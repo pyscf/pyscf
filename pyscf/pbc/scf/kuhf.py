@@ -325,21 +325,14 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
                 mo[k] /= np.sqrt(norm)
         return mo
 
-    if kpts.shape == chk_kpts.shape and np.allclose(kpts, chk_kpts):
-        def makedm(mos, occs):
-            moa, mob = mos
-            mos = (fproj(moa, kpts), fproj(mob, kpts))
-            return make_rdm1(mos, occs)
-    else:
-        def makedm(mos, occs):
-            where = [np.argmin(lib.norm(chk_kpts-kpt, axis=1)) for kpt in kpts]
-            moa, mob = mos
-            occa, occb = occs
-            dkpts = [chk_kpts[w]-kpts[i] for i,w in enumerate(where)]
-            mos = (fproj([moa[w] for w in where], dkpts),
-                   fproj([mob[w] for w in where], dkpts))
-            occs = ([occa[i] for i in where], [occb[i] for i in where])
-            return make_rdm1(mos, occs)
+    def makedm(mos, occs):
+        moa, mob = mos
+        mos = (fproj(moa, chk_kpts), fproj(mob, chk_kpts))
+        dm = make_rdm1(mos, occs)
+        if kpts.shape != chk_kpts.shape or not np.allclose(kpts, chk_kpts):
+            dm = [addons.project_dm_k2k(cell, dm[0], chk_kpts, kpts),
+                  addons.project_dm_k2k(cell, dm[1], chk_kpts, kpts)]
+        return np.asarray(dm)
 
     if getattr(mo[0], 'ndim', None) == 2:  # KRHF
         mo_occa = [(occ>1e-8).astype(np.double) for occ in mo_occ]

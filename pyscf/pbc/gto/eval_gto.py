@@ -177,7 +177,7 @@ def _estimate_rcut(cell):
         es = cell.bas_exp(ib)
         cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
         norm_ang = ((2*l+1)/(4*np.pi))**.5
-        fac = 2*np.pi*cs*norm_ang/es / precision
+        fac = 2*np.pi/cell.vol * cs*norm_ang/es / precision
         r = cell.rcut
         r = (np.log(fac * r**(l+1) + 1.) / es)**.5
         r = (np.log(fac * r**(l+1) + 1.) / es)**.5

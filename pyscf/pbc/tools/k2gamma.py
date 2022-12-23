@@ -47,12 +47,12 @@ def kpts_to_kmesh(cell, kpts, precision=None):
         floats = scaled_kpts[:,i]
         uniq_floats_idx = np.unique(floats.round(6), return_index=True)[1]
         uniq_floats = floats[uniq_floats_idx]
-        # Limit the number of images to 20 in each direction
-        fracs = [Fraction(x).limit_denominator(20) for x in uniq_floats]
+        # Limit the number of images to 30 in each direction
+        fracs = [Fraction(x).limit_denominator(30) for x in uniq_floats]
         denominators = np.unique([x.denominator for x in fracs])
         common_denominator = reduce(np.lcm, denominators)
         fs = common_denominator * uniq_floats
-        if abs(fs - np.rint(fs)).max() < max(precision, 1e-5):
+        if abs(fs - np.rint(fs)).max() < precision*1e2:
             kmesh[i] = min(kmesh[i], common_denominator)
         if cell.verbose >= logger.DEBUG3:
             logger.debug3(cell, 'dim=%d common_denominator %d  error %g',

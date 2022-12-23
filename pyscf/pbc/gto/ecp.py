@@ -42,9 +42,8 @@ def ecp_int(cell, kpts=None):
     # append a fictitious s function to mimic the auxiliary index in pbc.incore.
     # ptr2last_env_idx to force PBCnr3c_fill_* function to copy the entire "env"
     ptr2last_env_idx = len(cell._env) - 1
-    ecpbas = numpy.vstack([[0, 0, 1, 1, 0, ptr2last_env_idx, 0, 0],
-                           cell._ecpbas]).astype(numpy.int32)
-    ecpcell._bas = ecpbas
+    ecpcell._bas = numpy.array([[0, 0, 1, 1, 0, ptr2last_env_idx, 0, 0]],
+                               dtype=numpy.int32)
     # In pbc.incore _ecpbas is appended to the cell._bas and the
     # fictitious s function.
     cell._env[AS_ECPBAS_OFFSET] = cell.nbas + 1

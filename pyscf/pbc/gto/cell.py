@@ -520,13 +520,18 @@ def estimate_rcut(cell, precision=None):
     rcut = _estimate_rcut(exps, ls, cs, precision)
     return rcut.max()
 
-def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
+def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, omega=0):
     '''Energy cutoff estimation for nuclear attraction integrals'''
     norm_ang = (2*l+1)/(4*np.pi)
     fac = 32*np.pi**2*(2*np.pi)**1.5 * c**2*norm_ang / (2*alpha)**(2*l+.5) / precision
     Ecut = 20.
-    Ecut = np.log(fac * (Ecut*2)**(l-.5) + 1.) * 4*alpha
-    Ecut = np.log(fac * (Ecut*2)**(l-.5) + 1.) * 4*alpha
+    if omega <= 0:
+        Ecut = np.log(fac * (Ecut*2)**(l-.5) + 1.) * 4*alpha
+        Ecut = np.log(fac * (Ecut*2)**(l-.5) + 1.) * 4*alpha
+    else:
+        theta = 1./(1./(4*alpha) + 1./(2*omega**2))
+        Ecut = np.log(fac * (Ecut*2)**(l-.5) + 1.) * theta
+        Ecut = np.log(fac * (Ecut*2)**(l-.5) + 1.) * theta
     return Ecut
 
 def estimate_ke_cutoff(cell, precision=None):
@@ -538,7 +543,7 @@ def estimate_ke_cutoff(cell, precision=None):
     #precision /= cell.atom_charges().sum()
     exps, cs = _extract_pgto_params(cell, 'max')
     ls = cell._bas[:,mole.ANG_OF]
-    Ecut = _estimate_ke_cutoff(exps, ls, cs, precision)
+    Ecut = _estimate_ke_cutoff(exps, ls, cs, precision, cell.omega)
     return Ecut.max()
 
 def _extract_pgto_params(cell, op='min'):
@@ -563,11 +568,16 @@ def _extract_pgto_params(cell, op='min'):
 
 def error_for_ke_cutoff(cell, ke_cutoff):
     '''Error estimation based on nuclear attraction integrals'''
+    omega = cell.omega
     exps, cs = _extract_pgto_params(cell, 'max')
     ls = cell._bas[:,mole.ANG_OF]
     norm_ang = (2*ls+1)/(4*np.pi)
     fac = 32*np.pi**2*(2*np.pi)**1.5 * cs**2*norm_ang / (2*exps)**(2*ls+.5)
-    err = fac * (2*ke_cutoff)**(ls-.5) * np.exp(-ke_cutoff/(4*exps))
+    if omega <= 0:
+        err = fac * (2*ke_cutoff)**(ls-.5) * np.exp(-ke_cutoff/(4*exps))
+    else:
+        theta = 1./(1./(4*exps) + 1./(2*omega**2))
+        err = fac * (2*ke_cutoff)**(ls-.5) * np.exp(-ke_cutoff/theta)
     return err.max()
 
 def get_bounding_sphere(cell, rcut):

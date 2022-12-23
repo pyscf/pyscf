@@ -408,7 +408,7 @@ def _dip_correction(mf):
     grids.mesh = tools.cutoff_to_mesh(a, ke_cutoff)
 
     dm = mf.make_rdm1()
-    rho = mf.get_rho(dm, grids, mf.kpt)
+    rho = mf.get_rho(dm, grids)
     origin = _search_dipole_gauge_origin(cell, grids, rho, log)
 
     def shift_grids(r):
@@ -549,7 +549,6 @@ class SCF(mol_hf.SCF):
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpt):
                 self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
-            self.rsjk.direct_scf_tol = self.direct_scf_tol
             self.rsjk.build()
 
         # Let df.build() be called by get_jk function later on needs.

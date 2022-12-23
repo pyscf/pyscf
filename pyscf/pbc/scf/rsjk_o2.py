@@ -48,7 +48,7 @@ RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
 
 libpbc = lib.load_library('libpbc')
 
-class RangeSeparatedJKBuilder(lib.StreamObject):
+class RangeSeparatedJKBuilder(object):
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
@@ -67,7 +67,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         else:
             raise RuntimeError('RSJK does not support LR integrals')
         self.rs_cell = None
-        self.cell_d = None
         # Born-von Karman supercell
         self.bvk_kmesh = None
         self.supmol_sr = None
@@ -80,8 +79,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         # Use the k-point conjugation symmetry between k and -k
         self.k_conj_symmetry = True
         self.exclude_dd_block = True
-        self.allow_drv_nodddd = True
-        self._sr_without_dddd = False
 
         # TODO: incrementally build SR part
         self._dm_last = None
@@ -105,20 +102,25 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         logger.info(self, 'k_conj_symmetry = %s', self.k_conj_symmetry())
         logger.info(self, 'has_long_range = %s', self.has_long_range())
         logger.info(self, 'exclude_dd_block = %s', self.exclude_dd_block)
-        logger.info(self, 'allow_drv_nodddd = %s', self.allow_drv_nodddd)
         return self
 
     def reset(self, cell=None):
         if cell is not None:
             self.cell = cell
         self.rs_cell = None
-        self.cell_d = None
         self.supmol_sr = None
         self.supmol_ft = None
         self.supmol_d = None
         self.exclude_dd_block = True
-        self.direct_scf_tol = None
         return self
+
+    def check_sanity(self):
+        cell = self.cell
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            logger.warn(self, 'Coulombe interaction truncation for '
+                        'cell.dimension=2 is not available for RSJK. '
+                        'Results may be different to FFT/AFT results.')
+        return lib.StreamObject.check_sanity(self)
 
     def build(self, omega=None, intor='int2e'):
         cpu0 = logger.process_clock(), logger.perf_counter()
@@ -138,10 +140,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             self.ke_cutoff = estimate_ke_cutoff_for_omega(cell, self.omega)
             self.mesh = cell.cutoff_to_mesh(self.ke_cutoff)
 
-        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
-            # To ensure trunc-coulG converged for all basis
-            self.mesh[2] = rsdf_builder._estimate_meshz(cell)
-
         self.check_sanity()
 
         log.info('omega = %.15g  ke_cutoff = %s  mesh = %s',
@@ -150,6 +148,16 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         # AFT part exchange cost becomes dominnant
         if cell.nao * len(kpts) > 3500:
             self.exclude_dd_block = False
+        self.exclude_dd_block = False
+
+        direct_scf_tol = self.direct_scf_tol
+        if direct_scf_tol is None:
+            cell_exp = np.hstack(cell.bas_exps()).min()
+            theta = 1./(1./cell_exp + self.omega**-2)
+            lattice_sum_factor = 2*np.pi*cell.rcut / theta
+            direct_scf_tol = cell.precision / lattice_sum_factor
+        self.direct_scf_tol = direct_scf_tol
+        log.debug('Set direct_scf_tol %g', direct_scf_tol)
 
         rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
@@ -158,17 +166,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
-        exp_min = np.hstack(cell.bas_exps()).min()
-        theta = 1./(1./exp_min + self.omega**-2)
-        lattice_sum_factor = max(2*np.pi*cell.rcut/(cell.vol*theta), 1)
-        # Errors are cumulated in tripple lattice-sum
-        cutoff = cell.precision / lattice_sum_factor**3 * .1
-        self.direct_scf_tol = cutoff
-        log.debug('Set RangeSeparationJKBuilder.direct_scf_tol to %g', cutoff)
-
         rcut_sr = estimate_rcut(rs_cell, self.omega,
                                 exclude_dd_block=self.exclude_dd_block)
-        supmol_sr = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_sr.max(), log)
+        supmol_sr = ft_ao.ExtendedMole.from_cell(
+            rs_cell, kmesh, rcut_sr.max(), log)
         supmol_sr.omega = -self.omega
         self.supmol_sr = supmol_sr.strip_basis(rcut_sr)
         log.debug('supmol nbas = %d cGTO = %d pGTO = %d',
@@ -184,10 +185,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             log.debug('sup-mol-ft nbas = %d cGTO = %d pGTO = %d',
                       supmol_ft.nbas, supmol_ft.nao, supmol_ft.npgto_nr())
 
-            self.cell_d = rs_cell.smooth_basis_cell()
-            rcut = ft_ao.estimate_rcut(self.cell_d)
+            cell_d = rs_cell.smooth_basis_cell()
+            rcut = ft_ao.estimate_rcut(cell_d)
             supmol_d = ft_ao.ExtendedMole.from_cell(
-                self.cell_d, self.bvk_kmesh, rcut.max(), log)
+                cell_d, self.bvk_kmesh, rcut.max(), log)
             self.supmol_d = supmol_d.strip_basis(rcut)
             log.debug('supmol_d nbas = %d cGTO = %d', supmol_d.nbas, supmol_d.nao)
         log.timer_debug1('initializing supmol', *cpu0)
@@ -197,14 +198,13 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         nbas = supmol_sr.nbas
         self.q_cond = np.empty((3,nbas,nbas), dtype=np.float32)
         ao_loc = supmol_sr.ao_loc
-        with supmol_sr.with_integral_screen(self.direct_scf_tol**2):
-            libpbc.PBCVHFsetnr_direct_scf(
-                libpbc.int2e_sph, self._cintopt,
-                self.q_cond.ctypes.data_as(ctypes.c_void_p),
-                ao_loc.ctypes.data_as(ctypes.c_void_p),
-                supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
-                supmol_sr._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.nbas),
-                supmol_sr._env.ctypes.data_as(ctypes.c_void_p))
+        libpbc.PBCVHFsetnr_direct_scf(
+            libpbc.int2e_sph, self._cintopt,
+            self.q_cond.ctypes.data_as(ctypes.c_void_p),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
+            supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
+            supmol_sr._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.nbas),
+            supmol_sr._env.ctypes.data_as(ctypes.c_void_p))
         libpbc.PBCVHFsetnr_scond(
             self.q_cond[2:].ctypes.data_as(ctypes.c_void_p),
             supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
@@ -235,7 +235,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             raise NotImplementedError
 
         cpu0 = logger.process_clock(), logger.perf_counter()
-        log = logger.new_logger(self)
         if self.supmol_sr is None:
             self.build()
 
@@ -254,31 +253,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             dm = dm_kpts
         n_dm = dm.shape[0]
 
-        # Exclude dddd block can slightly speedup sr integrals with some
-        # overhead in lr_j and lr_k. It does not help when closing covergence.
-        smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
-        smooth_bas_idx = rs_cell.bas_map[smooth_bas_mask]
-        smooth_ao_idx = rs_cell.get_ao_indices(smooth_bas_idx, cell.ao_loc)
-        dm_d = dm[:,:,smooth_ao_idx[:,None],smooth_ao_idx]
-        if dm_d.size > 0:
-            near_zero = np.count_nonzero(abs(dm_d)<1e-2) / dm_d.size
-            log.debug1('near_zero ratio = %g', near_zero)
-        else:
-            near_zero = 1
-        self._sr_without_dddd = (
-            self.allow_drv_nodddd and
-            not self.exclude_dd_block and
-            self.cell_d.nbas > 0 and
-            self.has_long_range() and
-            (cell.dimension == 3 or cell.low_dim_ft_type != 'inf_vacuum') and
-            near_zero < .5)
-
-        if self._sr_without_dddd:
+        if 1:
             # To exclude (dd|dd) block, diffused shell needs to be independent
             # segments in PBCVHF_direct_drv1. Decontract the segments in rs-shell.
             # map ao indices in cell to ao indices in rs_cell
-            log.debug1('get_jk_sr with PBCVHF_direct_drv_nodddd')
-            drv = libpbc.PBCVHF_direct_drv_nodddd
             ao_map = lib.locs_to_indices(cell.ao_loc, rs_cell.bas_map)
             rs_nao = ao_map.size
             rs_dm = np.empty((n_dm,nkpts,rs_nao,rs_nao), dtype=dm.dtype)
@@ -296,14 +274,15 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             sh_loc = supmol.seg2sh[seg_loc]
             qcell0_ijij, qcell0_iijj, ish_idx, jsh_idx = \
                     self._sort_qcond_cell0(sh_loc, nbasp)
+            drv = libpbc.PBCVHF_direct_drv_nodddd
         else:
-            drv = libpbc.PBCVHF_direct_drv
             nbasp = cell.nbas  # The number of shells in the primitive cell
             cell0_ao_loc = cell.ao_loc
             seg_loc = supmol.seg_loc
 
             qcell0_ijij, qcell0_iijj, ish_idx, jsh_idx = \
                     self._sort_qcond_cell0(supmol.sh_loc, nbasp)
+            drv = libpbc.PBCVHF_direct_drv
 
         nao = dm.shape[-1]
 
@@ -318,8 +297,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         is_complex_dm = dm_imag_max > 1e-6
         if is_complex_dm:
             if dm_imag_max < 1e-2:
-                log.warn('DM in (BvK) cell has small imaginary part.  '
-                         'It may be a signal of symmetry broken in k-point symmetry')
+                logger.warn(self, 'DM in (BvK) cell has small imaginary part.  '
+                            'It may be a signal of symmetry broken in k-point symmetry')
             sc_dm = np.vstack([sc_dm.real, sc_dm.imag])
         else:
             sc_dm = sc_dm.real
@@ -391,25 +370,24 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         if is_complex_dm:
             vs = vs[:,:n_dm] + vs[:,n_dm:] * 1j
 
-        if self._sr_without_dddd:
-            nvs = vs.shape[0]
-            rs_vs = vs.transpose(0,1,3,2,4).reshape(-1,nao,nao)
-            nao0 = cell.nao
-            vs = np.zeros((nvs*n_dm*nbands,nao0,nao0), dtype=rs_vs.dtype)
-            for i in range(nvs*n_dm*nbands):
-                lib.takebak_2d(vs[i], rs_vs[i], ao_map, ao_map, thread_safe=False)
-            vs = vs.reshape(nvs,n_dm,nbands,nao0,nao0).transpose(0,1,3,2,4)
+        nvs = vs.shape[0]
+        rs_vs = vs.transpose(0,1,3,2,4).reshape(-1,nao,nao)
+        nao0 = cell.nao
+        vs = np.zeros((nvs*n_dm*nbands,nao0,nao0), dtype=rs_vs.dtype)
+        for i in range(nvs*n_dm*nbands):
+            lib.takebak_2d(vs[i], rs_vs[i], ao_map, ao_map, thread_safe=False)
+        vs = vs.reshape(nvs,n_dm,nbands,nao0,nao0).transpose(0,1,3,2,4)
 
         if kpts_band is None:
             vs = lib.einsum('snpRq,Rk->snkpq', vs, expRk)
         else:
-            log.warn('Approximate J/K matrices at kpts_band '
-                     'with the bvk-cell dervied from kpts')
+            logger.warn(self, 'Approximate J/K matrices at kpts_band '
+                        'with the bvk-cell dervied from kpts')
             kpts_band = np.reshape(kpts_band, (-1, 3))
             vs = lib.einsum('snpRq,Rk->snkpq', vs,
                             np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts_band.T)))
 
-        log.timer_debug1('short range part vj and vk', *cpu0)
+        logger.timer_debug1(self, 'short range part vj and vk', *cpu0)
         return vs
 
     def get_jk(self, dm_kpts, hermi=1, kpts=None, kpts_band=None,
@@ -431,9 +409,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         if kpts is not None and abs(kpts-self.kpts).max() > 1e-7:
             raise RuntimeError('kpts error. kpts cannot be modified in RSJK')
         kpts = self.kpts
-
-        # TODO: approximate vj vk at kpts-band with addons.project_dm_k2k from
-        # vj vk at kpts
 
         vs = self._get_jk_sr(dm_kpts, hermi, kpts, kpts_band,
                              with_j, with_k, omega, exxdiv)
@@ -509,24 +484,36 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         log = logger.new_logger(self)
         cell = self.cell
         rs_cell = self.rs_cell
-        if self.exclude_dd_block or self._sr_without_dddd:
-            cell_d = self.cell_d
+        if 1 or self.exclude_dd_block:
+            cell_d = rs_cell.smooth_basis_cell()
             naod = cell_d.nao
-            ngrids_d = np.prod(cell_d.mesh)
         else:
             cell_d = None
-            naod = ngrids_d = 0
+            naod = 0
         kpts = np.asarray(kpts.reshape(-1, 3), order='C')
         dms = _format_dms(dm_kpts, kpts)
         n_dm, nkpts, nao = dms.shape[:3]
         mesh = self.mesh
         ngrids = np.prod(mesh)
 
-        is_real = is_zero(kpts) and dms.dtype == np.double
-        if is_real:
-            vj_kpts = np.zeros((n_dm,nkpts,nao,nao))
-        else:
-            vj_kpts = np.zeros((n_dm,nkpts,nao,nao), dtype=np.complex128)
+        at_gamma_point = is_zero(kpts) and dms.dtype == np.double
+        def update_vj(vj, Gpq, dm, coulG):
+            GpqR, GpqI = Gpq
+            rhoR = np.einsum('kij,kgij->g', dm.real, GpqR)
+            rhoI = -np.einsum('kij,kgij->g', dm.real, GpqI)
+            if not at_gamma_point:
+                rhoR += np.einsum('kij,kgij->g', dm.imag, GpqI)
+                rhoI += np.einsum('kij,kgij->g', dm.imag, GpqR)
+            vR = coulG * rhoR
+            vI = coulG * rhoI
+            vj.real += np.einsum('g,kgij->kij', vR, GpqR)
+            vj.real -= np.einsum('g,kgij->kij', vI, GpqI)
+            if not at_gamma_point:
+                vj.imag += np.einsum('g,kgij->kij', vR, GpqI)
+                vj.imag += np.einsum('g,kgij->kij', vI, GpqR)
+            return vj
+
+        vj_kpts = np.zeros((n_dm,nkpts,nao,nao), dtype=np.complex128)
 
         # TODO: aosym == 's2'
         aosym = 's1'
@@ -537,145 +524,37 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         kpt_allow = np.zeros(3)
         coulG = self.weighted_coulG(kpt_allow, False, mesh)
-
-        if (cell.dimension == 3 or
-            (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum')):
+        coulG_SR = self.weighted_coulG_SR(kpt_allow, False, mesh)
+        if cell.dimension >= 2:
             G0_idx = 0  # due to np.fft.fftfreq convension
-            # G=0 associated to 2e integrals in real-space
-            coulG_SR_at_G0 = np.pi/self.omega**2 * kws
-            # For cell.dimension = 2, coulG is computed with truncated coulomb
-            # interactions. The 3d coulG_SR below is to remove the analytical
-            # SR from get_jk_sr (which was computed with full Coulomb) then to
-            # add truncated Coulomb for AFT part.
-            with lib.temporary_env(cell, dimension=3):
-                coulG_SR = self.weighted_coulG_SR(kpt_allow, False, mesh)
-            coulG_SR[G0_idx] += coulG_SR_at_G0
-        else:
-            coulG_SR = self.weighted_coulG_SR(kpt_allow, False, mesh)
-            coulG_SR_at_G0 = None
+            G0_weight = kws[G0_idx] if isinstance(kws, np.ndarray) else kws
+            coulG_SR[G0_idx] += np.pi/self.omega**2 * G0_weight
 
-        if not self.exclude_dd_block or naod == 0:
-            log.debug1('get_lr_j_kpts with aft_aopair')
-            # Long-range part is calculated as the difference
-            # coulG(cell.omega) - coulG(self.omega) . It can support both regular
-            # integrals and LR integrals.
-            coulG_LR = coulG - coulG_SR
-            max_memory = (self.max_memory - lib.current_memory()[0]) * .9
-            Gblksize = max(24, int(max_memory*1e6/16/nao**2/(nkpts+1))//8*8)
-            for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts)
-                for i in range(n_dm):
-                    _update_vj_(vj_kpts[i], Gpq, dms[i], coulG_LR[p0:p1])
-                Gpq = None
+        # Long-range part is calculated as the difference
+        # coulG(cell.omega) - coulG(self.omega) . It can support both regular
+        # integrals and LR integrals.
+        coulG_LR = coulG - coulG_SR
+        max_memory = (self.max_memory - lib.current_memory()[0]) * .9
+        Gblksize = max(24, int(max_memory*1e6/16/nao**2/(nkpts+1))//8*8)
+        for p0, p1 in lib.prange(0, ngrids, Gblksize):
+            Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts)
+            for i in range(n_dm):
+                update_vj(vj_kpts[i], Gpq, dms[i], coulG_LR[p0:p1])
+            Gpq = None
 
-            if self._sr_without_dddd and naod > 0:
-                log.debug1('get_lr_j_kpts dd block')
-                if cell.dimension < 2:
-                    raise NotImplementedError
-                if cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum':
-                    raise NotImplementedError
-                aoR_ks, aoI_ks = rsdf_builder._eval_gto(cell_d, cell_d.mesh, kpts)
-                smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
-                smooth_bas_idx = rs_cell.bas_map[smooth_bas_mask]
-                smooth_ao_idx = rs_cell.get_ao_indices(smooth_bas_idx, cell.ao_loc)
-
-                # rho = einsum('nkji,kig,kjg->ng', dm, ao.conj(), ao)
-                rho = np.zeros((n_dm, ngrids_d))
-                tmpR = np.empty((naod, ngrids_d))
-                tmpI = np.empty((naod, ngrids_d))
-                dmR_dd = dms.real[:,:,smooth_ao_idx[:,None],smooth_ao_idx]
-                dmI_dd = dms.imag[:,:,smooth_ao_idx[:,None],smooth_ao_idx]
-                assert dmR_dd.flags.c_contiguous
-                # vG = einsum('ij,gji->g', dm_dd[k], aoao[k]) * coulG
-                for i in range(n_dm):
-                    for k in range(nkpts):
-                        zdotNN(dmR_dd[i,k].T, dmI_dd[i,k].T,
-                               aoR_ks[k], aoI_ks[k], 1, tmpR, tmpI)
-                        rho[i] += np.einsum('ig,ig->g', aoR_ks[k], tmpR)
-                        rho[i] += np.einsum('ig,ig->g', aoI_ks[k], tmpI)
-
-                if coulG_SR_at_G0 is not None:
-                    with lib.temporary_env(cell, dimension=3):
-                        coulG_SR = self.weighted_coulG_SR(kpt_allow, False,
-                                                          cell_d.mesh)
-                    coulG_SR[G0_idx] += coulG_SR_at_G0
-                else:
-                    coulG_SR = self.weighted_coulG_SR(kpt_allow, False, cell_d.mesh)
-                vG = pbctools.fft(rho, cell_d.mesh) * coulG_SR
-                vR = pbctools.ifft(vG, cell_d.mesh).real
-
-                nband = nkpts
-                vjR_dd = np.empty((naod,naod))
-                vjI_dd = np.empty((naod,naod))
-                for i in range(n_dm):
-                    for k in range(nband):
-                        aowR = np.einsum('xi,x->xi', aoR_ks[k].T, vR[i])
-                        aowI = np.einsum('xi,x->xi', aoI_ks[k].T, vR[i])
-                        zdotCN(aoR_ks[k], aoI_ks[k], aowR, aowI, 1, vjR_dd, vjI_dd)
-                        if is_real:
-                            vj = vjR_dd
-                        else:
-                            vj = vjR_dd + vjI_dd*1j
-                        lib.takebak_2d(vj_kpts[i,k], vj, smooth_ao_idx, smooth_ao_idx,
-                                       thread_safe=False)
-
-        elif naod > 0 and ngrids < ngrids_d:
-            # Prefer AFTDF for everything otherwise cell_d.mesh have to be used
-            # for AFTDF
-            log.debug1('get_lr_j_kpts dd block cached aft_aopair_dd')
-
-            ao_loc = cell.ao_loc
-            smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
-            smooth_bas_idx = rs_cell.bas_map[smooth_bas_mask]
-            smooth_ao_idx = rs_cell.get_ao_indices(smooth_bas_idx, ao_loc)
-            aft_aopair_dd = self.supmol_d.gen_ft_kernel(
-                aosym, return_complex=False, verbose=log)
-
-            def merge_dd(Gpq, p0, p1):
-                '''Merge diffused basis block into ao-pair tensor inplace'''
-                GpqR, GpqI = Gpq
-                pqG_ddR, pqG_ddI = aft_aopair_dd(Gv[p0:p1], gxyz[p0:p1], Gvbase,
-                                                 kpt_allow, kpts)
-                # Gpq should be an array of (nkpts,ni,nj,ngrids) in C order
-                if not GpqR[0].flags.c_contiguous:
-                    assert GpqR[0].strides[0] == 8  # stride for grids
-                for k in range(nkpts):
-                    libpbc.PBC_ft_fuse_dd_s1(
-                        GpqR[k].ctypes.data_as(ctypes.c_void_p),
-                        GpqI[k].ctypes.data_as(ctypes.c_void_p),
-                        pqG_ddR[k].ctypes.data_as(ctypes.c_void_p),
-                        pqG_ddI[k].ctypes.data_as(ctypes.c_void_p),
-                        smooth_ao_idx.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_int(nao), ctypes.c_int(naod), ctypes.c_int(p1-p0))
-                return (GpqR, GpqI)
-
-            mem_now = lib.current_memory()[0]
-            max_memory = self.max_memory - mem_now
-            log.debug1('max_memory = %d MB (%d in use)', max_memory+mem_now, mem_now)
-            Gblksize = max(24, int(max_memory*.9e6/16/nao**2/(nkpts+1)/8*8))
-            log.debug1('Gblksize = %d', Gblksize)
-            for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts)
-                #: aft_jk._update_vj_(vj_kpts, aoaoks, dms, coulG[p0:p1], 1)
-                #: aft_jk._update_vj_(vj_kpts, aoaoks, dms, coulG_SR[p0:p1], -1)
-                for i in range(n_dm):
-                    _update_vj_(vj_kpts[i], Gpq, dms[i], -coulG_SR[p0:p1])
-                Gpq = merge_dd(Gpq, p0, p1)
-                for i in range(n_dm):
-                    _update_vj_(vj_kpts[i], Gpq, dms[i], coulG[p0:p1])
-                Gpq = None
-
-        elif naod > 0:
-            log.debug1('get_lr_j_kpts dd block cached fft_aopair_dd')
-            aoR_ks, aoI_ks = rsdf_builder._eval_gto(cell_d, mesh, kpts)
+        if naod > 0:
+            log.debug1('get_lr_j_kpts dd block')
+            mesh_d = cell_d.mesh
+            aoR_ks, aoI_ks = rsdf_builder._eval_gto(cell_d, mesh_d, kpts)
             smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
             smooth_bas_idx = rs_cell.bas_map[smooth_bas_mask]
             smooth_ao_idx = rs_cell.get_ao_indices(smooth_bas_idx, cell.ao_loc)
+            ngrids_d = np.prod(mesh_d)
 
             # rho = einsum('nkji,kig,kjg->ng', dm, ao.conj(), ao)
-            rho = np.zeros((n_dm, ngrids))
-            tmpR = np.empty((naod, ngrids))
-            tmpI = np.empty((naod, ngrids))
+            rho = np.zeros((n_dm, ngrids_d))
+            tmpR = np.empty((naod, ngrids_d))
+            tmpI = np.empty((naod, ngrids_d))
             dmR_dd = np.asarray(dms.real[:,:,smooth_ao_idx[:,None],smooth_ao_idx], order='C')
             dmI_dd = np.asarray(dms.imag[:,:,smooth_ao_idx[:,None],smooth_ao_idx], order='C')
             # vG = einsum('ij,gji->g', dm_dd[k], aoao[k]) * coulG
@@ -684,55 +563,24 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                     zdotNN(dmR_dd[i,k].T, dmI_dd[i,k].T, aoR_ks[k], aoI_ks[k], 1, tmpR, tmpI)
                     rho[i] += np.einsum('ig,ig->g', aoR_ks[k], tmpR)
                     rho[i] += np.einsum('ig,ig->g', aoI_ks[k], tmpI)
-            vG_dd = pbctools.ifft(rho, mesh) * cell.vol * coulG
-            tmpR = tmpI = dmR_dd = dmI_dd = None
-            cpu1 = log.timer_debug1('get_lr_j_kpts dd block', *cpu0)
 
-            mem_now = lib.current_memory()[0]
-            max_memory = self.max_memory - mem_now
-            log.debug1('max_memory = %d MB (%d in use)', max_memory+mem_now, mem_now)
-            Gblksize = max(72, int(max_memory*.9e6/16/nao**2/(nkpts+1))//8*8)
-            log.debug1('Gblksize = %d', Gblksize)
-            for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts)
-                #: aft_jk._update_vj_(vj_kpts, aoaoks, dms, coulG[p0:p1], 1)
-                #: aft_jk._update_vj_(vj_kpts, aoaoks, dms, coulG_SR[p0:p1], -1)
-                GpqR, GpqI = Gpq
-                for i in range(n_dm):
-                    rhoR = np.einsum('kij,kgij->g', dms[i].real, GpqR)
-                    rhoI = -np.einsum('kij,kgij->g', dms[i].real, GpqI)
-                    if not is_real:
-                        rhoR += np.einsum('kij,kgij->g', dms[i].imag, GpqI)
-                        rhoI += np.einsum('kij,kgij->g', dms[i].imag, GpqR)
-                    rho = rhoR + rhoI * 1j
-                    vG = vG_dd[i,p0:p1]
-                    # Update vG_dd inplace to include rho contributions
-                    vG += coulG[p0:p1] * rho
-                    vG_SR = coulG_SR[p0:p1] * rho
-                    # vG_LR contains full vG of dd-block and vG_LR of rest blocks
-                    vG_LR = vG - vG_SR
-                    vj_kpts[i].real += np.einsum('g,kgij->kij', vG_LR.real, GpqR)
-                    vj_kpts[i].real -= np.einsum('g,kgij->kij', vG_LR.imag, GpqI)
-                    if not is_real:
-                        vj_kpts[i].imag += np.einsum('g,kgij->kij', vG_LR.real, GpqI)
-                        vj_kpts[i].imag += np.einsum('g,kgij->kij', vG_LR.imag, GpqR)
-                Gpq = None
-            log.timer_debug1('get_lr_j_kpts ft_aopair', *cpu1)
+            coulG_SR = pbctools.get_coulG(cell_d, mesh=mesh_d, omega=-self.omega)
+            if cell.dimension >= 2:
+                coulG_SR[G0_idx] += np.pi/self.omega**2
+            coulG_SR *= cell.vol / ngrids_d
+            vG = pbctools.fft(rho, mesh_d) * coulG_SR
+            vR = pbctools.ifft(vG, mesh_d).real
 
-            vR = pbctools.fft(vG_dd, mesh).real * (cell.vol/ngrids)
-            vjR_dd = np.empty((naod, naod))
-            vjI_dd = np.empty((naod, naod))
+            nband = nkpts
+            vjR_dd = np.empty((naod,naod))
+            vjI_dd = np.empty((naod,naod))
             for i in range(n_dm):
-                for k in range(nkpts):
-                    tmpR = aoR_ks[k] * vR[i]
-                    tmpI = aoI_ks[k] * vR[i]
-                    zdotCN(aoR_ks[k], aoI_ks[k], tmpR.T, tmpI.T, 1, vjR_dd, vjI_dd)
-                    lib.takebak_2d(vj_kpts[i,k], vjR_dd + vjI_dd * 1j,
-                                   smooth_ao_idx, smooth_ao_idx)
-
-        else:
-            raise RuntimeError(f'exclude_dd_block={self.exclude_dd_block} '
-                               f'sr_without_dddd={self._sr_without_dddd} naod={naod}')
+                for k in range(nband):
+                    aowR = np.einsum('xi,x->xi', aoR_ks[k].T, vR[i])
+                    aowI = np.einsum('xi,x->xi', aoI_ks[k].T, vR[i])
+                    zdotCN(aoR_ks[k], aoI_ks[k], aowR, aowI, 1, vjR_dd, vjI_dd)
+                    lib.takebak_2d(vj_kpts[i,k], vjR_dd+vjI_dd*1j,
+                                   smooth_ao_idx, smooth_ao_idx, thread_safe=False)
 
         if nkpts > 1:
             vj_kpts *= 1./nkpts
@@ -760,13 +608,12 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         log = logger.new_logger(self)
         cell = self.cell
         rs_cell = self.rs_cell
-        if self.exclude_dd_block or self._sr_without_dddd:
-            cell_d = self.cell_d
+        if 1 or self.exclude_dd_block:
+            cell_d = rs_cell.smooth_basis_cell()
             naod = cell_d.nao
-            ngrids_d = np.prod(cell_d.mesh)
         else:
             cell_d = None
-            naod = ngrids_d = 0
+            naod = 0
 
         mesh = self.mesh
         ngrids = np.prod(mesh)
@@ -790,12 +637,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             aosym, return_complex=False, verbose=log)
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
         gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
-        G0_idx = 0
-        if (cell.dimension == 3 or
-            (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum')):
-            coulG_SR_at_G0 = np.pi/self.omega**2 * kws
-        else:
-            coulG_SR_at_G0 = None
 
         uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
             cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
@@ -809,93 +650,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         cache_size = (naod*(naod+1)*ngrids*(nkpts+1))*16e-6
         log.debug1('naod = %d cache_size = %d', naod, cache_size)
-
-        if self.exclude_dd_block and not self._sr_without_dddd and naod > 0:
-            ao_loc = cell.ao_loc
-            smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
-            smooth_bas_idx = rs_cell.bas_map[smooth_bas_mask]
-            smooth_ao_idx = rs_cell.get_ao_indices(smooth_bas_idx, ao_loc)
-
-            # compute the dd blocks with fft_aopair_dd is more efficient than
-            # aft_aopair_dd but requiring more memory
-            if max_memory * .3 > cache_size:
-                log.debug1('merge_dd with cached fft_aopair_dd')
-                aoR_ks, aoI_ks = rsdf_builder._eval_gto(cell_d, mesh, kpts)
-                coords = cell_d.get_uniform_grids(mesh)
-                max_memory -= cache_size
-
-                def fft_aopair_dd(ki, kj, expmikr):
-                    # einsum('g,ig,jg->ijg', expmikr, ao_ki.conj(), ao_kj)
-                    pqG_ddR = np.empty((naod**2, ngrids))
-                    pqG_ddI = np.empty((naod**2, ngrids))
-                    expmikrR, expmikrI = expmikr
-                    libpbc.PBC_zjoin_fCN_s1(
-                        pqG_ddR.ctypes.data_as(ctypes.c_void_p),
-                        pqG_ddI.ctypes.data_as(ctypes.c_void_p),
-                        expmikrR.ctypes.data_as(ctypes.c_void_p),
-                        expmikrI.ctypes.data_as(ctypes.c_void_p),
-                        aoR_ks[ki].ctypes.data_as(ctypes.c_void_p),
-                        aoI_ks[ki].ctypes.data_as(ctypes.c_void_p),
-                        aoR_ks[kj].ctypes.data_as(ctypes.c_void_p),
-                        aoI_ks[kj].ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_int(naod), ctypes.c_int(naod), ctypes.c_int(ngrids))
-                    pqG_dd = pqG_ddR + pqG_ddI * 1j
-                    pqG_ddR = pqG_ddI = None
-                    pqG_dd *= cell.vol / ngrids
-                    pqG_dd = pbctools.fft(pqG_dd, mesh)
-                    return pqG_dd.reshape(naod, naod, ngrids)
-
-                cache = {}
-                def merge_dd(Gpq, p0, p1, ki_lst, kj_lst):
-                    '''Merge diffused basis block into ao-pair tensor inplace'''
-                    expmikr = np.exp(-1j * np.dot(coords, kpts[kj_lst[0]]-kpts[ki_lst[0]]))
-                    expmikrR = np.asarray(expmikr.real, order='C')
-                    expmikrI = np.asarray(expmikr.imag, order='C')
-                    GpqR, GpqI = Gpq
-                    # Gpq should be an array of (nkpts,ni,nj,ngrids) in C order
-                    if not GpqR[0].flags.c_contiguous:
-                        assert GpqR[0].strides[0] == 8  # stride for grids
-                    for k, (ki, kj) in enumerate(zip(ki_lst, kj_lst)):
-                        if (ki, kj) not in cache:
-                            log.debug3('cache dd block (%d, %d)', ki, kj)
-                            cache[ki, kj] = fft_aopair_dd(ki, kj, (expmikrR, expmikrI))
-
-                        pqG_dd = cache[ki, kj]
-                        libpbc.PBC_ft_zfuse_dd_s1(
-                            GpqR[k].ctypes.data_as(ctypes.c_void_p),
-                            GpqI[k].ctypes.data_as(ctypes.c_void_p),
-                            pqG_dd.ctypes.data_as(ctypes.c_void_p),
-                            smooth_ao_idx.ctypes.data_as(ctypes.c_void_p),
-                            (ctypes.c_int*2)(p0, p1), ctypes.c_int(nao),
-                            ctypes.c_int(naod), ctypes.c_int(ngrids))
-                    return (GpqR, GpqI)
-
-            else:
-                log.debug1('merge_dd with aft_aopair_dd')
-                aft_aopair_dd = self.supmol_d.gen_ft_kernel(
-                    aosym, return_complex=False, verbose=log)
-
-                def merge_dd(Gpq, p0, p1, ki_lst, kj_lst):
-                    '''Merge diffused basis block into ao-pair tensor inplace'''
-                    kpt = kpts[kj_lst[0]] - kpts[ki_lst[0]]
-                    kptjs = kpts[kptj_idx]
-                    GpqR, GpqI = Gpq
-                    pqG_ddR, pqG_ddI = aft_aopair_dd(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs)
-                    nkpts = len(kptjs)
-                    # Gpq should be an array of (nkpts,ni,nj,ngrids) in C order
-                    if not GpqR[0].flags.c_contiguous:
-                        assert GpqR[0].strides[0] == 8  # stride for grids
-                    for k in range(nkpts):
-                        libpbc.PBC_ft_fuse_dd_s1(
-                            GpqR[k].ctypes.data_as(ctypes.c_void_p),
-                            GpqI[k].ctypes.data_as(ctypes.c_void_p),
-                            pqG_ddR[k].ctypes.data_as(ctypes.c_void_p),
-                            pqG_ddI[k].ctypes.data_as(ctypes.c_void_p),
-                            smooth_ao_idx.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_int(nao), ctypes.c_int(naod), ctypes.c_int(p1-p0))
-                    return (GpqR, GpqI)
-
-            cpu1 = log.timer_debug1('get_lr_k_kpts dd block', *cpu1)
 
         k_conj_groups = group_by_conj_pairs(cell, uniq_kpts)[0]
         if self.k_conj_symmetry:
@@ -922,47 +676,27 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             swap_2e = k_conj is not None and k != k_conj
 
             coulG = self.weighted_coulG(kpt, exxdiv, mesh)
-            if coulG_SR_at_G0 is not None:
-                # For cell.dimension = 2, coulG is computed with truncated coulomb
-                # interactions. The 3d coulG_SR below is to remove the analytical
-                # SR from get_jk_sr (which was computed with full Coulomb) then
-                # add the truncated Coulomb for AFT part.
-                with lib.temporary_env(cell, dimension=3):
-                    coulG_SR = self.weighted_coulG_SR(kpt, False, mesh)
-                if is_zero(uniq_kpts[k]):
-                    coulG_SR[G0_idx] += coulG_SR_at_G0
-            else:
-                coulG_SR = self.weighted_coulG_SR(kpt, False, mesh)
+            coulG_SR = self.weighted_coulG_SR(kpt, False, mesh)
+            if cell.dimension >= 2 and is_zero(uniq_kpts[k]):
+                G0_idx = 0
+                G0_weight = kws[G0_idx] if isinstance(kws, np.ndarray) else kws
+                coulG_SR_at_G0 = np.pi/self.omega**2 * G0_weight
+                coulG_SR[G0_idx] += coulG_SR_at_G0
 
-            Gblksize = max(24, int(max_memory*.9e6/16/nao**2/(nkptj+3))//8*8)
+            Gblksize = max(24, int(max_memory*1e6/16/nao**2/(nkptj+max(nkptj,3)))//8*8)
             Gblksize = min(Gblksize, ngrids, 200000)
             log.debug1('Gblksize = %d', Gblksize)
-            if self.exclude_dd_block and not self._sr_without_dddd and naod > 0:
-                for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                    log.debug3('update_vk [%s:%s]', p0, p1)
-                    Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs)
-                    update_vk(vk, Gpq, dm, coulG_SR[p0:p1] * -weight,
-                              kpti_idx, kptj_idx, swap_2e, k_to_compute)
-                    Gpq = merge_dd(Gpq, p0, p1, kpti_idx, kptj_idx)
-                    update_vk(vk, Gpq, dm, coulG[p0:p1] * weight,
-                              kpti_idx, kptj_idx, swap_2e, k_to_compute)
-                    Gpq = None
-            else:
-                coulG_LR = coulG - coulG_SR
-                for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                    log.debug3('update_vk [%s:%s]', p0, p1)
-                    Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs)
-                    update_vk(vk, Gpq, dm, coulG_LR[p0:p1] * weight,
-                              kpti_idx, kptj_idx, swap_2e, k_to_compute)
-                    Gpq = None
-            cpu1 = log.timer_debug1('ft_aopair group %d'%group_id, *cpu1)
+            coulG_LR = coulG - coulG_SR
+            for p0, p1 in lib.prange(0, ngrids, Gblksize):
+                log.debug3('update_vk [%s:%s]', p0, p1)
+                Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs)
+                update_vk(vk, Gpq, dm, coulG_LR[p0:p1] * weight,
+                          kpti_idx, kptj_idx, swap_2e, k_to_compute)
+                Gpq = None
+            cpu1 = log.timer_debug1(f'ft_aopair LR eri group {group_id}', *cpu1)
 
-        if self._sr_without_dddd and naod > 0:
-            log.debug1('ft_aopair dd-blcok for dddd-block ERI')
-            if cell.dimension < 2:
-                raise NotImplementedError
-            if cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum':
-                raise NotImplementedError
+        if naod > 0:
+            log.debug1('ft_aopair dd-blcok')
             smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
             smooth_bas_idx = rs_cell.bas_map[smooth_bas_mask]
             smooth_ao_idx = rs_cell.get_ao_indices(smooth_bas_idx, cell.ao_loc)
@@ -993,9 +727,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 kpt = uniq_kpts[k]
                 swap_2e = k_conj is not None and k != k_conj
 
-                with lib.temporary_env(cell, dimension=3):
-                    coulG_SR = self.weighted_coulG_SR(kpt, False, mesh_d)
-                if is_zero(uniq_kpts[k]) and coulG_SR_at_G0 is not None:
+                coulG_SR = self.weighted_coulG_SR(kpt, False, mesh_d)
+                if cell.dimension >= 2 and is_zero(uniq_kpts[k]):
                     coulG_SR[G0_idx] += coulG_SR_at_G0
 
                 Gblksize = max(24, int(max_memory*1e6/16/naod**2/(nkptj+max(nkptj,3)))//8*8)
@@ -1061,7 +794,7 @@ def estimate_rcut(rs_cell, omega, precision=None,
     ai_idx = ak_idx = cost.argmax()
     compact_mask = rs_cell.bas_type != ft_ao.SMOOTH_BASIS
     compact_idx = np.where(compact_mask)[0]
-    if exclude_dd_block and compact_idx.size > 0:
+    if compact_idx.size > 0:
         ak_idx = compact_idx[cost[compact_idx].argmax()]
     # Case 1: l in cell0, product kl ~ dc, product ij ~ dd and dc
     # This includes interactions (dc|dd)
@@ -1089,13 +822,13 @@ def estimate_rcut(rs_cell, omega, precision=None,
     sfac = omega**2*aj*al/(aj*al + (aj+al)*omega**2) / theta
     fl = 2
     fac = 2**(li+lk)*np.pi**2.5*c1 * theta**(l4-.5)
-    fac *= 2*np.pi/rs_cell.vol/theta
+    fac *= 2*np.pi/theta
     fac /= aij**(li+1.5) * akl**(lk+1.5) * aj**lj * al**ll
     fac *= fl / precision
 
     r0 = rs_cell.rcut
-    r0 = (np.log(fac * r0 * (sfac*r0)**(l4-1) + 1.) / (sfac*theta))**.5
-    r0 = (np.log(fac * r0 * (sfac*r0)**(l4-1) + 1.) / (sfac*theta))**.5
+    r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
+    r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
     rcut = r0
 
     if exclude_dd_block and 0 < compact_idx.size < rs_cell.nbas:
@@ -1115,13 +848,13 @@ def estimate_rcut(rs_cell, omega, precision=None,
         sfac = omega**2*aj*al/(aj*al + (aj+al)*omega**2) / theta
         fl = 2
         fac = 2**(li+lk)*np.pi**2.5*c1 * theta**(l4-.5)
-        fac *= 2*np.pi/rs_cell.vol/theta
+        fac *= 2*np.pi/theta
         fac /= aij**(li+1.5) * akl**(lk+1.5) * aj**lj * al**ll
         fac *= fl / precision
 
         r0 = rcut[smooth_mask]
-        r0 = (np.log(fac * r0 * (sfac*r0)**(l4-1) + 1.) / (sfac*theta))**.5
-        r0 = (np.log(fac * r0 * (sfac*r0)**(l4-1) + 1.) / (sfac*theta))**.5
+        r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
+        r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
         rcut[smooth_mask] = r0
     return rcut
 
@@ -1133,6 +866,7 @@ def _guess_omega(cell, kpts, mesh=None):
         ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
         nkpts = len(kpts)
         ke_cutoff = 90 / (.5 + .6 * nkpts**(1./3) + .1*nkpts)
+        #ke_cutoff = 90*2.4 / (.4 + nkpts**(1./3) + nkpts**(2./3))
         ke_cutoff = max(ke_cutoff, ke_min)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     a = cell.lattice_vectors()
@@ -1140,22 +874,6 @@ def _guess_omega(cell, kpts, mesh=None):
     omega = estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision)
     return omega, mesh, ke_cutoff
 
-def _update_vj_(vj, Gpq, dm, coulG):
-    is_real = vj.dtype == np.double
-    GpqR, GpqI = Gpq
-    rhoR = np.einsum('kij,kgij->g', dm.real, GpqR)
-    rhoI = -np.einsum('kij,kgij->g', dm.real, GpqI)
-    if not is_real:
-        rhoR += np.einsum('kij,kgij->g', dm.imag, GpqI)
-        rhoI += np.einsum('kij,kgij->g', dm.imag, GpqR)
-    vR = coulG * rhoR
-    vI = coulG * rhoI
-    vj.real += np.einsum('g,kgij->kij', vR, GpqR)
-    vj.real -= np.einsum('g,kgij->kij', vI, GpqI)
-    if not is_real:
-        vj.imag += np.einsum('g,kgij->kij', vR, GpqI)
-        vj.imag += np.einsum('g,kgij->kij', vI, GpqR)
-    return vj
 
 def _update_vk_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
                 k_to_compute):

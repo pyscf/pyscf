@@ -558,7 +558,6 @@ class KSCF(pbchf.SCF):
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpts):
                 self.rsjk = self.rsjk.__class__(cell, self.kpts)
-            self.rsjk.direct_scf_tol = self.direct_scf_tol
             self.rsjk.build()
 
         # Let df.build() be called by get_jk function later on needs.

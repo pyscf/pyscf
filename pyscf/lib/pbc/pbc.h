@@ -35,10 +35,9 @@ typedef struct {
         // length of kpt_ij_idx
         int kpt_ij_size;
         // indicates how to map basis in bvk-cell to supmol basis
-        int *sh_loc;
+        int *seg_loc;
+        int *seg2sh;
         int *ao_loc;
-        // Map from supmol._bas to [bvk_cell-id, rs_basis-id, image-id]
-        int *bas_map;
         int *shls_slice;
         // index to get a sbuset of nkpts x nkpts output
         int *kpt_ij_idx;
@@ -47,10 +46,11 @@ typedef struct {
 
         // Integral mask of SupMole based on s-function overlap
         int8_t *ovlp_mask;
-        // Integral screening condition
-        double *q_cond;
+        // Integral screening condition (ij|ij) or log((ij|ij))
+        float *q_cond;
         // cutoff for schwarz condtion
-        double cutoff;
+        float cutoff;
+        float eta;
 
         // parameters for ft_ao
         double *Gv;

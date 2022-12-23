@@ -46,6 +46,7 @@ from pyscf.df import addons
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.gto.cell import _estimate_rcut
 from pyscf.pbc import tools
+from pyscf.pbc.df import incore
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft
@@ -70,7 +71,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     compensated charge algorithm, they are normalized against
     \int (r^l e^{-ar^2} r^2 dr
     '''
-    auxcell = addons.make_auxmol(cell, auxbasis)
+    auxcell = incore.make_auxcell(cell, auxbasis)
 
 # Note libcint library will multiply the norm of the integration over spheric
 # part sqrt(4pi) to the basis.
@@ -104,7 +105,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
 # half_sph_norm here to normalize the monopole (charge).  This convention can
 # simplify the formulism of \int \bar{\rho}, see function auxbar.
             cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
-            _env[ptr:ptr+np*nc] = cs.T.reshape(-1)
+            _env[ptr:ptr+np*nc] = cs.T.ravel()
 
             steep_shls.append(ib)
 
@@ -226,9 +227,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     def check_sanity(self):
         cell = self.cell
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
-            logger.warn(self, 'Coulombe interaction truncation for '
-                        'cell.dimension=2 is not available for GDF. '
-                        'Results may be different to FFT/AFT results.')
+            logger.warn(self, 'cell.dimension=2 for GDF may be slightly '
+                        'different to FFT/AFT results.')
         return lib.StreamObject.check_sanity(self)
 
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
@@ -281,7 +281,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         else:
             kpts_union = unique(numpy.vstack([self.kpts, self.kpts_band]))[0]
 
-        if self._prefer_ccdf or cell.omega != 0:
+        if self._prefer_ccdf or cell.omega > 0:
             # For long-range integrals _CCGDFBuilder is the only option
             dfbuilder = _CCGDFBuilder(cell, auxcell, kpts_union)
             dfbuilder.eta = self.eta
@@ -381,7 +381,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             kpts_lst = numpy.zeros((1,3))
         else:
             kpts_lst = numpy.reshape(kpts, (-1,3))
-        if self._prefer_ccdf or cell.omega != 0:
+        if self._prefer_ccdf or cell.omega > 0:
             # For long-range integrals _CCGDFBuilder is the only option
             dfbuilder = _CCNucBuilder(cell, kpts_lst).build()
         else:
@@ -401,7 +401,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             kpts_lst = numpy.zeros((1,3))
         else:
             kpts_lst = numpy.reshape(kpts, (-1,3))
-        if self._prefer_ccdf or cell.omega != 0:
+        if self._prefer_ccdf or cell.omega > 0:
             # For long-range integrals _CCGDFBuilder is the only option
             dfbuilder = _CCNucBuilder(cell, kpts_lst).build()
         else:

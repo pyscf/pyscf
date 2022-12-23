@@ -1770,6 +1770,7 @@ def _primitive_gto_cutoff(cell, precision=None):
     if precision is None:
         precision = cell.precision / cell.vol
 
+    omega = cell.omega
     rcut = []
     ke_cutoff = []
     for ib in range(cell.nbas):
@@ -1777,13 +1778,12 @@ def _primitive_gto_cutoff(cell, precision=None):
         es = cell.bas_exp(ib)
         cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
         norm_ang = ((2*l+1)/(4*numpy.pi))**.5
-        fac = 2*numpy.pi*cs*norm_ang/es / precision
+        fac = 2*numpy.pi/cell.vol * cs*norm_ang/es / precision
         r = cell.rcut
         r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
         r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
 
-        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision)
-
+        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision, omega)
         rcut.append(r)
         ke_cutoff.append(ke_guess)
     return rcut, ke_cutoff

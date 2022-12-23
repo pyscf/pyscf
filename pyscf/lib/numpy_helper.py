@@ -1057,27 +1057,40 @@ def condense(opname, a, loc_x, loc_y=None):
     if opname.startswith('NP_'):
         opname = opname[3:]
 
-    if (a.dtype != numpy.double or
-        opname not in ('sum', 'max', 'min', 'abssum', 'absmax', 'absmin', 'norm')):
-        tmp = numpy.empty((nloc_x, a.shape[1]), dtype=a.dtype)
-        out = numpy.empty((nloc_x, nloc_y), dtype=a.dtype)
-        op = getattr(numpy, opname)
-        for i, (i0, i1) in enumerate(zip(loc_x[:-1], loc_x[1:])):
-            tmp[i] = op(a[i0:i1], axis=0)
-        for j, (j0, j1) in enumerate(zip(loc_y[:-1], loc_y[1:])):
-            out[:,j] = op(tmp[:,j0:j1], axis=1)
+    if (a.dtype == numpy.double and
+        opname in ('sum', 'max', 'min', 'abssum', 'absmax', 'absmin', 'norm')):
+        op = getattr(_np_helper, 'NP_' + opname)
+        if a.flags.f_contiguous:
+            a = transpose(a.T)
+        a = numpy.asarray(a, order='C')
+        out = numpy.zeros((nloc_x, nloc_y))
+        _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
+                              a.ctypes.data_as(ctypes.c_void_p),
+                              loc_x.ctypes.data_as(ctypes.c_void_p),
+                              loc_y.ctypes.data_as(ctypes.c_void_p),
+                              ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
         return out
 
-    op = getattr(_np_helper, 'NP_' + opname)
-    if a.flags.f_contiguous:
-        a = transpose(a.T)
-    a = numpy.asarray(a, order='C')
-    out = numpy.zeros((nloc_x, nloc_y))
-    _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
-                          a.ctypes.data_as(ctypes.c_void_p),
-                          loc_x.ctypes.data_as(ctypes.c_void_p),
-                          loc_y.ctypes.data_as(ctypes.c_void_p),
-                          ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
+    if a.dtype in (bool, numpy.int8) and opname in ('any', 'all'):
+        op = getattr(_np_helper, 'NP_' + opname)
+        if a.flags.f_contiguous:
+            a = transpose(a.T)
+        a = numpy.asarray(a, order='C')
+        out = numpy.zeros((nloc_x, nloc_y), dtype=a.dtype)
+        _np_helper.NPbcondense(op, out.ctypes.data_as(ctypes.c_void_p),
+                               a.ctypes.data_as(ctypes.c_void_p),
+                               loc_x.ctypes.data_as(ctypes.c_void_p),
+                               loc_y.ctypes.data_as(ctypes.c_void_p),
+                               ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
+        return out
+
+    tmp = numpy.empty((nloc_x, a.shape[1]), dtype=a.dtype)
+    out = numpy.empty((nloc_x, nloc_y), dtype=a.dtype)
+    op = getattr(numpy, opname)
+    for i, (i0, i1) in enumerate(zip(loc_x[:-1], loc_x[1:])):
+        tmp[i] = op(a[i0:i1], axis=0)
+    for j, (j0, j1) in enumerate(zip(loc_y[:-1], loc_y[1:])):
+        out[:,j] = op(tmp[:,j0:j1], axis=1)
     return out
 
 def expm(a):

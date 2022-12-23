@@ -141,7 +141,7 @@ class KnownValues(unittest.TestCase):
             dfbuilder.exclude_d_aux = False
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 1.5094843470069796, 8)
+            self.assertAlmostEqual(lib.fp(v2), 1.5094843470069796, 7)
 
     def test_make_j3c(self):
         dfbuilder = rsdf_builder._RSGDFBuilder(cell, auxcell, kpts).build()
@@ -151,9 +151,9 @@ class KnownValues(unittest.TestCase):
             for ki in range(nkpts):
                 for kj in range(nkpts):
                     v_s2.append(load(tmpf.name, kpts[[ki, kj]]))
-            self.assertAlmostEqual(lib.fp(v_s2[0]), 1.5094843470069796, 8)
-            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), 3.8063416643507173+0.08901920438689674j, 8)
-            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 1.2630074629589676+0j, 8)
+            self.assertAlmostEqual(lib.fp(v_s2[0]), 1.5094843470069796, 7)
+            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), 3.8063416643507173+0.08901920438689674j, 7)
+            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 1.2630074629589676+0j, 7)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
             with df.CDERIArray(tmpf.name) as cderi_array:
@@ -224,7 +224,7 @@ class KnownValues(unittest.TestCase):
     def test_get_nuc(self):
         dfbuilder = rsdf_builder._RSNucBuilder(cell).build()
         v1 = dfbuilder.get_nuc()
-        self.assertAlmostEqual(lib.fp(v1), -2.9338697931882134, 9)
+        self.assertAlmostEqual(lib.fp(v1), -2.9338697931882134, 7)
 
     def test_get_nuc_0d(self):
         cell = pgto.M(atom='He 0 0 0; He 0.9 0 0',
@@ -246,12 +246,17 @@ class KnownValues(unittest.TestCase):
         vpp = dfbuilder.get_pp()
         self.assertAlmostEqual(lib.fp(vpp), -0.34980233064594995, 8)
 
+        kpts = cell.make_kpts([3,3,2])
+        dfbuilder = rsdf_builder._RSNucBuilder(cell, kpts).build()
+        vpp = dfbuilder.get_pp()
+        self.assertAlmostEqual(lib.fp(vpp), 0.08279960176438528+0j, 7)
+
     def test_vs_fft(self):
         cell = pgto.M(
             a = np.eye(3) * 2.8,
             atom = 'He    0.    2.2      1.; He    1.    1.       1.',
             basis = [[0, [1.2, 1.], [.7, .5], [0.4, .5]], [1, [1.1, .5], [0.4, .5]]],
-            mesh = [14] * 3,
+            mesh = [15] * 3,
             verbose = 0,
         )
         auxcell = df.make_auxcell(cell,

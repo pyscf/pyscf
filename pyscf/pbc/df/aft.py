@@ -147,25 +147,16 @@ def estimate_omega_min(cell, cutoff=CUTOFF):
 
 estimate_omega = estimate_omega_min
 
-# \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 exp(-k^2/(4 omega^2)) rho(k) < precision
-# ~ 16 pi^2 int_cutoff^infty exp(-k^2/(4*omega^2)) dk
-# = 16 pi^{5/2} omega erfc(sqrt(ke_cutoff/(2*omega^2)))
-# ~ 16 pi^2 exp(-ke_cutoff/(2*omega^2)))
 def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
-    '''Energy cutoff to converge attenuated Coulomb in moment space
+    '''Energy cutoff for AFTDF to converge attenuated Coulomb in moment space
     '''
-    if omega == 0:
-        return pbcgto.estimate_ke_cutoff(cell, precision)
-
     if precision is None:
         precision = cell.precision
-    ai = np.hstack(cell.bas_exps()).max()
-    theta = 1./(1./ai + omega**-2)
-    fac = 32*np.pi**2 * theta / precision
-    Ecut = 20.
-    Ecut = np.log(fac / (2*Ecut) + 1.) * 2*theta
-    Ecut = np.log(fac / (2*Ecut) + 1.) * 2*theta
-    return Ecut
+    exps, cs = pbcgto.cell._extract_pgto_params(cell, 'max')
+    ls = cell._bas[:,gto.ANG_OF]
+    cs = gto.gto_norm(ls, exps)
+    Ecut = _estimate_ke_cutoff(exps, ls, cs, precision, omega)
+    return Ecut.max()
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     '''The minimal omega in attenuated Coulombl given energy cutoff
@@ -334,21 +325,30 @@ def _fake_nuc(cell, with_pseudo=True):
     return fakenuc
 
 
+def _estimate_ke_cutoff(alpha, l, c, precision, omega=0):
+    '''Energy cutoff estimation for 4-center Coulomb repulsion integrals'''
+    norm_ang = ((2*l+1)/(4*np.pi))**2
+    fac = 8*np.pi**5 * c**4*norm_ang / (2*alpha)**(4*l+2) / precision
+    Ecut = 20.
+    if omega <= 0:
+        Ecut = np.log(fac * (Ecut*.5)**(2*l-.5) + 1.) * 2*alpha
+        Ecut = np.log(fac * (Ecut*.5)**(2*l-.5) + 1.) * 2*alpha
+    else:
+        theta = 1./(1./(2*alpha) + 1./(2*omega**2))
+        Ecut = np.log(fac * (Ecut*.5)**(2*l-.5) + 1.) * theta
+        Ecut = np.log(fac * (Ecut*.5)**(2*l-.5) + 1.) * theta
+    return Ecut
+
 def estimate_ke_cutoff(cell, precision=None):
     '''Energy cutoff estimation for 4-center Coulomb repulsion integrals'''
-    exps = np.array([e.min() for e in cell.bas_exps()])
-    if exps.size == 0:
+    if cell.nbas == 0:
         return 0.
     if precision is None:
         precision = cell.precision
+    exps, cs = pbcgto.cell._extract_pgto_params(cell, 'max')
     ls = cell._bas[:,gto.ANG_OF]
     cs = gto.gto_norm(ls, exps)
-    norm_ang = ((2*ls+1)/(4*np.pi))**2
-    fac = 8*np.pi**5 * cs**4*norm_ang / (2*exps)**(4*ls+2) / precision
-
-    Ecut = 20.
-    Ecut = np.log(fac * (Ecut*.5)**(2*ls-.5) + 1.) * 2*exps
-    Ecut = np.log(fac * (Ecut*.5)**(2*ls-.5) + 1.) * 2*exps
+    Ecut = _estimate_ke_cutoff(exps, ls, cs, precision)
     return Ecut.max()
 
 

@@ -328,7 +328,7 @@ class KnownValues(unittest.TestCase):
         mf.with_df.eta = 0.3
         mf.with_df.mesh = cell.mesh
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.2683850732448168, 7)
+        self.assertAlmostEqual(e1, -3.2683850732448168, 5)
 
     def test_rhf_2d_fft(self):
         L = 4
@@ -381,7 +381,7 @@ class KnownValues(unittest.TestCase):
         mf.with_df.mesh = cell.mesh
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.245417718, 7)
+        self.assertAlmostEqual(e1, -3.245417718, 6)
 
     def test_ghf_1d(self):
         L = 4
@@ -403,7 +403,7 @@ class KnownValues(unittest.TestCase):
         mf.with_df.mesh = cell.mesh
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.245417718, 7)
+        self.assertAlmostEqual(e1, -3.245417718, 6)
 
     def test_get_veff(self):
         mf = pscf.RHF(cell)

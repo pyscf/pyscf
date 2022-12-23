@@ -186,7 +186,7 @@ class KnownValues(unittest.TestCase):
         mf.omega = '0.7'
         mf.exxdiv = None
         mf.kernel()
-        #self.assertAlmostEqual(mf.e_tot, -2.4836186361124617, 4)
+        self.assertAlmostEqual(mf.e_tot, -2.4836186361124617, 3)
 
         mol = cell.to_mol()
         mf1 = mol.RKS().density_fit()

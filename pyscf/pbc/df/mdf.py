@@ -22,8 +22,6 @@ Ref:
 J. Chem. Phys. 147, 164119 (2017)
 '''
 
-import os
-
 import tempfile
 import numpy as np
 import h5py

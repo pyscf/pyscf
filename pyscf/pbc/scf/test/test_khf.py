@@ -294,9 +294,9 @@ class KnownValues(unittest.TestCase):
         vhf = 0
         f = khf.get_fock(kmf, kmf.get_hcore(), s, vhf, d, cycle=0,
                          diis_start_cycle=2, damp_factor=0.5)
-        self.assertAlmostEqual(np.linalg.norm(f[0]), 95.32749551722966, 8)
-        self.assertAlmostEqual(np.linalg.norm(f[1]), 73.9231303798864, 8)
-        self.assertAlmostEqual(np.linalg.norm(f[2]), 58.973290554565196, 8)
+        self.assertAlmostEqual(np.linalg.norm(f[0]), 95.32749551722966, 6)
+        self.assertAlmostEqual(np.linalg.norm(f[1]), 73.9231303798864, 6)
+        self.assertAlmostEqual(np.linalg.norm(f[2]), 58.973290554565196, 6)
 
         vhf = np.zeros((2,len(kpts),nao,nao))
         d1 = np.asarray([d/2, d/2])

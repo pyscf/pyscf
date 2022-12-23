@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include "vhf/fblas.h"
 #include "np_helper/np_helper.h"
 
@@ -459,4 +460,123 @@ void PBC_kzdot_CNN_s1(double *outR, double *outI,
         }
         free(bufR);
 }
+}
+
+#define BLEN    24
+// vk += np.einsum('ijg,jk,lkg,g->il', pqG, dm, pqG.conj(), coulG)
+// vk += np.einsum('ijg,li,lkg,g->kj', pqG, dm, pqG.conj(), coulG)
+void PBC_kcontract1(double *vkR, double *vkI, double *dmR, double *dmI,
+                    double *pqGR, double *pqGI, double *coulG,
+                    int *ki_idx, int *kj_idx, int8_t *k_to_compute,
+                    int swap_2e, int n_dm, int nao, int ngrids, int nkpts)
+{
+        int nao2 = nao * nao;
+        int size_vk = n_dm * nkpts * nao2;
+        double *vtmpR = calloc(sizeof(double), size_vk*2);
+        double *vtmpI = vtmpR + size_vk;
+#pragma omp parallel
+{
+        char TRANS_T = 'T';
+        char TRANS_N = 'N';
+        double D1 = 1.;
+        double D0 = 0.;
+        double N1 = -1.;
+        size_t Naog = nao * ngrids;
+        double *pLqR = malloc(sizeof(double) * BLEN * nao2 * 4);
+        double *pLqI = pLqR + BLEN * nao2;
+        double *bufR = pLqI + BLEN * nao2;
+        double *bufI = bufR + BLEN * nao2;
+        double *outR, *outI, *inR, *inI;
+        double *dR, *dI, *vR, *vI;
+        int k, i, j, ig, ki, kj, g0, mg, nm, i_dm;
+        double c;
+#pragma omp for schedule(dynamic)
+        for (k = 0; k < nkpts; k++) {
+                ki = ki_idx[k];
+                kj = kj_idx[k];
+                if (!(k_to_compute[ki] || (swap_2e && k_to_compute[kj]))) {
+                        continue;
+                }
+
+                for (g0 = 0; g0 < ngrids; g0 += BLEN) {
+                        mg = MIN(BLEN, ngrids-g0);
+                        nm = mg * nao;
+                        // pLqR[:] = pqGR[k].transpose(0,2,1)
+                        // pLqI[:] = pqGI[k].transpose(0,2,1)
+                        for (i = 0; i < nao; i++) {
+                                outR = pLqR + i * nm;
+                                outI = pLqI + i * nm;
+                                inR = pqGR + (k * nao + i) * Naog + g0;
+                                inI = pqGI + (k * nao + i) * Naog + g0;
+                                for (j = 0; j < nao; j++) {
+                                for (ig = 0; ig < mg; ig++) {
+                                        outR[ig*nao+j] = inR[j*ngrids+ig];
+                                        outI[ig*nao+j] = inI[j*ngrids+ig];
+                                } }
+                        }
+                        for (i_dm = 0; i_dm < n_dm; i_dm++) {
+                                dR = dmR + i_dm * nkpts * nao2;
+                                dI = dmI + i_dm * nkpts * nao2;
+                                vR = vkR + i_dm * nkpts * nao2;
+                                vI = vkI + i_dm * nkpts * nao2;
+
+                                if (k_to_compute[ki]) {
+// vk += np.einsum('igj,jk,lgk,g->il', pqG, dm, pqG.conj(), coulG)
+dgemm_(&TRANS_N, &TRANS_N, &nao, &nm, &nao, &D1, dR+kj*nao2, &nao, pLqR, &nao, &D0, bufR, &nao);
+dgemm_(&TRANS_N, &TRANS_N, &nao, &nm, &nao, &N1, dI+kj*nao2, &nao, pLqI, &nao, &D1, bufR, &nao);
+dgemm_(&TRANS_N, &TRANS_N, &nao, &nm, &nao, &D1, dI+kj*nao2, &nao, pLqR, &nao, &D0, bufI, &nao);
+dgemm_(&TRANS_N, &TRANS_N, &nao, &nm, &nao, &D1, dR+kj*nao2, &nao, pLqI, &nao, &D1, bufI, &nao);
+for (i = 0; i < nao; i++) {
+        outR = bufR + i * nm;
+        outI = bufI + i * nm;
+        for (ig = 0; ig < mg; ig++) {
+                c = coulG[g0+ig];
+                for (j = 0; j < nao; j++) {
+                        outR[ig*nao+j] *= c;
+                        outI[ig*nao+j] *= c;
+                }
+        }
+}
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nm, &D1, pLqR, &nm, bufR, &nm, &D1, vR+ki*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nm, &D1, pLqI, &nm, bufI, &nm, &D1, vR+ki*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nm, &N1, pLqI, &nm, bufR, &nm, &D1, vI+ki*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nm, &D1, pLqR, &nm, bufI, &nm, &D1, vI+ki*nao2, &nao);
+                        }
+
+                                if (swap_2e && k_to_compute[kj]) {
+                                        vR = vtmpR + i_dm * nkpts * nao2;
+                                        vI = vtmpI + i_dm * nkpts * nao2;
+// vk += np.einsum('igj,li,lgk,g->kj', pqG, dm, pqG.conj(), coulG)
+dgemm_(&TRANS_N, &TRANS_N, &nm, &nao, &nao, &D1, pLqR, &nm, dR+ki*nao2, &nao, &D0, bufR, &nm);
+dgemm_(&TRANS_N, &TRANS_N, &nm, &nao, &nao, &N1, pLqI, &nm, dI+ki*nao2, &nao, &D1, bufR, &nm);
+dgemm_(&TRANS_N, &TRANS_N, &nm, &nao, &nao, &D1, pLqI, &nm, dR+ki*nao2, &nao, &D0, bufI, &nm);
+dgemm_(&TRANS_N, &TRANS_N, &nm, &nao, &nao, &D1, pLqR, &nm, dI+ki*nao2, &nao, &D1, bufI, &nm);
+for (i = 0; i < nao; i++) {
+        outR = bufR + i * nm;
+        outI = bufI + i * nm;
+        for (ig = 0; ig < mg; ig++) {
+                c = coulG[g0+ig];
+                for (j = 0; j < nao; j++) {
+                        outR[ig*nao+j] *= c;
+                        outI[ig*nao+j] *= c;
+                }
+        }
+}
+dgemm_(&TRANS_N, &TRANS_T, &nao, &nao, &nm, &D1, bufR, &nao, pLqR, &nao, &D1, vR+kj*nao2, &nao);
+dgemm_(&TRANS_N, &TRANS_T, &nao, &nao, &nm, &D1, bufI, &nao, pLqI, &nao, &D1, vR+kj*nao2, &nao);
+dgemm_(&TRANS_N, &TRANS_T, &nao, &nao, &nm, &D1, bufI, &nao, pLqR, &nao, &D1, vI+kj*nao2, &nao);
+dgemm_(&TRANS_N, &TRANS_T, &nao, &nao, &nm, &N1, bufR, &nao, pLqI, &nao, &D1, vI+kj*nao2, &nao);
+                                }
+                        }
+                }
+        }
+        free(pLqR);
+#pragma omp barrier
+#pragma omp for schedule(static)
+        for (i = 0; i < size_vk; i++) {
+                vkR[i] += vtmpR[i];
+                vkI[i] += vtmpI[i];
+        }
+}
+        free(vtmpR);
 }

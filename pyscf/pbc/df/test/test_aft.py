@@ -29,7 +29,6 @@ from pyscf.pbc.df import fft, aft, mdf, rsdf_builder, gdf_builder
 # port from ao2mo/eris.py
 #
 ##################################################
-from pyscf import lib
 from pyscf.pbc import lib as pbclib
 from pyscf.pbc.dft.gen_grid import gen_uniform_grids
 from pyscf.pbc.dft.numint import eval_ao
@@ -416,14 +415,15 @@ class KnownValues(unittest.TestCase):
 
     def test_get_eri_gamma(self):
         odf0 = mdf.MDF(cell1)
+        odf0.mesh = [15]* 3
         odf = aft.AFTDF(cell1)
         ref = odf0.get_eri()
         eri0000 = odf.get_eri(compact=True)
         self.assertTrue(eri0000.dtype == numpy.double)
-        self.assertTrue(np.allclose(eri0000, ref, atol=1e-6, rtol=1e-6))
+        self.assertAlmostEqual(abs(eri0000-ref).max(), 0, 7)
         self.assertAlmostEqual(lib.fp(eri0000), 0.23714016293926865, 8)
 
-    def test_get_eri_gamma(self):
+    def test_get_eri_gamma1(self):
         odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         eri1111 = odf.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))

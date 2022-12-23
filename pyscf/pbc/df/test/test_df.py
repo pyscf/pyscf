@@ -73,7 +73,7 @@ class KnownValues(unittest.TestCase):
         cell.pseudo = 'gth-pade'
         cell.build()
         v1 = df.DF(cell).get_pp([.25]*3)
-        self.assertAlmostEqual(lib.fp(v1), -0.0533131779366407-0.11895124492447073j, 9)
+        self.assertAlmostEqual(lib.fp(v1), -0.0533131779366407-0.11895124492447073j, 8)
 
     def test_get_eri_gamma(self):
         odf = df.DF(cell)

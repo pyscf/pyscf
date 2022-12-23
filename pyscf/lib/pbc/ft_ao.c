@@ -58,17 +58,19 @@ static int _assemble2c(FPtrIntor intor, FPtr_eval_gz eval_gz,
         int natm = envs_cint->natm;
         int nbas = envs_cint->nbas;
 //        int ncomp = envs_cint->ncomp;
-        int *sh_loc = envs_bvk->sh_loc;
-        int ish0 = sh_loc[ish_cell0];
-        int ish1 = sh_loc[ish_cell0+1];
-        int jsh0 = sh_loc[jsh_bvk];
-        int jsh1 = sh_loc[jsh_bvk+1];
+        int *seg_loc = envs_bvk->seg_loc;
+        int *seg2sh = envs_bvk->seg2sh;
+        int iseg0 = seg_loc[ish_cell0];
+        int iseg1 = seg_loc[ish_cell0+1];
+        int jseg0 = seg_loc[jsh_bvk];
+        int jseg1 = seg_loc[jsh_bvk+1];
         int empty = 1;
-        if (ish0 == ish1 || jsh0 == jsh1) {
+        if (iseg0 == iseg1 || jseg0 == jseg1) {
                 return !empty;
         }
 
-        int nimgs = envs_bvk->nimgs;
+        int jsh0 = seg2sh[jseg0];
+        int jsh1 = seg2sh[jseg1];
         int ngrids = envs_bvk->nGv;
         int dg = grid1 - grid0;
         int *atm = envs_cint->atm;
@@ -79,17 +81,13 @@ static int _assemble2c(FPtrIntor intor, FPtr_eval_gz eval_gz,
         int *gxyz = envs_bvk->gxyz;
         int *gs = envs_bvk->gs;
         int8_t *ovlp_mask = envs_bvk->ovlp_mask;
-        int *bas_map = envs_bvk->bas_map;
         int shls[2];
-        int ish, jsh, ishp;
+        int ish, jsh, iseg;
 
-        for (ish = ish0; ish < ish1; ish++) {
-                if (bas_map[ish] % nimgs != 0) {
-                        continue;
-                }
-                ishp = bas_map[ish] / nimgs;
+        for (iseg = iseg0; iseg < iseg1; iseg++) {
+                ish = seg2sh[iseg];
                 for (jsh = jsh0; jsh < jsh1; jsh++) {
-                        if (!ovlp_mask[ishp*nbas+jsh]) {
+                        if (!ovlp_mask[iseg*nbas+jsh]) {
                                 continue;
                         }
                         shls[0] = ish;
@@ -607,8 +605,8 @@ void PBC_ft_zsort_s1hermi(double *out, double *in, int fill_zero,
 void PBC_ft_bvk_drv(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrFill fill, FPtrSort fsort,
                     double *out, double *expLkR, double *expLkI,
                     int bvk_ncells, int nimgs, int nkpts, int nbasp, int comp,
-                    int *sh_loc, int *cell0_ao_loc, int *shls_slice,
-                    int8_t *ovlp_mask, int8_t *cell0_ovlp_mask, int *bas_map,
+                    int *seg_loc, int *seg2sh, int *cell0_ao_loc, int *shls_slice,
+                    int8_t *ovlp_mask, int8_t *cell0_ovlp_mask,
                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -621,8 +619,8 @@ void PBC_ft_bvk_drv(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrFill fill, FPtrSo
         int di = GTOmax_shell_dim(cell0_ao_loc, shls_slice, 2);
         BVKEnvs envs_bvk = {bvk_ncells, nimgs,
                 nkpts, nkpts, nbasp, comp, nGv, 0,
-                sh_loc, cell0_ao_loc, bas_map, shls_slice, NULL,
-                expLkR, expLkI, ovlp_mask, NULL, 0., Gv, b, gxyz, gs};
+                seg_loc, seg2sh, cell0_ao_loc, shls_slice, NULL,
+                expLkR, expLkI, ovlp_mask, NULL, 0.f, 0.f, Gv, b, gxyz, gs};
         size_t count = nkpts + bvk_ncells;
         size_t size_v = di * di * BLOCK_SIZE * count * comp * OF_CMPLX;
 

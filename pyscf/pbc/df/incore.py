@@ -37,19 +37,26 @@ KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
 
 libpbc = lib.load_library('libpbc')
 
-def make_auxmol(cell, auxbasis=None):
+def make_auxcell(cell, auxbasis=None):
     '''
     See pyscf.df.addons.make_auxmol
     '''
     auxcell = pyscf.df.addons.make_auxmol(cell, auxbasis)
-    auxcell.rcut = pbcgto.estimate_rcut(auxcell, cell.precision)
+    auxcell.rcut = pbcgto.estimate_rcut(auxcell)
+    ke_cutoff = pbcgto.estimate_ke_cutoff(auxcell)
+    a = cell.lattice_vectors()
+    mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
+    dimension = cell.dimension
+    if dimension < 2 or (dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'):
+        mesh[dimension:] = cell.mesh[dimension:]
+    auxcell.mesh = mesh
     return auxcell
 
-make_auxcell = make_auxmol
+make_auxmol = make_auxcell
 
 def format_aux_basis(cell, auxbasis='weigend+etb'):
     '''For backward compatibility'''
-    return make_auxmol(cell, auxbasis)
+    return make_auxcell(cell, auxbasis)
 
 def aux_e2(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', comp=None,
            kptij_lst=np.zeros((1,2,3)), shls_slice=None, **kwargs):
@@ -155,6 +162,7 @@ class Int3cBuilder(lib.StreamObject):
         self.bvk_kmesh = None
         self.supmol = None
         self.ke_cutoff = None
+        self.direct_scf_tol = None
 
         self._keys = set(self.__dict__.keys())
 
@@ -163,6 +171,7 @@ class Int3cBuilder(lib.StreamObject):
             self.cell = cell
         self.rs_cell = None
         self.supmol = None
+        self.direct_scf_tol = None
         return self
 
     def build(self):
@@ -212,34 +221,48 @@ class Int3cBuilder(lib.StreamObject):
         intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
         nbasp = cell.nbas  # The number of shells in the primitive cell
 
-        # Instead to use precision, cutoff encounts the effects of lattice-sum
-        omega = supmol.omega
-        aux_exp = min(np.hstack(auxcell.bas_exps()).min(), 1.)
-        if omega == 0:
-            lattice_sum_factor = 2*np.pi*cell.rcut / aux_exp
+        if self.direct_scf_tol is None:
+            omega = supmol.omega
+            aux_exp = np.hstack(auxcell.bas_exps()).min()
+            cell_exp = np.hstack(cell.bas_exps()).min()
+            if omega == 0:
+                theta = 1./(1./cell_exp + 1./aux_exp)
+            else:
+                theta = 1./(1./cell_exp + 1./aux_exp + omega**-2)
+            lattice_sum_factor = max(2*np.pi*cell.rcut/(cell.vol*theta), 1)
+            cutoff = cell.precision / lattice_sum_factor**2 * .1
+            log.debug1('int3c_kernel integral omega=%g theta=%g cutoff=%g',
+                       omega, theta, cutoff)
         else:
-            theta = 1./(1./aux_exp + omega**-2)
-            lattice_sum_factor = 2*np.pi*cell.rcut / theta
-        cutoff = supmol.precision / lattice_sum_factor
-        log.debug1('int3c_kernel integral cutoff %g', cutoff)
+            cutoff = self.direct_scf_tol
+        log_cutoff = np.log(cutoff)
 
         atm, bas, env = gto.conc_env(supmol._atm, supmol._bas, supmol._env,
                                      rs_auxcell._atm, rs_auxcell._bas, rs_auxcell._env)
-        sh_loc = _conc_locs(supmol.sh_loc, rs_auxcell.sh_loc)
         cell0_ao_loc = _conc_locs(cell.ao_loc, auxcell.ao_loc)
+        seg_loc = _conc_locs(supmol.seg_loc, rs_auxcell.sh_loc)
+        # mimic the lattice sum with range 1
+        aux_seg2sh = np.arange(rs_auxcell.nbas + 1)
+        seg2sh = _conc_locs(supmol.seg2sh, aux_seg2sh)
+
+        q_cond = self.get_q_cond(supmol)
+        ovlp_mask = q_cond > np.log(cutoff)
+        bvk_ovlp_mask = lib.condense('np.any', ovlp_mask, supmol.sh_loc)
+        cell0_ovlp_mask = bvk_ovlp_mask.reshape(
+            bvk_ncells, nbasp, bvk_ncells, nbasp).any(axis=2).any(axis=0)
+        cell0_ovlp_mask = cell0_ovlp_mask.astype(np.int8)
 
         if 'ECP' in intor:
-            q_cond_aux = None
-            env[gto.AS_ECPBAS_OFFSET] = supmol.nbas + 1
+            # rs_auxcell is a placeholder only to represent the ecpbas.
+            # Ensure the ECPBAS_OFFSET be consistent with the treatment in pbc.gto.ecp
+            env[gto.AS_ECPBAS_OFFSET] = len(bas)
+            bas = np.asarray(np.vstack([bas, cell._ecpbas]), dtype=np.int32)
             cintopt = _vhf.make_cintopt(atm, bas, env, intor)
+            # q_cond may not be accurate enough to screen ECP integral.
+            # Add penalty 1e-2 to reduce the screening error
+            log_cutoff = np.log(cutoff * 1e-2)
         else:
-            q_cond_aux = self.get_q_cond_aux(supmol, rs_auxcell)
             cintopt = _vhf.make_cintopt(supmol._atm, supmol._bas, supmol._env, intor)
-
-        ovlp_mask, cell0_ovlp_mask = self.get_ovlp_mask(cutoff, supmol, cintopt)
-        # bas_map maps the basis index in supmol and rs_auxcell to the basis
-        # index for the cell-auxcell 3c2e integrals
-        bas_map = self._conc_bas_map(supmol, rs_auxcell)
 
         # Estimate the buffer size required by PBCfill_nr3c functions
         cache_size = max(_get_cache_size(cell, intor),
@@ -299,7 +322,7 @@ class Int3cBuilder(lib.StreamObject):
             intor = 'PBC' + intor
         log.debug1('is_pbcintor = %d, intor = %s', is_pbcintor, intor)
 
-        log.timer_debug1('int3c kernel initialization', *cput0)
+        log.timer('int3c kernel initialization', *cput0)
 
         def int3c(shls_slice=None, outR=None, outI=None):
             cput0 = logger.process_clock(), logger.perf_counter()
@@ -328,10 +351,10 @@ class Int3cBuilder(lib.StreamObject):
                 outI = np.ndarray(shape, buffer=outI)
                 outI[:] = 0
 
-            if q_cond_aux is None:
-                q_cond_aux_ptr = lib.c_null_ptr()
+            if q_cond is None:
+                q_cond_ptr = lib.c_null_ptr()
             else:
-                q_cond_aux_ptr = q_cond_aux.ctypes.data_as(ctypes.c_void_p)
+                q_cond_ptr = q_cond.ctypes.data_as(ctypes.c_void_p)
 
             drv(getattr(libpbc, intor), getattr(libpbc, fill),
                 ctypes.c_int(is_pbcintor),
@@ -342,13 +365,12 @@ class Int3cBuilder(lib.StreamObject):
                 reindex_k.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts_ij),
                 ctypes.c_int(bvk_ncells), ctypes.c_int(nimgs),
                 ctypes.c_int(nkpts), ctypes.c_int(nbasp), ctypes.c_int(comp),
-                sh_loc.ctypes.data_as(ctypes.c_void_p),
+                seg_loc.ctypes.data_as(ctypes.c_void_p),
+                seg2sh.ctypes.data_as(ctypes.c_void_p),
                 cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
                 (ctypes.c_int*6)(*shls_slice),
-                ovlp_mask.ctypes.data_as(ctypes.c_void_p),
                 cell0_ovlp_mask.ctypes.data_as(ctypes.c_void_p),
-                bas_map.ctypes.data_as(ctypes.c_void_p),
-                q_cond_aux_ptr, ctypes.c_double(cutoff),
+                q_cond_ptr, ctypes.c_float(log_cutoff),
                 cintopt, ctypes.c_int(cache_size),
                 atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
                 bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
@@ -367,65 +389,18 @@ class Int3cBuilder(lib.StreamObject):
                     return outR, outI
         return int3c
 
-#    def get_q_cond(self, supmol=None):
-#        '''Integral screening condition max(sqrt((ij|ij))) inside the supmol'''
-#        supmol = self.supmol
-#        intor = 'int2e_sph'
-#        cintopt = lib.c_null_ptr()
-#        nbas = supmol.nbas
-#        q_cond = np.empty((nbas, nbas))
-#        with supmol.with_integral_screen(supmol.precision**2):
-#            ao_loc = gto.moleintor.make_loc(supmol._bas, intor)
-#            libpbc.CVHFset_int2e_q_cond(
-#                getattr(libpbc, intor), cintopt,
-#                q_cond.ctypes.data_as(ctypes.c_void_p),
-#                ao_loc.ctypes.data_as(ctypes.c_void_p),
-#                supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
-#                supmol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
-#                supmol._env.ctypes.data_as(ctypes.c_void_p))
-#        return q_cond
-#
-    def get_q_cond_aux(self, supmol=None, rs_auxcell=None):
-        '''To compute Schwarz inequality for auxiliary basis'''
-        return None
-
-    # FIXME: based on sqrt(eri) or the AO overlap?
-    def get_ovlp_mask(self, cutoff, supmol=None, cintopt=None):
-        '''integral screening mask between two sup-mols based on Schwarz inequality'''
+    def get_q_cond(self, supmol=None):
+        '''Integral screening condition max(sqrt((ij|ij))) inside the supmol'''
         if supmol is None:
             supmol = self.supmol
-        bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
-        nbasp = self.cell.nbas  # The number of shells in the primitive cell
         nbas = supmol.nbas
-        ovlp_mask = np.empty((nbas, nbas), dtype=np.int8)
-        libpbc.PBCsupmol_ovlp_mask(
-            ovlp_mask.ctypes.data_as(ctypes.c_void_p), ctypes.c_double(cutoff),
+        q_cond = np.empty((nbas,nbas), dtype=np.float32)
+        libpbc.PBCVHFsetnr_scond(
+            q_cond.ctypes.data_as(ctypes.c_void_p),
             supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
             supmol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
             supmol._env.ctypes.data_as(ctypes.c_void_p))
-
-        bvk_ovlp_mask = lib.condense('np.any', ovlp_mask, supmol.sh_loc)
-        cell0_ovlp_mask = bvk_ovlp_mask.reshape(
-            bvk_ncells, nbasp, bvk_ncells, nbasp).any(axis=2).any(axis=0)
-        ovlp_mask = ovlp_mask.astype(np.int8)
-        cell0_ovlp_mask = cell0_ovlp_mask.astype(np.int8)
-        return ovlp_mask, cell0_ovlp_mask
-
-    def _conc_bas_map(self, supmol=None, rs_auxcell=None):
-        '''bas_map is to assign each basis of supmol._bas the index in
-        [bvk_cell-id, bas-id, image-id]
-        '''
-        # Append aux_mask to bas_map as a temporary solution for function
-        # _assemble3c in fill_ints.c
-        if supmol is None:
-            supmol = self.supmol
-        if rs_auxcell is None:
-            rs_auxcell = self.rs_auxcell
-        assert isinstance(rs_auxcell, ft_ao._RangeSeparatedCell)
-        aux_mask = np.ones(rs_auxcell.ref_cell.nbas, dtype=np.int32)
-        bas_map = np.where(supmol.bas_mask.ravel())[0].astype(np.int32)
-        bas_map = np.asarray(np.append(bas_map, aux_mask), dtype=np.int32)
-        return bas_map
+        return q_cond
 
 
 libpbc.GTOmax_cache_size.restype = ctypes.c_int

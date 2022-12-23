@@ -33,7 +33,7 @@ from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
-RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.0)
+RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
 # kecut=10 can rougly converge GTO with alpha=0.5
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
 
@@ -123,10 +123,6 @@ def gen_ft_kernel(supmol, aosym='s1', intor='GTO_ft_ovlp', comp=1,
     ovlp_mask = ovlp_mask.astype(np.int8)
     cell0_ovlp_mask = cell0_ovlp_mask.astype(np.int8)
 
-    # A map to assign each basis of supmol._bas the index in
-    # [bvk_cell-id, bas-id, image-id]
-    bas_map = np.where(supmol.bas_mask.ravel())[0].astype(np.int32)
-
     b = rs_cell.reciprocal_vectors()
 
     log.timer_debug1('ft_ao kernel initialization', *cput0)
@@ -206,12 +202,12 @@ def gen_ft_kernel(supmol, aosym='s1', intor='GTO_ft_ovlp', comp=1,
             expLkI.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(bvk_ncells), ctypes.c_int(nimgs),
             ctypes.c_int(nkpts), ctypes.c_int(nbasp), ctypes.c_int(comp),
-            supmol.sh_loc.ctypes.data_as(ctypes.c_void_p),
+            supmol.seg_loc.ctypes.data_as(ctypes.c_void_p),
+            supmol.seg2sh.ctypes.data_as(ctypes.c_void_p),
             cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
             (ctypes.c_int*4)(*shls_slice),
             ovlp_mask.ctypes.data_as(ctypes.c_void_p),
             cell0_ovlp_mask.ctypes.data_as(ctypes.c_void_p),
-            bas_map.ctypes.data_as(ctypes.c_void_p),
             GvT.ctypes.data_as(ctypes.c_void_p), p_b, p_gxyzT, p_mesh, ctypes.c_int(nGv),
             supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
             supmol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
@@ -250,15 +246,14 @@ class _RangeSeparatedCell(pbcgto.Cell):
         self.bas_map = None
         # Type of each de-contracted basis
         self.bas_type = None
-        # For each shell in the original cell, the first basis in the rs-cell.
-        # sh_loc indicates how the rs-cell basis can be aggregated to restore
-        # the contracted basis in the original cell
+        # Each shell in the original cell can have several segments in the rs-cell.
+        # sh_loc indicates the shell Id in rs-cell for each shell in cell.
         self.sh_loc = None
 
     @classmethod
     def from_cell(cls, cell, ke_cut_threshold=None,
                   rcut_threshold=None, verbose=None):
-        from pyscf.pbc.dft.multigrid import _primitive_gto_cutoff
+        from pyscf.pbc.df import aft
         rs_cell = cls()
         rs_cell.__dict__.update(cell.__dict__)
         rs_cell.ref_cell = cell
@@ -274,8 +269,7 @@ class _RangeSeparatedCell(pbcgto.Cell):
         if not isinstance(ke_cut_threshold, float):
             ke_cut_threshold = np.min(ke_cut_threshold)
 
-        # rcut and energy cutoff for eash shell
-        rcuts, kecuts = _primitive_gto_cutoff(cell, cell.precision)
+        precision = cell.precision
 
         # preserves all environments defined in cell (e.g. omega, gauge origin)
         _env = cell._env.copy()
@@ -295,18 +289,26 @@ class _RangeSeparatedCell(pbcgto.Cell):
             bas_type.append(btype)
             bas_map.append(orig_id)
 
-        # Split shells based on rcut
         for ib, orig_bas in enumerate(cell._bas):
             nprim = orig_bas[gto.NPRIM_OF]
             nctr = orig_bas[gto.NCTR_OF]
-            ke = kecuts[ib]
+            l = orig_bas[gto.ANG_OF]
+            es = cell.bas_exp(ib)
+            cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
+            ke = aft._estimate_ke_cutoff(es, l, cs, precision)
 
             smooth_mask = ke < ke_cut_threshold
             if rcut_threshold is None:
                 local_mask = ~smooth_mask
                 steep_mask = np.zeros_like(local_mask)
+                rcut = None
             else:
-                steep_mask = (~smooth_mask) & (rcuts[ib] < rcut_threshold)
+                norm_ang = ((2*l+1)/(4*np.pi))**.5
+                fac = 2*np.pi*cs/cell.vol * norm_ang/es / precision
+                rcut = cell.rcut
+                rcut = (np.log(fac * rcut**(l+1) + 1.) / es)**.5
+                rcut = (np.log(fac * rcut**(l+1) + 1.) / es)**.5
+                steep_mask = (~smooth_mask) & (rcut < rcut_threshold)
                 local_mask = (~steep_mask) & (~smooth_mask)
 
             pexp = orig_bas[gto.PTR_EXP]
@@ -328,7 +330,7 @@ class _RangeSeparatedCell(pbcgto.Cell):
                 es[smooth_mask],
             ])
             if log.verbose >= logger.DEBUG2:
-                log.debug2('bas %d rcuts %s  kecuts %s', ib, rcuts[ib], ke)
+                log.debug2('bas %d rcut %s  kecut %s', ib, rcut, ke)
                 log.debug2('steep %s, %s', np.where(steep_mask)[0], es[steep_mask])
                 log.debug2('local %s, %s', np.where(local_mask)[0], es[local_mask])
                 log.debug2('smooth %s, %s', np.where(smooth_mask)[0], es[smooth_mask])
@@ -382,6 +384,10 @@ class _RangeSeparatedCell(pbcgto.Cell):
         cell_d = self.view(pbcgto.Cell)
         mask = self.bas_type == SMOOTH_BASIS
         cell_d._bas = self._bas[mask]
+        segs = np.zeros(self.ref_cell.nbas)
+        segs[self.bas_map[mask]] = 1
+        cell_d.sh_loc = np.append(0, np.cumsum(segs)).astype(np.int32)
+        logger.debug1(self, 'cell_d.nbas %d', cell_d.nbas)
         if cell_d.nbas == 0:
             return cell_d
 
@@ -398,16 +404,16 @@ class _RangeSeparatedCell(pbcgto.Cell):
         cell_c._bas = self._bas[mask]
         cell_c.bas_map = cell_c.bas_map[mask]
         cell_c.bas_type = cell_c.bas_type[mask]
-        cell_c.sh_loc = None
-        if cell_c.nbas == 0:
-            return cell_c
+        segs = self.sh_loc[1:] - self.sh_loc[:-1]
+        segs[self.bas_map[~mask]] -= 1
+        cell_c.sh_loc = np.append(0, np.cumsum(segs)).astype(np.int32)
         cell_c.rcut = pbcgto.estimate_rcut(cell_c, self.precision)
         return cell_c
 
     def merge_diffused_block(self, aosym='s1'):
         '''For AO pair that are evaluated in blocks with using the basis
         partitioning self.compact_basis_cell() and self.smooth_basis_cell(),
-        merge the DD block into the CC, CD, DC blocks (D ~ compact basis,
+        merge the DD block into the CC, CD, DC blocks (C ~ compact basis,
         D ~ diffused basis)
         '''
         ao_loc = self.ref_cell.ao_loc
@@ -537,14 +543,27 @@ class ExtendedMole(gto.Mole):
         self.bvk_kmesh = None
         self.Ls = None
         self.bvkmesh_Ls = None
-        # For each shell in the bvk cell, the first basis in the supmole.
-        # sh_loc indicates the boundary of the batches in supmol. These batches
-        # can be aggregated to restore the original contracted basis in the bvk-cell
-        self.sh_loc = None
+        # seg_loc maps the shell Id in bvk cell to shell Id in bvk rs-cell.
+        # seg2sh maps the shell Id in bvk rs-cell to the shell Id in supmol.
+        # Lattice sum range for each bvk cell shell can be obtained
+        # (seg2sh[n+1] - seg2sh[n])
+        self.seg_loc = None
+        self.seg2sh = None
         # whether the basis bas_mask[bvk-cell-id, basis-id, image-id] is
         # needed to reproduce the periodicity
         self.bas_mask = None
         self.precision = None
+
+    @property
+    def sh_loc(self):
+        # A map for shell in bvk cell to shell Id in supmol
+        return self.seg2sh[self.seg_loc]
+
+    @property
+    def bas_map(self):
+        # A map to assign each basis of supmol._bas the index in
+        # [bvk_cell-id, bas-id, image-id]
+        return np.where(self.bas_mask.ravel())[0].astype(np.int32)
 
     @classmethod
     def from_cell(cls, cell, kmesh, rcut=None, verbose=None):
@@ -571,9 +590,10 @@ class ExtendedMole(gto.Mole):
         supmol.Ls = Ls
         supmol.bvkmesh_Ls = bvkmesh_Ls
         bas_mask = np.ones((bvk_ncells, cell.nbas, nimgs), dtype=bool)
-        supmol.sh_loc = supmol.bas_mask_to_sh_loc(cell, bas_mask, verbose)
+        supmol.seg_loc, supmol.seg2sh = supmol.bas_mask_to_segment(cell, bas_mask, verbose)
         supmol.bas_mask = bas_mask
         supmol.precision = cell.precision
+        supmol._env[gto.PTR_EXPCUTOFF] = -np.log(cell.precision**2)
 
         _bas_reordered = supmol._bas.reshape(
             nimgs, bvk_ncells, cell.nbas, gto.BAS_SLOTS).transpose(1,2,0,3)
@@ -590,6 +610,7 @@ class ExtendedMole(gto.Mole):
         rb = np.linalg.norm(supmol_bas_coords[:,:dim], axis=1)
         a = rs_cell.lattice_vectors()
 
+        # filter _bas
         nbas0 = self._bas.shape[0]
         if rb.size == self.bas_mask.size:
             dr = rb - np.linalg.norm(a[:dim])
@@ -604,9 +625,16 @@ class ExtendedMole(gto.Mole):
             self._bas = self._bas[bas_mask[self.bas_mask]]
             self.bas_mask = bas_mask
 
+        # filter _atm
+        atm_ids = np.unique(self._bas[:,gto.ATOM_OF])
+        atm_mapping = np.zeros(self._atm.shape[0], dtype=np.int32)
+        atm_mapping[atm_ids] = np.arange(atm_ids.size)
+        self._atm = self._atm[atm_ids]
+        self._bas[:,gto.ATOM_OF] = atm_mapping[self._bas[:,gto.ATOM_OF]]
+
         nbas1 = self._bas.shape[0]
         logger.debug1(self, 'strip_basis %d to %d ', nbas0, nbas1)
-        self.sh_loc = self.bas_mask_to_sh_loc(rs_cell, self.bas_mask)
+        self.seg_loc, self.seg2sh = self.bas_mask_to_segment(rs_cell, self.bas_mask)
         return self
 
     def get_ovlp_mask(self, cutoff=None):
@@ -619,8 +647,10 @@ class ExtendedMole(gto.Mole):
         cell_bas_coords = rs_cell.atom_coords()[rs_cell._bas[:,gto.ATOM_OF]]
 
         if cutoff is None:
-            lattice_sum_factor = 2*np.pi*rs_cell.rcut / (cell_exps.min()*2)
-            cutoff = self.precision / lattice_sum_factor
+            theta_ij = cell_exps.min() / 2
+            lattice_sum_fac = max(2*np.pi*rs_cell.rcut/(rs_cell.vol*theta_ij), 1)
+            cutoff = rs_cell.precision/lattice_sum_fac * .1
+            logger.debug(self, 'Set ft_ao cutoff to %g', cutoff)
 
         supmol_exps, supmol_cs = pbcgto.cell._extract_pgto_params(supmol, 'min')
         supmol_bas_coords = supmol.atom_coords()[supmol._bas[:,gto.ATOM_OF]]
@@ -630,46 +660,42 @@ class ExtendedMole(gto.Mole):
         theta = cell_exps[:,None] * supmol_exps / aij
         dr = np.linalg.norm(cell_bas_coords[:,None,:] - supmol_bas_coords, axis=2)
 
-        aij1 = aij**-.5
-        dri = supmol_exps*aij1 * dr + 1.
-        drj = cell_exps[:,None]*aij1 * dr + 1.
-        lij = cell_l[:,None] + supmol_l
+        aij1 = 1./aij
+        aij2 = aij**-.5
+        dri = supmol_exps*aij1 * dr + aij2
+        drj = cell_exps[:,None]*aij1 * dr + aij2
         norm_i = cell_cs * ((2*cell_l+1)/(4*np.pi))**.5
         norm_j = supmol_cs * ((2*supmol_l+1)/(4*np.pi))**.5
-        fl = 2*np.pi*dr/theta + 1.
+        fl = 2*np.pi/rs_cell.vol*dr/theta + 1.
         ovlp = (np.pi**1.5 * norm_i[:,None]*norm_j * np.exp(-theta*dr**2) *
-                dri**cell_l[:,None] * drj**supmol_l * aij1**(lij+3) * fl)
+                dri**cell_l[:,None] * drj**supmol_l * aij1**1.5 * fl)
         return ovlp > cutoff
 
     @staticmethod
-    def bas_mask_to_sh_loc(rs_cell, bas_mask, verbose=None):
+    def bas_mask_to_segment(rs_cell, bas_mask, verbose=None):
         '''
         bas_mask shape [bvk_ncells, nbas, nimgs]
         '''
         log = logger.new_logger(rs_cell, verbose)
         bvk_ncells, cell_rs_nbas, nimgs = bas_mask.shape
         images_count = np.count_nonzero(bas_mask, axis=2)
-        if log.verbose >= logger.DEBUG:
+
+        # seg_loc maps shell Id in bvk-cell to segment Id in supmol
+        # seg2sh maps the segment Id to shell Id of supmol
+        seg_loc = np.arange(bvk_ncells)[:,None] * cell_rs_nbas + rs_cell.sh_loc[:-1]
+        seg_loc = np.append(seg_loc.ravel(), bvk_ncells * cell_rs_nbas)
+        seg2sh = np.append(0, np.cumsum(images_count.ravel()))
+
+        if log.verbose > logger.DEBUG:
             steep_mask = rs_cell.bas_type == STEEP_BASIS
             local_mask = rs_cell.bas_type == LOCAL_BASIS
             diffused_mask = rs_cell.bas_type == SMOOTH_BASIS
             log.debug1('No. steep basis in sup-mol %d', images_count[:,steep_mask].sum())
             log.debug1('No. local basis in sup-mol %d', images_count[:,local_mask].sum())
             log.debug1('No. diffused basis in sup-mol %d', images_count[:,diffused_mask].sum())
-
-        cell0_sh_loc = rs_cell.sh_loc
-        cell_nbas = len(cell0_sh_loc) - 1
-        condensed_images_count = np.empty((bvk_ncells, cell_nbas), dtype=np.int32)
-        for ib, (i0, i1) in enumerate(zip(cell0_sh_loc[:-1], cell0_sh_loc[1:])):
-            condensed_images_count[:,ib] = images_count[:,i0:i1].sum(axis=1)
-
-        # sh_loc maps from shell Id in bvk-cell to shell Id of supmol
-        sh_loc = np.append(0, np.cumsum(condensed_images_count.ravel()))
-        log.debug3('sup-mol sh_loc %s', sh_loc)
-        # TODO: Some bases are completely inside the bvk-cell. Exclude them from
-        # lattice sum. ??
-        # sh_loc = np.append(0, np.cumsum(condensed_images_count[condensed_images_count != 0]))
-        return sh_loc.astype(np.int32)
+            log.debug3('sup-mol seg_loc %s', seg_loc)
+            log.debug3('sup-mol seg2sh %s', seg2sh)
+        return seg_loc.astype(np.int32), seg2sh.astype(np.int32)
 
     def bas_type_to_indices(self, type_code=SMOOTH_BASIS):
         '''Return the basis indices of required bas_type'''
@@ -718,11 +744,11 @@ def estimate_rcut(cell, precision=None):
     r0 = cell.rcut
     dri = aj*aij1 * r0 + 1.
     drj = ai*aij1 * r0 + 1.
-    fl = 2*np.pi*r0/theta + 1.
+    fl = 2*np.pi/cell.vol * r0/theta
     r0 = (np.log(fac * dri**li * drj**lj * fl + 1.) / theta)**.5
 
     dri = aj*aij1 * r0 + 1.
     drj = ai*aij1 * r0 + 1.
-    fl = 2*np.pi*r0/theta + 1.
+    fl = 2*np.pi/cell.vol * r0/theta
     r0 = (np.log(fac * dri**li * drj**lj * fl + 1.) / theta)**.5
     return r0
