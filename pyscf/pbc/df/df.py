@@ -160,6 +160,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
         self.linear_dep_threshold = LINEAR_DEP_THR
         self._j_only = False
+        self.force_dm_kbuild = False # use mo coeff for K-build if possible
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 # If _cderi is specified, the 3C-integral tensor will be read from this file
