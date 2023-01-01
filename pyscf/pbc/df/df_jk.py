@@ -768,12 +768,14 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         tspans[2] += tock - tick
 
         LpqR = LpqI = pLqR = pLqI = None
+
+    tick = numpy.asarray((logger.process_clock(), logger.perf_counter()))
     if thread_k is not None:
         thread_k.join()
     thread_k = None
 
-    tick = numpy.asarray((logger.process_clock(), logger.perf_counter()))
-    tspans[2] += tick - tock
+    tock = numpy.asarray((logger.process_clock(), logger.perf_counter()))
+    tspans[2] += tock - tick
 
     for tspan,tspanname,tspanmask in zip(tspans,tspannames,tspanmasks):
         if tspanmask:
@@ -801,6 +803,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 def _mo_from_dm(dms, method='eigh', shape=None, order='C', precision=DM2MO_PREC):
     import scipy.linalg
     nkpts = len(dms)
+    precision *= 1e-2
 
     def sep_real_imag(a, ncolmax, order):
         nrow = a.shape[0]
@@ -830,7 +833,6 @@ def _mo_from_dm(dms, method='eigh', shape=None, order='C', precision=DM2MO_PREC)
 
         nmos = [mo.shape[1] for mo in mos]
         nmomax = max(nmos)
-        nao = mos[0].shape[0]
         moRs = numpy.empty(nkpts, dtype=object)
         moIs = numpy.empty(nkpts, dtype=object)
         for k,mo in enumerate(mos):
@@ -850,7 +852,6 @@ def _mo_from_dm(dms, method='eigh', shape=None, order='C', precision=DM2MO_PREC)
         mos = [fsvd(dm) for k,dm in enumerate(dms)]
         nmos = [x[0].shape[1] for x in mos]
         nmomax = max(nmos)
-        nao = mos[0][0].shape[0]
         mo1Rs = numpy.empty(nkpts, dtype=object)
         mo1Is = numpy.empty(nkpts, dtype=object)
         mo2Rs = numpy.empty(nkpts, dtype=object)
