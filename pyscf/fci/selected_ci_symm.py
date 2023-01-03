@@ -27,7 +27,7 @@ from pyscf.fci import direct_spin1_symm
 from pyscf.fci import selected_ci
 from pyscf.fci import addons
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 def reorder4irrep(eri, norb, link_index, orbsym, offdiag=0):
     if orbsym is None:

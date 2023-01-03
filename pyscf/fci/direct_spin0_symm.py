@@ -47,67 +47,14 @@ from pyscf.fci import addons
 from pyscf.fci.spin_op import contract_ss
 from pyscf import __config__
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 TOTIRREPS = 8
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None, orbsym=None):
     return direct_spin0.contract_1e(f1e, fcivec, norb, nelec, link_index)
 
-# Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
-# h2e = eri_{pq,rs} p^+ q r^+ s
-#     = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
-# so eri is defined as
-#       eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
-# to restore the symmetry between pq and rs,
-#       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
-# Please refer to the treatment in direct_spin1.absorb_h1e
-# the input fcivec should be symmetrized
-def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0):
-    if orbsym is None:
-        return direct_spin0.contract_2e(eri, fcivec, norb, nelec, link_index)
-
-    eri = ao2mo.restore(4, eri, norb)
-    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
-    assert (neleca == nelecb)
-    link_indexa = direct_spin0._unpack(norb, nelec, link_index)
-    na, nlinka = link_indexa.shape[:2]
-    eri_irs, rank_eri, irrep_eri = direct_spin1_symm.reorder_eri(eri, norb, orbsym)
-
-    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    aidx, link_indexa = direct_spin1_symm.gen_str_irrep(strsa, orbsym, link_indexa,
-                                                        rank_eri, irrep_eri)
-
-    Tirrep = ctypes.c_void_p*TOTIRREPS
-    linka_ptr = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in link_indexa])
-    eri_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in eri_irs])
-    dimirrep = (ctypes.c_int*TOTIRREPS)(*[x.shape[0] for x in eri_irs])
-    fcivec_shape = fcivec.shape
-    fcivec = fcivec.reshape((na,na), order='C')
-    ci1new = numpy.zeros_like(fcivec)
-    nas = (ctypes.c_int*TOTIRREPS)(*[x.size for x in aidx])
-
-    ci0 = []
-    ci1 = []
-    wfnsym_in_d2h = wfnsym % 10
-    for ir in range(TOTIRREPS):
-        ma, mb = aidx[ir].size, aidx[wfnsym_in_d2h ^ ir].size
-        ci0.append(numpy.zeros((ma,mb)))
-        ci1.append(numpy.zeros((ma,mb)))
-        if ma > 0 and mb > 0:
-            lib.take_2d(fcivec, aidx[ir], aidx[wfnsym_in_d2h ^ ir], out=ci0[ir])
-    ci0_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci0])
-    ci1_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci1])
-    libfci.FCIcontract_2e_symm1(eri_ptrs, ci0_ptrs, ci1_ptrs,
-                                ctypes.c_int(norb), nas, nas,
-                                ctypes.c_int(nlinka), ctypes.c_int(nlinka),
-                                linka_ptr, linka_ptr, dimirrep,
-                                ctypes.c_int(wfnsym_in_d2h))
-    for ir in range(TOTIRREPS):
-        if ci0[ir].size > 0:
-            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], aidx[wfnsym_in_d2h ^ ir])
-    ci1 = lib.transpose_sum(ci1new, inplace=True).reshape(fcivec_shape)
-    return ci1.view(direct_spin1.FCIvector)
+contract_2e = direct_spin1_symm.contract_2e
 
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,

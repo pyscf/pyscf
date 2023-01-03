@@ -40,7 +40,7 @@ from pyscf import ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 def contract_1e(h1e, fcivec, norb, nelec, link_index=None):
     h1e = numpy.asarray(h1e, order='C')

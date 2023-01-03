@@ -43,7 +43,7 @@ from pyscf.fci import direct_spin1
 from pyscf.fci import rdm
 from pyscf import __config__
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 @lib.with_doc(direct_spin1.contract_2e.__doc__)
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None):

@@ -49,7 +49,7 @@ from pyscf.fci import rdm
 from pyscf.fci import direct_spin1
 from pyscf.fci.spin_op import contract_ss
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 @lib.with_doc(direct_spin1.contract_1e.__doc__)
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):

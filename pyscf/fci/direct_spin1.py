@@ -53,7 +53,7 @@ from pyscf.fci.spin_op import contract_ss
 from pyscf.fci.addons import _unpack_nelec
 from pyscf import __config__
 
-libfci = lib.load_library('libfci')
+libfci = cistring.libfci
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     '''Contract the 1-electron Hamiltonian with a FCI vector to get a new FCI
@@ -948,43 +948,3 @@ def _unpack(norb, nelec, link_index, spin=None):
         return link_indexa, link_indexb
     else:
         return link_index
-
-
-if __name__ == '__main__':
-    from functools import reduce
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None#"out_h2o"
-    mol.atom = [
-        ['H', ( 1.,-1.    , 0.   )],
-        ['H', ( 0.,-1.    ,-1.   )],
-        ['H', ( 1.,-0.5   ,-1.   )],
-        #['H', ( 0.,-0.5   ,-1.   )],
-        #['H', ( 0.,-0.5   ,-0.   )],
-        ['H', ( 0.,-0.    ,-1.   )],
-        ['H', ( 1.,-0.5   , 0.   )],
-        ['H', ( 0., 1.    , 1.   )],
-    ]
-
-    mol.basis = {'H': 'sto-3g'}
-    mol.build()
-
-    m = scf.RHF(mol)
-    ehf = m.scf()
-
-    cis = FCISolver(mol)
-    norb = m.mo_coeff.shape[1]
-    nelec = mol.nelectron - 2
-    h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-    eri = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
-    eri = eri.reshape(norb,norb,norb,norb)
-    nea = nelec//2 + 1
-    neb = nelec//2 - 1
-    nelec = (nea, neb)
-
-    e1 = cis.kernel(h1e, eri, norb, nelec, davidson_only=True)[0]
-    print(e1, e1 - -7.7466756526056004)
-

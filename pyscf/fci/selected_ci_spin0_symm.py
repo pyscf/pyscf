@@ -26,7 +26,7 @@ from pyscf.fci import selected_ci
 from pyscf.fci import selected_ci_symm
 from pyscf.fci import selected_ci_spin0
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     ci_coeff, nelec, ci_strs = selected_ci._unpack(civec_strs, nelec)
