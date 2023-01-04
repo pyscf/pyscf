@@ -551,11 +551,11 @@ def get_frozen_mask(mp):
 def _add_padding(mp, mo_coeff, mo_energy):
     nmo = mp.nmo
 
-    # Check if these are padded mo coefficients and energies
-    if not np.all([x.shape[1] == nmo for x in mo_coeff]):
+    # Check if these are padded mo coefficients and energies and/or if some orbitals are frozen.
+    if (mp.frozen is not None) or (not np.all([x.shape[1] == nmo for x in mo_coeff])):
         mo_coeff = padded_mo_coeff(mp, mo_coeff)
 
-    if not np.all([x.shape[0] == nmo for x in mo_energy]):
+    if (mp.frozen is not None) or (not np.all([x.shape[0] == nmo for x in mo_energy])):
         mo_energy = padded_mo_energy(mp, mo_energy)
     return mo_coeff, mo_energy
 
