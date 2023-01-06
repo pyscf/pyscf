@@ -434,8 +434,7 @@ def _get_init_guess(na, nb, nroots, hdiag, nelec):
     neleca, nelecb = _unpack_nelec(nelec)
     if neleca == nelecb and na == nb:
         hdiag = hdiag.reshape(na, na)
-        idx = numpy.arange(na)
-        addrs = numpy.argpartition(hdiag[idx[:,None]>=idx], nroots-1)[:nroots]
+        addrs = numpy.argpartition(lib.pack_tril(hdiag), nroots-1)[:nroots]
         for addr in addrs:
             addra = (int)((2*addr+.25)**.5 - .5 + 1e-7)
             addrb = addr - addra*(addra+1)//2
@@ -519,39 +518,35 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
     nelec = _unpack_nelec(nelec, fci.spin)
     assert (0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
-    link_indexa, link_indexb = _unpack(norb, nelec, link_index)
-    na = link_indexa.shape[0]
-    nb = link_indexb.shape[0]
-
-    if max_memory < na*nb*6*8e-6:
-        log.warn('Not enough memory for FCI solver. '
-                 'The minimal requirement is %.0f MB', na*nb*60e-6)
 
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
-    nroots = min(hdiag.size, nroots)
+    pspace_size = min(hdiag.size, pspace_size)
 
-    try:
-        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
-        if pspace_size > 0:
-            pw, pv = fci.eig(h0)
-        else:
-            pw = pv = None
+    if max_memory < hdiag.size*6*8e-6:
+        log.warn('Not enough memory for FCI solver. '
+                 'The minimal requirement is %.0f MB', hdiag.size*60e-6)
 
-        if pspace_size >= na*nb and ci0 is None and not davidson_only:
-            # The degenerated wfn can break symmetry.  The davidson iteration with proper
-            # initial guess doesn't have this issue
-            if na*nb == 1:
-                return pw[0]+ecore, pv[:,0].reshape(1,1).view(FCIvector)
-            elif nroots > 1:
-                civec = numpy.empty((nroots,na*nb))
-                civec[:,addr] = pv[:,:nroots].T
-                return pw[:nroots]+ecore, [c.reshape(na,nb).view(FCIvector) for c in civec]
-            elif abs(pw[0]-pw[1]) > 1e-12:
-                civec = numpy.empty((na*nb))
-                civec[addr] = pv[:,0]
-                return pw[0]+ecore, civec.reshape(na,nb).view(FCIvector)
-    except NotImplementedError:
-        addr = [0]
+    addr = [0]
+    pw = pv = None
+    if pspace_size > 0:
+        try:
+            addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+        except NotImplementedError:
+            pass
+        pw, pv = fci.eig(h0)
+
+    if pspace_size >= hdiag.size and ci0 is None and not davidson_only:
+        if nroots > 1:
+            nroots = min(hdiag.size, nroots)
+            civec = numpy.empty((nroots,hdiag.size))
+            civec[:,addr] = pv[:,:nroots].T
+            return pw[:nroots]+ecore, civec
+        elif pspace_size == 1 or abs(pw[0]-pw[1]) > 1e-12:
+            # Check degeneracy. Degenerated wfn may break point group symmetry.
+            # Davidson iteration with a proper initial guess can avoid this problem.
+            civec = numpy.empty(hdiag.size)
+            civec[addr] = pv[:,0]
+            return pw[0]+ecore, civec
     pw = pv = h0 = None
 
     precond = fci.make_precond(hdiag)
@@ -559,34 +554,36 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
     if hop is None:
         def hop(c):
-            hc = fci.contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
+            hc = fci.contract_2e(h2e, c, norb, nelec, link_index)
             return hc.ravel()
 
-    if ci0 is None:
+    if getattr(fci, 'sym_allowed_idx', None):
+        # Remove symmetry forbidden elements
+        s_idx = numpy.hstack(fci.sym_allowed_idx)
+        if ci0 is None:
+            ci0 = fci.get_init_guess(norb, nelec, nroots, hdiag)
+        elif callable(ci0):
+            ci0 = ci0()
+        if isinstance(ci0, numpy.ndarray) and ci0.size != s_idx.size:
+            ci0 = [ci0.ravel()[s_idx]]
+        elif ci0[0].size != s_idx.size:
+            ci0 = [x.ravel()[s_idx] for x in ci0]
+    elif ci0 is None:
         if callable(getattr(fci, 'get_init_guess', None)):
             ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
             def ci0():  # lazy initialization to reduce memory footprint
                 x0 = []
-                for i in range(nroots):
-                    x = numpy.zeros(na*nb)
+                for i in range(min(len(addr), nroots)):
+                    x = numpy.zeros(hdiag.size)
                     x[addr[i]] = 1
                     x0.append(x)
                 return x0
     elif not callable(ci0):
-        if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
+        if isinstance(ci0, numpy.ndarray) and ci0.size == hdiag.size:
             ci0 = [ci0.ravel()]
         else:
             ci0 = [x.ravel() for x in ci0]
-        # Add vectors if not enough initial guess is given
-        if len(ci0) < nroots:
-            if callable(getattr(fci, 'get_init_guess', None)):
-                ci0.extend(fci.get_init_guess(norb, nelec, nroots, hdiag)[len(ci0):])
-            else:
-                for i in range(len(ci0), nroots):
-                    x = numpy.zeros(na*nb)
-                    x[addr[i]] = 1
-                    ci0.append(x)
 
     if tol is None: tol = fci.conv_tol
     if lindep is None: lindep = fci.lindep
@@ -595,15 +592,11 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     tol_residual = getattr(fci, 'conv_tol_residual', None)
 
     with lib.with_omp_threads(fci.threads):
-        #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
         e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                        max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                        max_memory=max_memory, verbose=log, follow_state=True,
                        tol_residual=tol_residual, **kwargs)
-    if nroots > 1:
-        return e+ecore, [ci.reshape(na,nb).view(FCIvector) for ci in c]
-    else:
-        return e+ecore, c.reshape(na,nb).view(FCIvector)
+    return e+ecore, c
 
 def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     # precondition with pspace Hamiltonian, CPL, 169, 463
@@ -821,14 +814,23 @@ class FCIBase(lib.StreamObject):
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
+        if nroots is None: nroots = self.nroots
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.norb = norb
-        self.nelec = nelec
-        self.eci, self.ci = \
-                kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
-                           tol, lindep, max_cycle, max_space, nroots,
-                           davidson_only, pspace_size, ecore=ecore, **kwargs)
+        self.nelec = nelec = _unpack_nelec(nelec, self.spin)
+        link_index = _unpack(norb, nelec, None)
+        e, c = kernel_ms1(self, h1e, eri, norb, nelec, ci0, link_index,
+                          tol, lindep, max_cycle, max_space, nroots,
+                          davidson_only, pspace_size, ecore=ecore, **kwargs)
+        self.eci = e
+
+        na = link_index[0].shape[0]
+        nb = link_index[1].shape[0]
+        if nroots > 1:
+            self.ci = [x.reshape(na,nb).view(FCIvector) for x in c]
+        else:
+            self.ci = c.reshape(na,nb).view(FCIvector)
         return self.eci, self.ci
 
     @lib.with_doc(energy.__doc__)
@@ -901,9 +903,8 @@ class FCIBase(lib.StreamObject):
         return addons.large_ci(fcivec, norb, nelec, tol, return_strs)
 
     def contract_ss(self, fcivec, norb, nelec):  # noqa: F811
-        from pyscf.fci import spin_op
         nelec = _unpack_nelec(nelec, self.spin)
-        return spin_op.contract_ss(fcivec, norb, nelec)
+        return contract_ss(fcivec, norb, nelec)
 
     def gen_linkstr(self, norb, nelec, tril=True, spin=None):
         if spin is None:

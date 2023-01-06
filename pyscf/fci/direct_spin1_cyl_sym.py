@@ -53,7 +53,6 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     if orbsym is None:
         return direct_nosym.contract_2e(eri, fcivec, norb, nelec, link_index)
 
-    #eri = ao2mo.restore(1, eri, norb)
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
     link_indexa, link_indexb = direct_nosym._unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
@@ -64,7 +63,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     wfn_ungerade = wfnsym_in_d2h >= 4
     orbsym_d2h = orbsym % 10
     orb_ungerade = orbsym_d2h >= 4
-    if np.any(orb_ungerade):
+    if np.any(orb_ungerade) or wfn_ungerade:
         max_gerades = 2
     else:
         max_gerades = 1
@@ -84,42 +83,35 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
         max_strb_l = strsb_l.max()
     max_momentum = max(max_stra_l, max_strb_l, max_eri_l)
 
-    eri_irs, rank_eri, irrep_eri = reorder_eri(eri, norb, orbsym, max_momentum)
+    eri_irs, rank_eri, irrep_eri = reorder_eri(eri, norb, orbsym, max_momentum,
+                                               max_gerades)
     eri_ir_dims = np.array([x.shape[0] for x in eri_irs], dtype=np.int32)
     eri_irs = np.hstack([x.ravel() for x in eri_irs])
 
     # FIXME: pass max_momentum, max_gerades to ...
     aidx, link_indexa = gen_str_irrep(strsa, orbsym, link_indexa, rank_eri,
-                                      irrep_eri, max_momentum)
+                                      irrep_eri, max_momentum, max_gerades)
     nas = np.array([x.size for x in aidx], dtype=np.int32)
     if neleca == nelecb:
         bidx, link_indexb = aidx, link_indexa
         nbs = nas
     else:
         bidx, link_indexb = gen_str_irrep(strsb, orbsym, link_indexb, rank_eri,
-                                          irrep_eri, max_momentum)
+                                          irrep_eri, max_momentum, max_gerades)
         nbs = np.array([x.size for x in bidx], dtype=np.int32)
 
     nirreps = (max_momentum * 2 + 1) * max_gerades
     ug_offsets = max_momentum * 2 + 1
 
     ab_idx = [np.zeros(0, dtype=int)] * nirreps
-    if max_gerades == 2:
-        for ag in (0, 1):
-            bg = wfn_ungerade ^ ag
-            # abs(al) < max_stra_l and abs(bl := wfn_momentum-al) < max_strb_l
-            for al in range(max(-max_stra_l, wfn_momentum-max_strb_l),
-                            min( max_stra_l, wfn_momentum+max_strb_l)+1):
-                bl = wfn_momentum - al
-                stra_ir = al + max_momentum + ag * ug_offsets
-                strb_ir = bl + max_momentum + bg * ug_offsets
-                ab_idx[stra_ir] = (aidx[stra_ir][:,None] * nb + bidx[strb_ir]).ravel()
-    else:
+    for ag in range(max_gerades):
+        bg = wfn_ungerade ^ ag
+        # abs(al) < max_stra_l and abs(bl := wfn_momentum-al) < max_strb_l
         for al in range(max(-max_stra_l, wfn_momentum-max_strb_l),
                         min( max_stra_l, wfn_momentum+max_strb_l)+1):
             bl = wfn_momentum - al
-            stra_ir = al + max_momentum
-            strb_ir = bl + max_momentum
+            stra_ir = al + max_momentum + ag * ug_offsets
+            strb_ir = bl + max_momentum + bg * ug_offsets
             ab_idx[stra_ir] = (aidx[stra_ir][:,None] * nb + bidx[strb_ir]).ravel()
     ci_size = np.array([x.size for x in ab_idx], dtype=np.int32)
 
@@ -160,7 +152,7 @@ def _get_orb_l(orbsym):
     orb_l[ey_mask] *= -1
     return orb_l
 
-def reorder_eri(eri, norb, orbsym, max_momentum):
+def reorder_eri(eri, norb, orbsym, max_momentum, max_gerades):
     eri = eri.reshape(norb,norb,norb,norb)
     # Swap last two indices because they are contracted to the t1 intermediates
     # in FCIcontract_2e_cyl_sym. t1 is generated with swapped orbital indices (a*norb+i).
@@ -169,10 +161,6 @@ def reorder_eri(eri, norb, orbsym, max_momentum):
     # % 10 to map irrep IDs of Dooh or Coov, etc. to irreps of D2h, C2v
     orbsym_d2h = orbsym % 10
     orb_ungerade = orbsym_d2h >= 4
-    if np.any(orb_ungerade):
-        max_gerades = 2
-    else:
-        max_gerades = 1
     nirreps = (max_momentum * 2 + 1) * max_gerades
 
     # irrep of (ij| pair
@@ -233,16 +221,9 @@ def reorder_eri(eri, norb, orbsym, max_momentum):
                 rank_in_irrep[idx_m] = np.arange(idx_m.size, dtype=np.int32)
     return eri_irs, rank_in_irrep, old_eri_irrep
 
-def argsort_strs_by_irrep(strs, orbsym, max_momentum):
+def argsort_strs_by_irrep(strs, orbsym, max_momentum, max_gerades):
     strs_ls = _strs_angular_momentum(strs, orbsym)
     maxl = abs(strs_ls).max()
-
-    orbsym_d2h = orbsym % 10
-    orb_ungerade = orbsym_d2h >= 4
-    if np.any(orb_ungerade):
-        max_gerades = 2
-    else:
-        max_gerades = 1
     nirreps = (max_momentum * 2 + 1) * max_gerades
     aidx = [np.zeros(0, dtype=np.int32)] * nirreps
 
@@ -261,8 +242,9 @@ def argsort_strs_by_irrep(strs, orbsym, max_momentum):
             aidx[max_momentum+l] = idx
     return aidx
 
-def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri, max_momentum):
-    aidx = argsort_strs_by_irrep(strs, orbsym, max_momentum)
+def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri, max_momentum,
+                  max_gerades):
+    aidx = argsort_strs_by_irrep(strs, orbsym, max_momentum, max_gerades)
     na = len(strs)
     rank = np.zeros(na, dtype=np.int32)
     for idx in aidx:
@@ -279,39 +261,35 @@ def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri, max_momentum):
     link_index = link_index.take(np.hstack(aidx), axis=0)
     return aidx, link_index
 
-def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
+def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0,
+                   sym_allowed_idx=None):
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
     strsa = strsb = cistring.gen_strings4orblist(range(norb), neleca)
-    airreps_d2h = birreps_d2h = direct_spin1_symm._gen_strs_irrep(strsa, orbsym)
-    a_ls = b_ls = _strs_angular_momentum(strsa, orbsym)
     if neleca != nelecb:
         strsb = cistring.gen_strings4orblist(range(norb), nelecb)
-        birreps_d2h = direct_spin1_symm._gen_strs_irrep(strsb, orbsym)
-        b_ls = _strs_angular_momentum(strsb, orbsym)
-
-    wfnsym_in_d2h = wfnsym % 10
-    wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
     na = len(strsa)
     nb = len(strsb)
-    hdiag = hdiag.reshape(na,nb)
     degen = orbsym.degen_mapping
-    ci0 = []
-    iroot = 0
-    wfn_ungerade = wfnsym_in_d2h >= 4
-    a_ungerade = airreps_d2h >= 4
-    b_ungerade = birreps_d2h >= 4
-    sym_allowed = a_ungerade[:,None] == b_ungerade ^ wfn_ungerade
-    # total angular momentum == wfn_momentum
-    sym_allowed &= a_ls[:,None] == wfn_momentum - b_ls
-    if neleca == nelecb and na == nb:
-        idx = np.arange(na)
-        sym_allowed[idx[:,None] < idx] = False
-    idx_a, idx_b = np.where(sym_allowed)
 
-    for k in hdiag[idx_a,idx_b].argsort():
+    if sym_allowed_idx is None:
+        sym_allowed_idx = sym_allowed_indices(nelec, orbsym, wfnsym)
+    s_idx = np.hstack(sym_allowed_idx)
+    idx_a, idx_b = divmod(s_idx, nb)
+    if hdiag.size == na*nb:
+        hdiag = hdiag[s_idx]
+    civec_size = hdiag.size
+
+    if neleca == nelecb and na == nb:
+        idx = np.arange(idx_a.size)[idx_a >= idx_b]
+        idx_a = idx_a[idx]
+        idx_b = idx_b[idx]
+        hdiag = hdiag[idx]
+
+    ci0 = []
+    for k in hdiag.argsort():
         addra, addrb = idx_a[k], idx_b[k]
-        x = np.zeros((na, nb))
-        x[addra, addrb] = 1.
+        x = np.zeros(civec_size)
+        x[s_idx==addra*nb+addrb] = 1.
         if wfnsym in (0, 1, 4, 5):
             addra1, sign_a = _sv_associated_det(strsa[addra], degen)
             addrb1, sign_b = _sv_associated_det(strsb[addrb], degen)
@@ -320,18 +298,17 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             # (E+)(E-') - (E-)(E+') => A2
             if wfnsym in (0, 5):  # A1g, A1u
                 # ensure <|sigma_v|> = 1
-                x[addra1,addrb1] += sign_a * sign_b
+                x[s_idx==addra1*nb+addrb1] += sign_a * sign_b
             elif wfnsym in (1, 4):  # A2g, A2u
                 # ensure <|sigma_v|> = -1
-                x[addra1,addrb1] -= sign_a * sign_b
+                x[s_idx==addra1*nb+addrb1] -= sign_a * sign_b
 
         norm = np.linalg.norm(x)
         if norm < 1e-3:
             continue
         x *= 1./norm
-        ci0.append(x.ravel().view(direct_spin1.FCIvector))
-        iroot += 1
-        if iroot >= nroots:
+        ci0.append(x.view(direct_spin1.FCIvector))
+        if len(ci0) >= nroots:
             break
 
     if len(ci0) == 0:
@@ -435,6 +412,51 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
         wfnsym = wfnsym1
     return wfnsym
 
+#?def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri, max_momentum):
+def sym_allowed_indices(nelec, orbsym, wfnsym):
+    '''Indices of symmetry allowed determinants for each irrep'''
+    norb = orbsym.size
+    neleca, nelecb = nelec
+    strsa = strsb = cistring.gen_strings4orblist(range(norb), neleca)
+    strsa_l = _strs_angular_momentum(strsa, orbsym)
+    max_stra_l = max_strb_l = strsa_l.max()
+    if neleca != nelecb:
+        strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+        strsb_l = _strs_angular_momentum(strsb, orbsym)
+        max_strb_l = strsb_l.max()
+    nb = len(strsb)
+
+    wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
+    wfnsym_in_d2h = wfnsym % 10
+    wfn_ungerade = wfnsym_in_d2h >= 4
+    orbsym_d2h = orbsym % 10
+    orb_ungerade = orbsym_d2h >= 4
+    if np.any(orb_ungerade) or wfn_ungerade:
+        max_gerades = 2
+    else:
+        max_gerades = 1
+    orb_l = _get_orb_l(orbsym)
+    max_eri_l = abs(orb_l).max() * 2
+    max_momentum = max(max_stra_l, max_strb_l, max_eri_l)
+
+    aidx = bidx = argsort_strs_by_irrep(strsa, orbsym, max_momentum, max_gerades)
+    if neleca != nelecb:
+        bidx = argsort_strs_by_irrep(strsb, orbsym, max_momentum, max_gerades)
+
+    nirreps = (max_momentum * 2 + 1) * max_gerades
+    ug_offsets = max_momentum * 2 + 1
+    ab_idx = [np.zeros(0, dtype=int)] * nirreps
+    for ag in range(max_gerades):
+        bg = wfn_ungerade ^ ag
+        # abs(al) < max_stra_l and abs(bl := wfn_momentum-al) < max_strb_l
+        for al in range(max(-max_stra_l, wfn_momentum-max_strb_l),
+                        min( max_stra_l, wfn_momentum+max_strb_l)+1):
+            bl = wfn_momentum - al
+            stra_ir = al + max_momentum + ag * ug_offsets
+            strb_ir = bl + max_momentum + bg * ug_offsets
+            ab_idx[stra_ir] = (aidx[stra_ir][:,None] * nb + bidx[strb_ir]).ravel()
+    return ab_idx
+
 
 class FCISolver(direct_spin1_symm.FCISolver):
 
@@ -443,15 +465,22 @@ class FCISolver(direct_spin1_symm.FCISolver):
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None,
                     orbsym=None, wfnsym=None, **kwargs):
-        return direct_nosym.contract_2e(eri, fcivec, norb, nelec, link_index)
+        if orbsym is None: orbsym = self.orbsym
+        if wfnsym is None:
+            wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, orbsym, self.wfnsym)
+        return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, wfnsym)
 
-    def get_init_guess(self, norb, nelec, nroots, hdiag):
-        wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.orbsym, self.wfnsym)
-        return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
+    def get_init_guess(self, norb, nelec, nroots, hdiag, orbsym=None, wfnsym=None):
+        if orbsym is None:
+            orbsym = self.orbsym
+        if wfnsym is None:
+            wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, orbsym, self.wfnsym)
+        return get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym,
+                              self.sym_allowed_idx)
 
     absorb_h1e = direct_nosym.FCISolver.absorb_h1e
-    make_hdiag = direct_nosym.FCISolver.make_hdiag
-    pspace = direct_spin1.FCISolver.pspace
+    make_hdiag = direct_spin1_symm.FCISolver.make_hdiag
+    pspace = direct_spin1_symm.FCISolver.pspace
     guess_wfnsym = guess_wfnsym
 
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
@@ -472,37 +501,62 @@ class FCISolver(direct_spin1_symm.FCISolver):
         if orbsym is None: orbsym = self.orbsym
         if wfnsym is None: wfnsym = self.wfnsym
         if self.verbose >= logger.WARN:
+            if 'verbose' not in kwargs:
+                kwargs['verbose'] = self.verbose
             self.check_sanity()
         self.norb = norb
-        self.nelec = nelec
+        self.nelec = nelec = direct_spin1._unpack_nelec(nelec, self.spin)
 
         if not hasattr(orbsym, 'degen_mapping'):
             degen_mapping = map_degeneracy(h1e.diagonal(), orbsym)
             orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
-        self.orbsym = orbsym
-        u = _cyl_sym_orbital_rotation(orbsym, orbsym.degen_mapping)
-        wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
 
+        u = _cyl_sym_orbital_rotation(orbsym, orbsym.degen_mapping)
         h1e = u.dot(h1e).dot(u.conj().T)
         eri = ao2mo.restore(1, eri, norb)
         eri = lib.einsum('pqrs,ip,jq,kr,ls->ijkl', eri, u, u.conj(), u, u.conj())
         assert abs(h1e.imag).max() < 1e-12, 'Cylindrical symmetry broken'
         assert abs(eri.imag).max() < 1e-12, 'Cylindrical symmetry broken'
         h1e = h1e.real.copy()
-        # Note: although eri is real, it does not have the permutation relation
+        # Note: eri is real but it does not have the permutation relation
         # (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
         # The nosym version fci contraction is required
         eri = eri.real.copy()
 
+        wfnsym_ir = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
+        if wfnsym_ir in (1, 4):
+            # sym_allowed_idx does not distinguish A2g and A2u
+            davidson_only = True
+        self.sym_allowed_idx = sym_allowed_indices(nelec, orbsym, wfnsym_ir)
+        self.orbsym = orbsym
+        logger.debug(self, 'Num symmetry allowed elements %d',
+                     sum([x.size for x in self.sym_allowed_idx]))
+
         neleca, nelecb = direct_spin1._unpack_nelec(nelec)
         link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
-        with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
+
+        with lib.temporary_env(self, wfnsym=wfnsym_ir):
             e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
                                            (link_indexa,link_indexb),
                                            tol, lindep, max_cycle, max_space,
                                            nroots, davidson_only, pspace_size,
                                            ecore=ecore, **kwargs)
+
+        na = link_indexa.shape[0]
+        nb = link_indexb.shape[0]
+        s_idx = np.hstack(self.sym_allowed_idx)
+        if nroots > 1:
+            c, c_raw = [], c
+            for vec in c_raw:
+                c1 = np.zeros(na*nb)
+                c1[s_idx] = vec.T
+                c.append(c1)
+        else:
+            c1 = np.zeros(na*nb)
+            c1[s_idx] = c
+            c = c1.reshape(na, nb).view(direct_spin1.FCIvector)
+
         self.eci, self.ci = e, c
         return e, c
 

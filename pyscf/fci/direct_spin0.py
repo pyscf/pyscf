@@ -234,59 +234,46 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
         max_memory = fci.max_memory - lib.current_memory()[0]
     log = logger.new_logger(fci, verbose)
 
-    assert (fci.spin is None or fci.spin == 0)
-    assert (0 <= numpy.sum(nelec) <= norb*2)
+    nelec = direct_spin1._unpack_nelec(nelec, fci.spin)
+    assert (0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
 
-    link_index = _unpack(norb, nelec, link_index)
-    h1e = numpy.ascontiguousarray(h1e)
-    eri = numpy.ascontiguousarray(eri)
-    na = link_index.shape[0]
+    hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
+    pspace_size = min(hdiag.size, pspace_size)
+    na = cistring.num_strings(norb, nelec[0])
 
-    if max_memory < na**2*6*8e-6:
+    if max_memory < hdiag.size*6*8e-6:
         log.warn('Not enough memory for FCI solver. '
-                 'The minimal requirement is %.0f MB', na**2*60e-6)
+                 'The minimal requirement is %.0f MB', hdiag.size*60e-6)
 
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
     nroots = min(hdiag.size, nroots)
 
-    try:
-        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
-        if pspace_size > 0:
-            pw, pv = fci.eig(h0)
+    addr = [0]
+    pw = pv = None
+    if pspace_size > 0:
+        try:
+            addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+        except NotImplementedError:
+            pass
+        pw, pv = fci.eig(h0)
+
+    if pspace_size >= hdiag.size and ci0 is None and not davidson_only:
+        e = []
+        civec = []
+        for i in range(pspace_size):
+            c = numpy.empty(hdiag.size)
+            c[addr] = pv[:,i]
+            try:
+                civec.append(_check_(c.reshape(na,na)))
+            except ValueError:
+                continue
+            e.append(pw[i])
+            if len(civec) >= nroots:
+                break
+        if nroots == 1:
+            return e[0]+ecore, civec[0]
         else:
-            pw = pv = None
-
-        if pspace_size >= na*na and ci0 is None and not davidson_only:
-            # The degenerated wfn can break symmetry.  The davidson iteration with proper
-            # initial guess doesn't have this issue
-            if na*na == 1:
-                return pw[0]+ecore, pv[:,0].reshape(1,1).view(direct_spin1.FCIvector)
-            elif nroots > 1:
-                civec = numpy.empty((nroots,na*na))
-                civec[:,addr] = pv[:,:nroots].T
-                civec = civec.reshape(nroots,na,na)
-                try:
-                    return (pw[:nroots]+ecore,
-                            [_check_(ci).view(direct_spin1.FCIvector) for ci in civec])
-                except ValueError:
-                    pass
-            elif abs(pw[0]-pw[1]) > 1e-12:
-                civec = numpy.empty((na*na))
-                civec[addr] = pv[:,0]
-                civec = civec.reshape(na,na)
-                civec = lib.transpose_sum(civec) * .5
-                # direct diagonalization may lead to triplet ground state
-
-                #TODO: optimize initial guess.  Using pspace vector as initial guess may have
-                # spin problems.  The 'ground state' of psapce vector may have different spin
-                # state to the true ground state.
-                try:
-                    return (pw[0]+ecore,
-                            _check_(civec.reshape(na,na)).view(direct_spin1.FCIvector))
-                except ValueError:
-                    pass
-    except NotImplementedError:
-        addr = [0]
+            return numpy.array(e)+ecore, civec
     pw = pv = h0 = None
 
     precond = fci.make_precond(hdiag)
@@ -327,16 +314,11 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     tol_residual = getattr(fci, 'conv_tol_residual', None)
 
     with lib.with_omp_threads(fci.threads):
-        #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
         e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                        max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                        max_memory=max_memory, verbose=log, follow_state=True,
                        tol_residual=tol_residual, **kwargs)
-    if nroots > 1:
-        return (e+ecore,
-                [_check_(ci.reshape(na,na)).view(direct_spin1.FCIvector) for ci in c])
-    else:
-        return e+ecore, _check_(c.reshape(na,na)).view(direct_spin1.FCIvector)
+    return e+ecore, c
 
 def _check_(c):
     c = lib.transpose_sum(c, inplace=True)
@@ -365,14 +347,24 @@ class FCISolver(direct_spin1.FCISolver):
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
+        if nroots is None: nroots = self.nroots
         if self.verbose >= logger.WARN:
             self.check_sanity()
+        assert self.spin is None or self.spin == 0
         self.norb = norb
         self.nelec = nelec
-        self.eci, self.ci = \
-                kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
-                           tol, lindep, max_cycle, max_space, nroots,
-                           davidson_only, pspace_size, ecore=ecore, **kwargs)
+        link_index = _unpack(norb, nelec, None)
+        e, c = kernel_ms0(self, h1e, eri, norb, nelec, ci0, link_index,
+                          tol, lindep, max_cycle, max_space, nroots,
+                          davidson_only, pspace_size, ecore=ecore, **kwargs)
+        self.eci = e
+
+        na = link_index.shape[0]
+        if nroots > 1:
+            self.ci = [
+                _check_(x.reshape(na,na)).view(direct_spin1.FCIvector) for x in c]
+        else:
+            self.ci = _check_(c.reshape(na,na)).view(direct_spin1.FCIvector)
         return self.eci, self.ci
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):

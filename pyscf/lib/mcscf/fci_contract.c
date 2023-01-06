@@ -958,34 +958,34 @@ void FCIcontract_2e_cyl_sym(double *eris, double *ci0, double *ci1,
         int stra_ir = 0;
         int strb_ir = 0;
         int intera_l, interb_l, intera_g, interb_g, intera_ir, interb_ir;
-        int ai_l, ai_g, ai_ir, ai_ir_conj, t1_l, t1_g;
+        int ai_l, ai_g, ai_ir, t1_l, t1_g;
         int eri_m0, eri_m1;
         int ma, mb;
 
         for (intera_g = 0; intera_g < max_gerades; intera_g++) {
         for (intera_l = -max_momentum; intera_l <= max_momentum; intera_l++) {
                 // abs(ai_l) < max_momentum
-                // t1_l := wfn_momentum + ai_l
+                // t1_l := wfn_momentum - ai_l
                 // abs(interb_l := t1_l-intera_l) < max_momentum
                 //      => range for ai_l
-                eri_m0 = MAX(0, intera_l-wfn_momentum) - max_momentum;;
-                eri_m1 = MIN(0, intera_l-wfn_momentum) + max_momentum;;
+                eri_m0 = MAX(0, wfn_momentum-intera_l) - max_momentum;;
+                eri_m1 = MIN(0, wfn_momentum-intera_l) + max_momentum;;
 // TODO: pick_link_by_irrep to extract link_index for all nirreps in one pass
                 for (ai_g = 0; ai_g < max_gerades; ai_g++) {
                 for (ai_l = eri_m0; ai_l <= eri_m1; ai_l++) {
                         ai_ir = IRREP_OF(ai_l, ai_g);
 
                         if (eris_ir_dims[ai_ir] > 0) {
-                                t1_l = wfn_momentum + ai_l;
+                                t1_l = wfn_momentum - ai_l;
                                 t1_g = wfn_ungerade ^ ai_g;
                                 interb_l = t1_l - intera_l;
                                 interb_g = t1_g ^ intera_g;
                                 intera_ir = IRREP_OF(intera_l, intera_g);
                                 interb_ir = IRREP_OF(interb_l, interb_g);
 
-                                stra_l = intera_l - ai_l;
+                                stra_l = intera_l + ai_l;
                                 stra_g = intera_g ^ ai_g;
-                                strb_l = interb_l - ai_l; // = wfn_momentum-intera_l
+                                strb_l = interb_l + ai_l; // = wfn_momentum-intera_l
                                 strb_g = interb_g ^ ai_g; // = wfn_ungerade^intera_g
                                 ma = 0;
                                 if (abs(stra_l) <= max_momentum) {
@@ -999,12 +999,10 @@ void FCIcontract_2e_cyl_sym(double *eris, double *ci0, double *ci1,
                                 }
                                 if (nas[intera_ir] > 0 && nas[interb_ir] > 0 &&
                                     (ma > 0 || mb > 0)) {
-ai_ir_conj = IRREP_OF(-ai_l, ai_g);
 // clinka for intera*ai -> stra.
-// l for (ai| in eri needs to be -ai_l because intera_l+(-ai_l) -> stra_l
-pick_link_by_irrep(clinka, linka+linka_loc[intera_ir], nas[intera_ir], nlinka, ai_ir_conj);
+pick_link_by_irrep(clinka, linka+linka_loc[intera_ir], nas[intera_ir], nlinka, ai_ir);
 // clinkb for interb*ai -> strb
-pick_link_by_irrep(clinkb, linkb+linkb_loc[interb_ir], nbs[interb_ir], nlinkb, ai_ir_conj);
+pick_link_by_irrep(clinkb, linkb+linkb_loc[interb_ir], nbs[interb_ir], nlinkb, ai_ir);
 loop_c2e_symm(eris+eris_loc[ai_ir],
               ci0+ci_loc[stra_ir], ci0+ci_loc[intera_ir],
               ci1+ci_loc[stra_ir], ci1+ci_loc[intera_ir], t1buf, ci1bufs,
