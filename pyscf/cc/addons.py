@@ -15,6 +15,7 @@
 
 import numpy
 from pyscf import lib
+from pyscf.cc.bccd import bccd_kernel_
 
 def spatial2spin(tx, orbspin=None):
     '''Convert T1/T2 of spatial orbital representation to T1/T2 of

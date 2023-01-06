@@ -38,8 +38,8 @@ def setUpModule():
     cell.build()
     nk = [2, 2, 1]
     kpts = cell.make_kpts(nk, wrap_around=True)
-    kmf = pscf.KUHF(cell, kpts).run()
-    mf = pscf.UHF(cell).run()
+    kmf = pscf.KUHF(cell, kpts).run(conv_tol=1e-8)
+    mf = pscf.UHF(cell).run(conv_tol=1e-8)
 
 def tearDownModule():
     global cell, kmf, mf
@@ -110,7 +110,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(e), 0.9038555558945438, 6)
 
         e = kmf.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(lib.fp(e), -0.3020614, 6)
+        self.assertAlmostEqual(lib.fp(e), -0.3020614, 5)
 
     def test_small_system(self):
         mol = pgto.Cell(

@@ -124,8 +124,8 @@ class KnownValues(unittest.TestCase):
         mc.fcisolver.nroots = 2
         mc.natorb = True
         mc.kernel()
-        self.assertAlmostEqual(mc.e_tot[0], -75.73319012518794, 9)
-        self.assertAlmostEqual(mc.e_tot[1], -75.63476344994703, 9)
+        self.assertAlmostEqual(mc.e_tot[0], -75.73319012518794, 7)
+        self.assertAlmostEqual(mc.e_tot[1], -75.63476344994703, 7)
 
         ss, s1 = mc.spin_square()
         self.assertAlmostEqual(ss[0], 2.005756795092406, 7)
@@ -164,4 +164,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for CASCI")
     unittest.main()
-

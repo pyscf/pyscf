@@ -505,7 +505,7 @@ class _PhysicistsERIs:
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             eri = ao2mofn(cc._scf.mol, (so_coeff,so_coeff,so_coeff,so_coeff), compact=0)
-            if mo_coeff[0].dtype == np.float: eri = eri.real
+            if mo_coeff[0].dtype == np.double: eri = eri.real
             eri = eri.reshape((nmo,)*4)
             for i in range(nmo):
                 for j in range(i):
@@ -540,7 +540,7 @@ class _PhysicistsERIs:
             cput1 = logger.process_clock(), logger.perf_counter()
             # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbo,so_coeff), compact=0)
-            if mo_coeff[0].dtype == np.float: buf = buf.real
+            if mo_coeff[0].dtype == np.double: buf = buf.real
             buf = buf.reshape((nocc,nmo,nocc,nmo))
             for i in range(nocc):
                 for p in range(nmo):
@@ -558,7 +558,7 @@ class _PhysicistsERIs:
             cput1 = logger.process_clock(), logger.perf_counter()
             # <ia||pq> = <ia|pq> - <ia|qp> = (ip|aq) - (iq|ap)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbv,so_coeff), compact=0)
-            if mo_coeff[0].dtype == np.float: buf = buf.real
+            if mo_coeff[0].dtype == np.double: buf = buf.real
             buf = buf.reshape((nocc,nmo,nvir,nmo))
             for p in range(nmo):
                 for i in range(nocc):
@@ -577,7 +577,7 @@ class _PhysicistsERIs:
             for a in range(nvir):
                 orbva = orbv[:,a].reshape(-1,1)
                 buf = ao2mofn(cc._scf.mol, (orbva,orbv,orbv,orbv), compact=0)
-                if mo_coeff[0].dtype == np.float: buf = buf.real
+                if mo_coeff[0].dtype == np.double: buf = buf.real
                 buf = buf.reshape((1,nvir,nvir,nvir))
                 for b in range(nvir):
                     if spin[nocc+a] != spin[nocc+b]:

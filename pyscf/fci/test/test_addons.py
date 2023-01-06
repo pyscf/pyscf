@@ -229,13 +229,13 @@ class KnownValues(unittest.TestCase):
         mci = fci.FCI(mol, mf.mo_coeff, False)
         mci.wfnsym = 'A1g'
         check(mci)
-        mci.wfnsym = 'A2g'
+        mci.wfnsym = 'A1u'
         check(mci)
 
         mci = fci.FCI(mol, mf.mo_coeff, True)
         mci.wfnsym = 'A1g'
         check(mci)
-        mci.wfnsym = 'A2g'
+        mci.wfnsym = 'A1u'
         check(mci)
 
         mol = gto.M(atom='O 0 0 0; O 0 0 1.2', spin=2, basis='sto3g',
@@ -438,4 +438,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for fci.addons")
     unittest.main()
-
