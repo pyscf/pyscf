@@ -103,7 +103,7 @@ def get_err_vec_orth(s, d, f, Corth):
         raise RuntimeError('Unknown SCF DIIS type')
     return errvec
 
-def get_err_vec(s, d, f, Corth):
+def get_err_vec(s, d, f, Corth=None):
     if Corth is None:
         return get_err_vec_orig(s, d, f)
     else:
