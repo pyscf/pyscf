@@ -140,8 +140,11 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                                 link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1.view(FCIvector)
 
-def make_hdiag(h1e, eri, norb, nelec):
+def make_hdiag(h1e, eri, norb, nelec, compress=False):
     '''Diagonal Hamiltonian for Davidson preconditioner
+
+    Kwargs:
+        compress (bool) : whether to remove symmetry forbidden elements
     '''
     if h1e.dtype == numpy.complex128 or eri.dtype == numpy.complex128:
         raise NotImplementedError('Complex Hamiltonian')
@@ -198,9 +201,11 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.ascontiguousarray(h1e)
     eri = ao2mo.restore(1, eri, norb)
+    na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     if hdiag is None:
-        hdiag = make_hdiag(h1e, eri, norb, nelec)
+        hdiag = make_hdiag(h1e, eri, norb, nelec, compress=False)
+    assert hdiag.size == na * nb
     if hdiag.size <= np:
         addr = numpy.arange(hdiag.size)
     else:
@@ -519,37 +524,48 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     nelec = _unpack_nelec(nelec, fci.spin)
     assert (0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
 
-    hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
-    pspace_size = min(hdiag.size, pspace_size)
+    hdiag = fci.make_hdiag(h1e, eri, norb, nelec, compress=False).ravel()
+    if getattr(fci, 'sym_allowed_idx', None):
+        # Remove symmetry forbidden elements
+        sym_idx = numpy.hstack(fci.sym_allowed_idx)
+        civec_size = sym_idx.size
+    else:
+        sym_idx = None
+        civec_size = hdiag.size
 
-    if max_memory < hdiag.size*6*8e-6:
+    if max_memory < civec_size*6*8e-6:
         log.warn('Not enough memory for FCI solver. '
-                 'The minimal requirement is %.0f MB', hdiag.size*60e-6)
+                 'The minimal requirement is %.0f MB', civec_size*60e-6)
 
+    pspace_size = min(hdiag.size, pspace_size)
     addr = [0]
     pw = pv = None
     if pspace_size > 0:
         try:
             addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+            pspace_size = len(addr)
         except NotImplementedError:
             pass
         pw, pv = fci.eig(h0)
 
-    if pspace_size >= hdiag.size and ci0 is None and not davidson_only:
+    if pspace_size >= civec_size and ci0 is None and not davidson_only:
         if nroots > 1:
-            nroots = min(hdiag.size, nroots)
-            civec = numpy.empty((nroots,hdiag.size))
+            nroots = min(civec_size, nroots)
+            civec = numpy.empty((nroots,civec_size))
             civec[:,addr] = pv[:,:nroots].T
             return pw[:nroots]+ecore, civec
         elif pspace_size == 1 or abs(pw[0]-pw[1]) > 1e-12:
             # Check degeneracy. Degenerated wfn may break point group symmetry.
             # Davidson iteration with a proper initial guess can avoid this problem.
-            civec = numpy.empty(hdiag.size)
+            civec = numpy.empty(civec_size)
             civec[addr] = pv[:,0]
             return pw[0]+ecore, civec
     pw = pv = h0 = None
 
-    precond = fci.make_precond(hdiag)
+    if hdiag.size == civec_size:
+        precond = fci.make_precond(hdiag)
+    else:
+        precond = fci.make_precond(hdiag[sym_idx])
 
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
     if hop is None:
@@ -557,33 +573,28 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             hc = fci.contract_2e(h2e, c, norb, nelec, link_index)
             return hc.ravel()
 
-    if getattr(fci, 'sym_allowed_idx', None):
-        # Remove symmetry forbidden elements
-        s_idx = numpy.hstack(fci.sym_allowed_idx)
-        if ci0 is None:
-            ci0 = fci.get_init_guess(norb, nelec, nroots, hdiag)
-        elif callable(ci0):
-            ci0 = ci0()
-        if isinstance(ci0, numpy.ndarray) and ci0.size != s_idx.size:
-            ci0 = [ci0.ravel()[s_idx]]
-        elif ci0[0].size != s_idx.size:
-            ci0 = [x.ravel()[s_idx] for x in ci0]
-    elif ci0 is None:
+    def init_guess():
         if callable(getattr(fci, 'get_init_guess', None)):
-            ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
+            return fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
-            def ci0():  # lazy initialization to reduce memory footprint
-                x0 = []
-                for i in range(min(len(addr), nroots)):
-                    x = numpy.zeros(hdiag.size)
-                    x[addr[i]] = 1
-                    x0.append(x)
-                return x0
+            x0 = []
+            for i in range(min(len(addr), nroots)):
+                x = numpy.zeros(civec_size)
+                x[addr[i]] = 1
+                x0.append(x)
+            return x0
+
+    if ci0 is None:
+        ci0 = init_guess  # lazy initialization to reduce memory footprint
     elif not callable(ci0):
-        if isinstance(ci0, numpy.ndarray) and ci0.size == hdiag.size:
+        if isinstance(ci0, numpy.ndarray):
             ci0 = [ci0.ravel()]
         else:
             ci0 = [x.ravel() for x in ci0]
+        if sym_idx is not None and ci0[0].size != civec_size:
+            ci0 = [x[sym_idx] for x in ci0]
+        if len(ci0) < nroots:
+            ci0.extend(init_guess()[len(ci0):])
 
     if tol is None: tol = fci.conv_tol
     if lindep is None: lindep = fci.lindep
@@ -763,9 +774,9 @@ class FCIBase(lib.StreamObject):
         return absorb_h1e(h1e, eri, norb, nelec, fac)
 
     @lib.with_doc(make_hdiag.__doc__)
-    def make_hdiag(self, h1e, eri, norb, nelec):
+    def make_hdiag(self, h1e, eri, norb, nelec, compress=False):
         nelec = _unpack_nelec(nelec, self.spin)
-        return make_hdiag(h1e, eri, norb, nelec)
+        return make_hdiag(h1e, eri, norb, nelec, compress)
 
     @lib.with_doc(pspace.__doc__)
     def pspace(self, h1e, eri, norb, nelec, hdiag=None, np=400):

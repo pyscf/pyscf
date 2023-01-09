@@ -33,7 +33,8 @@ def large_ci(ci, norb, nelec, tol=LARGE_CI_TOL, return_strs=RETURN_STRS):
     neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
-    assert (ci.shape == (na, nb))
+    assert ci.size == na * nb
+    ci = ci.reshape(na, nb)
     addra, addrb = numpy.where(abs(ci) > tol)
     if addra.size == 0:
         # No large CI coefficient > tol, search for the largest coefficient

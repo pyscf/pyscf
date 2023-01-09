@@ -645,39 +645,49 @@ class FCISolver(direct_spin1.FCISolver):
 
     absorb_h1e = direct_spin1.FCISolver.absorb_h1e
 
-    def make_hdiag(self, h1e, eri, norb, nelec):
+    def make_hdiag(self, h1e, eri, norb, nelec, compress=False):
         nelec = _unpack_nelec(nelec, self.spin)
         hdiag = direct_spin1.make_hdiag(h1e, eri, norb, nelec)
-        if self.sym_allowed_idx is not None:
+        # TODO: hdiag should return symmetry allowed elements only. However,
+        # get_init_guess_cyl_sym does not strictly follow the D2h (and subgroup)
+        # symmetry treatments. The diagonal of entire Hamiltonian is required.
+        if compress and self.sym_allowed_idx is not None:
             hdiag = hdiag.ravel()[np.hstack(self.sym_allowed_idx)]
         return hdiag
 
     def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
         nelec = _unpack_nelec(nelec, self.spin)
-        np = min(np, hdiag.size)
-        if self.sym_allowed_idx is not None:
-            na = cistring.num_strings(norb, nelec[0])
-            nb = cistring.num_strings(norb, nelec[1])
-            hdiag, hdiag0 = numpy.empty(na*nb), hdiag
+        na = cistring.num_strings(norb, nelec[0])
+        nb = cistring.num_strings(norb, nelec[1])
+        s_idx = numpy.hstack(self.sym_allowed_idx)
+        if hdiag.size == s_idx.size:
+            hdiag, hdiag0 = numpy.empty(na*nb), hdiag.ravel()
             hdiag[:] = 1e9
-            s_idx = numpy.hstack(self.sym_allowed_idx)
             hdiag[s_idx] = hdiag0
-            addr0, h = direct_spin1.pspace(h1e, eri, norb, nelec, hdiag, np)
-            # mapping the address in (na,nb) civec to address in sym-allowed civec
-            addr_sym_allow = numpy.where(numpy.isin(s_idx, addr0))[0]
-            addr1 = s_idx[addr_sym_allow]
-            new_idx = numpy.empty_like(addr_sym_allow)
-            new_idx[addr0.argsort()] = addr1.argsort()
-            addr = addr_sym_allow[new_idx]
-            return addr, h
-        else:
-            return direct_spin1.pspace(h1e, eri, norb, nelec, hdiag, np)
+        elif not getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov'):
+            # Screen symmetry forbidden elements
+            hdiag, hdiag0 = numpy.empty(na*nb), hdiag.ravel()
+            hdiag[:] = 1e9
+            hdiag[s_idx] = hdiag0[s_idx]
+
+        np = min(np, hdiag.size)
+        addr0, h = direct_spin1.pspace(h1e, eri, norb, nelec, hdiag, np)
+
+        # mapping the address in (na,nb) civec to address in sym-allowed civec
+        addr0_sym_allow = numpy.where(numpy.isin(addr0, s_idx))[0]
+        addr0 = addr0[addr0_sym_allow]
+        s_idx_allowed = numpy.where(numpy.isin(s_idx, addr0))[0]
+        addr1 = s_idx[s_idx_allowed]
+        new_idx = numpy.empty_like(s_idx_allowed)
+        new_idx[addr0.argsort()] = addr1.argsort()
+        addr = s_idx_allowed[new_idx]
+        return addr, h[addr0_sym_allow[:,None],addr0_sym_allow]
 
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
         nelec = direct_spin1._unpack_nelec(nelec)
         na = cistring.num_strings(norb, nelec[0])
         nb = cistring.num_strings(norb, nelec[1])
-        if fcivec.size != na*nb:
+        if fcivec.size != na * nb:
             fcivec, ci0 = np.zeros(na*nb), fcivec
             fcivec[np.hstack(self.sym_allowed_idx)] = ci0
         return direct_spin1.contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
@@ -703,18 +713,18 @@ class FCISolver(direct_spin1.FCISolver):
         ci1 = contract_ss(fcivec, norb, nelec)
         return ci1.ravel()[s_idx]
 
-    #def get_init_guess(self, norb, nelec, nroots, hdiag):
-    #    wfnsym = _id_wfnsym(self, norb, nelec, self.orbsym, self.wfnsym)
-    #    return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
     def get_init_guess(self, norb, nelec, nroots, hdiag, orbsym=None, wfnsym=None):
         if orbsym is None: orbsym = self.orbsym
         if wfnsym is None:
             wfnsym = _id_wfnsym(self, norb, nelec, orbsym, self.wfnsym)
+        s_idx = np.hstack(self.sym_allowed_idx)
         if getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov'):
-            return get_init_guess_cyl_sym(
+            ci0 = get_init_guess_cyl_sym(
                 norb, nelec, nroots, hdiag, orbsym, wfnsym)
+            return [x[s_idx] for x in ci0]
         else:
-            return get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym)
+            return get_init_guess(norb, nelec, nroots, hdiag.ravel()[s_idx],
+                                  orbsym, wfnsym)
 
     guess_wfnsym = guess_wfnsym
 
@@ -742,9 +752,13 @@ class FCISolver(direct_spin1.FCISolver):
 
         wfnsym_ir = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
         self.sym_allowed_idx = sym_allowed_indices(nelec, orbsym, wfnsym_ir)
+        s_idx = np.hstack(self.sym_allowed_idx)
         self.orbsym = orbsym
         logger.debug(self, 'Num symmetry allowed elements %d',
                      sum([x.size for x in self.sym_allowed_idx]))
+        if s_idx.size == 0:
+            raise RuntimeError(
+                f'Symmetry allowed determinants not found for wfnsym {wfnsym}')
 
         if wfnsym_ir > 7:
             # Symmetry broken for Dooh and Coov groups is often observed.
@@ -761,7 +775,7 @@ class FCISolver(direct_spin1.FCISolver):
             # get_init_guess_cyl_sym (which follows direct_spin1_cyl_sym.py).
             # Some symmetry forbidden elements for D2h are needed in
             # get_init_guess_cyl_sym function. Thus the entire hdiag is computed.
-            hdiag = direct_spin1.make_hdiag(h1e, eri, norb, nelec)
+            hdiag = self.make_hdiag(h1e, eri, norb, nelec, compress=False)
             ci0 = self.get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym_ir)
 
         with lib.temporary_env(self, wfnsym=wfnsym_ir):
@@ -771,13 +785,12 @@ class FCISolver(direct_spin1.FCISolver):
 
         na = link_index[0].shape[0]
         nb = link_index[1].shape[0]
-        s_idx = np.hstack(self.sym_allowed_idx)
         if nroots > 1:
             c, c_raw = [], c
             for vec in c_raw:
                 c1 = np.zeros(na*nb)
                 c1[s_idx] = vec.T
-                c.append(c1)
+                c.append(c1.reshape(na, nb).view(direct_spin1.FCIvector))
         else:
             c1 = np.zeros(na*nb)
             c1[s_idx] = c

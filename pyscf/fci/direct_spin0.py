@@ -54,7 +54,10 @@ libfci = direct_spin1.libfci
 @lib.with_doc(direct_spin1.contract_1e.__doc__)
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
-    link_index = _unpack(norb, nelec, link_index)
+    link_index = direct_spin1._unpack(norb, nelec, link_index)
+    if not isinstance(link_index, numpy.ndarray):
+        # Handle computability. link_index should be (nparray, nparray)
+        link_index = link_index[0]
     na, nlink = link_index.shape[:2]
     assert (fcivec.size == na**2)
     ci1 = numpy.empty_like(fcivec)
@@ -84,7 +87,10 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri = ao2mo.restore(4, eri, norb)
     lib.transpose_sum(eri, inplace=True)
     eri *= .5
-    link_index = _unpack(norb, nelec, link_index)
+    link_index = direct_spin1._unpack(norb, nelec, link_index)
+    if not isinstance(link_index, numpy.ndarray):
+        # Handle computability. link_index should be (nparray, nparray)
+        link_index = link_index[0]
     na, nlink = link_index.shape[:2]
     assert (fcivec.size == na**2)
     ci1 = numpy.empty((na,na))
@@ -102,7 +108,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 absorb_h1e = direct_spin1.absorb_h1e
 
 @lib.with_doc(direct_spin1.make_hdiag.__doc__)
-def make_hdiag(h1e, eri, norb, nelec):
+def make_hdiag(h1e, eri, norb, nelec, compress=False):
     hdiag = direct_spin1.make_hdiag(h1e, eri, norb, nelec)
     na = int(numpy.sqrt(hdiag.size))
 # symmetrize hdiag to reduce numerical error
@@ -237,17 +243,22 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     nelec = direct_spin1._unpack_nelec(nelec, fci.spin)
     assert (0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
 
-    hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
-    pspace_size = min(hdiag.size, pspace_size)
-    na = cistring.num_strings(norb, nelec[0])
+    hdiag = fci.make_hdiag(h1e, eri, norb, nelec, compress=True)
+    if getattr(fci, 'sym_allowed_idx', None):
+        # Remove symmetry forbidden elements
+        sym_idx = numpy.hstack(fci.sym_allowed_idx)
+        civec_size = sym_idx.size
+    else:
+        sym_idx = None
+        civec_size = hdiag.size
 
     if max_memory < hdiag.size*6*8e-6:
         log.warn('Not enough memory for FCI solver. '
                  'The minimal requirement is %.0f MB', hdiag.size*60e-6)
 
-    hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
+    pspace_size = min(hdiag.size, pspace_size)
     nroots = min(hdiag.size, nroots)
-
+    na = cistring.num_strings(norb, nelec[0])
     addr = [0]
     pw = pv = None
     if pspace_size > 0:
@@ -257,11 +268,11 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             pass
         pw, pv = fci.eig(h0)
 
-    if pspace_size >= hdiag.size and ci0 is None and not davidson_only:
+    if pspace_size >= civec_size and ci0 is None and not davidson_only:
         e = []
         civec = []
         for i in range(pspace_size):
-            c = numpy.empty(hdiag.size)
+            c = numpy.empty(civec_size)
             c[addr] = pv[:,i]
             try:
                 civec.append(_check_(c.reshape(na,na)))
@@ -276,7 +287,10 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             return numpy.array(e)+ecore, civec
     pw = pv = h0 = None
 
-    precond = fci.make_precond(hdiag)
+    if hdiag.size == civec_size:
+        precond = fci.make_precond(hdiag)
+    else:
+        precond = fci.make_precond(hdiag[sym_idx])
 
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
     if hop is None:
@@ -284,28 +298,33 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             hc = fci.contract_2e(h2e, c.reshape(na,na), norb, nelec, link_index)
             return hc.ravel()
 
-#TODO: check spin of initial guess
-    if ci0 is None:
+    def init_guess():
         if callable(getattr(fci, 'get_init_guess', None)):
-            ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
+            return fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
-            def ci0():
-                x0 = []
-                for i in range(nroots):
-                    x = numpy.zeros((na,na))
-                    addra = addr[i] // na
-                    addrb = addr[i] % na
-                    if addra == addrb:
-                        x[addra,addrb] = 1
-                    else:
-                        x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
-                    x0.append(x.ravel())
-                return x0
+            x0 = []
+            for i in range(nroots):
+                x = numpy.zeros((na,na))
+                addra = addr[i] // na
+                addrb = addr[i] % na
+                if addra == addrb:
+                    x[addra,addrb] = 1
+                else:
+                    x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
+                x0.append(x.ravel())
+            return x0
+
+    if ci0 is None:
+        ci0 = init_guess  # lazy initialization to reduce memory footprint
     elif not callable(ci0):
-        if isinstance(ci0, numpy.ndarray) and ci0.size == na*na:
+        if isinstance(ci0, numpy.ndarray):
             ci0 = [ci0.ravel()]
         else:
             ci0 = [x.ravel() for x in ci0]
+        if sym_idx is not None and ci0[0].size != civec_size:
+            ci0 = [x[sym_idx] for x in ci0]
+        if len(ci0) < nroots:
+            ci0.extend(init_guess()[len(ci0):])
 
     if tol is None: tol = fci.conv_tol
     if lindep is None: lindep = fci.lindep
@@ -331,8 +350,7 @@ def _check_(c):
 
 class FCISolver(direct_spin1.FCISolver):
 
-    def make_hdiag(self, h1e, eri, norb, nelec):
-        return make_hdiag(h1e, eri, norb, nelec)
+    make_hdiag = staticmethod(make_hdiag)
 
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
@@ -353,13 +371,13 @@ class FCISolver(direct_spin1.FCISolver):
         assert self.spin is None or self.spin == 0
         self.norb = norb
         self.nelec = nelec
-        link_index = _unpack(norb, nelec, None)
+        link_index = direct_spin1._unpack(norb, nelec, None)
         e, c = kernel_ms0(self, h1e, eri, norb, nelec, ci0, link_index,
                           tol, lindep, max_cycle, max_space, nroots,
                           davidson_only, pspace_size, ecore=ecore, **kwargs)
         self.eci = e
 
-        na = link_index.shape[0]
+        na = link_index[0].shape[0]
         if nroots > 1:
             self.ci = [
                 _check_(x.reshape(na,na)).view(direct_spin1.FCIvector) for x in c]
@@ -406,18 +424,6 @@ class FCISolver(direct_spin1.FCISolver):
         return link_index
 
 FCI = FCISolver
-
-
-def _unpack(norb, nelec, link_index):
-    if link_index is None:
-        if isinstance(nelec, (int, numpy.number)):
-            neleca = nelec//2
-        else:
-            neleca, nelecb = nelec
-            assert (neleca == nelecb)
-        return cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    else:
-        return link_index
 
 
 if __name__ == '__main__':

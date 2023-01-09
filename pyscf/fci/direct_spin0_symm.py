@@ -48,7 +48,14 @@ from pyscf import __config__
 
 libfci = direct_spin1.libfci
 
-contract_2e = direct_spin1_symm.contract_2e
+def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0):
+    link_index = direct_spin1._unpack(norb, nelec, link_index)
+    if isinstance(link_index, numpy.ndarray):
+        # For backward compatibility
+        link_index = (link_index, link_index)
+    return direct_spin1_symm.contract_2e(eri, fcivec, norb, nelec, link_index,
+                                         orbsym, wfnsym)
+
 energy = direct_spin1_symm.energy
 kernel = direct_spin1_symm.kernel
 
@@ -175,7 +182,7 @@ class FCISolver(direct_spin0.FCISolver):
             civec += ci1[s_idx]
             civec *= .5
         else:
-            civec = lib.transpose_sum(civec, inplace=True)
+            civec = lib.transpose_sum(civec.reshape(na,na), inplace=True)
             civec *= .5
         return civec
 
@@ -184,8 +191,9 @@ class FCISolver(direct_spin0.FCISolver):
         if wfnsym is None:
             wfnsym = direct_spin1_symm._id_wfnsym(
                 self, norb, nelec, orbsym, self.wfnsym)
+        s_idx = numpy.hstack(self.sym_allowed_idx)
         if getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov'):
-            return get_init_guess_cyl_sym(
+            ci0 = get_init_guess_cyl_sym(
                 norb, nelec, nroots, hdiag, orbsym, wfnsym)
         else:
             nelec = direct_spin1._unpack_nelec(nelec, self.spin)
@@ -194,6 +202,8 @@ class FCISolver(direct_spin0.FCISolver):
                 hdiag, hdiag0 = numpy.empty(na*na), hdiag
                 hdiag[:] = 1e9
                 hdiag[numpy.hstack(self.sym_allowed_idx)] = hdiag0
-            return get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym)
+            ci0 = get_init_guess(norb, nelec, nroots, hdiag.ravel(),
+                                 orbsym, wfnsym)
+        return [x[s_idx] for x in ci0]
 
 FCI = FCISolver

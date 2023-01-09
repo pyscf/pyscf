@@ -753,6 +753,12 @@ def module_method(fn, absences=None):
             if a is None: a = self.a
             if b is None: b = self.b
             return fn(a, b)
+
+    This function can be used to replace "staticmethod" when inserting a module
+    method into a class. In a child class, it allows one to call the method of a
+    base class with either "self.__class__.method_name(self, args)" or
+    "self.super().method_name(args)". For method created with "staticmethod",
+    calling "self.super().method_name(args)" is the only option.
     '''
     _locals = {}
     name = fn.__name__

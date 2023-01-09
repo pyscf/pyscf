@@ -114,8 +114,7 @@ class SelectedCI(selected_ci_symm.SelectedCI):
             civec_strs = selected_ci._as_SCIvector(civec_strs, self._strs)
         return contract_2e(eri, civec_strs, norb, nelec, link_index, orbsym)
 
-    def make_hdiag(self, h1e, eri, ci_strs, norb, nelec):
-        return selected_ci_spin0.make_hdiag(h1e, eri, ci_strs, norb, nelec)
+    make_hdiag = staticmethod(selected_ci_spin0.make_hdiag)
 
     enlarge_space = selected_ci_spin0.enlarge_space
 

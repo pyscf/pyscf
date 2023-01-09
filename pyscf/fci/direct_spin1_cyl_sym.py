@@ -30,7 +30,9 @@ wavefunction should have an indentical one from either Ex or Ey wavefunction
 of direct_spin1_symm.
 '''
 
+import functools
 import ctypes
+import numpy
 import numpy as np
 from pyscf import lib
 from pyscf import ao2mo
@@ -457,6 +459,27 @@ def sym_allowed_indices(nelec, orbsym, wfnsym):
             ab_idx[stra_ir] = (aidx[stra_ir][:,None] * nb + bidx[strb_ir]).ravel()
     return ab_idx
 
+def _dm_wrapper(fn_rdm):
+    def transform(dm, u):
+        if dm.ndim == 2:
+            dm = u.conj().T.dot(dm).dot(u)
+        else:
+            dm = lib.einsum('pqrs,pi,qj,rk,sl->ijkl', dm, u.conj(), u, u.conj(), u)
+        return dm.real.copy()
+
+    @functools.wraps(fn_rdm)
+    def make_dm(self, fcivec, norb, nelec, *args, **kwargs):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
+        dms = fn_rdm(fcivec, norb, nelec, *args, **kwargs)
+        orbsym = self.orbsym
+        degen_mapping = self.orbsym.degen_mapping
+        u = _cyl_sym_orbital_rotation(orbsym, degen_mapping)
+        if isinstance(dms, np.ndarray):
+            return transform(dms, u)
+        else:
+            return [transform(dm, u) for dm in dms]
+    return make_dm
+
 
 class FCISolver(direct_spin1_symm.FCISolver):
 
@@ -478,20 +501,42 @@ class FCISolver(direct_spin1_symm.FCISolver):
         return get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym,
                               self.sym_allowed_idx)
 
+    def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
+        na = cistring.num_strings(norb, nelec[0])
+        nb = cistring.num_strings(norb, nelec[1])
+        s_idx = numpy.hstack(self.sym_allowed_idx)
+        # Screen symmetry forbidden elements
+        hdiag, hdiag0 = numpy.empty(na*nb), hdiag.ravel()
+        hdiag[:] = 1e99
+        if hdiag0.size == s_idx.size:
+            hdiag[s_idx] = hdiag0
+        else:
+            hdiag[s_idx] = hdiag0[s_idx]
+
+        np = min(np, s_idx.size)
+        addr0, h = direct_spin1.pspace(h1e, eri, norb, nelec, hdiag, np)
+
+        # mapping the address in (na,nb) civec to address in sym-allowed civec
+        s_idx_allowed = numpy.where(numpy.isin(s_idx, addr0))[0]
+        addr1 = s_idx[s_idx_allowed]
+        new_idx = numpy.empty_like(s_idx_allowed)
+        new_idx[addr0.argsort()] = addr1.argsort()
+        addr = s_idx_allowed[new_idx]
+        return addr, h
+
     absorb_h1e = direct_nosym.FCISolver.absorb_h1e
     make_hdiag = direct_spin1_symm.FCISolver.make_hdiag
-    pspace = direct_spin1_symm.FCISolver.pspace
     guess_wfnsym = guess_wfnsym
 
-    def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
-        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
-        dm1, dm2 = direct_spin1.make_rdm12(fcivec, norb, nelec, link_index, reorder)
-        orbsym = self.orbsym
-        degen_mapping = self.orbsym.degen_mapping
-        u = _cyl_sym_orbital_rotation(orbsym, degen_mapping)
-        dm1 = u.conj().T.dot(dm1).dot(u)
-        dm2 = lib.einsum('pqrs,pi,qj,rk,sl->ijkl', dm2, u.conj(), u, u.conj(), u)
-        return dm1.real.copy(), dm2.real.copy()
+    make_rdm1 = _dm_wrapper(direct_spin1.make_rdm1)
+    make_rdm1s = _dm_wrapper(direct_spin1.make_rdm1s)
+    make_rdm12 = _dm_wrapper(direct_spin1.make_rdm12)
+    make_rdm12s = _dm_wrapper(direct_spin1.make_rdm12s)
+    trans_rdm1 = _dm_wrapper(direct_spin1.trans_rdm1)
+    trans_rdm1s = _dm_wrapper(direct_spin1.trans_rdm1s)
+    trans_rdm12 = _dm_wrapper(direct_spin1.trans_rdm12)
+    trans_rdm12s = _dm_wrapper(direct_spin1.trans_rdm12s)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
