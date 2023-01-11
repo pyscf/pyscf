@@ -108,8 +108,8 @@ def FCI(mol_or_mf, mo=None, singlet=False):
         mf = None
         mol = mol_or_mf
         is_rhf = (mo is None or (isinstance(mo, numpy.ndarray) and mo.ndim == 2 and mo.shape[0] == mol.nao))
-        is_ghf = (mo is None or (isinstance(mo, numpy.ndarray) and mo.ndim == 2 and mo.shape[0] == 2 * mol.nao))
-        is_dhf = (mo is None or (isinstance(mo, numpy.ndarray) and mo.ndim == 2 and mo.shape[0] == 2 * mol.nao_2c()))
+        is_ghf = (mo is not None and (isinstance(mo, numpy.ndarray) and mo.ndim == 2 and mo.shape[0] == 2 * mol.nao))
+        is_dhf = (mo is not None and (isinstance(mo, numpy.ndarray) and mo.ndim == 2 and mo.shape[0] == 2 * mol.nao_2c()))
         is_uhf = not (is_rhf or is_ghf or is_dhf)
 
     if is_uhf:
