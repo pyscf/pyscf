@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ from pyscf.lib import logger
 
 
 def contract_2e(eri, fcivec, norb, nelec, opt=None):
-    '''Compute a^\dagger_p a_q a^\dagger_r a_s |CI>'''
+    '''Compute a^\\dagger_p a_q a^\\dagger_r a_s |CI>'''
     link_index = cistring.gen_linkstr_index(range(norb), nelec)
     na = cistring.num_strings(norb, nelec)
     t1 = numpy.zeros((norb, norb, na), dtype=eri.dtype)
