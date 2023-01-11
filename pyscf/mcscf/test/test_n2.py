@@ -125,6 +125,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.6910275883606078, 4)
 
+        mc.wfnsym = 'A2u'
+        # raised by mc.fcisolver.guess_wfnsym
+        self.assertRaises(RuntimeError, mc.kernel)
+
     def test_casci_from_uhf(self):
         mf = scf.UHF(mol)
         mf.scf()
@@ -157,9 +161,13 @@ class KnownValues(unittest.TestCase):
 
     def test_wfnsym(self):
         mc = mcscf.CASSCF(msym, 4, (3,1))
-        mc.fcisolver.wfnsym = 4
+        mc.fcisolver.wfnsym = 14
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.74508322877787, 7)
+
+        mc.wfnsym = 'A2u'
+        emc = mc.mc1step()[0]
+        self.assertAlmostEqual(emc, -108.69019443475308, 7)
 
     def test_ucasci(self):
         mc = mcscf.UCASCI(msym, 4, (3,1))

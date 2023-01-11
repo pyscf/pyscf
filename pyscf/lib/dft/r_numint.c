@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <complex.h>
 #include "config.h"
 #include "gto/grid_ao_drv.h"

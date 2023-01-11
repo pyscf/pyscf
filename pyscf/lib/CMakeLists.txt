@@ -115,7 +115,7 @@ link_directories(${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/lib64)
 
 configure_file(
   "${PROJECT_SOURCE_DIR}/config.h.in"
-  "${PROJECT_BINARY_DIR}/config.h")
+  "${PROJECT_SOURCE_DIR}/config.h")
 # to find config.h
 include_directories("${PROJECT_BINARY_DIR}")
 
@@ -165,7 +165,7 @@ if(BUILD_LIBCINT)
 
   ExternalProject_Add(libcint
     GIT_REPOSITORY ${LIBCINT_GIT}
-    GIT_TAG v5.1.5
+    GIT_TAG v5.1.8
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_CACHE_ARGS

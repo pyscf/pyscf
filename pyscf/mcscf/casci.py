@@ -918,7 +918,7 @@ To enable the solvent model for CASCI, the following code needs to be called
         elif mo_coeff.shape[1] != ncas:
             mo_coeff = mo_coeff[:,ncore:nocc]
 
-        if self._scf._eri is not None:
+        if hasattr(self._scf, '_eri') and self._scf._eri is not None:
             eri = ao2mo.full(self._scf._eri, mo_coeff,
                              max_memory=self.max_memory)
         else:

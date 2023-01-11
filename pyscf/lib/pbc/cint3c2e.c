@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <stdint.h>
 #include <math.h>
 //#include <omp.h>
 #include "config.h"

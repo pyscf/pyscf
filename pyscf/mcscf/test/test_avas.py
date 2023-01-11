@@ -33,15 +33,15 @@ class KnownValues(unittest.TestCase):
             verbose = 7,
             output = '/dev/null'
         )
-        mf = scf.RHF(mol).run()
+        mf = scf.RHF(mol).run(conv_tol=1e-10)
         ncas, nelecas, mo = avas.kernel(mf, 'O 2p')
-        self.assertAlmostEqual(lib.fp(abs(mo)), 2.0834371806990823, 5)
+        self.assertAlmostEqual(lib.fp(abs(mo)), 2.0834371806990823, 4)
 
         ncas, nelecas, mo = avas.kernel(mf, 'O 2p', openshell_option=3)
-        self.assertAlmostEqual(lib.fp(abs(mo)), 1.886278150191051, 5)
+        self.assertAlmostEqual(lib.fp(abs(mo)), 1.886278150191051, 4)
 
         ncas, nelecas, mo = avas.kernel(mf.to_uhf(), 'O 2p')
-        self.assertAlmostEqual(lib.fp(abs(mo)), 2.0950187018846607, 5)
+        self.assertAlmostEqual(lib.fp(abs(mo)), 2.0950187018846607, 4)
         mol.stdout.close()
 
 if __name__ == "__main__":

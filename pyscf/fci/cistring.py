@@ -98,6 +98,7 @@ def _strs2occslst(strs, norb):
     occslst = numpy.where(occ_masks)[1].reshape(na,-1)
     return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
 def _occslst2strs(occslst):
+    occslst = numpy.asarray(occslst)
     na, nelec = occslst.shape
     strs = numpy.zeros(na, dtype=numpy.int64)
     for i in range(nelec):

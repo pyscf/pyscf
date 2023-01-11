@@ -34,7 +34,7 @@ except (ImportError, OSError):
         warnings.warn('XC functional libraries (libxc or XCfun) are not available.')
         raise
 
-from pyscf.dft.gen_grid import BLKSIZE, NBINS, CUTOFF, make_mask
+from pyscf.dft.gen_grid import BLKSIZE, NBINS, CUTOFF, ALIGNMENT_UNIT, make_mask
 from pyscf.dft import xc_deriv
 from pyscf import __config__
 
@@ -830,8 +830,7 @@ def _sparse_enough(screen_index):
     return numpy.count_nonzero(screen_index) < screen_index.size * threshold
 
 def _dot_ao_ao_dense(ao1, ao2, wv, out=None):
-    '''Returns bra.T.dot(ket) while sparsity is explicitly considered.
-    Note the return may have ~1e-13 difference to _dot_ao_ao.
+    '''Returns (bra*wv).T.dot(ket)
     '''
     assert ao1.flags.f_contiguous
     assert ao2.flags.f_contiguous
@@ -857,13 +856,13 @@ def _dot_ao_ao_sparse(ao1, ao2, wv, nbins, screen_index, pair_mask, ao_loc,
     '''Returns (bra*wv).T.dot(ket) while sparsity is explicitly considered.
     Note the return may have ~1e-13 difference to _dot_ao_ao.
     '''
-    if screen_index is None or pair_mask is None:
+    ngrids, nao = ao1.shape
+    if screen_index is None or pair_mask is None or ngrids % ALIGNMENT_UNIT != 0:
         return _dot_ao_ao_dense(ao1, ao2, wv, out)
 
     assert ao1.flags.f_contiguous
     assert ao2.flags.f_contiguous
     assert ao1.dtype == ao2.dtype == numpy.double
-    ngrids, nao = ao1.shape
     nbas = screen_index.shape[1]
     if out is None:
         out = numpy.zeros((nao, nao), dtype=ao1.dtype)
@@ -898,12 +897,12 @@ def _dot_ao_dm_sparse(ao, dm, nbins, screen_index, pair_mask, ao_loc):
     ao matrix, (numpy.dot(ao, dm)*ao).sum(axis=1), their value can be matched up
     to ~1e-13.
     '''
-    if screen_index is None or pair_mask is None:
+    ngrids, nao = ao.shape
+    if screen_index is None or pair_mask is None or ngrids % ALIGNMENT_UNIT != 0:
         return lib.dot(dm.T, ao.T).T
 
     assert ao.flags.f_contiguous
     assert ao.dtype == dm.dtype == numpy.double
-    ngrids, nao = ao.shape
     nbas = screen_index.shape[1]
     dm = numpy.asarray(dm, order='C')
     out = _empty_aligned((nao, ngrids)).T
@@ -936,6 +935,9 @@ def _scale_ao_sparse(ao, wv, screen_index, ao_loc, out=None):
         ngrids, nao = ao.shape
         comp = 1
     nbas = screen_index.shape[1]
+    if ngrids % ALIGNMENT_UNIT != 0:
+        return _scale_ao(ao, wv, out=out)
+
     if out is None:
         out = _empty_aligned((nao, ngrids)).T
     else:
@@ -954,13 +956,13 @@ def _contract_rho_sparse(bra, ket, screen_index, ao_loc):
     '''Returns numpy.einsum('gi,gi->g', bra, ket) while sparsity is explicitly
     considered. Note the return may have ~1e-13 difference to _contract_rho.
     '''
-    if screen_index is None:
+    ngrids, nao = bra.shape
+    if screen_index is None or ngrids % ALIGNMENT_UNIT != 0:
         return _contract_rho(bra, ket)
 
     assert bra.flags.f_contiguous
     assert ket.flags.f_contiguous
     assert bra.dtype == ket.dtype == numpy.double
-    ngrids, nao = bra.shape
     nbas = screen_index.shape[1]
     rho = numpy.empty(ngrids)
     libdft.VXCdcontract_rho_sparse(
@@ -2527,6 +2529,9 @@ def _uks_mgga_wv2(rho0, rho1, fxc, kxc, weight):
     return wva, wvb
 
 def _empty_aligned(shape, alignment=8):
+    if alignment <= 1:
+        return numpy.empty(shape)
+
     size = numpy.prod(shape)
     buf = numpy.empty(size + alignment - 1)
     align8 = alignment * 8
@@ -2642,8 +2647,9 @@ def _block_loop(ni, mol, grids, nao=None, deriv=0, max_memory=2000,
     # NOTE to index grids.non0tab, the blksize needs to be an integer
     # multiplier of BLKSIZE
     if blksize is None:
-        blksize = int(max_memory*1e6/((comp+1)*nao*8*BLKSIZE))*BLKSIZE
-        blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
+        blksize = int(max_memory*1e6/((comp+1)*nao*8*BLKSIZE))
+        blksize = max(4, min(blksize, ngrids//BLKSIZE+1, 1200)) * BLKSIZE
+    assert blksize % BLKSIZE == 0
 
     if non0tab is None and mol is grids.mol:
         non0tab = grids.non0tab
@@ -2652,6 +2658,9 @@ def _block_loop(ni, mol, grids, nao=None, deriv=0, max_memory=2000,
                               dtype=numpy.uint8)
         non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
     screen_index = non0tab
+
+    # the xxx_sparse() functions require ngrids 8-byte aligned
+    allow_sparse = ngrids % ALIGNMENT_UNIT == 0
 
     if buf is None:
         buf = _empty_aligned(comp * blksize * nao)
@@ -2662,7 +2671,7 @@ def _block_loop(ni, mol, grids, nao=None, deriv=0, max_memory=2000,
         # TODO: pass grids.cutoff to eval_ao
         ao = ni.eval_ao(mol, coords, deriv=deriv, non0tab=mask,
                         cutoff=grids.cutoff, out=buf)
-        if not _sparse_enough(mask):
+        if not allow_sparse and not _sparse_enough(mask):
             # Unset mask for dense AO tensor. It determines which eval_rho
             # to be called in make_rho
             mask = None
@@ -2847,7 +2856,7 @@ class NumInt(_NumIntMixin):
         if hermi != 1 and dms[0].dtype == numpy.double:
             # (D + D.T)/2 because eval_rho computes 2*(|\nabla i> D_ij <j|) instead of
             # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency when dm is real
-            dms = lib.hermi_sum(dms, axes=(0,2,1)) * .5
+            dms = lib.hermi_sum(numpy.asarray(dms, order='C'), axes=(0,2,1)) * .5
             hermi = 1
 
         nao = dms[0].shape[0]
