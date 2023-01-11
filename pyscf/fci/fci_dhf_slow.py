@@ -199,7 +199,7 @@ class FCISolver(direct_spin1.FCISolver):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, 0.5)
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.conj(), ci1)
-    
+
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
