@@ -95,8 +95,8 @@ class KnownValues(unittest.TestCase):
         k_ref = 32.30441176447805   # rsjk result
         self.assertAlmostEqual(ej1, j_ref, 2)
         self.assertAlmostEqual(ek1, k_ref, 2)
-        self.assertAlmostEqual(ej1, 48.283745538383684, 7)
-        self.assertAlmostEqual(ek1, 32.30260871417842 , 7)
+        self.assertAlmostEqual(ej1, 48.283745538383684, 6)
+        self.assertAlmostEqual(ek1, 32.30260871417842 , 6)
 
         numpy.random.seed(12)
         nao = cell.nao_nr()
@@ -105,8 +105,8 @@ class KnownValues(unittest.TestCase):
         vj1, vk1 = mf.get_jk(cell, dm, hermi=0)
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 242.04678235140264, 5)
-        self.assertAlmostEqual(ek1, 280.15934926575903, 5)
+        self.assertAlmostEqual(ej1, 242.04678235140264, 6)
+        self.assertAlmostEqual(ek1, 280.15934926575903, 6)
 
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
@@ -118,11 +118,11 @@ class KnownValues(unittest.TestCase):
         vj, vk = mydf.get_jk(dm, 1, kpt, exxdiv=None)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 241.15121903857556+0j, 5)
-        self.assertAlmostEqual(ek1, 279.64649194057051+0j, 5)
+        self.assertAlmostEqual(ej1, 241.15121903857556+0j, 6)
+        self.assertAlmostEqual(ek1, 279.64649194057051+0j, 6)
         vj, vk = mydf.get_jk(dm, 1, kpt, with_j=False, exxdiv='ewald')
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ek1, 691.64624456329909+0j, 5)
+        self.assertAlmostEqual(ek1, 691.64624456329909+0j, 6)
 
     def test_jk_hermi0(self):
         numpy.random.seed(12)

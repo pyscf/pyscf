@@ -148,8 +148,8 @@ class DIIS(object):
     def push_vec(self, x):
         x = x.ravel()
 
-        while len(self._bookkeep) >= self.space:
-            self._bookkeep.pop(0)
+        if len(self._bookkeep) >= self.space:
+            self._bookkeep = self._bookkeep[1-self.space:]
 
         if self._err_vec_touched:
             self._bookkeep.append(self._head)

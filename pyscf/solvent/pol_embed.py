@@ -384,11 +384,12 @@ class PolEmbed(lib.StreamObject):
             raise NotImplementedError("""Multipole potential integrals not
                                       implemented for order > 2.""")
 
-        chunks = numpy.array_split(all_sites, n_chunks)
-        chunks_o = numpy.array_split(all_orders, n_chunks)
-        chunks_m = numpy.array_split(all_moments, n_chunks)
         op = 0
-        for (sites, orders, moments) in zip(chunks, chunks_o, chunks_m):
+        for p0, p1 in lib.prange_split(all_sites.size, n_chunks):
+            sites = all_sites[p0:p1]
+            orders = all_orders[p0:p1]
+            moments = all_moments[p0:p1]
+
             # order 0
             fakemol = gto.fakemol_for_charges(sites)
             integral0 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e')

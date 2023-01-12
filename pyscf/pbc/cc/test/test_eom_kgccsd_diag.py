@@ -27,8 +27,9 @@ def setUpModule():
     3.370137329, 0.000000000, 3.370137329
     3.370137329, 3.370137329, 0.000000000'''
     cell.unit = 'B'
-    #cell.verbose = 7
-    #cell.output = '/dev/null'
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.mesh = [15] * 3
     cell.build()
 
     KGCCSD_TEST_NMP = [1,1,2]
@@ -36,6 +37,7 @@ def setUpModule():
 
 def tearDownModule():
     global cell, KGCCSD_TEST_NMP, KGCCSD_TEST_THRESHOLD
+    cell.stdout.close()
     del cell, KGCCSD_TEST_NMP, KGCCSD_TEST_THRESHOLD
 
 def get_idx_r2(nkpts,nocc,nvir,ki,kj,i,j,a):

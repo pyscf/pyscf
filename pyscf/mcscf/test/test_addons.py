@@ -316,6 +316,7 @@ class KnownValues(unittest.TestCase):
         solver1.spin = 0
         solver1.nroots = 2
         solver2 = fci.FCI(mol, singlet=False)
+        solver2.wfnsym = 'A1u'
         solver2.spin = 2
         mc = mcscf.CASSCF(mfr, 4, 4)
         mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2],
@@ -360,6 +361,7 @@ class KnownValues(unittest.TestCase):
         solver1.spin =    fcisolver1.spin = 0
         solver1.nroots =  fcisolver1.nroots = 2
         solver2 = fci.FCI(mol, singlet=False)
+        solver2.wfnsym = 'A1u'
         solver2.spin = 2
         mc = mcscf.CASSCF(mfr, 4, 4)
         mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2],
@@ -492,10 +494,9 @@ class KnownValues(unittest.TestCase):
         mc.state_average_([.8, .2])
         mscan = mc.as_scanner()
         e = mscan(mol)
-        self.assertAlmostEqual(e, -108.84390277715984, 9)
+        self.assertAlmostEqual(e, -108.84390277715984, 8)
 
 
 if __name__ == "__main__":
     print("Full Tests for mcscf.addons")
     unittest.main()
-

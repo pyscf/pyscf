@@ -115,7 +115,12 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
         wherej = kptij_idx[len(kpti):]
         nkpts = len(kpts)
         kptij_idx = wherei * nkpts + wherej
-    dfbuilder = _Int3cBuilder(cell, auxcell, kpts)
+    dfbuilder = _Int3cBuilder(cell, auxcell, kpts).build()
+    # Reduce the size of supmol based on the 3-center overlaps. Otherwise the
+    # dfbuilder.supmol oftens two large for the calculations.
+    # TODO: strip supmol basis based on the intor type.
+    eta = np.hstack(auxcell.bas_exps()).min()
+    dfbuilder.supmol = _strip_basis(dfbuilder.supmol, eta)
     int3c = dfbuilder.gen_int3c_kernel(intor, aosym, comp, j_only,
                                        kptij_idx, return_complex=True)
     return int3c
@@ -176,16 +181,11 @@ class _Int3cBuilder(lib.StreamObject):
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
 
-        rcut = cell.rcut
-        if False:
-            # FIXME: Is it necessary to increase rcut?
-            exp_min = np.hstack(cell.bas_exps()).min()
-            eij = exp_min / 2
-            # Approximate with only s functions for the lattice-sum boundary
-            rcut = abs(-np.log(cell.precision) / eij)**.5 * 2
-            log.debug1('exp_min = %g, rcut = %g', exp_min, rcut)
-
-        supmol = ft_ao._ExtendedMole.from_cell(rs_cell, kmesh, rcut, verbose=log)
+        supmol = ft_ao._ExtendedMole.from_cell(rs_cell, kmesh, cell.rcut,
+                                               verbose=log)
+        if self.auxcell is not None:
+            eta = np.hstack(self.auxcell.bas_exps()).min()
+            supmol = _strip_basis(supmol, eta)
         self.supmol = supmol
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
@@ -584,17 +584,21 @@ class _IntNucBuilder(_Int3cBuilder):
         if self.rs_cell is None:
             self.build()
         cell = self.cell
-        supmol = self.supmol
-        if supmol.nbas == supmol.bas_mask.size:  # supmol not stripped
-            supmol = self.supmol.strip_basis(inplace=False)
         kpts = self.kpts
         nkpts = len(kpts)
         intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
                   'int3c1e_r4_origk', 'int3c1e_r6_origk')
+        fake_cells = [pp_int.fake_cell_vloc(cell, cn) for cn in range(1, 5)]
+
+        supmol = self.supmol
+        if supmol.nbas == supmol.bas_mask.size:  # supmol not stripped
+            eta = min([np.hstack(c.bas_exps()).min()
+                       for c in fake_cells if c.nbas > 0])
+            supmol = _strip_basis(supmol, eta, inplace=False)
+
         bufR = 0
         bufI = 0
-        for cn in range(1, 5):
-            fake_cell = pp_int.fake_cell_vloc(cell, cn)
+        for cn, fake_cell in enumerate(fake_cells, start=1):
             if fake_cell.nbas > 0:
                 int3c = self.gen_int3c_kernel(intors[cn], 's2', comp=1, j_only=True,
                                               auxcell=fake_cell, supmol=supmol)

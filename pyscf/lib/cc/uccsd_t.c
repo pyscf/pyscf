@@ -323,6 +323,7 @@ void CCuccsd_t_aaa(double complex *e_tot,
 }
         free(permute_idx);
         free(fvohalf);
+        free(jobs);
 }
 
 
@@ -562,6 +563,7 @@ void CCuccsd_t_baa(double complex *e_tot,
 #pragma omp critical
         *e_tot += e;
 }
+        free(jobs);
 }
 
 
@@ -718,6 +720,7 @@ void CCuccsd_t_zaaa(double complex *e_tot,
 }
         free(permute_idx);
         free(fvohalf);
+        free(jobs);
 }
 
 
@@ -917,5 +920,6 @@ void CCuccsd_t_zbaa(double complex *e_tot,
 #pragma omp critical
         *e_tot += e;
 }
+        free(jobs);
 }
 

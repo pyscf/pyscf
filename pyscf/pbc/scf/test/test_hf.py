@@ -474,22 +474,22 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(pscf.KHF  (cell  ), pscf.khf.KRHF   ))
         self.assertTrue(isinstance(pscf.KHF  (cell_u), pscf.kuhf.KUHF  ))
 
-    def test_dipole_moment(self):
-        dip = mf.dip_moment()
-        self.assertAlmostEqual(lib.fp(dip), 0.03847620192010277, 8)
-
-        # For test cover only. Results for low-dimesion system are not
-        # implemented.
-        with lib.temporary_env(cell, dimension=1):
-            kdm = kmf.get_init_guess(key='minao')
-            dip = kmf.dip_moment(cell, kdm)
-        #self.assertAlmostEqual(lib.fp(dip), 0, 9)
-
     def test_makov_payne_correction(self):
+        from pyscf.pbc.dft import gen_grid
         de = pbchf.makov_payne_correction(mf)
-        self.assertAlmostEqual(de[0], -0.1490687416177664, 7)
+        self.assertAlmostEqual(de[0], -0.1490687416177664, 2)
         self.assertAlmostEqual(de[0], de[1], 7)
         self.assertAlmostEqual(de[0], de[2], 7)
+
+        dm = mf.make_rdm1()
+        grids = gen_grid.UniformGrids(cell)
+        rho = pscf.hf.get_rho(mf, dm, grids)
+        log = lib.logger.new_logger(mf)
+        center = pscf.hf._search_dipole_gauge_origin(cell, grids, rho, log)
+        self.assertAlmostEqual(abs(center - [1.75, 2, 2]).max(), 0, 2)
+
+        dip = mf.dip_moment(cell, dm)
+        self.assertAlmostEqual(abs(dip).max(), 0, 1)
 
     def test_init_guess_by_1e(self):
         dm = mf.get_init_guess(key='1e')

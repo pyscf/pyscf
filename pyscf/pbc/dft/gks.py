@@ -69,8 +69,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
     # vxc = (vxc_aa, vxc_bb). vxc_ab is neglected in collinear DFT.
+    max_memory = ks.max_memory - lib.current_memory()[0]
     n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, (dm_a,dm_b), 0,
-                                    kpt, kpts_band)
+                                    kpt, kpts_band, max_memory=max_memory)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
     # vxc = (vxc_aa,   0   )
@@ -81,7 +82,16 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj
     else:
-        raise NotImplementedError
+        vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vklr = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk
+
+        if ground_state:
+            exc -= numpy.einsum('ij,ji', dm, vk).real * .5
 
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
