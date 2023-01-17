@@ -32,6 +32,7 @@ from pyscf.pbc.lib.kpts_helper import is_zero, unique
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf import __config__
+from pyscf.pbc.gto import _pbcintor
 
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.5)
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
@@ -742,8 +743,8 @@ def wrap_int3c_screened(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
                                          cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, intor)
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
-    ao_loc = numpy.asarray(numpy.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
-                           dtype=numpy.int32)
+    ao_loc = np.asarray(np.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
+                        dtype=np.int32)
     atm, bas, env = gto.conc_env(atm, bas, env,
                                  auxcell._atm, auxcell._bas, auxcell._env)
     rcut = max(cell.rcut, auxcell.rcut)
@@ -751,11 +752,11 @@ def wrap_int3c_screened(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     nimgs = len(Ls)
     nbas = cell.nbas
 
-    if gamma_point(kptij_lst):
+    if is_zero(kptij_lst):
         kk_type = 'g'
         nkpts = nkptij = 1
-        kptij_idx = numpy.array([0], dtype=numpy.int32)
-        expkL = numpy.ones(1, dtype=numpy.complex128)
+        kptij_idx = np.array([0], dtype=np.int32)
+        expkL = np.ones(1, dtype=np.complex128)
     else:
         raise NotImplementedError
 
@@ -764,7 +765,7 @@ def wrap_int3c_screened(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
 
     if cintopt is None:
         if nbas > 0:
-            env[PTR_EXPCUTOFF] = abs(numpy.log(cell.precision))
+            env[PTR_EXPCUTOFF] = abs(np.log(cell.precision))
             cintopt = _vhf.make_cintopt(atm, bas, env, intor)
         else:
             cintopt = lib.c_null_ptr()
@@ -803,7 +804,7 @@ def wrap_int3c_screened(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
 
 
 def aux_e2_sum_auxbas(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', comp=None,
-                      kptij_lst=numpy.zeros((1,2,3)), shls_slice=None, **kwargs):
+                      kptij_lst=np.zeros((1,2,3)), shls_slice=None, **kwargs):
     r'''3-center AO integrals \sum_L (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
 
@@ -840,13 +841,13 @@ def aux_e2_sum_auxbas(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', co
     else:
         nao_pair = ni * nj
 
-    if gamma_point(kptij_lst):
-        dtype = numpy.double
+    if is_zero(kptij_lst):
+        dtype = np.double
     else:
-        dtype = numpy.complex128
+        dtype = np.complex128
 
     int3c = wrap_int3c_sum_auxbas(cell, auxcell, intor, aosym, comp, kptij_lst, **kwargs)
-    out = numpy.empty((nkptij,comp,nao_pair), dtype=dtype)
+    out = np.empty((nkptij,comp,nao_pair), dtype=dtype)
     out = int3c(shls_slice, out)
 
     if comp == 1:
@@ -858,7 +859,7 @@ def aux_e2_sum_auxbas(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', co
 
 
 def wrap_int3c_sum_auxbas(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
-                          kptij_lst=numpy.zeros((1,2,3)), cintopt=None, pbcopt=None,
+                          kptij_lst=np.zeros((1,2,3)), cintopt=None, pbcopt=None,
                           neighbor_list=None):
     intor = cell._add_suffix(intor)
     pcell = copy.copy(cell)
@@ -867,8 +868,8 @@ def wrap_int3c_sum_auxbas(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
                                          cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, intor)
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
-    ao_loc = numpy.asarray(numpy.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
-                           dtype=numpy.int32)
+    ao_loc = np.asarray(np.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
+                           dtype=np.int32)
     atm, bas, env = gto.conc_env(atm, bas, env,
                                  auxcell._atm, auxcell._bas, auxcell._env)
     Ls = cell.get_lattice_Ls()
@@ -877,11 +878,11 @@ def wrap_int3c_sum_auxbas(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
 
     #kpti = kptij_lst[:,0]
     #kptj = kptij_lst[:,1]
-    if gamma_point(kptij_lst):
+    if is_zero(kptij_lst):
         kk_type = 'g'
         nkpts = nkptij = 1
-        kptij_idx = numpy.array([0], dtype=numpy.int32)
-        expkL = numpy.ones(1, dtype=numpy.complex128)
+        kptij_idx = np.array([0], dtype=np.int32)
+        expkL = np.ones(1, dtype=np.complex128)
     else:
         raise NotImplementedError
 
@@ -896,7 +897,7 @@ def wrap_int3c_sum_auxbas(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
 
     if cintopt is None:
         if nbas > 0:
-            env[PTR_EXPCUTOFF] = abs(numpy.log(cell.precision))
+            env[PTR_EXPCUTOFF] = abs(np.log(cell.precision))
             cintopt = _vhf.make_cintopt(atm, bas, env, intor)
         else:
             cintopt = lib.c_null_ptr()
@@ -937,7 +938,7 @@ def wrap_int3c_sum_auxbas(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
 
 
 def int3c1e_nuc_grad(cell, auxcell, dm, intor='int3c1e', aosym='s1', comp=3,
-                     kptij_lst=numpy.zeros((1,2,3)), shls_slice=None, **kwargs):
+                     kptij_lst=np.zeros((1,2,3)), shls_slice=None, **kwargs):
     t0 = (logger.process_clock(), logger.perf_counter())
     if comp != 3:
         raise NotImplementedError
@@ -950,7 +951,7 @@ def int3c1e_nuc_grad(cell, auxcell, dm, intor='int3c1e', aosym='s1', comp=3,
 
     nkptij = len(kptij_lst)
     int3c = wrap_int3c1e_nuc_grad(cell, auxcell, dm, intor, aosym, comp, kptij_lst, **kwargs)
-    out = numpy.zeros((nkptij,cell.natm,comp), dtype=float)
+    out = np.zeros((nkptij,cell.natm,comp), dtype=float)
     out = int3c(shls_slice, out)
 
     if nkptij == 1:
@@ -960,7 +961,7 @@ def int3c1e_nuc_grad(cell, auxcell, dm, intor='int3c1e', aosym='s1', comp=3,
 
 
 def wrap_int3c1e_nuc_grad(cell, auxcell, dm, intor='int3c1e', aosym='s1', comp=3,
-                          kptij_lst=numpy.zeros((1,2,3)), cintopt=None, pbcopt=None,
+                          kptij_lst=np.zeros((1,2,3)), cintopt=None, pbcopt=None,
                           neighbor_list=None):
     intor = cell._add_suffix(intor)
     pcell = copy.copy(cell)
@@ -969,8 +970,8 @@ def wrap_int3c1e_nuc_grad(cell, auxcell, dm, intor='int3c1e', aosym='s1', comp=3
                                          cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, intor)
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
-    ao_loc = numpy.asarray(numpy.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
-                           dtype=numpy.int32)
+    ao_loc = np.asarray(np.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
+                           dtype=np.int32)
     atm, bas, env = gto.conc_env(atm, bas, env,
                                  auxcell._atm, auxcell._bas, auxcell._env)
 
@@ -978,12 +979,12 @@ def wrap_int3c1e_nuc_grad(cell, auxcell, dm, intor='int3c1e', aosym='s1', comp=3
     nimgs = len(Ls)
     nbas = cell.nbas
 
-    if gamma_point(kptij_lst):
+    if is_zero(kptij_lst):
         kk_type = 'g'
         nkpts = nkptij = 1
-        kptij_idx = numpy.array([0], dtype=numpy.int32)
-        expkL = numpy.ones(1, dtype=numpy.complex128)
-        dm = numpy.asarray(dm, order="C", dtype=float)
+        kptij_idx = np.array([0], dtype=np.int32)
+        expkL = np.ones(1, dtype=np.complex128)
+        dm = np.asarray(dm, order="C", dtype=float)
     else:
         raise NotImplementedError
 
@@ -998,7 +999,7 @@ def wrap_int3c1e_nuc_grad(cell, auxcell, dm, intor='int3c1e', aosym='s1', comp=3
 
     if cintopt is None:
         if nbas > 0:
-            env[PTR_EXPCUTOFF] = abs(numpy.log(cell.precision))
+            env[PTR_EXPCUTOFF] = abs(np.log(cell.precision))
             cintopt = _vhf.make_cintopt(atm, bas, env, intor)
         else:
             cintopt = lib.c_null_ptr()

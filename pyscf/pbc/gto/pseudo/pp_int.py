@@ -159,52 +159,41 @@ def get_gth_vlocG_part1(cell, Gv):
 def get_pp_loc_part2(cell, kpts=None):
     '''PRB, 58, 3641 Eq (1), integrals associated to C1, C2, C3, C4
     '''
-<<<<<<< HEAD
-    from pyscf.pbc.df import incore
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
-              'int3c1e_r4_origk', 'int3c1e_r6_origk')
     kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
-    buf = 0
     if gamma_point(kpts_lst):
+        intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
+                  'int3c1e_r4_origk', 'int3c1e_r6_origk')
         buf = get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst, aosym='s2', comp=1)
-    else:
-        for cn in range(1, 5):
-            fakecell = fake_cell_vloc(cell, cn)
-            if fakecell.nbas > 0:
-                v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2', comp=1,
-                                  kptij_lst=kptij_lst)
-                buf += numpy.einsum('...i->...', v)
 
-    if isinstance(buf, int):
-        if any(cell.atom_symbol(ia) in cell._pseudo for ia in range(cell.natm)):
-            pass
+        if isinstance(buf, int):
+            if any(cell.atom_symbol(ia) in cell._pseudo for ia in range(cell.natm)):
+                pass
+            else:
+                lib.logger.warn(cell, 'cell.pseudo was specified but its elements %s '
+                                 'were not found in the system.', cell._pseudo.keys())
+            vpploc = [0] * nkpts
         else:
-            lib.logger.warn(cell, 'cell.pseudo was specified but its elements %s '
-                             'were not found in the system.', cell._pseudo.keys())
-        vpploc = [0] * nkpts
+            buf = buf.reshape(nkpts,-1)
+            vpploc = []
+            for k, kpt in enumerate(kpts_lst):
+                v = lib.unpack_tril(buf[k])
+                if abs(kpt).sum() < 1e-9:  # gamma_point:
+                    v = v.real
+                vpploc.append(v)
     else:
-        buf = buf.reshape(nkpts,-1)
-        vpploc = []
-        for k, kpt in enumerate(kpts_lst):
-            v = lib.unpack_tril(buf[k])
-            if abs(kpt).sum() < 1e-9:  # gamma_point:
-                v = v.real
-            vpploc.append(v)
-=======
-    from pyscf.pbc.df.incore import _IntNucBuilder
-    vpploc = _IntNucBuilder(cell, kpts).get_pp_loc_part2()
->>>>>>> upstream/master
+        from pyscf.pbc.df.incore import _IntNucBuilder
+        vpploc = _IntNucBuilder(cell, kpts).get_pp_loc_part2()
+
     if kpts is None or numpy.shape(kpts) == (3,):
         vpploc = vpploc[0]
     return vpploc
 
-<<<<<<< HEAD
 
 def get_pp_loc_part2_ip1(cell, kpts=None):
     from pyscf.pbc.df import incore
@@ -678,8 +667,6 @@ def _contract_ppnl_nuc_grad(cell, fakecell, dms, hl_blocks, ppnl_half, ppnl_half
     return grad_tot
 
 
-=======
->>>>>>> upstream/master
 def get_pp_nl(cell, kpts=None):
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -929,15 +916,9 @@ def fake_cell_vloc(cell, cn=0, atm_id=None):
     fake_atm[:,gto.PTR_COORD] = numpy.arange(0, natm*3, 3)
     ptr = natm * 3
     fake_bas = []
-<<<<<<< HEAD
-    half_sph_norm = .5/numpy.sqrt(numpy.pi)
+    half_sph_norm = .5/numpy.pi**.5
     for ia, atm in enumerate(atm_id):
         if cell.atom_charge(atm) == 0:  # pass ghost atoms
-=======
-    half_sph_norm = .5/numpy.pi**.5
-    for ia in range(cell.natm):
-        if cell.atom_charge(ia) == 0:  # pass ghost atoms
->>>>>>> upstream/master
             continue
 
         symb = cell.atom_symbol(atm)
@@ -963,11 +944,7 @@ def fake_cell_vloc(cell, cn=0, atm_id=None):
                 ptr += 2
 
     fakecell = copy.copy(cell)
-<<<<<<< HEAD
-    fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32)
-=======
     fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32).reshape(-1, gto.ATM_SLOTS)
->>>>>>> upstream/master
     fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32).reshape(-1, gto.BAS_SLOTS)
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
     fakecell.precision = EPS_PPL
@@ -1042,12 +1019,8 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts, intors=None, comp=1):
     nkpts = len(kpts)
 
     fill = getattr(libpbc, 'PBCnr2c_fill_ks1')
-<<<<<<< HEAD
     # TODO add screening
-    intopt = lib.c_null_ptr()
-=======
     cintopt = lib.c_null_ptr()
->>>>>>> upstream/master
 
     def int_ket(_bas, intor):
         if len(_bas) == 0:
