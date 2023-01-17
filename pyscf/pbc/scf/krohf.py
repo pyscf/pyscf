@@ -294,13 +294,6 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-#?    def get_init_guess(self, cell=None, key='minao'):
-#?        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
-#?        if dm_kpts.ndim != 4:  # The KRHF initial guess
-#?            # dm_kpts shape should be (spin, nkpts, nao, nao)
-#?            dm_kpts = lib.asarray([dm_kpts*.5,]*2)
-#?        return dm_kpts
-#?
     def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None:
             cell = self.cell

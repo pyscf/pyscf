@@ -1698,7 +1698,7 @@ void GTOreverse_vrr2d_ket(double *g00, double *g01,
         }
 }
 
-void _cart_to_xyz(double *dm_xyz, double *dm_cart,
+static void _cart_to_xyz(double *dm_xyz, double *dm_cart,
                          int floorl, int topl, int l1)
 {
         int l1l1 = l1 * l1;
@@ -2575,7 +2575,7 @@ static void _apply_rho(void (*eval_rho)(), double *rho, double *dm,
                     offset, submesh, mesh, cache);
 }
 
-int _rho_cache_size(int l, int comp, int *mesh)
+static int _rho_cache_size(int l, int comp, int *mesh)
 {
         int l1 = l * 2 + 1;
         int cache_size = 0;

@@ -21,7 +21,8 @@ import numpy as np
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pscf
-from pyscf.pbc.dft import krks,kuks,multigrid
+from pyscf.pbc.dft import krks,kuks
+from pyscf.pbc.dft.multigrid import multigrid
 
 L = 2.
 He = pbcgto.Cell()
@@ -175,14 +176,14 @@ class KnownValues(unittest.TestCase):
     def test_multigrid(self):
         kmf0 = krks.KRKS(cell, kpts=cell.make_kpts(nk))
         kmf0.xc = 'lda'
-        kmf0 = multigrid.multigrid(kmf0)
+        kmf0 = multigrid.multigrid_fftdf(kmf0)
         kmf0.kernel()
         rho0 = kmf0.get_rho()
 
         kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
         kmf = pscf.KRKS(cell, kpts=kpts)
         kmf.xc = 'lda'
-        kmf = multigrid.multigrid(kmf)
+        kmf = multigrid.multigrid_fftdf(kmf)
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
         rho = kmf.get_rho()
@@ -199,14 +200,14 @@ class KnownValues(unittest.TestCase):
     def test_multigrid_kuks(self):
         kmf0 = pscf.KUKS(cell, kpts=cell.make_kpts(nk))
         kmf0.xc = 'lda'
-        kmf0 = multigrid.multigrid(kmf0)
+        kmf0 = multigrid.multigrid_fftdf(kmf0)
         kmf0.kernel()
         rho0 = kmf0.get_rho()
 
         kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
         kmf = pscf.KUKS(cell, kpts=kpts)
         kmf.xc = 'lda'
-        kmf = multigrid.multigrid(kmf)
+        kmf = multigrid.multigrid_fftdf(kmf)
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
         rho = kmf.get_rho()

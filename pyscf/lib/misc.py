@@ -1276,3 +1276,22 @@ def device_get(a_on_device, dtype=None):
     else:
         a = numpy.asarray(a_on_device, dtype=dtype)
     return a
+
+try:
+    from threadpoolctl import ThreadpoolController
+except ImportError:
+    class _ThreadpoolLimiter():
+        def __init__(self, controller, *, limits=None, user_api=None):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, type, value, traceback):
+            pass
+
+    class ThreadpoolController():
+        def __init__(self):
+            pass
+        def limit(self, *, limits=None, user_api=None):
+            return _ThreadpoolLimiter(self, limits=limits, user_api=user_api)
+
+threadpool_controller = ThreadpoolController()
