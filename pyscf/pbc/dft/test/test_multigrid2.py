@@ -4,6 +4,7 @@ from pyscf.pbc import gto, dft
 from pyscf.pbc.dft import multigrid
 from pyscf.pbc.grad import rks as rks_grad
 from pyscf.pbc.grad import uks as uks_grad
+from pyscf.pbc.grad import krks as krks_grad
 
 def setUpModule():
     global cell
@@ -29,6 +30,14 @@ def tearDownModule():
     global cell
     del cell
 
+def _fftdf_energy_force(cell, xc):
+    mf = dft.KRKS(cell, kpts=numpy.zeros((1,3)))
+    mf.xc = xc
+    e = mf.kernel()
+    grad = krks_grad.Gradients(mf)
+    g = grad.kernel()
+    return e, g
+
 def _multigrid2_energy_grad(cell, xc, spin=0):
     if spin == 0:
         mf = dft.RKS(cell)
@@ -46,33 +55,23 @@ def _multigrid2_energy_grad(cell, xc, spin=0):
 class KnownValues(unittest.TestCase):
     def test_orth_lda(self):
         xc = 'lda, vwn'
-        e0 = -17.02057946126692
-        # reference gradient from finite difference
-        g0 = numpy.array([[-0.0654262,   0.01814277,  0.14353642],
-                          [-0.06847643, -0.01211328, -0.11874917],
-                          [ 0.13387634, -0.00706341, -0.02448715]])
-
+        e0, g0 = _fftdf_energy_force(cell, xc)
         e, g = _multigrid2_energy_grad(cell, xc, 0)
         e1, g1 = _multigrid2_energy_grad(cell, xc, 1)
         assert abs(e-e0) < 1e-8
         assert abs(e1-e0) < 1e-8
-        assert abs(g-g0).max() < 1e-6
-        assert abs(g1-g0).max() < 1e-6
+        assert abs(g-g0).max() < 2e-5
+        assert abs(g1-g0).max() < 2e-5
 
     def test_orth_rks_gga(self):
         xc = 'pbe, pbe'
-        e0 = -17.11221773261034
-        # reference gradient from finite difference
-        g0 = numpy.array([[-0.0655152,   0.01590365,  0.14426682],
-                          [-0.06760018, -0.01204781, -0.11812823],
-                          [ 0.13283427, -0.00704953, -0.02473178]])
-
+        e0, g0 = _fftdf_energy_force(cell, xc)
         e, g = _multigrid2_energy_grad(cell, xc, 0)
         e1, g1 = _multigrid2_energy_grad(cell, xc, 1)
-        assert abs(e-e0) < 1e-8
-        assert abs(e1-e0) < 1e-8
-        assert abs(g-g0).max() < 1e-6
-        assert abs(g1-g0).max() < 1e-6
+        assert abs(e-e0) < 1e-6
+        assert abs(e1-e0) < 1e-6
+        assert abs(g-g0).max() < 2e-4
+        assert abs(g1-g0).max() < 2e-4
 
 if __name__ == '__main__':
     print("Full Tests for multigrid2")

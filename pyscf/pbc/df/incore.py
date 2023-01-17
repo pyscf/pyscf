@@ -752,11 +752,17 @@ def wrap_int3c_screened(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     nimgs = len(Ls)
     nbas = cell.nbas
 
+
+    kpti = kptij_lst[:,0]
+    kptj = kptij_lst[:,1]
+    j_only = is_zero(kpti-kptj)
+
     if is_zero(kptij_lst):
         kk_type = 'g'
         nkpts = nkptij = 1
         kptij_idx = np.array([0], dtype=np.int32)
         expkL = np.ones(1, dtype=np.complex128)
+        dtype = np.double
     else:
         raise NotImplementedError
 
@@ -780,11 +786,24 @@ def wrap_int3c_screened(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     else:
         cpbcopt = lib.c_null_ptr()
 
-
-    def int3c(shls_slice, out):
+    def int3c(shls_slice):
+        if shls_slice is None:
+            shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
         shls_slice = (shls_slice[0], shls_slice[1],
                       nbas+shls_slice[2], nbas+shls_slice[3],
                       nbas*2+shls_slice[4], nbas*2+shls_slice[5])
+
+        ni   = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
+        nj   = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+        naux = ao_loc[shls_slice[5]] - ao_loc[shls_slice[4]]
+
+        if j_only and aosym[:2] == 's2':
+            assert ni == nj
+            nao_pair = ni * (ni + 1) // 2
+        else:
+            nao_pair = ni * nj
+
+        out = np.empty((nkptij,comp,nao_pair,naux), dtype=dtype)
         drv(getattr(libpbc, intor), getattr(libpbc, fill),
             out.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nkptij), ctypes.c_int(nkpts),

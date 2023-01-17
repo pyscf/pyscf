@@ -259,7 +259,7 @@ class _RangeSeparatedCell(pbcgto.Cell):
     @classmethod
     def from_cell(cls, cell, ke_cut_threshold=KECUT_THRESHOLD,
                   rcut_threshold=None, verbose=None):
-        from pyscf.pbc.dft.multigrid import _primitive_gto_cutoff
+        from pyscf.pbc.dft.multigrid.multigrid import _primitive_gto_cutoff
         log = logger.new_logger(cell, verbose)
         if ke_cut_threshold is None:
             ke_cut_threshold = KECUT_THRESHOLD

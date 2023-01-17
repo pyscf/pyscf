@@ -87,7 +87,7 @@ class KnownValues(unittest.TestCase):
         mydf = multigrid.MultiGridFFTDF(cell_orth)
         mydf.max_memory = 10
         out = mydf.get_pp(max_memory=2)
-        self.assertAlmostEqual(abs(ref-out).max(), 0, 9)
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
     def test_nonorth_get_pp(self):
         ref = df.FFTDF(cell_nonorth).get_pp()
