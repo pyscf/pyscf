@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,17 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
-import numpy
-from pyscf.pbc import gto
-from pyscf.pbc.gto import _pbcintor
+from pyscf.pbc import scf
+from pyscf.pbc.adc import kadc_rhf
+from pyscf.pbc.adc import kadc_rhf_ip
+from pyscf.pbc.adc import kadc_rhf_ea
 
-def test_pbcintor():
-    cell = gto.Cell()
-    cell.build(a = numpy.eye(3) * 2.5,
-               atom = 'C',
-               basis = 'ccpvdz')
-
-    pbcopt = _pbcintor.PBCOpt(cell)
-    pbcopt.init_rcut_cond(cell)
-    pbcopt.del_rcut_cond()
+def KRADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    from pyscf.pbc.adc import kadc_rhf
+    if not isinstance(mf, scf.khf.KRHF):
+        mf = scf.addons.convert_to_rhf(mf)
+    return kadc_rhf.RADC(mf, frozen, mo_coeff, mo_occ)

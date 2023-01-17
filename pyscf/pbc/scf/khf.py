@@ -40,7 +40,7 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
 from pyscf.pbc import df
-from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
+from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
@@ -68,7 +68,7 @@ def get_ovlp(mf, cell=None, kpts=None):
     if hermi_error > cell.precision and hermi_error > 1e-12:
         logger.warn(mf, '%.4g error found in overlap integrals. '
                     'cell.precision  or  cell.rcut  can be adjusted to '
-                    'improve accuracy.')
+                    'improve accuracy.', hermi_error)
 
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
@@ -803,7 +803,7 @@ class KSCF(pbchf.SCF):
                 self.with_df = getattr(df, df_method)(self.cell, self.kpts)
 
         if 'RS' in J or 'RS' in K:
-            self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpts)
+            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpts)
             self.rsjk.verbose = self.verbose
 
         # For nuclear attraction

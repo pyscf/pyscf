@@ -35,6 +35,8 @@ from pyscf.pbc import tools
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
+from pyscf.pbc.df import incore
+from pyscf.pbc.df import gdf_builder
 from pyscf.pbc.scf import ghf
 from pyscf import __config__
 
@@ -249,52 +251,57 @@ def get_pnucp(mydf, kpts=None):
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
 
-    Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
-    charge = -cell.atom_charges()
+    eta, mesh, ke_cutoff = gdf_builder._guess_eta(cell, kpts_lst)
+    log.debug1('get_pnucp eta = %s mesh = %s', eta, mesh)
+
+    nuccell = incore._compensate_nuccell(cell, eta)
+    wj = mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1')
+    t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
+
+    charge = -cell.atom_charges() # Apply Koseki effective charge?
+    if cell.dimension == 3:
+        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+        nucbar *= numpy.pi/cell.vol
+
+        ovlp = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
+        for k in range(nkpts):
+            s = lib.pack_tril(ovlp[k])
+            # *2 due to the factor 1/2 in T
+            wj[k] -= nucbar*2 * s
+
+    dfbuilder = incore._IntNucBuilder(cell, kpts_lst).build()
+    supmol_ft = dfbuilder.supmol.strip_basis()
+    ft_kern = supmol_ft.gen_ft_kernel('s2', intor='GTO_ft_pdotp',
+                                      return_complex=False, verbose=log)
+
+    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+    gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
+    ngrids = Gv.shape[0]
     kpt_allow = numpy.zeros(3)
-    coulG = tools.get_coulG(cell, kpt_allow, mesh=mydf.mesh, Gv=Gv)
+    coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
     coulG *= kws
-    if mydf.eta == 0:
-        wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
-        SI = cell.get_SI(Gv)
-        vG = numpy.einsum('i,ix->x', charge, SI) * coulG
-    else:
-        nuccell = copy.copy(cell)
-        half_sph_norm = .5/numpy.sqrt(numpy.pi)
-        norm = half_sph_norm/mole.gaussian_int(2, mydf.eta)
-        chg_env = [mydf.eta, norm]
-        ptr_eta = cell._env.size
-        ptr_norm = ptr_eta + 1
-        chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
-        nuccell._atm = cell._atm
-        nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
-        nuccell._env = numpy.hstack((cell._env, chg_env))
-
-        wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1'))
-        t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
-
-        aoaux = ft_ao.ft_ao(nuccell, Gv)
-        vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
-        if cell.dimension == 3:
-            nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-            nucbar *= numpy.pi/cell.vol
-
-            ovlp = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
-            for k in range(nkpts):
-                s = lib.pack_tril(ovlp[k])
-                # *2 due to the factor 1/2 in T
-                wj[k] -= nucbar*2 * s
-
+    aoaux = ft_ao.ft_ao(nuccell, Gv)
+    vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
+    vGR = vG.real
+    vGI = vG.imag
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
-                                       max_memory=max_memory, aosym='s2',
-                                       intor='GTO_ft_pdotp'):
-        for k, aoao in enumerate(aoaoks):
-            if aft_jk.gamma_point(kpts_lst[k]):
-                wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].real, aoao.real)
-                wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].imag, aoao.imag)
-            else:
-                wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
+    Gblksize = max(16, int(max_memory*1e6/16/nao_pair/nkpts))
+    Gblksize = min(Gblksize, ngrids, 200000)
+    log.debug1('max_memory = %s  Gblksize = %s  ngrids = %s',
+               max_memory, Gblksize, ngrids)
+
+    buf = numpy.empty((2, nkpts, Gblksize, nao_pair))
+    for p0, p1 in lib.prange(0, ngrids, Gblksize):
+        # shape of Gpq (nkpts, nGv, nao_pair)
+        Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts_lst, out=buf)
+        for k, (GpqR, GpqI) in enumerate(zip(*Gpq)):
+            vR  = numpy.einsum('k,kx->x', vGR[p0:p1], GpqR)
+            vR += numpy.einsum('k,kx->x', vGI[p0:p1], GpqI)
+            wj[k] += vR
+            if not aft_jk.gamma_point(kpts_lst[k]):
+                vI  = numpy.einsum('k,kx->x', vGR[p0:p1], GpqI)
+                vI -= numpy.einsum('k,kx->x', vGI[p0:p1], GpqR)
+                wj[k] += vI * 1j
     t1 = log.timer_debug1('contracting pnucp', *t1)
 
     wj_kpts = []

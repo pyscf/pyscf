@@ -212,8 +212,10 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
+        if cell is None:
+            cell = self.cell
+        if dm is None:
+            dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)

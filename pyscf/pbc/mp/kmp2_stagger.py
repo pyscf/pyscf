@@ -22,10 +22,10 @@ Reference: Staggered Mesh Method for Correlation Energy Calculations of Solids: 
 
 import h5py
 import numpy as np
-from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lib.parameters import LARGE_DENOM
+from pyscf.ao2mo import _ao2mo
 from pyscf.pbc import df, dft, scf
 from pyscf.pbc.scf.khf import get_occ
 from pyscf.pbc.mp import kmp2
@@ -33,6 +33,7 @@ from pyscf.pbc.mp.kmp2 import padding_k_idx, _add_padding
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import unique, round_to_fbz
 from pyscf.pbc.tools.pbc import get_monkhorst_pack_size
+from pyscf.pbc.df.df import CDERIArray
 
 #   Kernel function for computing the MP2 energy
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
@@ -151,9 +152,6 @@ def _init_mp_df_eris_stagger(mp):
         Lov (numpy.ndarray) -- 3-center DF ints, with shape (nkpts_ov, nkpts_ov, naux, nocc, nvir)
     """
 
-    from pyscf.pbc.df import df
-    from pyscf.ao2mo import _ao2mo
-
     log = logger.Logger(mp.stdout, mp.verbose)
 
     cell = mp._scf.cell
@@ -170,28 +168,7 @@ def _init_mp_df_eris_stagger(mp):
         with_df = mp._scf.with_df
 
     else:
-        with_df = df.GDF(mp.cell, mp.kpts)
-
-        #   Remove duplicate kpts
-        uniq_idx = unique(mp.kpts)[1]
-        kpts = np.asarray(mp.kpts)[uniq_idx]
-
-        #   Construct 3-center GDF (L|ia) with ki and ka on two staggered meshes
-        with_df.auxcell = df.make_modrho_basis(
-            with_df.cell, with_df.auxbasis,
-            with_df.exp_to_discard)
-        kptij_lst = [(kpti, kpta) for kpti in mp.kpts_occ for kpta in mp.kpts_vir]
-        kptij_lst = np.asarray(kptij_lst)
-
-        if isinstance(with_df._cderi_to_save, str):
-            cderi = with_df._cderi_to_save
-        else:
-            cderi = with_df._cderi_to_save.name
-
-        with_df._cderi = cderi
-        t1 = (logger.process_clock(), logger.perf_counter())
-        with_df._make_j3c(with_df.cell, with_df.auxcell, kptij_lst, cderi)
-        t1 = logger.timer_debug1(with_df, 'j3c', *t1)
+        with_df = df.GDF(mp.cell, mp.kpts).build()
 
     nocc = mp.nocc
     nmo = mp.nmo
@@ -202,8 +179,6 @@ def _init_mp_df_eris_stagger(mp):
     nkpts_ov     = mp.nkpts_ov          #   number of points on the occupied/virtual mesh
     kpts_idx_vir = mp.kpts_idx_vir
     kpts_idx_occ = mp.kpts_idx_occ
-    kpts = mp.kpts
-
 
     mo_coeff = _add_padding(mp, mp.mo_coeff, mp.mo_energy)[0]
     dtype = np.result_type(np.complex128, *mo_coeff)
@@ -215,26 +190,21 @@ def _init_mp_df_eris_stagger(mp):
     bra_end = nocc
     ket_start = nmo+nocc
     ket_end = ket_start + nvir
-    with h5py.File(with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
-        tao = []
-        ao_loc = None
+    cderi_array = CDERIArray(with_df._cderi)
+    tao = []
+    ao_loc = None
+    for iki, ki in enumerate(kpts_idx_occ):
+        for ika, ka in enumerate(kpts_idx_vir):
+            Lpq_ao = cderi_array[ki, ka]
 
-        for iki, ki in enumerate(kpts_idx_occ):
-            for ika, ka in enumerate(kpts_idx_vir):
-                kpti = kpts[ki]
-                kpta = kpts[ka]
-                kpti_kpta = np.array( (kpti, kpta) )
-                Lpq_ao = np.asarray(df._getitem(f, 'j3c', kpti_kpta, kptij_lst))
+            mo = np.hstack((mo_coeff[ki], mo_coeff[ka]))
+            mo = np.asarray(mo, dtype=dtype, order='F')
 
-                mo = np.hstack((mo_coeff[ki], mo_coeff[ka]))
-                mo = np.asarray(mo, dtype=dtype, order='F')
-
-                #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
-                if Lpq_ao[0].size != nao**2:  # aosym = 's2'
-                    Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
-                out = _ao2mo.r_e2(Lpq_ao, mo, (bra_start, bra_end, ket_start, ket_end), tao, ao_loc)
-                Lov[iki, ika] = out.reshape(-1, nocc, nvir)
+            #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+            if Lpq_ao[0].size != nao**2:  # aosym = 's2'
+                Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
+            out = _ao2mo.r_e2(Lpq_ao, mo, (bra_start, bra_end, ket_start, ket_end), tao, ao_loc)
+            Lov[iki, ika] = out.reshape(-1, nocc, nvir)
 
     log.timer_debug1("transforming DF-MP2 integrals", *cput0)
 

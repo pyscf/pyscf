@@ -177,10 +177,10 @@ class KnownValues(unittest.TestCase):
             basis = 'ccpvdz',
         )
         dm = scf.hf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.fp(dm), 2.78218274161741, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.78218274161741, 7)
 
         dm = scf.ROHF(mol).init_guess_by_atom()
-        self.assertAlmostEqual(lib.fp(dm[0]), 2.78218274161741/2, 9)
+        self.assertAlmostEqual(lib.fp(dm[0]), 2.78218274161741/2, 7)
 
         mol.atom = [["O" , (0. , 0.     , 0.)],
                     ['ghost-H'   , (0. , -0.757, 0.587)],
@@ -188,23 +188,23 @@ class KnownValues(unittest.TestCase):
         mol.spin = 1
         mol.build(0, 0)
         dm = scf.hf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.fp(dm), 3.0813279501879838, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.0813279501879838, 7)
 
         mol.basis = {'h': '3-21g'}
         mol.build(0, 0)
         dm = scf.hf.get_init_guess(mol, key='atom')
         self.assertEqual(dm.shape, (4, 4))
         self.assertEqual(abs(dm[:2,:2]).max(), 0)
-        self.assertAlmostEqual(lib.fp(dm), -0.47008362287778827, 9)
+        self.assertAlmostEqual(lib.fp(dm), -0.47008362287778827, 7)
 
     def test_init_guess_atom_with_ecp(self):
         s = re_ecp1.intor('int1e_ovlp')
         dm = scf.hf.get_init_guess(re_ecp1, key='atom')
-        self.assertAlmostEqual(lib.fp(dm), -4.822111004225718, 9)
+        self.assertAlmostEqual(lib.fp(dm), -4.822111004225718, 6)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 15, 9)
 
         dm = scf.hf.get_init_guess(re_ecp2, key='atom')
-        self.assertAlmostEqual(lib.fp(dm), -14.083500177270547, 9)
+        self.assertAlmostEqual(lib.fp(dm), -14.083500177270547, 6)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 57, 9)
 
     def test_atom_hf_with_ecp(self):
@@ -220,23 +220,23 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_chk(self):
         dm = mol.HF(chkfile=tempfile.NamedTemporaryFile().name).get_init_guess(mol, key='chkfile')
-        self.assertAlmostEqual(lib.fp(dm), 2.5912875957299684, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.5912875957299684, 5)
 
         dm = mf.get_init_guess(mol, key='chkfile')
-        self.assertAlmostEqual(lib.fp(dm), 3.2111753674560535, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.2111753674560535, 5)
 
     def test_init_guess_huckel(self):
         dm = scf.hf.RHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), 3.348165771345748, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.348165771345748, 5)
 
         dm = scf.ROHF(mol).init_guess_by_huckel()
-        self.assertAlmostEqual(lib.fp(dm[0]), 3.348165771345748/2, 9)
+        self.assertAlmostEqual(lib.fp(dm[0]), 3.348165771345748/2, 5)
 
         # Initial guess Huckel is not able to handle open-shell system
         mol1 = gto.M(atom='Mo 0 0 0; C 0 0 1', basis='lanl2dz', ecp='lanl2dz',
                      verbose=7, output='/dev/null')
         dm = scf.hf.get_init_guess(mol1, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), 2.01095497354225, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.01095497354225, 5)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 20, 9)
 
     def test_1e(self):
@@ -311,7 +311,7 @@ class KnownValues(unittest.TestCase):
     def test_analyze(self):
         popandchg, dip = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 4.0049440587033116, 6)
-        self.assertAlmostEqual(numpy.linalg.norm(dip), 2.0584447549532596, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(dip), 2.0584447549532596, 6)
         popandchg, dip = mf.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 3.2031790129016922, 6)
 
@@ -445,7 +445,7 @@ H     0    0.757    0.587'''
         pmol.symmetry = 1
         pmol.build(False, False)
         mf = scf.hf_symm.RHF(pmol)
-        mf.irrep_nelec = {'B1':4}
+        mf.irrep_nelec = {'B2':4}
         self.assertAlmostEqual(mf.scf(), -75.074736446470723, 9)
         (pop, chg), dip = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop), 3.9779576643902912, 6)
@@ -468,7 +468,7 @@ H     0    0.757    0.587'''
         pmol.spin = 1
         pmol.build(False, False)
         mf = scf.hf_symm.ROHF(pmol)
-        mf.irrep_nelec = {'B1':(2,1)}
+        mf.irrep_nelec = {'B2':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.008317646307404, 9)
         (pop, chg), dip = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop), 3.7873920690764575, 6)

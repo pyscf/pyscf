@@ -55,7 +55,7 @@ def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
 
 def member(kpt, kpts):
     kpts = np.reshape(kpts, (len(kpts),kpt.size))
-    dk = np.einsum('ki->k', abs(kpts-kpt.ravel()))
+    dk = abs(kpts-kpt.ravel()).max(axis=1)
     return np.where(dk < KPT_DIFF_TOL)[0]
 
 def unique(kpts):
@@ -84,6 +84,65 @@ def unique(kpts):
                 seen[idx] = True
                 n += 1
         return np.asarray(uniq_kpts), np.asarray(uniq_index), uniq_inverse
+
+def unique_with_wrap_around(cell, kpts):
+    '''Search unique kpts in first Brillouin zone.'''
+    scaled_kpts = cell.get_scaled_kpts(kpts).round(5)
+    scaled_kpts = np.modf(scaled_kpts)[0]
+    scaled_kpts[scaled_kpts >= .5] -= 1
+    scaled_kpts[scaled_kpts < -.5] += 1
+
+    uniq_index, uniq_inverse = unique(scaled_kpts)[1:3]
+    uniq_kpts = kpts[uniq_index]
+    return uniq_kpts, uniq_index, uniq_inverse
+
+def group_by_conj_pairs(cell, kpts, wrap_around=True):
+    '''Find all conjugation k-point pairs in the input kpts.
+    This function lables three types of conjugation.
+    1. self-conjugated. The two index in idx_pairs have the same value.
+    2. conjugated to the k-point within the input kpts. The indices of conjugated
+    k-points are held in idx_pairs.
+    3. conjugated to the k-point not inside the input kpts. The record is (index, None).
+    '''
+    if wrap_around:
+        scaled = cell.get_scaled_kpts(kpts)
+        scaled = np.modf(scaled)[0]
+        scaled_conj = -scaled
+        scaled[scaled.round(5) > .5] -= 1
+        scaled[scaled.round(5) <= -.5] += 1
+        scaled_conj[scaled_conj.round(5) > .5] -= 1
+        scaled_conj[scaled_conj.round(5) <= -.5] += 1
+        kpts = cell.get_abs_kpts(scaled)
+    else:
+        scaled = cell.get_scaled_kpts(kpts)
+        scaled_conj = -scaled
+
+    scaled = scaled.round(5)
+    scaled_conj = scaled_conj.round(5)
+    self_conj_mask = abs(scaled - scaled_conj).max(axis=1) < KPT_DIFF_TOL
+    idx_pairs = [(k, k) for k in np.where(self_conj_mask)[0]]
+
+    seen = self_conj_mask
+    for k, (skpt, skpt_conj) in enumerate(zip(scaled, scaled_conj)):
+        if seen[k]:
+            continue
+
+        seen[k] = True
+        conj_idx = member(skpt_conj, scaled)
+        if conj_idx.size == 0:
+            # conjugated k-point not in the kpts set
+            idx_pairs.append((k, None))
+        else:
+            seen[conj_idx[0]] = True
+            idx_pairs.append((k, conj_idx[0]))
+
+    kpts_pairs = []
+    for i, j in idx_pairs:
+        if j is None:
+            kpts_pairs.append((kpts[i], None))
+        else:
+            kpts_pairs.append((kpts[i], kpts[j]))
+    return idx_pairs, kpts_pairs
 
 def loop_kkk(nkpts):
     range_nkpts = range(nkpts)

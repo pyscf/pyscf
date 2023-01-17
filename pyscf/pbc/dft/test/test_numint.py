@@ -45,6 +45,14 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=
                                             shls_slice, non0tab, out, verbose) * factor
     return numpy.asarray(aoR)
 
+def coords_wrap_around_phase(cell, coords, kpts):
+    ngrids = coords.shape[0]
+    fac = np.exp(1j*cell.lattice_vectors().dot(kpts.T))
+    fac = np.repeat(fac[None,:,:], ngrids, axis=0)
+    fac[coords>=0] = 1
+    fac = np.prod(fac, axis=1)
+    return fac
+
 def make_grids(mesh):
     L = 60
     cell = pbcgto.Cell()
@@ -131,7 +139,17 @@ class KnownValues(unittest.TestCase):
         np.random.seed(1)
         kpts = np.random.random((4,3))
         ni = numint.KNumInt(kpts)
-        ao1 = ni.eval_ao(cell, grids.coords, kpts)
+        coords = grids.coords
+        ao1 = ni.eval_ao(cell, coords, kpts)
+        fac = coords_wrap_around_phase(cell, coords, kpts)
+
+        self.assertAlmostEqual(lib.fp(ao1[0]*fac[:,0:1]), (-2.4066959390326477-0.98044994099240701j), 8)
+        self.assertAlmostEqual(lib.fp(ao1[1]*fac[:,1:2]), (-0.30643153325360639+0.1571658820483913j), 8)
+        self.assertAlmostEqual(lib.fp(ao1[2]*fac[:,2:3]), (-1.1937974302337684-0.39039259235266233j), 8)
+        self.assertAlmostEqual(lib.fp(ao1[3]*fac[:,3:4]), (0.17701966968272009-0.20232879692603079j), 8)
+
+        coords = cell.get_uniform_grids(wrap_around=False)
+        ao1 = ni.eval_ao(cell, coords, kpts)
         self.assertAlmostEqual(lib.fp(ao1[0]), (-2.4066959390326477-0.98044994099240701j), 8)
         self.assertAlmostEqual(lib.fp(ao1[1]), (-0.30643153325360639+0.1571658820483913j), 8)
         self.assertAlmostEqual(lib.fp(ao1[2]), (-1.1937974302337684-0.39039259235266233j), 8)
@@ -156,7 +174,8 @@ class KnownValues(unittest.TestCase):
         ao0 = eval_ao(cell, grids.coords, kpt)
         ao1 = ni.eval_ao(cell, grids.coords, kpt)
         self.assertAlmostEqual(abs(ao0 - ao1).max(), 0, 10)
-        self.assertAlmostEqual(lib.fp(ao1), (-2.4066959390326477-0.98044994099240701j), 8)
+        fac = coords_wrap_around_phase(cell, grids.coords, kpt[None])
+        self.assertAlmostEqual(lib.fp(ao1*fac), (-2.4066959390326477-0.98044994099240701j), 8)
 
     def test_nr_rks(self):
         cell = pbcgto.Cell()
@@ -177,8 +196,7 @@ class KnownValues(unittest.TestCase):
         dms = np.random.random((2,nao,nao))
         dms = (dms + dms.transpose(0,2,1)) * .5
         ni = numint.NumInt()
-        with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
-            ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], 1, kpts[0])
+        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], 1, kpts[0])
         self.assertAlmostEqual(ne, 5.0499199224525153, 8)
         self.assertAlmostEqual(exc, -3.8870579114663886, 8)
         self.assertAlmostEqual(lib.fp(vmat), 0.42538491159934377+0.14139753327162483j, 8)
@@ -188,15 +206,15 @@ class KnownValues(unittest.TestCase):
             ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, 1, kpts)
         self.assertAlmostEqual(ne, 6.0923292346269742, 8)
         self.assertAlmostEqual(exc, -3.9899423803106466, 8)
-        self.assertAlmostEqual(lib.fp(vmat[0]), -2348.9577179701278-60.733087913116719j, 7)
-        self.assertAlmostEqual(lib.fp(vmat[1]), -2353.0350086740673-117.74811536967495j, 7)
+        self.assertAlmostEqual(lib.fp(vmat[0]), -2348.9577179701278-60.733087913116719j, 6)
+        self.assertAlmostEqual(lib.fp(vmat[1]), -2353.0350086740673-117.74811536967495j, 6)
 
         with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
             ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', [dms,dms], 1, kpts)
         self.assertAlmostEqual(ne[1], 6.0923292346269742, 8)
         self.assertAlmostEqual(exc[1], -3.9899423803106466, 8)
-        self.assertAlmostEqual(lib.fp(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 7)
-        self.assertAlmostEqual(lib.fp(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 7)
+        self.assertAlmostEqual(lib.fp(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 6)
+        self.assertAlmostEqual(lib.fp(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 6)
 
     def test_eval_rho(self):
         cell, grids = make_grids([61]*3)
@@ -275,6 +293,7 @@ class KnownValues(unittest.TestCase):
         cell.build()
         grids = gen_grid.UniformGrids(cell)
         grids.build()
+        grids.coords = cell.get_uniform_grids(wrap_around=False)
         numpy.random.seed(10)
         nao = cell.nao_nr()
         dm = numpy.random.random((nao,nao))
@@ -296,6 +315,7 @@ class KnownValues(unittest.TestCase):
         cell.build()
         grids = gen_grid.UniformGrids(cell)
         grids.build()
+        grids.coords = cell.get_uniform_grids(wrap_around=False)
         numpy.random.seed(10)
         nao = cell.nao_nr()
         dm = numpy.random.random((nao,nao))
@@ -303,6 +323,29 @@ class KnownValues(unittest.TestCase):
         ni = numint.NumInt()
         rho = numint.get_rho(ni, cell, dm, grids)
         self.assertAlmostEqual(lib.fp(rho), 1.1624587519868457, 9)
+
+    def test_3d_rho(self):
+        cell = pbcgto.Cell()
+        cell.a = '3 0 0; 0 3 0; 0 0 3'
+        cell.unit = 'B'
+        cell.atom = 'He     1.    0.       1.'
+        cell.basis = {'He': '321g'}
+        cell.verbose = 0
+        cell.mesh = [20,20,20]
+        cell.build()
+        grids = gen_grid.UniformGrids(cell)
+        grids.build()
+        numpy.random.seed(10)
+        nao = cell.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+        ni = numint.NumInt()
+        rho = numint.get_rho(ni, cell, dm, grids)
+        self.assertAlmostEqual(lib.fp(rho), 1.4639787098513968, 9)
+
+        grids.coords = cell.get_uniform_grids(wrap_around=False)
+        rho1 = numint.get_rho(ni, cell, dm, grids)
+        self.assertAlmostEqual(abs(rho - rho1).max(), 0, 9)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.numint")

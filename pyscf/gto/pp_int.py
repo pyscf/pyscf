@@ -44,6 +44,7 @@ def get_gth_pp(mol):
     cell_0D = mol.view(Cell)
     cell_0D.dimension = 0
     cell_0D.a = numpy.eye(3)
+    cell_0D.mesh = [0] * 3
     vpploc += pp_int.get_pp_loc_part2(cell_0D).real
     vpploc += pp_int.get_pp_nl(cell_0D).real
     return vpploc

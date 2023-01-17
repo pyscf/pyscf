@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <math.h>
 #include <complex.h>
 #include "config.h"
@@ -178,7 +179,7 @@ static void _fill_grid2atm(double *grid2atm, double *min_grid2atm,
 }
 
 
-void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
+void PBCeval_cart_iter(FPtr_eval feval, FPtr_exp fexp,
                        size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                        int param[], int *shls_slice, int *ao_loc, double *buf,
                        double *Ls, double complex *expLk,
@@ -297,7 +298,7 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
 }
 
 
-void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
+void PBCeval_sph_iter(FPtr_eval feval, FPtr_exp fexp,
                       size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                       int param[], int *shls_slice, int *ao_loc, double *buf,
                       double *Ls, double complex *expLk,

@@ -23,20 +23,29 @@ from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import dft as pdft
 
+def setUpModule():
+    global cell
+    cell = pgto.Cell()
+    cell.unit = 'A'
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
+
+    cell.basis = 'gth-dzvp'
+    cell.pseudo = 'gth-pade'
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.mesh = [29]*3
+    cell.build()
+
+def tearDownModule():
+    global cell
+    cell.stdout.close()
+    del cell
+
 class KnownValues(unittest.TestCase):
     def test_KRKSpU_high_cost(self):
-        cell = pgto.Cell()
-        cell.unit = 'A'
-        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-        cell.a = '''0.      1.7834  1.7834
-                    1.7834  0.      1.7834
-                    1.7834  1.7834  0.    '''
-
-        cell.basis = 'gth-dzvp'
-        cell.pseudo = 'gth-pade'
-        cell.verbose = 7
-        cell.output = '/dev/null'
-        cell.build()
         kmesh = [2, 1, 1]
         kpts = cell.make_kpts(kmesh, wrap_around=True)
         U_idx = ["1 C 2p"]
@@ -49,18 +58,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -10.694460059491741, 8)
 
     def test_KRKSpU_ksymm(self):
-        cell = pgto.Cell()
-        cell.unit = 'A'
-        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-        cell.a = '''0.      1.7834  1.7834
-                    1.7834  0.      1.7834
-                    1.7834  1.7834  0.    '''
-
-        cell.basis = 'gth-dzvp'
-        cell.pseudo = 'gth-pade'
-        cell.verbose = 7
-        cell.output = '/dev/null'
-        cell.build()
         U_idx = ["1 C 2p"]
         U_val = [5.0]
         kmesh = [2, 2, 1]
@@ -73,18 +70,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -11.0115546012593, 8)
 
     def test_get_veff(self):
-        cell = pgto.Cell()
-        cell.unit = 'A'
-        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-        cell.a = '''0.      1.7834  1.7834
-                    1.7834  0.      1.7834
-                    1.7834  1.7834  0.    '''
-
-        cell.basis = 'gth-dzvp'
-        cell.pseudo = 'gth-pade'
-        cell.verbose = 7
-        cell.output = '/dev/null'
-        cell.build()
         kmesh = [2, 1, 1]
         kpts = cell.make_kpts(kmesh, wrap_around=True)
         U_idx = ["1 C 2p"]

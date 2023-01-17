@@ -35,7 +35,7 @@ def setUpModule():
     mol.spin = 2
     mol.build()
     mf = scf.UHF(mol)
-    mf.conv_tol = 1e-14
+    mf.conv_tol = 1e-12
     mf.scf()
 
 def tearDownModule():
@@ -187,6 +187,7 @@ class KnownValues(unittest.TestCase):
         ao2mofn = mf_df.with_df.ao2mo
         pt.ao2mo = lambda *args: mp.ump2._make_eris(pt, *args, ao2mofn=ao2mofn)
         e1 = pt.kernel()[0]
+        self.assertAlmostEqual(e1, -0.16607937629805458, 8)
         pt = mp.ump2.UMP2(mf.density_fit('weigend'))
         e2 = pt.kernel()[0]
         self.assertAlmostEqual(e1, e2, 8)
@@ -274,4 +275,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for mp2")
     unittest.main()
-

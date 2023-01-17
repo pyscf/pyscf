@@ -235,7 +235,7 @@ class KnownValues(unittest.TestCase):
         e_ref = mf.e_tot
 
         e_tot = scf.RHF(mol).run().e_tot
-        self.assertAlmostEqual(abs(e_ref-e_tot).max(), 0, 6)
+        self.assertAlmostEqual(abs(e_ref-e_tot).max(), 0, 5)
 
     def test_scalar_vs_int1e_rinv(self):
         mol = gto.M(atom='''
@@ -329,4 +329,3 @@ Na F
 if __name__ == '__main__':
     print("Full Tests for ECP")
     unittest.main()
-

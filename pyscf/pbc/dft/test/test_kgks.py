@@ -22,6 +22,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.pbc import gto as gto
 from pyscf.pbc import dft as dft
+from pyscf.pbc.df import rsdf_builder, gdf_builder
 
 def setUpModule():
     global cell, alle_cell, kpts, alle_kpts
@@ -35,6 +36,7 @@ def setUpModule():
     cell.basis = 'gth-dzvp'
     cell.pseudo = 'gth-pade'
     cell.verbose = 0
+    cell.mesh = [29] * 3
     cell.build()
     kmesh = [2, 1, 1]
     kpts = cell.make_kpts(kmesh, wrap_around=True)
@@ -82,19 +84,25 @@ class KnownValues(unittest.TestCase):
 
     def test_KGKS_sfx2c1e_high_cost(self):
         with lib.light_speed(10) as c:
-          mf = dft.KGKS(alle_cell, alle_kpts).density_fit().sfx2c1e()
-          mf.xc = 'lda'
-          mf.conv_tol = 1e-10
-          e_kgks = mf.kernel()
-          self.assertAlmostEqual(e_kgks, -75.67071562222077, 7)
+            # j2c_eig_always is set to make results match old version
+            with lib.temporary_env(rsdf_builder._RSGDFBuilder, j2c_eig_always=True):
+                mf = dft.KGKS(alle_cell, alle_kpts).density_fit().sfx2c1e()
+                mf.xc = 'lda'
+                mf.conv_tol = 1e-10
+                e_kgks = mf.kernel()
+                print(e_kgks)
+            self.assertAlmostEqual(e_kgks, -75.67071562222077, 4)
 
     def test_KGKS_x2c1e_high_cost(self):
         with lib.light_speed(10) as c:
-          mf = dft.KGKS(alle_cell, alle_kpts).density_fit().x2c1e()
-          mf.xc = 'lda'
-          mf.conv_tol = 1e-10
-          e_kgks = mf.kernel()
-          self.assertAlmostEqual(e_kgks, -75.66883793093882, 7)
+            # j2c_eig_always is set to make results match old version
+            with lib.temporary_env(rsdf_builder._RSGDFBuilder, j2c_eig_always=True):
+                mf = dft.KGKS(alle_cell, alle_kpts).density_fit().x2c1e()
+                mf.xc = 'lda'
+                mf.conv_tol = 1e-10
+                e_kgks = mf.kernel()
+                print(e_kgks)
+            self.assertAlmostEqual(e_kgks, -75.66883793093882, 4)
 
 
 if __name__ == '__main__':

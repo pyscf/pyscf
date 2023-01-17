@@ -201,8 +201,8 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1), -11001.96269563921, 7)
-        self.assertAlmostEqual(lib.fp(r2), 10145.408880409095, 7)
+        self.assertAlmostEqual(lib.fp(r1), -29298.85295742222, 7)
+        self.assertAlmostEqual(lib.fp(r2), 10145.543907318603, 7)
 
     def test_df_eomee_ccsd_matvec_triplet(self):
         numpy.random.seed(10)
@@ -216,9 +216,9 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1   ), 214.90035498814302, 9)
-        self.assertAlmostEqual(lib.fp(r2[0]), 37033.183886562998, 7)
-        self.assertAlmostEqual(lib.fp(r2[1]), 4164.1657912277242, 7)
+        self.assertAlmostEqual(lib.fp(r1   ), -6923.975705203359, 8)
+        self.assertAlmostEqual(lib.fp(r2[0]), 37033.47500554715 , 7)
+        self.assertAlmostEqual(lib.fp(r2[1]), 4164.221159944544, 7)
 
     def test_df_eomsf_ccsd_matvec(self):
         numpy.random.seed(10)
@@ -229,15 +229,15 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1   ), 1929.9270950777639, 8)
-        self.assertAlmostEqual(lib.fp(r2[0]), 15571.714806853948, 7)
-        self.assertAlmostEqual(lib.fp(r2[1]),-12949.619613624538, 7)
+        self.assertAlmostEqual(lib.fp(r1   ), 133.93692998558186, 8)
+        self.assertAlmostEqual(lib.fp(r2[0]), 15572.228624905263, 7)
+        self.assertAlmostEqual(lib.fp(r2[1]),-12949.86945323115 , 7)
 
     def test_df_eomee_diag(self):
         vec1S, vec1T, vec2 = eom_rccsd.EOMEE(mycc1).get_diag()
-        self.assertAlmostEqual(lib.fp(vec1S), 213.16715890265095, 9)
-        self.assertAlmostEqual(lib.fp(vec1T),-857.23800705535234, 9)
-        self.assertAlmostEqual(lib.fp(vec2) , 14.360296355284504, 9)
+        self.assertAlmostEqual(lib.fp(vec1S), 213.17116636400607, 9)
+        self.assertAlmostEqual(lib.fp(vec1T),-857.2458742624522 , 9)
+        self.assertAlmostEqual(lib.fp(vec2) , 14.357453812621733, 9)
 
     def test_ao2mo(self):
         numpy.random.seed(2)

@@ -356,6 +356,18 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(v1[2]), (-6.05309558678+0.281728966073j), 8)
         self.assertAlmostEqual(lib.fp(v1[3]), (-5.60115995450+0.275973062529j), 8)
 
+    def test_aft_get_pp_high_cost(self):
+        cell = pgto.Cell()
+        cell.verbose = 0
+        cell.atom = 'C 0 0 0; C 1 1 1'
+        cell.a = numpy.diag([4, 4, 4])
+        cell.basis = 'gth-szv'
+        cell.pseudo = 'gth-pade'
+        cell.mesh = [20]*3
+        cell.build()
+        v1 = aft.AFTDF(cell).get_pp([.25]*3)
+        self.assertAlmostEqual(lib.fp(v1), -0.0533131779366407-0.11895124492447073j, 9)
+
     def test_aft_get_ao_eri(self):
         df0 = fft.FFTDF(cell1)
         df = aft.AFTDF(cell1)
@@ -506,4 +518,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for aft")
     unittest.main()
-

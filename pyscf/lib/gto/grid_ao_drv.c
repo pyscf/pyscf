@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <math.h>
+#include <stdint.h>
 #include <complex.h>
 #include "config.h"
 #include "grid_ao_drv.h"
@@ -149,7 +150,7 @@ int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
 {
         int i, j;
         double arr;
-        double rr[ngrids];
+        double rr[BLKSIZE];
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
@@ -177,13 +178,10 @@ static void _fill_grid2atm(double *grid2atm, double *coord, size_t bgrids, size_
         double *r_atm;
         for (atm_id = 0; atm_id < natm; atm_id++) {
                 r_atm = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
+#pragma GCC ivdep
                 for (ig = 0; ig < bgrids; ig++) {
                         grid2atm[0*BLKSIZE+ig] = coord[0*ngrids+ig] - r_atm[0];
-                }
-                for (ig = 0; ig < bgrids; ig++) {
                         grid2atm[1*BLKSIZE+ig] = coord[1*ngrids+ig] - r_atm[1];
-                }
-                for (ig = 0; ig < bgrids; ig++) {
                         grid2atm[2*BLKSIZE+ig] = coord[2*ngrids+ig] - r_atm[2];
                 }
                 grid2atm += 3*BLKSIZE;
@@ -422,7 +420,7 @@ void GTOeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp, double fac,
         int ip, ib, k, iloc, ish;
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
-        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
+        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart+1));
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
@@ -478,7 +476,7 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         int ip, ib, k, iloc, ish;
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
-        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
+        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart+1));
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
@@ -496,4 +494,3 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         free(buf);
 }
 }
-

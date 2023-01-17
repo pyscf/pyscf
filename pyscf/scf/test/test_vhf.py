@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import unittest
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
+from pyscf import lib
 from pyscf.scf import _vhf
 
 def setUpModule():
@@ -152,9 +153,32 @@ class KnownValues(unittest.TestCase):
                                  dm, 1, mol._atm, mol._bas, mol._env, opt_llll)
         self.assertTrue(numpy.allclose(vk0,vk1))
 
+    def test_nr_direct_ex_drv(self):
+        numpy.random.seed(1)
+        dm = numpy.random.random((nao, nao))
+        dm = dm + dm.conj().T
+        shls_excludes = [0, 4] * 4
+        vref = _vhf.direct_bindm('int2e_sph', 's8', 'jk->s1il', dm, 1, mol._atm, mol._bas, mol._env)
+        self.assertAlmostEqual(lib.fp(vref), 5.0067176755619975, 12)
+
+        v0 = _vhf.direct_bindm('int2e_sph', 's8', 'jk->s1il', dm[:6,:6], 1,
+                               mol._atm, mol._bas, mol._env, shls_slice=shls_excludes)
+        v1 = _vhf.direct_bindm('int2e_sph', 's8', 'jk->s1il', dm, 1,
+                               mol._atm, mol._bas, mol._env, shls_excludes=shls_excludes)
+        v1[:6,:6] += v0
+        self.assertAlmostEqual(abs(v1 - vref).max(), 0, 12)
+
+        vref = _vhf.direct_mapdm('int2e_sph', 's8', 'ji->s1kl', dm, 1, mol._atm, mol._bas, mol._env)
+        self.assertAlmostEqual(lib.fp(vref), 48.61070262547175, 12)
+
+        v0 = _vhf.direct_mapdm('int2e_sph', 's8', 'ji->s1kl', dm[:6,:6], 1,
+                               mol._atm, mol._bas, mol._env, shls_slice=shls_excludes)
+        v1 = _vhf.direct_mapdm('int2e_sph', 's8', 'ji->s1kl', dm, 1,
+                               mol._atm, mol._bas, mol._env, shls_excludes=shls_excludes)
+        v1[:6,:6] += v0
+        self.assertAlmostEqual(abs(v1 - vref).max(), 0, 12)
+
 
 if __name__ == "__main__":
     print("Full Tests for _vhf")
     unittest.main()
-
-

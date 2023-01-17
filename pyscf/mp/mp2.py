@@ -566,7 +566,7 @@ class MP2(lib.StreamObject):
         self.e_hf = self.get_e_hf(mo_coeff=mo_coeff)
 
         if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+            eris = self.ao2mo(mo_coeff)
 
         if self._scf.converged:
             self.e_corr, self.t2 = self.init_amps(mo_energy, mo_coeff, eris, with_t2)

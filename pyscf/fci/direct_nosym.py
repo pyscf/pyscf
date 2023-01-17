@@ -133,6 +133,8 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index)
     return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
+make_hdiag = direct_spin1.make_hdiag
+
 
 class FCISolver(direct_spin1.FCISolver):
     def __init__(self, *args, **kwargs):

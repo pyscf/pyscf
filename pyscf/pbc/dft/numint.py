@@ -24,7 +24,7 @@ from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm, _tau_dot
 from pyscf.dft.numint import _scale_ao, _contract_rho
 from pyscf.dft.numint import OCCDROP
-from pyscf.dft.gen_grid import NBINS, CUTOFF
+from pyscf.dft.gen_grid import NBINS, CUTOFF, ALIGNMENT_UNIT
 from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import member, is_zero
 
@@ -354,7 +354,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
         nelec = numpy.zeros(nset)
         excsum = numpy.zeros(nset)
         shls_slice = (0, cell.nbas)
-        ao_loc = cell.ao_loc_2c()
+        ao_loc = cell.ao_loc
         deriv = 1
         vmat = [0]*nset
         v_hermi = 1  # the output matrix must be hermitian
@@ -457,7 +457,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
     excsum = numpy.zeros(nset)
     if xctype in ('LDA', 'GGA', 'MGGA'):
         shls_slice = (0, cell.nbas)
-        ao_loc = cell.ao_loc_2c()
+        ao_loc = cell.ao_loc
         deriv = 1
         vmata = [0]*nset
         vmatb = [0]*nset
@@ -966,10 +966,11 @@ class NumInt(numint.NumInt):
         grids_weights = grids.weights
         ngrids = grids_coords.shape[0]
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-# NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+        # NOTE to index grids.non0tab, blksize needs to be integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))*BLKSIZE
-            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
+            blksize = int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))
+            blksize = max(4, min(blksize, ngrids//BLKSIZE+1, 2400)) * BLKSIZE
+        assert blksize % BLKSIZE == 0
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
@@ -1155,7 +1156,7 @@ class KNumInt(numint.NumInt):
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
             blksize = int(max_memory*1e6/(comp*2*len(kpts_all)*nao*16*BLKSIZE))*BLKSIZE
-            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
+            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*2400))
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:

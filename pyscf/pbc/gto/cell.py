@@ -53,8 +53,6 @@ WITH_GAMMA = getattr(__config__, 'pbc_gto_cell_make_kpts_with_gamma', True)
 EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
                         [1.0, 0.5, 0.25, 0.1, 0])
 RCUT_EPS = 1e-3
-# cutoff penalty due to lattice summation
-LATTICE_SUM_PENALTY = 1e-1
 
 
 # For code compatiblity in python-2 and python-3
@@ -384,15 +382,12 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     fill = getattr(libpbc, 'PBCnr2c_fill_k'+aosym)
     fintor = getattr(moleintor.libcgto, intor)
     cintopt = lib.c_null_ptr()
-    pbcopt = kwargs.get('pbcopt', None)
-    if pbcopt is None:
-        pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell)
-    if isinstance(pbcopt, _pbcintor.PBCOpt):
-        cpbcopt = pbcopt._this
-    else:
-        cpbcopt = lib.c_null_ptr()
 
-    Ls = cell1.get_lattice_Ls(rcut=max(cell1.rcut, cell2.rcut))
+    rcut = max(cell1.rcut, cell2.rcut)
+    if cell1.dimension < 2 or cell1.low_dim_ft_type == 'inf_vacuum':
+        Ls = cell1.get_lattice_Ls(rcut=rcut, dimension=cell1.dimension)
+    else:
+        Ls = cell1.get_lattice_Ls(rcut=rcut, dimension=3)
     expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
     drv = libpbc.PBCnr2c_drv
 
@@ -415,7 +410,7 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
                 Ls.ctypes.data_as(ctypes.c_void_p),
                 facx.ctypes.data_as(ctypes.c_void_p),
                 (ctypes.c_int*4)(i0, i1, j0, j1),
-                ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
+                ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
                 atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
                 bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
                 env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
@@ -433,7 +428,7 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
         Ls.ctypes.data_as(ctypes.c_void_p),
         expkL.ctypes.data_as(ctypes.c_void_p),
         (ctypes.c_int*4)(i0, i1, j0, j1),
-        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
+        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
         env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
@@ -469,9 +464,8 @@ def get_nimgs(cell, precision=None):
     if precision is None:
         precision = cell.precision
 
-    rcut = max([cell.bas_rcut(ib, precision) for ib in range(cell.nbas)])
-
     # nimgs determines the supercell size
+    rcut = estimate_rcut(cell, precision)
     nimgs = cell.get_bounding_sphere(rcut)
     return nimgs
 
@@ -479,8 +473,11 @@ def _estimate_rcut(alpha, l, c, precision=INTEGRAL_PRECISION):
     '''rcut based on the overlap integrals. This estimation is too conservative
     in many cases. A possible replacement can be the value of the basis
     function at rcut ~ c*r^(l+2)*exp(-alpha*r^2) < precision'''
-    C = (c**2)*(2*l+1) / (precision * LATTICE_SUM_PENALTY)
     r0 = 20
+    # lattice_sum_penalty is the factor in terms of lattice sum in overlap
+    # integrals
+    lattice_sum_penalty = 4 * np.pi * r0 / alpha
+    C = c**2*(2*l+1)*alpha / precision * lattice_sum_penalty
     # +1. to ensure np.log returning positive value
     r0 = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
     rcut = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
@@ -497,6 +494,33 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     cs = abs(cell.bas_ctr_coeff(bas_id)).max(axis=1)
     rcut = _estimate_rcut(es, l, cs, precision)
     return rcut.max()
+
+def estimate_rcut(cell, precision=INTEGRAL_PRECISION):
+    '''Lattice-sum cutoff for the entire system'''
+    rcut = [cell.bas_rcut(ib, precision) for ib in range(cell.nbas)]
+    if rcut:
+        rcut_max = max(rcut)
+    else:
+        rcut_max = 0
+    return rcut_max
+
+def _rcut_penalty(cell):
+    '''Basis near the boundary of a cell may be closed to basis near the
+    boundary of the neighbour image. Use a penalty for this when calling
+    estimate_rcut
+    '''
+    a = cell.lattice_vectors()
+    if cell.dimension == 3:
+        vol = np.linalg.det(a)
+        penalty = vol ** (1./3) * 3**.5
+    elif cell.dimension == 2:
+        area = np.linalg.norm(np.cross(a[0], a[1]))
+        penalty = area ** .5 * 2**.5
+    elif cell.dimension == 1:
+        penalty = np.linalg.norm(a[0])
+    else:
+        penalty = 0
+    return penalty
 
 def pgf_rcut(l, alpha, coeff, precision=INTEGRAL_PRECISION, r0=0, max_cycle=100):
     '''
@@ -637,7 +661,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     return Ecut
 
 def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
-    '''Energy cutoff estimation'''
+    '''Energy cutoff estimation for the entire system'''
     Ecut_max = 0
     for i in range(cell.nbas):
         l = cell.bas_angular(i)
@@ -864,25 +888,26 @@ def get_ewald_params(cell, precision=None, mesh=None):
         ew_cut = cell.rcut
         ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
     else:
-        if mesh is None:
-            mesh = cell.mesh
         mesh = _cut_mesh_for_ewald(cell, mesh)
-        Gmax = min(np.asarray(mesh)//2 * lib.norm(cell.reciprocal_vectors(), axis=1))
-        log_precision = np.log(precision/(4*np.pi*(Gmax+1e-100)**2))
-        ew_eta = np.sqrt(-Gmax**2/(4*log_precision)) + 1e-100
+        ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
+        log_precision = np.log(precision / (cell.atom_charges().sum()*16*np.pi**2))
+        ew_eta = np.sqrt(-ke_cutoff/(2*log_precision))
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
     return ew_eta, ew_cut
 
+MESH_FOR_EWALD = np.array([15] * 3)
+
 def _cut_mesh_for_ewald(cell, mesh):
-    mesh = np.copy(mesh)
-    mesh_max = np.asarray(np.linalg.norm(cell.lattice_vectors(), axis=1) * 2,
-                          dtype=int)  # roughly 2 grids per bohr
+    if cell.dimension == 3:
+        return MESH_FOR_EWALD
+
+    mesh = MESH_FOR_EWALD.copy()
     if (cell.dimension < 2 or
         (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
-        mesh_max[cell.dimension:] = mesh[cell.dimension:]
-
-    mesh_max[mesh_max<80] = 80
-    mesh[mesh>mesh_max] = mesh_max[mesh>mesh_max]
+        mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+    else:  # dimension == 2
+        # roughly 2 grids per bohr
+        mesh[2] = int(np.linalg.norm(cell.lattice_vectors()[2])) * 2 + 1
     return mesh
 
 def ewald(cell, ew_eta=None, ew_cut=None):
@@ -909,9 +934,17 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         from pyscf.pbc.gto import ewald_methods
         return ewald_methods.particle_mesh_ewald(cell, ew_eta, ew_cut)
 
-    if ew_eta is None: ew_eta = cell.get_ewald_params()[0]
-    if ew_cut is None: ew_cut = cell.get_ewald_params()[1]
     chargs = cell.atom_charges()
+
+    if ew_eta is None or ew_cut is None:
+        ew_eta, ew_cut = cell.get_ewald_params()
+        mesh = _cut_mesh_for_ewald(cell, cell.mesh)
+    else:
+        log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
+        ke_cutoff = -2*ew_eta**2*log_precision
+        mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+        logger.debug1(cell, 'mesh for ewald %s', mesh)
+
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
 
@@ -935,11 +968,11 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
 
-    mesh = _cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     #absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2 = lib.multiply_sum(Gv, Gv, axis=1)
     absG2[absG2==0] = 1e200
+
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         coulG = 4*np.pi / absG2
         coulG *= weights
@@ -1050,7 +1083,7 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
         kpts = libkpts.make_kpts(cell, kpts, space_group_symmetry, time_reversal_symmetry, symmorphic)
     return kpts
 
-def get_uniform_grids(cell, mesh=None, **kwargs):
+def get_uniform_grids(cell, mesh=None, wrap_around=True):
     '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
 
     Args:
@@ -1062,14 +1095,18 @@ def get_uniform_grids(cell, mesh=None, **kwargs):
 
     '''
     if mesh is None: mesh = cell.mesh
-    if 'gs' in kwargs:
-        warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
-                      'the number of PWs (=2*gs+1) along each direction.')
-        mesh = [2*n+1 for n in kwargs['gs']]
-    mesh = np.asarray(mesh, dtype=np.double)
-    qv = lib.cartesian_prod([np.arange(x) for x in mesh])
-    a_frac = np.einsum('i,ij->ij', 1./mesh, cell.lattice_vectors())
-    coords = np.dot(qv, a_frac)
+
+    if wrap_around:
+        # wrap the coordinates around the origin. If coordinates are generated
+        # inside the primitive cell without wrap-around, an extra layer would be
+        # needed in function get_lattice_Ls for 2D calculations.
+        qv = lib.cartesian_prod([np.fft.fftfreq(x) for x in mesh])
+        coords = np.dot(qv, cell.lattice_vectors())
+    else:
+        mesh = np.asarray(mesh, dtype=np.double)
+        qv = lib.cartesian_prod([np.arange(x) for x in mesh])
+        a_frac = np.einsum('i,ij->ij', 1./mesh, cell.lattice_vectors())
+        coords = np.dot(qv, a_frac)
     return coords
 gen_uniform_grids = get_uniform_grids
 
@@ -1357,9 +1394,10 @@ class Cell(mole.Mole):
             else:
                 mf = scf.HF(self)
 
-        method = getattr(mf, key, None)
-        if method is None:
-            raise AttributeError('Cell object has no attribute %s' % key)
+        if not hasattr(mf.__class__, key):
+            raise AttributeError('Cell object does not have method %s' % key)
+
+        method = getattr(mf, key)
 
         mf.run()
         return method
@@ -1543,8 +1581,7 @@ class Cell(mole.Mole):
 
         if self.rcut is None or self._rcut_from_build:
             if not self.rcut_by_shell_radius:
-                self._rcut = max([self.bas_rcut(ib, self.precision)
-                                  for ib in range(self.nbas)] + [0])
+                self._rcut = estimate_rcut(self, self.precision)
             else:
                 self._rcut = max(0, rcut_by_shells(self).max())
             self._rcut_from_build = True
@@ -1664,12 +1701,7 @@ class Cell(mole.Mole):
         b = self.reciprocal_vectors(norm_to=1)
         heights_inv = lib.norm(b, axis=1)
         self.rcut = max(np.asarray(x) / heights_inv)
-
-        if self.nbas == 0:
-            rcut_guess = _estimate_rcut(.05, 0, 1, 1e-8)
-        else:
-            rcut_guess = max([self.bas_rcut(ib, self.precision)
-                              for ib in range(self.nbas)])
+        rcut_guess = estimate_rcut(self, self.precision)
         if self.rcut > rcut_guess*1.5:
             msg = ('.nimgs is a deprecated attribute.  It is replaced by .rcut '
                    'attribute for lattic sum cutoff radius.  The given nimgs '

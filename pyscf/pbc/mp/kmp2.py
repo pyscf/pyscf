@@ -34,7 +34,7 @@ import h5py
 from pyscf import lib
 from pyscf.lib import logger, einsum
 from pyscf.mp import mp2
-from pyscf.pbc import df
+from pyscf.pbc.df import df
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib import kpts as libkpts
 from pyscf.lib.parameters import LARGE_DENOM
@@ -161,7 +161,6 @@ def _init_mp_df_eris(mp):
     Returns:
         Lov (numpy.ndarray) -- 3-center DF ints, with shape (nkpts, nkpts, naux, nocc, nvir)
     """
-    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     from pyscf.pbc.lib.kpts_helper import gamma_point
 
@@ -199,14 +198,12 @@ def _init_mp_df_eris(mp):
     bra_end = nocc
     ket_start = nmo+nocc
     ket_end = ket_start + nvir
-    with h5py.File(mp._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
+    with df.CDERIArray(mp._scf.with_df._cderi) as cderi_array:
         tao = []
         ao_loc = None
-        for ki, kpti in enumerate(kpts):
-            for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti, kptj))
-                Lpq_ao = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                Lpq_ao = cderi_array[ki,kj]
 
                 mo = np.hstack((mo_coeff[ki], mo_coeff[kj]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
@@ -554,11 +551,11 @@ def get_frozen_mask(mp):
 def _add_padding(mp, mo_coeff, mo_energy):
     nmo = mp.nmo
 
-    # Check if these are padded mo coefficients and energies
-    if not np.all([x.shape[1] == nmo for x in mo_coeff]):
+    # Check if these are padded mo coefficients and energies and/or if some orbitals are frozen.
+    if (mp.frozen is not None) or (not np.all([x.shape[1] == nmo for x in mo_coeff])):
         mo_coeff = padded_mo_coeff(mp, mo_coeff)
 
-    if not np.all([x.shape[0] == nmo for x in mo_energy]):
+    if (mp.frozen is not None) or (not np.all([x.shape[0] == nmo for x in mo_energy])):
         mo_energy = padded_mo_energy(mp, mo_energy)
     return mo_coeff, mo_energy
 

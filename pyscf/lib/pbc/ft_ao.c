@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018, 2021 The PySCF Developers. All Rights Reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -17,765 +17,839 @@
  */
 
 #include <stdlib.h>
-#include <stdio.h>
+#include <stdint.h>
 #include <complex.h>
+#include <math.h>
 #include <assert.h>
 #include "config.h"
 #include "cint.h"
+#include "gto/gto.h"
 #include "gto/ft_ao.h"
 #include "vhf/fblas.h"
+#include "vhf/nr_direct.h"
+#include "pbc/pbc.h"
 #include "np_helper/np_helper.h"
 
-#define INTBUFMAX       16000
-#define IMGBLK          80
 #define OF_CMPLX        2
+#define BLOCK_SIZE      104
 
-int PBCsizeof_env(int *shls_slice,
-                  int *atm, int natm, int *bas, int nbas, double *env);
+typedef int (*FPtrIntor)(double *outR, double *outI, int *shls, int *dims,
+                         FPtr_eval_gz eval_gz, double complex fac,
+                         double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                         int block_size,
+                         int *atm, int natm, int *bas, int nbas, double *env);
 
-static void shift_bas(double *env_loc, double *env, double *Ls, int ptr, int iL)
+typedef int (*FPtrSort)(double *out, double *in, int fill_zero,
+                        int *shls_slice, int *ao_loc, int nkpts, int comp,
+                        int nGv, int ish, int jsh, int grid0, int grid1);
+
+typedef int (*FPtrFill)(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
+                        double *out, double *buf, int *cell0_shls,
+                        CINTEnvVars *envs_cint, BVKEnvs *envs_bvk);
+
+void PBCminimal_CINTEnvVars(CINTEnvVars *envs, int *atm, int natm, int *bas, int nbas, double *env,
+                            CINTOpt *cintopt);
+
+static int _assemble2c(FPtrIntor intor, FPtr_eval_gz eval_gz,
+                       double *eriR, double *eriI, //double *cache,
+                       int grid0, int grid1, int ish_cell0, int jsh_bvk,
+                       double complex fac, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
-        env_loc[ptr+0] = env[ptr+0] + Ls[iL*3+0];
-        env_loc[ptr+1] = env[ptr+1] + Ls[iL*3+1];
-        env_loc[ptr+2] = env[ptr+2] + Ls[iL*3+2];
-}
-
-/*
- * Multiple k-points
- */
-static void _ft_fill_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                       void (*fsort)(), double complex *out, int nkpts,
-                       int comp, int nimgs, int blksize, int ish, int jsh,
-                       double complex *buf, double *env_loc, double *Ls,
-                       double complex *expkL, int *shls_slice, int *ao_loc,
-                       double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                       int *atm, int natm, int *bas, int nbas, double *env)
-{
-        const int ish0 = shls_slice[0];
-        const int jsh0 = shls_slice[2];
-        ish += ish0;
-        jsh += jsh0;
-
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        const int dij = di * dj;
-        const char TRANS_N = 'N';
-        const double complex Z1 = 1;
-
-        int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
-        int shls[2] = {ish, jsh};
-        int dims[2] = {di, dj};
-        double complex *bufk = buf;
-        double complex *bufL = buf + ((size_t)dij) * blksize * comp * nkpts;
-        double complex *pbuf;
-        int gs0, gs1, dg, dijg;
-        int jL0, jLcount, jL;
-        int i;
-
-        for (gs0 = 0; gs0 < nGv; gs0 += blksize) {
-                gs1 = MIN(gs0+blksize, nGv);
-                dg = gs1 - gs0;
-                dijg = dij * dg * comp;
-                NPzset0(bufk, ((size_t)dijg) * nkpts);
-
-                for (jL0 = 0; jL0 < nimgs; jL0 += IMGBLK) {
-                        jLcount = MIN(IMGBLK, nimgs-jL0);
-                        pbuf = bufL;
-                        for (jL = jL0; jL < jL0+jLcount; jL++) {
-                                shift_bas(env_loc, env, Ls, jptrxyz, jL);
-                                if ((*intor)(pbuf, shls, dims, eval_aopair, eval_gz,
-                                             Z1, sGv, b, sgxyz, gs, dg,
-                                             atm, natm, bas, nbas, env_loc)) {
-                                } else {
-                                        for (i = 0; i < dijg; i++) {
-                                                pbuf[i] = 0;
-                                        }
-                                }
-                                pbuf += dijg;
-                        }
-                        zgemm_(&TRANS_N, &TRANS_N, &dijg, &nkpts, &jLcount,
-                               &Z1, bufL, &dijg, expkL+jL0, &nimgs,
-                               &Z1, bufk, &dijg);
-                }
-
-                (*fsort)(out, bufk, shls_slice, ao_loc,
-                         nkpts, comp, nGv, ish, jsh, gs0, gs1);
-
-                sGv += dg * 3;
-                if (sgxyz != NULL) {
-                        sgxyz += dg * 3;
-                }
+        int natm = envs_cint->natm;
+        int nbas = envs_cint->nbas;
+//        int ncomp = envs_cint->ncomp;
+        int *sh_loc = envs_bvk->sh_loc;
+        int ish0 = sh_loc[ish_cell0];
+        int ish1 = sh_loc[ish_cell0+1];
+        int jsh0 = sh_loc[jsh_bvk];
+        int jsh1 = sh_loc[jsh_bvk+1];
+        int empty = 1;
+        if (ish0 == ish1 || jsh0 == jsh1) {
+                return !empty;
         }
-}
 
-/*
- * Single k-point
- */
-static void _ft_fill_nk1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                         void (*fsort)(), double complex *out, int nkpts,
-                         int comp, int nimgs, int blksize, int ish, int jsh,
-                         double complex *buf, double *env_loc, double *Ls,
-                         double complex *expkL, int *shls_slice, int *ao_loc,
-                         double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                         int *atm, int natm, int *bas, int nbas, double *env)
-{
-        const int ish0 = shls_slice[0];
-        const int jsh0 = shls_slice[2];
-        ish += ish0;
-        jsh += jsh0;
+        int nimgs = envs_bvk->nimgs;
+        int ngrids = envs_bvk->nGv;
+        int dg = grid1 - grid0;
+        int *atm = envs_cint->atm;
+        int *bas = envs_cint->bas;
+        double *env = envs_cint->env;
+        double *Gv = envs_bvk->Gv;
+        double *b = envs_bvk->b;
+        int *gxyz = envs_bvk->gxyz;
+        int *gs = envs_bvk->gs;
+        int8_t *ovlp_mask = envs_bvk->ovlp_mask;
+        int *bas_map = envs_bvk->bas_map;
+        int shls[2];
+        int ish, jsh, ishp;
 
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        const size_t dij = di * dj;
-
-        int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
-        int shls[2] = {ish, jsh};
-        int dims[2] = {di, dj};
-        double complex *bufk = buf;
-        double complex *bufL = buf + dij*blksize * comp;
-        int gs0, gs1, dg, jL;
-        size_t i, dijg;
-
-        for (gs0 = 0; gs0 < nGv; gs0 += blksize) {
-                gs1 = MIN(gs0+blksize, nGv);
-                dg = gs1 - gs0;
-                dijg = dij * dg * comp;
-                for (i = 0; i < dijg; i++) {
-                        bufk[i] = 0;
+        for (ish = ish0; ish < ish1; ish++) {
+                if (bas_map[ish] % nimgs != 0) {
+                        continue;
                 }
-
-                for (jL = 0; jL < nimgs; jL++) {
-                        shift_bas(env_loc, env, Ls, jptrxyz, jL);
-                        if ((*intor)(bufL, shls, dims, eval_aopair, eval_gz,
-                                     expkL[jL], sGv, b, sgxyz, gs, dg,
-                                     atm, natm, bas, nbas, env_loc)) {
-                                for (i = 0; i < dijg; i++) {
-                                        bufk[i] += bufL[i];
-                                }
+                ishp = bas_map[ish] / nimgs;
+                for (jsh = jsh0; jsh < jsh1; jsh++) {
+                        if (!ovlp_mask[ishp*nbas+jsh]) {
+                                continue;
+                        }
+                        shls[0] = ish;
+                        shls[1] = jsh;
+                        if ((*intor)(eriR, eriI, shls, NULL, eval_gz,
+                                     fac, Gv+grid0, b, gxyz+grid0, gs, ngrids, dg,
+                                     atm, natm, bas, nbas, env)) {
+                                empty = 0;
                         }
                 }
-
-                (*fsort)(out, bufk, shls_slice, ao_loc,
-                         nkpts, comp, nGv, ish, jsh, gs0, gs1);
-
-                sGv += dg * 3;
-                if (sgxyz != NULL) {
-                        sgxyz += dg * 3;
-                }
         }
+        return !empty;
 }
 
 /*
  * Multiple k-points for BvK cell
  */
-static void _ft_bvk_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                      void (*fsort)(), double complex *out,
-                      int nkpts, int comp, int nimgs, int bvk_nimgs, int blksize,
-                      int ish, int jsh, int *cell_loc_bvk, int8_t *ovlp_mask,
-                      double complex *buf, double *env_loc, double *Ls,
-                      double complex *expkL, int *shls_slice, int *ao_loc,
-                      double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                      int *atm, int natm, int *bas, int nbas, double *env)
+void PBC_ft_bvk_ks1(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
+                    double *out, double *buf, int *cell0_shls,
+                    CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
-        const int ish0 = shls_slice[0];
-        const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
-        const int njsh = jsh1 - jsh0;
-        ovlp_mask += (ish * njsh + jsh) * nimgs;
-        ish += ish0;
-        jsh += jsh0;
+        int *shls_slice = envs_bvk->shls_slice;
+        int *cell0_ao_loc = envs_bvk->ao_loc;
+        int ish_cell0 = cell0_shls[0];
+        int jsh_cell0 = cell0_shls[1];
 
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        const int dij = di * dj;
-        const char TRANS_N = 'N';
-        const double complex Z1 = 1;
-        const double complex Z0 = 0;
+        int di = cell0_ao_loc[ish_cell0+1] - cell0_ao_loc[ish_cell0];
+        int dj = cell0_ao_loc[jsh_cell0+1] - cell0_ao_loc[jsh_cell0];
+        int dij = di * dj;
+        char TRANS_N = 'N';
+        char TRANS_T = 'T';
+        double D0 = 0;
+        double D1 = 1;
+        double ND1 = -1;
+        double complex Z1 = 1;
 
-        int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
-        int shls[2] = {ish, jsh};
-        int dims[2] = {di, dj};
-        double complex *buf_rs = buf;
-        double complex *bufL = buf + ((size_t)dij) * blksize * comp * nkpts;
-        double complex *pbuf;
-        int gs0, gs1, dg, dijg;
-        int jL, i;
+        int comp = envs_bvk->ncomp;
+        int nGv = envs_bvk->nGv;
+        int bvk_ncells = envs_bvk->ncells;
+        int nkpts = envs_bvk->nkpts;
+        int nbasp = envs_bvk->nbasp;
+        double *expLkR = envs_bvk->expLkR;
+        double *expLkI = envs_bvk->expLkI;
+        double *bufkR = buf;
+        double *bufkI = bufkR + ((size_t)dij) * BLOCK_SIZE * comp * nkpts;
+        double *bufLR = bufkI + ((size_t)dij) * BLOCK_SIZE * comp * nkpts;
+        double *bufLI = bufLR + ((size_t)dij) * BLOCK_SIZE * comp * bvk_ncells;
+        //double *cache = bufLI + ((size_t)dij) * BLOCK_SIZE * comp * bvk_ncells;
+        double *pbufR, *pbufI;
+        int grid0, grid1, dg, dijg, jL, jLmax, nLj, empty;
 
-        for (gs0 = 0; gs0 < nGv; gs0 += blksize) {
-                gs1 = MIN(gs0+blksize, nGv);
-                dg = gs1 - gs0;
+        // TODO: precompute opts??
+
+        for (grid0 = 0; grid0 < nGv; grid0 += BLOCK_SIZE) {
+                grid1 = MIN(grid0+BLOCK_SIZE, nGv);
+                dg = grid1 - grid0;
                 dijg = dij * dg * comp;
-                NPzset0(bufL, ((size_t)dijg) * bvk_nimgs);
 
-                for (jL = 0; jL < nimgs; jL++) {
-                        if (!ovlp_mask[jL]) {
-                                continue;
-                        }
-
-                        shift_bas(env_loc, env, Ls, jptrxyz, jL);
-                        if ((*intor)(buf_rs, shls, dims, eval_aopair, eval_gz,
-                                     Z1, sGv, b, sgxyz, gs, dg,
-                                     atm, natm, bas, nbas, env_loc)) {
-                                pbuf = bufL + dijg * cell_loc_bvk[jL];
-                                for (i = 0; i < dijg; i++) {
-                                        pbuf[i] += buf_rs[i];
-                                }
-
+                jLmax = -1;
+                for (jL = 0; jL < bvk_ncells; jL++) {
+                        pbufR = bufLR + jL * dijg;
+                        pbufI = bufLI + jL * dijg;
+                        NPdset0(pbufR, dijg);
+                        NPdset0(pbufI, dijg);
+                        if (_assemble2c(intor, eval_gz, pbufR, pbufI, grid0, grid1,
+                                        ish_cell0, jL*nbasp+jsh_cell0, Z1,
+                                        envs_cint, envs_bvk)) {
+                                jLmax = jL;
                         }
                 }
 
-                zgemm_(&TRANS_N, &TRANS_N, &dijg, &nkpts, &bvk_nimgs,
-                       &Z1, bufL, &dijg, expkL, &bvk_nimgs, &Z0, buf, &dijg);
-
-                (*fsort)(out, buf, shls_slice, ao_loc,
-                         nkpts, comp, nGv, ish, jsh, gs0, gs1);
-
-                sGv += dg * 3;
-                if (sgxyz != NULL) {
-                        sgxyz += dg * 3;
+                empty = jLmax == -1;
+                if (!empty) {
+                        nLj = jLmax + 1;
+                        dgemm_(&TRANS_N, &TRANS_T, &dijg, &nkpts, &nLj,
+                               &D1, bufLR, &dijg, expLkR, &nkpts, &D0, bufkR, &dijg);
+                        dgemm_(&TRANS_N, &TRANS_T, &dijg, &nkpts, &nLj,
+                               &ND1, bufLI, &dijg, expLkI, &nkpts, &D1, bufkR, &dijg);
+                        dgemm_(&TRANS_N, &TRANS_T, &dijg, &nkpts, &nLj,
+                               &D1, bufLR, &dijg, expLkI, &nkpts, &D0, bufkI, &dijg);
+                        dgemm_(&TRANS_N, &TRANS_T, &dijg, &nkpts, &nLj,
+                               &D1, bufLI, &dijg, expLkR, &nkpts, &D1, bufkI, &dijg);
                 }
+
+                (*fsort)(out, bufkR, empty, shls_slice, cell0_ao_loc,
+                         nkpts, comp, nGv, ish_cell0, jsh_cell0, grid0, grid1);
         }
 }
 
 /*
  * Single k-point for BvK cell
  */
-static void _ft_bvk_nk1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                        void (*fsort)(), double complex *out,
-                        int nkpts, int comp, int nimgs, int bvk_nimgs, int blksize,
-                        int ish, int jsh, int *cell_loc_bvk, int8_t *ovlp_mask,
-                        double complex *buf, double *env_loc, double *Ls,
-                        double complex *expkL, int *shls_slice, int *ao_loc,
-                        double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                        int *atm, int natm, int *bas, int nbas, double *env)
+void PBC_ft_bvk_nk1s1(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
+                      double *out, double *buf, int *cell0_shls,
+                      CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
-        const int ish0 = shls_slice[0];
-        const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
-        const int njsh = jsh1 - jsh0;
-        ovlp_mask += (ish * njsh + jsh) * nimgs;
-        ish += ish0;
-        jsh += jsh0;
+        int *shls_slice = envs_bvk->shls_slice;
+        int *cell0_ao_loc = envs_bvk->ao_loc;
+        int ish_cell0 = cell0_shls[0];
+        int jsh_cell0 = cell0_shls[1];
 
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        const int dij = di * dj;
-
-        int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
-        int shls[2] = {ish, jsh};
-        int dims[2] = {di, dj};
+        int di = cell0_ao_loc[ish_cell0+1] - cell0_ao_loc[ish_cell0];
+        int dj = cell0_ao_loc[jsh_cell0+1] - cell0_ao_loc[jsh_cell0];
+        int dij = di * dj;
+        int comp = envs_bvk->ncomp;
+        int nGv = envs_bvk->nGv;
+        int bvk_ncells = envs_bvk->ncells;
+        int nkpts = envs_bvk->nkpts;
+        int nbasp = envs_bvk->nbasp;
+        double *expLkR = envs_bvk->expLkR;
+        double *expLkI = envs_bvk->expLkI;
+        double *bufR = buf;
+        double *bufI = bufR + dij * BLOCK_SIZE * comp;
         double complex fac;
-        double complex *buf_rs = buf + dij * blksize * comp;
-        int gs0, gs1, dg, jL, i, dijg;
+        int grid0, grid1, dg, jL, dijg, empty;
 
-        for (gs0 = 0; gs0 < nGv; gs0 += blksize) {
-                gs1 = MIN(gs0+blksize, nGv);
-                dg = gs1 - gs0;
+        for (grid0 = 0; grid0 < nGv; grid0 += BLOCK_SIZE) {
+                grid1 = MIN(grid0+BLOCK_SIZE, nGv);
+                dg = grid1 - grid0;
                 dijg = dij * dg * comp;
-                for (i = 0; i < dijg; i++) {
-                        buf[i] = 0;
-                }
+                NPdset0(bufR, dijg);
+                NPdset0(bufI, dijg);
 
-                for (jL = 0; jL < nimgs; jL++) {
-                        if (!ovlp_mask[jL]) {
-                                continue;
-                        }
-
-                        shift_bas(env_loc, env, Ls, jptrxyz, jL);
-                        fac = expkL[cell_loc_bvk[jL]];
-                        if ((*intor)(buf_rs, shls, dims, eval_aopair, eval_gz,
-                                     fac, sGv, b, sgxyz, gs, dg,
-                                     atm, natm, bas, nbas, env_loc)) {
-                                for (i = 0; i < dijg; i++) {
-                                        buf[i] += buf_rs[i];
-                                }
-
+                empty = 1;
+                for (jL = 0; jL < bvk_ncells; jL++) {
+                        fac = expLkR[jL] + expLkI[jL] * _Complex_I;
+                        if (_assemble2c(intor, eval_gz, bufR, bufI, grid0, grid1,
+                                        ish_cell0, jL*nbasp+jsh_cell0, fac,
+                                        envs_cint, envs_bvk)) {
+                                empty = 0;
                         }
                 }
 
-                (*fsort)(out, buf, shls_slice, ao_loc,
-                         nkpts, comp, nGv, ish, jsh, gs0, gs1);
-
-                sGv += dg * 3;
-                if (sgxyz != NULL) {
-                        sgxyz += dg * 3;
-                }
+                (*fsort)(out, bufR, empty, shls_slice, cell0_ao_loc,
+                         nkpts, comp, nGv, ish_cell0, jsh_cell0, grid0, grid1);
         }
 }
 
-static void sort_s1(double complex *out, double complex *in,
-                    int *shls_slice, int *ao_loc, int nkpts, int comp,
-                    int nGv, int ish, int jsh, int gs0, int gs1)
+static void _fill0(FPtrSort fsort, double *out, int *cell0_shls,
+                   BVKEnvs *envs_bvk)
 {
-        const size_t NGv = nGv;
-        const int ish0 = shls_slice[0];
-        const int ish1 = shls_slice[1];
-        const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
-        const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
-        const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
-        const size_t nijg = naoi * naoj * NGv;
-
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        const int ip = ao_loc[ish] - ao_loc[ish0];
-        const int jp = ao_loc[jsh] - ao_loc[jsh0];
-        const int dg = gs1 - gs0;
-        const int dijg = di * dj * dg;
-        out += (ip * naoj + jp) * NGv + gs0;
-
-        int i, j, n, ic, kk;
-        double complex *pin, *pout;
-
-        for (kk = 0; kk < nkpts; kk++) {
-        for (ic = 0; ic < comp; ic++) {
-                for (j = 0; j < dj; j++) {
-                for (i = 0; i < di; i++) {
-                        pout = out + (i*naoj+j) * NGv;
-                        pin  = in + (j*di+i) * dg;
-                        for (n = 0; n < dg; n++) {
-                                pout[n] = pin[n];
-                        }
-                } }
-                out += nijg;
-                in  += dijg;
-        } }
+        int *shls_slice = envs_bvk->shls_slice;
+        int *cell0_ao_loc = envs_bvk->ao_loc;
+        int comp = envs_bvk->ncomp;
+        int nGv = envs_bvk->nGv;
+        int nkpts = envs_bvk->nkpts;
+        int ish_cell0 = cell0_shls[0];
+        int jsh_cell0 = cell0_shls[1];
+        int fill_zero = 1;
+        (*fsort)(out, NULL, fill_zero, shls_slice, cell0_ao_loc,
+                 nkpts, comp, nGv, ish_cell0, jsh_cell0, 0, nGv);
 }
 
-static void sort_s2_igtj(double complex *out, double complex *in,
-                         int *shls_slice, int *ao_loc, int nkpts, int comp,
-                         int nGv, int ish, int jsh, int gs0, int gs1)
+void PBC_ft_dsort_s1(double *out, double *in, int fill_zero,
+                     int *shls_slice, int *ao_loc, int nkpts, int comp,
+                     int nGv, int ish, int jsh, int grid0, int grid1)
 {
-        const size_t NGv = nGv;
-        const int ish0 = shls_slice[0];
-        const int ish1 = shls_slice[1];
-        const int jsh0 = shls_slice[2];
-        const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
-        const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
-        const size_t nijg = nij * NGv;
+        size_t NGv = nGv;
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        int jsh1 = shls_slice[3];
+        size_t naoi = ao_loc[ish1] - ao_loc[ish0];
+        size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        size_t nijg = naoi * naoj * NGv;
 
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        const int dij = di * dj;
-        const int dg = gs1 - gs0;
-        const size_t dijg = dij * dg;
-        const int jp = ao_loc[jsh] - ao_loc[jsh0];
-        out += (((size_t)ao_loc[ish])*(ao_loc[ish]+1)/2-off0 + jp) * NGv + gs0;
+        int di = ao_loc[ish+1] - ao_loc[ish];
+        int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        int ip = ao_loc[ish] - ao_loc[ish0];
+        int jp = ao_loc[jsh] - ao_loc[jsh0];
+        int dg = grid1 - grid0;
+        int dij = di * dj;
+        int dijg = dij * dg;
+        double *outR = out + (ip * naoj + jp) * NGv + grid0;
+        double *outI = outR + nijg * nkpts * comp;
+        double *inR = in;
+        double *inI = inR + dij * BLOCK_SIZE * comp * nkpts;
 
-        const int ip1 = ao_loc[ish] + 1;
         int i, j, n, ic, kk;
-        double complex *pin, *pout;
+        double *pinR, *pinI, *poutR, *poutI;
 
-        for (kk = 0; kk < nkpts; kk++) {
-        for (ic = 0; ic < comp; ic++) {
-                pout = out;
-                for (i = 0; i < di; i++) {
+        if (fill_zero) {
+                for (kk = 0; kk < nkpts; kk++) {
+                for (ic = 0; ic < comp; ic++) {
                         for (j = 0; j < dj; j++) {
-                                pin = in + (j*di+i) * dg;
+                        for (i = 0; i < di; i++) {
+                                poutR = outR + (i*naoj+j) * NGv;
+                                poutI = outI + (i*naoj+j) * NGv;
                                 for (n = 0; n < dg; n++) {
-                                        pout[j*NGv+n] = pin[n];
+                                        poutR[n] = 0;
+                                        poutI[n] = 0;
                                 }
-                        }
-                        pout += (ip1 + i) * NGv;
-                }
-                out += nijg;
-                in  += dijg;
-        } }
-}
-
-static void sort_s2_ieqj(double complex *out, double complex *in,
-                         int *shls_slice, int *ao_loc, int nkpts, int comp,
-                         int nGv, int ish, int jsh, int gs0, int gs1)
-{
-        const size_t NGv = nGv;
-        const int ish0 = shls_slice[0];
-        const int ish1 = shls_slice[1];
-        const int jsh0 = shls_slice[2];
-        const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
-        const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
-        const size_t nijg = nij * NGv;
-
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        const int dij = di * dj;
-        const int dg = gs1 - gs0;
-        const int dijg = dij * dg;
-        const int jp = ao_loc[jsh] - ao_loc[jsh0];
-        out += (((size_t)ao_loc[ish])*(ao_loc[ish]+1)/2-off0 + jp) * NGv + gs0;
-
-        const int ip1 = ao_loc[ish] + 1;
-        int i, j, n, ic, kk;
-        double complex *pin, *pout;
-
-        for (kk = 0; kk < nkpts; kk++) {
-        for (ic = 0; ic < comp; ic++) {
-                pout = out;
-                for (i = 0; i < di; i++) {
-                        for (j = 0; j <= i; j++) {
-                                pin = in + (j*di+i) * dg;
-                                for (n = 0; n < dg; n++) {
-                                        pout[j*NGv+n] = pin[n];
-                                }
-                        }
-                        pout += (ip1 + i) * NGv;
-                }
-                out += nijg;
-                in  += dijg;
-        } }
-}
-
-void PBC_ft_fill_ks1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                     double complex *out, int nkpts, int comp, int nimgs,
-                     int blksize, int ish, int jsh,
-                     double complex *buf, double *env_loc, double *Ls,
-                     double complex *expkL, int *shls_slice, int *ao_loc,
-                     double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                     int *atm, int natm, int *bas, int nbas, double *env)
-{
-        _ft_fill_k(intor, eval_aopair, eval_gz, &sort_s1,
-                   out, nkpts, comp, nimgs, blksize, ish, jsh,
-                   buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                   sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-}
-
-void PBC_ft_fill_ks2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                     double complex *out, int nkpts, int comp, int nimgs,
-                     int blksize, int ish, int jsh,
-                     double complex *buf, double *env_loc, double *Ls,
-                     double complex *expkL, int *shls_slice, int *ao_loc,
-                     double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                     int *atm, int natm, int *bas, int nbas, double *env)
-{
-        int ip = ish + shls_slice[0];
-        int jp = jsh + shls_slice[2] - nbas;
-        if (ip > jp) {
-                _ft_fill_k(intor, eval_aopair, eval_gz, &sort_s2_igtj,
-                           out, nkpts, comp, nimgs, blksize, ish, jsh,
-                           buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                           sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        } else if (ip == jp) {
-                _ft_fill_k(intor, eval_aopair, eval_gz, &sort_s2_ieqj,
-                           out, nkpts, comp, nimgs, blksize, ish, jsh,
-                           buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                           sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        }
-}
-
-void PBC_ft_fill_nk1s1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                       double complex *out, int nkpts, int comp, int nimgs,
-                       int blksize, int ish, int jsh,
-                       double complex *buf, double *env_loc, double *Ls,
-                       double complex *expkL, int *shls_slice, int *ao_loc,
-                       double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                       int *atm, int natm, int *bas, int nbas, double *env)
-{
-        _ft_fill_nk1(intor, eval_aopair, eval_gz, &sort_s1,
-                     out, nkpts, comp, nimgs, blksize, ish, jsh,
-                     buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                     sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-}
-
-void PBC_ft_fill_nk1s1hermi(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                            double complex *out, int nkpts, int comp, int nimgs,
-                            int blksize, int ish, int jsh,
-                            double complex *buf, double *env_loc, double *Ls,
-                            double complex *expkL, int *shls_slice, int *ao_loc,
-                            double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                            int *atm, int natm, int *bas, int nbas, double *env)
-{
-        int ip = ish + shls_slice[0];
-        int jp = jsh + shls_slice[2] - nbas;
-        if (ip >= jp) {
-                _ft_fill_nk1(intor, eval_aopair, eval_gz, &sort_s1,
-                             out, nkpts, comp, nimgs, blksize, ish, jsh,
-                             buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                             sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        }
-}
-
-void PBC_ft_fill_nk1s2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                       double complex *out, int nkpts, int comp, int nimgs,
-                       int blksize, int ish, int jsh,
-                       double complex *buf, double *env_loc, double *Ls,
-                       double complex *expkL, int *shls_slice, int *ao_loc,
-                       double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                       int *atm, int natm, int *bas, int nbas, double *env)
-{
-        int ip = ish + shls_slice[0];
-        int jp = jsh + shls_slice[2] - nbas;
-        if (ip > jp) {
-                _ft_fill_nk1(intor, eval_aopair, eval_gz, &sort_s2_igtj,
-                             out, nkpts, comp, nimgs, blksize, ish, jsh,
-                             buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                             sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        } else if (ip == jp) {
-                _ft_fill_nk1(intor, eval_aopair, eval_gz, &sort_s2_ieqj,
-                             out, nkpts, comp, nimgs, blksize, ish, jsh,
-                             buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                             sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        }
-}
-
-void PBC_ft_bvk_ks1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                    double complex *out, int nkpts, int comp, int nimgs,
-                    int bvk_nimgs, int blksize, int ish, int jsh,
-                    int *cell_loc_bvk, int8_t *ovlp_mask,
-                    double complex *buf, double *env_loc, double *Ls,
-                    double complex *expkL, int *shls_slice, int *ao_loc,
-                    double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                    int *atm, int natm, int *bas, int nbas, double *env)
-{
-        _ft_bvk_k(intor, eval_aopair, eval_gz, &sort_s1,
-                  out, nkpts, comp, nimgs, bvk_nimgs, blksize,
-                  ish, jsh, cell_loc_bvk, ovlp_mask,
-                  buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                  sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-}
-
-void PBC_ft_bvk_ks2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                    double complex *out, int nkpts, int comp, int nimgs,
-                    int bvk_nimgs, int blksize, int ish, int jsh,
-                    int *cell_loc_bvk, int8_t *ovlp_mask,
-                    double complex *buf, double *env_loc, double *Ls,
-                    double complex *expkL, int *shls_slice, int *ao_loc,
-                    double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                    int *atm, int natm, int *bas, int nbas, double *env)
-{
-        int ip = ish + shls_slice[0];
-        int jp = jsh + shls_slice[2] - nbas;
-        if (ip > jp) {
-                _ft_bvk_k(intor, eval_aopair, eval_gz, &sort_s2_igtj,
-                          out, nkpts, comp, nimgs, bvk_nimgs, blksize,
-                          ish, jsh, cell_loc_bvk, ovlp_mask,
-                          buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                          sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        } else if (ip == jp) {
-                _ft_bvk_k(intor, eval_aopair, eval_gz, &sort_s2_ieqj,
-                          out, nkpts, comp, nimgs, bvk_nimgs, blksize,
-                          ish, jsh, cell_loc_bvk, ovlp_mask,
-                          buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                          sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        }
-}
-
-void PBC_ft_bvk_nk1s1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                      double complex *out, int nkpts, int comp, int nimgs,
-                      int bvk_nimgs, int blksize, int ish, int jsh,
-                      int *cell_loc_bvk, int8_t *ovlp_mask,
-                      double complex *buf, double *env_loc, double *Ls,
-                      double complex *expkL, int *shls_slice, int *ao_loc,
-                      double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                      int *atm, int natm, int *bas, int nbas, double *env)
-{
-        _ft_bvk_nk1(intor, eval_aopair, eval_gz, &sort_s1,
-                    out, nkpts, comp, nimgs, bvk_nimgs, blksize,
-                    ish, jsh, cell_loc_bvk, ovlp_mask,
-                    buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                    sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-}
-
-void PBC_ft_bvk_nk1s1hermi(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                           double complex *out, int nkpts, int comp, int nimgs,
-                           int bvk_nimgs, int blksize, int ish, int jsh,
-                           int *cell_loc_bvk, int8_t *ovlp_mask,
-                           double complex *buf, double *env_loc, double *Ls,
-                           double complex *expkL, int *shls_slice, int *ao_loc,
-                           double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                           int *atm, int natm, int *bas, int nbas, double *env)
-{
-        int ip = ish + shls_slice[0];
-        int jp = jsh + shls_slice[2] - nbas;
-        if (ip >= jp) {
-                _ft_bvk_nk1(intor, eval_aopair, eval_gz, &sort_s1,
-                            out, nkpts, comp, nimgs, bvk_nimgs, blksize,
-                            ish, jsh, cell_loc_bvk, ovlp_mask,
-                            buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                            sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        }
-}
-
-void PBC_ft_bvk_nk1s2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                      double complex *out, int nkpts, int comp, int nimgs,
-                      int bvk_nimgs, int blksize, int ish, int jsh,
-                      int *cell_loc_bvk, int8_t *ovlp_mask,
-                      double complex *buf, double *env_loc, double *Ls,
-                      double complex *expkL, int *shls_slice, int *ao_loc,
-                      double *sGv, double *b, int *sgxyz, int *gs, int nGv,
-                      int *atm, int natm, int *bas, int nbas, double *env)
-{
-        int ip = ish + shls_slice[0];
-        int jp = jsh + shls_slice[2] - nbas;
-        if (ip > jp) {
-                _ft_bvk_nk1(intor, eval_aopair, eval_gz, &sort_s2_igtj,
-                            out, nkpts, comp, nimgs, bvk_nimgs, blksize,
-                            ish, jsh, cell_loc_bvk, ovlp_mask,
-                            buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                            sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        } else if (ip == jp) {
-                _ft_bvk_nk1(intor, eval_aopair, eval_gz, &sort_s2_ieqj,
-                            out, nkpts, comp, nimgs, bvk_nimgs, blksize,
-                            ish, jsh, cell_loc_bvk, ovlp_mask,
-                            buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                            sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        }
-}
-
-static int subgroupGv(double *sGv, int *sgxyz, double *Gv, int *gxyz,
-                      int nGv, int bufsize, int *shls_slice, int *ao_loc,
-                      int *atm, int natm, int *bas, int nbas, double *env)
-{
-        int i, n;
-        int dimax = 0;
-        int djmax = 0;
-        for (i = shls_slice[0]; i < shls_slice[1]; i++) {
-                dimax = MAX(dimax, ao_loc[i+1]-ao_loc[i]);
-        }
-        for (i = shls_slice[2]; i < shls_slice[3]; i++) {
-                djmax = MAX(djmax, ao_loc[i+1]-ao_loc[i]);
-        }
-        int dij = dimax * djmax;
-        int gblksize = 0xfffffff8 & (bufsize / dij);
-
-        int gs0, dg;
-        int *psgxyz, *pgxyz;
-        for (gs0 = 0; gs0 < nGv; gs0 += gblksize) {
-                dg = MIN(nGv-gs0, gblksize);
-                for (i = 0; i < 3; i++) {
-                        NPdcopy(sGv+dg*i, Gv+nGv*i+gs0, dg);
-                }
-                sGv += dg * 3;
-                if (gxyz != NULL) {
-                        for (i = 0; i < 3; i++) {
-                                psgxyz = sgxyz + dg * i;
-                                pgxyz = gxyz + nGv * i + gs0;
-                                for (n = 0; n < dg; n++) {
-                                        psgxyz[n] = pgxyz[n];
-                                }
-                        }
-                        sgxyz += dg * 3;
-                }
-        }
-        return gblksize;
-}
-
-void PBC_ft_latsum_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
-                       double complex *out, int nkpts, int comp, int nimgs,
-                       double *Ls, double complex *expkL,
-                       int *shls_slice, int *ao_loc,
-                       double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                       int *atm, int natm, int *bas, int nbas, double *env)
-{
-        const int ish0 = shls_slice[0];
-        const int ish1 = shls_slice[1];
-        const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
-        const int nish = ish1 - ish0;
-        const int njsh = jsh1 - jsh0;
-        double *sGv = malloc(sizeof(double) * nGv * 3);
-        int *sgxyz = NULL;
-        if (gxyz != NULL) {
-                sgxyz = malloc(sizeof(int) * nGv * 3);
-        }
-        int blksize;
-
-        if (fill == &PBC_ft_fill_nk1s1 || fill == &PBC_ft_fill_nk1s2 ||
-            fill == &PBC_ft_fill_nk1s1hermi) {
-                blksize = subgroupGv(sGv, sgxyz, Gv, gxyz, nGv, INTBUFMAX*IMGBLK/2,
-                                     shls_slice, ao_loc, atm, natm, bas, nbas, env);
+                        } }
+                        outR += nijg;
+                        outI += nijg;
+                } }
         } else {
-                blksize = subgroupGv(sGv, sgxyz, Gv, gxyz, nGv, INTBUFMAX,
-                                     shls_slice, ao_loc, atm, natm, bas, nbas, env);
+                for (kk = 0; kk < nkpts; kk++) {
+                for (ic = 0; ic < comp; ic++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++) {
+                                poutR = outR + (i*naoj+j) * NGv;
+                                poutI = outI + (i*naoj+j) * NGv;
+                                pinR  = inR + (j*di+i) * dg;
+                                pinI  = inI + (j*di+i) * dg;
+                                for (n = 0; n < dg; n++) {
+                                        poutR[n] = pinR[n];
+                                        poutI[n] = pinI[n];
+                                }
+                        } }
+                        outR += nijg;
+                        outI += nijg;
+                        inR  += dijg;
+                        inI  += dijg;
+                } }
         }
-        int (*eval_aopair)() = NULL;
-        if (intor != &GTO_ft_ovlp_cart && intor != &GTO_ft_ovlp_sph) {
-                eval_aopair = &GTO_aopair_lazy_contract;
-        }
+}
 
-#pragma omp parallel
+void PBC_ft_dsort_s2(double *out, double *in, int fill_zero,
+                     int *shls_slice, int *ao_loc, int nkpts, int comp,
+                     int nGv, int ish, int jsh, int grid0, int grid1)
 {
-        int i, j, ij;
-        int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
-        nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
-        double *env_loc = malloc(sizeof(double)*nenv+400);
-        NPdcopy(env_loc, env, nenv);
-        size_t count = nkpts + IMGBLK;
-        double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp+400);
-        if (buf == NULL) {
-                fprintf(stderr, "buf = malloc(%zu) falied in PBC_ft_latsum_drv\n",
-                        sizeof(double complex)*count*INTBUFMAX*comp+400);
-        }
-#pragma omp for schedule(dynamic)
-        for (ij = 0; ij < nish*njsh; ij++) {
-                i = ij / njsh;
-                j = ij % njsh;
-                (*fill)(intor, eval_aopair, eval_gz,
-                        out, nkpts, comp, nimgs, blksize, i, j,
-                        buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                        sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
-        }
-        free(buf);
-        free(env_loc);
-}
-        free(sGv);
-        if (sgxyz != NULL) {
-                free(sgxyz);
+        size_t NGv = nGv;
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
+        size_t nij  = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
+        size_t nijg = nij * NGv;
+
+        int di = ao_loc[ish+1] - ao_loc[ish];
+        int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        int dij = di * dj;
+        int dg = grid1 - grid0;
+        size_t dijg = dij * dg;
+        int jp = ao_loc[jsh] - ao_loc[jsh0];
+        double *outR = out + (((size_t)ao_loc[ish])*(ao_loc[ish]+1)/2-off0 + jp) * NGv + grid0;
+        double *outI = outR + nijg * nkpts * comp;
+        double *inR = in;
+        double *inI = inR + dij * BLOCK_SIZE * comp * nkpts;
+
+        int ip1 = ao_loc[ish] + 1;
+        int i, j, n, ic, kk;
+        double *pinR, *pinI, *poutR, *poutI;
+
+        if (ish > jsh) {
+                if (fill_zero) {
+                        for (kk = 0; kk < nkpts; kk++) {
+                        for (ic = 0; ic < comp; ic++) {
+                                poutR = outR + (kk * comp + ic) * nijg;
+                                poutI = outI + (kk * comp + ic) * nijg;
+                                for (i = 0; i < di; i++) {
+                                        for (j = 0; j < dj; j++) {
+                                        for (n = 0; n < dg; n++) {
+                                                poutR[j*NGv+n] = 0;
+                                                poutI[j*NGv+n] = 0;
+                                        } }
+                                        poutR += (ip1 + i) * NGv;
+                                        poutI += (ip1 + i) * NGv;
+                                }
+                        } }
+                } else {
+                        for (kk = 0; kk < nkpts; kk++) {
+                        for (ic = 0; ic < comp; ic++) {
+                                poutR = outR + (kk * comp + ic) * nijg;
+                                poutI = outI + (kk * comp + ic) * nijg;
+                                for (i = 0; i < di; i++) {
+                                        for (j = 0; j < dj; j++) {
+                                                pinR = inR + (j*di+i) * dg;
+                                                pinI = inI + (j*di+i) * dg;
+                                                for (n = 0; n < dg; n++) {
+                                                        poutR[j*NGv+n] = pinR[n];
+                                                        poutI[j*NGv+n] = pinI[n];
+                                                }
+                                        }
+                                        poutR += (ip1 + i) * NGv;
+                                        poutI += (ip1 + i) * NGv;
+                                }
+                                inR += dijg;
+                                inI += dijg;
+                        } }
+                }
+        } else if (ish == jsh) {
+                if (fill_zero) {
+                        for (kk = 0; kk < nkpts; kk++) {
+                        for (ic = 0; ic < comp; ic++) {
+                                poutR = outR + (kk * comp + ic) * nijg;
+                                poutI = outI + (kk * comp + ic) * nijg;
+                                for (i = 0; i < di; i++) {
+                                        for (j = 0; j <= i; j++) {
+                                        for (n = 0; n < dg; n++) {
+                                                poutR[j*NGv+n] = 0;
+                                                poutI[j*NGv+n] = 0;
+                                        } }
+                                        poutR += (ip1 + i) * NGv;
+                                        poutI += (ip1 + i) * NGv;
+                                }
+                        } }
+                } else {
+                        for (kk = 0; kk < nkpts; kk++) {
+                        for (ic = 0; ic < comp; ic++) {
+                                poutR = outR + (kk * comp + ic) * nijg;
+                                poutI = outI + (kk * comp + ic) * nijg;
+                                for (i = 0; i < di; i++) {
+                                        for (j = 0; j <= i; j++) {
+                                                pinR = inR + (j*di+i) * dg;
+                                                pinI = inI + (j*di+i) * dg;
+                                                for (n = 0; n < dg; n++) {
+                                                        poutR[j*NGv+n] = pinR[n];
+                                                        poutI[j*NGv+n] = pinI[n];
+                                                }
+                                        }
+                                        poutR += (ip1 + i) * NGv;
+                                        poutI += (ip1 + i) * NGv;
+                                }
+                                inR += dijg;
+                                inI += dijg;
+                        } }
+                }
         }
 }
 
-void PBC_ft_bvk_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
-                    double complex *out, int nkpts, int comp, int nimgs,
-                    int bvk_nimgs, double *Ls, double complex *expkL,
-                    int *shls_slice, int *ao_loc,
-                    int *cell_loc_bvk, int8_t *ovlp_mask,
+void PBC_ft_zsort_s1(double *out, double *in, int fill_zero,
+                     int *shls_slice, int *ao_loc, int nkpts, int comp,
+                     int nGv, int ish, int jsh, int grid0, int grid1)
+{
+        size_t NGv = nGv;
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        int jsh1 = shls_slice[3];
+        size_t naoi = ao_loc[ish1] - ao_loc[ish0];
+        size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        size_t nijg = naoi * naoj * NGv;
+
+        int di = ao_loc[ish+1] - ao_loc[ish];
+        int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        int ip = ao_loc[ish] - ao_loc[ish0];
+        int jp = ao_loc[jsh] - ao_loc[jsh0];
+        int dg = grid1 - grid0;
+        int dij = di * dj;
+        int dijg = dij * dg;
+        out += ((ip * naoj + jp) * NGv + grid0) * OF_CMPLX;
+        double *inR = in;
+        double *inI = inR + dij * BLOCK_SIZE * comp * nkpts;
+
+        int i, j, n, ic, kk;
+        double *pinR, *pinI, *pout;
+
+        if (fill_zero) {
+                for (kk = 0; kk < nkpts; kk++) {
+                for (ic = 0; ic < comp; ic++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++) {
+                                pout = out + (i*naoj+j) * NGv * OF_CMPLX;
+                                for (n = 0; n < dg*OF_CMPLX; n++) {
+                                        pout[n] = 0;
+                                }
+                        } }
+                        out += nijg * OF_CMPLX;
+                } }
+        } else {
+                for (kk = 0; kk < nkpts; kk++) {
+                for (ic = 0; ic < comp; ic++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++) {
+                                pout = out + (i*naoj+j) * NGv * OF_CMPLX;
+                                pinR = inR + (j*di+i) * dg;
+                                pinI = inI + (j*di+i) * dg;
+                                for (n = 0; n < dg; n++) {
+                                        pout[n*OF_CMPLX  ] = pinR[n];
+                                        pout[n*OF_CMPLX+1] = pinI[n];
+                                }
+                        } }
+                        out += nijg * OF_CMPLX;
+                        inR += dijg;
+                        inI += dijg;
+                } }
+        }
+}
+
+void PBC_ft_zsort_s2(double *out, double *in, int fill_zero,
+                     int *shls_slice, int *ao_loc, int nkpts, int comp,
+                     int nGv, int ish, int jsh, int grid0, int grid1)
+{
+        size_t NGv = nGv;
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
+        size_t nij  = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
+        size_t nijg = nij * NGv;
+
+        int di = ao_loc[ish+1] - ao_loc[ish];
+        int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        int dij = di * dj;
+        int dg = grid1 - grid0;
+        size_t dijg = dij * dg;
+        int jp = ao_loc[jsh] - ao_loc[jsh0];
+        out += ((((size_t)ao_loc[ish])*(ao_loc[ish]+1)/2-off0 + jp) * NGv + grid0) * OF_CMPLX;
+        double *inR = in;
+        double *inI = inR + dij * BLOCK_SIZE * comp * nkpts;
+
+        int ip1 = ao_loc[ish] + 1;
+        int i, j, n, ic, kk;
+        double *pinR, *pinI, *pout;
+
+        if (ish > jsh) {
+                if (fill_zero) {
+                        for (kk = 0; kk < nkpts; kk++) {
+                        for (ic = 0; ic < comp; ic++) {
+                                pout = out + (kk * comp + ic) * nijg * OF_CMPLX;
+                                for (i = 0; i < di; i++) {
+                                        for (j = 0; j < dj; j++) {
+                                        for (n = 0; n < dg*OF_CMPLX; n++) {
+                                                pout[j*NGv*OF_CMPLX+n] = 0;
+                                        } }
+                                        pout += (ip1 + i) * NGv * OF_CMPLX;
+                                }
+                        } }
+                } else {
+                        for (kk = 0; kk < nkpts; kk++) {
+                        for (ic = 0; ic < comp; ic++) {
+                                pout = out + (kk * comp + ic) * nijg * OF_CMPLX;
+                                for (i = 0; i < di; i++) {
+                                        for (j = 0; j < dj; j++) {
+                                                pinR = inR + (j*di+i) * dg;
+                                                pinI = inI + (j*di+i) * dg;
+                                                for (n = 0; n < dg; n++) {
+                                                        pout[(j*NGv+n)*OF_CMPLX  ] = pinR[n];
+                                                        pout[(j*NGv+n)*OF_CMPLX+1] = pinI[n];
+                                                }
+                                        }
+                                        pout += (ip1 + i) * NGv * OF_CMPLX;
+                                }
+                                inR += dijg;
+                                inI += dijg;
+                        } }
+                }
+        } else if (ish == jsh) {
+                if (fill_zero) {
+                        for (kk = 0; kk < nkpts; kk++) {
+                        for (ic = 0; ic < comp; ic++) {
+                                pout = out + (kk * comp + ic) * nijg * OF_CMPLX;
+                                for (i = 0; i < di; i++) {
+                                        for (j = 0; j <= i; j++) {
+                                        for (n = 0; n < dg*OF_CMPLX; n++) {
+                                                pout[j*NGv*OF_CMPLX+n] = 0;
+                                        } }
+                                        pout += (ip1 + i) * NGv * OF_CMPLX;
+                                }
+                        } }
+                } else {
+                        for (kk = 0; kk < nkpts; kk++) {
+                        for (ic = 0; ic < comp; ic++) {
+                                pout = out + (kk * comp + ic) * nijg * OF_CMPLX;
+                                for (i = 0; i < di; i++) {
+                                        for (j = 0; j <= i; j++) {
+                                                pinR = inR + (j*di+i) * dg;
+                                                pinI = inI + (j*di+i) * dg;
+                                                for (n = 0; n < dg; n++) {
+                                                        pout[(j*NGv+n)*OF_CMPLX  ] = pinR[n];
+                                                        pout[(j*NGv+n)*OF_CMPLX+1] = pinI[n];
+                                                }
+                                        }
+                                        pout += (ip1 + i) * NGv * OF_CMPLX;
+                                }
+                                inR += dijg;
+                                inI += dijg;
+                        } }
+                }
+        }
+}
+
+void PBC_ft_bvk_ks2(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
+                    double *out, double *buf, int *cell0_shls,
+                    CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
+{
+        int ish_cell0 = cell0_shls[0];
+        int jsh_cell0 = cell0_shls[1];
+        if (ish_cell0 >= jsh_cell0) {
+                PBC_ft_bvk_ks1(intor, eval_gz, fsort, out, buf, cell0_shls,
+                               envs_cint, envs_bvk);
+        }
+}
+
+void PBC_ft_bvk_nk1s2(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
+                      double *out, double *buf, int *cell0_shls,
+                      CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
+{
+        int ish_cell0 = cell0_shls[0];
+        int jsh_cell0 = cell0_shls[1];
+        if (ish_cell0 >= jsh_cell0) {
+                PBC_ft_bvk_nk1s1(intor, eval_gz, fsort, out, buf, cell0_shls,
+                                 envs_cint, envs_bvk);
+        }
+}
+
+void PBC_ft_bvk_nk1s1hermi(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
+                           double *out, double *buf, int *cell0_shls,
+                           CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
+{
+        PBC_ft_bvk_nk1s2(intor, eval_gz, fsort, out, buf, cell0_shls,
+                         envs_cint, envs_bvk);
+}
+
+void PBC_ft_zsort_s1hermi(double *out, double *in, int fill_zero,
+                          int *shls_slice, int *ao_loc, int nkpts, int comp,
+                          int nGv, int ish, int jsh, int grid0, int grid1)
+{
+        PBC_ft_zsort_s1(out, in, fill_zero, shls_slice, ao_loc, nkpts, comp,
+                        nGv, ish, jsh, grid0, grid1);
+}
+
+void PBC_ft_bvk_drv(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrFill fill, FPtrSort fsort,
+                    double *out, double *expLkR, double *expLkI,
+                    int bvk_ncells, int nimgs, int nkpts, int nbasp, int comp,
+                    int *sh_loc, int *cell0_ao_loc, int *shls_slice,
+                    int8_t *ovlp_mask, int8_t *cell0_ovlp_mask, int *bas_map,
                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const int ish0 = shls_slice[0];
-        const int ish1 = shls_slice[1];
-        const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
-        const int nish = ish1 - ish0;
-        const int njsh = jsh1 - jsh0;
-        double *sGv = malloc(sizeof(double) * nGv * 3);
-        int *sgxyz = NULL;
-        if (gxyz != NULL) {
-                sgxyz = malloc(sizeof(int) * nGv * 3);
-        }
-        int blksize = subgroupGv(sGv, sgxyz, Gv, gxyz, nGv, INTBUFMAX,
-                                 shls_slice, ao_loc, atm, natm, bas, nbas, env);
-        int (*eval_aopair)() = NULL;
-        if (intor != &GTO_ft_ovlp_cart && intor != &GTO_ft_ovlp_sph) {
-                eval_aopair = &GTO_aopair_lazy_contract;
-        }
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        int jsh1 = shls_slice[3];
+        int nish = ish1 - ish0;
+        int njsh = jsh1 - jsh0;
+        int di = GTOmax_shell_dim(cell0_ao_loc, shls_slice, 2);
+        BVKEnvs envs_bvk = {bvk_ncells, nimgs,
+                nkpts, nkpts, nbasp, comp, nGv, 0,
+                sh_loc, cell0_ao_loc, bas_map, shls_slice, NULL,
+                expLkR, expLkI, ovlp_mask, NULL, 0., Gv, b, gxyz, gs};
+        size_t count = nkpts + bvk_ncells;
+        size_t size_v = di * di * BLOCK_SIZE * count * comp * OF_CMPLX;
 
 #pragma omp parallel
 {
-        int i, j, ij;
-        int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
-        nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
-        double *env_loc = malloc(sizeof(double)*nenv+400);
-        NPdcopy(env_loc, env, nenv);
-        size_t count = nkpts + bvk_nimgs;
-        double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp+400);
-        if (buf == NULL) {
-                fprintf(stderr, "buf = malloc(%zu) falied in PBC_ft_bvk_drv\n",
-                        sizeof(double complex)*count*INTBUFMAX*comp+400);
-        }
+        CINTEnvVars envs_cint;
+        PBCminimal_CINTEnvVars(&envs_cint, atm, natm, bas, nbas, env, NULL);
+        int ish, jsh, ij;
+        int cell0_shls[2];
+        double *buf = malloc(sizeof(double) * size_v);
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
-                i = ij / njsh;
-                j = ij % njsh;
-                (*fill)(intor, eval_aopair, eval_gz,
-                        out, nkpts, comp, nimgs, bvk_nimgs, blksize,
-                        i, j, cell_loc_bvk, ovlp_mask,
-                        buf, env_loc, Ls, expkL, shls_slice, ao_loc,
-                        sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
+                ish = ij / njsh + ish0;
+                jsh = ij % njsh + jsh0;
+                cell0_shls[0] = ish;
+                cell0_shls[1] = jsh;
+                if (!cell0_ovlp_mask[ish*nbasp+jsh]) {
+                        _fill0(fsort, out, cell0_shls, &envs_bvk);
+                        continue;
+                }
+                (*fill)(intor, eval_gz, fsort, out, buf, cell0_shls,
+                        &envs_cint, &envs_bvk);
         }
         free(buf);
-        free(env_loc);
 }
-        free(sGv);
-        if (sgxyz != NULL) {
-                free(sgxyz);
+}
+
+void PBC_ft_zfuse_dd_s1(double *outR, double *outI, double complex *pqG_dd,
+                       int *ao_idx, int *grid_slice, int nao, int naod, int ngrids)
+{
+        size_t Ngrids = ngrids;
+        size_t Nao = nao;
+        int ig0 = grid_slice[0];
+        int ig1 = grid_slice[1];
+        size_t ng = ig1 - ig0;
+#pragma omp parallel
+{
+        size_t off_out, off_in;
+        int i, j, ij, ip, jp, n;
+#pragma omp for schedule(static)
+        for (ij = 0; ij < naod*naod; ij++) {
+                i = ij / naod;
+                j = ij % naod;
+                ip = ao_idx[i];
+                jp = ao_idx[j];
+                off_in = (i * naod + j) * Ngrids + ig0;
+                off_out = (ip * Nao + jp) * ng;
+                for (n = 0; n < ng; n++) {
+                        outR[off_out+n] += creal(pqG_dd[off_in+n]);
+                        outI[off_out+n] += cimag(pqG_dd[off_in+n]);
+                }
         }
+}
+}
+
+void PBC_ft_zfuse_dd_s2(double *outR, double *outI, double complex *pqG_dd,
+                       int *ao_idx, int *grid_slice, int nao, int naod, int ngrids)
+{
+        size_t Ngrids = ngrids;
+        int ig0 = grid_slice[0];
+        int ig1 = grid_slice[1];
+        size_t ng = ig1 - ig0;
+#pragma omp parallel
+{
+        size_t off_out, off_in;
+        int i, j, ij, ip, jp, n;
+#pragma omp for schedule(static)
+        for (ij = 0; ij < naod*(naod+1)/2; ij++) {
+                i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                j = ij - i*(i+1)/2;
+                ip = ao_idx[i];
+                jp = ao_idx[j];
+                off_in = (i * naod + j) * Ngrids + ig0;
+                off_out = (ip*(ip+1)/2 + jp) * ng;
+                for (n = 0; n < ng; n++) {
+                        outR[off_out+n] += creal(pqG_dd[off_in+n]);
+                        outI[off_out+n] += cimag(pqG_dd[off_in+n]);
+                }
+        }
+}
+}
+
+void PBC_ft_fuse_dd_s1(double *outR, double *outI, double *pqG_ddR, double *pqG_ddI,
+                       int *ao_idx, int nao, int naod, int ngrids)
+{
+        size_t Ngrids = ngrids;
+        size_t Nao = nao;
+#pragma omp parallel
+{
+        size_t off_out, off_in;
+        int i, j, ij, ip, jp, n;
+#pragma omp for schedule(static)
+        for (ij = 0; ij < naod*naod; ij++) {
+                i = ij / naod;
+                j = ij % naod;
+                ip = ao_idx[i];
+                jp = ao_idx[j];
+                off_in = (i * naod + j) * Ngrids;
+                off_out = (ip * Nao + jp) * Ngrids;
+                for (n = 0; n < Ngrids; n++) {
+                        outR[off_out+n] += pqG_ddR[off_in+n];
+                        outI[off_out+n] += pqG_ddI[off_in+n];
+                }
+        }
+}
+}
+
+void PBC_ft_fuse_dd_s2(double *outR, double *outI, double *pqG_ddR, double *pqG_ddI,
+                       int *ao_idx, int nao, int naod, int ngrids)
+{
+        size_t Ngrids = ngrids;
+#pragma omp parallel
+{
+        size_t off_out, off_in;
+        int i, j, ij, ip, jp, n;
+#pragma omp for schedule(static)
+        for (ij = 0; ij < naod*(naod+1)/2; ij++) {
+                i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                j = ij - i*(i+1)/2;
+                ip = ao_idx[i];
+                jp = ao_idx[j];
+                off_in = (i * naod + j) * Ngrids;
+                off_out = (ip*(ip+1)/2 + jp) * Ngrids;
+                for (n = 0; n < Ngrids; n++) {
+                        outR[off_out+n] += pqG_ddR[off_in+n];
+                        outI[off_out+n] += pqG_ddI[off_in+n];
+                }
+        }
+}
+}
+
+void PBCsupmol_ovlp_mask(int8_t *out, double cutoff,
+                         int *atm, int natm, int *bas, int nbas, double *env)
+{
+        size_t Nbas = nbas;
+        size_t Nbas1 = nbas + 1;
+        int *exps_group_loc = malloc(sizeof(int) * Nbas1);
+        double *exps = malloc(sizeof(double) * Nbas1 * 4);
+        double *rx = exps + Nbas1;
+        double *ry = rx + Nbas1;
+        double *rz = ry + Nbas1;
+        int ptr_coord, nprim, n;
+        double log4 = log(4.) * .75;
+        double log_cutoff = log(cutoff) - log4;
+        double exp_min, exp_last;
+        int ngroups = 0;
+        exp_last = 0.;
+        for (n = 0; n < nbas; n++) {
+                ptr_coord = atm(PTR_COORD, bas(ATOM_OF, n));
+                rx[n] = env[ptr_coord+0];
+                ry[n] = env[ptr_coord+1];
+                rz[n] = env[ptr_coord+2];
+                nprim = bas(NPRIM_OF, n);
+                // the most diffused function
+                exp_min = env[bas(PTR_EXP, n) + nprim - 1];
+
+                if (exp_min != exp_last) {
+                        // partition all exponents into groups
+                        exps[ngroups] = exp_min;
+                        exps_group_loc[ngroups] = n;
+                        exp_last = exp_min;
+                        ngroups++;
+                }
+        }
+        exps_group_loc[ngroups] = nbas;
+
+#pragma omp parallel
+{
+        int ijb, ib, jb, i0, j0, i1, j1, i, j, li, lj;
+        double dx, dy, dz, ai, aj, aij, a1, fi, fj, rr, rij, dri, drj;
+        double log_a1, rr_cutoff, li_a1, lj_a1;
+#pragma omp for schedule(dynamic, 1)
+        for (ijb = 0; ijb < ngroups*(ngroups+1)/2; ijb++) {
+                ib = (int)(sqrt(2*ijb+.25) - .5 + 1e-7);
+                jb = ijb - ib*(ib+1)/2;
+
+                i0 = exps_group_loc[ib];
+                i1 = exps_group_loc[ib+1];
+                li = bas(ANG_OF, i0);
+                ai = exps[ib];
+                j0 = exps_group_loc[jb];
+                j1 = exps_group_loc[jb+1];
+                lj = bas(ANG_OF, j0);
+                aj = exps[jb];
+                aij = ai + aj;
+                fi = ai / aij;
+                fj = aj / aij;
+                a1 = ai * aj / aij;
+                log_a1 = .75 * log(a1 / aij);
+                rr_cutoff = (log_a1 - log_cutoff) / a1;
+                if (li > 0 && lj > 0 && a1 < 0.3) {
+                        // the contribution of r^n should be considered for
+                        // overlap of smooth basis funcitons
+                        li_a1 = li / -a1;
+                        lj_a1 = lj / -a1;
+                        for (i = i0; i < i1; i++) {
+#pragma GCC ivdep
+                        for (j = j0; j < j1; j++) {
+                                dx = rx[i] - rx[j];
+                                dy = ry[i] - ry[j];
+                                dz = rz[i] - rz[j];
+                                rr = dx * dx + dy * dy + dz * dz;
+                                rij = sqrt(rr);
+                                dri = fj * rij + 1.;
+                                drj = fi * rij + 1.;
+                                out[i*Nbas+j] = rr + li_a1 * log(dri) + lj_a1 * log(drj) < rr_cutoff;
+                        } }
+                } else {
+                        for (i = i0; i < i1; i++) {
+#pragma GCC ivdep
+                        for (j = j0; j < j1; j++) {
+                                dx = rx[i] - rx[j];
+                                dy = ry[i] - ry[j];
+                                dz = rz[i] - rz[j];
+                                rr = dx * dx + dy * dy + dz * dz;
+                                out[i*Nbas+j] = rr < rr_cutoff;
+                        } }
+                }
+                if (ib > jb) {
+                        for (i = i0; i < i1; i++) {
+#pragma GCC ivdep
+                        for (j = j0; j < j1; j++) {
+                                out[j*Nbas+i] = out[i*Nbas+j];
+                        } }
+                }
+        }
+}
+        free(exps);
+        free(exps_group_loc);
 }

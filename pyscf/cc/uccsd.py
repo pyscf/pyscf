@@ -511,9 +511,12 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
             u2bb[otrilb[1],otrilb[0]] = u2tril.transpose(0,2,1)
             u2bb[otrilb] = u2tril
 
-        u2ab = _ao2mo.nr_e2(buf[-nocca*noccb:].reshape(nocca*noccb,nao**2), mo,
-                            (0,nvira,nvira,nvira+nvirb), 's1', 's1')
-        u2ab = u2ab.reshape(t2ab.shape)
+        if nocca*noccb > 0:
+            u2ab = _ao2mo.nr_e2(buf[-nocca*noccb:].reshape(nocca*noccb,nao**2), mo,
+                                (0,nvira,nvira,nvira+nvirb), 's1', 's1')
+            u2ab = u2ab.reshape(t2ab.shape)
+        else:
+            u2ab = np.zeros_like(t2ab)
 
     else:
         assert (not with_ovvv)

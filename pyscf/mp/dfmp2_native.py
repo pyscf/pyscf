@@ -342,7 +342,7 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
         bufsize = int((max_memory - lib.current_memory()[0]) * 1e6 / (nauxfcns * nmo2 * 8))
         if bufsize < 1:
             raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-        bufsize = min(nmo1, bufsize)
+        bufsize = max(1, min(nmo1, bufsize))
         logger.debug('    Batch size: {0:d} (of {1:d})'.format(bufsize, nmo1))
 
         # In batches:
