@@ -336,17 +336,3 @@ def is_eye(op):
 
 def is_inversion(op):
     raise NotImplementedError
-
-if __name__ == "__main__":
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.atom = """
-        Si  0.0 0.0 0.0
-        Si  1.3467560987 1.3467560987 1.3467560987
-    """
-    cell.a = [[0.0, 2.6935121974, 2.6935121974],
-              [2.6935121974, 0.0, 2.6935121974],
-              [2.6935121974, 2.6935121974, 0.0]]
-    cell.verbose = 5
-    cell.build()
-    Symmetry(cell).build()

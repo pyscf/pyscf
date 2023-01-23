@@ -22,7 +22,6 @@ Reference: Staggered Mesh Method for Correlation Energy Calculations of Solids: 
 
 import h5py
 import numpy as np
-from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lib.parameters import LARGE_DENOM

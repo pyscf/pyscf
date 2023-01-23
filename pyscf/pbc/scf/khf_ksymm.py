@@ -135,7 +135,7 @@ class KsymAdaptedKSCF(khf.KSCF):
     """
     def __init__(self, cell, kpts=libkpts.KPoints(),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
-                 use_ao_symmetry=False):
+                 use_ao_symmetry=True):
         ksymm_scf_common_init(self, cell, kpts, use_ao_symmetry)
         khf.KSCF.__init__(self, cell, kpts=kpts, exxdiv=exxdiv)
 

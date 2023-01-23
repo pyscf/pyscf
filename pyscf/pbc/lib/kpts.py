@@ -1180,26 +1180,3 @@ class KQuartets:
             self.cache_stabilizer()
         for klcd, iop in zip(self._kqrts_stab[index], self._ops_stab[index]):
             yield klcd, iop
-
-
-if __name__ == "__main__":
-    import numpy
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.atom = """
-        Si  0.0 0.0 0.0
-        Si  1.3467560987 1.3467560987 1.3467560987
-    """
-    cell.a = [[0.0, 2.6935121974, 2.6935121974],
-              [2.6935121974, 0.0, 2.6935121974],
-              [2.6935121974, 2.6935121974, 0.0]]
-    cell.verbose = 4
-    cell.build()
-    nk = [3,3,3]
-    kpts_bz = cell.make_kpts(nk)
-    kpts0 = cell.make_kpts(nk, space_group_symmetry=True, time_reversal_symmetry=True)
-    kpts1 = KPoints(cell, kpts_bz).build(space_group_symmetry=True, time_reversal_symmetry=True)
-    print(numpy.allclose(kpts0.kpts_ibz, kpts1.kpts_ibz))
-
-    kpts = KPoints()
-    print(kpts.kpts)
