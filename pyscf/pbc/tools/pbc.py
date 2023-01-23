@@ -713,3 +713,9 @@ def cutoff_to_gs(a, cutoff):
 def gs_to_cutoff(a, gs):
     '''Deprecated.  Replaced by function mesh_to_cutoff.'''
     return mesh_to_cutoff(a, [2*n+1 for n in gs])
+
+def round_to_cell0(r, tol=1e-6):
+    '''Round scaled coordinates to reference unit cell
+    '''
+    from pyscf.pbc.lib import kpts_helper
+    return kpts_helper.round_to_fbz(r, wrap_around=False, tol=tol)
