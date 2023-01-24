@@ -157,6 +157,7 @@ class FiniteGroup(ABC):
         self._chartab = None
         self._group_name = None
         self._group_index = None
+        self._check_sanity()
 
     @staticmethod
     @abstractmethod
@@ -380,6 +381,19 @@ class FiniteGroup(ABC):
     def get_irrep_chi(self, ir):
         chartab = self.character_table(True)
         return chartab[ir]
+
+    def _check_sanity(self):
+        try:
+            # check duplication
+            assert len(self.hash_table) == self.order
+            # check inversion
+            assert (abs(np.sort(self.inverse_table)
+                       -np.arange(self.order)).max() == 0)
+            # check multiplication
+            assert (abs(np.sort(self.multiplication_table, axis=-1)
+                       -np.arange(self.order)[None,:]).max() == 0)
+        except (AssertionError, KeyError, ValueError):
+            raise ValueError('The elements do not form a group.')
 
 
 class PointGroup(FiniteGroup):
