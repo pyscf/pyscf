@@ -342,7 +342,7 @@ class Cube(object):
             self.box = numpy.zeros((3,3))
             self.box[0], self.nx, self.xs = parse_nx(f.readline(), 0)
             self.box[1], self.ny, self.ys = parse_nx(f.readline(), 1)
-            self.box[2], self.nz, self.zs = parse_nx(f.readline(), 2)            
+            self.box[2], self.nz, self.zs = parse_nx(f.readline(), 2)
             atoms = []
             for ia in range(natm):
                 d = f.readline().split()
