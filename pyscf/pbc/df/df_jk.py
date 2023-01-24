@@ -171,13 +171,29 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         mydf.build(kpts_band=kpts_band)
         t0 = log.timer_debug1('Init get_k_kpts', *t0)
 
+    mo_coeff = getattr(dm_kpts, 'mo_coeff', None)
+    if mo_coeff is not None:
+        mo_occ = dm_kpts.mo_occ
+
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
     skmoR = skmo2R = None
     if not mydf.force_dm_kbuild:
-        if hermi == 1:
+        if mo_coeff is not None:
+            if isinstance(mo_coeff[0], (list, tuple)):
+                mo_coeff = [mo for mo1 in mo_coeff for mo in mo1]
+            if len(mo_coeff) != nset*nkpts: # wrong shape
+                log.warn('mo_coeff from dm tag has wrong shape. '
+                         'Calculating mo from dm instead.')
+                mo_coeff = None
+            elif isinstance(mo_occ[0], (list, tuple)):
+                mo_occ = [mo for mo1 in mo_occ for mo in mo1]
+        if mo_coeff is not None:
+            skmoR, skmoI = _format_mo(mo_coeff, mo_occ, shape=(nset,nkpts), order='F',
+                                      precision=cell.precision)
+        elif hermi == 1:
             skmoR, skmoI = _mo_from_dm(dms.reshape(-1,nao,nao), method='eigh',
                                        shape=(nset,nkpts), order='F',
                                        precision=cell.precision)
@@ -800,19 +816,31 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     log.timer('sr jk', *t0)
     return vj, vk
 
+def _sep_real_imag(a, ncolmax, order):
+    nrow = a.shape[0]
+    aR = numpy.zeros((nrow,ncolmax), dtype=numpy.float64)
+    aI = numpy.zeros((nrow,ncolmax), dtype=numpy.float64)
+    ncol = a.shape[1]
+    aR[:,:ncol] = numpy.asarray(a.real, order=order)
+    aI[:,:ncol] = numpy.asarray(a.imag, order=order)
+    return aR, aI
+def _format_mo(mo_coeff, mo_occ, shape=None, order='F', precision=DM2MO_PREC):
+    mos = [mo[:,mocc>precision]*mocc[mocc>precision]**0.5
+           for mo,mocc in zip(mo_coeff,mo_occ)]
+    nkpts = len(mos)
+    nmomax = numpy.max([mo.shape[1] for mo in mos])
+    moRs = numpy.empty(nkpts, dtype=object)
+    moIs = numpy.empty(nkpts, dtype=object)
+    for k in range(nkpts):
+        moRs[k], moIs[k] = _sep_real_imag(mos[k], nmomax, order)
+    if shape is not None:
+        moRs = moRs.reshape(*shape)
+        moIs = moIs.reshape(*shape)
+    return moRs, moIs
 def _mo_from_dm(dms, method='eigh', shape=None, order='C', precision=DM2MO_PREC):
     import scipy.linalg
     nkpts = len(dms)
     precision *= 1e-2
-
-    def sep_real_imag(a, ncolmax, order):
-        nrow = a.shape[0]
-        aR = numpy.zeros((nrow,ncolmax), dtype=numpy.float64)
-        aI = numpy.zeros((nrow,ncolmax), dtype=numpy.float64)
-        ncol = a.shape[1]
-        aR[:,:ncol] = numpy.asarray(a.real, order=order)
-        aI[:,:ncol] = numpy.asarray(a.imag, order=order)
-        return aR, aI
 
     if method == 'eigh':
         def feigh(dm):
@@ -836,7 +864,7 @@ def _mo_from_dm(dms, method='eigh', shape=None, order='C', precision=DM2MO_PREC)
         moRs = numpy.empty(nkpts, dtype=object)
         moIs = numpy.empty(nkpts, dtype=object)
         for k,mo in enumerate(mos):
-            moRs[k], moIs[k] = sep_real_imag(mo, nmomax, order)
+            moRs[k], moIs[k] = _sep_real_imag(mo, nmomax, order)
         if shape is not None:
             moRs = moRs.reshape(*shape)
             moIs = moIs.reshape(*shape)
@@ -857,8 +885,8 @@ def _mo_from_dm(dms, method='eigh', shape=None, order='C', precision=DM2MO_PREC)
         mo2Rs = numpy.empty(nkpts, dtype=object)
         mo2Is = numpy.empty(nkpts, dtype=object)
         for k,(mo1,mo2) in enumerate(mos):
-            mo1Rs[k], mo1Is[k] = sep_real_imag(mo1, nmomax, order)
-            mo2Rs[k], mo2Is[k] = sep_real_imag(mo2, nmomax, order)
+            mo1Rs[k], mo1Is[k] = _sep_real_imag(mo1, nmomax, order)
+            mo2Rs[k], mo2Is[k] = _sep_real_imag(mo2, nmomax, order)
         if shape is not None:
             mo1Rs = mo1Rs.reshape(*shape)
             mo1Is = mo1Is.reshape(*shape)
