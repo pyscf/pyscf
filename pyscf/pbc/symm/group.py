@@ -304,7 +304,7 @@ class FiniteGroup(ABC):
         inverse = -np.ones((self.order), dtype=int)
         diff = (self.conjugacy_mask[None,:,:]==classes[:,None,:]).all(axis=-1)
         for i, a in enumerate(diff):
-            inverse[np.where(a==True)[0]] = i # noqa: E712
+            inverse[np.where(a)[0]] = i
         assert (inverse >= 0).all()
         assert (classes[inverse] == self.conjugacy_mask).all()
         return classes, representatives, inverse

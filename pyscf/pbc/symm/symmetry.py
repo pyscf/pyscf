@@ -119,9 +119,9 @@ def check_mesh_symmetry(cell, ops, mesh=None, tol=SYMPREC,
                     break
 
         if not return_mesh:
-            logger.warn(cell, 'Input mesh %s has lower symmetry than the lattice.\
-                        \nSome of the symmetry operations will be removed.\
-                        \nRecommended mesh is %s.', mesh, mesh1)
+            logger.warn(cell, 'Input mesh %s has lower symmetry than the lattice.\n'
+                        'Some of the symmetry operations will be removed.\n'
+                        'Recommended mesh is %s.', mesh, mesh1)
     if return_mesh:
         return rm_list, mesh1
     else:

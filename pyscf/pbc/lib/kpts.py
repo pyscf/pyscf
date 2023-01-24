@@ -1009,7 +1009,7 @@ class KPoints(symm.Symmetry, lib.StreamObject):
             kptsij = kptsi[:,None,:] + kptsj[None,:,:]
             diff = kptsij[:,:,None,:] - self.kpts_scaled[None,None,:,:]
             diff = round_to_fbz(diff, tol=tol)
-            idx = np.where(np.sum(abs(diff), axis=-1) < tol)
+            idx = np.where(abs(diff).max(axis=-1) < tol)
 
             nk = self.nkpts
             table= -np.ones((nk,nk), dtype=np.int32)
@@ -1023,7 +1023,7 @@ class KPoints(symm.Symmetry, lib.StreamObject):
         if self._inverse_table is None:
             diff = -self.kpts_scaled[:,None,:] - self.kpts_scaled[None,:,:]
             diff = round_to_fbz(diff, tol=tol)
-            idx = np.where(np.sum(abs(diff), axis=-1) < tol)
+            idx = np.where(abs(diff).max(axis=-1) < tol)
 
             table = -np.ones((self.nkpts,), dtype=np.int32)
             table[idx[0]] = idx[1]
