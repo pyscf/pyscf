@@ -225,7 +225,7 @@ def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
     return mo_coeff
 
 def so2ao_mo_coeff(so, irrep_mo_coeff):
-    '''Transfer the basis of MO coefficients, from spin-adapted basis to AO basis
+    '''Transfer the basis of MO coefficients, from symmetry-adapted basis to AO basis
     '''
     return numpy.hstack([numpy.dot(so[ir],irrep_mo_coeff[ir])
                          for ir in range(so.__len__())])
@@ -297,36 +297,38 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
 
 #TODO: force Dooh, Doov orbitals E1gx/E1gy ... using the same coefficients
 #TODO: force SO3 orbitals p+0,p-1,p+1, ... using the same coefficients
-def eig(mf, h, s):
+def eig(mf, h, s, symm_orb=None, irrep_id=None):
     '''Solve generalized eigenvalue problem, for each irrep.  The
     eigenvalues and eigenvectors are not sorted to ascending order.
     Instead, they are grouped based on irreps.
     '''
     mol = mf.mol
-    if not mol.symmetry:
-        return mf._eigh(h, s)
+    if symm_orb is None or irrep_id is None:
+        if not mol.symmetry:
+            return mf._eigh(h, s)
+        symm_orb = mol.symm_orb
+        irrep_id = mol.irrep_id
 
-    nirrep = mol.symm_orb.__len__()
-    h = symm.symmetrize_matrix(h, mol.symm_orb)
-    s = symm.symmetrize_matrix(s, mol.symm_orb)
+    nirrep = symm_orb.__len__()
+    h = symm.symmetrize_matrix(h, symm_orb)
+    s = symm.symmetrize_matrix(s, symm_orb)
     cs = []
     es = []
     orbsym = []
-    if mol.groupname in ('Dooh', 'Coov'):
+    if getattr(mol, 'groupname', None) in ('Dooh', 'Coov'):
         for ir in range(nirrep):
-            irrep_id = mol.irrep_id[ir]
-            irrep_1d = irrep_id in (0, 1, 4, 5)
-            irrep_2dx = irrep_id % 2 == 0
+            irrep_1d = irrep_id[ir] in (0, 1, 4, 5)
+            irrep_2dx = irrep_id[ir] % 2 == 0
             if irrep_1d or irrep_2dx:
                 e, c = mf._eigh(h[ir], s[ir])
                 cs.append(c)
                 es.append(e)
-                orbsym.append([mol.irrep_id[ir]] * e.size)
+                orbsym.append([irrep_id[ir]] * e.size)
 
             if not irrep_1d and irrep_2dx:
                 # force 2D irreps using the same coefficients
-                irrep_conj = irrep_id ^ 1
-                assert mol.irrep_id[ir+1] == irrep_conj
+                irrep_conj = irrep_id[ir] ^ 1
+                assert irrep_id[ir+1] == irrep_conj
                 cs.append(c)
                 es.append(e)
                 orbsym.append([irrep_conj] * e.size)
@@ -335,20 +337,23 @@ def eig(mf, h, s):
             e, c = mf._eigh(h[ir], s[ir])
             cs.append(c)
             es.append(e)
-            orbsym.append([mol.irrep_id[ir]] * e.size)
+            orbsym.append([irrep_id[ir]] * e.size)
     e = numpy.hstack(es)
-    c = so2ao_mo_coeff(mol.symm_orb, cs)
+    c = so2ao_mo_coeff(symm_orb, cs)
     c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
     return e, c
 
-def get_orbsym(mol, mo_coeff, s=None, check=False):
+def get_orbsym(mol, mo_coeff, s=None, check=False, symm_orb=None, irrep_id=None):
+    if symm_orb is None or irrep_id is None:
+        symm_orb = mol.symm_orb
+        irrep_id = mol.irrep_id
     if mo_coeff is None:
-        orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
-                               for i, ir in enumerate(mol.irrep_id)])
+        orbsym = numpy.hstack([[ir] * symm_orb[i].shape[1]
+                               for i, ir in enumerate(irrep_id)])
     elif getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
     else:
-        orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+        orbsym = symm.label_orb_symm(mol, irrep_id, symm_orb,
                                      mo_coeff, s, check)
     return orbsym
 
