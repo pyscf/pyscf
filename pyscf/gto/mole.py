@@ -412,7 +412,7 @@ def format_atom(atoms, origin=0, axes=None,
     if isinstance(unit, (str, unicode)):
         if is_au(unit):
             unit = 1.
-        else: #unit[:3].upper() == 'ANG':
+        else:
             unit = 1./param.BOHR
     else:
         unit = 1./unit
@@ -3165,7 +3165,7 @@ class Mole(lib.StreamObject):
         [ 0.          0.          2.07869874]
         '''
         ptr = self._atm[atm_id,PTR_COORD]
-        if unit[:3].upper() == 'ANG':
+        if not is_au(unit):
             return self._env[ptr:ptr+3] * param.BOHR
         else:
             return self._env[ptr:ptr+3].copy()
@@ -3174,7 +3174,7 @@ class Mole(lib.StreamObject):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
         c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T].copy()
-        if unit[:3].upper() == 'ANG':
+        if not is_au(unit):
             c *= param.BOHR
         return c
 
