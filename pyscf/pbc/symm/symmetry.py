@@ -235,7 +235,7 @@ def _get_phase(cell, op, kpt_scaled, ignore_phase=False, tol=SYMPREC):
         # remove numerical noise, important for symmetry adaptation
         Lshift = Lshift.round()
         if not ignore_phase:
-            phase[iatm] = np.exp(-1j * np.dot(kpt_scaled, Lshift) * 2.0 * np.pi)
+            phase[iatm] = np.exp(1j * np.dot(kpt_scaled, Lshift) * 2.0 * np.pi)
     return atm_map, phase
 
 def _get_rotation_mat(cell, kpt_scaled_ibz, mo_coeff_or_dm, op, Dmats,

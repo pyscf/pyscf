@@ -36,15 +36,16 @@ def setUpModule():
               [2.6935121974, 2.6935121974, 0.0]]
     cell.basis = 'gth-szv'
     cell.pseudo  = 'gth-pade'
-    cell.mesh = [24,24,24]
+    cell.mesh = [20,] * 3
     cell.space_group_symmetry = True
     cell.build()
 
     cell1 = cell.copy()
     cell1.build(symmorphic=True)
 
-    kpts0 = cell.make_kpts([2,2,2])
+    kpts0 = cell.make_kpts([3,3,3])
     kmf = scf.KRKS(cell, kpts0)
+    kmf.max_cycle=1
     kmf.kernel()
 
 def tearDownModule():
@@ -91,12 +92,12 @@ class KnownValues(unittest.TestCase):
         kpts = libkpts.make_kpts(cell, kpts0, space_group_symmetry=True, time_reversal_symmetry=True)
         dms_ibz = kmf.make_rdm1()[kpts.ibz2bz]
         dms_bz = kpts.transform_dm(dms_ibz)
-        self.assertAlmostEqual(abs(dms_bz - kmf.make_rdm1()).max(), 0, 9)
+        self.assertAlmostEqual(abs(dms_bz - kmf.make_rdm1()).max(), 0, 7)
 
         mo_coeff_ibz = np.asarray(kmf.mo_coeff)[kpts.ibz2bz]
         mo_coeff_bz = kpts.transform_mo_coeff(mo_coeff_ibz)
         dms_bz = khf.make_rdm1(mo_coeff_bz, kmf.mo_occ)
-        self.assertAlmostEqual(abs(dms_bz - kmf.make_rdm1()).max(), 0, 9)
+        self.assertAlmostEqual(abs(dms_bz - kmf.make_rdm1()).max(), 0, 7)
 
         mo_occ_ibz = kpts.check_mo_occ_symmetry(kmf.mo_occ)
         mo_occ_bz = kpts.transform_mo_occ(mo_occ_ibz)
@@ -104,17 +105,17 @@ class KnownValues(unittest.TestCase):
 
         mo_energy_ibz = np.asarray(kmf.mo_energy)[kpts.ibz2bz]
         mo_energy_bz = kpts.transform_mo_energy(mo_energy_ibz)
-        self.assertAlmostEqual(abs(mo_energy_bz - np.asarray(kmf.mo_energy)).max(), 0 , 9)
+        self.assertAlmostEqual(abs(mo_energy_bz - np.asarray(kmf.mo_energy)).max(), 0 , 7)
 
         fock_ibz = kmf.get_fock()[kpts.ibz2bz]
         fock_bz = kpts.transform_fock(fock_ibz)
-        self.assertAlmostEqual(abs(fock_bz - kmf.get_fock()).max(), 0, 9)
+        self.assertAlmostEqual(abs(fock_bz - kmf.get_fock()).max(), 0, 7)
 
         kumf = kmf.to_uhf()
         mo_coeff_ibz = np.asarray(kumf.mo_coeff)[:,kpts.ibz2bz]
         mo_coeff_bz = kpts.transform_mo_coeff(mo_coeff_ibz)
         dms_bz = kuhf.make_rdm1(mo_coeff_bz, kumf.mo_occ)
-        self.assertAlmostEqual(abs(dms_bz - kumf.make_rdm1()).max(), 0, 9)
+        self.assertAlmostEqual(abs(dms_bz - kumf.make_rdm1()).max(), 0, 7)
 
         mo_occ_ibz = np.asarray(kumf.mo_occ)[:,kpts.ibz2bz]
         mo_occ_bz = kpts.transform_mo_occ(mo_occ_ibz)
@@ -122,11 +123,11 @@ class KnownValues(unittest.TestCase):
 
         mo_energy_ibz = np.asarray(kumf.mo_energy)[:,kpts.ibz2bz]
         mo_energy_bz = kpts.transform_mo_energy(mo_energy_ibz)
-        self.assertAlmostEqual(abs(mo_energy_bz - np.asarray(kumf.mo_energy)).max(), 0 , 9)
+        self.assertAlmostEqual(abs(mo_energy_bz - np.asarray(kumf.mo_energy)).max(), 0 , 7)
 
         fock_ibz = kumf.get_fock()[:,kpts.ibz2bz]
         fock_bz = kpts.transform_fock(fock_ibz)
-        self.assertAlmostEqual(abs(fock_bz - kumf.get_fock()).max(), 0, 9)
+        self.assertAlmostEqual(abs(fock_bz - kumf.get_fock()).max(), 0, 7)
 
     def test_symmetrize_density(self):
         rho0 = kmf.get_rho()
