@@ -36,7 +36,7 @@ from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
 from pyscf.gto.mole import (_symbol, _rm_digit, _atom_symbol, _std_symbol,
-                            _std_symbol_without_ghost, charge, is_ghost_atom) # noqa
+                            _std_symbol_without_ghost, charge, is_ghost_atom, is_au) # noqa
 from pyscf.gto.mole import conc_env, uncontract
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
@@ -1627,7 +1627,7 @@ class Cell(mole.Mole):
         else:
             a = np.asarray(self.a, dtype=np.double)
         if isinstance(self.unit, (str, unicode)):
-            if self.unit.startswith(('B','b','au','AU')):
+            if is_au(self.unit):
                 return a
             else:
                 return a/param.BOHR
