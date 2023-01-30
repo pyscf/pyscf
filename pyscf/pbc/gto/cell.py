@@ -874,7 +874,7 @@ energy_nuc = ewald
 def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
               scaled_center=None,
               space_group_symmetry=False, time_reversal_symmetry=False,
-              symmorphic=True):
+              **kwargs):
     '''Given number of kpoints along x,y,z , generate kpoints
 
     Args:
@@ -919,7 +919,14 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
     scaled_kpts += np.array(scaled_center)
     kpts = cell.get_abs_kpts(scaled_kpts)
     if space_group_symmetry or time_reversal_symmetry:
-        kpts = libkpts.make_kpts(cell, kpts, space_group_symmetry, time_reversal_symmetry, symmorphic)
+        if space_group_symmetry and not cell.space_group_symmetry:
+            raise RuntimeError('Using k-point symmetry now requires cell '
+                               'to be built with space group symmetry info:\n'
+                               'cell.space_group_symmetry = True\n'
+                               'cell.symmorphic = False\n'
+                               'cell.build()')
+        kpts = libkpts.make_kpts(cell, kpts, space_group_symmetry,
+                                 time_reversal_symmetry)
     return kpts
 
 def get_uniform_grids(cell, mesh=None, wrap_around=True):
@@ -1086,6 +1093,15 @@ class Cell(mole.Mole):
             infinity vacuum (inf_vacuum) or truncated Coulomb potential
             (analytic_2d_1). Unless explicitly specified, analytic_2d_1 is
             used for 2D system and inf_vacuum is assumed for 1D and 0D.
+        space_group_symmetry : bool
+            Whether to consider space group symmetry. Default is False.
+        symmorphic : bool
+            Whether the lattice is symmorphic. If set to True, even if the
+            lattice is non-symmorphic, only symmorphic space group symmetry
+            will be considered. Default is False, meaning the space group is
+            determined by the lattice symmetry to be symmorphic or non-symmorphic.
+        lattice_symmetry : None or :class:`pbc.symm.Symmetry` instance
+            The object containing the lattice symmetry information. Default is None.
 
     (See other attributes in :class:`Mole`)
 
@@ -1114,6 +1130,9 @@ class Cell(mole.Mole):
         #       density-fitting class.  This determines how the ewald produces
         #       its energy.
         self.low_dim_ft_type = None
+        self.space_group_symmetry = False
+        self.symmorphic = False
+        self.lattice_symmetry = None
 
 ##################################################
 # These attributes are initialized by build function if not given
@@ -1122,7 +1141,8 @@ class Cell(mole.Mole):
 
 ##################################################
 # don't modify the following variables, they are not input arguments
-        keys = ('precision', 'exp_to_discard')
+        keys = ('precision', 'exp_to_discard',
+                'space_group_symmetry', 'symmorphic', 'lattice_symmetry')
         self._keys = self._keys.union(self.__dict__).union(keys)
         self.__dict__.update(kwargs)
 
@@ -1234,11 +1254,33 @@ class Cell(mole.Mole):
 
     tot_electrons = tot_electrons
 
+    def _build_symmetry(self, kpts=None, **kwargs):
+        '''Construct symmetry adapted crystalline atomic orbitals
+        '''
+        from pyscf.pbc.symm.basis import symm_adapted_basis
+        if not isinstance(kpts, libkpts.KPoints):
+            return mole.Mole._build_symmetry(self)
+        self.symm_orb, self.irrep_id = symm_adapted_basis(self, kpts)
+        return self
+
+    def symmetrize_mesh(self, mesh=None):
+        if mesh is None:
+            mesh = self.mesh
+        if not self.space_group_symmetry:
+            return mesh
+
+        _, mesh1 = self.lattice_symmetry.check_mesh_symmetry(mesh=mesh,
+                                                             return_mesh=True)
+        if np.prod(mesh1) != np.prod(mesh):
+            logger.debug(self, 'mesh %s is symmetrized as %s', mesh, mesh1)
+        return mesh1
+
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=True,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
               pseudo=None, basis=None, h=None, dimension=None, rcut= None,
-              ecp=None, low_dim_ft_type=None, *args, **kwargs):
+              ecp=None, low_dim_ft_type=None,
+              space_group_symmetry=None, symmorphic=None, *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
         you need call this function to refresh the internal data of Cell.
@@ -1276,6 +1318,13 @@ class Cell(mole.Mole):
                 infinity vacuum (inf_vacuum) or truncated Coulomb potential
                 (analytic_2d_1). Unless explicitly specified, analytic_2d_1 is
                 used for 2D system and inf_vacuum is assumed for 1D and 0D.
+            space_group_symmetry : bool
+                Whether to consider space group symmetry. Default is False.
+            symmorphic : bool
+                Whether the lattice is symmorphic. If set to True, even if the
+                lattice is non-symmorphic, only symmorphic space group symmetry
+                will be considered. Default is False, meaning the space group is
+                determined by the lattice symmetry to be symmorphic or non-symmorphic.
         '''
         if h is not None: self.h = h
         if a is not None: self.a = a
@@ -1289,6 +1338,10 @@ class Cell(mole.Mole):
         if ecp is not None: self.ecp = ecp
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
         if low_dim_ft_type is not None: self.low_dim_ft_type = low_dim_ft_type
+        if space_group_symmetry is not None:
+            self.space_group_symmetry = space_group_symmetry
+        if symmorphic is not None:
+            self.symmorphic = symmorphic
 
         if 'unit' in kwargs:
             self.unit = kwargs['unit']
@@ -1442,6 +1495,19 @@ class Cell(mole.Mole):
             # system, cell.mesh was initialized to 0.
             self._mesh[self._mesh == 0] = 30
 
+        if self.space_group_symmetry:
+            from pyscf.pbc.symm import Symmetry
+            _check_mesh_symm = False
+            if not self._mesh_from_build:
+                _check_mesh_symm = True
+            _lattice_symm = Symmetry(self)
+            _lattice_symm.build(space_group_symmetry=True,
+                                symmorphic=self.symmorphic,
+                                check_mesh_symmetry=_check_mesh_symm)
+            self.lattice_symmetry = _lattice_symm
+            if self._mesh_from_build:
+                self._mesh = self.symmetrize_mesh()
+
         if dump_input and not _built and self.verbose > logger.NOTE:
             self.dump_input()
             logger.info(self, 'lattice vectors  a1 [%.9f, %.9f, %.9f]', *_a[0])
@@ -1465,6 +1531,8 @@ class Cell(mole.Mole):
                             self.mesh, np.prod(self.mesh))
                 Ecut = pbctools.mesh_to_cutoff(self.lattice_vectors(), self.mesh)
                 logger.info(self, '    = ke_cutoff %s', Ecut)
+            if self.space_group_symmetry:
+                self.lattice_symmetry.dump_info()
         return self
     kernel = build
 

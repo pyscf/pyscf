@@ -2573,7 +2573,7 @@ class Mole(lib.StreamObject):
         return self
     kernel = build
 
-    def _build_symmetry(self):
+    def _build_symmetry(self, *args, **kwargs):
         '''
         Update symmetry related attributes: topgroup, groupname, _symm_orig,
         _symm_axes, irrep_id, irrep_name, symm_orb

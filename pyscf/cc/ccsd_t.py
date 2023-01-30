@@ -137,8 +137,9 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     nmo = nocc + nvir
 
     if mol.symmetry:
+        ovlp = mycc._scf.get_ovlp()
         orbsym = symm.addons.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                            eris.mo_coeff, check=False)
+                                            eris.mo_coeff, s=ovlp, check=False)
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32) % 10
     else:
         orbsym = numpy.zeros(nmo, dtype=numpy.int32)

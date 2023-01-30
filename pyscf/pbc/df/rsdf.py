@@ -223,6 +223,8 @@ cell.dimension=3 with large vacuum.""")
                                                 kmax=kmax,
                                                 round2odd=r2o)
 
+        self.mesh_compact = self.cell.symmetrize_mesh(self.mesh_compact)
+
         # build auxcell
         auxcell = make_auxmol(self.cell, self.auxbasis)
         # drop exponents
@@ -242,6 +244,7 @@ cell.dimension=3 with large vacuum.""")
         if self.mesh_j2c is None:
             self.mesh_j2c = rsdf_helper.estimate_mesh_for_omega(
                                     auxcell, self.omega_j2c, round2odd=True)[1]
+        self.mesh_j2c = self.cell.symmetrize_mesh(self.mesh_j2c)
         self.auxcell = auxcell
 
     def _kpts_build(self, kpts_band=None):

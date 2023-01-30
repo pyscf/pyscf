@@ -500,11 +500,14 @@ class CDERIArray:
         self.kpts = data_group['kpts'][:]
         self.nkpts = self.kpts.shape[0]
         nao_pair = sum(dat.shape[1] for dat in self.j3c['0'].values())
-        nao = int(nao_pair ** .5)
-        if nao ** 2 == nao_pair:  # s
+        if self.aosym == 's1':
+            nao = int(nao_pair ** .5)
+            assert nao ** 2 == nao_pair
             self.nao = nao
-        else:
+        elif self.aosym == 's2':
             self.nao = int((nao_pair * 2)**.5)
+        else:
+            raise NotImplementedError
         self.naux = self.j3c['0/0'].shape[0]
 
     def __del__(self):
