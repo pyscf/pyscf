@@ -160,6 +160,12 @@ class PolEmbed(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
 
+        # The maximum iterations and convergence tolerance to update solvent
+        # effects in CASCI, CC, MP, CI, ... methods
+        self.max_cycle = 20
+        self.conv_tol = 1e-7
+        self.state_id = 0
+
         self.frozen = False
         # FIXME: Should the solvent in PE model by default has the character
         # of rapid process?
