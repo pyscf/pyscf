@@ -33,6 +33,9 @@ from pyscf.lib import logger
 from pyscf.scf import hf, hf_symm, uhf_symm
 from pyscf.scf import _response_functions  # noqa
 from pyscf.soscf import newton_ah
+from pyscf.data.nist import HARTREE2EV
+
+STAB_NROOTS = 3
 
 def rhf_stability(mf, internal=True, external=False, verbose=None, return_status=False):
     '''
@@ -193,7 +196,11 @@ def ghf_stability(mf, verbose=None, return_status=False):
     x0[g!=0] = 1. / hdiag[g!=0]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
-    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
+    nroots = min(x0.size, STAB_NROOTS)
+    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log, nroots=nroots)
+    log.debug('ghf_stability: lowest eigs of H = %s', e)
+    if nroots != 1:
+        e, v = e[0], v[0]
     if e < -1e-5:
         log.note(f'{mf.__class__} wavefunction has an internal instability')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
@@ -239,7 +246,11 @@ def dhf_stability(mf, verbose=None, return_status=False):
     x0 = numpy.zeros_like(g)
     x0[g!=0] = 1. / hdiag[g!=0]
     x0[numpy.argmin(hdiag)] = 1
-    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
+    nroots = min(x0.size, STAB_NROOTS)
+    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log, nroots=nroots)
+    log.debug('dhf_stability: lowest eigs of H = %s', e)
+    if nroots != 1:
+        e, v = e[0], v[0]
     if e < -1e-5:
         log.note(f'{mf.__class__} wavefunction has an internal instability')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
@@ -275,7 +286,11 @@ def rhf_internal(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[g!=0] = 1. / hdiag[g!=0]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
-    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
+    nroots = min(x0.size, STAB_NROOTS)
+    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log, nroots=nroots)
+    log.debug('rhf_internal: lowest eigs of H = %s', e)
+    if nroots != 1:
+        e, v = e[0], v[0]
     if e < -1e-5:
         log.note(f'{mf.__class__} wavefunction has an internal instability')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
@@ -373,7 +388,11 @@ def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[hdiag1>1e-5] = 1. / hdiag1[hdiag1>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag1)] = 1
-    e1, v1 = lib.davidson(hop1, x0, precond, tol=1e-4, verbose=log)
+    nroots = min(x0.size, STAB_NROOTS)
+    e1, v1 = lib.davidson(hop1, x0, precond, tol=1e-4, verbose=log, nroots=nroots)
+    log.debug('rhf_external: lowest eigs (e1) of H = %s', e1)
+    if nroots != 1:
+        e1, v1 = e1[0], v1[0]
     if e1 < -1e-5:
         log.note(f'{mf.__class__} wavefunction has a real -> complex instability')
     else:
@@ -385,7 +404,11 @@ def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
         return dx/hdiagd
     x0 = v1
-    e3, v3 = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log)
+    nroots = min(x0.size, STAB_NROOTS)
+    e3, v3 = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log, nroots=nroots)
+    log.debug('rhf_external: lowest eigs (e3) of H = %s', e3)
+    if nroots != 1:
+        e3, v3 = e3[0], v3[0]
     if e3 < -1e-5:
         log.note(f'{mf.__class__} wavefunction has a RHF/RKS -> UHF/UKS instability.')
         mo = (_rotate_mo(mf.mo_coeff, mf.mo_occ, v3), mf.mo_coeff)
@@ -416,7 +439,11 @@ def rohf_internal(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[g!=0] = 1. / hdiag[g!=0]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
-    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
+    nroots = min(x0.size, STAB_NROOTS)
+    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log, nroots=nroots)
+    log.debug('rohf_internal: lowest eigs of H = %s', e)
+    if nroots != 1:
+        e, v = e[0], v[0]
     if e < -1e-5:
         log.note(f'{mf.__class__} wavefunction has an internal instability.')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
@@ -450,7 +477,11 @@ def uhf_internal(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[g!=0] = 1. / hdiag[g!=0]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
-    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
+    nroots = min(x0.size, STAB_NROOTS)
+    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log, nroots=nroots)
+    log.debug('uhf_external: lowest eigs of H = %s', e)
+    if nroots != 1:
+        e, v = e[0], v[0]
     if e < -1e-5:
         log.note(f'{mf.__class__} wavefunction has an internal instability.')
         nocca = numpy.count_nonzero(mf.mo_occ[0]> 0)
@@ -581,7 +612,11 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[hdiag1>1e-5] = 1. / hdiag1[hdiag1>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag1)] = 1
-    e1, v = lib.davidson(hop1, x0, precond, tol=1e-4, verbose=log)
+    nroots = min(x0.size, STAB_NROOTS)
+    e1, v = lib.davidson(hop1, x0, precond, tol=1e-4, verbose=log, nroots=nroots)
+    log.debug('uhf_external: lowest eigs (e1) of H = %s', e1)
+    if nroots != 1:
+        e1, v = e1[0], v[0]
     if e1 < -1e-5:
         log.note(f'{mf.__class__} wavefunction has a real -> complex instability')
     else:
@@ -596,8 +631,11 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[hdiag2>1e-5] = 1. / hdiag2[hdiag2>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag2)] = 1
-    e3, v = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log)
-    log.debug('uhf_external: lowest eigs of H = %s', e3)
+    nroots = min(x0.size, STAB_NROOTS)
+    e3, v = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log, nroots=nroots)
+    log.debug('uhf_external: lowest eigs (e3) of H = %s', e3)
+    if nroots != 1:
+        e3, v = e3[0], v[0]
     mo = scipy.linalg.block_diag(*mf.mo_coeff)
     if e3 < -1e-5:
         log.note(f'{mf.__class__} wavefunction has an UHF/UKS -> GHF/GKS instability.')
