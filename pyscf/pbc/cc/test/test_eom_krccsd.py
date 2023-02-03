@@ -416,7 +416,7 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.fp(e), -328.44609187669454, 6)
+        self.assertAlmostEqual(lib.fp(e), -328.44609187669454, 4)
         self.assertAlmostEqual(lib.fp(pt1),(-64.29455737653288+94.36604246905883j), 6)
         self.assertAlmostEqual(lib.fp(pt2),(-24.663592135920723+36.00181963359046j), 6)
         self.assertAlmostEqual(lib.fp(Wmcik),(6.692675632408793+6.926864923969868j), 6)

@@ -170,7 +170,7 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff
         double *env = envs_cint->env;
         float omega = env[PTR_RANGE_OMEGA];
         float ai, aj, ak, aij;
-        float omega2, eta, theta, theta_k, ij_cutoff;
+        float omega2, eta, theta, theta_k, ij_cutoff, theta_r2;
 
         if (omega < 0.f) {
                 // Short-range ERI
@@ -179,6 +179,8 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff
                         ksh = seg2sh[kseg];
                         shls[2] = ksh;
                         ak = env[bas(PTR_EXP,ksh) + bas(NPRIM_OF,ksh)-1];
+                        // ck ~= 1/gaussian_int(l+2, ak) ~=
+                        // 2*ak^{(lk+3)/2)}/gamma((lk+3)/2)
                         ptr = atm(PTR_COORD, bas(ATOM_OF, ksh));
                         xk = env[ptr];
                         yk = env[ptr+1];
@@ -204,14 +206,16 @@ for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
         sij_cond = scond + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                if (sij_cond[jsh] < ij_cutoff) {
+                // +3. in case r2 is very small
+                if (sij_cond[jsh] + 3.f < ij_cutoff) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                if (theta * r2 + ij_cutoff < sij_cond[jsh]) {
+                theta_r2 = theta * r2 + ij_cutoff + logf(r2 + 1e-15f);
+                if (theta_r2 < sij_cond[jsh]) {
                         shls[1] = jsh;
                         update_int3c2e_envs(envs_cint, shls);
                         (*intor_loop)(gctr, envs_cint, cache, &empty);
@@ -255,14 +259,16 @@ for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
         sij_cond = scond + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                if (sij_cond[jsh] < ij_cutoff) {
+                // +3. in case r2 is very small
+                if (sij_cond[jsh] + 3.f < ij_cutoff) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                if (theta * r2 + ij_cutoff < sij_cond[jsh]) {
+                theta_r2 = theta * r2 + ij_cutoff + logf(r2 + 1e-15f);
+                if (theta_r2 < sij_cond[jsh]) {
                         shls[1] = jsh;
                         update_int3c2e_envs(envs_cint, shls);
                         (*intor_loop)(gctr, envs_cint, cache, &empty);

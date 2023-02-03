@@ -152,7 +152,7 @@ static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, double cuto
         int lk = bas(ANG_OF, seg2sh[kseg0]);
         float omega = env[PTR_RANGE_OMEGA];
         float ai, aj, ak, aij;
-        float omega2, eta, theta, theta_k, ij_cutoff, ij_cutoff0;
+        float omega2, eta, theta, theta_k, ij_cutoff, ij_cutoff0, theta_r2;
 
         // FIXME: Is it correct to assemble ECP and PP 3c integrals this way?
         if (omega < 0.f) {
@@ -193,14 +193,15 @@ for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
         sij_cond = scond + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                if (sij_cond[jsh] < ij_cutoff) {
+                if (sij_cond[jsh] + 3.f < ij_cutoff) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                if (theta * r2 + ij_cutoff < sij_cond[jsh]) {
+                theta_r2 = theta * r2 + ij_cutoff + logf(r2 + 1e-15f);
+                if (theta_r2 < sij_cond[jsh]) {
                         shls[1] = jsh;
                         if ((*intor)(bufL, NULL, shls, atm, natm,
                                      bas, nbas, env, cintopt, cache)) {
@@ -250,14 +251,15 @@ for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
         sij_cond = scond + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                if (sij_cond[jsh] < ij_cutoff) {
+                if (sij_cond[jsh] + 3.f < ij_cutoff) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                if (theta * r2 + ij_cutoff < sij_cond[jsh]) {
+                theta_r2 = theta * r2 + ij_cutoff + logf(r2 + 1e-15f);
+                if (theta_r2 < sij_cond[jsh]) {
                         shls[1] = jsh;
                         if ((*intor)(bufL, NULL, shls, atm, natm,
                                      bas, nbas, env, cintopt, cache)) {

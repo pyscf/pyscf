@@ -183,6 +183,7 @@ He
      0.32235865    2     2.25670239    -0.39677748
                                         0.93894690
                                                  ''')}
+        cell.precision = 1e-11
         cell.build()
         np.random.seed(9)
         kpt = np.random.random(3)

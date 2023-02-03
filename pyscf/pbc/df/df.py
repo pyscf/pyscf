@@ -224,13 +224,6 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             log.debug1('    kpts_band = %s', self.kpts_band)
         return self
 
-    def check_sanity(self):
-        cell = self.cell
-        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
-            logger.warn(self, 'cell.dimension=2 for GDF may be slightly '
-                        'different to FFT/AFT results.')
-        return lib.StreamObject.check_sanity(self)
-
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
         if j_only is not None:
             self._j_only = j_only

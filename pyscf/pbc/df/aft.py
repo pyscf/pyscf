@@ -39,140 +39,66 @@ from pyscf.pbc.tools import pbc as pbctools
 from pyscf import __config__
 
 
-CUTOFF = getattr(__config__, 'pbc_df_aft_estimate_eta_cutoff', 1e-12)
-ETA_MIN = getattr(__config__, 'pbc_df_aft_estimate_eta_min', 0.2)
-OMEGA_MIN = getattr(__config__, 'pbc_df_aft_estimate_omega_min', 0.3)
-PRECISION = getattr(__config__, 'pbc_df_aft_estimate_eta_precision', 1e-8)
 KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.0)
 
-def estimate_eta_min(cell, cutoff=CUTOFF):
+def estimate_eta_min(cell, cutoff=None):
     '''Given rcut the boundary of repeated images of the cell, estimates the
     minimal exponent of the smooth compensated gaussian model charge, requiring
     that at boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) < cutoff
     '''
-    lmax = min(np.max(cell._bas[:,gto.ANG_OF]), 4)
-    # If lmax=3 (r^5 for radial part), this expression guarantees at least up
-    # to f shell the convergence at boundary
-    rcut = cell.rcut
-    eta = max(np.log(4*np.pi*rcut**(lmax+2)/cutoff)/rcut**2, ETA_MIN)
-    return eta
+    from pyscf.pbc.df.gdf_builder import estimate_eta_min
+    logger.warn(cell, 'Function deprecated. '
+                'Call pbc.df.gdf_builder.estimate_eta_min instead.')
+    return estimate_eta_min(cell, cutoff)
 
 estimate_eta = estimate_eta_min
 
-def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
+def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=None):
     '''Given ke_cutoff, the upper bound of eta to produce the required
     precision in AFTDF Coulomb integrals.
     '''
-    # search eta for interaction between GTO(eta) and point charge at the same
-    # location so that
-    # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 GTO(eta, k) < precision
-    # GTO(eta, k) = Fourier transform of Gaussian e^{-eta r^2}
+    from pyscf.pbc.df.gdf_builder import estimate_eta_for_ke_cutoff
+    logger.warn(cell, 'Function deprecated. '
+                'Call pbc.df.gdf_builder.estimate_eta_for_ke_cutoff instead.')
+    return estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision)
 
-#    lmax = np.max(cell._bas[:,gto.ANG_OF])
-#    kmax = (ke_cutoff*2)**.5
-#    # The interaction between two s-type density distributions should be
-#    # enough for the error estimation.  Put lmax here to increate Ecut for
-#    # slightly better accuracy
-#    log_rest = np.log(precision / (32*np.pi**2 * kmax**max(0, lmax-1)))
-#    log_eta = -1
-#    eta = kmax**2/4 / (-log_eta - log_rest)
-#    return eta
-
-    ai = np.hstack(cell.bas_exps()).max()
-    aij = ai * 2
-    ci = gto.gto_norm(0, ai)
-    norm_ang = (4*np.pi)**-1.5
-    c1 = ci**2 * norm_ang
-    fac = 64*np.pi**5*c1 * (aij*ke_cutoff*2)**-.5 / precision
-
-    eta = 4.
-    eta = 1./(np.log(fac * eta**-1.5)*2 / ke_cutoff - 1./aij)
-    if eta < 0:
-        eta = 4.
-    else:
-        eta = min(4., eta)
-    return eta
-
-def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
+def estimate_ke_cutoff_for_eta(cell, eta, precision=None):
     '''Given eta, the lower bound of ke_cutoff to produce the required
     precision in AFTDF Coulomb integrals.
     '''
-    # estimate ke_cutoff for interaction between GTO(eta) and point charge at
-    # the same location so that
-    # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 GTO(eta, k) < precision
-    # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 GTO(eta, k)
-    # ~ \int_kmax^infty 4*pi/k^2 GTO(eta,k) dk^3
-    # = (4*pi)^2 *2*eta/kmax^{n-1} e^{-kmax^2/4eta} + ... < precision
+    from pyscf.pbc.df.gdf_builder import estimate_ke_cutoff_for_eta
+    logger.warn(cell, 'Function deprecated. '
+                'Call pbc.df.gdf_builder.estimate_ke_cutoff_for_eta instead.')
+    return estimate_ke_cutoff_for_eta(cell, eta, precision)
 
-    # The magic number 0.2 comes from AFTDF.__init__ and GDF.__init__
-    # eta = max(eta, ETA_MIN)
-
-#    log_k0 = 3 + np.log(eta) / 2
-#    log_rest = np.log(precision / (32*np.pi**2*eta))
-#    # The interaction between two s-type density distributions should be
-#    # enough for the error estimation.  Put lmax here to increate Ecut for
-#    # slightly better accuracy
-#    lmax = np.max(cell._bas[:,gto.ANG_OF])
-#    Ecut = 2*eta * (log_k0*max(0, lmax-1) - log_rest)
-#    Ecut = max(Ecut, .5)
-#    return Ecut
-
-    ai = np.hstack(cell.bas_exps()).max()
-    aij = ai * 2
-    ci = gto.gto_norm(0, ai)
-    ck = gto.gto_norm(0, eta)
-    theta = 1./(1./aij + 1./eta)
-    Norm_ang = (4*np.pi)**-1.5
-    fac = 32*np.pi**5 * ci**2*ck*Norm_ang * (2*aij) / (aij*eta)**1.5
-    fac /= precision
-
-    Ecut = 20.
-    Ecut = np.log(fac * (Ecut*2)**(-.5)) * 2*theta
-    Ecut = np.log(fac * (Ecut*2)**(-.5)) * 2*theta
-    return Ecut
-
-def estimate_omega_min(cell, cutoff=CUTOFF):
+def estimate_omega_min(cell, cutoff=None):
     '''Given cell.rcut the boundary of repeated images of the cell, estimates
     the minimal omega for the attenuated Coulomb interactions, requiring that at
     boundary the Coulomb potential of a point charge < cutoff
     '''
-    # erfc(z) = 2/\sqrt(pi) int_z^infty exp(-t^2) dt < exp(-z^2)/(z\sqrt(pi))
-    # erfc(omega*rcut)/rcut < cutoff
-    # ~ exp(-(omega*rcut)**2) / (omega*rcut**2*pi**.5) < cutoff
-    rcut = cell.rcut
-    omega = OMEGA_MIN
-    omega = max((-np.log(cutoff * rcut**2 * omega))**.5 / rcut, OMEGA_MIN)
-    return omega
+    from pyscf.pbc.df.rsdf_builder import estimate_omega_min
+    logger.warn(cell, 'Function deprecated. '
+                'Call pbc.df.rsdf_builder.estimate_omega_min instead.')
+    return estimate_omega_min(cell, cutoff)
 
 estimate_omega = estimate_omega_min
 
 def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     '''Energy cutoff for AFTDF to converge attenuated Coulomb in moment space
     '''
-    if precision is None:
-        precision = cell.precision
-    exps, cs = pbcgto.cell._extract_pgto_params(cell, 'max')
-    ls = cell._bas[:,gto.ANG_OF]
-    cs = gto.gto_norm(ls, exps)
-    Ecut = _estimate_ke_cutoff(exps, ls, cs, precision, omega)
-    return Ecut.max()
+    from pyscf.pbc.df.rsdf_builder import estimate_ke_cutoff_for_omega
+    logger.warn(cell, 'Function deprecated. '
+                'Call pbc.df.rsdf_builder.estimate_ke_cutoff_for_omega instead.')
+    return estimate_ke_cutoff_for_omega(cell, omega, precision)
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     '''The minimal omega in attenuated Coulombl given energy cutoff
     '''
-    if precision is None:
-        precision = cell.precision
-    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
-    # enough to converge the 2-electron integrals. A penalty term here is to
-    # reduce the error in integrals
-    precision *= 1e-2
-    # Consider l>0 basis here to increate Ecut for slightly better accuracy
-    lmax = np.max(cell._bas[:,gto.ANG_OF])
-    kmax = (ke_cutoff*2)**.5
-    log_rest = np.log(precision / (16*np.pi**2 * kmax**lmax))
-    omega = (-.5 * ke_cutoff / log_rest)**.5
-    return omega
+    from pyscf.pbc.df.rsdf_builder import estimate_omega_for_ke_cutoff
+    logger.warn(cell, 'Function deprecated. '
+                'Call pbc.df.rsdf_builder.estimate_omega_for_ke_cutoff instead.')
+    return estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision)
 
 
 def _get_pp_loc_part1(mydf, kpts=None, with_pseudo=True):
@@ -799,5 +725,3 @@ def _sub_df_jk_(dfobj, dm, hermi=1, kpts=None, kpts_band=None,
     with dfobj.range_coulomb(omega) as rsh_df:
         return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
                              omega=None, exxdiv=exxdiv)
-
-del(CUTOFF, PRECISION)

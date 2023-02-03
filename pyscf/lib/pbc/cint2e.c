@@ -189,7 +189,7 @@ int PBCint2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff,
         assert(omega != 0);
         float omega2 = omega * omega;
         float ai, aj, ak, al, aij, akl;
-        float theta, theta_ij;
+        float theta, theta_ij, theta_r2;
 
         for (iseg = iseg0; iseg < iseg1; iseg++) {
                 ish = seg2sh[iseg];
@@ -257,7 +257,8 @@ for (jsh = jsh0; jsh < jsh1; jsh++) {
                         dy = yij - ykl_cond[ksh * nlsh + lsh - rkl_off];
                         dz = zij - zkl_cond[ksh * nlsh + lsh - rkl_off];
                         r2 = dx * dx + dy * dy + dz * dz;
-                        if (theta * r2 + cutoff < sij + skl_cond[lsh]) {
+                        theta_r2 = theta * r2 + cutoff + logf(r2 + 1e-15f);
+                        if (theta_r2 < sij + skl_cond[lsh]) {
                                 shls[3] = lsh;
                                 update_int2e_envs(envs_cint, shls);
                                 (*intor_loop)(gctr, envs_cint, cache, &empty);

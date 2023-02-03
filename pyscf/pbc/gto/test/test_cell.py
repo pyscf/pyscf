@@ -454,12 +454,12 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(len(cl3._atm), 8)
 
     def test_eval_gto(self):
-        cell = pgto.M(a=np.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
+        cell = pgto.M(a=np.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]], precision=1e-10)
         coords = cell.get_uniform_grids([10]*3, wrap_around=False)
         ao_value = cell.pbc_eval_gto("GTOval_sph", coords, kpts=cell.make_kpts([3]*3))
         self.assertAlmostEqual(lib.fp(ao_value), (-0.27594803231989179+0.0064644591759109114j), 9)
 
-        cell = pgto.M(a=np.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
+        cell = pgto.M(a=np.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]], precision=1e-10)
         coords = cell.get_uniform_grids([10]*3, wrap_around=False)
         ao_value = cell.pbc_eval_gto("GTOval_ip_cart", coords, kpts=cell.make_kpts([3]*3))
         self.assertAlmostEqual(lib.fp(ao_value), (0.38051517609460028+0.062526488684770759j), 9)

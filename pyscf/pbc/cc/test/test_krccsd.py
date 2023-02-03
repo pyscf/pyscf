@@ -51,6 +51,7 @@ def setUpModule():
     #cell.verbose = 7
     cell.output = '/dev/null'
     cell.mesh = [15] * 3
+    cell.precision = 1e-9
     cell.build()
 
     rand_kmf = make_rand_kmf()
@@ -229,13 +230,13 @@ class KnownValues(unittest.TestCase):
         rand_cc = pbcc.KRCCSD(kmf)
         # incore
         eris1 = pbcc.kccsd_rhf._ERIS(rand_cc, rand_kmf.mo_coeff)
-        self.assertAlmostEqual(lib.fp(eris1.oooo),  0.13691900935600992+0.026617355192746089j, 11)
-        self.assertAlmostEqual(lib.fp(eris1.ooov),  0.11364240700567171-0.041695025273248622j, 11)
-        self.assertAlmostEqual(lib.fp(eris1.oovv), -0.23285827477217841+0.019174699732188771j, 11)
-        self.assertAlmostEqual(lib.fp(eris1.ovov), -0.43577673177721338-0.25735127894943477j , 11)
-        self.assertAlmostEqual(lib.fp(eris1.voov), -0.38516873139657298+0.26042322219884251j , 11)
-        self.assertAlmostEqual(lib.fp(eris1.vovv), -0.12844875724711163+0.17587781601517866j , 11)
-        self.assertAlmostEqual(lib.fp(eris1.vvvv), -0.39587103797107615-0.001692506310261882j, 11)
+        self.assertAlmostEqual(lib.fp(eris1.oooo),  0.13691900935600992+0.026617355192746089j, 10)
+        self.assertAlmostEqual(lib.fp(eris1.ooov),  0.11364240700567171-0.041695025273248622j, 10)
+        self.assertAlmostEqual(lib.fp(eris1.oovv), -0.23285827477217841+0.019174699732188771j, 10)
+        self.assertAlmostEqual(lib.fp(eris1.ovov), -0.43577673177721338-0.25735127894943477j , 10)
+        self.assertAlmostEqual(lib.fp(eris1.voov), -0.38516873139657298+0.26042322219884251j , 10)
+        self.assertAlmostEqual(lib.fp(eris1.vovv), -0.12844875724711163+0.17587781601517866j , 10)
+        self.assertAlmostEqual(lib.fp(eris1.vvvv), -0.39587103797107615-0.001692506310261882j, 10)
 
         # outcore
         eris2 = pbcc.kccsd_rhf._ERIS(rand_cc, rand_kmf.mo_coeff,

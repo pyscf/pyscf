@@ -1074,9 +1074,8 @@ void PBCVHFsetnr_scond(float *scond, int *atm, int natm,
         exps_group_loc[ngroups] = nbas;
 
         double omega = env[PTR_RANGE_OMEGA];
-        // log(sqrt(fl/sqrt(pi*theta)/r^2))
-        // ~= log(sqrt(2/sqrt(pi*omega^2)/r_guess^2))
-        // ~= log(fl~=2)/2 - log(r_guess~=5.) - log(pi*omega^2)/4
+        // log(sqrt(fl/sqrt(pi*theta)))
+        // ~= log(sqrt(2/sqrt(pi*omega^2)))
         float omega2;
         if (omega == 0.) {
                 omega2 = 0.3f;
@@ -1086,11 +1085,10 @@ void PBCVHFsetnr_scond(float *scond, int *atm, int natm,
 
 #pragma omp parallel
 {
-        float r_guess = sqrtf(-logf(1e-9f)/omega2);
-        float fac_guess = .6f - logf(r_guess) - logf(omega2)/4;
+        float fac_guess = .6f - logf(omega2)/4;
         int ijb, ib, jb, i0, j0, i1, j1, i, j, li, lj;
         float dx, dy, dz, ai, aj, ci, cj, aij, a1, fi, fj, rr, rij, dri, drj;
-        float log_fac, theta, theta_r;
+        float log_fac, theta, theta_r, r_guess;
 #pragma omp for schedule(dynamic, 1)
         for (ijb = 0; ijb < ngroups*(ngroups+1)/2; ijb++) {
                 ib = (int)(sqrt(2*ijb+.25) - .5 + 1e-7);

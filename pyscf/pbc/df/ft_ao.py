@@ -593,7 +593,7 @@ class ExtendedMole(gto.Mole):
         supmol.seg_loc, supmol.seg2sh = supmol.bas_mask_to_segment(cell, bas_mask, verbose)
         supmol.bas_mask = bas_mask
         supmol.precision = cell.precision
-        supmol._env[gto.PTR_EXPCUTOFF] = -np.log(cell.precision**2)
+        supmol._env[gto.PTR_EXPCUTOFF] = -np.log(cell.precision*1e-4)
 
         _bas_reordered = supmol._bas.reshape(
             nimgs, bvk_ncells, cell.nbas, gto.BAS_SLOTS).transpose(1,2,0,3)
@@ -648,8 +648,9 @@ class ExtendedMole(gto.Mole):
 
         if cutoff is None:
             theta_ij = cell_exps.min() / 2
-            lattice_sum_fac = max(2*np.pi*rs_cell.rcut/(rs_cell.vol*theta_ij), 1)
-            cutoff = rs_cell.precision/lattice_sum_fac * .1
+            vol = rs_cell.vol
+            lattice_sum_factor = max(2*np.pi*rs_cell.rcut/(vol*theta_ij), 1)
+            cutoff = rs_cell.precision/lattice_sum_factor * .1
             logger.debug(self, 'Set ft_ao cutoff to %g', cutoff)
 
         supmol_exps, supmol_cs = pbcgto.cell._extract_pgto_params(supmol, 'min')

@@ -135,7 +135,7 @@ class KnownValues(unittest.TestCase):
         pcell, contr_coeff = uncontract(cell_north)
         out = eval_mat(pcell, vxc, xctype='GGA', hermi=0, kpts=kpts)
         out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
-        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 7)
 
         #out = eval_mat(pcell, vxc, xctype='GGA', hermi=1, kpts=kpts)
         self.assertRaises(RuntimeError, eval_mat, pcell, vxc, xctype='GGA', hermi=1, kpts=kpts)

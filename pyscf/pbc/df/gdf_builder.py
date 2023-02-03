@@ -40,11 +40,12 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import rsdf_builder
-from pyscf.pbc.df.aft import estimate_ke_cutoff_for_eta
 from pyscf.pbc.df.incore import libpbc, Int3cBuilder
 from pyscf.pbc.lib.kpts_helper import (is_zero, unique_with_wrap_around,
                                        group_by_conj_pairs)
+from pyscf import __config__
 
+ETA_MIN = getattr(__config__, 'pbc_df_aft_estimate_eta_min', 0.1)
 
 class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
     '''
@@ -105,10 +106,10 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
 
         self.dump_flags()
 
-        cell_exp = np.hstack(cell.bas_exps()).min()
-        theta = 1./(.5/cell_exp + 1./self.eta)
-        lattice_sum_factor = max(2*np.pi*cell.rcut/(cell.vol*theta), 1)
-        cutoff = cell.precision / lattice_sum_factor**2 * .1
+        exp_min = np.hstack(cell.bas_exps()).min()
+        theta = 1./(.5/exp_min + 1./self.eta)
+        lattice_sum_factor = max((2*cell.rcut)**3/cell.vol * 1/exp_min, 1)
+        cutoff = cell.precision / lattice_sum_factor * .1
         self.direct_scf_tol = cutoff
         log.debug('Set _CCGDFBuilder.direct_scf_tol to %g', cutoff)
 
@@ -522,10 +523,13 @@ class _CCNucBuilder(_CCGDFBuilder):
         if eta is not None:
             self.eta = eta
         else:
-            self.eta = .5/(.5+nkpts**(1./9))
+            self.eta = max(.5/(.5+nkpts**(1./9)), ETA_MIN)
 
-        self.ke_cutoff = estimate_ke_cutoff_for_eta(cell, self.eta)
-        self.mesh = cell.cutoff_to_mesh(self.ke_cutoff)
+        ke_cutoff = estimate_ke_cutoff_for_eta(cell, eta)
+        self.mesh = cell.cutoff_to_mesh(ke_cutoff)
+        self.ke_cutoff = min(pbctools.mesh_to_cutoff(
+            cell.lattice_vectors(), self.mesh)[:cell.dimension])
+        self.eta = estimate_eta_for_ke_cutoff(cell, self.ke_cutoff)
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             self.mesh[2] = rsdf_builder._estimate_meshz(cell)
         elif cell.dimension < 2:
@@ -546,11 +550,11 @@ class _CCNucBuilder(_CCGDFBuilder):
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
-        cell_exp = np.hstack(cell.bas_exps()).min()
-        theta = 1./(.5/cell_exp + 1./self.eta)
-        lattice_sum_factor = max(2*np.pi*cell.rcut/(cell.vol*theta), 1)
-        cutoff = cell.precision / lattice_sum_factor**2 * .1
-        self.direct_scf_tol = cutoff
+        exp_min = np.hstack(cell.bas_exps()).min()
+        theta = 1./(.5/exp_min + 1./self.eta)
+        lattice_sum_factor = max((2*cell.rcut)**3/cell.vol * 1/exp_min, 1)
+        cutoff = cell.precision / lattice_sum_factor * .1
+        self.direct_scf_tol = cutoff / cell.atom_charges().max()
         log.debug('Set _CCNucBuilder.direct_scf_tol to %g', cutoff)
 
         rcut = rsdf_builder.estimate_ft_rcut(rs_cell, cell.precision,
@@ -595,8 +599,9 @@ class _CCNucBuilder(_CCGDFBuilder):
 
         # vbar is the interaction between the background charge
         # and the compensating function.  0D, 1D, 2D do not have vbar.
-        if cell.dimension == 3 and intor in ('int3c2e', 'int3c2e_sph',
-                                             'int3c2e_cart'):
+        if ((intor in ('int3c2e', 'int3c2e_sph', 'int3c2e_cart')) and
+            (cell.dimension == 3 or
+             (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum'))):
             logger.debug2(self, 'G=0 part for %s', intor)
 
             # Note only need to remove the G=0 for mod_cell. when fakenuc is
@@ -670,12 +675,8 @@ class _CCNucBuilder(_CCGDFBuilder):
             with lib.temporary_env(cell, dimension=3):
                 coulG_full = pbctools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
             aoaux = ft_ao.ft_ao(self.modchg_cell, Gv, None, b, gxyz, Gvbase)
-            vG = np.einsum('i,xi,x->x', charges, aoaux, coulG * kws)
+            vG = np.einsum('i,xi,x->x', charges, aoaux, coulG_full * kws)
             aoaux = ft_ao.ft_ao(fakenuc, Gv, None, b, gxyz, Gvbase)
-            # Remove the trunc-Coul completion part (interactions beyond
-            # truncation length). Errors are relatively large here since the
-            # trunc-Coul copmletion is computed in Gv space and Gv is not enough
-            # to handle all orbital-products.
             vG += np.einsum('i,xi,x->x', charges, aoaux, (coulG-coulG_full)*kws)
         else:
             aoaux = ft_ao.ft_ao(self.modchg_cell, Gv, None, b, gxyz, Gvbase)
@@ -888,11 +889,11 @@ def _guess_eta(cell, kpts=None, mesh=None):
         if mesh is None:
             mesh = cell.mesh
         ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
-        eta = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+        eta = estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
         return eta, mesh, ke_cutoff
 
-    # eta_min = aft.estimate_eta(cell, cell.precision*1e-2)
-    eta_min = aft.ETA_MIN
+    # eta_min = estimate_eta_min(cell, cell.precision*1e-2)
+    eta_min = ETA_MIN
     ke_min = estimate_ke_cutoff_for_eta(cell, eta_min, cell.precision)
     a = cell.lattice_vectors()
 
@@ -908,7 +909,7 @@ def _guess_eta(cell, kpts=None, mesh=None):
                         'integral precision %g.\nRecommended mesh is %s.',
                         mesh, cell.precision, mesh_min)
     ke_cutoff = min(pbctools.mesh_to_cutoff(a, mesh)[:cell.dimension])
-    eta = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+    eta = estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
     return eta, mesh, ke_cutoff
 
 def _compensate_nuccell(cell, eta):
@@ -1000,3 +1001,58 @@ def estimate_rcut(rs_cell, auxcell, precision=None, exclude_dd_block=False):
             r0 = (np.log(fac * r0 * (sfac*r0)**(l3-1) + 1.) / (sfac*theta))**.5
             rcut[smooth_mask] = r0
     return rcut
+
+def estimate_eta_min(cell, precision=None):
+    '''Given rcut the boundary of repeated images of the cell, estimates the
+    minimal exponent of the smooth compensated gaussian model charge, requiring
+    that at boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) < precision
+    '''
+    if precision is None:
+        precision = cell.precision
+    lmax = min(np.max(cell._bas[:,gto.ANG_OF]), 4)
+    # If lmax=3 (r^5 for radial part), this expression guarantees at least up
+    # to f shell the convergence at boundary
+    rcut = cell.rcut
+    eta = max(np.log(4*np.pi*rcut**(lmax+2)/precision)/rcut**2, ETA_MIN)
+    return eta
+
+def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=None):
+    '''Given ke_cutoff, the upper bound of eta to produce the required
+    precision in AFTDF Coulomb integrals.
+    '''
+    if precision is None:
+        precision = cell.precision
+    ai = np.hstack(cell.bas_exps()).max()
+    aij = ai * 2
+    ci = gto.gto_norm(0, ai)
+    norm_ang = (4*np.pi)**-1.5
+    c1 = ci**2 * norm_ang
+    fac = 64*np.pi**5*c1 * (aij*ke_cutoff*2)**-.5 / precision
+
+    eta = 4.
+    eta = 1./(np.log(fac * eta**-1.5)*2 / ke_cutoff - 1./aij)
+    if eta < 0:
+        eta = 4.
+    else:
+        eta = min(4., eta)
+    return eta
+
+def estimate_ke_cutoff_for_eta(cell, eta, precision=None):
+    '''Given eta, the lower bound of ke_cutoff to produce the required
+    precision in AFTDF Coulomb integrals.
+    '''
+    if precision is None:
+        precision = cell.precision
+    ai = np.hstack(cell.bas_exps()).max()
+    aij = ai * 2
+    ci = gto.gto_norm(0, ai)
+    ck = gto.gto_norm(0, eta)
+    theta = 1./(1./aij + 1./eta)
+    Norm_ang = (4*np.pi)**-1.5
+    fac = 32*np.pi**5 * ci**2*ck*Norm_ang * (2*aij) / (aij*eta)**1.5
+    fac /= precision
+
+    Ecut = 20.
+    Ecut = np.log(fac * (Ecut*2)**(-.5)) * 2*theta
+    Ecut = np.log(fac * (Ecut*2)**(-.5)) * 2*theta
+    return Ecut

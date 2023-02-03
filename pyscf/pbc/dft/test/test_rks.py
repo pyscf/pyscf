@@ -117,7 +117,6 @@ class KnownValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -4.717699891018736, 6)
 
-    @unittest.skip('density_fit for 2D converges slowly wrt vacuum size')
     def test_density_fit_2d(self):
         L = 4.
         cell = pbcgto.Cell()
@@ -131,7 +130,7 @@ class KnownValues(unittest.TestCase):
         mf = pbcdft.RKS(cell).run()
         self.assertAlmostEqual(mf.e_tot, -0.6252695697315944, 7)
         mf = pbcdft.RKS(cell).density_fit().run()
-        self.assertAlmostEqual(mf.e_tot, -0.635069614773985, 3)
+        self.assertAlmostEqual(mf.e_tot, -0.635069614773985, 5)
 
     def test_rsh_fft(self):
         mf = pbcdft.RKS(cell)

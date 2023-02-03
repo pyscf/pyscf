@@ -39,6 +39,7 @@ def setUpModule():
     3.370137329, 3.370137329, 0.000000000'''
     cell.unit = 'B'
     cell.mesh = [13,13,13]
+    cell.precision = 1e-9
     cell.build()
 
 def tearDownModule():

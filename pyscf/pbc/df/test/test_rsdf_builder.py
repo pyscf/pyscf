@@ -226,6 +226,15 @@ class KnownValues(unittest.TestCase):
         v1 = dfbuilder.get_nuc()
         self.assertAlmostEqual(lib.fp(v1), -2.9338697931882134, 7)
 
+    def test_get_nuc_2d(self):
+        a = np.eye(3) * 2.8
+        a[2,2] = 10.
+        cell = pgto.M(atom='He 0 0 0; He 0.9 0 0',
+                      basis=basis, a=a, dimension=2)
+        dfbuilder = rsdf_builder._RSNucBuilder(cell).build()
+        v1 = dfbuilder.get_nuc()
+        self.assertAlmostEqual(lib.fp(v1), -2.9494363868337388, 7)
+
     def test_get_nuc_0d(self):
         cell = pgto.M(atom='He 0 0 0; He 0.9 0 0',
                       basis=basis,

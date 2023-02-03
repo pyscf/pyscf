@@ -94,7 +94,7 @@ class KnownValues(unittest.TestCase):
         #kmf.verbose = 7
         mf.conv_tol = 1e-8
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -44.892502703975893, 8)
+        self.assertAlmostEqual(e1, -44.892502703975893, 7)
 
     def test_klda8_cubic_kpt_222(self):
         cell = build_cell([17]*3)
@@ -106,7 +106,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-8
         #mf.verbose = 7
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -45.425834895129569, 8)
+        self.assertAlmostEqual(e1, -45.425834895129569, 7)
 
     def test_klda8_primitive_gamma(self):
         cell = make_primitive_cell([17]*3)
@@ -115,7 +115,7 @@ class KnownValues(unittest.TestCase):
         #kmf.verbose = 7
         mf.conv_tol = 1e-8
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -10.221426445656439, 8)
+        self.assertAlmostEqual(e1, -10.221426445656439, 7)
 
     def test_klda8_primitive_kpt_222(self):
         cell = make_primitive_cell([17]*3)
@@ -126,7 +126,7 @@ class KnownValues(unittest.TestCase):
         #mf.verbose = 7
         mf.conv_tol = 1e-8
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -11.353643583707452, 8)
+        self.assertAlmostEqual(e1, -11.353643583707452, 7)
 
     def test_rsh_fft(self):
         mf = pbcdft.KRKS(cell)

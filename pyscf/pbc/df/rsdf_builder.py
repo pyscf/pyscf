@@ -45,12 +45,12 @@ from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.df.aft import estimate_ke_cutoff_for_omega
 from pyscf.pbc.df.incore import libpbc, Int3cBuilder
 from pyscf.pbc.lib.kpts_helper import (is_zero, member, unique_with_wrap_around,
                                        group_by_conj_pairs)
 from pyscf import __config__
 
+OMEGA_MIN = 0.15
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 # Threshold of steep bases and local bases
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
@@ -127,10 +127,6 @@ class _RSGDFBuilder(Int3cBuilder):
         auxcell = self.auxcell
         kpts = self.kpts
 
-        if cell.dimension == 0:
-            log.warn('_RSGDFBuilder for cell.dimension=0 may have larger error '
-                     'than _CCGDFBuilder')
-
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
@@ -157,12 +153,17 @@ class _RSGDFBuilder(Int3cBuilder):
 
         self.dump_flags()
 
-        cell_exp = np.hstack(cell.bas_exps()).min()
+        exp_min = np.hstack(cell.bas_exps()).min()
         aux_exp = np.hstack(auxcell.bas_exps()).min()
-        theta = 1./(.5/cell_exp + 1./aux_exp + self.omega**-2)
-        lattice_sum_factor = max(2*np.pi*cell.rcut/(cell.vol*theta), 1)
-        # Cumulated errors are found in double lattice-sum
-        cutoff = cell.precision / lattice_sum_factor**2 * .1
+        if self.omega == 0:
+            theta = 1./(.5/exp_min + 1./aux_exp)
+        else:
+            theta = 1./(.5/exp_min + 1./aux_exp + self.omega**-2)
+        # For each basis i in (ij|, small integrals accumulated by the lattice
+        # sum for j are not negligible. (2*cell.rcut)**3/vol is roughly the
+        # number of basis i and 1./exp_min for the non-negligible basis j.
+        lattice_sum_factor = max((2*cell.rcut)**3/cell.vol * 1/exp_min, 1)
+        cutoff = cell.precision / lattice_sum_factor * .1
         self.direct_scf_tol = cutoff
         log.debug('Set _RSGDFBuilder.direct_scf_tol to %g', cutoff)
 
@@ -1090,18 +1091,18 @@ class _RSNucBuilder(_RSGDFBuilder):
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
-        if omega is not None:
-            self.omega = omega
-        else:
-            self.omega = 1./(.5+nkpts**(1./9))
-
         if cell.dimension == 0:
             self.omega = 0
             self.ke_cutoff = cell.ke_cutoff
             self.mesh = cell.mesh
         else:
-            self.ke_cutoff = estimate_ke_cutoff_for_omega(cell, self.omega)
-            self.mesh = cell.cutoff_to_mesh(self.ke_cutoff)
+            if omega is None:
+                omega = 1./(1.+nkpts**(1./9))
+            ke_cutoff = estimate_ke_cutoff_for_omega(cell, omega)
+            self.mesh = cell.cutoff_to_mesh(ke_cutoff)
+            self.ke_cutoff = min(pbctools.mesh_to_cutoff(
+                cell.lattice_vectors(), self.mesh)[:cell.dimension])
+            self.omega = estimate_omega_for_ke_cutoff(cell, self.ke_cutoff)
             if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
                 self.mesh[2] = _estimate_meshz(cell)
             elif cell.dimension < 2:
@@ -1110,14 +1111,16 @@ class _RSNucBuilder(_RSGDFBuilder):
 
         self.dump_flags()
 
-        cell_exp = np.hstack(cell.bas_exps()).min()
+        exp_min = np.hstack(cell.bas_exps()).min()
         if self.omega == 0:
-            theta = cell_exp / 2
+            theta = exp_min / 2
         else:
-            theta = 1./(.5/cell_exp + self.omega**-2)
-        lattice_sum_factor = max(2*np.pi*cell.rcut/(cell.vol*theta), 1)
-        cutoff = cell.precision / lattice_sum_factor**2 * .1
-        self.direct_scf_tol = cutoff
+            theta = 1./(.5/exp_min + self.omega**-2)
+        # For each basis i in (ij|, small integrals accumulated by the lattice
+        # sum for j are not negligible.
+        lattice_sum_factor = max((2*cell.rcut)**3/cell.vol * 1/exp_min, 1)
+        cutoff = cell.precision / lattice_sum_factor * .1
+        self.direct_scf_tol = cutoff / cell.atom_charges().max()
         log.debug('Set _RSNucBuilder.direct_scf_tol to %g', cutoff)
 
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
@@ -1160,8 +1163,10 @@ class _RSNucBuilder(_RSGDFBuilder):
                    np.einsum('k...z,z->k...', bufI, charge) * 1j)
 
         # G = 0 contributions to SR integrals
-        if (cell.dimension == 3 and self.omega != 0 and
-            (intor in ('int3c2e', 'int3c2e_sph', 'int3c2e_cart'))):
+        if (self.omega != 0 and
+            (intor in ('int3c2e', 'int3c2e_sph', 'int3c2e_cart')) and
+            (cell.dimension == 3 or
+             (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum'))):
             logger.debug2(self, 'G=0 part for %s', intor)
             nucbar = np.pi / self.omega**2 / cell.vol * charge.sum()
             if self.exclude_dd_block:
@@ -1314,8 +1319,8 @@ def _guess_omega(cell, kpts, mesh=None):
 
     # requiring Coulomb potential < cell.precision at rcut is often not
     # enough to truncate the interaction.
-    # omega_min = aft.estimate_omega(cell, cell.precision*1e-2)
-    omega_min = aft.OMEGA_MIN
+    # omega_min = estimate_omega_min(cell, cell.precision*1e-2)
+    omega_min = OMEGA_MIN
     ke_min = estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
     a = cell.lattice_vectors()
 
@@ -1331,7 +1336,7 @@ def _guess_omega(cell, kpts, mesh=None):
                         'integral precision %g.\nRecommended mesh is %s.',
                         mesh, cell.precision, mesh_min)
     ke_cutoff = min(pbctools.mesh_to_cutoff(a, mesh)[:cell.dimension])
-    omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+    omega = estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
     return omega, mesh, ke_cutoff
 
 def _estimate_meshz(cell, precision=None):
@@ -1543,3 +1548,45 @@ def estimate_ft_rcut(rs_cell, precision=None, exclude_dd_block=False):
             r0 = (np.log(fac * dri**li * drj**lj * fl + 1.) / theta)**.5
             rcut[smooth_mask] = r0
     return rcut
+
+def estimate_omega_min(cell, precision=None):
+    '''Given cell.rcut the boundary of repeated images of the cell, estimates
+    the minimal omega for the attenuated Coulomb interactions, requiring that at
+    boundary the Coulomb potential of a point charge < cutoff
+    '''
+    if precision is None:
+        precision = cell.precision
+    # erfc(z) = 2/\sqrt(pi) int_z^infty exp(-t^2) dt < exp(-z^2)/(z\sqrt(pi))
+    # erfc(omega*rcut)/rcut < cutoff
+    # ~ exp(-(omega*rcut)**2) / (omega*rcut**2*pi**.5) < cutoff
+    rcut = cell.rcut
+    omega = OMEGA_MIN
+    omega = max((-np.log(precision * rcut**2 * omega))**.5 / rcut, OMEGA_MIN)
+    return omega
+
+def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
+    '''Energy cutoff for AFTDF to converge attenuated Coulomb in moment space
+    '''
+    if precision is None:
+        precision = cell.precision
+    exps, cs = pbcgto.cell._extract_pgto_params(cell, 'max')
+    ls = cell._bas[:,gto.ANG_OF]
+    cs = gto.gto_norm(ls, exps)
+    Ecut = aft._estimate_ke_cutoff(exps, ls, cs, precision, omega)
+    return Ecut.max()
+
+def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
+    '''The minimal omega in attenuated Coulombl given energy cutoff
+    '''
+    if precision is None:
+        precision = cell.precision
+    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+    # enough to converge the 2-electron integrals. A penalty term here is to
+    # reduce the error in integrals
+    precision *= 1e-2
+    # Consider l>0 basis here to increate Ecut for slightly better accuracy
+    lmax = np.max(cell._bas[:,gto.ANG_OF])
+    kmax = (ke_cutoff*2)**.5
+    log_rest = np.log(precision / (16*np.pi**2 * kmax**lmax))
+    omega = (-.5 * ke_cutoff / log_rest)**.5
+    return omega

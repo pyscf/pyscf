@@ -42,7 +42,7 @@ def kpts_to_kmesh(cell, kpts, precision=None):
     # cell.nimgs are the upper limits for kmesh
     kmesh = np.asarray(cell.nimgs) * 2 + 1
     if precision is None:
-        precision = cell.precision
+        precision = cell.precision * 1e2
     for i in range(3):
         floats = scaled_kpts[:,i]
         uniq_floats_idx = np.unique(floats.round(6), return_index=True)[1]
@@ -52,7 +52,7 @@ def kpts_to_kmesh(cell, kpts, precision=None):
         denominators = np.unique([x.denominator for x in fracs])
         common_denominator = reduce(np.lcm, denominators)
         fs = common_denominator * uniq_floats
-        if abs(fs - np.rint(fs)).max() < precision*1e2:
+        if abs(uniq_floats - np.rint(fs)/common_denominator).max() < precision:
             kmesh[i] = min(kmesh[i], common_denominator)
         if cell.verbose >= logger.DEBUG3:
             logger.debug3(cell, 'dim=%d common_denominator %d  error %g',
