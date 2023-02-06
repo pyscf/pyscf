@@ -587,7 +587,7 @@ def _discard_edge_images(cell, Ls, rcut, dimension):
     scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
     atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
     atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
-    if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
+    if (np.any(atom_boundary_max > 2) or np.any(atom_boundary_min < -1)):
         logger.warn(cell, 'Atoms found very far from the primitive cell. '
                     'Atom coordinates may be error.')
         atom_boundary_max[atom_boundary_max > 1] = 1
