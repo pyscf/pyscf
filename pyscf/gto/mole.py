@@ -411,9 +411,9 @@ def format_atom(atoms, origin=0, axes=None,
         axes = numpy.eye(3)
 
     if isinstance(unit, (str, unicode)):
-        if unit.upper().startswith(('B', 'AU')):
+        if is_au(unit):
             unit = 1.
-        else: #unit[:3].upper() == 'ANG':
+        else:
             unit = 1./param.BOHR
     else:
         unit = 1./unit
@@ -2087,6 +2087,10 @@ def fromstring(string, format='xyz'):
     else:
         raise NotImplementedError
 
+def is_au(unit):
+    '''Return whether the unit is recogized as A.U. or not
+    '''
+    return unit.upper().startswith(('B', 'AU'))
 
 #
 # Mole class handles three layers: input, internal format, libcint arguments.
@@ -2587,7 +2591,7 @@ class Mole(lib.StreamObject):
         return self
     kernel = build
 
-    def _build_symmetry(self):
+    def _build_symmetry(self, *args, **kwargs):
         '''
         Update symmetry related attributes: topgroup, groupname, _symm_orig,
         _symm_axes, irrep_id, irrep_name, symm_orb
@@ -3039,9 +3043,9 @@ class Mole(lib.StreamObject):
 
         if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
             if isinstance(unit, (str, unicode)):
-                if unit.upper().startswith(('B', 'AU')):
+                if is_au(unit):
                     unit = 1.
-                else: #unit[:3].upper() == 'ANG':
+                else:
                     unit = 1./param.BOHR
             else:
                 unit = 1./unit
@@ -3178,7 +3182,7 @@ class Mole(lib.StreamObject):
         [ 0.          0.          2.07869874]
         '''
         ptr = self._atm[atm_id,PTR_COORD]
-        if unit[:3].upper() == 'ANG':
+        if not is_au(unit):
             return self._env[ptr:ptr+3] * param.BOHR
         else:
             return self._env[ptr:ptr+3].copy()
@@ -3187,7 +3191,7 @@ class Mole(lib.StreamObject):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
         c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T].copy()
-        if unit[:3].upper() == 'ANG':
+        if not is_au(unit):
             c *= param.BOHR
         return c
 

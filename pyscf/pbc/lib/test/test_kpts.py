@@ -28,6 +28,7 @@ def setUpModule():
                 1.7834  0.      1.7834
                 1.7834  1.7834  0.    '''
     cell.verbose = 0
+    cell.space_group_symmetry = True
     cell.build()
 
 def tearDownModule():
@@ -38,6 +39,9 @@ class KnownValues(unittest.TestCase):
     def test_kconserve(self):
         kpts = cell.make_kpts([3,4,5])
         kconserve = kpts_helper.get_kconserv(cell, kpts)
+        self.assertAlmostEqual(lib.finger(kconserve), 84.88659638289468, 9)
+        kpts = cell.make_kpts([3,4,5], space_group_symmetry=True)
+        kconserve = kpts_helper.KptsHelper(cell, kpts).kconserv
         self.assertAlmostEqual(lib.finger(kconserve), 84.88659638289468, 9)
 
     def test_kconserve3(self):

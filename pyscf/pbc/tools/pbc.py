@@ -975,3 +975,9 @@ def prolong_by_fft(f_sub, mesh, submesh):
     if input_is_vector:
         f_rs = f_rs[0]
     return f_rs
+
+def round_to_cell0(r, tol=1e-6):
+    '''Round scaled coordinates to reference unit cell
+    '''
+    from pyscf.pbc.lib import kpts_helper
+    return kpts_helper.round_to_fbz(r, wrap_around=False, tol=tol)

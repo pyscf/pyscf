@@ -27,6 +27,7 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
+from pyscf.gto.mole import is_au
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
@@ -292,7 +293,7 @@ class GradientsMixin(lib.StreamObject):
                      self.base.__class__.__name__)
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)
-        if 'ANG' in self.unit.upper():
+        if not is_au(self.unit):
             raise NotImplementedError('unit Eh/Ang is not supported')
         else:
             log.info('unit = Eh/Bohr')
