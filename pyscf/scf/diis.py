@@ -94,15 +94,19 @@ def get_err_vec_orig(s, d, f):
 def get_err_vec_orth(s, d, f, Corth):
     '''error vector in orthonormal basis = C.T.conj() (SDF - FDS) C'''
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
-        sdf = reduce(numpy.dot, (s,d,f))
-        errvec = Corth.conj().T.dot(sdf.conj().T - sdf).dot(Corth).ravel()
+        sdf = reduce(lib.dot, (s,d,f))
+        #errvec = Corth.conj().T.dot(sdf.conj().T - sdf).dot(Corth).ravel()
+        errvec = reduce(lib.dot, (Corth.conj().T, (sdf.conj().T - sdf), Corth)).ravel()
 
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
         errvec = []
         for i in range(f.shape[0]):
-            sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
+            sdf = reduce(lib.dot, (s[i], d[i], f[i]))
+            #errvec.append(
+            #    Corth[i].conj().T.dot(sdf.conj().T - sdf).dot(Corth[i]).ravel())
             errvec.append(
-                Corth[i].conj().T.dot(sdf.conj().T - sdf).dot(Corth[i]).ravel())
+                reduce(lib.dot, (Corth[i].conj().T, (sdf.conj().T - sdf), Corth[i])).ravel()
+            )
         errvec = numpy.vstack(errvec).ravel()
 
     elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
