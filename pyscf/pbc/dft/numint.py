@@ -27,6 +27,7 @@ from pyscf.dft.numint import OCCDROP
 from pyscf.dft.gen_grid import NBINS, CUTOFF, ALIGNMENT_UNIT
 from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import member, is_zero
+from pyscf.pbc.lib.kpts import KPoints
 
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
@@ -554,6 +555,8 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+    if isinstance(kpts, KPoints):
+        kpts = kpts.kpts_ibz
     xctype = ni._xc_type(xc_code)
     if xctype == 'LDA':
         ao_deriv = 0
@@ -843,6 +846,10 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+    if isinstance(kpts, KPoints):
+        mo_coeff = kpts.transform_mo_coeff(mo_coeff)
+        mo_occ = kpts.transform_mo_occ(mo_occ)
+        kpts = kpts.kpts
     xctype = ni._xc_type(xc_code)
     if xctype == 'GGA':
         ao_deriv = 1
