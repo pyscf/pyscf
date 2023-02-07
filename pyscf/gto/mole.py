@@ -1346,8 +1346,8 @@ def nao_2c(mol):
     l = mol._bas[:,ANG_OF]
     kappa = mol._bas[:,KAPPA_OF]
     dims = (l*4+2) * mol._bas[:,NCTR_OF]
-    dims[kappa<0] = l[kappa<0] * 2 + 2
-    dims[kappa>0] = l[kappa>0] * 2
+    dims[kappa<0] = (l[kappa<0] * 2 + 2) * mol._bas[kappa<0,NCTR_OF]
+    dims[kappa>0] = (l[kappa>0] * 2) * mol._bas[kappa>0,NCTR_OF]
     return dims.sum()
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
