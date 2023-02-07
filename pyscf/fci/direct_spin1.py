@@ -469,7 +469,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 
 def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None,
+               nroots=None, davidson_only=None, pspace_size=None, hop=None,
                max_memory=None, verbose=None, ecore=0, **kwargs):
     '''
     Args:
@@ -503,6 +503,8 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             full diagonlization (lapack eigh) for small systems
         pspace_size: int
             Number of determinants as the threshold of "small systems",
+        hop: function(c) => array_like_c
+            Function to use for the Hamiltonian multiplication with trial vector
 
     Note: davidson solver requires more arguments. For the parameters not
     dispatched, they can be passed to davidson solver via the extra keyword
@@ -555,9 +557,10 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
-    def hop(c):
-        hc = fci.contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
-        return hc.ravel()
+    if hop is None:
+        def hop(c):
+            hc = fci.contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
+            return hc.ravel()
 
     if ci0 is None:
         if callable(getattr(fci, 'get_init_guess', None)):
