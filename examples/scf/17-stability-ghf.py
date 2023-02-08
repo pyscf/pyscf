@@ -46,7 +46,7 @@ O1
 O2  1  1.2227
 O3  1  1.2227  2  114.0451''', 
             basis='6-31gs',
-            spin=2, verbose=4).build()
+            spin=2, verbose=5).build()
 mf = scf.UHF(mol).run()
 mf = stable_opt_internal(mf)
 mf.stability(external=True, tol=1e-6, verbose=9)

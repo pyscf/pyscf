@@ -2105,7 +2105,8 @@ class RHF(SCF):
             and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import rhf_stability
-        return rhf_stability(self, internal, external, verbose, return_status, tol)
+        return rhf_stability(self, internal, external, verbose, return_status,
+                             tol=tol)
 
     def nuc_grad_method(self):
         from pyscf.grad import rhf
