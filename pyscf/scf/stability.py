@@ -66,7 +66,7 @@ def dump_status(log, stable, method_class, stab_type):
                  'stability analysis')
 
 
-def rhf_stability(mf, internal=True, external=False, verbose=None, return_status=False, 
+def rhf_stability(mf, internal=True, external=False, verbose=None, return_status=False,
                   nroots=STAB_NROOTS, tol=1e-4):
     '''
     Stability analysis for RHF/RKS method.
@@ -217,7 +217,7 @@ def ghf_stability(mf, verbose=None, return_status=False,
                   nroots=STAB_NROOTS, tol=1e-4):
     '''
     Stability analysis for GHF/GKS method.
-    For real GHF/GKS, internal and real2complex stability analysis are performed, 
+    For real GHF/GKS, internal and real2complex stability analysis are performed,
     but currently only the mo (and stable) of internal analysis is returned.
     For complex GHF/GKS, internal stability analysis is performed.
 
@@ -329,7 +329,7 @@ def rhf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.debug('rhf_internal: lowest eigs of H = %s', e)
+    log.info('rhf_internal: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
     stable = not (e < -1e-5)
@@ -428,7 +428,7 @@ def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag1)] = 1
     e1, v1 = lib.davidson(hop1, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.debug('rhf_real2complex: lowest eigs of H = %s', e1)
+    log.info('rhf_real2complex: lowest eigs of H = %s', e1)
     if nroots != 1:
         e1, v1 = e1[0], v1[0]
     stable1 = not (e1 < -1e-5)
@@ -440,7 +440,7 @@ def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
         return dx/hdiagd
     x0 = v1
     e3, v3 = lib.davidson(hop2, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.debug('rhf_external: lowest eigs of H = %s', e3)
+    log.info('rhf_external: lowest eigs of H = %s', e3)
     if nroots != 1:
         e3, v3 = e3[0], v3[0]
     stable = not (e3 < -1e-5)
@@ -472,7 +472,7 @@ def rohf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.debug('rohf_internal: lowest eigs of H = %s', e)
+    log.info('rohf_internal: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
     stable = not (e < -1e-5)
@@ -508,7 +508,7 @@ def uhf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.debug('uhf_internal: lowest eigs of H = %s', e)
+    log.info('uhf_internal: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
     stable = not (e < -1e-5)
@@ -640,11 +640,11 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag1)] = 1
     e1, v = lib.davidson(hop1, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.debug('uhf_real2complex: lowest eigs of H = %s', e1)
+    log.info('uhf_real2complex: lowest eigs of H = %s', e1)
     if nroots != 1:
         e1, v = e1[0], v[0]
     stable1 = not (e1 < -1e-5)
-    dump_status(log, stable, f'{mf.__class__}', 'real -> complex')
+    dump_status(log, stable1, f'{mf.__class__}', 'real -> complex')
 
     def precond(dx, e, x0):
         hdiagd = hdiag2 - e
@@ -655,7 +655,7 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag2)] = 1
     e3, v = lib.davidson(hop2, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.debug('uhf_external: lowest eigs of H = %s', e3)
+    log.info('uhf_external: lowest eigs of H = %s', e3)
     if nroots != 1:
         e3, v = e3[0], v[0]
     stable = not (e3 < -1e-5)
@@ -809,7 +809,7 @@ def ghf_real(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.debug('ghf_real_internal: lowest eigs of H = %s', e)
+    log.info('ghf_real_internal: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
     stable = not (e < -1e-5)
@@ -829,7 +829,7 @@ def ghf_real(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag_r2c)] = 1
     e2, v2 = lib.davidson(hop_r2c, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.debug('ghf_real2complex: lowest eigs of H = %s', e2)
+    log.info('ghf_real2complex: lowest eigs of H = %s', e2)
     if nroots != 1:
         e2, v = e2[0], v[0]
     stable_r2c = not (e2 < -1e-5)
@@ -853,7 +853,7 @@ def ghf_complex(mf, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hop, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.debug('ghf_complex_internal: lowest eigs of H = %s', e)
+    log.info('ghf_complex_internal: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
     stable = not (e < -1e-5)

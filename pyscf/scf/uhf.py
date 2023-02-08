@@ -1027,7 +1027,7 @@ class UHF(hf.SCF):
             and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import uhf_stability
-        return uhf_stability(self, internal, external, verbose, return_status, 
+        return uhf_stability(self, internal, external, verbose, return_status,
                              tol=tol)
 
     def nuc_grad_method(self):
