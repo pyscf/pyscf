@@ -259,7 +259,7 @@ def _gen_hop_ghf_real2complex(mf, with_symmetry=True, verbose=None):
 
     vrespz = mf.gen_response(#singlet=None,
                              with_j=False,
-                             hermi=2)
+                             hermi=0)
     def hop_real2complex(x1):
         x1 = x1.reshape(nvir,nocc)
         if with_symmetry and mol.symmetry:
