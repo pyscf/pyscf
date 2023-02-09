@@ -85,18 +85,14 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
         max_strb_l = strsb_l.max()
     max_momentum = max(max_stra_l, max_strb_l, max_eri_l)
 
-    eri_irs, rank_eri, irrep_eri = reorder_eri(eri, norb, orbsym, max_momentum,
-                                               max_gerades)
-    eri_ir_dims = np.array([x.shape[0] for x in eri_irs], dtype=np.int32)
-    eri_irs = np.hstack([x.ravel() for x in eri_irs])
-
-    # FIXME: pass max_momentum, max_gerades to ...
+    eri, rank_eri, irrep_eri = reorder_eri(eri, norb, orbsym, max_momentum,
+                                           max_gerades)
+    eri_ir_dims = eri.ir_dims
     aidx, link_indexa = gen_str_irrep(strsa, orbsym, link_indexa, rank_eri,
                                       irrep_eri, max_momentum, max_gerades)
-    nas = np.array([x.size for x in aidx], dtype=np.int32)
+    nas = nbs = np.array([x.size for x in aidx], dtype=np.int32)
     if neleca == nelecb:
         bidx, link_indexb = aidx, link_indexa
-        nbs = nas
     else:
         bidx, link_indexb = gen_str_irrep(strsb, orbsym, link_indexb, rank_eri,
                                           irrep_eri, max_momentum, max_gerades)
@@ -104,7 +100,6 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
 
     nirreps = (max_momentum * 2 + 1) * max_gerades
     ug_offsets = max_momentum * 2 + 1
-
     ab_idx = [np.zeros(0, dtype=int)] * nirreps
     for ag in range(max_gerades):
         bg = wfn_ungerade ^ ag
@@ -125,7 +120,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     ci1 = np.zeros_like(ci0)
 
     libfci.FCIcontract_2e_cyl_sym(
-        eri_irs.ctypes.data_as(ctypes.c_void_p),
+        eri.ctypes.data_as(ctypes.c_void_p),
         ci0.ctypes.data_as(ctypes.c_void_p),
         ci1.ctypes.data_as(ctypes.c_void_p),
         eri_ir_dims.ctypes.data_as(ctypes.c_void_p),
@@ -172,7 +167,7 @@ def reorder_eri(eri, norb, orbsym, max_momentum, max_gerades):
 
     old_eri_irrep = np.asarray(ll_prod+max_momentum, dtype=np.int32)
     rank_in_irrep = np.empty_like(old_eri_irrep)
-    eri_irs = [np.zeros((0,0))] * nirreps
+    ir_idx_pairs = [None] * nirreps
 
     if max_gerades == 2:
         ug_offsets = max_momentum * 2 + 1
@@ -181,11 +176,11 @@ def reorder_eri(eri, norb, orbsym, max_momentum, max_gerades):
 
         # gerade
         idx = np.asarray(np.where((ll_prod == 0) & ~ug_prod)[0], dtype=np.int32)
-        eri_irs[max_momentum] = lib.take_2d(eri, idx, idx)
+        ir_idx_pairs[max_momentum] = (idx, idx)
         rank_in_irrep[idx] = np.arange(idx.size, dtype=np.int32)
         # ungerade
         idx = np.asarray(np.where((ll_prod == 0) & ug_prod)[0], dtype=np.int32)
-        eri_irs[max_momentum+ug_offsets] = lib.take_2d(eri, idx, idx)
+        ir_idx_pairs[max_momentum+ug_offsets] = (idx, idx)
         rank_in_irrep[idx] = np.arange(idx.size, dtype=np.int32)
 
         for ll in range(1, maxll+1):
@@ -194,8 +189,8 @@ def reorder_eri(eri, norb, orbsym, max_momentum, max_gerades):
             idx_m = np.asarray(np.where((ll_prod ==-ll) & ~ug_prod)[0], dtype=np.int32)
             assert idx_p.size == idx_m.size
             if idx_p.size > 0:
-                eri_irs[max_momentum+ll] = lib.take_2d(eri, idx_p, idx_p)
-                eri_irs[max_momentum-ll] = lib.take_2d(eri, idx_m, idx_m)
+                ir_idx_pairs[max_momentum+ll] = (idx_p, idx_p)
+                ir_idx_pairs[max_momentum-ll] = (idx_m, idx_m)
                 rank_in_irrep[idx_p] = np.arange(idx_p.size, dtype=np.int32)
                 rank_in_irrep[idx_m] = np.arange(idx_m.size, dtype=np.int32)
             # ungerade
@@ -203,13 +198,13 @@ def reorder_eri(eri, norb, orbsym, max_momentum, max_gerades):
             idx_m = np.asarray(np.where((ll_prod ==-ll) & ug_prod)[0], dtype=np.int32)
             assert idx_p.size == idx_m.size
             if idx_p.size > 0:
-                eri_irs[max_momentum+ll+ug_offsets] = lib.take_2d(eri, idx_p, idx_p)
-                eri_irs[max_momentum-ll+ug_offsets] = lib.take_2d(eri, idx_m, idx_m)
+                ir_idx_pairs[max_momentum+ll+ug_offsets] = (idx_p, idx_p)
+                ir_idx_pairs[max_momentum-ll+ug_offsets] = (idx_m, idx_m)
                 rank_in_irrep[idx_p] = np.arange(idx_p.size, dtype=np.int32)
                 rank_in_irrep[idx_m] = np.arange(idx_m.size, dtype=np.int32)
     else:
         idx = np.asarray(np.where(ll_prod == 0)[0], dtype=np.int32)
-        eri_irs[max_momentum] = lib.take_2d(eri, idx, idx)
+        ir_idx_pairs[max_momentum] = (idx, idx)
         rank_in_irrep[idx] = np.arange(idx.size, dtype=np.int32)
 
         for ll in range(1, maxll+1):
@@ -217,10 +212,19 @@ def reorder_eri(eri, norb, orbsym, max_momentum, max_gerades):
             idx_m = np.asarray(np.where(ll_prod ==-ll)[0], dtype=np.int32)
             assert idx_p.size == idx_m.size
             if idx_p.size > 0:
-                eri_irs[max_momentum+ll] = lib.take_2d(eri, idx_p, idx_p)
-                eri_irs[max_momentum-ll] = lib.take_2d(eri, idx_m, idx_m)
+                ir_idx_pairs[max_momentum+ll] = (idx_p, idx_p)
+                ir_idx_pairs[max_momentum-ll] = (idx_m, idx_m)
                 rank_in_irrep[idx_p] = np.arange(idx_p.size, dtype=np.int32)
                 rank_in_irrep[idx_m] = np.arange(idx_m.size, dtype=np.int32)
+
+    ir_dims = np.hstack([0 if x is None else x[0].size for x in ir_idx_pairs])
+    eri_irs = np.empty((ir_dims**2).sum())
+    p1 = 0
+    for idx in ir_idx_pairs:
+        if idx is not None:
+            p0, p1 = p1, p1 + idx[0].size**2
+            lib.take_2d(eri, idx[0], idx[1], out=eri_irs[p0:p1])
+    eri_irs = lib.tag_array(eri_irs, ir_dims=np.asarray(ir_dims, dtype=np.int32))
     return eri_irs, rank_in_irrep, old_eri_irrep
 
 def argsort_strs_by_irrep(strs, orbsym, max_momentum, max_gerades):
@@ -414,7 +418,6 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
         wfnsym = wfnsym1
     return wfnsym
 
-#?def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri, max_momentum):
 def sym_allowed_indices(nelec, orbsym, wfnsym):
     '''Indices of symmetry allowed determinants for each irrep'''
     norb = orbsym.size
@@ -579,7 +582,10 @@ class FCISolver(direct_spin1_symm.FCISolver):
 
         neleca, nelecb = direct_spin1._unpack_nelec(nelec)
         link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+        if neleca == nelecb:
+            link_indexb = link_indexa
+        else:
+            link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
 
         with lib.temporary_env(self, wfnsym=wfnsym_ir):
             e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
