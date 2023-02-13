@@ -46,10 +46,10 @@ typedef struct {
 
         // Integral mask of SupMole based on s-function overlap
         int8_t *ovlp_mask;
-        // Integral screening condition (ij|ij) or log((ij|ij))
-        float *q_cond;
+        // Integral screening condition ~log((ij|ij))/2
+        uint8_t *qindex;
         // cutoff for schwarz condtion
-        float cutoff;
+        uint32_t cutoff;
         float eta;
 
         // parameters for ft_ao
@@ -64,4 +64,4 @@ typedef struct {
 
 // supports integrals value between exp(-115/2) - exp((127-115)/2)
 // 1e-25 - 4e2
-#define CUT_OFFSET 115
+#define CUTOFF_OFFSET 115

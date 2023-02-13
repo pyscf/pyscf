@@ -36,7 +36,7 @@ void PBCminimal_CINTEnvVars(CINTEnvVars *envs, int *atm, int natm, int *bas, int
 
 void PBCVHF_contract_k_s1(int (*intor)(), double *vk, double *dms, double *buf,
                           int *cell0_shls, int *bvk_cells,
-                          int *dm_translation, int n_dm, float *dm_cond,
+                          int *dm_translation, int n_dm, uint8_t *dmindex,
                           float *rij_cond, float *rkl_cond,
                           CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -53,13 +53,13 @@ void PBCVHF_contract_k_s1(int (*intor)(), double *vk, double *dms, double *buf,
         int dm_jk_off = dm_translation[cell_j * bvk_ncells + cell_k];
         size_t Nbasp = nbasp;
         size_t nn0 = nbasp * nbasp;
-        float log_cutoff = envs_bvk->cutoff;
-        float dm_jk_cond = dm_cond[dm_jk_off*nn0 + jsh_cell0*Nbasp+ksh_cell0];
-        if (dm_jk_cond < log_cutoff) {
+        uint8_t cutoff = envs_bvk->cutoff;
+        uint8_t dmidx_jk = dmindex[dm_jk_off*nn0 + jsh_cell0*Nbasp+ksh_cell0];
+        if (dmidx_jk < cutoff) {
                 return;
         }
-        log_cutoff -= dm_jk_cond;
-        if (!(*intor)(buf, cell0_shls, bvk_cells, log_cutoff,
+        cutoff += CUTOFF_OFFSET * 2 - dmidx_jk;
+        if (!(*intor)(buf, cell0_shls, bvk_cells, cutoff,
                       rij_cond, rkl_cond, envs_cint, envs_bvk)) {
                 return;
         }
@@ -101,7 +101,7 @@ void PBCVHF_contract_k_s1(int (*intor)(), double *vk, double *dms, double *buf,
 
 static void contract_k_s2_kgtl(int (*intor)(), double *vk, double *dms, double *buf,
                                int *cell0_shls, int *bvk_cells,
-                               int *dm_translation, int n_dm, float *dm_cond,
+                               int *dm_translation, int n_dm, uint8_t *dmindex,
                                float *rij_cond, float *rkl_cond,
                                CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -119,15 +119,15 @@ static void contract_k_s2_kgtl(int (*intor)(), double *vk, double *dms, double *
         int dm_jl_off = dm_translation[cell_j*bvk_ncells+cell_l];
         size_t Nbasp = nbasp;
         size_t nn0 = Nbasp * Nbasp;
-        float log_cutoff = envs_bvk->cutoff;
-        float dm_jk_cond = dm_cond[dm_jk_off*nn0 + jsh_cell0*Nbasp+ksh_cell0];
-        float dm_jl_cond = dm_cond[dm_jl_off*nn0 + jsh_cell0*Nbasp+lsh_cell0];
-        float dm_cond_max = MAX(dm_jk_cond, dm_jl_cond);
-        if (dm_cond_max < log_cutoff) {
+        uint8_t cutoff = envs_bvk->cutoff;
+        uint8_t dmidx_jk = dmindex[dm_jk_off*nn0 + jsh_cell0*Nbasp+ksh_cell0];
+        uint8_t dmidx_jl = dmindex[dm_jl_off*nn0 + jsh_cell0*Nbasp+lsh_cell0];
+        uint8_t dmidx_max = MAX(dmidx_jk, dmidx_jl);
+        if (dmidx_max < cutoff) {
                 return;
         }
-        log_cutoff -= dm_cond_max;
-        if (!(*intor)(buf, cell0_shls, bvk_cells, log_cutoff,
+        cutoff += CUTOFF_OFFSET * 2 - dmidx_max;
+        if (!(*intor)(buf, cell0_shls, bvk_cells, cutoff,
                       rij_cond, rkl_cond, envs_cint, envs_bvk)) {
                 return;
         }
@@ -174,7 +174,7 @@ static void contract_k_s2_kgtl(int (*intor)(), double *vk, double *dms, double *
 
 void PBCVHF_contract_k_s2kl(int (*intor)(), double *vk, double *dms, double *buf,
                             int *cell0_shls, int *bvk_cells,
-                            int *dm_translation, int n_dm, float *dm_cond,
+                            int *dm_translation, int n_dm, uint8_t *dmindex,
                             float *rij_cond, float *rkl_cond,
                             CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -183,11 +183,11 @@ void PBCVHF_contract_k_s2kl(int (*intor)(), double *vk, double *dms, double *buf
         int lsh = cell0_shls[3] + bvk_cells[3] * nbasp;
         if (ksh > lsh) {
                 contract_k_s2_kgtl(intor, vk, dms, buf, cell0_shls, bvk_cells,
-                                   dm_translation, n_dm, dm_cond,
+                                   dm_translation, n_dm, dmindex,
                                    rij_cond, rkl_cond, envs_cint, envs_bvk);
         } else if (ksh == lsh) {
                 PBCVHF_contract_k_s1(intor, vk, dms, buf, cell0_shls, bvk_cells,
-                                     dm_translation, n_dm, dm_cond,
+                                     dm_translation, n_dm, dmindex,
                                      rij_cond, rkl_cond, envs_cint, envs_bvk);
         }
 }
@@ -201,7 +201,7 @@ void PBCVHF_contract_k_s2kl(int (*intor)(), double *vk, double *dms, double *buf
 //        continue
 void PBCVHF_contract_j_s1(int (*intor)(), double *vj, double *dms, double *buf,
                           int *cell0_shls, int *bvk_cells,
-                          int *dm_translation, int n_dm, float *dm_cond,
+                          int *dm_translation, int n_dm, uint8_t *dmindex,
                           float *rij_cond, float *rkl_cond,
                           CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -218,13 +218,13 @@ void PBCVHF_contract_j_s1(int (*intor)(), double *vj, double *dms, double *buf,
         int dm_lk_off = dm_translation[cell_l * bvk_ncells + cell_k];
         size_t Nbasp = nbasp;
         size_t nn0 = Nbasp * Nbasp;
-        float log_cutoff = envs_bvk->cutoff;
-        float dm_lk_cond = dm_cond[dm_lk_off*nn0 + lsh_cell0*Nbasp+ksh_cell0];
-        if (dm_lk_cond < log_cutoff) {
+        uint8_t cutoff = envs_bvk->cutoff;
+        uint8_t dmidx_lk = dmindex[dm_lk_off*nn0 + lsh_cell0*Nbasp+ksh_cell0];
+        if (dmidx_lk < cutoff) {
                 return;
         }
-        log_cutoff -= dm_lk_cond;
-        if (!(*intor)(buf, cell0_shls, bvk_cells, log_cutoff,
+        cutoff += CUTOFF_OFFSET * 2 - dmidx_lk;
+        if (!(*intor)(buf, cell0_shls, bvk_cells, cutoff,
                       rij_cond, rkl_cond, envs_cint, envs_bvk)) {
                 return;
         }
@@ -266,7 +266,7 @@ void PBCVHF_contract_j_s1(int (*intor)(), double *vj, double *dms, double *buf,
 
 static void contract_j_s2_kgtl(int (*intor)(), double *vj, double *dms, double *buf,
                                int *cell0_shls, int *bvk_cells,
-                               int *dm_translation, int n_dm, float *dm_cond,
+                               int *dm_translation, int n_dm, uint8_t *dmindex,
                                float *rij_cond, float *rkl_cond,
                                CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -284,15 +284,15 @@ static void contract_j_s2_kgtl(int (*intor)(), double *vj, double *dms, double *
         int dm_kl_off = dm_translation[cell_k * bvk_ncells + cell_l];
         size_t Nbasp = nbasp;
         size_t nn0 = Nbasp * Nbasp;
-        float log_cutoff = envs_bvk->cutoff;
-        float dm_lk_cond = dm_cond[dm_lk_off*nn0 + lsh_cell0*Nbasp+ksh_cell0];
-        float dm_kl_cond = dm_cond[dm_kl_off*nn0 + ksh_cell0*Nbasp+lsh_cell0];
-        float dm_cond_max = MAX(dm_lk_cond, dm_kl_cond);
-        if (dm_cond_max < log_cutoff) {
+        uint8_t cutoff = envs_bvk->cutoff;
+        uint8_t dmidx_lk = dmindex[dm_lk_off*nn0 + lsh_cell0*Nbasp+ksh_cell0];
+        uint8_t dmidx_kl = dmindex[dm_kl_off*nn0 + ksh_cell0*Nbasp+lsh_cell0];
+        uint8_t dmidx_max = MAX(dmidx_lk, dmidx_kl);
+        if (dmidx_max < cutoff) {
                 return;
         }
-        log_cutoff -= dm_cond_max;
-        if (!(*intor)(buf, cell0_shls, bvk_cells, log_cutoff,
+        cutoff += CUTOFF_OFFSET * 2 - dmidx_max;
+        if (!(*intor)(buf, cell0_shls, bvk_cells, cutoff,
                       rij_cond, rkl_cond, envs_cint, envs_bvk)) {
                 return;
         }
@@ -335,7 +335,7 @@ static void contract_j_s2_kgtl(int (*intor)(), double *vj, double *dms, double *
 
 void PBCVHF_contract_j_s2kl(int (*intor)(), double *vj, double *dms, double *buf,
                             int *cell0_shls, int *bvk_cells,
-                            int *dm_translation, int n_dm, float *dm_cond,
+                            int *dm_translation, int n_dm, uint8_t *dmindex,
                             float *rij_cond, float *rkl_cond,
                             CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -344,18 +344,18 @@ void PBCVHF_contract_j_s2kl(int (*intor)(), double *vj, double *dms, double *buf
         int lsh = cell0_shls[3] + bvk_cells[3] * nbasp;
         if (ksh > lsh) {
                 contract_j_s2_kgtl(intor, vj, dms, buf, cell0_shls, bvk_cells,
-                                   dm_translation, n_dm, dm_cond,
+                                   dm_translation, n_dm, dmindex,
                                    rij_cond, rkl_cond, envs_cint, envs_bvk);
         } else if (ksh == lsh) {
                 PBCVHF_contract_j_s1(intor, vj, dms, buf, cell0_shls, bvk_cells,
-                                     dm_translation, n_dm, dm_cond,
+                                     dm_translation, n_dm, dmindex,
                                      rij_cond, rkl_cond, envs_cint, envs_bvk);
         }
 }
 
 void PBCVHF_contract_jk_s1(int (*intor)(), double *jk, double *dms, double *buf,
                            int *cell0_shls, int *bvk_cells,
-                           int *dm_translation, int n_dm, float *dm_cond,
+                           int *dm_translation, int n_dm, uint8_t *dmindex,
                            float *rij_cond, float *rkl_cond,
                            CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -373,15 +373,15 @@ void PBCVHF_contract_jk_s1(int (*intor)(), double *jk, double *dms, double *buf,
         int dm_jk_off = dm_translation[cell_j * bvk_ncells + cell_k];
         size_t Nbasp = nbasp;
         size_t nn0 = Nbasp * Nbasp;
-        float log_cutoff = envs_bvk->cutoff;
-        float dm_lk_cond = dm_cond[dm_lk_off*nn0 + lsh_cell0*Nbasp+ksh_cell0];
-        float dm_jk_cond = dm_cond[dm_jk_off*nn0 + jsh_cell0*Nbasp+ksh_cell0];
-        float dm_cond_max = MAX(dm_lk_cond, dm_jk_cond);
-        if (dm_cond_max < log_cutoff) {
+        uint8_t cutoff = envs_bvk->cutoff;
+        uint8_t dmidx_lk = dmindex[dm_lk_off*nn0 + lsh_cell0*Nbasp+ksh_cell0];
+        uint8_t dmidx_jk = dmindex[dm_jk_off*nn0 + jsh_cell0*Nbasp+ksh_cell0];
+        uint8_t dmidx_max = MAX(dmidx_lk, dmidx_jk);
+        if (dmidx_max < cutoff) {
                 return;
         }
-        log_cutoff -= dm_cond_max;
-        if (!(*intor)(buf, cell0_shls, bvk_cells, log_cutoff,
+        cutoff += CUTOFF_OFFSET * 2 - dmidx_max;
+        if (!(*intor)(buf, cell0_shls, bvk_cells, cutoff,
                       rij_cond, rkl_cond, envs_cint, envs_bvk)) {
                 return;
         }
@@ -429,7 +429,7 @@ void PBCVHF_contract_jk_s1(int (*intor)(), double *jk, double *dms, double *buf,
 
 static void contract_jk_s2_kgtl(int (*intor)(), double *jk, double *dms, double *buf,
                                 int *cell0_shls, int *bvk_cells,
-                                int *dm_translation, int n_dm, float *dm_cond,
+                                int *dm_translation, int n_dm, uint8_t *dmindex,
                                 float *rij_cond, float *rkl_cond,
                                 CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -449,19 +449,19 @@ static void contract_jk_s2_kgtl(int (*intor)(), double *jk, double *dms, double 
         int dm_kl_off = dm_translation[cell_k*bvk_ncells+cell_l];
         size_t Nbasp = nbasp;
         size_t nn0 = Nbasp * Nbasp;
-        float log_cutoff = envs_bvk->cutoff;
-        float dm_jk_cond = dm_cond[dm_jk_off*nn0 + jsh_cell0*Nbasp+ksh_cell0];
-        float dm_jl_cond = dm_cond[dm_jl_off*nn0 + jsh_cell0*Nbasp+lsh_cell0];
-        float dm_lk_cond = dm_cond[dm_lk_off*nn0 + lsh_cell0*Nbasp+ksh_cell0];
-        float dm_kl_cond = dm_cond[dm_kl_off*nn0 + ksh_cell0*Nbasp+lsh_cell0];
-        float dm_cond_max = MAX(dm_jk_cond, dm_jl_cond);
-        dm_cond_max = MAX(dm_cond_max, dm_lk_cond);
-        dm_cond_max = MAX(dm_cond_max, dm_kl_cond);
-        if (dm_cond_max < log_cutoff) {
+        uint8_t cutoff = envs_bvk->cutoff;
+        uint8_t dmidx_jk = dmindex[dm_jk_off*nn0 + jsh_cell0*Nbasp+ksh_cell0];
+        uint8_t dmidx_jl = dmindex[dm_jl_off*nn0 + jsh_cell0*Nbasp+lsh_cell0];
+        uint8_t dmidx_lk = dmindex[dm_lk_off*nn0 + lsh_cell0*Nbasp+ksh_cell0];
+        uint8_t dmidx_kl = dmindex[dm_kl_off*nn0 + ksh_cell0*Nbasp+lsh_cell0];
+        uint8_t dmidx_max = MAX(dmidx_jk, dmidx_jl);
+        dmidx_max = MAX(dmidx_max, dmidx_lk);
+        dmidx_max = MAX(dmidx_max, dmidx_kl);
+        if (dmidx_max < cutoff) {
                 return;
         }
-        log_cutoff -= dm_cond_max;
-        if (!(*intor)(buf, cell0_shls, bvk_cells, log_cutoff,
+        cutoff += CUTOFF_OFFSET * 2 - dmidx_max;
+        if (!(*intor)(buf, cell0_shls, bvk_cells, cutoff,
                       rij_cond, rkl_cond, envs_cint, envs_bvk)) {
                 return;
         }
@@ -515,7 +515,7 @@ static void contract_jk_s2_kgtl(int (*intor)(), double *jk, double *dms, double 
 
 void PBCVHF_contract_jk_s2kl(int (*intor)(), double *jk, double *dms, double *buf,
                              int *cell0_shls, int *bvk_cells,
-                             int *dm_translation, int n_dm, float *dm_cond,
+                             int *dm_translation, int n_dm, uint8_t *dmindex,
                              float *rij_cond, float *rkl_cond,
                              CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -524,11 +524,11 @@ void PBCVHF_contract_jk_s2kl(int (*intor)(), double *jk, double *dms, double *bu
         int lsh = cell0_shls[3] + bvk_cells[3] * nbasp;
         if (ksh > lsh) {
                 contract_jk_s2_kgtl(intor, jk, dms, buf, cell0_shls, bvk_cells,
-                                    dm_translation, n_dm, dm_cond,
+                                    dm_translation, n_dm, dmindex,
                                     rij_cond, rkl_cond, envs_cint, envs_bvk);
         } else if (ksh == lsh) {
                 PBCVHF_contract_jk_s1(intor, jk, dms, buf, cell0_shls, bvk_cells,
-                                      dm_translation, n_dm, dm_cond,
+                                      dm_translation, n_dm, dmindex,
                                       rij_cond, rkl_cond, envs_cint, envs_bvk);
         }
 }
@@ -661,38 +661,38 @@ void PBCapprox_bvk_rcond(float *rcond, int ish_bvk, int jsh_bvk, BVKEnvs *envs_b
         }
 }
 
-static float _max_q_cond(float *qcond, size_t Nbas, int ish0,
-                        int ish1, int jsh0, int jsh1)
+static uint8_t _max_qindex(uint8_t *qindex, size_t Nbas, int ish0,
+                           int ish1, int jsh0, int jsh1)
 {
-        float q_max = -500.f;
+        uint8_t q_max = 0;
         int ish, jsh;
         for (ish = ish0; ish < ish1; ish++) {
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                q_max = MAX(q_max, qcond[ish*Nbas+jsh]);
+                q_max = MAX(q_max, qindex[ish*Nbas+jsh]);
         } }
         return q_max;
 }
 
-static float _max_dm_cond(float *dm_cond, BVKEnvs *envs_bvk)
+static uint8_t _max_dmindex(uint8_t *dmindex, BVKEnvs *envs_bvk)
 {
         int bvk_ncells = envs_bvk->ncells;
         int nbasp = envs_bvk->nbasp;
         int i;
-        float dm_max = -500.f;
+        uint8_t dm_max = 0;
         for (i = 0; i < nbasp*nbasp*bvk_ncells; i++) {
-                dm_max = MAX(dm_max, dm_cond[i]);
+                dm_max = MAX(dm_max, dmindex[i]);
         }
         return dm_max;
 }
 
-static void qcond_abstract(float *cond_abs, float *qcond, size_t Nbas,
-                           BVKEnvs *envs_bvk)
+static void qindex_abstract(uint8_t *cond_abs, uint8_t *qindex, size_t Nbas,
+                            BVKEnvs *envs_bvk)
 {
         int nbasp = envs_bvk->nbasp;
         int nbas_bvk = nbasp * envs_bvk->ncells;
         int *seg_loc = envs_bvk->seg_loc;
         int *seg2sh = envs_bvk->seg2sh;
-        float q_max;
+        uint8_t q_max;
         int ish_bvk, jsh_bvk;
         int ish0, ish1, jsh0, jsh1;
         for (ish_bvk = 0; ish_bvk < nbas_bvk; ish_bvk++) {
@@ -701,7 +701,7 @@ static void qcond_abstract(float *cond_abs, float *qcond, size_t Nbas,
                 jsh0 = seg2sh[seg_loc[jsh_bvk]];
                 ish1 = seg2sh[seg_loc[ish_bvk+1]];
                 jsh1 = seg2sh[seg_loc[jsh_bvk+1]];
-                q_max = _max_q_cond(qcond, Nbas, ish0, ish1, jsh0, jsh1);
+                q_max = _max_qindex(qindex, Nbas, ish0, ish1, jsh0, jsh1);
                 cond_abs[ish_bvk*nbas_bvk+jsh_bvk] = q_max;
                 cond_abs[jsh_bvk*nbas_bvk+ish_bvk] = q_max;
         } }
@@ -720,9 +720,9 @@ void PBCVHF_direct_drv(void (*fdot)(), int (*intor)(),
                        int nkpts, int nbands, int nbasp, int comp,
                        int *seg_loc, int *seg2sh, int *cell0_ao_loc,
                        int *cell0_bastype, int *shls_slice, int *dm_translation,
-                       float *q_cond, float *dm_cond, float log_cutoff,
-                       float *qcell0_ijij, float *qcell0_iijj, int *ish_idx, int *jsh_idx,
-                       CINTOpt *cintopt, int cache_size,
+                       uint8_t *qindex, uint8_t *dmindex, uint8_t cutoff,
+                       uint8_t *qcell0_ijij, uint8_t *qcell0_iijj,
+                       int *ish_idx, int *jsh_idx, CINTOpt *cintopt, int cache_size,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         size_t ish0 = shls_slice[0];
@@ -741,7 +741,7 @@ void PBCVHF_direct_drv(void (*fdot)(), int (*intor)(),
         BVKEnvs envs_bvk = {bvk_ncells, nimgs,
                 nkpts, nbands, nbasp, comp, 0, 0,
                 seg_loc, seg2sh, cell0_ao_loc, shls_slice, NULL, NULL, NULL,
-                NULL, q_cond, log_cutoff};
+                NULL, qindex, cutoff};
 
         int rs_cell_nbas = seg_loc[nbasp];
         float *rij_cond = malloc(sizeof(float) * rs_cell_nbas*nbas*3);
@@ -752,11 +752,11 @@ void PBCVHF_direct_drv(void (*fdot)(), int (*intor)(),
 
         size_t Nbas = nbas;
         size_t nbas_bvk = nbasp * nbands;
-        float *qcond_iijj = malloc(sizeof(float) * nbas_bvk * nbas_bvk);
-        qcond_abstract(qcond_iijj, q_cond+Nbas*Nbas, Nbas, &envs_bvk);
+        uint8_t *qidx_iijj = malloc(sizeof(uint8_t) * nbas_bvk * nbas_bvk);
+        qindex_abstract(qidx_iijj, qindex+Nbas*Nbas, Nbas, &envs_bvk);
 
-        float dm_cond_max = _max_dm_cond(dm_cond, &envs_bvk);
-        log_cutoff -= MIN(dm_cond_max, 0);
+        uint8_t dmidx_max = _max_dmindex(dmindex, &envs_bvk);
+        cutoff += CUTOFF_OFFSET * 2 - MIN(dmidx_max, CUTOFF_OFFSET);
 
 #pragma omp parallel
 {
@@ -770,24 +770,24 @@ void PBCVHF_direct_drv(void (*fdot)(), int (*intor)(),
         double *v_priv = calloc(size_v, sizeof(double));
         double *buf = malloc(sizeof(double) * MAX(cache_size, dsh_max*3));
         float *rkl_cond = malloc(sizeof(float) * dsh_max*dsh_max*3);
-        float *qk, *ql, *qcell0k, *qcell0l;
-        float kl_cutoff, qklkl_max;
+        uint8_t *qk, *ql, *qcell0k, *qcell0l;
+        uint8_t kl_cutoff, qklkl_max;
 
 #pragma omp for schedule(dynamic, 1)
         for (kl = 0; kl < nkl; kl++) {
                 k = kl / nlsh + ksh0;
                 l = kl % nlsh + lsh0;
-                qklkl_max = _max_q_cond(q_cond, Nbas,
+                qklkl_max = _max_qindex(qindex, Nbas,
                                         seg2sh[seg_loc[k]], seg2sh[seg_loc[k+1]],
                                         seg2sh[seg_loc[l]], seg2sh[seg_loc[l+1]]);
 
-                if (qklkl_max < log_cutoff ||
+                if (qklkl_max + CUTOFF_OFFSET < cutoff ||
                     seg_loc[k] == seg_loc[k+1] || seg_loc[l] == seg_loc[l+1]) {
                         continue;
                 }
-                kl_cutoff = log_cutoff - qklkl_max;
-                qk = qcond_iijj + k * nbas_bvk;
-                ql = qcond_iijj + l * nbas_bvk;
+                kl_cutoff = cutoff - qklkl_max;
+                qk = qidx_iijj + k * nbas_bvk;
+                ql = qidx_iijj + l * nbas_bvk;
                 qcell0k = qcell0_iijj + k * nbasp;
                 qcell0l = qcell0_iijj + l * nbasp;
 
@@ -804,15 +804,15 @@ void PBCVHF_direct_drv(void (*fdot)(), int (*intor)(),
                         if (qcell0_ijij[j*nbasp+i] < kl_cutoff) {
                                 break;
                         }
-                        if (qcell0k[i] + ql[j] < log_cutoff ||
-                            qcell0l[i] + qk[j] < log_cutoff) {
+                        if (qcell0k[i] + ql[j] < cutoff ||
+                            qcell0l[i] + qk[j] < cutoff) {
                                 continue;
                         }
                         cell0_shls[0] = i;
                         cell0_shls[1] = j % nbasp;
                         bvk_cells[1] = j / nbasp;
                         (*fdot)(intor, v_priv, dms, buf, cell0_shls, bvk_cells,
-                                dm_translation, n_dm, dm_cond,
+                                dm_translation, n_dm, dmindex,
                                 rij_cond, rkl_cond, &envs_cint, &envs_bvk);
                 }
         }
@@ -827,7 +827,7 @@ void PBCVHF_direct_drv(void (*fdot)(), int (*intor)(),
         free(rkl_cond);
 }
         free(rij_cond);
-        free(qcond_iijj);
+        free(qidx_iijj);
 }
 
 #define DIFFUSED        2
@@ -838,9 +838,9 @@ void PBCVHF_direct_drv_nodddd(
                        int nkpts, int nbands, int nbasp, int comp,
                        int *seg_loc, int *seg2sh, int *cell0_ao_loc,
                        int *cell0_bastype, int *shls_slice, int *dm_translation,
-                       float *q_cond, float *dm_cond, float log_cutoff,
-                       float *qcell0_ijij, float *qcell0_iijj, int *ish_idx, int *jsh_idx,
-                       CINTOpt *cintopt, int cache_size,
+                       uint8_t *qindex, uint8_t *dmindex, uint8_t cutoff,
+                       uint8_t *qcell0_ijij, uint8_t *qcell0_iijj,
+                       int *ish_idx, int *jsh_idx, CINTOpt *cintopt, int cache_size,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         size_t ish0 = shls_slice[0];
@@ -859,7 +859,7 @@ void PBCVHF_direct_drv_nodddd(
         BVKEnvs envs_bvk = {bvk_ncells, nimgs,
                 nkpts, nbands, nbasp, comp, 0, 0,
                 seg_loc, seg2sh, cell0_ao_loc, shls_slice, NULL, NULL, NULL,
-                NULL, q_cond, log_cutoff};
+                NULL, qindex, cutoff};
 
         int rs_cell_nbas = seg_loc[nbasp];
         float *rij_cond = malloc(sizeof(float) * rs_cell_nbas*nbas*3);
@@ -870,11 +870,11 @@ void PBCVHF_direct_drv_nodddd(
 
         size_t Nbas = nbas;
         size_t nbas_bvk = nbasp * nbands;
-        float *qcond_iijj = malloc(sizeof(float) * nbas_bvk * nbas_bvk);
-        qcond_abstract(qcond_iijj, q_cond+Nbas*Nbas, Nbas, &envs_bvk);
+        uint8_t *qidx_iijj = malloc(sizeof(uint8_t) * nbas_bvk * nbas_bvk);
+        qindex_abstract(qidx_iijj, qindex+Nbas*Nbas, Nbas, &envs_bvk);
 
-        float dm_cond_max = _max_dm_cond(dm_cond, &envs_bvk);
-        log_cutoff -= MIN(dm_cond_max, 0);
+        uint8_t dmidx_max = _max_dmindex(dmindex, &envs_bvk);
+        cutoff += CUTOFF_OFFSET * 2 - MIN(dmidx_max, 0);
 
         int *i_c_idx = malloc(sizeof(int) * nish * njsh * 2);
         int *j_c_idx = i_c_idx + nish * njsh;
@@ -883,7 +883,7 @@ void PBCVHF_direct_drv_nodddd(
         for (nij = 0; nij < nish * njsh; nij++) {
                 int ip = ish_idx[nij];
                 int jp = jsh_idx[nij];
-                if (qcell0_ijij[jp*nbasp+ip] < log_cutoff) {
+                if (qcell0_ijij[jp*nbasp+ip] + CUTOFF_OFFSET < cutoff) {
                         nij++;
                         break;
                 }
@@ -909,24 +909,24 @@ void PBCVHF_direct_drv_nodddd(
         double *v_priv = calloc(size_v, sizeof(double));
         double *buf = malloc(sizeof(double) * MAX(cache_size, dsh_max*3));
         float *rkl_cond = malloc(sizeof(float) * dsh_max*dsh_max*3);
-        float *qk, *ql, *qcell0k, *qcell0l;
-        float kl_cutoff, qklkl_max;
+        uint8_t *qk, *ql, *qcell0k, *qcell0l;
+        uint8_t kl_cutoff, qklkl_max;
 
 #pragma omp for schedule(dynamic, 1)
         for (kl = 0; kl < nkl; kl++) {
                 k = kl / nlsh + ksh0;
                 l = kl % nlsh + lsh0;
-                qklkl_max = _max_q_cond(q_cond, Nbas,
+                qklkl_max = _max_qindex(qindex, Nbas,
                                         seg2sh[seg_loc[k]], seg2sh[seg_loc[k+1]],
                                         seg2sh[seg_loc[l]], seg2sh[seg_loc[l+1]]);
 
-                if (qklkl_max < log_cutoff ||
+                if (qklkl_max + CUTOFF_OFFSET < cutoff ||
                     seg_loc[k] == seg_loc[k+1] || seg_loc[l] == seg_loc[l+1]) {
                         continue;
                 }
-                kl_cutoff = log_cutoff - qklkl_max;
-                qk = qcond_iijj + k * nbas_bvk;
-                ql = qcond_iijj + l * nbas_bvk;
+                kl_cutoff = cutoff - qklkl_max;
+                qk = qidx_iijj + k * nbas_bvk;
+                ql = qidx_iijj + l * nbas_bvk;
                 qcell0k = qcell0_iijj + k * nbasp;
                 qcell0l = qcell0_iijj + l * nbasp;
 
@@ -948,15 +948,15 @@ void PBCVHF_direct_drv_nodddd(
                                 if (qcell0_ijij[j*nbasp+i] < kl_cutoff) {
                                         break;
                                 }
-                                if (qcell0k[i] + ql[j] < log_cutoff ||
-                                    qcell0l[i] + qk[j] < log_cutoff) {
+                                if (qcell0k[i] + ql[j] < cutoff ||
+                                    qcell0l[i] + qk[j] < cutoff) {
                                         continue;
                                 }
                                 cell0_shls[0] = i;
                                 cell0_shls[1] = j % nbasp;
                                 bvk_cells[1] = j / nbasp;
                                 (*fdot)(intor, v_priv, dms, buf, cell0_shls, bvk_cells,
-                                        dm_translation, n_dm, dm_cond,
+                                        dm_translation, n_dm, dmindex,
                                         rij_cond, rkl_cond, &envs_cint, &envs_bvk);
                         }
                 } else {
@@ -967,15 +967,15 @@ void PBCVHF_direct_drv_nodddd(
                                 if (qcell0_ijij[j*nbasp+i] < kl_cutoff) {
                                         break;
                                 }
-                                if (qcell0k[i] + ql[j] < log_cutoff ||
-                                    qcell0l[i] + qk[j] < log_cutoff) {
+                                if (qcell0k[i] + ql[j] < cutoff ||
+                                    qcell0l[i] + qk[j] < cutoff) {
                                         continue;
                                 }
                                 cell0_shls[0] = i;
                                 cell0_shls[1] = j % nbasp;
                                 bvk_cells[1] = j / nbasp;
                                 (*fdot)(intor, v_priv, dms, buf, cell0_shls, bvk_cells,
-                                        dm_translation, n_dm, dm_cond,
+                                        dm_translation, n_dm, dmindex,
                                         rij_cond, rkl_cond, &envs_cint, &envs_bvk);
                         }
                 }
@@ -992,7 +992,7 @@ void PBCVHF_direct_drv_nodddd(
 }
         free(i_c_idx);
         free(rij_cond);
-        free(qcond_iijj);
+        free(qidx_iijj);
 }
 
 static int _int2e_swap_jk(double *buf, int *dims, int *shls,
@@ -1072,10 +1072,10 @@ void PBCVHFsetnr_direct_scf1(int (*intor)(), CINTOpt *cintopt, uint8_t *qindex,
                                         tmp = fabs(buf[ij+dij*ij]);
                                         qtmp = MAX(qtmp, tmp);
                                 }
-                                // 2 * log(sqrt(qtmp))
-                                qtmp = CUT_OFFSET + log(qtmp);
+                                // 2 * log(sqrt(qtmp)) + offset
+                                qtmp = CUTOFF_OFFSET + log(qtmp);
                         }
-                        itmp = (int)qtmp;
+                        itmp = (int)ceilf(qtmp);
                         itmp = MAX(0, itmp);
                         itmp = MIN(itmp, 127);
                         qijij[ish*nbas+jsh] = itmp;
@@ -1096,9 +1096,9 @@ void PBCVHFsetnr_direct_scf1(int (*intor)(), CINTOpt *cintopt, uint8_t *qindex,
                                         tmp = fabs(buf[i+di2*j]);
                                         qtmp = MAX(qtmp, tmp);
                                 } }
-                                qtmp = CUT_OFFSET + log(qtmp);
+                                qtmp = CUTOFF_OFFSET + log(qtmp);
                         }
-                        itmp = (int)qtmp;
+                        itmp = (int)ceilf(qtmp);
                         itmp = MAX(0, itmp);
                         itmp = MIN(itmp, 127);
                         qiijj[ish*nbas+jsh] = itmp;
@@ -1110,8 +1110,8 @@ void PBCVHFsetnr_direct_scf1(int (*intor)(), CINTOpt *cintopt, uint8_t *qindex,
 }
 }
 
-void PBCVHFsetnr_scond(float *scond, int *atm, int natm,
-                       int *bas, int nbas, double *env)
+void PBCVHFsetnr_sindex(uint8_t *sindex, int *atm, int natm,
+                        int *bas, int nbas, double *env)
 {
         size_t Nbas = nbas;
         size_t Nbas1 = nbas + 1;
@@ -1169,7 +1169,7 @@ void PBCVHFsetnr_scond(float *scond, int *atm, int natm,
         float fac_guess = .6f - logf(omega2)/4;
         int ijb, ib, jb, i0, j0, i1, j1, i, j, li, lj;
         float dx, dy, dz, ai, aj, ci, cj, aij, a1, fi, fj, rr, rij, dri, drj;
-        float log_fac, theta, theta_r, r_guess;
+        float log_fac, theta, theta_r, r_guess, v;
 #pragma omp for schedule(dynamic, 1)
         for (ijb = 0; ijb < ngroups*(ngroups+1)/2; ijb++) {
                 ib = (int)(sqrt(2*ijb+.25) - .5 + 1e-7);
@@ -1206,14 +1206,14 @@ void PBCVHFsetnr_scond(float *scond, int *atm, int natm,
                         rij = sqrtf(rr);
                         dri = fj * rij + theta_r;
                         drj = fi * rij + theta_r;
-                        scond[i*Nbas+j] = li*logf(dri) + lj*logf(drj)
-                                - a1*rr + log_fac;
+                        v = li*logf(dri) + lj*logf(drj) - a1*rr + log_fac;
+                        sindex[i*Nbas+j] = CUTOFF_OFFSET + (uint8_t)ceilf(v) * 2;
                 } }
                 if (ib > jb) {
                         for (i = i0; i < i1; i++) {
 #pragma GCC ivdep
                         for (j = j0; j < j1; j++) {
-                                scond[j*Nbas+i] = scond[i*Nbas+j];
+                                sindex[j*Nbas+i] = sindex[i*Nbas+j];
                         } }
                 }
         }

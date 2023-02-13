@@ -58,7 +58,7 @@ void PBCminimal_CINTEnvVars(CINTEnvVars *envs, int *atm, int natm, int *bas, int
 /*
  * contract basis in supmol to basis of bvk-cell
  */
-static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, double cutoff,
+static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
                        float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
         int *atm = envs_cint->atm;
@@ -116,15 +116,15 @@ static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, double cuto
         int iseg, jseg, kseg;
         int ish0, jsh0;
         int ish1, jsh1;
-        float *scond = envs_bvk->q_cond;
+        uint8_t *sindex = envs_bvk->qindex;
         float *xij_cond = rij_cond;
         float *yij_cond = rij_cond + nij;
         float *zij_cond = rij_cond + nij * 2;
-        float *sij_cond;
+        uint8_t *sij_idx;
         float xk, yk, zk, dx, dy, dz, r2;
         int (*intor)() = envs_bvk->intor;
 
-        if (scond == NULL) {
+        if (sindex == NULL) {
                 ish0 = seg2sh[iseg0];
                 ish1 = seg2sh[iseg1];
                 jsh0 = seg2sh[jseg0];
@@ -152,7 +152,8 @@ static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, double cuto
         int lk = bas(ANG_OF, seg2sh[kseg0]);
         float omega = env[PTR_RANGE_OMEGA];
         float ai, aj, ak, aij;
-        float omega2, eta, theta, theta_k, ij_cutoff, ij_cutoff0, theta_r2;
+        float omega2, eta, theta, theta_k, theta_r2, fac;
+        uint8_t ij_cutoff;
 
         // FIXME: Is it correct to assemble ECP and PP 3c integrals this way?
         if (omega < 0.f) {
@@ -160,8 +161,8 @@ static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, double cuto
                 omega2 = omega * omega;
                 // the factor for aux-basis
                 // ~ log(sqrt(2/sqrt(pi*theta)/r^2)*r^lk)
-                ij_cutoff0 = cutoff + .25f*logf(omega2);
-                ij_cutoff = ij_cutoff0;
+                fac = .25f*logf(omega2);
+                ij_cutoff = cutoff + (int)ceilf(2*fac);
 
                 for (kseg = kseg0; kseg < kseg1; kseg++) {
                         ksh = seg2sh[kseg];
@@ -177,7 +178,7 @@ static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, double cuto
                         // ~ log(sqrt(2/sqrt(pi*theta)/r^2) * (theta*r/ak)^lk
                         //     * (pi/ak)^1.5 * norm_k)
                         if (lk >= 0) {  // exclude ECP
-                                ij_cutoff = ij_cutoff0 - lk*logf(theta_k*8.f);
+                                ij_cutoff = cutoff + ceilf(2*(fac - lk*logf(theta_k*8.f)));
                         }
                         for (iseg = iseg0; iseg < iseg1; iseg++) {
                                 ish0 = seg2sh[iseg];
@@ -191,17 +192,17 @@ static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, double cuto
                                         theta = theta_k * aij / (theta_k + aij);
 for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
-        sij_cond = scond + ish * Nbas;
+        sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                if (sij_cond[jsh] + 3.f < ij_cutoff) {
+                if (sij_idx[jsh] < ij_cutoff - 1) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                theta_r2 = theta * r2 + ij_cutoff + logf(r2 + 1e-15f);
-                if (theta_r2 < sij_cond[jsh]) {
+                theta_r2 = theta * r2 + logf(r2 + 1e-15f);
+                if (theta_r2*2 + ij_cutoff < sij_idx[jsh]) {
                         shls[1] = jsh;
                         if ((*intor)(bufL, NULL, shls, atm, natm,
                                      bas, nbas, env, cintopt, cache)) {
@@ -223,8 +224,8 @@ for (ish = ish0; ish < ish1; ish++) {
                         omega2 = omega * omega;
                         theta_k = omega2 * eta / (omega2 + eta);
                 }
-                ij_cutoff0 = cutoff + .25f*logf(eta);
-                ij_cutoff = ij_cutoff0;
+                fac = .25f*logf(eta);
+                ij_cutoff = cutoff + ceilf(2*fac);
                 for (kseg = kseg0; kseg < kseg1; kseg++) {
                         ksh = seg2sh[kseg];
                         shls[2] = ksh;
@@ -235,7 +236,7 @@ for (ish = ish0; ish < ish1; ish++) {
                         zk = env[ptr+2];
                         lk = bas(ANG_OF, ksh);
                         if (lk > 0) {  // exclude ECP
-                                ij_cutoff = ij_cutoff0 - lk*logf(theta_k*8.f);
+                                ij_cutoff = cutoff + ceilf(2*(fac - lk*logf(theta_k*8.f)));
                         }
                         for (iseg = iseg0; iseg < iseg1; iseg++) {
                                 ish0 = seg2sh[iseg];
@@ -249,17 +250,17 @@ for (ish = ish0; ish < ish1; ish++) {
                                         theta = theta_k * aij / (theta_k + aij);
 for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
-        sij_cond = scond + ish * Nbas;
+        sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                if (sij_cond[jsh] + 3.f < ij_cutoff) {
+                if (sij_idx[jsh] + 3.f < ij_cutoff) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                theta_r2 = theta * r2 + ij_cutoff + logf(r2 + 1e-15f);
-                if (theta_r2 < sij_cond[jsh]) {
+                theta_r2 = theta * r2 + logf(r2 + 1e-15f);
+                if (theta_r2*2 + ij_cutoff < sij_idx[jsh]) {
                         shls[1] = jsh;
                         if ((*intor)(bufL, NULL, shls, atm, natm,
                                      bas, nbas, env, cintopt, cache)) {
@@ -1100,7 +1101,7 @@ void PBCfill_nr3c_drv(int (*intor)(), FPtrFill fill, int is_pbcintor,
                       int *kpt_ij_idx, int kpt_ij_size, int bvk_ncells, int nimgs,
                       int nkpts, int nbasp, int comp, int *seg_loc, int *seg2sh,
                       int *cell0_ao_loc, int *shls_slice, int8_t *cell0_ovlp_mask,
-                      float *q_cond, float log_cutoff, CINTOpt *cintopt, int cache_size,
+                      uint8_t *sindex, uint8_t cutoff, CINTOpt *cintopt, int cache_size,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         int ish0 = shls_slice[0];
@@ -1117,7 +1118,7 @@ void PBCfill_nr3c_drv(int (*intor)(), FPtrFill fill, int is_pbcintor,
         BVKEnvs envs_bvk = {bvk_ncells, nimgs,
                 nkpts, nkpts, nbasp, comp, 0, kpt_ij_size,
                 seg_loc, seg2sh, cell0_ao_loc, shls_slice, kpt_ij_idx,
-                expLkR, expLkI, NULL, q_cond, log_cutoff};
+                expLkR, expLkI, NULL, sindex, cutoff};
 
         int k;
         float ak;
@@ -1175,12 +1176,6 @@ void PBCfill_nr3c_drv(int (*intor)(), FPtrFill fill, int is_pbcintor,
         }
         free(cache);
 }
-}
-
-void PBC_nr3c_q_cond(int (*intor)(), CINTOpt *cintopt,
-                     float *q_cond, int *shls_slice, int *ao_loc,
-                     int *atm, int natm, int *bas, int nbas, double *env)
-{
 }
 
 void PBCnr3c_fuse_dd_s1(double *j3c, double *j3c_dd,

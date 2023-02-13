@@ -108,7 +108,7 @@ static void update_int2e_envs(CINTEnvVars *envs, int *shls)
         }
 }
 
-int PBCint2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff,
+int PBCint2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
                   float *rij_cond, float *rkl_cond,
                   CINTEnvVars *envs_cint, BVKEnvs *envs_bvk, double *cache)
 {
@@ -169,18 +169,18 @@ int PBCint2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff,
         int iseg, jseg, kseg, lseg;
         int jsh0, ksh0, lsh0;
         int jsh1, ksh1, lsh1;
-        float *qcond_ijij = envs_bvk->q_cond;
-        float *qcond_iijj = qcond_ijij + Nbas2;
-        float *scond = qcond_iijj + Nbas2;
+        uint8_t *qidx_ijij = envs_bvk->qindex;
+        uint8_t *qidx_iijj = qidx_ijij + Nbas2;
+        uint8_t *sindex = qidx_iijj + Nbas2;
         float *xij_cond = rij_cond;
         float *yij_cond = rij_cond + rs_cell_nbas * Nbas;
         float *zij_cond = rij_cond + rs_cell_nbas * Nbas * 2;
         float *xkl_cond = rkl_cond;
         float *ykl_cond = rkl_cond + nkl;
         float *zkl_cond = rkl_cond + nkl * 2;
-        float *qcond_ij, *qcond_kl, *qcond_ik, *qcond_jk, *skl_cond;
-        float kl_cutoff, jl_cutoff, il_cutoff;
-        float sij, xij, yij, zij, dx, dy, dz, r2;
+        uint8_t *qidx_ij, *qidx_kl, *qidx_ik, *qidx_jk, *skl_idx;
+        uint8_t kl_cutoff, jl_cutoff, il_cutoff, sij, skl_cutoff;
+        float xij, yij, zij, dx, dy, dz, r2;
 
         int *bas = envs_cint->bas;
         double *env = envs_cint->env;
@@ -212,33 +212,34 @@ int PBCint2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff,
                                         akl = ak + al;
                                         // theta = 1/(1/aij+1/akl+1/omega2);
                                         theta = theta_ij*akl / (theta_ij + akl);
-                                        qcond_ij = qcond_ijij + ish * Nbas;
-                                        qcond_ik = qcond_iijj + ish * Nbas;
+                                        qidx_ij = qidx_ijij + ish * Nbas;
+                                        qidx_ik = qidx_iijj + ish * Nbas;
 for (jsh = jsh0; jsh < jsh1; jsh++) {
-        if (qcond_ij[jsh] < cutoff) {
+        if (qidx_ij[jsh] + CUTOFF_OFFSET < cutoff) {
                 continue;
         }
         shls[1] = jsh;
-        kl_cutoff = cutoff - qcond_ij[jsh];
-        qcond_jk = qcond_iijj + jsh * Nbas;
-        sij = scond[ish * Nbas + jsh];
+        kl_cutoff = cutoff - qidx_ij[jsh];
+        qidx_jk = qidx_iijj + jsh * Nbas;
+        sij = sindex[ish * Nbas + jsh];
         xij = xij_cond[iseg * Nbas + jsh];
         yij = yij_cond[iseg * Nbas + jsh];
         zij = zij_cond[iseg * Nbas + jsh];
+        skl_cutoff = cutoff - sij;
         for (ksh = ksh0; ksh < ksh1; ksh++) {
-                if (qcond_ik[ksh] < cutoff ||
-                    qcond_jk[ksh] < cutoff) {
+                if (qidx_ik[ksh] + CUTOFF_OFFSET < cutoff ||
+                    qidx_jk[ksh] + CUTOFF_OFFSET < cutoff) {
                         continue;
                 }
                 shls[2] = ksh;
-                qcond_kl = qcond_ijij + ksh * Nbas;
-                skl_cond = scond + ksh * Nbas;
-                jl_cutoff = cutoff - qcond_ik[ksh];
-                il_cutoff = cutoff - qcond_jk[ksh];
+                qidx_kl = qidx_ijij + ksh * Nbas;
+                skl_idx = sindex + ksh * Nbas;
+                jl_cutoff = cutoff - qidx_ik[ksh];
+                il_cutoff = cutoff - qidx_jk[ksh];
                 for (lsh = lsh0; lsh < lsh1; lsh++) {
-                        if (qcond_kl[lsh] < kl_cutoff ||
-                            qcond_jk[lsh] < jl_cutoff ||
-                            qcond_ik[lsh] < il_cutoff) {
+                        if (qidx_kl[lsh] < kl_cutoff ||
+                            qidx_jk[lsh] < jl_cutoff ||
+                            qidx_ik[lsh] < il_cutoff) {
                                 continue;
                         }
                         // the last level screening is theta*(Rij-Rkl)^2.
@@ -257,8 +258,8 @@ for (jsh = jsh0; jsh < jsh1; jsh++) {
                         dy = yij - ykl_cond[ksh * nlsh + lsh - rkl_off];
                         dz = zij - zkl_cond[ksh * nlsh + lsh - rkl_off];
                         r2 = dx * dx + dy * dy + dz * dz;
-                        theta_r2 = theta * r2 + cutoff + logf(r2 + 1e-15f);
-                        if (theta_r2 < sij + skl_cond[lsh]) {
+                        theta_r2 = theta * r2 + logf(r2 + 1e-15f);
+                        if (theta_r2*2 + skl_cutoff < skl_idx[lsh]) {
                                 shls[3] = lsh;
                                 update_int2e_envs(envs_cint, shls);
                                 (*intor_loop)(gctr, envs_cint, cache, &empty);
@@ -275,7 +276,7 @@ for (jsh = jsh0; jsh < jsh1; jsh++) {
 
 // envs_cint are updated in this function. It needs to be allocated
 // omp-privately
-int PBCint2e_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, double cutoff,
+int PBCint2e_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
                   float *rij_cond, float *rkl_cond,
                   CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -306,7 +307,7 @@ int PBCint2e_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, double cutof
         return has_value;
 }
 
-int PBCint2e_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, double cutoff,
+int PBCint2e_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
                  float *rij_cond, float *rkl_cond,
                  CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {

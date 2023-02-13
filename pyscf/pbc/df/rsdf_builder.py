@@ -210,7 +210,7 @@ class _RSGDFBuilder(Int3cBuilder):
         # Remove d-d block in supmol q_cond
         if self.exclude_dd_block and self.cell.dimension > 0:
             smooth_idx = supmol.bas_type_to_indices(ft_ao.SMOOTH_BASIS)
-            q_cond[smooth_idx[:,None], smooth_idx] = np.log(1e-200)
+            q_cond[smooth_idx[:,None], smooth_idx] = 0
         return q_cond
 
     def decompose_j2c(self, j2c):

@@ -34,6 +34,7 @@ from pyscf import __config__
 
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.5)
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
+CUTOFF_OFFSET = 115
 
 libpbc = lib.load_library('libpbc')
 
@@ -235,7 +236,7 @@ class Int3cBuilder(lib.StreamObject):
                        omega, theta, cutoff)
         else:
             cutoff = self.direct_scf_tol
-        log_cutoff = np.log(cutoff)
+        cutoff = int(CUTOFF_OFFSET + 2*np.log(self.direct_scf_tol))
 
         atm, bas, env = gto.conc_env(supmol._atm, supmol._bas, supmol._env,
                                      rs_auxcell._atm, rs_auxcell._bas, rs_auxcell._env)
@@ -245,12 +246,13 @@ class Int3cBuilder(lib.StreamObject):
         aux_seg2sh = np.arange(rs_auxcell.nbas + 1)
         seg2sh = _conc_locs(supmol.seg2sh, aux_seg2sh)
 
-        q_cond = self.get_q_cond(supmol)
-        ovlp_mask = q_cond > np.log(cutoff)
+        sindex = self.get_q_cond(supmol)
+        ovlp_mask = sindex > cutoff
         bvk_ovlp_mask = lib.condense('np.any', ovlp_mask, supmol.sh_loc)
         cell0_ovlp_mask = bvk_ovlp_mask.reshape(
             bvk_ncells, nbasp, bvk_ncells, nbasp).any(axis=2).any(axis=0)
         cell0_ovlp_mask = cell0_ovlp_mask.astype(np.int8)
+        ovlp_mask = None
 
         if 'ECP' in intor:
             # rs_auxcell is a placeholder only to represent the ecpbas.
@@ -258,9 +260,9 @@ class Int3cBuilder(lib.StreamObject):
             env[gto.AS_ECPBAS_OFFSET] = len(bas)
             bas = np.asarray(np.vstack([bas, cell._ecpbas]), dtype=np.int32)
             cintopt = _vhf.make_cintopt(atm, bas, env, intor)
-            # q_cond may not be accurate enough to screen ECP integral.
+            # sindex may not be accurate enough to screen ECP integral.
             # Add penalty 1e-2 to reduce the screening error
-            log_cutoff = np.log(cutoff * 1e-2)
+            cutoff = int(CUTOFF_OFFSET + 2*np.log(self.direct_scf_tol*1e-2))
         else:
             cintopt = _vhf.make_cintopt(supmol._atm, supmol._bas, supmol._env, intor)
 
@@ -351,10 +353,10 @@ class Int3cBuilder(lib.StreamObject):
                 outI = np.ndarray(shape, buffer=outI)
                 outI[:] = 0
 
-            if q_cond is None:
-                q_cond_ptr = lib.c_null_ptr()
+            if sindex is None:
+                sindex_ptr = lib.c_null_ptr()
             else:
-                q_cond_ptr = q_cond.ctypes.data_as(ctypes.c_void_p)
+                sindex_ptr = sindex.ctypes.data_as(ctypes.c_void_p)
 
             drv(getattr(libpbc, intor), getattr(libpbc, fill),
                 ctypes.c_int(is_pbcintor),
@@ -370,7 +372,7 @@ class Int3cBuilder(lib.StreamObject):
                 cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
                 (ctypes.c_int*6)(*shls_slice),
                 cell0_ovlp_mask.ctypes.data_as(ctypes.c_void_p),
-                q_cond_ptr, ctypes.c_float(log_cutoff),
+                sindex_ptr, ctypes.c_uint8(cutoff),
                 cintopt, ctypes.c_int(cache_size),
                 atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
                 bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
@@ -394,13 +396,13 @@ class Int3cBuilder(lib.StreamObject):
         if supmol is None:
             supmol = self.supmol
         nbas = supmol.nbas
-        q_cond = np.empty((nbas,nbas), dtype=np.float32)
-        libpbc.PBCVHFsetnr_scond(
-            q_cond.ctypes.data_as(ctypes.c_void_p),
+        sindex = np.empty((nbas,nbas), dtype=np.uint8)
+        libpbc.PBCVHFsetnr_sindex(
+            sindex.ctypes.data_as(ctypes.c_void_p),
             supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
             supmol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
             supmol._env.ctypes.data_as(ctypes.c_void_p))
-        return q_cond
+        return sindex
 
 
 libpbc.GTOmax_cache_size.restype = ctypes.c_int

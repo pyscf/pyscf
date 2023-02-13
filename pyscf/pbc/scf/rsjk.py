@@ -43,9 +43,10 @@ from pyscf.pbc.lib.kpts_helper import (is_zero, unique_with_wrap_around,
                                        group_by_conj_pairs)
 from pyscf import __config__
 
-OMEGA_MIN = rsdf_builder.OMEGA_MIN
 # Threshold of steep bases and local bases
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
+OMEGA_MIN = rsdf_builder.OMEGA_MIN
+CUTOFF_OFFSET = 115
 libpbc = lib.load_library('libpbc')
 
 class RangeSeparatedJKBuilder(lib.StreamObject):
@@ -195,18 +196,18 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self._cintopt = _vhf.make_cintopt(supmol_sr._atm, supmol_sr._bas,
                                           supmol_sr._env, 'int2e')
         nbas = supmol_sr.nbas
-        self.q_cond = np.empty((3,nbas,nbas), dtype=np.float32)
+        self.qindex = np.empty((3,nbas,nbas), dtype=np.uint8)
         ao_loc = supmol_sr.ao_loc
         with supmol_sr.with_integral_screen(self.direct_scf_tol**2):
-            libpbc.PBCVHFsetnr_direct_scf(
+            libpbc.PBCVHFsetnr_direct_scf1(
                 libpbc.int2e_sph, self._cintopt,
-                self.q_cond.ctypes.data_as(ctypes.c_void_p),
+                self.qindex.ctypes.data_as(ctypes.c_void_p),
                 ao_loc.ctypes.data_as(ctypes.c_void_p),
                 supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
                 supmol_sr._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.nbas),
                 supmol_sr._env.ctypes.data_as(ctypes.c_void_p))
-        libpbc.PBCVHFsetnr_scond(
-            self.q_cond[2:].ctypes.data_as(ctypes.c_void_p),
+        libpbc.PBCVHFsetnr_sindex(
+            self.qindex[2:].ctypes.data_as(ctypes.c_void_p),
             supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
             supmol_sr._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.nbas),
             supmol_sr._env.ctypes.data_as(ctypes.c_void_p))
@@ -214,9 +215,9 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         if self.exclude_dd_block:
             # Remove the smooth-smooth basis block.
             smooth_idx = supmol_sr.bas_type_to_indices(ft_ao.SMOOTH_BASIS)
-            self.q_cond[0,smooth_idx[:,None], smooth_idx] = np.log(1e-200)
+            self.qindex[0,smooth_idx[:,None], smooth_idx] = 0
 
-        log.timer('initializing q_cond', *cpu0)
+        log.timer('initializing qindex', *cpu0)
         return self
 
     def _sort_qcond_cell0(self, seg_loc, nbasp):
@@ -224,8 +225,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         can be "break" early
         '''
         seg2sh = self.supmol_sr.seg2sh
-        qcell0_ijij = _qcond_cell0_abstract(self.q_cond[0], seg_loc, seg2sh, nbasp)
-        qcell0_iijj = _qcond_cell0_abstract(self.q_cond[1], seg_loc, seg2sh, nbasp)
+        qcell0_ijij = _qcond_cell0_abstract(self.qindex[0], seg_loc, seg2sh, nbasp)
+        qcell0_iijj = _qcond_cell0_abstract(self.qindex[1], seg_loc, seg2sh, nbasp)
         idx = np.asarray(qcell0_ijij.ravel().argsort(), np.int32)[::-1]
         jsh_idx, ish_idx = divmod(idx, nbasp)
         return qcell0_ijij, qcell0_iijj, ish_idx, jsh_idx
@@ -254,6 +255,12 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         else:
             dm = dm_kpts
         n_dm = dm.shape[0]
+
+        cutoff = int(CUTOFF_OFFSET + 2*np.log(self.direct_scf_tol))
+        if cutoff < 0:
+            log.warn('direct_scf_tol %g is too small. Set to %g',
+                     self.direct_scf_tol, np.exp(-CUTOFF_OFFSET/2))
+            cutoff = 0
 
         # Exclude dddd block can slightly speedup sr integrals with some
         # overhead in lr_j and lr_k. It does not help when closing covergence.
@@ -330,9 +337,13 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         dm_cond = [lib.condense('NP_absmax', d, sparse_ao_loc, cell0_ao_loc)
                    for d in sc_dm.reshape(n_sc_dm, bvk_ncells*nao, nao)]
         dm_cond = np.max(dm_cond, axis=0)
-        dm_cond[dm_cond < self.direct_scf_tol**2] = 1e-100
-        dm_cond = np.asarray(np.log(dm_cond), order='C', dtype=np.float32)
-        dm_cond = dm_cond.reshape(bvk_ncells, nbasp, nbasp)
+        small_dm_mask = dm_cond < self.direct_scf_tol**2
+        dm_cond[small_dm_mask] = 1e-100
+        dmindex = np.ceil(CUTOFF_OFFSET + 2*np.log(dm_cond))
+        dmindex = np.asarray(dmindex, order='C', dtype=np.uint8)
+        dmindex[small_dm_mask] = 0
+        dmindex = dmindex.reshape(bvk_ncells, nbasp, nbasp)
+        dm_cond = small_dm_mask = None
 
         bvk_nbas = nbasp * bvk_ncells
         shls_slice = (0, nbasp, 0, bvk_nbas, 0, bvk_nbas, 0, bvk_nbas)
@@ -340,7 +351,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         cache_size = _get_cache_size(cell, 'int2e_sph')
         cell0_dims = cell0_ao_loc[1:] - cell0_ao_loc[:-1]
         cache_size += cell0_dims.max()**4 * comp * 2
-        log_cutoff = np.log(self.direct_scf_tol)
 
         if hermi:
             fdot_suffix = 's2kl'
@@ -374,8 +384,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             rs_cell.bas_type.ctypes.data_as(ctypes.c_void_p),
             (ctypes.c_int*8)(*shls_slice),
             dm_translation.ctypes.data_as(ctypes.c_void_p),
-            self.q_cond.ctypes.data_as(ctypes.c_void_p),
-            dm_cond.ctypes.data_as(ctypes.c_void_p), ctypes.c_float(log_cutoff),
+            self.qindex.ctypes.data_as(ctypes.c_void_p),
+            dmindex.ctypes.data_as(ctypes.c_void_p), ctypes.c_uint8(cutoff),
             qcell0_ijij.ctypes.data_as(ctypes.c_void_p),
             qcell0_iijj.ctypes.data_as(ctypes.c_void_p),
             ish_idx.ctypes.data_as(ctypes.c_void_p),
@@ -1325,11 +1335,11 @@ def _qcond_cell0_abstract(qcond, seg_loc, seg2sh, nbasp):
         if i0 != i1:
             qtmp[i] = qcond_sub[i0:i1].max(axis=0)
         else:
-            qtmp[i] = -500
+            qtmp[i] = 0
     qcond_cell0 = np.empty((nbas_bvk, nbasp), dtype=qcond.dtype)
     for j, (j0, j1) in enumerate(zip(seg_loc[:nbasp], seg_loc[1:nbasp+1])):
         if j0 != j1:
             qcond_cell0[:,j] = qtmp[:,j0:j1].max(axis=1)
         else:
-            qcond_cell0[:,j] = -500
+            qcond_cell0[:,j] = 0
     return qcond_cell0

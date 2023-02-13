@@ -104,7 +104,7 @@ static void update_int3c2e_envs(CINTEnvVars *envs, int *shls)
         envs->rkrl[2] = envs->rk[2];
 }
 
-int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff,
+int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
                     float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk,
                     double *cache)
 {
@@ -158,11 +158,11 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff
         int iseg, jseg, kseg;
         int ish0, jsh0;
         int ish1, jsh1;
-        float *scond = envs_bvk->q_cond;
+        uint8_t *sindex = envs_bvk->qindex;
         float *xij_cond = rij_cond;
         float *yij_cond = rij_cond + nij;
         float *zij_cond = rij_cond + nij * 2;
-        float *sij_cond;
+        uint8_t *sij_idx;
         float xk, yk, zk, dx, dy, dz, r2;
 
         int *atm = envs_cint->atm;
@@ -170,7 +170,8 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff
         double *env = envs_cint->env;
         float omega = env[PTR_RANGE_OMEGA];
         float ai, aj, ak, aij;
-        float omega2, eta, theta, theta_k, ij_cutoff, theta_r2;
+        float omega2, eta, theta, theta_k, theta_r2, fac;
+        uint8_t ij_cutoff;
 
         if (omega < 0.f) {
                 // Short-range ERI
@@ -190,7 +191,8 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff
                         // factor for aux-basis
                         // ~ log(sqrt(2/sqrt(pi*theta)/r^2) * (theta*r/ak)^lk
                         //     * (pi/ak)^1.5 * norm_k)
-                        ij_cutoff = cutoff + logf(omega2)/4 - lk*logf(theta_k*8.f);
+                        fac = logf(omega2)/4 - lk*logf(theta_k*8.f);
+                        ij_cutoff = cutoff + (int)(ceilf(2*fac));
                         for (iseg = iseg0; iseg < iseg1; iseg++) {
                                 ish0 = seg2sh[iseg];
                                 ish1 = seg2sh[iseg+1];
@@ -204,18 +206,18 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff
                                         theta = theta_k * aij / (theta_k + aij);
 for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
-        sij_cond = scond + ish * Nbas;
+        sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                // +3. in case r2 is very small
-                if (sij_cond[jsh] + 3.f < ij_cutoff) {
+                // adjust ij_cutoff in case r2 is very small
+                if (sij_idx[jsh] < ij_cutoff - 1) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                theta_r2 = theta * r2 + ij_cutoff + logf(r2 + 1e-15f);
-                if (theta_r2 < sij_cond[jsh]) {
+                theta_r2 = theta * r2 + logf(r2 + 1e-15f);
+                if (theta_r2*2 + ij_cutoff < sij_idx[jsh]) {
                         shls[1] = jsh;
                         update_int3c2e_envs(envs_cint, shls);
                         (*intor_loop)(gctr, envs_cint, cache, &empty);
@@ -244,7 +246,8 @@ for (ish = ish0; ish < ish1; ish++) {
                         // factor for aux-basis
                         // ~ log(sqrt(2/sqrt(pi*theta)/r^2) * (theta*r/ak)^lk
                         //     * (pi/ak)^1.5 * norm_k)
-                        ij_cutoff = cutoff + logf(eta)/4 - lk*logf(theta_k*8.f);
+                        fac = logf(eta)/4 - lk*logf(theta_k*8.f);
+                        ij_cutoff = cutoff + (int)(ceilf(2*fac));
                         for (iseg = iseg0; iseg < iseg1; iseg++) {
                                 ish0 = seg2sh[iseg];
                                 ish1 = seg2sh[iseg+1];
@@ -257,18 +260,18 @@ for (ish = ish0; ish < ish1; ish++) {
                                         theta = theta_k * aij / (theta_k + aij);
 for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
-        sij_cond = scond + ish * Nbas;
+        sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                // +3. in case r2 is very small
-                if (sij_cond[jsh] + 3.f < ij_cutoff) {
+                // adjust ij_cutoff in case r2 is very small
+                if (sij_idx[jsh] < ij_cutoff - 1) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                theta_r2 = theta * r2 + ij_cutoff + logf(r2 + 1e-15f);
-                if (theta_r2 < sij_cond[jsh]) {
+                theta_r2 = theta * r2 + logf(r2 + 1e-15f);
+                if (theta_r2*2 + ij_cutoff < sij_idx[jsh]) {
                         shls[1] = jsh;
                         update_int3c2e_envs(envs_cint, shls);
                         (*intor_loop)(gctr, envs_cint, cache, &empty);
@@ -284,7 +287,7 @@ for (ish = ish0; ish < ish1; ish++) {
 
 // envs_cint are updated in this function. It needs to be allocated
 // omp-privately
-int PBCint3c2e_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, double cutoff,
+int PBCint3c2e_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
                     float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
         int ng[] = {0, 0, 0, 0, 0, 1, 1, 1};
@@ -313,7 +316,7 @@ int PBCint3c2e_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, double cut
         return has_value;
 }
 
-int PBCint3c2e_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, double cutoff,
+int PBCint3c2e_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
                    float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
         int ng[] = {0, 0, 0, 0, 0, 1, 1, 1};

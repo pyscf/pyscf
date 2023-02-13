@@ -620,7 +620,7 @@ void PBC_ft_bvk_drv(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrFill fill, FPtrSo
         BVKEnvs envs_bvk = {bvk_ncells, nimgs,
                 nkpts, nkpts, nbasp, comp, nGv, 0,
                 seg_loc, seg2sh, cell0_ao_loc, shls_slice, NULL,
-                expLkR, expLkI, ovlp_mask, NULL, 0.f, 0.f, Gv, b, gxyz, gs};
+                expLkR, expLkI, ovlp_mask, NULL, 0, 0.f, Gv, b, gxyz, gs};
         size_t count = nkpts + bvk_ncells;
         size_t size_v = di * di * BLOCK_SIZE * count * comp * OF_CMPLX;
 
