@@ -1029,6 +1029,87 @@ void PBCVHFsetnr_direct_scf(int (*intor)(), CINTOpt *cintopt, float *qcond,
         free(buf);
 }
 
+void PBCVHFsetnr_direct_scf1(int (*intor)(), CINTOpt *cintopt, uint8_t *qindex,
+                            int *ao_loc, int *atm, int natm,
+                            int *bas, int nbas, double *env)
+{
+        size_t Nbas = nbas;
+        size_t Nbas2 = Nbas * Nbas;
+        uint8_t *qijij = qindex;
+        uint8_t *qiijj = qindex + Nbas2;
+
+        int shls_slice[] = {0, nbas};
+        const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
+                                                 atm, natm, bas, nbas, env);
+#pragma omp parallel
+{
+        double qtmp, tmp;
+        size_t ij, i, j, di, dj, dij, di2, dj2, ish, jsh;
+        size_t Nbas = nbas;
+        int itmp;
+        int shls[4];
+        double *cache = malloc(sizeof(double) * cache_size);
+        di = 0;
+        for (ish = 0; ish < nbas; ish++) {
+                dj = ao_loc[ish+1] - ao_loc[ish];
+                di = MAX(di, dj);
+        }
+        double *buf = malloc(sizeof(double) * di*di*di*di);
+#pragma omp for schedule(dynamic)
+        for (ish = 0; ish < Nbas; ish++) {
+                for (jsh = 0; jsh <= ish; jsh++) {
+                        di = ao_loc[ish+1] - ao_loc[ish];
+                        dj = ao_loc[jsh+1] - ao_loc[jsh];
+                        dij = di * dj;
+                        shls[0] = ish;
+                        shls[1] = jsh;
+                        shls[2] = ish;
+                        shls[3] = jsh;
+                        qtmp = 0;
+                        if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env,
+                                          cintopt, cache)) {
+                                for (ij = 0; ij < dij; ij++) {
+                                        tmp = fabs(buf[ij+dij*ij]);
+                                        qtmp = MAX(qtmp, tmp);
+                                }
+                                // 2 * log(sqrt(qtmp))
+                                qtmp = CUT_OFFSET + log(qtmp);
+                        }
+                        itmp = (int)qtmp;
+                        itmp = MAX(0, itmp);
+                        itmp = MIN(itmp, 127);
+                        qijij[ish*nbas+jsh] = itmp;
+                        qijij[jsh*nbas+ish] = itmp;
+
+                        shls[0] = ish;
+                        shls[1] = ish;
+                        shls[2] = jsh;
+                        shls[3] = jsh;
+                        di2 = di * di;
+                        dj2 = dj * dj;
+                        qtmp = 0;
+                        if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env,
+                                          cintopt, cache)) {
+                                for (j = 0; j < dj2; j+=dj+1) {
+                                for (i = 0; i < di2; i+=di+1) {
+                                        // buf[i,i,j,j]
+                                        tmp = fabs(buf[i+di2*j]);
+                                        qtmp = MAX(qtmp, tmp);
+                                } }
+                                qtmp = CUT_OFFSET + log(qtmp);
+                        }
+                        itmp = (int)qtmp;
+                        itmp = MAX(0, itmp);
+                        itmp = MIN(itmp, 127);
+                        qiijj[ish*nbas+jsh] = itmp;
+                        qiijj[jsh*nbas+ish] = itmp;
+                }
+        }
+        free(buf);
+        free(cache);
+}
+}
+
 void PBCVHFsetnr_scond(float *scond, int *atm, int natm,
                        int *bas, int nbas, double *env)
 {

@@ -60,28 +60,7 @@ def get_ovlp(mf, cell=None, kpts=None):
     '''
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpts,
-                       pbcopt=lib.c_null_ptr())
-    s = lib.asarray(s)
-    hermi_error = abs(s - s.conj().transpose(0,2,1)).max()
-    if hermi_error > cell.precision and hermi_error > 1e-12:
-        logger.warn(mf, '%.4g error found in overlap integrals. '
-                    'cell.precision  or  cell.rcut  can be adjusted to '
-                    'improve accuracy.', hermi_error)
-
-    cond = np.max(lib.cond(s))
-    if cond * cell.precision > 1e2:
-        prec = 1e2 / cond
-        rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
-        if cell.rcut < rmin:
-            logger.warn(mf, 'Singularity detected in overlap matrix.  '
-                        'Integral accuracy may be not enough.\n      '
-                        'You can adjust  cell.precision  or  cell.rcut  to '
-                        'improve accuracy.  Recommended values are\n      '
-                        'cell.precision = %.2g  or smaller.\n      '
-                        'cell.rcut = %.4g  or larger.', prec, rmin)
-    return s
+    return pbchf.get_ovlp(cell, kpts)
 
 
 def get_hcore(mf, cell=None, kpts=None):

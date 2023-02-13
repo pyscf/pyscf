@@ -48,9 +48,12 @@ from pyscf import __config__
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
-                       pbcopt=lib.c_null_ptr())
+    precision = cell.precision**2
+    rcut = max(cell.rcut, gto.estimate_rcut(cell, precision))
+    with lib.temporary_env(cell, rcut=rcut, precision=precision):
+        # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+        s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
+                           pbcopt=lib.c_null_ptr())
     s = lib.asarray(s)
     hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
     if hermi_error > cell.precision and hermi_error > 1e-12:
@@ -59,16 +62,15 @@ def get_ovlp(cell, kpt=np.zeros(3)):
                     'improve accuracy.', hermi_error)
 
     cond = np.max(lib.cond(s))
-    if cond * cell.precision > 1e2:
-        prec = 1e2 / cond
-        rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
-        if cell.rcut < rmin:
-            logger.warn(cell, 'Singularity detected in overlap matrix.  '
-                        'Integral accuracy may be not enough.\n      '
-                        'You can adjust  cell.precision  or  cell.rcut  to '
-                        'improve accuracy.  Recommended values are\n      '
-                        'cell.precision = %.2g  or smaller.\n      '
-                        'cell.rcut = %.4g  or larger.', prec, rmin)
+    if cond * precision > 1e2:
+        prec = cond**-.5
+        rmin = gto.estimate_rcut(cell, 1./cond)
+        logger.warn(cell, 'Singularity detected in overlap matrix.  '
+                    'Integral accuracy may be not enough.\n      '
+                    'You can adjust  cell.precision  or  cell.rcut  to '
+                    'improve accuracy.  Recommended settings are\n      '
+                    'cell.precision < %.2g\n      '
+                    'cell.rcut > %.4', prec, rmin)
     return s
 
 

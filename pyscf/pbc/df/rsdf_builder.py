@@ -50,7 +50,7 @@ from pyscf.pbc.lib.kpts_helper import (is_zero, member, unique_with_wrap_around,
                                        group_by_conj_pairs)
 from pyscf import __config__
 
-OMEGA_MIN = 0.15
+OMEGA_MIN = 0.08
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 # Threshold of steep bases and local bases
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)

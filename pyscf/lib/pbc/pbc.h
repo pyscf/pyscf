@@ -61,3 +61,7 @@ typedef struct {
         int (*intor)();
 } BVKEnvs;
 #endif
+
+// supports integrals value between exp(-115/2) - exp((127-115)/2)
+// 1e-25 - 4e2
+#define CUT_OFFSET 115

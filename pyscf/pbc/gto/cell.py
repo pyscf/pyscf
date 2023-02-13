@@ -566,9 +566,10 @@ def _extract_pgto_params(cell, op='min'):
             cs.append(abs(c[idx]).max())
     return np.array(es), np.array(cs)
 
-def error_for_ke_cutoff(cell, ke_cutoff):
+def error_for_ke_cutoff(cell, ke_cutoff, omega=None):
     '''Error estimation based on nuclear attraction integrals'''
-    omega = cell.omega
+    if omega is None:
+        omega = cell.omega
     exps, cs = _extract_pgto_params(cell, 'max')
     ls = cell._bas[:,mole.ANG_OF]
     norm_ang = (2*ls+1)/(4*np.pi)

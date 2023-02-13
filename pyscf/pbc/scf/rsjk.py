@@ -43,9 +43,9 @@ from pyscf.pbc.lib.kpts_helper import (is_zero, unique_with_wrap_around,
                                        group_by_conj_pairs)
 from pyscf import __config__
 
+OMEGA_MIN = rsdf_builder.OMEGA_MIN
 # Threshold of steep bases and local bases
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
-
 libpbc = lib.load_library('libpbc')
 
 class RangeSeparatedJKBuilder(lib.StreamObject):
@@ -160,10 +160,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
         exp_min = np.hstack(cell.bas_exps()).min()
-        if self.omega == 0:
-            theta = exp_min
-        else:
-            theta = 1./(1./exp_min + self.omega**-2)
         lattice_sum_factor = max((2*cell.rcut)**3/cell.vol * 1/exp_min, 1)
         cutoff = cell.precision / lattice_sum_factor * .1
         self.direct_scf_tol = cutoff
@@ -431,12 +427,15 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         # Does not support to specify arbitrary kpts
         if kpts is not None and abs(kpts-self.kpts).max() > 1e-7:
             raise RuntimeError('kpts error. kpts cannot be modified in RSJK')
-        kpts = self.kpts
+        kpts = np.asarray(self.kpts.reshape(-1, 3), order='C')
+
+        dm_kpts = lib.asarray(dm_kpts, order='C')
+        dms = _format_dms(dm_kpts, kpts)
 
         # TODO: approximate vj vk at kpts-band with addons.project_dm_k2k from
         # vj vk at kpts
 
-        vs = self._get_jk_sr(dm_kpts, hermi, kpts, kpts_band,
+        vs = self._get_jk_sr(dms, hermi, kpts, kpts_band,
                              with_j, with_k, omega, exxdiv)
         if with_j and with_k:
             vj, vk = vs
@@ -453,7 +452,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         if with_j:
             if self.has_long_range():
-                vj += self._get_lr_j_kpts(dm_kpts, hermi, kpts, kpts_band)
+                vj += self._get_lr_j_kpts(dms, hermi, kpts, kpts_band)
             if hermi:
                 vj = (vj + vj.conj().transpose(0,1,3,2)) * .5
             if self.purify and kpts_band is None:
@@ -464,7 +463,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         if with_k:
             if self.has_long_range():
-                vk += self._get_lr_k_kpts(dm_kpts, hermi, kpts, kpts_band, exxdiv)
+                vk += self._get_lr_k_kpts(dms, hermi, kpts, kpts_band, exxdiv)
             if hermi:
                 vk = (vk + vk.conj().transpose(0,1,3,2)) * .5
             if self.purify and kpts_band is None:
@@ -491,14 +490,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
     def _get_lr_j_kpts(self, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         '''
         Long-range part of J matrix
-
-        C ~ compact basis, D ~ diffused basis
-
-        Compute J matrix with coulG_LR:
-        (CC|CC) (CC|CD) (CC|DC) (CD|CC) (CD|CD) (CD|DC) (DC|CC) (DC|CD) (DC|DC)
-
-        Compute J matrix with full coulG:
-        (CC|DD) (CD|DD) (DC|DD) (DD|CC) (DD|CD) (DD|DC) (DD|DD)
         '''
         if kpts_band is not None:
             return self._get_lr_j_for_bands(dm_kpts, hermi, kpts, kpts_band)
@@ -518,7 +509,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             cell_d = None
             naod = ngrids_d = 0
         kpts = np.asarray(kpts.reshape(-1, 3), order='C')
-        dms = _format_dms(dm_kpts, kpts)
+        dms = dm_kpts
         n_dm, nkpts, nao = dms.shape[:3]
         mesh = self.mesh
         ngrids = np.prod(mesh)
@@ -755,14 +746,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                        exxdiv=None):
         '''
         Long-range part of K matrix
-
-        C ~ compact basis, D ~ diffused basis
-
-        Compute K matrix with coulG_LR:
-        (CC|CC) (CC|CD) (CC|DC) (CD|CC) (CD|CD) (CD|DC) (DC|CC) (DC|CD) (DC|DC)
-
-        Compute K matrix with full coulG:
-        (CC|DD) (CD|DD) (DC|DD) (DD|CC) (DD|CD) (DD|DC) (DD|DD)
         '''
         assert kpts_band is None
         cpu0 = cpu1 = logger.process_clock(), logger.perf_counter()
@@ -779,8 +762,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         mesh = self.mesh
         ngrids = np.prod(mesh)
-        dm_kpts = lib.asarray(dm_kpts, order='C')
-        dms = _format_dms(dm_kpts, kpts)
+        dms = dm_kpts
         n_dm, nkpts, nao = dms.shape[:3]
 
         kpts_band = _format_kpts_band(kpts_band, kpts)
@@ -816,14 +798,14 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         max_memory = max(2000, (self.max_memory - mem_now))
         log.debug1('max_memory = %d MB (%d in use)', max_memory+mem_now, mem_now)
 
-        cache_size = (naod*(naod+1)*ngrids*(nkpts+1))*16e-6
-        log.debug1('naod = %d cache_size = %d', naod, cache_size)
-
         if self.exclude_dd_block and not self._sr_without_dddd and naod > 0:
             ao_loc = cell.ao_loc
             smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
             smooth_bas_idx = rs_cell.bas_map[smooth_bas_mask]
             smooth_ao_idx = rs_cell.get_ao_indices(smooth_bas_idx, ao_loc)
+
+            cache_size = (naod*(naod+1)*ngrids*(nkpts+1))*16e-6
+            log.debug1('naod = %d cache_size = %d', naod, cache_size)
 
             # fft_aopair_dd seems less efficient than aft_aopair_dd
             if 0 and max_memory * .5 > cache_size and cell.dimension >= 2:
@@ -961,6 +943,11 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
             if self.exclude_dd_block and not self._sr_without_dddd and naod > 0:
                 for p0, p1 in lib.prange(0, ngrids, Gblksize):
+                    # C ~ compact basis, D ~ diffused basis
+                    # K matrix with coulG_LR:
+                    # (CC|CC) (CC|CD) (CC|DC) (CD|CC) (CD|CD) (CD|DC) (DC|CC) (DC|CD) (DC|DC)
+                    # K matrix with full coulG:
+                    # (CC|DD) (CD|DD) (DC|DD) (DD|CC) (DD|CD) (DD|DC) (DD|DD)
                     log.debug3('update_vk [%s:%s]', p0, p1)
                     Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs, out=buf)
                     update_vk(vk, Gpq, dm, coulG_SR[p0:p1] * -weight,
@@ -982,6 +969,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             cpu1 = log.timer_debug1('ft_aopair group %d'%group_id, *cpu1)
 
         if self._sr_without_dddd and naod > 0:
+            # (DD|DD) with full coulG, rest terms with coulG_LR
             log.debug1('ft_aopair dd-blcok for dddd-block ERI')
             if cell.dimension < 2:
                 raise NotImplementedError
@@ -1075,7 +1063,6 @@ def _purify(mat_kpts, phase):
 def estimate_rcut(rs_cell, omega, precision=None,
                   exclude_dd_block=True):
     '''Estimate rcut for 2e SR-integrals'''
-    # TODO: test why rcut is larger when diffused idx exists for sto3g-333
     if precision is None:
         precision = rs_cell.precision
 
@@ -1090,6 +1077,7 @@ def estimate_rcut(rs_cell, omega, precision=None,
     compact_idx = np.where(compact_mask)[0]
     if exclude_dd_block and compact_idx.size > 0:
         ak_idx = compact_idx[cost[compact_idx].argmax()]
+    logger.debug2(rs_cell, 'ai_idx=%d ak_idx=%d', ai_idx, ak_idx)
     # Case 1: l in cell0, product kl ~ dc, product ij ~ dd and dc
     # This includes interactions (dc|dd)
     ak = exps[ak_idx]
@@ -1163,7 +1151,7 @@ def _guess_omega(cell, kpts, mesh=None):
     precision = cell.precision
     nkpts = len(kpts)
     if mesh is None:
-        omega_min = rsdf_builder.OMEGA_MIN
+        omega_min = OMEGA_MIN
         ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
         nkpts = len(kpts)
         ke_cutoff = 50 / (.95 + .05*nkpts)
@@ -1312,11 +1300,17 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     ai = np.hstack(cell.bas_exps()).max()
     aij = ai * 2
     fac = 32*np.pi**2 / precision
-    omega = 2.
+    omega = .3
     theta = 1./(1./ai + omega**-2)
     omega2 = 1./(np.log(fac * theta/ (2*ke_cutoff) + 1.)*2/ke_cutoff - 1./aij)
-    omega2 = max(omega2, 0.01)
-    omega = omega2**.5
+    if omega2 > 0:
+        theta = 1./(1./ai + 1./omega2)
+        omega2 = 1./(np.log(fac * theta/ (2*ke_cutoff) + 1.)*2/ke_cutoff - 1./aij)
+    omega = max(omega2, 0)**.5
+    if omega < OMEGA_MIN:
+        logger.warn(cell, 'omega=%g smaller than the required minimal value %g. '
+                    'Set omega to %g', omega2, OMEGA_MIN, OMEGA_MIN)
+        omega = OMEGA_MIN
     return omega
 
 def _qcond_cell0_abstract(qcond, seg_loc, seg2sh, nbasp):
