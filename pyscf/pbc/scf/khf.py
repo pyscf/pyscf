@@ -536,7 +536,6 @@ class KSCF(pbchf.SCF):
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpts):
                 self.rsjk = self.rsjk.__class__(cell, self.kpts)
-            self.rsjk.build()
 
         # Let df.build() be called by get_jk function later on needs.
         # DFT objects may need to initiailze df with different paramters.

@@ -102,7 +102,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vk[6]), (3.6342630872923456-0.054892635365850449j)/8, 9)
         self.assertAlmostEqual(lib.fp(vk[7]), (3.3483735224533548+0.040877095049528467j)/8, 9)
 
-    def test_aft_k1_high_cost(self):
+    def test_aft_k1(self):
         kpts = cell.get_abs_kpts([[-.25,-.25,-.25],
                                   [-.25,-.25, .25],
                                   [-.25, .25,-.25],
@@ -111,9 +111,7 @@ class KnownValues(unittest.TestCase):
                                   [ .25,-.25, .25],
                                   [ .25, .25,-.25],
                                   [ .25, .25, .25]])
-        numpy.random.seed(1)
         nao = cell.nao_nr()
-        dm = numpy.random.random((8,nao,nao))
         mydf = aft.AFTDF(cell)
         mydf.kpts = kpts
         numpy.random.seed(1)
@@ -129,6 +127,41 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vk[6]), (7.3743790120272408-0.096290683129384574j)/8, 8)
         self.assertAlmostEqual(lib.fp(vk[7]), (6.8144379626901443+0.08071261392857812j) /8, 8)
 
+    def test_aft_k2(self):
+        kpts = cell.make_kpts([1]*3)
+        nkpts = len(kpts)
+        numpy.random.seed(1)
+        nao = cell.nao_nr()
+        nocc = 2
+        mo = (numpy.random.random((nkpts,nao,nocc)) +
+              numpy.random.random((nkpts,nao,nocc))*1j)
+        mo_occ = numpy.ones((nkpts,nocc))
+        dm = numpy.einsum('npi,nqi->npq', mo, mo.conj())
+        dm = lib.tag_array(dm, mo_coeff=mo, mo_occ=mo_occ)
+        mydf = aft.AFTDF(cell)
+        mydf.kpts = kpts
+        vk = aft_jk.get_k_kpts(mydf, dm, 1, mydf.kpts)
+        self.assertAlmostEqual(lib.fp(vk), 0.12513784226311198-0.10318660336428756j, 9)
+        vk1 = aft_jk.get_k_for_bands(mydf, dm, 1, mydf.kpts)
+        self.assertAlmostEqual(abs(vk-vk1).max(), 0, 9)
+
+    def test_aft_k3(self):
+        kpts = cell.make_kpts([2]*3)
+        nkpts = len(kpts)
+        numpy.random.seed(1)
+        nao = cell.nao_nr()
+        nocc = 2
+        mo = (numpy.random.random((nkpts,nao,nocc)) +
+              numpy.random.random((nkpts,nao,nocc))*1j)
+        mo_occ = numpy.ones((nkpts,nocc))
+        dm = numpy.einsum('npi,nqi->npq', mo, mo.conj())
+        dm = lib.tag_array(dm, mo_coeff=mo, mo_occ=mo_occ)
+        mydf = aft.AFTDF(cell)
+        mydf.kpts = kpts
+        vk = aft_jk.get_k_kpts(mydf, dm, 1, mydf.kpts)
+        self.assertAlmostEqual(lib.fp(vk), -3.0142712906563087+0.018808393052152095j, 9)
+        vk1 = aft_jk.get_k_for_bands(mydf, dm, 1, mydf.kpts)
+        self.assertAlmostEqual(abs(vk-vk1).max(), 0, 9)
 
 
 if __name__ == '__main__':

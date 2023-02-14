@@ -454,7 +454,6 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
     get_fermi = get_fermi
     get_occ = get_occ
     energy_elec = energy_elec
-
     get_rho = get_rho
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
@@ -469,7 +468,6 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
                 **kwargs):
         if verbose is None: verbose = self.verbose
         return khf.analyze(self, verbose, with_meta_lowdin, **kwargs)
-
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         if fock is None:

@@ -360,6 +360,7 @@ class _RangeSeparatedCell(pbcgto.Cell):
         rs_cell.ke_cutoff = ke_cut_threshold
         if log.verbose >= logger.DEBUG:
             bas_type = rs_cell.bas_type
+            log.debug('rs_cell.nbas %d nao %d', rs_cell.nbas, rs_cell.nao)
             log.debug1('No. steep_bas in rs_cell %d', np.count_nonzero(bas_type == STEEP_BASIS))
             log.debug1('No. local_bas in rs_cell %d', np.count_nonzero(bas_type == LOCAL_BASIS))
             log.debug('No. smooth_bas in rs_cell %d', np.count_nonzero(bas_type == SMOOTH_BASIS))

@@ -107,7 +107,6 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.dump_flags()
 
         exp_min = np.hstack(cell.bas_exps()).min()
-        theta = 1./(.5/exp_min + 1./self.eta)
         lattice_sum_factor = max((2*cell.rcut)**3/cell.vol * 1/exp_min, 1)
         cutoff = cell.precision / lattice_sum_factor * .1
         self.direct_scf_tol = cutoff
@@ -551,7 +550,6 @@ class _CCNucBuilder(_CCGDFBuilder):
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
         exp_min = np.hstack(cell.bas_exps()).min()
-        theta = 1./(.5/exp_min + 1./self.eta)
         lattice_sum_factor = max((2*cell.rcut)**3/cell.vol * 1/exp_min, 1)
         cutoff = cell.precision / lattice_sum_factor * .1
         self.direct_scf_tol = cutoff / cell.atom_charges().max()
@@ -903,6 +901,7 @@ def _guess_eta(cell, kpts=None, mesh=None):
         ke_cutoff = max(ke_cutoff, ke_min)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
+        mesh = np.asarray(mesh)
         mesh_min = cell.cutoff_to_mesh(ke_min)
         if np.any(mesh[:cell.dimension] < mesh_min[:cell.dimension]):
             logger.warn(cell, 'mesh %s is not enough to converge to the required '

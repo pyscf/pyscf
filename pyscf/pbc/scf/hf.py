@@ -48,7 +48,7 @@ from pyscf import __config__
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    precision = cell.precision**2
+    precision = cell.precision * 1e-5
     rcut = max(cell.rcut, gto.estimate_rcut(cell, precision))
     with lib.temporary_env(cell, rcut=rcut, precision=precision):
         # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
@@ -63,14 +63,14 @@ def get_ovlp(cell, kpt=np.zeros(3)):
 
     cond = np.max(lib.cond(s))
     if cond * precision > 1e2:
-        prec = cond**-.5
-        rmin = gto.estimate_rcut(cell, 1./cond)
+        prec = 1e7 / cond
+        rmin = gto.estimate_rcut(cell, prec*1e-5)
         logger.warn(cell, 'Singularity detected in overlap matrix.  '
                     'Integral accuracy may be not enough.\n      '
                     'You can adjust  cell.precision  or  cell.rcut  to '
                     'improve accuracy.  Recommended settings are\n      '
                     'cell.precision < %.2g\n      '
-                    'cell.rcut > %.4', prec, rmin)
+                    'cell.rcut > %.4g', prec, rmin)
     return s
 
 
@@ -551,7 +551,6 @@ class SCF(mol_hf.SCF):
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpt):
                 self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
-            self.rsjk.build()
 
         # Let df.build() be called by get_jk function later on needs.
         # DFT objects may need to initiailze df with different paramters.

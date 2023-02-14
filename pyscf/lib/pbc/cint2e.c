@@ -179,7 +179,10 @@ int PBCint2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
         float *ykl_cond = rkl_cond + nkl;
         float *zkl_cond = rkl_cond + nkl * 2;
         uint8_t *qidx_ij, *qidx_kl, *qidx_ik, *qidx_jk, *skl_idx;
-        uint8_t kl_cutoff, jl_cutoff, il_cutoff, sij, skl_cutoff;
+        uint8_t kl_cutoff, jl_cutoff, il_cutoff, sij;
+        // cutoff1 ~ 2*(log(cutoff) - log(dm)) + CUTOFF_OFFSET
+        uint8_t cutoff1 = cutoff - CUTOFF_OFFSET;
+        float skl_cutoff;
         float xij, yij, zij, dx, dy, dz, r2;
 
         int *bas = envs_cint->bas;
@@ -215,7 +218,7 @@ int PBCint2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
                                         qidx_ij = qidx_ijij + ish * Nbas;
                                         qidx_ik = qidx_iijj + ish * Nbas;
 for (jsh = jsh0; jsh < jsh1; jsh++) {
-        if (qidx_ij[jsh] + CUTOFF_OFFSET < cutoff) {
+        if (qidx_ij[jsh] < cutoff1) {
                 continue;
         }
         shls[1] = jsh;
@@ -227,8 +230,8 @@ for (jsh = jsh0; jsh < jsh1; jsh++) {
         zij = zij_cond[iseg * Nbas + jsh];
         skl_cutoff = cutoff - sij;
         for (ksh = ksh0; ksh < ksh1; ksh++) {
-                if (qidx_ik[ksh] + CUTOFF_OFFSET < cutoff ||
-                    qidx_jk[ksh] + CUTOFF_OFFSET < cutoff) {
+                if (qidx_ik[ksh] < cutoff1 ||
+                    qidx_jk[ksh] < cutoff1) {
                         continue;
                 }
                 shls[2] = ksh;

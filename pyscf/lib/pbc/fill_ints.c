@@ -34,7 +34,7 @@
 
 typedef void (*FPtrSort)(double *outR, double *outI, double *bufkkR, double *bufkkI,
                          int *shls, int *ao_loc, BVKEnvs *envs_bvk);
-typedef void (*FPtrFill)(int (*intor)(double *, int *, int *, double, CINTEnvVars *, BVKEnvs *),
+typedef void (*FPtrFill)(int (*intor)(double *, int *, int *, uint8_t, float *, CINTEnvVars *, BVKEnvs *),
                          double *outR, double *outI, double *cache, int *cell0_shls,
                          float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk);
 void PBCapprox_bvk_rcond(float *rcond, int ish_bvk, int jsh_bvk, BVKEnvs *envs_bvk,
@@ -153,7 +153,7 @@ static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, uint8_t cut
         float omega = env[PTR_RANGE_OMEGA];
         float ai, aj, ak, aij;
         float omega2, eta, theta, theta_k, theta_r2, fac;
-        uint8_t ij_cutoff;
+        float ij_cutoff, sij;
 
         // FIXME: Is it correct to assemble ECP and PP 3c integrals this way?
         if (omega < 0.f) {
@@ -162,7 +162,7 @@ static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, uint8_t cut
                 // the factor for aux-basis
                 // ~ log(sqrt(2/sqrt(pi*theta)/r^2)*r^lk)
                 fac = .25f*logf(omega2);
-                ij_cutoff = cutoff + (int)ceilf(2*fac);
+                ij_cutoff = cutoff + ceilf(2*fac);
 
                 for (kseg = kseg0; kseg < kseg1; kseg++) {
                         ksh = seg2sh[kseg];
@@ -194,7 +194,8 @@ for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
         sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                if (sij_idx[jsh] < ij_cutoff - 1) {
+                sij = sij_idx[jsh];
+                if (sij < ij_cutoff - 1) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
@@ -202,7 +203,7 @@ for (ish = ish0; ish < ish1; ish++) {
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
                 theta_r2 = theta * r2 + logf(r2 + 1e-15f);
-                if (theta_r2*2 + ij_cutoff < sij_idx[jsh]) {
+                if (theta_r2*2 + ij_cutoff < sij) {
                         shls[1] = jsh;
                         if ((*intor)(bufL, NULL, shls, atm, natm,
                                      bas, nbas, env, cintopt, cache)) {
@@ -252,7 +253,8 @@ for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
         sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                if (sij_idx[jsh] + 3.f < ij_cutoff) {
+                sij = sij_idx[jsh];
+                if (sij < ij_cutoff - 1) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
@@ -260,7 +262,7 @@ for (ish = ish0; ish < ish1; ish++) {
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
                 theta_r2 = theta * r2 + logf(r2 + 1e-15f);
-                if (theta_r2*2 + ij_cutoff < sij_idx[jsh]) {
+                if (theta_r2*2 + ij_cutoff < sij) {
                         shls[1] = jsh;
                         if ((*intor)(bufL, NULL, shls, atm, natm,
                                      bas, nbas, env, cintopt, cache)) {
@@ -470,6 +472,7 @@ static void _fill_kk(int (*intor)(), FPtrSort fsort,
         int iL, ish_bvk, iseg0, iseg1, nish;
         int jL, jsh_bvk, jseg0, jseg1, njsh;
         int bvk_cells[2];
+        uint8_t cutoff = envs_bvk->cutoff;
 
         int iLmax = -1;
         int jLmax = -1;
@@ -485,7 +488,7 @@ static void _fill_kk(int (*intor)(), FPtrSort fsort,
                         jseg0 = seg_loc[jsh_bvk];
                         jseg1 = seg_loc[jsh_bvk+1];
                         njsh = seg2sh[jseg1] - seg2sh[jseg0];
-                        if ((*intor)(pbuf, cell0_shls, bvk_cells, envs_bvk->cutoff,
+                        if ((*intor)(pbuf, cell0_shls, bvk_cells, cutoff,
                                      rij_cond, envs_cint, envs_bvk)) {
                                 iLmax = iL;
                                 jLmax = MAX(jL, jLmax);
@@ -731,6 +734,7 @@ static void _fill_k(int (*intor)(), FPtrSort fsort,
         int bvk_cells[2];
         double *expLkR = envs_bvk->expLkR;
         double *expLkI = envs_bvk->expLkI;
+        uint8_t cutoff = envs_bvk->cutoff;
 
         int empty = 1;
         NPdset0(bufkR, d3ck);
@@ -750,7 +754,7 @@ static void _fill_k(int (*intor)(), FPtrSort fsort,
                         jseg0 = seg_loc[jsh_bvk];
                         jseg1 = seg_loc[jsh_bvk+1];
                         njsh = seg2sh[jseg1] - seg2sh[jseg0];
-                        if ((*intor)(pbuf, cell0_shls, bvk_cells, envs_bvk->cutoff,
+                        if ((*intor)(pbuf, cell0_shls, bvk_cells, cutoff,
                                      rij_cond, envs_cint, envs_bvk)) {
                                 jLmax = MAX(jL, jLmax);
                         }
@@ -949,6 +953,7 @@ static void _fill_nk1(int (*intor)(), FPtrSort fsort,
         double *expLkR = envs_bvk->expLkR;
         double *expLkI = envs_bvk->expLkI;
         double facR, facI;
+        uint8_t cutoff = envs_bvk->cutoff;
 
         int empty = 1;
         NPdset0(bufR, d3c);
@@ -965,7 +970,7 @@ static void _fill_nk1(int (*intor)(), FPtrSort fsort,
                         jseg0 = seg_loc[jsh_bvk];
                         jseg1 = seg_loc[jsh_bvk+1];
                         njsh = seg2sh[jseg1] - seg2sh[jseg0];
-                        if ((*intor)(bufL, cell0_shls, bvk_cells, envs_bvk->cutoff,
+                        if ((*intor)(bufL, cell0_shls, bvk_cells, cutoff,
                                      rij_cond, envs_cint, envs_bvk)) {
                                 empty = 0;
                                 facR = expLkR[iL] * expLkR[jL] + expLkI[iL] * expLkI[jL];
@@ -1014,8 +1019,9 @@ static void _fill_g(int (*intor)(), FPtrSort fsort,
         int *cell0_ao_loc = envs_bvk->ao_loc;
         double *buf = cache;
         int bvk_cells[2] = {0, 0};
+        uint8_t cutoff = envs_bvk->cutoff;
 
-        if ((*intor)(buf, cell0_shls, bvk_cells, envs_bvk->cutoff,
+        if ((*intor)(buf, cell0_shls, bvk_cells, cutoff,
                      rij_cond, envs_cint, envs_bvk)) {
                 (*fsort)(outR, NULL, buf, NULL, cell0_shls, cell0_ao_loc, envs_bvk);
         }

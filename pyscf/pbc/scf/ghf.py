@@ -22,6 +22,7 @@ Generalized Hartree-Fock for periodic systems at a single k-point
 
 import numpy as np
 import scipy.linalg
+from pyscf.lib import logger
 import pyscf.scf.ghf as mol_ghf
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import addons

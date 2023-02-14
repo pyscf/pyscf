@@ -171,7 +171,7 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, uint8_t cutof
         float omega = env[PTR_RANGE_OMEGA];
         float ai, aj, ak, aij;
         float omega2, eta, theta, theta_k, theta_r2, fac;
-        uint8_t ij_cutoff;
+        float ij_cutoff, sij;
 
         if (omega < 0.f) {
                 // Short-range ERI
@@ -192,7 +192,7 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, uint8_t cutof
                         // ~ log(sqrt(2/sqrt(pi*theta)/r^2) * (theta*r/ak)^lk
                         //     * (pi/ak)^1.5 * norm_k)
                         fac = logf(omega2)/4 - lk*logf(theta_k*8.f);
-                        ij_cutoff = cutoff + (int)(ceilf(2*fac));
+                        ij_cutoff = cutoff + ceilf(2*fac);
                         for (iseg = iseg0; iseg < iseg1; iseg++) {
                                 ish0 = seg2sh[iseg];
                                 ish1 = seg2sh[iseg+1];
@@ -208,8 +208,9 @@ for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
         sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
+                sij = sij_idx[jsh];
                 // adjust ij_cutoff in case r2 is very small
-                if (sij_idx[jsh] < ij_cutoff - 1) {
+                if (sij < ij_cutoff - 1) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
@@ -217,7 +218,7 @@ for (ish = ish0; ish < ish1; ish++) {
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
                 theta_r2 = theta * r2 + logf(r2 + 1e-15f);
-                if (theta_r2*2 + ij_cutoff < sij_idx[jsh]) {
+                if (theta_r2*2 + ij_cutoff < sij) {
                         shls[1] = jsh;
                         update_int3c2e_envs(envs_cint, shls);
                         (*intor_loop)(gctr, envs_cint, cache, &empty);
@@ -247,7 +248,7 @@ for (ish = ish0; ish < ish1; ish++) {
                         // ~ log(sqrt(2/sqrt(pi*theta)/r^2) * (theta*r/ak)^lk
                         //     * (pi/ak)^1.5 * norm_k)
                         fac = logf(eta)/4 - lk*logf(theta_k*8.f);
-                        ij_cutoff = cutoff + (int)(ceilf(2*fac));
+                        ij_cutoff = cutoff + ceilf(2*fac);
                         for (iseg = iseg0; iseg < iseg1; iseg++) {
                                 ish0 = seg2sh[iseg];
                                 ish1 = seg2sh[iseg+1];
@@ -262,8 +263,9 @@ for (ish = ish0; ish < ish1; ish++) {
         shls[0] = ish;
         sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
+                sij = sij_idx[jsh];
                 // adjust ij_cutoff in case r2 is very small
-                if (sij_idx[jsh] < ij_cutoff - 1) {
+                if (sij < ij_cutoff - 1) {
                         continue;
                 }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
@@ -271,7 +273,7 @@ for (ish = ish0; ish < ish1; ish++) {
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
                 theta_r2 = theta * r2 + logf(r2 + 1e-15f);
-                if (theta_r2*2 + ij_cutoff < sij_idx[jsh]) {
+                if (theta_r2*2 + ij_cutoff < sij) {
                         shls[1] = jsh;
                         update_int3c2e_envs(envs_cint, shls);
                         (*intor_loop)(gctr, envs_cint, cache, &empty);

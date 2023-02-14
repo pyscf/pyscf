@@ -154,11 +154,6 @@ class _RSGDFBuilder(Int3cBuilder):
         self.dump_flags()
 
         exp_min = np.hstack(cell.bas_exps()).min()
-        aux_exp = np.hstack(auxcell.bas_exps()).min()
-        if self.omega == 0:
-            theta = 1./(.5/exp_min + 1./aux_exp)
-        else:
-            theta = 1./(.5/exp_min + 1./aux_exp + self.omega**-2)
         # For each basis i in (ij|, small integrals accumulated by the lattice
         # sum for j are not negligible. (2*cell.rcut)**3/vol is roughly the
         # number of basis i and 1./exp_min for the non-negligible basis j.
@@ -301,7 +296,7 @@ class _RSGDFBuilder(Int3cBuilder):
             mesh[2] = _estimate_meshz(auxcell)
         elif cell.dimension < 2:
             mesh[cell.dimension:] = cell.mesh[cell.dimension:]
-        mesh = self.cell.symmetrize_mesh(mesh)
+        mesh = cell.symmetrize_mesh(mesh)
         logger.debug(self, 'Set 2c2e integrals precision %g, mesh %s', precision, mesh)
 
         Gv, Gvbase, kws = auxcell.get_Gv_weights(mesh)
@@ -1112,10 +1107,6 @@ class _RSNucBuilder(_RSGDFBuilder):
         self.dump_flags()
 
         exp_min = np.hstack(cell.bas_exps()).min()
-        if self.omega == 0:
-            theta = exp_min / 2
-        else:
-            theta = 1./(.5/exp_min + self.omega**-2)
         # For each basis i in (ij|, small integrals accumulated by the lattice
         # sum for j are not negligible.
         lattice_sum_factor = max((2*cell.rcut)**3/cell.vol * 1/exp_min, 1)
@@ -1330,6 +1321,7 @@ def _guess_omega(cell, kpts, mesh=None):
         ke_cutoff = max(ke_cutoff, ke_min)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
+        mesh = np.asarray(mesh)
         mesh_min = cell.cutoff_to_mesh(ke_min)
         if np.any(mesh[:cell.dimension] < mesh_min[:cell.dimension]):
             logger.warn(cell, 'mesh %s is not enough to converge to the required '
