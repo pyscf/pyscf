@@ -68,6 +68,8 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
     nblocks, n_dm = dms.shape[:2]
     dms = dms.reshape(nblocks*n_dm, nao, nao)
 
+    if mf.rsjk:
+        logger.warn(mf, 'RSJK does not support GHF')
     j1, k1 = mf.with_df.get_jk(dms, _hermi, kpt, kpts_band, with_j, with_k,
                                exxdiv=mf.exxdiv)
 

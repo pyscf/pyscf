@@ -149,7 +149,7 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # passed to functions like get_jk, get_vxc.  These functions may take the tags
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # arrays and modifications to DM arrays may be ignored.
-    return numpy.array((dm_a, dm_b))
+    return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ):
     '''Two-particle density matrix in AO representation

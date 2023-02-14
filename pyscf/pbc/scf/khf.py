@@ -232,9 +232,8 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
         dm_kpts : (nkpts, nao, nao) ndarray
     '''
     nkpts = len(mo_occ_kpts)
-    dm_kpts = [mol_hf.make_rdm1(mo_coeff_kpts[k], mo_occ_kpts[k])
-               for k in range(nkpts)]
-    return lib.asarray(dm_kpts)
+    dm = [mol_hf.make_rdm1(mo_coeff_kpts[k], mo_occ_kpts[k]) for k in range(nkpts)]
+    return lib.tag_array(dm, mo_coeff=mo_coeff_kpts, mo_occ=mo_occ_kpts)
 
 
 def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
@@ -634,14 +633,8 @@ class KSCF(pbchf.SCF):
         '''
         if dm_kpts is None:
             dm_kpts = self.make_rdm1()
-        if self.rsjk and self.direct_scf:
-            # Enable direct-SCF for real space JK builder
-            ddm = dm_kpts - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
-            return vhf_last + vj - vk * .5
-        else:
-            vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-            return vj - vk * .5
+        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+        return vj - vk * .5
 
     def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
                 **kwargs):

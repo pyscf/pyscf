@@ -56,7 +56,8 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
         return [np.dot(mos[k]*occs[k], mos[k].T.conj()) for k in range(nkpts)]
     dm_kpts =(make_dm(mo_coeff_kpts[0], mo_occ_kpts[0]) +
               make_dm(mo_coeff_kpts[1], mo_occ_kpts[1]))
-    return lib.asarray(dm_kpts).reshape(2,nkpts,nao,nao)
+    dm = lib.asarray(dm_kpts).reshape(2,nkpts,nao,nao)
+    return lib.tag_array(dm, mo_coeff=mo_coeff_kpts, mo_occ=mo_occ_kpts)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -460,16 +461,9 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
                  kpts=None, kpts_band=None):
         if dm_kpts is None:
             dm_kpts = self.make_rdm1()
-        if self.rsjk and self.direct_scf:
-            ddm = dm_kpts - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
-            vhf = vj[0] + vj[1] - vk
-            vhf += vhf_last
-        else:
-            vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-            vhf = vj[0] + vj[1] - vk
+        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+        vhf = vj[0] + vj[1] - vk
         return vhf
-
 
     def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
                 **kwargs):

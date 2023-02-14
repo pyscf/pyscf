@@ -49,7 +49,7 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
         mo_b = mo_coeff_kpts[k][:,occ==2]
         dma.append(np.dot(mo_a, mo_a.conj().T))
         dmb.append(np.dot(mo_b, mo_b.conj().T))
-    return lib.asarray((dma,dmb))
+    return lib.tag_array((dma, dmb), mo_coeff=mo_coeff_kpts, mo_occ=mo_occ_kpts)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -363,14 +363,8 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
             mo_occ_b = [(x ==2).astype(np.double) for x in dm_kpts.mo_occ]
             dm_kpts = lib.tag_array(dm_kpts, mo_coeff=(mo_coeff,mo_coeff),
                                     mo_occ=(mo_occ_a,mo_occ_b))
-        if self.rsjk and self.direct_scf:
-            ddm = dm_kpts - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
-            vhf = vj[0] + vj[1] - vk
-            vhf += vhf_last
-        else:
-            vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-            vhf = vj[0] + vj[1] - vk
+        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+        vhf = vj[0] + vj[1] - vk
         return vhf
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):

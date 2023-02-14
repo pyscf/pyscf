@@ -764,7 +764,7 @@ class SymAdaptedROHF(rohf.ROHF):
         mo_b = mo_coeff[:,mo_occ==2]
         dm_a = numpy.dot(mo_a, mo_a.conj().T)
         dm_b = numpy.dot(mo_b, mo_b.conj().T)
-        return numpy.array((dm_a, dm_b))
+        return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
     def _finalize(self):
         rohf.ROHF._finalize(self)

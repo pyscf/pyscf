@@ -199,7 +199,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self.qindex = np.empty((3,nbas,nbas), dtype=np.uint8)
         ao_loc = supmol_sr.ao_loc
         with supmol_sr.with_integral_screen(self.direct_scf_tol**2):
-            libpbc.PBCVHFsetnr_direct_scf1(
+            libpbc.PBCVHFsetnr_direct_scf(
                 libpbc.int2e_sph, self._cintopt,
                 self.qindex.ctypes.data_as(ctypes.c_void_p),
                 ao_loc.ctypes.data_as(ctypes.c_void_p),

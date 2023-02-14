@@ -694,15 +694,8 @@ class SCF(mol_hf.SCF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        if self.rsjk and self.direct_scf:
-            # Enable direct-SCF for real space JK builder
-            ddm = dm - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
-            vhf = vj - vk * .5
-            vhf += vhf_last
-        else:
-            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-            vhf = vj - vk * .5
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+        vhf = vj - vk * .5
         return vhf
 
     def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, omega=None,

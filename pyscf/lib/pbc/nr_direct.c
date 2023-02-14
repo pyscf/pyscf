@@ -995,41 +995,7 @@ void PBCVHF_direct_drv_nodddd(
         free(qidx_iijj);
 }
 
-static int _int2e_swap_jk(double *buf, int *dims, int *shls,
-                          int *atm, int natm, int *bas, int nbas, double *env,
-                          CINTOpt *cintopt, double *cache)
-{
-        int shls_swap_jk[4] = {shls[0], shls[2], shls[1], shls[3]};
-        return int2e_sph(buf, dims, shls_swap_jk, atm, natm, bas, nbas, env, cintopt, cache);
-}
-
-void PBCVHFsetnr_direct_scf(int (*intor)(), CINTOpt *cintopt, float *qcond,
-                            int *ao_loc, int *atm, int natm,
-                            int *bas, int nbas, double *env)
-{
-        size_t Nbas = nbas;
-        size_t Nbas2 = Nbas * Nbas;
-        double *buf = (double *)malloc(sizeof(double) * Nbas2);
-        float *qcond_ijij = qcond;
-        float *qcond_iijj = qcond + Nbas2;
-        size_t i;
-
-        CVHFset_int2e_q_cond(intor, cintopt, buf, ao_loc,
-                             atm, natm, bas, nbas, env);
-        for (i = 0; i < Nbas2; i++) {
-                qcond_ijij[i] = logf(buf[i]);
-        }
-
-        CVHFset_int2e_q_cond(_int2e_swap_jk, cintopt, buf, ao_loc,
-                             atm, natm, bas, nbas, env);
-        for (i = 0; i < Nbas2; i++) {
-                qcond_iijj[i] = logf(buf[i]);
-        }
-
-        free(buf);
-}
-
-void PBCVHFsetnr_direct_scf1(int (*intor)(), CINTOpt *cintopt, uint8_t *qindex,
+void PBCVHFsetnr_direct_scf(int (*intor)(), CINTOpt *cintopt, uint8_t *qindex,
                             int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {

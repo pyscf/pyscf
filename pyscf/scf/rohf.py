@@ -231,7 +231,7 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
         mo_occa, mo_occb = mo_occ
     dm_a = numpy.dot(mo_coeff*mo_occa, mo_coeff.conj().T)
     dm_b = numpy.dot(mo_coeff*mo_occb, mo_coeff.conj().T)
-    return numpy.array((dm_a, dm_b))
+    return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if dm is None: dm = mf.make_rdm1()

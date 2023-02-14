@@ -179,8 +179,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        # attach mo_coeff and mo_occ to dm to improve DFT get_veff efficiency
-        dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot = mf.energy_tot(dm, h1e, vhf)
 
@@ -217,7 +215,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
-        dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot, last_hf_e = mf.energy_tot(dm, h1e, vhf), e_tot
 
@@ -687,7 +684,8 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # passed to functions like get_jk, get_vxc.  These functions may take the tags
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # array and modifications to DM array may be ignored.
-    return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
+    dm = numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
+    return lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ, **kwargs):
     '''Two-particle density matrix in AO representation
@@ -1642,19 +1640,8 @@ class SCF(lib.StreamObject):
             logger.debug1(self, 'Nelec from initial guess = %s', nelec)
         return dm
 
-    # full density matrix for RHF
-    @lib.with_doc(make_rdm1.__doc__)
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_occ is None: mo_occ = self.mo_occ
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return make_rdm1(mo_coeff, mo_occ, **kwargs)
-
-    @lib.with_doc(make_rdm2.__doc__)
-    def make_rdm2(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_occ is None: mo_occ = self.mo_occ
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return make_rdm2(mo_coeff, mo_occ, **kwargs)
-
+    make_rdm1 = lib.module_method(make_rdm1, absences=['mo_coeff', 'mo_occ'])
+    make_rdm2 = lib.module_method(make_rdm2, absences=['mo_coeff', 'mo_occ'])
     energy_elec = energy_elec
     energy_tot = energy_tot
 
