@@ -44,14 +44,19 @@ def _get_internal_stability_status(mf):
     elif len(res) == 2:
         return res
 
-def stable_opt_internal(mf, max_attempt=10):
+def stable_opt_internal(mf, max_attempt=10, newton=False):
     log = logger.new_logger(mf)
     mo1, stable = _get_internal_stability_status(mf)
     cyc = 0
     while (not stable and cyc < max_attempt):
         log.note('Try to optimize orbitals until stable, attempt %d' % cyc)
         dm1 = mf.make_rdm1(mo1, mf.mo_occ)
-        mf = mf.run(dm1)
+        if newton:
+            mf = mf.run(max_cycle=20)
+            if not mf.converged:
+                mf = mf.newton().run()
+        else:
+            mf = mf.run(dm1)
         mo1, stable = _get_internal_stability_status(mf)
         cyc += 1
     if not stable:
@@ -99,18 +104,14 @@ def rhf_stability(mf, internal=True, external=False, verbose=None, return_status
         and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
+    stable_i = stable_e = None
+    if internal:
+        mo_i, stable_i = rhf_internal(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
+    if external:
+        mo_e, stable_e = rhf_external(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
     if return_status:
-        stable_i = stable_e = None
-        if internal:
-            mo_i, stable_i = rhf_internal(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
-        if external:
-            mo_e, stable_e = rhf_external(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
         return mo_i, mo_e, stable_i, stable_e
     else:
-        if internal:
-            mo_i = rhf_internal(mf, verbose=verbose, nroots=nroots, tol=tol)
-        if external:
-            mo_e = rhf_external(mf, verbose=verbose, nroots=nroots, tol=tol)
         return mo_i, mo_e
 
 def uhf_stability(mf, internal=True, external=False, verbose=None, return_status=False,
@@ -146,18 +147,14 @@ def uhf_stability(mf, internal=True, external=False, verbose=None, return_status
         and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
+    stable_i = stable_e = None
+    if internal:
+        mo_i, stable_i = uhf_internal(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
+    if external:
+        mo_e, stable_e = uhf_external(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
     if return_status:
-        stable_i = stable_e = None
-        if internal:
-            mo_i, stable_i = uhf_internal(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
-        if external:
-            mo_e, stable_e = uhf_external(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
         return mo_i, mo_e, stable_i, stable_e
     else:
-        if internal:
-            mo_i = uhf_internal(mf, verbose=verbose, nroots=nroots, tol=tol)
-        if external:
-            mo_e = uhf_external(mf, verbose=verbose, nroots=nroots, tol=tol)
         return mo_i, mo_e
 
 def rohf_stability(mf, internal=True, external=False, verbose=None, return_status=False,
@@ -192,26 +189,18 @@ def rohf_stability(mf, internal=True, external=False, verbose=None, return_statu
         and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
+    stable_i = stable_e = None
+    if internal:
+        mo_i, stable_i = rohf_internal(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
+    if external:
+        mo_e, stable_e = rohf_external(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
     if return_status:
-        stable_i = stable_e = None
-        if internal:
-            mo_i, stable_i = rohf_internal(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
-        if external:
-            mo_e, stable_e = rohf_external(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
         return mo_i, mo_e, stable_i, stable_e
     else:
-        if internal:
-            mo_i = rohf_internal(mf, verbose=verbose, nroots=nroots, tol=tol)
-        if external:
-            mo_e = rohf_external(mf, verbose=verbose, nroots=nroots, tol=tol)
         return mo_i, mo_e
 
 def is_complex(mf):
-    if mf.mo_coeff.dtype == numpy.float64:
-        return False
-    else:
-        dm = mf.make_rdm1()
-        return abs(dm.imag).max() > 1e-6
+    return mf.mo_coeff.dtype == numpy.complex128
 
 def ghf_stability(mf, verbose=None, return_status=False,
                   nroots=STAB_NROOTS, tol=1e-4):
@@ -240,18 +229,16 @@ def ghf_stability(mf, verbose=None, return_status=False,
         stable or unstable) are returned.
     '''
     mo_i = None
+    stable_i = None
+    if is_complex(mf):
+        mo_i, stable_i = ghf_complex(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
+    else:
+        mo_i, stable_i = ghf_real_internal(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
+        ghf_real2complex(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
+        # should we also return the status of r2c?
     if return_status:
-        stable_i = None
-        if is_complex(mf):
-            mo_i, stable_i = ghf_complex(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
-        else:
-            mo_i, stable_i = ghf_real(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
         return mo_i, stable_i
     else:
-        if is_complex(mf):
-            mo_i = ghf_complex(mf, verbose=verbose, nroots=nroots, tol=tol)
-        else:
-            mo_i = ghf_real(mf, verbose=verbose, nroots=nroots, tol=tol)
         return mo_i
 
 
@@ -791,8 +778,8 @@ def _gen_hop_ghf_complex_internal(mf, with_symmetry=True, verbose=None):
 
     return hop, hdiag
 
-def ghf_real(mf, with_symmetry=True, verbose=None, return_status=False,
-             nroots=STAB_NROOTS, tol=1e-4):
+def ghf_real_internal(mf, with_symmetry=True, verbose=None, return_status=False,
+                      nroots=STAB_NROOTS, tol=1e-4):
     log = logger.new_logger(mf, verbose)
     #with_symmetry = True
     g, hop, hdiag = newton_ah.gen_g_hop_ghf(mf, mf.mo_coeff, mf.mo_occ)
@@ -818,7 +805,14 @@ def ghf_real(mf, with_symmetry=True, verbose=None, return_status=False,
         mo = mf.mo_coeff
     else:
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
+    if return_status:
+        return mo, stable
+    else:
+        return mo
 
+def ghf_real2complex(mf, with_symmetry=True, verbose=None, return_status=False,
+                     nroots=STAB_NROOTS, tol=1e-4):
+    log = logger.new_logger(mf, verbose)
     hop_r2c, hdiag_r2c = _gen_hop_ghf_real2complex(mf, with_symmetry=with_symmetry)
     def precond(dx, e, x0):
         hdiagd = hdiag_r2c - e
@@ -831,18 +825,19 @@ def ghf_real(mf, with_symmetry=True, verbose=None, return_status=False,
     e2, v2 = lib.davidson(hop_r2c, x0, precond, tol=tol, verbose=log, nroots=nroots)
     log.info('ghf_real2complex: lowest eigs of H = %s', e2)
     if nroots != 1:
-        e2, v = e2[0], v[0]
+        e2, v2 = e2[0], v2[0]
     stable_r2c = not (e2 < -1e-5)
     dump_status(log, stable_r2c, f'{mf.__class__} (real)', 'real -> complex')
-    if return_status:
-        return mo, stable
-    else:
-        return mo
+    # TODO: return mo for GHF r2c
 
-def ghf_complex(mf, verbose=None, return_status=False,
+def ghf_real(mf, **kwargs):
+    ghf_real_internal(mf, **kwargs)
+    ghf_real2complex(mf, **kwargs)
+
+
+def ghf_complex(mf, with_symmetry=True, verbose=None, return_status=False,
                 nroots=STAB_NROOTS, tol=1e-4):
     log = logger.new_logger(mf, verbose)
-    with_symmetry = True
     hop, hdiag = _gen_hop_ghf_complex_internal(mf)
     def precond(dx, e, x0):
         hdiagd = hdiag - e
@@ -852,16 +847,29 @@ def ghf_complex(mf, verbose=None, return_status=False,
     x0[hdiag>1e-5] = 1. / hdiag[hdiag>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
+    x0[0] += 0.1j
     e, v = lib.davidson(hop, x0, precond, tol=tol, verbose=log, nroots=nroots)
     log.info('ghf_complex_internal: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
     stable = not (e < -1e-5)
     dump_status(log, stable, f'{mf.__class__} (complex)', 'internal')
+
     if stable:
         mo = mf.mo_coeff
     else:
-        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
+        occidx = numpy.where(mf.mo_occ> 0)[0]
+        viridx = numpy.where(mf.mo_occ==0)[0]
+        nocc = len(occidx)
+        nvir = len(viridx)
+        j = v[:nvir*nocc].reshape(nvir,nocc)
+        dx = numpy.vstack((
+            numpy.hstack(( numpy.zeros((nocc,nocc)), -j.conj().T )),
+            numpy.hstack(( j, numpy.zeros((nvir, nvir)) ))
+        ))
+        u = newton_ah.expmat(dx)
+        #print(mf.mo_occ, nocc, nvir, dx.shape, u.shape)
+        mo = numpy.dot(mf.mo_coeff, u)
 
     if return_status:
         return mo, stable

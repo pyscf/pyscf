@@ -29,6 +29,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf import tdscf
+from pyscf.scf.stability import is_complex
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     if internal:
@@ -67,7 +68,7 @@ def rhf_internal(mf, verbose=None):
 
     nov = nocc * nvir
     e = scipy.linalg.eigh(h.reshape(nov,nov))[0]
-    log.debug('rhf_internal: lowest eigs = %s', e[e<=max(e[0],1e-5)])
+    log.info('rhf_internal: lowest eigs = %s', e[e<=max(e[0],1e-5)])
     if e[0] < -1e-5:
         log.log('RHF wavefunction has an internal instability')
     else:
@@ -98,7 +99,7 @@ def rhf_external(mf, verbose=None):
     h+= numpy.einsum('cldk->kcld', eri_mo[nocc:,:nocc,nocc:,:nocc])
 
     e1 = scipy.linalg.eigh(h.reshape(nov,nov))[0]
-    log.debug('rhf_external: lowest eigs = %s', e1[e1<=max(e1[0],1e-5)])
+    log.info('rhf_external: lowest eigs = %s', e1[e1<=max(e1[0],1e-5)])
     if e1[0] < -1e-5:
         log.log('RHF wavefunction has an RHF real -> complex instability')
     else:
@@ -110,7 +111,7 @@ def rhf_external(mf, verbose=None):
             h[i,a,i,a] += eai[a,i]
     h-= numpy.einsum('cldk->kcld', eri_mo[nocc:,:nocc,nocc:,:nocc])
     e3 = scipy.linalg.eigh(h.reshape(nov,nov))[0]
-    log.debug('rhf_external: lowest eigs of H = %s', e3[e3<=max(e3[0],1e-5)])
+    log.info('rhf_external: lowest eigs of H = %s', e3[e3<=max(e3[0],1e-5)])
     if e3[0] < -1e-5:
         log.log('RHF wavefunction has an RHF -> UHF instability.')
     else:
@@ -156,7 +157,7 @@ def uhf_internal(mf, verbose=None):
     hall[:nova,nova:] = hab.reshape(nova,novb)
     hall[nova:,:nova] = hab.reshape(nova,novb).T
     e = scipy.linalg.eigh(hall)[0]
-    log.debug('uhf_internal: lowest eigs of H = %s', e[e<=max(e[0],1e-5)])
+    log.info('uhf_internal: lowest eigs of H = %s', e[e<=max(e[0],1e-5)])
     if e[0] < -1e-5:
         log.log('UHF wavefunction has an internal instability. '
                  'It maybe corresponds to (spatial) symmetry broken wfn.')
@@ -197,7 +198,7 @@ def uhf_external(mf, verbose=None):
     hall[:nova,:nova] = haa.reshape(nova,nova)
     hall[nova:,nova:] = hbb.reshape(novb,novb)
     e1 = scipy.linalg.eigh(hall)[0]
-    log.debug('uhf_external: lowest eigs of H = %s', e1[e1<=max(e1[0],1e-5)])
+    log.info('uhf_external: lowest eigs of H = %s', e1[e1<=max(e1[0],1e-5)])
     if e1[0] < -1e-5:
         log.log('UHF wavefunction has an UHF real -> complex instability')
     else:
@@ -222,13 +223,13 @@ def uhf_external(mf, verbose=None):
     hall[:n1,n1:] = h12.reshape(n1,n2)
     hall[n1:,:n1] = h21.reshape(n2,n1)
     e3 = scipy.linalg.eigh(hall)[0]
-    log.debug('uhf_external: lowest eigs of H = %s', e3[e3<=max(e3[0],1e-5)])
+    log.info('uhf_external: lowest eigs of H = %s', e3[e3<=max(e3[0],1e-5)])
     if e3[0] < -1e-5:
         log.log('UHF wavefunction has an UHF -> GHF instability.')
     else:
         log.log('UHF wavefunction is stable in the UHF -> GHF stability analysis')
 
-def ghf_real_internal(mf, verbose=None):
+def ghf_real(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
@@ -242,18 +243,41 @@ def ghf_real_internal(mf, verbose=None):
     b = b.reshape(nov,nov)
     h = a + b
     e = scipy.linalg.eigh(h)[0]
-    log.debug('ghf_internal: lowest eigs = %s', e[e<=max(e[0],1e-5)])
+    log.info('ghf_real_internal: lowest eigs = %s', e[e<=max(e[0],1e-5)])
     if e[0] < -1e-5:
         log.log('GHF (real) wavefunction has an internal instability')
     else:
         log.log('GHF (real) wavefunction is stable in the internal stability analysis')
     h2 = a - b
     e2 = scipy.linalg.eigh(h2)[0]
-    log.debug('ghf_internal: lowest eigs = %s', e2[e2<=max(e2[0],1e-5)])
+    log.info('ghf_real2complex: lowest eigs = %s', e2[e2<=max(e2[0],1e-5)])
     if e2[0] < -1e-5:
         log.log('GHF (real) wavefunction has a real2complex instability')
     else:
         log.log('GHF (real) wavefunction is stable in the real2complex stability analysis')
+
+def ghf_complex(mf, verbose=None):
+    #assert is_complex(mf)
+    log = logger.new_logger(mf, verbose)
+    mo_coeff = mf.mo_coeff
+    mo_occ = mf.mo_occ
+    nmo = mo_coeff.shape[1]
+    nocc = numpy.count_nonzero(mo_occ)
+    nvir = nmo - nocc
+
+    a,b = tdscf.ghf.get_ab(mf)
+    nov = nocc * nvir
+    a = a.reshape(nov,nov)
+    b = b.reshape(nov,nov)
+    h = numpy.vstack((
+        numpy.hstack(( a, b )),
+        numpy.hstack(( b.conj(), a.conj() )) ))
+    e = scipy.linalg.eigh(h)[0]
+    log.info('ghf_complex_internal: lowest eigs = %s', e[e<=max(e[0],1e-5)])
+    if e[0] < -1e-5:
+        log.log('GHF (complex) wavefunction has an internal instability')
+    else:
+        log.log('GHF (complex) wavefunction is stable in the internal stability analysis')
 
 if __name__ == '__main__':
     from pyscf import gto, scf
