@@ -231,9 +231,16 @@ void del_pgfpair(PGFPair** pair_info)
 }
 
 
+//unlink the pgfpair data instead of deleting
+void nullify_pgfpair(PGFPair** pair_info)
+{
+    *pair_info = NULL;
+}
+
+
 void init_task(Task** task)
 {
-    Task *t0 = (Task*) malloc(sizeof(Task));
+    Task *t0 = *task = (Task*) malloc(sizeof(Task));
     t0->ntasks = 0;
     t0->buf_size = BUF_SIZE; 
     t0->pgfpairs = (PGFPair**) malloc(sizeof(PGFPair*) * t0->buf_size);
@@ -241,7 +248,6 @@ void init_task(Task** task)
     for (i = 0; i < t0->buf_size; i++) {
         (t0->pgfpairs)[i] = NULL;
     }
-    *task = t0;
 }
 
 
@@ -263,9 +269,27 @@ void del_task(Task** task)
 }
 
 
+void nullify_task(Task** task)
+{
+    Task *t0 = *task;
+    if (!t0) {
+        return;
+    }
+    if (t0->pgfpairs) {
+        size_t i, ntasks = t0->ntasks;
+        for (i = 0; i < ntasks; i++) {
+            nullify_pgfpair(t0->pgfpairs + i);
+        }
+        free(t0->pgfpairs);
+    }
+    free(t0);
+    *task = NULL;
+}
+
+
 void init_task_list(TaskList** task_list, GridLevel_Info* gridlevel_info, int nlevels, int hermi)
 {
-    TaskList* tl = (TaskList*) malloc(sizeof(TaskList));
+    TaskList* tl = *task_list = (TaskList*) malloc(sizeof(TaskList));
     tl->nlevels = nlevels;
     tl->hermi = hermi;
     tl->gridlevel_info = gridlevel_info;
@@ -274,7 +298,6 @@ void init_task_list(TaskList** task_list, GridLevel_Info* gridlevel_info, int nl
     for (i = 0; i < nlevels; i++) {
         init_task(tl->tasks + i);
     }
-    *task_list = tl;
 }
 
 
@@ -302,6 +325,29 @@ void del_task_list(TaskList** task_list)
 }
 
 
+void nullify_task_list(TaskList** task_list)
+{
+    TaskList *tl = *task_list;
+    if (!tl) {
+        return;
+    }
+    if (tl->gridlevel_info) {
+        tl->gridlevel_info = NULL;
+    }
+    if (tl->tasks) {
+        int i;
+        for (i = 0; i < tl->nlevels; i++) {
+            if ((tl->tasks)[i]) {
+                nullify_task(tl->tasks + i);
+            }
+        }
+        free(tl->tasks);
+    }
+    free(tl);
+    *task_list = NULL;
+}
+
+
 void update_task_list(TaskList** task_list, int grid_level, 
                       int ish, int ipgf, int jsh, int jpgf, int iL, double radius)
 {
@@ -314,6 +360,28 @@ void update_task_list(TaskList** task_list, int grid_level,
     }
     init_pgfpair(t0->pgfpairs + t0->ntasks - 1,
                  ish, ipgf, jsh, jpgf, iL, radius);
+}
+
+
+void merge_task_list(TaskList** task_list, TaskList** task_list_loc)
+{
+    TaskList* tl = *task_list;
+    TaskList* tl_loc = *task_list_loc;
+    int ilevel, itask;
+    for (ilevel = 0; ilevel < tl->nlevels; ilevel++) {
+        Task *t0 = (tl->tasks)[ilevel];
+        Task *t1 = (tl_loc->tasks)[ilevel];
+        int itask_off = t0->ntasks;
+        int ntasks_loc = t1->ntasks;
+        t0->ntasks += ntasks_loc;
+        t0->buf_size = t0->ntasks;
+        t0->pgfpairs = (PGFPair**) realloc(t0->pgfpairs, sizeof(PGFPair*) * t0->buf_size);
+        PGFPair** ptr_pgfpairs = t0->pgfpairs + itask_off;
+        PGFPair** ptr_pgfpairs_loc = t1->pgfpairs;
+        for (itask = 0; itask < ntasks_loc; itask++) {
+            ptr_pgfpairs[itask] = ptr_pgfpairs_loc[itask];
+        }
+    }
 }
 
 
@@ -342,20 +410,23 @@ void build_task_list(TaskList** task_list, NeighborList** neighbor_list,
                      int nish, int njsh, double* Ls, double precision, int hermi)
 {
     GridLevel_Info *gl_info = *gridlevel_info;
+    int ilevel;
     int nlevels = gl_info->nlevels;
     init_task_list(task_list, gl_info, nlevels, hermi);
     double max_radius[nlevels];
-
-//#pragma omp parallel
-//{
     NeighborList *nl0 = *neighbor_list;
+
+#pragma omp parallel private(ilevel)
+{
+    double max_radius_loc[nlevels];
+    TaskList** task_list_loc = (TaskList**) malloc(sizeof(TaskList*));
+    init_task_list(task_list_loc, gl_info, nlevels, hermi);
     NeighborPair *np0_ij;
     int ish, jsh;
     int li, lj;
     int ipgf, jpgf;
     int nipgf, njpgf;
     int iL, iL_idx;
-    int grid_level;
     int ish_atm_id, jsh_atm_id;
     int ish_alpha_of, jsh_alpha_of;
     double ipgf_alpha, jpgf_alpha;
@@ -363,6 +434,7 @@ void build_task_list(TaskList** task_list, NeighborList** neighbor_list,
     double rij[3];
     double dij, radius;
 
+    #pragma omp for schedule(dynamic)
     for (ish = 0; ish < nish; ish++) {
         li = ish_bas[ANG_OF+ish*BAS_SLOTS];
         nipgf = ish_bas[NPRIM_OF+ish*BAS_SLOTS];
@@ -402,25 +474,35 @@ void build_task_list(TaskList** task_list, NeighborList** neighbor_list,
                                 continue;
                             }
                             jpgf_alpha = jsh_env[jsh_alpha_of+jpgf]; 
-                            grid_level = get_grid_level(gl_info, ipgf_alpha+jpgf_alpha);
+                            ilevel = get_grid_level(gl_info, ipgf_alpha+jpgf_alpha);
                             radius = pgfpair_radius(li, lj, ipgf_alpha, jpgf_alpha, ish_ratm, rij, precision);
                             if (radius < RZERO) {
                                 continue;
                             }
-                            max_radius[grid_level] = MAX(radius, max_radius[grid_level]);
-                            update_task_list(task_list, grid_level, ish, ipgf, jsh, jpgf, iL, radius);
+                            max_radius_loc[ilevel] = MAX(radius, max_radius_loc[ilevel]);
+                            update_task_list(task_list_loc, ilevel, ish, ipgf, jsh, jpgf, iL, radius);
                         }
                     }
                 }
             }
         }
     }
-//}
 
-    int i;
-    for (i = 0; i < nlevels; i++) {
-        Task *t0 = ((*task_list)->tasks)[i];
-        t0->radius = max_radius[i];
+    #pragma omp critical
+    merge_task_list(task_list, task_list_loc);
+
+    nullify_task_list(task_list_loc);
+    free(task_list_loc);
+
+    #pragma omp critical
+    for (ilevel = 0; ilevel < nlevels; ilevel++) {
+        max_radius[ilevel] = MAX(max_radius[ilevel], max_radius_loc[ilevel]);
+    }
+}
+
+    for (ilevel = 0; ilevel < nlevels; ilevel++) {
+        Task *t0 = ((*task_list)->tasks)[ilevel];
+        t0->radius = max_radius[ilevel];
     }
 }
 
