@@ -34,7 +34,8 @@
 
 typedef void (*FPtrSort)(double *outR, double *outI, double *bufkkR, double *bufkkI,
                          int *shls, int *ao_loc, BVKEnvs *envs_bvk);
-typedef void (*FPtrFill)(int (*intor)(double *, int *, int *, uint8_t, float *, CINTEnvVars *, BVKEnvs *),
+typedef int (*FPtrIntor)(double *, int *, int *, uint8_t, float *, CINTEnvVars *, BVKEnvs *);
+typedef void (*FPtrFill)(FPtrIntor intor,
                          double *outR, double *outI, double *cache, int *cell0_shls,
                          float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk);
 void PBCapprox_bvk_rcond(float *rcond, int ish_bvk, int jsh_bvk, BVKEnvs *envs_bvk,
@@ -436,7 +437,7 @@ static void _sort_kks2(double *outR, double *outI, double *bufkkR, double *bufkk
         }
 }
 
-static void _fill_kk(int (*intor)(), FPtrSort fsort,
+static void _fill_kk(FPtrIntor intor, FPtrSort fsort,
                      double *outR, double *outI, double *cache, int *cell0_shls,
                      float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -529,7 +530,7 @@ static void _fill_kk(int (*intor)(), FPtrSort fsort,
         }
 }
 
-void PBCfill_nr3c_kks1(int (*intor)(), double *outR, double *outI, double *cache,
+void PBCfill_nr3c_kks1(FPtrIntor intor, double *outR, double *outI, double *cache,
                        int *cell0_shls, float *rij_cond,
                        CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -537,7 +538,7 @@ void PBCfill_nr3c_kks1(int (*intor)(), double *outR, double *outI, double *cache
                  rij_cond, envs_cint, envs_bvk);
 }
 
-void PBCfill_nr3c_kks2(int (*intor)(), double *outR, double *outI, double *cache,
+void PBCfill_nr3c_kks2(FPtrIntor intor, double *outR, double *outI, double *cache,
                        int *cell0_shls, float *rij_cond,
                        CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -696,7 +697,7 @@ static void _sort_ks2(double *outR, double *outI, double *bufkR, double *bufkI,
         }
 }
 
-static void _fill_k(int (*intor)(), FPtrSort fsort,
+static void _fill_k(FPtrIntor intor, FPtrSort fsort,
                     double *outR, double *outI, double *cache, int *cell0_shls,
                     float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -785,7 +786,7 @@ static void _fill_k(int (*intor)(), FPtrSort fsort,
         }
 }
 
-void PBCfill_nr3c_ks1(int (*intor)(), double *outR, double *outI, double *cache,
+void PBCfill_nr3c_ks1(FPtrIntor intor, double *outR, double *outI, double *cache,
                       int *cell0_shls, float *rij_cond,
                       CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -793,7 +794,7 @@ void PBCfill_nr3c_ks1(int (*intor)(), double *outR, double *outI, double *cache,
                 envs_cint, envs_bvk);
 }
 
-void PBCfill_nr3c_ks2(int (*intor)(), double *outR, double *outI, double *cache,
+void PBCfill_nr3c_ks2(FPtrIntor intor, double *outR, double *outI, double *cache,
                       int *cell0_shls, float *rij_cond,
                       CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -925,7 +926,7 @@ static void _sort_gs2(double *outR, double *outI, double *bufR, double *bufI,
         }
 }
 
-static void _fill_nk1(int (*intor)(), FPtrSort fsort,
+static void _fill_nk1(FPtrIntor intor, FPtrSort fsort,
                       double *outR, double *outI, double *cache, int *cell0_shls,
                       float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -990,7 +991,7 @@ static void _fill_nk1(int (*intor)(), FPtrSort fsort,
         }
 }
 
-void PBCfill_nr3c_nk1s1(int (*intor)(), double *outR, double *outI, double *cache,
+void PBCfill_nr3c_nk1s1(FPtrIntor intor, double *outR, double *outI, double *cache,
                         int *cell0_shls, float *rij_cond,
                         CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -998,7 +999,7 @@ void PBCfill_nr3c_nk1s1(int (*intor)(), double *outR, double *outI, double *cach
                   envs_cint, envs_bvk);
 }
 
-void PBCfill_nr3c_nk1s2(int (*intor)(), double *outR, double *outI, double *cache,
+void PBCfill_nr3c_nk1s2(FPtrIntor intor, double *outR, double *outI, double *cache,
                         int *cell0_shls, float *rij_cond,
                         CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -1012,7 +1013,7 @@ void PBCfill_nr3c_nk1s2(int (*intor)(), double *outR, double *outI, double *cach
 }
 
 
-static void _fill_g(int (*intor)(), FPtrSort fsort,
+static void _fill_g(FPtrIntor intor, FPtrSort fsort,
                     double *outR, double *outI, double *cache, int *cell0_shls,
                     float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -1027,7 +1028,7 @@ static void _fill_g(int (*intor)(), FPtrSort fsort,
         }
 }
 
-void PBCfill_nr3c_gs1(int (*intor)(), double *outR, double *outI, double *cache,
+void PBCfill_nr3c_gs1(FPtrIntor intor, double *outR, double *outI, double *cache,
                       int *cell0_shls, float *rij_cond,
                       CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -1035,7 +1036,7 @@ void PBCfill_nr3c_gs1(int (*intor)(), double *outR, double *outI, double *cache,
                 envs_cint, envs_bvk);
 }
 
-void PBCfill_nr3c_gs2(int (*intor)(), double *outR, double *outI, double *cache,
+void PBCfill_nr3c_gs2(FPtrIntor intor, double *outR, double *outI, double *cache,
                       int *cell0_shls, float *rij_cond,
                       CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -1102,7 +1103,7 @@ static void approx_bvk_rcond(float *rcond, int *cell0_shls, BVKEnvs *envs_bvk,
         free(cache);
 }
 
-void PBCfill_nr3c_drv(int (*intor)(), FPtrFill fill, int is_pbcintor,
+void PBCfill_nr3c_drv(FPtrIntor intor, FPtrFill fill, int is_pbcintor,
                       double *eriR, double *eriI, double *expLkR, double *expLkI,
                       int *kpt_ij_idx, int kpt_ij_size, int bvk_ncells, int nimgs,
                       int nkpts, int nbasp, int comp, int *seg_loc, int *seg2sh,

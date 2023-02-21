@@ -293,6 +293,7 @@ class Int3cBuilder(lib.StreamObject):
             cache_size = (dijk * bvk_ncells + dijk * nkpts * 2 +
                           max(dijk * nkpts * 2, cache_size))
         else:
+            assert nkpts < 45000
             fill = f'PBCfill_nr3c_kk{aosym}'
             nkpts_ij = nkpts * nkpts
             cache_size = (max(dijk * bvk_ncells**2 + cache_size, dijk * nkpts**2 * 2) +

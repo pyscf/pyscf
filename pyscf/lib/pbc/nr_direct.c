@@ -746,6 +746,14 @@ void PBCVHF_direct_drv(void (*fdot)(), int (*intor)(),
         size_t nksh = ksh1 - ksh0;
         size_t nlsh = lsh1 - lsh0;
         size_t nkl = nksh * nlsh;
+        int s2kl = 0;
+        if (fdot == &PBCVHF_contract_j_s2kl ||
+            fdot == &PBCVHF_contract_k_s2kl ||
+            fdot == &PBCVHF_contract_jk_s2kl) {
+                nkl = nksh * (nksh + 1) / 2;
+                s2kl = 1;
+        }
+
         BVKEnvs envs_bvk = {bvk_ncells, nimgs,
                 nkpts, bvk_ncells, nbasp, comp, 0, 0,
                 seg_loc, seg2sh, cell0_ao_loc, shls_slice, NULL, NULL, NULL,
@@ -786,10 +794,17 @@ void PBCVHF_direct_drv(void (*fdot)(), int (*intor)(),
         uint8_t *qk, *ql, *qcell0k, *qcell0l;
         uint8_t kl_cutoff, qklkl_max;
 
-#pragma omp for schedule(dynamic, 1)
+#pragma omp for schedule(dynamic, 4)
         for (kl = 0; kl < nkl; kl++) {
-                k = kl / nlsh + ksh0;
-                l = kl % nlsh + lsh0;
+                if (s2kl) {
+                        k = (int)(sqrt(2*kl+.25) - .5 + 1e-7);
+                        l = kl - (size_t)k*(k+1)/2;
+                        k += ksh0;
+                        l += lsh0;
+                } else {
+                        k = kl / nlsh + ksh0;
+                        l = kl % nlsh + lsh0;
+                }
                 qklkl_max = _max_qindex(qindex, Nbas,
                                         seg2sh[seg_loc[k]], seg2sh[seg_loc[k+1]],
                                         seg2sh[seg_loc[l]], seg2sh[seg_loc[l+1]]);
@@ -867,6 +882,14 @@ void PBCVHF_direct_drv_nodddd(
         size_t nksh = ksh1 - ksh0;
         size_t nlsh = lsh1 - lsh0;
         size_t nkl = nksh * nlsh;
+        int s2kl = 0;
+        if (fdot == &PBCVHF_contract_j_s2kl ||
+            fdot == &PBCVHF_contract_k_s2kl ||
+            fdot == &PBCVHF_contract_jk_s2kl) {
+                nkl = nksh * (nksh + 1) / 2;
+                s2kl = 1;
+        }
+
         BVKEnvs envs_bvk = {bvk_ncells, nimgs,
                 nkpts, bvk_ncells, nbasp, comp, 0, 0,
                 seg_loc, seg2sh, cell0_ao_loc, shls_slice, NULL, NULL, NULL,
@@ -926,8 +949,17 @@ void PBCVHF_direct_drv_nodddd(
         uint8_t *qk, *ql, *qcell0k, *qcell0l;
         uint8_t kl_cutoff, qklkl_max;
 
-#pragma omp for schedule(dynamic, 1)
+#pragma omp for schedule(dynamic, 4)
         for (kl = 0; kl < nkl; kl++) {
+                if (s2kl) {
+                        k = (int)(sqrt(2*kl+.25) - .5 + 1e-7);
+                        l = kl - (size_t)k*(k+1)/2;
+                        k += ksh0;
+                        l += lsh0;
+                } else {
+                        k = kl / nlsh + ksh0;
+                        l = kl % nlsh + lsh0;
+                }
                 k = kl / nlsh + ksh0;
                 l = kl % nlsh + lsh0;
                 qklkl_max = _max_qindex(qindex, Nbas,

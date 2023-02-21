@@ -58,11 +58,28 @@ def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
     return kpts_fbz.reshape(shape)
 
 def member(kpt, kpts):
-    kpts = np.reshape(kpts, (len(kpts),kpt.size))
-    dk = abs(kpts-kpt.ravel()).max(axis=1)
-    return np.where(dk < KPT_DIFF_TOL)[0]
+    '''Return the indices of the common k-points in kpts'''
+    assert kpts.ndim == 2
+    dk = abs(kpts[:,None] - kpt).max(axis=2)
+    idx = np.where(dk < KPT_DIFF_TOL)[0]
+    if idx.size > 0:
+        idx = np.unique(idx)
+    return idx
+
+def intersection(kpts1, kpts2):
+    '''Return the indices of the common k-points in kpts1'''
+    assert kpts1.ndim == 2 and kpts2.ndim == 2
+    return member(kpts2, kpts1)
 
 def unique(kpts):
+    '''
+    Find the unique k-points
+
+    Returns the sorted unique k-points, the indices of the input that give the
+    unique elements, and the indices of the unique k-points that reconstruct the
+    input.
+    '''
+
     kpts = np.asarray(kpts)
     try:
         digits = int(-np.log10(KPT_DIFF_TOL))

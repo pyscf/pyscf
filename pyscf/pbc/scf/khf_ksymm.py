@@ -262,8 +262,11 @@ class KsymAdaptedKSCF(khf.KSCF):
         dm_kpts = kpts.transform_dm(dm_kpts)
         if kpts_band is None: kpts_band = kpts.kpts_ibz
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts.kpts, kpts_band,
-                                     with_j, with_k, omega, exxdiv=self.exxdiv)
+        if self.rsjk:
+            raise NotImplementedError('rsjk with k-points symmetry')
+        else:
+            vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts.kpts, kpts_band,
+                                         with_j, with_k, omega, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 

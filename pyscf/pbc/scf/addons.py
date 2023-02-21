@@ -58,12 +58,16 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
 def project_dm_k2k(cell, dm, kpts1, kpts2):
     '''Project density matrix from k-point mesh 1 to k-point mesh 2'''
     bvk_mesh = k2gamma.kpts_to_kmesh(cell, kpts1)
-    bvkmesh_Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_mesh, True)
-    expRk1 = numpy.exp(1j*numpy.dot(bvkmesh_Ls, kpts1.T))
-    expRk2 = numpy.exp(1j*numpy.dot(bvkmesh_Ls, kpts2.T))
-    c = expRk2.conj().T.dot(expRk1) / len(bvkmesh_Ls)
-    return lib.einsum('mk,mk,kuv->muv', c, c.conj(), dm)
+    Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_mesh, True)
+    c = _k2k_projection(kpts1, kpts2, Ls)
+    return lib.einsum('km,kuv->muv', c, dm)
 
+def _k2k_projection(kpts1, kpts2, Ls):
+    weight = 1. / len(Ls)
+    expRk1 = numpy.exp(1j*numpy.dot(Ls, kpts1.T))
+    expRk2 = numpy.exp(-1j*numpy.dot(Ls, kpts2.T))
+    c = expRk1.T.dot(expRk2) * weight
+    return (c*c.conj()).real.copy()
 
 def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
     '''Fermi-Dirac or Gaussian smearing'''

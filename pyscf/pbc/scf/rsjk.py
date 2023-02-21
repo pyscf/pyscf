@@ -34,13 +34,14 @@ from pyscf.scf import _vhf
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.tools import k2gamma
+from pyscf.pbc.scf import addons
 from pyscf.pbc.df import aft, rsdf_builder, aft_jk
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df.df_jk import (zdotNN, zdotCN, zdotNC, _ewald_exxdiv_for_G0,
                                 _format_dms, _format_kpts_band, _format_jks)
 from pyscf.pbc.df.incore import libpbc, _get_cache_size
 from pyscf.pbc.lib.kpts_helper import (is_zero, unique_with_wrap_around,
-                                       group_by_conj_pairs)
+                                       group_by_conj_pairs, intersection)
 from pyscf import __config__
 
 # Threshold of steep bases and local bases
@@ -395,10 +396,12 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             vs = vs.reshape(nvs,n_dm,nao,bvk_ncells,nao)
 
         if kpts_band is not None:
-            log.warn('Approximate J/K matrices at kpts_band '
-                     'with the bvk-cell dervied from kpts')
             kpts_band = np.reshape(kpts_band, (-1, 3))
-            expRk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts_band.T))
+            subset_only = intersection(kpts, kpts_band).size == len(kpts_band)
+            if not subset_only:
+                log.warn('Approximate J/K matrices at kpts_band '
+                         'with the bvk-cell dervied from kpts')
+                expRk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts_band.T))
         vs = lib.einsum('snpRq,Rk->snkpq', vs, expRk)
         vs = np.asarray(vs, order='C')
         log.timer_debug1('short range part vj and vk', *cpu0)
@@ -525,7 +528,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         logger.warn(self, 'Approximate kpts_band for vj with k-point projection')
         vj = self._get_lr_j_kpts(dm_kpts, hermi, kpts)
-        pk2k = _k2k_projection(kpts, kpts_band, self.supmol_ft.bvkmesh_Ls)
+        pk2k = addons._k2k_projection(kpts, kpts_band, self.supmol_ft.bvkmesh_Ls)
         return lib.einsum('nkpq,kh->nhpq', vj, pk2k)
 
     def _get_lr_j_kpts(self, dm_kpts, hermi=1, kpts=np.zeros((1,3))):
@@ -778,7 +781,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         # k2k-projection for vk has significant finite-size errors.
         logger.warn(self, 'Approximate kpts_band for vk with k-point projection')
         vk = self._get_lr_k_kpts(dm_kpts, hermi, kpts, exxdiv=None)
-        pk2k = _k2k_projection(kpts, kpts_band, self.supmol_ft.bvkmesh_Ls)
+        pk2k = addons._k2k_projection(kpts, kpts_band, self.supmol_ft.bvkmesh_Ls)
         vk = lib.einsum('nkpq,kh->nhpq', vk, pk2k)
         if exxdiv == 'ewald':
             _ewald_exxdiv_for_G0(self.cell, kpts, dm_kpts, vk, kpts_band)
@@ -946,6 +949,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                     return (GpqR, GpqI)
 
         k_conj_groups = group_by_conj_pairs(cell, uniq_kpts)[0]
+        log.debug1('Num kpts conj_pairs %d', len(k_conj_groups))
         if self.k_conj_symmetry:
             k_to_compute = np.zeros(nkpts, dtype=np.int8)
             k_to_compute[[k for k, k_conj in k_conj_groups]] = 1
@@ -971,7 +975,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         Gblksize = min(Gblksize, ngrids, 200000)
         log.debug1('Gblksize = %d', Gblksize)
         buf = np.empty(nkpts*Gblksize*nao**2*2)
-        buf1 = np.empty(nkpts*Gblksize*naod**2*2)
+        if naod > 0:
+            buf1 = np.empty(nkpts*Gblksize*naod**2*2)
         for group_id, (k, k_conj) in enumerate(k_conj_groups):
             kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
             kpti_idx = kpt_ij_idx // nkpts
@@ -1084,7 +1089,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                     lib.takebak_2d(vkI[i,k], vkI_dd[i,k], ao_d_idx, ao_d_idx,
                                    thread_safe=False)
 
-        buf = None
+        buf = buf1 = None
         if is_zero(kpts) and not np.iscomplexobj(dm_kpts):
             vk_kpts = vkR
         else:
@@ -1210,7 +1215,7 @@ def _guess_omega(cell, kpts, mesh=None):
         omega_min = OMEGA_MIN
         ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
         nk = nkpts**(1./3)
-        ke_cutoff = 50 / (.8/nk+.2*nk**2+.01*nk**3)
+        ke_cutoff = 50 / (.7+.25*nk+.05*nk**3)
         ke_cutoff = max(ke_cutoff, ke_min)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
@@ -1282,10 +1287,3 @@ def _qcond_cell0_abstract(qcond, seg_loc, seg2sh, nbasp):
         else:
             qcond_cell0[:,j] = 0
     return qcond_cell0
-
-def _k2k_projection(kpts1, kpts2, Ls):
-    weight = 1. / Ls.shape[0]
-    expRk1 = np.exp(1j*np.dot(Ls, kpts1.T))
-    expRk2 = np.exp(-1j*np.dot(Ls, kpts2.T))
-    c = expRk1.T.dot(expRk2) * weight
-    return (c*c.conj()).real.copy()
