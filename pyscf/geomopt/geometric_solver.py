@@ -145,7 +145,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     # geomeTRIC library on pypi requires to provide config file log.ini.
     if not os.path.exists(os.path.abspath(
-            os.path.join(geometric.optimize.__file__, '..', 'log.ini'))):
+            os.path.join(geometric.optimize.__file__, '..', 'log.ini'))) and kwargs.get('logIni') is None:
         kwargs['logIni'] = os.path.abspath(os.path.join(__file__, '..', 'log.ini'))
 
     engine.assert_convergence = assert_convergence
