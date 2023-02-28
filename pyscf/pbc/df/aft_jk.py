@@ -165,6 +165,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     log.debug('Num uniq kpts %d', len(uniq_kpts))
 
     k_conj_groups = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)
+    log.debug1('Num kpts conj_pairs %d', len(k_conj_groups))
     k_conj_symmetry = mydf.k_conj_symmetry
     if k_conj_symmetry:
         for k, k_conj in k_conj_groups:
@@ -252,43 +253,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         log.debug2('set update_vk to %s with dm_factor', update_vk)
 
     if contract_mo_early:
-        # consider only the most diffused component of a basis
-        cell_exps, cell_cs = pbcgto.cell._extract_pgto_params(cell, 'min')
-        cell_l = cell._bas[:,gto.ANG_OF]
-        cell_bas_coords = cell.atom_coords()[cell._bas[:,gto.ATOM_OF]]
-
-        theta_ij = cell_exps.min() / 2
-        vol = cell.vol
-        lattice_sum_factor = max(2*np.pi*cell.rcut/(vol*theta_ij), 1)
-        cutoff = cell.precision/lattice_sum_factor * .1
-        logger.debug1(mydf, 'ft_ao cutoff = %g', cutoff)
-
-        supmol_exps, supmol_cs = pbcgto.cell._extract_pgto_params(supmol, 'min')
-        supmol_bas_coords = supmol.atom_coords()[supmol._bas[:,gto.ATOM_OF]]
-        supmol_l = supmol._bas[:,gto.ANG_OF]
-
-        aij = cell_exps[:,None] + supmol_exps
-        theta = cell_exps[:,None] * supmol_exps / aij
-        dr = np.linalg.norm(cell_bas_coords[:,None,:] - supmol_bas_coords, axis=2)
-
-        aij1 = 1./aij
-        aij2 = aij**-.5
-        dri = supmol_exps*aij1 * dr + aij2
-        drj = cell_exps[:,None]*aij1 * dr + aij2
-        norm_i = cell_cs * ((2*cell_l+1)/(4*np.pi))**.5
-        norm_j = supmol_cs * ((2*supmol_l+1)/(4*np.pi))**.5
-        fl = 2*np.pi/vol*dr/theta + 1.
-        ovlp = (np.pi**1.5 * norm_i[:,None]*norm_j * np.exp(-theta*dr**2) *
-                dri**cell_l[:,None] * drj**supmol_l * aij1**1.5 * fl)
-        ovlp_mask = np.asarray(ovlp > cutoff, dtype=np.int8, order='F')
-        ovlp = None
-        supmol1 = cell.to_mol() + supmol
-        b = cell.reciprocal_vectors()
-        shls_slice = (0, cell.nbas, cell.nbas, supmol1.nbas)
-        def ft_kern(Gv, gxyz=None, Gvbase=None, q=None, kpts=None, out=None):
-            return ft_aopair(supmol1, Gv, shls_slice, aosym, b,
-                             gxyz=gxyz, Gvbase=Gvbase, q=q, return_complex=False,
-                             ovlp_mask=ovlp_mask)
+        ft_kern = _gen_ft_kernel_fake_gamma(cell, supmol, aosym)
     else:
         ft_kern = supmol.gen_ft_kernel(aosym, return_complex=False, verbose=log)
 
@@ -599,6 +564,56 @@ def _update_vk1_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
         ctypes.c_int(swap_2e), ctypes.c_int(n_dm), ctypes.c_int(nao),
         ctypes.c_int(nocc), ctypes.c_int(nG), ctypes.c_int(nkpts))
 
+def _update_vk_fake_gamma_debug(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
+                                k_to_compute):
+    '''
+    dmf is the factorized dm, dm = dmf * dmf.conj().T
+    Computing exchange matrices with dmf:
+    vk += np.einsum('ngij,njp,nkp,nglk,g->nil', Gpq, dmf, dmf.conj(), Gpq.conj(), coulG)
+    vk += np.einsum('ngij,nlp,nip,nglk,g->nkj', Gpq, dmf, dmf.conj(), Gpq.conj(), coulG)
+    '''
+    vkR, vkI = vk
+    GpqR, GpqI = Gpq
+    dmfR, dmfI = dmf
+    nG = len(wcoulG)
+    n_dm, s_nao, nkpts, nocc = dmfR.shape
+    nao = vkR.shape[-1]
+
+    GpqR = GpqR.transpose(2,1,0)
+    GpqI = GpqI.transpose(2,1,0)
+    assert GpqR.flags.c_contiguous
+    GpqR = GpqR.reshape(s_nao, -1)
+    GpqI = GpqI.reshape(s_nao, -1)
+
+    for i in range(n_dm):
+        moR = dmfR[i].reshape(s_nao,nkpts*nocc)
+        moI = dmfI[i].reshape(s_nao,nkpts*nocc)
+        ipGR = lib.dot(moR.T, GpqR).reshape(nkpts,nocc,nao,nG)
+        ipGI = lib.dot(moR.T, GpqI).reshape(nkpts,nocc,nao,nG)
+        ipGIi = lib.dot(moI.T, GpqR).reshape(nkpts,nocc,nao,nG)
+        ipGRi = lib.dot(moI.T, GpqI).reshape(nkpts,nocc,nao,nG)
+        for k, (ki, kj) in enumerate(zip(kpti_idx, kptj_idx)):
+            if k_to_compute[ki]:
+                ipGR1 = np.array(ipGR[kj].transpose(1,0,2), order='C')
+                ipGI1 = np.array(ipGI[kj].transpose(1,0,2), order='C')
+                ipGR1 -= ipGRi[kj].transpose(1,0,2)
+                ipGI1 += ipGIi[kj].transpose(1,0,2)
+                ipGR2 = ipGR1 * wcoulG
+                ipGI2 = ipGI1 * wcoulG
+                zdotNC(ipGR1.reshape(nao,-1), ipGI1.reshape(nao,-1),
+                       ipGR2.reshape(nao,-1).T, ipGI2.reshape(nao,-1).T,
+                       1, vkR[i,ki], vkI[i,ki], 1)
+            if swap_2e and k_to_compute[kj]:
+                ipGR1 = np.array(ipGR[ki].transpose(1,0,2), order='C')
+                ipGI1 = np.array(ipGI[ki].transpose(1,0,2), order='C')
+                ipGR1 += ipGRi[ki].transpose(1,0,2)
+                ipGI1 -= ipGIi[ki].transpose(1,0,2)
+                ipGR2 = ipGR1 * wcoulG
+                ipGI2 = ipGI1 * wcoulG
+                zdotCN(ipGR1.reshape(nao,-1), ipGI1.reshape(nao,-1),
+                       ipGR2.reshape(nao,-1).T, ipGI2.reshape(nao,-1).T,
+                       1, vkR[i,kj], vkI[i,kj], 1)
+
 def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
                           k_to_compute):
     '''
@@ -616,38 +631,6 @@ def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
 
     GpqR = GpqR.transpose(2,1,0)
     assert GpqR.flags.c_contiguous
-#    GpqI = GpqI.transpose(2,1,0)
-#    GpqR = GpqR.reshape(s_nao, -1)
-#    GpqI = GpqI.reshape(s_nao, -1)
-#
-#    for i in range(n_dm):
-#        moR = dmfR[i].reshape(s_nao,nkpts*nocc)
-#        moI = dmfI[i].reshape(s_nao,nkpts*nocc)
-#        ipGR = lib.dot(moR.T, GpqR).reshape(nkpts,nocc,nao,nG)
-#        ipGI = lib.dot(moR.T, GpqI).reshape(nkpts,nocc,nao,nG)
-#        ipGIi = lib.dot(moI.T, GpqR).reshape(nkpts,nocc,nao,nG)
-#        ipGRi = lib.dot(moI.T, GpqI).reshape(nkpts,nocc,nao,nG)
-#        for k, (ki, kj) in enumerate(zip(kpti_idx, kptj_idx)):
-#            if k_to_compute[ki]:
-#                ipGR1 = np.array(ipGR[kj].transpose(1,0,2), order='C')
-#                ipGI1 = np.array(ipGI[kj].transpose(1,0,2), order='C')
-#                ipGR1 -= ipGRi[kj].transpose(1,0,2)
-#                ipGI1 += ipGIi[kj].transpose(1,0,2)
-#                ipGR2 = ipGR1 * wcoulG
-#                ipGI2 = ipGI1 * wcoulG
-#                zdotNC(ipGR1.reshape(nao,-1), ipGI1.reshape(nao,-1),
-#                       ipGR2.reshape(nao,-1).T, ipGI2.reshape(nao,-1).T,
-#                       1, vkR[i,ki], vkI[i,ki], 1)
-#            if swap_2e and k_to_compute[kj]:
-#                ipGR1 = np.array(ipGR[ki].transpose(1,0,2), order='C')
-#                ipGI1 = np.array(ipGI[ki].transpose(1,0,2), order='C')
-#                ipGR1 += ipGRi[ki].transpose(1,0,2)
-#                ipGI1 -= ipGIi[ki].transpose(1,0,2)
-#                ipGR2 = ipGR1 * wcoulG
-#                ipGI2 = ipGI1 * wcoulG
-#                zdotCN(ipGR1.reshape(nao,-1), ipGI1.reshape(nao,-1),
-#                       ipGR2.reshape(nao,-1).T, ipGI2.reshape(nao,-1).T,
-#                       1, vkR[i,kj], vkI[i,kj], 1)
 
     for i in range(n_dm):
         libpbc.PBC_kcontract_fake_gamma(
@@ -663,6 +646,20 @@ def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
             k_to_compute.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(swap_2e), ctypes.c_int(s_nao), ctypes.c_int(nao),
             ctypes.c_int(nocc), ctypes.c_int(nG), ctypes.c_int(nkpts))
+
+def _gen_ft_kernel_fake_gamma(cell, supmol, aosym='s1'):
+    ovlp_mask = supmol.get_ovlp_mask()
+    ovlp_mask = np.asarray(ovlp_mask, dtype=np.int8, order='F')
+    cell = supmol.rs_cell
+    supmol1 = cell.to_mol() + supmol
+    shls_slice = (0, cell.nbas, cell.nbas, supmol1.nbas)
+    b = cell.reciprocal_vectors()
+
+    def ft_kern(Gv, gxyz=None, Gvbase=None, q=None, kpts=None, out=None):
+        return ft_aopair(supmol1, Gv, shls_slice, aosym, b,
+                         gxyz=gxyz, Gvbase=Gvbase, q=q, return_complex=False,
+                         ovlp_mask=ovlp_mask)
+    return ft_kern
 
 ##################################################
 #
