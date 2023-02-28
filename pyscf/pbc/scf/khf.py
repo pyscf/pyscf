@@ -323,6 +323,33 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
         mo_energy.append(mo_e)
     return mo_energy, mo_coeff
 
+def init_guess_by_minao(cell, kpts=None):
+    '''Generates initial guess density matrix and the orbitals of the initial
+    guess DM based on ANO basis.
+    '''
+    if kpts is None:
+        nkpts = 1
+    else:
+        nkpts = len(kpts)
+    dm = mol_hf.init_guess_by_minao(cell)
+    mo_coeff = [dm.mo_coeff] * nkpts
+    mo_occ = [dm.mo_occ] * nkpts
+    dm_kpts = lib.asarray([dm] * nkpts)
+    return lib.tag_array(dm_kpts, mo_coeff=mo_coeff, mo_occ=mo_occ)
+
+def init_guess_by_atom(cell, kpts=None):
+    '''Generates initial guess density matrix and the orbitals of the initial
+    guess DM based on the superposition of atomic HF density matrix.
+    '''
+    if kpts is None:
+        nkpts = 1
+    else:
+        nkpts = len(kpts)
+    dm = mol_hf.init_guess_by_atom(cell)
+    mo_coeff = [dm.mo_coeff] * nkpts
+    mo_occ = [dm.mo_occ] * nkpts
+    dm_kpts = lib.asarray([dm] * nkpts)
+    return lib.tag_array(dm_kpts, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
@@ -557,19 +584,18 @@ class KSCF(pbchf.SCF):
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
             dm_kpts = self.init_guess_by_1e(cell)
         elif key == 'atom':
-            dm = self.init_guess_by_atom(cell)
+            dm_kpts = self.init_guess_by_atom(cell)
         elif key[:3] == 'chk':
             try:
                 dm_kpts = self.from_chk()
             except (IOError, KeyError):
                 logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
                             self.chkfile)
-                dm = self.init_guess_by_minao(cell)
+                dm_kpts = self.init_guess_by_minao(cell)
         else:
-            dm = self.init_guess_by_minao(cell)
+            dm_kpts = self.init_guess_by_minao(cell)
 
-        if dm_kpts is None:
-            dm_kpts = lib.asarray([dm]*len(self.kpts))
+        assert dm_kpts.ndim == 3
 
         ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
         # FIXME: consider the fractional num_electron or not? This maybe
@@ -592,6 +618,9 @@ class KSCF(pbchf.SCF):
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
         return mol_hf.SCF.init_guess_by_1e(self, cell)
+
+    init_guess_by_minao = lib.module_method(init_guess_by_minao, absences=['kpts'])
+    init_guess_by_atom = lib.module_method(init_guess_by_atom, absences=['kpts'])
 
     get_hcore = get_hcore
     get_ovlp = get_ovlp

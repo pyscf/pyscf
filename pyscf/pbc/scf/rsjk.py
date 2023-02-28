@@ -813,11 +813,14 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         vk = [vkR, vkI]
         weight = 1. / nkpts
 
+        # TODO: aosym == 's2'
+        aosym = 's1'
         uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
             cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
         scaled_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
         log.debug('Num uniq kpts %d', len(uniq_kpts))
 
+        # Test if vk[k] == vk[k_conj].conj()
         k_conj_groups = group_by_conj_pairs(cell, uniq_kpts, return_kpts_pairs=False)
         log.debug1('Num kpts conj_pairs %d', len(k_conj_groups))
         k_conj_symmetry = self.k_conj_symmetry
@@ -847,11 +850,11 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 update_vk = aft_jk._update_vk_
             log.debug2('set update_vk to %s', update_vk)
         else:
+            # dm ~= dm_factor * dm_factor.T
             nocc = dm_factor.shape[-1]
             if nocc == 0:
                 return vkR
 
-            # dm ~= dm_factor * dm_factor.T
             bvk_ncells, rs_nbas, nimgs = self.supmol_ft.bas_mask.shape
             contract_mo_early = (k_conj_symmetry and naod == 0 and
                                  bvk_ncells*nao > self.supmol_ft.nao*nocc*n_dm)
@@ -885,25 +888,20 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                     )
                 dm = [moR, moI]
                 dm_factor = None
+                ft_kern = aft_jk._gen_ft_kernel_fake_gamma(cell, supmol, aosym)
+                update_vk = aft_jk._update_vk_fake_gamma
             else:
                 dmfR = np.asarray(dm_factor.real, order='C')
                 dmfI = np.asarray(dm_factor.imag, order='C')
                 dm = [dmfR, dmfI]
                 dm_factor = None
-
-            if contract_mo_early:
-                update_vk = aft_jk._update_vk_fake_gamma
-            elif np.count_nonzero(k_to_compute) >= 2 * lib.num_threads():
-                update_vk = aft_jk._update_vk1_dmf
-            else:
-                update_vk = aft_jk._update_vk_dmf
+                if np.count_nonzero(k_to_compute) >= 2 * lib.num_threads():
+                    update_vk = aft_jk._update_vk1_dmf
+                else:
+                    update_vk = aft_jk._update_vk_dmf
             log.debug2('set update_vk to %s with dm_factor', update_vk)
 
-        # TODO: aosym == 's2'
-        aosym = 's1'
-        if contract_mo_early:
-            ft_kern = aft_jk._gen_ft_kernel_fake_gamma(cell, supmol, aosym)
-        else:
+        if not contract_mo_early:
             ft_kern = self.supmol_ft.gen_ft_kernel(
                 aosym, return_complex=False, verbose=log)
 
@@ -1021,12 +1019,19 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                             ctypes.c_int(nao), ctypes.c_int(naod), ctypes.c_int(p1-p0))
                     return (GpqR, GpqI)
 
-        Gblksize = max(24, int(max_memory*1e6/16/(nao**2+naod**2)/(nkpts+3))//8*8)
-        Gblksize = min(Gblksize, ngrids, 200000)
-        log.debug1('Gblksize = %d', Gblksize)
-        buf = np.empty(nkpts*Gblksize*nao**2*2)
-        if naod > 0:
-            buf1 = np.empty(nkpts*Gblksize*naod**2*2)
+        if contract_mo_early:
+            Gblksize = max(24, int(max_memory*1e6/16/(nao*s_nao+nao*nkpts*nocc*2))//8*8)
+            Gblksize = min(Gblksize, ngrids, 200000)
+            log.debug1('Gblksize = %d', Gblksize)
+            buf = np.empty(Gblksize*s_nao*nao)
+        else:
+            Gblksize = max(24, int(max_memory*1e6/16/(nao**2+naod**2)/(nkpts+3))//8*8)
+            Gblksize = min(Gblksize, ngrids, 200000)
+            log.debug1('Gblksize = %d', Gblksize)
+            buf = np.empty(nkpts*Gblksize*nao**2*2)
+            if naod > 0:
+                buf1 = np.empty(nkpts*Gblksize*naod**2*2)
+
         for group_id, (k, k_conj) in enumerate(k_conj_groups):
             kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
             kpti_idx = kpt_ij_idx // nkpts

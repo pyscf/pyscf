@@ -453,11 +453,14 @@ def init_guess_by_minao(mol):
     pmol = gto.Mole()
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(new_atom, basis, [])
     pmol._built = True
-    dm = addons.project_dm_nr2nr(pmol, numpy.diag(occ), mol)
+
+    #: dm = addons.project_dm_nr2nr(pmol, numpy.diag(occ), mol)
+    mo = addons.project_mo_nr2nr(pmol, numpy.eye(pmol.nao), mol)
+    dm = lib.dot(mo*occ, mo.conj().T)
 # normalize eletron number
 #    s = mol.intor_symmetric('int1e_ovlp')
 #    dm *= mol.nelectron / (dm*s).sum()
-    return dm
+    return lib.tag_array(dm, mo_coeff=mo, mo_occ=occ)
 
 
 def init_guess_by_1e(mol):
@@ -481,6 +484,8 @@ def init_guess_by_atom(mol):
     atm_scf = atom_hf.get_atm_nrhf(mol)
     aoslice = mol.aoslice_by_atom()
     atm_dms = []
+    mo_coeff = []
+    mo_occ = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         if symb not in atm_scf:
@@ -488,22 +493,27 @@ def init_guess_by_atom(mol):
 
         if symb in atm_scf:
             e_hf, e, c, occ = atm_scf[symb]
-            dm = numpy.dot(c*occ, c.conj().T)
         else:  # symb's basis is not specified in the input
             nao_atm = aoslice[ia,3] - aoslice[ia,2]
-            dm = numpy.zeros((nao_atm, nao_atm))
+            c = numpy.zeros((nao_atm, nao_atm))
+            occ = numpy.zeros(nao_atm)
 
-        atm_dms.append(dm)
+        atm_dms.append(numpy.dot(c*occ, c.conj().T))
+        mo_coeff.append(c)
+        mo_occ.append(occ)
 
     dm = scipy.linalg.block_diag(*atm_dms)
+    mo_coeff = scipy.linalg.block_diag(*mo_coeff)
+    mo_occ = numpy.hstack(occ)
 
     if mol.cart:
         cart2sph = mol.cart2sph_coeff(normalized='sp')
-        dm = reduce(numpy.dot, (cart2sph, dm, cart2sph.T))
+        dm = reduce(lib.dot, (cart2sph, dm, cart2sph.T))
+        mo_coeff = lib.dot(cart2sph, mo_coeff)
 
     for k, v in atm_scf.items():
         logger.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
-    return dm
+    return lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def init_guess_by_huckel(mol):
     '''Generate initial guess density matrix from a Huckel calculation based

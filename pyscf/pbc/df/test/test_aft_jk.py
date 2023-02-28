@@ -33,6 +33,56 @@ def tearDownModule():
     global cell
     del cell
 
+def _update_vk_fake_gamma_debug(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
+                                k_to_compute):
+    '''
+    dmf is the factorized dm, dm = dmf * dmf.conj().T
+    Computing exchange matrices with dmf:
+    vk += np.einsum('ngij,njp,nkp,nglk,g->nil', Gpq, dmf, dmf.conj(), Gpq.conj(), coulG)
+    vk += np.einsum('ngij,nlp,nip,nglk,g->nkj', Gpq, dmf, dmf.conj(), Gpq.conj(), coulG)
+    '''
+    vkR, vkI = vk
+    GpqR, GpqI = Gpq
+    dmfR, dmfI = dmf
+    nG = len(wcoulG)
+    n_dm, s_nao, nkpts, nocc = dmfR.shape
+    nao = vkR.shape[-1]
+
+    GpqR = GpqR.transpose(2,1,0)
+    GpqI = GpqI.transpose(2,1,0)
+    assert GpqR.flags.c_contiguous
+    GpqR = GpqR.reshape(s_nao, -1)
+    GpqI = GpqI.reshape(s_nao, -1)
+
+    for i in range(n_dm):
+        moR = dmfR[i].reshape(s_nao,nkpts*nocc)
+        moI = dmfI[i].reshape(s_nao,nkpts*nocc)
+        ipGR = lib.dot(moR.T, GpqR).reshape(nkpts,nocc,nao,nG)
+        ipGI = lib.dot(moR.T, GpqI).reshape(nkpts,nocc,nao,nG)
+        ipGIi = lib.dot(moI.T, GpqR).reshape(nkpts,nocc,nao,nG)
+        ipGRi = lib.dot(moI.T, GpqI).reshape(nkpts,nocc,nao,nG)
+        for k, (ki, kj) in enumerate(zip(kpti_idx, kptj_idx)):
+            if k_to_compute[ki]:
+                ipGR1 = np.array(ipGR[kj].transpose(1,0,2), order='C')
+                ipGI1 = np.array(ipGI[kj].transpose(1,0,2), order='C')
+                ipGR1 -= ipGRi[kj].transpose(1,0,2)
+                ipGI1 += ipGIi[kj].transpose(1,0,2)
+                ipGR2 = ipGR1 * wcoulG
+                ipGI2 = ipGI1 * wcoulG
+                zdotNC(ipGR1.reshape(nao,-1), ipGI1.reshape(nao,-1),
+                       ipGR2.reshape(nao,-1).T, ipGI2.reshape(nao,-1).T,
+                       1, vkR[i,ki], vkI[i,ki], 1)
+            if swap_2e and k_to_compute[kj]:
+                ipGR1 = np.array(ipGR[ki].transpose(1,0,2), order='C')
+                ipGI1 = np.array(ipGI[ki].transpose(1,0,2), order='C')
+                ipGR1 += ipGRi[ki].transpose(1,0,2)
+                ipGI1 -= ipGIi[ki].transpose(1,0,2)
+                ipGR2 = ipGR1 * wcoulG
+                ipGI2 = ipGI1 * wcoulG
+                zdotCN(ipGR1.reshape(nao,-1), ipGI1.reshape(nao,-1),
+                       ipGR2.reshape(nao,-1).T, ipGI2.reshape(nao,-1).T,
+                       1, vkR[i,kj], vkI[i,kj], 1)
+
 class KnownValues(unittest.TestCase):
     def test_jk(self):
         mf0 = scf.RHF(cell)
@@ -169,6 +219,7 @@ class KnownValues(unittest.TestCase):
         ref = FFTDF(cell, kpts=kpts).get_jk(dm, kpts=kpts)[1]
         self.assertAlmostEqual(abs(ref-vk).max(), 0, 8)
 
+    # TODO: test_aft_jk_update_vk_fake_gamma
 
 if __name__ == '__main__':
     print("Full Tests for aft jk")

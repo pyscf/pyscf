@@ -213,7 +213,6 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                              bvk_ncells * nao > supmol.nao * nocc * n_dm)
         if contract_mo_early:
             nbasp = cell.nbas
-            bvk_nbas = nbasp * bvk_ncells
             sh_loc = supmol.sh_loc  # maps the bvk shell Id to supmol shell Id
             ao_loc = supmol.ao_loc
             cell0_ao_loc = supmol.rs_cell.ao_loc
@@ -232,29 +231,26 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                     sh_loc.ctypes.data_as(ctypes.c_void_p),
                     ao_loc.ctypes.data_as(ctypes.c_void_p),
                     cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(bvk_nbas), ctypes.c_int(nbasp),
+                    ctypes.c_int(bvk_ncells), ctypes.c_int(nbasp),
                     ctypes.c_int(s_nao), ctypes.c_int(nao), ctypes.c_int(nocc),
                     ctypes.c_int(nkpts), ctypes.c_int(expRk.shape[0]),
                 )
             dm = [moR, moI]
             dm_factor = None
+            ft_kern = _gen_ft_kernel_fake_gamma(cell, supmol, aosym)
+            update_vk = _update_vk_fake_gamma
         else:
             dmfR = np.asarray(dm_factor.real, order='C')
             dmfI = np.asarray(dm_factor.imag, order='C')
             dm = [dmfR, dmfI]
             dm_factor = None
-
-        if contract_mo_early:
-            update_vk = _update_vk_fake_gamma
-        elif np.count_nonzero(k_to_compute) >= 2 * lib.num_threads():
-            update_vk = _update_vk1_dmf
-        else:
-            update_vk = _update_vk_dmf
+            if np.count_nonzero(k_to_compute) >= 2 * lib.num_threads():
+                update_vk = _update_vk1_dmf
+            else:
+                update_vk = _update_vk_dmf
         log.debug2('set update_vk to %s with dm_factor', update_vk)
 
-    if contract_mo_early:
-        ft_kern = _gen_ft_kernel_fake_gamma(cell, supmol, aosym)
-    else:
+    if not contract_mo_early:
         ft_kern = supmol.gen_ft_kernel(aosym, return_complex=False, verbose=log)
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
@@ -264,10 +260,17 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     max_memory = max(2000, (mydf.max_memory - mem_now))
     log.debug1('max_memory = %d MB (%d in use)', max_memory+mem_now, mem_now)
 
-    Gblksize = max(24, int(max_memory*1e6/16/nao**2/(nkpts+3))//8*8)
-    Gblksize = min(Gblksize, ngrids, 200000)
-    log.debug1('Gblksize = %d', Gblksize)
-    buf = np.empty(nkpts*Gblksize*nao**2*2)
+    if contract_mo_early:
+        Gblksize = max(24, int(max_memory*1e6/16/(nao*s_nao+nao*nkpts*nocc*2))//8*8)
+        Gblksize = min(Gblksize, ngrids, 200000)
+        log.debug1('Gblksize = %d', Gblksize)
+        buf = np.empty(Gblksize*s_nao*nao)
+    else:
+        Gblksize = max(24, int(max_memory*1e6/16/nao**2/(nkpts+3))//8*8)
+        Gblksize = min(Gblksize, ngrids, 200000)
+        log.debug1('Gblksize = %d', Gblksize)
+        buf = np.empty(nkpts*Gblksize*nao**2*2)
+
     for group_id, (k, k_conj) in enumerate(k_conj_groups):
         kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
         kpti_idx = kpt_ij_idx // nkpts
@@ -564,56 +567,6 @@ def _update_vk1_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
         ctypes.c_int(swap_2e), ctypes.c_int(n_dm), ctypes.c_int(nao),
         ctypes.c_int(nocc), ctypes.c_int(nG), ctypes.c_int(nkpts))
 
-def _update_vk_fake_gamma_debug(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                                k_to_compute):
-    '''
-    dmf is the factorized dm, dm = dmf * dmf.conj().T
-    Computing exchange matrices with dmf:
-    vk += np.einsum('ngij,njp,nkp,nglk,g->nil', Gpq, dmf, dmf.conj(), Gpq.conj(), coulG)
-    vk += np.einsum('ngij,nlp,nip,nglk,g->nkj', Gpq, dmf, dmf.conj(), Gpq.conj(), coulG)
-    '''
-    vkR, vkI = vk
-    GpqR, GpqI = Gpq
-    dmfR, dmfI = dmf
-    nG = len(wcoulG)
-    n_dm, s_nao, nkpts, nocc = dmfR.shape
-    nao = vkR.shape[-1]
-
-    GpqR = GpqR.transpose(2,1,0)
-    GpqI = GpqI.transpose(2,1,0)
-    assert GpqR.flags.c_contiguous
-    GpqR = GpqR.reshape(s_nao, -1)
-    GpqI = GpqI.reshape(s_nao, -1)
-
-    for i in range(n_dm):
-        moR = dmfR[i].reshape(s_nao,nkpts*nocc)
-        moI = dmfI[i].reshape(s_nao,nkpts*nocc)
-        ipGR = lib.dot(moR.T, GpqR).reshape(nkpts,nocc,nao,nG)
-        ipGI = lib.dot(moR.T, GpqI).reshape(nkpts,nocc,nao,nG)
-        ipGIi = lib.dot(moI.T, GpqR).reshape(nkpts,nocc,nao,nG)
-        ipGRi = lib.dot(moI.T, GpqI).reshape(nkpts,nocc,nao,nG)
-        for k, (ki, kj) in enumerate(zip(kpti_idx, kptj_idx)):
-            if k_to_compute[ki]:
-                ipGR1 = np.array(ipGR[kj].transpose(1,0,2), order='C')
-                ipGI1 = np.array(ipGI[kj].transpose(1,0,2), order='C')
-                ipGR1 -= ipGRi[kj].transpose(1,0,2)
-                ipGI1 += ipGIi[kj].transpose(1,0,2)
-                ipGR2 = ipGR1 * wcoulG
-                ipGI2 = ipGI1 * wcoulG
-                zdotNC(ipGR1.reshape(nao,-1), ipGI1.reshape(nao,-1),
-                       ipGR2.reshape(nao,-1).T, ipGI2.reshape(nao,-1).T,
-                       1, vkR[i,ki], vkI[i,ki], 1)
-            if swap_2e and k_to_compute[kj]:
-                ipGR1 = np.array(ipGR[ki].transpose(1,0,2), order='C')
-                ipGI1 = np.array(ipGI[ki].transpose(1,0,2), order='C')
-                ipGR1 += ipGRi[ki].transpose(1,0,2)
-                ipGI1 -= ipGIi[ki].transpose(1,0,2)
-                ipGR2 = ipGR1 * wcoulG
-                ipGI2 = ipGI1 * wcoulG
-                zdotCN(ipGR1.reshape(nao,-1), ipGI1.reshape(nao,-1),
-                       ipGR2.reshape(nao,-1).T, ipGI2.reshape(nao,-1).T,
-                       1, vkR[i,kj], vkI[i,kj], 1)
-
 def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
                           k_to_compute):
     '''
@@ -657,8 +610,8 @@ def _gen_ft_kernel_fake_gamma(cell, supmol, aosym='s1'):
 
     def ft_kern(Gv, gxyz=None, Gvbase=None, q=None, kpts=None, out=None):
         return ft_aopair(supmol1, Gv, shls_slice, aosym, b,
-                         gxyz=gxyz, Gvbase=Gvbase, q=q, return_complex=False,
-                         ovlp_mask=ovlp_mask)
+                         gxyz=gxyz, Gvbase=Gvbase, out=out,
+                         q=q, return_complex=False, ovlp_mask=ovlp_mask)
     return ft_kern
 
 ##################################################

@@ -42,11 +42,15 @@ void PBCmo_k2gamma(double *dmfR, double *dmfI,
 {
         int bvk_nbas = bvk_ncells * nbasp;
         size_t knmo = nkpts * nmo;
+
+#pragma omp parallel
+{
         int ip0, ip1, i0, di, i, j, k;
         int ish_bvk, ish, ish0, ish1, ishp, iL;
         double complex phase, v;
         double complex *pmo_k;
         double *pdmfR, *pdmfI;
+#pragma omp for schedule(dynamic, 4)
         for (ish_bvk = 0; ish_bvk < bvk_nbas; ish_bvk++) {
                 ish0 = sh_loc[ish_bvk];
                 ish1 = sh_loc[ish_bvk+1];
@@ -65,17 +69,18 @@ void PBCmo_k2gamma(double *dmfR, double *dmfI,
                                 pdmfR = dmfR + (i0+i) * knmo;
                                 pdmfI = dmfI + (i0+i) * knmo;
                                 pmo_k = mo + (ip0+i) * nmo;
-for (k = 0; k < nkpts; k++) {
-        phase = expRk[iL*nkpts+k];
-        for (j = 0; j < nmo; j++) {
-                v = phase * pmo_k[k*naop*nmo+j];
-                pdmfR[k*nmo+j] = creal(v);
-                pdmfI[k*nmo+j] = cimag(v);
-        }
-}
+                                for (k = 0; k < nkpts; k++) {
+                                        phase = expRk[iL*nkpts+k];
+                                        for (j = 0; j < nmo; j++) {
+                                                v = phase * pmo_k[k*naop*nmo+j];
+                                                pdmfR[k*nmo+j] = creal(v);
+                                                pdmfI[k*nmo+j] = cimag(v);
+                                        }
+                                }
                         }
                 }
         }
+}
 }
 
 void PBC_kcontract_fake_gamma(double *vkR, double *vkI, double *moR, double *moI,
