@@ -117,7 +117,7 @@ def unique_with_wrap_around(cell, kpts):
     uniq_kpts = kpts[uniq_index]
     return uniq_kpts, uniq_index, uniq_inverse
 
-def group_by_conj_pairs(cell, kpts, wrap_around=True):
+def group_by_conj_pairs(cell, kpts, wrap_around=True, return_kpts_pairs=True):
     '''Find all conjugation k-point pairs in the input kpts.
     This function lables three types of conjugation.
     1. self-conjugated. The two index in idx_pairs have the same value.
@@ -157,13 +157,16 @@ def group_by_conj_pairs(cell, kpts, wrap_around=True):
             seen[conj_idx[0]] = True
             idx_pairs.append((k, conj_idx[0]))
 
-    kpts_pairs = []
-    for i, j in idx_pairs:
-        if j is None:
-            kpts_pairs.append((kpts[i], None))
-        else:
-            kpts_pairs.append((kpts[i], kpts[j]))
-    return idx_pairs, kpts_pairs
+    if return_kpts_pairs:
+        kpts_pairs = []
+        for i, j in idx_pairs:
+            if j is None:
+                kpts_pairs.append((kpts[i], None))
+            else:
+                kpts_pairs.append((kpts[i], kpts[j]))
+        return idx_pairs, kpts_pairs
+    else:
+        return idx_pairs
 
 def loop_kkk(nkpts):
     range_nkpts = range(nkpts)

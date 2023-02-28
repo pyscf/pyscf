@@ -17,7 +17,7 @@ import numpy
 from pyscf import lib
 from pyscf.pbc import gto
 from pyscf.pbc import scf
-from pyscf.pbc.df import aft, aft_jk
+from pyscf.pbc.df import aft, aft_jk, FFTDF
 
 
 def setUpModule():
@@ -102,6 +102,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vk[6]), (3.6342630872923456-0.054892635365850449j)/8, 9)
         self.assertAlmostEqual(lib.fp(vk[7]), (3.3483735224533548+0.040877095049528467j)/8, 9)
 
+        ref = FFTDF(cell, kpts=kpts).get_jk(dm, kpts=kpts)[1]
+        self.assertAlmostEqual(abs(ref-vk).max(), 0, 8)
+
     def test_aft_k1(self):
         kpts = cell.get_abs_kpts([[-.25,-.25,-.25],
                                   [-.25,-.25, .25],
@@ -146,7 +149,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vk-vk1).max(), 0, 9)
 
     def test_aft_k3(self):
-        kpts = cell.make_kpts([2]*3)
+        kpts = cell.make_kpts([6,1,1])
         nkpts = len(kpts)
         numpy.random.seed(1)
         nao = cell.nao_nr()
@@ -157,11 +160,14 @@ class KnownValues(unittest.TestCase):
         dm = numpy.einsum('npi,nqi->npq', mo, mo.conj())
         dm = lib.tag_array(dm, mo_coeff=mo, mo_occ=mo_occ)
         mydf = aft.AFTDF(cell)
+        mydf.k_conj_symmetry = False
         mydf.kpts = kpts
         vk = aft_jk.get_k_kpts(mydf, dm, 1, mydf.kpts)
-        self.assertAlmostEqual(lib.fp(vk), -3.0142712906563087+0.018808393052152095j, 9)
+        self.assertAlmostEqual(lib.fp(vk), 5.872042619636364+0.39662848875321643j, 9)
         vk1 = aft_jk.get_k_for_bands(mydf, dm, 1, mydf.kpts)
         self.assertAlmostEqual(abs(vk-vk1).max(), 0, 9)
+        ref = FFTDF(cell, kpts=kpts).get_jk(dm, kpts=kpts)[1]
+        self.assertAlmostEqual(abs(ref-vk).max(), 0, 8)
 
 
 if __name__ == '__main__':

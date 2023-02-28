@@ -124,6 +124,10 @@ def gen_ft_kernel(supmol, aosym='s1', intor='GTO_ft_ovlp', comp=1,
     cell0_ovlp_mask = cell0_ovlp_mask.astype(np.int8)
 
     b = rs_cell.reciprocal_vectors()
+    if abs(b-np.diag(b.diagonal())).sum() < 1e-8:
+        _eval_gz = 'GTO_Gv_orth'
+    else:
+        _eval_gz = 'GTO_Gv_nonorth'
 
     log.timer_debug1('ft_ao kernel initialization', *cput0)
 
@@ -166,16 +170,13 @@ def gen_ft_kernel(supmol, aosym='s1', intor='GTO_ft_ovlp', comp=1,
             nij = i1*(i1+1)//2 - i0*(i0+1)//2
             shape = (nkpts, comp, nij, nGv)
 
-        if gxyz is None or b is None or Gvbase is None or (abs(q).sum() > 1e-9):
+        if gxyz is None or Gvbase is None or (abs(q).sum() > 1e-9):
             p_gxyzT = lib.c_null_ptr()
             p_mesh = (ctypes.c_int*3)(0,0,0)
             p_b = (ctypes.c_double*1)(0)
             eval_gz = 'GTO_Gv_general'
         else:
-            if abs(b-np.diag(b.diagonal())).sum() < 1e-8:
-                eval_gz = 'GTO_Gv_orth'
-            else:
-                eval_gz = 'GTO_Gv_nonorth'
+            eval_gz = _eval_gz
             gxyzT = np.asarray(gxyz.T, order='C', dtype=np.int32)
             p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
             bqGv = np.hstack((b.ravel(), q) + Gvbase)
@@ -230,9 +231,7 @@ def gen_ft_kernel(supmol, aosym='s1', intor='GTO_ft_ovlp', comp=1,
             out = np.rollaxis(out, -1, 3)
             if comp == 1:
                 out = out[:,:,0]
-            outR = out[0]
-            outI = out[1]
-            return outR, outI
+            return out
 
     return ft_kernel
 

@@ -33,12 +33,6 @@
 #define OF_CMPLX        2
 #define BLOCK_SIZE      104
 
-typedef int (*FPtrIntor)(double *outR, double *outI, int *shls, int *dims,
-                         FPtr_eval_gz eval_gz, double complex fac,
-                         double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                         int block_size,
-                         int *atm, int natm, int *bas, int nbas, double *env);
-
 typedef int (*FPtrSort)(double *out, double *in, int fill_zero,
                         int *shls_slice, int *ao_loc, int nkpts, int comp,
                         int nGv, int ish, int jsh, int grid0, int grid1);
@@ -49,6 +43,12 @@ typedef int (*FPtrFill)(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
 
 void PBCminimal_CINTEnvVars(CINTEnvVars *envs, int *atm, int natm, int *bas, int nbas, double *env,
                             CINTOpt *cintopt);
+
+void GTO_ft_dfill_s1(FPtrIntor intor, FPtr_eval_gz eval_gz,
+                     double *out, int comp, int ish, int jsh, double *buf,
+                     int *shls_slice, int *ao_loc, double complex fac,
+                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                     int *atm, int natm, int *bas, int nbas, double *env);
 
 static int _assemble2c(FPtrIntor intor, FPtr_eval_gz eval_gz,
                        double *eriR, double *eriI, //double *cache,
@@ -81,8 +81,12 @@ static int _assemble2c(FPtrIntor intor, FPtr_eval_gz eval_gz,
         int *gxyz = envs_bvk->gxyz;
         int *gs = envs_bvk->gs;
         int8_t *ovlp_mask = envs_bvk->ovlp_mask;
-        int shls[2];
+        int shls[2] = {seg2sh[iseg0], jsh0};
         int ish, jsh, iseg;
+        size_t cache_size = (*intor)(NULL, NULL, shls, NULL, eval_gz,
+                                     fac, Gv, b, gxyz, gs, ngrids, dg,
+                                     atm, natm, bas, nbas, env, NULL);
+        double *cache = malloc(sizeof(double) * cache_size * ngrids);
 
         for (iseg = iseg0; iseg < iseg1; iseg++) {
                 ish = seg2sh[iseg];
@@ -94,11 +98,12 @@ static int _assemble2c(FPtrIntor intor, FPtr_eval_gz eval_gz,
                         shls[1] = jsh;
                         if ((*intor)(eriR, eriI, shls, NULL, eval_gz,
                                      fac, Gv+grid0, b, gxyz+grid0, gs, ngrids, dg,
-                                     atm, natm, bas, nbas, env)) {
+                                     atm, natm, bas, nbas, env, cache)) {
                                 empty = 0;
                         }
                 }
         }
+        free(cache);
         return !empty;
 }
 

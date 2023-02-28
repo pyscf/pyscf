@@ -33,6 +33,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
+from pyscf.pbc.lib.kpts_helper import group_by_conj_pairs
 
 
 def kpts_to_kmesh(cell, kpts, precision=None):
@@ -138,36 +139,53 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
     Nk, Nao, Nmo = C_k.shape
     NR = phase.shape[0]
 
+    k_conj_groups = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)
+    k_phase = np.eye(Nk, dtype=np.complex128)
+    r2x2 = np.array([[1., 1j], [1., -1j]]) * .5**.5
+    pairs = [[k, k_conj] for k, k_conj in k_conj_groups
+             if k_conj is not None and k != k_conj]
+    for idx in np.array(pairs):
+        k_phase[idx[:,None],idx] = r2x2
     # Transform AO indices
-    C_gamma = np.einsum('Rk, kum -> Rukm', phase, C_k)
+    C_gamma = np.einsum('Rk,kum,kh->Ruhm', phase, C_k, k_phase)
     C_gamma = C_gamma.reshape(Nao*NR, Nk*Nmo)
 
-    E_sort_idx = np.argsort(E_g)
-    E_g = E_g[E_sort_idx]
-    C_gamma = C_gamma[:,E_sort_idx]
-    s = scell.pbc_intor('int1e_ovlp')
-    assert (abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
-               - np.eye(Nmo*Nk)).max() < 1e-5)
+    # Pure imaginary orbitals to real
+    cR_max = abs(C_gamma.real).max(axis=0)
+    C_gamma[:,cR_max < 1e-5] *= -1j
 
-    # For degenerated MOs, the transformed orbitals in super cell may not be
-    # real. Construct a sub Fock matrix in super-cell to find a proper
-    # transformation that makes the transformed MOs real.
-    E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
-    degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
-    if np.any(E_k_degen):
-        if abs(C_gamma[:,~degen_mask].imag).max() < 1e-4:
-            shift = min(E_g[degen_mask]) - .1
-            f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
-                       C_gamma[:,degen_mask].conj().T)
-            assert (abs(f.imag).max() < 1e-4)
+    cI_max = abs(C_gamma.imag).max(axis=0)
+    if cI_max.max() < 1e-5:
+        C_gamma = C_gamma.real
+    else:
+        E_sort_idx = np.argsort(E_g)
+        E_g = E_g[E_sort_idx]
+        C_gamma = C_gamma[:,E_sort_idx]
+        s = scell.pbc_intor('int1e_ovlp')
+        # assert (abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
+        #            - np.eye(Nmo*Nk)).max() < 1e-5)
 
-            e, na_orb = scipy.linalg.eigh(f.real, s, type=2)
-            C_gamma = C_gamma.real
-            C_gamma[:,degen_mask] = na_orb[:, e>1e-7]
-        else:
-            f = np.dot(C_gamma * E_g, C_gamma.conj().T)
-            assert (abs(f.imag).max() < 1e-4)
-            e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)
+        # For degenerated MOs, the transformed orbitals in super cell may not be
+        # real. Construct a sub Fock matrix in super-cell to find a proper
+        # transformation that makes the transformed MOs real.
+        E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
+        degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
+        degen_mask[cI_max < 1e-5] = False
+        if np.any(E_k_degen):
+            c_rest = C_gamma[:,~degen_mask]
+            if c_rest.size > 0 and abs(c_rest.imag).max() < 1e-4:
+                shift = min(E_g[degen_mask]) - .1
+                f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
+                           C_gamma[:,degen_mask].conj().T)
+                assert (abs(f.imag).max() < 1e-4)
+
+                e, na_orb = scipy.linalg.eigh(f.real, s, type=2)
+                C_gamma = C_gamma.real
+                C_gamma[:,degen_mask] = na_orb[:, e>1e-7]
+            else:
+                f = np.dot(C_gamma * E_g, C_gamma.conj().T)
+                assert (abs(f.imag).max() < 1e-4)
+                e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)
 
     s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     # overlap between k-point unitcell and gamma-point supercell

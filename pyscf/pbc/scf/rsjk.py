@@ -21,6 +21,7 @@ Range separation JK builder
 
 Ref:
     Q. Sun, arXiv:2012.07929
+    Q. Sun, arXiv:2302.11307
 '''
 
 import copy
@@ -948,7 +949,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                             ctypes.c_int(nao), ctypes.c_int(naod), ctypes.c_int(p1-p0))
                     return (GpqR, GpqI)
 
-        k_conj_groups = group_by_conj_pairs(cell, uniq_kpts)[0]
+        k_conj_groups = group_by_conj_pairs(cell, uniq_kpts, return_kpts_pairs=False)
         log.debug1('Num kpts conj_pairs %d', len(k_conj_groups))
         if self.k_conj_symmetry:
             k_to_compute = np.zeros(nkpts, dtype=np.int8)

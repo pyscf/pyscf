@@ -25,8 +25,11 @@ import ctypes
 import numpy
 import numpy as np
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.lib import zdotNN, zdotCN, zdotNC
+from pyscf.pbc import gto as pbcgto
+from pyscf.gto.ft_ao import ft_aopair
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df.df_jk import (_format_dms, _format_kpts_band, _format_jks,
                                 _ewald_exxdiv_for_G0)
@@ -150,11 +153,44 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     vk = [vkR, vkI]
     weight = 1. / nkpts
 
+    aosym = 's1'
+    bvk_kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+    rcut = ft_ao.estimate_rcut(cell)
+    supmol = ft_ao.ExtendedMole.from_cell(cell, bvk_kmesh, rcut.max())
+    supmol = supmol.strip_basis(rcut)
+
+    uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
+        cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
+    scaled_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
+    log.debug('Num uniq kpts %d', len(uniq_kpts))
+
+    k_conj_groups = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)
+    k_conj_symmetry = mydf.k_conj_symmetry
+    if k_conj_symmetry:
+        for k, k_conj in k_conj_groups:
+            if (k_conj is not None and k != k_conj and
+                abs(dms[:,k_conj] - dms[:,k].conj()).max() > 1e-6):
+                k_conj_symmetry = False
+                break
+
+    if k_conj_symmetry:
+        k_to_compute = np.zeros(nkpts, dtype=np.int8)
+        k_to_compute[[k for k, k_conj in k_conj_groups]] = 1
+    else:
+        k_to_compute = np.ones(nkpts, dtype=np.int8)
+
+    contract_mo_early = False
     if mo_coeff is None:
         dmsR = np.asarray(dms.real, order='C')
         dmsI = np.asarray(dms.imag, order='C')
         dm = [dmsR, dmsI]
         dm_factor = None
+
+        if np.count_nonzero(k_to_compute) >= 2 * lib.num_threads():
+            update_vk = _update_vk1_
+        else:
+            update_vk = _update_vk_
+        log.debug2('set update_vk to %s', update_vk)
     else:
         # dm ~= dm_factor * dm_factor.T
         n_dm, nkpts, nao = dms.shape[:3]
@@ -168,50 +204,100 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
             nocc = max(np.count_nonzero(x > 0) for x in mo_occ)
             dm_factor = [[mo[:,:nocc] for mo in mo_coeff]]
             occs = [[x[:nocc] for x in mo_occ]]
-        dm_factor = np.array(dm_factor, dtype=dms.dtype, order='C')
+        dm_factor = np.array(dm_factor, dtype=np.complex128, order='C')
         dm_factor *= np.sqrt(np.array(occs, dtype=np.double))[:,:,None]
-        dmfR = np.asarray(dm_factor.real, order='C')
-        dmfI = np.asarray(dm_factor.imag, order='C')
-        dm = [dmfR, dmfI]
 
-    aosym = 's1'
-    bvk_kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
-    rcut = ft_ao.estimate_rcut(cell)
-    supmol = ft_ao.ExtendedMole.from_cell(cell, bvk_kmesh, rcut.max())
-    supmol = supmol.strip_basis(rcut)
-    ft_kern = supmol.gen_ft_kernel(aosym, return_complex=False, verbose=log)
+        bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
+        contract_mo_early = (k_conj_symmetry and
+                             bvk_ncells * nao > supmol.nao * nocc * n_dm)
+        if contract_mo_early:
+            nbasp = cell.nbas
+            bvk_nbas = nbasp * bvk_ncells
+            sh_loc = supmol.sh_loc  # maps the bvk shell Id to supmol shell Id
+            ao_loc = supmol.ao_loc
+            cell0_ao_loc = supmol.rs_cell.ao_loc
+            expRk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts.T))
+            expRk = np.asarray(expRk, order='C')
+            s_nao = supmol.nao
+            moR = np.empty((n_dm,s_nao,nkpts,nocc))
+            moI = np.empty((n_dm,s_nao,nkpts,nocc))
+            # Transform to MO of supcell at gamma point
+            for i_dm in range(n_dm):
+                libpbc.PBCmo_k2gamma(
+                    moR[i_dm].ctypes.data_as(ctypes.c_void_p),
+                    moI[i_dm].ctypes.data_as(ctypes.c_void_p),
+                    dm_factor[i_dm].ctypes.data_as(ctypes.c_void_p),
+                    expRk.ctypes.data_as(ctypes.c_void_p),
+                    sh_loc.ctypes.data_as(ctypes.c_void_p),
+                    ao_loc.ctypes.data_as(ctypes.c_void_p),
+                    cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(bvk_nbas), ctypes.c_int(nbasp),
+                    ctypes.c_int(s_nao), ctypes.c_int(nao), ctypes.c_int(nocc),
+                    ctypes.c_int(nkpts), ctypes.c_int(expRk.shape[0]),
+                )
+            dm = [moR, moI]
+            dm_factor = None
+        else:
+            dmfR = np.asarray(dm_factor.real, order='C')
+            dmfI = np.asarray(dm_factor.imag, order='C')
+            dm = [dmfR, dmfI]
+            dm_factor = None
+
+        if contract_mo_early:
+            update_vk = _update_vk_fake_gamma
+        elif np.count_nonzero(k_to_compute) >= 2 * lib.num_threads():
+            update_vk = _update_vk1_dmf
+        else:
+            update_vk = _update_vk_dmf
+        log.debug2('set update_vk to %s with dm_factor', update_vk)
+
+    if contract_mo_early:
+        # consider only the most diffused component of a basis
+        cell_exps, cell_cs = pbcgto.cell._extract_pgto_params(cell, 'min')
+        cell_l = cell._bas[:,gto.ANG_OF]
+        cell_bas_coords = cell.atom_coords()[cell._bas[:,gto.ATOM_OF]]
+
+        theta_ij = cell_exps.min() / 2
+        vol = cell.vol
+        lattice_sum_factor = max(2*np.pi*cell.rcut/(vol*theta_ij), 1)
+        cutoff = cell.precision/lattice_sum_factor * .1
+        logger.debug1(mydf, 'ft_ao cutoff = %g', cutoff)
+
+        supmol_exps, supmol_cs = pbcgto.cell._extract_pgto_params(supmol, 'min')
+        supmol_bas_coords = supmol.atom_coords()[supmol._bas[:,gto.ATOM_OF]]
+        supmol_l = supmol._bas[:,gto.ANG_OF]
+
+        aij = cell_exps[:,None] + supmol_exps
+        theta = cell_exps[:,None] * supmol_exps / aij
+        dr = np.linalg.norm(cell_bas_coords[:,None,:] - supmol_bas_coords, axis=2)
+
+        aij1 = 1./aij
+        aij2 = aij**-.5
+        dri = supmol_exps*aij1 * dr + aij2
+        drj = cell_exps[:,None]*aij1 * dr + aij2
+        norm_i = cell_cs * ((2*cell_l+1)/(4*np.pi))**.5
+        norm_j = supmol_cs * ((2*supmol_l+1)/(4*np.pi))**.5
+        fl = 2*np.pi/vol*dr/theta + 1.
+        ovlp = (np.pi**1.5 * norm_i[:,None]*norm_j * np.exp(-theta*dr**2) *
+                dri**cell_l[:,None] * drj**supmol_l * aij1**1.5 * fl)
+        ovlp_mask = np.asarray(ovlp > cutoff, dtype=np.int8, order='F')
+        ovlp = None
+        supmol1 = cell.to_mol() + supmol
+        b = cell.reciprocal_vectors()
+        shls_slice = (0, cell.nbas, cell.nbas, supmol1.nbas)
+        def ft_kern(Gv, gxyz=None, Gvbase=None, q=None, kpts=None, out=None):
+            return ft_aopair(supmol1, Gv, shls_slice, aosym, b,
+                             gxyz=gxyz, Gvbase=Gvbase, q=q, return_complex=False,
+                             ovlp_mask=ovlp_mask)
+    else:
+        ft_kern = supmol.gen_ft_kernel(aosym, return_complex=False, verbose=log)
+
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
-
-    uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
-        cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-    scaled_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
-    log.debug('Num uniq kpts %d', len(uniq_kpts))
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, (mydf.max_memory - mem_now))
     log.debug1('max_memory = %d MB (%d in use)', max_memory+mem_now, mem_now)
-
-    k_conj_groups = group_by_conj_pairs(cell, uniq_kpts)[0]
-    if mydf.k_conj_symmetry:
-        k_to_compute = np.zeros(nkpts, dtype=np.int8)
-        k_to_compute[[k for k, k_conj in k_conj_groups]] = 1
-    else:
-        k_to_compute = np.ones(nkpts, dtype=np.int8)
-
-    if np.count_nonzero(k_to_compute) >= 2 * lib.num_threads():
-        if dm_factor is None:
-            log.debug2('set update_vk to _update_vk1_')
-            update_vk = _update_vk1_
-        else:
-            log.debug2('set update_vk to _update_vk3_ with dm_factor')
-            update_vk = _update_vk3_
-    else:
-        if dm_factor is None:
-            update_vk = _update_vk_
-        else:
-            log.debug2('set update_vk to _update_vk2_ with dm_factor')
-            update_vk = _update_vk2_
 
     Gblksize = max(24, int(max_memory*1e6/16/nao**2/(nkpts+3))//8*8)
     Gblksize = min(Gblksize, ngrids, 200000)
@@ -249,7 +335,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
          (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts)
 
-    if mydf.k_conj_symmetry:
+    if k_conj_symmetry:
         for k, k_conj in k_conj_groups:
             if k_conj is not None and k != k_conj:
                 vk_kpts[:,k_conj] = vk_kpts[:,k].conj()
@@ -422,13 +508,13 @@ def _update_vk1_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
         ctypes.c_int(swap_2e), ctypes.c_int(n_dm), ctypes.c_int(nao),
         ctypes.c_int(nG), ctypes.c_int(nkpts))
 
-def _update_vk2_(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                 k_to_compute):
+def _update_vk_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
+                   k_to_compute):
     '''
-    contraction for exchange matrices:
-
-    vk += np.einsum('ngij,njk,nglk,g->nil', Gpq, dm, Gpq.conj(), coulG)
-    vk += np.einsum('ngij,nli,nglk,g->nkj', Gpq, dm, Gpq.conj(), coulG)
+    dmf is the factorized dm, dm = dmf * dmf.conj().T
+    Computing exchange matrices with dmf:
+    vk += np.einsum('ngij,njp,nkp,nglk,g->nil', Gpq, dmf, dmf.conj(), Gpq.conj(), coulG)
+    vk += np.einsum('ngij,nlp,nip,nglk,g->nkj', Gpq, dmf, dmf.conj(), Gpq.conj(), coulG)
     '''
     vkR, vkI = vk
     GpqR, GpqI = Gpq
@@ -478,8 +564,8 @@ def _update_vk2_(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
                        iLkR1.reshape(-1,nao), iLkI1.reshape(-1,nao),
                        1, vkR[i,kj], vkI[i,kj], 1)
 
-def _update_vk3_(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                 k_to_compute):
+def _update_vk1_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
+                    k_to_compute):
     '''
     dmf is the factorized dm, dm = dmf * dmf.conj().T
     Computing exchange matrices with dmf:
@@ -512,6 +598,71 @@ def _update_vk3_(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
         k_to_compute.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(swap_2e), ctypes.c_int(n_dm), ctypes.c_int(nao),
         ctypes.c_int(nocc), ctypes.c_int(nG), ctypes.c_int(nkpts))
+
+def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
+                          k_to_compute):
+    '''
+    dmf is the factorized dm, dm = dmf * dmf.conj().T
+    Computing exchange matrices with dmf:
+    vk += np.einsum('ngij,njp,nkp,nglk,g->nil', Gpq, dmf, dmf.conj(), Gpq.conj(), coulG)
+    vk += np.einsum('ngij,nlp,nip,nglk,g->nkj', Gpq, dmf, dmf.conj(), Gpq.conj(), coulG)
+    '''
+    vkR, vkI = vk
+    GpqR, GpqI = Gpq
+    dmfR, dmfI = dmf
+    nG = len(wcoulG)
+    n_dm, s_nao, nkpts, nocc = dmfR.shape
+    nao = vkR.shape[-1]
+
+    GpqR = GpqR.transpose(2,1,0)
+    assert GpqR.flags.c_contiguous
+#    GpqI = GpqI.transpose(2,1,0)
+#    GpqR = GpqR.reshape(s_nao, -1)
+#    GpqI = GpqI.reshape(s_nao, -1)
+#
+#    for i in range(n_dm):
+#        moR = dmfR[i].reshape(s_nao,nkpts*nocc)
+#        moI = dmfI[i].reshape(s_nao,nkpts*nocc)
+#        ipGR = lib.dot(moR.T, GpqR).reshape(nkpts,nocc,nao,nG)
+#        ipGI = lib.dot(moR.T, GpqI).reshape(nkpts,nocc,nao,nG)
+#        ipGIi = lib.dot(moI.T, GpqR).reshape(nkpts,nocc,nao,nG)
+#        ipGRi = lib.dot(moI.T, GpqI).reshape(nkpts,nocc,nao,nG)
+#        for k, (ki, kj) in enumerate(zip(kpti_idx, kptj_idx)):
+#            if k_to_compute[ki]:
+#                ipGR1 = np.array(ipGR[kj].transpose(1,0,2), order='C')
+#                ipGI1 = np.array(ipGI[kj].transpose(1,0,2), order='C')
+#                ipGR1 -= ipGRi[kj].transpose(1,0,2)
+#                ipGI1 += ipGIi[kj].transpose(1,0,2)
+#                ipGR2 = ipGR1 * wcoulG
+#                ipGI2 = ipGI1 * wcoulG
+#                zdotNC(ipGR1.reshape(nao,-1), ipGI1.reshape(nao,-1),
+#                       ipGR2.reshape(nao,-1).T, ipGI2.reshape(nao,-1).T,
+#                       1, vkR[i,ki], vkI[i,ki], 1)
+#            if swap_2e and k_to_compute[kj]:
+#                ipGR1 = np.array(ipGR[ki].transpose(1,0,2), order='C')
+#                ipGI1 = np.array(ipGI[ki].transpose(1,0,2), order='C')
+#                ipGR1 += ipGRi[ki].transpose(1,0,2)
+#                ipGI1 -= ipGIi[ki].transpose(1,0,2)
+#                ipGR2 = ipGR1 * wcoulG
+#                ipGI2 = ipGI1 * wcoulG
+#                zdotCN(ipGR1.reshape(nao,-1), ipGI1.reshape(nao,-1),
+#                       ipGR2.reshape(nao,-1).T, ipGI2.reshape(nao,-1).T,
+#                       1, vkR[i,kj], vkI[i,kj], 1)
+
+    for i in range(n_dm):
+        libpbc.PBC_kcontract_fake_gamma(
+            vkR[i].ctypes.data_as(ctypes.c_void_p),
+            vkI[i].ctypes.data_as(ctypes.c_void_p),
+            dmfR[i].ctypes.data_as(ctypes.c_void_p),
+            dmfI[i].ctypes.data_as(ctypes.c_void_p),
+            GpqR.ctypes.data_as(ctypes.c_void_p),
+            GpqI.ctypes.data_as(ctypes.c_void_p),
+            wcoulG.ctypes.data_as(ctypes.c_void_p),
+            kpti_idx.ctypes.data_as(ctypes.c_void_p),
+            kptj_idx.ctypes.data_as(ctypes.c_void_p),
+            k_to_compute.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(swap_2e), ctypes.c_int(s_nao), ctypes.c_int(nao),
+            ctypes.c_int(nocc), ctypes.c_int(nG), ctypes.c_int(nkpts))
 
 ##################################################
 #
@@ -634,33 +785,3 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
     return vj, vk
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto as pgto
-    from pyscf.pbc import scf as pscf
-    from pyscf.pbc.df import aft
-
-    L = 5.
-    n = 10
-    cell = pgto.Cell()
-    cell.a = numpy.diag([L,L,L])
-    cell.mesh = numpy.array([n,n,n])
-
-    cell.atom = '''He    3.    2.       3.
-                   He    1.    1.       1.'''
-    #cell.basis = {'He': [[0, (1.0, 1.0)]]}
-    #cell.basis = '631g'
-    #cell.basis = {'He': [[0, (2.4, 1)], [1, (1.1, 1)]]}
-    cell.basis = 'ccpvdz'
-    cell.verbose = 0
-    cell.build(0,0)
-    cell.verbose = 5
-
-    df = aft.AFTDF(cell)
-    df.mesh = (31,)*3
-    dm = pscf.RHF(cell).get_init_guess()
-    vj, vk = df.get_jk(dm)
-    print(numpy.einsum('ij,ji->', df.get_nuc(), dm), 'ref=-10.585410081257631')
-    print(numpy.einsum('ij,ji->', vj, dm), 'ref=5.384744986452681')
-    print(numpy.einsum('ij,ji->', vk, dm), 'ref=5.835415107946317')
