@@ -88,6 +88,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self.approx_vk_lr_missing_mo = False
         # TODO: incrementally build SR part
         self._last_vs = (0, 0)
+        self._qindex = None
 
         self._keys = set(self.__dict__.keys())
 
@@ -199,18 +200,18 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self._cintopt = _vhf.make_cintopt(supmol_sr._atm, supmol_sr._bas,
                                           supmol_sr._env, 'int2e')
         nbas = supmol_sr.nbas
-        self.qindex = np.empty((3,nbas,nbas), dtype=np.uint8)
+        qindex = np.empty((3,nbas,nbas), dtype=np.uint8)
         ao_loc = supmol_sr.ao_loc
         with supmol_sr.with_integral_screen(self.direct_scf_tol**2):
             libpbc.PBCVHFsetnr_direct_scf(
                 libpbc.int2e_sph, self._cintopt,
-                self.qindex.ctypes.data_as(ctypes.c_void_p),
+                qindex.ctypes.data_as(ctypes.c_void_p),
                 ao_loc.ctypes.data_as(ctypes.c_void_p),
                 supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
                 supmol_sr._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.nbas),
                 supmol_sr._env.ctypes.data_as(ctypes.c_void_p))
         libpbc.PBCVHFsetnr_sindex(
-            self.qindex[2:].ctypes.data_as(ctypes.c_void_p),
+            qindex[2:].ctypes.data_as(ctypes.c_void_p),
             supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
             supmol_sr._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.nbas),
             supmol_sr._env.ctypes.data_as(ctypes.c_void_p))
@@ -218,18 +219,34 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         if self.exclude_dd_block:
             # Remove the smooth-smooth basis block.
             smooth_idx = supmol_sr.bas_type_to_indices(ft_ao.SMOOTH_BASIS)
-            self.qindex[0,smooth_idx[:,None], smooth_idx] = 0
+            qindex[0,smooth_idx[:,None], smooth_idx] = 0
+
+        self.qindex = qindex
 
         log.timer('initializing qindex', *cpu0)
         return self
 
-    def _sort_qcond_cell0(self, seg_loc, nbasp):
+    @property
+    def qindex(self):
+        if self._qindex is None or isinstance(self._qindex, np.ndarray):
+            return self._qindex
+        return self._qindex['qindex'][:]
+
+    @qindex.setter
+    def qindex(self, x):
+        if x.size < self.max_memory*.2e6:
+            self._qindex = x
+        else:
+            self._qindex = lib.H5TmpFile()
+            self._qindex['qindex'] = x
+            self._qindex.flush()
+
+    def _sort_qcond_cell0(self, seg_loc, seg2sh, nbasp, qindex):
         '''Sort qcond for ij-pair in cell0 so that loops in PBCVHF_direct_drv
         can be "break" early
         '''
-        seg2sh = self.supmol_sr.seg2sh
-        qcell0_ijij = _qcond_cell0_abstract(self.qindex[0], seg_loc, seg2sh, nbasp)
-        qcell0_iijj = _qcond_cell0_abstract(self.qindex[1], seg_loc, seg2sh, nbasp)
+        qcell0_ijij = _qcond_cell0_abstract(qindex[0], seg_loc, seg2sh, nbasp)
+        qcell0_iijj = _qcond_cell0_abstract(qindex[1], seg_loc, seg2sh, nbasp)
         idx = np.asarray(qcell0_ijij.ravel().argsort(), np.int32)[::-1]
         jsh_idx, ish_idx = divmod(idx, nbasp)
         return qcell0_ijij, qcell0_iijj, ish_idx, jsh_idx
@@ -295,8 +312,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             nbasp = cell.nbas  # The number of shells in the primitive cell
             cell0_ao_loc = cell.ao_loc
             seg_loc = supmol.seg_loc
+
+        qindex = self.qindex
         qcell0_ijij, qcell0_iijj, ish_idx, jsh_idx = \
-                self._sort_qcond_cell0(seg_loc, nbasp)
+                self._sort_qcond_cell0(seg_loc, supmol.seg2sh, nbasp, qindex)
 
         weight = 1. / nkpts
         expRk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts.T))
@@ -373,7 +392,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             rs_cell.bas_type.ctypes.data_as(ctypes.c_void_p),
             (ctypes.c_int*8)(*shls_slice),
             dm_translation.ctypes.data_as(ctypes.c_void_p),
-            self.qindex.ctypes.data_as(ctypes.c_void_p),
+            qindex.ctypes.data_as(ctypes.c_void_p),
             dmindex.ctypes.data_as(ctypes.c_void_p), ctypes.c_uint8(cutoff),
             qcell0_ijij.ctypes.data_as(ctypes.c_void_p),
             qcell0_iijj.ctypes.data_as(ctypes.c_void_p),
@@ -859,6 +878,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             contract_mo_early = (k_conj_symmetry and naod == 0 and
                                  bvk_ncells*nao > self.supmol_ft.nao*nocc*n_dm)
             if contract_mo_early:
+                logger.debug1('Use algorithm contract_mo_early')
                 bvk_kmesh = self.bvk_kmesh
                 rcut = ft_ao.estimate_rcut(cell)
                 supmol = ft_ao.ExtendedMole.from_cell(cell, bvk_kmesh, rcut.max())
