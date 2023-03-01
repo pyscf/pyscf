@@ -29,6 +29,8 @@
 #include "vhf/fblas.h"
 #include "pbc/pbc.h"
 
+#define SQRTHALF        0.707106781186547524
+
 // # Transform AO indices
 //  k_phase = np.eye(nkpts, dtype=np.complex128)
 //  k_phase[[[k],[k_conj]],[k,k_conj]] = [[1., 1j], [1., -1j]] * .5**.5
@@ -37,17 +39,19 @@
 void PBCmo_k2gamma(double *dmfR, double *dmfI,
                    double complex *mo, double complex *expRk,
                    int *sh_loc, int *ao_loc, int *cell0_ao_loc,
-                   int bvk_ncells, int nbasp, int s_nao, int naop, int nmo,
-                   int nkpts, int nimgs)
+                   int *k_conj_groups, int ngroups, int bvk_ncells, int nbasp,
+                   int s_nao, int naop, int nmo, int nkpts, int nimgs)
 {
         int bvk_nbas = bvk_ncells * nbasp;
         size_t knmo = nkpts * nmo;
+        int *k_list = k_conj_groups;
+        int *kc_list = k_conj_groups + ngroups;
 
 #pragma omp parallel
 {
-        int ip0, ip1, i0, di, i, j, k;
+        int ip0, ip1, i0, di, i, j, n, k, kc;
         int ish_bvk, ish, ish0, ish1, ishp, iL;
-        double complex phase, v;
+        double complex phase, phasec, v1, v2, c1, c2;
         double complex *pmo_k;
         double *pdmfR, *pdmfI;
 #pragma omp for schedule(dynamic, 4)
@@ -69,148 +73,291 @@ void PBCmo_k2gamma(double *dmfR, double *dmfI,
                                 pdmfR = dmfR + (i0+i) * knmo;
                                 pdmfI = dmfI + (i0+i) * knmo;
                                 pmo_k = mo + (ip0+i) * nmo;
-                                for (k = 0; k < nkpts; k++) {
-                                        phase = expRk[iL*nkpts+k];
-                                        for (j = 0; j < nmo; j++) {
-                                                v = phase * pmo_k[k*naop*nmo+j];
-                                                pdmfR[k*nmo+j] = creal(v);
-                                                pdmfI[k*nmo+j] = cimag(v);
-                                        }
-                                }
+for (n = 0; n < ngroups; n++) {
+        k = k_list[n];
+        kc = kc_list[n];
+        if (k == kc) {
+                phase = expRk[iL*nkpts+k];
+                for (j = 0; j < nmo; j++) {
+                        v1 = phase * pmo_k[k*naop*nmo+j];
+                        pdmfR[k*nmo+j] = creal(v1);
+                        pdmfI[k*nmo+j] = cimag(v1);
+                }
+        } else {
+                // multiply phase
+                //   [1  i]
+                //   [1 -i] / sqrt(2)
+                phase = expRk[iL*nkpts+k];
+                phasec = expRk[iL*nkpts+kc];
+                for (j = 0; j < nmo; j++) {
+                        v1 = phase * pmo_k[k*naop*nmo+j];
+                        v2 = phasec * pmo_k[kc*naop*nmo+j];
+                        c1 = v1 + v2;
+                        c2 = v1 - v2;
+                        pdmfR[k*nmo+j] = creal(c1) * SQRTHALF;
+                        pdmfI[k*nmo+j] = cimag(c1) * SQRTHALF;
+                        pdmfR[kc*nmo+j] = cimag(c2) * -SQRTHALF;
+                        pdmfI[kc*nmo+j] = creal(c2) * SQRTHALF;
+                }
+        }
+}
                         }
                 }
         }
 }
 }
 
-void PBC_kcontract_fake_gamma(double *vkR, double *vkI, double *moR, double *moI,
+static void hermi_assign(double *outR, double *outI, double *inR, double *inI, int n)
+{
+        int i, j;
+        for (i = 0; i < n; i++) {
+        for (j = 0; j < n; j++) {
+                outR[j*n+i] = inR[i*n+j];
+                outI[j*n+i] = -inI[i*n+j];
+        } }
+}
+
+static void plain_add(double *outR, double *outI, double *inR, double *inI, int n)
+{
+        int i;
+        for (i = 0; i < n*n; i++) {
+                outR[i] += inR[i];
+                outI[i] += inI[i];
+        }
+}
+
+static void transpose_add(double *outR, double *outI, double *inR, double *inI, int n)
+{
+        int i, j;
+        for (i = 0; i < n; i++) {
+        for (j = 0; j < n; j++) {
+                outR[j*n+i] += inR[i*n+j];
+                outI[j*n+i] += inI[i*n+j];
+        } }
+}
+
+// Vpq = Gpi dot pp dot (Gqi*)
+// u = [1  i]
+//     [1 -i] / sqrt(2)
+// U = (u^-1)[:,0]
+// pp = U U^dagger = [ .5  .5i]
+//                   [-.5i .5 ]
+static void pp_add(double *outR, double *outI,
+                   double *i00R, double *i00I, double *i11R, double *i11I,
+                   double *i01R, double *i01I, double *i10R, double *i10I, int n)
+{
+        int i;
+        for (i = 0; i < n*n; i++) {
+                outR[i] += (i00R[i] + i11R[i] + i10I[i] - i01I[i]) * .5;
+                outI[i] += (i00I[i] + i11I[i] - i10R[i] + i01R[i]) * .5;
+        }
+}
+
+// Vpq = Gpi dot cc dot (Gqi*)
+// U = (u^-1)[:,1]
+// cc = U U^\dagger = [.5  -.5i]
+//                    [.5i  .5 ]
+static void cc_add(double *outR, double *outI,
+                   double *i00R, double *i00I, double *i11R, double *i11I,
+                   double *i01R, double *i01I, double *i10R, double *i10I, int n)
+{
+        pp_add(outR, outI, i00R, i00I, i11R, i11I, i10R, i10I, i01R, i01I, n);
+}
+
+// Vqp = Gpi dot pp dot (Gqi*) = transpose(pp_add)
+static void pp_tadd(double *outR, double *outI,
+                   double *i00R, double *i00I, double *i11R, double *i11I,
+                   double *i01R, double *i01I, double *i10R, double *i10I, int n)
+{
+        int i, j, ij;
+        for (i = 0, ij = 0; i < n; i++) {
+        for (j = 0; j < n; j++, ij++) {
+                outR[j*n+i] += (i00R[ij] + i11R[ij] + i10I[ij] - i01I[ij]) * .5;
+                outI[j*n+i] += (i00I[ij] + i11I[ij] - i10R[ij] + i01R[ij]) * .5;
+        } }
+}
+
+// Vqp = Gpi dot cc dot (Gqi*) = transpose(cc_add)
+static void cc_tadd(double *outR, double *outI,
+                   double *i00R, double *i00I, double *i11R, double *i11I,
+                   double *i01R, double *i01I, double *i10R, double *i10I, int n)
+{
+        pp_tadd(outR, outI, i00R, i00I, i11R, i11I, i10R, i10I, i01R, i01I, n);
+}
+
+void PBC_kcontract_fake_gamma(double *vkR, double *vkI, double *moR,
                               double *GpqR, double *GpqI, double *coulG,
-                              int *ki_idx, int *kj_idx, int8_t *k_to_compute, int swap_2e,
+                              int *ki_idx, int *kj_idx, int8_t *k_to_compute,
+                              int *k_conj_groups, int ngroups, int swap_2e,
                               int s_nao, int nao, int nmo, int ngrids, int nkpts)
 {
         size_t nao2 = nao * nao;
         size_t size_vk = nkpts * nao2;
-        double *vtmpR = calloc(sizeof(double), size_vk*2);
-        double *vtmpI = vtmpR + size_vk;
+        double *v00R = calloc(sizeof(double), size_vk*4);
+        double *v00I = v00R + size_vk;
+        double *v01R = v00I + size_vk;
+        double *v01I = v01R + size_vk;
+        int *k_list = k_conj_groups;
+        int *kc_list = k_conj_groups + ngroups;
+        int *ki2kj = malloc(sizeof(int) * nkpts * 2);
+        int *kj2ki = ki2kj + nkpts;
+        int n;
+#pragma GCC ivdep
+        for (n = 0; n < nkpts; n++) {
+                ki2kj[ki_idx[n]] = kj_idx[n];
+                kj2ki[kj_idx[n]] = ki_idx[n];
+        }
 
         int naog = nao * ngrids;
         int nmog = nmo * ngrids;
         int knmo = nkpts * nmo;
         size_t Naog = naog;
-        double *GpiRR = malloc(sizeof(double) * Naog * knmo * 4);
-        double *GpiRI = GpiRR + naog * knmo;
-        double *GpiIR = GpiRI + naog * knmo;
-        double *GpiII = GpiIR + naog * knmo;
+        double *GpiR = malloc(sizeof(double) * Naog * knmo * 2);
+        double *GpiI = GpiR + naog * knmo;
 
         char TRANS_T = 'T';
         char TRANS_N = 'N';
         double D1 = 1.;
         double D0 = 0.;
         double N1 = -1.;
-//        dgemm_(&TRANS_N, &TRANS_T, &naog, &knmo, &s_nao, &D1, GpqR, &naog, moR, &knmo, &D0, GpiRR, &naog);
-//        dgemm_(&TRANS_N, &TRANS_T, &naog, &knmo, &s_nao, &D1, GpqI, &naog, moR, &knmo, &D0, GpiRI, &naog);
-//        dgemm_(&TRANS_N, &TRANS_T, &naog, &knmo, &s_nao, &D1, GpqR, &naog, moI, &knmo, &D0, GpiIR, &naog);
-//        dgemm_(&TRANS_N, &TRANS_T, &naog, &knmo, &s_nao, &D1, GpqI, &naog, moI, &knmo, &D0, GpiII, &naog);
-//
+
 #pragma omp parallel
 {
         size_t k0, k1;
         NPomp_split(&k0, &k1, knmo);
         int dk = k1 - k0;
-        double *pRR = GpiRR + Naog * k0;
-        double *pRI = GpiRI + Naog * k0;
-        double *pIR = GpiIR + Naog * k0;
-        double *pII = GpiII + Naog * k0;
-        dgemm_(&TRANS_N, &TRANS_T, &naog, &dk, &s_nao, &D1, GpqR, &naog, moR+k0, &knmo, &D0, pRR, &naog);
-        dgemm_(&TRANS_N, &TRANS_T, &naog, &dk, &s_nao, &D1, GpqI, &naog, moR+k0, &knmo, &D0, pRI, &naog);
-        dgemm_(&TRANS_N, &TRANS_T, &naog, &dk, &s_nao, &D1, GpqR, &naog, moI+k0, &knmo, &D0, pIR, &naog);
-        dgemm_(&TRANS_N, &TRANS_T, &naog, &dk, &s_nao, &D1, GpqI, &naog, moI+k0, &knmo, &D0, pII, &naog);
+        double *pR = GpiR + Naog * k0;
+        double *pI = GpiI + Naog * k0;
+        dgemm_(&TRANS_N, &TRANS_T, &naog, &dk, &s_nao, &D1, GpqR, &naog, moR+k0, &knmo, &D0, pR, &naog);
+        dgemm_(&TRANS_N, &TRANS_T, &naog, &dk, &s_nao, &D1, GpqI, &naog, moR+k0, &knmo, &D0, pI, &naog);
+#pragma omp barrier
 
-        double *bufR = malloc(sizeof(double) * Naog * nmo * 4);
-        double *bufI = bufR + Naog * nmo;
-        double *buf1R = bufI + Naog * nmo;
+        double *buf0R = malloc(sizeof(double) * Naog * nmo * 6);
+        double *buf0I = buf0R + Naog * nmo;
+        double *buf1R = buf0I + Naog * nmo;
         double *buf1I = buf1R + Naog * nmo;
-        double *outR, *outI, *out1R, *out1I;
-        int k, i, j, ig, ki, kj;
-        double cR, cI;
+        double *bufwR = buf1I + Naog * nmo;
+        double *bufwI = bufwR + Naog * nmo;
+        double *out0R, *out0I, *out1R, *out1I, *outwR, *outwI;
+        int kp, k, kc, i, j, ig, ki, kj, kic, kjc;
 
 #pragma omp for schedule(dynamic)
-        for (k = 0; k < nkpts; k++) {
-                ki = ki_idx[k];
-                kj = kj_idx[k];
-                if (!(k_to_compute[ki] || (swap_2e && k_to_compute[kj]))) {
+        for (kp = 0; kp < ngroups; kp++) {
+                k = k_list[kp];
+                for (i = 0; i < nmo; i++) {
+                        out0R = buf0R + i * ngrids;
+                        out0I = buf0I + i * ngrids;
+                        outwR = bufwR + i * ngrids;
+                        outwI = bufwI + i * ngrids;
+                        pR = GpiR + (k * nmo + i) * Naog;
+                        pI = GpiI + (k * nmo + i) * Naog;
+                        for (j = 0; j < nao; j++) {
+#pragma GCC ivdep
+                        for (ig = 0; ig < ngrids; ig++) {
+                                out0R[j*nmog+ig] = pR[j*ngrids+ig];
+                                out0I[j*nmog+ig] = pI[j*ngrids+ig];
+                                outwR[j*nmog+ig] = pR[j*ngrids+ig] * coulG[ig];
+                                outwI[j*nmog+ig] = pI[j*ngrids+ig] * coulG[ig];
+                        } }
+                }
+// zdotNC(buf*w, buf.T).T
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, bufwR, &nmog, buf0R, &nmog, &D1, v00R+k*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, bufwI, &nmog, buf0I, &nmog, &D1, v00R+k*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, bufwR, &nmog, buf0I, &nmog, &D1, v00I+k*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &N1, bufwI, &nmog, buf0R, &nmog, &D1, v00I+k*nao2, &nao);
+
+                kc = kc_list[kp];
+                if (k == kc) {
                         continue;
                 }
 
-                if (k_to_compute[ki]) {
-                        // (GpiRR[kj] - GpiII[kj]).transpose(1,0,2)
-                        // (GpiRI[kj] + GpiIR[kj]).transpose(1,0,2)
-                        for (i = 0; i < nmo; i++) {
-                                outR = bufR + i * ngrids;
-                                outI = bufI + i * ngrids;
-                                out1R = buf1R + i * ngrids;
-                                out1I = buf1I + i * ngrids;
-                                pRR = GpiRR + (kj * nmo + i) * Naog;
-                                pRI = GpiRI + (kj * nmo + i) * Naog;
-                                pIR = GpiIR + (kj * nmo + i) * Naog;
-                                pII = GpiII + (kj * nmo + i) * Naog;
-                                for (j = 0; j < nao; j++) {
+                for (i = 0; i < nmo; i++) {
+                        out1R = buf1R + i * ngrids;
+                        out1I = buf1I + i * ngrids;
+                        outwR = bufwR + i * ngrids;
+                        outwI = bufwI + i * ngrids;
+                        pR = GpiR + (kc * nmo + i) * Naog;
+                        pI = GpiI + (kc * nmo + i) * Naog;
+                        for (j = 0; j < nao; j++) {
 #pragma GCC ivdep
-                                for (ig = 0; ig < ngrids; ig++) {
-                                        cR = pRR[j*ngrids+ig] - pII[j*ngrids+ig];
-                                        cI = pRI[j*ngrids+ig] + pIR[j*ngrids+ig];
-                                        outR[j*nmog+ig] = cR;
-                                        outI[j*nmog+ig] = cI;
-                                        out1R[j*nmog+ig] = cR * coulG[ig];
-                                        out1I[j*nmog+ig] = cI * coulG[ig];
-                                } }
-                        }
-// zdotNC(buf, buf1.T).T
-dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, buf1R, &nmog, bufR, &nmog, &D1, vkR+ki*nao2, &nao);
-dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, buf1I, &nmog, bufI, &nmog, &D1, vkR+ki*nao2, &nao);
-dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, buf1R, &nmog, bufI, &nmog, &D1, vkI+ki*nao2, &nao);
-dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &N1, buf1I, &nmog, bufR, &nmog, &D1, vkI+ki*nao2, &nao);
+                        for (ig = 0; ig < ngrids; ig++) {
+                                out1R[j*nmog+ig] = pR[j*ngrids+ig];
+                                out1I[j*nmog+ig] = pI[j*ngrids+ig];
+                                outwR[j*nmog+ig] = pR[j*ngrids+ig] * coulG[ig];
+                                outwI[j*nmog+ig] = pI[j*ngrids+ig] * coulG[ig];
+                        } }
                 }
+// zdotNC(buf*w, buf.T).T
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, bufwR, &nmog, buf1R, &nmog, &D1, v00R+kc*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, bufwI, &nmog, buf1I, &nmog, &D1, v00R+kc*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, bufwR, &nmog, buf1I, &nmog, &D1, v00I+kc*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &N1, bufwI, &nmog, buf1R, &nmog, &D1, v00I+kc*nao2, &nao);
 
-                if (swap_2e && k_to_compute[kj]) {
-                        // (GpiRR[ki] + GpiII[ki]).transpose(1,0,2)
-                        // (GpiRI[ki] - GpiIR[ki]).transpose(1,0,2)
-                        for (i = 0; i < nmo; i++) {
-                                outR = bufR + i * ngrids;
-                                outI = bufI + i * ngrids;
-                                out1R = buf1R + i * ngrids;
-                                out1I = buf1I + i * ngrids;
-                                pRR = GpiRR + (ki * nmo + i) * Naog;
-                                pRI = GpiRI + (ki * nmo + i) * Naog;
-                                pIR = GpiIR + (ki * nmo + i) * Naog;
-                                pII = GpiII + (ki * nmo + i) * Naog;
-                                for (j = 0; j < nao; j++) {
-#pragma GCC ivdep
-                                for (ig = 0; ig < ngrids; ig++) {
-                                        cR = pRR[j*ngrids+ig] + pII[j*ngrids+ig];
-                                        cI = pRI[j*ngrids+ig] - pIR[j*ngrids+ig];
-                                        outR[j*nmog+ig] = cR;
-                                        outI[j*nmog+ig] = cI;
-                                        out1R[j*nmog+ig] = cR * coulG[ig];
-                                        out1I[j*nmog+ig] = cI * coulG[ig];
-                                } }
-                        }
-// zdotCN(buf, buf1.T).T
-dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, buf1R, &nmog, bufR, &nmog, &D1, vtmpR+kj*nao2, &nao);
-dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, buf1I, &nmog, bufI, &nmog, &D1, vtmpR+kj*nao2, &nao);
-dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &N1, buf1R, &nmog, bufI, &nmog, &D1, vtmpI+kj*nao2, &nao);
-dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, buf1I, &nmog, bufR, &nmog, &D1, vtmpI+kj*nao2, &nao);
-                }
+// zdotNC(buf*w, buf.T).T
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, bufwR, &nmog, buf0R, &nmog, &D1, v01R+k*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, bufwI, &nmog, buf0I, &nmog, &D1, v01R+k*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &D1, bufwR, &nmog, buf0I, &nmog, &D1, v01I+k*nao2, &nao);
+dgemm_(&TRANS_T, &TRANS_N, &nao, &nao, &nmog, &N1, bufwI, &nmog, buf0R, &nmog, &D1, v01I+k*nao2, &nao);
+// Put v10[k] in v01[kc]
+hermi_assign(v01R+kc*nao2, v01I+kc*nao2, v01R+k*nao2, v01I+k*nao2, nao);
         }
-        free(bufR);
-
+        free(buf0R);
 #pragma omp barrier
-#pragma omp for schedule(static)
-        for (i = 0; i < size_vk; i++) {
-                vkR[i] += vtmpR[i];
-                vkI[i] += vtmpI[i];
+
+        // k as kj
+#pragma omp for schedule(dynamic)
+        for (kp = 0; kp < ngroups; kp++) {
+                k = k_list[kp];
+                kc = kc_list[kp];
+                ki = kj2ki[k];
+                kic = kj2ki[kc];
+if (k == kc) {
+        if (k_to_compute[ki]) {
+                plain_add(vkR+ki*nao2, vkI+ki*nao2, v00R+k*nao2, v00I+k*nao2, nao);
+        }
+} else { // k != kc
+        if (k_to_compute[ki]) {
+                pp_add(vkR+ki*nao2, vkI+ki*nao2,
+                       v00R+k*nao2, v00I+k*nao2, v00R+kc*nao2, v00I+kc*nao2,
+                       v01R+k*nao2, v01I+k*nao2, v01R+kc*nao2, v01I+kc*nao2, nao);
+        }
+        if (k_to_compute[kic]) {
+                cc_add(vkR+kic*nao2, vkI+kic*nao2,
+                       v00R+k*nao2, v00I+k*nao2, v00R+kc*nao2, v00I+kc*nao2,
+                       v01R+k*nao2, v01I+k*nao2, v01R+kc*nao2, v01I+kc*nao2, nao);
         }
 }
-        free(GpiRR);
-        free(vtmpR);
+        }
+#pragma omp barrier
+
+        if (swap_2e) {
+                // k as ki
+#pragma omp for schedule(dynamic)
+                for (kp = 0; kp < ngroups; kp++) {
+                        k = k_list[kp];
+                        kc = kc_list[kp];
+                        kj = ki2kj[k];
+                        kjc = ki2kj[kc];
+if (k == kc) {
+        if (k_to_compute[kj]) {
+                transpose_add(vkR+kj*nao2, vkI+kj*nao2, v00R+k*nao2, v00I+k*nao2, nao);
+        }
+} else { // k != kc
+        if (k_to_compute[kj]) {
+                pp_tadd(vkR+kj*nao2, vkI+kj*nao2,
+                        v00R+k*nao2, v00I+k*nao2, v00R+kc*nao2, v00I+kc*nao2,
+                        v01R+k*nao2, v01I+k*nao2, v01R+kc*nao2, v01I+kc*nao2, nao);
+        }
+        if (k_to_compute[kjc]) {
+                cc_tadd(vkR+kjc*nao2, vkI+kjc*nao2,
+                        v00R+k*nao2, v00I+k*nao2, v00R+kc*nao2, v00I+kc*nao2,
+                        v01R+k*nao2, v01I+k*nao2, v01R+kc*nao2, v01I+kc*nao2, nao);
+        }
+}
+                }
+        }
+}
+        free(GpiR);
+        free(v00R);
+        free(ki2kj);
 }

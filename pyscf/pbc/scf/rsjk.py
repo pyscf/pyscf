@@ -80,7 +80,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self.ke_cutoff = None
         self.direct_scf_tol = None
         # Use the k-point conjugation symmetry between k and -k
-        self.k_conj_symmetry = True
+        self.time_reversal_symmetry = True
         self.exclude_dd_block = True
         self.allow_drv_nodddd = True
         self._sr_without_dddd = None
@@ -104,7 +104,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         logger.info(self, 'purify = %s', self.purify)
         logger.info(self, 'bvk_kmesh = %s', self.bvk_kmesh)
         logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
-        logger.info(self, 'k_conj_symmetry = %s', self.k_conj_symmetry())
+        logger.info(self, 'time_reversal_symmetry = %s', self.time_reversal_symmetry)
         logger.info(self, 'has_long_range = %s', self.has_long_range())
         logger.info(self, 'exclude_dd_block = %s', self.exclude_dd_block)
         logger.info(self, 'allow_drv_nodddd = %s', self.allow_drv_nodddd)
@@ -122,6 +122,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self.exclude_dd_block = True
         self.approx_vk_lr_missing_mo = False
         self._last_vs = (0, 0)
+        self._qindex = None
         return self
 
     def build(self, omega=None, intor='int2e'):
@@ -841,18 +842,23 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         # Test if vk[k] == vk[k_conj].conj()
         k_conj_groups = group_by_conj_pairs(cell, uniq_kpts, return_kpts_pairs=False)
+        try:
+            k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
+        except TypeError:
+            k_conj_groups = [[k, k] if k_conj is None else [k, k_conj]
+                             for k, k_conj in k_conj_groups]
+            k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
         log.debug1('Num kpts conj_pairs %d', len(k_conj_groups))
-        k_conj_symmetry = self.k_conj_symmetry
-        if k_conj_symmetry:
+        time_reversal_symmetry = self.time_reversal_symmetry
+        if time_reversal_symmetry:
             for k, k_conj in k_conj_groups:
-                if (k_conj is not None and k != k_conj and
-                    abs(dms[:,k_conj] - dms[:,k].conj()).max() > 1e-6):
-                    k_conj_symmetry = False
+                if k != k_conj and abs(dms[:,k_conj] - dms[:,k].conj()).max() > 1e-6:
+                    time_reversal_symmetry = False
                     break
 
-        if k_conj_symmetry:
+        if time_reversal_symmetry:
             k_to_compute = np.zeros(nkpts, dtype=np.int8)
-            k_to_compute[[k for k, k_conj in k_conj_groups]] = 1
+            k_to_compute[k_conj_groups[:,0]] = 1
         else:
             k_to_compute = np.ones(nkpts, dtype=np.int8)
 
@@ -875,10 +881,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 return vkR
 
             bvk_ncells, rs_nbas, nimgs = self.supmol_ft.bas_mask.shape
-            contract_mo_early = (k_conj_symmetry and naod == 0 and
-                                 bvk_ncells*nao > self.supmol_ft.nao*nocc*n_dm)
+            contract_mo_early = (time_reversal_symmetry and naod == 0 and
+                                 bvk_ncells*nao*2 > self.supmol_ft.nao*nocc*n_dm)
             if contract_mo_early:
-                logger.debug1('Use algorithm contract_mo_early')
+                log.debug1('Use algorithm contract_mo_early')
                 bvk_kmesh = self.bvk_kmesh
                 rcut = ft_ao.estimate_rcut(cell)
                 supmol = ft_ao.ExtendedMole.from_cell(cell, bvk_kmesh, rcut.max())
@@ -902,12 +908,16 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                         sh_loc.ctypes.data_as(ctypes.c_void_p),
                         ao_loc.ctypes.data_as(ctypes.c_void_p),
                         cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
+                        k_conj_groups.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(k_conj_groups.shape[0]),
                         ctypes.c_int(bvk_ncells), ctypes.c_int(nbasp),
                         ctypes.c_int(s_nao), ctypes.c_int(nao), ctypes.c_int(nocc),
                         ctypes.c_int(nkpts), ctypes.c_int(expRk.shape[0]),
                     )
-                dm = [moR, moI]
-                dm_factor = None
+                if abs(moI).max() > 1e-5:
+                    raise NotImplementedError
+                dm = [moR, None]
+                dm_factor = moR = moI = None
                 ft_kern = aft_jk._gen_ft_kernel_fake_gamma(cell, supmol, aosym)
                 update_vk = aft_jk._update_vk_fake_gamma
             else:
@@ -1040,10 +1050,11 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                     return (GpqR, GpqI)
 
         if contract_mo_early:
-            Gblksize = max(24, int(max_memory*1e6/16/(nao*s_nao+nao*nkpts*nocc*2))//8*8)
+            Gblksize = max(24, int((max_memory*1e6/16-nkpts*nao**2*3)/
+                                   (nao*s_nao+nao*nkpts*nocc))//8*8)
             Gblksize = min(Gblksize, ngrids, 200000)
             log.debug1('Gblksize = %d', Gblksize)
-            buf = np.empty(Gblksize*s_nao*nao)
+            buf = np.empty(Gblksize*s_nao*nao*2)
         else:
             Gblksize = max(24, int(max_memory*1e6/16/(nao**2+naod**2)/(nkpts+3))//8*8)
             Gblksize = min(Gblksize, ngrids, 200000)
@@ -1085,11 +1096,11 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                     # (CC|DD) (CD|DD) (DC|DD) (DD|CC) (DD|CD) (DD|DC) (DD|DD)
                     log.debug3('update_vk [%s:%s]', p0, p1)
                     Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs, out=buf)
-                    update_vk(vk, Gpq, dm, coulG_SR[p0:p1] * -weight,
-                              kpti_idx, kptj_idx, swap_2e, k_to_compute)
+                    update_vk(vk, Gpq, dm, coulG_SR[p0:p1] * -weight, kpti_idx,
+                              kptj_idx, swap_2e, k_to_compute, k_conj_groups)
                     Gpq = merge_dd(Gpq, p0, p1, kpti_idx, kptj_idx)
-                    update_vk(vk, Gpq, dm, coulG[p0:p1] * weight,
-                              kpti_idx, kptj_idx, swap_2e, k_to_compute)
+                    update_vk(vk, Gpq, dm, coulG[p0:p1] * weight, kpti_idx,
+                              kptj_idx, swap_2e, k_to_compute, k_conj_groups)
                     Gpq = None
                 # clear cache to release memory for merge_dd function
                 cache = {}
@@ -1098,8 +1109,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 for p0, p1 in lib.prange(0, ngrids, Gblksize):
                     log.debug3('update_vk [%s:%s]', p0, p1)
                     Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs, out=buf)
-                    update_vk(vk, Gpq, dm, coulG_LR[p0:p1] * weight,
-                              kpti_idx, kptj_idx, swap_2e, k_to_compute)
+                    update_vk(vk, Gpq, dm, coulG_LR[p0:p1] * weight, kpti_idx,
+                              kptj_idx, swap_2e, k_to_compute, k_conj_groups)
                     Gpq = None
             cpu1 = log.timer_debug1(f'ft_aopair group {group_id}', *cpu1)
 
@@ -1153,7 +1164,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 for p0, p1 in lib.prange(0, ngrids_d, Gblksize):
                     Gpq = ft_dd_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs, out=buf)
                     update_vk(vk_dd, Gpq, dm_dd, coulG_SR[p0:p1] * weight,
-                              kpti_idx, kptj_idx, swap_2e, k_to_compute)
+                              kpti_idx, kptj_idx, swap_2e, k_to_compute, k_conj_groups)
                     Gpq = None
                 cpu1 = log.timer_debug1(f'ft_aopair dd-block group {group_id}', *cpu1)
 
@@ -1177,9 +1188,9 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
              (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
             _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts)
 
-        if k_conj_symmetry:
+        if time_reversal_symmetry:
             for k, k_conj in k_conj_groups:
-                if k_conj is not None and k != k_conj:
+                if k != k_conj:
                     vk_kpts[:,k_conj] = vk_kpts[:,k].conj()
         log.timer_debug1('get_lr_k_kpts', *cpu0)
         return vk_kpts

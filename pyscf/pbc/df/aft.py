@@ -566,7 +566,7 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
         self.max_memory = cell.max_memory
         self.mesh = cell.mesh
         self.kpts = kpts
-        self.k_conj_symmetry = True
+        self.time_reversal_symmetry = True
 
         # to mimic molecular DF object
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)

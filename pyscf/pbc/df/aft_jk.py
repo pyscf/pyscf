@@ -165,18 +165,24 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     log.debug('Num uniq kpts %d', len(uniq_kpts))
 
     k_conj_groups = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)
+    try:
+        k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
+    except TypeError:
+        k_conj_groups = [[k, k] if k_conj is None else [k, k_conj]
+                         for k, k_conj in k_conj_groups]
+        k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
     log.debug1('Num kpts conj_pairs %d', len(k_conj_groups))
-    k_conj_symmetry = mydf.k_conj_symmetry
-    if k_conj_symmetry:
+
+    time_reversal_symmetry = mydf.time_reversal_symmetry
+    if time_reversal_symmetry:
         for k, k_conj in k_conj_groups:
-            if (k_conj is not None and k != k_conj and
-                abs(dms[:,k_conj] - dms[:,k].conj()).max() > 1e-6):
-                k_conj_symmetry = False
+            if k != k_conj and abs(dms[:,k_conj] - dms[:,k].conj()).max() > 1e-6:
+                time_reversal_symmetry = False
                 break
 
-    if k_conj_symmetry:
+    if time_reversal_symmetry:
         k_to_compute = np.zeros(nkpts, dtype=np.int8)
-        k_to_compute[[k for k, k_conj in k_conj_groups]] = 1
+        k_to_compute[k_conj_groups[:,0]] = 1
     else:
         k_to_compute = np.ones(nkpts, dtype=np.int8)
 
@@ -209,9 +215,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         dm_factor *= np.sqrt(np.array(occs, dtype=np.double))[:,:,None]
 
         bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
-        contract_mo_early = (k_conj_symmetry and
-                             bvk_ncells * nao > supmol.nao * nocc * n_dm)
+        contract_mo_early = (time_reversal_symmetry and
+                             bvk_ncells*nao*2 > supmol.nao*nocc*n_dm)
         if contract_mo_early:
+            log.debug1('Use algorithm contract_mo_early')
             nbasp = cell.nbas
             sh_loc = supmol.sh_loc  # maps the bvk shell Id to supmol shell Id
             ao_loc = supmol.ao_loc
@@ -231,12 +238,16 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                     sh_loc.ctypes.data_as(ctypes.c_void_p),
                     ao_loc.ctypes.data_as(ctypes.c_void_p),
                     cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
+                    k_conj_groups.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(k_conj_groups.shape[0]),
                     ctypes.c_int(bvk_ncells), ctypes.c_int(nbasp),
                     ctypes.c_int(s_nao), ctypes.c_int(nao), ctypes.c_int(nocc),
                     ctypes.c_int(nkpts), ctypes.c_int(expRk.shape[0]),
                 )
-            dm = [moR, moI]
-            dm_factor = None
+            if abs(moI).max() > 1e-5:
+                raise NotImplementedError
+            dm = [moR, None]
+            dm_factor = moR = moI = None
             ft_kern = _gen_ft_kernel_fake_gamma(cell, supmol, aosym)
             update_vk = _update_vk_fake_gamma
         else:
@@ -261,10 +272,11 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     log.debug1('max_memory = %d MB (%d in use)', max_memory+mem_now, mem_now)
 
     if contract_mo_early:
-        Gblksize = max(24, int(max_memory*1e6/16/(nao*s_nao+nao*nkpts*nocc*2))//8*8)
+        Gblksize = max(24, int((max_memory*1e6/16-nkpts*nao**2*3)/
+                               (nao*s_nao+nao*nkpts*nocc))//8*8)
         Gblksize = min(Gblksize, ngrids, 200000)
         log.debug1('Gblksize = %d', Gblksize)
-        buf = np.empty(Gblksize*s_nao*nao)
+        buf = np.empty(Gblksize*s_nao*nao*2)
     else:
         Gblksize = max(24, int(max_memory*1e6/16/nao**2/(nkpts+3))//8*8)
         Gblksize = min(Gblksize, ngrids, 200000)
@@ -286,8 +298,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         for p0, p1 in lib.prange(0, ngrids, Gblksize):
             log.debug3('update_vk [%s:%s]', p0, p1)
             Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs, out=buf)
-            update_vk(vk, Gpq, dm, vkcoulG[p0:p1] * weight,
-                      kpti_idx, kptj_idx, swap_2e, k_to_compute)
+            update_vk(vk, Gpq, dm, vkcoulG[p0:p1] * weight, kpti_idx, kptj_idx,
+                      swap_2e, k_to_compute, k_conj_groups)
             Gpq = None
         cpu1 = log.timer_debug1(f'get_k_kpts group {group_id}', *cpu1)
 
@@ -303,9 +315,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
          (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts)
 
-    if k_conj_symmetry:
+    if time_reversal_symmetry:
         for k, k_conj in k_conj_groups:
-            if k_conj is not None and k != k_conj:
+            if k != k_conj:
                 vk_kpts[:,k_conj] = vk_kpts[:,k].conj()
     log.timer_debug1('get_k_kpts', *cpu0)
     return vk_kpts.reshape(dm_kpts.shape)
@@ -361,7 +373,7 @@ def get_k_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
         for Gpq, p0, p1 in mydf.ft_loop(mesh, kpt, kptjs, max_memory=max_memory1,
                                         return_complex=False):
             _update_vk_((vkR, vkI), Gpq, (dmsR, dmsI), vkcoulG[p0:p1]*weight,
-                        kpti_idx, kptj_idx, perm_sym, k_to_compute)
+                        kpti_idx, kptj_idx, perm_sym, k_to_compute, None)
 
     for ki, kpti in enumerate(kpts_band):
         for kj, kptj in enumerate(kpts):
@@ -385,7 +397,7 @@ def get_k_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
 def _update_vk_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                k_to_compute):
+                k_to_compute, k_conj_groups):
     '''
     contraction for exchange matrices:
 
@@ -440,7 +452,7 @@ def _update_vk_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
                        1, vkR[i,kj], vkI[i,kj], 1)
 
 def _update_vk1_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                 k_to_compute):
+                 k_to_compute, k_conj_groups):
     '''
     contraction for exchange matrices:
 
@@ -477,7 +489,7 @@ def _update_vk1_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
         ctypes.c_int(nG), ctypes.c_int(nkpts))
 
 def _update_vk_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                   k_to_compute):
+                   k_to_compute, k_conj_groups):
     '''
     dmf is the factorized dm, dm = dmf * dmf.conj().T
     Computing exchange matrices with dmf:
@@ -533,7 +545,7 @@ def _update_vk_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
                        1, vkR[i,kj], vkI[i,kj], 1)
 
 def _update_vk1_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                    k_to_compute):
+                    k_to_compute, k_conj_groups):
     '''
     dmf is the factorized dm, dm = dmf * dmf.conj().T
     Computing exchange matrices with dmf:
@@ -568,7 +580,7 @@ def _update_vk1_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
         ctypes.c_int(nocc), ctypes.c_int(nG), ctypes.c_int(nkpts))
 
 def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                          k_to_compute):
+                          k_to_compute, k_conj_groups):
     '''
     dmf is the factorized dm, dm = dmf * dmf.conj().T
     Computing exchange matrices with dmf:
@@ -590,13 +602,14 @@ def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
             vkR[i].ctypes.data_as(ctypes.c_void_p),
             vkI[i].ctypes.data_as(ctypes.c_void_p),
             dmfR[i].ctypes.data_as(ctypes.c_void_p),
-            dmfI[i].ctypes.data_as(ctypes.c_void_p),
             GpqR.ctypes.data_as(ctypes.c_void_p),
             GpqI.ctypes.data_as(ctypes.c_void_p),
             wcoulG.ctypes.data_as(ctypes.c_void_p),
             kpti_idx.ctypes.data_as(ctypes.c_void_p),
             kptj_idx.ctypes.data_as(ctypes.c_void_p),
             k_to_compute.ctypes.data_as(ctypes.c_void_p),
+            k_conj_groups.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(k_conj_groups.shape[0]),
             ctypes.c_int(swap_2e), ctypes.c_int(s_nao), ctypes.c_int(nao),
             ctypes.c_int(nocc), ctypes.c_int(nG), ctypes.c_int(nkpts))
 
