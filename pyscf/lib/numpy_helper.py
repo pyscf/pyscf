@@ -238,8 +238,9 @@ def einsum(subscripts, *tensors, **kwargs):
     elif len(tensors) <= 2:
         out = _contract(subscripts, *tensors, **kwargs)
     else:
+        optimize = kwargs.pop('optimize', True)
         tensors = list(tensors)
-        contraction_list = _einsum_path(subscripts, *tensors, optimize=True,
+        contraction_list = _einsum_path(subscripts, *tensors, optimize=optimize,
                                         einsum_call=True)[1]
         for contraction in contraction_list:
             inds, idx_rm, einsum_str, remaining = contraction[:4]
