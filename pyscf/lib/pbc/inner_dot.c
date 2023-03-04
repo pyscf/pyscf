@@ -465,10 +465,10 @@ void PBC_kzdot_CNN_s1(double *outR, double *outI,
 #define BLEN    24
 // vk += np.einsum('ijg,jk,lkg,g->il', pqG, dm, pqG.conj(), coulG)
 // vk += np.einsum('ijg,li,lkg,g->kj', pqG, dm, pqG.conj(), coulG)
-void PBC_kcontract1(double *vkR, double *vkI, double *dmR, double *dmI,
-                    double *pqGR, double *pqGI, double *coulG,
-                    int *ki_idx, int *kj_idx, int8_t *k_to_compute,
-                    int swap_2e, int n_dm, int nao, int ngrids, int nkpts)
+void PBC_kcontract(double *vkR, double *vkI, double *dmR, double *dmI,
+                   double *pqGR, double *pqGI, double *coulG,
+                   int *ki_idx, int *kj_idx, int8_t *k_to_compute,
+                   int swap_2e, int n_dm, int nao, int ngrids, int nkpts)
 {
         size_t nao2 = nao * nao;
         size_t size_vk = n_dm * nkpts * nao2;
@@ -501,13 +501,13 @@ void PBC_kcontract1(double *vkR, double *vkI, double *dmR, double *dmI,
                 for (g0 = 0; g0 < ngrids; g0 += BLEN) {
                         mg = MIN(BLEN, ngrids-g0);
                         nm = mg * nao;
-                        // pLqR[:] = pqGR[k].transpose(0,2,1)
-                        // pLqI[:] = pqGI[k].transpose(0,2,1)
+                        // pLqR[:] = pqGR[kj].transpose(0,2,1)
+                        // pLqI[:] = pqGI[kj].transpose(0,2,1)
                         for (i = 0; i < nao; i++) {
                                 outR = pLqR + i * nm;
                                 outI = pLqI + i * nm;
-                                inR = pqGR + (k * nao + i) * Naog + g0;
-                                inI = pqGI + (k * nao + i) * Naog + g0;
+                                inR = pqGR + (kj * nao + i) * Naog + g0;
+                                inI = pqGI + (kj * nao + i) * Naog + g0;
                                 for (j = 0; j < nao; j++) {
                                 for (ig = 0; ig < mg; ig++) {
                                         outR[ig*nao+j] = inR[j*ngrids+ig];
@@ -584,10 +584,10 @@ dgemm_(&TRANS_N, &TRANS_T, &nao, &nao, &nm, &N1, bufR, &nao, pLqI, &nao, &D1, vI
 #define BLEN    24
 // vk += np.einsum('ijg,nj,nk,lkg,g->il', pqG, mo, mo.conj(), pqG.conj(), coulG)
 // vk += np.einsum('ijg,nl,ni,lkg,g->kj', pqG, mo, mo.conj(), pqG.conj(), coulG)
-void PBC_kcontract3(double *vkR, double *vkI, double *moR, double *moI,
-                    double *pqGR, double *pqGI, double *coulG,
-                    int *ki_idx, int *kj_idx, int8_t *k_to_compute, int swap_2e,
-                    int n_dm, int nao, int nocc, int ngrids, int nkpts)
+void PBC_kcontract_dmf(double *vkR, double *vkI, double *moR, double *moI,
+                       double *pqGR, double *pqGI, double *coulG,
+                       int *ki_idx, int *kj_idx, int8_t *k_to_compute, int swap_2e,
+                       int n_dm, int nao, int nocc, int ngrids, int nkpts)
 {
         size_t nao2 = nao * nao;
         size_t naoo = nao * nocc;
@@ -624,13 +624,13 @@ void PBC_kcontract3(double *vkR, double *vkI, double *moR, double *moI,
                         mg = MIN(BLEN, ngrids-g0);
                         nm = mg * nao;
                         go = mg * nocc;
-                        // pLqR[:] = pqGR[k].transpose(0,2,1)
-                        // pLqI[:] = pqGI[k].transpose(0,2,1)
+                        // pLqR[:] = pqGR[kj].transpose(0,2,1)
+                        // pLqI[:] = pqGI[kj].transpose(0,2,1)
                         for (i = 0; i < nao; i++) {
                                 outR = pLqR + i * nm;
                                 outI = pLqI + i * nm;
-                                inR = pqGR + (k * nao + i) * Naog + g0;
-                                inI = pqGI + (k * nao + i) * Naog + g0;
+                                inR = pqGR + (kj * nao + i) * Naog + g0;
+                                inI = pqGI + (kj * nao + i) * Naog + g0;
                                 for (j = 0; j < nao; j++) {
                                 for (ig = 0; ig < mg; ig++) {
                                         outR[ig*nao+j] = inR[j*ngrids+ig];

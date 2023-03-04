@@ -101,7 +101,7 @@ def ft_ao(mol, Gv, shls_slice=None, b=None,
 
 
 def gen_ft_kernel(supmol, aosym='s1', intor='GTO_ft_ovlp', comp=1,
-                  return_complex=False, verbose=None):
+                  return_complex=False, kpts=None, verbose=None):
     r'''
     Generate the analytical fourier transform kernel for AO products
 
@@ -123,32 +123,48 @@ def gen_ft_kernel(supmol, aosym='s1', intor='GTO_ft_ovlp', comp=1,
     ovlp_mask = ovlp_mask.astype(np.int8)
     cell0_ovlp_mask = cell0_ovlp_mask.astype(np.int8)
 
+    if kpts is not None:
+        expLk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts.T))
+        expLkR = np.asarray(expLk.real, order='C')
+        expLkI = np.asarray(expLk.imag, order='C')
+        _expLk = (expLkR, expLkI)
+    else:
+        _expLk = None
+
     b = rs_cell.reciprocal_vectors()
     if abs(b-np.diag(b.diagonal())).sum() < 1e-8:
         _eval_gz = 'GTO_Gv_orth'
     else:
         _eval_gz = 'GTO_Gv_nonorth'
+    drv = libpbc.PBC_ft_bvk_drv
+    cintor = getattr(libpbc, rs_cell._add_suffix(intor))
 
     log.timer_debug1('ft_ao kernel initialization', *cput0)
 
     # TODO: use Gv = b * gxyz + q in c code
     # TODO: add zfill
-    def ft_kernel(Gv, gxyz=None, Gvbase=None, q=np.zeros(3), kptjs=np.zeros((1, 3)),
+    def ft_kernel(Gv, gxyz=None, Gvbase=None, q=np.zeros(3), kptjs=None,
                   shls_slice=None, aosym=aosym, out=None):
         '''
         Analytical FT for orbital products. The output tensor has the shape [nGv, nao, nao]
         '''
         cput0 = logger.process_clock(), logger.perf_counter()
-        q = np.reshape(q, 3)
-        kptjs = np.asarray(kptjs, order='C').reshape(-1,3)
-        nkpts = len(kptjs)
+        assert q.ndim == 1
+        if kptjs is None:
+            if _expLk is None:
+                expLkR = np.ones((nimgs,1))
+                expLkI = np.zeros((nimgs,1))
+            else:
+                expLkR, expLkI = _expLk
+        else:
+            kptjs = np.asarray(kptjs, order='C').reshape(-1,3)
+            expLk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kptjs.T))
+            expLkR = np.asarray(expLk.real, order='C')
+            expLkI = np.asarray(expLk.imag, order='C')
+            expLk = None
 
-        expLk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kptjs.T))
-        expLkR = np.asarray(expLk.real, order='C')
-        expLkI = np.asarray(expLk.imag, order='C')
-        expLk = None
-
-        GvT = np.asarray(Gv.T, order='C') + q.reshape(-1,1)
+        nkpts = expLkR.shape[1]
+        GvT = np.asarray(Gv.T + q[:,None], order='C')
         nGv = GvT.shape[1]
 
         if shls_slice is None:
@@ -183,8 +199,6 @@ def gen_ft_kernel(supmol, aosym='s1', intor='GTO_ft_ovlp', comp=1,
             p_b = bqGv.ctypes.data_as(ctypes.c_void_p)
             p_mesh = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
 
-        drv = libpbc.PBC_ft_bvk_drv
-        cintor = getattr(libpbc, rs_cell._add_suffix(intor))
         eval_gz = getattr(libpbc, eval_gz)
         if nkpts == 1:
             fill = getattr(libpbc, 'PBC_ft_bvk_nk1'+aosym)

@@ -216,44 +216,23 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 
         bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
         contract_mo_early = (time_reversal_symmetry and
-                             bvk_ncells*nao*2 > supmol.nao*nocc*n_dm)
+                             bvk_ncells*nao*4 > supmol.nao*nocc*n_dm)
         if contract_mo_early:
             log.debug1('Use algorithm contract_mo_early')
-            nbasp = cell.nbas
-            sh_loc = supmol.sh_loc  # maps the bvk shell Id to supmol shell Id
-            ao_loc = supmol.ao_loc
-            cell0_ao_loc = supmol.rs_cell.ao_loc
-            expRk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts.T))
-            expRk = np.asarray(expRk, order='C')
             s_nao = supmol.nao
-            moR = np.empty((n_dm,s_nao,nkpts,nocc))
-            moI = np.empty((n_dm,s_nao,nkpts,nocc))
-            # Transform to MO of supcell at gamma point
-            for i_dm in range(n_dm):
-                libpbc.PBCmo_k2gamma(
-                    moR[i_dm].ctypes.data_as(ctypes.c_void_p),
-                    moI[i_dm].ctypes.data_as(ctypes.c_void_p),
-                    dm_factor[i_dm].ctypes.data_as(ctypes.c_void_p),
-                    expRk.ctypes.data_as(ctypes.c_void_p),
-                    sh_loc.ctypes.data_as(ctypes.c_void_p),
-                    ao_loc.ctypes.data_as(ctypes.c_void_p),
-                    cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
-                    k_conj_groups.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(k_conj_groups.shape[0]),
-                    ctypes.c_int(bvk_ncells), ctypes.c_int(nbasp),
-                    ctypes.c_int(s_nao), ctypes.c_int(nao), ctypes.c_int(nocc),
-                    ctypes.c_int(nkpts), ctypes.c_int(expRk.shape[0]),
-                )
-            if abs(moI).max() > 1e-5:
-                raise NotImplementedError
-            dm = [moR, None]
-            dm_factor = moR = moI = None
-            ft_kern = _gen_ft_kernel_fake_gamma(cell, supmol, aosym)
-            update_vk = _update_vk_fake_gamma
-        else:
-            dmfR = np.asarray(dm_factor.real, order='C')
-            dmfI = np.asarray(dm_factor.imag, order='C')
-            dm = [dmfR, dmfI]
+            moR, moI = _mo_k2gamma(supmol, dm_factor, kpts, k_conj_groups)
+            if abs(moI).max() < 1e-5:
+                dm = [moR, None]
+                dm_factor = moR = moI = None
+                ft_kern = _gen_ft_kernel_fake_gamma(cell, supmol, aosym)
+                update_vk = _update_vk_fake_gamma
+            else:
+                moR = moI = None
+                contract_mo_early = False
+
+        if not contract_mo_early:
+            dm = [np.asarray(dm_factor.real, order='C'),
+                  np.asarray(dm_factor.imag, order='C')]
             dm_factor = None
             if np.count_nonzero(k_to_compute) >= 2 * lib.num_threads():
                 update_vk = _update_vk1_dmf
@@ -262,9 +241,11 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         log.debug2('set update_vk to %s with dm_factor', update_vk)
 
     if not contract_mo_early:
-        ft_kern = supmol.gen_ft_kernel(aosym, return_complex=False, verbose=log)
+        ft_kern = supmol.gen_ft_kernel(aosym, return_complex=False, kpts=kpts,
+                                       verbose=log)
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+    Gv = np.asarray(Gv, order='F')
     gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
 
     mem_now = lib.current_memory()[0]
@@ -287,7 +268,6 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
         kpti_idx = kpt_ij_idx // nkpts
         kptj_idx = kpt_ij_idx % nkpts
-        kptjs = kpts[kptj_idx]
         kpt = uniq_kpts[k]
         log.debug1('ft_ao_pair for scaled kpt = %s', scaled_kpts[k])
         log.debug2('ft_ao_pair for kpti_idx = %s', kpti_idx)
@@ -297,7 +277,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh)
         for p0, p1 in lib.prange(0, ngrids, Gblksize):
             log.debug3('update_vk [%s:%s]', p0, p1)
-            Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs, out=buf)
+            Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, out=buf)
             update_vk(vk, Gpq, dm, vkcoulG[p0:p1] * weight, kpti_idx, kptj_idx,
                       swap_2e, k_to_compute, k_conj_groups)
             Gpq = None
@@ -367,10 +347,9 @@ def get_k_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
         #bufI = numpy.empty((blksize*nao**2))
         # Use DF object to mimic KRHF/KUHF object in function get_coulG
         vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh)
-        kptjs = kpts[kptj_idx]
         weight = 1./len(kpts)
         perm_sym = swap_2e and not is_zero(kpt)
-        for Gpq, p0, p1 in mydf.ft_loop(mesh, kpt, kptjs, max_memory=max_memory1,
+        for Gpq, p0, p1 in mydf.ft_loop(mesh, kpt, kpts, max_memory=max_memory1,
                                         return_complex=False):
             _update_vk_((vkR, vkI), Gpq, (dmsR, dmsI), vkcoulG[p0:p1]*weight,
                         kpti_idx, kptj_idx, perm_sym, k_to_compute, None)
@@ -423,8 +402,8 @@ def _update_vk_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
         #:vk += np.einsum('ijkl,jk->il', v4, dm)
         pLqR = np.ndarray((nao,nG,nao), buffer=bufR)
         pLqI = np.ndarray((nao,nG,nao), buffer=bufI)
-        pLqR[:] = GpqR[k].transpose(1,0,2)
-        pLqI[:] = GpqI[k].transpose(1,0,2)
+        pLqR[:] = GpqR[kj].transpose(1,0,2)
+        pLqI[:] = GpqI[kj].transpose(1,0,2)
         if k_to_compute[ki]:
             for i in range(n_dm):
                 zdotNN(pLqR.reshape(-1,nao), pLqI.reshape(-1,nao),
@@ -474,7 +453,7 @@ def _update_vk1_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
     assert kptj_idx.dtype == np.int32
     assert k_to_compute.dtype == np.int8
 
-    libpbc.PBC_kcontract1(
+    libpbc.PBC_kcontract(
         vkR.ctypes.data_as(ctypes.c_void_p),
         vkI.ctypes.data_as(ctypes.c_void_p),
         dmsR.ctypes.data_as(ctypes.c_void_p),
@@ -512,8 +491,8 @@ def _update_vk_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
         #:vk += np.einsum('ijkl,jk->il', v4, dm)
         pLqR = np.ndarray((nao,nG,nao), buffer=bufR)
         pLqI = np.ndarray((nao,nG,nao), buffer=bufI)
-        pLqR[:] = GpqR[k].transpose(1,0,2)
-        pLqI[:] = GpqI[k].transpose(1,0,2)
+        pLqR[:] = GpqR[kj].transpose(1,0,2)
+        pLqI[:] = GpqI[kj].transpose(1,0,2)
         if k_to_compute[ki]:
             iLkR = np.ndarray((nao,nG,nocc), buffer=bufR1)
             iLkI = np.ndarray((nao,nG,nocc), buffer=bufI1)
@@ -565,7 +544,7 @@ def _update_vk1_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
     assert kptj_idx.dtype == np.int32
     assert k_to_compute.dtype == np.int8
 
-    libpbc.PBC_kcontract3(
+    libpbc.PBC_kcontract_dmf(
         vkR.ctypes.data_as(ctypes.c_void_p),
         vkI.ctypes.data_as(ctypes.c_void_p),
         dmfR.ctypes.data_as(ctypes.c_void_p),
@@ -612,6 +591,37 @@ def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
             ctypes.c_int(k_conj_groups.shape[0]),
             ctypes.c_int(swap_2e), ctypes.c_int(s_nao), ctypes.c_int(nao),
             ctypes.c_int(nocc), ctypes.c_int(nG), ctypes.c_int(nkpts))
+
+def _mo_k2gamma(supmol, dm_factor, kpts, k_conj_groups):
+    '''Transform to MO of supcell at gamma point'''
+    sh_loc = supmol.sh_loc  # maps the bvk shell Id to supmol shell Id
+    ao_loc = supmol.ao_loc
+    rs_cell = supmol.rs_cell
+    cell0_ao_loc = rs_cell.ao_loc
+    nbasp = rs_cell.ref_cell.nbas
+    bvk_ncells, _, nimgs = supmol.bas_mask.shape
+    expLk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts.T))
+    expLk = np.asarray(expLk, order='C')
+    s_nao = supmol.nao
+    n_dm, nkpts, nao, nocc = dm_factor.shape
+    moR = np.empty((n_dm,s_nao,nkpts,nocc))
+    moI = np.empty((n_dm,s_nao,nkpts,nocc))
+    k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
+    for i_dm in range(n_dm):
+        libpbc.PBCmo_k2gamma(
+            moR[i_dm].ctypes.data_as(ctypes.c_void_p),
+            moI[i_dm].ctypes.data_as(ctypes.c_void_p),
+            dm_factor[i_dm].ctypes.data_as(ctypes.c_void_p),
+            expLk.ctypes.data_as(ctypes.c_void_p),
+            sh_loc.ctypes.data_as(ctypes.c_void_p),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
+            cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
+            k_conj_groups.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(k_conj_groups.shape[0]),
+            ctypes.c_int(bvk_ncells), ctypes.c_int(nbasp),
+            ctypes.c_int(s_nao), ctypes.c_int(nao), ctypes.c_int(nocc),
+            ctypes.c_int(nkpts), ctypes.c_int(nimgs))
+    return moR, moI
 
 def _gen_ft_kernel_fake_gamma(cell, supmol, aosym='s1'):
     ovlp_mask = supmol.get_ovlp_mask()
