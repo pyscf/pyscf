@@ -238,12 +238,6 @@ def einsum(subscripts, *tensors, **kwargs):
     elif len(tensors) <= 2:
         out = _contract(subscripts, *tensors, **kwargs)
     else:
-        if '->' in subscripts:
-            indices_in, idx_final = subscripts.split('->')
-            indices_in = indices_in.split(',')
-        else:
-            # idx_final = ''
-            indices_in = subscripts.split('->')[0].split(',')
         tensors = list(tensors)
         contraction_list = _einsum_path(subscripts, *tensors, optimize=True,
                                         einsum_call=True)[1]
