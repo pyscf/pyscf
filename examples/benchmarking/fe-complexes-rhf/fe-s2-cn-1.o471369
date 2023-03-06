@@ -1,0 +1,61 @@
+------------------------------------------------------
+Job is running on nodes
+    Knecht21
+    Knecht21
+    Knecht21
+    Knecht21
+    Knecht21
+    Knecht21
+    Knecht21
+    Knecht21
+------------------------------------------------------
+qsys: job was submitted from Meister
+qsys: originating queue is batch
+qsys: executing queue is middle
+qsys: original working directory is /export/home/ccprak16/Documents/Linus/FDIIS/pyscf_workspace/pyscf/examples/benchmarking/fe-complexes-rhf
+qsys: job identifier is 471369.Meister
+qsys: job name is fe-s2-cn-1
+qsys: current home directory is /export/home/ccprak16
+qsys: PATH = /export/home/ccprak16/bin:/export/home/ccprak16/miniconda3/bin:/export/home/ccprak16/miniconda3/condabin:/opt/software/Turbomole/Turbomole-6.6_TmoleX-4.0/TURBOMOLE/bin/em64t-unknown-linux-gnu:/opt/software/Turbomole/Turbomole-6.6_TmoleX-4.0/TURBOMOLE/scripts:/opt/software/Gaussian/Intel/g09:/opt/software/GaussView/5.0.9/gv:/opt/software/molden/molden5.4:/opt/software/VMD/vmd-1.9.2/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/maui/bin:/usr/games:/usr/local/games:/snap/bin:/export/home/ccprak16/bin:/export/home/ccprak16/dreuwBin:/export/home/ccprak16/dreuwBin/queuing_system:/export/home/ccprak16/dreuwBin/qchem:/export/home/ccprak16/dreuwBin/orca:/export/home/ccprak16/dreuwBin/external/look4bas:/opt/software/Gaussian/Intel/g09/bsd:/opt/software/Gaussian/Intel/g09/local:/opt/software/Gaussian/Intel/g09/extras:/opt/software/Gaussian/Intel/g09:/opt/software/Orca/4.0.0
+------------------------------------------------------
+
+Calculation working directory: /scratch/ccprak16/fe-s2-cn-1_471369.Meister
+            scratch directory: /lscratch/ccprak16/fe-s2-cn-1_471369.Meister
+
+------------------------------------------------------
+
+	Running on host supporting AVX -> using AVX version.
+
+	Your environment variables are now setup for use of Q-Chem.
+	You do not need to source qchem.setup.sh or qchem.setup.csh!
+
+	Do not forget to set variable QCSCRATCH to your 
+	preferred scratch directory!
+setting QC=/opt/software/Q-Chem/intel/mkl/5.2/avx
+setting QCAUX=/opt/software/Q-Chem/qcaux_qchem_5.2
+This is a multi-thread run using 8 threads
+/opt/software/Q-Chem/intel/mkl/5.2/avx/exe/qcprog.exe .fe-s2-cn-1.in.1404.qcin.1 /lscratch/ccprak16/fe-s2-cn-1_471369.Meister/qchem1404/
+Error: in the serial run
+
+------------------------------------------------------
+
+Final files in /export/home/ccprak16/Documents/Linus/FDIIS/pyscf_workspace/pyscf/examples/benchmarking/fe-complexes-rhf:
+    insgesamt 392
+    -rw-r--r-- 1 ccprak16 CompChem    917 Dez  7 17:21 fe-s2-cn-1.in
+    -rw------- 1 ccprak16 CompChem      0 Dez  7 17:59 fe-s2-cn-1.o471260
+    -rw------- 1 ccprak16 CompChem      0 Dez  7 18:01 fe-s2-cn-1.o471261
+    -rw------- 1 ccprak16 CompChem      0 Dez  7 18:01 fe-s2-cn-1.o471262
+    -rw------- 1 ccprak16 CompChem 387719 Dez  8 16:30 fe-s2-cn-1.out
+    -rw-r--r-- 1 ccprak16 CompChem   7517 Dez  8 16:21 fe-s2-cn-1.sh
+    -rw------- 1 ccprak16 CompChem      0 Dez  8 16:30 job_not_successful
+
+More files can be found in /scratch/ccprak16/fe-s2-cn-1_471369.Meister and /lscratch/ccprak16/fe-s2-cn-1_471369.Meister on
+    Knecht21
+
+Sizes of these files:
+    4,0K	fe-s2-cn-1.in
+    384K	fe-s2-cn-1.out
+    388K	insgesamt
+
+If you want to delete these, run:
+    ssh Knecht21 rm -r "/scratch/ccprak16/fe-s2-cn-1_471369.Meister" "/lscratch/ccprak16/fe-s2-cn-1_471369.Meister"

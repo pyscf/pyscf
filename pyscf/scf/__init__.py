@@ -114,11 +114,18 @@ from pyscf.scf import dhf
 from pyscf.scf import chkfile
 from pyscf.scf import addons
 from pyscf.scf import diis
-from pyscf.scf.diis import DIIS, CDIIS, EDIIS, ADIIS
+from pyscf.scf.diis import DIIS, CDIIS, EDIIS, ADIIS, FDIIS
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
+from pyscf.soscf.m3soscf import M3SOSCF as m3soscf_py
+from pyscf.scf.diis_m3 import DIIS_M3 as diis_m3
 
+def M3SOSCF(mf, threads, purgeSolvers=0.5, convergence=8, initScattering=0.3, trustScaleRange=(0.05, 0.5, 0.5), memSize=1, memScale=0.2, initGuess='minao', stepsize=0.2):
+    return m3soscf_py(mf, threads, purgeSolvers, convergence, initScattering, trustScaleRange, memSize, memScale, initGuess, stepsize)
+
+def DIIS_M3(mf, threads, purgeSolvers=0.5, convergence=8, initScattering=0.1, trustScaleRange=(0.01, 0.2, 8), memSize=1, memScale=0.2):
+    return diis_m3(mf, threads, purgeSolvers, convergence, initScattering, trustScaleRange, memSize, memScale)
 
 def HF(mol, *args):
     if mol.nelectron == 1 or mol.spin == 0:

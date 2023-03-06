@@ -671,7 +671,7 @@ class KnownValues(unittest.TestCase):
 
         #mymp = pbmp.KMP2(kmf)
         #ekmp2, _ = mymp.kernel()
-        #print("KMP2 corr energy (per unit cell) = ", ekmp2)
+        #print("KMP2 corr energy (per cell) = ", ekmp2)
 
         mycc = pbcc.KGCCSD(kmf)
         ekccsd, t1, t2 = mycc.kernel()
@@ -699,7 +699,7 @@ class KnownValues(unittest.TestCase):
 
         ##mysmp = pbmp.KMP2(mf)
         ##emp2, _ = mysmp.kernel()
-        ##print("MP2 corr energy (per unit cell) = ", emp2 / np.prod(nmp))
+        ##print("MP2 corr energy (per cell) = ", emp2 / np.prod(nmp))
 
         myscc = pbcc.KGCCSD(mf)
         eccsd, _, _ = myscc.kernel()
@@ -755,7 +755,7 @@ class KnownValues(unittest.TestCase):
 
         #mymp = pbmp.KMP2(kmf)
         #ekmp2, _ = mymp.kernel()
-        #print("KMP2 corr energy (per unit cell) = ", ekmp2)
+        #print("KMP2 corr energy (per cell) = ", ekmp2)
 
         # By not applying a level-shift, one gets a different initial CCSD answer.
         # One can check however that the t1/t2 from level-shifting are a solution
@@ -787,7 +787,7 @@ class KnownValues(unittest.TestCase):
 
         #mysmp = pbmp.KMP2(mf)
         #emp2, _ = mysmp.kernel()
-        #print("MP2 corr energy (per unit cell) = ", emp2 / np.prod(nmp))
+        #print("MP2 corr energy (per cell) = ", emp2 / np.prod(nmp))
 
         myscc = pbcc.KGCCSD(mf, frozen=[0, 1, 14, 15])
         eccsd, _, _ = myscc.kernel()
