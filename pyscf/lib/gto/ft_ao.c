@@ -391,10 +391,6 @@ int GTO_ft_aopair_loop(double *gctr, FTEnvVars *envs, FPtr_eval_gz eval_gz,
         size_t leng = envs->g_size * 3 * (1<<envs->gbits) * block_size * OF_CMPLX;
         size_t len0 = nf * n_comp * block_size * OF_CMPLX;
         size_t leni = nf * i_ctr * n_comp * block_size * OF_CMPLX;
-        size_t lenj = 0;
-        if (n_comp > 1) {
-                lenj = nf * i_ctr * j_ctr * n_comp * block_size * OF_CMPLX;
-        }
         double *g = cache;
         cache = g + leng;
         double *gout, *gctri, *gctrj;
@@ -403,7 +399,7 @@ int GTO_ft_aopair_loop(double *gctr, FTEnvVars *envs, FPtr_eval_gz eval_gz,
                 gctrj = gctr;
         } else {
                 gctrj = cache;
-                cache += lenj;
+                cache += nf * i_ctr * j_ctr * n_comp * block_size * OF_CMPLX;
         }
         if (j_ctr == 1) {
                 gctri = gctrj;
@@ -778,7 +774,7 @@ static int ft_aopair_cache_size(FTEnvVars *envs)
         int len0 = envs->nf * n_comp * OF_CMPLX;
         int nc = envs->nf * i_ctr * j_ctr;
         int cache_size = leng+len0+nc*OF_CMPLX*n_comp*3 +
-                (ngs * 3 + envs->nf * 5) / block_size + 1;
+                (ngs*3 + envs->nf*3) / block_size + 3;
         return cache_size;
 }
 
@@ -1204,6 +1200,7 @@ static size_t max_cache_size(FPtrIntor intor, FPtr_eval_gz eval_gz, int *shls_sl
         int jsh1 = shls_slice[3];
         int sh0 = MIN(ish0, jsh0);
         int sh1 = MAX(ish1, jsh1);
+        int blksize = MIN(nGv, BLKSIZE);
         int shls[2];
         int i, cache_size;
         size_t max_size = 0;
@@ -1211,11 +1208,11 @@ static size_t max_cache_size(FPtrIntor intor, FPtr_eval_gz eval_gz, int *shls_sl
                 shls[0] = i;
                 shls[1] = i;
                 cache_size = (*intor)(NULL, NULL, shls, NULL, eval_gz,
-                                      fac, Gv, b, gxyz, gs, nGv, BLKSIZE,
+                                      fac, Gv, b, gxyz, gs, nGv, blksize,
                                       atm, natm, bas, nbas, env, NULL);
                 max_size = MAX(max_size, cache_size);
         }
-        return max_size * BLKSIZE;
+        return max_size * blksize;
 }
 
 /*

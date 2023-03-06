@@ -595,14 +595,16 @@ class KSCF(pbchf.SCF):
         else:
             dm_kpts = self.init_guess_by_minao(cell)
 
-        assert dm_kpts.ndim == 3
+        nkpts = len(self.kpts)
+        if dm_kpts.ndim == 2:
+            # dm[nao,nao] at gamma point -> dm_kpts[nkpts,nao,nao]
+            dm_kpts = np.repeat(dm_kpts[None,:,:], nkpts, axis=0)
 
         ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
         # FIXME: consider the fractional num_electron or not? This maybe
         # relate to the charged system.
-        nkpts = len(self.kpts)
         nelectron = float(self.cell.tot_electrons(nkpts))
-        if abs(ne - nelectron) > 1e-7*nkpts:
+        if abs(ne - nelectron) > 0.1*nkpts:
             logger.debug(self, 'Big error detected in the electron number '
                          'of initial guess density matrix (Ne/cell = %g)!\n'
                          '  This can cause huge error in Fock matrix and '
@@ -619,8 +621,8 @@ class KSCF(pbchf.SCF):
                         'the SCF of low-dimensional systems.')
         return mol_hf.SCF.init_guess_by_1e(self, cell)
 
-    init_guess_by_minao = lib.module_method(init_guess_by_minao, absences=['kpts'])
-    init_guess_by_atom = lib.module_method(init_guess_by_atom, absences=['kpts'])
+    init_guess_by_minao = lib.module_method(init_guess_by_minao, absences=['cell', 'kpts'])
+    init_guess_by_atom = lib.module_method(init_guess_by_atom, absences=['cell', 'kpts'])
 
     get_hcore = get_hcore
     get_ovlp = get_ovlp

@@ -468,7 +468,7 @@ void PBC_kzdot_CNN_s1(double *outR, double *outI,
 void PBC_kcontract(double *vkR, double *vkI, double *dmR, double *dmI,
                    double *pqGR, double *pqGI, double *coulG,
                    int *ki_idx, int *kj_idx, int8_t *k_to_compute,
-                   int swap_2e, int n_dm, int nao, int ngrids, int nkpts)
+                   int swap_2e, int n_dm, int nao, int ngrids, int nkpts, int nkptj)
 {
         size_t nao2 = nao * nao;
         size_t size_vk = n_dm * nkpts * nao2;
@@ -491,7 +491,7 @@ void PBC_kcontract(double *vkR, double *vkI, double *dmR, double *dmI,
         int k, i, j, ig, ki, kj, g0, mg, nm, i_dm;
         double c;
 #pragma omp for schedule(dynamic)
-        for (k = 0; k < nkpts; k++) {
+        for (k = 0; k < nkptj; k++) {
                 ki = ki_idx[k];
                 kj = kj_idx[k];
                 if (!(k_to_compute[ki] || (swap_2e && k_to_compute[kj]))) {
@@ -587,7 +587,7 @@ dgemm_(&TRANS_N, &TRANS_T, &nao, &nao, &nm, &N1, bufR, &nao, pLqI, &nao, &D1, vI
 void PBC_kcontract_dmf(double *vkR, double *vkI, double *moR, double *moI,
                        double *pqGR, double *pqGI, double *coulG,
                        int *ki_idx, int *kj_idx, int8_t *k_to_compute, int swap_2e,
-                       int n_dm, int nao, int nocc, int ngrids, int nkpts)
+                       int n_dm, int nao, int nocc, int ngrids, int nkpts, int nkptj)
 {
         size_t nao2 = nao * nao;
         size_t naoo = nao * nocc;
@@ -613,7 +613,7 @@ void PBC_kcontract_dmf(double *vkR, double *vkI, double *moR, double *moI,
         int k, i, j, ig, ki, kj, g0, mg, nm, go, i_dm, ptr;
         double c;
 #pragma omp for schedule(dynamic)
-        for (k = 0; k < nkpts; k++) {
+        for (k = 0; k < nkptj; k++) {
                 ki = ki_idx[k];
                 kj = kj_idx[k];
                 if (!(k_to_compute[ki] || (swap_2e && k_to_compute[kj]))) {

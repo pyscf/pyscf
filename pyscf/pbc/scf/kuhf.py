@@ -416,21 +416,21 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
             dm_kpts = self.init_guess_by_1e(cell)
         elif key == 'atom':
-            dm = self.init_guess_by_atom(cell)
+            dm_kpts = self.init_guess_by_atom(cell)
         elif key[:3] == 'chk':
             try:
                 dm_kpts = self.from_chk()
             except (IOError, KeyError):
                 logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
                             self.chkfile)
-                dm = self.init_guess_by_minao(cell)
+                dm_kpts = self.init_guess_by_minao(cell)
         else:
-            dm = self.init_guess_by_minao(cell)
+            dm_kpts = self.init_guess_by_minao(cell)
 
-        if dm_kpts is None:
-            nkpts = len(self.kpts)
+        nkpts = len(self.kpts)
+        if dm_kpts.ndim != 4:
             # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
-            dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
+            dm_kpts = np.repeat(dm_kpts[:,None,:,:], nkpts, axis=1)
             dm_kpts[0,:] *= 1.01
             dm_kpts[1,:] *= 0.99  # To slightly break spin symmetry
             assert dm_kpts.shape[0]==2
@@ -438,9 +438,8 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         ne = np.einsum('xkij,kji->x', dm_kpts, self.get_ovlp(cell)).real
         # FIXME: consider the fractional num_electron or not? This maybe
         # relates to the charged system.
-        nkpts = len(self.kpts)
         nelec = np.asarray(self.nelec)
-        if np.any(abs(ne - nelec) > 1e-7*nkpts):
+        if np.any(abs(ne - nelec) > 0.1*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
                          'of initial guess density matrix (Ne/cell = %g)!\n'
                          '  This can cause huge error in Fock matrix and '

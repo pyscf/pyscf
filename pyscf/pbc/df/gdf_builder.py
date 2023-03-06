@@ -519,21 +519,21 @@ class _CCNucBuilder(_CCGDFBuilder):
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
-        if eta is not None:
-            self.eta = eta
+        if cell.dimension == 0:
+            self.eta, self.mesh, self.ke_cutoff = _guess_eta(cell, kpts, self.mesh)
         else:
-            self.eta = max(.5/(.5+nkpts**(1./9)), ETA_MIN)
-
-        ke_cutoff = estimate_ke_cutoff_for_eta(cell, eta)
-        self.mesh = cell.cutoff_to_mesh(ke_cutoff)
-        self.ke_cutoff = min(pbctools.mesh_to_cutoff(
-            cell.lattice_vectors(), self.mesh)[:cell.dimension])
-        self.eta = estimate_eta_for_ke_cutoff(cell, self.ke_cutoff)
-        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
-            self.mesh[2] = rsdf_builder._estimate_meshz(cell)
-        elif cell.dimension < 2:
-            self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
-        self.mesh = cell.symmetrize_mesh(self.mesh)
+            if eta is None:
+                eta = max(.5/(.5+nkpts**(1./9)), ETA_MIN)
+            ke_cutoff = estimate_ke_cutoff_for_eta(cell, eta)
+            self.mesh = cell.cutoff_to_mesh(ke_cutoff)
+            self.ke_cutoff = min(pbctools.mesh_to_cutoff(
+                cell.lattice_vectors(), self.mesh)[:cell.dimension])
+            self.eta = estimate_eta_for_ke_cutoff(cell, self.ke_cutoff)
+            if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+                self.mesh[2] = rsdf_builder._estimate_meshz(cell)
+            elif cell.dimension < 2:
+                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+            self.mesh = cell.symmetrize_mesh(self.mesh)
 
         self.dump_flags()
 
@@ -685,7 +685,7 @@ class _CCNucBuilder(_CCGDFBuilder):
                                                verbose=log)
         ngrids = Gv.shape[0]
         max_memory = max(2000, self.max_memory-lib.current_memory()[0])
-        Gblksize = max(16, int(max_memory*1e6/16/nao_pair/nkpts)//8*8)
+        Gblksize = max(16, int(max_memory*.8e6/16/(nao_pair*nkpts))//8*8)
         Gblksize = min(Gblksize, ngrids, 200000)
         vGR = vG.real
         vGI = vG.imag

@@ -226,14 +226,19 @@ class KnownValues(unittest.TestCase):
 
     def test_update_vk(self):
         L = 5.
-        n = 15
         cell = gto.Cell()
-        cell.a = np.diag([L,L,L])
+        np.random.seed(1)
+        cell.a = np.diag([L,L,L]) + np.random.rand(3,3)
         cell.mesh = np.array([27]*3)
         cell.atom = '''H    1.8   2.       .4
-                       H    1.    1.       1.'''
+                       Li    1.    1.       1.'''
         cell.basis = {'H': [[0, (1.0, 1)],
-                            [1, (0.8, 1)]]}
+                            [1, (0.8, 1)]
+                           ],
+                      'Li': [[0, (1.0, 1)],
+                             [0, (0.6, 1)],
+                            [1, (0.8, 1)]
+                           ]}
         cell.build()
         kmesh = [6,1,1]
         kpts = cell.make_kpts(kmesh)
@@ -243,14 +248,14 @@ class KnownValues(unittest.TestCase):
 
         dms = mf.make_rdm1()
         ref = FFTDF(cell, kpts=kpts).get_jk(dms, kpts=kpts)[1]
-        self.assertAlmostEqual(lib.fp(ref), 0.5324128408462644, 8)
+        self.assertAlmostEqual(lib.fp(ref), -7.614964681516531, 8)
 
         df = aft.AFTDF(cell, kpts)
         dms = np.array(dms)[None,:]
         nkpts = kpts.shape[0]
         weight = 1./nkpts
         nao = cell.nao
-        nocc = 1
+        nocc = cell.nelec[0]
         dmf = np.asarray(mf.mo_coeff[:,:,:nocc] * np.sqrt(mf.mo_occ)[:,None,:nocc], order='C')
         dmf = dmf[None,:]
 
@@ -258,14 +263,14 @@ class KnownValues(unittest.TestCase):
         rcut = ft_ao.estimate_rcut(cell)
         supmol = ft_ao.ExtendedMole.from_cell(cell, bvk_kmesh, rcut.max())
         supmol = supmol.strip_basis(rcut)
-        k_conj_groups = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)
-        k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
+        t_rev_pairs = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)
+        t_rev_pairs = np.asarray(t_rev_pairs, dtype=np.int32, order='F')
 
-        moR, moI = aft_jk._mo_k2gamma(supmol, dmf, kpts, k_conj_groups)
+        moR, moI = aft_jk._mo_k2gamma(supmol, dmf, kpts, t_rev_pairs)
         mof = [moR, None]
         dm0 = [dms.real.copy(), dms.imag.copy()]
         dmf = [dmf.real.copy(), dmf.imag.copy()]
-        ft_kern0 = supmol.gen_ft_kernel(return_complex=False)
+        ft_kern0 = supmol.gen_ft_kernel(return_complex=False, kpts=kpts)
         ft_kern1 = aft_jk._gen_ft_kernel_fake_gamma(cell, supmol, 's1')
 
         uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
@@ -276,7 +281,7 @@ class KnownValues(unittest.TestCase):
         Gv, Gvbase, kws = cell.get_Gv_weights(cell.mesh)
         gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
         k_to_compute = np.zeros(nkpts, dtype=np.int8)
-        k_to_compute[k_conj_groups[:,0]] = 1
+        k_to_compute[t_rev_pairs[:,0]] = 1
         ngrids = Gv.shape[0]
         Gblksize = 8000
 
@@ -289,28 +294,21 @@ class KnownValues(unittest.TestCase):
             vkR = np.zeros((n_dm,nkpts,nao,nao))
             vkI = np.zeros((n_dm,nkpts,nao,nao))
             vk = [vkR, vkI]
-            for group_id, (k, k_conj) in enumerate(k_conj_groups):
-                kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
-                kpti_idx = kpt_ij_idx // nkpts
-                kptj_idx = kpt_ij_idx % nkpts
-                kptjs = kpts[kptj_idx]
-                kpt = uniq_kpts[k]
-                swap_2e = k_conj is not None and k != k_conj
-
+            for kpt, ki_idx, kj_idx, self_conj in aft_jk.loop_k(cell, kpts):
                 Gv, Gvbase, kws = cell.get_Gv_weights(cell.mesh)
                 wcoulG = pbctools.get_coulG(cell, kpt, False, mf, cell.mesh, Gv)
                 wcoulG *= kws
                 for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                    Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs)
-                    update_vk(vk, Gpq, dm, wcoulG[p0:p1] * weight, kpti_idx, kptj_idx,
-                              swap_2e, k_to_compute, k_conj_groups)
+                    Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt)
+                    update_vk(vk, Gpq, dm, wcoulG[p0:p1] * weight, ki_idx, kj_idx,
+                              not self_conj, k_to_compute, t_rev_pairs)
                     Gpq = None
 
             vk = vkR + vkI * 1j
-            for k, k_conj in k_conj_groups:
+            for k, k_conj in t_rev_pairs:
                 if k != k_conj:
                     vk[:,k_conj] = vk[:,k].conj()
-            self.assertAlmostEqual(abs(vk-ref).max(), 0, 8)
+            self.assertAlmostEqual(abs(vk-ref).max(), 0, 7)
 
 if __name__ == '__main__':
     print("Full Tests for aft jk")

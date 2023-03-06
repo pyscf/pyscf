@@ -44,14 +44,8 @@ typedef int (*FPtrFill)(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
 void PBCminimal_CINTEnvVars(CINTEnvVars *envs, int *atm, int natm, int *bas, int nbas, double *env,
                             CINTOpt *cintopt);
 
-void GTO_ft_dfill_s1(FPtrIntor intor, FPtr_eval_gz eval_gz,
-                     double *out, int comp, int ish, int jsh, double *buf,
-                     int *shls_slice, int *ao_loc, double complex fac,
-                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                     int *atm, int natm, int *bas, int nbas, double *env);
-
 static int _assemble2c(FPtrIntor intor, FPtr_eval_gz eval_gz,
-                       double *eriR, double *eriI, //double *cache,
+                       double *eriR, double *eriI, double *cache,
                        int grid0, int grid1, int ish_cell0, int jsh_bvk,
                        double complex fac, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
@@ -81,12 +75,8 @@ static int _assemble2c(FPtrIntor intor, FPtr_eval_gz eval_gz,
         int *gxyz = envs_bvk->gxyz;
         int *gs = envs_bvk->gs;
         int8_t *ovlp_mask = envs_bvk->ovlp_mask;
-        int shls[2] = {seg2sh[iseg0], jsh0};
+        int shls[2] = {0,};
         int ish, jsh, iseg;
-        size_t cache_size = (*intor)(NULL, NULL, shls, NULL, eval_gz,
-                                     fac, Gv, b, gxyz, gs, ngrids, dg,
-                                     atm, natm, bas, nbas, env, NULL);
-        double *cache = malloc(sizeof(double) * cache_size * ngrids);
 
         for (iseg = iseg0; iseg < iseg1; iseg++) {
                 ish = seg2sh[iseg];
@@ -98,12 +88,11 @@ static int _assemble2c(FPtrIntor intor, FPtr_eval_gz eval_gz,
                         shls[1] = jsh;
                         if ((*intor)(eriR, eriI, shls, NULL, eval_gz,
                                      fac, Gv+grid0, b, gxyz+grid0, gs, ngrids, dg,
-                                     atm, natm, bas, nbas, env, cache)) {
+                                     atm, natm, bas, nbas, env, NULL)) {
                                 empty = 0;
                         }
                 }
         }
-        free(cache);
         return !empty;
 }
 
@@ -140,7 +129,7 @@ void PBC_ft_bvk_ks1(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
         double *bufkI = bufkR + ((size_t)dij) * BLOCK_SIZE * comp * nkpts;
         double *bufLR = bufkI + ((size_t)dij) * BLOCK_SIZE * comp * nkpts;
         double *bufLI = bufLR + ((size_t)dij) * BLOCK_SIZE * comp * bvk_ncells;
-        //double *cache = bufLI + ((size_t)dij) * BLOCK_SIZE * comp * bvk_ncells;
+        double *cache = bufLI + ((size_t)dij) * BLOCK_SIZE * comp * bvk_ncells;
         double *pbufR, *pbufI;
         int grid0, grid1, dg, dijg, jL, jLmax, nLj, empty;
 
@@ -157,9 +146,9 @@ void PBC_ft_bvk_ks1(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
                         pbufI = bufLI + jL * dijg;
                         NPdset0(pbufR, dijg);
                         NPdset0(pbufI, dijg);
-                        if (_assemble2c(intor, eval_gz, pbufR, pbufI, grid0, grid1,
-                                        ish_cell0, jL*nbasp+jsh_cell0, Z1,
-                                        envs_cint, envs_bvk)) {
+                        if (_assemble2c(intor, eval_gz, pbufR, pbufI, cache,
+                                        grid0, grid1, ish_cell0, jL*nbasp+jsh_cell0,
+                                        Z1, envs_cint, envs_bvk)) {
                                 jLmax = jL;
                         }
                 }
@@ -206,6 +195,7 @@ void PBC_ft_bvk_nk1s1(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
         double *expLkI = envs_bvk->expLkI;
         double *bufR = buf;
         double *bufI = bufR + dij * BLOCK_SIZE * comp;
+        double *cache = bufI + dij * BLOCK_SIZE * comp;
         double complex fac;
         int grid0, grid1, dg, jL, dijg, empty;
 
@@ -219,9 +209,9 @@ void PBC_ft_bvk_nk1s1(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrSort fsort,
                 empty = 1;
                 for (jL = 0; jL < bvk_ncells; jL++) {
                         fac = expLkR[jL] + expLkI[jL] * _Complex_I;
-                        if (_assemble2c(intor, eval_gz, bufR, bufI, grid0, grid1,
-                                        ish_cell0, jL*nbasp+jsh_cell0, fac,
-                                        envs_cint, envs_bvk)) {
+                        if (_assemble2c(intor, eval_gz, bufR, bufI, cache,
+                                        grid0, grid1, ish_cell0, jL*nbasp+jsh_cell0,
+                                        fac, envs_cint, envs_bvk)) {
                                 empty = 0;
                         }
                 }
@@ -607,6 +597,41 @@ void PBC_ft_zsort_s1hermi(double *out, double *in, int fill_zero,
                         nGv, ish, jsh, grid0, grid1);
 }
 
+static size_t max_cache_size(FPtrIntor intor, FPtr_eval_gz eval_gz, int *shls_slice,
+                             int *seg_loc, int *seg2sh,
+                             double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                             int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int ish_cell0 = shls_slice[0];
+        int ish_cell1 = shls_slice[1];
+        int jsh_cell0 = shls_slice[2];
+        int jsh_cell1 = shls_slice[3];
+        int iseg0 = seg_loc[ish_cell0];
+        int iseg1 = seg_loc[ish_cell1];
+        int jseg0 = seg_loc[jsh_cell0];
+        int jseg1 = seg_loc[jsh_cell1];
+        int ish0 = seg2sh[iseg0];
+        int ish1 = seg2sh[iseg1];
+        int jsh0 = seg2sh[jseg0];
+        int jsh1 = seg2sh[jseg1];
+        int sh0 = MIN(ish0, jsh0);
+        int sh1 = MAX(ish1, jsh1);
+        int blksize = MIN(nGv, BLOCK_SIZE);
+        double complex fac = 0.;
+        int shls[2];
+        int i, cache_size;
+        size_t max_size = 0;
+        for (i = sh0; i < sh1; i++) {
+                shls[0] = i;
+                shls[1] = i;
+                cache_size = (*intor)(NULL, NULL, shls, NULL, eval_gz,
+                                      fac, Gv, b, gxyz, gs, nGv, blksize,
+                                      atm, natm, bas, nbas, env, NULL);
+                max_size = MAX(max_size, cache_size);
+        }
+        return max_size * blksize;
+}
+
 void PBC_ft_bvk_drv(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrFill fill, FPtrSort fsort,
                     double *out, double *expLkR, double *expLkI,
                     int bvk_ncells, int nimgs, int nkpts, int nbasp, int comp,
@@ -627,7 +652,10 @@ void PBC_ft_bvk_drv(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrFill fill, FPtrSo
                 seg_loc, seg2sh, cell0_ao_loc, shls_slice, NULL,
                 expLkR, expLkI, ovlp_mask, NULL, 0, 0.f, Gv, b, gxyz, gs};
         size_t count = nkpts + bvk_ncells;
-        size_t size_v = di * di * BLOCK_SIZE * count * comp * OF_CMPLX;
+        size_t buf_size = di * di * BLOCK_SIZE * count * comp * OF_CMPLX;
+        size_t cache_size = max_cache_size(intor, eval_gz, shls_slice,
+                                           seg_loc, seg2sh, Gv, b, gxyz, gs, nGv,
+                                           atm, natm, bas, nbas, env);
 
 #pragma omp parallel
 {
@@ -635,7 +663,7 @@ void PBC_ft_bvk_drv(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrFill fill, FPtrSo
         PBCminimal_CINTEnvVars(&envs_cint, atm, natm, bas, nbas, env, NULL);
         int ish, jsh, ij;
         int cell0_shls[2];
-        double *buf = malloc(sizeof(double) * size_v);
+        double *buf = malloc(sizeof(double) * (buf_size+cache_size));
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 ish = ij / njsh + ish0;

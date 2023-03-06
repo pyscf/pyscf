@@ -74,6 +74,9 @@ class MDF(df.GDF):
         # tends to call _CCMDFBuilder if applicable
         self._prefer_ccdf = False
 
+        # TODO: More tests are needed
+        self.time_reversal_symmetry = False
+
         # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
@@ -124,7 +127,7 @@ class MDF(df.GDF):
         j_only = self._j_only or len(kpts_union) == 1
         dfbuilder.make_j3c(cderi_file, j_only=j_only)
 
-        # mdf.mesh must be the same to the mesh used in generating cderi
+        # mdf.mesh must be the mesh to generate cderi
         self.mesh = dfbuilder.mesh
 
     get_pp = df.GDF.get_pp

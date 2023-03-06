@@ -1087,9 +1087,7 @@ class _RSNucBuilder(_RSGDFBuilder):
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
         if cell.dimension == 0:
-            self.omega = 0
-            self.ke_cutoff = cell.ke_cutoff
-            self.mesh = cell.mesh
+            self.omega, self.mesh, self.ke_cutoff = _guess_omega(cell, kpts, self.mesh)
         else:
             if omega is None:
                 omega = 1./(1.+nkpts**(1./9))
@@ -1242,10 +1240,10 @@ class _RSNucBuilder(_RSGDFBuilder):
             vG[G0_idx] -= charges.dot(np.pi/exps) * kws
 
         ft_kern = self.supmol_ft.gen_ft_kernel(aosym, return_complex=False,
-                                               verbose=log)
+                                               kpts=kpts, verbose=log)
         ngrids = Gv.shape[0]
         max_memory = max(2000, self.max_memory-lib.current_memory()[0])
-        Gblksize = max(16, int(max_memory*1e6/16/nao_pair/nkpts)//8*8)
+        Gblksize = max(16, int(max_memory*.8e6/16/(nao_pair*nkpts))//8*8)
         Gblksize = min(Gblksize, ngrids, 200000)
         vGR = vG.real
         vGI = vG.imag
@@ -1255,7 +1253,7 @@ class _RSNucBuilder(_RSGDFBuilder):
         buf = np.empty((2, nkpts, Gblksize, nao_pair))
         for p0, p1 in lib.prange(0, ngrids, Gblksize):
             # shape of Gpq (nkpts, nGv, nao_pair)
-            Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts, out=buf)
+            Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, out=buf)
             for k, (GpqR, GpqI) in enumerate(zip(*Gpq)):
                 # rho_ij(G) nuc(-G) / G^2
                 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
@@ -1265,7 +1263,7 @@ class _RSNucBuilder(_RSGDFBuilder):
                 if not is_zero(kpts[k]):
                     vI = np.einsum('k,kx->x', vGR[p0:p1], GpqI)
                     vI-= np.einsum('k,kx->x', vGI[p0:p1], GpqR)
-                    vj[k] += vI * 1j
+                    vj[k].imag += vI
             t1 = log.timer_debug1('contracting Vnuc [%s:%s]'%(p0, p1), *t1)
         log.timer_debug1('contracting Vnuc', *t0)
 

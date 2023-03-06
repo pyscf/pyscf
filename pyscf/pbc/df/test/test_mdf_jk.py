@@ -37,8 +37,8 @@ def setUpModule():
     cell.atom = '''C    3.    2.       3.
                    C    1.    1.       1.'''
     cell.basis = 'ccpvdz'
-    cell.verbose = 0
-    cell.max_memory = 0
+    #cell.verbose = 0
+    #cell.max_memory = 0
     cell.rcut = 28.3
     cell.build()
 

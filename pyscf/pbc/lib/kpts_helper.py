@@ -59,8 +59,8 @@ def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
 
 def member(kpt, kpts):
     '''Return the indices of the common k-points in kpts'''
-    assert kpts.ndim == 2
-    dk = abs(kpts[:,None] - kpt).max(axis=2)
+    assert kpts.ndim == kpt.ndim + 1
+    dk = abs(kpts.reshape(-1,kpt.size) - kpt.ravel()).max(axis=1)
     idx = np.where(dk < KPT_DIFF_TOL)[0]
     if idx.size > 0:
         idx = np.unique(idx)
@@ -68,8 +68,12 @@ def member(kpt, kpts):
 
 def intersection(kpts1, kpts2):
     '''Return the indices of the common k-points in kpts1'''
-    assert kpts1.ndim == 2 and kpts2.ndim == 2
-    return member(kpts2, kpts1)
+    assert kpts1.ndim == kpts2.ndim == 2
+    dk = abs(kpts1[:,None] - kpts2).max(axis=2)
+    idx = np.where(dk < KPT_DIFF_TOL)[0]
+    if idx.size > 0:
+        idx = np.unique(idx)
+    return idx
 
 def unique(kpts):
     '''

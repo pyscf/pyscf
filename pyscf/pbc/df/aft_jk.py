@@ -159,30 +159,26 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     supmol = ft_ao.ExtendedMole.from_cell(cell, bvk_kmesh, rcut.max())
     supmol = supmol.strip_basis(rcut)
 
-    uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
-        cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-    scaled_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
-    log.debug('Num uniq kpts %d', len(uniq_kpts))
-
-    k_conj_groups = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)
+    t_rev_pairs = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)
     try:
-        k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
+        t_rev_pairs = np.asarray(t_rev_pairs, dtype=np.int32, order='F')
     except TypeError:
-        k_conj_groups = [[k, k] if k_conj is None else [k, k_conj]
-                         for k, k_conj in k_conj_groups]
-        k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
-    log.debug1('Num kpts conj_pairs %d', len(k_conj_groups))
+        t_rev_pairs = [[k, k] if k_conj is None else [k, k_conj]
+                       for k, k_conj in t_rev_pairs]
+        t_rev_pairs = np.asarray(t_rev_pairs, dtype=np.int32, order='F')
+    log.debug1('Num time-reversal pairs %d', len(t_rev_pairs))
 
     time_reversal_symmetry = mydf.time_reversal_symmetry
     if time_reversal_symmetry:
-        for k, k_conj in k_conj_groups:
+        for k, k_conj in t_rev_pairs:
             if k != k_conj and abs(dms[:,k_conj] - dms[:,k].conj()).max() > 1e-6:
                 time_reversal_symmetry = False
+                log.debug2('Disable time_reversal_symmetry')
                 break
 
     if time_reversal_symmetry:
         k_to_compute = np.zeros(nkpts, dtype=np.int8)
-        k_to_compute[k_conj_groups[:,0]] = 1
+        k_to_compute[t_rev_pairs[:,0]] = 1
     else:
         k_to_compute = np.ones(nkpts, dtype=np.int8)
 
@@ -215,12 +211,16 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         dm_factor *= np.sqrt(np.array(occs, dtype=np.double))[:,:,None]
 
         bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
+        s_nao = supmol.nao
         contract_mo_early = (time_reversal_symmetry and
-                             bvk_ncells*nao*4 > supmol.nao*nocc*n_dm)
+                             bvk_ncells*nao*4 > s_nao*nocc*n_dm)
+        log.debug2('time_reversal_symmetry = %s bvk_ncells = %d '
+                   's_nao = %d nocc = %d n_dm = %d',
+                   time_reversal_symmetry, bvk_ncells, s_nao, nocc, n_dm)
+        log.debug2('Use algorithm contract_mo_early = %s', contract_mo_early)
         if contract_mo_early:
-            log.debug1('Use algorithm contract_mo_early')
             s_nao = supmol.nao
-            moR, moI = _mo_k2gamma(supmol, dm_factor, kpts, k_conj_groups)
+            moR, moI = _mo_k2gamma(supmol, dm_factor, kpts, t_rev_pairs)
             if abs(moI).max() < 1e-5:
                 dm = [moR, None]
                 dm_factor = moR = moI = None
@@ -241,8 +241,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         log.debug2('set update_vk to %s with dm_factor', update_vk)
 
     if not contract_mo_early:
-        ft_kern = supmol.gen_ft_kernel(aosym, return_complex=False, kpts=kpts,
-                                       verbose=log)
+        ft_kern = supmol.gen_ft_kernel(aosym, return_complex=False,
+                                       kpts=kpts, verbose=log)
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     Gv = np.asarray(Gv, order='F')
@@ -264,22 +264,13 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         log.debug1('Gblksize = %d', Gblksize)
         buf = np.empty(nkpts*Gblksize*nao**2*2)
 
-    for group_id, (k, k_conj) in enumerate(k_conj_groups):
-        kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
-        kpti_idx = kpt_ij_idx // nkpts
-        kptj_idx = kpt_ij_idx % nkpts
-        kpt = uniq_kpts[k]
-        log.debug1('ft_ao_pair for scaled kpt = %s', scaled_kpts[k])
-        log.debug2('ft_ao_pair for kpti_idx = %s', kpti_idx)
-        log.debug2('ft_ao_pair for kptj_idx = %s', kptj_idx)
-        swap_2e = k_conj is not None and k != k_conj
-
+    for group_id, (kpt, ki_idx, kj_idx, self_conj) in enumerate(loop_k(cell, kpts)):
         vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh)
         for p0, p1 in lib.prange(0, ngrids, Gblksize):
             log.debug3('update_vk [%s:%s]', p0, p1)
             Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, out=buf)
-            update_vk(vk, Gpq, dm, vkcoulG[p0:p1] * weight, kpti_idx, kptj_idx,
-                      swap_2e, k_to_compute, k_conj_groups)
+            update_vk(vk, Gpq, dm, vkcoulG[p0:p1] * weight, ki_idx, kj_idx,
+                      not self_conj, k_to_compute, t_rev_pairs)
             Gpq = None
         cpu1 = log.timer_debug1(f'get_k_kpts group {group_id}', *cpu1)
 
@@ -296,7 +287,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts)
 
     if time_reversal_symmetry:
-        for k, k_conj in k_conj_groups:
+        for k, k_conj in t_rev_pairs:
             if k != k_conj:
                 vk_kpts[:,k_conj] = vk_kpts[:,k].conj()
     log.timer_debug1('get_k_kpts', *cpu0)
@@ -375,8 +366,28 @@ def get_k_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
+def loop_k(cell, kpts):
+    '''Generates unique kpt for p in (ij|p)'''
+    log = logger.new_logger(cell)
+    nkpts = len(kpts)
+    uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
+        cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
+    scaled_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
+    log.debug('Num uniq kpts %d', len(uniq_kpts))
+    k_conj_groups = group_by_conj_pairs(cell, uniq_kpts, return_kpts_pairs=False)
+    for k, k_conj in k_conj_groups:
+        kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
+        kpti_idx = kpt_ij_idx // nkpts
+        kptj_idx = kpt_ij_idx % nkpts
+        kpt = uniq_kpts[k]
+        log.debug1('ft_ao_pair for scaled kpt = %s', scaled_kpts[k])
+        log.debug2('ft_ao_pair for kpti_idx = %s', kpti_idx)
+        log.debug2('ft_ao_pair for kptj_idx = %s', kptj_idx)
+        self_conj = k_conj is None or k == k_conj
+        yield kpt, kpti_idx, kptj_idx, self_conj
+
 def _update_vk_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                k_to_compute, k_conj_groups):
+                k_to_compute, t_rev_pairs):
     '''
     contraction for exchange matrices:
 
@@ -387,8 +398,7 @@ def _update_vk_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
     GpqR, GpqI = Gpq
     dmsR, dmsI = dms
     nG = len(wcoulG)
-    n_dm = vkR.shape[0]
-    nao = vkR.shape[-1]
+    n_dm, nkpts, nao = vkR.shape[:3]
     bufR = np.empty((nG*nao**2))
     bufI = np.empty((nG*nao**2))
     buf1R = np.empty((nG*nao**2))
@@ -431,7 +441,7 @@ def _update_vk_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
                        1, vkR[i,kj], vkI[i,kj], 1)
 
 def _update_vk1_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                 k_to_compute, k_conj_groups):
+                 k_to_compute, t_rev_pairs):
     '''
     contraction for exchange matrices:
 
@@ -442,9 +452,8 @@ def _update_vk1_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
     GpqR, GpqI = Gpq
     dmsR, dmsI = dms
     nG = len(wcoulG)
-    n_dm = vkR.shape[0]
-    nao = vkR.shape[-1]
-    nkpts = len(kpti_idx)
+    n_dm, nkpts, nao = vkR.shape[:3]
+    nkptj = len(kptj_idx)
 
     assert GpqR.transpose(0,2,3,1).flags.c_contiguous
     assert vkR.flags.c_contiguous
@@ -452,6 +461,7 @@ def _update_vk1_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
     assert kpti_idx.dtype == np.int32
     assert kptj_idx.dtype == np.int32
     assert k_to_compute.dtype == np.int8
+    assert k_to_compute.size == nkpts
 
     libpbc.PBC_kcontract(
         vkR.ctypes.data_as(ctypes.c_void_p),
@@ -465,10 +475,10 @@ def _update_vk1_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
         kptj_idx.ctypes.data_as(ctypes.c_void_p),
         k_to_compute.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(swap_2e), ctypes.c_int(n_dm), ctypes.c_int(nao),
-        ctypes.c_int(nG), ctypes.c_int(nkpts))
+        ctypes.c_int(nG), ctypes.c_int(nkpts), ctypes.c_int(nkptj))
 
 def _update_vk_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                   k_to_compute, k_conj_groups):
+                   k_to_compute, t_rev_pairs):
     '''
     dmf is the factorized dm, dm = dmf * dmf.conj().T
     Computing exchange matrices with dmf:
@@ -514,7 +524,7 @@ def _update_vk_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
             iLkR = np.ndarray((nocc,nG,nao), buffer=bufR1)
             iLkI = np.ndarray((nocc,nG,nao), buffer=bufI1)
             for i in range(n_dm):
-                zdotNN(dmfR[i,ki].T, dmfI[i,ki].T, pLqR.reshape(nao,-1),
+                zdotCN(dmfR[i,ki].T, dmfI[i,ki].T, pLqR.reshape(nao,-1),
                        pLqI.reshape(nao,-1), 1,
                        iLkR.reshape(nocc,-1), iLkI.reshape(nocc,-1))
                 iLkR1 = iLkR * wcoulG[:,None]
@@ -524,7 +534,7 @@ def _update_vk_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
                        1, vkR[i,kj], vkI[i,kj], 1)
 
 def _update_vk1_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                    k_to_compute, k_conj_groups):
+                    k_to_compute, t_rev_pairs):
     '''
     dmf is the factorized dm, dm = dmf * dmf.conj().T
     Computing exchange matrices with dmf:
@@ -536,6 +546,7 @@ def _update_vk1_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
     dmfR, dmfI = dmf
     nG = len(wcoulG)
     n_dm, nkpts, nao, nocc = dmfR.shape
+    nkptj = len(kptj_idx)
 
     assert GpqR.transpose(0,2,3,1).flags.c_contiguous
     assert vkR.flags.c_contiguous
@@ -543,6 +554,7 @@ def _update_vk1_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
     assert kpti_idx.dtype == np.int32
     assert kptj_idx.dtype == np.int32
     assert k_to_compute.dtype == np.int8
+    assert k_to_compute.size == nkpts
 
     libpbc.PBC_kcontract_dmf(
         vkR.ctypes.data_as(ctypes.c_void_p),
@@ -555,11 +567,12 @@ def _update_vk1_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
         kpti_idx.ctypes.data_as(ctypes.c_void_p),
         kptj_idx.ctypes.data_as(ctypes.c_void_p),
         k_to_compute.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(swap_2e), ctypes.c_int(n_dm), ctypes.c_int(nao),
-        ctypes.c_int(nocc), ctypes.c_int(nG), ctypes.c_int(nkpts))
+        ctypes.c_int(swap_2e),
+        ctypes.c_int(n_dm), ctypes.c_int(nao), ctypes.c_int(nocc),
+        ctypes.c_int(nG), ctypes.c_int(nkpts), ctypes.c_int(nkptj))
 
 def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
-                          k_to_compute, k_conj_groups):
+                          k_to_compute, t_rev_pairs):
     '''
     dmf is the factorized dm, dm = dmf * dmf.conj().T
     Computing exchange matrices with dmf:
@@ -575,6 +588,11 @@ def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
 
     GpqR = GpqR.transpose(2,1,0)
     assert GpqR.flags.c_contiguous
+    assert kpti_idx.dtype == np.int32
+    assert kptj_idx.dtype == np.int32
+    assert k_to_compute.dtype == np.int8
+    assert k_to_compute.size == nkpts
+    assert kptj_idx.size == nkpts
 
     for i in range(n_dm):
         libpbc.PBC_kcontract_fake_gamma(
@@ -587,12 +605,12 @@ def _update_vk_fake_gamma(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
             kpti_idx.ctypes.data_as(ctypes.c_void_p),
             kptj_idx.ctypes.data_as(ctypes.c_void_p),
             k_to_compute.ctypes.data_as(ctypes.c_void_p),
-            k_conj_groups.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(k_conj_groups.shape[0]),
+            t_rev_pairs.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(t_rev_pairs.shape[0]),
             ctypes.c_int(swap_2e), ctypes.c_int(s_nao), ctypes.c_int(nao),
             ctypes.c_int(nocc), ctypes.c_int(nG), ctypes.c_int(nkpts))
 
-def _mo_k2gamma(supmol, dm_factor, kpts, k_conj_groups):
+def _mo_k2gamma(supmol, dm_factor, kpts, t_rev_pairs):
     '''Transform to MO of supcell at gamma point'''
     sh_loc = supmol.sh_loc  # maps the bvk shell Id to supmol shell Id
     ao_loc = supmol.ao_loc
@@ -606,7 +624,7 @@ def _mo_k2gamma(supmol, dm_factor, kpts, k_conj_groups):
     n_dm, nkpts, nao, nocc = dm_factor.shape
     moR = np.empty((n_dm,s_nao,nkpts,nocc))
     moI = np.empty((n_dm,s_nao,nkpts,nocc))
-    k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
+    t_rev_pairs = np.asarray(t_rev_pairs, dtype=np.int32, order='F')
     for i_dm in range(n_dm):
         libpbc.PBCmo_k2gamma(
             moR[i_dm].ctypes.data_as(ctypes.c_void_p),
@@ -616,8 +634,8 @@ def _mo_k2gamma(supmol, dm_factor, kpts, k_conj_groups):
             sh_loc.ctypes.data_as(ctypes.c_void_p),
             ao_loc.ctypes.data_as(ctypes.c_void_p),
             cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
-            k_conj_groups.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(k_conj_groups.shape[0]),
+            t_rev_pairs.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(t_rev_pairs.shape[0]),
             ctypes.c_int(bvk_ncells), ctypes.c_int(nbasp),
             ctypes.c_int(s_nao), ctypes.c_int(nao), ctypes.c_int(nocc),
             ctypes.c_int(nkpts), ctypes.c_int(nimgs))

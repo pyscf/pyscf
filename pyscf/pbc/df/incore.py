@@ -236,7 +236,8 @@ class Int3cBuilder(lib.StreamObject):
                        omega, theta, cutoff)
         else:
             cutoff = self.direct_scf_tol
-        cutoff = int(CUTOFF_OFFSET + 2*np.log(self.direct_scf_tol))
+        # Map cutoff to integer index
+        cutoff = int(CUTOFF_OFFSET + 2*np.log(cutoff))
 
         atm, bas, env = gto.conc_env(supmol._atm, supmol._bas, supmol._env,
                                      rs_auxcell._atm, rs_auxcell._bas, rs_auxcell._env)

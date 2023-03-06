@@ -310,7 +310,6 @@ hermi_assign(v01R+kc*nao2, v01I+kc*nao2, v01R+k*nao2, v01I+k*nao2, nao);
                 k = k_list[kp];
                 kc = kc_list[kp];
                 ki = kj2ki[k];
-                kic = kj2ki[kc];
 if (k == kc) {
         if (k_to_compute[ki]) {
                 plain_add(vkR+ki*nao2, vkI+ki*nao2, v00R+k*nao2, v00I+k*nao2, nao);
@@ -321,6 +320,7 @@ if (k == kc) {
                        v00R+k*nao2, v00I+k*nao2, v00R+kc*nao2, v00I+kc*nao2,
                        v01R+k*nao2, v01I+k*nao2, v01R+kc*nao2, v01I+kc*nao2, nao);
         }
+        kic = kj2ki[kc];
         if (k_to_compute[kic]) {
                 cc_add(vkR+kic*nao2, vkI+kic*nao2,
                        v00R+k*nao2, v00I+k*nao2, v00R+kc*nao2, v00I+kc*nao2,
@@ -337,19 +337,19 @@ if (k == kc) {
                         k = k_list[kp];
                         kc = kc_list[kp];
                         kj = ki2kj[k];
-                        kjc = ki2kj[kc];
 if (k == kc) {
         if (k_to_compute[kj]) {
                 transpose_add(vkR+kj*nao2, vkI+kj*nao2, v00R+k*nao2, v00I+k*nao2, nao);
         }
 } else { // k != kc
         if (k_to_compute[kj]) {
-                pp_tadd(vkR+kj*nao2, vkI+kj*nao2,
+                cc_tadd(vkR+kj*nao2, vkI+kj*nao2,
                         v00R+k*nao2, v00I+k*nao2, v00R+kc*nao2, v00I+kc*nao2,
                         v01R+k*nao2, v01I+k*nao2, v01R+kc*nao2, v01I+kc*nao2, nao);
         }
+        kjc = ki2kj[kc];
         if (k_to_compute[kjc]) {
-                cc_tadd(vkR+kjc*nao2, vkI+kjc*nao2,
+                pp_tadd(vkR+kjc*nao2, vkI+kjc*nao2,
                         v00R+k*nao2, v00I+k*nao2, v00R+kc*nao2, v00I+kc*nao2,
                         v01R+k*nao2, v01I+k*nao2, v01R+kc*nao2, v01I+kc*nao2, nao);
         }

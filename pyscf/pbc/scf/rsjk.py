@@ -616,7 +616,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         mem_now = lib.current_memory()[0]
         max_memory = self.max_memory - mem_now
         log.debug1('max_memory = %d MB (%d in use)', max_memory+mem_now, mem_now)
-        Gblksize = max(24, int(max_memory*1e6/16/(nao**2+naod**2)/(nkpts+1))//8*8)
+        Gblksize = max(24, int(max_memory*.8e6/16/(nao**2+naod**2)/(nkpts+1))//8*8)
         Gblksize = min(Gblksize, ngrids)
         log.debug1('Gblksize = %d', Gblksize)
 
@@ -684,14 +684,14 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             # Prefer AFTDF for everything otherwise cell_d.mesh have to be used
             # for AFTDF
             log.debug1('get_lr_j_kpts dd block cached aft_aopair_dd')
-            aft_aopair_dd = self.supmol_d.gen_ft_kernel(
-                aosym, return_complex=False, verbose=log)
+            ft_kern_dd = self.supmol_d.gen_ft_kernel(
+                aosym, return_complex=False, kpts=kpts, verbose=log)
 
             def merge_dd(Gpq, p0, p1):
                 '''Merge diffused basis block into ao-pair tensor inplace'''
                 GpqR, GpqI = Gpq
-                pqG_ddR, pqG_ddI = aft_aopair_dd(Gv[p0:p1], gxyz[p0:p1], Gvbase,
-                                                 kpt_allow, kpts)
+                pqG_ddR, pqG_ddI = ft_kern_dd(Gv[p0:p1], gxyz[p0:p1], Gvbase,
+                                              kpt_allow, kpts)
                 # Gpq should be an array of (nkpts,ni,nj,ngrids) in C order
                 if not GpqR[0].flags.c_contiguous:
                     assert GpqR[0].strides[0] == 8  # stride for grids
@@ -737,7 +737,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             mem_now = lib.current_memory()[0]
             max_memory = self.max_memory - mem_now
             log.debug1('max_memory = %d MB (%d in use)', max_memory+mem_now, mem_now)
-            Gblksize = min(Gblksize, int(max_memory*1e6/16/(nao**2+naod**2)/(nkpts+1))//8*8)
+            Gblksize = min(Gblksize, int(max_memory*.8e6/16/(nao**2+naod**2)/(nkpts+1))//8*8)
             log.debug1('Gblksize = %d', Gblksize)
             buf = np.empty(nkpts*Gblksize*nao**2*2)
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
@@ -833,32 +833,28 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         vk = [vkR, vkI]
         weight = 1. / nkpts
 
-        # TODO: aosym == 's2'
-        aosym = 's1'
-        uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
-            cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-        scaled_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
-        log.debug('Num uniq kpts %d', len(uniq_kpts))
-
         # Test if vk[k] == vk[k_conj].conj()
-        k_conj_groups = group_by_conj_pairs(cell, uniq_kpts, return_kpts_pairs=False)
+        t_rev_pairs = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)
         try:
-            k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
+            t_rev_pairs = np.asarray(t_rev_pairs, dtype=np.int32, order='F')
         except TypeError:
-            k_conj_groups = [[k, k] if k_conj is None else [k, k_conj]
-                             for k, k_conj in k_conj_groups]
-            k_conj_groups = np.asarray(k_conj_groups, dtype=np.int32, order='F')
-        log.debug1('Num kpts conj_pairs %d', len(k_conj_groups))
+            t_rev_pairs = [[k, k] if k_conj is None else [k, k_conj]
+                             for k, k_conj in t_rev_pairs]
+            t_rev_pairs = np.asarray(t_rev_pairs, dtype=np.int32, order='F')
+        log.debug1('Num kpts conj_pairs %d', len(t_rev_pairs))
         time_reversal_symmetry = self.time_reversal_symmetry
         if time_reversal_symmetry:
-            for k, k_conj in k_conj_groups:
+            for k, k_conj in t_rev_pairs:
                 if k != k_conj and abs(dms[:,k_conj] - dms[:,k].conj()).max() > 1e-6:
                     time_reversal_symmetry = False
+                    log.debug2('Disable time_reversal_symmetry')
                     break
 
+        # TODO: aosym == 's2'
+        aosym = 's1'
         if time_reversal_symmetry:
             k_to_compute = np.zeros(nkpts, dtype=np.int8)
-            k_to_compute[k_conj_groups[:,0]] = 1
+            k_to_compute[t_rev_pairs[:,0]] = 1
         else:
             k_to_compute = np.ones(nkpts, dtype=np.int8)
 
@@ -873,7 +869,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 update_vk = aft_jk._update_vk1_
             else:
                 update_vk = aft_jk._update_vk_
-            log.debug2('set update_vk to %s', update_vk)
         else:
             # dm ~= dm_factor * dm_factor.T
             nocc = dm_factor.shape[-1]
@@ -881,34 +876,36 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 return vkR
 
             bvk_ncells, rs_nbas, nimgs = self.supmol_ft.bas_mask.shape
+            s_nao = self.supmol_ft.nao
             contract_mo_early = (time_reversal_symmetry and naod == 0 and
-                                 bvk_ncells*nao*4 > self.supmol_ft.nao*nocc*n_dm)
+                                 bvk_ncells*nao*4 > s_nao*nocc*n_dm)
+            log.debug2('time_reversal_symmetry = %s bvk_ncells = %d '
+                       's_nao = %d nocc = %d n_dm = %d',
+                       time_reversal_symmetry, bvk_ncells, s_nao, nocc, n_dm)
+            log.debug2('Use algorithm contract_mo_early = %s', contract_mo_early)
             if contract_mo_early:
-                log.debug1('Use algorithm contract_mo_early')
                 bvk_kmesh = self.bvk_kmesh
                 rcut = ft_ao.estimate_rcut(cell)
                 supmol = ft_ao.ExtendedMole.from_cell(cell, bvk_kmesh, rcut.max())
                 supmol = supmol.strip_basis(rcut)
                 s_nao = supmol.nao
-                moR, moI = aft_jk._mo_k2gamma(supmol, dm_factor, kpts, k_conj_groups)
+                moR, moI = aft_jk._mo_k2gamma(supmol, dm_factor, kpts, t_rev_pairs)
                 if abs(moI).max() < 1e-5:
                     dm = [moR, None]
-                    dm_factor = moR = moI = None
                     ft_kern = aft_jk._gen_ft_kernel_fake_gamma(cell, supmol, aosym)
                     update_vk = aft_jk._update_vk_fake_gamma
                 else:
-                    moR = moI = None
                     contract_mo_early = False
+                moR = moI = None
 
             if not contract_mo_early:
                 dm = [np.asarray(dm_factor.real, order='C'),
                       np.asarray(dm_factor.imag, order='C')]
-                dm_factor = None
                 if np.count_nonzero(k_to_compute) >= 2 * lib.num_threads():
                     update_vk = aft_jk._update_vk1_dmf
                 else:
                     update_vk = aft_jk._update_vk_dmf
-            log.debug2('set update_vk to %s with dm_factor', update_vk)
+        log.debug2('set update_vk to %s', update_vk)
 
         if not contract_mo_early:
             ft_kern = self.supmol_ft.gen_ft_kernel(
@@ -991,8 +988,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
                         pqG_dd = cache[ki, kj]
                         libpbc.PBC_ft_zfuse_dd_s1(
-                            GpqR[k].ctypes.data_as(ctypes.c_void_p),
-                            GpqI[k].ctypes.data_as(ctypes.c_void_p),
+                            GpqR[kj].ctypes.data_as(ctypes.c_void_p),
+                            GpqI[kj].ctypes.data_as(ctypes.c_void_p),
                             pqG_dd.ctypes.data_as(ctypes.c_void_p),
                             ao_d_idx.ctypes.data_as(ctypes.c_void_p),
                             (ctypes.c_int*2)(p0, p1), ctypes.c_int(nao),
@@ -1004,18 +1001,16 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
             else:
                 log.debug1('merge_dd with aft_aopair_dd')
-                aft_aopair_dd = self.supmol_d.gen_ft_kernel(
-                    aosym, return_complex=False, verbose=log)
+                ft_kern_dd = self.supmol_d.gen_ft_kernel(
+                    aosym, return_complex=False, kpts=kpts, verbose=log)
 
                 buf1 = None
                 def merge_dd(Gpq, p0, p1, ki_lst, kj_lst):
                     '''Merge diffused basis block into ao-pair tensor inplace'''
                     kpt = kpts[kj_lst[0]] - kpts[ki_lst[0]]
-                    kptjs = kpts[kptj_idx]
                     GpqR, GpqI = Gpq
-                    pqG_ddR, pqG_ddI = aft_aopair_dd(Gv[p0:p1], gxyz[p0:p1], Gvbase,
-                                                     kpt, kptjs, out=buf1)
-                    nkpts = len(kptjs)
+                    pqG_ddR, pqG_ddI = ft_kern_dd(Gv[p0:p1], gxyz[p0:p1], Gvbase,
+                                                  kpt, out=buf1)
                     # Gpq should be an array of (nkpts,ni,nj,ngrids) in C order
                     if not GpqR[0].flags.c_contiguous:
                         assert GpqR[0].strides[0] == 8  # stride for grids
@@ -1036,24 +1031,15 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             log.debug1('Gblksize = %d', Gblksize)
             buf = np.empty(Gblksize*s_nao*nao*2)
         else:
-            Gblksize = max(24, int(max_memory*1e6/16/(nao**2+naod**2)/(nkpts+3))//8*8)
+            Gblksize = max(24, int(max_memory*.8e6/16/(nao**2+naod**2)/(nkpts+3))//8*8)
             Gblksize = min(Gblksize, ngrids, 200000)
             log.debug1('Gblksize = %d', Gblksize)
             buf = np.empty(nkpts*Gblksize*nao**2*2)
             if naod > 0:
                 buf1 = np.empty(nkpts*Gblksize*naod**2*2)
 
-        for group_id, (k, k_conj) in enumerate(k_conj_groups):
-            kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
-            kpti_idx = kpt_ij_idx // nkpts
-            kptj_idx = kpt_ij_idx % nkpts
-            kptjs = kpts[kptj_idx]
-            kpt = uniq_kpts[k]
-            log.debug1('ft_ao_pair for scaled kpt = %s', scaled_kpts[k])
-            log.debug2('ft_ao_pair for kpti_idx = %s', kpti_idx)
-            log.debug2('ft_ao_pair for kptj_idx = %s', kptj_idx)
-            swap_2e = k_conj is not None and k != k_conj
-
+        for group_id, (kpt, ki_idx, kj_idx, self_conj) \
+                in enumerate(aft_jk.loop_k(cell, kpts)):
             coulG = self.weighted_coulG(kpt, exxdiv, mesh)
             if coulG_SR_at_G0 is not None:
                 # For cell.dimension = 2, coulG is computed with truncated coulomb
@@ -1076,11 +1062,11 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                     # (CC|DD) (CD|DD) (DC|DD) (DD|CC) (DD|CD) (DD|DC) (DD|DD)
                     log.debug3('update_vk [%s:%s]', p0, p1)
                     Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, out=buf)
-                    update_vk(vk, Gpq, dm, coulG_SR[p0:p1] * -weight, kpti_idx,
-                              kptj_idx, swap_2e, k_to_compute, k_conj_groups)
-                    Gpq = merge_dd(Gpq, p0, p1, kpti_idx, kptj_idx)
-                    update_vk(vk, Gpq, dm, coulG[p0:p1] * weight, kpti_idx,
-                              kptj_idx, swap_2e, k_to_compute, k_conj_groups)
+                    update_vk(vk, Gpq, dm, coulG_SR[p0:p1] * -weight, ki_idx,
+                              kj_idx, not self_conj, k_to_compute, t_rev_pairs)
+                    Gpq = merge_dd(Gpq, p0, p1, ki_idx, kj_idx)
+                    update_vk(vk, Gpq, dm, coulG[p0:p1] * weight, ki_idx,
+                              kj_idx, not self_conj, k_to_compute, t_rev_pairs)
                     Gpq = None
                 # clear cache to release memory for merge_dd function
                 cache = {}
@@ -1089,8 +1075,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 for p0, p1 in lib.prange(0, ngrids, Gblksize):
                     log.debug3('update_vk [%s:%s]', p0, p1)
                     Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, out=buf)
-                    update_vk(vk, Gpq, dm, coulG_LR[p0:p1] * weight, kpti_idx,
-                              kptj_idx, swap_2e, k_to_compute, k_conj_groups)
+                    update_vk(vk, Gpq, dm, coulG_LR[p0:p1] * weight, ki_idx,
+                              kj_idx, not self_conj, k_to_compute, t_rev_pairs)
                     Gpq = None
             cpu1 = log.timer_debug1(f'ft_aopair group {group_id}', *cpu1)
 
@@ -1105,10 +1091,13 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             vkI_dd = np.zeros((n_dm,nkpts,naod,naod))
             vk_dd = [vkR_dd, vkI_dd]
             if dm_factor is None:
+                dmsR, dmsI = dm
                 dmR_dd = np.asarray(dmsR[:,:,ao_d_idx[:,None],ao_d_idx], order='C')
                 dmI_dd = np.asarray(dmsI[:,:,ao_d_idx[:,None],ao_d_idx], order='C')
                 dm_dd = [dmR_dd, dmI_dd]
             else:
+                assert update_vk is not aft_jk._update_vk_fake_gamma
+                dmfR, dmfI = dm
                 dmfR_dd = np.asarray(dmfR[:,:,ao_d_idx], order='C')
                 dmfI_dd = np.asarray(dmfI[:,:,ao_d_idx], order='C')
                 dm_dd = [dmfR_dd, dmfI_dd]
@@ -1118,33 +1107,27 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             mesh_d = cell_d.cutoff_to_mesh(ke_cutoff)
             log.debug1('lr_k dd-block ke_cutoff = %s mesh = %s', ke_cutoff, mesh_d)
 
-            ft_dd_kern = self.supmol_d.gen_ft_kernel(
-                aosym, return_complex=False, verbose=log)
+            ft_kern_dd = self.supmol_d.gen_ft_kernel(
+                aosym, return_complex=False, kpts=kpts, verbose=log)
             Gv, Gvbase, kws = cell_d.get_Gv_weights(mesh_d)
             gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
             ngrids_d = len(Gv)
 
-            Gblksize = max(24, int(max_memory*1e6/16/naod**2/(nkpts+max(nkpts,3)))//8*8)
+            Gblksize = max(24, int(max_memory*.8e6/16/naod**2/(nkpts+max(nkpts,3)))//8*8)
             Gblksize = min(Gblksize, ngrids_d)
             log.debug1('Gblksize = %d', Gblksize)
             buf = np.empty(nkpts*Gblksize*naod**2*2)
-            for group_id, (k, k_conj) in enumerate(k_conj_groups):
-                kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
-                kpti_idx = kpt_ij_idx // nkpts
-                kptj_idx = kpt_ij_idx % nkpts
-                kptjs = kpts[kptj_idx]
-                kpt = uniq_kpts[k]
-                swap_2e = k_conj is not None and k != k_conj
-
+            for group_id, (kpt, ki_idx, kj_idx, self_conj) \
+                    in enumerate(aft_jk.loop_k(cell, kpts)):
                 with lib.temporary_env(cell, dimension=3):
                     coulG_SR = self.weighted_coulG_SR(kpt, False, mesh_d)
                 if is_zero(kpt) and coulG_SR_at_G0 is not None:
                     coulG_SR[G0_idx] += coulG_SR_at_G0
 
                 for p0, p1 in lib.prange(0, ngrids_d, Gblksize):
-                    Gpq = ft_dd_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, kptjs, out=buf)
+                    Gpq = ft_kern_dd(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, out=buf)
                     update_vk(vk_dd, Gpq, dm_dd, coulG_SR[p0:p1] * weight,
-                              kpti_idx, kptj_idx, swap_2e, k_to_compute, k_conj_groups)
+                              ki_idx, kj_idx, not self_conj, k_to_compute, t_rev_pairs)
                     Gpq = None
                 cpu1 = log.timer_debug1(f'ft_aopair dd-block group {group_id}', *cpu1)
 
@@ -1169,7 +1152,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts)
 
         if time_reversal_symmetry:
-            for k, k_conj in k_conj_groups:
+            for k, k_conj in t_rev_pairs:
                 if k != k_conj:
                     vk_kpts[:,k_conj] = vk_kpts[:,k].conj()
         log.timer_debug1('get_lr_k_kpts', *cpu0)
