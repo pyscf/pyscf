@@ -120,7 +120,10 @@ from pyscf.scf.diis import DIIS, CDIIS, EDIIS, ADIIS
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
+from pyscf.soscf import m3soscf
 
+def M3SOSCF(mf, agents, **kwargs):
+    return m3soscf.M3SOSCF(mf, agents, **kwargs)
 
 def HF(mol, *args):
     if mol.nelectron == 1 or mol.spin == 0:

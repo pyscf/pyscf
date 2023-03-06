@@ -1924,6 +1924,14 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         from pyscf.soscf import newton_ah
         return newton_ah.newton(self)
 
+    def m3soscf(self, agents, purge_solvers=0.5, convergence=8, init_scattering=0.3,
+            trust_scale_range=(0.05, 0.5, 0.5), init_guess='minao',
+            stepsize=0.2):
+        '''Create an M3SOSCF object based on the mean-field object'''
+        from pyscf.soscf import m3soscf
+        return m3soscf.M3SOSCF(self, agents, purge_solvers, convergence,
+                init_scattering, trust_scale_range, init_guess, stepsize)
+
     def remove_soscf(self):
         '''Remove the SOSCF decorator'''
         from pyscf.soscf import newton_ah

@@ -22,6 +22,7 @@ from pyscf.mp import dfmp2
 from pyscf.mp import ump2
 from pyscf.mp import gmp2
 from pyscf.mp import dfgmp2
+from pyscf.mp import ordmp2
 
 def MP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if mf.istype('UHF'):
@@ -74,3 +75,7 @@ def GMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     else:
         return gmp2.GMP2(mf, frozen, mo_coeff, mo_occ)
 GMP2.__doc__ = gmp2.GMP2.__doc__
+
+def ORDMP2(mf, optimality='max_energy'):
+    return ordmp2.ORDMP2(mf, optimality)
+ORDMP2.__doc__ = ordmp2.ORDMP2.__doc__
