@@ -1640,14 +1640,6 @@ class SCF(lib.StreamObject):
                 dm = self.init_guess_by_minao(mol)
         else:
             dm = self.init_guess_by_minao(mol)
-        if self.verbose >= logger.DEBUG1:
-            s = self.get_ovlp()
-            if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-                nelec = numpy.einsum('ij,ji', dm, s).real
-            else:  # UHF
-                nelec =(numpy.einsum('ij,ji', dm[0], s).real,
-                        numpy.einsum('ij,ji', dm[1], s).real)
-            logger.debug1(self, 'Nelec from initial guess = %s', nelec)
         return dm
 
     make_rdm1 = lib.module_method(make_rdm1, absences=['mo_coeff', 'mo_occ'])
@@ -2028,6 +2020,12 @@ class SCF(lib.StreamObject):
         else:
             raise RuntimeError(f'to_ks does not support {self.__class__}')
 
+    def stability(self):
+        raise NotImplementedError
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
 
 class KohnShamDFT:
     '''A mock DFT base class
@@ -2047,6 +2045,14 @@ class RHF(SCF):
             logger.warn(self, 'Invalid number of electrons %d for RHF method.',
                         mol.nelectron)
         return SCF.check_sanity(self)
+
+    def get_init_guess(self, mol=None, key='minao'):
+        dm = SCF.get_init_guess(self, mol, key)
+        if self.verbose >= logger.DEBUG1:
+            s = self.get_ovlp()
+            nelec = numpy.einsum('ij,ji', dm, s).real
+            logger.debug1(self, 'Nelec from initial guess = %s', nelec)
+        return dm
 
     @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,

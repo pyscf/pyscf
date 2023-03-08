@@ -323,33 +323,35 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
         mo_energy.append(mo_e)
     return mo_energy, mo_coeff
 
+def _cast_mol_init_guess(fn):
+    def fn_init_guess(mf, cell=None, kpts=None):
+        if cell is None: cell = mf.cell
+        if kpts is None: kpts = mf.kpts
+        dm = fn(cell)
+        nkpts = len(kpts)
+        dm_kpts = np.asarray([dm] * nkpts)
+        if hasattr(dm, 'mo_coeff'):
+            mo_coeff = [dm.mo_coeff] * nkpts
+            mo_occ = [dm.mo_occ] * nkpts
+            dm_kpts = lib.tag_array(dm_kpts, mo_coeff=mo_coeff, mo_occ=mo_occ)
+        return dm_kpts
+    fn_init_guess.__name__ = fn.__name__
+    fn_init_guess.__doc__ = (
+        'Generates initial guess density matrix and the orbitals of the initial '
+        'guess DM ' + fn.__doc__)
+    return fn_init_guess
+
 def init_guess_by_minao(cell, kpts=None):
     '''Generates initial guess density matrix and the orbitals of the initial
     guess DM based on ANO basis.
     '''
-    if kpts is None:
-        nkpts = 1
-    else:
-        nkpts = len(kpts)
-    dm = mol_hf.init_guess_by_minao(cell)
-    mo_coeff = [dm.mo_coeff] * nkpts
-    mo_occ = [dm.mo_occ] * nkpts
-    dm_kpts = lib.asarray([dm] * nkpts)
-    return lib.tag_array(dm_kpts, mo_coeff=mo_coeff, mo_occ=mo_occ)
+    return KSCF(cell).init_guess_by_minao(cell, kpts)
 
 def init_guess_by_atom(cell, kpts=None):
     '''Generates initial guess density matrix and the orbitals of the initial
     guess DM based on the superposition of atomic HF density matrix.
     '''
-    if kpts is None:
-        nkpts = 1
-    else:
-        nkpts = len(kpts)
-    dm = mol_hf.init_guess_by_atom(cell)
-    mo_coeff = [dm.mo_coeff] * nkpts
-    mo_occ = [dm.mo_occ] * nkpts
-    dm_kpts = lib.asarray([dm] * nkpts)
-    return lib.tag_array(dm_kpts, mo_coeff=mo_coeff, mo_occ=mo_occ)
+    return KSCF(cell).init_guess_by_atom(cell, kpts)
 
 def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
@@ -573,46 +575,7 @@ class KSCF(pbchf.SCF):
             self.check_sanity()
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None:
-            cell = self.cell
-        dm_kpts = None
-        key = key.lower()
-        if key == '1e' or key == 'hcore':
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif getattr(cell, 'natm', 0) == 0:
-            logger.info(self, 'No atom found in cell. Use 1e initial guess')
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif key == 'atom':
-            dm_kpts = self.init_guess_by_atom(cell)
-        elif key[:3] == 'chk':
-            try:
-                dm_kpts = self.from_chk()
-            except (IOError, KeyError):
-                logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
-                            self.chkfile)
-                dm_kpts = self.init_guess_by_minao(cell)
-        else:
-            dm_kpts = self.init_guess_by_minao(cell)
-
-        nkpts = len(self.kpts)
-        if dm_kpts.ndim == 2:
-            # dm[nao,nao] at gamma point -> dm_kpts[nkpts,nao,nao]
-            dm_kpts = np.repeat(dm_kpts[None,:,:], nkpts, axis=0)
-
-        ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
-        # FIXME: consider the fractional num_electron or not? This maybe
-        # relate to the charged system.
-        nelectron = float(self.cell.tot_electrons(nkpts))
-        if abs(ne - nelectron) > 0.1*nkpts:
-            logger.debug(self, 'Big error detected in the electron number '
-                         'of initial guess density matrix (Ne/cell = %g)!\n'
-                         '  This can cause huge error in Fock matrix and '
-                         'lead to instability in SCF for low-dimensional '
-                         'systems.\n  DM is normalized wrt the number '
-                         'of electrons %s', ne/nkpts, nelectron/nkpts)
-            dm_kpts *= (nelectron / ne).reshape(-1,1,1)
-        return dm_kpts
+    get_init_guess = pbchf.SCF.get_init_guess
 
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell
@@ -621,8 +584,8 @@ class KSCF(pbchf.SCF):
                         'the SCF of low-dimensional systems.')
         return mol_hf.SCF.init_guess_by_1e(self, cell)
 
-    init_guess_by_minao = lib.module_method(init_guess_by_minao, absences=['cell', 'kpts'])
-    init_guess_by_atom = lib.module_method(init_guess_by_atom, absences=['cell', 'kpts'])
+    init_guess_by_minao = _cast_mol_init_guess(mol_hf.init_guess_by_minao)
+    init_guess_by_atom = _cast_mol_init_guess(mol_hf.init_guess_by_atom)
 
     get_hcore = get_hcore
     get_ovlp = get_ovlp
@@ -863,6 +826,27 @@ class KRHF(KSCF, pbchf.RHF):
             logger.warn(self, 'Problematic nelec %s and number of k-points %d '
                         'found in KRHF method.', cell.nelec, nkpts)
         return KSCF.check_sanity(self)
+
+    def get_init_guess(self, cell=None, key='minao'):
+        dm_kpts = pbchf.SCF.get_init_guess(self, cell, key)
+        nkpts = len(self.kpts)
+        if dm_kpts.ndim == 2:
+            # dm[nao,nao] at gamma point -> dm_kpts[nkpts,nao,nao]
+            dm_kpts = np.repeat(dm_kpts[None,:,:], nkpts, axis=0)
+
+        ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
+        # FIXME: consider the fractional num_electron or not? This maybe
+        # relate to the charged system.
+        nelectron = float(self.cell.tot_electrons(nkpts))
+        if abs(ne - nelectron) > 0.01*nkpts:
+            logger.debug(self, 'Big error detected in the electron number '
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %s', ne/nkpts, nelectron/nkpts)
+            dm_kpts *= (nelectron / ne).reshape(-1,1,1)
+        return dm_kpts
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to KRHF'''

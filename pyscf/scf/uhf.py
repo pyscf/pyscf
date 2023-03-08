@@ -830,6 +830,15 @@ class UHF(hf.SCF):
 
     energy_elec = energy_elec
 
+    def get_init_guess(self, mol=None, key='minao'):
+        dm = hf.SCF.get_init_guess(self, mol, key)
+        if self.verbose >= logger.DEBUG1:
+            s = self.get_ovlp()
+            nelec =(numpy.einsum('ij,ji', dm[0], s).real,
+                    numpy.einsum('ij,ji', dm[1], s).real)
+            logger.debug1(self, 'Nelec from initial guess = %s', nelec)
+        return dm
+
     def init_guess_by_minao(self, mol=None, breaksym=BREAKSYM):
         '''Initial guess in terms of the overlap to minimal basis.'''
         if mol is None: mol = self.mol

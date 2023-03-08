@@ -416,6 +416,8 @@ class GHF(hf.SCF):
                                mo_coeff[:,viridx]))
         return g.conj().T.ravel()
 
+    get_init_guess = hf.RHF.get_init_guess
+
     @lib.with_doc(hf.SCF.init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
         return _from_rhf_init_dm(hf.SCF.init_guess_by_minao(self, mol))

@@ -740,11 +740,7 @@ class SCF(mol_hf.SCF):
             makov_payne_correction(self)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
-        dm = mol_hf.SCF.get_init_guess(self, cell, key)
-        dm = normalize_dm_(self, dm)
-        return dm
+    get_init_guess = mol_hf.SCF.get_init_guess
 
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell
@@ -804,7 +800,10 @@ class SCF(mol_hf.SCF):
         '''Convert the input mean-field object to a GHF/GKS object'''
         return addons.convert_to_ghf(mf)
 
-    def nuc_grad_method(self, *args, **kwargs):
+    def stability(self):
+        raise NotImplementedError
+
+    def nuc_grad_method(self):
         raise NotImplementedError
 
     def jk_method(self, J='FFTDF', K=None):
@@ -858,6 +857,12 @@ class KohnShamDFT:
 
 class RHF(SCF, mol_hf.RHF):
 
+    def get_init_guess(self, cell=None, key='minao'):
+        if cell is None: cell = self.cell
+        dm = SCF.get_init_guess(self, cell, key)
+        dm = normalize_dm_(self, dm)
+        return dm
+
     stability = mol_hf.RHF.stability
 
     def convert_from_(self, mf):
@@ -884,7 +889,7 @@ def normalize_dm_(mf, dm):
         ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
     else:
         ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
-    if abs(ne - cell.nelectron).sum() > 1e-7:
+    if abs(ne - cell.nelectron).sum() > 0.01:
         logger.debug(mf, 'Big error detected in the electron number '
                      'of initial guess density matrix (Ne/cell = %g)!\n'
                      '  This can cause huge error in Fock matrix and '

@@ -35,11 +35,17 @@ MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 def init_guess_by_minao(mol):
     dm = hf.init_guess_by_minao(mol)
-    return numpy.array((dm*.5, dm*.5))
+    dm = numpy.array((dm*.5, dm*.5))
+    if hasattr(dm, 'mo_coeff'):
+        dm = lib.tag_array(dm, mo_coeff=dm.mo_coeff, mo_occ=dm.mo_occ)
+    return dm
 
 def init_guess_by_atom(mol):
     dm = hf.init_guess_by_atom(mol)
-    return numpy.array((dm*.5, dm*.5))
+    dm = numpy.array((dm*.5, dm*.5))
+    if hasattr(dm, 'mo_coeff'):
+        dm = lib.tag_array(dm, mo_coeff=dm.mo_coeff, mo_occ=dm.mo_occ)
+    return dm
 
 init_guess_by_huckel = uhf.init_guess_by_huckel
 init_guess_by_chkfile = uhf.init_guess_by_chkfile
@@ -344,6 +350,8 @@ class ROHF(hf.RHF):
         nelec = self.nelec
         logger.info(self, 'num. doubly occ = %d  num. singly occ = %d',
                     nelec[1], nelec[0]-nelec[1])
+
+    get_init_guess = uhf.UHF.get_init_guess
 
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol

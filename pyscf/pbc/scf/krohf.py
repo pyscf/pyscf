@@ -294,51 +294,23 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-#?    def get_init_guess(self, cell=None, key='minao'):
-#?        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
-#?        if dm_kpts.ndim != 4:  # The KRHF initial guess
-#?            # dm_kpts shape should be (spin, nkpts, nao, nao)
-#?            dm_kpts = lib.asarray([dm_kpts*.5,]*2)
-#?        return dm_kpts
-#?
     def get_init_guess(self, cell=None, key='minao'):
-        if cell is None:
-            cell = self.cell
-        dm_kpts = None
-        key = key.lower()
-        if key == '1e' or key == 'hcore':
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif getattr(cell, 'natm', 0) == 0:
-            logger.info(self, 'No atom found in cell. Use 1e initial guess')
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif key == 'atom':
-            dm_kpts = self.init_guess_by_atom(cell)
-        elif key[:3] == 'chk':
-            try:
-                dm_kpts = self.from_chk()
-            except (IOError, KeyError):
-                logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
-                            self.chkfile)
-                dm_kpts = self.init_guess_by_minao(cell)
-        else:
-            dm_kpts = self.init_guess_by_minao(cell)
-
+        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
+        assert dm_kpts.shape[0] == 2
         nkpts = len(self.kpts)
         if dm_kpts.ndim != 4:
             # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
             dm_kpts = np.repeat(dm_kpts[:,None,:,:], nkpts, axis=1)
 
         ne = np.einsum('xkij,kji->', dm_kpts, self.get_ovlp(cell)).real
-        # FIXME: consider the fractional num_electron or not? This maybe
-        # relates to the charged system.
         nelec = float(sum(self.nelec))
-        if np.any(abs(ne - nelec) > 0.1*nkpts):
+        if np.any(abs(ne - nelec) > 0.01*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
                          'of initial guess density matrix (Ne/cell = %g)!\n'
                          '  This can cause huge error in Fock matrix and '
                          'lead to instability in SCF for low-dimensional '
                          'systems.\n  DM is normalized wrt the number '
-                         'of electrons %g', ne/nkpts, nelec/nkpts)
+                         'of electrons %s', ne.mean()/nkpts, nelec/nkpts)
             dm_kpts *= nelec / ne
         return dm_kpts
 

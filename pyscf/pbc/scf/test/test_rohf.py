@@ -104,11 +104,11 @@ class KnownValues(unittest.TestCase):
         cell1.build(0, 0)
         mf = pscf.ROHF(cell1)
         dm = mf.get_init_guess(key='minao')
-        self.assertAlmostEqual(lib.fp(dm), -0.06586028869608128, 8)
+        self.assertAlmostEqual(lib.fp(dm), -0.06591221355479249, 8)
 
         mf = pscf.KROHF(cell1)
         dm = mf.get_init_guess(key='minao')
-        self.assertAlmostEqual(lib.fp(dm), -0.06586028869608128, 8)
+        self.assertAlmostEqual(lib.fp(dm), -0.06591221355479249, 8)
 
     def test_spin_square(self):
         ss = kmf.spin_square()[0]

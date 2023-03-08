@@ -16,7 +16,9 @@
 import unittest
 import numpy as np
 import scipy.linalg
+from pyscf import lib
 from pyscf.pbc.gto import Cell
+from pyscf.pbc.df import FFTDF
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.scf import rsjk
 
@@ -228,6 +230,56 @@ class KnownValues(unittest.TestCase):
 
         vj, vk = jk_builder.get_jk(dm, hermi=0, kpts=kpts, exxdiv=mf.exxdiv, with_k=False)
         self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
+
+    def test_update_vk_high_cost(self):
+        L = 5.
+        cell = Cell()
+        np.random.seed(1)
+        cell.a = np.diag([L,L,L]) + np.random.rand(3,3)
+        cell.mesh = np.array([27]*3)
+        cell.atom = '''H    1.8   2.       .4
+                       Li    1.    1.       1.'''
+        cell.basis = {'H': [[0, (1.0, 1)],
+                            [1, (0.8, 1)]],
+                      'Li': [[0, (1.0, 1)],
+                             [0, (0.6, 1)],
+                             [1, (0.8, 1)]]}
+        cell.build()
+        kmesh = [6,1,1]
+        kpts = cell.make_kpts(kmesh)
+        mf = cell.KRHF(kpts=kpts)
+        mf.run()
+        mf.mo_coeff = np.array(mf.mo_coeff)
+
+        dm = mf.make_rdm1()
+        refj, refk = FFTDF(cell, kpts=kpts).get_jk(dm, kpts=kpts)
+        self.assertAlmostEqual(lib.fp(refk), -7.614964681516531, 8)
+
+        mf.jk_method('RS')
+        vj, vk = mf.rsjk.get_jk(dm, kpts=kpts, exxdiv=None)
+        self.assertAlmostEqual(abs(vj-refj).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk-refk).max(), 0, 7)
+
+        mf.rsjk.reset()
+        mf.rsjk.exclude_dd_block = True
+        mf.rsjk.allow_drv_nodddd = False
+        vj, vk = mf.rsjk.get_jk(dm, kpts=kpts, exxdiv=None)
+        self.assertAlmostEqual(abs(vj-refj).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk-refk).max(), 0, 7)
+
+        mf.rsjk.reset()
+        mf.rsjk.exclude_dd_block = False
+        mf.rsjk.allow_drv_nodddd = True
+        vj, vk = mf.rsjk.get_jk(dm, kpts=kpts, exxdiv=None)
+        self.assertAlmostEqual(abs(vj-refj).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk-refk).max(), 0, 7)
+
+        mf.rsjk.reset()
+        mf.rsjk.exclude_dd_block = False
+        mf.rsjk.allow_drv_nodddd = False
+        vj, vk = mf.rsjk.get_jk(dm, kpts=kpts, exxdiv=None)
+        self.assertAlmostEqual(abs(vj-refj).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk-refk).max(), 0, 7)
 
 if __name__ == '__main__':
     print("Full Tests for rsjk")

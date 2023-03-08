@@ -23,6 +23,7 @@ Generalized Hartree-Fock for periodic systems with k-point sampling
 from functools import reduce
 import numpy as np
 import scipy.linalg
+import pyscf.scf.hf as mol_hf  # noqa
 import pyscf.scf.ghf as mol_ghf  # noqa
 from pyscf import lib
 from pyscf.lib import logger
@@ -129,6 +130,19 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     return mo_occ_kpts
 
+def _cast_mol_init_guess(fn):
+    def fn_init_guess(mf, cell=None, kpts=None):
+        if cell is None: cell = mf.cell
+        if kpts is None: kpts = mf.kpts
+        dm = mol_ghf._from_rhf_init_dm(fn(cell))
+        nkpts = len(kpts)
+        dm_kpts = np.asarray([dm] * nkpts)
+        return dm_kpts
+    fn_init_guess.__name__ = fn.__name__
+    fn_init_guess.__doc__ = (
+        'Generates initial guess density matrix and the orbitals of the initial '
+        'guess DM ' + fn.__doc__)
+    return fn_init_guess
 
 class KGHF(pbcghf.GHF, khf.KSCF):
     '''GHF class for PBCs.
@@ -192,8 +206,6 @@ class KGHF(pbcghf.GHF, khf.KSCF):
         '''
         raise NotImplementedError
 
-    get_init_guess = khf.KSCF.get_init_guess
-
     def _finalize(self):
         if self.converged:
             logger.note(self, 'converged SCF energy = %.15g', self.e_tot)
@@ -208,6 +220,11 @@ class KGHF(pbcghf.GHF, khf.KSCF):
         addons.convert_to_ghf(mf, self)
         return self
 
+    get_init_guess = khf.KRHF.get_init_guess
+    init_guess_by_minao = _cast_mol_init_guess(mol_hf.init_guess_by_minao)
+    init_guess_by_atom = _cast_mol_init_guess(mol_hf.init_guess_by_atom)
+    init_guess_by_chkfile = mol_ghf.init_guess_by_chkfile
+
     density_fit = khf.KSCF.density_fit
     rs_density_fit = khf.KSCF.rs_density_fit
     newton = khf.KSCF.newton
@@ -216,11 +233,8 @@ class KGHF(pbcghf.GHF, khf.KSCF):
         '''X2C with spin-orbit coupling effects in spin-orbital basis'''
         from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
         return x2c1e_gscf(self)
-
     x2c = x2c1e
     sfx2c1e = khf.KSCF.sfx2c1e
-    stability = None
-    nuc_grad_method = None
 
 
 if __name__ == '__main__':

@@ -187,37 +187,17 @@ class KsymAdaptedKSCF(khf.KSCF):
         return self
 
     def get_init_guess(self, cell=None, key='minao'):
-        if cell is None:
-            cell = self.cell
-        dm_kpts = None
-        key = key.lower()
-        if key == '1e' or key == 'hcore':
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif getattr(cell, 'natm', 0) == 0:
-            logger.info(self, 'No atom found in cell. Use 1e initial guess')
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif key == 'atom':
-            dm = self.init_guess_by_atom(cell)
-        elif key[:3] == 'chk':
-            try:
-                dm_kpts = self.from_chk()
-            except (IOError, KeyError):
-                logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
-                            self.chkfile)
-                dm = self.init_guess_by_minao(cell)
-        else:
-            dm = self.init_guess_by_minao(cell)
-
-        if dm_kpts is None:
-            dm_kpts = lib.asarray([dm]*self.kpts.nkpts_ibz)
+        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
+        if dm_kpts.ndim == 2:
+            dm_kpts = np.asarray([dm_kpts]*self.kpts.nkpts_ibz)
+        elif len(dm_kpts) != self.kpts.nkpts_ibz:
+            dm_kpts = dm_kpts[self.kpts.ibz2bz]
 
         ne = np.einsum('k,kij,kji', self.kpts.weights_ibz, dm_kpts, self.get_ovlp(cell)).real
-        # FIXME: consider the fractional num_electron or not? This maybe
-        # relate to the charged system.
         nkpts = self.kpts.nkpts
         ne *= nkpts
         nelectron = float(self.cell.tot_electrons(nkpts))
-        if abs(ne - nelectron) > 1e-7*nkpts:
+        if abs(ne - nelectron) > 0.01*nkpts:
             logger.debug(self, 'Big error detected in the electron number '
                          'of initial guess density matrix (Ne/cell = %g)!\n'
                          '  This can cause huge error in Fock matrix and '

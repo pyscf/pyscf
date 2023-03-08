@@ -502,7 +502,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm), -1.714952331211208, 8)
 
         self.assertEqual(kdm.ndim, 3)
-        self.assertAlmostEqual(lib.fp(dm), -1.714952331211208, 8)
+        self.assertAlmostEqual(lib.fp(kdm), -1.714952331211208, 8)
 
     def test_jk(self):
         nao = cell.nao
