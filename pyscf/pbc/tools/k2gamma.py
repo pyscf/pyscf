@@ -154,12 +154,13 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
     cR_max = abs(C_gamma.real).max(axis=0)
     C_gamma[:,cR_max < 1e-5] *= -1j
 
+    E_sort_idx = np.argsort(E_g)
+    E_g = E_g[E_sort_idx]
+
     cI_max = abs(C_gamma.imag).max(axis=0)
     if cI_max.max() < 1e-5:
-        C_gamma = C_gamma.real
+        C_gamma = C_gamma.real[:,E_sort_idx]
     else:
-        E_sort_idx = np.argsort(E_g)
-        E_g = E_g[E_sort_idx]
         C_gamma = C_gamma[:,E_sort_idx]
         s = scell.pbc_intor('int1e_ovlp')
         # assert (abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))

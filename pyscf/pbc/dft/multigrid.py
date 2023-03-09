@@ -1785,8 +1785,9 @@ def _primitive_gto_cutoff(cell, precision=None):
     required precsion'''
     if precision is None:
         precision = cell.precision
-    weight_penalty = numpy.prod(cell.mesh) / cell.vol
-    precision = cell.precision / weight_penalty
+    vol = cell.vol
+    weight_penalty = vol
+    precision = cell.precision / max(weight_penalty, 1)
 
     omega = cell.omega
     rcut = []
@@ -1796,7 +1797,7 @@ def _primitive_gto_cutoff(cell, precision=None):
         es = cell.bas_exp(ib)
         cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
         norm_ang = ((2*l+1)/(4*numpy.pi))**.5
-        fac = 2*numpy.pi/cell.vol * cs*norm_ang/es / precision
+        fac = 2*numpy.pi/vol * cs*norm_ang/es / precision
         r = cell.rcut
         r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
         r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5

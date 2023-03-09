@@ -1826,7 +1826,7 @@ class SCF(lib.StreamObject):
 
     def nuc_grad_method(self):  # pragma: no cover
         '''Hook to create object for analytical nuclear gradients.'''
-        pass
+        raise NotImplementedError
 
     def update_(self, chkfile=None):
         '''Read attributes from the chkfile then replace the attributes of
@@ -2021,9 +2021,6 @@ class SCF(lib.StreamObject):
             raise RuntimeError(f'to_ks does not support {self.__class__}')
 
     def stability(self):
-        raise NotImplementedError
-
-    def nuc_grad_method(self):
         raise NotImplementedError
 
 

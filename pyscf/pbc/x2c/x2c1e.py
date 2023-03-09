@@ -41,6 +41,7 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import gdf_builder
 from pyscf.pbc.scf import ghf
 from pyscf.pbc.x2c import sfx2c1e
+from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
 def x2c1e_gscf(mf):
@@ -227,7 +228,8 @@ def get_pbc_pvxp(mydf, kpts=None):
     t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 
     ft_kern = dfbuilder.supmol_ft.gen_ft_kernel(
-        's1', intor='GTO_ft_pxp_sph', comp=3, return_complex=False, verbose=log)
+        's1', intor='GTO_ft_pxp_sph', comp=3, return_complex=False,
+        kpts=kpts_lst, verbose=log)
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
@@ -249,12 +251,12 @@ def get_pbc_pvxp(mydf, kpts=None):
 
     for p0, p1 in lib.prange(0, ngrids, Gblksize):
         # shape of Gpq (nkpts, nGv, nao_pair)
-        Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts_lst)
+        Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow)
         for k, (GpqR, GpqI) in enumerate(zip(*Gpq)):
             vR  = numpy.einsum('k,ckpq->cpq', vGR[p0:p1], GpqR)
             vR += numpy.einsum('k,ckpq->cpq', vGI[p0:p1], GpqI)
             soc_mat[k] += vR
-            if not aft_jk.gamma_point(kpts_lst[k]):
+            if not is_zero(kpts_lst[k]):
                 vI  = numpy.einsum('k,ckpq->cpq', vGR[p0:p1], GpqI)
                 vI -= numpy.einsum('k,ckpq->cpq', vGI[p0:p1], GpqR)
                 soc_mat[k] += vI * 1j
@@ -262,7 +264,7 @@ def get_pbc_pvxp(mydf, kpts=None):
 
     soc_mat_kpts = []
     for k, kpt in enumerate(kpts_lst):
-        if aft_jk.gamma_point(kpt):
+        if is_zero(kpt):
             soc_mat_kpts.append(soc_mat[k].real.reshape(3,nao,nao))
         else:
             soc_mat_kpts.append(soc_mat[k].reshape(3,nao,nao))

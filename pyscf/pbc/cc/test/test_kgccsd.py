@@ -293,7 +293,7 @@ class KnownValues(unittest.TestCase):
         eris.mo_energy = [f.diagonal() for f in eris.fock]
         ecc1, t1, t2 = mycc.kernel(eris=eris)
 
-        self.assertAlmostEqual(ecc1, ecc1_bench, 6)
+        self.assertAlmostEqual(ecc1, ecc1_bench, 5)
 
     def _test_cu_metallic_frozen_occ(self, kmf, cell, nk=[1,1,1]):
         assert cell.mesh == [7, 7, 7]

@@ -878,7 +878,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             bvk_ncells, rs_nbas, nimgs = self.supmol_ft.bas_mask.shape
             s_nao = self.supmol_ft.nao
             contract_mo_early = (time_reversal_symmetry and naod == 0 and
-                                 bvk_ncells*nao*4 > s_nao*nocc*n_dm)
+                                 bvk_ncells*nao*6 > s_nao*nocc*n_dm)
             log.debug2('time_reversal_symmetry = %s bvk_ncells = %d '
                        's_nao = %d nocc = %d n_dm = %d',
                        time_reversal_symmetry, bvk_ncells, s_nao, nocc, n_dm)

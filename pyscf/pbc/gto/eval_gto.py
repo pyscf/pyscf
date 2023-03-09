@@ -169,15 +169,16 @@ pbc_eval_gto = eval_gto
 def _estimate_rcut(cell):
     '''Cutoff raidus, above which each shell decays to a value less than the
     required precsion'''
-    weight_penalty = np.prod(cell.mesh) / cell.vol
-    precision = cell.precision / weight_penalty
+    vol = cell.vol
+    weight_penalty = vol # ~ V[r] * (vol/ngrids) * ngrids
+    precision = cell.precision / max(weight_penalty, 1)
     rcut = []
     for ib in range(cell.nbas):
         l = cell.bas_angular(ib)
         es = cell.bas_exp(ib)
         cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
         norm_ang = ((2*l+1)/(4*np.pi))**.5
-        fac = 2*np.pi/cell.vol * cs*norm_ang/es / precision
+        fac = 2*np.pi/vol * cs*norm_ang/es / precision
         r = cell.rcut
         r = (np.log(fac * r**(l+1) + 1.) / es)**.5
         r = (np.log(fac * r**(l+1) + 1.) / es)**.5

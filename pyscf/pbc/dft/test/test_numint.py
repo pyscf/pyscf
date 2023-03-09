@@ -349,7 +349,7 @@ class KnownValues(unittest.TestCase):
 
         grids.coords = cell.get_uniform_grids(wrap_around=False)
         rho1 = numint.get_rho(ni, cell, dm, grids)
-        self.assertAlmostEqual(abs(rho - rho1).max(), 0, 9)
+        self.assertAlmostEqual(abs(rho - rho1).max(), 0, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.numint")
