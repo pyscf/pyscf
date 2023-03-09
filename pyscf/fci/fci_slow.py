@@ -32,7 +32,7 @@ def contract_1e(f1e, fcivec, norb, nelec):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci0 = fcivec.reshape(na,nb)
-    t1 = numpy.zeros((norb,norb,na,nb))
+    t1 = numpy.zeros((norb,norb,na,nb), dtype=fcivec.dtype)
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
             t1[a,i,str1] += sign * ci0[str0]
@@ -55,7 +55,7 @@ def contract_2e(eri, fcivec, norb, nelec, opt=None):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci0 = fcivec.reshape(na,nb)
-    t1 = numpy.zeros((norb,norb,na,nb))
+    t1 = numpy.zeros((norb,norb,na,nb), dtype=fcivec.dtype)
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
             t1[a,i,str1] += sign * ci0[str0]
@@ -65,7 +65,7 @@ def contract_2e(eri, fcivec, norb, nelec, opt=None):
 
     t1 = lib.einsum('bjai,aiAB->bjAB', eri.reshape([norb]*4), t1)
 
-    fcinew = numpy.zeros_like(ci0)
+    fcinew = numpy.zeros_like(ci0, dtype=fcivec.dtype)
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
             fcinew[str1] += sign * t1[a,i,str0]
