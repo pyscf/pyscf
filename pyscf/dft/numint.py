@@ -2778,8 +2778,8 @@ class _NumIntMixin(lib.StreamObject):
                 = alpha * HFX + beta * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
                 = alpha * LR_HFX + hyb * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
 
-        SR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
-        LR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
+        SR_HFX = < pi | (1-erf(-omega r_{12}))/r_{12} | iq >
+        LR_HFX = < pi | erf(-omega r_{12})/r_{12} | iq >
         alpha = c_LR
         beta = c_SR - c_LR
         '''
