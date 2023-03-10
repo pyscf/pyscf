@@ -977,7 +977,7 @@ class UHF(hf.SCF):
     def _finalize(self):
         if self.mo_coeff is None or self.mo_occ is None:
             # Skip spin_square (issue #1574)
-            return SCF._finalize()
+            return hf.SCF._finalize(self)
 
         ss, s = self.spin_square()
         if self.converged:
