@@ -906,14 +906,17 @@ H     0    0.757    0.587'''
         q = opt.q_cond
         self.assertTrue(mol.intor_by_shell('int2e', shls).ravel()[0] < q[i,j] * q[k,l])
 
+    @unittest.skip('Numerical accuracy issue in libcint 5.2')
+    def test_schwarz_condition_numerical_error(self):
         mol = gto.M(atom='''
                     H    0   0   0
                     H    0   0   6
                     ''', unit='B',
                     basis = [[0, (.6, 1)], [0, (1e3, 1)]])
         omega = 5.
-        with mol.with_short_range_coulomb(5.):
+        with mol.with_short_range_coulomb(omega):
             mf = scf.RHF(mol)
+            # sr eri cannot reach the accuracy 1e-18
             mf.direct_scf_tol = 1e-18
             opt = mf.init_direct_scf()
             shls = i, j, k, l = 2, 0, 1, 1
