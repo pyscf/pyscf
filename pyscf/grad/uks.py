@@ -40,7 +40,6 @@ def get_veff(ks_grad, mol=None, dm=None):
     t0 = (logger.process_clock(), logger.perf_counter())
 
     mf = ks_grad.base
-    ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids
     else:
@@ -55,7 +54,7 @@ def get_veff(ks_grad, mol=None, dm=None):
     if grids.coords is None:
         grids.build(with_non0tab=True)
 
-    #enabling range-separated hybrids
+    ni = mf._numint
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
     mem_now = lib.current_memory()[0]
@@ -83,15 +82,14 @@ def get_veff(ks_grad, mol=None, dm=None):
             vxc += vnlc
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
-    if abs(hyb) < 1e-10:
+    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vj = ks_grad.get_j(mol, dm)
         vxc += vj[0] + vj[1]
     else:
         vj, vk = ks_grad.get_jk(mol, dm)
         vk *= hyb
         if abs(omega) > 1e-10:  # For range separated Coulomb operator
-            with mol.with_range_coulomb(omega):
-                vk += ks_grad.get_k(mol, dm) * (alpha - hyb)
+            vk += ks_grad.get_k(mol, dm, omega=omega) * (alpha - hyb)
         vxc += vj[0] + vj[1] - vk
 
     return lib.tag_array(vxc, exc1_grid=exc)
