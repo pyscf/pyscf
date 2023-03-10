@@ -512,8 +512,6 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
     atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
     if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
-        logger.warn(cell, 'Atoms found very far from the primitive cell. '
-                    'Atom coordinates may be error.')
         atom_boundary_max[atom_boundary_max > 1] = 1
         atom_boundary_min[atom_boundary_min <-1] = -1
     ovlp_penalty = atom_boundary_max - atom_boundary_min

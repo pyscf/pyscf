@@ -1504,6 +1504,14 @@ class Cell(mole.Mole):
             logger.info(self, 'dimension = %s', self.dimension)
             logger.info(self, 'low_dim_ft_type = %s', self.low_dim_ft_type)
             logger.info(self, 'Cell volume = %g', self.vol)
+            # Check atoms coordinates
+            if self.dimension > 0:
+                scaled_atom_coords = np.linalg.solve(_a.T, self.atom_coords().T).T
+                atom_boundary_max = scaled_atom_coords[:,:self.dimension].max(axis=0)
+                atom_boundary_min = scaled_atom_coords[:,:self.dimension].min(axis=0)
+                if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
+                    logger.warn(self, 'Atoms found out of the primitive cell.')
+
             if self.exp_to_discard is not None:
                 logger.info(self, 'exp_to_discard = %s', self.exp_to_discard)
             logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
