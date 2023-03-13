@@ -76,7 +76,7 @@ class KnownValues(unittest.TestCase):
     @unittest.skipIf(not hasattr(dft, 'xcfun'), 'xcfun not available')
     def test_tda_singlet_b3lyp_xcfun(self):
         mf = dft.RKS(mol)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf._numint.libxc = dft.xcfun
         mf.conv_tol = 1e-14
         mf.scf()
@@ -98,7 +98,7 @@ class KnownValues(unittest.TestCase):
     @unittest.skip('not implmented')
     def test_tda_triplet_b3lyp(self):
         mf = dft.RKS(mol)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf.conv_tol = 1e-14
         mf.kernel()
         td = tdscf.TDA(mf).run(singlet=False, nstates=3)
@@ -143,7 +143,7 @@ class KnownValues(unittest.TestCase):
 
     def test_tddft_b3lyp_high_cost(self):
         mf = dft.RKS(mol)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf._numint.libxc = dft.xcfun
         mf.grids.prune = False
         mf.scf()

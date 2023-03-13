@@ -51,7 +51,7 @@ def setUpModule():
     mf_bp86.run(conv_tol=1e-10)
 
     mf_b3lyp = dft.RKS(mol)
-    mf_b3lyp.xc = 'b3lyp'
+    mf_b3lyp.xc = 'b3lyp5'
     mf_b3lyp.grids.prune = None
     mf_b3lyp.run(conv_tol=1e-10)
 
