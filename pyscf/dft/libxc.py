@@ -28,6 +28,7 @@ import copy
 import ctypes
 import math
 import numpy
+from functools import lru_cache
 from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
 from pyscf import __config__
@@ -868,6 +869,7 @@ def xc_reference(xc_code):
                 refs.append(ref.decode("UTF-8"))
     return refs
 
+@lru_cache(100)
 def xc_type(xc_code):
     if xc_code is None:
         return None
@@ -891,6 +893,7 @@ def xc_type(xc_code):
 def is_lda(xc_code):
     return xc_type(xc_code) == 'LDA'
 
+@lru_cache(100)
 def is_hybrid_xc(xc_code):
     if xc_code is None:
         return False
@@ -922,6 +925,7 @@ def needs_laplacian(xc_code):
 def is_nlc(xc_code):
     return '__VV10' in xc_code.upper()
 
+@lru_cache(100)
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
     if fn_facs:
@@ -951,6 +955,7 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
             raise e
     return support
 
+@lru_cache(100)
 def hybrid_coeff(xc_code, spin=0):
     '''Support recursively defining hybrid functional
     '''
@@ -959,6 +964,7 @@ def hybrid_coeff(xc_code, spin=0):
         hyb[0] += fac * _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
     return hyb[0]
 
+@lru_cache(100)
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
@@ -986,6 +992,7 @@ def nlc_coeff(xc_code):
                 (xc_code, ', '.join(VV10_XC.keys())))
     return nlc_pars
 
+@lru_cache(100)
 def rsh_coeff(xc_code):
     '''Range-separated parameter and HF exchange components: omega, alpha, beta
 
@@ -1039,6 +1046,7 @@ def parse_xc_name(xc_name='LDA,VWN'):
     fn_facs = parse_xc(xc_name)[1]
     return fn_facs[0][0], fn_facs[1][0]
 
+@lru_cache(100)
 def parse_xc(description):
     r'''Rules to input functional description:
 
