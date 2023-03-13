@@ -798,7 +798,7 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                                 func.cam_omega = omega[i];
                         }
 #else
-                        if (func.hyb_omega[0] != 0) {
+                        if (func.hyb_omega != NULL && func.hyb_omega[0] != 0) {
                                 func.hyb_omega[0] = omega[i];
                         }
 #endif
@@ -810,7 +810,7 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                                         func.func_aux[j]->cam_omega = omega[i];
                                 }
 #else
-                                if (func.func_aux[j]->hyb_omega[0] != 0) {
+                                if (func.func_aux[j]->hyb_omega != NULL && func.func_aux[j]->hyb_omega[0] != 0) {
                                         func.func_aux[j]->hyb_omega[0] = omega[i];
                                 }
 #endif

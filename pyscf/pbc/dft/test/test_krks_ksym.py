@@ -152,6 +152,20 @@ class KnownValues(unittest.TestCase):
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
 
+    def test_gga_df_newton(self):
+        kpts0 = He.make_kpts(nk, with_gamma_point=False)
+        kmf0 = krks.KRKS(He, kpts=kpts0).density_fit()
+        kmf0.xc = 'pbe'
+        kmf0 = kmf0.newton()
+        kmf0.kernel()
+
+        kpts = He.make_kpts(nk, with_gamma_point=False, space_group_symmetry=True,time_reversal_symmetry=True)
+        kmf = pscf.KRKS(He, kpts=kpts).density_fit()
+        kmf.xc = 'pbe'
+        kmf = kmf.newton()
+        kmf.kernel()
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
+
     def test_rsh_df(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
         kmf0 = krks.KRKS(He, kpts=kpts0).density_fit()

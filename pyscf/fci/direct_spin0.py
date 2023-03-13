@@ -225,7 +225,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 
 def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None,
+               nroots=None, davidson_only=None, pspace_size=None, hop=None,
                max_memory=None, verbose=None, ecore=0, **kwargs):
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
@@ -292,9 +292,10 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
-    def hop(c):
-        hc = fci.contract_2e(h2e, c.reshape(na,na), norb, nelec, link_index)
-        return hc.ravel()
+    if hop is None:
+        def hop(c):
+            hc = fci.contract_2e(h2e, c.reshape(na,na), norb, nelec, link_index)
+            return hc.ravel()
 
 #TODO: check spin of initial guess
     if ci0 is None:

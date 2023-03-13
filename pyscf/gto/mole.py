@@ -1238,6 +1238,8 @@ def loads(molstr):
     mol._env = numpy.array(mol._env, dtype=numpy.double)
     mol._ecpbas = numpy.array(mol._ecpbas, dtype=numpy.int32)
 
+    # Objects related to symmetry cannot be serialized by dumps function.
+    # Recreate it manually
     if mol.symmetry and mol._symm_orig is not None:
         from pyscf import symm
         mol._symm_orig = numpy.array(mol._symm_orig)
@@ -1346,8 +1348,8 @@ def nao_2c(mol):
     l = mol._bas[:,ANG_OF]
     kappa = mol._bas[:,KAPPA_OF]
     dims = (l*4+2) * mol._bas[:,NCTR_OF]
-    dims[kappa<0] = l[kappa<0] * 2 + 2
-    dims[kappa>0] = l[kappa>0] * 2
+    dims[kappa<0] = (l[kappa<0] * 2 + 2) * mol._bas[kappa<0,NCTR_OF]
+    dims[kappa>0] = (l[kappa>0] * 2) * mol._bas[kappa>0,NCTR_OF]
     return dims.sum()
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
