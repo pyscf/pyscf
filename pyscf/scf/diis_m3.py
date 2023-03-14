@@ -33,10 +33,10 @@ class DIIS_M3:
         self._memScale = memScale
 
     def kernel(self, bufferSize=1, switchThresh=10**-6, hardSwitch=100):
-        max_cycle = self._mf.max_cycle
-        bufferCursor = 0
+        #max_cycle = self._mf.max_cycle
+        #bufferCursor = 0
         converged = False
-        cycle = 0
+        #cycle = 0
         self._mf.max_cycle = bufferSize
         old_energy = self._mf.kernel()
         diis_conv = self._mf.converged

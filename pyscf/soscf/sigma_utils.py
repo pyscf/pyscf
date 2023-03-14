@@ -97,7 +97,7 @@ def vectorToMatrix(vector, assm=None):
     return mat - mat.conj().T
 
 def matrixToVector(matrix, assm=None):
-    s = int(len(matrix) * (len(matrix)-1) * 0.5)
+    #s = int(len(matrix) * (len(matrix)-1) * 0.5)
     if not type(assm) is numpy.ndarray:
         assm = getVectorMatrixIndices(len(matrix))
     #vec = numpy.zeros(s)

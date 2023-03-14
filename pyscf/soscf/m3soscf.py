@@ -239,7 +239,7 @@ class M3SOSCF:
         self._memScale = memScale
         
         if type(dm0) is numpy.ndarray:
-            self.initDensityMatrixDirectly(initGuess)
+            self.initDensityMatrixDirectly(dm0)
         else:
             raise Exception('Illegal initial matrix: dm0 is not a numpy.ndarray.')
 
@@ -301,14 +301,14 @@ class M3SOSCF:
         scf_conv = False
         final_mo_coeffs = None
         final_mo_energy = None
-        last_energy = 10**50
+        #last_energy = 10**50
 
         s1e = self._mf.get_ovlp()
         h1e = self._mf.get_hcore()
 
         mo_occs = self._mf.mo_occ
         #multiprocessing.set_start_method('fork')
-        debug_mo_coeffs = numpy.zeros(self._currentDm.shape)
+        #debug_mo_coeffs = numpy.zeros(self._currentDm.shape)
 
         guess_energy = self._mf.energy_elec(self._mf.make_rdm1(self._moCoeffs[0,0,:], mo_occs))[0]
         log.info("Guess energy: " + str(guess_energy))
@@ -866,7 +866,7 @@ class ESM3_Subconverger(Subconverger):
     def getTrust(self, dm0, dm1, converged):
         t1 = super().getTrust(dm0, dm1, converged)
         if converged:
-            log.info("NEWTON RAPHSON CONVERGED")
+            print("NEWTON RAPHSON CONVERGED")
             return 1.0
         e1 = self._m3._mf.energy_elec(dm1)[0]
 
@@ -1063,7 +1063,7 @@ class SubconvergerReassigmentManager:
             points: 2D array
                 The random points generated
         '''
-        dim = self._m3.getDegreesOfFreedom()
+        #dim = self._m3.getDegreesOfFreedom()
         #norm = 2 * 3.141592**((dim + 1) / 2.0) * trust * math.factorial(int(dim + 1)) / (scipy.special.gamma((dim + 1) / 2.0) * (self._alpha * trust)**(dim + 2))
         norm = 1
         #log.info("Norm: " + str(norm))
