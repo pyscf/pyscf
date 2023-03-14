@@ -11,10 +11,9 @@ import scipy.linalg
 import scipy.special
 import pyscf.scf
 import pyscf.dft
+import pyscf.symm
 import pyscf.soscf.newton_ah as newton_ah
 import pyscf.soscf.sigma_utils as sigutils
-import multiprocessing
-import multiprocessing.managers
 import os
 import itertools
 import copy
@@ -488,27 +487,7 @@ class M3SOSCF:
                 final_mo_energy = self.calculateOrbitalEnergies(final_mo_coeffs, final_fock, s1e)
                 final_energy = self._mf.energy_tot(self._currentDm, h1e=h1e)
                 total_cycles = cycle+1
-                #final_mo_energy_buffer = numpy.zeros(final_mo_energy.shape)
-                #orbital_overlap_matrix = None
-                #if self._method == 'uhf' or self._method == 'uks':
-                #    orbital_overlap_matrix = numpy.einsum('aki,kl,ajk->aij', dummy_mo_coeffs, s1e, final_mo_coeffs)
-                #else:
-                #    orbital_overlap_matrix = numpy.einsum('ki,kl,lj->ij', dummy_mo_coeffs, s1e, final_mo_coeffs)
-#
-#                orbital_overlap_matrix = numpy.abs(orbital_overlap_matrix)
-#
-#                for o in range(len(orbital_overlap_matrix[0])):
-#                    match_index = None
-#                    if self._method == 'uhf' or self._method == 'uks':
-#                        match_index_a = numpy.argmax(abs(orbital_overlap_matrix[0,o,:]))
-#                        match_index_b = numpy.argmax(abs(orbital_overlap_matrix[1,o,:]))
-#                        final_mo_energy_buffer[0,o] = final_mo_energy[0,match_index_a]
-#                        final_mo_energy_buffer[1,o] = final_mo_energy[1,match_index_b]
-#                    else:
-#                        match_index = numpy.array(numpy.argmax(abs(orbital_overlap_matrix[o,:])))
-#                        final_mo_energy_buffer[o] = final_mo_energy[match_index]
-
-#               final_mo_energy = final_mo_energy_buffer
+                
                 self._mf.mo_energy = final_mo_energy
                 self._mf.mo_coeff = final_mo_coeffs
                 self._mf.e_tot = final_energy
@@ -520,7 +499,6 @@ class M3SOSCF:
             self._moCursor += 1
             if self._moCursor >= len(self._moCoeffs):
                 self._moCursor = 0
-
 
         log.info("Final Energy: " + str(final_energy) + " ha")
         log.info("Cycles: " + str(total_cycles))
@@ -559,6 +537,8 @@ class M3SOSCF:
         log.info("Number of Cycles:         " + str(cycles))
         log.info("Final Energy:             " + str(self._mf.e_tot))
         log.info("Converged:                " + str(self._mf.converged))
+        aux_mol = pyscf.gto.M(atom=self._mf.mol.atom, basis=self._mf.mol.basis, spin=self._mf.mol.spin, charge=self._mf.mol.charge, symmetry=1)
+        log.info("Point group:              " + aux_mol.topgroup + " (Supported: " + aux_mol.groupname + ")")
         homo_index = None
         lumo_index = None
         if self._method == 'uhf' or self._method == 'uks':
@@ -586,11 +566,39 @@ class M3SOSCF:
             log.info("Spin-Square:              " + str(ss[0]))
             log.info("Multiplicity:             " + str(ss[1]))
 
+        irreps = ['-'] * len(self._mf.mo_energy)
+        forced_irreps = False
+        symm_overlap = None
+        if self._method == 'uhf' or self._method == 'uks':
+            irreps = ['-'] * len(self._mf.mo_energy[0])
+        try:
+            if self._method == 'uhf' or self._method == 'uks':
+                irreps_a = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, self._mf.mo_coeff[0])
+                irreps_b = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, self._mf.mo_coeff[1])
+                irreps = [irreps_a, irreps_b]
+            else:
+                irreps = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, self._mf.mo_coeff)
+        except:
+            if self._method == 'uhf' or self._method == 'uks':
+                mo_coeff_symm_a = pyscf.symm.addons.symmetrize_orb(aux_mol, self._mf.mo_coeff[0])
+                mo_coeff_symm_b = pyscf.symm.addons.symmetrize_orb(aux_mol, self._mf.mo_coeff[1])
+                symm_overlap_a = numpy.diag(mo_coeff_symm_a.conj().T @ self._mf.get_ovlp() @ self._mf.mo_coeff[0])
+                symm_overlap_b = numpy.diag(mo_coeff_symm_b.conj().T @ self._mf.get_ovlp() @ self._mf.mo_coeff[1])
+                irreps_a = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, mo_coeff_symm_a)
+                irreps_b = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, mo_coeff_symm_b)
+                irreps = [irreps_a, irreps_b]
+                symm_overlap = numpy.array([symm_overlap_a, symm_overlap_b])
+            else:
+                mo_coeff_symm = pyscf.symm.addons.symmetrize_orb(aux_mol, self._mf.mo_coeff)
+                symm_overlap = numpy.diag(mo_coeff_symm.conj().T @ self._mf.get_ovlp() @ self._mf.mo_coeff)
+                irreps = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, mo_coeff_symm)
+            forced_irreps = True
+
         log.info("")
         log.info("")
         log.info("ORIBTAL SUMMARY:")
         log.info("")
-        log.info("Index:        Energy [ha]:                        Occupation:")
+        log.info("Index:        Energy [ha]:                        Occupation:    Symmetry:")
         if self._method == 'uhf' or self._method == 'uks':
             for index in range(len(self._mf.mo_energy[0])):
                 mo_e = self._mf.mo_energy[0,index]
@@ -604,6 +612,7 @@ class M3SOSCF:
                     s += (37 - len(str(mo_e))) * " "
                 if self._mf.mo_occ[0,index] > 0:
                     s += "A"
+                s += (65 - len(s)) * " " + irreps[0][index] + " (FORCED, Overlap: " + str(round(symm_overlap[0,index], 5)) + ")" * forced_irreps
                 log.info(s)
 
                 mo_e = self._mf.mo_energy[1,index]
@@ -617,6 +626,7 @@ class M3SOSCF:
                     s += (37 - len(str(mo_e))) * " "
                 if self._mf.mo_occ[1,index] > 0:
                     s += "  B"
+                s += (65 - len(s)) * " " + irreps[1][index] + " (FORCED, Overlap: " + str(round(symm_overlap[1,index], 5)) + ")" * forced_irreps
                 log.info(s)
         else:
             for index in range(len(self._mf.mo_energy)):
@@ -633,9 +643,9 @@ class M3SOSCF:
                     s += "A "
                 if self._mf.mo_occ[index] > 1:
                     s += "B"
+                s += (65 - len(s)) * " " + irreps[index] + (" (FORCED, Overlap: " + str(round(symm_overlap[index], 5)) +  ")") * forced_irreps
+
                 log.info(s)
-
-
 
             
 
