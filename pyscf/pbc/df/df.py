@@ -495,7 +495,8 @@ class CDERIArray:
             self._cderi = data_group.file.filename
             self._label = label
             self._kptij_lst = data_group[label+'-kptij'][()]
-            self.nkpts = len(unique(self._kptij_lst[:,0])[0])
+            kpts = unique(self._kptij_lst[:,0])[0]
+            self.nkpts = len(kpts)
             return
         else:
             self._data_version = 'v2'
@@ -553,8 +554,17 @@ class CDERIArray:
     def _load_one(self, ki, kj, slices):
         if self._data_version == 'v1':
             with _load3c(self._cderi, self._label) as fload:
-                kikj = ki * self.nkpts + kj
-                kpti, kptj = self._kptij_lst[kikj]
+                if len(self._kptij_lst) == self.nkpts:
+                    # kptij_lst was generated with option j_only, leading to
+                    # only the diagonal terms
+                    kikj = ki
+                    kpti, kptj = self._kptij_lst[kikj]
+                elif ki >= kj:
+                    kikj = ki*(ki+1)//2 + kj
+                    kpti, kptj = self._kptij_lst[kikj]
+                else:
+                    kikj = kj*(kj+1)//2 + ki
+                    kptj, kpti = self._kptij_lst[kikj]
                 out = fload(kpti, kptj)
                 return out[slices]
 
