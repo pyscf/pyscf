@@ -496,11 +496,12 @@ class CDERIArray:
             self._label = label
             self._kptij_lst = data_group[label+'-kptij'][()]
             kpts = unique(self._kptij_lst[:,0])[0]
-            self.nkpts = len(kpts)
+            self.nkpts = nkpts = len(kpts)
+            if len(self._kptij_lst) not in (nkpts, nkpts**2, nkpts*(nkpts+1)//2):
+                raise RuntimeError(f'Dimension error for CDERI {self._cderi}')
             return
-        else:
-            self._data_version = 'v2'
 
+        self._data_version = 'v2'
         aosym = data_group['aosym'][()]
         if isinstance(aosym, bytes):
             aosym = aosym.decode()
@@ -558,6 +559,9 @@ class CDERIArray:
                     # kptij_lst was generated with option j_only, leading to
                     # only the diagonal terms
                     kikj = ki
+                    kpti, kptj = self._kptij_lst[kikj]
+                elif len(self._kptij_lst) == self.nkpts**2:
+                    kikj = ki * self.nkpts + kj
                     kpti, kptj = self._kptij_lst[kikj]
                 elif ki >= kj:
                     kikj = ki*(ki+1)//2 + kj
