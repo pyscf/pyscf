@@ -342,7 +342,7 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
         bufsize = int((max_memory - lib.current_memory()[0]) * 1e6 / (nauxfcns * nmo2 * 8))
         if bufsize < 1:
             raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-        bufsize = min(nmo1, bufsize)
+        bufsize = max(1, min(nmo1, bufsize))
         logger.debug('    Batch size: {0:d} (of {1:d})'.format(bufsize, nmo1))
 
         # In batches:
@@ -576,7 +576,7 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
                     tbatch = tiset[jstart:jend, :, :]
                     Gbatch = Gamma[jstart:jend, :, :]
                     for jj in range(jend-jstart):
-                        TCijab_scal = 4.0 * (pt + pt) * tbatch[jj] - 4.0 * pt * tbatch[jj].T
+                        TCijab_scal = 4.0 * (pt + ps) * tbatch[jj] - 4.0 * pt * tbatch[jj].T
                         Gbatch[jj] += lib.dot(ints3cV1_ia, TCijab_scal)
                     Gamma[jstart:jend, :, :] = Gbatch
                 del ints3cV1_ia, tbatch, Gbatch, TCijab_scal

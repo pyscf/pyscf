@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,312 +25,32 @@ J. Chem. Phys. 147, 164119 (2017)
 import os
 
 import tempfile
-import numpy
+import numpy as np
 import h5py
 import scipy.linalg
 from pyscf import lib
-from pyscf.lib import logger
+from pyscf.lib import logger, zdotCN
 from pyscf.df.outcore import _guess_shell_ranges
-from pyscf.pbc import tools
 from pyscf.pbc import gto
+from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
-from pyscf.pbc.df.df import fuse_auxcell, _round_off_to_odd_mesh
-from pyscf.pbc.df.df_jk import zdotCN
-from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, unique,
-                                       KPT_DIFF_TOL)
+from pyscf.pbc.df.gdf_builder import _CCGDFBuilder
+from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _round_off_to_odd_mesh
+from pyscf.pbc.df.incore import libpbc, make_auxcell
+from pyscf.pbc.lib.kpts_helper import is_zero, member, unique
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
 from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf import __config__
 
 
-# kpti == kptj: s2 symmetry
-# kpti == kptj == 0 (gamma point): real
-def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
-    t1 = (logger.process_clock(), logger.perf_counter())
-    log = logger.Logger(mydf.stdout, mydf.verbose)
-    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-
-    # Create swap file to avoid huge cderi_file. see also function
-    # pyscf.pbc.df.df._make_j3c
-    swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
-    fswap = lib.H5TmpFile(swapfile.name)
-    # Unlink swapfile to avoid trash
-    swapfile = None
-
-    outcore._aux_e2(cell, fused_cell, fswap, 'int3c2e', aosym='s2',
-                    kptij_lst=kptij_lst, dataname='j3c-junk', max_memory=max_memory)
-    t1 = log.timer_debug1('3c2e', *t1)
-
-    nao = cell.nao_nr()
-    naux = auxcell.nao_nr()
-    mesh = mydf.mesh
-    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-    b = cell.reciprocal_vectors()
-    gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-    ngrids = gxyz.shape[0]
-
-    kptis = kptij_lst[:,0]
-    kptjs = kptij_lst[:,1]
-    kpt_ji = kptjs - kptis
-    uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
-    log.debug('Num uniq kpts %d', len(uniq_kpts))
-    log.debug2('uniq_kpts %s', uniq_kpts)
-    # j2c ~ (-kpt_ji | kpt_ji)
-    j2c = fused_cell.pbc_intor('int2c2e', hermi=0, kpts=uniq_kpts)
-
-    max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
-    blksize = max(2048, int(max_memory*.4e6/16/fused_cell.nao_nr()))
-    log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
-    for k, kpt in enumerate(uniq_kpts):
-        j2c_k = fuse(fuse(j2c[k]).T).T.copy()
-        j2c_k = (j2c_k + j2c_k.conj().T) * .5
-
-        coulG = mydf.weighted_coulG(kpt, False, mesh)
-        for p0, p1 in lib.prange(0, ngrids, blksize):
-            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
-            aoaux = fuse(aoaux)
-            LkR = numpy.asarray(aoaux.real, order='C')
-            LkI = numpy.asarray(aoaux.imag, order='C')
-            aoaux = None
-
-            if is_zero(kpt):  # kpti == kptj
-                j2c_k -= lib.dot(LkR*coulG[p0:p1], LkR.T)
-                j2c_k -= lib.dot(LkI*coulG[p0:p1], LkI.T)
-            else:
-                # aoaux ~ kpt_ij, aoaux.conj() ~ kpt_kl
-                j2cR, j2cI = zdotCN(LkR*coulG[p0:p1], LkI*coulG[p0:p1], LkR.T, LkI.T)
-                j2c_k -= j2cR + j2cI * 1j
-        fswap['j2c/%d'%k] = j2c_k
-        aoaux = LkR = LkI = j2cR = j2cI = coulG = j2c_k = None
-    j2c = None
-
-    def cholesky_decomposed_metric(uniq_kptji_id):
-        j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
-        j2c_negative = None
-# Note large difference may be found in results between the CD/eig treatments.
-# In some systems, small integral errors can lead to different treatments of
-# linear dependency which can be observed in the total energy/orbital energy
-# around 4th decimal place.
-#        try:
-#            j2c = scipy.linalg.cholesky(j2c, lower=True)
-#            j2ctag = 'CD'
-#        except scipy.linalg.LinAlgError as e:
-#
-# Abandon CD treatment for better numerical stability
-        w, v = scipy.linalg.eigh(j2c)
-        log.debug('MDF metric for kpt %s cond = %.4g, drop %d bfns',
-                  uniq_kptji_id, w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
-        v1 = v[:,w>mydf.linear_dep_threshold].T.conj()
-        v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
-        j2c = v1
-        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
-            idx = numpy.where(w < -mydf.linear_dep_threshold)[0]
-            if len(idx) > 0:
-                j2c_negative = (v[:,idx]/numpy.sqrt(-w[idx])).conj().T
-        j2ctag = 'eig'
-        return j2c, j2c_negative, j2ctag
-
-    feri = h5py.File(cderi_file, 'w')
-    feri['j3c-kptij'] = kptij_lst
-    nsegs = len(fswap['j3c-junk/0'])
-    def make_kpt(uniq_kptji_id, cholesky_j2c):  # kpt = kptj - kpti
-        kpt = uniq_kpts[uniq_kptji_id]
-        log.debug1('kpt = %s', kpt)
-        adapted_ji_idx = numpy.where(uniq_inverse == uniq_kptji_id)[0]
-        adapted_kptjs = kptjs[adapted_ji_idx]
-        nkptj = len(adapted_kptjs)
-        log.debug1('adapted_ji_idx = %s', adapted_ji_idx)
-
-        j2c, j2c_negative, j2ctag = cholesky_j2c
-
-        Gaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
-        Gaux = fuse(Gaux)
-        Gaux *= mydf.weighted_coulG(kpt, False, mesh)
-        kLR = Gaux.T.real.copy('C')
-        kLI = Gaux.T.imag.copy('C')
-
-        if is_zero(kpt):  # kpti == kptj
-            aosym = 's2'
-            nao_pair = nao*(nao+1)//2
-
-            if cell.dimension == 3:
-                vbar = fuse(mydf.auxbar(fused_cell))
-                ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
-                ovlp = [lib.pack_tril(s) for s in ovlp]
-        else:
-            aosym = 's1'
-            nao_pair = nao**2
-
-        mem_now = lib.current_memory()[0]
-        log.debug2('memory = %s', mem_now)
-        max_memory = max(2000, mydf.max_memory-mem_now)
-        # nkptj for 3c-coulomb arrays plus 1 Lpq array
-        buflen = min(max(int(max_memory*.38e6/16/naux/(nkptj+1)), 1), nao_pair)
-        shranges = _guess_shell_ranges(cell, buflen, aosym)
-        buflen = max([x[2] for x in shranges])
-        # +1 for a pqkbuf
-        if aosym == 's2':
-            Gblksize = max(16, int(max_memory*.1e6/16/buflen/(nkptj+1)))
-        else:
-            Gblksize = max(16, int(max_memory*.2e6/16/buflen/(nkptj+1)))
-        Gblksize = min(Gblksize, ngrids, 16384)
-
-        def load(aux_slice):
-            col0, col1 = aux_slice
-            j3cR = []
-            j3cI = []
-            for k, idx in enumerate(adapted_ji_idx):
-                v = [fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
-                v = fuse(numpy.vstack(v))
-                if is_zero(kpt) and cell.dimension == 3:
-                    for i in numpy.where(vbar != 0)[0]:
-                        v[i] -= vbar[i] * ovlp[k][col0:col1]
-                j3cR.append(numpy.asarray(v.real, order='C'))
-                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
-                    j3cI.append(None)
-                else:
-                    j3cI.append(numpy.asarray(v.imag, order='C'))
-                v = None
-            return j3cR, j3cI
-
-        pqkRbuf = numpy.empty(buflen*Gblksize)
-        pqkIbuf = numpy.empty(buflen*Gblksize)
-        # buf for ft_aopair
-        buf = numpy.empty((nkptj,buflen*Gblksize), dtype=numpy.complex128)
-        cols = [sh_range[2] for sh_range in shranges]
-        locs = numpy.append(0, numpy.cumsum(cols))
-        tasks = zip(locs[:-1], locs[1:])
-        for istep, (j3cR, j3cI) in enumerate(lib.map_with_prefetch(load, tasks)):
-            bstart, bend, ncol = shranges[istep]
-            log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d',
-                       istep+1, len(shranges), bstart, bend, ncol)
-            if aosym == 's2':
-                shls_slice = (bstart, bend, 0, bend)
-            else:
-                shls_slice = (bstart, bend, 0, cell.nbas)
-
-            for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                dat = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                           b, gxyz[p0:p1], Gvbase, kpt,
-                                           adapted_kptjs, out=buf)
-                nG = p1 - p0
-                for k, ji in enumerate(adapted_ji_idx):
-                    aoao = dat[k].reshape(nG,ncol)
-                    pqkR = numpy.ndarray((ncol,nG), buffer=pqkRbuf)
-                    pqkI = numpy.ndarray((ncol,nG), buffer=pqkIbuf)
-                    pqkR[:] = aoao.real.T
-                    pqkI[:] = aoao.imag.T
-
-                    lib.dot(kLR[p0:p1].T, pqkR.T, -1, j3cR[k], 1)
-                    lib.dot(kLI[p0:p1].T, pqkI.T, -1, j3cR[k], 1)
-                    if not (is_zero(kpt) and gamma_point(adapted_kptjs[k])):
-                        lib.dot(kLR[p0:p1].T, pqkI.T, -1, j3cI[k], 1)
-                        lib.dot(kLI[p0:p1].T, pqkR.T,  1, j3cI[k], 1)
-
-            for k, ji in enumerate(adapted_ji_idx):
-                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
-                    v = j3cR[k]
-                else:
-                    v = j3cR[k] + j3cI[k] * 1j
-                if j2ctag == 'CD':
-                    v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
-                    feri['j3c/%d/%d'%(ji,istep)] = v
-                else:
-                    feri['j3c/%d/%d'%(ji,istep)] = lib.dot(j2c, v)
-
-                # low-dimension systems
-                if j2c_negative is not None:
-                    feri['j3c-/%d/%d'%(ji,istep)] = lib.dot(j2c_negative, v)
-            j3cR = j3cI = None
-
-        for ji in adapted_ji_idx:
-            del(fswap['j3c-junk/%d'%ji])
-
-    # Wrapped around boundary and symmetry between k and -k can be used
-    # explicitly for the metric integrals.  We consider this symmetry
-    # because it is used in the df_ao2mo module when contracting two 3-index
-    # integral tensors to the 4-index 2e integral tensor. If the symmetry
-    # related k-points are treated separately, the resultant 3-index tensors
-    # may have inconsistent dimension due to the numerial noise when handling
-    # linear dependency of j2c.
-    def conj_j2c(cholesky_j2c):
-        j2c, j2c_negative, j2ctag = cholesky_j2c
-        if j2c_negative is None:
-            return j2c.conj(), None, j2ctag
-        else:
-            return j2c.conj(), j2c_negative.conj(), j2ctag
-
-    a = cell.lattice_vectors() / (2*numpy.pi)
-    def kconserve_indices(kpt):
-        '''search which (kpts+kpt) satisfies momentum conservation'''
-        kdif = numpy.einsum('wx,ix->wi', a, uniq_kpts + kpt)
-        kdif_int = numpy.rint(kdif)
-        mask = numpy.einsum('wi->i', abs(kdif - kdif_int)) < KPT_DIFF_TOL
-        uniq_kptji_ids = numpy.where(mask)[0]
-        return uniq_kptji_ids
-
-    done = numpy.zeros(len(uniq_kpts), dtype=bool)
-    for k, kpt in enumerate(uniq_kpts):
-        if done[k]:
-            continue
-
-        log.debug1('Cholesky decomposition for j2c at kpt %s', k)
-        cholesky_j2c = cholesky_decomposed_metric(k)
-
-        # The k-point k' which has (k - k') * a = 2n pi. Metric integrals have the
-        # symmetry S = S
-        uniq_kptji_ids = kconserve_indices(-kpt)
-        log.debug1("Symmetry pattern (k - %s)*a= 2n pi", kpt)
-        log.debug1("    make_kpt for uniq_kptji_ids %s", uniq_kptji_ids)
-        for uniq_kptji_id in uniq_kptji_ids:
-            if not done[uniq_kptji_id]:
-                make_kpt(uniq_kptji_id, cholesky_j2c)
-        done[uniq_kptji_ids] = True
-
-        # The k-point k' which has (k + k') * a = 2n pi. Metric integrals have the
-        # symmetry S = S*
-        uniq_kptji_ids = kconserve_indices(kpt)
-        log.debug1("Symmetry pattern (k + %s)*a= 2n pi", kpt)
-        log.debug1("    make_kpt for %s", uniq_kptji_ids)
-        cholesky_j2c = conj_j2c(cholesky_j2c)
-        for uniq_kptji_id in uniq_kptji_ids:
-            if not done[uniq_kptji_id]:
-                make_kpt(uniq_kptji_id, cholesky_j2c)
-        done[uniq_kptji_ids] = True
-
-    feri.close()
-
-
-# valence_exp = 1. are typically the Gaussians in the valence
-VALENCE_EXP = getattr(__config__, 'pbc_df_mdf_valence_exp', 1.0)
-def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
-    '''Energy cutoff estimation'''
-    precision = cell.precision * 10
-    Ecut_max = 0
-    for i in range(cell.nbas):
-        l = cell.bas_angular(i)
-        es = cell.bas_exp(i).copy()
-        es[es>valence_exp] = valence_exp
-        cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision)
-        Ecut_max = max(Ecut_max, ke_guess.max())
-    mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
-    mesh = numpy.min((mesh, cell.mesh), axis=0)
-    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-        mesh[cell.dimension:] = cell.mesh[cell.dimension:]
-    return _round_off_to_odd_mesh(mesh)
-del(VALENCE_EXP)
-
-
-class MDF(df.DF):
+class MDF(df.GDF):
     '''Gaussian and planewaves mixed density fitting
     '''
-    def __init__(self, cell, kpts=numpy.zeros((1,3))):
+    def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
@@ -339,7 +59,6 @@ class MDF(df.DF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
-        self.mesh = _mesh_for_valence(cell)
 
         # In MDF, fitting PWs (self.mesh), and parameters eta and exp_to_discard
         # are related to each other. The compensated function does not need to
@@ -347,12 +66,16 @@ class MDF(df.DF):
         # (self.mesh). self.eta is estimated on the fly based on the value of
         # self.mesh.
         self.eta = None
+        self.mesh = None
 
         # Any functions which are more diffused than the compensated Gaussian
         # are linearly dependent to the PWs. They can be removed from the
         # auxiliary set without affecting the accuracy of MDF. exp_to_discard
         # can be set to the value of self.eta
         self.exp_to_discard = None
+
+        # tends to call _CCMDFBuilder if applicable
+        self._prefer_ccdf = False
 
         # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -367,32 +90,45 @@ class MDF(df.DF):
         self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 
-    @property
-    def eta(self):
-        if self._eta is not None:
-            return self._eta
-        else:
-            cell = self.cell
-            if cell.dimension == 0:
-                return 0.2
-            ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
-            ke_cutoff = ke_cutoff[:cell.dimension].min()
-            return aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
-    @eta.setter
-    def eta(self, x):
-        self._eta = x
+    def build(self, j_only=None, with_j3c=True, kpts_band=None):
+        df.GDF.build(self, j_only, with_j3c, kpts_band)
+        cell = self.cell
+        if any(x % 2 == 0 for x in self.mesh[:cell.dimension]):
+            # Even number in mesh can produce planewaves without couterparts
+            # (see np.fft.fftfreq). MDF mesh is typically not enough to capture
+            # all basis. The singular planewaves can break the symmetry in
+            # potential (leads to non-real density) and thereby break the
+            # hermitian of J and K matrices
+            logger.warn(self, 'MDF with even number in mesh may have significant errors')
+        return self
 
-    @property
-    def exp_to_discard(self):
-        if self._exp_to_discard is not None:
-            return self._exp_to_discard
-        else:
-            return self.eta
-    @exp_to_discard.setter
-    def exp_to_discard(self, x):
-        self._exp_to_discard = x
+    def _make_j3c(self, cell=None, auxcell=None, kptij_lst=None, cderi_file=None):
+        if cell is None: cell = self.cell
+        if auxcell is None: auxcell = self.auxcell
+        if cderi_file is None: cderi_file = self._cderi_to_save
 
-    _make_j3c = _make_j3c
+        # Remove duplicated k-points. Duplicated kpts may lead to a buffer
+        # located in incore.wrap_int3c larger than necessary. Integral code
+        # only fills necessary part of the buffer, leaving some space in the
+        # buffer unfilled.
+        if self.kpts_band is None:
+            kpts_union = self.kpts
+        else:
+            kpts_union = unique(np.vstack([self.kpts, self.kpts_band]))[0]
+
+        if self._prefer_ccdf or cell.omega > 0:
+            # For long-range integrals _CCMDFBuilder is the only option
+            dfbuilder = _CCMDFBuilder(cell, auxcell, kpts_union)
+        else:
+            dfbuilder = _RSMDFBuilder(cell, auxcell, kpts_union)
+            dfbuilder.eta = self.eta
+        dfbuilder.mesh = self.mesh
+        dfbuilder.linear_dep_threshold = self.linear_dep_threshold
+        j_only = self._j_only or len(kpts_union) == 1
+        dfbuilder.make_j3c(cderi_file, j_only=j_only)
+
+        # mdf.mesh must be the same to the mesh used in generating cderi
+        self.mesh = dfbuilder.mesh
 
     # Note: Special exxdiv by default should not be used for an arbitrary
     # input density matrix. When the df object was used with the molecular
@@ -415,20 +151,20 @@ class MDF(df.DF):
             if (omega < df.LONGRANGE_AFT_TURNOVER_THRESHOLD and
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
-                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
-                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), mydf.ke_cutoff)
+                ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
+                mydf.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
             else:
                 mydf = self
             return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
                                with_j, with_k, omega, exxdiv)
 
         if kpts is None:
-            if numpy.all(self.kpts == 0):
+            if np.all(self.kpts == 0):
                 # Gamma-point calculation by default
-                kpts = numpy.zeros(3)
+                kpts = np.zeros(3)
             else:
                 kpts = self.kpts
-        kpts = numpy.asarray(kpts)
+        kpts = np.asarray(kpts)
 
         if kpts.shape == (3,):
             return mdf_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
@@ -446,13 +182,13 @@ class MDF(df.DF):
     ao2mo_7d = mdf_ao2mo.ao2mo_7d
 
     def update_mp(self):
-        pass
+        raise NotImplementedError
 
     def update_cc(self):
-        pass
+        raise NotImplementedError
 
     def update(self):
-        pass
+        raise NotImplementedError
 
 ################################################################################
 # With this function to mimic the molecular DF.loop function, the pbc gamma
@@ -465,3 +201,223 @@ class MDF(df.DF):
 
     def get_naoaux(self):
         return df.DF.get_naoaux(self) + aft.AFTDF.get_naoaux(self)
+
+
+class _RSMDFBuilder(_RSGDFBuilder):
+    '''
+    Use the range-separated algorithm to build mixed density fitting 3-center tensor
+    '''
+    def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
+        _RSGDFBuilder.__init__(self, cell, auxcell, kpts)
+
+        # For MDF, large difference may be found in results between the CD/ED
+        # treatments. In some systems, small integral errors can lead to a
+        # differnece in the total energy/orbital energy around 4th decimal
+        # place. Abandon CD treatment for better numerical stability
+        self.j2c_eig_always = True
+
+    def has_long_range(self):
+        return True
+
+    def get_2c2e(self, uniq_kpts):
+        # The basis for MDF are planewaves {G} and orthogonal gaussians
+        # {|g> - |G><G|g>}. computing j2c for orthogonal gaussians here:
+        #    <g|g> - 2 <g|G><G|g> + <g|G><G|G><G|g> = <g|g> - <g|G><G|g>
+        auxcell = self.auxcell
+        omega = self.omega
+        rs_auxcell = self.rs_auxcell
+        auxcell_c = rs_auxcell.compact_basis_cell()
+        if auxcell_c.nbas > 0:
+            with auxcell_c.with_short_range_coulomb(omega):
+                sr_j2c = list(auxcell_c.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts))
+
+            compact_bas_idx = np.where(rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS)[0]
+            ao_map = auxcell.get_ao_indices(rs_auxcell.bas_map[compact_bas_idx])
+
+            def recontract_2d(j2c, j2c_cc):
+                return lib.takebak_2d(j2c, j2c_cc, ao_map, ao_map, thread_safe=False)
+        else:
+            sr_j2c = None
+
+        mesh = self.mesh
+        Gv, Gvbase, kws = auxcell.get_Gv_weights(mesh)
+        b = auxcell.reciprocal_vectors()
+        gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
+        ngrids = Gv.shape[0]
+        naux_rs = rs_auxcell.nao
+        naux = auxcell.nao
+        max_memory = max(1000, self.max_memory - lib.current_memory()[0])
+        blksize = min(ngrids, int(max_memory*.4e6/16/naux_rs), 200000)
+        logger.debug2(self, 'max_memory %s (MB)  blocksize %s', max_memory, blksize)
+        j2c = []
+        for k, kpt in enumerate(uniq_kpts):
+            if is_zero(kpt):  # kpti == kptj
+                j2c_k = np.zeros((naux, naux))
+            else:
+                j2c_k = np.zeros((naux, naux), dtype=np.complex128)
+
+            if sr_j2c is not None:
+                # coulG_sr here to first remove the FT-SR-2c2e for compact basis
+                # from the analytical 2c2e integrals. The FT-SR-2c2e for compact
+                # basis is added back in j2c_k.
+                coulG_sr = self.weighted_coulG_SR(kpt, False, mesh)
+                if auxcell.dimension == 3 and is_zero(kpt):
+                    G0_idx = 0  # due to np.fft.fftfreq convention
+                    G0_weight = kws[G0_idx] if isinstance(kws, np.ndarray) else kws
+                    coulG_sr[G0_idx] += np.pi/omega**2 * G0_weight
+
+                for p0, p1 in lib.prange(0, ngrids, blksize):
+                    auxG_sr = ft_ao.ft_ao(auxcell_c, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
+                    if is_zero(kpt):
+                        sr_j2c[k] -= lib.dot(auxG_sr.conj() * coulG_sr, auxG_sr.T).real
+                    else:
+                        sr_j2c[k] -= lib.dot(auxG_sr.conj() * coulG_sr, auxG_sr.T)
+                    auxG_sr = None
+
+                j2c_k = recontract_2d(j2c_k, sr_j2c[k])
+                sr_j2c[k] = None
+
+            j2c.append(j2c_k)
+        return j2c
+
+    def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
+                      j_only=False, dataname='j3c', shls_slice=None,
+                      fft_dd_block=False):
+        # dd_block from real-space integrals will be cancelled by AFT part
+        # anyway. It's safe to omit dd_block when computing real-space int3c2e
+        return super().outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
+                                     dataname, shls_slice, fft_dd_block)
+
+    def weighted_ft_ao(self, kpt):
+        '''exp(-i*(G + k) dot r) * Coulomb_kernel'''
+        rs_cell = self.rs_cell
+        Gv, Gvbase, kws = rs_cell.get_Gv_weights(self.mesh)
+        b = rs_cell.reciprocal_vectors()
+        gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
+        coulG_SR = self.weighted_coulG_SR(kpt, False, self.mesh)
+
+        if self.exclude_d_aux:
+            # The smooth basis in auxcell was excluded in outcore_auxe2.
+            # Full Coulomb kernel needs to be applied for the smooth basis
+            rs_auxcell = self.rs_auxcell
+            smooth_aux_mask = rs_auxcell.get_ao_type() == ft_ao.SMOOTH_BASIS
+            auxG = ft_ao.ft_ao(rs_auxcell, Gv, None, b, gxyz, Gvbase, kpt).T
+            auxG[smooth_aux_mask] = 0
+            auxG[~smooth_aux_mask] *= -coulG_SR
+            auxG = rs_auxcell.recontract_1d(auxG)
+        else:
+            auxcell = self.auxcell
+            auxG = ft_ao.ft_ao(auxcell, Gv, None, b, gxyz, Gvbase, kpt).T
+            auxG *= -coulG_SR
+        Gaux = lib.transpose(auxG)
+        GauxR = np.asarray(Gaux.real, order='C')
+        GauxI = np.asarray(Gaux.imag, order='C')
+        return GauxR, GauxI
+
+
+class _CCMDFBuilder(_CCGDFBuilder):
+    '''
+    Use the compensated-charge algorithm to build mixed density fitting 3-center tensor
+    '''
+    def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
+        _CCGDFBuilder.__init__(self, cell, auxcell, kpts)
+
+        # For MDF, large difference may be found in results between the CD/ED
+        # treatments. In some systems, small integral errors can lead to a
+        # differnece in the total energy/orbital energy around 4th decimal
+        # place. Abandon CD treatment for better numerical stability
+        self.j2c_eig_always = True
+
+    def has_long_range(self):
+        return True
+
+    def get_2c2e(self, uniq_kpts):
+        # The basis for MDF are planewaves {G} and orthogonal gaussians
+        # {|g> - |G><G|g>}. computing j2c for orthogonal gaussians here:
+        #    <g|g> - 2 <g|G><G|g> + <g|G><G|G><G|g> = <g|g> - <g|G><G|g>
+        fused_cell = self.fused_cell
+
+        # j2c ~ (-kpt_ji | kpt_ji)
+        j2c = list(fused_cell.pbc_intor('int2c2e', hermi=0, kpts=uniq_kpts))
+
+        Gv, Gvbase, kws = fused_cell.get_Gv_weights(self.mesh)
+        b = fused_cell.reciprocal_vectors()
+        gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
+        ngrids = Gv.shape[0]
+        max_memory = max(2000, self.max_memory - lib.current_memory()[0])
+        blksize = max(2048, int(max_memory*.4e6/16/fused_cell.nao_nr()))
+        logger.debug2(self, 'max_memory %s (MB)  blocksize %s', max_memory, blksize)
+        for k, kpt in enumerate(uniq_kpts):
+            j2c_k = self.fuse(self.fuse(j2c[k]), axis=1)
+            j2c_k = np.asarray((j2c_k + j2c_k.conj().T) * .5, order='C')
+
+            coulG = self.weighted_coulG(kpt, False, self.mesh)
+            for p0, p1 in lib.prange(0, ngrids, blksize):
+                auxG = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
+                auxG = self.fuse(auxG)
+                if is_zero(kpt):  # kpti == kptj
+                    j2c_k -= lib.dot(auxG.conj()*coulG[p0:p1], auxG.T).real
+                else:
+                    j2c_k -= lib.dot(auxG.conj()*coulG[p0:p1], auxG.T)
+                auxG = None
+            j2c[k] = j2c_k
+        return j2c
+
+
+    def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
+                      j_only=False, dataname='j3c', shls_slice=None,
+                      fft_dd_block=False):
+        return super().outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
+                                     dataname, shls_slice, fft_dd_block)
+
+    def weighted_ft_ao(self, kpt):
+        fused_cell = self.fused_cell
+        Gv, Gvbase, kws = fused_cell.get_Gv_weights(self.mesh)
+        b = fused_cell.reciprocal_vectors()
+        gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
+        auxG = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
+        auxG = self.fuse(auxG)
+        auxG *= self.weighted_coulG(kpt, False, self.mesh)
+        Gaux = lib.transpose(auxG)
+        GauxR = np.asarray(Gaux.real, order='C')
+        GauxI = np.asarray(Gaux.imag, order='C')
+        return GauxR, GauxI
+
+    def gen_j3c_loader(self, h5group, kpt, kpt_ij_idx, aosym):
+        gdf_load = _CCGDFBuilder.gen_j3c_loader(self, h5group, kpt, kpt_ij_idx, aosym)
+        naux = self.auxcell.nao
+        def load_j3c(col0, col1):
+            j3cR, j3cI = gdf_load(col0, col1)
+            j3cR = [vR[:naux] for vR in j3cR]
+            j3cI = [vI[:naux] if vI is not None else None for vI in j3cI]
+            return j3cR, j3cI
+        return load_j3c
+
+    def add_ft_j3c(self, j3c, Gpq, Gaux, p0, p1):
+        j3cR, j3cI = j3c
+        GauxR = Gaux[0][p0:p1]
+        GauxI = Gaux[1][p0:p1]
+        nG = p1 - p0
+        for k, (GpqR, GpqI) in enumerate(zip(*Gpq)):
+            GpqR = GpqR.reshape(nG, -1)
+            GpqI = GpqI.reshape(nG, -1)
+            lib.ddot(GauxR.T, GpqR, -1, j3cR[k], 1)
+            lib.ddot(GauxI.T, GpqI, -1, j3cR[k], 1)
+            if j3cI[k] is not None:
+                lib.ddot(GauxR.T, GpqI, -1, j3cI[k], 1)
+                lib.ddot(GauxI.T, GpqR,  1, j3cI[k], 1)
+
+    def solve_cderi(self, cd_j2c, j3cR, j3cI):
+        j2c, j2c_negative, j2ctag = cd_j2c
+        if j3cI is None:
+            j3c = j3cR
+        else:
+            j3c = j3cR + j3cI * 1j
+
+        cderi = lib.dot(j2c, j3c)
+        if j2c_negative is not None:
+            # for low-dimension systems
+            cderi_negative = lib.dot(j2c_negative, j3c)
+        else:
+            cderi_negative = None
+        return cderi, cderi_negative

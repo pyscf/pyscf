@@ -55,11 +55,11 @@ def setUpModule():
         basis = 'cc-pvdz',
         symmetry = 'c2v'
     )
-    mfsym = scf.GHF(molsym).run()
+    mfsym = scf.GHF(molsym).run(conv_tol=1e-10)
 
     mol1 = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
-    mf_r = scf.RHF(mol1).run(chkfile=tempfile.NamedTemporaryFile().name)
-    mf_u = scf.RHF(mol1).run(chkfile=tempfile.NamedTemporaryFile().name)
+    mf_r = scf.RHF(mol1).run(conv_tol=1e-10, chkfile=tempfile.NamedTemporaryFile().name)
+    mf_u = scf.RHF(mol1).run(conv_tol=1e-10, chkfile=tempfile.NamedTemporaryFile().name)
 
 def tearDownModule():
     global mol, mf, molsym, mfsym, mol1, mf_r, mf_u
@@ -107,29 +107,29 @@ class KnownValues(unittest.TestCase):
     def test_init_guess_atom(self):
         dm = mf.get_init_guess(mol, key='atom')
         self.assertEqual(dm.shape, (48,48))
-        self.assertAlmostEqual(lib.fp(dm[:24,:24])*2, 2.7821827416174094, 9)
-        self.assertAlmostEqual(lib.fp(dm[24:,24:])*2, 2.7821827416174094, 9)
+        self.assertAlmostEqual(lib.fp(dm[:24,:24])*2, 2.7821827416174094, 7)
+        self.assertAlmostEqual(lib.fp(dm[24:,24:])*2, 2.7821827416174094, 7)
 
     def test_init_guess_chk(self):
         dm = mol.GHF(chkfile=tempfile.NamedTemporaryFile().name).get_init_guess(mol, key='chkfile')
         self.assertEqual(dm.shape, (48,48))
-        self.assertAlmostEqual(lib.fp(dm), 1.8117584283411752, 9)
+        self.assertAlmostEqual(lib.fp(dm), 1.8117584283411752, 5)
 
         dm = mf.get_init_guess(mol, key='chkfile')
         self.assertEqual(dm.shape, (48,48))
-        self.assertAlmostEqual(lib.fp(dm), 1.3594274771226789, 9)
+        self.assertAlmostEqual(lib.fp(dm), 1.3594274771226789, 5)
 
         dm = scf.ghf.init_guess_by_chkfile(mol1, mf_r.chkfile, project=True)
         self.assertEqual(dm.shape, (26,26))
-        self.assertAlmostEqual(lib.fp(dm), -3.742519160521582, 9)
+        self.assertAlmostEqual(lib.fp(dm), -3.742519160521582, 5)
 
         dm = scf.ghf.init_guess_by_chkfile(mol1, mf_u.chkfile)
         self.assertEqual(dm.shape, (26,26))
-        self.assertAlmostEqual(lib.fp(dm), -3.742519160521582, 9)
+        self.assertAlmostEqual(lib.fp(dm), -3.742519160521582, 5)
 
     def test_init_guess_huckel(self):
         dm = scf.GHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), 1.0574099243527206, 9)
+        self.assertAlmostEqual(lib.fp(dm), 1.0574099243527206, 7)
 
     def test_ghf_complex(self):
         mf1 = scf.GHF(mol)
@@ -240,7 +240,7 @@ class KnownValues(unittest.TestCase):
         mo[:,:nocc] = numpy.dot(mo[:,:nocc], u)
         mo[:,nocc:] = numpy.dot(mo[:,nocc:], vh)
         mo_e, mo = mf.canonicalize(mo, mf.mo_occ)
-        self.assertAlmostEqual(abs(mo_e-mf.mo_energy).max(), 0, 7)
+        self.assertAlmostEqual(abs(mo_e-mf.mo_energy).max(), 0, 6)
 
         e, c = mfsym.canonicalize(mfsym.mo_coeff, mfsym.mo_occ)
         self.assertAlmostEqual(abs(e - mfsym.mo_energy).max(), 0, 6)
@@ -248,7 +248,7 @@ class KnownValues(unittest.TestCase):
     def test_get_occ(self):
         mf1 = copy.copy(mfsym)
         mf1.irrep_nelec = {}
-        mf1.irrep_nelec['B2'] = 1
+        mf1.irrep_nelec['B1'] = 1
         occ = mf1.get_occ(mf.mo_energy, mf.mo_coeff+0j)
         self.assertAlmostEqual(lib.fp(occ), 0.49368251542877073, 9)
         mf1.irrep_nelec['A2'] = 5

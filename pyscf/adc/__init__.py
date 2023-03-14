@@ -1,4 +1,4 @@
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,6 +27,15 @@ from pyscf import scf
 from pyscf import lib
 from pyscf.adc import uadc
 from pyscf.adc import radc
+from pyscf.adc import radc_amplitudes
+from pyscf.adc import uadc_amplitudes
+from pyscf.adc import radc_ip
+from pyscf.adc import radc_ip_cvs
+from pyscf.adc import radc_ea
+from pyscf.adc import uadc_ip
+from pyscf.adc import uadc_ip_cvs
+from pyscf.adc import uadc_ea
+
 
 def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):

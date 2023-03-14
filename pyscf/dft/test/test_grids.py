@@ -49,6 +49,7 @@ class KnownValues(unittest.TestCase):
         grid.becke_scheme = gen_grid.original_becke
         grid.radii_adjust = radi.becke_atomic_radii_adjust
         grid.atomic_radii = radi.BRAGG_RADII
+        grid.alignment = 0
         grid.atom_grid = {"H": (10, 50), "O": (10, 50),}
         grid.build(with_non0tab=False)
         self.assertAlmostEqual(numpy.linalg.norm(grid.coords), 185.91245945279027, 9)
@@ -86,12 +87,13 @@ class KnownValues(unittest.TestCase):
 
         grid.radi_method = radi.becke
         grid.build(with_non0tab=False)
-        self.assertAlmostEqual(lib.fp(grid.weights), 2486249.209827192, 7)
+        self.assertAlmostEqual(lib.fp(grid.weights), 818061.875131255, 7)
 
     def test_prune(self):
         grid = gen_grid.Grids(h2o)
         grid.prune = gen_grid.sg1_prune
         grid.atom_grid = {"H": (10, 50), "O": (10, 50),}
+        grid.alignment = 0
         grid.build(with_non0tab=False)
         self.assertAlmostEqual(numpy.linalg.norm(grid.coords), 202.17732600266302, 9)
         self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 442.54536463517167, 9)
@@ -121,21 +123,53 @@ class KnownValues(unittest.TestCase):
     def test_make_mask(self):
         grid = gen_grid.Grids(h2o)
         grid.atom_grid = {"H": (10, 110), "O": (10, 110),}
+        grid.cutoff = 1e-15
         grid.build()
         coords = grid.coords*10.
         non0 = gen_grid.make_mask(h2o, coords)
-        self.assertEqual(non0.sum(), 122)
-        self.assertAlmostEqual(lib.fp(non0), 0.554275491306796, 9)
+        self.assertEqual((non0>0).sum(), 123)
+        self.assertAlmostEqual(lib.fp(non0), -83.54934301013405, 9)
 
     def test_overwriting_grids_attribute(self):
         g = gen_grid.Grids(h2o).run()
-        self.assertEqual(g.weights.size, 34310)
+        self.assertEqual(g.weights.size, 34312)
 
         g.atom_grid = {"H": (10, 110), "O": (10, 110),}
         self.assertTrue(g.weights is None)
+
+    def test_arg_group_coords(self):
+        mol = h2o
+        g = gen_grid.Grids(mol)
+        atom_grids_tab = g.gen_atomic_grids(
+            mol, g.atom_grid, g.radi_method, g.level, g.prune)
+        coords, weights = g.get_partition(
+            mol, atom_grids_tab, g.radii_adjust, g.atomic_radii, g.becke_scheme)
+
+        atom_coords = mol.atom_coords()
+        boundary = [atom_coords.min(axis=0)-gen_grid.GROUP_BOUNDARY_PENALTY,
+                    atom_coords.max(axis=0)+gen_grid.GROUP_BOUNDARY_PENALTY]
+        box_size = gen_grid.GROUP_BOX_SIZE
+        boxes = ((boundary[1] - boundary[0]) * (1./box_size)).round().astype(int)
+        box_size = (boundary[1] - boundary[0]) / boxes
+        x_splits = numpy.append(numpy.append(
+            -numpy.inf, numpy.arange(boxes[0]+1) * box_size[0] + boundary[0][0]), numpy.inf)
+        y_splits = numpy.append(numpy.append(
+            -numpy.inf, numpy.arange(boxes[1]+1) * box_size[1] + boundary[0][1]), numpy.inf)
+        z_splits = numpy.append(numpy.append(
+            -numpy.inf, numpy.arange(boxes[2]+1) * box_size[2] + boundary[0][2]), numpy.inf)
+        idx = []
+        for x0, x1 in zip(x_splits[:-1], x_splits[1:]):
+            for y0, y1 in zip(y_splits[:-1], y_splits[1:]):
+                for z0, z1 in zip(z_splits[:-1], z_splits[1:]):
+                    mask = ((x0 <= coords[:,0]) & (coords[:,0] < x1) &
+                            (y0 <= coords[:,1]) & (coords[:,1] < y1) &
+                            (z0 <= coords[:,2]) & (coords[:,2] < z1))
+                    idx.append(numpy.where(mask)[0])
+        ref = numpy.hstack(idx)
+        idx = gen_grid.arg_group_grids(mol, coords)
+        self.assertTrue(abs(ref - idx).max() == 0)
 
 
 if __name__ == "__main__":
     print("Test Grids")
     unittest.main()
-

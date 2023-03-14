@@ -59,7 +59,7 @@ VERSION = get_version()
 EXTRAS = {
     'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2', 'pyscf-qsdopt'],
     'dftd3': ['pyscf-dftd3'],
-    'dmrgscf': ['pyscf-dmrgscf'],
+    #'dmrgscf': ['pyscf-dmrgscf'],
     'doci': ['pyscf-doci'],
     'icmpspt': ['pyscf-icmpspt'],
     'properties': ['pyscf-properties'],
@@ -126,17 +126,19 @@ build.sub_commands = ([c for c in build.sub_commands if c[0] == 'build_ext'] +
 _scipy_version = 'scipy!=1.5.0,!=1.5.1'
 import sys
 if sys.platform == 'darwin':
-    # https://github.com/scipy/scipy/issues/15362
     if sys.version_info < (3, 8):
         _scipy_version = 'scipy<=1.1.0'
     else:
-        # https://github.com/scipy/scipy/issues/16151
-        print('scipy>1.1.0 may crash with segmentation fault when calling scipy.linalg.eigh')
+        print('scipy>1.1.0 may crash when calling scipy.linalg.eigh. '
+              '(Issues https://github.com/scipy/scipy/issues/15362 '
+              'https://github.com/scipy/scipy/issues/16151)')
 
 setup(
     name=NAME,
     version=VERSION,
     description=DESCRIPTION,
+    long_description_content_type="text/markdown",
+    long_description=DESCRIPTION,
     url=URL,
     download_url=DOWNLOAD_URL,
     license=LICENSE,
@@ -153,7 +155,7 @@ setup(
     ext_modules=[Extension('pyscf_lib_placeholder', [])],
     cmdclass={'build_ext': CMakeBuildExt},
     install_requires=['numpy>=1.13,!=1.16,!=1.17',
-                      'scipy<=1.1.0' if sys.platform == "darwin" else 'scipy!=1.5.0,!=1.5.1',
+                      _scipy_version,
                       'h5py>=2.7'],
     extras_require=EXTRAS,
 )

@@ -167,4 +167,4 @@ def fast_iao_mullikan_pop(mol, dm, iaos, verbose=logger.DEBUG):
               reduce(numpy.dot, (iao_inv, dm[1], iao_inv.conj().T))]
         return scf.uhf.mulliken_pop(pmol, dm, s_iao, verbose)
 
-del(MINAO)
+del (MINAO)

@@ -712,6 +712,22 @@ def make_rdm1s(casscf, mo_coeff=None, ci=None, **kwargs):
     '''
     return casscf.make_rdm1s(mo_coeff, ci, **kwargs)
 
+def get_spin_square(casdm1, casdm2):
+    # DOI:10.1021/acs.jctc.1c00589 Eq (49)
+    spin_square = (0.75*numpy.einsum("ii", casdm1)
+                   - 0.5*numpy.einsum("ijji", casdm2)
+                   - 0.25*numpy.einsum("iijj", casdm2))
+    return spin_square
+
+def make_spin_casdm1(casdm1, casdm2, spin=None, nelec=None):
+    # DOI: 10.1002/qua.22320 Eq (3)
+    if spin is None:
+        spin = numpy.sqrt(get_spin_square(casdm1, casdm2) + 0.25) - 0.5
+    if nelec is None:
+        nelec = numpy.einsum("ii", casdm1)
+    spin_casdm1 = ((2. - nelec/2.)*casdm1 - numpy.einsum('ikkj->ij', casdm2))/(spin + 1)
+    return spin_casdm1
+
 def _is_uhf_mo(mo_coeff):
     return not (isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2)
 
@@ -736,7 +752,7 @@ def _make_rdm12_on_mo(casdm1, casdm2, ncore, ncas, nmo):
 def make_rdm12(casscf, mo_coeff=None, ci=None):
     if ci is None: ci = casscf.ci
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
-    assert(not _is_uhf_mo(mo_coeff))
+    assert (not _is_uhf_mo(mo_coeff))
     nelecas = casscf.nelecas
     ncas = casscf.ncas
     ncore = casscf.ncore
@@ -855,7 +871,7 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
     used as intermediates for calculations of the gradient of a single root in the context
     of the SA-CASSCF method; see: Mol. Phys. 99, 103 (2001).
     '''
-    assert(abs(sum(weights)-1) < 1e-3)
+    assert (abs(sum(weights)-1) < 1e-3)
     fcibase_class = casscf.fcisolver.__class__
     has_spin_square = getattr(casscf.fcisolver, 'spin_square', None)
     if wfnsym is None:
@@ -868,6 +884,9 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             self.weights = weights
             self.wfnsym = wfnsym
             self.e_states = [None]
+            # MRH 09/09/2022: I turned the _base_class property into an
+            # attribute to prevent conflict with fix_spin_ dynamic class
+            self._base_class = fcibase_class
             keys = set (('weights','e_states','_base_class'))
             self._keys = self._keys.union (keys)
 
@@ -878,11 +897,6 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             log.info('State-average over %d states with weights %s',
                      len(self.weights), self.weights)
             return self
-
-        @property
-        def _base_class (self):
-            ''' for convenience; this is equal to fcibase_class '''
-            return self.__class__.__bases__[0]
 
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if 'nroots' not in kwargs:
@@ -953,6 +967,24 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             rdm1 = numpy.einsum ('r,rpq->pq', self.weights, rdm1)
             rdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, rdm2)
             return rdm1, rdm2
+
+        def states_make_rdm12s(self, ci0, norb, nelec, *args, **kwargs):
+            dm1a, dm1b = [], []
+            dm2aa, dm2ab, dm2bb = [], [], []
+            for c in ci0:
+                dm1s, dm2s = fcibase_class.make_rdm12s(self, c, norb, nelec, *args, **kwargs)
+                dm1a.append(dm1s[0])
+                dm1b.append(dm1s[1])
+                dm2aa.append(dm2s[0])
+                dm2ab.append(dm2s[1])
+                dm2bb.append(dm2s[2])
+            return (dm1a, dm1b), (dm2aa, dm2ab, dm2bb)
+
+        def make_rdm12s(self, ci0, norb, nelec, *args, **kwargs):
+            rdm1s, rdm2s = self.states_make_rdm12s(ci0, norb, nelec, *args, **kwargs)
+            rdm1s = numpy.einsum ('r,srpq->spq', self.weights, rdm1s)
+            rdm2s = numpy.einsum ('r,srpqtu->spqtu', self.weights, rdm2s)
+            return rdm1s, rdm2s
 
         def states_trans_rdm12 (self, ci1, ci0, norb, nelec, *args, **kwargs):
             tdm1 = []
@@ -1165,7 +1197,7 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
     '''
     fcibase_class = fcisolvers[0].__class__
     nroots = sum(solver.nroots for solver in fcisolvers)
-    assert(nroots == len(weights))
+    assert (nroots == len(weights))
     has_spin_square = all(getattr(solver, 'spin_square', None)
                           for solver in fcisolvers)
     has_large_ci = all(getattr(solver, 'large_ci', None)
@@ -1289,10 +1321,10 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             cs = []
             for ix, (solver, my_args, my_kwargs) in enumerate (self._loop_solver(_state_args (ci0))):
                 c0 = my_args[0]
-                try:
+                if hasattr(solver, 'approx_kernel'):
                     e, c = solver.approx_kernel(h1, h2, norb, self._get_nelec(solver, nelec), ci0=c0,
                                                 orbsym=self.orbsym, **kwargs)
-                except AttributeError:
+                else:
                     e, c = solver.kernel(h1, h2, norb, self._get_nelec(solver, nelec), ci0=c0,
                                          orbsym=self.orbsym, **kwargs)
                 if solver.nroots == 1:
@@ -1345,6 +1377,26 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             rdm1 = numpy.einsum ('r,rpq->pq', self.weights, rdm1)
             rdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, rdm2)
             return rdm1, rdm2
+
+        def states_make_rdm12s(self, ci0, norb, nelec, link_index=None, **kwargs):
+            ci0 = _state_args (ci0)
+            link_index = _solver_args (link_index)
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+            dm1a, dm1b = [], []
+            dm2aa, dm2ab, dm2bb = [], [], []
+            for dm1s, dm2s in self._collect ('make_rdm12s', ci0, norb, nelec, link_index=link_index, **kwargs):
+                dm1a.append(dm1s[0])
+                dm1b.append(dm1s[1])
+                dm2aa.append(dm2s[0])
+                dm2ab.append(dm2s[1])
+                dm2bb.append(dm2s[2])
+            return (dm1a, dm1b), (dm2aa, dm2ab, dm2bb)
+
+        def make_rdm12s(self, ci0, norb, nelec, link_index=None, **kwargs):
+            rdm1s, rdm2s = self.states_make_rdm12s(ci0, norb, nelec, link_index=link_index, **kwargs)
+            rdm1s = numpy.einsum ('r,srpq->spq', self.weights, rdm1s)
+            rdm2s = numpy.einsum ('r,srpqtu->spqtu', self.weights, rdm2s)
+            return rdm1s, rdm2s
 
         # TODO: linkstr support
         def states_trans_rdm12 (self, ci1, ci0, norb, nelec, link_index=None, **kwargs):
@@ -1411,7 +1463,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     return casscf
 
 
-del(BASE, MAP2HF_TOL)
+del (BASE, MAP2HF_TOL)
 
 
 if __name__ == '__main__':

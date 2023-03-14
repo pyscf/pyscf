@@ -23,7 +23,7 @@
 #
 
 
-
+import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import uks as uks_grad
@@ -68,7 +68,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         vj = ks_grad.get_j(mol, dm)
         vxc += vj[0] + vj[1]
         if ks_grad.auxbasis_response:
-            e1_aux = vj.aux
+            e1_aux = vj.aux.sum ((0,1))
     else:
         vj, vk = ks_grad.get_jk(mol, dm)
         if ks_grad.auxbasis_response:
@@ -82,7 +82,8 @@ def get_veff(ks_grad, mol=None, dm=None):
                 vk_aux += vk_lr.aux * (alpha - hyb)
         vxc += vj[0] + vj[1] - vk
         if ks_grad.auxbasis_response:
-            e1_aux = vj.aux - vk_aux
+            e1_aux = vj.aux.sum ((0,1))
+            e1_aux -= numpy.trace (vk_aux, axis1=0, axis2=1)
 
     if ks_grad.auxbasis_response:
         logger.debug1(ks_grad, 'sum(auxbasis response) %s', e1_aux.sum(axis=0))

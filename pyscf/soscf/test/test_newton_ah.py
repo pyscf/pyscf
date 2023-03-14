@@ -154,7 +154,7 @@ class KnownValues(unittest.TestCase):
 
     def test_nr_rohf_symm(self):
         mf = scf.RHF(h2o_z1_s)
-        mf.irrep_nelec['B2'] = (1,0)
+        mf.irrep_nelec['B1'] = (1,0)
         mf.max_cycle = 1
         mf.conv_check = False
         mf.kernel()
@@ -367,4 +367,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for Newton solver")
     unittest.main()
-

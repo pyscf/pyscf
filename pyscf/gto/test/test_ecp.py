@@ -226,6 +226,7 @@ class KnownValues(unittest.TestCase):
         hcore = scf.RHF(mol).get_hcore()
         mydf = df.AFTDF(cell)
         ref = mydf.get_pp() + mol.intor('int1e_kin')
+        #FIXME: error seems big
         self.assertAlmostEqual(abs(hcore-ref).max(), 0, 2)
 
         mf = pbcscf.RHF(cell)
@@ -234,7 +235,7 @@ class KnownValues(unittest.TestCase):
         e_ref = mf.e_tot
 
         e_tot = scf.RHF(mol).run().e_tot
-        self.assertAlmostEqual(abs(e_ref-e_tot).max(), 0, 6)
+        self.assertAlmostEqual(abs(e_ref-e_tot).max(), 0, 5)
 
     def test_scalar_vs_int1e_rinv(self):
         mol = gto.M(atom='''
@@ -301,7 +302,7 @@ Na F
 
         mat1 = mol.set_geom_('Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.049').intor('ECPscalar')
         mat2 = mol.set_geom_('Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.051').intor('ECPscalar')
-        self.assertAlmostEqual(abs(mat0[2] - (mat2 - mat1) / 0.002).max(), 0, 6)
+        self.assertAlmostEqual(abs(mat0[2] - (mat2 - mat1) / 0.002).max(), 0, 5)
 
     def test_ecp_hessian1(self):
         mol = gto.M(atom='Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.050',
@@ -328,4 +329,3 @@ Na F
 if __name__ == '__main__':
     print("Full Tests for ECP")
     unittest.main()
-

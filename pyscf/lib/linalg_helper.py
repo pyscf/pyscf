@@ -53,7 +53,9 @@ FOLLOW_STATE = getattr(__config__, 'lib_linalg_helper_davidson_follow_state', Fa
 
 
 def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
-    '''Solve generalized eigenvalue problem  h v = w s v.
+    '''Solve generalized eigenvalue problem  h v = w s v  in two passes.
+    First diagonalize s to get eigenvectors. Then in the eigenvectors space
+    transform and diagonalize h.
 
     .. note::
         The number of eigenvalues and eigenvectors might be less than the
@@ -75,17 +77,14 @@ def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
     '''
     seig, t = scipy.linalg.eigh(s)
     mask = seig >= lindep
-    if numpy.all(mask):
-        w, v = scipy.linalg.eigh(h, s)
+    t = t[:,mask] * (1/numpy.sqrt(seig[mask]))
+    if t.size > 0:
+        heff = reduce(numpy.dot, (t.T.conj(), h, t))
+        w, v = scipy.linalg.eigh(heff)
+        v = numpy.dot(t, v)
     else:
-        t = t[:,mask] * (1/numpy.sqrt(seig[mask]))
-        if t.size > 0:
-            heff = reduce(numpy.dot, (t.T.conj(), h, t))
-            w, v = scipy.linalg.eigh(heff)
-            v = numpy.dot(t, v)
-        else:
-            w = numpy.zeros((0,))
-            v = t
+        w = numpy.zeros((0,))
+        v = t
     return w, v, seig
 
 def eigh_by_blocks(h, s=None, labels=None):
@@ -418,13 +417,23 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
             x0len = len(x0)
-            xt, x0 = _qr(x0, dot, lindep)[0], None
+            xt = _qr(x0, dot, lindep)[0]
             if len(xt) != x0len:
                 log.warn('QR decomposition removed %d vectors.  The davidson may fail.',
                          x0len - len(xt))
                 if callable(pick):
                     log.warn('Check to see if `pick` function %s is providing '
                              'linear dependent vectors', pick.__name__)
+                if len(xt) == 0:
+                    if icyc == 0:
+                        msg = 'Initial guess is empty or zero'
+                    else:
+                        msg = ('No more linearly independent basis were found. '
+                               'Unless loosen the lindep tolerance (current value '
+                               f'{lindep}), the diagonalization solver is not able '
+                               'to find eigenvectors.')
+                    raise LinearDependenceError(msg)
+            x0 = None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
@@ -443,7 +452,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             try:
                 dtype = numpy.result_type(axt[0], xt[0])
             except IndexError:
-                dtype = numpy.result_type(ax[0].dtype, xs[0].dtype)
+                raise LinearDependenceError('No linearly independent basis found '
+                                            'by the diagonalization solver.')
         if heff is None:  # Lazy initilize heff to determine the dtype
             heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:
@@ -1573,6 +1583,10 @@ def _sort_elast(elast, conv_last, vlast, v, fresh_start, log):
     return [elast[i] for i in idx], [conv_last[i] for i in idx]
 
 
+class LinearDependenceError(RuntimeError):
+    pass
+
+
 class _Xlist(list):
     def __init__(self):
         self.scr_h5 = misc.H5TmpFile()
@@ -1607,9 +1621,9 @@ class _Xlist(list):
 
     def pop(self, index):
         key = self.index.pop(index)
-        del(self.scr_h5[str(key)])
+        del (self.scr_h5[str(key)])
 
-del(SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)
+del (SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)
 
 
 if __name__ == '__main__':

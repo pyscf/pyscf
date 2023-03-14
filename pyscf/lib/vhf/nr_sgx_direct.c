@@ -25,6 +25,7 @@
 #include "config.h"
 #include "cint.h"
 #include "nr_direct.h"
+#include "gto/gto.h"
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
 #define MIN(I,J)        ((I) < (J) ? (I) : (J))
@@ -47,10 +48,6 @@ typedef struct {
         void (*finalize)(SGXJKArray *, double *);
         void (*sanity_check)(int *shls_slice);
 } SGXJKOperator;
-
-int GTOmax_shell_dim(const int *ao_loc, const int *shls_slice, int ncenter);
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
 
 #define BLKSIZE         312
 
@@ -79,16 +76,16 @@ int _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
 }
 
 #define DECLARE_ALL \
-        const int *atm = envs->atm; \
-        const int *bas = envs->bas; \
+        int *atm = envs->atm; \
+        int *bas = envs->bas; \
         double *env = envs->env; \
-        const int natm = envs->natm; \
-        const int nbas = envs->nbas; \
-        const int *ao_loc = envs->ao_loc; \
-        const int *shls_slice = envs->shls_slice; \
-        const CINTOpt *cintopt = envs->cintopt; \
-        const int ioff = ao_loc[shls_slice[0]]; \
-        const int joff = ao_loc[shls_slice[2]]; \
+        int natm = envs->natm; \
+        int nbas = envs->nbas; \
+        int *ao_loc = envs->ao_loc; \
+        int *shls_slice = envs->shls_slice; \
+        CINTOpt *cintopt = envs->cintopt; \
+        int ioff = ao_loc[shls_slice[0]]; \
+        int joff = ao_loc[shls_slice[2]]; \
         int i0, j0, i1, j1, ish, jsh, idm; \
         ish = shls[0]; \
         jsh = shls[1];

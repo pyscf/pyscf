@@ -535,13 +535,15 @@ class NumInt2C(numint._NumIntMixin):
     collinear_thrd = getattr(__config__, 'dft_numint_RnumInt_collinear_thrd', 0.99)
     collinear_samples = getattr(__config__, 'dft_numint_RnumInt_collinear_samples', 200)
 
-    def __init__(self):
-        self.omega = None  # RSH paramter
+    make_mask = staticmethod(numint.make_mask)
+    eval_ao = staticmethod(numint.eval_ao)
+    eval_rho = staticmethod(eval_rho)
 
-    @lib.with_doc(eval_rho.__doc__)
-    def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
-                 with_lapl=True, verbose=None):
-        return eval_rho(mol, ao, dm, non0tab, xctype, hermi, with_lapl, verbose)
+    def eval_rho1(self, mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
+                  with_lapl=True, cutoff=None, ao_cutoff=None, pair_mask=None,
+                  verbose=None):
+        return self.eval_rho(mol, ao, dm, screen_index, xctype, hermi,
+                             with_lapl, verbose=verbose)
 
     def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                   with_lapl=True, verbose=None):
@@ -592,7 +594,7 @@ class NumInt2C(numint._NumIntMixin):
                     in self.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho.append(self.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype,
                                           with_lapl))
-            rho = np.hstack(rho)
+            rho = np.concatenate(rho,axis=-1)
             if self.collinear[0] == 'm':  # mcol
                 eval_xc = self.mcfun_eval_xc_adapter(xc_code)
             else:
@@ -613,10 +615,9 @@ class NumInt2C(numint._NumIntMixin):
                 # rhoa and rhob must be real
                 rhoa.append(ni.eval_rho(mol, ao, dm_a, mask, xctype, hermi, with_lapl))
                 rhob.append(ni.eval_rho(mol, ao, dm_b, mask, xctype, hermi, with_lapl))
-            rho = np.stack([np.hstack(rhoa), np.hstack(rhob)])
+            rho = np.stack([np.concatenate(rhoa,axis=-1), np.concatenate(rhob,axis=-1)])
             assert rho.dtype == np.double
-            vxc, fxc = ni.eval_xc(xc_code, rho, spin=1, relativity=0, deriv=2,
-                                  verbose=0)[1:3]
+            vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
         return rho, vxc, fxc
 
     def get_rho(self, mol, dm, grids, max_memory=2000):
@@ -685,7 +686,9 @@ class NumInt2C(numint._NumIntMixin):
     eval_xc_eff = _eval_xc_eff
     mcfun_eval_xc_adapter = mcfun_eval_xc_adapter
 
-    def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=False):
+    block_loop = numint._block_loop
+
+    def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=False, grids=None):
         if getattr(dms, 'mo_coeff', None) is not None:
             #TODO: test whether dm.mo_coeff matching dm
             mo_coeff = dms.mo_coeff

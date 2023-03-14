@@ -167,7 +167,7 @@ class SpinFreeX2CHelper(x2c.X2CHelperMixin):
 
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
         t = xmol.intor_symmetric('int1e_kin')
         v = xmol.intor_symmetric('int1e_nuc')
         s = xmol.intor_symmetric('int1e_ovlp')
@@ -245,7 +245,7 @@ class SpinFreeX2CHelper(x2c.X2CHelperMixin):
         else:
             xmol = mol
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_nr_by_atom()

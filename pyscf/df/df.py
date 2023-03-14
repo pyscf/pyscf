@@ -62,8 +62,8 @@ class DF(lib.StreamObject):
             'j3c'.
             The DF integral tensor :math:`V_{x,ij}` should be a 2D array in C
             (row-major) convention, where x corresponds to index of auxiliary
-            basis, and the combined index ij is the orbital pair index. The
-            hermitian symmetry is assumed for the combined ij index, ie
+            basis, and the composite index ij is the orbital pair index. The
+            hermitian symmetry is assumed for the composite ij index, ie
             the elements of :math:`V_{x,i,j}` with :math:`i\geq j` are existed
             in the DF integral tensor.  Thus the shape of DF integral tensor
             is (M,N*(N+1)/2), where M is the number of auxbasis functions and

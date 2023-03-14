@@ -22,17 +22,16 @@ import h5py
 import numpy as np
 from scipy.special import gamma, gammaincc, comb
 
-from pyscf import gto as mol_gto
-from pyscf.pbc import df
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
-from pyscf.pbc import tools as pbctools
-from pyscf.scf import _vhf
-from pyscf.pbc.tools import k2gamma
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lib.parameters import BOHR
-
-libpbc = lib.load_library('libpbc')
+from pyscf import gto as mol_gto
+from pyscf.pbc.df.gdf_builder import _round_off_to_odd_mesh
+from pyscf.pbc.df.incore import libpbc, make_auxcell
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
+from pyscf.pbc.tools import pbc as pbctools
+from pyscf.scf import _vhf
+from pyscf.pbc.tools import k2gamma
 
 
 """ General helper functions
@@ -386,7 +385,8 @@ def _get_schwartz_data(bas_lst, omega, dijs_lst=None, keep1ctr=True, safe=True):
     if keep1ctr:
         bas_lst = get1ctr(bas_lst)
     if dijs_lst is None:
-        mol = mol_gto.M(atom="H 0 0 0", basis=bas_lst, spin=None)
+        mol = mol_gto.Mole()
+        mol.build(False, False, atom="H 0 0 0", basis=bas_lst, spin=None)
         nbas = mol.nbas
         intor = "int2c2e"
         Qs = np.zeros(nbas)
@@ -400,7 +400,8 @@ def _get_schwartz_data(bas_lst, omega, dijs_lst=None, keep1ctr=True, safe=True):
             return _get_norm(
                         _fintor_sreri(mol, intor, shls_slice, omega, safe)
                     )**0.5
-        mol = mol_gto.M(atom="H 0 0 0; H 0 0 0", basis=bas_lst, spin=None)
+        mol = mol_gto.Mole()
+        mol.build(False, False, atom="H 0 0 0; H 0 0 0", basis=bas_lst, spin=None)
         nbas = mol.nbas//2
         n2 = nbas*(nbas+1)//2
         if len(dijs_lst) != n2:
@@ -427,7 +428,8 @@ def _get_schwartz_dcut(bas_lst, omega, precision, r0=None, safe=True):
     Return:
         1d array of length nbas*(nbas+1)//2 with nbas=len(bas_lst).
     """
-    mol = mol_gto.M(atom="H 0 0 0; H 0 0 0", basis=bas_lst)
+    mol = mol_gto.Mole()
+    mol.build(False, False, atom="H 0 0 0; H 0 0 0", basis=bas_lst)
     nbas = len(bas_lst)
     n2 = nbas*(nbas+1)//2
 
@@ -662,13 +664,15 @@ def _get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol, dijs_lst, omega,
         mol = bas_lst_or_mol
     else:
         bas_lst = bas_lst_or_mol
-        mol = mol_gto.M(atom="H 0 0 0", basis=bas_lst, spin=None)
+        mol = mol_gto.Mole()
+        mol.build(False, False, atom="H 0 0 0", basis=bas_lst, spin=None)
 
     if isinstance(auxbas_lst_or_auxmol, mol_gto.mole.Mole):
         auxmol = auxbas_lst_or_auxmol
     else:
         auxbas_lst = auxbas_lst_or_auxmol
-        auxmol = mol_gto.M(atom="H 0 0 0", basis=auxbas_lst, spin=None)
+        auxmol = mol_gto.Mole()
+        auxmol.build(False, False, atom="H 0 0 0", basis=auxbas_lst, spin=None)
 
     nbas = mol.nbas
 
@@ -691,7 +695,7 @@ def _get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol, dijs_lst, omega,
     return Rcuts
 def _get_atom_Rcuts_3c(Rcuts, dijs_lst, bas_exps, bas_loc, auxbas_loc):
     natm = len(bas_loc) - 1
-    assert(len(auxbas_loc) == natm+1)
+    assert (len(auxbas_loc) == natm+1)
     bas_loc_inv = np.concatenate([[i]*(bas_loc[i+1]-bas_loc[i])
                                   for i in range(natm)])
     nbas = bas_loc[-1]
@@ -753,7 +757,7 @@ def _get_bvk_data(cell, Ls, bvk_kmesh):
 
     Ls_sorted = np.array(Ls[iL_by_bvk], order="C")
     ### [END] Hongzhou's style of bvk
-    bvkmesh_Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_kmesh)
+    bvkmesh_Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_kmesh, True)
 
     return Ls_sorted, bvkmesh_Ls, cell_loc_bvk
 
@@ -801,7 +805,7 @@ def estimate_omega_for_npw(cell, npw_max, precision=None, kmax=0,
                                                                 precision, kmax)
         mesh = pbctools.cutoff_to_mesh(latvecs, ke_cutoff)
         if round2odd:
-            mesh = df.df._round_off_to_odd_mesh(mesh)
+            mesh = _round_off_to_odd_mesh(mesh)
         return ke_cutoff, mesh
     def fcheck(omega):
         return np.prod(omega2all(omega)[1]) > npw_max
@@ -825,7 +829,7 @@ def estimate_mesh_for_omega(cell, omega, precision=None, kmax=0,
                                                             precision, kmax)
     mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
     if round2odd:
-        mesh = df.df._round_off_to_odd_mesh(mesh)
+        mesh = _round_off_to_odd_mesh(mesh)
 
     return ke_cutoff, mesh
 
@@ -869,7 +873,7 @@ def intor_j2c(cell, omega, precision=None, kpts=None, hermi=1, shls_slice=None,
     intor = "int2c2e"
     intor, comp = mol_gto.moleintor._get_intor_and_comp(
                                             cell._add_suffix(intor), None)
-    assert(comp == 1)
+    assert (comp == 1)
 
 # prescreening data
     if precision is None: precision = cell.precision
@@ -988,7 +992,6 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     if isinstance(auxcell_or_auxbasis, mol_gto.Mole):
         auxcell = auxcell_or_auxbasis
     else:
-        from pyscf.pbc.df.incore import make_auxcell
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
 
 # prescreening data
@@ -1037,9 +1040,9 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     else:
         feri = h5py.File(erifile, 'w')
     if dataname in feri:
-        del(feri[dataname])
+        del (feri[dataname])
     if dataname+'-kptij' in feri:
-        del(feri[dataname+'-kptij'])
+        del (feri[dataname+'-kptij'])
 
     if kptij_lst is None:
         kptij_lst = np.zeros((1,2,3))
@@ -1070,7 +1073,7 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     aosym_ks2 &= aosym[:2] == 's2'
 
     if j_only and aosym[:2] == 's2':
-        assert(shls_slice[2] == 0)
+        assert (shls_slice[2] == 0)
         nao_pair = nii
     else:
         nao_pair = nij
@@ -1186,7 +1189,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
         bvk_nimgs = Ls_.shape[0]
 
     if gamma_point(kptij_lst):
-        assert(aosym[:2] == "s2")
+        assert (aosym[:2] == "s2")
         kk_type = 'g'
         dtype = np.double
         nkpts = nkptij = 1

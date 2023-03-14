@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -155,8 +155,8 @@ void CVHFrha2kl_lk_s1ij(double complex *eri,
         int dkl = dk * dl;
         double complex Z0 = 0;
         double complex Z1 = 1;
-        double complex sdm[dkl];
-        double complex svj[dij];
+        double complex *sdm = eri + dij * dkl * ncomp * 2;
+        double complex *svj = sdm + dkl;
         int ic;
 
         CVHFtimerev_ijminus(sdm, dm, tao, lstart, lend, kstart, kend, nao);
@@ -190,9 +190,9 @@ void CVHFrha2kl_jk_s1il(double complex *eri,
         int djl = dj * dl;
         double complex Z1 = 1;
         double complex Z_1 = -1;
-        double complex sdm[djl];
-        double complex svk[dik];
-        double complex *p0213 = eri + dik*djl*ncomp;
+        double complex *p0213 = eri + dik * djl * ncomp;
+        double complex *sdm = p0213 + dik * djl * ncomp;
+        double complex *svk = sdm + djl;
         int ic;
 
         CVHFtimerev_jT(sdm, dm, tao, jstart, jend, lstart, lend, nao);
@@ -226,9 +226,9 @@ void CVHFrha2kl_li_s1kj(double complex *eri,
         int djl = dj * dl;
         double complex Z1 = 1;
         double complex Z_1 = -1;
-        double complex sdm[dik];
-        double complex svk[djl];
-        double complex *p0213 = eri + dik*djl*ncomp;
+        double complex *p0213 = eri + dik * djl * ncomp;
+        double complex *sdm = p0213 + dik * djl * ncomp;
+        double complex *svk = sdm + dik;
         int ic;
 
         CVHFtimerev_i(sdm, dm, tao, kstart, kend, istart, iend, nao);
@@ -284,15 +284,15 @@ void CVHFrha4_jk_s1il(double complex *eri,
         int djk = dj * dk;
         int dik = di * dk;
         int djl = dj * dl;
+        int dil = di * dl;
         int dijk = dik * dj;
-        int n = (di+dj)*(dk+dl);
         double complex Z1 = 1;
         double complex Z_1 = -1;
-        double complex sdm[n];
-        double complex svk[n];
         double complex *peri = eri;
         double complex *pvk = vk;
-        double complex *p0213 = eri + dik*djl*ncomp;
+        double complex *p0213 = eri + dik * djl * ncomp;
+        double complex *sdm = p0213 + dik * djl * ncomp;
+        double complex *svk = sdm + dik + dil;
         int l, ic;
 
         // tjtikl
@@ -346,14 +346,13 @@ void CVHFrha4_li_s1kj(double complex *eri,
         int dik = di * dk;
         int djl = dj * dl;
         int dijk = dik * dj;
-        int n = (di+dj)*(dk+dl);
         double complex Z1 = 1;
         double complex Z_1 = -1;
-        double complex sdm[n];
-        double complex svk[n];
         double complex *peri = eri;
         double complex *pvk = vk;
-        double complex *p0213 = eri + dik*djl*ncomp;
+        double complex *p0213 = eri + dik * djl * ncomp;
+        double complex *sdm = p0213 + dik * djl * ncomp;
+        double complex *svk = sdm + djl + djk;
         int l, ic;
 
         // tjtikl

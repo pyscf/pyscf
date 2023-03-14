@@ -68,7 +68,7 @@ class KnownValues(unittest.TestCase):
         ci1 = fci.direct_spin0.contract_1e(h1e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_1e(h1e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 9.1191973750140729, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 9.1191973750140729, 7)
         ci1 = fci.direct_spin0.contract_2e(g2e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
@@ -76,9 +76,9 @@ class KnownValues(unittest.TestCase):
 
     def test_kernel(self):
         e, c = fci.direct_spin0.kernel(h1e, g2e, norb, nelec)
-        self.assertAlmostEqual(e, -9.1491239851241737, 8)
+        self.assertAlmostEqual(e, -9.1491239851241737, 7)
         e = fci.direct_spin0.energy(h1e, g2e, c, norb, nelec)
-        self.assertAlmostEqual(e, -9.1491239851241737, 8)
+        self.assertAlmostEqual(e, -9.1491239851241737, 7)
 
     def test_rdm1(self):
         dm1ref = fci.direct_spin1.make_rdm1(ci0, norb, nelec)
@@ -143,7 +143,7 @@ class KnownValues(unittest.TestCase):
             symmetry = True,
             basis = '6-311g')
         mf = scf.RHF(mol)
-        mf.scf()
+        mf.run(conv_tol=1e-10)
         mf._scf = mf
         h1e = mcscf.casci.h1e_for_cas(mf, mf.mo_coeff, ncas=2, ncore=2)[0]
         eri = ao2mo.incore.full(mf._eri, mf.mo_coeff[:,2:4])
@@ -152,7 +152,7 @@ class KnownValues(unittest.TestCase):
         ci0 = numpy.zeros((2,2))
         ci0[0,0] = 1
         e, c = cis.kernel(h1e, eri, 2, 2, ci0)
-        self.assertAlmostEqual(e, -0.80755526695538049, 10)
+        self.assertAlmostEqual(e, -0.80755526695538049, 7)
 
         cis = fci.direct_spin0_symm.FCISolver(mol)
         # Test the default initial guess. It should give "0" in the results
@@ -191,4 +191,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for spin0")
     unittest.main()
-

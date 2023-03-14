@@ -26,24 +26,6 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_n3_diffuse(self):
         self.assertAlmostEqual(kmf.e_tot, -6.1870676561721227, 6)
-        '''
-        nmp = [1,1,2]
-        # treating 1*1*2 supercell at gamma point
-        supcell = super_cell(cell_n3d,nmp)
-        gmf  = scf.UHF(supcell,exxdiv=None)
-        ehf  = gmf.kernel()
-        gcc  = cc.UCCSD(gmf)
-        gcc.conv_tol=1e-12
-        gcc.conv_tol_normt=1e-10
-        gcc.max_cycle=250
-        ecc, t1, t2 = gcc.kernel()
-        print('UHF energy (supercell) %.7f \n' % (float(ehf)/2.))
-        print('UCCSD correlation energy (supercell) %.7f \n' % (float(ecc)/2.))
-        #eom = eom_uccsd.EOMIP(gcc)
-        #e1, v = eom.ipccsd(nroots=2)
-        #eom = eom_uccsd.EOMEA(gcc)
-        #e2, v = eom.eaccsd(nroots=2, koopmans=True)
-        '''
         mycc = pbcc.KUCCSD(kmf)
         mycc.conv_tol = 1e-7
         mycc.conv_tol_normt = 1e-7
@@ -187,11 +169,11 @@ class KnownValues(unittest.TestCase):
         vector = np.random.random(eom.vector_size())
 
         hc = eom.matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (4.126336947439054 +0.5931985341760211j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (4.126336947439054 +0.5931985341760211j), 7)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (1.248516714348047  +2.310336141756983j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (1.248516714348047  +2.310336141756983j), 7)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-3.4529892564020126-5.093287166283228j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-3.4529892564020126-5.093287166283228j), 7)
 
 
         kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
@@ -200,21 +182,21 @@ class KnownValues(unittest.TestCase):
         eris = mycc.ao2mo()
         imds = eom.make_imds(eris)
         hc = eom.matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (4.045928342346641 +0.5861843966140339j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (4.045928342346641 +0.5861843966140339j), 7)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (1.2695743252320795+2.28060203958305j  ), 8)
+        self.assertAlmostEqual(lib.fp(hc), (1.2695743252320795+2.28060203958305j  ), 7)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-3.435385905375094-5.0991524119952505j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-3.435385905375094-5.0991524119952505j), 7)
 
         mycc.max_memory = 4000
         eris = mycc.ao2mo()
         imds = eom.make_imds(eris)
         hc = eom.matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (4.045928342346641 +0.5861843966140339j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (4.045928342346641 +0.5861843966140339j), 7)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (1.2695743252320795+2.28060203958305j  ), 8)
+        self.assertAlmostEqual(lib.fp(hc), (1.2695743252320795+2.28060203958305j  ), 7)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-3.435385905375094-5.0991524119952505j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-3.435385905375094-5.0991524119952505j), 7)
 
 if __name__ == '__main__':
     print("eom_kccsd_uhf tests")

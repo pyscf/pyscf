@@ -36,7 +36,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen == 0 or mp.frozen is None)
+        assert (mp.frozen == 0 or mp.frozen is None)
 
     if eris is None:
         eris = mp.ao2mo(mo_coeff)
@@ -122,7 +122,7 @@ def energy(mp, t2, eris):
 
 def update_amps(mp, t2, eris):
     '''Update non-canonical MP2 amplitudes'''
-    #assert(isinstance(eris, _ChemistsERIs))
+    #assert (isinstance(eris, _ChemistsERIs))
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     mo_ea_o = eris.mo_energy[0][:nocca]
@@ -172,7 +172,7 @@ def get_nocc(mp):
     elif isinstance(frozen, (int, numpy.integer)):
         nocca = numpy.count_nonzero(mp.mo_occ[0] > 0) - frozen
         noccb = numpy.count_nonzero(mp.mo_occ[1] > 0) - frozen
-        #assert(nocca > 0 and noccb > 0)
+        #assert (nocca > 0 and noccb > 0)
     elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
         if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
             # The same frozen orbital indices for alpha and beta orbitals
@@ -475,7 +475,6 @@ class _ChemistsERIs(mp2._ChemistsERIs):
                               mp._scf.mo_energy[1][mo_idx[1]])
             self.fock = (numpy.diag(self.mo_energy[0]),
                          numpy.diag(self.mo_energy[1]))
-            self.e_hf = mp._scf.e_tot
         else:
             dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
@@ -483,7 +482,6 @@ class _ChemistsERIs(mp2._ChemistsERIs):
             focka = mo_a.conj().T.dot(fockao[0]).dot(mo_a)
             fockb = mo_b.conj().T.dot(fockao[1]).dot(mo_b)
             self.fock = (focka, fockb)
-            self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             nocca, noccb = self.nocc = mp.nocc
             self.mo_energy = (focka.diagonal().real, fockb.diagonal().real)
         return self
@@ -537,9 +535,18 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         eris.feri = lib.H5TmpFile()
         _ao2mo_ovov(mp, (orboa,orbva,orbob,orbvb), eris.feri,
                     max(2000, max_memory), log)
-        eris.ovov = eris.feri['ovov']
-        eris.ovOV = eris.feri['ovOV']
-        eris.OVOV = eris.feri['OVOV']
+        if nocca*nvira > 0:
+            eris.ovov = eris.feri['ovov']
+        else:
+            eris.ovov = numpy.zeros((nocca*nvira,nocca*nvira))
+        if nocca*nvira*noccb*nvirb > 0:
+            eris.ovOV = eris.feri['ovOV']
+        else:
+            eris.ovOV = numpy.zeros((nocca*nvira,noccb*nvirb))
+        if noccb*nvirb > 0:
+            eris.OVOV = eris.feri['OVOV']
+        else:
+            eris.OVOV = numpy.zeros((noccb*nvirb,noccb*nvirb))
 
     log.timer('Integral transformation', *time0)
     return eris
@@ -561,8 +568,8 @@ def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
     ao2mopt = _ao2mo.AO2MOpt(mol, int2e, 'CVHFnr_schwarz_cond',
                              'CVHFsetnr_direct_scf')
     nbas = mol.nbas
-    assert(nvira <= nao)
-    assert(nvirb <= nao)
+    assert (nvira <= nao)
+    assert (nvirb <= nao)
 
     ao_loc = mol.ao_loc_nr()
     dmax = max(4, min(nao/3, numpy.sqrt(max_memory*.95e6/8/(nao+nocca)**2)))
@@ -616,14 +623,17 @@ def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
     time1 = time0 = log.timer('mp2 ao2mo_ovov pass1', *time0)
     eri = eribuf = tmp_i = tmp_li = None
 
-    fovov = feri.create_dataset('ovov', (nocca*nvira,nocca*nvira), 'f8',
-                                chunks=(nvira,nvira))
-    fovOV = feri.create_dataset('ovOV', (nocca*nvira,noccb*nvirb), 'f8',
-                                chunks=(nvira,nvirb))
-    fOVOV = feri.create_dataset('OVOV', (noccb*nvirb,noccb*nvirb), 'f8',
-                                chunks=(nvirb,nvirb))
+    if nocca*nvira > 0:
+        fovov = feri.create_dataset('ovov', (nocca*nvira,nocca*nvira), 'f8',
+                                    chunks=(nvira,nvira))
+    if nocca*nvira*noccb*nvirb > 0:
+        fovOV = feri.create_dataset('ovOV', (nocca*nvira,noccb*nvirb), 'f8',
+                                    chunks=(nvira,nvirb))
+    if noccb*nvirb > 0:
+        fOVOV = feri.create_dataset('OVOV', (noccb*nvirb,noccb*nvirb), 'f8',
+                                    chunks=(nvirb,nvirb))
     occblk = int(min(max(nocca,noccb),
-                     max(4, 250/nocca, max_memory*.9e6/8/(nao**2*nocca)/5)))
+                     max(4, 250/max(1,nocca), max_memory*.9e6/8/(nao**2*max(1,nocca))/5)))
 
     def load_aa(h5g, nocc, i0, eri):
         if i0 < nocc:
@@ -646,45 +656,48 @@ def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
 
     with lib.call_in_background(save) as bsave:
         with lib.call_in_background(load_aa) as prefetch:
-            buf_prefecth = numpy.empty((occblk,nocca,nao,nao))
-            buf = numpy.empty_like(buf_prefecth)
-            load_aa(ftmp['aa'], nocca, 0, buf_prefecth)
-            for i0, i1 in lib.prange(0, nocca, occblk):
-                buf, buf_prefecth = buf_prefecth, buf
-                prefetch(ftmp['aa'], nocca, i1, buf_prefecth)
-                eri = buf[:i1-i0].reshape((i1-i0)*nocca,nao,nao)
-                dat = _ao2mo.nr_e2(eri, orbva, (0,nvira,0,nvira), 's1', 's1')
-                bsave(fovov, nvira, i0, i1,
-                      dat.reshape(i1-i0,nocca,nvira,nvira).transpose(0,2,1,3))
-                time1 = log.timer_debug1('pass2 ao2mo for aa [%d:%d]' % (i0,i1), *time1)
+            if nocca*nvira > 0:
+                buf_prefecth = numpy.empty((occblk,nocca,nao,nao))
+                buf = numpy.empty_like(buf_prefecth)
+                load_aa(ftmp['aa'], nocca, 0, buf_prefecth)
+                for i0, i1 in lib.prange(0, nocca, occblk):
+                    buf, buf_prefecth = buf_prefecth, buf
+                    prefetch(ftmp['aa'], nocca, i1, buf_prefecth)
+                    eri = buf[:i1-i0].reshape((i1-i0)*nocca,nao,nao)
+                    dat = _ao2mo.nr_e2(eri, orbva, (0,nvira,0,nvira), 's1', 's1')
+                    bsave(fovov, nvira, i0, i1,
+                          dat.reshape(i1-i0,nocca,nvira,nvira).transpose(0,2,1,3))
+                    time1 = log.timer_debug1('pass2 ao2mo for aa [%d:%d]' % (i0,i1), *time1)
 
-            buf_prefecth = numpy.empty((occblk,noccb,nao,nao))
-            buf = numpy.empty_like(buf_prefecth)
-            load_aa(ftmp['bb'], noccb, 0, buf_prefecth)
-            for i0, i1 in lib.prange(0, noccb, occblk):
-                buf, buf_prefecth = buf_prefecth, buf
-                prefetch(ftmp['bb'], noccb, i1, buf_prefecth)
-                eri = buf[:i1-i0].reshape((i1-i0)*noccb,nao,nao)
-                dat = _ao2mo.nr_e2(eri, orbvb, (0,nvirb,0,nvirb), 's1', 's1')
-                bsave(fOVOV, nvirb, i0, i1,
-                      dat.reshape(i1-i0,noccb,nvirb,nvirb).transpose(0,2,1,3))
-                time1 = log.timer_debug1('pass2 ao2mo for bb [%d:%d]' % (i0,i1), *time1)
+            if noccb*nvirb > 0:
+                buf_prefecth = numpy.empty((occblk,noccb,nao,nao))
+                buf = numpy.empty_like(buf_prefecth)
+                load_aa(ftmp['bb'], noccb, 0, buf_prefecth)
+                for i0, i1 in lib.prange(0, noccb, occblk):
+                    buf, buf_prefecth = buf_prefecth, buf
+                    prefetch(ftmp['bb'], noccb, i1, buf_prefecth)
+                    eri = buf[:i1-i0].reshape((i1-i0)*noccb,nao,nao)
+                    dat = _ao2mo.nr_e2(eri, orbvb, (0,nvirb,0,nvirb), 's1', 's1')
+                    bsave(fOVOV, nvirb, i0, i1,
+                          dat.reshape(i1-i0,noccb,nvirb,nvirb).transpose(0,2,1,3))
+                    time1 = log.timer_debug1('pass2 ao2mo for bb [%d:%d]' % (i0,i1), *time1)
 
-        orbvab = numpy.asarray(numpy.hstack((orbva, orbvb)), order='F')
-        with lib.call_in_background(load_ab) as prefetch:
-            load_ab(ftmp['ab'], nocca, 0, buf_prefecth)
-            for i0, i1 in lib.prange(0, nocca, occblk):
-                buf, buf_prefecth = buf_prefecth, buf
-                prefetch(ftmp['ab'], nocca, i1, buf_prefecth)
-                eri = buf[:i1-i0].reshape((i1-i0)*noccb,nao,nao)
-                dat = _ao2mo.nr_e2(eri, orbvab, (0,nvira,nvira,nvira+nvirb), 's1', 's1')
-                bsave(fovOV, nvira, i0, i1,
-                      dat.reshape(i1-i0,noccb,nvira,nvirb).transpose(0,2,1,3))
-                time1 = log.timer_debug1('pass2 ao2mo for ab [%d:%d]' % (i0,i1), *time1)
+        if nocca*nvira*noccb*nvirb > 0:
+            orbvab = numpy.asarray(numpy.hstack((orbva, orbvb)), order='F')
+            with lib.call_in_background(load_ab) as prefetch:
+                load_ab(ftmp['ab'], nocca, 0, buf_prefecth)
+                for i0, i1 in lib.prange(0, nocca, occblk):
+                    buf, buf_prefecth = buf_prefecth, buf
+                    prefetch(ftmp['ab'], nocca, i1, buf_prefecth)
+                    eri = buf[:i1-i0].reshape((i1-i0)*noccb,nao,nao)
+                    dat = _ao2mo.nr_e2(eri, orbvab, (0,nvira,nvira,nvira+nvirb), 's1', 's1')
+                    bsave(fovOV, nvira, i0, i1,
+                          dat.reshape(i1-i0,noccb,nvira,nvirb).transpose(0,2,1,3))
+                    time1 = log.timer_debug1('pass2 ao2mo for ab [%d:%d]' % (i0,i1), *time1)
 
     time0 = log.timer('mp2 ao2mo_ovov pass2', *time0)
 
-del(WITH_T2)
+del (WITH_T2)
 
 
 if __name__ == '__main__':

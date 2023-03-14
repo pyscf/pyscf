@@ -66,7 +66,7 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     '''
     from pyscf import df
     from pyscf.scf import dhf
-    assert(isinstance(mf, scf.hf.SCF))
+    assert (isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
         if isinstance(mf, dhf.UHF):
@@ -151,12 +151,17 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
 class _DFHF(object):
     def nuc_grad_method(self):
-        from pyscf.df.grad import rhf, uhf, rks, uks
-        if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
+        from pyscf.df.grad import rhf, rohf, uhf, rks, roks, uks
+        if isinstance(self, scf.uhf.UHF):
             if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Gradients(self)
             else:
                 return uhf.Gradients(self)
+        elif isinstance(self, scf.rohf.ROHF):
+            if isinstance(self, scf.hf.KohnShamDFT):
+                return roks.Gradients(self)
+            else:
+                return rohf.Gradients(self)
         elif isinstance(self, scf.rhf.RHF):
             if isinstance(self, scf.hf.KohnShamDFT):
                 return rks.Gradients(self)
@@ -202,7 +207,7 @@ class _DFHF(object):
 
 
 def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
-    assert(with_j or with_k)
+    assert (with_j or with_k)
     if (not with_k and not dfobj.mol.incore_anyway and
         # 3-center integral tensor is not initialized
         dfobj._cderi is None):
@@ -244,7 +249,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
             mo_coeff = numpy.vstack((mo_coeff, mo_coeff))
             mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
             mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)
-            assert(mo_occa.sum() + mo_occb.sum() == mo_occ.sum())
+            assert (mo_occa.sum() + mo_occb.sum() == mo_occ.sum())
             mo_occ = numpy.vstack((mo_occa, mo_occb))
 
         orbo = []
@@ -258,7 +263,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
         buf = numpy.empty((blksize*nao,nao))
         for eri1 in dfobj.loop(blksize):
             naux, nao_pair = eri1.shape
-            assert(nao_pair == nao*(nao+1)//2)
+            assert (nao_pair == nao*(nao+1)//2)
             if with_j:
                 rho = numpy.einsum('ix,px->ip', dmtril, eri1)
                 vj += numpy.einsum('ip,px->ix', rho, eri1)

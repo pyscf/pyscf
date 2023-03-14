@@ -36,7 +36,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             orbital hessian or CPHF will be generated. If singlet is boolean,
             it is used in TDDFT response kernel.
     '''
-    assert(not isinstance(mf, (uhf.UHF, rohf.ROHF)))
+    assert (not isinstance(mf, (uhf.UHF, rohf.ROHF)))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
@@ -100,9 +100,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = numpy.zeros_like(dm1)
                 else:
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
-                    v1 = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm1, 0,
-                                              True, rho0, vxc, fxc,
-                                              max_memory=max_memory)
+                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, True,
+                                          rho0, vxc, fxc, max_memory=max_memory)
                     v1 *= .5
                 if hybrid:
                     if hermi != 2:
@@ -122,9 +121,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = numpy.zeros_like(dm1)
                 else:
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
-                    v1 = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm1, 0,
-                                              False, rho0, vxc, fxc,
-                                              max_memory=max_memory)
+                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, False,
+                                          rho0, vxc, fxc, max_memory=max_memory)
                     v1 *= .5
                 if hybrid:
                     vk = mf.get_k(mol, dm1, hermi=hermi)

@@ -5,8 +5,9 @@ on:
     types:
       # Note: editing the prerelease then marking as release does not trigger
       # this pipeline
-      - prereleased
+      # - prereleased
       - released
+  workflow_dispatch:
 
 jobs:
   release-pypi-linux:
@@ -17,7 +18,7 @@ jobs:
         uses: docker://pyscf/pyscf-pypa-env:latest
         with:
           entrypoint: /build-wheels.sh
-          #args: http://www.sunqm.net/pyscf/files/bin/pyscf-2.1a-deps.tar.gz
+          #args: http://www.sunqm.net/pyscf/files/bin/pyscf-2.2a-deps.tar.gz
       - name: List available wheels
         run: |
           ls ${{ github.workspace }}/linux-wheels
@@ -100,8 +101,9 @@ jobs:
   release-pypi-macos:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [3.6, 3.7, 3.8]
+        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -111,6 +113,7 @@ jobs:
       - name: Build wheels
         run: |
             pip install wheel
+            export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF"
             python setup.py bdist_wheel -v --dist-dir ${{ github.workspace }}/mac-wheels
       - name: List available wheels
         run: |
@@ -122,36 +125,47 @@ jobs:
             export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
             twine upload --verbose ${{ github.workspace }}/mac-wheels/*
 
-  # This pipeline builds conda-python3.7 only
   release-conda-linux:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
+      fail-fast: false
     steps:
       - uses: actions/checkout@v2
-      - name: Publish to conda
-        uses: docker://pyscf/pyscf-conda-env:latest
+      - name: Setup conda
+        uses: actions/setup-python@v2
         with:
-          entrypoint: /build-conda.sh
-        env:
-          ANACONDATOKEN: ${{ secrets.ANACONDA_TOKEN }}
+          python-version: ${{ matrix.python-version }}
+      - name: Publish to conda
+        run: |
+          $CONDA/bin/conda install -y anaconda-client conda-build
+          $CONDA/bin/conda build --output-folder . conda
+          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_TOKEN }}
+          $CONDA/bin/conda config --set anaconda_upload yes
+          $CONDA/bin/anaconda upload linux-64/*.tar.bz2
 
-#  release-conda-macos:
-#    name: release-conda-macos-python${{ matrix.python-version }}
-#    runs-on: macos-latest
-#    strategy:
-#      matrix:
-#        python-version: [3.7]
-#      - uses: conda-incubator/setup-miniconda@v2
-#        with:
-#          auto-update-conda: true
-#          python-version: ${{ matrix.python-version }}
-#      - uses: actions/checkout@v2
-#      - name: Publish to conda
-#        env:
-#          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
-#        shell: bash -l {0}
-#        run: |
-#          # Error in cmake  ld: unsupported tapi file type '!tapi-tbd'
-#          conda install -y anaconda-client conda-build && conda build --output-folder . pyscf/conda && anaconda upload macos/*.tar.bz2
+  # Disable macos conda release for Error during compling:
+  # MACOSX_DEPLOYMENT_TARGET mismatch: now "10.9" but "10.15" during configure
+  #release-conda-macos:
+  #  runs-on: macos-latest
+  #  strategy:
+  #    matrix:
+  #      python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
+  #    fail-fast: false
+  #  steps:
+  #    - uses: actions/checkout@v2
+  #    - name: Setup conda
+  #      uses: actions/setup-python@v2
+  #      with:
+  #        python-version: ${{ matrix.python-version }}
+  #    - name: Publish to conda
+  #      run: |
+  #        $CONDA/bin/conda install -y anaconda-client conda-build
+  #        $CONDA/bin/conda build --output-folder . conda
+  #        export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_TOKEN }}
+  #        $CONDA/bin/conda config --set anaconda_upload yes
+  #        $CONDA/bin/anaconda upload linux-64/*.tar.bz2
 
   release-docker:
     runs-on: ${{ matrix.os }}

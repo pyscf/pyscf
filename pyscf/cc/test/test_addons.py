@@ -79,6 +79,20 @@ class KnownValues(unittest.TestCase):
         mygcc = addons.convert_to_gccsd(cc.GCCSD(gmf))
         self.assertTrue(isinstance(mygcc, cc.gccsd.GCCSD))
 
+    def test_bccd_kernel_(self):
+        mybcc = addons.bccd_kernel_(myrcc)
+        self.assertAlmostEqual(abs(mybcc.t1).max(), 0, 4)
+        e_r = mybcc.e_tot
+
+        myucc = addons.convert_to_uccsd(myrcc)
+        mybcc = addons.bccd_kernel_(myucc)
+        e_u = mybcc.e_tot
+        self.assertAlmostEqual(abs(e_u - e_r), 0, 6)
+
+        mygcc = addons.convert_to_gccsd(myrcc)
+        mybcc = addons.bccd_kernel_(mygcc)
+        e_g = mybcc.e_tot
+        self.assertAlmostEqual(abs(e_g - e_r), 0, 6)
 
 if __name__ == "__main__":
     print("Tests for addons")

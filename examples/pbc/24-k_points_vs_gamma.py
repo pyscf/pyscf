@@ -5,7 +5,6 @@ Showing use of the parallelized CCSD with K-point sampling.
 '''
 
 import numpy as np
-from pyscf import cc
 from pyscf.pbc import cc as pbccc
 from pyscf.pbc import scf as pbchf
 from pyscf.pbc import gto
@@ -34,7 +33,8 @@ mf = pbchf.RHF(supcell)
 mf.kernel()
 supcell_energy = mf.energy_tot() / np.prod(nmp)
 
-mycc = cc.RCCSD(mf)
+# A wrapper calling molecular CC method for gamma point calculation.
+mycc = pbccc.RCCSD(mf)
 gccsd_energy = mycc.ccsd()[0] / np.prod(nmp)
 eip, wip = mycc.ipccsd(nroots=2)
 eea, wea = mycc.eaccsd(nroots=2)

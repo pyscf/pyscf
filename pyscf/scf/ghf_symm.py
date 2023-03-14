@@ -144,13 +144,16 @@ class GHF(ghf.GHF):
                             mol.nelectron-nelec_fix, ' '.join(float_irname))
         return ghf.GHF.build(self, mol)
 
-    def eig(self, h, s):
-        mol = self.mol
-        if not mol.symmetry:
-            return self._eigh(h, s)
+    def eig(self, h, s, symm_orb=None, irrep_id=None):
+        if symm_orb is None or irrep_id is None:
+            mol = self.mol
+            if not mol.symmetry:
+                return self._eigh(h, s)
+            symm_orb = mol.symm_orb
+            irrep_id = mol.irrep_id
 
-        nirrep = len(mol.symm_orb)
-        symm_orb = [scipy.linalg.block_diag(c, c) for c in mol.symm_orb]
+        nirrep = len(symm_orb)
+        symm_orb = [scipy.linalg.block_diag(c, c) for c in symm_orb]
         s = [reduce(numpy.dot, (c.T,s,c)) for c in symm_orb]
         h = [reduce(numpy.dot, (c.T,h,c)) for c in symm_orb]
         cs = []
@@ -160,7 +163,7 @@ class GHF(ghf.GHF):
             e, c = self._eigh(h[ir], s[ir])
             cs.append(c)
             es.append(e)
-            orbsym.append([mol.irrep_id[ir]] * e.size)
+            orbsym.append([irrep_id[ir]] * e.size)
         e = numpy.hstack(es)
         c = hf_symm.so2ao_mo_coeff(symm_orb, cs)
         c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
@@ -200,7 +203,7 @@ class GHF(ghf.GHF):
                 nelec_fix += n
                 rest_idx[ir_idx] = False
         nelec_float = mol.nelectron - nelec_fix
-        assert(nelec_float >= 0)
+        assert (nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
             occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
@@ -283,22 +286,25 @@ class HF1e(GHF):
     scf = hf._hf1e_scf
 
 
-def get_orbsym(mol, mo_coeff, s=None, check=False):
+def get_orbsym(mol, mo_coeff, s=None, check=False, symm_orb=None, irrep_id=None):
+    if symm_orb is None or irrep_id is None:
+        symm_orb = mol.symm_orb
+        irrep_id = mol.irrep_id
     if mo_coeff is None:
-        orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
-                               for i, ir in enumerate(mol.irrep_id)])
+        orbsym = numpy.hstack([[ir] * symm_orb[i].shape[1]
+                               for i, ir in enumerate(irrep_id)])
     elif getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
     else:
         nao = mo_coeff.shape[0] // 2
         if isinstance(s, numpy.ndarray):
-            assert(s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
+            assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
             s = s[:nao,:nao]
         mo_a = mo_coeff[:nao].copy()
         mo_b = mo_coeff[nao:]
         zero_alpha_idx = numpy.linalg.norm(mo_a, axis=0) < 1e-7
         mo_a[:,zero_alpha_idx] = mo_b[:,zero_alpha_idx]
-        orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+        orbsym = symm.label_orb_symm(mol, irrep_id, symm_orb,
                                      mo_a, s, check)
     return numpy.asarray(orbsym)
 

@@ -81,7 +81,7 @@ class CasidaTDDFT(TDDFT, TDA):
                 zs = numpy.copy(zs)
                 zs[:,sym_forbid] = 0
 
-            dmov = lib.einsum('xov,po,qv->xpq', zs*d_ia, orbo, orbv)
+            dmov = lib.einsum('xov,qv,po->xpq', zs*d_ia, orbv, orbo)
             # +cc for A+B because K_{ai,jb} in A == K_{ai,bj} in B
             dmov = dmov + dmov.transpose(0,2,1)
 

@@ -72,8 +72,8 @@ def get_pp(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     mesh = mydf.mesh
-    SI = cell.get_SI()
     Gv = cell.get_Gv(mesh)
+    SI = cell.get_SI(Gv)
     vpplocG = pseudo.get_vlocG(cell, Gv)
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
     ngrids = len(vpplocG)
@@ -232,6 +232,9 @@ class FFTDF(lib.StreamObject):
                         ke_cutoff, self.mesh, cell.precision,
                         error_for_ke_cutoff(cell, ke_cutoff), ke_guess, mesh_guess)
         return self
+
+    def build(self):
+        return self.check_sanity()
 
     def aoR_loop(self, grids=None, kpts=None, deriv=0):
         if grids is None:

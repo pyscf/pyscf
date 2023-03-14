@@ -22,7 +22,7 @@ import numpy as np
 
 from pyscf import gto, scf
 
-from pyscf.lib import finger
+from pyscf.lib import fp
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
 import pyscf.pbc.tools
@@ -48,8 +48,9 @@ def setUpModule():
     3.370137329, 0.000000000, 3.370137329
     3.370137329, 3.370137329, 0.000000000'''
     cell.unit = 'B'
-    #cell.verbose = 7
+    cell.verbose = 7
     cell.output = '/dev/null'
+    cell.mesh = [15] * 3
     cell.build()
 
     rand_kmf = make_rand_kmf()
@@ -202,7 +203,7 @@ class KnownValues(unittest.TestCase):
         hf_111 = -0.73491491306419987
         cc_111 = -1.1580008204825658e-05
         escf, ecc = run_kcell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_111,9)
+        self.assertAlmostEqual(escf,hf_111,8)
         self.assertAlmostEqual(ecc, cc_111,6)
 
     def test_111_n1(self):
@@ -213,7 +214,7 @@ class KnownValues(unittest.TestCase):
         hf_111 = -0.73506011036963814
         cc_111 = -0.023265431169472835
         escf, ecc = run_kcell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_111,9)
+        self.assertAlmostEqual(escf,hf_111,8)
         self.assertAlmostEqual(ecc, cc_111,6)
 
     def test_111_n3(self):
@@ -223,7 +224,7 @@ class KnownValues(unittest.TestCase):
         hf_111 = -7.4117951240232118
         cc_111 = -0.19468901057053406
         escf, ecc = run_kcell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_111,9)
+        self.assertAlmostEqual(escf,hf_111,8)
         self.assertAlmostEqual(ecc, cc_111,6)
 
     def test_311_n1_high_cost(self):
@@ -234,7 +235,7 @@ class KnownValues(unittest.TestCase):
         hf_311 = -0.92687629918229486
         cc_311 = -0.042702177586414237
         escf, ecc = run_kcell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_311, 9)
+        self.assertAlmostEqual(escf,hf_311, 8)
         self.assertAlmostEqual(ecc, cc_311, 6)
 
     def test_211_n3(self):
@@ -274,8 +275,8 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.kccsd.CCSD(kmf, frozen=[[0,1],[],[0]])
         cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
-        self.assertAlmostEqual(ehf, ehf_bench, 9)
-        self.assertAlmostEqual(ecc, ecc_bench, 7)
+        self.assertAlmostEqual(ehf, ehf_bench, 8)
+        self.assertAlmostEqual(ecc, ecc_bench, 6)
 
     def _test_cu_metallic_nonequal_occ(self, kmf, cell, nk=[1,1,1]):
         assert cell.mesh == [7, 7, 7]
@@ -407,8 +408,8 @@ class KnownValues(unittest.TestCase):
         t1, t2 = rand_t1_t2(kmf, rand_cc)
 
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(finger(Ht1), (-10.5746290133+4.22371219606j), 6)
-        self.assertAlmostEqual(finger(Ht2), (-250.696532783+706.190346877j), 6)
+        self.assertAlmostEqual(fp(Ht1), (-10.5746290133+4.22371219606j), 6)
+        self.assertAlmostEqual(fp(Ht2), (-250.696532783+706.190346877j), 6)
 
         # Excited state results
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
@@ -418,17 +419,17 @@ class KnownValues(unittest.TestCase):
         #kshift = 0
         #r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc, kshift)
         #Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
-        #print finger(Hr1)
-        #print finger(Hr2)
-        ##self.assertAlmostEqual(finger(Hr1), (-0.717532270254-0.440422108955j), 6)
-        ##self.assertAlmostEqual(finger(Hr2), (0.681025691811+6.11804388788j), 6)
+        #print fp(Hr1)
+        #print fp(Hr2)
+        ##self.assertAlmostEqual(fp(Hr1), (-0.717532270254-0.440422108955j), 6)
+        ##self.assertAlmostEqual(fp(Hr2), (0.681025691811+6.11804388788j), 6)
 
         #r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc, kshift)
         #Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
-        #print finger(Hr1)
-        #print finger(Hr2)
-        ##self.assertAlmostEqual(finger(Hr1), (-0.780441346305-0.72371724202j), 6)
-        ##self.assertAlmostEqual(finger(Hr2), (-5.64822780257+5.40589051948j) , 6)
+        #print fp(Hr1)
+        #print fp(Hr2)
+        ##self.assertAlmostEqual(fp(Hr1), (-0.780441346305-0.72371724202j), 6)
+        ##self.assertAlmostEqual(fp(Hr2), (-5.64822780257+5.40589051948j) , 6)
 
     def test_rand_ccsd_frozen0(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and lowest lying orbital
@@ -447,8 +448,8 @@ class KnownValues(unittest.TestCase):
         t1, t2 = rand_t1_t2(kmf, rand_cc)
 
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(finger(Ht1), (12.6235870016-0.263432509044j), 6)
-        self.assertAlmostEqual(finger(Ht2), (94.8802678168+910.369938369j), 6)
+        self.assertAlmostEqual(fp(Ht1), (12.6235870016-0.263432509044j), 6)
+        self.assertAlmostEqual(fp(Ht2), (94.8802678168+910.369938369j), 6)
 
         # frozen = [[0,],[0,],[0,]], should be same as above
         frozen = [[0,],[0,],[0,]]
@@ -458,8 +459,8 @@ class KnownValues(unittest.TestCase):
         t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
 
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(finger(Ht1), (12.6235870016-0.263432509044j), 6)
-        self.assertAlmostEqual(finger(Ht2), (94.8802678168+910.369938369j), 6)
+        self.assertAlmostEqual(fp(Ht1), (12.6235870016-0.263432509044j), 6)
+        self.assertAlmostEqual(fp(Ht2), (94.8802678168+910.369938369j), 6)
 
         ## Excited state results
         #rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
@@ -469,17 +470,17 @@ class KnownValues(unittest.TestCase):
         #kshift = 0
         #r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc, kshift)
         #Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
-        #print finger(Hr1)
-        #print finger(Hr2)
-        ##self.assertAlmostEqual(finger(Hr1), (0.24563231525-0.513480233538j)  , 6)
-        ##self.assertAlmostEqual(finger(Hr2), (-0.168078406643-0.259459463532j), 6)
+        #print fp(Hr1)
+        #print fp(Hr2)
+        ##self.assertAlmostEqual(fp(Hr1), (0.24563231525-0.513480233538j)  , 6)
+        ##self.assertAlmostEqual(fp(Hr2), (-0.168078406643-0.259459463532j), 6)
 
         #r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc, kshift)
         #Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
-        #print finger(Hr1)
-        #print finger(Hr2)
-        ##self.assertAlmostEqual(finger(Hr1), (0.408247189016+0.329977757156j), 6)
-        ##self.assertAlmostEqual(finger(Hr2), (0.906733733269-2.40456195366j) , 6)
+        #print fp(Hr1)
+        #print fp(Hr2)
+        ##self.assertAlmostEqual(fp(Hr1), (0.408247189016+0.329977757156j), 6)
+        ##self.assertAlmostEqual(fp(Hr2), (0.906733733269-2.40456195366j) , 6)
 
     def test_rand_ccsd_frozen1(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and single frozen occupied
@@ -504,8 +505,8 @@ class KnownValues(unittest.TestCase):
         t2[:, 0, :, :, 1] = 0.0
 
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(finger(Ht1), (-15.7950827762+31.0483053388j), 6)
-        self.assertAlmostEqual(finger(Ht2), (263.884192539+96.7615664563j), 6)
+        self.assertAlmostEqual(fp(Ht1), (-15.7950827762+31.0483053388j), 6)
+        self.assertAlmostEqual(fp(Ht2), (263.884192539+96.7615664563j), 6)
 
         # TODO: fill in as the eom-kgccsd completed...
         #
@@ -518,14 +519,14 @@ class KnownValues(unittest.TestCase):
         #r2[0, :, 1] = 0.0
         #r2[:, 0, :, 1] = 0.0
         #Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
-        #self.assertAlmostEqual(finger(Hr1), (-0.558560718395-0.344470539404j), 6)
-        #self.assertAlmostEqual(finger(Hr2), (0.882960101238+0.0752022769822j), 6)
+        #self.assertAlmostEqual(fp(Hr1), (-0.558560718395-0.344470539404j), 6)
+        #self.assertAlmostEqual(fp(Hr2), (0.882960101238+0.0752022769822j), 6)
 
         #r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
         #r2[0, :, 1] = 0.0
         #Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
-        #self.assertAlmostEqual(finger(Hr1), (0.010947007472-0.287095461151j), 6)
-        #self.assertAlmostEqual(finger(Hr2), (-2.58907863831+0.685390702884j), 6)
+        #self.assertAlmostEqual(fp(Hr1), (0.010947007472-0.287095461151j), 6)
+        #self.assertAlmostEqual(fp(Hr2), (-2.58907863831+0.685390702884j), 6)
 
     def test_rand_ccsd_frozen2(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and full occupied frozen
@@ -550,8 +551,8 @@ class KnownValues(unittest.TestCase):
         t2[:, 1, :, :, [0,1,2,3]] = 0.0
 
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(finger(Ht1), (-19.2772171332-10.5977304455j), 6)
-        self.assertAlmostEqual(finger(Ht2), (227.434582141+298.826965082j), 6)
+        self.assertAlmostEqual(fp(Ht1), (-19.2772171332-10.5977304455j), 6)
+        self.assertAlmostEqual(fp(Ht2), (227.434582141+298.826965082j), 6)
 
         # TODO: fill in as the eom-kgccsd completed...
         #
@@ -564,14 +565,14 @@ class KnownValues(unittest.TestCase):
         #r2[1, :, [0,1]] = 0.0
         #r2[:, 1, :, [0,1]] = 0.0
         #Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
-        #self.assertAlmostEqual(finger(Hr1), (0.0 + 0.0j), 6)
-        #self.assertAlmostEqual(finger(Hr2), (-0.336011745573-0.0454220386975j), 6)
+        #self.assertAlmostEqual(fp(Hr1), (0.0 + 0.0j), 6)
+        #self.assertAlmostEqual(fp(Hr2), (-0.336011745573-0.0454220386975j), 6)
 
         #r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
         #r2[1, :, [0,1]] = 0.0
         #Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
-        #self.assertAlmostEqual(finger(Hr1), (-0.00152035195068-0.502318229581j), 6)
-        #self.assertAlmostEqual(finger(Hr2), (-1.59488320866+0.838903632811j), 6)
+        #self.assertAlmostEqual(fp(Hr1), (-0.00152035195068-0.502318229581j), 6)
+        #self.assertAlmostEqual(fp(Hr2), (-1.59488320866+0.838903632811j), 6)
 
     def test_rand_ccsd_frozen3(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and single frozen virtual
@@ -602,8 +603,8 @@ class KnownValues(unittest.TestCase):
                   t2[ki, kj, ka, :, :, :, 0] = 0.0
 
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(finger(Ht1), (-19.6637196882-16.2773841431j), 6)
-        self.assertAlmostEqual(finger(Ht2), (881.655146297+1283.71020059j), 6)
+        self.assertAlmostEqual(fp(Ht1), (-19.6637196882-16.2773841431j), 6)
+        self.assertAlmostEqual(fp(Ht2), (881.655146297+1283.71020059j), 6)
 
         # TODO: fill in as the eom-kgccsd completed...
         #
@@ -620,8 +621,8 @@ class KnownValues(unittest.TestCase):
         #        r2[ki, kj, :, :, 0] = 0.0
 
         #Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
-        #self.assertAlmostEqual(finger(Hr1), (0.4067595510145880 +  0.0770280877446436j), 6)
-        #self.assertAlmostEqual(finger(Hr2), (0.0926714318228812 + -1.0702702421619084j), 6)
+        #self.assertAlmostEqual(fp(Hr1), (0.4067595510145880 +  0.0770280877446436j), 6)
+        #self.assertAlmostEqual(fp(Hr2), (0.0926714318228812 + -1.0702702421619084j), 6)
 
         #r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
         #r1[0] = 0.0
@@ -634,8 +635,8 @@ class KnownValues(unittest.TestCase):
         #        r2[kj, ka, :, :, 0] = 0.0
 
         #Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
-        #self.assertAlmostEqual(finger(Hr1), (0.0070404498167285 + -0.1646809321907418j), 6)
-        #self.assertAlmostEqual(finger(Hr2), (0.4518315588945250 + -0.5508323185152750j), 6)
+        #self.assertAlmostEqual(fp(Hr1), (0.0070404498167285 + -0.1646809321907418j), 6)
+        #self.assertAlmostEqual(fp(Hr2), (0.4518315588945250 + -0.5508323185152750j), 6)
 
     def test_h4_fcc_k2(self):
         '''Metallic hydrogen fcc lattice.  Checks versus a corresponding

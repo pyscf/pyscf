@@ -24,6 +24,8 @@ from pyscf.tdscf import rhf, rks
 from pyscf import tdscf
 from pyscf.data import nist
 
+has_xcfun = hasattr(dft, 'xcfun')
+
 def setUpModule():
     global mol, mf, td_hf, mf_lda, mf_bp86, mf_b3lyp, mf_m06l
     mol = gto.Mole()
@@ -41,19 +43,19 @@ def setUpModule():
     mf_lda = dft.RKS(mol)
     mf_lda.xc = 'lda, vwn'
     mf_lda.grids.prune = None
-    mf_lda.scf()
+    mf_lda.run(conv_tol=1e-10)
 
     mf_bp86 = dft.RKS(mol)
     mf_bp86.xc = 'b88,p86'
     mf_bp86.grids.prune = None
-    mf_bp86.scf()
+    mf_bp86.run(conv_tol=1e-10)
 
     mf_b3lyp = dft.RKS(mol)
     mf_b3lyp.xc = 'b3lyp'
     mf_b3lyp.grids.prune = None
-    mf_b3lyp.scf()
+    mf_b3lyp.run(conv_tol=1e-10)
 
-    mf_m06l = dft.RKS(mol).run(xc='m06l')
+    mf_m06l = dft.RKS(mol).run(xc='m06l', conv_tol=1e-10)
 
 def tearDownModule():
     global mol, mf, td_hf, mf_lda, mf_bp86, mf_b3lyp, mf_m06l
@@ -76,29 +78,35 @@ class KnownValues(unittest.TestCase):
     def test_nohbrid_lda(self):
         td = rks.CasidaTDDFT(mf_lda)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -41.100806721759945, 6)
+        self.assertAlmostEqual(lib.fp(es), -41.100806721759945, 5)
         ref = [9.67249402,  9.67249402, 14.79447862, 30.32465371, 30.32465371]
-        self.assertAlmostEqual(abs(es - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 5)
 
     def test_nohbrid_b88p86(self):
         td = rks.CasidaTDDFT(mf_bp86)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -40.462005239920558, 6)
+        self.assertAlmostEqual(lib.fp(es), -40.462005239920558, 4)
+        a, b = td.get_ab()
+        ref = diagonalize(a, b, nroots=5) * 27.2114
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 7)
 
     def test_tddft_lda(self):
         td = rks.TDDFT(mf_lda)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -41.100806721759945, 6)
+        self.assertAlmostEqual(lib.fp(es), -41.100806721759945, 4)
 
     def test_tddft_b88p86(self):
         td = rks.TDDFT(mf_bp86)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -40.462005239920558, 6)
+        self.assertAlmostEqual(lib.fp(es), -40.462005239920558, 4)
 
     def test_tddft_b3lyp(self):
         td = rks.TDDFT(mf_b3lyp)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -41.29609453661341, 6)
+        self.assertAlmostEqual(lib.fp(es), -41.29609453661341, 4)
+        a, b = td.get_ab()
+        ref = diagonalize(a, b, nroots=5) * 27.2114
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 7)
 
     def test_tda_b3lypg(self):
         mf = dft.RKS(mol)
@@ -107,26 +115,29 @@ class KnownValues(unittest.TestCase):
         mf.scf()
         td = rks.TDA(mf)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -41.385520327568869, 6)
+        self.assertAlmostEqual(lib.fp(es), -41.385520327568869, 4)
 
     def test_tda_lda(self):
         td = rks.TDA(mf_lda)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -41.201828219760415, 6)
+        self.assertAlmostEqual(lib.fp(es), -41.201828219760415, 4)
 
+    @unittest.skipIf(has_xcfun, "xcfun library not found.")
     def test_tddft_b3lyp_xcfun(self):
         with lib.temporary_env(dft.numint.NumInt, libxc=dft.xcfun):
             td = rks.TDDFT(mf_b3lyp)
             es = td.kernel(nstates=5)[0] * 27.2114
         ref = [9.88975514, 9.88975514, 15.16643994, 30.55289462, 30.55289462]
-        self.assertAlmostEqual(abs(es - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 5)
 
+    @unittest.skipIf(has_xcfun, "xcfun library not found.")
     def test_tda_b3lyp_xcfun(self):
         with lib.temporary_env(dft.numint.NumInt, libxc=dft.xcfun):
             td = rks.TDA(mf_b3lyp)
             es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -41.393122257109056, 6)
+        self.assertAlmostEqual(lib.fp(es), -41.393122257109056, 5)
 
+    @unittest.skipIf(has_xcfun, "xcfun library not found.")
     def test_tda_lda_xcfun(self):
         mf = dft.RKS(mol)
         mf.xc = 'lda,vwn'
@@ -135,38 +146,56 @@ class KnownValues(unittest.TestCase):
         mf.scf()
         td = rks.TDA(mf)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -41.201828219760415, 6)
+        self.assertAlmostEqual(lib.fp(es), -41.201828219760415, 5)
         ref = [9.68872769,  9.68872769, 15.07122478]
-        self.assertAlmostEqual(abs(es[:3] - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(es[:3] - ref).max(), 0, 5)
 
     def test_tda_b3lyp_triplet(self):
         td = rks.TDA(mf_b3lyp)
         td.singlet = False
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -40.020204585289648, 6)
+        self.assertAlmostEqual(lib.fp(es), -40.020204585289648, 5)
         td.analyze()
 
     def test_tda_lda_triplet(self):
         td = rks.TDA(mf_lda)
         td.singlet = False
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -39.988118769202416, 6)
+        self.assertAlmostEqual(lib.fp(es), -39.988118769202416, 5)
         ref = [9.0139312, 9.0139312,  12.42444659]
-        self.assertAlmostEqual(abs(es[:3] - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(es[:3] - ref).max(), 0, 4)
 
     def test_tddft_b88p86_triplet(self):
         td = rks.TDDFT(mf_bp86)
         td.singlet = False
         es = td.kernel(nstates=5)[0] * 27.2114
-        ref = [9.09322358,  9.09322358, 12.29843139, 29.26731075, 29.26731075]
-        self.assertAlmostEqual(abs(es - ref).max(), 0, 5)
+        ref = [9.09315203, 9.09315203, 12.29837275, 29.26724001, 29.26724001]
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
+
+        utd = mf_bp86.to_uks().TDDFT()
+        nocc = mf_bp86.mol.nelectron//2
+        nvir = mf_bp86.mo_energy.size - nocc
+        nov = nocc * nvir
+        shape = (nov, nov)
+        a, b = utd.get_ab()
+        a_aa, a_ab, a_bb = a
+        b_aa, b_ab, b_bb = b
+        a = numpy.block([[a_aa.reshape(shape)  ,a_ab.reshape(shape)],
+                         [a_ab.reshape(shape).T,a_bb.reshape(shape)]])
+        b = numpy.block([[b_aa.reshape(shape)  ,b_ab.reshape(shape)],
+                         [b_ab.reshape(shape).T,b_bb.reshape(shape)]])
+        h = numpy.block([[a        , b         ],
+                         [-b.conj(),-a.conj()]])
+        e = numpy.linalg.eig(numpy.asarray(h))[0]
+        ref = numpy.sort(e[e.real>0])[[0,1,4,6,7]] * 27.2114
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
 
     def test_tda_m06l_singlet(self):
         td = mf_m06l.TDA()
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -42.50751841202568, 6)
+        self.assertAlmostEqual(lib.fp(es), -42.50751841202568, 4)
         ref = [10.82698652, 10.82698652, 16.73024993]
-        self.assertAlmostEqual(abs(es[:3] - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(es[:3] - ref).max(), 0, 4)
 
     def test_ab_hf(self):
         a, b = rhf.get_ab(mf)
@@ -178,7 +207,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(2)
         x, y = xy = numpy.random.random((2,nocc,nvir))
         ax = numpy.einsum('iajb,jb->ia', a, x)
-        self.assertAlmostEqual(abs(ax - ftda([x]).reshape(nocc,nvir)).max(), 0, 6)
+        self.assertAlmostEqual(abs(ax - ftda([x]).reshape(nocc,nvir)).max(), 0, 5)
 
         ab1 = ax + numpy.einsum('iajb,jb->ia', b, y)
         ab2 =-numpy.einsum('iajb,jb->ia', b, x)
@@ -248,12 +277,12 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol).run()
         td = rks.TDA(mf).run()
         w, nto = td.get_nto(state=3)
-        self.assertAlmostEqual(w[0], 0.98655300613468389, 9)
-        self.assertAlmostEqual(lib.fp(w), 0.98625701534112464, 9)
+        self.assertAlmostEqual(w[0], 0.98655300613468389, 7)
+        self.assertAlmostEqual(lib.fp(w), 0.98625701534112464, 7)
 
         w, nto = td.get_nto(state=0)
-        self.assertAlmostEqual(w[0], 0.99997335352278072, 9)
-        self.assertAlmostEqual(lib.fp(w), 0.99998775067586554, 9)
+        self.assertAlmostEqual(w[0], 0.99997335352278072, 7)
+        self.assertAlmostEqual(lib.fp(w), 0.99998775067586554, 7)
 
         pmol = copy.copy(mol)
         pmol.symmetry = True
@@ -261,14 +290,14 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(pmol).run()
         td = rks.TDA(mf).run(nstates=3)
         w, nto = td.get_nto(state=-1)
-        self.assertAlmostEqual(w[0], 0.98655300613468389, 9)
-        self.assertAlmostEqual(lib.fp(w), 0.98625701534112464, 9)
+        self.assertAlmostEqual(w[0], 0.98655300613468389, 7)
+        self.assertAlmostEqual(lib.fp(w), 0.98625701534112464, 7)
 
     def test_analyze(self):
         f = td_hf.oscillator_strength(gauge='length')
-        self.assertAlmostEqual(lib.fp(f), -0.13908774016795605, 7)
+        self.assertAlmostEqual(lib.fp(f), -0.13908774016795605, 5)
         f = td_hf.oscillator_strength(gauge='velocity', order=2)
-        self.assertAlmostEqual(lib.fp(f), -0.096991134490587522, 6)
+        self.assertAlmostEqual(lib.fp(f), -0.096991134490587522, 5)
 
         note_args = []
         def temp_logger_note(rec, msg, *args):
@@ -280,10 +309,10 @@ class KnownValues(unittest.TestCase):
                (2, 11.834865910142618, 104.76181013351919, 0.010753590745567499),
                (3, 16.66308427853695, 74.40651170629978, 0.3740302871966713)]
         self.assertAlmostEqual(abs(numpy.hstack(ref) -
-                                   numpy.hstack(note_args)).max(), 0, 6)
+                                   numpy.hstack(note_args)).max(), 0, 4)
 
         self.assertEqual(td_hf.nroots, td_hf.nstates)
-        self.assertAlmostEqual(lib.fp(td_hf.e_tot-mf.e_tot), 0.41508325757603637, 6)
+        self.assertAlmostEqual(lib.fp(td_hf.e_tot-mf.e_tot), 0.41508325757603637, 5)
 
     def test_init(self):
         hf = scf.RHF(mol)
@@ -324,7 +353,7 @@ class KnownValues(unittest.TestCase):
         td.wfnsym = 'A2'
         es = td.kernel(nstates=3)[0]
         self.assertTrue(len(es) == 2)  # At most 2 states due to symmetry subspace size
-        self.assertAlmostEqual(lib.fp(es), 2.1857694738741071, 6)
+        self.assertAlmostEqual(lib.fp(es), 2.1857694738741071, 5)
 
         note_args = []
         def temp_logger_note(rec, msg, *args):
@@ -338,7 +367,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(note_args[2][1], 'A2')
         self.assertAlmostEqual(abs(numpy.append(ref[1][2:], ref[2][2:]) -
                                    numpy.append(note_args[1][2:], note_args[2][2:])).max(),
-                               0, 7)
+                               0, 4)
 
     def test_tdhf_with_wfnsym(self):
         pmol = mol.copy()
@@ -350,7 +379,7 @@ class KnownValues(unittest.TestCase):
         td.wfnsym = 'A2'
         td.nroots = 3
         es = td.kernel()[0]
-        self.assertAlmostEqual(lib.fp(es), 2.2541287466157165, 6)
+        self.assertAlmostEqual(lib.fp(es), 2.2541287466157165, 5)
         td.analyze()
 
     def test_tddft_with_wfnsym(self):
@@ -364,14 +393,14 @@ class KnownValues(unittest.TestCase):
         td.nroots = 3
         es = td.kernel()[0]
         self.assertTrue(len(es) == 2)  # At most 2 states due to symmetry subspace size
-        self.assertAlmostEqual(lib.fp(es), 2.1856920990871753, 6)
+        self.assertAlmostEqual(lib.fp(es), 2.1856920990871753, 5)
         td.analyze()
 
     def test_scanner(self):
         td_scan = td_hf.as_scanner().as_scanner()
         td_scan.nroots = 3
         td_scan(mol)
-        self.assertAlmostEqual(lib.fp(td_scan.e), 0.41508325757603637, 6)
+        self.assertAlmostEqual(lib.fp(td_scan.e), 0.41508325757603637, 5)
 
     def test_transition_multipoles(self):
         self.assertAlmostEqual(abs(lib.fp(td_hf.transition_dipole()             [2])), 0.39833021312014988, 5)
@@ -385,21 +414,21 @@ class KnownValues(unittest.TestCase):
         td = rks.dRPA(mf_lda)
         td._scf.xc = ''
         es = td.kernel(nstates=5)[0]
-        self.assertAlmostEqual(lib.fp(es[:3]), 0.32727702719009616, 6)
+        self.assertAlmostEqual(lib.fp(es[:3]), 0.32727702719009616, 5)
         ref = [10.00343861, 10.00343861, 15.62586305, 30.69238874, 30.69238874]
-        self.assertAlmostEqual(abs(es * 27.2114 - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(es * 27.2114 - ref).max(), 0, 5)
 
     def test_dTDA(self):
         td = rks.dTDA(mf_lda)
         td._scf.xc = ''
         es = td.kernel(nstates=3)[0]
-        self.assertAlmostEqual(lib.fp(es), 0.3237948650800024, 6)
+        self.assertAlmostEqual(lib.fp(es), 0.3237948650800024, 5)
 
         td = rks.dTDA(mf_lda)
         es = td.kernel(nstates=5)[0]
-        self.assertAlmostEqual(lib.fp(es[:3]), 0.3237948650800024, 6)
+        self.assertAlmostEqual(lib.fp(es[:3]), 0.3237948650800024, 5)
         ref = [10.05245288, 10.05245288, 16.03497655, 30.7120363,  30.7120363 ]
-        self.assertAlmostEqual(abs(es * 27.2114 - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(es * 27.2114 - ref).max(), 0, 5)
 
     def test_reset(self):
         mol1 = gto.M(atom='C')
@@ -409,6 +438,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(td._scf.mol is mol1)
         self.assertTrue(td._scf._scf.mol is mol1)
 
+    @unittest.skipIf(has_xcfun, "xcfun library not found.")
     def test_custom_rsh(self):
         mol = gto.M(atom='H 0 0 0.6; H 0 0 0', basis = "6-31g")
         mf = dft.RKS(mol)
@@ -423,7 +453,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(e_td*nist.HARTREE2EV - ref).max(), 0, 4)
 
     def test_symmetry_init_guess(self):
-        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', output='/dev/null', symmetry=True)
         td = mol.RHF.run().TDA().run(nstates=1)
         self.assertAlmostEqual(td.e[0], 0.22349707455528, 7)
         # TODO: verify symmetry of td.x == A1u

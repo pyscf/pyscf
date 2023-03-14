@@ -284,5 +284,5 @@ if __name__ == '__main__':
     rpa = RPA(mf)
     rpa.kernel()
     print ('RPA e_tot, e_hf, e_corr = ', rpa.e_tot, rpa.e_hf, rpa.e_corr)
-    assert(abs(rpa.e_corr- -0.30783004035780076) < 1e-6)
-    assert(abs(rpa.e_tot- -76.26428191794182) < 1e-6)
+    assert (abs(rpa.e_corr- -0.30783004035780076) < 1e-6)
+    assert (abs(rpa.e_tot- -76.26428191794182) < 1e-6)

@@ -114,10 +114,10 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         mo = numpy.random.random((nao,4))
         eri = ao2mo.kernel(pmol, mo)
-        self.assertAlmostEqual(lib.finger(eri), -977.99841341828437, 9)
+        self.assertAlmostEqual(lib.fp(eri), -977.99841341828437, 9)
 
         eri = ao2mo.kernel(mol, mo, intor='int2e_cart')
-        self.assertAlmostEqual(lib.finger(eri), -977.99841341828437, 9)
+        self.assertAlmostEqual(lib.fp(eri), -977.99841341828437, 9)
 
 if __name__ == '__main__':
     print('Full Tests for ao2mo.outcore')

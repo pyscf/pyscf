@@ -1,4 +1,4 @@
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ to try out the package::
 
 '''
 
-__version__ = '2.0.1'
+__version__ = '2.1.1'
 
 import os
 import sys
@@ -86,7 +86,7 @@ else:
         sys.stderr.write('pyscf plugins found in \n%s\n'
                          'When PYTHONPATH is set, it is recommended to load '
                          'these plugins through the environment variable '
-                         'PYSCF_EXT_PATH' % '\n'.join(__path__[1:]))
+                         'PYSCF_EXT_PATH\n' % '\n'.join(__path__[1:]))
 
 from distutils.version import LooseVersion
 import numpy

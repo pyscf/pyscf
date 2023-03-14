@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,20 +23,30 @@ from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import dft as pdft
 
+def setUpModule():
+    global cell
+    cell = pgto.Cell()
+    cell.unit = 'A'
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
+
+    cell.basis = 'gth-dzvp'
+    cell.pseudo = 'gth-pade'
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.mesh = [29]*3
+    cell.space_group_symmetry=True
+    cell.build()
+
+def tearDownModule():
+    global cell
+    cell.stdout.close()
+    del cell
+
 class KnownValues(unittest.TestCase):
     def test_KRKSpU_high_cost(self):
-        cell = pgto.Cell()
-        cell.unit = 'A'
-        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-        cell.a = '''0.      1.7834  1.7834
-                    1.7834  0.      1.7834
-                    1.7834  1.7834  0.    '''
-
-        cell.basis = 'gth-dzvp'
-        cell.pseudo = 'gth-pade'
-        cell.verbose = 7
-        cell.output = '/dev/null'
-        cell.build()
         kmesh = [2, 1, 1]
         kpts = cell.make_kpts(kmesh, wrap_around=True)
         U_idx = ["1 C 2p"]
@@ -48,19 +58,28 @@ class KnownValues(unittest.TestCase):
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -10.694460059491741, 8)
 
-    def test_get_veff(self):
-        cell = pgto.Cell()
-        cell.unit = 'A'
-        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-        cell.a = '''0.      1.7834  1.7834
-                    1.7834  0.      1.7834
-                    1.7834  1.7834  0.    '''
+    def test_KRKSpU_ksymm(self):
+        cell1 = cell.copy()
+        cell1.basis = 'gth-szv'
+        cell1.mesh = [16,]*3
+        cell1.build()
 
-        cell.basis = 'gth-dzvp'
-        cell.pseudo = 'gth-pade'
-        cell.verbose = 7
-        cell.output = '/dev/null'
-        cell.build()
+        U_idx = ["1 C 2p"]
+        U_val = [5.0]
+
+        kmesh = [2, 2, 1]
+        kpts0 = cell1.make_kpts(kmesh, wrap_around=True)
+        mf0 = pdft.KRKSpU(cell1, kpts0, U_idx=U_idx, U_val=U_val, C_ao_lo='minao')
+        e0 = mf0.kernel()
+
+        kpts = cell1.make_kpts(kmesh, wrap_around=True,
+                               space_group_symmetry=True, time_reversal_symmetry=True)
+        assert kpts.nkpts_ibz == 3
+        mf = pdft.KRKSpU(cell1, kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao')
+        e1 = mf.kernel()
+        self.assertAlmostEqual(e1, e0, 8)
+
+    def test_get_veff(self):
         kmesh = [2, 1, 1]
         kpts = cell.make_kpts(kmesh, wrap_around=True)
         U_idx = ["1 C 2p"]

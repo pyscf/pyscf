@@ -229,13 +229,13 @@ class KnownValues(unittest.TestCase):
         mci = fci.FCI(mol, mf.mo_coeff, False)
         mci.wfnsym = 'A1g'
         check(mci)
-        mci.wfnsym = 'A2g'
+        mci.wfnsym = 'A1u'
         check(mci)
 
         mci = fci.FCI(mol, mf.mo_coeff, True)
         mci.wfnsym = 'A1g'
         check(mci)
-        mci.wfnsym = 'A2g'
+        mci.wfnsym = 'A1u'
         check(mci)
 
         mol = gto.M(atom='O 0 0 0; O 0 0 1.2', spin=2, basis='sto3g',
@@ -414,28 +414,27 @@ class KnownValues(unittest.TestCase):
         b4 = numpy.arange(4)
         b6 = numpy.arange(6)
 
-        self.assertAlmostEqual(lib.finger(fci.addons.des_a(a4+b4, 4, (3,3), 0)), -31.99739808931113, 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.des_a(a4+b4, 4, (3,3), 1)), -68.97044878458135, 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.des_a(a4+b4, 4, (3,3), 2)), -41.22836642162049, 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.des_a(a4+b4, 4, (3,3), 3)), -29.88708752568659, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.des_a(a4+b4, 4, (3,3), 0)), -31.99739808931113, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.des_a(a4+b4, 4, (3,3), 1)), -68.97044878458135, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.des_a(a4+b4, 4, (3,3), 2)), -41.22836642162049, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.des_a(a4+b4, 4, (3,3), 3)), -29.88708752568659, 12)
 
-        self.assertAlmostEqual(lib.finger(fci.addons.des_b(a6+b4, 4, (2,3), 0)), -163.5210711323742, 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.des_b(a6+b4, 4, (2,3), 1)), -187.1999296644511, 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.des_b(a6+b4, 4, (2,3), 2)), 285.3422683187559 , 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.des_b(a6+b4, 4, (2,3), 3)), 311.44080890546695, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.des_b(a6+b4, 4, (2,3), 0)), -163.5210711323742, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.des_b(a6+b4, 4, (2,3), 1)), -187.1999296644511, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.des_b(a6+b4, 4, (2,3), 2)), 285.3422683187559 , 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.des_b(a6+b4, 4, (2,3), 3)), 311.44080890546695, 12)
 
-        self.assertAlmostEqual(lib.finger(fci.addons.cre_a(a6+b4, 4, (2,3), 0)), -39.48915822224921, 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.cre_a(a6+b4, 4, (2,3), 1)), 12.45125619610399 , 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.cre_a(a6+b4, 4, (2,3), 2)), 12.016451871939289, 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.cre_a(a6+b4, 4, (2,3), 3)), 4.44581041782693  , 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.cre_a(a6+b4, 4, (2,3), 0)), -39.48915822224921, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.cre_a(a6+b4, 4, (2,3), 1)), 12.45125619610399 , 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.cre_a(a6+b4, 4, (2,3), 2)), 12.016451871939289, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.cre_a(a6+b4, 4, (2,3), 3)), 4.44581041782693  , 12)
 
-        self.assertAlmostEqual(lib.finger(fci.addons.cre_b(a6+b6, 4, (2,2), 0)), -56.76161034968627, 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.cre_b(a6+b6, 4, (2,2), 1)), 23.167401126371875, 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.cre_b(a6+b6, 4, (2,2), 2)), 30.522245459279716, 12)
-        self.assertAlmostEqual(lib.finger(fci.addons.cre_b(a6+b6, 4, (2,2), 3)), -57.04404450083064, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.cre_b(a6+b6, 4, (2,2), 0)), -56.76161034968627, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.cre_b(a6+b6, 4, (2,2), 1)), 23.167401126371875, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.cre_b(a6+b6, 4, (2,2), 2)), 30.522245459279716, 12)
+        self.assertAlmostEqual(lib.fp(fci.addons.cre_b(a6+b6, 4, (2,2), 3)), -57.04404450083064, 12)
 
 
 if __name__ == "__main__":
     print("Full Tests for fci.addons")
     unittest.main()
-

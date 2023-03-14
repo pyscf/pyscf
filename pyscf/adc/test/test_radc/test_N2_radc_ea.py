@@ -27,8 +27,8 @@ def setUpModule():
     r = 1.098
     mol = gto.Mole()
     mol.atom = [
-        ['N', ( 0., 0.    , -r/2   )],
-        ['N', ( 0., 0.    ,  r/2)],]
+        ['N', (0., 0.    , -r/2   )],
+        ['N', (0., 0.    ,  r/2)],]
     mol.basis = {'N':'aug-cc-pvdz'}
     mol.verbose = 0
     mol.build()
@@ -44,12 +44,12 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
-  
+
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
         e,v,p,x,es = myadc.ea_adc(nroots=3)
-        es.analyze()        
+        es.analyze()
 
         self.assertAlmostEqual(e[0], 0.0961781923822576, 6)
         self.assertAlmostEqual(e[1], 0.1258326916409743, 6)
@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.9783719593912672, 6)
 
     def test_ea_adc2_oneroot(self):
-  
+
         myadc.method_type = "ea"
         e,v,p,x = myadc.kernel()
 
@@ -69,10 +69,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.9832854445007961, 6)
 
     def test_ea_adc2x(self):
-  
+
         myadc.method = "adc(2)-x"
         myadc.method_type = "ea"
-        
+
         e,v,p,x = myadc.kernel(nroots=4)
         e_corr = myadc.e_corr
 
@@ -89,12 +89,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3],1.9689940350592559, 6)
 
     def test_ea_adc3(self):
-  
+
         myadc.method = "adc(3)"
         myadc.method_type = "ea"
-        
+
         e,v,p,x = myadc.kernel(nroots=3)
-        e_corr = myadc.e_corr        
+        e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.31694173142858517 , 6)
 
@@ -105,7 +105,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.8324175318668088, 6)
         self.assertAlmostEqual(p[1], 1.9840991060607487, 6)
         self.assertAlmostEqual(p[2], 1.9638550014980212, 6)
-      
+
 if __name__ == "__main__":
     print("EA calculations for different RADC methods for nitrogen molecule")
     unittest.main()

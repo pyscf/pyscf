@@ -77,7 +77,7 @@ class X2CHelperMixin(lib.StreamObject):
 
         xmol, contr_coeff_nr = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
         s = xmol.intor_symmetric('int1e_ovlp_spinor')
         t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
         v = xmol.intor_symmetric('int1e_nuc_spinor')
@@ -230,7 +230,7 @@ class X2CHelperMixin(lib.StreamObject):
         else:
             xmol = mol
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
@@ -289,7 +289,7 @@ class SpinOrbitalX2CHelper(X2CHelperMixin):
 
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         t = _block_diag(xmol.intor_symmetric('int1e_kin'))
         v = _block_diag(xmol.intor_symmetric('int1e_nuc'))
@@ -361,7 +361,7 @@ class SpinOrbitalX2CHelper(X2CHelperMixin):
         else:
             xmol = mol
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_nr_by_atom()
@@ -789,84 +789,10 @@ def x2c1e_ghf(mf):
     return mf.view(X2C1E_GSCF).add_keys(with_x2c=with_x2c)
 
 
-def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
+def _uncontract_mol(mol, xuncontract=None, exp_drop=0.2):
     '''mol._basis + uncontracted steep functions'''
-    pmol = copy.copy(mol)
-    _bas = []
-    _env = []
-    ptr = len(pmol._env)
-    contr_coeff = []
-
-    def _to_full_contraction(mol, bas_idx):
-        es = numpy.hstack([mol.bas_exp(ib) for ib in bas_idx])
-        cs = scipy.linalg.block_diag(*[mol._libcint_ctr_coeff(ib) for ib in bas_idx])
-
-        es, e_idx, rev_idx = numpy.unique(es.round(9), True, True)
-        cs_new = numpy.zeros((es.size, cs.shape[1]))
-        for i, j in enumerate(rev_idx):
-            cs_new[j] += cs[i]
-        return es[::-1], cs_new[::-1]
-
-    aoslices = mol.aoslice_by_atom()
-    for ia, (ib0, ib1) in enumerate(aoslices[:,:2]):
-        if isinstance(xuncontract, str):
-            uncontract_me = ((xuncontract == mol.atom_pure_symbol(ia)) or
-                             (xuncontract == mol.atom_symbol(ia)))
-        elif isinstance(xuncontract, (tuple, list)):
-            uncontract_me = ((mol.atom_pure_symbol(ia) in xuncontract) or
-                             (mol.atom_symbol(ia) in xuncontract) or
-                             (ia in xuncontract))
-        else:
-            uncontract_me = xuncontract
-
-        if not uncontract_me:
-            p0, p1 = aoslices[ia]
-            _bas.append(mol._bas[ib0:ib1])
-            contr_coeff.append(numpy.eye(p1-p0))
-            continue
-
-        lmax = mol._bas[ib0:ib1,mole.ANG_OF].max()
-        assert(all(mol._bas[ib0:ib1, mole.KAPPA_OF] == 0))
-        # TODO: loop based on kappa
-        for l in range(lmax+1):
-            bas_idx = ib0 + numpy.where(mol._bas[ib0:ib1,mole.ANG_OF] == l)[0]
-            if len(bas_idx) == 0:
-                continue
-
-# Some input basis may be the segmented basis from a general contracted set.
-# This may lead to duplicated pGTOs. First contract all basis to remove
-# duplicated primitive functions.
-            mol_exps, b_coeff = _to_full_contraction(mol, bas_idx)
-
-            if mol.cart:
-                degen = (l + 1) * (l + 2) // 2
-            else:
-                degen = l * 2 + 1
-            np, nc = b_coeff.shape
-
-            # Uncontract all basis. Use pGTO basis for X
-            bs = numpy.zeros((np, mole.BAS_SLOTS), dtype=numpy.int32)
-            bs[:,mole.ATOM_OF] = ia
-            bs[:,mole.ANG_OF ] = l
-            bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
-            norm = mole.gto_norm(l, mol_exps)
-            _env.append(mol_exps)
-            _env.append(norm)
-            bs[:,mole.PTR_EXP] = numpy.arange(ptr, ptr+np)
-            bs[:,mole.PTR_COEFF] = numpy.arange(ptr+np, ptr+np*2)
-            _bas.append(bs)
-            ptr += np * 2
-
-            c = b_coeff * 1/norm[:,None]
-            c = scipy.linalg.block_diag(*([c,] * degen))
-            c = c.reshape((degen, np, degen, nc))
-            c = c.transpose(1,0,3,2).reshape(np*degen, nc*degen)
-            contr_coeff.append(c)
-
-    pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
-    pmol._env = numpy.hstack([mol._env,] + _env)
+    pmol, contr_coeff = mol.decontract_basis(atoms=xuncontract)
     contr_coeff = scipy.linalg.block_diag(*contr_coeff)
-
     return pmol, contr_coeff
 
 
@@ -881,12 +807,16 @@ def _invsqrt(a, tol=1e-14):
     return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
 def _get_hcore_fw(t, v, w, s, x, c):
+    # s1 = s + (1/2c^2)(X^{\dag}*T*X)
     s1 = s + reduce(numpy.dot, (x.T.conj(), t, x)) * (.5/c**2)
+    # tx = T * X
     tx = numpy.dot(t, x)
+    # h1 = (v + T*X + V^{\dag}*T^{\dag} - (X^{\dag} * T * X) + (X^{\dag} * W * X)*(1/4c^2)
     h1 =(v + tx + tx.T.conj() - numpy.dot(x.T.conj(), tx) +
          reduce(numpy.dot, (x.T.conj(), w, x)) * (.25/c**2))
-
+    # R = S^{-1/2} * (S^{-1/2}\tilde{S}S^{-1/2})^{-1/2} * S^{1/2}
     r = _get_r(s, s1)
+    # H1 = R^{\dag} * H1 * R
     h1 = reduce(numpy.dot, (r.T.conj(), h1, r))
     return h1
 

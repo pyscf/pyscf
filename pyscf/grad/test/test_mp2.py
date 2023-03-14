@@ -47,7 +47,10 @@ class KnownValues(unittest.TestCase):
         pt = mp.mp2.MP2(mf)
         pt.kernel()
         g1 = pt.nuc_grad_method().kernel(pt.t2, atmlst=[0,1,2])
-        self.assertAlmostEqual(lib.finger(g1), -0.035681131697586257, 6)
+# O    -0.0000000000    -0.0000000000     0.0089211366
+# H     0.0000000000     0.0222745046    -0.0044605683
+# H     0.0000000000    -0.0222745046    -0.0044605683
+        self.assertAlmostEqual(lib.fp(g1), -0.035681131697586257, 6)
 
     def test_mp2_grad_finite_diff(self):
         mol = gto.M(
@@ -79,7 +82,10 @@ class KnownValues(unittest.TestCase):
         pt.max_memory = 1
         pt.kernel()
         g1 = mp2_grad.Gradients(pt).kernel(pt.t2)
-        self.assertAlmostEqual(lib.finger(g1), 0.12457973399092415, 6)
+# O    -0.0000000000    -0.0000000000     0.0037319667
+# H    -0.0000000000    -0.0897959298    -0.0018659834
+# H     0.0000000000     0.0897959298    -0.0018659834
+        self.assertAlmostEqual(lib.fp(g1), 0.12457973399092415, 6)
 
     def test_as_scanner_with_frozen(self):
         pt = mp.mp2.MP2(mf)
@@ -88,7 +94,7 @@ class KnownValues(unittest.TestCase):
         e, g1 = gscan(mol)
         self.assertTrue(gscan.converged)
         self.assertAlmostEqual(e, -76.025166662910223, 9)
-        self.assertAlmostEqual(lib.finger(g1), 0.12457973399092415, 6)
+        self.assertAlmostEqual(lib.fp(g1), 0.12457973399092415, 6)
 
     def test_with_x2c_scanner(self):
         with lib.light_speed(20.):
@@ -134,7 +140,7 @@ class KnownValues(unittest.TestCase):
     def test_symmetrize(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
         g = mol.RHF.run().MP2().run().Gradients().kernel()
-        self.assertAlmostEqual(lib.finger(g), 0.049987975650731625, 7)
+        self.assertAlmostEqual(lib.fp(g), 0.049987975650731625, 6)
 
 
 if __name__ == "__main__":

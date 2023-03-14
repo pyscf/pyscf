@@ -484,7 +484,7 @@ class EOMIP(eom_kgccsd.EOMIP):
                                  (kshift, len(tmp_obeta)+len(tmp_oalpha), nroots))
 
             total_count = 0
-            while(total_count < nroots):
+            while (total_count < nroots):
                 if total_count % 2 == 0 and len(tmp_oalpha) > 0:
                     idx[total_count] = tmp_oalpha.pop()
                 else:
@@ -987,7 +987,7 @@ class EOMEA(eom_kgccsd.EOMEA):
                                  (kshift, len(tmp_vbeta)+len(tmp_valpha), nroots))
 
             total_count = 0
-            while(total_count < nroots):
+            while (total_count < nroots):
                 if total_count % 2 == 0 and len(tmp_valpha) > 0:
                     idx[total_count] = tmp_valpha.pop(0)
                 else:
@@ -1241,12 +1241,12 @@ if __name__ == '__main__':
     Hr1, Hr2 = myeom.vector_to_amplitudes(vector, nkpts, (nmoa, nmob), (nocca, noccb))
     Hr1a, Hr1b = Hr1
     Hr2aaa, Hr2baa, Hr2abb, Hr2bbb = Hr2
-    print('ip Hr1a',   abs(lib.finger(Hr1a)   - (-0.34462696543560045-1.6104596956729178j)))
-    print('ip Hr1b',   abs(lib.finger(Hr1b)   - (-0.055793611517250929+0.22169994342782473j)))
-    print('ip Hr2aaa', abs(lib.finger(Hr2aaa) - (0.692705827672665420-1.958639508839846943j)))
-    print('ip Hr2baa', abs(lib.finger(Hr2baa) - (2.892194153603884654+2.039530776282815872j)))
-    print('ip Hr2abb', abs(lib.finger(Hr2abb) - (1.618257685489421727-5.489218743953674817j)))
-    print('ip Hr2bbb', abs(lib.finger(Hr2bbb) - (0.479835513829048044+0.108406393138471210j)))
+    print('ip Hr1a',   abs(lib.fp(Hr1a)   - (-0.34462696543560045-1.6104596956729178j)))
+    print('ip Hr1b',   abs(lib.fp(Hr1b)   - (-0.055793611517250929+0.22169994342782473j)))
+    print('ip Hr2aaa', abs(lib.fp(Hr2aaa) - (0.692705827672665420-1.958639508839846943j)))
+    print('ip Hr2baa', abs(lib.fp(Hr2baa) - (2.892194153603884654+2.039530776282815872j)))
+    print('ip Hr2abb', abs(lib.fp(Hr2abb) - (1.618257685489421727-5.489218743953674817j)))
+    print('ip Hr2bbb', abs(lib.fp(Hr2bbb) - (0.479835513829048044+0.108406393138471210j)))
     # EA version
 
     myeom = EOMEA(mycc)
@@ -1267,9 +1267,9 @@ if __name__ == '__main__':
     Hr1a, Hr1b = Hr1
     Hr2aaa, Hr2aba, Hr2bab, Hr2bbb = Hr2
 
-    print('ea Hr1a',  abs(lib.finger(Hr1a)   - (-0.081373075311041126-0.51422895644026023j)))
-    print('ea Hr1b',  abs(lib.finger(Hr1b)   - (-0.39518588661294807-1.3063424820239824j))  )
-    print('ea Hr2aaa',abs(lib.finger(Hr2aaa) - (-2.6502079691200251-0.61302655915003545j))  )
-    print('ea Hr2aba',abs(lib.finger(Hr2aba) - (5.5723208649566036-5.4202659143496286j))    )
-    print('ea Hr2bab',abs(lib.finger(Hr2bab) - (-1.2822293707887937+0.3026476580141586j))   )
-    print('ea Hr2bbb',abs(lib.finger(Hr2bbb) - (-4.0202809577487253-0.46985725132191702j))  )
+    print('ea Hr1a',  abs(lib.fp(Hr1a)   - (-0.081373075311041126-0.51422895644026023j)))
+    print('ea Hr1b',  abs(lib.fp(Hr1b)   - (-0.39518588661294807-1.3063424820239824j))  )
+    print('ea Hr2aaa',abs(lib.fp(Hr2aaa) - (-2.6502079691200251-0.61302655915003545j))  )
+    print('ea Hr2aba',abs(lib.fp(Hr2aba) - (5.5723208649566036-5.4202659143496286j))    )
+    print('ea Hr2bab',abs(lib.fp(Hr2bab) - (-1.2822293707887937+0.3026476580141586j))   )
+    print('ea Hr2bbb',abs(lib.fp(Hr2bbb) - (-4.0202809577487253-0.46985725132191702j))  )

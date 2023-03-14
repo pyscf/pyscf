@@ -216,7 +216,7 @@ class GeometryOptimizer(lib.StreamObject):
         return self.mol
     optimize = kernel
 
-del(INCLUDE_GHOST, ASSERT_CONV)
+del (INCLUDE_GHOST, ASSERT_CONV)
 
 
 if __name__ == '__main__':

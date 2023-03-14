@@ -84,6 +84,9 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(isintsequence('123'))
         self.assertFalse(isintsequence(5))
 
+    def test_prange_split(self):
+        self.assertEqual(list(lib.prange_split(10, 3)), [(0, 4), (4, 7), (7, 10)])
+
 
 if __name__ == "__main__":
     unittest.main()

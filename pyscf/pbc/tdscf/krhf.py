@@ -37,13 +37,16 @@ class TDA(rhf.TDA):
 
     def __init__(self, mf):
         from pyscf.pbc import scf
-        assert(isinstance(mf, scf.khf.KSCF))
+        assert (isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         rhf.TDA.__init__(self, mf)
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(mf)
 
     def gen_vind(self, mf):
+        # exxdiv corrections are kept in hdiag while excluding them when calling
+        # the contractions between two-electron integrals and X/Y amplitudes.
+        # See also the relevant comments in function pbc.tdscf.rhf.TDA.gen_vind
         singlet = self.singlet
 
         mo_coeff = mf.mo_coeff

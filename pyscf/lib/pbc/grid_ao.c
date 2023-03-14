@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <math.h>
 #include <complex.h>
 #include "config.h"
@@ -64,6 +65,12 @@ void PBCnr_ao_screen(uint8_t *non0table, double *coords, int ngrids,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
+        double expcutoff;
+        if (env[PTR_EXPCUTOFF] == 0) {
+                expcutoff = EXPCUTOFF;
+        } else {
+                expcutoff = env[PTR_EXPCUTOFF];
+        }
 
 #pragma omp parallel
 {
@@ -104,7 +111,7 @@ void PBCnr_ao_screen(uint8_t *non0table, double *coords, int ngrids,
                                 rr = dr[0]*dr[0] + dr[1]*dr[1] + dr[2]*dr[2];
                                 for (j = 0; j < np; j++) {
                                         arr = p_exp[j] * rr;
-                                        if (arr-logcoeff[j] < EXPCUTOFF) {
+                                        if (arr-logcoeff[j] < expcutoff) {
                                                 non0table[ib*nbas+bas_id] = MIN(ALL_IMAGES, m+1);
                                                 goto next_blk;
                                         }
@@ -172,7 +179,7 @@ static void _fill_grid2atm(double *grid2atm, double *min_grid2atm,
 }
 
 
-void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
+void PBCeval_cart_iter(FPtr_eval feval, FPtr_exp fexp,
                        size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                        int param[], int *shls_slice, int *ao_loc, double *buf,
                        double *Ls, double complex *expLk,
@@ -291,7 +298,7 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
 }
 
 
-void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
+void PBCeval_sph_iter(FPtr_eval feval, FPtr_exp fexp,
                       size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                       int param[], int *shls_slice, int *ao_loc, double *buf,
                       double *Ls, double complex *expLk,

@@ -43,7 +43,7 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    assert(mo_coeff[0].dtype == numpy.double)
+    assert (mo_coeff[0].dtype == numpy.double)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff[0].shape
@@ -191,7 +191,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1)[0]
+        make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, mf.max_memory*.8-mem_now)
 
@@ -201,8 +201,9 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 rho0a = make_rho(0, ao, mask, xctype)
                 rho0b = make_rho(1, ao, mask, xctype)
-                fxc = ni.eval_xc(mf.xc, (rho0a,rho0b), 1, deriv=2)[2]
-                u_u, u_d, d_d = fxc[0].T
+                rho = (rho0a, rho0b)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
+                wfxc = fxc[:,0,:,0] * weight
 
                 rho_o_a = lib.einsum('rp,pi->ri', ao, orbo_a)
                 rho_v_a = lib.einsum('rp,pi->ri', ao, orbv_a)
@@ -211,17 +212,17 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 rho_ov_a = numpy.einsum('ri,ra->ria', rho_o_a, rho_v_a)
                 rho_ov_b = numpy.einsum('ri,ra->ria', rho_o_b, rho_v_b)
 
-                w_ov = numpy.einsum('ria,r->ria', rho_ov_a, weight*u_u)
+                w_ov = numpy.einsum('ria,r->ria', rho_ov_a, wfxc[0,0])
                 iajb = lib.einsum('ria,rjb->iajb', rho_ov_a, w_ov)
                 a_aa += iajb
                 b_aa += iajb
 
-                w_ov = numpy.einsum('ria,r->ria', rho_ov_b, weight*u_d)
+                w_ov = numpy.einsum('ria,r->ria', rho_ov_b, wfxc[0,1])
                 iajb = lib.einsum('ria,rjb->iajb', rho_ov_a, w_ov)
                 a_ab += iajb
                 b_ab += iajb
 
-                w_ov = numpy.einsum('ria,r->ria', rho_ov_b, weight*d_d)
+                w_ov = numpy.einsum('ria,r->ria', rho_ov_b, wfxc[1,1])
                 iajb = lib.einsum('ria,rjb->iajb', rho_ov_b, w_ov)
                 a_bb += iajb
                 b_bb += iajb
@@ -233,8 +234,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 rho0a = make_rho(0, ao, mask, xctype)
                 rho0b = make_rho(1, ao, mask, xctype)
                 rho = (rho0a, rho0b)
-                vxc, fxc = ni.eval_xc(mf.xc, rho, 1, deriv=2)[1:3]
-                fxc = xc_deriv.transform_fxc(rho, vxc, fxc, xctype, spin=1)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
                 wfxc = fxc * weight
                 rho_o_a = lib.einsum('xrp,pi->xri', ao, orbo_a)
                 rho_v_a = lib.einsum('xrp,pi->xri', ao, orbv_a)
@@ -273,8 +273,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 rho0a = make_rho(0, ao, mask, xctype)
                 rho0b = make_rho(1, ao, mask, xctype)
                 rho = (rho0a, rho0b)
-                vxc, fxc = ni.eval_xc(mf.xc, rho, 1, deriv=2)[1:3]
-                fxc = xc_deriv.transform_fxc(rho, vxc, fxc, xctype, spin=1)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
                 wfxc = fxc * weight
                 rho_oa = lib.einsum('xrp,pi->xri', ao, orbo_a)
                 rho_ob = lib.einsum('xrp,pi->xri', ao, orbo_b)
@@ -703,7 +702,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    assert(mo_coeff[0].dtype == numpy.double)
+    assert (mo_coeff[0].dtype == numpy.double)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff[0].shape
@@ -864,4 +863,4 @@ RPA = TDUHF = TDHF
 scf.uhf.UHF.TDA = lib.class_as_method(TDA)
 scf.uhf.UHF.TDHF = lib.class_as_method(TDHF)
 
-del(OUTPUT_THRESHOLD)
+del (OUTPUT_THRESHOLD)
