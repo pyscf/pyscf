@@ -490,7 +490,15 @@ class CDERIArray:
             data_group = h5py.File(data_group, 'r')
         self.data_group = data_group
         if 'kpts' not in data_group:
-            raise RuntimeError('cderi data not generated or format incompatible')
+            # TODO: Deprecate the v1 data format
+            self._data_version = 'v1'
+            self._cderi = data_group.file.filename
+            self._label = label
+            self._kptij_lst = data_group[label+'-kptij'][()]
+            self.nkpts = len(unique(self._kptij_lst[:,0])[0])
+            return
+        else:
+            self._data_version = 'v2'
 
         aosym = data_group['aosym'][()]
         if isinstance(aosym, bytes):
@@ -543,6 +551,13 @@ class CDERIArray:
         return out[k_slices]
 
     def _load_one(self, ki, kj, slices):
+        if self._data_version == 'v1':
+            with _load3c(self._cderi, self._label) as fload:
+                kikj = ki * self.nkpts + kj
+                kpti, kptj = self._kptij_lst[kikj]
+                out = fload(kpti, kptj)
+                return out[slices]
+
         kikj = ki * self.nkpts + kj
         kjki = kj * self.nkpts + ki
         if self.aosym == 's1' or kikj == kjki:
@@ -565,6 +580,10 @@ class CDERIArray:
         return out
 
     def load(self, kpti, kptj):
+        if self._data_version == 'v1':
+            with _load3c(self._cderi, self._label) as fload:
+                return numpy.asarray(fload(kpti, kptj))
+
         ki = member(kpti, self.kpts)
         kj = member(kptj, self.kpts)
         if len(ki) == 0 or len(kj) == 0:
