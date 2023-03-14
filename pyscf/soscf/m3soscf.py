@@ -455,7 +455,7 @@ class M3SOSCF:
                 self._currentEnergies[j] = self._mf.energy_elec(self._mf.make_rdm1(self._moCoeffs[writeCursor,j], self._mf.mo_occ))[0]
                 if self._currentEnergies[j] < self._lowestEnergy:
                     log.info("Energy pruning")
-                    self._currentTrusts[writeCursor,lowestTrustIndex] = 0.0
+                    #self._currentTrusts[writeCursor,lowestTrustIndex] = 0.0
                 log.info("ENERGY (" + str(j) + "): " + str(self._currentEnergies[j]))
 
             log.info("")
@@ -934,7 +934,7 @@ class SubconvergerReassigmentManager:
         log.info("Current Trust Scaling: " + str(self._alpha))
 
         #basis = sigutils.getCanonicalBasis(len(self._m3._currentDm[0]))
-        dim = self._m3.getDegreesOfFreedom()
+        #dim = self._m3.getDegreesOfFreedom()
 
         for i in range(len(trusts)):
             p = cursor - i
