@@ -24,6 +24,7 @@ U. Ekstrom et al, J. Chem. Theory Comput., 6, 1971
 
 import copy
 import ctypes
+from functools import lru_cache
 import math
 import numpy
 from pyscf import lib
@@ -247,19 +248,20 @@ RSH_XC = set(('CAMB3LYP',))
 MAX_DERIV_ORDER = 3
 
 VV10_XC = {
-    'B97M_V'    : [6.0, 0.01],
-    'WB97M_V'   : [6.0, 0.01],
-    'WB97X_V'   : [6.0, 0.01],
-    'VV10'      : [5.9, 0.0093],
-    'LC_VV10'   : [6.3, 0.0089],
-    'REVSCAN_VV10': [9.8, 0.0093],
-    'SCAN_RVV10'  : [15.7, 0.0093],
-    'SCAN_VV10'   : [14.0, 0.0093],
-    'SCANL_RVV10' : [15.7, 0.0093],
-    'SCANL_VV10'  : [14.0, 0.0093],
+    'B97M_V'    : (6.0, 0.01),
+    'WB97M_V'   : (6.0, 0.01),
+    'WB97X_V'   : (6.0, 0.01),
+    'VV10'      : (5.9, 0.0093),
+    'LC_VV10'   : (6.3, 0.0089),
+    'REVSCAN_VV10': (9.8, 0.0093),
+    'SCAN_RVV10'  : (15.7, 0.0093),
+    'SCAN_VV10'   : (14.0, 0.0093),
+    'SCANL_RVV10' : (15.7, 0.0093),
+    'SCANL_VV10'  : (14.0, 0.0093),
 }
 VV10_XC.update([(key.replace('_', ''), val) for key, val in VV10_XC.items()])
 
+@lru_cache(100)
 def xc_type(xc_code):
     if xc_code is None:
         return None
@@ -330,7 +332,6 @@ def rsh_coeff(xc_code):
     return omega, alpha, beta
 
 def max_deriv_order(xc_code):
-    hyb, fn_facs = parse_xc(xc_code)
     return MAX_DERIV_ORDER
 
 def test_deriv_order(xc_code, deriv, raise_error=False):
@@ -350,6 +351,7 @@ def parse_xc_name(xc_name):
     fn_facs = parse_xc(xc_name)[1]
     return fn_facs[0][0], fn_facs[1][0]
 
+@lru_cache(100)
 def parse_xc(description):
     r'''Rules to input functional description:
 
@@ -402,9 +404,9 @@ def parse_xc(description):
     '''
     hyb = [0, 0, 0]  # hybrid, alpha, omega
     if description is None:
-        return hyb, []
+        return tuple(hyb), ()
     elif isinstance(description, int):
-        return hyb, [(description, 1.)]
+        return tuple(hyb), ((description, 1.),)
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
@@ -494,7 +496,7 @@ def parse_xc(description):
             parse_token(token, 'XC', search_xc_alias=True)
     if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
         hyb[1] = 0
-    return hyb, remove_dup(fn_facs)
+    return tuple(hyb), tuple(remove_dup(fn_facs))
 
 _NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
                    'LR-HF'  : 'LR_HF',
@@ -512,7 +514,7 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
     '''
     hyb, fn_facs = parse_xc(xc_code)
     if omega is not None:
-        hyb[2] = float(omega)
+        hyb = hyb[:2] + (float(omega),)
     return _eval_xc(hyb, fn_facs, rho, spin, relativity, deriv, verbose)
 
 XC_D0 = 0
