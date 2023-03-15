@@ -28,10 +28,10 @@ def build_cell(space_group_symmetry=False):
     a = np.eye(3) * 5
     basis = 'cc-pvdz'
     if space_group_symmetry:
-        return pbcgto.M(atom=atom, basis=basis, a=a,
+        return pbcgto.M(atom=atom, basis=basis, a=a, output='/dev/null',
                         space_group_symmetry=True,
                         symmorphic=False).set(precision=1e-12, verbose=4)
-    return pbcgto.M(atom=atom, basis=basis, a=a).set(precision=1e-12, verbose=4)
+    return pbcgto.M(atom=atom, basis=basis, a=a, output='/dev/null').set(precision=1e-12, verbose=4)
 
 
 class KnownValues(unittest.TestCase):
