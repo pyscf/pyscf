@@ -23,14 +23,20 @@ import pyscf.pbc.mp
 import pyscf.pbc.mp.kmp2
 
 
-atom = 'C 0 0 0'
-a = np.eye(3) * 5
-basis = 'cc-pvdz'
-cell = pbcgto.M(atom=atom, basis=basis, a=a).set(precision=1e-12, verbose=4)
+def build_cell(space_group_symmetry=False):
+    atom = 'C 0 0 0'
+    a = np.eye(3) * 5
+    basis = 'cc-pvdz'
+    if space_group_symmetry:
+        return pbcgto.M(atom=atom, basis=basis, a=a,
+                        space_group_symmetry=True,
+                        symmorphic=False).set(precision=1e-12, verbose=4)
+    return pbcgto.M(atom=atom, basis=basis, a=a).set(precision=1e-12, verbose=4)
 
 
 class KnownValues(unittest.TestCase):
     def test_mp2(self):
+        cell = build_cell()
         mf = pbcscf.RHF(cell).density_fit()
         mf.conv_tol = 1e-10
         mf.kernel()
@@ -41,7 +47,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(pt.e_corr_os, -0.0578376473823737, 7)
 
     def test_kmp2(self):
-        def run_k(kmesh):
+        def run_k(cell, kmesh):
             kpts = cell.make_kpts(kmesh)
             mf = pbcscf.KRHF(cell, kpts).density_fit()
             mf.conv_tol = 1e-10
@@ -49,18 +55,20 @@ class KnownValues(unittest.TestCase):
             pt = pyscf.pbc.mp.kmp2.KMP2(mf).run()
             return pt
 
-        pt = run_k((1,1,1))
+        cell = build_cell()
+
+        pt = run_k(cell, (1,1,1))
         self.assertAlmostEqual(pt.e_corr, -0.0634551885557889, 7)
         self.assertAlmostEqual(pt.e_corr_ss, -0.00561754117341521, 7)
         self.assertAlmostEqual(pt.e_corr_os, -0.0578376473823737, 7)
 
-        pt = run_k((2,1,1))
+        pt = run_k(cell, (2,1,1))
         self.assertAlmostEqual(pt.e_corr, -0.0640728626841088, 7)
         self.assertAlmostEqual(pt.e_corr_ss, -0.00558491559563941, 7)
         self.assertAlmostEqual(pt.e_corr_os, -0.0584879470884693, 7)
 
     def test_ksymm(self):
-        def run_k(kmesh):
+        def run_k(cell, kmesh):
             kpts = cell.make_kpts(kmesh, space_group_symmetry=True)
             mf = pbcscf.KRHF(cell, kpts).density_fit()
             mf.conv_tol = 1e-10
@@ -68,12 +76,14 @@ class KnownValues(unittest.TestCase):
             pt = pyscf.pbc.mp.kmp2_ksymm.KMP2(mf).run()
             return pt
 
-        pt = run_k((1,1,1))
+        cell = build_cell(space_group_symmetry=True)
+
+        pt = run_k(cell, (1,1,1))
         self.assertAlmostEqual(pt.e_corr, -0.0634551885557889, 7)
         self.assertAlmostEqual(pt.e_corr_ss, -0.00561754117341521, 7)
         self.assertAlmostEqual(pt.e_corr_os, -0.0578376473823737, 7)
 
-        pt = run_k((2,1,1))
+        pt = run_k(cell, (2,1,1))
         self.assertAlmostEqual(pt.e_corr, -0.0640728626841088, 7)
         self.assertAlmostEqual(pt.e_corr_ss, -0.00558491559563941, 7)
         self.assertAlmostEqual(pt.e_corr_os, -0.0584879470884693, 7)
