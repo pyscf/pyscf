@@ -396,7 +396,7 @@ class AFTDFMixin:
             auxcell.omega = omega
 
         assert rsh_df.cell.omega == omega
-        if getattr(rsh, 'auxcell', None) is not None:
+        if getattr(rsh_df, 'auxcell', None) is not None:
             assert rsh_df.auxcell.omega == omega
 
         try:
