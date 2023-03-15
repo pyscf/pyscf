@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <assert.h>
 #include "config.h"
 #include "gto/grid_ao_drv.h"

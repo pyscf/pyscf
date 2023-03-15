@@ -284,6 +284,28 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def prange_split(n_total, n_sections):
+    '''
+    Generate prange sequence that splits n_total elements into n sections.
+    The splits parallel to the np.array_split convention: the first (l % n)
+    sections of size l//n + 1 and the rest of size l//n.
+
+    Examples:
+
+    >>> for p0, p1 in lib.prange_split(10, 3):
+    ...     print(p0, p1)
+    (0, 4)
+    (4, 7)
+    (7, 10)
+    '''
+    n_each_section, extras = divmod(n_total, n_sections)
+    section_sizes = ([0] +
+                     extras * [n_each_section+1] +
+                     (n_sections-extras) * [n_each_section])
+    div_points = numpy.array(section_sizes).cumsum()
+    return zip(div_points[:-1], div_points[1:])
+
+
 def map_with_prefetch(func, *iterables):
     '''
     Apply function to an task and prefetch the next task

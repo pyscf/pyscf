@@ -218,6 +218,8 @@ def make_auxmol(mol, auxbasis=None):
         _basis = auxbasis
     pmol._basis = pmol.format_basis(_basis)
 
+    # Note: To pass parameters like gauge origin, rsh-omega to auxmol,
+    # mol._env[:PTR_ENV_START] must be copied to auxmol._env
     pmol._atm, pmol._bas, pmol._env = \
             pmol.make_env(mol._atom, pmol._basis, mol._env[:gto.PTR_ENV_START])
     pmol._built = True

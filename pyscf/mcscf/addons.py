@@ -1321,10 +1321,10 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             cs = []
             for ix, (solver, my_args, my_kwargs) in enumerate (self._loop_solver(_state_args (ci0))):
                 c0 = my_args[0]
-                try:
+                if hasattr(solver, 'approx_kernel'):
                     e, c = solver.approx_kernel(h1, h2, norb, self._get_nelec(solver, nelec), ci0=c0,
                                                 orbsym=self.orbsym, **kwargs)
-                except AttributeError:
+                else:
                     e, c = solver.kernel(h1, h2, norb, self._get_nelec(solver, nelec), ci0=c0,
                                          orbsym=self.orbsym, **kwargs)
                 if solver.nroots == 1:

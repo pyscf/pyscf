@@ -43,7 +43,6 @@ def get_veff(ks_grad, mol=None, dm=None):
     t0 = (logger.process_clock(), logger.perf_counter())
 
     mf = ks_grad.base
-    ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids
     else:
@@ -58,7 +57,7 @@ def get_veff(ks_grad, mol=None, dm=None):
     if grids.coords is None:
         grids.build(with_non0tab=True)
 
-    #enabling range-separated hybrids
+    ni = mf._numint
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
     mem_now = lib.current_memory()[0]
@@ -94,8 +93,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         vj, vk = ks_grad.get_jk(mol, dm)
         vk *= hyb
         if abs(omega) > 1e-10:  # For range separated Coulomb operator
-            with mol.with_range_coulomb(omega):
-                vk += ks_grad.get_k(mol, dm) * (alpha - hyb)
+            vk += ks_grad.get_k(mol, dm, omega=omega) * (alpha - hyb)
         vxc += vj - vk * .5
 
     return lib.tag_array(vxc, exc1_grid=exc)
@@ -297,7 +295,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)
     ao_loc = mol.ao_loc_nr()
 
-    excsum = 0
+    excsum = numpy.zeros((mol.natm,3))
     vmat = numpy.zeros((3,nao,nao))
     if xctype == 'LDA':
         ao_deriv = 1

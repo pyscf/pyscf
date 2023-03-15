@@ -134,9 +134,13 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Setup conda
-        uses: actions/setup-python@v2
+        uses: s-weigand/setup-conda@v1
         with:
+          update-conda: true
           python-version: ${{ matrix.python-version }}
+          conda-channels: anaconda, conda-forge
+      - run: conda --version
+      - run: which python
       - name: Publish to conda
         run: |
           $CONDA/bin/conda install -y anaconda-client conda-build

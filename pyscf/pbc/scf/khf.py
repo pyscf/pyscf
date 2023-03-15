@@ -227,8 +227,8 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
             logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
                          k, kpt[0], kpt[1], kpt[2],
-                         mo_energy_kpts[k][mo_occ_kpts[k]> 0],
-                         mo_energy_kpts[k][mo_occ_kpts[k]==0])
+                         np.sort(mo_energy_kpts[k][mo_occ_kpts[k]> 0]),
+                         np.sort(mo_energy_kpts[k][mo_occ_kpts[k]==0]))
         np.set_printoptions(threshold=1000)
 
     return mo_occ_kpts
@@ -839,6 +839,9 @@ class KSCF(pbchf.SCF):
     def to_ghf(self, mf=None):
         '''Convert the input mean-field object to a KGHF/KGKS object'''
         return addons.convert_to_ghf(self, mf)
+
+    def to_khf(self):
+        return self
 
     as_scanner = as_scanner
 

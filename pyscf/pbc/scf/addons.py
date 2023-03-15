@@ -96,7 +96,6 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
         kpts = getattr(mf, 'kpts', None)
         if isinstance(kpts, KPoints):
             mo_energy_kpts = kpts.transform_mo_energy(mo_energy_kpts)
-            #mo_coeff_kpts = mf.kpts_descriptor.transform_mo_coeff(mo_coeff_kpts)
 
         #mo_occ_kpts = mf_class.get_occ(mf, mo_energy_kpts, mo_coeff_kpts)
         if (mf.sigma == 0) or (not mf.sigma) or (not mf.smearing_method):

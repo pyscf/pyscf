@@ -97,6 +97,8 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
             ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             self.ke_cutoff = ke_cutoff.min()
 
+        self.mesh = cell.symmetrize_mesh(self.mesh)
+
         self.dump_flags()
 
         self.fused_cell, self.fuse = fuse_auxcell(auxcell, self.eta)
@@ -137,6 +139,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         mesh = pbctools.cutoff_to_mesh(auxcell.lattice_vectors(), ke)
         if auxcell.dimension < 2 or auxcell.low_dim_ft_type == 'inf_vacuum':
             mesh[auxcell.dimension:] = self.mesh[auxcell.dimension:]
+        mesh = self.cell.symmetrize_mesh(mesh)
         logger.debug(self, 'Set 2c2e integrals precision %g, mesh %s', precision, mesh)
 
         Gv, Gvbase, kws = fused_cell.get_Gv_weights(mesh)

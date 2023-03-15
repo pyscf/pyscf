@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.symm import geom
 from functools import reduce
+from pyscf.pbc.symm.group import PGElement
 
 SYMPREC = getattr(__config__, 'pbc_symm_space_group_symprec', 1e-6)
 XYZ = np.eye(3)
@@ -50,6 +51,7 @@ def transform_rot(op, a, b, allow_non_integer=False):
     '''
     P = np.dot(np.linalg.inv(b.T), a.T)
     R = reduce(np.dot,(P, op, np.linalg.inv(P))).round(15)
+    R[np.where(abs(R) < 1e-9)] = 0
     if not allow_non_integer:
         if(np.amax(np.absolute(R-R.round())) > SYMPREC):
             raise RuntimeError("Point-group symmetries of the two coordinate systems are different.")
@@ -77,19 +79,26 @@ def transform_trans(op, a, b):
     return np.dot(op, P.T)
 
 
-class SpaceGroup_element():
+class SPGElement():
     '''
     Matrix representation of space group operations
 
     Attributes:
-        rot : (3,3) array
+        rot : (d,d) array
             Rotation operator.
-        trans : (3,) array
+        trans : (d,) array
             Translation operator.
+        dimension : int
+            Dimension of the space: `d`.
     '''
-    def __init__(self, rot=np.eye(3, dtype=int), trans=np.zeros((3))):
+    def __init__(self,
+                 rot=np.eye(3, dtype=np.int32),
+                 trans=np.zeros((3)), dimension=3):
         self.rot = np.asarray(rot)
         self.trans = np.asarray(trans)
+        self.dimension = dimension
+        if dimension != 3:
+            raise NotImplementedError
 
     def dot(self, r_or_op):
         '''
@@ -97,12 +106,12 @@ class SpaceGroup_element():
         '''
         if isinstance(r_or_op, np.ndarray) and r_or_op.ndim==1 and len(r_or_op)==3:
             return np.dot(r_or_op, self.rot.T) + self.trans
-        elif isinstance(r_or_op, SpaceGroup_element):
+        elif isinstance(r_or_op, SPGElement):
             beta = self.rot
             b = self.trans
             alpha = r_or_op.rot
             a = r_or_op.trans
-            op = SpaceGroup_element(np.dot(beta, alpha), b + np.dot(a, beta.T))
+            op = SPGElement(np.dot(beta, alpha), b + np.dot(a, beta.T))
             return op
         else:
             raise KeyError("Input has wrong type: %s" % type(r_or_op))
@@ -119,7 +128,7 @@ class SpaceGroup_element():
         '''
         inv_rot = np.linalg.inv(self.rot)
         trans = -np.dot(self.trans, inv_rot.T)
-        return SpaceGroup_element(inv_rot, trans)
+        return SPGElement(inv_rot, trans)
 
     def transform(self, a, b, allow_non_integer=False):
         r'''
@@ -127,15 +136,15 @@ class SpaceGroup_element():
         '''
         rot = transform_rot(self.rot, a, b, allow_non_integer)
         trans = transform_trans(self.trans, a, b)
-        return SpaceGroup_element(rot, trans)
+        return SPGElement(rot, trans)
 
     @property
     def rot_is_eye(self):
-        return ((self.rot - np.eye(3,dtype=int)) == 0).all()
+        return ((self.rot - np.eye(self.dimension,dtype=int)) == 0).all()
 
     @property
     def rot_is_inversion(self):
-        return ((self.rot + np.eye(3,dtype=int)) == 0).all()
+        return ((self.rot + np.eye(self.dimension,dtype=int)) == 0).all()
 
     @property
     def trans_is_zero(self):
@@ -156,47 +165,44 @@ class SpaceGroup_element():
         return self.rot_is_inversion and self.trans_is_zero
 
     def __eq__(self, other):
-        if not isinstance(other, SpaceGroup_element):
+        if not isinstance(other, SPGElement):
             raise TypeError
         return self.__hash__() == other.__hash__()
 
     def __ne__(self, other):
-        if not isinstance(other, SpaceGroup_element):
+        if not isinstance(other, SPGElement):
             raise TypeError
         return not self.__eq__(other)
 
     def __lt__(self, other):
-        if not isinstance(other, SpaceGroup_element):
+        if not isinstance(other, SPGElement):
             raise TypeError
         return self.__hash__() < other.__hash__()
 
     def __le__(self, other):
-        if not isinstance(other, SpaceGroup_element):
+        if not isinstance(other, SPGElement):
             raise TypeError
         return self.__eq__(other) or self.__lt__(other)
 
     def __gt__(self, other):
-        if not isinstance(other, SpaceGroup_element):
+        if not isinstance(other, SPGElement):
             raise TypeError
         return not self.__le__(other)
 
     def __ge__(self, other):
-        if not isinstance(other, SpaceGroup_element):
+        if not isinstance(other, SPGElement):
             raise TypeError
         return not self.__lt__(other)
 
     def __hash__(self):
-        rot = self.rot.flatten()
-        r = 0
-        for i in range(9):
-            r += 3**(8-i) * (rot[i] + 1)
+        r = PGElement.__hash__(self)
 
         trans = self.trans
         t = 0
-        for i in range(3):
+        for i in range(self.dimension):
             t += int(np.round(trans[i] * 12.)) * 12**(2-i)
 
-        return int(t * (3**9) + r)
+        return int(t * (3**(self.dimension ** 2)) + r)
 
     def a2b(self, cell):
         '''
@@ -254,7 +260,7 @@ class SpaceGroup(lib.StreamObject):
         backend: str
             Choose which backend to use for symmetry detection.
             Default is `pyscf` and other choices are `spglib`.
-        ops : list of :class:`SpaceGroup_element` objects
+        ops : list of :class:`SPGElement` objects
             Matrix representation of the space group operations (in direct lattice system).
         nop : int
             Order of the space group.
@@ -291,7 +297,7 @@ class SpaceGroup(lib.StreamObject):
             pg_symbol = dataset['pointgroup']
             symmetry = get_symmetry(spgcell, symprec=self.symprec)
             for rot, trans in zip(symmetry['rotations'], symmetry['translations']):
-                self.ops.append(SpaceGroup_element(rot, trans))
+                self.ops.append(SPGElement(rot, trans))
         elif self.backend == 'pyscf':
             self.ops = geom.search_space_group_ops(self.cell, tol=self.symprec)
             pg_symbol = geom.get_crystal_class(self.cell, tol=self.symprec)[0]
@@ -309,7 +315,9 @@ class SpaceGroup(lib.StreamObject):
             self.dump_info()
         return self
 
-    def dump_info(self):
+    def dump_info(self, ops=None):
+        if ops is None:
+            ops = self.ops
         if self.verbose >= logger.INFO:
             gn = self.groupname
             if gn['international_symbol'] is not None:
@@ -317,8 +325,12 @@ class SpaceGroup(lib.StreamObject):
                             gn['international_symbol'], gn['international_number'])
             logger.info(self, '[Cell] Point group symbol:  %s', gn['point_group_symbol'])
         if self.verbose >= logger.DEBUG:
-            logger.debug(self, "Space group symmetry operations:")
-            for op in self.ops:
+            if len(ops) < len(self.ops):
+                message = 'Subset of space group symmetry operations:'
+            else:
+                message = 'Space group symmetry operations:'
+            logger.debug(self, message)
+            for op in ops:
                 logger.debug(self, op.__str__())
 
 if __name__ == "__main__":

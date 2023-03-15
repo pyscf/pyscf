@@ -975,8 +975,11 @@ class UHF(hf.SCF):
         return make_asym_dm(mo1, mo2, occ1, occ2, x)
 
     def _finalize(self):
-        ss, s = self.spin_square()
+        if self.mo_coeff is None or self.mo_occ is None:
+            # Skip spin_square (issue #1574)
+            return hf.SCF._finalize(self)
 
+        ss, s = self.spin_square()
         if self.converged:
             logger.note(self, 'converged SCF energy = %.15g  '
                         '<S^2> = %.8g  2S+1 = %.8g', self.e_tot, ss, s)

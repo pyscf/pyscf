@@ -55,7 +55,6 @@ from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
-from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _guess_eta
 from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
 from pyscf import __config__
@@ -131,6 +130,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     # Call _CCGDFBuilder if applicable. _CCGDFBuilder is slower than
     # _RSGDFBuilder but numerically more close to previous versions
     _prefer_ccdf = False
+    # If True, force using denisty matrix-based K-build
+    force_dm_kbuild = False
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell
@@ -391,8 +392,9 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
             else:
                 mydf = self
-            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
-                               with_j, with_k, omega, exxdiv)
+            with mydf.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                                     omega=None, exxdiv=exxdiv)
 
         if kpts is None:
             if numpy.all(self.kpts == 0):
@@ -500,11 +502,14 @@ class CDERIArray:
         self.kpts = data_group['kpts'][:]
         self.nkpts = self.kpts.shape[0]
         nao_pair = sum(dat.shape[1] for dat in self.j3c['0'].values())
-        nao = int(nao_pair ** .5)
-        if nao ** 2 == nao_pair:  # s
+        if self.aosym == 's1':
+            nao = int(nao_pair ** .5)
+            assert nao ** 2 == nao_pair
             self.nao = nao
-        else:
+        elif self.aosym == 's2':
             self.nao = int((nao_pair * 2)**.5)
+        else:
+            raise NotImplementedError
         self.naux = self.j3c['0/0'].shape[0]
 
     def __del__(self):

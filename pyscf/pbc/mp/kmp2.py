@@ -90,7 +90,6 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
 
     fao2mo = mp._scf.with_df.ao2mo
     kconserv = mp.khelper.kconserv
-    emp2 = 0.
     oovv_ij = np.zeros((nkpts,nocc,nocc,nvir,nvir), dtype=mo_coeff[0].dtype)
 
     mo_e_o = [mo_energy[k][:nocc] for k in range(nkpts)]
@@ -108,6 +107,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     if with_df_ints:
         Lov = _init_mp_df_eris(mp)
 
+    emp2_ss = emp2_os = 0.
     for ki in range(nkpts):
         for kj in range(nkpts):
             for ka in range(nkpts):
@@ -139,12 +139,16 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
                 t2_ijab = np.conj(oovv_ij[ka]/eijab)
                 if with_t2:
                     t2[ki, kj, ka] = t2_ijab
-                woovv = 2*oovv_ij[ka] - oovv_ij[kb].transpose(0,1,3,2)
-                emp2 += einsum('ijab,ijab', t2_ijab, woovv).real
+                edi = einsum('ijab,ijab', t2_ijab, oovv_ij[ka]).real * 2
+                exi = -einsum('ijab,ijba', t2_ijab, oovv_ij[kb]).real
+                emp2_ss += edi*0.5 + exi
+                emp2_os += edi*0.5
 
     log.timer("KMP2", *cput0)
 
-    emp2 /= nkpts
+    emp2_ss /= nkpts
+    emp2_os /= nkpts
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
 
     return emp2, t2
 
@@ -551,11 +555,11 @@ def get_frozen_mask(mp):
 def _add_padding(mp, mo_coeff, mo_energy):
     nmo = mp.nmo
 
-    # Check if these are padded mo coefficients and energies
-    if not np.all([x.shape[1] == nmo for x in mo_coeff]):
+    # Check if these are padded mo coefficients and energies and/or if some orbitals are frozen.
+    if (mp.frozen is not None) or (not np.all([x.shape[1] == nmo for x in mo_coeff])):
         mo_coeff = padded_mo_coeff(mp, mo_coeff)
 
-    if not np.all([x.shape[0] == nmo for x in mo_energy]):
+    if (mp.frozen is not None) or (not np.all([x.shape[0] == nmo for x in mo_energy])):
         mo_energy = padded_mo_energy(mp, mo_energy)
     return mo_coeff, mo_energy
 
@@ -723,6 +727,8 @@ class KMP2(mp2.MP2):
         self._nmo = None
         self.e_hf = None
         self.e_corr = None
+        self.e_corr_ss = None
+        self.e_corr_os = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
 
@@ -767,7 +773,13 @@ class KMP2(mp2.MP2):
 
         self.e_corr, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose, with_t2=with_t2)
-        logger.log(self, 'KMP2 energy = %.15g', self.e_corr)
+
+        self.e_corr_ss = getattr(self.e_corr, 'e_corr_ss', 0)
+        self.e_corr_os = getattr(self.e_corr, 'e_corr_os', 0)
+        self.e_corr = float(self.e_corr)
+
+        self._finalize()
+
         return self.e_corr, self.t2
 
 KRMP2 = KMP2
@@ -804,4 +816,3 @@ if __name__ == '__main__':
     mymp = mp.KMP2(kmf)
     emp2, t2 = mymp.kernel()
     print(emp2 - -0.204721432828996)
-

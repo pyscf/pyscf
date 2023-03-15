@@ -27,6 +27,7 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
+from pyscf.gto.mole import is_au
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
@@ -292,7 +293,7 @@ class GradientsMixin(lib.StreamObject):
                      self.base.__class__.__name__)
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)
-        if 'ANG' in self.unit.upper():
+        if not is_au(self.unit):
             raise NotImplementedError('unit Eh/Ang is not supported')
         else:
             log.info('unit = Eh/Bohr')
@@ -311,27 +312,39 @@ class GradientsMixin(lib.StreamObject):
         return get_ovlp(mol)
 
     @lib.with_doc(get_jk.__doc__)
-    def get_jk(self, mol=None, dm=None, hermi=0):
+    def get_jk(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        vj, vk = get_jk(mol, dm)
+        if omega is None:
+            vj, vk = get_jk(mol, dm)
+        else:
+            with mol.with_range_coulomb(omega):
+                vj, vk = get_jk(mol, dm)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def get_j(self, mol=None, dm=None, hermi=0):
+    def get_j(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         intor = mol._add_suffix('int2e_ip1')
-        return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
-                                  mol._atm, mol._bas, mol._env)
+        if omega is None:
+            return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
+        with mol.with_range_coulomb(omega):
+            return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
 
-    def get_k(self, mol=None, dm=None, hermi=0):
+    def get_k(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         intor = mol._add_suffix('int2e_ip1')
-        return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
-                                  mol._atm, mol._bas, mol._env)
+        if omega is None:
+            return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
+        with mol.with_range_coulomb(omega):
+            return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
 
     def get_veff(self, mol=None, dm=None):
         raise NotImplementedError

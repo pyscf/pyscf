@@ -428,19 +428,26 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, inplace=True)
     return dm1, dm2
 
-def _get_init_guess(na, nb, nroots, hdiag):
-    '''Initial guess is the single Slater determinant
-    '''
+def _get_init_guess(na, nb, nroots, hdiag, nelec):
     # The "nroots" lowest determinats based on energy expectation value.
     ci0 = []
-    try:
+    neleca, nelecb = _unpack_nelec(nelec)
+    if neleca == nelecb and na == nb:
+        hdiag = hdiag.reshape(na, na)
+        idx = numpy.arange(na)
+        addrs = numpy.argpartition(hdiag[idx[:,None]>=idx], nroots-1)[:nroots]
+        for addr in addrs:
+            addra = (int)((2*addr+.25)**.5 - .5 + 1e-7)
+            addrb = addr - addra*(addra+1)//2
+            x = numpy.zeros((na, na))
+            x[addra,addrb] = 1
+            ci0.append(x.ravel().view(FCIvector))
+    else:
         addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
-    except AttributeError:
-        addrs = numpy.argsort(hdiag)[:nroots]
-    for addr in addrs:
-        x = numpy.zeros((na*nb))
-        x[addr] = 1
-        ci0.append(x.ravel().view(FCIvector))
+        for addr in addrs:
+            x = numpy.zeros((na*nb))
+            x[addr] = 1
+            ci0.append(x.view(FCIvector))
 
     # Add noise
     ci0[0][0 ] += 1e-5
@@ -453,7 +460,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
     neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
-    return _get_init_guess(na, nb, nroots, hdiag)
+    return _get_init_guess(na, nb, nroots, hdiag, nelec)
 
 
 ###############################################################
@@ -462,7 +469,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 
 def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None,
+               nroots=None, davidson_only=None, pspace_size=None, hop=None,
                max_memory=None, verbose=None, ecore=0, **kwargs):
     '''
     Args:
@@ -496,6 +503,8 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             full diagonlization (lapack eigh) for small systems
         pspace_size: int
             Number of determinants as the threshold of "small systems",
+        hop: function(c) => array_like_c
+            Function to use for the Hamiltonian multiplication with trial vector
 
     Note: davidson solver requires more arguments. For the parameters not
     dispatched, they can be passed to davidson solver via the extra keyword
@@ -548,9 +557,10 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
-    def hop(c):
-        hc = fci.contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
-        return hc.ravel()
+    if hop is None:
+        def hop(c):
+            hc = fci.contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
+            return hc.ravel()
 
     if ci0 is None:
         if callable(getattr(fci, 'get_init_guess', None)):

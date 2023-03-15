@@ -44,7 +44,6 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     eijab = np.zeros((nocc,nocc,nvir,nvir))
 
     fao2mo = mp._scf.with_df.ao2mo
-    emp2 = 0.
     oovv_ij = np.zeros((nkpts,nocc,nocc,nvir,nvir), dtype=mo_coeff[0].dtype)
 
     mo_e_o = [mo_energy[k][:nocc] for k in range(nkpts)]
@@ -57,6 +56,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     _, igroup = np.unique(kijab[:,:2], axis=0, return_index=True)
     igroup = list(igroup) + [len(kijab)]
 
+    emp2_ss = emp2_os = 0.
     nao2mo = 0
     icount = 0
     for i in range(len(igroup)-1):
@@ -102,11 +102,15 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
             t2_ijab = np.conj(oovv_ij[ka]/eijab)
             idx_ibz = k4_bz2ibz[ki*nkpts**2 + kj*nkpts + ka]
             assert(icount == idx_ibz)
-            woovv = 2*oovv_ij[ka] - oovv_ij[kb].transpose(0,1,3,2)
-            emp2 += np.einsum('ijab,ijab', t2_ijab, woovv).real * weight[idx_ibz] * nkpts**3
+            edi = einsum('ijab,ijab', t2_ijab, oovv_ij[ka]).real * 2
+            exi = -einsum('ijab,ijba', t2_ijab, oovv_ij[kb]).real
+            emp2_ss += (edi*0.5 + exi) * weight[idx_ibz] * nkpts**3
+            emp2_os += edi*0.5 * weight[idx_ibz] * nkpts**3
             icount += 1
 
-    emp2 /= nkpts
+    emp2_ss /= nkpts
+    emp2_os /= nkpts
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
     assert(icount == len(kijab))
     logger.debug(mp, "Number of ao2mo transformations performed in KMP2: %d", nao2mo)
     logger.timer(mp, 'KMP2', *t0)
@@ -234,7 +238,13 @@ class KsymAdaptedKMP2(kmp2.KMP2):
 
         self.e_corr, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose, with_t2=with_t2)
-        logger.log(self, 'KMP2 energy = %.15g', self.e_corr)
+
+        self.e_corr_ss = getattr(self.e_corr, 'e_corr_ss', 0)
+        self.e_corr_os = getattr(self.e_corr, 'e_corr_os', 0)
+        self.e_corr = float(self.e_corr)
+
+        self._finalize()
+
         return self.e_corr, self.t2
 
     make_rdm1 = make_rdm1
