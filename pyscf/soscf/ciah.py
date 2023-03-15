@@ -281,13 +281,6 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
 
 
 def _regular_step(heff, ovlp, xs, lindep, log):
-    try:
-        e, c = scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])
-    except scipy.linalg.LinAlgError:
-        e, c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
-    if numpy.any(e < -1e-5):
-        log.debug('Negative hessians found %s', e[e<0])
-
     w, v, seig = lib.safe_eigh(heff, ovlp, lindep)
     if log.verbose >= logger.DEBUG3:
         numpy.set_printoptions(3, linewidth=1000)
@@ -303,8 +296,16 @@ def _regular_step(heff, ovlp, xs, lindep, log):
     idx = numpy.where(abs(v[0]) > 0.1)[0]
     sel = idx[0]
     log.debug1('CIAH eigen-sel %s', sel)
-
     w_t = w[sel]
+
+    if w_t < 1e-4:
+        try:
+            e, c = scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])
+        except scipy.linalg.LinAlgError:
+            e, c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
+        if numpy.any(e < -1e-5):
+            log.debug('Negative hessians found %s', e[e<0])
+
     xtrial = _dgemv(v[1:,sel]/v[0,sel], xs)
     return xtrial, w_t, v[:,sel], sel, seig
 
