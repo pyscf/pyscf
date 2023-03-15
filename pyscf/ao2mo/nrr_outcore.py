@@ -13,6 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+'''
+ao2mo of scalar integrals to complex MO integrals for GHF orbitals
+'''
+
 import time
 import tempfile
 import numpy
@@ -24,7 +28,6 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import outcore
-from pyscf.ao2mo import r_outcore
 from pyscf import __config__
 from pyscf.gto.moleintor import make_cintopt, make_loc, ascint3
 
@@ -41,7 +44,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo',
          intor='int2e_sph', motype='ghf', aosym='s1', comp=None,
          max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN):
     general(mol, (mo_coeff,)*4, erifile, dataname,
-            intor, aosym, motype, comp, max_memory, ioblk_size, verbose)
+            intor, motype, aosym, comp, max_memory, ioblk_size, verbose)
     return erifile
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo',
@@ -67,7 +70,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         mo_alph = [moi[:nao,:] for moi in mo_coeffs]
         mo_beta = [moi[nao:,:] for moi in mo_coeffs]
     else:
-        raise AssertionError('Unknown motype %s' % motype, " should be one of 'j-spinor' and 'ghf'.")
+        raise AssertionError(f'Unknown motype {motype}. should be one of "j-spinor" or "ghf".')
 
     aosym = outcore._stand_sym_code(aosym)
     if aosym in ('s1', 's2ij', 'a2ij'):
@@ -141,7 +144,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     ao_loc = numpy.asarray(mol.ao_loc, dtype=numpy.int32)
     tao = numpy.asarray(mol.tmap(), dtype=numpy.int32)
     ti0 = time_1pass
-    buf = numpy.empty((e2buflen, nao_pair), dtype=numpy.complex)
+    buf = numpy.empty((e2buflen, nao_pair), dtype=numpy.complex128)
     istep = 0
     for row0, row1 in prange(0, nij_pair, e2buflen):
         nrow = row1 - row0
@@ -260,15 +263,15 @@ def half_e1(mol, mo_coeffs, swapfile,
         log.debug('step 1 [%d/%d], AO [%d:%d], len(buf) = %d',
                   istep+1, nstep, *(sh_range[:3]))
         buflen = sh_range[2]
-        iobuf = numpy.empty((comp,buflen,nij_pair), dtype=numpy.complex)
+        iobuf = numpy.empty((comp,buflen,nij_pair), dtype=numpy.complex128)
         nmic = len(sh_range[3])
         p0 = 0
         for imic, aoshs in enumerate(sh_range[3]):
             log.debug1('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d',
                        imic+1, nmic, *aoshs)
             buf = r_e1(intor, moija, moijb, ijshape, aoshs,
-                              mol._atm, mol._bas, mol._env,
-                              tao, aosym, comp, ao2mopt)
+                       mol._atm, mol._bas, mol._env,
+                       tao, aosym, comp, ao2mopt)
             iobuf[:,p0:p0+aoshs[2]] = buf
             p0 += aoshs[2]
         ti2 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
@@ -290,8 +293,8 @@ def r_e1(intor, mo_a, mo_b, orbs_slice, sh_range, atm, bas, env,
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
     intor = ascint3(intor)
-    mo_a = numpy.asfortranarray(mo_a)
-    mo_b = numpy.asfortranarray(mo_b)
+    mo_a = numpy.asarray(mo_a, dtype=numpy.complex128, order='F')
+    mo_b = numpy.asarray(mo_b, dtype=numpy.complex128, order='F')
     i0, i1, j0, j1 = orbs_slice
     icount = i1 - i0
     jcount = j1 - j0
@@ -310,7 +313,8 @@ def r_e1(intor, mo_a, mo_b, orbs_slice, sh_range, atm, bas, env,
     #else:
     #   fmmm = _fpointer('AO2MOmmm_nrr_igtj')
 
-    out = numpy.ndarray((2*comp,nkl,ij_count), dtype=numpy.complex, buffer=out)
+    out = numpy.ndarray((2*comp,nkl,ij_count), dtype=numpy.complex128,
+                        buffer=out)
     if out.size == 0:
         return out
 
@@ -383,54 +387,3 @@ def _count_naopair(mol, nao):
     return nao_pair
 
 del(MAX_MEMORY)
-
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = 'out_outcore'
-    mol.atom = [
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)]]
-
-    mol.basis = {'H': 'cc-pvdz',
-                 'O': 'cc-pvdz',}
-    mol.build()
-    n2c = mol.nao_2c()
-    numpy.random.seed(1)
-    mo = numpy.random.random((n2c,n2c)) + numpy.random.random((n2c,n2c))*1j
-
-    eri0 = numpy.empty((n2c,n2c,n2c,n2c), dtype=complex)
-    pi = 0
-    for i in range(mol.nbas):
-        pj = 0
-        for j in range(mol.nbas):
-            pk = 0
-            for k in range(mol.nbas):
-                pl = 0
-                for l in range(mol.nbas):
-                    buf = gto.getints_by_shell('int2e_spinor', (i,j,k,l),
-                                               mol._atm, mol._bas, mol._env)
-                    di, dj, dk, dl = buf.shape
-                    eri0[pi:pi+di,pj:pj+dj,pk:pk+dk,pl:pl+dl] = buf
-                    pl += dl
-                pk += dk
-            pj += dj
-        pi += di
-
-    nao, nmo = mo.shape
-    eri0 = numpy.dot(mo.T.conj(), eri0.reshape(nao,-1))
-    eri0 = numpy.dot(eri0.reshape(-1,nao), mo)
-    eri0 = eri0.reshape(nmo,nao,nao,nmo).transpose(2,3,0,1).copy()
-    eri0 = numpy.dot(mo.T.conj(), eri0.reshape(nao,-1))
-    eri0 = numpy.dot(eri0.reshape(-1,nao), mo)
-    eri0 = eri0.reshape((nmo,)*4)
-
-    print(logger.process_clock())
-    r_outcore.full(mol, mo, 'h2oeri.h5', max_memory=10, ioblk_size=5)
-    with h5py.File('h2oeri.h5', 'r') as feri:
-        eri1 = numpy.array(feri['eri_mo']).reshape((nmo,)*4)
-
-    print(logger.process_clock())
-    print(numpy.allclose(eri0, eri1))

@@ -1,11 +1,11 @@
 /* Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
-  
+
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
- 
+
         http://www.apache.org/licenses/LICENSE-2.0
- 
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -35,7 +35,7 @@
 #define MAX(X,Y)        ((X) > (Y) ? (X) : (Y))
 #define NCTRMAX         128
 
-int AO2MOmmm_nrr_iltj(double complex *vout, double *eri, 
+int AO2MOmmm_nrr_iltj(double complex *vout, double *eri,
                     struct _AO2MOEnvs *envs, int seekdim)
 {
         switch (seekdim) {
@@ -118,7 +118,7 @@ int AO2MOmmm_nrr_iltj(double complex *vout, double *eri,
         free(mo1);
         return 0;
 }
-int AO2MOmmm_nrr_s1_iltj(double complex *vout, double *eri, 
+int AO2MOmmm_nrr_s1_iltj(double complex *vout, double *eri,
                        struct _AO2MOEnvs *envs, int seekdim)
 {
         return AO2MOmmm_nrr_iltj(vout, eri, envs, seekdim);
@@ -137,8 +137,7 @@ void AO2MOfill_nrr_s1(int (*intor)(), int (*fprescreen)(),
         int kl, jsh, ksh, lsh, dj, dk, dl;
         int icomp, i, j, k, l, n;
         int shls[4];
-        double *buf = malloc(sizeof(double)
-                                     *di*nao*NCTRMAX*NCTRMAX*envs->ncomp);
+        double *buf = malloc(sizeof(double) *di*nao*NCTRMAX*NCTRMAX*envs->ncomp);
         assert(buf);
         double *pbuf, *pbuf1, *peri;
 
