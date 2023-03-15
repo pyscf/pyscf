@@ -342,8 +342,10 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
     else:
         ci0 = myci.get_init_guess(ci_strs, norb, nelec, nroots, hdiag)
 
+    cpu0 = [logger.process_clock(), logger.perf_counter()]
     def hop(c):
         hc = myci.contract_2e(h2e, _as_SCIvector(c, ci_strs), norb, nelec, link_index)
+        cpu0[:] = log.timer_debug1('contract_2e', *cpu0)
         return hc.reshape(-1)
     precond = lambda x, e, *args: x/(hdiag-e+1e-4)
 

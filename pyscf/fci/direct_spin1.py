@@ -569,8 +569,10 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
     if hop is None:
+        cpu0 = [logger.process_clock(), logger.perf_counter()]
         def hop(c):
             hc = fci.contract_2e(h2e, c, norb, nelec, link_index)
+            cpu0[:] = log.timer_debug1('contract_2e', *cpu0)
             return hc.ravel()
 
     def init_guess():
