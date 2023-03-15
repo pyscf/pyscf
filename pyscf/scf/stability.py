@@ -384,7 +384,8 @@ def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
         hdiagd = hdiag2 - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
         return dx/hdiagd
-    x0 = v1
+    x0 = numpy.zeros_like(hdiag2)
+    x0[hdiag2>1e-5] = 1. / hdiag2[hdiag2>1e-5]
     e3, v3 = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log)
     if e3 < -1e-5:
         log.note(f'{mf.__class__} wavefunction has a RHF/RKS -> UHF/UKS instability.')
