@@ -222,8 +222,7 @@ def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
         vj = vj.reshape(2,4,3,nao,nao)
         vk = vk.reshape(2,4,3,nao,nao) * hyb
         if abs(omega) > 1e-10:
-            with mol.with_range_coulomb(omega):
-                vk += td_grad.get_k(mol, dm).reshape(2,4,3,nao,nao) * (alpha-hyb)
+            vk += td_grad.get_k(mol, dm, omega=omega).reshape(2,4,3,nao,nao) * (alpha-hyb)
         veff1 = vj[0] + vj[1] - vk
     else:
         dm = (oo0a, dmz1dooa+dmz1dooa.T, dmxpya+dmxpya.T,

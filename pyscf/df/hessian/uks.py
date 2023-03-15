@@ -54,16 +54,18 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     if mf.nlc != '':
         raise NotImplementedError
-    #enabling range-separated hybrids
-    omega, alpha, beta = mf._numint.rsh_coeff(mf.xc)
-    if abs(omega) > 1e-10:
-        raise NotImplementedError
-    else:
-        hyb = mf._numint.hybrid_coeff(mf.xc, spin=mol.spin)
+
+    ni = mf._numint
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
     de2, ej, ek = df_uhf_hess._partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
                                                 atmlst, max_memory, verbose,
                                                 abs(hyb) > 1e-10)
     de2 += ej - hyb * ek  # (A,B,dR_A,dR_B)
+    if abs(alpha) > 1e-10 and abs(omega) > 1e-10:
+        with hessobj.base.with_df.range_coulomb(omega):
+            ek_lr = df_uhf_hess._partial_hess_ejk(
+                hessobj, mo_energy, mo_coeff, mo_occ, atmlst, max_memory, verbose)[2]
+        de2 -= ek_lr * (alpha - hyb)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
@@ -100,14 +102,23 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     h1aoa, h1aob = uks_hess._get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory)
-    for ia, h1, vj1, vk1a, vk1b in df_uhf_hess._gen_jk(hessobj, mo_coeff, mo_occ, chkfile,
-                                                       atmlst, verbose, abs(hyb) > 1e-10):
+    for ia, h1, vj1, vk1 in df_uhf_hess._gen_jk(
+            hessobj, mo_coeff, mo_occ, chkfile, atmlst, verbose, abs(hyb) > 1e-10):
         f1 = h1 + vj1
         h1aoa[ia] += f1
         h1aob[ia] += f1
-        if abs(hyb) > 1e-10:
+        if abs(hyb) > 1e-10 or abs(alpha) > 1e-10:
+            vk1a, vk1b = vk1
             h1aoa[ia] -= hyb * vk1a
             h1aob[ia] -= hyb * vk1b
+
+    if abs(alpha) > 1e-10 and abs(omega) > 1e-10:
+        with hessobj.base.with_df.range_coulomb(omega):
+            for ia, h1, vj1, vk1 in df_uhf_hess._gen_jk(
+                    hessobj, mo_coeff, mo_occ, chkfile, atmlst, verbose):
+                vk1a, vk1b = vk1
+                h1aoa[ia] -= (alpha - hyb) * vk1a
+                h1aob[ia] -= (alpha - hyb) * vk1b
 
     if chkfile is None:
         return h1aoa, h1aob
@@ -147,7 +158,7 @@ if __name__ == '__main__':
     mol.unit = 'B'
     mol.spin = 2
     mol.build()
-    mf = dft.UKS(mol).density_fit()
+    mf = dft.RKS(mol).density_fit()
     mf.grids.level = 4
     mf.grids.prune = False
     mf.xc = xc_code

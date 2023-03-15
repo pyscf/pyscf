@@ -49,8 +49,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
 
     def test_rks_hess(self):
-        href = mol.RKS.run(xc='b3lyp').Hessian().kernel()
-        h1 = mol.RKS.density_fit().run(xc='b3lyp').Hessian().kernel()
+        href = mol.RKS.run(xc='camb3lyp').Hessian().kernel()
+        h1 = mol.RKS.density_fit().run(xc='camb3lyp').Hessian().kernel()
         self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
 
     def test_uhf_hess(self):
@@ -59,8 +59,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
 
     def test_uks_hess(self):
-        href = mol.UKS.run(xc='b3lyp').Hessian().kernel()
-        h1 = mol.UKS.density_fit().run(xc='b3lyp').Hessian().kernel()
+        href = mol.UKS.run(xc='camb3lyp').Hessian().kernel()
+        h1 = mol.UKS.density_fit().run(xc='camb3lyp').Hessian().kernel()
         self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@
 
 
 import copy
+import contextlib
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -372,6 +373,39 @@ class AFTDFMixin:
             dat = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, q, kpts, shls_slice, out=buf)
             yield dat, p0, p1
 
+    @contextlib.contextmanager
+    def range_coulomb(self, omega):
+        '''Creates a temporary density fitting object for RSH-DF integrals.
+        In this context, only LR or SR integrals for mol and auxmol are computed.
+        '''
+        key = '%.6f' % omega
+        if key in self._rsh_df:
+            rsh_df = self._rsh_df[key]
+        else:
+            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
+
+        cell = self.cell
+        auxcell = getattr(self, 'auxcell', None)
+
+        cell_omega = cell.omega
+        cell.omega = omega
+        auxcell_omega = None
+        if auxcell is not None:
+            auxcell_omega = auxcell.omega
+            auxcell.omega = omega
+
+        assert rsh_df.cell.omega == omega
+        if getattr(rsh_df, 'auxcell', None) is not None:
+            assert rsh_df.auxcell.omega == omega
+
+        try:
+            yield rsh_df
+        finally:
+            cell.omega = cell_omega
+            if auxcell_omega is not None:
+                auxcell.omega = auxcell_omega
+
 
 class AFTDF(lib.StreamObject, AFTDFMixin):
     '''Density expansion on plane waves
@@ -476,8 +510,9 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
         if omega is not None:  # J/K for RSH functionals
-            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
-                               with_j, with_k, omega, exxdiv)
+            with self.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                                     omega=None, exxdiv=exxdiv)
 
         if kpts is None:
             if numpy.all(self.kpts == 0):
@@ -546,14 +581,7 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
 
 def _sub_df_jk_(dfobj, dm, hermi=1, kpts=None, kpts_band=None,
                 with_j=True, with_k=True, omega=None, exxdiv=None):
-    key = '%.6f' % omega
-    if key in dfobj._rsh_df:
-        rsh_df = dfobj._rsh_df[key]
-    else:
-        rsh_df = dfobj._rsh_df[key] = copy.copy(dfobj).reset()
-        logger.info(dfobj, 'Create RSH-%s object %s for omega=%s',
-                    dfobj.__class__.__name__, rsh_df, omega)
-    with rsh_df.cell.with_range_coulomb(omega):
+    with dfobj.range_coulomb(omega) as rsh_df:
         return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
                              omega=None, exxdiv=exxdiv)
 

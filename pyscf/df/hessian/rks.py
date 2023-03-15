@@ -52,16 +52,18 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     if mf.nlc != '':
         raise NotImplementedError
-    #enabling range-separated hybrids
-    omega, alpha, beta = mf._numint.rsh_coeff(mf.xc)
-    if abs(omega) > 1e-10:
-        raise NotImplementedError
-    else:
-        hyb = mf._numint.hybrid_coeff(mf.xc, spin=mol.spin)
+
+    ni = mf._numint
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
     de2, ej, ek = df_rhf_hess._partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
                                                 atmlst, max_memory, verbose,
                                                 abs(hyb) > 1e-10)
     de2 += ej - hyb * ek  # (A,B,dR_A,dR_B)
+    if abs(alpha) > 1e-10 and abs(omega) > 1e-10:
+        with hessobj.base.with_df.range_coulomb(omega):
+            ek_lr = df_rhf_hess._partial_hess_ejk(
+                hessobj, mo_energy, mo_coeff, mo_occ, atmlst, max_memory, verbose)[2]
+        de2 -= ek_lr * (alpha - hyb)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
@@ -94,12 +96,17 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     h1ao = rks_hess._get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory)
-    for ia, h1, vj1, vk1 in df_rhf_hess._gen_jk(hessobj, mo_coeff, mo_occ, chkfile,
-                                                atmlst, verbose, abs(hyb) > 1e-10):
-        if abs(hyb) > 1e-10:
-            h1ao[ia] += h1 + vj1 - hyb*.5 * vk1
-        else:
-            h1ao[ia] += h1 + vj1
+    for ia, h1, vj1, vk1 in df_rhf_hess._gen_jk(
+            hessobj, mo_coeff, mo_occ, chkfile, atmlst, verbose, abs(hyb) > 1e-10):
+        h1ao[ia] += h1 + vj1
+        if abs(hyb) > 1e-10 or abs(alpha) > 1e-10:
+            h1ao[ia] -= .5 * hyb * vk1
+
+    if abs(alpha) > 1e-10 and abs(omega) > 1e-10:
+        with hessobj.base.with_df.range_coulomb(omega):
+            for ia, h1, vj1, vk1 in df_rhf_hess._gen_jk(
+                    hessobj, mo_coeff, mo_occ, chkfile, atmlst, verbose):
+                h1ao[ia] -= .5 * (alpha - hyb) * vk1
 
     if chkfile is None:
         return h1ao

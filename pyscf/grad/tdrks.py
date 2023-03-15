@@ -163,8 +163,7 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
         vj, vk = td_grad.get_jk(mol, dm)
         vk *= hyb
         if abs(omega) > 1e-10:
-            with mol.with_range_coulomb(omega):
-                vk += td_grad.get_k(mol, dm) * (alpha-hyb)
+            vk += td_grad.get_k(mol, dm, omega=omega) * (alpha-hyb)
         vj = vj.reshape(-1,3,nao,nao)
         vk = vk.reshape(-1,3,nao,nao)
         if singlet:
