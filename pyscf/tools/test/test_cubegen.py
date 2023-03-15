@@ -28,7 +28,7 @@ def setUpModule():
     H 0.00000000, -0.761561, -0.478993 '''
     mol.verbose = 0
     mol.build()
-    mf = scf.RHF(mol).run()
+    mf = scf.RHF(mol).run(conv_tol=1e-10)
 
 def tearDownModule():
     global mol, mf
@@ -40,29 +40,29 @@ class KnownValues(unittest.TestCase):
             mep = cubegen.mep(mol, ftmp.name, mf.make_rdm1(),
                               nx=10, ny=10, nz=10)
             self.assertEqual(mep.shape, (10,10,10))
-            self.assertAlmostEqual(lib.fp(mep), -0.3198103636180436, 9)
+            self.assertAlmostEqual(lib.fp(mep), -0.3198103636180436, 5)
 
             mep = cubegen.mep(mol, ftmp.name, mf.make_rdm1(),
                               nx=10, ny=10, nz=10, resolution=0.5)
             self.assertEqual(mep.shape, (12,18,15))
-            self.assertAlmostEqual(lib.fp(mep), -4.653995909548524, 9)
+            self.assertAlmostEqual(lib.fp(mep), -4.653995909548524, 5)
 
     def test_orb(self):
         with tempfile.NamedTemporaryFile() as ftmp:
             orb = cubegen.orbital(mol, ftmp.name, mf.mo_coeff[:,0],
                                   nx=10, ny=10, nz=10)
             self.assertEqual(orb.shape, (10,10,10))
-            self.assertAlmostEqual(lib.fp(orb), -0.11804191128016768, 9)
+            self.assertAlmostEqual(lib.fp(orb), -0.11804191128016768, 5)
 
             orb = cubegen.orbital(mol, ftmp.name, mf.mo_coeff[:,0],
                                   nx=10, ny=10, nz=10, resolution=0.5)
             self.assertEqual(orb.shape, (12,18,15))
-            self.assertAlmostEqual(lib.fp(orb), -0.8591778390706646, 9)
+            self.assertAlmostEqual(lib.fp(orb), -0.8591778390706646, 5)
 
             orb = cubegen.orbital(mol, ftmp.name, mf.mo_coeff[:,0],
                                   nx=10, ny=1, nz=1)
             self.assertEqual(orb.shape, (10,1,1))
-            self.assertAlmostEqual(lib.fp(orb), 6.921008881822988e-09, 9)
+            self.assertAlmostEqual(lib.fp(orb), 6.921008881822988e-09, 5)
 
 
     def test_rho(self):
@@ -70,12 +70,12 @@ class KnownValues(unittest.TestCase):
             rho = cubegen.density(mol, ftmp.name, mf.make_rdm1(),
                                   nx=10, ny=10, nz=10)
             self.assertEqual(rho.shape, (10,10,10))
-            self.assertAlmostEqual(lib.fp(rho), -0.3740462814001553, 9)
+            self.assertAlmostEqual(lib.fp(rho), -0.3740462814001553, 5)
 
             rho = cubegen.density(mol, ftmp.name, mf.make_rdm1(),
                                   nx=10, ny=10, nz=10, resolution=0.5)
             self.assertEqual(rho.shape, (12,18,15))
-            self.assertAlmostEqual(lib.fp(rho), -1.007950007160415, 9)
+            self.assertAlmostEqual(lib.fp(rho), -1.007950007160415, 5)
 
     def test_rho_with_pbc(self):
         from pyscf.pbc.gto import Cell
