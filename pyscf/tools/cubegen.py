@@ -326,11 +326,11 @@ class Cube(object):
             data = f.readline().split()
             natm = int(data[0])
             self.boxorig = numpy.array([float(x) for x in data[1:]])
-            def parse_nx(data, x):
+            def parse_nx(data):
                 from pyscf.pbc.gto import Cell
                 d = data.split()
                 nx = int(d[0])
-                x_vec = numpy.array([float(x) for x in d[1:]])
+                x_vec = numpy.array([float(x) for x in d[1:]]) * nx
                 if isinstance(self.mol, Cell):
                     # Use an asymmetric mesh for tiling unit cells
                     xs = numpy.linspace(0, 1, nx, endpoint=False)
@@ -340,9 +340,9 @@ class Cube(object):
                     xs = numpy.linspace(0, 1, nx, endpoint=True)
                 return x_vec, nx, xs
             self.box = numpy.zeros((3,3))
-            self.box[0], self.nx, self.xs = parse_nx(f.readline(), 0)
-            self.box[1], self.ny, self.ys = parse_nx(f.readline(), 1)
-            self.box[2], self.nz, self.zs = parse_nx(f.readline(), 2)
+            self.box[0], self.nx, self.xs = parse_nx(f.readline())
+            self.box[1], self.ny, self.ys = parse_nx(f.readline())
+            self.box[2], self.nz, self.zs = parse_nx(f.readline())
             atoms = []
             for ia in range(natm):
                 d = f.readline().split()
