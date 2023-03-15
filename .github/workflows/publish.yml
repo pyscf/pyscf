@@ -147,7 +147,6 @@ jobs:
           conda install -y anaconda-client conda-build
           conda config --set anaconda_upload yes
           conda build --output-folder . conda
-          anaconda upload linux-64/pyscf*.tar.bz2
 
   # Disable macos conda release for Error during compling:
   # MACOSX_DEPLOYMENT_TARGET mismatch: now "10.9" but "10.15" during configure
