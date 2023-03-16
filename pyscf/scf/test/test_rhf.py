@@ -590,8 +590,7 @@ H     0    0.757    0.587'''
                 [0, 2, 0, 0, 0, 1, 2, 0, 1, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
 
         mf1 = scf.RHF(mol).set(verbose=0).view(scf.hf_symm.ROHF)
-        self.assertTrue(numpy.allclose(mf1.get_occ(energy, mo_coeff),
-                [0 ,2 ,0 ,0 ,0 ,0 ,2 ,0 ,0 ,0 ,0 ,0 ,2 ,0 ,2 ,0 ,0 ,0 ,0 ,2]))
+        self.assertRaises(RuntimeError, mf1.get_occ, energy, mo_coeff)
 
     def test_get_occ_extreme_case(self):
         mol = gto.M(atom='He', verbose=7, output='/dev/null')

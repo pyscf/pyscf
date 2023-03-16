@@ -80,7 +80,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''
     mol = mf.mol
     if not mol.symmetry:
-        raise RuntimeError('Symmetry is not enabled in Mole object')
+        raise RuntimeError('mol.symmetry not enabled')
 
     if getattr(mo_coeff, 'orbsym', None) is not None:
         return hf_symm.canonicalize(mf, mo_coeff, mo_occ, fock)
@@ -111,7 +111,7 @@ class GHF(ghf.GHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if not mol.symmetry:
-            raise RuntimeError('Symmetry is not enabled in Mole object')
+            raise RuntimeError('mol.symmetry not enabled')
 
         for irname in self.irrep_nelec:
             if irname not in mol.irrep_name:
@@ -181,6 +181,9 @@ class GHF(ghf.GHF):
         '''
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
+        if not mol.symmetry:
+            raise RuntimeError('mol.symmetry not enabled')
+
         orbsym = self.get_orbsym(mo_coeff)
         mo_occ = numpy.zeros_like(mo_energy)
         rest_idx = numpy.ones(mo_occ.size, dtype=bool)

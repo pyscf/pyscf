@@ -150,7 +150,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''
     mol = mf.mol
     if not mol.symmetry:
-        raise RuntimeError('Symmetry is not enabled in Mole object')
+        raise RuntimeError('mol.symmetry not enabled')
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
@@ -300,6 +300,8 @@ def eig(mf, h, s, symm_orb=None, irrep_id=None):
     '''
     mol = mf.mol
     if symm_orb is None or irrep_id is None:
+        if not mol.symmetry:
+            raise RuntimeError('mol.symmetry not enabled')
         symm_orb = mol.symm_orb
         irrep_id = mol.irrep_id
 
@@ -441,7 +443,7 @@ class SymAdaptedRHF(hf.RHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if not mol.symmetry:
-            raise RuntimeError('Symmetry is not enabled in Mole object')
+            raise RuntimeError('mol.symmetry not enabled')
         check_irrep_nelec(mol, self.irrep_nelec, self.mol.nelectron)
         return hf.RHF.build(self, mol)
 
@@ -460,9 +462,11 @@ class SymAdaptedRHF(hf.RHF):
         ''' We assumed mo_energy are grouped by symmetry irreps, (see function
         self.eig). The orbitals are sorted after SCF.
         '''
-
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
+        if not mol.symmetry:
+            raise RuntimeError('mol.symmetry not enabled')
+
         orbsym = self.get_orbsym(mo_coeff)
         mo_occ = numpy.zeros_like(mo_energy)
         rest_idx = numpy.ones(mo_occ.size, dtype=bool)
@@ -610,7 +614,7 @@ class SymAdaptedROHF(rohf.ROHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if not mol.symmetry:
-            raise RuntimeError('Symmetry is not enabled in Mole object')
+            raise RuntimeError('mol.symmetry not enabled')
         fix_na, fix_nb = check_irrep_nelec(mol, self.irrep_nelec, self.nelec)[:2]
         alpha_open = beta_open = False
         for ne in self.irrep_nelec.values():
@@ -654,6 +658,9 @@ class SymAdaptedROHF(rohf.ROHF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
+        if not mol.symmetry:
+            raise RuntimeError('mol.symmetry not enabled')
+
         if getattr(mo_energy, 'mo_ea', None) is not None:
             mo_ea = mo_energy.mo_ea
             mo_eb = mo_energy.mo_eb

@@ -190,7 +190,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''
     mol = mf.mol
     if not mol.symmetry:
-        raise RuntimeError('Symmetry is not enabled in Mole object')
+        raise RuntimeError('mol.symmetry not enabled')
     mo_occ = numpy.asarray(mo_occ)
     assert (mo_occ.ndim == 2)
     if fock is None:
@@ -323,7 +323,7 @@ class SymAdaptedUHF(uhf.UHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if not mol.symmetry:
-            raise RuntimeError('Symmetry is not enabled in Mole object')
+            raise RuntimeError('mol.symmetry not enabled')
         hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         return uhf.UHF.build(self, mol)
 
@@ -403,6 +403,9 @@ class SymAdaptedUHF(uhf.UHF):
         '''
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
+        if not mol.symmetry:
+            raise RuntimeError('mol.symmetry not enabled')
+
         orbsyma, orbsymb = self.get_orbsym(mo_coeff)
         mo_occ = numpy.zeros_like(mo_energy)
         idx_ea_left = []
