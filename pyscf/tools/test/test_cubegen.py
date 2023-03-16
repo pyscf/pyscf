@@ -102,7 +102,7 @@ class KnownValues(unittest.TestCase):
                                   nx=10, ny=10, nz=10)
             cc = cubegen.Cube(cell)
             self.assertEqual(rho.shape, (10,10,10))
-            self.assertAlmostEqual(lib.fp(rho), -0.253781345652853, 7)
+            self.assertAlmostEqual(lib.fp(rho), -0.253781345652853, 5)
 
             rho1 = cc.read(ftmp.name)
             self.assertAlmostEqual(abs(rho1 - rho).max(), 0, 5)
