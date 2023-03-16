@@ -16,7 +16,7 @@ requirements:
     - python {{ python }}
     - cmake
     - make
-    - mkl<2022
+    - mkl
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
   host:
