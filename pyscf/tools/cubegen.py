@@ -327,11 +327,22 @@ class Cube(object):
             natm = int(data[0])
             self.boxorig = numpy.array([float(x) for x in data[1:]])
             def parse_nx(data):
+                from pyscf.pbc.gto import Cell
                 d = data.split()
-                return int(d[0]), numpy.array([float(x) for x in d[1:]])
-            self.nx, self.xs = parse_nx(f.readline())
-            self.ny, self.ys = parse_nx(f.readline())
-            self.nz, self.zs = parse_nx(f.readline())
+                nx = int(d[0])
+                x_vec = numpy.array([float(x) for x in d[1:]]) * nx
+                if isinstance(self.mol, Cell):
+                    # Use an asymmetric mesh for tiling unit cells
+                    xs = numpy.linspace(0, 1, nx, endpoint=False)
+                else:
+                    # Use endpoint=True to get a symmetric mesh
+                    # see also the discussion https://github.com/sunqm/pyscf/issues/154
+                    xs = numpy.linspace(0, 1, nx, endpoint=True)
+                return x_vec, nx, xs
+            self.box = numpy.zeros((3,3))
+            self.box[0], self.nx, self.xs = parse_nx(f.readline())
+            self.box[1], self.ny, self.ys = parse_nx(f.readline())
+            self.box[2], self.nz, self.zs = parse_nx(f.readline())
             atoms = []
             for ia in range(natm):
                 d = f.readline().split()
