@@ -43,6 +43,10 @@ class CDIIS(lib.diis.DIIS):
         self.rollback = 0
         self.space = 8
         self.Corth = Corth
+        #?self._scf = mf
+        #?if hasattr(self._scf, 'get_orbsym'): # Symmetry adapted SCF objects
+        #?    self.orbsym = mf.get_orbsym(Corth)
+        #?    sym_forbid = self.orbsym[:,None] != self.orbsym
 
     def update(self, s, d, f, *args, **kwargs):
         errvec = get_err_vec(s, d, f, self.Corth)
@@ -83,16 +87,24 @@ def get_err_vec_orig(s, d, f):
 
 def get_err_vec_orth(s, d, f, Corth):
     '''error vector in orthonormal basis = C.T.conj() (SDF - FDS) C'''
+    # Symmetry information to reduce numerical error in DIIS (issue #1524)
+    orbsym = getattr(Corth, 'orbsym', None)
+    if orbsym is not None:
+        sym_forbid = orbsym[:,None] != orbsym
+
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
-        sdf = reduce(numpy.dot, (s,d,f))
-        errvec = Corth.conj().T.dot(sdf.conj().T - sdf).dot(Corth).ravel()
+        sdf = reduce(numpy.dot, (Corth.conj().T, s, d, f, Corth))
+        if orbsym is not None:
+            sdf[sym_forbid] = 0
+        errvec = (sdf.conj().T - sdf).ravel()
 
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
         errvec = []
         for i in range(f.shape[0]):
-            sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
-            errvec.append(
-                Corth[i].conj().T.dot(sdf.conj().T - sdf).dot(Corth[i]).ravel())
+            sdf = reduce(numpy.dot, (Corth[i].conj().T, s[i], d[i], f[i], Corth[i]))
+            if orbsym is not None:
+                sdf[sym_forbid] = 0
+            errvec.append((sdf.conj().T - sdf).ravel())
         errvec = numpy.vstack(errvec).ravel()
 
     elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
