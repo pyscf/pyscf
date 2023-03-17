@@ -40,7 +40,7 @@ def RCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_rhf(mf)
 
     if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-RCISD')
+        return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
     else:
         return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
 RCISD.__doc__ = cisd.RCISD.__doc__
@@ -52,7 +52,7 @@ def UCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_uhf(mf)
 
     if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-UCISD')
+        return ucisd.UCISD(mf, frozen, mo_coeff, mo_occ)
     else:
         return ucisd.UCISD(mf, frozen, mo_coeff, mo_occ)
 UCISD.__doc__ = ucisd.UCISD.__doc__
@@ -73,9 +73,9 @@ GCISD.__doc__ = gcisd.GCISD.__doc__
 
 def QCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if isinstance(mf, scf.uhf.UHF):
-        raise NotImplementedError 
+        raise NotImplementedError
     elif isinstance(mf, scf.ghf.GHF):
-        raise NotImplementedError 
+        raise NotImplementedError
     else:
         return RQCISD(mf, frozen, mo_coeff, mo_occ)
 QCISD.__doc__ = qcisd.QCISD.__doc__
@@ -93,13 +93,13 @@ def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         lib.logger.warn(mf, 'RQCISD method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UQCISD method is called.')
         mf = scf.addons.convert_to_uhf(mf)
-        raise NotImplementedError 
+        raise NotImplementedError
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
         mf = scf.addons.convert_to_rhf(mf)
 
     elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
-        raise NotImplementedError 
+        raise NotImplementedError
 
     else:
         return qcisd.QCISD(mf, frozen, mo_coeff, mo_occ)
