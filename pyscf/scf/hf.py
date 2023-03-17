@@ -1102,7 +1102,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
 
     log.info(' ** Mulliken pop  **')
     for i, s in enumerate(mol.ao_labels()):
-        log.info('pop of  %s %10.5f', s, pop[i])
+        log.info('pop of  %-14s %10.5f', s, pop[i])
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
@@ -1111,7 +1111,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     chg = mol.atom_charges() - chg
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+        log.note('charge of  %3d%s =   %10.5f', ia, symb, chg[ia])
     return pop, chg
 
 
