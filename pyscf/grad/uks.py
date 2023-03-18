@@ -55,8 +55,6 @@ def get_veff(ks_grad, mol=None, dm=None):
         grids.build(with_non0tab=True)
 
     ni = mf._numint
-    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
-
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
     if ks_grad.grid_response:
@@ -82,13 +80,14 @@ def get_veff(ks_grad, mol=None, dm=None):
             vxc += vnlc
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
-    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
+    if not ni.libxc.is_hybrid_xc(mf.xc):
         vj = ks_grad.get_j(mol, dm)
         vxc += vj[0] + vj[1]
     else:
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
         vj, vk = ks_grad.get_jk(mol, dm)
         vk *= hyb
-        if abs(omega) > 1e-10:  # For range separated Coulomb operator
+        if omega != 0:
             vk += ks_grad.get_k(mol, dm, omega=omega) * (alpha - hyb)
         vxc += vj[0] + vj[1] - vk
 
