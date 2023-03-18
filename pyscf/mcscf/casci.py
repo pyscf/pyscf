@@ -1011,7 +1011,7 @@ To enable the solvent model for CASCI, the following code needs to be called
                 log.note('CASCI E = %#.15g  E(CI) = %#.15g', self.e_tot, self.e_cas)
             else:
                 for i, e in enumerate(self.e_cas):
-                    log.note('CASCI state %3d  E = %.#15g  E(CI) = %.#15g',
+                    log.note('CASCI state %3d  E = %#.15g  E(CI) = %#.15g',
                              i, self.e_tot[i], e)
         return self
 
