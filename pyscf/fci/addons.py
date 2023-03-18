@@ -539,6 +539,9 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             A modified FCI object based on fciobj.
     '''
     import types
+    from pyscf.fci import direct_uhf
+    if isinstance(fciobj, direct_uhf.FCISolver):
+        raise NotImplementedError
 
     if 'ss_value' in kwargs:
         sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
