@@ -1095,7 +1095,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         vj = _format_jks(veff, dm_kpts, input_band, kpts)
     else:
         vj = None
-
+    veff = veff.reshape(dm_kpts.shape)
     veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
     return nelec, excsum, veff
 
@@ -1200,7 +1200,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
             vj = vj[0]
     else:
         vj = None
-
+    veff = veff.reshape(dm_kpts.shape)
     veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
     return nelec, excsum, veff
 
