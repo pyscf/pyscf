@@ -54,12 +54,6 @@ def rotate(R, theta):
     return numpy.array([U.dot(r).dot(U.T) for r in R])
 
 
-def get_score(R):
-    n = R.shape[1]
-    Rdiag = R[:, numpy.arange(n), numpy.arange(n)]
-    return numpy.sum(numpy.square(Rdiag))
-
-
 def get_optimized_rotation(R):
     R11 = R[:, 0, 0]
     R12 = R[:, 0, 1]
@@ -115,8 +109,6 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
         nmo = localizer.mo_coeff.shape[1]
         mo_coeff = localizer.mo_coeff.dot(u0)
         dip = dipole_integral(localizer.mol, mo_coeff)
-        #dip = numpy.asarray([reduce(lib.dot, (mo_coeff.conj().T, x, mo_coeff))
-        #                     for x in localizer.mol.intor_symmetric('int1e_r', comp=3)])
         for imacro in range(localizer.max_cycle):
             for i in range(nmo):
                 for j in range(i + 1, nmo):
@@ -127,7 +119,6 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
                     dip[:, :, [i, j]] = numpy.einsum("ik,xpk->xpi", u_sub, dip[:, :, [i, j]])
                     u0[:, [i, j]] = u0[:, [i, j]].dot(u_sub.T)
             score = localizer.cost_function(u0)
-            #score = get_score(dip)
             residual = numpy.max(numpy.abs(get_residual(dip)))
             log.info('macro= %d  f(x)= %.14g  res= %.14g',
                     imacro+1, score, residual)
