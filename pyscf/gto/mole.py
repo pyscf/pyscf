@@ -259,6 +259,22 @@ def sph2spinor_l(l):
     '''Real spherical to spinor transformation matrix for angular moment l'''
     return sph2spinor_kappa(0, l)
 
+def ao_rotation_matrix(mol, orientation):
+    '''Matrix u to rotate AO basis to a new orientation.
+
+    atom_new_coords = mol.atom_coords().dot(orientation.T)
+    new_AO = u * mol.AO
+    new_orbitals_coef = u.dot(orbitals_coef)
+    '''
+    from pyscf.symm.basis import _momentum_rotation_matrices
+    Ds = _momentum_rotation_matrices(mol, orientation)
+    u = []
+    for i in range(mol.nbas):
+        l = mol.bas_angular(i)
+        nc = mol.bas_nctr(i)
+        u.extend([Ds[l]] * nc)
+    return scipy.linalg.block_diag(*u)
+
 def atom_types(atoms, basis=None, magmom=None):
     '''symmetry inequivalent atoms'''
     atmgroup = {}
@@ -394,9 +410,9 @@ def format_atom(atoms, origin=0, axes=None,
         axes = numpy.eye(3)
 
     if isinstance(unit, (str, unicode)):
-        if unit.upper().startswith(('B', 'AU')):
+        if is_au(unit):
             unit = 1.
-        else: #unit[:3].upper() == 'ANG':
+        else:
             unit = 1./param.BOHR
     else:
         unit = 1./unit
@@ -2070,6 +2086,10 @@ def fromstring(string, format='xyz'):
     else:
         raise NotImplementedError
 
+def is_au(unit):
+    '''Return whether the unit is recogized as A.U. or not
+    '''
+    return unit.upper().startswith(('B', 'AU'))
 
 #
 # Mole class handles three layers: input, internal format, libcint arguments.
@@ -2361,9 +2381,10 @@ class Mole(lib.StreamObject):
         else:
             mf = scf.HF(self)
 
+        if not hasattr(mf.__class__, key):
+            raise AttributeError('Mole object does not have method %s' % key)
+
         method = getattr(mf, key, None)
-        if method is None:
-            raise AttributeError('Mole object has no attribute %s' % key)
 
         # Initialize SCF object for post-SCF methods if applicable
         if self.nelectron != 0:
@@ -2556,7 +2577,7 @@ class Mole(lib.StreamObject):
         return self
     kernel = build
 
-    def _build_symmetry(self):
+    def _build_symmetry(self, *args, **kwargs):
         '''
         Update symmetry related attributes: topgroup, groupname, _symm_orig,
         _symm_axes, irrep_id, irrep_name, symm_orb
@@ -3008,9 +3029,9 @@ class Mole(lib.StreamObject):
 
         if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
             if isinstance(unit, (str, unicode)):
-                if unit.upper().startswith(('B', 'AU')):
+                if is_au(unit):
                     unit = 1.
-                else: #unit[:3].upper() == 'ANG':
+                else:
                     unit = 1./param.BOHR
             else:
                 unit = 1./unit
@@ -3144,7 +3165,7 @@ class Mole(lib.StreamObject):
         [ 0.          0.          2.07869874]
         '''
         ptr = self._atm[atm_id,PTR_COORD]
-        if unit[:3].upper() == 'ANG':
+        if not is_au(unit):
             return self._env[ptr:ptr+3] * param.BOHR
         else:
             return self._env[ptr:ptr+3].copy()
@@ -3153,7 +3174,7 @@ class Mole(lib.StreamObject):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
         c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T].copy()
-        if unit[:3].upper() == 'ANG':
+        if not is_au(unit):
             c *= param.BOHR
         return c
 
@@ -3578,6 +3599,8 @@ class Mole(lib.StreamObject):
     decontract_basis = decontract_basis
 
     __add__ = conc_mol
+
+    ao_rotation_matrix = ao_rotation_matrix
 
     def cart2sph_coeff(self, normalized='sp'):
         '''Transformation matrix that transforms Cartesian GTOs to spherical

@@ -15,17 +15,17 @@ cell = gto.M(
               Si  1.3467560987 1.3467560987 1.3467560987''', 
     basis = 'gth-szv',
     pseudo = 'gth-pade',
-    mesh = [24,24,24],
     verbose = 5,
+    space_group_symmetry = True,
+    #symmorphic: if True, only the symmorphic subgroup is considered
+    symmorphic = True,
 )
 
 nk = [2,2,2]
 #The Brillouin Zone symmetry info is contained in the kpts object
-#symmorphic: if True, only the symmorphic subgroup is considered
 kpts = cell.make_kpts(nk, 
                       space_group_symmetry=True, 
-                      time_reversal_symmetry=True,
-                      symmorphic=True)
+                      time_reversal_symmetry=True)
 print(kpts)
 
 kmf = scf.KRHF(cell, kpts)

@@ -26,6 +26,7 @@ He.verbose = 0
 He.a = np.eye(3)*L
 He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
 He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+He.space_group_symmetry=True
 He.build()
 
 nk = [2,2,2]

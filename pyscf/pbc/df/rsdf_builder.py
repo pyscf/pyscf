@@ -137,6 +137,8 @@ class _RSGDFBuilder(_Int3cBuilder):
             ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             self.ke_cutoff = ke_cutoff[:cell.dimension].min()
 
+        self.mesh = cell.symmetrize_mesh(self.mesh)
+
         self.dump_flags()
 
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
@@ -347,9 +349,7 @@ class _RSGDFBuilder(_Int3cBuilder):
         rs_auxcell = self.rs_auxcell
         auxcell_c = rs_auxcell.compact_basis_cell()
         if auxcell_c.nbas > 0:
-            rcut_sr = auxcell_c.rcut
-            rcut_sr = (-2*np.log(
-                .225*precision * omega**4 * rcut_sr**2))**.5 / omega
+            rcut_sr = (-np.log(precision * auxcell_c.rcut**2 * omega))**.5 / omega
             auxcell_c.rcut = rcut_sr
             logger.debug1(self, 'auxcell_c  rcut_sr = %g', rcut_sr)
             with auxcell_c.with_short_range_coulomb(omega):
@@ -372,6 +372,7 @@ class _RSGDFBuilder(_Int3cBuilder):
         mesh = pbctools.cutoff_to_mesh(auxcell.lattice_vectors(), ke)
         if auxcell.dimension < 2 or auxcell.low_dim_ft_type == 'inf_vacuum':
             mesh[auxcell.dimension:] = self.mesh[auxcell.dimension:]
+        mesh = self.cell.symmetrize_mesh(mesh)
         logger.debug(self, 'Set 2c2e integrals precision %g, mesh %s', precision, mesh)
 
         Gv, Gvbase, kws = auxcell.get_Gv_weights(mesh)
@@ -1159,7 +1160,7 @@ def _guess_omega(cell, kpts, mesh=None):
     # enough to truncate the interaction.
     omega_min = aft.estimate_omega(cell, cell.precision*1e-2)
     ke_min = aft.estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
-    mesh_min = pbctools.cutoff_to_mesh(a, ke_min) + 1
+    mesh_min = _round_off_to_odd_mesh(pbctools.cutoff_to_mesh(a, ke_min))
 
     if mesh is None:
         nao = cell.npgto_nr()

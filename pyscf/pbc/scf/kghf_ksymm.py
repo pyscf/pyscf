@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -76,18 +76,15 @@ def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
 
     return vj, vk
 
+@lib.with_doc(kghf.get_occ.__doc__)
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
-    '''Label the occupancies for each orbital for sampled k-points.
-
-    This is a k-point version of scf.hf.SCF.get_occ
-    '''
-    if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
+    if mo_energy_kpts is None:
+        mo_energy_kpts = mf.mo_energy
     kpts = mf.kpts
+    assert isinstance(kpts, libkpts.KPoints)
+
+    nocc = mf.cell.nelectron * kpts.nkpts
     mo_energy_kpts = kpts.transform_mo_energy(mo_energy_kpts)
-
-    nkpts = len(mo_energy_kpts)
-    nocc = mf.cell.nelectron * nkpts
-
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
     fermi = mo_energy[nocc-1]
     mo_occ_kpts = []
@@ -109,12 +106,29 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts, kpts_in_ibz=False)):
             logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
                          k, kpt[0], kpt[1], kpt[2],
-                         mo_energy_kpts[k][mo_occ_kpts[k]> 0],
-                         mo_energy_kpts[k][mo_occ_kpts[k]==0])
+                         np.sort(mo_energy_kpts[k][mo_occ_kpts[k]> 0]),
+                         np.sort(mo_energy_kpts[k][mo_occ_kpts[k]==0]))
         np.set_printoptions(threshold=1000)
 
     mo_occ_kpts = kpts.check_mo_occ_symmetry(mo_occ_kpts)
     return mo_occ_kpts
+
+def eig(kmf, h_kpts, s_kpts):
+    from pyscf.scf.ghf_symm import GHF
+    cell = kmf.cell
+    symm_orb = cell.symm_orb
+    irrep_id = cell.irrep_id
+
+    nkpts = len(h_kpts)
+    assert len(symm_orb) == nkpts
+    eig_kpts = []
+    mo_coeff_kpts = []
+
+    for k in range(nkpts):
+        e, c = GHF.eig(kmf, h_kpts[k], s_kpts[k], symm_orb[k], irrep_id[k])
+        eig_kpts.append(e)
+        mo_coeff_kpts.append(c)
+    return eig_kpts, mo_coeff_kpts
 
 
 class KsymAdaptedKGHF(khf_ksymm.KsymAdaptedKSCF, kghf.KGHF):
@@ -122,8 +136,9 @@ class KsymAdaptedKGHF(khf_ksymm.KsymAdaptedKSCF, kghf.KGHF):
     KGHF with k-point symmetry
     """
     def __init__(self, cell, kpts=libkpts.KPoints(),
-                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
-        self._kpts = None
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
+                 use_ao_symmetry=True):
+        khf_ksymm.ksymm_scf_common_init(self, cell, kpts, use_ao_symmetry)
         kghf.KGHF.__init__(self, cell, kpts, exxdiv)
 
     def get_hcore(self, cell=None, kpts=None):
@@ -133,6 +148,33 @@ class KsymAdaptedKGHF(khf_ksymm.KsymAdaptedKSCF, kghf.KGHF):
     def get_ovlp(self, cell=None, kpts=None):
         s = khf_ksymm.KsymAdaptedKSCF.get_ovlp(self, cell, kpts)
         return lib.asarray([scipy.linalg.block_diag(x, x) for x in s])
+
+    def eig(self, h_kpts, s_kpts):
+        if self.use_ao_symmetry:
+            return eig(self, h_kpts, s_kpts)
+        else:
+            return kghf.KGHF.eig(self, h_kpts, s_kpts)
+
+    def get_orbsym(self, mo_coeff=None, s=None):
+        if not self.use_ao_symmetry:
+            raise RuntimeError("AO symmetry not initiated")
+        from pyscf.scf.ghf_symm import get_orbsym
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if s is None:
+            s = self.get_ovlp()
+
+        cell = self.cell
+        symm_orb = cell.symm_orb
+        irrep_id = cell.irrep_id
+        orbsym = []
+        for k in range(len(mo_coeff)):
+            orbsym_k = np.asarray(get_orbsym(cell, mo_coeff[k], s=s[k],
+                                             symm_orb=symm_orb[k], irrep_id=irrep_id[k]))
+            orbsym.append(orbsym_k)
+        return orbsym
+
+    orbsym = property(get_orbsym)
 
     get_jk = get_jk
     get_occ = get_occ

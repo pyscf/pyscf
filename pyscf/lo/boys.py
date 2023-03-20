@@ -78,7 +78,8 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
                  imacro+1, e, de, norm_gorb, stat.tot_kf+1, stat.tot_hop)
         cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 
-        if (norm_gorb < conv_tol_grad and abs(de) < localizer.conv_tol):
+        if (norm_gorb < conv_tol_grad and abs(de) < localizer.conv_tol
+                and stat.tot_hop < localizer.ah_max_cycle):
             conv = True
 
         if callable(callback):
