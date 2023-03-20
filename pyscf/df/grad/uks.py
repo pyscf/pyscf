@@ -68,7 +68,7 @@ def get_veff(ks_grad, mol=None, dm=None):
                 max_memory=max_memory, verbose=ks_grad.verbose)
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
-    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
+    if not ni.libxc.is_hybrid_xc(mf.xc):
         vj = ks_grad.get_j(mol, dm)
         vxc += vj[0] + vj[1]
         if ks_grad.auxbasis_response:
@@ -78,7 +78,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         if ks_grad.auxbasis_response:
             vk.aux = vk.aux * hyb
         vk[:] *= hyb # inplace * for vk[:] to keep the .aux tag
-        if abs(omega) > 1e-10:  # For range separated Coulomb operator
+        if omega != 0:  # For range separated Coulomb operator
             vk_lr = ks_grad.get_k(mol, dm, omega=omega)
             vk[:] += vk_lr * (alpha - hyb)
             if ks_grad.auxbasis_response:

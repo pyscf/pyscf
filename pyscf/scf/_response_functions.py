@@ -50,7 +50,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = abs(hyb) > 1e-10
+        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
         # mf can be pbc.dft.RKS object with multigrid
         if (not hybrid and
@@ -85,7 +85,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
-                        if omega > 1e-10:  # For range separated Coulomb
+                        if abs(omega) > 1e-10:  # For range separated Coulomb
                             vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                         v1 += vj - .5 * vk
                     else:
@@ -107,7 +107,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
-                        if omega > 1e-10:  # For range separated Coulomb
+                        if abs(omega) > 1e-10:  # For range separated Coulomb
                             vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                         v1 += vj - .5 * vk
                     else:
@@ -127,7 +127,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 if hybrid:
                     vk = mf.get_k(mol, dm1, hermi=hermi)
                     vk *= hyb
-                    if omega > 1e-10:  # For range separated Coulomb
+                    if abs(omega) > 1e-10:  # For range separated Coulomb
                         vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                     v1 += -.5 * vk
                 return v1
@@ -160,7 +160,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = abs(hyb) > 1e-10
+        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
         # mf can be pbc.dft.UKS object with multigrid
         if (not hybrid and
@@ -231,7 +231,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
         if getattr(mf, 'nlc', '') != '':
             raise NotImplementedError('NLC')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = abs(hyb) > 1e-10
+        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
         # mf can be pbc.dft.UKS object with multigrid
         if (not hybrid and

@@ -94,17 +94,15 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     int2c_ip1 = auxmol.intor('int2c2e_ip1', aosym='s1')
 
     rhoj0_P = 0
-    if with_k:
-        if hessobj.max_memory*.8e6/8 < naux*nocc*(nocc+nao):
-            raise RuntimeError('Memory not enough. You need to increase mol.max_memory')
-        rhok0_Pl_ = np.empty((naux,nao,nocc))
+    if hessobj.max_memory*.8e6/8 < naux*nocc*(nocc+nao):
+        raise RuntimeError('Memory not enough. You need to increase mol.max_memory')
+    rhok0_Pl_ = np.empty((naux,nao,nocc))
     for i, (shl0, shl1, p0, p1) in enumerate(aoslices):
         int3c = get_int3c((shl0, shl1, 0, nbas, 0, auxmol.nbas))
         rhoj0_P += np.einsum('klp,kl->p', int3c, dm0[p0:p1])
-        if with_k:
-            tmp = lib.einsum('ijp,jk->pik', int3c, mocc_2)
-            tmp = solve_j2c(tmp.reshape(naux,-1))
-            rhok0_Pl_[:,p0:p1] = tmp.reshape(naux,p1-p0,nocc)
+        tmp = lib.einsum('ijp,jk->pik', int3c, mocc_2)
+        tmp = solve_j2c(tmp.reshape(naux,-1))
+        rhok0_Pl_[:,p0:p1] = tmp.reshape(naux,p1-p0,nocc)
         int3c = tmp = None
     rhoj0_P = solve_j2c(rhoj0_P)
 
