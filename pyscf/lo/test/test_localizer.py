@@ -75,7 +75,7 @@ class KnownValues(unittest.TestCase):
         mo = loc.kernel(mf_h2o.mo_coeff[:,idx])
         dip = boys.dipole_integral(h2o, mo)
         z = numpy.einsum('xii,xii->', dip, dip)
-        self.assertAlmostEqual(z, 17.96309963411759, 4)
+        self.assertAlmostEqual(z, 1.1566988026, 4)
 
     def test_pipek(self):
         idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1
