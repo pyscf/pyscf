@@ -26,11 +26,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-20.04]
-        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
+        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10", "3.11"]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install and Test
@@ -62,7 +62,7 @@ jobs:
             yum install -y epel-release && \
             yum-config-manager --enable epel && \
             yum install -y openblas-devel gcc cmake curl && \
-            cd ./pyscf/lib && curl -o deps.tar.gz -L "https://github.com/pyscf/pyscf-build-deps/blob/master/pyscf-2.2a-aarch64-deps.tar.gz?raw=true"  && \
+            cd ./pyscf/lib && curl -o deps.tar.gz -L "https://github.com/pyscf/pyscf-build-deps/blob/master/pyscf-2.2-aarch64-deps.tar.gz?raw=true"  && \
             tar xzf deps.tar.gz && \
             mkdir build && cd build && \
             cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF -DBUILD_LIBCINT=OFF .. && \
@@ -80,9 +80,9 @@ jobs:
       matrix:
         python-version: ["3.7"]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install and Test

@@ -793,7 +793,7 @@ def map2hf(casscf, mf_mo=None, base=BASE, tol=MAP2HF_TOL):
     s = reduce(numpy.dot, (casscf.mo_coeff.T, s, mf_mo))
     idx = numpy.argwhere(abs(s) > tol)
     for i,j in idx:
-        logger.info(casscf, '<mo_coeff-mcscf|mo_coeff-hf>  %d  %d  %12.8f',
+        logger.info(casscf, '<mo_coeff-mcscf|mo_coeff-hf>  %-5d  %-5d  % 12.8f',
                     i+base, j+base, s[i,j])
     return idx
 

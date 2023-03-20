@@ -207,7 +207,8 @@ def unpack(celldic):
 def dumps(cell):
     '''Serialize Cell object to a JSON formatted str.
     '''
-    exclude_keys = set(('output', 'stdout', '_keys', 'symm_orb', 'irrep_id', 'irrep_name'))
+    exclude_keys = set(('output', 'stdout', '_keys', 'symm_orb', 'irrep_id',
+                        'irrep_name', 'lattice_symmetry'))
 
     celldic = dict(cell.__dict__)
     for k in exclude_keys:
@@ -270,6 +271,17 @@ def loads(cellstr):
     cell._bas = np.array(cell._bas, dtype=np.int32)
     cell._env = np.array(cell._env, dtype=np.double)
     cell._ecpbas = np.array(cell._ecpbas, dtype=np.int32)
+    cell._mesh = np.array(cell._mesh)
+
+    # Symmetry class cannot be serialized by dumps function.
+    # Recreate it manually
+    if cell.natm > 0 and cell.space_group_symmetry:
+        from pyscf.pbc.symm import Symmetry
+        _lattice_symm = Symmetry(cell)
+        _lattice_symm.build(space_group_symmetry=True,
+                            symmorphic=cell.symmorphic,
+                            check_mesh_symmetry=False)
+        cell.lattice_symmetry = _lattice_symm
 
     return cell
 

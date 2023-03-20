@@ -56,8 +56,7 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (logger.process_clock(), logger.perf_counter())
 
     # TODO GKS with hybrid functional
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
+    hybrid = ks._numint.libxc.is_hybrid_xc(ks.xc)
     if hybrid:
         raise NotImplementedError
 
@@ -103,12 +102,13 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
         vj = ks.get_j(cell, dm_kpts, hermi, kpts, kpts_band)
         vxc += vj
     else:
+        omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
         if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
             logger.warn(ks, 'df.j_only cannot be used with hybrid functional')
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
         vk *= hyb
-        if abs(omega) > 1e-10:
+        if omega != 0:
             vklr = ks.get_k(cell, dm_kpts, hermi, kpts, kpts_band, omega=omega)
             vklr *= (alpha - hyb)
             vk += vklr

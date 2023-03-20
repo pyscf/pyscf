@@ -98,12 +98,12 @@ def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
             _contract_xc_kernel(td_grad, mf.xc, (dmxpya,dmxpyb),
                                 (dmzooa,dmzoob), True, True, max_memory)
 
-    if abs(hyb) > 1e-10:
+    if ni.libxc.is_hybrid_xc(mf.xc):
         dm = (dmzooa, dmxpya+dmxpya.T, dmxmya-dmxmya.T,
               dmzoob, dmxpyb+dmxpyb.T, dmxmyb-dmxmyb.T)
         vj, vk = mf.get_jk(mol, dm, hermi=0)
         vk *= hyb
-        if abs(omega) > 1e-10:
+        if omega != 0:
             vk += mf.get_k(mol, dm, hermi=0, omega=omega) * (alpha-hyb)
         vj = vj.reshape(2,3,nao,nao)
         vk = vk.reshape(2,3,nao,nao)
@@ -215,15 +215,14 @@ def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
     oo0b = reduce(numpy.dot, (orbob, orbob.T))
     as_dm1 = oo0a + oo0b + (dmz1dooa + dmz1doob) * .5
 
-    if abs(hyb) > 1e-10:
+    if ni.libxc.is_hybrid_xc(mf.xc):
         dm = (oo0a, dmz1dooa+dmz1dooa.T, dmxpya+dmxpya.T, dmxmya-dmxmya.T,
               oo0b, dmz1doob+dmz1doob.T, dmxpyb+dmxpyb.T, dmxmyb-dmxmyb.T)
         vj, vk = td_grad.get_jk(mol, dm)
         vj = vj.reshape(2,4,3,nao,nao)
         vk = vk.reshape(2,4,3,nao,nao) * hyb
-        if abs(omega) > 1e-10:
-            with mol.with_range_coulomb(omega):
-                vk += td_grad.get_k(mol, dm).reshape(2,4,3,nao,nao) * (alpha-hyb)
+        if omega != 0:
+            vk += td_grad.get_k(mol, dm, omega=omega).reshape(2,4,3,nao,nao) * (alpha-hyb)
         veff1 = vj[0] + vj[1] - vk
     else:
         dm = (oo0a, dmz1dooa+dmz1dooa.T, dmxpya+dmxpya.T,

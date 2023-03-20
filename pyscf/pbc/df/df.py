@@ -55,7 +55,6 @@ from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
-from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _guess_eta
 from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
 from pyscf import __config__
@@ -131,6 +130,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     # Call _CCGDFBuilder if applicable. _CCGDFBuilder is slower than
     # _RSGDFBuilder but numerically more close to previous versions
     _prefer_ccdf = False
+    # If True, force using denisty matrix-based K-build
+    force_dm_kbuild = False
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell
@@ -391,8 +392,9 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
             else:
                 mydf = self
-            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
-                               with_j, with_k, omega, exxdiv)
+            with mydf.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                                     omega=None, exxdiv=exxdiv)
 
         if kpts is None:
             if numpy.all(self.kpts == 0):
@@ -490,8 +492,18 @@ class CDERIArray:
             data_group = h5py.File(data_group, 'r')
         self.data_group = data_group
         if 'kpts' not in data_group:
-            raise RuntimeError('cderi data not generated or format incompatible')
+            # TODO: Deprecate the v1 data format
+            self._data_version = 'v1'
+            self._cderi = data_group.file.filename
+            self._label = label
+            self._kptij_lst = data_group[label+'-kptij'][()]
+            kpts = unique(self._kptij_lst[:,0])[0]
+            self.nkpts = nkpts = len(kpts)
+            if len(self._kptij_lst) not in (nkpts, nkpts**2, nkpts*(nkpts+1)//2):
+                raise RuntimeError(f'Dimension error for CDERI {self._cderi}')
+            return
 
+        self._data_version = 'v2'
         aosym = data_group['aosym'][()]
         if isinstance(aosym, bytes):
             aosym = aosym.decode()
@@ -543,6 +555,25 @@ class CDERIArray:
         return out[k_slices]
 
     def _load_one(self, ki, kj, slices):
+        if self._data_version == 'v1':
+            with _load3c(self._cderi, self._label) as fload:
+                if len(self._kptij_lst) == self.nkpts:
+                    # kptij_lst was generated with option j_only, leading to
+                    # only the diagonal terms
+                    kikj = ki
+                    kpti, kptj = self._kptij_lst[kikj]
+                elif len(self._kptij_lst) == self.nkpts**2:
+                    kikj = ki * self.nkpts + kj
+                    kpti, kptj = self._kptij_lst[kikj]
+                elif ki >= kj:
+                    kikj = ki*(ki+1)//2 + kj
+                    kpti, kptj = self._kptij_lst[kikj]
+                else:
+                    kikj = kj*(kj+1)//2 + ki
+                    kptj, kpti = self._kptij_lst[kikj]
+                out = fload(kpti, kptj)
+                return out[slices]
+
         kikj = ki * self.nkpts + kj
         kjki = kj * self.nkpts + ki
         if self.aosym == 's1' or kikj == kjki:
@@ -565,6 +596,10 @@ class CDERIArray:
         return out
 
     def load(self, kpti, kptj):
+        if self._data_version == 'v1':
+            with _load3c(self._cderi, self._label) as fload:
+                return numpy.asarray(fload(kpti, kptj))
+
         ki = member(kpti, self.kpts)
         kj = member(kptj, self.kpts)
         if len(ki) == 0 or len(kj) == 0:

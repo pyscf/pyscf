@@ -124,7 +124,6 @@ class KnownValues(unittest.TestCase):
 
         self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
 
-
 if __name__ == "__main__":
     print("Full Tests for NVE Velocity Verlet")
     unittest.main()

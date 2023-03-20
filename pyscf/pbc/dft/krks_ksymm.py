@@ -48,8 +48,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                                % (len(dm), kpts.nkpts_ibz))
         dm_bz = kpts.transform_dm(dm)
 
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
+    hybrid = ks._numint.libxc.is_hybrid_xc(ks.xc)
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm_bz, hermi,
@@ -82,11 +81,12 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         vxc += vj
     else:
+        omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
         if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vk *= hyb
-        if abs(omega) > 1e-10:
+        if omega != 0:
             vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
             vklr *= (alpha - hyb)
             vk += vklr

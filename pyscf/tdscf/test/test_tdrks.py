@@ -190,6 +190,17 @@ class KnownValues(unittest.TestCase):
         ref = numpy.sort(e[e.real>0])[[0,1,4,6,7]] * 27.2114
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
 
+    def test_tda_rsh(self):
+        mol = gto.M(atom='H 0 0 0.6; H 0 0 0', basis = "6-31g")
+        mf = dft.RKS(mol)
+        mf.xc = 'wb97'
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -1.14670613191817, 8)
+
+        e_td = mf.TDA().kernel()[0]
+        ref = [16.25021865, 27.93720198, 49.4665691]
+        self.assertAlmostEqual(abs(e_td*nist.HARTREE2EV - ref).max(), 0, 4)
+
     def test_tda_m06l_singlet(self):
         td = mf_m06l.TDA()
         es = td.kernel(nstates=5)[0] * 27.2114
