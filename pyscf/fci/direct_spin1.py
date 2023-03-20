@@ -201,7 +201,7 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     nb = cistring.num_strings(norb, nelecb)
     if hdiag is None:
         hdiag = make_hdiag(h1e, eri, norb, nelec)
-    if hdiag.size < np:
+    if hdiag.size <= np:
         addr = numpy.arange(hdiag.size)
     else:
         try:
