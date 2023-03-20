@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
+#         Jiace Sun <susyustc@gmail.com>
 #
 
 '''
@@ -29,6 +30,56 @@ from pyscf.lib import logger
 from pyscf.soscf import ciah
 from pyscf.lo import orth, cholesky_mos
 from pyscf import __config__
+
+
+def get_max_theta(a, b):
+    '''
+    calculate theta to maximize
+    a cos(theta) + b sin(theta)
+    '''
+    theta = numpy.arctan(b / a)
+    x = a * numpy.cos(theta) + b * numpy.sin(theta)
+    if x > 0:
+        return theta
+    else:
+        return theta + numpy.pi
+
+
+def get_rotation(theta):
+    return numpy.array([[numpy.cos(theta), -numpy.sin(theta)], [numpy.sin(theta), numpy.cos(theta)]])
+
+
+def rotate(R, theta):
+    U = get_rotation(theta)
+    return numpy.array([U.dot(r).dot(U.T) for r in R])
+
+
+def get_score(R):
+    n = R.shape[1]
+    Rdiag = R[:, numpy.arange(n), numpy.arange(n)]
+    return numpy.sum(numpy.square(Rdiag))
+
+
+def get_optimized_rotation(R):
+    R11 = R[:, 0, 0]
+    R12 = R[:, 0, 1]
+    R22 = R[:, 1, 1]
+    B = (R11 - R22) / 2
+    C = -R12
+    return get_max_theta(B.dot(B) - C.dot(C), B.dot(C) * 2) / 4
+
+
+def get_Rloc(R, C):
+    return numpy.array([C.T.dot(r).dot(C) for r in R])
+
+
+def get_residual(R, C=None):
+    if C is not None:
+        Rl = numpy.array([C.T.dot(r).dot(C) for r in R])
+        return get_residual(Rl)
+    n = R.shape[1]
+    Rdiag = R[:, numpy.arange(n), numpy.arange(n)]
+    return numpy.sum(R * (Rdiag[:, None, :] - Rdiag[:, :, None]), axis=0)
 
 
 def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
@@ -60,42 +111,74 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
     else:
         u0 = localizer.get_init_guess(None)
 
-    rotaiter = ciah.rotate_orb_cc(localizer, u0, conv_tol_grad, verbose=log)
-    u, g_orb, stat = next(rotaiter)
-    cput1 = log.timer('initializing CIAH', *cput0)
+    if localizer.jacobi:
+        nmo = localizer.mo_coeff.shape[1]
+        mo_coeff = localizer.mo_coeff.dot(u0)
+        dip = dipole_integral(localizer.mol, mo_coeff)
+        #dip = numpy.asarray([reduce(lib.dot, (mo_coeff.conj().T, x, mo_coeff))
+        #                     for x in localizer.mol.intor_symmetric('int1e_r', comp=3)])
+        for imacro in range(localizer.max_cycle):
+            for i in range(nmo):
+                for j in range(i + 1, nmo):
+                    dip_sub = dip[:, [i, j]][:, :, [i, j]]
+                    theta = get_optimized_rotation(dip_sub)
+                    u_sub = get_rotation(theta)
+                    dip[:, [i, j]] = numpy.einsum("ik,xkp->xip", u_sub, dip[:, [i, j]])
+                    dip[:, :, [i, j]] = numpy.einsum("ik,xpk->xpi", u_sub, dip[:, :, [i, j]])
+                    u0[:, [i, j]] = u0[:, [i, j]].dot(u_sub.T)
+            score = localizer.cost_function(u0)
+            #score = get_score(dip)
+            residual = numpy.max(numpy.abs(get_residual(dip)))
+            log.info('macro= %d  f(x)= %.14g  res= %.14g',
+                    imacro+1, score, residual)
 
-    tot_kf = stat.tot_kf
-    tot_hop = stat.tot_hop
-    conv = False
-    e_last = 0
-    for imacro in range(localizer.max_cycle):
-        norm_gorb = numpy.linalg.norm(g_orb)
-        u0 = lib.dot(u0, u)
-        e = localizer.cost_function(u0)
-        e_last, de = e, e-e_last
+            if (residual < localizer.conv_tol):
+                conv = True
+            else:
+                conv = False
 
-        log.info('macro= %d  f(x)= %.14g  delta_f= %g  |g|= %g  %d KF %d Hx',
-                 imacro+1, e, de, norm_gorb, stat.tot_kf+1, stat.tot_hop)
-        cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
+            if callable(callback):
+                callback(locals())
 
-        if (norm_gorb < conv_tol_grad and abs(de) < localizer.conv_tol
-                and stat.tot_hop < localizer.ah_max_cycle):
-            conv = True
+            if conv:
+                break
+    else:
+        rotaiter = ciah.rotate_orb_cc(localizer, u0, conv_tol_grad, verbose=log)
+        u, g_orb, stat = next(rotaiter)
+        cput1 = log.timer('initializing CIAH', *cput0)
 
-        if callable(callback):
-            callback(locals())
+        tot_kf = stat.tot_kf
+        tot_hop = stat.tot_hop
+        conv = False
+        e_last = 0
+        for imacro in range(localizer.max_cycle):
+            norm_gorb = numpy.linalg.norm(g_orb)
+            u0 = lib.dot(u0, u)
+            e = localizer.cost_function(u0)
+            e_last, de = e, e-e_last
 
-        if conv:
-            break
+            log.info('macro= %d  f(x)= %.14g  delta_f= %g  |g|= %g  %d KF %d Hx',
+                    imacro+1, e, de, norm_gorb, stat.tot_kf+1, stat.tot_hop)
+            cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 
-        u, g_orb, stat = rotaiter.send(u0)
-        tot_kf += stat.tot_kf
-        tot_hop += stat.tot_hop
+            if (norm_gorb < conv_tol_grad and abs(de) < localizer.conv_tol
+                    and stat.tot_hop < localizer.ah_max_cycle):
+                conv = True
 
-    rotaiter.close()
-    log.info('macro X = %d  f(x)= %.14g  |g|= %g  %d intor %d KF %d Hx',
-             imacro+1, e, norm_gorb,
-             (imacro+1)*2, tot_kf+imacro+1, tot_hop)
+            if callable(callback):
+                callback(locals())
+
+            if conv:
+                break
+
+            u, g_orb, stat = rotaiter.send(u0)
+            tot_kf += stat.tot_kf
+            tot_hop += stat.tot_hop
+
+        rotaiter.close()
+        log.info('macro X = %d  f(x)= %.14g  |g|= %g  %d intor %d KF %d Hx',
+                imacro+1, e, norm_gorb,
+                (imacro+1)*2, tot_kf+imacro+1, tot_hop)
 # Sort the localized orbitals, to make each localized orbitals as close as
 # possible to the corresponding input orbitals
     sorted_idx = mo_mapping.mo_1to1map(u0)
@@ -166,6 +249,8 @@ class Boys(ciah.CIAHOptimizer):
         max_stepsize : float
             The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
             Default 0.03.
+        jacobi : bool
+            Whether to use jacobi sweep. Default False
         init_guess : str or None
             Initial guess for optimization. If set to None, orbitals defined
             by the attribute .mo_coeff will be used as initial guess. If set
@@ -196,6 +281,7 @@ class Boys(ciah.CIAHOptimizer):
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.mo_coeff = mo_coeff
+        self.jacobi = False
 
         keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'max_iters',
                     'max_stepsize', 'ah_trust_region', 'ah_start_tol',
