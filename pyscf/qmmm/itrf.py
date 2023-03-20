@@ -293,6 +293,28 @@ def qmmm_grad_for_scf(scf_grad):
                     v += numpy.einsum('ipqk,k->ipq', j3c, charges[i0:i1])
             return g_qm + v
 
+        def contract_hcore_mm(self, dm, mol=None):
+            ''' dm_ij * d h_ij / d R_I where I is MM '''
+            if mol is None: mol = self.mol
+            coords = self.base.mm_mol.atom_coords()
+            charges = self.base.mm_mol.atom_charges()
+            expnts = self.base.mm_mol._expnts
+
+            intor = 'int3c2e_ip2'
+            nao = mol.nao
+            max_memory = self.max_memory - lib.current_memory()[0]
+            blksize = int(min(max_memory*1e6/8/nao**2, 200))
+            cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
+                                                 mol._env, intor)
+
+            g = numpy.empty_like(coords)
+            for i0, i1 in lib.prange(0, charges.size, blksize):
+                fakemol = gto.fakemol_for_charges(coords[i0:i1], expnts[i0:i1])
+                j3c = df.incore.aux_e2(mol, fakemol, intor, aosym='s1',
+                                       comp=3, cintopt=cintopt)
+                g[i0:i1] = numpy.einsum('ipqk,qp->ik', j3c * charges[i0:i1], dm).T
+            return g
+
         def grad_nuc(self, mol=None, atmlst=None):
             if mol is None: mol = self.mol
             coords = self.base.mm_mol.atom_coords()
@@ -309,6 +331,19 @@ def qmmm_grad_for_scf(scf_grad):
             if atmlst is not None:
                 g_mm = g_mm[atmlst]
             return g_qm + g_mm
+
+        def grad_nuc_mm(self, mol=None):
+            ''' nuclear gradient w.r.t mm charges '''
+            if mol is None: mol = self.mol
+            coords = self.base.mm_mol.atom_coords()
+            charges = self.base.mm_mol.atom_charges()
+            g_mm = numpy.zeros_like(coords)
+            for i in range(mol.natm):
+                q1 = mol.atom_charge(i)
+                r1 = mol.atom_coord(i)
+                r = lib.norm(r1-coords, axis=1)
+                g_mm += q1 * numpy.einsum('i,ix,i->ix', charges, r1-coords, 1/r**3)
+            return g_mm
     return QMMM(scf_grad)
 
 # A tag to label the derived class
