@@ -1095,7 +1095,11 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         vj = _format_jks(veff, dm_kpts, input_band, kpts)
     else:
         vj = None
-    veff = veff.reshape(dm_kpts.shape)
+
+    shape = list(dm_kpts.shape)
+    if len(shape) == 3 and shape[0] != kpts_band.shape[0]:
+        shape[0] = kpts_band.shape[0]
+    veff = veff.reshape(shape)
     veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
     return nelec, excsum, veff
 
@@ -1200,7 +1204,11 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
             vj = vj[0]
     else:
         vj = None
-    veff = veff.reshape(dm_kpts.shape)
+
+    shape = list(dm_kpts.shape)
+    if len(shape) == 4 and shape[1] != kpts_band.shape[0]:
+        shape[1] = kpts_band.shape[0]
+    veff = veff.reshape(shape)
     veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
     return nelec, excsum, veff
 
