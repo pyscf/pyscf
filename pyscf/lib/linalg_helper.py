@@ -480,12 +480,14 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
                                            fresh_start, log)
 
-        if elast is None or elast.size == e.size:
-            de = e - elast
-        else:
+        if elast is None:
+            de = e
+        elif elast.size != e.size:
             log.debug('Number of roots different from the previous step (%d,%d)',
                       e.size, elast.size)
             de = e
+        else:
+            de = e - elast
 
         x0 = None
         x0 = _gen_x0(v, xs)
@@ -861,12 +863,14 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
                                            fresh_start, log)
 
-        if elast is None or elast.size == e.size:
-            de = e - elast
-        else:
+        if elast is None:
+            de = e
+        elif elast.size != e.size:
             log.debug('Number of roots different from the previous step (%d,%d)',
                       e.size, elast.size)
             de = e
+        else:
+            de = e - elast
 
         x0 = None
         x0 = _gen_x0(v, xs)
