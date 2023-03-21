@@ -77,26 +77,47 @@ def log_symmetry_info(mol):
                     mol.irrep_name[ir], mol.symm_orb[ir].shape[1])
 
 
-def gen_mol_msym(mol, tol=1e-14):
+def gen_mol_msym(mol, tol=1e-14, verbose=True):
     mol_msym = mol.copy()
-    atoms_msym_fmt = msym_atoms(mol._atom)
+    if verbose:
+        logger.info(mol_msym, '\n*** Use libmsym to generate symmetry-adapted AOs ***')
+        logger.info(mol_msym, 'tolerance used to detect symmetry = %s', tol)
+    prop_atoms = mol_msym.format_atom(mol_msym._atom,
+                                      mol_msym._symm_orig,
+                                      mol_msym._symm_axes,
+                                      'Angstrom')
+    atoms_msym_fmt = msym_atoms(prop_atoms)
     with msym.Context(elements=atoms_msym_fmt,
-                      basis_functions=msym_basis(mol.ao_labels(fmt=False), atoms_msym_fmt)) as ctx:
+                      basis_functions=msym_basis(mol_msym.ao_labels(fmt=False),
+                                                 atoms_msym_fmt)) as ctx:
         ctx.set_thresholds(zero=tol, geometry=tol, angle=tol,
                            equivalence=tol, eigfact=tol, permutation=tol,
                            orthogonalization=tol)
         mol_msym.groupname = ctx.find_symmetry()
+        # character_table = ctx.character_table.table
         irrep_name = [irrep.name for irrep in ctx.character_table.symmetry_species]
+        irrep_dim = [irrep.dim for irrep in ctx.character_table.symmetry_species]
         (salc_mo_coeff, salc_symm_id, salc_partner_func) = ctx.salcs
         salc_mo_coeff = salc_mo_coeff.T
-        salc_partner_id = numpy.array([pf.dim for pf in salc_partner_func])
+        salc_partner_id = [pf.dim for pf in salc_partner_func]
         # partners_by_irrep = [(id, numpy.sort(numpy.unique(salc_partner_id[salc_symm_id==id])))
         #                      for id in numpy.unique(salc_symm_id)]
-        labels = numpy.array([irrep_name[idx]+"_"+str(pf)
+        labels = numpy.array([irrep_name[idx]
+                              + ("_" + str(pf))*(irrep_dim[idx] > 1)  # add partner id for dim > 1
                               for idx, pf in zip(salc_symm_id, salc_partner_id)])
         mol_msym.irrep_name = list(numpy.unique(labels))
         mol_msym.irrep_id = list(range(len(mol_msym.irrep_name)))
         mol_msym.symm_orb = [salc_mo_coeff[:, labels == i_label] for i_label in mol_msym.irrep_name]
+        # in-place rotate SALCs to the original geometry
+        l_idx = symm.basis.ao_l_dict(mol_msym)
+        Ds = symm.basis._momentum_rotation_matrices(mol_msym, mol_msym._symm_axes)
+        for c_ir in mol_msym.symm_orb:
+            nso = c_ir.shape[1]
+            for l, idx in l_idx.items():
+                c = c_ir[idx].reshape(-1,Ds[l].shape[1],nso)
+                c_ir[idx] = numpy.einsum('nm,smp->snp', Ds[l], c).reshape(-1,nso)
+    if verbose:
+        log_symmetry_info(mol_msym)
     return mol_msym
 
 
