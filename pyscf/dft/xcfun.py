@@ -266,11 +266,10 @@ def xc_type(xc_code):
     if xc_code is None:
         return None
     elif isinstance(xc_code, str):
-        if is_nlc(xc_code):
-            return 'NLC'
         hyb, fn_facs = parse_xc(xc_code)
     else:
         fn_facs = [(xc_code, 1)]  # mimic fn_facs
+
     if not fn_facs:
         return 'HF'
     elif all(_itrf.XCFUN_xc_type(ctypes.c_int(xid)) == 0 for xid, val in fn_facs):
@@ -302,22 +301,18 @@ def is_gga(xc_code):
     return xc_type(xc_code) == 'GGA'
 
 def is_nlc(xc_code):
-    return '__VV10' in xc_code.upper()
+    xc_code = xc_code.upper()
+    return 'VV10' in xc_code or 'B97M_V' in xc_code or 'WB97X_V' in xc_code
 
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
     xc_code = xc_code.upper()
-
-    nlc_part = None
     if '__VV10' in xc_code:
-        xc_code, nlc_part = xc_code.split('__', 1)
+        raise RuntimeError('Deprecated notation for NLC functional.')
 
     if xc_code in VV10_XC:
         return VV10_XC[xc_code]
-    elif nlc_part is not None:
-        # Use VV10 NLC parameters by default for the general case
-        return VV10_XC[nlc_part]
     else:
         raise NotImplementedError(
             '%s does not have NLC part. Available functionals are %s' %
@@ -342,8 +337,6 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
     return support
 
 def hybrid_coeff(xc_code, spin=0):
-    if is_nlc(xc_code):
-        return 0
     hyb, fn_facs = parse_xc(xc_code)
     return hyb[0]
 

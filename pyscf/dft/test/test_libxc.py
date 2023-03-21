@@ -141,6 +141,12 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(dft.libxc.is_hybrid_xc('vv10'))
         self.assertTrue (dft.libxc.is_hybrid_xc((402,'vv10')))
         self.assertTrue (dft.libxc.is_hybrid_xc(('402','vv10')))
+        self.assertTrue (dft.libxc.is_nlc('b97mv'))
+        self.assertTrue (dft.libxc.is_nlc('lc-vv10'))
+        self.assertTrue (dft.libxc.is_nlc('scanl-vv10'))
+        self.assertTrue (dft.libxc.is_nlc('b97mv+pbe'))
+        self.assertTrue (dft.libxc.is_nlc((402, 'b97mv')))
+        self.assertTrue (dft.libxc.is_nlc(('402', 'b97mv')))
 
     def test_libxc_cam_beta(self):
         rsh_tmp = (ctypes.c_double*3)()
@@ -289,6 +295,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(dft.libxc.xc_type('hf'), 'HF')
         self.assertEqual(dft.libxc.xc_type(',vwn'), 'LDA')
         self.assertEqual(dft.libxc.xc_type('lda+b3lyp'), 'GGA')
+        self.assertEqual(dft.libxc.xc_type('wb97x_v'), 'GGA')
         self.assertEqual(dft.libxc.xc_type('wb97m_v'), 'MGGA')
         self.assertEqual(dft.libxc.xc_type('bp86'), 'GGA')
 
