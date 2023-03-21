@@ -398,7 +398,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     dtype = None
     heff = None
     fresh_start = True
-    e = 0
+    e = None
     v = None
     conv = [False] * nroots
     emin = None
@@ -480,12 +480,12 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
                                            fresh_start, log)
 
-        if elast.size != e.size:
+        if elast is None or elast.size == e.size:
+            de = e - elast
+        else:
             log.debug('Number of roots different from the previous step (%d,%d)',
                       e.size, elast.size)
             de = e
-        else:
-            de = e - elast
 
         x0 = None
         x0 = _gen_x0(v, xs)
@@ -539,7 +539,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                 else:
                     xt[k] = None
-                    log.debug1('Throwing out eigenvector %d with norm=%4.3g', k, dx_norm[k])
+                    log.debug1('Drop eigenvector %d, norm=%4.3g', k, dx_norm[k])
         xt = [xi for xi in xt if xi is not None]
 
         for i in range(space):
@@ -791,7 +791,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     dtype = None
     heff = None
     fresh_start = True
-    e = 0
+    e = None
     v = None
     conv = [False] * nroots
     emin = None
@@ -854,45 +854,38 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if SORT_EIG_BY_SIMILARITY:
             e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin,
                                        heff[:space,:space])
-            if e.size != elast.size:
-                de = e
-            else:
-                de = e - elast
         else:
             e = w[:nroots]
             v = v[:,:nroots]
+            conv = [False] * nroots
+            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
+                                           fresh_start, log)
 
+        if elast is None or elast.size == e.size:
+            de = e - elast
+        else:
+            log.debug('Number of roots different from the previous step (%d,%d)',
+                      e.size, elast.size)
+            de = e
+
+        x0 = None
         x0 = _gen_x0(v, xs)
         if lessio:
             ax0 = aop(x0)
         else:
             ax0 = _gen_x0(v, ax)
 
-        if SORT_EIG_BY_SIMILARITY:
-            dx_norm = [0] * nroots
-            xt = [None] * nroots
-            for k, ek in enumerate(e):
-                if not conv[k]:
-                    xt[k] = ax0[k] - ek * x0[k]
-                    dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-                    if abs(de[k]) < tol and dx_norm[k] < toloose:
-                        log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
-                                  k, dx_norm[k], ek, de[k])
-                        conv[k] = True
-        else:
-            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
-                                           fresh_start, log)
-            de = e - elast
-            dx_norm = []
-            xt = []
-            for k, ek in enumerate(e):
-                xt.append(ax0[k] - ek * x0[k])
-                dx_norm.append(numpy.sqrt(dot(xt[k].conj(), xt[k]).real))
-                if not conv_last[k] and abs(de[k]) < tol and dx_norm[k] < toloose:
+        dx_norm = [0] * nroots
+        xt = [None] * nroots
+        for k, ek in enumerate(e):
+            if not conv[k]:
+                xt[k] = ax0[k] - ek * x0[k]
+                dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
+                conv[k] = abs(de[k]) < tol and dx_norm[k] < toloose
+                if conv[k] and not conv_last[k]:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                               k, dx_norm[k], ek, de[k])
-            dx_norm = numpy.asarray(dx_norm)
-            conv = (abs(de) < tol) & (dx_norm < toloose)
+                    conv[k] = True
         ax0 = None
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
@@ -921,7 +914,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                 else:
                     xt[k] = None
-                    log.debug1('Throwing out eigenvector %d with norm=%4.3g', k, dx_norm[k])
+                    log.debug1('Drop eigenvector %d, norm=%4.3g', k, dx_norm[k])
         else:
             for k, ek in enumerate(e):
                 if dx_norm[k]**2 > lindep:
