@@ -1,9 +1,6 @@
 include MANIFEST.in
 include README.md setup.py CHANGELOG AUTHORS LICENSE NOTICE
 
-global-exclude *.py[cod]
-prune pyscf/lib/build
-
 recursive-include pyscf *.dat
 recursive-include pyscf/lib/deps *.so
 include pyscf/lib/*.so pyscf/lib/config.h.in
@@ -11,12 +8,14 @@ include pyscf/lib/*.so pyscf/lib/config.h.in
 # macos dynamic libraries
 include pyscf/lib/*.dylib
 include pyscf/lib/deps/lib*/libcint.[45].dylib
-include pyscf/lib/deps/lib*/libxc.dylib
+include pyscf/lib/deps/lib*/libxc.*.dylib
 include pyscf/lib/deps/lib*/libxcfun.[23].dylib
 
 include pyscf/geomopt/log.ini
 
 # source code
-prune pyscf/lib/build
 recursive-include pyscf/lib *.c *.h CMakeLists.txt
 recursive-exclude pyscf/lib *.cl
+
+global-exclude *.py[cod]
+prune pyscf/lib/build
