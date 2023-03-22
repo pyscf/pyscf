@@ -237,7 +237,7 @@ def contract(myci, civec, eris):
     t0  = numpy.einsum('ia,ia->', fov, c1) * 2
     t0 += numpy.einsum('iabj,ijab->', eris.ovvo, c2) * 2
     t0 -= numpy.einsum('iabj,jiab->', eris.ovvo, c2)
-    cinew = numpy.hstack((t0, t1.ravel(), t2.ravel()))
+    cinew = myci.amplitudes_to_cisdvec(t0, t1, t2)
     return cinew
 
 def amplitudes_to_cisdvec(c0, c1, c2):
