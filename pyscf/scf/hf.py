@@ -1846,7 +1846,19 @@ class SCF(lib.StreamObject):
         '''
         from pyscf.scf import chkfile as chkmod
         if chkfile is None: chkfile = self.chkfile
-        self.__dict__.update(chkmod.load(chkfile, 'scf'))
+        chk_scf = chkmod.load(chkfile, 'scf')
+        nao = self.mol.nao
+        mo = chk_scf['mo_coeff']
+        if isinstance(mo, numpy.ndarray): # RHF
+            mo_nao = mo.shape[-2]
+        elif isinstance(mo[0], numpy.ndarray): # UHF
+            mo_nao = mo[0].shape[-2]
+        else: # KUHF
+            mo_nao = mo[0][0].shape[-2]
+        if mo_nao not in (nao, nao*2):
+            logger.warn(self, 'Current mol is inconsistent with SCF object in '
+                        'chkfile %s', chkfile)
+        self.__dict__.update(chk_scf)
         return self
     update_from_chk = update_from_chk_ = update = update_
 
