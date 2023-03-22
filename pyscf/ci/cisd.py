@@ -851,7 +851,9 @@ class CISD(lib.StreamObject):
     max_cycle = getattr(__config__, 'ci_cisd_CISD_max_cycle', 50)
     max_space = getattr(__config__, 'ci_cisd_CISD_max_space', 12)
     lindep = getattr(__config__, 'ci_cisd_CISD_lindep', 1e-14)
-    level_shift = getattr(__config__, 'ci_cisd_CISD_level_shift', 0)  # in preconditioner
+    # level shift in preconditioner is helpful to avoid singularity and linear
+    # dependence basis in davidson diagonalization solver
+    level_shift = getattr(__config__, 'ci_cisd_CISD_level_shift', 1e-3)
     direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
     async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
 

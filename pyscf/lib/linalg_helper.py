@@ -544,7 +544,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             # able to generate linearly dependent basis vectors. e.g. issue 1362
             log.warn('Matrix may be already a diagonal matrix. '
                      'level_shift is applied to precond')
-            level_shift = 0.5
+            level_shift = 0.1
 
         xt, norm_min = _normalize_xt_(xt, lindep, dot)
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
@@ -577,7 +577,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     return numpy.asarray(conv), e, x0
 
 
-def make_diag_precond(diag, level_shift=0.5):
+def make_diag_precond(diag, level_shift=0):
     '''Generate the preconditioner function with the diagonal function.'''
     # For diagonal matrix A, precond (Ax-x*e)/(diag(A)-e) is not able to
     # generate linearly independent basis. Use level_shift to break the
@@ -919,7 +919,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
             # able to generate linearly dependent basis vectors. e.g. issue 1362
             log.warn('Matrix may be already a diagonal matrix. '
                      'level_shift is applied to precond')
-            level_shift = 0.5
+            level_shift = 0.1
 
         xt, norm_min = _normalize_xt_(xt, lindep, dot)
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
@@ -1225,7 +1225,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
             # able to generate linearly dependent basis vectors. e.g. issue 1362
             log.warn('Matrix may be already a diagonal matrix. '
                      'level_shift is applied to precond')
-            level_shift = 0.5
+            level_shift = 0.1
 
         xt, norm_min = _normalize_xt_(xt, lindep, dot)
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
