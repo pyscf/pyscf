@@ -41,6 +41,8 @@ class KTDMixin(TDMixin):
         TDMixin.__init__(self, mf)
         warn_pbc2d_eri(mf)
 
+    get_nto = lib.invalid_method('get_nto')
+
 class TDA(KTDMixin):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 

@@ -36,8 +36,8 @@ class TDMixin(rhf.TDMixin):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+    get_nto = rhf.TDMixin.get_nto
     analyze = lib.invalid_method('analyze')
-    get_nto = lib.invalid_method('get_nto')
     oscillator_strength = lib.invalid_method('oscillator_strength')
     transition_dipole              = lib.invalid_method('transition_dipole')
     transition_quadrupole          = lib.invalid_method('transition_quadrupole')
