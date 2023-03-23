@@ -439,20 +439,28 @@ def linearmole_irrep_symb2id(gpname, symb):
         if symb in DOOH_IRREP_ID_TABLE:
             return DOOH_IRREP_ID_TABLE[symb]
         else:
-            n = int(''.join([i for i in symb if i.isdigit()]))
-            if n % 2:
-                return (n//2)*10 + DOOH_IRREP_ID_TABLE['_odd'+symb[-2:]]
-            else:
-                return (n//2)*10 + DOOH_IRREP_ID_TABLE['_even'+symb[-2:]]
+            try:
+                n = int(''.join([i for i in symb if i.isdigit()]))
+                if n % 2:
+                    return (n//2)*10 + DOOH_IRREP_ID_TABLE['_odd'+symb[-2:]]
+                else:
+                    return (n//2)*10 + DOOH_IRREP_ID_TABLE['_even'+symb[-2:]]
+            except (KeyError, ValueError):
+                raise PointGroupSymmetryError(f'Incorrect Dooh irrep {symb}')
     elif gpname == 'Coov':
         if symb in COOV_IRREP_ID_TABLE:
             return COOV_IRREP_ID_TABLE[symb]
         else:
-            n = int(''.join([i for i in symb if i.isdigit()]))
-            if n % 2:
-                return (n//2)*10 + COOV_IRREP_ID_TABLE['_odd'+symb[-1]]
-            else:
-                return (n//2)*10 + COOV_IRREP_ID_TABLE['_even'+symb[-1]]
+            if 'g' in symb or 'u' in symb:
+                raise PointGroupSymmetryError(f'Incorrect Coov irrep {symb}')
+            try:
+                n = int(''.join([i for i in symb if i.isdigit()]))
+                if n % 2:
+                    return (n//2)*10 + COOV_IRREP_ID_TABLE['_odd'+symb[-1]]
+                else:
+                    return (n//2)*10 + COOV_IRREP_ID_TABLE['_even'+symb[-1]]
+            except (KeyError, ValueError):
+                raise PointGroupSymmetryError(f'Incorrect Coov irrep {symb}')
     else:
         raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
