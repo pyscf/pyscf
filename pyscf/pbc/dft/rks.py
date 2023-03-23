@@ -158,7 +158,9 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
 
 def _dft_common_init_(mf, xc='LDA,VWN'):
     mf.xc = xc
+    mf.nlc = ''
     mf.grids = gen_grid.UniformGrids(mf.cell)
+    mf.nlcgrids = None
     # Use rho to filter grids
     mf.small_rho_cutoff = getattr(__config__,
                                   'pbc_dft_rks_RKS_small_rho_cutoff', 1e-7)

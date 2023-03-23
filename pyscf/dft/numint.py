@@ -1174,36 +1174,6 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                               hermi=0, out=vmat[i])
         vmat = lib.hermi_sum(vmat, axes=(0,2,1))
 
-    elif xctype == 'NLC':
-        nlc_pars = ni.nlc_coeff(xc_code)
-        ao_deriv = 1
-        vvrho = []
-        for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
-            vvrho.append([make_rho(idm, ao, mask, 'GGA') for idm in range(nset)])
-
-        vv_vxc = []
-        for i in range(nset):
-            rho = numpy.hstack([r[i] for r in vvrho])
-            exc, vxc = _vv10nlc(rho, grids.coords, rho, grids.weights,
-                                grids.coords, nlc_pars)
-            den = rho[0] * grids.weights
-            nelec[i] = den.sum()
-            excsum[i] = numpy.dot(den, exc)
-            vv_vxc.append(xc_deriv.transform_vxc(rho, vxc, 'GGA', spin=0))
-
-        p1 = 0
-        for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
-            p0, p1 = p1, p1 + weight.size
-            for i in range(nset):
-                wv = vv_vxc[i][:,p0:p1] * weight
-                wv[0] *= .5  # *.5 because vmat + vmat.T at the end
-                aow = _scale_ao_sparse(ao[:4], wv[:4], mask, ao_loc, out=aow)
-                _dot_ao_ao_sparse(ao[0], aow, None, nbins, mask, pair_mask, ao_loc,
-                                  hermi=0, out=vmat[i])
-        vmat = lib.hermi_sum(vmat, axes=(0,2,1))
-
     elif xctype == 'MGGA':
         if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
             raise NotImplementedError('laplacian in meta-GGA method')
@@ -1392,7 +1362,8 @@ def _format_uks_dm(dms):
 nr_rks_vxc = nr_rks
 nr_uks_vxc = nr_uks
 
-def nr_nlc_vxc(ni, mol, grids, xc_code, dm, hermi=1, max_memory=2000, verbose=None):
+def nr_nlc_vxc(ni, mol, grids, xc_code, dm, relativity=0, hermi=1,
+               max_memory=2000, verbose=None):
     '''Calculate NLC functional and potential matrix on given grids
 
     Args:
@@ -1563,9 +1534,6 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         # For real orbitals, K_{ia,bj} = K_{ia,jb}. It simplifies real fxc_jb
         # [(\nabla mu) nu + mu (\nabla nu)] * fxc_jb = ((\nabla mu) nu f_jb) + h.c.
         vmat = lib.hermi_sum(vmat, axes=(0,2,1))
-
-    elif xctype == 'NLC':
-        raise NotImplementedError('NLC')
 
     elif xctype == 'MGGA':
         assert not MGGA_DENSITY_LAPL
@@ -1867,9 +1835,6 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         # For real orbitals, K_{ia,bj} = K_{ia,jb}. It simplifies real fxc_jb
         # [(\nabla mu) nu + mu (\nabla nu)] * fxc_jb = ((\nabla mu) nu f_jb) + h.c.
         vmat = lib.hermi_sum(vmat.reshape(-1,nao,nao), axes=(0,2,1)).reshape(2,nset,nao,nao)
-
-    elif xctype == 'NLC':
-        raise NotImplementedError('NLC')
 
     elif xctype == 'MGGA':
         assert not MGGA_DENSITY_LAPL

@@ -330,7 +330,6 @@ class KnownValues(unittest.TestCase):
         dm = method.get_init_guess()
         dm = (dm[0], dm[0])
         method.xc = 'wB97M_V'
-        method.nlc = 'vv10'
         method.grids.prune = None
         method.grids.atom_grid = {"H": (30, 86), "O": (30, 86),}
         method.nlcgrids.prune = None

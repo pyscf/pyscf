@@ -654,7 +654,7 @@ class NumInt2C(numint._NumIntMixin):
     get_vxc = nr_gks_vxc = nr_vxc
 
     @lib.with_doc(numint.nr_nlc_vxc.__doc__)
-    def nr_nlc_vxc(self, mol, grids, xc_code, dm, spin=0, hermi=1,
+    def nr_nlc_vxc(self, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
                    max_memory=2000, verbose=None):
         assert dm.ndim == 2
         nao = dm.shape[-1] // 2
