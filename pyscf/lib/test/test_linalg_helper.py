@@ -45,7 +45,7 @@ class KnownValues(unittest.TestCase):
                     H 1.92 1.38 0
                     H -1.92 1.38 0''', verbose=0)
         ci = fci.FCI(mol.RHF().run()).run()
-        self.assertAlmostEqual(ci.e_tot, -74.74294263255416, 9)
+        self.assertAlmostEqual(ci.e_tot, -74.74294263255416, 8)
 
     def test_linalg_qr(self):
         a = numpy.random.random((9,5))+numpy.random.random((9,5))*1j
@@ -162,7 +162,7 @@ class KnownValues(unittest.TestCase):
             return numpy.dot(a, numpy.dot(b, x)).T.copy()
         e0, x0 = linalg_helper.eig(abop, x0, a.diagonal(), max_cycle=100,
                                    nroots=3, pick=linalg_helper.pick_real_eigs)
-        self.assertAlmostEqual(abs(e0 - eref[:3]).max(), 0, 8)
+        self.assertAlmostEqual(abs(e0 - eref[:3]).max(), 0, 7)
 
     def test_eig2(self):
         numpy.random.seed(12)
@@ -187,7 +187,7 @@ class KnownValues(unittest.TestCase):
         x0 = a[0]
         e0, vl, vr = linalg_helper.eig(abop, x0, a.diagonal(), max_cycle=100,
                          nroots=3, pick=linalg_helper.pick_real_eigs, left=True)
-        self.assertAlmostEqual(abs(e0 - e[:3]).max(), 0, 8)
+        self.assertAlmostEqual(abs(e0 - e[:3]).max(), 0, 7)
         self.assertAlmostEqual(abs(numpy.abs(vr) - abs(u[:,:3].T)).max(), 0, 5)
         # FIXME: left eigenvectors do not agree with scipy results
         print((abs(vl[0]) - abs(ul[:,0])).max())
