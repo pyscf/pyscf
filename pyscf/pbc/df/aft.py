@@ -532,6 +532,7 @@ class AFTDFMixin:
             rsh_df = self._rsh_df[key]
         else:
             rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            rsh_df._dataname = f'{self._dataname}/lr/{key}'
             logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
 
         cell = self.cell
