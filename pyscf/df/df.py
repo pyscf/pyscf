@@ -277,7 +277,7 @@ class DF(lib.StreamObject):
             rsh_df = self._rsh_df[key]
         else:
             rsh_df = self._rsh_df[key] = copy.copy(self).reset()
-            rsh_df._dataname = 'j3c_' + key
+            rsh_df._dataname = f'j3c/lr/{key}'
             logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
 
         mol = self.mol
@@ -343,15 +343,7 @@ class DF4C(DF):
         if omega is None:
             return df_jk.r_get_jk(self, dm, hermi, with_j, with_k)
 
-        # A temporary treatment for RSH-DF integrals
-        key = '%.6f' % omega
-        if key in self._rsh_df:
-            rsh_df = self._rsh_df[key]
-        else:
-            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
-            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
-
-        with rsh_df.mol.with_range_coulomb(omega):
+        with self.range_coulomb(omega) as rsh_df:
             return df_jk.r_get_jk(rsh_df, dm, hermi, with_j, with_k)
 
     def ao2mo(self, mo_coeffs):
