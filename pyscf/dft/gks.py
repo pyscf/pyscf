@@ -84,10 +84,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    #enabling range-separated hybrids
-    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
-
-    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
+    if not ni.libxc.is_hybrid_xc(ks.xc):
         vk = None
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
@@ -98,12 +95,13 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj = ks.get_j(mol, dm, hermi)
         vxc += vj
     else:
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vk', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
-            if abs(omega) > 1e-10:
+            if omega != 0:
                 vklr = ks.get_k(mol, ddm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
@@ -112,7 +110,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
             vk *= hyb
-            if abs(omega) > 1e-10:
+            if omega != 0:
                 vklr = ks.get_k(mol, dm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
@@ -120,6 +118,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
         if ground_state:
             exc -= numpy.einsum('ij,ji', dm, vk).real * .5
+
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
     else:

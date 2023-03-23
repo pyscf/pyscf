@@ -35,6 +35,7 @@ import ctypes
 import warnings
 import tempfile
 import contextlib
+import itertools
 import numpy
 import h5py
 import scipy.linalg
@@ -54,7 +55,6 @@ from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
-from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _guess_eta
 from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
 from pyscf import __config__
@@ -130,6 +130,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     # Call _CCGDFBuilder if applicable. _CCGDFBuilder is slower than
     # _RSGDFBuilder but numerically more close to previous versions
     _prefer_ccdf = False
+    # If True, force using denisty matrix-based K-build
+    force_dm_kbuild = False
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell
@@ -141,7 +143,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.kpts_band = None
         self._auxbasis = None
 
-        self.eta, self.mesh, ke_cutoff = _guess_eta(cell, kpts)
+        self.eta = None
+        self.mesh = None
 
         # exp_to_discard to remove diffused fitting functions. The diffused
         # fitting functions may cause linear dependency in DF metric. Removing
@@ -197,12 +200,14 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s ********', self.__class__)
-        log.info('mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         if self.auxcell is None:
             log.info('auxbasis = %s', self.auxbasis)
         else:
             log.info('auxbasis = %s', self.auxcell.basis)
-        log.info('eta = %s', self.eta)
+        if self.eta is not None:
+            log.info('eta = %s', self.eta)
+        if self.mesh is not None:
+            log.info('mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         log.info('exp_to_discard = %s', self.exp_to_discard)
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
@@ -279,7 +284,16 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
         dfbuilder.mesh = self.mesh
         dfbuilder.linear_dep_threshold = self.linear_dep_threshold
-        dfbuilder.make_j3c(cderi_file, j_only=self._j_only)
+        j_only = self._j_only or len(kpts_union) == 1
+        dfbuilder.make_j3c(cderi_file, j_only=j_only)
+
+    def cderi_array(self, label='j3c'):
+        '''
+        Returns CDERIArray object which provides numpy APIs to access cderi tensor.
+        '''
+        if self._cderi is None:
+            self.build()
+        return CDERIArray(self._cderi, label)
 
     def has_kpts(self, kpts):
         if kpts is None:
@@ -374,12 +388,13 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             if (omega < LONGRANGE_AFT_TURNOVER_THRESHOLD and
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
-                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
-                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), mydf.ke_cutoff)
+                ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
+                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
             else:
                 mydf = self
-            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
-                               with_j, with_k, omega, exxdiv)
+            with mydf.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                                     omega=None, exxdiv=exxdiv)
 
         if kpts is None:
             if numpy.all(self.kpts == 0):
@@ -465,6 +480,135 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
 DF = GDF
 
+class CDERIArray:
+    '''
+    Provide numpy APIs to access cderi tensor. This object can be viewed as an
+    5-dimension array [kpt-i, kpt-j, aux-index, ao-i, ao-j]
+    '''
+
+    def __init__(self, data_group, label='j3c'):
+        self._data_is_h5obj = isinstance(data_group, h5py.Group)
+        if not self._data_is_h5obj:
+            data_group = h5py.File(data_group, 'r')
+        self.data_group = data_group
+        if 'kpts' not in data_group:
+            # TODO: Deprecate the v1 data format
+            self._data_version = 'v1'
+            self._cderi = data_group.file.filename
+            self._label = label
+            self._kptij_lst = data_group[label+'-kptij'][()]
+            kpts = unique(self._kptij_lst[:,0])[0]
+            self.nkpts = nkpts = len(kpts)
+            if len(self._kptij_lst) not in (nkpts, nkpts**2, nkpts*(nkpts+1)//2):
+                raise RuntimeError(f'Dimension error for CDERI {self._cderi}')
+            return
+
+        self._data_version = 'v2'
+        aosym = data_group['aosym'][()]
+        if isinstance(aosym, bytes):
+            aosym = aosym.decode()
+        self.aosym = aosym
+        self.j3c = data_group[label]
+        self.kpts = data_group['kpts'][:]
+        self.nkpts = self.kpts.shape[0]
+        nao_pair = sum(dat.shape[1] for dat in self.j3c['0'].values())
+        if self.aosym == 's1':
+            nao = int(nao_pair ** .5)
+            assert nao ** 2 == nao_pair
+            self.nao = nao
+        elif self.aosym == 's2':
+            self.nao = int((nao_pair * 2)**.5)
+        else:
+            raise NotImplementedError
+        self.naux = self.j3c['0/0'].shape[0]
+
+    def __del__(self):
+        if not self._data_is_h5obj:
+            self.data_group.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        if not self._data_is_h5obj:
+            self.data_group.close()
+
+    def __getitem__(self, slices):
+        if isinstance(slices, tuple):
+            ns = len(slices)
+            if ns < 2:
+                # patch (:) to slices
+                slices = slices + (range(self.nkpts),) * (2 - ns)
+
+            k_slices = slices[:2]
+            a_slices = slices[2:]
+            if isinstance(k_slices[0], int) and isinstance(k_slices[1], int):
+                return self._load_one(k_slices[0], k_slices[1], ())
+        else:
+            k_slices = slices
+            a_slices = ()
+        out = numpy.empty((self.nkpts, self.nkpts), dtype=object)
+        out[k_slices] = True
+
+        for ki, kj in numpy.argwhere(out):
+            out[ki,kj] = self._load_one(ki, kj, a_slices)
+        return out[k_slices]
+
+    def _load_one(self, ki, kj, slices):
+        if self._data_version == 'v1':
+            with _load3c(self._cderi, self._label) as fload:
+                if len(self._kptij_lst) == self.nkpts:
+                    # kptij_lst was generated with option j_only, leading to
+                    # only the diagonal terms
+                    kikj = ki
+                    kpti, kptj = self._kptij_lst[kikj]
+                elif len(self._kptij_lst) == self.nkpts**2:
+                    kikj = ki * self.nkpts + kj
+                    kpti, kptj = self._kptij_lst[kikj]
+                elif ki >= kj:
+                    kikj = ki*(ki+1)//2 + kj
+                    kpti, kptj = self._kptij_lst[kikj]
+                else:
+                    kikj = kj*(kj+1)//2 + ki
+                    kptj, kpti = self._kptij_lst[kikj]
+                out = fload(kpti, kptj)
+                return out[slices]
+
+        kikj = ki * self.nkpts + kj
+        kjki = kj * self.nkpts + ki
+        if self.aosym == 's1' or kikj == kjki:
+            dat = self.j3c[str(kikj)]
+            nsegs = len(dat)
+            out = numpy.hstack([dat[str(i)][slices] for i in range(nsegs)])
+        elif self.aosym == 's2':
+            dat_ij = self.j3c[str(kikj)]
+            dat_ji = self.j3c[str(kjki)]
+            tril = numpy.hstack([dat_ij[str(i)][slices] for i in range(len(dat_ij))])
+            triu = numpy.hstack([dat_ji[str(i)][slices] for i in range(len(dat_ji))])
+            assert tril.dtype == numpy.complex128
+            naux = self.naux
+            nao = self.nao
+            out = numpy.empty((naux, nao*nao), dtype=tril.dtype)
+            libpbc.PBCunpack_tril_triu(out.ctypes.data_as(ctypes.c_void_p),
+                                       tril.ctypes.data_as(ctypes.c_void_p),
+                                       triu.ctypes.data_as(ctypes.c_void_p),
+                                       ctypes.c_int(naux), ctypes.c_int(nao))
+        return out
+
+    def load(self, kpti, kptj):
+        if self._data_version == 'v1':
+            with _load3c(self._cderi, self._label) as fload:
+                return numpy.asarray(fload(kpti, kptj))
+
+        ki = member(kpti, self.kpts)
+        kj = member(kptj, self.kpts)
+        if len(ki) == 0 or len(kj) == 0:
+            raise RuntimeError(f'CDERI for kpts ({kpti}, {kptj}) not found')
+        return self._load_one(ki[0], kj[0], ())
+
+    def __array__(self):
+        '''Create a numpy array'''
+        return self[:]
 
 class _load3c:
     #'''Read cderi from old version pyscf (<= 2.0)'''
@@ -534,14 +678,20 @@ class _load3c:
         if self.data_version == 'v2':
             kpts = self.kptij_lst
             nkpts = len(kpts)
-            ki = member(kpti, kpts)
-            kj = member(kptj, kpts)
-            if len(ki) == 0 or len(kj) == 0:
-                raise RuntimeError(f'CDERI {self.label} for kpts ({kpti}, {kptj}) is '
-                                   'not initialized.')
+            if (isinstance(kpti, (int, numpy.integer)) and
+                isinstance(kptj, (int, numpy.integer))):
+                ki = kpti
+                kj = kptj
+            else:
+                ki = member(kpti, kpts)
+                kj = member(kptj, kpts)
+                if len(ki) == 0 or len(kj) == 0:
+                    raise RuntimeError(f'CDERI {self.label} for kpts ({kpti}, {kptj}) is '
+                                       'not initialized.')
 
-            ki = ki[0]
-            kj = kj[0]
+                ki = ki[0]
+                kj = kj[0]
+
             key = f'{self.label}/{ki * nkpts + kj}'
             if key not in self.feri:
                 if self.ignore_key_error:

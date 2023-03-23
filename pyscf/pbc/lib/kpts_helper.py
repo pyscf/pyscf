@@ -37,7 +37,7 @@ def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
     Round scaled k-points to the first Brillouin zone.
 
     Args:
-        kpts : (n,3) ndarray
+        kpts : (...,3) ndarray
             Scaled k-points.
         wrap_around : bool
             If set to True, k-points are rounded to [-0.5, 0.5), otherwise [0.0, 1.0).
@@ -46,12 +46,16 @@ def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
             K-points differ less than tol are considered as the same.
             Default value is 1e-6.
     '''
-    kpts_round = np.mod(kpts, 1)
-    kpts_round = kpts_round.round(-np.log10(tol).astype(int))
-    kpts_round = np.mod(kpts_round, 1)
+    shape = kpts.shape
+    kpts = kpts.reshape(-1, 3)
+    decimal = -np.log10((tol+1e-16)/10.).astype(int)
+    kpts_fbz = np.mod(kpts, 1)
+    kpts_fbz = lib.cleanse(kpts_fbz, axis=0, tol=tol)
+    kpts_fbz = kpts_fbz.round(decimal)
+    kpts_fbz = np.mod(kpts_fbz, 1)
     if wrap_around:
-        kpts_round[kpts_round >= 0.5] -= 1.0
-    return kpts_round
+        kpts_fbz[kpts_fbz >= 0.5] -= 1.0
+    return kpts_fbz.reshape(shape)
 
 def member(kpt, kpts):
     kpts = np.reshape(kpts, (len(kpts),kpt.size))
@@ -397,7 +401,7 @@ class VectorSplitter(object):
 
 
 class KptsHelper(lib.StreamObject):
-    def __init__(self, cell, kpts):
+    def __init__(self, cell, kpts, init_symm_map=True):
         '''Helper class for handling k-points in correlated calculations.
 
         Attributes:
@@ -408,11 +412,34 @@ class KptsHelper(lib.StreamObject):
                 Keys are (3,) tuples of symmetry-unique k-point indices and
                 values are lists of (3,) tuples, enumerating all
                 symmetry-related k-point indices for ERI generation
+            init_symm_map : bool, optional
+                Whether to build `symm_map` at initialization. Default is True.
         '''
-        self.kconserv = get_kconserv(cell, kpts)
-        nkpts = len(kpts)
-        temp = range(0,nkpts)
-        kptlist = lib.cartesian_prod((temp,temp,temp))
+        from pyscf.pbc.lib.kpts import KPoints
+        if isinstance(kpts, KPoints):
+            self.kconserv = kpts.get_kconserv()
+            nkpts = kpts.nkpts
+        else:
+            self.kconserv = get_kconserv(cell, kpts)
+            nkpts = len(kpts)
+
+        self.nkpts = nkpts
+        self._operation = None
+        self.symm_map = None
+        if init_symm_map:
+            self.build_symm_map()
+
+    def build_symm_map(self, kptlist=None):
+        nkpts = self.nkpts
+        if kptlist is None:
+            _isin = lambda *args: True
+        else:
+            _isin = lambda v, vs: lib.isin_1d(v,vs)
+
+        if kptlist is None:
+            temp = range(0, nkpts)
+            kptlist = lib.cartesian_prod((temp,temp,temp))
+
         completed = np.zeros((nkpts,nkpts,nkpts), dtype=bool)
 
         self._operation = np.zeros((nkpts,nkpts,nkpts), dtype=int)
@@ -429,18 +456,20 @@ class KptsHelper(lib.StreamObject):
                 self._operation[kp,kq,kr] = 0
                 self.symm_map[kpt].append((kp,kq,kr))
 
-                completed[kr,ks,kp] = True
-                self._operation[kr,ks,kp] = 1 #.transpose(2,3,0,1)
-                self.symm_map[kpt].append((kr,ks,kp))
+                if _isin([kr,ks,kp], kptlist):
+                    completed[kr,ks,kp] = True
+                    self._operation[kr,ks,kp] = 1 #.transpose(2,3,0,1)
+                    self.symm_map[kpt].append((kr,ks,kp))
 
-                completed[kq,kp,ks] = True
-                self._operation[kq,kp,ks] = 2 #np.conj(.transpose(1,0,3,2))
-                self.symm_map[kpt].append((kq,kp,ks))
+                if _isin([kq,kp,ks], kptlist):
+                    completed[kq,kp,ks] = True
+                    self._operation[kq,kp,ks] = 2 #np.conj(.transpose(1,0,3,2))
+                    self.symm_map[kpt].append((kq,kp,ks))
 
-                completed[ks,kr,kq] = True
-                self._operation[ks,kr,kq] = 3 #np.conj(.transpose(3,2,1,0))
-                self.symm_map[kpt].append((ks,kr,kq))
-
+                if _isin([ks,kr,kq], kptlist):
+                    completed[ks,kr,kq] = True
+                    self._operation[ks,kr,kq] = 3 #np.conj(.transpose(3,2,1,0))
+                    self.symm_map[kpt].append((ks,kr,kq))
 
     def transform_symm(self, eri_kpt, kp, kq, kr):
         '''Return the symmetry-related ERI at any set of k-points.

@@ -38,13 +38,18 @@ DEBUG = False
 # error vector = SDF-FDS
 # error vector = F_ai ~ (S-SDS)*S^{-1}FDS = FDS - SDFDS ~ FDS-SDF in converge
 class CDIIS(lib.diis.DIIS):
-    def __init__(self, mf=None, filename=None):
+    def __init__(self, mf=None, filename=None, Corth=None):
         lib.diis.DIIS.__init__(self, mf, filename)
-        self.rollback = False
+        self.rollback = 0
         self.space = 8
+        self.Corth = Corth
+        #?self._scf = mf
+        #?if hasattr(self._scf, 'get_orbsym'): # Symmetry adapted SCF objects
+        #?    self.orbsym = mf.get_orbsym(Corth)
+        #?    sym_forbid = self.orbsym[:,None] != self.orbsym
 
     def update(self, s, d, f, *args, **kwargs):
-        errvec = get_err_vec(s, d, f)
+        errvec = get_err_vec(s, d, f, self.Corth)
         logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
         xnew = lib.diis.DIIS.update(self, f, xerr=errvec)
         if self.rollback > 0 and len(self._bookkeep) == self.space:
@@ -59,27 +64,62 @@ class CDIIS(lib.diis.DIIS):
 
 SCFDIIS = SCF_DIIS = DIIS = CDIIS
 
-def get_err_vec(s, d, f):
+def get_err_vec_orig(s, d, f):
     '''error vector = SDF - FDS'''
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
         sdf = reduce(numpy.dot, (s,d,f))
-        errvec = sdf.T.conj() - sdf
+        errvec = (sdf.conj().T - sdf).ravel()
 
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
         errvec = []
         for i in range(f.shape[0]):
             sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
-            errvec.append((sdf.T.conj() - sdf))
-        errvec = numpy.vstack(errvec)
+            errvec.append((sdf.conj().T - sdf).ravel())
+        errvec = numpy.hstack(errvec)
 
     elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
-        nao = s.shape[-1]
-        s = lib.asarray((s,s)).reshape(-1,nao,nao)
-        return get_err_vec(s, d.reshape(s.shape), f.reshape(s.shape))
+        errvec = numpy.hstack([
+            get_err_vec_orig(s, d[0], f[0]).ravel(),
+            get_err_vec_orig(s, d[1], f[1]).ravel()])
     else:
         raise RuntimeError('Unknown SCF DIIS type')
     return errvec
 
+def get_err_vec_orth(s, d, f, Corth):
+    '''error vector in orthonormal basis = C.T.conj() (SDF - FDS) C'''
+    # Symmetry information to reduce numerical error in DIIS (issue #1524)
+    orbsym = getattr(Corth, 'orbsym', None)
+    if orbsym is not None:
+        sym_forbid = orbsym[:,None] != orbsym
+
+    if isinstance(f, numpy.ndarray) and f.ndim == 2:
+        sdf = reduce(numpy.dot, (Corth.conj().T, s, d, f, Corth))
+        if orbsym is not None:
+            sdf[sym_forbid] = 0
+        errvec = (sdf.conj().T - sdf).ravel()
+
+    elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
+        errvec = []
+        for i in range(f.shape[0]):
+            sdf = reduce(numpy.dot, (Corth[i].conj().T, s[i], d[i], f[i], Corth[i]))
+            if orbsym is not None:
+                sdf[sym_forbid] = 0
+            errvec.append((sdf.conj().T - sdf).ravel())
+        errvec = numpy.vstack(errvec).ravel()
+
+    elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
+        errvec = numpy.hstack([
+            get_err_vec_orth(s, d[0], f[0], Corth[0]).ravel(),
+            get_err_vec_orth(s, d[1], f[1], Corth[1]).ravel()])
+    else:
+        raise RuntimeError('Unknown SCF DIIS type')
+    return errvec
+
+def get_err_vec(s, d, f, Corth=None):
+    if Corth is None:
+        return get_err_vec_orig(s, d, f)
+    else:
+        return get_err_vec_orth(s, d, f, Corth)
 
 class EDIIS(lib.diis.DIIS):
     '''SCF-EDIIS
@@ -204,4 +244,3 @@ def adiis_minimize(ds, fs, idnewest):
     res = scipy.optimize.minimize(costf, numpy.ones(nx), method='BFGS',
                                   jac=grad, tol=1e-9)
     return res.fun, (res.x**2)/(res.x**2).sum()
-

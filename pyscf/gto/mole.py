@@ -259,6 +259,22 @@ def sph2spinor_l(l):
     '''Real spherical to spinor transformation matrix for angular moment l'''
     return sph2spinor_kappa(0, l)
 
+def ao_rotation_matrix(mol, orientation):
+    '''Matrix u to rotate AO basis to a new orientation.
+
+    atom_new_coords = mol.atom_coords().dot(orientation.T)
+    new_AO = u * mol.AO
+    new_orbitals_coef = u.dot(orbitals_coef)
+    '''
+    from pyscf.symm.basis import _momentum_rotation_matrices
+    Ds = _momentum_rotation_matrices(mol, orientation)
+    u = []
+    for i in range(mol.nbas):
+        l = mol.bas_angular(i)
+        nc = mol.bas_nctr(i)
+        u.extend([Ds[l]] * nc)
+    return scipy.linalg.block_diag(*u)
+
 def atom_types(atoms, basis=None, magmom=None):
     '''symmetry inequivalent atoms'''
     atmgroup = {}
@@ -394,9 +410,9 @@ def format_atom(atoms, origin=0, axes=None,
         axes = numpy.eye(3)
 
     if isinstance(unit, (str, unicode)):
-        if unit.upper().startswith(('B', 'AU')):
+        if is_au(unit):
             unit = 1.
-        else: #unit[:3].upper() == 'ANG':
+        else:
             unit = 1./param.BOHR
     else:
         unit = 1./unit
@@ -900,11 +916,15 @@ def make_atm_env(atom, ptr=0, nuclear_model=NUC_POINT, nucprop={}):
 def make_bas_env(basis_add, atom_id=0, ptr=0):
     '''Convert :attr:`Mole.basis` to the argument ``bas`` for ``libcint`` integrals
     '''
+    # First sort basis accroding to l. This is important for method
+    # decontract_basis, which assumes that basis functions with the same angular
+    # momentum are grouped together
+    basis_add = [b for b in basis_add if b]
+    basis_add = sorted(basis_add, key=lambda b: b[0])
+
     _bas = []
     _env = []
     for b in basis_add:
-        if not b:  # == []
-            continue
         angl = b[0]
         if angl > 14:
             sys.stderr.write('Warning: integral library does not support basis '
@@ -1222,6 +1242,8 @@ def loads(molstr):
     mol._env = numpy.array(mol._env, dtype=numpy.double)
     mol._ecpbas = numpy.array(mol._ecpbas, dtype=numpy.int32)
 
+    # Objects related to symmetry cannot be serialized by dumps function.
+    # Recreate it manually
     if mol.symmetry and mol._symm_orig is not None:
         from pyscf import symm
         mol._symm_orig = numpy.array(mol._symm_orig)
@@ -1330,8 +1352,8 @@ def nao_2c(mol):
     l = mol._bas[:,ANG_OF]
     kappa = mol._bas[:,KAPPA_OF]
     dims = (l*4+2) * mol._bas[:,NCTR_OF]
-    dims[kappa<0] = l[kappa<0] * 2 + 2
-    dims[kappa>0] = l[kappa>0] * 2
+    dims[kappa<0] = (l[kappa<0] * 2 + 2) * mol._bas[kappa<0,NCTR_OF]
+    dims[kappa>0] = (l[kappa>0] * 2) * mol._bas[kappa>0,NCTR_OF]
     return dims.sum()
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
@@ -1498,7 +1520,7 @@ def sph_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp, atom_symbol=symb)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
@@ -2070,6 +2092,10 @@ def fromstring(string, format='xyz'):
     else:
         raise NotImplementedError
 
+def is_au(unit):
+    '''Return whether the unit is recogized as A.U. or not
+    '''
+    return unit.upper().startswith(('B', 'AU'))
 
 #
 # Mole class handles three layers: input, internal format, libcint arguments.
@@ -2361,9 +2387,10 @@ class Mole(lib.StreamObject):
         else:
             mf = scf.HF(self)
 
+        if not hasattr(mf.__class__, key):
+            raise AttributeError('Mole object does not have method %s' % key)
+
         method = getattr(mf, key, None)
-        if method is None:
-            raise AttributeError('Mole object has no attribute %s' % key)
 
         # Initialize SCF object for post-SCF methods if applicable
         if self.nelectron != 0:
@@ -2556,7 +2583,7 @@ class Mole(lib.StreamObject):
         return self
     kernel = build
 
-    def _build_symmetry(self):
+    def _build_symmetry(self, *args, **kwargs):
         '''
         Update symmetry related attributes: topgroup, groupname, _symm_orig,
         _symm_axes, irrep_id, irrep_name, symm_orb
@@ -3008,9 +3035,9 @@ class Mole(lib.StreamObject):
 
         if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
             if isinstance(unit, (str, unicode)):
-                if unit.upper().startswith(('B', 'AU')):
+                if is_au(unit):
                     unit = 1.
-                else: #unit[:3].upper() == 'ANG':
+                else:
                     unit = 1./param.BOHR
             else:
                 unit = 1./unit
@@ -3144,7 +3171,7 @@ class Mole(lib.StreamObject):
         [ 0.          0.          2.07869874]
         '''
         ptr = self._atm[atm_id,PTR_COORD]
-        if unit[:3].upper() == 'ANG':
+        if not is_au(unit):
             return self._env[ptr:ptr+3] * param.BOHR
         else:
             return self._env[ptr:ptr+3].copy()
@@ -3153,7 +3180,7 @@ class Mole(lib.StreamObject):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
         c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T].copy()
-        if unit[:3].upper() == 'ANG':
+        if not is_au(unit):
             c *= param.BOHR
         return c
 
@@ -3578,6 +3605,8 @@ class Mole(lib.StreamObject):
     decontract_basis = decontract_basis
 
     __add__ = conc_mol
+
+    ao_rotation_matrix = ao_rotation_matrix
 
     def cart2sph_coeff(self, normalized='sp'):
         '''Transformation matrix that transforms Cartesian GTOs to spherical

@@ -66,10 +66,10 @@ class KnownValues(unittest.TestCase):
         )
         mf1 = scf.RHF(mol)
         mf1.diis_space = 4
-        mf1.diis_space_rollback = True
+        mf1.diis_space_rollback = 1
         mf1.max_cycle = 10
         e = mf1.kernel()
-        self.assertAlmostEqual(e, -75.446749864901321, 9)
+        self.assertAlmostEqual(e, -75.44751684382042, 9)
         mol.stdout.close()
 
     def test_diis_restart(self):
@@ -94,8 +94,18 @@ class KnownValues(unittest.TestCase):
         e = mf.kernel()
         self.assertAlmostEqual(e, eref, 9)
 
+    # issue 1524
+    def test_diis_for_symmetry_adapted_scf(self):
+        mol = gto.M(atom='O', spin=2, basis='ccpvdz', symmetry=True)
+        mf = mol.ROHF()
+        mf.init_guess = '1e'
+        mf.irrep_nelec = {'s+0' : (2,2), 'p-1' : (1,0), 'p+0' : (1,0), 'p+1' : (1,1) }
+        mf.max_cycle = 9
+        mf.kernel()
+        self.assertTrue(mf.converged)
+        self.assertAlmostEqual(mf.e_tot, -74.7874921601008, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for DIIS")
     unittest.main()
-

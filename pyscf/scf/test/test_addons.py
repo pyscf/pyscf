@@ -266,16 +266,18 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol)
         mf = addons.dynamic_level_shift(mf)
         mf.init_guess = 'hcore'
+        mf.diis = False
         mf.max_cycle = 4
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -75.868344714445342, 9)
+        self.assertAlmostEqual(mf.e_tot, -75.91511679613092, 9)
 
         mf = dft.UKS(mol)
         mf = addons.dynamic_level_shift(mf)
         mf.init_guess = 'hcore'
         mf.max_cycle = 2
+        mf.diis = False
         mf.kernel()
-        self.assertAlmostEqual(mf.scf(), -74.7887264596429, 8)
+        self.assertAlmostEqual(mf.scf(), -71.6072956194109, 8)
 
     def test_convert_to_scf(self):
         from pyscf.x2c import x2c
@@ -415,4 +417,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for addons")
     unittest.main()
-

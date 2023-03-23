@@ -42,8 +42,8 @@ from pyscf.pbc.mpitools import mpi_load_balancer, mpi
 from pyscf.pbc.tools.tril import tril_index, unpack_tril
 from pyscf.pbc.lib import kpts_helper
 import pyscf.pbc.cc.kccsd_rhf
-from pyscf.pbc.cc.eom_kccsd_rhf_ea import mask_frozen as mask_frozen_ea
-from pyscf.pbc.cc.eom_kccsd_rhf_ip import mask_frozen as mask_frozen_ip
+from pyscf.pbc.cc.eom_kccsd_ghf import mask_frozen_ea
+from pyscf.pbc.cc.eom_kccsd_ghf import mask_frozen_ip
 
 from mpi4py import MPI
 

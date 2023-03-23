@@ -52,7 +52,7 @@ class KnownValues(unittest.TestCase):
             vk1 = jk.get_jk(mol, (dm,dm), ['ijkl,jk->il','ijkl,li->kj'], hermi=1)
             self.assertAlmostEqual(abs(vk1[0]-vk0).max(), 0, 9)
             self.assertAlmostEqual(abs(vk1[1]-vk0).max(), 0, 9)
-            self.assertAlmostEqual(lib.finger(vk0), 0.87325708945599279, 9)
+            self.assertAlmostEqual(lib.fp(vk0), 0.87325708945599279, 9)
 
             vk = scf.hf.get_jk(mol, dm)[1]
             self.assertAlmostEqual(abs(vk-vk0).max(), 0, 12)
@@ -108,7 +108,7 @@ class KnownValues(unittest.TestCase):
         vj0 = jk.get_jk(mols, dm, 'ijkl,lk->ij')
         vj1 = scf.hf.get_jk(mol, dm)[0]
         self.assertAlmostEqual(abs(vj1-vj0).max(), 0, 9)
-        self.assertAlmostEqual(lib.finger(vj0), 28.36214139459754, 9)
+        self.assertAlmostEqual(lib.fp(vj0), 28.36214139459754, 6)
 
     def test_vk_s8(self):
         mol = gto.M(atom='H 0 -.5 0; H 0 .5 0; H 1.1 0.2 0.2; H 0.6 0.5 0.4',
@@ -318,4 +318,3 @@ def get_vk_s8(mol, dm):
 if __name__ == "__main__":
     print("Full Tests for rhf")
     unittest.main()
-

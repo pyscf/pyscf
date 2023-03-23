@@ -40,8 +40,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.hessian import rhf as rhf_hess
-from pyscf.df.grad.rhf import _int3c_wrapper
-
+from pyscf.df.grad.rhf import (_int3c_wrapper, _gen_metric_solver,
+                               LINEAR_DEP_THRESHOLD)
 
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None):
@@ -90,23 +90,21 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     #    (11|0)(0|00)
     #    (10|0)(0|10)
     int2c = auxmol.intor('int2c2e', aosym='s1')
-    int2c_low = scipy.linalg.cho_factor(int2c, lower=True)
+    solve_j2c = _gen_metric_solver(int2c)
     int2c_ip1 = auxmol.intor('int2c2e_ip1', aosym='s1')
 
     rhoj0_P = 0
-    if with_k:
-        if hessobj.max_memory*.8e6/8 < naux*nocc*(nocc+nao):
-            raise RuntimeError('Memory not enough. You need to increase mol.max_memory')
-        rhok0_Pl_ = np.empty((naux,nao,nocc))
+    if hessobj.max_memory*.8e6/8 < naux*nocc*(nocc+nao):
+        raise RuntimeError('Memory not enough. You need to increase mol.max_memory')
+    rhok0_Pl_ = np.empty((naux,nao,nocc))
     for i, (shl0, shl1, p0, p1) in enumerate(aoslices):
         int3c = get_int3c((shl0, shl1, 0, nbas, 0, auxmol.nbas))
         rhoj0_P += np.einsum('klp,kl->p', int3c, dm0[p0:p1])
-        if with_k:
-            tmp = lib.einsum('ijp,jk->pik', int3c, mocc_2)
-            tmp = scipy.linalg.cho_solve(int2c_low, tmp.reshape(naux,-1), overwrite_b=True)
-            rhok0_Pl_[:,p0:p1] = tmp.reshape(naux,p1-p0,nocc)
+        tmp = lib.einsum('ijp,jk->pik', int3c, mocc_2)
+        tmp = solve_j2c(tmp.reshape(naux,-1))
+        rhok0_Pl_[:,p0:p1] = tmp.reshape(naux,p1-p0,nocc)
         int3c = tmp = None
-    rhoj0_P = scipy.linalg.cho_solve(int2c_low, rhoj0_P)
+    rhoj0_P = solve_j2c(rhoj0_P)
 
     get_int3c_ipip1 = _int3c_wrapper(mol, auxmol, 'int3c2e_ipip1', 's1')
     vj1_diag = 0
@@ -132,8 +130,7 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1, 0, nbas, 0, auxmol.nbas)
         int3c_ip1 = get_int3c_ip1(shls_slice)
-        tmp_ip1 = scipy.linalg.cho_solve(int2c_low, int3c_ip1.reshape(-1,naux).T,
-                                         overwrite_b=True).reshape(naux,3,p1-p0,nao)
+        tmp_ip1 = solve_j2c(int3c_ip1.reshape(-1,naux).T).reshape(naux,3,p1-p0,nao)
         rhoj1[i0] = np.einsum('pxij,ji->px', tmp_ip1, dm0[:,p0:p1])
         wj1[i0] = np.einsum('xijp,ji->px', int3c_ip1, dm0[:,p0:p1])
         rho_ip1[p0:p1] = tmp_ip1.transpose(2,3,0,1)
@@ -178,11 +175,18 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         rhok0_P__ = lib.einsum('plj,li->pij', rhok0_Pl_, mocc_2)
         rho2c_0 = lib.einsum('pij,qji->pq', rhok0_P__, rhok0_P__)
 
-        int2c_inv = np.linalg.inv(int2c)
+        try:
+            int2c_inv = np.linalg.inv(int2c)
+        except scipy.linalg.LinAlgError:
+            w, v = scipy.linalg.eigh(int2c)
+            mask = w > LINEAR_DEP_THRESHOLD
+            v1 = v[:,mask]
+            int2c_inv = lib.dot(v1/w[mask], v1.conj().T)
+            v1 = None
         int2c_ipip1 = auxmol.intor('int2c2e_ipip1', aosym='s1')
         int2c_ip_ip  = lib.einsum('xpq,qr,ysr->xyps', int2c_ip1, int2c_inv, int2c_ip1)
         int2c_ip_ip -= auxmol.intor('int2c2e_ip1ip2', aosym='s1').reshape(3,3,naux,naux)
-    int2c = int2c_low = None
+    int2c = solve_j2c = None
 
     get_int3c_ipvip1 = _int3c_wrapper(mol, auxmol, 'int3c2e_ipvip1', 's1')
     get_int3c_ip1ip2 = _int3c_wrapper(mol, auxmol, 'int3c2e_ip1ip2', 's1')
@@ -401,21 +405,22 @@ def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
     rho0_Pij = ftmp.create_group('rho0_Pij')
     wj_ip1_pij = ftmp.create_group('wj_ip1_pij')
     int2c = auxmol.intor('int2c2e', aosym='s1')
-    int2c_low = scipy.linalg.cho_factor(int2c, lower=True)
+    solve_j2c = _gen_metric_solver(int2c)
+    int2c = None
     int2c_ip1 = auxmol.intor('int2c2e_ip1', aosym='s1')
     rhoj0_P = 0
     if with_k:
         rhok0_Pl_ = np.empty((naux,nao,nocc))
     for i, (shl0, shl1, p0, p1) in enumerate(aoslices):
         int3c = get_int3c((shl0, shl1, 0, nbas, 0, auxmol.nbas))
-        coef3c = scipy.linalg.cho_solve(int2c_low, int3c.reshape(-1,naux).T, overwrite_b=True)
+        coef3c = solve_j2c(int3c.reshape(-1,naux).T)
         rho0_Pij['%.4d'%i] = coef3c = coef3c.reshape(naux,p1-p0,nao)
         rhoj0_P += np.einsum('pkl,kl->p', coef3c, dm0[p0:p1])
         if with_k:
             rhok0_Pl_[:,p0:p1] = lib.einsum('pij,jk->pik', coef3c, mocc_2)
         if hessobj.auxbasis_response:
             wj_ip1_pij['%.4d'%i] = lib.einsum('xqp,pij->qixj', int2c_ip1, coef3c)
-    int3c = coef3c = int2c_low = None
+    int3c = coef3c = None
 
     get_int3c_ip1 = _int3c_wrapper(mol, auxmol, 'int3c2e_ip1', 's1')
     get_int3c_ip2 = _int3c_wrapper(mol, auxmol, 'int3c2e_ip2', 's1')
@@ -430,25 +435,27 @@ def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
         for i, (shl0, shl1, q0, q1) in enumerate(aoslices):
             wj1 = np.einsum('xijp,ji->xp', int3c_ip1[:,q0:q1], dm0[:,q0:q1])
             vj1_buf[i] += np.einsum('xp,pij->xij', wj1, coef3c)
-        rhok0_PlJ = lib.einsum('plj,Jj->plJ', rhok0_Pl_[p0:p1], mocc_2)
-        vk1_buf += lib.einsum('xijp,plj->xil', int3c_ip1, rhok0_PlJ[p0:p1])
+        if with_k:
+            rhok0_PlJ = lib.einsum('plj,Jj->plJ', rhok0_Pl_[p0:p1], mocc_2)
+            vk1_buf += lib.einsum('xijp,plj->xil', int3c_ip1, rhok0_PlJ)
         int3c_ip1 = None
     vj1_buf = ftmp['vj1_buf'] = vj1_buf
 
+    vk1 = np.zeros((3,nao,nao))
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1, 0, nbas, 0, auxmol.nbas)
         int3c_ip1 = get_int3c_ip1(shls_slice)
         vj1 = -np.asarray(vj1_buf[ia])
-        rhok0_PlJ = lib.einsum('plj,Jj->plJ', rhok0_Pl_, mocc_2[p0:p1])
-        vk1 = -lib.einsum('xijp,pki->xkj', int3c_ip1, rhok0_PlJ)
         vj1[:,p0:p1] -= np.einsum('xijp,p->xij', int3c_ip1, rhoj0_P)
-        vk1[:,p0:p1] -= vk1_buf[:,p0:p1]
+        if with_k:
+            rhok0_PlJ = lib.einsum('plj,Jj->plJ', rhok0_Pl_, mocc_2[p0:p1])
+            vk1 = -lib.einsum('xijp,pki->xkj', int3c_ip1, rhok0_PlJ)
+            vk1[:,p0:p1] -= vk1_buf[:,p0:p1]
 
         if hessobj.auxbasis_response:
             shl0, shl1, q0, q1 = auxslices[ia]
             shls_slice = (0, nbas, 0, nbas, shl0, shl1)
-            rhok0_PlJ = lib.einsum('plj,Jj->plJ', rhok0_Pl_[q0:q1], mocc_2)
             int3c_ip2 = get_int3c_ip2(shls_slice)
             rhoj1 = np.einsum('xijp,ji->xp', int3c_ip2, dm0)
             coef3c = _load_dim0(rho0_Pij, q0, q1)
@@ -457,12 +464,15 @@ def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
             vj1 += .5 * np.einsum('xijp,p->xij', int3c_ip2, -rhoj0_P[q0:q1])
             vj1 -= .5 * lib.einsum('xpq,q,pij->xij', int2c_ip1[:,q0:q1], -rhoj0_P, coef3c)
             vj1 -= .5 * lib.einsum('pixj,p->xij', pij, -rhoj0_P[q0:q1])
-            vk1 -= lib.einsum('plj,xijp->xil', rhok0_PlJ, int3c_ip2)
-            vk1 += lib.einsum('pjxi,plj->xil', pij, rhok0_PlJ)
+            if with_k:
+                rhok0_PlJ = lib.einsum('plj,Jj->plJ', rhok0_Pl_[q0:q1], mocc_2)
+                vk1 -= lib.einsum('plj,xijp->xil', rhok0_PlJ, int3c_ip2)
+                vk1 += lib.einsum('pjxi,plj->xil', pij, rhok0_PlJ)
         rhok0_PlJ = pij = coef3c = int3c_ip1 = None
 
         vj1 = vj1 + vj1.transpose(0,2,1)
-        vk1 = vk1 + vk1.transpose(0,2,1)
+        if with_k:
+            vk1 = vk1 + vk1.transpose(0,2,1)
         h1 = hcore_deriv(ia)
         yield ia, h1, vj1, vk1
 

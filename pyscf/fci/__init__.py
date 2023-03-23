@@ -26,9 +26,11 @@ direct_spin0        No            Yes            Yes                Yes
 direct_spin1        No            No             Yes                Yes
 direct_uhf          No            No             Yes                No
 direct_nosym        No            No             No**               Yes
+fci_dhf_slow        No            No             No***              No
 
 *  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
 ** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
+*** Hamiltonian is complex hermitian (DHF case) or real hermitian (GHF case)
 '''
 
 from pyscf.fci import cistring
@@ -37,6 +39,7 @@ from pyscf.fci import direct_spin1
 from pyscf.fci import direct_uhf
 from pyscf.fci import direct_spin0_symm
 from pyscf.fci import direct_spin1_symm
+from pyscf.fci import fci_dhf_slow
 from pyscf.fci import addons
 from pyscf.fci import rdm
 from pyscf.fci import spin_op
@@ -92,20 +95,27 @@ def FCI(mol_or_mf, mo=None, singlet=False):
     from pyscf import scf
     from pyscf import symm
     from pyscf import ao2mo
+    from pyscf import lib
     if isinstance(mol_or_mf, scf.hf.SCF):
         mf = mol_or_mf
         mol = mf.mol
         if mo is None:
             mo = mf.mo_coeff
         is_uhf = isinstance(mf, scf.uhf.UHF)
+        is_ghf = isinstance(mf, scf.ghf.GHF)
+        is_dhf = isinstance(mf, scf.dhf.DHF)
     else:
         mf = None
         mol = mol_or_mf
-        is_rhf = (mo is None or (isinstance(mo, numpy.ndarray) and mo.ndim == 2))
-        is_uhf = not is_rhf
+        is_rhf = (mo is None or (isinstance(mo, numpy.ndarray) and mo.ndim == 2 and mo.shape[0] == mol.nao))
+        is_ghf = (mo is not None and (isinstance(mo, numpy.ndarray) and mo.ndim == 2 and mo.shape[0] == 2 * mol.nao))
+        is_dhf = (mo is not None and (isinstance(mo, numpy.ndarray) and mo.ndim == 2 and mo.shape[0] == 2 * mol.nao_2c()))
+        is_uhf = not (is_rhf or is_ghf or is_dhf)
 
     if is_uhf:
         fcisolver = direct_uhf.FCI(mol)
+    elif is_ghf or is_dhf:
+        fcisolver = fci_dhf_slow.FCI(mol)
     else:
         fcisolver = solver(mol, singlet=(singlet and mol.spin==0))
 
@@ -137,6 +147,10 @@ def FCI(mol_or_mf, mo=None, singlet=False):
 
         if is_uhf:
             orbsym = scf.uhf_symm.get_orbsym(mol, mo, s)
+        elif is_ghf:
+            orbsym = scf.ghf_symm.get_orbsym(mol, mo, s)
+        elif is_dhf:
+            orbsym = None
         else:
             orbsym = scf.hf_symm.get_orbsym(mol, mo, s)
     else:
@@ -150,6 +164,51 @@ def FCI(mol_or_mf, mo=None, singlet=False):
         eri_bb = ao2mo.kernel(eri_ao, (mo[1], mo[1], mo[1], mo[1]))
         eri = [eri_aa, eri_ab, eri_bb]
         norb = mo[0].shape[1]
+    elif is_ghf:
+        norb = mo.shape[1]
+        h1e = reduce(numpy.dot, (mo.conj().T, hcore, mo))
+        mo_a, mo_b = mo[:mol.nao], mo[mol.nao:]
+        eri = ao2mo.restore(4, ao2mo.general(eri_ao, (mo_a, mo_a, mo_b, mo_b)), norb)
+        eri = eri + eri.transpose(1, 0)
+        eri += ao2mo.restore(4, ao2mo.full(eri_ao, mo_a), norb)
+        eri += ao2mo.restore(4, ao2mo.full(eri_ao, mo_b), norb)
+        eri = ao2mo.restore(1, eri, norb)
+        nelec = sum(nelec)
+    elif is_dhf:
+        ecore = ecore.real
+        ncore = 0
+        ncas = mo.shape[1] // 4 - ncore
+        nneg = mo.shape[1] // 4
+        ncore += nneg
+        mo_core = mo[:, nneg * 2:ncore * 2]
+        mo_cas = mo[:, ncore * 2:ncore * 2 + ncas * 2]
+        core_dm = mo_core @ mo_core.T.conj()
+        if mf is not None:
+            vj, vk = mf.get_jk(mol, core_dm)
+        else:
+            vj, vk = scf.dhf.get_jk_coulomb(mol, core_dm)
+        hveff = vj - vk
+        ecore += numpy.sum(core_dm.T * (hcore + 0.5 * hveff)).real
+        c1 = 0.5 / lib.param.LIGHT_SPEED
+        h1e = reduce(numpy.dot, (mo_cas.conj().T, hcore + hveff, mo_cas))
+        mo_l, mo_s = mo_cas[:mol.nao_2c()], mo_cas[mol.nao_2c():]
+        eri = ao2mo.general(mol, (mo_l, mo_l, mo_s, mo_s), intor="int2e_spsp2_spinor", aosym=4)
+        eri = (eri + eri.transpose(1, 0)) * c1 ** 2
+        eri += ao2mo.full(mol, mo_l, intor="int2e_spinor", aosym=4)
+        eri += ao2mo.full(mol, mo_s, intor="int2e_spsp1spsp2_spinor", aosym=4) * c1 ** 4
+        if mf is not None and mf.with_gaunt:
+            p = "int2e_breit_" if mf.with_breit else "int2e_"
+            eri_lsls = ao2mo.general(mol, (mo_l, mo_s, mo_l, mo_s), intor=p + "ssp1ssp2_spinor", aosym=1, comp=1)
+            eri_slsl = eri_lsls.reshape((ncas * 2,) * 4).transpose(3, 2, 1, 0).conj().reshape((ncas * ncas * 4,) * 2)
+            eri_lssl = ao2mo.general(mol, (mo_l, mo_s, mo_s, mo_l), intor=p + "ssp1sps2_spinor", aosym=1, comp=1)
+            eri_slls = eri_lssl.transpose(1, 0)
+            if mf.with_breit:
+                eri += (eri_lsls + eri_slsl + eri_lssl + eri_slls) * c1 ** 2
+            else:
+                eri -= (eri_lsls + eri_slsl + eri_lssl + eri_slls) * c1 ** 2
+        eri = eri.reshape((ncas * 2,) * 4)
+        norb = ncas * 2
+        nelec = sum(nelec)
     else:
         h1e = reduce(numpy.dot, (mo.conj().T, hcore, mo))
         eri = ao2mo.kernel(eri_ao, mo)

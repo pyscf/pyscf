@@ -1,19 +1,18 @@
 [flake8]
 # https://flake8.pycqa.org/en/2.5.5/warnings.html#error-codes
-ignore = \
+ignore =
         # Indentation:
-        E126, E127, E128, E129, \
+        E126, E127, E128, E129,
         # Whitespaces:
-        E201, E202, E203, E211, E221, E222, E225, E226, E228, E231, E241, \
-        E251, \
+        E201, E202, E203, E211, E221, E222, E225, E226, E228, E231, E241, E251,
         # Comments:
-        E261, E262, E265, E266, \
+        E261, E262, E265, E266,
         # Blank lines:
-        E301, E302, E303, E305, E306, \
+        E301, E302, E303, E305, E306,
         # Imports:
-        E401, E402, \
+        E401, E402,
         # Other:
-        E701, E731, E741, E275, \
+        E701, E731, E741, E275,
         F401, C901, W391, W503, W504
 
 exclude = test, .git, __pycache__, build, dist, __init__.py .eggs, *.egg

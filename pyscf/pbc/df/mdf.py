@@ -31,8 +31,8 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger, zdotCN
 from pyscf.df.outcore import _guess_shell_ranges
-from pyscf.pbc import tools
 from pyscf.pbc import gto
+from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
@@ -59,7 +59,6 @@ class MDF(df.GDF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
-        self.mesh = _mesh_for_valence(cell)
 
         # In MDF, fitting PWs (self.mesh), and parameters eta and exp_to_discard
         # are related to each other. The compensated function does not need to
@@ -67,6 +66,7 @@ class MDF(df.GDF):
         # (self.mesh). self.eta is estimated on the fly based on the value of
         # self.mesh.
         self.eta = None
+        self.mesh = None
 
         # Any functions which are more diffused than the compensated Gaussian
         # are linearly dependent to the PWs. They can be removed from the
@@ -90,30 +90,17 @@ class MDF(df.GDF):
         self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 
-    @property
-    def eta(self):
-        if self._eta is not None:
-            return self._eta
-        else:
-            cell = self.cell
-            if cell.dimension == 0:
-                return 0.2
-            ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
-            ke_cutoff = ke_cutoff[:cell.dimension].min()
-            return aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
-    @eta.setter
-    def eta(self, x):
-        self._eta = x
-
-    @property
-    def exp_to_discard(self):
-        if self._exp_to_discard is not None:
-            return self._exp_to_discard
-        else:
-            return self.eta
-    @exp_to_discard.setter
-    def exp_to_discard(self, x):
-        self._exp_to_discard = x
+    def build(self, j_only=None, with_j3c=True, kpts_band=None):
+        df.GDF.build(self, j_only, with_j3c, kpts_band)
+        cell = self.cell
+        if any(x % 2 == 0 for x in self.mesh[:cell.dimension]):
+            # Even number in mesh can produce planewaves without couterparts
+            # (see np.fft.fftfreq). MDF mesh is typically not enough to capture
+            # all basis. The singular planewaves can break the symmetry in
+            # potential (leads to non-real density) and thereby break the
+            # hermitian of J and K matrices
+            logger.warn(self, 'MDF with even number in mesh may have significant errors')
+        return self
 
     def _make_j3c(self, cell=None, auxcell=None, kptij_lst=None, cderi_file=None):
         if cell is None: cell = self.cell
@@ -131,20 +118,17 @@ class MDF(df.GDF):
 
         if self._prefer_ccdf or cell.omega > 0:
             # For long-range integrals _CCMDFBuilder is the only option
-            dfbuilder = _CCMDFBuilder(cell, auxcell, kpts_union).set(
-                mesh=self.mesh,
-                linear_dep_threshold=self.linear_dep_threshold,
-            )
+            dfbuilder = _CCMDFBuilder(cell, auxcell, kpts_union)
         else:
-            dfbuilder = _RSMDFBuilder(cell, auxcell, kpts_union).set(
-                mesh=self.mesh,
-                linear_dep_threshold=self.linear_dep_threshold,
-            )
+            dfbuilder = _RSMDFBuilder(cell, auxcell, kpts_union)
+            dfbuilder.eta = self.eta
+        dfbuilder.mesh = self.mesh
+        dfbuilder.linear_dep_threshold = self.linear_dep_threshold
+        j_only = self._j_only or len(kpts_union) == 1
+        dfbuilder.make_j3c(cderi_file, j_only=j_only)
 
-        if len(kpts_union) == 1 or self._j_only:
-            dfbuilder.make_j3c(cderi_file, aosym='s2', j_only=self._j_only)
-        else:
-            dfbuilder.make_j3c(cderi_file, aosym='s1', j_only=self._j_only)
+        # mdf.mesh must be the same to the mesh used in generating cderi
+        self.mesh = dfbuilder.mesh
 
     # Note: Special exxdiv by default should not be used for an arbitrary
     # input density matrix. When the df object was used with the molecular
@@ -167,12 +151,13 @@ class MDF(df.GDF):
             if (omega < df.LONGRANGE_AFT_TURNOVER_THRESHOLD and
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
-                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
-                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), mydf.ke_cutoff)
+                ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
+                mydf.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
             else:
                 mydf = self
-            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
-                               with_j, with_k, omega, exxdiv)
+            with mydf.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                                     omega=None, exxdiv=exxdiv)
 
         if kpts is None:
             if np.all(self.kpts == 0):
@@ -217,27 +202,6 @@ class MDF(df.GDF):
 
     def get_naoaux(self):
         return df.DF.get_naoaux(self) + aft.AFTDF.get_naoaux(self)
-
-
-# valence_exp = 1. are typically the Gaussians in the valence
-VALENCE_EXP = getattr(__config__, 'pbc_df_mdf_valence_exp', 1.0)
-def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
-    '''Energy cutoff estimation'''
-    precision = cell.precision * 10
-    Ecut_max = 0
-    for i in range(cell.nbas):
-        l = cell.bas_angular(i)
-        es = cell.bas_exp(i).copy()
-        es[es>valence_exp] = valence_exp
-        cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision)
-        Ecut_max = max(Ecut_max, ke_guess.max())
-    mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
-    mesh = np.min((mesh, cell.mesh), axis=0)
-    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-        mesh[cell.dimension:] = cell.mesh[cell.dimension:]
-    return _round_off_to_odd_mesh(mesh)
-del(VALENCE_EXP)
 
 
 class _RSMDFBuilder(_RSGDFBuilder):

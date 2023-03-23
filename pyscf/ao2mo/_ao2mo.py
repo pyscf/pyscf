@@ -210,7 +210,7 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
     assert (aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
     intor = ascint3(intor)
-    mo_coeff = numpy.asfortranarray(mo_coeff)
+    mo_coeff = numpy.asarray(mo_coeff, dtype=numpy.complex128, order='F')
     i0, i1, j0, j1 = orbs_slice
     icount = i1 - i0
     jcount = j1 - j0

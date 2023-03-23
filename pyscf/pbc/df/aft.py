@@ -20,6 +20,7 @@
 
 
 import copy
+import contextlib
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -43,16 +44,19 @@ OMEGA_MIN = getattr(__config__, 'pbc_df_aft_estimate_omega_min', 0.3)
 PRECISION = getattr(__config__, 'pbc_df_aft_estimate_eta_precision', 1e-8)
 KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
-def estimate_eta(cell, cutoff=CUTOFF):
-    '''The exponent of the smooth gaussian model density, requiring that at
-    boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) ~ 1e-12
+def estimate_eta_min(cell, cutoff=CUTOFF):
+    '''Given rcut the boundary of repeated images of the cell, estimates the
+    minimal exponent of the smooth compensated gaussian model charge, requiring
+    that at boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) < cutoff
     '''
     lmax = min(numpy.max(cell._bas[:,gto.ANG_OF]), 4)
     # If lmax=3 (r^5 for radial part), this expression guarantees at least up
     # to f shell the convergence at boundary
-    eta = max(numpy.log(4*numpy.pi*cell.rcut**(lmax+2)/cutoff)/cell.rcut**2*2,
-              ETA_MIN)
+    rcut = cell.rcut
+    eta = max(numpy.log(4*numpy.pi*rcut**(lmax+2)/cutoff)/rcut**2, ETA_MIN)
     return eta
+
+estimate_eta = estimate_eta_min
 
 def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
     '''Given ke_cutoff, the upper bound of eta to produce the required
@@ -93,13 +97,14 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     # enough for the error estimation.  Put lmax here to increate Ecut for
     # slightly better accuracy
     lmax = numpy.max(cell._bas[:,gto.ANG_OF])
-    Ecut = 2*eta * (log_k0*(lmax-1) - log_rest)
+    Ecut = 2*eta * (log_k0*max(0, lmax-1) - log_rest)
     Ecut = max(Ecut, .5)
     return Ecut
 
-def estimate_omega(cell, cutoff=CUTOFF):
-    '''The parameter for attenuated Coulomb interactions, requiring that at
-    boundary, the Coulomb potential ~ 1e-12
+def estimate_omega_min(cell, cutoff=CUTOFF):
+    '''Given cell.rcut the boundary of repeated images of the cell, estimates
+    the minimal omega for the attenuated Coulomb interactions, requiring that at
+    boundary the Coulomb potential of a point charge < cutoff
     '''
     # erfc(z) = 2/\sqrt(pi) int_z^infty exp(-t^2) dt < exp(-z^2)/(z\sqrt(pi))
     # erfc(omega*rcut)/rcut < cutoff
@@ -108,6 +113,8 @@ def estimate_omega(cell, cutoff=CUTOFF):
     omega = OMEGA_MIN
     omega = max((-numpy.log(cutoff * rcut**2 * omega))**.5 / rcut, OMEGA_MIN)
     return omega
+
+estimate_omega = estimate_omega_min
 
 # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 exp(-k^2/(4 omega^2)) rho(k) < precision
 # ~ 16 pi^2 int_cutoff^infty exp(-k^2/(4*omega^2)) dk
@@ -214,11 +221,7 @@ def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
     t0 = (logger.process_clock(), logger.perf_counter())
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-    dfbuilder = _IntNucBuilder(mydf.cell, kpts_lst)
+    dfbuilder = _IntNucBuilder(mydf.cell, kpts)
     vpp = dfbuilder.get_pp(mydf.mesh)
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
@@ -227,11 +230,7 @@ def get_pp(mydf, kpts=None):
 
 def get_nuc(mydf, kpts=None):
     t0 = (logger.process_clock(), logger.perf_counter())
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-    dfbuilder = _IntNucBuilder(mydf.cell, kpts_lst)
+    dfbuilder = _IntNucBuilder(mydf.cell, kpts)
     vj = dfbuilder.get_nuc(mydf.mesh)
     if kpts is None or numpy.shape(kpts) == (3,):
         vj = vj[0]
@@ -374,6 +373,39 @@ class AFTDFMixin:
             dat = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, q, kpts, shls_slice, out=buf)
             yield dat, p0, p1
 
+    @contextlib.contextmanager
+    def range_coulomb(self, omega):
+        '''Creates a temporary density fitting object for RSH-DF integrals.
+        In this context, only LR or SR integrals for mol and auxmol are computed.
+        '''
+        key = '%.6f' % omega
+        if key in self._rsh_df:
+            rsh_df = self._rsh_df[key]
+        else:
+            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
+
+        cell = self.cell
+        auxcell = getattr(self, 'auxcell', None)
+
+        cell_omega = cell.omega
+        cell.omega = omega
+        auxcell_omega = None
+        if auxcell is not None:
+            auxcell_omega = auxcell.omega
+            auxcell.omega = omega
+
+        assert rsh_df.cell.omega == omega
+        if getattr(rsh_df, 'auxcell', None) is not None:
+            assert rsh_df.auxcell.omega == omega
+
+        try:
+            yield rsh_df
+        finally:
+            cell.omega = cell_omega
+            if auxcell_omega is not None:
+                auxcell.omega = auxcell_omega
+
 
 class AFTDF(lib.StreamObject, AFTDFMixin):
     '''Density expansion on plane waves
@@ -478,8 +510,9 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
         if omega is not None:  # J/K for RSH functionals
-            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
-                               with_j, with_k, omega, exxdiv)
+            with self.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                                     omega=None, exxdiv=exxdiv)
 
         if kpts is None:
             if numpy.all(self.kpts == 0):
@@ -548,14 +581,7 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
 
 def _sub_df_jk_(dfobj, dm, hermi=1, kpts=None, kpts_band=None,
                 with_j=True, with_k=True, omega=None, exxdiv=None):
-    key = '%.6f' % omega
-    if key in dfobj._rsh_df:
-        rsh_df = dfobj._rsh_df[key]
-    else:
-        rsh_df = dfobj._rsh_df[key] = copy.copy(dfobj).reset()
-        logger.info(dfobj, 'Create RSH-%s object %s for omega=%s',
-                    dfobj.__class__.__name__, rsh_df, omega)
-    with rsh_df.cell.with_range_coulomb(omega):
+    with dfobj.range_coulomb(omega) as rsh_df:
         return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
                              omega=None, exxdiv=exxdiv)
 

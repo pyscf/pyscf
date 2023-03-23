@@ -944,8 +944,7 @@ class UCISD(cisd.CISD):
             return uccsd._make_eris_incore(self, mo_coeff)
 
         elif getattr(self._scf, 'with_df', None):
-            raise NotImplementedError
-
+            return uccsd._make_df_eris_outcore(self, mo_coeff)
         else:
             return uccsd._make_eris_outcore(self, mo_coeff)
 

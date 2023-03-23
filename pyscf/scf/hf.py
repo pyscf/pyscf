@@ -153,6 +153,12 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mf_diis = mf.DIIS(mf, mf.diis_file)
         mf_diis.space = mf.diis_space
         mf_diis.rollback = mf.diis_space_rollback
+
+        # We get the used orthonormalized AO basis from any old eigendecomposition.
+        # Since the ingredients for the Fock matrix has already been built, we can
+        # just go ahead and use it to determine the orthonormal basis vectors.
+        fock = mf.get_fock(h1e, s1e, vhf, dm)
+        _, mf_diis.Corth = mf.eig(fock, s1e)
     else:
         mf_diis = None
 
@@ -1096,7 +1102,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
 
     log.info(' ** Mulliken pop  **')
     for i, s in enumerate(mol.ao_labels()):
-        log.info('pop of  %s %10.5f', s, pop[i])
+        log.info('pop of  %-14s %10.5f', s, pop[i])
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
@@ -1105,7 +1111,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     chg = mol.atom_charges() - chg
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+        log.note('charge of  %3d%s =   %10.5f', ia, symb, chg[ia])
     return pop, chg
 
 
@@ -1216,7 +1222,7 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
         unit = kwargs['unit_symbol']
 
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-        # UHF denisty matrices
+        # UHF density matrices
         dm = dm[0] + dm[1]
 
     with mol.with_common_orig((0,0,0)):
@@ -1427,7 +1433,7 @@ class SCF(lib.StreamObject):
     max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
     init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
 
-    # To avoid diis pollution form previous run, self.diis should not be
+    # To avoid diis pollution from previous run, self.diis should not be
     # initialized as DIIS instance here
     DIIS = diis.SCF_DIIS
     diis = getattr(__config__, 'scf_hf_SCF_diis', True)
@@ -1435,8 +1441,7 @@ class SCF(lib.StreamObject):
     # need > 0 if initial DM is numpy.zeros array
     diis_start_cycle = getattr(__config__, 'scf_hf_SCF_diis_start_cycle', 1)
     diis_file = None
-    # Give diis_space_rollback=True a trial if all other methods do not converge
-    diis_space_rollback = False
+    diis_space_rollback = 0
 
     damp = getattr(__config__, 'scf_hf_SCF_damp', 0)
     level_shift = getattr(__config__, 'scf_hf_SCF_level_shift', 0)

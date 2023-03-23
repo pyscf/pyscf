@@ -277,11 +277,21 @@ class KnownValues(unittest.TestCase):
         r2 = r2 + r2.transpose(1,0,3,2)
         myeom = eom_rccsd.EOMEESinglet(mycc1)
         vec = myeom.amplitudes_to_vector(r1,r2)
-        imds = myeom.make_imds(eris1)
-        vec1 = myeom.matvec(vec, imds)
-        r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1), -112883.3791497977, 7)
-        self.assertAlmostEqual(lib.fp(r2), -268199.3475813322, 7)
+        vec1 = myeom.matvec(vec)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+        self.assertAlmostEqual(lib.fp(v1), -145152.78511963107, 7)
+        self.assertAlmostEqual(lib.fp(v2), -268196.0471308574, 7)
+
+        gcc1 = cc.addons.convert_to_gccsd(mycc1)
+        gee1 = gcc1.EOMEE()
+        orbspin = gcc1._scf.mo_coeff.orbspin
+        gr1 = myeom.spatial2spin(r1, orbspin)
+        gr2 = myeom.spatial2spin(r2, orbspin)
+        gvec = gee1.amplitudes_to_vector(gr1, gr2)
+        vecref = gee1.matvec(gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        self.assertAlmostEqual(abs(gr1-myeom.spatial2spin(v1, orbspin)).max(), 0, 8)
+        self.assertAlmostEqual(abs(gr2-myeom.spatial2spin(v2, orbspin)).max(), 0, 8)
 
     def test_eomee_ccsd_matvec_triplet(self):
         numpy.random.seed(10)
@@ -294,10 +304,24 @@ class KnownValues(unittest.TestCase):
         vec = myeom.amplitudes_to_vector(r1, r2)
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
-        r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1   ), 3550.5250670914056, 8)
-        self.assertAlmostEqual(lib.fp(r2[0]), -237433.03756895234,7)
-        self.assertAlmostEqual(lib.fp(r2[1]), 127680.0182437716 , 7)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+        self.assertAlmostEqual(lib.fp(v1   ), -5616.12199728998, 8)
+        self.assertAlmostEqual(lib.fp(v2[0]), -237430.14342594685,7)
+        self.assertAlmostEqual(lib.fp(v2[1]), 127682.76151592708, 7)
+
+        gcc1 = cc.addons.convert_to_uccsd(mycc1)
+        gee1 = gcc1.EOMEESpinKeep()
+        gr1 = (r1*.5**.5, -r1*.5**.5)
+        raa = r2[0]*.5**.5
+        rx = r2[1]*.5**.5
+        gr2 = (raa, rx, -raa)
+        gvec = gee1.amplitudes_to_vector(gr1, gr2)
+        vecref = gee1.matvec(gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        self.assertAlmostEqual(abs(gr1[0]*2**.5- v1).max(), 0, 9)
+        self.assertAlmostEqual(abs(gr2[0]*2**.5- v2[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(gr2[1]*2**.5- v2[1]).max(), 0, 9)
+        self.assertAlmostEqual(abs(-gr2[2]*2**.5- v2[0]).max(), 0, 9)
 
     def test_eomsf_ccsd_matvec(self):
         numpy.random.seed(10)
@@ -307,24 +331,56 @@ class KnownValues(unittest.TestCase):
         vec = myeom.amplitudes_to_vector(r1,r2)
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
-        r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1   ), -19368.729268465482, 8)
-        self.assertAlmostEqual(lib.fp(r2[0]), 84325.863680611626 , 7)
-        self.assertAlmostEqual(lib.fp(r2[1]), 6715.9574457836134 , 8)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+
+        self.assertAlmostEqual(lib.fp(v1   ), -6213.095578988824, 7)
+        self.assertAlmostEqual(lib.fp(v2[0]), 84329.40539995288 , 7)
+        self.assertAlmostEqual(lib.fp(v2[1]), 6719.930458652292 , 7)
+
+        numpy.random.seed(10)
+        vec = numpy.random.random(myeom.vector_size()) - .9
+        r1, r2 = myeom.vector_to_amplitudes(vec)
+        vec1 = myeom.matvec(vec, imds)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+
+        gcc1 = cc.addons.convert_to_gccsd(mycc1)
+        gee1 = gcc1.EOMEE()
+        orbspin = gcc1._scf.mo_coeff.orbspin
+        gr1 = myeom.spatial2spin(r1, orbspin)
+        gr2 = myeom.spatial2spin(r2, orbspin)
+        gvec = gee1.amplitudes_to_vector(gr1, gr2)
+        vecref = gee1.matvec(gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        self.assertAlmostEqual(abs(gr1-myeom.spatial2spin(v1, orbspin)).max(), 0, 9)
+        self.assertAlmostEqual(abs(gr2-myeom.spatial2spin(v2, orbspin)).max(), 0, 9)
 
     def test_eomee_diag(self):
         vec1S, vec1T, vec2 = eom_rccsd.EOMEE(mycc1).get_diag()
-        self.assertAlmostEqual(lib.fp(vec1S),-4714.9854130015719, 8)
-        self.assertAlmostEqual(lib.fp(vec1T), 2221.3155272953709, 8)
-        self.assertAlmostEqual(lib.fp(vec2) ,-5486.1611871545592, 8)
+        self.assertAlmostEqual(lib.fp(vec1S), -4714.969920334639, 8)
+        self.assertAlmostEqual(lib.fp(vec1T),  2221.322839866705, 8)
+        self.assertAlmostEqual(lib.fp(vec2) , -5486.124838268124, 8)
 
     def test_ip_matvec(self):
         numpy.random.seed(12)
         r1 = numpy.random.random((no)) - .9
         r2 = numpy.random.random((no,no,nv)) - .9
-        myeom = eom_rccsd.EOMIP(mycc1)
+        myeom = mycc1.EOMIP()
         vec = myeom.amplitudes_to_vector(r1,r2)
         r1,r2 = myeom.vector_to_amplitudes(vec)
+
+        gcc1 = cc.addons.convert_to_gccsd(mycc1)
+        gee1 = gcc1.EOMIP()
+        orbspin = gcc1._scf.mo_coeff.orbspin
+        gr1 = myeom.spatial2spin(r1, orbspin)
+        gr2 = myeom.spatial2spin(r2, orbspin)
+        gvec = gee1.amplitudes_to_vector(gr1, gr2)
+        vecref = gee1.matvec(gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        vec1 = myeom.matvec(vec)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+        self.assertAlmostEqual(abs(gr1-myeom.spatial2spin(v1, orbspin)).max(), 0, 9)
+        self.assertAlmostEqual(abs(gr2-myeom.spatial2spin(v2, orbspin)).max(), 0, 9)
+
         myeom.partition = 'mp'
         self.assertAlmostEqual(lib.fp(r1), 0.37404344676857076, 11)
         self.assertAlmostEqual(lib.fp(r2), -1.1568913404570922, 11)
@@ -347,6 +403,20 @@ class KnownValues(unittest.TestCase):
         myeom = eom_rccsd.EOMEA(mycc1)
         vec = myeom.amplitudes_to_vector(r1,r2)
         r1,r2 = myeom.vector_to_amplitudes(vec)
+
+        gcc1 = cc.addons.convert_to_gccsd(mycc1)
+        gee1 = gcc1.EOMEA()
+        orbspin = gcc1._scf.mo_coeff.orbspin
+        gr1 = myeom.spatial2spin(r1, orbspin)
+        gr2 = myeom.spatial2spin(r2, orbspin)
+        gvec = gee1.amplitudes_to_vector(gr1, gr2)
+        vecref = gee1.matvec(gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        vec1 = myeom.matvec(vec)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+        self.assertAlmostEqual(abs(gr1-myeom.spatial2spin(v1, orbspin)).max(), 0, 9)
+        self.assertAlmostEqual(abs(gr2-myeom.spatial2spin(v2, orbspin)).max(), 0, 9)
+
         myeom.partition = 'mp'
         self.assertAlmostEqual(lib.fp(r1), 1.4488291275539353, 11)
         self.assertAlmostEqual(lib.fp(r2), 0.97080165032287469, 11)
@@ -506,8 +576,8 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris21)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1), -112883.3791497977, 7)
-        self.assertAlmostEqual(lib.fp(r2), -268199.3475813322, 7)
+        self.assertAlmostEqual(lib.fp(r1), -145152.7851196310, 7)
+        self.assertAlmostEqual(lib.fp(r2), -268196.0471308578, 7)
 
     def test_eomee_ccsd_matvec_triplet2(self):
         numpy.random.seed(10)
@@ -521,9 +591,9 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris21)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1   ), 3550.5250670914056, 8)
-        self.assertAlmostEqual(lib.fp(r2[0]), -237433.03756895234,7)
-        self.assertAlmostEqual(lib.fp(r2[1]), 127680.0182437716 , 7)
+        self.assertAlmostEqual(lib.fp(r1   ), -5616.12199728998, 8)
+        self.assertAlmostEqual(lib.fp(r2[0]), -237430.14342594685,7)
+        self.assertAlmostEqual(lib.fp(r2[1]), 127682.76151592708, 7)
 
     def test_eomsf_ccsd_matvec2(self):
         numpy.random.seed(10)
@@ -534,15 +604,15 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris21)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1   ), -19368.729268465482, 7)
-        self.assertAlmostEqual(lib.fp(r2[0]), 84325.863680611626 , 7)
-        self.assertAlmostEqual(lib.fp(r2[1]), 6715.9574457836134 , 7)
+        self.assertAlmostEqual(lib.fp(r1   ), -6213.095578988824, 7)
+        self.assertAlmostEqual(lib.fp(r2[0]), 84329.40539995288 , 7)
+        self.assertAlmostEqual(lib.fp(r2[1]), 6719.930458652292 , 7)
 
     def test_eomee_diag2(self):
         vec1S, vec1T, vec2 = eom_rccsd.EOMEE(mycc21).get_diag()
-        self.assertAlmostEqual(lib.fp(vec1S),-4714.9854130015719, 8)
-        self.assertAlmostEqual(lib.fp(vec1T), 2221.3155272953709, 8)
-        self.assertAlmostEqual(lib.fp(vec2) ,-5486.1611871545592, 8)
+        self.assertAlmostEqual(lib.fp(vec1S), -4714.969920334639, 8)
+        self.assertAlmostEqual(lib.fp(vec1T),  2221.322839866705, 8)
+        self.assertAlmostEqual(lib.fp(vec2) , -5486.124838268124, 8)
 
 
     def test_ip_matvec2(self):
@@ -705,8 +775,8 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris31)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1), -112883.3791497977, 7)
-        self.assertAlmostEqual(lib.fp(r2), -268199.3475813322, 7)
+        self.assertAlmostEqual(lib.fp(r1), -145152.7851196310, 7)
+        self.assertAlmostEqual(lib.fp(r2), -268196.0471308578, 7)
 
     def test_eomee_ccsd_matvec_triplet3(self):
         numpy.random.seed(10)
@@ -720,9 +790,9 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris31)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1   ), 3550.5250670914056, 8)
-        self.assertAlmostEqual(lib.fp(r2[0]), -237433.03756895234,7)
-        self.assertAlmostEqual(lib.fp(r2[1]), 127680.0182437716 , 7)
+        self.assertAlmostEqual(lib.fp(r1   ), -5616.12199728998, 8)
+        self.assertAlmostEqual(lib.fp(r2[0]), -237430.14342594685,7)
+        self.assertAlmostEqual(lib.fp(r2[1]), 127682.76151592708, 7)
 
     def test_eomsf_ccsd_matvec3(self):
         numpy.random.seed(10)
@@ -733,15 +803,15 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris31)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.fp(r1   ), -19368.729268465482, 7)
-        self.assertAlmostEqual(lib.fp(r2[0]), 84325.863680611626 , 7)
-        self.assertAlmostEqual(lib.fp(r2[1]), 6715.9574457836134 , 7)
+        self.assertAlmostEqual(lib.fp(r1   ), -6213.095578988824, 7)
+        self.assertAlmostEqual(lib.fp(r2[0]), 84329.40539995288 , 7)
+        self.assertAlmostEqual(lib.fp(r2[1]), 6719.930458652292 , 7)
 
     def test_eomee_diag3(self):
         vec1S, vec1T, vec2 = eom_rccsd.EOMEE(mycc31).get_diag()
-        self.assertAlmostEqual(lib.fp(vec1S),-2881.6804563818432, 8)
-        self.assertAlmostEqual(lib.fp(vec1T), 2039.7385969969259, 8)
-        self.assertAlmostEqual(lib.fp(vec2) ,-4271.6230465236358, 8)
+        self.assertAlmostEqual(lib.fp(vec1S), -2881.664963714903, 8)
+        self.assertAlmostEqual(lib.fp(vec1T),  2039.745909568253, 8)
+        self.assertAlmostEqual(lib.fp(vec2) , -4271.586697637197, 8)
 
 
     def test_ip_matvec3(self):

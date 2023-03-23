@@ -33,7 +33,7 @@ from pyscf.pbc.mp.kmp2 import padding_k_idx, _add_padding
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import unique, round_to_fbz
 from pyscf.pbc.tools.pbc import get_monkhorst_pack_size
-from pyscf.pbc.df.df import _KPair3CLoader
+from pyscf.pbc.df.df import CDERIArray
 
 #   Kernel function for computing the MP2 energy
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
@@ -179,8 +179,6 @@ def _init_mp_df_eris_stagger(mp):
     nkpts_ov     = mp.nkpts_ov          #   number of points on the occupied/virtual mesh
     kpts_idx_vir = mp.kpts_idx_vir
     kpts_idx_occ = mp.kpts_idx_occ
-    kpts = mp.kpts
-
 
     mo_coeff = _add_padding(mp, mp.mo_coeff, mp.mo_energy)[0]
     dtype = np.result_type(np.complex128, *mo_coeff)
@@ -192,28 +190,21 @@ def _init_mp_df_eris_stagger(mp):
     bra_end = nocc
     ket_start = nmo+nocc
     ket_end = ket_start + nvir
-    with h5py.File(with_df._cderi, 'r') as f:
-        tao = []
-        ao_loc = None
-        nkpts = len(kpts)
+    cderi_array = CDERIArray(with_df._cderi)
+    tao = []
+    ao_loc = None
+    for iki, ki in enumerate(kpts_idx_occ):
+        for ika, ka in enumerate(kpts_idx_vir):
+            Lpq_ao = cderi_array[ki, ka]
 
-        assert 'kpts' in f, 'cderi generated from pyscf v2.0 not supported'
-        aosym = f['aosym'][()]
-        if isinstance(aosym, bytes):
-            aosym = aosym.decode()
+            mo = np.hstack((mo_coeff[ki], mo_coeff[ka]))
+            mo = np.asarray(mo, dtype=dtype, order='F')
 
-        for iki, ki in enumerate(kpts_idx_occ):
-            for ika, ka in enumerate(kpts_idx_vir):
-                Lpq_ao = np.asarray(_KPair3CLoader(f['j3c'], ki, ka, nkpts, aosym))
-
-                mo = np.hstack((mo_coeff[ki], mo_coeff[ka]))
-                mo = np.asarray(mo, dtype=dtype, order='F')
-
-                #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
-                if Lpq_ao[0].size != nao**2:  # aosym = 's2'
-                    Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
-                out = _ao2mo.r_e2(Lpq_ao, mo, (bra_start, bra_end, ket_start, ket_end), tao, ao_loc)
-                Lov[iki, ika] = out.reshape(-1, nocc, nvir)
+            #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+            if Lpq_ao[0].size != nao**2:  # aosym = 's2'
+                Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
+            out = _ao2mo.r_e2(Lpq_ao, mo, (bra_start, bra_end, ket_start, ket_end), tao, ao_loc)
+            Lov[iki, ika] = out.reshape(-1, nocc, nvir)
 
     log.timer_debug1("transforming DF-MP2 integrals", *cput0)
 
