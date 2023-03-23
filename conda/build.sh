@@ -11,7 +11,10 @@ set -x -e
 # find pyscf/lib/deps -name "*cint*" -exec rm {} \+
 # rm pyscf-2.0-depsa-openblas.tar.gz
 
+# C extensions must be installed with sequential BLAS library
+# https://pyscf.org/install.html#using-optimized-blas
+export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF -DBLA_VENDOR=Intel10_64lp_seq"
+
 # env PYTHON not defined in certain conda-build version
 # $PYTHON -m pip install . -vv
-export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF"
 pip install -v --prefix=$PREFIX .

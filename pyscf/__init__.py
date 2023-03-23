@@ -39,12 +39,6 @@ __version__ = '2.2.0'
 
 import os
 import sys
-# Avoid too many threads being created in OMP loops.
-# See issue https://github.com/pyscf/pyscf/issues/317
-if 'OPENBLAS_NUM_THREADS' not in os.environ:
-    os.environ['OPENBLAS_NUM_THREADS'] = '1'
-if 'MKL_NUM_THREADS' not in os.environ:
-    os.environ['MKL_NUM_THREADS'] = '1'
 
 # Load modules which are developed as plugins of the namespace package
 PYSCF_EXT_PATH = os.getenv('PYSCF_EXT_PATH')
