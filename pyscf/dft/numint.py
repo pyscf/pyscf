@@ -1403,12 +1403,16 @@ def nr_nlc_vxc(ni, mol, grids, xc_code, dm, relativity=0, hermi=1,
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
         vvrho.append(make_rho(0, ao, mask, 'GGA'))
-
-    nlc_pars = ni.nlc_coeff(xc_code)
-    vv_vxc = []
     rho = numpy.hstack(vvrho)
-    exc, vxc = _vv10nlc(rho, grids.coords, rho, grids.weights,
+
+    exc = 0
+    vxc = 0
+    nlc_coefs = ni.nlc_coeff(xc_code)
+    for nlc_pars, fac in nlc_coefs:
+        e, v = _vv10nlc(rho, grids.coords, rho, grids.weights,
                         grids.coords, nlc_pars)
+        exc += e * fac
+        vxc += v * fac
     den = rho[0] * grids.weights
     nelec = den.sum()
     excsum = numpy.dot(den, exc)

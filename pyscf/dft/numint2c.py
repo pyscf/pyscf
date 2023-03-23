@@ -662,7 +662,7 @@ class NumInt2C(numint._NumIntMixin):
         dm_a = dm[:nao,:nao].real
         dm_b = dm[nao:,nao:].real
         ni = self._to_numint1c()
-        n, exc, v = ni.nr_nlc_vxc(mol, grids, xc_code, dm_a+dm_b,
+        n, exc, v = ni.nr_nlc_vxc(mol, grids, xc_code, dm_a+dm_b, relativity,
                                   hermi, max_memory, verbose)
         vmat = np.zeros_like(dm)
         vmat[:nao,:nao] = v[0]

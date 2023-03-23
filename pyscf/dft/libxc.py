@@ -920,9 +920,6 @@ def is_meta_gga(xc_code):
 def is_gga(xc_code):
     return xc_type(xc_code) == 'GGA'
 
-def needs_laplacian(xc_code):
-    return _itrf.LIBXC_needs_laplacian(xc_code) != 0
-
 @lru_cache(100)
 def is_nlc(xc_code):
     if isinstance(xc_code, str):
@@ -935,6 +932,9 @@ def is_nlc(xc_code):
         return _itrf.LIBXC_is_nlc(ctypes.c_int(xc_code))
     else:
         return any((is_nlc(x) for x in xc_code))
+
+def needs_laplacian(xc_code):
+    return _itrf.LIBXC_needs_laplacian(xc_code) != 0
 
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
@@ -978,12 +978,12 @@ def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
     hyb, fn_facs = parse_xc(xc_code)
-    nlc_pars = [0, 0]
+    nlc_pars = []
     nlc_tmp = (ctypes.c_double*2)()
     for xid, fac in fn_facs:
-        _itrf.LIBXC_nlc_coeff(xid, nlc_tmp)
-        nlc_pars[0] += nlc_tmp[0]
-        nlc_pars[1] += nlc_tmp[1]
+        if _itrf.LIBXC_is_nlc(ctypes.c_int(xid)):
+            _itrf.LIBXC_nlc_coeff(xid, nlc_tmp)
+            nlc_pars.append((tuple(nlc_tmp), fac))
     return tuple(nlc_pars)
 
 @lru_cache(100)
@@ -1171,7 +1171,7 @@ def parse_xc(description):
                     else:
                         # Some libxc functionals may not be listed in the
                         # XC_CODES table. Query libxc directly
-                        func_id = _itrf.xc_functional_get_number(key)
+                        func_id = _itrf.xc_functional_get_number(ctypes.c_char_p(key.encode()))
                         if func_id == -1:
                             raise KeyError(f"LibXCFunctional: name '{key}' not found.")
                 if isinstance(x_id, str):

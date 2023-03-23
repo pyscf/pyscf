@@ -92,6 +92,7 @@ def get_veff(ks_grad, mol=None, dm=None):
 
 def _initialize_grids(ks_grad):
     mf = ks_grad.base
+    ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids
     else:
@@ -160,21 +161,22 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
 def get_nlc_vxc(ni, mol, grids, xc_code, dm, relativity=0, hermi=1,
                 max_memory=2000, verbose=None):
-    xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi, False, grids)
     assert nset == 1
     ao_loc = mol.ao_loc_nr()
 
     vmat = numpy.zeros((3,nao,nao))
-    nlc_pars = ni.nlc_coeff(xc_code)
+    nlc_coefs = ni.nlc_coeff(xc_code)
+    if len(nlc_coefs) != 1:
+        raise NotImplementedError('Additive NLC')
+    nlc_pars, fac = nlc_coefs[0]
     ao_deriv = 2
     vvrho = []
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
         vvrho.append(make_rho(0, ao[:4], mask, 'GGA'))
-
-    vv_vxc = []
     rho = numpy.hstack(vvrho)
+
     vxc = numint._vv10nlc(rho, grids.coords, rho, grids.weights,
                           grids.coords, nlc_pars)[1]
     vv_vxc = xc_deriv.transform_vxc(rho, vxc, 'GGA', spin=0)
@@ -393,7 +395,10 @@ def get_nlc_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=
 
     excsum = numpy.zeros((mol.natm,3))
     vmat = numpy.zeros((3,nao,nao))
-    nlc_pars = ni.nlc_coeff(xc_code)
+    nlc_coefs = ni.nlc_coeff(xc_code)
+    if len(nlc_coefs) != 1:
+        raise NotImplementedError('Additive NLC')
+    nlc_pars, fac = nlc_coefs[0]
     ao_deriv = 2
     vvrho = []
     vvcoords = []
@@ -405,11 +410,11 @@ def get_nlc_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=
         vvrho.append(make_rho(0, ao[:4], mask, 'GGA'))
         vvcoords.append(coords)
         vvweights.append(weight)
-
-    vv_vxc = []
     vvcoords_flat = numpy.vstack(vvcoords)
     vvweights_flat = numpy.concatenate(vvweights)
     vvrho_flat = numpy.hstack(vvrho)
+
+    vv_vxc = []
     for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
         rho = vvrho[atm_id]
         mask = gen_grid.make_mask(mol, coords)
