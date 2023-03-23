@@ -287,9 +287,9 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                     pass
     except NotImplementedError:
         addr = [0]
-        pw = pv = None
+    pw = pv = h0 = None
 
-    precond = fci.make_precond(hdiag, pw, pv, addr)
+    precond = fci.make_precond(hdiag)
 
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
     if hop is None:
