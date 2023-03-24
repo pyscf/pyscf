@@ -715,8 +715,6 @@ class _CCNucBuilder(_CCGDFBuilder):
                 vj_kpts.append(lib.unpack_tril(vj[k].real))
             else:
                 vj_kpts.append(lib.unpack_tril(vj[k]))
-        if np.shape(kpts) == (3,):
-            vj_kpts = vj_kpts[0]
         return np.asarray(vj_kpts)
 
     get_nuc = rsdf_builder.get_nuc

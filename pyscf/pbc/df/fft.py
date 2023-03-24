@@ -28,8 +28,10 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.gto import pseudo, error_for_ke_cutoff, estimate_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_ao2mo
+from pyscf.pbc.df import fft_jk
 from pyscf.pbc.df import aft
-from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.df.aft import _check_kpts
+from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
 KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
@@ -37,13 +39,7 @@ KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 def get_nuc(mydf, kpts=None):
     from pyscf.pbc.dft import gen_grid
-    if kpts is None:
-        kpts = mydf.kpts
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-
+    kpts, is_single_kpt = _check_kpts(mydf, kpts)
     cell = mydf.cell
     mesh = mydf.mesh
     charge = -cell.atom_charges()
@@ -55,14 +51,14 @@ def get_nuc(mydf, kpts=None):
     vneG = rhoG * coulG
     vneR = tools.ifft(vneG, mesh).real
 
-    vne = [0] * len(kpts_lst)
-    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_lst):
+    vne = [0] * len(kpts)
+    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
         ao_ks = ao_ks_etc[0]
         for k, ao in enumerate(ao_ks):
             vne[k] += lib.dot(ao.T.conj()*vneR[p0:p1], ao)
         ao = ao_ks = None
 
-    if kpts is None or numpy.shape(kpts) == (3,):
+    if is_single_kpt:
         vne = vne[0]
     return numpy.asarray(vne)
 
@@ -70,14 +66,8 @@ def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
     from pyscf.pbc.dft import gen_grid
+    kpts, is_single_kpt = _check_kpts(mydf, kpts)
     cell = mydf.cell
-    if kpts is None:
-        kpts = mydf.kpts
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-
     mesh = mydf.mesh
     Gv = cell.get_Gv(mesh)
     SI = cell.get_SI(mesh=mesh)
@@ -87,8 +77,8 @@ def get_pp(mydf, kpts=None):
 
     # vpploc evaluated in real-space
     vpplocR = tools.ifft(vpplocG, mesh).real
-    vpp = [0] * len(kpts_lst)
-    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_lst):
+    vpp = [0] * len(kpts)
+    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
         ao_ks = ao_ks_etc[0]
         for k, ao in enumerate(ao_ks):
             vpp[k] += lib.dot(ao.T.conj()*vpplocR[p0:p1], ao)
@@ -151,14 +141,14 @@ def get_pp(mydf, kpts=None):
                         vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
         return vppnl * (1./cell.vol)
 
-    for k, kpt in enumerate(kpts_lst):
+    for k, kpt in enumerate(kpts):
         vppnl = vppnl_by_k(kpt)
-        if gamma_point(kpt):
+        if is_zero(kpt):
             vpp[k] = vpp[k].real + vppnl.real
         else:
             vpp[k] += vppnl
 
-    if kpts is None or numpy.shape(kpts) == (3,):
+    if is_single_kpt:
         vpp = vpp[0]
     return numpy.asarray(vpp)
 
@@ -282,42 +272,18 @@ class FFTDF(lib.StreamObject):
     get_nuc = get_nuc
 
     def get_jk_e1(self, dm, kpts=None, kpts_band=None, exxdiv=None):
-        from pyscf.pbc.df import fft_jk
-        if kpts is None:
-            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
-                kpts = numpy.zeros(3)
-            else:
-                kpts = self.kpts
-        else:
-            kpts = numpy.asarray(kpts)
-
+        kpts = _check_kpts(self, kpts)[0]
         vj = fft_jk.get_j_e1_kpts(self, dm, kpts, kpts_band)
         vk = fft_jk.get_k_e1_kpts(self, dm, kpts, kpts_band, exxdiv)
         return vj, vk
 
     def get_j_e1(self, dm, kpts=None, kpts_band=None):
-        from pyscf.pbc.df import fft_jk
-        if kpts is None:
-            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
-                kpts = numpy.zeros(3)
-            else:
-                kpts = self.kpts
-        else:
-            kpts = numpy.asarray(kpts)
-
+        kpts = _check_kpts(self, kpts)[0]
         vj = fft_jk.get_j_e1_kpts(self, dm, kpts, kpts_band)
         return vj
 
     def get_k_e1(self, dm, kpts=None, kpts_band=None, exxdiv=None):
-        from pyscf.pbc.df import fft_jk
-        if kpts is None:
-            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
-                kpts = numpy.zeros(3)
-            else:
-                kpts = self.kpts
-        else:
-            kpts = numpy.asarray(kpts)
-
+        kpts = _check_kpts(self, kpts)[0]
         vk = fft_jk.get_k_e1_kpts(self, dm, kpts, kpts_band, exxdiv)
         return vk
 
@@ -328,25 +294,17 @@ class FFTDF(lib.StreamObject):
     # post-HF methods.
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
-        from pyscf.pbc.df import fft_jk
         if omega is not None:  # J/K for RSH functionals
             with self.range_coulomb(omega) as rsh_df:
                 return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
                                      omega=None, exxdiv=exxdiv)
 
-        if kpts is None:
-            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
-                kpts = numpy.zeros(3)
-            else:
-                kpts = self.kpts
-        else:
-            kpts = numpy.asarray(kpts)
-
-        vj = vk = None
-        if kpts.shape == (3,):
+        kpts, is_single_kpt = _check_kpts(self, kpts)
+        if is_single_kpt:
             vj, vk = fft_jk.get_jk(self, dm, hermi, kpts, kpts_band,
                                    with_j, with_k, exxdiv)
         else:
+            vj = vk = None
             if with_k:
                 vk = fft_jk.get_k_kpts(self, dm, hermi, kpts, kpts_band, exxdiv)
             if with_j:

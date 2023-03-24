@@ -162,15 +162,8 @@ class MDF(df.GDF):
                 return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
                                      omega=None, exxdiv=exxdiv)
 
-        if kpts is None:
-            if np.all(self.kpts == 0):
-                # Gamma-point calculation by default
-                kpts = np.zeros(3)
-            else:
-                kpts = self.kpts
-        kpts = np.asarray(kpts)
-
-        if kpts.shape == (3,):
+        kpts, is_single_kpt = _check_kpts(self, kpts)
+        if is_single_kpt:
             return mdf_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
                                  with_k, exxdiv)
 

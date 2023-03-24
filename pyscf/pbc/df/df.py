@@ -52,7 +52,7 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
-from pyscf.pbc.df.aft import estimate_eta
+from pyscf.pbc.df.aft import estimate_eta, _check_kpts
 from pyscf.pbc.df.df_jk import zdotCN
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
@@ -368,19 +368,14 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
         '''
         cell = self.cell
-        if kpts is None:
-            kpts = self.kpts
-        if kpts is None:
-            kpts_lst = numpy.zeros((1,3))
-        else:
-            kpts_lst = numpy.reshape(kpts, (-1,3))
+        kpts, is_single_kpt = _check_kpts(self, kpts)
         if self._prefer_ccdf or cell.omega > 0:
             # For long-range integrals _CCGDFBuilder is the only option
-            dfbuilder = _CCNucBuilder(cell, kpts_lst).build()
+            dfbuilder = _CCNucBuilder(cell, kpts).build()
         else:
-            dfbuilder = _RSNucBuilder(cell, kpts_lst).build()
+            dfbuilder = _RSNucBuilder(cell, kpts).build()
         vpp = dfbuilder.get_pp()
-        if kpts is None or numpy.shape(kpts) == (3,):
+        if is_single_kpt:
             vpp = vpp[0]
         return vpp
 
@@ -388,19 +383,14 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         '''Get the periodic nuc-el AO matrix, with G=0 removed.
         '''
         cell = self.cell
-        if kpts is None:
-            kpts = self.kpts
-        if kpts is None:
-            kpts_lst = numpy.zeros((1,3))
-        else:
-            kpts_lst = numpy.reshape(kpts, (-1,3))
+        kpts, is_single_kpt = _check_kpts(self, kpts)
         if self._prefer_ccdf or cell.omega > 0:
             # For long-range integrals _CCGDFBuilder is the only option
-            dfbuilder = _CCNucBuilder(cell, kpts_lst).build()
+            dfbuilder = _CCNucBuilder(cell, kpts).build()
         else:
-            dfbuilder = _RSNucBuilder(cell, kpts_lst).build()
+            dfbuilder = _RSNucBuilder(cell, kpts).build()
         nuc = dfbuilder.get_nuc()
-        if kpts is None or numpy.shape(kpts) == (3,):
+        if is_single_kpt:
             nuc = nuc[0]
         return nuc
 
@@ -433,15 +423,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
                                      omega=None, exxdiv=exxdiv)
 
-        if kpts is None:
-            if numpy.all(self.kpts == 0):
-                # Gamma-point calculation by default
-                kpts = numpy.zeros(3)
-            else:
-                kpts = self.kpts
-        kpts = numpy.asarray(kpts)
-
-        if kpts.shape == (3,):
+        kpts, is_single_kpt = _check_kpts(self, kpts)
+        if is_single_kpt:
             return df_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
                                 with_k, exxdiv)
 

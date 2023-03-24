@@ -351,12 +351,8 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
     return rho
 
 def get_nuc(mydf, kpts=None):
+    kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
     cell = mydf.cell
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
@@ -366,9 +362,9 @@ def get_nuc(mydf, kpts=None):
     coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
     vneG = rhoG * coulG
     hermi = 1
-    vne = _get_j_pass2(mydf, vneG, hermi, kpts_lst)[0]
+    vne = _get_j_pass2(mydf, vneG, hermi, kpts)[0]
 
-    if kpts is None or numpy.shape(kpts) == (3,):
+    if is_single_kpt:
         vne = vne[0]
     return numpy.asarray(vne)
 
@@ -376,12 +372,8 @@ def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
     from pyscf import gto
+    kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
     cell = mydf.cell
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-
     mesh = mydf.mesh
     SI = cell.get_SI()
     Gv = cell.get_Gv(mesh)
@@ -392,7 +384,7 @@ def get_pp(mydf, kpts=None):
     ngrids = len(vpplocG)
 
     hermi = 1
-    vpp = _get_j_pass2(mydf, vpplocG, hermi, kpts_lst)[0]
+    vpp = _get_j_pass2(mydf, vpplocG, hermi, kpts)[0]
 
     # vppnonloc evaluated in reciprocal space
     fakemol = gto.Mole()
@@ -452,14 +444,14 @@ def get_pp(mydf, kpts=None):
                         vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
         return vppnl * (1./ngrids**2)
 
-    for k, kpt in enumerate(kpts_lst):
+    for k, kpt in enumerate(kpts):
         vppnl = vppnl_by_k(kpt)
         if gamma_point(kpt):
             vpp[k] = vpp[k].real + vppnl.real
         else:
             vpp[k] += vppnl
 
-    if kpts is None or numpy.shape(kpts) == (3,):
+    if is_single_kpt:
         vpp = vpp[0]
     return numpy.asarray(vpp)
 

@@ -102,15 +102,12 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
 
 
 def _get_pp_loc_part1(mydf, kpts=None, with_pseudo=True):
-    if kpts is None:
-        kpts_lst = np.zeros((1,3))
-    else:
-        kpts_lst = np.reshape(kpts, (-1,3))
+    kpts, is_single_kpt = _check_kpts(mydf, kpts)
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t0 = t1 = (logger.process_clock(), logger.perf_counter())
     cell = mydf.cell
     mesh = np.asarray(mydf.mesh)
-    nkpts = len(kpts_lst)
+    nkpts = len(kpts)
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
 
@@ -142,7 +139,7 @@ def _get_pp_loc_part1(mydf, kpts=None, with_pseudo=True):
     vjR = np.zeros((nkpts, nao_pair))
     vjI = np.zeros((nkpts, nao_pair))
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    for Gpq, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_lst, aosym='s2',
+    for Gpq, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts, aosym='s2',
                                     max_memory=max_memory, return_complex=False):
         # shape of Gpq (nkpts, nGv, nao_pair)
         for k, (GpqR, GpqI) in enumerate(zip(*Gpq)):
@@ -150,21 +147,34 @@ def _get_pp_loc_part1(mydf, kpts=None, with_pseudo=True):
             # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
             vjR[k] += np.einsum('k,kx->x', vGR[p0:p1], GpqR)
             vjR[k] += np.einsum('k,kx->x', vGI[p0:p1], GpqI)
-            if not is_zero(kpts_lst[k]):
+            if not is_zero(kpts[k]):
                 vjI[k] += np.einsum('k,kx->x', vGR[p0:p1], GpqI)
                 vjI[k] -= np.einsum('k,kx->x', vGI[p0:p1], GpqR)
         t1 = log.timer_debug1('contracting Vnuc [%s:%s]'%(p0, p1), *t1)
     log.timer_debug1('contracting Vnuc', *t0)
 
     vj_kpts = []
-    for k, kpt in enumerate(kpts_lst):
+    for k, kpt in enumerate(kpts):
         if is_zero(kpt):
             vj_kpts.append(lib.unpack_tril(vjR[k]))
         else:
             vj_kpts.append(lib.unpack_tril(vjR[k]+vjI[k]*1j))
-    if np.shape(kpts) == (3,):
+    if is_single_kpt:
         vj_kpts = vj_kpts[0]
     return np.asarray(vj_kpts)
+
+def _check_kpts(mydf, kpts):
+    '''Check if the argument kpts is a single k-point'''
+    if kpts is None:
+        kpts = np.asarray(mydf.kpts)
+        # mydf.kpts is initialized to np.zeros((1,3)). Here is only a guess
+        # based on the value of mydf.kpts.
+        is_single_kpt = kpts.ndim == 1 or is_zero(kpts)
+    else:
+        kpts = np.asarray(kpts)
+        is_single_kpt = kpts.ndim == 1
+    kpts = kpts.reshape(-1,3)
+    return kpts, is_single_kpt
 
 def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
     '''Vnuc - Vloc'''
@@ -178,19 +188,17 @@ def get_pp(mydf, kpts=None):
         function _guess_eta from module pbc.df.gdf_builder.
     '''
     t0 = (logger.process_clock(), logger.perf_counter())
-    if kpts is None:
-        kpts = mydf.kpts
+    kpts, is_single_kpt = _check_kpts(mydf, kpts)
     cell = mydf.cell
     vpp = _get_pp_loc_part1(mydf, kpts, with_pseudo=True)
     t1 = logger.timer_debug1(mydf, 'get_pp_loc_part1', *t0)
     pp2builder = _IntPPBuilder(cell, kpts)
-    if kpts is None or np.shape(kpts) == (3,):
-        vpp += pp2builder.get_pp_loc_part2()[0]
-    else:
-        vpp += pp2builder.get_pp_loc_part2()
+    vpp += pp2builder.get_pp_loc_part2()
     t1 = logger.timer_debug1(mydf, 'get_pp_loc_part2', *t1)
     vpp += pp_int.get_pp_nl(cell, kpts)
     t1 = logger.timer_debug1(mydf, 'get_pp_nl', *t1)
+    if is_single_kpt:
+        vpp = vpp[0]
     logger.timer(mydf, 'get_pp', *t0)
     return vpp
 
@@ -202,8 +210,6 @@ def get_nuc(mydf, kpts=None):
         function _guess_eta from module pbc.df.gdf_builder.
     '''
     t0 = (logger.process_clock(), logger.perf_counter())
-    if kpts is None:
-        kpts = mydf.kpts
     nuc = _get_pp_loc_part1(mydf, kpts, with_pseudo=False)
     logger.timer(mydf, 'get_nuc', *t0)
     return nuc
@@ -278,7 +284,6 @@ def estimate_ke_cutoff(cell, precision=None):
     return Ecut.max()
 
 
-
 class _IntPPBuilder(Int3cBuilder):
     '''3-center integral builder for pp loc part2 only
     '''
@@ -348,7 +353,7 @@ class _IntPPBuilder(Int3cBuilder):
         vpploc = []
         for k, kpt in enumerate(kpts):
             v = lib.unpack_tril(buf[k])
-            if abs(kpt).sum() < 1e-9:  # gamma_point:
+            if is_zero(kpt):  # gamma_point:
                 v = v.real
             vpploc.append(v)
         return vpploc
@@ -532,7 +537,8 @@ class AFTDFMixin:
             rsh_df = self._rsh_df[key]
         else:
             rsh_df = self._rsh_df[key] = copy.copy(self).reset()
-            rsh_df._dataname = f'{self._dataname}/lr/{key}'
+            if hasattr(self, '_dataname'):
+                rsh_df._dataname = f'{self._dataname}/lr/{key}'
             logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
 
         cell = self.cell
@@ -657,15 +663,8 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
                 return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
                                      omega=None, exxdiv=exxdiv)
 
-        if kpts is None:
-            if np.all(self.kpts == 0):
-                # Gamma-point calculation by default
-                kpts = np.zeros(3)
-            else:
-                kpts = self.kpts
-        kpts = np.asarray(kpts)
-
-        if kpts.shape == (3,):
+        kpts, is_single_kpt = _check_kpts(self, kpts)
+        if is_single_kpt:
             return aft_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
                                   with_k, exxdiv)
 
