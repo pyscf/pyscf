@@ -31,7 +31,9 @@ class M3SOSCF:
         convergence: int
             Convergence Threshold for Trust is 10**-convergence
         initScattering: float
-            Initial statistical distribution of subconverger guesses. The original initial guess (e.g. minao, huckel, 1e, ...) is always conserved as the 0th guess, the rest is scattered around with uniform radius distribution and uniform angular distribution on a box
+            Initial statistical distribution of subconverger guesses. The original initial guess (e.g. minao, huckel,
+            1e, ...) is always conserved as the 0th guess, the rest is scattered around with uniform radius 
+            distribution and uniform angular distribution on a box
 
         Examples:
 
@@ -81,7 +83,8 @@ class M3SOSCF:
 
 
 
-    def __init__(self, mf, threads, purgeSolvers=0.5, convergence=8, initScattering=0.3, trustScaleRange=(0.05, 0.5, 0.5), memSize=1, memScale=0.2, initGuess='minao', stepsize=0.2):
+    def __init__(self, mf, threads, purgeSolvers=0.5, convergence=8, initScattering=0.3, \
+            trustScaleRange=(0.05, 0.5, 0.5), memSize=1, memScale=0.2, initGuess='minao', stepsize=0.2):
 
         self.mf = mf
 
@@ -111,7 +114,7 @@ class M3SOSCF:
         self.subconvergers = []
         self.subconverger_rm = SubconvergerReassigmentManager(self)
         self.init_scattering = initScattering
-        self.subconverger_rm.trust_scaleRange = trustScaleRange
+        self.subconverger_rm.trust_scale_range = trustScaleRange
         self.subconverger_rm.mem_scale = memScale
         self.nr_stepsize = stepsize
         self.mo_cursor = 0
@@ -152,7 +155,8 @@ class M3SOSCF:
 
     def initDensityMatrixWithRothaanStep(self, idm=None):
         '''
-        Initialises the M3SOSCF-Solver with a given density matrix. One Rothaan step is performed afterwards to ensure DM properties.
+        Initialises the M3SOSCF-Solver with a given density matrix. One Rothaan step is performed afterwards to
+        ensure DM properties.
 
         Arguments:
             idm: 2D array
@@ -191,7 +195,8 @@ class M3SOSCF:
 
     def getCurrentDm(self, convertToAO=False):
         '''
-        Returns the current density matrix. Possibility of desync, since density matrix is not regularly updated during the SCF procedure. Only use after SCF procedure is complete.
+        Returns the current density matrix. Possibility of desync, since density matrix is not regularly updated 
+        during the SCF procedure. Only use after SCF procedure is complete.
 
         Arguments:
             convertToAO: Boolean, optional, default False
@@ -205,19 +210,24 @@ class M3SOSCF:
             return 2 * numpy.linalg.inv(self.mf.get_ovlp()) @ self.current_dm
         return self.current_dm
 
-    def set(self, current_dm=None, purgeSolvers=-1, convergence=-1, initScatting=-1, trustScaleRange=None, memSize=-1, memScale=-1, mo_coeffs=None):
+    def set(self, current_dm=None, purgeSolvers=-1, convergence=-1, initScatting=-1, trustScaleRange=None, \
+            memSize=-1, memScale=-1, mo_coeffs=None):
         if type(current_dm) is numpy.ndarray:
             self.setCurrentDm(current_dm)
         if purgeSolvers >= 0:
             self.purgeSolvers = purgeSolvers
+        self.convergene_thresh = convergence
+        self.init_scattering = initScattering
+        self.subconverger_rm.trustScaleRange = trustScaleRange
 
 
 
-    def kernel(self, purgeSolvers=0.5, convergence=8, initScattering=0.1, trustScaleRange=(0.01, 0.2, 8), memScale=0.2, dm0=None):
+    def kernel(self, purgeSolvers=0.5, convergence=8, initScattering=0.1, trustScaleRange=(0.01, 0.2, 8), \
+            memScale=0.2, dm0=None):
         self._purgeSolvers = purgeSolvers
         self.convergence_thresh = 10**(-convergence)
         self.init_scattering = initScattering
-        self.subconverger_rm.trust_scaleRange = trustScaleRange 
+        self.subconverger_rm.trust_scale_range = trustScaleRange 
         self.mem_scale = memScale
         
         if type(dm0) is numpy.ndarray:
@@ -267,13 +277,20 @@ class M3SOSCF:
         if self.threads >= 2:
             for j in range(1, self.threads):
                 if self.method == 'uhf' or self.method == 'uks':
-                    mo_pert_a = numpy.random.random(1)[0] * self.init_scattering * sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, size=(self.getDegreesOfFreedom(),)))
-                    mo_pert_b = numpy.random.random(1)[0] * self.init_scattering * sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, size=(self.getDegreesOfFreedom(),)))
-                    mo_coeffs_l = numpy.array((self.mo_basis_coeff[0] @ scipy.linalg.expm(mo_pert_a), self.mo_basis_coeff[1] @ scipy.linalg.expm(mo_pert_b)))
+                    mo_pert_a = numpy.random.random(1)[0] * self.init_scattering * \
+                            sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, \
+                            size=(self.getDegreesOfFreedom(),)))
+                    mo_pert_b = numpy.random.random(1)[0] * self.init_scattering * \
+                            sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, \
+                            size=(self.getDegreesOfFreedom(),)))
+                    mo_coeffs_l = numpy.array((self.mo_basis_coeff[0] @ scipy.linalg.expm(mo_pert_a), \
+                            self.mo_basis_coeff[1] @ scipy.linalg.expm(mo_pert_b)))
                     self.subconvergers[j].setMoCoeffs(mo_coeffs_l)
                     self.mo_coeffs[0,j] = mo_coeffs_l
                 else:
-                    mo_pert = numpy.random.random(1)[0] * self.init_scattering * sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, size=(self.getDegreesOfFreedom(),)))
+                    mo_pert = numpy.random.random(1)[0] * self.init_scattering * \
+                            sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, \
+                            size=(self.getDegreesOfFreedom(),)))
                     mo_coeffs_l = self.mo_basis_coeff @ scipy.linalg.expm(mo_pert)
                     self.subconvergers[j].setMoCoeffs(mo_coeffs_l)
                     self.mo_coeffs[0,j] = mo_coeffs_l
@@ -315,7 +332,8 @@ class M3SOSCF:
 
             if cycle > 0 and len(self.subconvergers) > 1:
                 sorted_indices = numpy.argsort(self.current_trusts[readCursor])
-                purge_indices = sorted_indices[0:min(int(len(sorted_indices) * (self.purge_subconvergers)), len(sorted_indices))]
+                purge_indices = sorted_indices[0:min(int(len(sorted_indices) * (self.purge_subconvergers)), \
+                        len(sorted_indices))]
                 uniquevals, uniqueindices = numpy.unique(self.current_trusts[readCursor], return_index=True)
                 nonuniqueindices = []
 
@@ -334,7 +352,8 @@ class M3SOSCF:
                 max_written = min(cycle, len(self.current_trusts))
                 log.info("Purge Indices: " + str(purge_indices))
                 log.info("Purging: " + str(len(purge_indices)) + " / " + str(len(self.subconvergers)))
-                new_shifts = self.subconverger_rm.generateNewShifts(self.current_trusts[:max_written], self.mo_coeffs[:max_written], len(purge_indices), readCursor, log)
+                new_shifts = self.subconverger_rm.generateNewShifts(self.current_trusts[:max_written], \
+                        self.mo_coeffs[:max_written], len(purge_indices), readCursor, log)
 
                 for j in range(len(purge_indices)):
                     self.mo_coeffs[writeCursor,purge_indices[j]] = new_shifts[j]
@@ -401,7 +420,8 @@ class M3SOSCF:
             # current energy
 
             for j in range(len(self.current_energies)):
-                self.current_energies[j] = self.mf.energy_elec(self.mf.make_rdm1(self.mo_coeffs[writeCursor,j], self.mf.mo_occ))[0]
+                self.current_energies[j] = self.mf.energy_elec(self.mf.make_rdm1(self.mo_coeffs[writeCursor,j], \
+                        self.mf.mo_occ))[0]
                 log.info("ENERGY (" + str(j) + "): " + str(self.current_energies[j]))
 
             log.info("")
@@ -480,7 +500,8 @@ class M3SOSCF:
         log.info("Number of Cycles:         " + str(cycles))
         log.info("Final Energy:             " + str(self.mf.e_tot))
         log.info("Converged:                " + str(self.mf.converged))
-        aux_mol = pyscf.gto.M(atom=self.mf.mol.atom, basis=self.mf.mol.basis, spin=self.mf.mol.spin, charge=self.mf.mol.charge, symmetry=1)
+        aux_mol = pyscf.gto.M(atom=self.mf.mol.atom, basis=self.mf.mol.basis, spin=self.mf.mol.spin, \
+                charge=self.mf.mol.charge, symmetry=1)
         log.info("Point group:              " + aux_mol.topgroup + " (Supported: " + aux_mol.groupname + ")")
         homo_index = None
         lumo_index = None
@@ -517,12 +538,15 @@ class M3SOSCF:
             symm_overlap = [symm_overlap, symm_overlap]
         try:
             if self.method == 'uhf' or self.method == 'uks':
-                irreps_a = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, self.mf.mo_coeff[0])
-                irreps_b = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, self.mf.mo_coeff[1])
+                irreps_a = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                        self.mf.mo_coeff[0])
+                irreps_b = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                        self.mf.mo_coeff[1])
                 if not (type(irreps_a) is type(None) or type(irreps_b) is type(None)):
                     irreps = [irreps_a, irreps_b]
             else:
-                irreps1 = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, self.mf.mo_coeff)
+                irreps1 = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                        self.mf.mo_coeff)
                 if not type(irreps1) is type(None):
                     irreps = irreps1
         except:
@@ -531,8 +555,10 @@ class M3SOSCF:
                 mo_coeff_symm_b = pyscf.symm.addons.symmetrize_orb(aux_mol, self.mf.mo_coeff[1])
                 symm_overlap_a = numpy.diag(mo_coeff_symm_a.conj().T @ self.mf.get_ovlp() @ self.mf.mo_coeff[0])
                 symm_overlap_b = numpy.diag(mo_coeff_symm_b.conj().T @ self.mf.get_ovlp() @ self.mf.mo_coeff[1])
-                irreps_a = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, mo_coeff_symm_a)
-                irreps_b = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, mo_coeff_symm_b)
+                irreps_a = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                        mo_coeff_symm_a)
+                irreps_b = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                        mo_coeff_symm_b)
                 if not (type(irreps_a) is type(None) or type(irreps_b) is type(None)):
                     irreps = [irreps_a, irreps_b]
                     forced_irreps = True
@@ -540,7 +566,8 @@ class M3SOSCF:
             else:
                 mo_coeff_symm = pyscf.symm.addons.symmetrize_orb(aux_mol, self.mf.mo_coeff)
                 symm_overlap = numpy.diag(mo_coeff_symm.conj().T @ self.mf.get_ovlp() @ self.mf.mo_coeff)
-                irreps1 = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, mo_coeff_symm)
+                irreps1 = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                        mo_coeff_symm)
                 if not type(irreps1) is type(None):
                     irreps = irreps1
                     forced_irreps = True
@@ -563,7 +590,8 @@ class M3SOSCF:
                     s += (37 - len(str(mo_e))) * " "
                 if self.mf.mo_occ[0,index] > 0:
                     s += "A"
-                s += (65 - len(s)) * " " + irreps[0][index] + (" (FORCED, Overlap: " + str(round(symm_overlap[0][index], 5)) + ")") * forced_irreps
+                s += (65 - len(s)) * " " + irreps[0][index] + (" (FORCED, Overlap: " + \
+                        str(round(symm_overlap[0][index], 5)) + ")") * forced_irreps
                 log.info(s)
 
                 mo_e = self.mf.mo_energy[1,index]
@@ -577,7 +605,8 @@ class M3SOSCF:
                     s += (37 - len(str(mo_e))) * " "
                 if self.mf.mo_occ[1,index] > 0:
                     s += "  B"
-                s += (65 - len(s)) * " " + irreps[1][index] + (" (FORCED, Overlap: " + str(round(symm_overlap[1][index], 5)) + ")") * forced_irreps
+                s += (65 - len(s)) * " " + irreps[1][index] + (" (FORCED, Overlap: " + \
+                        str(round(symm_overlap[1][index], 5)) + ")") * forced_irreps
                 log.info(s)
         else:
             for index in range(len(self.mf.mo_energy)):
@@ -594,7 +623,8 @@ class M3SOSCF:
                     s += "A "
                 if self.mf.mo_occ[index] > 1:
                     s += "B"
-                s += (65 - len(s)) * " " + irreps[index] + (" (FORCED, Overlap: " + str(round(symm_overlap[index], 5)) +  ")") * forced_irreps
+                s += (65 - len(s)) * " " + irreps[index] + (" (FORCED, Overlap: " + \
+                        str(round(symm_overlap[index], 5)) +  ")") * forced_irreps
 
                 log.info(s)
 
@@ -639,7 +669,8 @@ class Subconverger:
 
     def getLocalSolAndTrust(self, h1e=None, s1e=None):
         '''
-        This method is directly invoked by the master M3SOSCF. It solves the local NR step from the previously assigned base MO coefficients and returns the solution as well as a trust and the gradient.
+        This method is directly invoked by the master M3SOSCF. It solves the local NR step from the previously
+        assigned base MO coefficients and returns the solution as well as a trust and the gradient.
 
         Arguments:
             h1e: 2D array, optional, default None
@@ -651,9 +682,11 @@ class Subconverger:
             sol: 2D array
                 local solution as an anti-hermitian MO rotation matrix.
             egrad: 1D array
-                local gradient calculated at the base MO coefficients and used in the NR step as a compressed vector that can be expanded to an anti-hermitian matrix via contraction with the canonical basis.
+                local gradient calculated at the base MO coefficients and used in the NR step as a compressed vector 
+                that can be expanded to an anti-hermitian matrix via contraction with the canonical basis.
             trust: float
-                Trust value of the local solution, always between 0 and 1. 0 indicates that the solution is infinitely far away and 1 indicates perfect convergence.
+                Trust value of the local solution, always between 0 and 1. 0 indicates that the solution is
+                infinitely far away and 1 indicates perfect convergence.
         '''
 
         old_dm = self.m3.mf.make_rdm1(self.mo_coeffs, self.m3.mf.mo_occ) 
@@ -668,7 +701,11 @@ class Subconverger:
 
     def solveForLocalSol(self):
         '''
-        This method directly solves the NR step. In the current implementation, this is performed via an SVD transformation: An SVD is performed on the hessian, the gradient is transformed into the SVD basis and the individual, uncoupled linear equations are solved. If the hessian singular value is below a threshold of its maximum, this component of the solution is set to 0 to avoid singularities.
+        TODO:
+        This method directly solves the NR step. In the current implementation, this is performed via an SVD 
+        transformation: An SVD is performed on the hessian, the gradient is transformed into the SVD basis and the 
+        individual, uncoupled linear equations are solved. If the hessian singular value is below a threshold of 
+        its maximum, this component of the solution is set to 0 to avoid singularities.
 
         Arguments:
             hess: 2D array
@@ -700,7 +737,8 @@ class Subconverger:
 
     def getMoCoeffs(self):
         '''
-        Returns the current MO coefficients used as a basis for the NR step. Se getLocalSolAndTrust for the solution to the NR step.
+        Returns the current MO coefficients used as a basis for the NR step. Se getLocalSolAndTrust for the solution 
+        to the NR step.
 
         Returns:
             moCoeffs: 2D array
@@ -767,7 +805,9 @@ class Subconverger:
 
 class SubconvergerReassigmentManager:
     '''
-    This class regulates the reassignment of subconvergers after each iteration. If a subconverger is either redundant or gives a solution with a low trust, it is reassigned to another place in the electronic phase space where it generates more valuable local solutions.
+    This class regulates the reassignment of subconvergers after each iteration. If a subconverger is either 
+    redundant or gives a solution with a low trust, it is reassigned to another place in the electronic phase space
+    where it generates more valuable local solutions.
 
     Arguments: 
         lc: M3SOSCF
@@ -778,34 +818,39 @@ class SubconvergerReassigmentManager:
     m3 = None
     alpha = 5.0
     mem_scale = 0.2
-    trust_scaleRange = None
+    trust_scale_range = None
 
     def __init__(self, lc):
         self.m3 = lc
-        self.trust_scaleRange = (0.01, 0.2, 8)
-        self.alpha = 1.0 / self.trust_scaleRange[1]
+        self.trust_scale_range = (0.01, 0.2, 8)
+        self.alpha = 1.0 / self.trust_scale_range[1]
 
 
     def generateNewShifts(self, trusts, sols, total, cursor, log):
         '''
-        This method is directly invoked by the master M3SOSCF class at the start of each SCF iteration to generate new, useful positions for the reassigned subconvergers.
+        This method is directly invoked by the master M3SOSCF class at the start of each SCF iteration to generate 
+        new, useful positions for the reassigned subconvergers.
 
         Arguments:
             trusts: 1D array
                 Array of trusts of each subconverger. trusts[i] belongs to the same subconverger as sols[i]
             sols: 3D array
-                Array of the current MO coefficents of each subconverger. sols[i] belongs to the same subconverger as trusts[i]
+                Array of the current MO coefficents of each subconverger. sols[i] belongs to the same subconverger 
+                as trusts[i]
             total: int
-                Total number of subconvergers to be reassigned, therefore total number of new shifts that need to be generated
+                Total number of subconvergers to be reassigned, therefore total number of new shifts that need to 
+                be generated
 
         Returns:
             shifts: 3D array
-                Array of new MO coefficient for each subconverger that is to be reassigned. The shape of shifts is ( total, n, n )
+                Array of new MO coefficient for each subconverger that is to be reassigned. The shape of shifts 
+                is ( total, n, n )
 
         '''
 
         maxTrust = numpy.max(trusts.flatten())
-        self.alpha = 1.0 / ((self.trust_scaleRange[1] - self.trust_scaleRange[0]) * (1 - maxTrust)**(self.trust_scaleRange[2]) + self.trust_scaleRange[0])
+        self.alpha = 1.0 / ((self.trust_scale_range[1] - self.trust_scale_range[0]) * \
+                (1 - maxTrust)**(self.trust_scale_range[2]) + self.trust_scale_range[0])
 
         log.info("Current Trust Scaling: " + str(self.alpha))
 
@@ -873,7 +918,9 @@ class SubconvergerReassigmentManager:
 
     def genSpherePoint(self):
         '''
-        This method generates random points on any dimensional unit sphere via the box inflation algorithm. This results in approximately uniform point distribution, although slight accumulation at the projected corners is possible.
+        This method generates random points on any dimensional unit sphere via the box inflation algorithm. This 
+        results in approximately uniform point distribution, although slight accumulation at the projected corners 
+        is possible.
 
         Returns:
             point: 1D array
