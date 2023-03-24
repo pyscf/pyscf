@@ -83,7 +83,7 @@ class M3SOSCF:
 
 
 
-    def __init__(self, mf, threads, purgeSolvers=0.5, convergence=8, initScattering=0.3, \
+    def __init__(self, mf, threads, purgeSolvers=0.5, convergence=8, initScattering=0.3, 
             trustScaleRange=(0.05, 0.5, 0.5), memSize=1, memScale=0.2, initGuess='minao', stepsize=0.2):
 
         self.mf = mf
@@ -210,7 +210,7 @@ class M3SOSCF:
             return 2 * numpy.linalg.inv(self.mf.get_ovlp()) @ self.current_dm
         return self.current_dm
 
-    def set(self, current_dm=None, purgeSolvers=-1, convergence=-1, initScatting=-1, trustScaleRange=None, \
+    def set(self, current_dm=None, purgeSolvers=-1, convergence=-1, initScattering=-1, trustScaleRange=None, 
             memSize=-1, memScale=-1, mo_coeffs=None):
         if type(current_dm) is numpy.ndarray:
             self.setCurrentDm(current_dm)
@@ -222,7 +222,7 @@ class M3SOSCF:
 
 
 
-    def kernel(self, purgeSolvers=0.5, convergence=8, initScattering=0.1, trustScaleRange=(0.01, 0.2, 8), \
+    def kernel(self, purgeSolvers=0.5, convergence=8, initScattering=0.1, trustScaleRange=(0.01, 0.2, 8), 
             memScale=0.2, dm0=None):
         self._purgeSolvers = purgeSolvers
         self.convergence_thresh = 10**(-convergence)
@@ -278,18 +278,18 @@ class M3SOSCF:
             for j in range(1, self.threads):
                 if self.method == 'uhf' or self.method == 'uks':
                     mo_pert_a = numpy.random.random(1)[0] * self.init_scattering * \
-                            sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, \
+                            sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, 
                             size=(self.getDegreesOfFreedom(),)))
                     mo_pert_b = numpy.random.random(1)[0] * self.init_scattering * \
-                            sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, \
+                            sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, 
                             size=(self.getDegreesOfFreedom(),)))
-                    mo_coeffs_l = numpy.array((self.mo_basis_coeff[0] @ scipy.linalg.expm(mo_pert_a), \
+                    mo_coeffs_l = numpy.array((self.mo_basis_coeff[0] @ scipy.linalg.expm(mo_pert_a), 
                             self.mo_basis_coeff[1] @ scipy.linalg.expm(mo_pert_b)))
                     self.subconvergers[j].setMoCoeffs(mo_coeffs_l)
                     self.mo_coeffs[0,j] = mo_coeffs_l
                 else:
                     mo_pert = numpy.random.random(1)[0] * self.init_scattering * \
-                            sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, \
+                            sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5, 
                             size=(self.getDegreesOfFreedom(),)))
                     mo_coeffs_l = self.mo_basis_coeff @ scipy.linalg.expm(mo_pert)
                     self.subconvergers[j].setMoCoeffs(mo_coeffs_l)
@@ -332,13 +332,13 @@ class M3SOSCF:
 
             if cycle > 0 and len(self.subconvergers) > 1:
                 sorted_indices = numpy.argsort(self.current_trusts[readCursor])
-                purge_indices = sorted_indices[0:min(int(len(sorted_indices) * (self.purge_subconvergers)), \
+                purge_indices = sorted_indices[0:min(int(len(sorted_indices) * (self.purge_subconvergers)), 
                         len(sorted_indices))]
                 uniquevals, uniqueindices = numpy.unique(self.current_trusts[readCursor], return_index=True)
                 nonuniqueindices = []
 
                 for i in range(self.threads):
-                    if not i in uniqueindices:
+                    if i not in uniqueindices:
                         nonuniqueindices.append(i)
 
                 nui = numpy.array(nonuniqueindices, dtype=numpy.int32)
@@ -352,7 +352,7 @@ class M3SOSCF:
                 max_written = min(cycle, len(self.current_trusts))
                 log.info("Purge Indices: " + str(purge_indices))
                 log.info("Purging: " + str(len(purge_indices)) + " / " + str(len(self.subconvergers)))
-                new_shifts = self.subconverger_rm.generateNewShifts(self.current_trusts[:max_written], \
+                new_shifts = self.subconverger_rm.generateNewShifts(self.current_trusts[:max_written], 
                         self.mo_coeffs[:max_written], len(purge_indices), readCursor, log)
 
                 for j in range(len(purge_indices)):
@@ -420,7 +420,7 @@ class M3SOSCF:
             # current energy
 
             for j in range(len(self.current_energies)):
-                self.current_energies[j] = self.mf.energy_elec(self.mf.make_rdm1(self.mo_coeffs[writeCursor,j], \
+                self.current_energies[j] = self.mf.energy_elec(self.mf.make_rdm1(self.mo_coeffs[writeCursor,j], 
                         self.mf.mo_occ))[0]
                 log.info("ENERGY (" + str(j) + "): " + str(self.current_energies[j]))
 
@@ -500,7 +500,7 @@ class M3SOSCF:
         log.info("Number of Cycles:         " + str(cycles))
         log.info("Final Energy:             " + str(self.mf.e_tot))
         log.info("Converged:                " + str(self.mf.converged))
-        aux_mol = pyscf.gto.M(atom=self.mf.mol.atom, basis=self.mf.mol.basis, spin=self.mf.mol.spin, \
+        aux_mol = pyscf.gto.M(atom=self.mf.mol.atom, basis=self.mf.mol.basis, spin=self.mf.mol.spin, 
                 charge=self.mf.mol.charge, symmetry=1)
         log.info("Point group:              " + aux_mol.topgroup + " (Supported: " + aux_mol.groupname + ")")
         homo_index = None
@@ -538,14 +538,14 @@ class M3SOSCF:
             symm_overlap = [symm_overlap, symm_overlap]
         try:
             if self.method == 'uhf' or self.method == 'uks':
-                irreps_a = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                irreps_a = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, 
                         self.mf.mo_coeff[0])
-                irreps_b = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                irreps_b = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, 
                         self.mf.mo_coeff[1])
                 if not (type(irreps_a) is type(None) or type(irreps_b) is type(None)):
                     irreps = [irreps_a, irreps_b]
             else:
-                irreps1 = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                irreps1 = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, 
                         self.mf.mo_coeff)
                 if not type(irreps1) is type(None):
                     irreps = irreps1
@@ -555,9 +555,9 @@ class M3SOSCF:
                 mo_coeff_symm_b = pyscf.symm.addons.symmetrize_orb(aux_mol, self.mf.mo_coeff[1])
                 symm_overlap_a = numpy.diag(mo_coeff_symm_a.conj().T @ self.mf.get_ovlp() @ self.mf.mo_coeff[0])
                 symm_overlap_b = numpy.diag(mo_coeff_symm_b.conj().T @ self.mf.get_ovlp() @ self.mf.mo_coeff[1])
-                irreps_a = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                irreps_a = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, 
                         mo_coeff_symm_a)
-                irreps_b = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                irreps_b = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, 
                         mo_coeff_symm_b)
                 if not (type(irreps_a) is type(None) or type(irreps_b) is type(None)):
                     irreps = [irreps_a, irreps_b]
@@ -566,7 +566,7 @@ class M3SOSCF:
             else:
                 mo_coeff_symm = pyscf.symm.addons.symmetrize_orb(aux_mol, self.mf.mo_coeff)
                 symm_overlap = numpy.diag(mo_coeff_symm.conj().T @ self.mf.get_ovlp() @ self.mf.mo_coeff)
-                irreps1 = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, \
+                irreps1 = pyscf.symm.addons.label_orb_symm(aux_mol, aux_mol.irrep_name, aux_mol.symm_orb, 
                         mo_coeff_symm)
                 if not type(irreps1) is type(None):
                     irreps = irreps1
@@ -590,7 +590,7 @@ class M3SOSCF:
                     s += (37 - len(str(mo_e))) * " "
                 if self.mf.mo_occ[0,index] > 0:
                     s += "A"
-                s += (65 - len(s)) * " " + irreps[0][index] + (" (FORCED, Overlap: " + \
+                s += (65 - len(s)) * " " + irreps[0][index] + (" (FORCED, Overlap: " + 
                         str(round(symm_overlap[0][index], 5)) + ")") * forced_irreps
                 log.info(s)
 
@@ -605,7 +605,7 @@ class M3SOSCF:
                     s += (37 - len(str(mo_e))) * " "
                 if self.mf.mo_occ[1,index] > 0:
                     s += "  B"
-                s += (65 - len(s)) * " " + irreps[1][index] + (" (FORCED, Overlap: " + \
+                s += (65 - len(s)) * " " + irreps[1][index] + (" (FORCED, Overlap: " + 
                         str(round(symm_overlap[1][index], 5)) + ")") * forced_irreps
                 log.info(s)
         else:
@@ -623,7 +623,7 @@ class M3SOSCF:
                     s += "A "
                 if self.mf.mo_occ[index] > 1:
                     s += "B"
-                s += (65 - len(s)) * " " + irreps[index] + (" (FORCED, Overlap: " + \
+                s += (65 - len(s)) * " " + irreps[index] + (" (FORCED, Overlap: " + 
                         str(round(symm_overlap[index], 5)) +  ")") * forced_irreps
 
                 log.info(s)
