@@ -29,7 +29,7 @@ class DIIS_M3:
             trust_scale_range=(0.01, 0.2, 8), mem_size=1, mem_scale=0.2):
         '''
         Constructor for the DIIS_M3 method.
-        
+
         Args:
             mf: an instance of SCF class
                 SCF object on which M3 is to be constructed.
@@ -45,7 +45,7 @@ class DIIS_M3:
             trust_scale_range: float[3]
                 Array of 3 floats consisting of min, max and gamma for the trust scale.
             mem_size: int
-                Number of past values that should be considered in the M3 calculation. Default is strongly 
+                Number of past values that should be considered in the M3 calculation. Default is strongly
                 recommended.
             mem_scale: float
                 Scaling used for past iterations in the M3 calculation. Default is strongly recommended.
@@ -76,7 +76,7 @@ class DIIS_M3:
                 Maximum number of DIIS iterations (not macro-iterations) that are allowed before a switch to
                 M3 is enforced.
 
-        Returns: 
+        Returns:
             conv: bool
                 Whether the SCF is converged.
             energy: float

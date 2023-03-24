@@ -562,7 +562,7 @@ class M3SOSCF:
                         self.mf.mo_coeff)
                 if type(irreps1) is numpy.ndarray:
                     irreps = irreps1
-        except:
+        except Exception:
             if self.method == 'uhf' or self.method == 'uks':
                 mo_coeff_symm_a = pyscf.symm.addons.symmetrize_orb(aux_mol, self.mf.mo_coeff[0])
                 mo_coeff_symm_b = pyscf.symm.addons.symmetrize_orb(aux_mol, self.mf.mo_coeff[1])
@@ -857,7 +857,7 @@ class SubconvergerReassigmentManager:
         '''
 
         maxTrust = numpy.max(trusts.flatten())
-        self.alpha = 1.0 / ((self.trust_scale_range[1] - self.trust_scale_range[0]) * 
+        self.alpha = 1.0 / ((self.trust_scale_range[1] - self.trust_scale_range[0]) *
                 (1 - maxTrust)**(self.trust_scale_range[2]) + self.trust_scale_range[0])
 
         log.info("Current Trust Scaling: " + str(self.alpha))
