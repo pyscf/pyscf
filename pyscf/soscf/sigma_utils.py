@@ -24,7 +24,7 @@ def matrixToVector(matrix, assm=None):
         assm = getVectorMatrixIndices(len(matrix))
     vec = matrix[assm[:,0],assm[:,1]]
     return vec
-    
+
 
 
 def getVectorMatrixIndices(size):
@@ -44,7 +44,7 @@ def contractVectorToVOSpace(subconverger, vector):
     occ_num = int(round(subconverger._m3.mf.mol.nelectron / 2))
     assm = getVectorMatrixIndices(subconverger._m3.getDegreesOfFreedom())
     v_reda = []
-    
+
     for i in range(len(vector)):
         if assm[i,0] >= occ_num and assm[i,1] < occ_num:
             v_reda.append(vector[i])
