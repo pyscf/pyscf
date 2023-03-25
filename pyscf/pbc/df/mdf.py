@@ -34,6 +34,7 @@ from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
+from pyscf.pbc.df.aft import _check_kpts
 from pyscf.pbc.df.gdf_builder import _CCGDFBuilder
 from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
 from pyscf.pbc.df.incore import libpbc, make_auxcell
@@ -125,7 +126,8 @@ class MDF(df.GDF):
         dfbuilder.mesh = self.mesh
         dfbuilder.linear_dep_threshold = self.linear_dep_threshold
         j_only = self._j_only or len(kpts_union) == 1
-        dfbuilder.make_j3c(cderi_file, j_only=j_only)
+        dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname,
+                           kptij_lst=kptij_lst)
 
         # mdf.mesh must be the mesh to generate cderi
         self.mesh = dfbuilder.mesh
@@ -164,7 +166,7 @@ class MDF(df.GDF):
 
         kpts, is_single_kpt = _check_kpts(self, kpts)
         if is_single_kpt:
-            return mdf_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
+            return mdf_jk.get_jk(self, dm, hermi, kpts[0], kpts_band, with_j,
                                  with_k, exxdiv)
 
         vj = vk = None
@@ -279,11 +281,11 @@ class _RSMDFBuilder(_RSGDFBuilder):
 
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
                       j_only=False, dataname='j3c', shls_slice=None,
-                      fft_dd_block=False):
+                      fft_dd_block=False, kk_idx=None):
         # dd_block from real-space integrals will be cancelled by AFT part
         # anyway. It's safe to omit dd_block when computing real-space int3c2e
         return super().outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
-                                     dataname, shls_slice, fft_dd_block)
+                                     dataname, shls_slice, fft_dd_block, kk_idx)
 
     def weighted_ft_ao(self, kpt):
         '''exp(-i*(G + k) dot r) * Coulomb_kernel'''
@@ -363,9 +365,9 @@ class _CCMDFBuilder(_CCGDFBuilder):
 
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
                       j_only=False, dataname='j3c', shls_slice=None,
-                      fft_dd_block=False):
+                      fft_dd_block=False, kk_idx=None):
         return super().outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
-                                     dataname, shls_slice, fft_dd_block)
+                                     dataname, shls_slice, fft_dd_block, kk_idx)
 
     def weighted_ft_ao(self, kpt):
         fused_cell = self.fused_cell

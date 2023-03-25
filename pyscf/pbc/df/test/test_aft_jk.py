@@ -294,7 +294,7 @@ class KnownValues(unittest.TestCase):
             vkR = np.zeros((n_dm,nkpts,nao,nao))
             vkI = np.zeros((n_dm,nkpts,nao,nao))
             vk = [vkR, vkI]
-            for kpt, ki_idx, kj_idx, self_conj in aft_jk.loop_k(cell, kpts):
+            for kpt, ki_idx, kj_idx, self_conj in aft_jk.kk_adapted_iter(cell, kpts):
                 Gv, Gvbase, kws = cell.get_Gv_weights(cell.mesh)
                 wcoulG = pbctools.get_coulG(cell, kpt, False, mf, cell.mesh, Gv)
                 wcoulG *= kws

@@ -121,6 +121,21 @@ def unique_with_wrap_around(cell, kpts):
     uniq_kpts = kpts[uniq_index]
     return uniq_kpts, uniq_index, uniq_inverse
 
+def members_with_wrap_around(cell, kpts, test_kpts):
+    '''Search the indices of kpts in first Brillouin zone.
+    [where(k==test_kpts) for k in kpts]
+
+    kpts : array_like
+        kpts to index
+    test_kpts : array_like
+        The values against which to index each value of `kpts`.
+    '''
+    scaled_kpts = cell.get_scaled_kpts(kpts)
+    scaled_db = cell.get_scaled_kpts(test_kpts)
+    dk = scaled_kpts[:,None] - scaled_db
+    idx, idy = np.where(abs(np.modf(dk)[0]).max(axis=2) < KPT_DIFF_TOL)
+    return np.asarray(idy[idx.argsort()], dtype=np.int32)
+
 def group_by_conj_pairs(cell, kpts, wrap_around=True, return_kpts_pairs=True):
     '''Find all conjugation k-point pairs in the input kpts.
     This function lables three types of conjugation.
@@ -171,6 +186,51 @@ def group_by_conj_pairs(cell, kpts, wrap_around=True, return_kpts_pairs=True):
         return idx_pairs, kpts_pairs
     else:
         return idx_pairs
+
+def kk_adapted_iter(cell, kpts, kk_idx=None, time_reversal_symmetry=True):
+    '''Generates kpt which is adapted to the kpt_p in (ij|p)'''
+    if kk_idx is not None and time_reversal_symmetry:
+        raise NotImplementedError('Time reversal symmetry with custom ki-kj pairs')
+
+    log = lib.logger.new_logger(cell)
+    nkpts = len(kpts)
+    dk = (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3)
+    if kk_idx is not None:
+        dk = dk[kk_idx]
+    uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(cell, dk)
+    scaled_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
+    log.debug('Num uniq kpts %d', len(uniq_kpts))
+    k_conj_groups = group_by_conj_pairs(cell, uniq_kpts, return_kpts_pairs=False)
+    for k, k_conj in k_conj_groups:
+        self_conj = k == k_conj
+        if kk_idx is None:
+            kpt_ij_idx = np.where(uniq_inverse == k)[0]
+            assert k_conj is not None
+        else:
+            kpt_ij_idx = kk_idx[uniq_inverse == k]
+        kpt_ij_idx = np.asarray(kpt_ij_idx, dtype=np.int32)
+        kpti_idx = kpt_ij_idx // nkpts
+        kptj_idx = kpt_ij_idx % nkpts
+        log.debug1('ft_ao_pair for scaled kpt = %s', scaled_kpts[k])
+        log.debug2('ft_ao_pair for kpti_idx = %s', kpti_idx)
+        log.debug2('ft_ao_pair for kptj_idx = %s', kptj_idx)
+        yield uniq_kpts[k], kpti_idx, kptj_idx, self_conj
+
+        if self_conj or k_conj is None or time_reversal_symmetry:
+            continue
+
+        # For time-reversal symmetry
+        if kk_idx is None:
+            kpt_ij_idx = np.where(uniq_inverse == k_conj)[0]
+        else:
+            kpt_ij_idx = kk_idx[uniq_inverse == k_conj]
+        kpt_ij_idx = np.asarray(kpt_ij_idx, dtype=np.int32)
+        kpti_idx = kpt_ij_idx // nkpts
+        kptj_idx = kpt_ij_idx % nkpts
+        log.debug1('ft_ao_pair for scaled kpt = %s', scaled_kpts[k_conj])
+        log.debug2('ft_ao_pair for kpti_idx = %s', kpti_idx)
+        log.debug2('ft_ao_pair for kptj_idx = %s', kptj_idx)
+        yield uniq_kpts[k_conj], kpti_idx, kptj_idx, self_conj
 
 def loop_kkk(nkpts):
     range_nkpts = range(nkpts)

@@ -301,7 +301,7 @@ class FFTDF(lib.StreamObject):
 
         kpts, is_single_kpt = _check_kpts(self, kpts)
         if is_single_kpt:
-            vj, vk = fft_jk.get_jk(self, dm, hermi, kpts, kpts_band,
+            vj, vk = fft_jk.get_jk(self, dm, hermi, kpts[0], kpts_band,
                                    with_j, with_k, exxdiv)
         else:
             vj = vk = None

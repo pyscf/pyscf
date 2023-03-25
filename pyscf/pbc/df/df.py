@@ -283,7 +283,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         dfbuilder.mesh = self.mesh
         dfbuilder.linear_dep_threshold = self.linear_dep_threshold
         j_only = self._j_only or len(kpts_union) == 1
-        dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname)
+        dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname,
+                           kptij_lst=kptij_lst)
 
     def cderi_array(self, label=None):
         '''
@@ -329,7 +330,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             b0, b1 = aux_slice
             naux = b1 - b0
             if is_real:
-                LpqR = numpy.asarray(j3c[b0:b1])
+                LpqR = numpy.asarray(j3c[b0:b1].real)
                 if compact and LpqR.shape[1] == nao**2:
                     LpqR = lib.pack_tril(LpqR.reshape(naux,nao,nao))
                 elif unpack and LpqR.shape[1] != nao**2:
@@ -425,7 +426,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
         kpts, is_single_kpt = _check_kpts(self, kpts)
         if is_single_kpt:
-            return df_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
+            return df_jk.get_jk(self, dm, hermi, kpts[0], kpts_band, with_j,
                                 with_k, exxdiv)
 
         vj = vk = None
@@ -479,23 +480,39 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 # object when self._cderi is provided.
         if self._cderi is None:
             self.build()
-        # self._cderi['j3c/k_id/seg_id']
-        with addons.load(self._cderi, f'{self._dataname}/0') as feri:
-            if isinstance(feri, h5py.Group):
-                naux = feri['0'].shape[0]
-            else:
-                naux = feri.shape[0]
 
         cell = self.cell
-        if (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum' and
-            not isinstance(self._cderi, numpy.ndarray)):
-            with h5py.File(self._cderi, 'r') as feri:
-                if f'{self._dataname}-/0' in feri:
-                    dat = feri[f'{self._dataname}-/0']
-                    if isinstance(dat, h5py.Group):
-                        naux += dat['0'].shape[0]
-                    else:
-                        naux += dat.shape[0]
+        if isinstance(self._cderi, numpy.ndarray):
+            # self._cderi is likely offered by user. Ensure
+            # cderi.shape = (nkpts,naux,nao_pair)
+            nao = cell.nao
+            if self._cderi.shape[-1] == nao:
+                assert self._cderi.ndim == 4
+                naux = self._cderi.shape[1]
+            elif self._cderi.shape[-1] in (nao**2, nao*(nao+1)//2):
+                assert self._cderi.ndim == 3
+                naux = self._cderi.shape[1]
+            else:
+                raise RuntimeError('cderi shape')
+            return naux
+
+        # self._cderi['j3c/k_id/seg_id']
+        with h5py.File(self._cderi, 'r') as feri:
+            key = next(iter(feri[self._dataname].keys()))
+            dat = feri[f'{self._dataname}/{key}']
+            if isinstance(dat, h5py.Group):
+                naux = dat['0'].shape[0]
+            else:
+                naux = dat.shape[0]
+
+            if (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum' and
+                f'{self._dataname}-' in feri):
+                key = next(iter(feri[f'{self._dataname}-'].keys()))
+                dat = feri[f'{self._dataname}-/{key}']
+                if isinstance(dat, h5py.Group):
+                    naux += dat['0'].shape[0]
+                else:
+                    naux += dat.shape[0]
         return naux
 
 DF = GDF
@@ -531,7 +548,12 @@ class CDERIArray:
         self.j3c = data_group[label]
         self.kpts = data_group['kpts'][:]
         self.nkpts = self.kpts.shape[0]
-        nao_pair = sum(dat.shape[1] for dat in self.j3c['0'].values())
+        self.naux = 0
+        nao_pair = 0
+        for dat in self.j3c.values():
+            nao_pair = sum(x.shape[1] for x in dat.values())
+            self.naux = dat['0'].shape[0]
+            break
         if self.aosym == 's1':
             nao = int(nao_pair ** .5)
             assert nao ** 2 == nao_pair
@@ -540,7 +562,6 @@ class CDERIArray:
             self.nao = int((nao_pair * 2)**.5)
         else:
             raise NotImplementedError
-        self.naux = self.j3c['0/0'].shape[0]
 
     def __del__(self):
         if not self._data_is_h5obj:

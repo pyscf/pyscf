@@ -33,8 +33,8 @@ from pyscf.gto.ft_ao import ft_aopair
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df.df_jk import (_format_dms, _format_kpts_band, _format_jks,
                                 _ewald_exxdiv_for_G0)
-from pyscf.pbc.lib.kpts_helper import (is_zero, unique_with_wrap_around,
-                                       group_by_conj_pairs)
+from pyscf.pbc.lib.kpts_helper import (is_zero, group_by_conj_pairs,
+                                       kk_adapted_iter)
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.df.incore import libpbc
 
@@ -264,7 +264,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         log.debug1('Gblksize = %d', Gblksize)
         buf = np.empty(nkpts*Gblksize*nao**2*2)
 
-    for group_id, (kpt, ki_idx, kj_idx, self_conj) in enumerate(loop_k(cell, kpts)):
+    for group_id, (kpt, ki_idx, kj_idx, self_conj) \
+            in enumerate(kk_adapted_iter(cell, kpts)):
         vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh)
         for p0, p1 in lib.prange(0, ngrids, Gblksize):
             log.debug3('update_vk [%s:%s]', p0, p1)
@@ -365,26 +366,6 @@ def get_k_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
-
-def loop_k(cell, kpts):
-    '''Generates unique kpt for p in (ij|p)'''
-    log = logger.new_logger(cell)
-    nkpts = len(kpts)
-    uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
-        cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-    scaled_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
-    log.debug('Num uniq kpts %d', len(uniq_kpts))
-    k_conj_groups = group_by_conj_pairs(cell, uniq_kpts, return_kpts_pairs=False)
-    for k, k_conj in k_conj_groups:
-        kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
-        kpti_idx = kpt_ij_idx // nkpts
-        kptj_idx = kpt_ij_idx % nkpts
-        kpt = uniq_kpts[k]
-        log.debug1('ft_ao_pair for scaled kpt = %s', scaled_kpts[k])
-        log.debug2('ft_ao_pair for kpti_idx = %s', kpti_idx)
-        log.debug2('ft_ao_pair for kptj_idx = %s', kptj_idx)
-        self_conj = k_conj is None or k == k_conj
-        yield kpt, kpti_idx, kptj_idx, self_conj
 
 def _update_vk_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
                 k_to_compute, t_rev_pairs):

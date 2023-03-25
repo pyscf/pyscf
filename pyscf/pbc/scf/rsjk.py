@@ -41,7 +41,7 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df.df_jk import (zdotNN, zdotCN, zdotNC, _ewald_exxdiv_for_G0,
                                 _format_dms, _format_kpts_band, _format_jks)
 from pyscf.pbc.df.incore import libpbc, _get_cache_size
-from pyscf.pbc.lib.kpts_helper import (is_zero, unique_with_wrap_around,
+from pyscf.pbc.lib.kpts_helper import (is_zero, kk_adapted_iter,
                                        group_by_conj_pairs, intersection)
 from pyscf import __config__
 
@@ -839,7 +839,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             t_rev_pairs = np.asarray(t_rev_pairs, dtype=np.int32, order='F')
         except TypeError:
             t_rev_pairs = [[k, k] if k_conj is None else [k, k_conj]
-                             for k, k_conj in t_rev_pairs]
+                           for k, k_conj in t_rev_pairs]
             t_rev_pairs = np.asarray(t_rev_pairs, dtype=np.int32, order='F')
         log.debug1('Num kpts conj_pairs %d', len(t_rev_pairs))
         time_reversal_symmetry = self.time_reversal_symmetry
@@ -857,6 +857,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             k_to_compute[t_rev_pairs[:,0]] = 1
         else:
             k_to_compute = np.ones(nkpts, dtype=np.int8)
+            t_rev_pairs = None
 
         dm_factor = getattr(dm_kpts, 'dm_factor', None)
         contract_mo_early = False
@@ -1039,7 +1040,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 buf1 = np.empty(nkpts*Gblksize*naod**2*2)
 
         for group_id, (kpt, ki_idx, kj_idx, self_conj) \
-                in enumerate(aft_jk.loop_k(cell, kpts)):
+                in enumerate(kk_adapted_iter(cell, kpts)):
             coulG = self.weighted_coulG(kpt, exxdiv, mesh)
             if coulG_SR_at_G0 is not None:
                 # For cell.dimension = 2, coulG is computed with truncated coulomb
@@ -1118,7 +1119,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             log.debug1('Gblksize = %d', Gblksize)
             buf = np.empty(nkpts*Gblksize*naod**2*2)
             for group_id, (kpt, ki_idx, kj_idx, self_conj) \
-                    in enumerate(aft_jk.loop_k(cell, kpts)):
+                    in enumerate(kk_adapted_iter(cell, kpts)):
                 with lib.temporary_env(cell, dimension=3):
                     coulG_SR = self.weighted_coulG_SR(kpt, False, mesh_d)
                 if is_zero(kpt) and coulG_SR_at_G0 is not None:

@@ -665,7 +665,7 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
 
         kpts, is_single_kpt = _check_kpts(self, kpts)
         if is_single_kpt:
-            return aft_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
+            return aft_jk.get_jk(self, dm, hermi, kpts[0], kpts_band, with_j,
                                   with_k, exxdiv)
 
         vj = vk = None

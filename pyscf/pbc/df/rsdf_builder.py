@@ -30,6 +30,7 @@ Ref:
 import os
 import copy
 import ctypes
+import warnings
 import tempfile
 import numpy as np
 import scipy.linalg
@@ -46,8 +47,8 @@ from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df.incore import libpbc, Int3cBuilder
-from pyscf.pbc.lib.kpts_helper import (is_zero, member, unique_with_wrap_around,
-                                       group_by_conj_pairs)
+from pyscf.pbc.lib.kpts_helper import (is_zero, member, kk_adapted_iter,
+                                       members_with_wrap_around, KPT_DIFF_TOL)
 from pyscf import __config__
 
 OMEGA_MIN = 0.08
@@ -364,7 +365,7 @@ class _RSGDFBuilder(Int3cBuilder):
 
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
                       j_only=False, dataname='j3c', shls_slice=None,
-                      fft_dd_block=None):
+                      fft_dd_block=None, kk_idx=None):
         r'''The SR part of 3-center integrals (ij|L) with double lattice sum.
 
         Kwargs:
@@ -402,19 +403,10 @@ class _RSGDFBuilder(Int3cBuilder):
         if fft_dd_block is None:
             fft_dd_block = self.exclude_dd_block
 
-        if fft_dd_block:
-            self._outcore_dd_block(fswap, intor, aosym, comp, j_only,
-                                   dataname, shls_slice)
-
         if self.exclude_d_aux and cell.dimension > 0:
             rs_auxcell = self.rs_auxcell.compact_basis_cell()
         else:
             rs_auxcell = self.rs_auxcell
-        # int3c may be the regular int3c2e, LR-int3c2e or SR-int3c2e, depending
-        # on how self.supmol is initialized
-        int3c = self.gen_int3c_kernel(intor, aosym, comp, j_only,
-                                      rs_auxcell=rs_auxcell)
-
         if shls_slice is None:
             shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
 
@@ -434,33 +426,48 @@ class _RSGDFBuilder(Int3cBuilder):
         else:
             merge_dd = None
 
+        reindex_k = None
         # TODO: shape = (comp, nao_pair, naux)
         shape = (nao_pair, naux)
         if j_only or nkpts == 1:
-            for k in range(nkpts):
-                fswap.create_dataset(f'{dataname}R/{k*nkpts+k}', shape, 'f8')
-                # exclude imaginary part for gamma point
-                if not is_zero(kpts[k]):
-                    fswap.create_dataset(f'{dataname}I/{k*nkpts+k}', shape, 'f8')
             nkpts_ij = nkpts
-            kikj_idx = [k*nkpts+k for k in range(nkpts)]
+            ks = np.arange(nkpts, dtype=np.int32)
+            kikj_idx = ks * nkpts + ks
+            if kk_idx is not None:
+                # Ensure kk_idx is a subset of all possible ki-kj paris
+                assert np.all(np.isin(kk_idx, kikj_idx))
+                kikj_idx = kk_idx
+            reindex_k = kikj_idx // nkpts
         else:
-            for ki in range(nkpts):
-                for kj in range(nkpts):
-                    fswap.create_dataset(f'{dataname}R/{ki*nkpts+kj}', shape, 'f8')
-                    fswap.create_dataset(f'{dataname}I/{ki*nkpts+kj}', shape, 'f8')
-                # exclude imaginary part for gamma point
-                if is_zero(kpts[ki]):
-                    del fswap[f'{dataname}I/{ki*nkpts+ki}']
             nkpts_ij = nkpts * nkpts
-            kikj_idx = range(nkpts_ij)
-            if merge_dd:
-                uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
-                    cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-                kpt_ij_pairs = group_by_conj_pairs(cell, uniq_kpts)[0]
+            if kk_idx is None:
+                kikj_idx = np.arange(nkpts_ij, dtype=np.int32)
+            else:
+                kikj_idx = kk_idx
+            reindex_k = kikj_idx
+            if merge_dd and kk_idx is None:
+                kpt_ij_iters = list(kk_adapted_iter(cell, kpts))
+
+        for idx in kikj_idx:
+            fswap.create_dataset(f'{dataname}R/{idx}', shape, 'f8')
+            fswap.create_dataset(f'{dataname}I/{idx}', shape, 'f8')
+        # exclude imaginary part for gamma point
+        for k in np.where(abs(kpts).max(axis=1) < KPT_DIFF_TOL)[0]:
+            if f'{dataname}I/{k*nkpts+k}' in fswap:
+                del fswap[f'{dataname}I/{k*nkpts+k}']
 
         if naux == 0:
             return fswap
+
+        if fft_dd_block:
+            self._outcore_dd_block(fswap, intor, aosym, comp, j_only,
+                                   dataname, kk_idx=kk_idx)
+
+        # int3c may be the regular int3c2e, LR-int3c2e or SR-int3c2e, depending
+        # on how self.supmol is initialized
+        # TODO: call gen_int3c_kernel(reindex_k=kikj_idx) for a subset of kpts
+        int3c = self.gen_int3c_kernel(intor, aosym, comp, j_only,
+                                      reindex_k=reindex_k, rs_auxcell=rs_auxcell)
 
         mem_now = lib.current_memory()[0]
         log.debug2('memory = %s', mem_now)
@@ -497,20 +504,18 @@ class _RSGDFBuilder(Int3cBuilder):
                 if gamma_point_only:
                     merge_dd(outR[0], fswap[f'{dataname}R-dd/0'], shls_slice)
                 elif j_only or nkpts == 1:
-                    for k in range(nkpts):
-                        merge_dd(outR[k], fswap[f'{dataname}R-dd/{k*nkpts+k}'], shls_slice)
-                        merge_dd(outI[k], fswap[f'{dataname}I-dd/{k*nkpts+k}'], shls_slice)
-                else:
-                    for k, k_conj in kpt_ij_pairs:
-                        kpt_ij_idx = np.where(uniq_inverse == k)[0]
-                        if k_conj is None or k == k_conj:
+                    for k, idx in enumerate(kikj_idx):
+                        merge_dd(outR[k], fswap[f'{dataname}R-dd/{idx}'], shls_slice)
+                        merge_dd(outI[k], fswap[f'{dataname}I-dd/{idx}'], shls_slice)
+                elif kk_idx is None:
+                    for _, ki_idx, kj_idx, self_conj in kpt_ij_iters:
+                        kpt_ij_idx = ki_idx * nkpts + kj_idx
+                        if self_conj:
                             for ij_idx in kpt_ij_idx:
                                 merge_dd(outR[ij_idx], fswap[f'{dataname}R-dd/{ij_idx}'], shls_slice)
                                 merge_dd(outI[ij_idx], fswap[f'{dataname}I-dd/{ij_idx}'], shls_slice)
                         else:
-                            ki_lst = kpt_ij_idx // nkpts
-                            kj_lst = kpt_ij_idx % nkpts
-                            kpt_ji_idx = kj_lst * nkpts + ki_lst
+                            kpt_ji_idx = kj_idx * nkpts + ki_idx
                             for ij_idx, ji_idx in zip(kpt_ij_idx, kpt_ji_idx):
                                 j3cR_dd = np.asarray(fswap[f'{dataname}R-dd/{ij_idx}'])
                                 merge_dd(outR[ij_idx], j3cR_dd, shls_slice)
@@ -518,17 +523,22 @@ class _RSGDFBuilder(Int3cBuilder):
                                 j3cI_dd = np.asarray(fswap[f'{dataname}I-dd/{ij_idx}'])
                                 merge_dd(outI[ij_idx], j3cI_dd, shls_slice)
                                 merge_dd(outI[ji_idx],-j3cI_dd.transpose(1,0,2), shls_slice)
+                else:
+                    for k, idx in enumerate(kikj_idx):
+                        merge_dd(outR[k], fswap[f'{dataname}R-dd/{idx}'], shls_slice)
+                        merge_dd(outI[k], fswap[f'{dataname}I-dd/{idx}'], shls_slice)
 
-            for k, kk_idx in enumerate(kikj_idx):
-                fswap[f'{dataname}R/{kk_idx}'][row0:row1] = outR[k]
-                if f'{dataname}I/{kk_idx}' in fswap:
-                    fswap[f'{dataname}I/{kk_idx}'][row0:row1] = outI[k]
+            for k, idx in enumerate(kikj_idx):
+                fswap[f'{dataname}R/{idx}'][row0:row1] = outR[k]
+                if f'{dataname}I/{idx}' in fswap:
+                    fswap[f'{dataname}I/{idx}'][row0:row1] = outI[k]
             outR = outI = None
         bufR = bufI = None
         return fswap
 
     def _outcore_dd_block(self, h5group, intor='int3c2e', aosym='s2', comp=None,
-                          j_only=False, dataname='j3c', shls_slice=None):
+                          j_only=False, dataname='j3c', shls_slice=None,
+                          kk_idx=None):
         '''
         The block of smooth AO basis in i and j of (ij|L) with full Coulomb kernel
         '''
@@ -633,8 +643,11 @@ class _RSGDFBuilder(Int3cBuilder):
                 #:for k in range(nkpts):
                 #:    h5group[f'{dataname}R-dd/{k*nkpts+k}'] = lib.ddot(join_R(k, k), Vaux.T)
                 #:    h5group[f'{dataname}I-dd/{k*nkpts+k}'] = lib.ddot(join_I(k, k), Vaux.T)
-                k_idx = np.arange(nkpts, dtype=np.int32)
-                kpt_ij_idx = k_idx * nkpts + k_idx
+                if kk_idx is None:
+                    ks = np.arange(nkpts, dtype=np.int32)
+                    kpt_ij_idx = ks * nkpts + ks
+                else:
+                    kpt_ij_idx = np.asarray(kk_idx, dtype=np.int32)
                 j3cR = np.empty((nkpts, nao, nao, naux))
                 j3cI = np.empty((nkpts, nao, nao, naux))
                 libpbc.PBC_kzdot_CNN_s1(j3cR.ctypes.data_as(ctypes.c_void_p),
@@ -646,22 +659,17 @@ class _RSGDFBuilder(Int3cBuilder):
                                         ctypes.c_int(nao), ctypes.c_int(nao),
                                         ctypes.c_int(naux), ctypes.c_int(ngrids),
                                         ctypes.c_int(nkpts), ctypes.c_int(nkpts))
-                for k, kk_idx in enumerate(kpt_ij_idx):
-                    h5group[f'{dataname}R-dd/{kk_idx}'] = j3cR[k]
-                    h5group[f'{dataname}I-dd/{kk_idx}'] = j3cI[k]
+                for k, idx in enumerate(kpt_ij_idx):
+                    h5group[f'{dataname}R-dd/{idx}'] = j3cR[k]
+                    h5group[f'{dataname}I-dd/{idx}'] = j3cI[k]
 
         else:
-            uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
-                cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-            scaled_uniq_kpts = cell_d.get_scaled_kpts(uniq_kpts).round(5)
-            log.debug('Num uniq kpts %d', len(uniq_kpts))
-            log.debug2('Scaled unique kpts %s', scaled_uniq_kpts)
-            for k, k_conj in group_by_conj_pairs(cell, uniq_kpts)[0]:
-                # Find ki's and kj's that satisfy k_aux = kj - ki
-                kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
+            enable_t_rev_sym = kk_idx is None
+            for kpt, ki_idx, kj_idx, self_conj \
+                    in kk_adapted_iter(cell, kpts, kk_idx, enable_t_rev_sym):
+                kpt_ij_idx = np.asarray(ki_idx * nkpts + kj_idx, dtype=np.int32)
                 nkptij = len(kpt_ij_idx)
-
-                Vaux = get_Vaux(uniq_kpts[k])
+                Vaux = get_Vaux(kpt)
                 VauxR = np.asarray(Vaux.real, order='C')
                 VauxI = np.asarray(Vaux.imag, order='C')
                 Vaux = None
@@ -686,9 +694,9 @@ class _RSGDFBuilder(Int3cBuilder):
                                         ctypes.c_int(nao), ctypes.c_int(nao),
                                         ctypes.c_int(naux), ctypes.c_int(ngrids),
                                         ctypes.c_int(nkptij), ctypes.c_int(nkpts))
-                for k, kk_idx in enumerate(kpt_ij_idx):
-                    h5group[f'{dataname}R-dd/{kk_idx}'] = j3cR[k]
-                    h5group[f'{dataname}I-dd/{kk_idx}'] = j3cI[k]
+                for k, idx in enumerate(kpt_ij_idx):
+                    h5group[f'{dataname}R-dd/{idx}'] = j3cR[k]
+                    h5group[f'{dataname}I-dd/{idx}'] = j3cI[k]
                 j3cR = j3cI = VauxR = VauxI = None
 
     def weighted_ft_ao(self, kpt):
@@ -820,7 +828,7 @@ class _RSGDFBuilder(Int3cBuilder):
                 cderi_negative = lib.dot(j2c_negative, j3c)
         return cderi, cderi_negative
 
-    def gen_uniq_kpts_groups(self, j_only, h5swap):
+    def gen_uniq_kpts_groups(self, j_only, h5swap, kk_idx=None):
         '''Group (kpti,kptj) pairs
         '''
         cpu1 = (logger.process_clock(), logger.perf_counter())
@@ -834,44 +842,41 @@ class _RSGDFBuilder(Int3cBuilder):
             cpu1 = log.timer('int2c2e', *cpu1)
             cd_j2c = self.decompose_j2c(j2c)
             j2c = None
-            ki = np.arange(nkpts)
-            kpt_ii_idx = ki * nkpts + ki
+            if kk_idx is None:
+                ki = np.arange(nkpts, dtype=np.int32)
+                kpt_ii_idx = ki * nkpts + ki
+            else:
+                kpt_ii_idx = np.asarray(kk_idx, dtype=np.int32)
             yield uniq_kpts[0], kpt_ii_idx, cd_j2c
 
         else:
-            uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
-                cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-            scaled_uniq_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
-            log.debug('Num uniq kpts %d', len(uniq_kpts))
-            log.debug2('scaled unique kpts %s', scaled_uniq_kpts)
-
-            kpts_idx_pairs = group_by_conj_pairs(cell, uniq_kpts)[0]
-            j2c_uniq_kpts = uniq_kpts[[k for k, _ in kpts_idx_pairs]]
+            enable_t_rev_sym = kk_idx is None
+            kpt_ij_iters = list(kk_adapted_iter(cell, kpts, kk_idx, enable_t_rev_sym))
+            j2c_uniq_kpts = np.asarray([s[0] for s in kpt_ij_iters])
             for k, j2c in enumerate(self.get_2c2e(j2c_uniq_kpts)):
                 h5swap[f'j2c/{k}'] = j2c
                 j2c = None
             cpu1 = log.timer('int2c2e', *cpu1)
 
-            for j2c_idx, (k, k_conj) in enumerate(kpts_idx_pairs):
+            for j2c_idx, (kpt, ki_idx, kj_idx, self_conj) \
+                    in enumerate(kpt_ij_iters):
                 # Find ki's and kj's that satisfy k_aux = kj - ki
-                log.debug1('Cholesky decomposition for j2c at kpt %s %s',
-                           k, scaled_uniq_kpts[k])
+                log.debug1('Cholesky decomposition for j2c %d', j2c_idx)
                 j2c = h5swap[f'j2c/{j2c_idx}']
-                if k == k_conj:
+                if self_conj:
                     # DF metric for self-conjugated k-point should be real
                     j2c = np.asarray(j2c).real
                 cd_j2c = self.decompose_j2c(j2c)
                 j2c = None
-                kpt_ij_idx = np.where(uniq_inverse == k)[0]
-                yield uniq_kpts[k], kpt_ij_idx, cd_j2c
 
-                if k_conj is None or k == k_conj:
+                kpt_ij_idx = ki_idx * nkpts + kj_idx
+                yield kpt, kpt_ij_idx, cd_j2c
+
+                if self_conj or not enable_t_rev_sym:
                     continue
 
                 # Swap ki, kj for the conjugated case
-                log.debug1('Cholesky decomposition for the conjugated kpt %s %s',
-                           k_conj, scaled_uniq_kpts[k_conj])
-                kpt_ji_idx = np.where(uniq_inverse == k_conj)[0]
+                kpt_ji_idx = kj_idx * nkpts + ki_idx
                 # If self.mesh is not enough to converge compensated charge or
                 # SR-coulG, the conj symmetry between j2c[k] and j2c[k_conj]
                 # (j2c[k] == conj(j2c[k_conj]) may not be strictly held.
@@ -880,10 +885,10 @@ class _RSGDFBuilder(Int3cBuilder):
                 # contraction for cderi of k and cderi of k_conj. By using the
                 # conj(j2c[k]) and -uniq_kpts[k] (instead of j2c[k_conj] and
                 # uniq_kpts[k_conj]), conj-symmetry in j2c is imposed.
-                yield -uniq_kpts[k], kpt_ji_idx, _conj_j2c(cd_j2c)
+                yield -kpt, kpt_ji_idx, _conj_j2c(cd_j2c)
 
     def make_j3c(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
-                 j_only=False, dataname='j3c', shls_slice=None):
+                 j_only=False, dataname='j3c', shls_slice=None, kptij_lst=None):
         if self.rs_cell is None:
             self.build()
         log = logger.new_logger(self)
@@ -899,8 +904,22 @@ class _RSGDFBuilder(Int3cBuilder):
         else:
             ish0, ish1 = shls_slice[:2]
 
+        if kptij_lst is not None:
+            if aosym == 's2':
+                warnings.warn('rsdf_builder does not support aosym="s2" for '
+                              'custom kptij_lst')
+                aosym = 's1'
+            ki_idx = members_with_wrap_around(cell, kptij_lst[:,0], kpts)
+            kj_idx = members_with_wrap_around(cell, kptij_lst[:,1], kpts)
+            if ki_idx.size != len(kptij_lst) or kj_idx.size != len(kptij_lst):
+                msg = f'some k-points in kptij_lst are not found in {self}.kpts'
+                raise RuntimeError(msg)
+            kk_idx = ki_idx * nkpts + kj_idx
+        else:
+            kk_idx = None
+
         fswap = self.outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
-                                   dataname, shls_slice)
+                                   'j3c', shls_slice, kk_idx=kk_idx)
         cpu1 = log.timer('pass1: real space int3c2e', *cpu0)
 
         feri = h5py.File(cderi_file, 'w')
@@ -966,15 +985,16 @@ class _RSGDFBuilder(Int3cBuilder):
                         Gpq = None
 
                 j3cR, j3cI = j3c
-                for k, kk_idx in enumerate(kpt_ij_idx):
+                for k, idx in enumerate(kpt_ij_idx):
                     cderi, cderi_negative = self.solve_cderi(j2c, j3cR[k], j3cI[k])
-                    feri[f'{dataname}/{kk_idx}/{istep}'] = cderi
+                    feri[f'{dataname}/{idx}/{istep}'] = cderi
                     if cderi_negative is not None:
                         # for low-dimension systems
-                        feri[f'{dataname}-/{kk_idx}/{istep}'] = cderi_negative
+                        feri[f'{dataname}-/{idx}/{istep}'] = cderi_negative
                 j3cR = j3cI = j3c = cderi = None
 
-        for kpt, kpt_ij_idx, cd_j2c in self.gen_uniq_kpts_groups(j_only, fswap):
+        for kpt, kpt_ij_idx, cd_j2c \
+                in self.gen_uniq_kpts_groups(j_only, fswap, kk_idx=kk_idx):
             make_cderi(kpt, kpt_ij_idx, cd_j2c)
 
         feri.close()

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import unittest
+import tempfile
 import numpy
 from pyscf import lib
 import pyscf.pbc

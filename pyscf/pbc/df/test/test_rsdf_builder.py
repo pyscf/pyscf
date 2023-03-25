@@ -182,6 +182,27 @@ class KnownValues(unittest.TestCase):
                 v2 = lib.unpack_tril(v_s2[ki]).reshape(v1.shape)
                 self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
 
+    def test_make_j3c_kptij_lst(self):
+        kpts = cell.make_kpts([3,3,3])
+        dfbuilder = rsdf_builder._RSGDFBuilder(cell, auxcell, kpts)
+        ki_idx = np.array([0 , 3 , 4 , 5, 15, 8, 9])
+        kj_idx = np.array([15, 18, 21, 1, 2 , 4, 5])
+        kij_idx = np.array([ki_idx,kj_idx]).T
+        kptij_lst = kpts[kij_idx]
+        with tempfile.NamedTemporaryFile() as tmpf:
+            cderi = tmpf.name
+            dfbuilder.make_j3c(cderi, aosym='s1')
+            with df.CDERIArray(cderi) as cderi_array:
+                ref = np.array([cderi_array[ki, kj] for ki, kj in kij_idx])
+
+        with tempfile.NamedTemporaryFile() as tmpf:
+            cderi = tmpf.name
+            dfbuilder.make_j3c(cderi, aosym='s1', kptij_lst=kptij_lst)
+            with df.CDERIArray(cderi) as cderi_array:
+                v1 = np.array([cderi_array[ki, kj] for ki, kj in kij_idx])
+        self.assertAlmostEqual(abs(ref - v1).max(), 0, 9)
+        self.assertAlmostEqual(lib.fp(v1), (0.11778572205661936-0.236925902605606j), 8)
+
     def test_make_j3c_gamma_2d(self):
         cell = pgto.M(atom='He 0 0 0; He 0.9 0 0',
                       basis=basis,
