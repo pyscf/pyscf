@@ -40,7 +40,7 @@ einsum = lib.einsum
 # core routines, kernel, rpa_ecorr, rho_response
 # ****************************************************************************
 
-def kernel(rpa, mo_energy, mo_coeff, Lpq=None, nw=None, x0=None, verbose=logger.NOTE):
+def kernel(rpa, mo_energy, mo_coeff, Lpq=None, nw=40, x0=0.5, verbose=logger.NOTE):
     """
     RPA correlation and total energy
 
