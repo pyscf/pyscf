@@ -2430,7 +2430,7 @@ class Mole(lib.StreamObject):
         self.__dict__.update(loads(molstr).__dict__)
         return self
 
-    def build(self, dump_input=True, parse_arg=True,
+    def build(self, dump_input=True, parse_arg=False,
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
               charge=None, spin=0, symmetry=None, symmetry_subgroup=None,
