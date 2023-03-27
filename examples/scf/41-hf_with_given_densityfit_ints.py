@@ -48,7 +48,7 @@ mf.kernel()
 #
 with h5py.File(ftmp.name, 'r') as file1:
     mf = scf.density_fit(scf.RHF(fake_mol))
-    mf._cderi = file1['j3c']
+    mf._cderi = file1
     mf.get_hcore = lambda *args: (mol.intor('cint1e_kin_sph') +
                                   mol.intor('cint1e_nuc_sph'))
     mf.get_ovlp = lambda *args: mol.intor('cint1e_ovlp_sph')
