@@ -23,6 +23,7 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
 from pyscf.data import elements
+from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf import __config__
 
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
@@ -169,10 +170,16 @@ def make_auxbasis(mol, mp2fit=False):
                     auxb = DEFAULT_AUXBASIS[balias][1]
                 else:
                     auxb = DEFAULT_AUXBASIS[balias][0]
-                if auxb is not None and gto.basis.load(auxb, k):
-                    auxbasis[k] = auxb
-                    logger.info(mol, 'Default auxbasis %s is used for %s %s',
-                                auxb, k, _basis[k])
+                if auxb is not None:
+                    try:
+                        # Test if basis auxb for element k is available
+                        gto.basis.load(auxb, k)
+                    except BasisNotFoundError:
+                        pass
+                    else:
+                        auxbasis[k] = auxb
+                        logger.info(mol, 'Default auxbasis %s is used for %s %s',
+                                    auxb, k, _basis[k])
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS
