@@ -254,7 +254,7 @@ class M3SOSCF:
 
         if type(dm0) is numpy.ndarray:
             self.initDensityMatrixDirectly(dm0)
-        elif type(dm0) is NoneType:
+        elif type(dm0) is type(None):
             pass
         else:
             raise Exception('Illegal initial matrix: dm0 is not a numpy.ndarray.')

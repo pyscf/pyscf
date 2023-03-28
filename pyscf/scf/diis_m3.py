@@ -82,20 +82,20 @@ class DIIS_M3:
         self.mem_size = mem_size
         self.mem_scale = mem_scale
 
-    def kernel(self, bufferSize=10, switchThresh=10**-6, hardSwitch=100):
+    def kernel(self, buffer_size=10, switch_thresh=10**-6, hard_switch=100):
         '''
         Main driver for DIIS/M3.
 
         Args:
             None
         Kwargs:
-            bufferSize: int
+            buffer_size: int
                 Minimum number of DIIS iterations. Strongly recommended to be at least the size of the DIIS
                 buffer.
-            switchThresh: float
+            switch_thresh: float
                 Maximum difference of energy that is tolerated between two macro-iterations of DIIS before
                 a switch to M3 is enforced.
-            hardSwitch: int
+            hard_switch: int
                 Maximum number of DIIS iterations (not macro-iterations) that are allowed before a switch to
                 M3 is enforced.
 
@@ -113,7 +113,7 @@ class DIIS_M3:
 
         '''
         converged = False
-        self.mf.max_cycle = bufferSize
+        self.mf.max_cycle = buffer_size
         old_energy = self.mf.kernel()
         diis_conv = self.mf.converged
         mo_energy = self.mf.mo_energy
@@ -135,7 +135,7 @@ class DIIS_M3:
             denergy = new_energy - old_energy
             old_energy = new_energy
             dm = self.mf.make_rdm1(mo_coeff, mo_occ)
-            if not denergy > 0 and abs(denergy) > switchThresh and not counter*bufferSize >= hardSwitch:
+            if not denergy > 0 and abs(denergy) > switch_thresh and not counter*buffer_size >= hard_switch:
                 continue
             self.m3 = scf.M3SOSCF(self.mf, self.agents, purge_solvers=self.purge_subconvergers,
                     convergence=self.convergence_thresh, init_scattering=self.init_scattering,
