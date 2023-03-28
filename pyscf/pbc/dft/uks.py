@@ -46,7 +46,11 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpt is None: kpt = ks.kpt
     t0 = (logger.process_clock(), logger.perf_counter())
 
-    hybrid = ks._numint.libxc.is_hybrid_xc(ks.xc)
+    ni = ks._numint
+    if ks.nlc or ni.libxc.is_nlc(ks.xc):
+        raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
+
+    hybrid = ni.libxc.is_hybrid_xc(ks.xc)
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
