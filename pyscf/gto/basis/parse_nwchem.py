@@ -212,7 +212,7 @@ def _parse_ecp(raw_ecp):
     for l in range(-1, MAXL):
         bsort.extend([b for b in ecp_add if b[0] == l])
     if not bsort:
-        raise BasisNotFoundError(f'ECP data not found in "{raw_basis}"')
+        raise BasisNotFoundError(f'ECP data not found in "{raw_ecp}"')
     return [nelec, bsort]
 
 def load_ecp(basisfile, symb):

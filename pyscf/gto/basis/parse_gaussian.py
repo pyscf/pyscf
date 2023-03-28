@@ -28,6 +28,7 @@ try:
 except ImportError:
     optimize_contraction = lambda basis: basis
     remove_zero = lambda basis: basis
+from pyscf.lib.exceptions import BasisNotFoundError
 
 MAXL = 12
 SPDF = 'SPDFGHIJKLMN'
