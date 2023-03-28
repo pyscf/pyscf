@@ -24,8 +24,8 @@ class M3SOSCF:
     Attributes for M3SOSCF:
         mf: Instance of SCF class
             SCF Object that is to be converged.
-        threads: int > 0
-            Number of theoretically parallel threads that is to be used. Generally increases speed
+        agents: int > 0
+            Number of theoretically parallel agents that is to be used. Generally increases speed
         purge_solvers: float, optional
             Partition of solvers that is to be purged and each iteration. Between 0 and 1
         convergence: int
@@ -34,13 +34,13 @@ class M3SOSCF:
             Initial statistical distribution of subconverger guesses. The original initial guess (e.g. minao, huckel,
             1e, ...) is always conserved as the 0th guess, the rest is scattered around with uniform radius
             distribution and uniform angular distribution on a box
-        trustScaleRange: float[3]
+        trust_scale_range: float[3]
             Scaling array used for adaptive scaling of trust values. The 3 floats correspond to minimum, maximum and
             power of the scaling calculation.
-        memSize: int
+        mem_size: int
             Size of the memory buffer that is included in the calculation in M3. Default is strongly recommended.
-        memScale: float
-            Influence of past iterations on the currently generated new points if memSize > 1. Default is strongly
+        mem_scale: float
+            Influence of past iterations on the currently generated new points if mem_size > 1. Default is strongly
             reconmmended.
         initGuess: String or ndarray
             Initial Guess for the SCF iteration. Either one of the string aliases supported by pyscf.scf.SCF or an
@@ -52,8 +52,8 @@ class M3SOSCF:
 
         >>> mol = gto.M('C 0.0 0.0 0.0; O 0.0 0.0 1.1')
         >>> mf = scf.RHF(mol)
-        >>> threads = 5
-        >>> m3 = M3SOSCF(threads)
+        >>> agents = 5
+        >>> m3 = M3SOSCF(agents)
         >>> m3.converge()
     '''
 
@@ -66,21 +66,21 @@ class M3SOSCF:
     # String identifier of used method. currently supported: RHF
     method = ''
 
-    # Trust array (threads,)
+    # Trust array (agents,)
     current_trusts = None
     # Array of Indices where the individual Subconvergers put their solution and trust
     # subconverger_indices[(Converger)] = (Index of Converger in current_trusts/mo_coeffs)
     subconverger_indices = None
-    # MO Coeffs of each subconverger (threads,n,n). Used for storage of local solutions
+    # MO Coeffs of each subconverger (agents,n,n). Used for storage of local solutions
     mo_coeffs = None
     # MO Coeff index that scrolls through the mo_coeffs array for memory purposes. Irrelevant if meM3 is turned off.
     mo_cursor = 0
     # MO Coeffs used for initialisation (n,n)
     mo_basis_coeff = None
-    # Energy array (threads,)
+    # Energy array (agents,)
     current_energies = None
     # Number of Subconvergers
-    threads = 0
+    agents = 0
     # Array ob Subconverger Objects
     subconvergers = None
     # Gradient threshold for convergence
@@ -96,8 +96,8 @@ class M3SOSCF:
 
 
 
-    def __init__(self, mf, threads, purgeSolvers=0.5, convergence=8, initScattering=0.3,
-            trustScaleRange=(0.05, 0.5, 0.5), memSize=1, memScale=0.2, initGuess='minao', stepsize=0.2):
+    def __init__(self, mf, agents, purge_solvers=0.5, convergence=8, init_scattering=0.3,
+            trust_scale_range=(0.05, 0.5, 0.5), mem_size=1, mem_scale=0.2, init_guess='minao', stepsize=0.2):
 
         self.mf = mf
 
@@ -116,29 +116,29 @@ class M3SOSCF:
 
         if self.method == 'uhf' or self.method == 'uks':
             self.current_dm = numpy.zeros((2, self.mf.mol.nao_nr(), self.mf.mol.nao_nr()))
-            self.mo_coeffs = numpy.zeros((memSize, threads, 2, self.mf.mol.nao_nr(), self.mf.mol.nao_nr()))
+            self.mo_coeffs = numpy.zeros((mem_size, agents, 2, self.mf.mol.nao_nr(), self.mf.mol.nao_nr()))
         else:
             self.current_dm = numpy.zeros((self.mf.mol.nao_nr(), self.mf.mol.nao_nr()))
-            self.mo_coeffs = numpy.zeros((memSize, threads, self.mf.mol.nao_nr(), self.mf.mol.nao_nr()))
-        self.threads = threads
-        self.current_trusts = numpy.zeros((memSize, threads))
-        self.current_energies = numpy.zeros(threads)
+            self.mo_coeffs = numpy.zeros((mem_size, agents, self.mf.mol.nao_nr(), self.mf.mol.nao_nr()))
+        self.agents = agents
+        self.current_trusts = numpy.zeros((mem_size, agents))
+        self.current_energies = numpy.zeros(agents)
         self.mo_basis_coeff = numpy.zeros(self.current_dm.shape)
         self.subconvergers = []
         self.subconverger_rm = SubconvergerReassigmentManager(self)
-        self.init_scattering = initScattering
-        self.subconverger_rm.trust_scale_range = trustScaleRange
-        self.subconverger_rm.mem_scale = memScale
+        self.init_scattering = init_scattering
+        self.subconverger_rm.trust_scale_range = trust_scale_range
+        self.subconverger_rm.mem_scale = mem_scale
         self.nr_stepsize = stepsize
         self.mo_cursor = 0
         self.max_cycle = self.mf.max_cycle
 
-        for i in range(threads):
+        for i in range(agents):
             self.subconvergers.append(Subconverger(self))
 
 
         self.subconverger_indices = numpy.arange(len(self.subconvergers))
-        self.purge_subconvergers = purgeSolvers
+        self.purge_subconvergers = purge_solvers
         self.convergence_thresh = 10**-convergence
 
 
@@ -223,28 +223,39 @@ class M3SOSCF:
             return 2 * numpy.linalg.inv(self.mf.get_ovlp()) @ self.current_dm
         return self.current_dm
 
-    def set(self, current_dm=None, purgeSolvers=-1, convergence=-1, initScattering=-1, trustScaleRange=None,
-            memSize=-1, memScale=-1, mo_coeffs=None):
+    def set(self, current_dm=None, purge_solvers=-1, convergence=-1, init_scattering=-1, trust_scale_range=None,
+            mem_scale=-1, mo_coeffs=None, stepsize=-1):
         if type(current_dm) is numpy.ndarray:
             self.setCurrentDm(current_dm)
-        if purgeSolvers >= 0:
-            self.purgeSolvers = purgeSolvers
-        self.convergene_thresh = convergence
-        self.init_scattering = initScattering
-        self.subconverger_rm.trustScaleRange = trustScaleRange
+        if purge_solvers >= 0:
+            self.purge_solvers = purge_solvers
+        if convergence >= 0:
+            self.convergene_thresh = convergence
+        if init_scattering >= 0:
+            self.init_scattering = init_scattering
+        if type(trust_scale_range) is type((0.0, 0.0, 0.0)):
+            self.subconverger_rm.trust_scale_range = trust_scale_range
+        if mem_scale >= 0:
+            self.subconverger_rm.mem_scale = mem_scale
+        if type(mo_coeffs) is numpy.ndarray:
+            self.mo_basis_coeffs = mo_coeffs
+        if stepsize >= 0:
+            self.nr_stepsize = stepsize
 
 
 
-    def kernel(self, purgeSolvers=0.5, convergence=8, initScattering=0.1, trustScaleRange=(0.01, 0.2, 8),
-            memScale=0.2, dm0=None):
-        self._purgeSolvers = purgeSolvers
+    def kernel(self, purge_solvers=0.5, convergence=8, init_scattering=0.1, trust_scale_range=(0.01, 0.2, 8),
+            mem_scale=0.2, dm0=None):
+        self.purge_solvers = purge_solvers
         self.convergence_thresh = 10**(-convergence)
-        self.init_scattering = initScattering
-        self.subconverger_rm.trust_scale_range = trustScaleRange
-        self.mem_scale = memScale
+        self.init_scattering = init_scattering
+        self.subconverger_rm.trust_scale_range = trust_scale_range
+        self.mem_scale = mem_scale
 
         if type(dm0) is numpy.ndarray:
             self.initDensityMatrixDirectly(dm0)
+        elif type(dm0) is type(None):
+            pass
         else:
             raise Exception('Illegal initial matrix: dm0 is not a numpy.ndarray.')
 
@@ -270,8 +281,8 @@ class M3SOSCF:
         Examples:
         >>> mol = gto.M('H 0.0 0.0 0.0; F 0.0 0.0 1.0', basis='6-31g')
         >>> mf = scf.RHF(mol)
-        >>> threads = 5
-        >>> m3 = scf.M3SOSCF(mf, threads)
+        >>> agents = 5
+        >>> m3 = scf.M3SOSCF(mf, agents)
         >>> result = m3.converge()
         >>> print(result[1]) # Print SCF energy
         -99.9575044930158
@@ -287,8 +298,8 @@ class M3SOSCF:
         self.subconvergers[0].setMoCoeffs(self.mo_basis_coeff)
         self.mo_coeffs[0,0] = self.mo_basis_coeff
 
-        if self.threads >= 2:
-            for j in range(1, self.threads):
+        if self.agents >= 2:
+            for j in range(1, self.agents):
                 if self.method == 'uhf' or self.method == 'uks':
                     mo_pert_a = numpy.random.random(1)[0] * self.init_scattering * \
                             sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5,
@@ -350,7 +361,7 @@ class M3SOSCF:
                 uniquevals, uniqueindices = numpy.unique(self.current_trusts[readCursor], return_index=True)
                 nonuniqueindices = []
 
-                for i in range(self.threads):
+                for i in range(self.agents):
                     if i not in uniqueindices:
                         nonuniqueindices.append(i)
 
@@ -543,9 +554,9 @@ class M3SOSCF:
             log.info("Spin-Square:              " + str(ss[0]))
             log.info("Multiplicity:             " + str(ss[1]))
 
-        irreps = ['-'] * len(self.mf.mo_energy[0])
+        irreps = ['-'] * len(self.mf.mo_coeff[0])
         forced_irreps = False
-        symm_overlap = numpy.ones(len(self.mf.mo_energy[0]))
+        symm_overlap = numpy.ones(len(self.mf.mo_coeff[0]))
         if self.method == 'uhf' or self.method == 'uks':
             irreps = [irreps, irreps]
             symm_overlap = [symm_overlap, symm_overlap]
