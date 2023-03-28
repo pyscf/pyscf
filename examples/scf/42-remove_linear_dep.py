@@ -48,22 +48,28 @@ print(numpy.linalg.eigh(s)[0][:8])
 
 def eig(h, s):
     d, t = numpy.linalg.eigh(s)
-# Removing the eigenvectors assoicated to the smallest eigenvalue, the new
-# basis defined by x matrix has 139 vectors.
-    x = t[:,d>1e-8] / numpy.sqrt(d[d>1e-8])
+    # Removing the eigenvectors assoicated to the smallest eigenvalue.
+    x = t[:,d>1e-7] / numpy.sqrt(d[d>1e-7])
     xhx = reduce(numpy.dot, (x.T, h, x))
     e, c = numpy.linalg.eigh(xhx)
     c = numpy.dot(x, c)
-# Return 139 eigenvalues and 139 eigenvectors.
     return e, c
 #
 # Replacing the default eig function with the above one,  the HF solver
-# generate only 139 canonical orbitals
+# generate only 138 canonical orbitals
 #
 mf = scf.RHF(mol)
 mf.eig = eig
 mf.verbose = 4
 mf.kernel()
+#
+# Note: The default settings in scf.addons.remove_linear_dep_ may lead to
+# convergence issue in the following CASSCF calculations due to numerical
+# noises. We need to drop more basis by overwriting the keyword arguments
+# threshold and lindep
+#
+# mf = scf.addons.remove_linear_dep_(mf, threshold=1e-7, lindep=1e-7)
+#
 
 #
 # The CASSCF solver takes the HF orbital as initial guess.  The MCSCF problem
@@ -116,7 +122,7 @@ def eig(h, s):
 #
     for ir in range(nirrep):
         d, t = numpy.linalg.eigh(s[ir])
-        x = t[:,d>1e-8] / numpy.sqrt(d[d>1e-8])
+        x = t[:,d>1e-7] / numpy.sqrt(d[d>1e-7])
         xhx = reduce(numpy.dot, (x.T, h[ir], x))
         e, c = numpy.linalg.eigh(xhx)
         cs.append(reduce(numpy.dot, (mol.symm_orb[ir], x, c)))

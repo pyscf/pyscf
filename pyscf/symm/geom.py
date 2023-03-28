@@ -447,8 +447,8 @@ def symm_ops(gpname, axes=None):
              'C2x': opc2x,
              'C2y': opc2y,
              'i'  : opi,
-             'sz' : opcsz,
-             'sx' : opcsx,
+             'sz' : opcsz,  # the mirror perpendicular to z
+             'sx' : opcsx,  # the mirror perpendicular to x
              'sy' : opcsy,}
     return opdic
 

@@ -50,9 +50,10 @@ def add_mm_charges(scf_method, atoms_or_coords, charges, radii=None, unit=None):
             MM particle coordinates
         charges : 1D array
             MM particle charges
-        radii : 1D array
-            MM particle gaussian radii
+
     Kwargs:
+        radii : 1D array
+            The Gaussian charge distribution radii of MM atoms.
         unit : str
             Bohr, AU, Ang (case insensitive). Default is the same to mol.unit
 
@@ -76,7 +77,8 @@ def add_mm_charges(scf_method, atoms_or_coords, charges, radii=None, unit=None):
     mol = scf_method.mol
     if unit is None:
         unit = mol.unit
-    mm_mol = mm_mole.create_mm_mol(atoms_or_coords, charges, radii, unit)
+    mm_mol = mm_mole.create_mm_mol(atoms_or_coords, charges,
+                                   radii=radii, unit=unit)
     return qmmm_for_scf(scf_method, mm_mol)
 
 # Define method mm_charge for backward compatibility
@@ -125,32 +127,28 @@ def qmmm_for_scf(scf_method, mm_mol):
             return self
 
         def get_hcore(self, mol=None):
-            if mol is None: mol = self.mol
+            if mol is None:
+                mol = self.mol
+            mm_mol = self.mm_mol
+
             if getattr(method_class, 'get_hcore', None):
                 h1e = method_class.get_hcore(self, mol)
             else:  # DO NOT modify post-HF objects to avoid the MM charges applied twice
                 raise RuntimeError('mm_charge function cannot be applied on post-HF methods')
 
-            coords = self.mm_mol.atom_coords()
-            charges = self.mm_mol.atom_charges()
-            expnts = self.mm_mol._expnts
-            if pyscf.DEBUG:
-                v = 0
-                for i,q in enumerate(charges):
-                    mol.set_rinv_origin(coords[i])
-                    v += mol.intor('int1e_rinv') * -q
-            else:
+            coords = mm_mol.atom_coords()
+            charges = mm_mol.atom_charges()
+            nao = mol.nao
+            max_memory = self.max_memory - lib.current_memory()[0]
+            blksize = int(min(max_memory*1e6/8/nao**2, 200))
+            blksize = max(blksize, 1)
+            if mm_mol.charge_model == 'gaussian':
+                expnts = mm_mol.get_zetas()
+
                 if mol.cart:
                     intor = 'int3c2e_cart'
                 else:
                     intor = 'int3c2e_sph'
-                nao = mol.nao
-                max_memory = self.max_memory - lib.current_memory()[0]
-                blksize = int(min(max_memory*1e6/8/nao**2, 200))
-                if max_memory <= 0:
-                    blksize = 1
-                    logger.warn(self, 'Memory estimate for reading point charges is negative. '
-                                'Trying to read point charges one by one.')
                 cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
                                                      mol._env, intor)
                 v = 0
@@ -160,7 +158,12 @@ def qmmm_for_scf(scf_method, mm_mol):
                                            aosym='s2ij', cintopt=cintopt)
                     v += numpy.einsum('xk,k->x', j3c, -charges[i0:i1])
                 v = lib.unpack_tril(v)
-            return h1e + v
+                h1e += v
+            else:
+                for i0, i1 in lib.prange(0, charges.size, blksize):
+                    j3c = mol.intor('int1e_grids', hermi=1, grids=coords[i0:i1])
+                    h1e += numpy.einsum('kpq,k->pq', j3c, -charges[i0:i1])
+            return h1e
 
         def energy_nuc(self):
             # interactions between QM nuclei and MM particles
@@ -198,9 +201,9 @@ def add_mm_charges_grad(scf_grad, atoms_or_coords, charges, radii=None, unit=Non
             MM particle coordinates
         charges : 1D array
             MM particle charges
-        radii : 1D array
-            MM particle gaussian radii
     Kwargs:
+        radii : 1D array
+            The Gaussian charge distribution radii of MM atoms.
         unit : str
             Bohr, AU, Ang (case insensitive). Default is the same to mol.unit
 
@@ -223,7 +226,8 @@ def add_mm_charges_grad(scf_grad, atoms_or_coords, charges, radii=None, unit=Non
     mol = scf_grad.mol
     if unit is None:
         unit = mol.unit
-    mm_mol = mm_mole.create_mm_mol(atoms_or_coords, charges, radii, unit)
+    mm_mol = mm_mole.create_mm_mol(atoms_or_coords, charges,
+                                   radii=radii, unit=unit)
     mm_grad = qmmm_grad_for_scf(scf_grad)
     mm_grad.base.mm_mol = mm_mol
     return mm_grad
@@ -263,26 +267,23 @@ def qmmm_grad_for_scf(scf_grad):
 
         def get_hcore(self, mol=None):
             ''' (QM 1e grad) + <-d/dX i|q_mm/r_mm|j>'''
-            if mol is None: mol = self.mol
-            coords = self.base.mm_mol.atom_coords()
-            charges = self.base.mm_mol.atom_charges()
-            expnts = self.base.mm_mol._expnts
+            if mol is None:
+                mol = self.mol
+            mm_mol = self.base.mm_mol
+            coords = mm_mol.atom_coords()
+            charges = mm_mol.atom_charges()
 
+            nao = mol.nao
+            max_memory = self.max_memory - lib.current_memory()[0]
+            blksize = int(min(max_memory*1e6/8/nao**2/3, 200))
+            blksize = max(blksize, 1)
             g_qm = grad_class.get_hcore(self, mol)
-            nao = g_qm.shape[1]
-            if pyscf.DEBUG:
-                v = 0
-                for i,q in enumerate(charges):
-                    mol.set_rinv_origin(coords[i])
-                    v += mol.intor('int1e_iprinv', comp=3) * q
-            else:
+            if mm_mol.charge_model == 'gaussian':
+                expnts = mm_mol.get_zetas()
                 if mol.cart:
                     intor = 'int3c2e_ip1_cart'
                 else:
                     intor = 'int3c2e_ip1_sph'
-                nao = mol.nao
-                max_memory = self.max_memory - lib.current_memory()[0]
-                blksize = int(min(max_memory*1e6/8/nao**2, 200))
                 cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
                                                      mol._env, intor)
                 v = 0
@@ -291,19 +292,39 @@ def qmmm_grad_for_scf(scf_grad):
                     j3c = df.incore.aux_e2(mol, fakemol, intor, aosym='s1',
                                            comp=3, cintopt=cintopt)
                     v += numpy.einsum('ipqk,k->ipq', j3c, charges[i0:i1])
-            return g_qm + v
+                g_qm += v
+            else:
+                for i0, i1 in lib.prange(0, charges.size, blksize):
+                    j3c = mol.intor('int1e_grids_ip', grids=coords[i0:i1])
+                    g_qm += numpy.einsum('ikpq,k->ipq', j3c, charges[i0:i1])
+            return g_qm
 
-        def contract_hcore_mm(self, dm, mol=None):
-            ''' dm_ij * d h_ij / d R_I where I is MM '''
-            if mol is None: mol = self.mol
-            coords = self.base.mm_mol.atom_coords()
-            charges = self.base.mm_mol.atom_charges()
-            expnts = self.base.mm_mol._expnts
+        def grad_hcore_mm(self, dm, mol=None):
+            r'''Nuclear gradients of the electronic energy
+            with respect to MM atoms:
+
+            ... math::
+                g = \sum_{ij} \frac{\partial hcore_{ij}}{\partial R_{I}} P_{ji},
+
+            where I represents MM atoms.
+
+            Args:
+                dm : array
+                    The QM density matrix.
+            '''
+            if mol is None:
+                mol = self.mol
+            mm_mol = self.base.mm_mol
+
+            coords = mm_mol.atom_coords()
+            charges = mm_mol.atom_charges()
+            expnts = mm_mol.get_zetas()
 
             intor = 'int3c2e_ip2'
             nao = mol.nao
             max_memory = self.max_memory - lib.current_memory()[0]
-            blksize = int(min(max_memory*1e6/8/nao**2, 200))
+            blksize = int(min(max_memory*1e6/8/nao**2/3, 200))
+            blksize = max(blksize, 1)
             cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
                                                  mol._env, intor)
 
@@ -314,6 +335,8 @@ def qmmm_grad_for_scf(scf_grad):
                                        comp=3, cintopt=cintopt)
                 g[i0:i1] = numpy.einsum('ipqk,qp->ik', j3c * charges[i0:i1], dm).T
             return g
+
+        contract_hcore_mm = grad_hcore_mm # for backward compatibility
 
         def grad_nuc(self, mol=None, atmlst=None):
             if mol is None: mol = self.mol
@@ -333,10 +356,15 @@ def qmmm_grad_for_scf(scf_grad):
             return g_qm + g_mm
 
         def grad_nuc_mm(self, mol=None):
-            ''' nuclear gradient w.r.t mm charges '''
-            if mol is None: mol = self.mol
-            coords = self.base.mm_mol.atom_coords()
-            charges = self.base.mm_mol.atom_charges()
+            '''Nuclear gradients of the QM-MM nuclear energy
+            (in the form of point charge Coulomb interactions)
+            with respect to MM atoms.
+            '''
+            if mol is None:
+                mol = self.mol
+            mm_mol = self.base.mm_mol
+            coords = mm_mol.atom_coords()
+            charges = mm_mol.atom_charges()
             g_mm = numpy.zeros_like(coords)
             for i in range(mol.natm):
                 q1 = mol.atom_charge(i)

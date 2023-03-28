@@ -147,22 +147,25 @@ class Gradients (rhf_grad.GradientsMixin):
 
         self.converged, self.Lvec, bvec, Aop, Adiag = self.solve_lagrange (
             level_shift=level_shift, **kwargs)
-        self.debug_lagrange (self.Lvec, bvec, Aop, Adiag, **kwargs)
-        cput1 = logger.timer (self, 'Lagrange gradient multiplier solution', *cput0)
+        if self.verbose >= logger.INFO:
+            self.debug_lagrange (self.Lvec, bvec, Aop, Adiag, **kwargs)
+            cput1 = logger.timer (self, 'Lagrange gradient multiplier solution', *cput0)
 
         ham_response = self.get_ham_response (**kwargs)
-        logger.info(self, '--------------- %s gradient Hamiltonian response ---------------',
-                    self.base.__class__.__name__)
-        rhf_grad._write(self, self.mol, ham_response, self.atmlst)
-        logger.info(self, '----------------------------------------------')
-        cput1 = logger.timer (self, 'Lagrange gradient Hellmann-Feynman determination', *cput1)
+        if self.verbose >= logger.INFO:
+            logger.info(self, '--------------- %s gradient Hamiltonian response ---------------',
+                        self.base.__class__.__name__)
+            rhf_grad._write(self, self.mol, ham_response, self.atmlst)
+            logger.info(self, '----------------------------------------------')
+            cput1 = logger.timer (self, 'Lagrange gradient Hellmann-Feynman determination', *cput1)
 
         LdotJnuc = self.get_LdotJnuc (self.Lvec, **kwargs)
-        logger.info(self, '--------------- %s gradient Lagrange response ---------------',
-                    self.base.__class__.__name__)
-        rhf_grad._write(self, self.mol, LdotJnuc, self.atmlst)
-        logger.info(self, '----------------------------------------------')
-        cput1 = logger.timer (self, 'Lagrange gradient Jacobian', *cput1)
+        if self.verbose >= logger.INFO:
+            logger.info(self, '--------------- %s gradient Lagrange response ---------------',
+                        self.base.__class__.__name__)
+            rhf_grad._write(self, self.mol, LdotJnuc, self.atmlst)
+            logger.info(self, '----------------------------------------------')
+            cput1 = logger.timer (self, 'Lagrange gradient Jacobian', *cput1)
 
         self.de = ham_response + LdotJnuc
         log.timer('Lagrange gradients', *cput0)
