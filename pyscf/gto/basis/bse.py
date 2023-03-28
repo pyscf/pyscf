@@ -4,7 +4,10 @@ Conversion from the Basis Set Exchange format to PySCF format
 17 Nov 2021 Susi Lehtola
 '''
 
-from basis_set_exchange import lut, manip, sort
+try:
+    from basis_set_exchange import lut, manip, sort
+except ImportError:
+    basis_set_exchange = None
 
 
 def _orbital_basis(basis):
@@ -71,8 +74,6 @@ def _ecp_basis(basis):
         for z in ecp_elements:
             data = basis['elements'][z]
             sym = lut.element_sym_from_Z(z, True)
-            max_ecp_am = max([x['angular_momentum'][0] for x in data['ecp_potentials']])
-            max_ecp_amchar = lut.amint_to_char([max_ecp_am], hij=True)
 
             # Sort lowest->highest
             ecp_list = sorted(data['ecp_potentials'], key=lambda x: x['angular_momentum'])

@@ -513,13 +513,30 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
-        except BasisNotFoundError:
-            try:
-                return parse_nwchem.parse(filename_or_basisname)
-            except IndexError:
-                raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
         except IndexError:
             raise BasisNotFoundError(filename_or_basisname)
+        except BasisNotFoundError as basis_err:
+            pass
+
+        try:
+            return parse_nwchem.parse(filename_or_basisname)
+        except IndexError:
+            raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
+        except BasisNotFoundError:
+            pass
+
+        # Last, a trial to access Basis Set Exchange database
+        from pyscf.basis import bse
+        if bse.basis_set_exchange is not None:
+            try:
+                bse_obj = bse.basis_set_exchange.api.get_basis(
+                    filename_or_basisname, elements=symb)
+            except KeyError:
+                raise BasisNotFoundError(filename_or_basisname)
+            else:
+                return bse._orbital_basis(bse_obj)[0]
+
+        raise basis_err
 
     if name in ALIAS:
         basmod = ALIAS[name]
@@ -565,8 +582,33 @@ def load_ecp(filename_or_basisname, symb):
     if name in ALIAS:
         basmod = ALIAS[name]
         return parse_nwchem.load_ecp(join(_BASIS_DIR, basmod), symb)
-    else:
+
+    try:
         return parse_ecp(filename_or_basisname, symb)
+    except IndexError:
+        raise BasisNotFoundError(filename_or_basisname)
+    except BasisNotFoundError as basis_err:
+        pass
+
+    try:
+        return parse_nwchem.parse_ecp(filename_or_basisname)
+    except IndexError:
+        raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
+    except BasisNotFoundError:
+        pass
+
+    # Last, a trial to access Basis Set Exchange database
+    from pyscf.basis import bse
+    if bse.basis_set_exchange is not None:
+        try:
+            bse_obj = bse.basis_set_exchange.api.get_basis(
+                filename_or_basisname, elements=symb)
+        except KeyError:
+            raise BasisNotFoundError(filename_or_basisname)
+        else:
+            return bse._ecp_basis(bse_obj)[0]
+
+    raise basis_err
 
 def _format_basis_name(basisname):
     return basisname.lower().replace('-', '').replace('_', '').replace(' ', '')
