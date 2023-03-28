@@ -13,11 +13,34 @@ import scipy
 class DIIS_M3:
     '''
     This class performs hybrid DIIS/M3 SCF convergence.
+
+    Attributes:
+        m3: M3SOSCF
+            Parent M3SOSCF that is used in the M3 parts of the combined iteration.
+        mf: an instance of SCF class
+            Parent SCF that is used in the DIIS parts of the combined iteration.
+        agents: int
+            Number of agents. See pyscf.soscf.m3soscf.M3SOSCF
+        purge_subconvergers: float
+            Amount of subconvergers that are to be reassigned. See pyscf.soscf.m3soscf.M3SOSCF
+        convergence_thresh: float
+            10^-convergence_thresh is the convergence criterion for trust.
+            See pyscf.soscf.m3soscf.M3SOSCF
+        init_scattering: float
+            Size of the initial scattering. See pyscf.soscf.m3soscf.M3SOSCF
+        trust_scale_range: (float, float, float)
+            Defining array for the trust scaling (min, max, power). See pyscf.soscf.m3soscf.M3SOSCF
+        mem_size: int
+            Size of memory buffer. Default strongly recommended. See pyscf.soscf.m3soscf.M3SOSCF
+        mem_scale: float
+            Influence of previous iterations on the M3 iteration. Default strongly recommended.
+            See pyscf.soscf.m3soscf.M3SOSCF
+
     '''
 
     m3 = None
     mf = None
-    threads = 0
+    agents = 0
     purge_subconvergers = 0.0
     convergence_thresh = 0
     init_scattering = 0
@@ -25,7 +48,7 @@ class DIIS_M3:
     mem_size = 0
     mem_scale = 0.0
 
-    def __init__(self, mf, threads, purgeSolvers=0.5, convergence=8, init_scattering=0.1,
+    def __init__(self, mf, agents, purge_solvers=0.5, convergence=8, init_scattering=0.1,
             trust_scale_range=(0.01, 0.2, 8), mem_size=1, mem_scale=0.2):
         '''
         Constructor for the DIIS_M3 method.
@@ -33,10 +56,10 @@ class DIIS_M3:
         Args:
             mf: an instance of SCF class
                 SCF object on which M3 is to be constructed.
-            threads: int
-                The number of threads used in the M3 calculation.
+            agents: int
+                The number of agents used in the M3 calculation.
         Kwargs:
-            purgeSolvers: float
+            purge_solvers: float
                 The percentage of solvers which are to be annihilated and reassigned in every step of M3.
             convergence: float
                 10^-convergence is the convergence threshold for M3.
@@ -51,8 +74,8 @@ class DIIS_M3:
                 Scaling used for past iterations in the M3 calculation. Default is strongly recommended.
         '''
         self.mf = mf
-        self.threads = threads
-        self.purge_subconvergers = purgeSolvers
+        self.agents = agents
+        self.purge_subconvergers = purge_solvers
         self.convergence_thresh = convergence
         self.init_scattering = init_scattering
         self.trust_scale_range = trust_scale_range
@@ -114,10 +137,10 @@ class DIIS_M3:
             dm = self.mf.make_rdm1(mo_coeff, mo_occ)
             if not denergy > 0 and abs(denergy) > switchThresh and not counter*bufferSize >= hardSwitch:
                 continue
-            self.m3 = scf.M3SOSCF(self.mf, self.threads, purgeSolvers=self.purge_subconvergers,
-                    convergence=self.convergence_thresh, init_scattering=self._init_scattering,
+            self.m3 = scf.M3SOSCF(self.mf, self.agents, purge_solvers=self.purge_subconvergers,
+                    convergence=self.convergence_thresh, init_scattering=self.init_scattering,
                     trust_scale_range=self.trust_scale_range, mem_size=self.mem_size, mem_scale=self.mem_scale,
-                    initGuess=mo_coeff)
+                    init_guess=mo_coeff)
 
             diis_conv, new_energy, mo_energy, mo_coeff, mo_occ = self.m3.converge()
             converged = diis_conv
