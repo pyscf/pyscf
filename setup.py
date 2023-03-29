@@ -157,6 +157,6 @@ setup(
     cmdclass={'build_ext': CMakeBuildExt},
     install_requires=['numpy>=1.13,!=1.16,!=1.17',
                       _scipy_version,
-                      'h5py>=2.7'],
+                      'h5py>=2.7', 'cmake'],
     extras_require=EXTRAS,
 )
