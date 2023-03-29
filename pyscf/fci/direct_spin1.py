@@ -593,6 +593,14 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             ci0 = [ci0.ravel()]
         else:
             ci0 = [x.ravel() for x in ci0]
+        if sym_idx is not None and ci0[0].size != civec_size:
+            ci0 = [x[sym_idx] for x in ci0]
+        # If provided initial guess ci0 are accidentally the eigenvectors of the
+        # system, Davidson solver may be failed to find enough roots as it is
+        # unable to generate more subspace basis from ci0. Adding vectors so
+        # initial guess to help Davidson solver generate enough basis.
+        if len(ci0) < nroots:
+            ci0.extend(init_guess()[len(ci0):])
 
     if tol is None: tol = fci.conv_tol
     if lindep is None: lindep = fci.lindep
