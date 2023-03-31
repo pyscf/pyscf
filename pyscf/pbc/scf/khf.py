@@ -256,11 +256,13 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     return (e1+e_coul).real, e_coul.real
 
 
-def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+def analyze(mf, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
             **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
+    if verbose is None:
+        verbose = mf.verbose
     mf.dump_scf_summary(verbose)
 
     mo_occ = mf.mo_occ
@@ -401,58 +403,6 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     ni = numint.KNumInt()
     return ni.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
 
-def as_scanner(mf):
-    import copy
-    if isinstance(mf, lib.SinglePointScanner):
-        return mf
-
-    logger.info(mf, 'Create scanner for %s', mf.__class__)
-
-    class SCF_Scanner(mf.__class__, lib.SinglePointScanner):
-        def __init__(self, mf_obj):
-            self.__dict__.update(mf_obj.__dict__)
-
-        def __call__(self, cell_or_geom, **kwargs):
-            from pyscf.pbc import gto
-            if isinstance(cell_or_geom, gto.Cell):
-                cell = cell_or_geom
-            else:
-                cell = self.cell.set_geom_(cell_or_geom, inplace=False)
-
-            # Cleanup intermediates associated to the pervious mol object
-            self.reset(cell)
-
-            if 'dm0' in kwargs:
-                dm0 = kwargs.pop('dm0')
-            elif self.mo_coeff is None:
-                dm0 = None
-            elif self.chkfile and h5py.is_hdf5(self.chkfile):
-                dm0 = self.from_chk(self.chkfile)
-            else:
-                dm0 = self.make_rdm1()
-                # dm0 form last calculation cannot be used in the current
-                # calculation if a completely different system is given.
-                # Obviously, the systems are very different if the number of
-                # basis functions are different.
-                # TODO: A robust check should include more comparison on
-                # various attributes between current `mol` and the `mol` in
-                # last calculation.
-                if dm0.shape[-1] != cell.nao_nr():
-                    #TODO:
-                    #from pyscf.scf import addons
-                    #if numpy.any(last_mol.atom_charges() != mol.atom_charges()):
-                    #    dm0 = None
-                    #elif non-relativistic:
-                    #    addons.project_dm_nr2nr(last_mol, dm0, last_mol)
-                    #else:
-                    #    addons.project_dm_r2r(last_mol, dm0, last_mol)
-                    dm0 = None
-            self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
-            e_tot = self.kernel(dm0=dm0, **kwargs)
-            return e_tot
-
-    return SCF_Scanner(mf)
-
 
 class KSCF(pbchf.SCF):
     '''SCF base class with k-point sampling.
@@ -466,14 +416,31 @@ class KSCF(pbchf.SCF):
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
+
+    reset = pbchf.SCF.reset
+    mol = pbchf.SCF.mol
+
+    check_sanity = pbchf.SCF.check_sanity
+    init_direct_scf = lib.invalid_method('init_direct_scf')
+    get_hcore = get_hcore
+    get_ovlp = get_ovlp
+    get_fock = get_fock
+    get_fermi = get_fermi
+    get_occ = get_occ
+    get_jk_incore = lib.invalid_method('get_jk_incore')
+    energy_elec = energy_elec
+    energy_nuc = pbchf.SCF.energy_nuc
+    get_rho = get_rho
+    init_guess_by_minao = _cast_mol_init_guess(mol_hf.init_guess_by_minao)
+    init_guess_by_atom = _cast_mol_init_guess(mol_hf.init_guess_by_atom)
+    _finalize = pbchf.SCF._finalize
+    canonicalize = canonicalize
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
-        self.cell = cell
         mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
@@ -491,7 +458,7 @@ class KSCF(pbchf.SCF):
     def kpts(self):
         if 'kpts' in self.__dict__:
             # To handle the attribute kpt loaded from chkfile
-            self.kpt = self.__dict__.pop('kpts')
+            self.kpts = self.__dict__.pop('kpts')
         return self.with_df.kpts
 
     @kpts.setter
@@ -544,14 +511,6 @@ class KSCF(pbchf.SCF):
             self.with_df.dump_flags(verbose)
         return self
 
-    def check_sanity(self):
-        mol_hf.SCF.check_sanity(self)
-        if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
-            isinstance(self.with_df, df.df.DF)):
-            logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
-                        self.exxdiv)
-        return self
-
     def build(self, cell=None):
         if cell is None:
             cell = self.cell
@@ -575,7 +534,8 @@ class KSCF(pbchf.SCF):
             self.check_sanity()
         return self
 
-    get_init_guess = pbchf.SCF.get_init_guess
+    def get_init_guess(self, cell=None, key='minao'):
+        raise NotImplementedError
 
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell
@@ -583,16 +543,6 @@ class KSCF(pbchf.SCF):
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
         return mol_hf.SCF.init_guess_by_1e(self, cell)
-
-    init_guess_by_minao = _cast_mol_init_guess(mol_hf.init_guess_by_minao)
-    init_guess_by_atom = _cast_mol_init_guess(mol_hf.init_guess_by_atom)
-
-    get_hcore = get_hcore
-    get_ovlp = get_ovlp
-    get_fock = get_fock
-    get_occ = get_occ
-    energy_elec = energy_elec
-    get_fermi = get_fermi
 
     def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None,
               kpts_band=None, omega=None):
@@ -628,11 +578,6 @@ class KSCF(pbchf.SCF):
             dm_kpts = self.make_rdm1()
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
         return vj - vk * .5
-
-    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
-                **kwargs):
-        if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         '''
@@ -708,6 +653,9 @@ class KSCF(pbchf.SCF):
                 fh5['scf/kpts'] = self.kpts
         return self
 
+    def analyze(mf, verbose=None, with_meta_lowdin=WITH_META_LOWDIN, **kwargs):
+        raise NotImplementedError
+
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
@@ -719,19 +667,15 @@ class KSCF(pbchf.SCF):
     def mulliken_pop(self):
         raise NotImplementedError
 
-    get_rho = get_rho
-
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
+        if cell is None:
+            cell = self.cell
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)
-        if cell is None:
-            cell = self.cell
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
-
-    canonicalize = canonicalize
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import df_jk
@@ -781,16 +725,12 @@ class KSCF(pbchf.SCF):
         logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
         return self
 
-    def stability(self,
-                  internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),
-                  external=getattr(__config__, 'pbc_scf_KSCF_stability_external', False),
-                  verbose=None):
-        from pyscf.pbc.scf.stability import rhf_stability
-        return rhf_stability(self, internal, external, verbose)
-
     def newton(self):
         from pyscf.pbc.scf import newton_ah
         return newton_ah.newton(self)
+
+    def remove_soscf(self):
+        raise NotImplementedError
 
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
@@ -812,10 +752,18 @@ class KSCF(pbchf.SCF):
     def to_khf(self):
         return self
 
-    as_scanner = as_scanner
+    def stability(self):
+        raise NotImplementedError
 
+    def nuc_grad_method(self):
+        raise NotImplementedError
 
-class KRHF(KSCF, pbchf.RHF):
+class KRHF(KSCF):
+
+    analyze = analyze
+    spin_square = mol_hf.RHF.spin_square
+    convert_from_ = pbchf.RHF.convert_from_
+
     def check_sanity(self):
         cell = self.cell
         if isinstance(self.kpts, KPoints):
@@ -828,11 +776,12 @@ class KRHF(KSCF, pbchf.RHF):
         return KSCF.check_sanity(self)
 
     def get_init_guess(self, cell=None, key='minao'):
-        dm_kpts = pbchf.SCF.get_init_guess(self, cell, key)
+        dm = mol_hf.SCF.get_init_guess(self, cell, key)
         nkpts = len(self.kpts)
-        if dm_kpts.ndim == 2:
+        if dm.ndim == 2:
             # dm[nao,nao] at gamma point -> dm_kpts[nkpts,nao,nao]
-            dm_kpts = np.repeat(dm_kpts[None,:,:], nkpts, axis=0)
+            dm = np.repeat(dm[None,:,:], nkpts, axis=0)
+        dm_kpts = dm
 
         ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
         # FIXME: consider the fractional num_electron or not? This maybe
@@ -848,14 +797,22 @@ class KRHF(KSCF, pbchf.RHF):
             dm_kpts *= (nelectron / ne).reshape(-1,1,1)
         return dm_kpts
 
-    def convert_from_(self, mf):
-        '''Convert given mean-field object to KRHF'''
-        addons.convert_to_rhf(mf, self)
-        return self
-
     def nuc_grad_method(self):
         from pyscf.pbc.grad import krhf
         return krhf.Gradients(self)
+
+    def stability(self,
+                  internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),
+                  external=getattr(__config__, 'pbc_scf_KSCF_stability_external', False),
+                  verbose=None):
+        from pyscf.pbc.scf.stability import rhf_stability
+        return rhf_stability(self, internal, external, verbose)
+
+    def to_ks(self, xc='HF'):
+        '''Convert to RKS object.
+        '''
+        from pyscf.pbc import dft
+        return self._transfer_attrs_(dft.KRKS(self.cell, xc=xc))
 
 del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 

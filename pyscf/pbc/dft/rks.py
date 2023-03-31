@@ -95,7 +95,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         n, exc, vxc = 0, 0, 0
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, hermi,
+        n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 0, hermi,
                                         kpt, kpts_band, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
@@ -163,6 +163,12 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
 class KohnShamDFT(mol_ks.KohnShamDFT):
     '''PBC-KS'''
 
+    get_rho = get_rho
+
+    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
+    rs_density_fit = _patch_df_beckegrids(pbchf.RHF.rs_density_fit)
+    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
+
     def __init__(self, xc='LDA,VWN'):
         self.xc = xc
         self.grids = gen_grid.UniformGrids(self.cell)
@@ -181,7 +187,8 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
                 self._numint = numint.KNumInt(self.kpts)
         else:
             self._numint = numint.NumInt()
-        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+        self._keys = self._keys.union([
+            'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
 
     def dump_flags(self, verbose=None):
         logger.info(self, 'XC functionals = %s', self.xc)
@@ -213,8 +220,7 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         mf = addons.convert_to_rhf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc or not isinstance(self, RKS):
-            mf.converged = False
+        mf.converged = xc == self.xc and isinstance(self, RKS)
         return mf
 
     def to_uks(self, xc=None):
@@ -227,8 +233,7 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         mf = addons.convert_to_uhf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc:
-            mf.converged = False
+        mf.converged = xc == self.xc
         return mf
 
     def to_gks(self, xc=None):
@@ -238,12 +243,22 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
+        from pyscf.pbc.dft.numint2c import NumInt2C, KNumInt2C
         mf = addons.convert_to_ghf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc:
-            mf.converged = False
+        mf.converged = xc == self.xc
+        if isinstance(mf, khf.KSCF):
+            if not isinstance(mf._numint, KNumInt2C):
+                mf._numint = KNumInt2C(mf._numint.kpts)
+        else:
+            if not isinstance(mf._numint, NumInt2C):
+                mf._numint = NumInt2C()
         return mf
+
+    def initialize_grids(self, cell=None, dm=None):
+        '''Initialize self.grids the first time call get_veff'''
+        raise NotImplementedError
 
 # Update the KohnShamDFT label in pbc.scf.hf module
 pbchf.KohnShamDFT = KohnShamDFT
@@ -255,6 +270,12 @@ class RKS(KohnShamDFT, pbchf.RHF):
     This is a literal duplication of the molecular RKS class with some `mol`
     variables replaced by `cell`.
     '''
+
+    get_vsap = mol_ks.get_vsap
+    init_guess_by_vsap = mol_ks.init_guess_by_vsap
+    get_veff = get_veff
+    energy_elec = mol_ks.energy_elec
+
     def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.RHF.__init__(self, cell, kpt, exxdiv=exxdiv)
@@ -265,16 +286,13 @@ class RKS(KohnShamDFT, pbchf.RHF):
         KohnShamDFT.dump_flags(self, verbose)
         return self
 
-    get_vsap = mol_ks.get_vsap
-    init_guess_by_vsap = mol_ks.init_guess_by_vsap
-
-    get_veff = get_veff
-    energy_elec = pyscf.dft.rks.energy_elec
-    get_rho = get_rho
-
-    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
-    rs_density_fit = _patch_df_beckegrids(pbchf.RHF.rs_density_fit)
-    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
+    def to_hf(self):
+        '''Convert to RHF object.'''
+        mf = pbchf.RHF(self.cell)
+        keys = mf.__dict__.keys() & self.__dict__.keys()
+        mf.__dict__.update({key: getattr(self, key) for key in keys}, _keys=mf._keys)
+        mf.converged = False
+        return mf
 
 
 if __name__ == '__main__':

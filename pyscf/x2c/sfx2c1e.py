@@ -149,6 +149,13 @@ def sfx2c1e(mf):
                 log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
             return mol_dip
 
+        def _transfer_attrs_(self, dst):
+            if self.with_x2c and not hasattr(dst, 'with_x2c'):
+                logger.warn(self, 'Destination object of to_hf/to_ks method is not '
+                            'an X2C object. Convert dst to X2C object.')
+                dst = dst.sfx2c()
+            return hf.SCF._transfer_attrs_(self, dst)
+
     with_x2c = SpinFreeX2CHelper(mf.mol)
     return mf.view(SFX2C1E_SCF).add_keys(with_x2c=with_x2c)
 

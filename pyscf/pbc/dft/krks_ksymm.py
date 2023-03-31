@@ -128,6 +128,10 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
 
 
 class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
+
+    get_veff = get_veff
+    get_rho = get_rho
+
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf_ksymm.KRHF.__init__(self, cell, kpts, exxdiv=exxdiv)
@@ -137,8 +141,6 @@ class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
         khf_ksymm.KRHF.dump_flags(self, verbose)
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
-
-    get_veff = get_veff
 
     def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):
         if h1e_kpts is None: h1e_kpts = self.get_hcore(self.cell, self.kpts)
@@ -154,10 +156,5 @@ class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
         self.scf_summary['exc'] = vhf.exc.real
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
         return tot_e.real, vhf.ecoul + vhf.exc
-
-    get_rho = get_rho
-
-    density_fit = rks._patch_df_beckegrids(khf_ksymm.KRHF.density_fit)
-    mix_density_fit = rks._patch_df_beckegrids(khf_ksymm.KRHF.mix_density_fit)
 
 KRKS = KsymAdaptedKRKS

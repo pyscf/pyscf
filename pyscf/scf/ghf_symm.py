@@ -87,7 +87,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     else:
         raise NotImplementedError
 
-class GHF(ghf.GHF):
+class SymAdaptedGHF(ghf.GHF):
     __doc__ = ghf.GHF.__doc__ + '''
     Attributes for symmetry allowed GHF:
         irrep_nelec : dict
@@ -278,6 +278,8 @@ class GHF(ghf.GHF):
             s = self.get_ovlp()
         return numpy.asarray(get_orbsym(self.mol, mo_coeff, s))
     orbsym = property(get_orbsym)
+
+GHF = SymAdaptedGHF
 
 
 class HF1e(GHF):

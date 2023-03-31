@@ -37,7 +37,6 @@ from pyscf.pbc import gto
 from pyscf.pbc import tools
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
-from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc.scf import addons
 from pyscf.pbc import df
 from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
@@ -503,22 +502,17 @@ class SCF(mol_hf.SCF):
         with_df : density fitting object
             Default is the FFT based DF model. For all-electron calculation,
             MDF model is favored for better accuracy.  See also :mod:`pyscf.pbc.df`.
-
-        direct_scf : bool
-            When this flag is set to true, the J/K matrices will be computed
-            directly through the underlying with_df methods.  Otherwise,
-            depending the available memory, the 4-index integrals may be cached
-            and J/K matrices are computed based on the 4-index integrals.
     '''
 
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    init_direct_scf = lib.invalid_method('init_direct_scf')
+    get_bands = get_bands
+    get_rho = get_rho
 
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
-        self.cell = cell
         mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
@@ -565,9 +559,16 @@ class SCF(mol_hf.SCF):
         '''Reset cell and relevant attributes associated to the old cell object'''
         if cell is not None:
             self.cell = cell
-            self.mol = cell # used by hf kernel
         self.with_df.reset(cell)
         return self
+
+    # used by hf kernel
+    @property
+    def mol(self):
+        return self.cell
+    @mol.setter
+    def mol(self, x):
+        self.cell = x
 
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)
@@ -640,7 +641,7 @@ class SCF(mol_hf.SCF):
             not self.rsjk and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
             (self._eri is not None or cell.incore_anyway or
-             (not self.direct_scf and self._is_mem_enough()))):
+             self._is_mem_enough())):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
@@ -716,17 +717,11 @@ class SCF(mol_hf.SCF):
     def energy_nuc(self):
         return self.cell.energy_nuc()
 
-    get_bands = get_bands
-
-    get_rho = get_rho
-
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
         if cell is None:
             cell = self.cell
-        if dm is None:
-            dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)
@@ -740,7 +735,11 @@ class SCF(mol_hf.SCF):
             makov_payne_correction(self)
         return self
 
-    get_init_guess = mol_hf.SCF.get_init_guess
+    def get_init_guess(self, cell=None, key='minao'):
+        if cell is None: cell = self.cell
+        dm = mol_hf.SCF.get_init_guess(self, cell, key)
+        dm = normalize_dm_(self, dm)
+        return dm
 
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell
@@ -771,6 +770,12 @@ class SCF(mol_hf.SCF):
             mem_need = nao**4*16/1e6
         return mem_need + lib.current_memory()[0] < self.max_memory*.95
 
+    def analyze(self, verbose=None, with_meta_lowdin=None, **kwargs):
+        raise NotImplementedError
+
+    def mulliken_pop(self):
+        raise NotImplementedError
+
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import df_jk
         return df_jk.density_fit(self, auxbasis, with_df=with_df)
@@ -788,17 +793,17 @@ class SCF(mol_hf.SCF):
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
 
-    def to_rhf(self, mf):
+    def to_rhf(self, mf=None):
         '''Convert the input mean-field object to a RHF/ROHF/RKS/ROKS object'''
-        return addons.convert_to_rhf(mf)
+        return addons.convert_to_rhf(self, mf)
 
-    def to_uhf(self, mf):
+    def to_uhf(self, mf=None):
         '''Convert the input mean-field object to a UHF/UKS object'''
-        return addons.convert_to_uhf(mf)
+        return addons.convert_to_uhf(self, mf)
 
-    def to_ghf(self, mf):
+    def to_ghf(self, mf=None):
         '''Convert the input mean-field object to a GHF/GKS object'''
-        return addons.convert_to_ghf(mf)
+        return addons.convert_to_ghf(self, mf)
 
     def stability(self):
         raise NotImplementedError
@@ -855,20 +860,21 @@ class KohnShamDFT:
     '''
 
 
-class RHF(SCF, mol_hf.RHF):
+class RHF(SCF):
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
-        dm = SCF.get_init_guess(self, cell, key)
-        dm = normalize_dm_(self, dm)
-        return dm
-
+    analyze = mol_hf.RHF.analyze
+    spin_square = mol_hf.RHF.spin_square
     stability = mol_hf.RHF.stability
+    convert_from_ = mol_hf.RHF.convert_from_
 
-    def convert_from_(self, mf):
-        '''Convert given mean-field object to RHF'''
-        addons.convert_to_rhf(mf, self)
-        return self
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+    def to_ks(self, xc='HF'):
+        '''Convert to RKS object.
+        '''
+        from pyscf.pbc import dft
+        return self._transfer_attrs_(dft.RKS(self.cell, xc=xc))
 
 
 def _format_jks(vj, dm, kpts_band):

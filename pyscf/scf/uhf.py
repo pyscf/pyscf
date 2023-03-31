@@ -748,7 +748,7 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
 
 dip_moment = hf.dip_moment
 
-class UHF(hf.SCF):
+class SymAdaptedUHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for UHF:
         nelec : (int, int)
@@ -1019,8 +1019,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     def convert_from_(self, mf):
         '''Create UHF object based on the RHF/ROHF object'''
-        from pyscf.scf import addons
-        return addons.convert_to_uhf(mf, out=self)
+        return mf.to_uhf(self)
 
     def stability(self,
                   internal=getattr(__config__, 'scf_stability_internal', True),
@@ -1061,6 +1060,14 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     def nuc_grad_method(self):
         from pyscf.grad import uhf
         return uhf.Gradients(self)
+
+    def to_ks(self, xc='HF'):
+        '''Convert to UKS object.
+        '''
+        from pyscf import dft
+        return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
+
+UHF = SymAdaptedUHF
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

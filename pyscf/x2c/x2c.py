@@ -638,6 +638,13 @@ class SCF(hf.SCF):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+    def _transfer_attrs_(self, dst):
+        if self.with_x2c and not hasattr(dst, 'with_x2c'):
+            logger.warn(self, 'Destination object of to_hf/to_ks method is not '
+                        'an X2C object. Convert dst to X2C object.')
+            dst = dst.x2c()
+        return hf.SCF._transfer_attrs_(self, dst)
+
 X2C_SCF = SCF
 
 class UHF(SCF):
@@ -649,9 +656,7 @@ class UHF(SCF):
         mean-field object.
         '''
         from pyscf.x2c import dft
-        mf = self.view(dft.UKS)
-        mf.converged = False
-        return mf
+        return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
 
 X2C_UHF = UHF
 
@@ -672,9 +677,7 @@ class RHF(SCF):
         mean-field object.
         '''
         from pyscf.x2c import dft
-        mf = self.view(dft.RKS)
-        mf.converged = False
-        return mf
+        return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
 
 X2C_RHF = RHF
 
@@ -778,6 +781,16 @@ def x2c1e_ghf(mf):
             else:
                 log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
             return mol_dip
+
+        def _transfer_attrs_(self, dst):
+            if self.with_x2c and not hasattr(dst, 'with_x2c'):
+                logger.warn(self, 'Destination object of to_hf/to_ks method is not '
+                            'an X2C object. Convert dst to X2C object.')
+                dst = dst.x2c()
+            return hf.SCF._transfer_attrs_(self, dst)
+
+        def to_ks(self, xc='HF'):
+            raise NotImplementedError
 
     with_x2c = SpinOrbitalX2CHelper(mf.mol)
     return mf.view(X2C1E_GSCF).add_keys(with_x2c=with_x2c)

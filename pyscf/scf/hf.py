@@ -1375,8 +1375,6 @@ def as_scanner(mf):
 
     return SCF_Scanner(mf)
 
-############
-
 
 
 class SCF(lib.StreamObject):
@@ -1956,7 +1954,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
 
-    def to_rhf(self):
+    def to_rhf(self, mf=None):
         '''Convert the input mean-field object to a RHF/ROHF object.
 
         Note this conversion only changes the class of the mean-field object.
@@ -1964,12 +1962,12 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mean-field object.
         '''
         from pyscf.scf import addons
-        mf = addons.convert_to_rhf(self)
+        mf = addons.convert_to_rhf(self, mf)
         if not isinstance(self, RHF):
             mf.converged = False
         return mf
 
-    def to_uhf(self):
+    def to_uhf(self, mf=None):
         '''Convert the input mean-field object to a UHF object.
 
         Note this conversion only changes the class of the mean-field object.
@@ -1977,9 +1975,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mean-field object.
         '''
         from pyscf.scf import addons
-        return addons.convert_to_uhf(self)
+        return addons.convert_to_uhf(self, mf)
 
-    def to_ghf(self):
+    def to_ghf(self, mf=None):
         '''Convert the input mean-field object to a GHF object.
 
         Note this conversion only changes the class of the mean-field object.
@@ -1987,7 +1985,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mean-field object.
         '''
         from pyscf.scf import addons
-        return addons.convert_to_ghf(self)
+        return addons.convert_to_ghf(self, mf)
 
     def to_rks(self, xc='HF'):
         '''Convert the input mean-field object to a RKS/ROKS object.
@@ -1996,13 +1994,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        from pyscf import dft
-        mf = dft.RKS(self.mol, xc=xc)
-        res_keys = dict(self.to_rhf().__dict__)
-        res_keys.pop('_keys')
-        mf.__dict__.update(res_keys)
-        mf.converged = False
-        return mf
+        return self.to_rhf().to_ks(xc)
 
     def to_uks(self, xc='HF'):
         '''Convert the input mean-field object to a UKS object.
@@ -2011,13 +2003,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        from pyscf import dft
-        mf = dft.UKS(self.mol, xc=xc)
-        res_keys = dict(self.to_uhf().__dict__)
-        res_keys.pop('_keys')
-        mf.__dict__.update(res_keys)
-        mf.converged = False
-        return mf
+        return self.to_uhf().to_ks(xc)
 
     def to_gks(self, xc='HF'):
         '''Convert the input mean-field object to a GKS object.
@@ -2026,13 +2012,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        from pyscf import dft
-        mf = dft.GKS(self.mol, xc=xc)
-        res_keys = dict(self.to_ghf().__dict__)
-        res_keys.pop('_keys')
-        mf.__dict__.update(res_keys)
-        mf.converged = False
-        return mf
+        return self.to_ghf().to_ks(xc)
 
     def _method_name(self):
         if isinstance(self, KohnShamDFT):
@@ -2047,6 +2027,11 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         cls = self.__class__
         return f'{self._method_name()} object of {cls}'
 
+    def convert_from_(self, mf):
+        '''Convert the abinput mean-field object to the associated KS object.
+        '''
+        raise NotImplementedError
+
     def to_ks(self, xc='HF'):
         '''Convert the input mean-field object to the associated KS object.
 
@@ -2054,18 +2039,16 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        from pyscf import scf
-        if isinstance(self, scf.hf.RHF):
-            return self.to_rks(xc)
-        elif isinstance(self, scf.hf.UHF):
-            return self.to_uks(xc)
-        elif isinstance(self, scf.hf.GHF):
-            return self.to_gks(xc)
-        else:
-            raise RuntimeError(f'to_ks does not support {self.__class__}')
-
-    def stability(self):
         raise NotImplementedError
+
+    def _transfer_attrs_(self, dst):
+        '''This helper function transfers attributes from one SCF object to
+        another SCF object. It is invoked by to_ks and to_hf methods.
+        '''
+        keys = dst.__dict__.keys() & self.__dict__.keys()
+        dst.__dict__.update({k: getattr(self, k) for k in keys}, _keys=dst._keys)
+        dst.converged = False
+        return dst
 
 
 class KohnShamDFT:
@@ -2126,8 +2109,7 @@ class RHF(SCF):
 
     def convert_from_(self, mf):
         '''Convert the input mean-field object to RHF/ROHF'''
-        from pyscf.scf import addons
-        return addons.convert_to_rhf(mf, out=self)
+        return mf.to_rhf(self)
 
     def spin_square(self, mo_coeff=None, s=None):  # pragma: no cover
         '''Spin square and multiplicity of RHF determinant'''
@@ -2170,6 +2152,11 @@ class RHF(SCF):
         from pyscf.grad import rhf
         return rhf.Gradients(self)
 
+    def to_ks(self, xc='HF'):
+        '''Convert to RKS object.
+        '''
+        from pyscf import dft
+        return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

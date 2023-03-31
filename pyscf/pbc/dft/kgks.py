@@ -33,6 +33,8 @@ from pyscf.pbc.scf import kghf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import krks
 from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import multigrid
+from pyscf.pbc.dft.numint2c import KNumInt2C
 from pyscf import __config__
 
 def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
@@ -67,40 +69,29 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
         raise NotImplementedError
 
     # TODO GKS with multigrid method
+    if isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        raise NotImplementedError
 
     # ndim = 3 : dm.shape = (nkpts, nao, nao)
     ground_state = (isinstance(dm_kpts, np.ndarray) and dm_kpts.ndim == 3 and
                     kpts_band is None)
-
+    # TODO: support non-symmetric density matrix
     assert (hermi == 1)
-    nso = dm_kpts.shape[-1]
-    nao = nso // 2
-    dm_a = dm_kpts[..., :nao, :nao]
-    dm_b = dm_kpts[..., nao:, nao:]
 
     # For UniformGrids, grids.coords does not indicate whehter grids are initialized
     if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
         if (isinstance(ks.grids, gen_grid.BeckeGrids) and
             ks.small_rho_cutoff > 1e-20 and ground_state):
-            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm_a+dm_b, ks.grids, kpts)
+            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm_kpts, ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
-    # vxc_spblk = (vxc_aa, vxc_bb), vxc_aa = (nkpts, nao, nao), vxc_bb = (nkpts, nao, nao)
     max_memory = ks.max_memory - lib.current_memory()[0]
-    n, exc, vxc_spblk = ks._numint.nr_uks(cell, ks.grids, ks.xc, (dm_a,dm_b), hermi,
-                                          kpts, kpts_band, max_memory=max_memory)
+    ni = ks._numint
+    n, exc, vxc = ni.get_vxc(cell, ks.grids, ks.xc, dm_kpts, hermi=hermi, kpts=kpts,
+                             kpts_band=kpts_band, max_memory=max_memory)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
-
-    # vxc = (vxc_aa,   0   )
-    #       (   0  , vxc_bb)
-    vxc = []
-    for k in range(len(kpts)):
-        vxc_k = np.asarray([vxc_spblk[0,k],vxc_spblk[1,k]], dtype=vxc_spblk.dtype)
-        vxc_k = np.asarray(scipy.linalg.block_diag(*vxc_k))
-        vxc.append(vxc_k)
-    vxc = lib.asarray(vxc)
 
     nkpts = len(kpts)
     weight = 1. / nkpts
@@ -137,50 +128,34 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
 class KGKS(rks.KohnShamDFT, kghf.KGHF):
     '''GKS class adapted for PBCs with k-point sampling.
     '''
+
+    get_veff = get_veff
+    energy_elec = krks.energy_elec
+    get_rho = krks.get_rho
+
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         kghf.KGHF.__init__(self, cell, kpts, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)
+        self._numint = KNumInt2C()
 
     def dump_flags(self, verbose=None):
         kghf.KGHF.dump_flags(self, verbose)
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
-    get_veff = get_veff
-    energy_elec = krks.energy_elec
-    get_rho = krks.get_rho
-
-    density_fit = rks._patch_df_beckegrids(kghf.KGHF.density_fit)
-    rs_density_fit = rks._patch_df_beckegrids(kghf.KGHF.rs_density_fit)
-    mix_density_fit = rks._patch_df_beckegrids(kghf.KGHF.mix_density_fit)
-    newton = khf.KSCF.newton
-
     def x2c1e(self):
         '''Adds spin-orbit coupling effects to H0 through the x2c1e approximation'''
         from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
         return x2c1e_gscf(self)
-
     x2c = x2c1e
-    sfx2c1e = khf.KSCF.sfx2c1e
 
-    stability = None
+    def stability(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
         raise NotImplementedError
 
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.unit = 'A'
-    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-    cell.a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    '''
-
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.verbose = 7
-    cell.output = '/dev/null'
-    cell.build()
-    mf = KGKS(cell, cell.make_kpts([2,1,1]))
-    print(mf.kernel())
+    def to_hf(self):
+        '''Convert to KGHF object.'''
+        return self._transfer_attrs_(self.cell.KGHF())

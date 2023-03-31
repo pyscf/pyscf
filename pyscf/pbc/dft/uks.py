@@ -80,7 +80,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         n, exc, vxc = (0,0), 0, 0
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, hermi,
+        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0, hermi,
                                         kpt, kpts_band, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
@@ -124,6 +124,13 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
     This is a literal duplication of the molecular UKS class with some `mol`
     variables replaced by `cell`.
     '''
+
+    get_vsap = mol_uks.UKS.get_vsap
+    init_guess_by_vsap = mol_uks.UKS.init_guess_by_vsap
+    get_veff = get_veff
+    energy_elec = pyscf.dft.uks.energy_elec
+    get_rho = get_rho
+
     def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbcuhf.UHF.__init__(self, cell, kpt, exxdiv=exxdiv)
@@ -134,16 +141,9 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
-    get_vsap = mol_uks.UKS.get_vsap
-    init_guess_by_vsap = mol_uks.UKS.init_guess_by_vsap
-
-    get_veff = get_veff
-    energy_elec = pyscf.dft.uks.energy_elec
-    get_rho = get_rho
-
-    density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.density_fit)
-    rs_density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.rs_density_fit)
-    mix_density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.mix_density_fit)
+    def to_hf(self):
+        '''Convert to UHF object.'''
+        return self._transfer_attrs_(self.cell.UHF())
 
 
 if __name__ == '__main__':

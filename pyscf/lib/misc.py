@@ -650,8 +650,9 @@ class StreamObject(object):
     def add_keys(self, **kwargs):
         '''Add or update attributes of the object and register these attributes in ._keys'''
         if kwargs:
+            keys = self._keys.union(kwargs.keys())
             self.__dict__.update(**kwargs)
-            self._keys = self._keys.union(kwargs.keys())
+            self._keys = keys
         return self
 
 _warn_once_registry = {}

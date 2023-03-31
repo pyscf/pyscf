@@ -36,7 +36,7 @@ from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import gdf_builder
-from pyscf.pbc.scf import ghf
+from pyscf.pbc.scf import ghf, khf, kghf
 from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
@@ -90,20 +90,18 @@ def sfx2c1e(mf):
         def get_hcore(self, cell=None, kpts=None, kpt=None):
             if cell is None: cell = self.cell
             if kpts is None:
-                if getattr(self, 'kpts', None) is not None:
+                if isinstance(self, khf.KSCF):
                     kpts = self.kpts
+                elif kpt is None:
+                    kpts = self.kpt
                 else:
-                    if kpt is None:
-                        kpts = self.kpt
-                    else:
-                        kpts = kpt
+                    kpts = kpt
             if self.with_x2c:
                 hcore = self.with_x2c.get_hcore(cell, kpts)
-                if isinstance(self, ghf.GHF):
-                    if kpts.ndim == 1:
-                        hcore = scipy.linalg.block_diag(hcore, hcore)
-                    else:
-                        hcore = [scipy.linalg.block_diag(h, h) for h in hcore]
+                if isinstance(self, kghf.KGHF):
+                    hcore = [scipy.linalg.block_diag(h, h) for h in hcore]
+                elif isinstance(self, ghf.GHF):
+                    hcore = scipy.linalg.block_diag(hcore, hcore)
                 return hcore
             else:
                 return mf_class.get_hcore(self, cell, kpts)

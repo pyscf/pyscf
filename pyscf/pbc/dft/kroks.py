@@ -30,20 +30,25 @@ from pyscf import __config__
 
 
 @lib.with_doc(kuks.get_veff.__doc__)
-def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
-    if getattr(dm, 'mo_coeff', None) is not None:
-        mo_coeff = dm.mo_coeff
-        mo_occ_a = [(x > 0).astype(np.double) for x in dm.mo_occ]
-        mo_occ_b = [(x ==2).astype(np.double) for x in dm.mo_occ]
-        dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
-                           mo_occ=(mo_occ_a,mo_occ_b))
-    return kuks.get_veff(ks, cell, dm, dm_last, vhf_last, hermi, kpts, kpts_band)
+    if getattr(dm_kpts, 'mo_coeff', None) is not None:
+        mo_coeff = dm_kpts.mo_coeff
+        mo_occ_a = [(x > 0).astype(np.double) for x in dm_kpts.mo_occ]
+        mo_occ_b = [(x ==2).astype(np.double) for x in dm_kpts.mo_occ]
+        dm_kpts = lib.tag_array(dm_kpts, mo_coeff=(mo_coeff,mo_coeff),
+                                mo_occ=(mo_occ_a,mo_occ_b))
+    return kuks.get_veff(ks, cell, dm_kpts, dm_last, vhf_last, hermi, kpts, kpts_band)
 
 
 class KROKS(rks.KohnShamDFT, krohf.KROHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
+
+    get_veff = get_veff
+    energy_elec = energy_elec
+    get_rho = kuks.get_rho
+
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         krohf.KROHF.__init__(self, cell, kpts, exxdiv=exxdiv)
@@ -54,13 +59,9 @@ class KROKS(rks.KohnShamDFT, krohf.KROHF):
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
-    get_veff = get_veff
-    energy_elec = energy_elec
-    get_rho = kuks.get_rho
-
-    density_fit = rks._patch_df_beckegrids(krohf.KROHF.density_fit)
-    rs_density_fit = rks._patch_df_beckegrids(krohf.KROHF.rs_density_fit)
-    mix_density_fit = rks._patch_df_beckegrids(krohf.KROHF.mix_density_fit)
+    def to_hf(self):
+        '''Convert to KROHF object.'''
+        return self._transfer_attrs_(self.cell.KROHF())
 
 
 if __name__ == '__main__':

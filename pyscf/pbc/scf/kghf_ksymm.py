@@ -143,7 +143,10 @@ class KsymAdaptedKGHF(khf_ksymm.KsymAdaptedKSCF, kghf.KGHF):
 
     def get_hcore(self, cell=None, kpts=None):
         hcore = khf_ksymm.KsymAdaptedKSCF.get_hcore(self, cell, kpts)
-        return lib.asarray([scipy.linalg.block_diag(h, h) for h in hcore])
+        hcore = lib.asarray([scipy.linalg.block_diag(h, h) for h in hcore])
+        if self.with_soc:
+            raise NotImplementedError
+        return hcore
 
     def get_ovlp(self, cell=None, kpts=None):
         s = khf_ksymm.KsymAdaptedKSCF.get_ovlp(self, cell, kpts)
