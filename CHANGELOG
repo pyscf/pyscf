@@ -1,3 +1,30 @@
+PySCF 2.2.1 (2023-03-29)
+------------------------
+* Added
+  - Density fitting gradients and hessian for RSH functionals
+  - SCS-MP2 and SCS-KMP2
+  - Configurations of f-in-core ECPs
+  - ao2mo integral transformation for GHF orbitals with scalar ERIs
+  - Interface to access basis Set Exchange DB
+  - DF-UCISD
+  - Moment resolved GF-CCSD
+  - MOM (maximum overlap method) for GHF and DHF
+* Improved
+  - PBC GDF K-build performance
+  - Read cubegen for crystalline systems
+* Fixes
+  - Outdated examples
+  - Update to libcint 5.3.0 to filter warning messages produced by 5.2.0
+  - PBC density fitting CDERIArray object backward compatibility
+  - DIIS numerical instability
+  - C2v molecule orientation when symmetry is enabled
+  - The missed HF exchange in RSH functional wB97
+  - Gauge origin of Boys localization
+  - Check the root numbers during Davidson diagonalization iterations
+  - Removed hard-coded environment variable MKL_NUM_THREADS=1
+  - Conflicts in GDF cderi tensor for RSH functionals
+
+
 PySCF 2.2.0 (2023-03-09)
 ------------------------
 * Added
