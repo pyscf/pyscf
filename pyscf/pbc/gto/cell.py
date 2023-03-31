@@ -1370,7 +1370,7 @@ class Cell(mole.Mole):
         _built = self._built
         mole.Mole.build(self, False, parse_arg, *args, **kwargs)
 
-        exp_min = np.array([self.bas_exp(ib).max() for ib in range(self.nbas)])
+        exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
         if self.exp_to_discard is None:
             if np.any(exp_min < 0.1):
                 sys.stderr.write('''WARNING!
