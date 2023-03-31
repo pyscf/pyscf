@@ -30,6 +30,7 @@ from pyscf.gto import AS_ECPBAS_OFFSET, AS_NECPBAS
 
 def ecp_int(cell, kpts=None):
     from pyscf.pbc.df import gdf_builder
+    lib.logger.debug(cell, 'ECP integrals with CCGDF')
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:

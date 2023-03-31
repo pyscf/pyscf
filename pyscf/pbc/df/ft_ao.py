@@ -308,7 +308,15 @@ class _RangeSeparatedCell(pbcgto.Cell):
             l = orig_bas[gto.ANG_OF]
             es = cell.bas_exp(ib)
             cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
-            ke = aft._estimate_ke_cutoff(es, l, cs, precision)
+            # ke = aft._estimate_ke_cutoff(es, l, cs, precision) is a more
+            # accurate estimator of ke_cut for 4c2e integrals when using rs_cell
+            # is used in rsjk module. However, rs_cell is also used in other
+            # integrals such as nuclear attraction. aft._estimate_ke_cutoff may
+            # put primitive GTOs of large es and small cs in the group
+            # SMOOTH_BASIS. These GTOs may lead to a large ke_cutoff (mesh) in
+            # _RSNucBuilder or _CCNucBuilder. For safety, _estimate_ke_cutoff
+            # for nuclear attraction is used here
+            ke = pbcgto.cell._estimate_ke_cutoff(es, l, cs, precision)
 
             smooth_mask = ke < ke_cut_threshold
             if rcut_threshold is None:
