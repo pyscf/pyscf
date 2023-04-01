@@ -69,13 +69,13 @@ print('CCSD correlation energy', mycc.e_corr)
 # number of elec screened by ECP > number of chemical core electrons
 #
 mol = gto.M(
-    atom = 'Mg 0 0 0',
-    basis = 'def2-svp')
+    atom = 'Xe 0 0 0',
+    basis = 'cc-pvtz-dk')
 mf = scf.RHF(mol).run()
 mycc = cc.CCSD(mf)
 mycc.set_frozen()
 print('Number of core orbital frozen: %d' % mycc.frozen)
-mol.set(basis='lanl2dz', ecp='lanl2dz').build()
+mol.set(basis='def2-svp', ecp='def2-svp').build()
 mf = scf.RHF(mol).run()
 mycc = cc.CCSD(mf)
 mycc.set_frozen()
