@@ -247,14 +247,6 @@ class Int3cBuilder(lib.StreamObject):
         aux_seg2sh = np.arange(rs_auxcell.nbas + 1)
         seg2sh = _conc_locs(supmol.seg2sh, aux_seg2sh)
 
-        sindex = self.get_q_cond(supmol)
-        ovlp_mask = sindex > cutoff
-        bvk_ovlp_mask = lib.condense('np.any', ovlp_mask, supmol.sh_loc)
-        cell0_ovlp_mask = bvk_ovlp_mask.reshape(
-            bvk_ncells, nbasp, bvk_ncells, nbasp).any(axis=2).any(axis=0)
-        cell0_ovlp_mask = cell0_ovlp_mask.astype(np.int8)
-        ovlp_mask = None
-
         if 'ECP' in intor:
             # rs_auxcell is a placeholder only to represent the ecpbas.
             # Ensure the ECPBAS_OFFSET be consistent with the treatment in pbc.gto.ecp
@@ -263,9 +255,17 @@ class Int3cBuilder(lib.StreamObject):
             cintopt = _vhf.make_cintopt(atm, bas, env, intor)
             # sindex may not be accurate enough to screen ECP integral.
             # Add penalty 1e-2 to reduce the screening error
-            cutoff = int(CUTOFF_OFFSET + 2*np.log(self.direct_scf_tol*1e-2))
+            cutoff += int(2*np.log(1e-2))
         else:
             cintopt = _vhf.make_cintopt(supmol._atm, supmol._bas, supmol._env, intor)
+
+        sindex = self.get_q_cond(supmol)
+        ovlp_mask = sindex > cutoff
+        bvk_ovlp_mask = lib.condense('np.any', ovlp_mask, supmol.sh_loc)
+        cell0_ovlp_mask = bvk_ovlp_mask.reshape(
+            bvk_ncells, nbasp, bvk_ncells, nbasp).any(axis=2).any(axis=0)
+        cell0_ovlp_mask = cell0_ovlp_mask.astype(np.int8)
+        ovlp_mask = None
 
         # Estimate the buffer size required by PBCfill_nr3c functions
         cache_size = max(_get_cache_size(cell, intor),
@@ -321,7 +321,7 @@ class Int3cBuilder(lib.StreamObject):
 
         # is_pbcintor controls whether to use memory efficient functions
         # Only suppots int3c2e_sph, int3c2e_cart in current C library
-        is_pbcintor = intor in ('int3c2e_sph', 'int3c2e_cart')
+        is_pbcintor = intor in ('int3c2e_sph', 'int3c2e_cart') or intor[:3] == 'ECP'
         if is_pbcintor and not intor.startswith('PBC'):
             intor = 'PBC' + intor
         log.debug1('is_pbcintor = %d, intor = %s', is_pbcintor, intor)
@@ -460,7 +460,6 @@ def estimate_rcut(cell, auxcell, precision=None):
     r0 = cell.rcut
     r0 = (np.log(fac * r0 * (sfac*r0)**(l3-2) + 1.) / (sfac*theta))**.5
     r0 = (np.log(fac * r0 * (sfac*r0)**(l3-2) + 1.) / (sfac*theta))**.5
-    logger.debug2(cell, 'exp_d = %g, exp_c = %g, rcut = %s', aj, ai, r0)
     return r0
 
 def _conc_locs(ao_loc1, ao_loc2):

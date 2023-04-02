@@ -18,7 +18,7 @@
 
 #include <stdint.h>
 
-#if !defined(HAVE_DEFINED_BVKENV_H)
+#ifndef HAVE_DEFINED_BVKENV_H
 #define HAVE_DEFINED_BVKENV_H
 typedef struct {
         // number of primitive cells in bvk-cell
@@ -60,8 +60,8 @@ typedef struct {
 
         int (*intor)();
 } BVKEnvs;
-#endif
 
 // supports integrals value between exp(-115/2) - exp((127-115)/2)
 // 1e-25 - 4e2
 #define CUTOFF_OFFSET 115
+#endif

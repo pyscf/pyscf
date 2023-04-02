@@ -242,7 +242,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis,
                                          self.exp_to_discard)
 
-        if with_j3c:
+        if with_j3c and self._cderi_to_save is not None:
             if isinstance(self._cderi_to_save, str):
                 cderi = self._cderi_to_save
             else:

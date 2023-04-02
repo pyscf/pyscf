@@ -369,7 +369,6 @@ get_rho = khf.get_rho
 class KUHF(khf.KSCF, pbcuhf.UHF):
     '''UHF class with k-point sampling.
     '''
-    conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
     direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
 

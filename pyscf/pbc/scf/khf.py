@@ -482,7 +482,7 @@ class KSCF(pbchf.SCF):
 
         self.exxdiv = exxdiv
         self.kpts = kpts
-        self.conv_tol = cell.precision * 10
+        self.conv_tol = max(cell.precision * 10, 1e-8)
 
         self.exx_built = False
         self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'])

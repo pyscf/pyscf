@@ -156,7 +156,7 @@ static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, uint8_t cut
         float omega2, eta, theta, theta_k, theta_r2, fac;
         float ij_cutoff, sij;
 
-        // FIXME: Is it correct to assemble ECP and PP 3c integrals this way?
+        // FIXME: Is it correct to assemble PP 3c integrals this way?
         if (omega < 0.f) {
                 // Short-range integrals
                 omega2 = omega * omega;
@@ -220,6 +220,7 @@ for (ish = ish0; ish < ish1; ish++) {
                         }
                 }
         } else {
+                // TODO: for int3c1e_ovlp, eta = ak[ksh]
                 eta = envs_bvk->eta;
                 theta_k = eta;
                 if (omega > 0.f) {

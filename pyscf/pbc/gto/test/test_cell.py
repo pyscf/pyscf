@@ -271,6 +271,7 @@ class KnownValues(unittest.TestCase):
             pseudo = {'Cu': 'gthbp'})
         self.assertTrue(all(cell._ecpbas[:,0] == 1))
 
+    def test_ecp_int(self):
         cell = pgto.Cell()
         cell.a = numpy.eye(3) * 8
         cell.mesh = [11] * 3
@@ -283,6 +284,19 @@ class KnownValues(unittest.TestCase):
         mol = cell.to_mol()
         v0 = mol.intor('ECPscalar_sph')
         self.assertAlmostEqual(abs(v0 - v1).sum(), 0.029005926114411891, 8)
+        self.assertAlmostEqual(lib.fp(v1), -0.20831852433927503, 8)
+
+        cell = pgto.M(
+            verbose = 0,
+            a = np.eye(3)*6,
+            atom = 'Na 1 0 1; Cl 5 4 4',
+            ecp = 'lanl2dz',
+            basis = [[0, [1, 1]]])
+        v1 = ecp.ecp_int(cell)
+        mol = cell.to_mol()
+        v0 = mol.intor('ECPscalar_sph')
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 5)
+        self.assertAlmostEqual(lib.fp(v1), -1.225444628445373, 8)
 
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(
