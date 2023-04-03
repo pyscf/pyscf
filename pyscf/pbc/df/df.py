@@ -184,7 +184,6 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             self.cell = cell
         self.auxcell = None
         self._cderi = None
-        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self._rsh_df = {}
         return self
 
