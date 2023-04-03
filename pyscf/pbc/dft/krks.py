@@ -91,16 +91,19 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    weight = 1./len(kpts)
+    nkpts = len(kpts)
+    weight = 1. / nkpts
     if not hybrid:
-        ks.with_df._j_only = False
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         vxc += vj
     else:
         omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
-            logger.warn(ks, 'df.j_only cannot be used with hybrid functional')
+        if getattr(ks.with_df, '_j_only', False) and nkpts > 1: # for GDF and MDF
             ks.with_df._j_only = False
+            if ks.with_df._cderi is not None:
+                logger.warn(ks, 'df.j_only cannot be used with hybrid '
+                            'functional. Rebuild cderi')
+                ks.with_df.build()
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vk *= hyb
         if omega != 0:

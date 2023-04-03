@@ -35,7 +35,18 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
     vlapl = None
     vtau = None
     vxc = (vrho, vgamma, vlapl, vtau)
-    fxc = None  # 2nd order functional derivative
+    v2rho2 = 0.01 * 6 * rho0
+    v2rhosigma = .02 * .5 * (gamma+.001)**(-.5)
+    v2sigma2 = 0.02 * .5 * -.5 * (gamma+.001)**(-1.5)
+    v2lapl2 = None
+    vtau2 = None
+    v2rholapl = None
+    v2rhotau = None
+    v2lapltau = None
+    v2sigmalapl = None
+    v2sigmatau = None
+    # 2nd order functional derivative
+    fxc = (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
     kxc = None  # 3rd order functional derivative
 
     # Mix with existing functionals

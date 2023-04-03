@@ -328,6 +328,8 @@ class EOMIP(eom_rccsd.EOMIP):
         self.nmo = cc.get_nmo()
 
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        if diag is None:
+            diag = self.get_diag()
         if koopmans:
             nocca, noccb = self.nocc
             idx = diag[:nocca+noccb].argsort()
@@ -853,6 +855,8 @@ class EOMEA(eom_rccsd.EOMEA):
         self.nmo = cc.get_nmo()
 
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        if diag is None:
+            diag = self.get_diag()
         if koopmans:
             nocca, noccb = self.nocc
             nmoa, nmob = self.nmo
@@ -1850,6 +1854,8 @@ class EOMEESpinKeep(EOMEE):
     get_diag = eeccsd_diag
 
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        if diag is None:
+            diag = self.get_diag()
         if koopmans:
             nocca, noccb = self.nocc
             nmoa, nmob = self.nmo
@@ -1904,6 +1910,8 @@ class EOMEESpinFlip(EOMEE):
     matvec = eomsf_ccsd_matvec
 
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        if diag is None:
+            diag = self.get_diag()
         if koopmans:
             nocca, noccb = self.nocc
             nmoa, nmob = self.nmo
