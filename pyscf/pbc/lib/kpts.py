@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,18 +16,20 @@
 # Authors: Xing Zhang <zhangxing.nju@gmail.com>
 #
 
+from functools import reduce
 import numpy as np
 import ctypes
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 from pyscf.pbc.symm import symmetry as symm
-from pyscf.pbc.lib.kpts_helper import member, KPT_DIFF_TOL, KptsHelper
+from pyscf.pbc.symm.group import PGElement, PointGroup, Representation
+from pyscf.pbc.lib.kpts_helper import member, round_to_fbz, KPT_DIFF_TOL
 from numpy.linalg import inv
 
 libpbc = lib.load_library('libpbc')
 
-def make_kpts_ibz(kpts):
+def make_kpts_ibz(kpts, tol=KPT_DIFF_TOL):
     """
     Locate k-points in IBZ.
 
@@ -46,7 +48,7 @@ def make_kpts_ibz(kpts):
     if kpts.time_reversal:
         op_rot = np.concatenate([op_rot, -op_rot])
 
-    bz2bz_ks = map_k_points_fast(kpts.kpts_scaled, op_rot, KPT_DIFF_TOL)
+    bz2bz_ks = map_k_points_fast(kpts.kpts_scaled, op_rot, tol)
     kpts.k2opk = bz2bz_ks.copy()
     if -1 in bz2bz_ks:
         bz2bz_ks[:, np.unique(np.where(bz2bz_ks == -1)[1])] = -1
@@ -85,16 +87,22 @@ def make_kpts_ibz(kpts):
                 continue
             diff = bz_k_scaled - np.dot(ibz_k_scaled, op.T)
             diff = diff - diff.round()
-            if (np.absolute(diff) < KPT_DIFF_TOL).all():
+            if (np.absolute(diff) < tol).all():
                 kpts.time_reversal_symm_bz[k] = io // nop
                 kpts.stars_ops_bz[k] = io % nop
                 break
 
     for i in range(kpts.nkpts_ibz):
-        ibz_k_scaled = kpts.kpts_scaled_ibz[i]
         idx = np.where(kpts.bz2ibz == i)[0]
         kpts.stars.append(idx)
         kpts.stars_ops.append(kpts.stars_ops_bz[idx])
+
+    little_cogroup_ops = []
+    for ki_ibz in range(kpts.nkpts_ibz):
+        ki = kpts.ibz2bz[ki_ibz]
+        ops_id = np.where(kpts.k2opk[ki] == ki)[0]
+        little_cogroup_ops.append(ops_id)
+    kpts.little_cogroup_ops = little_cogroup_ops
 
 def make_ktuples_ibz(kpts, kpts_scaled=None, ntuple=2, tol=KPT_DIFF_TOL):
     """
@@ -114,100 +122,109 @@ def make_ktuples_ibz(kpts, kpts_scaled=None, ntuple=2, tol=KPT_DIFF_TOL):
 
     Returns
     -------
-        ibz2bz_kk : (nibz,) ndarray of int
+        ibz2bz : (nibz,) ndarray of int
             Mapping table from IBZ to full BZ.
-        ibz_kk_weight : (nibz,) ndarray of int
+        weight_ibz : (nibz,) ndarray of int
             Weights of each k-point tuple in the IBZ.
-        bz2ibz_kk : (nkpts**ntuple,) ndarray of int
+        bz2ibz : (nkpts**ntuple,) ndarray of int
             Mapping table from full BZ to IBZ.
-        kk_group : list of (nk,) ndarrays of int
+        stars : list of (nibz,) ndarrays of int
             Similar as :attr:`.stars`.
-        kk_sym_group : list of (nk,) ndarrays of int
+        stars_ops : list of (nibz,) ndarrays of int
             Similar as :attr:`.stars_ops`.
+        stars_ops_bz : (nkpts**ntuple,) ndarray of int
+            Similar as :attr:`.stars_ops_bz`.
     """
     if kpts_scaled is not None:
         cell = kpts.cell
         op_rot = np.asarray([op.a2b(cell).rot for op in kpts.ops])
         if kpts.time_reversal:
             op_rot = np.concatenate([op_rot, -op_rot])
-        bz2bz_ksks = map_k_tuples(kpts_scaled, op_rot, ntuple=ntuple, tol=tol)
-        bz2bz_ksks[:, np.unique(np.where(bz2bz_ksks == -1)[1])] = -1
-        nbzk2 = bz2bz_ksks.shape[0]
+        kt2opkt = map_kpts_tuples(kpts_scaled, op_rot, ntuple=ntuple, tol=tol)
+        kt2opkt[:, np.unique(np.where(kt2opkt == -1)[1])] = -1
+        nktuple = kt2opkt.shape[0]
     else:
-        bz2bz_ks = kpts.k2opk
-        nop = bz2bz_ks.shape[-1]
-        nbzk = kpts.nkpts
-        nbzk2 = nbzk**ntuple
-        bz2bz_T = np.zeros([nop, nbzk2], dtype=int)
+        k2opk = kpts.k2opk
+        nkpts, nop = k2opk.shape
+        nktuple = nkpts ** ntuple
+        kt2opkt_T = np.empty([nop, nktuple], dtype=np.int64)
         for iop in range(nop):
-            tmp = lib.cartesian_prod([bz2bz_ks[:,iop]]*ntuple)
-            if -1 in tmp:
-                bz2bz_T[iop,:] = -1
+            if -1 in k2opk[:,iop]:
+                kt2opkt_T[iop,:] = -1
             else:
-                #idx_throw = np.unique(np.where(tmp == -1)[0])
-                for i in range(ntuple):
-                    bz2bz_T[iop] += tmp[:,i] * nbzk**(ntuple-i-1)
-                #bz2bz_T[iop, idx_throw] = -1
-        bz2bz_ksks = bz2bz_T.T
+                tmp = lib.cartesian_prod([k2opk[:,iop],] * ntuple)
+                kt2opkt_T[iop] = lib.inv_base_repr_int(tmp, nkpts)
+                tmp = None
+        kt2opkt = kt2opkt_T.T
 
     if kpts.verbose >= logger.INFO:
-        logger.info(kpts, 'Number of k-point %d-tuples: %d', ntuple, nbzk2)
+        logger.info(kpts, 'Number of k-point %d-tuples: %d', ntuple, nktuple)
 
-    bz2bz_kk = -np.ones(nbzk2+1, dtype=int)
-    ibz2bz_kk = []
-    k_group = []
-    sym_group = []
-    for k in range(nbzk2-1, -1, -1):
-        if bz2bz_kk[k] == -1:
-            bz2bz_kk[bz2bz_ksks[k]] = k
-            ibz2bz_kk.append(k)
-            k_idx, op_idx = np.unique(bz2bz_ksks[k], return_index=True)
+    bz2bz = -np.ones(nktuple+1, dtype=np.int64)
+    ibz2bz = []
+    stars = []
+    stars_ops = []
+    stars_ops_bz = np.empty(nktuple, dtype=np.int32)
+    for k in range(nktuple-1, -1, -1):
+        if bz2bz[k] == -1:
+            bz2bz[kt2opkt[k]] = k
+            ibz2bz.append(k)
+            k_idx, op_idx = np.unique(kt2opkt[k], return_index=True)
             if k_idx[0] == -1:
                 k_idx = k_idx[1:]
                 op_idx = op_idx[1:]
-            k_group.append(k_idx)
-            sym_group.append(op_idx)
+            stars.append(k_idx)
+            stars_ops.append(op_idx)
+            stars_ops_bz[k_idx] = op_idx
 
-    ibz2bz_kk = np.array(ibz2bz_kk[::-1])
+    kt2opkt =None
+
+    ibz2bz = np.array(ibz2bz, dtype=np.int64)[::-1]
     if kpts.verbose >= logger.INFO:
-        logger.info(kpts, 'Number of k %d-tuples in IBZ: %s', ntuple, len(ibz2bz_kk))
+        logger.info(kpts, f'Number of k {ntuple}-tuples in IBZ: {len(ibz2bz)}')
 
-    bz2bz_kk = bz2bz_kk[:-1].copy()
-    bz2ibz_kk = np.empty(nbzk2,dtype=int)
-    bz2ibz_kk[ibz2bz_kk] = np.arange(len(ibz2bz_kk))
-    bz2ibz_kk = bz2ibz_kk[bz2bz_kk]
+    bz2bz = bz2bz[:-1]
+    bz2ibz = np.empty(nktuple, dtype=np.int64)
+    bz2ibz[ibz2bz] = np.arange(len(ibz2bz))
+    bz2ibz = bz2ibz[bz2bz]
 
-    kk_group = k_group[::-1]
-    kk_sym_group = sym_group[::-1]
-    ibz_kk_weight = np.bincount(bz2ibz_kk) * (1.0 / nbzk2)
-    return ibz2bz_kk, ibz_kk_weight, bz2ibz_kk, kk_group, kk_sym_group
+    stars = stars[::-1]
+    stars_ops = stars_ops[::-1]
+    weight_ibz = np.bincount(bz2ibz) * (1.0 / nktuple)
+    return ibz2bz, weight_ibz, bz2ibz, stars, stars_ops, stars_ops_bz
 
-def make_k4_ibz(kpts, sym='s1'):
+def make_k4_ibz(kpts, sym='s1', return_ops=False):
     #physicist's notation
-    ibz2bz, weight, bz2ibz, group, _ = kpts.make_ktuples_ibz(ntuple=3)
-    khelper = KptsHelper(kpts.cell, kpts.kpts)
-    k4 = []
-    for ki, kj, ka in kpts.loop_ktuples(ibz2bz, 3):
-        kb = khelper.kconserv[ki,ka,kj]
-        k4.append([ki,kj,ka,kb])
+    ibz2bz, weight, bz2ibz, stars, stars_ops, stars_ops_bz = \
+            kpts.make_ktuples_ibz(ntuple=3)
+    kconserv = kpts.get_kconserv()
+
+    kija = kpts.index_to_ktuple(ibz2bz, 3)
+    kb = kconserv[kija[:,0], kija[:,2], kija[:,1]]
+    k4 = np.concatenate((kija, kb[:,None]), axis=1)
 
     if sym == "s1":
-        return np.asarray(k4), np.asarray(weight), np.asarray(bz2ibz)
+        if return_ops:
+            return k4, weight, bz2ibz, ibz2bz, stars_ops, stars_ops_bz
+        else:
+            return k4, weight, bz2ibz
     elif sym == "s2" or sym == "s4":
         ibz2ibz_s2 = np.arange(len(k4))
         k4_s2 = []
         weight_s2 = []
-        for i, k in enumerate(k4):
-            ki,kj,ka,kb = k
-            k_sym = [kj,ki,kb,ka] #interchange dummy indices
+        for i, kijab in enumerate(k4):
+            ki, kj, ka, kb = kijab
+            k = list(kijab)
+            k_sym = [kj, ki, kb, ka] #interchange dummy indices
             if k not in k4_s2 and k_sym not in k4_s2:
                 k4_s2.append(k)
                 ibz2ibz_s2[i] = len(k4_s2) - 1
                 w = weight[i]
-                if k != k_sym and k_sym in k4:
-                    idx = k4.index(k_sym)
-                    ibz2ibz_s2[idx] = ibz2ibz_s2[i]
-                    w += weight[idx]
+                if k != k_sym:
+                    k_sym_in_k4, idx = lib.isin_1d(k_sym, k4, True)
+                    if k_sym_in_k4:
+                        ibz2ibz_s2[idx] = ibz2ibz_s2[i]
+                        w += weight[idx]
                 weight_s2.append(w)
         #refine s2 symmetry
         k4_s2_refine = []
@@ -215,22 +232,24 @@ def make_k4_ibz(kpts, sym='s1'):
         skip = np.zeros([len(k4_s2)], dtype=int)
         ibz_s22ibz_s2_refine = np.arange(len(k4_s2))
         for i, k in enumerate(k4_s2):
-            if skip[i]: continue
-            ki,kj,ka,kb = k
-            k_sym = [kj,ki,kb,ka]
-            if ki==kj and ka==kb:
+            if skip[i]:
+                continue
+            ki, kj, ka, kb = k
+            k_sym = [kj, ki, kb, ka]
+            if ki == kj and ka == kb:
                 k4_s2_refine.append(k)
                 ibz_s22ibz_s2_refine[i] = len(k4_s2_refine) - 1
                 weight_s2_refine.append(weight_s2[i])
                 continue
             idx_sym = None
             for j in range(i+1, len(k4_s2)):
-                if skip[j]: continue
+                if skip[j]:
+                    continue
                 k_tmp = k4_s2[j]
                 if ki in k_tmp and kj in k_tmp and ka in k_tmp and kb in k_tmp:
-                    idx = k4.index(k_tmp)
-                    for kii,kjj,kaa in kpts.loop_ktuples(group[idx], 3):
-                        kbb = khelper.kconserv[kii,kaa,kjj]
+                    _, idx = lib.isin_1d(k_tmp, k4, True)
+                    for kii,kjj,kaa in kpts.loop_ktuples(stars[idx], 3):
+                        kbb = kconserv[kii,kaa,kjj]
                         if k_sym == [kii,kjj,kaa,kbb]:
                             idx_sym = j
                             break
@@ -298,37 +317,10 @@ def map_k_points_fast(kpts_scaled, ops, tol=KPT_DIFF_TOL):
             bz2bz_ks[k1,s] = k2 if ops[s] * kpts_scaled[k1] = kpts_scaled[k2] + K,
             where K is a reciprocal lattice vector.
     """
-    nkpts = len(kpts_scaled)
-    nop = len(ops)
-    bz2bz_ks = -np.ones((nkpts, nop), dtype=int)
-    for s, op in enumerate(ops):
-        # Find mapped kpoints
-        op_kpts_scaled = np.dot(kpts_scaled, op.T)
+    return map_kpts_tuples(kpts_scaled.reshape(len(kpts_scaled),-1,3),
+                           ops, ntuple=1, tol=tol)
 
-        # Do some work on the input
-        k_kc = np.concatenate([kpts_scaled, op_kpts_scaled])
-        k_kc = np.mod(np.mod(k_kc, 1), 1)
-        k_kc = aglomerate_points(k_kc, tol)
-        k_kc = k_kc.round(-np.log10(tol).astype(int))
-        k_kc = np.mod(k_kc, 1)
-
-        # Find the lexicographical order
-        order = np.lexsort(k_kc.T)
-        k_kc = k_kc[order]
-        diff_kc = np.diff(k_kc, axis=0)
-        equivalentpairs_k = np.array((diff_kc == 0).all(1), dtype=bool)
-
-        # Mapping array.
-        orders = np.array([order[:-1][equivalentpairs_k],
-                           order[1:][equivalentpairs_k]])
-
-        # This has to be true.
-        assert (orders[0] < nkpts).all()
-        assert (orders[1] >= nkpts).all()
-        bz2bz_ks[orders[1] - nkpts, s] = orders[0]
-    return bz2bz_ks
-
-def map_k_tuples(kpts_scaled, ops, ntuple=2, tol=KPT_DIFF_TOL):
+def map_kpts_tuples(kpts_scaled, ops, ntuple=2, tol=KPT_DIFF_TOL):
     """
     Find symmetry-related k-point tuples.
 
@@ -341,8 +333,8 @@ def map_k_tuples(kpts_scaled, ops, ntuple=2, tol=KPT_DIFF_TOL):
         ntuple : int
             Dimension of tuples. Default is 2.
         tol : float
-            K-points differ by ``tol`` are considered as different.
-            Default is 1e-6.
+            K-points differ less than ``tol`` are considered
+            as the same. Default is 1e-6.
 
     Returns
     -------
@@ -355,54 +347,23 @@ def map_k_tuples(kpts_scaled, ops, ntuple=2, tol=KPT_DIFF_TOL):
     nop = len(ops)
     bz2bz_ks = -np.ones((nkpts, nop), dtype=int)
     for s, op in enumerate(ops):
-        # Find mapped kpoints
-        op_kpts_scaled = np.empty((nkpts, ntuple, 3), dtype=float)
-        for i in range(ntuple):
-            op_kpts_scaled[:,i] = np.dot(kpts_scaled[:,i], op.T)
+        op_kpts_scaled = np.einsum('kix,xy->kiy', kpts_scaled, op.T)
         op_kpts_scaled = op_kpts_scaled.reshape((nkpts,-1))
 
-        # Do some work on the input
-        k_kc = np.concatenate([kpts_scaled.reshape((nkpts,-1)), op_kpts_scaled])
-        k_kc = np.mod(np.mod(k_kc, 1), 1)
-        k_kc = aglomerate_points(k_kc, tol)
-        k_kc = k_kc.round(-np.log10(tol).astype(int))
-        k_kc = np.mod(k_kc, 1)
+        k_opk = np.concatenate([kpts_scaled.reshape((nkpts,-1)), op_kpts_scaled])
+        k_opk = round_to_fbz(k_opk, tol=tol)
+        order = np.lexsort(k_opk.T)
+        k_opk = k_opk[order]
+        diff = np.diff(k_opk, axis=0)
+        equivalent_pairs = np.array((diff == 0).all(1), dtype=bool)
 
-        # Find the lexicographical order
-        order = np.lexsort(k_kc.T)
-        k_kc = k_kc[order]
-        diff_kc = np.diff(k_kc, axis=0)
-        equivalentpairs_k = np.array((diff_kc == 0).all(1), dtype=bool)
+        maps = np.array([order[:-1][equivalent_pairs],
+                         order[ 1:][equivalent_pairs]])
 
-        # Mapping array.
-        orders = np.array([order[:-1][equivalentpairs_k],
-                           order[1:][equivalentpairs_k]])
-
-        # This has to be true.
-        assert (orders[0] < nkpts).all()
-        assert (orders[1] >= nkpts).all()
-        bz2bz_ks[orders[1] - nkpts, s] = orders[0]
+        assert (maps[0] < nkpts).all()
+        assert (maps[1] >= nkpts).all()
+        bz2bz_ks[maps[1] - nkpts, s] = maps[0]
     return bz2bz_ks
-
-def aglomerate_points(k_kc, tol=KPT_DIFF_TOL):
-    #This routine is adopted from GPAW
-    '''
-    Remove numerical error
-    '''
-    nd = k_kc.shape[1]
-    nbzkpts = len(k_kc)
-
-    inds_kc = np.argsort(k_kc, axis=0)
-
-    for c in range(nd):
-        sk_k = k_kc[inds_kc[:, c], c]
-        dk_k = np.diff(sk_k)
-
-        pt_K = np.argwhere(dk_k > tol)[:, 0]
-        pt_K = np.append(np.append(0, pt_K + 1), nbzkpts*2)
-        for i in range(len(pt_K) - 1):
-            k_kc[inds_kc[pt_K[i]:pt_K[i + 1], c], c] = k_kc[inds_kc[pt_K[i], c], c]
-    return k_kc
 
 def symmetrize_density(kpts, rhoR_k, ibz_k_idx, mesh):
     '''
@@ -767,9 +728,56 @@ def check_mo_occ_symmetry(kpts, mo_occ, tol=1e-5):
         mo_occ_ibz.append(mo_occ[kpts.ibz2bz[k]])
     return mo_occ_ibz
 
+def get_rotation_mat_for_mos(kpts, mo_coeff, ovlp, k1, k2, ops_id=None):
+    '''Rotation matrices for rotating MO[k1] to MO[k2].
+
+    Args:
+        kpts : :class:`KPoints` instance
+            K-point object.
+        mo_coeff : array
+            MO coefficients.
+        ovlp : array
+            Overlap matrix in AOs.
+        k1 : array like
+            Indices of the original k-points in the BZ.
+        k2 : array like
+            Indices of the target k-points in the BZ.
+        ops_id : list, optional
+            Indices of space group operations.
+            If not given, all the rotations are considered.
+
+    Returns:
+        out : list
+            Rotation matrices.
+    '''
+    from pyscf.pbc.symm.symmetry import _get_rotation_mat
+    cell = kpts.cell
+    nk = len(k1)
+    assert nk == len(k2)
+    if ops_id is not None:
+        assert nk == len(ops_id)
+
+    out = []
+    for k, (k_orig, k_target) in enumerate(zip(k1, k2)):
+        mats = []
+        if ops_id is None:
+            ids = np.arange(kpts.nop)
+        else:
+            ids = np.asarray(ops_id[k]).reshape(-1)
+        for iop in ids:
+            mat_ao = _get_rotation_mat(cell, kpts.kpts_scaled[k_orig],
+                                       mo_coeff[k_orig], kpts.ops[iop],
+                                       kpts.Dmats[iop])
+            mat = reduce(np.dot,(mo_coeff[k_orig].conj().T, ovlp[k_orig],
+                                 mat_ao.conj().T, mo_coeff[k_target]))
+            mats.append(mat)
+        out.append(np.asarray(mats))
+    return out
+
+
 def make_kpts(cell, kpts=np.zeros((1,3)),
               space_group_symmetry=False, time_reversal_symmetry=False,
-              symmorphic=True):
+              **kwargs):
     """
     A wrapper function to build the :class:`KPoints` object.
 
@@ -783,8 +791,6 @@ def make_kpts(cell, kpts=np.zeros((1,3)),
             Whether to consider space group symmetry. Default is False.
         time_reversal_symmetry : bool
             Whether to consider time reversal symmetry. Default is False.
-        symmorphic : bool
-            Whether to consider only the symmorphic subgroup. Default is True.
 
     Examples
     --------
@@ -792,16 +798,25 @@ def make_kpts(cell, kpts=np.zeros((1,3)),
     ...     atom = '''He 0. 0. 0.''',
     ...     a = numpy.eye(3)*2.0).build()
     >>> kpts = make_kpts(cell,
-    ...                  numpy.array([[0.,0.,0.],[0.5,0.,0.],[0.,0.5,0.],[0.,0.,0.5]])
+    ...                  numpy.array([[0.,0.,0.],
+    ...                               [0.5,0.,0.],
+    ...                               [0.,0.5,0.],
+    ...                               [0.,0.,0.5]]),
     ...                  space_group_symmetry=True)
     >>> print(kpts.kpts_ibz)
     [[0.  0.  0. ]
      [0.  0.  0.5]]
     """
     if isinstance(kpts, KPoints):
-        return kpts.build(space_group_symmetry, time_reversal_symmetry, symmorphic)
+        return kpts.build(space_group_symmetry,
+                          time_reversal_symmetry,
+                          **kwargs)
     else:
-        return KPoints(cell, kpts).build(space_group_symmetry, time_reversal_symmetry, symmorphic)
+        kpts_symm = KPoints(cell, kpts)
+        kpts_symm.build(space_group_symmetry,
+                        time_reversal_symmetry,
+                        **kwargs)
+        return kpts_symm
 
 class KPoints(symm.Symmetry, lib.StreamObject):
     """
@@ -880,10 +895,15 @@ class KPoints(symm.Symmetry, lib.StreamObject):
         self.stars_ops = []
         self.stars_ops_bz = np.zeros(nkpts, dtype=int)
         self.time_reversal_symm_bz = np.zeros(nkpts, dtype=int)
+        self.little_cogroup_ops = []
 
         #private variables
         self._nkpts = len(self.kpts)
         self._nkpts_ibz = len(self.kpts_ibz)
+        self._addition_table = None
+        self._inverse_table = None
+        self._copgs = None
+        self._copg_ops_map_ibz2bz = None
 
     @property
     def nkpts(self):
@@ -926,10 +946,16 @@ class KPoints(symm.Symmetry, lib.StreamObject):
     def __len__(self):
         return self.nkpts_ibz
 
-    def build(self, space_group_symmetry=True, time_reversal_symmetry=True,
-              symmorphic=True, *args, **kwargs):
-        symm.Symmetry.build(self, space_group_symmetry, symmorphic, *args, **kwargs)
-        if not getattr(self.cell, '_built', None): return
+    def build(self, space_group_symmetry=False, time_reversal_symmetry=False,
+              *args, **kwargs):
+        if space_group_symmetry:
+            _lattice_symm = getattr(self.cell, 'lattice_symmetry', None)
+            if isinstance(_lattice_symm, symm.Symmetry):
+                self.__dict__.update(_lattice_symm.__dict__)
+        if not self._built:
+            symm.Symmetry.build(self, space_group_symmetry, *args, **kwargs)
+        if not getattr(self.cell, '_built', None):
+            return self
 
         self.time_reversal = time_reversal_symmetry and not self.has_inversion
         self.kpts_scaled_ibz = self.kpts_scaled = self.cell.get_scaled_kpts(self.kpts)
@@ -940,10 +966,10 @@ class KPoints(symm.Symmetry, lib.StreamObject):
     def dump_info(self):
         if self.verbose >= logger.INFO:
             logger.info(self, 'time reversal: %s', self.time_reversal)
-            logger.info(self, 'k-points in IBZ                           weights')
+            logger.info(self, 'k-points in IBZ                         weights')
             ibzk = self.kpts_scaled_ibz
             for k in range(self.nkpts_ibz):
-                logger.info(self, '%d:  %11.8f, %11.8f, %11.8f    %d/%d',
+                logger.info(self, '%3d: %9.6f, %9.6f, %9.6f    %d/%d',
                             k, ibzk[k][0], ibzk[k][1], ibzk[k][2],
                             np.floor(self.weights_ibz[k]*self.nkpts), self.nkpts)
 
@@ -966,19 +992,83 @@ class KPoints(symm.Symmetry, lib.StreamObject):
         return kptij_lst
 
     def loop_ktuples(self, ibz2bz, ntuple):
-        nkpts = self.nkpts
         for k in ibz2bz:
-            res = []
-            for i in range(ntuple-1, -1, -1):
-                ki = k // nkpts**(i)
-                k = k - ki * nkpts**(i)
-                res.append(ki)
+            res = self.index_to_ktuple(k, ntuple)
             yield tuple(res)
+
+    def ktuple_to_index(self, kk):
+        return lib.inv_base_repr_int(kk, self.nkpts)
+
+    def index_to_ktuple(self, k, ntuple):
+        return lib.base_repr_int(k, self.nkpts, ntuple)
+
+    @property
+    def addition_table(self, tol=KPT_DIFF_TOL):
+        if self._addition_table is None:
+            kptsi = kptsj = self.kpts_scaled
+            kptsij = kptsi[:,None,:] + kptsj[None,:,:]
+            diff = kptsij[:,:,None,:] - self.kpts_scaled[None,None,:,:]
+            diff = round_to_fbz(diff, tol=tol)
+            idx = np.where(abs(diff).max(axis=-1) < tol)
+
+            nk = self.nkpts
+            table= -np.ones((nk,nk), dtype=np.int32)
+            table[idx[0],idx[1]] = idx[2]
+            assert (table > -1).all()
+            self._addition_table = table
+        return self._addition_table
+
+    @property
+    def inverse_table(self, tol=KPT_DIFF_TOL):
+        if self._inverse_table is None:
+            diff = -self.kpts_scaled[:,None,:] - self.kpts_scaled[None,:,:]
+            diff = round_to_fbz(diff, tol=tol)
+            idx = np.where(abs(diff).max(axis=-1) < tol)
+
+            table = -np.ones((self.nkpts,), dtype=np.int32)
+            table[idx[0]] = idx[1]
+            assert (table > -1).all()
+            self._inverse_table = table
+        return self._inverse_table
+
+    def get_kconserv(self):
+        '''Equivalent to `kpts_helper.get_kconserv`,
+           but with better performance.
+        '''
+        add_tab = self.addition_table
+        inv_tab = self.inverse_table
+        kconserv = add_tab[add_tab[:, inv_tab[:]],:]
+        return kconserv
+
+    def little_cogroups(self, return_indices=True):
+        if self._copgs is not None:
+            return self._copgs, self._copg_ops_map_ibz2bz
+        copgs = []
+        indices = []
+        for ki in range(self.nkpts):
+            ki_ibz = self.bz2ibz[ki]
+            ops_ibz = self.little_cogroup_ops[ki_ibz]
+            elements = np.sort([PGElement(self.ops[i].rot) for i in ops_ibz])
+            iop = self.stars_ops_bz[ki]
+            op_i = PGElement(self.ops[iop].rot)
+            elements_i = np.asarray([op_i @ g @ op_i.inv() for g in elements])
+            idx = np.argsort(elements_i)
+            indices.append(idx)
+            copgs.append(PointGroup(elements_i[idx]))
+        self._copgs, self._copg_ops_map_ibz2bz = copgs, indices
+        return self._copgs, self._copg_ops_map_ibz2bz
+
+    def little_cogroup_rep(self, ki, ir):
+        copgs, indices = self.little_cogroups()
+        ki_ibz = self.bz2ibz[ki]
+        pg_ibz = copgs[self.ibz2bz[ki_ibz]]
+        chi = pg_ibz.get_irrep_chi(ir)
+        chi_ki = chi[indices[ki]]
+        return Representation(copgs[ki], chi=chi_ki)
 
     make_kpts_ibz = make_kpts_ibz
     make_ktuples_ibz = make_ktuples_ibz
     make_k4_ibz = make_k4_ibz
-    loop_ktuples = loop_ktuples
     symmetrize_density = symmetrize_density
     symmetrize_wavefunction = symmetrize_wavefunction
     transform_mo_coeff = transform_mo_coeff
@@ -990,25 +1080,103 @@ class KPoints(symm.Symmetry, lib.StreamObject):
     transform_fock = transform_fock
     transform_1e_operator = transform_1e_operator
     dm_at_ref_cell = dm_at_ref_cell
+    get_rotation_mat_for_mos = get_rotation_mat_for_mos
 
-if __name__ == "__main__":
-    import numpy
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.atom = """
-        Si  0.0 0.0 0.0
-        Si  1.3467560987 1.3467560987 1.3467560987
-    """
-    cell.a = [[0.0, 2.6935121974, 2.6935121974],
-              [2.6935121974, 0.0, 2.6935121974],
-              [2.6935121974, 2.6935121974, 0.0]]
-    cell.verbose = 4
-    cell.build()
-    nk = [3,3,3]
-    kpts_bz = cell.make_kpts(nk)
-    kpts0 = cell.make_kpts(nk, space_group_symmetry=True, time_reversal_symmetry=True)
-    kpts1 = KPoints(cell, kpts_bz).build(space_group_symmetry=True, time_reversal_symmetry=True)
-    print(numpy.allclose(kpts0.kpts_ibz, kpts1.kpts_ibz))
 
-    kpts = KPoints()
-    print(kpts.kpts)
+class MORotationMatrix:
+    '''
+    The class holding the rotation matrices that transform
+    MOs from one k-point to another.
+    '''
+    def __init__(self, kpts, mo_coeff, ovlp, nocc, nmo):
+        self.kpts = kpts
+        self.mo_coeff = mo_coeff
+        self.ovlp = ovlp
+        assert nmo >= nocc
+        self.nocc = nocc
+        self.nmo = nmo
+        self.oo = None
+        self.vv = None
+
+    def build(self):
+        kpts = self.kpts
+        mo_coeff = self.mo_coeff
+        ovlp = self.ovlp
+        nocc = self.nocc
+        nmo = self.nmo
+        nvir = nmo - nocc
+        orb_occ = [mo[:,:nocc] for mo in mo_coeff]
+        orb_vir = [mo[:,nocc:] for mo in mo_coeff]
+        nkpts = kpts.nkpts
+        nop = kpts.nop
+        k2opk = kpts.k2opk
+
+        self.oo = []
+        self.vv = []
+        for ki in range(nkpts):
+            k1 = np.repeat(ki, nop)
+            k2 = k2opk[ki]
+            rot_oo = kpts.get_rotation_mat_for_mos(orb_occ, ovlp, k1, k2,
+                                                   ops_id=np.arange(nop))
+            rot_oo = np.asarray(rot_oo).reshape(nop,nocc,nocc)
+            rot_vv = kpts.get_rotation_mat_for_mos(orb_vir, ovlp, k1, k2,
+                                                   ops_id=np.arange(nop))
+            rot_vv = np.asarray(rot_vv).reshape(nop,nvir,nvir)
+            self.oo.append(rot_oo)
+            self.vv.append(rot_vv)
+
+        self.oo = np.asarray(self.oo)
+        self.vv = np.asarray(self.vv)
+        return self
+
+
+class KQuartets:
+    '''
+    The class holding the symmetry relations between k-quartets.
+    '''
+    def __init__(self, kpts):
+        self.kpts = kpts
+        self.kqrts_ibz = None
+        self.weights_ibz = None
+        self.ibz2bz = None
+        self.bz2ibz = None
+        self.stars_ops = None
+        self.stars_ops_bz = None
+        self._kqrts_stab = None
+        self._ops_stab = None
+
+    def build(self):
+        kpts = self.kpts
+        (self.kqrts_ibz, self.weights_ibz, self.bz2ibz,
+         self.ibz2bz, self.stars_ops, self.stars_ops_bz) = \
+                kpts.make_k4_ibz(sym='s1', return_ops=True)
+
+        # Sanity check
+        #assert -1 not in self.stars_ops_bz
+        #for ki, ki_ibz in enumerate(self.bz2ibz):
+        #    iop = self.stars_ops_bz[ki]
+        #    iops = self.stars_ops[ki_ibz]
+        #    assert iop in iops
+        #    i,j,a,b = self.kqrts_ibz[ki_ibz]
+        #    k,l,c = kpts.k2opk[[i,j,a,], iop]
+        #    kk, ll, cc = lib.base_repr_int(ki, kpts.nkpts, 3)
+        #    assert (k,l,c) == (kk,ll,cc)
+        return self
+
+    def cache_stabilizer(self):
+        self._kqrts_stab = []
+        self._ops_stab = []
+        for i, kq in enumerate(self.kqrts_ibz):
+            op_group = self.stars_ops[i]
+            ks = self.kpts.k2opk[kq[0], op_group]
+            idx = np.where(ks == kq[0])[0]
+            op_group_small = op_group[idx]
+            klcd = self.kpts.k2opk[kq[:,None], op_group_small].T
+            self._kqrts_stab.append(klcd)
+            self._ops_stab.append(op_group_small)
+
+    def loop_stabilizer(self, index):
+        if self._kqrts_stab is None or self._ops_stab is None:
+            self.cache_stabilizer()
+        for klcd, iop in zip(self._kqrts_stab[index], self._ops_stab[index]):
+            yield klcd, iop

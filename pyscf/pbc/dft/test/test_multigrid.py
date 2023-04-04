@@ -82,21 +82,25 @@ class KnownValues(unittest.TestCase):
     def test_orth_get_pp(self):
         ref = df.FFTDF(cell_orth).get_pp()
         out = multigrid.MultiGridFFTDF(cell_orth).get_pp()
+        self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
     def test_nonorth_get_pp(self):
         ref = df.FFTDF(cell_nonorth).get_pp()
         out = multigrid.MultiGridFFTDF(cell_nonorth).get_pp()
+        self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
     def test_orth_get_nuc_kpts(self):
         ref = df.FFTDF(cell_orth).get_nuc(kpts)
         out = multigrid.MultiGridFFTDF(cell_orth).get_nuc(kpts)
+        self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
     def test_orth_get_j_kpts(self):
         ref = df.FFTDF(cell_orth).get_jk(dm, kpts=kpts, with_k=False)[0]
         out = multigrid.MultiGridFFTDF(cell_orth).get_jk(dm, kpts=kpts)[0]
+        self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
 #        mydf = multigrid.MultiGridFFTDF(cell_orth)
@@ -105,11 +109,13 @@ class KnownValues(unittest.TestCase):
     def test_nonorth_get_j_kpts(self):
         ref = df.FFTDF(cell_nonorth).get_jk(dm, kpts=kpts, with_k=False)[0]
         out = multigrid.MultiGridFFTDF(cell_nonorth, kpts=kpts).get_jk(dm)[0]
+        self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
     def test_nonorth_get_j(self):
         ref = df.FFTDF(cell_nonorth).get_jk(dm[0], with_k=False)[0]
         out = multigrid.MultiGridFFTDF(cell_nonorth).get_jk(dm)[0]
+        self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
     def test_orth_rks_lda_kpts(self):
@@ -119,7 +125,8 @@ class KnownValues(unittest.TestCase):
         n, exc0, ref = ni.nr_rks(cell_orth, mydf.grids, xc, dm, 1, kpts=kpts)
         mydf = multigrid.MultiGridFFTDF(cell_orth)
         n, exc1, vxc = multigrid.nr_rks(mydf, xc, dm, kpts=kpts)
-        self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 7)
+        self.assertEqual(vxc.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-vxc).max(), 0, 7)
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
 
     def test_multigrid_kuks(self):
@@ -127,7 +134,8 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,'
         ref = mf.get_veff(cell_he, numpy.array((dm_he,dm_he)), kpts=kpts)
         out = multigrid.multigrid(mf).get_veff(cell_he, (dm_he,dm_he), kpts=kpts)
-        self.assertAlmostEqual(float(abs(ref-out).max()), 0, 8)
+        self.assertEqual(out.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
         self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 8)
         self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 8)
 
@@ -136,7 +144,8 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,'
         ref = mf.get_veff(cell_he, dm_he, kpts=kpts)
         out = multigrid.multigrid(mf).get_veff(cell_he, dm_he, kpts=kpts)
-        self.assertAlmostEqual(float(abs(ref-out).max()), 0, 8)
+        self.assertEqual(out.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
         self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 8)
         self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 8)
 
@@ -151,7 +160,8 @@ class KnownValues(unittest.TestCase):
                             mo_occ=mo_occ*2)
         ref = mf.get_veff(cell_he, dm1, kpts=kpts)
         out = multigrid.multigrid(mf).get_veff(cell_he, dm1, kpts=kpts)
-        self.assertAlmostEqual(float(abs(ref-out).max()), 0, 7)
+        self.assertEqual(out.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 7)
         self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 7)
         self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 7)
 
@@ -160,7 +170,8 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,'
         ref = mf.get_veff(cell_he, numpy.array((dm_he[0],dm_he[0])))
         out = multigrid.multigrid(mf).get_veff(cell_he, (dm_he[0], dm_he[0]))
-        self.assertAlmostEqual(float(abs(ref-out).max()), 0, 7)
+        self.assertEqual(out.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 7)
         self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 7)
         self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 7)
 
@@ -169,7 +180,8 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,'
         ref = mf.get_veff(cell_he, dm_he[0])
         out = multigrid.multigrid(mf).get_veff(cell_he, dm_he[0])
-        self.assertAlmostEqual(float(abs(ref-out).max()), 0, 7)
+        self.assertEqual(out.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 7)
         self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 7)
         self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 7)
 
@@ -184,7 +196,8 @@ class KnownValues(unittest.TestCase):
                             mo_occ=mo_occ*2)
         ref = mf.get_veff(cell_he, dm1)
         out = multigrid.multigrid(mf).get_veff(cell_he, dm1)
-        self.assertAlmostEqual(float(abs(ref-out).max()), 0, 7)
+        self.assertEqual(out.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 7)
         self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 7)
         self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 7)
 
@@ -196,6 +209,7 @@ class KnownValues(unittest.TestCase):
         ref += mydf.get_jk(dm, hermi=1, with_k=False, kpts=kpts)[0]
         mydf = multigrid.MultiGridFFTDF(cell_orth)
         n, exc1, vxc = multigrid.nr_rks(mydf, xc, dm, hermi=1, kpts=kpts, with_j=True)
+        self.assertEqual(vxc.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 7)
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
         self.assertAlmostEqual(lib.fp(ref), -0.05697304864467462+0.6990367789096609j, 7)

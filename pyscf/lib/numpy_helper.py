@@ -238,14 +238,9 @@ def einsum(subscripts, *tensors, **kwargs):
     elif len(tensors) <= 2:
         out = _contract(subscripts, *tensors, **kwargs)
     else:
-        if '->' in subscripts:
-            indices_in, idx_final = subscripts.split('->')
-            indices_in = indices_in.split(',')
-        else:
-            # idx_final = ''
-            indices_in = subscripts.split('->')[0].split(',')
+        optimize = kwargs.pop('optimize', True)
         tensors = list(tensors)
-        contraction_list = _einsum_path(subscripts, *tensors, optimize=True,
+        contraction_list = _einsum_path(subscripts, *tensors, optimize=optimize,
                                         einsum_call=True)[1]
         for contraction in contraction_list:
             inds, idx_rm, einsum_str, remaining = contraction[:4]
@@ -918,23 +913,7 @@ def frompointer(pointer, count, dtype=float):
     a = numpy.ndarray(count, dtype=numpy.int8, buffer=buf)
     return a.view(dtype)
 
-from distutils.version import LooseVersion
-if LooseVersion(numpy.__version__) <= LooseVersion('1.6.0'):
-    def norm(x, ord=None, axis=None):
-        '''numpy.linalg.norm for numpy 1.6.*
-        '''
-        if axis is None or ord is not None:
-            return numpy.linalg.norm(x, ord)
-        else:
-            x = numpy.asarray(x)
-            axes = string.ascii_lowercase[:x.ndim]
-            target = axes.replace(axes[axis], '')
-            descr = '%s,%s->%s' % (axes, axes, target)
-            xx = _numpy_einsum(descr, x.conj(), x)
-            return numpy.sqrt(xx.real)
-else:
-    norm = numpy.linalg.norm
-del (LooseVersion)
+norm = numpy.linalg.norm
 
 def cond(x, p=None):
     '''Compute the condition number'''
@@ -1242,6 +1221,169 @@ def locs_to_indices(locs, segement_list):
             idx.append(numpy.arange(i0, i1))
         idx = numpy.hstack(idx)
     return numpy.asarray(idx, dtype=numpy.int32)
+
+def cleanse(a, axis=0, tol=0):
+    '''
+    Remove floating-point errors by setting the
+    numbers with differences smaller than `tol`
+    to the same value. This should allow
+    `numpy.round_` and `numpy.unique` together
+    to work as expected.
+
+    Args:
+        a : ndarray
+            Array to be cleansed.
+        axis : int or None
+            Axis along which the array values are compared.
+            Default is the first axis. If set to None,
+            the flattened array is used.
+        tol : floating
+            Tolerance, default is 0.
+    Returns:
+        Cleansed array.
+    '''
+    def _cleanse_1d(a_flat, tol):
+        sorted_index = numpy.argsort(a_flat, axis=None)
+        sorted_a_flat = a_flat[sorted_index]
+        diff = numpy.diff(sorted_a_flat)
+        cluster_loc = numpy.append(numpy.append(0, numpy.argwhere(diff > tol)[:,0]+1), a_flat.size)
+        for i in range(len(cluster_loc)-1):
+            id0, id1 = cluster_loc[i], cluster_loc[i+1]
+            a_flat[sorted_index[id0:id1]] = a_flat[sorted_index[id0]]
+        return a_flat
+
+    if axis is None:
+        a_flat = a.flatten()
+        return _cleanse_1d(a_flat, tol).reshape(a.shape)
+    else:
+        a0 = numpy.moveaxis(a, axis, -1)
+        shape = a0.shape
+        a0 = a0.reshape(-1, a0.shape[-1])
+        out = []
+        for i in range(len(a0)):
+            out.append(_cleanse_1d(a0[i].flatten(), tol))
+        out = numpy.asarray(out).reshape(shape)
+        return numpy.moveaxis(out, -1, axis)
+
+def base_repr_int(number, base, ndigits=None):
+    '''
+    Similar to numpy.base_repr, but returns a list of integers.
+
+    Args:
+        number : array or int
+            The value to convert. Negative values are converted to
+            their absolute values.
+        base : int
+            Convert `number` to the `base` number system.
+        ndigits : int, optional
+            Number of digits. If given, pad zeros to the left until the number
+            of digits reaches `ndigits`. Default is None, meaning no padding.
+
+    Returns:
+        out : list
+            Representation of `number` in `base` system.
+
+    Examples::
+
+    >>> lib.base_repr_int(29, 8)
+    [3, 5]
+
+    >>> lib.base_repr_int(29, 8, 3)
+    [0, 3, 5]
+    '''
+    if isinstance(number, numpy.ndarray):
+        assert ndigits is not None
+        number = number.flatten()
+        res = numpy.empty([ndigits, len(number)], dtype=int)
+        for i in range(ndigits-1, -1, -1):
+            ki = number // base**i
+            number -= ki * base**i
+            res[ndigits-1-i] = ki
+        return res.T
+
+    num = abs(number)
+    res = []
+    if num == 0:
+        res = [0]
+    while num:
+        res.append(num % base)
+        num //= base
+    if ndigits:
+        padding = ndigits - len(res)
+        res += [0] * padding
+    res.reverse()
+    return res
+
+def inv_base_repr_int(x, base):
+    '''Inverse of `base_repr_int`.
+    Similar to Python function int(), but for arbitrary base.
+
+    Args:
+        x : array like
+        base : int
+
+    Returns:
+        out : int
+
+    Examples::
+
+    >>> lib.inv_base_repr_int([0, 18, 9], 27)
+    495
+
+    >>> lib.base_repr_int(495, 27, 3)
+    [0, 18, 9]
+    '''
+    out = 0
+    x = numpy.asarray(x, dtype=int)
+    if x.ndim > 1:
+        shape = x.shape
+        nd = shape[-1]
+        x = x.reshape(-1, nd)
+        for i in range(nd):
+            out += x[:,i] * base ** (nd-i-1)
+        out = out.reshape(shape[:-1])
+    else:
+        for i, ix in enumerate(x[::-1]):
+            out += ix * base**i
+    return out
+
+def isin_1d(v, vs, return_index=False):
+    '''Check if vector `v` is in vectors `vs`.
+
+    Args:
+        v : array like
+            The target vector. `v` is flattened.
+        vs : array like
+            A list of vectors. The last dimenstion of `vs`
+            should be the same as the size of `v`.
+        return_index : bool
+            Index of `v` in `vs`.
+
+    Examples::
+
+    >>> lib.isin_1d([1,2], [[2,1],[1,2]])
+    True
+
+    >>> lib.isin_1d([1,2], [[2,1],[2,1]])
+    False
+    '''
+    v = numpy.asarray(v).flatten()
+    n = len(v)
+    vs = numpy.asarray(vs).reshape(-1, n)
+    diff = abs(v[None,:] - vs)
+    diff = numpy.sum(diff, axis=1)
+    idx = numpy.where(diff == 0)[0]
+    if len(idx) > 0:
+        v_in_vs = True
+    else:
+        v_in_vs = False
+
+    if not return_index:
+        return v_in_vs
+    else:
+        if len(idx) == 1:
+            idx = idx[0]
+        return v_in_vs, idx
 
 if __name__ == '__main__':
     a = numpy.random.random((30,40,5,10))

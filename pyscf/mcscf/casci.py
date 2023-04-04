@@ -158,13 +158,13 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
                 for i, civec in enumerate(ci):
                     log.info('  [alpha occ-orbitals] [beta occ-orbitals]  state %-3d CI coefficient', i)
                     for c,ia,ib in res[i]:
-                        log.info('  %-20s %-30s %.12f', ia, ib, c)
+                        log.info('  %-20s %-30s % .12f', ia, ib, c)
             else:
                 log.info('  [alpha occ-orbitals] [beta occ-orbitals]            CI coefficient')
                 res = casscf.fcisolver.large_ci(ci, casscf.ncas, casscf.nelecas,
                                                 large_ci_tol, return_strs=False)
                 for c,ia,ib in res:
-                    log.info('  %-20s %-30s %.12f', ia, ib, c)
+                    log.info('  %-20s %-30s % .12f', ia, ib, c)
 
         if with_meta_lowdin:
             casscf._scf.mulliken_meta(casscf.mol, dm1, s=ovlp_ao, verbose=log)
@@ -403,7 +403,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                                    mc._scf.get_ovlp(), mc._scf.mo_coeff))
             idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
-                log.info('<CAS-nat-orb|mo-hf>  %d  %d  %12.8f',
+                log.info('<CAS-nat-orb|mo-hf>  %-5d  %-5d  % 12.8f',
                          ncore+i+1, j+1, s[i,j])
     return mo_coeff1, fcivec, mo_occ
 
@@ -991,27 +991,27 @@ To enable the solvent model for CASCI, the following code needs to be called
             if isinstance(self.e_cas, (float, numpy.number)):
                 try:
                     ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
-                    log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                    log.note('CASCI E = %#.15g  E(CI) = %#.15g  S^2 = %.7f',
                              self.e_tot, self.e_cas, ss[0])
                 except NotImplementedError:
-                    log.note('CASCI E = %.15g  E(CI) = %.15g',
+                    log.note('CASCI E = %#.15g  E(CI) = %#.15g',
                              self.e_tot, self.e_cas)
             else:
                 for i, e in enumerate(self.e_cas):
                     try:
                         ss = self.fcisolver.spin_square(self.ci[i], self.ncas, self.nelecas)
-                        log.note('CASCI state %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                        log.note('CASCI state %3d  E = %#.15g  E(CI) = %#.15g  S^2 = %.7f',
                                  i, self.e_tot[i], e, ss[0])
                     except NotImplementedError:
-                        log.note('CASCI state %d  E = %.15g  E(CI) = %.15g',
+                        log.note('CASCI state %3d  E = %#.15g  E(CI) = %#.15g',
                                  i, self.e_tot[i], e)
 
         else:
             if isinstance(self.e_cas, (float, numpy.number)):
-                log.note('CASCI E = %.15g  E(CI) = %.15g', self.e_tot, self.e_cas)
+                log.note('CASCI E = %#.15g  E(CI) = %#.15g', self.e_tot, self.e_cas)
             else:
                 for i, e in enumerate(self.e_cas):
-                    log.note('CASCI state %d  E = %.15g  E(CI) = %.15g',
+                    log.note('CASCI state %3d  E = %#.15g  E(CI) = %#.15g',
                              i, self.e_tot[i], e)
         return self
 

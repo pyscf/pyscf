@@ -81,6 +81,7 @@ class KnownValues(unittest.TestCase):
         '''
         cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
         cell.a = np.eye(3) * 2.
+        cell.space_group_symmetry = True
         cell.build()
 
         kmesh = [2,2,1]

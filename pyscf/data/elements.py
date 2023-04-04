@@ -1102,13 +1102,12 @@ def chemcore(mol, spinorb=False):
         atm_nelec = mol.atom_charge(a)
         atm_z = charge(mol.atom_symbol(a))
         ne_ecp = atm_z - atm_nelec
+        ncore_ecp = ne_ecp // 2
         atm_ncore = chemcore_atm[atm_z]
-        if ne_ecp == 0:
-            core += atm_ncore
-        elif ne_ecp > atm_ncore:
+        if ncore_ecp > atm_ncore:
             core += 0
         else:
-            core += atm_ncore - ne_ecp
+            core += atm_ncore - ncore_ecp
 
     if spinorb:
         core *= 2

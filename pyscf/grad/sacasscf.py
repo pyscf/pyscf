@@ -579,6 +579,8 @@ class Gradients (lagrange.Gradients):
         elif eris is None:
             eris = self.eris
         fcasscf_grad = casscf_grad.Gradients (self.make_fcasscf (state))
+        # Mute some misleading messages
+        fcasscf_grad._finalize = lambda: None
         return fcasscf_grad.kernel (mo_coeff=mo, ci=ci[state], atmlst=atmlst, verbose=verbose)
 
     def get_LdotJnuc (self, Lvec, state=None, atmlst=None, verbose=None, mo=None, ci=None,

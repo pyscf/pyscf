@@ -793,7 +793,7 @@ def map2hf(casscf, mf_mo=None, base=BASE, tol=MAP2HF_TOL):
     s = reduce(numpy.dot, (casscf.mo_coeff.T, s, mf_mo))
     idx = numpy.argwhere(abs(s) > tol)
     for i,j in idx:
-        logger.info(casscf, '<mo_coeff-mcscf|mo_coeff-hf>  %d  %d  %12.8f',
+        logger.info(casscf, '<mo_coeff-mcscf|mo_coeff-hf>  %-5d  %-5d  % 12.8f',
                     i+base, j+base, s[i,j])
     return idx
 
@@ -920,12 +920,12 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             return numpy.einsum('i,i->', e, self.weights), c
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-            try:
+            if hasattr(fcibase_class, 'approx_kernel'):
                 e, c = fcibase_class.approx_kernel(self, h1, h2, norb, nelec,
                                                    ci0=ci0, nroots=self.nroots,
                                                    wfnsym=self.wfnsym,
                                                    **kwargs)
-            except AttributeError:
+            else:
                 e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0=ci0,
                                             nroots=self.nroots,
                                             wfnsym=self.wfnsym, **kwargs)
@@ -1155,12 +1155,12 @@ def state_specific_(casscf, state=1, wfnsym=None):
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if self._civec is not None:
                 ci0 = self._civec
-            try:
+            if hasattr(fcibase_class, 'approx_kernel'):
                 e, c = fcibase_class.approx_kernel(self, h1, h2, norb, nelec,
                                                    ci0=ci0, nroots=self.nroots,
                                                    wfnsym=self.wfnsym,
                                                    **kwargs)
-            except AttributeError:
+            else:
                 e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0=ci0,
                                             nroots=self.nroots,
                                             wfnsym=self.wfnsym, **kwargs)

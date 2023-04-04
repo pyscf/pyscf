@@ -248,7 +248,7 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
         else:
             result[key] = val
 
-    # Convert to molpr orbsym convert_orbsym
+    # Convert to Molpro orbsym convert_orbsym
     if 'ORBSYM' in result:
         if molpro_orbsym:
             # Guess which point group the orbsym belongs to. FCIDUMP does not
@@ -267,7 +267,7 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
                 result['ORBSYM'] = [0] * len(orbsym)
             else:
                 raise RuntimeError('Unknown orbsym')
-        elif max(result['ORBSYM']) >= 8:
+        elif min(result['ORBSYM']) < 0:
             raise RuntimeError('Unknown orbsym convention')
 
     norb = result['NORB']

@@ -24,9 +24,10 @@ from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm, _tau_dot
 from pyscf.dft.numint import _scale_ao, _contract_rho
 from pyscf.dft.numint import OCCDROP
-from pyscf.dft.gen_grid import NBINS, CUTOFF
+from pyscf.dft.gen_grid import NBINS, CUTOFF, ALIGNMENT_UNIT
 from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import member, is_zero
+from pyscf.pbc.lib.kpts import KPoints
 
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
@@ -554,6 +555,8 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+    if isinstance(kpts, KPoints):
+        kpts = kpts.kpts_ibz
     xctype = ni._xc_type(xc_code)
     if xctype == 'LDA':
         ao_deriv = 0
@@ -843,6 +846,10 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+    if isinstance(kpts, KPoints):
+        mo_coeff = kpts.transform_mo_coeff(mo_coeff)
+        mo_occ = kpts.transform_mo_occ(mo_occ)
+        kpts = kpts.kpts
     xctype = ni._xc_type(xc_code)
     if xctype == 'GGA':
         ao_deriv = 1
@@ -966,10 +973,11 @@ class NumInt(numint.NumInt):
         grids_weights = grids.weights
         ngrids = grids_coords.shape[0]
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-# NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+        # NOTE to index grids.non0tab, blksize needs to be integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))*BLKSIZE
-            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*2400))
+            blksize = int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))
+            blksize = max(4, min(blksize, ngrids//BLKSIZE+1, 2400)) * BLKSIZE
+        assert blksize % BLKSIZE == 0
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:

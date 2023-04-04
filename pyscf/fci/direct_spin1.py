@@ -201,7 +201,7 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     nb = cistring.num_strings(norb, nelecb)
     if hdiag is None:
         hdiag = make_hdiag(h1e, eri, norb, nelec)
-    if hdiag.size < np:
+    if hdiag.size <= np:
         addr = numpy.arange(hdiag.size)
     else:
         try:
@@ -469,7 +469,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 
 def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None,
+               nroots=None, davidson_only=None, pspace_size=None, hop=None,
                max_memory=None, verbose=None, ecore=0, **kwargs):
     '''
     Args:
@@ -503,6 +503,8 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             full diagonlization (lapack eigh) for small systems
         pspace_size: int
             Number of determinants as the threshold of "small systems",
+        hop: function(c) => array_like_c
+            Function to use for the Hamiltonian multiplication with trial vector
 
     Note: davidson solver requires more arguments. For the parameters not
     dispatched, they can be passed to davidson solver via the extra keyword
@@ -550,14 +552,15 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                 return pw[0]+ecore, civec.reshape(na,nb).view(FCIvector)
     except NotImplementedError:
         addr = [0]
-        pw = pv = None
+    pw = pv = h0 = None
 
-    precond = fci.make_precond(hdiag, pw, pv, addr)
+    precond = fci.make_precond(hdiag)
 
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
-    def hop(c):
-        hc = fci.contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
-        return hc.ravel()
+    if hop is None:
+        def hop(c):
+            hc = fci.contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
+            return hc.ravel()
 
     if ci0 is None:
         if callable(getattr(fci, 'get_init_guess', None)):
@@ -619,7 +622,7 @@ def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
         x1 = r - e1*x0
         #pspace_x1 = x1[addr].copy()
         x1 *= hdiaginv
-# pspace (h0-e0)^{-1} cause diverging?
+        # pspace (h0-e0)^{-1} cause diverging?
         #x1[addr] = numpy.linalg.solve(h0e0, pspace_x1)
         return x1
     return precond
@@ -693,7 +696,8 @@ class FCIBase(lib.StreamObject):
     conv_tol_residual = getattr(__config__, 'fci_direct_spin1_FCI_conv_tol_residual', None)
     lindep = getattr(__config__, 'fci_direct_spin1_FCI_lindep', 1e-14)
 
-    # level shift in precond
+    # level shift in preconditioner is helpful to avoid singularity and linear
+    # dependence basis in davidson diagonalization solver
     level_shift = getattr(__config__, 'fci_direct_spin1_FCI_level_shift', 1e-3)
 
     # force the diagonlization use davidson iteration.  When the CI space
@@ -799,11 +803,12 @@ class FCIBase(lib.StreamObject):
             ci = ci[0]
         return e, ci
 
-    def make_precond(self, hdiag, pspaceig, pspaceci, addr):
+    def make_precond(self, hdiag, pspaceig=None, pspaceci=None, addr=None):
         if pspaceig is None:
             return make_diag_precond(hdiag, pspaceig, pspaceci, addr,
                                      self.level_shift)
         else:
+            # Note: H0 in pspace may break symmetry.
             return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
                                        self.level_shift)
 

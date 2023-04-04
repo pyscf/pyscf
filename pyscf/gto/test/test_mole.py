@@ -1034,6 +1034,13 @@ H    P
         s = ctr_coeff.T.dot(pmol.intor('int1e_ovlp')).dot(ctr_coeff)
         self.assertAlmostEqual(abs(s - mol.intor('int1e_ovlp')).max(), 0, 12)
 
+        mol = gto.M(atom='He',
+                    basis=('ccpvdz', [[0, [5, 1]], [1, [3, 1]]]))
+        pmol, contr_coeff = mol.decontract_basis()
+        contr_coeff = scipy.linalg.block_diag(*contr_coeff)
+        s = contr_coeff.T.dot(pmol.intor('int1e_ovlp')).dot(contr_coeff)
+        self.assertAlmostEqual(abs(s - mol.intor('int1e_ovlp')).max(), 0, 12)
+
     def test_ao_rotation_matrix(self):
         mol = gto.M(atom='O 0 0 0.2; H1 0 -.8 -.5; H2 0 .8 -.5', basis='ccpvdz')
         numpy.random.seed(1)

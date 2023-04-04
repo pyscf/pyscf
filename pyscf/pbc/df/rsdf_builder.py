@@ -137,6 +137,8 @@ class _RSGDFBuilder(_Int3cBuilder):
             ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             self.ke_cutoff = ke_cutoff[:cell.dimension].min()
 
+        self.mesh = cell.symmetrize_mesh(self.mesh)
+
         self.dump_flags()
 
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
@@ -370,6 +372,7 @@ class _RSGDFBuilder(_Int3cBuilder):
         mesh = pbctools.cutoff_to_mesh(auxcell.lattice_vectors(), ke)
         if auxcell.dimension < 2 or auxcell.low_dim_ft_type == 'inf_vacuum':
             mesh[auxcell.dimension:] = self.mesh[auxcell.dimension:]
+        mesh = self.cell.symmetrize_mesh(mesh)
         logger.debug(self, 'Set 2c2e integrals precision %g, mesh %s', precision, mesh)
 
         Gv, Gvbase, kws = auxcell.get_Gv_weights(mesh)
@@ -938,7 +941,7 @@ class _RSGDFBuilder(_Int3cBuilder):
                 yield -uniq_kpts[k], kpt_ji_idx, _conj_j2c(cd_j2c)
 
     def make_j3c(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
-                 j_only=False, shls_slice=None):
+                 j_only=False, dataname='j3c', shls_slice=None):
         if self.rs_cell is None:
             self.build()
         log = logger.new_logger(self)
@@ -954,7 +957,6 @@ class _RSGDFBuilder(_Int3cBuilder):
         else:
             ish0, ish1 = shls_slice[:2]
 
-        dataname = 'j3c'
         fswap = self.outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
                                    dataname, shls_slice)
         cpu1 = log.timer('pass1: real space int3c2e', *cpu0)

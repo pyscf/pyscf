@@ -25,7 +25,7 @@ mol = gto.M(
     atom = '''
 Cl 0  0     0
 H  0  1.9   0''',
-    basis = {'Cl': gto.uncontract_basis(gto.basis.load('ccpvdz', 'Cl')),
+    basis = {'Cl': 'unc-ccpvdz',
              'H' : 'ccpvdz'},
 )
 lib.param.LIGHT_SPEED = 90.  # Change light speed globally

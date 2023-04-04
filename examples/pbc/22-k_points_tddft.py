@@ -55,7 +55,6 @@ td = tdscf.KTDDFT(ks)
 td.nstates = 5
 td.verbose = 5
 print(td.kernel()[0] * 27.2114)
-print(td.oscillator_strength())
 
 
 # TODO:

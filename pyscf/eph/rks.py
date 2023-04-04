@@ -109,6 +109,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omg, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
     vnuc_deriv = ephobj.vnuc_generator(mol)
     aoslices = mol.aoslice_by_atom()
@@ -128,14 +129,14 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
 
-        if abs(hyb)>1e-10:
+        if hybrid:
             vj1, vk1 = \
                     rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
                                      ['ji->s2kl', -dm0[:,p0:p1], #vj1
                                       'li->s1kj', -dm0[:,p0:p1]], #vk1
                                      shls_slice=shls_slice)
             veff = vj1 - hyb * .5 * vk1
-            if abs(omg) > 1e-10:
+            if omg != 0:
                 with mol.with_range_coulomb(omg):
                     vk1 = \
                         rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',

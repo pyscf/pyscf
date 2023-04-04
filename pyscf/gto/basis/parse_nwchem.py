@@ -136,6 +136,8 @@ def _parse(raw_basis, optimize=True):
             else:
                 current_basis.append(dat)
     basis_sorted = [b for bs in basis_parsed for b in bs]
+    if not basis_sorted:
+        raise BasisNotFoundError(f'Basis data not found in "{raw_basis}"')
 
     if optimize:
         basis_sorted = optimize_contraction(basis_sorted)
@@ -205,11 +207,13 @@ def _parse_ecp(raw_ecp):
 
     if nelec is None:
         return []
-    else:
-        bsort = []
-        for l in range(-1, MAXL):
-            bsort.extend([b for b in ecp_add if b[0] == l])
-        return [nelec, bsort]
+
+    bsort = []
+    for l in range(-1, MAXL):
+        bsort.extend([b for b in ecp_add if b[0] == l])
+    if not bsort:
+        raise BasisNotFoundError(f'ECP data not found in "{raw_ecp}"')
+    return [nelec, bsort]
 
 def load_ecp(basisfile, symb):
     return _parse_ecp(search_ecp(basisfile, symb))

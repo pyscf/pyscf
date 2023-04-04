@@ -782,7 +782,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     return vind, hdiag
 
 
-class TDHF(TDMixin):
+class TDHF(TDA):
 
     singlet = None
 

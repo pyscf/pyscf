@@ -58,17 +58,18 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     if mf.nlc != '':
         raise NotImplementedError
-    #enabling range-separated hybrids
-    omega, alpha, hyb = mf._numint.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    ni = mf._numint
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
     de2, ej, ek = uhf_hess._partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
                                              atmlst, max_memory, verbose,
-                                             abs(hyb) > 1e-10)
+                                             with_k=hybrid)
     de2 += ej - hyb * ek  # (A,B,dR_A,dR_B)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     veffa_diag, veffb_diag = _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory)
-    if abs(omega) > 1e-10:
+    if hybrid and omega != 0:
         with mol.with_range_coulomb(omega):
             vk1a, vk1b = _get_jk(mol, 'int2e_ipip1', 9, 's2kl',
                                  ['jk->s1il', dm0a, 'jk->s1il', dm0b])
@@ -85,7 +86,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         veffa = vxca[ia]
         veffb = vxcb[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
-        if abs(omega) > 1e-10:
+        if hybrid and omega != 0:
             with mol.with_range_coulomb(omega):
                 vk1a, vk1b, vk2a, vk2b = \
                         _get_jk(mol, 'int2e_ip1ip2', 9, 's1',
@@ -138,6 +139,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
@@ -146,7 +148,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
-        if abs(hyb) > 1e-10:
+        if hybrid:
             vj1a, vj1b, vj2a, vj2b, vk1a, vk1b, vk2a, vk2b = \
                     _get_jk(mol, 'int2e_ip1', 3, 's2kl',
                             ['ji->s2kl', -dm0a[:,p0:p1], 'ji->s2kl', -dm0b[:,p0:p1],
@@ -160,7 +162,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
             veffb = vj1 - hyb * vk1b
             veffa[:,p0:p1] += vj2 - hyb * vk2a
             veffb[:,p0:p1] += vj2 - hyb * vk2b
-            if abs(omega) > 1e-10:
+            if omega != 0:
                 with mol.with_range_coulomb(omega):
                     vk1a, vk1b, vk2a, vk2b = \
                             _get_jk(mol, 'int2e_ip1', 3, 's2kl',
