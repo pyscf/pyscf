@@ -38,6 +38,7 @@ ALIAS = {
     'ccpvtz'     : 'cc-pvtz.dat'    ,
     'ccpvqz'     : 'cc-pvqz.dat'    ,
     'ccpv5z'     : 'cc-pv5z.dat'    ,
+    'junccpvtz'  : 'jun-cc-pvtz.dat',
     'augccpvdz'  : 'aug-cc-pvdz.dat',
     'augccpvtz'  : 'aug-cc-pvtz.dat',
     'augccpvqz'  : 'aug-cc-pvqz.dat',
