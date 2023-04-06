@@ -32,6 +32,7 @@ from pyscf import __config__
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
 LARGE_CI_TOL = getattr(__config__, 'mcscf_analyze_large_ci_tol', 0.1)
 PENALTY = getattr(__config__, 'mcscf_casci_CASCI_fix_spin_shift', 0.2)
+FRAC_OCC_THRESHOLD = 1e-6
 
 if sys.version_info < (3,):
     RANGE_TYPE = list
@@ -99,6 +100,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
         dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.conj().T))
         dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.conj().T))
         dm1 = dm1a + dm1b
+        spin_dm1 = dm1a - dm1b
         if log.verbose >= logger.DEBUG2:
             log.info('alpha density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1a, label, **kwargs)
@@ -110,6 +112,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
                 reduce(numpy.dot, (mocas, casdm1, mocas.conj().T)))
         dm1b = None
         dm1 = dm1a
+        spin_dm1 = None
 
     if log.verbose >= logger.INFO:
         ovlp_ao = casscf._scf.get_ovlp()
@@ -155,18 +158,32 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
                 for i, civec in enumerate(ci):
                     log.info('  [alpha occ-orbitals] [beta occ-orbitals]  state %-3d CI coefficient', i)
                     for c,ia,ib in res[i]:
-                        log.info('  %-20s %-30s %.12f', ia, ib, c)
+                        log.info('  %-20s %-30s % .12f', ia, ib, c)
             else:
                 log.info('  [alpha occ-orbitals] [beta occ-orbitals]            CI coefficient')
                 res = casscf.fcisolver.large_ci(ci, casscf.ncas, casscf.nelecas,
                                                 large_ci_tol, return_strs=False)
                 for c,ia,ib in res:
-                    log.info('  %-20s %-30s %.12f', ia, ib, c)
+                    log.info('  %-20s %-30s % .12f', ia, ib, c)
 
         if with_meta_lowdin:
             casscf._scf.mulliken_meta(casscf.mol, dm1, s=ovlp_ao, verbose=log)
         else:
             casscf._scf.mulliken_pop(casscf.mol, dm1, s=ovlp_ao, verbose=log)
+        if spin_dm1 is not None:
+            if with_meta_lowdin:
+                log.info('Mulliken spin population analysis on meta-Lowdin AOs:')
+                spin_pop, spin_chg = casscf._scf.mulliken_meta(casscf.mol, spin_dm1, s=ovlp_ao, verbose=log)
+            else:
+                log.info('Mulliken spin population analysis on AOs:')
+                spin_pop, spin_chg = casscf._scf.mulliken_pop(casscf.mol, spin_dm1, s=ovlp_ao, verbose=log)
+            for i, s in enumerate(label):
+                log.info('spop of %-12s %10.5f', s, spin_pop[i])
+            spin_chg = casscf.mol.atom_charges() - spin_chg
+            log.note('Mulliken atomic spins:')
+            for ia in range(casscf.mol.natm):
+                symb = casscf.mol.atom_symbol(ia)
+                log.note('spin of  %d%s =   %10.5f', ia, symb, spin_chg[ia])
     return dm1a, dm1b
 
 def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
@@ -262,19 +279,20 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     ncas = mc.ncas
     nocc = ncore + ncas
     nelecas = mc.nelecas
+    nmo = mo_coeff.shape[1]
     if casdm1 is None:
         casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
     # orbital symmetry is reserved in this _eig call
-    occ, ucas = mc._eig(-casdm1, ncore, nocc)
+    cas_occ, ucas = mc._eig(-casdm1, ncore, nocc)
     if sort:
-        casorb_idx = numpy.argsort(occ.round(9), kind='mergesort')
-        occ = occ[casorb_idx]
+        casorb_idx = numpy.argsort(cas_occ.round(9), kind='mergesort')
+        cas_occ = cas_occ[casorb_idx]
         ucas = ucas[:,casorb_idx]
 
-    occ = -occ
+    cas_occ = -cas_occ
     mo_occ = numpy.zeros(mo_coeff.shape[1])
     mo_occ[:ncore] = 2
-    mo_occ[ncore:nocc] = occ
+    mo_occ[ncore:nocc] = cas_occ
 
     mo_coeff1 = mo_coeff.copy()
     mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
@@ -283,13 +301,45 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         if sort:
             orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
+    else:
+        orbsym = numpy.zeros(nmo, dtype=int)
 
+    # When occupancies of active orbitals equal to 2 or 0, these orbitals
+    # need to be canonicalized along with inactive(core or virtual) orbitals
+    # using general Fock matrix. Because they are strongly coupled with
+    # inactive orbitals, the 0th order Hamiltonian of MRPT methods can be
+    # strongly affected. Numerical uncertainty may be found in the perturbed
+    # correlation energy.
+    # See issue https://github.com/pyscf/pyscf/issues/1041
+    occ2_idx = numpy.where(2 - cas_occ < FRAC_OCC_THRESHOLD)[0]
+    occ0_idx = numpy.where(cas_occ < FRAC_OCC_THRESHOLD)[0]
+    if occ2_idx.size > 0 or occ0_idx.size > 0:
+        fock_ao = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
+
+        def _diag_subfock_(idx):
+            c = mo_coeff1[:,idx]
+            fock = reduce(numpy.dot, (c.conj().T, fock_ao, c))
+            w, c = mc._eig(fock, None, None, orbsym[idx])
+            mo_coeff1[:,idx] = mo_coeff1[:,idx].dot(c)
+
+        if occ2_idx.size > 0:
+            log.warn('Active orbitals %s (occs = %s) are canonicalized with core orbitals',
+                     occ2_idx, cas_occ[occ2_idx])
+            full_occ2_idx = numpy.append(numpy.arange(ncore), ncore + occ2_idx)
+            _diag_subfock_(full_occ2_idx)
+        if occ0_idx.size > 0:
+            log.warn('Active orbitals %s (occs = %s) are canonicalized with external orbitals',
+                     occ0_idx, cas_occ[occ0_idx])
+            full_occ0_idx = numpy.append(ncore + occ0_idx, numpy.arange(nocc, nmo))
+            _diag_subfock_(full_occ0_idx)
+
+    # Rotate CI according to the unitary coefficients ucas if applicable
     fcivec = None
     if getattr(mc.fcisolver, 'transform_ci_for_orbital_rotation', None):
-        if isinstance(ci, numpy.ndarray):
+        if isinstance(ci, (fci.FCIvector, fci.SCIvector, numpy.ndarray)):
             fcivec = mc.fcisolver.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
         elif (isinstance(ci, (list, tuple)) and
-              all(isinstance(x[0], numpy.ndarray) for x in ci)):
+              all(isinstance(x[0], (fci.FCIvector, fci.SCIvector, numpy.ndarray)) for x in ci)):
             fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
                       for x in ci]
     elif getattr(mc.fcisolver, 'states_transform_ci_for_orbital_rotation', None):
@@ -336,7 +386,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         # where_natorb gives the new locations of the natural orbitals
         where_natorb = mo_1to1map(ucas)
         log.debug('where_natorb %s', str(where_natorb))
-        log.info('Natural occ %s', str(occ))
+        log.info('Natural occ %s', str(cas_occ))
         if with_meta_lowdin:
             log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
             label = mc.mol.ao_labels()
@@ -353,13 +403,13 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                                    mc._scf.get_ovlp(), mc._scf.mo_coeff))
             idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
-                log.info('<CAS-nat-orb|mo-hf>  %d  %d  %12.8f',
+                log.info('<CAS-nat-orb|mo-hf>  %-5d  %-5d  % 12.8f',
                          ncore+i+1, j+1, s[i,j])
     return mo_coeff1, fcivec, mo_occ
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                  cas_natorb=False, casdm1=None, verbose=logger.NOTE,
-                 with_meta_lowdin=WITH_META_LOWDIN):
+                 with_meta_lowdin=WITH_META_LOWDIN, stav_dm1=False):
     '''Canonicalized CASCI/CASSCF orbitals of effecitive Fock matrix and
     update CI coefficients accordingly.
 
@@ -402,6 +452,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             canonicalized orbitals of state-average effective Fock matrix.
             To canonicalize the orbitals for one particular state, you can
             assign the density matrix of that state to the kwarg casdm1.
+        stav_dm1 (bool): Use state-average 1-particle density matrix for
+            computing Fock matrices and natural orbitals
 
     Returns:
         A tuple, (natural orbitals, CI coefficients, orbital energies)
@@ -414,10 +466,21 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     if ci is None: ci = mc.ci
     if casdm1 is None:
         if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
-            not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
-            log.warn('Mulitple states found in CASCI solver. First state is '
-                     'used to compute the natural orbitals in active space.')
-            casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
+                not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
+            if stav_dm1:
+                log.warn('Mulitple states found in CASCI solver. '
+                         'Use state-average 1RDM  to compute the Fock matrix'
+                         ' and natural orbitals in the active space.')
+                casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
+                for root in range(1, len(ci)):
+                    casdm1 += mc.fcisolver.make_rdm1(ci[root], mc.ncas,
+                                                     mc.nelecas)
+                casdm1 /= len(ci)
+            else:
+                log.warn('Mulitple states found in CASCI solver. '
+                         'First state is used to compute the Fock matrix'
+                         ' and natural orbitals in active space.')
+                casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
         else:
             casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
 
@@ -425,6 +488,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
     fock_ao = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
+
     if cas_natorb:
         mo_coeff1, ci, mc.mo_occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
                                                  verbose, with_meta_lowdin)
@@ -434,8 +498,28 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mo_coeff1 = mo_coeff.copy()
         log.info('Density matrix diagonal elements %s', casdm1.diagonal())
 
-    fock = reduce(numpy.dot, (mo_coeff1.conj().T, fock_ao, mo_coeff1))
-    mo_energy = fock.diagonal().copy()
+    mo_energy = numpy.einsum('pi,pi->i', mo_coeff1.conj(), fock_ao.dot(mo_coeff1))
+
+    if getattr(mo_coeff, 'orbsym', None) is not None:
+        orbsym = mo_coeff.orbsym
+    else:
+        orbsym = numpy.zeros(nmo, dtype=int)
+
+    def _diag_subfock_(idx):
+        if idx.size > 1:
+            c = mo_coeff1[:,idx]
+            fock = reduce(numpy.dot, (c.conj().T, fock_ao, c))
+            # note the last argument orbysm is needed by mc1step_symm._eig
+            w, c = mc._eig(fock, None, None, orbsym[idx])
+
+            if sort:
+                sub_order = numpy.argsort(w.round(9), kind='mergesort')
+                w = w[sub_order]
+                c = c[:,sub_order]
+                orbsym[idx] = orbsym[idx][sub_order]
+
+            mo_coeff1[:,idx] = mo_coeff1[:,idx].dot(c)
+            mo_energy[idx] = w
 
     mask = numpy.ones(nmo, dtype=bool)
     frozen = getattr(mc, 'frozen', None)
@@ -446,36 +530,11 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             mask[frozen] = False
     core_idx = numpy.where(mask[:ncore])[0]
     vir_idx = numpy.where(mask[nocc:])[0] + nocc
+    _diag_subfock_(core_idx)
+    _diag_subfock_(vir_idx)
 
-    if getattr(mo_coeff, 'orbsym', None) is not None:
-        orbsym = mo_coeff.orbsym
-    else:
-        orbsym = numpy.zeros(nmo, dtype=int)
-
-    if len(core_idx) > 0:
-        # note the last two args of ._eig for mc1step_symm
-        # mc._eig function is called to handle symmetry adapated fock
-        w, c1 = mc._eig(fock[core_idx[:,None],core_idx], 0, ncore,
-                        orbsym[core_idx])
-        if sort:
-            idx = numpy.argsort(w.round(9), kind='mergesort')
-            w = w[idx]
-            c1 = c1[:,idx]
-            orbsym[core_idx] = orbsym[core_idx][idx]
-        mo_coeff1[:,core_idx] = numpy.dot(mo_coeff1[:,core_idx], c1)
-        mo_energy[core_idx] = w
-
-    if len(vir_idx) > 0:
-        w, c1 = mc._eig(fock[vir_idx[:,None],vir_idx], nocc, nmo,
-                        orbsym[vir_idx])
-        if sort:
-            idx = numpy.argsort(w.round(9), kind='mergesort')
-            w = w[idx]
-            c1 = c1[:,idx]
-            orbsym[vir_idx] = orbsym[vir_idx][idx]
-        mo_coeff1[:,vir_idx] = numpy.dot(mo_coeff1[:,vir_idx], c1)
-        mo_energy[vir_idx] = w
-
+    # orbsym is required only for symmetry-adapted methods. Here to use
+    # mo_coeff.orbsym to test if a symmetry-adapted calculation.
     if getattr(mo_coeff, 'orbsym', None) is not None:
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
 
@@ -487,8 +546,26 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     return mo_coeff1, ci, mo_energy
 
 
-def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
     '''CASCI solver
+
+    Args:
+        casci: CASCI or CASSCF object
+
+        mo_coeff : ndarray
+            orbitals to construct active space Hamiltonian
+        ci0 : ndarray or custom types
+            FCI sovler initial guess. For external FCI-like solvers, it can be
+            overloaded different data type. For example, in the state-average
+            FCI solver, ci0 is a list of ndarray. In other solvers such as
+            DMRGCI solver, SHCI solver, ci0 are custom types.
+
+    kwargs:
+        envs: dict
+            The variable envs is created (for PR 807) to passes MCSCF runtime
+            environment variables to SHCI solver. For solvers which do not
+            need this parameter, a kwargs should be created in kernel method
+            and "envs" pop in kernel function
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
     log = logger.new_logger(casci, verbose)
@@ -704,7 +781,7 @@ class CASCI(lib.StreamObject):
         self.fcisolver = fci.solver(mol, singlet, symm=False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = getattr(__config__,
-                                        'mcscf_casci_CASCI_fcisolver_lindep', 1e-10)
+                                        'mcscf_casci_CASCI_fcisolver_lindep', 1e-12)
         self.fcisolver.max_cycle = getattr(__config__,
                                            'mcscf_casci_CASCI_fcisolver_max_cycle', 200)
         self.fcisolver.conv_tol = getattr(__config__,
@@ -841,7 +918,7 @@ To enable the solvent model for CASCI, the following code needs to be called
         elif mo_coeff.shape[1] != ncas:
             mo_coeff = mo_coeff[:,ncore:nocc]
 
-        if self._scf._eri is not None:
+        if hasattr(self._scf, '_eri') and self._scf._eri is not None:
             eri = ao2mo.full(self._scf._eri, mo_coeff,
                              max_memory=self.max_memory)
         else:
@@ -912,20 +989,29 @@ To enable the solvent model for CASCI, the following code needs to be called
         log = logger.Logger(self.stdout, self.verbose)
         if log.verbose >= logger.NOTE and getattr(self.fcisolver, 'spin_square', None):
             if isinstance(self.e_cas, (float, numpy.number)):
-                ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
-                log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                         self.e_tot, self.e_cas, ss[0])
+                try:
+                    ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
+                    log.note('CASCI E = %#.15g  E(CI) = %#.15g  S^2 = %.7f',
+                             self.e_tot, self.e_cas, ss[0])
+                except NotImplementedError:
+                    log.note('CASCI E = %#.15g  E(CI) = %#.15g',
+                             self.e_tot, self.e_cas)
             else:
                 for i, e in enumerate(self.e_cas):
-                    ss = self.fcisolver.spin_square(self.ci[i], self.ncas, self.nelecas)
-                    log.note('CASCI state %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                             i, self.e_tot[i], e, ss[0])
+                    try:
+                        ss = self.fcisolver.spin_square(self.ci[i], self.ncas, self.nelecas)
+                        log.note('CASCI state %3d  E = %#.15g  E(CI) = %#.15g  S^2 = %.7f',
+                                 i, self.e_tot[i], e, ss[0])
+                    except NotImplementedError:
+                        log.note('CASCI state %3d  E = %#.15g  E(CI) = %#.15g',
+                                 i, self.e_tot[i], e)
+
         else:
             if isinstance(self.e_cas, (float, numpy.number)):
-                log.note('CASCI E = %.15g  E(CI) = %.15g', self.e_tot, self.e_cas)
+                log.note('CASCI E = %#.15g  E(CI) = %#.15g', self.e_tot, self.e_cas)
             else:
                 for i, e in enumerate(self.e_cas):
-                    log.note('CASCI state %d  E = %.15g  E(CI) = %.15g',
+                    log.note('CASCI state %3d  E = %#.15g  E(CI) = %#.15g',
                              i, self.e_tot[i], e)
         return self
 
@@ -968,12 +1054,12 @@ To enable the solvent model for CASCI, the following code needs to be called
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
     @lib.with_doc(addons.state_average.__doc__)
-    def state_average_(self, weights=(0.5,0.5)):
-        addons.state_average_(self, weights)
+    def state_average_(self, weights=(0.5,0.5), wfnsym=None):
+        addons.state_average_(self, weights, wfnsym)
         return self
     @lib.with_doc(addons.state_average.__doc__)
-    def state_average(self, weights=(0.5,0.5)):
-        return addons.state_average(self, weights)
+    def state_average(self, weights=(0.5,0.5), wfnsym=None):
+        return addons.state_average(self, weights, wfnsym)
 
     @lib.with_doc(addons.state_specific_.__doc__)
     def state_specific_(self, state=1):
@@ -1051,7 +1137,7 @@ To enable the solvent model for CASCI, the following code needs to be called
 scf.hf.RHF.CASCI = scf.rohf.ROHF.CASCI = lib.class_as_method(CASCI)
 scf.uhf.UHF.CASCI = None
 
-del(WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
+del (WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
 
 
 if __name__ == '__main__':

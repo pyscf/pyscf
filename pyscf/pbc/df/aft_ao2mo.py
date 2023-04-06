@@ -174,7 +174,7 @@ def general(mydf, mo_coeffs, kpts=None,
         mo_coeffs = _mo_as_complex(mo_coeffs)
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nlk_pair, molk, lkslice = _conc_mos(mo_coeffs[3], mo_coeffs[2])[1:]
-        eri_mo = numpy.zeros((nij_pair,nlk_pair), dtype=numpy.complex)
+        eri_mo = numpy.zeros((nij_pair,nlk_pair), dtype=numpy.complex128)
         sym = (iden_coeffs(mo_coeffs[0], mo_coeffs[3]) and
                iden_coeffs(mo_coeffs[1], mo_coeffs[2]))
 
@@ -202,7 +202,7 @@ def general(mydf, mo_coeffs, kpts=None,
         mo_coeffs = _mo_as_complex(mo_coeffs)
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3])[1:]
-        eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex)
+        eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex128)
 
         tao = []
         ao_loc = None
@@ -252,7 +252,7 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
     else:
         aosym = 's1'
 
-    ao_pairs_G = numpy.empty((ngrids,(i1-i0)*(j1-j0)), dtype=numpy.complex)
+    ao_pairs_G = numpy.empty((ngrids,(i1-i0)*(j1-j0)), dtype=numpy.complex128)
     for pqkR, pqkI, p0, p1 \
             in mydf.pw_loop(mydf.mesh, kpts, q, shls_slice,
                             max_memory=max_memory, aosym=aosym):
@@ -282,7 +282,7 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
     ngrids = len(coords)
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .5)
 
-    mo_pairs_G = numpy.empty((ngrids,nmoi,nmoj), dtype=numpy.complex)
+    mo_pairs_G = numpy.empty((ngrids,nmoi,nmoj), dtype=numpy.complex128)
     nao = cell.nao
     for pqkR, pqkI, p0, p1 \
             in mydf.pw_loop(mydf.mesh, kpts, q,
@@ -316,7 +316,7 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     if out is None:
         out = numpy.empty(eri_shape, dtype=dtype)
     else:
-        assert(out.shape == eri_shape)
+        assert (out.shape == eri_shape)
 
     kptij_lst = numpy.array([(ki, kj) for ki in kpts for kj in kpts])
     kptis_lst = kptij_lst[:,0]
@@ -392,8 +392,8 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
                 if dtype == numpy.double:
                     tmp = tmp.real
                 out[ki,kj,kk] = tmp.reshape(eri_shape[3:])
-        del(fswap['zij'])
-        del(fswap['zkl'])
+        del (fswap['zij'])
+        del (fswap['zkl'])
 
     return out
 

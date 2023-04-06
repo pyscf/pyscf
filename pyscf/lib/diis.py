@@ -148,8 +148,8 @@ class DIIS(object):
     def push_vec(self, x):
         x = x.ravel()
 
-        while len(self._bookkeep) >= self.space:
-            self._bookkeep.pop(0)
+        if len(self._bookkeep) >= self.space:
+            self._bookkeep = self._bookkeep[1-self.space:]
 
         if self._err_vec_touched:
             self._bookkeep.append(self._head)
@@ -320,7 +320,7 @@ class DIIS(object):
             vecsize = dti.size
             for j in range(i+1):
                 dtj = self.get_err_vec(j)
-                assert(dtj.size == vecsize)
+                assert (dtj.size == vecsize)
                 tmp = 0
                 for p0, p1 in misc.prange(0, vecsize, BLOCK_SIZE):
                     tmp += numpy.dot(dti[p0:p1].conj(), dtj[p0:p1])

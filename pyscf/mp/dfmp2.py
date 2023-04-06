@@ -34,7 +34,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
     if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen == 0 or mp.frozen is None)
+        assert (mp.frozen == 0 or mp.frozen is None)
 
     if eris is None:      eris = mp.ao2mo(mo_coeff)
     if mo_energy is None: mo_energy = eris.mo_energy
@@ -57,7 +57,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
         p0, p1 = p1, p1 + qov.shape[0]
         Lov[p0:p1] = qov
 
-    emp2 = 0
+    emp2_ss = emp2_os = 0
 
     for i in range(nocc):
         buf = numpy.dot(Lov[:,i*nvir:(i+1)*nvir].T,
@@ -65,10 +65,17 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
         gi = numpy.array(buf, copy=False)
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
-        emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
-        emp2 -= numpy.einsum('jab,jba', t2i, gi)
+        edi = numpy.einsum('jab,jab', t2i, gi) * 2
+        exi = -numpy.einsum('jab,jba', t2i, gi)
+        emp2_ss += edi*0.5 + exi
+        emp2_os += edi*0.5
         if with_t2:
             t2[i] = t2i
+        buf = gi = t2i = None # free mem
+
+    emp2_ss = emp2_ss.real
+    emp2_os = emp2_os.real
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
 
     return emp2, t2
 
@@ -139,7 +146,7 @@ scf.hf.RHF.DFMP2 = lib.class_as_method(DFMP2)
 scf.rohf.ROHF.DFMP2 = None
 scf.uhf.UHF.DFMP2 = None
 
-del(WITH_T2)
+del (WITH_T2)
 
 
 if __name__ == '__main__':

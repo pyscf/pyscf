@@ -439,7 +439,7 @@ def energy(cc, t1, t2, eris):
 
     kka, noa, nva = t1a.shape
     kkb, nob, nvb = t1b.shape
-    assert(kka == kkb)
+    assert (kka == kkb)
     nkpts = kka
     s = 0.0 + 0j
     fa, fb = eris.fock
@@ -476,7 +476,7 @@ def energy(cc, t1, t2, eris):
 #    if cc._nocc is not None:
 #        return cc._nocc
 #
-#    assert(cc.frozen == 0)
+#    assert (cc.frozen == 0)
 #
 #    if isinstance(cc.frozen, (int, np.integer)):
 #        nocca = [(np.count_nonzero(cc.mo_occ[0][k] > 0) - cc.frozen) for k in range(cc.nkpts)]
@@ -495,7 +495,7 @@ def energy(cc, t1, t2, eris):
 #    if cc._nmo is not None:
 #        return cc._nmo
 #
-#    assert(cc.frozen == 0)
+#    assert (cc.frozen == 0)
 #
 #    if isinstance(cc.frozen, (int, np.integer)):
 #        nmoa = [(cc.mo_occ[0][k].size - cc.frozen) for k in range(cc.nkpts)]
@@ -514,7 +514,7 @@ def energy(cc, t1, t2, eris):
 #
 #    moidxa = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[0]]
 #    moidxb = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[1]]
-#    assert(cc.frozen == 0)
+#    assert (cc.frozen == 0)
 #
 #    if isinstance(cc.frozen, (int, np.integer)):
 #        for idx in moidxa:
@@ -640,7 +640,7 @@ class KUCCSD(uccsd.UCCSD):
     max_space = getattr(__config__, 'pbc_cc_kccsd_uhf_KUCCSD_max_space', 20)
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        assert(isinstance(mf, scf.khf.KSCF))
+        assert (isinstance(mf, scf.khf.KSCF))
         uccsd.UCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
         self.mo_energy = mf.mo_energy
@@ -862,7 +862,6 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     fockb = [reduce(np.dot, (mo.conj().T, hcore[k]+vhf[1][k], mo))
              for k, mo in enumerate(mo_b)]
     eris.fock = (np.asarray(focka), np.asarray(fockb))
-    eris.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
     madelung = tools.madelung(cell, kpts)
     mo_ea = [focka[k].diagonal().real for k in range(nkpts)]
@@ -897,7 +896,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     oppp = None
 
     if isinstance(buf, h5py.Group):
-        del(buf['tmp'])
+        del (buf['tmp'])
         out = buf.create_dataset('tmp', (nkpts,nkpts,nkpts,noccb,nmob,nmob,nmob), dtype)
     oppp = thisdf.ao2mo_7d([orbob,mo_coeff[1],mo_coeff[1],mo_coeff[1]], kpts,
                            factor=1./nkpts, out=out)
@@ -913,7 +912,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     oppp = None
 
     if isinstance(buf, h5py.Group):
-        del(buf['tmp'])
+        del (buf['tmp'])
         out = buf.create_dataset('tmp', (nkpts,nkpts,nkpts,nocca,nmoa,nmob,nmob), dtype)
     oppp = thisdf.ao2mo_7d([orboa,mo_coeff[0],mo_coeff[1],mo_coeff[1]], kpts,
                            factor=1./nkpts, out=out)
@@ -929,7 +928,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     oppp = None
 
     if isinstance(buf, h5py.Group):
-        del(buf['tmp'])
+        del (buf['tmp'])
         out = buf.create_dataset('tmp', (nkpts,nkpts,nkpts,noccb,nmob,nmoa,nmoa), dtype)
     oppp = thisdf.ao2mo_7d([orbob,mo_coeff[1],mo_coeff[0],mo_coeff[0]], kpts,
                            factor=1./nkpts, out=out)
@@ -1087,14 +1086,12 @@ def _make_df_eris(cc, mo_coeff=None):
 
     eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
     eris.LPV = LPV = np.empty((nkpts,nkpts), dtype=object)
-    with h5py.File(thisdf._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
+    with df.CDERIArray(thisdf._cderi) as cderi_array:
         tao = []
         ao_loc = None
-        for ki, kpti in enumerate(kpts):
-            for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti,kptj))
-                Lpq = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                Lpq = cderi_array[ki,kj]
 
                 mo_a = np.hstack((mo_kpts_a[ki], mo_kpts_a[kj][:,nocca:]))
                 mo_b = np.hstack((mo_kpts_b[ki], mo_kpts_b[kj][:,noccb:]))
@@ -1192,11 +1189,11 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1[0]) - (2.2677885702176339-2.5150764056992041j))
-    print(lib.finger(Ht1[1]) - (-51.643438947846086+526.58026126100458j))
-    print(lib.finger(Ht2[0]) - (-29.490813482748258-8.7509143690136018j))
-    print(lib.finger(Ht2[1]) - (2256.0440056839416-193.16480896707569j))
-    print(lib.finger(Ht2[2]) - (-250.59447681063182-397.57189085666982j))
+    print(lib.fp(Ht1[0]) - (2.2677885702176339-2.5150764056992041j))
+    print(lib.fp(Ht1[1]) - (-51.643438947846086+526.58026126100458j))
+    print(lib.fp(Ht2[0]) - (-29.490813482748258-8.7509143690136018j))
+    print(lib.fp(Ht2[1]) - (2256.0440056839416-193.16480896707569j))
+    print(lib.fp(Ht2[2]) - (-250.59447681063182-397.57189085666982j))
 
     kmf.mo_occ[:] = 0
     kmf.mo_occ[:,:,:2] = 1
@@ -1204,11 +1201,11 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1[0]) - (5.4622516572705662+1.990046725028729j))
-    print(lib.finger(Ht1[1]) - (4.8801120611799043-5.9940463787453488j))
-    print(lib.finger(Ht2[0]) - (-192.38864512375193+305.14191018543983j))
-    print(lib.finger(Ht2[1]) - (23085.044505825954-11527.802302550244j))
-    print(lib.finger(Ht2[2]) - (115.57932548288559-40.888597453928604j))
+    print(lib.fp(Ht1[0]) - (5.4622516572705662+1.990046725028729j))
+    print(lib.fp(Ht1[1]) - (4.8801120611799043-5.9940463787453488j))
+    print(lib.fp(Ht2[0]) - (-192.38864512375193+305.14191018543983j))
+    print(lib.fp(Ht2[1]) - (23085.044505825954-11527.802302550244j))
+    print(lib.fp(Ht2[2]) - (115.57932548288559-40.888597453928604j))
 
     from pyscf.pbc.cc import kccsd
     kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
@@ -1228,11 +1225,11 @@ if __name__ == '__main__':
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
 
-    print(lib.finger(Ht1[0]) - (6.9341372555790013+0.87313546297025901j))
-    print(lib.finger(Ht1[1]) - (6.7538005829391992-0.95702422534126796j))
-    print(lib.finger(Ht2[0]) - (-509.24544842179876+448.00925776269855j))
-    print(lib.finger(Ht2[1]) - (107.5960392010511+40.869216223808067j)  )
-    print(lib.finger(Ht2[2]) - (-196.75910296082139+218.53005038057515j))
+    print(lib.fp(Ht1[0]) - (6.9341372555790013+0.87313546297025901j))
+    print(lib.fp(Ht1[1]) - (6.7538005829391992-0.95702422534126796j))
+    print(lib.fp(Ht2[0]) - (-509.24544842179876+448.00925776269855j))
+    print(lib.fp(Ht2[1]) - (107.5960392010511+40.869216223808067j)  )
+    print(lib.fp(Ht2[2]) - (-196.75910296082139+218.53005038057515j))
     kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
     kccsd_eris = kccsd._make_eris_incore(kgcc, kgcc._scf.mo_coeff)
     r1 = kgcc.spatial2spin(t1)
@@ -1242,57 +1239,57 @@ if __name__ == '__main__':
     print(abs(r1 - kgcc.spatial2spin(Ht1)).max())
     print(abs(r2 - kgcc.spatial2spin(Ht2)).max())
 
-    print(all([abs(lib.finger(eris.oooo) - (-0.18290712163391809-0.13839081039521306j)  )<1e-8,
-               abs(lib.finger(eris.ooOO) - (-0.084752145202964035-0.28496525042110676j) )<1e-8,
-               #abs(lib.finger(eris.OOoo) - (0.43054922768629345-0.27990237216969871j)   )<1e-8,
-               abs(lib.finger(eris.OOOO) - (-0.2941475969103261-0.047247498899840978j)  )<1e-8,
-               abs(lib.finger(eris.ooov) - (0.23381463349517045-0.11703340936984277j)   )<1e-8,
-               abs(lib.finger(eris.ooOV) - (-0.052655392703214066+0.69533309442418556j) )<1e-8,
-               abs(lib.finger(eris.OOov) - (-0.2111361247200903+0.85087916975274647j)   )<1e-8,
-               abs(lib.finger(eris.OOOV) - (-0.36995992208047412-0.18887278030885621j)  )<1e-8,
-               abs(lib.finger(eris.oovv) - (0.21107397525051516+0.0048714991438174871j) )<1e-8,
-               abs(lib.finger(eris.ooVV) - (-0.076411225687065987+0.11080438166425896j) )<1e-8,
-               abs(lib.finger(eris.OOvv) - (-0.17880337626095003-0.24174716216954206j)  )<1e-8,
-               abs(lib.finger(eris.OOVV) - (0.059186286356424908+0.68433866387500164j)  )<1e-8,
-               abs(lib.finger(eris.ovov) - (0.15402983765151051+0.064359681685222214j)  )<1e-8,
-               abs(lib.finger(eris.ovOV) - (-0.10697649196044598+0.30351249676253234j)  )<1e-8,
-               #abs(lib.finger(eris.OVov) - (-0.17619329728836752-0.56585020976035816j)  )<1e-8,
-               abs(lib.finger(eris.OVOV) - (-0.63963235318492118+0.69863219317718828j)  )<1e-8,
-               abs(lib.finger(eris.voov) - (-0.24137641647339092+0.18676684336011531j)  )<1e-8,
-               abs(lib.finger(eris.voOV) - (0.19257709151227204+0.38929027819406414j)   )<1e-8,
-               #abs(lib.finger(eris.VOov) - (0.07632606729926053-0.70350947950650355j)   )<1e-8,
-               abs(lib.finger(eris.VOOV) - (-0.47970203195500816+0.46735207193861927j)  )<1e-8,
-               abs(lib.finger(eris.vovv) - (-0.1342049915673903-0.23391327821719513j)   )<1e-8,
-               abs(lib.finger(eris.voVV) - (-0.28989635223866056+0.9644368822688475j)   )<1e-8,
-               abs(lib.finger(eris.VOvv) - (-0.32428269235420271+0.0029847254383674748j))<1e-8,
-               abs(lib.finger(eris.VOVV) - (0.45031779746222456-0.36858577475752041j)   )<1e-8]))
+    print(all([abs(lib.fp(eris.oooo) - (-0.18290712163391809-0.13839081039521306j)  )<1e-8,
+               abs(lib.fp(eris.ooOO) - (-0.084752145202964035-0.28496525042110676j) )<1e-8,
+               #abs(lib.fp(eris.OOoo) - (0.43054922768629345-0.27990237216969871j)   )<1e-8,
+               abs(lib.fp(eris.OOOO) - (-0.2941475969103261-0.047247498899840978j)  )<1e-8,
+               abs(lib.fp(eris.ooov) - (0.23381463349517045-0.11703340936984277j)   )<1e-8,
+               abs(lib.fp(eris.ooOV) - (-0.052655392703214066+0.69533309442418556j) )<1e-8,
+               abs(lib.fp(eris.OOov) - (-0.2111361247200903+0.85087916975274647j)   )<1e-8,
+               abs(lib.fp(eris.OOOV) - (-0.36995992208047412-0.18887278030885621j)  )<1e-8,
+               abs(lib.fp(eris.oovv) - (0.21107397525051516+0.0048714991438174871j) )<1e-8,
+               abs(lib.fp(eris.ooVV) - (-0.076411225687065987+0.11080438166425896j) )<1e-8,
+               abs(lib.fp(eris.OOvv) - (-0.17880337626095003-0.24174716216954206j)  )<1e-8,
+               abs(lib.fp(eris.OOVV) - (0.059186286356424908+0.68433866387500164j)  )<1e-8,
+               abs(lib.fp(eris.ovov) - (0.15402983765151051+0.064359681685222214j)  )<1e-8,
+               abs(lib.fp(eris.ovOV) - (-0.10697649196044598+0.30351249676253234j)  )<1e-8,
+               #abs(lib.fp(eris.OVov) - (-0.17619329728836752-0.56585020976035816j)  )<1e-8,
+               abs(lib.fp(eris.OVOV) - (-0.63963235318492118+0.69863219317718828j)  )<1e-8,
+               abs(lib.fp(eris.voov) - (-0.24137641647339092+0.18676684336011531j)  )<1e-8,
+               abs(lib.fp(eris.voOV) - (0.19257709151227204+0.38929027819406414j)   )<1e-8,
+               #abs(lib.fp(eris.VOov) - (0.07632606729926053-0.70350947950650355j)   )<1e-8,
+               abs(lib.fp(eris.VOOV) - (-0.47970203195500816+0.46735207193861927j)  )<1e-8,
+               abs(lib.fp(eris.vovv) - (-0.1342049915673903-0.23391327821719513j)   )<1e-8,
+               abs(lib.fp(eris.voVV) - (-0.28989635223866056+0.9644368822688475j)   )<1e-8,
+               abs(lib.fp(eris.VOvv) - (-0.32428269235420271+0.0029847254383674748j))<1e-8,
+               abs(lib.fp(eris.VOVV) - (0.45031779746222456-0.36858577475752041j)   )<1e-8]))
 
     eris = _make_eris_outcore(mycc, mycc.mo_coeff)
-    print(all([abs(lib.finger(eris.oooo) - (-0.18290712163391809-0.13839081039521306j)  )<1e-8,
-               abs(lib.finger(eris.ooOO) - (-0.084752145202964035-0.28496525042110676j) )<1e-8,
-               #abs(lib.finger(eris.OOoo) - (0.43054922768629345-0.27990237216969871j)   )<1e-8,
-               abs(lib.finger(eris.OOOO) - (-0.2941475969103261-0.047247498899840978j)  )<1e-8,
-               abs(lib.finger(eris.ooov) - (0.23381463349517045-0.11703340936984277j)   )<1e-8,
-               abs(lib.finger(eris.ooOV) - (-0.052655392703214066+0.69533309442418556j) )<1e-8,
-               abs(lib.finger(eris.OOov) - (-0.2111361247200903+0.85087916975274647j)   )<1e-8,
-               abs(lib.finger(eris.OOOV) - (-0.36995992208047412-0.18887278030885621j)  )<1e-8,
-               abs(lib.finger(eris.oovv) - (0.21107397525051516+0.0048714991438174871j) )<1e-8,
-               abs(lib.finger(eris.ooVV) - (-0.076411225687065987+0.11080438166425896j) )<1e-8,
-               abs(lib.finger(eris.OOvv) - (-0.17880337626095003-0.24174716216954206j)  )<1e-8,
-               abs(lib.finger(eris.OOVV) - (0.059186286356424908+0.68433866387500164j)  )<1e-8,
-               abs(lib.finger(eris.ovov) - (0.15402983765151051+0.064359681685222214j)  )<1e-8,
-               abs(lib.finger(eris.ovOV) - (-0.10697649196044598+0.30351249676253234j)  )<1e-8,
-               #abs(lib.finger(eris.OVov) - (-0.17619329728836752-0.56585020976035816j)  )<1e-8,
-               abs(lib.finger(eris.OVOV) - (-0.63963235318492118+0.69863219317718828j)  )<1e-8,
-               abs(lib.finger(eris.voov) - (-0.24137641647339092+0.18676684336011531j)  )<1e-8,
-               abs(lib.finger(eris.voOV) - (0.19257709151227204+0.38929027819406414j)   )<1e-8,
-               #abs(lib.finger(eris.VOov) - (0.07632606729926053-0.70350947950650355j)   )<1e-8,
-               abs(lib.finger(eris.VOOV) - (-0.47970203195500816+0.46735207193861927j)  )<1e-8,
-               abs(lib.finger(eris.vovv) - (-0.1342049915673903-0.23391327821719513j)   )<1e-8,
-               abs(lib.finger(eris.voVV) - (-0.28989635223866056+0.9644368822688475j)   )<1e-8,
-               abs(lib.finger(eris.VOvv) - (-0.32428269235420271+0.0029847254383674748j))<1e-8,
-               abs(lib.finger(eris.VOVV) - (0.45031779746222456-0.36858577475752041j)   )<1e-8,
-               abs(lib.finger(eris.vvvv) - (-0.080512851258903173-0.2868384266725581j)  )<1e-8,
-               abs(lib.finger(eris.vvVV) - (-0.5137063762484736+1.1036785801263898j)    )<1e-8,
-               #abs(lib.finger(eris.VVvv) - (0.16468487082491939+0.25730725586992997j)   )<1e-8,
-               abs(lib.finger(eris.VVVV) - (-0.56714875196802295+0.058636785679170501j) )<1e-8]))
+    print(all([abs(lib.fp(eris.oooo) - (-0.18290712163391809-0.13839081039521306j)  )<1e-8,
+               abs(lib.fp(eris.ooOO) - (-0.084752145202964035-0.28496525042110676j) )<1e-8,
+               #abs(lib.fp(eris.OOoo) - (0.43054922768629345-0.27990237216969871j)   )<1e-8,
+               abs(lib.fp(eris.OOOO) - (-0.2941475969103261-0.047247498899840978j)  )<1e-8,
+               abs(lib.fp(eris.ooov) - (0.23381463349517045-0.11703340936984277j)   )<1e-8,
+               abs(lib.fp(eris.ooOV) - (-0.052655392703214066+0.69533309442418556j) )<1e-8,
+               abs(lib.fp(eris.OOov) - (-0.2111361247200903+0.85087916975274647j)   )<1e-8,
+               abs(lib.fp(eris.OOOV) - (-0.36995992208047412-0.18887278030885621j)  )<1e-8,
+               abs(lib.fp(eris.oovv) - (0.21107397525051516+0.0048714991438174871j) )<1e-8,
+               abs(lib.fp(eris.ooVV) - (-0.076411225687065987+0.11080438166425896j) )<1e-8,
+               abs(lib.fp(eris.OOvv) - (-0.17880337626095003-0.24174716216954206j)  )<1e-8,
+               abs(lib.fp(eris.OOVV) - (0.059186286356424908+0.68433866387500164j)  )<1e-8,
+               abs(lib.fp(eris.ovov) - (0.15402983765151051+0.064359681685222214j)  )<1e-8,
+               abs(lib.fp(eris.ovOV) - (-0.10697649196044598+0.30351249676253234j)  )<1e-8,
+               #abs(lib.fp(eris.OVov) - (-0.17619329728836752-0.56585020976035816j)  )<1e-8,
+               abs(lib.fp(eris.OVOV) - (-0.63963235318492118+0.69863219317718828j)  )<1e-8,
+               abs(lib.fp(eris.voov) - (-0.24137641647339092+0.18676684336011531j)  )<1e-8,
+               abs(lib.fp(eris.voOV) - (0.19257709151227204+0.38929027819406414j)   )<1e-8,
+               #abs(lib.fp(eris.VOov) - (0.07632606729926053-0.70350947950650355j)   )<1e-8,
+               abs(lib.fp(eris.VOOV) - (-0.47970203195500816+0.46735207193861927j)  )<1e-8,
+               abs(lib.fp(eris.vovv) - (-0.1342049915673903-0.23391327821719513j)   )<1e-8,
+               abs(lib.fp(eris.voVV) - (-0.28989635223866056+0.9644368822688475j)   )<1e-8,
+               abs(lib.fp(eris.VOvv) - (-0.32428269235420271+0.0029847254383674748j))<1e-8,
+               abs(lib.fp(eris.VOVV) - (0.45031779746222456-0.36858577475752041j)   )<1e-8,
+               abs(lib.fp(eris.vvvv) - (-0.080512851258903173-0.2868384266725581j)  )<1e-8,
+               abs(lib.fp(eris.vvVV) - (-0.5137063762484736+1.1036785801263898j)    )<1e-8,
+               #abs(lib.fp(eris.VVvv) - (0.16468487082491939+0.25730725586992997j)   )<1e-8,
+               abs(lib.fp(eris.VVVV) - (-0.56714875196802295+0.058636785679170501j) )<1e-8]))

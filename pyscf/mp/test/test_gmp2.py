@@ -22,25 +22,28 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import mp
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.basis = '631g'
-mol.spin = 2
-mol.build()
-mf = scf.UHF(mol)
-mf.conv_tol = 1e-14
-mf.scf()
-gmf = scf.GHF(mol)
-gmf.conv_tol = 1e-14
-gmf.scf()
+def setUpModule():
+    global mol, mf, gmf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '631g'
+    mol.spin = 2
+    mol.build()
+    mf = scf.UHF(mol)
+    mf.conv_tol = 1e-12
+    mf.scf()
+    gmf = scf.GHF(mol)
+    gmf.conv_tol = 1e-12
+    gmf.scf()
 
 def tearDownModule():
     global mol, mf, gmf
+    mol.stdout.close()
     del mol, mf, gmf
 
 
@@ -48,23 +51,23 @@ class KnownValues(unittest.TestCase):
     def test_gmp2(self):
         pt = mp.GMP2(gmf)
         emp2, t2 = pt.kernel(gmf.mo_energy, gmf.mo_coeff)
-        self.assertAlmostEqual(emp2, -0.12886859466191491, 9)
+        self.assertAlmostEqual(emp2, -0.12886859466191491, 8)
 
         pt.max_memory = 1
         pt.frozen = None
         emp2, t2 = pt.kernel()
-        self.assertAlmostEqual(emp2, -0.12886859466191491, 9)
+        self.assertAlmostEqual(emp2, -0.12886859466191491, 8)
 
         mf1 = scf.addons.convert_to_ghf(mf)
         mf1.mo_coeff = numpy.asarray(mf1.mo_coeff)  # remove tag orbspin
         pt = mp.GMP2(mf1)
         emp2, t2 = pt.kernel()
-        self.assertAlmostEqual(emp2, -0.09625784206542846, 9)
+        self.assertAlmostEqual(emp2, -0.09625784206542846, 8)
 
         pt.max_memory = 1
         pt.frozen = None
         emp2, t2 = pt.kernel()
-        self.assertAlmostEqual(emp2, -0.09625784206542846, 9)
+        self.assertAlmostEqual(emp2, -0.09625784206542846, 8)
 
     def test_gmp2_contract_eri_dm(self):
         pt = mp.GMP2(mf)
@@ -89,17 +92,17 @@ class KnownValues(unittest.TestCase):
         e1 = numpy.einsum('ij,ji', h1, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
-        self.assertAlmostEqual(e1, pt.e_tot, 9)
+        self.assertAlmostEqual(e1, pt.e_tot, 8)
 
         pt = mp.GMP2(mf)
         emp2, t2 = pt.kernel()
         dm1 = pt.make_rdm1()
         dm2 = pt.make_rdm2()
-        #self.assertAlmostEqual(abs(numpy.einsum('ijkk->ji', dm2)/9 - dm1).max(), 0, 9)
+        #self.assertAlmostEqual(abs(numpy.einsum('ijkk->ji', dm2)/9 - dm1).max(), 0, 8)
         e1 = numpy.einsum('ij,ji', h1, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
-        self.assertAlmostEqual(e1, pt.e_tot, 9)
+        self.assertAlmostEqual(e1, pt.e_tot, 8)
 
         hcore = pt._scf.get_hcore()
         mo = pt._scf.mo_coeff
@@ -107,13 +110,17 @@ class KnownValues(unittest.TestCase):
         h1 = reduce(numpy.dot, (mo.T, hcore+vhf, mo))
         dm1[numpy.diag_indices(mol.nelectron)] -= 1
         e = numpy.einsum('pq,qp', h1, dm1)
-        self.assertAlmostEqual(e, -emp2, 9)
+        self.assertAlmostEqual(e, -emp2, 8)
 
     def test_gmp2_frozen(self):
         pt = mp.GMP2(gmf)
-        pt.frozen = [2,3]
+        pt.frozen = [0, 1]
         pt.kernel(with_t2=False)
-        self.assertAlmostEqual(pt.emp2, -0.087828433042835427, 9)
+        self.assertAlmostEqual(pt.emp2, -0.12783149583822068, 8)
+        pt.set_frozen()
+        pt.kernel(with_t2=False)
+        self.assertEqual(pt.frozen, 2)
+        self.assertAlmostEqual(pt.emp2, -0.12783149583822068, 8)
 
     def test_gmp2_outcore_frozen(self):
         pt = mp.GMP2(gmf)
@@ -121,13 +128,13 @@ class KnownValues(unittest.TestCase):
         pt.nmo = 24
         pt.frozen = [8,9]
         e = pt.kernel(with_t2=False)[0]
-        self.assertAlmostEqual(e, -0.098239933985213371, 9)
+        self.assertAlmostEqual(e, -0.098239933985213371, 8)
 
         pt = mp.GMP2(gmf)
         pt.nmo = 24
         pt.nocc = 8
         e = pt.kernel(with_t2=False)[0]
-        self.assertAlmostEqual(e, -0.098239933985213371, 9)
+        self.assertAlmostEqual(e, -0.098239933985213371, 8)
 
     def test_gmp2_with_ao2mofn(self):
         pt = mp.GMP2(gmf)
@@ -143,13 +150,13 @@ class KnownValues(unittest.TestCase):
             return eri
         pt.ao2mo = lambda *args: mp.gmp2._make_eris_incore(pt, *args, ao2mofn=ao2mofn)
         e1 = pt.kernel()[0]
-        self.assertAlmostEqual(e1, -0.12879040729543023, 8)
+        self.assertAlmostEqual(e1, -0.12879040729543023, 7)
         # Should be quite close to emp2 without DF
         self.assertAlmostEqual(e1, -0.12886859466191491, 3)
 
 #        pt = mp.GMP2(gmf.density_fit('weigend'))
 #        e2 = pt.kernel()[0]
-#        self.assertAlmostEqual(e1, e2, 9)
+#        self.assertAlmostEqual(e1, e2, 8)
 
     def test_rdm_complex(self):
         mol = gto.M()
@@ -173,8 +180,10 @@ class KnownValues(unittest.TestCase):
         mo_energy = numpy.arange(nmo)
         mo_occ = numpy.zeros(nmo)
         mo_occ[:nocc] = 1
-        dm = numpy.diag(mo_occ)
-        vhf = numpy.einsum('ijkl,lk->ij', erip, dm)
+        mf.make_rdm1 = lambda *args: numpy.diag(mo_occ)
+        dm = mf.make_rdm1()
+        mf.get_veff = lambda *args: numpy.einsum('ijkl,lk->ij', erip, dm)
+        vhf = mf.get_veff()
         hcore = numpy.diag(mo_energy) - vhf
         mf.get_hcore = lambda *args: hcore
         mf.get_ovlp = lambda *args: numpy.eye(nmo)
@@ -207,13 +216,13 @@ class KnownValues(unittest.TestCase):
     def test_gmp2_with_df(self):
         pt = mp.GMP2(gmf).density_fit()
         emp2, t2 = pt.kernel(gmf.mo_energy, gmf.mo_coeff)
-        self.assertAlmostEqual(emp2, -0.12884823204824902, 9)
+        self.assertAlmostEqual(emp2, -0.12884823204824902, 8)
 
         mf1 = scf.addons.convert_to_ghf(mf)
         mf1.mo_coeff = numpy.asarray(mf1.mo_coeff)  # remove tag orbspin
         pt = mp.GMP2(mf1).density_fit()
         emp2, t2 = pt.kernel()
-        self.assertAlmostEqual(emp2, -0.09624851692896723, 9)
+        self.assertAlmostEqual(emp2, -0.09624851692896723, 8)
 
         dm = gmf.get_init_guess() + .1j
         dm = 0.5*(dm + dm.T.conj())

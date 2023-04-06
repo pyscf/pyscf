@@ -17,7 +17,7 @@
 import numpy as np
 
 from pyscf import lib
-from pyscf.lib import logger
+from pyscf.lib import logger, module_method
 from pyscf.cc import ccsd
 from pyscf.cc import eom_rccsd
 from pyscf.cc import gccsd
@@ -46,7 +46,7 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    r1, r2 = vector_to_amplitudes_ip(vector, nmo, nocc)
+    r1, r2 = eom.vector_to_amplitudes(vector, nmo, nocc)
 
     # Eq. (8)
     Hr1 = -np.einsum('mi,m->i', imds.Foo, r1)
@@ -62,7 +62,7 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     Hr2 += tmp2 - tmp2.transpose(1,0,2)
     Hr2 += 0.5*lib.einsum('mnef,mnf,ijae->ija', imds.Woovv, r2, imds.t2)
 
-    vector = amplitudes_to_vector_ip(Hr1, Hr2)
+    vector = eom.amplitudes_to_vector(Hr1, Hr2)
     return vector
 
 def lipccsd_matvec(eom, vector, imds=None, diag=None):
@@ -73,7 +73,7 @@ def lipccsd_matvec(eom, vector, imds=None, diag=None):
         imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    r1, r2 = vector_to_amplitudes_ip(vector, nmo, nocc)
+    r1, r2 = eom.vector_to_amplitudes(vector, nmo, nocc)
 
     Hr1 = -lib.einsum('mi,i->m', imds.Foo, r1)
     Hr1 += -0.5 * lib.einsum('maji,ija->m', imds.Wovoo, r2)
@@ -89,7 +89,7 @@ def lipccsd_matvec(eom, vector, imds=None, diag=None):
     Hr2 += (tmp2 - tmp2.transpose(1, 0, 2))
     Hr2 += 0.5 * lib.einsum('mnef,ija,ijae->mnf', imds.Woovv, r2, imds.t2)
 
-    vector = amplitudes_to_vector_ip(Hr1, Hr2)
+    vector = eom.amplitudes_to_vector(Hr1, Hr2)
     return vector
 
 def ipccsd_diag(eom, imds=None):
@@ -111,7 +111,7 @@ def ipccsd_diag(eom, imds=None):
                 Hr2[i,j,a] += 0.5*(np.dot(imds.Woovv[i,j,:,a], t2[i,j,a,:]) -
                                    np.dot(imds.Woovv[j,i,:,a], t2[i,j,a,:]))
 
-    vector = amplitudes_to_vector_ip(Hr1, Hr2)
+    vector = eom.amplitudes_to_vector(Hr1, Hr2)
     return vector
 
 def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=None):
@@ -145,14 +145,14 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
     foo = fock[:nocc, :nocc].diagonal()
     fvv = fock[nocc:, nocc:].diagonal()
 
-    oovv = _cp(eris.oovv)
-    ovvv = _cp(eris.ovvv)
-    ovov = _cp(eris.ovov)
-    #ovvo = -_cp(eris.ovov).transpose(0,1,3,2)
-    ooov = _cp(eris.ooov)
-    vooo = _cp(ooov).conj().transpose(3,2,1,0)
-    vvvo = _cp(ovvv).conj().transpose(3,2,1,0)
-    oooo = _cp(eris.oooo)
+    oovv = np.asarray(eris.oovv)
+    ovvv = np.asarray(eris.ovvv)
+    ovov = np.asarray(eris.ovov)
+    #ovvo = -np.asarray(eris.ovov).transpose(0,1,3,2)
+    ooov = np.asarray(eris.ooov)
+    vooo = np.asarray(ooov).conj().transpose(3,2,1,0)
+    vvvo = np.asarray(ovvv).conj().transpose(3,2,1,0)
+    oooo = np.asarray(eris.oooo)
 
     # Create denominator
     eijk = foo[:, None, None] + foo[None, :, None] + foo[None, None, :]
@@ -179,8 +179,8 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
     ipccsd_evals = np.atleast_1d(ipccsd_evals)
     for ip_eval, ip_evec, ip_levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
         # Enforcing <L|R> = 1
-        l1, l2 = vector_to_amplitudes_ip(ip_levec, nmo, nocc)
-        r1, r2 = vector_to_amplitudes_ip(ip_evec, nmo, nocc)
+        l1, l2 = eom.vector_to_amplitudes(ip_levec, nmo, nocc)
+        r1, r2 = eom.vector_to_amplitudes(ip_evec, nmo, nocc)
         ldotr = np.dot(l1, r1) + 0.5 * np.dot(l2.ravel(), r2.ravel())
 
         logger.info(eom, 'Left-right amplitude overlap : %14.8e', ldotr)
@@ -229,18 +229,14 @@ class EOMIP(eom_rccsd.EOMIP):
     get_diag = ipccsd_diag
     ccsd_star_contract = ipccsd_star_contract
 
-    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
-        if nmo is None: nmo = self.nmo
-        if nocc is None: nocc = self.nocc
-        return vector_to_amplitudes_ip(vector, nmo, nocc)
-
-    def amplitudes_to_vector(self, r1, r2):
-        return amplitudes_to_vector_ip(r1, r2)
+    amplitudes_to_vector = staticmethod(amplitudes_to_vector_ip)
+    vector_to_amplitudes = module_method(vector_to_amplitudes_ip,
+                                         absences=['nmo', 'nocc'])
 
     def vector_size(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        return nocc + nocc*(nocc-1)/2*nvir
+        return nocc + nocc*(nocc-1)//2*nvir
 
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris)
@@ -277,7 +273,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    r1, r2 = vector_to_amplitudes_ea(vector, nmo, nocc)
+    r1, r2 = eom.vector_to_amplitudes(vector, nmo, nocc)
 
     # Eq. (30)
     Hr1  = np.einsum('ac,c->a', imds.Fvv, r1)
@@ -293,7 +289,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     Hr2 += 0.5*lib.einsum('abcd,jcd->jab', imds.Wvvvv, r2)
     Hr2 -= 0.5*lib.einsum('klcd,lcd,kjab->jab', imds.Woovv, r2, imds.t2)
 
-    vector = amplitudes_to_vector_ea(Hr1, Hr2)
+    vector = eom.amplitudes_to_vector(Hr1, Hr2)
     return vector
 
 def leaccsd_matvec(eom, vector, imds=None, diag=None):
@@ -305,7 +301,7 @@ def leaccsd_matvec(eom, vector, imds=None, diag=None):
         imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    r1, r2 = vector_to_amplitudes_ea(vector, nmo, nocc)
+    r1, r2 = eom.vector_to_amplitudes(vector, nmo, nocc)
 
     # Eq. (32)
     Hr1 = lib.einsum('ac,a->c',imds.Fvv,r1)
@@ -322,7 +318,7 @@ def leaccsd_matvec(eom, vector, imds=None, diag=None):
     Hr2 += 0.5*lib.einsum('abcd,jab->jcd',imds.Wvvvv,r2)
     Hr2 += -0.5*lib.einsum('klcd,jab,kjab->lcd',imds.Woovv,r2,imds.t2)
 
-    vector = amplitudes_to_vector_ea(Hr1,Hr2)
+    vector = eom.amplitudes_to_vector(Hr1,Hr2)
     return vector
 
 def eaccsd_diag(eom, imds=None):
@@ -345,7 +341,7 @@ def eaccsd_diag(eom, imds=None):
                 Hr2[j,a,b] -= 0.5*(np.dot(imds.Woovv[:,j,a,b], t2[:,j,a,b]) -
                                    np.dot(imds.Woovv[:,j,b,a], t2[:,j,a,b]))
 
-    vector = amplitudes_to_vector_ea(Hr1, Hr2)
+    vector = eom.amplitudes_to_vector(Hr1, Hr2)
     return vector
 
 def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=None):
@@ -374,14 +370,14 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
     foo = fock[:nocc, :nocc].diagonal()
     fvv = fock[nocc:, nocc:].diagonal()
 
-    vvvv = _cp(eris.vvvv)
-    oovv = _cp(eris.oovv)
-    ovvv = _cp(eris.ovvv)
-    ovov = _cp(eris.ovov)
-    #ovvo = -_cp(eris.ovov).transpose(0,1,3,2)
-    ooov = _cp(eris.ooov)
-    vooo = _cp(ooov).conj().transpose(3,2,1,0)
-    vvvo = _cp(ovvv).conj().transpose(3,2,1,0)
+    vvvv = np.asarray(eris.vvvv)
+    oovv = np.asarray(eris.oovv)
+    ovvv = np.asarray(eris.ovvv)
+    ovov = np.asarray(eris.ovov)
+    #ovvo = -np.asarray(eris.ovov).transpose(0,1,3,2)
+    ooov = np.asarray(eris.ooov)
+    vooo = np.asarray(ooov).conj().transpose(3,2,1,0)
+    vvvo = np.asarray(ovvv).conj().transpose(3,2,1,0)
 
     # Create denominator
     eabc = fvv[:, None, None] + fvv[None, :, None] + fvv[None, None, :]
@@ -408,8 +404,8 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
     eaccsd_evals = np.atleast_1d(eaccsd_evals)
     for ea_eval, ea_evec, ea_levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
         # Enforcing <L|R> = 1
-        l1, l2 = vector_to_amplitudes_ea(ea_levec, nmo, nocc)
-        r1, r2 = vector_to_amplitudes_ea(ea_evec, nmo, nocc)
+        l1, l2 = eom.vector_to_amplitudes(ea_levec, nmo, nocc)
+        r1, r2 = eom.vector_to_amplitudes(ea_evec, nmo, nocc)
         ldotr = np.dot(l1, r1) + 0.5 * np.dot(l2.ravel(), r2.ravel())
 
         logger.info(eom, 'Left-right amplitude overlap : %14.8e', ldotr)
@@ -460,13 +456,9 @@ class EOMEA(eom_rccsd.EOMEA):
     get_diag = eaccsd_diag
     ccsd_star_contract = eaccsd_star_contract
 
-    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
-        if nmo is None: nmo = self.nmo
-        if nocc is None: nocc = self.nocc
-        return vector_to_amplitudes_ea(vector, nmo, nocc)
-
-    def amplitudes_to_vector(self, r1, r2):
-        return amplitudes_to_vector_ea(r1, r2)
+    amplitudes_to_vector = staticmethod(amplitudes_to_vector_ea)
+    vector_to_amplitudes = module_method(vector_to_amplitudes_ea,
+                                         absences=['nmo', 'nocc'])
 
     def vector_size(self):
         nocc = self.nocc
@@ -500,7 +492,7 @@ def eeccsd_matvec(eom, vector, imds=None, diag=None):
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    r1, r2 = vector_to_amplitudes_ee(vector, nmo, nocc)
+    r1, r2 = eom.vector_to_amplitudes(vector, nmo, nocc)
 
     # Eq. (9)
     Hr1  = lib.einsum('ae,ie->ia', imds.Fvv, r1)
@@ -529,7 +521,7 @@ def eeccsd_matvec(eom, vector, imds=None, diag=None):
     Hr2 += 0.5*lib.einsum('mnij,mnab->ijab', imds.Woooo, r2)
     Hr2 += 0.5*lib.einsum('abef,ijef->ijab', imds.Wvvvv, r2)
 
-    vector = amplitudes_to_vector_ee(Hr1, Hr2)
+    vector = eom.amplitudes_to_vector(Hr1, Hr2)
     return vector
 
 def eeccsd_diag(eom, imds=None):
@@ -564,7 +556,7 @@ def eeccsd_diag(eom, imds=None):
         for j in range(i):
             Hr2[i,j,:,:] += 0.5*(imds.Woooo[i,j,i,j]-imds.Woooo[j,i,i,j])
 
-    vector = amplitudes_to_vector_ee(Hr1, Hr2)
+    vector = eom.amplitudes_to_vector(Hr1, Hr2)
     return vector
 
 
@@ -596,13 +588,9 @@ class EOMEE(eom_rccsd.EOMEE):
         matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
-    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
-        if nmo is None: nmo = self.nmo
-        if nocc is None: nocc = self.nocc
-        return vector_to_amplitudes_ee(vector, nmo, nocc)
-
-    def amplitudes_to_vector(self, r1, r2):
-        return amplitudes_to_vector_ee(r1, r2)
+    amplitudes_to_vector = staticmethod(amplitudes_to_vector_ee)
+    vector_to_amplitudes = module_method(vector_to_amplitudes_ee,
+                                         absences=['nmo', 'nocc'])
 
     def vector_size(self):
         '''size of the vector based on spin-orbital basis'''
@@ -747,41 +735,3 @@ class _IMDS:
         self.made_ee_imds = True
         logger.timer(self, 'EOM-CCSD EE intermediates', *cput0)
         return self
-
-def _cp(a):
-    return np.array(a, copy=False, order='C')
-
-if __name__ == '__main__':
-    from pyscf import scf
-    from pyscf import gto
-    from pyscf.cc import gccsd
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-    mol.basis = 'cc-pvdz'
-    mol.spin = 0
-    mol.build()
-    mf = scf.UHF(mol).run()
-    mf = scf.addons.convert_to_ghf(mf)
-
-    mycc = gccsd.GCCSD(mf)
-    ecc, t1, t2 = mycc.kernel()
-    print(ecc - -0.2133432712431435)
-    e,v = mycc.ipccsd(nroots=8)
-    print(e[0] - 0.4335604332073799)
-    print(e[2] - 0.5187659896045407)
-    print(e[4] - 0.6782876002229172)
-
-    #mycc.verbose = 5
-    e,v = mycc.eaccsd(nroots=8)
-    print(e[0] - 0.16737886338859731)
-    print(e[2] - 0.24027613852009164)
-    print(e[4] - 0.51006797826488071)
-
-    e,v = mycc.eeccsd(nroots=4)
-    print(e[0] - 0.2757159395886167)
-    print(e[1] - 0.2757159395886167)
-    print(e[2] - 0.2757159395886167)
-    print(e[3] - 0.3005716731825082)

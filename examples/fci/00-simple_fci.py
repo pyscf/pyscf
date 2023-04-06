@@ -11,7 +11,7 @@ import pyscf
 
 mol = pyscf.M(
     atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
-    basis = '6-31g',
+    basis = 'sto3g',
     symmetry = True,
 )
 myhf = mol.RHF().run()
@@ -28,6 +28,14 @@ print('E(FCI) = %.12f' % cisolver.kernel()[0])
 myuhf = mol.UHF().run()
 cisolver = pyscf.fci.FCI(myuhf)
 print('E(UHF-FCI) = %.12f' % cisolver.kernel()[0])
+
+myghf = mol.GHF().run()
+cisolver = pyscf.fci.FCI(myghf)
+print('E(GHF-FCI) = %.12f' % cisolver.kernel()[0])
+
+mydhf = mol.DHF().set(with_gaunt=True, with_breit=True).run()
+cisolver = pyscf.fci.FCI(mydhf)
+print('E(DHF-FCI) = %.12f' % cisolver.kernel()[0])
 
 #
 # create an FCI solver based on the given orbitals and the num. electrons and

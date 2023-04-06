@@ -20,24 +20,26 @@ from pyscf import mp
 from pyscf import grad
 from pyscf.grad import ump2 as ump2_grad
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.spin = 2
-mol.basis = '631g'
-mol.build()
-mf = scf.UHF(mol)
-mf.conv_tol_grad = 1e-8
-mf.kernel()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.spin = 2
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.UHF(mol)
+    mf.conv_tol_grad = 1e-8
+    mf.kernel()
 
 def tearDownModule():
-    global mol
+    global mol, mf
     mol.stdout.close()
-    del mol
+    del mol, mf
 
 
 class KnownValues(unittest.TestCase):
@@ -45,7 +47,10 @@ class KnownValues(unittest.TestCase):
         pt = mp.MP2(mf)
         pt.kernel()
         g1 = pt.nuc_grad_method().kernel(pt.t2, atmlst=[0,1,2])
-        self.assertAlmostEqual(lib.finger(g1), -0.2241809640361207, 6)
+# O     0.0000000000    -0.0000000000     0.1436990190
+# H    -0.0000000000     0.1097329294    -0.0718495095
+# H    -0.0000000000    -0.1097329294    -0.0718495095
+        self.assertAlmostEqual(lib.fp(g1), -0.2241809640361207, 6)
 
     def test_mp2_grad_finite_diff(self):
         mol = gto.M(
@@ -76,7 +81,10 @@ class KnownValues(unittest.TestCase):
         pt.max_memory = 1
         pt.kernel()
         g1 = ump2_grad.Gradients(pt).kernel(pt.t2)
-        self.assertAlmostEqual(lib.finger(g1), -0.22437278030057645, 6)
+# O    -0.0000000000    -0.0000000000     0.1454782514
+# H     0.0000000000     0.1092558730    -0.0727391257
+# H    -0.0000000000    -0.1092558730    -0.0727391257
+        self.assertAlmostEqual(lib.fp(g1), -0.22437278030057645, 6)
 
     def test_as_scanner(self):
         pt = mp.MP2(mf)
@@ -85,7 +93,7 @@ class KnownValues(unittest.TestCase):
         e, g1 = gscan(mol)
         self.assertTrue(gscan.converged)
         self.assertAlmostEqual(e, -75.759091758835353, 9)
-        self.assertAlmostEqual(lib.finger(g1), -0.22437278030057645, 6)
+        self.assertAlmostEqual(lib.fp(g1), -0.22437278030057645, 6)
 
 
 if __name__ == "__main__":

@@ -52,27 +52,32 @@ def sfx2c1e(mf):
     >>> mf = pyscf.x2c.sfx2c1e.sfx2c1e(scf.UHF(mol))
     >>> mf.scf()
     '''
+    assert isinstance(mf, hf.SCF)
+
     if isinstance(mf, x2c._X2C_SCF):
         if mf.with_x2c is None:
-            return mf.__class__(mf)
+            mf.with_x2c = SpinFreeX2CHelper(mf.mol)
+            return mf
+        elif not isinstance(mf.with_x2c, SpinFreeX2CHelper):
+            # An object associated to x2c.SpinOrbitalX2CHelper
+            raise NotImplementedError
         else:
             return mf
-
-    assert(isinstance(mf, hf.SCF))
 
     mf_class = mf.__class__
     if mf_class.__doc__ is None:
         doc = ''
     else:
         doc = mf_class.__doc__
+
     class SFX2C1E_SCF(x2c._X2C_SCF, mf_class):
         __doc__ = doc + '''
         Attributes for spin-free X2C:
             with_x2c : X2C object
         '''
-        def __init__(self, mf):
-            self.__dict__.update(mf.__dict__)
-            self.with_x2c = SpinFreeX2C(mf.mol)
+        def __init__(self, mol, *args, **kwargs):
+            mf_class.__init__(self, mol, *args, **kwargs)
+            self.with_x2c = SpinFreeX2CHelper(mf.mol)
             self._keys = self._keys.union(['with_x2c'])
 
         def get_hcore(self, mol=None):
@@ -110,17 +115,16 @@ def sfx2c1e(mf):
                 A list: the dipole moment on x, y and z component
             '''
             if mol is None: mol = self.mol
-            if dm is None: dm =self.make_rdm1()
+            if dm is None: dm = self.make_rdm1()
             log = logger.new_logger(mol, verbose)
-
-            if 'unit_symbol' in kwargs:  # pragma: no cover
-                log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
-                         'unit since PySCF-1.5.')
-                unit = kwargs['unit_symbol']
 
             if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
                 # UHF denisty matrices
                 dm = dm[0] + dm[1]
+
+            if isinstance(self, ghf.GHF):
+                nao = mol.nao_nr()
+                dm = dm[:nao,:nao] + dm[nao:,nao:]
 
             with mol.with_common_orig((0,0,0)):
                 if picture_change:
@@ -145,12 +149,13 @@ def sfx2c1e(mf):
                 log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
             return mol_dip
 
-    return SFX2C1E_SCF(mf)
+    with_x2c = SpinFreeX2CHelper(mf.mol)
+    return mf.view(SFX2C1E_SCF).add_keys(with_x2c=with_x2c)
 
 sfx2c = sfx2c1e
 
 
-class SpinFreeX2C(x2c.X2C):
+class SpinFreeX2CHelper(x2c.X2CHelperMixin):
     '''1-component X2c (spin-free part only)
     '''
     def get_hcore(self, mol=None):
@@ -162,7 +167,7 @@ class SpinFreeX2C(x2c.X2C):
 
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
         t = xmol.intor_symmetric('int1e_kin')
         v = xmol.intor_symmetric('int1e_nuc')
         s = xmol.intor_symmetric('int1e_ovlp')
@@ -240,7 +245,7 @@ class SpinFreeX2C(x2c.X2C):
         else:
             xmol = mol
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_nr_by_atom()
@@ -284,6 +289,8 @@ class SpinFreeX2C(x2c.X2C):
             return sfx2c1e_hess.hcore_hess_generator(self, mol)
         else:
             raise NotImplementedError
+
+SpinFreeX2C = SpinFreeX2CHelper
 
 
 if __name__ == '__main__':

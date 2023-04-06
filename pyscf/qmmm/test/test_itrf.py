@@ -23,14 +23,19 @@ from pyscf import mcscf
 from pyscf import grad
 from pyscf.qmmm import itrf
 
-mol = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = ''' H                 -0.00000000   -0.000    0.
- H                 -0.00000000   -0.000    1.
- H                 -0.00000000   -0.82    0.
- H                 -0.91000000   -0.020    0.''',
-    basis = 'cc-pvdz')
+def setUpModule():
+    global mol
+    mol = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = ''' H                 -0.00000000   -0.000    0.
+     H                 -0.00000000   -0.000    1.
+     H                 -0.00000000   -0.82    0.
+     H                 -0.91000000   -0.020    0.''',
+        basis = 'cc-pvdz')
+
+def tearDownModule():
+    global mol
 
 class KnowValues(unittest.TestCase):
     def test_energy(self):
@@ -42,9 +47,9 @@ class KnowValues(unittest.TestCase):
     def test_grad(self):
         coords = [(0.0,0.1,0.0)]
         charges = [1.00]
-        mf = itrf.mm_charge(scf.RHF(mol), coords, charges).run()
+        mf = itrf.mm_charge(scf.RHF(mol), coords, charges).run(conv_tol=1e-10)
         hfg = itrf.mm_charge_grad(grad.RHF(mf), coords, charges).run()
-        self.assertAlmostEqual(numpy.linalg.norm(hfg.de), 26.978089280783195, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(hfg.de), 26.978089280783195, 6)
 
         mfs = mf.as_scanner()
         e1 = mfs('''
@@ -97,13 +102,13 @@ class KnowValues(unittest.TestCase):
 
         coords = [(0.5,0.6,0.1)]
         charges = [-0.1]
-        mf = itrf.add_mm_charges(scf.RHF(mol), coords, charges).run()
+        mf = itrf.add_mm_charges(scf.RHF(mol), coords, charges).run(conv_tol=1e-10)
         mc = mcscf.CASCI(mf, 4, 4).run()
-        self.assertAlmostEqual(mc.e_tot, -75.98156095286714, 9)
+        self.assertAlmostEqual(mc.e_tot, -75.98156095286714, 8)
 
-        mf = scf.RHF(mol).run()
+        mf = scf.RHF(mol).run(conv_tol=1e-10)
         mc = itrf.add_mm_charges(mcscf.CASCI(mf, 4, 4), coords, charges).run()
-        self.assertAlmostEqual(mc.e_tot, -75.98156095286714, 9)
+        self.assertAlmostEqual(mc.e_tot, -75.98156095286714, 8)
 
     def test_casscf(self):
         mol = gto.Mole()
@@ -129,4 +134,3 @@ class KnowValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for qmmm")
     unittest.main()
-

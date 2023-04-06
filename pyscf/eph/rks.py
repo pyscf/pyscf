@@ -83,7 +83,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
                       for i in range(4)]
             for ia in range(mol.natm):
-                wv = dR_rho1 = rks_hess._make_dR_rho1(ao, ao_dm0, ia, aoslices)
+                wv = dR_rho1 = rks_hess._make_dR_rho1(ao, ao_dm0, ia, aoslices, xctype)
                 wv[0] = numint._rks_gga_wv1(rho, dR_rho1[0], vxc, fxc, weight)
                 wv[1] = numint._rks_gga_wv1(rho, dR_rho1[1], vxc, fxc, weight)
                 wv[2] = numint._rks_gga_wv1(rho, dR_rho1[2], vxc, fxc, weight)
@@ -109,6 +109,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omg, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
     vnuc_deriv = ephobj.vnuc_generator(mol)
     aoslices = mol.aoslice_by_atom()
@@ -128,14 +129,14 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
 
-        if abs(hyb)>1e-10:
+        if hybrid:
             vj1, vk1 = \
                     rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
                                      ['ji->s2kl', -dm0[:,p0:p1], #vj1
                                       'li->s1kj', -dm0[:,p0:p1]], #vk1
                                      shls_slice=shls_slice)
             veff = vj1 - hyb * .5 * vk1
-            if abs(omg) > 1e-10:
+            if omg != 0:
                 with mol.with_range_coulomb(omg):
                     vk1 = \
                         rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',

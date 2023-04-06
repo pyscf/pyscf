@@ -24,6 +24,7 @@ from pyscf.mcscf import mc1step
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=None, dump_chk=True):
+    from pyscf.mcscf.addons import StateAverageMCSCFSolver
     if verbose is None:
         verbose = casscf.verbose
     if callback is None:
@@ -92,26 +93,46 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            log.debug('micro %d  ~dE=%5.3g  |u-1|=%5.3g  |g[o]|=%5.3g  |dm1|=%5.3g',
+            log.debug('micro %2d  ~dE=%5.3g  |u-1|=%5.3g  |g[o]|=%5.3g  |dm1|=%5.3g',
                       imicro, de, norm_t, norm_gorb, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
-            t2m = log.timer('micro iter %d'%imicro, *t2m)
+            t2m = log.timer('micro iter %2d'%imicro, *t2m)
             if norm_t < 1e-4 or abs(de) < tol*.4 or norm_gorb < conv_tol_grad*.2:
                 break
 
         totinner += njk
         totmicro += imicro + 1
 
+        max_offdiag_u = numpy.abs(numpy.triu(u, 1)).max()
+        if max_offdiag_u < casscf.small_rot_tol:
+            small_rot = True
+            log.debug('Small orbital rotation, restart CI if supported by solver')
+        else:
+            small_rot = False
+        if not isinstance(casscf, StateAverageMCSCFSolver):
+            # The fcivec from builtin FCI solver is a numpy.ndarray
+            if not isinstance(fcivec, numpy.ndarray):
+                fcivec = small_rot
+        else:
+            newvecs = []
+            for subvec in fcivec:
+                if not isinstance(subvec, numpy.ndarray):
+                    newvecs.append(small_rot)
+                else:
+                    newvecs.append(subvec)
+            fcivec = newvecs
+
         e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         log.timer('CASCI solver', *t3m)
-        t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
+        t2m = t1m = log.timer('macro iter %2d'%imacro, *t1m)
 
         de, elast = e_tot - elast, e_tot
         if (abs(de) < tol and
-            norm_gorb < conv_tol_grad and norm_ddm < conv_tol_ddm):
+                norm_gorb < conv_tol_grad and norm_ddm < conv_tol_ddm and
+                (max_offdiag_u < casscf.small_rot_tol or casscf.small_rot_tol == 0)):
             conv = True
         else:
             elast = e_tot
@@ -123,10 +144,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             callback(locals())
 
     if conv:
-        log.info('2-step CASSCF converged in %d macro (%d JK %d micro) steps',
+        log.info('2-step CASSCF converged in %3d macro (%3d JK %3d micro) steps',
                  imacro, totinner, totmicro)
     else:
-        log.info('2-step CASSCF not converged, %d macro (%d JK %d micro) steps',
+        log.info('2-step CASSCF not converged, %3d macro (%3d JK %3d micro) steps',
                  imacro, totinner, totmicro)
 
     if casscf.canonicalization:

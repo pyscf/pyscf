@@ -15,6 +15,7 @@
 
 import numpy
 from pyscf import lib
+from pyscf.cc.bccd import bccd_kernel_
 
 def spatial2spin(tx, orbspin=None):
     '''Convert T1/T2 of spatial orbital representation to T1/T2 of
@@ -25,17 +26,20 @@ def spatial2spin(tx, orbspin=None):
         return spatial2spin((tx,tx), orbspin)
     elif isinstance(tx, numpy.ndarray) and tx.ndim == 4:
         # RCCSD t2 amplitudes
-        t2aa = tx - tx.transpose(0,1,3,2)
+        t2aa = tx - tx.transpose(1,0,2,3)
         return spatial2spin((t2aa,tx,t2aa), orbspin)
     elif len(tx) == 2:  # t1
         t1a, t1b = tx
         nocc_a, nvir_a = t1a.shape
         nocc_b, nvir_b = t1b.shape
-    else:
+    elif len(tx) == 3:  # t2
         t2aa, t2ab, t2bb = tx
         nocc_a, nocc_b, nvir_a, nvir_b = t2ab.shape
+    else:
+        raise RuntimeError('Unknown T amplitudes')
 
     if orbspin is None:
+        assert nocc_a == nocc_b
         orbspin = numpy.zeros((nocc_a+nvir_a)*2, dtype=int)
         orbspin[1::2] = 1
 
@@ -79,10 +83,14 @@ def spatial2spin(tx, orbspin=None):
 spatial2spinorb = spatial2spin
 
 def spin2spatial(tx, orbspin):
+    '''Convert T1/T2 in spin-orbital basis to T1/T2 in spatial orbital basis
+    '''
     if tx.ndim == 2:  # t1
         nocc, nvir = tx.shape
-    else:
+    elif tx.ndim == 4:
         nocc, nvir = tx.shape[1:3]
+    else:
+        raise RuntimeError('Unknown T amplitudes')
 
     idxoa = numpy.where(orbspin[:nocc] == 0)[0]
     idxob = numpy.where(orbspin[:nocc] == 1)[0]
@@ -123,8 +131,8 @@ def convert_to_uccsd(mycc):
 
     mf = scf.addons.convert_to_uhf(mycc._scf)
     ucc = uccsd.UCCSD(mf)
-    assert(mycc._nocc is None)
-    assert(mycc._nmo is None)
+    assert (mycc._nocc is None)
+    assert (mycc._nmo is None)
     ucc.__dict__.update(mycc.__dict__)
     ucc._scf = mf
     ucc.mo_coeff = mf.mo_coeff
@@ -142,8 +150,8 @@ def convert_to_gccsd(mycc):
 
     mf = scf.addons.convert_to_ghf(mycc._scf)
     gcc = gccsd.GCCSD(mf)
-    assert(mycc._nocc is None)
-    assert(mycc._nmo is None)
+    assert (mycc._nocc is None)
+    assert (mycc._nmo is None)
     gcc.__dict__.update(mycc.__dict__)
     gcc._scf = mf
     gcc.mo_coeff = mf.mo_coeff

@@ -88,8 +88,11 @@ Saved result
 '''
 
 from pyscf import scf, lib
-from pyscf.agf2 import aux, ragf2, uagf2, dfragf2, dfuagf2, ragf2_slow, uagf2_slow
-from pyscf.agf2.aux import AuxiliarySpace, GreensFunction, SelfEnergy
+from pyscf.agf2 import aux_space, ragf2, uagf2, dfragf2, dfuagf2, ragf2_slow, uagf2_slow
+from pyscf.agf2.aux_space import AuxiliarySpace, GreensFunction, SelfEnergy
+
+# Backwards compatibility:
+aux = aux_space
 
 
 def AGF2(mf, nmom=(None,0), frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):

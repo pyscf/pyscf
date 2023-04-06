@@ -75,6 +75,7 @@ from pyscf.cc import eom_rccsd
 from pyscf.cc import eom_uccsd
 from pyscf.cc import eom_gccsd
 from pyscf.cc import qcisd
+from pyscf.cc import momgfccsd
 from pyscf import scf
 
 def CCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -124,7 +125,9 @@ def UCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_uhf(mf)
 
     if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-UCCSD')
+        # TODO: DF-UCCSD with memory-efficient particle-particle ladder,
+        # similar to dfccsd.RCCSD
+        return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
     else:
         return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
 UCCSD.__doc__ = uccsd.UCCSD.__doc__
@@ -145,9 +148,9 @@ GCCSD.__doc__ = gccsd.GCCSD.__doc__
 
 def QCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if isinstance(mf, scf.uhf.UHF):
-        raise NotImplementedError 
+        raise NotImplementedError
     elif isinstance(mf, scf.ghf.GHF):
-        raise NotImplementedError 
+        raise NotImplementedError
     else:
         return RQCISD(mf, frozen, mo_coeff, mo_occ)
 QCISD.__doc__ = qcisd.QCISD.__doc__
@@ -165,13 +168,13 @@ def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         lib.logger.warn(mf, 'RQCISD method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UQCISD method is called.')
         mf = scf.addons.convert_to_uhf(mf)
-        raise NotImplementedError 
+        raise NotImplementedError
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
         mf = scf.addons.convert_to_rhf(mf)
 
     elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
-        raise NotImplementedError 
+        raise NotImplementedError
 
     else:
         return qcisd.QCISD(mf, frozen, mo_coeff, mo_occ)
@@ -210,3 +213,5 @@ def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None):
         return self
     mycc._finalize = _finalize.__get__(mycc, mycc.__class__)
     return mycc
+
+MomGFCCSD = momgfccsd.MomGFCCSD

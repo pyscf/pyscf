@@ -23,47 +23,49 @@ from pyscf import scf
 from pyscf import adc
 from pyscf import df
 
-r = 1.098
-mol = gto.Mole()
-mol.atom = [
-    ['N', ( 0., 0.    , -r/2   )],
-    ['N', ( 0., 0.    ,  r/2)],]
-mol.basis = {'N':'cc-pvdz'}
-mol.verbose = 0
-mol.build()
-mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
-mf.kernel()
-myadc = adc.ADC(mf)
-myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
+def setUpModule():
+    global mol, mf, myadc
+    r = 1.098
+    mol = gto.Mole()
+    mol.atom = [
+        ['N', (0., 0.    , -r/2   )],
+        ['N', (0., 0.    ,  r/2)],]
+    mol.basis = {'N':'cc-pvdz'}
+    mol.verbose = 0
+    mol.build()
+    mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
+    mf.kernel()
+    myadc = adc.ADC(mf)
+    myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
 
 def tearDownModule():
-    global mol,mf
-    del mol,mf
+    global mol, mf, myadc
+    del mol, mf, myadc
 
 class KnownValues(unittest.TestCase):
 
     def test_df_gs(self):
-  
+
         mf = scf.RHF(mol).run()
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.31081009625, 6)
 
     def test_dfhf_dfadc_gs(self):
-  
+
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.3108102956, 6)
 
     def test_dfadc3_ip(self):
-  
+
         myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         myadc.max_memory = 2
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
-        
+
         e,v,p,x = myadc.kernel(nroots=3)
-        e_corr = myadc.e_corr        
+        e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.3061165912 , 6)
 
@@ -76,7 +78,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.86389642, 6)
 
     def test_dfhf_dfadc2_ea(self):
-  
+
         myadc.max_memory = 20
         myadc.method = "adc(2)"
         myadc.method_type = "ea"
@@ -95,13 +97,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3], 1.88366005, 6)
 
     def test_hf_dfadc2_ea(self):
- 
+
         mf = scf.RHF(mol).run()
         myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         myadc.max_memory = 20
         myadc.method = "adc(2)"
         myadc.method_type = "ea"
-       
+
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 0.14265314, 6)
@@ -113,7 +115,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.86604908, 6)
         self.assertAlmostEqual(p[2], 1.92697854, 6)
         self.assertAlmostEqual(p[3], 1.88386011, 6)
-      
+
 
 if __name__ == "__main__":
     print("DF-ADC calculations for different RADC methods for nitrogen molecule")

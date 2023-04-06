@@ -458,8 +458,8 @@ def _new(shape, dtype, out):
     if out is None: # Incore:
         out = np.empty(shape, dtype=dtype)
     else:
-        assert(out.shape == shape)
-        assert(out.dtype == dtype)
+        assert (out.shape == shape)
+        assert (out.dtype == dtype)
     return out
 
 def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
@@ -678,7 +678,7 @@ def _add_pt2(pt2, nkpts, kconserv, kpt_indices, orb_indices, val):
         val (ndarray):
             Values to be added to pt2.
     '''
-    assert(len(orb_indices) == 4)
+    assert (len(orb_indices) == 4)
     ki, kj, ka = kpt_indices
     kb = kconserv[ki,ka,kj]
     idxi, idxj, idxa, idxb = [slice(None, None)
@@ -737,8 +737,8 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     # Create necessary temporary eris for fast read
     from pyscf.pbc.cc.kccsd_t_rhf import create_t3_eris, get_data_slices
     feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv, [eris.vovv, eris.oovv, eris.ooov, t2])
-    #t1T = np.array([x.T for x in t1], dtype=np.complex, order='C')
-    #fvo = np.array([x.T for x in fov], dtype=np.complex, order='C')
+    #t1T = np.array([x.T for x in t1], dtype=np.complex128, order='C')
+    #fvo = np.array([x.T for x in fov], dtype=np.complex128, order='C')
     cpu1 = logger.timer_debug1(mycc, 'CCSD(T) tmp eri creation', *cpu1)
 
     def get_w(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):

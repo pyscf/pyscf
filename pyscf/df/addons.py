@@ -23,6 +23,7 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
 from pyscf.data import elements
+from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf import __config__
 
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
@@ -56,8 +57,8 @@ DEFAULT_AUXBASIS = {
     'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
     'def2qzvpp'   : ('def2-qzvpp-jkfit'       , 'def2-qzvpp-ri'      ),
     'def2qzvppd'  : ('def2-qzvpp-jkfit'       , 'def2-qzvppd-ri'     ),
-    'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-rifit'     ),
-    '321g'        : ('def2-svp-jkfit'         , 'def2-svp-rifit'     ),
+    'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
+    '321g'        : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
     '631g'        : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
     '631+g'       : ('heavy-aug-cc-pvdz-jkfit', 'heavyaug-cc-pvdz-ri'),
     '631++g'      : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
@@ -132,7 +133,10 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
             for l, n in enumerate(numpy.ceil(ns).astype(int)):
                 if n > 0:
                     etb.append((l, n, emin_by_l[l], beta))
-            newbasis[symb] = gto.expand_etbs(etb)
+            if etb:
+                newbasis[symb] = gto.expand_etbs(etb)
+            else:
+                raise RuntimeError(f'Failed to generate even-tempered auxbasis for {symb}')
 
     return newbasis
 
@@ -151,7 +155,7 @@ def make_auxbasis(mol, mp2fit=False):
         default_basis = mol.basis['default']
         _basis = dict(((a, default_basis) for a in uniq_atoms))
         _basis.update(mol.basis)
-        del(_basis['default'])
+        del (_basis['default'])
     else:
         _basis = mol._basis
 
@@ -166,10 +170,16 @@ def make_auxbasis(mol, mp2fit=False):
                     auxb = DEFAULT_AUXBASIS[balias][1]
                 else:
                     auxb = DEFAULT_AUXBASIS[balias][0]
-                if auxb is not None and gto.basis.load(auxb, k):
-                    auxbasis[k] = auxb
-                    logger.info(mol, 'Default auxbasis %s is used for %s %s',
-                                auxb, k, _basis[k])
+                if auxb is not None:
+                    try:
+                        # Test if basis auxb for element k is available
+                        gto.basis.load(auxb, k)
+                    except BasisNotFoundError:
+                        pass
+                    else:
+                        auxbasis[k] = auxb
+                        logger.info(mol, 'Default auxbasis %s is used for %s %s',
+                                    auxb, k, _basis[k])
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS
@@ -210,11 +220,13 @@ def make_auxmol(mol, auxbasis=None):
         uniq_atoms = set([a[0] for a in mol._atom])
         _basis = dict(((a, auxbasis['default']) for a in uniq_atoms))
         _basis.update(auxbasis)
-        del(_basis['default'])
+        del (_basis['default'])
     else:
         _basis = auxbasis
     pmol._basis = pmol.format_basis(_basis)
 
+    # Note: To pass parameters like gauge origin, rsh-omega to auxmol,
+    # mol._env[:PTR_ENV_START] must be copied to auxmol._env
     pmol._atm, pmol._bas, pmol._env = \
             pmol.make_env(mol._atom, pmol._basis, mol._env[:gto.PTR_ENV_START])
     pmol._built = True
@@ -222,4 +234,4 @@ def make_auxmol(mol, auxbasis=None):
                  pmol.nbas, pmol.nao_nr())
     return pmol
 
-del(DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)
+del (DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)

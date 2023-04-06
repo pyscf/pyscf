@@ -37,21 +37,11 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         dm = numpy.asarray(dm)
     if dm.ndim == 2:  # RHF DM
         dm = numpy.asarray((dm*.5,dm*.5))
-    ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
+    ks.initialize_grids(mol, dm)
 
     t0 = (logger.process_clock(), logger.perf_counter())
 
-    if ks.grids.coords is None:
-        ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
-            ks.grids = rks.prune_small_rho_grids_(ks, mol, dm[0]+dm[1], ks.grids)
-        t0 = logger.timer(ks, 'setting up grids', *t0)
-    if ks.nlc != '':
-        if ks.nlcgrids.coords is None:
-            ks.nlcgrids.build(with_non0tab=True)
-            if ks.small_rho_cutoff > 1e-20 and ground_state:
-                ks.nlcgrids = rks.prune_small_rho_grids_(ks, mol, dm[0]+dm[1], ks.nlcgrids)
-            t0 = logger.timer(ks, 'setting up nlc grids', *t0)
+    ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
 
     ni = ks._numint
     if hermi == 2:  # because rho = 0
@@ -68,10 +58,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    #enabling range-separated hybrids
-    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
-
-    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
+    if not ni.libxc.is_hybrid_xc(ks.xc):
         vk = None
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
@@ -82,12 +69,13 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj = ks.get_j(mol, dm[0]+dm[1], hermi)
         vxc += vj
     else:
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vk', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
-            if abs(omega) > 1e-10:
+            if omega != 0:
                 vklr = ks.get_k(mol, ddm, hermi, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
@@ -97,7 +85,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, dm, hermi)
             vj = vj[0] + vj[1]
             vk *= hyb
-            if abs(omega) > 1e-10:
+            if omega != 0:
                 vklr = ks.get_k(mol, dm, hermi, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
@@ -179,6 +167,15 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
     def dump_flags(self, verbose=None):
         uhf.UHF.dump_flags(self, verbose)
         rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
+
+    def initialize_grids(self, mol=None, dm=None):
+        ground_state = (isinstance(dm, numpy.ndarray)
+                        and dm.ndim == 3 and dm.shape[0] == 2)
+        if ground_state:
+            super().initialize_grids(mol, dm[0]+dm[1])
+        else:
+            super().initialize_grids(mol)
         return self
 
     get_veff = get_veff

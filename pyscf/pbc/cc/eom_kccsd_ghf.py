@@ -96,7 +96,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
     if dtype is None:
         dtype = np.result_type(*imds.t1)
 
-    evals = np.zeros((len(kptlist),nroots), np.float)
+    evals = np.zeros((len(kptlist),nroots))
     evecs = np.zeros((len(kptlist),nroots,size), dtype)
     convs = np.zeros((len(kptlist),nroots), dtype)
 
@@ -160,7 +160,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
 
 def enforce_2p_spin_doublet(r2, kconserv, kshift, orbspin, excitation):
     '''Enforces condition that net spin can only change by +/- 1/2'''
-    assert(excitation in ['ip', 'ea'])
+    assert (excitation in ['ip', 'ea'])
     if excitation == 'ip':
         nkpts, nocc, nvir = np.array(r2.shape)[[1, 3, 4]]
     elif excitation == 'ea':
@@ -704,7 +704,7 @@ class EOMIP(eom_rccsd.EOMIP):
 
     def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.complex)
+        dtype = getattr(diag, 'dtype', np.complex128)
         nroots = min(nroots, size)
         guess = []
         if koopmans:
@@ -1221,7 +1221,7 @@ class EOMEA(eom_rccsd.EOMEA):
 
     def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.complex)
+        dtype = getattr(diag, 'dtype', np.complex128)
         nroots = min(nroots, size)
         guess = []
         if koopmans:
@@ -1749,7 +1749,7 @@ class EOMEE(eom_rccsd.EOM):
     def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None, **kwargs):
         """Initial guess vectors of R coefficients"""
         size = self.vector_size(kshift)
-        dtype = getattr(diag, 'dtype', np.complex)
+        dtype = getattr(diag, 'dtype', np.complex128)
         nroots = min(nroots, size)
         guess = []
         # TODO do Koopmans later

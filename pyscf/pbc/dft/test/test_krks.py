@@ -24,15 +24,6 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
 
 
-L = 4.
-cell = pbcgto.Cell()
-cell.verbose = 0
-cell.a = np.eye(3)*L
-cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
-cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
-cell.build()
-
-
 def build_cell(mesh):
     cell = pbcgto.Cell()
     cell.unit = 'A'
@@ -73,6 +64,16 @@ def make_primitive_cell(mesh):
     return cell
 
 
+def setUpModule():
+    global cell
+    L = 4.
+    cell = pbcgto.Cell()
+    cell.verbose = 0
+    cell.a = np.eye(3)*L
+    cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
+    cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+    cell.build()
+
 def tearDownModule():
     global cell
     del cell
@@ -84,6 +85,7 @@ class KnownValues(unittest.TestCase):
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
         #kmf.verbose = 7
+        mf.conv_tol = 1e-8
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -44.892502703975893, 8)
 
@@ -91,8 +93,10 @@ class KnownValues(unittest.TestCase):
         cell = build_cell([17]*3)
         abs_kpts = cell.make_kpts([2]*3, with_gamma_point=False)
         mf = pbcdft.KRKS(cell, abs_kpts)
+        mf.conv_tol=1e-9
         #mf.analytic_int = False
         mf.xc = 'lda,vwn'
+        mf.conv_tol = 1e-8
         #mf.verbose = 7
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -45.425834895129569, 8)
@@ -113,20 +117,24 @@ class KnownValues(unittest.TestCase):
         #mf.analytic_int = False
         mf.xc = 'lda,vwn'
         #mf.verbose = 7
+        mf.conv_tol = 1e-8
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -11.353643583707452, 8)
 
-    def test_rsh_df(self):
+    def test_rsh_fft(self):
         mf = pbcdft.KRKS(cell)
         mf.xc = 'camb3lyp'
+        mf.conv_tol = 1e-8
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.3032261128220544, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4745140703871877, 7)
 
+    def test_rsh_df(self):
         mf = pbcdft.KRKS(cell).density_fit()
         mf.xc = 'camb3lyp'
         mf.omega = .15
+        mf.conv_tol = 1e-8
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.3987656490734555, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 7)
 
 # TODO: test the reset method of pbcdft.KRKS, pbcdft.RKS whether the reset
 # methods of all subsequent objects are called

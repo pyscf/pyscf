@@ -130,25 +130,22 @@ A wrap function to create SCF class (RHF or UHF).\n
 ''' + hf.SCF.__doc__
 
 def RHF(mol, *args):
-    if mol.nelectron == 1:
-        if mol.symmetry:
-            return rhf_symm.HF1e(mol)
-        else:
-            return rohf.HF1e(mol)
-    elif not mol.symmetry or mol.groupname == 'C1':
-        if mol.spin > 0:
-            return rohf.ROHF(mol, *args)
-        else:
+    if mol.spin == 0:
+        if not mol.symmetry or mol.groupname == 'C1':
             return rhf.RHF(mol, *args)
-    else:
-        if mol.spin > 0:
-            return rhf_symm.ROHF(mol, *args)
         else:
             return rhf_symm.RHF(mol, *args)
+    else:
+        return ROHF(mol, *args)
 RHF.__doc__ = hf.RHF.__doc__
 
 def ROHF(mol, *args):
-    if not mol.symmetry or mol.groupname == 'C1':
+    if mol.nelectron == 1:
+        if not mol.symmetry or mol.groupname == 'C1':
+            return rohf.HF1e(mol)
+        else:
+            return hf_symm.HF1e(mol, *args)
+    elif not mol.symmetry or mol.groupname == 'C1':
         return rohf.ROHF(mol, *args)
     else:
         return hf_symm.ROHF(mol, *args)
@@ -167,7 +164,12 @@ def UHF(mol, *args):
 UHF.__doc__ = uhf.UHF.__doc__
 
 def GHF(mol, *args):
-    if not mol.symmetry or mol.groupname == 'C1':
+    if mol.nelectron == 1:
+        if not mol.symmetry or mol.groupname == 'C1':
+            return ghf.HF1e(mol)
+        else:
+            return ghf_symm.HF1e(mol, *args)
+    elif not mol.symmetry or mol.groupname == 'C1':
         return ghf.GHF(mol, *args)
     else:
         return ghf_symm.GHF(mol, *args)
@@ -184,11 +186,15 @@ DHF.__doc__ = dhf.DHF.__doc__
 
 
 def X2C(mol, *args):
-    '''X2C UHF (in testing)'''
+    '''X2C Hartree-Fock'''
     from pyscf.x2c import x2c
-    return x2c.UHF(mol, *args)
+    if dhf.zquatev and mol.spin == 0:
+        return x2c.RHF(mol, *args)
+    else:
+        return x2c.UHF(mol, *args)
 
 def sfx2c1e(mf):
+    '''spin-free (the scalar part) X2C with 1-electron X-matrix'''
     return mf.sfx2c1e()
 sfx2c = sfx2c1e
 
@@ -203,11 +209,11 @@ fast_newton = addons.fast_newton
 
 def KS(mol, *args):
     from pyscf import dft
-    return dft.KS(mol)
+    return dft.KS(mol, *args)
 
 def RKS(mol, *args):
     from pyscf import dft
-    return dft.RKS(mol)
+    return dft.RKS(mol, *args)
 
 def ROKS(mol, *args):
     from pyscf import dft

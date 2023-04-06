@@ -29,7 +29,8 @@ EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 libpbc = _pbcintor.libpbc
 
 def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
-             shls_slice=None, non0tab=None, ao_loc=None, out=None):
+             shls_slice=None, non0tab=None, ao_loc=None, cutoff=None,
+             out=None, Ls=None, rcut=None):
     r'''Evaluate PBC-AO function value on the given grids,
 
     Args:
@@ -62,6 +63,9 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`dft.gen_grid.make_mask`
+        cutoff : float
+            AO values smaller than cutoff will be set to zero. The default
+            cutoff threshold is ~1e-22 (defined in gto/grid_ao_drv.h)
         out : ndarray
             If provided, results are written into this array.
 
@@ -73,19 +77,19 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     Examples:
 
     >>> cell = pbc.gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g')
-    >>> coords = cell.get_uniform_grids([20,20,20])
+    >>> coords = cell.get_uniform_grids([10,10,10])
     >>> kpts = cell.make_kpts([3,3,3])
     >>> ao_value = cell.pbc_eval_gto("GTOval_sph", coords, kpts)
     >>> len(ao_value)
     27
     >>> ao_value[0].shape
-    (100, 2)
+    (1000, 2)
     >>> ao_value = cell.pbc_eval_gto("GTOval_ig_sph", coords, kpts, comp=3)
     >>> print(ao_value.shape)
     >>> len(ao_value)
     27
     >>> ao_value[0].shape
-    (3, 100, 2)
+    (3, 1000, 2)
     '''
     if eval_name[:3] == 'PBC':  # PBCGTOval_xxx
         eval_name, comp = _get_intor_and_comp(cell, eval_name[3:], comp)
@@ -112,7 +116,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
         non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
                               dtype=numpy.uint8)
 # non0tab stores the number of images to be summed in real space.
-# Initializing it to 255 means all images are summed
+# Initializing it to 255 means all images should be included
         non0tab[:] = 0xff
 
     if ao_loc is None:
@@ -127,26 +131,29 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
 
     # For atoms near the boundary of the cell, it is necessary (even in low-
     # dimensional systems) to include lattice translations in all 3 dimensions.
-    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-        Ls = cell.get_lattice_Ls(dimension=cell.dimension)
-    else:
-        Ls = cell.get_lattice_Ls(dimension=3)
-    Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
+    if Ls is None:
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            Ls = cell.get_lattice_Ls(dimension=cell.dimension)
+        else:
+            Ls = cell.get_lattice_Ls(dimension=3)
+        Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts_lst.T), order='C'))
-    rcut = _estimate_rcut(cell)
+    if rcut is None:
+        rcut = _estimate_rcut(cell)
 
-    drv = getattr(libpbc, eval_name)
-    drv(ctypes.c_int(ngrids),
-        (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
-        Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
-        expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
-        out.ctypes.data_as(ctypes.c_void_p),
-        coords.ctypes.data_as(ctypes.c_void_p),
-        rcut.ctypes.data_as(ctypes.c_void_p),
-        non0tab.ctypes.data_as(ctypes.c_void_p),
-        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-        env.ctypes.data_as(ctypes.c_void_p))
+    with cell.with_integral_screen(cutoff):
+        drv = getattr(libpbc, eval_name)
+        drv(ctypes.c_int(ngrids),
+            (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
+            Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
+            expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
+            out.ctypes.data_as(ctypes.c_void_p),
+            coords.ctypes.data_as(ctypes.c_void_p),
+            rcut.ctypes.data_as(ctypes.c_void_p),
+            non0tab.ctypes.data_as(ctypes.c_void_p),
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+            env.ctypes.data_as(ctypes.c_void_p))
 
     ao_kpts = []
     for k, kpt in enumerate(kpts_lst):
@@ -175,6 +182,7 @@ def _estimate_rcut(cell):
         cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
         r = 5.
         r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        r[r < 1.] = 1.
         r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
         rcut.append(r.max())
     return numpy.array(rcut)

@@ -32,7 +32,7 @@ from pyscf.sgx import sgx_jk
 from pyscf.df import df_jk
 from pyscf import __config__
 
-def sgx_fit(mf, auxbasis=None, with_df=None):
+def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding SGX or density fitting integrals.
 
@@ -44,6 +44,13 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
             Same format to the input attribute mol.basis.  If auxbasis is
             None, optimal auxiliary basis based on AO basis (if possible) or
             even-tempered Gaussian basis will be used.
+        with_df : SGX
+            Existing SGX object for the system.
+        pjs: bool
+            Whether to perform P-junction screening (screening matrix elements
+            by the density matrix). Default False. If True, dfj is set to True
+            automatically at the beginning of the calculation, as this screening
+            is only for K-matrix elements.
 
     Returns:
         An SCF object with a modified J, K matrix constructor which uses density
@@ -62,10 +69,10 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
     >>> mf.scf()
     -100.00978770951018
     '''
-    assert(isinstance(mf, scf.hf.SCF))
+    assert (isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
-        with_df = SGX(mf.mol)
+        with_df = SGX(mf.mol, pjs=pjs)
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout
         with_df.verbose = mf.verbose
@@ -90,18 +97,44 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
             self.with_df = df
 
             # Grids/Integral quality varies during SCF. VHF cannot be
-            # constructed incrementally.
+            # constructed incrementally through standard direct SCF.
             self.direct_scf = False
+            # Set direct_scf_sgx True to use direct SCF for each
+            # grid size with SGX.
+            self.direct_scf_sgx = False
+            # Set rebuild_nsteps to control how many direct SCF steps
+            # are taken between resets of the SGX JK matrix.
+            # Default 5, only used if direct_scf_sgx = True
+            self.rebuild_nsteps = 5
 
             self._last_dm = 0
+            self._last_vj = 0
+            self._last_vk = 0
             self._in_scf = False
-            self._keys = self._keys.union(['auxbasis', 'with_df'])
+            self._keys = self._keys.union(['auxbasis', 'with_df',
+                                           'direct_scf_sgx',
+                                           'rebuild_nsteps'])
 
         def build(self, mol=None, **kwargs):
+            if self.direct_scf_sgx:
+                self._nsteps_direct = 0
+                self._last_dm = 0
+                self._last_vj = 0
+                self._last_vk = 0
             if self.direct_scf:
                 self.with_df.build(level=self.with_df.grids_level_f)
             else:
                 self.with_df.build(level=self.with_df.grids_level_i)
+            if self.with_df.pjs:
+                if not self.with_df.dfj:
+                    import warnings
+                    msg = '''
+                    P-junction screening is not compatible with SGX J-matrix.
+                    Setting dfj = True. If you want to use SGX J-matrix,
+                    set pjs = False to turn off P-junction screening.
+                    '''
+                    warnings.warn(msg)
+                self.with_df.dfj = True # no SGX-J allowed if P-junction screening on
             return mf_class.build(self, mol, **kwargs)
 
         def reset(self, mol=None):
@@ -109,7 +142,9 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
             return mf_class.reset(self, mol)
 
         def pre_kernel(self, envs):
-            self._in_scf = True
+            self.direct_scf = False # should always be False
+            if self.with_df.grids_level_i != self.with_df.grids_level_f:
+                self._in_scf = True
 
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                    omega=None):
@@ -117,22 +152,50 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
             with_df = self.with_df
             if not with_df:
                 return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+            if self.opt is None and self.with_df.direct_j and (not self.with_df.dfj):
+                self.opt = self.init_direct_scf(mol)
 
             if self._in_scf and not self.direct_scf:
-                if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd:
+                if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd \
+                        and with_df.grids_level_f != with_df.grids_level_i:
+                    # only reset if grids_level_f and grids_level_i differ
                     logger.debug(self, 'Switching SGX grids')
                     with_df.build(level=with_df.grids_level_f)
+                    self._nsteps_direct = 0
                     self._in_scf = False
                     self._last_dm = 0
-                else:
-                    self._last_dm = numpy.asarray(dm)
+                    self._last_vj = 0
+                    self._last_vk = 0
 
-            return with_df.get_jk(dm, hermi, with_j, with_k,
-                                  self.direct_scf_tol, omega)
+            if self.direct_scf_sgx:
+                vj, vk = with_df.get_jk(dm-self._last_dm, hermi, self.opt,
+                                        with_j, with_k,
+                                        self.direct_scf_tol, omega)
+                vj += self._last_vj
+                vk += self._last_vk
+                self._last_dm = numpy.asarray(dm)
+                self._last_vj = vj.copy()
+                self._last_vk = vk.copy()
+                self._nsteps_direct += 1
+                if self.rebuild_nsteps > 0 and \
+                        self._nsteps_direct >= self.rebuild_nsteps:
+                    logger.debug(self, 'Resetting JK matrix')
+                    self._nsteps_direct = 0
+                    self._last_dm = 0
+                    self._last_vj = 0
+                    self._last_vk = 0
+            else:
+                self._last_dm = numpy.asarray(dm)
+                vj, vk = with_df.get_jk(dm, hermi, self.opt, with_j, with_k,
+                                        self.direct_scf_tol, omega)
+
+            return vj, vk
 
         def post_kernel(self, envs):
             self._in_scf = False
             self._last_dm = 0
+            self._last_vj = 0
+            self._last_vk = 0
 
         def nuc_grad_method(self):
             raise NotImplementedError
@@ -159,22 +222,26 @@ scf.hf.SCF.COSX = sgx_fit
 mcscf.casci.CASCI.COSX = sgx_fit
 
 
-def _make_opt(mol):
+def _make_opt(mol, pjs=False):
     '''Optimizer to genrate 3-center 2-electron integrals'''
-    intor = mol._add_suffix('int3c2e')
+    intor = mol._add_suffix('int1e_grids')
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, intor)
     # intor 'int1e_ovlp' is used by the prescreen method
     # 'SGXnr_ovlp_prescreen' only. Not used again in other places.
     # It can be released early
-    vhfopt = _vhf.VHFOpt(mol, 'int1e_ovlp', 'SGXnr_ovlp_prescreen',
-                         'SGXsetnr_direct_scf')
+    if pjs:
+        vhfopt = _vhf.SGXOpt(mol, 'int1e_ovlp', 'SGXnr_ovlp_prescreen',
+                             'SGXsetnr_direct_scf', 'SGXsetnr_direct_scf_dm')
+    else:
+        vhfopt = _vhf.VHFOpt(mol, 'int1e_ovlp', 'SGXnr_ovlp_prescreen',
+                             'SGXsetnr_direct_scf')
     vhfopt._intor = intor
     vhfopt._cintopt = cintopt
     return vhfopt
 
 
 class SGX(lib.StreamObject):
-    def __init__(self, mol, auxbasis=None):
+    def __init__(self, mol, auxbasis=None, pjs=False):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
@@ -186,7 +253,9 @@ class SGX(lib.StreamObject):
         # compute J matrix using DF and K matrix using SGX. It's identical to
         # the RIJCOSX method in ORCA
         self.dfj = False
+        self.direct_j = False
         self._auxbasis = auxbasis
+        self.pjs = pjs
 
         # debug=True generates a dense tensor of the Coulomb integrals at each
         # grids. debug=False utilizes the sparsity of the integral tensor and
@@ -219,7 +288,7 @@ class SGX(lib.StreamObject):
         log.info('grids_level_f = %s', self.grids_level_f)
         log.info('grids_thrd = %s', self.grids_thrd)
         log.info('grids_switch_thrd = %s', self.grids_switch_thrd)
-        log.info('df_j = %s', self.df_j)
+        log.info('dfj = %s', self.dfj)
         log.info('auxbasis = %s', self.auxbasis)
         return self
 
@@ -233,7 +302,7 @@ class SGX(lib.StreamObject):
         if level is None:
             level = self.grids_level_f
         self.grids = sgx_jk.get_gridss(self.mol, level, self.grids_thrd)
-        self._opt = _make_opt(self.mol)
+        self._opt = _make_opt(self.mol, pjs=self.pjs)
 
         # In the RSH-integral temporary treatment, recursively rebuild SGX
         # objects in _rsh_df.
@@ -257,7 +326,7 @@ class SGX(lib.StreamObject):
         self._rsh_df = {}
         return self
 
-    def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
+    def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True,
                direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
                omega=None):
         if omega is not None:
@@ -280,6 +349,13 @@ class SGX(lib.StreamObject):
 
         if with_j and self.dfj:
             vj = df_jk.get_j(self, dm, hermi, direct_scf_tol)
+            if with_k:
+                vk = sgx_jk.get_jk(self, dm, hermi, False, with_k, direct_scf_tol)[1]
+            else:
+                vk = None
+        elif with_j and self.direct_j:
+            vj, _ = _vhf.direct(dm, self.mol._atm, self.mol._bas, self.mol._env,
+                                vhfopt, hermi, self.mol.cart, True, False)
             if with_k:
                 vk = sgx_jk.get_jk(self, dm, hermi, False, with_k, direct_scf_tol)[1]
             else:

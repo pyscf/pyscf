@@ -28,6 +28,7 @@ try:
 except ImportError:
     optimize_contraction = lambda basis: basis
     remove_zero = lambda basis: basis
+from pyscf.lib.exceptions import BasisNotFoundError
 
 MAXL = 12
 SPDF = 'SPDFGHIJKLMN'
@@ -109,6 +110,8 @@ def _parse(raw_basis, optimize=True):
     basis_sorted = []
     for l in range(MAXL):
         basis_sorted.extend([b for b in basis_add if b[0] == l])
+    if not basis_sorted:
+        raise BasisNotFoundError(f'Basis data not found in "{raw_basis}"')
 
     if optimize:
         basis_sorted = optimize_contraction(basis_sorted)

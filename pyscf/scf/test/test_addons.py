@@ -22,38 +22,41 @@ from pyscf import gto, lib
 from pyscf import scf, dft
 from pyscf.scf import addons
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
 
-mol.basis = {"H": '6-31g',
-             "O": '6-31g',}
-mol.build()
-mf = scf.RHF(mol).run()
+def setUpModule():
+    global mol, mf, mol_dz, mol1, mf_u, mol2, sym_mf, mol3, sym_mf_u
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
 
-mol_dz = mol.copy()
-mol_dz.basis = 'cc-pvdz'
-mol_dz.cart = True
-mol_dz.build(False, False)
+    mol.basis = {"H": '6-31g',
+                 "O": '6-31g',}
+    mol.build()
+    mf = scf.RHF(mol).run()
 
-mol1 = mol.copy()
-mol1.spin = 2
-mf_u = scf.UHF(mol1).run()
+    mol_dz = mol.copy()
+    mol_dz.basis = 'cc-pvdz'
+    mol_dz.cart = True
+    mol_dz.build(False, False)
 
-mol2 = mol.copy()
-mol2.symmetry = True
-mol2.build(0,0)
-sym_mf = scf.RHF(mol2).run()
+    mol1 = mol.copy()
+    mol1.spin = 2
+    mf_u = scf.UHF(mol1).run()
 
-mol3 = mol1.copy()
-mol3.symmetry = True
-mol3.spin = 2
-mol3.build(0,0)
-sym_mf_u = scf.UHF(mol3).run()
+    mol2 = mol.copy()
+    mol2.symmetry = True
+    mol2.build(0,0)
+    sym_mf = scf.RHF(mol2).run()
+
+    mol3 = mol1.copy()
+    mol3.symmetry = True
+    mol3.spin = 2
+    mol3.build(0,0)
+    sym_mf_u = scf.UHF(mol3).run()
 
 def tearDownModule():
     global mol, mf, mol_dz, mol1, mf_u, mol2, sym_mf, mol3, sym_mf_u
@@ -263,9 +266,18 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol)
         mf = addons.dynamic_level_shift(mf)
         mf.init_guess = 'hcore'
+        mf.diis = False
         mf.max_cycle = 4
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -75.868344714445342, 9)
+        self.assertAlmostEqual(mf.e_tot, -75.91511679613092, 9)
+
+        mf = dft.UKS(mol)
+        mf = addons.dynamic_level_shift(mf)
+        mf.init_guess = 'hcore'
+        mf.max_cycle = 2
+        mf.diis = False
+        mf.kernel()
+        self.assertAlmostEqual(mf.scf(), -71.6072956194109, 8)
 
     def test_convert_to_scf(self):
         from pyscf.x2c import x2c
@@ -273,13 +285,13 @@ class KnownValues(unittest.TestCase):
         from pyscf.soscf import newton_ah
         addons.convert_to_rhf(dft.RKS(mol))
         addons.convert_to_uhf(dft.RKS(mol))
-        #addons.convert_to_ghf(dft.RKS(mol))
+        addons.convert_to_ghf(dft.RKS(mol))
         addons.convert_to_rhf(dft.UKS(mol))
         addons.convert_to_uhf(dft.UKS(mol))
-        #addons.convert_to_ghf(dft.UKS(mol))
+        addons.convert_to_ghf(dft.UKS(mol))
         #addons.convert_to_rhf(dft.GKS(mol))
         #addons.convert_to_uhf(dft.GKS(mol))
-        #addons.convert_to_ghf(dft.GKS(mol))
+        addons.convert_to_ghf(dft.GKS(mol))
 
         self.assertTrue(isinstance(addons.convert_to_rhf(mf), scf.rhf.RHF))
         self.assertTrue(isinstance(addons.convert_to_uhf(mf), scf.uhf.UHF))
@@ -405,4 +417,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for addons")
     unittest.main()
-

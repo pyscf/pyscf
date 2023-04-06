@@ -36,9 +36,8 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(KeyError, gto.basis._parse_pople_basis, '631g++', 'C')
 
     def test_basis_load(self):
-        self.assertEqual(gto.basis.load(__file__, 'H'), [])
+        self.assertRaises(BasisNotFoundError, gto.basis.load, __file__, 'H')
         self.assertRaises(BasisNotFoundError, gto.basis.load, 'abas', 'H')
-        #self.assertRaises(BasisNotFoundError, gto.basis.load(__file__, 'C'), [])
 
         self.assertEqual(len(gto.basis.load('631++g**', 'C')), 8)
         self.assertEqual(len(gto.basis.load('ccpcvdz', 'C')), 7)

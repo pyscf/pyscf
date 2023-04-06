@@ -289,8 +289,8 @@ class Cube(object):
 
     def write(self, field, fname, comment=None):
         """  Result: .cube file with the field in the file fname.  """
-        assert(field.ndim == 3)
-        assert(field.shape == (self.nx, self.ny, self.nz))
+        assert (field.ndim == 3)
+        assert (field.shape == (self.nx, self.ny, self.nz))
         if comment is None:
             comment = 'Generic field? Supply the optional argument "comment" to define this line'
 
@@ -301,7 +301,10 @@ class Cube(object):
             f.write(f'PySCF Version: {pyscf.__version__}  Date: {time.ctime()}\n')
             f.write(f'{mol.natm:5d}')
             f.write('%12.6f%12.6f%12.6f\n' % tuple(self.boxorig.tolist()))
-            delta = (self.box.T * [self.xs[1], self.ys[1], self.zs[1]]).T
+            dx = self.xs[-1] if len(self.xs) == 1 else self.xs[1]
+            dy = self.ys[-1] if len(self.ys) == 1 else self.ys[1]
+            dz = self.zs[-1] if len(self.zs) == 1 else self.zs[1]
+            delta = (self.box.T * [dx,dy,dz]).T
             f.write(f'{self.nx:5d}{delta[0,0]:12.6f}{delta[0,1]:12.6f}{delta[0,2]:12.6f}\n')
             f.write(f'{self.ny:5d}{delta[1,0]:12.6f}{delta[1,1]:12.6f}{delta[1,2]:12.6f}\n')
             f.write(f'{self.nz:5d}{delta[2,0]:12.6f}{delta[2,1]:12.6f}{delta[2,2]:12.6f}\n')
@@ -324,11 +327,22 @@ class Cube(object):
             natm = int(data[0])
             self.boxorig = numpy.array([float(x) for x in data[1:]])
             def parse_nx(data):
+                from pyscf.pbc.gto import Cell
                 d = data.split()
-                return int(d[0]), numpy.array([float(x) for x in d[1:]])
-            self.nx, self.xs = parse_nx(f.readline())
-            self.ny, self.ys = parse_nx(f.readline())
-            self.nz, self.zs = parse_nx(f.readline())
+                nx = int(d[0])
+                x_vec = numpy.array([float(x) for x in d[1:]]) * nx
+                if isinstance(self.mol, Cell):
+                    # Use an asymmetric mesh for tiling unit cells
+                    xs = numpy.linspace(0, 1, nx, endpoint=False)
+                else:
+                    # Use endpoint=True to get a symmetric mesh
+                    # see also the discussion https://github.com/sunqm/pyscf/issues/154
+                    xs = numpy.linspace(0, 1, nx, endpoint=True)
+                return x_vec, nx, xs
+            self.box = numpy.zeros((3,3))
+            self.box[0], self.nx, self.xs = parse_nx(f.readline())
+            self.box[1], self.ny, self.ys = parse_nx(f.readline())
+            self.box[2], self.nz, self.zs = parse_nx(f.readline())
             atoms = []
             for ia in range(natm):
                 d = f.readline().split()

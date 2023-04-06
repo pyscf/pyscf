@@ -167,19 +167,19 @@ class UCCSD(ccsd.CCSD):
     def nip(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        self._nip = nocc + nocc*(nocc-1)/2*nvir
+        self._nip = nocc + nocc*(nocc-1)//2*nvir
         return self._nip
 
     def nea(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        self._nea = nvir + nocc*nvir*(nvir-1)/2
+        self._nea = nvir + nocc*nvir*(nvir-1)//2
         return self._nea
 
     def nee(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        self._nee = nocc*nvir + nocc*(nocc-1)/2*nvir*(nvir-1)/2
+        self._nee = nocc*nvir + nocc*(nocc-1)//2*nvir*(nvir-1)//2
         return self._nee
 
     def ipccsd_matvec(self, vector):
@@ -253,7 +253,7 @@ class UCCSD(ccsd.CCSD):
     def amplitudes_to_vector_ip(self,r1,r2):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        size = nocc + nocc*(nocc-1)/2*nvir
+        size = nocc + nocc*(nocc-1)//2*nvir
         vector = np.zeros(size, r1.dtype)
         vector[:nocc] = r1.copy()
         index = nocc
@@ -338,7 +338,7 @@ class UCCSD(ccsd.CCSD):
     def amplitudes_to_vector_ea(self,r1,r2):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        size = nvir + nvir*(nvir-1)/2*nocc
+        size = nvir + nvir*(nvir-1)//2*nocc
         vector = np.zeros(size, r1.dtype)
         vector[:nvir] = r1.copy()
         index = nvir
@@ -450,7 +450,7 @@ class UCCSD(ccsd.CCSD):
     def amplitudes_to_vector_ee(self,r1,r2):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        size = nocc*nvir + nocc*(nocc-1)/2*nvir*(nvir-1)/2
+        size = nocc*nvir + nocc*(nocc-1)//2*nvir*(nvir-1)//2
         vector = np.zeros(size, r1.dtype)
         vector[:nocc*nvir] = r1.copy().reshape(nocc*nvir)
         index = nocc*nvir
@@ -505,7 +505,7 @@ class _PhysicistsERIs:
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             eri = ao2mofn(cc._scf.mol, (so_coeff,so_coeff,so_coeff,so_coeff), compact=0)
-            if mo_coeff[0].dtype == np.float: eri = eri.real
+            if mo_coeff[0].dtype == np.double: eri = eri.real
             eri = eri.reshape((nmo,)*4)
             for i in range(nmo):
                 for j in range(i):
@@ -527,7 +527,7 @@ class _PhysicistsERIs:
             self.feri1 = lib.H5TmpFile()
             orbo = so_coeff[:,:nocc]
             orbv = so_coeff[:,nocc:]
-            if mo_coeff[0].dtype == np.complex: ds_type = 'c16'
+            if mo_coeff[0].dtype == np.complex128: ds_type = 'c16'
             else: ds_type = 'f8'
             self.oooo = self.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), ds_type)
             self.ooov = self.feri1.create_dataset('ooov', (nocc,nocc,nocc,nvir), ds_type)
@@ -540,7 +540,7 @@ class _PhysicistsERIs:
             cput1 = logger.process_clock(), logger.perf_counter()
             # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbo,so_coeff), compact=0)
-            if mo_coeff[0].dtype == np.float: buf = buf.real
+            if mo_coeff[0].dtype == np.double: buf = buf.real
             buf = buf.reshape((nocc,nmo,nocc,nmo))
             for i in range(nocc):
                 for p in range(nmo):
@@ -558,7 +558,7 @@ class _PhysicistsERIs:
             cput1 = logger.process_clock(), logger.perf_counter()
             # <ia||pq> = <ia|pq> - <ia|qp> = (ip|aq) - (iq|ap)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbv,so_coeff), compact=0)
-            if mo_coeff[0].dtype == np.float: buf = buf.real
+            if mo_coeff[0].dtype == np.double: buf = buf.real
             buf = buf.reshape((nocc,nmo,nvir,nmo))
             for p in range(nmo):
                 for i in range(nocc):
@@ -577,7 +577,7 @@ class _PhysicistsERIs:
             for a in range(nvir):
                 orbva = orbv[:,a].reshape(-1,1)
                 buf = ao2mofn(cc._scf.mol, (orbva,orbv,orbv,orbv), compact=0)
-                if mo_coeff[0].dtype == np.float: buf = buf.real
+                if mo_coeff[0].dtype == np.double: buf = buf.real
                 buf = buf.reshape((1,nvir,nvir,nvir))
                 for b in range(nvir):
                     if spin[nocc+a] != spin[nocc+b]:

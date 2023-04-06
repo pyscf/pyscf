@@ -94,7 +94,8 @@ def get_vmat(mf, mfset, disp):
     return np.asarray(vmat)
 
 def kernel(mf, disp=1e-4, mo_rep=False, cutoff_frequency=CUTOFF_FREQUENCY, keep_imag_frequency=KEEP_IMAG_FREQUENCY):
-    if hasattr(mf, 'xc'): mf.grids.build()
+    if isinstance(mf, scf.hf.KohnShamDFT):
+        mf.grids.build()
     if not mf.converged: mf.kernel()
     RESTRICTED = (mf.mo_coeff.ndim==2)
     mol = mf.mol
@@ -138,7 +139,7 @@ if __name__ == '__main__':
     grad = mf.nuc_grad_method().kernel()
     print("Force on the atoms/au:")
     print(grad)
-    assert(abs(grad).max()<1e-5)
+    assert (abs(grad).max()<1e-5)
 
     mat, omega = kernel(mf)
     matmo, _ = kernel(mf, mo_rep=True)

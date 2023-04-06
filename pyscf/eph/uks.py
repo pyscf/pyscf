@@ -102,8 +102,8 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc)
                        for i in range(4)]
             for ia in range(mol.natm):
-                wva = dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices)
-                wvb = dR_rho1b = rks_hess._make_dR_rho1(ao, ao_dm0b, ia, aoslices)
+                wva = dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices, xctype)
+                wvb = dR_rho1b = rks_hess._make_dR_rho1(ao, ao_dm0b, ia, aoslices, xctype)
                 wva[0], wvb[0] = numint._uks_gga_wv1((rhoa,rhob), (dR_rho1a[0],dR_rho1b[0]), vxc, fxc, weight)
                 wva[1], wvb[1] = numint._uks_gga_wv1((rhoa,rhob), (dR_rho1a[1],dR_rho1b[1]), vxc, fxc, weight)
                 wva[2], wvb[2] = numint._uks_gga_wv1((rhoa,rhob), (dR_rho1a[2],dR_rho1b[2]), vxc, fxc, weight)
@@ -136,6 +136,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omg, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
     vnuc_deriv = ephobj.vnuc_generator(mol)
     aoslices = mol.aoslice_by_atom()
@@ -161,7 +162,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         v1 = vind(moia)
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
-        if abs(hyb)>1e-10:
+        if hybrid:
             vja, vjb, vka, vkb = \
                     rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
                                      ['ji->s2kl', -dm0a[:,p0:p1], #vja
@@ -171,7 +172,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
                                      shls_slice=shls_slice)
             vhfa = vja + vjb - hyb * vka
             vhfb = vjb + vja - hyb * vkb
-            if abs(omg) > 1e-10:
+            if omg != 0:
                 with mol.with_range_coulomb(omg):
                     vka, vkb = \
                         rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',

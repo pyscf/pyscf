@@ -40,10 +40,10 @@ class load(object):
             feri = self.feri = h5py.File(self.eri, 'r')
         elif isinstance(self.eri, h5py.Group):
             feri = self.eri
+        elif isinstance(self.eri, (numpy.ndarray, h5py.Dataset)):
+            return self.eri
         elif isinstance(getattr(self.eri, 'name', None), str):
             feri = self.feri = h5py.File(self.eri.name, 'r')
-        elif isinstance(self.eri, numpy.ndarray):
-            return self.eri
         else:
             raise RuntimeError('Unknown eri type %s', type(self.eri))
 

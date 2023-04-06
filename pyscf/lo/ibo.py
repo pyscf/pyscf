@@ -77,7 +77,7 @@ def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None,
     if locmethod == 'PM':
         EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', exponent)
         ibos = PipekMezey(mol, orbocc, iaos, s, exponent=EXPONENT, minao=minao)
-        del(EXPONENT)
+        del (EXPONENT)
     else:
         ibos = ibo_loc(mol, orbocc, iaos, s, exponent=exponent,
                        grad_tol=grad_tol, max_iter=max_iter,
@@ -114,7 +114,7 @@ def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
         IBOs in the big basis (the basis defined in mol object).
     '''
     log = logger.new_logger(mol, verbose)
-    assert(exponent in (2, 4))
+    assert (exponent in (2, 4))
 
     # Symmetrically orthogonalization of the IAO orbitals as Knizia's
     # implementation.  The IAO returned by iao.iao function is not orthogonal.
@@ -287,26 +287,26 @@ def MakeAtomInfos():
     for At in "Li Be B C O N F Ne".split(): nCoreX[At] = 1
     for At in "Na Mg Al Si P S Cl Ar".split(): nCoreX[At] = 5
     for At in "Na Mg Al Si P S Cl Ar".split(): nCoreX[At] = 5
-    for At in "K Ca".split(): nCoreX[At] = 18/2
-    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nCoreX[At] = 18/2
-    for At in "Ga Ge As Se Br Kr".split(): nCoreX[At] = 18/2+5 # [Ar] and the 5 d orbitals.
+    for At in "K Ca".split(): nCoreX[At] = 18//2
+    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nCoreX[At] = 18//2
+    for At in "Ga Ge As Se Br Kr".split(): nCoreX[At] = 18//2 + 5  # [Ar] and the 5d orbitals.
     nAoX = {"H": 1, "He": 1}
     for At in "Li Be".split(): nAoX[At] = 2
     for At in "B C O N F Ne".split(): nAoX[At] = 5
     for At in "Na Mg".split(): nAoX[At] = 3*1 + 1*3
     for At in "Al Si P S Cl Ar".split(): nAoX[At] = 3*1 + 2*3
-    for At in "K Ca".split(): nAoX[At] = 18/2+1
-    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nAoX[At] = 18/2+1+5   # 4s, 3d
-    for At in "Ga Ge As Se Br Kr".split(): nAoX[At] = 18/2+1+5+3
+    for At in "K Ca".split(): nAoX[At] = 18//2 + 1
+    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nAoX[At] = 18//2 + 1 + 5  # 4s, 3d
+    for At in "Ga Ge As Se Br Kr".split(): nAoX[At] = 18//2 + 1 + 5 + 3
 
     AoLabels = {}
 
     def SetAo(At, AoDecl):
         Labels = AoDecl.split()
         AoLabels[At] = Labels
-        assert(len(Labels) == nAoX[At])
+        assert (len(Labels) == nAoX[At])
         nCore = len([o for o in Labels if o.startswith('[')])
-        assert(nCore == nCoreX[At])
+        assert (nCore == nCoreX[At])
 
     # atomic orbitals in the MINAO basis: [xx] denotes core orbitals.
     for At in "H He".split(): SetAo(At, "1s")
@@ -405,4 +405,4 @@ def MakeAtomIbOffsets(Atoms):
         iBfAt.append(iBfAt[-1] + nAoX[Atom])
     return iBfAt, nCoreX, nAoX, AoLabels
 
-del(MINAO)
+del (MINAO)

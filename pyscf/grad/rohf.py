@@ -38,6 +38,14 @@ def make_rdm1e(mf_grad, mo_energy, mo_coeff, mo_occ):
     rdm1e_b = reduce(numpy.dot, (mocc_b, mocc_b.conj().T, fb, mocc_b, mocc_b.conj().T))
     return numpy.array((rdm1e_a, rdm1e_b))
 
+def _tag_rdm1 (self, dm, mo_coeff, mo_occ):
+    mo_coeff = numpy.stack ((mo_coeff,mo_coeff), axis=0)
+    mo_occa = numpy.array (mo_occ>0, dtype=numpy.double)
+    mo_occb = numpy.array (mo_occ==2, dtype=numpy.double)
+    assert (mo_occa.sum () + mo_occb.sum () == mo_occ.sum())
+    mo_occ = numpy.vstack ((mo_occa,mo_occb))
+    return lib.tag_array (dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
+
 class Gradients(rhf_grad.Gradients):
     '''Non-relativistic restricted open-shell Hartree-Fock gradients
     '''
@@ -48,54 +56,9 @@ class Gradients(rhf_grad.Gradients):
 
     grad_elec = uhf_grad.grad_elec
 
+    _tag_rdm1 = _tag_rdm1
+
 Grad = Gradients
 
 from pyscf import scf
 scf.rohf.ROHF.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.atom = [['He', (0.,0.,0.)], ]
-    mol.basis = {'He': 'ccpvdz'}
-    mol.build()
-    mf = scf.ROHF(mol)
-    mf.scf()
-    g = mf.Gradients()
-    print(g.grad())
-
-    mol = gto.Mole()
-    mol.atom = [
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    mol.basis = '631g'
-    mol.build()
-    rhf = scf.ROHF(mol)
-    rhf.conv_tol = 1e-14
-    e0 = rhf.scf()
-    g = Gradients(rhf)
-    print(g.grad())
-#[[ 0   0               -2.41134256e-02]
-# [ 0   4.39690522e-03   1.20567128e-02]
-# [ 0  -4.39690522e-03   1.20567128e-02]]
-
-    mol = gto.Mole()
-    mol.atom = [
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    mol.basis = '631g'
-    mol.charge = 1
-    mol.spin = 1
-    mol.build()
-    rhf = scf.ROHF(mol)
-    rhf.conv_tol = 1e-14
-    e0 = rhf.scf()
-    g = Gradients(rhf)
-    print(g.grad())
-#[[ 0   0                3.27774948e-03]
-# [ 0   4.28113397e-02  -1.40822936e-03]
-# [ 0  -4.28113397e-02  -1.40822936e-03]]

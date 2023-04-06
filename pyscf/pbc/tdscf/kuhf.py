@@ -22,24 +22,15 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.tdscf import uhf
 from pyscf.pbc import scf
-from pyscf.pbc.tdscf.krhf import _get_e_ia, purify_krlyov_heff
+from pyscf.pbc.tdscf.krhf import KTDMixin, _get_e_ia, purify_krlyov_heff
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)
-POSTIVE_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_positive_eig_threshold', 1e-3)
 
-class TDA(uhf.TDA):
-
+class TDA(KTDMixin):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
-
-    def __init__(self, mf):
-        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
-        assert(isinstance(mf, scf.khf.KSCF))
-        self.cell = mf.cell
-        uhf.TDA.__init__(self, mf)
-        warn_pbc2d_eri(mf)
 
     def gen_vind(self, mf):
         '''Compute Ax'''
@@ -130,7 +121,7 @@ class TDA(uhf.TDA):
             x0 = self.init_guess(self._scf, self.nstates)
 
         def pickeig(w, v, nroots, envs):
-            idx = numpy.where(w > POSTIVE_EIG_THRESHOLD)[0]
+            idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
 
         log = logger.Logger(self.stdout, self.verbose)
@@ -232,7 +223,7 @@ class TDHF(TDA):
     def init_guess(self, mf, nstates=None, wfnsym=None):
         x0 = TDA.init_guess(self, mf, nstates)
         y0 = numpy.zeros_like(x0)
-        return numpy.hstack((x0,y0))
+        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
 
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -251,7 +242,7 @@ class TDHF(TDA):
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
-                                  (w.real > POSTIVE_EIG_THRESHOLD))[0]
+                                  (w.real > self.positive_eig_threshold))[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         log = logger.Logger(self.stdout, self.verbose)

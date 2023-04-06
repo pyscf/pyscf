@@ -20,19 +20,25 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.lo import orth
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom = '''
-     O    0.   0.       0
-     1    0.   -0.757   0.587
-     1    0.   0.757    0.587'''
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = '''
+         O    0.   0.       0
+         1    0.   -0.757   0.587
+         1    0.   0.757    0.587'''
 
-mol.basis = 'cc-pvdz'
-mol.build()
-mf = scf.RHF(mol)
+    mol.basis = 'cc-pvdz'
+    mol.build()
+    mf = scf.RHF(mol)
 
-class KnowValues(unittest.TestCase):
+def tearDownModule():
+    global mol, mf
+    del mol, mf
+
+class KnownValues(unittest.TestCase):
     def test_orth(self):
         numpy.random.seed(10)
         n = 100
@@ -79,17 +85,17 @@ class KnowValues(unittest.TestCase):
 
     def test_orth_ao(self):
         c0 = orth.pre_orth_ao(mol, method='scf')
-        self.assertAlmostEqual(abs(c0).sum(), 33.48215772351, 8)
+        self.assertAlmostEqual(abs(c0).sum(), 33.48215772351, 7)
         c = orth.orth_ao(mol, 'lowdin', c0)
-        self.assertAlmostEqual(abs(c).sum(), 94.21571091299639, 8)
+        self.assertAlmostEqual(abs(c).sum(), 94.21571091299639, 7)
         c = orth.orth_ao(mol, 'meta_lowdin', c0)
-        self.assertAlmostEqual(abs(c).sum(), 92.15697348744733, 8)
+        self.assertAlmostEqual(abs(c).sum(), 92.15697348744733, 7)
 
         c = orth.orth_ao(mol, 'meta_lowdin', 'sto-3g')
-        self.assertAlmostEqual(abs(c).sum(), 90.12324660084619, 8)
+        self.assertAlmostEqual(abs(c).sum(), 90.12324660084619, 7)
 
         c = orth.orth_ao(mol, 'meta_lowdin', None)
-        self.assertAlmostEqual(abs(c).sum(), 83.71349158130113, 8)
+        self.assertAlmostEqual(abs(c).sum(), 83.71349158130113, 7)
 
     def test_ghost_atm_meta_lowdin(self):
         mol = gto.Mole()

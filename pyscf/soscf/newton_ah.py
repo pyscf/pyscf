@@ -31,7 +31,7 @@ from pyscf.lib import logger
 from pyscf.scf import chkfile
 from pyscf.scf import addons
 from pyscf.scf import hf_symm, uhf_symm, ghf_symm
-from pyscf.scf import hf, rohf, uhf
+from pyscf.scf import hf, rohf, uhf, dhf
 # import _response_functions to load gen_response methods in SCF class
 from pyscf.scf import _response_functions  # noqa
 from pyscf.soscf import ciah
@@ -279,7 +279,7 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
 def gen_g_hop_dhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
-                  with_symmetry=True):
+                  with_symmetry=False):
     return gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao, h1e, with_symmetry)
 
 
@@ -351,6 +351,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
             x0_guess = dxi
         g_orb = g_kf
         norm_gorb = norm_gkf
+        problem_size = g_orb.size
 
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
         # increase the AH accuracy when approach convergence
@@ -374,13 +375,13 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                 (seig < mf.ah_lindep)):
                 imic += 1
                 dxmax = numpy.max(abs(dxi))
-                if dxmax > mf.max_stepsize:
+                if ihop == problem_size:
+                    log.debug1('... Hx=g fully converged for small systems')
+                elif dxmax > mf.max_stepsize:
                     scale = mf.max_stepsize / dxmax
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
                     hdxi *= scale
-                else:
-                    scale = None
 
                 dr = dr + dxi
                 g_orb = g_orb + hdxi
@@ -576,10 +577,22 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
             mf.dump_chk(locals())
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d KF %d JK',
              imacro+1, e_tot, norm_gorb, kftot+1, jktot+1)
-    if (numpy.any(mo_occ==0) and
-        mo_energy[mo_occ>0].max() > mo_energy[mo_occ==0].min()):
+
+    homo = lumo = None
+    if isinstance(mf, dhf.DHF):
+        n2c = mo_energy.size // 2
+        pos_mo_energy = mo_energy[n2c:]
+        pos_mo_occ = mo_occ[n2c:]
+        if numpy.any(pos_mo_occ==0):
+            homo = pos_mo_energy[pos_mo_occ>0].max()
+            lumo = pos_mo_energy[pos_mo_occ==0].min()
+    else:
+        if numpy.any(mo_occ==0):
+            homo = mo_energy[mo_occ>0].max()
+            lumo = mo_energy[mo_occ==0].min()
+    if lumo is not None and homo > lumo:
         log.warn('HOMO %s > LUMO %s was found in the canonicalized orbitals.',
-                 mo_energy[mo_occ>0].max(), mo_energy[mo_occ==0].min())
+                 homo, lumo)
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
 # Note which function that "density_fit" decorated.  density-fit have been
@@ -781,7 +794,7 @@ def newton(mf):
     if isinstance(mf, _CIAH_SOSCF):
         return mf
 
-    assert(isinstance(mf, hf.SCF))
+    assert (isinstance(mf, hf.SCF))
     if mf.__doc__ is None:
         mf_doc = ''
     else:
@@ -894,7 +907,7 @@ def newton(mf):
                 nvir = nmo - nocc
                 dx = dx.reshape(nvir, nocc)
                 dx_aa = dx[::2,::2]
-                dr_aa = hf.unpack_uniq_var(dx_aa.ravel, mo_occ[::2])
+                dr_aa = hf.unpack_uniq_var(dx_aa.ravel(), mo_occ[::2])
                 u = numpy.zeros((nmo, nmo), dtype=dr_aa.dtype)
                 # Allows only the rotation within the up-up space and down-down space
                 u[::2,::2] = u[1::2,1::2] = expmat(dr_aa)
@@ -926,11 +939,24 @@ def newton(mf):
             gen_g_hop = gen_g_hop_rhf
         return SecondOrderRHF(mf)
 
+def remove_soscf(mf):
+    '''Remove the SOSCF decorator'''
+    if not isinstance(mf, _CIAH_SOSCF):
+        return mf
+
+    for cls in mf.__class__.__mro__:
+        if not issubclass(cls, _CIAH_SOSCF):
+            break
+    mf = mf.view(cls)
+    if hasattr(mf, '_scf'):
+        delattr(mf, '_scf')
+    return mf
+
 SVD_TOL = getattr(__config__, 'soscf_newton_ah_effective_svd_tol', 1e-5)
 def _effective_svd(a, tol=SVD_TOL):
     w = numpy.linalg.svd(a)[1]
     return w[(tol<w) & (w<1-tol)]
-del(SVD_TOL)
+del (SVD_TOL)
 
 def _force_SO3_degeneracy_(dr, orbsym):
     '''Force orbitals of same angular momentum to use the same rotation matrix'''

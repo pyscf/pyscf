@@ -39,7 +39,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'C2v')
-        self.assertTrue(geom.check_given_symm('C2v', atoms))
+        self.assertTrue(geom.check_symm('C2v', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0], [1, 4], [2, 3], [5, 6]])
 
@@ -52,7 +52,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'C2v')
-        self.assertTrue(geom.check_given_symm('C2v', atoms))
+        self.assertTrue(geom.check_symm('C2v', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0,2],[1],[3,4],[5,6]])
 
@@ -65,7 +65,7 @@ class KnownValues(unittest.TestCase):
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0,3],[1,2,4,5],[6,7]])
-        self.assertTrue(geom.check_given_symm('D2h', atoms))
+        self.assertTrue(geom.check_symm('D2h', atoms))
 
     def test_d6h_1(self):
         atoms = ringhat(6, u)
@@ -79,7 +79,7 @@ class KnownValues(unittest.TestCase):
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0,3],[1,2,4,5],[6,7]])
-        self.assertTrue(geom.check_given_symm('D2h', atoms, basis))
+        self.assertTrue(geom.check_symm('D2h', atoms, basis))
 
     def test_c2v(self):
         atoms = ringhat(6, u)
@@ -93,7 +93,17 @@ class KnownValues(unittest.TestCase):
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 3], [1, 2], [4, 5], [6, 7]])
-        self.assertTrue(geom.check_given_symm('C2', atoms, basis))
+        self.assertTrue(geom.check_symm('C2', atoms, basis))
+
+    def test_c2v_planar_mole(self):
+        atoms = [
+            ['O', [0, 0, 0.1197]],
+            ['H', [0, 0.7616, -0.4786]],
+            ['H', [0,-0.7616, -0.4786]],
+        ]
+        gpname, orig, axes = geom.detect_symm(atoms, {'O': 'sto3g', 'H': 'sto3g'})
+        self.assertEqual(gpname, 'C2v')
+        self.assertAlmostEqual(abs(axes - numpy.diag(axes.diagonal())).max(), 0, 12)
 
     def test_s4(self):
         atoms = [['C', (  0.5,   0    ,   1)],
@@ -110,7 +120,7 @@ class KnownValues(unittest.TestCase):
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 2], [1, 3], [4, 6], [5, 7]])
-        self.assertTrue(geom.check_given_symm('C2', atoms))
+        self.assertTrue(geom.check_symm('C2', atoms))
 
     def test_s6(self):
         rotz = random_rotz()
@@ -133,7 +143,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'Cs')
-        self.assertTrue(geom.check_given_symm('Cs', atoms))
+        self.assertTrue(geom.check_symm('Cs', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10,11]])
 
@@ -152,7 +162,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'Cs')
-        self.assertTrue(geom.check_given_symm('Cs', atoms))
+        self.assertTrue(geom.check_symm('Cs', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 4], [1, 3], [2], [5]])
 
@@ -165,7 +175,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'Ci')
-        self.assertTrue(geom.check_given_symm('Ci', atoms))
+        self.assertTrue(geom.check_symm('Ci', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 55], [1, 56], [2, 57], [3, 58], [4, 59],
                           [5, 30], [6, 31], [7, 32], [8, 33], [9, 34],
@@ -184,7 +194,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'Ci')
-        self.assertTrue(geom.check_given_symm('Ci', atoms))
+        self.assertTrue(geom.check_symm('Ci', atoms))
 
     def test_ih3(self):
         coords1 = numpy.dot(make20(1.5), u)
@@ -195,7 +205,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'Ci')
-        self.assertTrue(geom.check_given_symm('Ci', atoms))
+        self.assertTrue(geom.check_symm('Ci', atoms))
 
     def test_ih4(self):
         coords1 = make12(1.5)
@@ -206,7 +216,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'Ci')
-        self.assertTrue(geom.check_given_symm('Ci', atoms))
+        self.assertTrue(geom.check_symm('Ci', atoms))
 
     def test_d5d_1(self):
         coords1 = numpy.dot(make20(2.0), u)
@@ -234,7 +244,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'D2h')
-        self.assertTrue(geom.check_given_symm('D2h', atoms))
+        self.assertTrue(geom.check_symm('D2h', atoms))
 
     def test_oh2(self):
         coords1 = numpy.dot(make8(1.5), u)
@@ -245,7 +255,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'D2h')
-        self.assertTrue(geom.check_given_symm('D2h', atoms))
+        self.assertTrue(geom.check_symm('D2h', atoms))
 
     def test_oh3(self):
         coords1 = numpy.dot(make8(1.5), u)
@@ -257,7 +267,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'D2h')
-        self.assertTrue(geom.check_given_symm('D2h', atoms))
+        self.assertTrue(geom.check_symm('D2h', atoms))
 
     def test_c4h(self):
         coords1 = numpy.dot(make8(1.5), u)
@@ -324,7 +334,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'D2')
-        self.assertTrue(geom.check_given_symm('D2', atoms))
+        self.assertTrue(geom.check_symm('D2', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 1, 2, 3]])
 
@@ -338,7 +348,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'D2')
-        self.assertTrue(geom.check_given_symm('D2', atoms))
+        self.assertTrue(geom.check_symm('D2', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 1, 2, 3], [4, 5, 6, 7]])
 
@@ -367,7 +377,7 @@ class KnownValues(unittest.TestCase):
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'Cs')
-        self.assertTrue(geom.check_given_symm('Cs', atoms))
+        self.assertTrue(geom.check_symm('Cs', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 1], [2], [3], [4, 5], [6], [7]])
 
@@ -409,7 +419,7 @@ H   2.041481  -0.080642  -0.024174''')
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'D2')
-        self.assertTrue(geom.check_given_symm('D2', atoms))
+        self.assertTrue(geom.check_symm('D2', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 4, 8, 12], [1, 5, 11, 15],
                           [2, 6, 10, 13], [3, 7, 9, 14]])
@@ -453,7 +463,7 @@ H   2.041481  -0.080642  -0.024174''')
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'D2')
-        self.assertTrue(geom.check_given_symm('D2', atoms))
+        self.assertTrue(geom.check_symm('D2', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 8, 20, 28], [1, 9, 23, 31],
                           [2, 10, 22, 29], [3, 11, 21, 30],
@@ -478,10 +488,13 @@ H   2.041481  -0.080642  -0.024174''')
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'Dooh')
-        self.assertTrue(geom.check_given_symm('Dooh', atoms, basis))
-        self.assertTrue(geom.check_given_symm('D2h', atoms, basis))
+        self.assertTrue(geom.check_symm('Dooh', atoms, basis))
+        self.assertTrue(geom.check_symm('D2h', atoms, basis))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0], [1,2]])
+
+        atoms = [['H', (0,0,0)], ['H', (1,0,0)]]
+        self.assertFalse(geom.check_symm('Dooh', atoms))
 
     def test_Coov(self):
         atoms = [['H', (0,0,0)], ['H', (0,0,-1)], ['H1', (0,0,1)]]
@@ -494,8 +507,8 @@ H   2.041481  -0.080642  -0.024174''')
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'Coov')
-        self.assertTrue(geom.check_given_symm('Coov', atoms, basis))
-        self.assertTrue(geom.check_given_symm('C2v', atoms, basis))
+        self.assertTrue(geom.check_symm('Coov', atoms, basis))
+        self.assertTrue(geom.check_symm('C2v', atoms, basis))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0], [1], [2]])
 
@@ -511,7 +524,7 @@ H   2.041481  -0.080642  -0.024174''')
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'C2')
-        self.assertTrue(geom.check_given_symm('C2', atoms))
+        self.assertTrue(geom.check_symm('C2', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 5], [1, 9], [2, 8], [3, 7], [4, 6]])
 
@@ -527,7 +540,7 @@ H   2.041481  -0.080642  -0.024174''')
         gpname, axes = geom.subgroup(gpname, axes)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(gpname, 'C2h')
-        self.assertTrue(geom.check_given_symm('C2h', atoms))
+        self.assertTrue(geom.check_symm('C2h', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 3, 5, 7], [1, 2, 8, 9], [4, 6]])
 
@@ -539,7 +552,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'C2v')
         atoms = geom.shift_atom(atoms, orig, axes)
-        self.assertTrue(geom.check_given_symm('C2v', atoms))
+        self.assertTrue(geom.check_symm('C2v', atoms))
         self.assertEqual(geom.symm_identical_atoms(l,atoms), [[0,2],[1,3]])
 
     def test_detect_symm_d2h_a(self):
@@ -550,7 +563,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'D2h')
         atoms = geom.shift_atom(atoms, orig, axes)
-        self.assertTrue(geom.check_given_symm('D2h', atoms))
+        self.assertTrue(geom.check_symm('D2h', atoms))
         self.assertEqual(geom.symm_identical_atoms(l,atoms),
                          [[0, 3], [1, 2]])
 
@@ -562,7 +575,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'D2h')
         atoms = geom.shift_atom(atoms, orig, axes)
-        self.assertTrue(geom.check_given_symm('D2h', atoms))
+        self.assertTrue(geom.check_symm('D2h', atoms))
         self.assertEqual(geom.symm_identical_atoms(l,atoms), [[0,2],[1,3]])
 
     def test_detect_symm_c2h_a(self):
@@ -574,7 +587,7 @@ H   2.041481  -0.080642  -0.024174''')
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'C2h')
         self.assertEqual(geom.symm_identical_atoms(l,atoms), [[0,2],[1,3]])
-        self.assertTrue(geom.check_given_symm('C2h', atoms))
+        self.assertTrue(geom.check_symm('C2h', atoms))
 
     def test_detect_symm_c2h(self):
         atoms = [['H' , (1., 0., 2.)],
@@ -587,7 +600,7 @@ H   2.041481  -0.080642  -0.024174''')
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'C2h')
         self.assertEqual(geom.symm_identical_atoms(l,atoms), [[0,4],[1,5],[2,3]])
-        self.assertTrue(geom.check_given_symm('C2h', atoms))
+        self.assertTrue(geom.check_symm('C2h', atoms))
 
         atoms = [['H' , (1., 0., 1.)],
                  ['H' , (1., 0.,-1.)],
@@ -600,7 +613,7 @@ H   2.041481  -0.080642  -0.024174''')
         self.assertEqual(l, 'C2h')
         self.assertEqual(geom.symm_identical_atoms(l,atoms),
                          [[0, 1], [2, 3], [4, 5]])
-        self.assertTrue(geom.check_given_symm('C2h', atoms))
+        self.assertTrue(geom.check_symm('C2h', atoms))
 
     def test_detect_symm_d2_a(self):
         atoms = [['H' , (1., 0., 1.)],
@@ -612,7 +625,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'D2d')
         atoms = geom.shift_atom(atoms, orig, axes)
-        self.assertTrue(geom.check_given_symm('D2', atoms))
+        self.assertTrue(geom.check_symm('D2', atoms))
         self.assertEqual(geom.symm_identical_atoms('D2', atoms),
                          [[0, 1], [2, 3, 4, 5]])
 
@@ -627,7 +640,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'D2')
         atoms = geom.shift_atom(atoms, orig, axes)
-        self.assertTrue(geom.check_given_symm('D2', atoms))
+        self.assertTrue(geom.check_symm('D2', atoms))
         self.assertEqual(geom.symm_identical_atoms(l,atoms),
                          [[0, 1], [2, 3, 4, 5]])
 
@@ -643,7 +656,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'S4')
         atoms = geom.shift_atom(atoms, orig, axes)
-        self.assertTrue(geom.check_given_symm('C2', atoms))
+        self.assertTrue(geom.check_symm('C2', atoms))
         self.assertEqual(geom.symm_identical_atoms('C2',atoms),
                          [[0, 1], [2, 3], [4, 5], [6, 7]])
 
@@ -659,7 +672,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'Ci')
-        self.assertTrue(geom.check_given_symm('Ci', atoms))
+        self.assertTrue(geom.check_symm('Ci', atoms))
         self.assertEqual(geom.symm_identical_atoms(l,atoms),
                          [[0, 4], [1, 5], [2, 6], [3, 7]])
 
@@ -671,7 +684,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'Cs')
-        self.assertTrue(geom.check_given_symm('Cs', atoms))
+        self.assertTrue(geom.check_symm('Cs', atoms))
         self.assertEqual(geom.symm_identical_atoms(l,atoms),
                          [[0], [1], [2], [3]])
 
@@ -687,7 +700,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'Cs')
-        self.assertTrue(geom.check_given_symm('Cs', atoms))
+        self.assertTrue(geom.check_symm('Cs', atoms))
         self.assertEqual(geom.symm_identical_atoms(l,atoms),
                          [[0], [1], [2], [3], [4, 5]])
 
@@ -703,7 +716,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'Cs')
-        self.assertTrue(geom.check_given_symm('Cs', atoms))
+        self.assertTrue(geom.check_symm('Cs', atoms))
         self.assertEqual(geom.symm_identical_atoms(l,atoms),
                          [[0], [1], [2], [3], [4, 5]])
 
@@ -715,7 +728,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'C1')
-        self.assertTrue(geom.check_given_symm('C1', atoms))
+        self.assertTrue(geom.check_symm('C1', atoms))
         self.assertEqual(geom.symm_identical_atoms(l,atoms),
                          [[0], [1], [2], [3]])
 
@@ -727,7 +740,7 @@ H   2.041481  -0.080642  -0.024174''')
         l, orig, axes = geom.detect_symm(atoms)
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertEqual(l, 'C2')
-        self.assertTrue(geom.check_given_symm('C2', atoms))
+        self.assertTrue(geom.check_symm('C2', atoms))
         self.assertEqual(geom.symm_identical_atoms(l,atoms), [[0,1],[2,3]])
 
     def test_detect_symm_d3d(self):
@@ -835,7 +848,7 @@ H   2.041481  -0.080642  -0.024174''')
             ['O'   , ( 0.0,   1.3,   0.0)],]
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'C2v')
-        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5)
+        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5, 9)
 
         atoms = [
             ['Fe'  , ( 0.0,   0.0,   0.0)],
@@ -845,7 +858,7 @@ H   2.041481  -0.080642  -0.024174''')
             ['O'   , ( 0.0,   1.3,   0.0)],]
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'C2v')
-        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5)
+        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5, 9)
 
         atoms = [
             ['Fe'  , ( 0.0,   0.0,   0.0)],
@@ -855,13 +868,23 @@ H   2.041481  -0.080642  -0.024174''')
             ['O'   , ( 0.0,   1.3,   0.0)],]
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'C2v')
-        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5)
+        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5, 9)
 
     def test_sort_coords(self):
         c = numpy.random.random((5,3))
         c0 = symm.sort_coords(c)
         idx = symm.argsort_coords(c)
         self.assertAlmostEqual(abs(c[idx] - c0).max(), 0, 9)
+
+    def test_c2v_shifted(self):
+        atoms = [
+            ["C", [1.0000000, 0.0000000, 0.1238210]],
+            ["H", [1.0000000, 0.9620540, -0.3714630]],
+            ["H", [1.0000000, -0.9620540, -0.3714630]],
+        ]
+        l, orig, axes = geom.detect_symm(atoms)
+        self.assertEqual(l, 'C2v')
+        self.assertAlmostEqual(abs(axes - numpy.diag(axes.diagonal())).max(), 0, 9)
 
 
 def ring(n, start=0):
@@ -1018,4 +1041,3 @@ def random_rotz(seed=19):
 if __name__ == "__main__":
     print("Full Tests geom")
     unittest.main()
-

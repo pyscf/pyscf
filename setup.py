@@ -28,6 +28,8 @@ CLASSIFIERS = [
 'Programming Language :: Python :: 3.7',
 'Programming Language :: Python :: 3.8',
 'Programming Language :: Python :: 3.9',
+'Programming Language :: Python :: 3.10',
+'Programming Language :: Python :: 3.11',
 'Topic :: Software Development',
 'Topic :: Scientific/Engineering',
 'Operating System :: POSIX',
@@ -57,16 +59,17 @@ def get_version():
 VERSION = get_version()
 
 EXTRAS = {
-    'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2'],
-    'dftd3': ['pyscf-dftd3'],
-    'dmrgscf': ['pyscf-dmrgscf'],
+    'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2', 'pyscf-qsdopt'],
+    #'dmrgscf': ['pyscf-dmrgscf'],
     'doci': ['pyscf-doci'],
     'icmpspt': ['pyscf-icmpspt'],
     'properties': ['pyscf-properties'],
     'semiempirical': ['pyscf-semiempirical'],
     'shciscf': ['pyscf-shciscf'],
     'cppe': ['cppe'],
-    'pyqmc':['pyqmc'],
+    'pyqmc': ['pyqmc'],
+    'mcfun': ['mcfun>=0.2.1'],
+    'bse': ['basis-set-exchange'],
 }
 EXTRAS['all'] = [p for extras in EXTRAS.values() for p in extras]
 # extras which should not be installed by "all" components
@@ -91,7 +94,9 @@ class CMakeBuildExt(build_ext):
         self.spawn(cmd)
 
         self.announce('Building binaries', level=3)
-        cmd = ['cmake', '--build', self.build_temp, '-j']
+        # Do not use high level parallel compilation. OOM may be triggered
+        # when compiling certain functionals in libxc.
+        cmd = ['cmake', '--build', self.build_temp, '-j2']
         build_args = os.getenv('CMAKE_BUILD_ARGS')
         if build_args:
             cmd.extend(build_args.split(' '))
@@ -118,10 +123,24 @@ from distutils.command.build import build
 build.sub_commands = ([c for c in build.sub_commands if c[0] == 'build_ext'] +
                       [c for c in build.sub_commands if c[0] != 'build_ext'])
 
+# scipy bugs
+# https://github.com/scipy/scipy/issues/12533
+_scipy_version = 'scipy!=1.5.0,!=1.5.1'
+import sys
+if sys.platform == 'darwin':
+    if sys.version_info < (3, 8):
+        _scipy_version = 'scipy<=1.1.0'
+    else:
+        print('scipy>1.1.0 may crash when calling scipy.linalg.eigh. '
+              '(Issues https://github.com/scipy/scipy/issues/15362 '
+              'https://github.com/scipy/scipy/issues/16151)')
+
 setup(
     name=NAME,
     version=VERSION,
     description=DESCRIPTION,
+    long_description_content_type="text/markdown",
+    long_description=DESCRIPTION,
     url=URL,
     download_url=DOWNLOAD_URL,
     license=LICENSE,
@@ -137,8 +156,8 @@ setup(
     # The ext_modules placeholder is to ensure build_ext getting initialized
     ext_modules=[Extension('pyscf_lib_placeholder', [])],
     cmdclass={'build_ext': CMakeBuildExt},
-    install_requires=['numpy>1.8,!=1.16,!=1.17',
-                      'scipy!=1.5.0,!=1.5.1',
-                      'h5py>=2.6'],
+    install_requires=['numpy>=1.13,!=1.16,!=1.17',
+                      _scipy_version,
+                      'h5py>=2.7'],
     extras_require=EXTRAS,
 )

@@ -46,16 +46,16 @@ def reorder_rdm(rdm1, rdm2, inplace=False):
 
 # dm[p,q] = <|q^+ p|>
 def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
-    assert(cibra is not None and ciket is not None)
+    assert (cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
         neleca, nelecb = _unpack_nelec(nelec)
-        assert(neleca == nelecb)
+        assert (neleca == nelecb)
         link_index = cistring.gen_linkstr_index(range(norb), neleca)
     na, nlink = link_index.shape[:2]
-    assert(cibra.size == na**2)
-    assert(ciket.size == na**2)
+    assert (cibra.size == na**2)
+    assert (ciket.size == na**2)
     rdm1 = numpy.empty((norb,norb))
     fn = getattr(librdm, fname)
     fn(rdm1.ctypes.data_as(ctypes.c_void_p),
@@ -76,7 +76,7 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
 def make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
     if link_index is None:
         neleca, nelecb = _unpack_nelec(nelec)
-        assert(neleca == nelecb)
+        assert (neleca == nelecb)
         link_index = cistring.gen_linkstr_index(range(norb), neleca)
     link_index = (link_index, link_index)
     return make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index, symm)
@@ -89,7 +89,7 @@ make_rdm12 = make_rdm12_ms0
 # nelec and link_index are tuples of (alpha,beta)
 #
 def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
-    assert(cibra is not None and ciket is not None)
+    assert (cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
@@ -101,8 +101,8 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
         link_indexa, link_indexb = link_index
     na,nlinka = link_indexa.shape[:2]
     nb,nlinkb = link_indexb.shape[:2]
-    assert(cibra.size == na*nb)
-    assert(ciket.size == na*nb)
+    assert (cibra.size == na*nb)
+    assert (ciket.size == na*nb)
     rdm1 = numpy.empty((norb,norb))
     fn = getattr(librdm, fname)
     fn(rdm1.ctypes.data_as(ctypes.c_void_p),
@@ -121,7 +121,7 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
 # symm = 1: bra, ket symmetry
 # symm = 2: particle permutation symmetry
 def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
-    assert(cibra is not None and ciket is not None)
+    assert (cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
@@ -133,8 +133,8 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
         link_indexa, link_indexb = link_index
     na,nlinka = link_indexa.shape[:2]
     nb,nlinkb = link_indexb.shape[:2]
-    assert(cibra.size == na*nb)
-    assert(ciket.size == na*nb)
+    assert (cibra.size == na*nb)
+    assert (ciket.size == na*nb)
     rdm1 = numpy.empty((norb,norb))
     rdm2 = numpy.empty((norb,norb,norb,norb))
     librdm.FCIrdm12_drv(getattr(librdm, fname),
@@ -176,8 +176,8 @@ def make_dm123(fname, cibra, ciket, norb, nelec):
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     na,nlinka = link_indexa.shape[:2]
     nb,nlinkb = link_indexb.shape[:2]
-    assert(cibra.size == na*nb)
-    assert(ciket.size == na*nb)
+    assert (cibra.size == na*nb)
+    assert (ciket.size == na*nb)
     rdm1 = numpy.empty((norb,)*2)
     rdm2 = numpy.empty((norb,)*4)
     rdm3 = numpy.empty((norb,)*6)
@@ -245,8 +245,8 @@ def make_dm1234(fname, cibra, ciket, norb, nelec):
     link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
     na,nlinka = link_indexa.shape[:2]
     nb,nlinkb = link_indexb.shape[:2]
-    assert(cibra.size == na*nb)
-    assert(ciket.size == na*nb)
+    assert (cibra.size == na*nb)
+    assert (ciket.size == na*nb)
     rdm1 = numpy.empty((norb,)*2)
     rdm2 = numpy.empty((norb,)*4)
     rdm3 = numpy.empty((norb,)*6)

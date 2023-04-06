@@ -60,8 +60,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
     t0 = (logger.process_clock(), logger.perf_counter())
 
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
+    hybrid = ks._numint.libxc.is_hybrid_xc(ks.xc)
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
@@ -86,21 +85,28 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
     else:
-        n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 0,
-                                        kpts, kpts_band)
+        max_memory = ks.max_memory - lib.current_memory()[0]
+        n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, hermi,
+                                        kpts, kpts_band, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    weight = 1./len(kpts)
+    nkpts = len(kpts)
+    weight = 1. / nkpts
     if not hybrid:
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         vxc += vj
     else:
-        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
+        omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+        if getattr(ks.with_df, '_j_only', False) and nkpts > 1: # for GDF and MDF
             ks.with_df._j_only = False
+            if ks.with_df._cderi is not None:
+                logger.warn(ks, 'df.j_only cannot be used with hybrid '
+                            'functional. Rebuild cderi')
+                ks.with_df.build()
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vk *= hyb
-        if abs(omega) > 1e-10:
+        if omega != 0:
             vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
             vklr *= (alpha - hyb)
             vk += vklr
@@ -128,8 +134,22 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
         rho = mf._numint.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
     return rho
 
+def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
+    if h1e_kpts is None: h1e_kpts = mf.get_hcore(mf.cell, mf.kpts)
+    if dm_kpts is None: dm_kpts = mf.make_rdm1()
+    if vhf is None or getattr(vhf, 'ecoul', None) is None:
+        vhf = mf.get_veff(mf.cell, dm_kpts)
 
-class KRKS(rks.KohnShamDFT, khf.KRHF):
+    weight = 1./len(h1e_kpts)
+    e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
+    tot_e = e1 + vhf.ecoul + vhf.exc
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['coul'] = vhf.ecoul.real
+    mf.scf_summary['exc'] = vhf.exc.real
+    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+    return tot_e.real, vhf.ecoul + vhf.exc
+
+class KRKS(khf.KRHF, rks.KohnShamDFT):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
@@ -143,25 +163,11 @@ class KRKS(rks.KohnShamDFT, khf.KRHF):
         return self
 
     get_veff = get_veff
-
-    def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):
-        if h1e_kpts is None: h1e_kpts = self.get_hcore(self.cell, self.kpts)
-        if dm_kpts is None: dm_kpts = self.make_rdm1()
-        if vhf is None or getattr(vhf, 'ecoul', None) is None:
-            vhf = self.get_veff(self.cell, dm_kpts)
-
-        weight = 1./len(h1e_kpts)
-        e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
-        tot_e = e1 + vhf.ecoul + vhf.exc
-        self.scf_summary['e1'] = e1.real
-        self.scf_summary['coul'] = vhf.ecoul.real
-        self.scf_summary['exc'] = vhf.exc.real
-        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-        return tot_e.real, vhf.ecoul + vhf.exc
-
+    energy_elec = energy_elec
     get_rho = get_rho
 
     density_fit = rks._patch_df_beckegrids(khf.KRHF.density_fit)
+    rs_density_fit = rks._patch_df_beckegrids(khf.KRHF.rs_density_fit)
     mix_density_fit = rks._patch_df_beckegrids(khf.KRHF.mix_density_fit)
 
     def nuc_grad_method(self):

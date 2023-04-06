@@ -203,7 +203,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
-    if any(c.dtype == numpy.complex for c in mo_coeffs):
+    if any(c.dtype == numpy.complex128 for c in mo_coeffs):
         raise NotImplementedError('Integral transformation for complex orbitals')
 
     time_0pass = (logger.process_clock(), logger.perf_counter())
@@ -215,7 +215,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     nao = mo_coeffs[0].shape[0]
 
     intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)
-    assert(nao == mol.nao_nr('_cart' in intor))
+    assert (nao == mol.nao_nr('_cart' in intor))
 
     aosym = _stand_sym_code(aosym)
     if aosym in ('s4', 's2kl'):
@@ -240,11 +240,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         if h5py.is_hdf5(erifile):
             feri = h5py.File(erifile, 'a')
             if dataname in feri:
-                del(feri[dataname])
+                del (feri[dataname])
         else:
             feri = h5py.File(erifile, 'w')
     else:
-        assert(isinstance(erifile, h5py.Group))
+        assert (isinstance(erifile, h5py.Group))
         feri = erifile
 
     if comp == 1:
@@ -394,7 +394,7 @@ def half_e1(mol, mo_coeffs, swapfile,
         None
 
     '''
-    if any(c.dtype == numpy.complex for c in mo_coeffs):
+    if any(c.dtype == numpy.complex128 for c in mo_coeffs):
         raise NotImplementedError('Integral transformation for complex orbitals')
 
     intor = mol._add_suffix(intor)
@@ -774,7 +774,7 @@ def balance_partition(ao_loc, blksize, start_id=0, stop_id=None):
         tasks.append((i0, i1, ao_loc[i1]-ao_loc[i0]))
     return tasks
 
-del(MAX_MEMORY)
+del (MAX_MEMORY)
 
 
 if __name__ == '__main__':

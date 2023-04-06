@@ -49,7 +49,7 @@ def contract_1e(h1e, fcivec, norb, nelec, link_index=None):
 
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert(fcivec.size == na*nb)
+    assert (fcivec.size == na*nb)
     ci1 = numpy.zeros_like(fcivec)
 
     libfci.FCIcontract_a_1e_nosym(h1e.ctypes.data_as(ctypes.c_void_p),
@@ -68,7 +68,7 @@ def contract_1e(h1e, fcivec, norb, nelec, link_index=None):
                                   ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                                   link_indexa.ctypes.data_as(ctypes.c_void_p),
                                   link_indexb.ctypes.data_as(ctypes.c_void_p))
-    return ci1
+    return ci1.view(direct_spin1.FCIvector)
 
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     r'''Contract the 2-electron Hamiltonian with a FCI vector to get a new FCI
@@ -100,7 +100,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert(fcivec.size == na*nb)
+    assert (fcivec.size == na*nb)
     ci1 = numpy.empty_like(fcivec)
 
     libfci.FCIcontract_2es1(eri.ctypes.data_as(ctypes.c_void_p),
@@ -111,7 +111,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                             ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                             link_indexa.ctypes.data_as(ctypes.c_void_p),
                             link_indexb.ctypes.data_as(ctypes.c_void_p))
-    return ci1
+    return ci1.view(direct_spin1.FCIvector)
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
@@ -132,6 +132,8 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index)
     return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
+
+make_hdiag = direct_spin1.make_hdiag
 
 
 class FCISolver(direct_spin1.FCISolver):

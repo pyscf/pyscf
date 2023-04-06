@@ -24,14 +24,16 @@ from pyscf import gto
 from pyscf import ao2mo
 from pyscf.ao2mo import semi_incore
 
-mol = gto.Mole()
-mol.atom = [
-    ['H' , (0. , 0. , .917)],
-    ['F' , (0. , 0. , 0.)], ]
-mol.basis = '6311g'
-mol.build()
-nao = mol.nao_nr()
-eri = mol.intor('int2e_sph', aosym='s8')
+def setUpModule():
+    global mol, nao, eri
+    mol = gto.Mole()
+    mol.atom = [
+        ['H' , (0. , 0. , .917)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol.basis = '6311g'
+    mol.build()
+    nao = mol.nao_nr()
+    eri = mol.intor('int2e_sph', aosym='s8')
 
 def tearDownModule():
     global mol, eri

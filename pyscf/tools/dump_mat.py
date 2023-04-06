@@ -152,7 +152,7 @@ def dump_rec(stdout, c, label=None, label2=None,
         else:
             stdout.write(((' '*(digits+10))+'%s\n') % ' '.join(label2[ic:ic+m]))
             for k, v in enumerate(dc):
-                stdout.write(('%12s' % label[k]) + (fmt % tuple(v)))
+                stdout.write(('%-14s' % label[k]) + (fmt % tuple(v)))
 
 def dump_mo(mol, c, label=None,
             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=BASE):
@@ -190,7 +190,7 @@ def dump_mo(mol, c, label=None,
         label = mol.ao_labels()
     dump_rec(mol.stdout, c, label, None, ncol, digits, start)
 
-del(BASE)
+del (BASE)
 
 
 if __name__ == '__main__':

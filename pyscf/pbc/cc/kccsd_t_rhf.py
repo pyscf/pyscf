@@ -89,7 +89,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
     mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
-    mo_energy = np.asarray([eris.mo_energy[ki] for ki in range(nkpts)], dtype=np.float, order='C')
+    mo_energy = np.asarray([eris.mo_energy[ki] for ki in range(nkpts)],
+                           dtype=np.double, order='C')
     fov = eris.fock[:, :nocc, nocc:]
 
     mo_e = mo_energy
@@ -101,8 +102,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     # Create necessary temporary eris for fast read
     feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv, [eris.vovv, eris.oovv, eris.ooov, t2])
-    t1T = np.array([x.T for x in t1], dtype=np.complex, order='C')
-    fvo = np.array([x.T for x in fov], dtype=np.complex, order='C')
+    t1T = np.array([x.T for x in t1], dtype=np.complex128, order='C')
+    fvo = np.array([x.T for x in fov], dtype=np.complex128, order='C')
     cpu1 = log.timer_debug1('CCSD(T) tmp eri creation', *cpu1)
 
     #def get_w_old(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1, out=None):
@@ -193,33 +194,33 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
         mo_offset = np.array([ki,kj,kk,ka,kb,kc], dtype=np.int32)
 
-        vvop_ab = np.asarray(data[0][0], dtype=np.complex, order='C')
-        vvop_ac = np.asarray(data[0][1], dtype=np.complex, order='C')
-        vvop_ba = np.asarray(data[0][2], dtype=np.complex, order='C')
-        vvop_bc = np.asarray(data[0][3], dtype=np.complex, order='C')
-        vvop_ca = np.asarray(data[0][4], dtype=np.complex, order='C')
-        vvop_cb = np.asarray(data[0][5], dtype=np.complex, order='C')
+        vvop_ab = np.asarray(data[0][0], dtype=np.complex128, order='C')
+        vvop_ac = np.asarray(data[0][1], dtype=np.complex128, order='C')
+        vvop_ba = np.asarray(data[0][2], dtype=np.complex128, order='C')
+        vvop_bc = np.asarray(data[0][3], dtype=np.complex128, order='C')
+        vvop_ca = np.asarray(data[0][4], dtype=np.complex128, order='C')
+        vvop_cb = np.asarray(data[0][5], dtype=np.complex128, order='C')
 
-        vooo_aj = np.asarray(data[1][0], dtype=np.complex, order='C')
-        vooo_ak = np.asarray(data[1][1], dtype=np.complex, order='C')
-        vooo_bi = np.asarray(data[1][2], dtype=np.complex, order='C')
-        vooo_bk = np.asarray(data[1][3], dtype=np.complex, order='C')
-        vooo_ci = np.asarray(data[1][4], dtype=np.complex, order='C')
-        vooo_cj = np.asarray(data[1][5], dtype=np.complex, order='C')
+        vooo_aj = np.asarray(data[1][0], dtype=np.complex128, order='C')
+        vooo_ak = np.asarray(data[1][1], dtype=np.complex128, order='C')
+        vooo_bi = np.asarray(data[1][2], dtype=np.complex128, order='C')
+        vooo_bk = np.asarray(data[1][3], dtype=np.complex128, order='C')
+        vooo_ci = np.asarray(data[1][4], dtype=np.complex128, order='C')
+        vooo_cj = np.asarray(data[1][5], dtype=np.complex128, order='C')
 
-        t2T_cj = np.asarray(data[2][0], dtype=np.complex, order='C')
-        t2T_bk = np.asarray(data[2][1], dtype=np.complex, order='C')
-        t2T_ci = np.asarray(data[2][2], dtype=np.complex, order='C')
-        t2T_ak = np.asarray(data[2][3], dtype=np.complex, order='C')
-        t2T_bi = np.asarray(data[2][4], dtype=np.complex, order='C')
-        t2T_aj = np.asarray(data[2][5], dtype=np.complex, order='C')
+        t2T_cj = np.asarray(data[2][0], dtype=np.complex128, order='C')
+        t2T_bk = np.asarray(data[2][1], dtype=np.complex128, order='C')
+        t2T_ci = np.asarray(data[2][2], dtype=np.complex128, order='C')
+        t2T_ak = np.asarray(data[2][3], dtype=np.complex128, order='C')
+        t2T_bi = np.asarray(data[2][4], dtype=np.complex128, order='C')
+        t2T_aj = np.asarray(data[2][5], dtype=np.complex128, order='C')
 
-        t2T_cb = np.asarray(data[3][0], dtype=np.complex, order='C')
-        t2T_bc = np.asarray(data[3][1], dtype=np.complex, order='C')
-        t2T_ca = np.asarray(data[3][2], dtype=np.complex, order='C')
-        t2T_ac = np.asarray(data[3][3], dtype=np.complex, order='C')
-        t2T_ba = np.asarray(data[3][4], dtype=np.complex, order='C')
-        t2T_ab = np.asarray(data[3][5], dtype=np.complex, order='C')
+        t2T_cb = np.asarray(data[3][0], dtype=np.complex128, order='C')
+        t2T_bc = np.asarray(data[3][1], dtype=np.complex128, order='C')
+        t2T_ca = np.asarray(data[3][2], dtype=np.complex128, order='C')
+        t2T_ac = np.asarray(data[3][3], dtype=np.complex128, order='C')
+        t2T_ba = np.asarray(data[3][4], dtype=np.complex128, order='C')
+        t2T_ab = np.asarray(data[3][5], dtype=np.complex128, order='C')
 
         data = [vvop_ab, vvop_ac, vvop_ba, vvop_bc, vvop_ca, vvop_cb,
                 vooo_aj, vooo_ak, vooo_bi, vooo_bk, vooo_ci, vooo_cj,
@@ -229,8 +230,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         data_ptrs = (ctypes.c_void_p*24)(*data_ptrs)
 
         a0, a1, b0, b1, c0, c1 = task
-        t3Tw = np.empty((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=np.complex, order='C')
-        t3Tv = np.empty((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=np.complex, order='C')
+        t3Tw = np.empty((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=np.complex128, order='C')
+        t3Tv = np.empty((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=np.complex128, order='C')
 
         drv = _ccsd.libcc.CCsd_zcontract_t3T
         drv(t3Tw.ctypes.data_as(ctypes.c_void_p),
@@ -390,11 +391,11 @@ def transpose_t2(t2, nkpts, nocc, nvir, kconserv, out=None):
 def create_eris_vvop(vovv, oovv, nkpts, nocc, nvir, kconserv, out=None):
     '''Creates vvop from vovv and oovv array (physicist notation).'''
     nmo = nocc + nvir
-    assert(vovv.shape == (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir))
+    assert (vovv.shape == (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir))
     if out is None:
         out = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=vovv.dtype)
     else:
-        assert(out.shape == (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo))
+        assert (out.shape == (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo))
 
     for ki, kj, ka in product(range(nkpts), repeat=3):
         kb = kconserv[ki,ka,kj]
@@ -410,7 +411,7 @@ def create_eris_vooo(ooov, nkpts, nocc, nvir, kconserv, out=None):
     This is not exactly chemist's notation, but close.  Here a chemist notation vooo
     is created from physicist ooov, and then the last two indices of vooo are swapped.
     '''
-    assert(ooov.shape == (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir))
+    assert (ooov.shape == (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir))
     if out is None:
         out = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=ooov.dtype)
 
@@ -469,7 +470,7 @@ def _convert_to_int(kpt_indices):
     '''Convert all kpoint indices for 3-particle operator to integers.'''
     out_indices = [0]*6
     for ix, x in enumerate(kpt_indices):
-        assert isinstance(x, (int, np.int, np.ndarray, list))
+        assert isinstance(x, (int, np.integer, np.ndarray, list))
         if isinstance(x, (np.ndarray)) and (x.ndim == 0):
             out_indices[ix] = int(x)
         else:
@@ -490,7 +491,7 @@ def _tile_list(kpt_indices):
         return kpt_indices
     else:
         for ix, x in enumerate(kpt_indices):
-            if isinstance(x, (int, np.int)):
+            if isinstance(x, (int, np.integer)):
                 out_indices[ix] = [x] * max_length
             else:
                 out_indices[ix] = x
@@ -508,8 +509,8 @@ def zip_kpoints(kpt_indices):
 
 def get_data_slices(kpt_indices, orb_indices, kconserv):
     kpt_indices = zip_kpoints(kpt_indices)
-    if isinstance(kpt_indices[0], (int, np.int)):  # Ensure we are working
-        kpt_indices = [kpt_indices]                # with a list of lists
+    if isinstance(kpt_indices[0], (int, np.integer)):  # Ensure we are working
+        kpt_indices = [kpt_indices]                    # with a list of lists
 
     a0,a1,b0,b1,c0,c1 = orb_indices
     length = len(kpt_indices)*6
@@ -578,7 +579,7 @@ def _get_epqr(pindices,qindices,rindices,fac=[1.0,1.0,1.0],large_num=LARGE_DENOM
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert(all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all([len(x) == 5 for x in [pindices,qindices]]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     r0,r1,kr,mo_e_r,nonzero_r = rindices

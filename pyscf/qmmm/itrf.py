@@ -87,7 +87,7 @@ def qmmm_for_scf(scf_method, mm_mol):
     Args:
         mm_mol : MM Mole object
     '''
-    assert(isinstance(scf_method, (scf.hf.SCF, mcscf.casci.CASCI)))
+    assert (isinstance(scf_method, (scf.hf.SCF, mcscf.casci.CASCI)))
 
     if isinstance(scf_method, scf.hf.SCF):
         # Avoid to initialize _QMMM twice
@@ -131,33 +131,13 @@ def qmmm_for_scf(scf_method, mm_mol):
 
             coords = self.mm_mol.atom_coords()
             charges = self.mm_mol.atom_charges()
-            if pyscf.DEBUG:
-                v = 0
-                for i,q in enumerate(charges):
-                    mol.set_rinv_origin(coords[i])
-                    v += mol.intor('int1e_rinv') * -q
-            else:
-                if mol.cart:
-                    intor = 'int3c2e_cart'
-                else:
-                    intor = 'int3c2e_sph'
-                nao = mol.nao
-                max_memory = self.max_memory - lib.current_memory()[0]
-                blksize = int(min(max_memory*1e6/8/nao**2, 200))
-                if max_memory <= 0:
-                    blksize = 1
-                    logger.warn(self, 'Memory estimate for reading point charges is negative. '
-                                'Trying to read point charges one by one.')
-                cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
-                                                     mol._env, intor)
-                v = 0
-                for i0, i1 in lib.prange(0, charges.size, blksize):
-                    fakemol = gto.fakemol_for_charges(coords[i0:i1])
-                    j3c = df.incore.aux_e2(mol, fakemol, intor=intor,
-                                           aosym='s2ij', cintopt=cintopt)
-                    v += numpy.einsum('xk,k->x', j3c, -charges[i0:i1])
-                v = lib.unpack_tril(v)
-            return h1e + v
+            nao = mol.nao
+            max_memory = self.max_memory - lib.current_memory()[0]
+            blksize = int(min(max_memory*1e6/8/nao**2, 200))
+            for i0, i1 in lib.prange(0, charges.size, blksize):
+                j3c = mol.intor('int1e_grids', hermi=1, grids=coords[i0:i1])
+                h1e += numpy.einsum('kpq,k->pq', j3c, -charges[i0:i1])
+            return h1e
 
         def energy_nuc(self):
             # interactions between QM nuclei and MM particles
@@ -214,7 +194,7 @@ def add_mm_charges_grad(scf_grad, atoms_or_coords, charges, unit=None):
     [[-0.25912357 -0.29235976 -0.38245077]
      [-1.70497052 -1.89423883  1.2794798 ]]
     '''
-    assert(isinstance(scf_grad, grad.rhf.Gradients))
+    assert (isinstance(scf_grad, grad.rhf.Gradients))
     mol = scf_grad.mol
     if unit is None:
         unit = mol.unit
@@ -237,7 +217,7 @@ def qmmm_grad_for_scf(scf_grad):
     if isinstance(scf_grad, _QMMMGrad):
         return scf_grad
 
-    assert(isinstance(scf_grad.base, scf.hf.SCF) and
+    assert (isinstance(scf_grad.base, scf.hf.SCF) and
            isinstance(scf_grad.base, _QMMM))
 
     grad_class = scf_grad.__class__
@@ -262,30 +242,14 @@ def qmmm_grad_for_scf(scf_grad):
             coords = self.base.mm_mol.atom_coords()
             charges = self.base.mm_mol.atom_charges()
 
+            nao = mol.nao
+            max_memory = self.max_memory - lib.current_memory()[0]
+            blksize = int(min(max_memory*1e6/8/nao**2/3, 200))
             g_qm = grad_class.get_hcore(self, mol)
-            nao = g_qm.shape[1]
-            if pyscf.DEBUG:
-                v = 0
-                for i,q in enumerate(charges):
-                    mol.set_rinv_origin(coords[i])
-                    v += mol.intor('int1e_iprinv', comp=3) * q
-            else:
-                if mol.cart:
-                    intor = 'int3c2e_ip1_cart'
-                else:
-                    intor = 'int3c2e_ip1_sph'
-                nao = mol.nao
-                max_memory = self.max_memory - lib.current_memory()[0]
-                blksize = int(min(max_memory*1e6/8/nao**2, 200))
-                cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
-                                                     mol._env, intor)
-                v = 0
-                for i0, i1 in lib.prange(0, charges.size, blksize):
-                    fakemol = gto.fakemol_for_charges(coords[i0:i1])
-                    j3c = df.incore.aux_e2(mol, fakemol, intor, aosym='s1',
-                                           comp=3, cintopt=cintopt)
-                    v += numpy.einsum('ipqk,k->ipq', j3c, charges[i0:i1])
-            return g_qm + v
+            for i0, i1 in lib.prange(0, charges.size, blksize):
+                j3c = mol.intor('int1e_grids_ip', grids=coords[i0:i1])
+                g_qm += numpy.einsum('ikpq,k->ipq', j3c, charges[i0:i1])
+            return g_qm
 
         def grad_nuc(self, mol=None, atmlst=None):
             if mol is None: mol = self.mol

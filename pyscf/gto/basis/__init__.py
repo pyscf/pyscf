@@ -38,11 +38,12 @@ ALIAS = {
     'ccpvtz'     : 'cc-pvtz.dat'    ,
     'ccpvqz'     : 'cc-pvqz.dat'    ,
     'ccpv5z'     : 'cc-pv5z.dat'    ,
-    'junccpvtz'  : 'jun-cc-pvtz.dat',
+    'ccpvdpdz'   : 'cc-pvdpdz.dat'  ,
     'augccpvdz'  : 'aug-cc-pvdz.dat',
     'augccpvtz'  : 'aug-cc-pvtz.dat',
     'augccpvqz'  : 'aug-cc-pvqz.dat',
     'augccpv5z'  : 'aug-cc-pv5z.dat',
+    'augccpvdpdz': 'aug-cc-pvdpdz.dat',
     'ccpvdzdk'   : 'cc-pvdz-dk.dat' ,
     'ccpvtzdk'   : 'cc-pvtz-dk.dat' ,
     'ccpvqzdk'   : 'cc-pvqz-dk.dat' ,
@@ -74,10 +75,13 @@ ALIAS = {
     'augccpv5zjkfit' : 'aug-cc-pv5z-jkfit.dat' ,
     'heavyaugccpvdzjkfit' : 'heavy-aug-cc-pvdz-jkfit.dat',
     'heavyaugccpvtzjkfit' : 'heavy-aug-cc-pvtz-jkfit.dat',
+    'heavyaugccpvdzri' : 'heavy-aug-cc-pvdz-ri.dat',
+    'heavyaugccpvtzri' : 'heavy-aug-cc-pvtz-ri.dat',
     'augccpvdzri'    : 'aug-cc-pvdz-ri.dat'    ,
     'augccpvdzpri'   : 'aug-cc-pvdzp-ri.dat'   ,
     'augccpvqzri'    : 'aug-cc-pvqz-ri.dat'    ,
     'augccpvtzri'    : 'aug-cc-pvtz-ri.dat'    ,
+    'augccpv5zri'    : 'aug-cc-pv5z-ri.dat'    ,
     'ccpvtzdk3'   : 'cc-pVTZ-DK3.dat'   ,
     'ccpvqzdk3'   : 'cc-pVQZ-DK3.dat'   ,
     'augccpvtzdk3': 'aug-cc-pVTZ-DK3.dat',
@@ -208,7 +212,7 @@ ALIAS = {
     'ccpwcv5zdk' : 'cc-pwCV5Z-DK.dat',
     'ccpwcvtzdk3': 'cc-pwCVTZ-DK3.dat',
     'ccpwcvqzdk3': 'cc-pwCVQZ-DK3.dat',
-    'augccpwcvdz': 'aug-cc-pwcvtz.dat',
+    'augccpwcvdz': 'aug-cc-pwcvdz.dat',
     'augccpwcvtz': 'aug-cc-pwcvtz.dat',
     'augccpwcvqz': 'aug-cc-pwcvqz.dat',
     'augccpwcv5z': 'aug-cc-pwcv5z.dat',
@@ -333,6 +337,38 @@ ALIAS = {
     'ccecpregaugccpvtz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVTZ.dat'),
     'ccecpregaugccpvqz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVQZ.dat'),
     'ccecpregaugccpv5z': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pV5Z.dat'),
+#spin-orbit ECPs
+    'ecpds10mdfso' : os.path.join('soecp', 'ECPDS10MDFSO.dat'),
+    'ecpds28mdfso' : os.path.join('soecp', 'ECPDS28MDFSO.dat'),
+    'ecpds28mwbso' : os.path.join('soecp', 'ECPDS28MWBSO.dat'),
+    'ecpds46mdfso' : os.path.join('soecp', 'ECPDS46MDFSO.dat'),
+    'ecpds60mdfso' : os.path.join('soecp', 'ECPDS60MDFSO.dat'),
+    'ecpds60mwbso' : os.path.join('soecp', 'ECPDS60MWBSO.dat'),
+    'ecpds78mdfso' : os.path.join('soecp', 'ECPDS78MDFSO.dat'),
+    'ecpds92mdfbso' : os.path.join('soecp', 'ECPDS92MDFBSO.dat'),
+    'ecpds92mdfbqso' : os.path.join('soecp', 'ECPDS92MDFBQSO.dat'),
+# dyall's sets
+    'dyall2zp' : 'dyall-basis.dyall_2zp',
+    'dyall3zp' : 'dyall-basis.dyall_3zp',
+    'dyall4zp' : 'dyall-basis.dyall_4zp',
+    'dyallaae2z' : 'dyall-basis.dyall_aae2z',
+    'dyallaae3z' : 'dyall-basis.dyall_aae3z',
+    'dyallaae4z' : 'dyall-basis.dyall_aae4z',
+    'dyallacv2z' : 'dyall-basis.dyall_acv2z',
+    'dyallacv3z' : 'dyall-basis.dyall_acv3z',
+    'dyallacv4z' : 'dyall-basis.dyall_acv4z',
+    'dyallae2z' : 'dyall-basis.dyall_ae2z',
+    'dyallae3z' : 'dyall-basis.dyall_ae3z',
+    'dyallae4z' : 'dyall-basis.dyall_ae4z',
+    'dyallav2z' : 'dyall-basis.dyall_av2z',
+    'dyallav3z' : 'dyall-basis.dyall_av3z',
+    'dyallav4z' : 'dyall-basis.dyall_av4z',
+    'dyallcv2z' : 'dyall-basis.dyall_cv2z',
+    'dyallcv3z' : 'dyall-basis.dyall_cv3z',
+    'dyallcv4z' : 'dyall-basis.dyall_cv4z',
+    'dyallv2z' : 'dyall-basis.dyall_v2z',
+    'dyallv3z' : 'dyall-basis.dyall_v3z',
+    'dyallv4z' : 'dyall-basis.dyall_v4z',
 }
 
 def _is_pople_basis(basis):
@@ -477,13 +513,30 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
-        except BasisNotFoundError:
-            try:
-                return parse_nwchem.parse(filename_or_basisname)
-            except IndexError:
-                raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
         except IndexError:
             raise BasisNotFoundError(filename_or_basisname)
+        except BasisNotFoundError as basis_err:
+            pass
+
+        try:
+            return parse_nwchem.parse(filename_or_basisname)
+        except IndexError:
+            raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
+        except BasisNotFoundError:
+            pass
+
+        # Last, a trial to access Basis Set Exchange database
+        from pyscf.basis import bse
+        if bse.basis_set_exchange is not None:
+            try:
+                bse_obj = bse.basis_set_exchange.api.get_basis(
+                    filename_or_basisname, elements=symb)
+            except KeyError:
+                raise BasisNotFoundError(filename_or_basisname)
+            else:
+                return bse._orbital_basis(bse_obj)[0]
+
+        raise basis_err
 
     if name in ALIAS:
         basmod = ALIAS[name]
@@ -525,11 +578,37 @@ def load_ecp(filename_or_basisname, symb):
                 return parse_ecp(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
+
     if name in ALIAS:
         basmod = ALIAS[name]
         return parse_nwchem.load_ecp(join(_BASIS_DIR, basmod), symb)
-    else:
+
+    try:
         return parse_ecp(filename_or_basisname, symb)
+    except IndexError:
+        raise BasisNotFoundError(filename_or_basisname)
+    except BasisNotFoundError as basis_err:
+        pass
+
+    try:
+        return parse_nwchem.parse_ecp(filename_or_basisname)
+    except IndexError:
+        raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
+    except BasisNotFoundError:
+        pass
+
+    # Last, a trial to access Basis Set Exchange database
+    from pyscf.basis import bse
+    if bse.basis_set_exchange is not None:
+        try:
+            bse_obj = bse.basis_set_exchange.api.get_basis(
+                filename_or_basisname, elements=symb)
+        except KeyError:
+            raise BasisNotFoundError(filename_or_basisname)
+        else:
+            return bse._ecp_basis(bse_obj)[0]
+
+    raise basis_err
 
 def _format_basis_name(basisname):
     return basisname.lower().replace('-', '').replace('_', '').replace(' ', '')

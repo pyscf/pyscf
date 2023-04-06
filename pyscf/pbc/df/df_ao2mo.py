@@ -143,7 +143,7 @@ def general(mydf, mo_coeffs, kpts=None,
         mo_coeffs = _mo_as_complex(mo_coeffs)
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3])[1:]
-        eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex)
+        eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex128)
         sym = (iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
                iden_coeffs(mo_coeffs[1], mo_coeffs[3]))
 
@@ -164,7 +164,7 @@ def general(mydf, mo_coeffs, kpts=None,
         mo_coeffs = _mo_as_complex(mo_coeffs)
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nlk_pair, molk, lkslice = _conc_mos(mo_coeffs[3], mo_coeffs[2])[1:]
-        eri_mo = numpy.zeros((nij_pair,nlk_pair), dtype=numpy.complex)
+        eri_mo = numpy.zeros((nij_pair,nlk_pair), dtype=numpy.complex128)
         sym = (iden_coeffs(mo_coeffs[0], mo_coeffs[3]) and
                iden_coeffs(mo_coeffs[1], mo_coeffs[2]))
 
@@ -192,7 +192,7 @@ def general(mydf, mo_coeffs, kpts=None,
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3])[1:]
         nao = mo_coeffs[0].shape[0]
-        eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex)
+        eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex128)
 
         blksize = int(min(max_memory*.3e6/16/nij_pair,
                           max_memory*.3e6/16/nkl_pair,
@@ -232,7 +232,7 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     if out is None:
         out = numpy.empty(eri_shape, dtype=dtype)
     else:
-        assert(out.shape == eri_shape)
+        assert (out.shape == eri_shape)
 
     kptij_lst = numpy.array([(ki, kj) for ki in kpts for kj in kpts])
     kptis_lst = kptij_lst[:,0]

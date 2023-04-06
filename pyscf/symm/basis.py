@@ -24,9 +24,11 @@ from functools import reduce
 import numpy
 from pyscf.data.elements import _symbol, _rm_digit
 from pyscf import gto
+from pyscf import lib
 from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm import geom
 from pyscf.symm import param
+from pyscf.symm.Dmatrix import Dmatrix, get_euler_angles
 
 __all__ = ['tot_parity_odd',
            'symm_adapted_basis',
@@ -37,7 +39,7 @@ __all__ = ['tot_parity_odd',
            'linearmole_irrep_id2symb',
            'linearmole_symm_adapted_basis',
            'so3_irrep_symb2id',
-           'so3_irrep_id2symb',]
+           'so3_irrep_id2symb']
 
 OP_PARITY_ODD = {
     'E'  : (0, 0, 0),
@@ -132,7 +134,7 @@ def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
         if idx:
             l_idx[l] = numpy.hstack(idx)
 
-    Ds = _ao_rotation_matrices(mol, coordinates)
+    Ds = _momentum_rotation_matrices(mol, coordinates)
     so = []
     irrep_ids = []
     for ir, c in enumerate(sodic):
@@ -148,10 +150,8 @@ def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
 
     return so, irrep_ids
 
-def _ao_rotation_matrices(mol, axes):
-    '''Cache the rotation matrices'''
-    from pyscf import lib
-    from pyscf.symm.Dmatrix import Dmatrix, get_euler_angles
+def _momentum_rotation_matrices(mol, axes):
+    '''Cache the rotation matrices for each angular momentum'''
     alpha, beta, gamma = get_euler_angles(numpy.eye(3), axes)
     ANG_OF = 1
     l_max = mol._bas[:,ANG_OF].max()
@@ -298,13 +298,41 @@ _SO3_SYMB2ID = {
     'i+6':    630,
 }
 _SO3_ID2SYMB = dict([(v, k) for k, v in _SO3_SYMB2ID.items()])
-_ANGULAR = 'spdfghik'
+_ANGULAR = 'spdfghiklmnortu'
 
 def so3_irrep_symb2id(symb):
-    return _SO3_SYMB2ID[symb.lower()]
+    symb = symb.lower()
+    if symb in _SO3_SYMB2ID:
+        return _SO3_SYMB2ID[symb]
+    else:
+        s = ''.join([i for i in symb if i.isalpha()])
+        n = int(''.join([i for i in symb if not i.isalpha()]))
+        e2 = abs(n) // 2
+        l = _ANGULAR.index(s)
+        if abs(n) > l:
+            raise KeyError(symb)
+        gu = 'u' if l % 2 else 'g'
+        xy = 'y' if n < 0 else 'x'
+        parity = '_odd' if n % 2 else '_even'
+        return l * 100 + e2 * 10 + DOOH_IRREP_ID_TABLE[parity + gu + xy]
 
 def so3_irrep_id2symb(irrep_id):
-    return _SO3_ID2SYMB[irrep_id]
+    if irrep_id in _SO3_ID2SYMB:
+        return _SO3_ID2SYMB[irrep_id]
+    else:
+        l, e2 = divmod(irrep_id, 100)
+        e2, n = divmod(e2, 10)
+        if n in (0, 1, 5, 4):
+            rn = e2 * 2
+        elif n in (2, 3, 6, 7):
+            rn = e2 * 2 + 1
+        else:
+            raise KeyError(f'Unknown Irrep ID {irrep_id} for SO3 group')
+        if l <= 1 or rn > l:
+            raise KeyError(f'Unknown Irrep ID {irrep_id} for SO3 group')
+        if n in (6, 4, 3, 1):
+            rn = -rn
+        return f'{_ANGULAR[l]}{rn:+d}'
 
 def so3_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     assert gpname == 'SO3'
@@ -324,6 +352,8 @@ def so3_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     irrep_names = []
     for l in range(lmax+1):
         bas_idx = mol._bas[:,gto.ANG_OF] == l
+        if sum(bas_idx) == 0: # Skip any unused angular momentum channels
+            continue
         cs = [coeff[:,p0:p1]
               for p0, p1 in zip(ao_loc[:-1][bas_idx], ao_loc[1:][bas_idx])]
         c_groups = numpy.hstack(cs).reshape(nao, -1, l*2+1)
@@ -397,10 +427,10 @@ COOV_IRREP_ID_TABLE = {
     '_oddy': 3,
 }
 
-def linearmole_symm_descent(gpname, irrepid):
+def linearmole_symm_descent(gpname, irrep_id):
     '''Map irreps to D2h or C2v'''
     if gpname in ('Dooh', 'Coov'):
-        return irrepid % 10
+        return irrep_id % 10
     else:
         raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
@@ -409,20 +439,28 @@ def linearmole_irrep_symb2id(gpname, symb):
         if symb in DOOH_IRREP_ID_TABLE:
             return DOOH_IRREP_ID_TABLE[symb]
         else:
-            n = int(''.join([i for i in symb if i.isdigit()]))
-            if n % 2:
-                return (n//2)*10 + DOOH_IRREP_ID_TABLE['_odd'+symb[-2:]]
-            else:
-                return (n//2)*10 + DOOH_IRREP_ID_TABLE['_even'+symb[-2:]]
+            try:
+                n = int(''.join([i for i in symb if i.isdigit()]))
+                if n % 2:
+                    return (n//2)*10 + DOOH_IRREP_ID_TABLE['_odd'+symb[-2:]]
+                else:
+                    return (n//2)*10 + DOOH_IRREP_ID_TABLE['_even'+symb[-2:]]
+            except (KeyError, ValueError):
+                raise PointGroupSymmetryError(f'Incorrect Dooh irrep {symb}')
     elif gpname == 'Coov':
         if symb in COOV_IRREP_ID_TABLE:
             return COOV_IRREP_ID_TABLE[symb]
         else:
-            n = int(''.join([i for i in symb if i.isdigit()]))
-            if n % 2:
-                return (n//2)*10 + COOV_IRREP_ID_TABLE['_odd'+symb[-1]]
-            else:
-                return (n//2)*10 + COOV_IRREP_ID_TABLE['_even'+symb[-1]]
+            if 'g' in symb or 'u' in symb:
+                raise PointGroupSymmetryError(f'Incorrect Coov irrep {symb}')
+            try:
+                n = int(''.join([i for i in symb if i.isdigit()]))
+                if n % 2:
+                    return (n//2)*10 + COOV_IRREP_ID_TABLE['_odd'+symb[-1]]
+                else:
+                    return (n//2)*10 + COOV_IRREP_ID_TABLE['_even'+symb[-1]]
+            except (KeyError, ValueError):
+                raise PointGroupSymmetryError(f'Incorrect Coov irrep {symb}')
     else:
         raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
@@ -434,34 +472,35 @@ def linearmole_irrep_id2symb(gpname, irrep_id):
         if irrep_id < 10:
             return DOOH_IRREP_SYMBS[irrep_id]
         else:
+            l = abs(linearmole_irrep2momentum(irrep_id))
             n = irrep_id % 10
-            m = irrep_id // 10
-            if n in (0, 1, 5, 4):
-                rn = m*2
-            else:
-                rn = m*2+1
-            return 'E%d%s' % (rn, DOOH_IRREP_SYMBS_EXT[n])
+            return 'E%d%s' % (l, DOOH_IRREP_SYMBS_EXT[n])
     elif gpname == 'Coov':
         if irrep_id < 10:
             return COOV_IRREP_SYMBS[irrep_id]
         else:
+            l = abs(linearmole_irrep2momentum(irrep_id))
             n = irrep_id % 10
-            m = irrep_id // 10
-            if n < 2:
-                rn = m*2
-            else:
-                rn = m*2+1
             if n % 2:
                 xy = 'y'
             else:
                 xy = 'x'
-            return 'E%d%s' % (rn, xy)
+            return 'E%d%s' % (l, xy)
     else:
         raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
+def linearmole_irrep2momentum(irrep_id):
+    if irrep_id % 10 in (0, 1, 5, 4):
+        l = irrep_id // 10 * 2
+    else:
+        l = irrep_id // 10 * 2 + 1
+    if irrep_id % 10 in (1, 3, 4, 6):  # Ey
+        l *= -1
+    return l
+
 def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
-    assert(gpname in ('Dooh', 'Coov'))
-    assert(not mol.cart)
+    assert (gpname in ('Dooh', 'Coov'))
+    assert (not mol.cart)
 
     if coordinates is None:
         coordinates = numpy.eye(3)
@@ -638,7 +677,7 @@ def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
         if idx:
             l_idx[l] = numpy.hstack(idx)
 
-    Ds = _ao_rotation_matrices(mol, coordinates)
+    Ds = _momentum_rotation_matrices(mol, coordinates)
     so = []
     for i in irrep_idx:
         c_ir = numpy.vstack(sodic[irrep_names[i]]).T

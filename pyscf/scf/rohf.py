@@ -222,7 +222,7 @@ def get_grad(mo_coeff, mo_occ, fock):
     return g[uniq_var_a | uniq_var_b]
 
 def make_rdm1(mo_coeff, mo_occ, **kwargs):
-    '''One-particle densit matrix.  mo_occ is a 1D array, with occupancy 1 or 2.
+    '''One-particle density matrix.  mo_occ is a 1D array, with occupancy 1 or 2.
     '''
     if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
         mo_occa = mo_occ > 0
@@ -443,7 +443,8 @@ class ROHF(hf.RHF):
     def stability(self,
                   internal=getattr(__config__, 'scf_stability_internal', True),
                   external=getattr(__config__, 'scf_stability_external', False),
-                  verbose=None):
+                  verbose=None,
+                  return_status=False):
         '''
         ROHF/ROKS stability analysis.
 
@@ -454,13 +455,22 @@ class ROHF(hf.RHF):
                 Internal stability, within the RHF optimization space.
             external : bool
                 External stability. It is not available in current version.
+            return_status: bool
+                Whether to return `stable_i` and `stable_e`
 
         Returns:
-            The return value includes two set of orbitals which are more close to
-            the required stable condition.
+            If return_status is False (default), the return value includes
+            two set of orbitals, which are more close to the stable condition.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
+
+            Else, another two boolean variables (indicating current status:
+            stable or unstable) are returned.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import rohf_stability
-        return rohf_stability(self, internal, external, verbose)
+        return rohf_stability(self, internal, external, verbose, return_status)
 
     def nuc_grad_method(self):
         from pyscf.grad import rohf
@@ -468,16 +478,7 @@ class ROHF(hf.RHF):
 
 
 class HF1e(ROHF):
-    def scf(self, *args):
-        logger.info(self, '\n')
-        logger.info(self, '******** 1 electron system ********')
-        self.converged = True
-        h1e = self.get_hcore(self.mol)
-        s1e = self.get_ovlp(self.mol)
-        self.mo_energy, self.mo_coeff = self.eig(h1e, s1e)
-        self.mo_occ = self.get_occ(self.mo_energy, self.mo_coeff)
-        self.e_tot = self.mo_energy[self.mo_occ>0][0] + self.mol.energy_nuc()
-        self._finalize()
-        return self.e_tot
+    scf = hf._hf1e_scf
 
-del(WITH_META_LOWDIN)
+
+del (WITH_META_LOWDIN)

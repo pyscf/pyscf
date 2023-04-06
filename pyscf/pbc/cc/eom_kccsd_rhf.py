@@ -106,7 +106,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 def lipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     '''2hp operators are of the form s_{kl}^{ d}, i.e. 'ld' indices are coupled.'''
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
-    assert(eom.partition is None)
+    assert (eom.partition is None)
     if imds is None: imds = eom.make_imds()
 
     t2 = imds.t2
@@ -380,6 +380,7 @@ class EOMIP(eom_kgccsd.EOMIP):
     l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
     ccsd_star_contract = ipccsd_star_contract
+    mask_frozen = eom_kgccsd.mask_frozen_ip
 
     @property
     def nkpts(self):
@@ -506,7 +507,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 def leaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     '''2hp operators are of the form s_{ l}^{cd}, i.e. 'ld' indices are coupled.'''
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
-    assert(eom.partition is None)
+    assert (eom.partition is None)
     if imds is None: imds = eom.make_imds()
 
     t1 = imds.t1
@@ -778,6 +779,7 @@ class EOMEA(eom_kgccsd.EOMEA):
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
     ccsd_star_contract = eaccsd_star_contract
+    mask_frozen = eom_kgccsd.mask_frozen_ea
 
     @property
     def nkpts(self):

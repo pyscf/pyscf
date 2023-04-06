@@ -42,7 +42,7 @@ MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 def update_amps(cc, t1, t2, eris):
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
-    assert(isinstance(eris, ccsd._ChemistsERIs))
+    assert (isinstance(eris, ccsd._ChemistsERIs))
     nocc, nvir = t1.shape
     fock = eris.fock
     mo_e_o = eris.mo_energy[:nocc]
@@ -405,7 +405,7 @@ if __name__ == '__main__':
 
     orbspin = np.zeros(nao*2, dtype=int)
     orbspin[1::2] = 1
-    eri1 = np.zeros([nao*2]*4, dtype=np.complex)
+    eri1 = np.zeros([nao*2]*4, dtype=np.complex128)
     eri1[0::2,0::2,0::2,0::2] = eri1[0::2,0::2,1::2,1::2] = eri0
     eri1[1::2,1::2,0::2,0::2] = eri1[1::2,1::2,1::2,1::2] = eri0
     eri1 = eri1.transpose(0,2,1,3) - eri1.transpose(0,2,3,1)

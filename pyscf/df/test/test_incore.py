@@ -22,18 +22,20 @@ from pyscf import lib
 from pyscf import gto
 from pyscf import df
 
-mol = gto.Mole()
-mol.build(
-    verbose = 0,
-    atom = '''O     0    0.       0.
-              1     0    -0.757   0.587
-              1     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-)
+def setUpModule():
+    global mol, auxmol, atm, bas, env
+    mol = gto.Mole()
+    mol.build(
+        verbose = 0,
+        atom = '''O     0    0.       0.
+                  1     0    -0.757   0.587
+                  1     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+    )
 
-auxmol = df.addons.make_auxmol(mol, 'weigend')
-atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,
-                             auxmol._atm, auxmol._bas, auxmol._env)
+    auxmol = df.addons.make_auxmol(mol, 'weigend')
+    atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,
+                                 auxmol._atm, auxmol._bas, auxmol._env)
 
 def tearDownModule():
     global mol, auxmol, atm, bas, env
@@ -144,7 +146,7 @@ class KnownValues(unittest.TestCase):
         naoaux = auxmol.nao_nr()
         j3c = j3c.reshape(nao,nao,naoaux)
 
-        eri0 = numpy.empty((nao,nao,naoaux), dtype=numpy.complex)
+        eri0 = numpy.empty((nao,nao,naoaux), dtype=numpy.complex128)
         pi = 0
         for i in range(mol.nbas):
             pj = 0

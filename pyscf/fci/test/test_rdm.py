@@ -21,13 +21,15 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 
-norb = 6
-nelec = 6
-na = fci.cistring.num_strings(norb, nelec//2)
-numpy.random.seed(1)
-ci0 = numpy.random.random((na,na))
-ci0 = ci0 + ci0.T
-rdm1, rdm2 = fci.direct_spin1.make_rdm12(ci0, norb, nelec)
+def setUpModule():
+    global ci0, rdm1, rdm2, norb, nelec
+    norb = 6
+    nelec = 6
+    na = fci.cistring.num_strings(norb, nelec//2)
+    numpy.random.seed(1)
+    ci0 = numpy.random.random((na,na))
+    ci0 = ci0 + ci0.T
+    rdm1, rdm2 = fci.direct_spin1.make_rdm12(ci0, norb, nelec)
 
 def tearDownModule():
     global ci0, rdm1, rdm2

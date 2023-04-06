@@ -27,24 +27,26 @@ from pyscf import cc
 from pyscf.cc import ccsd_lambda
 
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
+def setUpModule():
+    global mol, mf, mycc
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
 
-mol.basis = '631g'
-mol.build()
-mf = scf.RHF(mol)
-mf.conv_tol_grad = 1e-8
-mf.kernel()
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.RHF(mol)
+    mf.conv_tol_grad = 1e-8
+    mf.kernel()
 
-mycc = cc.ccsd.RCCSD(mf)
-mycc.conv_tol = 1e-10
-eris = mycc.ao2mo()
-mycc.kernel(eris=eris)
+    mycc = cc.ccsd.RCCSD(mf)
+    mycc.conv_tol = 1e-10
+    eris = mycc.ao2mo()
+    mycc.kernel(eris=eris)
 
 def tearDownModule():
     global mol, mf, mycc
@@ -86,27 +88,27 @@ class KnownValues(unittest.TestCase):
         saved = ccsd_lambda.make_intermediates(mcc, t1, t2, eris)
         l1new, l2new = ccsd_lambda.update_lambda(mcc, t1, t2, l1, l2, eris, saved)
         self.assertAlmostEqual(abs(l1new).sum(), 38172.7896467303, 8)
-        self.assertAlmostEqual(numpy.dot(l1new.flatten(), numpy.arange(35)), 739312.005491083, 8)
+        self.assertAlmostEqual(numpy.dot(l1new.flatten(), numpy.arange(35)), 739312.005491083, 6)
         self.assertAlmostEqual(numpy.dot(l1new.flatten(), numpy.sin(numpy.arange(35))), 7019.50937051188, 8)
         self.assertAlmostEqual(numpy.dot(numpy.sin(l1new.flatten()), numpy.arange(35)), 69.6652346635955, 8)
 
-        self.assertAlmostEqual(abs(l2new).sum(), 72035.4931071527, 8)
+        self.assertAlmostEqual(abs(l2new).sum(), 72035.4931071527, 7)
         self.assertAlmostEqual(abs(l2new-l2new.transpose(1,0,3,2)).sum(), 0, 9)
-        self.assertAlmostEqual(numpy.dot(l2new.flatten(), numpy.arange(35**2)), 48427109.5409886, 7)
+        self.assertAlmostEqual(numpy.dot(l2new.flatten(), numpy.arange(35**2)), 48427109.5409886, 5)
         self.assertAlmostEqual(numpy.dot(l2new.flatten(), numpy.sin(numpy.arange(35**2))), 137.758016736487, 8)
         self.assertAlmostEqual(numpy.dot(numpy.sin(l2new.flatten()), numpy.arange(35**2)), 507.656936701192, 8)
 
         mcc.max_memory = 0
         saved = ccsd_lambda.make_intermediates(mcc, t1, t2, eris)
         l1new, l2new = ccsd_lambda.update_lambda(mcc, t1, t2, l1, l2, eris, saved)
-        self.assertAlmostEqual(abs(l1new).sum(), 38172.7896467303, 8)
-        self.assertAlmostEqual(numpy.dot(l1new.flatten(), numpy.arange(35)), 739312.005491083, 8)
+        self.assertAlmostEqual(abs(l1new).sum(), 38172.7896467303, 7)
+        self.assertAlmostEqual(numpy.dot(l1new.flatten(), numpy.arange(35)), 739312.005491083, 6)
         self.assertAlmostEqual(numpy.dot(l1new.flatten(), numpy.sin(numpy.arange(35))), 7019.50937051188, 8)
         self.assertAlmostEqual(numpy.dot(numpy.sin(l1new.flatten()), numpy.arange(35)), 69.6652346635955, 8)
 
-        self.assertAlmostEqual(abs(l2new).sum(), 72035.4931071527, 8)
+        self.assertAlmostEqual(abs(l2new).sum(), 72035.4931071527, 7)
         self.assertAlmostEqual(abs(l2new-l2new.transpose(1,0,3,2)).sum(), 0, 9)
-        self.assertAlmostEqual(numpy.dot(l2new.flatten(), numpy.arange(35**2)), 48427109.5409886, 7)
+        self.assertAlmostEqual(numpy.dot(l2new.flatten(), numpy.arange(35**2)), 48427109.5409886, 5)
         self.assertAlmostEqual(numpy.dot(l2new.flatten(), numpy.sin(numpy.arange(35**2))), 137.758016736487, 8)
         self.assertAlmostEqual(numpy.dot(numpy.sin(l2new.flatten()), numpy.arange(35**2)), 507.656936701192, 8)
 

@@ -22,27 +22,29 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import adc
 
-r = 1.098
-mol = gto.Mole()
-mol.atom = [
-    ['N', ( 0., 0.    , -r/2   )],
-    ['N', ( 0., 0.    ,  r/2)],]
-mol.basis = {'N':'aug-cc-pvdz'}
-mol.verbose = 0
-mol.build()
-mf = scf.RHF(mol)
-mf.conv_tol = 1e-12
-mf.kernel()
-myadc = adc.ADC(mf)
+def setUpModule():
+    global mol, mf, myadc
+    r = 1.098
+    mol = gto.Mole()
+    mol.atom = [
+        ['N', (0., 0.    , -r/2   )],
+        ['N', (0., 0.    ,  r/2)],]
+    mol.basis = {'N':'aug-cc-pvdz'}
+    mol.verbose = 0
+    mol.build()
+    mf = scf.RHF(mol)
+    mf.conv_tol = 1e-12
+    mf.kernel()
+    myadc = adc.ADC(mf)
 
 def tearDownModule():
-    global mol, mf
-    del mol, mf
+    global mol, mf, myadc
+    del mol, mf, myadc
 
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
-  
+
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
@@ -58,7 +60,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.8192921131700293, 6)
 
     def test_ip_adc2_oneroot(self):
-  
+
         e,v,p,x = myadc.kernel()
 
         self.assertAlmostEqual(e[0], 0.5434389910483670, 6)
@@ -66,11 +68,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.7688097076459075, 6)
 
     def test_ip_adc2x(self):
-  
+
         myadc.method = "adc(2)-x"
 
         e,v,p,x = myadc.kernel(nroots=3)
-        e_corr = myadc.e_corr 
+        e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.32201692499346535, 6)
 
@@ -83,7 +85,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.8152869633769015, 6)
 
     def test_ip_adc3(self):
-  
+
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
 
@@ -99,7 +101,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.8173191958988848, 6)
         self.assertAlmostEqual(p[1], 1.8429224413853840, 6)
         self.assertAlmostEqual(p[2], 1.8429224413853851, 6)
-      
+
 if __name__ == "__main__":
     print("IP calculations for different RADC methods for nitrogen molecule")
     unittest.main()

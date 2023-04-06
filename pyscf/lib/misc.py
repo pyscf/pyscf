@@ -25,6 +25,7 @@ import warnings
 import tempfile
 import functools
 import itertools
+import inspect
 import collections
 import ctypes
 import numpy
@@ -35,6 +36,41 @@ try:
     from concurrent.futures import ThreadPoolExecutor
 except ImportError:
     ThreadPoolExecutor = None
+
+if sys.platform.startswith('linux'):
+    # Avoid too many threads being created in OMP loops.
+    # See issue https://github.com/pyscf/pyscf/issues/317
+    try:
+        from elftools.elf.elffile import ELFFile
+    except ImportError:
+        pass
+    else:
+        def _ldd(so_file):
+            libs = []
+            with open(so_file, 'rb') as f:
+                elf = ELFFile(f)
+                for seg in elf.iter_segments():
+                    if seg.header.p_type != 'PT_DYNAMIC':
+                        continue
+                    for t in seg.iter_tags():
+                        if t.entry.d_tag == 'DT_NEEDED':
+                            libs.append(t.needed)
+                    break
+            return libs
+
+        so_file = os.path.abspath(os.path.join(__file__, '..', 'libnp_helper.so'))
+        for p in _ldd(so_file):
+            if 'mkl' in p and 'thread' in p:
+                warnings.warn(f'PySCF C exteions are incompatible with {p}. '
+                              'MKL_NUM_THREADS is set to 1')
+                os.environ['MKL_NUM_THREADS'] = '1'
+                break
+            elif 'openblasp' in p or 'openblaso' in p:
+                warnings.warn(f'PySCF C exteions are incompatible with {p}. '
+                              'OPENBLAS_NUM_THREADS is set to 1')
+                os.environ['OPENBLAS_NUM_THREADS'] = '1'
+                break
+        del p, so_file, _ldd
 
 from pyscf.lib import param
 from pyscf import __config__
@@ -140,6 +176,27 @@ class with_omp_threads(object):
         if self.sys_threads is not None:
             num_threads(self.sys_threads)
 
+class with_multiproc_nproc(object):
+    '''
+    Using this macro to create a temporary context in which the number of
+    multi-processing processes are set to the required value.
+    '''
+    def __init__(self, nproc=1):
+        self.nproc = nproc
+        self.sys_threads = None
+    def __enter__(self):
+        if self.nproc is not None and self.nproc >= 1:
+            self.sys_threads = num_threads()
+            if self.nproc > self.sys_threads:
+                warnings.warn('Reset nproc to nthreads: %s' % self.sys_threads)
+                self.nproc = self.sys_threads
+            nthreads = max(1, self.sys_threads // self.nproc)
+            num_threads(nthreads)
+        return self
+    def __exit__(self, type, value, traceback):
+        if self.sys_threads is not None:
+            num_threads(self.sys_threads)
+            self.nproc = 1
 
 def c_int_arr(m):
     npm = numpy.array(m).flatten('C')
@@ -262,6 +319,28 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def prange_split(n_total, n_sections):
+    '''
+    Generate prange sequence that splits n_total elements into n sections.
+    The splits parallel to the np.array_split convention: the first (l % n)
+    sections of size l//n + 1 and the rest of size l//n.
+
+    Examples:
+
+    >>> for p0, p1 in lib.prange_split(10, 3):
+    ...     print(p0, p1)
+    (0, 4)
+    (4, 7)
+    (7, 10)
+    '''
+    n_each_section, extras = divmod(n_total, n_sections)
+    section_sizes = ([0] +
+                     extras * [n_each_section+1] +
+                     (n_sections-extras) * [n_each_section])
+    div_points = numpy.array(section_sizes).cumsum()
+    return zip(div_points[:-1], div_points[1:])
+
+
 def map_with_prefetch(func, *iterables):
     '''
     Apply function to an task and prefetch the next task
@@ -271,7 +350,7 @@ def map_with_prefetch(func, *iterables):
         import imp
         global_import_lock = imp.lock_held()
 
-    if global_import_lock:
+    if not ASYNC_IO or global_import_lock:
         for task in zip(*iterables):
             yield func(*task)
 
@@ -567,6 +646,13 @@ class StreamObject(object):
         obj.__dict__.update(self.__dict__)
         return obj
 
+    def add_keys(self, **kwargs):
+        '''Add or update attributes of the object and register these attributes in ._keys'''
+        if kwargs:
+            self.__dict__.update(**kwargs)
+            self._keys = self._keys.union(kwargs.keys())
+        return self
+
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
     '''Check misinput of class attributes, check whether a class method is
@@ -626,32 +712,92 @@ def alias(fn, alias_name=None):
     overloaded in the child class. Using "alias" can make sure that the
     overloaded mehods were called when calling the aliased method.
     '''
-    fname = fn.__name__
-    def aliased_fn(self, *args, **kwargs):
-        return getattr(self, fname)(*args, **kwargs)
+    name = fn.__name__
+    if alias_name is None:
+        alias_name = name
 
-    if alias_name is not None:
-        aliased_fn.__name__ = alias_name
-
-    doc_str = 'An alias to method %s\n' % fname
-    if sys.version_info >= (3,):
-        from inspect import signature
-        sig = str(signature(fn))
-        if alias_name is None:
-            doc_str += 'Function Signature: %s\n' % sig
+    _locals = {}
+    sig = inspect.signature(fn)
+    var_args = []
+    for k, v in sig.parameters.items():
+        if v.kind == v.VAR_POSITIONAL or v.kind == v.VAR_KEYWORD:
+            var_args.append(str(v))
         else:
-            doc_str += 'Function Signature: %s%s\n' % (alias_name, sig)
-    doc_str += '----------------------------------------\n\n'
+            var_args.append(k)
+    txt = f'''def {alias_name}({", ".join(var_args)}):
+    return {var_args[0]}.{name}({", ".join(var_args[1:])})'''
+    exec(txt, fn.__globals__, _locals)
+    new_fn = _locals[alias_name]
 
-    if fn.__doc__ is not None:
-        doc_str += fn.__doc__
+    new_fn.__defaults__ = fn.__defaults__
+    new_fn.__module__ = fn.__module__
+    new_fn.__doc__ = fn.__doc__
+    new_fn.__annotations__ = fn.__annotations__
+    return new_fn
 
-    aliased_fn.__doc__ = doc_str
-    return aliased_fn
+def module_method(fn, absences=None):
+    '''
+    The statement "fn1 = module_method(fn, absences=['a'])"
+    in a class is equivalent to define the following method in the class:
+
+    .. code-block:: python
+        def fn1(self, ..., a=None, b, ...):
+            if a is None: a = self.a
+            return fn(..., a, b, ...)
+
+    If absences are not specified, all position arguments will be assigned in
+    terms of the corresponding attributes of self, i.e.
+
+    .. code-block:: python
+        def fn1(self, a=None, b=None):
+            if a is None: a = self.a
+            if b is None: b = self.b
+            return fn(a, b)
+    '''
+    _locals = {}
+    name = fn.__name__
+    sig = inspect.signature(fn)
+    body = []
+    var_args = []
+    for k, v in sig.parameters.items():
+        if v.kind == v.VAR_POSITIONAL or v.kind == v.VAR_KEYWORD:
+            var_args.append(str(v))
+        else:
+            var_args.append(k)
+            if absences is None and v.default == v.empty:  # positional argument
+                body.append(f'    if {k} is None: {k} = self.{k}')
+
+    fn_defaults = fn.__defaults__
+    nargs = fn.__code__.co_argcount
+    if fn_defaults is None:
+        fn_defaults = [None] * nargs
+    else:
+        fn_defaults = [None] * (nargs-len(fn_defaults)) + list(fn_defaults)
+
+    if absences is not None:
+        for k in absences:
+            try:
+                idx = var_args.index(k)
+            except ValueError:
+                raise ValueError(f'Unknown argument {k}')
+            body.append(f'    if {k} is None: {k} = self.{k}')
+            fn_defaults[idx] = None
+
+    body = '\n'.join(body)
+    txt = f'''def {name}(self, {", ".join(var_args)}):
+{body}
+    return {name}({", ".join(var_args)})'''
+    exec(txt, fn.__globals__, _locals)
+    new_fn = _locals[name]
+    new_fn.__module__ = fn.__module__
+    new_fn.__defaults__ = tuple(fn_defaults)
+    new_fn.__doc__ = fn.__doc__
+    new_fn.__annotations__ = fn.__annotations__
+    return new_fn
 
 def class_as_method(cls):
     '''
-    The statement "fn1 = alias(Class)" is equivalent to:
+    The statement "fn1 = class_as_method(Class)" is equivalent to:
 
     .. code-block:: python
         def fn1(self, *args, **kwargs):
@@ -662,6 +808,14 @@ def class_as_method(cls):
     fn.__doc__ = cls.__doc__
     fn.__name__ = cls.__name__
     fn.__module__ = cls.__module__
+    return fn
+
+def invalid_method(name):
+    '''
+    The statement "fn1 = invalid_method(name)" can de-register a method
+    '''
+    def fn(obj, *args, **kwargs):
+        raise NotImplementedError(f'Method {name} invalid or not implemented')
     return fn
 
 def overwrite_mro(obj, mro):
@@ -680,7 +834,7 @@ def overwrite_mro(obj, mro):
     obj = Temp()
 # Delete mro function otherwise all subclass of Temp are not able to
 # resolve the right mro
-    del(HackMRO.mro)
+    del (HackMRO.mro)
     return obj
 
 def izip(*args):
@@ -1098,8 +1252,3 @@ def isintsequence(obj):
         for i in obj:
             are_ints = are_ints and isinteger(i)
         return are_ints
-
-
-if __name__ == '__main__':
-    for i,j in prange_tril(0, 90, 300):
-        print(i, j, j*(j+1)//2-i*(i+1)//2)

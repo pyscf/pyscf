@@ -39,8 +39,7 @@ mf.kernel()
 
 
 #
-# In PBC calculations, DF/MDF method should be used for all-electron
-# calculation.  There are various ways to initialize the DF methods.
+# In PBC calculations, DF method can be used for all-electron calculation.
 #
 cell = pgto.Cell()
 cell.atom='''
@@ -53,17 +52,9 @@ cell.a = '''
 3.370137329, 0.000000000, 3.370137329
 3.370137329, 3.370137329, 0.000000000'''
 cell.unit = 'B'
-cell.mesh = [10]*3
-#cell.verbose = 4
+cell.verbose = 4
 cell.build()
 kpts = cell.make_kpts([2,2,2])
 
-# Method 1: Calling .density_fit
 mf = pdft.KRKS(cell, kpts=kpts).density_fit(auxbasis='ahlrichs')
 mf.kernel()
-
-# Method 2: Overwriting the existed .with_df attribute.  All PBC SCF object
-# has the .with_df attribute.  Don't forget to pass kpts to DF object.
-mf.with_df = pdft.MDF(cell, kpts=kpts)
-mf.kernel()
-

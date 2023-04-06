@@ -22,14 +22,16 @@ from pyscf import ao2mo
 from pyscf import fci
 from pyscf.fci import fci_slow
 
-nelec = (3,4)
-norb = 7
-numpy.random.seed(10)
-h1e = numpy.random.random((norb,norb))
-h2e = numpy.random.random((norb,norb,norb,norb))
-h2e = h2e + h2e.transpose(2,3,0,1)
-na = fci.cistring.num_strings(norb, nelec[0])
-nb = fci.cistring.num_strings(norb, nelec[1])
+def setUpModule():
+    global h1e, h2e, norb, nelec, na, nb
+    nelec = (3,4)
+    norb = 7
+    numpy.random.seed(10)
+    h1e = numpy.random.random((norb,norb))
+    h2e = numpy.random.random((norb,norb,norb,norb))
+    h2e = h2e + h2e.transpose(2,3,0,1)
+    na = fci.cistring.num_strings(norb, nelec[0])
+    nb = fci.cistring.num_strings(norb, nelec[1])
 
 def tearDownModule():
     global h1e, h2e
@@ -44,6 +46,18 @@ class KnownValues(unittest.TestCase):
 
         ci1ref = fci_slow.contract_2e(h2e, ci0, norb, nelec)
         ci1 = fci.direct_nosym.contract_2e(h2e, ci0, norb, nelec)
+        self.assertTrue(numpy.allclose(ci1ref, ci1))
+
+    def test_contract_complex(self):
+        ci0 = numpy.random.random((na,nb)) + 1j * numpy.random.random((na,nb))
+        ci1ref = fci_slow.contract_1e(h1e, ci0, norb, nelec)
+        ci1 = fci.direct_nosym.contract_1e(h1e, ci0.real, norb, nelec).astype(complex)
+        ci1 += 1j * fci.direct_nosym.contract_1e(h1e, ci0.imag, norb, nelec)
+        self.assertTrue(numpy.allclose(ci1ref, ci1))
+
+        ci1ref = fci_slow.contract_2e(h2e, ci0, norb, nelec)
+        ci1 = fci.direct_nosym.contract_2e(h2e, ci0.real, norb, nelec).astype(complex)
+        ci1 += 1j * fci.direct_nosym.contract_2e(h2e, ci0.imag, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
 
     def test_absorb_h1e(self):

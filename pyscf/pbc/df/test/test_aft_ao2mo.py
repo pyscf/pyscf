@@ -19,18 +19,24 @@ from pyscf.pbc.df import aft
 import pyscf.pbc.gto as pgto
 from pyscf.pbc.lib import kpts_helper
 
-L = 5.
-n = 3
-cell = pgto.Cell()
-cell.a = numpy.diag([L,L,L])
-cell.mesh = numpy.array([n,n,n])
+def setUpModule():
+    global cell, nao
+    L = 5.
+    n = 3
+    cell = pgto.Cell()
+    cell.a = numpy.diag([L,L,L])
+    cell.mesh = numpy.array([n,n,n])
 
-cell.atom = '''He    3.    2.       3.
-               He    1.    1.       1.'''
-cell.basis = 'ccpvdz'
-cell.verbose = 0
-cell.build(0,0)
-nao = cell.nao_nr()
+    cell.atom = '''He    3.    2.       3.
+                   He    1.    1.       1.'''
+    cell.basis = 'ccpvdz'
+    cell.verbose = 0
+    cell.build(0,0)
+    nao = cell.nao_nr()
+
+def tearDownModule():
+    global cell
+    del cell
 
 
 class KnownValues(unittest.TestCase):
@@ -96,6 +102,7 @@ class KnownValues(unittest.TestCase):
                        He    1.2   1.       1.'''
         cell.basis = {'He': [[0, (1.2, 1)], [1, (0.6, 1)]]}
         cell.verbose = 0
+        cell.precision = 1e-12
         cell.build(0,0)
 
         kpts = cell.make_kpts([1,3,1])
@@ -120,4 +127,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for aft ao2mo")
     unittest.main()
-

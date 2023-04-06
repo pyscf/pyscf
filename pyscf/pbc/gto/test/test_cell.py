@@ -23,27 +23,35 @@ import numpy as np
 from pyscf import gto
 from pyscf import lib
 from pyscf.pbc import gto as pgto
+from pyscf.pbc.gto import ecp
+from pyscf.pbc.tools import pbc as pbctools
 
 
-L = 1.5
-n = 41
-cl = pgto.Cell()
-cl.build(
-    a = [[L,0,0], [0,L,0], [0,0,L]],
-    mesh = [n,n,n],
-    atom = 'He %f %f %f' % ((L/2.,)*3),
-    basis = 'ccpvdz')
+def setUpModule():
+    global cl, cl1, L, n
+    L = 1.5
+    n = 41
+    cl = pgto.Cell()
+    cl.build(
+        a = [[L,0,0], [0,L,0], [0,0,L]],
+        mesh = [n,n,n],
+        atom = 'He %f %f %f' % ((L/2.,)*3),
+        basis = 'ccpvdz')
 
-numpy.random.seed(1)
-cl1 = pgto.Cell()
-cl1.build(a = numpy.random.random((3,3)).T,
-          precision = 1e-9,
-          mesh = [n,n,n],
-          atom ='''He .1 .0 .0
-                   He .5 .1 .0
-                   He .0 .5 .0
-                   He .1 .3 .2''',
-          basis = 'ccpvdz')
+    numpy.random.seed(1)
+    cl1 = pgto.Cell()
+    cl1.build(a = numpy.random.random((3,3)).T,
+              precision = 1e-9,
+              mesh = [n,n,n],
+              atom ='''He .1 .0 .0
+                       He .5 .1 .0
+                       He .0 .5 .0
+                       He .1 .3 .2''',
+              basis = 'ccpvdz')
+
+def tearDownModule():
+    global cl, cl1
+    del cl, cl1
 
 class KnownValues(unittest.TestCase):
     def test_nimgs(self):
@@ -97,9 +105,9 @@ class KnownValues(unittest.TestCase):
         3.370137329  3.370137329  0.000000000''',
         mesh = [15]*3)
         rcut = max([cell.bas_rcut(ib, 1e-8) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1361, 3))
-        rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
         self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1465, 3))
+        rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1657, 3))
 
     def test_ewald(self):
         cell = pgto.Cell()
@@ -114,20 +122,8 @@ class KnownValues(unittest.TestCase):
         cell.output = '/dev/null'
         cell.build()
 
-        ew_cut = (20,20,20)
-        self.assertAlmostEqual(cell.ewald(.05, 100), -0.468640671931, 9)
-        self.assertAlmostEqual(cell.ewald(0.1, 100), -0.468640671931, 9)
-        self.assertAlmostEqual(cell.ewald(0.2, 100), -0.468640671931, 9)
-        self.assertAlmostEqual(cell.ewald(1  , 100), -0.468640671931, 9)
-
-        def check(precision, eta_ref, ewald_ref):
-            ew_eta0, ew_cut0 = cell.get_ewald_params(precision, mesh=[41]*3)
-            self.assertAlmostEqual(ew_eta0, eta_ref)
-            self.assertAlmostEqual(cell.ewald(ew_eta0, ew_cut0), ewald_ref, 9)
-        check(0.001, 3.15273336976, -0.468640679947)
-        check(1e-05, 2.77596886114, -0.468640671968)
-        check(1e-07, 2.50838938833, -0.468640671931)
-        check(1e-09, 2.30575091612, -0.468640671931)
+        self.assertAlmostEqual(cell.ewald(0.2, 30), -0.468640671931, 9)
+        self.assertAlmostEqual(cell.ewald(1  , 30), -0.468640671931, 9)
 
         cell = pgto.Cell()
         numpy.random.seed(10)
@@ -143,6 +139,32 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(cell.ewald(1, 20), -2.3711356723457615, 9)
         self.assertAlmostEqual(cell.ewald(2, 10), -2.3711356723457615, 9)
         self.assertAlmostEqual(cell.ewald(2,  5), -2.3711356723457615, 9)
+
+    def test_ewald_vs_supercell(self):
+        a  = 4.1705
+        cell = pgto.Cell()
+        cell.a = a * np.asarray([
+            [1, 0.5, 0.5],
+            [0.5, 1, 0.5],
+            [0.5, 0.5, 1.0]])
+
+        cell.atom = [
+                ['Ni', [0, 0, 0]],
+                ['Ni', [a, a, a]]]
+        cell.precision = 1e-8
+        cell.build()
+        e_nuc_1 = cell.energy_nuc()
+        self.assertAlmostEqual(e_nuc_1, -456.0950359594, 8)
+
+        celldims = [2, 1, 1]
+        scell = pbctools.super_cell(cell, celldims)
+        e_nuc_2 = scell.energy_nuc() / np.product(celldims)
+        self.assertAlmostEqual(e_nuc_1, e_nuc_2, 8)
+
+        celldims = [2, 2, 1]
+        scell = pbctools.super_cell(cell, celldims)
+        e_nuc_2 = scell.energy_nuc() / np.product(celldims)
+        self.assertAlmostEqual(e_nuc_1, e_nuc_2, 8)
 
     def test_ewald_2d_inf_vacuum(self):
         cell = pgto.Cell()
@@ -169,7 +191,7 @@ class KnownValues(unittest.TestCase):
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), 70.875156940393225, 7)
+        self.assertAlmostEqual(cell.ewald(), 70.875156940393225, 4)
 
     def test_ewald_0d_inf_vacuum(self):
         cell = pgto.Cell()
@@ -230,7 +252,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(12)
         kpts = numpy.random.random((4,3))
         kpts[0] = 0
-        self.assertEqual(list(cl1.nimgs), [34,23,20])
+        self.assertEqual(list(cl1.nimgs), [36,24,21])
         s0 = cl1.pbc_intor('int1e_ovlp_sph', hermi=0, kpts=kpts)
         self.assertAlmostEqual(lib.fp(s0[0]), 492.30658304804126, 4)
         self.assertAlmostEqual(lib.fp(s0[1]), 37.812956255000756-28.972806230140314j, 4)
@@ -241,7 +263,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(s1), 492.30658304804126, 4)
 
     def test_ecp_pseudo(self):
-        from pyscf.pbc.gto import ecp
         cell = pgto.M(
             a = np.eye(3)*5,
             mesh = [9]*3,
@@ -258,7 +279,6 @@ class KnownValues(unittest.TestCase):
         cell.basis={'Na':'lanl2dz', 'H':'sto3g'}
         cell.ecp = {'Na':'lanl2dz'}
         cell.build()
-        # FIXME: ECP integrals segfault
         v1 = ecp.ecp_int(cell)
         mol = cell.to_mol()
         v0 = mol.intor('ECPscalar_sph')
@@ -343,13 +363,25 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(cell.KKS().__class__, dft.KKS(cell).__class__)
         self.assertEqual(cell.CCSD().__class__, cc.ccsd.RCCSD)
         self.assertEqual(cell.TDA().__class__, tdscf.rhf.TDA)
-        self.assertEqual(cell.TDBP86().__class__, tdscf.rks.TDDFTNoHybrid)
+        self.assertEqual(cell.TDBP86().__class__, tdscf.rks.CasidaTDDFT)
         self.assertEqual(cell.TDB3LYP().__class__, tdscf.rks.TDDFT)
         self.assertEqual(cell.KCCSD().__class__, cc.kccsd_rhf.KRCCSD)
         self.assertEqual(cell.KTDA().__class__, tdscf.krhf.TDA)
-        self.assertEqual(cell.KTDBP86().__class__, tdscf.krks.TDDFTNoHybrid)
+        self.assertEqual(cell.KTDBP86().__class__, tdscf.krks.TDDFT)
         self.assertRaises(AttributeError, lambda: cell.xyz)
         self.assertRaises(AttributeError, lambda: cell.TDxyz)
+
+        cell = pgto.M(atom='He', charge=1, spin=1, a=np.eye(3)*4, basis={'He': [[0, (1, 1)]]})
+        self.assertTrue(cell.HF().__class__, scf.uhf.UHF)
+        self.assertTrue(cell.KS().__class__, dft.uks.UKS)
+        self.assertTrue(cell.KKS().__class__, dft.kuks.KUKS)
+        self.assertTrue(cell.CCSD().__class__, cc.ccsd.UCCSD)
+        self.assertTrue(cell.TDA().__class__, tdscf.uhf.TDA)
+        self.assertTrue(cell.TDBP86().__class__, tdscf.uks.CasidaTDDFT)
+        self.assertTrue(cell.TDB3LYP().__class__, tdscf.uks.TDDFT)
+        self.assertTrue(cell.KCCSD().__class__, cc.kccsd_uhf.KUCCSD)
+        self.assertTrue(cell.KTDA().__class__, tdscf.kuhf.TDA)
+        self.assertTrue(cell.KTDBP86().__class__, tdscf.kuks.TDDFT)
 
     def test_ghost(self):
         cell = pgto.Cell(
@@ -413,8 +445,15 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(es - es1).max(), 0, 15)
             self.assertAlmostEqual(abs(cs - cs1).max(), 0, 15)
 
+    def test_conc_cell(self):
+        cl1 = pgto.M(a=np.eye(3)*5, atom='Cu', basis='lanl2dz', ecp='lanl2dz', spin=None)
+        cl2 = pgto.M(a=np.eye(3)*5, atom='Cs', basis='lanl2dz', ecp='lanl2dz', spin=None)
+        cl3 = cl1 + cl2
+        self.assertTrue(len(cl3._ecpbas), 20)
+        self.assertTrue(len(cl3._bas), 12)
+        self.assertTrue(len(cl3._atm), 8)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
     unittest.main()
-

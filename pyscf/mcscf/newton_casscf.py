@@ -819,7 +819,8 @@ class CASSCF(mc1step.CASSCF):
         else:
             fcasci = mc1step._fake_h_for_fast_casci(self, mo_coeff, eris)
 
-        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
+        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log,
+                                            envs=envs)
         if not isinstance(e_cas, (float, numpy.number)):
             raise RuntimeError('Multiple roots are detected in fcisolver.  '
                                'CASSCF does not know which state to optimize.\n'
@@ -829,7 +830,10 @@ class CASSCF(mc1step.CASSCF):
             log.debug('CAS space CI energy = %.15g', e_cas)
 
             if getattr(self.fcisolver, 'spin_square', None):
-                ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
+                try:
+                    ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
+                except NotImplementedError:
+                    ss = None
             else:
                 ss = None
 

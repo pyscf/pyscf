@@ -18,16 +18,18 @@ import numpy
 from pyscf import gto, scf, lib
 from pyscf import grad, hessian
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom.extend([
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
-mol.basis = '6-31g'
-mol.spin = 2
-mol.build()
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom.extend([
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ])
+    mol.basis = '6-31g'
+    mol.spin = 2
+    mol.build()
 
 def tearDownModule():
     global mol
@@ -39,7 +41,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.finger(hess), -0.20243405976628576, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.20243405976628576, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()

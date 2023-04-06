@@ -750,16 +750,16 @@ if __name__ == '__main__':
     nocc = gw.nocc
     gw.kernel(kptlist=[0,1,2],orbs=range(0,nocc+3))
     print(gw.mo_energy)
-    assert((abs(gw.mo_energy[0][nocc-1]-0.62045796))<1e-5)
-    assert((abs(gw.mo_energy[0][nocc]-0.96574426))<1e-5)
-    assert((abs(gw.mo_energy[1][nocc-1]-0.52639129))<1e-5)
-    assert((abs(gw.mo_energy[1][nocc]-1.07442235))<1e-5)
+    assert ((abs(gw.mo_energy[0][nocc-1]-0.62045796))<1e-5)
+    assert ((abs(gw.mo_energy[0][nocc]-0.96574426))<1e-5)
+    assert ((abs(gw.mo_energy[1][nocc-1]-0.52639129))<1e-5)
+    assert ((abs(gw.mo_energy[1][nocc]-1.07442235))<1e-5)
 
     # with finite size corrections
     gw.fc = True
     gw.kernel(kptlist=[0,1,2],orbs=range(0,nocc+3))
     print(gw.mo_energy)
-    assert((abs(gw.mo_energy[0][nocc-1]-0.5427707))<1e-5)
-    assert((abs(gw.mo_energy[0][nocc]-0.80148557))<1e-5)
-    assert((abs(gw.mo_energy[1][nocc-1]-0.45073751))<1e-5)
-    assert((abs(gw.mo_energy[1][nocc]-0.92910117))<1e-5)
+    assert ((abs(gw.mo_energy[0][nocc-1]-0.5427707))<1e-5)
+    assert ((abs(gw.mo_energy[0][nocc]-0.80148557))<1e-5)
+    assert ((abs(gw.mo_energy[1][nocc-1]-0.45073751))<1e-5)
+    assert ((abs(gw.mo_energy[1][nocc]-0.92910117))<1e-5)

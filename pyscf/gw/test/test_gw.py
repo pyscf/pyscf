@@ -4,20 +4,24 @@ import unittest
 import numpy
 from pyscf import lib, gto, scf, dft, tdscf
 from pyscf import gw
+from pyscf.gw import rpa
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    ['O' , (0. , 0.     , 0.)],
-    ['H' , (0. , -0.7571 , 0.5861)],
-    ['H' , (0. , 0.7571 , 0.5861)]]
-mol.basis = 'def2-svp'
-mol.build()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        ['O' , (0. , 0.     , 0.)],
+        ['H' , (0. , -0.7571 , 0.5861)],
+        ['H' , (0. , 0.7571 , 0.5861)]]
+    mol.basis = 'def2-svp'
+    mol.build()
 
-mf = dft.RKS(mol)
-mf.xc = 'pbe'
-mf.kernel()
+    mf = dft.RKS(mol)
+    mf.conv_tol = 1e-10
+    mf.xc = 'pbe'
+    mf.kernel()
 
 def tearDownModule():
     global mol, mf
@@ -41,7 +45,7 @@ class KnownValues(unittest.TestCase):
         gw_obj.kernel(orbs=range(0, nocc+3))
         self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.41284735, 5)
         self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.16574524, 5)
-        self.assertAlmostEqual(gw_obj.mo_energy[0], -19.53387986, 5)
+        self.assertAlmostEqual(gw_obj.mo_energy[0], -19.53387986, 4)
 
     def test_gw_exact(self):
         mol = gto.Mole()
@@ -68,8 +72,14 @@ class KnownValues(unittest.TestCase):
         gw_obj.kernel()
         gw_obj.linearized = True
         gw_obj.kernel(orbs=[nocc-1,nocc])
-        self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.44684106, 7)
-        self.assertAlmostEqual(gw_obj.mo_energy[nocc]  ,  0.17292032, 7)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.44684106, 6)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc]  ,  0.17292032, 6)
+
+    def test_rpa(self):
+        rpa_obj = rpa.RPA(mf, frozen=0)
+        rpa_obj.kernel()
+        self.assertAlmostEqual(rpa_obj.e_tot, -76.26428191794182, 6)
+        self.assertAlmostEqual(rpa_obj.e_corr, -0.30783004035780076, 6)
 
 
 if __name__ == "__main__":

@@ -489,7 +489,8 @@ class UCASSCF(ucasci.UCASCI):
 
         log = logger.new_logger(self, verbose)
 
-        e_tot, e_cas, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log)
+        e_tot, e_cas, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log,
+                                             envs=envs)
         if envs is not None and log.verbose >= logger.INFO:
             log.debug('CAS space CI energy = %.15g', e_cas)
 
@@ -498,9 +499,9 @@ class UCASSCF(ucasci.UCASCI):
                          'UCASSCF E = %.15g  dE = %.8g',
                          envs['imacro'], envs['njk'], envs['imicro'],
                          e_tot, e_tot-envs['elast'])
-                if 'norm_gci' in envs:
+                if 'norm_gci' in envs and envs['norm_gci'] is not None:
                     log.info('               |grad[o]|=%5.3g  '
-                             '|grad[c]|= %s  |ddm|=%5.3g',
+                             '|grad[c]|=%5.3g  |ddm|=%5.3g',
                              envs['norm_gorb0'],
                              envs['norm_gci'], envs['norm_ddm'])
                 else:

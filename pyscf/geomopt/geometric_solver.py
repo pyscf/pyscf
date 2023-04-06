@@ -41,7 +41,7 @@ except ImportError:
 internal.ang2bohr = optimize.ang2bohr = nifty.ang2bohr = 1./lib.param.BOHR
 engine.bohr2ang = internal.bohr2ang = molecule.bohr2ang = nifty.bohr2ang = \
         optimize.bohr2ang = lib.param.BOHR
-del(internal, optimize, nifty, engine, molecule)
+del (internal, optimize, nifty, engine, molecule)
 
 
 INCLUDE_GHOST = getattr(__config__, 'geomopt_berny_solver_optimize_include_ghost', True)
@@ -145,7 +145,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     # geomeTRIC library on pypi requires to provide config file log.ini.
     if not os.path.exists(os.path.abspath(
-            os.path.join(geometric.optimize.__file__, '..', 'log.ini'))):
+            os.path.join(geometric.optimize.__file__, '..', 'log.ini'))) and kwargs.get('logIni') is None:
         kwargs['logIni'] = os.path.abspath(os.path.join(__file__, '..', 'log.ini'))
 
     engine.assert_convergence = assert_convergence
@@ -213,7 +213,7 @@ class GeometryOptimizer(lib.StreamObject):
 class NotConvergedError(RuntimeError):
     pass
 
-del(INCLUDE_GHOST, ASSERT_CONV)
+del (INCLUDE_GHOST, ASSERT_CONV)
 
 
 if __name__ == '__main__':

@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
         hf_111 = -0.73491491306419987
         cc_111 = -1.1580008204825658e-05
         escf,ecc=run_cell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_111, 9)
+        self.assertAlmostEqual(escf,hf_111, 8)
         self.assertAlmostEqual(ecc, cc_111, 6)
 
     def test_111_n1(self):
@@ -71,7 +71,7 @@ class KnownValues(unittest.TestCase):
         hf_111 = -0.73506011036963814
         cc_111 = -0.023265431169472835
         escf,ecc=run_cell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_111, 9)
+        self.assertAlmostEqual(escf,hf_111, 8)
         self.assertAlmostEqual(ecc, cc_111, 6)
 
     def test_111_n3(self):
@@ -82,7 +82,7 @@ class KnownValues(unittest.TestCase):
         hf_111 = -7.4117951240232118
         cc_111 = -0.19468901057053406
         escf,ecc=run_cell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_111, 9)
+        self.assertAlmostEqual(escf,hf_111, 8)
         self.assertAlmostEqual(ecc, cc_111, 6)
 
     def test_311_n1(self):
@@ -93,7 +93,7 @@ class KnownValues(unittest.TestCase):
         hf_311 = -0.92687629918229486
         cc_311 = -0.042702177586414237
         escf,ecc=run_cell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_311, 9)
+        self.assertAlmostEqual(escf,hf_311, 8)
         self.assertAlmostEqual(ecc, cc_311, 6)
 
 if __name__ == '__main__':

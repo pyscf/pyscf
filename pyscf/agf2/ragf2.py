@@ -27,7 +27,8 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo
 from pyscf.scf import _vhf
-from pyscf.agf2 import aux, mpi_helper, _agf2
+from pyscf.agf2 import mpi_helper, _agf2
+from pyscf.agf2 import aux_space as aux
 from pyscf.agf2 import chkfile as chkutil
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
 from pyscf.mp.mp2 import get_frozen_mask as _get_frozen_mask
@@ -828,6 +829,12 @@ class RAGF2(lib.StreamObject):
     def dump_chk(self, chkfile=None, key='agf2', gf=None, se=None,
                  frozen=None, nmom=None,
                  mo_energy=None, mo_coeff=None, mo_occ=None):
+        if chkfile is None:
+            chkfile = self.chkfile
+
+        if not chkfile:
+            return self
+
         chkutil.dump_agf2(self, chkfile, key,
                           gf, se, frozen, None,
                           mo_energy, mo_coeff, mo_occ)
@@ -858,7 +865,6 @@ class RAGF2(lib.StreamObject):
             myagf2.with_df.auxbasis = auxbasis
 
         return myagf2
-
 
     def get_ip(self, gf, nroots=5):
         gf_occ = gf.get_occupied()
@@ -942,6 +948,7 @@ class RAGF2(lib.StreamObject):
 
     @property
     def e_corr(self):
+        # TODO Should HF energy be recalculated in case DFT orbitals or so were used?
         e_hf = mpi_helper.bcast(self._scf.e_tot)
         return self.e_tot - e_hf
 
