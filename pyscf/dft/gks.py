@@ -75,13 +75,18 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         ni = ks._numint
         n, exc, vxc = ni.get_vxc(mol, ks.grids, ks.xc, dm,
                                  hermi=hermi, max_memory=max_memory)
-        if ks.nlc != '':
-            assert ('VV10' in ks.nlc.upper())
-            _, enlc, vnlc = ni.get_vxc(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm,
-                                       hermi=hermi, max_memory=max_memory)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        if ks.nlc or ni.libxc.is_nlc(ks.xc):
+            if ni.libxc.is_nlc(ks.xc):
+                xc = ks.xc
+            else:
+                assert ni.libxc.is_nlc(ks.nlc)
+                xc = ks.nlc
+            n, enlc, vnlc = ni.nr_nlc_vxc(mol, ks.nlcgrids, xc, dm,
+                                          hermi=hermi, max_memory=max_memory)
             exc += enlc
             vxc += vnlc
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+            logger.debug(ks, 'nelec with nlc grids = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     if not ni.libxc.is_hybrid_xc(ks.xc):

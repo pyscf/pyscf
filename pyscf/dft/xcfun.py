@@ -266,11 +266,10 @@ def xc_type(xc_code):
     if xc_code is None:
         return None
     elif isinstance(xc_code, str):
-        if is_nlc(xc_code):
-            return 'NLC'
         hyb, fn_facs = parse_xc(xc_code)
     else:
         fn_facs = [(xc_code, 1)]  # mimic fn_facs
+
     if not fn_facs:
         return 'HF'
     elif all(_itrf.XCFUN_xc_type(ctypes.c_int(xid)) == 0 for xid, val in fn_facs):
@@ -279,7 +278,7 @@ def xc_type(xc_code):
         return 'MGGA'
     else:
         # all((xid in GGA_IDS or xid in LDA_IDS for xid, val in fn_fns)):
-        # include hybrid_xc
+        # include hybrid_xc and NLC
         return 'GGA'
 
 def is_lda(xc_code):
@@ -301,27 +300,28 @@ def is_meta_gga(xc_code):
 def is_gga(xc_code):
     return xc_type(xc_code) == 'GGA'
 
+# Assign a temporary Id to VV10 functionals. parse_xc function needs them to
+# parse NLC functionals
+XC_CODES.update([(key, 5000+i) for i, key in enumerate(VV10_XC)])
+VV10_XC.update([(5000+i, VV10_XC[key]) for i, key in enumerate(VV10_XC)])
+
 def is_nlc(xc_code):
-    return '__VV10' in xc_code.upper()
+    fn_facs = parse_xc(xc_code)[1]
+    return any(xid >= 5000 for xid, c in fn_facs)
 
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
     xc_code = xc_code.upper()
-
-    nlc_part = None
     if '__VV10' in xc_code:
-        xc_code, nlc_part = xc_code.split('__', 1)
+        raise RuntimeError('Deprecated notation for NLC functional.')
 
-    if xc_code in VV10_XC:
-        return VV10_XC[xc_code]
-    elif nlc_part is not None:
-        # Use VV10 NLC parameters by default for the general case
-        return VV10_XC[nlc_part]
-    else:
-        raise NotImplementedError(
-            '%s does not have NLC part. Available functionals are %s' %
-            (xc_code, ', '.join(VV10_XC.keys())))
+    fn_facs = parse_xc(xc_code)[1]
+    nlc_pars = []
+    for xid, fac in fn_facs:
+        if xid >= 5000:
+            nlc_pars.append((VV10_XC[xid], fac))
+    return tuple(nlc_pars)
 
 def rsh_coeff(xc_code):
     '''Get Range-separated-hybrid coefficients
@@ -342,8 +342,6 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
     return support
 
 def hybrid_coeff(xc_code, spin=0):
-    if is_nlc(xc_code):
-        return 0
     hyb, fn_facs = parse_xc(xc_code)
     return hyb[0]
 

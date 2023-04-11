@@ -64,7 +64,11 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpt is None: kpt = ks.kpt
     t0 = (logger.process_clock(), logger.perf_counter())
 
-    hybrid = ks._numint.libxc.is_hybrid_xc(ks.xc)
+    ni = ks._numint
+    if ks.nlc or ni.libxc.is_nlc(ks.xc):
+        raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
+
+    hybrid = ni.libxc.is_hybrid_xc(ks.xc)
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
@@ -158,7 +162,9 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
 
 def _dft_common_init_(mf, xc='LDA,VWN'):
     mf.xc = xc
+    mf.nlc = ''
     mf.grids = gen_grid.UniformGrids(mf.cell)
+    mf.nlcgrids = None
     # Use rho to filter grids
     mf.small_rho_cutoff = getattr(__config__,
                                   'pbc_dft_rks_RKS_small_rho_cutoff', 1e-7)
