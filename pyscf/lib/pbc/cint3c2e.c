@@ -95,9 +95,18 @@ static void update_int3c2e_envs(CINTEnvVars *envs, int *shls)
         }
 
         // see g3c2e.c in libcint
+#ifdef QCINT_VERSION
+        int i;
+        for (i = 0; i < SIMDD; i++) {
+                envs->rkl[0*SIMDD+i] = envs->rk[0];
+                envs->rkl[1*SIMDD+i] = envs->rk[1];
+                envs->rkl[2*SIMDD+i] = envs->rk[2];
+        }
+#else
         envs->rkl[0] = envs->rk[0];
         envs->rkl[1] = envs->rk[1];
         envs->rkl[2] = envs->rk[2];
+#endif
         envs->rx_in_rklrx = envs->rk;
         envs->rkrl[0] = envs->rk[0];
         envs->rkrl[1] = envs->rk[1];
