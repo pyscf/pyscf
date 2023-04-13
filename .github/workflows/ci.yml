@@ -35,10 +35,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install and Test
         run: ./.github/workflows/run_ci.sh
-#      - name: Upload to codecov
-#        uses: codecov/codecov-action@v1.0.13
-#        with:
-#          token: ${{secrets.CODECOV_TOKEN}}
+      - name: Upload to codecov
+        uses: codecov/codecov-action@v1.0.13
+        with:
+          token: ${{secrets.CODECOV_TOKEN}}
   
   linux-build-aarch64:
     runs-on: ${{ matrix.os }}
