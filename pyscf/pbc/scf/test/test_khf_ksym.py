@@ -43,7 +43,7 @@ def make_primitive_cell(mesh, spin=0):
 
 def setUpModule():
     global cell, He, nk, kmf0, kumf0, kmf_ksymm, kumf_ksymm
-    cell = make_primitive_cell([17]*3)
+    cell = make_primitive_cell([16]*3)
     nk = [1,2,2]
     kmf0  = pscf.KRHF(cell, cell.make_kpts(nk)).run()
     kumf0 = pscf.KUHF(cell, cell.make_kpts(nk)).run()
