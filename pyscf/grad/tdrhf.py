@@ -199,10 +199,10 @@ def as_scanner(td_grad, state=1):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+            self.reset(mol)
 
             td_scanner = self.base
             td_scanner(mol)
-            self.mol = mol
 # TODO: Check root flip.  Maybe avoid the initial guess in TDHF otherwise
 # large error may be found in the excited states amplitudes
             de = self.kernel(state=state, **kwargs)

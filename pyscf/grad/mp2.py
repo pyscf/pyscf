@@ -224,6 +224,7 @@ def as_scanner(grad_mp):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+            self.reset(mol)
 
             mp_scanner = self.base
             mp_scanner(mol, with_t2=True)
@@ -279,7 +280,7 @@ class Gradients(rhf_grad.GradientsMixin):
     def kernel(self, t2=None, atmlst=None, verbose=None):
         log = logger.new_logger(self, verbose)
         if t2 is None: t2 = self.base.t2
-        if t2 is None: t2 = self.base.kernel()
+        if t2 is None: t2 = self.base.kernel()[1]
         if atmlst is None:
             atmlst = self.atmlst
         else:
