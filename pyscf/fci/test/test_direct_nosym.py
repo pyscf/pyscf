@@ -65,6 +65,11 @@ class KnownValues(unittest.TestCase):
         h1 = fci.direct_nosym.absorb_h1e(h1e, h2e, norb, nelec)
         self.assertTrue(numpy.allclose(href, h1))
 
+    def test_absorb_h1e_complex(self):
+        href = fci_slow.absorb_h1e(h1e.astype(complex), h2e, norb, nelec)
+        h1 = fci.direct_nosym.absorb_h1e(h1e.astype(complex), h2e, norb, nelec)
+        self.assertTrue(numpy.allclose(href, h1))
+
     def test_kernel(self):
         h1 = h1e + h1e.T
         eri = .5* ao2mo.restore(1, ao2mo.restore(8, h2e, norb), norb)
