@@ -131,7 +131,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''
     if not isinstance(nelec, (int, numpy.integer)):
         nelec = sum(nelec)
-    h2e = ao2mo.restore(1, eri.copy(), norb)
+    h2e = ao2mo.restore(1, eri.copy(), norb).astype(h1e.dtype, copy=False)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
