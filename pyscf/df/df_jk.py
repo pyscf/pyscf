@@ -118,18 +118,21 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                    omega=None):
             if dm is None: dm = self.make_rdm1()
-            if self.with_df and self.only_dfj:
-                vj = vk = None
-                if with_j:
-                    vj, vk = self.with_df.get_jk(dm, hermi, True, False,
-                                                 self.direct_scf_tol, omega)
-                if with_k:
-                    vk = mf_class.get_jk(self, mol, dm, hermi, False, True, omega)[1]
-            elif self.with_df:
-                vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_k,
-                                             self.direct_scf_tol, omega)
+            if not self.with_df:
+                return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+
+            with_dfk = with_k and not self.only_dfj
+            if isinstance(self, scf.ghf.GHF):
+                def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
+                    return self.with_df.get_jk(dm, hermi, with_j, with_k,
+                                               self.direct_scf_tol, omega)
+                vj, vk = scf.ghf.get_jk(mol, dm, hermi, with_j, with_dfk,
+                                        jkbuild, omega)
             else:
-                vj, vk = mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+                vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_dfk,
+                                             self.direct_scf_tol, omega)
+            if with_k and not with_dfk:
+                vk = mf_class.get_jk(self, mol, dm, hermi, False, True, omega)[1]
             return vj, vk
 
         # for pyscf 1.0, 1.1 compatibility
