@@ -157,10 +157,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
     >>> rho, dx_rho, dy_rho, dz_rho = eval_rho(mol, ao, dm, xctype='LDA')
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-    else:
-        ngrids, nao = ao[0].shape
+    ngrids, nao = ao.shape[-2:]
 
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
@@ -273,10 +270,7 @@ def eval_rho1(mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
         return eval_rho(mol, ao, dm, screen_index, xctype, hermi, with_lapl, verbose)
 
     xctype = xctype.upper()
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids = ao.shape[0]
-    else:
-        ngrids = ao.shape[1]
+    ngrids = ao.shape[-2]
 
     if cutoff is None:
         cutoff = CUTOFF
@@ -369,10 +363,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         or (5,N) (with_lapl=False) where the last row is tau = 1/2(\nabla f)^2
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-    else:
-        ngrids, nao = ao[0].shape
+    ngrids, nao = ao.shape[-2:]
 
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
@@ -608,10 +599,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
         number of AO functions.
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-    else:
-        ngrids, nao = ao[0].shape
+    ngrids, nao = ao.shape[-2:]
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
@@ -1512,7 +1500,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 if xctype == 'LDA':
                     wv = weight * rho1 * _fxc[0]
                 else:
-                    wv = numpy.einsum('xg,xyg,g->yg', rho1, _fxc, weight)
+                    wv = numpy.einsum('yg,xyg,g->xg', rho1, _fxc, weight)
                 yield i, ao, mask, wv
 
     ao_loc = mol.ao_loc_nr()
@@ -1569,8 +1557,6 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
     Ref. CPL, 256, 454
     '''
     if fxc is None:
-        if dm0.ndim == 2:
-            dm0 = [dm0*.5] * 2
         fxc = ni.cache_xc_kernel1(mol, grids, xc_code, dm0, spin=1,
                                   max_memory=max_memory)[2]
     if singlet:
@@ -2597,14 +2583,19 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
     else:
         ao_deriv = 0
 
-    if spin == 0:
+    if mo_coeff[0].ndim == 1:  # RKS
         nao = mo_coeff.shape[0]
         rho = []
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             rho.append(ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype))
         rho = numpy.hstack(rho)
-    else:
+        if spin == 1:  # RKS with nr_rks_fxc_st
+            rho *= .5
+            rho = numpy.repeat(rho[numpy.newaxis], 2, axis=0)
+    else:  # UKS
+        assert mo_coeff[0].ndim == 2
+        assert spin == 1
         nao = mo_coeff[0].shape[0]
         rhoa = []
         rhob = []
@@ -2629,13 +2620,18 @@ def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=0, max_memory=2000):
         ao_deriv = 0
 
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi=1)
-    if spin == 0:
+    if dm[0].ndim == 1:  # RKS
         rho = []
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             rho.append(make_rho(0, ao, mask, xctype))
         rho = numpy.hstack(rho)
-    else:
+        if spin == 1:  # RKS with nr_rks_fxc_st
+            rho *= .5
+            rho = numpy.repeat(rho[numpy.newaxis], 2, axis=0)
+    else:  # UKS
+        assert dm[0].ndim == 2
+        assert spin == 1
         rhoa = []
         rhob = []
         for ao, mask, weight, coords \

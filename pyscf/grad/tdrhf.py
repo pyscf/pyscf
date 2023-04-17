@@ -126,10 +126,11 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
                                   dmxmy-dmxmy.T))
     vj = vj.reshape(-1,3,nao,nao)
     vk = vk.reshape(-1,3,nao,nao)
+    vhf1 = -vk
     if singlet:
-        vhf1 = vj * 2 - vk
+        vhf1 += vj * 2
     else:
-        vhf1 = numpy.vstack((vj[:2]*2-vk[:2], -vk[2:]))
+        vhf1[:2] += vj[:2]*2
     time1 = log.timer('2e AO integral derivatives', *time1)
 
     if atmlst is None:

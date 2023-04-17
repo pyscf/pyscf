@@ -62,10 +62,10 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         if singlet is None:
             # for ground state orbital hessian
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                mo_coeff, mo_occ, 0)
+                                                mo_coeff, mo_occ, spin=0)
         else:
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
+                                                mo_coeff, mo_occ, spin=1)
         dm0 = None  #mf.make_rdm1(mo_coeff, mo_occ)
 
         if max_memory is None:
