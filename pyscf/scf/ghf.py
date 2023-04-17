@@ -442,7 +442,8 @@ class GHF(hf.SCF):
         if dm is None: dm = self.make_rdm1()
         nao = mol.nao
         dm = numpy.asarray(dm)
-        if dm.shape[-1] != nao * 2:
+        # nao = 0 for HF with custom Hamiltonian
+        if dm.shape[-1] != nao * 2 and nao != 0:
             raise ValueError('Dimension inconsistent '
                              f'dm.shape = {dm.shape}, mol.nao = {nao}')
 

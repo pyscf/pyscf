@@ -1306,6 +1306,7 @@ def as_scanner(mf):
     class SCF_Scanner(mf.__class__, lib.SinglePointScanner):
         def __init__(self, mf_obj):
             self.__dict__.update(mf_obj.__dict__)
+            self._last_mol_fp = mf.mol.ao_loc
 
         def __call__(self, mol_or_geom, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
@@ -1323,7 +1324,7 @@ def as_scanner(mf):
             elif self.chkfile and h5py.is_hdf5(self.chkfile):
                 dm0 = self.from_chk(self.chkfile)
             else:
-                dm0 = self.make_rdm1()
+                dm0 = None
                 # dm0 form last calculation cannot be used in the current
                 # calculation if a completely different system is given.
                 # Obviously, the systems are very different if the number of
@@ -1331,18 +1332,11 @@ def as_scanner(mf):
                 # TODO: A robust check should include more comparison on
                 # various attributes between current `mol` and the `mol` in
                 # last calculation.
-                if dm0.shape[-1] != mol.nao:
-                    #TODO:
-                    #from pyscf.scf import addons
-                    #if numpy.any(last_mol.atom_charges() != mol.atom_charges()):
-                    #    dm0 = None
-                    #elif non-relativistic:
-                    #    addons.project_dm_nr2nr(last_mol, dm0, last_mol)
-                    #else:
-                    #    addons.project_dm_r2r(last_mol, dm0, last_mol)
-                    dm0 = None
+                if numpy.array_equal(self._last_mol_fp, mol.ao_loc):
+                    dm0 = self.make_rdm1()
             self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
             e_tot = self.kernel(dm0=dm0, **kwargs)
+            self._last_mol_fp = mol.ao_loc
             return e_tot
 
     return SCF_Scanner(mf)

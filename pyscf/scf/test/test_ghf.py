@@ -193,17 +193,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vj), 254.68614111766146+0j, 9)
         self.assertAlmostEqual(lib.fp(vk), 62.08832587927003-8.640597547171135j, 9)
 
-        nao = mol.nao_nr()
-        numpy.random.seed(1)
-        d1 = numpy.random.random((nao,nao))
-        d2 = numpy.random.random((nao,nao))
-        d = (d1+d1.T, d2+d2.T)
-        vj, vk = mf.get_jk(mol, d)
-        self.assertEqual(vj.shape, (2,nao,nao))
-        self.assertEqual(vk.shape, (2,nao,nao))
-        self.assertAlmostEqual(lib.fp(vj), -388.17756605981504, 9)
-        self.assertAlmostEqual(lib.fp(vk), -84.276190743451622, 9)
-
     def test_spin_square(self):
         nao = mol.nao_nr()
         s = mol.intor('int1e_ovlp')
