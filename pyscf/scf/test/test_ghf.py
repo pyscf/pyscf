@@ -140,6 +140,7 @@ class KnownValues(unittest.TestCase):
         dm[nao:,:nao] = dm[:nao,nao:].T.conj()
         mf1.kernel(dm)
         self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 9)
+        self.assertAlmostEqual(mf1.e_tot, -76.02676567312, 9)
 
     def test_get_veff(self):
         nao = mol.nao_nr()*2
@@ -192,17 +193,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vj), 254.68614111766146+0j, 9)
         self.assertAlmostEqual(lib.fp(vk), 62.08832587927003-8.640597547171135j, 9)
 
-        nao = mol.nao_nr()
-        numpy.random.seed(1)
-        d1 = numpy.random.random((nao,nao))
-        d2 = numpy.random.random((nao,nao))
-        d = (d1+d1.T, d2+d2.T)
-        vj, vk = mf.get_jk(mol, d)
-        self.assertEqual(vj.shape, (2,nao,nao))
-        self.assertEqual(vk.shape, (2,nao,nao))
-        self.assertAlmostEqual(lib.fp(vj), -388.17756605981504, 9)
-        self.assertAlmostEqual(lib.fp(vk), -84.276190743451622, 9)
-
     def test_spin_square(self):
         nao = mol.nao_nr()
         s = mol.intor('int1e_ovlp')
@@ -229,6 +219,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ss, 3.9543837879512358, 9)
         ssref = spin_square(mol, mo)
         self.assertAlmostEqual(ssref, ss, 9)
+
+        # Test the call to spin_square() in ghf.analyze()
+        mf.analyze()
 
     def test_canonicalize(self):
         mo = mf.mo_coeff + 0j

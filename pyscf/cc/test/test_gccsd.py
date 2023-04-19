@@ -181,6 +181,7 @@ class KnownValues(unittest.TestCase):
     def test_rdm_real(self):
         nocc = 6
         nvir = 10
+        mol = gto.M()
         mf = scf.GHF(mol)
         nmo = nocc + nvir
         npair = nmo*(nmo//2+1)//4
