@@ -52,7 +52,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
 
 
 def make_hdiag(h1e, eri, norb, nelec, opt=None):
-    occslist = cistring._gen_occslst(range(norb), nelec)
+    occslist = cistring.gen_occslst(range(norb), nelec)
     diagjk = numpy.einsum('iijj->ij', eri.copy(), optimize=True)
     diagjk -= numpy.einsum('ijji->ij', eri, optimize=True)
     hdiag = []

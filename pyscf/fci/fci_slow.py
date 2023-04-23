@@ -147,8 +147,8 @@ def make_hdiag(h1e, eri, norb, nelec, opt=None):
     else:
         neleca, nelecb = nelec
 
-    occslista = cistring._gen_occslst(range(norb), neleca)
-    occslistb = cistring._gen_occslst(range(norb), nelecb)
+    occslista = cistring.gen_occslst(range(norb), neleca)
+    occslistb = cistring.gen_occslst(range(norb), nelecb)
     eri = ao2mo.restore(1, eri, norb)
     diagj = numpy.einsum('iijj->ij', eri)
     diagk = numpy.einsum('ijji->ij', eri)

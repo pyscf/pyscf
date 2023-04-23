@@ -149,9 +149,9 @@ def make_hdiag(h1e, eri, norb, nelec):
     neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.asarray(h1e, order='C')
     eri = ao2mo.restore(1, eri, norb)
-    occslsta = occslstb = cistring._gen_occslst(range(norb), neleca)
+    occslsta = occslstb = cistring.gen_occslst(range(norb), neleca)
     if neleca != nelecb:
-        occslstb = cistring._gen_occslst(range(norb), nelecb)
+        occslstb = cistring.gen_occslst(range(norb), nelecb)
     na = len(occslsta)
     nb = len(occslstb)
 
