@@ -246,9 +246,9 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
         raise NotImplementedError
         orb_lz = wfn_lz = d2h_wfnsym_id = None
 
-    occslsta = occslstb = cistring._gen_occslst(range(norb), neleca)
+    occslsta = occslstb = cistring.gen_occslst(range(norb), neleca)
     if neleca != nelecb:
-        occslstb = cistring._gen_occslst(range(norb), nelecb)
+        occslstb = cistring.gen_occslst(range(norb), nelecb)
     na = len(occslsta)
     nb = len(occslsta)
 

@@ -130,9 +130,9 @@ def make_hdiag(h1e, eri, norb, nelec):
     g2e_ab = ao2mo.restore(1, eri[1], norb)
     g2e_bb = ao2mo.restore(1, eri[2], norb)
 
-    occslsta = occslstb = cistring._gen_occslst(range(norb), neleca)
+    occslsta = occslstb = cistring.gen_occslst(range(norb), neleca)
     if neleca != nelecb:
-        occslstb = cistring._gen_occslst(range(norb), nelecb)
+        occslstb = cistring.gen_occslst(range(norb), nelecb)
     na = len(occslsta)
     nb = len(occslstb)
 
