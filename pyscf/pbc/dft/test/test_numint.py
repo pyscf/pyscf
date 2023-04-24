@@ -351,6 +351,53 @@ class KnownValues(unittest.TestCase):
         rho1 = numint.get_rho(ni, cell, dm, grids)
         self.assertAlmostEqual(abs(rho - rho1).max(), 0, 8)
 
+    def test_nr_uks_vxc_vv10(self):
+        cell = pbcgto.Cell()
+        cell.verbose = 5
+        cell.output = '/dev/null'
+        cell.a = np.eye(3) * 2.5
+        cell.atom = [['He', (1., .8, 1.9)],
+                     ['He', (.1, .2,  .3)],]
+        cell.basis = [[0, [1, 1]], [1, [.5, 1]]]
+        cell.build(False, False)
+        grids = gen_grid.UniformGrids(cell)
+        grids.build()
+
+        dm = cell.RKS().get_init_guess()
+        ni = numint.NumInt()
+        n, e, v = numint.nr_nlc_vxc(ni, cell, grids, 'wB97M_V', dm)
+        self.assertAlmostEqual(n, 4, 7)
+        self.assertAlmostEqual(e, 0.018478019527738167, 7)
+        self.assertAlmostEqual(lib.fp(v), 0.002648410260782844, 7)
+
+
+        kpts = cell.make_kpts([3,1,1])
+        dm = cell.KRKS(kpts=kpts).get_init_guess()
+        ni = numint.KNumInt()
+        n, e, v = numint.nr_nlc_vxc(ni, cell, grids, 'wB97M_V', dm, kpts=kpts)
+        self.assertAlmostEqual(n, 4, 7)
+        self.assertAlmostEqual(e, 0.018474723573745723, 7)
+        self.assertAlmostEqual(lib.fp(v), 0.002648584136536172, 7)
+
+        h2o = pbcgto.Cell()
+        h2o.a = np.eye(3) * 10
+        h2o.atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)] ]
+        h2o.basis = {"H": '6-31g', "O": '6-31g',}
+        h2o.build()
+
+        method = h2o.UKS().density_fit()
+        dm = method.get_init_guess()
+        grids = gen_grid.BeckeGrids(h2o)
+        grids.atom_grid = {'H': (20, 50), 'O': (20,50)}
+        grids.build()
+        ni = numint.NumInt()
+        n, e, v = numint.nr_nlc_vxc(ni, h2o, grids, 'wB97M_V', dm[0]*2, hermi=0)
+        self.assertAlmostEqual(e, 0.04237199619089385, 3)
+        self.assertAlmostEqual(lib.fp([v, v]), 0.02293399033256055, 4)
+
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.numint")
     unittest.main()

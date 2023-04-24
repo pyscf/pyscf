@@ -61,6 +61,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         raise NotImplementedError
 
+    # ndim = 2, dm.shape = (2*nao, 2*nao)
+    ground_state = (dm.ndim == 2 and kpts_band is None)
+    ks.initialize_grids(cell, dm, kpt, ground_state)
+
     # TODO: support non-symmetric density matrix
     assert (hermi == 1)
     dm = numpy.asarray(dm)
@@ -68,13 +72,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     # ndim = 2, dm.shape = (2*nao, 2*nao)
     ground_state = (dm.ndim == 2 and kpts_band is None)
 
-    if ks.grids.non0tab is None:
-        ks.grids.build(with_non0tab=True)
-        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
-            ks.small_rho_cutoff > 1e-20 and ground_state):
-            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpt)
-        t0 = logger.timer(ks, 'setting up grids', *t0)
-
+    # vxc = (vxc_aa, vxc_bb). vxc_ab is neglected in collinear DFT.
     max_memory = ks.max_memory - lib.current_memory()[0]
     ni = ks._numint
     n, exc, vxc = ni.get_vxc(cell, ks.grids, ks.xc, dm, hermi=hermi, kpt=kpt,

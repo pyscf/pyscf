@@ -31,6 +31,7 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import khf, kuhf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
+from pyscf.pbc.dft.krks import get_rho
 from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
@@ -46,12 +47,11 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (logger.process_clock(), logger.perf_counter())
 
     ni = ks._numint
-    if ks.nlc or ni.libxc.is_nlc(ks.xc):
-        raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
-
     hybrid = ni.libxc.is_hybrid_xc(ks.xc)
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        if ks.nlc or ni.libxc.is_nlc(ks.xc):
+            raise NotImplementedError(f'MultiGrid for NLC functional {ks.xc} + {ks.nlc}')
         n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
                                        kpts, kpts_band,
                                        with_j=True, return_j=False)
@@ -61,20 +61,24 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
     ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
-
-    if ks.grids.non0tab is None:
-        ks.grids.build(with_non0tab=True)
-        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
-            ks.small_rho_cutoff > 1e-20 and ground_state):
-            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpts)
-        t0 = logger.timer(ks, 'setting up grids', *t0)
+    ks.initialize_grids(cell, dm, kpts, ground_state)
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = (0,0), 0, 0
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0, hermi,
-                                        kpts, kpts_band, max_memory=max_memory)
+        n, exc, vxc = ni.nr_uks(cell, ks.grids, ks.xc, dm, 0, hermi,
+                                kpts, kpts_band, max_memory=max_memory)
+        if ks.nlc or ni.libxc.is_nlc(ks.xc):
+            if ni.libxc.is_nlc(ks.xc):
+                xc = ks.xc
+            else:
+                assert ni.libxc.is_nlc(ks.nlc)
+                xc = ks.nlc
+            n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm[0]+dm[1],
+                                          0, hermi, kpts, max_memory=max_memory)
+            exc += enlc
+            vxc += vnlc
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -85,7 +89,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vj = ks.get_j(cell, dm[0]+dm[1], hermi, kpts, kpts_band)
         vxc += vj
     else:
-        omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
         if getattr(ks.with_df, '_j_only', False) and nkpts > 1: # for GDF and MDF
             ks.with_df._j_only = False
             if ks.with_df._cderi is not None:
@@ -134,16 +138,9 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
                     ecoul.imag)
     return tot_e.real, vhf.ecoul + vhf.exc
 
-@lib.with_doc(kuhf.get_rho.__doc__)
-def get_rho(mf, dm=None, grids=None, kpts=None):
-    from pyscf.pbc.dft import krks
-    if dm is None:
-        dm = mf.make_rdm1()
-    return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
 
-
-class KUKS(kuhf.KUHF, rks.KohnShamDFT):
-    '''RKS class adapted for PBCs with k-point sampling.
+class KUKS(rks.KohnShamDFT, kuhf.KUHF):
+    '''UKS class adapted for PBCs with k-point sampling.
     '''
 
     get_veff = get_veff
