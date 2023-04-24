@@ -248,8 +248,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         '''
         qcell0_ijij = _qcond_cell0_abstract(qindex[0], seg_loc, seg2sh, nbasp)
         qcell0_iijj = _qcond_cell0_abstract(qindex[1], seg_loc, seg2sh, nbasp)
-        idx = np.asarray(qcell0_ijij.ravel().argsort(), np.int32)[::-1]
+        idx = np.asarray(qcell0_ijij.ravel().argsort(kind='stable'), np.int32)[::-1]
         jsh_idx, ish_idx = divmod(idx, nbasp)
+        ish_idx = np.asarray(ish_idx, dtype=np.int32, order='C')
+        jsh_idx = np.asarray(jsh_idx, dtype=np.int32, order='C')
         return qcell0_ijij, qcell0_iijj, ish_idx, jsh_idx
 
     def _get_jk_sr(self, dm_kpts, hermi=1, kpts=None, kpts_band=None,
