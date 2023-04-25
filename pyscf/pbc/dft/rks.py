@@ -194,6 +194,15 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         self.grids.reset(mol)
         return self
 
+    def jk_method(self, J='FFTDF', K=None):
+        if K is None:
+            K = J
+        if (('RS' in J or 'RS' in K) and
+            not isinstance(self.grids, gen_grid.BeckeGrids)):
+            self.grids = gen_grid.BeckeGrids(self.cell)
+        super().jk_method(J, K)
+        return self
+
     def to_rks(self, xc=None):
         '''Convert the input mean-field object to a RKS/ROKS object.
 
