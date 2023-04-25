@@ -937,38 +937,20 @@ class SubconvergerReassigmentManager:
 
     def genSpherePoint(self):
         '''
-        This method generates random points on any dimensional unit sphere via the box inflation algorithm. This
-        results in approximately uniform point distribution, although slight accumulation at the projected corners
-        is possible.
+        This method generates a single point on any dimensional sphere. See genSpherePoints for more details. 
 
         Returns:
             point: ndarray
                 Random point on a sphere
         '''
-        dim = self.m3.getDegreesOfFreedom()
 
-        capt_dim = numpy.random.randint(0, dim, 1)[0]
-        capt_sign = numpy.random.randint(0, 1, 1)[0] * 2 - 1
-
-        sub_point = numpy.random.random(dim-1)
-
-        index_correct = 0
-        point = numpy.zeros(dim)
-
-        for i in range(dim):
-            if i == int(capt_dim):
-                point[i] = capt_sign
-                index_correct = 1
-                continue
-            point[i] = sub_point[i-index_correct]
-
-        point /= numpy.linalg.norm(point)
-
-        return point
+        return self.genSpherePoints(1)[0]
 
     def genSpherePoints(self, num):
         '''
-        Generate multiple random points on any dimensional sphere. See genSpherePoint for futher details.
+        Generate multiple random points on any dimensional sphere. This method utilises the spherical symmetry of
+        the normal distribution by generating a point whose cartesian coordinates are normally distributed and
+        subsequently normalising said point.
 
         Arguments:
             num: int
@@ -978,10 +960,10 @@ class SubconvergerReassigmentManager:
             points: ndarray
                 array of random points on the sphere.
         '''
-        points = numpy.zeros((num, self.m3.getDegreesOfFreedom()))
+        points = numpy.random.normal(0.0, 1.0, size=(num, self.m3.getDegreesOfFreedom()))
 
         for i in range(len(points)):
-            points[i] = self.genSpherePoint()
+            points[i] /= numpy.linalg.norm(points[i])
 
         return points
 
