@@ -1053,7 +1053,7 @@ def _mesh_inf_vaccum(cell):
     return int(meshz*.5 + .999) * 2
 
 
-class Cell(mole.Mole):
+class Cell(mole.GTO):
     '''A Cell object holds the basic information of a crystal.
 
     Attributes:
@@ -1113,7 +1113,7 @@ class Cell(mole.Mole):
     ))
 
     def __init__(self, **kwargs):
-        mole.Mole.__init__(self, **kwargs)
+        mole.GTO.__init__(self, **kwargs)
         self.a = None # lattice vectors, (a1,a2,a3)
         # if set, defines a spherical cutoff
         # of fourier components, with .5 * G**2 < ke_cutoff
@@ -1247,10 +1247,14 @@ class Cell(mole.Mole):
         '''Construct symmetry adapted crystalline atomic orbitals
         '''
         from pyscf.pbc.symm.basis import symm_adapted_basis
-        if not isinstance(kpts, libkpts.KPoints):
+        if kpts is None:
             return mole.Mole._build_symmetry(self)
-        self.symm_orb, self.irrep_id = symm_adapted_basis(self, kpts)
-        return self
+        elif isinstance(kpts, libkpts.KPoints):
+            self.symm_orb, self.irrep_id = symm_adapted_basis(self, kpts)
+            return self
+        else:
+            raise RuntimeError('Symmetry information not found in kpts. '
+                               'kpts needs to be initialized as a KPoints object.')
 
     def symmetrize_mesh(self, mesh=None):
         if mesh is None:
@@ -1390,7 +1394,7 @@ class Cell(mole.Mole):
 
         # Do regular Mole.build
         _built = self._built
-        mole.Mole.build(self, False, parse_arg, *args, **kwargs)
+        mole.GTO.build(self, False, parse_arg, *args, **kwargs)
 
         exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
         if self.exp_to_discard is None:
@@ -1768,7 +1772,7 @@ class Cell(mole.Mole):
     get_SI = get_SI
 
     ewald = ewald
-    energy_nuc = ewald
+    energy_nuc = get_enuc = ewald
 
     gen_uniform_grids = get_uniform_grids = get_uniform_grids
 
@@ -1836,9 +1840,5 @@ class Cell(mole.Mole):
     def has_ecp(self):
         '''Whether pseudo potential is used in the system.'''
         return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
-
-    def ao2mo(self, mo_coeffs, intor='int2e', erifile=None, dataname='eri_mo',
-              **kwargs):
-        raise NotImplementedError
 
 del (INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

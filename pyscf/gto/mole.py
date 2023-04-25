@@ -1131,6 +1131,10 @@ def tot_electrons(mol):
 
 def copy(mol):
     '''Deepcopy of the given :class:`Mole` object
+
+    Some attributes are shared between the original and copied objects.
+    Deepcopy is utilized here to ensure that operations on the copied object do
+    not affect the original object.
     '''
     import copy
     newmol = copy.copy(mol)
@@ -2110,8 +2114,8 @@ def is_au(unit):
 # on the internal format.  Exceptions are make_env, make_atm_env, make_bas_env,
 # set_common_orig_, set_rinv_orig_ which are used to manipulate the libcint arguments.
 #
-class Mole(lib.StreamObject):
-    '''Basic class to hold molecular structure and global options
+class GaussianTypeOrbital(lib.StreamObject):
+    '''Basic class to hold GTO basis paramaters and global options
 
     Attributes:
         verbose : int
@@ -2267,6 +2271,7 @@ class Mole(lib.StreamObject):
         self.nucprop = {}
 # Collinear spin of each atom. self.magmom = [0, ...]
         self.magmom = []
+        self.pseudo = None
 ##################################################
 # don't modify the following private variables, they are not input options
         self._atm = numpy.zeros((0,6), dtype=numpy.int32)
@@ -2360,56 +2365,7 @@ class Mole(lib.StreamObject):
         else:
             self.spin = int(round(2*x, 4))
 
-    def __getattr__(self, key):
-        '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
-        from Mole object.
-        '''
-        if key[0] == '_':  # Skip private attributes and Python builtins
-            raise AttributeError('Mole object does not have attribute %s' % key)
-        elif key in ('_ipython_canary_method_should_not_exist_',
-                     '_repr_mimebundle_'):
-            # https://github.com/mewwts/addict/issues/26
-            # https://github.com/jupyter/notebook/issues/2014
-            raise AttributeError
-
-        # Import all available modules. Some methods are registered to other
-        # classes/modules when importing modules in __all__.
-        from pyscf import __all__  # noqa
-        from pyscf import scf, dft
-        for mod in (scf, dft):
-            method = getattr(mod, key, None)
-            if callable(method):
-                return method(self)
-
-        if 'TD' in key[:3]:
-            if key in ('TDHF', 'TDA'):
-                mf = scf.HF(self)
-            else:
-                mf = dft.KS(self)
-                xc = key.split('TD', 1)[1]
-                if xc in dft.XC:
-                    mf.xc = xc
-                    key = 'TDDFT'
-        else:
-            mf = scf.HF(self)
-
-        if not hasattr(mf.__class__, key):
-            raise AttributeError('Mole object does not have method %s' % key)
-
-        method = getattr(mf, key, None)
-
-        # Initialize SCF object for post-SCF methods if applicable
-        if self.nelectron != 0:
-            mf.run()
-        return method
-
-# need "deepcopy" here because in shallow copy, _env may get new elements but
-# with ptr_env unchanged
-# def __copy__(self):
-#        cls = self.__class__
-#        newmol = cls.__new__(cls)
-#        newmol = ...
-# do not use __copy__ to avoid iteratively call copy.copy
+    # NOTE: do not overwrite __copy__. It causes recursive calls in copy.copy(mol)
     copy = copy
 
     pack = pack
@@ -2438,7 +2394,7 @@ class Mole(lib.StreamObject):
 
     def build(self, dump_input=True, parse_arg=ARGPARSE,
               verbose=None, output=None, max_memory=None,
-              atom=None, basis=None, unit=None, nucmod=None, ecp=None,
+              atom=None, basis=None, unit=None, nucmod=None, ecp=None, pseudo=None,
               charge=None, spin=0, symmetry=None, symmetry_subgroup=None,
               cart=None, magmom=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
@@ -2537,7 +2493,6 @@ class Mole(lib.StreamObject):
             _basis = self.basis
         self._basis = self.format_basis(_basis)
 
-# TODO: Consider ECP info in point group symmetry initialization
         if self.ecp:
             # Unless explicitly input, ECP should not be assigned to ghost atoms
             if isinstance(self.ecp, (str, unicode)):
@@ -2552,6 +2507,8 @@ class Mole(lib.StreamObject):
             else:
                 _ecp = self.ecp
             self._ecp = self.format_ecp(_ecp)
+
+        #TODO: pass PBC basis here
 
         env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
@@ -2594,49 +2551,7 @@ class Mole(lib.StreamObject):
         Update symmetry related attributes: topgroup, groupname, _symm_orig,
         _symm_axes, irrep_id, irrep_name, symm_orb
         '''
-        from pyscf import symm
-        self.topgroup, orig, axes = symm.detect_symm(self._atom, self._basis)
-
-        if isinstance(self.symmetry, (str, unicode)):
-            self.symmetry = str(symm.std_symb(self.symmetry))
-            groupname = None
-            if abs(axes - np.eye(3)).max() < symm.TOLERANCE:
-                if symm.check_symm(self.symmetry, self._atom, self._basis):
-                    # Try to use original axes (issue #1209)
-                    groupname = self.symmetry
-                    axes = np.eye(3)
-                else:
-                    logger.warn(self, 'Unable to to identify input symmetry using original axes.\n'
-                                'Different symmetry axes will be used.')
-            if groupname is None:
-                try:
-                    groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                                       self.symmetry)
-                except PointGroupSymmetryError as e:
-                    raise PointGroupSymmetryError(
-                        'Unable to identify input symmetry %s. Try symmetry="%s"' %
-                        (self.symmetry, self.topgroup)) from e
-        else:
-            groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                               self.symmetry_subgroup)
-        self._symm_orig = orig
-        self._symm_axes = axes
-
-        if self.cart and groupname in ('Dooh', 'Coov', 'SO3'):
-            if groupname == 'Coov':
-                groupname, lgroup = 'C2v', groupname
-            else:
-                groupname, lgroup = 'D2h', groupname
-            logger.warn(self, 'This version does not support symmetry %s '
-                        'for cartesian GTO basis. Its subgroup %s is used',
-                        lgroup, groupname)
-        self.groupname = groupname
-
-        self.symm_orb, self.irrep_id = \
-                symm.symm_adapted_basis(self, groupname, orig, axes)
-        self.irrep_name = [symm.irrep_id2name(groupname, ir)
-                           for ir in self.irrep_id]
-        return self
+        raise NotImplementedError
 
     @lib.with_doc(format_atom.__doc__)
     def format_atom(self, atom, origin=0, axes=None, unit='Ang'):
@@ -2689,9 +2604,9 @@ class Mole(lib.StreamObject):
     def gto_norm(self, l, expnt):
         return gto_norm(l, expnt)
 
-
     def dump_input(self):
         import __main__
+        import pyscf
         if hasattr(__main__, '__file__'):
             try:
                 filename = os.path.abspath(__main__.__file__)
@@ -2711,7 +2626,6 @@ class Mole(lib.StreamObject):
         self.stdout.write('numpy %s  scipy %s\n' %
                           (numpy.__version__, scipy.__version__))
         self.stdout.write('Date: %s\n' % time.ctime())
-        import pyscf
         self.stdout.write('PySCF version %s\n' % pyscf.__version__)
         info = lib.repo_info(os.path.join(__file__, '..', '..'))
         self.stdout.write('PySCF path  %s\n' % info['path'])
@@ -3093,8 +3007,6 @@ class Mole(lib.StreamObject):
                 numpy.any(self._ecpbas[:,SO_TYPE_OF] == 1))
 
 
-#######################################################
-#NOTE: atm_id or bas_id start from 0
     def atom_symbol(self, atm_id):
         r'''For the given atom id, return the input symbol (without striping special characters)
 
@@ -3386,7 +3298,6 @@ class Mole(lib.StreamObject):
         '''
         return len_cart(self._bas[bas_id,ANG_OF])
 
-
     npgto_nr = npgto_nr
 
     nao_nr = nao_nr
@@ -3412,28 +3323,6 @@ class Mole(lib.StreamObject):
     ao_loc = property(ao_loc_nr)
 
     tmap = time_reversal_map = time_reversal_map
-
-    inertia_moment = inertia_moment
-
-    tostring = tostring
-    tofile = tofile
-
-    def fromstring(self, string, format='xyz'):
-        '''Update the Mole object based on the input geometry string'''
-        atom = self.format_atom(fromstring(string, format), unit=1)
-        self.set_geom_(atom, unit='Angstrom', inplace=True)
-        if format == 'sdf' and 'M  CHG' in string:
-            raise NotImplementedError
-            #FIXME self.charge = 0
-        return self
-
-    def fromfile(self, filename, format=None):
-        '''Update the Mole object based on the input geometry file'''
-        atom = self.format_atom(fromfile(filename, format), unit=1)
-        self.set_geom_(atom, unit='Angstrom', inplace=True)
-        if format == 'sdf':
-            raise NotImplementedError
-        return self
 
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
               shls_slice=None, grids=None):
@@ -3581,10 +3470,6 @@ class Mole(lib.StreamObject):
 
     eval_ao = eval_gto = eval_gto
 
-    energy_nuc = energy_nuc
-    def get_enuc(self):
-        return self.energy_nuc()
-
     def get_ao_indices(self, bas_list, ao_loc=None):
         '''
         Generate (dis-continued) AO indices for basis specified in bas_list
@@ -3615,8 +3500,6 @@ class Mole(lib.StreamObject):
 
     to_uncontracted_cartesian_basis = to_uncontracted_cartesian_basis
     decontract_basis = decontract_basis
-
-    __add__ = conc_mol
 
     ao_rotation_matrix = ao_rotation_matrix
 
@@ -3679,6 +3562,144 @@ class Mole(lib.StreamObject):
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
 
+    @contextlib.contextmanager
+    def _TemporaryMoleContext(self, method, args, args_bak):
+        '''Almost every method depends on the Mole environment. Ensure the
+        modification in temporary environment being thread safe
+        '''
+        haslock = self._ctx_lock
+        if haslock is None:
+            self._ctx_lock = threading.RLock()
+
+        with self._ctx_lock:
+            method(*args)
+            try:
+                yield
+            finally:
+                method(*args_bak)
+                if haslock is None:
+                    self._ctx_lock = None
+
+GTO = GaussianTypeOrbital
+
+
+class Mole(GTO):
+    '''Molecule with GTO basis and global options
+    '''
+
+    __add__ = conc_mol
+    energy_nuc = get_enuc = energy_nuc
+    inertia_moment = inertia_moment
+    tostring = tostring
+    tofile = tofile
+
+    def fromstring(self, string, format='xyz'):
+        '''Update the Mole object based on the input geometry string'''
+        atom = self.format_atom(fromstring(string, format), unit=1)
+        self.set_geom_(atom, unit='Angstrom', inplace=True)
+        if format == 'sdf' and 'M  CHG' in string:
+            raise NotImplementedError
+            #FIXME self.charge = 0
+        return self
+
+    def fromfile(self, filename, format=None):
+        '''Update the Mole object based on the input geometry file'''
+        atom = self.format_atom(fromfile(filename, format), unit=1)
+        self.set_geom_(atom, unit='Angstrom', inplace=True)
+        if format == 'sdf':
+            raise NotImplementedError
+        return self
+
+    def __getattr__(self, key):
+        '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
+        from Mole object.
+        '''
+        if key[0] == '_':  # Skip private attributes and Python builtins
+            raise AttributeError('Mole object does not have attribute %s' % key)
+        elif key in ('_ipython_canary_method_should_not_exist_',
+                     '_repr_mimebundle_'):
+            # https://github.com/mewwts/addict/issues/26
+            # https://github.com/jupyter/notebook/issues/2014
+            raise AttributeError
+
+        # Import all available modules. Some methods are registered to other
+        # classes/modules when importing modules in __all__.
+        from pyscf import __all__  # noqa
+        from pyscf import scf, dft
+        for mod in (scf, dft):
+            method = getattr(mod, key, None)
+            if callable(method):
+                return method(self)
+
+        if 'TD' in key[:3]:
+            if key in ('TDHF', 'TDA'):
+                mf = scf.HF(self)
+            else:
+                mf = dft.KS(self)
+                xc = key.split('TD', 1)[1]
+                if xc in dft.XC:
+                    mf.xc = xc
+                    key = 'TDDFT'
+        else:
+            mf = scf.HF(self)
+
+        if not hasattr(mf.__class__, key):
+            raise AttributeError('Mole object does not have method %s' % key)
+
+        method = getattr(mf, key, None)
+
+        # Initialize SCF object for post-SCF methods if applicable
+        if self.nelectron != 0:
+            mf.run()
+        return method
+
+    def _build_symmetry(self, *args, **kwargs):
+        from pyscf import symm
+
+        # TODO: Consider ECP info in point group symmetry initialization
+        self.topgroup, orig, axes = symm.detect_symm(self._atom, self._basis)
+
+        if isinstance(self.symmetry, (str, unicode)):
+            self.symmetry = str(symm.std_symb(self.symmetry))
+            groupname = None
+            if abs(axes - np.eye(3)).max() < symm.TOLERANCE:
+                if symm.check_symm(self.symmetry, self._atom, self._basis):
+                    # Try to use original axes (issue #1209)
+                    groupname = self.symmetry
+                    axes = np.eye(3)
+                else:
+                    logger.warn(self, 'Unable to to identify input symmetry using original axes.\n'
+                                'Different symmetry axes will be used.')
+            if groupname is None:
+                try:
+                    groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                       self.symmetry)
+                except PointGroupSymmetryError as e:
+                    raise PointGroupSymmetryError(
+                        'Unable to identify input symmetry %s. Try symmetry="%s"' %
+                        (self.symmetry, self.topgroup)) from e
+        else:
+            groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                               self.symmetry_subgroup)
+        self._symm_orig = orig
+        self._symm_axes = axes
+
+        if self.cart and groupname in ('Dooh', 'Coov', 'SO3'):
+            if groupname == 'Coov':
+                groupname, lgroup = 'C2v', groupname
+            else:
+                groupname, lgroup = 'D2h', groupname
+            logger.warn(self, 'This version does not support symmetry %s '
+                        'for cartesian GTO basis. Its subgroup %s is used',
+                        lgroup, groupname)
+        self.groupname = groupname
+
+        self.symm_orb, self.irrep_id = \
+                symm.symm_adapted_basis(self, groupname, orig, axes)
+        self.irrep_name = [symm.irrep_id2name(groupname, ir)
+                           for ir in self.irrep_id]
+        return self
+
     def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
               **kwargs):
         '''Integral transformation for arbitrary orbitals and arbitrary
@@ -3733,23 +3754,19 @@ class Mole(lib.StreamObject):
         from pyscf import ao2mo
         return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
-    @contextlib.contextmanager
-    def _TemporaryMoleContext(self, method, args, args_bak):
-        '''Almost every method depends on the Mole environment. Ensure the
-        modification in temporary environment being thread safe
-        '''
-        haslock = self._ctx_lock
-        if haslock is None:
-            self._ctx_lock = threading.RLock()
+    def to_cell(self, a, dimension=3):
+        '''Put a molecule in a cell with periodic boundary condictions
 
-        with self._ctx_lock:
-            method(*args)
-            try:
-                yield
-            finally:
-                method(*args_bak)
-                if haslock is None:
-                    self._ctx_lock = None
+        Args:
+            a : (3,3) ndarray
+                Lattice primitive vectors. Each row is a lattice vector
+        '''
+        from pyscf.pbc.gto import Cell
+        cell = Cell()
+        cell.__dict__.update(self.__dict__)
+        cell.dimension = dimension
+        cell.build(False, False)
+        return cell
 
 def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT
