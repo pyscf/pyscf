@@ -452,6 +452,13 @@ def format_basis(basis_tab):
         [5.4471780000000001, 0.15628500000000001],
         [0.82454700000000003, 0.90469100000000002]],
         [0, [0.18319199999999999, 1.0]]]}
+
+    >>> gto.format_basis({'H':'gth-szv'})
+    {'H': [[0,
+        (8.3744350009, -0.0283380461),
+        (1.8058681460, -0.1333810052),
+        (0.4852528328, -0.3995676063),
+        (0.1658236932, -0.5531027541)]]}
     '''
     basis_converter = _generate_basis_converter()
     fmt_basis = {}
@@ -476,27 +483,34 @@ def _generate_basis_converter():
         return val
 
     def load(basis_name, symb):
-        if basis_name.lower().startswith('unc'):
-            return uncontract(basis.load(basis_name[3:], symb))
+        unc = basis_name.lower().startswith('unc')
+        if unc:
+            basis_name = basis_name[3:]
+        if 'gth' in basis_name:
+            from pyscf.pbc.gto.basis import load as pbc_basis_load
+            _basis = pbc_basis_load(basis_name, symb)
         else:
-            return basis.load(basis_name, symb)
+            _basis = basis.load(basis_name, symb)
+        if unc:
+            _basis = uncontracted_basis(_basis)
+        return _basis
 
     def converter(symb, raw_basis):
-        if isinstance(raw_basis, (str, unicode)):
-            bset = load(str(raw_basis), _std_symbol_without_ghost(symb))
-        elif (any(isinstance(x, (str, unicode)) for x in raw_basis)
+        if isinstance(raw_basis, str):
+            _basis = load(raw_basis, _std_symbol_without_ghost(symb))
+        elif (any(isinstance(x, str) for x in raw_basis)
               # The first element is the basis of internal format
               or not isinstance(raw_basis[0][0], int)):
             stdsymb = _std_symbol_without_ghost(symb)
-            bset = []
+            _basis = []
             for rawb in raw_basis:
-                if isinstance(rawb, (str, unicode)):
-                    bset += load(str(rawb), stdsymb)
+                if isinstance(rawb, str):
+                    _basis.extend(load(rawb, stdsymb))
                 else:
-                    bset += nparray_to_list(rawb)
+                    _basis.extend(nparray_to_list(rawb))
         else:
-            bset = nparray_to_list(raw_basis)
-        return bset
+            _basis = nparray_to_list(raw_basis)
+        return _basis
     return converter
 
 def uncontracted_basis(_basis):
@@ -699,6 +713,48 @@ def format_ecp(ecp_tab):
             fmt_ecp[symb] = atom_ecp
     return fmt_ecp
 
+def format_pseudo(pseudo_tab):
+    r'''Convert the input :attr:`pseudo` (dict) to the internal data format::
+
+       { atom: ( (nelec_s, nele_p, nelec_d, ...),
+                rloc, nexp, (cexp_1, cexp_2, ..., cexp_nexp),
+                nproj_types,
+                (r1, nproj1, ( (hproj1[1,1], hproj1[1,2], ..., hproj1[1,nproj1]),
+                               (hproj1[2,1], hproj1[2,2], ..., hproj1[2,nproj1]),
+                               ...
+                               (hproj1[nproj1,1], hproj1[nproj1,2], ...        ) )),
+                (r2, nproj2, ( (hproj2[1,1], hproj2[1,2], ..., hproj2[1,nproj1]),
+                ... ) )
+                )
+        ... }
+
+    Args:
+        pseudo_tab : dict
+            Similar to :attr:`pseudo` (a dict), it **cannot** be a str
+
+    Returns:
+        Formatted :attr:`pseudo`
+
+    Examples:
+
+    >>> pbc.format_pseudo({'H':'gth-blyp', 'He': 'gth-pade'})
+    {'H': [[1],
+        0.2, 2, [-4.19596147, 0.73049821], 0],
+     'He': [[2],
+        0.2, 2, [-9.1120234, 1.69836797], 0]}
+    '''
+    from pyscf.pbc.gto.pseudo import load
+    fmt_pseudo = {}
+    for atom, atom_pp in pseudo_tab.items():
+        symb = _symbol(atom)
+
+        if isinstance(atom_pp, str):
+            stdsymb = _std_symbol_without_ghost(symb)
+            fmt_pseudo[symb] = load(atom_pp, stdsymb)
+        else:
+            fmt_pseudo[symb] = atom_pp
+    return fmt_pseudo
+
 # transform etb to basis format
 def expand_etb(l, n, alpha, beta):
     r'''Generate the exponents of even tempered basis for :attr:`Mole.basis`.
@@ -825,8 +881,11 @@ def conc_mol(mol1, mol2):
     mol3._pseudo.update(mol1._pseudo)
     mol3._ecp.update(mol2._ecp)
     mol3._ecp.update(mol1._ecp)
+    mol3._pseudo.update(mol2._pseudo)
+    mol3._pseudo.update(mol1._pseudo)
     mol3.basis = mol3._basis
     mol3.ecp = mol3._ecp
+    mol3.pseudo = mol3._pseudo
 
     mol3.nucprop.update(mol1.nucprop)
     mol3.nucprop.update(mol2.nucprop)
@@ -1149,6 +1208,8 @@ def copy(mol):
     newmol._basis  = copy.deepcopy(mol._basis)
     newmol.ecp     = copy.deepcopy(mol.ecp)
     newmol._ecp    = copy.deepcopy(mol._ecp)
+    newmol.pseudo  = copy.deepcopy(mol.pseudo)
+    newmol._pseudo = copy.deepcopy(mol._pseudo)
     return newmol
 
 def pack(mol):
@@ -1167,6 +1228,7 @@ def pack(mol):
             'nucmod'  : mol.nucmod,
             'nucprop' : mol.nucprop,
             'ecp'     : mol.ecp,
+            'pseudo'  : mol.pseudo,
             '_nelectron': mol._nelectron,
             'verbose' : mol.verbose}
     return mdic
@@ -1185,6 +1247,7 @@ def dumps(mol):
     exclude_keys = set(('output', 'stdout', '_keys',
                         # Constructing in function loads
                         'symm_orb', 'irrep_id', 'irrep_name'))
+    # FIXME: nparray and kpts for cell objects may need to be excluded
     nparray_keys = set(('_atm', '_bas', '_env', '_ecpbas',
                         '_symm_orig', '_symm_axes'))
 
@@ -1198,6 +1261,7 @@ def dumps(mol):
     moldic['atom'] = repr(mol.atom)
     moldic['basis']= repr(mol.basis)
     moldic['ecp' ] = repr(mol.ecp)
+    moldic['pseudo'] = repr(mol.pseudo)
 
     try:
         return json.dumps(moldic)
@@ -1244,6 +1308,7 @@ def loads(molstr):
     mol.atom = eval(mol.atom)
     mol.basis= eval(mol.basis)
     mol.ecp  = eval(mol.ecp)
+    mol.pseudo  = eval(mol.pseudo)
     mol._atm = numpy.array(mol._atm, dtype=numpy.int32)
     mol._bas = numpy.array(mol._bas, dtype=numpy.int32)
     mol._env = numpy.array(mol._env, dtype=numpy.double)
@@ -2293,14 +2358,8 @@ class GaussianTypeOrbital(lib.StreamObject):
         self._atom = []
         self._basis = {}
         self._ecp = {}
-        self._built = False
-
-        # _pseudo is created to make the mol object consistenet with the mol
-        # object converted from Cell.to_mol(). It is initialized in the
-        # Cell.build() method only. Assigning _pseudo to mol object basically
-        # has no effects. Mole.build() method does not have code to access the
-        # contents of _pseudo.
         self._pseudo = {}
+        self._built = False
 
         # Some methods modify ._env. These method are executed in the context
         # _TemporaryMoleContext which is protected by the _ctx_lock.
@@ -2449,6 +2508,7 @@ class GaussianTypeOrbital(lib.StreamObject):
         if unit is not None: self.unit = unit
         if nucmod is not None: self.nucmod = nucmod
         if ecp is not None: self.ecp = ecp
+        if pseudo is not None: self.pseudo = pseudo
         if charge is not None: self.charge = charge
         if spin != 0: self.spin = spin
         if symmetry is not None: self.symmetry = symmetry
@@ -2481,41 +2541,42 @@ class GaussianTypeOrbital(lib.StreamObject):
         self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = set([a[0] for a in self._atom])
 
-        if isinstance(self.basis, (str, unicode, tuple, list)):
-            # specify global basis for whole molecule
-            _basis = dict(((a, self.basis) for a in uniq_atoms))
-        elif 'default' in self.basis:
-            default_basis = self.basis['default']
-            _basis = dict(((a, default_basis) for a in uniq_atoms))
-            _basis.update(self.basis)
-            del (_basis['default'])
-        else:
-            _basis = self.basis
+        _basis = _parse_default_basis(self.basis, uniq_atoms)
         self._basis = self.format_basis(_basis)
-
-        if self.ecp:
-            # Unless explicitly input, ECP should not be assigned to ghost atoms
-            if isinstance(self.ecp, (str, unicode)):
-                _ecp = dict([(a, str(self.ecp))
-                             for a in uniq_atoms if not is_ghost_atom(a)])
-            elif 'default' in self.ecp:
-                default_ecp = self.ecp['default']
-                _ecp = dict(((a, default_ecp)
-                             for a in uniq_atoms if not is_ghost_atom(a)))
-                _ecp.update(self.ecp)
-                del (_ecp['default'])
-            else:
-                _ecp = self.ecp
-            self._ecp = self.format_ecp(_ecp)
-
-        #TODO: pass PBC basis here
-
         env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, env, self.nucmod,
                               self.nucprop)
-        self._atm, self._ecpbas, self._env = \
-                self.make_ecp_env(self._atm, self._ecp, self._env)
+
+        if self.pseudo:
+            self.ecp, self.pseudo = classify_ecp_pseudo(self, self.ecp, self.pseudo)
+
+        if self.ecp:
+            # Unless explicitly input, ECP should not be assigned to ghost atoms
+            atoms_wo_ghost = [a for a in uniq_atoms if not is_ghost_atom(a)]
+            _ecp = _parse_default_basis(self.ecp, atoms_wo_ghost)
+            self._ecp = self.format_ecp(_ecp)
+            if self._ecp:
+                self._atm, self._ecpbas, self._env = \
+                        self.make_ecp_env(self._atm, self._ecp, self._env)
+
+        if self.pseudo:
+            # Unless explicitly input, PP should not be assigned to ghost atoms
+            atoms_wo_ghost = [a for a in uniq_atoms if not is_ghost_atom(a)]
+            _pseudo = _parse_default_basis(self.pseudo, atoms_wo_ghost)
+            self._pseudo = self.format_pseudo(_pseudo)
+            if self._pseudo:
+                conflicts = set(self._pseudo).intersection(self._ecp)
+                if conflicts:
+                    raise RuntimeError('Pseudo potential for atoms %s are defined '
+                                       'in both .ecp and .pseudo.' % list(conflicts))
+
+                for ia, atom in enumerate(self._atom):
+                    symb = atom[0]
+                    if (symb in self._pseudo and
+                        # skip ghost atoms
+                        self._atm[ia,0] != 0):
+                        self._atm[ia,0] = sum(_pseudo[symb][0])
 
         if self.spin is None:
             self.spin = self.nelectron % 2
@@ -3768,6 +3829,19 @@ class Mole(GTO):
         cell.build(False, False)
         return cell
 
+def _parse_default_basis(basis, uniq_atoms):
+    if isinstance(basis, (str, tuple, list)):
+        # default basis for all atoms
+        _basis = {a: basis for a in uniq_atoms}
+    elif 'default' in basis:
+        default_basis = basis['default']
+        _basis = {a: default_basis for a in uniq_atoms}
+        _basis.update(basis)
+        del _basis['default']
+    else:
+        _basis = basis
+    return _basis
+
 def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT
     if callable(str_or_int_or_fn):
@@ -4007,4 +4081,52 @@ def fakemol_for_charges(coords, expnt=1e16):
     fakemol._built = True
     return fakemol
 
-del (BASE)
+def classify_ecp_pseudo(mol, ecp, pp):
+    '''
+    Check whether ecp keywords are presented in pp and whether pp keywords are
+    presented in ecp.  The return (ecp, pp) should have only the ecp keywords and
+    pp keywords in each dict.
+    The "misplaced" ecp/pp keywords have the lowest priority. E.g., if an atom
+    is defined in ecp, the same ecp atom found in pp does NOT replace the
+    definition in ecp, and vise versa.
+    '''
+    from pyscf.pbc.gto import pseudo
+    def classify(ecp, pp_alias):
+        if isinstance(ecp, (str, unicode)):
+            if pseudo._format_pseudo_name(ecp)[0] in pp_alias:
+                return {}, {'default': str(ecp)}
+        elif isinstance(ecp, dict):
+            ecp_as_pp = {}
+            for atom in ecp:
+                key = ecp[atom]
+                if (isinstance(key, (str, unicode)) and
+                    pseudo._format_pseudo_name(key)[0] in pp_alias):
+                    ecp_as_pp[atom] = str(key)
+            if ecp_as_pp:
+                ecp_left = dict(ecp)
+                for atom in ecp_as_pp:
+                    ecp_left.pop(atom)
+                return ecp_left, ecp_as_pp
+        return ecp, {}
+    ecp_left, ecp_as_pp = classify(ecp, basis.PP_ALIAS)
+    pp_left , pp_as_ecp = classify(pp, basis.ALIAS)
+
+    # ecp = ecp_left + pp_as_ecp
+    # pp = pp_left + ecp_as_pp
+    ecp = ecp_left
+    if pp_as_ecp and not isinstance(ecp_left, (str, unicode)):
+        # If ecp is a str, all atoms have ecp definition.
+        # The misplaced ecp has no effects.
+        logger.info(mol, 'pseudo-potentials keywords for %s found in .ecp',
+                    pp_as_ecp.keys())
+        if ecp_left:
+            pp_as_ecp.update(ecp_left)
+        ecp = pp_as_ecp
+    pp = pp_left
+    if ecp_as_pp and not isinstance(pp_left, (str, unicode)):
+        logger.info(mol, 'ECP keywords for %s found in .pseudo',
+                    ecp_as_pp.keys())
+        if pp_left:
+            ecp_as_pp.update(pp_left)
+        pp = ecp_as_pp
+    return ecp, pp

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ parse CP2K format
 '''
 
 import re
+from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf.gto.basis import parse_nwchem
 from pyscf import __config__
 
@@ -32,6 +33,22 @@ def parse(string, optimize=False):
     '''Parse the basis text which is in CP2K format, return an internal
     basis format which can be assigned to :attr:`Mole.basis`
     Lines started with # are ignored.
+
+    Examples:
+
+    >>> cell = gto.Cell()
+    >>> cell.basis = {'C': pyscf.gto.basis.parse_cp2k.parse("""
+    ... C DZVP-GTH
+    ...   2
+    ...   2  0  1  4  2  2
+    ...         4.3362376436   0.1490797872   0.0000000000  -0.0878123619   0.0000000000
+    ...         1.2881838513  -0.0292640031   0.0000000000  -0.2775560300   0.0000000000
+    ...         0.4037767149  -0.6882040510   0.0000000000  -0.4712295093   0.0000000000
+    ...         0.1187877657  -0.3964426906   1.0000000000  -0.4058039291   1.0000000000
+    ...   3  2  2  1  1
+    ...         0.5500000000   1.0000000000
+    ... #
+    ... """)}
     '''
     bastxt = []
     for dat in string.splitlines():
@@ -88,4 +105,4 @@ def search_seg(basisfile, symb):
             # remove blank lines
             return [x.strip() for x in dat.splitlines()
                     if x.strip() and 'END' not in x]
-    raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
+    raise BasisNotFoundError(f'Basis for {symb} not found in {basisfile}')

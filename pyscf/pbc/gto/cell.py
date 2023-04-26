@@ -23,28 +23,17 @@ import ctypes
 import warnings
 import numpy as np
 import scipy.linalg
-try:
-    from scipy.special import factorial2
-except ImportError:
-    from scipy.misc import factorial2
 from scipy.special import erf, erfc
-import scipy.optimize
 import pyscf.lib.parameters as param
 from pyscf import lib
 from pyscf.dft import radi
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
-from pyscf.gto.mole import (_symbol, _rm_digit, _atom_symbol, _std_symbol,
-                            _std_symbol_without_ghost, charge, is_ghost_atom, is_au) # noqa
-from pyscf.gto.mole import conc_env, uncontract
-from pyscf.pbc.gto import basis
-from pyscf.pbc.gto import pseudo
+from pyscf.gto.mole import conc_env, is_au # noqa
 from pyscf.pbc.gto import _pbcintor
 from pyscf.pbc.gto.eval_gto import eval_gto as pbc_eval_gto
 from pyscf.pbc.tools import pbc as pbctools
-from pyscf.gto.basis import ALIAS as MOLE_ALIAS
-from pyscf.pbc.lib import kpts as libkpts
 from pyscf import __config__
 
 INTEGRAL_PRECISION = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
@@ -74,111 +63,6 @@ def M(*args, **kwargs):
     return cell
 C = M
 
-
-def format_pseudo(pseudo_tab):
-    r'''Convert the input :attr:`Cell.pseudo` (dict) to the internal data format::
-
-       { atom: ( (nelec_s, nele_p, nelec_d, ...),
-                rloc, nexp, (cexp_1, cexp_2, ..., cexp_nexp),
-                nproj_types,
-                (r1, nproj1, ( (hproj1[1,1], hproj1[1,2], ..., hproj1[1,nproj1]),
-                               (hproj1[2,1], hproj1[2,2], ..., hproj1[2,nproj1]),
-                               ...
-                               (hproj1[nproj1,1], hproj1[nproj1,2], ...        ) )),
-                (r2, nproj2, ( (hproj2[1,1], hproj2[1,2], ..., hproj2[1,nproj1]),
-                ... ) )
-                )
-        ... }
-
-    Args:
-        pseudo_tab : dict
-            Similar to :attr:`Cell.pseudo` (a dict), it **cannot** be a str
-
-    Returns:
-        Formatted :attr:`~Cell.pseudo`
-
-    Examples:
-
-    >>> pbc.format_pseudo({'H':'gth-blyp', 'He': 'gth-pade'})
-    {'H': [[1],
-        0.2, 2, [-4.19596147, 0.73049821], 0],
-     'He': [[2],
-        0.2, 2, [-9.1120234, 1.69836797], 0]}
-    '''
-    fmt_pseudo = {}
-    for atom, atom_pp in pseudo_tab.items():
-        symb = _symbol(atom)
-
-        if isinstance(atom_pp, (str, unicode)):
-            stdsymb = _std_symbol_without_ghost(symb)
-            fmt_pseudo[symb] = pseudo.load(str(atom_pp), stdsymb)
-        else:
-            fmt_pseudo[symb] = atom_pp
-    return fmt_pseudo
-
-def make_pseudo_env(cell, _atm, _pseudo, pre_env=[]):
-    for ia, atom in enumerate(cell._atom):
-        symb = atom[0]
-        if symb in _pseudo and _atm[ia,0] != 0:  # pass ghost atoms.
-            _atm[ia,0] = sum(_pseudo[symb][0])
-    _pseudobas = None
-    return _atm, _pseudobas, pre_env
-
-def format_basis(basis_tab):
-    '''Convert the input :attr:`Cell.basis` to the internal data format::
-
-      { atom: (l, kappa, ((-exp, c_1, c_2, ..), nprim, nctr, ptr-exps, ptr-contraction-coeff)), ... }
-
-    Args:
-        basis_tab : dict
-            Similar to :attr:`Cell.basis`, it **cannot** be a str
-
-    Returns:
-        Formated :attr:`~Cell.basis`
-
-    Examples:
-
-    >>> pbc.format_basis({'H':'gth-szv'})
-    {'H': [[0,
-        (8.3744350009, -0.0283380461),
-        (1.8058681460, -0.1333810052),
-        (0.4852528328, -0.3995676063),
-        (0.1658236932, -0.5531027541)]]}
-    '''
-    def convert(basis_name, symb):
-        if basis_name.lower().startswith('unc'):
-            return uncontract(basis.load(basis_name[3:], symb))
-        else:
-            return basis.load(basis_name, symb)
-
-    fmt_basis = {}
-    for atom, atom_basis in basis_tab.items():
-        symb = _atom_symbol(atom)
-        stdsymb = _std_symbol_without_ghost(symb)
-
-        if isinstance(atom_basis, (str, unicode)):
-            if 'gth' in atom_basis:
-                bset = convert(str(atom_basis), stdsymb)
-            else:
-                bset = atom_basis
-        else:
-            bset = []
-            for rawb in atom_basis:
-                if isinstance(rawb, (str, unicode)) and 'gth' in rawb:
-                    bset.append(convert(str(rawb), stdsymb))
-                else:
-                    bset.append(rawb)
-        fmt_basis[symb] = bset
-    return mole.format_basis(fmt_basis)
-
-def copy(cell):
-    '''Deepcopy of the given :class:`Cell` object
-    '''
-    import copy
-    newcell = mole.copy(cell)
-    newcell._pseudo = copy.deepcopy(cell._pseudo)
-    return newcell
-
 def pack(cell):
     '''Pack the input args of :class:`Cell` to a dict, which can be serialized
     with :mod:`pickle`
@@ -186,7 +70,6 @@ def pack(cell):
     cldic = mole.pack(cell)
     cldic['a'] = cell.a
     cldic['precision'] = cell.precision
-    cldic['pseudo'] = cell.pseudo
     cldic['ke_cutoff'] = cell.ke_cutoff
     cldic['exp_to_discard'] = cell.exp_to_discard
     cldic['_mesh'] = cell._mesh
@@ -283,34 +166,10 @@ def loads(cellstr):
 def conc_cell(cell1, cell2):
     '''Concatenate two Cell objects.
     '''
+    mol3 = mole.conc_mol(cell1, cell2)
     cell3 = Cell()
-    cell3._atm, cell3._bas, cell3._env = \
-            conc_env(cell1._atm, cell1._bas, cell1._env,
-                     cell2._atm, cell2._bas, cell2._env)
-    off = len(cell1._env)
-    natm_off = len(cell1._atm)
-    if len(cell2._ecpbas) == 0:
-        cell3._ecpbas = cell1._ecpbas
-    else:
-        ecpbas2 = np.copy(cell2._ecpbas)
-        ecpbas2[:,mole.ATOM_OF  ] += natm_off
-        ecpbas2[:,mole.PTR_EXP  ] += off
-        ecpbas2[:,mole.PTR_COEFF] += off
-        if len(cell1._ecpbas) == 0:
-            cell3._ecpbas = ecpbas2
-        else:
-            cell3._ecpbas = np.vstack((cell1._ecpbas, ecpbas2))
+    cell3.__dict__.update(mol3.__dict__)
 
-    cell3.verbose = cell1.verbose
-    cell3.output = cell1.output
-    cell3.max_memory = cell1.max_memory
-    cell3.charge = cell1.charge + cell2.charge
-    cell3.spin = cell1.spin + cell2.spin
-    cell3.cart = cell1.cart and cell2.cart
-    cell3._atom = cell1._atom + cell2._atom
-    cell3.unit = cell1.unit
-    cell3._basis = dict(cell2._basis)
-    cell3._basis.update(cell1._basis)
     # Whether to update the lattice_vectors?
     cell3.a = cell1.a
     cell3.mesh = np.max((cell1.mesh, cell2.mesh), axis=0)
@@ -330,20 +189,6 @@ def conc_cell(cell1, cell2):
     cell3.dimension = max(cell1.dimension, cell2.dimension)
     cell3.low_dim_ft_type = cell1.low_dim_ft_type or cell2.low_dim_ft_type
     cell3.rcut = max(cell1.rcut, cell2.rcut)
-
-    cell3._pseudo.update(cell1._pseudo)
-    cell3._pseudo.update(cell2._pseudo)
-    cell3._ecp.update(cell1._ecp)
-    cell3._ecp.update(cell2._ecp)
-
-    cell3.nucprop.update(cell1.nucprop)
-    cell3.nucprop.update(cell2.nucprop)
-
-    if not cell1._built:
-        logger.warn(cell1, 'Warning: intor envs of %s not initialized.', cell1)
-    if not cell2._built:
-        logger.warn(cell2, 'Warning: intor envs of %s not initialized.', cell2)
-    cell3._built = cell1._built or cell2._built
     return cell3
 
 def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
@@ -907,6 +752,7 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
     scaled_kpts += np.array(scaled_center)
     kpts = cell.get_abs_kpts(scaled_kpts)
     if space_group_symmetry or time_reversal_symmetry:
+        from pyscf.pbc.lib import kpts as libkpts
         if space_group_symmetry and not cell.space_group_symmetry:
             raise RuntimeError('Using k-point symmetry now requires cell '
                                'to be built with space group symmetry info:\n'
@@ -943,52 +789,6 @@ def get_uniform_grids(cell, mesh=None, wrap_around=True):
         coords = np.dot(qv, a_frac)
     return coords
 gen_uniform_grids = get_uniform_grids
-
-# Check whether ecp keywords are presented in pp and whether pp keywords are
-# presented in ecp.  The return (ecp, pp) should have only the ecp keywords and
-# pp keywords in each dict.
-# The "misplaced" ecp/pp keywords have lowest priority, ie if the atom is
-# defined in ecp, the misplaced ecp atom found in pp does NOT replace the
-# definition in ecp, and versa vise.
-def classify_ecp_pseudo(cell, ecp, pp):
-    def classify(ecp, pp_alias):
-        if isinstance(ecp, (str, unicode)):
-            if pseudo._format_pseudo_name(ecp)[0] in pp_alias:
-                return {}, {'default': str(ecp)}
-        elif isinstance(ecp, dict):
-            ecp_as_pp = {}
-            for atom in ecp:
-                key = ecp[atom]
-                if (isinstance(key, (str, unicode)) and
-                    pseudo._format_pseudo_name(key)[0] in pp_alias):
-                    ecp_as_pp[atom] = str(key)
-            if ecp_as_pp:
-                ecp_left = dict(ecp)
-                for atom in ecp_as_pp:
-                    ecp_left.pop(atom)
-                return ecp_left, ecp_as_pp
-        return ecp, {}
-    ecp_left, ecp_as_pp = classify(ecp, pseudo.ALIAS)
-    pp_left , pp_as_ecp = classify(pp, MOLE_ALIAS)
-
-    # ecp = ecp_left + pp_as_ecp
-    # pp = pp_left + ecp_as_pp
-    ecp = ecp_left
-    if pp_as_ecp and not isinstance(ecp_left, (str, unicode)):
-        # If ecp is a str, all atoms have ecp definition.  The misplaced ecp has no effects.
-        logger.info(cell, 'PBC pseudo-potentials keywords for %s found in .ecp',
-                    pp_as_ecp.keys())
-        if ecp_left:
-            pp_as_ecp.update(ecp_left)
-        ecp = pp_as_ecp
-    pp = pp_left
-    if ecp_as_pp and not isinstance(pp_left, (str, unicode)):
-        logger.info(cell, 'ECP keywords for %s found in PBC .pseudo',
-                    ecp_as_pp.keys())
-        if pp_left:
-            ecp_as_pp.update(pp_left)
-        pp = ecp_as_pp
-    return ecp, pp
 
 def _split_basis(cell, delimiter=EXP_DELIMITER):
     '''
@@ -1119,7 +919,6 @@ class Cell(mole.GTO):
         # of fourier components, with .5 * G**2 < ke_cutoff
         self.ke_cutoff = None
 
-        self.pseudo = None
         self.dimension = 3
         # TODO: Simple hack for now; the implementation of ewald depends on the
         #       density-fitting class.  This determines how the ewald produces
@@ -1246,10 +1045,11 @@ class Cell(mole.GTO):
     def _build_symmetry(self, kpts=None, **kwargs):
         '''Construct symmetry adapted crystalline atomic orbitals
         '''
+        from pyscf.pbc.lib.kpts import KPoints
         from pyscf.pbc.symm.basis import symm_adapted_basis
         if kpts is None:
             return mole.Mole._build_symmetry(self)
-        elif isinstance(kpts, libkpts.KPoints):
+        elif isinstance(kpts, KPoints):
             self.symm_orb, self.irrep_id = symm_adapted_basis(self, kpts)
             return self
         else:
@@ -1297,8 +1097,7 @@ class Cell(mole.GTO):
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=mole.ARGPARSE,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
-              pseudo=None, basis=None, h=None, dimension=None, rcut= None,
-              ecp=None, low_dim_ft_type=None,
+              h=None, dimension=None, rcut= None, low_dim_ft_type=None,
               space_group_symmetry=None, symmorphic=None, *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
@@ -1323,10 +1122,6 @@ class Cell(mole.GTO):
                 Cutoff radius (unit Bohr) in lattice summation to produce
                 periodicity. The value can be estimated based on the required
                 precision.  It's recommended NOT making changes to this value.
-            pseudo : dict or str
-                To define pseudopotential.
-            ecp : dict or str
-                To define ECP type pseudopotential.
             h : (3,3) ndarray
                 a.T. Deprecated
             dimension : int
@@ -1349,12 +1144,9 @@ class Cell(mole.GTO):
         if a is not None: self.a = a
         if mesh is not None: self.mesh = mesh
         if nimgs is not None: self.nimgs = nimgs
-        if pseudo is not None: self.pseudo = pseudo
-        if basis is not None: self.basis = basis
         if dimension is not None: self.dimension = dimension
         if precision is not None: self.precision = precision
         if rcut is not None: self.rcut = rcut
-        if ecp is not None: self.ecp = ecp
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
         if low_dim_ft_type is not None: self.low_dim_ft_type = low_dim_ft_type
         if space_group_symmetry is not None:
@@ -1362,39 +1154,8 @@ class Cell(mole.GTO):
         if symmorphic is not None:
             self.symmorphic = symmorphic
 
-        if 'unit' in kwargs:
-            self.unit = kwargs['unit']
-
-        if 'atom' in kwargs:
-            self.atom = kwargs['atom']
-
-        if 'gs' in kwargs:
-            self.gs = kwargs['gs']
-
-        # Set-up pseudopotential if it exists
-        # This must be done before build() because it affects
-        # tot_electrons() via the call to .atom_charge()
-
-        self.ecp, self.pseudo = classify_ecp_pseudo(self, self.ecp, self.pseudo)
-        if self.pseudo is not None:
-            _atom = self.format_atom(self.atom)
-            # Unless explicitly input, ECP should not be assigned to ghost atoms
-            uniq_atoms = set([a[0] for a in _atom if not is_ghost_atom(a[0])])
-            if isinstance(self.pseudo, (str, unicode)):
-                # specify global pseudo for whole molecule
-                _pseudo = dict([(a, str(self.pseudo)) for a in uniq_atoms])
-            elif 'default' in self.pseudo:
-                default_pseudo = self.pseudo['default']
-                _pseudo = dict(((a, default_pseudo) for a in uniq_atoms))
-                _pseudo.update(self.pseudo)
-                del (_pseudo['default'])
-            else:
-                _pseudo = self.pseudo
-            self._pseudo = self.format_pseudo(_pseudo)
-
-        # Do regular Mole.build
-        _built = self._built
-        mole.GTO.build(self, False, parse_arg, *args, **kwargs)
+        dump_input = dump_input and not self._built and self.verbose > logger.NOTE
+        mole.GTO.build(self, dump_input, parse_arg, *args, **kwargs)
 
         exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
         if self.exp_to_discard is None:
@@ -1474,8 +1235,6 @@ class Cell(mole.GTO):
         # The rest initialization requires lattice parameters.  If .a is not
         # set, pass the rest initialization.
         if self.a is None:
-            if dump_input and not _built and self.verbose > logger.NOTE:
-                self.dump_input()
             return self
 
         if self.rcut is None or self._rcut_from_build:
@@ -1513,8 +1272,7 @@ class Cell(mole.GTO):
             _check_mesh_symm = not self._mesh_from_build
             self.build_lattice_symmetry(check_mesh_symmetry=_check_mesh_symm)
 
-        if dump_input and not _built and self.verbose > logger.NOTE:
-            self.dump_input()
+        if dump_input:
             logger.info(self, 'lattice vectors  a1 [%.9f, %.9f, %.9f]', *_a[0])
             logger.info(self, '                 a2 [%.9f, %.9f, %.9f]', *_a[1])
             logger.info(self, '                 a3 [%.9f, %.9f, %.9f]', *_a[2])
@@ -1574,14 +1332,6 @@ class Cell(mole.GTO):
     def Gv(self):
         return self.get_Gv()
 
-    @lib.with_doc(format_pseudo.__doc__)
-    def format_pseudo(self, pseudo_tab):
-        return format_pseudo(pseudo_tab)
-
-    @lib.with_doc(format_basis.__doc__)
-    def format_basis(self, basis_tab):
-        return format_basis(basis_tab)
-
     @property
     def gs(self):
         return [n//2 for n in self.mesh]
@@ -1613,20 +1363,6 @@ class Cell(mole.GTO):
                    '%s is far over the estimated cutoff radius %s. ' %
                    (x, rcut_guess))
             warnings.warn(msg)
-
-    def make_ecp_env(self, _atm, _ecp, pre_env=[]):
-        if _ecp and self._pseudo:
-            conflicts = set(self._pseudo.keys()).intersection(set(_ecp.keys()))
-            if conflicts:
-                raise RuntimeError('Pseudo potential for atoms %s are defined '
-                                   'in both .ecp and .pseudo.' % list(conflicts))
-
-        _ecpbas, _env = np.zeros((0,8)), pre_env
-        if _ecp:
-            _atm, _ecpbas, _env = mole.make_ecp_env(self, _atm, _ecp, _env)
-        if self._pseudo:
-            _atm, _, _env = make_pseudo_env(self, _atm, self._pseudo, _env)
-        return _atm, _ecpbas, _env
 
     def lattice_vectors(self):
         '''Convert the primitive lattice vectors.
@@ -1703,7 +1439,8 @@ class Cell(mole.GTO):
         Returns:
             scaled_kpts : (nkpts, 3) ndarray of floats
         '''
-        if isinstance(abs_kpts, libkpts.KPoints):
+        from pyscf.pbc.lib.kpts import KPoints
+        if isinstance(abs_kpts, KPoints):
             if kpts_in_ibz:
                 return abs_kpts.kpts_scaled_ibz
             else:
@@ -1728,9 +1465,6 @@ class Cell(mole.GTO):
         return mesh
 
     make_kpts = get_kpts = make_kpts
-
-    def copy(self):
-        return copy(self)
 
     pack = pack
 
@@ -1836,9 +1570,5 @@ class Cell(mole.GTO):
         if mol.symmetry:
             mol._build_symmetry()
         return mol
-
-    def has_ecp(self):
-        '''Whether pseudo potential is used in the system.'''
-        return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
 
 del (INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)
