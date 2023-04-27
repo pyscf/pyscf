@@ -30,15 +30,15 @@ from pyscf import __config__
 
 
 @lib.with_doc(kuks.get_veff.__doc__)
-def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
+def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
-    if getattr(dm_kpts, 'mo_coeff', None) is not None:
-        mo_coeff = dm_kpts.mo_coeff
-        mo_occ_a = [(x > 0).astype(np.double) for x in dm_kpts.mo_occ]
-        mo_occ_b = [(x ==2).astype(np.double) for x in dm_kpts.mo_occ]
-        dm_kpts = lib.tag_array(dm_kpts, mo_coeff=(mo_coeff,mo_coeff),
-                                mo_occ=(mo_occ_a,mo_occ_b))
-    return kuks.get_veff(ks, cell, dm_kpts, dm_last, vhf_last, hermi, kpts, kpts_band)
+    if getattr(dm, 'mo_coeff', None) is not None:
+        mo_coeff = dm.mo_coeff
+        mo_occ_a = [(x > 0).astype(np.double) for x in dm.mo_occ]
+        mo_occ_b = [(x ==2).astype(np.double) for x in dm.mo_occ]
+        dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
+                           mo_occ=(mo_occ_a,mo_occ_b))
+    return kuks.get_veff(ks, cell, dm, dm_last, vhf_last, hermi, kpts, kpts_band)
 
 
 class KROKS(rks.KohnShamDFT, krohf.KROHF):
@@ -61,7 +61,10 @@ class KROKS(rks.KohnShamDFT, krohf.KROHF):
 
     def to_hf(self):
         '''Convert to KROHF object.'''
-        return self._transfer_attrs_(self.cell.KROHF())
+        from pyscf.pbc import scf
+        return self._transfer_attrs_(scf.KROHF(self.cell, self.kpts))
+
+    to_khf = to_hf
 
 
 if __name__ == '__main__':

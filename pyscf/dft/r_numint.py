@@ -576,11 +576,6 @@ def r_fxc(ni, mol, grids, xc_code, dm0, dms, spin=0, relativity=1, hermi=0,
     make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
     with_s = (nao == n2c*2)  # 4C DM
 
-    if rho0 is None and (xctype != 'LDA' or fxc is None):
-        make_rho0 = ni._gen_rho_evaluator(mol, dm0, 1)[0]
-    else:
-        make_rho0 = None
-
     matLL = numpy.zeros((nset,n2c,n2c), dtype=dms.dtype)
     matSS = numpy.zeros_like(matLL)
     if xctype in ('LDA', 'GGA', 'MGGA'):
@@ -593,11 +588,6 @@ def r_fxc(ni, mol, grids, xc_code, dm0, dms, spin=0, relativity=1, hermi=0,
             ('MGGA', 'm'): (_mcol_mgga_fxc_mat , 1),
         }
         fmat, ao_deriv = f_eval_mat[(xctype, ni.collinear[0])]
-        if ni.collinear[0] == 'm':  # mcol
-            eval_xc = ni.mcfun_eval_xc_adapter(xc_code)
-        else:
-            eval_xc = ni.eval_xc_eff
-
         _rho0 = None
         p1 = 0
         for ao, mask, weight, coords \

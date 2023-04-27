@@ -27,7 +27,7 @@ from pyscf.lib import linalg_helper
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
 from pyscf.pbc import scf
-from pyscf.pbc.tdscf.rhf import TDMixin
+from pyscf.pbc.tdscf.rhf import TDBase
 from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf.pbc.lib.kpts_helper import gamma_point, get_kconserv_ria
 from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
@@ -37,10 +37,10 @@ from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
 
-class KTDMixin(TDMixin):
+class KTDBase(TDBase):
     def __init__(self, mf, kshift_lst=None):
         assert isinstance(mf, scf.khf.KSCF)
-        TDMixin.__init__(self, mf)
+        TDBase.__init__(self, mf)
         warn_pbc2d_eri(mf)
 
         if kshift_lst is None: kshift_lst = [0]
@@ -96,8 +96,7 @@ class KTDMixin(TDMixin):
 
     get_nto = lib.invalid_method('get_nto')
 
-
-class TDA(KTDMixin):
+class TDA(KTDBase):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     def gen_vind(self, mf, kshift):

@@ -1019,7 +1019,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     def convert_from_(self, mf):
         '''Create UHF object based on the RHF/ROHF object'''
-        return mf.to_uhf(self)
+        tgt = mf.to_uhf()
+        self.__dict__.update(tgt.__dict__)
+        return self
 
     def stability(self,
                   internal=getattr(__config__, 'scf_stability_internal', True),

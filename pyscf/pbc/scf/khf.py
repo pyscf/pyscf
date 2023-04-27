@@ -269,8 +269,10 @@ def analyze(mf, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
     mo_coeff = mf.mo_coeff
     ovlp_ao = mf.get_ovlp()
     dm = mf.make_rdm1(mo_coeff, mo_occ)
+    pop, chg = mf.mulliken_meta(mf.cell, dm, s=ovlp_ao, verbose=verbose)
+    dip = None
     if with_meta_lowdin:
-        return mf.mulliken_meta(mf.cell, dm, s=ovlp_ao, verbose=verbose)
+        return (pop, chg), dip
     else:
         raise NotImplementedError
         #return mf.mulliken_pop(mf.cell, dm, s=ovlp_ao, verbose=verbose)
@@ -613,6 +615,9 @@ class KSCF(pbchf.SCF):
 
         return make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs)
 
+    def make_rdm2(self, mo_coeff_kpts, mo_occ_kpts, **kwargs):
+        raise NotImplementedError
+
     def get_bands(self, kpts_band, cell=None, dm_kpts=None, kpts=None):
         '''Get energy bands at the given (arbitrary) 'band' k-points.
 
@@ -658,11 +663,7 @@ class KSCF(pbchf.SCF):
 
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
-        if s is None: s = self.get_ovlp(cell)
-        return mulliken_meta(cell, dm, s=s, verbose=verbose,
-                             pre_orth_method=pre_orth_method)
+        raise NotImplementedError
 
     def mulliken_pop(self):
         raise NotImplementedError
@@ -737,32 +738,28 @@ class KSCF(pbchf.SCF):
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
 
-    def to_rhf(self, mf=None):
+    def to_rhf(self):
         '''Convert the input mean-field object to a KRHF/KROHF/KRKS/KROKS object'''
-        return addons.convert_to_rhf(self, mf)
+        return addons.convert_to_rhf(self)
 
-    def to_uhf(self, mf=None):
+    def to_uhf(self):
         '''Convert the input mean-field object to a KUHF/KUKS object'''
-        return addons.convert_to_uhf(self, mf)
+        return addons.convert_to_uhf(self)
 
-    def to_ghf(self, mf=None):
+    def to_ghf(self):
         '''Convert the input mean-field object to a KGHF/KGKS object'''
-        return addons.convert_to_ghf(self, mf)
+        return addons.convert_to_ghf(self)
 
     def to_khf(self):
         return self
 
-    def stability(self):
+    def convert_from_(self, mf):
         raise NotImplementedError
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
-
-class KRHF(KSCF):
+class KRHF(KSCF, pbchf.RHF):
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square
-    convert_from_ = pbchf.RHF.convert_from_
 
     def check_sanity(self):
         cell = self.cell
@@ -797,6 +794,15 @@ class KRHF(KSCF):
             dm_kpts *= (nelectron / ne).reshape(-1,1,1)
         return dm_kpts
 
+    @lib.with_doc(mulliken_meta.__doc__)
+    def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(cell)
+        return mulliken_meta(cell, dm, s=s, verbose=verbose,
+                             pre_orth_method=pre_orth_method)
+
     def nuc_grad_method(self):
         from pyscf.pbc.grad import krhf
         return krhf.Gradients(self)
@@ -812,23 +818,9 @@ class KRHF(KSCF):
         '''Convert to RKS object.
         '''
         from pyscf.pbc import dft
-        return self._transfer_attrs_(dft.KRKS(self.cell, xc=xc))
+        return self._transfer_attrs_(dft.KRKS(self.cell, self.kpts, xc=xc))
 
-del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.atom = '''
-    He 0 0 1
-    He 1 0 1
-    '''
-    cell.basis = '321g'
-    cell.a = np.eye(3) * 3
-    cell.mesh = [11] * 3
-    cell.verbose = 5
-    cell.build()
-    mf = KRHF(cell, [2,1,1])
-    mf.kernel()
-    mf.analyze()
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to KRHF/KROHF'''
+        addons.convert_to_rhf(mf, self)
+        return self

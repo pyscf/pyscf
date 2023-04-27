@@ -255,10 +255,12 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
 
 init_guess_by_chkfile = kuhf.init_guess_by_chkfile
 
-class KROHF(khf.KRHF):
+class KROHF(khf.KRHF, pbcrohf.ROHF):
     '''UHF class with k-point sampling.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
+
+    get_init_guess = kuhf.KUHF.get_init_guess
 
     init_guess_by_minao  = pbcrohf.ROHF.init_guess_by_minao
     init_guess_by_atom   = pbcrohf.ROHF.init_guess_by_atom
@@ -271,7 +273,6 @@ class KROHF(khf.KRHF):
     analyze = khf.analyze
     spin_square = pbcrohf.ROHF.spin_square
     canonicalize = canonicalize
-    convert_from_ = pbcrohf.ROHF.convert_from_
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -302,10 +303,6 @@ class KROHF(khf.KRHF):
         logger.info(self, 'number of electrons per cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self
-
-    def get_init_guess(self, cell=None, key='minao'):
-        dm_kpts = kuhf.KUHF.get_init_guess(self, cell, key)
-        return dm_kpts[0] + dm_kpts[1]
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
@@ -381,22 +378,4 @@ class KROHF(khf.KRHF):
         '''Convert to RKS object.
         '''
         from pyscf.pbc import dft
-        return self._transfer_attrs_(dft.KROKS(self.cell, xc=xc))
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.atom = '''
-    He 0 0 1
-    He 1 0 1
-    '''
-    cell.basis = '321g'
-    cell.a = np.eye(3) * 3
-    cell.mesh = [11] * 3
-    cell.verbose = 5
-    cell.spin = 2
-    cell.build()
-    mf = KROHF(cell, [2,1,1])
-    mf.kernel()
-    mf.analyze()
+        return self._transfer_attrs_(dft.KROKS(self.cell, self.kpts, xc=xc))

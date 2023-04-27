@@ -44,6 +44,7 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
     '''ROHF class for PBCs.
     '''
 
+    get_init_guess = pbcuhf.UHF.get_init_guess
     init_guess_by_chkfile = pbcuhf.UHF.init_guess_by_chkfile
     init_guess_by_minao  = mol_rohf.ROHF.init_guess_by_minao
     init_guess_by_atom   = mol_rohf.ROHF.init_guess_by_atom
@@ -61,7 +62,6 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
     spin_square = mol_rohf.ROHF.spin_square
     stability = mol_rohf.ROHF.stability
     dip_moment = pbchf.SCF.dip_moment
-    convert_from_ = mol_rohf.ROHF.convert_from_
 
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -131,4 +131,4 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
         '''Convert to RKS object.
         '''
         from pyscf.pbc import dft
-        return self._transfer_attrs_(dft.ROKS(self.cell, xc=xc))
+        return self._transfer_attrs_(dft.ROKS(self.cell, self.kpt, xc=xc))

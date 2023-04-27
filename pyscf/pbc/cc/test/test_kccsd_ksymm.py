@@ -60,4 +60,24 @@ class KnownValues(unittest.TestCase):
 
 if __name__ == '__main__':
     print("Full Tests for CCSD with k-point symmetry")
-    unittest.main()
+    #unittest.main()
+    L = 2.
+    He = gto.Cell()
+    He.verbose = 5
+    He.a = np.eye(3)*L
+    He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
+    He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+    He.space_group_symmetry = True
+    He.build()
+
+    nk = [2,2,2]
+
+    kpts0 = He.make_kpts(nk)
+    kmf0 = scf.KRHF(He, kpts0, exxdiv=None).density_fit()
+    kmf0.kernel()
+    kccref = cc.KRCCSD(kmf0)
+    kccref.kernel()
+
+    kpts = He.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
+    kmf = scf.KRHF(He, kpts, exxdiv=None).density_fit()
+    kmf.kernel()

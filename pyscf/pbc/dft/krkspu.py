@@ -63,7 +63,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
 
     # J + V_xc
-    vxc = super(ks.__class__, ks).get_veff(cell=cell, dm=dm, dm_last=dm_last,
+    vxc = super(ks.__class__, ks).get_veff(cell, dm, dm_last=dm_last,
                                            vhf_last=vhf_last, hermi=hermi, kpts=kpts,
                                            kpts_band=kpts_band)
 

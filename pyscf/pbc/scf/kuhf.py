@@ -364,7 +364,7 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
 
 get_rho = khf.get_rho
 
-class KUHF(khf.KSCF):
+class KUHF(khf.KSCF, pbcuhf.UHF):
     '''UHF class with k-point sampling.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
@@ -374,7 +374,6 @@ class KUHF(khf.KSCF):
     init_guess_by_atom   = pbcuhf.UHF.init_guess_by_atom
     init_guess_by_huckel = pbcuhf.UHF.init_guess_by_huckel
     init_guess_by_mod_huckel = pbcuhf.UHF.init_guess_by_mod_huckel
-    make_rdm2 = lib.invalid_method('make_rdm2')
     get_fock = get_fock
     get_fermi = get_fermi
     get_occ = get_occ
@@ -382,7 +381,6 @@ class KUHF(khf.KSCF):
     get_rho = get_rho
     analyze = khf.analyze
     canonicalize = canonicalize
-    convert_from_ = pbcuhf.UHF.convert_from_
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -567,21 +565,9 @@ class KUHF(khf.KSCF):
         '''Convert to RKS object.
         '''
         from pyscf.pbc import dft
-        return self._transfer_attrs_(dft.KUKS(self.cell, xc=xc))
+        return self._transfer_attrs_(dft.KUKS(self.cell, self.kpts, xc=xc))
 
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.atom = '''
-    He 0 0 1
-    He 1 0 1
-    '''
-    cell.basis = '321g'
-    cell.a = np.eye(3) * 3
-    cell.mesh = [11] * 3
-    cell.verbose = 5
-    cell.build()
-    mf = KUHF(cell, [2,1,1])
-    mf.kernel()
-    mf.analyze()
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to KUHF'''
+        addons.convert_to_uhf(mf, self)
+        return self

@@ -637,7 +637,7 @@ def as_scanner(td):
     return TD_Scanner(td)
 
 
-class TDMixin(lib.StreamObject):
+class TDBase(lib.StreamObject):
     conv_tol = getattr(__config__, 'tdscf_rhf_TDA_conv_tol', 1e-9)
     nstates = getattr(__config__, 'tdscf_rhf_TDA_nstates', 3)
     singlet = getattr(__config__, 'tdscf_rhf_TDA_singlet', True)
@@ -781,7 +781,7 @@ class TDMixin(lib.StreamObject):
         logger.note(self, 'Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self
 
-class TDA(TDMixin):
+class TDA(TDBase):
     '''Tamm-Dancoff approximation
 
     Attributes:

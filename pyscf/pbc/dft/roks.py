@@ -50,10 +50,8 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
 
     get_vsap = rks.RKS.get_vsap
     init_guess_by_vsap = rks.RKS.init_guess_by_vsap
-
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
-    get_rho = uks.get_rho
 
     def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -67,7 +65,8 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
 
     def to_hf(self):
         '''Convert to RHF object.'''
-        return self._transfer_attrs_(self.cell.ROHF())
+        from pyscf.pbc import scf
+        return self._transfer_attrs_(scf.ROHF(self.cell, self.kpt))
 
 
 if __name__ == '__main__':

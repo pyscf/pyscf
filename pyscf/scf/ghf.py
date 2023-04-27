@@ -512,7 +512,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     def convert_from_(self, mf):
         '''Create GHF object based on the RHF/UHF object'''
-        return mf.to_ghf(self)
+        tgt = mf.to_ghf()
+        self.__dict__.update(tgt.__dict__)
+        return self
 
     def stability(self, internal=None, external=None, verbose=None, return_status=False):
         from pyscf.scf.stability import ghf_stability

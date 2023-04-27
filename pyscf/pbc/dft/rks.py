@@ -256,6 +256,12 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
                 mf._numint = NumInt2C()
         return mf
 
+    def to_hf(self):
+        raise NotImplementedError
+
+    def to_khf(self):
+        raise NotImplementedError
+
     def initialize_grids(self, cell=None, dm=None):
         '''Initialize self.grids the first time call get_veff'''
         raise NotImplementedError
@@ -288,11 +294,8 @@ class RKS(KohnShamDFT, pbchf.RHF):
 
     def to_hf(self):
         '''Convert to RHF object.'''
-        mf = pbchf.RHF(self.cell)
-        keys = mf.__dict__.keys() & self.__dict__.keys()
-        mf.__dict__.update({key: getattr(self, key) for key in keys}, _keys=mf._keys)
-        mf.converged = False
-        return mf
+        from pyscf.pbc import scf
+        return self._transfer_attrs_(scf.RHF(self.cell, self.kpt))
 
 
 if __name__ == '__main__':

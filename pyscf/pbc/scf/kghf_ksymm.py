@@ -135,6 +135,17 @@ class KsymAdaptedKGHF(khf_ksymm.KsymAdaptedKSCF, kghf.KGHF):
     """
     KGHF with k-point symmetry
     """
+
+    get_jk = get_jk
+    get_occ = get_occ
+    energy_elec = khf_ksymm.KsymAdaptedKRHF.energy_elec
+    get_init_guess = khf_ksymm.KsymAdaptedKRHF.get_init_guess
+    init_guess_by_minao = kghf.KGHF.init_guess_by_minao
+    init_guess_by_atom = kghf.KGHF.init_guess_by_atom
+    init_guess_by_chkfile = kghf.KGHF.init_guess_by_chkfile
+    to_ks = kghf.KGHF.to_ks
+    convert_from_ = kghf.KGHF.convert_from_
+
     def __init__(self, cell, kpts=libkpts.KPoints(),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
                  use_ao_symmetry=True):
@@ -178,14 +189,6 @@ class KsymAdaptedKGHF(khf_ksymm.KsymAdaptedKSCF, kghf.KGHF):
         return orbsym
 
     orbsym = property(get_orbsym)
-
-    get_jk = get_jk
-    get_occ = get_occ
-    energy_elec = khf_ksymm.KsymAdaptedKRHF.energy_elec
-    get_init_guess = khf_ksymm.KsymAdaptedKRHF.get_init_guess
-    init_guess_by_minao = kghf.KGHF.init_guess_by_minao
-    init_guess_by_atom = kghf.KGHF.init_guess_by_atom
-    init_guess_by_chkfile = kghf.KGHF.init_guess_by_chkfile
 
 KGHF = KsymAdaptedKGHF
 

@@ -793,23 +793,17 @@ class SCF(mol_hf.SCF):
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
 
-    def to_rhf(self, mf=None):
+    def to_rhf(self):
         '''Convert the input mean-field object to a RHF/ROHF/RKS/ROKS object'''
-        return addons.convert_to_rhf(self, mf)
+        return addons.convert_to_rhf(self)
 
-    def to_uhf(self, mf=None):
+    def to_uhf(self):
         '''Convert the input mean-field object to a UHF/UKS object'''
-        return addons.convert_to_uhf(self, mf)
+        return addons.convert_to_uhf(self)
 
-    def to_ghf(self, mf=None):
+    def to_ghf(self):
         '''Convert the input mean-field object to a GHF/GKS object'''
-        return addons.convert_to_ghf(self, mf)
-
-    def stability(self):
-        raise NotImplementedError
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
+        return addons.convert_to_ghf(self)
 
     def jk_method(self, J='FFTDF', K=None):
         '''
@@ -860,12 +854,11 @@ class KohnShamDFT:
     '''
 
 
-class RHF(SCF):
+class RHF(SCF, mol_hf.RHF):
 
     analyze = mol_hf.RHF.analyze
     spin_square = mol_hf.RHF.spin_square
     stability = mol_hf.RHF.stability
-    convert_from_ = mol_hf.RHF.convert_from_
 
     def nuc_grad_method(self):
         raise NotImplementedError
@@ -875,6 +868,11 @@ class RHF(SCF):
         '''
         from pyscf.pbc import dft
         return self._transfer_attrs_(dft.RKS(self.cell, xc=xc))
+
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to RHF/ROHF'''
+        addons.convert_to_rhf(mf, self)
+        return self
 
 
 def _format_jks(vj, dm, kpts_band):
@@ -891,11 +889,8 @@ def normalize_dm_(mf, dm):
     Scale density matrix to make it produce the correct number of electrons.
     '''
     cell = mf.cell
-    if isinstance(dm, np.ndarray) and dm.ndim == 2:
-        ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
-    else:
-        ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
-    if abs(ne - cell.nelectron).sum() > 0.01:
+    ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
+    if abs(ne - cell.nelectron) > 0.01:
         logger.debug(mf, 'Big error detected in the electron number '
                      'of initial guess density matrix (Ne/cell = %g)!\n'
                      '  This can cause huge error in Fock matrix and '

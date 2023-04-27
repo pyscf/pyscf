@@ -1866,6 +1866,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         from pyscf.soscf import newton_ah
         return newton_ah.remove_soscf(self)
 
+    def stability(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):  # pragma: no cover
         '''Hook to create object for analytical nuclear gradients.'''
         raise NotImplementedError
@@ -1954,7 +1957,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
 
-    def to_rhf(self, mf=None):
+    def to_rhf(self):
         '''Convert the input mean-field object to a RHF/ROHF object.
 
         Note this conversion only changes the class of the mean-field object.
@@ -1962,12 +1965,12 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mean-field object.
         '''
         from pyscf.scf import addons
-        mf = addons.convert_to_rhf(self, mf)
+        mf = addons.convert_to_rhf(self)
         if not isinstance(self, RHF):
             mf.converged = False
         return mf
 
-    def to_uhf(self, mf=None):
+    def to_uhf(self):
         '''Convert the input mean-field object to a UHF object.
 
         Note this conversion only changes the class of the mean-field object.
@@ -1975,9 +1978,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mean-field object.
         '''
         from pyscf.scf import addons
-        return addons.convert_to_uhf(self, mf)
+        return addons.convert_to_uhf(self)
 
-    def to_ghf(self, mf=None):
+    def to_ghf(self):
         '''Convert the input mean-field object to a GHF object.
 
         Note this conversion only changes the class of the mean-field object.
@@ -1985,7 +1988,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mean-field object.
         '''
         from pyscf.scf import addons
-        return addons.convert_to_ghf(self, mf)
+        return addons.convert_to_ghf(self)
 
     def to_rks(self, xc='HF'):
         '''Convert the input mean-field object to a RKS/ROKS object.
@@ -2109,7 +2112,9 @@ class RHF(SCF):
 
     def convert_from_(self, mf):
         '''Convert the input mean-field object to RHF/ROHF'''
-        return mf.to_rhf(self)
+        tgt = mf.to_rhf()
+        self.__dict__.update(tgt.__dict__)
+        return self
 
     def spin_square(self, mo_coeff=None, s=None):  # pragma: no cover
         '''Spin square and multiplicity of RHF determinant'''

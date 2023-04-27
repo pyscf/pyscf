@@ -21,7 +21,7 @@ from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.lib import kpts as libkpts
-from pyscf.pbc.scf import kuhf_ksymm
+from pyscf.pbc.scf import khf, khf_ksymm, kuhf_ksymm
 from pyscf.pbc.dft import gen_grid, multigrid
 from pyscf.pbc.dft import rks, kuks
 
@@ -120,6 +120,21 @@ class KsymAdaptedKUKS(kuks.KUKS, kuhf_ksymm.KUHF):
     get_veff = get_veff
     get_rho = get_rho
 
+    kpts = khf_ksymm.KsymAdaptedKSCF.kpts
+    get_ovlp = khf_ksymm.KsymAdaptedKSCF.get_ovlp
+    get_hcore = khf_ksymm.KsymAdaptedKSCF.get_hcore
+    get_jk = khf_ksymm.KsymAdaptedKSCF.get_jk
+    init_guess_by_chkfile = khf_ksymm.KsymAdaptedKSCF.init_guess_by_chkfile
+    dump_chk = khf_ksymm.KsymAdaptedKSCF.dump_chk
+
+    nelec = kuhf_ksymm.KUHF.nelec
+    get_init_guess = kuhf_ksymm.KUHF.get_init_guess
+    get_occ = kuhf_ksymm.KUHF.get_occ
+    eig = kuhf_ksymm.KUHF.eig
+    get_orbsym = kuhf_ksymm.KUHF.get_orbsym
+    orbsym = kuhf_ksymm.KUHF.orbsym
+    _finalize = kuhf_ksymm.KUHF._finalize
+
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         kuhf_ksymm.KUHF.__init__(self, cell, kpts, exxdiv=exxdiv)
@@ -138,11 +153,16 @@ class KsymAdaptedKUKS(kuks.KUKS, kuhf_ksymm.KUHF):
 
         weight = self.kpts.weights_ibz
         e1 = np.einsum('k,kij,kji', weight, h1e_kpts, dm_kpts[0]+dm_kpts[1])
-        tot_e = e1 + vhf.ecoul + vhf.exc
+        ecoul = vhf.ecoul
+        tot_e = e1 + ecoul + vhf.exc
         self.scf_summary['e1'] = e1.real
-        self.scf_summary['coul'] = vhf.ecoul.real
+        self.scf_summary['coul'] = ecoul.real
         self.scf_summary['exc'] = vhf.exc.real
-        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, vhf.exc)
+        if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag > self.cell.precision*10):
+            logger.warn(self, "Coulomb energy has imaginary part %s. "
+                        "Coulomb integrals (e-e, e-N) may not converge !",
+                        ecoul.imag)
         return tot_e.real, vhf.ecoul + vhf.exc
 
 

@@ -28,20 +28,20 @@ See Also:
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.pbc.scf import kuhf
+from pyscf.pbc.scf import khf, kuhf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
 
-def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
+def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
     '''Coulomb + XC functional for UKS.  See pyscf/pbc/dft/uks.py
     :func:`get_veff` fore more details.
     '''
     if cell is None: cell = ks.cell
-    if dm_kpts is None: dm_kpts = ks.make_rdm1()
+    if dm is None: dm = ks.make_rdm1()
     if kpts is None: kpts = ks.kpts
     t0 = (logger.process_clock(), logger.perf_counter())
 
@@ -52,28 +52,28 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
     hybrid = ni.libxc.is_hybrid_xc(ks.xc)
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
-        n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm_kpts, hermi,
+        n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
                                        kpts, kpts_band,
                                        with_j=True, return_j=False)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
         return vxc
 
-    # ndim = 4 : dm_kpts.shape = ([alpha,beta], nkpts, nao, nao)
-    ground_state = (dm_kpts.ndim == 4 and dm_kpts.shape[0] == 2 and kpts_band is None)
+    # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
+    ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
 
     if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
         if (isinstance(ks.grids, gen_grid.BeckeGrids) and
             ks.small_rho_cutoff > 1e-20 and ground_state):
-            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm_kpts, ks.grids, kpts)
+            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = (0,0), 0, 0
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm_kpts, 0, hermi,
+        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0, hermi,
                                         kpts, kpts_band, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
@@ -82,7 +82,7 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
     weight = 1. / nkpts
 
     if not hybrid:
-        vj = ks.get_j(cell, dm_kpts[0]+dm_kpts[1], hermi, kpts, kpts_band)
+        vj = ks.get_j(cell, dm[0]+dm[1], hermi, kpts, kpts_band)
         vxc += vj
     else:
         omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
@@ -92,21 +92,21 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                 logger.warn(ks, 'df.j_only cannot be used with hybrid '
                             'functional. Rebuild cderi')
                 ks.with_df.build()
-        vj, vk = ks.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+        vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vj = vj[0] + vj[1]
         vk *= hyb
         if omega != 0:
-            vklr = ks.get_k(cell, dm_kpts, hermi, kpts, kpts_band, omega=omega)
+            vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
             vklr *= (alpha - hyb)
             vk += vklr
         vxc += vj - vk
 
         if ground_state:
-            exc -= (np.einsum('Kij,Kji', dm_kpts[0], vk[0]) +
-                    np.einsum('Kij,Kji', dm_kpts[1], vk[1])).real * .5 * weight
+            exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
+                    np.einsum('Kij,Kji', dm[1], vk[1])).real * .5 * weight
 
     if ground_state:
-        ecoul = np.einsum('Kij,Kji', dm_kpts[0]+dm_kpts[1], vj).real * .5 * weight
+        ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj).real * .5 * weight
     else:
         ecoul = None
 
@@ -122,11 +122,16 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     weight = 1./len(h1e_kpts)
     e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
                   np.einsum('kij,kji', h1e_kpts, dm_kpts[1]))
-    tot_e = e1 + vhf.ecoul + vhf.exc
+    ecoul = vhf.ecoul
+    tot_e = e1 + ecoul + vhf.exc
     mf.scf_summary['e1'] = e1.real
-    mf.scf_summary['coul'] = vhf.ecoul.real
+    mf.scf_summary['coul'] = ecoul.real
     mf.scf_summary['exc'] = vhf.exc.real
-    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, vhf.exc)
+    if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag > mf.cell.precision*10):
+        logger.warn(mf, "Coulomb energy has imaginary part %s. "
+                    "Coulomb integrals (e-e, e-N) may not converge !",
+                    ecoul.imag)
     return tot_e.real, vhf.ecoul + vhf.exc
 
 @lib.with_doc(kuhf.get_rho.__doc__)
@@ -161,7 +166,10 @@ class KUKS(kuhf.KUHF, rks.KohnShamDFT):
 
     def to_hf(self):
         '''Convert to KUHF object.'''
-        return self._transfer_attrs_(self.cell.KUHF())
+        from pyscf.pbc import scf
+        return self._transfer_attrs_(scf.KUHF(self.cell, self.kpts))
+
+    to_khf = to_hf
 
 
 if __name__ == '__main__':

@@ -563,8 +563,9 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError(f'r_vxc for functional {xc_code}')
 
     if fxc is None and xctype in ('LDA', 'GGA', 'MGGA'):
-        fxc = ni.cache_xc_kernel1(cell, grids, xc_code, dm0, spin=0,
-                                  kpts=kpts, max_memory=max_memory)[2]
+        spin = 0
+        fxc = ni.cache_xc_kernel1(cell, grids, xc_code, dm0, spin, kpts,
+                                  max_memory=max_memory)[2]
     if kpts is None:
         kpts = numpy.zeros((1,3))
     elif isinstance(kpts, KPoints):
@@ -619,14 +620,15 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
     Ref. CPL, 256, 454
     '''
     if fxc is None:
-        fxc = ni.cache_xc_kernel1(cell, grids, xc_code, dm0, spin=1,
-                                  kpts=kpts, max_memory=max_memory)[2]
+        spin = 1
+        fxc = ni.cache_xc_kernel1(cell, grids, xc_code, dm0, spin, kpts,
+                                  max_memory=max_memory)[2]
     if singlet:
         fxc = fxc[0,:,0] + fxc[0,:,1]
     else:
         fxc = fxc[0,:,0] - fxc[0,:,1]
     return ni.nr_rks_fxc(cell, grids, xc_code, dm0, dms_alpha, hermi=0, fxc=fxc,
-                         max_memory=max_memory)
+                         kpts=kpts, max_memory=max_memory)
 
 def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
@@ -683,8 +685,9 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError(f'r_vxc for functional {xc_code}')
 
     if fxc is None and xctype in ('LDA', 'GGA', 'MGGA'):
-        fxc = ni.cache_xc_kernel1(cell, grids, xc_code, dm0, spin=1,
-                                  kpts=kpts, max_memory=max_memory)[2]
+        spin = 1
+        fxc = ni.cache_xc_kernel1(cell, grids, xc_code, dm0, spin, kpts,
+                                  max_memory=max_memory)[2]
     if kpts is None:
         kpts = numpy.zeros((1,3))
     elif isinstance(kpts, KPoints):
@@ -766,10 +769,10 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     if kpts is None:
         kpts = numpy.zeros((1,3))
     elif isinstance(kpts, KPoints):
-        kpts = kpts.kpts
-        if kpts.size > 3: # multiple k points
+        if kpts.kpts.size > 3: # multiple k points
             mo_coeff = kpts.transform_mo_coeff(mo_coeff)
             mo_occ = kpts.transform_mo_occ(mo_occ)
+        kpts = kpts.kpts
     xctype = ni._xc_type(xc_code)
     if xctype == 'GGA':
         ao_deriv = 1
@@ -828,12 +831,14 @@ def cache_xc_kernel1(ni, cell, grids, xc_code, dm, spin=0,
     else:
         is_rhf = dm[0].ndim == 1
 
+    # 0th order density matrix must be hermitian
+    hermi = 1
     nao = cell.nao_nr()
     if is_rhf:
         rho = []
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
-            rho.append(ni.eval_rho1(cell, ao_k1, dm, mask, xctype))
+            rho.append(ni.eval_rho1(cell, ao_k1, dm, mask, xctype, hermi))
         rho = numpy.hstack(rho)
         if spin == 1:
             rho *= .5
@@ -844,8 +849,8 @@ def cache_xc_kernel1(ni, cell, grids, xc_code, dm, spin=0,
         rhob = []
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
-            rhoa.append(ni.eval_rho1(cell, ao_k1, dm[0], mask, xctype))
-            rhob.append(ni.eval_rho1(cell, ao_k1, dm[1], mask, xctype))
+            rhoa.append(ni.eval_rho1(cell, ao_k1, dm[0], mask, xctype, hermi))
+            rhob.append(ni.eval_rho1(cell, ao_k1, dm[1], mask, xctype, hermi))
         rho = numpy.stack([numpy.hstack(rhoa), numpy.hstack(rhob)])
     vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
     return rho, vxc, fxc
@@ -893,11 +898,12 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
             # To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
             ni = self.view(KNumInt)
             nao = dms.shape[-1]
-            return ni.nr_rks(cell, grids, xc_code, dms.reshape(-1,nao,nao),
-                             hermi, kpt.reshape(1,3), kpts_band, max_memory,
-                             verbose)
-        return nr_rks(self, cell, grids, xc_code, dms,
-                      0, 0, hermi, kpt, kpts_band, max_memory, verbose)
+            dms = dms.reshape(-1,nao,nao)
+            return ni.nr_rks(cell, grids, xc_code, dms, relativity,
+                             hermi, kpt.reshape(1,3), kpts_band, max_memory, verbose)
+        spin = 0
+        return nr_rks(self, cell, grids, xc_code, dms, spin, relativity,
+                      hermi, kpt, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_uks.__doc__)
     def nr_uks(self, cell, grids, xc_code, dms, relativity=0, hermi=1,
@@ -906,11 +912,12 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
             # To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
             ni = self.view(KNumInt)
             nao = dms.shape[-1]
-            return ni.nr_uks(cell, grids, xc_code, dms.reshape(2,-1,nao,nao),
-                             hermi, kpt.reshape(1,3), kpts_band, max_memory,
-                             verbose)
-        return nr_uks(self, cell, grids, xc_code, dms,
-                      1, 0, hermi, kpt, kpts_band, max_memory, verbose)
+            dms = dms.reshape(2,-1,nao,nao)
+            return ni.nr_uks(cell, grids, xc_code, dms, relativity,
+                             hermi, kpt.reshape(1,3), kpts_band, max_memory, verbose)
+        spin = 1
+        return nr_uks(self, cell, grids, xc_code, dms, spin, relativity,
+                      hermi, kpt, kpts_band, max_memory, verbose)
 
     def _vxc_mat(self, cell, ao, wv, mask, xctype, shls_slice, ao_loc, hermi):
         if hermi == 1:
@@ -1140,15 +1147,15 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
         if kpts_band is not None:
             kpts_band = numpy.reshape(kpts_band, (-1,3))
             dk = abs(kpts[:,None] - kpts_band).max(axis=2)
-            idx, idy = numpy.where(dk < KPT_DIFF_TOL)
+            k_idx, kband_idx = numpy.where(dk < KPT_DIFF_TOL)
             where = numpy.empty(len(kpts_band), dtype=int)
-            where[idy] = idx
+            where[kband_idx] = k_idx
             kband_mask = numpy.ones(len(kpts_band), dtype=bool)
-            kband_mask[idy] = False
+            kband_mask[kband_idx] = False
             kpts_band_uniq = kpts_band[kband_mask]
             if kpts_band_uniq.size > 0:
                 kpts_all = numpy.vstack([kpts,kpts_band_uniq])
-                where[kband_mask] = len(kpts) + numpy.arange(kpts_band_uniq.size)
+                where[kband_mask] = len(kpts) + numpy.arange(kpts_band_uniq.shape[0])
 
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:

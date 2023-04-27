@@ -21,7 +21,7 @@ from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.lib import kpts as libkpts
-from pyscf.pbc.scf import khf_ksymm
+from pyscf.pbc.scf import khf, khf_ksymm
 from pyscf.pbc.dft import gen_grid, multigrid
 from pyscf.pbc.dft import rks, krks
 
@@ -108,29 +108,38 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     return vxc
 
 def get_rho(mf, dm=None, grids=None, kpts=None):
-    if dm is None: dm = mf.make_rdm1()
-    if grids is None: grids = mf.grids
     if kpts is None: kpts = mf.kpts
-    if isinstance(kpts, np.ndarray):
-        return krks.get_rho(mf, dm, grids, kpts)
-
-    ndm = len(dm)
-    if ndm != kpts.nkpts_ibz:
-        raise RuntimeError("Number of input density matrices does not \
-                           match the number of IBZ kpts: %d vs %d."
-                           % (ndm, kpts.nkpts_ibz))
-    dm = kpts.transform_dm(dm)
-    if isinstance(mf.with_df, multigrid.MultiGridFFTDF):
-        rho = mf.with_df.get_rho(dm, kpts.kpts)
-    else:
-        rho = mf._numint.get_rho(mf.cell, dm, grids, kpts.kpts, mf.max_memory)
-    return rho
+    if isinstance(kpts, libkpts.KPoints):
+        if dm is None:
+            dm = mf.make_rdm1()
+        if len(dm) != kpts.nkpts_ibz:
+            raise RuntimeError(
+                'Number of input density matrices does not match the number of '
+                f'IBZ kpts: {len(dm)} vs {kpts.nkpts_ibz}.')
+        dm = kpts.transform_dm(dm)
+        kpts = kpts.kpts
+    return krks.get_rho(mf, dm, grids, kpts)
 
 
 class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
 
     get_veff = get_veff
     get_rho = get_rho
+
+    kpts = khf_ksymm.KsymAdaptedKSCF.kpts
+    get_ovlp = khf_ksymm.KsymAdaptedKSCF.get_ovlp
+    get_hcore = khf_ksymm.KsymAdaptedKSCF.get_hcore
+    get_jk = khf_ksymm.KsymAdaptedKSCF.get_jk
+    get_occ = khf_ksymm.KsymAdaptedKSCF.get_occ
+    init_guess_by_chkfile = khf_ksymm.KsymAdaptedKSCF.init_guess_by_chkfile
+    dump_chk = khf_ksymm.KsymAdaptedKSCF.dump_chk
+    eig = khf_ksymm.KsymAdaptedKSCF.eig
+    get_orbsym = khf_ksymm.KsymAdaptedKSCF.get_orbsym
+    orbsym = khf_ksymm.KsymAdaptedKSCF.orbsym
+    _finalize = khf_ksymm.KsymAdaptedKSCF._finalize
+
+    get_init_guess = khf_ksymm.KRHF.get_init_guess
+    to_khf = khf_ksymm.KRHF.to_khf
 
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -150,11 +159,16 @@ class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
 
         weight = self.kpts.weights_ibz
         e1 = np.einsum('k,kij,kji', weight, h1e_kpts, dm_kpts)
-        tot_e = e1 + vhf.ecoul + vhf.exc
+        ecoul = vhf.ecoul
+        tot_e = e1 + ecoul + vhf.exc
         self.scf_summary['e1'] = e1.real
-        self.scf_summary['coul'] = vhf.ecoul.real
+        self.scf_summary['coul'] = ecoul.real
         self.scf_summary['exc'] = vhf.exc.real
-        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, vhf.exc)
+        if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag > self.cell.precision*10):
+            logger.warn(self, "Coulomb energy has imaginary part %s. "
+                        "Coulomb integrals (e-e, e-N) may not converge !",
+                        ecoul.imag)
         return tot_e.real, vhf.ecoul + vhf.exc
 
 KRKS = KsymAdaptedKRKS

@@ -97,7 +97,7 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
 
     return vj, vk
 
-class GHF(pbchf.SCF):
+class GHF(pbchf.SCF, mol_ghf.GHF):
     '''GHF class for PBCs.
     '''
 
@@ -120,7 +120,6 @@ class GHF(pbchf.SCF):
     mulliken_meta = lib.invalid_method('mulliken_meta')
     spin_square = mol_ghf.GHF.spin_square
     stability = mol_ghf.GHF.stability
-    convert_from_ = mol_ghf.GHF.convert_from_
 
     def get_hcore(self, cell=None, kpt=None):
         hcore = pbchf.SCF.get_hcore(self, cell, kpt)
@@ -160,7 +159,12 @@ class GHF(pbchf.SCF):
         '''Convert to RKS object.
         '''
         from pyscf.pbc import dft
-        return self._transfer_attrs_(dft.GKS(self.cell, xc=xc))
+        return self._transfer_attrs_(dft.GKS(self.cell, self.kpt, xc=xc))
+
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to GHF'''
+        addons.convert_to_ghf(mf, self)
+        return self
 
 
 if __name__ == '__main__':

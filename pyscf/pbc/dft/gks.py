@@ -143,4 +143,5 @@ class GKS(rks.KohnShamDFT, pbcghf.GHF):
 
     def to_hf(self):
         '''Convert to GHF object.'''
-        return self._transfer_attrs_(self.cell.GHF())
+        from pyscf.pbc import scf
+        return self._transfer_attrs_(scf.GHF(self.cell, self.kpt))

@@ -36,6 +36,7 @@ from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
+get_rho = rks.get_rho
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpt=None, kpts_band=None):
@@ -125,11 +126,11 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
     variables replaced by `cell`.
     '''
 
+    get_rho = get_rho
     get_vsap = mol_uks.UKS.get_vsap
     init_guess_by_vsap = mol_uks.UKS.init_guess_by_vsap
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
-    get_rho = get_rho
 
     def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -143,7 +144,8 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
 
     def to_hf(self):
         '''Convert to UHF object.'''
-        return self._transfer_attrs_(self.cell.UHF())
+        from pyscf.pbc import scf
+        return self._transfer_attrs_(scf.UHF(self.cell, self.kpt))
 
 
 if __name__ == '__main__':

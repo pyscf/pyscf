@@ -451,10 +451,10 @@ def convert_to_rhf(mf, out=None):
                              dft.roks.ROKS   : dft.rks.RKS  ,
                              scf.rohf.ROHF   : scf.hf.RHF   }
             else:
-                known_cls = {dft.kuks.KUKS : dft.krks.KROKS,
-                             scf.kuhf.KUHF : scf.khf.KROHF ,
-                             dft.uks.UKS   : dft.rks.ROKS  ,
-                             scf.uhf.UHF   : scf.hf.ROHF   }
+                known_cls = {dft.kuks.KUKS : dft.kroks.KROKS,
+                             scf.kuhf.KUHF : scf.krohf.KROHF,
+                             dft.uks.UKS   : dft.roks.ROKS,
+                             scf.uhf.UHF   : scf.rohf.ROHF}
             # .with_df should never be removed or changed during the conversion.
             # It is needed to compute JK matrix in all pbc SCF objects
             out = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)

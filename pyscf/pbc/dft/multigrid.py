@@ -1410,7 +1410,10 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
     return veff.reshape(dm_kpts.shape)
 
 
-def cache_xc_kernel(mydf, xc_code, dm, spin=0, kpts=None):
+def cache_xc_kernel(mydf, xc_code, mo_coeff, mo_occ, spin=0, kpts=None):
+    raise NotImplementedError
+
+def cache_xc_kernel1(mydf, xc_code, dm, spin=0, kpts=None):
     '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
     DFT hessian module etc.
     '''
@@ -1436,16 +1439,22 @@ def cache_xc_kernel(mydf, xc_code, dm, spin=0, kpts=None):
     weight = cell.vol / ngrids
     rhoG = _eval_rhoG(mydf, dm, hermi, kpts, deriv)
     rho = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
+    rho = rho.reshape(rhoG.shape)
+
+    n_dm, comp, ngrids = rho.shape
+    if n_dm == 1 and spin == 1:
+        rho = numpy.repeat(rho, 2, axis=0)
+        rho *= .5
+
     if xctype == 'LDA':
-        if spin == 0:
-            rho = rho.ravel()
-        else:
-            rho = rho.reshape(2,ngrids)
+        assert comp == 1
+        rho = rho[:,0]
     else:
-        if spin == 0:
-            rho = rho.reshape(comp,ngrids)
-        else:
-            rho = rho.reshape(2,comp,ngrids)
+        assert comp > 1
+
+    if spin == 0:
+        assert n_dm == 1
+        rho = rho[0]
 
     vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
     return rho, vxc, fxc
@@ -1460,9 +1469,9 @@ def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
         kpts = mf.kpt.reshape(1,3)
 
     if singlet is None:  # for newton solver
-        rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, dm0, 0, kpts)
+        rho0, vxc, fxc = cache_xc_kernel1(mf.with_df, mf.xc, dm0, 0, kpts)
     else:
-        rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, [dm0*.5]*2, 1, kpts)
+        rho0, vxc, fxc = cache_xc_kernel1(mf.with_df, mf.xc, dm0, 1, kpts)
     dm0 = None
 
     def vind(dm1):
@@ -1490,7 +1499,7 @@ def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
     else:
         kpts = mf.kpt.reshape(1,3)
 
-    rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, dm0, 1, kpts)
+    rho0, vxc, fxc = cache_xc_kernel1(mf.with_df, mf.xc, dm0, 1, kpts)
     dm0 = None
 
     def vind(dm1):

@@ -246,7 +246,7 @@ class KnownValues(unittest.TestCase):
         dm = kmf.make_rdm1()
         dm = np.asarray([dm,dm]) / 2.
 
-        kumf = kmf.to_uhf()
+        kumf = kmf.to_uks()
         kumf.max_cycle = 1
         kumf.kernel(dm)
         self.assertAlmostEqual(kmf.e_tot, kumf.e_tot, 8)
@@ -258,7 +258,7 @@ class KnownValues(unittest.TestCase):
         kumf.kernel()
         dm = kumf.make_rdm1()
 
-        kmf = kumf.to_rhf()
+        kmf = kumf.to_rks()
         kmf.max_cycle = 1
         kmf.kernel(dm[0]+dm[1])
         self.assertAlmostEqual(kmf.e_tot, kumf.e_tot, 8)

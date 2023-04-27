@@ -514,6 +514,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vj - ref[0]).max(), 0, 9)
         self.assertAlmostEqual(abs(vk - ref[1]).max(), 0, 9)
 
+    def test_analyze(self):
+        rpop, rchg = mf.analyze()[0]
+        self.assertAlmostEqual(lib.fp(rpop), 0.0110475, 4)
+        self.assertAlmostEqual(abs(rchg).max(), 0, 7)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.hf")

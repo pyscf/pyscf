@@ -183,7 +183,7 @@ def _cast_mol_init_guess(fn):
         'guess DM ' + fn.__doc__)
     return fn_init_guess
 
-class KGHF(khf.KSCF):
+class KGHF(khf.KSCF, pbcghf.GHF):
     '''GHF class for PBCs.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)),
@@ -198,7 +198,7 @@ class KGHF(khf.KSCF):
     init_guess_by_chkfile = mol_ghf.init_guess_by_chkfile
     get_jk = get_jk
     get_occ = get_occ
-    make_rdm2 = lib.invalid_method('make_rdm2')
+    analyze = khf.analyze
     convert_from_ = pbcghf.GHF.convert_from_
 
     def get_hcore(self, cell=None, kpts=None):
@@ -267,20 +267,6 @@ class KGHF(khf.KSCF):
     def mulliken_pop(self):
         raise NotImplementedError
 
-    def _finalize(self):
-        if self.converged:
-            logger.note(self, 'converged SCF energy = %.15g', self.e_tot)
-        else:
-            logger.note(self, 'SCF not converged.')
-            logger.note(self, 'SCF energy = %.15g after %d cycles',
-                        self.e_tot, self.max_cycle)
-        return self
-
-    def convert_from_(self, mf):
-        '''Convert given mean-field object to RHF/ROHF'''
-        addons.convert_to_ghf(mf, self)
-        return self
-
     def x2c1e(self):
         '''X2C with spin-orbit coupling effects in spin-orbital basis'''
         from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
@@ -291,7 +277,12 @@ class KGHF(khf.KSCF):
         '''Convert to RKS object.
         '''
         from pyscf.pbc import dft
-        return self._transfer_attrs_(dft.KGKS(self.cell, xc=xc))
+        return self._transfer_attrs_(dft.KGKS(self.cell, self.kpts, xc=xc))
+
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to KGHF'''
+        addons.convert_to_ghf(mf, self)
+        return self
 
 del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 

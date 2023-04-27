@@ -57,9 +57,10 @@ def KRHF(cell, *args, **kwargs):
             return khf_ksymm.KRHF(cell, *args, **kwargs)
     return krhf.KRHF(cell, *args, **kwargs)
 
-#KUHF = kuhf.KUHF
 def KUHF(cell, *args, **kwargs):
+    print(' XXXXXXXXXXXXXXXXXXXXXXXXXX', args)
     for arg in args:
+        print('   uuuu????????    ', isinstance(arg, libkpts.KPoints))
         if isinstance(arg, libkpts.KPoints):
             return kuhf_ksymm.KUHF(cell, *args, **kwargs)
     if 'kpts' in kwargs:

@@ -104,7 +104,7 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
 
 get_rho = pbchf.get_rho
 
-class UHF(pbchf.SCF):
+class UHF(pbchf.SCF, mol_uhf.UHF):
     '''UHF class for PBCs.
     '''
 
@@ -127,7 +127,6 @@ class UHF(pbchf.SCF):
     canonicalize = mol_uhf.UHF.canonicalize
     spin_square = mol_uhf.UHF.spin_square
     stability = mol_uhf.UHF.stability
-    convert_from_ = mol_uhf.UHF.convert_from_
 
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -222,6 +221,21 @@ class UHF(pbchf.SCF):
             rho = self.get_rho(dm)
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
+    def get_init_guess(self, cell=None, key='minao'):
+        if cell is None: cell = self.cell
+        dm = mol_uhf.UHF.get_init_guess(self, cell, key)
+        ne = np.einsum('xij,ji->x', dm, self.get_ovlp(cell)).real
+        nelec = self.nelec
+        if np.any(abs(ne - nelec) > 0.01):
+            logger.debug(self, 'Big error detected in the electron number '
+                         'of initial guess density matrix (Ne/cell = %s)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %s', ne, nelec)
+            dm *= (nelec / ne).reshape(2,1,1)
+        return dm
+
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell
         if cell.dimension < 3:
@@ -238,4 +252,9 @@ class UHF(pbchf.SCF):
         '''Convert to RKS object.
         '''
         from pyscf.pbc import dft
-        return self._transfer_attrs_(dft.UKS(self.cell, xc=xc))
+        return self._transfer_attrs_(dft.UKS(self.cell, self.kpt, xc=xc))
+
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to UHF'''
+        addons.convert_to_uhf(mf, self)
+        return self
