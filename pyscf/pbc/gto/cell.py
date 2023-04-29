@@ -853,7 +853,7 @@ def _mesh_inf_vaccum(cell):
     return int(meshz*.5 + .999) * 2
 
 
-class Cell(mole.GTO):
+class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
     '''A Cell object holds the basic information of a crystal.
 
     Attributes:
@@ -905,15 +905,15 @@ class Cell(mole.GTO):
     precision = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
     exp_to_discard = getattr(__config__, 'pbc_gto_cell_Cell_exp_to_discard', None)
 
-    _keys = set((
+    _keys = {
         'precision', 'exp_to_discard',
         'a', 'ke_cutoff', 'pseudo', 'dimension', 'low_dim_ft_type',
-        'space_group_symmetry', 'symmorphic', 'lattice_symmetry', 'mesh',
-        'rcut',
-    ))
+        'space_group_symmetry', 'symmorphic', 'lattice_symmetry', 'mesh', 'rcut',
+    }
 
     def __init__(self, **kwargs):
-        mole.GTO.__init__(self, **kwargs)
+        mole.GTOIntegralMixin.__init__(self)
+        mole.GlobalOptionMixin.__init__(self)
         self.a = None # lattice vectors, (a1,a2,a3)
         # if set, defines a spherical cutoff
         # of fourier components, with .5 * G**2 < ke_cutoff
@@ -929,10 +929,11 @@ class Cell(mole.GTO):
         self.lattice_symmetry = None
 
 ##################################################
-# These attributes are initialized by build function if not given
+# These attributes are initialized by build function if not specified
         self.mesh = None
         self.rcut = None
-        self.__dict__.update(kwargs)
+        if kwargs:
+            self.__dict__.update(kwargs)
 
     @property
     def mesh(self):
@@ -1000,10 +1001,6 @@ class Cell(mole.GTO):
         from pyscf.pbc import __all__  # noqa
         from pyscf.pbc import scf, dft
         from pyscf.dft import XC
-        for mod in (scf, dft):
-            method = getattr(mod, key, None)
-            if callable(method):
-                return method(self)
 
         if key[0] == 'K':  # with k-point sampling
             if 'TD' in key[:4]:
@@ -1155,7 +1152,7 @@ class Cell(mole.GTO):
             self.symmorphic = symmorphic
 
         dump_input = dump_input and not self._built and self.verbose > logger.NOTE
-        mole.GTO.build(self, dump_input, parse_arg, *args, **kwargs)
+        mole.GlobalOptionMixin.build(self, dump_input, parse_arg, *args, **kwargs)
 
         exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
         if self.exp_to_discard is None:

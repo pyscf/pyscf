@@ -36,6 +36,7 @@ try:
         XC = {**xcfun.XC, **xcfun.XC_ALIAS}
 except (ImportError, OSError):
     pass
+from pyscf import gto
 #from pyscf.dft import xc
 from pyscf.dft import rks
 from pyscf.dft import roks
@@ -65,7 +66,7 @@ def KS(mol, xc='LDA,VWN'):
 KS.__doc__ = '''
 A wrap function to create DFT object (RKS or UKS).\n
 ''' + rks.RKS.__doc__
-DFT = KS
+gto.Mole.KS = gto.Mole.DFT = DFT = KS
 
 def RKS(mol, xc='LDA,VWN'):
     if mol.spin == 0:
@@ -76,6 +77,7 @@ def RKS(mol, xc='LDA,VWN'):
     else:
         return ROKS(mol, xc)
 RKS.__doc__ = rks.RKS.__doc__
+gto.Mole.RKS = RKS
 
 def ROKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname == 'C1':
@@ -83,6 +85,7 @@ def ROKS(mol, xc='LDA,VWN'):
     else:
         return rks_symm.ROKS(mol, xc)
 ROKS.__doc__ = roks.ROKS.__doc__
+gto.Mole.ROKS = ROKS
 
 def UKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname == 'C1':
@@ -90,6 +93,7 @@ def UKS(mol, xc='LDA,VWN'):
     else:
         return uks_symm.UKS(mol, xc)
 UKS.__doc__ = uks.UKS.__doc__
+gto.Mole.UKS = UKS
 
 def GKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname == 'C1':
@@ -97,6 +101,7 @@ def GKS(mol, xc='LDA,VWN'):
     else:
         return gks_symm.GKS(mol, xc)
 GKS.__doc__ = gks.GKS.__doc__
+gto.Mole.GKS = GKS
 
 def DKS(mol, xc='LDA,VWN'):
     from pyscf.scf import dhf
@@ -105,8 +110,10 @@ def DKS(mol, xc='LDA,VWN'):
     else:
         return dks.UDKS(mol, xc=xc)
 
-UDKS = dks.UDKS
-RDKS = dks.RDKS
+gto.Mole.DKS = DKS
+gto.Mole.UDKS = UDKS = dks.UDKS
+gto.Mole.RDKS = RDKS = dks.RDKS
+
 
 def X2C(mol, *args):
     '''X2C Kohn-Sham'''
@@ -116,3 +123,4 @@ def X2C(mol, *args):
         return dft.RKS(mol, *args)
     else:
         return dft.UKS(mol, *args)
+gto.Mole.X2C_KS = X2C
