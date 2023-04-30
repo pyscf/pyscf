@@ -23,7 +23,7 @@ from pyscf import ao2mo
 from pyscf.fci import direct_spin1
 from pyscf.fci import selected_ci
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     ci_coeff, nelec, ci_strs = selected_ci._unpack(civec_strs, nelec)
@@ -117,7 +117,7 @@ def enlarge_space(myci, civec_strs, eri, norb, nelec):
     return cs
 
 
-def make_hdiag(h1e, eri, ci_strs, norb, nelec):
+def make_hdiag(h1e, eri, ci_strs, norb, nelec, compress=False):
     hdiag = selected_ci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
     na = len(ci_strs[0])
     lib.transpose_sum(hdiag.reshape(na,na), inplace=True)
@@ -156,8 +156,7 @@ class SelectedCI(selected_ci.SelectedCI):
             civec_strs = selected_ci._as_SCIvector(civec_strs, self._strs)
         return contract_2e(eri, civec_strs, norb, nelec, link_index)
 
-    def make_hdiag(self, h1e, eri, ci_strs, norb, nelec):
-        return make_hdiag(h1e, eri, ci_strs, norb, nelec)
+    make_hdiag = staticmethod(make_hdiag)
 
     enlarge_space = enlarge_space
 

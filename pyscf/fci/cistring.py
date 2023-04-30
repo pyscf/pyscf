@@ -133,7 +133,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
     if strs is None:
         strs = make_strings(orb_list, nelec)
     strdic = dict(zip(strs,range(strs.__len__())))
-    def propgate1e(str0):
+    def propagate1e(str0):
         occ = []
         vir = []
         for i in orb_list:
@@ -151,7 +151,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
                 linktab.append((a, i, strdic[str1], cre_des_sign(a, i, str0)))
         return linktab
 
-    t = [propgate1e(s) for s in strs.astype(numpy.int64)]
+    t = [propagate1e(s) for s in strs.astype(numpy.int64)]
     return numpy.array(t, dtype=numpy.int32)
 
 def gen_linkstr_index_o1(orb_list, nelec, strs=None, tril=False):

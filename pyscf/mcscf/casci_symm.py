@@ -37,6 +37,7 @@ class SymAdaptedCASCI(casci.CASCI):
             self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)
         else:
             self.fcisolver = fci.direct_spin1_symm.FCISolver(self.mol)
+        delattr(fcisolver, '_keys')
         self.fcisolver.__dict__.update(fcisolver.__dict__)
 
     @property
