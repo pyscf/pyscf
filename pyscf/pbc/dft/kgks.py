@@ -75,7 +75,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     # ndim = 3 : dm.shape = (nkpts, nao, nao)
     ground_state = (isinstance(dm, np.ndarray) and dm.ndim == 3 and
                     kpts_band is None)
-    ks.initialize_grids(cell, dm_kpts, kpts, ground_state)
+    ks.initialize_grids(cell, dm, kpts, ground_state)
 
     # TODO: support non-symmetric density matrix
     assert (hermi == 1)
