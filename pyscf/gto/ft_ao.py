@@ -105,6 +105,8 @@ def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3),
         out = numpy.rollaxis(out, -1, -3)
     else:
         out = numpy.rollaxis(out, -1, -2)
+    if nGv == 0:
+        return out
 
     fn = libcgto.GTO_ft_fill_drv
     intor = getattr(libcgto, intor)
@@ -183,6 +185,8 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
     shape = (ni, nGv)
     mat = numpy.zeros(shape, order='C', dtype=numpy.complex128)
     phase = 0
+    if nGv == 0:
+        return mat
 
     nish = shls_slice[1] - shls_slice[0]
     ovlp_mask = numpy.ones(nish, dtype=numpy.int8)

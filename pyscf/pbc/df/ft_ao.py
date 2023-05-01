@@ -211,24 +211,25 @@ def gen_ft_kernel(supmol, aosym='s1', intor='GTO_ft_ovlp', comp=1,
         else:
             fsort = getattr(libpbc, 'PBC_ft_dsort_' + aosym)
             out = np.ndarray((2,) + shape, buffer=out)
-        drv(cintor, eval_gz, fill, fsort,
-            out.ctypes.data_as(ctypes.c_void_p),
-            expLkR.ctypes.data_as(ctypes.c_void_p),
-            expLkI.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(bvk_ncells), ctypes.c_int(nimgs),
-            ctypes.c_int(nkpts), ctypes.c_int(nbasp), ctypes.c_int(comp),
-            supmol.seg_loc.ctypes.data_as(ctypes.c_void_p),
-            supmol.seg2sh.ctypes.data_as(ctypes.c_void_p),
-            cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
-            (ctypes.c_int*4)(*shls_slice),
-            ovlp_mask.ctypes.data_as(ctypes.c_void_p),
-            cell0_ovlp_mask.ctypes.data_as(ctypes.c_void_p),
-            GvT.ctypes.data_as(ctypes.c_void_p), p_b, p_gxyzT, p_mesh, ctypes.c_int(nGv),
-            supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
-            supmol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
-            supmol._env.ctypes.data_as(ctypes.c_void_p))
 
-        log.timer_debug1(f'ft_ao intor {intor}', *cput0)
+        if nGv > 0:
+            drv(cintor, eval_gz, fill, fsort,
+                out.ctypes.data_as(ctypes.c_void_p),
+                expLkR.ctypes.data_as(ctypes.c_void_p),
+                expLkI.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(bvk_ncells), ctypes.c_int(nimgs),
+                ctypes.c_int(nkpts), ctypes.c_int(nbasp), ctypes.c_int(comp),
+                supmol.seg_loc.ctypes.data_as(ctypes.c_void_p),
+                supmol.seg2sh.ctypes.data_as(ctypes.c_void_p),
+                cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
+                (ctypes.c_int*4)(*shls_slice),
+                ovlp_mask.ctypes.data_as(ctypes.c_void_p),
+                cell0_ovlp_mask.ctypes.data_as(ctypes.c_void_p),
+                GvT.ctypes.data_as(ctypes.c_void_p), p_b, p_gxyzT, p_mesh, ctypes.c_int(nGv),
+                supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
+                supmol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
+                supmol._env.ctypes.data_as(ctypes.c_void_p))
+            log.timer_debug1(f'ft_ao intor {intor}', *cput0)
 
         if return_complex:
             if aosym == 's1hermi':
