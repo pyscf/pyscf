@@ -451,6 +451,7 @@ class Gradients (lagrange.Gradients):
         fcasscf = mcscf.CASSCF (self.base._scf, self.base.ncas, self.base.nelecas)
         fcasscf.__dict__.update (self.base.__dict__)
 
+        nelecas = self.base.nelecas
         if isinstance (fcasscf.fcisolver, StateAverageFCISolver):
             if isinstance (fcasscf.fcisolver, StateAverageMixFCISolver):
                 p0 = 0
@@ -459,6 +460,7 @@ class Gradients (lagrange.Gradients):
                     if p0 <= state < p1:
                         solver_class = solver.__class__
                         solver_obj = solver
+                        nelecas = fcasscf.fcisolver._get_nelec (solver_obj, nelecas)
                         break
                     p0 = p1
             else:
@@ -473,6 +475,7 @@ class Gradients (lagrange.Gradients):
             fcasscf.fcisolver = copy.copy (fcasscf.fcisolver)
             fcasscf.fcisolver.ss_penalty = 0
         fcasscf.__dict__.update (casscf_attr)
+        fcasscf.nelecas = nelecas
         fcasscf.fcisolver.__dict__.update (fcisolver_attr)
         fcasscf.verbose, fcasscf.stdout = self.verbose, self.stdout
         fcasscf._tag_gfock_ov_nonzero = True
