@@ -61,7 +61,7 @@ if sys.version_info >= (3,):
 
 libpbc = _pbcintor.libpbc
 
-def M(**kwargs):
+def M(*args, **kwargs):
     r'''This is a shortcut to build up Cell object.
 
     Examples:
@@ -70,7 +70,7 @@ def M(**kwargs):
     >>> cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g')
     '''
     cell = Cell()
-    cell.build(**kwargs)
+    cell.build(*args, **kwargs)
     return cell
 C = M
 

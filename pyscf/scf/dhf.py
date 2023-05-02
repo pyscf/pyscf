@@ -556,6 +556,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         def set_vkscreen(opt, name):
             opt._this.contents.r_vkscreen = _vhf._fpointer(name)
 
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         with mol.with_integral_screen(self.direct_scf_tol**2):
             opt_llll = _vhf.VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
                                    'CVHFrkbllll_direct_scf',
@@ -585,6 +586,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
 #TODO: prescreen for gaunt
             opt_gaunt = None
+        logger.timer(self, 'init_direct_scf', *cpu0)
         return opt_llll, opt_ssll, opt_ssss, opt_gaunt
 
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
@@ -593,14 +595,20 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         if dm is None: dm = self.make_rdm1()
         t0 = (logger.process_clock(), logger.perf_counter())
         log = logger.new_logger(self)
-        if self.direct_scf and self.opt is None:
-            self.opt = self.init_direct_scf(mol)
-        opt_llll, opt_ssll, opt_ssss, opt_gaunt = self.opt
+        if self.direct_scf and self._opt.get(omega) is None:
+            with mol.with_range_coulomb(omega):
+                self._opt[omega] = self.init_direct_scf(mol)
+        vhfopt = self._opt.get(omega)
+        if vhfopt is None:
+            opt_llll = opt_ssll = opt_ssss = opt_gaunt = None
+        else:
+            opt_llll, opt_ssll, opt_ssss, opt_gaunt = vhfopt
 
         vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_level,
                                 opt_llll, opt_ssll, opt_ssss, omega, log)
 
         if self.with_breit:
+            assert omega is None
             if ('SSSS' in self._coulomb_level.upper() or
                 # for the case both with_breit and with_ssss are set
                 (not self.with_ssss and 'SSLL' in self._coulomb_level.upper())):
@@ -609,6 +617,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
                 vj += vj1
                 vk += vk1
         elif self.with_gaunt and 'SS' in self._coulomb_level.upper():
+            assert omega is None
             log.debug('Add Gaunt term')
             vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, False)
             vj += vj1
@@ -682,6 +691,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         if mol is not None:
             self.mol = mol
         self._coulomb_level = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
+        self._opt = {None: None}
         self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         return self
 

@@ -535,9 +535,11 @@ class SCF(hf.SCF):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (logger.process_clock(), logger.perf_counter())
-        if self.direct_scf and self.opt is None:
-            self.opt = self.init_direct_scf(mol)
-        vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
+        if self.direct_scf and self._opt.get(omega) is None:
+            with mol.with_range_coulomb(omega):
+                self._opt[omega] = self.init_direct_scf(mol)
+        vhfopt = self._opt.get(omega)
+        vj, vk = get_jk(mol, dm, hermi, vhfopt, with_j, with_k)
         logger.timer(self, 'vj and vk', *t0)
         return vj, vk
 

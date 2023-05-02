@@ -35,7 +35,6 @@ class VHFOpt(object):
         names of C functions defined in libcvhf module
         '''
         self._this = ctypes.POINTER(_CVHFOpt)()
-        #print self._this.contents, expect ValueError: NULL pointer access
 
         if intor is None:
             self._intor = intor
@@ -146,6 +145,111 @@ class VHFOpt(object):
         data = ctypes.cast(self._this.contents.dm_cond,
                            ctypes.POINTER(ctypes.c_double))
         return numpy.ctypeslib.as_array(data, shape=shape)
+    dm_cond = property(get_dm_cond)
+
+class _VHFOpt:
+    def __init__(self, mol, intor=None,
+                 prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
+        '''New version of VHFOpt (under development).
+
+        If function "qcondname" is presented, the qcond (sqrt(integrals))
+        and will be initialized in __init__.
+
+        prescreen, qcondname, dmcondname can be either function pointers or
+        names of C functions defined in libcvhf module
+        '''
+        self.mol = mol
+        self._q_cond = None
+        self._dm_cond = None
+        self._this = cvhfopt = _CVHFOpt()
+        cvhfopt.nbas = mol.nbas
+        cvhfopt.direct_scf_cutoff = 1e-14
+        cvhfopt.fprescreen = _fpointer(prescreen)
+        cvhfopt.r_vkscreen = _fpointer('CVHFr_vknoscreen')
+
+        if intor is None:
+            self._intor = intor
+            self._cintopt = lib.c_null_ptr()
+        else:
+            self._intor = mol._add_suffix(intor)
+            self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
+
+        self._dmcondname = dmcondname
+        self._qcondname = qcondname
+        if qcondname is not None and intor is not None:
+            self.init_cvhf_direct(mol, intor, qcondname)
+
+    def init_cvhf_direct(self, mol, intor, qcondname):
+        '''qcondname can be the function pointer or the name of a C function
+        defined in libcvhf module
+        '''
+        intor = mol._add_suffix(intor)
+        assert intor == self._intor
+        cintopt = self._cintopt
+        ao_loc = mol.ao_loc_nr()
+        if isinstance(qcondname, ctypes._CFuncPtr):
+            fqcond = qcondname
+        else:
+            fqcond = getattr(libcvhf, qcondname)
+        nbas = mol.nbas
+        q_cond = self._q_cond = numpy.empty((nbas, nbas))
+        fqcond(getattr(libcvhf, intor), cintopt, q_cond.ctypes,
+               ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+               mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+        self._this.q_cond = q_cond.ctypes.data_as(ctypes.c_void_p)
+        self._qcondname = qcondname
+
+    @property
+    def direct_scf_tol(self):
+        return self._this.direct_scf_cutoff
+    @direct_scf_tol.setter
+    def direct_scf_tol(self, v):
+        self._this.direct_scf_cutoff = v
+
+    @property
+    def prescreen(self):
+        return self._this.fprescreen
+    @prescreen.setter
+    def prescreen(self, v):
+        if isinstance(v, str):
+            v = _fpointer(v)
+        self._this.fprescreen = v
+
+    def set_dm(self, dm, atm, bas, env):
+        if self._dmcondname is None:
+            return
+
+        mol = self.mol
+        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+            n_dm = 1
+        else:
+            n_dm = len(dm)
+        dm = numpy.asarray(dm, order='C')
+        ao_loc = mol.ao_loc_nr()
+        if isinstance(self._dmcondname, ctypes._CFuncPtr):
+            fdmcond = self._dmcondname
+        else:
+            fdmcond = getattr(libcvhf, self._dmcondname)
+        nbas = mol.nbas
+        dm_cond = numpy.empty((nbas, nbas))
+        fdmcond(dm_cond.ctypes, dm.ctypes, ctypes.c_int(n_dm),
+                ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+                mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+        self._dm_cond = dm_cond
+        self._this.dm_cond = dm_cond.ctypes.data_as(ctypes.c_void_p)
+
+    def get_q_cond(self, shape=None):
+        '''Return an array associated to q_cond. Contents of q_cond can be
+        modified through this array
+        '''
+        return self._q_cond
+    q_cond = property(get_q_cond)
+
+    def get_dm_cond(self, shape=None):
+        '''Return an array associated to dm_cond. Contents of dm_cond can be
+        modified through this array
+        '''
+        return self._dm_cond
     dm_cond = property(get_dm_cond)
 
 
@@ -301,13 +405,7 @@ def incore(eri, dms, hermi=0, with_j=True, with_k=True):
 # use int2e_sph as cintor, CVHFnrs8_ij_s2kl, CVHFnrs8_jk_s2il as fjk to call
 # direct_mapdm
 def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
-           with_j=True, with_k=True):
-    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
-    natm = ctypes.c_int(c_atm.shape[0])
-    nbas = ctypes.c_int(c_bas.shape[0])
-
+           with_j=True, with_k=True, out=None, optimize_sr=False):
     dms = numpy.asarray(dms, order='C', dtype=numpy.double)
     dms_shape = dms.shape
     nao = dms_shape[-1]
@@ -315,57 +413,45 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
     n_dm = dms.shape[0]
 
     if vhfopt is None:
+        cvhfopt = None
+        cintopt = None
         if cart:
             intor = 'int2e_cart'
         else:
             intor = 'int2e_sph'
-        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
-        cvhfopt = lib.c_null_ptr()
     else:
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         intor = vhfopt._intor
-    cintor = _fpointer(intor)
-
-    fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
-    fdot = _fpointer('CVHFdot_nrs8')
 
     vj = vk = None
-    dmsptr = []
-    vjkptr = []
-    fjk = []
-
+    jkscripts = []
+    n_jk = 0
     if with_j:
-        fvj = _fpointer('CVHFnrs8_ji_s2kl')
-        vj = numpy.empty((n_dm,nao,nao))
-        for i, dm in enumerate(dms):
-            dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
-            vjkptr.append(vj[i].ctypes.data_as(ctypes.c_void_p))
-            fjk.append(fvj)
-
+        jkscripts.extend(['ji->s2kl']*n_dm)
+        n_jk += 1
     if with_k:
         if hermi == 1:
-            fvk = _fpointer('CVHFnrs8_li_s2kj')
+            jkscripts.extend(['li->s2kj']*n_dm)
         else:
-            fvk = _fpointer('CVHFnrs8_li_s1kj')
-        vk = numpy.empty((n_dm,nao,nao))
-        for i, dm in enumerate(dms):
-            dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
-            vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
-            fjk.append(fvk)
+            jkscripts.extend(['li->s1kj']*n_dm)
+        n_jk += 1
+    if n_jk == 0:
+        return vj, vk
 
-    shls_slice = (ctypes.c_int*8)(*([0, c_bas.shape[0]]*4))
-    ao_loc = make_loc(bas, intor)
-    n_ops = len(dmsptr)
-    comp = 1
-    fdrv(cintor, fdot, (ctypes.c_void_p*n_ops)(*fjk),
-         (ctypes.c_void_p*n_ops)(*dmsptr), (ctypes.c_void_p*n_ops)(*vjkptr),
-         ctypes.c_int(n_ops), ctypes.c_int(comp),
-         shls_slice, ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cvhfopt,
-         c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-         c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-         c_env.ctypes.data_as(ctypes.c_void_p))
+    dms = list(dms) * n_jk # make n_jk copies of dms
+    if out is None:
+        out = numpy.empty((n_jk*n_dm, nao, nao))
+    nr_direct_drv(intor, 's8', jkscripts, dms, 1, atm, bas, env,
+                  cvhfopt, cintopt, out=out, optimize_sr=optimize_sr)
+    if with_j and with_k:
+        vj = out[:n_dm]
+        vk = out[n_dm:]
+    elif with_j:
+        vj = out
+    else:
+        vk = out
 
     if with_j:
         # vj must be symmetric
@@ -383,91 +469,45 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
 # jkdescript: 'ij->s1kl', 'kl->s2ij', ...
 def direct_mapdm(intor, aosym, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
-                 shls_slice=None, shls_excludes=None):
-    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
-                      'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
-    intor = ascint3(intor)
-    c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-    c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-    c_env = numpy.asarray(env, dtype=numpy.double, order='C')
-    natm = ctypes.c_int(c_atm.shape[0])
-    nbas = ctypes.c_int(c_bas.shape[0])
-
+                 shls_slice=None, shls_excludes=None, out=None,
+                 optimize_sr=False):
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
+        single_dm = True
+    else:
+        single_dm = False
     n_dm = len(dms)
     dms = [numpy.asarray(dm, order='C', dtype=numpy.double) for dm in dms]
     if isinstance(jkdescript, str):
-        jkdescripts = (jkdescript,)
+        jkscripts = (jkdescript,)
     else:
-        jkdescripts = jkdescript
-    njk = len(jkdescripts)
+        jkscripts = jkdescript
+    n_jk = len(jkscripts)
 
+    # make n_jk copies of dms
+    dms = dms * n_jk
+    # make n_dm copies for each jk script
+    jkscripts = numpy.repeat(jkscripts, n_dm)
+
+    intor = ascint3(intor)
     if vhfopt is None:
-        cintor = _fpointer(intor)
         cvhfopt = lib.c_null_ptr()
+        cintopt = None
     else:
         vhfopt.set_dm(dms, atm, bas, env)
         cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
-        cintor = getattr(libcvhf, vhfopt._intor)
-    if cintopt is None:
-        cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
-    if shls_slice is None:
-        shls_slice = [0, c_bas.shape[0]] * 4
-    if shls_excludes is not None:
-        shls_excludes = _check_shls_excludes(shls_slice, shls_excludes)
+    vjk = nr_direct_drv(intor, aosym, jkscripts, dms, ncomp, atm, bas, env,
+                        cvhfopt, cintopt, shls_slice, shls_excludes, out,
+                        optimize_sr=optimize_sr)
+    if ncomp == 1:
+        vjk = [v[0] for v in vjk]
 
-    ao_loc = make_loc(bas, intor)
-
-    vjk = []
-    descr_sym = [x.split('->') for x in jkdescripts]
-    fjk = (ctypes.c_void_p*(njk*n_dm))()
-    dmsptr = (ctypes.c_void_p*(njk*n_dm))()
-    vjkptr = (ctypes.c_void_p*(njk*n_dm))()
-
-    for i, (dmsym, vsym) in enumerate(descr_sym):
-        if dmsym in ('ij', 'kl', 'il', 'kj'):
-            sys.stderr.write('not support DM description %s, transpose to %s\n' %
-                             (dmsym, dmsym[::-1]))
-            dmsym = dmsym[::-1]
-        f1 = _fpointer('CVHFnr%s_%s_%s'%(aosym, dmsym, vsym))
-
-        vshape = (n_dm, ncomp) + get_dims(vsym[-2:], shls_slice, ao_loc)
-        vjk.append(numpy.empty(vshape))
-        for j in range(n_dm):
-            if dms[j].shape != get_dims(dmsym, shls_slice, ao_loc):
-                raise RuntimeError('dm[%d] shape %s is inconsistent with the '
-                                   'shls_slice shape %s' %
-                                   (j, dms[j].shape, get_dims(dmsym, shls_slice, ao_loc)))
-            dmsptr[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
-            vjkptr[i*n_dm+j] = vjk[i][j].ctypes.data_as(ctypes.c_void_p)
-            fjk[i*n_dm+j] = f1
-
-    if shls_excludes is None:
-        fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
-        shls_slice = (ctypes.c_int*8)(*shls_slice)
-    else:
-        fdrv = getattr(libcvhf, 'CVHFnr_direct_ex_drv')
-        shls_slice = (ctypes.c_int*16)(*shls_slice, *shls_excludes)
-    dotsym = _INTSYMAP[aosym]
-    fdot = _fpointer('CVHFdot_nr'+dotsym)
-
-    fdrv(cintor, fdot, fjk, dmsptr, vjkptr,
-         ctypes.c_int(njk*n_dm), ctypes.c_int(ncomp),
-         shls_slice, ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cvhfopt,
-         c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-         c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-         c_env.ctypes.data_as(ctypes.c_void_p))
-
-    if n_dm * ncomp == 1:
-        vjk = [v[0,0] for v in vjk]
-    elif n_dm == 1:
-        vjk = [v[0,:] for v in vjk]
-    elif ncomp == 1:
-        vjk = [v[:,0] for v in vjk]
-    if isinstance(jkdescript, str):
+    # vjk.reshape(n_jk,n_dm,...).transpose(1,0,...)
+    if n_dm > 1 and n_jk > 1:
+        vjk = [vjk[i::n_dm] for i in range(n_dm)]
+    elif n_jk == 1 and single_dm:
         vjk = vjk[0]
     return vjk
 
@@ -475,10 +515,36 @@ def direct_mapdm(intor, aosym, jkdescript,
 # jkdescript: 'ij->s1kl', 'kl->s2ij', ...
 def direct_bindm(intor, aosym, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
-                 shls_slice=None, shls_excludes=None):
-    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
-                      'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
+                 shls_slice=None, shls_excludes=None, out=None,
+                 optimize_sr=False):
     intor = ascint3(intor)
+    if vhfopt is None:
+        cvhfopt = lib.c_null_ptr()
+        cintopt = None
+    else:
+        vhfopt.set_dm(dms, atm, bas, env)
+        cvhfopt = vhfopt._this
+        cintopt = vhfopt._cintopt
+
+    vjk = nr_direct_drv(intor, aosym, jkdescript, dms, ncomp, atm, bas, env,
+                        cvhfopt, cintopt, shls_slice, shls_excludes, out,
+                        optimize_sr=optimize_sr)
+    if ncomp == 1:
+        if isinstance(jkdescript, str):
+            vjk = vjk[0]
+        else:
+            vjk = [v[0] for v in vjk]
+    return vjk
+
+def nr_direct_drv(intor, aosym, jkscript,
+                  dms, ncomp, atm, bas, env, cvhfopt=None, cintopt=None,
+                  shls_slice=None, shls_excludes=None, out=None,
+                  optimize_sr=True):
+    if optimize_sr:
+        assert aosym in ('s8', 's4', 's2ij', 's2kl', 's1')
+    else:
+        assert aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+                         'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl')
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     c_env = numpy.asarray(env, dtype=numpy.double, order='C')
@@ -487,23 +553,22 @@ def direct_bindm(intor, aosym, jkdescript,
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
+    assert dms[0].ndim == 2
     n_dm = len(dms)
     dms = [numpy.asarray(dm, order='C', dtype=numpy.double) for dm in dms]
-    if isinstance(jkdescript, str):
-        jkdescripts = (jkdescript,)
-    else:
-        jkdescripts = jkdescript
-    njk = len(jkdescripts)
-    assert (njk == n_dm)
 
-    if vhfopt is None:
-        cintor = _fpointer(intor)
-        cvhfopt = lib.c_null_ptr()
+    if isinstance(jkscript, str):
+        jkscripts = (jkscript,)
     else:
-        vhfopt.set_dm(dms, atm, bas, env)
-        cvhfopt = vhfopt._this
-        cintopt = vhfopt._cintopt
-        cintor = getattr(libcvhf, vhfopt._intor)
+        jkscripts = jkscript
+    assert len(jkscripts) == n_dm
+
+    if cvhfopt is None:
+        cvhfopt = lib.c_null_ptr()
+    elif isinstance(cvhfopt, ctypes.Structure):
+        # To make cvhfopt _VHFOpt comparable
+        assert cvhfopt.dm_cond and cvhfopt.q_cond
+        cvhfopt = ctypes.byref(cvhfopt)
     if cintopt is None:
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
@@ -515,7 +580,7 @@ def direct_bindm(intor, aosym, jkdescript,
     ao_loc = make_loc(bas, intor)
 
     vjk = []
-    descr_sym = [x.split('->') for x in jkdescripts]
+    descr_sym = [x.split('->') for x in jkscripts]
     fjk = (ctypes.c_void_p*(n_dm))()
     dmsptr = (ctypes.c_void_p*(n_dm))()
     vjkptr = (ctypes.c_void_p*(n_dm))()
@@ -527,30 +592,42 @@ def direct_bindm(intor, aosym, jkdescript,
                                'shls_slice shape %s' %
                                (i, dms[i].shape, get_dims(dmsym, shls_slice, ao_loc)))
         vshape = (ncomp,) + get_dims(vsym[-2:], shls_slice, ao_loc)
-        vjk.append(numpy.empty(vshape))
+        if out is None:
+            buf = numpy.empty(vshape)
+        else:
+            buf = numpy.ndarray(vshape, dtype=numpy.double, buffer=out[i])
+        vjk.append(buf)
         dmsptr[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
         vjkptr[i] = vjk[i].ctypes.data_as(ctypes.c_void_p)
         fjk[i] = f1
 
-    if shls_excludes is None:
-        fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
+    omega = env[gto.PTR_RANGE_OMEGA]
+    if omega < 0 and optimize_sr:
+        assert shls_excludes is None
+        drv = 'CVHFnr_sr_direct_drv'
+        shls_slice = (ctypes.c_int*8)(*shls_slice)
+    elif shls_excludes is None:
+        drv = 'CVHFnr_direct_drv'
         shls_slice = (ctypes.c_int*8)(*shls_slice)
     else:
-        fdrv = getattr(libcvhf, 'CVHFnr_direct_ex_drv')
+        drv = 'CVHFnr_direct_ex_drv'
         shls_slice = (ctypes.c_int*16)(*shls_slice, *shls_excludes)
+    fdrv = getattr(libcvhf, drv)
     dotsym = _INTSYMAP[aosym]
-    fdot = _fpointer('CVHFdot_nr'+dotsym)
+    if omega < 0 and optimize_sr:
+        fdot = getattr(libcvhf, 'CVHFdot_sr_nr'+dotsym)
+    else:
+        fdot = getattr(libcvhf, 'CVHFdot_nr'+dotsym)
+    cintor = getattr(libcvhf, intor)
 
     fdrv(cintor, fdot, fjk, dmsptr, vjkptr,
-         ctypes.c_int(n_dm), ctypes.c_int(ncomp),
-         shls_slice, ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cvhfopt,
+         ctypes.c_int(n_dm), ctypes.c_int(ncomp), shls_slice,
+         ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cvhfopt,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
-    if ncomp == 1:
-        vjk = [v[0] for v in vjk]
-    if isinstance(jkdescript, str):
+    if isinstance(jkscript, str):
         vjk = vjk[0]
     return vjk
 

@@ -152,8 +152,11 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             with_df = self.with_df
             if not with_df:
                 return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
-            if self.opt is None and self.with_df.direct_j and (not self.with_df.dfj):
-                self.opt = self.init_direct_scf(mol)
+            if (self._opt.get(omega) is None and
+                self.with_df.direct_j and (not self.with_df.dfj)):
+                with mol.with_range_coulomb(omega):
+                    self._opt[omega] = self.init_direct_scf(mol)
+            vhfopt = self._opt.get(omega)
 
             if self._in_scf and not self.direct_scf:
                 if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd \
@@ -168,7 +171,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
                     self._last_vk = 0
 
             if self.direct_scf_sgx:
-                vj, vk = with_df.get_jk(dm-self._last_dm, hermi, self.opt,
+                vj, vk = with_df.get_jk(dm-self._last_dm, hermi, vhfopt,
                                         with_j, with_k,
                                         self.direct_scf_tol, omega)
                 vj += self._last_vj
@@ -186,7 +189,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
                     self._last_vk = 0
             else:
                 self._last_dm = numpy.asarray(dm)
-                vj, vk = with_df.get_jk(dm, hermi, self.opt, with_j, with_k,
+                vj, vk = with_df.get_jk(dm, hermi, vhfopt, with_j, with_k,
                                         self.direct_scf_tol, omega)
 
             return vj, vk

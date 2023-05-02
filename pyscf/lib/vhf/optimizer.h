@@ -16,13 +16,15 @@
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdint.h>
+
 #if !defined(HAVE_DEFINED_CVHFOPT_H)
 #define HAVE_DEFINED_CVHFOPT_H
 typedef struct CVHFOpt_struct {
     int nbas;
     int ngrids;
-    double direct_scf_cutoff;
-    double *q_cond;
+    union {double direct_scf_cutoff; double log_cutoff;};
+    union {double *q_cond; float *logq_cond;};
     double *dm_cond;
     int (*fprescreen)(int *shls, struct CVHFOpt_struct *opt,
                       int *atm, int *bas, double *env);

@@ -107,7 +107,7 @@ DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 DISABLE_GC = getattr(__config__, 'DISABLE_GC', False)
 ARGPARSE = getattr(__config__, 'ARGPARSE', False)
 
-def M(**kwargs):
+def M(*args, **kwargs):
     r'''This is a shortcut to build up Mole object.
 
     Args: Same to :func:`Mole.build`
@@ -118,7 +118,7 @@ def M(**kwargs):
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='6-31g')
     '''
     mol = Mole()
-    mol.build(**kwargs)
+    mol.build(*args, **kwargs)
     return mol
 
 def gaussian_int(n, alpha):
@@ -2909,6 +2909,8 @@ class Mole(lib.StreamObject):
         >>> with mol.with_range_coulomb(omega=1.5):
         ...     mol.intor('int2e')
         '''
+        if omega is None:
+            return contextlib.nullcontext()
         omega0 = self._env[PTR_RANGE_OMEGA].copy()
         return self._TemporaryMoleContext(self.set_range_coulomb, (omega,), (omega0,))
 
@@ -2916,12 +2918,16 @@ class Mole(lib.StreamObject):
         '''Return a temporary mol context for long-range part of
         range-separated Coulomb operator.
         '''
+        if omega is None:
+            return contextlib.nullcontext()
         return self.with_range_coulomb(abs(omega))
 
     def with_short_range_coulomb(self, omega):
         '''Return a temporary mol context for short-range part of
         range-separated Coulomb operator.
         '''
+        if omega is None:
+            return contextlib.nullcontext()
         return self.with_range_coulomb(-abs(omega))
 
     def set_f12_zeta(self, zeta):

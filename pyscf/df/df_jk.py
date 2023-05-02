@@ -104,11 +104,16 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
 
         See also the documents of class %s for other SCF attributes.
         ''' % mf_class
+
         def __init__(self, mf, df, only_dfj):
             self.__dict__.update(mf.__dict__)
             self._eri = None
             self.with_df = df
             self.only_dfj = only_dfj
+            # Unless DF is used only for J matrix, disable direct_scf for K build.
+            # It is more efficient to construct K matrix with MO coefficients than
+            # the incremental method in direct_scf.
+            self.direct_scf = only_dfj
             self._keys = self._keys.union(['with_df', 'only_dfj'])
 
         def reset(self, mol=None):
