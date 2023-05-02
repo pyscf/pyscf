@@ -364,7 +364,7 @@ def init_guess_by_minao(mol):
         stdsymb = gto.mole._std_symbol(symb)
         basis_add = gto.basis.load('ano', stdsymb)
 # coreshl defines the core shells to be removed in the initial guess
-        coreshl = gto.ecp.core_configuration(nelec_ecp)
+        coreshl = gto.ecp.core_configuration(nelec_ecp, atom_symbol=symb)
         #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
             ndocc, frac = atom_hf.frac_occ(stdsymb, l)

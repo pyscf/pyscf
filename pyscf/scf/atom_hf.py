@@ -55,6 +55,8 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
         atm.spin = atm.nelectron % 2
 
         nao = atm.nao
+        logger.info(mol, '\n Generating atomic guess for %s, n_el %d, spin %d:',
+                    element, atm.nelectron, atm.spin)
         # nao == 0 for the case that no basis was assigned to an atom
         if nao == 0 or atm.nelectron == 0:  # GHOST
             mo_occ = mo_energy = numpy.zeros(nao)
@@ -133,7 +135,7 @@ class AtomSphAverageRHF(hf.RHF):
         symb = mol.atom_symbol(0)
 
         nelec_ecp = mol.atom_nelec_core(0)
-        coreshl = gto.ecp.core_configuration(nelec_ecp)
+        coreshl = gto.ecp.core_configuration(nelec_ecp, atom_symbol=symb)
 
         occ = []
         for l in range(param.L_MAX):
