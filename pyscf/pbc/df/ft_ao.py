@@ -265,8 +265,8 @@ class _RangeSeparatedCell(pbcgto.Cell):
         self.sh_loc = None
 
     @classmethod
-    def from_cell(cls, cell, ke_cut_threshold=None,
-                  rcut_threshold=None, verbose=None):
+    def from_cell(cls, cell, ke_cut_threshold=None, rcut_threshold=None,
+                  in_rsjk=False, verbose=None):
         from pyscf.pbc.df import aft
         rs_cell = cls()
         rs_cell.__dict__.update(cell.__dict__)
@@ -308,16 +308,22 @@ class _RangeSeparatedCell(pbcgto.Cell):
             nctr = orig_bas[gto.NCTR_OF]
             l = orig_bas[gto.ANG_OF]
             es = cell.bas_exp(ib)
-            cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
-            # ke = aft._estimate_ke_cutoff(es, l, cs, precision) is a more
-            # accurate estimator of ke_cut for 4c2e integrals when using rs_cell
-            # is used in rsjk module. However, rs_cell is also used in other
-            # integrals such as nuclear attraction. aft._estimate_ke_cutoff may
-            # put primitive GTOs of large es and small cs in the group
-            # SMOOTH_BASIS. These GTOs may lead to a large ke_cutoff (mesh) in
-            # _RSNucBuilder or _CCNucBuilder. For safety, _estimate_ke_cutoff
-            # for nuclear attraction is used here
-            ke = pbcgto.cell._estimate_ke_cutoff(es, l, cs, precision)
+            # Sort exponents because integral screening of rsjk method relies on
+            # the dscending order in exponents
+            es_idx = es.argsort()[::-1]
+            es = es[es_idx]
+            cs = cell._libcint_ctr_coeff(ib)[es_idx]
+            abs_cs = abs(cs).max(axis=1)
+
+            # aft._estimate_ke_cutoff is accurate for 4c2e integrals
+            # For other integrals such as nuclear attraction.
+            # aft._estimate_ke_cutoff may put some primitive GTOs of large es
+            # and small cs in the group SMOOTH_BASIS.  These GTOs requires a
+            # large ke_cutoff (mesh) in _RSNucBuilder or _CCNucBuilder.
+            if in_rsjk:
+                ke = aft._estimate_ke_cutoff(es, l, abs_cs, precision)
+            else:
+                ke = pbcgto.cell._estimate_ke_cutoff(es, l, abs_cs, precision)
 
             smooth_mask = ke < ke_cut_threshold
             if rcut_threshold is None:
@@ -326,7 +332,7 @@ class _RangeSeparatedCell(pbcgto.Cell):
                 rcut = None
             else:
                 norm_ang = ((2*l+1)/(4*np.pi))**.5
-                fac = 2*np.pi*cs/cell.vol * norm_ang/es / precision
+                fac = 2*np.pi*abs_cs/cell.vol * norm_ang/es / precision
                 rcut = cell.rcut
                 rcut = (np.log(fac * rcut**(l+1) + 1.) / es)**.5
                 rcut = (np.log(fac * rcut**(l+1) + 1.) / es)**.5
@@ -335,8 +341,6 @@ class _RangeSeparatedCell(pbcgto.Cell):
 
             pexp = orig_bas[gto.PTR_EXP]
             pcoeff = orig_bas[gto.PTR_COEFF]
-            es = cell.bas_exp(ib)
-            cs = cell._libcint_ctr_coeff(ib)
 
             c_steep = cs[steep_mask]
             c_local = cs[local_mask]

@@ -158,8 +158,9 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             self.exclude_dd_block = False
 
         # basis with cutoff under ~150 eV are handled by AFTDF
+        ke_cutoff = max(6., self.ke_cutoff)
         rs_cell = ft_ao._RangeSeparatedCell.from_cell(
-            cell, max(6., self.ke_cutoff), RCUT_THRESHOLD, verbose=log)
+            cell, ke_cutoff, RCUT_THRESHOLD, in_rsjk=True, verbose=log)
         self.rs_cell = rs_cell
 
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
