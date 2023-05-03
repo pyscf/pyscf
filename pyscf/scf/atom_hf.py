@@ -147,11 +147,12 @@ class AtomSphAverageRHF(hf.RHF):
 
                 logger.debug1(self, 'l = %d  occ = %d + %.4g', l, n2occ, frac)
 
-                occ_l = numpy.zeros(nbas_l)
-                occ_l[:n2occ] = 2
-                if frac > 0:
-                    occ_l[n2occ] = frac
-                occ.append(numpy.repeat(occ_l, degen))
+                if nbas_l > 0:
+                    occ_l = numpy.zeros(nbas_l)
+                    occ_l[:n2occ] = 2
+                    if frac > 0:
+                        occ_l[n2occ] = frac
+                    occ.append(numpy.repeat(occ_l, degen))
             else:
                 occ.append(numpy.zeros(nbas_l * degen))
 
