@@ -167,10 +167,10 @@ class AtomSphAverageRHF(hf.RHF):
 
     def _finalize(self):
         if self.converged:
-            logger.info(self, 'Atomic HF for atom  %s  converged. SCF energy = %.15g',
+            logger.info(self, 'Atomic HF for atom  %s  converged. SCF energy = %.15g\n',
                         self.mol.atom_symbol(0), self.e_tot)
         else:
-            logger.info(self, 'Atomic HF for atom  %s  not converged. SCF energy = %.15g',
+            logger.info(self, 'Atomic HF for atom  %s  not converged. SCF energy = %.15g\n',
                         self.mol.atom_symbol(0), self.e_tot)
         return self
 
