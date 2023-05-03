@@ -162,13 +162,12 @@ def _core_val_ryd_list(mol):
     for ib in range(mol.nbas):
         ia = mol.bas_atom(ib)
         # Avoid calling mol.atom_charge because we should include ECP core electrons here
-        symb = mol.atom_symbol(ia)
-        nuc = mole.charge(symb)
+        nuc = mole.charge(mol.atom_symbol(ia))
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
 
         nelec_ecp = mol.atom_nelec_core(ia)
-        ecpcore = core_configuration(nelec_ecp, atom_symbol=symb)
+        ecpcore = core_configuration(nelec_ecp, atom_symbol=mol.atom_pure_symbol(ia))
         coreshell = [int(x) for x in AOSHELL[nuc][0][::2]]
         cvshell = [int(x) for x in AOSHELL[nuc][1][::2]]
         if mol.cart:

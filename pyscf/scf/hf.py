@@ -364,8 +364,8 @@ def init_guess_by_minao(mol):
         stdsymb = gto.mole._std_symbol(symb)
         basis_add = gto.basis.load('ano', stdsymb)
 # coreshl defines the core shells to be removed in the initial guess
-        coreshl = gto.ecp.core_configuration(nelec_ecp, atom_symbol=symb)
-        #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
+        coreshl = gto.ecp.core_configuration(nelec_ecp, atom_symbol=stdsymb)
+        # coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
             ndocc, frac = atom_hf.frac_occ(stdsymb, l)
             assert ndocc >= coreshl[l]
@@ -1561,6 +1561,7 @@ class SCF(lib.StreamObject):
     @lib.with_doc(init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from minao.')
         return init_guess_by_minao(mol)
 
     @lib.with_doc(init_guess_by_atom.__doc__)
