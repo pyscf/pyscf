@@ -113,7 +113,7 @@ static void update_int3c2e_envs(CINTEnvVars *envs, int *shls)
         envs->rkrl[2] = envs->rk[2];
 }
 
-int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
+int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, int cutoff,
                     float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk,
                     double *cache)
 {
@@ -167,11 +167,11 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, uint8_t cutof
         int iseg, jseg, kseg;
         int ish0, jsh0;
         int ish1, jsh1;
-        uint8_t *sindex = envs_bvk->qindex;
+        int16_t *sindex = envs_bvk->qindex;
         float *xij_cond = rij_cond;
         float *yij_cond = rij_cond + nij;
         float *zij_cond = rij_cond + nij * 2;
-        uint8_t *sij_idx;
+        int16_t *sij_idx;
         float xk, yk, zk, dx, dy, dz, r2;
 
         int *atm = envs_cint->atm;
@@ -201,7 +201,7 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, uint8_t cutof
                         // ~ log(sqrt(2/sqrt(pi*theta)/r^2) * (theta*r/ak)^lk
                         //     * (pi/ak)^1.5 * norm_k)
                         fac = logf(omega2)/4 - lk*logf(theta_k*8.f);
-                        ij_cutoff = cutoff + ceilf(2*fac);
+                        ij_cutoff = cutoff + fac * LOG_ADJUST;
                         for (iseg = iseg0; iseg < iseg1; iseg++) {
                                 ish0 = seg2sh[iseg];
                                 ish1 = seg2sh[iseg+1];
@@ -218,16 +218,12 @@ for (ish = ish0; ish < ish1; ish++) {
         sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
                 sij = sij_idx[jsh];
-                // adjust ij_cutoff in case r2 is very small
-                if (sij < ij_cutoff - 1) {
-                        continue;
-                }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                theta_r2 = theta * r2 + logf(r2 + 1e-15f);
-                if (theta_r2*2 + ij_cutoff < sij) {
+                theta_r2 = theta * r2 + logf(r2 + 1e-30f);
+                if (theta_r2*LOG_ADJUST + ij_cutoff < sij) {
                         shls[1] = jsh;
                         update_int3c2e_envs(envs_cint, shls);
                         (*intor_loop)(gctr, envs_cint, cache, &empty);
@@ -257,7 +253,7 @@ for (ish = ish0; ish < ish1; ish++) {
                         // ~ log(sqrt(2/sqrt(pi*theta)/r^2) * (theta*r/ak)^lk
                         //     * (pi/ak)^1.5 * norm_k)
                         fac = logf(eta)/4 - lk*logf(theta_k*8.f);
-                        ij_cutoff = cutoff + ceilf(2*fac);
+                        ij_cutoff = cutoff + fac * LOG_ADJUST;
                         for (iseg = iseg0; iseg < iseg1; iseg++) {
                                 ish0 = seg2sh[iseg];
                                 ish1 = seg2sh[iseg+1];
@@ -273,16 +269,12 @@ for (ish = ish0; ish < ish1; ish++) {
         sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
                 sij = sij_idx[jsh];
-                // adjust ij_cutoff in case r2 is very small
-                if (sij < ij_cutoff - 1) {
-                        continue;
-                }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                theta_r2 = theta * r2 + logf(r2 + 1e-15f);
-                if (theta_r2*2 + ij_cutoff < sij) {
+                theta_r2 = theta * r2 + logf(r2 + 1e-30f);
+                if (theta_r2*LOG_ADJUST + ij_cutoff < sij) {
                         shls[1] = jsh;
                         update_int3c2e_envs(envs_cint, shls);
                         (*intor_loop)(gctr, envs_cint, cache, &empty);
@@ -298,7 +290,7 @@ for (ish = ish0; ish < ish1; ish++) {
 
 // envs_cint are updated in this function. It needs to be allocated
 // omp-privately
-int PBCint3c2e_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
+int PBCint3c2e_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, int cutoff,
                     float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
         int ng[] = {0, 0, 0, 0, 0, 1, 1, 1};
@@ -327,7 +319,7 @@ int PBCint3c2e_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, uint8_t cu
         return has_value;
 }
 
-int PBCint3c2e_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
+int PBCint3c2e_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, int cutoff,
                    float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
         int ng[] = {0, 0, 0, 0, 0, 1, 1, 1};

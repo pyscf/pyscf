@@ -34,7 +34,7 @@ from pyscf import __config__
 
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.5)
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
-CUTOFF_OFFSET = 115
+LOG_ADJUST = 32
 
 libpbc = lib.load_library('libpbc')
 
@@ -236,8 +236,7 @@ class Int3cBuilder(lib.StreamObject):
                        omega, theta, cutoff)
         else:
             cutoff = self.direct_scf_tol
-        # Map cutoff to integer index
-        cutoff = int(CUTOFF_OFFSET + 2*np.log(cutoff))
+        log_cutoff = int(np.log(cutoff) * LOG_ADJUST)
 
         atm, bas, env = gto.conc_env(supmol._atm, supmol._bas, supmol._env,
                                      rs_auxcell._atm, rs_auxcell._bas, rs_auxcell._env)
@@ -255,12 +254,12 @@ class Int3cBuilder(lib.StreamObject):
             cintopt = _vhf.make_cintopt(atm, bas, env, intor)
             # sindex may not be accurate enough to screen ECP integral.
             # Add penalty 1e-2 to reduce the screening error
-            cutoff += int(2*np.log(1e-2))
+            log_cutoff = int(np.log(cutoff*1e-2) * LOG_ADJUST)
         else:
             cintopt = _vhf.make_cintopt(supmol._atm, supmol._bas, supmol._env, intor)
 
         sindex = self.get_q_cond(supmol)
-        ovlp_mask = sindex > cutoff
+        ovlp_mask = sindex > log_cutoff
         bvk_ovlp_mask = lib.condense('np.any', ovlp_mask, supmol.sh_loc)
         cell0_ovlp_mask = bvk_ovlp_mask.reshape(
             bvk_ncells, nbasp, bvk_ncells, nbasp).any(axis=2).any(axis=0)
@@ -374,7 +373,7 @@ class Int3cBuilder(lib.StreamObject):
                 cell0_ao_loc.ctypes.data_as(ctypes.c_void_p),
                 (ctypes.c_int*6)(*shls_slice),
                 cell0_ovlp_mask.ctypes.data_as(ctypes.c_void_p),
-                sindex_ptr, ctypes.c_uint8(cutoff),
+                sindex_ptr, ctypes.c_int(log_cutoff),
                 cintopt, ctypes.c_int(cache_size),
                 atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
                 bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
@@ -398,7 +397,7 @@ class Int3cBuilder(lib.StreamObject):
         if supmol is None:
             supmol = self.supmol
         nbas = supmol.nbas
-        sindex = np.empty((nbas,nbas), dtype=np.uint8)
+        sindex = np.empty((nbas,nbas), dtype=np.int16)
         libpbc.PBCVHFsetnr_sindex(
             sindex.ctypes.data_as(ctypes.c_void_p),
             supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),

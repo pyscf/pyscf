@@ -47,9 +47,9 @@ typedef struct {
         // Integral mask of SupMole based on s-function overlap
         int8_t *ovlp_mask;
         // Integral screening condition ~log((ij|ij))/2
-        uint8_t *qindex;
+        int16_t *qindex;
         // cutoff for schwarz condtion
-        uint32_t cutoff;
+        int cutoff;
         float eta;
 
         // parameters for ft_ao
@@ -61,7 +61,8 @@ typedef struct {
         int (*intor)();
 } BVKEnvs;
 
-// supports integrals value between exp(-115/2) - exp((127-115)/2)
-// 1e-25 - 4e2
-#define CUTOFF_OFFSET 115
+// It is preferable to use the float16 type to save log value. fp16 type is
+// platform dependent. Here log value is saved in int16_t instead with an
+// adjustment factor 32 to ensure accuracy.
+#define LOG_ADJUST      32
 #endif

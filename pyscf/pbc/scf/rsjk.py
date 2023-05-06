@@ -40,7 +40,7 @@ from pyscf.pbc.df import aft, rsdf_builder, aft_jk
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df.df_jk import (zdotNN, zdotCN, zdotNC, _ewald_exxdiv_for_G0,
                                 _format_dms, _format_kpts_band, _format_jks)
-from pyscf.pbc.df.incore import libpbc, _get_cache_size
+from pyscf.pbc.df.incore import libpbc, _get_cache_size, LOG_ADJUST
 from pyscf.pbc.lib.kpts_helper import (is_zero, kk_adapted_iter,
                                        group_by_conj_pairs, intersection)
 from pyscf import __config__
@@ -48,7 +48,7 @@ from pyscf import __config__
 # Threshold of steep bases and local bases
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
 OMEGA_MIN = rsdf_builder.OMEGA_MIN
-CUTOFF_OFFSET = 115
+INDEX_MIN = rsdf_builder.INDEX_MIN
 
 class RangeSeparatedJKBuilder(lib.StreamObject):
     def __init__(self, cell, kpts=np.zeros((1,3))):
@@ -202,7 +202,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self._cintopt = _vhf.make_cintopt(supmol_sr._atm, supmol_sr._bas,
                                           supmol_sr._env, 'int2e')
         nbas = supmol_sr.nbas
-        qindex = np.empty((3,nbas,nbas), dtype=np.uint8)
+        qindex = np.empty((3,nbas,nbas), dtype=np.int16)
         ao_loc = supmol_sr.ao_loc
         with supmol_sr.with_integral_screen(self.direct_scf_tol**2):
             libpbc.PBCVHFsetnr_direct_scf(
@@ -221,7 +221,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         if self.exclude_dd_block:
             # Remove the smooth-smooth basis block.
             smooth_idx = supmol_sr.bas_type_to_indices(ft_ao.SMOOTH_BASIS)
-            qindex[0,smooth_idx[:,None], smooth_idx] = 0
+            qindex[0,smooth_idx[:,None], smooth_idx] = INDEX_MIN
 
         self.qindex = qindex
 
@@ -277,11 +277,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             dm = dm_kpts
         n_dm = dm.shape[0]
 
-        cutoff = int(CUTOFF_OFFSET + 2*np.log(self.direct_scf_tol))
-        if cutoff < 0:
-            log.warn('direct_scf_tol %g is too small. Set to %g',
-                     self.direct_scf_tol, np.exp(-CUTOFF_OFFSET/2))
-            cutoff = 0
+        cutoff = int(np.log(self.direct_scf_tol) * LOG_ADJUST)
 
         self._sr_without_dddd = (
             self.allow_drv_nodddd and
@@ -349,14 +345,12 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         dm_cond = [lib.condense('NP_absmax', d, sparse_ao_loc, cell0_ao_loc)
                    for d in sc_dm.reshape(n_sc_dm, bvk_ncells*nao1, nao1)]
         dm_cond = np.max(dm_cond, axis=0)
-        small_dm_mask = dm_cond < self.direct_scf_tol**2
-        dm_cond[small_dm_mask] = 1e-100
-        dmindex = np.ceil(CUTOFF_OFFSET + 2*np.log(dm_cond))
-        dmindex = np.asarray(dmindex, order='C', dtype=np.uint8)
-        dmindex[small_dm_mask] = 0
-        dmindex[dmindex > 127] = 127
+        dm_cond[dm_cond < 1e-100] = 1e-100
+        dmindex = np.log(dm_cond)
+        dmindex *= LOG_ADJUST
+        dmindex = np.asarray(dmindex, order='C', dtype=np.int16)
         dmindex = dmindex.reshape(bvk_ncells, nbasp, nbasp)
-        dm_cond = small_dm_mask = None
+        dm_cond = None
 
         bvk_nbas = nbasp * bvk_ncells
         shls_slice = (0, nbasp, 0, bvk_nbas, 0, bvk_nbas, 0, bvk_nbas)
@@ -397,7 +391,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             (ctypes.c_int*8)(*shls_slice),
             dm_translation.ctypes.data_as(ctypes.c_void_p),
             qindex.ctypes.data_as(ctypes.c_void_p),
-            dmindex.ctypes.data_as(ctypes.c_void_p), ctypes.c_uint8(cutoff),
+            dmindex.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cutoff),
             qcell0_ijij.ctypes.data_as(ctypes.c_void_p),
             qcell0_iijj.ctypes.data_as(ctypes.c_void_p),
             ish_idx.ctypes.data_as(ctypes.c_void_p),
@@ -1332,11 +1326,11 @@ def _qcond_cell0_abstract(qcond, seg_loc, seg2sh, nbasp):
         if i0 != i1:
             qtmp[i] = qcond_sub[i0:i1].max(axis=0)
         else:
-            qtmp[i] = 0
+            qtmp[i] = INDEX_MIN
     qcond_cell0 = np.empty((nbas_bvk, nbasp), dtype=qcond.dtype)
     for j, (j0, j1) in enumerate(zip(seg_loc[:nbasp], seg_loc[1:nbasp+1])):
         if j0 != j1:
             qcond_cell0[:,j] = qtmp[:,j0:j1].max(axis=1)
         else:
-            qcond_cell0[:,j] = 0
+            qcond_cell0[:,j] = INDEX_MIN
     return qcond_cell0

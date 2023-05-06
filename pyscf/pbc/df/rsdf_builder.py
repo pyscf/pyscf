@@ -52,6 +52,7 @@ from pyscf.pbc.lib.kpts_helper import (is_zero, member, kk_adapted_iter,
 from pyscf import __config__
 
 OMEGA_MIN = 0.08
+INDEX_MIN = -10000
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 # Threshold of steep bases and local bases
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
@@ -206,7 +207,7 @@ class _RSGDFBuilder(Int3cBuilder):
         # Remove d-d block in supmol q_cond
         if self.exclude_dd_block and self.cell.dimension > 0:
             smooth_idx = supmol.bas_type_to_indices(ft_ao.SMOOTH_BASIS)
-            q_cond[smooth_idx[:,None], smooth_idx] = 0
+            q_cond[smooth_idx[:,None], smooth_idx] = INDEX_MIN
         return q_cond
 
     def decompose_j2c(self, j2c):
@@ -229,10 +230,11 @@ class _RSGDFBuilder(Int3cBuilder):
         cell = self.cell
         j2c_negative = None
         w, v = scipy.linalg.eigh(j2c)
+        mask = w > self.linear_dep_threshold
         logger.debug(self, 'cond = %.4g, drop %d bfns',
-                     w[-1]/w[0], np.count_nonzero(w<self.linear_dep_threshold))
-        v1 = v[:,w>self.linear_dep_threshold].conj().T
-        v1 /= np.sqrt(w[w>self.linear_dep_threshold, None])
+                     w[-1]/w[0], w.size-np.count_nonzero(mask))
+        v1 = v[:,mask].conj().T
+        v1 /= np.sqrt(w[mask, None])
         j2c = v1
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             idx = np.where(w < -self.linear_dep_threshold)[0]

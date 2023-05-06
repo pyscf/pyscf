@@ -32,7 +32,7 @@ void ECPscalar_distribute(double *out, double *gctr, const int *dims,
                           const int comp, const int di, const int dj);
 
 int PBCECP_loop(Function_cart intor,
-                double *gctr, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
+                double *gctr, int *cell0_shls, int *bvk_cells, int cutoff,
                 float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk,
                 double *cache)
 {
@@ -90,11 +90,11 @@ int PBCECP_loop(Function_cart intor,
         int iseg, jseg;
         int ish1, jsh1;
         int ksh0, ksh1;
-        uint8_t *sindex = envs_bvk->qindex;
+        int16_t *sindex = envs_bvk->qindex;
         float *xij_cond = rij_cond;
         float *yij_cond = rij_cond + nij;
         float *zij_cond = rij_cond + nij * 2;
-        uint8_t *sij_idx;
+        int16_t *sij_idx;
         float xk, yk, zk, dx, dy, dz, r2;
 
         float ai, aj, ak, aij;
@@ -146,7 +146,7 @@ int PBCECP_loop(Function_cart intor,
                 zk = env[ptr+2];
 
                 fac = logf(eta)/4;
-                ij_cutoff = cutoff + ceilf(2*fac);
+                ij_cutoff = cutoff + fac * LOG_ADJUST;
                 for (iseg = iseg0; iseg < iseg1; iseg++) {
                         ish0 = seg2sh[iseg];
                         ish1 = seg2sh[iseg+1];
@@ -162,16 +162,12 @@ for (ish = ish0; ish < ish1; ish++) {
         sij_idx = sindex + ish * Nbas;
         for (jsh = jsh0; jsh < jsh1; jsh++) {
                 sij = sij_idx[jsh];
-                // adjust ij_cutoff in case r2 is very small
-                if (sij < ij_cutoff - 1) {
-                        continue;
-                }
                 dx = xk - xij_cond[ish * njsh + jsh - rij_off];
                 dy = yk - yij_cond[ish * njsh + jsh - rij_off];
                 dz = zk - zij_cond[ish * njsh + jsh - rij_off];
                 r2 = dx * dx + dy * dy + dz * dz;
-                theta_r2 = theta * r2 + logf(r2 + 1e-15f);
-                if (theta_r2*2 + ij_cutoff < sij) {
+                theta_r2 = theta * r2 + logf(r2 + 1e-30f);
+                if (theta_r2*LOG_ADJUST + ij_cutoff < sij) {
                         shls[1] = jsh;
                         has_value = intor(gctr, shls, ecpbas, necpbas, atm, natm, bas,
                                           nbas, env, opt, cache) | has_value;
@@ -184,7 +180,7 @@ for (ish = ish0; ish < ish1; ish++) {
         return has_value;
 }
 
-int PBCECPscalar_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
+int PBCECPscalar_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, int cutoff,
                       float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
         int *bas = envs_cint->bas;
@@ -215,7 +211,7 @@ int PBCECPscalar_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, uint8_t 
         return has_value;
 }
 
-int PBCECPscalar_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, uint8_t cutoff,
+int PBCECPscalar_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, int cutoff,
                    float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
 {
         int *bas = envs_cint->bas;
