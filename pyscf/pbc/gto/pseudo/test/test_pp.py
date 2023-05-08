@@ -215,6 +215,7 @@ He
         cell.pseudo = {'C':'gth-pade'}
         cell.a = np.eye(3) * 2.5
         cell.mesh = [30] * 3
+        cell.precision = 1e-9
         cell.build()
         np.random.seed(1)
         kpt = np.random.random(3)
