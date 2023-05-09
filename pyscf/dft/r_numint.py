@@ -116,7 +116,7 @@ def _eval_rho_2c(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=Fal
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_2c()
 
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         c0 = _dot_spinor_dm(mol, ao, dm, non0tab, shls_slice, ao_loc)
         rho_m = _contract_rho_m(ao, c0, hermi, True)
     elif xctype == 'GGA':

@@ -52,6 +52,17 @@ class KnownValues(unittest.TestCase):
 # H     0.0000000000    -0.0222745046    -0.0044605683
         self.assertAlmostEqual(lib.fp(g1), -0.035681131697586257, 6)
 
+        geom1 = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.55)],
+            [1 , (0. , 0.757  , 0.54)]]
+        mol1 = gto.M(atom=geom1, basis='631g')
+        pt1 = mol1.MP2().Gradients()
+        de_ref = pt1.kernel()
+        e, de = pt.Gradients().as_scanner()(geom1)
+        self.assertAlmostEqual(pt1.base.e_tot, e, 7)
+        self.assertAlmostEqual(abs(de - de_ref).max(), 0, 5)
+
     def test_mp2_grad_finite_diff(self):
         mol = gto.M(
             verbose = 0,
@@ -146,4 +157,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Tests for MP2 gradients")
     unittest.main()
-

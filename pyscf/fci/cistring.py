@@ -41,7 +41,7 @@ def make_strings(orb_list, nelec):
     '''
     orb_list = list(orb_list)
     if len(orb_list) > 63:
-        return _gen_occslst(orb_list, nelec)
+        return gen_occslst(orb_list, nelec)
 
     assert (nelec >= 0)
     if nelec == 0:
@@ -68,8 +68,24 @@ def make_strings(orb_list, nelec):
     return numpy.asarray(strings, dtype=numpy.int64)
 gen_strings4orblist = make_strings
 
-def _gen_occslst(orb_list, nelec):
+def gen_occslst(orb_list, nelec):
     '''Generate occupied orbital list for each string.
+
+    Returns:
+        List of lists of int32. Each inner list has length equal to the number of
+        electrons, and contains the occupied orbitals in the corresponding string.
+
+    Example:
+
+        >>> [bin(x) for x in make_strings((0, 1, 2, 3), 2)]
+        ['0b11', '0b101', '0b110', '0b1001', '0b1010', '0b1100']
+        >>> gen_occslst((0, 1, 2, 3), 2)
+        OIndexList([[0, 1],
+                    [0, 2],
+                    [1, 2],
+                    [0, 3],
+                    [1, 3],
+                    [2, 3]], dtype=int32)
     '''
     orb_list = list(orb_list)
     assert (nelec >= 0)
@@ -117,7 +133,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
     if strs is None:
         strs = make_strings(orb_list, nelec)
     strdic = dict(zip(strs,range(strs.__len__())))
-    def propgate1e(str0):
+    def propagate1e(str0):
         occ = []
         vir = []
         for i in orb_list:
@@ -135,7 +151,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
                 linktab.append((a, i, strdic[str1], cre_des_sign(a, i, str0)))
         return linktab
 
-    t = [propgate1e(s) for s in strs.astype(numpy.int64)]
+    t = [propagate1e(s) for s in strs.astype(numpy.int64)]
     return numpy.array(t, dtype=numpy.int32)
 
 def gen_linkstr_index_o1(orb_list, nelec, strs=None, tril=False):
@@ -143,7 +159,7 @@ def gen_linkstr_index_o1(orb_list, nelec, strs=None, tril=False):
         return numpy.zeros((0,0,4), dtype=numpy.int32)
 
     if strs is None:
-        strs = _gen_occslst(orb_list, nelec)
+        strs = gen_occslst(orb_list, nelec)
     occslst = strs
 
     orb_list = numpy.asarray(orb_list)

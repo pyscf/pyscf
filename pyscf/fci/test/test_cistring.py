@@ -30,7 +30,7 @@ class KnownValues(unittest.TestCase):
             self.assertEqual(bin(x), ref[i])
 
         strs = cistring.gen_strings4orblist(range(8), 4)
-        occlst = cistring._gen_occslst(range(8), 4)
+        occlst = cistring.gen_occslst(range(8), 4)
         self.assertAlmostEqual(abs(occlst - cistring._strs2occslst(strs, 8)).sum(), 0, 12)
         self.assertAlmostEqual(abs(strs - cistring._occslst2strs(occlst)).sum(), 0, 12)
 

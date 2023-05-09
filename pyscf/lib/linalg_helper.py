@@ -419,8 +419,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             x0len = len(x0)
             xt = _qr(x0, dot, lindep)[0]
             if len(xt) != x0len:
-                log.warn('QR decomposition removed %d vectors.  The davidson may fail.',
-                         x0len - len(xt))
+                log.warn('QR decomposition removed %d vectors.', x0len - len(xt))
                 if callable(pick):
                     log.warn('Check to see if `pick` function %s is providing '
                              'linear dependent vectors', pick.__name__)
@@ -805,7 +804,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
             x0len = len(x0)
             xt, x0 = _qr(x0, dot, lindep)[0], None
             if len(xt) != x0len:
-                log.warn('QR decomposition removed %d vectors.  The davidson may fail.'
+                log.warn('QR decomposition removed %d vectors. '
                          'Check to see if `pick` function :%s: is providing linear dependent '
                          'vectors' % (x0len - len(xt), pick.__name__))
             max_dx_last = 1e9

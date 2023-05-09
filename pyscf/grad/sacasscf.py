@@ -373,13 +373,13 @@ def as_scanner(mcscf_grad, state=None):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+            self.reset(mol)
             if 'state' in kwargs: self.state = kwargs['state']
             mc_scanner = self.base
             e_tot = mc_scanner(mol)
             if hasattr (mc_scanner, 'e_mcscf'): self.e_mcscf = mc_scanner.e_mcscf
             if hasattr (mc_scanner, 'e_states') and self.state is not None:
                 e_tot = mc_scanner.e_states[self.state]
-            self.mol = mol
             if not ('state' in kwargs):
                 kwargs['state'] = self.state
             de = self.kernel(**kwargs)

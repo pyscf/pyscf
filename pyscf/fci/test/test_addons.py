@@ -378,36 +378,6 @@ class KnownValues(unittest.TestCase):
         val = finger(fci.addons.symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2))
         self.assertAlmostEqual(val, 3.010642818688976, 12)
 
-    def test_symm_initguess(self):
-        norb = 6
-        nelec = (4,2)
-        orbsym = [6,5,7,2,3,0]
-        ci1 = fci.addons.symm_initguess(norb, nelec, orbsym, wfnsym=0)
-        ci2 = fci.addons.symmetrize_wfn(ci1, norb, nelec, orbsym, wfnsym=0)
-        self.assertEqual(abs(ci1-ci2).max(), 0)
-
-        ci1 = fci.addons.symm_initguess(norb, nelec, orbsym, wfnsym=5)
-        ci2 = fci.addons.symmetrize_wfn(ci1, norb, nelec, orbsym, wfnsym=5)
-        self.assertEqual(abs(ci1-ci2).max(), 0)
-
-        ci1 = fci.addons.symm_initguess(norb, nelec, orbsym, wfnsym=3)
-        ci2 = fci.addons.symmetrize_wfn(ci1, norb, nelec, orbsym, wfnsym=3)
-        self.assertEqual(abs(ci1-ci2).max(), 0)
-
-        ci1 = fci.addons.symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=1, irrep_nelec=None)
-        self.assertEqual(numpy.argwhere(ci1!=0).tolist(), [[0,2]])
-        ci1 = fci.addons.symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=0, irrep_nelec={0:[3,2],3:2})
-        self.assertEqual(numpy.argwhere(ci1!=0).tolist(), [[2,5], [3,4]])
-        ci1 = fci.addons.symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=2, irrep_nelec={1:[0,1],3:[1,0]})
-        self.assertEqual(numpy.argwhere(ci1!=0).tolist(), [[5,0]])
-        ci1 = fci.addons.symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3, irrep_nelec={5:[0,1],3:[1,0]})
-        self.assertEqual(numpy.argwhere(ci1!=0).tolist(), [[4,2], [7,0]])
-
-        self.assertRaises(RuntimeError, fci.addons.symm_initguess, 6, (3,2), [3,3,3,3,3,3], wfnsym=2)
-
-        ci1 = fci.addons.symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3, irrep_nelec={5:[0,1],3:[1,0]})
-        self.assertEqual(fci.addons.guess_wfnsym(ci1, 6, (3,3), [0,1,5,4,3,7]), 3)
-
     def test_des_and_cre(self):
         a4 = 10*numpy.arange(4)[:,None]
         a6 = 10*numpy.arange(6)[:,None]

@@ -37,8 +37,9 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
+from pyscf.fci.spin_op import spin_square
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 # When the spin-orbitals do not have the degeneracy on spacial part,
 # there is only one version of FCI which is close to _spin1 solver.
@@ -122,7 +123,7 @@ def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
             fcinew[:,maskb] += u_bb * fcivec[:,maskb]
     return fcinew.view(direct_spin1.FCIvector)
 
-def make_hdiag(h1e, eri, norb, nelec):
+def make_hdiag(h1e, eri, norb, nelec, compress=False):
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
     h1e_a = numpy.ascontiguousarray(h1e[0])
     h1e_b = numpy.ascontiguousarray(h1e[1])
@@ -130,9 +131,9 @@ def make_hdiag(h1e, eri, norb, nelec):
     g2e_ab = ao2mo.restore(1, eri[1], norb)
     g2e_bb = ao2mo.restore(1, eri[2], norb)
 
-    occslsta = occslstb = cistring._gen_occslst(range(norb), neleca)
+    occslsta = occslstb = cistring.gen_occslst(range(norb), neleca)
     if neleca != nelecb:
-        occslstb = cistring._gen_occslst(range(norb), nelecb)
+        occslstb = cistring.gen_occslst(range(norb), nelecb)
     na = len(occslsta)
     nb = len(occslstb)
 
@@ -187,7 +188,10 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     g2e_ab = ao2mo.restore(1, eri[1], norb)
     g2e_bb = ao2mo.restore(1, eri[2], norb)
     if hdiag is None:
-        hdiag = make_hdiag(h1e, eri, norb, nelec)
+        hdiag = make_hdiag(h1e, eri, norb, nelec, compress=False)
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+    assert hdiag.size == na * nb
     if hdiag.size < np:
         addr = numpy.arange(hdiag.size)
     else:
@@ -195,7 +199,6 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
             addr = numpy.argpartition(hdiag, np-1)[:np]
         except AttributeError:
             addr = numpy.argsort(hdiag)[:np]
-    nb = cistring.num_strings(norb, nelecb)
     addra = addr // nb
     addrb = addr % nb
     stra = cistring.addrs2str(norb, neleca, addra)
@@ -234,25 +237,20 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
 
 # dm_pq = <|p^+ q|>
-def make_rdm1s(fcivec, norb, nelec, link_index=None):
-    return direct_spin1.make_rdm1s(fcivec, norb, nelec, link_index)
+make_rdm1s = direct_spin1.make_rdm1s
 
 # spacial part of DM, dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
     raise ValueError('Spin trace for UHF-FCI density matrices.')
 
-def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
-    return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index, reorder)
-
-def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
-    return direct_spin1.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
+make_rdm12s = direct_spin1.make_rdm12s
+trans_rdm1s = direct_spin1.trans_rdm1s
 
 # spacial part of DM
 def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     raise ValueError('Spin trace for UHF-FCI density matrices.')
 
-def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
-    return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
+trans_rdm12s = direct_spin1.trans_rdm12s
 
 
 ###############################################################
@@ -261,81 +259,14 @@ def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
 
 class FCISolver(direct_spin1.FCISolver):
 
-    def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
-        return absorb_h1e(h1e, eri, norb, nelec, fac)
+    absorb_h1e = staticmethod(absorb_h1e)
+    make_hdiag = staticmethod(make_hdiag)
+    pspace = staticmethod(pspace)
 
-    def make_hdiag(self, h1e, eri, norb, nelec):
-        return make_hdiag(h1e, eri, norb, nelec)
-
-    def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
-        return pspace(h1e, eri, norb, nelec, hdiag, np)
-
-    def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
-        return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
-
-    def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
-        return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
-
-    def spin_square(self, fcivec, norb, nelec):
-        from pyscf.fci import spin_op
-        return spin_op.spin_square(fcivec, norb, nelec)
-
-    def make_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
-        return trans_rdm1(cibra, ciket, norb, nelec, link_index)
-
-    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
-        return trans_rdm1(cibra, ciket, norb, nelec, link_index)
+    contract_1e = lib.module_method(contract_1e)
+    contract_2e = lib.module_method(contract_2e)
+    make_rdm1 = lib.module_method(make_rdm1)
+    trans_rdm1 = lib.module_method(trans_rdm1)
+    spin_square = lib.module_method(spin_square)
 
 FCI = FCISolver
-
-if __name__ == '__main__':
-    from functools import reduce
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None#"out_h2o"
-    mol.atom = [
-        ['H', ( 1.,-1.    , 0.   )],
-        ['H', ( 0.,-1.    ,-1.   )],
-        ['H', ( 1.,-0.5   ,-1.   )],
-        #['H', ( 0.,-0.5   ,-1.   )],
-        #['H', ( 0.,-0.5   ,-0.   )],
-        ['H', ( 0.,-0.    ,-1.   )],
-        ['H', ( 1.,-0.5   , 0.   )],
-        ['H', ( 0., 1.    , 1.   )],
-    ]
-
-    mol.basis = {'H': 'sto-3g'}
-    mol.charge = 1
-    mol.spin = 1
-    mol.build()
-
-    m = scf.UHF(mol)
-    ehf = m.scf()
-
-    cis = FCISolver(mol)
-    norb = m.mo_energy[0].size
-    nea = (mol.nelectron+1) // 2
-    neb = (mol.nelectron-1) // 2
-    nelec = (nea, neb)
-    mo_a = m.mo_coeff[0]
-    mo_b = m.mo_coeff[1]
-    h1e_a = reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a))
-    h1e_b = reduce(numpy.dot, (mo_b.T, m.get_hcore(), mo_b))
-    g2e_aa = ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False)
-    g2e_aa = g2e_aa.reshape(norb,norb,norb,norb)
-    g2e_ab = ao2mo.incore.general(m._eri, (mo_a,mo_a,mo_b,mo_b), compact=False)
-    g2e_ab = g2e_ab.reshape(norb,norb,norb,norb)
-    g2e_bb = ao2mo.incore.general(m._eri, (mo_b,)*4, compact=False)
-    g2e_bb = g2e_bb.reshape(norb,norb,norb,norb)
-    h1e = (h1e_a, h1e_b)
-    eri = (g2e_aa, g2e_ab, g2e_bb)
-    na = cistring.num_strings(norb, nea)
-    nb = cistring.num_strings(norb, neb)
-    numpy.random.seed(15)
-    fcivec = numpy.random.random((na,nb))
-
-    e = kernel(h1e, eri, norb, nelec)[0]
-    print(e, e - -8.65159903476)

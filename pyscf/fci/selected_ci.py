@@ -43,7 +43,7 @@ from pyscf.fci import direct_spin1
 from pyscf.fci import rdm
 from pyscf import __config__
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 @lib.with_doc(direct_spin1.contract_2e.__doc__)
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
@@ -286,7 +286,7 @@ def gen_cre_linkstr(strs, norb, nelec):
     return link_index
 
 
-def make_hdiag(h1e, eri, ci_strs, norb, nelec):
+def make_hdiag(h1e, eri, ci_strs, norb, nelec, compress=False):
     ci_coeff, nelec, ci_strs = _unpack(None, nelec, ci_strs)
     na = len(ci_strs[0])
     nb = len(ci_strs[1])
@@ -332,7 +332,7 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
     h2e = ao2mo.restore(1, h2e, norb)
 
     link_index = _all_linkstr_index(ci_strs, norb, nelec)
-    hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
+    hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec, compress=True)
 
     if isinstance(ci0, SCIvector):
         if ci0.size == na*nb:
@@ -342,8 +342,10 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
     else:
         ci0 = myci.get_init_guess(ci_strs, norb, nelec, nroots, hdiag)
 
+    cpu0 = [logger.process_clock(), logger.perf_counter()]
     def hop(c):
         hc = myci.contract_2e(h2e, _as_SCIvector(c, ci_strs), norb, nelec, link_index)
+        cpu0[:] = log.timer_debug1('contract_2e', *cpu0)
         return hc.reshape(-1)
     precond = lambda x, e, *args: x/(hdiag-e+1e-4)
 
@@ -400,7 +402,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         if ci0.size < nroots:
             raise RuntimeError('Not enough selected-CI space for %d states' % nroots)
         ci_strs = ci0._strs
-        hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
+        hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec, compress=True)
         ci0 = myci.get_init_guess(ci_strs, norb, nelec, nroots, hdiag)
 
     def hop(c):
@@ -422,7 +424,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
 
         ci0 = [c.ravel() for c in ci0]
         link_index = _all_linkstr_index(ci_strs, norb, nelec)
-        hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
+        hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec, compress=True)
         #e, ci0 = lib.davidson(hop, ci0.reshape(-1), precond, tol=float_tol)
         e, ci0 = myci.eig(hop, ci0, precond, tol=float_tol, lindep=lindep,
                           max_cycle=max_cycle, max_space=max_space, nroots=nroots,
@@ -453,7 +455,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     log.debug('Extra CI in selected space %s', (len(ci_strs[0]), len(ci_strs[1])))
     ci0 = [c.ravel() for c in ci0]
     link_index = _all_linkstr_index(ci_strs, norb, nelec)
-    hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
+    hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec, compress=True)
     e, c = myci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                     max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                     max_memory=max_memory, verbose=log, **kwargs)
@@ -765,8 +767,7 @@ class SelectedCI(direct_spin1.FCISolver):
         ci0 = direct_spin1._get_init_guess(na, nb, nroots, hdiag, nelec)
         return [_as_SCIvector(x, ci_strs) for x in ci0]
 
-    def make_hdiag(self, h1e, eri, ci_strs, norb, nelec):
-        return make_hdiag(h1e, eri, ci_strs, norb, nelec)
+    make_hdiag = staticmethod(make_hdiag)
 
     enlarge_space = enlarge_space
     kernel = kernel_float_space
