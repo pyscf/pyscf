@@ -376,7 +376,8 @@ Eu F
 2      5.3988000000      -63.6010500000
                     ''')}, charge=2, verbose=0)
         mf = scf.RHF(mol)
-        self.assertAlmostEqual(mf.kernel(), -28.426603442192, 8)
+        self.assertEqual(mol.ao_labels()[0], '0 Eu1 5s    ')
+        self.assertAlmostEqual(lib.fp(mf.get_hcore()), 22.59028455662168)
 
 
 if __name__ == '__main__':
