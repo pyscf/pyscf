@@ -364,16 +364,19 @@ def init_guess_by_minao(mol):
         stdsymb = gto.mole._std_symbol(symb)
         basis_add = gto.basis.load('ano', stdsymb)
 # coreshl defines the core shells to be removed in the initial guess
-        coreshl = gto.ecp.core_configuration(nelec_ecp)
-        #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
+        coreshl = gto.ecp.core_configuration(nelec_ecp, atom_symbol=stdsymb)
+        # coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
             ndocc, frac = atom_hf.frac_occ(stdsymb, l)
-            assert ndocc >= coreshl[l]
-            degen = l * 2 + 1
-            occ_l = [2,]*(ndocc-coreshl[l]) + [frac,]
-            occ.append(numpy.repeat(occ_l, degen))
-            basis_ano.append([l] + [b[:1] + b[1+coreshl[l]:ndocc+2]
-                                    for b in basis_add[l][1:]])
+            if ndocc >= coreshl[l]:
+                degen = l * 2 + 1
+                occ_l = [2, ]*(ndocc-coreshl[l]) + [frac, ]
+                occ.append(numpy.repeat(occ_l, degen))
+                basis_ano.append([l] + [b[:1] + b[1+coreshl[l]:ndocc+2]
+                                        for b in basis_add[l][1:]])
+            else:
+                logger.debug(mol, '*** ECP incorporates partially occupied '
+                             'shell of l = %d for atom %s ***', l, symb)
         occ = numpy.hstack(occ)
 
         if nelec_ecp > 0:
@@ -397,11 +400,12 @@ def init_guess_by_minao(mol):
                 ndocc -= coreshl[l]
                 assert ndocc <= nbas_l
 
-                occ_l = numpy.zeros(nbas_l)
-                occ_l[:ndocc] = 2
-                if frac > 0:
-                    occ_l[ndocc] = frac
-                occ4ecp.append(numpy.repeat(occ_l, l * 2 + 1))
+                if nbas_l > 0:
+                    occ_l = numpy.zeros(nbas_l)
+                    occ_l[:ndocc] = 2
+                    if frac > 0:
+                        occ_l[ndocc] = frac
+                    occ4ecp.append(numpy.repeat(occ_l, l * 2 + 1))
 
             occ4ecp = numpy.hstack(occ4ecp)
             basis4ecp = lib.flatten(basis4ecp)
@@ -1561,6 +1565,7 @@ class SCF(lib.StreamObject):
     @lib.with_doc(init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from minao.')
         return init_guess_by_minao(mol)
 
     @lib.with_doc(init_guess_by_atom.__doc__)

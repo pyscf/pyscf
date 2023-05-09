@@ -181,7 +181,7 @@ def project_to_atomic_orbitals(mol, ref_basis):
             if not PROJECT_ECP_BASIS:
                 continue
 
-            ecpcore = core_configuration(nelec_ecp_dic[symb])
+            ecpcore = core_configuration(nelec_ecp_dic[symb], atom_symbol=gto.mole._std_symbol(symb))
             # Comparing to ANO valence basis, to check whether the ECP basis set has
             # reasonable AO-character contraction.  The ANO valence AO should have
             # significant overlap to ECP basis if the ECP basis has AO-character.

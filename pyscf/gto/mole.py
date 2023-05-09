@@ -1520,7 +1520,7 @@ def sph_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = core_configuration(nelec_ecp, atom_symbol=symb)
+            coreshl = core_configuration(nelec_ecp, atom_symbol=_std_symbol(symb))
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
@@ -1570,7 +1570,7 @@ def cart_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp, atom_symbol=_std_symbol(symb))
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         ncart = (l + 1) * (l + 2) // 2
@@ -1620,7 +1620,7 @@ def spinor_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp, atom_symbol=_std_symbol(symb))
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
