@@ -67,7 +67,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
     is_khf = isinstance(mf, khf.KSCF)
     is_rohf = isinstance(mf, rohf.ROHF)
     if is_rohf:
-        is_rhf = False 
+        is_rhf = False
 
     if fix_spin and not (is_uhf or is_rohf):
         raise KeyError("fix_spin only supports UHF and ROHF.")
