@@ -397,7 +397,7 @@ class KnownValues(unittest.TestCase):
         myhf2 = scf.ROHF(mol)
         myhf2.max_cycle = 600
         myhf2 = myhf2.newton()
-        myhf2.kernel(myhf.make_rdm1())
+        myhf2.kernel(myhf_s.make_rdm1())
         # note 16mHa lower energy than myhf
         self.assertAlmostEqual(myhf2.e_tot, -244.98087503558844, 6)
         
