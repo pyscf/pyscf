@@ -5,12 +5,9 @@ author: Linus Bjarne Dittmer
 '''
 
 import numpy
-import numpy.linalg
 import scipy
-import scipy.linalg
-import scipy.special
 import pyscf.scf
-import pyscf.dft
+from pyscf.dft import uks
 import pyscf.symm
 import pyscf.soscf.newton_ah as newton_ah
 import pyscf.soscf.sigma_utils as sigutils
