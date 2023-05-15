@@ -442,20 +442,15 @@ class GHF(hf.SCF):
         if dm is None: dm = self.make_rdm1()
         nao = mol.nao
         dm = numpy.asarray(dm)
+        # nao = 0 for HF with custom Hamiltonian
+        if dm.shape[-1] != nao * 2 and nao != 0:
+            raise ValueError('Dimension inconsistent '
+                             f'dm.shape = {dm.shape}, mol.nao = {nao}')
 
         def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
-            if (not omega and
-                (self._eri is not None or mol.incore_anyway or self._is_mem_enough())):
-                if self._eri is None:
-                    self._eri = mol.intor('int2e', aosym='s8')
-                return hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
-            else:
-                return hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+            return hf.RHF.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
 
-        if nao == dm.shape[-1]:
-            vj, vk = jkbuild(mol, dm, hermi, with_j, with_k, omega)
-        else:  # GHF density matrix, shape (2N,2N)
-            vj, vk = get_jk(mol, dm, hermi, with_j, with_k, jkbuild, omega)
+        vj, vk = get_jk(mol, dm, hermi, with_j, with_k, jkbuild, omega)
         return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -554,29 +549,3 @@ def _from_rhf_init_dm(dm, breaksym=True):
 
 class HF1e(GHF):
     scf = hf._hf1e_scf
-
-
-del (PRE_ORTH_METHOD)
-
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.verbose = 3
-    mol.atom = 'H 0 0 0; H 0 0 1; O .5 .6 .2'
-    mol.basis = 'ccpvdz'
-    mol.build()
-
-    mf = GHF(mol)
-    mf.kernel()
-
-    dm = mf.init_guess_by_1e(mol)
-    dm = dm + 0j
-    nao = mol.nao_nr()
-    numpy.random.seed(12)
-    dm[:nao,nao:] = numpy.random.random((nao,nao)) * .1j
-    dm[nao:,:nao] = dm[:nao,nao:].T.conj()
-    mf.kernel(dm)
-    mf.canonicalize(mf.mo_coeff, mf.mo_occ)
-    mf.analyze()
-    print(mf.spin_square())
-    print(mf.e_tot - -75.9125824421352)

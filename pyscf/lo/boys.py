@@ -103,10 +103,12 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
     return localizer.mo_coeff
 
 
-def dipole_integral(mol, mo_coeff):
+def dipole_integral(mol, mo_coeff, charge_center=None):
     # The gauge origin has no effects for maximization |<r>|^2
     # Set to charge center for physical significance of <r>
-    charge_center = numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords())
+    if charge_center is None:
+        charge_center = (numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords())
+                         / mol.atom_charges().sum())
     with mol.with_common_origin(charge_center):
         dip = numpy.asarray([reduce(lib.dot, (mo_coeff.conj().T, x, mo_coeff))
                              for x in mol.intor_symmetric('int1e_r', comp=3)])
@@ -291,10 +293,13 @@ class Boys(ciah.CIAHOptimizer):
     def cost_function(self, u=None):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
-        dip = dipole_integral(self.mol, mo_coeff)
-        r2 = self.mol.intor_symmetric('int1e_r2')
+        charge_center = (numpy.einsum('z,zx->x', self.mol.atom_charges(), self.mol.atom_coords())
+                         / self.mol.atom_charges().sum())
+        dip = dipole_integral(self.mol, mo_coeff, charge_center)
+        with self.mol.with_common_origin(charge_center):
+            r2 = self.mol.intor_symmetric('int1e_r2')
         r2 = numpy.einsum('pi,pi->', mo_coeff, lib.dot(r2, mo_coeff))
-        val = r2 - numpy.einsum('xii,xii->', dip, dip) * 2
+        val = r2 - numpy.einsum('xii,xii->', dip, dip)
         return val
 
     def get_init_guess(self, key='atomic'):

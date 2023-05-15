@@ -373,13 +373,13 @@ def as_scanner(mcscf_grad, state=None):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+            self.reset(mol)
             if 'state' in kwargs: self.state = kwargs['state']
             mc_scanner = self.base
             e_tot = mc_scanner(mol)
             if hasattr (mc_scanner, 'e_mcscf'): self.e_mcscf = mc_scanner.e_mcscf
             if hasattr (mc_scanner, 'e_states') and self.state is not None:
                 e_tot = mc_scanner.e_states[self.state]
-            self.mol = mol
             if not ('state' in kwargs):
                 kwargs['state'] = self.state
             de = self.kernel(**kwargs)
@@ -447,10 +447,33 @@ class Gradients (lagrange.Gradients):
         return xorb, xci
 
     def make_fcasscf (self, state=None, casscf_attr={}, fcisolver_attr={}):
-        ''' Make a fake CASSCF object for ostensible single-state calculations '''
+        ''' SA-CASSCF nuclear gradients require 1) first derivatives wrt wave function variables
+        and nuclear shifts of the target state's energy, AND 2) first and second derivatives of the
+        objective function used to determine the MO coefficients and CI vectors. This function
+        addresses 1).
+
+        Kwargs:
+            state : integer
+                The specific state whose energy is being differentiated. This kwarg is necessary
+                in the context of state_average_mix, where the number of electrons and the
+                make_rdm* functions differ from state to state.
+            casscf_attr : dictionary
+                Extra attributes to apply to fcasscf. Relevant to child methods (i.e., MC-PDFT;
+                NACs)
+            fcisolver_attr : dictionary
+                Extra attributes to apply to fcasscf.fcisolver. Relevant to child methods (i.e.,
+                MC-PDFT; NACs)
+
+        Returns:
+            fcasscf : object of :class:`mc1step.CASSCF`
+                Set up to evaluate first derivatives of state "state". Only functions, classes,
+                and the nelecas variable are set up; the caller should assign MO coefficients
+                and CI vectors explicitly post facto.
+        '''
         fcasscf = mcscf.CASSCF (self.base._scf, self.base.ncas, self.base.nelecas)
         fcasscf.__dict__.update (self.base.__dict__)
 
+        nelecas = self.base.nelecas
         if isinstance (fcasscf.fcisolver, StateAverageFCISolver):
             if isinstance (fcasscf.fcisolver, StateAverageMixFCISolver):
                 p0 = 0
@@ -459,6 +482,7 @@ class Gradients (lagrange.Gradients):
                     if p0 <= state < p1:
                         solver_class = solver.__class__
                         solver_obj = solver
+                        nelecas = fcasscf.fcisolver._get_nelec (solver_obj, nelecas)
                         break
                     p0 = p1
             else:
@@ -473,13 +497,30 @@ class Gradients (lagrange.Gradients):
             fcasscf.fcisolver = copy.copy (fcasscf.fcisolver)
             fcasscf.fcisolver.ss_penalty = 0
         fcasscf.__dict__.update (casscf_attr)
+        fcasscf.nelecas = nelecas
         fcasscf.fcisolver.__dict__.update (fcisolver_attr)
         fcasscf.verbose, fcasscf.stdout = self.verbose, self.stdout
         fcasscf._tag_gfock_ov_nonzero = True
         return fcasscf
 
     def make_fcasscf_sa (self, casscf_attr={}, fcisolver_attr={}):
-        ''' Make a fake SA-CASSCF object to get around weird inheritance conflicts '''
+        ''' SA-CASSCF nuclear gradients require 1) first derivatives wrt wave function variables
+        and nuclear shifts of the target state's energy, AND 2) first and second derivatives of the
+        objective function used to determine the MO coefficients and CI vectors. This function
+        addresses 2). Note that penalty methods etc. must be removed, and that child methods such
+        as MC-PDFT which do not reoptimize the orbitals also do not alter this function.
+
+        Kwargs:
+            casscf_attr : dictionary
+                Extra attributes to apply to fcasscf. Just in case.
+            fcisolver_attr : dictionary
+                Extra attributes to apply to fcasscf.fcisolver. Just in case.
+
+        Returns:
+            fcasscf : object of :class:`StateAverageMCSCFSolver`
+                Set up to evaluate second derivatives of SA-CASSCF average energy in the
+                absence of (i.e., spin) penalties.
+        '''
         fcasscf = self.make_fcasscf (state=0, casscf_attr={}, fcisolver_attr={})
         fcasscf.__dict__.update (self.base.__dict__)
         if isinstance (self.base, StateAverageMCSCFSolver):
@@ -579,6 +620,8 @@ class Gradients (lagrange.Gradients):
         elif eris is None:
             eris = self.eris
         fcasscf_grad = casscf_grad.Gradients (self.make_fcasscf (state))
+        # Mute some misleading messages
+        fcasscf_grad._finalize = lambda: None
         return fcasscf_grad.kernel (mo_coeff=mo, ci=ci[state], atmlst=atmlst, verbose=verbose)
 
     def get_LdotJnuc (self, Lvec, state=None, atmlst=None, verbose=None, mo=None, ci=None,

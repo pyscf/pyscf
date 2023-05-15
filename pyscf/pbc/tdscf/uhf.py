@@ -18,38 +18,30 @@
 
 from pyscf import lib
 from pyscf.tdscf import uhf
+from pyscf.pbc.tdscf import rhf as td_rhf
+from pyscf.pbc.tdscf.rhf import TDMixin
 
 
-class TDA(uhf.TDA):
-    def gen_vind(self, mf):
-        vind, hdiag = uhf.TDA.gen_vind(self, mf)
-        def vindp(x):
-            with lib.temporary_env(mf, exxdiv=None):
-                return vind(x)
-        return vindp, hdiag
+class TDA(TDMixin):
 
-    def get_ab(self, mf=None):
-        raise NotImplementedError
+    singlet = None
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
+    init_guess = uhf.TDA.init_guess
+    kernel = uhf.TDA.kernel
+    _gen_vind = uhf.TDA.gen_vind
+    gen_vind = td_rhf.TDA.gen_vind
 
 CIS = TDA
 
 
-class TDHF(uhf.TDHF):
-    def gen_vind(self, mf):
-        vind, hdiag = uhf.TDHF.gen_vind(self, mf)
-        def vindp(x):
-            with lib.temporary_env(mf, exxdiv=None):
-                return vind(x)
-        return vindp, hdiag
+class TDHF(TDA):
 
-    def get_ab(self, mf=None):
-        raise NotImplementedError
+    singlet = None
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
+    init_guess = uhf.TDHF.init_guess
+    kernel = uhf.TDHF.kernel
+    _gen_vind = uhf.TDHF.gen_vind
+    gen_vind = td_rhf.TDA.gen_vind
 
 RPA = TDUHF = TDHF
 

@@ -7,9 +7,9 @@ Python-based Simulations of Chemistry Framework
 [![Build Status](https://github.com/pyscf/pyscf/workflows/CI/badge.svg)](https://github.com/pyscf/pyscf/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/pyscf/pyscf/branch/master/graph/badge.svg)](https://codecov.io/gh/pyscf/pyscf)
 
-2022-09-21
+2023-03-29
 
-* [Stable release 2.1.1](https://github.com/pyscf/pyscf/releases/tag/v2.1.1)
+* [Stable release 2.2.1](https://github.com/pyscf/pyscf/releases/tag/v2.2.1)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)

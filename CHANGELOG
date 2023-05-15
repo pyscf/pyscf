@@ -1,3 +1,60 @@
+PySCF 2.2.1 (2023-03-29)
+------------------------
+* Added
+  - Density fitting gradients and hessian for RSH functionals
+  - SCS-MP2 and SCS-KMP2
+  - Configurations of f-in-core ECPs
+  - ao2mo integral transformation for GHF orbitals with scalar ERIs
+  - Interface to access basis Set Exchange DB
+  - DF-UCISD
+  - Moment resolved GF-CCSD
+  - MOM (maximum overlap method) for GHF and DHF
+* Improved
+  - PBC GDF K-build performance
+  - Read cubegen for crystalline systems
+* Fixes
+  - Outdated examples
+  - Update to libcint 5.3.0 to filter warning messages produced by 5.2.0
+  - PBC density fitting CDERIArray object backward compatibility
+  - DIIS numerical instability
+  - C2v molecule orientation when symmetry is enabled
+  - The missed HF exchange in RSH functional wB97
+  - Gauge origin of Boys localization
+  - Check the root numbers during Davidson diagonalization iterations
+  - Removed hard-coded environment variable MKL_NUM_THREADS=1
+  - Conflicts in GDF cderi tensor for RSH functionals
+
+
+PySCF 2.2.0 (2023-03-09)
+------------------------
+* Added
+  - Molecular nuc grad with DF ERIs for ROHF, ROKS, CASSCF, SA-CASSCF
+  - K-point symmetry adapted crystalline orbital basis
+  - K-point symmetry for GDF, MDF, KCCSD
+  - VV10 gradients
+  - Spin density population analysis for MCSCF
+  - BCCD
+  - Cylindrical symmetry for FCI wavefunction
+  - Use a linearly independent basis in DIIS
+  - Full CI for complex integrals
+  - Maxwell-Boltzmann Velocity Distribution in BOMD
+* Improved
+  - PBC integral accuracy for GDF, MDF, FFT, AFT
+  - PBC integral accuracy of 2D system for insufficient integral grids
+  - Update Libxc to Libxc-6
+  - get_monkhorst_pack_size for numerical noise
+  - Unit recognization unified
+* Fixed
+  - MCSCF without initializing SCF
+  - Memory leaks in C kernels for CCSD(T)
+  - Fully spin-polarized UMP2, DF-UMP2, UCCSD, UCCSD(T) bugfixes
+  - numpy_helper.hermi_sum for non-contiguous array
+  - Padding and frozen orbitals bugs in KMP2
+  - PolEmbed interface and CASCI with PE
+  - Molecular density fitting hessian
+  - K-point symmetry adapted KS-DFT with SOSCF solvers
+
+
 PySCF 2.1.1 (2022-09-21)
 ------------------------
 * Added

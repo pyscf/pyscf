@@ -52,48 +52,48 @@ class KnownValues(unittest.TestCase):
                                        (0.04, 0.36, 0.405, 0.595)))
         hyb, fn_facs = dft.libxc.parse_xc('HF,')
         self.assertEqual(hyb[0], 1)
-        self.assertEqual(fn_facs, [])
+        self.assertEqual(fn_facs, ())
 
         hyb, fn_facs = dft.libxc.parse_xc('B88 - SLATER')
-        self.assertEqual(fn_facs, [(106, 1), (1, -1)])
+        self.assertEqual(fn_facs, ((106, 1), (1, -1)))
         hyb, fn_facs = dft.libxc.parse_xc('B88 -SLATER*.5')
-        self.assertEqual(fn_facs, [(106, 1), (1, -0.5)])
+        self.assertEqual(fn_facs, ((106, 1), (1, -0.5)))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP\n+0.25*B3LYP')
-        self.assertTrue(numpy.allclose(hyb, [.15, 0, 0]))
+        self.assertTrue(numpy.allclose(hyb, (.15, 0, 0)))
         hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.25*B3LYP')
         self.assertAlmostEqual(hyb, .15, 12)
 
         hyb, fn_facs = dft.libxc.parse_xc('0.6*CAM_B3LYP+0.4*B3P86')
-        self.assertTrue(numpy.allclose(hyb, [.08, 0, 0]))
+        self.assertTrue(numpy.allclose(hyb, (.08, 0, 0)))
         self.assertTrue(numpy.allclose(fn_facs,
-                                       [(433, 0.6), (1, 0.032), (106, 0.288), (132, 0.324), (7, 0.076)]))
+                                       ((433, 0.6), (1, 0.032), (106, 0.288), (132, 0.324), (7, 0.076))))
         rsh = dft.libxc.rsh_coeff('0.6*CAM_B3LYP+0.4*B3P86')
         self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.4*B3P86+0.6*CAM_B3LYP')
-        self.assertTrue(numpy.allclose(hyb, [.08, 0, 0]))
+        self.assertTrue(numpy.allclose(hyb, (.08, 0, 0)))
         self.assertTrue(numpy.allclose(fn_facs,
-                                       [(1, 0.032), (106, 0.288), (132, 0.324), (7, 0.076), (433, 0.6)]))
+                                       ((1, 0.032), (106, 0.288), (132, 0.324), (7, 0.076), (433, 0.6))))
         rsh = dft.libxc.rsh_coeff('0.4*B3P86+0.6*CAM_B3LYP')
         self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*SR-HF(0.3) + .8*HF + .22*LR_HF')
-        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+        self.assertEqual(hyb, (1.3, 1.02, 0.3))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*SR-HF + .22*LR_HF(0.3) + .8*HF')
-        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+        self.assertEqual(hyb, (1.3, 1.02, 0.3))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*SR-HF + .8*HF + .22*LR_HF(0.3)')
-        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+        self.assertEqual(hyb, (1.3, 1.02, 0.3))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*RSH(2.04;0.56;0.3) + 0.5*BP86')
-        self.assertEqual(hyb, [1.3, 1.02, 0.3])
-        self.assertEqual(fn_facs, [(106, 0.5), (132, 0.5)])
+        self.assertEqual(hyb, (1.3, 1.02, 0.3))
+        self.assertEqual(fn_facs, ((106, 0.5), (132, 0.5)))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*RSH(.3, 2.04, 0.56) + 0.5*BP86')
-        self.assertEqual(hyb, [1.3, 1.02, 0.3])
-        self.assertEqual(fn_facs, [(106, 0.5), (132, 0.5)])
+        self.assertEqual(hyb, (1.3, 1.02, 0.3))
+        self.assertEqual(fn_facs, ((106, 0.5), (132, 0.5)))
 
         self.assertRaises(ValueError, dft.libxc.parse_xc, 'SR_HF(0.3) + LR_HF(.5)')
         self.assertRaises(ValueError, dft.libxc.parse_xc, 'LR-HF(0.3) + SR-HF(.5)')
@@ -102,28 +102,28 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(hyb, 0.28, 9)
 
         hyb, fn_facs = dft.libxc.parse_xc('APBE,')
-        self.assertEqual(fn_facs, [(184, 1)])
+        self.assertEqual(fn_facs, ((184, 1),))
 
         #hyb, fn_facs = dft.libxc.parse_xc('TF,')
         #self.assertEqual(fn_facs, [(50, 1)])
 
-        ref = [(1, 1), (7, 1)]
+        ref = ((1, 1), (7, 1))
         self.assertEqual(dft.libxc.parse_xc_name('LDA,VWN'), (1,7))
         self.assertEqual(dft.libxc.parse_xc(('LDA','VWN'))[1], ref)
         self.assertEqual(dft.libxc.parse_xc((1, 7))[1], ref)
         self.assertEqual(dft.libxc.parse_xc('1, 7')[1], ref)
-        self.assertEqual(dft.libxc.parse_xc(7)[1], [(7,1)])
+        self.assertEqual(dft.libxc.parse_xc(7)[1], ((7,1),))
 
-        self.assertEqual(dft.libxc.parse_xc('M11-L')[1], [(226,1),(75,1)])
-        self.assertEqual(dft.libxc.parse_xc('M11L' )[1], [(226,1),(75,1)])
-        self.assertEqual(dft.libxc.parse_xc('M11-L,M11L' )[1], [(226,1),(75,1)])
-        self.assertEqual(dft.libxc.parse_xc('M11_L,M11-L')[1], [(226,1),(75,1)])
-        self.assertEqual(dft.libxc.parse_xc('M11L,M11_L' )[1], [(226,1),(75,1)])
+        self.assertEqual(dft.libxc.parse_xc('M11-L')[1], ((226,1),(75,1)))
+        self.assertEqual(dft.libxc.parse_xc('M11L' )[1], ((226,1),(75,1)))
+        self.assertEqual(dft.libxc.parse_xc('M11-L,M11L' )[1], ((226,1),(75,1)))
+        self.assertEqual(dft.libxc.parse_xc('M11_L,M11-L')[1], ((226,1),(75,1)))
+        self.assertEqual(dft.libxc.parse_xc('M11L,M11_L' )[1], ((226,1),(75,1)))
 
-        self.assertEqual(dft.libxc.parse_xc('Xpbe,')[1], [(123,1)])
-        self.assertEqual(dft.libxc.parse_xc('pbe,' )[1], [(101,1)])
+        self.assertEqual(dft.libxc.parse_xc('Xpbe,')[1], ((123,1),))
+        self.assertEqual(dft.libxc.parse_xc('pbe,' )[1], ((101,1),))
         hyb, fn_facs = dft.libxc.parse_xc('PBE*.4+LDA')
-        self.assertEqual(fn_facs, [(101, 0.4), (130, 0.4), (1, 1)])
+        self.assertEqual(fn_facs, ((101, 0.4), (130, 0.4), (1, 1)))
         self.assertRaises(KeyError, dft.libxc.parse_xc, 'PBE+VWN')
 
         self.assertTrue (dft.libxc.is_meta_gga('m05'))
@@ -141,6 +141,12 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(dft.libxc.is_hybrid_xc('vv10'))
         self.assertTrue (dft.libxc.is_hybrid_xc((402,'vv10')))
         self.assertTrue (dft.libxc.is_hybrid_xc(('402','vv10')))
+        self.assertTrue (dft.libxc.is_nlc('b97mv'))
+        self.assertTrue (dft.libxc.is_nlc('lc-vv10'))
+        self.assertTrue (dft.libxc.is_nlc('scanl-vv10'))
+        self.assertTrue (dft.libxc.is_nlc('b97mv+pbe'))
+        self.assertTrue (dft.libxc.is_nlc((402, 'b97mv')))
+        self.assertTrue (dft.libxc.is_nlc(('402', 'b97mv')))
 
     def test_libxc_cam_beta(self):
         rsh_tmp = (ctypes.c_double*3)()
@@ -159,8 +165,8 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(beta, 0)
 
     def test_nlc_coeff(self):
-        self.assertEqual(dft.libxc.nlc_coeff('0.5*vv10'), [5.9, 0.0093])
-        self.assertEqual(dft.libxc.nlc_coeff('pbe__vv10'), [5.9, 0.0093])
+        self.assertEqual(dft.libxc.nlc_coeff('0.5*vv10'), (((5.9, 0.0093), .5),))
+        self.assertEqual(dft.libxc.nlc_coeff('pbe+vv10'), (((5.9, 0.0093), 1),))
 
     def test_lda(self):
         e,v,f,k = dft.libxc.eval_xc('lda,', rho[0], deriv=3)
@@ -261,7 +267,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(vxc[0]), -0.7709812578936763, 7)
         self.assertAlmostEqual(float(vxc[1]), -0.0029862221286189846, 7)
 
-        self.assertEqual(dft.libxc.rsh_coeff('camb3lyp'), [0.33, 0.65, -0.46])
+        self.assertEqual(dft.libxc.rsh_coeff('camb3lyp'), (0.33, 0.65, -0.46))
 
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('RSH(0.5,0.65,-0.46) + 0.46*ITYH + .35*B88,', rho, 0, deriv=1)
@@ -275,7 +281,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(exc), -0.6359945579326314, 7)
         self.assertAlmostEqual(float(vxc[0]), -0.8712041561251518, 7)
         self.assertAlmostEqual(float(vxc[1]), -0.003911167644579979, 7)
-        self.assertEqual(dft.libxc.rsh_coeff('ityh,'), [0.2, 0.0, 0.0])
+        self.assertEqual(dft.libxc.rsh_coeff('ityh,'), (0.2, 0.0, 0.0))
 
     def test_deriv_order(self):
         self.assertTrue(dft.libxc.test_deriv_order('lda', 3, raise_error=False))
@@ -289,6 +295,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(dft.libxc.xc_type('hf'), 'HF')
         self.assertEqual(dft.libxc.xc_type(',vwn'), 'LDA')
         self.assertEqual(dft.libxc.xc_type('lda+b3lyp'), 'GGA')
+        self.assertEqual(dft.libxc.xc_type('wb97x_v'), 'GGA')
         self.assertEqual(dft.libxc.xc_type('wb97m_v'), 'MGGA')
         self.assertEqual(dft.libxc.xc_type('bp86'), 'GGA')
 

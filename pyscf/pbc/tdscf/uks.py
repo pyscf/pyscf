@@ -25,16 +25,9 @@ from pyscf.pbc.tdscf.uhf import TDHF as TDDFT
 RPA = TDUKS = TDDFT
 
 
-class CasidaTDDFT(uks.CasidaTDDFT):
-    def gen_vind(self, mf):
-        vind, hdiag = uks.CasidaTDDFT.gen_vind(self, mf)
-        def vindp(x):
-            with lib.temporary_env(mf, exxdiv=None):
-                return vind(x)
-        return vindp, hdiag
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
+class CasidaTDDFT(TDA):
+    _gen_vind = uks.TDDFTNoHybrid.gen_vind
+    gen_vind = TDA.gen_vind
 
 TDDFTNoHybrid = CasidaTDDFT
 

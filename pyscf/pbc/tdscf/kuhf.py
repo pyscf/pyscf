@@ -22,23 +22,15 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.tdscf import uhf
 from pyscf.pbc import scf
-from pyscf.pbc.tdscf.krhf import _get_e_ia, purify_krlyov_heff
+from pyscf.pbc.tdscf.krhf import KTDMixin, _get_e_ia, purify_krlyov_heff
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)
 
-class TDA(uhf.TDA):
-
+class TDA(KTDMixin):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
-
-    def __init__(self, mf):
-        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
-        assert (isinstance(mf, scf.khf.KSCF))
-        self.cell = mf.cell
-        uhf.TDA.__init__(self, mf)
-        warn_pbc2d_eri(mf)
 
     def gen_vind(self, mf):
         '''Compute Ax'''
@@ -95,9 +87,6 @@ class TDA(uhf.TDA):
             return numpy.hstack(v1s).reshape(nz,-1)
 
         return vind, hdiag
-
-    def get_ab(self, mf=None):
-        raise NotImplementedError
 
     def init_guess(self, mf, nstates=None):
         if nstates is None: nstates = self.nstates

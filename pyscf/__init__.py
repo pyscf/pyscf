@@ -27,24 +27,18 @@ We recommend the enhanced Python interpreter `IPython <http://ipython.org>`_
 and the web-based Python IDE `Ipython notebook <http://ipython.org/notebook.html>`_
 to try out the package::
 
-    >>> from pyscf import gto, scf
-    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.2', basis='cc-pvdz')
-    >>> mol.apply(scf.RHF).run()
+    >>> import pyscf
+    >>> mol = pyscf.M(atom='H 0 0 0; H 0 0 1.2', basis='cc-pvdz')
+    >>> mol.RHF().run()
     converged SCF energy = -1.06111199785749
     -1.06111199786
 
 '''
 
-__version__ = '2.1.1'
+__version__ = '2.2.1'
 
 import os
 import sys
-# Avoid too many threads being created in OMP loops.
-# See issue https://github.com/pyscf/pyscf/issues/317
-if 'OPENBLAS_NUM_THREADS' not in os.environ:
-    os.environ['OPENBLAS_NUM_THREADS'] = '1'
-if 'MKL_NUM_THREADS' not in os.environ:
-    os.environ['MKL_NUM_THREADS'] = '1'
 
 # Load modules which are developed as plugins of the namespace package
 PYSCF_EXT_PATH = os.getenv('PYSCF_EXT_PATH')
@@ -88,25 +82,15 @@ else:
                          'these plugins through the environment variable '
                          'PYSCF_EXT_PATH\n' % '\n'.join(__path__[1:]))
 
-from distutils.version import LooseVersion
 import numpy
-if LooseVersion(numpy.__version__) <= '1.8.0':
-    raise SystemError("You're using an old version of Numpy (%s). "
-                      "It is recommended to upgrade numpy to 1.8.0 or newer. \n"
-                      "You still can use all features of PySCF with the old numpy by removing this warning msg. "
-                      "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
-                      numpy.__version__)
-elif '1.16.2' <= LooseVersion(numpy.__version__) < '1.18':
-    #sys.stderr.write('Numpy 1.16 has memory leak bug  '
-    #                 'https://github.com/numpy/numpy/issues/13808\n'
-    #                 'It is recommended to downgrade to numpy 1.15 or older\n')
+if numpy.__version__[:5] in ('1.16.', '1.17.'):
+    # Numpy memory leak bug https://github.com/numpy/numpy/issues/13808
     import ctypes
     from numpy.core import _internal
     def _get_void_ptr(arr):
         simple_arr = numpy.asarray(_internal._unsafe_first_element_pointer(arr))
         c_arr = (ctypes.c_char * 0).from_buffer(simple_arr)
         return ctypes.cast(ctypes.byref(c_arr), ctypes.c_void_p)
-    # patch _get_void_ptr as a workaround to numpy issue #13808
     _internal._get_void_ptr = _get_void_ptr
 
 from pyscf import __config__
@@ -127,4 +111,4 @@ def M(**kwargs):
     else:  # Molecule
         return gto.M(**kwargs)
 
-del os, sys, LooseVersion
+del os, sys

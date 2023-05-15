@@ -60,7 +60,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     else:
         t2 = None
 
-    emp2 = 0.0
+    emp2_ss = emp2_os = 0.0
     for i in range(nocca):
         if isinstance(eris.ovov, numpy.ndarray) and eris.ovov.ndim == 4:
             # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
@@ -71,8 +71,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
         eris_ovov = eris_ovov.reshape(nvira,nocca,nvira).transpose(1,0,2)
         t2i = eris_ovov.conj()/lib.direct_sum('a+jb->jab', eia_a[i], eia_a)
-        emp2 += numpy.einsum('jab,jab', t2i, eris_ovov) * .5
-        emp2 -= numpy.einsum('jab,jba', t2i, eris_ovov) * .5
+        emp2_ss += numpy.einsum('jab,jab', t2i, eris_ovov) * .5
+        emp2_ss -= numpy.einsum('jab,jba', t2i, eris_ovov) * .5
         if with_t2:
             t2aa[i] = t2i - t2i.transpose(0,2,1)
 
@@ -84,7 +84,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
             eris_ovov = numpy.asarray(eris.ovOV[i*nvira:(i+1)*nvira])
         eris_ovov = eris_ovov.reshape(nvira,noccb,nvirb).transpose(1,0,2)
         t2i = eris_ovov.conj()/lib.direct_sum('a+jb->jab', eia_a[i], eia_b)
-        emp2 += numpy.einsum('JaB,JaB', t2i, eris_ovov)
+        emp2_os += numpy.einsum('JaB,JaB', t2i, eris_ovov)
         if with_t2:
             t2ab[i] = t2i
 
@@ -97,12 +97,16 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
             eris_ovov = numpy.asarray(eris.OVOV[i*nvirb:(i+1)*nvirb])
         eris_ovov = eris_ovov.reshape(nvirb,noccb,nvirb).transpose(1,0,2)
         t2i = eris_ovov.conj()/lib.direct_sum('a+jb->jab', eia_b[i], eia_b)
-        emp2 += numpy.einsum('jab,jab', t2i, eris_ovov) * .5
-        emp2 -= numpy.einsum('jab,jba', t2i, eris_ovov) * .5
+        emp2_ss += numpy.einsum('jab,jab', t2i, eris_ovov) * .5
+        emp2_ss -= numpy.einsum('jab,jba', t2i, eris_ovov) * .5
         if with_t2:
             t2bb[i] = t2i - t2i.transpose(0,2,1)
 
-    return emp2.real, t2
+    emp2_ss = emp2_ss.real
+    emp2_os = emp2_os.real
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
+
+    return emp2, t2
 
 def energy(mp, t2, eris):
     '''MP2 energy'''
@@ -111,14 +115,16 @@ def energy(mp, t2, eris):
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocca,nvira,nocca,nvira)
     eris_OVOV = numpy.asarray(eris.OVOV).reshape(noccb,nvirb,noccb,nvirb)
     eris_ovOV = numpy.asarray(eris.ovOV).reshape(nocca,nvira,noccb,nvirb)
-    e  = 0.25 * numpy.einsum('ijab,iajb->', t2aa, eris_ovov)
-    e -= 0.25 * numpy.einsum('ijab,ibja->', t2aa, eris_ovov)
-    e += 0.25 * numpy.einsum('ijab,iajb->', t2bb, eris_OVOV)
-    e -= 0.25 * numpy.einsum('ijab,ibja->', t2bb, eris_OVOV)
-    e +=        numpy.einsum('iJaB,iaJB->', t2ab, eris_ovOV)
+    ess  = 0.25 * numpy.einsum('ijab,iajb->', t2aa, eris_ovov)
+    ess -= 0.25 * numpy.einsum('ijab,ibja->', t2aa, eris_ovov)
+    ess += 0.25 * numpy.einsum('ijab,iajb->', t2bb, eris_OVOV)
+    ess -= 0.25 * numpy.einsum('ijab,ibja->', t2bb, eris_OVOV)
+    eos  =        numpy.einsum('iJaB,iaJB->', t2ab, eris_ovOV)
+    e    = ess + eos
     if abs(e.imag) > 1e-4:
         logger.warn(mp, 'Non-zero imaginary part found in UMP2 energy %s', e)
-    return e.real
+    e = lib.tag_array(e.real, e_corr_ss=ess.real, e_corr_os=eos.real)
+    return e
 
 def update_amps(mp, t2, eris):
     '''Update non-canonical MP2 amplitudes'''

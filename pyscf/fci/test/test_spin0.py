@@ -155,11 +155,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.80755526695538049, 7)
 
         cis = fci.direct_spin0_symm.FCISolver(mol)
-        # Test the default initial guess. It should give "0" in the results
-        cis.get_init_guess = None
-        cis.dump_flags()
-        e, c = cis.kernel(h1e, eri, 2, 2, orbsym=mf.mo_coeff.orbsym[2:4])
-        self.assertAlmostEqual(e, 0, 10)
+        cis.wfnsym = 5
+        self.assertRaises(RuntimeError,
+                          cis.kernel, h1e, eri, 2, 2, orbsym=mf.mo_coeff.orbsym[2:4])
 
     def test_gen_linkstr(self):
         sol = fci.direct_spin0.FCI(mol)

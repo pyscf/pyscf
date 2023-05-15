@@ -23,6 +23,7 @@ J-metric density fitting
 
 import copy
 import tempfile
+import contextlib
 import numpy
 import h5py
 from pyscf import lib
@@ -58,8 +59,8 @@ class DF(lib.StreamObject):
         _cderi : str or numpy array
             If _cderi is specified, the DF integral tensor will be read from
             this HDF5 file (or numpy array). When the DF integral tensor is
-            provided from the HDF5 file, it has to be stored under the dataset
-            'j3c'.
+            provided from the HDF5 file, its dataset name should be consistent
+            with DF._dataname, which is 'j3c' by default.
             The DF integral tensor :math:`V_{x,ij}` should be a 2D array in C
             (row-major) convention, where x corresponds to index of auxiliary
             basis, and the composite index ij is the orbital pair index. The
@@ -77,6 +78,7 @@ class DF(lib.StreamObject):
 
     # Store DF tensor in a format compatible to pyscf-1.1 - pyscf-1.6
     _compatible_format = getattr(__config__, 'df_df_DF_compatible_format', False)
+    _dataname = 'j3c'
 
     def __init__(self, mol, auxbasis=None):
         self.mol = mol
@@ -135,16 +137,16 @@ class DF(lib.StreamObject):
         naux = auxmol.nao_nr()
         nao_pair = nao*(nao+1)//2
 
+        is_custom_storage = isinstance(self._cderi_to_save, str)
         max_memory = self.max_memory - lib.current_memory()[0]
         int3c = mol._add_suffix('int3c2e')
         int2c = mol._add_suffix('int2c2e')
-        if (nao_pair*naux*8/1e6 < .9*max_memory and
-            not isinstance(self._cderi_to_save, str)):
+        if (nao_pair*naux*8/1e6 < .9*max_memory and not is_custom_storage):
             self._cderi = incore.cholesky_eri(mol, int3c=int3c, int2c=int2c,
                                               auxmol=auxmol,
                                               max_memory=max_memory, verbose=log)
         else:
-            if isinstance(self._cderi_to_save, str):
+            if is_custom_storage:
                 cderi = self._cderi_to_save
             else:
                 cderi = self._cderi_to_save.name
@@ -154,14 +156,14 @@ class DF(lib.StreamObject):
                 log.warn('Value of _cderi is ignored. DF integrals will be '
                          'saved in file %s .', cderi)
 
-            if self._compatible_format or isinstance(self._cderi_to_save, str):
-                outcore.cholesky_eri(mol, cderi, dataname='j3c',
+            if self._compatible_format:
+                outcore.cholesky_eri(mol, cderi, dataname=self._dataname,
                                      int3c=int3c, int2c=int2c, auxmol=auxmol,
                                      max_memory=max_memory, verbose=log)
             else:
                 # Store DF tensor in blocks. This is to reduce the
                 # initiailzation overhead
-                outcore.cholesky_eri_b(mol, cderi, dataname='j3c',
+                outcore.cholesky_eri_b(mol, cderi, dataname=self._dataname,
                                        int3c=int3c, int2c=int2c, auxmol=auxmol,
                                        max_memory=max_memory, verbose=log)
             self._cderi = cderi
@@ -177,8 +179,6 @@ class DF(lib.StreamObject):
             self.mol = mol
         self.auxmol = None
         self._cderi = None
-        if not isinstance(self._cderi_to_save, str):
-            self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self._vjopt = None
         self._rsh_df = {}
         return self
@@ -189,7 +189,7 @@ class DF(lib.StreamObject):
         if blksize is None:
             blksize = self.blockdim
 
-        with addons.load(self._cderi, 'j3c') as feri:
+        with addons.load(self._cderi, self._dataname) as feri:
             if isinstance(feri, numpy.ndarray):
                 naoaux = feri.shape[0]
                 for b0, b1 in self.prange(0, naoaux, blksize):
@@ -222,7 +222,7 @@ class DF(lib.StreamObject):
         # object when self._cderi is provided.
         if self._cderi is None:
             self.build()
-        with addons.load(self._cderi, 'j3c') as feri:
+        with addons.load(self._cderi, self._dataname) as feri:
             if isinstance(feri, h5py.Group):
                 return feri['0'].shape[0]
             else:
@@ -235,14 +235,7 @@ class DF(lib.StreamObject):
             return df_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
 
         # A temporary treatment for RSH-DF integrals
-        key = '%.6f' % omega
-        if key in self._rsh_df:
-            rsh_df = self._rsh_df[key]
-        else:
-            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
-            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
-
-        with rsh_df.mol.with_range_coulomb(omega):
+        with self.range_coulomb(omega) as rsh_df:
             return df_jk.get_jk(rsh_df, dm, hermi, with_j, with_k, direct_scf_tol)
 
     def get_eri(self):
@@ -274,6 +267,40 @@ class DF(lib.StreamObject):
         return mo_eri
     get_mo_eri = ao2mo
 
+    @contextlib.contextmanager
+    def range_coulomb(self, omega):
+        '''Creates a temporary density fitting object for RSH-DF integrals.
+        In this context, only LR or SR integrals for mol and auxmol are computed.
+        '''
+        key = '%.6f' % omega
+        if key in self._rsh_df:
+            rsh_df = self._rsh_df[key]
+        else:
+            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            rsh_df._dataname = f'j3c/lr/{key}'
+            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
+
+        mol = self.mol
+        auxmol = self.auxmol
+
+        mol_omega = mol.omega
+        mol.omega = omega
+        auxmol_omega = None
+        if auxmol is not None:
+            auxmol_omega = auxmol.omega
+            auxmol.omega = omega
+
+        assert rsh_df.mol.omega == omega
+        if rsh_df.auxmol is not None:
+            assert rsh_df.auxmol.omega == omega
+
+        try:
+            yield rsh_df
+        finally:
+            mol.omega = mol_omega
+            if auxmol_omega is not None:
+                auxmol.omega = auxmol_omega
+
 GDF = DF
 
 
@@ -302,9 +329,9 @@ class DF4C(DF):
             self.build()
         if blksize is None:
             blksize = self.blockdim
-        with addons.load(self._cderi[0], 'j3c') as ferill:
+        with addons.load(self._cderi[0], self._dataname) as ferill:
             naoaux = ferill.shape[0]
-            with addons.load(self._cderi[1], 'j3c') as feriss: # python2.6 not support multiple with
+            with addons.load(self._cderi[1], self._dataname) as feriss: # python2.6 not support multiple with
                 for b0, b1 in self.prange(0, naoaux, blksize):
                     erill = numpy.asarray(ferill[b0:b1], order='C')
                     eriss = numpy.asarray(feriss[b0:b1], order='C')
@@ -316,15 +343,7 @@ class DF4C(DF):
         if omega is None:
             return df_jk.r_get_jk(self, dm, hermi, with_j, with_k)
 
-        # A temporary treatment for RSH-DF integrals
-        key = '%.6f' % omega
-        if key in self._rsh_df:
-            rsh_df = self._rsh_df[key]
-        else:
-            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
-            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
-
-        with rsh_df.mol.with_range_coulomb(omega):
+        with self.range_coulomb(omega) as rsh_df:
             return df_jk.r_get_jk(rsh_df, dm, hermi, with_j, with_k)
 
     def ao2mo(self, mo_coeffs):

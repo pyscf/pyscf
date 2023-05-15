@@ -41,9 +41,6 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
     mol = mf.mol
-    if not mol.symmetry:
-        return uhf.analyze(mf, verbose, with_meta_lowdin, **kwargs)
-
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
@@ -193,8 +190,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''
     mol = mf.mol
     if not mol.symmetry:
-        return uhf.canonicalize(mf, mo_coeff, mo_occ, fock)
-
+        raise RuntimeError('mol.symmetry not enabled')
     mo_occ = numpy.asarray(mo_occ)
     assert (mo_occ.ndim == 2)
     if fock is None:
@@ -326,15 +322,13 @@ class SymAdaptedUHF(uhf.UHF):
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
-        if mol.symmetry:
-            hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
+        if not mol.symmetry:
+            raise RuntimeError('mol.symmetry not enabled')
+        hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         return uhf.UHF.build(self, mol)
 
     def eig(self, h, s):
         mol = self.mol
-        if not mol.symmetry:
-            return self._eigh(h, s)
-
         nirrep = mol.symm_orb.__len__()
         s = symm.symmetrize_matrix(s, mol.symm_orb)
         ha = symm.symmetrize_matrix(h[0], mol.symm_orb)
@@ -391,17 +385,16 @@ class SymAdaptedUHF(uhf.UHF):
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         g = uhf.UHF.get_grad(self, mo_coeff, mo_occ, fock)
-        if self.mol.symmetry:
-            occidxa = mo_occ[0] > 0
-            occidxb = mo_occ[1] > 0
-            viridxa = ~occidxa
-            viridxb = ~occidxb
-            orbsyma, orbsymb = self.get_orbsym(mo_coeff, self.get_ovlp())
-            sym_forbida = orbsyma[viridxa].reshape(-1,1) != orbsyma[occidxa]
-            sym_forbidb = orbsymb[viridxb].reshape(-1,1) != orbsymb[occidxb]
-            sym_forbid = numpy.hstack((sym_forbida.ravel(),
-                                       sym_forbidb.ravel()))
-            g[sym_forbid] = 0
+        occidxa = mo_occ[0] > 0
+        occidxb = mo_occ[1] > 0
+        viridxa = ~occidxa
+        viridxb = ~occidxb
+        orbsyma, orbsymb = self.get_orbsym(mo_coeff)
+        sym_forbida = orbsyma[viridxa].reshape(-1,1) != orbsyma[occidxa]
+        sym_forbidb = orbsymb[viridxb].reshape(-1,1) != orbsymb[occidxb]
+        sym_forbid = numpy.hstack((sym_forbida.ravel(),
+                                   sym_forbidb.ravel()))
+        g[sym_forbid] = 0
         return g
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
@@ -411,9 +404,9 @@ class SymAdaptedUHF(uhf.UHF):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         if not mol.symmetry:
-            return uhf.UHF.get_occ(self, mo_energy, mo_coeff)
+            raise RuntimeError('mol.symmetry not enabled')
 
-        orbsyma, orbsymb = self.get_orbsym(mo_coeff, self.get_ovlp())
+        orbsyma, orbsymb = self.get_orbsym(mo_coeff)
         mo_occ = numpy.zeros_like(mo_energy)
         idx_ea_left = []
         idx_eb_left = []
@@ -516,7 +509,7 @@ class SymAdaptedUHF(uhf.UHF):
         idxb = numpy.hstack((idxb[self.mo_occ[1]> 0][ob_sort],
                              idxb[self.mo_occ[1]==0][vb_sort]))
         self.mo_energy = (ea[idxa], eb[idxb])
-        orbsyma, orbsymb = self.get_orbsym(self.mo_coeff, self.get_ovlp())
+        orbsyma, orbsymb = self.get_orbsym(self.mo_coeff)
         orbsyma = orbsyma[idxa]
         orbsymb = orbsymb[idxb]
         degen_a = degen_b = None
@@ -558,6 +551,8 @@ class SymAdaptedUHF(uhf.UHF):
     def get_orbsym(self, mo_coeff=None, s=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
+        if getattr(mo_coeff, 'orbsym', None) is not None:
+            return mo_coeff.orbsym
         if s is None:
             s = self.get_ovlp()
         return get_orbsym(self.mol, mo_coeff, s)

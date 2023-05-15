@@ -106,6 +106,11 @@ class KnownValues(unittest.TestCase):
         uhf.conv_tol = 1e-11
         self.assertAlmostEqual(uhf.scf(), -75.983210886950, 9)
 
+    def test_nr_df_ghf(self):
+        mf = mol.GHF().density_fit(auxbasis='weigend')
+        mf.conv_tol = 1e-11
+        self.assertAlmostEqual(mf.scf(), -75.983210886950, 9)
+
     def test_nr_rhf_no_mem(self):
         rhf = scf.RHF(mol)
         rhf.conv_tol = 1e-11

@@ -26,7 +26,7 @@ mc.kernel()
 
 # Output all determinants coefficients
 print('   det-alpha,    det-beta,    CI coefficients')
-occslst = fci.cistring._gen_occslst(range(ncas), nelec//2)
+occslst = fci.cistring.gen_occslst(range(ncas), nelec//2)
 for i,occsa in enumerate(occslst):
     for j,occsb in enumerate(occslst):
         print('   %s       %s      %.12f' % (occsa, occsb, mc.ci[i,j]))
