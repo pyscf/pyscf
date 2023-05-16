@@ -399,7 +399,9 @@ class KnownValues(unittest.TestCase):
         myhf_s = scf.ROHF(mol)
         myhf_s = pscf.addons.smearing_(myhf_s, sigma=0.01, method='gaussian', fix_spin=True)
         myhf_s.kernel()
-        self.assertAlmostEqual(myhf_s.e_tot, -242.4828, 4)
+        # macos py3.7 CI -242.4828982467762
+        # linux py3.11 CI -242.48289824670388
+        self.assertAlmostEqual(myhf_s.e_tot, -242.482898246, 6)
         self.assertAlmostEqual(myhf_s.entropy, 0.45197, 4)
         myhf2 = scf.ROHF(mol)
         myhf2.max_cycle = 600
