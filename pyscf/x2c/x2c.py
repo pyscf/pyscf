@@ -31,7 +31,7 @@ from pyscf import __config__
 
 LINEAR_DEP_THRESHOLD = 1e-9
 
-class X2CHelperMixin(lib.StreamObject):
+class X2CHelperBase(lib.StreamObject):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
@@ -270,7 +270,7 @@ class X2CHelperMixin(lib.StreamObject):
         self.mol = mol
         return self
 
-class SpinorX2CHelper(X2CHelperMixin):
+class SpinorX2CHelper(X2CHelperBase):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
@@ -278,7 +278,7 @@ class SpinorX2CHelper(X2CHelperMixin):
 
 X2C = SpinorX2CHelper
 
-class SpinOrbitalX2CHelper(X2CHelperMixin):
+class SpinOrbitalX2CHelper(X2CHelperBase):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the Gaussian type spin-orbital basis (as the spin-orbital basis in GHF)
     '''
@@ -332,7 +332,7 @@ class SpinOrbitalX2CHelper(X2CHelperMixin):
             h1 = reduce(lib.dot, (contr_coeff.T, h1, contr_coeff))
         return h1
 
-    @lib.with_doc(X2CHelperMixin.picture_change.__doc__)
+    @lib.with_doc(X2CHelperBase.picture_change.__doc__)
     def picture_change(self, even_operator=(None, None), odd_operator=None):
         mol = self.mol
         xmol, c = self.get_xmol(mol)

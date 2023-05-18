@@ -124,7 +124,7 @@ def get_coulomb_hf(mol, dm, level='SSSS'):
 get_veff = get_coulomb_hf
 
 
-class GradientsMixin(rhf_grad.GradientsMixin):
+class GradientsBase(rhf_grad.GradientsBase):
     '''
     Basic nuclear gradient functions for 4C relativistic methods
     '''
@@ -158,13 +158,13 @@ class GradientsMixin(rhf_grad.GradientsMixin):
         return get_ovlp(mol)
 
 
-class Gradients(GradientsMixin):
+class Gradients(GradientsBase):
     '''Unrestricted Dirac-Hartree-Fock gradients'''
 
     _keys = set(['level'])
 
     def __init__(self, scf_method):
-        GradientsMixin.__init__(self, scf_method)
+        GradientsBase.__init__(self, scf_method)
         if scf_method.with_ssss:
             self.level = 'SSSS'
         else:

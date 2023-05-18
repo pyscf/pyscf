@@ -155,7 +155,7 @@ class SFX2C1E_SCF(x2c._X2C_SCF):
         return hf.SCF._transfer_attrs_(self, dst)
 
 
-class SpinFreeX2CHelper(x2c.X2CHelperMixin):
+class SpinFreeX2CHelper(x2c.X2CHelperBase):
     '''1-component X2c (spin-free part only)
     '''
     def get_hcore(self, mol=None):

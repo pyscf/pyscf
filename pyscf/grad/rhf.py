@@ -269,7 +269,7 @@ class SCF_GradScanner(lib.GradScanner):
         return e_tot, de
 
 
-class GradientsMixin(lib.StreamObject):
+class GradientsBase(lib.StreamObject):
     '''
     Basic nuclear gradient functions for non-relativistic methods
     '''
@@ -437,7 +437,11 @@ class GradientsMixin(lib.StreamObject):
         to be split into alpha,beta in DF-ROHF subclass'''
         return lib.tag_array (dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
-class Gradients(GradientsMixin):
+# export the symbol GradientsMixin for backward compatibility.
+# GradientsMixin should be dropped in the future.
+GradientsMixin = GradientsBase
+
+class Gradients(GradientsBase):
     '''Non-relativistic restricted Hartree-Fock gradients'''
 
     def get_veff(self, mol=None, dm=None):
