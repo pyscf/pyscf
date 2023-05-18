@@ -116,7 +116,7 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
     return proj
 
 
-class PipekMezey(boys.Boys):
+class PipekMezey(boys.OrbitalLocalizer):
     '''The Pipek-Mezey localization optimizer that maximizes the orbital
     population
 
@@ -189,13 +189,13 @@ class PipekMezey(boys.Boys):
     _keys = set(['pop_method', 'conv_tol', 'exponent'])
 
     def __init__(self, mol, mo_coeff=None, mf=None, pop_method=None):
-        boys.Boys.__init__(self, mol, mo_coeff)
+        boys.OrbitalLocalizer.__init__(self, mol, mo_coeff)
         self._scf = mf
         if pop_method is not None:
             self.pop_method = pop_method
 
     def dump_flags(self, verbose=None):
-        boys.Boys.dump_flags(self, verbose)
+        boys.OrbitalLocalizer.dump_flags(self, verbose)
         logger.info(self, 'pop_method = %s',self.pop_method)
 
     def gen_g_hop(self, u):

@@ -660,6 +660,12 @@ class StreamObject(object):
             self._keys = keys
         return self
 
+    @classmethod
+    def dir_attributes(cls):
+        '''Returns all attributes defined in class'''
+        return {key for key, val in vars(cls).items()
+                if not (key.startswith('__') or callable(val))}
+
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
     '''Check misinput of class attributes, check whether a class method is
