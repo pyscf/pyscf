@@ -457,19 +457,6 @@ class KSCF(pbchf.SCF):
         self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'])
 
     @property
-    def kpts(self):
-        if 'kpts' in self.__dict__:
-            # To handle the attribute kpt loaded from chkfile
-            self.kpts = self.__dict__.pop('kpts')
-        return self.with_df.kpts
-
-    @kpts.setter
-    def kpts(self, x):
-        self.with_df.kpts = np.reshape(x, (-1,3))
-        if self.rsjk:
-            self.rsjk.kpts = self.with_df.kpts
-
-    @property
     def mo_energy_kpts(self):
         return self.mo_energy
 
@@ -488,11 +475,6 @@ class KSCF(pbchf.SCF):
         logger.info(self, 'N kpts = %d', len(self.kpts))
         logger.debug(self, 'kpts = %s', self.kpts)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
-        # "vcut_ws" precomputing is triggered by pbc.tools.pbc.get_coulG
-        #if self.exxdiv == 'vcut_ws':
-        #    if self.exx_built is False:
-        #        self.precompute_exx()
-        #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
         cell = self.cell
         if ((cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum') and
             isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
@@ -511,29 +493,6 @@ class KSCF(pbchf.SCF):
         if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
             self.with_df.dump_flags(verbose)
-        return self
-
-    def build(self, cell=None):
-        if cell is None:
-            cell = self.cell
-        #if self.exxdiv == 'vcut_ws':
-        #    self.precompute_exx()
-
-        if 'kpts' in self.__dict__:
-            # To handle the attribute kpts loaded from chkfile
-            self.kpts = self.__dict__.pop('kpts')
-
-        if self.rsjk:
-            if not np.all(self.rsjk.kpts == self.kpts):
-                self.rsjk = self.rsjk.__class__(cell, self.kpts)
-
-        # Let df.build() be called by get_jk function later on needs.
-        # DFT objects may need to initiailze df with different paramters.
-        #if self.with_df:
-        #    self.with_df.build()
-
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
         return self
 
     def get_init_guess(self, cell=None, key='minao'):
@@ -689,42 +648,6 @@ class KSCF(pbchf.SCF):
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
-
-    def jk_method(self, J='FFTDF', K=None):
-        '''
-        Set up the schemes to evaluate Coulomb and exchange matrix
-
-        FFTDF: planewave density fitting using Fast Fourier Transform
-        AFTDF: planewave density fitting using analytic Fourier Transform
-        GDF: Gaussian density fitting
-        MDF: Gaussian and planewave mix density fitting
-        RS: range-separation JK builder
-        RSDF: range-separation density fitting
-        '''
-        if K is None:
-            K = J
-
-        if J != K:
-            raise NotImplementedError('J != K')
-
-        if 'DF' in J or 'DF' in K:
-            if 'DF' in J and 'DF' in K:
-                assert J == K
-            else:
-                df_method = J if 'DF' in J else K
-                self.with_df = getattr(df, df_method)(self.cell, self.kpts)
-
-        if 'RS' in J or 'RS' in K:
-            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpts)
-            self.rsjk.verbose = self.verbose
-
-        # For nuclear attraction
-        if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
-            self.with_df = df.GDF(self.cell, self.kpts)
-
-        nuc = self.with_df.__class__.__name__
-        logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
-        return self
 
     def newton(self):
         from pyscf.pbc.scf import newton_ah

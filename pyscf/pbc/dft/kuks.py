@@ -90,12 +90,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vxc += vj
     else:
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-        if getattr(ks.with_df, '_j_only', False) and nkpts > 1: # for GDF and MDF
-            ks.with_df._j_only = False
-            if ks.with_df._cderi is not None:
-                logger.warn(ks, 'df.j_only cannot be used with hybrid '
-                            'functional. Rebuild cderi')
-                ks.with_df.build()
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vj = vj[0] + vj[1]
         vk *= hyb

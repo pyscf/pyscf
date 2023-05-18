@@ -208,14 +208,38 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         self.nlcgrids.reset(cell)
         return self
 
+    def build(self, cell=None):
+        # To handle the attribute kpt or kpts loaded from chkfile
+        if 'kpts' in self.__dict__:
+            self.kpts = self.__dict__.pop('kpts')
+        elif 'kpt' in self.__dict__:
+            self.kpt = self.__dict__.pop('kpt')
+
+        kpts = self.kpts
+        if self.rsjk:
+            if not np.all(self.rsjk.kpts == self.kpt):
+                self.rsjk = self.rsjk.__class__(cell, kpts)
+
+        # for GDF and MDF
+        with_df = self.with_df
+        if (self._numint.libxc.is_hybrid_xc(self.xc) and
+            len(kpts) > 1 and getattr(with_df, '_j_only', False)):
+            logger.warn(self, 'df.j_only cannot be used with hybrid functional')
+            self.with_df._j_only = False
+            self.with_df.reset()
+
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return self
+
+    @lib.with_doc(pbchf.SCF.jk_method.__doc__)
     def jk_method(self, J='FFTDF', K=None):
         if K is None:
             K = J
         if (('RS' in J or 'RS' in K) and
             not isinstance(self.grids, gen_grid.BeckeGrids)):
             self.grids = gen_grid.BeckeGrids(self.cell)
-        super().jk_method(J, K)
-        return self
+        return pbchf.SCF.jk_method(self, J, K)
 
     def to_rks(self, xc=None):
         '''Convert the input mean-field object to a RKS/ROKS object.

@@ -674,7 +674,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             ni = self._to_numint1c()
             n, exc, v = ni.nr_uks(mol, grids, xc_code, dm1, relativity,
                                   hermi, max_memory, verbose)
-            vmat = np.zeros(dms.shape, dtype=np.result_type(*v))
+            vmat = np.zeros_like(dms)
             vmat[...,:nao,:nao] = v[0]
             vmat[...,nao:,nao:] = v[1]
         return n.sum(), exc, vmat
@@ -720,7 +720,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             ni = self._to_numint1c()
             vmat = ni.nr_uks_fxc(mol, grids, xc_code, dm0, dm1, relativity,
                                  hermi, rho0, vxc, fxc, max_memory, verbose)
-            fxcmat = np.zeros(dms.shape, dtype=np.result_type(*vmat))
+            fxcmat = np.zeros_like(dms)
             fxcmat[...,:nao,:nao] = vmat[0]
             fxcmat[...,nao:,nao:] = vmat[1]
         return fxcmat

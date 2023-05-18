@@ -533,23 +533,46 @@ class SCF(mol_hf.SCF):
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
-        self.with_df.kpts = np.reshape(x, (-1, 3))
+        self.with_df.kpts = np.reshape(x, (1, 3))
+        if self.rsjk:
+            self.rsjk.kpts = self.with_df.kpts
+
+    @property
+    def kpts(self):
+        if 'kpts' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpts = self.__dict__.pop('kpts')
+        return self.with_df.kpts
+    @kpts.setter
+    def kpts(self, x):
+        self.with_df.kpts = np.reshape(x, (-1,3))
         if self.rsjk:
             self.rsjk.kpts = self.with_df.kpts
 
     def build(self, cell=None):
-        if 'kpt' in self.__dict__:
-            # To handle the attribute kpt loaded from chkfile
+        # To handle the attribute kpt or kpts loaded from chkfile
+        if 'kpts' in self.__dict__:
+            self.kpts = self.__dict__.pop('kpts')
+        elif 'kpt' in self.__dict__:
             self.kpt = self.__dict__.pop('kpt')
 
+        # "vcut_ws" precomputing is triggered by pbc.tools.pbc.get_coulG
+        #if self.exxdiv == 'vcut_ws':
+        #    if self.exx_built is False:
+        #        self.precompute_exx()
+        #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
+
+        kpts = self.kpts
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpt):
-                self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
+                self.rsjk = self.rsjk.__class__(cell, kpts)
 
-        # Let df.build() be called by get_jk function later on needs.
-        # DFT objects may need to initiailze df with different paramters.
-        #if self.with_df:
-        #    self.with_df.build()
+        # for GDF and MDF
+        with_df = self.with_df
+        if len(kpts) > 1 and getattr(with_df, '_j_only', False):
+            logger.warn(self, 'df.j_only cannot be used with k-point HF')
+            with_df._j_only = False
+            with_df.reset()
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -827,17 +850,15 @@ class SCF(mol_hf.SCF):
                 assert J == K
             else:
                 df_method = J if 'DF' in J else K
-                self.with_df = getattr(df, df_method)(self.cell, self.kpt)
+                self.with_df = getattr(df, df_method)(self.cell, self.kpts)
 
         if 'RS' in J or 'RS' in K:
-            if not gamma_point(self.kpt):
-                raise NotImplementedError('Single k-point must be gamma point')
-            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpt)
+            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpts)
             self.rsjk.verbose = self.verbose
 
         # For nuclear attraction
         if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
-            self.with_df = df.GDF(self.cell, self.kpt)
+            self.with_df = df.GDF(self.cell, self.kpts)
 
         nuc = self.with_df.__class__.__name__
         logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
