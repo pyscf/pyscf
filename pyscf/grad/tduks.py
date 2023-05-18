@@ -26,7 +26,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.grad import tdrhf as tdrhf_grad
-from pyscf.grad import rks as rks_grad
+from pyscf.grad import tdrks as tdrks_grad
 from pyscf.scf import ucphf
 
 
@@ -319,122 +319,54 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
     else:
         k1ao = None
 
-    if xctype == 'LDA':
-        def lda_sum_(vmat, ao, wv, mask):
-            aow = numint._scale_ao(ao[0], wv)
-            for k in range(4):
-                vmat[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
-
-        ao_deriv = 1
-        for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            rho = (ni.eval_rho2(mol, ao[0], mo_coeff[0], mo_occ[0], mask, xctype),
-                   ni.eval_rho2(mol, ao[0], mo_coeff[1], mo_occ[1], mask, xctype))
-            vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 1, deriv=deriv)[1:]
-
-            u_u, u_d, d_d = fxc[0].T * weight
-            rho1a = ni.eval_rho(mol, ao[0], dmvo[0], mask, xctype, hermi=1)
-            rho1b = ni.eval_rho(mol, ao[0], dmvo[1], mask, xctype, hermi=1)
-            lda_sum_(f1vo[0], ao, u_u*rho1a+u_d*rho1b, mask)
-            lda_sum_(f1vo[1], ao, u_d*rho1a+d_d*rho1b, mask)
-            if dmoo is not None:
-                rho2a = ni.eval_rho(mol, ao[0], dmoo[0], mask, xctype, hermi=1)
-                rho2b = ni.eval_rho(mol, ao[0], dmoo[1], mask, xctype, hermi=1)
-                lda_sum_(f1oo[0], ao, u_u*rho2a+u_d*rho2b, mask)
-                lda_sum_(f1oo[1], ao, u_d*rho2a+d_d*rho2b, mask)
-            if with_vxc:
-                vrho = vxc[0].T * weight
-                lda_sum_(v1ao[0], ao, vrho[0], mask)
-                lda_sum_(v1ao[1], ao, vrho[1], mask)
-            if with_kxc:
-                u_u_u, u_u_d, u_d_d, d_d_d = kxc[0].T * weight
-                lda_sum_(k1ao[0], ao, u_u_u*rho1a*rho1a+u_u_d*rho1a*rho1b*2+u_d_d*rho1b*rho1b, mask)
-                lda_sum_(k1ao[1], ao, u_u_d*rho1a*rho1a+u_d_d*rho1a*rho1b*2+d_d_d*rho1b*rho1b, mask)
-
+    if xctype == 'HF':
+        return f1vo, f1oo, v1ao, k1ao
+    elif xctype == 'LDA':
+        fmat_, ao_deriv = tdrks_grad._lda_eval_mat_, 1
     elif xctype == 'GGA':
-        def gga_sum_(vmat, ao, wv, mask):
-            aow = numint._scale_ao(ao[:4], wv[:4])
-            tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
-            vmat[0] += tmp + tmp.T
-            rks_grad._gga_grad_sum_(vmat[1:], mol, ao, wv, mask, ao_loc)
-        ao_deriv = 2
-        for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            rho = (ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype),
-                   ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
-            vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 1, deriv=deriv)[1:]
-
-            rho1 = (ni.eval_rho(mol, ao, dmvo[0], mask, xctype, hermi=1),
-                    ni.eval_rho(mol, ao, dmvo[1], mask, xctype, hermi=1))
-            wv = numint._uks_gga_wv1(rho, rho1, vxc, fxc, weight)
-            gga_sum_(f1vo[0], ao, wv[0], mask)
-            gga_sum_(f1vo[1], ao, wv[1], mask)
-
-            if dmoo is not None:
-                rho2 = (ni.eval_rho(mol, ao, dmoo[0], mask, xctype, hermi=1),
-                        ni.eval_rho(mol, ao, dmoo[1], mask, xctype, hermi=1))
-                wv = numint._uks_gga_wv1(rho, rho2, vxc, fxc, weight)
-                gga_sum_(f1oo[0], ao, wv[0], mask)
-                gga_sum_(f1oo[1], ao, wv[1], mask)
-            if with_vxc:
-                wv = numint._uks_gga_wv0(rho, vxc, weight)
-                gga_sum_(v1ao[0], ao, wv[0], mask)
-                gga_sum_(v1ao[1], ao, wv[1], mask)
-            if with_kxc:
-                wv = numint._uks_gga_wv2(rho, rho1, fxc, kxc, weight)
-                gga_sum_(k1ao[0], ao, wv[0], mask)
-                gga_sum_(k1ao[1], ao, wv[1], mask)
-            vxc = fxc = kxc = rho = rho1 = None
-
+        fmat_, ao_deriv = tdrks_grad._gga_eval_mat_, 2
     elif xctype == 'MGGA':
-        logger.warn(mol, 'TD-MGGA gradients may be incorrect.')
-        def mgga_sum_(vmat, ao, wv, mask):
-            aow = numint._scale_ao(ao[:4], wv[:4])
-            tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
-            aow = numint._scale_ao(ao[1], wv[5], aow)
-            tmp += numint._dot_ao_ao(mol, ao[1], aow, mask, shls_slice, ao_loc)
-            aow = numint._scale_ao(ao[2], wv[5], aow)
-            tmp += numint._dot_ao_ao(mol, ao[2], aow, mask, shls_slice, ao_loc)
-            aow = numint._scale_ao(ao[3], wv[5], aow)
-            tmp += numint._dot_ao_ao(mol, ao[3], aow, mask, shls_slice, ao_loc)
-            vmat[0] += tmp + tmp.T
-
-            rks_grad._gga_grad_sum_(vmat[1:], mol, ao, wv[:4], mask, ao_loc)
-            rks_grad._tau_grad_dot_(vmat[1:], mol, ao, wv[5]*2, mask, ao_loc, True)
-
-        ao_deriv = 2
-        for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            rho = (ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype),
-                   ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
-            vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 1, deriv=deriv)[1:]
-
-            rho1 = (ni.eval_rho(mol, ao, dmvo[0], mask, xctype, hermi=1),
-                    ni.eval_rho(mol, ao, dmvo[1], mask, xctype, hermi=1))
-            wv = numint._uks_mgga_wv1(rho, rho1, vxc, fxc, weight)
-            mgga_sum_(f1vo[0], ao, wv[0], mask)
-            mgga_sum_(f1vo[1], ao, wv[1], mask)
-
-            if dmoo is not None:
-                rho2 = (ni.eval_rho(mol, ao, dmoo[0], mask, xctype, hermi=1),
-                        ni.eval_rho(mol, ao, dmoo[1], mask, xctype, hermi=1))
-                wv = numint._uks_mgga_wv1(rho, rho2, vxc, fxc, weight)
-                mgga_sum_(f1oo[0], ao, wv[0], mask)
-                mgga_sum_(f1oo[1], ao, wv[1], mask)
-            if with_vxc:
-                wv = numint._uks_mgga_wv0(rho, vxc, weight)
-                mgga_sum_(v1ao[0], ao, wv[0], mask)
-                mgga_sum_(v1ao[1], ao, wv[1], mask)
-            if with_kxc:
-                wv = numint._uks_mgga_wv2(rho, rho1, fxc, kxc, weight)
-                mgga_sum_(k1ao[0], ao, wv[0], mask)
-                mgga_sum_(k1ao[1], ao, wv[1], mask)
-            vxc = fxc = kxc = rho = rho1 = None
-
-    elif xctype == 'HF':
-        pass
+        fmat_, ao_deriv = tdrks_grad._mgga_eval_mat_, 2
+        logger.warn(td_grad, 'TDUKS-MGGA Gradients may be inaccurate due to grids response')
     else:
         raise NotImplementedError(f'td-uks for functional {xc_code}')
+
+    for ao, mask, weight, coords \
+            in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+        if xctype == 'LDA':
+            ao0 = ao[0]
+        else:
+            ao0 = ao
+        rho = (ni.eval_rho2(mol, ao0, mo_coeff[0], mo_occ[0], mask, xctype, with_lapl=False),
+               ni.eval_rho2(mol, ao0, mo_coeff[1], mo_occ[1], mask, xctype, with_lapl=False))
+        vxc, fxc, kxc = ni.eval_xc_eff(xc_code, rho, deriv, xctype=xctype)[1:]
+
+        rho1 = numpy.asarray((
+            ni.eval_rho(mol, ao0, dmvo[0], mask, xctype, hermi=1, with_lapl=False),
+            ni.eval_rho(mol, ao0, dmvo[1], mask, xctype, hermi=1, with_lapl=False)))
+        if xctype == 'LDA':
+            rho1 = rho1[:,numpy.newaxis]
+        wv = numpy.einsum('axg,axbyg,g->byg', rho1, fxc, weight)
+        fmat_(mol, f1vo[0], ao, wv[0], mask, shls_slice, ao_loc)
+        fmat_(mol, f1vo[1], ao, wv[1], mask, shls_slice, ao_loc)
+
+        if dmoo is not None:
+            rho2 = numpy.asarray((
+                ni.eval_rho(mol, ao0, dmoo[0], mask, xctype, hermi=1, with_lapl=False),
+                ni.eval_rho(mol, ao0, dmoo[1], mask, xctype, hermi=1, with_lapl=False)))
+            if xctype == 'LDA':
+                rho2 = rho2[:,numpy.newaxis]
+            wv = numpy.einsum('axg,axbyg,g->byg', rho2, fxc, weight)
+            fmat_(mol, f1oo[0], ao, wv[0], mask, shls_slice, ao_loc)
+            fmat_(mol, f1oo[1], ao, wv[1], mask, shls_slice, ao_loc)
+        if with_vxc:
+            wv = vxc * weight
+            fmat_(mol, v1ao[0], ao, wv[0], mask, shls_slice, ao_loc)
+            fmat_(mol, v1ao[1], ao, wv[1], mask, shls_slice, ao_loc)
+        if with_kxc:
+            wv = numpy.einsum('axg,byg,axbyczg,g->czg', rho1, rho1, kxc, weight)
+            fmat_(mol, k1ao[0], ao, wv[0], mask, shls_slice, ao_loc)
+            fmat_(mol, k1ao[1], ao, wv[1], mask, shls_slice, ao_loc)
 
     f1vo[:,1:] *= -1
     if f1oo is not None: f1oo[:,1:] *= -1

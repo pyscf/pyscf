@@ -26,7 +26,7 @@ import ctypes
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import _vhf
+from pyscf.scf import hf, _vhf
 from pyscf.gto.mole import is_au
 
 
@@ -255,14 +255,15 @@ def as_scanner(mf_grad):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            self.reset(mol)
             mf_scanner = self.base
             e_tot = mf_scanner(mol)
-            self.mol = mol
 
-            # If second integration grids are created for RKS and UKS
-            # gradients
-            if getattr(self, 'grids', None):
-                self.grids.reset(mol)
+            if isinstance(mf_scanner, hf.KohnShamDFT):
+                if getattr(self, 'grids', None):
+                    self.grids.reset(mol)
+                if getattr(self, 'nlcgrids', None):
+                    self.nlcgrids.reset(mol)
 
             de = self.kernel(**kwargs)
             return e_tot, de
@@ -299,6 +300,12 @@ class GradientsMixin(lib.StreamObject):
             log.info('unit = Eh/Bohr')
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
+        return self
+
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self.base.reset(mol)
         return self
 
     def get_hcore(self, mol=None):

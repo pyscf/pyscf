@@ -133,7 +133,7 @@ class AtomSphAverageRHF(hf.RHF):
         symb = mol.atom_symbol(0)
 
         nelec_ecp = mol.atom_nelec_core(0)
-        coreshl = gto.ecp.core_configuration(nelec_ecp)
+        coreshl = gto.ecp.core_configuration(nelec_ecp, atom_symbol=gto.mole._std_symbol(symb))
 
         occ = []
         for l in range(param.L_MAX):
@@ -147,11 +147,12 @@ class AtomSphAverageRHF(hf.RHF):
 
                 logger.debug1(self, 'l = %d  occ = %d + %.4g', l, n2occ, frac)
 
-                occ_l = numpy.zeros(nbas_l)
-                occ_l[:n2occ] = 2
-                if frac > 0:
-                    occ_l[n2occ] = frac
-                occ.append(numpy.repeat(occ_l, degen))
+                if nbas_l > 0:
+                    occ_l = numpy.zeros(nbas_l)
+                    occ_l[:n2occ] = 2
+                    if frac > 0:
+                        occ_l[n2occ] = frac
+                    occ.append(numpy.repeat(occ_l, degen))
             else:
                 occ.append(numpy.zeros(nbas_l * degen))
 
@@ -166,10 +167,10 @@ class AtomSphAverageRHF(hf.RHF):
 
     def _finalize(self):
         if self.converged:
-            logger.info(self, 'Atomic HF for atom  %s  converged. SCF energy = %.15g',
+            logger.info(self, 'Atomic HF for atom  %s  converged. SCF energy = %.15g\n',
                         self.mol.atom_symbol(0), self.e_tot)
         else:
-            logger.info(self, 'Atomic HF for atom  %s  not converged. SCF energy = %.15g',
+            logger.info(self, 'Atomic HF for atom  %s  not converged. SCF energy = %.15g\n',
                         self.mol.atom_symbol(0), self.e_tot)
         return self
 

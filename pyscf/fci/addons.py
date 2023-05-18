@@ -33,7 +33,8 @@ def large_ci(ci, norb, nelec, tol=LARGE_CI_TOL, return_strs=RETURN_STRS):
     neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
-    assert (ci.shape == (na, nb))
+    assert ci.size == na * nb
+    ci = ci.reshape(na, nb)
     addra, addrb = numpy.where(abs(ci) > tol)
     if addra.size == 0:
         # No large CI coefficient > tol, search for the largest coefficient
@@ -83,116 +84,7 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     Returns:
         CI coefficients 2D array which has the target symmetry.
     '''
-    neleca, nelecb = _unpack_nelec(nelec)
-    orbsym = numpy.asarray(orbsym)
-    if not isinstance(orbsym[0], numpy.number):
-        raise RuntimeError('TODO: convert irrep symbol to irrep id')
-
-    na = cistring.num_strings(norb, neleca)
-    nb = cistring.num_strings(norb, nelecb)
-    ci1 = numpy.zeros((na,nb))
-
-########################
-# pass 1: The fixed occs
-    orbleft = numpy.ones(norb, dtype=bool)
-    stra = numpy.zeros(norb, dtype=bool)
-    strb = numpy.zeros(norb, dtype=bool)
-    if irrep_nelec is not None:
-        for k,n in irrep_nelec.items():
-            orbleft[orbsym==k] = False
-            if isinstance(n, (int, numpy.number)):
-                idx = numpy.where(orbsym==k)[0][:n//2]
-                stra[idx] = True
-                strb[idx] = True
-            else:
-                na, nb = n
-                stra[numpy.where(orbsym==k)[0][:na]] = True
-                strb[numpy.where(orbsym==k)[0][:nb]] = True
-                if (na-nb)%2:
-                    wfnsym ^= k
-
-    orbleft = numpy.where(orbleft)[0]
-    neleca_left = neleca - stra.sum()
-    nelecb_left = nelecb - strb.sum()
-    spin = neleca_left - nelecb_left
-    assert (neleca_left >= 0)
-    assert (nelecb_left >= 0)
-    assert (spin >= 0)
-
-########################
-# pass 2: search pattern
-    def gen_str_iter(orb_list, nelec):
-        if nelec == 1:
-            for i in orb_list:
-                yield [i]
-        elif nelec >= len(orb_list):
-            yield orb_list
-        else:
-            restorb = orb_list[1:]
-            #yield from gen_str_iter(restorb, nelec)
-            for x in gen_str_iter(restorb, nelec):
-                yield x
-            for x in gen_str_iter(restorb, nelec-1):
-                yield [orb_list[0]] + x
-
-    # search for alpha and beta pattern which match to the required symmetry
-    def query(target, nelec_atmost, spin, orbsym):
-        norb = len(orbsym)
-        for excite_level in range(1, nelec_atmost+1):
-            for beta_only in gen_str_iter(list(range(norb)), excite_level):
-                alpha_allow = [i for i in range(norb) if i not in beta_only]
-                alpha_orbsym = orbsym[alpha_allow]
-                alpha_target = target
-                for i in beta_only:
-                    alpha_target ^= orbsym[i]
-                alpha_only = symm.route(alpha_target, spin+excite_level, alpha_orbsym)
-                if alpha_only:
-                    alpha_only = [alpha_allow[i] for i in alpha_only]
-                    return alpha_only, beta_only
-        raise RuntimeError('No pattern found for wfn irrep %s over orbsym %s'
-                           % (target, orbsym))
-
-    if spin == 0:
-        aonly = bonly = []
-        if wfnsym != 0:
-            aonly, bonly = query(wfnsym, neleca_left, spin, orbsym[orbleft])
-    else:
-        # 1. assume "nelecb_left" doubly occupied orbitals
-        # search for alpha pattern which match to the required symmetry
-        aonly, bonly = orbleft[symm.route(wfnsym, spin, orbsym[orbleft])], []
-        # dcompose doubly occupied orbitals, search for alpha and beta pattern
-        if len(aonly) != spin:
-            aonly, bonly = query(wfnsym, neleca_left, spin, orbsym[orbleft])
-
-    ndocc = neleca_left - len(aonly) # == nelecb_left - len(bonly)
-    docc_allow = numpy.ones(len(orbleft), dtype=bool)
-    docc_allow[aonly] = False
-    docc_allow[bonly] = False
-    docclst = orbleft[numpy.where(docc_allow)[0]][:ndocc]
-    stra[docclst] = True
-    strb[docclst] = True
-
-    def find_addr_(stra, aonly, nelec):
-        stra[orbleft[aonly]] = True
-        return cistring.str2addr(norb, nelec, ('%i'*norb)%tuple(stra)[::-1])
-    if bonly:
-        if spin > 0:
-            aonly, socc_only = aonly[:-spin], aonly[-spin:]
-            stra[orbleft[socc_only]] = True
-        stra1 = stra.copy()
-        strb1 = strb.copy()
-
-        addra = find_addr_(stra, aonly, neleca)
-        addrb = find_addr_(strb, bonly, nelecb)
-        addra1 = find_addr_(stra1, bonly, neleca)
-        addrb1 = find_addr_(strb1, aonly, nelecb)
-        ci1[addra,addrb] = ci1[addra1,addrb1] = numpy.sqrt(.5)
-    else:
-        addra = find_addr_(stra, aonly, neleca)
-        addrb = find_addr_(strb, bonly, nelecb)
-        ci1[addra,addrb] = 1
-
-    return ci1
+    raise DeprecationWarning
 
 
 def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
@@ -246,9 +138,9 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
         raise NotImplementedError
         orb_lz = wfn_lz = d2h_wfnsym_id = None
 
-    occslsta = occslstb = cistring._gen_occslst(range(norb), neleca)
+    occslsta = occslstb = cistring.gen_occslst(range(norb), neleca)
     if neleca != nelecb:
-        occslstb = cistring._gen_occslst(range(norb), nelecb)
+        occslstb = cistring.gen_occslst(range(norb), nelecb)
     na = len(occslsta)
     nb = len(occslsta)
 
@@ -647,6 +539,9 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             A modified FCI object based on fciobj.
     '''
     import types
+    from pyscf.fci import direct_uhf
+    if isinstance(fciobj, direct_uhf.FCISolver):
+        raise NotImplementedError
 
     if 'ss_value' in kwargs:
         sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '

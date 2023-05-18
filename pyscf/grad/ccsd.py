@@ -238,7 +238,7 @@ def as_scanner(grad_cc):
             else:
                 last_size = 0
 
-            cc.reset(mol)
+            self.reset(mol)
             mf_scanner = cc._scf
             mf_scanner(mol)
             cc.mo_coeff = mf_scanner.mo_coeff
@@ -246,7 +246,6 @@ def as_scanner(grad_cc):
             if last_size != cc.vector_size():
                 cc.t1 = cc.t2 = cc.l1 = cc.l2 = None
 
-            self.mol = mol
             eris = cc.ao2mo(cc.mo_coeff)
             # Update cc.t1 and cc.t2
             cc.kernel(t1=cc.t1, t2=cc.t2, eris=eris)

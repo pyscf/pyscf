@@ -26,6 +26,7 @@
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.grad import rks as rks_grad
 from pyscf.grad import uks as uks_grad
 from pyscf.df.grad import rhf as df_rhf_grad
 
@@ -38,22 +39,8 @@ def get_veff(ks_grad, mol=None, dm=None):
     t0 = (logger.process_clock(), logger.perf_counter())
 
     mf = ks_grad.base
-    if ks_grad.grids is not None:
-        grids = ks_grad.grids
-    else:
-        grids = mf.grids
-    if mf.nlc != '':
-        if ks_grad.nlcgrids is not None:
-            nlcgrids = ks_grad.nlcgrids
-        else:
-            nlcgrids = mf.nlcgrids
-        if nlcgrids.coords is None:
-            nlcgrids.build(with_non0tab=True)
-    if grids.coords is None:
-        grids.build(with_non0tab=True)
-
     ni = mf._numint
-    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    grids, nlcgrids = rks_grad._initialize_grids(ks_grad)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
@@ -61,11 +48,30 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = uks_grad.get_vxc_full_response(
                 ni, mol, grids, mf.xc, dm,
                 max_memory=max_memory, verbose=ks_grad.verbose)
+        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+            if ni.libxc.is_nlc(mf.xc):
+                xc = mf.xc
+            else:
+                xc = mf.nlc
+            enlc, vnlc = rks_grad.get_nlc_vxc_full_response(
+                ni, mol, nlcgrids, xc, dm[0]+dm[1],
+                max_memory=max_memory, verbose=ks_grad.verbose)
+            exc += enlc
+            vxc += vnlc
         logger.debug1(ks_grad, 'sum(grids response) %s', exc.sum(axis=0))
     else:
         exc, vxc = uks_grad.get_vxc(
                 ni, mol, grids, mf.xc, dm,
                 max_memory=max_memory, verbose=ks_grad.verbose)
+        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+            if ni.libxc.is_nlc(mf.xc):
+                xc = mf.xc
+            else:
+                xc = mf.nlc
+            enlc, vnlc = rks_grad.get_nlc_vxc(
+                ni, mol, nlcgrids, xc, dm[0]+dm[1],
+                max_memory=max_memory, verbose=ks_grad.verbose)
+            vxc += vnlc
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
     if not ni.libxc.is_hybrid_xc(mf.xc):
@@ -74,6 +80,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         if ks_grad.auxbasis_response:
             e1_aux = vj.aux.sum ((0,1))
     else:
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
         vj, vk = ks_grad.get_jk(mol, dm)
         if ks_grad.auxbasis_response:
             vk.aux = vk.aux * hyb

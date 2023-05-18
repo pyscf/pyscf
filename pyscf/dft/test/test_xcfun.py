@@ -147,8 +147,8 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (dft.xcfun.is_hybrid_xc(('b3lyp', 4, 'vv10')))
 
     def test_nlc_coeff(self):
-        #self.assertEqual(dft.xcfun.nlc_coeff('0.5*vv10'), (5.9, 0.0093))
-        self.assertEqual(dft.xcfun.nlc_coeff('pbe__vv10'), (5.9, 0.0093))
+        self.assertEqual(dft.xcfun.nlc_coeff('0.5*vv10'), (((5.9, 0.0093), .5),))
+        self.assertEqual(dft.xcfun.nlc_coeff('pbe+vv10'), (((5.9, 0.0093), 1),))
 
     def test_lda(self):
         e,v,f,k = dft.xcfun.eval_xc('lda,', rho[0], deriv=3)

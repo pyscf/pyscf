@@ -40,6 +40,7 @@ _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
 _itrf.LIBXC_needs_laplacian.restype = ctypes.c_int
 _itrf.LIBXC_needs_laplacian.argtypes = [ctypes.c_int]
 _itrf.LIBXC_is_hybrid.restype = ctypes.c_int
+_itrf.LIBXC_is_nlc.restype = ctypes.c_int
 _itrf.LIBXC_is_cam_rsh.restype = ctypes.c_int
 _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
 _itrf.LIBXC_number_of_functionals.restype = ctypes.c_int
@@ -55,6 +56,9 @@ _itrf.LIBXC_version.restype = ctypes.c_char_p
 _itrf.LIBXC_reference.restype = ctypes.c_char_p
 _itrf.LIBXC_reference_doi.restype = ctypes.c_char_p
 _itrf.LIBXC_xc_reference.argtypes = [ctypes.c_int, (ctypes.c_char_p * 8)]
+
+_itrf.xc_functional_get_number.argtypes = (ctypes.c_char_p, )
+_itrf.xc_functional_get_number.restype = ctypes.c_int
 
 def libxc_version():
     '''Returns the version of libxc'''
@@ -852,11 +856,6 @@ XC_ALIAS = {
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
 
-VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10',
-               'REVSCAN_VV10',
-               'SCAN_VV10', 'SCAN_RVV10', 'SCANL_VV10', 'SCANL_RVV10'))
-VV10_XC = VV10_XC.union(set([x.replace('_', '') for x in VV10_XC]))
-
 def xc_reference(xc_code):
     '''Returns the reference to the individual XC functional'''
     hyb, fn_facs = parse_xc(xc_code)
@@ -874,11 +873,13 @@ def xc_type(xc_code):
     if xc_code is None:
         return None
     elif isinstance(xc_code, str):
-        if is_nlc(xc_code):
-            return 'NLC'
+        if '__VV10' in xc_code:
+            raise RuntimeError('Deprecated notation for NLC functional.')
         hyb, fn_facs = parse_xc(xc_code)
     else:
+        assert isinstance(xc_code, int)
         fn_facs = [(xc_code, 1)]  # mimic fn_facs
+
     if not fn_facs:
         return 'HF'
     elif all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs):
@@ -919,11 +920,21 @@ def is_meta_gga(xc_code):
 def is_gga(xc_code):
     return xc_type(xc_code) == 'GGA'
 
+@lru_cache(100)
+def is_nlc(xc_code):
+    if isinstance(xc_code, str):
+        if xc_code.isdigit():
+            return _itrf.LIBXC_is_nlc(ctypes.c_int(int(xc_code)))
+        else:
+            fn_facs = parse_xc(xc_code)[1]
+            return any(_itrf.LIBXC_is_nlc(ctypes.c_int(xid)) for xid, fac in fn_facs)
+    elif isinstance(xc_code, int):
+        return _itrf.LIBXC_is_nlc(ctypes.c_int(xc_code))
+    else:
+        return any((is_nlc(x) for x in xc_code))
+
 def needs_laplacian(xc_code):
     return _itrf.LIBXC_needs_laplacian(xc_code) != 0
-
-def is_nlc(xc_code):
-    return '__VV10' in xc_code.upper()
 
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
@@ -966,28 +977,13 @@ def hybrid_coeff(xc_code, spin=0):
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
-    nlc_code = None
-    if isinstance(xc_code, str) and '__VV10' in xc_code.upper():
-        xc_code, nlc_code = xc_code.upper().split('__', 1)
-
     hyb, fn_facs = parse_xc(xc_code)
-    nlc_pars = [0, 0]
+    nlc_pars = []
     nlc_tmp = (ctypes.c_double*2)()
     for xid, fac in fn_facs:
-        _itrf.LIBXC_nlc_coeff(xid, nlc_tmp)
-        nlc_pars[0] += nlc_tmp[0]
-        nlc_pars[1] += nlc_tmp[1]
-
-    if nlc_pars[0] == 0 and nlc_pars[1] == 0:
-        if nlc_code is not None:
-            # Use VV10 NLC parameters by default for the general case
-            _itrf.LIBXC_nlc_coeff(XC_CODES['GGA_XC_' + nlc_code], nlc_tmp)
-            nlc_pars[0] += nlc_tmp[0]
-            nlc_pars[1] += nlc_tmp[1]
-        else:
-            raise NotImplementedError(
-                '%s does not have NLC part. Available functionals are %s' %
-                (xc_code, ', '.join(VV10_XC.keys())))
+        if _itrf.LIBXC_is_nlc(ctypes.c_int(xid)):
+            _itrf.LIBXC_nlc_coeff(xid, nlc_tmp)
+            nlc_pars.append((tuple(nlc_tmp), fac))
     return tuple(nlc_pars)
 
 @lru_cache(100)
@@ -1173,7 +1169,11 @@ def parse_xc(description):
                             x_id = possible_xc.pop()
                         x_id = XC_CODES[x_id]
                     else:
-                        raise KeyError('Unknown %s functional  %s' % (ftype, key))
+                        # Some libxc functionals may not be listed in the
+                        # XC_CODES table. Query libxc directly
+                        func_id = _itrf.xc_functional_get_number(ctypes.c_char_p(key.encode()))
+                        if func_id == -1:
+                            raise KeyError(f"LibXCFunctional: name '{key}' not found.")
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
                     # Recursively scale the composed functional, to support e.g. '0.5*b3lyp'

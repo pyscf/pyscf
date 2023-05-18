@@ -330,7 +330,6 @@ class KnownValues(unittest.TestCase):
         dm = method.get_init_guess()
         dm = (dm[0], dm[0])
         method.xc = 'wB97M_V'
-        method.nlc = 'vv10'
         method.grids.prune = None
         method.grids.atom_grid = {"H": (30, 86), "O": (30, 86),}
         method.nlcgrids.prune = None
@@ -349,27 +348,37 @@ class KnownValues(unittest.TestCase):
     def test_nr_rks_rsh(self):
         method = dft.RKS(h2o)
         dm = method.get_init_guess()
+        method.xc = 'wB97'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.fp(vxc), 23.16975737295899, 8)
+
+    def test_nr_rks_nlc(self):
+        method = dft.RKS(h2o)
+        dm = method.get_init_guess()
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 22.767792068559917, 8)
 
+        method.xc = 'B97M_V'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.fp(vxc), 23.067046560473408, 8)
+
+    def test_nr_rks_nlc_small_memory_high_cost(self):
+        method = dft.RKS(h2o)
+        dm = method.get_init_guess()
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 22.759558596896344, 8)
-
-        method.xc = 'B97M_V'
-        vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 22.767792068559917, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 23.067046560473408, 8)
 
-    def test_nr_rks_rsh_cart(self):
+    def test_nr_rks_rsh_cart_high_cost(self):
         mol1 = h2o.copy()
         mol1.basis = 'ccpvdz'
         mol1.cart = True
@@ -377,60 +386,87 @@ class KnownValues(unittest.TestCase):
         method = dft.RKS(mol1)
         method.xc = 'B97M_V'
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        self.assertAlmostEqual(method.kernel(), -76.44022393692919, 8)
+        self.assertAlmostEqual(method.kernel(), -76.39753789383619, 8)
 
     def test_nr_uks_rsh(self):
         method = dft.UKS(h2o)
         dm = method.get_init_guess()
         dm = (dm[0], dm[0])
+        method.xc = 'wB97'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 23.16975737295899, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 23.16975737295899, 8)
+
+    def test_nr_uks_nlc_high_cost(self):
+        method = dft.UKS(h2o)
+        dm = method.get_init_guess()
+        dm = (dm[0], dm[0])
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 22.759558596896344, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 22.767792068559917, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 22.767792068559917, 8)
 
+        method.xc = 'B97M_V'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 23.067046560473408, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 23.067046560473408, 8)
+
+    def test_nr_uks_nlc_small_memory_high_cost(self):
+        method = dft.UKS(h2o)
+        dm = method.get_init_guess()
+        dm = (dm[0], dm[0])
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 22.759558596896344, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 22.759558596896344, 8)
-
-        method.xc = 'B97M_V'
-        vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 23.058813088809824, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 22.767792068559917, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 22.767792068559917, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 23.058813088809824, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 23.067046560473408, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 23.067046560473408, 8)
 
     def test_nr_gks_rsh(self):
         method = dft.GKS(h2o)
         dm = method.get_init_guess()
         dm = dm + numpy.sin(dm)*.02j
         dm = dm + dm.conj().T
+        method.xc = 'wB97'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.fp(vxc), 5.115622298912124+0j, 8)
+
+    def test_nr_gks_nlc_high_cost(self):
+        method = dft.GKS(h2o)
+        dm = method.get_init_guess()
+        dm = dm + numpy.sin(dm)*.02j
+        dm = dm + dm.conj().T
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 3.1818982731583274+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 3.172920887028461+0j, 8)
 
+        method.xc = 'B97M_V'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.fp(vxc), 2.0041673361905317+0j, 8)
+
+    def test_nr_gks_nlc_small_memory_high_cost(self):
+        method = dft.GKS(h2o)
+        dm = method.get_init_guess()
+        dm = dm + numpy.sin(dm)*.02j
+        dm = dm + dm.conj().T
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 3.1818982731583274+0j, 8)
-
-        method.xc = 'B97M_V'
-        vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 2.0131447223203565+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 3.172920887028461+0j, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 2.0131447223203565+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 2.0041673361905317+0j, 8)
 
     def test_nr_rks_vv10_high_cost(self):
         method = dft.RKS(h2o)
