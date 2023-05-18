@@ -80,6 +80,13 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    def test_klda(self):
+        cell = pbcgto.M(atom='H 0 0 0; H 1 0 0', a=np.eye(3)*2, basis=[[0, [1, 1]]])
+        cell.build()
+        mf = cell.KRKS(kpts=cell.make_kpts([2,2,1]))
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -0.3846075202893169, 7)
+
     def test_klda8_cubic_gamma(self):
         cell = build_cell([17]*3)
         mf = pbcdft.RKS(cell)
