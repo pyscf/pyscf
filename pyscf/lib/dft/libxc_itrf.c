@@ -373,6 +373,9 @@ int LIBXC_is_lda(int xc_id)
         switch(func.info->family)
         {
                 case XC_FAMILY_LDA:
+#ifdef XC_FAMILY_HYB_LDA
+                case XC_FAMILY_HYB_LDA:
+#endif
                         lda = 1;
                         break;
                 default:
