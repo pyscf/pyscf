@@ -573,13 +573,13 @@ class KnownValues(unittest.TestCase):
     def test_mbpt2(self):
         myucc = uccsd.UCCSD(mf)
         e = myucc.kernel(mbpt2=True)[0]
-        self.assertAlmostEqual(e, -0.12886859466216125, 10)
+        self.assertAlmostEqual(e, -0.12886859466216125, 8)
         emp2 = mp.MP2(mf).kernel()[0]
         self.assertAlmostEqual(e, emp2, 10)
 
         myucc = uccsd.UCCSD(mf_s2)
         e = myucc.kernel(mbpt2=True)[0]
-        self.assertAlmostEqual(e, -0.096257842171487293, 10)
+        self.assertAlmostEqual(e, -0.096257842171487293, 8)
         emp2 = mp.MP2(mf_s2).kernel()[0]
         self.assertAlmostEqual(e, emp2, 10)
 

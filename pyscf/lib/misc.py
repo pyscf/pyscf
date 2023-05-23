@@ -37,6 +37,41 @@ try:
 except ImportError:
     ThreadPoolExecutor = None
 
+if sys.platform.startswith('linux'):
+    # Avoid too many threads being created in OMP loops.
+    # See issue https://github.com/pyscf/pyscf/issues/317
+    try:
+        from elftools.elf.elffile import ELFFile
+    except ImportError:
+        pass
+    else:
+        def _ldd(so_file):
+            libs = []
+            with open(so_file, 'rb') as f:
+                elf = ELFFile(f)
+                for seg in elf.iter_segments():
+                    if seg.header.p_type != 'PT_DYNAMIC':
+                        continue
+                    for t in seg.iter_tags():
+                        if t.entry.d_tag == 'DT_NEEDED':
+                            libs.append(t.needed)
+                    break
+            return libs
+
+        so_file = os.path.abspath(os.path.join(__file__, '..', 'libnp_helper.so'))
+        for p in _ldd(so_file):
+            if 'mkl' in p and 'thread' in p:
+                warnings.warn(f'PySCF C exteions are incompatible with {p}. '
+                              'MKL_NUM_THREADS is set to 1')
+                os.environ['MKL_NUM_THREADS'] = '1'
+                break
+            elif 'openblasp' in p or 'openblaso' in p:
+                warnings.warn(f'PySCF C exteions are incompatible with {p}. '
+                              'OPENBLAS_NUM_THREADS is set to 1')
+                os.environ['OPENBLAS_NUM_THREADS'] = '1'
+                break
+        del p, so_file, _ldd
+
 from pyscf.lib import param
 from pyscf import __config__
 
@@ -283,6 +318,28 @@ def prange_tril(start, stop, blocksize):
     cum_costs = idx*(idx+1)//2 - start*(start+1)//2
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
+
+def prange_split(n_total, n_sections):
+    '''
+    Generate prange sequence that splits n_total elements into n sections.
+    The splits parallel to the np.array_split convention: the first (l % n)
+    sections of size l//n + 1 and the rest of size l//n.
+
+    Examples:
+
+    >>> for p0, p1 in lib.prange_split(10, 3):
+    ...     print(p0, p1)
+    (0, 4)
+    (4, 7)
+    (7, 10)
+    '''
+    n_each_section, extras = divmod(n_total, n_sections)
+    section_sizes = ([0] +
+                     extras * [n_each_section+1] +
+                     (n_sections-extras) * [n_each_section])
+    div_points = numpy.array(section_sizes).cumsum()
+    return zip(div_points[:-1], div_points[1:])
+
 
 def map_with_prefetch(func, *iterables):
     '''
@@ -696,6 +753,12 @@ def module_method(fn, absences=None):
             if a is None: a = self.a
             if b is None: b = self.b
             return fn(a, b)
+
+    This function can be used to replace "staticmethod" when inserting a module
+    method into a class. In a child class, it allows one to call the method of a
+    base class with either "self.__class__.method_name(self, args)" or
+    "self.super().method_name(args)". For method created with "staticmethod",
+    calling "self.super().method_name(args)" is the only option.
     '''
     _locals = {}
     name = fn.__name__

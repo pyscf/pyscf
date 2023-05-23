@@ -380,6 +380,7 @@ class EOMIP(eom_kgccsd.EOMIP):
     l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
     ccsd_star_contract = ipccsd_star_contract
+    mask_frozen = eom_kgccsd.mask_frozen_ip
 
     @property
     def nkpts(self):
@@ -778,6 +779,7 @@ class EOMEA(eom_kgccsd.EOMEA):
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
     ccsd_star_contract = eaccsd_star_contract
+    mask_frozen = eom_kgccsd.mask_frozen_ea
 
     @property
     def nkpts(self):

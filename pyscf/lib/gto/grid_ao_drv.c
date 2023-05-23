@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <math.h>
+#include <stdint.h>
 #include <complex.h>
 #include "config.h"
 #include "grid_ao_drv.h"

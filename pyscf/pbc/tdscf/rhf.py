@@ -22,9 +22,39 @@
 
 from pyscf import lib
 from pyscf.tdscf import rhf
+from pyscf import __config__
+
+class TDMixin(rhf.TDMixin):
+    def __init__(self, mf):
+        rhf.TDMixin.__init__(self, mf)
+        self.cell = mf.cell
+        self._keys = self._keys.union(['cell'])
+
+    def get_ab(self, mf=None):
+        raise NotImplementedError
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+    get_nto = rhf.TDMixin.get_nto
+    analyze = lib.invalid_method('analyze')
+    oscillator_strength = lib.invalid_method('oscillator_strength')
+    transition_dipole              = lib.invalid_method('transition_dipole')
+    transition_quadrupole          = lib.invalid_method('transition_quadrupole')
+    transition_octupole            = lib.invalid_method('transition_octupole')
+    transition_velocity_dipole     = lib.invalid_method('transition_velocity_dipole')
+    transition_velocity_quadrupole = lib.invalid_method('transition_velocity_quadrupole')
+    transition_velocity_octupole   = lib.invalid_method('transition_velocity_octupole')
+    transition_magnetic_dipole     = lib.invalid_method('transition_magnetic_dipole')
+    transition_magnetic_quadrupole = lib.invalid_method('transition_magnetic_quadrupole')
 
 
-class TDA(rhf.TDA):
+class TDA(TDMixin):
+
+    init_guess = rhf.TDA.init_guess
+    kernel = rhf.TDA.kernel
+    _gen_vind = rhf.TDA.gen_vind
+
     def gen_vind(self, mf):
         # gen_vind calls get_jk functions to compute the contraction between
         # two-electron integrals and X,Y amplitudes. There are two choices for
@@ -46,34 +76,21 @@ class TDA(rhf.TDA):
         #
         # See also issue https://github.com/pyscf/pyscf/issues/1187
 
-        vind, hdiag = rhf.TDA.gen_vind(self, mf)
+        vind, hdiag = self._gen_vind(mf)
         def vindp(x):
             with lib.temporary_env(mf, exxdiv=None):
                 return vind(x)
         return vindp, hdiag
-
-    def get_ab(self, mf=None):
-        raise NotImplementedError
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
 
 CIS = TDA
 
 
-class TDHF(rhf.TDHF):
-    def gen_vind(self, mf):
-        vind, hdiag = rhf.TDHF.gen_vind(self, mf)
-        def vindp(x):
-            with lib.temporary_env(mf, exxdiv=None):
-                return vind(x)
-        return vindp, hdiag
+class TDHF(TDA):
 
-    def get_ab(self, mf=None):
-        raise NotImplementedError
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
+    init_guess = rhf.TDHF.init_guess
+    kernel = rhf.TDHF.kernel
+    _gen_vind = rhf.TDHF.gen_vind
+    gen_vind = TDA.gen_vind
 
 RPA = TDRHF = TDHF
 

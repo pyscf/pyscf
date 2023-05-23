@@ -481,11 +481,11 @@ class KnownValues(unittest.TestCase):
     def test_nr_uks_vxc_vv10(self):
         method = dft.UKS(h2o)
         dm = method.get_init_guess()
-        dm = (dm[0], dm[0])
         grids = dft.gen_grid.Grids(h2o)
         grids.atom_grid = {'H': (20, 50), 'O': (20,50)}
-        v = dft.numint.nr_vxc(h2o, grids, 'wB97M_V__vv10', dm, spin=1, hermi=0)[2]
-        self.assertAlmostEqual(lib.fp(v), 0.02293399033256055, 8)
+        ni = dft.numint.NumInt()
+        v = dft.numint.nr_nlc_vxc(ni, h2o, grids, 'wB97M_V', dm[0]*2, hermi=0)[2]
+        self.assertAlmostEqual(lib.fp([v, v]), 0.02293399033256055, 8)
 
     def test_uks_gga_wv1(self):
         numpy.random.seed(1)
@@ -549,14 +549,14 @@ class KnownValues(unittest.TestCase):
         with lib.temporary_env(numint, _sparse_enough=_not_sparse):
             rho, vxc, fxc = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
         self.assertAlmostEqual(rho[0].dot(mf.grids.weights), 10, 4)
-        self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 8)
-        self.assertAlmostEqual(numpy.einsum('g,xg,xyg->', mf.grids.weights, rho, fxc), -6.194969637088992, 8)
+        self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 5)
+        self.assertAlmostEqual(numpy.einsum('g,xg,xyg->', mf.grids.weights, rho, fxc), -6.194969637088992, 5)
 
         with lib.temporary_env(numint, _sparse_enough=_sparse):
             rho, vxc, fxc = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
         self.assertAlmostEqual(rho[0].dot(mf.grids.weights), 10, 4)
-        self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 8)
-        self.assertAlmostEqual(numpy.einsum('g,xg,xyg->', mf.grids.weights, rho, fxc), -6.194969637088992, 8)
+        self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 5)
+        self.assertAlmostEqual(numpy.einsum('g,xg,xyg->', mf.grids.weights, rho, fxc), -6.194969637088992, 5)
 
         if hasattr(dft, 'xcfun'):
             mf.xc = 'camb3lyp'

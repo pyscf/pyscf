@@ -28,6 +28,8 @@ CLASSIFIERS = [
 'Programming Language :: Python :: 3.7',
 'Programming Language :: Python :: 3.8',
 'Programming Language :: Python :: 3.9',
+'Programming Language :: Python :: 3.10',
+'Programming Language :: Python :: 3.11',
 'Topic :: Software Development',
 'Topic :: Scientific/Engineering',
 'Operating System :: POSIX',
@@ -58,7 +60,6 @@ VERSION = get_version()
 
 EXTRAS = {
     'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2', 'pyscf-qsdopt'],
-    'dftd3': ['pyscf-dftd3'],
     #'dmrgscf': ['pyscf-dmrgscf'],
     'doci': ['pyscf-doci'],
     'icmpspt': ['pyscf-icmpspt'],
@@ -68,6 +69,7 @@ EXTRAS = {
     'cppe': ['cppe'],
     'pyqmc': ['pyqmc'],
     'mcfun': ['mcfun>=0.2.1'],
+    'bse': ['basis-set-exchange'],
 }
 EXTRAS['all'] = [p for extras in EXTRAS.values() for p in extras]
 # extras which should not be installed by "all" components

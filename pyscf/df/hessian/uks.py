@@ -41,6 +41,10 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     mol = hessobj.mol
     mf = hessobj.base
+    ni = mf._numint
+    if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        raise NotImplementedError('RKS Hessian for NLC functional')
+
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -52,18 +56,17 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     dm0a = numpy.dot(mocca, mocca.T)
     dm0b = numpy.dot(moccb, moccb.T)
 
-    if mf.nlc != '':
-        raise NotImplementedError
-    #enabling range-separated hybrids
-    omega, alpha, beta = mf._numint.rsh_coeff(mf.xc)
-    if abs(omega) > 1e-10:
-        raise NotImplementedError
-    else:
-        hyb = mf._numint.hybrid_coeff(mf.xc, spin=mol.spin)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
     de2, ej, ek = df_uhf_hess._partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
                                                 atmlst, max_memory, verbose,
-                                                abs(hyb) > 1e-10)
+                                                with_k=hybrid)
     de2 += ej - hyb * ek  # (A,B,dR_A,dR_B)
+    if hybrid and omega != 0:
+        with hessobj.base.with_df.range_coulomb(omega):
+            ek_lr = df_uhf_hess._partial_hess_ejk(
+                hessobj, mo_energy, mo_coeff, mo_occ, atmlst, max_memory, verbose)[2]
+        de2 -= ek_lr * (alpha - hyb)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
@@ -96,18 +99,28 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     h1aoa, h1aob = uks_hess._get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory)
-    for ia, h1, vj1, vk1a, vk1b in df_uhf_hess._gen_jk(hessobj, mo_coeff, mo_occ, chkfile,
-                                                       atmlst, verbose, abs(hyb) > 1e-10):
+    for ia, h1, vj1, vk1 in df_uhf_hess._gen_jk(
+            hessobj, mo_coeff, mo_occ, chkfile, atmlst, verbose, with_k=hybrid):
         f1 = h1 + vj1
         h1aoa[ia] += f1
         h1aob[ia] += f1
-        if abs(hyb) > 1e-10:
+        if hybrid:
+            vk1a, vk1b = vk1
             h1aoa[ia] -= hyb * vk1a
             h1aob[ia] -= hyb * vk1b
+
+    if hybrid and omega != 0:
+        with hessobj.base.with_df.range_coulomb(omega):
+            for ia, h1, vj1, vk1 in df_uhf_hess._gen_jk(
+                    hessobj, mo_coeff, mo_occ, chkfile, atmlst, verbose):
+                vk1a, vk1b = vk1
+                h1aoa[ia] -= (alpha - hyb) * vk1a
+                h1aob[ia] -= (alpha - hyb) * vk1b
 
     if chkfile is None:
         return h1aoa, h1aob
@@ -147,7 +160,7 @@ if __name__ == '__main__':
     mol.unit = 'B'
     mol.spin = 2
     mol.build()
-    mf = dft.UKS(mol).density_fit()
+    mf = dft.RKS(mol).density_fit()
     mf.grids.level = 4
     mf.grids.prune = False
     mf.xc = xc_code

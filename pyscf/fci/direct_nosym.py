@@ -40,7 +40,7 @@ from pyscf import ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 def contract_1e(h1e, fcivec, norb, nelec, link_index=None):
     h1e = numpy.asarray(h1e, order='C')
@@ -118,7 +118,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''
     if not isinstance(nelec, (int, numpy.number)):
         nelec = sum(nelec)
-    h2e = ao2mo.restore(1, eri.copy(), norb)
+    h2e = ao2mo.restore(1, eri.copy(), norb).astype(h1e.dtype, copy=False)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
@@ -132,6 +132,8 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index)
     return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
+
+make_hdiag = direct_spin1.make_hdiag
 
 
 class FCISolver(direct_spin1.FCISolver):

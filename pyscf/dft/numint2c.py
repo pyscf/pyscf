@@ -653,6 +653,22 @@ class NumInt2C(numint._NumIntMixin):
         return n, exc, vmat
     get_vxc = nr_gks_vxc = nr_vxc
 
+    @lib.with_doc(numint.nr_nlc_vxc.__doc__)
+    def nr_nlc_vxc(self, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
+                   max_memory=2000, verbose=None):
+        assert dm.ndim == 2
+        nao = dm.shape[-1] // 2
+        # ground state density is always real
+        dm_a = dm[:nao,:nao].real
+        dm_b = dm[nao:,nao:].real
+        ni = self._to_numint1c()
+        n, exc, v = ni.nr_nlc_vxc(mol, grids, xc_code, dm_a+dm_b, relativity,
+                                  hermi, max_memory, verbose)
+        vmat = np.zeros_like(dm)
+        vmat[:nao,:nao] = v[0]
+        vmat[nao:,nao:] = v[1]
+        return n, exc, vmat
+
     @lib.with_doc(numint.nr_rks_fxc.__doc__)
     def nr_fxc(self, mol, grids, xc_code, dm0, dms, spin=0, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):

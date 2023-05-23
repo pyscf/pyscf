@@ -465,9 +465,17 @@ def madelung(cell, kpts):
         return 2*cell.omega/np.pi**0.5-np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
 
 
-def get_monkhorst_pack_size(cell, kpts):
-    skpts = cell.get_scaled_kpts(kpts).round(decimals=6)
-    Nk = np.array([len(np.unique(ki)) for ki in skpts.T])
+def get_monkhorst_pack_size(cell, kpts, tol=1e-5):
+    kpts = np.reshape(kpts, (-1,3))
+    min_tol = tol
+    assert kpts.shape[0] < 1/min_tol
+    if kpts.shape[0] == 1:
+        Nk = np.array([1,1,1])
+    else:
+        tol = max(10**(-int(-np.log10(1/kpts.shape[0]))-2), min_tol)
+        skpts = cell.get_scaled_kpts(kpts)
+        Nk = np.array([np.count_nonzero(abs(ski[1:]-ski[:-1]) > tol) + 1
+                       for ski in np.sort(skpts.T)])
     return Nk
 
 
@@ -624,7 +632,9 @@ def _build_supcell_(supcell, cell, Ls):
     nimgs = len(Ls)
     symbs = [atom[0] for atom in cell._atom] * nimgs
     coords = Ls.reshape(-1,1,3) + cell.atom_coords()
-    supcell.atom = supcell._atom = list(zip(symbs, coords.reshape(-1,3).tolist()))
+    coords = coords.reshape(-1,3)
+    x, y, z = coords.T
+    supcell.atom = supcell._atom = list(zip(symbs, zip(x, y, z)))
     supcell.unit = 'B'
 
     # Do not call supcell.build() to initialize supcell since it may normalize
@@ -705,3 +715,9 @@ def cutoff_to_gs(a, cutoff):
 def gs_to_cutoff(a, gs):
     '''Deprecated.  Replaced by function mesh_to_cutoff.'''
     return mesh_to_cutoff(a, [2*n+1 for n in gs])
+
+def round_to_cell0(r, tol=1e-6):
+    '''Round scaled coordinates to reference unit cell
+    '''
+    from pyscf.pbc.lib import kpts_helper
+    return kpts_helper.round_to_fbz(r, wrap_around=False, tol=tol)

@@ -38,6 +38,13 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    def test_klda(self):
+        cell = pbcgto.M(atom='H 0 0 0; H 1 0 0', a=np.eye(3)*2, basis=[[0, [1, 1]]])
+        cell.build()
+        mf = cell.KUKS(kpts=cell.make_kpts([2,2,1]))
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -0.3846075202893169, 7)
+
     def test_klda8_cubic_kpt_222_high_cost(self):
         cell = pbcgto.Cell()
         cell.unit = 'A'

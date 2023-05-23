@@ -23,6 +23,7 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
 from pyscf.data import elements
+from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf import __config__
 
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
@@ -169,10 +170,16 @@ def make_auxbasis(mol, mp2fit=False):
                     auxb = DEFAULT_AUXBASIS[balias][1]
                 else:
                     auxb = DEFAULT_AUXBASIS[balias][0]
-                if auxb is not None and gto.basis.load(auxb, k):
-                    auxbasis[k] = auxb
-                    logger.info(mol, 'Default auxbasis %s is used for %s %s',
-                                auxb, k, _basis[k])
+                if auxb is not None:
+                    try:
+                        # Test if basis auxb for element k is available
+                        gto.basis.load(auxb, k)
+                    except BasisNotFoundError:
+                        pass
+                    else:
+                        auxbasis[k] = auxb
+                        logger.info(mol, 'Default auxbasis %s is used for %s %s',
+                                    auxb, k, _basis[k])
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS
@@ -218,6 +225,8 @@ def make_auxmol(mol, auxbasis=None):
         _basis = auxbasis
     pmol._basis = pmol.format_basis(_basis)
 
+    # Note: To pass parameters like gauge origin, rsh-omega to auxmol,
+    # mol._env[:PTR_ENV_START] must be copied to auxmol._env
     pmol._atm, pmol._bas, pmol._env = \
             pmol.make_env(mol._atom, pmol._basis, mol._env[:gto.PTR_ENV_START])
     pmol._built = True

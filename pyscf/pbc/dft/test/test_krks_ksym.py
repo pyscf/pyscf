@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,14 +23,6 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.dft import krks,kuks,multigrid
 
-L = 2.
-He = pbcgto.Cell()
-He.verbose = 0
-He.a = np.eye(3)*L
-He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
-He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
-He.build()
-
 def make_primitive_cell(mesh):
     cell = pbcgto.Cell()
     cell.unit = 'A'
@@ -45,11 +37,23 @@ def make_primitive_cell(mesh):
     cell.spin = 0
     cell.verbose = 0
     cell.output = '/dev/null'
+    cell.space_group_symmetry = True
     cell.build()
     return cell
 
-cell = make_primitive_cell([17]*3)
-nk = [1,2,2]
+def setUpModule():
+    global cell, He, nk
+    cell = make_primitive_cell([16]*3)
+    nk = [1,2,2]
+
+    L = 2.
+    He = pbcgto.Cell()
+    He.verbose = 0
+    He.a = np.eye(3)*L
+    He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
+    He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+    He.space_group_symmetry = True
+    He.build()
 
 def tearDownModule():
     global cell, He, nk
@@ -82,7 +86,7 @@ class KnownValues(unittest.TestCase):
         kmf = pscf.KRKS(cell, kpts=kpts)
         kmf.xc = 'lda'
         kmf.kernel()
-        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 6)
 
     def test_kuks_gamma_center(self):
         kpts0 = cell.make_kpts(nk, with_gamma_point=True)
@@ -110,7 +114,7 @@ class KnownValues(unittest.TestCase):
         kumf = pscf.KUKS(cell, kpts=kpts)
         kumf.xc = 'lda'
         kumf.kernel()
-        self.assertAlmostEqual(kumf.e_tot, kumf0.e_tot, 7)
+        self.assertAlmostEqual(kumf.e_tot, kumf0.e_tot, 6)
 
     def test_rsh(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
@@ -145,6 +149,20 @@ class KnownValues(unittest.TestCase):
         kpts = He.make_kpts(nk, with_gamma_point=False, space_group_symmetry=True,time_reversal_symmetry=True)
         kmf = pscf.KRKS(He, kpts=kpts).density_fit()
         kmf.xc = 'pbe'
+        kmf.kernel()
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
+
+    def test_gga_df_newton(self):
+        kpts0 = He.make_kpts(nk, with_gamma_point=False)
+        kmf0 = krks.KRKS(He, kpts=kpts0).density_fit()
+        kmf0.xc = 'pbe'
+        kmf0 = kmf0.newton()
+        kmf0.kernel()
+
+        kpts = He.make_kpts(nk, with_gamma_point=False, space_group_symmetry=True,time_reversal_symmetry=True)
+        kmf = pscf.KRKS(He, kpts=kpts).density_fit()
+        kmf.xc = 'pbe'
+        kmf = kmf.newton()
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
 

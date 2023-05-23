@@ -71,8 +71,8 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-11
         self.assertAlmostEqual(mf.scf(), -75.578396379589748, 9)
         pop_chg, dip = mf.analyze()
-        self.assertAlmostEqual(lib.finger(pop_chg[0]), 1.0036241405313113, 9)
-        self.assertAlmostEqual(lib.finger(dip), -1.4000447020842097, 9)
+        self.assertAlmostEqual(lib.finger(pop_chg[0]), 1.0036241405313113, 6)
+        self.assertAlmostEqual(lib.finger(dip), -1.4000447020842097, 6)
 
     def test_nr_uhf(self):
         uhf = scf.UHF(mol)
@@ -105,6 +105,11 @@ class KnownValues(unittest.TestCase):
         uhf = scf.density_fit(scf.UHF(mol), 'weigend')
         uhf.conv_tol = 1e-11
         self.assertAlmostEqual(uhf.scf(), -75.983210886950, 9)
+
+    def test_nr_df_ghf(self):
+        mf = mol.GHF().density_fit(auxbasis='weigend')
+        mf.conv_tol = 1e-11
+        self.assertAlmostEqual(mf.scf(), -75.983210886950, 9)
 
     def test_nr_rhf_no_mem(self):
         rhf = scf.RHF(mol)

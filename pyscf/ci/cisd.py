@@ -237,7 +237,7 @@ def contract(myci, civec, eris):
     t0  = numpy.einsum('ia,ia->', fov, c1) * 2
     t0 += numpy.einsum('iabj,ijab->', eris.ovvo, c2) * 2
     t0 -= numpy.einsum('iabj,jiab->', eris.ovvo, c2)
-    cinew = numpy.hstack((t0, t1.ravel(), t2.ravel()))
+    cinew = myci.amplitudes_to_cisdvec(t0, t1, t2)
     return cinew
 
 def amplitudes_to_cisdvec(c0, c1, c2):
@@ -851,7 +851,9 @@ class CISD(lib.StreamObject):
     max_cycle = getattr(__config__, 'ci_cisd_CISD_max_cycle', 50)
     max_space = getattr(__config__, 'ci_cisd_CISD_max_space', 12)
     lindep = getattr(__config__, 'ci_cisd_CISD_lindep', 1e-14)
-    level_shift = getattr(__config__, 'ci_cisd_CISD_level_shift', 0)  # in preconditioner
+    # level shift in preconditioner is helpful to avoid singularity and linear
+    # dependence basis in davidson diagonalization solver
+    level_shift = getattr(__config__, 'ci_cisd_CISD_level_shift', 1e-3)
     direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
     async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
 

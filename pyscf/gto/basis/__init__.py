@@ -212,7 +212,7 @@ ALIAS = {
     'ccpwcv5zdk' : 'cc-pwCV5Z-DK.dat',
     'ccpwcvtzdk3': 'cc-pwCVTZ-DK3.dat',
     'ccpwcvqzdk3': 'cc-pwCVQZ-DK3.dat',
-    'augccpwcvdz': 'aug-cc-pwcvtz.dat',
+    'augccpwcvdz': 'aug-cc-pwcvdz.dat',
     'augccpwcvtz': 'aug-cc-pwcvtz.dat',
     'augccpwcvqz': 'aug-cc-pwcvqz.dat',
     'augccpwcv5z': 'aug-cc-pwcv5z.dat',
@@ -354,7 +354,7 @@ ALIAS = {
     'dyallaae2z' : 'dyall-basis.dyall_aae2z',
     'dyallaae3z' : 'dyall-basis.dyall_aae3z',
     'dyallaae4z' : 'dyall-basis.dyall_aae4z',
-    'dyallacv2z' : 'dyall-basis.dyall_acv3z',
+    'dyallacv2z' : 'dyall-basis.dyall_acv2z',
     'dyallacv3z' : 'dyall-basis.dyall_acv3z',
     'dyallacv4z' : 'dyall-basis.dyall_acv4z',
     'dyallae2z' : 'dyall-basis.dyall_ae2z',
@@ -513,13 +513,30 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
-        except BasisNotFoundError:
-            try:
-                return parse_nwchem.parse(filename_or_basisname)
-            except IndexError:
-                raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
         except IndexError:
             raise BasisNotFoundError(filename_or_basisname)
+        except BasisNotFoundError as basis_err:
+            pass
+
+        try:
+            return parse_nwchem.parse(filename_or_basisname)
+        except IndexError:
+            raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
+        except BasisNotFoundError:
+            pass
+
+        # Last, a trial to access Basis Set Exchange database
+        from pyscf.basis import bse
+        if bse.basis_set_exchange is not None:
+            try:
+                bse_obj = bse.basis_set_exchange.api.get_basis(
+                    filename_or_basisname, elements=symb)
+            except KeyError:
+                raise BasisNotFoundError(filename_or_basisname)
+            else:
+                return bse._orbital_basis(bse_obj)[0]
+
+        raise basis_err
 
     if name in ALIAS:
         basmod = ALIAS[name]
@@ -565,8 +582,33 @@ def load_ecp(filename_or_basisname, symb):
     if name in ALIAS:
         basmod = ALIAS[name]
         return parse_nwchem.load_ecp(join(_BASIS_DIR, basmod), symb)
-    else:
+
+    try:
         return parse_ecp(filename_or_basisname, symb)
+    except IndexError:
+        raise BasisNotFoundError(filename_or_basisname)
+    except BasisNotFoundError as basis_err:
+        pass
+
+    try:
+        return parse_nwchem.parse_ecp(filename_or_basisname)
+    except IndexError:
+        raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
+    except BasisNotFoundError:
+        pass
+
+    # Last, a trial to access Basis Set Exchange database
+    from pyscf.basis import bse
+    if bse.basis_set_exchange is not None:
+        try:
+            bse_obj = bse.basis_set_exchange.api.get_basis(
+                filename_or_basisname, elements=symb)
+        except KeyError:
+            raise BasisNotFoundError(filename_or_basisname)
+        else:
+            return bse._ecp_basis(bse_obj)[0]
+
+    raise basis_err
 
 def _format_basis_name(basisname):
     return basisname.lower().replace('-', '').replace('_', '').replace(' ', '')

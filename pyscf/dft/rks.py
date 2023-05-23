@@ -78,19 +78,21 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_rks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
-        if ks.nlc:
-            assert 'VV10' in ks.nlc.upper()
-            _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm,
-                                      max_memory=max_memory)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        if ks.nlc or ni.libxc.is_nlc(ks.xc):
+            if ni.libxc.is_nlc(ks.xc):
+                xc = ks.xc
+            else:
+                assert ni.libxc.is_nlc(ks.nlc)
+                xc = ks.nlc
+            n, enlc, vnlc = ni.nr_nlc_vxc(mol, ks.nlcgrids, xc, dm,
+                                          max_memory=max_memory)
             exc += enlc
             vxc += vnlc
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+            logger.debug(ks, 'nelec with nlc grids = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    #enabling range-separated hybrids
-    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
-
-    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
+    if not ni.libxc.is_hybrid_xc(ks.xc):
         vk = None
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
@@ -101,12 +103,13 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj = ks.get_j(mol, dm, hermi)
         vxc += vj
     else:
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vk', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
-            if abs(omega) > 1e-10:  # For range separated Coulomb operator
+            if omega != 0:  # For range separated Coulomb
                 vklr = ks.get_k(mol, ddm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
@@ -115,7 +118,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
             vk *= hyb
-            if abs(omega) > 1e-10:
+            if omega != 0:
                 vklr = ks.get_k(mol, dm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
@@ -352,12 +355,14 @@ class KohnShamDFT(object):
             if hasattr(self._numint.libxc, 'xc_reference'):
                 log.info(textwrap.indent('\n'.join(self._numint.libxc.xc_reference(self.xc)), '    '))
 
-        if self.nlc!='':
-            log.info('NLC functional = %s', self.nlc)
-
         self.grids.dump_flags(verbose)
-        if self.nlc!='':
-            log.info('** Following is NLC Grids **')
+
+        if self.nlc or self._numint.libxc.is_nlc(self.xc):
+            log.info('** Following is NLC and NLC Grids **')
+            if self.nlc:
+                log.info('NLC functional = %s', self.nlc)
+            else:
+                log.info('NLC functional = %s', self.xc)
             self.nlcgrids.dump_flags(verbose)
 
         log.info('small_rho_cutoff = %g', self.small_rho_cutoff)
@@ -480,17 +485,17 @@ class KohnShamDFT(object):
                                                     self.grids)
             t0 = logger.timer(self, 'setting up grids', *t0)
 
-        if self.nlc != '':
-            if self.nlcgrids.coords is None:
-                t0 = (logger.process_clock(), logger.perf_counter())
-                self.nlcgrids.build(with_non0tab=True)
-                if (self.small_rho_cutoff > 1e-20 and
-                    # dm.ndim == 2 indicates ground state
-                    isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-                    # Filter grids the first time setup grids
-                    self.nlcgrids = prune_small_rho_grids_(self, self.mol, dm,
-                                                           self.nlcgrids)
-                t0 = logger.timer(self, 'setting up nlc grids', *t0)
+        is_nlc = self.nlc or self._numint.libxc.is_nlc(self.xc)
+        if is_nlc and self.nlcgrids.coords is None:
+            t0 = (logger.process_clock(), logger.perf_counter())
+            self.nlcgrids.build(with_non0tab=True)
+            if (self.small_rho_cutoff > 1e-20 and
+                # dm.ndim == 2 indicates ground state
+                isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+                # Filter grids the first time setup grids
+                self.nlcgrids = prune_small_rho_grids_(self, self.mol, dm,
+                                                       self.nlcgrids)
+            t0 = logger.timer(self, 'setting up nlc grids', *t0)
         return self
 
 # Update the KohnShamDFT label in scf.hf module

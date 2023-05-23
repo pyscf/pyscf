@@ -38,8 +38,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
-        hybrid = abs(hyb) > 1e-10
-        if abs(omega) > 1e-10:  # For range separated Coulomb
+        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+        if omega != 0:  # For range separated Coulomb
             raise NotImplementedError
 
         if not hybrid and isinstance(mf.with_df, multigrid.MultiGridFFTDF):
@@ -50,13 +50,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
                                                 mo_occ, 0, kpts)
         else:
-            if isinstance(mo_occ, numpy.ndarray):
-                mo_occ = mo_occ*.5
-            else:
-                mo_occ = [x*.5 for x in mo_occ]
-            rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
-                                                [mo_coeff]*2, [mo_occ]*2,
-                                                spin=1, kpts=kpts)
+            rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
+                                                mo_occ, 1, kpts)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
 
         if max_memory is None:
@@ -139,8 +134,8 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
-        hybrid = abs(hyb) > 1e-10
-        if abs(omega) > 1e-10:  # For range separated Coulomb
+        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+        if omega != 0:  # For range separated Coulomb
             raise NotImplementedError
 
         if not hybrid and isinstance(mf.with_df, multigrid.MultiGridFFTDF):
@@ -216,8 +211,8 @@ def _gen_rhf_response_gam(mf, mo_coeff=None, mo_occ=None,
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
-        hybrid = abs(hyb) > 1e-10
-        if abs(omega) > 1e-10:  # For range separated Coulomb
+        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+        if omega != 0:  # For range separated Coulomb
             raise NotImplementedError
 
         if not hybrid and isinstance(mf.with_df, multigrid.MultiGridFFTDF):
@@ -317,8 +312,8 @@ def _gen_uhf_response_gam(mf, mo_coeff=None, mo_occ=None,
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
-        hybrid = abs(hyb) > 1e-10
-        if abs(omega) > 1e-10:  # For range separated Coulomb
+        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+        if omega != 0:  # For range separated Coulomb
             raise NotImplementedError
 
         if not hybrid and isinstance(mf.with_df, multigrid.MultiGridFFTDF):

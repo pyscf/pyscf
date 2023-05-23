@@ -24,9 +24,10 @@ from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm, _tau_dot
 from pyscf.dft.numint import _scale_ao, _contract_rho
 from pyscf.dft.numint import OCCDROP
-from pyscf.dft.gen_grid import NBINS, CUTOFF
+from pyscf.dft.gen_grid import NBINS, CUTOFF, ALIGNMENT_UNIT
 from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import member, is_zero
+from pyscf.pbc.lib.kpts import KPoints
 
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
@@ -114,11 +115,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
         pyscf.dft.numint.eval_rho
 
     '''
-
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-    else:
-        ngrids, nao = ao[0].shape
+    ngrids, nao = ao.shape[-2:]
 
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
@@ -195,10 +192,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
     '''Refer to `pyscf.dft.numint.eval_rho2` for full documentation.
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-    else:
-        ngrids, nao = ao[0].shape
+    ngrids, nao = ao.shape[-2:]
 
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(mo_coeff):
@@ -246,7 +240,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                 rho = numpy.zeros(ngrids)
             elif xctype == 'GGA':
                 rho = numpy.zeros((4,ngrids))
-            if with_lapl:
+            elif with_lapl:
                 # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
                 rho = numpy.zeros((6,ngrids))
                 tau_idx = 5
@@ -554,6 +548,8 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+    if isinstance(kpts, KPoints):
+        kpts = kpts.kpts_ibz
     xctype = ni._xc_type(xc_code)
     if xctype == 'LDA':
         ao_deriv = 0
@@ -843,6 +839,10 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+    if isinstance(kpts, KPoints):
+        mo_coeff = kpts.transform_mo_coeff(mo_coeff)
+        mo_occ = kpts.transform_mo_occ(mo_occ)
+        kpts = kpts.kpts
     xctype = ni._xc_type(xc_code)
     if xctype == 'GGA':
         ao_deriv = 1
@@ -853,14 +853,24 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     else:
         ao_deriv = 0
 
+    if isinstance(ni, KNumInt):
+        # mo_coeff of KRHF has [mo_k1, mo_k2, ...]
+        is_rhf = mo_coeff[0][0].ndim == 1
+    else:
+        is_rhf = mo_coeff[0].ndim == 1
+
     nao = cell.nao_nr()
-    if spin == 0:
+    if is_rhf:
         rho = []
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
             rho.append(ni.eval_rho2(cell, ao_k1, mo_coeff, mo_occ, mask, xctype))
         rho = numpy.hstack(rho)
+        if spin == 1:
+            rho *= .5
+            rho = numpy.repeat(rho[numpy.newaxis], 2, axis=0)
     else:
+        assert spin == 1
         rhoa = []
         rhob = []
         for ao_k1, ao_k2, mask, weight, coords \
@@ -966,10 +976,11 @@ class NumInt(numint.NumInt):
         grids_weights = grids.weights
         ngrids = grids_coords.shape[0]
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-# NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
+        # NOTE to index grids.non0tab, blksize needs to be integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))*BLKSIZE
-            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*2400))
+            blksize = int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))
+            blksize = max(4, min(blksize, ngrids//BLKSIZE+1, 2400)) * BLKSIZE
+        assert blksize % BLKSIZE == 0
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:

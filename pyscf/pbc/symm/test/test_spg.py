@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 import unittest
 import numpy as np
+from pyscf import lib
 from pyscf.pbc import gto
 from pyscf.pbc.symm import space_group as spg
 
@@ -187,17 +188,27 @@ class KnownValues(unittest.TestCase):
         rot = np.empty([3,3], dtype=int)
         trans = np.empty([3], dtype=float)
         r = num % (3**9)
-        degit = 3**8
-        for i in range(3):
-            for j in range(3):
-                rot[i][j] = ( r % ( degit * 3 ) ) // degit - 1
-                degit = degit // 3
+        id_eye = int('211121112', 3)
+        id_max = int('222222222', 3)
+        r += id_eye
+        if r > id_max:
+            r -= id_max + 1
+        #s = np.base_repr(r, 3)
+        #s = '0'*(9-len(s)) + s
+        #rot = np.asarray([int(i) for i in s]) - 1
+        rot = np.asarray(lib.base_repr_int(r, 3, 9)) - 1
+        rot = rot.reshape(3,3)
+        #degit = 3**8
+        #for i in range(3):
+        #    for j in range(3):
+        #        rot[i][j] = ( r % ( degit * 3 ) ) // degit - 1
+        #        degit = degit // 3
         t = num // (3**9)
         degit = 12**2
         for i in range(3):
             trans[i] = ( float( ( t % ( degit * 12 ) ) // degit ) ) / 12.;
             degit = degit // 12
-        op = spg.SpaceGroup_element(rot, trans)
+        op = spg.SPGElement(rot, trans)
         self.assertTrue(hash(op) == num)
 
 

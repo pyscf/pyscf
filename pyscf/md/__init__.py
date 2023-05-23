@@ -29,7 +29,20 @@ Simple usage::
     >>> integrator = md.NVE(mf, dt=5, time=10).run()
 '''
 
-from pyscf.md import integrators
+import numpy as np
+
+from pyscf import __config__
+
+# Grabs the global SEED variable and creates the random number generator
+SEED = getattr(__config__, 'SEED', None)
+rng = np.random.Generator(np.random.PCG64(SEED))
+
+def set_seed(seed):
+    '''Sets the seed for the random number generator used by the md module'''
+    global rng
+    rng = np.random.Generator(np.random.PCG64(seed))
+
+from pyscf.md import integrators, distributions
 
 NVE = integrators.VelocityVerlet
 
