@@ -128,7 +128,7 @@ def logm(mrot):
         return rv @ ld @ rv.T
 
 def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
-                 verbose=4):
+                 canonicalization=True, verbose=4):
     """
     Brueckner coupled-cluster wrapper, using an outer-loop algorithm.
 
@@ -138,10 +138,12 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
         conv_tol_normu: convergence tolerance for u matrix.
         max_cycle: Maximum number of BCC cycles.
         diis: whether perform DIIS.
+        canonicalization: whether to semi-canonicalize the Brueckner orbitals.
         verbose: verbose for CCSD inner iterations.
 
     Returns:
         mycc: a modified CC object with t1 vanished.
+              mycc._scf and mycc will be modified.
     """
     log = lib.logger.new_logger(mycc, verbose)
     log.info("BCCD loop starts.")
@@ -256,6 +258,52 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             u = get_umat_from_t1(mycc.t1)
         else:
             log.warn("BCC: not converged, max_cycle reached.")
+
+    # semi-canonicalization
+    if canonicalization:
+        dm = mf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
+        vhf = mf.get_veff(mycc.mol, dm)
+        fockao = mf.get_fock(vhf=vhf, dm=dm)
+        e_corr = mycc.e_corr
+
+        if u.ndim == 2:
+            fock = mycc.mo_coeff.conj().T @ fockao @ mycc.mo_coeff
+            foo = fock[:mycc.nocc, :mycc.nocc]
+            fvv = fock[mycc.nocc:, mycc.nocc:]
+            ew_o, ev_o = la.eigh(foo)
+            ew_v, ev_v = la.eigh(fvv)
+            umat = la.block_diag(ev_o, ev_v)
+            umat_xcore = umat[np.ix_(frozen_mask, frozen_mask)]
+            mf.mo_coeff = mf.mo_coeff @ umat
+            mycc.mo_coeff = mf.mo_coeff
+        else:
+            umat = []
+            umat_xcore = []
+            for s in range(2):
+                fock = mycc.mo_coeff[s].conj().T @ fockao[s] @ mycc.mo_coeff[s]
+                foo = fock[:mycc.nocc[s], :mycc.nocc[s]]
+                fvv = fock[mycc.nocc[s]:, mycc.nocc[s]:]
+                ew_o, ev_o = la.eigh(foo)
+                ew_v, ev_v = la.eigh(fvv)
+                umat.append(la.block_diag(ev_o, ev_v))
+                umat_xcore.append(umat[-1][np.ix_(frozen_mask[s], frozen_mask[s])])
+            umat = np.asarray(umat)
+            mf.mo_coeff = np.einsum('spm, smn -> spn', mf.mo_coeff, umat)
+            mycc.mo_coeff = mf.mo_coeff
+
+        t1 = transform_t1_to_bo(mycc.t1, umat_xcore)
+        t2 = transform_t2_to_bo(mycc.t2, umat_xcore)
+
+        mf.e_tot = mf.energy_tot()
+        mycc.__init__(mf)
+        mycc.e_hf = mycc.get_e_hf()
+        mycc.e_corr = e_corr
+        mycc.frozen = frozen
+        mycc.level_shift = level_shift
+        mycc.verbose = verbose
+        mycc.t1 = np.asarray(t1, order='C')
+        mycc.t2 = np.asarray(t2, order='C')
+
     return mycc
 
 if __name__ == "__main__":
@@ -276,11 +324,15 @@ if __name__ == "__main__":
     rdm1_mf = myhf.make_rdm1()
 
     mycc = cc.CCSD(myhf, frozen=None)
+    #mycc.frozen = [0]
     mycc.kernel()
     mycc.conv_tol = 1e-3
 
     mycc = bccd_kernel_(mycc, diis=True, verbose=4)
     e_r = mycc.e_tot
+    e_ccsd_t = mycc.ccsd_t()
+    # PSI4 reference
+    assert abs(e_ccsd_t - -0.002625521337000) < 1e-5
 
     print (la.norm(mycc.t1))
     assert la.norm(mycc.t1) < 1e-5
