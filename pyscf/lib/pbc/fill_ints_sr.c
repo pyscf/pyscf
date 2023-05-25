@@ -184,10 +184,8 @@ static void _nr2c_k_fill(int (*intor)(), double complex *out,
                 Rij2_cut = uniq_Rcut2s[IJSH];
                 if (Rij2 < Rij2_cut) {
                     env_loc[PTR_RANGE_OMEGA] = 0.;
-                    /*if ((*intor)(pbuf, NULL, shls, atm, natm, bas, nbas,*/
-                                 /*env_loc, cintopt, cache)) {*/
-                        /*empty = 0;*/
-                    /*}*/
+                    (*intor)(pbuf, NULL, shls, atm, natm, bas, nbas,
+                             env_loc, cintopt, cache);
                     env_loc[PTR_RANGE_OMEGA] = omega;
                     if ((*intor)(pbuf2, NULL, shls, atm, natm, bas, nbas,
                                  env_loc, cintopt, cache)) {
@@ -857,11 +855,8 @@ static void _nr3c_bvk_k(int (*intor)(), void (*fsort)(),
                             Rijk2 = get_dsqure(rc, rk);
                             if (Rijk2 < Rcut2) {
                                 env_loc[PTR_RANGE_OMEGA] = 0.;
-                                /*if ((*intor)(pbuf1, NULL, shls, atm, natm,*/
-                                             /*bas, nbas, env_loc, cintopt,*/
-                                             /*cache)) {*/
-                                    /*empty = 0;*/
-                                /*}*/
+                                (*intor)(pbuf1, NULL, shls, atm, natm, bas, nbas,
+                                         env_loc, cintopt, cache);
                                 env_loc[PTR_RANGE_OMEGA] = omega;
                                 if ((*intor)(pbuf2, NULL, shls, atm, natm,
                                              bas, nbas, env_loc, cintopt,
@@ -1137,11 +1132,8 @@ static void _nr3c_k(int (*intor)(), void (*fsort)(),
                     Rijk2 = get_dsqure(rc, rk);
                     if (Rijk2 < Rcut2) {
                         env_loc[PTR_RANGE_OMEGA] = 0.;
-                        /*if ((*intor)(pbuf, NULL, shls, atm, natm,*/
-                                     /*bas, nbas, env_loc, cintopt,*/
-                                     /*cache)) {*/
-                            /*empty = 0;*/
-                        /*}*/
+                        (*intor)(pbuf, NULL, shls, atm, natm, bas, nbas,
+                                 env_loc, cintopt, cache);
                         env_loc[PTR_RANGE_OMEGA] = omega;
                         if ((*intor)(pbuf2, NULL, shls, atm, natm,
                                      bas, nbas, env_loc, cintopt,
@@ -1556,11 +1548,8 @@ static void _nr3c_bvk_kk(int (*intor)(), void (*fsort)(),
                                 Rijk2 = get_dsqure(rc, rk);
                                 if (Rijk2 < Rcut2) {
                                     env_loc[PTR_RANGE_OMEGA] = 0.;
-                                    /*if ((*intor)(buf_rs, NULL, shls, atm, natm,*/
-                                                 /*bas, nbas, env_loc, cintopt,*/
-                                                 /*cache)) {*/
-                                        /*empty = 0;*/
-                                    /*}*/
+                                    (*intor)(buf_rs, NULL, shls, atm, natm, bas, nbas,
+                                             env_loc, cintopt, cache);
                                     env_loc[PTR_RANGE_OMEGA] = omega;
                                     if ((*intor)(pbuf_rs, NULL, shls, atm, natm,
                                                  bas, nbas, env_loc, cintopt,
@@ -1828,11 +1817,8 @@ static void _nr3c_kk(int (*intor)(), void (*fsort)(),
                         Rijk2 = get_dsqure(rc, rk);
                         if (Rijk2 < Rcut2) {
                             env_loc[PTR_RANGE_OMEGA] = 0.;
-                            /*if ((*intor)(pbuf, NULL, shls, atm, natm,*/
-                                         /*bas, nbas, env_loc, cintopt,*/
-                                         /*cache)) {*/
-                                /*empty = 0;*/
-                            /*}*/
+                            (*intor)(pbuf, NULL, shls, atm, natm, bas, nbas,
+                                     env_loc, cintopt, cache);
                             env_loc[PTR_RANGE_OMEGA] = omega;
                             if ((*intor)(pbuf2, NULL, shls, atm, natm,
                                          bas, nbas, env_loc, cintopt,
