@@ -746,6 +746,16 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
         }
 }
 
+// callback after xc_func_type is fully initialized in LIBXC_eval_xc
+// useful for using custom parameters in xc functionals
+typedef void (*init_callback)(xc_func_type *);
+
+static init_callback installed_callback = NULL;
+
+void LIBXC_install_init_callback(init_callback func) {
+        installed_callback = func;
+}
+
 // omega is the range separation parameter mu in xcfun
 void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                    int spin, int deriv, int np,
@@ -832,6 +842,9 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
 #if defined XC_SET_RELATIVITY
                 xc_lda_x_set_params(&func, relativity);
 #endif
+                if (installed_callback != NULL) {
+                        installed_callback(&func);
+                }
                 _eval_xc(&func, spin, np, rho_u, rho_d, ebuf, vbuf, fbuf, kbuf);
                 merge_xc(output, ebuf, vbuf, fbuf, kbuf, fac[i],
                          np, outlen, nvar, spin, func.info->family);
