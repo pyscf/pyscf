@@ -59,7 +59,7 @@ initGuess = 'minao' # Default
 # stepsize: Stepsize of the parent CIAH solver
 stepsize = 0.2 # Default
 
-m3_1 = scf.M3SOSCF(scf.RHF(mol_1), 5, purge_solvers=purge_solvers, convergece=convergence, initScattering=initScattering, trustScaleRange=trustScaleRange, memSize=memSize, memScale=memScale, initGuess=initGuess, stepsize=stepsize)
+m3_1 = scf.M3SOSCF(scf.RHF(mol_1), 5, purge_solvers=purge_solvers, convergence=convergence, init_scattering=initScattering, trust_scale_range=trustScaleRange, mem_size=memSize, mem_scale=memScale, init_guess=initGuess, stepsize=stepsize)
 conv, e_tot, mo_energy, mo_coeff, mo_occ = m3_1.kernel()
 print(f"Converged? {conv}\nTotal Energy: {e_tot} ha")
 

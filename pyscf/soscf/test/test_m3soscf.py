@@ -24,71 +24,90 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import dft
 
+'''
 def setUpModule():
-    global h2o_z0, h2o_z1, h2o_z0_s, h2o_z1_s, h4_z0_s, h4_z1_s
-    h2o_z0 = gto.M(
+    global mol1, mol3
+    mol1 = gto.M(
         verbose = 5,
         output = '/dev/null',
-        atom = [
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ],
-        basis = '6-31g')
+        atom = "He 0.0 0.0 0.0; He 1.0 0.0 0.0",
+        spin = 0,
+        basis = '6-31g*')
 
-    h2o_z1 = gto.M(
+    mol3 = gto.M(
         verbose = 5,
         output = '/dev/null',
-        atom = [
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ],
-        basis = '6-31g',
-        charge = 1,
-        spin = 1,)
+        atom = "He 0.0 0.0 0.0; He 1.0 0.0 0.0",
+        basis = '6-31g*',
+        spin = 2,)
 
 def tearDownModule():
-    global h2o_z0, h2o_z1
-    h2o_z0.stdout.close()
-    h2o_z1.stdout.close()
-    del h2o_z0, h2o_z1
+    global mol1, mol3
+    mol1.stdout.close()
+    mol3.stdout.close()
+    del mol1, mol3
+'''
 
 class KnownValues(unittest.TestCase):
+
+    def setUp(self):
+        self.mol1 = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = "Li 0.0 0.0 0.0; H 1.0 0.0 0.0",
+            spin = 0,
+            basis = '6-31g')
+
+        self.mol3 = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = "Li 0.0 0.0 0.0; H 1.0 0.0 0.0",
+            basis = '6-31g',
+            spin = 2,)
+
+
+    def tearDown(self):
+        self.mol1.stdout.close()
+        self.mol3.stdout.close()
+        del self.mol1, self.mol3
+
     def test_nr_rhf(self):
-        mf = scf.RHF(h2o_z0)
+        mf = scf.RHF(self.mol1)
         m3 = scf.M3SOSCF(mf, 2)
         d = m3.converge()
-        self.assertAlmostEqual(d[1], -75.98394849812, 9)
+        self.assertAlmostEqual(d[1], -7.871355587185268, 9)
 
     def test_nr_rohf(self):
-        mf = scf.RHF(h2o_z1)
+        mf = scf.RHF(self.mol3)
         m3 = scf.M3SOSCF(mf, 2)
         d = m3.converge()
-        self.assertAlmostEqual(d[1], -75.5783963795897, 9)
+        self.assertAlmostEqual(d[1], -7.775069668379746, 9)
 
 
     def test_nr_uhf(self):
-        mf = scf.UHF(h2o_z1)
-        nr = scf.M3SOSCF(mf, 2)
+        mf = scf.UHF(self.mol3)
+        m3 = scf.M3SOSCF(mf, 2)
         d = m3.converge()
-        self.assertAlmostEqual(d[1], -75.58051984397145, 9)
+        self.assertAlmostEqual(d[1], -7.775142720974782, 9)
 
     def test_nr_rks_lda(self):
-        mf = dft.RKS(h2o_z0)
+        mf = dft.RKS(self.mol1)
         eref = mf.kernel()
-        nr = scf.M3SOSCF(mf, 2)
+        m3 = scf.M3SOSCF(mf, 2)
         d = m3.converge()
         self.assertAlmostEqual(d[1], eref, 9)
 
     def test_nr_rks_rsh(self):
         '''test range-separated Coulomb'''
-        mf = dft.RKS(h2o_z0)
+        mf = dft.RKS(self.mol1)
         mf.xc = 'wb97x'
         eref = mf.kernel()
         m3 = scf.M3SOSCF(mf, 2)
+        d = m3.converge()
         self.assertAlmostEqual(d[1], eref, 9)
 
     def test_nr_rks(self):
-        mf = dft.RKS(h2o_z0)
+        mf = dft.RKS(self.mol1)
         mf.xc = 'b3lyp'
         eref = mf.kernel()
         m3 = scf.M3SOSCF(mf, 2)
@@ -96,7 +115,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(d[1], eref, 9)
 
     def test_nr_roks(self):
-        mf = dft.RKS(h2o_z1)
+        mf = dft.RKS(self.mol1)
         mf.xc = 'b3lyp'
         eref = mf.kernel()
         m3 = scf.M3SOSCF(mf, 2)
@@ -105,7 +124,7 @@ class KnownValues(unittest.TestCase):
 
 
     def test_nr_uks_lda(self):
-        mf = dft.UKS(h2o_z1)
+        mf = dft.UKS(self.mol3)
         eref = mf.kernel()
         m3 = scf.M3SOSCF(mf, 2)
         d = m3.converge()
@@ -113,7 +132,7 @@ class KnownValues(unittest.TestCase):
 
     def test_nr_uks_rsh(self):
         '''test range-separated Coulomb'''
-        mf = dft.UKS(h2o_z1)
+        mf = dft.UKS(self.mol3)
         mf.xc = 'wb97x'
         eref = mf.kernel()
         m3 = scf.M3SOSCF(mf, 2)
@@ -121,7 +140,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(d[1], eref, 9)
 
     def test_nr_uks(self):
-        mf = dft.UKS(h2o_z1)
+        mf = dft.UKS(self.mol3)
         mf.xc = 'b3lyp'
         eref = mf.kernel()
         m3 = scf.M3SOSCF(mf, 2)
