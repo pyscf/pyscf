@@ -1656,3 +1656,9 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 def define_xc(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return define_xc_(copy.copy(ni), description, xctype, hyb, rsh)
 define_xc.__doc__ = define_xc_.__doc__
+
+def libxc_install_init_callback(callback):
+    _itrf.LIBXC_install_init_callback(callback)
+
+def libxc_remove_init_callback():
+    _itrf.LIBXC_install_init_callback(None)
