@@ -47,7 +47,7 @@ print('\nNormal B97-3')
 mf.xc = 'B973'
 e_b973 = mf.kernel()
 
-# Install callback to our reparameterization library
+# Install callback
 dft.libxc.libxc_install_init_callback(param_lib.init_callback)
 
 # Construct XC based on B97-2, but set its parameter to be B97-1
@@ -61,7 +61,7 @@ param_lib.set_param(param.ctypes)
 e = mf.kernel()
 print('difference:', e - e_b971)
 
-# New parameters will retain until one manually removes it, even 
+# New parameters will retain until one manually removes it, even
 # when a new `mf` object is created.
 print('\nRerun reparameterized B97-2: will be the same as B97-1')
 mf = dft.RKS(mol, 'B972')
@@ -69,11 +69,10 @@ e = mf.kernel()
 print('difference:', e - e_b971)
 
 # Set parameter to be B97-3 and rerun
-# One can simply call `set_param()` and call `kernel()` again, without the need
-# to construct a new `mf` object or to call `libxc_install_init_callback()` again.
-# However, note that percentage of HF exchange is handled within PySCF.
-# One needs to specify a new HF exchange percentage in the `mf.xc` property.
-# Changing the HF exchange percentage in LibXC using the callback will have no effect.
+# This is an example to modify the HF exchange percentage.
+# Note that percentage of HF exchange is handled by PySCF.
+# One needs to specify a new HF exchange percentage using the `mf.xc` property.
+# Changing the HF exchange percentage in Libxc using the callback has no effect.
 print('\nReparameterized B97-2: will be the same as B97-3')
 # Put the DIFFERENCE of HF exchange between B97-3 and B97-2 in `mf.xc`
 mf.xc = 'B972 + 0.059288 * HF'
