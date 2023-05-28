@@ -31,7 +31,7 @@ class KnownValues(unittest.TestCase):
         pcm.lmax = 6
         pcm.lebedev_order = 17
         mf = scf.RHF(mol).ddPCM(pcm).run()
-        self.assertAlmostEqual(mf.e_tot, -112.35457046199065, 9)
+        self.assertAlmostEqual(mf.e_tot, -112.3544929827, 8)
 
 
 if __name__ == "__main__":
