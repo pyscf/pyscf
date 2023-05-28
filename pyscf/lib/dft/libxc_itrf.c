@@ -374,16 +374,35 @@ static int custom_ext_params_count = 0;
 
 int set_ext_params(int id, double *params, size_t size)
 {
+        // Update existing entry if exists
         for (int i = 0; i < custom_ext_params_count; i++) {
-                if (custom_ext_params[i].id == id) {
-                        if (custom_ext_params[i].size != size) {
-                                return -1;
+                ext_params *p = &custom_ext_params[i];
+                if (p->id == id) {
+                        if (p->size != size) {
+                                fprintf(stderr, "Inconsistent parameter size. Expected %lu but got %lu\n", p->size, size);
+                                raise_error -1;
                         }
-                        memcpy(custom_ext_params[i].params, params, size * sizeof(double));
+                        memcpy(p->params, params, size * sizeof(double));
                         return 0;
                 }
         }
 
+        {
+                // Check params size
+                xc_func_type func;
+                if (xc_func_init(&func, id, XC_UNPOLARIZED) != 0){
+                        fprintf(stderr, "XC functional %d not found\n", id);
+                        raise_error -1;
+                }
+                int ref_size = func.info->ext_params.n;
+                xc_func_end(&func);
+                if (ref_size != size) {
+                        fprintf(stderr, "Inconsistent parameter size. Expected %d but got %lu.\n", ref_size, size);
+                        raise_error -1;
+                }
+        }
+
+        // Create new entry
         int i = custom_ext_params_count++;
         custom_ext_params = realloc(custom_ext_params, custom_ext_params_count * sizeof(ext_params));
         ext_params *p = &custom_ext_params[i];
@@ -421,15 +440,26 @@ void clear_ext_params()
 
 void print_ext_params()
 {
+        puts("Custom external functionals defined for the following functional(s):");
         for (int i = 0; i < custom_ext_params_count; i++) {
                 ext_params *p = &custom_ext_params[i];
-                printf("id: %d\n", p->id);
-                printf("size: %lu\n", p->size);
-                printf("params: ");
-                for (int j = 0; j < p->size; j++) {
-                        printf("%f ", p->params[j]);
+                xc_func_type func;
+                if (xc_func_init(&func, p->id, XC_UNPOLARIZED) != 0){
+                        fprintf(stderr, "XC functional %d not found\n", p->id);
+                        raise_error;
                 }
-                printf("\n");
+                printf("name: %s\n", func.info->name);
+                printf("id: %d\n", p->id);
+                printf("parameter size: %lu\n", p->size);
+                puts("parameter values:");
+                printf("%3s %14s %8s %s\n", "idx", "value", "name", "description");
+                for (int j = 0; j < p->size; j++) {
+                        printf("%3i %14.6e %8s %s\n", j, p->params[j],
+                                xc_func_info_get_ext_params_name(func.info, j),
+                                xc_func_info_get_ext_params_description(func.info, j));
+                }
+                xc_func_end(&func);
+                putchar('\n');
         }
 }
 
