@@ -1663,7 +1663,12 @@ def define_xc(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return define_xc_(copy.copy(ni), description, xctype, hyb, rsh)
 define_xc.__doc__ = define_xc_.__doc__
 
-def set_ext_params(xc_code, params):
+def clear_lru_cache():
+    hybrid_coeff.cache_clear()
+    nlc_coeff.cache_clear()
+    rsh_coeff.cache_clear()
+
+def set_ext_params(xc_code, params, clear_cache=True):
     if isinstance(params, numpy.ndarray):
         c_params = params.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
     else:
@@ -1671,14 +1676,20 @@ def set_ext_params(xc_code, params):
     status = _itrf.set_ext_params(xc_code, c_params, len(params))
     if status != 0:
         raise RuntimeError("Failed to set external parameters. Check the size of params.")
+    if clear_cache:
+        clear_lru_cache()
 
-def remove_ext_params(xc_code):
+def remove_ext_params(xc_code, clear_cache=True):
     status = _itrf.remove_ext_params(xc_code)
     if status != 0:
         raise RuntimeError(f"Failed to remove external parameter {xc_code}. Parameters not set.")
+    if clear_cache:
+        clear_lru_cache()
 
-def clear_ext_params():
+def clear_ext_params(clear_cache=True):
     _itrf.clear_ext_params()
+    if clear_cache:
+        clear_lru_cache()
 
 def print_ext_params():
     _itrf.print_ext_params()
