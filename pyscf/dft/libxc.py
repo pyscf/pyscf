@@ -60,6 +60,12 @@ _itrf.LIBXC_xc_reference.argtypes = [ctypes.c_int, (ctypes.c_char_p * 8)]
 _itrf.xc_functional_get_number.argtypes = (ctypes.c_char_p, )
 _itrf.xc_functional_get_number.restype = ctypes.c_int
 
+_itrf.set_ext_params.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+_itrf.set_ext_params.restype = ctypes.c_int
+
+_itrf.remove_ext_params.argtypes = [ctypes.c_int]
+_itrf.remove_ext_params.restype = ctypes.c_int
+
 def libxc_version():
     '''Returns the version of libxc'''
     return _itrf.LIBXC_version().decode("UTF-8")
@@ -1657,8 +1663,22 @@ def define_xc(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return define_xc_(copy.copy(ni), description, xctype, hyb, rsh)
 define_xc.__doc__ = define_xc_.__doc__
 
-def libxc_install_init_callback(callback):
-    _itrf.LIBXC_install_init_callback(callback)
+def set_ext_params(xc_code, params):
+    if isinstance(params, numpy.ndarray):
+        c_params = params.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    else:
+        c_params = (ctypes.c_double * len(params))(*params)
+    status = _itrf.set_ext_params(xc_code, c_params, len(params))
+    if status != 0:
+        raise RuntimeError("Failed to set external parameters. Check the size of params.")
 
-def libxc_remove_init_callback():
-    _itrf.LIBXC_install_init_callback(None)
+def remove_ext_params(xc_code):
+    status = _itrf.remove_ext_params(xc_code)
+    if status != 0:
+        raise RuntimeError(f"Failed to remove external parameter {xc_code}. Parameters not set.")
+
+def clear_ext_params():
+    _itrf.clear_ext_params()
+
+def print_ext_params():
+    _itrf.print_ext_params()

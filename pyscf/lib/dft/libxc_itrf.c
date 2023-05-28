@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 #include <xc.h>
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
@@ -362,6 +363,94 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
         }
 }
 
+typedef struct {
+        int id;
+        double *params;
+        size_t size;
+} ext_params;
+
+static ext_params *custom_ext_params = NULL;
+static int custom_ext_params_count = 0;
+
+int set_ext_params(int id, double *params, size_t size)
+{
+        for (int i = 0; i < custom_ext_params_count; i++) {
+                if (custom_ext_params[i].id == id) {
+                        if (custom_ext_params[i].size != size) {
+                                return -1;
+                        }
+                        memcpy(custom_ext_params[i].params, params, size * sizeof(double));
+                        return 0;
+                }
+        }
+
+        int i = custom_ext_params_count++;
+        custom_ext_params = realloc(custom_ext_params, custom_ext_params_count * sizeof(ext_params));
+        ext_params *p = &custom_ext_params[i];
+        p->id = id;
+        p->params = malloc(size * sizeof(double));
+        memcpy(p->params, params, size * sizeof(double));
+        p->size = size;
+        return 0;
+}
+
+int remove_ext_params(int id)
+{
+        for (int i = 0; i < custom_ext_params_count; i++) {
+                if (custom_ext_params[i].id == id) {
+                        free(custom_ext_params[i].params);
+                        for (int j = i; j < custom_ext_params_count - 1; j++) {
+                                custom_ext_params[j] = custom_ext_params[j + 1];
+                        }
+                        custom_ext_params_count--;
+                        return 0;
+                }
+        }
+        return -1;
+}
+
+void clear_ext_params()
+{
+        for (int i = 0; i < custom_ext_params_count; i++) {
+                free(custom_ext_params[i].params);
+        }
+        free(custom_ext_params);
+        custom_ext_params = NULL;
+        custom_ext_params_count = 0;
+}
+
+void print_ext_params()
+{
+        for (int i = 0; i < custom_ext_params_count; i++) {
+                ext_params *p = &custom_ext_params[i];
+                printf("id: %d\n", p->id);
+                printf("size: %lu\n", p->size);
+                printf("params: ");
+                for (int j = 0; j < p->size; j++) {
+                        printf("%f ", p->params[j]);
+                }
+                printf("\n");
+        }
+}
+
+static int _xc_func_init(xc_func_type *func, int xc_id, int spin)
+{
+        int error = xc_func_init(func, xc_id, spin);
+        if (error != 0){
+                return error;
+        }
+        if (custom_ext_params_count > 0){
+                for (int i = 0; i < custom_ext_params_count; i++) {
+                        ext_params *p = &custom_ext_params[i];
+                        if (xc_id == p->id) {
+                                xc_func_set_ext_params(func, p->params);
+                                break;
+                        }
+                }
+        }
+        return error;
+}
+
 int LIBXC_is_lda(int xc_id)
 {
         xc_func_type func;
@@ -481,7 +570,7 @@ double LIBXC_hybrid_coeff(int xc_id)
 {
         xc_func_type func;
         double factor;
-        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+        if(_xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
                 raise_error 0.0;
         }
@@ -514,7 +603,7 @@ double LIBXC_hybrid_coeff(int xc_id)
 void LIBXC_nlc_coeff(int xc_id, double *nlc_pars) {
 
         xc_func_type func;
-        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+        if(_xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
                 raise_error;
         }
@@ -525,7 +614,7 @@ void LIBXC_nlc_coeff(int xc_id, double *nlc_pars) {
 void LIBXC_rsh_coeff(int xc_id, double *rsh_pars) {
 
         xc_func_type func;
-        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+        if(_xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
                 raise_error;
         }
@@ -746,16 +835,6 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
         }
 }
 
-// callback after xc_func_type is fully initialized in LIBXC_eval_xc
-// useful for using custom parameters in xc functionals
-typedef void (*init_callback)(xc_func_type *);
-
-static init_callback installed_callback = NULL;
-
-void LIBXC_install_init_callback(init_callback func) {
-        installed_callback = func;
-}
-
 // omega is the range separation parameter mu in xcfun
 void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                    int spin, int deriv, int np,
@@ -794,7 +873,7 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
         int i, j;
         xc_func_type func;
         for (i = 0; i < nfn; i++) {
-                if (xc_func_init(&func, fn_id[i], spin) != 0) {
+                if (_xc_func_init(&func, fn_id[i], spin) != 0) {
                         fprintf(stderr, "XC functional %d not found\n",
                                 fn_id[i]);
                         raise_error;
@@ -842,9 +921,6 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
 #if defined XC_SET_RELATIVITY
                 xc_lda_x_set_params(&func, relativity);
 #endif
-                if (installed_callback != NULL) {
-                        installed_callback(&func);
-                }
                 _eval_xc(&func, spin, np, rho_u, rho_d, ebuf, vbuf, fbuf, kbuf);
                 merge_xc(output, ebuf, vbuf, fbuf, kbuf, fac[i],
                          np, outlen, nvar, spin, func.info->family);
