@@ -36,13 +36,14 @@ e_b973 = mf.kernel()
 
 # Construct XC based on B97-2, but set its parameter to be B97-1
 print('\nReparameterized B97-2: will be the same as B97-1')
+XC_ID_B97_2 = 410
 mf.xc = 'B97-2'
 param = np.array([0.789518, 0.573805, 0.660975, 0.0, 0.0,
                   0.0820011, 2.71681, -2.87103, 0.0, 0.0,
                   0.955689, 0.788552, -5.47869, 0.0, 0.0,
                   0.21
 ])
-dft.libxc.set_ext_params(410, param)
+dft.libxc.set_ext_params(XC_ID_B97_2, param)
 e = mf.kernel()
 print('difference:', e - e_b971)
 
@@ -54,21 +55,27 @@ e = mf.kernel()
 print('difference:', e - e_b971)
 
 # Set parameter to be B97-3 and rerun
-# This is an example that involes change in HF exchange percentage.
+# Change in HF exchange percentage will be handled automatically
 print('\nReparameterized B97-2: will be the same as B97-3')
 param = np.array([0.7334648, 0.292527, 3.338789, -10.51158, 10.60907,
                   0.5623649, -1.32298, 6.359191, -7.464002, 1.827082,
                   1.13383, -2.811967, 7.431302, -1.969342, -11.74423,
                   2.692880E-01
 ])
-dft.libxc.set_ext_params(410, param)
+dft.libxc.set_ext_params(XC_ID_B97_2, param)
 mf = dft.RKS(mol, 'B97-2')
 e = mf.kernel()
 print('difference:', e - e_b973)
+print()
 
-# Reset parameters
-print('\nAfter removing callback: will be the same as normal B97-2')
-dft.libxc.clear_ext_params()
+# Print currently set external parameters for debugging
+dft.libxc.print_ext_params()
+
+# Remove parameters
+print('\nAfter removing custom parameter: will be the same as normal B97-2')
+dft.libxc.remove_ext_params(XC_ID_B97_2)
 e = mf.kernel()
 print('difference:', e - e_b972)
 
+# One may also remove all custom parameters using
+#   dft.libxc.clear_ext_params()
