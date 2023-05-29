@@ -21,22 +21,24 @@ class Chooser():
     Implements the ranked-orbital selection scheme outlined in https://doi.org/10.1021/acs.jctc.1c00037
     Given a set of entropies, will select all orbitals for the active space and then drop the lowest-entropy orbitals
     until the size constraint max_size is met.
-    
+
     Args:
         orbs: 2D Numpy Array
             Orbitals to choose from, spanning the entire basis (must be square matrix of coefficients)
         occ: 1D Numpy Array
             Orbital occupations for orbs (2,1,0); nactel will be set to the number of electrons in the selected orbitals
-        entropies: 1D Numpy Array 
+        entropies: 1D Numpy Array
             Importance measurment used to rank the orbitals
         max_size: Int or Tuple
-            Active space size constraint. If tuple, interpreted as (nelecas,ncas), if int interpreted as max # of orbitals
-            
+            Active space size constraint.
+            If tuple, interpreted as (nelecas,ncas)
+            If int, interpreted as max # of orbitals
+
     Returns:
         active-space-size, #-active-electrons, orbital-initial-guess, chosen-active-orbital-indeces
-        
+
     Example:
-    
+
     #Randomly ranked orbitals
     >>> import numpy as np
     >>> from pyscf import gto, scf, mcscf
@@ -48,21 +50,25 @@ class Chooser():
     >>> ncas, nelecas, casorbs, active_idx = chooser.kernel()
     >>> mc = mcscf.CASSCF(mf, ncas, nelecas).run(casorbs)
     """
-    
+
     def __init__(self,orbs,occ,entropies,max_size=(8,8),verbose=4):
         #Check that we have a full set of orbitals:
         assert(orbs.shape[0] == orbs.shape[1])
         assert(len(occ) == len(entropies))
         assert(len(entropies) == orbs.shape[1])
-        
+
         self.log = logger.new_logger(lib.StreamObject,verbose)
         self.orbs = orbs
         self.occ = np.array(occ)
-        self.entropies = entropies
+        self.entropies = np.asarray(entropies)
         self.max_size = max_size
         self.verbose = verbose
-        
+
     def _ncsf(self,nactel,norbs):
+        """
+        Returns number of CSFs in a (nactel,nactorbs) active space
+        Assumes minimum number Sz = alpha - beta (0 for even nactel, 1 for odd nactel)
+        """
         from scipy.special import comb
         alpha = int(nactel//2 + nactel%2)
         beta = int(nactel//2)
@@ -70,28 +76,34 @@ class Chooser():
         term2 = comb(norbs,alpha+1)*comb(norbs,beta-1)
         ncsf = term1-term2
         return ncsf
-        
+
     def _calc_ncsf(self,active_idx):
+        """
+        Returns the number of CSFs given the active index using the info in self.occ
+        Passes this info to self._ncsf to calculate the size of the active space
+        """
         occ = self.occ
         nactel = np.sum(np.array(occ)[active_idx])
         norbs = len(active_idx)
         return self._ncsf(nactel,norbs)
-    
+
     def _as_is_reasonable(self,active_idx):
         #Checks active space reasonability
         occ = self.occ
-        
-        nactel = np.sum(np.array(occ)[active_idx])        
+
+        nactel = np.sum(np.array(occ)[active_idx])
         num_os = len(np.where(occ == 1)[0])
-        
+        nactorbs = len(active_idx)
+
         condition1 = (nactel > 0)
         condition2 = (nactel < 2*len(active_idx))
-        condition3 = (len(active_idx) >= num_os)
-        
+        condition3 = (nactorbs >= num_os)
+
         if (condition1 and condition2 and condition3):
             return True
         else:
             self.log.debug("Active space is not reasonable!")
+            self.log.debug(f"Nactel: {nactel}, Nactorbs: {nactorbs}, Num OS: {num_os}")
             if not condition1:
                 self.log.debug("Condition 1 not met")
             elif not condition2:
@@ -99,43 +111,43 @@ class Chooser():
             elif not condition3:
                 self.log.debug("Condition 3 not met")
             return False
-        
+
     def kernel(self):
         log = self.log
         entropies = self.entropies.copy()
         occ = self.occ.copy()
-        
+
         #Change singly occupied orbitals to have larger entropies so they are selected:
         os_idx = np.where(occ == 1)[0]
         entropies[os_idx] = np.max(entropies) + 0.01
         if len(os_idx) > 0:
             log.info("Singly occupied orbitals found, setting them to have entropy of max + 0.01...")
-        
+
         #Start with all orbitals in active space:
         active_idx = list(range(len(entropies)))
         inactive_idx = []
         secondary_idx = []
-        
+
         #Size constraint:
-        if isinstance(self.max_size,tuple):
+        if isinstance(self.max_size, (tuple, list, np.ndarray)):
             nactel,norbs = self.max_size
             max_size = self._ncsf(nactel,norbs)
             as_size = self._calc_ncsf(active_idx)
         else:
             max_size = self.max_size
             as_size = len(active_idx)
-                
+
         nactel = int(np.sum(np.array(occ)[active_idx]))
         nactorbs = len(active_idx)
         log.debug(f"Initial active space of ({nactel},{nactorbs}) has size {as_size}")
         log.debug(f"Maximum active space size set to {max_size}")
-        
+
         #Drop orbitals until size constraint is satisfied:
         while as_size > max_size:
             nactel = int(np.sum(np.array(occ)[active_idx]))
             nactorbs = len(active_idx)
             log.debug(f"Active space of ({nactel},{nactorbs}) has size {as_size} larger than {max_size}")
-            log.debug(f"Dropping lowest entropy orbital...")
+            log.debug("Dropping lowest entropy orbital...")
 
             #Get active orbital entropies
             active_entropies = entropies[active_idx]
@@ -152,7 +164,7 @@ class Chooser():
                     dropped_idx_occ = int(occ[dropped_idx])
                 except IndexError:
                     log.error("Not enough orbitals to choose a reasonable active space!")
-                    assert(active_space_is_reasonable)
+                    raise RuntimeError("Not enough orbitals to choose a reasonable active space!")
 
                 new_inactive_idx = inactive_idx.copy()
                 new_active_idx = active_idx.copy()
@@ -165,12 +177,13 @@ class Chooser():
                     new_active_idx.remove(dropped_idx)
                     new_secondary_idx += [dropped_idx]
 
-                log.debug(f"Attempting to drop orbital {dropped_idx} with occupancy {dropped_idx_occ} and entropy {dropped_idx_entropy}...")
+                log.debug(f"Attempting to drop orbital {dropped_idx} \
+                (occ={dropped_idx_occ}, S={dropped_idx_entropy})...")
                 active_space_is_reasonable = self._as_is_reasonable(new_active_idx)
                 if active_space_is_reasonable:
-                    log.debug(f"Orbital has been dropped")
+                    log.debug("Orbital has been dropped")
                 else:
-                    log.debug(f"Active space becomes unreasonable if this orbital is dropped, trying next option...")
+                    log.debug("Active space becomes unreasonable if this orbital is dropped, trying next option...")
 
                 tries += 1
 
@@ -184,11 +197,11 @@ class Chooser():
                 as_size = self._calc_ncsf(active_idx)
             else:
                 as_size = len(active_idx)
-        
+
         #Final checks:
         assert(len(active_idx) <= len(entropies))
         assert(as_size <= max_size)
-        
+
         orbs = self.orbs.copy()
         inactive_orbs = orbs[:,inactive_idx]
         active_orbs = orbs[:,active_idx]
@@ -200,37 +213,39 @@ class Chooser():
         alpha = int(nactel//2 + nactel%2)
         beta = int(nactel//2)
         nactel = (alpha,beta)
-        
+
         log.info(f"Final selected active space: ({nactel},{nactorbs})")
 
         return nactorbs, nactel, casorbs, active_idx
 
 class APC():
-    
+
     """
     APC Class
     Implements APC orbital entropy estimation from https://doi.org/10.1021/acs.jctc.1c00037
     APC-N implemented from https://doi.org/10.1021/acs.jctc.2c00630
-    
-    .kernel() combines this with the ranked-orbital scheme implemented in Chooser() to select an active space
-    of size max_size from the orbitals in mf.mo_coeff with occupancy mf.mo_occ 
-    
+
+    .kernel() combines this with the ranked-orbital scheme implemented in Chooser() to select
+    an active space of size max_size from the orbitals in mf.mo_coeff with occupancy mf.mo_occ
+
     Args:
         mf: an :class:`SCF` object
             Must expose mf.mo_coeff, mf.mo_occ, mf.get_fock(), and mf.get_k()
         max_size: Int or Tuple
-            Active space size constraint. If tuple, interpreted as (nelecas,ncas), if int interpreted as max # of orbitals
+            Active space size constraint.
+            If tuple, interpreted as (nelecas,ncas)
+            If int interpreted as max # of orbitals
         n: Int
-            Number of times to remove highest-entropy virtual orbitals in entropy calculation. 
+            Number of times to remove highest-entropy virtual orbitals in entropy calculation.
             A higher value will tend to select active spaces with less doubly occupied orbitals.
-            
+
     Kwargs:
         eps: Float
             Small offset added to singly occupied and removed virtual orbital entropies (can generally be ignored)
-    
+
     Returns:
         active-space-size, #-active-electrons, orbital-initial-guess (following AVAS convention)
-        
+
     Example:
     >>> import numpy as np
     >>> from pyscf import gto, scf, mcscf
@@ -247,6 +262,7 @@ class APC():
         self.mf = mf
         self.n = n
         self.eps = eps
+        assert(eps > 0) #Check that eps > 0
         self.max_size = max_size
         self.verbose = verbose
 
@@ -254,7 +270,7 @@ class APC():
         """
         Calculates APC entropies for given orbitals, occupations, and F and K matrix elements
         Singly occupied orbitals are set to max value of other orbitals + self.eps
-        
+
         Args:
             orbs: 2D Numpy Array
                 A nbasis x nmo array of candidate AS orbitals
@@ -294,13 +310,13 @@ class APC():
                 apcs_o = apcs[:,idx]
 
             #Normalize APCs:
-            cis = apcs_o 
+            cis = apcs_o
             cis2 = cis**2
             sumci2 = np.sum(cis2)
             norm = np.sqrt((sumci2 + 1))
             cisnorm = cis/norm
 
-            #Square Normalized APCs to calculate entropies: 
+            #Square Normalized APCs to calculate entropies:
             cisnorm2 = cisnorm**2
             assert((cisnorm2 < 1).any().all())
             sumcisnorm2 = np.sum(cisnorm2)
@@ -320,12 +336,12 @@ class APC():
         Implements the "APC-N" approach in which high-entropy virtual orbitals are repeatedly set to singly occupied
         Then sets the singly occupied orbitals and previously removed orbitals to high values
         Reads the value of n from self.n
-        
+
         Args:
             mf: an :class:`SCF` object
                 Must expose mf.mo_coeff, mf.mo_occ, mf.get_fock(), and mf.get_k()
         """
-        
+
         log = self.log
         n = self.n
         eps = self.eps
@@ -350,17 +366,17 @@ class APC():
             occ = mf.mo_occ.copy()
 
         #Calculate f and k in mo basis
-        log.info(f"Transforming F and K to MO basis...")
+        log.info("Transforming F and K to MO basis...")
         f_mo = np.linalg.multi_dot([orbs.T,f_ao,orbs])
         k_mo = np.linalg.multi_dot([orbs.T,k_ao,orbs])
 
         #Calculate entropies
         removed_idx = []
         original_os = np.where(occ == 1)[0]
-        
-        log.info(f"Calculating initial APC entropies...")
+
+        log.info("Calculating initial APC entropies...")
         apc_entropies = self._apc(orbs,occ,f_mo,k_mo)
-        
+
         for loop_n in range(n):
             if loop_n > 0:
                 log.info(f"Calculating APC entropies (Round {loop_n})...")
@@ -374,8 +390,8 @@ class APC():
             removed_idx += [to_remove]
             log.info(f"Setting maximum virtual orbitals {removed_idx} to occupation 1...")
             occ[removed_idx] = 1
-            
-        log.info(f"Calculating final APC entropies...")
+
+        log.info("Calculating final APC entropies...")
         apc_entropies = self._apc(orbs,occ,f_mo,k_mo)
         maxS = np.round(np.max(apc_entropies),5)
         log.info(f"Maximum entropy: {maxS}")
@@ -394,17 +410,20 @@ class APC():
         log.info('\n** APC Active Space Selection **')
         entropies = self._calc_apc_entropies(self.mf)
         self.entropies = entropies
-        
+
         if isinstance(self.mf, scf.uhf.UHF):
             orbs = self.mf.mo_coeff[0] #alpha orbitals
             occ = self.mf.mo_occ.sum(axis=0) #summed occupation
-        else: 
+        else:
             orbs = self.mf.mo_coeff
             occ = self.mf.mo_occ
-            
+
         max_size = self.max_size
         log.info(f"Choosing active space with ranked orbital approach (max_size = {max_size})...")
         chooser = Chooser(orbs,occ,entropies,max_size,verbose=self.verbose)
         nactorbs, nactel, casorbs, active_idx = chooser.kernel()
         self.active_idx = active_idx
         return nactorbs, nactel, casorbs
+
+
+
