@@ -240,7 +240,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                 rho = numpy.zeros(ngrids)
             elif xctype == 'GGA':
                 rho = numpy.zeros((4,ngrids))
-            if with_lapl:
+            elif with_lapl:
                 # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
                 rho = numpy.zeros((6,ngrids))
                 tau_idx = 5

@@ -104,6 +104,9 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.libxc.parse_xc('APBE,')
         self.assertEqual(fn_facs, ((184, 1),))
 
+        hyb, fn_facs = dft.libxc.parse_xc('LDA0')
+        self.assertEqual(fn_facs, ((177, 1),))
+
         #hyb, fn_facs = dft.libxc.parse_xc('TF,')
         #self.assertEqual(fn_facs, [(50, 1)])
 

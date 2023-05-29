@@ -1190,7 +1190,7 @@ def parse_xc(description):
                     'HYB_GGA_X_'+key, 'HYB_MGGA_X_'+key))
     def possible_xc_for(key):
         return set((key, 'LDA_XC_'+key, 'GGA_XC_'+key, 'MGGA_XC_'+key,
-                    'HYB_GGA_XC_'+key, 'HYB_MGGA_XC_'+key))
+                    'HYB_LDA_XC_'+key, 'HYB_GGA_XC_'+key, 'HYB_MGGA_XC_'+key))
     def possible_k_for(key):
         return set((key,
                     'LDA_K_'+key, 'GGA_K_'+key,))
