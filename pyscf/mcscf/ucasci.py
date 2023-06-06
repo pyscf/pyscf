@@ -412,7 +412,7 @@ class UCASCI(casci.CASCI):
     def spin_square(self, fcivec=None, mo_coeff=None, ovlp=None):
         return addons.spin_square(self, mo_coeff, fcivec, ovlp)
 
-    fix_spin_ = fix_spin = None
+    fix_spin_ = fix_spin = lib.invalid_method('fix_spin')
 
     @lib.with_doc(addons.sort_mo.__doc__)
     def sort_mo(self, caslst, mo_coeff=None, base=1):

@@ -115,11 +115,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
         pyscf.dft.numint.eval_rho
 
     '''
-
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-    else:
-        ngrids, nao = ao[0].shape
+    ngrids, nao = ao.shape[-2:]
 
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
@@ -196,10 +192,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
     '''Refer to `pyscf.dft.numint.eval_rho2` for full documentation.
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-    else:
-        ngrids, nao = ao[0].shape
+    ngrids, nao = ao.shape[-2:]
 
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(mo_coeff):
@@ -247,7 +240,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                 rho = numpy.zeros(ngrids)
             elif xctype == 'GGA':
                 rho = numpy.zeros((4,ngrids))
-            if with_lapl:
+            elif with_lapl:
                 # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
                 rho = numpy.zeros((6,ngrids))
                 tau_idx = 5
@@ -860,14 +853,24 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     else:
         ao_deriv = 0
 
+    if isinstance(ni, KNumInt):
+        # mo_coeff of KRHF has [mo_k1, mo_k2, ...]
+        is_rhf = mo_coeff[0][0].ndim == 1
+    else:
+        is_rhf = mo_coeff[0].ndim == 1
+
     nao = cell.nao_nr()
-    if spin == 0:
+    if is_rhf:
         rho = []
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
             rho.append(ni.eval_rho2(cell, ao_k1, mo_coeff, mo_occ, mask, xctype))
         rho = numpy.hstack(rho)
+        if spin == 1:
+            rho *= .5
+            rho = numpy.repeat(rho[numpy.newaxis], 2, axis=0)
     else:
+        assert spin == 1
         rhoa = []
         rhob = []
         for ao_k1, ao_k2, mask, weight, coords \

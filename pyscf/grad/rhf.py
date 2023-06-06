@@ -26,7 +26,7 @@ import ctypes
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import _vhf
+from pyscf.scf import hf, _vhf
 from pyscf.gto.mole import is_au
 
 
@@ -255,14 +255,15 @@ def as_scanner(mf_grad):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            self.reset(mol)
             mf_scanner = self.base
             e_tot = mf_scanner(mol)
-            self.mol = mol
 
-            # If second integration grids are created for RKS and UKS
-            # gradients
-            if getattr(self, 'grids', None):
-                self.grids.reset(mol)
+            if isinstance(mf_scanner, hf.KohnShamDFT):
+                if getattr(self, 'grids', None):
+                    self.grids.reset(mol)
+                if getattr(self, 'nlcgrids', None):
+                    self.nlcgrids.reset(mol)
 
             de = self.kernel(**kwargs)
             return e_tot, de
@@ -301,6 +302,12 @@ class GradientsMixin(lib.StreamObject):
                  self.max_memory, lib.current_memory()[0])
         return self
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self.base.reset(mol)
+        return self
+
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
         return get_hcore(mol)
@@ -312,27 +319,39 @@ class GradientsMixin(lib.StreamObject):
         return get_ovlp(mol)
 
     @lib.with_doc(get_jk.__doc__)
-    def get_jk(self, mol=None, dm=None, hermi=0):
+    def get_jk(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        vj, vk = get_jk(mol, dm)
+        if omega is None:
+            vj, vk = get_jk(mol, dm)
+        else:
+            with mol.with_range_coulomb(omega):
+                vj, vk = get_jk(mol, dm)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def get_j(self, mol=None, dm=None, hermi=0):
+    def get_j(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         intor = mol._add_suffix('int2e_ip1')
-        return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
-                                  mol._atm, mol._bas, mol._env)
+        if omega is None:
+            return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
+        with mol.with_range_coulomb(omega):
+            return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
 
-    def get_k(self, mol=None, dm=None, hermi=0):
+    def get_k(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         intor = mol._add_suffix('int2e_ip1')
-        return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
-                                  mol._atm, mol._bas, mol._env)
+        if omega is None:
+            return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
+        with mol.with_range_coulomb(omega):
+            return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
 
     def get_veff(self, mol=None, dm=None):
         raise NotImplementedError

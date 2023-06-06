@@ -157,10 +157,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
     >>> rho, dx_rho, dy_rho, dz_rho = eval_rho(mol, ao, dm, xctype='LDA')
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-    else:
-        ngrids, nao = ao[0].shape
+    ngrids, nao = ao.shape[-2:]
 
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
@@ -273,10 +270,7 @@ def eval_rho1(mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
         return eval_rho(mol, ao, dm, screen_index, xctype, hermi, with_lapl, verbose)
 
     xctype = xctype.upper()
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids = ao.shape[0]
-    else:
-        ngrids = ao.shape[1]
+    ngrids = ao.shape[-2]
 
     if cutoff is None:
         cutoff = CUTOFF
@@ -369,10 +363,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         or (5,N) (with_lapl=False) where the last row is tau = 1/2(\nabla f)^2
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-    else:
-        ngrids, nao = ao[0].shape
+    ngrids, nao = ao.shape[-2:]
 
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
@@ -608,10 +599,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
         number of AO functions.
     '''
     xctype = xctype.upper()
-    if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-    else:
-        ngrids, nao = ao[0].shape
+    ngrids, nao = ao.shape[-2:]
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
@@ -1174,36 +1162,6 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                               hermi=0, out=vmat[i])
         vmat = lib.hermi_sum(vmat, axes=(0,2,1))
 
-    elif xctype == 'NLC':
-        nlc_pars = ni.nlc_coeff(xc_code)
-        ao_deriv = 1
-        vvrho = []
-        for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
-            vvrho.append([make_rho(idm, ao, mask, 'GGA') for idm in range(nset)])
-
-        vv_vxc = []
-        for i in range(nset):
-            rho = numpy.hstack([r[i] for r in vvrho])
-            exc, vxc = _vv10nlc(rho, grids.coords, rho, grids.weights,
-                                grids.coords, nlc_pars)
-            den = rho[0] * grids.weights
-            nelec[i] = den.sum()
-            excsum[i] = numpy.dot(den, exc)
-            vv_vxc.append(xc_deriv.transform_vxc(rho, vxc, 'GGA', spin=0))
-
-        p1 = 0
-        for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
-            p0, p1 = p1, p1 + weight.size
-            for i in range(nset):
-                wv = vv_vxc[i][:,p0:p1] * weight
-                wv[0] *= .5  # *.5 because vmat + vmat.T at the end
-                aow = _scale_ao_sparse(ao[:4], wv[:4], mask, ao_loc, out=aow)
-                _dot_ao_ao_sparse(ao[0], aow, None, nbins, mask, pair_mask, ao_loc,
-                                  hermi=0, out=vmat[i])
-        vmat = lib.hermi_sum(vmat, axes=(0,2,1))
-
     elif xctype == 'MGGA':
         if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
             raise NotImplementedError('laplacian in meta-GGA method')
@@ -1279,12 +1237,6 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     >>> nelec, exc, vxc = ni.nr_uks(mol, grids, 'lda,vwn', dm)
     '''
     xctype = ni._xc_type(xc_code)
-    if xctype == 'NLC':
-        dms_sf = dms[0] + dms[1]
-        nelec, excsum, vmat = nr_rks(ni, mol, grids, xc_code, dms_sf, relativity, hermi,
-                                     max_memory, verbose)
-        return [nelec,nelec], excsum, numpy.asarray([vmat,vmat])
-
     ao_loc = mol.ao_loc_nr()
     cutoff = grids.cutoff * 1e2
     nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(grids.cutoff))
@@ -1398,6 +1350,77 @@ def _format_uks_dm(dms):
 nr_rks_vxc = nr_rks
 nr_uks_vxc = nr_uks
 
+def nr_nlc_vxc(ni, mol, grids, xc_code, dm, relativity=0, hermi=1,
+               max_memory=2000, verbose=None):
+    '''Calculate NLC functional and potential matrix on given grids
+
+    Args:
+        ni : an instance of :class:`NumInt`
+
+        mol : an instance of :class:`Mole`
+
+        grids : an instance of :class:`Grids`
+            grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
+        xc_code : str
+            XC functional description.
+            See :func:`parse_xc` of pyscf/dft/libxc.py for more details.
+        dm : 2D array
+            Density matrix or multiple density matrices
+
+    Kwargs:
+        hermi : int
+            Input density matrices symmetric or not. It also indicates whether
+            the potential matrices in return are symmetric or not.
+        max_memory : int or float
+            The maximum size of cache to use (in MB).
+
+    Returns:
+        nelec, excsum, vmat.
+        nelec is the number of electrons generated by numerical integration.
+        excsum is the XC functional value.  vmat is the XC potential matrix in
+        2D array of shape (nao,nao) where nao is the number of AO functions.
+    '''
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi, False, grids)
+    assert nset == 1
+    ao_loc = mol.ao_loc_nr()
+    cutoff = grids.cutoff * 1e2
+    nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(grids.cutoff))
+
+    ao_deriv = 1
+    vvrho = []
+    for ao, mask, weight, coords \
+            in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
+        vvrho.append(make_rho(0, ao, mask, 'GGA'))
+    rho = numpy.hstack(vvrho)
+
+    exc = 0
+    vxc = 0
+    nlc_coefs = ni.nlc_coeff(xc_code)
+    for nlc_pars, fac in nlc_coefs:
+        e, v = _vv10nlc(rho, grids.coords, rho, grids.weights,
+                        grids.coords, nlc_pars)
+        exc += e * fac
+        vxc += v * fac
+    den = rho[0] * grids.weights
+    nelec = den.sum()
+    excsum = numpy.dot(den, exc)
+    vv_vxc = xc_deriv.transform_vxc(rho, vxc, 'GGA', spin=0)
+
+    pair_mask = mol.get_overlap_cond() < -numpy.log(ni.cutoff)
+    aow = None
+    vmat = numpy.zeros((nao,nao))
+    p1 = 0
+    for ao, mask, weight, coords \
+            in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
+        p0, p1 = p1, p1 + weight.size
+        wv = vv_vxc[:,p0:p1] * weight
+        wv[0] *= .5
+        aow = _scale_ao_sparse(ao[:4], wv[:4], mask, ao_loc, out=aow)
+        _dot_ao_ao_sparse(ao[0], aow, None, nbins, mask, pair_mask, ao_loc,
+                          hermi=0, out=vmat)
+    vmat = vmat + vmat.T
+    return nelec, excsum, vmat
+
 def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
     '''Contract RKS XC (singlet hessian) kernel matrix with given density matrices
@@ -1477,7 +1500,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 if xctype == 'LDA':
                     wv = weight * rho1 * _fxc[0]
                 else:
-                    wv = numpy.einsum('xg,xyg,g->yg', rho1, _fxc, weight)
+                    wv = numpy.einsum('yg,xyg,g->xg', rho1, _fxc, weight)
                 yield i, ao, mask, wv
 
     ao_loc = mol.ao_loc_nr()
@@ -1503,9 +1526,6 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         # For real orbitals, K_{ia,bj} = K_{ia,jb}. It simplifies real fxc_jb
         # [(\nabla mu) nu + mu (\nabla nu)] * fxc_jb = ((\nabla mu) nu f_jb) + h.c.
         vmat = lib.hermi_sum(vmat, axes=(0,2,1))
-
-    elif xctype == 'NLC':
-        raise NotImplementedError('NLC')
 
     elif xctype == 'MGGA':
         assert not MGGA_DENSITY_LAPL
@@ -1537,8 +1557,6 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
     Ref. CPL, 256, 454
     '''
     if fxc is None:
-        if dm0.ndim == 2:
-            dm0 = [dm0*.5] * 2
         fxc = ni.cache_xc_kernel1(mol, grids, xc_code, dm0, spin=1,
                                   max_memory=max_memory)[2]
     if singlet:
@@ -1807,9 +1825,6 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         # For real orbitals, K_{ia,bj} = K_{ia,jb}. It simplifies real fxc_jb
         # [(\nabla mu) nu + mu (\nabla nu)] * fxc_jb = ((\nabla mu) nu f_jb) + h.c.
         vmat = lib.hermi_sum(vmat.reshape(-1,nao,nao), axes=(0,2,1)).reshape(2,nset,nao,nao)
-
-    elif xctype == 'NLC':
-        raise NotImplementedError('NLC')
 
     elif xctype == 'MGGA':
         assert not MGGA_DENSITY_LAPL
@@ -2565,19 +2580,22 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         ao_deriv = 1
     elif xctype == 'MGGA':
         ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
-    elif xctype == 'NLC':
-        raise NotImplementedError('NLC')
     else:
         ao_deriv = 0
 
-    if spin == 0:
+    if mo_coeff[0].ndim == 1:  # RKS
         nao = mo_coeff.shape[0]
         rho = []
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             rho.append(ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype))
         rho = numpy.hstack(rho)
-    else:
+        if spin == 1:  # RKS with nr_rks_fxc_st
+            rho *= .5
+            rho = numpy.repeat(rho[numpy.newaxis], 2, axis=0)
+    else:  # UKS
+        assert mo_coeff[0].ndim == 2
+        assert spin == 1
         nao = mo_coeff[0].shape[0]
         rhoa = []
         rhob = []
@@ -2598,19 +2616,22 @@ def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=0, max_memory=2000):
         ao_deriv = 1
     elif xctype == 'MGGA':
         ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
-    elif xctype == 'NLC':
-        raise NotImplementedError('NLC')
     else:
         ao_deriv = 0
 
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi=1)
-    if spin == 0:
+    if dm[0].ndim == 1:  # RKS
         rho = []
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             rho.append(make_rho(0, ao, mask, xctype))
         rho = numpy.hstack(rho)
-    else:
+        if spin == 1:  # RKS with nr_rks_fxc_st
+            rho *= .5
+            rho = numpy.repeat(rho[numpy.newaxis], 2, axis=0)
+    else:  # UKS
+        assert dm[0].ndim == 2
+        assert spin == 1
         rhoa = []
         rhob = []
         for ao, mask, weight, coords \
@@ -2778,8 +2799,8 @@ class _NumIntMixin(lib.StreamObject):
                 = alpha * HFX + beta * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
                 = alpha * LR_HFX + hyb * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
 
-        SR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
-        LR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
+        SR_HFX = < pi | (1-erf(-omega r_{12}))/r_{12} | iq >
+        LR_HFX = < pi | erf(-omega r_{12})/r_{12} | iq >
         alpha = c_LR
         beta = c_SR - c_LR
         '''
@@ -2823,6 +2844,7 @@ class NumInt(_NumIntMixin):
 
     nr_rks = nr_rks
     nr_uks = nr_uks
+    nr_nlc_vxc = nr_nlc_vxc
     nr_sap = nr_sap_vxc = nr_sap_vxc
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc

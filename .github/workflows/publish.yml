@@ -13,7 +13,7 @@ jobs:
   release-pypi-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Build wheels
         uses: docker://pyscf/pyscf-pypa-env:latest
         with:
@@ -30,23 +30,23 @@ jobs:
           #password: ${{ secrets.PYPI_TEST_API_TOKEN }}
           #repository_url: https://test.pypi.org/legacy/
           password: ${{ secrets.PYPI_API_TOKEN }}
-          packages_dir: ${{ github.workspace }}/linux-wheels
+          packages-dir: ${{ github.workspace }}/linux-wheels
           verbose: true
 
   release-pypi-aarch64:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pyver: [cp36-cp36m, cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310]
+        pyver: [cp36-cp36m, cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310, cp311-cp311]
       fail-fast: false
     env:
-      img: quay.io/pypa/manylinux2014_aarch64
+      img: quay.io/pypa/manylinux2014_aarch64:2023-03-12-25fd859
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Set up QEMU
       id: qemu
-      uses: docker/setup-qemu-action@v1
+      uses: docker/setup-qemu-action@v2
     - name: Build Wheel
       run: |
             docker run --rm -v ${{ github.workspace }}:/src/pyscf:rw --workdir=/src/pyscf \
@@ -59,7 +59,7 @@ jobs:
             export dst=${GITHUB_WORKSPACE:-/src/pyscf}/linux-wheels && \
             export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF" && \
             mkdir -p /root/wheelhouse $src/linux-wheels && \
-            sed -i "/            if basename(fn) not in needed_libs:/s/basename.*libs/1/" /opt/_internal/pipx/venvs/auditwheel/lib/python3.9/site-packages/auditwheel/wheel_abi.py && \
+            sed -i "/            if basename(fn) not in needed_libs:/s/basename.*libs/1/" /opt/_internal/pipx/venvs/auditwheel/lib/python*/site-packages/auditwheel/wheel_abi.py && \
             /opt/python/${{ matrix.pyver }}/bin/pip wheel -v --no-deps --no-clean -w /root/wheelhouse $src && \
             export whl=`ls /root/wheelhouse/pyscf-*-linux_*.whl` && \
             auditwheel -v repair "$whl" --lib-sdir /lib -w $dst'
@@ -74,13 +74,13 @@ jobs:
         #password: ${{ secrets.PYPI_TEST_API_TOKEN }}
         #repository_url: https://test.pypi.org/legacy/
         password: ${{ secrets.PYPI_API_TOKEN }}
-        packages_dir: ${{ github.workspace }}/linux-wheels
+        packages-dir: ${{ github.workspace }}/linux-wheels
         verbose: true
 
   release-pypi-sdist:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Build sdist
         run: |
           python3 setup.py sdist
@@ -95,7 +95,7 @@ jobs:
           #password: ${{ secrets.PYPI_TEST_API_TOKEN }}
           #repository_url: https://test.pypi.org/legacy/
           password: ${{ secrets.PYPI_API_TOKEN }}
-          packages_dir: ${{ github.workspace }}/dist
+          packages-dir: ${{ github.workspace }}/dist
           verbose: true
 
   release-pypi-macos:
@@ -103,11 +103,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
+        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10", "3.11"]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
       - name: Build wheels
@@ -128,22 +128,22 @@ jobs:
   release-conda-linux:
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Setup conda
-        uses: actions/setup-python@v2
+        uses: s-weigand/setup-conda@v1
         with:
-          python-version: ${{ matrix.python-version }}
+          update-conda: true
+          conda-channels: anaconda, conda-forge
+      - run: conda --version
+      - run: which python
       - name: Publish to conda
         run: |
-          $CONDA/bin/conda install -y anaconda-client conda-build
-          $CONDA/bin/conda build --output-folder . conda
           export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_TOKEN }}
-          $CONDA/bin/conda config --set anaconda_upload yes
-          $CONDA/bin/anaconda upload linux-64/*.tar.bz2
+          conda install -y anaconda-client conda-build
+          conda config --set anaconda_upload yes
+          conda build --output-folder . conda
 
   # Disable macos conda release for Error during compling:
   # MACOSX_DEPLOYMENT_TARGET mismatch: now "10.9" but "10.15" during configure
@@ -154,9 +154,9 @@ jobs:
   #      python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
   #    fail-fast: false
   #  steps:
-  #    - uses: actions/checkout@v2
+  #    - uses: actions/checkout@v3
   #    - name: Setup conda
-  #      uses: actions/setup-python@v2
+  #      uses: actions/setup-python@v4
   #      with:
   #        python-version: ${{ matrix.python-version }}
   #    - name: Publish to conda
@@ -168,14 +168,11 @@ jobs:
   #        $CONDA/bin/anaconda upload linux-64/*.tar.bz2
 
   release-docker:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     needs: release-pypi-linux
-    strategy:
-      matrix:
-        os: [ubuntu-18.04]
     steps:
       - name: Login to Docker Hub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: pyscf
           password: ${{ secrets.DOCKERHUB_TOKEN }}

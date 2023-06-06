@@ -33,8 +33,8 @@ from pyscf.dft import r_numint
 
 @lib.with_doc(gks.get_veff.__doc__)
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-    if ks.nlc != '':
-        raise NotImplementedError(ks.nlc)
+    if ks.nlc or ks._numint.libxc.is_nlc(ks.xc):
+        raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
     return gks.get_veff(ks, mol, dm, dm_last, vhf_last, hermi)
 
 

@@ -93,13 +93,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            log.debug('micro %d  ~dE=%5.3g  |u-1|=%5.3g  |g[o]|=%5.3g  |dm1|=%5.3g',
+            log.debug('micro %2d  ~dE=%5.3g  |u-1|=%5.3g  |g[o]|=%5.3g  |dm1|=%5.3g',
                       imicro, de, norm_t, norm_gorb, norm_ddm)
 
             if callable(callback):
                 callback(locals())
 
-            t2m = log.timer('micro iter %d'%imicro, *t2m)
+            t2m = log.timer('micro iter %2d'%imicro, *t2m)
             if norm_t < 1e-4 or abs(de) < tol*.4 or norm_gorb < conv_tol_grad*.2:
                 break
 
@@ -127,7 +127,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
         e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         log.timer('CASCI solver', *t3m)
-        t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
+        t2m = t1m = log.timer('macro iter %2d'%imacro, *t1m)
 
         de, elast = e_tot - elast, e_tot
         if (abs(de) < tol and
@@ -144,10 +144,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             callback(locals())
 
     if conv:
-        log.info('2-step CASSCF converged in %d macro (%d JK %d micro) steps',
+        log.info('2-step CASSCF converged in %3d macro (%3d JK %3d micro) steps',
                  imacro, totinner, totmicro)
     else:
-        log.info('2-step CASSCF not converged, %d macro (%d JK %d micro) steps',
+        log.info('2-step CASSCF not converged, %3d macro (%3d JK %3d micro) steps',
                  imacro, totinner, totmicro)
 
     if casscf.canonicalization:

@@ -224,6 +224,7 @@ def as_scanner(mcscf_grad, state=None):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+            self.reset(mol)
 
             if state is None:
                 state = self.state
@@ -242,7 +243,6 @@ def as_scanner(mcscf_grad, state=None):
                 # in self.kernel
                 ci = ci[state]
 
-            self.mol = mol
             de = self.kernel(ci=ci, state=state, **kwargs)
             return e_tot, de
     return CASCI_GradScanner(mcscf_grad)

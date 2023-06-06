@@ -149,8 +149,7 @@ def energy(pcmobj, dm):
     epcm = gen_ddpcm_solver(pcmobj, pcmobj.verbose)(dm)[0]
     return epcm
 
-def regularize_xt(t, eta, scale=1):
-    eta *= scale
+def regularize_xt(t, eta):
     xt = numpy.zeros_like(t)
     inner = t <= 1-eta
     on_shell = (1-eta < t) & (t < 1)
@@ -330,7 +329,7 @@ class DDPCM(ddcosmo.DDCOSMO):
     gen_solver = as_solver = gen_ddpcm_solver
 
     def regularize_xt(self, t, eta, scale=1):
-        return regularize_xt(t, eta, scale)
+        return regularize_xt(t, eta)
 
     def nuc_grad_method(self, grad_method):
         raise NotImplementedError

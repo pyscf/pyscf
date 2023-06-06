@@ -5,6 +5,8 @@
 
 '''
 Generate the entire FCI Hamiltonian for small system
+
+See also 36-determinants_basis_matrix.py
 '''
 
 import numpy

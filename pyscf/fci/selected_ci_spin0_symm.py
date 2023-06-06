@@ -26,7 +26,7 @@ from pyscf.fci import selected_ci
 from pyscf.fci import selected_ci_symm
 from pyscf.fci import selected_ci_spin0
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     ci_coeff, nelec, ci_strs = selected_ci._unpack(civec_strs, nelec)
@@ -114,8 +114,7 @@ class SelectedCI(selected_ci_symm.SelectedCI):
             civec_strs = selected_ci._as_SCIvector(civec_strs, self._strs)
         return contract_2e(eri, civec_strs, norb, nelec, link_index, orbsym)
 
-    def make_hdiag(self, h1e, eri, ci_strs, norb, nelec):
-        return selected_ci_spin0.make_hdiag(h1e, eri, ci_strs, norb, nelec)
+    make_hdiag = staticmethod(selected_ci_spin0.make_hdiag)
 
     enlarge_space = selected_ci_spin0.enlarge_space
 

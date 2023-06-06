@@ -30,7 +30,7 @@ from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci.addons import _unpack_nelec
 
-librdm = lib.load_library('libfci')
+librdm = cistring.libfci
 
 def reorder_rdm(rdm1, rdm2, inplace=False):
     nmo = rdm1.shape[0]

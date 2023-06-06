@@ -37,6 +37,41 @@ try:
 except ImportError:
     ThreadPoolExecutor = None
 
+if sys.platform.startswith('linux'):
+    # Avoid too many threads being created in OMP loops.
+    # See issue https://github.com/pyscf/pyscf/issues/317
+    try:
+        from elftools.elf.elffile import ELFFile
+    except ImportError:
+        pass
+    else:
+        def _ldd(so_file):
+            libs = []
+            with open(so_file, 'rb') as f:
+                elf = ELFFile(f)
+                for seg in elf.iter_segments():
+                    if seg.header.p_type != 'PT_DYNAMIC':
+                        continue
+                    for t in seg.iter_tags():
+                        if t.entry.d_tag == 'DT_NEEDED':
+                            libs.append(t.needed)
+                    break
+            return libs
+
+        so_file = os.path.abspath(os.path.join(__file__, '..', 'libnp_helper.so'))
+        for p in _ldd(so_file):
+            if 'mkl' in p and 'thread' in p:
+                warnings.warn(f'PySCF C exteions are incompatible with {p}. '
+                              'MKL_NUM_THREADS is set to 1')
+                os.environ['MKL_NUM_THREADS'] = '1'
+                break
+            elif 'openblasp' in p or 'openblaso' in p:
+                warnings.warn(f'PySCF C exteions are incompatible with {p}. '
+                              'OPENBLAS_NUM_THREADS is set to 1')
+                os.environ['OPENBLAS_NUM_THREADS'] = '1'
+                break
+        del p, so_file, _ldd
+
 from pyscf.lib import param
 from pyscf import __config__
 
@@ -718,6 +753,12 @@ def module_method(fn, absences=None):
             if a is None: a = self.a
             if b is None: b = self.b
             return fn(a, b)
+
+    This function can be used to replace "staticmethod" when inserting a module
+    method into a class. In a child class, it allows one to call the method of a
+    base class with either "self.__class__.method_name(self, args)" or
+    "self.super().method_name(args)". For method created with "staticmethod",
+    calling "self.super().method_name(args)" is the only option.
     '''
     _locals = {}
     name = fn.__name__

@@ -26,22 +26,25 @@ from pyscf import lib
 from pyscf.lib import linalg_helper
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
+from pyscf.pbc import scf
+from pyscf.pbc.tdscf.rhf import TDMixin
 from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
 
-class TDA(rhf.TDA):
-    conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
-
+class KTDMixin(TDMixin):
     def __init__(self, mf):
-        from pyscf.pbc import scf
-        assert (isinstance(mf, scf.khf.KSCF))
-        self.cell = mf.cell
-        rhf.TDA.__init__(self, mf)
-        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+        assert isinstance(mf, scf.khf.KSCF)
+        TDMixin.__init__(self, mf)
         warn_pbc2d_eri(mf)
+
+    get_nto = lib.invalid_method('get_nto')
+
+class TDA(KTDMixin):
+    conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     def gen_vind(self, mf):
         # exxdiv corrections are kept in hdiag while excluding them when calling
@@ -86,9 +89,6 @@ class TDA(rhf.TDA):
                     v1s.append(v1vo.ravel())
             return lib.asarray(v1s).reshape(nz,-1)
         return vind, hdiag
-
-    def get_ab(self, mf=None):
-        raise NotImplementedError
 
     def init_guess(self, mf, nstates=None):
         if nstates is None: nstates = self.nstates
@@ -291,7 +291,6 @@ def purify_krlyov_heff(precision, hermi, log):
     return fill_heff
 
 
-from pyscf.pbc import scf
 scf.khf.KRHF.TDA  = lib.class_as_method(KTDA)
 scf.khf.KRHF.TDHF = lib.class_as_method(KTDHF)
 scf.krohf.KROHF.TDA  = None

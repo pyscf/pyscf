@@ -38,6 +38,8 @@ from functools import reduce
 from itertools import product
 from pyscf.ao2mo import _ao2mo
 
+LINEAR_DEP_THRESHOLD = 1e-9
+
 def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True):
     assert (with_j or with_k)
     if not with_k:
@@ -339,6 +341,24 @@ def _decompose_rdm1 (mf_grad, mol, dm):
 
     return orbol, orbor
 
+def _gen_metric_solver(int2c):
+    try:
+        j2c = scipy.linalg.cho_factor(int2c, lower=True)
+        j2c_solver = lambda v: scipy.linalg.cho_solve(j2c, v, overwrite_b=True)
+    except (numpy.linalg.LinAlgError, scipy.linalg.LinAlgError):
+        w, v = scipy.linalg.eigh(int2c)
+        mask = w > LINEAR_DEP_THRESHOLD
+        #logger.debug(mf_grad, 'int2c2e cond = %.4g, drop %d bfns',
+        #             w[-1]/w[0], w.size-numpy.count_nonzero(mask))
+        v1 = v[:,mask]
+        j2c = lib.dot(v1/w[mask], v1.conj().T)
+        def j2c_solver(v):
+            if v.ndim == 2:
+                return lib.dot(j2c, v)
+            else:
+                return j2c.dot(v)
+    return j2c_solver
+
 def _cho_solve_rhojk (mf_grad, mol, auxmol, orbol, orbor):
     ''' Solve
 
@@ -374,7 +394,9 @@ def _cho_solve_rhojk (mf_grad, mol, auxmol, orbol, orbor):
     ao_loc = mol.ao_loc
     nocc = [o.shape[-1] for o in orbor]
 
-    int2c = scipy.linalg.cho_factor(auxmol.intor('int2c2e', aosym='s1'))
+    int2c = auxmol.intor('int2c2e', aosym='s1')
+    solve_j2c = _gen_metric_solver(int2c)
+    int2c = None
     get_int3c_s1 = _int3c_wrapper(mol, auxmol, 'int3c2e', 's1')
     rhoj = numpy.zeros((nset,naux))
     f_rhok = lib.H5TmpFile()
@@ -394,12 +416,12 @@ def _cho_solve_rhojk (mf_grad, mol, auxmol, orbol, orbor):
             t2 = logger.timer_debug1 (mf_grad, 'df grad einsum (P|mn) u_ni N_i = v_Pmi', *t2)
             rhoj[i] += numpy.dot (v, orbol[i][p0:p1].ravel ())
             t2 = logger.timer_debug1 (mf_grad, 'df grad einsum v_Pmi u_mi = rho_P', *t2)
-            v = scipy.linalg.cho_solve(int2c, v)
+            v = solve_j2c(v)
             t2 = logger.timer_debug1 (mf_grad, 'df grad cho_solve (P|Q) D_Qmi = v_Pmi', *t2)
             f_rhok['%s/%s'%(i,istep)] = v.reshape(naux,p1-p0,-1)
             t2 = logger.timer_debug1 (mf_grad, 'df grad cache D_Pmi (m <-> i transpose upon retrieval)', *t2)
         int3c = v = None
-    rhoj = scipy.linalg.cho_solve(int2c, rhoj.T).T
+    rhoj = solve_j2c(rhoj.T).T
     int2c = None
     t1 = logger.timer_debug1 (mf_grad, 'df grad vj and vk AO (P|Q) D_Q = (P|mn) D_mn solve', *t1)
     class get_rhok_class (object):
@@ -425,13 +447,19 @@ class Gradients(rhf_grad.Gradients):
         self.auxbasis_response = True
         rhf_grad.Gradients.__init__(self, mf)
 
-    get_jk = get_jk
+    def get_jk(self, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
+               omega=None):
+        if omega is None:
+            return get_jk(self, mol, dm, hermi, with_j, with_k)
 
-    def get_j(self, mol=None, dm=None, hermi=0):
-        return self.get_jk(mol, dm, with_k=False)[0]
+        with self.base.with_df.range_coulomb(omega):
+            return get_jk(self, mol, dm, hermi, with_j, with_k)
 
-    def get_k(self, mol=None, dm=None, hermi=0):
-        return self.get_jk(mol, dm, with_j=False)[1]
+    def get_j(self, mol=None, dm=None, hermi=0, omega=None):
+        return self.get_jk(mol, dm, with_k=False, omega=omega)[0]
+
+    def get_k(self, mol=None, dm=None, hermi=0, omega=None):
+        return self.get_jk(mol, dm, with_j=False, omega=omega)[1]
 
     def get_veff(self, mol=None, dm=None):
         vj, vk = self.get_jk(mol, dm)
@@ -449,30 +477,3 @@ class Gradients(rhf_grad.Gradients):
             return 0
 
 Grad = Gradients
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.atom = [
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    mol.basis = '631g'
-    mol.build()
-    mf = scf.RHF(mol).density_fit(auxbasis='ccpvdz-jkfit').run()
-    g = Gradients(mf).set(auxbasis_response=not False).kernel()
-    print(lib.finger(g) - 0.0055166381900824879)
-    g = Gradients(mf).kernel()
-    print(lib.finger(g) - 0.005516638190173352)
-    print(abs(g-scf.RHF(mol).run().Gradients().kernel()).max())
-# -0.0000000000    -0.0000000000    -0.0241140368
-#  0.0000000000     0.0043935801     0.0120570184
-#  0.0000000000    -0.0043935801     0.0120570184
-
-    mfs = mf.as_scanner()
-    e1 = mfs([['O' , (0. , 0.     , 0.001)],
-              [1   , (0. , -0.757 , 0.587)],
-              [1   , (0. , 0.757  , 0.587)] ])
-    e2 = mfs([['O' , (0. , 0.     ,-0.001)],
-              [1   , (0. , -0.757 , 0.587)],
-              [1   , (0. , 0.757  , 0.587)] ])
-    print((e1-e2)/0.002*lib.param.BOHR)

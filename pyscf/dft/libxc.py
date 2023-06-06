@@ -28,6 +28,7 @@ import copy
 import ctypes
 import math
 import numpy
+from functools import lru_cache
 from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
 from pyscf import __config__
@@ -39,6 +40,7 @@ _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
 _itrf.LIBXC_needs_laplacian.restype = ctypes.c_int
 _itrf.LIBXC_needs_laplacian.argtypes = [ctypes.c_int]
 _itrf.LIBXC_is_hybrid.restype = ctypes.c_int
+_itrf.LIBXC_is_nlc.restype = ctypes.c_int
 _itrf.LIBXC_is_cam_rsh.restype = ctypes.c_int
 _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
 _itrf.LIBXC_number_of_functionals.restype = ctypes.c_int
@@ -54,6 +56,9 @@ _itrf.LIBXC_version.restype = ctypes.c_char_p
 _itrf.LIBXC_reference.restype = ctypes.c_char_p
 _itrf.LIBXC_reference_doi.restype = ctypes.c_char_p
 _itrf.LIBXC_xc_reference.argtypes = [ctypes.c_int, (ctypes.c_char_p * 8)]
+
+_itrf.xc_functional_get_number.argtypes = (ctypes.c_char_p, )
+_itrf.xc_functional_get_number.restype = ctypes.c_int
 
 def libxc_version():
     '''Returns the version of libxc'''
@@ -851,11 +856,6 @@ XC_ALIAS = {
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
 
-VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10',
-               'REVSCAN_VV10',
-               'SCAN_VV10', 'SCAN_RVV10', 'SCANL_VV10', 'SCANL_RVV10'))
-VV10_XC = VV10_XC.union(set([x.replace('_', '') for x in VV10_XC]))
-
 def xc_reference(xc_code):
     '''Returns the reference to the individual XC functional'''
     hyb, fn_facs = parse_xc(xc_code)
@@ -868,15 +868,18 @@ def xc_reference(xc_code):
                 refs.append(ref.decode("UTF-8"))
     return refs
 
+@lru_cache(100)
 def xc_type(xc_code):
     if xc_code is None:
         return None
     elif isinstance(xc_code, str):
-        if is_nlc(xc_code):
-            return 'NLC'
+        if '__VV10' in xc_code:
+            raise RuntimeError('Deprecated notation for NLC functional.')
         hyb, fn_facs = parse_xc(xc_code)
     else:
+        assert isinstance(xc_code, int)
         fn_facs = [(xc_code, 1)]  # mimic fn_facs
+
     if not fn_facs:
         return 'HF'
     elif all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs):
@@ -891,6 +894,7 @@ def xc_type(xc_code):
 def is_lda(xc_code):
     return xc_type(xc_code) == 'LDA'
 
+@lru_cache(100)
 def is_hybrid_xc(xc_code):
     if xc_code is None:
         return False
@@ -902,7 +906,7 @@ def is_hybrid_xc(xc_code):
                 return True
             if hybrid_coeff(xc_code) != 0:
                 return True
-            if rsh_coeff(xc_code) != [0, 0, 0]:
+            if rsh_coeff(xc_code) != (0, 0, 0):
                 return True
             return False
     elif isinstance(xc_code, int):
@@ -916,11 +920,21 @@ def is_meta_gga(xc_code):
 def is_gga(xc_code):
     return xc_type(xc_code) == 'GGA'
 
+@lru_cache(100)
+def is_nlc(xc_code):
+    if isinstance(xc_code, str):
+        if xc_code.isdigit():
+            return _itrf.LIBXC_is_nlc(ctypes.c_int(int(xc_code)))
+        else:
+            fn_facs = parse_xc(xc_code)[1]
+            return any(_itrf.LIBXC_is_nlc(ctypes.c_int(xid)) for xid, fac in fn_facs)
+    elif isinstance(xc_code, int):
+        return _itrf.LIBXC_is_nlc(ctypes.c_int(xc_code))
+    else:
+        return any((is_nlc(x) for x in xc_code))
+
 def needs_laplacian(xc_code):
     return _itrf.LIBXC_needs_laplacian(xc_code) != 0
-
-def is_nlc(xc_code):
-    return '__VV10' in xc_code.upper()
 
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
@@ -951,41 +965,28 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
             raise e
     return support
 
+@lru_cache(100)
 def hybrid_coeff(xc_code, spin=0):
     '''Support recursively defining hybrid functional
     '''
     hyb, fn_facs = parse_xc(xc_code)
-    for xid, fac in fn_facs:
-        hyb[0] += fac * _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
-    return hyb[0]
+    hybs = [fac * _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid)) for xid, fac in fn_facs]
+    return hyb[0] + sum(hybs)
 
+@lru_cache(100)
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
-    nlc_code = None
-    if isinstance(xc_code, str) and '__VV10' in xc_code.upper():
-        xc_code, nlc_code = xc_code.upper().split('__', 1)
-
     hyb, fn_facs = parse_xc(xc_code)
-    nlc_pars = [0, 0]
+    nlc_pars = []
     nlc_tmp = (ctypes.c_double*2)()
     for xid, fac in fn_facs:
-        _itrf.LIBXC_nlc_coeff(xid, nlc_tmp)
-        nlc_pars[0] += nlc_tmp[0]
-        nlc_pars[1] += nlc_tmp[1]
+        if _itrf.LIBXC_is_nlc(ctypes.c_int(xid)):
+            _itrf.LIBXC_nlc_coeff(xid, nlc_tmp)
+            nlc_pars.append((tuple(nlc_tmp), fac))
+    return tuple(nlc_pars)
 
-    if nlc_pars[0] == 0 and nlc_pars[1] == 0:
-        if nlc_code is not None:
-            # Use VV10 NLC parameters by default for the general case
-            _itrf.LIBXC_nlc_coeff(XC_CODES['GGA_XC_' + nlc_code], nlc_tmp)
-            nlc_pars[0] += nlc_tmp[0]
-            nlc_pars[1] += nlc_tmp[1]
-        else:
-            raise NotImplementedError(
-                '%s does not have NLC part. Available functionals are %s' %
-                (xc_code, ', '.join(VV10_XC.keys())))
-    return nlc_pars
-
+@lru_cache(100)
 def rsh_coeff(xc_code):
     '''Range-separated parameter and HF exchange components: omega, alpha, beta
 
@@ -993,8 +994,8 @@ def rsh_coeff(xc_code):
             = alpha * HFX   + beta * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
             = alpha * LR_HFX + hyb * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
 
-    SR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
-    LR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
+    SR_HFX = < pi | (1-erf(-omega r_{12}))/r_{12} | iq >
+    LR_HFX = < pi | erf(-omega r_{12})/r_{12} | iq >
     alpha = c_LR
     beta = c_SR - c_LR = hyb - alpha
     '''
@@ -1011,12 +1012,10 @@ def rsh_coeff(xc_code):
             check_omega = False
 
     hyb, fn_facs = parse_xc(xc_code)
-
     hyb, alpha, omega = hyb
     beta = hyb - alpha
     rsh_pars = [omega, alpha, beta]
     rsh_tmp = (ctypes.c_double*3)()
-    _itrf.LIBXC_rsh_coeff(433, rsh_tmp)
     for xid, fac in fn_facs:
         _itrf.LIBXC_rsh_coeff(xid, rsh_tmp)
         if rsh_pars[0] == 0:
@@ -1031,7 +1030,7 @@ def rsh_coeff(xc_code):
                 raise ValueError('Different values of omega found for RSH functionals')
         rsh_pars[1] += rsh_tmp[1] * fac
         rsh_pars[2] += rsh_tmp[2] * fac
-    return rsh_pars
+    return tuple(rsh_pars)
 
 def parse_xc_name(xc_name='LDA,VWN'):
     '''Convert the XC functional name to libxc library internal ID.
@@ -1039,6 +1038,7 @@ def parse_xc_name(xc_name='LDA,VWN'):
     fn_facs = parse_xc(xc_name)[1]
     return fn_facs[0][0], fn_facs[1][0]
 
+@lru_cache(100)
 def parse_xc(description):
     r'''Rules to input functional description:
 
@@ -1077,96 +1077,20 @@ def parse_xc(description):
       contribution has been included.
 
     Args:
-        xc_code : str
+        description : str
             A string to describe the linear combination of different XC functionals.
             The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
             If "HF" was appeared in the string, it stands for the exact exchange.
-        rho : ndarray
-            Shape of ((*,N)) for electron density (and derivatives) if spin = 0;
-            Shape of ((*,N),(*,N)) for alpha/beta electron density (and derivatives) if spin > 0;
-            where N is number of grids.
-            rho (*,N) are ordered as (den,grad_x,grad_y,grad_z,laplacian,tau)
-            where grad_x = d/dx den, laplacian = \nabla^2 den, tau = 1/2(\nabla f)^2
-            In spin unrestricted case,
-            rho is ((den_u,grad_xu,grad_yu,grad_zu,laplacian_u,tau_u)
-                    (den_d,grad_xd,grad_yd,grad_zd,laplacian_d,tau_d))
-
-    Kwargs:
-        spin : int
-            spin polarized if spin > 0
-        relativity : int
-            No effects.
-        verbose : int or object of :class:`Logger`
-            No effects.
 
     Returns:
-        ex, vxc, fxc, kxc
-
-        where
-
-        * vxc = (vrho, vsigma, vlapl, vtau) for restricted case
-
-        * vxc for unrestricted case
-          | vrho[:,2]   = (u, d)
-          | vsigma[:,3] = (uu, ud, dd)
-          | vlapl[:,2]  = (u, d)
-          | vtau[:,2]   = (u, d)
-
-        * fxc for restricted case:
-          (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
-
-        * fxc for unrestricted case:
-          | v2rho2[:,3]     = (u_u, u_d, d_d)
-          | v2rhosigma[:,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
-          | v2sigma2[:,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
-          | v2lapl2[:,3]
-          | v2tau2[:,3]     = (u_u, u_d, d_d)
-          | v2rholapl[:,4]
-          | v2rhotau[:,4]   = (u_u, u_d, d_u, d_d)
-          | v2lapltau[:,4]
-          | v2sigmalapl[:,6]
-          | v2sigmatau[:,6] = (uu_u, uu_d, ud_u, ud_d, dd_u, dd_d)
-
-        * kxc for restricted case:
-          (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
-           v3rho2lapl, v3rho2tau,
-           v3rhosigmalapl, v3rhosigmatau,
-           v3rholapl2, v3rholapltau, v3rhotau2,
-           v3sigma2lapl, v3sigma2tau,
-           v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
-           v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
-
-        * kxc for unrestricted case:
-          | v3rho3[:,4]         = (u_u_u, u_u_d, u_d_d, d_d_d)
-          | v3rho2sigma[:,9]    = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
-          | v3rhosigma2[:,12]   = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
-          | v3sigma3[:,10]      = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
-          | v3rho2lapl[:,6]
-          | v3rho2tau[:,6]      = (u_u_u, u_u_d, u_d_u, u_d_d, d_d_u, d_d_d)
-          | v3rhosigmalapl[:,12]
-          | v3rhosigmatau[:,12] = (u_uu_u, u_uu_d, u_ud_u, u_ud_d, u_dd_u, u_dd_d,
-                                   d_uu_u, d_uu_d, d_ud_u, d_ud_d, d_dd_u, d_dd_d)
-          | v3rholapl2[:,6]
-          | v3rholapltau[:,8]
-          | v3rhotau2[:,6]      = (u_u_u, u_u_d, u_d_d, d_u_u, d_u_d, d_d_d)
-          | v3sigma2lapl[:,12]
-          | v3sigma2tau[:,12]   = (uu_uu_u, uu_uu_d, uu_ud_u, uu_ud_d, uu_dd_u, uu_dd_d,
-                                   ud_ud_u, ud_ud_d, ud_dd_u, ud_dd_d, dd_dd_u, dd_dd_d)
-          | v3sigmalapl2[:,9]
-          | v3sigmalapltau[:,12]
-          | v3sigmatau2[:,9]    = (uu_u_u, uu_u_d, uu_d_d, ud_u_u, ud_u_d, ud_d_d, dd_u_u, dd_u_d, dd_d_d)
-          | v3lapl3[:,4]
-          | v3lapl2tau[:,6]
-          | v3lapltau2[:,6]
-          | v3tau3[:,4]         = (u_u_u, u_u_d, u_d_d, d_d_d)
-
-        see also libxc_itrf.c
+        decoded XC description, with the data structure
+        (hybrid, alpha, omega), ((libxc-Id, fac), (libxc-Id, fac), ...)
     '''  # noqa: E501
     hyb = [0, 0, 0]  # hybrid, alpha, omega (== SR_HF, LR_HF, omega)
     if description is None:
-        return hyb, []
+        return tuple(hyb), ()
     elif isinstance(description, int):
-        return hyb, [(description, 1.)]
+        return tuple(hyb), ((description, 1.),)
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
@@ -1245,10 +1169,14 @@ def parse_xc(description):
                             x_id = possible_xc.pop()
                         x_id = XC_CODES[x_id]
                     else:
-                        raise KeyError('Unknown %s functional  %s' % (ftype, key))
+                        # Some libxc functionals may not be listed in the
+                        # XC_CODES table. Query libxc directly
+                        func_id = _itrf.xc_functional_get_number(ctypes.c_char_p(key.encode()))
+                        if func_id == -1:
+                            raise KeyError(f"LibXCFunctional: name '{key}' not found.")
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
-# Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
+                    # Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
                     if hyb1[0] != 0 or hyb1[1] != 0:
                         assign_omega(hyb1[2], hyb1[0]*fac, hyb1[1]*fac)
                     fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
@@ -1262,7 +1190,7 @@ def parse_xc(description):
                     'HYB_GGA_X_'+key, 'HYB_MGGA_X_'+key))
     def possible_xc_for(key):
         return set((key, 'LDA_XC_'+key, 'GGA_XC_'+key, 'MGGA_XC_'+key,
-                    'HYB_GGA_XC_'+key, 'HYB_MGGA_XC_'+key))
+                    'HYB_LDA_XC_'+key, 'HYB_GGA_XC_'+key, 'HYB_MGGA_XC_'+key))
     def possible_k_for(key):
         return set((key,
                     'LDA_K_'+key, 'GGA_K_'+key,))
@@ -1295,7 +1223,7 @@ def parse_xc(description):
             parse_token(token, 'compound XC', search_xc_alias=True)
     if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
         hyb[1] = 0
-    return hyb, remove_dup(fn_facs)
+    return tuple(hyb), tuple(remove_dup(fn_facs))
 
 _NAME_WITH_DASH = {'SR-HF'    : 'SR_HF',
                    'LR-HF'    : 'LR_HF',
@@ -1473,7 +1401,7 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
     '''  # noqa: E501
     hyb, fn_facs = parse_xc(xc_code)
     if omega is not None:
-        hyb[2] = float(omega)
+        hyb = hyb[:2] + (float(omega),)
     return _eval_xc(hyb, fn_facs, rho, spin, relativity, deriv, verbose)
 
 

@@ -389,7 +389,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + (nroots-1) * 3
+    max_space = max_space + (nroots-1) * 4
     # max_space*2 for holding ax and xs, nroots*2 for holding axt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*3
     lessio = lessio and not _incore
@@ -398,11 +398,11 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     dtype = None
     heff = None
     fresh_start = True
-    e = 0
+    e = None
     v = None
-    conv = [False] * nroots
+    conv = numpy.zeros(nroots, dtype=bool)
     emin = None
-    norm_min = 1
+    level_shift = 0
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -419,8 +419,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             x0len = len(x0)
             xt = _qr(x0, dot, lindep)[0]
             if len(xt) != x0len:
-                log.warn('QR decomposition removed %d vectors.  The davidson may fail.',
-                         x0len - len(xt))
+                log.warn('QR decomposition removed %d vectors.', x0len - len(xt))
                 if callable(pick):
                     log.warn('Check to see if `pick` function %s is providing '
                              'linear dependent vectors', pick.__name__)
@@ -436,7 +435,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             x0 = None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
-                conv = [False] * nroots
+                conv = numpy.zeros(nroots, dtype=bool)
         elif len(xt) > 1:
             xt = _qr(xt, dot, lindep)[0]
             xt = xt[:40]  # 40 trial vectors at most
@@ -473,13 +472,21 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
         if SORT_EIG_BY_SIMILARITY:
             e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin)
-            if elast.size != e.size:
-                de = e
-            else:
-                de = e - elast
         else:
             e = w[:nroots]
             v = v[:,:nroots]
+            conv = numpy.zeros(nroots, dtype=bool)
+            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
+                                           fresh_start, log)
+
+        if elast is None:
+            de = e
+        elif elast.size != e.size:
+            log.debug('Number of roots different from the previous step (%d,%d)',
+                      e.size, elast.size)
+            de = e
+        else:
+            de = e - elast
 
         x0 = None
         x0 = _gen_x0(v, xs)
@@ -488,27 +495,12 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         else:
             ax0 = _gen_x0(v, ax)
 
-        if SORT_EIG_BY_SIMILARITY:
-            dx_norm = [0] * nroots
-            xt = [None] * nroots
-            for k, ek in enumerate(e):
-                if not conv[k]:
-                    xt[k] = ax0[k] - ek * x0[k]
-                    dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-                    if abs(de[k]) < tol and dx_norm[k] < toloose:
-                        log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
-                                  k, dx_norm[k], ek, de[k])
-                        conv[k] = True
-        else:
-            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
-                                           fresh_start, log)
-            de = e - elast
-            dx_norm = []
-            xt = []
-            conv = [False] * nroots
-            for k, ek in enumerate(e):
-                xt.append(ax0[k] - ek * x0[k])
-                dx_norm.append(numpy.sqrt(dot(xt[k].conj(), xt[k]).real))
+        dx_norm = numpy.zeros(nroots)
+        xt = [None] * nroots
+        for k, ek in enumerate(e):
+            if not conv[k]:
+                xt[k] = ax0[k] - ek * x0[k]
+                dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                 conv[k] = abs(de[k]) < tol and dx_norm[k] < toloose
                 if conv[k] and not conv_last[k]:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
@@ -522,8 +514,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             break
         elif (follow_state and max_dx_norm > 1 and
               max_dx_norm/max_dx_last > 3 and space > nroots+2):
-            log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
-                      icyc, space, max_dx_norm, e, de[ide], norm_min)
+            log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
+                      icyc, space, max_dx_norm, e, de[ide])
             log.debug('Large |r| detected, restore to previous x0')
             x0 = _gen_x0(vlast, xs)
             fresh_start = True
@@ -534,44 +526,32 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 emin = min(e)
 
         # remove subspace linear dependency
-        if any(((not conv[k]) and n**2>lindep) for k, n in enumerate(dx_norm)):
-            for k, ek in enumerate(e):
-                if (not conv[k]) and dx_norm[k]**2 > lindep:
-                    xt[k] = precond(xt[k], e[0], x0[k])
-                    xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-                else:
-                    xt[k] = None
-        else:
-            for k, ek in enumerate(e):
-                if dx_norm[k]**2 > lindep:
-                    xt[k] = precond(xt[k], e[0], x0[k])
-                    xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-                else:
-                    xt[k] = None
-                    log.debug1('Throwing out eigenvector %d with norm=%4.3g', k, dx_norm[k])
-        xt = [xi for xi in xt if xi is not None]
-
-        for i in range(space):
-            xsi = numpy.asarray(xs[i])
-            for xi in xt:
-                xi -= xsi * dot(xsi.conj(), xi)
-            xsi = None
-        norm_min = 1
-        for i,xi in enumerate(xt):
-            norm = numpy.sqrt(dot(xi.conj(), xi).real)
-            if norm**2 > lindep:
-                xt[i] *= 1/norm
-                norm_min = min(norm_min, norm)
+        for k, ek in enumerate(e):
+            if (not conv[k]) and dx_norm[k]**2 > lindep:
+                xt[k] = precond(xt[k], e[0]-level_shift, x0[k])
+                xt[k] *= dot(xt[k].conj(), xt[k]).real ** -.5
+            elif not conv[k]:
+                # Remove linearly dependent vector
+                xt[k] = None
+                log.debug1('Drop eigenvector %d, norm=%4.3g', k, dx_norm[k])
             else:
-                xt[i] = None
-        xt = [xi for xi in xt if xi is not None]
-        xi = None
+                xt[k] = None
+
+        xt, ill_precond = _project_xt_(xt, xs, e, lindep, dot, precond)
+        if ill_precond:
+            # Manually adjust the precond because precond function may not be
+            # able to generate linearly dependent basis vectors. e.g. issue 1362
+            log.warn('Matrix may be already a diagonal matrix. '
+                     'level_shift is applied to precond')
+            level_shift = 0.1
+
+        xt, norm_min = _normalize_xt_(xt, lindep, dot)
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
                       dx_norm)
-            conv = [conv[k] or (norm < toloose) for k,norm in enumerate(dx_norm)]
+            conv[dx_norm < toloose] = True
             break
 
         max_dx_last = max_dx_norm
@@ -598,6 +578,9 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
 def make_diag_precond(diag, level_shift=0):
     '''Generate the preconditioner function with the diagonal function.'''
+    # For diagonal matrix A, precond (Ax-x*e)/(diag(A)-e) is not able to
+    # generate linearly independent basis. Use level_shift to break the
+    # correlation between Ax-x*e and diag(A)-e.
     def precond(dx, e, *args):
         diagd = diag - (e - level_shift)
         diagd[abs(diagd)<1e-8] = 1e-8
@@ -665,7 +648,7 @@ def _eigs_cmplx2real(w, v, real_idx, real_eigenvectors=True):
         v = v.real
     return w.real, v, idx
 
-def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
+def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
         lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
         dot=numpy.dot, callback=None,
         nroots=1, lessio=False, left=False, pick=pick_real_eigs,
@@ -766,7 +749,7 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             return e, x
 davidson_nosym = eig
 
-def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
+def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
                     lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
                     dot=numpy.dot, callback=None,
                     nroots=1, lessio=False, left=False, pick=pick_real_eigs,
@@ -791,7 +774,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + (nroots-1) * 4
+    max_space = max_space + (nroots-1) * 6
     # max_space*2 for holding ax and xs, nroots*2 for holding axt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*3
     lessio = lessio and not _incore
@@ -800,11 +783,11 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     dtype = None
     heff = None
     fresh_start = True
-    e = 0
+    e = None
     v = None
-    conv = [False] * nroots
+    conv = numpy.zeros(nroots, dtype=bool)
     emin = None
-    norm_min = 1
+    level_shift = 0
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -821,12 +804,12 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             x0len = len(x0)
             xt, x0 = _qr(x0, dot, lindep)[0], None
             if len(xt) != x0len:
-                log.warn('QR decomposition removed %d vectors.  The davidson may fail.'
+                log.warn('QR decomposition removed %d vectors. '
                          'Check to see if `pick` function :%s: is providing linear dependent '
                          'vectors' % (x0len - len(xt), pick.__name__))
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
-                conv = [False] * nroots
+                conv = numpy.zeros(nroots, dtype=bool)
         elif len(xt) > 1:
             xt = _qr(xt, dot, lindep)[0]
             xt = xt[:40]  # 40 trial vectors at most
@@ -863,45 +846,40 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if SORT_EIG_BY_SIMILARITY:
             e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin,
                                        heff[:space,:space])
-            if e.size != elast.size:
-                de = e
-            else:
-                de = e - elast
         else:
             e = w[:nroots]
             v = v[:,:nroots]
+            conv = numpy.zeros(nroots, dtype=bool)
+            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
+                                           fresh_start, log)
 
+        if elast is None:
+            de = e
+        elif elast.size != e.size:
+            log.debug('Number of roots different from the previous step (%d,%d)',
+                      e.size, elast.size)
+            de = e
+        else:
+            de = e - elast
+
+        x0 = None
         x0 = _gen_x0(v, xs)
         if lessio:
             ax0 = aop(x0)
         else:
             ax0 = _gen_x0(v, ax)
 
-        if SORT_EIG_BY_SIMILARITY:
-            dx_norm = [0] * nroots
-            xt = [None] * nroots
-            for k, ek in enumerate(e):
-                if not conv[k]:
-                    xt[k] = ax0[k] - ek * x0[k]
-                    dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-                    if abs(de[k]) < tol and dx_norm[k] < toloose:
-                        log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
-                                  k, dx_norm[k], ek, de[k])
-                        conv[k] = True
-        else:
-            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
-                                           fresh_start, log)
-            de = e - elast
-            dx_norm = []
-            xt = []
-            for k, ek in enumerate(e):
-                xt.append(ax0[k] - ek * x0[k])
-                dx_norm.append(numpy.sqrt(dot(xt[k].conj(), xt[k]).real))
-                if not conv_last[k] and abs(de[k]) < tol and dx_norm[k] < toloose:
+        dx_norm = numpy.zeros(nroots)
+        xt = [None] * nroots
+        for k, ek in enumerate(e):
+            if not conv[k]:
+                xt[k] = ax0[k] - ek * x0[k]
+                dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
+                conv[k] = abs(de[k]) < tol and dx_norm[k] < toloose
+                if conv[k] and not conv_last[k]:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                               k, dx_norm[k], ek, de[k])
-            dx_norm = numpy.asarray(dx_norm)
-            conv = (abs(de) < tol) & (dx_norm < toloose)
+                    conv[k] = True
         ax0 = None
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
@@ -911,8 +889,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             break
         elif (follow_state and max_dx_norm > 1 and
               max_dx_norm/max_dx_last > 3 and space > nroots+4):
-            log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
-                      icyc, space, max_dx_norm, e, de[ide], norm_min)
+            log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
+                      icyc, space, max_dx_norm, e, de[ide])
             log.debug('Large |r| detected, restore to previous x0')
             x0 = _gen_x0(vlast, xs)
             fresh_start = True
@@ -923,38 +901,26 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 emin = min(e)
 
         # remove subspace linear dependency
-        if any(((not conv[k]) and n**2>lindep) for k, n in enumerate(dx_norm)):
-            for k, ek in enumerate(e):
-                if (not conv[k]) and dx_norm[k]**2 > lindep:
-                    xt[k] = precond(xt[k], e[0], x0[k])
-                    xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-                else:
-                    xt[k] = None
-                    log.debug1('Throwing out eigenvector %d with norm=%4.3g', k, dx_norm[k])
-        else:
-            for k, ek in enumerate(e):
-                if dx_norm[k]**2 > lindep:
-                    xt[k] = precond(xt[k], e[0], x0[k])
-                    xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-                else:
-                    xt[k] = None
-        xt = [xi for xi in xt if xi is not None]
-
-        for i in range(space):
-            xsi = numpy.asarray(xs[i])
-            for xi in xt:
-                xi -= xsi * dot(xsi.conj(), xi)
-            xsi = None
-        norm_min = 1
-        for i,xi in enumerate(xt):
-            norm = numpy.sqrt(dot(xi.conj(), xi).real)
-            if norm**2 > lindep:
-                xt[i] *= 1/norm
-                norm_min = min(norm_min, norm)
+        for k, ek in enumerate(e):
+            if (not conv[k]) and dx_norm[k]**2 > lindep:
+                xt[k] = precond(xt[k], e[0]-level_shift, x0[k])
+                xt[k] *= dot(xt[k].conj(), xt[k]).real ** -.5
+            elif not conv[k]:
+                # Remove linearly dependent vector
+                xt[k] = None
+                log.debug1('Drop eigenvector %d, norm=%4.3g', k, dx_norm[k])
             else:
-                xt[i] = None
-        xt = [xi for xi in xt if xi is not None]
-        xi = None
+                xt[k] = None
+
+        xt, ill_precond = _project_xt_(xt, xs, e, lindep, dot, precond)
+        if ill_precond:
+            # Manually adjust the precond because precond function may not be
+            # able to generate linearly dependent basis vectors. e.g. issue 1362
+            log.warn('Matrix may be already a diagonal matrix. '
+                     'level_shift is applied to precond')
+            level_shift = 0.1
+
+        xt, norm_min = _normalize_xt_(xt, lindep, dot)
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
@@ -986,7 +952,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         e, v, idx = pick(w, v, nroots, locals())
         if len(e) == 0:
             raise RuntimeError(f'Not enough eigenvalues found by {pick}')
-        xl = _gen_x0(vl[:,idx[:nroots]].conj(), xs)
+        xl = _gen_x0(vl[:,idx[:nroots]], xs)
         x0 = _gen_x0(v[:,:nroots], xs)
         xl = [x for x in xl]  # nparray -> list
         x0 = [x for x in x0]  # nparray -> list
@@ -1129,7 +1095,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + (nroots-1) * 3
+    max_space = max_space + (nroots-1) * 4
     # max_space*3 for holding ax, bx and xs, nroots*3 for holding axt, bxt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*3+nroots*3
     lessio = lessio and not _incore
@@ -1137,6 +1103,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     seff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
     fresh_start = True
     conv = False
+    level_shift = 0
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -1226,15 +1193,14 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
             conv = True
             break
 
-        dx_norm = []
-        xt = []
+        dx_norm = numpy.zeros(nroots)
+        xt = [None] * nroots
         for k, ek in enumerate(e):
             if type == 1:
-                dxtmp = ax0[k] - ek * bx0[k]
+                xt[k] = ax0[k] - ek * bx0[k]
             else:
-                dxtmp = ax0[k] - ek * x0[k]
-            xt.append(dxtmp)
-            dx_norm.append(numpy_helper.norm(dxtmp))
+                xt[k] = ax0[k] - ek * x0[k]
+            dx_norm[k] = dot(xt[k].conj(), xt[k]).real ** .5
         ax0 = bx0 = None
 
         if max(dx_norm) < toloose:
@@ -1245,28 +1211,24 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
 
         # remove subspace linear dependency
         for k, ek in enumerate(e):
-            if dx_norm[k] > toloose:
-                xt[k] = precond(xt[k], e[0], x0[k])
-                xt[k] *= 1/numpy_helper.norm(xt[k])
+            if dx_norm[k]**2 > lindep:
+                xt[k] = precond(xt[k], e[0]-level_shift, x0[k])
+                xt[k] *= dot(xt[k].conj(), xt[k]).real ** -.5
             else:
+                log.debug1('Drop eigenvector %d, norm=%4.3g', k, dx_norm[k])
                 xt[k] = None
-        xt = [xi for xi in xt if xi is not None]
-        for i in range(space):
-            xsi = numpy.asarray(xs[i])
-            for xi in xt:
-                xi -= xsi * numpy.dot(xi, xsi)
-            xsi = None
-        norm_min = 1
-        for i,xi in enumerate(xt):
-            norm = numpy_helper.norm(xi)
-            if norm > toloose:
-                xt[i] *= 1/norm
-                norm_min = min(norm_min, norm)
-            else:
-                xt[i] = None
-        xt = [xi for xi in xt if xi is not None]
+
+        xt, ill_precond = _project_xt_(xt, xs, e, lindep, dot, precond)
+        if ill_precond:
+            # Manually adjust the precond because precond function may not be
+            # able to generate linearly dependent basis vectors. e.g. issue 1362
+            log.warn('Matrix may be already a diagonal matrix. '
+                     'level_shift is applied to precond')
+            level_shift = 0.1
+
+        xt, norm_min = _normalize_xt_(xt, lindep, dot)
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
-                  icyc, space, max(dx_norm), e, de[ide], norm)
+                  icyc, space, max(dx_norm), e, de[ide], norm_min)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
                       dx_norm)
@@ -1447,11 +1409,13 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     return x
 
 
-def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
-           lindep=DSOLVE_LINDEP, verbose=0, tol_residual=None):
-    '''Davidson iteration to solve linear equation.  It works bad.
+def solve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
+          lindep=DSOLVE_LINDEP, verbose=0, tol_residual=None):
+    '''Davidson iteration to solve linear equation.
     '''
-
+    msg = ('linalg_helper.solve is a bad solver for linear equations. '
+           'You should not use this solver in product.')
+    warnings.warn(msg)
     if tol_residual is None:
         toloose = numpy.sqrt(tol)
     else:
@@ -1466,14 +1430,14 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
     aeff = numpy.zeros((max_cycle,max_cycle), dtype=dtype)
     beff = numpy.zeros((max_cycle), dtype=dtype)
     for istep in range(max_cycle):
-        beff[istep] = dot(xs[istep], b)
+        beff[istep] = dot(xs[istep].conj(), b)
         for i in range(istep+1):
-            aeff[istep,i] = dot(xs[istep], ax[i])
-            aeff[i,istep] = dot(xs[i], ax[istep])
+            aeff[istep,i] = dot(xs[istep].conj(), ax[i])
+            aeff[i,istep] = dot(xs[i].conj(), ax[istep])
 
         v = scipy.linalg.solve(aeff[:istep+1,:istep+1], beff[:istep+1])
-        xtrial = dot(v, xs)
-        dx = b - dot(v, ax)
+        xtrial = _outprod_to_subspace(v, xs)
+        dx = b - _outprod_to_subspace(v, ax)
         rr = numpy_helper.norm(dx)
         if verbose:
             print('davidson', istep, rr)
@@ -1487,6 +1451,7 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
 
     return xtrial
 
+dsolve = solve
 
 def cho_solve(a, b, strict_sym_pos=True):
     '''Solve ax = b, where a is a positive definite hermitian matrix
@@ -1533,14 +1498,20 @@ def _qr(xs, dot, lindep=1e-14):
             nv += 1
     return qs[:nv], numpy.linalg.inv(rmat[:nv,:nv])
 
-def _gen_x0(v, xs):
+def _outprod_to_subspace(v, xs):
+    ndim = v.ndim
+    if ndim == 1:
+        v = v[:,None]
     space, nroots = v.shape
     x0 = numpy.einsum('c,x->cx', v[space-1], numpy.asarray(xs[space-1]))
     for i in reversed(range(space-1)):
         xsi = numpy.asarray(xs[i])
         for k in range(nroots):
             x0[k] += v[i,k] * xsi
+    if ndim == 1:
+        x0 = x0[0]
     return x0
+_gen_x0 = _outprod_to_subspace
 
 def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
     if not any(conv) or vlast is None:
@@ -1580,7 +1551,40 @@ def _sort_elast(elast, conv_last, vlast, v, fresh_start, log):
             for i in numpy.where(ordering_diff)[0]:
                 log.debug('  %3d     ->   %3d ', idx[i], i)
 
-    return [elast[i] for i in idx], [conv_last[i] for i in idx]
+    return elast[idx], conv_last[idx]
+
+def _project_xt_(xt, xs, e, threshold, dot, precond):
+    '''Projects out existing basis vectors xs. Also checks whether the precond
+    function is ill-conditioned'''
+    ill_precond = False
+    for i, xsi in enumerate(xs):
+        xsi = numpy.asarray(xsi)
+        for k, xi in enumerate(xt):
+            if xi is None:
+                continue
+            ovlp = dot(xsi.conj(), xi)
+            # xs[i] == xt[k]
+            if abs(1 - ovlp)**2 < threshold:
+                ill_precond = True
+                # rebuild xt[k] to remove correlation between xt[k] and xs[i]
+                xi[:] = precond(xi, e[k], xi)
+                ovlp = dot(xsi.conj(), xi)
+            xi -= xsi * ovlp
+        xsi = None
+    return xt, ill_precond
+
+def _normalize_xt_(xt, threshold, dot):
+    norm_min = 1
+    out = []
+    for i, xi in enumerate(xt):
+        if xi is None:
+            continue
+        norm = dot(xi.conj(), xi).real ** .5
+        if norm**2 > threshold:
+            xt[i] *= 1/norm
+            norm_min = min(norm_min, norm)
+            out.append(xt[i])
+    return out, norm_min
 
 
 class LinearDependenceError(RuntimeError):
@@ -1595,6 +1599,9 @@ class _Xlist(list):
     def __getitem__(self, n):
         key = self.index[n]
         return self.scr_h5[str(key)]
+
+    def __iter__(self):
+        return (self[i] for i in range(len(self)))
 
     def append(self, x):
         length = len(self.index)
@@ -1624,173 +1631,3 @@ class _Xlist(list):
         del (self.scr_h5[str(key)])
 
 del (SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)
-
-
-if __name__ == '__main__':
-    a = numpy.random.random((9,5))+numpy.random.random((9,5))*1j
-    q, r = _qr(a.T, numpy.dot)
-    print(abs(r.T.dot(q)-a.T).max())
-
-    numpy.random.seed(12)
-    n = 1000
-    #a = numpy.random.random((n,n))
-    a = numpy.arange(n*n).reshape(n,n)
-    a = numpy.sin(numpy.sin(a)) + a*1e-3j
-    a = a + a.T.conj() + numpy.diag(numpy.random.random(n))*10
-
-    e,u = scipy.linalg.eigh(a)
-    #a = numpy.dot(u[:,:15]*e[:15], u[:,:15].T)
-    print(e[0], u[0,0])
-
-    def aop(x):
-        return numpy.dot(a, x)
-
-    def precond(r, e0, x0):
-        idx = numpy.argwhere(abs(x0)>.1).ravel()
-        #idx = numpy.arange(20)
-        m = idx.size
-        if m > 2:
-            h0 = a[idx][:,idx] - numpy.eye(m)*e0
-            h0x0 = x0 / (a.diagonal() - e0)
-            h0x0[idx] = numpy.linalg.solve(h0, h0x0[idx])
-            h0r = r / (a.diagonal() - e0)
-            h0r[idx] = numpy.linalg.solve(h0, r[idx])
-            e1 = numpy.dot(x0, h0r) / numpy.dot(x0, h0x0)
-            x1 = (r - e1*x0) / (a.diagonal() - e0)
-            x1[idx] = numpy.linalg.solve(h0, (r-e1*x0)[idx])
-            return x1
-        else:
-            return r / (a.diagonal() - e0)
-
-    x0 = [a[0]/numpy.linalg.norm(a[0]),
-          a[1]/numpy.linalg.norm(a[1]),
-          a[2]/numpy.linalg.norm(a[2]),
-          a[3]/numpy.linalg.norm(a[3])]
-    e0,x0 = dsyev(aop, x0, precond, max_cycle=30, max_space=12,
-                  max_memory=.0001, verbose=5, nroots=4, follow_state=True)
-    print(e0[0] - e[0])
-    print(e0[1] - e[1])
-    print(e0[2] - e[2])
-    print(e0[3] - e[3])
-
-##########
-    a = a + numpy.diag(numpy.random.random(n)+1.1)* 10
-    b = numpy.random.random(n)
-    def aop(x):
-        return numpy.dot(a,x)
-    def precond(x, *args):
-        return x / a.diagonal()
-    x = numpy.linalg.solve(a, b)
-    x1 = dsolve(aop, b, precond, max_cycle=50)
-    print(abs(x - x1).sum())
-    a_diag = a.diagonal()
-    log = logger.Logger(sys.stdout, 5)
-    aop = lambda x: numpy.dot(a-numpy.diag(a_diag), x.ravel())/a_diag
-    x1 = krylov(aop, b/a_diag, max_cycle=50, verbose=log)
-    print(abs(x - x1).sum())
-    x1 = krylov(aop, b/a_diag, None, max_cycle=10, verbose=log)
-    x1 = krylov(aop, b/a_diag, x1, max_cycle=30, verbose=log)
-    print(abs(x - x1).sum())
-
-##########
-    numpy.random.seed(12)
-    n = 500
-    #a = numpy.random.random((n,n))
-    a = numpy.arange(n*n).reshape(n,n)
-    a = numpy.sin(numpy.sin(a))
-    a = a + a.T + numpy.diag(numpy.random.random(n))*10
-    b = numpy.random.random((n,n))
-    b = numpy.dot(b,b.T) + numpy.eye(n)*5
-
-    def abop(x):
-        return numpy.dot(numpy.asarray(x), a.T), numpy.dot(numpy.asarray(x), b.T)
-
-    def precond(r, e0, x0):
-        return r / (a.diagonal() - e0)
-
-    e,u = scipy.linalg.eigh(a, b)
-    x0 = [a[0]/numpy.linalg.norm(a[0]),
-          a[1]/numpy.linalg.norm(a[1]),]
-    e0,x0 = dgeev1(abop, x0, precond, type=1, max_cycle=100, max_space=18,
-                   verbose=5, nroots=4)[1:]
-    print(e0[0] - e[0])
-    print(e0[1] - e[1])
-    print(e0[2] - e[2])
-    print(e0[3] - e[3])
-
-
-    e,u = scipy.linalg.eigh(a, b, type=2)
-    x0 = [a[0]/numpy.linalg.norm(a[0]),
-          a[1]/numpy.linalg.norm(a[1]),]
-    e0,x0 = dgeev1(abop, x0, precond, type=2, max_cycle=100, max_space=18,
-                   verbose=5, nroots=4)[1:]
-    print(e0[0] - e[0])
-    print(e0[1] - e[1])
-    print(e0[2] - e[2])
-    print(e0[3] - e[3])
-
-    e,u = scipy.linalg.eigh(a, b, type=2)
-    x0 = [a[0]/numpy.linalg.norm(a[0]),
-          a[1]/numpy.linalg.norm(a[1]),]
-    abdiag = numpy.dot(a,b).diagonal().copy()
-    def abop(x):
-        x = numpy.asarray(x).T
-        return numpy.dot(a, numpy.dot(b, x)).T.copy()
-    def precond(r, e0, x0):
-        return r / (abdiag-e0)
-    e0, x0 = eig(abop, x0, precond, max_cycle=100, max_space=30, verbose=5,
-                 nroots=4, pick=pick_real_eigs)
-    print(e0[0] - e[0])
-    print(e0[1] - e[1])
-    print(e0[2] - e[2])
-    print(e0[3] - e[3])
-
-    e, ul, u = scipy.linalg.eig(numpy.dot(a, b), left=True)
-    idx = numpy.argsort(e)
-    e = e[idx]
-    ul = ul[:,idx]
-    u  = u [:,idx]
-    u  /= numpy.linalg.norm(u, axis=0)
-    ul /= numpy.linalg.norm(ul, axis=0)
-    x0 = [a[0]/numpy.linalg.norm(a[0]),
-          a[1]/numpy.linalg.norm(a[1]),]
-    abdiag = numpy.dot(a,b).diagonal().copy()
-    e0, vl, vr = eig(abop, x0, precond, max_cycle=100, max_space=30, verbose=5,
-                     nroots=4, pick=pick_real_eigs, left=True)
-    print(e0[0] - e[0])
-    print(e0[1] - e[1])
-    print(e0[2] - e[2])
-    print(e0[3] - e[3])
-    print((abs(vr[0]) - abs(u[:,0])).sum())
-    print((abs(vr[1]) - abs(u[:,1])).sum())
-    print((abs(vr[2]) - abs(u[:,2])).sum())
-    print((abs(vr[3]) - abs(u[:,3])).sum())
-#    print((abs(vl[0]) - abs(ul[:,0])).max())
-#    print((abs(vl[1]) - abs(ul[:,1])).max())
-#    print((abs(vl[2]) - abs(ul[:,2])).max())
-#    print((abs(vl[3]) - abs(ul[:,3])).max())
-
-##########
-    N = 200
-    neig = 4
-    A = numpy.zeros((N,N))
-    k = N/2
-    for ii in range(N):
-        i = ii+1
-        for jj in range(N):
-            j = jj+1
-            if j <= k:
-                A[ii,jj] = i*(i==j)-(i-j-k**2)
-            else:
-                A[ii,jj] = i*(i==j)+(i-j-k**2)
-    def matvec(x):
-        return numpy.dot(A,x)
-
-    def precond(r, e0, x0):
-        return (r+e0*x0) / A.diagonal()  # Converged
-        #return (r+e0*x0) / (A.diagonal()-e0)  # Does not converge
-        #return r / (A.diagonal()-e0)  # Does not converge
-    e, c = eig(matvec, A[:,0], precond, nroots=4, verbose=5,
-                   max_cycle=200,max_space=40, tol=1e-5)
-    print("# davidson evals =", e)
-

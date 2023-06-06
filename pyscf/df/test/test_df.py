@@ -124,6 +124,18 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
             self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
 
+    def test_rsh_df_custom_storage(self):
+        mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', verbose=0)
+        mf = mol.RKS().density_fit()
+        mf.xc = 'lda+0.5*SR_HF(0.3)'
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -102.02277148333626, 8)
+
+        with tempfile.NamedTemporaryFile() as ftmp:
+            mf.with_df._cderi_to_save = ftmp.name
+            mf.run()
+        self.assertAlmostEqual(mf.e_tot, -102.02277148333626, 8)
+
 if __name__ == "__main__":
     print("Full Tests for df")
     unittest.main()

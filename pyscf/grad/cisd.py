@@ -78,6 +78,7 @@ def as_scanner(grad_ci, state=0):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+            self.reset(mol)
 
             ci_scanner = self.base
             if ci_scanner.nroots > 1 and state >= ci_scanner.nroots:
@@ -101,7 +102,6 @@ def as_scanner(grad_ci, state=0):
                 e_tot = ci_scanner.e_tot
                 civec = ci_scanner.ci
 
-            self.mol = mol
             de = self.kernel(civec, eris=eris, **kwargs)
             return e_tot, de
         @property

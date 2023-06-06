@@ -367,16 +367,19 @@ def init_guess_by_minao(mol):
         stdsymb = gto.mole._std_symbol(symb)
         basis_add = gto.basis.load('ano', stdsymb)
 # coreshl defines the core shells to be removed in the initial guess
-        coreshl = gto.ecp.core_configuration(nelec_ecp)
-        #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
+        coreshl = gto.ecp.core_configuration(nelec_ecp, atom_symbol=stdsymb)
+        # coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
             ndocc, frac = atom_hf.frac_occ(stdsymb, l)
-            assert ndocc >= coreshl[l]
-            degen = l * 2 + 1
-            occ_l = [2,]*(ndocc-coreshl[l]) + [frac,]
-            occ.append(numpy.repeat(occ_l, degen))
-            basis_ano.append([l] + [b[:1] + b[1+coreshl[l]:ndocc+2]
-                                    for b in basis_add[l][1:]])
+            if ndocc >= coreshl[l]:
+                degen = l * 2 + 1
+                occ_l = [2, ]*(ndocc-coreshl[l]) + [frac, ]
+                occ.append(numpy.repeat(occ_l, degen))
+                basis_ano.append([l] + [b[:1] + b[1+coreshl[l]:ndocc+2]
+                                        for b in basis_add[l][1:]])
+            else:
+                logger.debug(mol, '*** ECP incorporates partially occupied '
+                             'shell of l = %d for atom %s ***', l, symb)
         occ = numpy.hstack(occ)
 
         if nelec_ecp > 0:
@@ -400,11 +403,12 @@ def init_guess_by_minao(mol):
                 ndocc -= coreshl[l]
                 assert ndocc <= nbas_l
 
-                occ_l = numpy.zeros(nbas_l)
-                occ_l[:ndocc] = 2
-                if frac > 0:
-                    occ_l[ndocc] = frac
-                occ4ecp.append(numpy.repeat(occ_l, l * 2 + 1))
+                if nbas_l > 0:
+                    occ_l = numpy.zeros(nbas_l)
+                    occ_l[:ndocc] = 2
+                    if frac > 0:
+                        occ_l[ndocc] = frac
+                    occ4ecp.append(numpy.repeat(occ_l, l * 2 + 1))
 
             occ4ecp = numpy.hstack(occ4ecp)
             basis4ecp = lib.flatten(basis4ecp)
@@ -1105,7 +1109,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
 
     log.info(' ** Mulliken pop  **')
     for i, s in enumerate(mol.ao_labels()):
-        log.info('pop of  %s %10.5f', s, pop[i])
+        log.info('pop of  %-14s %10.5f', s, pop[i])
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
@@ -1114,7 +1118,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     chg = mol.atom_charges() - chg
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+        log.note('charge of  %3d%s =   %10.5f', ia, symb, chg[ia])
     return pop, chg
 
 
@@ -1309,6 +1313,7 @@ def as_scanner(mf):
     class SCF_Scanner(mf.__class__, lib.SinglePointScanner):
         def __init__(self, mf_obj):
             self.__dict__.update(mf_obj.__dict__)
+            self._last_mol_fp = mf.mol.ao_loc
 
         def __call__(self, mol_or_geom, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
@@ -1326,7 +1331,7 @@ def as_scanner(mf):
             elif self.chkfile and h5py.is_hdf5(self.chkfile):
                 dm0 = self.from_chk(self.chkfile)
             else:
-                dm0 = self.make_rdm1()
+                dm0 = None
                 # dm0 form last calculation cannot be used in the current
                 # calculation if a completely different system is given.
                 # Obviously, the systems are very different if the number of
@@ -1334,18 +1339,11 @@ def as_scanner(mf):
                 # TODO: A robust check should include more comparison on
                 # various attributes between current `mol` and the `mol` in
                 # last calculation.
-                if dm0.shape[-1] != mol.nao:
-                    #TODO:
-                    #from pyscf.scf import addons
-                    #if numpy.any(last_mol.atom_charges() != mol.atom_charges()):
-                    #    dm0 = None
-                    #elif non-relativistic:
-                    #    addons.project_dm_nr2nr(last_mol, dm0, last_mol)
-                    #else:
-                    #    addons.project_dm_r2r(last_mol, dm0, last_mol)
-                    dm0 = None
+                if numpy.array_equal(self._last_mol_fp, mol.ao_loc):
+                    dm0 = self.make_rdm1()
             self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
             e_tot = self.kernel(dm0=dm0, **kwargs)
+            self._last_mol_fp = mol.ao_loc
             return e_tot
 
     return SCF_Scanner(mf)
@@ -1570,6 +1568,7 @@ class SCF(lib.StreamObject):
     @lib.with_doc(init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from minao.')
         return init_guess_by_minao(mol)
 
     @lib.with_doc(init_guess_by_atom.__doc__)
@@ -1849,7 +1848,19 @@ class SCF(lib.StreamObject):
         '''
         from pyscf.scf import chkfile as chkmod
         if chkfile is None: chkfile = self.chkfile
-        self.__dict__.update(chkmod.load(chkfile, 'scf'))
+        chk_scf = chkmod.load(chkfile, 'scf')
+        nao = self.mol.nao
+        mo = chk_scf['mo_coeff']
+        if isinstance(mo, numpy.ndarray): # RHF
+            mo_nao = mo.shape[-2]
+        elif isinstance(mo[0], numpy.ndarray): # UHF
+            mo_nao = mo[0].shape[-2]
+        else: # KUHF
+            mo_nao = mo[0][0].shape[-2]
+        if mo_nao not in (nao, nao*2):
+            logger.warn(self, 'Current mol is inconsistent with SCF object in '
+                        'chkfile %s', chkfile)
+        self.__dict__.update(chk_scf)
         return self
     update_from_chk = update_from_chk_ = update = update_
 

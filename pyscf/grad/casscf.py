@@ -171,13 +171,13 @@ def as_scanner(mcscf_grad):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+            self.reset(mol)
 
             mc_scanner = self.base
             e_tot = mc_scanner(mol)
             if isinstance(mc_scanner, StateAverageMCSCFSolver):
                 e_tot = mc_scanner.e_average
 
-            self.mol = mol
             de = self.kernel(**kwargs)
             return e_tot, de
     return CASSCF_GradScanner(mcscf_grad)

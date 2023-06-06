@@ -37,6 +37,7 @@ import ctypes
 import numpy
 from pyscf import lib
 from pyscf.gto import moleintor
+from pyscf.data.elements import ELEMENTS
 
 libecp = moleintor.libcgto
 libecp.ECPscalar_cache_size.restype = ctypes.c_int
@@ -124,7 +125,7 @@ def so_by_shell(mol, shls):
        cache.ctypes.data_as(ctypes.c_void_p))
     return buf
 
-def core_configuration(nelec_core):
+def core_configuration(nelec_core, atom_symbol=None):
     conf_dic = {
         0 : '0s0p0d0f',
         2 : '1s0p0d0f',
@@ -139,6 +140,16 @@ def core_configuration(nelec_core):
         78: '5s4p3d1f',
         92: '5s4p3d2f',
     }
+    # Core configurations for f-in-core ECPs defined in the following references
+    # 10.1007/BF00528565 , 10.1007/s00214-005-0629-0 , 10.1007/s00214-009-0584-2
+    elements_4f = ELEMENTS[57:71]
+    elements_5f = ELEMENTS[89:103]
+    if atom_symbol in elements_4f:
+        for i in range(46, 60):
+            conf_dic[i] = '4s3p2d1f'
+    if atom_symbol in elements_5f:
+        for i in range(78, 92):
+            conf_dic[i] = '5s4p3d2f'
     if nelec_core not in conf_dic:
         raise RuntimeError('Core configuration for %d core electrons is not available.' % nelec_core)
     coreshell = [int(x) for x in conf_dic[nelec_core][::2]]

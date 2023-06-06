@@ -913,23 +913,7 @@ def frompointer(pointer, count, dtype=float):
     a = numpy.ndarray(count, dtype=numpy.int8, buffer=buf)
     return a.view(dtype)
 
-from distutils.version import LooseVersion
-if LooseVersion(numpy.__version__) <= LooseVersion('1.6.0'):
-    def norm(x, ord=None, axis=None):
-        '''numpy.linalg.norm for numpy 1.6.*
-        '''
-        if axis is None or ord is not None:
-            return numpy.linalg.norm(x, ord)
-        else:
-            x = numpy.asarray(x)
-            axes = string.ascii_lowercase[:x.ndim]
-            target = axes.replace(axes[axis], '')
-            descr = '%s,%s->%s' % (axes, axes, target)
-            xx = _numpy_einsum(descr, x.conj(), x)
-            return numpy.sqrt(xx.real)
-else:
-    norm = numpy.linalg.norm
-del (LooseVersion)
+norm = numpy.linalg.norm
 
 def cond(x, p=None):
     '''Compute the condition number'''

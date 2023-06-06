@@ -94,6 +94,17 @@ class KnownValues(unittest.TestCase):
         e = mf.kernel()
         self.assertAlmostEqual(e, eref, 9)
 
+    # issue 1524
+    def test_diis_for_symmetry_adapted_scf(self):
+        mol = gto.M(atom='O', spin=2, basis='ccpvdz', symmetry=True)
+        mf = mol.ROHF()
+        mf.init_guess = '1e'
+        mf.irrep_nelec = {'s+0' : (2,2), 'p-1' : (1,0), 'p+0' : (1,0), 'p+1' : (1,1) }
+        mf.max_cycle = 9
+        mf.kernel()
+        self.assertTrue(mf.converged)
+        self.assertAlmostEqual(mf.e_tot, -74.7874921601008, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for DIIS")

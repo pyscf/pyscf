@@ -528,15 +528,18 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
 class EOMIP(EOM):
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.double)
         nroots = min(nroots, size)
         guess = []
         if koopmans:
+            dtype = getattr(diag, 'dtype', np.double)
             for n in range(nroots):
                 g = np.zeros(int(size), dtype)
                 g[self.nocc-n-1] = 1.0
                 guess.append(g)
         else:
+            if diag is None:
+                diag = self.get_diag()
+            dtype = getattr(diag, 'dtype', np.double)
             idx = diag.argsort()[:nroots]
             for i in idx:
                 g = np.zeros(int(size), dtype)
@@ -894,15 +897,18 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
 class EOMEA(EOM):
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.double)
         nroots = min(nroots, size)
         guess = []
         if koopmans:
+            dtype = getattr(diag, 'dtype', np.double)
             for n in range(nroots):
                 g = np.zeros(size, dtype)
                 g[n] = 1.0
                 guess.append(g)
         else:
+            if diag is None:
+                diag = self.get_diag()
+            dtype = getattr(diag, 'dtype', np.double)
             idx = diag.argsort()[:nroots]
             for i in idx:
                 g = np.zeros(size, dtype)
@@ -1657,6 +1663,8 @@ def eeccsd_diag(eom, imds=None):
 
 class EOMEE(EOM):
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        if diag is None:
+            diag = self.get_diag()
         if koopmans:
             nocc = self.nocc
             nvir = self.nmo - nocc
@@ -1699,9 +1707,12 @@ class EOMEESinglet(EOMEE):
     eomee_ccsd_singlet = eomee_ccsd_singlet
     matvec = eeccsd_matvec_singlet
 
+    def get_diag(self, imds=None):
+        return eeccsd_diag(self, imds=None)[0]
+
     def gen_matvec(self, imds=None, diag=None, **kwargs):
         if imds is None: imds = self.make_imds()
-        if diag is None: diag = self.get_diag(imds)[0]
+        if diag is None: diag = self.get_diag(imds)
         matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
@@ -1722,9 +1733,12 @@ class EOMEETriplet(EOMEE):
     eomee_ccsd_triplet = eomee_ccsd_triplet
     matvec = eeccsd_matvec_triplet
 
+    def get_diag(self, imds=None):
+        return eeccsd_diag(self, imds=None)[1]
+
     def gen_matvec(self, imds=None, diag=None, **kwargs):
         if imds is None: imds = self.make_imds()
-        if diag is None: diag = self.get_diag(imds)[1]
+        if diag is None: diag = self.get_diag(imds)
         matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
@@ -1745,9 +1759,12 @@ class EOMEESpinFlip(EOMEE):
     eomsf_ccsd = eomsf_ccsd
     matvec = eeccsd_matvec_sf
 
+    def get_diag(self, imds=None):
+        return eeccsd_diag(self, imds=None)[2]
+
     def gen_matvec(self, imds=None, diag=None, **kwargs):
         if imds is None: imds = self.make_imds()
-        if diag is None: diag = self.get_diag(imds)[2]
+        if diag is None: diag = self.get_diag(imds)
         matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 

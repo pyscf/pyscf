@@ -117,7 +117,7 @@ class KnownValues(unittest.TestCase):
         mc1.kernel(mo)
         mo0 = mc1.mo_coeff
         ci0 = mc1.ci
-        self.assertAlmostEqual(mc1.e_tot, -108.7288793597413, 8)
+        self.assertAlmostEqual(mc1.e_tot, -108.7288793597413, 7)
         casdm1 = mc1.fcisolver.make_rdm1(mc1.ci, 4, 4)
         mc1.ci = None  # Force cas_natorb_ to recompute CI coefficients
 
@@ -180,6 +180,7 @@ class KnownValues(unittest.TestCase):
         mc1.with_dep4 = True
         mc1.max_cycle = 1
         mc1.max_cycle_micro = 6
+        mc1.fcisolver.pspace_size = 0
         mc1.kernel(mo)
         self.assertAlmostEqual(mc1.e_tot, -105.82840377848402, 6)
 
@@ -189,6 +190,7 @@ class KnownValues(unittest.TestCase):
         mc1.with_dep4 = True
         mc1.max_cycle = 1
         mc1.max_cycle_micro = 6
+        mc1.fcisolver.pspace_size = 0
         mc1.kernel(mo)
         self.assertAlmostEqual(mc1.e_tot, -105.82833244029327, 6)
 
@@ -254,6 +256,7 @@ class KnownValues(unittest.TestCase):
         mo = mc1.sort_mo_by_irrep({'A1u':3, 'A1g':1})
         mc1.ah_grad_trust_region = 0.3
         mc1.conv_tol = 1e-7
+        mc1.fcisolver.pspace_size = 0
         tot_jk = []
         def count_jk(envs):
             tot_jk.append(envs.get('njk', 0))

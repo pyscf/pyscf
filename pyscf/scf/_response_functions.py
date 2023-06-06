@@ -45,12 +45,12 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if getattr(mf, 'nlc', '') != '':
+        if mf.nlc or ni.libxc.is_nlc(mf.xc):
             logger.warn(mf, 'NLC functional found in DFT object.  Its second '
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = abs(hyb) > 1e-10
+        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
         # mf can be pbc.dft.RKS object with multigrid
         if (not hybrid and
@@ -62,10 +62,10 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         if singlet is None:
             # for ground state orbital hessian
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                mo_coeff, mo_occ, 0)
+                                                mo_coeff, mo_occ, spin=0)
         else:
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
+                                                mo_coeff, mo_occ, spin=1)
         dm0 = None  #mf.make_rdm1(mo_coeff, mo_occ)
 
         if max_memory is None:
@@ -85,7 +85,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
-                        if omega > 1e-10:  # For range separated Coulomb
+                        if abs(omega) > 1e-10:  # For range separated Coulomb
                             vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                         v1 += vj - .5 * vk
                     else:
@@ -107,7 +107,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
-                        if omega > 1e-10:  # For range separated Coulomb
+                        if abs(omega) > 1e-10:  # For range separated Coulomb
                             vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                         v1 += vj - .5 * vk
                     else:
@@ -127,7 +127,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 if hybrid:
                     vk = mf.get_k(mol, dm1, hermi=hermi)
                     vk *= hyb
-                    if omega > 1e-10:  # For range separated Coulomb
+                    if abs(omega) > 1e-10:  # For range separated Coulomb
                         vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                     v1 += -.5 * vk
                 return v1
@@ -155,12 +155,12 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     if isinstance(mf, hf.KohnShamDFT):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if getattr(mf, 'nlc', '') != '':
+        if mf.nlc or ni.libxc.is_nlc(mf.xc):
             logger.warn(mf, 'NLC functional found in DFT object.  Its second '
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = abs(hyb) > 1e-10
+        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
         # mf can be pbc.dft.UKS object with multigrid
         if (not hybrid and
@@ -228,10 +228,10 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
         ni = mf._numint
         assert isinstance(ni, (numint2c.NumInt2C, r_numint.RNumInt))
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if getattr(mf, 'nlc', '') != '':
+        if mf.nlc or ni.libxc.is_nlc(mf.xc):
             raise NotImplementedError('NLC')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = abs(hyb) > 1e-10
+        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
         # mf can be pbc.dft.UKS object with multigrid
         if (not hybrid and

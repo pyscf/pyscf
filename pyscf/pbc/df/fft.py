@@ -26,7 +26,7 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_ao2mo
-from pyscf.pbc.df.aft import _sub_df_jk_
+from pyscf.pbc.df import aft
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
@@ -316,8 +316,9 @@ class FFTDF(lib.StreamObject):
                with_j=True, with_k=True, omega=None, exxdiv=None):
         from pyscf.pbc.df import fft_jk
         if omega is not None:  # J/K for RSH functionals
-            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
-                               with_j, with_k, omega, exxdiv)
+            with self.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                                     omega=None, exxdiv=exxdiv)
 
         if kpts is None:
             if numpy.all(self.kpts == 0): # Gamma-point J/K by default
@@ -377,6 +378,8 @@ class FFTDF(lib.StreamObject):
         mesh = numpy.asarray(self.mesh)
         ngrids = numpy.prod(mesh)
         return ngrids * 2
+
+    range_coulomb = aft.AFTDF.range_coulomb
 
 
 if __name__ == '__main__':

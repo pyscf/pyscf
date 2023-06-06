@@ -44,22 +44,7 @@ def get_veff(ks_grad, mol=None, dm=None):
 
     mf = ks_grad.base
     ni = mf._numint
-    if ks_grad.grids is not None:
-        grids = ks_grad.grids
-    else:
-        grids = mf.grids
-    if mf.nlc != '':
-        if ks_grad.nlcgrids is not None:
-            nlcgrids = ks_grad.nlcgrids
-        else:
-            nlcgrids = mf.nlcgrids
-        if nlcgrids.coords is None:
-            nlcgrids.build(with_non0tab=True)
-    if grids.coords is None:
-        grids.build(with_non0tab=True)
-
-    #enabling range-separated hybrids
-    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    grids, nlcgrids = _initialize_grids(ks_grad)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
@@ -67,38 +52,63 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = get_vxc_full_response(ni, mol, grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
-        if mf.nlc:
-            assert 'VV10' in mf.nlc.upper()
-            enlc, vnlc = get_vxc_full_response(ni, mol, nlcgrids,
-                                               mf.xc+'__'+mf.nlc, dm,
-                                               max_memory=max_memory,
-                                               verbose=ks_grad.verbose)
+        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+            if ni.libxc.is_nlc(mf.xc):
+                xc = mf.xc
+            else:
+                xc = mf.nlc
+            enlc, vnlc = get_nlc_vxc_full_response(
+                ni, mol, nlcgrids, xc, dm,
+                max_memory=max_memory, verbose=ks_grad.verbose)
             exc += enlc
             vxc += vnlc
         logger.debug1(ks_grad, 'sum(grids response) %s', exc.sum(axis=0))
     else:
         exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
-        if mf.nlc:
-            assert 'VV10' in mf.nlc.upper()
-            enlc, vnlc = get_vxc(ni, mol, nlcgrids, mf.xc+'__'+mf.nlc, dm,
-                                 max_memory=max_memory,
-                                 verbose=ks_grad.verbose)
+        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+            if ni.libxc.is_nlc(mf.xc):
+                xc = mf.xc
+            else:
+                xc = mf.nlc
+            enlc, vnlc = get_nlc_vxc(
+                ni, mol, nlcgrids, xc, dm,
+                max_memory=max_memory, verbose=ks_grad.verbose)
             vxc += vnlc
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
-    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
+    if not ni.libxc.is_hybrid_xc(mf.xc):
         vj = ks_grad.get_j(mol, dm)
         vxc += vj
     else:
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
         vj, vk = ks_grad.get_jk(mol, dm)
         vk *= hyb
-        if abs(omega) > 1e-10:  # For range separated Coulomb operator
-            with mol.with_range_coulomb(omega):
-                vk += ks_grad.get_k(mol, dm) * (alpha - hyb)
+        if omega != 0:
+            vk += ks_grad.get_k(mol, dm, omega=omega) * (alpha - hyb)
         vxc += vj - vk * .5
 
     return lib.tag_array(vxc, exc1_grid=exc)
+
+def _initialize_grids(ks_grad):
+    mf = ks_grad.base
+    ni = mf._numint
+    if ks_grad.grids is not None:
+        grids = ks_grad.grids
+    else:
+        grids = mf.grids
+    if grids.coords is None:
+        grids.build(with_non0tab=True)
+
+    nlcgrids = None
+    if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        if ks_grad.nlcgrids is not None:
+            nlcgrids = ks_grad.nlcgrids
+        else:
+            nlcgrids = mf.nlcgrids
+        if nlcgrids.coords is None:
+            nlcgrids.build(with_non0tab=True)
+    return grids, nlcgrids
 
 
 def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
@@ -130,31 +140,6 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 wv[0] *= .5
                 _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
 
-    elif xctype == 'NLC':
-        nlc_pars = ni.nlc_coeff(xc_code)
-        ao_deriv = 2
-        vvrho = []
-        for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            vvrho.append([make_rho(idm, ao[:4], mask, 'GGA')
-                          for idm in range(nset)])
-
-        vv_vxc = []
-        for idm in range(nset):
-            rho = numpy.hstack([r[idm] for r in vvrho])
-            vxc = numint._vv10nlc(rho, grids.coords, rho, grids.weights,
-                                  grids.coords, nlc_pars)[1]
-            vv_vxc.append(xc_deriv.transform_vxc(rho, vxc, 'GGA', spin=0))
-
-        p1 = 0
-        for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            p0, p1 = p1, p1 + weight.size
-            for idm in range(nset):
-                wv = vv_vxc[idm][:,p0:p1] * weight
-                wv[0] *= .5  # *.5 because vmat + vmat.T at the end
-                _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
-
     elif xctype == 'MGGA':
         ao_deriv = 2
         for ao, mask, weight, coords \
@@ -171,6 +156,40 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     exc = None
     if nset == 1:
         vmat = vmat[0]
+    # - sign because nabla_X = -nabla_x
+    return exc, -vmat
+
+def get_nlc_vxc(ni, mol, grids, xc_code, dm, relativity=0, hermi=1,
+                max_memory=2000, verbose=None):
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi, False, grids)
+    assert nset == 1
+    ao_loc = mol.ao_loc_nr()
+
+    vmat = numpy.zeros((3,nao,nao))
+    nlc_coefs = ni.nlc_coeff(xc_code)
+    if len(nlc_coefs) != 1:
+        raise NotImplementedError('Additive NLC')
+    nlc_pars, fac = nlc_coefs[0]
+    ao_deriv = 2
+    vvrho = []
+    for ao, mask, weight, coords \
+            in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+        vvrho.append(make_rho(0, ao[:4], mask, 'GGA'))
+    rho = numpy.hstack(vvrho)
+
+    vxc = numint._vv10nlc(rho, grids.coords, rho, grids.weights,
+                          grids.coords, nlc_pars)[1]
+    vv_vxc = xc_deriv.transform_vxc(rho, vxc, 'GGA', spin=0)
+
+    p1 = 0
+    for ao, mask, weight, coords \
+            in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+        p0, p1 = p1, p1 + weight.size
+        wv = vv_vxc[:,p0:p1] * weight
+        wv[0] *= .5  # *.5 because vmat + vmat.T at the end
+        _gga_grad_sum_(vmat, mol, ao, wv, mask, ao_loc)
+
+    exc = None
     # - sign because nabla_X = -nabla_x
     return exc, -vmat
 
@@ -297,7 +316,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)
     ao_loc = mol.ao_loc_nr()
 
-    excsum = 0
+    excsum = numpy.zeros((mol.natm,3))
     vmat = numpy.zeros((3,nao,nao))
     if xctype == 'LDA':
         ao_deriv = 1
@@ -342,56 +361,6 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms) * 2
             rho = vxc = wv = None
 
-    elif xctype == 'NLC':
-        nlc_pars = ni.nlc_coeff(xc_code)
-        ao_deriv = 2
-        vvrho = []
-        vvcoords = []
-        vvweights = []
-        for atm_id, (coords, weight) in enumerate(grids_noresponse_cc(grids)):
-            mask = gen_grid.make_mask(mol, coords)
-            ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask,
-                            cutoff=grids.cutoff)
-            vvrho.append(make_rho(0, ao[:4], mask, 'GGA'))
-            vvcoords.append(coords)
-            vvweights.append(weight)
-
-        vv_vxc = []
-        vvcoords_flat = numpy.vstack(vvcoords)
-        vvweights_flat = numpy.concatenate(vvweights)
-        vvrho_flat = numpy.hstack(vvrho)
-        for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
-            rho = vvrho[atm_id]
-            mask = gen_grid.make_mask(mol, coords)
-            ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask,
-                            cutoff=grids.cutoff)
-
-            exc, vxc = numint._vv10nlc(rho, coords, vvrho_flat, vvweights_flat,
-                                       vvcoords_flat, nlc_pars)
-            vv_vxc = xc_deriv.transform_vxc(rho, vxc, 'GGA', spin=0)
-            wv = vv_vxc * weight
-            wv[0] *= .5
-            vtmp = numpy.zeros((3,nao,nao))
-            _gga_grad_sum_(vtmp, mol, ao, wv, mask, ao_loc)
-            vmat += vtmp
-
-            vvrho_sub = numpy.hstack(
-                [r for i, r in enumerate(vvrho) if i != atm_id])
-            vvcoords_sub = numpy.vstack(
-                [r for i, r in enumerate(vvcoords) if i != atm_id])
-            vvweights_sub = numpy.concatenate(
-                [r for i, r in enumerate(vvweights) if i != atm_id])
-            egrad, Beta = _vv10nlc_grad(rho, coords, vvrho_sub,
-                                        vvweights_sub, vvcoords_sub,
-                                        nlc_pars)
-            # account for factor of 2 in double integration
-            exc -= 0.5 * Beta
-            # response of weights
-            excsum += 2 * numpy.einsum('r,r,nxr->nx', exc, rho[0], weight1)
-            # response of grids coordinates
-            excsum[atm_id] += 2 * numpy.einsum('xij,ji->x', vtmp, dms)
-            excsum[atm_id] += numpy.einsum('r,rx->x', rho[0]*weight, egrad)
-
     elif xctype == 'MGGA':
         ao_deriv = 2
         for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
@@ -415,6 +384,67 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms) * 2
             rho = vxc = wv = None
 
+    # - sign because nabla_X = -nabla_x
+    return excsum, -vmat
+
+def get_nlc_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
+                              max_memory=2000, verbose=None):
+    '''Full NLC functional response including the response of the grids'''
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)
+    ao_loc = mol.ao_loc_nr()
+
+    excsum = numpy.zeros((mol.natm,3))
+    vmat = numpy.zeros((3,nao,nao))
+    nlc_coefs = ni.nlc_coeff(xc_code)
+    if len(nlc_coefs) != 1:
+        raise NotImplementedError('Additive NLC')
+    nlc_pars, fac = nlc_coefs[0]
+    ao_deriv = 2
+    vvrho = []
+    vvcoords = []
+    vvweights = []
+    for atm_id, (coords, weight) in enumerate(grids_noresponse_cc(grids)):
+        mask = gen_grid.make_mask(mol, coords)
+        ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask,
+                        cutoff=grids.cutoff)
+        vvrho.append(make_rho(0, ao[:4], mask, 'GGA'))
+        vvcoords.append(coords)
+        vvweights.append(weight)
+    vvcoords_flat = numpy.vstack(vvcoords)
+    vvweights_flat = numpy.concatenate(vvweights)
+    vvrho_flat = numpy.hstack(vvrho)
+
+    vv_vxc = []
+    for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
+        rho = vvrho[atm_id]
+        mask = gen_grid.make_mask(mol, coords)
+        ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask,
+                        cutoff=grids.cutoff)
+
+        exc, vxc = numint._vv10nlc(rho, coords, vvrho_flat, vvweights_flat,
+                                   vvcoords_flat, nlc_pars)
+        vv_vxc = xc_deriv.transform_vxc(rho, vxc, 'GGA', spin=0)
+        wv = vv_vxc * weight
+        wv[0] *= .5
+        vtmp = numpy.zeros((3,nao,nao))
+        _gga_grad_sum_(vtmp, mol, ao, wv, mask, ao_loc)
+        vmat += vtmp
+
+        vvrho_sub = numpy.hstack(
+            [r for i, r in enumerate(vvrho) if i != atm_id])
+        vvcoords_sub = numpy.vstack(
+            [r for i, r in enumerate(vvcoords) if i != atm_id])
+        vvweights_sub = numpy.concatenate(
+            [r for i, r in enumerate(vvweights) if i != atm_id])
+        egrad, Beta = _vv10nlc_grad(rho, coords, vvrho_sub,
+                                    vvweights_sub, vvcoords_sub, nlc_pars)
+        # account for factor of 2 in double integration
+        exc -= 0.5 * Beta
+        # response of weights
+        excsum += 2 * numpy.einsum('r,r,nxr->nx', exc, rho[0], weight1)
+        # response of grids coordinates
+        excsum[atm_id] += 2 * numpy.einsum('xij,ji->x', vtmp, dms)
+        excsum[atm_id] += numpy.einsum('r,rx->x', rho[0]*weight, egrad)
     # - sign because nabla_X = -nabla_x
     return excsum, -vmat
 

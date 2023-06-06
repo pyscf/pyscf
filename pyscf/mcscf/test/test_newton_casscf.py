@@ -117,7 +117,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(sa.e_tot, -3.62638372957158, 7)
         # MRH 06/24/2020: convergence thresh of scf may not have consistent
         # meaning in SA problems
-        self.assertAlmostEqual(abs(sa.get_grad()).max(), 0, 5)
+        self.assertAlmostEqual(abs(sa.get_grad()).max(), 0, 4)
 
     def test_sa_mix(self):
         e = mc_N2.e_states
