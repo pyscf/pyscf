@@ -78,6 +78,8 @@ def transform_t2_to_bo(t2, umat, umat_b=None):
         umat_vir_b = umat_b[nocc_b:, nocc_b:]
         t2_bo = np.einsum("ijab, iI, jJ, aA, bB -> IJAB", t2, umat_occ_a,
                           umat_occ_b, umat_vir_a, umat_vir_b, optimize=True)
+        # (T) need a continuous array
+        t2_bo = np.asarray(t2_bo, order='C')
     else: # UHF
         t2_bo = [None, None, None]
         t2_bo[0] = transform_t2_to_bo(t2[0], umat[0])
@@ -301,8 +303,8 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
         mycc.frozen = frozen
         mycc.level_shift = level_shift
         mycc.verbose = verbose
-        mycc.t1 = np.asarray(t1, order='C')
-        mycc.t2 = np.asarray(t2, order='C')
+        mycc.t1 = t1
+        mycc.t2 = t2
 
     return mycc
 
