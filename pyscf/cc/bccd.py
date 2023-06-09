@@ -270,12 +270,14 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
 
         if u.ndim == 2:
             fock = mycc.mo_coeff.conj().T @ fockao @ mycc.mo_coeff
-            foo = fock[:mycc.nocc, :mycc.nocc]
-            fvv = fock[mycc.nocc:, mycc.nocc:]
+            fock_xcore = fock[np.ix_(frozen_mask, frozen_mask)]
+            foo = fock_xcore[:mycc.nocc, :mycc.nocc]
+            fvv = fock_xcore[mycc.nocc:, mycc.nocc:]
             ew_o, ev_o = la.eigh(foo)
             ew_v, ev_v = la.eigh(fvv)
-            umat = la.block_diag(ev_o, ev_v)
-            umat_xcore = umat[np.ix_(frozen_mask, frozen_mask)]
+            umat_xcore = la.block_diag(ev_o, ev_v)
+            umat = np.eye(mycc.mo_coeff.shape[-1])
+            umat[np.ix_(frozen_mask, frozen_mask)] = umat_xcore
             mf.mo_coeff = mf.mo_coeff @ umat
             mycc.mo_coeff = mf.mo_coeff
         else:
@@ -283,12 +285,16 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             umat_xcore = []
             for s in range(2):
                 fock = mycc.mo_coeff[s].conj().T @ fockao[s] @ mycc.mo_coeff[s]
-                foo = fock[:mycc.nocc[s], :mycc.nocc[s]]
-                fvv = fock[mycc.nocc[s]:, mycc.nocc[s]:]
+                fock_xcore = fock[np.ix_(frozen_mask[s], frozen_mask[s])]
+                foo = fock_xcore[:mycc.nocc[s], :mycc.nocc[s]]
+                fvv = fock_xcore[mycc.nocc[s]:, mycc.nocc[s]:]
                 ew_o, ev_o = la.eigh(foo)
                 ew_v, ev_v = la.eigh(fvv)
-                umat.append(la.block_diag(ev_o, ev_v))
-                umat_xcore.append(umat[-1][np.ix_(frozen_mask[s], frozen_mask[s])])
+                umat_xcore.append(la.block_diag(ev_o, ev_v))
+                umat_s = np.eye(mycc.mo_coeff[s].shape[-1])
+                umat_s[np.ix_(frozen_mask[s], frozen_mask[s])] = umat_xcore[-1]
+                umat.append(umat_s)
+
             umat = np.asarray(umat)
             mf.mo_coeff = np.einsum('spm, smn -> spn', mf.mo_coeff, umat)
             mycc.mo_coeff = mf.mo_coeff
