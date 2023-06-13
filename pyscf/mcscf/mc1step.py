@@ -574,12 +574,12 @@ def max_stepsize_scheduler(casscf, envs):
     if _max_stepsize is None:
         _max_stepsize = casscf.max_stepsize
     if envs['de'] > -casscf.conv_tol:  # Avoid total energy increasing
-        max_stepsize = _max_stepsize*.3
-        logger.debug(casscf, 'set max_stepsize to %g', max_stepsize)
+        _max_stepsize *= .3
+        logger.debug(casscf, 'set max_stepsize to %g', _max_stepsize)
     else:
-        max_stepsize = (casscf.max_stepsize*_max_stepsize)**.5
-    casscf._max_stepsize = max_stepsize # for inspection by user
-    return max_stepsize
+        _max_stepsize = (casscf.max_stepsize*_max_stepsize)**.5
+    casscf._max_stepsize = _max_stepsize # for inspection by user
+    return _max_stepsize
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
 # object or a module to CASSCF.fcisolver.  The fcisolver object or module
