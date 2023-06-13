@@ -566,6 +566,19 @@ def as_scanner(mc):
             return e_tot
     return CASSCF_Scanner(mc)
 
+def max_stepsize_scheduler(casscf, envs):
+    if not WITH_STEPSIZE_SCHEDULER:
+        return casscf.max_stepsize
+
+    if envs['max_stepsize'] is None:
+        max_stepsize = casscf.max_stepsize
+    if envs['de'] > -casscf.conv_tol:  # Avoid total energy increasing
+        max_stepsize = envs['max_stepsize']*.3
+        logger.debug(casscf, 'set max_stepsize to %g', max_stepsize)
+    else:
+        max_stepsize = (casscf.max_stepsize*envs['max_stepsize'])**.5
+    casscf._max_stepsize = max_stepsize # for inspection by user
+    return max_stepsize
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
 # object or a module to CASSCF.fcisolver.  The fcisolver object or module
@@ -1230,18 +1243,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
         log_norm_ddm = numpy.log(envs['norm_ddm'])
         return max(self.max_cycle_micro, int(self.max_cycle_micro-1-log_norm_ddm))
 
-    def max_stepsize_scheduler(self, envs):
-        if not WITH_STEPSIZE_SCHEDULER:
-            return self.max_stepsize
-
-        if envs['max_stepsize'] is None:
-            max_stepsize = self.max_stepsize
-        if envs['de'] > -self.conv_tol:  # Avoid total energy increasing
-            max_stepsize = envs['max_stepsize']*.3
-            logger.debug(self, 'set max_stepsize to %g', max_stepsize)
-        else:
-            max_stepsize = (self.max_stepsize*envs['max_stepsize'])**.5
-        return max_stepsize
+    max_stepsize_scheduler=max_stepsize_scheduler
 
     def ah_scheduler(self, envs):
         pass
