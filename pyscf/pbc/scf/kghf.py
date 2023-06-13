@@ -24,6 +24,7 @@ from functools import reduce
 import numpy as np
 import scipy.linalg
 import pyscf.scf.ghf as mol_ghf  # noqa
+import pyscf.scf.uhf as mol_uhf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import khf
@@ -32,6 +33,8 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.df.df_jk import _format_jks
 from pyscf import __config__
 
+WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
+PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
 
 def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
            with_j=True, with_k=True, **kwargs):
@@ -129,6 +132,39 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     return mo_occ_kpts
 
+def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
+                  pre_orth_method=PRE_ORTH_METHOD, s=None):
+    '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
+
+    Note this function only computes the Mulliken population for the gamma
+    point density matrix.
+    '''
+    from pyscf.lo import orth
+    if s is None:
+        s = khf.get_ovlp(cell)
+    log = logger.new_logger(cell, verbose)
+    log.note('Analyze output for *gamma point*.')
+    log.info('    To include the contributions from k-points, transform to a '
+             'supercell then run the population analysis on the supercell\n'
+             '        from pyscf.pbc.tools import k2gamma\n'
+             '        k2gamma.k2gamma(mf).mulliken_meta()')
+    log.note("KGHF mulliken_meta")
+    dm_ao_gamma = dm_ao_kpts[0,:,:].real
+    nso = dm_ao_gamma.shape[-1]
+    nao = nso // 2
+
+    dm_ao_gamma_aa = dm_ao_gamma[:nao,:nao]
+    dm_ao_gamma_bb = dm_ao_gamma[nao:,nao:]
+    s_gamma = s[0,:,:].real
+    s_gamma_aa = s_gamma[:nao,:nao]
+    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_method, s=s_gamma_aa)
+    c_inv = np.dot(orth_coeff.T, s_gamma_aa)
+    dm_aa = reduce(np.dot, (c_inv, dm_ao_gamma_aa, c_inv.T.conj()))
+    dm_bb = reduce(np.dot, (c_inv, dm_ao_gamma_bb, c_inv.T.conj()))
+
+    log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
+    return mol_uhf.mulliken_pop(cell, (dm_aa,dm_bb), np.eye(orth_coeff.shape[0]), log)
+
 
 class KGHF(pbcghf.GHF, khf.KSCF):
     '''GHF class for PBCs.
@@ -194,6 +230,18 @@ class KGHF(pbcghf.GHF, khf.KSCF):
 
     get_init_guess = khf.KSCF.get_init_guess
 
+    @lib.with_doc(mulliken_meta.__doc__)
+    def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(cell)
+        return mulliken_meta(cell, dm, s=s, verbose=verbose,
+                             pre_orth_method=pre_orth_method)
+
+    def mulliken_pop(self):
+        raise NotImplementedError
+
     def _finalize(self):
         if self.converged:
             logger.note(self, 'converged SCF energy = %.15g', self.e_tot)
@@ -222,6 +270,7 @@ class KGHF(pbcghf.GHF, khf.KSCF):
     stability = None
     nuc_grad_method = None
 
+del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
