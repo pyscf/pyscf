@@ -264,7 +264,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     casdm1_last = casdm1
     t3m = t2m = log.timer('CAS DM', *t1m)
     imacro = 0
-    casscf._max_stepsize = None # initialize for scheduler
     while not conv and imacro < casscf.max_cycle_macro:
         imacro += 1
         max_cycle_micro = casscf.micro_cycle_scheduler(locals())

@@ -60,7 +60,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     totmicro = totinner = 0
     casdm1 = 0
     r0 = None
-    casscf._max_stepsize = None # initialize for scheduler
 
     t2m = t1m = log.timer('Initializing 2-step CASSCF', *cput0)
     imacro = 0

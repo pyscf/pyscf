@@ -378,7 +378,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     t3m = t2m = log.timer('CAS DM', *t1m)
     imacro = 0
     dr0 = None
-    casscf._max_stepsize = None # initialize for scheduler
     while not conv and imacro < casscf.max_cycle_macro:
         imacro += 1
         max_cycle_micro = casscf.micro_cycle_scheduler(locals())
@@ -1235,14 +1234,14 @@ To enable the solvent model for CASSCF, the following code needs to be called
         if not WITH_STEPSIZE_SCHEDULER:
             return self.max_stepsize
 
-        if self._max_stepsize is None:
-            self._max_stepsize = self.max_stepsize
+        if envs['max_stepsize'] is None:
+            max_stepsize = self.max_stepsize
         if envs['de'] > -self.conv_tol:  # Avoid total energy increasing
-            self._max_stepsize *= .3
-            logger.debug(self, 'set max_stepsize to %g', self._max_stepsize)
+            max_stepsize = envs['max_stepsize']*.3
+            logger.debug(self, 'set max_stepsize to %g', max_stepsize)
         else:
-            self._max_stepsize = (self.max_stepsize*self._max_stepsize)**.5
-        return self._max_stepsize
+            max_stepsize = (self.max_stepsize*envs['max_stepsize'])**.5
+        return max_stepsize
 
     def ah_scheduler(self, envs):
         pass
