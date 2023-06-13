@@ -149,7 +149,7 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
              '        from pyscf.pbc.tools import k2gamma\n'
              '        k2gamma.k2gamma(mf).mulliken_meta()')
     log.note("KGHF mulliken_meta")
-    dm_ao_gamma = dm_ao_kpts[0,:,:].real
+    dm_ao_gamma = dm_ao_kpts[0,:,:]
     nso = dm_ao_gamma.shape[-1]
     nao = nso // 2
 
