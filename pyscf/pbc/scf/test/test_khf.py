@@ -64,10 +64,10 @@ class KnownValues(unittest.TestCase):
     def test_analyze(self):
         rpop, rchg = kmf.analyze() # pop at gamma point
         upop, uchg = kumf.analyze()
-        gpop, gchg = kumf.analyze()
+        gpop, gchg = kgmf.analyze()
         self.assertTrue(isinstance(rpop, np.ndarray) and rpop.ndim == 1)
         self.assertAlmostEqual(abs(upop[0]+upop[1]-rpop).max(), 0, 7)
-        self.assertAlmostEqual(abs(gpop[0]+gpop[1]-rpop).max(), 0, 7)
+        self.assertAlmostEqual(abs(gpop[0]+gpop[1]-rpop).max(), 0, 5)
         self.assertAlmostEqual(lib.fp(rpop), 1.697446, 5)
 
     def test_kpt_vs_supercell_high_cost(self):
