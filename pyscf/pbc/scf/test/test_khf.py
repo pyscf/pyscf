@@ -26,6 +26,7 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import kuhf
+from pyscf.pbc.scf import kghf
 from pyscf.pbc import df
 import pyscf.pbc.tools
 
@@ -47,23 +48,26 @@ def make_primitive_cell(mesh):
     return cell
 
 def setUpModule():
-    global cell, kmf, kumf, kpts
+    global cell, kmf, kumf, kgmf, kpts
     cell = make_primitive_cell([9]*3)
     kpts = cell.make_kpts([3,1,1])
     kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
     kumf = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
+    kgmf = kghf.KGHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
 
 def tearDownModule():
-    global cell, kmf, kumf
+    global cell, kmf, kumf, kgmf
     cell.stdout.close()
-    del cell, kmf, kumf
+    del cell, kmf, kumf, kgmf
 
 class KnownValues(unittest.TestCase):
     def test_analyze(self):
         rpop, rchg = kmf.analyze() # pop at gamma point
         upop, uchg = kumf.analyze()
+        gpop, gchg = kumf.analyze()
         self.assertTrue(isinstance(rpop, np.ndarray) and rpop.ndim == 1)
         self.assertAlmostEqual(abs(upop[0]+upop[1]-rpop).max(), 0, 7)
+        self.assertAlmostEqual(abs(gpop[0]+gpop[1]-rpop).max(), 0, 7)
         self.assertAlmostEqual(lib.fp(rpop), 1.697446, 5)
 
     def test_kpt_vs_supercell_high_cost(self):
