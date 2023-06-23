@@ -148,6 +148,16 @@ C  15.16687337 15.16687337 15.16687337
         self.assertAlmostEqual(lib.fp(cl2.atom_coords()), -18.946080642714836, 9)
         self.assertAlmostEqual(lib.fp(cl2._bas[:,gto.ATOM_OF]), 16.515144238434807, 9)
 
+    def test_super_cell_with_symm(self):
+        cl1 = pbcgto.M(a = 1.4 * numpy.eye(3),
+                       atom ='''He .0 .0 .0''',
+                       basis = 'ccpvdz',
+                       space_group_symmetry=True,
+                       symmorphic=False)
+        self.assertEqual(cl1.lattice_symmetry.nop, 48)
+        cl2 = tools.super_cell(cl1, [2,2,2])
+        self.assertEqual(cl2.lattice_symmetry.nop, 48*8)
+
     def test_cell_plus_imgs(self):
         numpy.random.seed(2)
         cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,

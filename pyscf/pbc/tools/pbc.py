@@ -597,6 +597,8 @@ def super_cell(cell, ncopy, wrap_around=False):
     supcell = copy.copy(cell)
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
     supcell.mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
+    supcell.magmom = np.repeat(np.asarray(cell.magmom).reshape(1,-1),
+                               np.prod(ncopy), axis=0).ravel()
     return _build_supcell_(supcell, cell, Ls)
 
 
@@ -654,6 +656,9 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._atm = np.asarray(_atm, dtype=np.int32)
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
+
+    if supcell.space_group_symmetry:
+        supcell.build_lattice_symmetry()
     return supcell
 
 
