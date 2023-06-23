@@ -631,6 +631,7 @@ def _build_supcell_(supcell, cell, Ls):
     Construct supcell ._env directly without calling supcell.build() method.
     This reserves the basis contraction coefficients defined in cell
     '''
+    from pyscf.pbc import gto as pbcgto
     nimgs = len(Ls)
     symbs = [atom[0] for atom in cell._atom] * nimgs
     coords = Ls.reshape(-1,1,3) + cell.atom_coords()
@@ -657,7 +658,7 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
 
-    if supcell.space_group_symmetry:
+    if isinstance(supcell, pbcgto.Cell) and supcell.space_group_symmetry:
         supcell.build_lattice_symmetry()
     return supcell
 
