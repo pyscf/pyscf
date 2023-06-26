@@ -1301,7 +1301,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
         return mc1
 
     def reset(self, mol=None):
-        casci.CASCI.reset(mol=mol)
+        casci.CASCI.reset(self, mol=mol)
         self._max_stepsize = None
 
 scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
