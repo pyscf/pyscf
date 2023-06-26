@@ -549,6 +549,7 @@ def as_scanner(mc):
             # may be created for mc separately, e.g. when mcscf.approx_hessian is
             # called. For safety, the code below explicitly resets these
             # properties.
+            self.reset (mol)
             for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
                 sub_mod = getattr(self, key, None)
                 if sub_mod:
@@ -1298,6 +1299,10 @@ To enable the solvent model for CASSCF, the following code needs to be called
             wfnsym = getattr(self, 'wfnsym', None)
             mc1 = mc1.state_average_(self.weights, wfnsym)
         return mc1
+
+    def reset(self, mol=None):
+        casci.CASCI.reset(mol=mol)
+        self._max_stepsize = None
 
 scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
 scf.uhf.UHF.CASSCF = None
