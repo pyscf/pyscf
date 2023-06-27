@@ -209,9 +209,11 @@ class Chooser():
         casorbs = np.hstack([inactive_orbs,active_orbs,secondary_orbs])
 
         nactorbs = active_orbs.shape[1]
-        nactel = int(np.sum(np.array(occ)[active_idx]))
-        alpha = int(nactel//2 + nactel%2)
-        beta = int(nactel//2)
+        active_occ = np.array(occ)[active_idx]
+        nboth = int(np.sum(active_occ[np.where(active_occ == 2)])/2)
+        nalpha = int(np.sum(active_occ[np.where(active_occ == 1)]))
+        alpha = nboth + nalpha
+        beta = nboth
         nactel = (alpha,beta)
 
         log.info(f"Final selected active space: ({nactel},{nactorbs})")
