@@ -19,7 +19,7 @@
 #include "cint.h"
 #include "optimizer.h"
 
-#define AO_BLOCK_SIZE   32
+#define AO_BLOCK_SIZE  64 
 
 #define NOVALUE 0xffffffff
 

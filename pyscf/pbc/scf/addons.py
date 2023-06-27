@@ -57,7 +57,7 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
 
 def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
     '''Fermi-Dirac or Gaussian smearing'''
-    from pyscf.scf import uhf
+    from pyscf.scf import uhf, rohf
     from pyscf.scf import ghf
     from pyscf.pbc.scf import khf
     mf_class = mf.__class__
@@ -65,9 +65,12 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
     is_ghf = isinstance(mf, ghf.GHF)
     is_rhf = (not is_uhf) and (not is_ghf)
     is_khf = isinstance(mf, khf.KSCF)
+    is_rohf = isinstance(mf, rohf.ROHF)
+    if is_rohf:
+        is_rhf = False
 
-    if fix_spin and not is_uhf:
-        raise KeyError("fix_spin only supports UHF.")
+    if fix_spin and not (is_uhf or is_rohf):
+        raise KeyError("fix_spin only supports UHF and ROHF.")
     if fix_spin and mu0 is not None:
         raise KeyError("fix_spin does not support fix mu0")
 
@@ -93,6 +96,8 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
 
         This is a k-point version of scf.hf.SCF.get_occ
         '''
+        if is_rohf and fix_spin:
+            mo_energy_kpts=(mo_energy_kpts,mo_energy_kpts)
         kpts = getattr(mf, 'kpts', None)
         if isinstance(kpts, KPoints):
             mo_energy_kpts = kpts.transform_mo_energy(mo_energy_kpts)
@@ -113,7 +118,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
             nelectron = mf.mol.tot_electrons(nkpts)
         else:
             nelectron = mf.mol.tot_electrons()
-        if is_uhf:
+        if is_uhf or (is_rohf and fix_spin):
             nocc = nelectron
             if fix_spin:
                 nocc = mf.nelec
@@ -150,7 +155,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
         if mu0 is None:
             def nelec_cost_fn(m, _mo_es, _nelectron):
                 mo_occ_kpts = f_occ(m, _mo_es, sigma)
-                if is_rhf:
+                if is_rhf and not is_rohf:
                     mo_occ_kpts *= 2
                 return (mo_occ_kpts.sum() - _nelectron)**2
             if fix_spin:
@@ -244,6 +249,8 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
             tools.print_mo_energy_occ_kpts(mf,mo_energy_kpts,mo_occ_kpts,is_uhf)
         else:
             tools.print_mo_energy_occ(mf,mo_energy_kpts,mo_occ_kpts,is_uhf)
+        if is_rohf and fix_spin:
+            mo_occ_kpts=mo_occ_kpts[0]+mo_occ_kpts[1]
         return mo_occ_kpts
 
     def get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock):

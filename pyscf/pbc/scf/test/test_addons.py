@@ -376,6 +376,40 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(kmf.e_free, 1.3942942592412, 9)
         self.assertAlmostEqual(lib.fp(kmf.mo_occ), 0.035214493032250, 9)
 
+    def test_rohf_smearing(self):
+        from pyscf import gto, scf
+        import sys
+        # Fe2 from https://doi.org/10.1021/acs.jpca.1c05769
+        mol = gto.M(
+            atom='''
+        Fe       0. 0. 0.
+        Fe       2.01 0. 0.
+        ''', basis="lanl2dz", ecp="lanl2dz", symmetry=False, unit='Angstrom',
+            spin=6, charge=0, verbose=0)
+        myhf = scf.ROHF(mol).newton()
+        myhf.kernel()
+        # -244.96420350069377 on python 3.8 and 3.9
+        # -244.37255692969057 on macos py3.7 (github CI)
+        # -244.37254314207422 on macos py3.7 (github CI), repeat
+        # -244.3724387756635 on linux-build py3.7 (github CI)
+        if sys.version_info.minor == 7:
+            self.assertAlmostEqual(myhf.e_tot, -244.3725, 3)
+        else:
+            self.assertAlmostEqual(myhf.e_tot, -244.9642035, 6)
+        myhf_s = scf.ROHF(mol)
+        myhf_s = pscf.addons.smearing_(myhf_s, sigma=0.01, method='gaussian', fix_spin=True)
+        myhf_s.kernel()
+        # macos py3.7 CI -242.4828982467762
+        # linux py3.11 CI -242.48289824670388
+        self.assertAlmostEqual(myhf_s.e_tot, -242.482898246, 6)
+        self.assertAlmostEqual(myhf_s.entropy, 0.45197, 4)
+        myhf2 = scf.ROHF(mol)
+        myhf2.max_cycle = 600
+        myhf2 = myhf2.newton()
+        myhf2.kernel(myhf_s.make_rdm1())
+        # note 16mHa lower energy than myhf
+        self.assertAlmostEqual(myhf2.e_tot, -244.9808750, 6)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.addons")
