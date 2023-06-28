@@ -48,10 +48,10 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
     s22 = cell2.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
     s21 = pbcgto.intor_cross('int1e_ovlp', cell2, cell1, kpts=kpts)
     if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
-        return scipy.linalg.solve(s22, s21.dot(mo1), sym_pos=True)
+        return scipy.linalg.solve(s22, s21.dot(mo1), assume_a='pos')
     else:
         assert (len(kpts) == len(mo1))
-        return [scipy.linalg.solve(s22[k], s21[k].dot(mo1[k]), sym_pos=True)
+        return [scipy.linalg.solve(s22[k], s21[k].dot(mo1[k]), assume_a='pos')
                 for k, kpt in enumerate(kpts)]
 
 

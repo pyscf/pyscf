@@ -244,7 +244,7 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0):
 
     # (P|Q)
     int2c = auxmol.intor('int2c2e', aosym='s1')
-    rhoj = scipy.linalg.solve(int2c, rhoj.T, sym_pos=True).T
+    rhoj = scipy.linalg.solve(int2c, rhoj.T, assume_a='pos').T
     int2c = None
 
     # (d/dX i,j|P)
