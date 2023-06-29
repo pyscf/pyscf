@@ -1461,7 +1461,7 @@ def cho_solve(a, b, strict_sym_pos=True):
             on matrix a
     '''
     try:
-        return scipy.linalg.solve(a, b, sym_pos=True)
+        return scipy.linalg.solve(a, b, assume_a='pos')
     except numpy.linalg.LinAlgError:
         if strict_sym_pos:
             raise
