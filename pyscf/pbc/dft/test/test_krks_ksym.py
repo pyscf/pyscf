@@ -43,7 +43,7 @@ def make_primitive_cell(mesh):
 
 def setUpModule():
     global cell, He, nk
-    cell = make_primitive_cell([17]*3)
+    cell = make_primitive_cell([16]*3)
     nk = [1,2,2]
 
     L = 2.
