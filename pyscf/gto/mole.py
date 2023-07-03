@@ -2561,7 +2561,7 @@ class Mole(lib.StreamObject):
             # number of electrons are consistent.
             self.nelec
 
-        if self.magmom is None or len(self.magmom) <= 0:
+        if self.magmom is None or len(self.magmom) != self.natm:
             self.magmom = [0,] * self.natm
         if self.spin == 0 and abs(numpy.sum(self.magmom) - self.spin) > 1e-6:
             #don't check for unrestricted calcs.
