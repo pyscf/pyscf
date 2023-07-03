@@ -1288,7 +1288,7 @@ class Cell(mole.Mole):
         return mesh1
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
-    def build(self, dump_input=True, parse_arg=True,
+    def build(self, dump_input=True, parse_arg=mole.ARGPARSE,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
               pseudo=None, basis=None, h=None, dimension=None, rcut= None,
               ecp=None, low_dim_ft_type=None,
