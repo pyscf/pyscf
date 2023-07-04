@@ -29,7 +29,6 @@ def setUpModule():
     He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
     He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
     He.space_group_symmetry=True
-    He.output = '/dev/null'
     He.build()
 
     nk = [2,2,2]

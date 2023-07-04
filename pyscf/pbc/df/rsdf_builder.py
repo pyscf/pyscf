@@ -28,7 +28,9 @@ Ref:
 '''
 
 import os
+import copy
 import ctypes
+import warnings
 import tempfile
 import numpy as np
 import scipy.linalg
@@ -39,21 +41,24 @@ from pyscf.lib import logger, zdotCN
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.gto import ANG_OF
 from pyscf.pbc import gto as pbcgto
+from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.df.incore import libpbc, _Int3cBuilder
-from pyscf.pbc.lib.kpts_helper import (is_zero, member, unique_with_wrap_around,
-                                       group_by_conj_pairs)
+from pyscf.pbc.df.incore import libpbc, Int3cBuilder
+from pyscf.pbc.lib.kpts_helper import (is_zero, member, kk_adapted_iter,
+                                       members_with_wrap_around, KPT_DIFF_TOL)
 from pyscf import __config__
 
+OMEGA_MIN = 0.08
+INDEX_MIN = -10000
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 # Threshold of steep bases and local bases
-RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.0)
+RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
 
 
-class _RSGDFBuilder(_Int3cBuilder):
+class _RSGDFBuilder(Int3cBuilder):
     '''
     Use the range-separated algorithm to build Gaussian density fitting 3-center tensor
     '''
@@ -73,15 +78,18 @@ class _RSGDFBuilder(_Int3cBuilder):
 
     def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
         self.mesh = None
-        if cell.omega != 0:
+        if cell.omega == 0:
+            self.omega = None
+        elif cell.omega < 0:
             # Initialize omega to cell.omega for HF exchange of short range
             # int2e in RSH functionals
-            self.omega = abs(cell.omega)
+            self.omega = -cell.omega
         else:
-            self.omega = None
+            raise RuntimeError('RSDF does not support LR integrals')
         self.rs_auxcell = None
+        self.supmol_ft = None
 
-        _Int3cBuilder.__init__(self, cell, auxcell, kpts)
+        Int3cBuilder.__init__(self, cell, auxcell, kpts)
 
     @property
     def exclude_dd_block(self):
@@ -89,11 +97,18 @@ class _RSGDFBuilder(_Int3cBuilder):
         return (self.fft_dd_block and
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum')
 
+    @exclude_dd_block.setter
+    def exclude_dd_block(self, x):
+        self.fft_dd_block = x
+        self.reset()
+
     def has_long_range(self):
         '''Whether to add the long-range part computed with AFT integrals'''
         # If self.exclude_d_aux is set, the block (D|**) will not be computed in
         # outcore_auxe2. It has to be computed by AFT code.
-        return self.omega is None or abs(self.cell.omega) < self.omega or self.exclude_d_aux
+        cell = self.cell
+        return (cell.dimension > 0 and
+                (self.omega is None or abs(cell.omega) < self.omega or self.exclude_d_aux))
 
     def dump_flags(self, verbose=None):
         logger.info(self, '\n')
@@ -114,91 +129,63 @@ class _RSGDFBuilder(_Int3cBuilder):
         auxcell = self.auxcell
         kpts = self.kpts
 
-        if self.cell.dimension == 0:
-            log.warn('_RSGDFBuilder for cell.dimension=0 may have larger error '
-                     'than _CCGDFBuilder')
-
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
         if omega is not None:
             self.omega = omega
 
-        if self.omega is None:
+        if self.omega is None or self.omega == 0:
             # Search a proper range-separation parameter omega that can balance the
             # computational cost between the real space integrals and moment space
             # integrals
             self.omega, self.mesh, self.ke_cutoff = _guess_omega(auxcell, kpts, self.mesh)
         elif self.mesh is None:
-            self.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, self.omega)
-            mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
-            self.mesh = _round_off_to_odd_mesh(mesh)
+            self.ke_cutoff = estimate_ke_cutoff_for_omega(cell, self.omega)
+            self.mesh = cell.cutoff_to_mesh(self.ke_cutoff)
         elif self.ke_cutoff is None:
             ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             self.ke_cutoff = ke_cutoff[:cell.dimension].min()
 
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            self.mesh[2] = _estimate_meshz(cell)
+        elif cell.dimension < 2:
+            self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
         self.mesh = cell.symmetrize_mesh(self.mesh)
 
         self.dump_flags()
+
+        exp_min = np.hstack(cell.bas_exps()).min()
+        # For each basis i in (ij|, small integrals accumulated by the lattice
+        # sum for j are not negligible. (2*cell.rcut)**3/vol is roughly the
+        # number of basis i and 1./exp_min for the non-negligible basis j.
+        lattice_sum_factor = max((2*cell.rcut)**3/cell.vol * 1/exp_min, 1)
+        cutoff = cell.precision / lattice_sum_factor * .1
+        self.direct_scf_tol = cutoff
+        log.debug('Set _RSGDFBuilder.direct_scf_tol to %g', cutoff)
 
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
         self.rs_auxcell = rs_auxcell = ft_ao._RangeSeparatedCell.from_cell(
             auxcell, self.ke_cutoff, verbose=log)
 
-        # Estimate rcut to generate Ls. rcut (and the translation vectors Ls)
-        # here needs to cover all possible shells to converge int3c2e.
-        # cell.rcut cannot be used here because it only converge the GTOval.
-        smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
-        cell_exps = rs_cell.bas_exps()
-        aux_exps = rs_auxcell.bas_exps()
-        exps_d = [cell_exps[ib] for ib in range(rs_cell.nbas) if smooth_bas_mask[ib]]
-        exps_c = [cell_exps[ib] for ib in range(rs_cell.nbas) if not smooth_bas_mask[ib]]
-
-        if self.exclude_d_aux:
-            compact_aux_idx = np.where(rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS)[0]
-            if len(compact_aux_idx) > 0:
-                exp_aux_min = np.hstack([aux_exps[ib] for ib in compact_aux_idx]).min()
-            else:
-                exp_aux_min = np.hstack(aux_exps).max()
-        else:
-            exp_aux_min = np.hstack(aux_exps).min()
-
-        if not exps_c: # Only smooth functions
-            rcut_sr = cell.rcut
-        else:
-            # Estimation with the assumption self.exclude_dd_block = True
-            # Is rcut enough if exclude_dd_block = False?
-            if not exps_d:  # Only compact functions
-                exp_d_min = exp_c_min = np.hstack(exps_c).min()
-                aij = exp_c_min * 2
-                eij = exp_c_min / 2
-            else:  # both smooth and compact functions exist
-                exp_d_min = np.hstack(exps_d).min()
-                exp_c_min = np.hstack(exps_c).min()
-                aij = exp_d_min + exp_c_min
-                eij = exp_d_min * exp_c_min / aij
-            theta = 1/(self.omega**-2 + 1./aij + 1./exp_aux_min)
-            fac = ((8*np.pi*exp_d_min*exp_c_min/(aij*exp_aux_min)**2)**.75
-                   / (theta * np.pi)**.5)
-            # x = rcut * x_ratio for the distance between compact function
-            # and smooth function (smooth function in the far end)
-            # fac*erfc(\sqrt(theta)|rcut - x|) for the asymptotic value of short-range eri
-            x_ratio = 1. / (exp_c_min/aij + exp_d_min/theta)
-            exp_fac = eij * x_ratio**2 + theta * (1 - exp_c_min/aij*x_ratio)**2
-
-            rcut_sr = cell.rcut  # initial guess
-            rcut_sr = ((-np.log(cell.precision
-                                * rcut_sr / (2*np.pi*fac)) / exp_fac)**.5
-                       + pbcgto.cell._rcut_penalty(cell))
-            log.debug1('exp_d_min = %g, exp_c_min = %g, exp_aux_min = %g, rcut_sr = %g',
-                       exp_d_min, exp_c_min, exp_aux_min, rcut_sr)
-
-        supmol = _ExtendedMoleSR.from_cell(rs_cell, kmesh, self.omega, rcut_sr, log)
-        self.supmol = _strip_basis(supmol, self.omega, exp_aux_min, self.exclude_dd_block)
-        log.timer_debug1('initializing supmol', *cpu0)
+        rcut_sr = estimate_rcut(rs_cell, rs_auxcell, self.omega, rs_cell.precision,
+                                self.exclude_dd_block,
+                                self.exclude_d_aux and cell.dimension > 0)
+        supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_sr.max(), log)
+        supmol.omega = -self.omega
+        self.supmol = supmol.strip_basis(rcut_sr)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
+
+        if self.has_long_range():
+            rcut = estimate_ft_rcut(rs_cell, cell.precision, self.exclude_dd_block)
+            supmol_ft = _ExtendedMoleFT.from_cell(rs_cell, kmesh, rcut.max(), log)
+            supmol_ft.exclude_dd_block = self.exclude_dd_block
+            self.supmol_ft = supmol_ft.strip_basis(rcut)
+            log.debug('sup-mol-ft nbas = %d cGTO = %d pGTO = %d',
+                      supmol_ft.nbas, supmol_ft.nao, supmol_ft.npgto_nr())
+        log.timer_debug1('initializing supmol', *cpu0)
         return self
 
     weighted_coulG = aft.weighted_coulG
@@ -213,88 +200,15 @@ class _RSGDFBuilder(_Int3cBuilder):
     def weighted_coulG_SR(self, kpt=np.zeros(3), exx=False, mesh=None):
         return self.weighted_coulG(kpt, False, mesh, -self.omega)
 
-    def get_q_cond(self):
+    def get_q_cond(self, supmol=None):
         '''Integral screening condition max(sqrt((ij|ij))) inside the supmol'''
-        supmol = self.supmol
-        intor = 'int2e_sph'
-        cintopt = lib.c_null_ptr()
-        nbas = supmol.nbas
-        q_cond = np.empty((nbas, nbas))
-        with supmol.with_integral_screen(supmol.precision**2):
-            ao_loc = gto.moleintor.make_loc(supmol._bas, intor)
-            libpbc.CVHFset_int2e_q_cond(
-                getattr(libpbc, intor), cintopt,
-                q_cond.ctypes.data_as(ctypes.c_void_p),
-                ao_loc.ctypes.data_as(ctypes.c_void_p),
-                supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
-                supmol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
-                supmol._env.ctypes.data_as(ctypes.c_void_p))
+        q_cond = Int3cBuilder.get_q_cond(self, supmol)
 
         # Remove d-d block in supmol q_cond
-        if self.exclude_dd_block:
+        if self.exclude_dd_block and self.cell.dimension > 0:
             smooth_idx = supmol.bas_type_to_indices(ft_ao.SMOOTH_BASIS)
-            q_cond[smooth_idx[:,None], smooth_idx] = 1e-200
+            q_cond[smooth_idx[:,None], smooth_idx] = INDEX_MIN
         return q_cond
-
-    def get_q_cond_aux(self, auxcell=None, supmol=None):
-        '''max(sqrt((k|ii))) between the auxcell and the supmol'''
-        if supmol is None:
-            supmol = self.supmol
-        auxcell_s = self.rs_auxcell.copy()
-        auxcell_s._bas[:,ANG_OF] = 0
-        intor = 'int3c2e_sph'
-        cintopt = lib.c_null_ptr()
-        nbas = supmol.nbas
-        q_cond_aux = np.empty((auxcell_s.nbas, nbas))
-        with supmol.with_integral_screen(supmol.precision**2):
-            atm, bas, env = gto.conc_env(supmol._atm, supmol._bas, supmol._env,
-                                         auxcell_s._atm, auxcell_s._bas, auxcell_s._env)
-            ao_loc = gto.moleintor.make_loc(bas, intor)
-            shls_slice = (0, supmol.nbas, supmol.nbas, len(bas))
-            libpbc.PBC_nr3c_q_cond(
-                getattr(libpbc, intor), cintopt,
-                q_cond_aux.ctypes.data_as(ctypes.c_void_p),
-                (ctypes.c_int * 4)(*shls_slice),
-                ao_loc.ctypes.data_as(ctypes.c_void_p),
-                atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
-                bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
-                env.ctypes.data_as(ctypes.c_void_p))
-
-        if self.exclude_d_aux:
-            # Assign a very small value to q_cond_aux to avoid dividing 0 error
-            q_cond_aux[self.rs_auxcell.bas_type == ft_ao.SMOOTH_BASIS] = 1e-200
-        return q_cond_aux
-
-    def get_bas_map(self, auxcell=None, supmol=None):
-        '''bas_map is to assign each basis of supmol._bas the index in
-        [bvk_cell-id, bas-id, image-id]
-        '''
-        if supmol is None:
-            supmol = self.supmol
-        if self.exclude_d_aux:
-            # Use aux_mask to skip smooth auxiliary basis and handle them in AFT part.
-            aux_mask = (self.rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS).astype(np.int32)
-        else:
-            aux_mask = np.ones(self.rs_auxcell.nbas, dtype=np.int32)
-
-        # Append aux_mask to bas_map as a temporary solution for function
-        # _assemble3c in fill_ints.c
-        bas_map = np.where(supmol.bas_mask.ravel())[0].astype(np.int32)
-        bas_map = np.asarray(np.append(bas_map, aux_mask), dtype=np.int32)
-        return bas_map
-
-    def get_ovlp_mask(self, cutoff, supmol=None, cintopt=None):
-        if supmol is None:
-            supmol = self.supmol
-        bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
-        nbasp = self.cell.nbas  # The number of shells in the primitive cell
-        ovlp_mask = self.get_q_cond() > cutoff
-        bvk_ovlp_mask = lib.condense('np.any', ovlp_mask, supmol.sh_loc)
-        cell0_ovlp_mask = bvk_ovlp_mask.reshape(
-            bvk_ncells, nbasp, bvk_ncells, nbasp).any(axis=2).any(axis=0)
-        ovlp_mask = ovlp_mask.astype(np.int8)
-        cell0_ovlp_mask = cell0_ovlp_mask.astype(np.int8)
-        return ovlp_mask, cell0_ovlp_mask
 
     def decompose_j2c(self, j2c):
         j2c = np.asarray(j2c)
@@ -316,10 +230,11 @@ class _RSGDFBuilder(_Int3cBuilder):
         cell = self.cell
         j2c_negative = None
         w, v = scipy.linalg.eigh(j2c)
+        mask = w > self.linear_dep_threshold
         logger.debug(self, 'cond = %.4g, drop %d bfns',
-                     w[-1]/w[0], np.count_nonzero(w<self.linear_dep_threshold))
-        v1 = v[:,w>self.linear_dep_threshold].conj().T
-        v1 /= np.sqrt(w[w>self.linear_dep_threshold]).reshape(-1,1)
+                     w[-1]/w[0], w.size-np.count_nonzero(mask))
+        v1 = v[:,mask].conj().T
+        v1 /= np.sqrt(w[mask, None])
         j2c = v1
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             idx = np.where(w < -self.linear_dep_threshold)[0]
@@ -330,12 +245,16 @@ class _RSGDFBuilder(_Int3cBuilder):
 
     def get_2c2e(self, uniq_kpts):
         # j2c ~ (-kpt_ji | kpt_ji) => hermi=1
+        cell = self.cell
         auxcell = self.auxcell
+        if auxcell.dimension == 0:
+            return [auxcell.intor('int2c2e', hermi=1)]
+
         if not self.has_long_range():
             omega = auxcell.omega
-            with lib.temporary_env(auxcell):
-                j2c = auxcell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
-            if auxcell.dimension == 3 and auxcell.low_dim_ft_type != 'inf_vacuum':
+            j2c = auxcell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
+            if (auxcell.dimension >= 2 and omega != 0 and
+                auxcell.low_dim_ft_type != 'inf_vacuum'):
                 gamma_point_idx = member(np.zeros(3), uniq_kpts)
                 if len(gamma_point_idx) > 0:
                     # Add G=0 contribution
@@ -344,12 +263,18 @@ class _RSGDFBuilder(_Int3cBuilder):
                     j2c[gamma_point_idx[0]] -= g0_fac * aux_chg[:,None] * aux_chg
             return j2c
 
-        precision = auxcell.precision**2
+        precision = auxcell.precision**1.5
         omega = self.omega
         rs_auxcell = self.rs_auxcell
         auxcell_c = rs_auxcell.compact_basis_cell()
         if auxcell_c.nbas > 0:
-            rcut_sr = (-np.log(precision * auxcell_c.rcut**2 * omega))**.5 / omega
+            aux_exp = np.hstack(auxcell_c.bas_exps()).min()
+            if omega == 0:
+                theta = aux_exp / 2
+            else:
+                theta = 1./(2./aux_exp + omega**-2)
+            fac = 2*np.pi**3.5/auxcell.vol * aux_exp**-3 * theta**-1.5
+            rcut_sr = (np.log(fac / auxcell_c.rcut / precision + 1.) / theta)**.5
             auxcell_c.rcut = rcut_sr
             logger.debug1(self, 'auxcell_c  rcut_sr = %g', rcut_sr)
             with auxcell_c.with_short_range_coulomb(omega):
@@ -368,11 +293,13 @@ class _RSGDFBuilder(_Int3cBuilder):
         # 2c2e integrals the metric can easily cause errors in cderi tensor.
         # self.mesh may not be enough to produce required accuracy.
         # mesh = self.mesh
-        ke = aft.estimate_ke_cutoff_for_omega(auxcell, omega, precision)
-        mesh = pbctools.cutoff_to_mesh(auxcell.lattice_vectors(), ke)
-        if auxcell.dimension < 2 or auxcell.low_dim_ft_type == 'inf_vacuum':
-            mesh[auxcell.dimension:] = self.mesh[auxcell.dimension:]
-        mesh = self.cell.symmetrize_mesh(mesh)
+        ke = estimate_ke_cutoff_for_omega(auxcell, omega, precision)
+        mesh = auxcell.cutoff_to_mesh(ke)
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            mesh[2] = _estimate_meshz(auxcell)
+        elif cell.dimension < 2:
+            mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+        mesh = cell.symmetrize_mesh(mesh)
         logger.debug(self, 'Set 2c2e integrals precision %g, mesh %s', precision, mesh)
 
         Gv, Gvbase, kws = auxcell.get_Gv_weights(mesh)
@@ -394,7 +321,8 @@ class _RSGDFBuilder(_Int3cBuilder):
 
             if sr_j2c is None:
                 for p0, p1 in lib.prange(0, ngrids, blksize):
-                    auxG = ft_ao.ft_ao(auxcell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
+                    auxG = ft_ao.ft_ao(auxcell, Gv[p0:p1], None, b, gxyz[p0:p1],
+                                       Gvbase, kpt).T
                     if is_zero(kpt):  # kpti == kptj
                         j2c_k += lib.dot(auxG.conj() * coulG[p0:p1], auxG.T).real
                     else:
@@ -406,11 +334,16 @@ class _RSGDFBuilder(_Int3cBuilder):
                 # coulG_sr here to first remove the FT-SR-2c2e for compact basis
                 # from the analytical 2c2e integrals. The FT-SR-2c2e for compact
                 # basis is added back in j2c_k.
-                coulG_sr = self.weighted_coulG_SR(kpt, False, mesh)
-                if auxcell.dimension == 3 and is_zero(kpt):
-                    G0_idx = 0  # due to np.fft.fftfreq convention
-                    G0_weight = kws[G0_idx] if isinstance(kws, np.ndarray) else kws
-                    coulG_sr[G0_idx] += np.pi/omega**2 * G0_weight
+                if (cell.dimension == 3 or
+                    (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum')):
+                    with lib.temporary_env(cell, dimension=3):
+                        coulG_sr = self.weighted_coulG_SR(kpt, False, mesh)
+                    if omega != 0 and is_zero(kpt):
+                        G0_idx = 0  # due to np.fft.fftfreq convention
+                        coulG_SR_at_G0 = np.pi/omega**2 * kws
+                        coulG_sr[G0_idx] += coulG_SR_at_G0
+                else:
+                    coulG_sr = self.weighted_coulG_SR(kpt, False, mesh)
 
                 for p0, p1 in lib.prange(0, ngrids, blksize):
                     auxG = ft_ao.ft_ao(rs_auxcell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
@@ -434,7 +367,7 @@ class _RSGDFBuilder(_Int3cBuilder):
 
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
                       j_only=False, dataname='j3c', shls_slice=None,
-                      fft_dd_block=None):
+                      fft_dd_block=None, kk_idx=None):
         r'''The SR part of 3-center integrals (ij|L) with double lattice sum.
 
         Kwargs:
@@ -472,15 +405,10 @@ class _RSGDFBuilder(_Int3cBuilder):
         if fft_dd_block is None:
             fft_dd_block = self.exclude_dd_block
 
-        if fft_dd_block:
-            self._outcore_dd_block(fswap, intor, aosym, comp, j_only,
-                                   dataname, shls_slice)
-
-        # int3c may be the regular int3c2e, LR-int3c2e or SR-int3c2e, depending
-        # on how self.supmol is initialized
-        int3c = self.gen_int3c_kernel(intor, aosym, comp, j_only,
-                                      rs_auxcell=self.rs_auxcell)
-
+        if self.exclude_d_aux and cell.dimension > 0:
+            rs_auxcell = self.rs_auxcell.compact_basis_cell()
+        else:
+            rs_auxcell = self.rs_auxcell
         if shls_slice is None:
             shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
 
@@ -500,33 +428,48 @@ class _RSGDFBuilder(_Int3cBuilder):
         else:
             merge_dd = None
 
+        reindex_k = None
         # TODO: shape = (comp, nao_pair, naux)
         shape = (nao_pair, naux)
         if j_only or nkpts == 1:
-            for k in range(nkpts):
-                fswap.create_dataset(f'{dataname}R/{k*nkpts+k}', shape, 'f8')
-                # exclude imaginary part for gamma point
-                if not is_zero(kpts[k]):
-                    fswap.create_dataset(f'{dataname}I/{k*nkpts+k}', shape, 'f8')
             nkpts_ij = nkpts
-            kikj_idx = [k*nkpts+k for k in range(nkpts)]
+            ks = np.arange(nkpts, dtype=np.int32)
+            kikj_idx = ks * nkpts + ks
+            if kk_idx is not None:
+                # Ensure kk_idx is a subset of all possible ki-kj paris
+                assert np.all(np.isin(kk_idx, kikj_idx))
+                kikj_idx = kk_idx
+            reindex_k = kikj_idx // nkpts
         else:
-            for ki in range(nkpts):
-                for kj in range(nkpts):
-                    fswap.create_dataset(f'{dataname}R/{ki*nkpts+kj}', shape, 'f8')
-                    fswap.create_dataset(f'{dataname}I/{ki*nkpts+kj}', shape, 'f8')
-                # exclude imaginary part for gamma point
-                if is_zero(kpts[ki]):
-                    del fswap[f'{dataname}I/{ki*nkpts+ki}']
             nkpts_ij = nkpts * nkpts
-            kikj_idx = range(nkpts_ij)
-            if merge_dd:
-                uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
-                    cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-                kpt_ij_pairs = group_by_conj_pairs(cell, uniq_kpts)[0]
+            if kk_idx is None:
+                kikj_idx = np.arange(nkpts_ij, dtype=np.int32)
+            else:
+                kikj_idx = kk_idx
+            reindex_k = kikj_idx
+            if merge_dd and kk_idx is None:
+                kpt_ij_iters = list(kk_adapted_iter(cell, kpts))
+
+        for idx in kikj_idx:
+            fswap.create_dataset(f'{dataname}R/{idx}', shape, 'f8')
+            fswap.create_dataset(f'{dataname}I/{idx}', shape, 'f8')
+        # exclude imaginary part for gamma point
+        for k in np.where(abs(kpts).max(axis=1) < KPT_DIFF_TOL)[0]:
+            if f'{dataname}I/{k*nkpts+k}' in fswap:
+                del fswap[f'{dataname}I/{k*nkpts+k}']
 
         if naux == 0:
             return fswap
+
+        if fft_dd_block:
+            self._outcore_dd_block(fswap, intor, aosym, comp, j_only,
+                                   dataname, kk_idx=kk_idx)
+
+        # int3c may be the regular int3c2e, LR-int3c2e or SR-int3c2e, depending
+        # on how self.supmol is initialized
+        # TODO: call gen_int3c_kernel(reindex_k=kikj_idx) for a subset of kpts
+        int3c = self.gen_int3c_kernel(intor, aosym, comp, j_only,
+                                      reindex_k=reindex_k, rs_auxcell=rs_auxcell)
 
         mem_now = lib.current_memory()[0]
         log.debug2('memory = %s', mem_now)
@@ -563,20 +506,18 @@ class _RSGDFBuilder(_Int3cBuilder):
                 if gamma_point_only:
                     merge_dd(outR[0], fswap[f'{dataname}R-dd/0'], shls_slice)
                 elif j_only or nkpts == 1:
-                    for k in range(nkpts):
-                        merge_dd(outR[k], fswap[f'{dataname}R-dd/{k*nkpts+k}'], shls_slice)
-                        merge_dd(outI[k], fswap[f'{dataname}I-dd/{k*nkpts+k}'], shls_slice)
-                else:
-                    for k, k_conj in kpt_ij_pairs:
-                        kpt_ij_idx = np.where(uniq_inverse == k)[0]
-                        if k_conj is None or k == k_conj:
+                    for k, idx in enumerate(kikj_idx):
+                        merge_dd(outR[k], fswap[f'{dataname}R-dd/{idx}'], shls_slice)
+                        merge_dd(outI[k], fswap[f'{dataname}I-dd/{idx}'], shls_slice)
+                elif kk_idx is None:
+                    for _, ki_idx, kj_idx, self_conj in kpt_ij_iters:
+                        kpt_ij_idx = ki_idx * nkpts + kj_idx
+                        if self_conj:
                             for ij_idx in kpt_ij_idx:
                                 merge_dd(outR[ij_idx], fswap[f'{dataname}R-dd/{ij_idx}'], shls_slice)
                                 merge_dd(outI[ij_idx], fswap[f'{dataname}I-dd/{ij_idx}'], shls_slice)
                         else:
-                            ki_lst = kpt_ij_idx // nkpts
-                            kj_lst = kpt_ij_idx % nkpts
-                            kpt_ji_idx = kj_lst * nkpts + ki_lst
+                            kpt_ji_idx = kj_idx * nkpts + ki_idx
                             for ij_idx, ji_idx in zip(kpt_ij_idx, kpt_ji_idx):
                                 j3cR_dd = np.asarray(fswap[f'{dataname}R-dd/{ij_idx}'])
                                 merge_dd(outR[ij_idx], j3cR_dd, shls_slice)
@@ -584,17 +525,22 @@ class _RSGDFBuilder(_Int3cBuilder):
                                 j3cI_dd = np.asarray(fswap[f'{dataname}I-dd/{ij_idx}'])
                                 merge_dd(outI[ij_idx], j3cI_dd, shls_slice)
                                 merge_dd(outI[ji_idx],-j3cI_dd.transpose(1,0,2), shls_slice)
+                else:
+                    for k, idx in enumerate(kikj_idx):
+                        merge_dd(outR[k], fswap[f'{dataname}R-dd/{idx}'], shls_slice)
+                        merge_dd(outI[k], fswap[f'{dataname}I-dd/{idx}'], shls_slice)
 
-            for k, kk_idx in enumerate(kikj_idx):
-                fswap[f'{dataname}R/{kk_idx}'][row0:row1] = outR[k]
-                if f'{dataname}I/{kk_idx}' in fswap:
-                    fswap[f'{dataname}I/{kk_idx}'][row0:row1] = outI[k]
+            for k, idx in enumerate(kikj_idx):
+                fswap[f'{dataname}R/{idx}'][row0:row1] = outR[k]
+                if f'{dataname}I/{idx}' in fswap:
+                    fswap[f'{dataname}I/{idx}'][row0:row1] = outI[k]
             outR = outI = None
         bufR = bufI = None
         return fswap
 
     def _outcore_dd_block(self, h5group, intor='int3c2e', aosym='s2', comp=None,
-                          j_only=False, dataname='j3c', shls_slice=None):
+                          j_only=False, dataname='j3c', shls_slice=None,
+                          kk_idx=None):
         '''
         The block of smooth AO basis in i and j of (ij|L) with full Coulomb kernel
         '''
@@ -621,7 +567,7 @@ class _RSGDFBuilder(_Int3cBuilder):
         coords = cell_d.get_uniform_grids(mesh)
 
         # TODO check if max_memory is enough
-        Gv, Gvbase, kws = auxcell.get_Gv_weights(mesh)
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
         b = cell_d.reciprocal_vectors()
         gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
         ngrids = Gv.shape[0]
@@ -654,31 +600,31 @@ class _RSGDFBuilder(_Int3cBuilder):
             Vaux *= np.exp(-1j * coords.dot(kpt))
             return Vaux
 
-        def join_R(ki, kj):
-            #:aopair = np.einsum('ig,jg->ijg', aoR_ks[ki], aoR_ks[kj])
-            #:aopair+= np.einsum('ig,jg->ijg', aoI_ks[ki], aoI_ks[kj])
-            aopair = np.empty((nao**2, ngrids))
-            libpbc.PBC_zjoinR_CN_s1(
-                aopair.ctypes.data_as(ctypes.c_void_p),
-                aoR_ks[ki].ctypes.data_as(ctypes.c_void_p),
-                aoI_ks[ki].ctypes.data_as(ctypes.c_void_p),
-                aoR_ks[kj].ctypes.data_as(ctypes.c_void_p),
-                aoI_ks[kj].ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nao), ctypes.c_int(nao), ctypes.c_int(ngrids))
-            return aopair
+        #:def join_R(ki, kj):
+        #:    #:aopair = np.einsum('ig,jg->ijg', aoR_ks[ki], aoR_ks[kj])
+        #:    #:aopair+= np.einsum('ig,jg->ijg', aoI_ks[ki], aoI_ks[kj])
+        #:    aopair = np.empty((nao**2, ngrids))
+        #:    libpbc.PBC_zjoinR_CN_s1(
+        #:        aopair.ctypes.data_as(ctypes.c_void_p),
+        #:        aoR_ks[ki].ctypes.data_as(ctypes.c_void_p),
+        #:        aoI_ks[ki].ctypes.data_as(ctypes.c_void_p),
+        #:        aoR_ks[kj].ctypes.data_as(ctypes.c_void_p),
+        #:        aoI_ks[kj].ctypes.data_as(ctypes.c_void_p),
+        #:        ctypes.c_int(nao), ctypes.c_int(nao), ctypes.c_int(ngrids))
+        #:    return aopair
 
-        def join_I(ki, kj):
-            #:aopair = np.einsum('ig,jg->ijg', aoR_ks[ki], aoI_ks[kj])
-            #:aopair-= np.einsum('ig,jg->ijg', aoI_ks[ki], aoR_ks[kj])
-            aopair = np.empty((nao**2, ngrids))
-            libpbc.PBC_zjoinI_CN_s1(
-                aopair.ctypes.data_as(ctypes.c_void_p),
-                aoR_ks[ki].ctypes.data_as(ctypes.c_void_p),
-                aoI_ks[ki].ctypes.data_as(ctypes.c_void_p),
-                aoR_ks[kj].ctypes.data_as(ctypes.c_void_p),
-                aoI_ks[kj].ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nao), ctypes.c_int(nao), ctypes.c_int(ngrids))
-            return aopair
+        #:def join_I(ki, kj):
+        #:    #:aopair = np.einsum('ig,jg->ijg', aoR_ks[ki], aoI_ks[kj])
+        #:    #:aopair-= np.einsum('ig,jg->ijg', aoI_ks[ki], aoR_ks[kj])
+        #:    aopair = np.empty((nao**2, ngrids))
+        #:    libpbc.PBC_zjoinI_CN_s1(
+        #:        aopair.ctypes.data_as(ctypes.c_void_p),
+        #:        aoR_ks[ki].ctypes.data_as(ctypes.c_void_p),
+        #:        aoI_ks[ki].ctypes.data_as(ctypes.c_void_p),
+        #:        aoR_ks[kj].ctypes.data_as(ctypes.c_void_p),
+        #:        aoI_ks[kj].ctypes.data_as(ctypes.c_void_p),
+        #:        ctypes.c_int(nao), ctypes.c_int(nao), ctypes.c_int(ngrids))
+        #:    return aopair
 
         gamma_point_only = is_zero(kpts)
         if j_only or nkpts == 1:
@@ -699,8 +645,11 @@ class _RSGDFBuilder(_Int3cBuilder):
                 #:for k in range(nkpts):
                 #:    h5group[f'{dataname}R-dd/{k*nkpts+k}'] = lib.ddot(join_R(k, k), Vaux.T)
                 #:    h5group[f'{dataname}I-dd/{k*nkpts+k}'] = lib.ddot(join_I(k, k), Vaux.T)
-                k_idx = np.arange(nkpts, dtype=np.int32)
-                kpt_ij_idx = k_idx * nkpts + k_idx
+                if kk_idx is None:
+                    ks = np.arange(nkpts, dtype=np.int32)
+                    kpt_ij_idx = ks * nkpts + ks
+                else:
+                    kpt_ij_idx = np.asarray(kk_idx, dtype=np.int32)
                 j3cR = np.empty((nkpts, nao, nao, naux))
                 j3cI = np.empty((nkpts, nao, nao, naux))
                 libpbc.PBC_kzdot_CNN_s1(j3cR.ctypes.data_as(ctypes.c_void_p),
@@ -712,22 +661,17 @@ class _RSGDFBuilder(_Int3cBuilder):
                                         ctypes.c_int(nao), ctypes.c_int(nao),
                                         ctypes.c_int(naux), ctypes.c_int(ngrids),
                                         ctypes.c_int(nkpts), ctypes.c_int(nkpts))
-                for k, kk_idx in enumerate(kpt_ij_idx):
-                    h5group[f'{dataname}R-dd/{kk_idx}'] = j3cR[k]
-                    h5group[f'{dataname}I-dd/{kk_idx}'] = j3cI[k]
+                for k, idx in enumerate(kpt_ij_idx):
+                    h5group[f'{dataname}R-dd/{idx}'] = j3cR[k]
+                    h5group[f'{dataname}I-dd/{idx}'] = j3cI[k]
 
         else:
-            uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
-                cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-            scaled_uniq_kpts = cell_d.get_scaled_kpts(uniq_kpts).round(5)
-            log.debug('Num uniq kpts %d', len(uniq_kpts))
-            log.debug2('Scaled unique kpts %s', scaled_uniq_kpts)
-            for k, k_conj in group_by_conj_pairs(cell, uniq_kpts)[0]:
-                # Find ki's and kj's that satisfy k_aux = kj - ki
-                kpt_ij_idx = np.asarray(np.where(uniq_inverse == k)[0], dtype=np.int32)
+            enable_t_rev_sym = kk_idx is None
+            for kpt, ki_idx, kj_idx, self_conj \
+                    in kk_adapted_iter(cell, kpts, kk_idx, enable_t_rev_sym):
+                kpt_ij_idx = np.asarray(ki_idx * nkpts + kj_idx, dtype=np.int32)
                 nkptij = len(kpt_ij_idx)
-
-                Vaux = get_Vaux(uniq_kpts[k])
+                Vaux = get_Vaux(kpt)
                 VauxR = np.asarray(Vaux.real, order='C')
                 VauxI = np.asarray(Vaux.imag, order='C')
                 Vaux = None
@@ -752,22 +696,28 @@ class _RSGDFBuilder(_Int3cBuilder):
                                         ctypes.c_int(nao), ctypes.c_int(nao),
                                         ctypes.c_int(naux), ctypes.c_int(ngrids),
                                         ctypes.c_int(nkptij), ctypes.c_int(nkpts))
-                for k, kk_idx in enumerate(kpt_ij_idx):
-                    h5group[f'{dataname}R-dd/{kk_idx}'] = j3cR[k]
-                    h5group[f'{dataname}I-dd/{kk_idx}'] = j3cI[k]
+                for k, idx in enumerate(kpt_ij_idx):
+                    h5group[f'{dataname}R-dd/{idx}'] = j3cR[k]
+                    h5group[f'{dataname}I-dd/{idx}'] = j3cI[k]
                 j3cR = j3cI = VauxR = VauxI = None
 
     def weighted_ft_ao(self, kpt):
         '''exp(-i*(G + k) dot r) * Coulomb_kernel'''
+        cell = self.cell
         rs_cell = self.rs_cell
         Gv, Gvbase, kws = rs_cell.get_Gv_weights(self.mesh)
         b = rs_cell.reciprocal_vectors()
         gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
         coulG = self.weighted_coulG(kpt, False, self.mesh)
-        coulG_LR = coulG - self.weighted_coulG_SR(kpt, False, self.mesh)
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            with lib.temporary_env(cell, dimension=3):
+                coulG_SR = self.weighted_coulG_SR(kpt, False, self.mesh)
+        else:
+            coulG_SR = self.weighted_coulG_SR(kpt, False, self.mesh)
+        coulG_LR = coulG - coulG_SR
 
         shls_slice = None
-        if self.exclude_d_aux:
+        if self.exclude_d_aux and rs_cell.dimension > 0:
             # The smooth basis in auxcell was excluded in outcore_auxe2.
             # Full Coulomb kernel needs to be applied for the smooth basis
             rs_auxcell = self.rs_auxcell
@@ -791,8 +741,10 @@ class _RSGDFBuilder(_Int3cBuilder):
         vbar = None
         # Explicitly add the G0 contributions here because FT will not be
         # applied to the j3c integrals for short range integrals.
-        if cell.dimension == 3 and is_zero(kpt):
-            if self.exclude_d_aux:
+        if (is_zero(kpt) and self.omega != 0 and
+            (cell.dimension == 3 or
+             (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum'))):
+            if self.exclude_d_aux and cell.dimension > 0:
                 rs_auxcell = self.rs_auxcell
                 aux_chg = _gaussian_int(rs_auxcell)
                 smooth_ao_idx = rs_auxcell.get_ao_type() == ft_ao.SMOOTH_BASIS
@@ -878,7 +830,7 @@ class _RSGDFBuilder(_Int3cBuilder):
                 cderi_negative = lib.dot(j2c_negative, j3c)
         return cderi, cderi_negative
 
-    def gen_uniq_kpts_groups(self, j_only, h5swap):
+    def gen_uniq_kpts_groups(self, j_only, h5swap, kk_idx=None):
         '''Group (kpti,kptj) pairs
         '''
         cpu1 = (logger.process_clock(), logger.perf_counter())
@@ -892,44 +844,41 @@ class _RSGDFBuilder(_Int3cBuilder):
             cpu1 = log.timer('int2c2e', *cpu1)
             cd_j2c = self.decompose_j2c(j2c)
             j2c = None
-            ki = np.arange(nkpts)
-            kpt_ii_idx = ki * nkpts + ki
+            if kk_idx is None:
+                ki = np.arange(nkpts, dtype=np.int32)
+                kpt_ii_idx = ki * nkpts + ki
+            else:
+                kpt_ii_idx = np.asarray(kk_idx, dtype=np.int32)
             yield uniq_kpts[0], kpt_ii_idx, cd_j2c
 
         else:
-            uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
-                cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-            scaled_uniq_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
-            log.debug('Num uniq kpts %d', len(uniq_kpts))
-            log.debug2('scaled unique kpts %s', scaled_uniq_kpts)
-
-            kpts_idx_pairs = group_by_conj_pairs(cell, uniq_kpts)[0]
-            j2c_uniq_kpts = uniq_kpts[[k for k, _ in kpts_idx_pairs]]
+            enable_t_rev_sym = kk_idx is None
+            kpt_ij_iters = list(kk_adapted_iter(cell, kpts, kk_idx, enable_t_rev_sym))
+            j2c_uniq_kpts = np.asarray([s[0] for s in kpt_ij_iters])
             for k, j2c in enumerate(self.get_2c2e(j2c_uniq_kpts)):
                 h5swap[f'j2c/{k}'] = j2c
                 j2c = None
             cpu1 = log.timer('int2c2e', *cpu1)
 
-            for j2c_idx, (k, k_conj) in enumerate(kpts_idx_pairs):
+            for j2c_idx, (kpt, ki_idx, kj_idx, self_conj) \
+                    in enumerate(kpt_ij_iters):
                 # Find ki's and kj's that satisfy k_aux = kj - ki
-                log.debug1('Cholesky decomposition for j2c at kpt %s %s',
-                           k, scaled_uniq_kpts[k])
+                log.debug1('Cholesky decomposition for j2c %d', j2c_idx)
                 j2c = h5swap[f'j2c/{j2c_idx}']
-                if k == k_conj:
+                if self_conj:
                     # DF metric for self-conjugated k-point should be real
                     j2c = np.asarray(j2c).real
                 cd_j2c = self.decompose_j2c(j2c)
                 j2c = None
-                kpt_ij_idx = np.where(uniq_inverse == k)[0]
-                yield uniq_kpts[k], kpt_ij_idx, cd_j2c
 
-                if k_conj is None or k == k_conj:
+                kpt_ij_idx = ki_idx * nkpts + kj_idx
+                yield kpt, kpt_ij_idx, cd_j2c
+
+                if self_conj or not enable_t_rev_sym:
                     continue
 
                 # Swap ki, kj for the conjugated case
-                log.debug1('Cholesky decomposition for the conjugated kpt %s %s',
-                           k_conj, scaled_uniq_kpts[k_conj])
-                kpt_ji_idx = np.where(uniq_inverse == k_conj)[0]
+                kpt_ji_idx = kj_idx * nkpts + ki_idx
                 # If self.mesh is not enough to converge compensated charge or
                 # SR-coulG, the conj symmetry between j2c[k] and j2c[k_conj]
                 # (j2c[k] == conj(j2c[k_conj]) may not be strictly held.
@@ -938,10 +887,10 @@ class _RSGDFBuilder(_Int3cBuilder):
                 # contraction for cderi of k and cderi of k_conj. By using the
                 # conj(j2c[k]) and -uniq_kpts[k] (instead of j2c[k_conj] and
                 # uniq_kpts[k_conj]), conj-symmetry in j2c is imposed.
-                yield -uniq_kpts[k], kpt_ji_idx, _conj_j2c(cd_j2c)
+                yield -kpt, kpt_ji_idx, _conj_j2c(cd_j2c)
 
     def make_j3c(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
-                 j_only=False, dataname='j3c', shls_slice=None):
+                 j_only=False, dataname='j3c', shls_slice=None, kptij_lst=None):
         if self.rs_cell is None:
             self.build()
         log = logger.new_logger(self)
@@ -957,8 +906,22 @@ class _RSGDFBuilder(_Int3cBuilder):
         else:
             ish0, ish1 = shls_slice[:2]
 
+        if kptij_lst is not None:
+            if aosym == 's2':
+                warnings.warn('rsdf_builder does not support aosym="s2" for '
+                              'custom kptij_lst')
+                aosym = 's1'
+            ki_idx = members_with_wrap_around(cell, kptij_lst[:,0], kpts)
+            kj_idx = members_with_wrap_around(cell, kptij_lst[:,1], kpts)
+            if ki_idx.size != len(kptij_lst) or kj_idx.size != len(kptij_lst):
+                msg = f'some k-points in kptij_lst are not found in {self}.kpts'
+                raise RuntimeError(msg)
+            kk_idx = ki_idx * nkpts + kj_idx
+        else:
+            kk_idx = None
+
         fswap = self.outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
-                                   dataname, shls_slice)
+                                   'j3c', shls_slice, kk_idx=kk_idx)
         cpu1 = log.timer('pass1: real space int3c2e', *cpu0)
 
         feri = h5py.File(cderi_file, 'w')
@@ -971,10 +934,8 @@ class _RSGDFBuilder(_Int3cBuilder):
             nao_pair = nao**2
 
         if self.has_long_range():
-            supmol_ft = _ExtendedMoleFT.from_cell(self.rs_cell, self.bvk_kmesh, verbose=log)
-            supmol_ft.exclude_dd_block = self.exclude_dd_block
-            supmol_ft = supmol_ft.strip_basis()
-            ft_kern = supmol_ft.gen_ft_kernel(aosym, return_complex=False, verbose=log)
+            ft_kern = self.supmol_ft.gen_ft_kernel(aosym, return_complex=False,
+                                                   verbose=log)
 
         Gv, Gvbase, kws = cell.get_Gv_weights(self.mesh)
         gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
@@ -999,7 +960,7 @@ class _RSGDFBuilder(_Int3cBuilder):
             max_memory -= buflen * naux * (nkptj+1) * 16e-6 * 2
 
             # +1 for a pqkbuf
-            Gblksize = max(16, int(max_memory*1e6/16/buflen/(nkptj+1)))
+            Gblksize = max(16, int(max_memory*1e6/16/buflen/(nkptj+1))//8*8)
             Gblksize = min(Gblksize, ngrids, 200000)
 
             load = self.gen_j3c_loader(fswap, kpt, kpt_ij_idx, aosym)
@@ -1026,15 +987,16 @@ class _RSGDFBuilder(_Int3cBuilder):
                         Gpq = None
 
                 j3cR, j3cI = j3c
-                for k, kk_idx in enumerate(kpt_ij_idx):
+                for k, idx in enumerate(kpt_ij_idx):
                     cderi, cderi_negative = self.solve_cderi(j2c, j3cR[k], j3cI[k])
-                    feri[f'{dataname}/{kk_idx}/{istep}'] = cderi
+                    feri[f'{dataname}/{idx}/{istep}'] = cderi
                     if cderi_negative is not None:
                         # for low-dimension systems
-                        feri[f'{dataname}-/{kk_idx}/{istep}'] = cderi_negative
+                        feri[f'{dataname}-/{idx}/{istep}'] = cderi_negative
                 j3cR = j3cI = j3c = cderi = None
 
-        for kpt, kpt_ij_idx, cd_j2c in self.gen_uniq_kpts_groups(j_only, fswap):
+        for kpt, kpt_ij_idx, cd_j2c \
+                in self.gen_uniq_kpts_groups(j_only, fswap, kk_idx=kk_idx):
             make_cderi(kpt, kpt_ij_idx, cd_j2c)
 
         feri.close()
@@ -1042,96 +1004,307 @@ class _RSGDFBuilder(_Int3cBuilder):
         return self
 
 
-def _strip_basis(supmol, omega, exp_aux_min=None, exclude_dd_block=False):
-    '''Remove redundant remote basis'''
-    rs_cell = supmol.rs_cell
-    bas_mask = supmol.bas_mask
-    compact_bas_mask = rs_cell.bas_type != ft_ao.SMOOTH_BASIS
-    exps = np.array([e.min() for e in rs_cell.bas_exps()])
-    exps_c = exps[compact_bas_mask]
-    if exps_c.size > 0:
-        exp_min = exps.min()
-        # compact_aux_idx = np.where(rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS)[0]
-        # exp_aux_min = min([rs_auxcell.bas_exp(ib).min() for ib in compact_aux_idx])
-        # Is the exact exp_aux_min needed here?
-        if exp_aux_min is None:
-            exp_aux_min = exp_min
-        aij = exp_min + exps_c
-        eij = exp_min * exps_c / aij
-        theta = 1./(omega**-2 + 1./aij + 1./exp_aux_min)
-        LKs = supmol.Ls[:,None,:] + supmol.bvkmesh_Ls
+def get_nuc(nuc_builder):
+    '''Get the periodic nuc-el AO matrix, with G=0 removed.
+    '''
+    t0 = (logger.process_clock(), logger.perf_counter())
+    nuc = nuc_builder.get_pp_loc_part1(with_pseudo=False)
+    logger.timer(nuc_builder, 'get_nuc', *t0)
+    return nuc
 
-        # For basis on the boundary of a cell, boundary_penalty can adjust
-        # the LKs to get proper distance between basis
-        shifts = lib.cartesian_prod([[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]])
-        a_off_bond = rs_cell.lattice_vectors() - 1.
-        boundary_penalty = np.einsum('te,ex->tx', shifts, a_off_bond)
-        rLK = np.linalg.norm(LKs + boundary_penalty[:,None,None], axis=-1).min(axis=0)
-        rLK[rLK < 1e-2] = 1e-2  # avoid singularity in upper_bounds
-        rr = rLK ** 2
+def get_pp(nuc_builder):
+    '''get the periodic pseudotential nuc-el ao matrix, with g=0 removed.
 
-        # x = rcut * x_ratio for the distance between compact function
-        # and smooth function (compact function in the far end)
-        # fac*erfc(\sqrt(theta)|rcut - x|) for the asymptotic value of short-range eri
-        x_ratio = 1. / (exp_min/aij + exps_c/theta)
-        exp_fac = eij * x_ratio**2 + theta * (1 - exp_min/aij*x_ratio)**2
-        fac = ((8*np.pi*exp_min*exps_c/(aij*exp_aux_min)**2)**.75
-               / (theta * np.pi)**.5)
-        # upper_bounds are the maximum values int3c2e can reach for each
-        # basis in each repeated image. shape (bas_id, image_id, bvk_cell_id)
-        upper_bounds = np.einsum('i,lk,ilk->kil', fac, 2*np.pi/rr,
-                                 np.exp(-exp_fac[:,None,None]*rr))
-        # The cutoff here is most critical parameter that impacts the
-        # accuracy of DF integrals
-        bas_mask[:,compact_bas_mask] = upper_bounds > supmol.precision
+    kwargs:
+        mesh: custom mesh grids. by default mesh is determined by the
+        function _guess_eta from module pbc.df.gdf_builder.
+    '''
+    t0 = (logger.process_clock(), logger.perf_counter())
+    cell = nuc_builder.cell
+    vpp = nuc_builder.get_pp_loc_part1()
+    t1 = logger.timer_debug1(nuc_builder, 'get_pp_loc_part1', *t0)
+    pp2builder = aft._IntPPBuilder(cell, nuc_builder.kpts)
+    vpp += pp2builder.get_pp_loc_part2()
+    t1 = logger.timer_debug1(nuc_builder, 'get_pp_loc_part2', *t1)
+    vpp += pseudo.pp_int.get_pp_nl(cell, nuc_builder.kpts)
+    t1 = logger.timer_debug1(nuc_builder, 'get_pp_nl', *t1)
+    logger.timer(nuc_builder, 'get_pp', *t0)
+    return vpp
 
-        # determine rcut boundary for diffused functions
-        exps_d = exps[~compact_bas_mask]
-        if exps_d.size > 0:
-            if exclude_dd_block:
-                # Just needs to estimate the upper bounds of (C,D|aux)
-                # otherwise, we need exp_min = exp_d_min for the (D,D|aux)
-                # upper bound estimation
-                exp_min = exps_c.min()
-            aij = exp_min + exps_d
-            eij = exp_min * exps_d / aij
-            theta = 1./(omega**-2 + 1./aij + 1./exp_aux_min)
+def _int_dd_block(dfbuilder, fakenuc, intor='int3c2e', comp=None):
+    '''
+    The block of smooth AO basis in i and j of (ij|L) with full Coulomb kernel
+    '''
+    if intor not in ('int3c2e', 'int3c2e_sph', 'int3c2e_cart'):
+        raise NotImplementedError
 
-            x_ratio = 1. / (exps_d/aij + exp_min/theta)
-            exp_fac = eij * x_ratio**2 + theta * (1 - exps_d/aij*x_ratio)**2
-            fac = ((8*np.pi*exps_d*exp_min/(aij*exp_aux_min)**2)**.75
-                   / (theta * np.pi)**.5)
-            # upper_bounds are the maximum values int3c2e can reach for each
-            # basis in each repeated image. shape (bas_id, image_id, bvk_cell_id)
-            upper_bounds = np.einsum('i,lk,ilk->kil', fac, 2*np.pi/rr,
-                                     np.exp(-exp_fac[:,None,None]*rr))
-            bas_mask[:,~compact_bas_mask] = upper_bounds > supmol.precision
+    t0 = (logger.process_clock(), logger.perf_counter())
+    cell = dfbuilder.cell
+    cell_d = dfbuilder.rs_cell.smooth_basis_cell()
+    nao = cell_d.nao
+    kpts = dfbuilder.kpts
+    nkpts = kpts.shape[0]
+    if nao == 0 or fakenuc.natm == 0:
+        if is_zero(kpts):
+            return np.zeros((nao,nao,1))
+        else:
+            return np.zeros((2,nkpts,nao,nao,1))
 
-        bas_mask[0,:,0] = True
+    mesh = cell_d.mesh
+    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+    b = cell_d.reciprocal_vectors()
+    gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
 
-    nbas0 = supmol._bas.shape[0]
-    supmol._bas = np.asarray(supmol._bas[bas_mask.ravel()], dtype=np.int32, order='C')
-    nbas1 = supmol._bas.shape[0]
-    logger.debug1(supmol, 'strip_basis %d to %d ', nbas0, nbas1)
-    supmol.sh_loc = supmol.bas_mask_to_sh_loc(rs_cell, bas_mask)
-    supmol.bas_mask = bas_mask
-    return supmol
+    kpt_allow = np.zeros(3)
+    charges = -cell.atom_charges()
+    #:rhoG = np.dot(charges, SI)
+    aoaux = ft_ao.ft_ao(fakenuc, Gv, None, b, gxyz, Gvbase)
+    rhoG = np.einsum('i,xi->x', charges, aoaux)
+    coulG = pbctools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
+    vG = rhoG * coulG
+    if (cell.dimension == 3 or
+        (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum')):
+        vG[0] -= charges.dot(np.pi/np.hstack(fakenuc.bas_exps()))
 
-class _ExtendedMoleSR(ft_ao._ExtendedMole):
-    '''Extended Mole for short-range ERIs without dd-blocks'''
+    vR = pbctools.ifft(vG, mesh).real
 
-    @classmethod
-    def from_cell(cls, cell, kmesh, omega, rcut=None, verbose=None):
-        supmol = super(_ExtendedMoleSR, cls).from_cell(cell, kmesh, rcut, verbose)
-        supmol.omega = -omega
-        return supmol
+    coords = cell_d.get_uniform_grids(mesh)
+    if is_zero(kpts):
+        ao_ks = cell_d.pbc_eval_gto('GTOval', coords)
+        j3c = lib.dot(ao_ks.T * vR, ao_ks).reshape(nao,nao,1)
 
-class _ExtendedMoleFT(ft_ao._ExtendedMole):
+    else:
+        ao_ks = cell_d.pbc_eval_gto('GTOval', coords, kpts=kpts)
+        j3cR = np.empty((nkpts, nao, nao))
+        j3cI = np.empty((nkpts, nao, nao))
+        for k in range(nkpts):
+            v = lib.dot(ao_ks[k].conj().T * vR, ao_ks[k])
+            j3cR[k] = v.real
+            j3cI[k] = v.imag
+        j3c = j3cR.reshape(nkpts,nao,nao,1), j3cI.reshape(nkpts,nao,nao,1)
+    t0 = logger.timer_debug1(dfbuilder, 'FFT smooth basis', *t0)
+    return j3c
+
+
+class _RSNucBuilder(_RSGDFBuilder):
+
+    exclude_dd_block = True
+    exclude_d_aux = False
+
+    def __init__(self, cell, kpts=np.zeros((1,3))):
+        self.mesh = None
+        self.omega = None
+        self.auxcell = self.rs_auxcell = None
+        Int3cBuilder.__init__(self, cell, self.auxcell, kpts)
+
+    def build(self, omega=None):
+        cpu0 = logger.process_clock(), logger.perf_counter()
+        log = logger.new_logger(self)
+        cell = self.cell
+        fakenuc = aft._fake_nuc(cell, with_pseudo=True)
+        kpts = self.kpts
+        nkpts = len(kpts)
+
+        self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        log.debug('kmesh for bvk-cell = %s', kmesh)
+
+        if cell.dimension == 0:
+            self.omega, self.mesh, self.ke_cutoff = _guess_omega(cell, kpts, self.mesh)
+        else:
+            if omega is None:
+                omega = 1./(1.+nkpts**(1./9))
+            ke_cutoff = estimate_ke_cutoff_for_omega(cell, omega)
+            self.mesh = cell.cutoff_to_mesh(ke_cutoff)
+            self.ke_cutoff = min(pbctools.mesh_to_cutoff(
+                cell.lattice_vectors(), self.mesh)[:cell.dimension])
+            self.omega = estimate_omega_for_ke_cutoff(cell, self.ke_cutoff)
+            if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+                self.mesh[2] = _estimate_meshz(cell)
+            elif cell.dimension < 2:
+                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+            self.mesh = cell.symmetrize_mesh(self.mesh)
+
+        self.dump_flags()
+
+        exp_min = np.hstack(cell.bas_exps()).min()
+        # For each basis i in (ij|, small integrals accumulated by the lattice
+        # sum for j are not negligible.
+        lattice_sum_factor = max((2*cell.rcut)**3/cell.vol * 1/exp_min, 1)
+        cutoff = cell.precision / lattice_sum_factor * .1
+        self.direct_scf_tol = cutoff / cell.atom_charges().max()
+        log.debug('Set _RSNucBuilder.direct_scf_tol to %g', cutoff)
+
+        self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
+            cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
+        rcut_sr = estimate_rcut(rs_cell, fakenuc, self.omega,
+                                rs_cell.precision, self.exclude_dd_block)
+        supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_sr.max(), log)
+        supmol.omega = -self.omega
+        self.supmol = supmol.strip_basis(rcut_sr)
+        log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
+                  supmol.nbas, supmol.nao, supmol.npgto_nr())
+
+        rcut = estimate_ft_rcut(rs_cell, cell.precision, self.exclude_dd_block)
+        supmol_ft = _ExtendedMoleFT.from_cell(rs_cell, kmesh, rcut.max(), log)
+        supmol_ft.exclude_dd_block = self.exclude_dd_block
+        self.supmol_ft = supmol_ft.strip_basis(rcut)
+        log.debug('sup-mol-ft nbas = %d cGTO = %d pGTO = %d',
+                  supmol_ft.nbas, supmol_ft.nao, supmol_ft.npgto_nr())
+        log.timer_debug1('initializing supmol', *cpu0)
+        return self
+
+    def _int_nuc_vloc(self, fakenuc, intor='int3c2e', aosym='s2', comp=None):
+        '''SR-Vnuc
+        '''
+        logger.debug2(self, 'Real space integrals %s for SR-Vnuc', intor)
+
+        cell = self.cell
+        kpts = self.kpts
+        nkpts = len(kpts)
+
+        int3c = self.gen_int3c_kernel(intor, aosym, comp=comp, j_only=True,
+                                      auxcell=fakenuc)
+        bufR, bufI = int3c()
+
+        charge = -cell.atom_charges()
+        if is_zero(kpts):
+            mat = np.einsum('k...z,z->k...', bufR, charge)
+        else:
+            mat = (np.einsum('k...z,z->k...', bufR, charge) +
+                   np.einsum('k...z,z->k...', bufI, charge) * 1j)
+
+        # G = 0 contributions to SR integrals
+        if (self.omega != 0 and
+            (intor in ('int3c2e', 'int3c2e_sph', 'int3c2e_cart')) and
+            (cell.dimension == 3 or
+             (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum'))):
+            logger.debug2(self, 'G=0 part for %s', intor)
+            nucbar = np.pi / self.omega**2 / cell.vol * charge.sum()
+            if self.exclude_dd_block:
+                rs_cell = self.rs_cell
+                ovlp = rs_cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
+                smooth_ao_idx = rs_cell.get_ao_type() == ft_ao.SMOOTH_BASIS
+                for s in ovlp:
+                    s[smooth_ao_idx[:,None] & smooth_ao_idx] = 0
+                recontract_2d = rs_cell.recontract(dim=2)
+                ovlp = [recontract_2d(s) for s in ovlp]
+            else:
+                ovlp = cell.pbc_intor('int1e_ovlp', 1, lib.HERMITIAN, kpts)
+
+            for k in range(nkpts):
+                if aosym == 's1':
+                    mat[k] -= nucbar * ovlp[k].ravel()
+                else:
+                    mat[k] -= nucbar * lib.pack_tril(ovlp[k])
+        return mat
+
+    _int_dd_block = _int_dd_block
+
+    def get_pp_loc_part1(self, mesh=None, with_pseudo=True):
+        log = logger.Logger(self.stdout, self.verbose)
+        t0 = t1 = (logger.process_clock(), logger.perf_counter())
+        if self.rs_cell is None:
+            self.build()
+        cell = self.cell
+        kpts = self.kpts
+        nkpts = len(kpts)
+        nao = cell.nao_nr()
+        aosym = 's2'
+        nao_pair = nao * (nao+1) // 2
+        mesh = self.mesh
+
+        fakenuc = aft._fake_nuc(cell, with_pseudo=with_pseudo)
+        vj = self._int_nuc_vloc(fakenuc)
+        if cell.dimension == 0:
+            return lib.unpack_tril(vj)
+
+        if self.exclude_dd_block:
+            cell_d = self.rs_cell.smooth_basis_cell()
+            if cell_d.nao > 0 and fakenuc.natm > 0:
+                merge_dd = self.rs_cell.merge_diffused_block(aosym)
+                if is_zero(kpts):
+                    vj_dd = self._int_dd_block(fakenuc)
+                    merge_dd(vj, vj_dd)
+                else:
+                    vj_ddR, vj_ddI = self._int_dd_block(fakenuc)
+                    for k in range(nkpts):
+                        outR = vj[k].real.copy()
+                        outI = vj[k].imag.copy()
+                        merge_dd(outR, vj_ddR[k])
+                        merge_dd(outI, vj_ddI[k])
+                        vj[k] = outR + outI * 1j
+        t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
+
+        kpt_allow = np.zeros(3)
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+        gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
+        b = cell.reciprocal_vectors()
+        aoaux = ft_ao.ft_ao(fakenuc, Gv, None, b, gxyz, Gvbase)
+        charges = -cell.atom_charges()
+
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            coulG = pbctools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
+            with lib.temporary_env(cell, dimension=3):
+                coulG_SR = pbctools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv,
+                                              omega=-self.omega)
+            coulG_LR = coulG - coulG_SR
+        else:
+            coulG_LR = pbctools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv,
+                                          omega=self.omega)
+        wcoulG = coulG_LR * kws
+        vG = np.einsum('i,xi,x->x', charges, aoaux, wcoulG)
+
+        # contributions due to pseudo.pp_int.get_gth_vlocG_part1
+        if (cell.dimension == 3 or
+            (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum')):
+            G0_idx = 0
+            exps = np.hstack(fakenuc.bas_exps())
+            vG[G0_idx] -= charges.dot(np.pi/exps) * kws
+
+        ft_kern = self.supmol_ft.gen_ft_kernel(aosym, return_complex=False,
+                                               kpts=kpts, verbose=log)
+        ngrids = Gv.shape[0]
+        max_memory = max(2000, self.max_memory-lib.current_memory()[0])
+        Gblksize = max(16, int(max_memory*.8e6/16/(nao_pair*nkpts))//8*8)
+        Gblksize = min(Gblksize, ngrids, 200000)
+        vGR = vG.real
+        vGI = vG.imag
+        log.debug1('max_memory = %s  Gblksize = %s  ngrids = %s',
+                   max_memory, Gblksize, ngrids)
+
+        buf = np.empty((2, nkpts, Gblksize, nao_pair))
+        for p0, p1 in lib.prange(0, ngrids, Gblksize):
+            # shape of Gpq (nkpts, nGv, nao_pair)
+            Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, out=buf)
+            for k, (GpqR, GpqI) in enumerate(zip(*Gpq)):
+                # rho_ij(G) nuc(-G) / G^2
+                # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
+                vR = np.einsum('k,kx->x', vGR[p0:p1], GpqR)
+                vR+= np.einsum('k,kx->x', vGI[p0:p1], GpqI)
+                vj[k] += vR
+                if not is_zero(kpts[k]):
+                    vI = np.einsum('k,kx->x', vGR[p0:p1], GpqI)
+                    vI-= np.einsum('k,kx->x', vGI[p0:p1], GpqR)
+                    vj[k].imag += vI
+            t1 = log.timer_debug1('contracting Vnuc [%s:%s]'%(p0, p1), *t1)
+        log.timer_debug1('contracting Vnuc', *t0)
+
+        vj_kpts = []
+        for k, kpt in enumerate(kpts):
+            if is_zero(kpt):
+                vj_kpts.append(lib.unpack_tril(vj[k].real))
+            else:
+                vj_kpts.append(lib.unpack_tril(vj[k]))
+        return np.asarray(vj_kpts)
+
+    get_pp = get_pp
+    get_nuc = get_nuc
+
+
+class _ExtendedMoleFT(ft_ao.ExtendedMole):
     '''Extended Mole for Fourier Transform without dd-blocks'''
 
-    def __init__(self):
-        self.exclude_dd_block = True
-        ft_ao._ExtendedMole.__init__(self)
+    exclude_dd_block = False
 
     def get_ovlp_mask(self, cutoff=None):
         '''integral screening mask for basis product between cell and supmol.
@@ -1151,42 +1324,42 @@ def _guess_omega(cell, kpts, mesh=None):
         if mesh is None:
             mesh = cell.mesh
         ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
-        omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
-        return omega, mesh, ke_cutoff
+        return 0, mesh, ke_cutoff
 
-    a = cell.lattice_vectors()
     # requiring Coulomb potential < cell.precision at rcut is often not
     # enough to truncate the interaction.
-    omega_min = aft.estimate_omega(cell, cell.precision*1e-2)
-    ke_min = aft.estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
-    mesh_min = _round_off_to_odd_mesh(pbctools.cutoff_to_mesh(a, ke_min))
+    # omega_min = estimate_omega_min(cell, cell.precision*1e-2)
+    omega_min = OMEGA_MIN
+    ke_min = estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
+    a = cell.lattice_vectors()
 
     if mesh is None:
-        nao = cell.npgto_nr()
         nkpts = len(kpts)
-        # FIXME: balance the two workloads
-        # int3c2e integrals ~ nao*(cell.rcut**3/cell.vol*nao)**2
-        # ft_ao integrals ~ nkpts*nao*(cell.rcut**3/cell.vol*nao)*mesh**3
-        nimgs = (8 * cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
-        mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) + 2
-        mesh = int(min((1e8/nao)**(1./3), mesh))
-        mesh = np.max([mesh_min, [mesh] * 3], axis=0)
-        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh-1)
-        ke_cutoff = ke_cutoff[:cell.dimension].min()
-        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-            mesh[cell.dimension:] = cell.mesh[cell.dimension:]
-        elif cell.dimension == 2:
-            mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
-        mesh = _round_off_to_odd_mesh(mesh)
+        ke_cutoff = 20. * nkpts**(-1./3)
+        ke_cutoff = max(ke_cutoff, ke_min)
+        mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
+        mesh = np.asarray(mesh)
+        mesh_min = cell.cutoff_to_mesh(ke_min)
         if np.any(mesh[:cell.dimension] < mesh_min[:cell.dimension]):
             logger.warn(cell, 'mesh %s is not enough to converge to the required '
                         'integral precision %g.\nRecommended mesh is %s.',
                         mesh, cell.precision, mesh_min)
-        ke_cutoff = pbctools.mesh_to_cutoff(a, np.asarray(mesh)-1)
-        ke_cutoff = ke_cutoff[:cell.dimension].min()
-    omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+    ke_cutoff = min(pbctools.mesh_to_cutoff(a, mesh)[:cell.dimension])
+    omega = estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
     return omega, mesh, ke_cutoff
+
+def _estimate_meshz(cell, precision=None):
+    '''For 2D with truncated Coulomb, estimate the necessary mesh size
+    that can converge the Gaussian function to the required precision.
+    '''
+    if precision is None:
+        precision = cell.precision
+    e = np.hstack(cell.bas_exps()).max()
+    ke_cut = -np.log(precision) * 2 * e
+    meshz = cell.cutoff_to_mesh(ke_cut)[2]
+    logger.debug2(cell, '_estimate_meshz %d', meshz)
+    return max(meshz, cell.mesh[2])
 
 def _eval_gto(cell, mesh, kpts):
     coords = cell.get_uniform_grids(mesh)
@@ -1222,4 +1395,208 @@ def _round_off_to_odd_mesh(mesh):
     # between k and -k is used (function conj_j2c) to overcome the error
     # caused by auxiliary basis linear dependency. More detalis of this
     # problem can be found in function _make_j3c.
-    return (np.asarray(mesh) // 2) * 2 + 1
+    if isinstance(mesh, (int, np.integer)):
+        return (mesh // 2) * 2 + 1
+    else:
+        return (np.asarray(mesh) // 2) * 2 + 1
+
+def estimate_rcut(rs_cell, rs_auxcell, omega, precision=None,
+                  exclude_dd_block=False, exclude_d_aux=False):
+    '''Estimate rcut for 3c2e SR-integrals'''
+    if precision is None:
+        precision = rs_cell.precision
+
+    if rs_cell.nbas == 0 or rs_auxcell.nbas == 0:
+        return np.zeros(1)
+
+    if omega == 0:
+        # No SR integrals in int3c2e if omega=0
+        assert rs_cell.dimension == 0
+        return np.zeros(1)
+
+    cell_exps, cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')
+    ls = rs_cell._bas[:,gto.ANG_OF]
+
+    aux_exps = np.array([e.min() for e in rs_auxcell.bas_exps()])
+    aux_min_idx = aux_exps.argmin()
+    if exclude_d_aux:
+        compact_aux_idx = np.where(rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS)[0]
+        if compact_aux_idx.size > 0:
+            aux_min_idx = compact_aux_idx[aux_exps[compact_aux_idx].argmin()]
+    ak = aux_exps[aux_min_idx]
+    lk = rs_auxcell._bas[aux_min_idx,gto.ANG_OF]
+
+    ai_idx = cell_exps.argmin()
+    ai = cell_exps[ai_idx]
+    aj = cell_exps
+    li = rs_cell._bas[ai_idx,gto.ANG_OF]
+    lj = ls
+
+    ci = cs[ai_idx]
+    cj = cs
+    # Note ck normalizes the auxiliary basis \int \chi_k dr to 1
+    ck = 1./(4*np.pi) / gto.gaussian_int(lk+2, ak)
+
+    aij = ai + aj
+    lij = li + lj
+    l3 = lij + lk
+    theta = 1./(omega**-2 + 1./aij + 1./ak)
+    norm_ang = ((2*li+1)*(2*lj+1))**.5/(4*np.pi)
+    c1 = ci * cj * ck * norm_ang
+    sfac = aij*aj/(aij*aj + ai*theta)
+    fl = 2
+    fac = 2**li*np.pi**2.5*c1 * theta**(l3-.5)
+    fac *= 2*np.pi/rs_cell.vol/theta
+    fac /= aij**(li+1.5) * ak**(lk+1.5) * aj**lj
+    fac *= fl / precision
+
+    r0 = rs_cell.rcut  # initial guess
+    r0 = (np.log(fac * r0 * (sfac*r0)**(l3-1) + 1.) / (sfac*theta))**.5
+    r0 = (np.log(fac * r0 * (sfac*r0)**(l3-1) + 1.) / (sfac*theta))**.5
+    rcut = r0
+
+    if exclude_dd_block:
+        compact_mask = rs_cell.bas_type != ft_ao.SMOOTH_BASIS
+        compact_idx = np.where(compact_mask)[0]
+        if 0 < compact_idx.size < rs_cell.nbas:
+            compact_idx = compact_idx[cell_exps[compact_idx].argmin()]
+            smooth_mask = ~compact_mask
+            ai = cell_exps[compact_idx]
+            li = ls[compact_idx]
+            ci = cs[compact_idx]
+            aj = cell_exps[smooth_mask]
+            lj = ls[smooth_mask]
+            cj = cs[smooth_mask]
+
+            aij = ai + aj
+            lij = li + lj
+            l3 = lij + lk
+            theta = 1./(omega**-2 + 1./aij + 1./ak)
+            norm_ang = ((2*li+1)*(2*lj+1))**.5/(4*np.pi)
+            c1 = ci * cj * ck * norm_ang
+            sfac = aij*aj/(aij*aj + ai*theta)
+            fl = 2
+            fac = 2**li*np.pi**2.5*c1 * theta**(l3-.5)
+            fac *= 2*np.pi/rs_cell.vol/theta
+            fac /= aij**(li+1.5) * ak**(lk+1.5) * aj**lj
+            fac *= fl / precision
+
+            r0 = rs_cell.rcut
+            r0 = (np.log(fac * r0 * (sfac*r0)**(l3-1) + 1.) / (sfac*theta))**.5
+            r0 = (np.log(fac * r0 * (sfac*r0)**(l3-1) + 1.) / (sfac*theta))**.5
+            rcut[smooth_mask] = r0
+    return rcut
+
+def estimate_ft_rcut(rs_cell, precision=None, exclude_dd_block=False):
+    '''Remove less important basis based on Schwarz inequality
+    Q_ij ~ S_ij * (sqrt(2aij/pi) * aij**(lij*2) * (4*lij-1)!!)**.5
+    '''
+    if precision is None:
+        precision = rs_cell.precision
+
+    # consider only the most diffused component of a basis
+    exps, cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')
+    ls = rs_cell._bas[:,gto.ANG_OF]
+    ai_idx = exps.argmin()
+    ai = exps[ai_idx]
+    li = ls[ai_idx]
+    ci = cs[ai_idx]
+    aj = exps
+    lj = ls
+    cj = cs
+    aij = ai + aj
+    lij = li + lj
+    norm_ang = ((2*li+1)*(2*lj+1))**.5/(4*np.pi)
+    c1 = ci * cj * norm_ang
+    theta = ai * aj / aij
+    aij1 = aij**-.5
+    fac = np.pi**1.5*c1 * aij1**(lij+3) * (2*aij/np.pi)**.25 * aij**lij
+    fac /= precision
+
+    r0 = rs_cell.rcut
+    dri = aj*aij1 * r0 + 1.
+    drj = ai*aij1 * r0 + 1.
+    fl = 2*np.pi*r0/theta + 1.
+    r0 = (np.log(fac * dri**li * drj**lj * fl + 1.) / theta)**.5
+
+    dri = aj*aij1 * r0 + 1.
+    drj = ai*aij1 * r0 + 1.
+    fl = 2*np.pi/rs_cell.vol*r0/theta
+    r0 = (np.log(fac * dri**li * drj**lj * fl + 1.) / theta)**.5
+    rcut = r0
+
+    if exclude_dd_block:
+        compact_mask = rs_cell.bas_type != ft_ao.SMOOTH_BASIS
+        compact_idx = np.where(compact_mask)[0]
+        if 0 < compact_idx.size < rs_cell.nbas:
+            compact_idx = compact_idx[exps[compact_idx].argmin()]
+            smooth_mask = ~compact_mask
+            ai = exps[compact_idx]
+            li = ls[compact_idx]
+            ci = cs[compact_idx]
+            aj = exps[smooth_mask]
+            lj = ls[smooth_mask]
+            cj = cs[smooth_mask]
+            aij = ai + aj
+            lij = li + lj
+            norm_ang = ((2*li+1)*(2*lj+1))**.5/(4*np.pi)
+            c1 = ci * cj * norm_ang
+            theta = ai * aj / aij
+            aij1 = aij**-.5
+            fac = np.pi**1.5*c1 * aij1**(lij+3) * (2*aij/np.pi)**.25 * aij**lij
+            fac /= precision
+
+            r0 = rs_cell.rcut
+            dri = aj*aij1 * r0 + 1.
+            drj = ai*aij1 * r0 + 1.
+            fl = 2*np.pi/rs_cell.vol*r0/theta
+            r0 = (np.log(fac * dri**li * drj**lj * fl + 1.) / theta)**.5
+
+            dri = aj*aij1 * r0 + 1.
+            drj = ai*aij1 * r0 + 1.
+            fl = 2*np.pi*r0/theta + 1.
+            r0 = (np.log(fac * dri**li * drj**lj * fl + 1.) / theta)**.5
+            rcut[smooth_mask] = r0
+    return rcut
+
+def estimate_omega_min(cell, precision=None):
+    '''Given cell.rcut the boundary of repeated images of the cell, estimates
+    the minimal omega for the attenuated Coulomb interactions, requiring that at
+    boundary the Coulomb potential of a point charge < cutoff
+    '''
+    if precision is None:
+        precision = cell.precision
+    # erfc(z) = 2/\sqrt(pi) int_z^infty exp(-t^2) dt < exp(-z^2)/(z\sqrt(pi))
+    # erfc(omega*rcut)/rcut < cutoff
+    # ~ exp(-(omega*rcut)**2) / (omega*rcut**2*pi**.5) < cutoff
+    rcut = cell.rcut
+    omega = OMEGA_MIN
+    omega = max((-np.log(precision * rcut**2 * omega))**.5 / rcut, OMEGA_MIN)
+    return omega
+
+def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
+    '''Energy cutoff for AFTDF to converge attenuated Coulomb in moment space
+    '''
+    if precision is None:
+        precision = cell.precision
+    exps, cs = pbcgto.cell._extract_pgto_params(cell, 'max')
+    ls = cell._bas[:,gto.ANG_OF]
+    cs = gto.gto_norm(ls, exps)
+    Ecut = aft._estimate_ke_cutoff(exps, ls, cs, precision, omega)
+    return Ecut.max()
+
+def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
+    '''The minimal omega in attenuated Coulombl given energy cutoff
+    '''
+    if precision is None:
+        precision = cell.precision
+    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+    # enough to converge the 2-electron integrals. A penalty term here is to
+    # reduce the error in integrals
+    precision *= 1e-2
+    # Consider l>0 basis here to increate Ecut for slightly better accuracy
+    lmax = np.max(cell._bas[:,gto.ANG_OF])
+    kmax = (ke_cutoff*2)**.5
+    log_rest = np.log(precision / (16*np.pi**2 * kmax**lmax))
+    omega = (-.5 * ke_cutoff / log_rest)**.5
+    return omega

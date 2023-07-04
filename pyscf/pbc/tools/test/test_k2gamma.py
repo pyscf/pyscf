@@ -67,12 +67,12 @@ class KnownValues(unittest.TestCase):
         mf.kernel()
 
         popa, popb = mf.mulliken_meta()[0]
-        self.assertAlmostEqual(lib.finger(popa).sum(), 1.5403023058, 7)
-        self.assertAlmostEqual(lib.finger(popb).sum(), 1.5403023058, 7)
+        self.assertAlmostEqual(lib.fp(popa), 1.5403023058, 7)
+        self.assertAlmostEqual(lib.fp(popb), 1.5403023058, 7)
 
         popa, popb = k2gamma.k2gamma(mf).mulliken_meta()[0]
-        self.assertAlmostEqual(lib.finger(popa), 0.8007278745, 7)
-        self.assertAlmostEqual(lib.finger(popb), 0.8007278745, 7)
+        self.assertAlmostEqual(lib.fp(popa), 0.8007278745, 7)
+        self.assertAlmostEqual(lib.fp(popb), 0.8007278745, 7)
 
     def test_k2gamma_ksymm(self):
         cell = gto.Cell()

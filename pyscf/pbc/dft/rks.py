@@ -160,30 +160,28 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     return rho
 
 
-def _dft_common_init_(mf, xc='LDA,VWN'):
-    mf.xc = xc
-    mf.nlc = ''
-    mf.grids = gen_grid.UniformGrids(mf.cell)
-    mf.nlcgrids = None
-    # Use rho to filter grids
-    mf.small_rho_cutoff = getattr(__config__,
-                                  'pbc_dft_rks_RKS_small_rho_cutoff', 1e-7)
-##################################################
-# don't modify the following attributes, they are not input options
-    # Note Do not refer to .with_df._numint because mesh/coords may be different
-    if isinstance(mf, khf.KSCF):
-        if isinstance(mf.kpts, KPoints):
-            mf._numint = numint.KNumInt(mf.kpts.kpts)
-        else:
-            mf._numint = numint.KNumInt(mf.kpts)
-    else:
-        mf._numint = numint.NumInt()
-    mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
-
 class KohnShamDFT(mol_ks.KohnShamDFT):
     '''PBC-KS'''
 
-    __init__ = _dft_common_init_
+    def __init__(self, xc='LDA,VWN'):
+        self.xc = xc
+        self.grids = gen_grid.UniformGrids(self.cell)
+        self.nlc = ''
+        self.nlcgrids = None
+        # Use rho to filter grids
+        self.small_rho_cutoff = getattr(
+            __config__, 'pbc_dft_rks_RKS_small_rho_cutoff', 1e-7)
+##################################################
+# don't modify the following attributes, they are not input options
+        # Note Do not refer to .with_df._numint because mesh/coords may be different
+        if isinstance(self, khf.KSCF):
+            if isinstance(self.kpts, KPoints):
+                self._numint = numint.KNumInt(self.kpts.kpts)
+            else:
+                self._numint = numint.KNumInt(self.kpts)
+        else:
+            self._numint = numint.NumInt()
+        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
     def dump_flags(self, verbose=None):
         logger.info(self, 'XC functionals = %s', self.xc)
@@ -194,6 +192,15 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
     def reset(self, mol=None):
         pbchf.SCF.reset(self, mol)
         self.grids.reset(mol)
+        return self
+
+    def jk_method(self, J='FFTDF', K=None):
+        if K is None:
+            K = J
+        if (('RS' in J or 'RS' in K) and
+            not isinstance(self.grids, gen_grid.BeckeGrids)):
+            self.grids = gen_grid.BeckeGrids(self.cell)
+        super().jk_method(J, K)
         return self
 
     def to_rks(self, xc=None):
@@ -257,6 +264,9 @@ class RKS(KohnShamDFT, pbchf.RHF):
         pbchf.RHF.dump_flags(self, verbose)
         KohnShamDFT.dump_flags(self, verbose)
         return self
+
+    get_vsap = mol_ks.get_vsap
+    init_guess_by_vsap = mol_ks.init_guess_by_vsap
 
     get_veff = get_veff
     energy_elec = pyscf.dft.rks.energy_elec

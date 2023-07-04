@@ -358,8 +358,8 @@ static void transpose(double *out, double *in, int nf, int comp, int ngrids)
         }
 }
 
-int GTO_ft_aopair_loop(double *gctr, FTEnvVars *envs,
-                       FPtr_eval_gz eval_gz, double *cache)
+int GTO_ft_aopair_loop(double *gctr, FTEnvVars *envs, FPtr_eval_gz eval_gz,
+                       double *cache)
 {
         int *shls  = envs->shls;
         int *bas = envs->bas;
@@ -388,42 +388,36 @@ int GTO_ft_aopair_loop(double *gctr, FTEnvVars *envs,
         int *iempty = empty + 1;
         int *gempty = empty + 2;
         int block_size = envs->block_size;
-        size_t len1 = envs->g_size * 3 * (1<<envs->gbits) * block_size * OF_CMPLX;
-        size_t leng = nf * n_comp * block_size * OF_CMPLX;
+        size_t leng = envs->g_size * 3 * (1<<envs->gbits) * block_size * OF_CMPLX;
+        size_t len0 = nf * n_comp * block_size * OF_CMPLX;
         size_t leni = nf * i_ctr * n_comp * block_size * OF_CMPLX;
-        size_t lenj = 0;
-        if (n_comp > 1) {
-                lenj = nf * i_ctr * j_ctr * n_comp * block_size * OF_CMPLX;
-        }
-        double *g = malloc(sizeof(double) * (len1+leng+leni+lenj));
-        if (g == NULL) {
-                fprintf(stderr, "g = malloc(%zu) falied in GTO_ft_aopair_loop\n",
-                        sizeof(double) * (len1 + leng + leni + lenj));
-        }
-        double *g1 = g + len1;
+        double *g = cache;
+        cache = g + leng;
         double *gout, *gctri, *gctrj;
 
         if (n_comp == 1) {
                 gctrj = gctr;
         } else {
-                gctrj = g1;
-                g1 += lenj;
+                gctrj = cache;
+                cache += nf * i_ctr * j_ctr * n_comp * block_size * OF_CMPLX;
         }
         if (j_ctr == 1) {
                 gctri = gctrj;
                 iempty = jempty;
         } else {
-                gctri = g1;
-                g1 += leni;
+                gctri = cache;
+                cache += leni;
         }
         if (i_ctr == 1) {
                 gout = gctri;
                 gempty = iempty;
         } else {
-                gout = g1;
+                gout = cache;
+                cache += len0;
         }
 
-        int *idx = malloc(sizeof(int) * nf * 3);
+        int *idx = (int *)cache;
+        cache += (envs->nf * 3 + 1) / 2;
         _g2c_index_xyz(idx, envs);
 
         double rrij = CINTsquare_dist(ri, rj);
@@ -472,8 +466,6 @@ int GTO_ft_aopair_loop(double *gctr, FTEnvVars *envs,
         if (n_comp > 1 && !*jempty) {
                 transpose(gctr, gctrj, nf*i_ctr*j_ctr, n_comp, block_size);
         }
-        free(g);
-        free(idx);
         return !*jempty;
 }
 
@@ -686,17 +678,17 @@ void GTO_Gv_nonorth(double *gzR, double *gzI, double fac, double aij,
 
 
 static void daxpy_ij(double *out, double *gctr,
-                     int mi, int mj, int ni, int ngrids)
+                     int bs, int mi, int mj, int ni, size_t ngrids)
 {
         int i, j, k;
         for (j = 0; j < mj; j++) {
                 for (i = 0; i < mi; i++) {
-                        for (k = 0; k < ngrids; k++) {
-                                out[i*ngrids+k] += gctr[i*ngrids+k];
+                        for (k = 0; k < bs; k++) {
+                                out[i*ngrids+k] += gctr[i*bs+k];
                         }
                 }
                 out  += ni * ngrids;
-                gctr += mi * ngrids;
+                gctr += mi * bs;
         }
 }
 
@@ -710,15 +702,16 @@ void GTO_ft_c2s_cart(double *out, double *gctr, int *dims,
         int nfj = envs->nfj;
         int mi = nfi*i_ctr;
         int mj = nfj*j_ctr;
-        int ni = dims[0];
-        int nf = envs->nf;
+        int ni = dims[1];
+        size_t ng = dims[0];
+        size_t nf = envs->nf;
         int ic, jc;
         size_t off;
 
         for (jc = 0; jc < mj; jc += nfj) {
         for (ic = 0; ic < mi; ic += nfi) {
-                off = (ni * jc + ic) * bs;
-                daxpy_ij(out+off, gctr, nfi, nfj, ni, bs);
+                off = (ni * jc + ic) * ng;
+                daxpy_ij(out+off, gctr, bs, nfi, nfj, ni, ng);
                 gctr += nf * bs;
         } }
 }
@@ -733,11 +726,12 @@ void GTO_ft_c2s_sph(double *out, double *gctr, int *dims,
         int bs = envs->block_size;
         int di = i_l * 2 + 1;
         int dj = j_l * 2 + 1;
+        int nfi = envs->nfi;
         int mi = di*i_ctr;
         int mj = dj*j_ctr;
-        int ni = dims[0];
-        int nfi = envs->nfi;
-        int nf = envs->nf;
+        int ni = dims[1];
+        size_t ng = dims[0];
+        size_t nf = envs->nf;
         int ic, jc, k;
         size_t off;
         int buflen = nfi*dj;
@@ -753,8 +747,8 @@ void GTO_ft_c2s_sph(double *out, double *gctr, int *dims,
                         CINTc2s_ket_sph(buf2+k*di, bs, buf+k*nfi, i_l);
                 }
 
-                off = (ni * jc + ic) * bs;
-                daxpy_ij(out+off, pij, di, dj, ni, bs);
+                off = (ni * jc + ic) * ng;
+                daxpy_ij(out+off, pij, bs, di, dj, ni, ng);
                 gctr += nf * bs;
         } }
 }
@@ -765,8 +759,27 @@ void GTO_ft_c2s_sph(double *out, double *gctr, int *dims,
  *
  *************************************************/
 
+static int ft_aopair_cache_size(FTEnvVars *envs)
+{
+        int i_ctr = envs->x_ctr[0];
+        int j_ctr = envs->x_ctr[1];
+        int n_comp = envs->ncomp_e1 * envs->ncomp_tensor;
+        int block_size = envs->block_size;
+        int *gs = envs->gs;
+        int ngs = gs[0] + gs[1] + gs[2];
+        if (ngs == 0) {
+                ngs = envs->ngrids;
+        }
+        int leng = envs->g_size * 3 * (1<<envs->gbits) * OF_CMPLX;
+        int len0 = envs->nf * n_comp * OF_CMPLX;
+        int nc = envs->nf * i_ctr * j_ctr;
+        int cache_size = leng+len0+nc*OF_CMPLX*n_comp*3 +
+                (ngs*3 + envs->nf*3) / block_size + 3;
+        return cache_size;
+}
+
 int GTO_ft_aopair_drv(double *outR, double *outI, int *dims,
-                      FPtr_eval_gz eval_gz, void (*f_c2s)(),
+                      FPtr_eval_gz eval_gz, double *cache, void (*f_c2s)(),
                       FTEnvVars *envs)
 {
         if (eval_gz == NULL) {
@@ -780,34 +793,42 @@ int GTO_ft_aopair_drv(double *outR, double *outI, int *dims,
         int j_ctr = envs->x_ctr[1];
         int n_comp = envs->ncomp_e1 * envs->ncomp_tensor;
         int block_size = envs->block_size;
-        int nc = envs->nf * i_ctr * j_ctr * block_size;
-        int *gs = envs->gs;
-        int ngs = gs[0] + gs[1] + gs[2];
-        if (ngs == 0) {
-                ngs = envs->ngrids;
+        size_t nc = envs->nf * i_ctr * j_ctr * block_size;
+        if (outR == NULL) {
+                return ft_aopair_cache_size(envs);
         }
-        double *gctrR = malloc(sizeof(double) * (nc * n_comp * OF_CMPLX + ngs * 3 + block_size * envs->nf * 2));
+
+        double *stack = NULL;
+        if (cache == NULL) {
+                size_t cache_size = ft_aopair_cache_size(envs) * (size_t)block_size;
+                stack = malloc(sizeof(double)*cache_size);
+                if (stack == NULL) {
+                        fprintf(stderr, "gctr = malloc(%zu) falied in GTO_ft_aopair_drv\n",
+                                sizeof(double) * cache_size);
+                        return 0;
+                }
+                cache = stack;
+        }
+        double *gctrR = cache;
         double *gctrI = gctrR + nc * n_comp;
-        double *cache = gctrI + nc * n_comp;
-        if (gctrR == NULL) {
-                fprintf(stderr, "gctr = malloc(%zu) falied in GTO_ft_aopair_drv\n",
-                        sizeof(double) * (nc * n_comp * OF_CMPLX + ngs * 3 + block_size * envs->nf * 2));
-        }
+        cache = gctrI + nc * n_comp;
 
         int has_value = GTO_ft_aopair_loop(gctrR, envs, eval_gz, cache);
 
-        int counts[4];
-        if (f_c2s == &GTO_ft_c2s_sph) {
-                counts[0] = (envs->i_l*2+1) * i_ctr;
-                counts[1] = (envs->j_l*2+1) * j_ctr;
-        } else {  // f_c2s == &GTO_ft_c2s_cart
-                counts[0] = envs->nfi * i_ctr;
-                counts[1] = envs->nfj * j_ctr;
-        }
+        int counts[3];
         if (dims == NULL) {
+                if (f_c2s == &GTO_ft_c2s_sph) {
+                        counts[0] = block_size;
+                        counts[1] = (envs->i_l*2+1) * i_ctr;
+                        counts[2] = (envs->j_l*2+1) * j_ctr;
+                } else {  // f_c2s == &GTO_ft_c2s_cart
+                        counts[0] = block_size;
+                        counts[1] = envs->nfi * i_ctr;
+                        counts[2] = envs->nfj * j_ctr;
+                }
                 dims = counts;
         }
-        size_t nout = dims[0] * dims[1] * block_size;
+        size_t nout = (size_t)dims[0] * dims[1] * dims[2];
         int n;
         if (has_value) {
                 for (n = 0; n < n_comp; n++) {
@@ -815,36 +836,36 @@ int GTO_ft_aopair_drv(double *outR, double *outI, int *dims,
                         (*f_c2s)(outI+nout*n, gctrI+nc*n, dims, envs, cache);
                 }
         }
-        free(gctrR);
+        if (stack != NULL) {
+                free(stack);
+        }
         return has_value;
 }
 
 int GTO_ft_ovlp_cart(double *outR, double *outI, int *shls, int *dims,
                      FPtr_eval_gz eval_gz, double complex fac,
-                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                     int block_size,
-                     int *atm, int natm, int *bas, int nbas, double *env)
+                     double *Gv, double *b, int *gxyz, int *gs, int nGv, int block_size,
+                     int *atm, int natm, int *bas, int nbas, double *env, double *cache)
 {
         FTEnvVars envs;
         int ng[] = {0, 0, 0, 0, 0, 1, 0, 1};
         GTO_ft_init1e_envs(&envs, ng, shls, fac, Gv, b, gxyz, gs, nGv, block_size,
                            atm, natm, bas, nbas, env);
         envs.f_gout = &inner_prod;
-        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, &GTO_ft_c2s_cart, &envs);
+        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, cache, &GTO_ft_c2s_cart, &envs);
 }
 
 int GTO_ft_ovlp_sph(double *outR, double *outI, int *shls, int *dims,
                     FPtr_eval_gz eval_gz, double complex fac,
-                    double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                    int block_size,
-                    int *atm, int natm, int *bas, int nbas, double *env)
+                    double *Gv, double *b, int *gxyz, int *gs, int nGv, int block_size,
+                    int *atm, int natm, int *bas, int nbas, double *env, double *cache)
 {
         FTEnvVars envs;
         int ng[] = {0, 0, 0, 0, 0, 1, 0, 1};
         GTO_ft_init1e_envs(&envs, ng, shls, fac, Gv, b, gxyz, gs, nGv, block_size,
                            atm, natm, bas, nbas, env);
         envs.f_gout = &inner_prod;
-        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, &GTO_ft_c2s_sph, &envs);
+        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, cache, &GTO_ft_c2s_sph, &envs);
 }
 
 // TODO: put kkpool in opt??
@@ -857,11 +878,104 @@ void GTO_ft_ovlp_optimizer()
  *
  *************************************************/
 
-void GTO_ft_fill_s1(int (*intor)(), FPtr_eval_gz eval_gz,
-                    double *out, int comp, int ish, int jsh, double *buf,
-                    int *shls_slice, int *ao_loc, double complex fac,
-                    double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                    int *atm, int natm, int *bas, int nbas, double *env)
+void GTO_ft_dfill_s1(FPtrIntor intor, FPtr_eval_gz eval_gz,
+                     double *out, int comp, int ish, int jsh, double *buf,
+                     int *shls_slice, int *ao_loc, double complex fac,
+                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                     int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        int jsh1 = shls_slice[3];
+        ish += ish0;
+        jsh += jsh0;
+        int ioff = ao_loc[ish] - ao_loc[ish0];
+        int joff = ao_loc[jsh] - ao_loc[jsh0];
+        size_t ni = ao_loc[ish1] - ao_loc[ish0];
+        size_t nj = ao_loc[jsh1] - ao_loc[jsh0];
+        size_t nij = ni * nj;
+        int shls[2] = {ish, jsh};
+        int dims[3] = {nGv, ni, nj};
+        int grid0, grid1, dg;
+        size_t off;
+        double *outR = out;
+        double *outI = outR + comp * nij * nGv;
+
+        for (grid0 = 0; grid0 < nGv; grid0 += BLKSIZE) {
+                grid1 = MIN(grid0+BLKSIZE, nGv);
+                dg = grid1 - grid0;
+                off = (joff * ni + ioff) * nGv + grid0;
+                (*intor)(outR+off, outI+off, shls, dims, eval_gz,
+                         fac, Gv+grid0, b, gxyz+grid0, gs, nGv, dg,
+                         atm, natm, bas, nbas, env, buf);
+        }
+}
+
+void GTO_ft_dfill_s1hermi(FPtrIntor intor, FPtr_eval_gz eval_gz,
+                          double *out, int comp, int ish, int jsh, double *buf,
+                          int *shls_slice, int *ao_loc, double complex fac,
+                          double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                          int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        int jsh1 = shls_slice[3];
+        ish += ish0;
+        jsh += jsh0;
+        int ioff = ao_loc[ish] - ao_loc[ish0];
+        int joff = ao_loc[jsh] - ao_loc[jsh0];
+        if (ioff < joff) {
+                return;
+        }
+
+        int di = ao_loc[ish+1] - ao_loc[ish];
+        int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        size_t ni = ao_loc[ish1] - ao_loc[ish0];
+        size_t nj = ao_loc[jsh1] - ao_loc[jsh0];
+        size_t nij = ni * nj;
+        size_t NGv = nGv;
+        int shls[2] = {ish, jsh};
+        int dims[3] = {nGv, ni, nj};
+        int grid0, grid1, dg;
+        int i, j, n, ic;
+        size_t off, ij, ji;
+        double *outR = out;
+        double *outI = outR + comp * nij * nGv;
+
+        for (grid0 = 0; grid0 < nGv; grid0 += BLKSIZE) {
+                grid1 = MIN(grid0+BLKSIZE, nGv);
+                dg = grid1 - grid0;
+                off = (joff * ni + ioff) * nGv + grid0;
+                if ((*intor)(outR+off, outI+off, shls, dims, eval_gz,
+                             fac, Gv+grid0, b, gxyz+grid0, gs, nGv, dg,
+                             atm, natm, bas, nbas, env, buf)) {
+                        if (ioff == joff) {
+                                continue;
+                        }
+for (ic = 0; ic < comp; ic++) {
+        off = nij * NGv * ic + grid0;
+        for (j = 0; j < dj; j++) {
+        for (i = 0; i < di; i++) {
+                ij = off + ((j+joff)*nj+i+ioff) * NGv;
+                ji = off + ((i+ioff)*nj+j+joff) * NGv;
+#pragma GCC ivdep
+                for (n = 0; n < dg; n++) {
+                        outR[ji+n] = outR[ij+n];
+                        outI[ji+n] = outI[ij+n];
+                }
+        } }
+}
+                }
+        }
+}
+
+void GTO_ft_zfill_s1(FPtrIntor intor, FPtr_eval_gz eval_gz,
+                     double *out, int comp, int ish, int jsh, double *buf,
+                     int *shls_slice, int *ao_loc, double complex fac,
+                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         int ish0 = shls_slice[0];
         int ish1 = shls_slice[1];
@@ -872,16 +986,17 @@ void GTO_ft_fill_s1(int (*intor)(), FPtr_eval_gz eval_gz,
         int di = ao_loc[ish+1] - ao_loc[ish];
         int dj = ao_loc[jsh+1] - ao_loc[jsh];
         int dij = di * dj;
-        int nrow = ao_loc[ish1] - ao_loc[ish0];
-        int ncol = ao_loc[jsh1] - ao_loc[jsh0];
+        int ni = ao_loc[ish1] - ao_loc[ish0];
+        int nj = ao_loc[jsh1] - ao_loc[jsh0];
         int ioff = ao_loc[ish] - ao_loc[ish0];
         int joff = ao_loc[jsh] - ao_loc[jsh0];
-        size_t nij = nrow * ncol;
-        size_t off = joff + ioff * ncol;
+        size_t nij = ni * nj;
+        size_t off = joff * ni + ioff;
         size_t NGv = nGv;
         int shls[2] = {ish, jsh};
         double *bufR = buf;
         double *bufI = bufR + dij * BLKSIZE * comp;
+        double *cache = bufI + dij * BLKSIZE * comp;
         int grid0, grid1, dg, dijg;
         int i, j, n, ic, ij;
         double *pout, *pbufR, *pbufI;
@@ -892,31 +1007,31 @@ void GTO_ft_fill_s1(int (*intor)(), FPtr_eval_gz eval_gz,
                 dijg = dij * dg;
                 NPdset0(bufR, dijg * comp);
                 NPdset0(bufI, dijg * comp);
-                (*intor)(bufR, bufI, shls, NULL, eval_gz,
-                         fac, Gv+grid0, b, gxyz+grid0, gs, nGv, dg,
-                         atm, natm, bas, nbas, env);
-
-                for (ic = 0; ic < comp; ic++) {
-                        pout = out + ((off + ic * nij) * NGv + grid0) * OF_CMPLX;
-                        for (i = 0; i < di; i++) {
-                        for (j = 0; j < dj; j++) {
-                                pbufR = bufR + ic * dijg + dg * (j*di+i);
-                                pbufI = bufI + ic * dijg + dg * (j*di+i);
-                                ij = i * ncol + j;
-                                for (n = 0; n < dg; n++) {
-                                        pout[(ij*NGv+n)*OF_CMPLX  ] += pbufR[n];
-                                        pout[(ij*NGv+n)*OF_CMPLX+1] += pbufI[n];
-                                }
-                        } }
+                if ((*intor)(bufR, bufI, shls, NULL, eval_gz,
+                            fac, Gv+grid0, b, gxyz+grid0, gs, nGv, dg,
+                            atm, natm, bas, nbas, env, cache)) {
+for (ic = 0; ic < comp; ic++) {
+        pout = out + ((off + ic * nij) * NGv + grid0) * OF_CMPLX;
+        for (j = 0; j < dj; j++) {
+        for (i = 0; i < di; i++) {
+                pbufR = bufR + ic * dijg + dg * (j*di+i);
+                pbufI = bufI + ic * dijg + dg * (j*di+i);
+                ij = j * ni + i;
+                for (n = 0; n < dg; n++) {
+                        pout[(ij*NGv+n)*OF_CMPLX  ] += pbufR[n];
+                        pout[(ij*NGv+n)*OF_CMPLX+1] += pbufI[n];
+                }
+        } }
+}
                 }
         }
 }
 
-void GTO_ft_fill_s1hermi(int (*intor)(), FPtr_eval_gz eval_gz,
-                         double *out, int comp, int ish, int jsh, double *buf,
-                         int *shls_slice, int *ao_loc, double complex fac,
-                         double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                         int *atm, int natm, int *bas, int nbas, double *env)
+void GTO_ft_zfill_s1hermi(FPtrIntor intor, FPtr_eval_gz eval_gz,
+                          double *out, int comp, int ish, int jsh, double *buf,
+                          int *shls_slice, int *ao_loc, double complex fac,
+                          double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                          int *atm, int natm, int *bas, int nbas, double *env)
 {
         int ish0 = shls_slice[0];
         int ish1 = shls_slice[1];
@@ -933,15 +1048,16 @@ void GTO_ft_fill_s1hermi(int (*intor)(), FPtr_eval_gz eval_gz,
         int di = ao_loc[ish+1] - ao_loc[ish];
         int dj = ao_loc[jsh+1] - ao_loc[jsh];
         int dij = di * dj;
-        int nrow = ao_loc[ish1] - ao_loc[ish0];
-        int ncol = ao_loc[jsh1] - ao_loc[jsh0];
-        size_t nij = nrow * ncol;
-        size_t ij_off = joff + ioff * ncol;
-        size_t ji_off = ioff + joff * ncol;
+        int ni = ao_loc[ish1] - ao_loc[ish0];
+        int nj = ao_loc[jsh1] - ao_loc[jsh0];
+        size_t nij = ni * nj;
+        size_t ij_off = joff * ni + ioff;
+        size_t ji_off = ioff * ni + joff;
         size_t NGv = nGv;
         int shls[2] = {ish, jsh};
         double *bufR = buf;
         double *bufI = bufR + dij * BLKSIZE * comp;
+        double *cache = bufI + dij * BLKSIZE * comp;
         int grid0, grid1, dg, dijg;
         int i, j, n, ic, ij, ji;
         double *pout_ij, *pout_ji, *pbufR, *pbufI;
@@ -952,51 +1068,52 @@ void GTO_ft_fill_s1hermi(int (*intor)(), FPtr_eval_gz eval_gz,
                 dijg = dij * dg;
                 NPdset0(bufR, dijg * comp);
                 NPdset0(bufI, dijg * comp);
-                (*intor)(bufR, bufI, shls, NULL, eval_gz,
-                         fac, Gv+grid0, b, gxyz+grid0, gs, nGv, dg,
-                         atm, natm, bas, nbas, env);
+                if ((*intor)(bufR, bufI, shls, NULL, eval_gz,
+                             fac, Gv+grid0, b, gxyz+grid0, gs, nGv, dg,
+                             atm, natm, bas, nbas, env, cache)) {
 
-                if (ioff == joff) {
-                        for (ic = 0; ic < comp; ic++) {
-                                pout_ij = out + ((ij_off + ic * nij) * NGv + grid0) * OF_CMPLX;
-                                for (i = 0; i < di; i++) {
-                                for (j = 0; j < dj; j++) {
-                                        pbufR = bufR + ic * dijg + dg * (j*di+i);
-                                        pbufI = bufI + ic * dijg + dg * (j*di+i);
-                                        ij = i * ncol + j;
-                                        for (n = 0; n < dg; n++) {
-                                                pout_ij[(ij*NGv+n)*OF_CMPLX  ] += pbufR[n];
-                                                pout_ij[(ij*NGv+n)*OF_CMPLX+1] += pbufI[n];
-                                        }
-                                } }
+if (ioff == joff) {
+        for (ic = 0; ic < comp; ic++) {
+                pout_ij = out + ((ij_off + ic * nij) * NGv + grid0) * OF_CMPLX;
+                for (j = 0; j < dj; j++) {
+                for (i = 0; i < di; i++) {
+                        pbufR = bufR + ic * dijg + dg * (j*di+i);
+                        pbufI = bufI + ic * dijg + dg * (j*di+i);
+                        ij = j * ni + i;
+                        for (n = 0; n < dg; n++) {
+                                pout_ij[(ij*NGv+n)*OF_CMPLX  ] += pbufR[n];
+                                pout_ij[(ij*NGv+n)*OF_CMPLX+1] += pbufI[n];
                         }
-                } else {
-                        for (ic = 0; ic < comp; ic++) {
-                                pout_ij = out + ((ij_off + ic * nij) * NGv + grid0) * OF_CMPLX;
-                                pout_ji = out + ((ji_off + ic * nij) * NGv + grid0) * OF_CMPLX;
-                                for (i = 0; i < di; i++) {
-                                for (j = 0; j < dj; j++) {
-                                        pbufR = bufR + ic * dijg + dg * (j*di+i);
-                                        pbufI = bufI + ic * dijg + dg * (j*di+i);
-                                        ij = i * ncol + j;
-                                        ji = j * ncol + i;
-                                        for (n = 0; n < dg; n++) {
-                                                pout_ij[(ij*NGv+n)*OF_CMPLX  ] += pbufR[n];
-                                                pout_ij[(ij*NGv+n)*OF_CMPLX+1] += pbufI[n];
-                                                pout_ji[(ji*NGv+n)*OF_CMPLX  ] += pbufR[n];
-                                                pout_ji[(ji*NGv+n)*OF_CMPLX+1] += pbufI[n];
-                                        }
-                                } }
+                } }
+        }
+} else {
+        for (ic = 0; ic < comp; ic++) {
+                pout_ij = out + ((ij_off + ic * nij) * NGv + grid0) * OF_CMPLX;
+                pout_ji = out + ((ji_off + ic * nij) * NGv + grid0) * OF_CMPLX;
+                for (j = 0; j < dj; j++) {
+                for (i = 0; i < di; i++) {
+                        pbufR = bufR + ic * dijg + dg * (j*di+i);
+                        pbufI = bufI + ic * dijg + dg * (j*di+i);
+                        ij = j * nj + i;
+                        ji = i * nj + j;
+                        for (n = 0; n < dg; n++) {
+                                pout_ij[(ij*NGv+n)*OF_CMPLX  ] += pbufR[n];
+                                pout_ij[(ij*NGv+n)*OF_CMPLX+1] += pbufI[n];
+                                pout_ji[(ji*NGv+n)*OF_CMPLX  ] += pbufR[n];
+                                pout_ji[(ji*NGv+n)*OF_CMPLX+1] += pbufI[n];
                         }
+                } }
+        }
+}
                 }
         }
 }
 
-void GTO_ft_fill_s2(int (*intor)(), FPtr_eval_gz eval_gz,
-                    double *out, int comp, int ish, int jsh, double *buf,
-                    int *shls_slice, int *ao_loc, double complex fac,
-                    double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                    int *atm, int natm, int *bas, int nbas, double *env)
+void GTO_ft_zfill_s2(FPtrIntor intor, FPtr_eval_gz eval_gz,
+                     double *out, int comp, int ish, int jsh, double *buf,
+                     int *shls_slice, int *ao_loc, double complex fac,
+                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         int ish0 = shls_slice[0];
         int ish1 = shls_slice[1];
@@ -1020,6 +1137,7 @@ void GTO_ft_fill_s2(int (*intor)(), FPtr_eval_gz eval_gz,
         int shls[2] = {ish, jsh};
         double *bufR = buf;
         double *bufI = bufR + dij * BLKSIZE * comp;
+        double *cache = bufI + dij * BLKSIZE * comp;
         int grid0, grid1, dg, dijg;
         int i, j, n, ic, ip1;
         double *pout, *pbufR, *pbufI;
@@ -1030,51 +1148,78 @@ void GTO_ft_fill_s2(int (*intor)(), FPtr_eval_gz eval_gz,
                 dijg = dij * dg;
                 NPdset0(bufR, dijg * comp);
                 NPdset0(bufI, dijg * comp);
-                (*intor)(bufR, bufI, shls, NULL, eval_gz,
-                         fac, Gv+grid0, b, gxyz+grid0, gs, nGv, dg,
-                         atm, natm, bas, nbas, env);
+                if ((*intor)(bufR, bufI, shls, NULL, eval_gz,
+                             fac, Gv+grid0, b, gxyz+grid0, gs, nGv, dg,
+                             atm, natm, bas, nbas, env, cache)) {
 
-                if (ioff == joff) {
-                        ip1 = ioff + 1;
-                        for (ic = 0; ic < comp; ic++) {
-                                pout = out + ((off + ic * nij) * NGv + grid0) * OF_CMPLX;
-                                for (i = 0; i < di; i++) {
-                                        for (j = 0; j <= i; j++) {
-                                                pbufR = bufR + ic * dijg + dg * (j*di+i);
-                                                pbufI = bufI + ic * dijg + dg * (j*di+i);
-                                                for (n = 0; n < dg; n++) {
-                                                        pout[(j*NGv+n)*OF_CMPLX  ] += pbufR[n];
-                                                        pout[(j*NGv+n)*OF_CMPLX+1] += pbufI[n];
-                                                }
-                                        }
-                                        pout += (ip1 + i) * NGv * OF_CMPLX;
+if (ioff == joff) {
+        ip1 = ioff + 1;
+        for (ic = 0; ic < comp; ic++) {
+                pout = out + ((off + ic * nij) * NGv + grid0) * OF_CMPLX;
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j <= i; j++) {
+                                pbufR = bufR + ic * dijg + dg * (j*di+i);
+                                pbufI = bufI + ic * dijg + dg * (j*di+i);
+                                for (n = 0; n < dg; n++) {
+                                        pout[(j*NGv+n)*OF_CMPLX  ] += pbufR[n];
+                                        pout[(j*NGv+n)*OF_CMPLX+1] += pbufI[n];
                                 }
                         }
-                } else {
-                        ip1 = ioff + 1;
-                        for (ic = 0; ic < comp; ic++) {
-                                pout = out + ((off + ic * nij) * NGv + grid0) * OF_CMPLX;
-                                for (i = 0; i < di; i++) {
-                                        for (j = 0; j < dj; j++) {
-                                                pbufR = bufR + ic * dijg + dg * (j*di+i);
-                                                pbufI = bufI + ic * dijg + dg * (j*di+i);
-                                                for (n = 0; n < dg; n++) {
-                                                        pout[(j*NGv+n)*OF_CMPLX  ] += pbufR[n];
-                                                        pout[(j*NGv+n)*OF_CMPLX+1] += pbufI[n];
-                                                }
-                                        }
-                                        pout += (ip1 + i) * NGv * OF_CMPLX;
-                                }
-                        }
+                        pout += (ip1 + i) * NGv * OF_CMPLX;
                 }
         }
+} else {
+        ip1 = ioff + 1;
+        for (ic = 0; ic < comp; ic++) {
+                pout = out + ((off + ic * nij) * NGv + grid0) * OF_CMPLX;
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                pbufR = bufR + ic * dijg + dg * (j*di+i);
+                                pbufI = bufI + ic * dijg + dg * (j*di+i);
+                                for (n = 0; n < dg; n++) {
+                                        pout[(j*NGv+n)*OF_CMPLX  ] += pbufR[n];
+                                        pout[(j*NGv+n)*OF_CMPLX+1] += pbufI[n];
+                                }
+                        }
+                        pout += (ip1 + i) * NGv * OF_CMPLX;
+                }
+        }
+}
+                }
+        }
+}
+
+static size_t max_cache_size(FPtrIntor intor, FPtr_eval_gz eval_gz, int *shls_slice,
+                             double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                             int *atm, int natm, int *bas, int nbas, double *env)
+{
+        double complex fac = 0.;
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        int jsh1 = shls_slice[3];
+        int sh0 = MIN(ish0, jsh0);
+        int sh1 = MAX(ish1, jsh1);
+        int blksize = MIN(nGv, BLKSIZE);
+        int shls[2];
+        int i, cache_size;
+        size_t max_size = 0;
+        for (i = sh0; i < sh1; i++) {
+                shls[0] = i;
+                shls[1] = i;
+                cache_size = (*intor)(NULL, NULL, shls, NULL, eval_gz,
+                                      fac, Gv, b, gxyz, gs, nGv, blksize,
+                                      atm, natm, bas, nbas, env, NULL);
+                max_size = MAX(max_size, cache_size);
+        }
+        return max_size * blksize;
 }
 
 /*
  * Fourier transform AO pairs and add to out (inplace)
  */
-void GTO_ft_fill_drv(int (*intor)(), FPtr_eval_gz eval_gz, void (*fill)(),
-                     double complex *out, int comp,
+void GTO_ft_fill_drv(FPtrIntor intor, FPtr_eval_gz eval_gz, void (*fill)(),
+                     double *out, int8_t *ovlp_mask, int comp,
                      int *shls_slice, int *ao_loc, double phase,
                      double *Gv, double *b, int *gxyz, int *gs, int nGv,
                      int *atm, int natm, int *bas, int nbas, double *env)
@@ -1086,17 +1231,23 @@ void GTO_ft_fill_drv(int (*intor)(), FPtr_eval_gz eval_gz, void (*fill)(),
         int nish = ish1 - ish0;
         int njsh = jsh1 - jsh0;
         double complex fac = cos(phase) + sin(phase)*_Complex_I;
-        size_t di = GTOmax_shell_dim(ao_loc, shls_slice  , 1);
-        size_t dj = GTOmax_shell_dim(ao_loc, shls_slice+2, 1);
+        size_t di = GTOmax_shell_dim(ao_loc, shls_slice  , 2);
+        size_t cache_size = max_cache_size(intor, eval_gz, shls_slice,
+                                           Gv, b, gxyz, gs, nGv,
+                                           atm, natm, bas, nbas, env);
 
 #pragma omp parallel
 {
         int i, j, ij;
-        double *buf = malloc(sizeof(double) * di*dj*comp*BLKSIZE * OF_CMPLX);
-#pragma omp for schedule(dynamic)
+        double *buf = malloc(sizeof(double) * (cache_size +
+                                               di*di*comp*BLKSIZE * OF_CMPLX));
+#pragma omp for schedule(dynamic, 4)
         for (ij = 0; ij < nish*njsh; ij++) {
-                i = ij / njsh;
-                j = ij % njsh;
+                j = ij / nish;
+                i = ij % nish;
+                if (!ovlp_mask[ij]) {
+                        continue;
+                }
                 (*fill)(intor, eval_gz, out,
                         comp, i, j, buf, shls_slice, ao_loc, fac,
                         Gv, b, gxyz, gs, nGv, atm, natm, bas, nbas, env);

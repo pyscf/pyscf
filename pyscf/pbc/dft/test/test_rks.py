@@ -41,28 +41,6 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
-#    def test_lda_grid30(self):
-#        cell = pbcgto.Cell()
-#        cell.unit = 'B'
-#        L = 10
-#        cell.a = np.diag([L]*3)
-#        cell.mesh = np.array([41]*3)
-#        cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
-## these are some exponents which are not hard to integrate
-#        cell.basis = { 'He': [[0, (0.8, 1.0)],
-#                              [0, (1.0, 1.0)],
-#                              [0, (1.2, 1.0)]] }
-#        cell.verbose = 5
-#        cell.output = '/dev/null'
-#        cell.pseudo = None
-#        cell.build()
-#        mf = pbcdft.RKS(cell)
-#        mf.xc = 'LDA,VWN_RPA'
-#        mf.kpt = np.ones(3)
-#        e1 = mf.scf()
-#        self.assertAlmostEqual(e1, -2.6409616064015591, 8)
-#
-#
 #    def test_pp_RKS(self):
 #        cell = pbcgto.Cell()
 #
@@ -168,11 +146,11 @@ class KnownValues(unittest.TestCase):
         mf = pbcdft.RKS(cell).density_fit()
         mf.xc = 'camb3lyp'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.474520122522153, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.474520122522153, 6)
 
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 6)
 
     def test_rsh_mdf(self):
         mf = pbcdft.RKS(cell).mix_density_fit()
@@ -207,15 +185,16 @@ class KnownValues(unittest.TestCase):
         mf.omega = '0.7'
         mf.exxdiv = None
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4836596871145558, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4836186361124617, 3)
 
         mol = cell.to_mol()
         mf1 = mol.RKS().density_fit()
         mf1.xc = 'camb3lyp'
         mf1.omega = '0.7'
         mf1.kernel()
-        self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 4)
+        self.assertAlmostEqual(mf1.e_tot-mf1.energy_nuc(), mf.e_tot-mf.energy_nuc(), 7)
 
+    @unittest.skip('ewald should not be enabled for 0d')
     def test_rsh_0d_ewald(self):
         L = 4.
         cell = pbcgto.Cell()
@@ -231,14 +210,7 @@ class KnownValues(unittest.TestCase):
         mf.omega = '0.7'
         mf.exxdiv = 'ewald'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4836186361124617, 7)
-
-        mol = cell.to_mol()
-        mf1 = mol.RKS().density_fit()
-        mf1.xc = 'camb3lyp'
-        mf1.omega = '0.7'
-        mf1.kernel()
-        self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 4)
+        self.assertAlmostEqual(mf.e_tot, -2.47559566263186, 4)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.rks")

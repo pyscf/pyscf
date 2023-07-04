@@ -103,6 +103,7 @@ DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 # Whether to disable the explicit call to gc.collect(). gc.collect() may cause
 # non-negligible overhead (https://github.com/pyscf/pyscf/issues/1038).
 DISABLE_GC = getattr(__config__, 'DISABLE_GC', False)
+ARGPARSE = getattr(__config__, 'ARGPARSE', False)
 
 def M(**kwargs):
     r'''This is a shortcut to build up Mole object.
@@ -147,7 +148,7 @@ def gto_norm(l, expnt):
     >>> print(gto_norm(0, 1))
     2.5264751109842591
     '''
-    if l >= 0:
+    if numpy.all(l >= 0):
         #f = 2**(2*l+3) * math.factorial(l+1) * (2*expnt)**(l+1.5) \
         #        / (math.factorial(2*l+2) * math.sqrt(math.pi))
         #return math.sqrt(f)
@@ -2430,7 +2431,7 @@ class Mole(lib.StreamObject):
         self.__dict__.update(loads(molstr).__dict__)
         return self
 
-    def build(self, dump_input=True, parse_arg=True,
+    def build(self, dump_input=True, parse_arg=ARGPARSE,
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
               charge=None, spin=0, symmetry=None, symmetry_subgroup=None,

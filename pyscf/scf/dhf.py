@@ -535,12 +535,7 @@ class DHF(hf.SCF):
                 logger.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
         return mo_occ
 
-    # full density matrix for UHF
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        if mo_occ is None: mo_occ = self.mo_occ
-        return make_rdm1(mo_coeff, mo_occ, **kwargs)
-
+    make_rdm1 = lib.module_method(make_rdm1, absences=['mo_coeff', 'mo_occ'])
     energy_elec = energy_elec
 
     def init_direct_scf(self, mol=None):
@@ -651,7 +646,7 @@ class DHF(hf.SCF):
     def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
         if mol is None: mol = self.mol
-        if dm is None: dm =self.make_rdm1()
+        if dm is None: dm = self.make_rdm1()
         return dip_moment(mol, dm, unit, verbose=verbose, **kwargs)
 
     def sfx2c1e(self):
