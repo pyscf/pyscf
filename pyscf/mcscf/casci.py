@@ -642,6 +642,7 @@ def as_scanner(mc):
             # may be created for mc separately, e.g. when mcscf.approx_hessian is
             # called. For safety, the code below explicitly resets these
             # properties.
+            self.reset (mol)
             for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
                 sub_mod = getattr(self, key, None)
                 if sub_mod:
