@@ -217,7 +217,7 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
 
         kpts = self.kpts
         if self.rsjk:
-            if not np.all(self.rsjk.kpts == self.kpt):
+            if not numpy.all(self.rsjk.kpts == self.kpt):
                 self.rsjk = self.rsjk.__class__(cell, kpts)
 
         # for GDF and MDF
