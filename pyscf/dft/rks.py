@@ -261,21 +261,7 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 
 
 def _dft_common_init_(mf, xc='LDA,VWN'):
-    mf.xc = xc
-    mf.nlc = ''
-    mf.grids = gen_grid.Grids(mf.mol)
-    mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
-                             mf.grids.level)
-    mf.nlcgrids = gen_grid.Grids(mf.mol)
-    mf.nlcgrids.level = getattr(__config__, 'dft_rks_RKS_nlcgrids_level',
-                                mf.nlcgrids.level)
-    # Use rho to filter grids
-    mf.small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
-##################################################
-# don't modify the following attributes, they are not input options
-    mf._numint = numint.NumInt()
-    mf._keys = mf._keys.union(['xc', 'nlc', 'omega', 'grids', 'nlcgrids',
-                               'small_rho_cutoff'])
+    raise DeprecationWarning
 
 class KohnShamDFT(object):
     '''
@@ -334,7 +320,23 @@ class KohnShamDFT(object):
     -76.415443079840458
     '''
 
-    __init__ = _dft_common_init_
+    def __init__(self, xc='LDA,VWN'):
+        self.xc = xc
+        self.nlc = ''
+        self.grids = gen_grid.Grids(self.mol)
+        self.grids.level = getattr(
+            __config__, 'dft_rks_RKS_grids_level', self.grids.level)
+        self.nlcgrids = gen_grid.Grids(self.mol)
+        self.nlcgrids.level = getattr(
+            __config__, 'dft_rks_RKS_nlcgrids_level', self.nlcgrids.level)
+        # Use rho to filter grids
+        self.small_rho_cutoff = getattr(
+            __config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
+##################################################
+# don't modify the following attributes, they are not input options
+        self._numint = numint.NumInt()
+        self._keys = self._keys.union([
+            'xc', 'nlc', 'omega', 'grids', 'nlcgrids', 'small_rho_cutoff'])
 
     @property
     def omega(self):

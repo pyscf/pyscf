@@ -29,6 +29,7 @@ from pyscf.pbc import tools
 from pyscf.lib import logger
 from pyscf.scf import addons as mol_addons
 from pyscf.pbc.lib.kpts import KPoints
+from pyscf.pbc.tools import k2gamma
 from pyscf import __config__
 
 SMEARING_METHOD = getattr(__config__, 'pbc_scf_addons_smearing_method', 'fermi')
@@ -54,6 +55,19 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
         return [scipy.linalg.solve(s22[k], s21[k].dot(mo1[k]), assume_a='pos')
                 for k, kpt in enumerate(kpts)]
 
+def project_dm_k2k(cell, dm, kpts1, kpts2):
+    '''Project density matrix from k-point mesh 1 to k-point mesh 2'''
+    bvk_mesh = k2gamma.kpts_to_kmesh(cell, kpts1)
+    Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_mesh, True)
+    c = _k2k_projection(kpts1, kpts2, Ls)
+    return lib.einsum('km,kuv->muv', c, dm)
+
+def _k2k_projection(kpts1, kpts2, Ls):
+    weight = 1. / len(Ls)
+    expRk1 = numpy.exp(1j*numpy.dot(Ls, kpts1.T))
+    expRk2 = numpy.exp(-1j*numpy.dot(Ls, kpts2.T))
+    c = expRk1.T.dot(expRk2) * weight
+    return (c*c.conj()).real.copy()
 
 def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
     '''Fermi-Dirac or Gaussian smearing'''

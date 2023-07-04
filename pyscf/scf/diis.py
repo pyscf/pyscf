@@ -105,7 +105,7 @@ def get_err_vec_orth(s, d, f, Corth):
             if orbsym is not None:
                 sdf[sym_forbid] = 0
             errvec.append((sdf.conj().T - sdf).ravel())
-        errvec = numpy.vstack(errvec).ravel()
+        errvec = numpy.hstack(errvec)
 
     elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
         errvec = numpy.hstack([

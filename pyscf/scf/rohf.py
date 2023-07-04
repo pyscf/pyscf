@@ -35,11 +35,17 @@ MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 def init_guess_by_minao(mol):
     dm = hf.init_guess_by_minao(mol)
-    return numpy.array((dm*.5, dm*.5))
+    dm = numpy.array((dm*.5, dm*.5))
+    if hasattr(dm, 'mo_coeff'):
+        dm = lib.tag_array(dm, mo_coeff=dm.mo_coeff, mo_occ=dm.mo_occ)
+    return dm
 
 def init_guess_by_atom(mol):
     dm = hf.init_guess_by_atom(mol)
-    return numpy.array((dm*.5, dm*.5))
+    dm = numpy.array((dm*.5, dm*.5))
+    if hasattr(dm, 'mo_coeff'):
+        dm = lib.tag_array(dm, mo_coeff=dm.mo_coeff, mo_occ=dm.mo_occ)
+    return dm
 
 init_guess_by_huckel = uhf.init_guess_by_huckel
 init_guess_by_chkfile = uhf.init_guess_by_chkfile
@@ -225,13 +231,13 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''One-particle density matrix.  mo_occ is a 1D array, with occupancy 1 or 2.
     '''
     if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
-        mo_occa = mo_occ > 0
-        mo_occb = mo_occ == 2
+        mo_occa = (mo_occ > 0).astype(numpy.double)
+        mo_occb = (mo_occ ==2).astype(numpy.double)
     else:
         mo_occa, mo_occb = mo_occ
     dm_a = numpy.dot(mo_coeff*mo_occa, mo_coeff.conj().T)
     dm_b = numpy.dot(mo_coeff*mo_occb, mo_coeff.conj().T)
-    return numpy.array((dm_a, dm_b))
+    return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if dm is None: dm = mf.make_rdm1()
@@ -345,6 +351,8 @@ class ROHF(hf.RHF):
         logger.info(self, 'num. doubly occ = %d  num. singly occ = %d',
                     nelec[1], nelec[0]-nelec[1])
 
+    get_init_guess = uhf.UHF.get_init_guess
+
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
         return init_guess_by_minao(mol)
@@ -397,7 +405,8 @@ class ROHF(hf.RHF):
         if mo_occ is None: mo_occ = self.mo_occ
         if self.mol.spin < 0:
             # Flip occupancies of alpha and beta orbitals
-            mo_occ = (mo_occ == 2), (mo_occ > 0)
+            mo_occ = (numpy.asarray(mo_occ == 2, dtype=numpy.double),
+                      numpy.asarray(mo_occ > 0, dtype=numpy.double))
         return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
@@ -410,12 +419,11 @@ class ROHF(hf.RHF):
             dm = numpy.array((dm*.5, dm*.5))
 
         if self._eri is not None or not self.direct_scf:
-            if getattr(dm, 'mo_coeff', None) is not None:
-                mo_coeff = dm.mo_coeff
-                mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
-                mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)
-                dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
-                                   mo_occ=(mo_occ_a,mo_occ_b))
+            if hasattr(dm, 'mo_occ') and numpy.ndim(dm.mo_occ) == 1:
+                mo_occa = (dm.mo_occ > 0).astype(numpy.double)
+                mo_occb = (dm.mo_occ ==2).astype(numpy.double)
+                dm = lib.tag_array(dm, mo_coeff=(dm.mo_coeff,)*2,
+                                   mo_occ=(mo_occa,mo_occb))
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj[0] + vj[1] - vk
         else:

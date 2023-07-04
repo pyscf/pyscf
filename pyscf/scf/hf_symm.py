@@ -215,7 +215,7 @@ def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
             es.append(mo_energy[idx])
             cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
         es = numpy.hstack(es).round(7)
-        idx = numpy.argsort(es, kind='mergesort')
+        idx = numpy.argsort(es, kind='stable')
         assert (numpy.allclose(es[idx], esub.round(7)))
         mo_coeff[:,degidx] = numpy.hstack(cs)[:,idx]
     return mo_coeff
@@ -476,7 +476,7 @@ class SymAdaptedRHF(hf.RHF):
             if irname in self.irrep_nelec:
                 ir_idx = numpy.where(orbsym == ir)[0]
                 n = self.irrep_nelec[irname]
-                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9), kind='mergesort')
+                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9), kind='stable')
                 occ_idx  = ir_idx[occ_sort[:n//2]]
                 mo_occ[occ_idx] = 2
                 nelec_fix += n
@@ -485,7 +485,7 @@ class SymAdaptedRHF(hf.RHF):
         assert (nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
-            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
+            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='stable')
             occ_idx  = rest_idx[occ_sort[:nelec_float//2]]
             mo_occ[occ_idx] = 2
 
@@ -517,8 +517,8 @@ class SymAdaptedRHF(hf.RHF):
         # sort MOs wrt orbital energies, it should be done last.
         # Using mergesort because it is stable. We don't want to change the
         # ordering of the symmetry labels when two orbitals are degenerated.
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='mergesort')
-        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='stable')
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='stable')
         idx = numpy.arange(self.mo_energy.size)
         idx = numpy.hstack((idx[self.mo_occ> 0][o_sort],
                             idx[self.mo_occ==0][v_sort]))
@@ -764,7 +764,7 @@ class SymAdaptedROHF(rohf.ROHF):
         mo_b = mo_coeff[:,mo_occ==2]
         dm_a = numpy.dot(mo_a, mo_a.conj().T)
         dm_b = numpy.dot(mo_b, mo_b.conj().T)
-        return numpy.array((dm_a, dm_b))
+        return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
     def _finalize(self):
         rohf.ROHF._finalize(self)
@@ -772,9 +772,9 @@ class SymAdaptedROHF(rohf.ROHF):
         # sort MOs wrt orbital energies, it should be done last.
         # Using mergesort because it is stable. We don't want to change the
         # ordering of the symmetry labels when two orbitals are degenerated.
-        c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2].round(9), kind='mergesort')
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1].round(9), kind='mergesort')
-        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
+        c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2].round(9), kind='stable')
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1].round(9), kind='stable')
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='stable')
         idx = numpy.arange(self.mo_energy.size)
         idx = numpy.hstack((idx[self.mo_occ==2][c_sort],
                             idx[self.mo_occ==1][o_sort],

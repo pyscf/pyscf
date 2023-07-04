@@ -148,7 +148,7 @@ def gto_norm(l, expnt):
     >>> print(gto_norm(0, 1))
     2.5264751109842591
     '''
-    if l >= 0:
+    if numpy.all(l >= 0):
         #f = 2**(2*l+3) * math.factorial(l+1) * (2*expnt)**(l+1.5) \
         #        / (math.factorial(2*l+2) * math.sqrt(math.pi))
         #return math.sqrt(f)

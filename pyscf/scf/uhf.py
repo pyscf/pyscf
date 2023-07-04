@@ -149,7 +149,7 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # passed to functions like get_jk, get_vxc.  These functions may take the tags
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # arrays and modifications to DM arrays may be ignored.
-    return numpy.array((dm_a, dm_b))
+    return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ):
     '''Two-particle density matrix in AO representation
@@ -829,6 +829,15 @@ class UHF(hf.SCF):
         return make_rdm2(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
+
+    def get_init_guess(self, mol=None, key='minao'):
+        dm = hf.SCF.get_init_guess(self, mol, key)
+        if self.verbose >= logger.DEBUG1:
+            s = self.get_ovlp()
+            nelec =(numpy.einsum('ij,ji', dm[0], s).real,
+                    numpy.einsum('ij,ji', dm[1], s).real)
+            logger.debug1(self, 'Nelec from initial guess = %s', nelec)
+        return dm
 
     def init_guess_by_minao(self, mol=None, breaksym=BREAKSYM):
         '''Initial guess in terms of the overlap to minimal basis.'''

@@ -30,6 +30,7 @@ def setUpModule():
     cell.mesh = np.array([11]*3)
     cell.atom = [['He', (L/2.,L/2.,L/2.)]]
     cell.basis = { 'He': [[0, (1.0, 1.0)]] }
+    cell.precision = 1e-9
     cell.build()
 
 
