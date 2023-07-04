@@ -29,6 +29,7 @@ import math
 import numpy
 from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
+from pyscf import __config__
 
 _itrf = lib.load_library('libxcfun_itrf')
 
@@ -145,12 +146,12 @@ XC = XC_CODES = {
 'PBE0'          : '.25*HF + .75*PBEX + PBEC',  # Perdew-Burke-Ernzerhof, JCP, 110, 6158
 'PBE1PBE'       : 'PBE0',
 'PBEH'          : 'PBE0',
-'B3P86'         : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN5C',
+'B3P86'         : 'B3P86G',
 'B3P86G'        : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN3C',
-'B3PW91'        : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN5C',
-'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN3C',
-# Note, use VWN5 for B3LYP. It is different to the libxc default B3LYP
-'B3LYP'         : 'B3LYP5',
+'B3P86V5'       : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN5C',
+'B3PW91'        : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*PW92C',
+# Note, B3LYP uses VWN3 https://doi.org/10.1016/S0009-2614(97)00207-8.
+'B3LYP'         : 'B3LYPG',
 'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5C',
 'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3C', # B3LYP-VWN3 used by Gaussian and libxc
 #'O3LYP'         : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN5C',  # Mol. Phys. 99 607
@@ -159,8 +160,9 @@ XC = XC_CODES = {
 #'O3LYP'         : '.1161*HF + .9262*SLATER + 1.164393477*OPTXCORR + .81*LYP + .19*VWN5C', #1.164393477 = .8133*1.43169
 #'O3LYPG'        : '.1161*HF + .9262*SLATER + 1.164393477*OPTXCORR + .81*LYP + .19*VWN3C',
 'O3LYP'         : '.1161*HF + 0.071006917*SLATER + .8133*OPTX, .81*LYP + .19*VWN5',  # libxc implementation
-'X3LYP'         : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN5C',  # Xu, PNAS, 101, 2673
+'X3LYP'         : 'X3LYPG',
 'X3LYPG'        : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN3C',
+'X3LYP5'        : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN5C',  # Xu, PNAS, 101, 2673
 # Range-separated-hybrid functional: (alpha+beta)*SR_HF(0.33) + alpha*LR_HF(0.33)
 # Note default mu of xcfun is 0.4. It can cause discrepancy for CAMB3LYP
 'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + 0.46*BECKESRX + 0.35*B88 + VWN5C*0.19 + LYPC*0.81',
@@ -172,6 +174,10 @@ XC = XC_CODES = {
 'TPSSH'         : '0.1*HF + 0.9*TPSSX + TPSSC',
 'TF'            : 'TFK',
 }
+
+if getattr(__config__, 'B3LYP_WITH_VWN5', False):
+    XC_CODES['B3P86'] = 'B3P86V5'
+    XC_CODES['B3LYP'] = 'B3LYP5'
 
 # Some XC functionals have conventional name, like M06-L means M06-L for X
 # functional and M06-L for C functional, PBE mean PBE-X plus PBE-C. If the

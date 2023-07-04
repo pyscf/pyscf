@@ -214,7 +214,7 @@ class KnownValues(unittest.TestCase):
     def test_rks_gen_g_hop(self):
         mf = dft.RKS(h2o_z0)
         mf.grids.build()
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         nao = h2o_z0.nao_nr()
         numpy.random.seed(1)
         mo = numpy.random.random((nao,nao))
@@ -281,7 +281,7 @@ class KnownValues(unittest.TestCase):
 
     def test_nr_uks_fast_newton(self):
         mf = dft.UKS(h4_z1_s)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf1 = scf.fast_newton(mf)
         self.assertAlmostEqual(mf1.e_tot, -39.696083841107587, 8)
 
@@ -290,7 +290,7 @@ class KnownValues(unittest.TestCase):
 
     def test_nr_rks_fast_newton(self):
         mf = dft.RKS(h4_z0_s)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf1 = scf.fast_newton(mf)
         self.assertAlmostEqual(mf1.e_tot, -40.10277421254213, 9)
 
@@ -302,7 +302,7 @@ class KnownValues(unittest.TestCase):
     def test_uks_gen_g_hop(self):
         mf = dft.UKS(h2o_z0)
         mf.grids.build()
-        mf.xc = 'b3p86'
+        mf.xc = 'b3p86v5'
         nao = h2o_z0.nao_nr()
         numpy.random.seed(1)
         mo =(numpy.random.random((nao,nao)),

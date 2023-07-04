@@ -515,7 +515,7 @@ class KnownValues(unittest.TestCase):
 
     def test_complex_dm(self):
         mf = dft.RKS(h2o)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         nao = h2o.nao
         numpy.random.seed(1)
         dm = (numpy.random.random((nao,nao)) +
