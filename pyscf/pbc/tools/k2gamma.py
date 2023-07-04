@@ -154,7 +154,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
     cR_max = abs(C_gamma.real).max(axis=0)
     C_gamma[:,cR_max < 1e-5] *= -1j
 
-    E_sort_idx = np.argsort(E_g)
+    E_sort_idx = np.argsort(E_g, kind='stable')
     E_g = E_g[E_sort_idx]
 
     cI_max = abs(C_gamma.imag).max(axis=0)
@@ -213,7 +213,7 @@ def k2gamma(kmf, kmesh=None):
             kpts = kmf.kpts
         scell, E_g, C_gamma = mo_k2gamma(kmf.cell, mo_energy, mo_coeff,
                                          kpts, kmesh)[:3]
-        E_sort_idx = np.argsort(np.hstack(mo_energy))
+        E_sort_idx = np.argsort(np.hstack(mo_energy), kind='stable')
         mo_occ = np.hstack(mo_occ)[E_sort_idx]
         return scell, E_g, C_gamma, mo_occ
 
