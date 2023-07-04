@@ -86,7 +86,6 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
         nuc_charge = gto.charge(symb)
         if nuc_charge < nuc_start:
             newbasis[symb] = dfbasis
-        #?elif symb in mol._ecp:
         else:
             conf = elements.CONFIGURATION[nuc_charge]
             max_shells = 4 - conf.count(0)
@@ -182,7 +181,7 @@ def make_auxbasis(mol, mp2fit=False):
         auxbasis.update(auxdefault)
         aux_etb = set(auxbasis) - set(auxdefault)
         if aux_etb:
-            logger.info(mol, 'Even tempered Gaussians are generated as '
+            logger.warn(mol, 'Even tempered Gaussians are generated as '
                         'DF auxbasis for  %s', ' '.join(aux_etb))
             for k in aux_etb:
                 logger.debug(mol, '  ETB auxbasis for %s  %s', k, auxbasis[k])
@@ -198,12 +197,19 @@ def make_auxmol(mol, auxbasis=None):
     even-tempered Gaussian basis set will be generated.
 
     See also the paper JCTC, 13, 554 about generating auxiliary fitting basis.
+    JCP, 127, 074102
+
+    Kwargs:
+        auxbasis : str, list, tuple
+            Similar to the input of orbital basis in Mole object.
     '''
     pmol = mol.copy(deep=False)
 
     if auxbasis is None:
         auxbasis = make_auxbasis(mol)
-    elif isinstance(auxbasis, str) and '+etb' in auxbasis:
+    elif auxbasis == 'etb':
+        auxbasis = aug_etb_for_dfbasis(mol, start_at=0)
+    elif '+etb' in auxbasis:
         dfbasis = auxbasis[:-4]
         auxbasis = aug_etb_for_dfbasis(mol, dfbasis)
     pmol.basis = auxbasis
@@ -211,13 +217,23 @@ def make_auxmol(mol, auxbasis=None):
     if isinstance(auxbasis, (str, list, tuple)):
         uniq_atoms = {a[0] for a in mol._atom}
         _basis = {a: auxbasis for a in uniq_atoms}
-    elif 'default' in auxbasis:
-        uniq_atoms = {a[0] for a in mol._atom}
-        _basis = {a: auxbasis['default'] for a in uniq_atoms}
-        _basis.update(auxbasis)
-        del (_basis['default'])
+        uniq_atoms = set([a[0] for a in mol._atom])
+        _basis = dict([(a, auxbasis) for a in uniq_atoms])
     else:
-        _basis = auxbasis
+        assert isinstance(auxbasis, dict)
+        if 'default' in auxbasis:
+            uniq_atoms = {a[0] for a in mol._atom}
+            _basis = {a: auxbasis['default'] for a in uniq_atoms}
+            _basis.update(auxbasis)
+            del (_basis['default'])
+        else:
+            _basis = auxbasis
+        if 'etb' in _basis.values():
+            etb_abs = aug_etb_for_dfbasis(mol, start_at=0)
+            for elem, bas in _basis.items():
+                if bas == 'etb':
+                    _basis[elem] = auxbasis_etb[elem]
+
     pmol._basis = pmol.format_basis(_basis)
 
     # Note: To pass parameters like gauge origin, rsh-omega to auxmol,
