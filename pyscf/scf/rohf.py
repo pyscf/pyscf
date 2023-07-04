@@ -48,6 +48,7 @@ def init_guess_by_atom(mol):
     return dm
 
 init_guess_by_huckel = uhf.init_guess_by_huckel
+init_guess_by_mod_huckel = uhf.init_guess_by_mod_huckel
 init_guess_by_chkfile = uhf.init_guess_by_chkfile
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
@@ -366,6 +367,11 @@ class ROHF(hf.RHF):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
         return init_guess_by_huckel(mol)
+
+    def init_guess_by_mod_huckel(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089, employing the updated GWH rule from doi:10.1021/ja00480a005.')
+        return init_guess_by_mod_huckel(mol)
 
     def init_guess_by_1e(self, mol=None):
         if mol is None: mol = self.mol
