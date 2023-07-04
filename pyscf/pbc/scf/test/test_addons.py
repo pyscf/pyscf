@@ -392,10 +392,7 @@ class KnownValues(unittest.TestCase):
         # -244.37255692969057 on macos py3.7 (github CI)
         # -244.37254314207422 on macos py3.7 (github CI), repeat
         # -244.3724387756635 on linux-build py3.7 (github CI)
-        if sys.version_info.minor == 7:
-            self.assertAlmostEqual(myhf.e_tot, -244.3725, 3)
-        else:
-            self.assertAlmostEqual(myhf.e_tot, -244.9642035, 6)
+        self.assertAlmostEqual(myhf.e_tot, -244.9642035, 6)
         myhf_s = scf.ROHF(mol)
         myhf_s = pscf.addons.smearing_(myhf_s, sigma=0.01, method='gaussian', fix_spin=True)
         myhf_s.kernel()
