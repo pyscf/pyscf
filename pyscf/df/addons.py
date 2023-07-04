@@ -16,6 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+
 import sys
 import numpy
 from pyscf.lib import logger
@@ -119,8 +120,8 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
             emax_by_l = [emax[liljsum==ll].max() for ll in range(l_max1*2-1)]
             emin_by_l = [emin[liljsum==ll].min() for ll in range(l_max1*2-1)]
             # Tune emin and emax
-            emin_by_l = numpy.array(emin_by_l) * 2  # *2 for alpha+alpha on same center
-            emax_by_l = numpy.array(emax_by_l) * 2  #/ (numpy.arange(l_max1*2-1)*.5+1)
+            emin_by_l = numpy.array(emin_by_l) * 2
+            emax_by_l = numpy.array(emax_by_l) * 2
 
             ns = numpy.log((emax_by_l+emin_by_l)/emin_by_l) / numpy.log(beta)
             etb = []
@@ -187,6 +188,7 @@ def make_auxbasis(mol, mp2fit=False):
                 logger.debug(mol, '  ETB auxbasis for %s  %s', k, auxbasis[k])
     return auxbasis
 
+# TODO: add auxbasis keyword etb and auto
 def make_auxmol(mol, auxbasis=None):
     '''Generate a fake Mole object which uses the density fitting auxbasis as
     the basis sets.  If auxbasis is not specified, the optimized auxiliary fitting
@@ -197,7 +199,6 @@ def make_auxmol(mol, auxbasis=None):
     even-tempered Gaussian basis set will be generated.
 
     See also the paper JCTC, 13, 554 about generating auxiliary fitting basis.
-    JCP, 127, 074102
 
     Kwargs:
         auxbasis : str, list, tuple
