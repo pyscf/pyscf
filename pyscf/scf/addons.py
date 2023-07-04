@@ -483,7 +483,7 @@ def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
     odS = numpy.abs(Snorm)
     numpy.fill_diagonal(odS, 0.0)
     odSs = numpy.sum(odS, axis=0)
-    sortidx = numpy.argsort(odSs)
+    sortidx = numpy.argsort(odSs, kind='stable')
 
     # Run the pivoted Cholesky decomposition
     Ssort = Snorm[numpy.ix_(sortidx, sortidx)].copy()
@@ -902,10 +902,10 @@ def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
         # round(6) to avoid numerical uncertainty in degeneracy
         es = numpy.append(mo_energy[0][mo_occ[0] >0],
                           mo_energy[1][mo_occ[1] >0])
-        oidx = numpy.argsort(es.round(6))
+        oidx = numpy.argsort(es.round(6), kind='stable')
         es = numpy.append(mo_energy[0][mo_occ[0]==0],
                           mo_energy[1][mo_occ[1]==0])
-        vidx = numpy.argsort(es.round(6))
+        vidx = numpy.argsort(es.round(6), kind='stable')
         orbspin = numpy.append(numpy.array([0]*nocca+[1]*noccb)[oidx],
                                numpy.array([0]*nvira+[1]*nvirb)[vidx])
     return orbspin

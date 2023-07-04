@@ -196,7 +196,7 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
         orbsym = self.get_orbsym()
         for s in range(2):
             for k, mo_e in enumerate(self.mo_energy[s]):
-                idx = np.argsort(mo_e.round(9), kind='mergesort')
+                idx = np.argsort(mo_e.round(9), kind='stable')
                 self.mo_energy[s][k] = self.mo_energy[s][k][idx]
                 self.mo_occ[s][k] = self.mo_occ[s][k][idx]
                 self.mo_coeff[s][k] = lib.tag_array(self.mo_coeff[s][k][:,idx],

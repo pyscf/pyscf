@@ -297,7 +297,7 @@ class KsymAdaptedKSCF(khf.KSCF):
 
         orbsym = self.get_orbsym()
         for k, mo_e in enumerate(self.mo_energy):
-            idx = np.argsort(mo_e.round(9), kind='mergesort')
+            idx = np.argsort(mo_e.round(9), kind='stable')
             self.mo_energy[k] = self.mo_energy[k][idx]
             self.mo_occ[k] = self.mo_occ[k][idx]
             self.mo_coeff[k] = lib.tag_array(self.mo_coeff[k][:,idx], orbsym=orbsym[k][idx])
