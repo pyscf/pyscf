@@ -436,7 +436,7 @@ def parse_xc(description):
                 fac, key = token.split('*')
                 if fac[0].isalpha():
                     fac, key = key, fac
-                fac = sign * float(fac)
+                fac = sign * float(fac.replace('_', '-'))
             else:
                 fac, key = sign, token
 
@@ -507,7 +507,8 @@ _NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
                    'M06-L'  : 'M06L',
                    'M05-2X' : 'M052X',
                    'M06-HF' : 'M06HF',
-                   'M06-2X' : 'M062X',}
+                   'M06-2X' : 'M062X',
+                   'E-'     : 'E_'} # For scientific notation
 
 
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
