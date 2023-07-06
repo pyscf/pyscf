@@ -166,9 +166,6 @@ def Wvvvo(t1, t2, eris, _Wvvvv=None):
 # T3[2] related contributions to T1/T2
 ########################################
 
-def _cp(a):
-    return np.array(a, copy=False, order='C')
-
 def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     """Calculates T1, T2 amplitudes corrected by second-order T3 contribution
     and intermediates used in IP/EA-CCSD(T)a
@@ -214,12 +211,12 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     mo_e_o = eris.mo_energy[:nocc]
     mo_e_v = eris.mo_energy[nocc:]
 
-    oovv = _cp(eris.oovv)
-    ovvv = _cp(eris.ovvv)
-    ooov = _cp(eris.ooov)
-    oovv = _cp(eris.oovv)
-    vooo = _cp(ooov).conj().transpose(3, 2, 1, 0)
-    vvvo = _cp(ovvv).conj().transpose(3, 2, 1, 0)
+    oovv = np.asarray(eris.oovv)
+    ovvv = np.asarray(eris.ovvv)
+    ooov = np.asarray(eris.ooov)
+    oovv = np.asarray(eris.oovv)
+    vooo = np.asarray(ooov).conj().transpose(3, 2, 1, 0)
+    vvvo = np.asarray(ovvv).conj().transpose(3, 2, 1, 0)
 
     ccsd_energy = cc.energy(t1, t2, eris)
     dtype = np.result_type(t1, t2)

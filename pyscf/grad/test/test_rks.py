@@ -190,6 +190,17 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
+    def test_finite_diff_df_rks_grad(self):
+        mf1 = mf.density_fit ().run ()
+        g = mf1.nuc_grad_method ().set (grid_response=True).kernel ()
+        self.assertAlmostEqual(lib.fp(g), -0.04990623577718451, 6)
+
+        mol1 = mol.copy()
+        mf_scanner = mf1.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
     def test_rks_grad_lda(self):
         mol_hf = gto.Mole()
         mol_hf.atom = [
@@ -228,6 +239,27 @@ class KnownValues(unittest.TestCase):
 
         g = mf.nuc_grad_method().set(grid_response=True).kernel()
         self.assertAlmostEqual(lib.fp(g), -0.05036316927480719, 6)
+
+        mol1 = mol.copy()
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-3*lib.param.BOHR, 5)
+
+    def test_finite_diff_rks_grad_nlc(self):
+#[[ 2.91036539e-16  1.22693574e-15  2.45978284e-02]
+# [ 2.83888198e-17  2.66388957e-02 -1.23039325e-02]
+# [ 1.17327811e-16 -2.66388957e-02 -1.23039325e-02]]
+        mf = mol.RKS()
+        mf.set(xc='VV10', nlc='VV10', conv_tol=1e-12)
+        mf.nlcgrids.level = 1
+        mf.kernel()
+        g = mf.nuc_grad_method().set().kernel()
+        self.assertAlmostEqual(lib.fp(g), -0.049431714073528615, 6)
+
+        mf.nlcgrids.level = 0
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
 
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()

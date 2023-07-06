@@ -1086,12 +1086,12 @@ def _make_df_eris(cc, mo_coeff=None):
 
     eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
     eris.LPV = LPV = np.empty((nkpts,nkpts), dtype=object)
-    with df._load3c(thisdf._cderi, 'j3c') as fload:
+    with df.CDERIArray(thisdf._cderi) as cderi_array:
         tao = []
         ao_loc = None
-        for ki, kpti in enumerate(kpts):
-            for kj, kptj in enumerate(kpts):
-                Lpq = np.asarray(fload(kpti, kptj))
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                Lpq = cderi_array[ki,kj]
 
                 mo_a = np.hstack((mo_kpts_a[ki], mo_kpts_a[kj][:,nocca:]))
                 mo_b = np.hstack((mo_kpts_b[ki], mo_kpts_b[kj][:,noccb:]))

@@ -48,27 +48,29 @@ from pyscf import __config__
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
-                       pbcopt=lib.c_null_ptr())
+    precision = cell.precision * 1e-5
+    rcut = max(cell.rcut, gto.estimate_rcut(cell, precision))
+    with lib.temporary_env(cell, rcut=rcut, precision=precision):
+        # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+        s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
+                           pbcopt=lib.c_null_ptr())
     s = lib.asarray(s)
     hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
     if hermi_error > cell.precision and hermi_error > 1e-12:
         logger.warn(cell, '%.4g error found in overlap integrals. '
                     'cell.precision  or  cell.rcut  can be adjusted to '
-                    'improve accuracy.')
+                    'improve accuracy.', hermi_error)
 
     cond = np.max(lib.cond(s))
-    if cond * cell.precision > 1e2:
-        prec = 1e2 / cond
-        rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
-        if cell.rcut < rmin:
-            logger.warn(cell, 'Singularity detected in overlap matrix.  '
-                        'Integral accuracy may be not enough.\n      '
-                        'You can adjust  cell.precision  or  cell.rcut  to '
-                        'improve accuracy.  Recommended values are\n      '
-                        'cell.precision = %.2g  or smaller.\n      '
-                        'cell.rcut = %.4g  or larger.', prec, rmin)
+    if cond * precision > 1e2:
+        prec = 1e7 / cond
+        rmin = gto.estimate_rcut(cell, prec*1e-5)
+        logger.warn(cell, 'Singularity detected in overlap matrix.  '
+                    'Integral accuracy may be not enough.\n      '
+                    'You can adjust  cell.precision  or  cell.rcut  to '
+                    'improve accuracy.  Recommended settings are\n      '
+                    'cell.precision < %.2g\n      '
+                    'cell.rcut > %.4g', prec, rmin)
     return s
 
 
@@ -237,27 +239,30 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
 
     if grids is None:
         grids = gen_grid.UniformGrids(cell)
-        #? FIXME: Less requirements on the density accuracy.
-        #ke_cutoff = gto.estimate_ke_cutoff(cell, 1e-5)
-        #grids.mesh = tools.cutoff_to_mesh(a, ke_cutoff)
+
     if rho is None:
         rho = numint.NumInt().get_rho(cell, dm, grids, kpt, cell.max_memory)
 
+    # With the optimal origin of the unti cell, the net dipole in the unit
+    # cell should be strictly zero. However, the integral grids are often not
+    # enough to produce the zero dipole. Errors are caused by the sub-optimal
+    # origin and the numerial integration.
     if origin is None:
         origin = _search_dipole_gauge_origin(cell, grids, rho, log)
 
-    # Move the cell to the position around the origin.
     def shift_grids(r):
-        r_frac = lib.dot(r - origin, b.T)
-        # Grids on the boundary (r_frac == +/-0.5) of the new cell may lead to
-        # unbalanced contributions to the dipole moment. Exclude them from the
-        # dipole and quadrupole
-        r_frac[r_frac== 0.5] = 0
-        r_frac[r_frac==-0.5] = 0
-        r_frac[r_frac > 0.5] -= 1
-        r_frac[r_frac <-0.5] += 1
+        r_frac = (r - origin).dot(b.T)
+        r_frac5 = r_frac.round(5)
+        # With origin at the center of the unit cell Grids on the edge
+        # (r_frac == +/-0.5) of the new cell may lead to unbalanced
+        # contributions to the dipole moment.
+        r_frac[r_frac5== 0.5] = 0
+        r_frac[r_frac5==-0.5] = 0
+        r_frac[r_frac5 > 0.5] -= 1
+        r_frac[r_frac5 <-0.5] += 1
         r = lib.dot(r_frac, a)
         return r
+
     r = shift_grids(grids.coords)
     e_dip = np.einsum('g,g,gx->x', rho, grids.weights, r)
 
@@ -275,94 +280,105 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
 
 def _search_dipole_gauge_origin(cell, grids, rho, log):
     '''Optimize the position of the unit cell in crystal. With a proper unit
-    cell, the nuclear charge center and the electron density center are at the
-    same point. This function returns the origin of such unit cell.
+    cell, the nuclear charge center and the electron density center can be
+    placed at the same point (zero net dipole). This function returns the
+    coordinates of the center of the unit cell.
     '''
     from pyscf.pbc.dft import gen_grid
     a = cell.lattice_vectors()
     b = np.linalg.inv(a).T
     charges = cell.atom_charges()
     coords  = cell.atom_coords()
-
-    origin = np.einsum('i,ix->x', charges, coords) / charges.sum()
-    log.debug1('Initial guess of origin center %s', origin)
     nelec = np.dot(rho, grids.weights)
 
     # The dipole moment in the crystal is not uniquely defined. Depending on
     # the position and the shape of the unit cell, the value of dipole moment
-    # can be very different. The optimization below searches the boundary of
+    # can be very different. The optimization below searches the origin of a
     # cell inside which the nuclear charge center and electron density charge
-    # center locate at the same point. The gauge origin will be chosen at the
-    # center of unit cell.
+    # center locate at the same point.
     if (cell.dimension == 3 and
         # For orthogonal lattice only
         abs(np.diag(a.diagonal())).max() and
         isinstance(grids, gen_grid.UniformGrids)):
-        gridxyz = grids.coords.T.reshape(3, *grids.mesh)
-        gridbase = (gridxyz[0,:,0,0], gridxyz[1,0,:,0], gridxyz[2,0,0,:])
+
+        r_nuc_frac = coords.dot(b.T)
+        grid_frac = [np.fft.fftfreq(x) for x in grids.mesh]
         wxyz = grids.weights.reshape(grids.mesh)
         rhoxyz = rho.reshape(grids.mesh)
 
-        def search_orig(ix, origin):
+        def search_orig(ix):
             nx = grids.mesh[ix]
-            Lx = a[ix,ix]
-            g = gridbase[ix] - origin
-            g_frac = (g * b[ix,ix]).round(6)
-            g[g_frac == .5]  = 0
-            g[g_frac ==-.5]  = 0
-            g[g_frac >  .5] -= Lx
-            g[g_frac < -.5] += Lx
-            meanx = np.einsum('xyz,xyz->'+('xyz'[ix]), rhoxyz, wxyz) / nelec
-            ex = meanx * g
+            den = np.einsum('xyz,xyz->'+('xyz'[ix]), rhoxyz, wxyz)
 
-            r_nuc = coords[:,ix] - origin
-            r_frac = (r_nuc * b[ix,ix]).round(6)
-            r_nuc[r_frac == .5]  = 0
-            r_nuc[r_frac ==-.5]  = 0
-            r_nuc[r_frac >  .5] -= Lx
-            r_nuc[r_frac < -.5] += Lx
-            nuc_dip = np.dot(charges, r_nuc) / charges.sum()
+            nuc_x = r_nuc_frac[:,ix]
+            grid_x = grid_frac[ix]
+            # possible origin of the unit cell
+            possible_orig = grid_x
 
-            # ex.sum() ~ electron dipole wrt the given origin
-            dipx = nuc_dip - ex.sum()
+            # shifts the unit cell
+            possible_x = grid_x - possible_orig[:,None]
+            possible_x[possible_x < 0] += 1
+            possible_nuc_x = nuc_x - possible_orig[:,None]
+            possible_nuc_x[possible_nuc_x < 0] += 1
 
-            g = gridbase[ix] - origin
-            sorted_meanx = np.hstack((meanx[g >= Lx/2],
-                                      meanx[(g < Lx/2) & (g >= -Lx/2)],
-                                      meanx[g < -Lx/2]))
-            if abs(dipx) < 1e-3:
-                offx = 0
-            elif dipx > 0:
-                # To cancel the positive dipole, move electrons to the right side
-                rcum_dip = np.append(0, np.cumsum(sorted_meanx * Lx))
-                idx = np.where(rcum_dip > dipx)[0][0]
-                dx = (rcum_dip[idx] - dipx) / (rcum_dip[idx] - rcum_dip[idx-1])
-                offx = (idx - dx) * Lx/nx
-            else:
-                # To cancel the negative dipole, move electrons to the left side
-                lcum_dip = np.append(0, np.cumsum(sorted_meanx[::-1] * Lx))
-                idx = np.where(lcum_dip > -dipx)[0][0]
-                dx = (lcum_dip[idx] - -dipx) / (lcum_dip[idx] - lcum_dip[idx-1])
-                offx = -(idx - dx) * Lx/nx
-            return origin + offx
+            # Handle the grids on the edge of a unit cell.
+            possible_nuc_x[possible_nuc_x==0] = .5
+            possible_nuc_x[possible_nuc_x==1] = .5
+            possible_x[possible_x==0] = .5
+            possible_x[possible_x==1] = .5
 
-        wbar = grids.weights[0]**(1./3)
-        for i in range(4):
-            orig_last = origin
-            origin[0] = search_orig(0, origin[0])
-            origin[1] = search_orig(1, origin[1])
-            origin[2] = search_orig(2, origin[2])
-            if abs(origin - orig_last).max() < wbar:
-                break
-            log.debug1('iter %d: origin %s', i, origin)
+            # dip in fractional coordinates
+            dip  = np.einsum('sx,x->s', possible_nuc_x, charges)
+            dip -= np.einsum('sx,x->s', possible_x, den)
+            # Put the net charge at the center of the unit cell
+            dip -= .5 * (charges.sum() - nelec)
+
+            idx = abs(dip).argmin()
+            dip_min = dip[idx]
+
+            if abs(dip_min) > 1e-4:
+                dip_nearest1 = dip[idx-1]
+                dip_nearest2 = dip[(idx+1)%nx]
+                if dip_nearest1 * dip_nearest2 > 0:
+                    if dip_nearest1 * dip_min > dip_nearest2 * dip_min:
+                        idx_nearest = idx - 1
+                    else:
+                        idx_nearest = idx + 1
+                else:
+                    if dip_nearest1 * dip_min < dip_nearest2 * dip_min:
+                        idx_nearest = idx - 1
+                    else:
+                        idx_nearest = idx + 1
+
+                dip_nearest = dip[idx_nearest%nx]
+                if dip_nearest * dip_min < 0:
+                    # extrapolation
+                    idx = (idx_nearest*dip_min-idx*dip_nearest) / (dip_min-dip_nearest)
+
+            # wraparound
+            if idx >= nx // 2:
+                idx -= nx
+            shift = idx / nx * a[ix]
+            return shift
+
+        orig_x = search_orig(0)
+        orig_y = search_orig(1)
+        orig_z = search_orig(2)
+        origin = orig_x + orig_y + orig_z
+        log.debug1('optimized cell origin = %s', origin)
+        log.debug1('  origin_x %s', orig_x)
+        log.debug1('  origin_y %s', orig_y)
+        log.debug1('  origin_z %s', orig_z)
+        center = origin + .5 * a.sum(axis=0)
+        log.debug1('gauge origin = %s', center)
     else:
         # If the grids are non-cubic grids, regenerating the grids is expensive if
         # the position or the shape of the unit cell is changed. The position of
         # the unit cell is not optimized. The gauge origin is set to the nuclear
         # charge center of the original unit cell.
-        pass
+        center = np.einsum('i,ix->x', charges, coords) / charges.sum()
 
-    return origin
+    return center
 
 def get_rho(mf, dm=None, grids=None, kpt=None):
     '''Compute density in real space
@@ -394,7 +410,7 @@ def _dip_correction(mf):
     grids.mesh = tools.cutoff_to_mesh(a, ke_cutoff)
 
     dm = mf.make_rdm1()
-    rho = mf.get_rho(dm, grids, mf.kpt)
+    rho = mf.get_rho(dm, grids)
     origin = _search_dipole_gauge_origin(cell, grids, rho, log)
 
     def shift_grids(r):
@@ -511,7 +527,7 @@ class SCF(mol_hf.SCF):
 
         self.exxdiv = exxdiv
         self.kpt = kpt
-        self.conv_tol = cell.precision * 10
+        self.conv_tol = max(cell.precision * 10, 1e-8)
 
         self._keys = self._keys.union(['cell', 'exxdiv', 'with_df', 'rsjk'])
 
@@ -535,7 +551,11 @@ class SCF(mol_hf.SCF):
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpt):
                 self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
-            self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
+
+        # Let df.build() be called by get_jk function later on needs.
+        # DFT objects may need to initiailze df with different paramters.
+        #if self.with_df:
+        #    self.with_df.build()
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -572,7 +592,6 @@ class SCF(mol_hf.SCF):
 
     def check_sanity(self):
         mol_hf.SCF.check_sanity(self)
-        self.with_df.check_sanity()
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
@@ -674,15 +693,8 @@ class SCF(mol_hf.SCF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        if self.rsjk and self.direct_scf:
-            # Enable direct-SCF for real space JK builder
-            ddm = dm - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
-            vhf = vj - vk * .5
-            vhf += vhf_last
-        else:
-            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-            vhf = vj - vk * .5
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+        vhf = vj - vk * .5
         return vhf
 
     def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, omega=None,
@@ -711,11 +723,13 @@ class SCF(mol_hf.SCF):
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
+        if cell is None:
+            cell = self.cell
+        if dm is None:
+            dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)
-        if cell is None:
-            cell = self.cell
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
     def _finalize(self):
@@ -726,11 +740,7 @@ class SCF(mol_hf.SCF):
             makov_payne_correction(self)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
-        dm = mol_hf.SCF.get_init_guess(self, cell, key)
-        dm = normalize_dm_(self, dm)
-        return dm
+    get_init_guess = mol_hf.SCF.get_init_guess
 
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell
@@ -790,7 +800,10 @@ class SCF(mol_hf.SCF):
         '''Convert the input mean-field object to a GHF/GKS object'''
         return addons.convert_to_ghf(mf)
 
-    def nuc_grad_method(self, *args, **kwargs):
+    def stability(self):
+        raise NotImplementedError
+
+    def nuc_grad_method(self):
         raise NotImplementedError
 
     def jk_method(self, J='FFTDF', K=None):
@@ -817,11 +830,7 @@ class SCF(mol_hf.SCF):
                 df_method = J if 'DF' in J else K
                 self.with_df = getattr(df, df_method)(self.cell, self.kpt)
 
-        # For nuclear attraction
-        if ('RS' in J or 'RS' in K) and not self.with_df:
-            self.with_df = df.GDF(self.cell, self.kpt)
-
-        if J == 'RS' or K == 'RS':
+        if 'RS' in J or 'RS' in K:
             if not gamma_point(self.kpt):
                 raise NotImplementedError('Single k-point must be gamma point')
             self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpt)
@@ -847,6 +856,12 @@ class KohnShamDFT:
 
 
 class RHF(SCF, mol_hf.RHF):
+
+    def get_init_guess(self, cell=None, key='minao'):
+        if cell is None: cell = self.cell
+        dm = SCF.get_init_guess(self, cell, key)
+        dm = normalize_dm_(self, dm)
+        return dm
 
     stability = mol_hf.RHF.stability
 
@@ -874,7 +889,7 @@ def normalize_dm_(mf, dm):
         ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
     else:
         ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
-    if abs(ne - cell.nelectron).sum() > 1e-7:
+    if abs(ne - cell.nelectron).sum() > 0.01:
         logger.debug(mf, 'Big error detected in the electron number '
                      'of initial guess density matrix (Ne/cell = %g)!\n'
                      '  This can cause huge error in Fock matrix and '

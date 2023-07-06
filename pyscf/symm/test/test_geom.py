@@ -876,6 +876,16 @@ H   2.041481  -0.080642  -0.024174''')
         idx = symm.argsort_coords(c)
         self.assertAlmostEqual(abs(c[idx] - c0).max(), 0, 9)
 
+    def test_c2v_shifted(self):
+        atoms = [
+            ["C", [1.0000000, 0.0000000, 0.1238210]],
+            ["H", [1.0000000, 0.9620540, -0.3714630]],
+            ["H", [1.0000000, -0.9620540, -0.3714630]],
+        ]
+        l, orig, axes = geom.detect_symm(atoms)
+        self.assertEqual(l, 'C2v')
+        self.assertAlmostEqual(abs(axes - numpy.diag(axes.diagonal())).max(), 0, 9)
+
 
 def ring(n, start=0):
     r = 1. / numpy.sin(numpy.pi/n)

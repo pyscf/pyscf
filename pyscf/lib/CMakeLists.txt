@@ -18,7 +18,6 @@ project (pyscf)
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 endif()
-#set(CMAKE_BUILD_TYPE DEBUG)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   # TODO: If updating to minimum requirement cmake>=3.7, use
@@ -115,7 +114,7 @@ link_directories(${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/lib64)
 
 configure_file(
   "${PROJECT_SOURCE_DIR}/config.h.in"
-  "${PROJECT_BINARY_DIR}/config.h")
+  "${PROJECT_SOURCE_DIR}/config.h")
 # to find config.h
 include_directories("${PROJECT_BINARY_DIR}")
 
@@ -165,9 +164,10 @@ if(BUILD_LIBCINT)
 
   ExternalProject_Add(libcint
     GIT_REPOSITORY ${LIBCINT_GIT}
-    GIT_TAG v5.1.5
+    GIT_TAG v5.3.0
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE
     CMAKE_CACHE_ARGS
         -DWITH_F12:STRING=${WITH_F12}
         -DWITH_RANGE_COULOMB:STRING=1
@@ -198,7 +198,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
     #GIT_TAG master
-    URL https://gitlab.com/libxc/libxc/-/archive/5.2.0/libxc-5.2.0.tar.gz
+    URL https://gitlab.com/libxc/libxc/-/archive/6.1.0/libxc-6.1.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
@@ -207,6 +207,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
             -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
             -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
             -DENABLE_XHOST:STRING=${BUILD_MARCH_NATIVE}
+            -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
   )
   add_dependencies(xc_itrf libxc)
   add_dependencies(dft libxc)
@@ -227,6 +228,7 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
             -DXCFUN_MAX_ORDER=3 -DENABLE_TESTALL=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_CXX_CREATE_SHARED_LIBRARY=${CXX_LINK_TEMPLATE}
+            -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
   )
   add_dependencies(xcfun_itrf libxcfun)
   add_dependencies(dft libxcfun)

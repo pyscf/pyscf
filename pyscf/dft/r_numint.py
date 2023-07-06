@@ -116,7 +116,7 @@ def _eval_rho_2c(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=Fal
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_2c()
 
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         c0 = _dot_spinor_dm(mol, ao, dm, non0tab, shls_slice, ao_loc)
         rho_m = _contract_rho_m(ao, c0, hermi, True)
     elif xctype == 'GGA':
@@ -668,7 +668,7 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=1,
             in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
                              with_s=with_s):
         rho.append(make_rho(0, ao, mask, xctype))
-    rho = numpy.hstack(rho)
+    rho = numpy.concatenate(rho,axis=-1)
 
     if ni.collinear[0] == 'm':  # mcol
         eval_xc = ni.mcfun_eval_xc_adapter(xc_code)

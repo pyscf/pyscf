@@ -33,7 +33,8 @@ def large_ci(ci, norb, nelec, tol=LARGE_CI_TOL, return_strs=RETURN_STRS):
     neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
-    assert (ci.shape == (na, nb))
+    assert ci.size == na * nb
+    ci = ci.reshape(na, nb)
     addra, addrb = numpy.where(abs(ci) > tol)
     if addra.size == 0:
         # No large CI coefficient > tol, search for the largest coefficient
@@ -83,116 +84,7 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     Returns:
         CI coefficients 2D array which has the target symmetry.
     '''
-    neleca, nelecb = _unpack_nelec(nelec)
-    orbsym = numpy.asarray(orbsym)
-    if not isinstance(orbsym[0], numpy.number):
-        raise RuntimeError('TODO: convert irrep symbol to irrep id')
-
-    na = cistring.num_strings(norb, neleca)
-    nb = cistring.num_strings(norb, nelecb)
-    ci1 = numpy.zeros((na,nb))
-
-########################
-# pass 1: The fixed occs
-    orbleft = numpy.ones(norb, dtype=bool)
-    stra = numpy.zeros(norb, dtype=bool)
-    strb = numpy.zeros(norb, dtype=bool)
-    if irrep_nelec is not None:
-        for k,n in irrep_nelec.items():
-            orbleft[orbsym==k] = False
-            if isinstance(n, (int, numpy.number)):
-                idx = numpy.where(orbsym==k)[0][:n//2]
-                stra[idx] = True
-                strb[idx] = True
-            else:
-                na, nb = n
-                stra[numpy.where(orbsym==k)[0][:na]] = True
-                strb[numpy.where(orbsym==k)[0][:nb]] = True
-                if (na-nb)%2:
-                    wfnsym ^= k
-
-    orbleft = numpy.where(orbleft)[0]
-    neleca_left = neleca - stra.sum()
-    nelecb_left = nelecb - strb.sum()
-    spin = neleca_left - nelecb_left
-    assert (neleca_left >= 0)
-    assert (nelecb_left >= 0)
-    assert (spin >= 0)
-
-########################
-# pass 2: search pattern
-    def gen_str_iter(orb_list, nelec):
-        if nelec == 1:
-            for i in orb_list:
-                yield [i]
-        elif nelec >= len(orb_list):
-            yield orb_list
-        else:
-            restorb = orb_list[1:]
-            #yield from gen_str_iter(restorb, nelec)
-            for x in gen_str_iter(restorb, nelec):
-                yield x
-            for x in gen_str_iter(restorb, nelec-1):
-                yield [orb_list[0]] + x
-
-    # search for alpha and beta pattern which match to the required symmetry
-    def query(target, nelec_atmost, spin, orbsym):
-        norb = len(orbsym)
-        for excite_level in range(1, nelec_atmost+1):
-            for beta_only in gen_str_iter(list(range(norb)), excite_level):
-                alpha_allow = [i for i in range(norb) if i not in beta_only]
-                alpha_orbsym = orbsym[alpha_allow]
-                alpha_target = target
-                for i in beta_only:
-                    alpha_target ^= orbsym[i]
-                alpha_only = symm.route(alpha_target, spin+excite_level, alpha_orbsym)
-                if alpha_only:
-                    alpha_only = [alpha_allow[i] for i in alpha_only]
-                    return alpha_only, beta_only
-        raise RuntimeError('No pattern found for wfn irrep %s over orbsym %s'
-                           % (target, orbsym))
-
-    if spin == 0:
-        aonly = bonly = []
-        if wfnsym != 0:
-            aonly, bonly = query(wfnsym, neleca_left, spin, orbsym[orbleft])
-    else:
-        # 1. assume "nelecb_left" doubly occupied orbitals
-        # search for alpha pattern which match to the required symmetry
-        aonly, bonly = orbleft[symm.route(wfnsym, spin, orbsym[orbleft])], []
-        # dcompose doubly occupied orbitals, search for alpha and beta pattern
-        if len(aonly) != spin:
-            aonly, bonly = query(wfnsym, neleca_left, spin, orbsym[orbleft])
-
-    ndocc = neleca_left - len(aonly) # == nelecb_left - len(bonly)
-    docc_allow = numpy.ones(len(orbleft), dtype=bool)
-    docc_allow[aonly] = False
-    docc_allow[bonly] = False
-    docclst = orbleft[numpy.where(docc_allow)[0]][:ndocc]
-    stra[docclst] = True
-    strb[docclst] = True
-
-    def find_addr_(stra, aonly, nelec):
-        stra[orbleft[aonly]] = True
-        return cistring.str2addr(norb, nelec, ('%i'*norb)%tuple(stra)[::-1])
-    if bonly:
-        if spin > 0:
-            aonly, socc_only = aonly[:-spin], aonly[-spin:]
-            stra[orbleft[socc_only]] = True
-        stra1 = stra.copy()
-        strb1 = strb.copy()
-
-        addra = find_addr_(stra, aonly, neleca)
-        addrb = find_addr_(strb, bonly, nelecb)
-        addra1 = find_addr_(stra1, bonly, neleca)
-        addrb1 = find_addr_(strb1, aonly, nelecb)
-        ci1[addra,addrb] = ci1[addra1,addrb1] = numpy.sqrt(.5)
-    else:
-        addra = find_addr_(stra, aonly, neleca)
-        addrb = find_addr_(strb, bonly, nelecb)
-        ci1[addra,addrb] = 1
-
-    return ci1
+    raise DeprecationWarning
 
 
 def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
@@ -246,9 +138,9 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
         raise NotImplementedError
         orb_lz = wfn_lz = d2h_wfnsym_id = None
 
-    occslsta = occslstb = cistring._gen_occslst(range(norb), neleca)
+    occslsta = occslstb = cistring.gen_occslst(range(norb), neleca)
     if neleca != nelecb:
-        occslstb = cistring._gen_occslst(range(norb), nelecb)
+        occslstb = cistring.gen_occslst(range(norb), nelecb)
     na = len(occslsta)
     nb = len(occslsta)
 
@@ -417,8 +309,9 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
         Irrep ID
     '''
     neleca, nelecb = _unpack_nelec(nelec)
-    strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
-    strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
+    strsa = strsb = numpy.asarray(cistring.make_strings(range(norb), neleca))
+    if neleca != nelecb:
+        strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
     if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
         wfnsym = _guess_wfnsym(ci, strsa, strsb, orbsym)
     else:
@@ -618,6 +511,13 @@ def overlap(bra, ket, norb, nelec, s=None):
         bra = transform_ci_for_orbital_rotation(bra, norb, nelec, s)
     return numpy.dot(bra.ravel().conj(), ket.ravel())
 
+class SpinPenaltyFCISolver ():
+    pass
+class SpinPenaltyMod ():
+    def __init__(self,**kwargs):
+        self.__dict__.update (kwargs)
+
+
 def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     r'''If FCI solver cannot stay on spin eigenfunction, this function can
     add a shift to the states which have wrong spin.
@@ -639,6 +539,10 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             A modified FCI object based on fciobj.
     '''
     import types
+    from pyscf.fci import direct_uhf
+    if isinstance(fciobj, direct_uhf.FCISolver):
+        raise NotImplementedError
+
     if 'ss_value' in kwargs:
         sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
                          'It was replaced by "ss"\n')
@@ -646,40 +550,74 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     else:
         ss_value = ss
 
-    if (not isinstance(fciobj, types.ModuleType)
-        and 'contract_2e' in getattr(fciobj, '__dict__', {})):
+    if isinstance (fciobj, SpinPenaltyFCISolver):
+        # recursion avoidance
+        fciobj.ss_penalty = shift
+        fciobj.ss_value = ss
+        return fciobj
+    ismodule = isinstance (fciobj, types.ModuleType)
+
+    if (not ismodule and 'contract_2e' in getattr(fciobj, '__dict__', {})):
         del fciobj.contract_2e  # To avoid initialize twice
-    old_contract_2e = fciobj.contract_2e
-    def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
+
+    def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         if isinstance(nelec, (int, numpy.number)):
             sz = (nelec % 2) * .5
         else:
             sz = abs(nelec[0]-nelec[1]) * .5
-        if ss_value is None:
+        if self.ss_value is None:
             ss = sz*(sz+1)
         else:
-            ss = ss_value
+            ss = self.ss_value
 
         if ss < sz*(sz+1)+.1:
             # (S^2-ss)|Psi> to shift state other than the lowest state
-            ci1 = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
+            ci1 = self.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             ci1 -= ss * fcivec
         else:
             # (S^2-ss)^2|Psi> to shift states except the given spin.
             # It still relies on the quality of initial guess
-            tmp = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
+            tmp = self.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             tmp -= ss * fcivec
             ci1 = -ss * tmp
-            ci1 += fciobj.contract_ss(tmp, norb, nelec).reshape(fcivec.shape)
+            ci1 += self.contract_ss(tmp, norb, nelec).reshape(fcivec.shape)
             tmp = None
-        ci1 *= shift
+        ci1 *= self.ss_penalty
 
-        ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+        ci0 = self.base_contract_2e (eri, fcivec, norb, nelec, link_index, **kwargs)
         ci1 += ci0.reshape(fcivec.shape)
         return ci1
 
-    fciobj.davidson_only = True
-    fciobj.contract_2e = contract_2e
+    if ismodule:
+        base_contract_2e = fciobj.contract_2e
+        self = SpinPenaltyMod (ss_penalty=shift, ss_value=ss_value,
+                               contract_ss=fciobj.contract_ss,
+                               base_contract_2e=base_contract_2e)
+        from functools import partial
+        fciobj.davidson_only = True
+        fciobj.contract_2e = partial (contract_2e, self)
+        return fciobj
+    else:
+        fciobj_class = fciobj.__class__
+
+    class FCISolver (fciobj_class, SpinPenaltyFCISolver):
+
+        def __init__(self, fcibase):
+            self.base = copy.copy (fcibase)
+            self.__dict__.update (fcibase.__dict__)
+            self.ss_value = ss_value
+            self.ss_penalty = shift
+            keys = set (('ss_value', 'ss_penalty', 'base'))
+            self._keys = self._keys.union (keys)
+            self.davidson_only = self.base.davidson_only = True
+
+        def base_contract_2e (self, *args, **kwargs):
+            return self.base.__class__.contract_2e (self, *args, **kwargs)
+
+    FCISolver.contract_2e = contract_2e
+    new_fciobj = FCISolver (fciobj)
+    fciobj.__class__ = new_fciobj.__class__
+    fciobj.__dict__.update (new_fciobj.__dict__)
     return fciobj
 def fix_spin(fciobj, shift=.1, ss=None):
     return fix_spin_(copy.copy(fciobj), shift, ss)
@@ -739,7 +677,7 @@ def transform_ci(ci, nelec, u):
     if neleca == 0:
         trans_ci_a = numpy.ones((1, 1))
     else:
-        trans_ci_a = numpy.zeros((na_old, na_new))
+        trans_ci_a = numpy.zeros((na_old, na_new), dtype=ua.dtype)
         strs_old = numpy.asarray(cistring.make_strings(range(norb_old), neleca))
 
         # Unitary transformation array trans_ci is the overlap between two sets of CI basis.
@@ -766,7 +704,7 @@ def transform_ci(ci, nelec, u):
     elif nelecb == 0:
         trans_ci_b = numpy.ones((1, 1))
     else:
-        trans_ci_b = numpy.zeros((nb_old, nb_new))
+        trans_ci_b = numpy.zeros((nb_old, nb_new), dtype=ub.dtype)
         strs_old = numpy.asarray(cistring.make_strings(range(norb_old), nelecb))
 
         occ_masks_old = (strs_old[:,None] & one_particle_strs_old) != 0

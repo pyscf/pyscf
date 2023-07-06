@@ -30,6 +30,7 @@ import pyscf.dft
 from pyscf import lib
 from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf.lib import logger
+from pyscf.dft import uks as mol_uks
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import multigrid
@@ -46,8 +47,11 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpt is None: kpt = ks.kpt
     t0 = (logger.process_clock(), logger.perf_counter())
 
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
+    ni = ks._numint
+    if ks.nlc or ni.libxc.is_nlc(ks.xc):
+        raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
+
+    hybrid = ni.libxc.is_hybrid_xc(ks.xc)
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
@@ -75,8 +79,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if hermi == 2:  # because rho = 0
         n, exc, vxc = (0,0), 0, 0
     else:
+        max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, hermi,
-                                        kpt, kpts_band)
+                                        kpt, kpts_band, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -84,12 +89,11 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vj = ks.get_j(cell, dm[0]+dm[1], hermi, kpt, kpts_band)
         vxc += vj
     else:
-        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
-            ks.with_df._j_only = False
+        omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
         vj = vj[0] + vj[1]
         vk *= hyb
-        if abs(omega) > 1e-10:
+        if omega != 0:
             vklr = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
             vklr *= (alpha - hyb)
             vk += vklr
@@ -129,6 +133,9 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
         pbcuhf.UHF.dump_flags(self, verbose)
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
+
+    get_vsap = mol_uks.UKS.get_vsap
+    init_guess_by_vsap = mol_uks.UKS.init_guess_by_vsap
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec

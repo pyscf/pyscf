@@ -153,6 +153,12 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mf_diis = mf.DIIS(mf, mf.diis_file)
         mf_diis.space = mf.diis_space
         mf_diis.rollback = mf.diis_space_rollback
+
+        # We get the used orthonormalized AO basis from any old eigendecomposition.
+        # Since the ingredients for the Fock matrix has already been built, we can
+        # just go ahead and use it to determine the orthonormal basis vectors.
+        fock = mf.get_fock(h1e, s1e, vhf, dm)
+        _, mf_diis.Corth = mf.eig(fock, s1e)
     else:
         mf_diis = None
 
@@ -173,8 +179,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        # attach mo_coeff and mo_occ to dm to improve DFT get_veff efficiency
-        dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot = mf.energy_tot(dm, h1e, vhf)
 
@@ -211,7 +215,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
-        dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot, last_hf_e = mf.energy_tot(dm, h1e, vhf), e_tot
 
@@ -358,16 +361,19 @@ def init_guess_by_minao(mol):
         stdsymb = gto.mole._std_symbol(symb)
         basis_add = gto.basis.load('ano', stdsymb)
 # coreshl defines the core shells to be removed in the initial guess
-        coreshl = gto.ecp.core_configuration(nelec_ecp)
-        #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
+        coreshl = gto.ecp.core_configuration(nelec_ecp, atom_symbol=stdsymb)
+        # coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
             ndocc, frac = atom_hf.frac_occ(stdsymb, l)
-            assert ndocc >= coreshl[l]
-            degen = l * 2 + 1
-            occ_l = [2,]*(ndocc-coreshl[l]) + [frac,]
-            occ.append(numpy.repeat(occ_l, degen))
-            basis_ano.append([l] + [b[:1] + b[1+coreshl[l]:ndocc+2]
-                                    for b in basis_add[l][1:]])
+            if ndocc >= coreshl[l]:
+                degen = l * 2 + 1
+                occ_l = [2, ]*(ndocc-coreshl[l]) + [frac, ]
+                occ.append(numpy.repeat(occ_l, degen))
+                basis_ano.append([l] + [b[:1] + b[1+coreshl[l]:ndocc+2]
+                                        for b in basis_add[l][1:]])
+            else:
+                logger.debug(mol, '*** ECP incorporates partially occupied '
+                             'shell of l = %d for atom %s ***', l, symb)
         occ = numpy.hstack(occ)
 
         if nelec_ecp > 0:
@@ -391,11 +397,12 @@ def init_guess_by_minao(mol):
                 ndocc -= coreshl[l]
                 assert ndocc <= nbas_l
 
-                occ_l = numpy.zeros(nbas_l)
-                occ_l[:ndocc] = 2
-                if frac > 0:
-                    occ_l[ndocc] = frac
-                occ4ecp.append(numpy.repeat(occ_l, l * 2 + 1))
+                if nbas_l > 0:
+                    occ_l = numpy.zeros(nbas_l)
+                    occ_l[:ndocc] = 2
+                    if frac > 0:
+                        occ_l[ndocc] = frac
+                    occ4ecp.append(numpy.repeat(occ_l, l * 2 + 1))
 
             occ4ecp = numpy.hstack(occ4ecp)
             basis4ecp = lib.flatten(basis4ecp)
@@ -446,11 +453,14 @@ def init_guess_by_minao(mol):
     pmol = gto.Mole()
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(new_atom, basis, [])
     pmol._built = True
-    dm = addons.project_dm_nr2nr(pmol, numpy.diag(occ), mol)
+
+    #: dm = addons.project_dm_nr2nr(pmol, numpy.diag(occ), mol)
+    mo = addons.project_mo_nr2nr(pmol, numpy.eye(pmol.nao), mol)
+    dm = lib.dot(mo*occ, mo.conj().T)
 # normalize eletron number
 #    s = mol.intor_symmetric('int1e_ovlp')
 #    dm *= mol.nelectron / (dm*s).sum()
-    return dm
+    return lib.tag_array(dm, mo_coeff=mo, mo_occ=occ)
 
 
 def init_guess_by_1e(mol):
@@ -474,6 +484,8 @@ def init_guess_by_atom(mol):
     atm_scf = atom_hf.get_atm_nrhf(mol)
     aoslice = mol.aoslice_by_atom()
     atm_dms = []
+    mo_coeff = []
+    mo_occ = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         if symb not in atm_scf:
@@ -481,22 +493,27 @@ def init_guess_by_atom(mol):
 
         if symb in atm_scf:
             e_hf, e, c, occ = atm_scf[symb]
-            dm = numpy.dot(c*occ, c.conj().T)
         else:  # symb's basis is not specified in the input
             nao_atm = aoslice[ia,3] - aoslice[ia,2]
-            dm = numpy.zeros((nao_atm, nao_atm))
+            c = numpy.zeros((nao_atm, nao_atm))
+            occ = numpy.zeros(nao_atm)
 
-        atm_dms.append(dm)
+        atm_dms.append(numpy.dot(c*occ, c.conj().T))
+        mo_coeff.append(c)
+        mo_occ.append(occ)
 
     dm = scipy.linalg.block_diag(*atm_dms)
+    mo_coeff = scipy.linalg.block_diag(*mo_coeff)
+    mo_occ = numpy.hstack(occ)
 
     if mol.cart:
         cart2sph = mol.cart2sph_coeff(normalized='sp')
-        dm = reduce(numpy.dot, (cart2sph, dm, cart2sph.T))
+        dm = reduce(lib.dot, (cart2sph, dm, cart2sph.T))
+        mo_coeff = lib.dot(cart2sph, mo_coeff)
 
     for k, v in atm_scf.items():
         logger.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
-    return dm
+    return lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def init_guess_by_huckel(mol):
     '''Generate initial guess density matrix from a Huckel calculation based
@@ -677,7 +694,8 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # passed to functions like get_jk, get_vxc.  These functions may take the tags
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # array and modifications to DM array may be ignored.
-    return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
+    dm = numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
+    return lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ, **kwargs):
     '''Two-particle density matrix in AO representation
@@ -1096,7 +1114,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
 
     log.info(' ** Mulliken pop  **')
     for i, s in enumerate(mol.ao_labels()):
-        log.info('pop of  %s %10.5f', s, pop[i])
+        log.info('pop of  %-14s %10.5f', s, pop[i])
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
@@ -1105,7 +1123,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     chg = mol.atom_charges() - chg
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+        log.note('charge of  %3d%s =   %10.5f', ia, symb, chg[ia])
     return pop, chg
 
 
@@ -1216,7 +1234,7 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
         unit = kwargs['unit_symbol']
 
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-        # UHF denisty matrices
+        # UHF density matrices
         dm = dm[0] + dm[1]
 
     with mol.with_common_orig((0,0,0)):
@@ -1300,6 +1318,7 @@ def as_scanner(mf):
     class SCF_Scanner(mf.__class__, lib.SinglePointScanner):
         def __init__(self, mf_obj):
             self.__dict__.update(mf_obj.__dict__)
+            self._last_mol_fp = mf.mol.ao_loc
 
         def __call__(self, mol_or_geom, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
@@ -1317,7 +1336,7 @@ def as_scanner(mf):
             elif self.chkfile and h5py.is_hdf5(self.chkfile):
                 dm0 = self.from_chk(self.chkfile)
             else:
-                dm0 = self.make_rdm1()
+                dm0 = None
                 # dm0 form last calculation cannot be used in the current
                 # calculation if a completely different system is given.
                 # Obviously, the systems are very different if the number of
@@ -1325,18 +1344,11 @@ def as_scanner(mf):
                 # TODO: A robust check should include more comparison on
                 # various attributes between current `mol` and the `mol` in
                 # last calculation.
-                if dm0.shape[-1] != mol.nao:
-                    #TODO:
-                    #from pyscf.scf import addons
-                    #if numpy.any(last_mol.atom_charges() != mol.atom_charges()):
-                    #    dm0 = None
-                    #elif non-relativistic:
-                    #    addons.project_dm_nr2nr(last_mol, dm0, last_mol)
-                    #else:
-                    #    addons.project_dm_r2r(last_mol, dm0, last_mol)
-                    dm0 = None
+                if numpy.array_equal(self._last_mol_fp, mol.ao_loc):
+                    dm0 = self.make_rdm1()
             self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
             e_tot = self.kernel(dm0=dm0, **kwargs)
+            self._last_mol_fp = mol.ao_loc
             return e_tot
 
     return SCF_Scanner(mf)
@@ -1427,7 +1439,7 @@ class SCF(lib.StreamObject):
     max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
     init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
 
-    # To avoid diis pollution form previous run, self.diis should not be
+    # To avoid diis pollution from previous run, self.diis should not be
     # initialized as DIIS instance here
     DIIS = diis.SCF_DIIS
     diis = getattr(__config__, 'scf_hf_SCF_diis', True)
@@ -1435,8 +1447,7 @@ class SCF(lib.StreamObject):
     # need > 0 if initial DM is numpy.zeros array
     diis_start_cycle = getattr(__config__, 'scf_hf_SCF_diis_start_cycle', 1)
     diis_file = None
-    # Give diis_space_rollback=True a trial if all other methods do not converge
-    diis_space_rollback = False
+    diis_space_rollback = 0
 
     damp = getattr(__config__, 'scf_hf_SCF_damp', 0)
     level_shift = getattr(__config__, 'scf_hf_SCF_level_shift', 0)
@@ -1562,6 +1573,7 @@ class SCF(lib.StreamObject):
     @lib.with_doc(init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from minao.')
         return init_guess_by_minao(mol)
 
     @lib.with_doc(init_guess_by_atom.__doc__)
@@ -1628,29 +1640,10 @@ class SCF(lib.StreamObject):
                 dm = self.init_guess_by_minao(mol)
         else:
             dm = self.init_guess_by_minao(mol)
-        if self.verbose >= logger.DEBUG1:
-            s = self.get_ovlp()
-            if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-                nelec = numpy.einsum('ij,ji', dm, s).real
-            else:  # UHF
-                nelec =(numpy.einsum('ij,ji', dm[0], s).real,
-                        numpy.einsum('ij,ji', dm[1], s).real)
-            logger.debug1(self, 'Nelec from initial guess = %s', nelec)
         return dm
 
-    # full density matrix for RHF
-    @lib.with_doc(make_rdm1.__doc__)
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_occ is None: mo_occ = self.mo_occ
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return make_rdm1(mo_coeff, mo_occ, **kwargs)
-
-    @lib.with_doc(make_rdm2.__doc__)
-    def make_rdm2(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_occ is None: mo_occ = self.mo_occ
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return make_rdm2(mo_coeff, mo_occ, **kwargs)
-
+    make_rdm1 = lib.module_method(make_rdm1, absences=['mo_coeff', 'mo_occ'])
+    make_rdm2 = lib.module_method(make_rdm2, absences=['mo_coeff', 'mo_occ'])
     energy_elec = energy_elec
     energy_tot = energy_tot
 
@@ -1833,7 +1826,7 @@ class SCF(lib.StreamObject):
 
     def nuc_grad_method(self):  # pragma: no cover
         '''Hook to create object for analytical nuclear gradients.'''
-        pass
+        raise NotImplementedError
 
     def update_(self, chkfile=None):
         '''Read attributes from the chkfile then replace the attributes of
@@ -1841,7 +1834,19 @@ class SCF(lib.StreamObject):
         '''
         from pyscf.scf import chkfile as chkmod
         if chkfile is None: chkfile = self.chkfile
-        self.__dict__.update(chkmod.load(chkfile, 'scf'))
+        chk_scf = chkmod.load(chkfile, 'scf')
+        nao = self.mol.nao
+        mo = chk_scf['mo_coeff']
+        if isinstance(mo, numpy.ndarray): # RHF
+            mo_nao = mo.shape[-2]
+        elif isinstance(mo[0], numpy.ndarray): # UHF
+            mo_nao = mo[0].shape[-2]
+        else: # KUHF
+            mo_nao = mo[0][0].shape[-2]
+        if mo_nao not in (nao, nao*2):
+            logger.warn(self, 'Current mol is inconsistent with SCF object in '
+                        'chkfile %s', chkfile)
+        self.__dict__.update(chk_scf)
         return self
     update_from_chk = update_from_chk_ = update = update_
 
@@ -2015,6 +2020,9 @@ class SCF(lib.StreamObject):
         else:
             raise RuntimeError(f'to_ks does not support {self.__class__}')
 
+    def stability(self):
+        raise NotImplementedError
+
 
 class KohnShamDFT:
     '''A mock DFT base class
@@ -2034,6 +2042,14 @@ class RHF(SCF):
             logger.warn(self, 'Invalid number of electrons %d for RHF method.',
                         mol.nelectron)
         return SCF.check_sanity(self)
+
+    def get_init_guess(self, mol=None, key='minao'):
+        dm = SCF.get_init_guess(self, mol, key)
+        if self.verbose >= logger.DEBUG1:
+            s = self.get_ovlp()
+            nelec = numpy.einsum('ij,ji', dm, s).real
+            logger.debug1(self, 'Nelec from initial guess = %s', nelec)
+        return dm
 
     @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,

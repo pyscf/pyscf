@@ -414,6 +414,25 @@ class KnownValues(unittest.TestCase):
         c2[:] = 1
         self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
 
+    # issue 1362
+    def test_cisd_hubbard(self):
+        mol = gto.M(verbose=0)
+        n, u = 6, 0.0
+        mol.nelectron = n
+        h1 = numpy.zeros((n,n))
+        for i in range(n-1):
+            h1[i,i+1] = h1[i+1,i] = -1.0
+        eri = numpy.zeros((n,n,n,n))
+        for i in range(1):
+            eri[i,i,i,i] = u
+        mf = scf.RHF(mol)
+        mf.get_hcore = lambda *args: h1
+        mf.get_ovlp = lambda *args: numpy.eye(n)
+        mf._eri = ao2mo.restore(8, eri, n)
+        mf.kernel()
+        myci = ci.CISD(mf)
+        ecisd, civec = myci.kernel()
+        self.assertAlmostEqual(ecisd, 0, 9)
 
 def t1_strs_ref(norb, nelec):
     nocc = nelec

@@ -367,8 +367,10 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     # DFT-RSH functionals to build long-range HF-exchange for erf(omega*r12)/r12
     if omega is not None:
         if omega > 0:
+            # long range part
             coulG *= np.exp(-.25/omega**2 * absG2)
         elif omega < 0:
+            # short range part
             coulG *= (1 - np.exp(-.25/omega**2 * absG2))
     elif cell.omega > 0:
         coulG *= np.exp(-.25/cell.omega**2 * absG2)
@@ -403,7 +405,7 @@ def precompute_exx(cell, kpts):
     #alpha = 3./Rin * np.sqrt(0.5)
     #kcell.mesh = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
     log.debug("# kcell.mesh FFT = %s", kcell.mesh)
-    rs = gen_grid.gen_uniform_grids(kcell)
+    rs = kcell.get_uniform_grids(wrap_around=False)
     kngs = len(rs)
     log.debug("# kcell kngs = %d", kngs)
     corners_coord = lib.cartesian_prod(([0, 1], [0, 1], [0, 1]))
@@ -445,14 +447,10 @@ def madelung(cell, kpts):
     ecell._env = np.append(cell._env, [0., 0., 0.])
     ecell.unit = 'B'
     #ecell.verbose = 0
-    ecell.a = np.einsum('xi,x->xi', cell.lattice_vectors(), Nk)
-    ecell.mesh = np.asarray(cell.mesh) * Nk
+    ecell.a = a = np.einsum('xi,x->xi', cell.lattice_vectors(), Nk)
 
     if cell.omega == 0:
-        ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.mesh)
-        lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
-                          Nk, ew_eta, ew_cut)
-        return -2*ecell.ewald(ew_eta, ew_cut)
+        return -2*ecell.ewald()
 
     else:
         # cell.ewald function does not use the Coulomb kernel function
@@ -460,90 +458,97 @@ def madelung(cell, kpts):
         # Coulomb operator, the Ewald summation technique is not needed
         # because the Coulomb kernel 4pi/G^2*exp(-G^2/4/omega**2) decays
         # quickly.
-        Gv, Gvbase, weights = ecell.get_Gv_weights(ecell.mesh)
-        coulG = get_coulG(ecell, Gv=Gv)
-        ZSI = np.einsum("i,ij->j", ecell.atom_charges(), ecell.get_SI(Gv))
-        return 2*cell.omega/np.pi**0.5-np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
+        precision = cell.precision
+        omega = cell.omega
+        Ecut = 10.
+        Ecut = np.log(16*np.pi**2/(2*omega**2*(2*Ecut)**.5) / precision + 1.) * 2*omega**2
+        Ecut = np.log(16*np.pi**2/(2*omega**2*(2*Ecut)**.5) / precision + 1.) * 2*omega**2
+        mesh = cutoff_to_mesh(a, Ecut)
+        Gv, Gvbase, weights = ecell.get_Gv_weights(mesh)
+        wcoulG = get_coulG(ecell, Gv=Gv) * weights
+        SI = ecell.get_SI(mesh=mesh)
+        ZSI = SI[0]
+        return 2*omega/np.pi**0.5-np.einsum('i,i,i->', ZSI.conj(), ZSI, wcoulG).real
 
 
-def get_monkhorst_pack_size(cell, kpts):
-    skpts = cell.get_scaled_kpts(kpts).round(decimals=6)
-    Nk = np.array([len(np.unique(ki)) for ki in skpts.T])
+def get_monkhorst_pack_size(cell, kpts, tol=1e-5):
+    kpts = np.reshape(kpts, (-1,3))
+    min_tol = tol
+    assert kpts.shape[0] < 1/min_tol
+    if kpts.shape[0] == 1:
+        Nk = np.array([1,1,1])
+    else:
+        tol = max(10**(-int(-np.log10(1/kpts.shape[0]))-2), min_tol)
+        skpts = cell.get_scaled_kpts(kpts)
+        Nk = np.array([np.count_nonzero(abs(ski[1:]-ski[:-1]) > tol) + 1
+                       for ski in np.sort(skpts.T)])
     return Nk
 
 
 def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.
-    The translation vectors can be used for the lattice summation.'''
-    a = cell.lattice_vectors()
-    b = cell.reciprocal_vectors(norm_to=1)
-    heights_inv = lib.norm(b, axis=1)
+    The translation vectors can be used for the lattice summation.
 
-    if nimgs is None:
-        if rcut is None:
-            rcut = cell.rcut
-        # For atoms outside the cell, distance between certain basis of nearby
-        # images may be smaller than rcut threshold even the corresponding Ls is
-        # larger than rcut. The boundary penalty ensures that Ls would be able to
-        # cover the basis that sitting out of the cell.
-        # See issue https://github.com/pyscf/pyscf/issues/1017
-        boundary_penalty = 0
-        scaled_atom_coords = cell.atom_coords().dot(b.T)
-        if len(scaled_atom_coords) > 0:
-            boundary_penalty = np.max([abs(scaled_atom_coords).max(axis=0),
-                                       abs(1 - scaled_atom_coords).max(axis=0)], axis=0)
-        nimgs = np.ceil(rcut * heights_inv + boundary_penalty).astype(int)
-    else:
-        rcut = max((np.asarray(nimgs))/heights_inv)
-
+    Kwargs:
+        discard:
+            Drop less important Ls based on AO values on grid
+    '''
     if dimension is None:
-        dimension = cell.dimension
-    if dimension == 0:
-        nimgs = [0, 0, 0]
-    elif dimension == 1:
-        nimgs = [nimgs[0], 0, 0]
-    elif dimension == 2:
-        nimgs = [nimgs[0], nimgs[1], 0]
+        # For atoms near the boundary of the cell, it is necessary (even in low-
+        # dimensional systems) to include lattice translations in all 3 dimensions.
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            dimension = cell.dimension
+        else:
+            dimension = 3
+    if rcut is None:
+        rcut = cell.rcut
 
-    Ts = lib.cartesian_prod((np.arange(-nimgs[0], nimgs[0]+1),
-                             np.arange(-nimgs[1], nimgs[1]+1),
-                             np.arange(-nimgs[2], nimgs[2]+1)))
-    Ls = np.dot(Ts, a)
-    if discard:
-        Ls = _discard_edge_images(cell, Ls, rcut)
-    return np.asarray(Ls, order='C')
-
-def _discard_edge_images(cell, Ls, rcut):
-    '''
-    Discard images if no basis in the image would contribute to lattice sum.
-    '''
-    if cell.dimension == 0 or rcut <= 0:
+    if dimension == 0 or rcut <= 0:
         return np.zeros((1, 3))
 
     a = cell.lattice_vectors()
+
     scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
-    atom_boundary_max = scaled_atom_coords[:cell.dimension].max(axis=0)
-    atom_boundary_min = scaled_atom_coords[:cell.dimension].min(axis=0)
+    atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
+    atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
     if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
-        logger.warn(cell, 'Atoms found very far from the primitive cell. '
-                    'Atom coordinates may be error.')
         atom_boundary_max[atom_boundary_max > 1] = 1
         atom_boundary_min[atom_boundary_min <-1] = -1
-    # ovlp_penalty ensures the overlap integrals for atoms in the adjcent
-    # images are converged.
     ovlp_penalty = atom_boundary_max - atom_boundary_min
-    # atom_boundary_min-1 ensures the values of basis at the grids on the edge
-    # of the primitive cell converged
-    boundary_max = np.ceil(np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)).astype(int)
-    boundary_min = np.floor(np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)).astype(int)
-    penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
-    penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
-    penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
-    shifts = lib.cartesian_prod([penalty_x, penalty_y, penalty_z]).dot(a)
-    Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
-    # cell0 (Ls == 0) should always be included.
-    Ls_mask[len(Ls)//2] = True
-    return Ls[Ls_mask]
+    dR = ovlp_penalty.dot(a[:dimension])
+    dR_basis = np.diag(dR)
+
+    # Search the minimal x,y,z requiring |x*a[0]+y*a[1]+z*a[2]+dR|^2 > rcut^2
+    # Ls boundary should be derived by decomposing (a, Rij) for each atom-pair.
+    # For reasons unclear, the so-obtained Ls boundary seems not large enough.
+    # The upper-bound of the Ls boundary is generated by find_boundary function.
+    def find_boundary(a):
+        aR = np.vstack([a, dR_basis])
+        r = np.linalg.qr(aR.T)[1]
+        ub = (rcut + abs(r[2,3:]).sum()) / abs(r[2,2])
+        return ub
+
+    xb = find_boundary(a[[1,2,0]])
+    if dimension > 1:
+        yb = find_boundary(a[[2,0,1]])
+    else:
+        yb = 0
+    if dimension > 2:
+        zb = find_boundary(a)
+    else:
+        zb = 0
+    bounds = np.ceil([xb, yb, zb]).astype(int)
+    Ts = lib.cartesian_prod((np.arange(-bounds[0], bounds[0]+1),
+                             np.arange(-bounds[1], bounds[1]+1),
+                             np.arange(-bounds[2], bounds[2]+1)))
+    Ls = np.dot(Ts[:,:dimension], a[:dimension])
+
+    ovlp_penalty += 1e-200  # avoid /0
+    Ts_scaled = (Ts[:,:dimension] + 1e-200) / ovlp_penalty
+    ovlp_penalty_fac = 1. / abs(Ts_scaled).min(axis=1)
+    Ls_mask = np.linalg.norm(Ls, axis=1) * (1-ovlp_penalty_fac) < rcut
+    Ls = Ls[Ls_mask]
+    return np.asarray(Ls, order='C')
 
 
 def super_cell(cell, ncopy, wrap_around=False):
@@ -582,7 +587,8 @@ def super_cell(cell, ncopy, wrap_around=False):
     Ls = np.dot(Ts, a)
     supcell = copy.copy(cell)
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
-    supcell.mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
+    mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
+    supcell.mesh = (mesh // 2) * 2 + 1
     return _build_supcell_(supcell, cell, Ls)
 
 
@@ -618,7 +624,9 @@ def _build_supcell_(supcell, cell, Ls):
     nimgs = len(Ls)
     symbs = [atom[0] for atom in cell._atom] * nimgs
     coords = Ls.reshape(-1,1,3) + cell.atom_coords()
-    supcell.atom = supcell._atom = list(zip(symbs, coords.reshape(-1,3).tolist()))
+    coords = coords.reshape(-1,3)
+    x, y, z = coords.T
+    supcell.atom = supcell._atom = list(zip(symbs, zip(x, y, z)))
     supcell.unit = 'B'
 
     # Do not call supcell.build() to initialize supcell since it may normalize
@@ -657,34 +665,30 @@ def cutoff_to_mesh(a, cutoff):
     Returns:
         mesh : (3,) array
     '''
+    # Search the minimal x,y,z requiring |x*b[0]+y*b[1]+z*b[2]|^2 > 2 * cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)
-    cutoff = cutoff * _cubic2nonorth_factor(a)
-    mesh = np.ceil(np.sqrt(2*cutoff)/lib.norm(b, axis=1) * 2).astype(int)
+    rx = np.linalg.qr(b[[1,2,0]].T)[1][2,2]
+    ry = np.linalg.qr(b[[2,0,1]].T)[1][2,2]
+    rz = np.linalg.qr(b.T)[1][2,2]
+
+    Gmax = (2*cutoff)**.5 / np.abs([rx, ry, rz])
+    mesh = np.ceil(Gmax).astype(int) * 2 + 1
     return mesh
 
 def mesh_to_cutoff(a, mesh):
     '''
     Convert #grid points to KE cutoff
     '''
+    # Search the minimal x,y,z requiring |x*b[0]+y*b[1]+z*b[2]|^2 > 2 * cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)
-    Gmax = lib.norm(b, axis=1) * np.asarray(mesh) * .5
-    ke_cutoff = Gmax**2/2
-    # scale down Gmax to get the real energy cutoff for non-orthogonal lattice
-    return ke_cutoff / _cubic2nonorth_factor(a)
+    rx = np.linalg.qr(b[[1,2,0]].T)[1][2,2]
+    ry = np.linalg.qr(b[[2,0,1]].T)[1][2,2]
+    rz = np.linalg.qr(b.T)[1][2,2]
 
-def _cubic2nonorth_factor(a):
-    '''The factors to transform the energy cutoff from cubic lattice to
-    non-orthogonal lattice. Energy cutoff is estimated based on cubic lattice.
-    It needs to be rescaled for the non-orthogonal lattice to ensure that the
-    minimal Gv vector in the reciprocal space is larger than the required
-    energy cutoff.
-    '''
-    # Using ke_cutoff to set up a sphere, the sphere needs to be completely
-    # inside the box defined by Gv vectors
-    abase = a / np.linalg.norm(a, axis=1)[:,None]
-    bbase = np.linalg.inv(abase.T)
-    overlap = np.einsum('ix,ix->i', abase, bbase)
-    return 1./overlap**2
+    gs = (np.asarray(mesh) - 1) // 2
+    Gmax = gs * np.array([rx, ry, rz])
+    ke_cutoff = Gmax**2 / 2
+    return ke_cutoff
 
 def cutoff_to_gs(a, cutoff):
     '''Deprecated.  Replaced by function cutoff_to_mesh.'''
@@ -693,3 +697,9 @@ def cutoff_to_gs(a, cutoff):
 def gs_to_cutoff(a, gs):
     '''Deprecated.  Replaced by function mesh_to_cutoff.'''
     return mesh_to_cutoff(a, [2*n+1 for n in gs])
+
+def round_to_cell0(r, tol=1e-6):
+    '''Round scaled coordinates to reference unit cell
+    '''
+    from pyscf.pbc.lib import kpts_helper
+    return kpts_helper.round_to_fbz(r, wrap_around=False, tol=tol)

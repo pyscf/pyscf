@@ -149,7 +149,7 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # passed to functions like get_jk, get_vxc.  These functions may take the tags
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # arrays and modifications to DM arrays may be ignored.
-    return numpy.array((dm_a, dm_b))
+    return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ):
     '''Two-particle density matrix in AO representation
@@ -694,14 +694,13 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
             :math:`\mathbf{U} \mathbf{\Lambda}^{-1} \mathbf{V}^\dagger`
             They are used to calculate asymmetric density matrix
     '''
-
-    if not numpy.array_equal(occ1, occ2):
-        raise RuntimeError('Electron numbers are not equal. Electronic coupling does not exist.')
-
     c1_a = mo1[0][:, occ1[0]>0]
     c1_b = mo1[1][:, occ1[1]>0]
     c2_a = mo2[0][:, occ2[0]>0]
     c2_b = mo2[1][:, occ2[1]>0]
+    if c1_a.shape[1] != c2_a.shape[1] or c1_b.shape[1] != c2_b.shape[1]:
+        raise RuntimeError('Electron numbers are not equal. Electronic coupling does not exist.')
+
     o_a = reduce(numpy.dot, (c1_a.conj().T, ovlp, c2_a))
     o_b = reduce(numpy.dot, (c1_b.conj().T, ovlp, c2_b))
     u_a, s_a, vt_a = numpy.linalg.svd(o_a)
@@ -830,6 +829,15 @@ class UHF(hf.SCF):
         return make_rdm2(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
+
+    def get_init_guess(self, mol=None, key='minao'):
+        dm = hf.SCF.get_init_guess(self, mol, key)
+        if self.verbose >= logger.DEBUG1:
+            s = self.get_ovlp()
+            nelec =(numpy.einsum('ij,ji', dm[0], s).real,
+                    numpy.einsum('ij,ji', dm[1], s).real)
+            logger.debug1(self, 'Nelec from initial guess = %s', nelec)
+        return dm
 
     def init_guess_by_minao(self, mol=None, breaksym=BREAKSYM):
         '''Initial guess in terms of the overlap to minimal basis.'''
@@ -975,8 +983,11 @@ class UHF(hf.SCF):
         return make_asym_dm(mo1, mo2, occ1, occ2, x)
 
     def _finalize(self):
-        ss, s = self.spin_square()
+        if self.mo_coeff is None or self.mo_occ is None:
+            # Skip spin_square (issue #1574)
+            return hf.SCF._finalize(self)
 
+        ss, s = self.spin_square()
         if self.converged:
             logger.note(self, 'converged SCF energy = %.15g  '
                         '<S^2> = %.8g  2S+1 = %.8g', self.e_tot, ss, s)

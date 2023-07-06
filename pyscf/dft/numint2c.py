@@ -594,7 +594,7 @@ class NumInt2C(numint._NumIntMixin):
                     in self.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho.append(self.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype,
                                           with_lapl))
-            rho = np.hstack(rho)
+            rho = np.concatenate(rho,axis=-1)
             if self.collinear[0] == 'm':  # mcol
                 eval_xc = self.mcfun_eval_xc_adapter(xc_code)
             else:
@@ -615,7 +615,7 @@ class NumInt2C(numint._NumIntMixin):
                 # rhoa and rhob must be real
                 rhoa.append(ni.eval_rho(mol, ao, dm_a, mask, xctype, hermi, with_lapl))
                 rhob.append(ni.eval_rho(mol, ao, dm_b, mask, xctype, hermi, with_lapl))
-            rho = np.stack([np.hstack(rhoa), np.hstack(rhob)])
+            rho = np.stack([np.concatenate(rhoa,axis=-1), np.concatenate(rhob,axis=-1)])
             assert rho.dtype == np.double
             vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
         return rho, vxc, fxc
@@ -652,6 +652,22 @@ class NumInt2C(numint._NumIntMixin):
             vmat[...,nao:,nao:] = v[1]
         return n, exc, vmat
     get_vxc = nr_gks_vxc = nr_vxc
+
+    @lib.with_doc(numint.nr_nlc_vxc.__doc__)
+    def nr_nlc_vxc(self, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
+                   max_memory=2000, verbose=None):
+        assert dm.ndim == 2
+        nao = dm.shape[-1] // 2
+        # ground state density is always real
+        dm_a = dm[:nao,:nao].real
+        dm_b = dm[nao:,nao:].real
+        ni = self._to_numint1c()
+        n, exc, v = ni.nr_nlc_vxc(mol, grids, xc_code, dm_a+dm_b, relativity,
+                                  hermi, max_memory, verbose)
+        vmat = np.zeros_like(dm)
+        vmat[:nao,:nao] = v[0]
+        vmat[nao:,nao:] = v[1]
+        return n, exc, vmat
 
     @lib.with_doc(numint.nr_rks_fxc.__doc__)
     def nr_fxc(self, mol, grids, xc_code, dm0, dms, spin=0, relativity=0, hermi=0,

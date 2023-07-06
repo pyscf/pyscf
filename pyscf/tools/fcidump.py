@@ -212,7 +212,7 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
                    tol, float_format)
 
 
-def read(filename, molpro_orbsym=MOLPRO_ORBSYM):
+def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
     '''Parse FCIDUMP.  Return a dictionary to hold the integrals and
     parameters with keys:  H1, H2, ECORE, NORB, NELEC, MS, ORBSYM, ISYM
 
@@ -221,8 +221,10 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM):
             Molpro orbsym convention as documented in
             https://www.molpro.net/info/current/doc/manual/node36.html
             In return, orbsym is converted to pyscf symmetry convention
+        verbose (bool): Whether to print debugging information
     '''
-    print('Parsing %s' % filename)
+    if verbose:
+        print('Parsing %s' % filename)
     finp = open(filename, 'r')
 
     data = []
@@ -246,7 +248,7 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM):
         else:
             result[key] = val
 
-    # Convert to molpr orbsym convert_orbsym
+    # Convert to Molpro orbsym convert_orbsym
     if 'ORBSYM' in result:
         if molpro_orbsym:
             # Guess which point group the orbsym belongs to. FCIDUMP does not
@@ -265,7 +267,7 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM):
                 result['ORBSYM'] = [0] * len(orbsym)
             else:
                 raise RuntimeError('Unknown orbsym')
-        elif max(result['ORBSYM']) >= 8:
+        elif min(result['ORBSYM']) < 0:
             raise RuntimeError('Unknown orbsym convention')
 
     norb = result['NORB']

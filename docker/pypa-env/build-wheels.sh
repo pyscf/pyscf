@@ -14,14 +14,14 @@ else
 fi
 
 # In certain versions of auditwheel, some .so files was excluded.
-sed -i '/            if basename(fn) not in needed_libs:/s/basename.*libs/1/' /opt/_internal/pipx/venvs/auditwheel/lib/python3.9/site-packages/auditwheel/wheel_abi.py
+sed -i '/            if basename(fn) not in needed_libs:/s/basename.*libs/1/' /opt/_internal/pipx/venvs/auditwheel/lib/python*/site-packages/auditwheel/wheel_abi.py
 
 # Compile wheels
-for PYVERSION in cp36-cp36m cp37-cp37m cp38-cp38 cp39-cp39 cp310-cp310; do
+for PYVERSION in cp36-cp36m cp37-cp37m cp38-cp38 cp39-cp39 cp310-cp310 cp311-cp311; do
     PYBIN=/opt/python/$PYVERSION/bin
     "${PYBIN}/pip" wheel -v --no-deps --no-clean -w /root/wheelhouse $src
 
     # Bundle external shared libraries into the wheels
-    whl=`ls /root/wheelhouse/pyscf-*-$PYVERSION-linux*_x86_64.whl`
+    whl=`ls /root/wheelhouse/pyscf-*-$PYVERSION-*linux*_x86_64.whl`
     auditwheel -v repair "$whl" --lib-sdir /lib -w $dst
 done

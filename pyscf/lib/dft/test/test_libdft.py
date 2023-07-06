@@ -29,7 +29,7 @@ class KnownValues(unittest.TestCase):
                 ao_mask[i0:i1] = non0tab_mask[k] == 1
             valued = [m.any() for m in numpy.split(ao_mask, [56, 112, 168])]
             empty_mask = ~numpy.array(valued)
-            return empty_mask.astype(numpy.int).tolist()
+            return empty_mask.astype(int).tolist()
 
         def check(non0tab_mask):
             if get_empty_mask(non0tab_mask) != naive_emtpy_mask(non0tab_mask):

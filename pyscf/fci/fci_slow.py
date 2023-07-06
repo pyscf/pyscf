@@ -32,7 +32,7 @@ def contract_1e(f1e, fcivec, norb, nelec):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci0 = fcivec.reshape(na,nb)
-    t1 = numpy.zeros((norb,norb,na,nb))
+    t1 = numpy.zeros((norb,norb,na,nb), dtype=fcivec.dtype)
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
             t1[a,i,str1] += sign * ci0[str0]
@@ -43,19 +43,22 @@ def contract_1e(f1e, fcivec, norb, nelec):
     return fcinew.reshape(fcivec.shape)
 
 
-def contract_2e(eri, fcivec, norb, nelec, opt=None):
+def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     '''Compute E_{pq}E_{rs}|CI>'''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-    link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+    if link_index is None:
+        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+    else:
+        link_indexa, link_indexb = link_index
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci0 = fcivec.reshape(na,nb)
-    t1 = numpy.zeros((norb,norb,na,nb))
+    t1 = numpy.zeros((norb,norb,na,nb), dtype=fcivec.dtype)
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
             t1[a,i,str1] += sign * ci0[str0]
@@ -65,7 +68,7 @@ def contract_2e(eri, fcivec, norb, nelec, opt=None):
 
     t1 = lib.einsum('bjai,aiAB->bjAB', eri.reshape([norb]*4), t1)
 
-    fcinew = numpy.zeros_like(ci0)
+    fcinew = numpy.zeros_like(ci0, dtype=fcivec.dtype)
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
             fcinew[str1] += sign * t1[a,i,str0]
@@ -131,7 +134,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''
     if not isinstance(nelec, (int, numpy.integer)):
         nelec = sum(nelec)
-    h2e = ao2mo.restore(1, eri.copy(), norb)
+    h2e = ao2mo.restore(1, eri.copy(), norb).astype(h1e.dtype, copy=False)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
@@ -147,8 +150,8 @@ def make_hdiag(h1e, eri, norb, nelec, opt=None):
     else:
         neleca, nelecb = nelec
 
-    occslista = cistring._gen_occslst(range(norb), neleca)
-    occslistb = cistring._gen_occslst(range(norb), nelecb)
+    occslista = cistring.gen_occslst(range(norb), neleca)
+    occslistb = cistring.gen_occslst(range(norb), nelecb)
     eri = ao2mo.restore(1, eri, norb)
     diagj = numpy.einsum('iijj->ij', eri)
     diagk = numpy.einsum('ijji->ij', eri)

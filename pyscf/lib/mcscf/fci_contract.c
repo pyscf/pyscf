@@ -769,9 +769,10 @@ static void pick_link_by_irrep(_LinkTrilT *clink, int *link_index,
         }
 }
 
-static void ctr_rhf2esym_kern1(double *eri, double *ci0, double *ci1ab,
-                              double *ci1buf, double *t1buf, int ncol_ci1buf,
-                              int bcount, int stra_id, int strb_id,
+static void ctr_rhf2esym_kern(double *eri, double *ci0a, double *ci0b,
+                              double *ci1a, double *ci1b,
+                              double *t1buf, int ncol_ci1buf,
+                              int bcount, int intera_id, int interb_id,
                               int nnorb, int nb_intermediate,
                               int na, int nb, int nlinka, int nlinkb,
                               _LinkTrilT *clink_indexa, _LinkTrilT *clink_indexb)
@@ -783,90 +784,238 @@ static void ctr_rhf2esym_kern1(double *eri, double *ci0, double *ci1ab,
         double *vt1 = t1buf + nnorb*bcount;
 
         NPdset0(t1, nnorb*bcount);
-        FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
-                     0, nb, nlinka, clink_indexa);
+        if (na > 0) {
+                // (stra,interb) * ia(alpha) -> (intera,interb)
+                FCIprog_a_t1(ci0a, t1, bcount, intera_id, interb_id,
+                             0, nb_intermediate, nlinka, clink_indexa);
+        }
+        if (nb > 0) {
+                // (intera,strb) * ia(beta) -> (intera,interb)
+                FCIprog_b_t1(ci0b, t1, bcount, intera_id, interb_id,
+                             0, nb, nlinkb, clink_indexb);
+        }
         dgemm_(&TRANS_N, &TRANS_N, &bcount, &nnorb, &nnorb,
                &D1, t1, &bcount, eri, &nnorb, &D0, vt1, &bcount);
-        FCIspread_b_t1(ci1ab, vt1, bcount, stra_id, strb_id,
-                       0, nb_intermediate, nlinkb, clink_indexb);
-        spread_bufa_t1(ci1buf, vt1, bcount, bcount, stra_id, 0,
-                       0, ncol_ci1buf, nlinka, clink_indexa);
+
+        if (nb > 0) {
+                // (intera,interb) * ia(beta) -> (intera,strb)
+                FCIspread_b_t1(ci1b, vt1, bcount, intera_id, interb_id,
+                               0, nb, nlinkb, clink_indexb);
+        }
+        if (na > 0) {
+                // (intera,interb) * ia(alpha) -> (stra,interb)
+                spread_bufa_t1(ci1a, vt1, bcount, bcount, intera_id, 0,
+                               0, ncol_ci1buf, nlinka, clink_indexa);
+        }
 }
 
-static void loop_c2e_symm1(double *eri, double *ci0, double *ci1aa, double *ci1ab,
-                           int nnorb, int na_intermediate, int nb_intermediate,
-                           int na, int nb, int nlinka, int nlinkb,
-                           _LinkTrilT *clinka, _LinkTrilT *clinkb)
-{
-        double *ci1bufs[MAX_THREADS];
-#pragma omp parallel
+// ci0a and ci1a ~ (stra,interb)
+// ci0b and ci1b ~ (intera,strb)
+static void loop_c2e_symm(double *eri, double *ci0a, double *ci0b,
+                          double *ci1a, double *ci1b, double *t1buf, double **ci1bufs,
+                          int nnorb, int na, int nb, int na_intermediate, int nb_intermediate,
+                          int nlinka, int nlinkb, _LinkTrilT *clinka, _LinkTrilT *clinkb)
 {
         int strk, ib;
         size_t blen;
-        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*nnorb*2+2));
-        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
-        ci1bufs[omp_get_thread_num()] = ci1buf;
-        for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
-                blen = MIN(STRB_BLKSIZE, nb-ib);
-                NPdset0(ci1buf, ((size_t)na) * blen);
+        double *ci1buf = ci1bufs[omp_get_thread_num()];
+        if (na > 0) {
+                for (ib = 0; ib < nb_intermediate; ib += STRB_BLKSIZE) {
+                        blen = MIN(STRB_BLKSIZE, nb_intermediate-ib);
+                        NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
-                for (strk = 0; strk < na_intermediate; strk++) {
-                        ctr_rhf2esym_kern1(eri, ci0, ci1ab, ci1buf, t1buf,
-                                           blen, blen, strk, ib,
-                                           nnorb, nb_intermediate, na, nb,
-                                           nlinka, nlinkb, clinka, clinkb);
-                }
-//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-//#pragma omp master
-//                FCIaxpy2d(ci1aa+ib, ci1buf, na, nb, blen);
+                        for (strk = 0; strk < na_intermediate; strk++) {
+                                ctr_rhf2esym_kern(eri, ci0a, ci0b, ci1buf, ci1b, t1buf,
+                                                  blen, blen, strk, ib,
+                                                  nnorb, nb_intermediate, na, nb,
+                                                  nlinka, nlinkb, clinka, clinkb);
+                        }
 #pragma omp barrier
-                _reduce(ci1aa+ib, ci1bufs, na, nb, blen);
+                        _reduce(ci1a+ib, ci1bufs, na, nb_intermediate, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may
-// occur race condition between FCIaxpy2d and ctr_rhf2esym_kern1
+// occur race condition between FCIaxpy2d and ctr_rhf2esym_kern
 #pragma omp barrier
+                }
+        } else {
+                for (ib = 0; ib < nb_intermediate; ib += STRB_BLKSIZE) {
+                        blen = MIN(STRB_BLKSIZE, nb_intermediate-ib);
+#pragma omp for schedule(static)
+                        for (strk = 0; strk < na_intermediate; strk++) {
+                                ctr_rhf2esym_kern(eri, ci0a, ci0b, ci1buf, ci1b, t1buf,
+                                                  blen, blen, strk, ib,
+                                                  nnorb, nb_intermediate, na, nb,
+                                                  nlinka, nlinkb, clinka, clinkb);
+                        }
+                }
         }
-        free(ci1buf);
-        free(t1buf);
-}
 }
 
-#define TOTIRREPS       8
-void FCIcontract_2e_symm1(double **eris, double **ci0, double **ci1,
-                          int norb, int *nas, int *nbs, int nlinka, int nlinkb,
-                          int **linka, int **linkb, int *dimirrep, int wfnsym)
+void FCIcontract_2e_symm1(double *eris, double *ci0, double *ci1,
+                          int *eris_ir_dims, int *ci_ir_size,
+                          int *nas, int *nbs, int *linka, int *linkb,
+                          int norb, int nlinka, int nlinkb, int nirreps, int wfnsym)
 {
         int i;
         int na = 0;
         int nb = 0;
-        for (i = 0; i < TOTIRREPS; i++) {
+        int *linka_loc = malloc(sizeof(int) * (nirreps*4+4));
+        int *linkb_loc = linka_loc + nirreps + 1;
+        int *eris_loc = linkb_loc + nirreps + 1;
+        int *ci_loc = eris_loc + nirreps + 1;
+        linka_loc[0] = 0;
+        linkb_loc[0] = 0;
+        eris_loc[0] = 0;
+        ci_loc[0] = 0;
+        for (i = 0; i < nirreps; i++) {
                 na = MAX(nas[i], na);
                 nb = MAX(nbs[i], nb);
+                linka_loc[i+1] = linka_loc[i] + nas[i] * nlinka * 4;
+                linkb_loc[i+1] = linkb_loc[i] + nbs[i] * nlinkb * 4;
+                eris_loc[i+1] = eris_loc[i] + eris_ir_dims[i]*eris_ir_dims[i];
+                ci_loc[i+1] = ci_loc[i] + ci_ir_size[i];
         }
+
+        double *ci1bufs[MAX_THREADS];
+#pragma omp parallel
+{
         _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * na);
         _LinkTrilT *clinkb = malloc(sizeof(_LinkTrilT) * nlinkb * nb);
-        int ai_ir, stra_ir, strb_ir, intera_ir, interb_ir, ma, mb;
-        for (stra_ir = 0; stra_ir < TOTIRREPS; stra_ir++) {
-        for (ai_ir = 0; ai_ir < TOTIRREPS; ai_ir++) {
-                strb_ir = wfnsym^stra_ir;
-                ma = nas[stra_ir];
-                mb = nbs[strb_ir];
-                if (ma > 0 && mb > 0 && dimirrep[ai_ir] > 0) {
-                        intera_ir = ai_ir^stra_ir;
-                        interb_ir = ai_ir^strb_ir;
-                        // clinka for inter_ir*ai_ir -> stra_ir
-                        pick_link_by_irrep(clinka, linka[intera_ir],
-                                           nas[intera_ir], nlinka, ai_ir);
-                        // clinka for strb_ir*ai_ir -> inter_ir
-                        pick_link_by_irrep(clinkb, linkb[strb_ir],
-                                           nbs[strb_ir], nlinkb, ai_ir);
-                        loop_c2e_symm1(eris[ai_ir], ci0[stra_ir],
-                                       ci1[stra_ir], ci1[intera_ir],
-                                       dimirrep[ai_ir], nas[intera_ir],
-                                       nbs[interb_ir], ma, mb,
-                                       nlinka, nlinkb, clinka, clinkb);
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)+2));
+        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
+        ci1bufs[omp_get_thread_num()] = ci1buf;
+
+        int ai_ir, t1_ir, intera_ir, interb_ir, stra_ir, strb_ir;
+        for (intera_ir = 0; intera_ir < nirreps; intera_ir++) {
+// TODO: pick_link_by_irrep to extract link_index for all nirreps in one pass
+        for (ai_ir = 0; ai_ir < nirreps; ai_ir++) {
+                if (eris_ir_dims[ai_ir] > 0) {
+                        t1_ir = wfnsym ^ ai_ir;
+                        interb_ir = t1_ir ^ intera_ir;
+                        stra_ir = ai_ir ^ intera_ir;
+                        strb_ir = ai_ir ^ interb_ir;
+                        if (nas[intera_ir] > 0 && nbs[interb_ir] > 0 &&
+                            (nas[stra_ir] > 0 || nbs[strb_ir] > 0)) {
+// clinka for intera_ir*ai_ir -> stra_ir
+pick_link_by_irrep(clinka, linka+linka_loc[intera_ir], nas[intera_ir], nlinka, ai_ir);
+// clinkb for interb_ir*ai_ir -> strb_ir
+pick_link_by_irrep(clinkb, linkb+linkb_loc[interb_ir], nbs[interb_ir], nlinkb, ai_ir);
+loop_c2e_symm(eris+eris_loc[ai_ir],
+              ci0+ci_loc[stra_ir], ci0+ci_loc[wfnsym^strb_ir],
+              ci1+ci_loc[stra_ir], ci1+ci_loc[wfnsym^strb_ir], t1buf, ci1bufs,
+              eris_ir_dims[ai_ir], nas[stra_ir], nbs[strb_ir],
+              nas[intera_ir], nbs[interb_ir], nlinka, nlinkb, clinka, clinkb);
+                        }
                 }
         } }
+        free(ci1buf);
+        free(t1buf);
         free(clinka);
         free(clinkb);
 }
+        free(linka_loc);
+}
 
+#define IRREP_OF(l, g)  (l + max_momentum + (g) * ug_offsets)
+void FCIcontract_2e_cyl_sym(double *eris, double *ci0, double *ci1,
+                            int *eris_ir_dims, int *ci_ir_size,
+                            int *nas, int *nbs, int *linka, int *linkb,
+                            int norb, int nlinka, int nlinkb,
+                            int max_momentum, int max_gerades,
+                            int wfn_momentum, int wfn_ungerade)
+{
+        int nirreps = (max_momentum * 2 + 1) * max_gerades;
+        int ug_offsets = max_momentum * 2 + 1;
+        int i;
+        int na = 0;
+        int nb = 0;
+        int *linka_loc = malloc(sizeof(int) * (nirreps*4+4));
+        int *linkb_loc = linka_loc + nirreps + 1;
+        int *ci_loc = linkb_loc + nirreps + 1;
+        int *eris_loc = ci_loc + nirreps + 1;
+        linka_loc[0] = 0;
+        linkb_loc[0] = 0;
+        eris_loc[0] = 0;
+        ci_loc[0] = 0;
+        for (i = 0; i < nirreps; i++) {
+                na = MAX(nas[i], na);
+                nb = MAX(nbs[i], nb);
+                linka_loc[i+1] = linka_loc[i] + nas[i] * nlinka * 4;
+                linkb_loc[i+1] = linkb_loc[i] + nbs[i] * nlinkb * 4;
+                eris_loc[i+1] = eris_loc[i] + eris_ir_dims[i]*eris_ir_dims[i];
+                ci_loc[i+1] = ci_loc[i] + ci_ir_size[i];
+        }
+
+        double *ci1bufs[MAX_THREADS];
+#pragma omp parallel
+{
+        _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * na);
+        _LinkTrilT *clinkb = malloc(sizeof(_LinkTrilT) * nlinkb * nb);
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)+2));
+        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
+        ci1bufs[omp_get_thread_num()] = ci1buf;
+
+        int stra_l, strb_l, stra_g, strb_g;
+        int stra_ir = 0;
+        int strb_ir = 0;
+        int intera_l, interb_l, intera_g, interb_g, intera_ir, interb_ir;
+        int ai_l, ai_g, ai_ir, t1_l, t1_g;
+        int eri_m0, eri_m1;
+        int ma, mb;
+
+        for (intera_g = 0; intera_g < max_gerades; intera_g++) {
+        for (intera_l = -max_momentum; intera_l <= max_momentum; intera_l++) {
+                // abs(ai_l) < max_momentum
+                // t1_l := wfn_momentum - ai_l
+                // abs(interb_l := t1_l-intera_l) < max_momentum
+                //      => range for ai_l
+                eri_m0 = MAX(0, wfn_momentum-intera_l) - max_momentum;;
+                eri_m1 = MIN(0, wfn_momentum-intera_l) + max_momentum;;
+// TODO: pick_link_by_irrep to extract link_index for all nirreps in one pass
+                for (ai_g = 0; ai_g < max_gerades; ai_g++) {
+                for (ai_l = eri_m0; ai_l <= eri_m1; ai_l++) {
+                        ai_ir = IRREP_OF(ai_l, ai_g);
+
+                        if (eris_ir_dims[ai_ir] > 0) {
+                                t1_l = wfn_momentum - ai_l;
+                                t1_g = wfn_ungerade ^ ai_g;
+                                interb_l = t1_l - intera_l;
+                                interb_g = t1_g ^ intera_g;
+                                intera_ir = IRREP_OF(intera_l, intera_g);
+                                interb_ir = IRREP_OF(interb_l, interb_g);
+
+                                stra_l = intera_l + ai_l;
+                                stra_g = intera_g ^ ai_g;
+                                strb_l = interb_l + ai_l; // = wfn_momentum-intera_l
+                                strb_g = interb_g ^ ai_g; // = wfn_ungerade^intera_g
+                                ma = 0;
+                                if (abs(stra_l) <= max_momentum) {
+                                        stra_ir = IRREP_OF(stra_l, stra_g);
+                                        ma = nas[stra_ir];
+                                }
+                                mb = 0;
+                                if (abs(strb_l) <= max_momentum) {
+                                        strb_ir = IRREP_OF(strb_l, strb_g);
+                                        mb = nbs[strb_ir];
+                                }
+                                if (nas[intera_ir] > 0 && nas[interb_ir] > 0 &&
+                                    (ma > 0 || mb > 0)) {
+// clinka for intera*ai -> stra.
+pick_link_by_irrep(clinka, linka+linka_loc[intera_ir], nas[intera_ir], nlinka, ai_ir);
+// clinkb for interb*ai -> strb
+pick_link_by_irrep(clinkb, linkb+linkb_loc[interb_ir], nbs[interb_ir], nlinkb, ai_ir);
+loop_c2e_symm(eris+eris_loc[ai_ir],
+              ci0+ci_loc[stra_ir], ci0+ci_loc[intera_ir],
+              ci1+ci_loc[stra_ir], ci1+ci_loc[intera_ir], t1buf, ci1bufs,
+              eris_ir_dims[ai_ir], ma, mb, nas[intera_ir], nbs[interb_ir],
+              nlinka, nlinkb, clinka, clinkb);
+                                }
+                        } }
+                }
+        } }
+        free(ci1buf);
+        free(t1buf);
+        free(clinka);
+        free(clinkb);
+}
+        free(linka_loc);
+}

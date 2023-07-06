@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,6 +25,44 @@ from pyscf.scf import hf as mol_hf
 from pyscf.pbc import tools
 from pyscf.pbc.lib import kpts as libkpts
 from pyscf.pbc.scf import khf
+
+@lib.with_doc(khf.get_occ.__doc__)
+def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
+    if mo_energy_kpts is None:
+        mo_energy_kpts = mf.mo_energy
+    cell = mf.cell
+    kpts = mf.kpts
+    assert isinstance(kpts, libkpts.KPoints)
+
+    nocc = cell.tot_electrons(kpts.nkpts) // 2
+    mo_energy_kpts = kpts.transform_mo_energy(mo_energy_kpts)
+    mo_energy = np.sort(np.hstack(mo_energy_kpts))
+    fermi = mo_energy[nocc-1]
+    mo_occ_kpts = []
+    for mo_e in mo_energy_kpts:
+        mo_occ_kpts.append((mo_e <= fermi).astype(np.double) * 2)
+
+    if nocc < mo_energy.size:
+        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
+                    mo_energy[nocc-1], mo_energy[nocc])
+        if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
+            logger.warn(mf, 'HOMO %.12g == LUMO %.12g',
+                        mo_energy[nocc-1], mo_energy[nocc])
+    else:
+        logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+
+    if mf.verbose >= logger.DEBUG:
+        np.set_printoptions(threshold=len(mo_energy))
+        logger.debug(mf, '     k-point                  mo_energy')
+        for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts, kpts_in_ibz=False)):
+            logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
+                         k, kpt[0], kpt[1], kpt[2],
+                         np.sort(mo_energy_kpts[k][mo_occ_kpts[k]> 0]),
+                         np.sort(mo_energy_kpts[k][mo_occ_kpts[k]==0]))
+        np.set_printoptions(threshold=1000)
+
+    mo_occ_kpts = kpts.check_mo_occ_symmetry(mo_occ_kpts)
+    return mo_occ_kpts
 
 @lib.with_doc(khf.energy_elec.__doc__)
 def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
@@ -62,13 +100,43 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     dm = kpts.transform_dm(dm)
     return khf.get_rho(mf, dm, grids, kpts.kpts)
 
+def eig(kmf, h_kpts, s_kpts):
+    from pyscf.scf.hf_symm import eig as eig_symm
+    cell = kmf.cell
+    symm_orb = cell.symm_orb
+    irrep_id = cell.irrep_id
+
+    nkpts = len(h_kpts)
+    assert len(symm_orb) == nkpts
+    eig_kpts = []
+    mo_coeff_kpts = []
+
+    for k in range(nkpts):
+        e, c = eig_symm(kmf, h_kpts[k], s_kpts[k], symm_orb[k], irrep_id[k])
+        eig_kpts.append(e)
+        mo_coeff_kpts.append(c)
+    return eig_kpts, mo_coeff_kpts
+
+def ksymm_scf_common_init(kmf, cell, kpts, use_ao_symmetry=True):
+    kmf._kpts = None
+    kmf.use_ao_symmetry = (cell.dimension == 3 and
+                           use_ao_symmetry and
+                           not kpts.time_reversal and
+                           kpts.symmorphic and
+                           len(kpts.little_cogroup_ops) > 0)
+    if kmf.use_ao_symmetry and cell.symm_orb is None:
+        cell._build_symmetry(kpts)
+    return kmf
+
+
 class KsymAdaptedKSCF(khf.KSCF):
     """
     KRHF with k-point symmetry
     """
     def __init__(self, cell, kpts=libkpts.KPoints(),
-                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
-        self._kpts = None
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
+                 use_ao_symmetry=True):
+        ksymm_scf_common_init(self, cell, kpts, use_ao_symmetry)
         khf.KSCF.__init__(self, cell, kpts=kpts, exxdiv=exxdiv)
 
     @property
@@ -119,37 +187,17 @@ class KsymAdaptedKSCF(khf.KSCF):
         return self
 
     def get_init_guess(self, cell=None, key='minao'):
-        if cell is None:
-            cell = self.cell
-        dm_kpts = None
-        key = key.lower()
-        if key == '1e' or key == 'hcore':
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif getattr(cell, 'natm', 0) == 0:
-            logger.info(self, 'No atom found in cell. Use 1e initial guess')
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif key == 'atom':
-            dm = self.init_guess_by_atom(cell)
-        elif key[:3] == 'chk':
-            try:
-                dm_kpts = self.from_chk()
-            except (IOError, KeyError):
-                logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
-                            self.chkfile)
-                dm = self.init_guess_by_minao(cell)
-        else:
-            dm = self.init_guess_by_minao(cell)
-
-        if dm_kpts is None:
-            dm_kpts = lib.asarray([dm]*self.kpts.nkpts_ibz)
+        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
+        if dm_kpts.ndim == 2:
+            dm_kpts = np.asarray([dm_kpts]*self.kpts.nkpts_ibz)
+        elif len(dm_kpts) != self.kpts.nkpts_ibz:
+            dm_kpts = dm_kpts[self.kpts.ibz2bz]
 
         ne = np.einsum('k,kij,kji', self.kpts.weights_ibz, dm_kpts, self.get_ovlp(cell)).real
-        # FIXME: consider the fractional num_electron or not? This maybe
-        # relate to the charged system.
         nkpts = self.kpts.nkpts
         ne *= nkpts
         nelectron = float(self.cell.tot_electrons(nkpts))
-        if abs(ne - nelectron) > 1e-7*nkpts:
+        if abs(ne - nelectron) > 0.01*nkpts:
             logger.debug(self, 'Big error detected in the electron number '
                          'of initial guess density matrix (Ne/cell = %g)!\n'
                          '  This can cause huge error in Fock matrix and '
@@ -194,8 +242,11 @@ class KsymAdaptedKSCF(khf.KSCF):
         dm_kpts = kpts.transform_dm(dm_kpts)
         if kpts_band is None: kpts_band = kpts.kpts_ibz
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts.kpts, kpts_band,
-                                     with_j, with_k, omega, exxdiv=self.exxdiv)
+        if self.rsjk:
+            raise NotImplementedError('rsjk with k-points symmetry')
+        else:
+            vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts.kpts, kpts_band,
+                                         with_j, with_k, omega, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
@@ -212,6 +263,50 @@ class KsymAdaptedKSCF(khf.KSCF):
                 fh5['scf/kpts'] = self.kpts.kpts_ibz #FIXME Shall we rebuild kpts? If so, more info is needed.
         return self
 
+    def eig(self, h_kpts, s_kpts):
+        if self.use_ao_symmetry:
+            return eig(self, h_kpts, s_kpts)
+        else:
+            return khf.KSCF.eig(self, h_kpts, s_kpts)
+
+    def get_orbsym(self, mo_coeff=None, s=None):
+        if not self.use_ao_symmetry:
+            raise RuntimeError("AO symmetry not initiated")
+        from pyscf.scf.hf_symm import get_orbsym
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if s is None:
+            s = self.get_ovlp()
+
+        cell = self.cell
+        symm_orb = cell.symm_orb
+        irrep_id = cell.irrep_id
+        orbsym = []
+        for k in range(len(mo_coeff)):
+            orbsym_k = np.asarray(get_orbsym(cell, mo_coeff[k], s=s[k],
+                                             symm_orb=symm_orb[k], irrep_id=irrep_id[k]))
+            orbsym.append(orbsym_k)
+        return orbsym
+
+    orbsym = property(get_orbsym)
+
+    def _finalize(self):
+        khf.KSCF._finalize(self)
+        if not self.use_ao_symmetry:
+            return self
+
+        orbsym = self.get_orbsym()
+        for k, mo_e in enumerate(self.mo_energy):
+            idx = np.argsort(mo_e.round(9), kind='stable')
+            self.mo_energy[k] = self.mo_energy[k][idx]
+            self.mo_occ[k] = self.mo_occ[k][idx]
+            self.mo_coeff[k] = lib.tag_array(self.mo_coeff[k][:,idx], orbsym=orbsym[k][idx])
+
+        self.dump_chk({'e_tot': self.e_tot, 'mo_energy': self.mo_energy,
+                       'mo_coeff': self.mo_coeff, 'mo_occ': self.mo_occ})
+        return self
+
+    get_occ = get_occ
     get_rho = get_rho
     energy_elec = energy_elec
 

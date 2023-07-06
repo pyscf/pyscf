@@ -17,6 +17,7 @@ cell = gto.M(
     pseudo = 'gth-pade',
     mesh = [24,24,24],
     verbose = 5,
+    space_group_symmetry = True,
 )
 
 nk = [2,2,2]

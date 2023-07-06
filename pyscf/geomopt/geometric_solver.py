@@ -18,12 +18,14 @@ Interface to geomeTRIC library https://github.com/leeping/geomeTRIC
 '''
 
 import os
+import uuid
 import tempfile
 import numpy
 import geometric
 import geometric.molecule
 #from geometric import molecule
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
                                   symmetrize)  # noqa
 from pyscf import __config__
@@ -72,11 +74,11 @@ class PySCFEngine(geometric.engine.Engine):
         g_scanner = self.scanner
         mol = self.mol
         self.cycle += 1
-        lib.logger.note(g_scanner, '\nGeometry optimization cycle %d', self.cycle)
+        logger.note(g_scanner, '\nGeometry optimization cycle %d', self.cycle)
 
         # geomeTRIC requires coords and gradients in atomic unit
         coords = coords.reshape(-1,3)
-        if g_scanner.verbose >= lib.logger.NOTE:
+        if g_scanner.verbose >= logger.NOTE:
             dump_mol_geometry(mol, coords*lib.param.BOHR)
 
         if mol.symmetry:
@@ -84,9 +86,8 @@ class PySCFEngine(geometric.engine.Engine):
 
         mol.set_geom_(coords, unit='Bohr')
         energy, gradients = g_scanner(mol)
-        lib.logger.note(g_scanner,
-                        'cycle %d: E = %.12g  dE = %g  norm(grad) = %g', self.cycle,
-                        energy, energy - self.e_last, numpy.linalg.norm(gradients))
+        logger.note(g_scanner, 'cycle %d: E = %.12g  dE = %g  norm(grad) = %g',
+                    self.cycle, energy, energy - self.e_last, numpy.linalg.norm(gradients))
         self.e_last = energy
 
         if callable(self.callback):
@@ -128,7 +129,6 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     if not include_ghost:
         g_scanner.atmlst = numpy.where(method.mol.atom_charges() != 0)[0]
 
-    tmpf = tempfile.mktemp(dir=lib.param.TMPDIR)
     engine = PySCFEngine(g_scanner)
     engine.callback = callback
     engine.maxsteps = maxsteps
@@ -142,21 +142,28 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     # detection code in Mole.build function).
     if engine.mol.symmetry:
         engine.mol.symmetry = engine.mol.topgroup
+    engine.assert_convergence = assert_convergence
 
     # geomeTRIC library on pypi requires to provide config file log.ini.
     if not os.path.exists(os.path.abspath(
-            os.path.join(geometric.optimize.__file__, '..', 'log.ini'))):
+            os.path.join(geometric.optimize.__file__, '..', 'log.ini'))) and kwargs.get('logIni') is None:
         kwargs['logIni'] = os.path.abspath(os.path.join(__file__, '..', 'log.ini'))
 
-    engine.assert_convergence = assert_convergence
-    try:
-        geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
-                                         constraints=constraints, **kwargs)
-        conv = True
-        # method.mol.set_geom_(m.xyzs[-1], unit='Angstrom')
-    except NotConvergedError as e:
-        lib.logger.note(method, str(e))
-        conv = False
+    with tempfile.TemporaryDirectory(dir=lib.param.TMPDIR) as tmpdir:
+        tmpf = os.path.join(tmpdir, str(uuid.uuid4()))
+
+        if 'hessian' in kwargs:
+            kwargs['hessian'] = _make_hessian(g_scanner, kwargs['hessian'], tmpdir)
+            logger.debug(g_scanner, 'Analytical hessian saved in %s', kwargs['hessian'])
+
+        try:
+            geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
+                                             constraints=constraints, **kwargs)
+            conv = True
+            # method.mol.set_geom_(m.xyzs[-1], unit='Angstrom')
+        except NotConvergedError as e:
+            logger.note(method, str(e))
+            conv = False
     return conv, engine.mol
 
 def optimize(method, assert_convergence=ASSERT_CONV,
@@ -181,6 +188,30 @@ def optimize(method, assert_convergence=ASSERT_CONV,
     # MRH, 07/23/2019: name all explicit kwargs for forward compatibility
     return kernel(method, assert_convergence=assert_convergence, include_ghost=include_ghost,
                   constraints=constraints, callback=callback, maxsteps=maxsteps, **kwargs)[1]
+
+def _make_hessian(g_scanner, hessian_option, tmpdir):
+    '''calculate hessian and saved to a file.
+    Returns the filename in the geomeTRIC supported format, e.g.
+    file:/path/to/hessian_file
+    '''
+    if not isinstance(hessian_option, str):
+        hessian_option = os.path.join(tmpdir, str(uuid.uuid4()))
+    if ':' in hessian_option:
+        hessian_file = hessian_option.split(':', 1)[1]
+    else:
+        hessian_file, hessian_option = hessian_option, f'first:{hessian_file}'
+
+    method = g_scanner.base
+    natm = method.mol.natm
+    try:
+        h = method.Hessian().kernel()
+    except (TypeError, NotImplementedError):
+        logger.warn(g_scanner, 'Analytical hessian for %s is not available', method)
+        hessian_option = False
+    else:
+        h = h.transpose(0,2,1,3).reshape(3*natm, 3*natm)
+        numpy.savetxt(hessian_file, h)
+    return hessian_option
 
 class GeometryOptimizer(lib.StreamObject):
     '''Optimize the molecular geometry for the input method.
@@ -212,48 +243,3 @@ class GeometryOptimizer(lib.StreamObject):
 
 class NotConvergedError(RuntimeError):
     pass
-
-del (INCLUDE_GHOST, ASSERT_CONV)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf, dft, cc, mp
-    mol = gto.M(atom='''
-C       1.1879  -0.3829 0.0000
-C       0.0000  0.5526  0.0000
-O       -1.1867 -0.2472 0.0000
-H       -1.9237 0.3850  0.0000
-H       2.0985  0.2306  0.0000
-H       1.1184  -1.0093 0.8869
-H       1.1184  -1.0093 -0.8869
-H       -0.0227 1.1812  0.8852
-H       -0.0227 1.1812  -0.8852
-                ''',
-                basis='3-21g')
-
-    mf = scf.RHF(mol)
-    conv_params = {
-        'convergence_energy': 1e-4,  # Eh
-        'convergence_grms': 3e-3,    # Eh/Bohr
-        'convergence_gmax': 4.5e-3,  # Eh/Bohr
-        'convergence_drms': 1.2e-2,  # Angstrom
-        'convergence_dmax': 1.8e-2,  # Angstrom
-    }
-    opt = GeometryOptimizer(mf).set(params=conv_params)#.run()
-    opt.max_cycle=1
-    opt.run()
-    mol1 = opt.mol
-    print(mf.kernel() - -153.219208484874)
-    print(scf.RHF(mol1).kernel() - -153.222680852335)
-
-    mf = dft.RKS(mol)
-    mf.xc = 'pbe,'
-    mf.conv_tol = 1e-7
-    mol1 = optimize(mf)
-
-    mymp2 = mp.MP2(scf.RHF(mol))
-    mol1 = optimize(mymp2)
-
-    mycc = cc.CCSD(scf.RHF(mol))
-    mol1 = optimize(mycc)

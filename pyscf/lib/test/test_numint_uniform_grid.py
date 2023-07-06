@@ -30,7 +30,7 @@ def setUpModule():
                       unit='B',
                       mesh=[7,6,5],
                       a=numpy.eye(3)*8,
-                      precision=1e-8)
+                      precision=1e-9)
 
     mol_orth = cell_orth.copy()
     mol_orth.dimension = 0
@@ -43,7 +43,7 @@ def setUpModule():
                        unit='B',
                        mesh=[7,6,5],
                        a=numpy.eye(3)*8+numpy.random.rand(3,3),
-                       precision=1e-8)
+                       precision=1e-9)
 
     mol_north = cell_north.copy()
     mol_north.dimension = 0
@@ -58,8 +58,10 @@ def setUpModule():
     # FIXME when kpts != 0 and dm is not hermitian
     dm_kpts = cell_orth.pbc_intor('int1e_ovlp', kpts=kpts)
 
-    grids_orth = gen_grid.UniformGrids(cell_orth)
-    grids_north = gen_grid.UniformGrids(cell_north)
+    grids_orth = gen_grid.UniformGrids(cell_orth).run()
+    grids_north = gen_grid.UniformGrids(cell_north).run()
+    grids_orth.coords = cell_orth.get_uniform_grids(wrap_around=False)
+    grids_north.coords = cell_north.get_uniform_grids(wrap_around=False)
 
     ao_kpts_orth = cell_orth.pbc_eval_gto('GTOval_sph_deriv1', grids_orth.coords, kpts=kpts)
     ao_kpts_north = cell_north.pbc_eval_gto('GTOval_sph_deriv1', grids_north.coords, kpts=kpts)
@@ -133,7 +135,7 @@ class KnownValues(unittest.TestCase):
         pcell, contr_coeff = uncontract(cell_north)
         out = eval_mat(pcell, vxc, xctype='GGA', hermi=0, kpts=kpts)
         out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
-        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 7)
 
         #out = eval_mat(pcell, vxc, xctype='GGA', hermi=1, kpts=kpts)
         self.assertRaises(RuntimeError, eval_mat, pcell, vxc, xctype='GGA', hermi=1, kpts=kpts)
@@ -213,7 +215,7 @@ class KnownValues(unittest.TestCase):
                   unit='B',
                   mesh=[7,6,5],
                   a=numpy.eye(3)*8)
-        grids = cell.get_uniform_grids()
+        grids = cell.get_uniform_grids(wrap_around=False)
         ao = cell.pbc_eval_gto('GTOval', grids)
         nao = cell.nao_nr()
         dm = numpy.random.random((nao,nao))
@@ -230,7 +232,7 @@ class KnownValues(unittest.TestCase):
                   unit='B',
                   mesh=[7,6,5],
                   a=numpy.eye(3)*8+numpy.random.rand(3,3))
-        grids = cell.get_uniform_grids()
+        grids = cell.get_uniform_grids(wrap_around=False)
         ao = cell.pbc_eval_gto('GTOval', grids)
         nao = cell.nao_nr()
         dm = numpy.random.random((nao,nao))

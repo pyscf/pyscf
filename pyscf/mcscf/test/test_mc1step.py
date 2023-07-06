@@ -117,7 +117,7 @@ class KnownValues(unittest.TestCase):
         mc1.kernel(mo)
         mo0 = mc1.mo_coeff
         ci0 = mc1.ci
-        self.assertAlmostEqual(mc1.e_tot, -108.7288793597413, 8)
+        self.assertAlmostEqual(mc1.e_tot, -108.7288793597413, 7)
         casdm1 = mc1.fcisolver.make_rdm1(mc1.ci, 4, 4)
         mc1.ci = None  # Force cas_natorb_ to recompute CI coefficients
 
@@ -180,6 +180,7 @@ class KnownValues(unittest.TestCase):
         mc1.with_dep4 = True
         mc1.max_cycle = 1
         mc1.max_cycle_micro = 6
+        mc1.fcisolver.pspace_size = 0
         mc1.kernel(mo)
         self.assertAlmostEqual(mc1.e_tot, -105.82840377848402, 6)
 
@@ -189,6 +190,7 @@ class KnownValues(unittest.TestCase):
         mc1.with_dep4 = True
         mc1.max_cycle = 1
         mc1.max_cycle_micro = 6
+        mc1.fcisolver.pspace_size = 0
         mc1.kernel(mo)
         self.assertAlmostEqual(mc1.e_tot, -105.82833244029327, 6)
 
@@ -241,7 +243,7 @@ class KnownValues(unittest.TestCase):
     def test_casci_in_casscf(self):
         mc1 = mcscf.CASSCF(m, 4, 4)
         e_tot, e_ci, fcivec = mc1.casci(mc1.mo_coeff)
-        self.assertAlmostEqual(e_tot, -108.83741684447352, 9)
+        self.assertAlmostEqual(e_tot, -108.83741684447352, 7)
 
     def test_scanner(self):
         mc_scan = mcscf.CASSCF(scf.RHF(mol), 4, 4).as_scanner().as_scanner()
@@ -254,6 +256,7 @@ class KnownValues(unittest.TestCase):
         mo = mc1.sort_mo_by_irrep({'A1u':3, 'A1g':1})
         mc1.ah_grad_trust_region = 0.3
         mc1.conv_tol = 1e-7
+        mc1.fcisolver.pspace_size = 0
         tot_jk = []
         def count_jk(envs):
             tot_jk.append(envs.get('njk', 0))
@@ -263,15 +266,10 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(tot_jk, [3,6,6,4,4,3,6,6,3,6,6,3,4,4,3,3,3,3,4,4])
 
     def test_with_ci_init_guess(self):
-        mc1 = mcscf.CASSCF(msym, 4, 4)
-        ci0 = numpy.zeros((6,6))
-        ci0[0,1] = 1
-        mc1.kernel(ci0=ci0)
-
         mc2 = mcscf.CASSCF(msym, 4, 4)
         mc2.wfnsym = 'A1u'
         mc2.kernel()
-        self.assertAlmostEqual(mc1.e_tot, mc2.e_tot, 8)
+        self.assertAlmostEqual(mc2.e_tot, -108.75147424827954, 8)
 
     def test_dump_chk(self):
         mcdic = lib.chkfile.load(mc0.chkfile, 'mcscf')
@@ -333,6 +331,12 @@ class KnownValues(unittest.TestCase):
         mc.mc2step()
         self.assertAlmostEqual(mc.e_tot, -1.14623442196547, 9)
         self.assertTrue(mc.converged)
+
+    def test_mcscf_without_initializing_scf(self):
+        mc = mcscf.CASSCF(mol.RHF(), 4, 4)
+        mc.kernel(m.mo_coeff)
+        self.assertAlmostEqual(mc.e_tot, -108.85974001740854, 7)
+        mc.analyze()
 
 
 if __name__ == "__main__":

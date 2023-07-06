@@ -37,7 +37,7 @@ def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
     Round scaled k-points to the first Brillouin zone.
 
     Args:
-        kpts : (n,3) ndarray
+        kpts : (...,3) ndarray
             Scaled k-points.
         wrap_around : bool
             If set to True, k-points are rounded to [-0.5, 0.5), otherwise [0.0, 1.0).
@@ -46,19 +46,44 @@ def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
             K-points differ less than tol are considered as the same.
             Default value is 1e-6.
     '''
-    kpts_round = np.mod(kpts, 1)
-    kpts_round = kpts_round.round(-np.log10(tol).astype(int))
-    kpts_round = np.mod(kpts_round, 1)
+    shape = kpts.shape
+    kpts = kpts.reshape(-1, 3)
+    decimal = -np.log10((tol+1e-16)/10.).astype(int)
+    kpts_fbz = np.mod(kpts, 1)
+    kpts_fbz = lib.cleanse(kpts_fbz, axis=0, tol=tol)
+    kpts_fbz = kpts_fbz.round(decimal)
+    kpts_fbz = np.mod(kpts_fbz, 1)
     if wrap_around:
-        kpts_round[kpts_round >= 0.5] -= 1.0
-    return kpts_round
+        kpts_fbz[kpts_fbz >= 0.5] -= 1.0
+    return kpts_fbz.reshape(shape)
 
 def member(kpt, kpts):
-    kpts = np.reshape(kpts, (len(kpts),kpt.size))
-    dk = abs(kpts-kpt.ravel()).max(axis=1)
-    return np.where(dk < KPT_DIFF_TOL)[0]
+    '''Return the indices of the common k-points in kpts'''
+    assert kpts.ndim == kpt.ndim + 1
+    dk = abs(kpts.reshape(-1,kpt.size) - kpt.ravel()).max(axis=1)
+    idx = np.where(dk < KPT_DIFF_TOL)[0]
+    if idx.size > 0:
+        idx = np.unique(idx)
+    return idx
+
+def intersection(kpts1, kpts2):
+    '''Return the indices of the common k-points in kpts1'''
+    assert kpts1.ndim == kpts2.ndim == 2
+    dk = abs(kpts1[:,None] - kpts2).max(axis=2)
+    idx = np.where(dk < KPT_DIFF_TOL)[0]
+    if idx.size > 0:
+        idx = np.unique(idx)
+    return idx
 
 def unique(kpts):
+    '''
+    Find the unique k-points
+
+    Returns the sorted unique k-points, the indices of the input that give the
+    unique elements, and the indices of the unique k-points that reconstruct the
+    input.
+    '''
+
     kpts = np.asarray(kpts)
     try:
         digits = int(-np.log10(KPT_DIFF_TOL))
@@ -96,7 +121,22 @@ def unique_with_wrap_around(cell, kpts):
     uniq_kpts = kpts[uniq_index]
     return uniq_kpts, uniq_index, uniq_inverse
 
-def group_by_conj_pairs(cell, kpts, wrap_around=True):
+def members_with_wrap_around(cell, kpts, test_kpts):
+    '''Search the indices of kpts in first Brillouin zone.
+    [where(k==test_kpts) for k in kpts]
+
+    kpts : array_like
+        kpts to index
+    test_kpts : array_like
+        The values against which to index each value of `kpts`.
+    '''
+    scaled_kpts = cell.get_scaled_kpts(kpts)
+    scaled_db = cell.get_scaled_kpts(test_kpts)
+    dk = scaled_kpts[:,None] - scaled_db
+    idx, idy = np.where(abs(np.modf(dk)[0]).max(axis=2) < KPT_DIFF_TOL)
+    return np.asarray(idy[idx.argsort()], dtype=np.int32)
+
+def group_by_conj_pairs(cell, kpts, wrap_around=True, return_kpts_pairs=True):
     '''Find all conjugation k-point pairs in the input kpts.
     This function lables three types of conjugation.
     1. self-conjugated. The two index in idx_pairs have the same value.
@@ -136,13 +176,61 @@ def group_by_conj_pairs(cell, kpts, wrap_around=True):
             seen[conj_idx[0]] = True
             idx_pairs.append((k, conj_idx[0]))
 
-    kpts_pairs = []
-    for i, j in idx_pairs:
-        if j is None:
-            kpts_pairs.append((kpts[i], None))
+    if return_kpts_pairs:
+        kpts_pairs = []
+        for i, j in idx_pairs:
+            if j is None:
+                kpts_pairs.append((kpts[i], None))
+            else:
+                kpts_pairs.append((kpts[i], kpts[j]))
+        return idx_pairs, kpts_pairs
+    else:
+        return idx_pairs
+
+def kk_adapted_iter(cell, kpts, kk_idx=None, time_reversal_symmetry=True):
+    '''Generates kpt which is adapted to the kpt_p in (ij|p)'''
+    if kk_idx is not None and time_reversal_symmetry:
+        raise NotImplementedError('Time reversal symmetry with custom ki-kj pairs')
+
+    log = lib.logger.new_logger(cell)
+    nkpts = len(kpts)
+    dk = (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3)
+    if kk_idx is not None:
+        dk = dk[kk_idx]
+    uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(cell, dk)
+    scaled_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
+    log.debug('Num uniq kpts %d', len(uniq_kpts))
+    k_conj_groups = group_by_conj_pairs(cell, uniq_kpts, return_kpts_pairs=False)
+    for k, k_conj in k_conj_groups:
+        self_conj = k == k_conj
+        if kk_idx is None:
+            kpt_ij_idx = np.where(uniq_inverse == k)[0]
+            assert k_conj is not None
         else:
-            kpts_pairs.append((kpts[i], kpts[j]))
-    return idx_pairs, kpts_pairs
+            kpt_ij_idx = kk_idx[uniq_inverse == k]
+        kpt_ij_idx = np.asarray(kpt_ij_idx, dtype=np.int32)
+        kpti_idx = kpt_ij_idx // nkpts
+        kptj_idx = kpt_ij_idx % nkpts
+        log.debug1('ft_ao_pair for scaled kpt = %s', scaled_kpts[k])
+        log.debug2('ft_ao_pair for kpti_idx = %s', kpti_idx)
+        log.debug2('ft_ao_pair for kptj_idx = %s', kptj_idx)
+        yield uniq_kpts[k], kpti_idx, kptj_idx, self_conj
+
+        if self_conj or k_conj is None or time_reversal_symmetry:
+            continue
+
+        # For time-reversal symmetry
+        if kk_idx is None:
+            kpt_ij_idx = np.where(uniq_inverse == k_conj)[0]
+        else:
+            kpt_ij_idx = kk_idx[uniq_inverse == k_conj]
+        kpt_ij_idx = np.asarray(kpt_ij_idx, dtype=np.int32)
+        kpti_idx = kpt_ij_idx // nkpts
+        kptj_idx = kpt_ij_idx % nkpts
+        log.debug1('ft_ao_pair for scaled kpt = %s', scaled_kpts[k_conj])
+        log.debug2('ft_ao_pair for kpti_idx = %s', kpti_idx)
+        log.debug2('ft_ao_pair for kptj_idx = %s', kptj_idx)
+        yield uniq_kpts[k_conj], kpti_idx, kptj_idx, self_conj
 
 def loop_kkk(nkpts):
     range_nkpts = range(nkpts)
@@ -397,7 +485,7 @@ class VectorSplitter(object):
 
 
 class KptsHelper(lib.StreamObject):
-    def __init__(self, cell, kpts):
+    def __init__(self, cell, kpts, init_symm_map=True):
         '''Helper class for handling k-points in correlated calculations.
 
         Attributes:
@@ -408,11 +496,34 @@ class KptsHelper(lib.StreamObject):
                 Keys are (3,) tuples of symmetry-unique k-point indices and
                 values are lists of (3,) tuples, enumerating all
                 symmetry-related k-point indices for ERI generation
+            init_symm_map : bool, optional
+                Whether to build `symm_map` at initialization. Default is True.
         '''
-        self.kconserv = get_kconserv(cell, kpts)
-        nkpts = len(kpts)
-        temp = range(0,nkpts)
-        kptlist = lib.cartesian_prod((temp,temp,temp))
+        from pyscf.pbc.lib.kpts import KPoints
+        if isinstance(kpts, KPoints):
+            self.kconserv = kpts.get_kconserv()
+            nkpts = kpts.nkpts
+        else:
+            self.kconserv = get_kconserv(cell, kpts)
+            nkpts = len(kpts)
+
+        self.nkpts = nkpts
+        self._operation = None
+        self.symm_map = None
+        if init_symm_map:
+            self.build_symm_map()
+
+    def build_symm_map(self, kptlist=None):
+        nkpts = self.nkpts
+        if kptlist is None:
+            _isin = lambda *args: True
+        else:
+            _isin = lambda v, vs: lib.isin_1d(v,vs)
+
+        if kptlist is None:
+            temp = range(0, nkpts)
+            kptlist = lib.cartesian_prod((temp,temp,temp))
+
         completed = np.zeros((nkpts,nkpts,nkpts), dtype=bool)
 
         self._operation = np.zeros((nkpts,nkpts,nkpts), dtype=int)
@@ -429,18 +540,20 @@ class KptsHelper(lib.StreamObject):
                 self._operation[kp,kq,kr] = 0
                 self.symm_map[kpt].append((kp,kq,kr))
 
-                completed[kr,ks,kp] = True
-                self._operation[kr,ks,kp] = 1 #.transpose(2,3,0,1)
-                self.symm_map[kpt].append((kr,ks,kp))
+                if _isin([kr,ks,kp], kptlist):
+                    completed[kr,ks,kp] = True
+                    self._operation[kr,ks,kp] = 1 #.transpose(2,3,0,1)
+                    self.symm_map[kpt].append((kr,ks,kp))
 
-                completed[kq,kp,ks] = True
-                self._operation[kq,kp,ks] = 2 #np.conj(.transpose(1,0,3,2))
-                self.symm_map[kpt].append((kq,kp,ks))
+                if _isin([kq,kp,ks], kptlist):
+                    completed[kq,kp,ks] = True
+                    self._operation[kq,kp,ks] = 2 #np.conj(.transpose(1,0,3,2))
+                    self.symm_map[kpt].append((kq,kp,ks))
 
-                completed[ks,kr,kq] = True
-                self._operation[ks,kr,kq] = 3 #np.conj(.transpose(3,2,1,0))
-                self.symm_map[kpt].append((ks,kr,kq))
-
+                if _isin([ks,kr,kq], kptlist):
+                    completed[ks,kr,kq] = True
+                    self._operation[ks,kr,kq] = 3 #np.conj(.transpose(3,2,1,0))
+                    self.symm_map[kpt].append((ks,kr,kq))
 
     def transform_symm(self, eri_kpt, kp, kq, kr):
         '''Return the symmetry-related ERI at any set of k-points.

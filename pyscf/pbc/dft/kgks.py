@@ -55,9 +55,14 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
     t0 = (logger.process_clock(), logger.perf_counter())
 
+    ni = ks._numint
+    if ks.nlc or ni.libxc.is_nlc(ks.xc):
+        raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
+
+    hybrid = ni.libxc.is_hybrid_xc(ks.xc)
+
     # TODO GKS with hybrid functional
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
+    hybrid = ks._numint.libxc.is_hybrid_xc(ks.xc)
     if hybrid:
         raise NotImplementedError
 
@@ -82,8 +87,9 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
     # vxc_spblk = (vxc_aa, vxc_bb), vxc_aa = (nkpts, nao, nao), vxc_bb = (nkpts, nao, nao)
+    max_memory = ks.max_memory - lib.current_memory()[0]
     n, exc, vxc_spblk = ks._numint.nr_uks(cell, ks.grids, ks.xc, (dm_a,dm_b), hermi,
-                                          kpts, kpts_band)
+                                          kpts, kpts_band, max_memory=max_memory)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -96,12 +102,29 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
         vxc.append(vxc_k)
     vxc = lib.asarray(vxc)
 
-    weight = 1./len(kpts)
+    nkpts = len(kpts)
+    weight = 1. / nkpts
     if not hybrid:
         vj = ks.get_j(cell, dm_kpts, hermi, kpts, kpts_band)
         vxc += vj
     else:
-        raise NotImplementedError
+        omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+        if getattr(ks.with_df, '_j_only', False) and nkpts > 1: # for GDF and MDF:
+            ks.with_df._j_only = False
+            if ks.with_df._cderi is not None:
+                logger.warn(ks, 'df.j_only cannot be used with hybrid '
+                            'functional. Rebuild cderi')
+                ks.with_df.build()
+        vj, vk = ks.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+        vk *= hyb
+        if omega != 0:
+            vklr = ks.get_k(cell, dm_kpts, hermi, kpts, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk
+
+        if ground_state:
+            exc -= np.einsum('Kij,Kji', dm_kpts, vk).real * .5
 
     if ground_state:
         ecoul = np.einsum('Kij,Kji', dm_kpts, vj).real * .5 * weight

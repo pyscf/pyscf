@@ -261,13 +261,6 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
             logger.debug(mol, 'atom %s rad-grids = %d, ang-grids = %s',
                          symb, n_rad, angs)
 
-            ang_grids = {}
-            for n in sorted(set(angs)):
-                grid = numpy.empty((n,4))
-                libdft.MakeAngularGrid(grid.ctypes.data_as(ctypes.c_void_p),
-                                       ctypes.c_int(n))
-                ang_grids[n] = grid
-
             angs = numpy.array(angs)
             coords = []
             vol = []
@@ -560,12 +553,12 @@ class Grids(lib.StreamObject):
             self.coords = self.coords[idx]
             self.weights = self.weights[idx]
 
-        if self.alignment:
+        if self.alignment > 1:
             padding = _padding_size(self.size, self.alignment)
             logger.debug(self, 'Padding %d grids', padding)
             if padding > 0:
                 self.coords = numpy.vstack(
-                    [self.coords, numpy.repeat([[1e4]*3], padding, axis=0)])
+                    [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
                 self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
 
         if with_non0tab:
@@ -620,12 +613,12 @@ class Grids(lib.StreamObject):
                          self.weights.size - numpy.count_nonzero(idx))
             self.coords  = numpy.asarray(self.coords [idx], order='C')
             self.weights = numpy.asarray(self.weights[idx], order='C')
-            if self.alignment:
+            if self.alignment > 1:
                 padding = _padding_size(self.size, self.alignment)
                 logger.debug(self, 'prune_by_density_: %d padding grids', padding)
                 if padding > 0:
                     self.coords = numpy.vstack(
-                        [self.coords, numpy.repeat([[1e4]*3], padding, axis=0)])
+                        [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
                     self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
             self.non0tab = self.make_mask(mol, self.coords)
             self.screen_index = self.non0tab
@@ -668,4 +661,6 @@ ANG_ORDER = numpy.array(((11, 15, 17, 17, 17, 17, 17 ),     # 0
                          (65, 65, 65, 65, 65, 65, 65 ),))   # 9
 
 def _padding_size(ngrids, alignment):
+    if alignment <= 1:
+        return 0
     return (ngrids + alignment - 1) // alignment * alignment - ngrids

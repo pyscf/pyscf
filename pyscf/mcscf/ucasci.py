@@ -381,15 +381,16 @@ class UCASCI(casci.CASCI):
                 log.info('Natural beta-orbital (expansion on AOs) in CAS space')
                 dump_mat.dump_rec(log.stdout, mocas_b, label, start=1, **kwargs)
 
-            tol = getattr(__config__, 'mcscf_addons_map2hf_tol', 0.4)
-            s = reduce(numpy.dot, (mo_coeff[0].T, ovlp_ao, self._scf.mo_coeff[0]))
-            idx = numpy.argwhere(abs(s)>tol)
-            for i,j in idx:
-                log.info('alpha <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
-            s = reduce(numpy.dot, (mo_coeff[1].T, ovlp_ao, self._scf.mo_coeff[1]))
-            idx = numpy.argwhere(abs(s)>tol)
-            for i,j in idx:
-                log.info('beta <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
+            if self._scf.mo_coeff is not None:
+                tol = getattr(__config__, 'mcscf_addons_map2hf_tol', 0.4)
+                s = reduce(numpy.dot, (mo_coeff[0].T, ovlp_ao, self._scf.mo_coeff[0]))
+                idx = numpy.argwhere(abs(s)>tol)
+                for i,j in idx:
+                    log.info('alpha <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
+                s = reduce(numpy.dot, (mo_coeff[1].T, ovlp_ao, self._scf.mo_coeff[1]))
+                idx = numpy.argwhere(abs(s)>tol)
+                for i,j in idx:
+                    log.info('beta <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
 
             if getattr(self.fcisolver, 'large_ci', None) and ci is not None:
                 log.info('\n** Largest CI components **')
@@ -411,7 +412,7 @@ class UCASCI(casci.CASCI):
     def spin_square(self, fcivec=None, mo_coeff=None, ovlp=None):
         return addons.spin_square(self, mo_coeff, fcivec, ovlp)
 
-    fix_spin_ = fix_spin = None
+    fix_spin_ = fix_spin = lib.invalid_method('fix_spin')
 
     @lib.with_doc(addons.sort_mo.__doc__)
     def sort_mo(self, caslst, mo_coeff=None, base=1):

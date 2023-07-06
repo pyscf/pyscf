@@ -167,7 +167,7 @@ def _core_val_ryd_list(mol):
         nc = mol.bas_nctr(ib)
 
         nelec_ecp = mol.atom_nelec_core(ia)
-        ecpcore = core_configuration(nelec_ecp)
+        ecpcore = core_configuration(nelec_ecp, atom_symbol=mol.atom_pure_symbol(ia))
         coreshell = [int(x) for x in AOSHELL[nuc][0][::2]]
         cvshell = [int(x) for x in AOSHELL[nuc][1][::2]]
         if mol.cart:

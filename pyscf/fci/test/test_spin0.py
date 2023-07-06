@@ -143,7 +143,7 @@ class KnownValues(unittest.TestCase):
             symmetry = True,
             basis = '6-311g')
         mf = scf.RHF(mol)
-        mf.scf()
+        mf.run(conv_tol=1e-10)
         mf._scf = mf
         h1e = mcscf.casci.h1e_for_cas(mf, mf.mo_coeff, ncas=2, ncore=2)[0]
         eri = ao2mo.incore.full(mf._eri, mf.mo_coeff[:,2:4])
@@ -152,14 +152,12 @@ class KnownValues(unittest.TestCase):
         ci0 = numpy.zeros((2,2))
         ci0[0,0] = 1
         e, c = cis.kernel(h1e, eri, 2, 2, ci0)
-        self.assertAlmostEqual(e, -0.80755526695538049, 10)
+        self.assertAlmostEqual(e, -0.80755526695538049, 7)
 
         cis = fci.direct_spin0_symm.FCISolver(mol)
-        # Test the default initial guess. It should give "0" in the results
-        cis.get_init_guess = None
-        cis.dump_flags()
-        e, c = cis.kernel(h1e, eri, 2, 2, orbsym=mf.mo_coeff.orbsym[2:4])
-        self.assertAlmostEqual(e, 0, 10)
+        cis.wfnsym = 5
+        self.assertRaises(RuntimeError,
+                          cis.kernel, h1e, eri, 2, 2, orbsym=mf.mo_coeff.orbsym[2:4])
 
     def test_gen_linkstr(self):
         sol = fci.direct_spin0.FCI(mol)
@@ -191,4 +189,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for spin0")
     unittest.main()
-

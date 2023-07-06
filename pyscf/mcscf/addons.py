@@ -712,6 +712,22 @@ def make_rdm1s(casscf, mo_coeff=None, ci=None, **kwargs):
     '''
     return casscf.make_rdm1s(mo_coeff, ci, **kwargs)
 
+def get_spin_square(casdm1, casdm2):
+    # DOI:10.1021/acs.jctc.1c00589 Eq (49)
+    spin_square = (0.75*numpy.einsum("ii", casdm1)
+                   - 0.5*numpy.einsum("ijji", casdm2)
+                   - 0.25*numpy.einsum("iijj", casdm2))
+    return spin_square
+
+def make_spin_casdm1(casdm1, casdm2, spin=None, nelec=None):
+    # DOI: 10.1002/qua.22320 Eq (3)
+    if spin is None:
+        spin = numpy.sqrt(get_spin_square(casdm1, casdm2) + 0.25) - 0.5
+    if nelec is None:
+        nelec = numpy.einsum("ii", casdm1)
+    spin_casdm1 = ((2. - nelec/2.)*casdm1 - numpy.einsum('ikkj->ij', casdm2))/(spin + 1)
+    return spin_casdm1
+
 def _is_uhf_mo(mo_coeff):
     return not (isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2)
 
@@ -777,7 +793,7 @@ def map2hf(casscf, mf_mo=None, base=BASE, tol=MAP2HF_TOL):
     s = reduce(numpy.dot, (casscf.mo_coeff.T, s, mf_mo))
     idx = numpy.argwhere(abs(s) > tol)
     for i,j in idx:
-        logger.info(casscf, '<mo_coeff-mcscf|mo_coeff-hf>  %d  %d  %12.8f',
+        logger.info(casscf, '<mo_coeff-mcscf|mo_coeff-hf>  %-5d  %-5d  % 12.8f',
                     i+base, j+base, s[i,j])
     return idx
 
@@ -868,6 +884,9 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             self.weights = weights
             self.wfnsym = wfnsym
             self.e_states = [None]
+            # MRH 09/09/2022: I turned the _base_class property into an
+            # attribute to prevent conflict with fix_spin_ dynamic class
+            self._base_class = fcibase_class
             keys = set (('weights','e_states','_base_class'))
             self._keys = self._keys.union (keys)
 
@@ -878,11 +897,6 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             log.info('State-average over %d states with weights %s',
                      len(self.weights), self.weights)
             return self
-
-        @property
-        def _base_class (self):
-            ''' for convenience; this is equal to fcibase_class '''
-            return self.__class__.__bases__[0]
 
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if 'nroots' not in kwargs:
@@ -906,19 +920,20 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             return numpy.einsum('i,i->', e, self.weights), c
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-            try:
+            if hasattr(fcibase_class, 'approx_kernel'):
                 e, c = fcibase_class.approx_kernel(self, h1, h2, norb, nelec,
                                                    ci0=ci0, nroots=self.nroots,
                                                    wfnsym=self.wfnsym,
                                                    **kwargs)
-            except AttributeError:
+            else:
                 e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0=ci0,
                                             nroots=self.nroots,
                                             wfnsym=self.wfnsym, **kwargs)
             return numpy.einsum('i,i->', e, self.weights), c
 
         def states_make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
-            dm1 = [fcibase_class.make_rdm1(self, c, norb, nelec, *args, **kwargs) for c in ci0]
+            fcibase = super()
+            dm1 = [fcibase.make_rdm1(c, norb, nelec, *args, **kwargs) for c in ci0]
             return dm1
 
         def make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
@@ -926,10 +941,11 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
                                                  self.states_make_rdm1(ci0, norb, nelec, *args, **kwargs))])
 
         def states_make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
+            fcibase = super()
             dm1a = []
             dm1b = []
             for c in ci0:
-                dm1s = fcibase_class.make_rdm1s(self, c, norb, nelec, *args, **kwargs)
+                dm1s = fcibase.make_rdm1s(c, norb, nelec, *args, **kwargs)
                 dm1a.append (dm1s[0])
                 dm1b.append (dm1s[1])
             return dm1a, dm1b
@@ -940,10 +956,11 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             return dm1s[0], dm1s[1]
 
         def states_make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
+            fcibase = super()
             rdm1 = []
             rdm2 = []
             for c in ci0:
-                dm1, dm2 = fcibase_class.make_rdm12(self, c, norb, nelec, *args, **kwargs)
+                dm1, dm2 = fcibase.make_rdm12(c, norb, nelec, *args, **kwargs)
                 rdm1.append (dm1)
                 rdm2.append (dm2)
             return rdm1, rdm2
@@ -955,10 +972,11 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             return rdm1, rdm2
 
         def states_make_rdm12s(self, ci0, norb, nelec, *args, **kwargs):
+            fcibase = super()
             dm1a, dm1b = [], []
             dm2aa, dm2ab, dm2bb = [], [], []
             for c in ci0:
-                dm1s, dm2s = fcibase_class.make_rdm12s(self, c, norb, nelec, *args, **kwargs)
+                dm1s, dm2s = fcibase.make_rdm12s(c, norb, nelec, *args, **kwargs)
                 dm1a.append(dm1s[0])
                 dm1b.append(dm1s[1])
                 dm2aa.append(dm2s[0])
@@ -973,10 +991,11 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             return rdm1s, rdm2s
 
         def states_trans_rdm12 (self, ci1, ci0, norb, nelec, *args, **kwargs):
+            fcibase = super()
             tdm1 = []
             tdm2 = []
             for c1, c0 in zip (ci1, ci0):
-                dm1, dm2 = fcibase_class.trans_rdm12 (self, c1, c0, norb, nelec)
+                dm1, dm2 = fcibase.trans_rdm12 (c1, c0, norb, nelec)
                 tdm1.append (dm1)
                 tdm2.append (dm2)
             return tdm1, tdm2
@@ -994,7 +1013,8 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
                 return numpy.dot(ss, weights), numpy.dot(multip, weights)
 
             def states_spin_square(self, ci0, norb, nelec, *args, **kwargs):
-                s = [fcibase_class.spin_square(self, ci0[i], norb, nelec, *args, **kwargs)
+                fcibase = super()
+                s = [fcibase.spin_square(ci0[i], norb, nelec, *args, **kwargs)
                      for i, wi in enumerate(self.weights)]
                 return [x[0] for x in s], [x[1] for x in s]
 
@@ -1131,7 +1151,8 @@ def state_specific_(casscf, state=1, wfnsym=None):
             log = logger.new_logger(self, kwargs.get('verbose'))
             if log.verbose >= logger.DEBUG:
                 if getattr(fcibase_class, 'spin_square', None):
-                    ss = fcibase_class.spin_square(self, c[state], norb, nelec)
+                    fcibase = super()
+                    ss = fcibase.spin_square(c[state], norb, nelec)
                     log.debug('state %d  E = %.15g S^2 = %.7f',
                               state, e[state], ss[0])
                 else:
@@ -1141,12 +1162,12 @@ def state_specific_(casscf, state=1, wfnsym=None):
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if self._civec is not None:
                 ci0 = self._civec
-            try:
+            if hasattr(fcibase_class, 'approx_kernel'):
                 e, c = fcibase_class.approx_kernel(self, h1, h2, norb, nelec,
                                                    ci0=ci0, nroots=self.nroots,
                                                    wfnsym=self.wfnsym,
                                                    **kwargs)
-            except AttributeError:
+            else:
                 e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0=ci0,
                                             nroots=self.nroots,
                                             wfnsym=self.wfnsym, **kwargs)
@@ -1307,10 +1328,10 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             cs = []
             for ix, (solver, my_args, my_kwargs) in enumerate (self._loop_solver(_state_args (ci0))):
                 c0 = my_args[0]
-                try:
+                if hasattr(solver, 'approx_kernel'):
                     e, c = solver.approx_kernel(h1, h2, norb, self._get_nelec(solver, nelec), ci0=c0,
                                                 orbsym=self.orbsym, **kwargs)
-                except AttributeError:
+                else:
                     e, c = solver.kernel(h1, h2, norb, self._get_nelec(solver, nelec), ci0=c0,
                                          orbsym=self.orbsym, **kwargs)
                 if solver.nroots == 1:

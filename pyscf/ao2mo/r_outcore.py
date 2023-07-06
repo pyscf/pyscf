@@ -53,6 +53,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
     nao = mo_coeffs[0].shape[0]
+    assert nao == mol.nao_2c()
     aosym = outcore._stand_sym_code(aosym)
     if aosym in ('s1', 's2ij', 'a2ij'):
         nao_pair = nao * nao
@@ -308,55 +309,3 @@ def _count_naopair(mol, nao):
     return nao_pair
 
 del (MAX_MEMORY)
-
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = 'out_outcore'
-    mol.atom = [
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)]]
-
-    mol.basis = {'H': 'cc-pvdz',
-                 'O': 'cc-pvdz',}
-    mol.build()
-    n2c = mol.nao_2c()
-    numpy.random.seed(1)
-    mo = numpy.random.random((n2c,n2c)) + numpy.random.random((n2c,n2c))*1j
-
-    eri0 = numpy.empty((n2c,n2c,n2c,n2c), dtype=numpy.complex128)
-    pi = 0
-    for i in range(mol.nbas):
-        pj = 0
-        for j in range(mol.nbas):
-            pk = 0
-            for k in range(mol.nbas):
-                pl = 0
-                for l in range(mol.nbas):
-                    buf = gto.getints_by_shell('int2e_spinor', (i,j,k,l),
-                                               mol._atm, mol._bas, mol._env)
-                    di, dj, dk, dl = buf.shape
-                    eri0[pi:pi+di,pj:pj+dj,pk:pk+dk,pl:pl+dl] = buf
-                    pl += dl
-                pk += dk
-            pj += dj
-        pi += di
-
-    nao, nmo = mo.shape
-    eri0 = numpy.dot(mo.T.conj(), eri0.reshape(nao,-1))
-    eri0 = numpy.dot(eri0.reshape(-1,nao), mo)
-    eri0 = eri0.reshape(nmo,nao,nao,nmo).transpose(2,3,0,1).copy()
-    eri0 = numpy.dot(mo.T.conj(), eri0.reshape(nao,-1))
-    eri0 = numpy.dot(eri0.reshape(-1,nao), mo)
-    eri0 = eri0.reshape((nmo,)*4)
-
-    print(logger.process_clock())
-    full(mol, mo, 'h2oeri.h5', max_memory=10, ioblk_size=5)
-    with h5py.File('h2oeri.h5', 'r') as feri:
-        eri1 = numpy.array(feri['eri_mo']).reshape((nmo,)*4)
-
-    print(logger.process_clock())
-    print(numpy.allclose(eri0, eri1))
-
