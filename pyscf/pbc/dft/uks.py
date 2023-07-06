@@ -30,6 +30,7 @@ import pyscf.dft
 from pyscf import lib
 from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf.lib import logger
+from pyscf.dft import uks as mol_uks
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import multigrid
@@ -132,6 +133,9 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
         pbcuhf.UHF.dump_flags(self, verbose)
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
+
+    get_vsap = mol_uks.UKS.get_vsap
+    init_guess_by_vsap = mol_uks.UKS.init_guess_by_vsap
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec

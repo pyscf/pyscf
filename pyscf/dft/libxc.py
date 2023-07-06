@@ -432,6 +432,7 @@ else:
         #'HYB_GGA_XC_B2PLYP'            : 713, # S. Grimme, J. Chem. Phys. 124, 034108 (2006)
         'HYB_GGA_XC_B3LYP'             : 402, # P. J. Stephens, F. J. Devlin, C. F. Chabalowski, and M. J. Frisch, J. Phys. Chem. 98, 11623 (1994)
         'HYB_GGA_XC_B3LYP5'            : 475, # P. J. Stephens, F. J. Devlin, C. F. Chabalowski, and M. J. Frisch, J. Phys. Chem. 98, 11623 (1994)
+        'HYB_GGA_XC_B3LYP3'            : 394,
         'HYB_GGA_XC_B3LYP_MCM1'        : 461, # M. T. Caldeira and R. Custodio, J. Mol. Model. 25, 62 (2019)
         'HYB_GGA_XC_B3LYP_MCM2'        : 462, # M. T. Caldeira and R. Custodio, J. Mol. Model. 25, 62 (2019)
         'HYB_GGA_XC_B3LYPS'            : 459, # M. Reiher, O. Salomon, and B. A. Hess, Theor. Chem. Acc. 107, 48 (2001)
@@ -733,33 +734,27 @@ XC_CODES.update({
     'PBE0'          : 406,
     'PBE1PBE'       : 406,
     'OPTXCORR'      : '0.7344536875999693*SLATER - 0.6984752285760186*OPTX,',
-    'B3LYP'         : 'B3LYP5',  # VWN5 version
-    'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88, .81*LYP + .19*VWN',
-    'B3LYPG'        : 402,  # VWN3, used by Gaussian
-    'B3P86'         : 'B3P865',  # VWN5 version
-    'B3P865'        : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN',
-    # FIXME: Check if Gaussian takes a different form for B3P86
-    #'B3P86G'        : 403,  # VWN3, used by Gaussian
-    'B3P86G'        : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN3',
-    'B3PW91'        : 'B3PW915',
-    'B3PW915'       : '.2*HF + .08*SLATER + .72*B88, .81*PW91 + .19*VWN',
-    #'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88, .81*PW91 + .19*VWN3',
-    'B3PW91G'       : 401,
+    'B3LYP'         : 402,
+    'B3LYPG'        : 402,  # used by Gaussian
+    'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88, .81*LYP + .19*VWN', # VWN5 version
+    'B3P86'         : 403,
+    'B3P86G'        : 403,  # used by Gaussian
+    'B3P86V5'       : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN', # VWN5 version
     #'O3LYP5'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWN5',
-    #'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWN3',
+    #'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWNRPA',
     'O3LYP'         : 404, # in libxc == '.1161*HF + 0.071006917*SLATER + .8133*OPTX, .81*LYP + .19*VWN5', may be erroreous
     'MPW3PW'        : 'MPW3PW5',  # VWN5 version
     'MPW3PW5'       : '.2*HF + .08*SLATER + .72*MPW91, .81*PW91 + .19*VWN',
-    'MPW3PWG'       : 415,  # VWN3, used by Gaussian
+    'MPW3PWG'       : 415,  # used by Gaussian
     'MPW3LYP'       : 'MPW3LYP5',  # VWN5 version
     'MPW3LYP5'      : '.218*HF + .073*SLATER + .709*MPW91, .871*LYP + .129*VWN',
-    'MPW3LYPG'      : 419,  # VWN3, used by Gaussian
+    'MPW3LYPG'      : 419,  # used by Gaussian
     'REVB3LYP'      : 'REVB3LYP5',  # VWN5 version
     'REVB3LYP5'     : '.2*HF + .13*SLATER + .67*B88, .84*LYP + .16*VWN',
-    'REVB3LYPG'     : 454,  # VWN3, used by Gaussian
-    'X3LYP'         : 'X3LYP5',  # VWN5 version
+    'REVB3LYPG'     : 454,  # used by Gaussian
+    'X3LYP'         : 411,
+    'X3LYPG'        : 411,  # used by Gaussian
     'X3LYP5'        : '.218*HF + .073*SLATER + .542385*B88 + .166615*PW91, .871*LYP + .129*VWN',
-    'X3LYPG'        : 411,  # VWN3, used by Gaussian
     'CAMB3LYP'      : 'HYB_GGA_XC_CAM_B3LYP',
     'CAMYBLYP'      : 'HYB_GGA_XC_CAMY_BLYP',
     'CAMYB3LYP'     : 'HYB_GGA_XC_CAMY_B3LYP',
@@ -771,6 +766,17 @@ XC_CODES.update({
     'B1B95'         : 440,
     'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
 })  # noqa: E501
+
+# Issue 1480
+if not hasattr(__config__, 'B3LYP_WITH_VWN5'):
+    warnings.warn('Since PySCF-2.3, B3LYP (and B3P86) are changed to the VWN-RPA variant, '
+                  'the same to the B3LYP functional in Gaussian and ORCA (issue 1480). '
+                  'To restore the VWN5 definition, you can put the setting '
+                  '"B3LYP_WITH_VWN5 = True" in pyscf_conf.py')
+elif getattr(__config__, 'B3LYP_WITH_VWN5', False):
+    XC_CODES['B3P86' ] = 'B3P86V5'
+    XC_CODES['B3LYP' ] = 'B3LYP5'
+    XC_CODES['X3LYP' ] = 'X3LYP5'
 
 XC_KEYS = set(XC_CODES.keys())
 

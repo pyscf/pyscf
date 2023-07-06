@@ -483,7 +483,7 @@ def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
     odS = numpy.abs(Snorm)
     numpy.fill_diagonal(odS, 0.0)
     odSs = numpy.sum(odS, axis=0)
-    sortidx = numpy.argsort(odSs)
+    sortidx = numpy.argsort(odSs, kind='stable')
 
     # Run the pivoted Cholesky decomposition
     Ssort = Snorm[numpy.ix_(sortidx, sortidx)].copy()
@@ -497,7 +497,7 @@ def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
     Xsub = canonical_orth_(Ssub, thr=canthr)
 
     # Full X
-    X = numpy.zeros((S.shape[0], Xsub.shape[1]))
+    X = numpy.zeros((S.shape[0], Xsub.shape[1]), dtype=Xsub.dtype)
     X[idx,:] = Xsub
 
     return X
@@ -524,27 +524,34 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
     logger.debug(mf, 'Overlap condition number %g', cond)
     if (cond < 1./numpy.finfo(s.dtype).eps and not force_pivoted_cholesky):
         logger.info(mf, 'Using canonical orthogonalization with threshold {}'.format(threshold))
-        def eigh(h, s):
-            x = canonical_orth_(s, threshold)
-            xhx = reduce(numpy.dot, (x.T.conj(), h, x))
-            e, c = numpy.linalg.eigh(xhx)
-            c = numpy.dot(x, c)
-            return e, c
-        mf._eigh = eigh
+        mf._eigh = _eigh_with_canonical_orth(threshold)
     else:
         logger.info(mf, 'Using partial Cholesky orthogonalization '
                     '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
         logger.info(mf, 'Using threshold {} for pivoted Cholesky'.format(cholesky_threshold))
         logger.info(mf, 'Using threshold {} to orthogonalize the subbasis'.format(threshold))
-        def eigh(h, s):
-            x = partial_cholesky_orth_(s, canthr=threshold, cholthr=cholesky_threshold)
-            xhx = reduce(numpy.dot, (x.T.conj(), h, x))
-            e, c = numpy.linalg.eigh(xhx)
-            c = numpy.dot(x, c)
-            return e, c
-        mf._eigh = eigh
+        mf._eigh = _eigh_with_pivot_cholesky(threshold, cholesky_threshold)
     return mf
 remove_linear_dep = remove_linear_dep_
+
+def _eigh_with_canonical_orth(threshold=LINEAR_DEP_THRESHOLD):
+    def eigh(h, s):
+        x = canonical_orth_(s, threshold)
+        xhx = reduce(lib.dot, (x.conj().T, h, x))
+        e, c = scipy.linalg.eigh(xhx)
+        c = numpy.dot(x, c)
+        return e, c
+    return eigh
+
+def _eigh_with_pivot_cholesky(threshold=LINEAR_DEP_THRESHOLD,
+                              cholesky_threshold=CHOLESKY_THRESHOLD):
+    def eigh(h, s):
+        x = partial_cholesky_orth_(s, canthr=threshold, cholthr=cholesky_threshold)
+        xhx = reduce(lib.dot, (x.conj().T, h, x))
+        e, c = scipy.linalg.eigh(xhx)
+        c = numpy.dot(x, c)
+        return e, c
+    return eigh
 
 def convert_to_uhf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the unrestricted HF/KS object
@@ -895,10 +902,10 @@ def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
         # round(6) to avoid numerical uncertainty in degeneracy
         es = numpy.append(mo_energy[0][mo_occ[0] >0],
                           mo_energy[1][mo_occ[1] >0])
-        oidx = numpy.argsort(es.round(6))
+        oidx = numpy.argsort(es.round(6), kind='stable')
         es = numpy.append(mo_energy[0][mo_occ[0]==0],
                           mo_energy[1][mo_occ[1]==0])
-        vidx = numpy.argsort(es.round(6))
+        vidx = numpy.argsort(es.round(6), kind='stable')
         orbspin = numpy.append(numpy.array([0]*nocca+[1]*noccb)[oidx],
                                numpy.array([0]*nvira+[1]*nvirb)[vidx])
     return orbspin

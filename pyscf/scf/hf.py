@@ -179,8 +179,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        # attach mo_coeff and mo_occ to dm to improve DFT get_veff efficiency
-        dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot = mf.energy_tot(dm, h1e, vhf)
 
@@ -217,7 +215,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
-        dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot, last_hf_e = mf.energy_tot(dm, h1e, vhf), e_tot
 
@@ -456,11 +453,14 @@ def init_guess_by_minao(mol):
     pmol = gto.Mole()
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(new_atom, basis, [])
     pmol._built = True
-    dm = addons.project_dm_nr2nr(pmol, numpy.diag(occ), mol)
+
+    #: dm = addons.project_dm_nr2nr(pmol, numpy.diag(occ), mol)
+    mo = addons.project_mo_nr2nr(pmol, numpy.eye(pmol.nao), mol)
+    dm = lib.dot(mo*occ, mo.conj().T)
 # normalize eletron number
 #    s = mol.intor_symmetric('int1e_ovlp')
 #    dm *= mol.nelectron / (dm*s).sum()
-    return dm
+    return lib.tag_array(dm, mo_coeff=mo, mo_occ=occ)
 
 
 def init_guess_by_1e(mol):
@@ -484,6 +484,8 @@ def init_guess_by_atom(mol):
     atm_scf = atom_hf.get_atm_nrhf(mol)
     aoslice = mol.aoslice_by_atom()
     atm_dms = []
+    mo_coeff = []
+    mo_occ = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         if symb not in atm_scf:
@@ -491,22 +493,27 @@ def init_guess_by_atom(mol):
 
         if symb in atm_scf:
             e_hf, e, c, occ = atm_scf[symb]
-            dm = numpy.dot(c*occ, c.conj().T)
         else:  # symb's basis is not specified in the input
             nao_atm = aoslice[ia,3] - aoslice[ia,2]
-            dm = numpy.zeros((nao_atm, nao_atm))
+            c = numpy.zeros((nao_atm, nao_atm))
+            occ = numpy.zeros(nao_atm)
 
-        atm_dms.append(dm)
+        atm_dms.append(numpy.dot(c*occ, c.conj().T))
+        mo_coeff.append(c)
+        mo_occ.append(occ)
 
     dm = scipy.linalg.block_diag(*atm_dms)
+    mo_coeff = scipy.linalg.block_diag(*mo_coeff)
+    mo_occ = numpy.hstack(occ)
 
     if mol.cart:
         cart2sph = mol.cart2sph_coeff(normalized='sp')
-        dm = reduce(numpy.dot, (cart2sph, dm, cart2sph.T))
+        dm = reduce(lib.dot, (cart2sph, dm, cart2sph.T))
+        mo_coeff = lib.dot(cart2sph, mo_coeff)
 
     for k, v in atm_scf.items():
         logger.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
-    return dm
+    return lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def init_guess_by_huckel(mol):
     '''Generate initial guess density matrix from a Huckel calculation based
@@ -687,7 +694,8 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # passed to functions like get_jk, get_vxc.  These functions may take the tags
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # array and modifications to DM array may be ignored.
-    return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
+    dm = numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
+    return lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ, **kwargs):
     '''Two-particle density matrix in AO representation
@@ -1632,29 +1640,10 @@ class SCF(lib.StreamObject):
                 dm = self.init_guess_by_minao(mol)
         else:
             dm = self.init_guess_by_minao(mol)
-        if self.verbose >= logger.DEBUG1:
-            s = self.get_ovlp()
-            if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-                nelec = numpy.einsum('ij,ji', dm, s).real
-            else:  # UHF
-                nelec =(numpy.einsum('ij,ji', dm[0], s).real,
-                        numpy.einsum('ij,ji', dm[1], s).real)
-            logger.debug1(self, 'Nelec from initial guess = %s', nelec)
         return dm
 
-    # full density matrix for RHF
-    @lib.with_doc(make_rdm1.__doc__)
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_occ is None: mo_occ = self.mo_occ
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return make_rdm1(mo_coeff, mo_occ, **kwargs)
-
-    @lib.with_doc(make_rdm2.__doc__)
-    def make_rdm2(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_occ is None: mo_occ = self.mo_occ
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return make_rdm2(mo_coeff, mo_occ, **kwargs)
-
+    make_rdm1 = lib.module_method(make_rdm1, absences=['mo_coeff', 'mo_occ'])
+    make_rdm2 = lib.module_method(make_rdm2, absences=['mo_coeff', 'mo_occ'])
     energy_elec = energy_elec
     energy_tot = energy_tot
 
@@ -1837,7 +1826,7 @@ class SCF(lib.StreamObject):
 
     def nuc_grad_method(self):  # pragma: no cover
         '''Hook to create object for analytical nuclear gradients.'''
-        pass
+        raise NotImplementedError
 
     def update_(self, chkfile=None):
         '''Read attributes from the chkfile then replace the attributes of
@@ -2031,6 +2020,9 @@ class SCF(lib.StreamObject):
         else:
             raise RuntimeError(f'to_ks does not support {self.__class__}')
 
+    def stability(self):
+        raise NotImplementedError
+
 
 class KohnShamDFT:
     '''A mock DFT base class
@@ -2050,6 +2042,14 @@ class RHF(SCF):
             logger.warn(self, 'Invalid number of electrons %d for RHF method.',
                         mol.nelectron)
         return SCF.check_sanity(self)
+
+    def get_init_guess(self, mol=None, key='minao'):
+        dm = SCF.get_init_guess(self, mol, key)
+        if self.verbose >= logger.DEBUG1:
+            s = self.get_ovlp()
+            nelec = numpy.einsum('ij,ji', dm, s).real
+            logger.debug1(self, 'Nelec from initial guess = %s', nelec)
+        return dm
 
     @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,

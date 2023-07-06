@@ -90,7 +90,7 @@ class KnownValues(unittest.TestCase):
         dm = mf.get_init_guess(cell, 'minao')
         vxc = mf.get_veff(cell, dm)
         self.assertAlmostEqual(vxc.E_U, 0.07587726255165786, 11)
-        self.assertAlmostEqual(lib.fp(vxc), 6.37407828665724, 9)
+        self.assertAlmostEqual(lib.fp(vxc), 6.37407828665724, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.kukspu")

@@ -148,7 +148,7 @@ def get_jk(mol, dm, hermi=0,
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
     if mo_energy is None: mo_energy = mf.mo_energy
-    e_idx = numpy.argsort(mo_energy)
+    e_idx = numpy.argsort(mo_energy.round(9), kind='stable')
     e_sort = mo_energy[e_idx]
     nmo = mo_energy.size
     mo_occ = numpy.zeros(nmo)
@@ -415,6 +415,8 @@ class GHF(hf.SCF):
         g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock,
                                mo_coeff[:,viridx]))
         return g.conj().T.ravel()
+
+    get_init_guess = hf.RHF.get_init_guess
 
     @lib.with_doc(hf.SCF.init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):

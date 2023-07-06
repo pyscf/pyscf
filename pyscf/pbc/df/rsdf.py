@@ -53,12 +53,11 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import rsdf_helper
 from pyscf.pbc.df import rsdf_builder
 from pyscf.pbc.df import gdf_builder
-from pyscf.pbc.df.incore import _Int3cBuilder
+from pyscf.pbc.df.incore import Int3cBuilder
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.lib.kpts_helper import (is_zero, member, unique,
-                                       unique_with_wrap_around,
-                                       group_by_conj_pairs, KPT_DIFF_TOL)
+                                       members_with_wrap_around)
 from pyscf.df.addons import make_auxmol
 
 
@@ -289,7 +288,9 @@ cell.dimension=3 with large vacuum.""")
             kpts_union = unique(np.vstack([self.kpts, self.kpts_band]))[0]
         dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
         dfbuilder.__dict__.update(self.__dict__)
-        dfbuilder.make_j3c(cderi_file, j_only=self._j_only, kptij_lst=kptij_lst)
+        j_only = self._j_only or len(kpts_union) == 1
+        dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname,
+                           kptij_lst=kptij_lst)
 
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
         # formatting k-points
@@ -323,8 +324,9 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
             self.omega = None
         self.ke_cutoff = None
         self.bvk_kmesh = None
+        self.supmol_ft = None
 
-        _Int3cBuilder.__init__(self, cell, auxcell, kpts)
+        Int3cBuilder.__init__(self, cell, auxcell, kpts)
 
         # set True to force calculating j2c^(-1/2) using eigenvalue
         # decomposition (ED); otherwise, Cholesky decomposition (CD) is used
@@ -340,8 +342,17 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
-        self.rs_cell = ft_ao._RangeSeparatedCell.from_cell(
+        self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, rsdf_builder.RCUT_THRESHOLD, verbose=log)
+
+        rcut = rsdf_builder.estimate_ft_rcut(rs_cell, cell.precision,
+                                             exclude_dd_block=False)
+        supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(rs_cell, kmesh,
+                                                           rcut.max(), log)
+        supmol_ft.exclude_dd_block = False
+        self.supmol_ft = supmol_ft.strip_basis(rcut)
+        log.debug('sup-mol-ft nbas = %d cGTO = %d pGTO = %d',
+                  supmol_ft.nbas, supmol_ft.nao, supmol_ft.npgto_nr())
         return self
 
     def get_2c2e(self, uniq_kpts):
@@ -433,8 +444,7 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
         GauxI = np.asarray(Gaux.imag, order='C')
         return GauxR, GauxI
 
-    def gen_j3c_loader(self, h5group, kpt, kpt_ij_idx, ijlst_mapping, aosym,
-                       dataname='j3c'):
+    def gen_j3c_loader(self, h5group, kpt, kpt_ij_idx, ijlst_mapping, aosym):
         cell = self.cell
         kpts = self.kpts
         nkpts = len(self.kpts)
@@ -449,14 +459,28 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
             else:
                 ovlp = [s.ravel() for s in ovlp]
 
-        nsegs = len(h5group[f'{dataname}-junk/0'])
+        # TODO: Store rs_density_fit cderi tensor in v1 format for the moment.
+        # It should be changed to 'v2' format in the future.
+        if ijlst_mapping is None:
+            data_version = 'v2'
+        else:
+            data_version = 'v1'
+
+        if data_version == 'v1':
+            nsegs = len(h5group[f'j3c-junk/{ijlst_mapping[kpt_ij_idx[0]]}'])
+        else:
+            nsegs = len(h5group[f'j3c-junk/{kpt_ij_idx[0]}'])
 
         def load_j3c(col0, col1):
             j3cR = []
             j3cI = []
             for kk in kpt_ij_idx:
-                v = np.hstack([h5group[f'{dataname}-junk/{ijlst_mapping[kk]}/{i}'][0,col0:col1]
-                               for i in range(nsegs)])
+                if data_version == 'v1':
+                    v = np.hstack([h5group[f'j3c-junk/{ijlst_mapping[kk]}/{i}'][0,col0:col1]
+                                   for i in range(nsegs)])
+                else:
+                    v = np.hstack([h5group[f'j3c-junk/{kk}/{i}'][0,col0:col1]
+                                   for i in range(nsegs)])
                 vR = np.asarray(v.real, order='C')
                 kj = kk % nkpts
                 if is_zero(kpt) and is_zero(kpts[kj]):
@@ -497,10 +521,6 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
             raise NotImplementedError
         ish0, ish1 = 0, cell.nbas
 
-        def members(kptis, kpts):
-            diff = abs(kptis[:,None,:] - kpts).max(axis=2)
-            return np.where(diff < KPT_DIFF_TOL)[1]
-
         # ijlst_mapping maps the [nkpts x nkpts] kpts-pair to kpts-pair in
         # kptij_lst. Value -1 in ijlst_mapping means the kpts-pair does not
         # exist in kptij_lst
@@ -511,24 +531,26 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
                 kpti_idx = np.arange(nkpts)
                 ijlst_mapping[kpti_idx * nkpts + kpti_idx] = kpti_idx
                 kptij_lst = np.concatenate([kpts[:,None,:], kpts[:,None,:]], axis=1)
+                kk_idx = kpti_idx * nkpts + kpti_idx
             else:
                 kpti_idx, kptj_idx = np.tril_indices(nkpts)
                 nkpts_pair = kpti_idx.size
                 ijlst_mapping[kpti_idx * nkpts + kptj_idx] = np.arange(nkpts_pair)
                 kptij_lst = np.concatenate([kpts[kpti_idx,None,:],
                                             kpts[kptj_idx,None,:]], axis=1)
+                kk_idx = kpti_idx * nkpts + kptj_idx
         else:
-            kpti_idx = members(kptij_lst[:,0], kpts)
-            kptj_idx = members(kptij_lst[:,1], kpts)
+            kpti_idx = members_with_wrap_around(cell, kptij_lst[:,0], kpts)
+            kptj_idx = members_with_wrap_around(cell, kptij_lst[:,1], kpts)
             ijlst_mapping[kpti_idx * nkpts + kptj_idx] = np.arange(len(kptij_lst))
+            kk_idx = kpti_idx * nkpts + kptj_idx
 
         fswap = self.outcore_auxe2(cderi_file, intor, aosym, comp,
-                                   kptij_lst, j_only, f'{dataname}-junk', shls_slice)
+                                   kptij_lst, j_only, 'j3c-junk', shls_slice)
         cpu1 = log.timer_debug1('3c2e', *cpu1)
 
-        supmol_ft = ft_ao._ExtendedMole.from_cell(self.rs_cell, self.bvk_kmesh, verbose=log)
-        supmol_ft = supmol_ft.strip_basis()
-        ft_kern = supmol_ft.gen_ft_kernel(aosym, return_complex=False, verbose=log)
+        ft_kern = self.supmol_ft.gen_ft_kernel(aosym, return_complex=False,
+                                               verbose=log)
 
         # recompute g0 and Gvectors for j3c
         mesh = self.mesh_compact
@@ -540,21 +562,32 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
         tspans = np.zeros((3,2))    # lr, j2c_inv, j2c_cntr
         tspannames = ["ftaop+pw", "j2c_inv", "j2c_cntr"]
         feri = h5py.File(cderi_file, 'w')
-        feri['j3c-kptij'] = kptij_lst
+
+        # TODO: Store rs_density_fit cderi tensor in v1 format for the moment.
+        # It should be changed to 'v2' format in the future.
+        data_version = 'v1'
+        if data_version == 'v1':
+            feri['j3c-kptij'] = kptij_lst
+        else:
+            feri['kpts'] = kpts
+            ijlst_mapping = None
         def make_cderi(kpt, kpt_ij_idx, j2c):
             log.debug1('make_cderi for %s', kpt)
-            input_kptij_idx = ijlst_mapping[kpt_ij_idx]
-            # filter kpt_ij_idx, keeps only the kpts-pair in kptij_lst
-            kpt_ij_idx = kpt_ij_idx[input_kptij_idx >= 0]
-            # input_kptij_idx saves the indices of remaining kpts-pair in kptij_lst
-            input_kptij_idx = input_kptij_idx[input_kptij_idx >= 0]
-            log.debug1('kpt_ij_idx = %s', kpt_ij_idx)
-            log.debug1('input_kptij_idx = %s', input_kptij_idx)
+            kptjs = kpts[kpt_ij_idx % nkpts]
+            nkptj = len(kptjs)
+            if data_version == 'v1':
+                input_kptij_idx = ijlst_mapping[kpt_ij_idx]
+                # filter kpt_ij_idx, keeps only the kpts-pair in kptij_lst
+                kpt_ij_idx = kpt_ij_idx[input_kptij_idx >= 0]
+                # input_kptij_idx saves the indices of remaining kpts-pair in kptij_lst
+                input_kptij_idx = input_kptij_idx[input_kptij_idx >= 0]
+                log.debug1('kpt_ij_idx = %s', kpt_ij_idx)
+                log.debug1('input_kptij_idx = %s', input_kptij_idx)
+            else:
+                input_kptij_idx = kpt_ij_idx
             if kpt_ij_idx.size == 0:
                 return
 
-            kptjs = kpts[kpt_ij_idx % nkpts]
-            nkptj = len(kptjs)
             Gaux = self.weighted_ft_ao(kpt)
 
             if is_zero(kpt):  # kpti == kptj
@@ -615,7 +648,8 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
                 tick_ = np.asarray((logger.process_clock(), logger.perf_counter()))
                 tspans[2] += tick_ - tock_
 
-        for kpt, kpt_ij_idx, cd_j2c in self.gen_uniq_kpts_groups(j_only, fswap):
+        for kpt, kpt_ij_idx, cd_j2c \
+                in self.gen_uniq_kpts_groups(j_only, fswap, kk_idx=kk_idx):
             make_cderi(kpt, kpt_ij_idx, cd_j2c)
 
         feri.close()

@@ -549,6 +549,7 @@ def as_scanner(mc):
             # may be created for mc separately, e.g. when mcscf.approx_hessian is
             # called. For safety, the code below explicitly resets these
             # properties.
+            self.reset (mol)
             for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
                 sub_mod = getattr(self, key, None)
                 if sub_mod:
@@ -566,6 +567,20 @@ def as_scanner(mc):
             return e_tot
     return CASSCF_Scanner(mc)
 
+def max_stepsize_scheduler(casscf, envs):
+    if not WITH_STEPSIZE_SCHEDULER:
+        return casscf.max_stepsize
+
+    _max_stepsize = envs.get ('max_stepsize', None)
+    if _max_stepsize is None:
+        _max_stepsize = casscf.max_stepsize
+    if envs['de'] > -casscf.conv_tol:  # Avoid total energy increasing
+        _max_stepsize *= .3
+        logger.debug(casscf, 'set max_stepsize to %g', _max_stepsize)
+    else:
+        _max_stepsize = (casscf.max_stepsize*_max_stepsize)**.5
+    casscf._max_stepsize = _max_stepsize # for inspection by user
+    return _max_stepsize
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
 # object or a module to CASSCF.fcisolver.  The fcisolver object or module
@@ -1230,18 +1245,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
         log_norm_ddm = numpy.log(envs['norm_ddm'])
         return max(self.max_cycle_micro, int(self.max_cycle_micro-1-log_norm_ddm))
 
-    def max_stepsize_scheduler(self, envs):
-        if not WITH_STEPSIZE_SCHEDULER:
-            return self.max_stepsize
-
-        if self._max_stepsize is None:
-            self._max_stepsize = self.max_stepsize
-        if envs['de'] > -self.conv_tol:  # Avoid total energy increasing
-            self._max_stepsize *= .3
-            logger.debug(self, 'set max_stepsize to %g', self._max_stepsize)
-        else:
-            self._max_stepsize = (self.max_stepsize*self._max_stepsize)**.5
-        return self._max_stepsize
+    max_stepsize_scheduler=max_stepsize_scheduler
 
     def ah_scheduler(self, envs):
         pass
@@ -1295,6 +1299,10 @@ To enable the solvent model for CASSCF, the following code needs to be called
             wfnsym = getattr(self, 'wfnsym', None)
             mc1 = mc1.state_average_(self.weights, wfnsym)
         return mc1
+
+    def reset(self, mol=None):
+        casci.CASCI.reset(self, mol=mol)
+        self._max_stepsize = None
 
 scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
 scf.uhf.UHF.CASSCF = None

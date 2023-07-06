@@ -98,15 +98,8 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
             mo_occ_b = (dm.mo_occ ==2).astype(np.double)
             dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
                                mo_occ=(mo_occ_a,mo_occ_b))
-        if self.rsjk and self.direct_scf:
-            # Enable direct-SCF for real space JK builder
-            ddm = dm - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
-            vhf = vj[0] + vj[1] - vk
-            vhf += vhf_last
-        else:
-            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-            vhf = vj[0] + vj[1] - vk
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+        vhf = vj[0] + vj[1] - vk
         return vhf
 
     def get_bands(self, kpts_band, cell=None, dm=None, kpt=None):
@@ -122,11 +115,7 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
 
     dip_moment = pbchf.SCF.dip_moment
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
-        dm = mol_rohf.ROHF.get_init_guess(self, cell, key)
-        dm = pbchf.normalize_dm_(self, dm)
-        return dm
+    get_init_guess = pbchf.RHF.get_init_guess
 
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell
@@ -135,11 +124,7 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
                         'the SCF of low-dimensional systems.')
         return mol_rohf.ROHF.init_guess_by_1e(self, cell)
 
-    def init_guess_by_chkfile(self, chk=None, project=True, kpt=None):
-        if chk is None: chk = self.chkfile
-        if kpt is None: kpt = self.kpt
-        return pbcuhf.init_guess_by_chkfile(self.cell, chk, project, kpt)
-
+    init_guess_by_chkfile = pbcuhf.UHF.init_guess_by_chkfile
     init_guess_by_minao  = mol_rohf.ROHF.init_guess_by_minao
     init_guess_by_atom   = mol_rohf.ROHF.init_guess_by_atom
     init_guess_by_huckel = mol_rohf.ROHF.init_guess_by_huckel

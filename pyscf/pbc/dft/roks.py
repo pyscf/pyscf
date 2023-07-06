@@ -57,6 +57,9 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
+    get_vsap = rks.RKS.get_vsap
+    init_guess_by_vsap = rks.RKS.init_guess_by_vsap
+
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
     get_rho = uks.get_rho

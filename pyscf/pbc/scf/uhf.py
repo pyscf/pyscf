@@ -159,15 +159,8 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
         if kpt is None: kpt = self.kpt
         if isinstance(dm, np.ndarray) and dm.ndim == 2:
             dm = np.asarray((dm*.5,dm*.5))
-        if self.rsjk and self.direct_scf:
-            # Enable direct-SCF for real space JK builder
-            ddm = dm - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
-            vhf = vj[0] + vj[1] - vk
-            vhf += vhf_last
-        else:
-            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-            vhf = vj[0] + vj[1] - vk
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+        vhf = vj[0] + vj[1] - vk
         return vhf
 
     def get_bands(self, kpts_band, cell=None, dm=None, kpt=None):
@@ -221,11 +214,7 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
             rho = self.get_rho(dm)
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
-        dm = mol_uhf.UHF.get_init_guess(self, cell, key)
-        dm = pbchf.normalize_dm_(self, dm)
-        return dm
+    get_init_guess = pbchf.RHF.get_init_guess
 
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell

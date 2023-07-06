@@ -64,7 +64,8 @@ if sys.version_info >= (3,):
 CHARGE_OF  = 0
 PTR_COORD  = 1
 NUC_MOD_OF = 2
-PTR_ZETA   = PTR_FRAC_CHARGE = 3
+PTR_ZETA   = 3
+PTR_FRAC_CHARGE = 4
 ATM_SLOTS  = 6
 ATOM_OF    = 0
 ANG_OF     = 1
@@ -103,6 +104,7 @@ DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 # Whether to disable the explicit call to gc.collect(). gc.collect() may cause
 # non-negligible overhead (https://github.com/pyscf/pyscf/issues/1038).
 DISABLE_GC = getattr(__config__, 'DISABLE_GC', False)
+ARGPARSE = getattr(__config__, 'ARGPARSE', False)
 
 def M(**kwargs):
     r'''This is a shortcut to build up Mole object.
@@ -147,7 +149,7 @@ def gto_norm(l, expnt):
     >>> print(gto_norm(0, 1))
     2.5264751109842591
     '''
-    if l >= 0:
+    if numpy.all(l >= 0):
         #f = 2**(2*l+3) * math.factorial(l+1) * (2*expnt)**(l+1.5) \
         #        / (math.factorial(2*l+2) * math.sqrt(math.pi))
         #return math.sqrt(f)
@@ -2430,7 +2432,7 @@ class Mole(lib.StreamObject):
         self.__dict__.update(loads(molstr).__dict__)
         return self
 
-    def build(self, dump_input=True, parse_arg=True,
+    def build(self, dump_input=True, parse_arg=ARGPARSE,
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
               charge=None, spin=0, symmetry=None, symmetry_subgroup=None,
@@ -3950,6 +3952,11 @@ def fakemol_for_charges(coords, expnt=1e16):
     distribution with the Gaussian exponent (expnt).
     '''
     nbas = coords.shape[0]
+    expnt = numpy.asarray(expnt).ravel()
+    if expnt.size == 1:
+        expnt = numpy.repeat(expnt, nbas)
+    assert expnt.size == nbas
+
     fakeatm = numpy.zeros((nbas,ATM_SLOTS), dtype=numpy.int32)
     fakebas = numpy.zeros((nbas,BAS_SLOTS), dtype=numpy.int32)
     fakeenv = [0] * PTR_ENV_START
@@ -3960,11 +3967,12 @@ def fakemol_for_charges(coords, expnt=1e16):
     fakebas[:,ATOM_OF] = numpy.arange(nbas)
     fakebas[:,NPRIM_OF] = 1
     fakebas[:,NCTR_OF] = 1
-# approximate point charge with gaussian distribution exp(-1e16*r^2)
-    fakebas[:,PTR_EXP] = ptr
-    fakebas[:,PTR_COEFF] = ptr+1
-    fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
-    ptr += 2
+# approximate point charge with gaussian distribution exp(-expnt*r^2)
+    fakebas[:,PTR_EXP] = ptr + numpy.arange(nbas) * 2
+    fakebas[:,PTR_COEFF] = ptr + numpy.arange(nbas) * 2 + 1
+    coeff = 1 / (2 * numpy.sqrt(numpy.pi) * gaussian_int(2, expnt))
+    fakeenv.append(numpy.vstack((expnt, coeff)).T.ravel())
+
     fakemol = Mole()
     fakemol._atm = fakeatm
     fakemol._bas = fakebas

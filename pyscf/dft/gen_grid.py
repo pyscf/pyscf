@@ -558,7 +558,7 @@ class Grids(lib.StreamObject):
             logger.debug(self, 'Padding %d grids', padding)
             if padding > 0:
                 self.coords = numpy.vstack(
-                    [self.coords, numpy.repeat([[1e4]*3], padding, axis=0)])
+                    [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
                 self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
 
         if with_non0tab:
@@ -618,7 +618,7 @@ class Grids(lib.StreamObject):
                 logger.debug(self, 'prune_by_density_: %d padding grids', padding)
                 if padding > 0:
                     self.coords = numpy.vstack(
-                        [self.coords, numpy.repeat([[1e4]*3], padding, axis=0)])
+                        [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
                     self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
             self.non0tab = self.make_mask(mol, self.coords)
             self.screen_index = self.non0tab

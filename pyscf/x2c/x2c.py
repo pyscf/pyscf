@@ -416,8 +416,7 @@ def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True, omega=None):
     vk = vk.reshape(dm.shape)
     return dhf._jk_triu_(mol, vj, vk, hermi)
 
-def make_rdm1(mo_coeff, mo_occ, **kwargs):
-    return numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
+make_rdm1 = hf.make_rdm1
 
 def init_guess_by_minao(mol):
     '''Initial guess in terms of the overlap to minimal basis.'''
@@ -518,10 +517,7 @@ class SCF(hf.SCF):
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        if mo_occ is None: mo_occ = self.mo_occ
-        return make_rdm1(mo_coeff, mo_occ, **kwargs)
+    make_rdm1 = lib.module_method(make_rdm1, absences=['mo_coeff', 'mo_occ'])
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
