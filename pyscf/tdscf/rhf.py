@@ -24,6 +24,7 @@
 
 from functools import reduce
 import numpy
+import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -646,6 +647,8 @@ class TDMixin(lib.StreamObject):
     max_cycle = getattr(__config__, 'tdscf_rhf_TDA_max_cycle', 100)
     # Low excitation filter to avoid numerical instability
     positive_eig_threshold = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
+    # Threshold to handle degeneracy in init guess
+    deg_eia_thresh = getattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-3)
 
     def __init__(self, mf):
         self.verbose = mf.verbose
@@ -729,6 +732,23 @@ class TDMixin(lib.StreamObject):
             return x/diagd
         return precond
 
+    def trunc_workspace(self, vind, x0, nstates=None, pick=None):
+        log = logger.new_logger(self)
+        if nstates is None: nstates = self.nstates
+        if x0.shape[0] <= nstates:
+            return None, x0
+        else:
+            heff = lib.einsum('xa,ya->xy', x0.conj(), vind(x0))
+            e, u = scipy.linalg.eig(heff)   # heff not necessarily Hermitian
+            order = numpy.argsort(e)
+            e = e[order]
+            u = u[:,order]
+            if callable(pick):
+                e, u = pick(e, u, None, None)[:2]
+            e = e[:nstates]
+            x1 = numpy.dot(x0.T, u[:,:nstates]).T
+            return e, x1
+
     analyze = analyze
     get_nto = get_nto
     oscillator_strength = oscillator_strength
@@ -793,6 +813,8 @@ class TDA(TDMixin):
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
         e_ia = mo_energy[viridx] - mo_energy[occidx,None]
+        # make degenerate excitations equal for later selection by energy
+        e_ia = numpy.ceil(e_ia / self.deg_eia_thresh) * self.deg_eia_thresh
         e_ia_max = e_ia.max()
 
         if wfnsym is not None and mf.mol.symmetry:
@@ -803,12 +825,14 @@ class TDA(TDMixin):
             orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
             e_ia[(orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym] = 1e99
 
+        e_ia_uniq = numpy.unique(e_ia)
+
         nov = e_ia.size
         nstates = min(nstates, nov)
+        nstates_thresh = min(nstates, e_ia_uniq.size)
         e_ia = e_ia.ravel()
-        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
-        # Handle degeneracy, include all degenerated states in initial guess
-        e_threshold += 1e-6
+        e_threshold = min(e_ia_max, e_ia_uniq[numpy.argsort(e_ia_uniq)[nstates_thresh-1]])
+        e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
         x0 = numpy.zeros((idx.size, nov))
@@ -832,12 +856,13 @@ class TDA(TDMixin):
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
-
         def pickeig(w, v, nroots, envs):
             idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
+            x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         self.converged, self.e, x1 = \
                 lib.davidson1(vind, x0, precond,
@@ -987,8 +1012,6 @@ class TDHF(TDA):
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
@@ -999,6 +1022,10 @@ class TDHF(TDA):
             # approximately be used as the "real" eigen solutions.
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
                                                       real_eigenvectors=True)
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
+            x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
