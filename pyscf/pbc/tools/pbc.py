@@ -651,7 +651,7 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._env = _env
 
     if isinstance(supcell, pbcgto.Cell) and supcell.space_group_symmetry:
-        supcell.build_lattice_symmetry()
+        supcell.build_lattice_symmetry(not cell._mesh_from_build)
     return supcell
 
 

@@ -1284,7 +1284,9 @@ class Cell(mole.Mole):
                                     symmorphic=self.symmorphic,
                                     check_mesh_symmetry=check_mesh_symmetry)
         if not check_mesh_symmetry:
+            _mesh_from_build = self._mesh_from_build
             self.mesh = self.symmetrize_mesh()
+            self._mesh_from_build = _mesh_from_build
         return self
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
