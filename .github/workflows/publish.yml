@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pyver: [cp36-cp36m, cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310, cp311-cp311]
+        pyver: [cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310, cp311-cp311]
       fail-fast: false
     env:
       img: quay.io/pypa/manylinux2014_aarch64:2023-03-12-25fd859
@@ -103,7 +103,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
@@ -151,7 +151,7 @@ jobs:
   #  runs-on: macos-latest
   #  strategy:
   #    matrix:
-  #      python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
+  #      python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
   #    fail-fast: false
   #  steps:
   #    - uses: actions/checkout@v3
