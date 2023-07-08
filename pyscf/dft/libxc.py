@@ -770,7 +770,7 @@ XC_CODES.update({
 # Issue 1480
 if not hasattr(__config__, 'B3LYP_WITH_VWN5'):
     warnings.warn('Since PySCF-2.3, B3LYP (and B3P86) are changed to the VWN-RPA variant, '
-                  'the same to the B3LYP functional in Gaussian and ORCA (issue 1480). '
+                  'the same to the B3LYP functional in Gaussian (issue 1480). '
                   'To restore the VWN5 definition, you can put the setting '
                   '"B3LYP_WITH_VWN5 = True" in pyscf_conf.py')
 elif getattr(__config__, 'B3LYP_WITH_VWN5', False):
