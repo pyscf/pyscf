@@ -1,0 +1,163 @@
+[build-system]
+requires = ["scikit_build_core[pyproject]",
+			"hatch-vcs",
+			]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "pyscf"
+description = 'PySCF: Python-based Simulations of Chemistry Framework'
+authors=[
+    {name = "Qiming Sun", email="osirpt.sun@gmail.com"},
+]
+license = {text= "Apache 2.0"}
+readme = "README.md"
+keywords = ["Chemistry", "Quantum"]
+classifiers = [
+	'Development Status :: 5 - Production/Stable',
+	'Intended Audience :: Science/Research',
+	'Intended Audience :: Developers',
+	'License :: OSI Approved :: Apache Software License',
+	'Programming Language :: C',
+	'Programming Language :: Python',
+	'Programming Language :: Python :: 3.6',
+	'Programming Language :: Python :: 3.7',
+	'Programming Language :: Python :: 3.8',
+	'Programming Language :: Python :: 3.9',
+	'Programming Language :: Python :: 3.10',
+	'Programming Language :: Python :: 3.11',
+	'Topic :: Software Development',
+	'Topic :: Scientific/Engineering',
+	'Operating System :: POSIX',
+	'Operating System :: Unix',
+	'Operating System :: MacOS',
+]
+dynamic = ["version"]
+
+requires-python = ">=3.7"
+dependencies=[
+    "numpy>=1.13,!=1.16,!=1.17",
+    "scipy<=1.1.0; sys_platform == 'darwin' and python_version < '3.8'",
+    "scipy>1.1.0; sys_platform == 'darwin' and python_version >= '3.8'",
+	"scipy!=1.5.0,!=1.5.1; sys_platform != 'darwin' ",
+	"h5py>=2.7"]
+
+[project.optional-dependencies]
+geomopt = ['pyberny>=0.6.2', 'geometric>=0.9.7.2', 'pyscf-qsdopt']
+#dmrgscf = ['pyscf-dmrgscf']
+doci = ['pyscf-doci']
+icmpspt = ['pyscf-icmpspt']
+properties = ['pyscf-properties']
+semiempirical = ['pyscf-semiempirical']
+shciscf = ['pyscf-shciscf']
+cppe = ['cppe']
+pyqmc = ['pyqmc']
+mcfun = ['mcfun>=0.2.1']
+bse = ['basis-set-exchange']
+
+# above: they all in all.
+all = ['pyscf[geomopt,doci,icmpspt,properties,semiempirical,shciscf,cppe,pyqmc,mcfun,bse]']
+
+# below extras which should not be installed by "all" components
+cornell_shci = ['pyscf-cornell-shci']
+nao = ['pyscf-nao']
+fciqmcscf = ['pyscf-fciqmc']
+tblis = ['pyscf-tblis']
+
+
+[project.urls]
+ homepage = "http://www.pyscf.org"
+ download = "http://github.com/pyscf/pyscf"
+ documentation = "https://netket.readthedocs.io/en/latest/#"
+ repository = "https://github.com/netket/netket"
+ changelog = "https://netket.readthedocs.io/en/latest/docs/changelog.html"
+
+[tool.hatch.version]
+source = "pyscf"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "pyscf/_version.py"
+
+[tool.scikit-build]
+cmake.source-dir = "pyscf/lib"
+
+# The PEP 517 build hooks will add ninja and/or cmake if the versions on the
+# system are not at least these versions. Disabled by an empty string.
+cmake.minimum-version = "3.15"
+
+# Extra args for CMake. Pip, unlike build, does not support lists, so semicolon
+# can be used to separate. Setting this in config or envvar will override the
+# entire list. See also cmake.define.
+cmake.args = []
+
+# This activates verbose builds
+cmake.verbose = false
+
+# This controls the CMake build type
+cmake.build-type = "Release"
+
+# Display logs at or above this level.
+logging.level = "WARNING"
+
+# Include and exclude patterns, in gitignore syntax. Include overrides exclude.
+# Wheels include packages included in the sdist; CMake has the final say.
+sdist.include = ['pyscf/*.dat',
+	'pyscf/lib/config.h.in'
+]
+#sdist.exclude = [
+#]
+
+
+# Make reproducible SDists (Python 3.9+ and UNIX recommended). Respects
+# SOURCE_DATE_EPOCH when true (the default).
+sdist.reproducible = true
+
+# The root-level packages to include. Special default: if not given, the package
+# is auto-discovered if it's name matches the main name.
+# wheel.packages = ["src/<package>", "<package>"]
+
+# Setting py-api to "cp37" would build ABI3 wheels for Python 3.7+.  If CPython
+# is less than this value, or on PyPy, this will be ignored.  Setting the api to
+# "py3" or "py2.py3" would build wheels that don't depend on Python (ctypes,
+# etc).
+# wheel.py-api = ""
+
+# Setting this to true will expand tags (universal2 will add Intel and Apple
+# Silicon tags, for pip <21.0.1 compatibility).
+# wheel.expand-macos-universal-tags = false
+
+# This allows you to change the install dir, such as to the package name. The
+# original dir is still at SKBUILD_PLATLIB_DIR (also SKBUILD_DATA_DIR, etc. are
+# available)
+# wheel.install-dir = "."
+
+# The licence file(s) to include in the wheel metadata directory.
+# wheel.license-files = ["LICEN[CS]E*", "COPYING*", "NOTICE*", "AUTHORS*"]
+
+# This will backport an internal copy of FindPython if CMake is less than this
+# value. Set to 0 or the empty string to disable. The default will be kept in
+# sync with the version of FindPython stored in scikit-build-core.
+# backport.find-python = "3.26.1"
+
+# This is the only editable mode currently
+# editable.mode = "redirect"
+
+# Enable auto rebuilds on import (experimental)
+# editable.rebuild = false
+
+# Display output on stderr while rebuilding on import
+# editable.verbose = true
+
+# Enable experimental features if any are available
+# experimental = false
+
+# Strictly validate config options
+strict-config = true
+
+# This provides some backward compatibility if set. Defaults to the latest
+# scikit-build-core version.
+minimum-version = "0.2"  # current version
+
+# Build directory (empty will use a temporary directory). {cache_tag} and
+# {wheel_tag} are available to provide a unique directory per interpreter.
+# build-dir = ""

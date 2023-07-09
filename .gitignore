@@ -83,3 +83,5 @@ tmp/
 # IDEs
 .idea/
 .vscode/
+.envrc
+.DS_STORE
