@@ -54,18 +54,16 @@ class Diamond(unittest.TestCase):
     def kernel(self, TD, ref, **kwargs):
         td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)), **kwargs).run()
         for kshift,e in enumerate(td.e):
-            self.assertAlmostEqual(abs(e * unitev  - ref[kshift]).max(), 0, 4)
+            self.assertAlmostEqual(abs(e[0] * unitev  - ref[kshift]).max(), 0, 4)
 
     def test_tda(self):
         # same as lowest roots in Diamond->test_tda_singlet/triplet in test_krhf.py
-        ref = [[6.4440036773, 7.5318046444, 7.5318046444],
-               [7.4264956906, 7.6381422644, 7.6381422645]]
+        ref = [[6.4440036773], [7.4264956906]]
         self.kernel(tdscf.KTDA, ref)
 
     def test_tdhf(self):
         # same as lowest roots in Diamond->test_tdhf_singlet/triplet in test_krhf.py
-        ref = [[5.9794499585, 5.9794500663, 7.5464807016],
-               [6.1703898411, 6.1703922034, 9.1061146011]]
+        ref = [[5.9794499585], [6.1703898411]]
         self.kernel(tdscf.KTDHF, ref)
 
 

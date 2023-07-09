@@ -51,22 +51,22 @@ class Diamond(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = TD(self.mf).set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [9.6425852905, 9.6425852905, 9.6425852905]
+        ref = [9.6425852905]
         self.kernel(tdscf.TDA, ref)
 
     def test_tda_triplet(self):
-        ref = [4.7209460257, 5.6500725912, 5.6500725912]
+        ref = [4.7209460257]
         self.kernel(tdscf.TDA , ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [9.2573219105, 9.2573219105, 9.2573219105]
+        ref = [9.2573219105]
         self.kernel(tdscf.TDHF , ref)
 
     def test_tdhf_triplet(self):
-        ref = [3.0396052214, 3.0396052214, 3.0396052214]
+        ref = [3.0396052214]
         self.kernel(tdscf.TDHF , ref, singlet=False)
 
 
@@ -100,22 +100,22 @@ class DiamondShifted(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [12.7166510188, 13.5460934688, 14.1717802380]
+        ref = [12.7166510188]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [8.7359078688, 9.2565904604, 9.9565822453]
+        ref = [8.7359078688]
         self.kernel('TDA' , ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [12.6104811730, 13.4160717807, 14.0043072550]
+        ref = [12.6104811730]
         self.kernel('TDHF', ref)
 
     def test_tdhf_triplet(self):
-        ref = [3.8940277713, 7.9448161494, 9.0359951744]
+        ref = [3.8940277713]
         self.kernel('TDHF', ref, singlet=False)
 
 

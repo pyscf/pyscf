@@ -25,6 +25,8 @@ from pyscf.data.nist import HARTREE2EV as unitev
 
 
 class DiamondPBE(unittest.TestCase):
+    ''' Reproduce KRKS-TDSCF
+    '''
     @classmethod
     def setUpClass(cls):
         cell = gto.Cell()
@@ -44,7 +46,7 @@ class DiamondPBE(unittest.TestCase):
         kpts = cell.make_kpts((2,1,1))
 
         xc = 'pbe'
-        mf = scf.KRKS(cell, kpts=kpts).set(xc=xc).rs_density_fit(auxbasis='weigend').run()
+        mf = scf.KUKS(cell, kpts=kpts).set(xc=xc).rs_density_fit(auxbasis='weigend').run()
 
         cls.cell = cell
         cls.mf = mf
@@ -58,23 +60,17 @@ class DiamondPBE(unittest.TestCase):
         for kshift,e in enumerate(td.e):
             self.assertAlmostEqual(abs(e[0] * unitev  - ref[kshift]).max(), 0, 4)
 
-    def test_tda_singlet(self):
-        ref = [[7.7172937578], [8.3749670085]]
-        self.kernel('TDA', ref)
-
-    def test_tda_triplet(self):
+    def test_tda(self):
+        # same as lowest roots in Diamond->test_tda_singlet/triplet in test_krks.py
         ref = [[5.7465210070], [6.9888275254]]
         self.kernel('TDA', ref, singlet=False)
 
-    def test_tdhf_singlet(self):
-        ref = [[7.5824389449], [8.3438724396]]
-        self.kernel('TDDFT', ref)
-
-    def test_tdhf_triplet(self):
+    def test_tdhf(self):
+        # same as lowest roots in Diamond->test_tdhf_singlet/triplet in test_krks.py
         ref = [[5.5660080681], [6.7992898892]]
         self.kernel('TDDFT', ref, singlet=False)
 
 
 if __name__ == "__main__":
-    print("Full Tests for krks-TDA and krks-TDDFT")
+    print("Full Tests for kuks-TDA and kuks-TDDFT")
     unittest.main()

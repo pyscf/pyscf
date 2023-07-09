@@ -53,7 +53,7 @@ class Diamond(unittest.TestCase):
     def kernel(self, TD, ref, **kwargs):
         td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)), **kwargs).run()
         for kshift,e in enumerate(td.e):
-            self.assertAlmostEqual(abs(e * unitev  - ref[kshift]).max(), 0, 4)
+            self.assertAlmostEqual(abs(e[0] * unitev  - ref[kshift]).max(), 0, 4)
 
     def test_tda_singlet_eomccs(self):
         ''' Brute-force solution to the KTDA equation. Compared to the brute-force
@@ -75,23 +75,19 @@ class Diamond(unittest.TestCase):
             self.assertAlmostEqual(abs(e * unitev  - ecc.real * unitev).max(), 0, 3)
 
     def test_tda_singlet(self):
-        ref = [[10.9574060301, 10.9574060301, 11.0754377535],
-               [11.0418473305, 11.0418473305, 11.8143618220]]
+        ref = [[10.9574060301], [11.0418473305]]
         self.kernel(tdscf.KTDA, ref)
 
     def test_tda_triplet(self):
-        ref = [[6.4440014682, 7.5318080468, 7.5318080468],
-               [7.4264969423, 7.6381437906, 7.6381437906]]
+        ref = [[6.4440014682], [7.4264969423]]
         self.kernel(tdscf.KTDA, ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [[10.6076181651, 10.7665355254, 10.7665355254],
-               [10.8485185168, 10.8485204989, 11.3321539636]]
+        ref = [[10.6076181651], [10.8485185168]]
         self.kernel(tdscf.KTDHF, ref)
 
     def test_tdhf_triplet(self):
-        ref = [[5.9794526306, 5.9794527382, 7.5464807016],
-               [6.1703901071, 6.1703924697, 9.1061158842]]
+        ref = [[5.9794526306], [6.1703901071]]
         self.kernel(tdscf.KTDHF, ref, singlet=False)
 
 

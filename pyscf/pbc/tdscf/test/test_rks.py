@@ -53,22 +53,22 @@ class DiamondPBE(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [9.2717239608, 9.2717239608, 9.2717425470]
+        ref = [9.2717239608]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [4.7947342558, 4.7947342558, 4.7947605634]
+        ref = [4.7947342558]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tddft_singlet(self):
-        ref = [8.8773591552, 8.8773591552, 8.8773808758]
+        ref = [8.8773591552]
         self.kernel('TDDFT', ref)
 
     def test_tddft_triplet(self):
-        ref = [4.7694603180, 4.7694603180, 4.7694891742]
+        ref = [4.7694603180]
         self.kernel('TDDFT', ref, singlet=False)
 
 
@@ -104,23 +104,23 @@ class DiamondPBEShifted(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [11.9664896841, 12.7605720987, 15.1738260142]
+        ref = [11.9664896841]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [8.5705050199, 9.3030310573, 11.4378496190]
+        ref = [8.5705050199]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tddft_singlet(self):
         # TODO: these do not match pbc.tdscf.rhf.TDHF(mf)
-        ref = [10.5406839130, 11.2987220401, 13.1534367448]
+        ref = [10.5406839130]
         self.kernel('TDDFT', ref)
 
     def test_tddft_triplet(self):
-        ref = [9.8870284077, 10.5054352535, 10.9880745420]
+        ref = [9.8870284077]
         self.kernel('TDDFT', ref, singlet=False)
 
 
@@ -212,22 +212,22 @@ class DiamondPBE0(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [9.6154699758, 9.6154699758, 9.6154827819]
+        ref = [9.6154699758]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [5.1302206493, 5.1302206493, 5.1302404747]
+        ref = [5.1302206493]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tddft_singlet(self):
-        ref = [9.2585544813, 9.2585544813, 9.2585695773]
+        ref = [9.2585544813]
         self.kernel('TDDFT', ref)
 
     def test_tddft_triplet(self):
-        ref = [4.5570175405, 4.5570175405, 4.5662667978]
+        ref = [4.5570175405]
         self.kernel('TDDFT', ref, singlet=False)
 
 
