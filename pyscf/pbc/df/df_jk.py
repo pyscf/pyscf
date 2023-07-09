@@ -160,7 +160,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
 
 
 def get_j_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), kpts_band=None):
-    ''' Math:
+    r''' Math:
             J^{k1 k1'}_{pq}
                 = (1/Nk) \sum_{k2} \sum_{rs} (p k1 q k1' |r k2' s k2) D_{sr}^{k2 k2'}
         where k1' and k2' satisfies
@@ -662,7 +662,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 
 def get_k_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), kpts_band=None,
                       exxdiv=None):
-    ''' Math:
+    r''' Math:
             K^{k1 k1'}_{pq}
                 = (1/Nk) \sum_{k2} \sum_{rs} (p k1 s k2 | r k2' q k1') D_{sr}^{k2 k2'}
         where k1' and k2' satisfies

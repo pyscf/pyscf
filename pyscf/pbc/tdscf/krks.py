@@ -43,7 +43,6 @@ RPA = KTDDFT = TDDFT
 def _rebuild_df(td):
     log = lib.logger.new_logger(td)
     mf = td._scf
-    import sys
     if any([k != 0 for k in td.kshift_lst]):
         if isinstance(mf.with_df, df.df.DF):
             if mf.with_df._j_only:

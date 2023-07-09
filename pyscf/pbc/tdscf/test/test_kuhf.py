@@ -54,7 +54,6 @@ class Diamond(unittest.TestCase):
     def kernel(self, TD, ref, **kwargs):
         td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)), **kwargs).run()
         for kshift,e in enumerate(td.e):
-        for kshift,e in enumerate(td.e):
             self.assertAlmostEqual(abs(e * unitev  - ref[kshift]).max(), 0, 4)
 
     def test_tda(self):

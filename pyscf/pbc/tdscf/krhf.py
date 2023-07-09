@@ -43,6 +43,8 @@ class KTDMixin(TDMixin):
         TDMixin.__init__(self, mf)
         warn_pbc2d_eri(mf)
 
+        log = logger.new_logger(self)
+
         if kshift_lst is None: kshift_lst = [0]
         if any([k != 0 for k in kshift_lst]) and not isinstance(mf.with_df, pbcdf.df.DF):
             log.warn(f'Non-zero kshift is requested for {self.__class__.__name__}, '
@@ -106,7 +108,6 @@ class TDA(KTDMixin):
         kconserv = self.kconserv[kshift]
 
         mo_coeff = mf.mo_coeff
-        mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         nkpts = len(mo_occ)
         nao, nmo = mo_coeff[0].shape
@@ -237,7 +238,6 @@ class TDHF(TDA):
         kconserv = self.kconserv[kshift]
 
         mo_coeff = mf.mo_coeff
-        mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         nkpts = len(mo_occ)
         nao, nmo = mo_coeff[0].shape
