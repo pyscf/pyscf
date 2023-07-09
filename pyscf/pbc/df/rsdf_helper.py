@@ -26,7 +26,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lib.parameters import BOHR
 from pyscf import gto as mol_gto
-from pyscf.pbc.df.gdf_builder import _round_off_to_odd_mesh
+from pyscf.pbc.df.rsdf_builder import _round_off_to_odd_mesh
 from pyscf.pbc.df.incore import libpbc, make_auxcell
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
 from pyscf.pbc.tools import pbc as pbctools

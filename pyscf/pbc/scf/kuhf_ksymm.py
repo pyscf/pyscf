@@ -21,7 +21,7 @@ from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.lib import kpts as libkpts
-from pyscf.pbc.scf import khf_ksymm, kuhf
+from pyscf.pbc.scf import khf_ksymm, khf, kuhf
 from pyscf.pbc.lib.kpts import KPoints
 
 @lib.with_doc(kuhf.get_occ.__doc__)
@@ -147,42 +147,20 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
         return self
 
     def get_init_guess(self, cell=None, key='minao'):
-        if cell is None:
-            cell = self.cell
-        dm_kpts = None
-        key = key.lower()
-        if key == '1e' or key == 'hcore':
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif getattr(cell, 'natm', 0) == 0:
-            logger.info(self, 'No atom found in cell. Use 1e initial guess')
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif key == 'atom':
-            dm = self.init_guess_by_atom(cell)
-        elif key[:3] == 'chk':
-            try:
-                dm_kpts = self.from_chk()
-            except (IOError, KeyError):
-                logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
-                            self.chkfile)
-                dm = self.init_guess_by_minao(cell)
-        else:
-            dm = self.init_guess_by_minao(cell)
-
-        if dm_kpts is None:
+        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
+        assert dm_kpts.shape[0]==2
+        if dm_kpts.ndim != 4:
             nkpts = self.kpts.nkpts_ibz
             # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
-            dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
-            dm_kpts[0,:] *= 1.01
-            dm_kpts[1,:] *= 0.99  # To slightly break spin symmetry
-            assert dm_kpts.shape[0]==2
+            dm_kpts = np.repeat(dm_kpts[:,None,:,:], nkpts, axis=1)
+        elif dm_kpts.shape[1] != self.kpts.nkpts_ibz:
+            dm_kpts = dm_kpts[:,self.kpts.ibz2bz]
 
         ne = np.einsum('k,xkij,kji->x', self.kpts.weights_ibz, dm_kpts, self.get_ovlp(cell)).real
-        # FIXME: consider the fractional num_electron or not? This maybe
-        # relates to the charged system.
         nkpts = self.kpts.nkpts
         ne *= nkpts
         nelec = np.asarray(self.nelec)
-        if np.any(abs(ne - nelec) > 1e-7*nkpts):
+        if np.any(abs(ne - nelec) > 0.01*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
                          'of initial guess density matrix (Ne/cell = %g)!\n'
                          '  This can cause huge error in Fock matrix and '
@@ -218,7 +196,7 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
         orbsym = self.get_orbsym()
         for s in range(2):
             for k, mo_e in enumerate(self.mo_energy[s]):
-                idx = np.argsort(mo_e.round(9), kind='mergesort')
+                idx = np.argsort(mo_e.round(9), kind='stable')
                 self.mo_energy[s][k] = self.mo_energy[s][k][idx]
                 self.mo_occ[s][k] = self.mo_occ[s][k][idx]
                 self.mo_coeff[s][k] = lib.tag_array(self.mo_coeff[s][k][:,idx],

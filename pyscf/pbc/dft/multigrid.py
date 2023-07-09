@@ -65,9 +65,19 @@ IMAG_TOL = 1e-9
 def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
              xctype='LDA', kpts=None, mesh=None, offset=None, submesh=None):
     assert (all(cell._bas[:,NPRIM_OF] == 1))
+    if mesh is None:
+        mesh = cell.mesh
+    vol = cell.vol
+    weight_penalty = numpy.prod(mesh) / vol
+    exp_min = numpy.hstack(cell.bas_exps()).min()
+    theta_ij = exp_min / 2
+    lattice_sum_fac = max(2*numpy.pi*cell.rcut/(vol*theta_ij), 1)
+    precision = cell.precision / weight_penalty / lattice_sum_fac
+    if xctype != 'LDA':
+        precision *= .1
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
-    env[PTR_EXPDROP] = min(cell.precision*EXTRA_PREC, EXPDROP)
+    env[PTR_EXPDROP] = min(precision*EXTRA_PREC, EXPDROP)
     ao_loc = gto.moleintor.make_loc(bas, 'cart')
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -77,14 +87,9 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
     naoi = ao_loc[i1] - ao_loc[i0]
     naoj = ao_loc[j1] - ao_loc[j0]
 
-    if cell.dimension > 0:
-        Ls = numpy.asarray(cell.get_lattice_Ls(), order='C')
-    else:
-        Ls = numpy.zeros((1,3))
+    Ls = gto.eval_gto.get_lattice_Ls(cell)
     nimgs = len(Ls)
 
-    if mesh is None:
-        mesh = cell.mesh
     weights = numpy.asarray(weights, order='C')
     assert (weights.dtype == numpy.double)
     xctype = xctype.upper()
@@ -112,7 +117,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
         submesh = mesh
     # log_prec is used to estimate the gto_rcut. Add EXTRA_PREC to count
     # other possible factors and coefficients in the integral.
-    log_prec = numpy.log(cell.precision * EXTRA_PREC)
+    log_prec = numpy.log(precision * EXTRA_PREC)
 
     if abs(a-numpy.diag(a.diagonal())).max() < 1e-12:
         lattice_type = '_orth'
@@ -187,9 +192,19 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
             The output density is assumed to be real if ignore_imag=True.
     '''
     assert (all(cell._bas[:,NPRIM_OF] == 1))
+    if mesh is None:
+        mesh = cell.mesh
+    vol = cell.vol
+    weight_penalty = numpy.prod(mesh) / vol
+    exp_min = numpy.hstack(cell.bas_exps()).min()
+    theta_ij = exp_min / 2
+    lattice_sum_fac = max(2*numpy.pi*cell.rcut/(vol*theta_ij), 1)
+    precision = cell.precision / weight_penalty / lattice_sum_fac
+    if xctype != 'LDA':
+        precision *= .1
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
-    env[PTR_EXPDROP] = min(cell.precision*EXTRA_PREC, EXPDROP)
+    env[PTR_EXPDROP] = min(precision*EXTRA_PREC, EXPDROP)
     ao_loc = gto.moleintor.make_loc(bas, 'cart')
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -203,10 +218,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
     dm = numpy.asarray(dm, order='C')
     assert (dm.shape[-2:] == (naoi, naoj))
 
-    if cell.dimension > 0:
-        Ls = numpy.asarray(cell.get_lattice_Ls(), order='C')
-    else:
-        Ls = numpy.zeros((1,3))
+    Ls = gto.eval_gto.get_lattice_Ls(cell)
 
     if cell.dimension == 0 or kpts is None or gamma_point(kpts):
         nkpts, nimgs = 1, Ls.shape[0]
@@ -219,13 +231,11 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
 
     a = cell.lattice_vectors()
     b = numpy.linalg.inv(a.T)
-    if mesh is None:
-        mesh = cell.mesh
     if offset is None:
         offset = (0, 0, 0)
     if submesh is None:
         submesh = mesh
-    log_prec = numpy.log(cell.precision * EXTRA_PREC)
+    log_prec = numpy.log(precision * EXTRA_PREC)
 
     if abs(a-numpy.diag(a.diagonal())).max() < 1e-12:
         lattice_type = '_orth'
@@ -341,12 +351,8 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
     return rho
 
 def get_nuc(mydf, kpts=None):
+    kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
     cell = mydf.cell
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
@@ -356,9 +362,9 @@ def get_nuc(mydf, kpts=None):
     coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
     vneG = rhoG * coulG
     hermi = 1
-    vne = _get_j_pass2(mydf, vneG, hermi, kpts_lst)[0]
+    vne = _get_j_pass2(mydf, vneG, hermi, kpts)[0]
 
-    if kpts is None or numpy.shape(kpts) == (3,):
+    if is_single_kpt:
         vne = vne[0]
     return numpy.asarray(vne)
 
@@ -366,12 +372,8 @@ def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
     from pyscf import gto
+    kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
     cell = mydf.cell
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-
     mesh = mydf.mesh
     SI = cell.get_SI()
     Gv = cell.get_Gv(mesh)
@@ -382,7 +384,7 @@ def get_pp(mydf, kpts=None):
     ngrids = len(vpplocG)
 
     hermi = 1
-    vpp = _get_j_pass2(mydf, vpplocG, hermi, kpts_lst)[0]
+    vpp = _get_j_pass2(mydf, vpplocG, hermi, kpts)[0]
 
     # vppnonloc evaluated in reciprocal space
     fakemol = gto.Mole()
@@ -442,14 +444,14 @@ def get_pp(mydf, kpts=None):
                         vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
         return vppnl * (1./ngrids**2)
 
-    for k, kpt in enumerate(kpts_lst):
+    for k, kpt in enumerate(kpts):
         vppnl = vppnl_by_k(kpt)
         if gamma_point(kpt):
             vpp[k] = vpp[k].real + vppnl.real
         else:
             vpp[k] += vppnl
 
-    if kpts is None or numpy.shape(kpts) == (3,):
+    if is_single_kpt:
         vpp = vpp[0]
     return numpy.asarray(vpp)
 
@@ -1774,24 +1776,25 @@ def _primitive_gto_cutoff(cell, precision=None):
     '''Cutoff raidus, above which each shell decays to a value less than the
     required precsion'''
     if precision is None:
-        precision = cell.precision * EXTRA_PREC
-    log_prec = min(numpy.log(precision), 0)
+        precision = cell.precision
+    vol = cell.vol
+    weight_penalty = vol
+    precision = cell.precision / max(weight_penalty, 1)
 
+    omega = cell.omega
     rcut = []
     ke_cutoff = []
     for ib in range(cell.nbas):
         l = cell.bas_angular(ib)
         es = cell.bas_exp(ib)
-        cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
-        r = 5.
-        r = (((l+2)*numpy.log(r)+numpy.log(4*numpy.pi*cs) - log_prec) / es)**.5
-        r = (((l+2)*numpy.log(r)+numpy.log(4*numpy.pi*cs) - log_prec) / es)**.5
+        cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
+        norm_ang = ((2*l+1)/(4*numpy.pi))**.5
+        fac = 2*numpy.pi/vol * cs*norm_ang/es / precision
+        r = cell.rcut
+        r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
+        r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
 
-# Errors in total number of electrons were observed with the default
-# precision. The energy cutoff (or the integration mesh) is not enough to
-# produce the desired accuracy. Scale precision by 0.1 to decrease the error.
-        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision*0.1)
-
+        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision, omega)
         rcut.append(r)
         ke_cutoff.append(ke_guess)
     return rcut, ke_cutoff
@@ -1910,42 +1913,3 @@ def _takebak_5d(out, a, indices):
     out = out.reshape((out_shape[0]*out_shape[1],) + out_shape[2:])
     indices = (None,) + indices[2:]
     return _takebak_4d(out, a, indices)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import dft
-    numpy.random.seed(22)
-    cell = gto.M(
-        a = numpy.eye(3)*3.5668,
-        atom = '''C     0.      0.      0.
-                  C     0.8917  0.8917  0.8917
-                  C     1.7834  1.7834  0.
-                  C     2.6751  2.6751  0.8917
-                  C     1.7834  0.      1.7834
-                  C     2.6751  0.8917  2.6751
-                  C     0.      1.7834  1.7834
-                  C     0.8917  2.6751  2.6751''',
-        #basis = 'sto3g',
-        #basis = 'ccpvdz',
-        basis = 'gth-dzvp',
-        #basis = 'gth-szv',
-        #verbose = 5,
-        #mesh = [15]*3,
-        #precision=1e-6
-        pseudo = 'gth-pade'
-    )
-    multi_grids_tasks(cell, cell.mesh, 5)
-
-    nao = cell.nao_nr()
-    numpy.random.seed(1)
-    kpts = cell.make_kpts([3,1,1])
-
-    dm = numpy.random.random((len(kpts),nao,nao)) * .2
-    dm += numpy.eye(nao)
-    dm = dm + dm.transpose(0,2,1)
-
-    mf = dft.KRKS(cell)
-    ref = mf.get_veff(cell, dm, kpts=kpts)
-    out = multigrid(mf).get_veff(cell, dm, kpts=kpts)
-    print(abs(ref-out).max())
-

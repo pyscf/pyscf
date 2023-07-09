@@ -179,30 +179,28 @@ static void inner_prod_pdotp(double *gout, double *g, int *idx, FTEnvVars *envs,
 
 int GTO_ft_pdotp_cart(double *outR, double *outI, int *shls, int *dims,
                       FPtr_eval_gz eval_gz, double complex fac,
-                      double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                      int block_size,
-                      int *atm, int natm, int *bas, int nbas, double *env)
+                      double *Gv, double *b, int *gxyz, int *gs, int nGv, int block_size,
+                      int *atm, int natm, int *bas, int nbas, double *env, double *cache)
 {
         FTEnvVars envs;
         int ng[] = {1, 1, 0, 0, 2, 1, 0, 1};
         GTO_ft_init1e_envs(&envs, ng, shls, fac, Gv, b, gxyz, gs, nGv, block_size,
                            atm, natm, bas, nbas, env);
         envs.f_gout = &inner_prod_pdotp;
-        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, &GTO_ft_c2s_cart, &envs);
+        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, cache, &GTO_ft_c2s_cart, &envs);
 }
 
 int GTO_ft_pdotp_sph(double *outR, double *outI, int *shls, int *dims,
                      FPtr_eval_gz eval_gz, double complex fac,
-                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                     int block_size,
-                     int *atm, int natm, int *bas, int nbas, double *env)
+                     double *Gv, double *b, int *gxyz, int *gs, int nGv, int block_size,
+                     int *atm, int natm, int *bas, int nbas, double *env, double *cache)
 {
         FTEnvVars envs;
         int ng[] = {1, 1, 0, 0, 2, 1, 0, 1};
         GTO_ft_init1e_envs(&envs, ng, shls, fac, Gv, b, gxyz, gs, nGv, block_size,
                            atm, natm, bas, nbas, env);
         envs.f_gout = &inner_prod_pdotp;
-        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, &GTO_ft_c2s_sph, &envs);
+        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, cache, &GTO_ft_c2s_sph, &envs);
 }
 
 
@@ -272,28 +270,26 @@ static void inner_prod_pxp(double *gout, double *g, int *idx, FTEnvVars *envs, i
 
 int GTO_ft_pxp_cart(double *outR, double *outI, int *shls, int *dims,
                     void (*eval_gz)(), double complex fac,
-                    double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                    int block_size,
-                    int *atm, int natm, int *bas, int nbas, double *env)
+                    double *Gv, double *b, int *gxyz, int *gs, int nGv, int block_size,
+                    int *atm, int natm, int *bas, int nbas, double *env, double *cache)
 {
         FTEnvVars envs;
         int ng[] = {1, 1, 0, 0, 2, 1, 0, 3};
         GTO_ft_init1e_envs(&envs, ng, shls, fac, Gv, b, gxyz, gs, nGv, block_size,
                            atm, natm, bas, nbas, env);
         envs.f_gout = &inner_prod_pxp;
-        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, &GTO_ft_c2s_cart, &envs);
+        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, cache, &GTO_ft_c2s_cart, &envs);
 }
 
 int GTO_ft_pxp_sph(double *outR, double *outI, int *shls, int *dims,
                    void (*eval_gz)(), double complex fac,
-                   double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                   int block_size,
-                   int *atm, int natm, int *bas, int nbas, double *env)
+                   double *Gv, double *b, int *gxyz, int *gs, int nGv, int block_size,
+                   int *atm, int natm, int *bas, int nbas, double *env, double *cache)
 {
         FTEnvVars envs;
         int ng[] = {1, 1, 0, 0, 2, 1, 0, 3};
         GTO_ft_init1e_envs(&envs, ng, shls, fac, Gv, b, gxyz, gs, nGv, block_size,
                            atm, natm, bas, nbas, env);
         envs.f_gout = &inner_prod_pxp;
-        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, &GTO_ft_c2s_sph, &envs);
+        return GTO_ft_aopair_drv(outR, outI, dims, eval_gz, cache, &GTO_ft_c2s_sph, &envs);
 }

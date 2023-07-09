@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import unittest
+import tempfile
 import numpy
 from pyscf import lib
 import pyscf.pbc
@@ -20,11 +21,12 @@ from pyscf import ao2mo, gto
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.df import df, aug_etb, FFTDF
+from pyscf.pbc.df import gdf_builder
 #from mpi4pyscf.pbc.df import df
 pyscf.pbc.DEBUG = False
 
 def setUpModule():
-    global cell, kmdf, ccgdf, kpts
+    global cell, cell1, kmdf, ccgdf, kpts
     L = 5.
     n = 11
     cell = pgto.Cell()
@@ -63,6 +65,17 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    def test_aft_get_pp_high_cost(self):
+        cell = pgto.Cell()
+        cell.verbose = 0
+        cell.atom = 'C 0 0 0; C 1 1 1'
+        cell.a = numpy.diag([4, 4, 4])
+        cell.basis = 'gth-szv'
+        cell.pseudo = 'gth-pade'
+        cell.build()
+        v1 = df.DF(cell).get_pp([.25]*3)
+        self.assertAlmostEqual(lib.fp(v1), -0.0533131779366407-0.11895124492447073j, 8)
+
     def test_get_eri_gamma(self):
         odf = df.DF(cell)
         odf.linear_dep_threshold = 1e-7

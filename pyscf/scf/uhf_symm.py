@@ -421,8 +421,8 @@ class SymAdaptedUHF(uhf.UHF):
                     neleca = self.irrep_nelec[irname] - nelecb
                 else:
                     neleca, nelecb = self.irrep_nelec[irname]
-                ea_idx = numpy.argsort(mo_energy[0][ir_idxa].round(9), kind='mergesort')
-                eb_idx = numpy.argsort(mo_energy[1][ir_idxb].round(9), kind='mergesort')
+                ea_idx = numpy.argsort(mo_energy[0][ir_idxa].round(9), kind='stable')
+                eb_idx = numpy.argsort(mo_energy[1][ir_idxb].round(9), kind='stable')
                 mo_occ[0,ir_idxa[ea_idx[:neleca]]] = 1
                 mo_occ[1,ir_idxb[eb_idx[:nelecb]]] = 1
                 neleca_fix += neleca
@@ -439,13 +439,13 @@ class SymAdaptedUHF(uhf.UHF):
         if len(idx_ea_left) > 0:
             idx_ea_left = numpy.hstack(idx_ea_left)
             ea_left = mo_energy[0][idx_ea_left]
-            ea_sort = numpy.argsort(ea_left.round(9), kind='mergesort')
+            ea_sort = numpy.argsort(ea_left.round(9), kind='stable')
             occ_idx = idx_ea_left[ea_sort][:neleca_float]
             mo_occ[0][occ_idx] = 1
         if len(idx_eb_left) > 0:
             idx_eb_left = numpy.hstack(idx_eb_left)
             eb_left = mo_energy[1][idx_eb_left]
-            eb_sort = numpy.argsort(eb_left.round(9), kind='mergesort')
+            eb_sort = numpy.argsort(eb_left.round(9), kind='stable')
             occ_idx = idx_eb_left[eb_sort][:nelecb_float]
             mo_occ[1][occ_idx] = 1
 
@@ -498,10 +498,10 @@ class SymAdaptedUHF(uhf.UHF):
         eb = numpy.hstack(self.mo_energy[1])
         # Using mergesort because it is stable. We don't want to change the
         # ordering of the symmetry labels when two orbitals are degenerated.
-        oa_sort = numpy.argsort(ea[self.mo_occ[0]>0 ].round(9), kind='mergesort')
-        va_sort = numpy.argsort(ea[self.mo_occ[0]==0].round(9), kind='mergesort')
-        ob_sort = numpy.argsort(eb[self.mo_occ[1]>0 ].round(9), kind='mergesort')
-        vb_sort = numpy.argsort(eb[self.mo_occ[1]==0].round(9), kind='mergesort')
+        oa_sort = numpy.argsort(ea[self.mo_occ[0]>0 ].round(9), kind='stable')
+        va_sort = numpy.argsort(ea[self.mo_occ[0]==0].round(9), kind='stable')
+        ob_sort = numpy.argsort(eb[self.mo_occ[1]>0 ].round(9), kind='stable')
+        vb_sort = numpy.argsort(eb[self.mo_occ[1]==0].round(9), kind='stable')
         idxa = numpy.arange(ea.size)
         idxa = numpy.hstack((idxa[self.mo_occ[0]> 0][oa_sort],
                              idxa[self.mo_occ[0]==0][va_sort]))

@@ -466,6 +466,39 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(exc1, exc2, 7)
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 7)
 
+    def test_multigrid_krks_1(self):
+        numpy.random.seed(22)
+        cell = gto.M(
+            a = numpy.eye(3)*3.5668,
+            atom = '''C     0.      0.      0.
+                      C     0.8917  0.8917  0.8917
+                      C     1.7834  1.7834  0.
+                      C     2.6751  2.6751  0.8917
+                      C     1.7834  0.      1.7834
+                      C     2.6751  0.8917  2.6751
+                      C     0.      1.7834  1.7834
+                      C     0.8917  2.6751  2.6751''',
+            #basis = 'sto3g',
+            #basis = 'ccpvdz',
+            basis = 'gth-dzvp',
+            #basis = 'gth-szv',
+            pseudo = 'gth-pade'
+        )
+        multigrid.multi_grids_tasks(cell, cell.mesh, 5)
+
+        nao = cell.nao_nr()
+        numpy.random.seed(1)
+        kpts = cell.make_kpts([3,1,1])
+
+        dm = numpy.random.random((len(kpts),nao,nao)) * .2
+        dm += numpy.eye(nao)
+        dm = dm + dm.transpose(0,2,1)
+
+        mf = dft.KRKS(cell)
+        ref = mf.get_veff(cell, dm, kpts=kpts)
+        out = multigrid.multigrid(mf).get_veff(cell, dm, kpts=kpts)
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 7)
+
 
 if __name__ == '__main__':
     print("Full Tests for multigrid")

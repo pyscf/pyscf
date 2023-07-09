@@ -77,6 +77,30 @@ class KnownValues(unittest.TestCase):
                 idy = np.where(uniq_inv == i)[0] % nkpts
                 self.assertTrue(np.array_equiv(np.sort(idy*nkpts+idx), np.where(uniq_inv == j)[0]))
 
+    def test_member(self):
+        kpts = np.random.rand(8,2,3)
+        kpt = kpts[4]
+        kpts[:,0] = kpt[0]
+        idx = kpts_helper.member(kpt, kpts)
+        self.assertEqual(idx[0], 4)
+
+        idx = kpts_helper.member(kpt+kpts_helper.KPT_DIFF_TOL*2, kpts)
+        self.assertEqual(idx.size, 0)
+
+        kpts[6] = kpt
+        idx = kpts_helper.member(kpt, kpts)
+        self.assertEqual(idx[0], 4)
+
+    def test_intersection(self):
+        kpts1 = np.random.rand(8,3)
+        kpts2 = np.empty((8,3))
+        kpts2[:] = kpts1[4]
+        idx = kpts_helper.intersection(kpts1, kpts2)
+        self.assertEqual(idx[0], 4)
+
+        idx = kpts_helper.intersection(kpts1+kpts_helper.KPT_DIFF_TOL*2, kpts2)
+        self.assertEqual(idx.size, 0)
+
 if __name__ == "__main__":
     print("Tests for kpts_helper")
     unittest.main()

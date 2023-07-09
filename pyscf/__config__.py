@@ -10,6 +10,7 @@ DEBUG = False
 MAX_MEMORY = int(os.environ.get('PYSCF_MAX_MEMORY', 4000)) # MB
 TMPDIR = os.environ.get('TMPDIR', '.')
 TMPDIR = os.environ.get('PYSCF_TMPDIR', TMPDIR)
+ARGPARSE = bool(os.getenv('PYSCF_ARGPARSE', False))
 
 VERBOSE = 3  # default logger level (logger.NOTE)
 UNIT = 'angstrom'

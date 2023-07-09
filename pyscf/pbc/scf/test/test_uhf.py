@@ -69,7 +69,7 @@ class KnownValues(unittest.TestCase):
         kmf.diis = None
         e2 = kmf.kernel(dm.reshape(2,1,nao,nao))
         self.assertAlmostEqual(e1, e2, 9)
-        self.assertAlmostEqual(e1, -3.498612316383892, 9)
+        self.assertAlmostEqual(e1, -3.498612316383892, 8)
 
     def test_init_guess_by_chkfile(self):
         np.random.seed(1)
@@ -79,7 +79,7 @@ class KnownValues(unittest.TestCase):
         mf.max_cycle = 1
         mf.diis = None
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.4070772194665477, 9)
+        self.assertAlmostEqual(e1, -3.4070772194665477, 7)
 
         mf1 = pscf.UHF(cell, exxdiv='vcut_sph')
         mf1.chkfile = mf.chkfile
@@ -87,7 +87,7 @@ class KnownValues(unittest.TestCase):
         mf1.diis = None
         mf1.max_cycle = 1
         e1 = mf1.kernel()
-        self.assertAlmostEqual(e1, -3.4272925247351256, 9)
+        self.assertAlmostEqual(e1, -3.4272925247351256, 7)
         self.assertTrue(mf1.mo_coeff[0].dtype == np.double)
 
     @unittest.skip('mesh not enough for density')

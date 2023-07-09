@@ -43,15 +43,18 @@ def contract_1e(f1e, fcivec, norb, nelec):
     return fcinew.reshape(fcivec.shape)
 
 
-def contract_2e(eri, fcivec, norb, nelec, opt=None):
+def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     '''Compute E_{pq}E_{rs}|CI>'''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-    link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+    if link_index is None:
+        link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
+        link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
+    else:
+        link_indexa, link_indexb = link_index
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     ci0 = fcivec.reshape(na,nb)
