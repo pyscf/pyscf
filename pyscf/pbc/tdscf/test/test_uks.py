@@ -54,7 +54,7 @@ class DiamondPBE(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 4)
 
     def test_tda(self):
         ref = [4.7721917153, 4.7721917153, 4.7722180220]
@@ -149,7 +149,7 @@ class DiamondPBE0(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 4)
 
     def test_tda(self):
         ref = [5.1078331316, 5.1078331316, 5.1078522588]

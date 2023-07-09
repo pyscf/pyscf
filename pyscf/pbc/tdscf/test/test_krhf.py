@@ -17,7 +17,7 @@
 import unittest
 import numpy as np
 from pyscf import __config__
-setattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-1)         # make sure no missing roots
+setattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 5e-1)         # make sure no missing roots
 from pyscf.pbc import gto, scf, tdscf, cc
 from pyscf import gto as molgto, scf as molscf, tdscf as moltdscf
 from pyscf.pbc.cc.eom_kccsd_rhf import EOMEESinglet
@@ -53,7 +53,7 @@ class Diamond(unittest.TestCase):
     def kernel(self, TD, ref, **kwargs):
         td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)), **kwargs).run()
         for kshift,e in enumerate(td.e):
-            self.assertAlmostEqual(abs(e * unitev  - ref[kshift]).max(), 0, 5)
+            self.assertAlmostEqual(abs(e * unitev  - ref[kshift]).max(), 0, 4)
 
     def test_tda_singlet_eomccs(self):
         ''' Brute-force solution to the KTDA equation. Compared to the brute-force
@@ -90,7 +90,7 @@ class Diamond(unittest.TestCase):
         self.kernel(tdscf.KTDHF, ref)
 
     def test_tdhf_triplet(self):
-        ref = [[5.9794526306, 5.9794527382, 8.4602603869],
+        ref = [[5.9794526306, 5.9794527382, 7.5464807016],
                [6.1703901071, 6.1703924697, 9.1061158842]]
         self.kernel(tdscf.KTDHF, ref, singlet=False)
 

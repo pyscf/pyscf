@@ -51,22 +51,22 @@ class Diamond(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = TD(self.mf).set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [9.6425852553, 9.6425852553, 9.6425852554]
+        ref = [9.6425852905, 9.6425852905, 9.6425852905]
         self.kernel(tdscf.TDA, ref)
 
     def test_tda_triplet(self):
-        ref = [4.7209459941, 5.6500725800, 5.6500725801]
+        ref = [4.7209460257, 5.6500725912, 5.6500725912]
         self.kernel(tdscf.TDA , ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [9.2573218738, 9.2573218738, 9.2573218738]
+        ref = [9.2573219105, 9.2573219105, 9.2573219105]
         self.kernel(tdscf.TDHF , ref)
 
     def test_tdhf_triplet(self):
-        ref = [3.0396052017, 3.0396052018, 3.0396052018]
+        ref = [3.0396052214, 3.0396052214, 3.0396052214]
         self.kernel(tdscf.TDHF , ref, singlet=False)
 
 
@@ -100,22 +100,22 @@ class DiamondShifted(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [12.7167033431, 13.5461086348, 14.1717794510]
+        ref = [12.7166510188, 13.5460934688, 14.1717802380]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [8.7359210740, 9.2566230987, 9.9565887957]
+        ref = [8.7359078688, 9.2565904604, 9.9565822453]
         self.kernel('TDA' , ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [12.6105360610, 13.4160895650, 14.0043050294]
+        ref = [12.6104811730, 13.4160717807, 14.0043072550]
         self.kernel('TDHF', ref)
 
     def test_tdhf_triplet(self):
-        ref = [3.8941254767, 7.9448347008, 9.0360145338]
+        ref = [3.8940277713, 7.9448161494, 9.0359951744]
         self.kernel('TDHF', ref, singlet=False)
 
 

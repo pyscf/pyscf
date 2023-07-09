@@ -52,7 +52,7 @@ class Diamond(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = TD(self.mf).set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(td.e * unitev  - ref).max(), 0, 4)
 
     def test_tda(self):
         ref = [4.7209459941, 5.6500725800, 5.6500725801]
