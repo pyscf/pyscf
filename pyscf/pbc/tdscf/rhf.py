@@ -22,6 +22,7 @@
 
 from pyscf import lib
 from pyscf.tdscf import rhf
+from pyscf.pbc.scf.addons import mo_energy_no_ewald_shift
 from pyscf import __config__
 
 class TDMixin(rhf.TDMixin):
@@ -76,7 +77,9 @@ class TDA(TDMixin):
         #
         # See also issue https://github.com/pyscf/pyscf/issues/1187
 
-        vind, hdiag = self._gen_vind(mf)
+        moe = mo_energy_no_ewald_shift(mf)
+        with lib.temporary_env(mf, mo_energy=moe):
+            vind, hdiag = self._gen_vind(mf)
         def vindp(x):
             with lib.temporary_env(mf, exxdiv=None):
                 return vind(x)
@@ -100,4 +103,3 @@ scf.hf.RHF.TDA = lib.class_as_method(TDA)
 scf.hf.RHF.TDHF = lib.class_as_method(TDHF)
 scf.rohf.ROHF.TDA = None
 scf.rohf.ROHF.TDHF = None
-

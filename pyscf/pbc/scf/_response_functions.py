@@ -59,7 +59,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             max_memory = max(2000, mf.max_memory*.8-mem_now)
 
         if singlet is None:  # Without specify singlet, general case
-            def vind(dm1):
+            def vind(dm1, kshift=0):
                 # The singlet hessian
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
@@ -68,16 +68,16 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                        rho0, vxc, fxc, kpts, max_memory=max_memory)
                 if hybrid:
                     if hermi != 2:
-                        vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
+                        vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
                         v1 += vj - .5 * hyb * vk
                     else:
-                        v1 -= .5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+                        v1 -= .5 * hyb * _get_k(mf, cell, dm1, hermi, kpts, kshift)
                 elif hermi != 2:
-                    v1 += mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
+                    v1 += _get_j(mf, cell, dm1, hermi, kpts, kshift)
                 return v1
 
         elif singlet:
-            def vind(dm1):
+            def vind(dm1, kshift=0):
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
                 else:
@@ -88,15 +88,15 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 *= .5
                 if hybrid:
                     if hermi != 2:
-                        vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
+                        vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
                         v1 += vj - .5 * hyb * vk
                     else:
-                        v1 -= .5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+                        v1 -= .5 * hyb * _get_k(mf, cell, dm1, hermi, kpts, kshift)
                 elif hermi != 2:
-                    v1 += mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
+                    v1 += _get_j(mf, cell, dm1, hermi, kpts, kshift)
                 return v1
         else:  # triplet
-            def vind(dm1):
+            def vind(dm1, kshift=0):
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
                 else:
@@ -106,17 +106,17 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                               max_memory=max_memory)
                     v1 *= .5
                 if hybrid:
-                    v1 += -.5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+                    v1 += -.5 * hyb * _get_k(mf, cell, dm1, hermi, kpts, kshift)
                 return v1
 
     else:  # HF
         if (singlet is None or singlet) and hermi != 2:
-            def vind(dm1):
-                vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
+            def vind(dm1, kshift=0):
+                vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
                 return vj - .5 * vk
         else:
-            def vind(dm1):
-                return -.5 * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+            def vind(dm1, kshift=0):
+                return -.5 * _get_k(mf, cell, dm1, hermi, kpts, kshift)
 
     return vind
 
@@ -152,33 +152,39 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.8-mem_now)
 
-        def vind(dm1):
+        def vind(dm1, kshift=0):
             if hermi == 2:
+                # TODO: should v1.shape be (2,nz,nkpts,nao,nao) like the other branch?
                 v1 = numpy.zeros_like(dm1)
             else:
+                shape = dm1.shape
+                nz = shape[0] // 2
+                dm1 = dm1.reshape(2,nz,*shape[1:])
                 v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, kpts, max_memory=max_memory)
+                dm1 = dm1.reshape(*shape)
+                # NOW: v1.shape = (2,nz,nkpts,nao,nao), dm1.shape = (2*nz,nkpts,nao,nao)
             if not hybrid:
                 if with_j:
-                    vj = mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
-                    v1 += vj[0] + vj[1]
+                    vj = _get_j(mf, cell, dm1, hermi, kpts, kshift)
+                    v1 += _jk_spinsum_uhf(vj)
             else:
                 if with_j:
-                    vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
-                    v1 += vj[0] + vj[1] - vk * hyb
+                    vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
+                    v1 += _jk_spinsum_uhf(vj, vk * hyb)
                 else:
-                    v1 -= hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+                    v1 -= hyb * _get_k(mf, cell, dm1, hermi, kpts, kshift)
             return v1
 
     elif with_j:
-        def vind(dm1):
-            vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
-            v1 = vj[0] + vj[1] - vk
+        def vind(dm1, kshift=0):
+            vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
+            v1 = _jk_spinsum_uhf(vj, vk)
             return v1
 
     else:
-        def vind(dm1):
-            return -mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
+        def vind(dm1, kshift=0):
+            return -_get_k(mf, cell, dm1, hermi, kpts, kshift)
 
     return vind
 
@@ -188,6 +194,39 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     KGHF density matrices.
     '''
     raise NotImplementedError
+
+def _get_jk_kshift(mf, dm_kpts, hermi, kpts, kshift, with_j=True, with_k=True):
+    from pyscf.pbc.df.df_jk import get_j_kpts_kshift, get_k_kpts_kshift
+    vj = vk = None
+    if with_j:
+        vj = get_j_kpts_kshift(mf.with_df, dm_kpts, kshift, hermi=hermi, kpts=kpts)
+    if with_k:
+        vk = get_k_kpts_kshift(mf.with_df, dm_kpts, kshift, hermi=hermi, kpts=kpts,
+                               exxdiv=mf.exxdiv)
+    return vj, vk
+def _get_jk(mf, cell, dm1, hermi, kpts, kshift, with_j=True, with_k=True):
+    from pyscf.pbc import df
+    if isinstance(mf.with_df, df.df.DF):
+        return _get_jk_kshift(mf, dm1, hermi, kpts, kshift, with_j=with_j, with_k=with_k)
+    else:
+        return mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts, with_j=with_j, with_k=with_k)
+def _get_j(mf, cell, dm1, hermi, kpts, kshift):
+    return _get_jk(mf, cell, dm1, hermi, kpts, kshift, True, False)[0]
+def _get_k(mf, cell, dm1, hermi, kpts, kshift):
+    return _get_jk(mf, cell, dm1, hermi, kpts, kshift, False, True)[1]
+def _jk_spinsum_uhf(vj, vk=None):
+    ''' vj[0] + vj[1] - vk taken into account of nstates (nz) and nkpts
+    '''
+    assert(vj.ndim == 4)    # 2*nz,nkpts,nao,nao
+    nz = vj.shape[0] // 2
+    shape = vj.shape
+    vj = vj.reshape(2,nz,*shape[1:])
+    if vk is None:
+        v1 = vj[0] + vj[1]
+    else:
+        v1 = vj[0] + vj[1] - vk.reshape(2,nz,*shape[1:])
+        v1 = v1.reshape(2*nz,*shape[1:])
+    return v1
 
 
 khf.KRHF.gen_response = _gen_rhf_response
@@ -372,4 +411,3 @@ hf.RHF.gen_response = _gen_rhf_response_gam
 uhf.UHF.gen_response = _gen_uhf_response_gam
 ghf.GHF.gen_response = _gen_ghf_response_gam
 rohf.ROHF.gen_response = _gen_uhf_response_gam
-
