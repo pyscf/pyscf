@@ -1,7 +1,5 @@
 [build-system]
-requires = ["scikit_build_core[pyproject]",
-			"hatch-vcs",
-			]
+requires = ["scikit_build_core[pyproject]",]
 build-backend = "scikit_build_core.build"
 
 [project]
