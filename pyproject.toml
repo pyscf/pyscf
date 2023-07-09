@@ -72,11 +72,11 @@ tblis = ['pyscf-tblis']
  repository = "https://github.com/netket/netket"
  changelog = "https://netket.readthedocs.io/en/latest/docs/changelog.html"
 
-[tool.hatch.version]
-source = "pyscf"
+[tool.setuptools_scm]
+# necessary to auto-compute the version
 
-[tool.hatch.build.hooks.vcs]
-version-file = "pyscf/_version.py"
+[tool.scikit-build.metadata]
+version.provider = "scikit_build_core.metadata.setuptools_scm"
 
 [tool.scikit-build]
 cmake.source-dir = "pyscf/lib"
