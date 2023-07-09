@@ -50,7 +50,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    assert (mo_coeff.dtype == numpy.double)
+    # assert (mo_coeff.dtype == numpy.double)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff.shape
@@ -115,7 +115,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
-    assert (mo_coeff.dtype == numpy.double)
+    # assert (mo_coeff.dtype == numpy.double)
 
     mol = mf.mol
     nao, nmo = mo_coeff.shape
@@ -693,6 +693,7 @@ class TDMixin(lib.StreamObject):
             log.info('nstates = %d singlet', self.nstates)
         else:
             log.info('nstates = %d triplet', self.nstates)
+        log.info('deg_eia_thresh = %.3e', self.deg_eia_thresh)
         log.info('wfnsym = %s', self.wfnsym)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('eigh lindep = %g', self.lindep)
@@ -740,12 +741,15 @@ class TDMixin(lib.StreamObject):
         else:
             heff = lib.einsum('xa,ya->xy', x0.conj(), vind(x0))
             e, u = scipy.linalg.eig(heff)   # heff not necessarily Hermitian
+            e = e.real
             order = numpy.argsort(e)
             e = e[order]
             u = u[:,order]
             if callable(pick):
                 e, u = pick(e, u, None, None)[:2]
             e = e[:nstates]
+            log.debug('truncating %d states to %d states with excitation energy (eV): %s',
+                      x0.shape[0], e.size, e*27.211399)
             x1 = numpy.dot(x0.T, u[:,:nstates]).T
             return e, x1
 
@@ -897,7 +901,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    assert (mo_coeff.dtype == numpy.double)
+    # assert (mo_coeff.dtype == numpy.double)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff.shape
@@ -1013,6 +1017,14 @@ class TDHF(TDA):
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
+        # handle single kpt PBC SCF
+        if getattr(self._scf, 'kpt', None) is not None:
+            from pyscf.pbc.lib.kpts_helper import gamma_point
+            real_system = (gamma_point(self._scf.kpt) and
+                           self._scf.mo_coeff[0].dtype == numpy.double)
+        else:
+            real_system = True
+
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
@@ -1020,8 +1032,7 @@ class TDHF(TDA):
             # If the complex eigenvalue has small imaginary part, both the
             # real part and the imaginary part of the eigenvector can
             # approximately be used as the "real" eigen solutions.
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
-                                                      real_eigenvectors=True)
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)

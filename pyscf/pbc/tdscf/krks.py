@@ -22,11 +22,35 @@
 
 from pyscf import lib
 from pyscf.pbc import dft
+from pyscf.pbc import df
 from pyscf.pbc.tdscf import krhf
 
 
-KTDA = TDA = krhf.TDA
-RPA = KTDDFT = TDDFT = krhf.TDHF
+class TDA(krhf.TDA):
+    def kernel(self, x0=None):
+        _rebuild_df(self)
+        return krhf.TDA.kernel(self, x0=x0)
+
+KTDA = TDA
+
+class TDDFT(krhf.TDHF):
+    def kernel(self, x0=None):
+        _rebuild_df(self)
+        return krhf.TDHF.kernel(self, x0=x0)
+
+RPA = KTDDFT = TDDFT
+
+def _rebuild_df(td):
+    log = lib.logger.new_logger(td)
+    mf = td._scf
+    import sys
+    if any([k != 0 for k in td.kshift_lst]):
+        if isinstance(mf.with_df, df.df.DF):
+            if mf.with_df._j_only:
+                log.warn(f'Non-zero kshift is requested for {td.__class__.__name__}, '
+                         f'recomputing DF integrals with _j_only = False')
+                mf.with_df._j_only = False
+                mf.with_df.build()
 
 dft.krks.KRKS.TDA   = lib.class_as_method(KTDA)
 dft.krks.KRKS.TDHF  = None
@@ -68,13 +92,13 @@ if __name__ == '__main__':
     td = TDDFT(mf)
     td.nstates = 5
     td.verbose = 5
-    print(td.kernel()[0] * 27.2114)
+    print(td.kernel()[0][0] * 27.2114)
 #mesh=12 [ 6.08108297  6.10231481  6.10231478  6.38355803  6.38355804]
 #MDF mesh=5 [ 6.07919157  6.10251718  6.10253961  6.37202499  6.37565246]
 
     td = TDA(mf)
     td.singlet = False
     td.verbose = 5
-    print(td.kernel()[0] * 27.2114)
+    print(td.kernel()[0][0] * 27.2114)
 #mesh=12 [ 4.01539192  5.1750807   5.17508071]
 #MDF mesh=5 [ 4.01148649  5.18043397  5.18043459]

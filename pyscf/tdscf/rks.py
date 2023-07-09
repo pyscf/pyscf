@@ -56,7 +56,7 @@ class CasidaTDDFT(TDDFT, TDA):
 
         mol = mf.mol
         mo_coeff = mf.mo_coeff
-        assert mo_coeff.dtype == numpy.double
+        # assert mo_coeff.dtype == numpy.double
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         nao, nmo = mo_coeff.shape
