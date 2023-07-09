@@ -118,8 +118,11 @@ class TDA(KTDMixin):
     def kernel(self, x0=None):
         '''TDA diagonalization solver
         '''
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
+
+        log = logger.new_logger(self)
 
         mf = self._scf
         mo_occ = mf.mo_occ
@@ -162,6 +165,8 @@ class TDA(KTDMixin):
                         (0, 0))  # (Y_alpha, Y_beta)
                        for xi in x1] )
         #TODO: analyze CIS wfn point group symmetry
+        log.timer(self.__class__.__name__, *cpu0)
+        self._finalize()
         return self.e, self.xy
 CIS = KTDA = TDA
 
@@ -251,8 +256,11 @@ class TDHF(TDA):
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
+
+        log = logger.new_logger(self)
 
         mf = self._scf
         mo_occ = mf.mo_occ
@@ -309,6 +317,8 @@ class TDHF(TDA):
             self.e.append( numpy.array(e) )
             self.xy.append( xy )
 
+        log.timer(self.__class__.__name__, *cpu0)
+        self._finalize()
         return self.e, self.xy
 RPA = KTDHF = TDHF
 

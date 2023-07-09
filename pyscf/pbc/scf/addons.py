@@ -605,7 +605,7 @@ def shift_mo_energy(mf, eshift):
     elif mf.__class__ in [scf.kuhf.KUHF, dft.kuks.KUKS]:
         return [_shiftk(kmoe,kocc) for kmoe,kocc in zip(mf.mo_energy,mf.mo_occ)]
     else:
-        log.error('Unknown SCF type %s', mf.__class__.__name__)
+        log.error(f'Unknown SCF type {mf.__class__.__name__}')
         raise NotImplementedError
 
 def mo_energy_no_ewald_shift(mf):

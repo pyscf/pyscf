@@ -32,6 +32,7 @@ from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf.pbc.lib.kpts_helper import gamma_point, get_kconserv_ria
 from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 from pyscf.pbc import df as pbcdf
+from pyscf.data import nist
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
@@ -80,6 +81,16 @@ class KTDMixin(TDMixin):
         if not self._scf.converged:
             log.warn('Ground state SCF is not converged')
         log.info('\n')
+
+    def _finalize(self):
+        '''Hook for dumping results and clearing up the object.'''
+        for k,kshift in enumerate(self.kshift_lst):
+            if not all(self.converged[k]):
+                logger.note(self, 'kshift = %d  TD-SCF states %s not converged.',
+                            kshift, [i for i, x in enumerate(self.converged[k]) if not x])
+            logger.note(self, 'kshift = %d  Excited State energies (eV)\n%s',
+                        kshift, self.e[k] * nist.HARTREE2EV)
+        return self
 
     get_nto = lib.invalid_method('get_nto')
 
@@ -166,8 +177,11 @@ class TDA(KTDMixin):
                 [x0_1, x0_2, ..., x0_nshift]
             x0_i ~ (nstates, nkpts*nocc*nvir)
         '''
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
+
+        log = logger.new_logger(self)
 
         mf = self._scf
         mo_occ = mf.mo_occ
@@ -207,6 +221,8 @@ class TDA(KTDMixin):
             # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
             self.xy.append( [(_unpack(xi*numpy.sqrt(.5), mo_occ, kconserv), 0) for xi in x1] )
 
+        log.timer(self.__class__.__name__, *cpu0)
+        self._finalize()
         return self.e, self.xy
 CIS = KTDA = TDA
 
@@ -279,8 +295,11 @@ class TDHF(TDA):
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
+
+        log = logger.new_logger(self)
 
         mf = self._scf
         mo_occ = mf.mo_occ
@@ -334,6 +353,8 @@ class TDHF(TDA):
             self.e.append( e )
             self.xy.append( [norm_xy(z, kconserv) for z in x1] )
 
+        log.timer(self.__class__.__name__, *cpu0)
+        self._finalize()
         return self.e, self.xy
 RPA = KTDHF = TDHF
 
