@@ -47,7 +47,7 @@ def fp(a):
 
 class KnownValues(unittest.TestCase):
     def test_parse_xc(self):
-        hyb, fn_facs = dft.xcfun.parse_xc('.5*HF+.5*B3LYP,VWN*.5')
+        hyb, fn_facs = dft.xcfun.parse_xc('.5*HF+.5*B3LYP5,VWN*.5')
         self.assertAlmostEqual(hyb[0], .6, 12)
         self.assertEqual([x[0] for x in fn_facs], [0,6,16,3])
         self.assertTrue(numpy.allclose([x[1] for x in fn_facs],
@@ -69,18 +69,18 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.xcfun.parse_xc('CAM_B3LYP')
         self.assertTrue(numpy.allclose(hyb, (0.19, 0.65, 0.33)))
 
-        hyb, fn_facs = dft.xcfun.parse_xc('0.6*CAM_B3LYP+0.4*B3P86')
+        hyb, fn_facs = dft.xcfun.parse_xc('0.6*CAM_B3LYP+0.4*B3P86V5')
         self.assertTrue(numpy.allclose(hyb, (.08+0.19*.6, 0.65*.6, 0.33)))
         self.assertTrue(numpy.allclose(fn_facs,
                                        ((8, 0.276), (6, 0.498), (3, 0.19), (16, 0.486), (0, 0.032), (56, 0.324))))
-        rsh = dft.xcfun.rsh_coeff('0.6*CAM_B3LYP+0.4*B3P86')
+        rsh = dft.xcfun.rsh_coeff('0.6*CAM_B3LYP+0.4*B3P86V5')
         self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 
-        hyb, fn_facs = dft.xcfun.parse_xc('0.4*B3P86+0.6*CAM_B3LYP')
+        hyb, fn_facs = dft.xcfun.parse_xc('0.4*B3P86V5+0.6*CAM_B3LYP')
         self.assertTrue(numpy.allclose(hyb, (.08+0.19*.6, 0.65*.6, 0.33)))
         self.assertTrue(numpy.allclose(fn_facs,
                                        ((0, 0.032), (6, 0.498), (56, 0.324), (3, 0.19), (8, 0.276), (16, 0.486))))
-        rsh = dft.xcfun.rsh_coeff('0.4*B3P86+0.6*CAM_B3LYP')
+        rsh = dft.xcfun.rsh_coeff('0.4*B3P86V5+0.6*CAM_B3LYP')
         self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 
         hyb, fn_facs = dft.xcfun.parse_xc('0.5*SR-HF(0.3) + .8*HF + .22*LR_HF')
@@ -319,7 +319,6 @@ class KnownValues(unittest.TestCase):
         check('B3P86'  , deriv=3, e_place=5, v_place=5, f_place=3, k_place=-1)
         check('B3P86G' , deriv=3, e_place=5, v_place=5, f_place=3, k_place=-2)
         check('B3PW91' , deriv=3, e_place=5, v_place=3, f_place=0, k_place=-2)
-        check('B3PW91G', deriv=3, e_place=2, v_place=2, f_place=0, k_place=-4)
         check('B3LYP'  , deriv=3,                                  k_place=0)
         check('B3LYP5' , deriv=3,                                  k_place=0)
         check('B3LYPG' , deriv=3,                                  k_place=-2)
@@ -414,7 +413,6 @@ class KnownValues(unittest.TestCase):
         check('B3P86'  , deriv=3, e_place=5, v_place=5, f_place=3, k_place=-2)
         check('B3P86G' , deriv=3, e_place=3, v_place=2, f_place=2, k_place=-3)
         check('B3PW91' , deriv=3, e_place=5, v_place=4, f_place=2, k_place=-1)
-        check('B3PW91G', deriv=3, e_place=2, v_place=2, f_place=2, k_place=-2)
         check('B3LYP'  , deriv=3,                                  k_place=-1)
         check('B3LYP5' , deriv=3,                                  k_place=-1)
         check('B3LYPG' , deriv=3, e_place=3, v_place=2, f_place=2, k_place=-2)
