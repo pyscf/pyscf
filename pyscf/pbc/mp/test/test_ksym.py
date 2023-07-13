@@ -29,6 +29,7 @@ def setUpModule():
     He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
     He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
     He.space_group_symmetry=True
+    He.output = '/dev/null'
     He.build()
 
     nk = [2,2,2]
@@ -45,6 +46,7 @@ def setUpModule():
 
 def tearDownModule():
     global He, nk, kpts0, kpts, kmf0, kmf, kmp2ref
+    He.stdout.close()
     del He, nk, kpts0, kpts, kmf0, kmf, kmp2ref
 
 class KnownValues(unittest.TestCase):

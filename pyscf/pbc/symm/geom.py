@@ -224,7 +224,7 @@ if __name__ == "__main__":
     """
     cell.a = [[4.0, 0., 0.], [0., 4.0, 0.], [0., 0., 16.0]]
     cell.dimension = 2
-    cell.magmom = [1., 1., -1., -1., 1., -1., 1., 1., -1., -1., 1., -1.]
+    cell.magmom = [1, 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, -1]
     cell.build()
 
     ops = search_space_group_ops(cell)

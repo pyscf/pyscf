@@ -589,6 +589,8 @@ def super_cell(cell, ncopy, wrap_around=False):
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
     mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
     supcell.mesh = (mesh // 2) * 2 + 1
+    supcell.magmom = np.repeat(np.asarray(cell.magmom).reshape(1,-1),
+                               np.prod(ncopy), axis=0).ravel()
     return _build_supcell_(supcell, cell, Ls)
 
 
@@ -621,6 +623,7 @@ def _build_supcell_(supcell, cell, Ls):
     Construct supcell ._env directly without calling supcell.build() method.
     This reserves the basis contraction coefficients defined in cell
     '''
+    from pyscf.pbc import gto as pbcgto
     nimgs = len(Ls)
     symbs = [atom[0] for atom in cell._atom] * nimgs
     coords = Ls.reshape(-1,1,3) + cell.atom_coords()
@@ -646,6 +649,9 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._atm = np.asarray(_atm, dtype=np.int32)
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
+
+    if isinstance(supcell, pbcgto.Cell) and supcell.space_group_symmetry:
+        supcell.build_lattice_symmetry(not cell._mesh_from_build)
     return supcell
 
 
