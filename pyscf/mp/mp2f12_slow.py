@@ -43,7 +43,7 @@ def find_cabs(mol, auxmol, lindep=1e-8):
     nao = mol.nao_nr()
     s = cabs_mol.intor_symmetric('int1e_ovlp')
 
-    ls12 = scipy.linalg.solve(s[:nao,:nao], s[:nao,nao:], sym_pos=True)
+    ls12 = scipy.linalg.solve(s[:nao,:nao], s[:nao,nao:], assume_a='pos')
     s[nao:,nao:] -= s[nao:,:nao].dot(ls12)
     w, v = scipy.linalg.eigh(s[nao:,nao:])
     c2 = v[:,w>lindep]/numpy.sqrt(w[w>lindep])

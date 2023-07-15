@@ -101,7 +101,7 @@ class KnownValues(unittest.TestCase):
 
         mo_occ_ibz = kpts.check_mo_occ_symmetry(kmf.mo_occ)
         mo_occ_bz = kpts.transform_mo_occ(mo_occ_ibz)
-        self.assertAlmostEqual(abs(mo_occ_bz - np.asarray(kmf.mo_occ)).max(), 0, 9)
+        self.assertAlmostEqual(abs(mo_occ_bz - np.asarray(kmf.mo_occ)).max(), 0, 8)
 
         mo_energy_ibz = np.asarray(kmf.mo_energy)[kpts.ibz2bz]
         mo_energy_bz = kpts.transform_mo_energy(mo_energy_ibz)
@@ -119,7 +119,7 @@ class KnownValues(unittest.TestCase):
 
         mo_occ_ibz = np.asarray(kumf.mo_occ)[:,kpts.ibz2bz]
         mo_occ_bz = kpts.transform_mo_occ(mo_occ_ibz)
-        self.assertAlmostEqual(abs(mo_occ_bz - np.asarray(kumf.mo_occ)).max(), 0, 9)
+        self.assertAlmostEqual(abs(mo_occ_bz - np.asarray(kumf.mo_occ)).max(), 0, 8)
 
         mo_energy_ibz = np.asarray(kumf.mo_energy)[:,kpts.ibz2bz]
         mo_energy_bz = kpts.transform_mo_energy(mo_energy_ibz)

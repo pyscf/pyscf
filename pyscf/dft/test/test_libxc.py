@@ -45,7 +45,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_parse_xc(self):
-        hyb, fn_facs = dft.libxc.parse_xc('.5*HF+.5*B3LYP,VWN*.5')
+        hyb, fn_facs = dft.libxc.parse_xc('.5*HF+.5*B3LYP5,VWN*.5')
         self.assertAlmostEqual(hyb[0], .6, 12)
         self.assertEqual([x[0] for x in fn_facs], [1,106,131,7])
         self.assertTrue(numpy.allclose([x[1] for x in fn_facs],
@@ -59,23 +59,21 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.libxc.parse_xc('B88 -SLATER*.5')
         self.assertEqual(fn_facs, ((106, 1), (1, -0.5)))
 
-        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP\n+0.25*B3LYP')
-        self.assertTrue(numpy.allclose(hyb, (.15, 0, 0)))
-        hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.25*B3LYP')
+        hyb = dft.libxc.hybrid_coeff('0.5*B3LYP\n+0.25*B3LYP')
         self.assertAlmostEqual(hyb, .15, 12)
 
-        hyb, fn_facs = dft.libxc.parse_xc('0.6*CAM_B3LYP+0.4*B3P86')
+        hyb, fn_facs = dft.libxc.parse_xc('0.6*CAM_B3LYP+0.4*B3P86V5')
         self.assertTrue(numpy.allclose(hyb, (.08, 0, 0)))
         self.assertTrue(numpy.allclose(fn_facs,
                                        ((433, 0.6), (1, 0.032), (106, 0.288), (132, 0.324), (7, 0.076))))
-        rsh = dft.libxc.rsh_coeff('0.6*CAM_B3LYP+0.4*B3P86')
+        rsh = dft.libxc.rsh_coeff('0.6*CAM_B3LYP+0.4*B3P86V5')
         self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 
-        hyb, fn_facs = dft.libxc.parse_xc('0.4*B3P86+0.6*CAM_B3LYP')
+        hyb, fn_facs = dft.libxc.parse_xc('0.4*B3P86V5+0.6*CAM_B3LYP')
         self.assertTrue(numpy.allclose(hyb, (.08, 0, 0)))
         self.assertTrue(numpy.allclose(fn_facs,
                                        ((1, 0.032), (106, 0.288), (132, 0.324), (7, 0.076), (433, 0.6))))
-        rsh = dft.libxc.rsh_coeff('0.4*B3P86+0.6*CAM_B3LYP')
+        rsh = dft.libxc.rsh_coeff('0.4*B3P86V5+0.6*CAM_B3LYP')
         self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*SR-HF(0.3) + .8*HF + .22*LR_HF')

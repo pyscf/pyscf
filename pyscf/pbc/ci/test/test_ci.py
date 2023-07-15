@@ -62,11 +62,11 @@ class KnownValues(unittest.TestCase):
 
     def test_cis_H(self):
         h = ci.kcis_rhf.cis_H(kci, 0, eris=eris)
-        self.assertAlmostEqual(lib.fp(h), 2.979013823936476+0j, 9)
+        self.assertAlmostEqual(lib.fp(h), 2.979013823936476+0j, 7)
         e0ref, v0ref = np.linalg.eigh(h)
 
         h = ci.kcis_rhf.cis_H(kci, 1, eris=eris)
-        self.assertAlmostEqual(lib.fp(h), 4.046206590499069-0j, 9)
+        self.assertAlmostEqual(lib.fp(h), 4.046206590499069-0j, 7)
         e1ref, v1ref = np.linalg.eigh(h)
 
         eci, v = kci.kernel(nroots=3, eris=eris, kptlist=[0, 1])

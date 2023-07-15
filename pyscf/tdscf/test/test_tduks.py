@@ -74,7 +74,7 @@ def setUpModule():
     mf_bp86 = dft.UKS(mol).set(xc='b88,p86', conv_tol=1e-12)
     mf_bp86.grids.prune = None
     mf_bp86 = mf_bp86.newton().run()
-    mf_b3lyp = dft.UKS(mol).set(xc='b3lyp', conv_tol=1e-12)
+    mf_b3lyp = dft.UKS(mol).set(xc='b3lyp5', conv_tol=1e-12)
     mf_b3lyp.grids.prune = None
     mf_b3lyp = mf_b3lyp.newton().run()
     mf_m06l = dft.UKS(mol).run(xc='m06l')

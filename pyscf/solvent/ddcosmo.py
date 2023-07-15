@@ -384,7 +384,7 @@ def make_L(pcmobj, r_vdw, ylm_1sph, fi):
         for ka in atoms_with_vdw_overlap(ja, atom_coords, r_vdw):
             vjk = r_vdw[ja] * coords_1sph + atom_coords[ja] - atom_coords[ka]
             tjk = lib.norm(vjk, axis=1) / r_vdw[ka]
-            wjk = pcmobj.regularize_xt(tjk, eta, r_vdw[ka])
+            wjk = pcmobj.regularize_xt(tjk, eta)
             wjk *= part_weights
             pol = sph.multipoles(vjk, lmax)
             p1 = 0
@@ -408,7 +408,7 @@ def make_fi(pcmobj, r_vdw):
             v = r_vdw[ia]*coords_1sph + atom_coords[ia] - atom_coords[ja]
             rv = lib.norm(v, axis=1)
             t = rv / r_vdw[ja]
-            xt = pcmobj.regularize_xt(t, eta, r_vdw[ja])
+            xt = pcmobj.regularize_xt(t, eta)
             fi[ia] += xt
     fi[fi < 1e-20] = 0
     return fi
@@ -851,8 +851,7 @@ class DDCOSMO(lib.StreamObject):
     get_atomic_radii = get_atomic_radii
 
     def regularize_xt(self, t, eta, scale=1):
-        # scale = eta*scale, is it correct?
-        return regularize_xt(t, eta*scale)
+        return regularize_xt(t, eta)
 
     def nuc_grad_method(self, grad_method):
         '''For grad_method in vacuum, add nuclear gradients of solvent
