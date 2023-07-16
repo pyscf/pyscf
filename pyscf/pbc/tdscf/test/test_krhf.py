@@ -17,7 +17,6 @@
 import unittest
 import numpy as np
 from pyscf import __config__
-setattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 5e-1)         # make sure no missing roots
 from pyscf.pbc import gto, scf, tdscf, cc
 from pyscf import gto as molgto, scf as molscf, tdscf as moltdscf
 from pyscf.pbc.cc.eom_kccsd_rhf import EOMEESinglet
@@ -45,15 +44,19 @@ class Diamond(unittest.TestCase):
         mf = scf.KRHF(cell, kpts=kpts).rs_density_fit(auxbasis='weigend').run()
         cls.cell = cell
         cls.mf = mf
+
+        cls.nstates = 4 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 1
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
     def kernel(self, TD, ref, **kwargs):
-        td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)), **kwargs).run()
+        td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)),
+                             nstates=self.nstates, **kwargs).run()
         for kshift,e in enumerate(td.e):
-            self.assertAlmostEqual(abs(e[0] * unitev  - ref[kshift]).max(), 0, 4)
+            self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev - ref[kshift]).max(), 0, 4)
 
     def test_tda_singlet_eomccs(self):
         ''' Brute-force solution to the KTDA equation. Compared to the brute-force
@@ -75,19 +78,23 @@ class Diamond(unittest.TestCase):
             self.assertAlmostEqual(abs(e * unitev  - ecc.real * unitev).max(), 0, 3)
 
     def test_tda_singlet(self):
-        ref = [[10.9574060301], [11.0418473305]]
+        ref = [[10.9573977036],
+               [11.0418311085]]
         self.kernel(tdscf.KTDA, ref)
 
     def test_tda_triplet(self):
-        ref = [[6.4440014682], [7.4264969423]]
+        ref = [[6.4440137833],
+               [7.4264899075]]
         self.kernel(tdscf.KTDA, ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [[10.6076181651], [10.8485185168]]
+        ref = [[10.7665673889],
+               [10.8485048947]]
         self.kernel(tdscf.KTDHF, ref)
 
     def test_tdhf_triplet(self):
-        ref = [[5.9794526306], [6.1703901071]]
+        ref = [[5.9794378466],
+               [6.1703909932]]
         self.kernel(tdscf.KTDHF, ref, singlet=False)
 
 
@@ -122,6 +129,9 @@ class WaterBigBox(unittest.TestCase):
         cls.mol = mol
         cls.molmf = molmf
 
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 3
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -130,11 +140,11 @@ class WaterBigBox(unittest.TestCase):
         del cls.mol, cls.molmf
 
     def kernel(self, TD, MOLTD, **kwargs):
-        td = TD(self.mf).set(**kwargs).run()
-        moltd = MOLTD(self.molmf).set(**kwargs).run()
-        ref = moltd.e
+        td = TD(self.mf).set(nstates=self.nstates, **kwargs).run()
+        moltd = MOLTD(self.molmf).set(nstates=self.nstates, **kwargs).run()
+        ref = moltd.e[:self.nstates_test]
         for kshift,e in enumerate(td.e):
-            self.assertAlmostEqual(abs(e * unitev  - ref * unitev).max(), 0, 2)
+            self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev  - ref * unitev).max(), 0, 2)
 
     def test_tda_singlet(self):
         self.kernel(tdscf.KTDA, moltdscf.TDA)

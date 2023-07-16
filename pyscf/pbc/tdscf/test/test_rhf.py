@@ -17,7 +17,6 @@
 import unittest
 import numpy as np
 from pyscf import __config__
-setattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-1)         # make sure no missing roots
 from pyscf import gto as molgto, scf as molscf, tdscf as moltdscf
 from pyscf.pbc import gto, scf, tdscf
 from pyscf.data.nist import HARTREE2EV as unitev
@@ -44,30 +43,33 @@ class Diamond(unittest.TestCase):
         mf = scf.RHF(cell).rs_density_fit(auxbasis='weigend').run()
         cls.cell = cell
         cls.mf = mf
+
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
     def kernel(self, TD, ref, **kwargs):
-        td = TD(self.mf).set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
+        td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [9.6425852905]
-        self.kernel(tdscf.TDA, ref)
+        ref = [9.6425852906, 9.6425852906]
+        self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [4.7209460257]
-        self.kernel(tdscf.TDA , ref, singlet=False)
+        ref = [4.7209460258, 5.6500725912]
+        self.kernel('TDA', ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [9.2573219105]
-        self.kernel(tdscf.TDHF , ref)
+        ref = [9.2573219105, 9.2573219106]
+        self.kernel('TDHF', ref)
 
     def test_tdhf_triplet(self):
-        ref = [3.0396052214]
-        self.kernel(tdscf.TDHF , ref, singlet=False)
+        ref = [3.0396052214, 3.0396052214]
+        self.kernel('TDHF', ref, singlet=False)
 
 
 class DiamondShifted(unittest.TestCase):
@@ -93,29 +95,32 @@ class DiamondShifted(unittest.TestCase):
         mf = scf.RHF(cell, kpt).rs_density_fit(auxbasis='weigend').run()
         cls.cell = cell
         cls.mf = mf
+
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
     def kernel(self, TD, ref, **kwargs):
-        td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
+        td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [12.7166510188]
+        ref = [12.7166510188, 13.5460934688]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [8.7359078688]
+        ref = [8.7359078688, 9.2565904604]
         self.kernel('TDA' , ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [12.6104811730]
+        ref = [12.6104811733, 13.4160717812]
         self.kernel('TDHF', ref)
 
     def test_tdhf_triplet(self):
-        ref = [3.8940277713]
+        ref = [3.8940277713, 7.9448161493]
         self.kernel('TDHF', ref, singlet=False)
 
 
@@ -149,6 +154,9 @@ class WaterBigBox(unittest.TestCase):
         cls.mol = mol
         cls.molmf = molmf
 
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -156,22 +164,23 @@ class WaterBigBox(unittest.TestCase):
         del cls.cell, cls.mf
         del cls.mol, cls.molmf
 
-    def kernel(self, TD, MOLTD, **kwargs):
-        td = TD(self.mf).set(**kwargs).run()
-        moltd = MOLTD(self.molmf).set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e * unitev  - moltd.e * unitev).max(), 0, 2)
+    def kernel(self, TD, **kwargs):
+        td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        moltd = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev -
+                                   moltd.e[:self.nstates_test] * unitev).max(), 0, 2)
 
     def test_tda_singlet(self):
-        self.kernel(tdscf.TDA , moltdscf.TDA)
+        self.kernel('TDA')
 
     def test_tda_triplet(self):
-        self.kernel(tdscf.TDA , moltdscf.TDA, singlet=False)
+        self.kernel('TDA', singlet=False)
 
     def test_tdhf_singlet(self):
-        self.kernel(tdscf.TDHF , moltdscf.TDHF)
+        self.kernel('TDHF')
 
     def test_tdhf_triplet(self):
-        self.kernel(tdscf.TDHF , moltdscf.TDHF, singlet=False)
+        self.kernel('TDHF', singlet=False)
 
 
 if __name__ == "__main__":

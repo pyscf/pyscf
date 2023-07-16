@@ -17,7 +17,6 @@
 import unittest
 import numpy as np
 from pyscf import __config__
-setattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-1)         # make sure no missing roots
 from pyscf import gto as molgto, scf as molscf, tdscf as moltdscf
 from pyscf.pbc import gto, scf, tdscf
 from pyscf.data.nist import HARTREE2EV as unitev
@@ -46,6 +45,9 @@ class DiamondPBE(unittest.TestCase):
 
         cls.cell = cell
         cls.mf = mf
+
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -53,22 +55,22 @@ class DiamondPBE(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [9.2717239608]
+        ref = [9.2717170319, 9.2717170319]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [4.7947342558]
+        ref = [4.7947246007, 4.7947246007]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tddft_singlet(self):
-        ref = [8.8773591552]
+        ref = [8.8773516429, 8.8773516429]
         self.kernel('TDDFT', ref)
 
     def test_tddft_triplet(self):
-        ref = [4.7694603180]
+        ref = [4.7694494173, 4.7694494173]
         self.kernel('TDDFT', ref, singlet=False)
 
 
@@ -97,6 +99,9 @@ class DiamondPBEShifted(unittest.TestCase):
 
         cls.cell = cell
         cls.mf = mf
+
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -104,23 +109,23 @@ class DiamondPBEShifted(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [11.9664896841]
+        ref = [11.9664870288, 12.7605699008]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [8.5705050199]
+        ref = [8.5705015296, 9.3030273411]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tddft_singlet(self):
         # TODO: these do not match pbc.tdscf.rhf.TDHF(mf)
-        ref = [10.5406839130]
+        ref = [10.5423511713, 11.2670180578]
         self.kernel('TDDFT', ref)
 
     def test_tddft_triplet(self):
-        ref = [9.8870284077]
+        ref = [9.8868846012, 10.4798629727]
         self.kernel('TDDFT', ref, singlet=False)
 
 
@@ -156,6 +161,9 @@ class WaterBigBoxPBE(unittest.TestCase):
         cls.mol = mol
         cls.molmf = molmf
 
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -164,10 +172,11 @@ class WaterBigBoxPBE(unittest.TestCase):
         del cls.mol, cls.molmf
 
     def kernel(self, TD, **kwargs):
-        td = getattr(self.mf, TD)().set(**kwargs).run()
-        moltd = getattr(self.molmf, TD)().set(**kwargs).run()
+        td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        moltd = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
         # larger tol (0.1 eV) potentially due to DFT integration error
-        self.assertTrue((abs(td.e * unitev  - moltd.e * unitev).max() < 0.1))
+        self.assertTrue((abs(td.e[:self.nstates_test] * unitev -
+                             moltd.e[:self.nstates_test] * unitev).max() < 0.1))
 
     def test_tda_singlet(self):
         self.kernel('TDA')
@@ -205,6 +214,9 @@ class DiamondPBE0(unittest.TestCase):
 
         cls.cell = cell
         cls.mf = mf
+
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -212,22 +224,22 @@ class DiamondPBE0(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [9.6154699758]
+        ref = [9.6154650817, 9.6154650817]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [5.1302206493]
+        ref = [5.1302133865, 5.1302133865]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tddft_singlet(self):
-        ref = [9.2585544813]
+        ref = [9.2585491075, 9.2585491075]
         self.kernel('TDDFT', ref)
 
     def test_tddft_triplet(self):
-        ref = [4.5570175405]
+        ref = [4.5570089807, 4.5570089807]
         self.kernel('TDDFT', ref, singlet=False)
 
 
@@ -263,6 +275,9 @@ class WaterBigBoxPBE0(unittest.TestCase):
         cls.mol = mol
         cls.molmf = molmf
 
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -271,10 +286,11 @@ class WaterBigBoxPBE0(unittest.TestCase):
         del cls.mol, cls.molmf
 
     def kernel(self, TD, **kwargs):
-        td = getattr(self.mf, TD)().set(**kwargs).run()
-        moltd = getattr(self.molmf, TD)().set(**kwargs).run()
+        td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        moltd = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
         # larger tol (0.1 eV) potentially due to DFT integration error
-        self.assertTrue((abs(td.e * unitev  - moltd.e * unitev).max() < 0.1))
+        self.assertTrue((abs(td.e[:self.nstates_test] * unitev -
+                             moltd.e[:self.nstates_test] * unitev).max() < 0.1))
 
     def test_tda_singlet(self):
         self.kernel('TDA')

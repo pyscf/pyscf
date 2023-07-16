@@ -225,7 +225,7 @@ def _jk_spinsum_uhf(vj, vk=None):
         v1 = vj[0] + vj[1]
     else:
         v1 = vj[0] + vj[1] - vk.reshape(2,nz,*shape[1:])
-        v1 = v1.reshape(2*nz,*shape[1:])
+        v1 = v1.reshape(2,nz,*shape[1:])
     return v1
 
 

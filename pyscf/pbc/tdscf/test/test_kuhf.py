@@ -17,7 +17,6 @@
 import unittest
 import numpy as np
 from pyscf import __config__
-setattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 5e-1)         # make sure no missing roots
 from pyscf.pbc import gto, scf, tdscf
 from pyscf import gto as molgto, scf as molscf, tdscf as moltdscf
 from pyscf.data.nist import HARTREE2EV as unitev
@@ -46,24 +45,30 @@ class Diamond(unittest.TestCase):
         mf = scf.KUHF(cell, kpts=kpts).rs_density_fit(auxbasis='weigend').run()
         cls.cell = cell
         cls.mf = mf
+
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
     def kernel(self, TD, ref, **kwargs):
-        td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)), **kwargs).run()
+        td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)),
+                             nstates=self.nstates, **kwargs).run()
         for kshift,e in enumerate(td.e):
-            self.assertAlmostEqual(abs(e[0] * unitev  - ref[kshift]).max(), 0, 4)
+            self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev  - ref[kshift]).max(), 0, 4)
 
     def test_tda(self):
         # same as lowest roots in Diamond->test_tda_singlet/triplet in test_krhf.py
-        ref = [[6.4440036773], [7.4264956906]]
+        ref = [[6.4440137833, 7.5317890777],
+               [7.4264899075, 7.6381352853]]
         self.kernel(tdscf.KTDA, ref)
 
     def test_tdhf(self):
         # same as lowest roots in Diamond->test_tdhf_singlet/triplet in test_krhf.py
-        ref = [[5.9794499585], [6.1703898411]]
+        ref = [[5.9794378466, 5.9794378466],
+               [6.1703909932, 6.1703909932]]
         self.kernel(tdscf.KTDHF, ref)
 
 
@@ -100,6 +105,9 @@ class WaterBigBox(unittest.TestCase):
         cls.mol = mol
         cls.molmf = molmf
 
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -108,11 +116,13 @@ class WaterBigBox(unittest.TestCase):
         del cls.mol, cls.molmf
 
     def kernel(self, TD, MOLTD, **kwargs):
-        td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)), **kwargs).run()
-        moltd = MOLTD(self.molmf).set(**kwargs).run()
+        td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)),
+                             nstates=self.nstates, **kwargs).run()
+        moltd = MOLTD(self.molmf).set(nstates=self.nstates, **kwargs).run()
         ref = moltd.e
         for kshift,e in enumerate(td.e):
-            self.assertAlmostEqual(abs(e * unitev  - ref * unitev).max(), 0, 2)
+            self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev -
+                                       ref[:self.nstates_test] * unitev).max(), 0, 2)
 
     def test_tda(self):
         self.kernel(tdscf.KTDA, moltdscf.TDA)

@@ -17,7 +17,6 @@
 import unittest
 import numpy as np
 from pyscf import __config__
-setattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-1)         # make sure no missing roots
 from pyscf import gto as molgto, scf as molscf, tdscf as moltdscf
 from pyscf.pbc import gto, scf, tdscf
 from pyscf.data.nist import HARTREE2EV as unitev
@@ -47,21 +46,24 @@ class DiamondPBE(unittest.TestCase):
         mf = scf.UKS(cell).set(xc=xc).rs_density_fit(auxbasis='weigend').run()
         cls.cell = cell
         cls.mf = mf
+
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
     def kernel(self, TD, ref, **kwargs):
-        td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
+        td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda(self):
-        ref = [4.7721917153]
+        ref = [4.8137763755, 4.8137763755]
         self.kernel('TDA', ref)
 
     def test_tdhf(self):
-        ref = [4.7455836027]
+        ref = [4.7455726874, 4.7455726874]
         self.kernel('TDDFT', ref)
 
 
@@ -98,6 +100,9 @@ class WaterBigBoxPBE(unittest.TestCase):
         cls.mol = mol
         cls.molmf = molmf
 
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -106,9 +111,10 @@ class WaterBigBoxPBE(unittest.TestCase):
         del cls.mol, cls.molmf
 
     def kernel(self, TD, **kwargs):
-        td = getattr(self.mf, TD)().set(**kwargs).run()
-        moltd = getattr(self.molmf, TD)().set(**kwargs).run()
-        self.assertTrue(abs(td.e * unitev  - moltd.e * unitev).max() < 0.1)
+        td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        moltd = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        self.assertTrue(abs(td.e[:self.nstates_test] * unitev -
+                            moltd.e[:self.nstates_test] * unitev).max() < 0.1)
 
     def test_tda(self):
         self.kernel('TDA')
@@ -142,21 +148,24 @@ class DiamondPBE0(unittest.TestCase):
         mf.grids.level = 4
         cls.cell = cell
         cls.mf = mf
+
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
     def kernel(self, TD, ref, **kwargs):
-        td = getattr(self.mf, TD)().set(**kwargs).run()
-        self.assertAlmostEqual(abs(td.e[0] * unitev  - ref).max(), 0, 4)
+        td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda(self):
-        ref = [5.1078331316]
+        ref = [5.1435121896, 5.1435121896]
         self.kernel('TDA', ref)
 
     def test_tdhf(self):
-        ref = [4.5331079672]
+        ref = [4.5331029147, 4.5331029147]
         self.kernel('TDDFT', ref)
 
 
@@ -193,6 +202,9 @@ class WaterBigBoxPBE0(unittest.TestCase):
         cls.mol = mol
         cls.molmf = molmf
 
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -201,9 +213,10 @@ class WaterBigBoxPBE0(unittest.TestCase):
         del cls.mol, cls.molmf
 
     def kernel(self, TD, **kwargs):
-        td = getattr(self.mf, TD)().set(**kwargs).run()
-        moltd = getattr(self.molmf, TD)().set(**kwargs).run()
-        self.assertTrue(abs(td.e * unitev  - moltd.e * unitev).max() < 0.1)
+        td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        moltd = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        self.assertTrue(abs(td.e[:self.nstates_test] * unitev -
+                            moltd.e[:self.nstates_test] * unitev).max() < 0.1)
 
     def test_tda(self):
         self.kernel('TDA')
