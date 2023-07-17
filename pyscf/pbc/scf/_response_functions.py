@@ -156,21 +156,16 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             if hermi == 2:
                 v1 = numpy.zeros_like(dm1)
             else:
-                shape = dm1.shape
-                nz = shape[0] // 2
-                dm1 = dm1.reshape(2,nz,*shape[1:])
                 v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, kpts, max_memory=max_memory)
-                dm1 = dm1.reshape(*shape)
-                v1 = v1.reshape(*shape)
             if not hybrid:
                 if with_j:
                     vj = _get_j(mf, cell, dm1, hermi, kpts, kshift)
-                    v1 += _jk_spinsum_uhf(vj)
+                    v1 += vj[0] + vj[1]
             else:
                 if with_j:
                     vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
-                    v1 += _jk_spinsum_uhf(vj, vk * hyb)
+                    v1 += vj[0] + vj[1] - vk * hyb
                 else:
                     v1 -= hyb * _get_k(mf, cell, dm1, hermi, kpts, kshift)
             return v1
@@ -178,7 +173,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     elif with_j:
         def vind(dm1, kshift=0):
             vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
-            v1 = _jk_spinsum_uhf(vj, vk)
+            v1 = vj[0] + vj[1] - vk
             return v1
 
     else:
@@ -213,21 +208,6 @@ def _get_j(mf, cell, dm1, hermi, kpts, kshift):
     return _get_jk(mf, cell, dm1, hermi, kpts, kshift, True, False)[0]
 def _get_k(mf, cell, dm1, hermi, kpts, kshift):
     return _get_jk(mf, cell, dm1, hermi, kpts, kshift, False, True)[1]
-def _jk_spinsum_uhf(vj, vk=None):
-    ''' vj[0] + vj[1] - vk taken into account of nstates (nz) and nkpts
-    '''
-    assert(vj.ndim == 4)    # 2*nz,nkpts,nao,nao
-    nz = vj.shape[0] // 2
-    shape = vj.shape
-    vj = vj.reshape(2,nz,*shape[1:])
-    if vk is None:
-        v1 = vj[0] + vj[1]
-        v1 = v1.reshape(nz,*shape[1:])
-        v1 = numpy.asarray([v1,v1])
-    else:
-        v1 = vj[0] + vj[1] - vk.reshape(2,nz,*shape[1:])
-    v1 = v1.reshape(shape)
-    return v1
 
 
 khf.KRHF.gen_response = _gen_rhf_response

@@ -68,7 +68,7 @@ class TDA(KTDMixin):
                     dmov[1,i,k] = reduce(numpy.dot, (orbob[k], dm1b[k], orbvb[k].conj().T))
 
             with lib.temporary_env(mf, exxdiv=None):
-                dmov = dmov.reshape(2*nz,nkpts,nao,nao)
+                dmov = dmov.reshape(2,nz,nkpts,nao,nao)
                 v1ao = vresp(dmov, kshift)
                 v1ao = v1ao.reshape(2,nz,nkpts,nao,nao)
 
@@ -216,7 +216,7 @@ class TDHF(TDA):
                     dmov[1,i,k] = dmx + dmy  # AX + BY
 
             with lib.temporary_env(mf, exxdiv=None):
-                dmov = dmov.reshape(2*nz,nkpts,nao,nao)
+                dmov = dmov.reshape(2,nz,nkpts,nao,nao)
                 v1ao = vresp(dmov, kshift)
                 v1ao = v1ao.reshape(2,nz,nkpts,nao,nao)
 
