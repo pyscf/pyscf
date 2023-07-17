@@ -154,7 +154,6 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
 
         def vind(dm1, kshift=0):
             if hermi == 2:
-                # TODO: should v1.shape be (2,nz,nkpts,nao,nao) like the other branch?
                 v1 = numpy.zeros_like(dm1)
             else:
                 shape = dm1.shape
@@ -163,7 +162,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                 v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, kpts, max_memory=max_memory)
                 dm1 = dm1.reshape(*shape)
-                # NOW: v1.shape = (2,nz,nkpts,nao,nao), dm1.shape = (2*nz,nkpts,nao,nao)
+                v1 = v1.reshape(*shape)
             if not hybrid:
                 if with_j:
                     vj = _get_j(mf, cell, dm1, hermi, kpts, kshift)
@@ -206,10 +205,10 @@ def _get_jk_kshift(mf, dm_kpts, hermi, kpts, kshift, with_j=True, with_k=True):
     return vj, vk
 def _get_jk(mf, cell, dm1, hermi, kpts, kshift, with_j=True, with_k=True):
     from pyscf.pbc import df
-    if isinstance(mf.with_df, df.df.DF):
-        return _get_jk_kshift(mf, dm1, hermi, kpts, kshift, with_j=with_j, with_k=with_k)
-    else:
+    if not isinstance(mf.with_df, df.df.DF) or kshift == 0:
         return mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts, with_j=with_j, with_k=with_k)
+    else:
+        return _get_jk_kshift(mf, dm1, hermi, kpts, kshift, with_j=with_j, with_k=with_k)
 def _get_j(mf, cell, dm1, hermi, kpts, kshift):
     return _get_jk(mf, cell, dm1, hermi, kpts, kshift, True, False)[0]
 def _get_k(mf, cell, dm1, hermi, kpts, kshift):
@@ -223,9 +222,11 @@ def _jk_spinsum_uhf(vj, vk=None):
     vj = vj.reshape(2,nz,*shape[1:])
     if vk is None:
         v1 = vj[0] + vj[1]
+        v1 = v1.reshape(nz,*shape[1:])
+        v1 = numpy.asarray([v1,v1])
     else:
         v1 = vj[0] + vj[1] - vk.reshape(2,nz,*shape[1:])
-        v1 = v1.reshape(2,nz,*shape[1:])
+    v1 = v1.reshape(shape)
     return v1
 
 

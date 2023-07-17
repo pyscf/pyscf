@@ -168,11 +168,11 @@ def get_j_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), k
             (k2 - k2' - kpts[kshift]) \dot a = 2n \pi
         For kshift = 0, :func:`get_j_kpts` is called.
     '''
-    if kpts_band is not None:
-        raise NotImplementedError
-
     if kshift == 0:
         return get_j_kpts(mydf, dm_kpts, hermi=hermi, kpts=kpts, kpts_band=kpts_band)
+
+    if kpts_band is not None:
+        raise NotImplementedError
 
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t0 = (logger.process_clock(), logger.perf_counter())
@@ -670,12 +670,12 @@ def get_k_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), k
             (k2 - k2' - kpts[kshift]) \dot a = 2n \pi
         For kshift = 0, :func:`get_k_kpts` is called.
     '''
-    if kpts_band is not None:
-        raise NotImplementedError
-
     if kshift == 0:
         return get_k_kpts(mydf, dm_kpts, hermi=hermi, kpts=kpts, kpts_band=kpts_band,
                           exxdiv=exxdiv)
+
+    if kpts_band is not None:
+        raise NotImplementedError
 
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
