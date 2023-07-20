@@ -231,6 +231,8 @@ def symmetrize_space(mol, mo, s=None,
     ['A', 'A', 'A', 'B1', 'B1', 'B2', 'B2', 'B3', 'B3']
     '''
     from pyscf.tools import mo_mapping
+    from pyscf.lo import orth
+
     if s is None:
         s = mol.intor_symmetric('int1e_ovlp')
     nmo = mo.shape[1]
@@ -240,7 +242,13 @@ def symmetrize_space(mol, mo, s=None,
         max_non_orth = abs(moso - numpy.eye(nmo)).max()
         logger.debug(mol, 'Non-orthogonality of input orbitals before symmetrization %8.2e', max_non_orth)
         if max_non_orth > tol:
-            raise ValueError('Input orbitals are not orthogonalized')
+            logger.info(mol, 'Input orbitals are not orthogonal, perform Lowdin orthogonalization')
+            mo = numpy.dot(mo, orth.lowdin(moso))
+            s_mo = numpy.dot(s, mo)
+            max_non_orth = abs(reduce(numpy.dot, (mo.conj().T, s, mo)) - numpy.eye(nmo)).max()
+            logger.debug(mol, 'Non-orthogonality of orbitals before symmetrization %8.2e', max_non_orth)
+            if max_non_orth > tol:
+                raise ValueError('Input orbitals are not orthogonalized')
 
     mo1 = []
     for i, csym in enumerate(mol.symm_orb):
@@ -249,19 +257,31 @@ def symmetrize_space(mol, mo, s=None,
 
         # excluding orbitals which are already symmetrized
         idx = find_symmetric_mo(moso, ovlpso)
-        orb_exclude = mo[:, idx]
+        orb_irrep = mo[:, idx]
         if clean:
             # rotate MO to symm-adapted AO and back to zero-out non-symmetric part
-            SALC_mo = numpy.dot(csym.T.conj(), orb_exclude)
-            orb_exclude = numpy.dot(csym, SALC_mo)
-        mo1.append(orb_exclude)
+            SALC_mo = numpy.dot(csym.T.conj(), orb_irrep)
+            orb_irrep = numpy.dot(csym, SALC_mo)
         moso1 = moso[:, ~idx]
         dm = numpy.dot(moso1, moso1.T.conj())
 
         if dm.trace() > 1e-8 and sum(idx) < csym.shape[1]:
             logger.debug(mol, '%5d orbital(s) symmetrized in irrep %3d', csym.shape[1] - sum(idx), i)
             e, u = scipy.linalg.eigh(dm, ovlpso)
-            mo1.append(numpy.dot(csym, u[:, abs(1-e) < 1e-6]))
+            orb_symmetrized = numpy.dot(csym, u[:, abs(1-e) < 1e-6])
+            orb_irrep = numpy.hstack([orb_irrep, orb_symmetrized])
+
+        moso = numpy.dot(orb_irrep.T.conj(), numpy.dot(s, orb_irrep))
+        max_non_orth = abs(moso - numpy.eye(moso.shape[0])).max()
+        logger.debug(mol, 'Non-orthogonality in irrep %3d after symmetrization: %8.2e', i, max_non_orth)
+        if max_non_orth > tol:
+            logger.info(mol, 'Symmetrized orbitals in irrep %3d not orthogonal, perform Lowdin orthogonalization', i)
+            orb_irrep = numpy.dot(orb_irrep, orth.lowdin(moso))
+            max_non_orth = abs(numpy.dot(orb_irrep.T.conj(), numpy.dot(s, orb_irrep))
+                               - numpy.eye(orb_irrep.shape[1])).max()
+            logger.debug(mol, 'Non-orthogonality in irrep %3d after symmetrization and orthogonalizastion: %8.2e',
+                         i, max_non_orth)
+        mo1.append(orb_irrep)
     mo1 = numpy.hstack(mo1)
     if mo1.shape[1] != nmo:
         raise ValueError('mo1.shape[1] != nmo: %d != %d The input orbital space is not symmetrized.\n One '
@@ -272,9 +292,15 @@ def symmetrize_space(mol, mo, s=None,
         max_non_orth = abs(moso1 - numpy.eye(nmo)).max()
         logger.debug(mol, 'Non-orthogonality of output orbitals after symmetrization %8.2e', max_non_orth)
         if max_non_orth > tol:
-            raise ValueError('Output orbitals are not orthogonalized')
+            logger.info(mol, 'Symmetrized output orbitals are not orthogonalized, perform Lowdin orthogonalization')
+            mo1 = numpy.dot(mo1, orth.lowdin(moso1))
+            max_non_orth = abs(reduce(numpy.dot, (mo1.conj().T, s, mo1)) - numpy.eye(nmo)).max()
+            logger.debug(mol, 'Non-orthogonality of output orbitals after orthogonalization %8.2e', max_non_orth)
+            if max_non_orth > tol:
+                raise ValueError('Output orbitals are not orthogonalized')
     idx = mo_mapping.mo_1to1map(reduce(numpy.dot, (mo.T.conj(), s, mo1)))
-    return mo1[:,idx]
+    return mo1[:, idx]
+
 
 def std_symb(gpname):
     '''std_symb('d2h') returns D2h; std_symb('D2H') returns D2h'''
