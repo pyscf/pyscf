@@ -160,6 +160,36 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None,
         mo1[:,idx] = numpy.dot(csym, sc)
     return mo1
 
+
+def find_symmetric_mo(moso, ovlpso, thr=1e-8):
+    '''Find the list of MO of that thransform like particular irrep
+
+    Args:
+        moso : 2D float array
+            Overlap matrix of symmetry-adapted AO and MO, it can be obtained
+            by reduce(numpy.dot, (csym.T.conj(), s, mo)), where csym taken from
+            mol.symm_orb, and s is the AO overlap matrix
+        ovlpso : 2D float array
+            Overlap matrix between symmetry-adapted AO, it can be obtained
+            by reduce(numpy.dot, (csym.T.conj(), s, csym))
+
+    Kwargs:
+        thr : float
+            Threshold to consider MO symmetry-adapted
+
+    Returns:
+        1D bool array to select symmetry adapted MO
+'''
+    irrep_dim = ovlpso.shape[0]
+    try:
+        diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
+    except numpy.linalg.LinAlgError:
+        ovlpso[numpy.diag_indices(irrep_dim)] += 1e-12
+        diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
+    idx = abs(1-diag) < thr
+    return idx
+
+
 def symmetrize_space(mol, mo, s=None,
                      check=getattr(__config__, 'symm_addons_symmetrize_space_check', True),
                      tol=getattr(__config__, 'symm_addons_symmetrize_space_tol', 1e-9),
@@ -218,12 +248,7 @@ def symmetrize_space(mol, mo, s=None,
         ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
 
         # excluding orbitals which are already symmetrized
-        try:
-            diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
-        except numpy.linalg.LinAlgError:
-            ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
-            diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
-        idx = abs(1-diag) < 1e-8
+        idx = find_symmetric_mo(moso, ovlpso)
         orb_exclude = mo[:, idx]
         if clean:
             # rotate MO to symm-adapted AO and back to zero-out non-symmetric part
