@@ -23,7 +23,7 @@ Installation
 
         pip install pyscf
 
-* (Optionally) Extensions projects geomopt, dftd3, dmrgscf, doci, icmpspt,
+* (Optionally) Extensions projects geomopt, dmrgscf, doci, fciqmc, icmpspt,
   properties, semiempirical, shciscf ... (more on https://github.com/pyscf) can
   be installed using pip
 
@@ -31,7 +31,7 @@ Installation
 
   Install an individual extension
 
-        pip install pyscf[dftd3]
+        pip install pyscf[geomopt]
 
 * More details of custom install can be found in
   [installation manual](http://pyscf.org/install.html#compiling-from-source-code)
