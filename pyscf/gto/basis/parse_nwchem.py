@@ -137,7 +137,7 @@ def _parse(raw_basis, optimize=True):
                 current_basis.append(dat)
     basis_sorted = [b for bs in basis_parsed for b in bs]
     if not basis_sorted:
-        raise BasisNotFoundError(f'Basis data not found in "{raw_basis}"')
+        raise BasisNotFoundError('Basis data not found')
 
     if optimize:
         basis_sorted = optimize_contraction(basis_sorted)
