@@ -2432,6 +2432,10 @@ class Mole(lib.StreamObject):
         self.__dict__.update(loads(molstr).__dict__)
         return self
 
+    # when pickling, serialize as a JSON-formatted string
+    __getstate__ = dumps
+    __setstate__ = loads_
+
     def build(self, dump_input=True, parse_arg=ARGPARSE,
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
