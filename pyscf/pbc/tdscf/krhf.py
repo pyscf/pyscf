@@ -47,12 +47,10 @@ class KTDMixin(TDMixin):
 
         if kshift_lst is None: kshift_lst = [0]
         if any([k != 0 for k in kshift_lst]) and not isinstance(mf.with_df, pbcdf.df.DF):
-            log.warn(f'Non-zero kshift is requested for {self.__class__.__name__}, '
-                     f'but the DF method {mf.with_df.__class__.__name__} does not support '
-                     f'shifted J/K build. kshift_lst is set to [0] and only zero-shift '
-                     f'roots will be calculated.\n'
-                     f'For full k-shift TDSCF solutions, use GDF/RSDF instead.\n')
-            kshift_lst = [0]
+            log.error(f'Non-zero kshift is requested for {self.__class__.__name__}, '
+                      f'but the DF method {mf.with_df.__class__.__name__} does not support '
+                      f'shifted J/K build. Please rerun with GDF/RSDF.\n')
+            raise RuntimeError
 
         self.kconserv = get_kconserv_ria(mf.cell, mf.kpts)
         self.kshift_lst = kshift_lst
@@ -115,7 +113,7 @@ class TDA(KTDMixin):
         viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[kconserv[k]][:,viridx[kconserv[k]]] for k in range(nkpts)]
-        e_ia = _get_e_ia(scf.addons.mo_energy_no_ewald_shift(mf), mo_occ, kconserv)
+        e_ia = _get_e_ia(scf.addons.mo_energy_with_exxdiv_none(mf), mo_occ, kconserv)
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
 
         mem_now = lib.current_memory()[0]
@@ -245,7 +243,7 @@ class TDHF(TDA):
         viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[kconserv[k]][:,viridx[kconserv[k]]] for k in range(nkpts)]
-        e_ia = _get_e_ia(scf.addons.mo_energy_no_ewald_shift(mf), mo_occ, kconserv)
+        e_ia = _get_e_ia(scf.addons.mo_energy_with_exxdiv_none(mf), mo_occ, kconserv)
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
         tot_x = hdiag.size
         hdiag = numpy.hstack((hdiag, -hdiag))

@@ -48,7 +48,7 @@ class TDA(KTDMixin):
         orbva = [mo_coeff[0][kconserv[k]][:,viridxa[kconserv[k]]] for k in range(nkpts)]
         orbvb = [mo_coeff[1][kconserv[k]][:,viridxb[kconserv[k]]] for k in range(nkpts)]
 
-        moe = scf.addons.mo_energy_no_ewald_shift(mf)
+        moe = scf.addons.mo_energy_with_exxdiv_none(mf)
         e_ia_a = _get_e_ia(moe[0], mo_occ[0], kconserv)
         e_ia_b = _get_e_ia(moe[1], mo_occ[1], kconserv)
         hdiag = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
@@ -186,7 +186,7 @@ class TDHF(TDA):
         orbva = [mo_coeff[0][kconserv[k]][:,viridxa[kconserv[k]]] for k in range(nkpts)]
         orbvb = [mo_coeff[1][kconserv[k]][:,viridxb[kconserv[k]]] for k in range(nkpts)]
 
-        moe = scf.addons.mo_energy_no_ewald_shift(mf)
+        moe = scf.addons.mo_energy_with_exxdiv_none(mf)
         e_ia_a = _get_e_ia(moe[0], mo_occ[0], kconserv)
         e_ia_b = _get_e_ia(moe[1], mo_occ[1], kconserv)
         hdiag = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])

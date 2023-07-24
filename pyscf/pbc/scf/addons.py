@@ -579,56 +579,41 @@ def convert_to_khf(mf, out=None):
         out.__dict__.update(mf.__dict__)
         return out
 
-def shift_mo_energy(mf, eshift):
-    ''' Shift occupied MO energy by a given value:
-            mo_energy += eshift
-        Note: this function does not alter mo_occ.
+def mo_energy_with_exxdiv_none(mf, mo_coeff=None):
+    ''' compute mo energy from the diagonal of fock matrix with exxdiv=None
     '''
-    from pyscf.pbc.cc.ccsd import _adjust_occ
     from pyscf.pbc import scf, dft
     from pyscf.lib import logger
-    def _shift1(moe, occ):
-        nocc = numpy.count_nonzero(occ>1e-10)
-        return _adjust_occ(moe, nocc, eshift)
-    def _shiftk(kmoe, kocc):
-        return [_shift1(moe,occ) for moe,occ in zip(kmoe,kocc)]
-
     log = logger.new_logger(mf)
+
+    if mo_coeff is None: mo_coeff = mf.mo_coeff
+
+    if mf.exxdiv is None and mf.mo_coeff is mo_coeff:
+        return mf.mo_energy
+
+    with lib.temporary_env(mf, exxdiv=None):
+        dm = mf.make_rdm1(mo_coeff)
+        vhf = mf.get_veff(mf.mol, dm)
+        fockao = mf.get_fock(vhf=vhf, dm=dm)
+
+    def _get_moe1(C, fao):
+        return lib.einsum('pi,pq,qi->i', C.conj(), fao, C)
+    def _get_moek(kC, kfao):
+        return [_get_moe1(C, fao) for C,fao in zip(kC, kfao)]
 
     # avoid using isinstance as some are other's derived class
     if mf.__class__ in [scf.rhf.RHF, scf.ghf.GHF, dft.rks.RKS, dft.gks.GKS]:
-        return _shift1(mf.mo_energy, mf.mo_occ)
+        return _get_moe1(mo_coeff, fockao)
     elif mf.__class__ in [scf.uhf.UHF, dft.uks.UKS]:
-        return _shiftk(mf.mo_energy, mf.mo_occ)
+        return _get_moek(mo_coeff, fockao)
     elif mf.__class__ in [scf.krhf.KRHF, scf.kghf.KGHF, dft.krks.KRKS, dft.kgks.KGKS]:
-        return _shiftk(mf.mo_energy, mf.mo_occ)
+        return _get_moek(mo_coeff, fockao)
     elif mf.__class__ in [scf.kuhf.KUHF, dft.kuks.KUKS]:
-        return [_shiftk(kmoe,kocc) for kmoe,kocc in zip(mf.mo_energy,mf.mo_occ)]
+        return [_get_moek(kC, kfao) for kC,kfao in zip(mo_coeff,fockao)]
     else:
         log.error(f'Unknown SCF type {mf.__class__.__name__}')
         raise NotImplementedError
 
-def mo_energy_no_ewald_shift(mf):
-    ''' remove madelung constant from occupied mo energy if exxdiv == 'ewald'
-    '''
-    if mf.exxdiv != 'ewald':
-        return mf.mo_energy
-
-    # pure DFT
-    if getattr(mf, 'xc', None) is not None:
-        if not mf._numint.libxc.is_hybrid_xc(mf.xc):
-            return mf.mo_energy
-
-    if hasattr(mf, 'kpts'):
-        emad = tools.madelung(mf.cell, mf.kpts)
-    else:
-        emad = tools.madelung(mf.cell, [mf.kpt])
-
-    if getattr(mf, 'xc', None) is None: # HF
-        return shift_mo_energy(mf, emad)
-    else:                               # hyb-DFT
-        omega, alpha, hyb = mf._numint.rsh_and_hybrid_coeff(mf.xc, mf.cell.spin)
-        return shift_mo_energy(mf, emad*hyb)
 
 del (SMEARING_METHOD)
 

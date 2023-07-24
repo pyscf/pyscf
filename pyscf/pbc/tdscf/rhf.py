@@ -22,7 +22,7 @@
 
 from pyscf import lib
 from pyscf.tdscf import rhf
-from pyscf.pbc.scf.addons import mo_energy_no_ewald_shift
+from pyscf.pbc import scf
 from pyscf import __config__
 
 class TDMixin(rhf.TDMixin):
@@ -57,27 +57,7 @@ class TDA(TDMixin):
     _gen_vind = rhf.TDA.gen_vind
 
     def gen_vind(self, mf):
-        # gen_vind calls get_jk functions to compute the contraction between
-        # two-electron integrals and X,Y amplitudes. There are two choices for
-        # the treatment of exxdiv.
-        # 1. Removing exxdiv corrections in both orbital energies (in hdiag) and
-        #   get_jk functions (in vind function). This treatment can make TDA the
-        #   same to CIS method in which exxdiv was completely excluded when
-        #   constructing Hamiltonians.
-        # 2. Excluding exxdiv corrections from get_jk only. Keep its correction
-        #   to orbital energy. This treatment can make the TDDFT excitation
-        #   energies closed to the relevant DFT orbital energy gaps.
-        # DFT orbital energy gaps can be used as a good estimation for
-        # excitation energies. Current implementation takes the second choice so
-        # as to make the TDDFT excitation energies agree to DFT orbital energy gaps.
-        #
-        # There might be a third treatment: Taking treatment 1 first then adding
-        # certain types of corrections to the excitation energy at last.
-        # I'm not sure how to do this properly.
-        #
-        # See also issue https://github.com/pyscf/pyscf/issues/1187
-
-        moe = mo_energy_no_ewald_shift(mf)
+        moe = scf.addons.mo_energy_with_exxdiv_none(mf)
         with lib.temporary_env(mf, mo_energy=moe):
             vind, hdiag = self._gen_vind(mf)
         def vindp(x):
