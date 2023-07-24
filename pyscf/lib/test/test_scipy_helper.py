@@ -104,6 +104,16 @@ class KnownValues(unittest.TestCase):
                     self.assertEqual(L[i, j], 0)
             self.assertTrue(numpy.allclose(LtL, PtAP, atol=1.0e-12))
 
+    def test_complex(self):
+        numpy.random.seed(1)
+        A = numpy.random.rand(8,8) + numpy.random.rand(8,8)*1j
+        A -= .7 + .3j
+        A = A.dot(A.conj().T)
+        U, piv = scipy_helper.pivoted_cholesky_python(A)[:2]
+        U1 = U.copy()
+        U[:,piv] = U1
+        self.assertAlmostEqual(abs(U.conj().T.dot(U) - A).max(), 0, 9)
+
 
 if __name__ == "__main__":
     print("Full tests for scipy_helper")

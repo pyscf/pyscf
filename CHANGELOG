@@ -1,3 +1,34 @@
+PySCF 2.3.0 (2023-07-04)
+------------------------
+* Added
+  - Gaussian MM charges
+  - Stepsize scheduler for UCASSCF
+  - APC active space selection
+  - f-in-core ECPs and core configurations
+  - TDDFT gradients for triplet states
+  - Support complex-valued h1e in fci_slow.absorb_h1e
+* Improved
+  - Update B3LYP functional to correspond to the original definition
+  - Disable CLI parser by default
+  - Accuracy and performance of RSDF, GDF and RSJK methods
+  - get_lattice_Ls, and energy cutoff estimation
+  - Performance of PBC-AFTDF get_k method
+  - BCCD with semi-canonicalized orbitals
+  - Smearing in the molecular ROHF method
+  - Refactors FCI cylindrical symmetry implementation and improves its stability and performance
+  - Update interface of geomeTRIC library to support initial hessian
+  - NLC parser and NLC integral code
+* Fixes
+  - Update ddCOSMO functional to make it behave the same to Gaussian
+  - Deprecated keywords when calling scipy.linalg.solve
+  - The numerical issue in df hessian when the overlap matrix is ill-conditioned
+  - PBC-DFT eval_rho2 method
+  - xc parser for hybrid LDA functional
+  - SACASSCF grad fcasscf right track nelecas
+  - density fitting for GHF objects
+  - Fix bug in MP2 gradients scanner
+
+
 PySCF 2.2.1 (2023-03-29)
 ------------------------
 * Added

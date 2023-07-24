@@ -62,21 +62,35 @@ class KnownValues(unittest.TestCase):
         h1 = df_h.kernel()
         self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
+    def test_rks_mgga_hess(self):
+        href = mol.RKS.run(xc='m06').Hessian().kernel()
+        df_h = mol.RKS.density_fit().run(xc='m06').Hessian()
+        df_h.auxbasis_response = 2
+        h1 = df_h.kernel()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
+
     def test_rks_rsh_hess(self):
         href = mol.RKS.run(xc='camb3lyp').Hessian().kernel()
-        h1 = mol.RKS.density_fit().run(xc='camb3lyp').Hessian().kernel()
-        self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
+        df_h = mol.RKS.density_fit().run(xc='camb3lyp').Hessian()
+        df_h.auxbasis_response = 2
+        h1 = df_h.kernel()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
     def test_uhf_hess(self):
         href = scf.UHF(mol).run().Hessian().kernel()
-        h1 = scf.UHF(mol).density_fit().run().Hessian().kernel()
-        self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
+        df_h = scf.UHF(mol).density_fit().run().Hessian()
+        df_h.auxbasis_response = 2
+        h1 = df_h.kernel()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
     def test_uks_hess(self):
         href = mol.UKS.run(xc='camb3lyp').Hessian().kernel()
-        h1 = mol.UKS.density_fit().run(xc='camb3lyp').Hessian().kernel()
-        self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
+        df_h = mol.UKS.density_fit().run(xc='camb3lyp').Hessian()
+        df_h.auxbasis_response = 2
+        h1 = df_h.kernel()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
 if __name__ == "__main__":
     print("Full Tests for df.hessian")
     unittest.main()
+

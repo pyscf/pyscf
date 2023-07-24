@@ -81,7 +81,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(method.scf(), -2.9070540942168002, 9)
 
         m = mol.UKS()
-        m.xc = 'b3lyp'
+        m.xc = 'b3lyp5'
         self.assertAlmostEqual(m.scf(), -2.89992555753, 9)
 
     def test_nr_lda_1e(self):

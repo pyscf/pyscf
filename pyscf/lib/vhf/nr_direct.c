@@ -27,8 +27,6 @@
 #include "np_helper/np_helper.h"
 #include "gto/gto.h"
 
-#define AO_BLOCK_SIZE   64
-
 #define DECLARE_ALL \
         const int *atm = envs->atm; \
         const int *bas = envs->bas; \

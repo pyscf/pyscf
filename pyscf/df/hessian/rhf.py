@@ -174,15 +174,7 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         get_int3c_ipip2 = _int3c_wrapper(mol, auxmol, 'int3c2e_ipip2', 's1')
         rhok0_P__ = lib.einsum('plj,li->pij', rhok0_Pl_, mocc_2)
         rho2c_0 = lib.einsum('pij,qji->pq', rhok0_P__, rhok0_P__)
-
-        try:
-            int2c_inv = np.linalg.inv(int2c)
-        except scipy.linalg.LinAlgError:
-            w, v = scipy.linalg.eigh(int2c)
-            mask = w > LINEAR_DEP_THRESHOLD
-            v1 = v[:,mask]
-            int2c_inv = lib.dot(v1/w[mask], v1.conj().T)
-            v1 = None
+        int2c_inv = numpy.linalg.pinv(int2c, rcond=LINEAR_DEP_THRESHOLD)
         int2c_ipip1 = auxmol.intor('int2c2e_ipip1', aosym='s1')
         int2c_ip_ip  = lib.einsum('xpq,qr,ysr->xyps', int2c_ip1, int2c_inv, int2c_ip1)
         int2c_ip_ip -= auxmol.intor('int2c2e_ip1ip2', aosym='s1').reshape(3,3,naux,naux)

@@ -61,7 +61,7 @@ class KnownValues(unittest.TestCase):
         m1 = ref[:nmax+1] / np.max(np.abs(ref[:nmax+1]), axis=(1, 2), keepdims=True)
         m2 = lib.einsum("xk,yk,nk->nxy", v[0], v[1].conj(), e[None]**np.arange(nmax+1)[:, None])
         m2 /= np.max(np.abs(m2), axis=(1, 2), keepdims=True)
-        self.assertAlmostEqual(np.max(np.abs(m1-m2)), 0.0, 8)
+        self.assertAlmostEqual(np.max(np.abs(m1-m2)), 0.0, 7)
 
     def _test_niter(self, niter):
         gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))

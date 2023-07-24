@@ -48,9 +48,12 @@ from pyscf import __config__
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
-                       pbcopt=lib.c_null_ptr())
+    precision = cell.precision * 1e-5
+    rcut = max(cell.rcut, gto.estimate_rcut(cell, precision))
+    with lib.temporary_env(cell, rcut=rcut, precision=precision):
+        # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+        s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
+                           pbcopt=lib.c_null_ptr())
     s = lib.asarray(s)
     hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
     if hermi_error > cell.precision and hermi_error > 1e-12:
@@ -59,16 +62,15 @@ def get_ovlp(cell, kpt=np.zeros(3)):
                     'improve accuracy.', hermi_error)
 
     cond = np.max(lib.cond(s))
-    if cond * cell.precision > 1e2:
-        prec = 1e2 / cond
-        rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
-        if cell.rcut < rmin:
-            logger.warn(cell, 'Singularity detected in overlap matrix.  '
-                        'Integral accuracy may be not enough.\n      '
-                        'You can adjust  cell.precision  or  cell.rcut  to '
-                        'improve accuracy.  Recommended values are\n      '
-                        'cell.precision = %.2g  or smaller.\n      '
-                        'cell.rcut = %.4g  or larger.', prec, rmin)
+    if cond * precision > 1e2:
+        prec = 1e7 / cond
+        rmin = gto.estimate_rcut(cell, prec*1e-5)
+        logger.warn(cell, 'Singularity detected in overlap matrix.  '
+                    'Integral accuracy may be not enough.\n      '
+                    'You can adjust  cell.precision  or  cell.rcut  to '
+                    'improve accuracy.  Recommended settings are\n      '
+                    'cell.precision < %.2g\n      '
+                    'cell.rcut > %.4g', prec, rmin)
     return s
 
 
@@ -408,7 +410,7 @@ def _dip_correction(mf):
     grids.mesh = tools.cutoff_to_mesh(a, ke_cutoff)
 
     dm = mf.make_rdm1()
-    rho = mf.get_rho(dm, grids, mf.kpt)
+    rho = mf.get_rho(dm, grids)
     origin = _search_dipole_gauge_origin(cell, grids, rho, log)
 
     def shift_grids(r):
@@ -525,7 +527,7 @@ class SCF(mol_hf.SCF):
 
         self.exxdiv = exxdiv
         self.kpt = kpt
-        self.conv_tol = cell.precision * 10
+        self.conv_tol = max(cell.precision * 10, 1e-8)
 
         self._keys = self._keys.union(['cell', 'exxdiv', 'with_df', 'rsjk'])
 
@@ -549,7 +551,11 @@ class SCF(mol_hf.SCF):
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpt):
                 self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
-            self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
+
+        # Let df.build() be called by get_jk function later on needs.
+        # DFT objects may need to initiailze df with different paramters.
+        #if self.with_df:
+        #    self.with_df.build()
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -586,7 +592,6 @@ class SCF(mol_hf.SCF):
 
     def check_sanity(self):
         mol_hf.SCF.check_sanity(self)
-        self.with_df.check_sanity()
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
@@ -688,15 +693,8 @@ class SCF(mol_hf.SCF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        if self.rsjk and self.direct_scf:
-            # Enable direct-SCF for real space JK builder
-            ddm = dm - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
-            vhf = vj - vk * .5
-            vhf += vhf_last
-        else:
-            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-            vhf = vj - vk * .5
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+        vhf = vj - vk * .5
         return vhf
 
     def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, omega=None,
@@ -742,11 +740,7 @@ class SCF(mol_hf.SCF):
             makov_payne_correction(self)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
-        dm = mol_hf.SCF.get_init_guess(self, cell, key)
-        dm = normalize_dm_(self, dm)
-        return dm
+    get_init_guess = mol_hf.SCF.get_init_guess
 
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell
@@ -806,7 +800,10 @@ class SCF(mol_hf.SCF):
         '''Convert the input mean-field object to a GHF/GKS object'''
         return addons.convert_to_ghf(mf)
 
-    def nuc_grad_method(self, *args, **kwargs):
+    def stability(self):
+        raise NotImplementedError
+
+    def nuc_grad_method(self):
         raise NotImplementedError
 
     def jk_method(self, J='FFTDF', K=None):
@@ -833,11 +830,7 @@ class SCF(mol_hf.SCF):
                 df_method = J if 'DF' in J else K
                 self.with_df = getattr(df, df_method)(self.cell, self.kpt)
 
-        # For nuclear attraction
-        if ('RS' in J or 'RS' in K) and not self.with_df:
-            self.with_df = df.GDF(self.cell, self.kpt)
-
-        if J == 'RS' or K == 'RS':
+        if 'RS' in J or 'RS' in K:
             if not gamma_point(self.kpt):
                 raise NotImplementedError('Single k-point must be gamma point')
             self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpt)
@@ -863,6 +856,12 @@ class KohnShamDFT:
 
 
 class RHF(SCF, mol_hf.RHF):
+
+    def get_init_guess(self, cell=None, key='minao'):
+        if cell is None: cell = self.cell
+        dm = SCF.get_init_guess(self, cell, key)
+        dm = normalize_dm_(self, dm)
+        return dm
 
     stability = mol_hf.RHF.stability
 
@@ -890,7 +889,7 @@ def normalize_dm_(mf, dm):
         ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
     else:
         ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
-    if abs(ne - cell.nelectron).sum() > 1e-7:
+    if abs(ne - cell.nelectron).sum() > 0.01:
         logger.debug(mf, 'Big error detected in the electron number '
                      'of initial guess density matrix (Ne/cell = %g)!\n'
                      '  This can cause huge error in Fock matrix and '

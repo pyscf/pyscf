@@ -212,8 +212,13 @@ def grad_nuc(cell, atmlst):
     '''
     Derivatives of nuclear repulsion energy wrt nuclear coordinates
     '''
-    ew_eta = cell.get_ewald_params()[0]
     chargs = cell.atom_charges()
+    ew_eta, ew_cut = cell.get_ewald_params()
+    log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
+    ke_cutoff = -2*ew_eta**2*log_precision
+    mesh = cell.cutoff_to_mesh(ke_cutoff)
+    logger.debug1(cell, 'mesh for ewald %s', mesh)
+
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls()
     natom = len(chargs)
@@ -234,7 +239,6 @@ def grad_nuc(cell, atmlst):
             ewovrl_grad[i] += np.sum(- qi * qj / r ** 2 * r1 * 2 * ew_eta / np.sqrt(np.pi) *
                                      np.exp(-ew_eta**2 * r ** 2).reshape(len(r),1), axis = 0)
 
-    mesh = gto.cell._cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
