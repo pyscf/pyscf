@@ -274,8 +274,9 @@ def _dft_common_init_(mf, xc='LDA,VWN'):
 ##################################################
 # don't modify the following attributes, they are not input options
     mf._numint = numint.NumInt()
+    mf.ext_params_dict = mf._numint.ext_params_dict
     mf._keys = mf._keys.union(['xc', 'nlc', 'omega', 'grids', 'nlcgrids',
-                               'small_rho_cutoff'])
+                               'small_rho_cutoff', 'ext_params_dict'])
 
 class KohnShamDFT(object):
     '''

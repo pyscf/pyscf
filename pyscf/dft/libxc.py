@@ -33,6 +33,11 @@ from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
 from pyscf import __config__
 
+class ext_params_cache_t(ctypes.Structure):
+    _fields_ = [("id", ctypes.c_int),
+                ("params", ctypes.POINTER(ctypes.c_double)),
+                ("n", ctypes.c_size_t)]
+
 _itrf = lib.load_library('libxc_itrf')
 _itrf.LIBXC_is_lda.restype = ctypes.c_int
 _itrf.LIBXC_is_gga.restype = ctypes.c_int
@@ -47,10 +52,14 @@ _itrf.LIBXC_number_of_functionals.restype = ctypes.c_int
 _itrf.LIBXC_functional_numbers.argtypes = (numpy.ctypeslib.ndpointer(dtype=numpy.intc, ndim=1, flags=("W", "C", "A")), )
 _itrf.LIBXC_functional_name.argtypes = [ctypes.c_int]
 _itrf.LIBXC_functional_name.restype = ctypes.c_char_p
-_itrf.LIBXC_hybrid_coeff.argtypes = [ctypes.c_int]
+_itrf.LIBXC_hybrid_coeff.argtypes = [ctypes.c_int, ctypes.POINTER(ext_params_cache_t)]
 _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
-_itrf.LIBXC_nlc_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
-_itrf.LIBXC_rsh_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
+_itrf.LIBXC_nlc_coeff.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ext_params_cache_t)]
+_itrf.LIBXC_rsh_coeff.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ext_params_cache_t)]
+
+_itrf.LIBXC_check_ext_params.argtypes = [ctypes.POINTER(ext_params_cache_t)]
+_itrf.LIBXC_check_ext_params.restype = ctypes.c_int
+_itrf.LIBXC_print_ext_params.argtypes = [ctypes.POINTER(ext_params_cache_t)]
 
 _itrf.LIBXC_version.restype = ctypes.c_char_p
 _itrf.LIBXC_reference.restype = ctypes.c_char_p
@@ -59,12 +68,6 @@ _itrf.LIBXC_xc_reference.argtypes = [ctypes.c_int, (ctypes.c_char_p * 8)]
 
 _itrf.xc_functional_get_number.argtypes = (ctypes.c_char_p, )
 _itrf.xc_functional_get_number.restype = ctypes.c_int
-
-_itrf.set_ext_params.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
-_itrf.set_ext_params.restype = ctypes.c_int
-
-_itrf.remove_ext_params.argtypes = [ctypes.c_int]
-_itrf.remove_ext_params.restype = ctypes.c_int
 
 def libxc_version():
     '''Returns the version of libxc'''
@@ -971,29 +974,44 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
             raise e
     return support
 
-@lru_cache(100)
-def hybrid_coeff(xc_code, spin=0):
+def no_ext_params_lru_cache(func):
+    '''Only cache function values when ext_params is None
+    '''
+    func_cached = lru_cache(100)(func)
+    def wrapper(*args, **kwargs):
+        if 'ext_params' in kwargs:
+            ext_params = kwargs['ext_params']
+        else:
+            ext_params = args[-1]
+        if ext_params is None:
+            return func_cached(*args, **kwargs)
+        else:
+            return func(*args, **kwargs)
+    return wrapper
+
+@no_ext_params_lru_cache
+def hybrid_coeff(xc_code, spin=0, ext_params=None):
     '''Support recursively defining hybrid functional
     '''
-    hyb, fn_facs = parse_xc(xc_code)
-    hybs = [fac * _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid)) for xid, fac in fn_facs]
+    hyb, fn_facs = parse_xc(xc_code, ext_params)
+    hybs = [fac * _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid), ext_params) for xid, fac in fn_facs]
     return hyb[0] + sum(hybs)
 
-@lru_cache(100)
-def nlc_coeff(xc_code):
+@no_ext_params_lru_cache
+def nlc_coeff(xc_code, ext_params=None):
     '''Get NLC coefficients
     '''
-    hyb, fn_facs = parse_xc(xc_code)
+    hyb, fn_facs = parse_xc(xc_code, ext_params)
     nlc_pars = []
     nlc_tmp = (ctypes.c_double*2)()
     for xid, fac in fn_facs:
         if _itrf.LIBXC_is_nlc(ctypes.c_int(xid)):
-            _itrf.LIBXC_nlc_coeff(xid, nlc_tmp)
+            _itrf.LIBXC_nlc_coeff(xid, nlc_tmp, ext_params)
             nlc_pars.append((tuple(nlc_tmp), fac))
     return tuple(nlc_pars)
 
-@lru_cache(100)
-def rsh_coeff(xc_code):
+@no_ext_params_lru_cache
+def rsh_coeff(xc_code, ext_params=None):
     '''Range-separated parameter and HF exchange components: omega, alpha, beta
 
     Exc_RSH = c_LR * LR_HFX + c_SR * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
@@ -1017,13 +1035,13 @@ def rsh_coeff(xc_code):
         if 'SR_HF' in xc_code or 'LR_HF' in xc_code or 'RSH(' in xc_code:
             check_omega = False
 
-    hyb, fn_facs = parse_xc(xc_code)
+    hyb, fn_facs = parse_xc(xc_code, ext_params)
     hyb, alpha, omega = hyb
     beta = hyb - alpha
     rsh_pars = [omega, alpha, beta]
     rsh_tmp = (ctypes.c_double*3)()
     for xid, fac in fn_facs:
-        _itrf.LIBXC_rsh_coeff(xid, rsh_tmp)
+        _itrf.LIBXC_rsh_coeff(xid, rsh_tmp, ext_params)
         if rsh_pars[0] == 0:
             rsh_pars[0] = rsh_tmp[0]
         elif check_omega:
@@ -1038,14 +1056,14 @@ def rsh_coeff(xc_code):
         rsh_pars[2] += rsh_tmp[2] * fac
     return tuple(rsh_pars)
 
-def parse_xc_name(xc_name='LDA,VWN'):
+def parse_xc_name(xc_name='LDA,VWN', ext_params=None):
     '''Convert the XC functional name to libxc library internal ID.
     '''
-    fn_facs = parse_xc(xc_name)[1]
+    fn_facs = parse_xc(xc_name, ext_params)[1]
     return fn_facs[0][0], fn_facs[1][0]
 
-@lru_cache(100)
-def parse_xc(description):
+@no_ext_params_lru_cache
+def parse_xc(description, ext_params=None):
     r'''Rules to input functional description:
 
     * The given functional description must be a one-line string.
@@ -1098,7 +1116,7 @@ def parse_xc(description):
     elif isinstance(description, int):
         return tuple(hyb), ((description, 1.),)
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
-        return parse_xc('%s,%s' % tuple(description))
+        return parse_xc('%s,%s' % tuple(description), ext_params)
 
     def assign_omega(omega, hyb_or_sr, lr=0):
         if hyb[2] == omega or omega == 0:
@@ -1181,7 +1199,7 @@ def parse_xc(description):
                         if func_id == -1:
                             raise KeyError(f"LibXCFunctional: name '{key}' not found.")
                 if isinstance(x_id, str):
-                    hyb1, fn_facs1 = parse_xc(x_id)
+                    hyb1, fn_facs1 = parse_xc(x_id, ext_params)
                     # Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
                     if hyb1[0] != 0 or hyb1[1] != 0:
                         assign_omega(hyb1[2], hyb1[0]*fac, hyb1[1]*fac)
@@ -1264,7 +1282,7 @@ _NAME_WITH_DASH = {'SR-HF'    : 'SR_HF',
                    'CAM-B3LYP': 'CAM_B3LYP'}
 
 
-def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
+def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None, ext_params=None):
     r'''Interface to call libxc library to evaluate XC functional, potential
     and functional derivatives.
 
@@ -1339,6 +1357,8 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
             spin polarized if spin > 0
         relativity : int
             No effects.
+        ext_params : ctypes array of ext_params_cache_t
+            Custom external functional parameters created by create_c_ext_params_array().
         verbose : int or object of :class:`Logger`
             No effects.
 
@@ -1405,13 +1425,13 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
 
         see also libxc_itrf.c
     '''  # noqa: E501
-    hyb, fn_facs = parse_xc(xc_code)
+    hyb, fn_facs = parse_xc(xc_code, ext_params)
     if omega is not None:
         hyb = hyb[:2] + (float(omega),)
-    return _eval_xc(hyb, fn_facs, rho, spin, relativity, deriv, verbose)
+    return _eval_xc(hyb, fn_facs, rho, spin, relativity, deriv, verbose, ext_params)
 
 
-def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
+def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None, ext_params=None):
     assert (deriv <= 3)
     if spin == 0:
         nspin = 1
@@ -1501,7 +1521,8 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                         rho_u.ctypes.data_as(ctypes.c_void_p),
                         rho_d.ctypes.data_as(ctypes.c_void_p),
                         outbuf.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_double(density_threshold))
+                        ctypes.c_double(density_threshold),
+                        ext_params)
 
     exc = outbuf[0]
     vxc = fxc = kxc = None
@@ -1663,33 +1684,93 @@ def define_xc(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return define_xc_(copy.copy(ni), description, xctype, hyb, rsh)
 define_xc.__doc__ = define_xc_.__doc__
 
-def clear_lru_cache():
-    hybrid_coeff.cache_clear()
-    nlc_coeff.cache_clear()
-    rsh_coeff.cache_clear()
+def create_c_ext_params_array(ext_params_dict):
+    '''Create a ext_params_cache_t array using ctypes.
 
-def set_ext_params(xc_code, params, clear_cache=True):
-    if isinstance(params, numpy.ndarray):
-        c_params = params.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-    else:
-        c_params = (ctypes.c_double * len(params))(*params)
-    status = _itrf.set_ext_params(xc_code, c_params, len(params))
+    Args:
+        ext_params_dict : 
+            A dict containing the custom external parameters.
+            The key is an int that is the ID of the Libxc functional.
+            The value is either a numpy array or a list of float.
+
+    Returns:
+        If ext_params_dict is empty, returns None.
+        Otherwise, returns a ctypes array of ext_params_cache_t. 
+        The terminating item has an id of 0.
+    '''
+    if not isinstance(ext_params_dict, dict):
+        raise TypeError("ext_params_dict must be a dictionary")
+
+    if not bool(ext_params_dict):
+        return None
+
+    ext_params_array = (ext_params_cache_t * (len(ext_params_dict) + 1))()
+
+    for i, (func_id, params) in enumerate(ext_params_dict.items()):
+        if not isinstance(func_id, int):
+            raise TypeError("functional ID must be an integer")
+
+        if not isinstance(params, (list, numpy.ndarray)):
+            raise TypeError("params must be a list or numpy array")
+
+        if isinstance(params, list):
+            params = numpy.array(params)
+
+        ext_params_array[i].id = func_id
+        ext_params_array[i].params = params.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        ext_params_array[i].n = len(params)
+
+    ext_params_array[-1].id = 0
+
+    status = _itrf.LIBXC_check_ext_params(ext_params_array)
     if status != 0:
-        raise RuntimeError("Failed to set external parameters. Check the size of params.")
-    if clear_cache:
-        clear_lru_cache()
+        raise ValueError("Inconsistency found in external parameter array")
 
-def remove_ext_params(xc_code, clear_cache=True):
-    status = _itrf.remove_ext_params(xc_code)
-    if status != 0:
-        raise RuntimeError(f"Failed to remove external parameter {xc_code}. Parameters not set.")
-    if clear_cache:
-        clear_lru_cache()
+    return ext_params_array
 
-def clear_ext_params(clear_cache=True):
-    _itrf.clear_ext_params()
-    if clear_cache:
-        clear_lru_cache()
+class ExtParamDict(dict):
+    '''This data structure provides a convenient interface to set custom external parameters.'''
+    def __init__(self, *args, **kwargs):
+        self.update(*args, **kwargs)
 
-def print_ext_params():
-    _itrf.print_ext_params()
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self.c_ext_params_array = create_c_ext_params_array(self)
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self.c_ext_params_array = create_c_ext_params_array(self)
+
+    def clear(self):
+        super().clear()
+        self.c_ext_params_array = create_c_ext_params_array(self)
+
+    def pop(self, key, default=None):
+        result = super().pop(key, default)
+        self.c_ext_params_array = create_c_ext_params_array(self)
+        return result
+
+    def popitem(self):
+        result = super().popitem()
+        self.c_ext_params_array = create_c_ext_params_array(self)
+        return result
+
+    def setdefault(self, key, default=None):
+        result = super().setdefault(key, default)
+        self.c_ext_params_array = create_c_ext_params_array(self)
+        return result
+
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        self.c_ext_params_array = create_c_ext_params_array(self)
+
+    @classmethod
+    def fromkeys(cls, iterable, value=None):
+        new_dict = cls()
+        for key in iterable:
+            new_dict[key] = value
+        return new_dict
+
+    def print_ext_params(self):
+        _itrf.LIBXC_print_ext_params(self.c_ext_params_array)
+

@@ -2704,25 +2704,26 @@ class _NumIntMixin(lib.StreamObject):
 
     def __init__(self):
         self.omega = None  # RSH paramter
+        self.ext_params_dict = self.libxc.ExtParamDict()
 
 ####################
 # Overwrite following functions to use custom XC functional
 
     def hybrid_coeff(self, xc_code, spin=0):
-        return self.libxc.hybrid_coeff(xc_code, spin)
+        return self.libxc.hybrid_coeff(xc_code, spin, self.ext_params_dict.c_ext_params_array)
 
     def nlc_coeff(self, xc_code):
-        return self.libxc.nlc_coeff(xc_code)
+        return self.libxc.nlc_coeff(xc_code, self.ext_params_dict.c_ext_params_array)
 
     def rsh_coeff(self, xc_code):
-        return self.libxc.rsh_coeff(xc_code)
+        return self.libxc.rsh_coeff(xc_code, self.ext_params_dict.c_ext_params_array)
 
     @lib.with_doc(libxc.eval_xc.__doc__)
     def eval_xc(self, xc_code, rho, spin=0, relativity=0, deriv=1, omega=None,
                 verbose=None):
         if omega is None: omega = self.omega
         return self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv,
-                                  omega, verbose)
+                                  omega, verbose, self.ext_params_dict.c_ext_params_array)
 
     def eval_xc_eff(self, xc_code, rho, deriv=1, omega=None, xctype=None,
                     verbose=None):
