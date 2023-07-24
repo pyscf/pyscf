@@ -335,7 +335,7 @@ class KohnShamDFT(object):
 ##################################################
 # don't modify the following attributes, they are not input options
         self._numint = numint.NumInt()
-        mf.ext_params_dict = mf._numint.ext_params_dict
+        self.ext_params_dict = self._numint.ext_params_dict
         self._keys = self._keys.union([
             'xc', 'nlc', 'omega', 'grids', 'nlcgrids', 'small_rho_cutoff',
             'ext_params_dict'])
