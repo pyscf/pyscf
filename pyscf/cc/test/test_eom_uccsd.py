@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 import numpy
 import numpy as np
@@ -47,7 +46,7 @@ def setUpModule():
     mol1.spin = 2
     mol1.build()
     mf0 = scf.UHF(mol1).run(conv_tol=1e-12)
-    mf1 = copy.copy(mf0)
+    mf1 = mf0.copy()
 
     nocca, noccb = mol1.nelec
     nmo = mol1.nao_nr()
@@ -218,7 +217,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(abs(gr2-uee1.spatial2spin(r2, orbspin)).max()), 0, 9)
         self.assertAlmostEqual(lib.fp(vec1), 49.499911123484523, 9)
 
-        ucc2 = copy.copy(ucc1)
+        ucc2 = ucc1.copy()
         ucc2.direct = True
         uee1 = eom_uccsd.EOMEESpinKeep(ucc2)
         vec1 = uee1.matvec(vec)
@@ -293,7 +292,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(abs(gr1-myeom.spatial2spin(v1, orbspin)).max()), 0, 9)
         self.assertAlmostEqual(float(abs(gr2-myeom.spatial2spin(v2, orbspin)).max()), 0, 9)
 
-        ucc2 = copy.copy(ucc1)
+        ucc2 = ucc1.copy()
         ucc2.direct = True
         myeom = eom_uccsd.EOMEESpinFlip(ucc2)
         vec1 = myeom.matvec(vec)
@@ -322,7 +321,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(abs(gr1-myeom.spatial2spin(v1, orbspin)).max()), 0, 9)
         self.assertAlmostEqual(float(abs(gr2-myeom.spatial2spin(v2, orbspin)).max()), 0, 9)
 
-        ucc2 = copy.copy(ucc1)
+        ucc2 = ucc1.copy()
         ucc2.direct = True
         myeom = eom_uccsd.EOMIP(ucc2)
         vec1 = myeom.matvec(vec)
@@ -351,7 +350,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(abs(gr1-myeom.spatial2spin(v1, orbspin)).max()), 0, 9)
         self.assertAlmostEqual(float(abs(gr2-myeom.spatial2spin(v2, orbspin)).max()), 0, 9)
 
-        ucc2 = copy.copy(ucc1)
+        ucc2 = ucc1.copy()
         ucc2.direct = True
         myeom = eom_uccsd.EOMEA(ucc2)
         vec1 = myeom.matvec(vec)

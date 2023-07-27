@@ -20,7 +20,6 @@
 Pseudo-spectral methods (COSX, PS, SN-K)
 '''
 
-import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -83,7 +82,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             mf.with_df = with_df
         elif mf.with_df.auxbasis != auxbasis:
             #logger.warn(mf, 'DF might have been initialized twice.')
-            mf = copy.copy(mf)
+            mf = mf.copy()
             mf.with_df = with_df
         return mf
 
@@ -347,7 +346,7 @@ class SGX(lib.StreamObject):
             if key in self._rsh_df:
                 rsh_df = self._rsh_df[key]
             else:
-                rsh_df = copy.copy(self)
+                rsh_df = self.copy()
                 rsh_df._rsh_df = None  # to avoid circular reference
                 # Not all attributes need to be reset. Resetting _vjopt
                 # because it is used by get_j method of regular DF object.

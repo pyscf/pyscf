@@ -602,8 +602,7 @@ def decontract_basis(mol, atoms=None, to_cart=False):
     >>> abs(s-mol.intor('int1e_ovlp')).max()
     0.0
     '''
-    import copy
-    pmol = copy.copy(mol)
+    pmol = mol.copy(deep=False)
 
     # Some input basis may be segmented basis from a general contracted set.
     # This may lead to duplicated pGTOs. First contract all basis to remove
@@ -1187,7 +1186,7 @@ def tot_electrons(mol):
                     nelectron, nelectron_int)
     return nelectron_int
 
-def copy(mol):
+def copy(mol, deep=True):
     '''Deepcopy of the given :class:`Mole` object
 
     Some attributes are shared between the original and copied objects.
@@ -1195,7 +1194,12 @@ def copy(mol):
     not affect the original object.
     '''
     import copy
-    newmol = copy.copy(mol)
+    # Avoid copy.copy(mol) for shallow copy because copy.copy automatically
+    # calls __copy__, __reduce__, __getstate__, __setstate__ methods
+    newmol = mol.view(mol.__class__)
+    if not deep:
+        return newmol
+
     newmol._atm    = numpy.copy(mol._atm)
     newmol._bas    = numpy.copy(mol._bas)
     newmol._env    = numpy.copy(mol._env)
@@ -2545,11 +2549,10 @@ class GTOIntegralMixin:
                   inplace=True):
         '''Update geometry
         '''
-        import copy
         if inplace:
             mol = self
         else:
-            mol = copy.copy(self)
+            mol = self.copy(deep=False)
             mol._env = mol._env.copy()
         if unit is None:
             unit = mol.unit
@@ -3174,7 +3177,6 @@ class GlobalOptionMixin:
         # _TemporaryMoleContext which is protected by the _ctx_lock.
         self._ctx_lock = None
 
-    # NOTE: do not overwrite __copy__. It causes recursive calls in copy.copy(mol)
     copy = copy
 
     pack = pack

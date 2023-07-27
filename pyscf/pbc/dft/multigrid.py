@@ -19,7 +19,6 @@
 '''Multigrid to compute DFT integrals'''
 
 import ctypes
-import copy
 import numpy
 import scipy.linalg
 
@@ -661,7 +660,7 @@ def _eval_rho_bra(cell, dms, shls_slice, hermi, xctype, kpts, grids,
     b = numpy.linalg.inv(a.T)
     ish0, ish1, jsh0, jsh1 = shls_slice
     nshells_j = jsh1 - jsh0
-    pcell = copy.copy(cell)
+    pcell = cell.copy(deep=False)
     rest_dms = []
     rest_bas = []
     i1 = 0
@@ -740,7 +739,7 @@ def _eval_rho_ket(cell, dms, shls_slice, hermi, xctype, kpts, grids,
     b = numpy.linalg.inv(a.T)
     ish0, ish1, jsh0, jsh1 = shls_slice
     nshells_i = ish1 - ish0
-    pcell = copy.copy(cell)
+    pcell = cell.copy(deep=False)
     rest_dms = []
     rest_bas = []
     j1 = 0
@@ -1544,7 +1543,7 @@ def multi_grids_tasks_for_rcut(cell, fft_mesh=None, verbose=None):
     ao_loc = cell.ao_loc_nr()
 
     def make_cell_dense_exp(shls_dense, r0, r1):
-        cell_dense = copy.copy(cell)
+        cell_dense = cell.copy(deep=False)
         cell_dense._bas = cell._bas.copy()
         cell_dense._env = cell._env.copy()
 
@@ -1575,7 +1574,7 @@ def multi_grids_tasks_for_rcut(cell, fft_mesh=None, verbose=None):
         return cell_dense, ao_idx, ke_cutoff, rcut_atom
 
     def make_cell_sparse_exp(shls_sparse, r0, r1):
-        cell_sparse = copy.copy(cell)
+        cell_sparse = cell.copy(deep=False)
         cell_sparse._bas = cell._bas.copy()
         cell_sparse._env = cell._env.copy()
 
@@ -1663,7 +1662,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
 
     # cell that needs dense integration grids
     def make_cell_dense_exp(shls_dense, ke0, ke1):
-        cell_dense = copy.copy(cell)
+        cell_dense = cell.copy(deep=False)
         cell_dense._bas = cell._bas.copy()
         cell_dense._env = cell._env.copy()
 
@@ -1695,7 +1694,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
 
     # cell that needs sparse integration grids
     def make_cell_sparse_exp(shls_sparse, ke0, ke1):
-        cell_sparse = copy.copy(cell)
+        cell_sparse = cell.copy(deep=False)
         cell_sparse._bas = cell._bas.copy()
         cell_sparse._env = cell._env.copy()
 

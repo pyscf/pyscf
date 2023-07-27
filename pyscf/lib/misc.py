@@ -666,6 +666,10 @@ class StreamObject(object):
         return {key for key, val in vars(cls).items()
                 if not (key.startswith('__') or callable(val))}
 
+    def copy(self):
+        '''Returns a shallow copy'''
+        return self.view(self.__class__)
+
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
     '''Check misinput of class attributes, check whether a class method is

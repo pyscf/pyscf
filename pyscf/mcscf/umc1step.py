@@ -23,7 +23,6 @@ UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
 
 import sys
 
-import copy
 from functools import reduce
 import numpy
 import pyscf.gto
@@ -310,8 +309,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         totinner += njk
 
         eris = None
-        u = copy.copy(u)
-        g_orb = copy.copy(g_orb)
         mo = casscf.rotate_mo(mo, u, log)
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)

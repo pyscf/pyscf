@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 import tempfile
 import numpy
@@ -307,7 +306,7 @@ class KnownValues(unittest.TestCase):
 
     def test_state_average_mix(self):
         mc = mcscf.CASSCF(m, 4, 4)
-        cis1 = copy.copy(mc.fcisolver)
+        cis1 = mc.fcisolver.copy()
         cis1.spin = 2
         mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [.5, .5])
         mc.run()

@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 from functools import reduce
 import numpy
@@ -118,7 +117,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, 44.2658681077, 7)
         self.assertAlmostEqual(lib.fp(mo_e), 4.1206025804989173, 4)
 
-        mcr1 = copy.copy(mcr)
+        mcr1 = mcr.copy()
         mcr1.frozen = 2
         mo, ci, mo_e = mcr1.canonicalize(mo1)
         self.assertAlmostEqual(lib.fp(mo_e), 6.6030999409178577, 5)

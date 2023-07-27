@@ -18,7 +18,6 @@
 
 '''Density expansion on plane waves'''
 
-import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -322,7 +321,7 @@ class FFTDF(lib.StreamObject):
     get_mo_pairs_G = get_mo_pairs = fft_ao2mo.get_mo_pairs_G
 
     def update_mf(self, mf):
-        mf = copy.copy(mf)
+        mf = mf.copy()
         mf.with_df = self
         return mf
 

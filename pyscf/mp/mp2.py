@@ -19,7 +19,6 @@ RMP2
 '''
 
 
-import copy
 import numpy
 from pyscf import gto
 from pyscf import lib
@@ -636,7 +635,7 @@ class MP2(lib.StreamObject):
         if with_df is not None:
             mymp.with_df = with_df
         if mymp.with_df.auxbasis != auxbasis:
-            mymp.with_df = copy.copy(mymp.with_df)
+            mymp.with_df = mymp.with_df.copy()
             mymp.with_df.auxbasis = auxbasis
         return mymp
 

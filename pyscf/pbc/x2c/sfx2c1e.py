@@ -23,7 +23,6 @@ One-electron spin-free X2C approximation for extended systems
 
 
 from functools import reduce
-import copy
 import numpy
 import scipy.linalg
 from pyscf import lib

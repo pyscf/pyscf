@@ -17,7 +17,6 @@
 #
 
 import ctypes
-import copy
 import numpy as np
 from pyscf import lib
 from pyscf import gto

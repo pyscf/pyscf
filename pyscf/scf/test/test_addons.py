@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import copy
 import numpy
 import scipy.linalg
 
@@ -307,7 +306,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(addons.convert_to_uhf(sym_mf_u), scf.uhf_symm.UHF))
         self.assertTrue(isinstance(addons.convert_to_ghf(sym_mf_u), scf.ghf_symm.GHF))
 
-        mf1 = copy.copy(mf)
+        mf1 = mf.copy()
         self.assertTrue(isinstance(mf1.convert_from_(mf), scf.rhf.RHF))
         self.assertTrue(isinstance(mf1.convert_from_(mf_u), scf.rhf.RHF))
         self.assertFalse(isinstance(mf1.convert_from_(mf_u), scf.rohf.ROHF))
@@ -316,7 +315,7 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(isinstance(mf1.convert_from_(sym_mf_u), scf.rohf.ROHF))
         self.assertFalse(isinstance(mf1.convert_from_(sym_mf), scf.hf_symm.RHF))
         self.assertFalse(isinstance(mf1.convert_from_(sym_mf_u), scf.hf_symm.RHF))
-        mf1 = copy.copy(mf_u)
+        mf1 = mf_u.copy()
         self.assertTrue(isinstance(mf1.convert_from_(mf), scf.uhf.UHF))
         self.assertTrue(isinstance(mf1.convert_from_(mf_u), scf.uhf.UHF))
         self.assertTrue(isinstance(mf1.convert_from_(sym_mf), scf.uhf.UHF))

@@ -199,7 +199,6 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
 
         \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
     '''
-    import copy
     intor, comp = moleintor._get_intor_and_comp(cell1._add_suffix(intor), comp)
 
     if kpts is None:
@@ -211,7 +210,7 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
         kpts_lst = np.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    pcell = copy.copy(cell1)
+    pcell = cell1.copy(deep=False)
     pcell.precision = min(cell1.precision, cell2.precision)
     pcell._atm, pcell._bas, pcell._env = \
             atm, bas, env = conc_env(cell1._atm, cell1._bas, cell1._env,
@@ -795,7 +794,6 @@ def _split_basis(cell, delimiter=EXP_DELIMITER):
     Split the contracted basis to small segmant.  The new basis has more
     shells.  Each shell has less primitive basis and thus is more local.
     '''
-    import copy
     _bas = []
     _env = cell._env.copy()
     contr_coeff = []
@@ -830,7 +828,7 @@ def _split_basis(cell, delimiter=EXP_DELIMITER):
                 count += 1
         contr_coeff.append(np.vstack([np.eye(degen*nc)] * count))
 
-    pcell = copy.copy(cell)
+    pcell = cell.copy(deep=False)
     pcell._bas = np.asarray(np.vstack(_bas), dtype=np.int32)
     pcell._env = _env
     return pcell, scipy.linalg.block_diag(*contr_coeff)

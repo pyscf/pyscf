@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import sys
-import copy
 import warnings
 import numpy
 from pyscf import lib
@@ -604,7 +603,7 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
         _keys = set(('ss_value', 'ss_penalty', 'base'))
 
         def __init__(self, fcibase):
-            self.base = copy.copy (fcibase)
+            self.base = fcibase.copy()
             self.__dict__.update (fcibase.__dict__)
             self.ss_value = ss_value
             self.ss_penalty = shift
@@ -619,7 +618,7 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     fciobj.__dict__.update (new_fciobj.__dict__)
     return fciobj
 def fix_spin(fciobj, shift=.1, ss=None):
-    return fix_spin_(copy.copy(fciobj), shift, ss)
+    return fix_spin_(fciobj.copy(), shift, ss)
 
 def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     '''

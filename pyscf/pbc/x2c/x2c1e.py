@@ -26,7 +26,6 @@ Additional information can be found in [1] and references therein.
 
 
 from functools import reduce
-import copy
 import numpy
 import scipy.linalg
 from pyscf import lib

@@ -17,7 +17,6 @@
 #
 
 import ctypes
-import copy
 import h5py
 import numpy as np
 from scipy.special import gamma, gammaincc, comb
@@ -918,7 +917,7 @@ def intor_j2c(cell, omega, precision=None, kpts=None, hermi=1, shls_slice=None,
     fintor = getattr(mol_gto.moleintor.libcgto, intor)
     cintopt = lib.c_null_ptr()
 
-    pcell = copy.copy(cell)
+    pcell = cell.copy(deep=False)
     pcell.precision = min(cell.precision, cell.precision)
     pcell._atm, pcell._bas, pcell._env = \
             atm, bas, env = mol_gto.conc_env(cell._atm, cell._bas, cell._env,
@@ -1179,7 +1178,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
 
 # GTO data
     intor = cell._add_suffix(intor)
-    pcell = copy.copy(cell)
+    pcell = cell.copy(deep=False)
     pcell._atm, pcell._bas, pcell._env = \
             atm, bas, env = mol_gto.conc_env(cell._atm, cell._bas, cell._env,
                                              cell._atm, cell._bas, cell._env)

@@ -26,7 +26,7 @@ from pyscf import ao2mo
 from pyscf.cc import ccsd, rccsd, eom_rccsd, rintermediates, gintermediates
 
 def make_mycc1():
-    mf1 = copy.copy(mf)
+    mf1 = mf.copy()
     no = mol.nelectron // 2
     n = mol.nao_nr()
     nv = n - no
@@ -67,7 +67,7 @@ def setUpModule():
     mf1, mycc1, eris1 = make_mycc1()
     no, nv = mycc1.t1.shape
 
-    mycci = copy.copy(mycc1)
+    mycci = mycc1.copy()
     erisi = copy.copy(eris1)
     erisi.oooo = eris1.oooo + numpy.sin(eris1.oooo)*1j
     erisi.oooo = erisi.oooo + erisi.oooo.conj().transpose(1,0,3,2)

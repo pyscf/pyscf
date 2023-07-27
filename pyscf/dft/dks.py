@@ -21,7 +21,6 @@
 '''
 
 
-import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -118,7 +117,7 @@ class KohnShamDFT(rks.KohnShamDFT):
 
     def to_dks(self, xc=None):
         if xc is not None and xc != self.xc:
-            mf = copy.copy(self)
+            mf = self.copy()
             mf.xc = xc
             mf.converged = False
         return self

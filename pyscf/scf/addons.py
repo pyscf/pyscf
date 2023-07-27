@@ -18,7 +18,6 @@
 #          Junzi Liu <latrix1247@gmail.com>
 #          Susi Lehtola <susi.lehtola@gmail.com>
 
-import copy
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -799,9 +798,9 @@ def convert_to_uhf(mf, out=None, remove_df=False):
         # returned SCF object, whether with_df exists in SOSCF has no effects on the
         # mean-field energy and other properties.
         if getattr(mf, '_scf', None):
-            return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
+            return _update_mf_without_soscf(mf, mf._scf.copy(), remove_df)
         else:
-            return copy.copy(mf)
+            return mf.copy()
 
     else:
         known_cls = {
@@ -904,9 +903,9 @@ def convert_to_rhf(mf, out=None, remove_df=False):
     elif (isinstance(mf, scf.hf.RHF) or
           (nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF))):
         if getattr(mf, '_scf', None):
-            return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
+            return _update_mf_without_soscf(mf, mf._scf.copy(), remove_df)
         else:
-            return copy.copy(mf)
+            return mf.copy()
 
     else:
         if nelec[0] == nelec[1]:
@@ -962,9 +961,9 @@ def convert_to_ghf(mf, out=None, remove_df=False):
 
     elif isinstance(mf, scf.ghf.GHF):
         if getattr(mf, '_scf', None):
-            return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
+            return _update_mf_without_soscf(mf, mf._scf.copy(), remove_df)
         else:
-            return copy.copy(mf)
+            return mf.copy()
 
     else:
         known_cls = {
@@ -1134,7 +1133,6 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     Newton solver attributes [max_cycle_inner, max_stepsize, ah_start_tol,
     ah_conv_tol, ah_grad_trust_region, ...] can be passed through ``**newton_kwargs``.
     '''
-    import copy
     from pyscf.lib import logger
     from pyscf import df
     from pyscf.soscf import newton_ah
@@ -1156,7 +1154,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         approx_grids.level = max(0, mf.grids.level-3)
         mf1.grids = approx_grids
 
-        approx_numint = copy.copy(mf._numint)
+        approx_numint = mf._numint.copy()
         mf1._numint = approx_numint
     for key in newton_kwargs:
         setattr(mf1, key, newton_kwargs[key])
@@ -1171,7 +1169,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
         logger.note(mf, '========================================================')
         if dual_basis:
-            mf0 = copy.copy(mf)
+            mf0 = mf.copy()
             mf0.mol = pmol
             mf0 = mf0.density_fit(auxbasis)
         else:

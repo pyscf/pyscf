@@ -21,7 +21,6 @@ J-metric density fitting
 '''
 
 
-import copy
 import tempfile
 import contextlib
 import numpy
@@ -283,7 +282,7 @@ class DF(lib.StreamObject):
         if key in self._rsh_df:
             rsh_df = self._rsh_df[key]
         else:
-            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            rsh_df = self._rsh_df[key] = self.copy().reset()
             if hasattr(self, '_dataname'):
                 rsh_df._dataname = f'{self._dataname}/lr/{key}'
             logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)

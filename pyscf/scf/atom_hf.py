@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 from pyscf import gto
 from pyscf.lib import logger
@@ -29,7 +28,7 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
     elements = set([a[0] for a in mol._atom])
     logger.info(mol, 'Spherically averaged atomic HF for %s', elements)
 
-    atm_template = copy.copy(mol)
+    atm_template = mol.copy(deep=False)
     atm_template.charge = 0
     atm_template.symmetry = False  # TODO: enable SO3 symmetry here
     atm_template.atom = atm_template._atom = []

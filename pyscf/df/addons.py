@@ -17,7 +17,6 @@
 #
 
 import sys
-import copy
 import numpy
 from pyscf.lib import logger
 from pyscf import gto
@@ -204,7 +203,7 @@ def make_auxmol(mol, auxbasis=None):
 
     See also the paper JCTC, 13, 554 about generating auxiliary fitting basis.
     '''
-    pmol = copy.copy(mol)  # just need shallow copy
+    pmol = mol.copy(deep=False)
 
     if auxbasis is None:
         auxbasis = make_auxbasis(mol)

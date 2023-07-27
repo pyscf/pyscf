@@ -21,7 +21,6 @@ Second order CASSCF
 '''
 
 
-import copy
 from functools import reduce
 from itertools import product
 import numpy

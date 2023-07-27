@@ -17,7 +17,6 @@
 #
 
 
-import copy
 import ctypes
 from functools import reduce
 import numpy
@@ -72,7 +71,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             casscf.with_df = with_df
         elif getattr(casscf.with_df, 'auxbasis', None) != auxbasis:
             #logger.warn(casscf, 'DF might have been initialized twice.')
-            casscf = copy.copy(casscf)
+            casscf = casscf.copy()
             casscf.with_df = with_df
         return casscf
 

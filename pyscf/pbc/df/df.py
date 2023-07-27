@@ -30,7 +30,6 @@ J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import os
-import copy
 import ctypes
 import warnings
 import tempfile
@@ -451,7 +450,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     ao2mo_7d = df_ao2mo.ao2mo_7d
 
     def update_mp(self):
-        mf = copy.copy(self)
+        mf = self.copy()
         mf.with_df = self
         return mf
 

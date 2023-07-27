@@ -18,7 +18,6 @@ X2C 2-component HF methods
 '''
 
 from functools import reduce
-import copy
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -58,7 +57,7 @@ class X2CHelperBase(lib.StreamObject):
             mol = self.mol
 
         if self.basis is not None:
-            xmol = copy.copy(mol)
+            xmol = mol.copy(deep=False)
             xmol.build(False, False, basis=self.basis)
             return xmol, None
         elif self.xuncontract:

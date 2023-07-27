@@ -1355,8 +1355,7 @@ class CCSD(CCSDBase):
         if with_df is not None:
             mycc.with_df = with_df
         if mycc.with_df.auxbasis != auxbasis:
-            import copy
-            mycc.with_df = copy.copy(mycc.with_df)
+            mycc.with_df = mycc.with_df.copy()
             mycc.with_df.auxbasis = auxbasis
         return mycc
 

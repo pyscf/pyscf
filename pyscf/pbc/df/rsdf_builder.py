@@ -28,7 +28,6 @@ Ref:
 '''
 
 import os
-import copy
 import ctypes
 import warnings
 import tempfile

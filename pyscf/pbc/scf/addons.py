@@ -17,7 +17,6 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import copy
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -287,7 +286,7 @@ def convert_to_uhf(mf, out=None):
 
     if out is None:
         if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
-            return copy.copy(mf)
+            return mf.copy()
         else:
             if isinstance(mf, scf.kghf.KGHF):
                 raise NotImplementedError(
@@ -342,13 +341,13 @@ def convert_to_rhf(mf, out=None):
 
     elif nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF):
         if getattr(mf, '_scf', None):
-            return mol_addons._update_mf_without_soscf(mf, copy.copy(mf._scf), False)
+            return mol_addons._update_mf_without_soscf(mf, mf._scf.copy(), False)
         else:
-            return copy.copy(mf)
+            return mf.copy()
 
     else:
         if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
-            return copy.copy(mf)
+            return mf.copy()
         else:
             if isinstance(mf, scf.kghf.KGHF):
                 raise NotImplementedError(
@@ -400,7 +399,7 @@ def convert_to_ghf(mf, out=None):
 
     if isinstance(mf, scf.ghf.GHF):
         if out is None:
-            return copy.copy(mf)
+            return mf.copy()
         else:
             out.__dict__.update(mf.__dict__)
             return out

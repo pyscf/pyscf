@@ -15,7 +15,6 @@
 
 
 import unittest
-import copy
 import numpy
 from pyscf import gto
 from pyscf import scf
@@ -57,7 +56,7 @@ class KnownValues(unittest.TestCase):
 
     def setUp(self):
         self.assertTrue(mf.converged)
-        self.mf = copy.copy(mf)
+        self.mf = mf.copy()
         self.mf.mol = mf.mol.copy()
         self.mf.mo_coeff = mf.mo_coeff.copy()
         self.mf.mo_occ = mf.mo_occ.copy()

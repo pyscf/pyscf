@@ -18,7 +18,6 @@
 
 import unittest
 import numpy
-import copy
 from pyscf import lib, gto, scf, dft
 from pyscf.tdscf import rhf, rks
 from pyscf import tdscf
@@ -295,7 +294,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(w[0], 0.99997335352278072, 7)
         self.assertAlmostEqual(lib.fp(w), 0.99998775067586554, 7)
 
-        pmol = copy.copy(mol)
+        pmol = mol.copy(deep=False)
         pmol.symmetry = True
         pmol.build(0, 0)
         mf = scf.RHF(pmol).run()

@@ -24,7 +24,6 @@ Ref:
     Q. Sun, arXiv:2302.11307
 '''
 
-import copy
 import ctypes
 import numpy as np
 import scipy.linalg
