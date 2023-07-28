@@ -43,8 +43,6 @@ class KTDMixin(TDMixin):
         TDMixin.__init__(self, mf)
         warn_pbc2d_eri(mf)
 
-        log = logger.new_logger(self)
-
         if kshift_lst is None: kshift_lst = [0]
 
         self.kconserv = get_kconserv_ria(mf.cell, mf.kpts)
@@ -82,9 +80,8 @@ class KTDMixin(TDMixin):
         mf = self._scf
         if any([k != 0 for k in self.kshift_lst]):
             if mf.rsjk is not None or not isinstance(mf.with_df, pbcdf.df.DF):
-                jk_method = 'RSJK' if mf.rsjk else mf.with_df.__class__.__name__
-                logger.error(self, f'Solutions with non-zero kshift for %s are '
-                             'only supported by GDF/RSDF', self.__class__.__name__)
+                logger.error(self, 'Solutions with non-zero kshift for %s are '
+                             'only supported by GDF/RSDF')
                 raise NotImplementedError
 
     def _finalize(self):
