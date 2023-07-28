@@ -46,11 +46,6 @@ class KTDMixin(TDMixin):
         log = logger.new_logger(self)
 
         if kshift_lst is None: kshift_lst = [0]
-        if any([k != 0 for k in kshift_lst]) and not isinstance(mf.with_df, pbcdf.df.DF):
-            log.error(f'Non-zero kshift is requested for {self.__class__.__name__}, '
-                      f'but the DF method {mf.with_df.__class__.__name__} does not support '
-                      f'shifted J/K build. Please rerun with GDF/RSDF.\n')
-            raise RuntimeError
 
         self.kconserv = get_kconserv_ria(mf.cell, mf.kpts)
         self.kshift_lst = kshift_lst
@@ -81,6 +76,16 @@ class KTDMixin(TDMixin):
         if not self._scf.converged:
             log.warn('Ground state SCF is not converged')
         log.info('\n')
+
+    def check_sanity(self):
+        TDMixin.check_sanity(self)
+        mf = self._scf
+        if any([k != 0 for k in self.kshift_lst]):
+            if mf.rsjk is not None or not isinstance(mf.with_df, pbcdf.df.DF):
+                jk_method = 'RSJK' if mf.rsjk else mf.with_df.__class__.__name__
+                logger.error(self, f'Solutions with non-zero kshift for %s are '
+                             'only supported by GDF/RSDF', self.__class__.__name__)
+                raise NotImplementedError
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''

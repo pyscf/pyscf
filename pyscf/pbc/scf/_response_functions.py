@@ -200,8 +200,11 @@ def _get_jk_kshift(mf, dm_kpts, hermi, kpts, kshift, with_j=True, with_k=True):
     return vj, vk
 def _get_jk(mf, cell, dm1, hermi, kpts, kshift, with_j=True, with_k=True):
     from pyscf.pbc import df
-    if not isinstance(mf.with_df, df.df.DF) or kshift == 0:
+    if kshift == 0:
         return mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts, with_j=with_j, with_k=with_k)
+    elif mf.rsjk is not None or not isinstance(mf.with_df, df.df.DF):
+        lib.logger.error(mf, 'Non-zero kshift is only supported by GDF/RSDF.')
+        raise NotImplementedError
     else:
         return _get_jk_kshift(mf, dm1, hermi, kpts, kshift, with_j=with_j, with_k=with_k)
 def _get_j(mf, cell, dm1, hermi, kpts, kshift):
