@@ -42,7 +42,7 @@ def tddft(mf):
 dft.rks.RKS.TDA           = lib.class_as_method(rhf.TDA)
 dft.rks.RKS.TDHF          = None
 dft.rks.RKS.TDDFTNoHybrid = tddft
-dft.rks.RKS.CasidaTDDFT   = tddft
+dft.rks.RKS.CasidaTDDFT   = lib.class_as_method(CasidaTDDFT)
 dft.rks.RKS.TDDFT         = tddft
 #dft.rks.RKS.dTDA          = lib.class_as_method(dTDA)
 #dft.rks.RKS.dRPA          = lib.class_as_method(dRPA)
