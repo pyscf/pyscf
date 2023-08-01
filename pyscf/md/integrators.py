@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Matthew Hennefarth <matthew.hennefarth@gmail.com>
+# Authors: Matthew Hennefarth <matthew.hennefarth@gmail.com>, Aniruddha Seal <aniruddhaseal2011@gmail.com>
 
 import os
 import numpy as np
@@ -152,12 +152,21 @@ class _Integrator(lib.StreamObject):
 
         dt : float
             Time between steps. Given in atomic units.
+            
+        T  : float
+            Target temperature for the NVT Ensemble. Given in K.
+            
+        taut   : float
+            Time constant for Berendsen temperature coupling. Given in atomic units. 
 
         stdout : file object
             Default is self.scanner.mol.stdout.
 
         energy_output : file object
             Stream to write energy to during the course of the simulation.
+
+        temp_output : file object
+            Stream to write temperature to during the course of the simulation.
 
         trajectory_output : file object
             Stream to write the trajectory to during the course of the
@@ -202,11 +211,14 @@ class _Integrator(lib.StreamObject):
         self.verbose = self.mol.verbose
         self.steps = 1
         self.dt = 10
+        self.T = None
+        self.taut = None        
         self.frames = None
         self.epot = None
         self.ekin = None
         self.time = 0
         self.energy_output = None
+        self.temp_output = None
         self.trajectory_output = None
         self.callback = None
 
@@ -239,7 +251,7 @@ class _Integrator(lib.StreamObject):
                 Print level
 
         Returns:
-            _Integrator with final epot, ekin, mol, and veloc of the simulation.
+            _Integrator with final epot, ekin, temp, mol, and veloc of the simulation.
         '''
 
         if veloc is not None:
@@ -279,6 +291,25 @@ class _Integrator(lib.StreamObject):
                     'time          Epot                 Ekin                 '
                     'Etot\n'
                 )
+                
+        # avoid opening energy_output file twice
+        if type(self.temp_output) is str:
+            if self.verbose > logger.QUIET:
+                if os.path.isfile(self.temp_output):
+                    print('overwrite temp output file: %s' %
+                          self.temp_output)
+                else:
+                    print('temp output file: %s' % self.temp_output)
+
+            if self.temp_output == '/dev/null':
+                self.temp_output = open(os.devnull, 'w')
+
+            else:
+                self.temp_output = open(self.temp_output, 'w')
+                self.temp_output.write(
+                    'time          temp\n'
+                )
+
 
         # avoid opening trajectory_output file twice
         if type(self.trajectory_output) is str:
@@ -310,6 +341,11 @@ class _Integrator(lib.StreamObject):
         log.info('******** BOMD flags ********')
         log.info('dt = %f', self.dt)
         log.info('Iterations = %d', self.steps)
+        
+        if self.T is not None:
+        	log.info('Temperature = %f', self.T)
+        	log.info('tau_T = %f', self.taut)
+        
         log.info('                   Initial Velocity                  ')
         log.info('             vx              vy              vz')
         for i, (e, v) in enumerate(zip(self.mol.elements, self.veloc)):
@@ -322,6 +358,10 @@ class _Integrator(lib.StreamObject):
         assert self.veloc is not None
         assert self.veloc.shape == (self.mol.natm, 3)
         assert self.scanner is not None
+        
+        if self.T is not None:
+                assert self.T > 0
+                assert self.taut is not None
 
         return self
 
@@ -361,6 +401,9 @@ class _Integrator(lib.StreamObject):
 
             if self.energy_output is not None:
                 self._write_energy()
+                
+            if self.temp_output is not None:
+                self._write_temp()
 
             if self.trajectory_output is not None:
                 self._write_coord()
@@ -407,6 +450,16 @@ class _Integrator(lib.StreamObject):
 
         # If we don't flush, there is a possibility of losing data
         self.energy_output.flush()
+        
+    def _write_temp(self):
+        '''Writes out the system temperature to the
+        self.temp_output stream. '''
+
+        output = '%8.2f  %.12E' % (self.time, self.temperature())
+        self.temp_output.write(output + '\n')
+
+        # If we don't flush, there is a possibility of losing data
+        self.temp_output.flush()
 
     def _write_coord(self):
         '''Writes out the current geometry to the self.trajectory_output
@@ -493,4 +546,99 @@ class VelocityVerlet(_Integrator):
         '''Compute the next velocity using the Velocity Verlet algorithm. The
         necessary equations of motion for the velocity is
             v(t_i+1) = v(t_i) + 0.5(a(t_i+1) + a(t_i))'''
+        return self.veloc + 0.5 * self.dt * (self.accel + next_accel)
+        
+        
+class NVTBerendson(_Integrator):
+    '''Berendsen (constant N, V, T) molecular dynamics
+
+    Args:
+        method : lib.GradScanner or rhf.GradientsMixin instance, or
+        has nuc_grad_method method.
+            Method by which to compute the energy gradients and energies
+            in order to propagate the equations of motion. Realistically,
+            it can be any callable object such that it returns the energy
+            and potential energy gradient when given a mol.
+
+    Attributes:
+        accel : ndarray
+            Current acceleration for the simulation. Values are given
+            in atomic units (Bohr/a.u.^2). Dimensions is (natm, 3) such as
+
+             [[x1, y1, z1],
+             [x2, y2, z2],
+             [x3, y3, z3]]
+    '''
+
+    def __init__(self, method, **kwargs):
+        super().__init__(method, **kwargs)
+        self.accel = None
+
+    def _next(self):
+        '''Computes the next frame of the simulation and sets all internal
+         variables to this new frame. First computes the new geometry,
+         then the next acceleration, and finally the velocity, all according
+         to the Velocity Verlet algorithm.
+
+        Returns:
+            The next frame of the simulation.
+        '''
+
+        # If no acceleration, compute that first, and then go
+        # onto the next step
+        if self.accel is None:
+            next_epot, next_accel = self._compute_accel()
+
+        else:
+            self._scale_velocities() 
+            self.mol.set_geom_(self._next_geometry(), unit='B')
+            self.mol.build()
+            next_epot, next_accel = self._compute_accel()
+            self.veloc = self._next_velocity(next_accel)
+
+        self.epot = next_epot
+        self.ekin = self.compute_kinetic_energy()
+        self.accel = next_accel
+
+        return _toframe(self)
+
+    def _compute_accel(self):
+        '''Given the current geometry, computes the acceleration
+        for each atom.'''
+        e_tot, grad = self.scanner(self.mol)
+        if not self.scanner.converged:
+            raise RuntimeError('Gradients did not converge!')
+
+        a = -1 * grad / self._masses.reshape(-1, 1)
+        return e_tot, a
+        
+    def _scale_velocities(self):
+        '''NVT Berendsen velocity scaling
+        v_rescale(t) = v(t) * (1 + ((T_target/T - 1) * (/delta t / taut)))^(0.5)
+        '''
+        tautscl = self.dt / self.taut
+        scl_temp = np.sqrt(1.0 + (self.T / self.temperature() - 1.0) * tautscl)
+        
+        # Limit the velocity scaling to reasonable values
+        if scl_temp > 1.1:
+            scl_temp = 1.1
+        if scl_temp < 0.9:
+            scl_temp = 0.9
+
+        self.veloc = self.veloc * scl_temp
+        return
+
+
+    def _next_geometry(self):
+        '''Computes the next geometry using the Velocity Verlet algorithm. The
+        necessary equations of motion for the position is
+            r(t_i+1) = r(t_i) + /delta t * v(t_i) + 0.5(/delta t)^2 a(t_i)
+        '''
+        return self.mol.atom_coords() + self.dt * self.veloc + \
+            0.5 * (self.dt ** 2) * self.accel
+
+    def _next_velocity(self, next_accel):
+        '''Compute the next velocity using the Velocity Verlet algorithm. The
+        necessary equations of motion for the velocity is
+            v(t_i+1) = v(t_i) + /delta t * 0.5(a(t_i+1) + a(t_i))'''
         return self.veloc + 0.5 * self.dt * (self.accel + next_accel)
