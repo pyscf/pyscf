@@ -90,7 +90,9 @@ class M3SOSCF:
     nr_stepsize = 0.0
 
     max_cycle = 200
-
+    
+    # Debugging for turning off Differential Evolution
+    _ignore_de = False
 
 
     def __init__(self, mf, agents, purge_solvers=0.5, convergence=8, init_scattering=0.3,
@@ -285,6 +287,7 @@ class M3SOSCF:
         -99.9575044930158
         '''
         log = logger.new_logger(self.mf, self.mf.mol.verbose)
+        cpu_timer0 = (logger.process_clock(), logger.perf_counter())
 
         if numpy.einsum('i->', self.mo_coeffs.flatten()) == 0:
             for sc in self.subconvergers:
@@ -295,8 +298,9 @@ class M3SOSCF:
         self.subconvergers[0].setMoCoeffs(self.mo_basis_coeff)
         self.mo_coeffs[0,0] = self.mo_basis_coeff
 
-        if self.agents >= 2:
-            for j in range(1, self.agents):
+        cpu_timer0 = logger.timer(self.mf, 'First M3 Initialisation', *cpu_timer0)
+        if self.agents >= 2 or self._ignore_de:
+            for j in range(1 * (not self._ignore_de), self.agents):
                 if self.method == 'uhf' or self.method == 'uks':
                     mo_pert_a = numpy.random.random(1)[0] * self.init_scattering * \
                             sigutils.vectorToMatrix(numpy.random.uniform(low=-0.5, high=0.5,
@@ -316,6 +320,8 @@ class M3SOSCF:
                     self.subconvergers[j].setMoCoeffs(mo_coeffs_l)
                     self.mo_coeffs[0,j] = mo_coeffs_l
 
+        cpu_timer0 = logger.timer(self.mf, 'Generate Initial MO Coeffs', *cpu_timer0)
+
         total_cycles = self.max_cycle
         final_energy = 0.0
         scf_conv = False
@@ -330,6 +336,7 @@ class M3SOSCF:
         guess_energy = self.mf.energy_elec(self.mf.make_rdm1(self.mo_coeffs[0,0,:], mo_occs))[0]
         log.info("Guess energy: " + str(guess_energy))
 
+        cpu_timer1 = logger.timer(self.mf, 'Second M3 Initialisation phase', *cpu_timer0)
         for cycle in range(self.max_cycle):
 
             # handle MO Coefficient cursor for I/O
@@ -350,7 +357,7 @@ class M3SOSCF:
             log.info("Iteration: " + str(cycle))
 
             purge_indices = None
-
+            
             if cycle > 0 and len(self.subconvergers) > 1:
                 sorted_indices = numpy.argsort(self.current_trusts[readCursor])
                 purge_indices = sorted_indices[0:min(int(len(sorted_indices) * (self.purge_subconvergers)),
@@ -383,12 +390,11 @@ class M3SOSCF:
 
             for j in range(len(self.subconvergers)):
                 newCursor = readCursor
-                if type(purge_indices) is numpy.ndarray:
+                if type(purge_indices) is numpy.ndarray and not self._ignore_de:
                     if self.subconverger_indices[j] in purge_indices:
                         newCursor = writeCursor
                 self.subconvergers[j].setMoCoeffs(self.mo_coeffs[newCursor,self.subconverger_indices[j]])
-
-
+            
             # generate local solutions and trusts
 
             # buffer array for new mocoeffs
@@ -398,9 +404,11 @@ class M3SOSCF:
             if len(self.subconvergers) > 1:
                 sorted_trusts = numpy.argsort(self.current_trusts[readCursor, 1:]) + 1
 
+            cpu_timer2 = logger.timer(self.mf, 'Purging MO Coefficients', *cpu_timer1)
             for j in range(len(self.subconvergers)):
 
-                sol, trust = self.subconvergers[j].getLocalSolAndTrust(h1e, s1e)
+                sol, trust, etot = self.subconvergers[j].getLocalSolAndTrust(h1e, s1e)
+                self.current_energies[j] = etot
 
                 numpy.set_printoptions(linewidth=500, precision=2)
                 log.info("J: " + str(j) + " Trust: " + str(trust))
@@ -427,6 +435,8 @@ class M3SOSCF:
                     newMoCoeffs[writeTrustIndex] = sol
                     self.subconverger_indices[j] = writeTrustIndex
 
+                cpu_timer2 = logger.timer(self.mf, f'Solving for Local Sol and Trust, Iteration {cycle}, Subconverger {j}', *cpu_timer2) 
+
             # update moCoeff array with buffer
             self.mo_coeffs[writeCursor] = numpy.copy(newMoCoeffs)
 
@@ -438,14 +448,14 @@ class M3SOSCF:
             log.info("Highest Trust Index: " + str(highestTrustIndex))
             log.info("Lowest Energy: " + str(numpy.min(self.current_energies)))
             log.info("Lowest Energy Index: " + str(numpy.argmin(self.current_energies)))
-            # current energy
-
+            # current energy (redundant)
+            
             for j in range(len(self.current_energies)):
-                self.current_energies[j] = self.mf.energy_elec(self.mf.make_rdm1(self.mo_coeffs[writeCursor,j],
-                        self.mf.mo_occ))[0]
+                #self.current_energies[j] = self.mf.energy_elec(self.mf.make_rdm1(self.mo_coeffs[writeCursor,j],
+                #        self.mf.mo_occ))[0]
                 log.info("ENERGY (" + str(j) + "): " + str(self.current_energies[j]))
-
             log.info("")
+
 
             scf_tconv =  1 - self.current_trusts[writeCursor,highestTrustIndex]**4 < self.convergence_thresh
             current_energy = numpy.min(self.current_energies)
@@ -484,11 +494,14 @@ class M3SOSCF:
             if self.mo_cursor >= len(self.mo_coeffs):
                 self.mo_cursor = 0
 
+            cpu_timer2 = logger.timer(self.mf, 'Checking convergence', *cpu_timer2)
+            cpu_timer1 = logger.timer(self.mf, 'Total Cycle time', *cpu_timer1)
+
         log.info("Final Energy: " + str(final_energy) + " ha")
         log.info("Cycles: " + str(total_cycles))
 
+        cpu_timer0 = logger.timer(self.mf, 'Total SCF time', *cpu_timer0)
         self.dumpInfo(log, total_cycles)
-
 
         return scf_conv, final_energy, final_mo_energy, final_mo_coeffs, mo_occs
 
@@ -714,13 +727,13 @@ class Subconverger:
         '''
 
         old_dm = self.m3.mf.make_rdm1(self.mo_coeffs, self.m3.mf.mo_occ)
-        esol, converged = self.solveForLocalSol()
+        esol, converged, etot = self.solveForLocalSol()
         new_dm = self.m3.mf.make_rdm1(esol, self.m3.mf.mo_occ)
 
         trust = self.getTrust(old_dm, new_dm, converged)
 
         sol = esol
-        return sol, trust
+        return sol, trust, etot
 
 
     def solveForLocalSol(self):
@@ -735,10 +748,11 @@ class Subconverger:
         '''
 
         mo_occ = self.m3.mf.mo_occ
-        self.newton.kernel(mo_coeff=numpy.copy(self.mo_coeffs), mo_occ=mo_occ)
+        etot = self.newton.kernel(mo_coeff=numpy.copy(self.mo_coeffs), mo_occ=mo_occ) 
+        conv = self.newton.converged
         new_mo_coeffs = self.newton.mo_coeff
 
-        return new_mo_coeffs, self.newton.converged
+        return new_mo_coeffs, conv, etot
 
     def setMoCoeffs(self, moCoeffs):
         '''
