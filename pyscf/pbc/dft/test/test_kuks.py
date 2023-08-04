@@ -91,4 +91,3 @@ C, 0.8917,  2.6751,  2.6751'''
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.kuks")
     unittest.main()
-

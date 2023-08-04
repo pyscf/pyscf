@@ -104,7 +104,7 @@ class KnownValues(unittest.TestCase):
     def test_finite_diff_b3lyp_hess(self):
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-14
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
         self.assertAlmostEqual(lib.fp(hess), -0.7590878171493624, 6)
@@ -162,7 +162,7 @@ class KnownValues(unittest.TestCase):
     def test_finite_diff_b3lyp_hess_high_cost(self):
         mf = dft.RKS(h4)
         mf.grids.level = 4
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf.conv_tol = 1e-14
         mf.kernel()
         e2 = mf.Hessian().kernel()

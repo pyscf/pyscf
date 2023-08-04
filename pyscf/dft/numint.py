@@ -1068,7 +1068,7 @@ def nr_sap_vxc(ni, mol, grids, max_memory=2000, verbose=None):
         # Form potential
         for ia, z in enumerate(atom_charges):
             rnuc = numpy.linalg.norm(atom_coords[ia] - coords, axis=1)
-            Zeff = sap_effective_charge(atom_charges[ia], rnuc)
+            Zeff = sap_effective_charge(z, rnuc)
             vxc -= Zeff/rnuc
 
         aow = _scale_ao(ao, weight*vxc, out=aow)

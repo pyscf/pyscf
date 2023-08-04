@@ -237,7 +237,7 @@ class KnownValues(unittest.TestCase):
 
     def test_mom_occ(self):
         mf = dft.UKS(mol)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf.scf()
         mo0 = mf.mo_coeff
         occ = mf.mo_occ

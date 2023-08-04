@@ -70,8 +70,8 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
-    vj_kpts = aft_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpts_band)
-    vj_kpts += df_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpts_band)
+    vj_kpts = df_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpts_band)
+    vj_kpts += aft_jk.get_j_kpts(mydf, dm_kpts, hermi, kpts, kpts_band)
     return vj_kpts
 
 
@@ -81,8 +81,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         logger.warn(mydf, 'MDF does not support exxdiv %s. '
                     'exxdiv needs to be "ewald" or None', exxdiv)
         raise RuntimeError('GDF does not support exxdiv %s' % exxdiv)
-    vk_kpts = aft_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpts_band, exxdiv)
-    vk_kpts += df_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpts_band, None)
+    vk_kpts = df_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpts_band, None)
+    vk_kpts += aft_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpts_band, exxdiv)
     return vk_kpts
 
 

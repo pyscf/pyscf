@@ -164,8 +164,8 @@ def make_L1(pcmobj, r_vdw, ylm_1sph, fi):
             vjk = r_vdw[ja] * coords_1sph + atom_coords[ja] - atom_coords[ka]
             rv = lib.norm(vjk, axis=1)
             tjk = rv / r_vdw[ka]
-            wjk0 = pcmobj.regularize_xt(tjk, eta, r_vdw[ka])
-            wjk1 = regularize_xt1(tjk, eta*r_vdw[ka])
+            wjk0 = pcmobj.regularize_xt(tjk, eta)
+            wjk1 = regularize_xt1(tjk, eta)
             sjk = vjk.T / rv
             wjk1 = 1./r_vdw[ka] * wjk1 * sjk
 
@@ -243,7 +243,7 @@ def make_fi1(pcmobj, r_vdw):
             v = r_vdw[ia]*coords_1sph + atom_coords[ia] - atom_coords[ja]
             rv = lib.norm(v, axis=1)
             t = rv / r_vdw[ja]
-            xt1 = regularize_xt1(t, eta*r_vdw[ja])
+            xt1 = regularize_xt1(t, eta)
             s_ij = v.T / rv
             xt1 = 1./r_vdw[ja] * xt1 * s_ij
             fi1[ia,:,ia] += xt1

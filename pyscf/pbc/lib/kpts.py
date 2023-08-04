@@ -59,6 +59,7 @@ def make_kpts_ibz(kpts, tol=KPT_DIFF_TOL):
     ibz2bz_k = []
     for k in range(nkpts-1, -1, -1):
         if bz2bz_k[k] == -1:
+            # Note:, bz2bz_ks[k] has duplicated index
             bz2bz_k[bz2bz_ks[k]] = k
             ibz2bz_k.append(k)
     ibz2bz_k = np.array(ibz2bz_k[::-1])

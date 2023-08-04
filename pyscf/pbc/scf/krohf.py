@@ -49,7 +49,7 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
         mo_b = mo_coeff_kpts[k][:,occ==2]
         dma.append(np.dot(mo_a, mo_a.conj().T))
         dmb.append(np.dot(mo_b, mo_b.conj().T))
-    return lib.asarray((dma,dmb))
+    return lib.tag_array((dma, dmb), mo_coeff=mo_coeff_kpts, mo_occ=mo_occ_kpts)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -260,7 +260,6 @@ init_guess_by_chkfile = kuhf.init_guess_by_chkfile
 class KROHF(khf.KRHF, pbcrohf.ROHF):
     '''UHF class with k-point sampling.
     '''
-    conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
     direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
 
@@ -294,52 +293,23 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-#?    def get_init_guess(self, cell=None, key='minao'):
-#?        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
-#?        if dm_kpts.ndim != 4:  # The KRHF initial guess
-#?            # dm_kpts shape should be (spin, nkpts, nao, nao)
-#?            dm_kpts = lib.asarray([dm_kpts*.5,]*2)
-#?        return dm_kpts
-#?
     def get_init_guess(self, cell=None, key='minao'):
-        if cell is None:
-            cell = self.cell
-        dm_kpts = None
-        key = key.lower()
-        if key == '1e' or key == 'hcore':
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif getattr(cell, 'natm', 0) == 0:
-            logger.info(self, 'No atom found in cell. Use 1e initial guess')
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif key == 'atom':
-            dm = self.init_guess_by_atom(cell)
-        elif key[:3] == 'chk':
-            try:
-                dm_kpts = self.from_chk()
-            except (IOError, KeyError):
-                logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
-                            self.chkfile)
-                dm = self.init_guess_by_minao(cell)
-        else:
-            dm = self.init_guess_by_minao(cell)
-
-        if dm_kpts is None:
-            nkpts = len(self.kpts)
+        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
+        assert dm_kpts.shape[0] == 2
+        nkpts = len(self.kpts)
+        if dm_kpts.ndim != 4:
             # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
-            dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
+            dm_kpts = np.repeat(dm_kpts[:,None,:,:], nkpts, axis=1)
 
         ne = np.einsum('xkij,kji->', dm_kpts, self.get_ovlp(cell)).real
-        # FIXME: consider the fractional num_electron or not? This maybe
-        # relates to the charged system.
-        nkpts = len(self.kpts)
         nelec = float(sum(self.nelec))
-        if np.any(abs(ne - nelec) > 1e-7*nkpts):
+        if np.any(abs(ne - nelec) > 0.01*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
                          'of initial guess density matrix (Ne/cell = %g)!\n'
                          '  This can cause huge error in Fock matrix and '
                          'lead to instability in SCF for low-dimensional '
                          'systems.\n  DM is normalized wrt the number '
-                         'of electrons %g', ne/nkpts, nelec/nkpts)
+                         'of electrons %s', ne.mean()/nkpts, nelec/nkpts)
             dm_kpts *= nelec / ne
         return dm_kpts
 
@@ -363,14 +333,8 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
             mo_occ_b = [(x ==2).astype(np.double) for x in dm_kpts.mo_occ]
             dm_kpts = lib.tag_array(dm_kpts, mo_coeff=(mo_coeff,mo_coeff),
                                     mo_occ=(mo_occ_a,mo_occ_b))
-        if self.rsjk and self.direct_scf:
-            ddm = dm_kpts - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
-            vhf = vj[0] + vj[1] - vk
-            vhf += vhf_last
-        else:
-            vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-            vhf = vj[0] + vj[1] - vk
+        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+        vhf = vj[0] + vj[1] - vk
         return vhf
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):

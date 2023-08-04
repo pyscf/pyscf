@@ -59,7 +59,7 @@ def type1_by_shell(mol, shls, cart=False):
         mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
         mol._env.ctypes.data_as(ctypes.c_void_p))
     cache = numpy.empty(cache_size)
-    buf = numpy.empty((di,dj), order='F')
+    buf = numpy.zeros((di,dj), order='F')
 
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
@@ -88,7 +88,7 @@ def type2_by_shell(mol, shls, cart=False):
         mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
         mol._env.ctypes.data_as(ctypes.c_void_p))
     cache = numpy.empty(cache_size)
-    buf = numpy.empty((di,dj), order='F')
+    buf = numpy.zeros((di,dj), order='F')
 
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
@@ -113,7 +113,7 @@ def so_by_shell(mol, shls):
     bas = numpy.vstack((mol._bas, mol._ecpbas))
     mol._env[AS_ECPBAS_OFFSET] = len(mol._bas)
     mol._env[AS_NECPBAS] = len(mol._ecpbas)
-    buf = numpy.empty((di,dj), order='F', dtype=numpy.complex128)
+    buf = numpy.zeros((di,dj), order='F', dtype=numpy.complex128)
     cache = numpy.empty(buf.size*48+100000)
     fn = libecp.ECPso_spinor
     fn(buf.ctypes.data_as(ctypes.c_void_p),

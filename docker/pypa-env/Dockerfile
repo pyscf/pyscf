@@ -1,14 +1,9 @@
 #FROM quay.io/pypa/manylinux2014_x86_64:latest
 #RUN yum install -y openblas-devel.x86_64
 #
-FROM quay.io/pypa/manylinux2010_x86_64:2022-08-05-4535177
+FROM quay.io/pypa/manylinux2014_x86_64:2023-03-26-14247e5
 
-# libquadmath from devtoolset-8-libquadmath-devel.x86_64 was not built with -fPIC.
-# Remove libquadmath-devel and restore the system default libquadmath.so
-RUN yum remove -y devtoolset-8-libquadmath-devel.x86_64 && \
-    yum install -y libquadmath.x86_64 && \
-    ln -fs libquadmath.so.0 /usr/lib64/libquadmath.so
-
+RUN ln -s libquadmath.so.0 /usr/lib64/libquadmath.so
 RUN yum install -y openblas-devel.x86_64 gcc && \
     yum clean all && \
     rm -rf /var/cache/yum

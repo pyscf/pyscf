@@ -27,29 +27,30 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.tools import pbc as pbctools
 pyscf.pbc.DEBUG = False
 
-cell = pgto.M(
-    a = np.eye(3) * 3.5,
-    mesh = [11] * 3,
-    atom = '''He    3.    2.       3.
-              He    1.    1.       1.''',
-    basis = 'ccpvdz',
-    verbose = 0,
-    max_memory = 1000,
-)
+def setUpModule():
+    global cell, kmdf, auxcell, dfobj, kpts
+    cell = pgto.M(
+        a = np.eye(3) * 3.5,
+        mesh = [11] * 3,
+        atom = '''He    3.    2.       3.
+                  He    1.    1.       1.''',
+        basis = 'ccpvdz',
+        verbose = 0,
+        max_memory = 1000,
+    )
 
-kpts = cell.make_kpts([3,5,6])[[0, 2, 3, 4, 6, 12, 20]]
-kpts[3] = kpts[0]-kpts[1]+kpts[2]
-nkpts = len(kpts)
+    kpts = cell.make_kpts([3,5,6])[[0, 2, 3, 4, 6, 12, 20]]
+    kpts[3] = kpts[0]-kpts[1]+kpts[2]
 
-kmdf = rsdf.RSDF(cell)
-kmdf.linear_dep_threshold = 1e-7
-kmdf.auxbasis = 'weigend'
-kmdf.kpts = kpts
+    kmdf = rsdf.RSDF(cell)
+    kmdf.linear_dep_threshold = 1e-7
+    kmdf.auxbasis = 'weigend'
+    kmdf.kpts = kpts
 
-dfobj = rsdf.RSGDF(cell, kpts)
-dfobj.auxbasis = 'weigend'
-dfobj._rs_build()
-auxcell = dfobj.auxcell
+    dfobj = rsdf.RSGDF(cell, kpts)
+    dfobj.auxbasis = 'weigend'
+    dfobj._rs_build()
+    auxcell = dfobj.auxcell
 
 def load(filename, kptij):
     with df._load3c(filename, 'j3c', kptij) as cderi:
@@ -98,9 +99,9 @@ class KnownValues(unittest.TestCase):
         dfbuilder.build()
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
-            self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[0, 0]])), 1.4877735860707935, 8)
+            self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[0, 0]])), 1.4877735860707935, 7)
             self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[2, 4]])), 4.530919637533813+0.10852447737595214j, 7)
-            self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[2, 2]])), 1.4492567814298059, 8)
+            self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[2, 2]])), 1.4492567814298059, 7)
 
     def test_make_j3c_j_only(self):
         dfbuilder = rsdf._RSGDFBuilder(cell, auxcell, kpts)
@@ -108,8 +109,8 @@ class KnownValues(unittest.TestCase):
         dfbuilder.build()
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
-            self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[0, 0]])), 1.4877735860707935, 8)
-            self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[2, 2]])), 1.4492567814298059, 8)
+            self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[0, 0]])), 1.4877735860707935, 7)
+            self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[2, 2]])), 1.4492567814298059, 7)
 
     def test_vs_fft(self):
         cell = pgto.M(

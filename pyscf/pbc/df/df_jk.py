@@ -78,7 +78,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
             log.warn('DF integrals for band k-points were not found %s. '
                      'DF integrals will be rebuilt to include band k-points.',
                      mydf._cderi)
-        mydf.build(kpts_band=kpts_band)
+        mydf.build(j_only=True, kpts_band=kpts_band)
         t0 = log.timer_debug1('Init get_j_kpts', *t0)
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -121,12 +121,18 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     weight = 1./nkpts
     rhoR *= weight
     rhoI *= weight
-    vjR = numpy.zeros((nset,nband,nao_pair))
-    vjI = numpy.zeros((nset,nband,nao_pair))
+    if hermi == 0:
+        aos2symm = False
+        vjR = numpy.zeros((nset,nband,nao**2))
+        vjI = numpy.zeros((nset,nband,nao**2))
+    else:
+        aos2symm = True
+        vjR = numpy.zeros((nset,nband,nao_pair))
+        vjI = numpy.zeros((nset,nband,nao_pair))
     for k, kpt in enumerate(kpts_band):
         kptii = numpy.asarray((kpt,kpt))
         p1 = 0
-        for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, True):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, aos2symm):
             p0, p1 = p1, p1+LpqR.shape[0]
             #:Lpq = (LpqR + LpqI*1j)#.reshape(-1,nao,nao)
             #:vjR[:,k] += numpy.dot(rho[:,p0:p1], Lpq).real
@@ -144,7 +150,8 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
         vj_kpts = vjR
     else:
         vj_kpts = vjR + vjI*1j
-    vj_kpts = lib.unpack_tril(vj_kpts.reshape(-1,nao_pair))
+    if aos2symm:
+        vj_kpts = lib.unpack_tril(vj_kpts.reshape(-1,nao_pair))
     vj_kpts = vj_kpts.reshape(nset,nband,nao,nao)
 
     log.timer('get_j', *t0)
@@ -555,6 +562,16 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
            kpts_band=None, with_j=True, with_k=True, exxdiv=None):
     '''JK for given k-point'''
+    log = logger.Logger(mydf.stdout, mydf.verbose)
+    t0 = (logger.process_clock(), logger.perf_counter())
+    if mydf._cderi is None or not mydf.has_kpts(kpts_band):
+        if mydf._cderi is not None:
+            log.warn('DF integrals for band k-points were not found %s. '
+                     'DF integrals will be rebuilt to include band k-points.',
+                     mydf._cderi)
+        mydf.build(j_only=not with_k, kpts_band=kpts_band)
+        t0 = log.timer_debug1('Init get_jk', *t0)
+
     vj = vk = None
     if kpts_band is not None and abs(kpt-kpts_band).sum() > 1e-9:
         kpt = numpy.reshape(kpt, (1,3))
@@ -565,16 +582,6 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         return vj, vk
 
     cell = mydf.cell
-    log = logger.Logger(mydf.stdout, mydf.verbose)
-    t0 = (logger.process_clock(), logger.perf_counter())
-    if mydf._cderi is None or not mydf.has_kpts(kpts_band):
-        if mydf._cderi is not None:
-            log.warn('DF integrals for band k-points were not found %s. '
-                     'DF integrals will be rebuilt to include band k-points.',
-                     mydf._cderi)
-        mydf.build(kpts_band=kpts_band)
-        t0 = log.timer_debug1('Init get_jk', *t0)
-
     dm = numpy.asarray(dm, order='C')
     dms = _format_dms(dm, [kpt])
     nset, _, nao = dms.shape[:3]

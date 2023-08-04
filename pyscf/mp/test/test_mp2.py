@@ -23,7 +23,7 @@ from pyscf import ao2mo
 from pyscf import mp
 
 def setUpModule():
-    global mol, mf
+    global mol, mf, mf1
     mol = gto.Mole()
     mol.verbose = 7
     mol.output = '/dev/null'
@@ -36,7 +36,7 @@ def setUpModule():
                  'O': 'cc-pvdz',}
     mol.build()
     mf = scf.RHF(mol)
-    mf.conv_tol = 1e-14
+    mf.conv_tol = 1e-12
     mf.scf()
 
 def tearDownModule():
@@ -232,6 +232,7 @@ class KnownValues(unittest.TestCase):
         e1 = pt.kernel()[0]
         pt = mp.mp2.MP2(mf.density_fit('weigend'))
         e2 = pt.kernel()[0]
+        self.assertAlmostEqual(e1, -0.20425449198652196, 8)
         self.assertAlmostEqual(e1, e2, 8)
 
     def test_rdm_complex(self):

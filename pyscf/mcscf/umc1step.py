@@ -30,7 +30,7 @@ import pyscf.gto
 import pyscf.scf
 from pyscf.lib import logger
 from pyscf.mcscf import ucasci
-from pyscf.mcscf.mc1step import expmat, rotate_orb_cc
+from pyscf.mcscf.mc1step import expmat, rotate_orb_cc, max_stepsize_scheduler, as_scanner
 from pyscf.mcscf import umc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import __config__
@@ -803,15 +803,8 @@ class UCASSCF(ucasci.UCASCI):
         #return max(self.max_cycle_micro, int(self.max_cycle_micro-1-log_norm_ddm))
         return self.max_cycle_micro
 
-    def max_stepsize_scheduler(self, envs):
-        if self._max_stepsize is None:
-            self._max_stepsize = self.max_stepsize
-        if envs['de'] > self.conv_tol:  # Avoid total energy increasing
-            self._max_stepsize *= .5
-            logger.debug(self, 'set max_stepsize to %g', self._max_stepsize)
-        else:
-            self._max_stepsize = numpy.sqrt(self.max_stepsize*self.max_stepsize)
-        return self._max_stepsize
+    max_stepsize_scheduler=max_stepsize_scheduler
+    as_scanner=as_scanner
 
     @property
     def max_orb_stepsize(self):  # pragma: no cover
@@ -820,6 +813,10 @@ class UCASSCF(ucasci.UCASCI):
     def max_orb_stepsize(self, x):  # pragma: no cover
         sys.stderr.write('WARN: Attribute "max_orb_stepsize" was replaced by "max_stepsize"\n')
         self.max_stepsize = x
+
+    def reset(self, mol=None):
+        ucasci.UCASCI.reset(self, mol=mol)
+        self._max_stepsize = None
 
 CASSCF = UCASSCF
 

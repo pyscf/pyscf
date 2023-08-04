@@ -22,8 +22,6 @@ Ref:
 J. Chem. Phys. 147, 164119 (2017)
 '''
 
-import os
-
 import tempfile
 import numpy as np
 import h5py
@@ -32,13 +30,13 @@ from pyscf import lib
 from pyscf.lib import logger, zdotCN
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc import gto
-from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
+from pyscf.pbc.df.aft import _check_kpts
 from pyscf.pbc.df.gdf_builder import _CCGDFBuilder
-from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _round_off_to_odd_mesh
+from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
 from pyscf.pbc.df.incore import libpbc, make_auxcell
 from pyscf.pbc.lib.kpts_helper import is_zero, member, unique
 from pyscf.pbc.df import mdf_jk
@@ -76,6 +74,9 @@ class MDF(df.GDF):
 
         # tends to call _CCMDFBuilder if applicable
         self._prefer_ccdf = False
+
+        # TODO: More tests are needed
+        self.time_reversal_symmetry = False
 
         # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -125,10 +126,14 @@ class MDF(df.GDF):
         dfbuilder.mesh = self.mesh
         dfbuilder.linear_dep_threshold = self.linear_dep_threshold
         j_only = self._j_only or len(kpts_union) == 1
-        dfbuilder.make_j3c(cderi_file, j_only=j_only)
+        dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname,
+                           kptij_lst=kptij_lst)
 
-        # mdf.mesh must be the same to the mesh used in generating cderi
+        # mdf.mesh must be the mesh to generate cderi
         self.mesh = dfbuilder.mesh
+
+    get_pp = df.GDF.get_pp
+    get_nuc = df.GDF.get_nuc
 
     # Note: Special exxdiv by default should not be used for an arbitrary
     # input density matrix. When the df object was used with the molecular
@@ -152,23 +157,16 @@ class MDF(df.GDF):
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
                 ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
-                mydf.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+                mydf.mesh = cell.cutoff_to_mesh(ke_cutoff)
             else:
                 mydf = self
             with mydf.range_coulomb(omega) as rsh_df:
                 return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
                                      omega=None, exxdiv=exxdiv)
 
-        if kpts is None:
-            if np.all(self.kpts == 0):
-                # Gamma-point calculation by default
-                kpts = np.zeros(3)
-            else:
-                kpts = self.kpts
-        kpts = np.asarray(kpts)
-
-        if kpts.shape == (3,):
-            return mdf_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
+        kpts, is_single_kpt = _check_kpts(self, kpts)
+        if is_single_kpt:
+            return mdf_jk.get_jk(self, dm, hermi, kpts[0], kpts_band, with_j,
                                  with_k, exxdiv)
 
         vj = vk = None
@@ -270,9 +268,9 @@ class _RSMDFBuilder(_RSGDFBuilder):
                 for p0, p1 in lib.prange(0, ngrids, blksize):
                     auxG_sr = ft_ao.ft_ao(auxcell_c, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
                     if is_zero(kpt):
-                        sr_j2c[k] -= lib.dot(auxG_sr.conj() * coulG_sr, auxG_sr.T).real
+                        sr_j2c[k] -= lib.dot(auxG_sr.conj() * coulG_sr[p0:p1], auxG_sr.T).real
                     else:
-                        sr_j2c[k] -= lib.dot(auxG_sr.conj() * coulG_sr, auxG_sr.T)
+                        sr_j2c[k] -= lib.dot(auxG_sr.conj() * coulG_sr[p0:p1], auxG_sr.T)
                     auxG_sr = None
 
                 j2c_k = recontract_2d(j2c_k, sr_j2c[k])
@@ -283,11 +281,11 @@ class _RSMDFBuilder(_RSGDFBuilder):
 
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
                       j_only=False, dataname='j3c', shls_slice=None,
-                      fft_dd_block=False):
+                      fft_dd_block=False, kk_idx=None):
         # dd_block from real-space integrals will be cancelled by AFT part
         # anyway. It's safe to omit dd_block when computing real-space int3c2e
         return super().outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
-                                     dataname, shls_slice, fft_dd_block)
+                                     dataname, shls_slice, fft_dd_block, kk_idx)
 
     def weighted_ft_ao(self, kpt):
         '''exp(-i*(G + k) dot r) * Coulomb_kernel'''
@@ -367,9 +365,9 @@ class _CCMDFBuilder(_CCGDFBuilder):
 
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
                       j_only=False, dataname='j3c', shls_slice=None,
-                      fft_dd_block=False):
+                      fft_dd_block=False, kk_idx=None):
         return super().outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
-                                     dataname, shls_slice, fft_dd_block)
+                                     dataname, shls_slice, fft_dd_block, kk_idx)
 
     def weighted_ft_ao(self, kpt):
         fused_cell = self.fused_cell

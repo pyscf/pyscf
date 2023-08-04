@@ -178,8 +178,11 @@ class KsymAdaptedKGHF(khf_ksymm.KsymAdaptedKSCF, kghf.KGHF):
 
     get_jk = get_jk
     get_occ = get_occ
-    energy_elec = khf_ksymm.KsymAdaptedKSCF.energy_elec
-    get_init_guess = khf_ksymm.KsymAdaptedKSCF.get_init_guess
+    energy_elec = khf_ksymm.KsymAdaptedKRHF.energy_elec
+    get_init_guess = khf_ksymm.KsymAdaptedKRHF.get_init_guess
+    init_guess_by_minao = kghf.KGHF.init_guess_by_minao
+    init_guess_by_atom = kghf.KGHF.init_guess_by_atom
+    init_guess_by_chkfile = kghf.KGHF.init_guess_by_chkfile
 
 KGHF = KsymAdaptedKGHF
 

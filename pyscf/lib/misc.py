@@ -822,6 +822,7 @@ def invalid_method(name):
     '''
     def fn(obj, *args, **kwargs):
         raise NotImplementedError(f'Method {name} invalid or not implemented')
+    fn.__name__ = name
     return fn
 
 def overwrite_mro(obj, mro):

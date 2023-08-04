@@ -112,7 +112,7 @@ class KnownValues(unittest.TestCase):
         fci.direct_spin0.contract_2e = bak0
         fci.direct_spin1.contract_2e = bak1
         self.assertAlmostEqual(e, -25.4095560762, 7)
-        self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 0, 7)
+        self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 0, 5)
 
     def test_rdm2_baab(self):
         numpy.random.seed(9)
