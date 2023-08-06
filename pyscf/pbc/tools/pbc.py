@@ -503,7 +503,7 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     if rcut is None:
         rcut = cell.rcut
 
-    if dimension == 0 or rcut <= 0:
+    if dimension == 0 or rcut <= 0 or cell.natm == 0:
         return np.zeros((1, 3))
 
     a = cell.lattice_vectors()

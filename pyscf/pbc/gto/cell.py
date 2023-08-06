@@ -1517,7 +1517,7 @@ class Cell(mole.Mole):
             logger.info(self, 'low_dim_ft_type = %s', self.low_dim_ft_type)
             logger.info(self, 'Cell volume = %g', self.vol)
             # Check atoms coordinates
-            if self.dimension > 0:
+            if self.dimension > 0 and self.natm > 0:
                 scaled_atom_coords = np.linalg.solve(_a.T, self.atom_coords().T).T
                 atom_boundary_max = scaled_atom_coords[:,:self.dimension].max(axis=0)
                 atom_boundary_min = scaled_atom_coords[:,:self.dimension].min(axis=0)
