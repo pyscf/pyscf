@@ -181,6 +181,12 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
             ao2mo.restore(4, h2e_bb, norb) * fac)
 
 def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
+    if norb >= 64:
+        raise NotImplementedError('norb >= 64')
+
+    if h1e[0].dtype == numpy.complex128 or eri[0].dtype == numpy.complex128:
+        raise NotImplementedError('Complex Hamiltonian')
+
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
     h1e_a = numpy.ascontiguousarray(h1e[0])
     h1e_b = numpy.ascontiguousarray(h1e[1])
