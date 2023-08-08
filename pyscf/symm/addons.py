@@ -355,8 +355,6 @@ def symmetrize_multidim(mol, mo, s=None,
                 logger.info(mol, 'Use Lowdin-orthogonalizied input orbitals')
             else:
                 logger.info(mol, 'Use original input orbitals')
-    name2id = dict(zip(mol.irrep_name, mol.irrep_id))
-    id2name = dict(zip(mol.irrep_id, mol.irrep_name))
     irreps_mdim = []
     irreps_1dim = []
     for irrep in mol.irrep_name:
@@ -373,7 +371,7 @@ def symmetrize_multidim(mol, mo, s=None,
         else:
             irreps_1dim.append(irrep)
     for irrep in irreps_1dim:
-        i = name2id[irrep]
+        i = mol.irrep_name.index(irrep)
         csym = mol.symm_orb[i]
         moso = numpy.dot(csym.T.conj(), s_mo)
         ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
@@ -381,14 +379,14 @@ def symmetrize_multidim(mol, mo, s=None,
         idx = find_symmetric_mo(moso, ovlpso)
         if sum(idx) != csym.shape[1]:
             raise ValueError('Number of symmetry-adapted MOs in not equal to dimensionality '
-                             'of irrep %s: %d != %d' % (id2name(irrep), csym.shape[1], sum(idx)))
+                             'of irrep %s: %d != %d' % (mol.irrep_name[irrep], csym.shape[1], sum(idx)))
         mo1.append(mo[:, idx])
     for partners in irreps_mdim:
         SALC_ao_partners = []
         SALC_ov_partners = []
         SALC_mo_partners = []
         for irrep in partners:
-            csym = mol.symm_orb[name2id[irrep]]
+            csym = mol.symm_orb[mol.irrep_name.index(irrep)]
             SALC_ao_partners.append(csym)
             moso = numpy.dot(csym.T.conj(), s_mo)
             ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
@@ -398,7 +396,7 @@ def symmetrize_multidim(mol, mo, s=None,
             mo_irrep = mo[:, idx]
             if sum(idx) != csym.shape[1]:
                 raise ValueError('Number of symmetry-adapted MOs in not equal to dimensionality '
-                                 'of irrep %s: %d != %d' % (id2name[irrep], csym.shape[1], sum(idx)))
+                                 'of irrep %s: %d != %d' % (mol.irrep_name[irrep], csym.shape[1], sum(idx)))
             # rotate MO to symm-adapted AO
             SALC_mo = numpy.dot(csym.T.conj(), mo_irrep)
             SALC_mo_partners.append(SALC_mo)
