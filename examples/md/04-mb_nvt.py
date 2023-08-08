@@ -19,12 +19,11 @@ init_veloc = pyscf.md.distributions.MaxwellBoltzmannVelocity(mol, T=300)
 
 # We set the initial velocity by passing to "veloc", 
 #T is the ensemble temperature in K and taut is the Berendsen Thermostat time constant given in time a.u.
-myintegrator = pyscf.md.NVT(myhf, dt=5, steps=10, 
+myintegrator = pyscf.md.NVT_Berendson(myhf, dt=5, steps=100, 
 			     T=300, taut=50, veloc=init_veloc,
-			     energy_output="NVT.md.energies", temp_output="NVT.md.temp", 
+			     data_output="NVT.md.data", 
 			     trajectory_output="NVT.md.xyz").run()
 			     
 # Close the file streams for the energy, temperature and trajectory.
-myintegrator.energy_output.close()
-myintegrator.temp_output.close()
+myintegrator.data_output.close()
 myintegrator.trajectory_output.close()

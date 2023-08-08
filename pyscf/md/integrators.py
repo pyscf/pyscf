@@ -152,21 +152,12 @@ class _Integrator(lib.StreamObject):
 
         dt : float
             Time between steps. Given in atomic units.
-            
-        T  : float
-            Target temperature for the NVT Ensemble. Given in K.
-            
-        taut   : float
-            Time constant for Berendsen temperature coupling. Given in atomic units. 
 
         stdout : file object
             Default is self.scanner.mol.stdout.
 
-        energy_output : file object
-            Stream to write energy to during the course of the simulation.
-
-        temp_output : file object
-            Stream to write temperature to during the course of the simulation.
+        data_output : file object
+            Stream to write energy and temperature to during the course of the simulation.
 
         trajectory_output : file object
             Stream to write the trajectory to during the course of the
@@ -210,15 +201,12 @@ class _Integrator(lib.StreamObject):
         self.veloc = None
         self.verbose = self.mol.verbose
         self.steps = 1
-        self.dt = 10
-        self.T = None
-        self.taut = None        
+        self.dt = 10        
         self.frames = None
         self.epot = None
         self.ekin = None
         self.time = 0
-        self.energy_output = None
-        self.temp_output = None
+        self.data_output = None
         self.trajectory_output = None
         self.callback = None
 
@@ -272,42 +260,24 @@ class _Integrator(lib.StreamObject):
         self._masses = np.array([
             data.elements.COMMON_ISOTOPE_MASSES[m] * data.nist.AMU2AU
             for m in self.mol.atom_charges()])
-
-        # avoid opening energy_output file twice
-        if type(self.energy_output) is str:
-            if self.verbose > logger.QUIET:
-                if os.path.isfile(self.energy_output):
-                    print('overwrite energy output file: %s' %
-                          self.energy_output)
-                else:
-                    print('energy output file: %s' % self.energy_output)
-
-            if self.energy_output == '/dev/null':
-                self.energy_output = open(os.devnull, 'w')
-
-            else:
-                self.energy_output = open(self.energy_output, 'w')
-                self.energy_output.write(
-                    'time          Epot                 Ekin                 '
-                    'Etot\n'
-                )
                 
-        # avoid opening energy_output file twice
-        if type(self.temp_output) is str:
+        # avoid opening data_output file twice
+        if type(self.data_output) is str:
             if self.verbose > logger.QUIET:
-                if os.path.isfile(self.temp_output):
-                    print('overwrite temp output file: %s' %
-                          self.temp_output)
+                if os.path.isfile(self.data_output):
+                    print('overwrite data output file: %s' %
+                          self.data_output)
                 else:
-                    print('temp output file: %s' % self.temp_output)
+                    print('data output file: %s' % self.data_output)
 
-            if self.temp_output == '/dev/null':
-                self.temp_output = open(os.devnull, 'w')
+            if self.data_output == '/dev/null':
+                self.data_output = open(os.devnull, 'w')
 
             else:
-                self.temp_output = open(self.temp_output, 'w')
-                self.temp_output.write(
-                    'time          temp\n'
+                self.data_output = open(self.data_output, 'w')
+                self.data_output.write(
+                    'time          Epot                 Ekin                 '
+                    'Etot                 T\n'
                 )
 
 
@@ -340,12 +310,7 @@ class _Integrator(lib.StreamObject):
         log.info('')
         log.info('******** BOMD flags ********')
         log.info('dt = %f', self.dt)
-        log.info('Iterations = %d', self.steps)
-        
-        if self.T is not None:
-        	log.info('Temperature = %f', self.T)
-        	log.info('tau_T = %f', self.taut)
-        
+        log.info('Iterations = %d', self.steps)      
         log.info('                   Initial Velocity                  ')
         log.info('             vx              vy              vz')
         for i, (e, v) in enumerate(zip(self.mol.elements, self.veloc)):
@@ -358,10 +323,6 @@ class _Integrator(lib.StreamObject):
         assert self.veloc is not None
         assert self.veloc.shape == (self.mol.natm, 3)
         assert self.scanner is not None
-        
-        if self.T is not None:
-                assert self.T > 0
-                assert self.taut is not None
 
         return self
 
@@ -399,11 +360,8 @@ class _Integrator(lib.StreamObject):
             if self.incore_anyway:
                 self.frames.append(current_frame)
 
-            if self.energy_output is not None:
-                self._write_energy()
-                
-            if self.temp_output is not None:
-                self._write_temp()
+            if self.data_output is not None:
+                self._write_data()
 
             if self.trajectory_output is not None:
                 self._write_coord()
@@ -431,14 +389,14 @@ class _Integrator(lib.StreamObject):
         '''
         raise NotImplementedError('Method Not Implemented')
 
-    def _write_energy(self):
-        '''Writes out the potential, kinetic, and total energy to the
-        self.energy_output stream. '''
+    def _write_data(self):
+        '''Writes out the potential, kinetic, and total energy, temperature to the
+        self.data_output stream. '''
 
-        output = '%8.2f  %.12E  %.12E  %.12E' % (self.time,
+        output = '%8.2f  %.12E  %.12E  %.12E %3.4f' % (self.time,
                                                  self.epot,
                                                  self.ekin,
-                                                 self.ekin + self.epot)
+                                                 self.ekin + self.epot,self.temperature())
 
         # We follow OM of writing all the states at the end of the line
         if getattr(self.scanner.base, 'e_states', None) is not None:
@@ -446,20 +404,10 @@ class _Integrator(lib.StreamObject):
                 for e in self.scanner.base.e_states:
                     output += '  %.12E' % e
 
-        self.energy_output.write(output + '\n')
+        self.data_output.write(output + '\n')
 
         # If we don't flush, there is a possibility of losing data
-        self.energy_output.flush()
-        
-    def _write_temp(self):
-        '''Writes out the system temperature to the
-        self.temp_output stream. '''
-
-        output = '%8.2f  %.12E' % (self.time, self.temperature())
-        self.temp_output.write(output + '\n')
-
-        # If we don't flush, there is a possibility of losing data
-        self.temp_output.flush()
+        self.data_output.flush()
 
     def _write_coord(self):
         '''Writes out the current geometry to the self.trajectory_output
@@ -559,6 +507,12 @@ class NVTBerendson(_Integrator):
             in order to propagate the equations of motion. Realistically,
             it can be any callable object such that it returns the energy
             and potential energy gradient when given a mol.
+            
+        T      : float
+            Target temperature for the NVT Ensemble. Given in K.
+            
+        taut   : float
+            Time constant for Berendsen temperature coupling. Given in atomic units.
 
     Attributes:
         accel : ndarray
