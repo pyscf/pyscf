@@ -272,6 +272,8 @@ def symmetrize_space(mol, mo, s=None,
             orb_irrep = numpy.hstack([orb_irrep, orb_symmetrized])
 
         moso = numpy.dot(orb_irrep.T.conj(), numpy.dot(s, orb_irrep))
+        if moso.shape[0] == 0:
+            continue
         max_non_orth = abs(moso - numpy.eye(moso.shape[0])).max()
         logger.debug(mol, 'Non-orthogonality in irrep %3d after symmetrization: %8.2e', i, max_non_orth)
         if max_non_orth > tol:
