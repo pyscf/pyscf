@@ -524,9 +524,11 @@ class NVTBerendson(_Integrator):
              [x3, y3, z3]]
     '''
 
-    def __init__(self, method, **kwargs):
-        super().__init__(method, **kwargs)
-        self.accel = None
+    def __init__(self, method, T, taut, **kwargs):
+    	self.T = T
+    	self.taut = taut
+    	self.accel = None
+    	super().__init__(method, **kwargs)
 
     def _next(self):
         '''Computes the next frame of the simulation and sets all internal
