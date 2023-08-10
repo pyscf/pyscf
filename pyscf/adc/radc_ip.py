@@ -779,13 +779,13 @@ def compute_dyson_mo(myadc):
 
     return dyson_mo
 
-def make_rdm1(adc):
+def _make_rdm1_excited(adc):
 
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
 
     nroots = adc.U.shape[1]
-    U = adc.renormalize_eigenvectors(nroots)
+    U = adc.U
 
     list_rdm1 = []
 
@@ -795,32 +795,6 @@ def make_rdm1(adc):
 
     cput0 = log.timer_debug1("completed OPDM calculation", *cput0)
     return list_rdm1
-
-def get_ref_opdm(adc):
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
-        raise NotImplementedError(adc.method)
-    t1 = adc.t1
-    t2 = adc.t2
-
-    t2_1 = t2[0][:]
-    t1_2 = t1[0]
-    einsum_type = True
-    nocc = adc._nocc
-    nvir = adc._nvir
-
-    nmo = nocc + nvir
-
-    t_bar = 2.0 * t2_1 - t2_1.transpose(0,1,3,2)
-
-    OPDM = np.zeros((nmo,nmo))
-
-    OPDM[:nocc, :nocc] = 2.0 * np.identity(nocc)
-    OPDM[:nocc, :nocc] += -2.0 * lib.einsum("jkab,ikab->ij", t_bar, t2_1)
-    OPDM[nocc:, nocc:] += 2.0 * lib.einsum("ijbc,ijac->ab", t_bar, t2_1)
-    OPDM[:nocc, nocc:] += 2.0 * t1_2.copy()
-    OPDM[nocc:, :nocc] += 2.0 * t1_2.T.copy()
-
-    return OPDM 
 
 def make_rdm1_eigenvectors(adc, L, R):
 
@@ -999,7 +973,7 @@ class RADCIP(radc.RADC):
     analyze_eigenvector = analyze_eigenvector
     analyze = analyze
     compute_dyson_mo = compute_dyson_mo
-    make_rdm1 = make_rdm1
+    _make_rdm1_excited = _make_rdm1_excited
 
     def get_init_guess(self, nroots=1, diag=None, ascending=True):
         if diag is None :

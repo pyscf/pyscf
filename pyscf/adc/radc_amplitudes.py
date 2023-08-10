@@ -529,6 +529,30 @@ def compute_energy(myadc, t2, eris):
     del t2_new
     return e_mp
 
+def _make_rdm1_ground(myadc):
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(myadc.method)
+    t1 = myadc.t1
+    t2 = myadc.t2
+
+    t2_1 = t2[0][:]
+    t1_2 = t1[0]
+    nocc = myadc._nocc
+    nvir = myadc._nvir
+
+    nmo = nocc + nvir
+
+    t_bar = 2.0 * t2_1 - t2_1.transpose(0,1,3,2)
+
+    OPDM = np.zeros((nmo,nmo))
+
+    OPDM[:nocc, :nocc] = 2.0 * np.identity(nocc)
+    OPDM[:nocc, :nocc] += -2.0 * lib.einsum("jkab,ikab->ij", t_bar, t2_1)
+    OPDM[nocc:, nocc:] += 2.0 * lib.einsum("ijbc,ijac->ab", t_bar, t2_1)
+    OPDM[:nocc, nocc:] += 2.0 * t1_2.copy()
+    OPDM[nocc:, :nocc] += 2.0 * t1_2.T.copy()
+
+    return OPDM 
 
 def contract_ladder(myadc,t_amp,vvvv):
 

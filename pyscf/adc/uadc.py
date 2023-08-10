@@ -177,6 +177,7 @@ class UADC(lib.StreamObject):
     compute_amplitudes = uadc_amplitudes.compute_amplitudes
     compute_energy = uadc_amplitudes.compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore
+    _make_rdm1_ground = uadc_amplitudes._make_rdm1_ground
 
     def dump_flags(self, verbose=None):
         logger.info(self, '')
@@ -340,8 +341,11 @@ class UADC(lib.StreamObject):
     def compute_dyson_mo(self):
         return self._adc_es.compute_dyson_mo()
 
-    def make_rdm1(self):
-        return self._adc_es.make_rdm1()
+    def make_rdm1_excited(self):
+        return self._adc_es._make_rdm1_excited()
+
+    def make_rdm1_ground(self):
+        return self._make_rdm1_ground()
 
 if __name__ == '__main__':
     from pyscf import scf

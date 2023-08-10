@@ -742,6 +742,96 @@ def compute_energy(myadc, t1, t2, eris):
 
     return e_mp
 
+def _make_rdm1_ground(myadc):
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(myadc.method)
+    t1 = myadc.t1
+    t2 = myadc.t2
+    
+    einsum_type = True
+    
+    nocc_a = myadc._nocc[0]
+    nocc_b = myadc._nocc[1]
+    nvir_a = myadc._nvir[0]
+    nvir_b = myadc._nvir[1]
+
+    vir_list_a = range(nvir_a)
+    vir_list_b = range(nvir_b)
+    occ_list_a = range(nocc_a)
+    occ_list_b = range(nocc_b)
+
+    #if adc.f_ov is None:
+    #    f_ov_a = np.zeros((nocc_a, nvir_a))
+    #    f_ov_b = np.zeros((nocc_b, nvir_b))
+    #    t1_ce_aa = np.zeros((nocc_a, nvir_a))
+    #    t1_ce_bb = np.zeros((nocc_b, nvir_b))
+    #else:
+    #    f_ov_a, f_ov_b = adc.f_ov
+    #    t1_ce_aa = t1[2][0][:]
+    #    t1_ce_bb = t1[2][1][:]
+
+    t2_ce_aa = t1[0][0][:]
+    t2_ce_bb = t1[0][1][:]
+
+    t1_ccee_aaaa = t2[0][0][:]
+    t1_ccee_abab = t2[0][1][:]
+    t1_ccee_bbbb = t2[0][2][:]
+
+    nmo_a = nocc_a + nvir_a
+    nmo_b = nocc_b + nvir_b
+
+    OPDM_a = np.zeros((nmo_a,nmo_a))
+    OPDM_b = np.zeros((nmo_b,nmo_b))
+
+    OPDM_a[:nocc_a, :nocc_a]  = lib.einsum('IL->IL', np.identity(nocc_a), optimize = einsum_type).copy()
+    OPDM_a[:nocc_a, :nocc_a] -= 1/2 * lib.einsum('Iiab,Liab->IL', t1_ccee_aaaa, t1_ccee_aaaa, optimize = einsum_type)
+    #OPDM_a[:nocc_a, :nocc_a] -= lib.einsum('Ia,La->IL', t1_ce_aa, t1_ce_aa, optimize = einsum_type)
+    OPDM_a[:nocc_a, :nocc_a] -= lib.einsum('Iiab,Liab->IL', t1_ccee_abab, t1_ccee_abab, optimize = einsum_type)
+
+    #OPDM_a[nocc_a:, nocc_a:]  = lib.einsum('iA,iC->AC', t1_ce_aa, t1_ce_aa, optimize = einsum_type)
+    OPDM_a[nocc_a:, nocc_a:] += 1/2 * lib.einsum('ijAa,ijCa->AC', t1_ccee_aaaa, t1_ccee_aaaa, optimize = einsum_type)
+    OPDM_a[nocc_a:, nocc_a:] += lib.einsum('ijAa,ijCa->AC', t1_ccee_abab, t1_ccee_abab, optimize = einsum_type)
+
+    #OPDM_a[:nocc_a, nocc_a:]  = lib.einsum('IC->IC', t1_ce_aa, optimize = einsum_type).copy()
+    OPDM_a[:nocc_a, nocc_a:] += lib.einsum('IC->IC', t2_ce_aa, optimize = einsum_type).copy()
+    
+    #OPDM_a[:nocc_a, nocc_a:] += 1/2 * lib.einsum('IiCa,ia->IC', t1_ccee_aaaa, t1_ce_aa, optimize = einsum_type)
+    #OPDM_a[:nocc_a, nocc_a:] += 1/2 * lib.einsum('IiCa,ia->IC', t1_ccee_abab, t1_ce_bb, optimize = einsum_type)
+
+    #OPDM_a[nocc_a:, :nocc_a]  = lib.einsum('LA->AL', t1_ce_aa, optimize = einsum_type).copy()
+    OPDM_a[nocc_a:, :nocc_a]  += lib.einsum('LA->AL', t2_ce_aa, optimize = einsum_type).copy()
+    #OPDM_a[nocc_a:, :nocc_a]  += 1/2 * lib.einsum('LiAa,ia->AL', t1_ccee_aaaa, t1_ce_aa, optimize = einsum_type)
+    #OPDM_a[nocc_a:, :nocc_a]  += 1/2 * lib.einsum('LiAa,ia->AL', t1_ccee_abab, t1_ce_bb, optimize = einsum_type)
+    #---
+    OPDM_b[:nocc_b, :nocc_b]  = lib.einsum('il->il', np.identity(nocc_b), optimize = einsum_type).copy()
+    OPDM_b[:nocc_b, :nocc_b] -= 1/2 * lib.einsum('ijab,ljab->il', t1_ccee_bbbb, t1_ccee_bbbb, optimize = einsum_type)
+    #OPDM_b[:nocc_b, :nocc_b] -= lib.einsum('ia,la->il', t1_ce_bb, t1_ce_bb, optimize = einsum_type)
+    OPDM_b[:nocc_b, :nocc_b] -= lib.einsum('jiab,jlab->il', t1_ccee_abab, t1_ccee_abab, optimize = einsum_type)
+
+    #OPDM_b[nocc_b:, nocc_b:] = lib.einsum('ia,ic->ac', t1_ce_bb, t1_ce_bb, optimize = einsum_type)
+    OPDM_b[nocc_b:, nocc_b:] += lib.einsum('ijba,ijbc->ac', t1_ccee_abab, t1_ccee_abab, optimize = einsum_type)
+    OPDM_b[nocc_b:, nocc_b:] += 1/2 * lib.einsum('ijab,ijcb->ac', t1_ccee_bbbb, t1_ccee_bbbb, optimize = einsum_type)
+
+    #OPDM_b[:nocc_b, nocc_b:]  = lib.einsum('ic->ic', t1_ce_bb, optimize = einsum_type).copy()
+    OPDM_b[:nocc_b, nocc_b:]  += lib.einsum('ic->ic', t2_ce_bb, optimize = einsum_type).copy()
+    #OPDM_b[:nocc_b, nocc_b:]  += 1/2 * lib.einsum('ijca,ja->ic', t1_ccee_bbbb, t1_ce_bb, optimize = einsum_type)
+    #OPDM_b[:nocc_b, nocc_b:]  += 1/2 * lib.einsum('jiac,ja->ic', t1_ccee_abab, t1_ce_aa, optimize = einsum_type)
+
+    #OPDM_b[nocc_b:, :nocc_b]   = lib.einsum('la->al', t1_ce_bb, optimize = einsum_type).copy()
+    OPDM_b[nocc_b:, :nocc_b]  += lib.einsum('la->al', t2_ce_bb, optimize = einsum_type).copy()
+    #PDM_b[nocc_b:, :nocc_b]  += 1/2 * lib.einsum('liab,ib->al', t1_ccee_bbbb, t1_ce_bb, optimize = einsum_type)
+    #PDM_b[nocc_b:, :nocc_b]  += 1/2 * lib.einsum('ilba,ib->al', t1_ccee_abab, t1_ce_aa, optimize = einsum_type)
+
+    #---
+    # print("OPDM_a_H " + str(np.linalg.norm(OPDM_a - OPDM_a.transpose(1,0))))
+    # print("OPDM_b_H " + str(np.linalg.norm(OPDM_b - OPDM_b.transpose(1,0))))
+
+    # print("OPDM_a_trace " + str(np.einsum('pp',OPDM_a)))
+    # print("OPDM_b_trace " + str(np.einsum('pp',OPDM_b)))
+    # exit()
+
+    opdm = (OPDM_a, OPDM_b)
+    return opdm
 def contract_ladder(myadc,t_amp,vvvv_p):
 
     nocc_a = t_amp.shape[0]
