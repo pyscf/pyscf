@@ -796,6 +796,32 @@ def make_rdm1(adc):
     cput0 = log.timer_debug1("completed OPDM calculation", *cput0)
     return list_rdm1
 
+def get_ref_opdm(adc):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
+    t1 = adc.t1
+    t2 = adc.t2
+
+    t2_1 = t2[0][:]
+    t1_2 = t1[0]
+    einsum_type = True
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    nmo = nocc + nvir
+
+    t_bar = 2.0 * t2_1 - t2_1.transpose(0,1,3,2)
+
+    OPDM = np.zeros((nmo,nmo))
+
+    OPDM[:nocc, :nocc] = 2.0 * np.identity(nocc)
+    OPDM[:nocc, :nocc] += -2.0 * lib.einsum("jkab,ikab->ij", t_bar, t2_1)
+    OPDM[nocc:, nocc:] += 2.0 * lib.einsum("ijbc,ijac->ab", t_bar, t2_1)
+    OPDM[:nocc, nocc:] += 2.0 * t1_2.copy()
+    OPDM[nocc:, :nocc] += 2.0 * t1_2.T.copy()
+
+    return OPDM 
+
 def make_rdm1_eigenvectors(adc, L, R):
 
     L = np.array(L).ravel()
@@ -834,9 +860,11 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1[:nocc,:nocc] += 4*np.einsum('ij,etu,etu->ij',kd_oc,L2,R2,optimize=True)
     rdm1[:nocc,:nocc] -= np.einsum('ij,etu,eut->ij',kd_oc,L2,R2,optimize=True)
     rdm1[:nocc,:nocc] -= np.einsum('ij,eut,etu->ij',kd_oc,L2,R2,optimize=True)
-    rdm1[:nocc,:nocc] -= 4*np.einsum('eti,etj->ij',L2,R2,optimize=True)
-    rdm1[:nocc,:nocc] += np.einsum('eti,ejt->ij',L2,R2,optimize=True)
+
+    rdm1[:nocc,:nocc] -= 2*np.einsum('eti,etj->ij',L2,R2,optimize=True)
     rdm1[:nocc,:nocc] += np.einsum('eit,etj->ij',L2,R2,optimize=True)
+    rdm1[:nocc,:nocc] += np.einsum('eti,ejt->ij',L2,R2,optimize=True)
+    rdm1[:nocc,:nocc] -= 2*np.einsum('eit,ejt->ij',L2,R2,optimize=True)
 
     rdm1[:nocc,:nocc] -= 2*np.einsum('g,g,hjcd,hicd->ij', L1,R1,t2_1,t2_1,optimize=True)
     rdm1[:nocc,:nocc] += 2*np.einsum('g,g,jhcd,hicd->ij', L1,R1,t2_1,t2_1,optimize=True)
@@ -849,7 +877,7 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1[:nocc,:nocc] += temp_ij
     rdm1[:nocc,:nocc] += temp_ij.T
 
-########## block- ab
+########### block- ab
     rdm1[nocc:,nocc:] = np.einsum('atu,btu->ab', L2,R2,optimize=True)
     rdm1[nocc:,nocc:] -= 0.5*np.einsum('aut,btu->ab', L2,R2,optimize=True)
     rdm1[nocc:,nocc:] -= 0.5*np.einsum('atu,but->ab', L2,R2,optimize=True)
@@ -858,19 +886,20 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1[nocc:,nocc:] += 4*np.einsum('g,g,hmbc,hmac->ab', L1,R1,t2_1,t2_1,optimize=True)
     rdm1[nocc:,nocc:] -= np.einsum('g,g,mhbc,hmac->ab', L1,R1,t2_1,t2_1,optimize=True)
     rdm1[nocc:,nocc:] -= np.einsum('g,g,hmbc,mhac->ab', L1,R1,t2_1,t2_1,optimize=True)
-    rdm1[nocc:,nocc:] -= 4*np.einsum('g,h,hmbc,gmac->ab', L1,R1,t2_1,t2_1,optimize=True)
+    rdm1[nocc:,nocc:] -= 2 * np.einsum('g,h,hmbc,gmac->ab', L1,R1,t2_1,t2_1,optimize=True)
+    rdm1[nocc:,nocc:] -= 2 * np.einsum('g,h,mhbc,mgac->ab', L1,R1,t2_1,t2_1,optimize=True)
     rdm1[nocc:,nocc:] += np.einsum('g,h,mhbc,gmac->ab', L1,R1,t2_1,t2_1,optimize=True)
     rdm1[nocc:,nocc:] += np.einsum('g,h,hmbc,mgac->ab', L1,R1,t2_1,t2_1,optimize=True)
 
-########### block- ia
+############ block- ia
     rdm1[:nocc,nocc:] = -np.einsum('n,ani->ia', R1,L2,optimize=True)
     rdm1[:nocc,nocc:] += 2*np.einsum('n,ain->ia', R1,L2,optimize=True)
 
     rdm1[:nocc,nocc:] -= 2*np.einsum('g,cgh,ihac->ia', L1,R2,t2_1,optimize=True)
-    rdm1[:nocc,nocc:] += np.einsum('g,cgh,hiac->ia', L1,R2,t2_1,optimize=True)
     rdm1[:nocc,nocc:] += 4*np.einsum('g,chg,ihac->ia', L1,R2,t2_1,optimize=True)
-    rdm1[:nocc,nocc:] -= np.einsum('g,chg,hiac->ia', L1,R2,t2_1,optimize=True)
-    rdm1[:nocc,nocc:] -= np.einsum('g,cgh,ihac->ia', L1,R2,t2_1,optimize=True)
+    rdm1[:nocc,nocc:] += np.einsum('g,cgh,hiac->ia', L1,R2,t2_1,optimize=True)
+    rdm1[:nocc,nocc:] -= 2*np.einsum('g,chg,hiac->ia', L1,R2,t2_1,optimize=True)
+
     rdm1[:nocc,nocc:] += np.einsum('i,cgh,ghac->ia', L1,R2,t2_1,optimize=True)
     rdm1[:nocc,nocc:] -= 2*np.einsum('i,chg,ghac->ia', L1,R2,t2_1,optimize=True)
 
@@ -878,7 +907,7 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1[:nocc,nocc:] += np.einsum('g,g,ia->ia', L1,R1,t1_2,optimize=True)
     rdm1[:nocc,nocc:] -= np.einsum('g,i,ga->ia', R1,L1,t1_2,optimize=True)
 
-############ block- ai
+############# block- ai
     rdm1[nocc:,:nocc] = rdm1[:nocc,nocc:].T
 
     return rdm1
