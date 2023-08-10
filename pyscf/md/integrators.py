@@ -338,7 +338,12 @@ class _Integrator(lib.StreamObject):
 
     def temperature(self):
         '''Returns the temperature of the system'''
-        dof = 3 * len(self.mol.atom_coords())
+        #dof = 3 * len(self.mol.atom_coords())
+        
+        n_atom = len(self.mol.atom_coords())
+        dof = 1
+        if n_atom > 2:
+        	dof = (3 * n_atom) - 6
 
         # Temp = 2/(3*k*N_f) * KE
         #      = 2/(3*k*N_f)*\sum_i (1/2 m_i v_i^2)
@@ -575,7 +580,7 @@ class NVTBerendson(_Integrator):
         tautscl = self.dt / self.taut
         scl_temp = np.sqrt(1.0 + (self.T / self.temperature() - 1.0) * tautscl)
         
-        # Limit the velocity scaling to reasonable values
+        # Limit the velocity scaling to reasonable values (taken from ase md/nvtberendson.py)
         if scl_temp > 1.1:
             scl_temp = 1.1
         if scl_temp < 0.9:

@@ -23,7 +23,7 @@ import pyscf.md as md
 CHECK_STABILITY = False
 
 def setUpModule():
-    global h2o, hf_scanner, casscf_scanner
+    global h2o, hf_scanner
     h2o = gto.M(verbose=3,
                 output='/dev/null',
                 atom=[['O', 0, 0, 0], ['H', 0, -0.757, 0.587],
@@ -48,7 +48,7 @@ class KnownValues(unittest.TestCase):
                                [-0.001133, -0.000182, 0.000047]])
 
         driver = md.integrators.NVTBerendson(hf_scanner, veloc=init_veloc,
-        				       dt=5, steps=20, T=165, taut=50)
+        				       dt=5, steps=20, T=495, taut=50)
 
         driver.kernel()
         self.assertAlmostEqual(driver.ekin, 0.007071731316944, 8)
@@ -63,7 +63,7 @@ class KnownValues(unittest.TestCase):
 
             driver.steps = 990
             driver.kernel()
-            self.assertTrue((driver.T - 5)<= driver.temperature() <= (driver.T + 5))
+            self.assertAlmostEqual(driver.T, driver.temperature(), delta=5)
 
 if __name__ == "__main__":
     print("Full Tests for NVT Berendson Thermostat")
