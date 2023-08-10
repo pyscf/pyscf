@@ -758,13 +758,12 @@ def x2c1e_ghf(mf):
             log = logger.new_logger(mol, verbose)
 
             nao = mol.nao
-            dm = dm[:nao,:nao] + dm[nao:,nao:]
-
             charges = mol.atom_charges()
             coords  = mol.atom_coords()
             nucl_dip = numpy.einsum('i,ix->x', charges, coords)
             with mol.with_common_orig(nucl_dip):
-                ao_dip = _block_diag(mol.intor_symmetric('int1e_r'))
+                r = mol.intor_symmetric('int1e_r')
+                ao_dip = numpy.array([_block_diag(x) for x in r])
                 if picture_change:
                     xmol = self.with_x2c.get_xmol()[0]
                     nao = xmol.nao

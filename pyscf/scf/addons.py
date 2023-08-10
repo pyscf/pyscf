@@ -48,7 +48,7 @@ def frac_occ_(mf, tol=1e-3):
         >>> mf = scf.addons.frac_occ(mf)
         >>> mf.run()
     '''
-    from pyscf.scf import uhf, rohf
+    from pyscf.scf import hf, uhf, rohf
     old_get_occ = mf.get_occ
     mol = mf.mol
 
@@ -145,7 +145,7 @@ def frac_occ_(mf, tol=1e-3):
             g[uniq_var_b] += fockb[uniq_var_b]
             return g[uniq_var_a | uniq_var_b]
 
-    else:  # RHF
+    elif isinstance(mf, hf.RHF):
         def get_occ(mo_energy, mo_coeff=None):
             nocc = (mol.nelectron+1) // 2  # n_docc + n_socc
             mo_occ, frac_lst, homo, lumo = guess_occ(mo_energy, nocc)
@@ -155,6 +155,18 @@ def frac_occ_(mf, tol=1e-3):
                 mo_occ *= 2
                 degen = len(frac_lst)
                 mo_occ[frac_lst] -= float(n_socc) / degen
+                logger.warn(mf, 'fraction occ = %6g  for orbitals %s',
+                            mo_occ[frac_lst[0]], frac_lst)
+                logger.info(mf, 'HOMO = %.12g  LUMO = %.12g', homo, lumo)
+                logger.debug(mf, '  mo_energy = %s', mo_energy)
+            else:
+                mo_occ = old_get_occ(mo_energy, mo_coeff)
+            return mo_occ
+    else:
+        def get_occ(mo_energy, mo_coeff=None):
+            nocc = mol.nelectron
+            mo_occ, frac_lst, homo, lumo = guess_occ(mo_energy, nocc)
+            if abs(homo - lumo) < tol:
                 logger.warn(mf, 'fraction occ = %6g  for orbitals %s',
                             mo_occ[frac_lst[0]], frac_lst)
                 logger.info(mf, 'HOMO = %.12g  LUMO = %.12g', homo, lumo)
