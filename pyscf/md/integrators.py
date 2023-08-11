@@ -338,17 +338,13 @@ class _Integrator(lib.StreamObject):
 
     def temperature(self):
         '''Returns the temperature of the system'''
-        #dof = 3 * len(self.mol.atom_coords())
-        
-        n_atom = len(self.mol.atom_coords())
-        dof = 1
-        if n_atom > 2:
-        	dof = (3 * n_atom) - 6
+        # checked against ORCA for linear and non-linear molecules
+        dof = 3 * len(self.mol.atom_coords())
 
         # Temp = 2/(3*k*N_f) * KE
         #      = 2/(3*k*N_f)*\sum_i (1/2 m_i v_i^2)
         return ((2 * self.ekin) / (
-                3 * dof * data.nist.BOLTZMANN / data.nist.HARTREE2J))
+                dof * data.nist.BOLTZMANN / data.nist.HARTREE2J))
 
     def __iter__(self):
         self._step = 0
