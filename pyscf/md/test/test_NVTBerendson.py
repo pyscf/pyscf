@@ -19,15 +19,19 @@ import unittest
 import numpy as np
 from pyscf import gto, scf
 import pyscf.md as md
+import os
+import pandas as pd
+import math
 
-CHECK_STABILITY = False
+CHECK_STABILITY = True
 
 def setUpModule():
     global h2o, hf_scanner
     h2o = gto.M(verbose=3,
                 output='/dev/null',
-                atom=[['O', 0, 0, 0], ['H', 0, -0.757, 0.587],
-                      ['H', 0, 0.757, 0.587]],
+                atom='''O -2.9103342153    -15.4805607073    -14.9344021104
+ 	                H -2.5833611256    -14.8540450112    -15.5615823519
+                       H  -2.7404195919    -16.3470417109    -15.2830799053''',
                 basis='def2-svp')
 
     hf_scanner = scf.RHF(h2o)
@@ -43,27 +47,40 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_hf_water_init_veloc(self):
-        init_veloc = np.array([[0.000336, 0.000044, 0.000434],
-                               [-0.000364, -0.000179, 0.001179],
-                               [-0.001133, -0.000182, 0.000047]])
+        init_veloc = np.array([[-3.00670625e-05, -2.47219610e-04, -2.99235779e-04],
+        			[-5.66022419e-05, -9.83256521e-04, -8.35299245e-04],
+        			[-4.38260913e-04, -3.17970694e-04,  5.07818817e-04]])
 
         driver = md.integrators.NVTBerendson(hf_scanner, veloc=init_veloc,
-        				       dt=5, steps=20, T=495, taut=50)
+        				       dt=20, steps=20, T=300, taut=413)
 
         driver.kernel()
-        self.assertAlmostEqual(driver.ekin, 0.007071731316944, 8)
-        self.assertAlmostEqual(driver.epot, -75.96084293823, 8)
+        self.assertAlmostEqual(driver.ekin, 4.244286252900E-03, 8)
+        self.assertAlmostEqual(driver.epot, -7.596117676337E+01, 8)
 
-        final_coord = np.array([[0.03203339, 0.00219695, 0.04414054],
- 				 [-0.03398398, -1.40833795, 1.18785634],
- 				 [-0.10817007, 1.40567903, 1.10489554]])
+        final_coord = np.array([[ -5.51486188, -29.3425402,  -28.32832762],
+ 				 [ -4.8843336,  -28.48585797, -29.75984939],
+ 				 [ -5.30517791, -31.05471672, -28.76717135]])
 
         self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
+        
         if CHECK_STABILITY:
 
             driver.steps = 990
+            driver.data_output="NVT.md.data"
             driver.kernel()
-            self.assertAlmostEqual(driver.T, driver.temperature(), delta=5)
+            driver.data_output.close()
+            
+            py_data = pd.read_table('NVT.md.data',delimiter=r"\s+")
+            py_data.set_axis(['time', 'Epot', 'Ekin', 'Etot', 'T'], axis=1, inplace=True)
+            
+            rmsf_T = 0
+            for i in py_data['T']:
+            	rmsf_T += (i - driver.T)**2
+            rmsf_T = math.sqrt(rmsf_T/len(py_data['T']))
+            	
+            self.assertTrue(rmsf_T <= 10)
+            os.remove('NVT.md.data')
 
 if __name__ == "__main__":
     print("Full Tests for NVT Berendson Thermostat")
