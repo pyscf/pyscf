@@ -197,7 +197,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         k : (3,) ndarray
             k-point
         exx : bool or str
-            Whether this is an exchange matrix element.
+            Whether this is an exchange matrix element
         mf : instance of :class:`SCF`
 
     Returns:
@@ -206,8 +206,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         mesh : (3,) ndarray of ints (= nx,ny,nz)
             The number G-vectors along each direction.
         omega : float
-            Enable Coulomb kernel erf(|omega|*r12)/r12 if omega > 0
-            and erfc(|omega|*r12)/r12 if omega < 0.
+            Enable Coulomb kernel ``erf(|omega|*r12)/r12`` if omega > 0
+            and ``erfc(|omega|*r12)/r12`` if omega < 0.
             Note this parameter is slightly different to setting cell.omega
             for the treatment of exxdiv (at G0).  cell.omega affects Ewald
             probe charge at G0. It is used mostly by RSH functionals for
@@ -553,12 +553,14 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
 
 def super_cell(cell, ncopy, wrap_around=False):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
-    Note this function differs from :fun:`cell_plus_imgs` that cell_plus_imgs
+    Note this function differs from :func:`cell_plus_imgs` that cell_plus_imgs
     creates images in both +/- direction.
 
     Args:
         cell : instance of :class:`Cell`
+
         ncopy : (3,) array
+
         wrap_around : bool
             Put the original cell centered on the super cell. It has the
             effects corresponding to the parameter wrap_around of
@@ -596,7 +598,7 @@ def super_cell(cell, ncopy, wrap_around=False):
 
 def cell_plus_imgs(cell, nimgs):
     '''Create a supercell via nimgs[i] in each +/- direction, as in get_lattice_Ls().
-    Note this function differs from :fun:`super_cell` that super_cell only
+    Note this function differs from :func:`super_cell` that super_cell only
     stacks the images in + direction.
 
     Args:

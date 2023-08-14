@@ -120,7 +120,7 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             An arbitrary "band" k-point at which J is evaluated.
 
     Returns:
@@ -150,7 +150,7 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3),
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             An arbitrary "band" k-point at which J and K are evaluated.
 
     Returns:
