@@ -211,7 +211,7 @@ def stratmann(g):
 
 def original_becke(g):
     '''Becke, JCP 88, 2547 (1988); DOI:10.1063/1.454033'''
-#    This funciton has been optimized in the C code VXCgen_grid
+#    This function has been optimized in the C code VXCgen_grid
 #    g = (3 - g**2) * g * .5
 #    g = (3 - g**2) * g * .5
 #    g = (3 - g**2) * g * .5
@@ -385,7 +385,7 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, cutoff=CUTOFF,
 
 def arg_group_grids(mol, coords, box_size=GROUP_BOX_SIZE):
     '''
-    Parition the entire space into small boxes according to the input box_size.
+    Partition the entire space into small boxes according to the input box_size.
     Group the grids against these boxes.
     '''
     atom_coords = mol.atom_coords()

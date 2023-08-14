@@ -1582,7 +1582,7 @@ def get_trans_moments(adc):
         T_bb = get_trans_moments_orbital(adc,orb, spin="beta")
         T_b.append(T_bb)
 
-    cput0 = log.timer_debug1("completed spec vactor calc in ADC(3) calculation", *cput0)
+    cput0 = log.timer_debug1("completed spec vector calc in ADC(3) calculation", *cput0)
     return (T_a, T_b)
 
 
