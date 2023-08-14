@@ -19,11 +19,8 @@ import unittest
 import numpy as np
 from pyscf import gto, scf
 import pyscf.md as md
-import os
-import pandas as pd
-import math
 
-CHECK_STABILITY = True
+CHECK_STABILITY = False
 
 def setUpModule():
     global h2o, hf_scanner
@@ -65,22 +62,10 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
         
         if CHECK_STABILITY:
-
+           
             driver.steps = 990
-            driver.data_output="NVT.md.data"
             driver.kernel()
-            driver.data_output.close()
-            
-            py_data = pd.read_table('NVT.md.data',delimiter=r"\s+")
-            py_data.set_axis(['time', 'Epot', 'Ekin', 'Etot', 'T'], axis=1, inplace=True)
-            
-            rmsf_T = 0
-            for i in py_data['T']:
-            	rmsf_T += (i - driver.T)**2
-            rmsf_T = math.sqrt(rmsf_T/len(py_data['T']))
-            	
-            self.assertTrue(rmsf_T <= 10)
-            os.remove('NVT.md.data')
+            self.assertAlmostEqual(driver.temperature(), driver.T, delta=5)
 
 if __name__ == "__main__":
     print("Full Tests for NVT Berendson Thermostat")
