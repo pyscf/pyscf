@@ -32,6 +32,7 @@ from pyscf.pbc.tools import pbc as pbctools
 def get_Dmat(op, l):
     '''
     Get Wigner D-matrix
+
     Args:
         op : (3,3) ndarray
             rotation operator in (x,y,z) system
@@ -133,7 +134,9 @@ class Symmetry():
 
     Attributes:
         cell : :class:`Cell` object
+
         spacegroup : :class:`SpaceGroup` object
+
         symmorphic : bool
             Whether space group is symmorphic
         has_inversion : bool
@@ -288,6 +291,7 @@ def transform_mo_coeff(cell, kpt_scaled, mo_coeff, op, Dmats):
 
     Args:
         cell : :class:`Cell` object
+
         kpt_scaled : (3,) array
             scaled k-point
         mo_coeff : (nao, nmo) array

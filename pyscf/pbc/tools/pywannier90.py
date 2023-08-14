@@ -22,8 +22,10 @@ Hung Q. Pham
 email: pqh3.14@gmail.com
 
 (2)
-Another wannier90 python interface is available on the repo:
+Another wannier90 python interface is available on the repo::
+
     https://github.com/zhcui/wannier90
+
 Contact its author "Zhihao Cui" <zcui@caltech.edu> for more details of
 installation and implementations.
 '''
@@ -152,6 +154,7 @@ def R_r(r_norm, r=1, zona=1):
 def theta(func, cost, phi):
     r'''
     Basic angular functions (s,p,d,f) used to compute \Theta_{l,m_r}(\theta,\phi)
+
     ref: Table 3.1 of the Wannier90 User guide
         Link: https://github.com/wannier-developers/wannier90/raw/v3.1.0/doc/compiled_docs/user_guide.pdf
     '''
@@ -194,6 +197,7 @@ def theta(func, cost, phi):
 def theta_lmr(l, mr, cost, phi):
     r'''
     Compute the value of \Theta_{l,m_r}(\theta,\phi)
+
     ref: Table 3.1 and 3.2 of the Wannier90 User guide
         Link: https://github.com/wannier-developers/wannier90/raw/v3.1.0/doc/compiled_docs/user_guide.pdf
     '''
@@ -282,11 +286,14 @@ def theta_lmr(l, mr, cost, phi):
 def g_r(grids_coor, site, l, mr, r, zona, x_axis=[1,0,0], z_axis=[0,0,1], unit='B'):
     r'''
     Evaluate the projection function g(r) or \Theta_{l,m_r}(\theta,\phi) on a grid
+
     ref: Chapter 3, wannier90 User Guide
+
     Attributes:
         grids_coor : a grids for the cell of interest
         site       : absolute coordinate (in Borh/Angstrom) of the g(r) in the cell
         l, mr      : l and mr value in the Table 3.1 and 3.2 of the ref
+
     Return:
         theta_lmr  : an array (ngrid, value) of g(r)
 
@@ -317,6 +324,7 @@ def g_r(grids_coor, site, l, mr, r, zona, x_axis=[1,0,0], z_axis=[0,0,1], unit='
 def get_wigner_seitz_supercell(w90, ws_search_size=[2,2,2], ws_distance_tol=1e-6):
     '''
     Return a grid that contains all the lattice within the Wigner-Seitz supercell
+
     Ref: the hamiltonian_wigner_seitz(count_pts) in wannier90/src/hamittonian.F90
     '''
 
@@ -365,6 +373,7 @@ def get_wigner_seitz_supercell(w90, ws_search_size=[2,2,2], ws_distance_tol=1e-6
 def R_wz_sc(w90, R_in, R0, ws_search_size=[2,2,2], ws_distance_tol=1e-6):
     '''
     TODO: document it
+
     Ref: This is the replication of the R_wz_sc function of ws_distance.F90
     '''
     ndegenx = 8 #max number of unit cells that can touch in a single point (i.e.  vertex of cube)
@@ -421,6 +430,7 @@ def R_wz_sc(w90, R_in, R0, ws_search_size=[2,2,2], ws_distance_tol=1e-6):
 def ws_translate_dist(w90, irvec, ws_search_size=[2,2,2], ws_distance_tol=1e-6):
     '''
     TODO: document it
+
     Ref: This is the replication of the ws_translate_dist function of ws_distance.F90
     '''
     nrpts = irvec.shape[0]
@@ -565,7 +575,7 @@ class W90:
 
     def make_win(self):
         '''
-        Make a basic *.win file for wannier90
+        Make a basic ``*.win`` file for wannier90
         '''
 
         win_file = open('wannier90.win', "w")
@@ -846,8 +856,9 @@ class W90:
                              use_ws_distance=True, ws_search_size=[2,2,2],
                              ws_distance_tol=1e-6):
         ''' Interpolate the band structure using the Slater-Koster scheme
-            Return:
-                eigenvalues and eigenvectors at the desired kpts
+
+        Return:
+            eigenvalues and eigenvectors at the desired kpts
         '''
 
         assert self.U_matrix is not None, "You must wannierize first, then you can run this function"
@@ -871,8 +882,9 @@ class W90:
     def interpolate_band(self, frac_kpts, ham_kpts=None, use_ws_distance=True,
                          ws_search_size=[2,2,2], ws_distance_tol=1e-6):
         ''' Interpolate the band structure using the Slater-Koster scheme
-            Return:
-                eigenvalues and eigenvectors at the desired kpts
+
+        Return:
+            eigenvalues and eigenvectors at the desired kpts
         '''
 
         assert self.U_matrix is not None, (
@@ -1031,7 +1043,9 @@ class W90:
     def plot_wf(self, outfile='MLWF', wf_list=None, supercell=[1,1,1], grid=[50,50,50]):
         '''
         Export Wannier function at cell R
+
         xsf format: http://web.mit.edu/xcrysden_v1.5.60/www/XCRYSDEN/doc/XSF.html
+
         Attributes:
             wf_list        : a list of MLWFs to plot
             supercell    : a supercell used for plotting
@@ -1090,7 +1104,9 @@ class W90:
                         supercell=[1,1,1], grid=[50,50,50]):
         '''
         Export Wannier function at cell R
+
         xsf format: http://web.mit.edu/xcrysden_v1.5.60/www/XCRYSDEN/doc/XSF.html
+
         Attributes:
             wf_list        : a list of MLWFs to plot
             supercell    : a supercell used for plotting
