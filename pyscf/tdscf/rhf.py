@@ -604,13 +604,13 @@ def as_scanner(td):
 
     Examples::
 
-    >>> from pyscf import gto, scf, tdscf
-    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-    >>> td_scanner = tdscf.TDHF(scf.RHF(mol)).as_scanner()
-    >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-    [ 0.34460866  0.34460866  0.7131453 ]
-    >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
-    [ 0.14844013  0.14844013  0.47641829]
+        >>> from pyscf import gto, scf, tdscf
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+        >>> td_scanner = tdscf.TDHF(scf.RHF(mol)).as_scanner()
+        >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+        [ 0.34460866  0.34460866  0.7131453 ]
+        >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+        [ 0.14844013  0.14844013  0.47641829]
     '''
     if isinstance(td, lib.SinglePointScanner):
         return td
