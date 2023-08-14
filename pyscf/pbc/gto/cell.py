@@ -1689,6 +1689,7 @@ class Cell(mole.Mole):
 
         Args:
             abs_kpts : (nkpts, 3) ndarray of floats or :class:`KPoints` object
+
             kpts_in_ibz : bool
                 If True, return k-points in IBZ; otherwise, return k-points in BZ.
                 Default value is True. This has effects only if abs_kpts is a

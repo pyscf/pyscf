@@ -218,10 +218,13 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
 
     Kwargs:
         molpro_orbsym (bool): Whether the orbsym in the FCIDUMP file is in
-            Molpro orbsym convention as documented in
-            https://www.molpro.net/info/current/doc/manual/node36.html
+            Molpro orbsym convention as documented in::
+
+                https://www.molpro.net/info/current/doc/manual/node36.html
+
             In return, orbsym is converted to pyscf symmetry convention
         verbose (bool): Whether to print debugging information
+
     '''
     if verbose:
         print('Parsing %s' % filename)

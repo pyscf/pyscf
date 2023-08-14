@@ -252,8 +252,10 @@ def _gen_batch_nuc(mol):
 
 def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=False):
     '''Contraction between sgX Coulomb integrals and density matrices
-    J: einsum('guv,xg->xuv', gbn, dms) if dms == rho at grid
-       einsum('gij,xij->xg', gbn, dms) if dms are density matrices
+
+    J: einsum('guv,xg->xuv', gbn, dms) if dms == rho at grid,
+    or einsum('gij,xij->xg', gbn, dms) if dms are density matrices
+
     K: einsum('gtv,xgt->xgv', gbn, fg)
     '''
     if sgxopt is None:
