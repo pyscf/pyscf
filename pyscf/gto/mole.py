@@ -21,7 +21,8 @@ Mole class and helper functions to handle paramters and attributes for GTO
 integrals. This module serves the interface to the integral library libcint.
 '''
 
-import os, sys
+import os
+import sys
 import types
 import re
 import platform
