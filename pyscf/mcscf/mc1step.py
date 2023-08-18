@@ -741,6 +741,7 @@ class CASSCF(casci.CASCI):
     sorting_mo_energy = getattr(__config__, 'mcscf_mc1step_CASSCF_sorting_mo_energy', False)
     scale_restoration = getattr(__config__, 'mcscf_mc1step_CASSCF_scale_restoration', 0.5)
     small_rot_tol = getattr(__config__, 'mcscf_mc1step_CASSCF_small_rot_tol', 0.01)
+    extrasym = None
 
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
@@ -786,6 +787,8 @@ class CASSCF(casci.CASCI):
                  self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
         if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
+        if self.extrasym is not None:
+            log.info('Extra symmetry labels:\n%s', str(self.extrasym))
         log.info('max_cycle_macro = %d', self.max_cycle_macro)
         log.info('max_cycle_micro = %d', self.max_cycle_micro)
         log.info('conv_tol = %g', self.conv_tol)
@@ -933,6 +936,11 @@ To enable the solvent model for CASSCF, the following code needs to be called
         mask[nocc:,:nocc] = True
         if self.internal_rotation:
             mask[ncore:nocc,ncore:nocc][numpy.tril_indices(ncas,-1)] = True
+        if self.extrasym is not None:
+            extrasym = numpy.asarray(self.extrasym)
+            # Allow rotation only if extra symmetry labels are the same
+            extrasym_allowed = extrasym.reshape(-1, 1) == extrasym
+            mask = mask * extrasym_allowed
         if frozen is not None:
             if isinstance(frozen, (int, numpy.integer)):
                 mask[:frozen] = mask[:,:frozen] = False
