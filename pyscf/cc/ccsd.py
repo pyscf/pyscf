@@ -88,6 +88,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         if abs(eccsd-eold) < tol and normt < tolnormt:
             conv = True
             break
+        if numpy.isnan(normt):
+            logger.warn(mycc, 'CCSD diverges to infinite value')
+            break
     log.timer('CCSD', *cput0)
     return conv, eccsd, t1, t2
 
