@@ -61,7 +61,7 @@ dft.kroks.KROKS.TDDFT = None
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
-    from pyscf.pbc import dft, df
+    from pyscf.pbc import dft
     cell = gto.Cell()
     cell.unit = 'B'
     cell.atom = '''
