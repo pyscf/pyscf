@@ -28,7 +28,8 @@ Contact its author "Zhihao Cui" <zcui@caltech.edu> for more details of
 installation and implementations.
 '''
 
-import os, time
+import os
+import time
 import numpy as np
 from scipy.io import FortranFile
 import pyscf.data.nist as param

@@ -20,7 +20,8 @@
 Some helper functions
 '''
 
-import os, sys
+import os
+import sys
 import warnings
 import tempfile
 import functools
