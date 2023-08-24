@@ -171,7 +171,7 @@ frac_occ = frac_occ_
 
 def dynamic_occ_(mf, tol=1e-3):
     '''
-    Dyanmically adjust the occupancy to avoid degeneracy between HOMO and LUMO
+    Dynamically adjust the occupancy to avoid degeneracy between HOMO and LUMO
     '''
     assert (isinstance(mf, hf.RHF))
     old_get_occ = mf.get_occ
@@ -613,7 +613,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
         # Remove with_df for SOSCF method because the post-HF code checks the
         # attribute .with_df to identify whether an SCF object is DF-SCF method.
         # with_df in SOSCF is used in orbital hessian approximation only.  For the
-        # returned SCF object, whehter with_df exists in SOSCF has no effects on the
+        # returned SCF object, whether with_df exists in SOSCF has no effects on the
         # mean-field energy and other properties.
         if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
@@ -973,7 +973,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
             mf0._numint = approx_numint
 # Note: by setting small_rho_cutoff, dft.get_veff function may overwrite
 # approx_grids and approx_numint.  It will further changes the corresponding
-# mf1 grids and _numint.  If inital guess dm0 or mo_coeff/mo_occ were given,
+# mf1 grids and _numint.  If initial guess dm0 or mo_coeff/mo_occ were given,
 # dft.get_veff are not executed so that more grid points may be found in
 # approx_grids.
             mf0.small_rho_cutoff = mf.small_rho_cutoff * 10
@@ -1005,7 +1005,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 #    def mf_kernel(*args, **kwargs):
 #        logger.warn(mf, "fast_newton is a wrap function to quickly setup and call Newton solver. "
 #                    "There's no need to call kernel function again for fast_newton.")
-#        del (mf.kernel)  # warn once and remove circular depdence
+#        del (mf.kernel)  # warn once and remove circular dependence
 #        return mf.e_tot
 #    mf.kernel = mf_kernel
     return mf

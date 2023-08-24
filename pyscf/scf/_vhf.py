@@ -209,7 +209,7 @@ class _CVHFOpt(ctypes.Structure):
 
 ################################################
 # for general DM
-# hermi = 0 : arbitary
+# hermi = 0 : arbitrary
 # hermi = 1 : hermitian
 # hermi = 2 : anti-hermitian
 ################################################

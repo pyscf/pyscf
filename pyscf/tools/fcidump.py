@@ -160,7 +160,7 @@ def from_integrals(filename, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=None,
 def from_mo(mol, filename, mo_coeff, orbsym=None,
             tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
             molpro_orbsym=MOLPRO_ORBSYM, ms=0):
-    '''Use the given MOs to transfrom the 1-electron and 2-electron integrals
+    '''Use the given MOs to transform the 1-electron and 2-electron integrals
     then dump them to FCIDUMP.
 
     Kwargs:
@@ -184,7 +184,7 @@ def from_mo(mol, filename, mo_coeff, orbsym=None,
 
 def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
              molpro_orbsym=MOLPRO_ORBSYM):
-    '''Use the given SCF object to transfrom the 1-electron and 2-electron
+    '''Use the given SCF object to transform the 1-electron and 2-electron
     integrals then dump them to FCIDUMP.
 
     Kwargs:
