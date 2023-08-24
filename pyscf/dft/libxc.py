@@ -884,7 +884,7 @@ def xc_type(xc_code):
             raise RuntimeError('Deprecated notation for NLC functional.')
         hyb, fn_facs = parse_xc(xc_code)
     else:
-        assert isinstance(xc_code, int)
+        assert numpy.issubdtype(type(xc_code), numpy.integer)
         fn_facs = [(xc_code, 1)]  # mimic fn_facs
 
     if not fn_facs:
@@ -916,7 +916,7 @@ def is_hybrid_xc(xc_code):
             if rsh_coeff(xc_code) != (0, 0, 0):
                 return True
             return False
-    elif isinstance(xc_code, int):
+    elif numpy.issubdtype(type(xc_code), numpy.integer):
         return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
     else:
         return any((is_hybrid_xc(x) for x in xc_code))
@@ -935,7 +935,7 @@ def is_nlc(xc_code):
         else:
             fn_facs = parse_xc(xc_code)[1]
             return any(_itrf.LIBXC_is_nlc(ctypes.c_int(xid)) for xid, fac in fn_facs)
-    elif isinstance(xc_code, int):
+    elif numpy.issubdtype(type(xc_code), numpy.integer):
         return _itrf.LIBXC_is_nlc(ctypes.c_int(xc_code))
     else:
         return any((is_nlc(x) for x in xc_code))
@@ -1096,7 +1096,7 @@ def parse_xc(description):
     hyb = [0, 0, 0]  # hybrid, alpha, omega (== SR_HF, LR_HF, omega)
     if description is None:
         return tuple(hyb), ()
-    elif isinstance(description, int):
+    elif numpy.issubdtype(type(description), numpy.integer):
         return tuple(hyb), ((description, 1.),)
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
