@@ -880,7 +880,8 @@ class UHF(hf.SCF):
         user_set_breaksym = getattr(self, "init_guess_breaksym", None)
         if user_set_breaksym is not None:
             breaksym = user_set_breaksym
-        logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089, employing the updated GWH rule from doi:10.1021/ja00480a005.')
+        logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol, updated_rule = True)
         mo_energy = (mo_energy, mo_energy)
         mo_coeff = (mo_coeff, mo_coeff)

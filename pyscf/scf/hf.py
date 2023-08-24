@@ -1623,7 +1623,8 @@ class SCF(lib.StreamObject):
     @lib.with_doc(init_guess_by_mod_huckel.__doc__)
     def init_guess_by_mod_huckel(self, updated_rule, mol=None):
         if mol is None: mol = self.mol
-        logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089, employing the updated GWH rule from doi:10.1021/ja00480a005.')
+        logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol, updated_rule=True)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
