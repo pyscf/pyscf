@@ -30,7 +30,9 @@ from pyscf.fci.direct_spin1 import _unpack_nelec
 from pyscf.fci.spin_op import spin_square0
 from pyscf.fci import cistring
 import numpy as np
-import copy, time, gc
+import copy
+import time
+import gc
 from functools import reduce
 from scipy import linalg
 from pyscf.df.grad.casdm2_util import solve_df_rdm2, grad_elec_dferi, grad_elec_auxresponse_dferi

@@ -1,5 +1,5 @@
 import unittest
-from pyscf import gto,scf,lib
+from pyscf import gto, scf, lib
 import numpy as np
 from pyscf.mcscf import apc
 

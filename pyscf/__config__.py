@@ -1,4 +1,6 @@
-import os, sys, tempfile
+import os
+import sys
+import tempfile
 
 #
 # All parameters initialized before loading pyscf_conf.py will be overwritten
