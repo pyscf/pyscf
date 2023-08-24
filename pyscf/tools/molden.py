@@ -303,7 +303,7 @@ def _parse_core(lines, envs):
             mol.ecp[atoms[atm_id][0]] = [nelec_core, []]
 
     if mol.ecp:
-        sys.stderr.write('\nECP were dectected in the molden file.\n'
+        sys.stderr.write('\nECP were detected in the molden file.\n'
                          'Note Molden format does not support ECP data. '
                          'ECP information was lost when saving to molden format.\n\n')
     return mol.ecp
@@ -441,7 +441,7 @@ def header(mol, fout, ignore_h=IGNORE_H):
     fout.write('\n')
 
 def order_ao_index(mol):
-    # reorder d,f,g fucntion to
+    # reorder d,f,g function to
     #  5D: D 0, D+1, D-1, D+2, D-2
     #  6D: xx, yy, zz, xy, xz, yz
     #

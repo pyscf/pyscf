@@ -284,7 +284,7 @@ def fock_loop(agf2, eri, gf, se):
 
     Returns:
         :class:`SelfEnergy`, :class:`GreensFunction` and a boolean
-        indicating wheter convergence was successful.
+        indicating whether convergence was successful.
     '''
 
     assert type(gf) is aux.GreensFunction

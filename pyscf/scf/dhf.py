@@ -233,7 +233,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
             Whether to project chkfile's orbitals to the new basis.  Note when
             the geometry of the chkfile and the given molecule are very
             different, this projection can produce very poor initial guess.
-            In PES scanning, it is recommended to swith off project.
+            In PES scanning, it is recommended to switch off project.
 
             If project is set to None, the projection is only applied when the
             basis sets of the chkfile's molecule are different to the basis
@@ -331,7 +331,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
                      i+1, mo_energy[i], mo_occ[i])
     mol = mf.mol
     if mf.verbose >= logger.DEBUG1:
-        log.debug(' ** MO coefficients of large component of postive state (real part) **')
+        log.debug(' ** MO coefficients of large component of positive state (real part) **')
         label = mol.spinor_labels()
         n2c = mo_coeff.shape[0] // 2
         dump_mat.dump_rec(mf.stdout, mo_coeff[n2c:,:n2c].real, label, start=1)

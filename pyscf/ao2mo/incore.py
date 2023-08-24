@@ -80,7 +80,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals

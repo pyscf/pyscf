@@ -396,7 +396,7 @@ def MakeAtomInfos():
 
 
 def MakeAtomIbOffsets(Atoms):
-    """calcualte offset of first orbital of individual atoms
+    """calculate offset of first orbital of individual atoms
     in the valence minimal basis (IB)"""
     nCoreX, nAoX, AoLabels = MakeAtomInfos()
     iBfAt = [0]

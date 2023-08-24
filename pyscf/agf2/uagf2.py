@@ -316,10 +316,10 @@ def energy_2body(agf2, gf, se):
 
 
 def energy_mp2(agf2, gf, se):
-    ''' Calculates the two-bdoy energy using analytically integrated
+    ''' Calculates the two-body energy using analytically integrated
         Galitskii-Migdal formula for an MP2 self-energy. Per the
         definition of one- and two-body partitioning in the Dyson
-        equation, this reuslt is half of :func:`energy_2body`.
+        equation, this result is half of :func:`energy_2body`.
 
     Args:
         gf : tuple of GreensFunction
