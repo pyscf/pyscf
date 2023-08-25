@@ -35,7 +35,7 @@ from pyscf.data import elements
 from pyscf import __config__
 
 # Note the valence space for Li, Be may need include 2p, Al..Cl may need 3d ...
-# This is No. of shells, not the atomic configuations
+# This is No. of shells, not the atomic configurations
 #     core       core+valence
 # core+valence = lambda nuc, l: \
 #            int(numpy.ceil(elements.CONFIGURATION[nuc][l]/(4*l+2.)))
@@ -196,7 +196,7 @@ def _core_val_ryd_list(mol):
 
 @lru_cache(10)
 def _cart_averge_wt(l):
-    '''Weight matrix for spherical symmetry averaging in Cartensian GTOs'''
+    '''Weight matrix for spherical symmetry averaging in Cartesian GTOs'''
     c = mole.cart2sph(l, normalized='sp')
     return numpy.einsum('pi,qi->pq', c, c)
 
