@@ -225,6 +225,12 @@ def init_guess_by_huckel(mol):
     dm = hf.init_guess_by_huckel(mol)
     return _proj_dmll(mol, dm, mol)
 
+def init_guess_by_mod_huckel(mol):
+    '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+    employing the updated GWH rule from doi:10.1021/ja00480a005.'''
+    dm = hf.init_guess_by_mod_huckel(mol)
+    return _proj_dmll(mol, dm, mol)
+
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for 4C-DHF initial guess.
 
@@ -283,7 +289,7 @@ def get_init_guess(mol, key='minao'):
 
     Kwargs:
         key : str
-            One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
+            One of 'minao', 'atom', 'huckel', 'mod_huckel', 'hcore', '1e', 'chkfile'.
     '''
     return UHF(mol).get_init_guess(mol, key)
 
@@ -495,6 +501,13 @@ class DHF(hf.SCF):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
         return init_guess_by_huckel(mol)
+
+    @lib.with_doc(hf.SCF.init_guess_by_mod_huckel.__doc__)
+    def init_guess_by_mod_huckel(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+employing the updated GWH rule from doi:10.1021/ja00480a005.''')
+        return init_guess_by_mod_huckel(mol)
 
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile

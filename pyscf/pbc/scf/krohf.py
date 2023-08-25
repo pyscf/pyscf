@@ -316,6 +316,7 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
     init_guess_by_minao  = pbcrohf.ROHF.init_guess_by_minao
     init_guess_by_atom   = pbcrohf.ROHF.init_guess_by_atom
     init_guess_by_huckel = pbcrohf.ROHF.init_guess_by_huckel
+    init_guess_by_mod_huckel = pbcrohf.ROHF.init_guess_by_mod_huckel
 
     get_rho = get_rho
 
