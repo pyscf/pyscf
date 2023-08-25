@@ -166,7 +166,7 @@ class Boys(ciah.CIAHOptimizer):
         max_iters : int
             The max. number of iterations in each macro iteration. Default 20
         max_stepsize : float
-            The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
+            The step size for orbital rotation.  Small step (0.005 - 0.05) is preferred.
             Default 0.03.
         init_guess : str or None
             Initial guess for optimization. If set to None, orbitals defined
