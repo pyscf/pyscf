@@ -522,22 +522,52 @@ def init_guess_by_huckel(mol):
     Returns:
         Density matrix, 2D ndarray
     '''
-    mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol)
+    mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol, updated_rule = False)
     mo_occ = get_occ(SCF(mol), mo_energy, mo_coeff)
     return make_rdm1(mo_coeff, mo_occ)
 
-def _init_guess_huckel_orbitals(mol):
+def init_guess_by_mod_huckel(mol):
     '''Generate initial guess density matrix from a Huckel calculation based
     on occupancy averaged atomic RHF calculations, doi:10.1021/acs.jctc.8b01089
+
+    In contrast to init_guess_by_huckel, this routine employs the
+    updated GWH rule from doi:10.1021/ja00480a005 to form the guess.
+
+    Returns:
+        Density matrix, 2D ndarray
+
+    '''
+    mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol, updated_rule = True)
+    mo_occ = get_occ(SCF(mol), mo_energy, mo_coeff)
+    return make_rdm1(mo_coeff, mo_occ)
+
+def Kgwh(Ei, Ej, updated_rule=False):
+    '''Computes the generalized Wolfsberg-Helmholtz parameter'''
+
+    # GWH parameter value
+    k = 1.75
+
+    if updated_rule:
+        '''Updated scheme from J. Am. Chem. Soc. 100, 3686 (1978); doi:10.1021/ja00480a005'''
+        Delta = (Ei-Ej)/(Ei+Ej)
+        return k + Delta**2 + Delta**4 * (1 - k)
+    else:
+        '''Original rule'''
+        return k
+
+def _init_guess_huckel_orbitals(mol, updated_rule = False):
+    '''Generate initial guess density matrix from a Huckel calculation based
+    on occupancy averaged atomic RHF calculations, doi:10.1021/acs.jctc.8b01089
+
+    Arguments:
+        mol, the molecule
+        updated_rule, boolean triggering use of the updated GWH rule from doi:10.1021/ja00480a005
 
     Returns:
         An 1D array for Huckel orbital energies and an 2D array for orbital coefficients
     '''
     from pyscf.scf import atom_hf
     atm_scf = atom_hf.get_atm_nrhf(mol)
-
-    # GWH parameter value
-    Kgwh = 1.75
 
     # Run atomic SCF calculations to get orbital energies, coefficients and occupations
     at_e = []
@@ -610,7 +640,7 @@ def _init_guess_huckel_orbitals(mol):
         orb_H[io,io] = orb_E[io]
         for jo in range(io):
             # Off-diagonal is given by GWH approximation
-            orb_H[io,jo] = 0.5*Kgwh*orb_S[io,jo]*(orb_E[io]+orb_E[jo])
+            orb_H[io,jo] = 0.5*Kgwh(orb_E[io],orb_E[jo],updated_rule=updated_rule)*orb_S[io,jo]*(orb_E[io]+orb_E[jo])
             orb_H[jo,io] = orb_H[io,jo]
 
     # Energies and coefficients in the minimal orbital basis
@@ -1586,7 +1616,16 @@ class SCF(lib.StreamObject):
     def init_guess_by_huckel(self, mol=None):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
-        mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol)
+        mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol, updated_rule=False)
+        mo_occ = self.get_occ(mo_energy, mo_coeff)
+        return self.make_rdm1(mo_coeff, mo_occ)
+
+    @lib.with_doc(init_guess_by_mod_huckel.__doc__)
+    def init_guess_by_mod_huckel(self, updated_rule, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+employing the updated GWH rule from doi:10.1021/ja00480a005.''')
+        mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol, updated_rule=True)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
@@ -1623,6 +1662,8 @@ class SCF(lib.StreamObject):
             dm = self.init_guess_by_1e(mol)
         elif key == 'huckel':
             dm = self.init_guess_by_huckel(mol)
+        elif key == 'mod_huckel':
+            dm = self.init_guess_by_mod_huckel(mol)
         elif getattr(mol, 'natm', 0) == 0:
             logger.info(self, 'No atom found in mol. Use 1e initial guess')
             dm = self.init_guess_by_1e(mol)

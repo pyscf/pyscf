@@ -508,6 +508,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
     init_guess_by_minao  = pbcuhf.UHF.init_guess_by_minao
     init_guess_by_atom   = pbcuhf.UHF.init_guess_by_atom
     init_guess_by_huckel = pbcuhf.UHF.init_guess_by_huckel
+    init_guess_by_mod_huckel = pbcuhf.UHF.init_guess_by_mod_huckel
 
     @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,

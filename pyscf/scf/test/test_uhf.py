@@ -96,6 +96,12 @@ class KnownValues(unittest.TestCase):
         dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='huckel')
         self.assertAlmostEqual(lib.fp(dm2), 0.6174062069308063, 7)
 
+    def test_init_guess_mod_huckel(self):
+        dm1 = mf.init_guess_by_mod_huckel(mol, breaksym=False)
+        self.assertAlmostEqual(lib.fp(dm1), 0.575004422279537, 7)
+        dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='mod_huckel')
+        self.assertAlmostEqual(lib.fp(dm2), 0.601086728278398, 7)
+
     def test_1e(self):
         mf = scf.uhf.HF1e(mol)
         self.assertAlmostEqual(mf.scf(), -23.867818585778764, 9)

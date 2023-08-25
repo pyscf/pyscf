@@ -66,6 +66,10 @@ class KnownValues(unittest.TestCase):
         dm = scf.dhf.DHF(mol).get_init_guess(mol, key='huckel')
         self.assertAlmostEqual(lib.fp(dm), (-0.6090467376579871-0.08968155321478456j), 8)
 
+    def test_init_guess_mod_huckel(self):
+        dm = scf.dhf.DHF(mol).get_init_guess(mol, key='mod_huckel')
+        self.assertAlmostEqual(lib.fp(dm), (-0.5563045659111319-0.0897593233637678j), 8)
+
     def test_get_hcore(self):
         h = mf.get_hcore()
         self.assertAlmostEqual(numpy.linalg.norm(h), 129.81389477933607, 7)

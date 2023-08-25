@@ -239,6 +239,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm), 2.01095497354225, 5)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 20, 9)
 
+    def test_init_guess_huckel(self):
+        dm = scf.hf.RHF(mol).get_init_guess(mol, key='mod_huckel')
+        self.assertAlmostEqual(lib.fp(dm), 3.233072986208057, 5)
+
+        dm = scf.ROHF(mol).init_guess_by_mod_huckel()
+        self.assertAlmostEqual(lib.fp(dm[0]), 3.233072986208057/2, 5)
+
     def test_1e(self):
         mf = scf.rohf.HF1e(mol)
         self.assertAlmostEqual(mf.scf(), -23.867818585778764, 9)
