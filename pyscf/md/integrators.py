@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Authors: Matthew Hennefarth <matthew.hennefarth@gmail.com>, Aniruddha Seal <aniruddhaseal2011@gmail.com>
+# Authors: Matthew Hennefarth <matthew.hennefarth@gmail.com>,
+#          Aniruddha Seal <aniruddhaseal2011@gmail.com>
 
 import os
 import numpy as np
@@ -157,7 +158,8 @@ class _Integrator(lib.StreamObject):
             Default is self.scanner.mol.stdout.
 
         data_output : file object
-            Stream to write energy and temperature to during the course of the simulation.
+            Stream to write energy and temperature to
+            during the course of the simulation.
 
         trajectory_output : file object
             Stream to write the trajectory to during the course of the
@@ -201,7 +203,7 @@ class _Integrator(lib.StreamObject):
         self.veloc = None
         self.verbose = self.mol.verbose
         self.steps = 1
-        self.dt = 10        
+        self.dt = 10
         self.frames = None
         self.epot = None
         self.ekin = None
@@ -239,7 +241,8 @@ class _Integrator(lib.StreamObject):
                 Print level
 
         Returns:
-            _Integrator with final epot, ekin, temp, mol, and veloc of the simulation.
+            _Integrator with final epot, ekin, temp,
+            mol, and veloc of the simulation.
         '''
 
         if veloc is not None:
@@ -260,7 +263,7 @@ class _Integrator(lib.StreamObject):
         self._masses = np.array([
             data.elements.COMMON_ISOTOPE_MASSES[m] * data.nist.AMU2AU
             for m in self.mol.atom_charges()])
-                
+
         # avoid opening data_output file twice
         if type(self.data_output) is str:
             if self.verbose > logger.QUIET:
@@ -279,7 +282,6 @@ class _Integrator(lib.StreamObject):
                     'time          Epot                 Ekin                 '
                     'Etot                 T\n'
                 )
-
 
         # avoid opening trajectory_output file twice
         if type(self.trajectory_output) is str:
@@ -310,7 +312,7 @@ class _Integrator(lib.StreamObject):
         log.info('')
         log.info('******** BOMD flags ********')
         log.info('dt = %f', self.dt)
-        log.info('Iterations = %d', self.steps)      
+        log.info('Iterations = %d', self.steps)
         log.info('                   Initial Velocity                  ')
         log.info('             vx              vy              vz')
         for i, (e, v) in enumerate(zip(self.mol.elements, self.veloc)):
@@ -395,9 +397,10 @@ class _Integrator(lib.StreamObject):
         self.data_output stream. '''
 
         output = '%8.2f  %.12E  %.12E  %.12E %3.4f' % (self.time,
-                                                 self.epot,
-                                                 self.ekin,
-                                                 self.ekin + self.epot,self.temperature())
+                                                       self.epot,
+                                                       self.ekin,
+                                                       self.ekin + self.epot,
+                                                       self.temperature())
 
         # We follow OM of writing all the states at the end of the line
         if getattr(self.scanner.base, 'e_states', None) is not None:
@@ -496,8 +499,8 @@ class VelocityVerlet(_Integrator):
         necessary equations of motion for the velocity is
             v(t_i+1) = v(t_i) + 0.5(a(t_i+1) + a(t_i))'''
         return self.veloc + 0.5 * self.dt * (self.accel + next_accel)
-        
-        
+
+
 class NVTBerendson(_Integrator):
     '''Berendsen (constant N, V, T) molecular dynamics
 
@@ -508,12 +511,13 @@ class NVTBerendson(_Integrator):
             in order to propagate the equations of motion. Realistically,
             it can be any callable object such that it returns the energy
             and potential energy gradient when given a mol.
-            
+
         T      : float
             Target temperature for the NVT Ensemble. Given in K.
-            
+
         taut   : float
-            Time constant for Berendsen temperature coupling. Given in atomic units.
+            Time constant for Berendsen temperature coupling.
+            Given in atomic units.
 
     Attributes:
         accel : ndarray
@@ -526,10 +530,10 @@ class NVTBerendson(_Integrator):
     '''
 
     def __init__(self, method, T, taut, **kwargs):
-    	self.T = T
-    	self.taut = taut
-    	self.accel = None
-    	super().__init__(method, **kwargs)
+        self.T = T
+        self.taut = taut
+        self.accel = None
+        super().__init__(method, **kwargs)
 
     def _next(self):
         '''Computes the next frame of the simulation and sets all internal
@@ -547,7 +551,7 @@ class NVTBerendson(_Integrator):
             next_epot, next_accel = self._compute_accel()
 
         else:
-            self._scale_velocities() 
+            self._scale_velocities()
             self.mol.set_geom_(self._next_geometry(), unit='B')
             self.mol.build()
             next_epot, next_accel = self._compute_accel()
@@ -568,15 +572,17 @@ class NVTBerendson(_Integrator):
 
         a = -1 * grad / self._masses.reshape(-1, 1)
         return e_tot, a
-        
+
     def _scale_velocities(self):
         '''NVT Berendsen velocity scaling
-        v_rescale(t) = v(t) * (1 + ((T_target/T - 1) * (/delta t / taut)))^(0.5)
+        v_rescale(t) = v(t) * (1 + ((T_target/T - 1)
+                            * (/delta t / taut)))^(0.5)
         '''
         tautscl = self.dt / self.taut
         scl_temp = np.sqrt(1.0 + (self.T / self.temperature() - 1.0) * tautscl)
-        
-        # Limit the velocity scaling to reasonable values (taken from ase md/nvtberendson.py)
+
+        # Limit the velocity scaling to reasonable values
+        # (taken from ase md/nvtberendson.py)
         if scl_temp > 1.1:
             scl_temp = 1.1
         if scl_temp < 0.9:
@@ -584,7 +590,6 @@ class NVTBerendson(_Integrator):
 
         self.veloc = self.veloc * scl_temp
         return
-
 
     def _next_geometry(self):
         '''Computes the next geometry using the Velocity Verlet algorithm. The
