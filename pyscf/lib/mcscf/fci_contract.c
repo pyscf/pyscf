@@ -27,8 +27,7 @@
 #include "np_helper/np_helper.h"
 #include "fci.h"
 // for (16e,16o) ~ 11 MB buffer = 120 * 12870 * 8
-// (136*136 + 136*STRB_BLKSIZE) ~ L2 cache size
-#define STRB_BLKSIZE    280
+#define STRB_BLKSIZE    112
 
 /*
  * CPU timing of single thread can be estimated:
