@@ -90,7 +90,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
             break
         if numpy.isnan(normt):
             logger.warn(mycc, 'CCSD diverges to infinite value')
-            break
+            raise RuntimeError('Nan found in CCSD amplitudes')
     log.timer('CCSD', *cput0)
     return conv, eccsd, t1, t2
 
