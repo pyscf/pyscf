@@ -500,6 +500,7 @@ class KnownValues(unittest.TestCase):
         mol = gto.M(atom='H 0 0 0; H 0 0 1.')
         mc = mol.RHF().run().CASCI(2, 2)
         mc.fcisolver = fci.SCI(mol)
+        mc.run()
         self.assertAlmostEqual(mc.e_tot, -1.1011503302326, 9)
         self.assertAlmostEqual(abs(mc.ci[0,0]), .984513596, 5)
         self.assertAlmostEqual(abs(mc.ci[1,1]), .175308242, 5)
