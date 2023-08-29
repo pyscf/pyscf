@@ -34,8 +34,6 @@ def TDHF(mf):
     import numpy
     if isinstance(mf, scf.khf.KSCF):
         return KTDHF(mf)
-    if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
-        raise NotImplementedError('Only supports gamma-point TDHF')
     if isinstance(mf, scf.hf.KohnShamDFT):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
     #TODO: mf = mf.remove_soscf()
@@ -48,8 +46,6 @@ def TDA(mf):
     import numpy
     if isinstance(mf, scf.khf.KSCF):
         return KTDA(mf)
-    if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
-        raise NotImplementedError('Only supports gamma-point TDA')
     #TODO: mf = mf.remove_soscf()
     if isinstance(mf, scf.rohf.ROHF):
         if isinstance(mf, scf.hf.KohnShamDFT):
@@ -62,8 +58,6 @@ def TDDFT(mf):
     import numpy
     if isinstance(mf, scf.khf.KSCF):
         return KTDDFT(mf)
-    if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
-        raise NotImplementedError('Only supports gamma-point TDDFT')
     if isinstance(mf, scf.hf.KohnShamDFT):
         #TODO: mf = mf.remove_soscf()
         if isinstance(mf, scf.rohf.ROHF):
@@ -99,4 +93,3 @@ def KTDDFT(mf):
         return KTDHF(mf)
 
 KTD = KTDDFT
-
