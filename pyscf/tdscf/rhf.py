@@ -24,6 +24,7 @@
 
 from functools import reduce
 import numpy
+import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -49,7 +50,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    assert (mo_coeff.dtype == numpy.double)
+    # assert (mo_coeff.dtype == numpy.double)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff.shape
@@ -114,7 +115,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
-    assert (mo_coeff.dtype == numpy.double)
+    # assert (mo_coeff.dtype == numpy.double)
 
     mol = mf.mol
     nao, nmo = mo_coeff.shape
@@ -646,6 +647,8 @@ class TDMixin(lib.StreamObject):
     max_cycle = getattr(__config__, 'tdscf_rhf_TDA_max_cycle', 100)
     # Low excitation filter to avoid numerical instability
     positive_eig_threshold = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
+    # Threshold to handle degeneracy in init guess
+    deg_eia_thresh = getattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-3)
 
     def __init__(self, mf):
         self.verbose = mf.verbose
@@ -690,6 +693,7 @@ class TDMixin(lib.StreamObject):
             log.info('nstates = %d singlet', self.nstates)
         else:
             log.info('nstates = %d triplet', self.nstates)
+        log.info('deg_eia_thresh = %.3e', self.deg_eia_thresh)
         log.info('wfnsym = %s', self.wfnsym)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('eigh lindep = %g', self.lindep)
@@ -728,6 +732,26 @@ class TDMixin(lib.StreamObject):
             diagd[abs(diagd)<1e-8] = 1e-8
             return x/diagd
         return precond
+
+    def trunc_workspace(self, vind, x0, nstates=None, pick=None):
+        log = logger.new_logger(self)
+        if nstates is None: nstates = self.nstates
+        if x0.shape[0] <= nstates:
+            return None, x0
+        else:
+            heff = lib.einsum('xa,ya->xy', x0.conj(), vind(x0))
+            e, u = scipy.linalg.eig(heff)   # heff not necessarily Hermitian
+            e = e.real
+            order = numpy.argsort(e)
+            e = e[order]
+            u = u[:,order]
+            if callable(pick):
+                e, u = pick(e, u, None, None)[:2]
+            e = e[:nstates]
+            log.debug('truncating %d states to %d states with excitation energy (eV): %s',
+                      x0.shape[0], e.size, e*27.211399)
+            x1 = numpy.dot(x0.T, u[:,:nstates]).T
+            return e, x1
 
     analyze = analyze
     get_nto = get_nto
@@ -793,6 +817,8 @@ class TDA(TDMixin):
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
         e_ia = mo_energy[viridx] - mo_energy[occidx,None]
+        # make degenerate excitations equal for later selection by energy
+        e_ia = numpy.ceil(e_ia / self.deg_eia_thresh) * self.deg_eia_thresh
         e_ia_max = e_ia.max()
 
         if wfnsym is not None and mf.mol.symmetry:
@@ -803,12 +829,14 @@ class TDA(TDMixin):
             orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
             e_ia[(orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym] = 1e99
 
+        e_ia_uniq = numpy.unique(e_ia)
+
         nov = e_ia.size
         nstates = min(nstates, nov)
+        nstates_thresh = min(nstates, e_ia_uniq.size)
         e_ia = e_ia.ravel()
-        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
-        # Handle degeneracy, include all degenerated states in initial guess
-        e_threshold += 1e-6
+        e_threshold = min(e_ia_max, e_ia_uniq[numpy.argsort(e_ia_uniq)[nstates_thresh-1]])
+        e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
         x0 = numpy.zeros((idx.size, nov))
@@ -832,12 +860,13 @@ class TDA(TDMixin):
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
-
         def pickeig(w, v, nroots, envs):
             idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
+            x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         self.converged, self.e, x1 = \
                 lib.davidson1(vind, x0, precond,
@@ -872,7 +901,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    assert (mo_coeff.dtype == numpy.double)
+    # assert (mo_coeff.dtype == numpy.double)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff.shape
@@ -987,8 +1016,14 @@ class TDHF(TDA):
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
+
+        # handle single kpt PBC SCF
+        if getattr(self._scf, 'kpt', None) is not None:
+            from pyscf.pbc.lib.kpts_helper import gamma_point
+            real_system = (gamma_point(self._scf.kpt) and
+                           self._scf.mo_coeff[0].dtype == numpy.double)
+        else:
+            real_system = True
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
@@ -997,8 +1032,11 @@ class TDHF(TDA):
             # If the complex eigenvalue has small imaginary part, both the
             # real part and the imaginary part of the eigenvector can
             # approximately be used as the "real" eigen solutions.
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
-                                                      real_eigenvectors=True)
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
+            x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,

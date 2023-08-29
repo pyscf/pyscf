@@ -308,7 +308,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                             len(member(kpt, self.kpts_band))>0) for kpt in kpts)
 
     def sr_loop(self, kpti_kptj=numpy.zeros((2,3)), max_memory=2000,
-                compact=True, blksize=None):
+                compact=True, blksize=None, aux_slice=None):
         '''Short range part'''
         if self._cderi is None:
             self.build()
@@ -350,7 +350,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             return LpqR, LpqI
 
         with _load3c(self._cderi, self._dataname, kpti_kptj) as j3c:
-            slices = lib.prange(0, j3c.shape[0], blksize)
+            if aux_slice is None: aux_slice = (0, j3c.shape[0])
+            slices = lib.prange(*aux_slice, blksize)
             for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                 yield LpqR, LpqI, 1
                 LpqR = LpqI = None
@@ -360,7 +361,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             # CDERI tensor of negative part.
             with _load3c(self._cderi, self._dataname+'-', kpti_kptj,
                          ignore_key_error=True) as j3c:
-                slices = lib.prange(0, j3c.shape[0], blksize)
+                if aux_slice is None: aux_slice = (0, j3c.shape[0])
+                slices = lib.prange(*aux_slice, blksize)
                 for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                     yield LpqR, LpqI, -1
                     LpqR = LpqI = None

@@ -136,9 +136,9 @@ class FrozenTest(unittest.TestCase):
                 model.kernel()
                 mask_o, mask_v = tdhf_frozen_mask(model.eri, kind="o,v")
                 testing.assert_allclose(model.e, self.td_model_krhf.e, atol=1e-3)
-                assert_vectors_close(model.xy, numpy.array(self.td_model_krhf.xy)[..., mask_o, :][..., mask_v], atol=1e-2)
+                assert_vectors_close(model.xy,
+                    numpy.array(self.td_model_krhf.xy)[..., mask_o, :][..., mask_v], atol=1e-2)
 
             except Exception:
                 print("When testing class with frozen={} the following exception occurred:".format(repr(frozen)))
                 raise
-
