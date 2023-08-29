@@ -115,7 +115,7 @@ def select_strs(myci, eri, eri_pq_max, civec_max, strs, norb, nelec):
     strs = numpy.asarray(strs, dtype=numpy.int64)
     nstrs = len(strs)
     nvir = norb - nelec
-    strs_add = numpy.empty((nstrs*(nelec*nvir)**2//4), dtype=numpy.int64)
+    strs_add = numpy.empty((nstrs*((nelec+1)*(nvir+1))**2//4), dtype=numpy.int64)
     libfci.SCIselect_strs.restype = ctypes.c_int
     nadd = libfci.SCIselect_strs(strs_add.ctypes.data_as(ctypes.c_void_p),
                                  strs.ctypes.data_as(ctypes.c_void_p),
