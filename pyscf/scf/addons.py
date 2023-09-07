@@ -639,8 +639,8 @@ def _object_without_soscf(mf, known_class, remove_df=False):
     if remove_df and isinstance(mf, _DFHF):
         mf = mf.undo_df()
 
-    for old_cls in known_class:
-        if isinstance(mf, old_cls):
+    for old_cls in mf.__class__.__mro__:
+        if old_cls in known_class:
             break
     else:
         raise NotImplementedError(
@@ -654,7 +654,6 @@ def _object_without_soscf(mf, known_class, remove_df=False):
     mf_dic.pop('_keys')
     out.__dict__.update(mf_dic)
     out.__class__ = lib.replace_class(mf.__class__, old_cls, new_cls)
-    print(out, mf.__class__, old_cls, new_cls)
     return out
 
 def _update_mf_without_soscf(mf, out, remove_df=False):
