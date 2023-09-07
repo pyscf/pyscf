@@ -639,39 +639,40 @@ def as_scanner(mc):
         return mc
 
     logger.info(mc, 'Create scanner for %s', mc.__class__)
+    name = mc.__class__.__name__ + CASCI_Scanner.__name_mixin__
+    return lib.set_class(CASCI_Scanner(mc), (CASCI_Scanner, mc.__class__), name)
 
-    class CASCI_Scanner(mc.__class__, lib.SinglePointScanner):
-        def __init__(self, mc):
-            self.__dict__.update(mc.__dict__)
-            self._scf = mc._scf.as_scanner()
+class CASCI_Scanner(lib.SinglePointScanner):
+    def __init__(self, mc):
+        self.__dict__.update(mc.__dict__)
+        self._scf = mc._scf.as_scanner()
 
-        def __call__(self, mol_or_geom, mo_coeff=None, ci0=None):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+    def __call__(self, mol_or_geom, mo_coeff=None, ci0=None):
+        if isinstance(mol_or_geom, gto.Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            # These properties can be updated when calling mf_scanner(mol) if
-            # they are shared with mc._scf. In certain scenario the properties
-            # may be created for mc separately, e.g. when mcscf.approx_hessian is
-            # called. For safety, the code below explicitly resets these
-            # properties.
-            self.reset (mol)
-            for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
-                sub_mod = getattr(self, key, None)
-                if sub_mod:
-                    sub_mod.reset(mol)
+        # These properties can be updated when calling mf_scanner(mol) if
+        # they are shared with mc._scf. In certain scenario the properties
+        # may be created for mc separately, e.g. when mcscf.approx_hessian is
+        # called. For safety, the code below explicitly resets these
+        # properties.
+        self.reset (mol)
+        for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
+            sub_mod = getattr(self, key, None)
+            if sub_mod:
+                sub_mod.reset(mol)
 
-            if mo_coeff is None:
-                mf_scanner = self._scf
-                mf_scanner(mol)
-                mo_coeff = mf_scanner.mo_coeff
-            if ci0 is None:
-                ci0 = self.ci
-            self.mol = mol
-            e_tot = self.kernel(mo_coeff, ci0)[0]
-            return e_tot
-    return CASCI_Scanner(mc)
+        if mo_coeff is None:
+            mf_scanner = self._scf
+            mf_scanner(mol)
+            mo_coeff = mf_scanner.mo_coeff
+        if ci0 is None:
+            ci0 = self.ci
+        self.mol = mol
+        e_tot = self.kernel(mo_coeff, ci0)[0]
+        return e_tot
 
 
 class CASCI(lib.StreamObject):

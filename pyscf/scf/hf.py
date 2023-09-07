@@ -1336,45 +1336,44 @@ def as_scanner(mf):
         return mf
 
     logger.info(mf, 'Create scanner for %s', mf.__class__)
+    name = mf.__class__.__name__ + SCF_Scanner.__name_mixin__
+    return lib.set_class(SCF_Scanner(mf), (SCF_Scanner, mf.__class__), name)
 
-    class SCF_Scanner(mf.__class__, lib.SinglePointScanner):
-        def __init__(self, mf_obj):
-            self.__dict__.update(mf_obj.__dict__)
-            self._last_mol_fp = mf.mol.ao_loc
+class SCF_Scanner(lib.SinglePointScanner):
+    def __init__(self, mf_obj):
+        self.__dict__.update(mf_obj.__dict__)
+        self._last_mol_fp = mf_obj.mol.ao_loc
 
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            # Cleanup intermediates associated to the previous mol object
-            self.reset(mol)
+        # Cleanup intermediates associated to the previous mol object
+        self.reset(mol)
 
-            if 'dm0' in kwargs:
-                dm0 = kwargs.pop('dm0')
-            elif self.mo_coeff is None:
-                dm0 = None
-            elif self.chkfile and h5py.is_hdf5(self.chkfile):
-                dm0 = self.from_chk(self.chkfile)
-            else:
-                dm0 = None
-                # dm0 form last calculation cannot be used in the current
-                # calculation if a completely different system is given.
-                # Obviously, the systems are very different if the number of
-                # basis functions are different.
-                # TODO: A robust check should include more comparison on
-                # various attributes between current `mol` and the `mol` in
-                # last calculation.
-                if numpy.array_equal(self._last_mol_fp, mol.ao_loc):
-                    dm0 = self.make_rdm1()
-            self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
-            e_tot = self.kernel(dm0=dm0, **kwargs)
-            self._last_mol_fp = mol.ao_loc
-            return e_tot
-
-    return SCF_Scanner(mf)
-
+        if 'dm0' in kwargs:
+            dm0 = kwargs.pop('dm0')
+        elif self.mo_coeff is None:
+            dm0 = None
+        elif self.chkfile and h5py.is_hdf5(self.chkfile):
+            dm0 = self.from_chk(self.chkfile)
+        else:
+            dm0 = None
+            # dm0 form last calculation cannot be used in the current
+            # calculation if a completely different system is given.
+            # Obviously, the systems are very different if the number of
+            # basis functions are different.
+            # TODO: A robust check should include more comparison on
+            # various attributes between current `mol` and the `mol` in
+            # last calculation.
+            if numpy.array_equal(self._last_mol_fp, mol.ao_loc):
+                dm0 = self.make_rdm1()
+        self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
+        e_tot = self.kernel(dm0=dm0, **kwargs)
+        self._last_mol_fp = mol.ao_loc
+        return e_tot
 
 
 class SCF(lib.StreamObject):
@@ -1533,7 +1532,7 @@ class SCF(lib.StreamObject):
 
         log.info('\n')
         log.info('******** %s ********', self.__class__)
-        log.info('method = %s', self._method_name())
+        log.info('method = %s', self.__class__.__name__)
         log.info('initial guess = %s', self.init_guess)
         log.info('damping factor = %g', self.damp)
         log.info('level_shift factor = %s', self.level_shift)
@@ -1864,7 +1863,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     def remove_soscf(self):
         '''Remove the SOSCF decorator'''
         from pyscf.soscf import newton_ah
-        return newton_ah.remove_soscf(self)
+        if not isinstance(self, newton_ah._CIAH_SOSCF):
+            return self
+        return self.undo_soscf()
 
     def stability(self):
         raise NotImplementedError
@@ -1965,10 +1966,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mean-field object.
         '''
         from pyscf.scf import addons
-        mf = addons.convert_to_rhf(self)
-        if not isinstance(self, RHF):
-            mf.converged = False
-        return mf
+        return addons.convert_to_rhf(self)
 
     def to_uhf(self):
         '''Convert the input mean-field object to a UHF object.
@@ -2016,19 +2014,6 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mean-field object.
         '''
         return self.to_ghf().to_ks(xc)
-
-    def _method_name(self):
-        if isinstance(self, KohnShamDFT):
-            method = [cls.__name__ for cls in self.__class__.__mro__
-                      if issubclass(cls, KohnShamDFT) and cls is not KohnShamDFT]
-        else:
-            method = [cls.__name__ for cls in self.__class__.__mro__
-                      if issubclass(cls, SCF) and cls is not SCF]
-        return '-'.join(method)
-
-    def __repr__(self):
-        cls = self.__class__
-        return f'{self._method_name()} object of {cls}'
 
     def convert_from_(self, mf):
         '''Convert the abinput mean-field object to the associated KS object.

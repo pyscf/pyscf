@@ -20,6 +20,7 @@ import numpy as np
 from functools import reduce
 from itertools import product
 from scipy import linalg
+from pyscf.gto import Mole
 from pyscf.grad import lagrange
 from pyscf.mcscf.addons import StateAverageMCSCFSolver, StateAverageFCISolver
 from pyscf.mcscf.addons import StateAverageMixFCISolver, state_average_mix_
@@ -353,7 +354,6 @@ def as_scanner(mcscf_grad, state=None):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf import gto
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
 
@@ -361,32 +361,32 @@ def as_scanner(mcscf_grad, state=None):
     #    return casscf_grad.as_scanner (mcscf_grad)
 
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
+    name = mcscf_grad.__class__.__name__ + CASSCF_GradScanner.__name_mixin__
+    return lib.set_class(CASSCF_GradScanner(mcscf_grad, state),
+                         (CASSCF_GradScanner, mcscf_grad.__class__), name)
 
-    class CASSCF_GradScanner(mcscf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-            if state is None:
-                self.state = g.state
-            else:
-                self.state = state
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
-            self.reset(mol)
-            if 'state' in kwargs: self.state = kwargs['state']
-            mc_scanner = self.base
-            e_tot = mc_scanner(mol)
-            if hasattr (mc_scanner, 'e_mcscf'): self.e_mcscf = mc_scanner.e_mcscf
-            if hasattr (mc_scanner, 'e_states') and self.state is not None:
-                e_tot = mc_scanner.e_states[self.state]
-            if not ('state' in kwargs):
-                kwargs['state'] = self.state
-            de = self.kernel(**kwargs)
-            return e_tot, de
+class CASSCF_GradScanner(lib.GradScanner):
+    def __init__(self, g, state):
+        lib.GradScanner.__init__(self, g)
+        if state is not None:
+            self.state = state
 
-    return CASSCF_GradScanner(mcscf_grad)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+        self.reset(mol)
+        if 'state' in kwargs: self.state = kwargs['state']
+        mc_scanner = self.base
+        e_tot = mc_scanner(mol)
+        if hasattr (mc_scanner, 'e_mcscf'): self.e_mcscf = mc_scanner.e_mcscf
+        if hasattr (mc_scanner, 'e_states') and self.state is not None:
+            e_tot = mc_scanner.e_states[self.state]
+        if not ('state' in kwargs):
+            kwargs['state'] = self.state
+        de = self.kernel(**kwargs)
+        return e_tot, de
 
 
 class Gradients (lagrange.Gradients):

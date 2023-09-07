@@ -78,8 +78,6 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
         with_df.verbose = mf.verbose
         with_df.auxbasis = auxbasis
 
-    mf_class = mf.__class__
-
     if isinstance(mf, _DFHF):
         if mf.with_df is None:
             mf.with_df = with_df
@@ -90,82 +88,91 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
             mf.only_dfj = only_dfj
         return mf
 
-    class DensityFitting(_DFHF, mf_class):
-        __doc__ = '''
-        Density fitting SCF class
-
-        Attributes for density-fitting SCF:
-            auxbasis : str or basis dict
-                Same format to the input attribute mol.basis.
-                The default basis 'weigend+etb' means weigend-coulomb-fit basis
-                for light elements and even-tempered basis for heavy elements.
-            with_df : DF object
-                Set mf.with_df = None to switch off density fitting mode.
-
-        See also the documents of class %s for other SCF attributes.
-        ''' % mf_class
-
-        def __init__(self, mf, df, only_dfj):
-            self.__dict__.update(mf.__dict__)
-            self._eri = None
-            self.with_df = df
-            self.only_dfj = only_dfj
-            # Unless DF is used only for J matrix, disable direct_scf for K build.
-            # It is more efficient to construct K matrix with MO coefficients than
-            # the incremental method in direct_scf.
-            self.direct_scf = only_dfj
-            self._keys = self._keys.union(['with_df', 'only_dfj'])
-
-        def reset(self, mol=None):
-            self.with_df.reset(mol)
-            return mf_class.reset(self, mol)
-
-        def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
-                   omega=None):
-            if dm is None: dm = self.make_rdm1()
-            if not self.with_df:
-                return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
-
-            with_dfk = with_k and not self.only_dfj
-            if isinstance(self, scf.ghf.GHF):
-                def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
-                    vj, vk = self.with_df.get_jk(dm.real, hermi, with_j, with_k,
-                                                 self.direct_scf_tol, omega)
-                    if dm.dtype == numpy.complex128:
-                        vjI, vkI = self.with_df.get_jk(dm.imag, hermi, with_j, with_k,
-                                                       self.direct_scf_tol, omega)
-                        if with_j:
-                            vj = vj + vjI * 1j
-                        if with_k:
-                            vk = vk + vkI * 1j
-                    return vj, vk
-                vj, vk = scf.ghf.get_jk(mol, dm, hermi, with_j, with_dfk,
-                                        jkbuild, omega)
-            else:
-                vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_dfk,
-                                             self.direct_scf_tol, omega)
-            if with_k and not with_dfk:
-                vk = mf_class.get_jk(self, mol, dm, hermi, False, True, omega)[1]
-            return vj, vk
-
-        # for pyscf 1.0, 1.1 compatibility
-        @property
-        def _cderi(self):
-            naux = self.with_df.get_naoaux()
-            return next(self.with_df.loop(blksize=naux))
-        @_cderi.setter
-        def _cderi(self, x):
-            self.with_df._cderi = x
-
-        @property
-        def auxbasis(self):
-            return getattr(self.with_df, 'auxbasis', None)
-
-    return DensityFitting(mf, with_df, only_dfj)
+    dfmf = _DFHF(mf, with_df, only_dfj)
+    return lib.set_class(dfmf, (_DFHF, mf.__class__))
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
-class _DFHF(object):
+class _DFHF:
+    '''
+    Density fitting SCF class
+
+    Attributes for density-fitting SCF:
+        auxbasis : str or basis dict
+            Same format to the input attribute mol.basis.
+            The default basis 'weigend+etb' means weigend-coulomb-fit basis
+            for light elements and even-tempered basis for heavy elements.
+        with_df : DF object
+            Set mf.with_df = None to switch off density fitting mode.
+
+    See also the documents of class for other SCF attributes.
+    '''
+
+    __name_mixin__ = 'DF'
+
+    def __init__(self, mf, df=None, only_dfj=None):
+        self.__dict__.update(mf.__dict__)
+        self._eri = None
+        self.with_df = df
+        self.only_dfj = only_dfj
+        # Unless DF is used only for J matrix, disable direct_scf for K build.
+        # It is more efficient to construct K matrix with MO coefficients than
+        # the incremental method in direct_scf.
+        self.direct_scf = only_dfj
+        self._keys = self._keys.union(['with_df', 'only_dfj'])
+
+    def undo_df(self):
+        '''Remove the DFHF Mixin'''
+        obj = lib.view(self, lib.drop_class(self.__class__, _DFHF))
+        del obj.with_df
+        del obj.only_dfj
+        return obj
+
+    def reset(self, mol=None):
+        self.with_df.reset(mol)
+        return super().reset(mol)
+
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
+        if dm is None: dm = self.make_rdm1()
+        if not self.with_df:
+            return super().get_jk(mol, dm, hermi, with_j, with_k, omega)
+
+        with_dfk = with_k and not self.only_dfj
+        if isinstance(self, scf.ghf.GHF):
+            def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
+                vj, vk = self.with_df.get_jk(dm.real, hermi, with_j, with_k,
+                                             self.direct_scf_tol, omega)
+                if dm.dtype == numpy.complex128:
+                    vjI, vkI = self.with_df.get_jk(dm.imag, hermi, with_j, with_k,
+                                                   self.direct_scf_tol, omega)
+                    if with_j:
+                        vj = vj + vjI * 1j
+                    if with_k:
+                        vk = vk + vkI * 1j
+                return vj, vk
+            vj, vk = scf.ghf.get_jk(mol, dm, hermi, with_j, with_dfk,
+                                    jkbuild, omega)
+        else:
+            vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_dfk,
+                                         self.direct_scf_tol, omega)
+        if with_k and not with_dfk:
+            vk = super().get_jk(mol, dm, hermi, False, True, omega)[1]
+        return vj, vk
+
+    # for pyscf 1.0, 1.1 compatibility
+    @property
+    def _cderi(self):
+        naux = self.with_df.get_naoaux()
+        return next(self.with_df.loop(blksize=naux))
+    @_cderi.setter
+    def _cderi(self, x):
+        self.with_df._cderi = x
+
+    @property
+    def auxbasis(self):
+        return getattr(self.with_df, 'auxbasis', None)
+
     def nuc_grad_method(self):
         from pyscf.df.grad import rhf, rohf, uhf, rks, roks, uks
         if isinstance(self, scf.uhf.UHF):

@@ -196,7 +196,7 @@ def make_A(pcmobj, r_vdw, ylm_1sph, ui):
                 Amat[ja,:,ka,p0:p1] += -fac * a
     return Amat
 
-class DDPCM(ddcosmo.DDCOSMO):
+class ddPCM(ddcosmo.DDCOSMO):
     def __init__(self, mol):
         ddcosmo.DDCOSMO.__init__(self, mol)
 
@@ -334,6 +334,7 @@ class DDPCM(ddcosmo.DDCOSMO):
     def nuc_grad_method(self, grad_method):
         raise NotImplementedError
 
+DDPCM = ddPCM
 
 if __name__ == '__main__':
     from pyscf import scf

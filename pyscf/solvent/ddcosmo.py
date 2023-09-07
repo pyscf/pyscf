@@ -619,7 +619,7 @@ def atoms_with_vdw_overlap(atm_id, atom_coords, r_vdw):
     atoms_nearby = numpy.where(atm_dist < vdw_sum**2)[0]
     return atoms_nearby
 
-class DDCOSMO(lib.StreamObject):
+class ddCOSMO(lib.StreamObject):
     def __init__(self, mol):
         self.mol = mol
         self.stdout = mol.stdout
@@ -865,6 +865,8 @@ class DDCOSMO(lib.StreamObject):
             return _ddcosmo_tdscf_grad.make_grad_object(grad_method)
         else:
             return ddcosmo_grad.make_grad_object(grad_method)
+
+DDCOSMO = ddCOSMO
 
 class Grids(gen_grid.Grids):
     '''DFT grids without sorting grids'''

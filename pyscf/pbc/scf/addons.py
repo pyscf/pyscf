@@ -372,25 +372,25 @@ def convert_to_uhf(mf, out=None):
         if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
             return copy.copy(mf)
         else:
-            unknown_cls = [scf.kghf.KGHF]
-            for i, cls in enumerate(mf.__class__.__mro__):
-                if cls in unknown_cls:
-                    raise NotImplementedError(
-                        "No conversion from %s to uhf object" % cls)
+            if isinstance(mf, scf.kghf.KGHF):
+                raise NotImplementedError(
+                    f'No conversion from {mf.__class__} to uhf object')
 
-            known_cls = {dft.krks.KRKS  : dft.kuks.KUKS,
-                         dft.krks_ksymm.KRKS  : dft.kuks_ksymm.KUKS,
-                         dft.kroks.KROKS: dft.kuks.KUKS,
-                         scf.khf.KRHF   : scf.kuhf.KUHF,
-                         scf.khf_ksymm.KRHF : scf.kuhf_ksymm.KUHF,
-                         scf.krohf.KROHF: scf.kuhf.KUHF,
-                         dft.rks.RKS    : dft.uks.UKS  ,
-                         dft.roks.ROKS  : dft.uks.UKS  ,
-                         scf.hf.RHF     : scf.uhf.UHF  ,
-                         scf.rohf.ROHF  : scf.uhf.UHF  ,}
+            known_cls = {
+                dft.krks_ksymm.KRKS  : dft.kuks_ksymm.KUKS,
+                dft.kroks.KROKS: dft.kuks.KUKS,
+                dft.krks.KRKS  : dft.kuks.KUKS,
+                dft.roks.ROKS  : dft.uks.UKS  ,
+                dft.rks.RKS    : dft.uks.UKS  ,
+                scf.khf_ksymm.KRHF : scf.kuhf_ksymm.KUHF,
+                scf.krohf.KROHF: scf.kuhf.KUHF,
+                scf.khf.KRHF   : scf.kuhf.KUHF,
+                scf.rohf.ROHF  : scf.uhf.UHF  ,
+                scf.hf.RHF     : scf.uhf.UHF  ,
+            }
             # .with_df should never be removed or changed during the conversion.
             # It is needed to compute JK matrix in all pbc SCF objects
-            out = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
+            out = mol_addons._object_without_soscf(mf, known_cls, False)
     else:
         assert (isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
         if isinstance(mf, scf.khf.KSCF):
@@ -398,11 +398,10 @@ def convert_to_uhf(mf, out=None):
         else:
             assert (not isinstance(out, scf.khf.KSCF))
 
-    out = mol_addons.convert_to_uhf(mf, out, False)
-    # Manually update .with_df because this attribute may not be passed to the
-    # output object correctly in molecular convert function
-    out.with_df = mf.with_df
-    return out
+    if out is not None:
+        out = mol_addons._update_mf_without_soscf(mf, out, False)
+
+    return mol_addons._update_mo_to_uhf_(mf, out)
 
 def convert_to_rhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding restricted
@@ -422,6 +421,7 @@ def convert_to_rhf(mf, out=None):
             assert (isinstance(out, scf.khf.KSCF))
         else:
             assert (not isinstance(out, scf.khf.KSCF))
+        out = mol_addons._update_mf_without_soscf(mf, out, False)
 
     elif nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF):
         if getattr(mf, '_scf', None):
@@ -433,37 +433,35 @@ def convert_to_rhf(mf, out=None):
         if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
             return copy.copy(mf)
         else:
-            unknown_cls = [scf.kghf.KGHF]
-            for i, cls in enumerate(mf.__class__.__mro__):
-                if cls in unknown_cls:
-                    raise NotImplementedError(
-                        "No conversion from %s to rhf object" % cls)
+            if isinstance(mf, scf.kghf.KGHF):
+                raise NotImplementedError(
+                    f'No conversion from {mf.__class__} to rhf object')
 
             if nelec[0] == nelec[1]:
-                known_cls = {dft.kuks.KUKS : dft.krks.KRKS,
-                             dft.kuks_ksymm.KUKS : dft.krks_ksymm.KRKS,
-                             scf.kuhf.KUHF : scf.khf.KRHF ,
-                             scf.kuhf_ksymm.KUHF : scf.khf_ksymm.KRHF,
-                             dft.uks.UKS   : dft.rks.RKS  ,
-                             scf.uhf.UHF   : scf.hf.RHF   ,
-                             dft.kroks.KROKS : dft.krks.KRKS,
-                             scf.krohf.KROHF : scf.khf.KRHF ,
-                             dft.roks.ROKS   : dft.rks.RKS  ,
-                             scf.rohf.ROHF   : scf.hf.RHF   }
+                known_cls = {
+                    dft.kuks_ksymm.KUKS : dft.krks_ksymm.KRKS,
+                    dft.kuks.KUKS       : dft.krks.KRKS      ,
+                    dft.kroks.KROKS     : dft.krks.KRKS      ,
+                    dft.uks.UKS         : dft.rks.RKS        ,
+                    dft.roks.ROKS       : dft.rks.RKS        ,
+                    scf.kuhf_ksymm.KUHF : scf.khf_ksymm.KRHF ,
+                    scf.kuhf.KUHF       : scf.khf.KRHF       ,
+                    scf.krohf.KROHF     : scf.khf.KRHF       ,
+                    scf.uhf.UHF         : scf.hf.RHF         ,
+                    scf.rohf.ROHF       : scf.hf.RHF         ,
+                }
             else:
-                known_cls = {dft.kuks.KUKS : dft.kroks.KROKS,
-                             scf.kuhf.KUHF : scf.krohf.KROHF,
-                             dft.uks.UKS   : dft.roks.ROKS,
-                             scf.uhf.UHF   : scf.rohf.ROHF}
+                known_cls = {
+                    dft.kuks.KUKS : dft.kroks.KROKS,
+                    dft.uks.UKS   : dft.roks.ROKS  ,
+                    scf.kuhf.KUHF : scf.krohf.KROHF,
+                    scf.uhf.UHF   : scf.rohf.ROHF  ,
+                }
             # .with_df should never be removed or changed during the conversion.
             # It is needed to compute JK matrix in all pbc SCF objects
-            out = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
+            out = mol_addons._object_without_soscf(mf, known_cls, False)
 
-    out = mol_addons.convert_to_rhf(mf, out, False)
-    # Manually update .with_df because this attribute may not be passed to the
-    # output object correctly in molecular convert function
-    out.with_df = mf.with_df
-    return out
+    return mol_addons._update_mo_to_rhf_(mf, out)
 
 def convert_to_ghf(mf, out=None):
     '''Convert the given mean-field object to the generalized HF/KS object
@@ -555,29 +553,37 @@ def convert_to_ghf(mf, out=None):
         out.with_df = mf.with_df
         return out
 
-def convert_to_khf(mf, out=None):
+def convert_to_kscf(mf, out=None):
     '''Convert gamma point SCF object to k-point SCF object
     '''
     from pyscf.pbc import scf, dft
     if not isinstance(mf, scf.khf.KSCF):
-        known_cls = {dft.uks.UKS   : dft.kuks.KUKS,
-                     scf.uhf.UHF   : scf.kuhf.KUHF,
-                     dft.rks.RKS   : dft.krks.KRKS,
-                     scf.hf.RHF    : scf.khf.KRHF,
-                     dft.roks.ROKS : dft.kroks.KROKS,
-                     scf.rohf.ROHF : scf.krohf.KROHF,
-                     #TODO: dft.gks.GKS   : dft.kgks.KGKS,
-                     scf.ghf.GHF   : scf.kghf.KGHF}
-        # Keep the attribute with_df
-        with_df = mf.with_df
-        mf = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
-        mf.with_df = with_df
+        known_cls = {
+            dft.uks.UKS   : dft.kuks.KUKS  ,
+            dft.roks.ROKS : dft.kroks.KROKS,
+            dft.rks.RKS   : dft.krks.KRKS  ,
+            dft.gks.GKS   : dft.kgks.KGKS  ,
+            scf.uhf.UHF   : scf.kuhf.KUHF  ,
+            scf.rohf.ROHF : scf.krohf.KROHF,
+            scf.hf.RHF    : scf.khf.KRHF   ,
+            scf.ghf.GHF   : scf.kghf.KGHF  ,
+        }
+        mf = mol_addons._object_without_soscf(mf, known_cls, False)
+        if isinstance(mf, scf.uhf.UHF):
+            mf.mo_occ = mf.mo_occ[:,numpy.newaxis]
+            mf.mo_coeff = mf.mo_coeff[:,numpy.newaxis]
+            mf.mo_energy = mf.mo_energy[:,numpy.newaxis]
+        else:
+            mf.mo_occ = mf.mo_occ[numpy.newaxis]
+            mf.mo_coeff = mf.mo_coeff[numpy.newaxis]
+            mf.mo_energy = mf.mo_energy[numpy.newaxis]
 
     if out is None:
         return mf
-    else:
-        out.__dict__.update(mf.__dict__)
-        return out
+
+    return mol_addons._update_mf_without_soscf(mf, out, False)
+
+convert_to_khf = convert_to_kscf
 
 def mo_energy_with_exxdiv_none(mf, mo_coeff=None):
     ''' compute mo energy from the diagonal of fock matrix with exxdiv=None

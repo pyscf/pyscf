@@ -411,26 +411,28 @@ def as_scanner(mp):
         return mp
 
     logger.info(mp, 'Set %s as a scanner', mp.__class__)
+    name = mp.__class__.__name__ + MP2_Scanner.__name_mixin__
+    return lib.set_class(MP2_Scanner(mp), (MP2_Scanner, mp.__class__), name)
 
-    class MP2_Scanner(mp.__class__, lib.SinglePointScanner):
-        def __init__(self, mp):
-            self.__dict__.update(mp.__dict__)
-            self._scf = mp._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class MP2_Scanner(lib.SinglePointScanner):
+    def __init__(self, mp):
+        self.__dict__.update(mp.__dict__)
+        self._scf = mp._scf.as_scanner()
 
-            self.reset(mol)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            mf_scanner = self._scf
-            mf_scanner(mol)
-            self.mo_coeff = mf_scanner.mo_coeff
-            self.mo_occ = mf_scanner.mo_occ
-            self.kernel(**kwargs)
-            return self.e_tot
-    return MP2_Scanner(mp)
+        self.reset(mol)
+
+        mf_scanner = self._scf
+        mf_scanner(mol)
+        self.mo_coeff = mf_scanner.mo_coeff
+        self.mo_occ = mf_scanner.mo_occ
+        self.kernel(**kwargs)
+        return self.e_tot
 
 
 class MP2(lib.StreamObject):

@@ -22,6 +22,7 @@ import copy
 from functools import reduce
 import numpy
 import scipy.linalg
+from pyscf.gto import Mole
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import casci
@@ -29,7 +30,6 @@ from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
-from pyscf import gto
 from pyscf import scf
 from pyscf.soscf import ciah
 from pyscf import __config__
@@ -527,45 +527,46 @@ def as_scanner(mc):
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf.mcscf.addons import project_init_guess
     if isinstance(mc, lib.SinglePointScanner):
         return mc
 
     logger.info(mc, 'Create scanner for %s', mc.__class__)
+    name = mc.__class__.__name__ + CASSCF_Scanner.__name_mixin__
+    return lib.set_class(CASSCF_Scanner(mc), (CASSCF_Scanner, mc.__class__), name)
 
-    class CASSCF_Scanner(mc.__class__, lib.SinglePointScanner):
-        def __init__(self, mc):
-            self.__dict__.update(mc.__dict__)
-            self._scf = mc._scf.as_scanner()
+class CASSCF_Scanner(lib.SinglePointScanner):
+    def __init__(self, mc):
+        self.__dict__.update(mc.__dict__)
+        self._scf = mc._scf.as_scanner()
 
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+    def __call__(self, mol_or_geom, **kwargs):
+        from pyscf.mcscf.addons import project_init_guess
+        if isinstance(mol_or_geom, Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            # These properties can be updated when calling mf_scanner(mol) if
-            # they are shared with mc._scf. In certain scenario the properties
-            # may be created for mc separately, e.g. when mcscf.approx_hessian is
-            # called. For safety, the code below explicitly resets these
-            # properties.
-            self.reset (mol)
-            for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
-                sub_mod = getattr(self, key, None)
-                if sub_mod:
-                    sub_mod.reset(mol)
+        # These properties can be updated when calling mf_scanner(mol) if
+        # they are shared with mc._scf. In certain scenario the properties
+        # may be created for mc separately, e.g. when mcscf.approx_hessian is
+        # called. For safety, the code below explicitly resets these
+        # properties.
+        self.reset (mol)
+        for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
+            sub_mod = getattr(self, key, None)
+            if sub_mod:
+                sub_mod.reset(mol)
 
-            mf_scanner = self._scf
-            mf_scanner(mol)
-            self.mol = mol
-            if self.mo_coeff is None:
-                mo = mf_scanner.mo_coeff
-            else:
-                mo = self.mo_coeff
-            mo = project_init_guess(self, mo)
-            e_tot = self.kernel(mo, self.ci)[0]
-            return e_tot
-    return CASSCF_Scanner(mc)
+        mf_scanner = self._scf
+        mf_scanner(mol)
+        self.mol = mol
+        if self.mo_coeff is None:
+            mo = mf_scanner.mo_coeff
+        else:
+            mo = self.mo_coeff
+        mo = project_init_guess(self, mo)
+        e_tot = self.kernel(mo, self.ci)[0]
+        return e_tot
 
 def max_stepsize_scheduler(casscf, envs):
     if not WITH_STEPSIZE_SCHEDULER:
@@ -1347,7 +1348,7 @@ if __name__ == '__main__':
     from pyscf import fci
     from pyscf.mcscf import addons
 
-    mol = gto.Mole()
+    mol = Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"
     mol.atom = [

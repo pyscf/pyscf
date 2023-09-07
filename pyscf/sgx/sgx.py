@@ -78,135 +78,142 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
         with_df.verbose = mf.verbose
         with_df.auxbasis = auxbasis
 
-    mf_class = mf.__class__
-
     if isinstance(mf, _SGXHF):
         if mf.with_df is None:
-            mf = mf_class(mf, with_df, auxbasis)
+            mf.with_df = with_df
         elif mf.with_df.auxbasis != auxbasis:
             #logger.warn(mf, 'DF might have been initialized twice.')
             mf = copy.copy(mf)
             mf.with_df = with_df
         return mf
 
-    class SGXHF(_SGXHF, mf_class):
-        def __init__(self, mf, df, auxbasis):
-            self.__dict__.update(mf.__dict__)
-            self._eri = None
-            self.auxbasis = auxbasis
-            self.with_df = df
+    dfmf = _SGXHF(mf, with_df, auxbasis)
+    return lib.set_class(dfmf, (_SGXHF, mf.__class__))
 
-            # Grids/Integral quality varies during SCF. VHF cannot be
-            # constructed incrementally through standard direct SCF.
-            self.direct_scf = False
-            # Set direct_scf_sgx True to use direct SCF for each
-            # grid size with SGX.
-            self.direct_scf_sgx = False
-            # Set rebuild_nsteps to control how many direct SCF steps
-            # are taken between resets of the SGX JK matrix.
-            # Default 5, only used if direct_scf_sgx = True
-            self.rebuild_nsteps = 5
+# A tag to label the derived SCF class
+class _SGXHF(object):
 
+    __name_mixin__ = 'SGX'
+
+    def __init__(self, mf, df=None, auxbasis=None):
+        self.__dict__.update(mf.__dict__)
+        self._eri = None
+        self.auxbasis = auxbasis
+        self.with_df = df
+
+        # Grids/Integral quality varies during SCF. VHF cannot be
+        # constructed incrementally through standard direct SCF.
+        self.direct_scf = False
+        # Set direct_scf_sgx True to use direct SCF for each
+        # grid size with SGX.
+        self.direct_scf_sgx = False
+        # Set rebuild_nsteps to control how many direct SCF steps
+        # are taken between resets of the SGX JK matrix.
+        # Default 5, only used if direct_scf_sgx = True
+        self.rebuild_nsteps = 5
+
+        self._last_dm = 0
+        self._last_vj = 0
+        self._last_vk = 0
+        self._in_scf = False
+        self._keys = self._keys.union(['auxbasis', 'with_df',
+                                       'direct_scf_sgx',
+                                       'rebuild_nsteps'])
+
+    def undo_sgx(self):
+        obj = lib.view(self, lib.drop_class(self.__class__, _SGXHF))
+        del obj.auxbasis
+        del obj.with_df
+        del obj.direct_scf_sgx
+        del obj.rebuild_nsteps
+        del obj._in_scf
+        return obj
+
+    def build(self, mol=None, **kwargs):
+        if self.direct_scf_sgx:
+            self._nsteps_direct = 0
             self._last_dm = 0
             self._last_vj = 0
             self._last_vk = 0
-            self._in_scf = False
-            self._keys = self._keys.union(['auxbasis', 'with_df',
-                                           'direct_scf_sgx',
-                                           'rebuild_nsteps'])
+        if self.direct_scf:
+            self.with_df.build(level=self.with_df.grids_level_f)
+        else:
+            self.with_df.build(level=self.with_df.grids_level_i)
+        if self.with_df.pjs:
+            if not self.with_df.dfj:
+                import warnings
+                msg = '''
+                P-junction screening is not compatible with SGX J-matrix.
+                Setting dfj = True. If you want to use SGX J-matrix,
+                set pjs = False to turn off P-junction screening.
+                '''
+                warnings.warn(msg)
+            self.with_df.dfj = True # no SGX-J allowed if P-junction screening on
+        return super().build(mol, **kwargs)
 
-        def build(self, mol=None, **kwargs):
-            if self.direct_scf_sgx:
+    def reset(self, mol=None):
+        self.with_df.reset(mol)
+        return super().reset(mol)
+
+    def pre_kernel(self, envs):
+        self.direct_scf = False # should always be False
+        if self.with_df.grids_level_i != self.with_df.grids_level_f:
+            self._in_scf = True
+
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
+        if dm is None: dm = self.make_rdm1()
+        with_df = self.with_df
+        if not with_df:
+            return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+        if (self._opt.get(omega) is None and
+            self.with_df.direct_j and (not self.with_df.dfj)):
+            with mol.with_range_coulomb(omega):
+                self._opt[omega] = self.init_direct_scf(mol)
+        vhfopt = self._opt.get(omega)
+
+        if self._in_scf and not self.direct_scf:
+            if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd \
+                    and with_df.grids_level_f != with_df.grids_level_i:
+                # only reset if grids_level_f and grids_level_i differ
+                logger.debug(self, 'Switching SGX grids')
+                with_df.build(level=with_df.grids_level_f)
+                self._nsteps_direct = 0
+                self._in_scf = False
+                self._last_dm = 0
+                self._last_vj = 0
+                self._last_vk = 0
+
+        if self.direct_scf_sgx:
+            vj, vk = with_df.get_jk(dm-self._last_dm, hermi, vhfopt,
+                                    with_j, with_k,
+                                    self.direct_scf_tol, omega)
+            vj += self._last_vj
+            vk += self._last_vk
+            self._last_dm = numpy.asarray(dm)
+            self._last_vj = vj.copy()
+            self._last_vk = vk.copy()
+            self._nsteps_direct += 1
+            if self.rebuild_nsteps > 0 and \
+                    self._nsteps_direct >= self.rebuild_nsteps:
+                logger.debug(self, 'Resetting JK matrix')
                 self._nsteps_direct = 0
                 self._last_dm = 0
                 self._last_vj = 0
                 self._last_vk = 0
-            if self.direct_scf:
-                self.with_df.build(level=self.with_df.grids_level_f)
-            else:
-                self.with_df.build(level=self.with_df.grids_level_i)
-            if self.with_df.pjs:
-                if not self.with_df.dfj:
-                    import warnings
-                    msg = '''
-                    P-junction screening is not compatible with SGX J-matrix.
-                    Setting dfj = True. If you want to use SGX J-matrix,
-                    set pjs = False to turn off P-junction screening.
-                    '''
-                    warnings.warn(msg)
-                self.with_df.dfj = True # no SGX-J allowed if P-junction screening on
-            return mf_class.build(self, mol, **kwargs)
+        else:
+            self._last_dm = numpy.asarray(dm)
+            vj, vk = with_df.get_jk(dm, hermi, vhfopt, with_j, with_k,
+                                    self.direct_scf_tol, omega)
 
-        def reset(self, mol=None):
-            self.with_df.reset(mol)
-            return mf_class.reset(self, mol)
+        return vj, vk
 
-        def pre_kernel(self, envs):
-            self.direct_scf = False # should always be False
-            if self.with_df.grids_level_i != self.with_df.grids_level_f:
-                self._in_scf = True
+    def post_kernel(self, envs):
+        self._in_scf = False
+        self._last_dm = 0
+        self._last_vj = 0
+        self._last_vk = 0
 
-        def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
-                   omega=None):
-            if dm is None: dm = self.make_rdm1()
-            with_df = self.with_df
-            if not with_df:
-                return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
-            if (self._opt.get(omega) is None and
-                self.with_df.direct_j and (not self.with_df.dfj)):
-                with mol.with_range_coulomb(omega):
-                    self._opt[omega] = self.init_direct_scf(mol)
-            vhfopt = self._opt.get(omega)
-
-            if self._in_scf and not self.direct_scf:
-                if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd \
-                        and with_df.grids_level_f != with_df.grids_level_i:
-                    # only reset if grids_level_f and grids_level_i differ
-                    logger.debug(self, 'Switching SGX grids')
-                    with_df.build(level=with_df.grids_level_f)
-                    self._nsteps_direct = 0
-                    self._in_scf = False
-                    self._last_dm = 0
-                    self._last_vj = 0
-                    self._last_vk = 0
-
-            if self.direct_scf_sgx:
-                vj, vk = with_df.get_jk(dm-self._last_dm, hermi, vhfopt,
-                                        with_j, with_k,
-                                        self.direct_scf_tol, omega)
-                vj += self._last_vj
-                vk += self._last_vk
-                self._last_dm = numpy.asarray(dm)
-                self._last_vj = vj.copy()
-                self._last_vk = vk.copy()
-                self._nsteps_direct += 1
-                if self.rebuild_nsteps > 0 and \
-                        self._nsteps_direct >= self.rebuild_nsteps:
-                    logger.debug(self, 'Resetting JK matrix')
-                    self._nsteps_direct = 0
-                    self._last_dm = 0
-                    self._last_vj = 0
-                    self._last_vk = 0
-            else:
-                self._last_dm = numpy.asarray(dm)
-                vj, vk = with_df.get_jk(dm, hermi, vhfopt, with_j, with_k,
-                                        self.direct_scf_tol, omega)
-
-            return vj, vk
-
-        def post_kernel(self, envs):
-            self._in_scf = False
-            self._last_dm = 0
-            self._last_vj = 0
-            self._last_vk = 0
-
-        def nuc_grad_method(self):
-            raise NotImplementedError
-
-    return SGXHF(mf, with_df, auxbasis)
-
-# A tag to label the derived SCF class
-class _SGXHF(object):
     def method_not_implemented(self, *args, **kwargs):
         raise NotImplementedError
     nuc_grad_method = Gradients = method_not_implemented

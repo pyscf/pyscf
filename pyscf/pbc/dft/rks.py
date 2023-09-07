@@ -290,9 +290,6 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
     def to_hf(self):
         raise NotImplementedError
 
-    def to_khf(self):
-        raise NotImplementedError
-
     def initialize_grids(self, cell, dm, kpts, ground_state=True):
         '''Initialize self.grids the first time call get_veff'''
         if self.grids.coords is None:

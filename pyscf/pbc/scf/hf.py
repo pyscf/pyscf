@@ -828,6 +828,12 @@ class SCF(mol_hf.SCF):
         '''Convert the input mean-field object to a GHF/GKS object'''
         return addons.convert_to_ghf(self)
 
+    def to_kscf(self):
+        '''Convert gamma point SCF object to k-point SCF object
+        '''
+        from pyscf.pbc.scf.addons import convert_to_kscf
+        return convert_to_kscf(self)
+
     def jk_method(self, J='FFTDF', K=None):
         '''
         Set up the schemes to evaluate Coulomb and exchange matrix

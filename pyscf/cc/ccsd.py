@@ -783,7 +783,6 @@ def set_frozen(mycc, method='auto', window=(-1000.0, 1000.0), is_gcc=False):
         mycc.frozen = frozen
     return mycc
 
-
 def as_scanner(cc):
     '''Generating a scanner/solver for CCSD PES.
 
@@ -810,33 +809,36 @@ def as_scanner(cc):
         return cc
 
     logger.info(cc, 'Set %s as a scanner', cc.__class__)
+    name = cc.__class__.__name__ + CCSD_Scanner.__name_mixin__
+    return lib.set_class(CCSD_Scanner(cc), (CCSD_Scanner, cc.__class__), name)
 
-    class CCSD_Scanner(cc.__class__, lib.SinglePointScanner):
-        def __init__(self, cc):
-            self.__dict__.update(cc.__dict__)
-            self._scf = cc._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class CCSD_Scanner(lib.SinglePointScanner):
 
-            if self.t2 is not None:
-                last_size = self.vector_size()
-            else:
-                last_size = 0
+    def __init__(self, cc):
+        self.__dict__.update(cc.__dict__)
+        self._scf = cc._scf.as_scanner()
 
-            self.reset(mol)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            mf_scanner = self._scf
-            mf_scanner(mol)
-            self.mo_coeff = mf_scanner.mo_coeff
-            self.mo_occ = mf_scanner.mo_occ
-            if last_size != self.vector_size():
-                self.t1 = self.t2 = None
-            self.kernel(self.t1, self.t2, **kwargs)
-            return self.e_tot
-    return CCSD_Scanner(cc)
+        if self.t2 is not None:
+            last_size = self.vector_size()
+        else:
+            last_size = 0
+
+        self.reset(mol)
+
+        mf_scanner = self._scf
+        mf_scanner(mol)
+        self.mo_coeff = mf_scanner.mo_coeff
+        self.mo_occ = mf_scanner.mo_occ
+        if last_size != self.vector_size():
+            self.t1 = self.t2 = None
+        self.kernel(self.t1, self.t2, **kwargs)
+        return self.e_tot
 
 
 class CCSD(lib.StreamObject):

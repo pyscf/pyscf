@@ -467,7 +467,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 7)
 
     def test_multigrid_krks_1(self):
-        numpy.random.seed(22)
         cell = gto.M(
             a = numpy.eye(3)*3.5668,
             atom = '''C     0.      0.      0.
@@ -484,7 +483,8 @@ class KnownValues(unittest.TestCase):
             #basis = 'gth-szv',
             pseudo = 'gth-pade'
         )
-        multigrid.multi_grids_tasks(cell, cell.mesh, 5)
+        mesh = [21] * 3
+        multigrid.multi_grids_tasks(cell, mesh, 5)
 
         nao = cell.nao_nr()
         numpy.random.seed(1)

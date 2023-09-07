@@ -184,8 +184,6 @@ class KRKS(rks.KohnShamDFT, khf.KRHF):
         from pyscf.pbc import scf
         return self._transfer_attrs_(scf.KRHF(self.cell, self.kpts))
 
-    to_khf = to_hf
-
 
 if __name__ == '__main__':
     from pyscf.pbc import gto

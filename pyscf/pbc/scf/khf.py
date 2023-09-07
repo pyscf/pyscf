@@ -673,7 +673,14 @@ class KSCF(pbchf.SCF):
         '''Convert the input mean-field object to a KGHF/KGKS object'''
         return addons.convert_to_ghf(self)
 
+    def to_kscf(self):
+        '''Convert to k-point SCF object
+        '''
+        return self
+
     def to_khf(self):
+        '''Disable point group symmetry
+        '''
         return self
 
     def convert_from_(self, mf):

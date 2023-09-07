@@ -500,8 +500,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
-        # mf.to_khf converts mf to a non-symmetry object
-        pyscf.cc.ccsd.CCSD.__init__(self, mf.to_khf(), frozen, mo_coeff, mo_occ)
+        if isinstance(mf, scf.khf_ksymm.KsymAdaptedKSCF):
+            # mf.to_khf converts mf to a non-symmetry object
+            mf = mf.to_khf()
+        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts,
                                               init_symm_map=False)

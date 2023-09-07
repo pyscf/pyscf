@@ -528,6 +528,12 @@ class omnimethod(object):
     def __get__(self, instance, owner):
         return functools.partial(self.func, instance)
 
+def view(obj, cls):
+    '''New view of object with the same attributes.'''
+    new_obj = cls.__new__(cls)
+    new_obj.__dict__.update(obj.__dict__)
+    return new_obj
+
 
 SANITY_CHECK = getattr(__config__, 'SANITY_CHECK', True)
 class StreamObject(object):
@@ -641,11 +647,7 @@ class StreamObject(object):
             check_sanity(self, self._keys, self.stdout)
         return self
 
-    def view(self, cls):
-        '''New view of object with the same attributes.'''
-        obj = cls.__new__(cls)
-        obj.__dict__.update(self.__dict__)
-        return obj
+    view = view
 
     def add_keys(self, **kwargs):
         '''Add or update attributes of the object and register these attributes in ._keys'''
@@ -827,24 +829,80 @@ def invalid_method(name):
     fn.__name__ = name
     return fn
 
+def make_class(bases, name=None, attrs=None):
+    '''
+    Construct a class
+
+    class {name}(*bases):
+        __dict__ = attrs
+    '''
+    if name is None:
+        name = ''.join(getattr(x, '__name_mixin__', x.__name__) for x in bases)
+    if attrs is None:
+        attrs = {}
+    elif not isinstance(attrs, dict):
+        attrs = dict(attrs)
+    return type(name, bases, attrs)
+
+def set_class(obj, bases, name=None, attrs=None):
+    '''Change the class of an object'''
+    obj.__class__ = make_class(bases, name, attrs)
+    return obj
+
+def drop_class(cls, base_cls, name_mixin=None):
+    '''Recursively remove the first matched base_cls from cls MRO
+    '''
+    filter_bases = list(cls.__bases__)
+    force_rebuild = False
+    for i, base in enumerate(cls.__bases__):
+        if base == base_cls:
+            filter_bases[i] = None
+            break
+        elif issubclass(base, base_cls):
+            filter_bases[i] = cls_undressed = drop_class(base, base_cls, name_mixin)
+            force_rebuild = cls_undressed is not None
+            break
+    else:
+        raise RuntimeError(f'class {base_cls} not found in {cls} MRO')
+
+    filter_bases = [x for x in filter_bases if x is not None]
+    if len(filter_bases) < 1:
+        # cls is the singly inherited sub-class of base_cls
+        return None
+    elif not force_rebuild and len(filter_bases) == 1:
+        return filter_bases[0]
+
+    if name_mixin is None:
+        name_mixin = getattr(base_cls, '__name_mixin__', base_cls.__name__)
+    cls_name = cls.__name__.replace(name_mixin, '', count=1)
+
+    # rebuild the dynamic_mixin class
+    cls_undressed = type(cls_name, tuple(filter_bases), dict(cls.__dict__))
+    return cls_undressed
+
+def replace_class(cls, old_cls, new_cls):
+    '''Replace the first matched class in MRO
+    '''
+    if cls == old_cls:
+        return new_cls
+
+    bases = list(cls.__bases__)
+    any_match = False
+    for i, base in enumerate(cls.__bases__):
+        if issubclass(base, old_cls):
+            bases[i] = replace_class(base, old_cls, new_cls)
+            any_match = True
+            break
+
+    if not any_match:
+        return cls
+
+    name = cls.__name__.replace(old_cls.__name__, new_cls.__name__)
+    return type(name, tuple(bases), dict(cls.__dict__))
+
 def overwrite_mro(obj, mro):
     '''A hacky function to overwrite the __mro__ attribute'''
-    class HackMRO(type):
-        pass
-# Overwrite type.mro function so that Temp class can use the given mro
-    HackMRO.mro = lambda self: mro
-    #if sys.version_info < (3,):
-    #    class Temp(obj.__class__):
-    #        __metaclass__ = HackMRO
-    #else:
-    #    class Temp(obj.__class__, metaclass=HackMRO):
-    #        pass
-    Temp = HackMRO(obj.__class__.__name__, obj.__class__.__bases__, obj.__dict__)
-    obj = Temp()
-# Delete mro function otherwise all subclass of Temp are not able to
-# resolve the right mro
-    del (HackMRO.mro)
-    return obj
+    raise DeprecationWarning
 
 def izip(*args):
     '''python2 izip == python3 zip'''
@@ -1094,8 +1152,18 @@ def ndpointer(*args, **kwargs):
 
 
 # A tag to label the derived Scanner class
-class SinglePointScanner: pass
+class SinglePointScanner:
+    __name_mixin__ = '_Scanner'
+
+    def undo_scanner(self):
+        return view(self, drop_class(self.__class__, SinglePointScanner))
+
 class GradScanner:
+    __name_mixin__ = '_Scanner'
+
+    def undo_scanner(self):
+        return view(self, drop_class(self.__class__, GradScanner))
+
     def __init__(self, g):
         self.__dict__.update(g.__dict__)
         self.base = g.base.as_scanner()

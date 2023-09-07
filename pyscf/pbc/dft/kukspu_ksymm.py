@@ -27,6 +27,7 @@ class KsymAdaptedKUKSpU(kuks_ksymm.KUKS):
 
     get_veff = kukspu.get_veff
     energy_elec = kukspu.energy_elec
+    to_hf = lib.invalid_method('to_hf')
 
     @lib.with_doc(kukspu.KUKSpU.__init__.__doc__)
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',

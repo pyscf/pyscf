@@ -23,8 +23,9 @@ CCSD analytical nuclear gradients
 
 import ctypes
 import numpy
-from pyscf import lib
 from functools import reduce
+from pyscf import lib
+from pyscf.gto import Mole
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
@@ -221,45 +222,46 @@ def as_scanner(grad_cc):
         return grad_cc
 
     logger.info(grad_cc, 'Create scanner for %s', grad_cc.__class__)
+    name = grad_cc.__class__.__name__ + CCSD_GradScanner.__name_mixin__
+    return lib.set_class(CCSD_GradScanner(grad_cc),
+                         (CCSD_GradScanner, grad_cc.__class__), name)
 
-    class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
+class CCSD_GradScanner(lib.GradScanner):
+    def __init__(self, g):
+        lib.GradScanner.__init__(self, g)
 
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            cc = self.base
-            if cc.t2 is not None:
-                last_size = cc.vector_size()
-            else:
-                last_size = 0
+        cc = self.base
+        if cc.t2 is not None:
+            last_size = cc.vector_size()
+        else:
+            last_size = 0
 
-            self.reset(mol)
-            mf_scanner = cc._scf
-            mf_scanner(mol)
-            cc.mo_coeff = mf_scanner.mo_coeff
-            cc.mo_occ = mf_scanner.mo_occ
-            if last_size != cc.vector_size():
-                cc.t1 = cc.t2 = cc.l1 = cc.l2 = None
+        self.reset(mol)
+        mf_scanner = cc._scf
+        mf_scanner(mol)
+        cc.mo_coeff = mf_scanner.mo_coeff
+        cc.mo_occ = mf_scanner.mo_occ
+        if last_size != cc.vector_size():
+            cc.t1 = cc.t2 = cc.l1 = cc.l2 = None
 
-            eris = cc.ao2mo(cc.mo_coeff)
-            # Update cc.t1 and cc.t2
-            cc.kernel(t1=cc.t1, t2=cc.t2, eris=eris)
-            # Update cc.l1 and cc.l2
-            cc.solve_lambda(l1=cc.l1, l2=cc.l2, eris=eris)
+        eris = cc.ao2mo(cc.mo_coeff)
+        # Update cc.t1 and cc.t2
+        cc.kernel(t1=cc.t1, t2=cc.t2, eris=eris)
+        # Update cc.l1 and cc.l2
+        cc.solve_lambda(l1=cc.l1, l2=cc.l2, eris=eris)
 
-            de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, **kwargs)
-            return cc.e_tot, de
-        @property
-        def converged(self):
-            cc = self.base
-            return all((cc._scf.converged, cc.converged, cc.converged_lambda))
-
-    return CCSD_GradScanner(grad_cc)
+        de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, **kwargs)
+        return cc.e_tot, de
+    @property
+    def converged(self):
+        cc = self.base
+        return all((cc._scf.converged, cc.converged, cc.converged_lambda))
 
 def _response_dm1(mycc, Xvo, eris=None):
     nvir, nocc = Xvo.shape

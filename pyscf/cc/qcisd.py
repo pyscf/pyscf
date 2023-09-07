@@ -335,33 +335,35 @@ def as_scanner(cc):
         return cc
 
     logger.info(cc, 'Set %s as a scanner', cc.__class__)
+    name = cc.__class__.__name__ + QCISD_Scanner.__name_mixin__
+    return lib.set_class(QCISD_Scanner(cc), (QCISD_Scanner, cc.__class__), name)
 
-    class QCISD_Scanner(cc.__class__, lib.SinglePointScanner):
-        def __init__(self, cc):
-            self.__dict__.update(cc.__dict__)
-            self._scf = cc._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class QCISD_Scanner(lib.SinglePointScanner):
+    def __init__(self, cc):
+        self.__dict__.update(cc.__dict__)
+        self._scf = cc._scf.as_scanner()
 
-            if self.t2 is not None:
-                last_size = self.vector_size()
-            else:
-                last_size = 0
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            self.reset(mol)
+        if self.t2 is not None:
+            last_size = self.vector_size()
+        else:
+            last_size = 0
 
-            mf_scanner = self._scf
-            mf_scanner(mol)
-            self.mo_coeff = mf_scanner.mo_coeff
-            self.mo_occ = mf_scanner.mo_occ
-            if last_size != self.vector_size():
-                self.t1 = self.t2 = None
-            self.kernel(self.t1, self.t2, **kwargs)
-            return self.e_tot
-    return QCISD_Scanner(cc)
+        self.reset(mol)
+
+        mf_scanner = self._scf
+        mf_scanner(mol)
+        self.mo_coeff = mf_scanner.mo_coeff
+        self.mo_occ = mf_scanner.mo_occ
+        if last_size != self.vector_size():
+            self.t1 = self.t2 = None
+        self.kernel(self.t1, self.t2, **kwargs)
+        return self.e_tot
 
 
 class QCISD(CCSD):

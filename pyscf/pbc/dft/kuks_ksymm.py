@@ -176,5 +176,10 @@ class KsymAdaptedKUKS(kuks.KUKS, kuhf_ksymm.KUHF):
                         ecoul.imag)
         return tot_e.real, vhf.ecoul + vhf.exc
 
+    def to_hf(self):
+        '''Convert to KRHF object.'''
+        from pyscf.pbc.scf.kuhf_ksymm import KUHF
+        return self._transfer_attrs_(KUHF(self.cell, self.kpts))
+
 
 KUKS = KsymAdaptedKUKS

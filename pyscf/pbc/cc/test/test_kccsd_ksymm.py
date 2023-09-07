@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
 
 if __name__ == '__main__':
     print("Full Tests for CCSD with k-point symmetry")
-    #unittest.main()
+    unittest.main()
     L = 2.
     He = gto.Cell()
     He.verbose = 5
@@ -76,8 +76,3 @@ if __name__ == '__main__':
     kmf0 = scf.KRHF(He, kpts0, exxdiv=None).density_fit()
     kmf0.kernel()
     kccref = cc.KRCCSD(kmf0)
-    kccref.kernel()
-
-    kpts = He.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
-    kmf = scf.KRHF(He, kpts, exxdiv=None).density_fit()
-    kmf.kernel()

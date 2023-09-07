@@ -363,6 +363,11 @@ class KnownValues(unittest.TestCase):
         mf.irrep_nelec = {'s+0': 4}
         self.assertAlmostEqual(mf.e_tot, -54.3973578450836, 9)
 
+    def test_no_virtual(self):
+        mol = gto.M(atom='He', basis='sto3g')
+        mf = mol.RHF().newton().run()
+        self.assertAlmostEqual(mf.e_tot, -2.80778395753997, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for Newton solver")

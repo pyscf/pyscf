@@ -27,6 +27,7 @@ class KsymAdaptedKRKSpU(krks_ksymm.KRKS):
 
     get_veff = krkspu.get_veff
     energy_elec = krkspu.energy_elec
+    to_hf = lib.invalid_method('to_hf')
 
     @lib.with_doc(krkspu.KRKSpU.__init__.__doc__)
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',

@@ -617,24 +617,26 @@ def as_scanner(td):
         return td
 
     logger.info(td, 'Set %s as a scanner', td.__class__)
+    name = td.__class__.__name__ + TD_Scanner.__name_mixin__
+    return lib.set_class(TD_Scanner(td), (TD_Scanner, td.__class__), name)
 
-    class TD_Scanner(td.__class__, lib.SinglePointScanner):
-        def __init__(self, td):
-            self.__dict__.update(td.__dict__)
-            self._scf = td._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class TD_Scanner(lib.SinglePointScanner):
+    def __init__(self, td):
+        self.__dict__.update(td.__dict__)
+        self._scf = td._scf.as_scanner()
 
-            self.reset(mol)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            mf_scanner = self._scf
-            mf_e = mf_scanner(mol)
-            self.kernel(**kwargs)
-            return mf_e + self.e
-    return TD_Scanner(td)
+        self.reset(mol)
+
+        mf_scanner = self._scf
+        mf_e = mf_scanner(mol)
+        self.kernel(**kwargs)
+        return mf_e + self.e
 
 
 class TDBase(lib.StreamObject):

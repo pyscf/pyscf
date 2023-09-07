@@ -55,8 +55,6 @@ def density_fit(casscf, auxbasis=None, with_df=None):
     >>> mc = DFCASSCF(mf, 4, 4)
     -100.05994191570504
     '''
-    casscf_class = casscf.__class__
-
     if with_df is None:
         if (getattr(casscf._scf, 'with_df', None) and
             (auxbasis is None or auxbasis == casscf._scf.with_df.auxbasis)):
@@ -77,90 +75,97 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             casscf.with_df = with_df
         return casscf
 
-    class DFCASSCF(_DFCASSCF, casscf_class):
-        def __init__(self):
-            self.__dict__.update(casscf.__dict__)
-            #self.grad_update_dep = 0
-            self.with_df = with_df
-            self._keys = self._keys.union(['with_df'])
-
-        def dump_flags(self, verbose=None):
-            casscf_class.dump_flags(self, verbose)
-            logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix '
-                        'and 2e integral transformation')
-            return self
-
-        def reset(self, mol=None):
-            self.with_df.reset(mol)
-            return casscf_class.reset(self, mol)
-
-        def ao2mo(self, mo_coeff=None):
-            if self.with_df and 'CASSCF' in casscf_class.__name__:
-                return _ERIS(self, mo_coeff, self.with_df)
-            else:
-                return casscf_class.ao2mo(self, mo_coeff)
-
-        def get_h2eff(self, mo_coeff=None):  # For CASCI
-            if self.with_df:
-                ncore = self.ncore
-                nocc = ncore + self.ncas
-                if mo_coeff is None:
-                    mo_coeff = self.mo_coeff[:,ncore:nocc]
-                elif mo_coeff.shape[1] != self.ncas:
-                    mo_coeff = mo_coeff[:,ncore:nocc]
-                return self.with_df.ao2mo(mo_coeff)
-            else:
-                return casscf_class.get_h2eff(self, mo_coeff)
-
-# Modify get_veff for JK matrix of core density because get_h1eff calls
-# self.get_veff to generate core JK
-        def get_veff(self, mol=None, dm=None, hermi=1):
-            if dm is None:
-                mocore = self.mo_coeff[:,:self.ncore]
-                dm = numpy.dot(mocore, mocore.T) * 2
-            vj, vk = self.get_jk(mol, dm, hermi)
-            return vj - vk * .5
-
-# only approximate jk for self.update_jk_in_ah
-        @lib.with_doc(casscf_class.get_jk.__doc__)
-        def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
-            if self.with_df:
-                return self.with_df.get_jk(dm, hermi,
-                                           with_j=with_j, with_k=with_k, omega=omega)
-            else:
-                return casscf_class.get_jk(self, mol, dm, hermi,
-                                           with_j=with_j, with_k=with_k, omega=omega)
-
-        def _exact_paaa(self, mo, u, out=None):
-            if self.with_df:
-                nmo = mo.shape[1]
-                ncore = self.ncore
-                ncas = self.ncas
-                nocc = ncore + ncas
-                mo1 = numpy.dot(mo, u)
-                mo1_cas = mo1[:,ncore:nocc]
-                paaa = self.with_df.ao2mo([mo1, mo1_cas, mo1_cas, mo1_cas], compact=False)
-                return paaa.reshape(nmo,ncas,ncas,ncas)
-            else:
-                return casscf_class._exact_paaa(self, mol, u, out)
-
-        def nuc_grad_method(self):
-            if 'CASCI' in str (casscf_class):
-                raise NotImplementedError ("DFCASCI nuclear gradients")
-            from pyscf.df.grad import casscf
-            return casscf.Gradients (self)
-
-        def _state_average_nuc_grad_method (self, state=None):
-            if 'CASCI' in str (casscf_class):
-                raise NotImplementedError ("DFCASCI nuclear gradients")
-            from pyscf.df.grad import sacasscf
-            return sacasscf.Gradients (self, state=state)
-
-    return DFCASSCF()
+    dfcas = _DFCASSCF(casscf, with_df)
+    return lib.set_class(dfcas, (_DFCASSCF, casscf.__class__))
 
 # A tag to label the derived MCSCF class
 class _DFCASSCF:
-    pass
+
+    __name_mixin__ = 'DF'
+
+    def __init__(self, mc, with_df):
+        self.__dict__.update(mc.__dict__)
+        #self.grad_update_dep = 0
+        self.with_df = with_df
+        self._keys = self._keys.union(['with_df'])
+
+    def undo_df(self):
+        '''Remove the DFCASSCF Mixin'''
+        obj = lib.view(self, lib.drop_class(self.__class__, _DFCASSCF))
+        del obj.with_df
+        return obj
+
+    def dump_flags(self, verbose=None):
+        super().dump_flags(verbose)
+        logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix '
+                    'and 2e integral transformation')
+        return self
+
+    def reset(self, mol=None):
+        self.with_df.reset(mol)
+        return super().reset(mol)
+
+    def ao2mo(self, mo_coeff=None):
+        if self.with_df and 'CASSCF' in self.__class__.__name__:
+            return _ERIS(self, mo_coeff, self.with_df)
+        else:
+            return super().ao2mo(mo_coeff)
+
+    def get_h2eff(self, mo_coeff=None):  # For CASCI
+        if self.with_df:
+            ncore = self.ncore
+            nocc = ncore + self.ncas
+            if mo_coeff is None:
+                mo_coeff = self.mo_coeff[:,ncore:nocc]
+            elif mo_coeff.shape[1] != self.ncas:
+                mo_coeff = mo_coeff[:,ncore:nocc]
+            return self.with_df.ao2mo(mo_coeff)
+        else:
+            return super().get_h2eff(mo_coeff)
+
+    # Modify get_veff for JK matrix of core density because get_h1eff calls
+    # self.get_veff to generate core JK
+    def get_veff(self, mol=None, dm=None, hermi=1):
+        if dm is None:
+            mocore = self.mo_coeff[:,:self.ncore]
+            dm = numpy.dot(mocore, mocore.T) * 2
+        vj, vk = self.get_jk(mol, dm, hermi)
+        return vj - vk * .5
+
+    # only approximate jk for self.update_jk_in_ah
+    def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
+        if self.with_df:
+            return self.with_df.get_jk(dm, hermi,
+                                       with_j=with_j, with_k=with_k, omega=omega)
+        else:
+            return super().get_jk(mol, dm, hermi,
+                                  with_j=with_j, with_k=with_k, omega=omega)
+
+    def _exact_paaa(self, mo, u, out=None):
+        if self.with_df:
+            nmo = mo.shape[1]
+            ncore = self.ncore
+            ncas = self.ncas
+            nocc = ncore + ncas
+            mo1 = numpy.dot(mo, u)
+            mo1_cas = mo1[:,ncore:nocc]
+            paaa = self.with_df.ao2mo([mo1, mo1_cas, mo1_cas, mo1_cas], compact=False)
+            return paaa.reshape(nmo,ncas,ncas,ncas)
+        else:
+            return super()._exact_paaa(mol, u, out)
+
+    def nuc_grad_method(self):
+        if 'CASCI' in self.__class__.__name__:
+            raise NotImplementedError ("DFCASCI nuclear gradients")
+        from pyscf.df.grad import casscf
+        return casscf.Gradients (self)
+
+    def _state_average_nuc_grad_method (self, state=None):
+        if 'CASCI' in self.__class__.__name__:
+            raise NotImplementedError ("DFCASCI nuclear gradients")
+        from pyscf.df.grad import sacasscf
+        return sacasscf.Gradients (self, state=state)
+
 _DFCASCI = _DFCASSCF
 
 
@@ -190,9 +195,8 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
     >>> mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 4, 4))
     -100.06458716530391
     '''
-    casscf_class = casscf.__class__
 
-    if 'CASCI' in str(casscf_class):
+    if 'CASCI' in casscf.__class__.__name__:
         return casscf  # because CASCI does not need orbital optimization
 
     if getattr(casscf, 'with_df', None):
@@ -210,68 +214,77 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
             if auxbasis is not None:
                 with_df.auxbasis = auxbasis
 
-    class CASSCF(casscf_class):
-        def __init__(self):
-            self.__dict__.update(casscf.__dict__)
-            #self.grad_update_dep = 0
-            self.with_df = with_df
-            self._keys = self._keys.union(['with_df'])
+    dfcas = _DFHessianCASSCF(casscf, with_df)
+    return lib.set_class(dfcas, (_DFHessianCASSCF, casscf.__class__))
 
-        def dump_flags(self, verbose=None):
-            casscf_class.dump_flags(self, verbose)
-            logger.info(self, 'CASSCF: density fitting for orbital hessian')
+class _DFHessianCASSCF:
 
-        def reset(self, mol=None):
-            self.with_df.reset(mol)
-            return casscf_class.reset(self, mol)
+    __name_mixin__ = 'DFHessian'
 
-        def ao2mo(self, mo_coeff):
-            # the exact integral transformation
-            eris = casscf_class.ao2mo(self, mo_coeff)
+    def __init__(self, mc, with_df):
+        self.__dict__.update(mc.__dict__)
+        #self.grad_update_dep = 0
+        self.with_df = with_df
+        self._keys = self._keys.union(['with_df'])
 
-            log = logger.Logger(self.stdout, self.verbose)
-            # Add the approximate diagonal term for orbital hessian
-            t1 = t0 = (logger.process_clock(), logger.perf_counter())
-            mo = numpy.asarray(mo_coeff, order='F')
-            nao, nmo = mo.shape
-            ncore = self.ncore
-            eris.j_pc = numpy.zeros((nmo,ncore))
-            k_cp = numpy.zeros((ncore,nmo))
-            fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_iltj
-            fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
-            ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
+    def undo_df(self):
+        '''Remove the DFHessianCASSCF Mixin'''
+        obj = lib.view(self, lib.drop_class(self.__class__, _DFHessianCASSCF))
+        del obj.with_df
+        return obj
 
-            max_memory = self.max_memory - lib.current_memory()[0]
-            blksize = max(4, int(min(self.with_df.blockdim, max_memory*.3e6/8/nmo**2)))
-            bufs1 = numpy.empty((blksize,nmo,nmo))
-            for eri1 in self.with_df.loop(blksize):
-                naux = eri1.shape[0]
-                buf = bufs1[:naux]
-                fdrv(ftrans, fmmm,
-                     buf.ctypes.data_as(ctypes.c_void_p),
-                     eri1.ctypes.data_as(ctypes.c_void_p),
-                     mo.ctypes.data_as(ctypes.c_void_p),
-                     ctypes.c_int(naux), ctypes.c_int(nao),
-                     (ctypes.c_int*4)(0, nmo, 0, nmo),
-                     ctypes.c_void_p(0), ctypes.c_int(0))
-                bufd = numpy.einsum('kii->ki', buf)
-                eris.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
-                k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
-                t1 = log.timer_debug1('j_pc and k_pc', *t1)
-            eris.k_pc = k_cp.T.copy()
-            log.timer('ao2mo density fit part', *t0)
-            return eris
+    def dump_flags(self, verbose=None):
+        super().dump_flags(verbose)
+        logger.info(self, 'CASSCF: density fitting for orbital hessian')
 
-        @lib.with_doc(casscf_class.get_jk.__doc__)
-        def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
-            if self.with_df:
-                return self.with_df.get_jk(dm, hermi,
-                                           with_j=with_j, with_k=with_k, omega=omega)
-            else:
-                return casscf_class.get_jk(self, mol, dm, hermi,
-                                           with_j=with_j, with_k=with_k, omega=omega)
+    def reset(self, mol=None):
+        self.with_df.reset(mol)
+        return super().reset(mol)
 
-    return CASSCF()
+    def ao2mo(self, mo_coeff):
+        # the exact integral transformation
+        eris = super().ao2mo(mo_coeff)
+
+        log = logger.Logger(self.stdout, self.verbose)
+        # Add the approximate diagonal term for orbital hessian
+        t1 = t0 = (logger.process_clock(), logger.perf_counter())
+        mo = numpy.asarray(mo_coeff, order='F')
+        nao, nmo = mo.shape
+        ncore = self.ncore
+        eris.j_pc = numpy.zeros((nmo,ncore))
+        k_cp = numpy.zeros((ncore,nmo))
+        fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_iltj
+        fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
+        ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
+
+        max_memory = self.max_memory - lib.current_memory()[0]
+        blksize = max(4, int(min(self.with_df.blockdim, max_memory*.3e6/8/nmo**2)))
+        bufs1 = numpy.empty((blksize,nmo,nmo))
+        for eri1 in self.with_df.loop(blksize):
+            naux = eri1.shape[0]
+            buf = bufs1[:naux]
+            fdrv(ftrans, fmmm,
+                 buf.ctypes.data_as(ctypes.c_void_p),
+                 eri1.ctypes.data_as(ctypes.c_void_p),
+                 mo.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(naux), ctypes.c_int(nao),
+                 (ctypes.c_int*4)(0, nmo, 0, nmo),
+                 ctypes.c_void_p(0), ctypes.c_int(0))
+            bufd = numpy.einsum('kii->ki', buf)
+            eris.j_pc += numpy.einsum('ki,kj->ij', bufd, bufd[:,:ncore])
+            k_cp += numpy.einsum('kij,kij->ij', buf[:,:ncore], buf[:,:ncore])
+            t1 = log.timer_debug1('j_pc and k_pc', *t1)
+        eris.k_pc = k_cp.T.copy()
+        log.timer('ao2mo density fit part', *t0)
+        return eris
+
+    def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
+        if self.with_df:
+            return self.with_df.get_jk(dm, hermi,
+                                       with_j=with_j, with_k=with_k, omega=omega)
+        else:
+            return super().get_jk(mol, dm, hermi,
+                                  with_j=with_j, with_k=with_k, omega=omega)
 
 
 class _ERIS(object):

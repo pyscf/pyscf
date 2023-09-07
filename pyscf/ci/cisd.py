@@ -776,32 +776,34 @@ def as_scanner(ci):
         return ci
 
     logger.info(ci, 'Set %s as a scanner', ci.__class__)
+    name = ci.__class__.__name__ + CISD_Scanner.__name_mixin__
+    return lib.set_class(CISD_Scanner(ci), (CISD_Scanner, ci.__class__), name)
 
-    class CISD_Scanner(ci.__class__, lib.SinglePointScanner):
-        def __init__(self, ci):
-            self.__dict__.update(ci.__dict__)
-            self._scf = ci._scf.as_scanner()
-        def __call__(self, mol_or_geom, ci0=None, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class CISD_Scanner(lib.SinglePointScanner):
+    def __init__(self, ci):
+        self.__dict__.update(ci.__dict__)
+        self._scf = ci._scf.as_scanner()
 
-            self.reset(mol)
+    def __call__(self, mol_or_geom, ci0=None, **kwargs):
+        if isinstance(mol_or_geom, gto.Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            mf_scanner = self._scf
-            mf_scanner(mol)
-            self.mo_coeff = mf_scanner.mo_coeff
-            self.mo_occ = mf_scanner.mo_occ
-            if getattr(self.ci, 'size', 0) != self.vector_size():
-                self.ci = None
-            if ci0 is None:
-                # FIXME: Whether to use the initial guess from last step?
-                # If root flips, large errors may be found in the solutions
-                ci0 = self.ci
-            self.kernel(ci0, **kwargs)[0]
-            return self.e_tot
-    return CISD_Scanner(ci)
+        self.reset(mol)
+
+        mf_scanner = self._scf
+        mf_scanner(mol)
+        self.mo_coeff = mf_scanner.mo_coeff
+        self.mo_occ = mf_scanner.mo_occ
+        if getattr(self.ci, 'size', 0) != self.vector_size():
+            self.ci = None
+        if ci0 is None:
+            # FIXME: Whether to use the initial guess from last step?
+            # If root flips, large errors may be found in the solutions
+            ci0 = self.ci
+        self.kernel(ci0, **kwargs)[0]
+        return self.e_tot
 
 
 class CISD(lib.StreamObject):

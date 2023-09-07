@@ -352,28 +352,31 @@ def as_scanner(mf_grad):
         return mf_grad
 
     logger.info(mf_grad, 'Create scanner for %s', mf_grad.__class__)
+    name = mf_grad.__class__.__name__ + SCF_GradScanner.__name_mixin__
+    return lib.set_class(SCF_GradScanner(mf_grad),
+                         (SCF_GradScanner, mf_grad.__class__), name)
 
-    class SCF_GradScanner(mf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-        def __call__(self, cell_or_geom, **kwargs):
-            if isinstance(cell_or_geom, gto.Cell):
-                cell = cell_or_geom
-            else:
-                cell = self.cell.set_geom_(cell_or_geom, inplace=False)
+class SCF_GradScanner(lib.GradScanner):
+    def __init__(self, g):
+        lib.GradScanner.__init__(self, g)
 
-            mf_scanner = self.base
-            e_tot = mf_scanner(cell)
-            self.cell = cell
+    def __call__(self, cell_or_geom, **kwargs):
+        if isinstance(cell_or_geom, gto.Cell):
+            cell = cell_or_geom
+        else:
+            cell = self.cell.set_geom_(cell_or_geom, inplace=False)
 
-            # If second integration grids are created for RKS and UKS
-            # gradients
-            if getattr(self, 'grids', None):
-                self.grids.reset(cell)
+        mf_scanner = self.base
+        e_tot = mf_scanner(cell)
+        self.cell = cell
 
-            de = self.kernel(**kwargs)
-            return e_tot, de
-    return SCF_GradScanner(mf_grad)
+        # If second integration grids are created for RKS and UKS
+        # gradients
+        if getattr(self, 'grids', None):
+            self.grids.reset(cell)
+
+        de = self.kernel(**kwargs)
+        return e_tot, de
 
 
 class Gradients(GradientsMixin):

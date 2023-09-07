@@ -149,7 +149,6 @@ class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
     _finalize = khf_ksymm.KsymAdaptedKSCF._finalize
 
     get_init_guess = khf_ksymm.KRHF.get_init_guess
-    to_khf = khf_ksymm.KRHF.to_khf
 
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -180,5 +179,10 @@ class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
                         "Coulomb integrals (e-e, e-N) may not converge !",
                         ecoul.imag)
         return tot_e.real, vhf.ecoul + vhf.exc
+
+    def to_hf(self):
+        '''Convert to KRHF object.'''
+        from pyscf.pbc.scf.khf_ksymm import KRHF
+        return self._transfer_attrs_(KRHF(self.cell, self.kpts))
 
 KRKS = KsymAdaptedKRKS

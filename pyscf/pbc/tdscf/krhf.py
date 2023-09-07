@@ -76,7 +76,7 @@ class KTDBase(TDBase):
         log.info('\n')
 
     def check_sanity(self):
-        TDMixin.check_sanity(self)
+        TDBase.check_sanity(self)
         mf = self._scf
         if any([k != 0 for k in self.kshift_lst]):
             if mf.rsjk is not None or not isinstance(mf.with_df, pbcdf.df.DF):

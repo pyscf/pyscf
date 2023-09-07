@@ -216,6 +216,10 @@ C     F
         self.assertTrue(mf.converged)
         self.assertAlmostEqual(mf.e_tot, ref.e_tot, 9)
 
+    def test_undo_x2c(self):
+        mf = mol.RHF().x2c().density_fit().undo_x2c()
+        self.assertEqual(mf.__class__.__name__, 'DFRHF')
+
 
 if __name__ == "__main__":
     print("Full Tests for x2c")

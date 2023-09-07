@@ -22,6 +22,7 @@
 
 from functools import reduce
 import numpy
+from pyscf.gto import Mole
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
@@ -189,36 +190,46 @@ def as_scanner(td_grad, state=1):
     if isinstance(td_grad, lib.GradScanner):
         return td_grad
 
-    logger.info(td_grad, 'Create scanner for %s', td_grad.__class__)
-
-    class TDSCF_GradScanner(td_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-            self._keys = self._keys.union(['e_tot'])
-        def __call__(self, mol_or_geom, state=state, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
-            self.reset(mol)
-
-            td_scanner = self.base
-            td_scanner(mol)
-# TODO: Check root flip.  Maybe avoid the initial guess in TDHF otherwise
-# large error may be found in the excited states amplitudes
-            de = self.kernel(state=state, **kwargs)
-            e_tot = self.e_tot[state-1]
-            return e_tot, de
-        @property
-        def converged(self):
-            td_scanner = self.base
-            return all((td_scanner._scf.converged,
-                        td_scanner.converged[self.state]))
-
     if state == 0:
         return td_grad.base._scf.nuc_grad_method().as_scanner()
-    else:
-        return TDSCF_GradScanner(td_grad)
+
+    logger.info(td_grad, 'Create scanner for %s', td_grad.__class__)
+    name = td_grad.__class__.__name__ + TDSCF_GradScanner.__name_mixin__
+    return lib.set_class(TDSCF_GradScanner(td_grad, state),
+                         (TDSCF_GradScanner, td_grad.__class__), name)
+
+class TDSCF_GradScanner(lib.GradScanner):
+    def __init__(self, g, state):
+        lib.GradScanner.__init__(self, g)
+        if state is not None:
+            self.state = state
+        self._keys = self._keys.union(['e_tot'])
+
+    def __call__(self, mol_or_geom, state=None, **kwargs):
+        if isinstance(mol_or_geom, Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+        self.reset(mol)
+
+        if state is None:
+            state = self.state
+        else:
+            self.state = state
+
+        td_scanner = self.base
+        td_scanner(mol)
+# TODO: Check root flip.  Maybe avoid the initial guess in TDHF otherwise
+# large error may be found in the excited states amplitudes
+        de = self.kernel(state=state, **kwargs)
+        e_tot = self.e_tot[state-1]
+        return e_tot, de
+
+    @property
+    def converged(self):
+        td_scanner = self.base
+        return all((td_scanner._scf.converged,
+                    td_scanner.converged[self.state]))
 
 
 class Gradients(rhf_grad.GradientsMixin):

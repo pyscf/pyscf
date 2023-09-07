@@ -748,7 +748,7 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
 
 dip_moment = hf.dip_moment
 
-class SymAdaptedUHF(hf.SCF):
+class UHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for UHF:
         nelec : (int, int)
@@ -1068,8 +1068,6 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         '''
         from pyscf import dft
         return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
-
-UHF = SymAdaptedUHF
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')
