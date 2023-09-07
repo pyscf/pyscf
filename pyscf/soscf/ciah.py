@@ -43,14 +43,14 @@ class CIAHOptimizer(lib.StreamObject):
     ah_max_cycle = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_max_cycle', 30)
     ah_trust_region = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_trust_region', 3.)
 
-    def __init__(self):
-        self._keys = set(('conv_tol_grad', 'max_stepsize', 'max_iters',
-                          'kf_interval', 'kf_trust_region', 'ah_start_tol',
-                          'ah_start_cycle', 'ah_level_shift', 'ah_conv_tol',
-                          'ah_lindep', 'ah_max_cycle', 'ah_trust_region'))
+    _keys = set((
+        'conv_tol_grad', 'max_stepsize', 'max_iters', 'kf_interval',
+        'kf_trust_region', 'ah_start_tol', 'ah_start_cycle', 'ah_level_shift',
+        'ah_conv_tol', 'ah_lindep', 'ah_max_cycle', 'ah_trust_region',
+    ))
 
     def gen_g_hop(self, u):
-        pass
+        raise NotImplementedError
 
     def pack_uniq_var(self, mat):
         nmo = mat.shape[0]

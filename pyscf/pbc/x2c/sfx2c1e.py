@@ -83,10 +83,11 @@ class SFX2C1E_SCF(x2c._X2C_SCF):
 
     __name_mixin__ = 'sfX2C1e'
 
+    _keys = set(['with_x2c'])
+
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)
         self.with_x2c = SpinFreeX2CHelper(mf.mol)
-        self._keys = self._keys.union(['with_x2c'])
 
     def get_hcore(self, cell=None, kpts=None, kpt=None):
         if cell is None: cell = self.cell
@@ -105,7 +106,7 @@ class SFX2C1E_SCF(x2c._X2C_SCF):
                 hcore = scipy.linalg.block_diag(hcore, hcore)
             return hcore
         else:
-            return super(x2c._X2C_SCF, self).get_hcore(self, cell, kpts)
+            return super(x2c._X2C_SCF, self).get_hcore(cell, kpts)
 
 class PBCX2CHelper(x2c.X2C):
 

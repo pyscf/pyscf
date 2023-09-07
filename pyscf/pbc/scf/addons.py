@@ -308,8 +308,8 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
     mf.entropy = None
     mf.e_free = None
     mf.e_zero = None
-    mf._keys = mf._keys.union(['sigma', 'smearing_method',
-                               'entropy', 'e_free', 'e_zero'])
+    mf._keys = set(['sigma', 'smearing_method',
+                    'entropy', 'e_free', 'e_zero'])
 
     mf.get_occ = get_occ
     mf.energy_tot = energy_tot
@@ -491,9 +491,7 @@ def convert_to_ghf(mf, out=None):
     elif isinstance(mf, scf.khf.KSCF):
 
         def update_mo_(mf, mf1):
-            _keys = mf._keys.union(mf1._keys)
             mf1.__dict__.update(mf.__dict__)
-            mf1._keys = _keys
             if mf.mo_energy is not None:
                 mf1.mo_energy = []
                 mf1.mo_occ = []

@@ -767,6 +767,9 @@ class UHF(hf.SCF):
     >>> print('S^2 = %.7f, 2S+1 = %.7f' % mf.spin_square())
     S^2 = 0.7570150, 2S+1 = 2.0070027
     '''
+
+    _keys = set(["init_guess_breaksym"])
+
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         # self.mo_coeff => [mo_a, mo_b]
@@ -774,7 +777,6 @@ class UHF(hf.SCF):
         # self.mo_energy => [mo_energy_a, mo_energy_b]
         self.nelec = None
         self.init_guess_breaksym = None
-        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):

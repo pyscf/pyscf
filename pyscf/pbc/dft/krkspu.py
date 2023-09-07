@@ -239,6 +239,8 @@ class KRKSpU(krks.KRKS):
     RKSpU class adapted for PBCs with k-point sampling.
     """
 
+    _keys = set(["U_idx", "U_val", "C_ao_lo", "U_lab"])
+
     get_veff = get_veff
     energy_elec = energy_elec
     to_hf = lib.invalid_method('to_hf')
@@ -275,7 +277,6 @@ class KRKSpU(krks.KRKS):
             self.C_ao_lo = np.asarray(C_ao_lo)
         if self.C_ao_lo.ndim == 4:
             self.C_ao_lo = self.C_ao_lo[0]
-        self._keys = self._keys.union(["U_idx", "U_val", "C_ao_lo", "U_lab"])
 
     def nuc_grad_method(self):
         raise NotImplementedError

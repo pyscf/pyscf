@@ -320,6 +320,8 @@ class KohnShamDFT(object):
     -76.415443079840458
     '''
 
+    _keys = set(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
+
     def __init__(self, xc='LDA,VWN'):
         self.xc = xc
         self.nlc = ''
@@ -335,8 +337,6 @@ class KohnShamDFT(object):
 ##################################################
 # don't modify the following attributes, they are not input options
         self._numint = numint.NumInt()
-        self._keys = self._keys.union([
-            'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
 
     @property
     def omega(self):

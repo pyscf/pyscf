@@ -85,10 +85,11 @@ class X2C1E_GSCF(x2c._X2C_SCF):
 
     __name_mixin__ = 'X2C1e'
 
+    _keys = set(['with_x2c'])
+
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)
         self.with_x2c = SpinOrbitalX2C1EHelper(mf.cell)
-        self._keys = self._keys.union(['with_x2c'])
 
     def get_hcore(self, cell=None, kpts=None, kpt=None):
         if cell is None:
@@ -105,7 +106,7 @@ class X2C1E_GSCF(x2c._X2C_SCF):
             hcore = self.with_x2c.get_hcore(cell, kpts)
             return hcore
         else:
-            return super(x2c._X2C_SCF).get_hcore(self, cell, kpts)
+            return super(x2c._X2C_SCF).get_hcore(cell, kpts)
 
 class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
     def get_hcore(self, cell=None, kpts=None):

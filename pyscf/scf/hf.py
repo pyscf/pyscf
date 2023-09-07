@@ -1474,6 +1474,17 @@ class SCF(lib.StreamObject):
     direct_scf_tol = getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)
     conv_check = getattr(__config__, 'scf_hf_SCF_conv_check', True)
 
+    callback = None
+
+    _keys = set((
+        'conv_tol', 'conv_tol_grad', 'max_cycle', 'init_guess',
+        'DIIS', 'diis', 'diis_space', 'diis_start_cycle',
+        'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
+        'direct_scf', 'direct_scf_tol', 'conv_check', 'callback',
+        'mol', 'chkfile', 'mo_energy', 'mo_coeff', 'mo_occ',
+        'e_tot', 'converged', 'scf_summary', 'opt',
+    ))
+
     def __init__(self, mol):
         if not mol._built:
             sys.stderr.write('Warning: %s must be initialized before calling SCF.\n'
@@ -1500,17 +1511,10 @@ class SCF(lib.StreamObject):
         self.mo_occ = None
         self.e_tot = 0
         self.converged = False
-        self.callback = None
         self.scf_summary = {}
 
         self._opt = {None: None}
         self._eri = None # Note: self._eri requires large amount of memory
-
-        keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'init_guess',
-                    'DIIS', 'diis', 'diis_space', 'diis_start_cycle',
-                    'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
-                    'direct_scf', 'direct_scf_tol', 'conv_check'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
@@ -2033,8 +2037,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         '''This helper function transfers attributes from one SCF object to
         another SCF object. It is invoked by to_ks and to_hf methods.
         '''
-        keys = dst.__dict__.keys() & self.__dict__.keys()
-        dst.__dict__.update({k: getattr(self, k) for k in keys}, _keys=dst._keys)
+        loc_dic = self.__dict__
+        keys = dst.__dict__.keys() & loc_dic.keys()
+        dst.__dict__.update({k: loc_dic[k] for k in keys})
         dst.converged = False
         return dst
 

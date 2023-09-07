@@ -559,7 +559,8 @@ class StreamObject(object):
 
     verbose = 0
     stdout = sys.stdout
-    _keys = set(['verbose', 'stdout'])
+    # Store the keys appeared in the module.  It is used to check misinput attributes
+    _keys = set(['verbose', 'stdout', 'max_memory'])
 
     def kernel(self, *args, **kwargs):
         '''
@@ -607,15 +608,15 @@ class StreamObject(object):
         if args:
             warnings.warn('method set() only supports keyword arguments.\n'
                           'Arguments %s are ignored.' % args)
-        #if getattr(self, '_keys', None):
-        #    for k,v in kwargs.items():
-        #        setattr(self, k, v)
-        #        if k not in self._keys:
-        #            sys.stderr.write('Warning: %s does not have attribute %s\n'
-        #                             % (self.__class__, k))
-        #else:
-        for k,v in kwargs.items():
-            setattr(self, k, v)
+        #keys_ref = set(self._keys)
+        #cls_keys = [cls._keys for cls in self.__class__.__mro__[:-1]
+        #            if hasattr(cls, '_keys')]
+        #keys_ref = keys_ref.union(*cls_keys)
+        #unknown_keys = set(kwargs).difference(keys_ref)
+        #if unknown_keys:
+        #    warnings.warn(f'{self.__class__} does not have attributes {unknown_keys}')
+
+        self.__dict__.update(kwargs)
         return self
 
     # An alias to .set method
@@ -641,10 +642,11 @@ class StreamObject(object):
         return value of method set is the object itself.  This allows a series
         of functions/methods to be executed in pipe.
         '''
-        if (SANITY_CHECK and
-            self.verbose > 0 and  # logger.QUIET
-            getattr(self, '_keys', None)):
-            check_sanity(self, self._keys, self.stdout)
+        if SANITY_CHECK and self.verbose > 0:
+            cls_keys = [cls._keys for cls in self.__class__.__mro__[:-1]
+                        if hasattr(cls, '_keys')]
+            keys_ref = set(self._keys).union(*cls_keys)
+            check_sanity(self, keys_ref, self.stdout)
         return self
 
     view = view

@@ -495,6 +495,12 @@ class Grids(lib.StreamObject):
     alignment = ALIGNMENT_UNIT
     cutoff = CUTOFF
 
+    _keys = set((
+        'atomic_radii', 'radii_adjust', 'radi_method', 'becke_scheme',
+        'prune', 'level', 'alignment', 'cutoff', 'mol', 'symmetry',
+        'atom_grid', 'non0tab', 'screen_index', 'coords', 'weights',
+    ))
+
     def __init__(self, mol):
         self.mol = mol
         self.stdout = mol.stdout
@@ -510,10 +516,6 @@ class Grids(lib.StreamObject):
         self.screen_index = None
         self.coords  = None
         self.weights = None
-        self._keys = set(self.__dict__.keys()).update([
-            'atomic_radii', 'radii_adjust', 'radi_method', 'becke_scheme',
-            'prune', 'level', 'alignment', 'cutoff',
-        ])
 
     @property
     def size(self):

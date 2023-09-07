@@ -644,14 +644,15 @@ class _CIAH_SOSCF(object):
     kf_interval = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_interval', 4)
     kf_trust_region = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_trust_region', 5)
 
+    _keys = set((
+        'max_cycle_inner', 'max_stepsize', 'canonicalization', 'ah_start_tol',
+        'ah_start_cycle', 'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
+        'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval', 'kf_trust_region',
+    ))
+
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)
         self._scf = mf
-        self._keys.update(('max_cycle_inner', 'max_stepsize',
-                           'canonicalization', 'ah_start_tol', 'ah_start_cycle',
-                           'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
-                           'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval',
-                           'kf_trust_region'))
 
     def undo_soscf(self):
         '''Remove the SOSCF Mixin'''

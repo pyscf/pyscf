@@ -504,6 +504,8 @@ class SCF(mol_hf.SCF):
             MDF model is favored for better accuracy.  See also :mod:`pyscf.pbc.df`.
     '''
 
+    _keys = set(['cell', 'exxdiv', 'with_df', 'rsjk'])
+
     init_direct_scf = lib.invalid_method('init_direct_scf')
     get_bands = get_bands
     get_rho = get_rho
@@ -522,8 +524,6 @@ class SCF(mol_hf.SCF):
         self.exxdiv = exxdiv
         self.kpt = kpt
         self.conv_tol = max(cell.precision * 10, 1e-8)
-
-        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df', 'rsjk'])
 
     @property
     def kpt(self):

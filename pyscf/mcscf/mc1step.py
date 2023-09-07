@@ -743,6 +743,20 @@ class CASSCF(casci.CASCI):
     scale_restoration = getattr(__config__, 'mcscf_mc1step_CASSCF_scale_restoration', 0.5)
     small_rot_tol = getattr(__config__, 'mcscf_mc1step_CASSCF_small_rot_tol', 0.01)
     extrasym = None
+    callback = None
+
+    _keys = set((
+        'max_stepsize', 'max_cycle_macro', 'max_cycle_micro', 'conv_tol',
+        'conv_tol_grad', 'ah_level_shift', 'ah_conv_tol', 'ah_max_cycle',
+        'ah_lindep', 'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
+        'internal_rotation', 'ci_response_space', 'ci_grad_trust_region',
+        'with_dep4', 'chk_ci', 'kf_interval', 'kf_trust_region',
+        'fcisolver_max_cycle', 'fcisolver_conv_tol', 'natorb',
+        'canonicalization', 'sorting_mo_energy', 'scale_restoration',
+        'small_rot_tol', 'extrasym', 'callback',
+        'frozen', 'chkfile', 'fcisolver', 'e_tot', 'e_cas', 'ci', 'mo_coeff',
+        'mo_energy', 'converged',
+    ))
 
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
@@ -765,17 +779,6 @@ class CASSCF(casci.CASCI):
         self.mo_energy = self._scf.mo_energy
         self.converged = False
         self._max_stepsize = None
-
-        keys = set(('max_stepsize', 'max_cycle_macro', 'max_cycle_micro',
-                    'conv_tol', 'conv_tol_grad', 'ah_level_shift',
-                    'ah_conv_tol', 'ah_max_cycle', 'ah_lindep',
-                    'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
-                    'internal_rotation', 'ci_response_space',
-                    'ci_grad_trust_region', 'with_dep4', 'chk_ci',
-                    'kf_interval', 'kf_trust_region', 'fcisolver_max_cycle',
-                    'fcisolver_conv_tol', 'natorb', 'canonicalization',
-                    'sorting_mo_energy', 'scale_restoration'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

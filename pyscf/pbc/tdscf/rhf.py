@@ -26,10 +26,11 @@ from pyscf.pbc import scf
 from pyscf import __config__
 
 class TDBase(rhf.TDBase):
+    _keys = set.union(['cell'])
+
     def __init__(self, mf):
         rhf.TDBase.__init__(self, mf)
         self.cell = mf.cell
-        self._keys = self._keys.union(['cell'])
 
     def get_ab(self, mf=None):
         raise NotImplementedError

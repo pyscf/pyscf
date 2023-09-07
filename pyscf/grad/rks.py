@@ -585,6 +585,8 @@ class Gradients(rhf_grad.Gradients):
     # the kernel function can be reused in the DFT gradients code.
     grid_response = getattr(__config__, 'grad_rks_Gradients_grid_response', False)
 
+    _keys = set(['grid_response', 'grids', 'nlcgrids'])
+
     def __init__(self, mf):
         rhf_grad.Gradients.__init__(self, mf)
         self.grids = None
@@ -592,7 +594,6 @@ class Gradients(rhf_grad.Gradients):
         # This parameter has no effects for HF gradients. Add this attribute so that
         # the kernel function can be reused in the DFT gradients code.
         self.grid_response = False
-        self._keys = self._keys.union(['grid_response', 'grids', 'nlcgrids'])
 
     def dump_flags(self, verbose=None):
         rhf_grad.Gradients.dump_flags(self, verbose)

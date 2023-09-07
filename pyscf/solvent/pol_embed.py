@@ -152,6 +152,12 @@ def _get_element_row(symbol):
 
 
 class PolEmbed(lib.StreamObject):
+    _keys = set((
+        'mol', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
+        'equilibrium_solvation', 'options', 'do_ecp', 'eef', 'cppe_state',
+        'potentials', 'V_es', 'ecpmol', 'e', 'v',
+    ))
+
     def __init__(self, mol, options_or_potfile):
         self.mol = mol
         self.stdout = mol.stdout
@@ -210,8 +216,6 @@ class PolEmbed(lib.StreamObject):
         self.e = None
         self.v = None
         self._dm = None
-
-        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         logger.info(self, '******** %s flags ********', self.__class__)

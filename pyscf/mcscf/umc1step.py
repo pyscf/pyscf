@@ -371,11 +371,21 @@ class UCASSCF(ucasci.UCASCI):
     #canonicalization = getattr(__config__, 'mcscf_umc1step_UCASSCF_canonicalization', True)
     #sorting_mo_energy = getattr(__config__, 'mcscf_umc1step_UCASSCF_sorting_mo_energy', False)
 
+    callback = None
+
+    _keys = set((
+        'max_stepsize', 'max_cycle_macro', 'max_cycle_micro', 'conv_tol',
+        'conv_tol_grad', 'ah_level_shift', 'ah_conv_tol', 'ah_max_cycle',
+        'ah_lindep', 'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
+        'internal_rotation', 'ci_response_space', 'with_dep4', 'chk_ci',
+        'kf_interval', 'kf_trust_region', 'natorb', 'callback',
+        'canonicalization', 'sorting_mo_energy',
+    ))
+
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
         ucasci.UCASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 
-        self.callback = None
         self.chkfile = self._scf.chkfile
 
         self.fcisolver.max_cycle = getattr(__config__,
@@ -391,17 +401,6 @@ class UCASSCF(ucasci.UCASCI):
         self.mo_coeff = self._scf.mo_coeff
         self.converged = False
         self._max_stepsize = None
-
-        keys = set(('max_stepsize', 'max_cycle_macro', 'max_cycle_micro',
-                    'conv_tol', 'conv_tol_grad', 'ah_level_shift',
-                    'ah_conv_tol', 'ah_max_cycle', 'ah_lindep',
-                    'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
-                    'internal_rotation', 'ci_response_space',
-                    'with_dep4', 'chk_ci',
-                    'kf_interval', 'kf_trust_region', 'fcisolver_max_cycle',
-                    'fcisolver_conv_tol', 'natorb', 'canonicalization',
-                    'sorting_mo_energy'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

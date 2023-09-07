@@ -772,6 +772,12 @@ class CASCI(lib.StreamObject):
     canonicalization = getattr(__config__, 'mcscf_casci_CASCI_canonicalization', True)
     sorting_mo_energy = getattr(__config__, 'mcscf_casci_CASCI_sorting_mo_energy', False)
 
+    _keys = set((
+        'natorb', 'canonicalization', 'sorting_mo_energy', 'mol', 'max_memory',
+        'ncas', 'nelecas', 'ncore', 'fcisolver', 'frozen', 'extrasym',
+        'e_tot', 'e_cas', 'ci', 'mo_coeff', 'mo_energy', 'mo_occ', 'converged',
+    ))
+
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
         if isinstance(mf_or_mol, gto.Mole):
             mf = scf.RHF(mf_or_mol)
@@ -814,9 +820,6 @@ class CASCI(lib.StreamObject):
         self.mo_energy = mf.mo_energy
         self.mo_occ = None
         self.converged = False
-
-        keys = set(('natorb', 'canonicalization', 'sorting_mo_energy'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
     def ncore(self):

@@ -91,9 +91,13 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
     return lib.set_class(dfmf, (_SGXHF, mf.__class__))
 
 # A tag to label the derived SCF class
-class _SGXHF(object):
+class _SGXHF:
 
     __name_mixin__ = 'SGX'
+
+    _keys = set([
+        'auxbasis', 'with_df', 'direct_scf_sgx', 'rebuild_nsteps'
+    ])
 
     def __init__(self, mf, df=None, auxbasis=None):
         self.__dict__.update(mf.__dict__)
@@ -116,9 +120,6 @@ class _SGXHF(object):
         self._last_vj = 0
         self._last_vk = 0
         self._in_scf = False
-        self._keys = self._keys.union(['auxbasis', 'with_df',
-                                       'direct_scf_sgx',
-                                       'rebuild_nsteps'])
 
     def undo_sgx(self):
         obj = lib.view(self, lib.drop_class(self.__class__, _SGXHF))
@@ -247,6 +248,12 @@ def _make_opt(mol, pjs=False,
 
 
 class SGX(lib.StreamObject):
+    _keys = set((
+        'mol', 'grids_thrd', 'grids_level_i', 'grids_level_f',
+        'grids_switch_thrd', 'dfj', 'direct_j', 'pjs', 'debug', 'grids',
+        'blockdim', 'auxmol',
+    ))
+
     def __init__(self, mol, auxbasis=None, pjs=False):
         self.mol = mol
         self.stdout = mol.stdout
@@ -275,7 +282,6 @@ class SGX(lib.StreamObject):
         self._opt = None
         self._last_dm = 0
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
 
     @property
     def auxbasis(self):

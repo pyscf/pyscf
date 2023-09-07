@@ -125,6 +125,8 @@ class KUKSpU(kuks.KUKS):
     UKSpU class adapted for PBCs with k-point sampling.
     """
 
+    _keys = set(["U_idx", "U_val", "C_ao_lo", "U_lab"])
+
     get_veff = get_veff
     energy_elec = energy_elec
     to_hf = lib.invalid_method('to_hf')
@@ -167,8 +169,6 @@ class KUKSpU(kuks.KUKS):
             assert self.C_ao_lo.shape[0] == 2
         else:
             raise ValueError
-
-        self._keys = self._keys.union(["U_idx", "U_val", "C_ao_lo", "U_lab"])
 
     def nuc_grad_method(self):
         raise NotImplementedError

@@ -369,6 +369,8 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
 
+    _keys = set(["init_guess_breaksym"])
+
     init_guess_by_1e     = pbcuhf.UHF.init_guess_by_1e
     init_guess_by_minao  = pbcuhf.UHF.init_guess_by_minao
     init_guess_by_atom   = pbcuhf.UHF.init_guess_by_atom
@@ -387,7 +389,6 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
         self.nelec = None
         self.init_guess_breaksym = None
-        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):

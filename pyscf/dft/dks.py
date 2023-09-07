@@ -140,9 +140,7 @@ class DKS(KohnShamDFT, dhf.DHF):
     def x2c1e(self):
         from pyscf.x2c import dft
         x2chf = dft.UKS(self.mol)
-        x2c_keys = x2chf._keys
         x2chf.__dict__.update(self.__dict__)
-        x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
     x2c = x2c1e
 
@@ -157,9 +155,7 @@ class RDKS(DKS, dhf.RDHF):
     def x2c1e(self):
         from pyscf.x2c import dft
         x2chf = dft.RKS(self.mol)
-        x2c_keys = x2chf._keys
         x2chf.__dict__.update(self.__dict__)
-        x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
     x2c = x2c1e
 

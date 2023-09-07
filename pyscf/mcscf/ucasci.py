@@ -156,8 +156,6 @@ class UCASCI(casci.CASCI):
         self.e_tot = 0
         self.e_cas = 0
 
-        self._keys = set(self.__dict__.keys())
-
     @property
     def ncore(self):
         if self._ncore is None:

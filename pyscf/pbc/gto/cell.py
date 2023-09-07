@@ -1105,6 +1105,13 @@ class Cell(mole.Mole):
     precision = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
     exp_to_discard = getattr(__config__, 'pbc_gto_cell_Cell_exp_to_discard', None)
 
+    _keys = set((
+        'precision', 'exp_to_discard',
+        'a', 'ke_cutoff', 'pseudo', 'dimension', 'low_dim_ft_type',
+        'space_group_symmetry', 'symmorphic', 'lattice_symmetry', 'mesh',
+        'rcut',
+    ))
+
     def __init__(self, **kwargs):
         mole.Mole.__init__(self, **kwargs)
         self.a = None # lattice vectors, (a1,a2,a3)
@@ -1126,12 +1133,6 @@ class Cell(mole.Mole):
 # These attributes are initialized by build function if not given
         self.mesh = None
         self.rcut = None
-
-##################################################
-# don't modify the following variables, they are not input arguments
-        keys = ('precision', 'exp_to_discard',
-                'space_group_symmetry', 'symmorphic', 'lattice_symmetry')
-        self._keys = self._keys.union(self.__dict__).union(keys)
         self.__dict__.update(kwargs)
 
     @property

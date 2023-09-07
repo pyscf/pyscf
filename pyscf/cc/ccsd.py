@@ -920,6 +920,16 @@ class CCSD(lib.StreamObject):
     incore_complete = getattr(__config__, 'cc_ccsd_CCSD_incore_complete', False)
     cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
 
+    _keys = set((
+        'max_cycle', 'conv_tol', 'iterative_damping',
+        'conv_tol_normt', 'diis', 'diis_space', 'diis_file',
+        'diis_start_cycle', 'diis_start_energy_diff', 'direct',
+        'async_io', 'incore_complete', 'cc2', 'callback',
+        'mol', 'verbose', 'stdout', 'frozen', 'level_shift',
+        'mo_coeff', 'mo_occ', 'converged', 'converged_lambda', 'emp2', 'e_hf',
+        'e_corr', 't1', 't2', 'l1', 'l2', 'chkfile', 'callback',
+    ))
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if isinstance(mf, gto.Mole):
             raise RuntimeError('''
@@ -968,12 +978,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self._nmo = None
         self.chkfile = mf.chkfile
         self.callback = None
-
-        keys = set(('max_cycle', 'conv_tol', 'iterative_damping',
-                    'conv_tol_normt', 'diis', 'diis_space', 'diis_file',
-                    'diis_start_cycle', 'diis_start_energy_diff', 'direct',
-                    'async_io', 'incore_complete', 'cc2'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
     def ecc(self):

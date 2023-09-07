@@ -169,6 +169,8 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
 class KohnShamDFT(mol_ks.KohnShamDFT):
     '''PBC-KS'''
 
+    _keys = set(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
+
     get_rho = get_rho
 
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
@@ -193,8 +195,6 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
                 self._numint = numint.KNumInt(self.kpts)
         else:
             self._numint = numint.NumInt()
-        self._keys = self._keys.union([
-            'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
 
     def dump_flags(self, verbose=None):
         logger.info(self, 'XC functionals = %s', self.xc)

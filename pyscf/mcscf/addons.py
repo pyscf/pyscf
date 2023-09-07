@@ -879,6 +879,8 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
         wfnsym = casscf.fcisolver.wfnsym
 
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
+        _keys = set (('weights','e_states','_base_class'))
+
         def __init__(self, fcibase):
             self.__dict__.update (fcibase.__dict__)
             self.nroots = len(weights)
@@ -888,8 +890,6 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             # MRH 09/09/2022: I turned the _base_class property into an
             # attribute to prevent conflict with fix_spin_ dynamic class
             self._base_class = fcibase_class
-            keys = set (('weights','e_states','_base_class'))
-            self._keys = self._keys.union (keys)
 
         def dump_flags(self, verbose=None):
             if hasattr(fcibase_class, 'dump_flags'):
@@ -1046,11 +1046,11 @@ def _state_average_mcscf_solver(casscf, fcisolver):
     has_spin_square = getattr(fcisolver, 'spin_square', None)
 
     class StateAverageMCSCF(mcscfbase_class, StateAverageMCSCFSolver):
+        _keys = set (('weights', '_base_class'))
+
         def __init__(self, my_mc):
             self.__dict__.update (my_mc.__dict__)
             self.fcisolver = fcisolver
-            keys = set (('weights', '_base_class'))
-            self._keys = self._keys.union (keys)
 
         @property
         def _base_class (self):
@@ -1215,14 +1215,14 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
     _solver_args = StateAverageMixFCISolver_solver_args
     _state_args = StateAverageMixFCISolver_state_args
     class FakeCISolver(fcibase_class, StateAverageMixFCISolver):
+        _keys = set (('weights','e_states','_base_class','fcisolvers'))
+
         def __init__(self, mol):
             fcibase_class.__init__(self, mol)
             self.nroots = len(weights)
             self.weights = weights
             self.e_states = [None]
             self.fcisolvers = fcisolvers
-            keys = set (('weights','e_states','_base_class','fcisolvers'))
-            self._keys = self._keys.union (keys)
 
         @property
         def _base_class (self):

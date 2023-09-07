@@ -382,6 +382,8 @@ class GHF(hf.SCF):
         mo_coeff[nao:nao*2] are the coefficients of AO with beta spin.
     '''
 
+    _keys = set(['with_soc'])
+
     get_init_guess = hf.RHF.get_init_guess
     get_occ = get_occ
     _finalize = uhf.UHF._finalize
@@ -389,7 +391,6 @@ class GHF(hf.SCF):
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.with_soc = None
-        self._keys = self._keys.union(['with_soc'])
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol

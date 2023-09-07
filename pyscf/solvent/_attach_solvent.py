@@ -51,10 +51,11 @@ class _Solvation:
     pass
 
 class SCFWithSolvent(_Solvation):
+    _keys = set(['with_solvent'])
+
     def __init__(self, mf, solvent):
         self.__dict__.update(mf.__dict__)
         self.with_solvent = solvent
-        self._keys.update(['with_solvent'])
 
     def undo_solvent(self):
         cls = self.__class__
@@ -165,11 +166,12 @@ def _for_casscf(mc, solvent_obj, dm=None):
     return lib.set_class(sol_cas, (CASSCFWithSolvent, mc.__class__), name)
 
 class CASSCFWithSolvent(_Solvation):
+    _keys = set(['with_solvent'])
+
     def __init__(self, mc, solvent):
         self.__dict__.update(mc.__dict__)
         self.with_solvent = solvent
         self._e_tot_without_solvent = 0
-        self._keys.update(['with_solvent'])
 
     def undo_solvent(self):
         cls = self.__class__
@@ -302,10 +304,11 @@ def _for_casci(mc, solvent_obj, dm=None):
     return lib.set_class(sol_mc, (CASCIWithSolvent, mc.__class__), name)
 
 class CASCIWithSolvent(_Solvation):
+    _keys = set(['with_solvent'])
+
     def __init__(self, mc, solvent):
         self.__dict__.update(mc.__dict__)
         self.with_solvent = solvent
-        self._keys.update(['with_solvent'])
 
     def undo_solvent(self):
         cls = self.__class__
@@ -576,11 +579,12 @@ def _for_tdscf(method, solvent_obj, dm=None):
     return lib.set_class(sol_td, (TDSCFWithSolvent, method.__class__), name)
 
 class TDSCFWithSolvent(_Solvation):
+    _keys = set(['with_solvent'])
+
     def __init__(self, method, scf_with_solvent):
         self.__dict__.update(method.__dict__)
         self._scf = scf_with_solvent
         self.with_solvent = self._scf.with_solvent
-        self._keys.update(['with_solvent'])
 
     def undo_solvent(self):
         cls = self.__class__

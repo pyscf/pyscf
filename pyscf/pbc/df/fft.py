@@ -156,6 +156,11 @@ def get_pp(mydf, kpts=None):
 class FFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
+
+    _keys = set((
+        'cell', 'kpts', 'grids', 'mesh', 'blockdim', 'exxdiv',
+    ))
+
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         from pyscf.pbc.dft import gen_grid
         from pyscf.pbc.dft import numint
@@ -183,7 +188,6 @@ class FFTDF(lib.StreamObject):
         self.exxdiv = None
         self._numint = numint.KNumInt()
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
 
     @property
     def mesh(self):

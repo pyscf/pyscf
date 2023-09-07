@@ -199,11 +199,12 @@ def as_scanner(td_grad, state=1):
                          (TDSCF_GradScanner, td_grad.__class__), name)
 
 class TDSCF_GradScanner(lib.GradScanner):
+    _keys = set(['e_tot'])
+
     def __init__(self, g, state):
         lib.GradScanner.__init__(self, g)
         if state is not None:
             self.state = state
-        self._keys = self._keys.union(['e_tot'])
 
     def __call__(self, mol_or_geom, state=None, **kwargs):
         if isinstance(mol_or_geom, Mole):
@@ -237,6 +238,11 @@ class Gradients(rhf_grad.GradientsMixin):
     cphf_max_cycle = getattr(__config__, 'grad_tdrhf_Gradients_cphf_max_cycle', 20)
     cphf_conv_tol = getattr(__config__, 'grad_tdrhf_Gradients_cphf_conv_tol', 1e-8)
 
+    _keys = set((
+        'cphf_max_cycle', 'cphf_conv_tol',
+        'mol', 'base', 'chkfile', 'state', 'atmlst', 'de',
+    ))
+
     def __init__(self, td):
         self.verbose = td.verbose
         self.stdout = td.stdout
@@ -247,8 +253,6 @@ class Gradients(rhf_grad.GradientsMixin):
         self.state = 1  # of which the gradients to be computed.
         self.atmlst = None
         self.de = None
-        keys = set(('cphf_max_cycle', 'cphf_conv_tol'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

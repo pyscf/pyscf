@@ -38,6 +38,8 @@ from pyscf import __config__
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
 
 class KTDBase(TDBase):
+    _keys = set(['kconserv', 'kshift_lst'])
+
     def __init__(self, mf, kshift_lst=None):
         assert isinstance(mf, scf.khf.KSCF)
         TDBase.__init__(self, mf)
@@ -47,7 +49,6 @@ class KTDBase(TDBase):
 
         self.kconserv = get_kconserv_ria(mf.cell, mf.kpts)
         self.kshift_lst = kshift_lst
-        self._keys.update(['kconserv', 'kshift_lst'])
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

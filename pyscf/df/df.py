@@ -80,6 +80,8 @@ class DF(lib.StreamObject):
     _compatible_format = getattr(__config__, 'df_df_DF_compatible_format', False)
     _dataname = 'j3c'
 
+    _keys = set(('mol', 'auxmol'))
+
     def __init__(self, mol, auxbasis=None):
         self.mol = mol
         self.stdout = mol.stdout
@@ -96,7 +98,6 @@ class DF(lib.StreamObject):
         self._cderi = None
         self._vjopt = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
 
     @property
     def auxbasis(self):

@@ -488,6 +488,12 @@ class MP2(lib.StreamObject):
     conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
 
+    _keys = set((
+        'max_cycle', 'conv_tol', 'conv_tol_normt', 'mol', 'max_memory',
+        'frozen', 'level_shift', 'mo_coeff', 'mo_occ', 'e_hf', 'e_corr',
+        'e_corr_ss', 'e_corr_os', 't2',
+    ))
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -515,7 +521,6 @@ class MP2(lib.StreamObject):
         self.e_corr_ss = None
         self.e_corr_os = None
         self.t2 = None
-        self._keys = set(self.__dict__.keys())
 
     @property
     def nocc(self):

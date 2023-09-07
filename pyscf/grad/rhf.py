@@ -273,6 +273,9 @@ class GradientsMixin(lib.StreamObject):
     '''
     Basic nuclear gradient functions for non-relativistic methods
     '''
+
+    _keys = set(('mol', 'base', 'unit', 'atmlst', 'de'))
+
     def __init__(self, method):
         self.verbose = method.verbose
         self.stdout = method.stdout
@@ -283,7 +286,6 @@ class GradientsMixin(lib.StreamObject):
 
         self.atmlst = None
         self.de = None
-        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

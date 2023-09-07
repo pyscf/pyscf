@@ -599,6 +599,11 @@ class KRGWCD(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
     fc = getattr(__config__, 'gw_gw_GW_fc', True)
 
+    _keys = set([
+        'linearized', 'eta', 'fc', 'frozen', 'mol', 'with_df',
+        'kpts', 'nkpts', 'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
+    ])
+
     def __init__(self, mf, frozen=0):
         self.mol = mf.mol
         self._scf = mf
@@ -616,7 +621,6 @@ class KRGWCD(lib.StreamObject):
             self.with_df = mf.with_df
         else:
             raise NotImplementedError
-        self._keys.update(['with_df'])
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -629,9 +633,6 @@ class KRGWCD(lib.StreamObject):
         self.mo_coeff = mf.mo_coeff
         self.mo_occ = mf.mo_occ
         self.sigma = None
-
-        keys = set(('linearized','eta','fc'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)

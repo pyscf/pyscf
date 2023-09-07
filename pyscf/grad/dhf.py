@@ -160,6 +160,9 @@ class GradientsMixin(rhf_grad.GradientsMixin):
 
 class Gradients(GradientsMixin):
     '''Unrestricted Dirac-Hartree-Fock gradients'''
+
+    _keys = set(['level'])
+
     def __init__(self, scf_method):
         GradientsMixin.__init__(self, scf_method)
         if scf_method.with_ssss:
@@ -168,7 +171,6 @@ class Gradients(GradientsMixin):
             #self.level = 'NOSS'
             #self.level = 'LLLL'
             raise NotImplementedError
-        self._keys = self._keys.union(['level'])
 
     def get_veff(self, mol, dm):
         return get_coulomb_hf(mol, dm, level=self.level)

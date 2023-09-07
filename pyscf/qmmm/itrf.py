@@ -116,12 +116,13 @@ class QMMM:
 _QMMM = QMMM
 
 class QMMMSCF(QMMM):
+    _keys = set(['mm_mol'])
+
     def __init__(self, method, mm_mol=None):
         self.__dict__.update(method.__dict__)
         if mm_mol is None:
             mm_mol = gto.Mole()
         self.mm_mol = mm_mol
-        self._keys.update(['mm_mol'])
 
     def undo_qmmm(self):
         obj = lib.view(self, lib.drop_class(self.__class__, QMMM))

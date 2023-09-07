@@ -110,6 +110,8 @@ class _DFHF:
 
     __name_mixin__ = 'DF'
 
+    _keys = set(['with_df', 'only_dfj'])
+
     def __init__(self, mf, df=None, only_dfj=None):
         self.__dict__.update(mf.__dict__)
         self._eri = None
@@ -119,7 +121,6 @@ class _DFHF:
         # It is more efficient to construct K matrix with MO coefficients than
         # the incremental method in direct_scf.
         self.direct_scf = only_dfj
-        self._keys = self._keys.union(['with_df', 'only_dfj'])
 
     def undo_df(self):
         '''Remove the DFHF Mixin'''

@@ -566,6 +566,11 @@ class AFTDFMixin:
 class AFTDF(lib.StreamObject, AFTDFMixin):
     '''Density expansion on plane waves
     '''
+
+    _keys = set((
+        'cell', 'mesh', 'kpts', 'time_reversal_symmetry', 'blockdim',
+    ))
+
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
@@ -580,7 +585,6 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
 
         # The following attributes are not input options.
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         logger.info(self, '\n')

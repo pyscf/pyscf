@@ -859,6 +859,13 @@ class CISD(lib.StreamObject):
     direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
     async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
 
+    keys = set((
+        'conv_tol', 'max_cycle', 'max_space', 'lindep',
+        'level_shift', 'direct', 'async_io', 'mol', 'max_memory',
+        'nroots', 'frozen', 'chkfile', 'converged', 'mo_coeff', 'mo_occ',
+        'e_hf', 'e_corr', 'emp2', 'ci',
+    ))
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import hf
         if isinstance(mf, hf.KohnShamDFT):
@@ -895,10 +902,6 @@ class CISD(lib.StreamObject):
         self.ci = None
         self._nocc = None
         self._nmo = None
-
-        keys = set(('conv_tol', 'max_cycle', 'max_space', 'lindep',
-                    'level_shift', 'direct'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

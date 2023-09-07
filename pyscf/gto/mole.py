@@ -2193,8 +2193,6 @@ class Mole(lib.StreamObject):
         _basis : dict
             like :attr:`Mole.basis`, the internal format which is returned from the
             parser :func:`format_basis`
-        _keys : a set of str
-            Store the keys appeared in the module.  It is used to check misinput attributes
 
         ** Following attributes are arguments used by ``libcint`` library **
 
@@ -2239,6 +2237,14 @@ class Mole(lib.StreamObject):
     # Using cartesian GTO (6d,10f,15g)
     cart = getattr(__config__, 'gto_mole_Mole_cart', False)
 
+    # Store the keys appeared in the module.  It is used to check misinput attributes
+    _keys = set((
+        'unit', 'cart', 'incore_anyway',
+        'charge', 'spin', 'symmetry', 'symmetry_subgroup',
+        'atom', 'basis', 'nucmod', 'ecp', 'nucprop', 'magmom',
+        'groupname', 'topgroup', 'symm_orb', 'irrep_id', 'irrep_name',
+    ))
+
     def __init__(self, **kwargs):
         self.output = None
         self.max_memory = param.MAX_MEMORY
@@ -2247,7 +2253,6 @@ class Mole(lib.StreamObject):
         self.spin = 0 # 2j == nelec_alpha - nelec_beta
         self.symmetry = False
         self.symmetry_subgroup = None
-        self.cart = False
 
 # Save inputs
 # self.atom = [(symb/nuc_charge, (coord(Angstrom):0.,0.,0.)), ...]
@@ -2295,8 +2300,6 @@ class Mole(lib.StreamObject):
         # Some methods modify ._env. These method are executed in the context
         # _TemporaryMoleContext which is protected by the _ctx_lock.
         self._ctx_lock = None
-        keys = set(('verbose', 'unit', 'cart', 'incore_anyway'))
-        self._keys = set(self.__dict__.keys()).union(keys)
         self.__dict__.update(kwargs)
 
     @property

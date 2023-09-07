@@ -107,6 +107,7 @@ get_rho = pbchf.get_rho
 class UHF(pbchf.SCF, mol_uhf.UHF):
     '''UHF class for PBCs.
     '''
+    _keys = set(["init_guess_breaksym"])
 
     init_guess_by_minao  = mol_uhf.UHF.init_guess_by_minao
     init_guess_by_atom   = mol_uhf.UHF.init_guess_by_atom
@@ -133,7 +134,6 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.nelec = None
         self.init_guess_breaksym = None
-        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):

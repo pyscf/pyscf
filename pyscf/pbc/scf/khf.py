@@ -419,6 +419,8 @@ class KSCF(pbchf.SCF):
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
 
+    _keys = set(['cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'])
+
     reset = pbchf.SCF.reset
     mol = pbchf.SCF.mol
 
@@ -454,7 +456,6 @@ class KSCF(pbchf.SCF):
         self.conv_tol = max(cell.precision * 10, 1e-8)
 
         self.exx_built = False
-        self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'])
 
     @property
     def mo_energy_kpts(self):

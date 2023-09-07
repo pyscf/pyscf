@@ -1810,10 +1810,11 @@ def _primitive_gto_cutoff(cell, precision=None):
 
 
 class MultiGridFFTDF(fft.FFTDF):
+    _keys = set(['tasks'])
+
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         fft.FFTDF.__init__(self, cell, kpts)
         self.tasks = None
-        self._keys = self._keys.union(['tasks'])
 
     def build(self):
         self.tasks = multi_grids_tasks(self.cell, self.mesh, self.verbose)
@@ -1864,9 +1865,7 @@ def multigrid(mf):
     the DFT object.
     '''
     mf.with_df, old_df = MultiGridFFTDF(mf.cell), mf.with_df
-    keys = mf.with_df._keys
     mf.with_df.__dict__.update(old_df.__dict__)
-    mf.with_df._keys = keys
     return mf
 
 

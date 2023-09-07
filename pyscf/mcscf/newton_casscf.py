@@ -729,6 +729,7 @@ class CASSCF(mc1step.CASSCF):
     >>> mc.kernel()[0]
     -109.044401882238134
     '''
+
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
@@ -751,8 +752,6 @@ class CASSCF(mc1step.CASSCF):
         self.kf_interval = 5
         self.internal_rotation = False
         self.chkfile = self._scf.chkfile
-
-        self.callback = None
         self.chk_ci = False
 
         self.fcisolver.max_cycle = 25
@@ -767,8 +766,6 @@ class CASSCF(mc1step.CASSCF):
         self.mo_energy = self._scf.mo_energy
         self.converged = False
         self._max_stepsize = None
-
-        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

@@ -192,17 +192,18 @@ class Boys(ciah.CIAHOptimizer):
     ah_max_cycle = getattr(__config__, 'lo_boys_Boys_ah_max_cycle', 40)
     init_guess = getattr(__config__, 'lo_boys_Boys_init_guess', 'atomic')
 
+    _keys = set((
+        'conv_tol', 'conv_tol_grad', 'max_cycle', 'max_iters',
+        'max_stepsize', 'ah_trust_region', 'ah_start_tol',
+        'ah_max_cycle', 'init_guess', 'mol', 'mo_coeff',
+    ))
+
     def __init__(self, mol, mo_coeff=None):
         ciah.CIAHOptimizer.__init__(self)
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.mo_coeff = mo_coeff
-
-        keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'max_iters',
-                    'max_stepsize', 'ah_trust_region', 'ah_start_tol',
-                    'ah_max_cycle', 'init_guess'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

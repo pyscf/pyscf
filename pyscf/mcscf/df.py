@@ -83,11 +83,12 @@ class _DFCASSCF:
 
     __name_mixin__ = 'DF'
 
+    _keys = set(['with_df'])
+
     def __init__(self, mc, with_df):
         self.__dict__.update(mc.__dict__)
         #self.grad_update_dep = 0
         self.with_df = with_df
-        self._keys = self._keys.union(['with_df'])
 
     def undo_df(self):
         '''Remove the DFCASSCF Mixin'''
@@ -221,11 +222,12 @@ class _DFHessianCASSCF:
 
     __name_mixin__ = 'DFHessian'
 
+    _keys = set(['with_df'])
+
     def __init__(self, mc, with_df):
         self.__dict__.update(mc.__dict__)
         #self.grad_update_dep = 0
         self.with_df = with_df
-        self._keys = self._keys.union(['with_df'])
 
     def undo_df(self):
         '''Remove the DFHessianCASSCF Mixin'''

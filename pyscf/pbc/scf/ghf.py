@@ -105,7 +105,6 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.with_soc = None
-        self._keys = self._keys.union(['with_soc'])
 
     init_guess_by_chkfile = mol_ghf.GHF.init_guess_by_chkfile
     init_guess_by_minao = mol_ghf.GHF.init_guess_by_minao

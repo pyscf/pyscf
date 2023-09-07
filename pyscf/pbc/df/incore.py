@@ -147,6 +147,12 @@ def fill_2c2e(cell, auxcell_or_auxbasis, intor='int2c2e', hermi=0, kpt=np.zeros(
 class Int3cBuilder(lib.StreamObject):
     '''helper functions to compute 3-center integral tensor with double-lattice sum
     '''
+
+    _keys = set((
+        'cell', 'auxcell', 'kpts', 'rs_cell', 'bvk_kmesh',
+        'supmol', 'ke_cutoff', 'direct_scf_tol',
+    ))
+
     def __init__(self, cell, auxcell, kpts=None):
         self.cell = cell
         self.auxcell = auxcell
@@ -164,8 +170,6 @@ class Int3cBuilder(lib.StreamObject):
         self.supmol = None
         self.ke_cutoff = None
         self.direct_scf_tol = None
-
-        self._keys = set(self.__dict__.keys())
 
     def reset(self, cell=None):
         if cell is not None:

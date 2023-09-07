@@ -186,12 +186,13 @@ class PipekMezey(boys.Boys):
     conv_tol = getattr(__config__, 'lo_pipek_PM_conv_tol', 1e-6)
     exponent = getattr(__config__, 'lo_pipek_PM_exponent', 2)  # should be 2 or 4
 
+    _keys = set(['pop_method', 'conv_tol', 'exponent'])
+
     def __init__(self, mol, mo_coeff=None, mf=None, pop_method=None):
         boys.Boys.__init__(self, mol, mo_coeff)
         self._scf = mf
         if pop_method is not None:
             self.pop_method = pop_method
-        self._keys = self._keys.union(['pop_method', 'exponent', '_scf'])
 
     def dump_flags(self, verbose=None):
         boys.Boys.dump_flags(self, verbose)

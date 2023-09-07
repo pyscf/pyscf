@@ -639,6 +639,8 @@ class KUCCSD(uccsd.UCCSD):
 
     max_space = getattr(__config__, 'pbc_cc_kccsd_uhf_KUCCSD_max_space', 20)
 
+    _keys = set(['kpts', 'mo_energy', 'khelper', 'max_space', 'direct'])
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         uccsd.UCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
@@ -646,9 +648,6 @@ class KUCCSD(uccsd.UCCSD):
         self.mo_energy = mf.mo_energy
         self.khelper = kpts_helper.KptsHelper(mf.cell, self.kpts)
         self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
-
-        keys = set(['kpts', 'mo_energy', 'khelper', 'max_space', 'direct'])
-        self._keys = self._keys.union(keys)
 
     @property
     def nkpts(self):

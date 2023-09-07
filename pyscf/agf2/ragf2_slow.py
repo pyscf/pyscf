@@ -177,14 +177,14 @@ class RAGF2(ragf2.RAGF2):
             Auxiliaries of the Green's function
     '''
 
+    _keys = set(['nmom'])
+
     def __init__(self, mf, nmom=(None,0), frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
         ragf2.RAGF2.__init__(self, mf, frozen=frozen, mo_energy=mo_energy,
                              mo_coeff=mo_coeff, mo_occ=mo_occ)
 
         self.nmom = nmom
-
-        self._keys.update(['nmom'])
 
     build_se_part = build_se_part
 

@@ -190,7 +190,6 @@ class KGHF(khf.KSCF, pbcghf.GHF):
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
         self.with_soc = None
-        self._keys = self._keys.union(['with_soc'])
 
     get_init_guess = khf.KRHF.get_init_guess
     init_guess_by_minao = _cast_mol_init_guess(mol_hf.init_guess_by_minao)
