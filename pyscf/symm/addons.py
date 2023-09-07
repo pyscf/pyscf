@@ -71,13 +71,14 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None,
     norm = numpy.zeros((len(irrep_name), nmo))
     for i, csym in enumerate(symm_orb):
         moso = numpy.dot(csym.T.conj(), s_mo)
-        ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
-        try:
-            s_moso = lib.cho_solve(ovlpso, moso)
-        except numpy.linalg.LinAlgError:
-            ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
-            s_moso = lib.cho_solve(ovlpso, moso)
-        norm[i] = numpy.einsum('ki,ki->i', moso.conj(), s_moso).real
+        # ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
+        # try:
+        #     s_moso = lib.cho_solve(ovlpso, moso)
+        # except numpy.linalg.LinAlgError:
+        #     ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
+        #     s_moso = lib.cho_solve(ovlpso, moso)
+        s_moso = numpy.dot(mo.T.conj(), csym)
+        norm[i] = numpy.einsum('ki,ik->i', moso.conj(), s_moso).real
     norm /= numpy.sum(norm, axis=0)  # for orbitals which are not normalized
     iridx = numpy.argmax(norm, axis=0)
     orbsym = numpy.asarray([irrep_name[i] for i in iridx])
