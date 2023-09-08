@@ -1045,6 +1045,7 @@ def _state_average_mcscf_solver(casscf, fcisolver):
 
     has_spin_square = getattr(fcisolver, 'spin_square', None)
 
+    print(mcscfbase_class.__mro__)
     class StateAverageMCSCF(mcscfbase_class, StateAverageMCSCFSolver):
         _keys = set (('weights', '_base_class'))
 

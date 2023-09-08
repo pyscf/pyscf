@@ -345,7 +345,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     return conv, e_tot, e_cas, fcivec, mo
 
 
-class UCASSCF(ucasci.UCASCI):
+class UCASSCF(ucasci.UCASBase):
     max_stepsize = getattr(__config__, 'mcscf_umc1step_UCASSCF_max_stepsize', .02)
     max_cycle_macro = getattr(__config__, 'mcscf_umc1step_UCASSCF_max_cycle_macro', 50)
     max_cycle_micro = getattr(__config__, 'mcscf_umc1step_UCASSCF_max_cycle_micro', 4)
@@ -383,7 +383,7 @@ class UCASSCF(ucasci.UCASCI):
     ))
 
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
-        ucasci.UCASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
+        ucasci.UCASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 
         self.chkfile = self._scf.chkfile
@@ -472,22 +472,11 @@ class UCASSCF(ucasci.UCASCI):
         from pyscf.mcscf import umc2step
         return self.kernel(mo_coeff, ci0, callback, umc2step.kernel)
 
-    def get_h2eff(self, mo_coeff=None):
-        '''Computing active space two-particle Hamiltonian.
-        '''
-        return self.get_h2cas(mo_coeff)
-    def get_h2cas(self, mo_coeff=None):
-        return ucasci.UCASCI.ao2mo(self, mo_coeff)
+    get_h2eff = ucasci.UCASCI.get_h2eff
 
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
-        if eris is None:
-            fcasci = copy.copy(self)
-            fcasci.ao2mo = self.get_h2cas
-        else:
-            fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
-
         log = logger.new_logger(self, verbose)
-
+        fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
         e_tot, e_cas, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log,
                                              envs=envs)
         if envs is not None and log.verbose >= logger.INFO:
@@ -814,7 +803,7 @@ class UCASSCF(ucasci.UCASCI):
         self.max_stepsize = x
 
     def reset(self, mol=None):
-        ucasci.UCASCI.reset(self, mol=mol)
+        ucasci.UCASBase.reset(self, mol=mol)
         self._max_stepsize = None
 
 CASSCF = UCASSCF
@@ -822,8 +811,12 @@ CASSCF = UCASSCF
 
 # to avoid calculating AO integrals
 def _fake_h_for_fast_casci(casscf, mo, eris):
-    mc = copy.copy(casscf)
+    mc = casscf.view(ucasci.UCASCI)
     mc.mo_coeff = mo
+
+    if eris is None:
+        return mc
+
     # vhf for core density matrix
     s = mc._scf.get_ovlp()
     mo_inv = (numpy.dot(mo[0].T, s), numpy.dot(mo[1].T, s))

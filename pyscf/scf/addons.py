@@ -844,9 +844,7 @@ def _object_without_soscf(mf, known_class, remove_df=False):
 
     new_cls = known_class[old_cls]
     out = new_cls(mf.mol)
-    mf_dic = dict(mf.__dict__)
-    mf_dic.pop('_keys')
-    out.__dict__.update(mf_dic)
+    out.__dict__.update(mf.__dict__)
     out.__class__ = lib.replace_class(mf.__class__, old_cls, new_cls)
     return out
 
@@ -854,7 +852,6 @@ def _update_mf_without_soscf(mf, out, remove_df=False):
     '''Update an SCF object, excluding the SOSCF base class'''
     from pyscf.soscf import newton_ah
     mf_dic = dict(mf.__dict__)
-    mf_dic.pop('_keys')
 
     # if mf is SOSCF object, avoid to overwrite the with_df method
     # FIXME: it causes bug when converting pbc-SOSCF.
@@ -1011,7 +1008,6 @@ def _update_mo_to_uhf_(mf, mf1):
             mo_eb = getattr(mf.mo_energy, 'mo_eb', mf.mo_energy)
             mf1.mo_energy = numpy.array((mo_ea, mo_eb))
             mf1.mo_coeff = numpy.array((mf.mo_coeff, mf.mo_coeff))
-    mf1.converged = False
     return mf1
 
 def _update_mo_to_rhf_(mf, mf1):
@@ -1027,11 +1023,12 @@ def _update_mo_to_rhf_(mf, mf1):
             mf1.mo_coeff =  mf.mo_coeff[0]
             if getattr(mf.mo_coeff[0], 'orbsym', None) is not None:
                 mf1.mo_coeff = lib.tag_array(mf1.mo_coeff, orbsym=mf.mo_coeff[0].orbsym)
+            mf1.converged = False
         else:  # KUHF
             mf1.mo_occ = [occa+occb for occa, occb in zip(*mf.mo_occ)]
             mf1.mo_energy = mf.mo_energy[0]
             mf1.mo_coeff =  mf.mo_coeff[0]
-    mf1.converged = False
+            mf1.converged = False
     return mf1
 
 def _update_mo_to_ghf_(mf, mf1):
@@ -1078,7 +1075,6 @@ def _update_mo_to_ghf_(mf, mf1):
                 orbsym[orbspin==1] = mf.mo_coeff[1].orbsym
                 mo_coeff = lib.tag_array(mo_coeff, orbsym=orbsym)
             mf1.mo_coeff = lib.tag_array(mo_coeff, orbspin=orbspin)
-    mf1.converged = False
     return mf1
 
 def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):

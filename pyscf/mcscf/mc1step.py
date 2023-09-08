@@ -26,7 +26,7 @@ from pyscf.gto import Mole
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import casci
-from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
+from pyscf.mcscf.casci import CASCI, get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
@@ -589,8 +589,8 @@ def max_stepsize_scheduler(casscf, envs):
 # hamiltonain), "make_rdm12" (1- and 2-pdm), "absorb_h1e" (effective
 # 2e-hamiltonain) in 1-step CASSCF solver, and two member functions "kernel"
 # and "make_rdm12" in 2-step CASSCF solver
-class CASSCF(casci.CASCI):
-    __doc__ = casci.CASCI.__doc__ + '''CASSCF
+class CASSCF(casci.CASBase):
+    __doc__ = casci.CASBase.__doc__ + '''
 
     Extra attributes for CASSCF:
 
@@ -759,7 +759,7 @@ class CASSCF(casci.CASCI):
     ))
 
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
-        casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
+        casci.CASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 
         self.callback = None
@@ -822,7 +822,7 @@ class CASSCF(casci.CASCI):
         if getattr(self.fcisolver, 'dump_flags', None):
             self.fcisolver.dump_flags(self.verbose)
         if self.mo_coeff is None:
-            log.error('Orbitals for CASCI are not specified. The relevant SCF '
+            log.error('Orbitals for CASSCF are not specified. The relevant SCF '
                       'object may not be initialized.')
 
         if (getattr(self._scf, 'with_solvent', None) and
@@ -877,12 +877,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
 
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
         log = logger.new_logger(self, verbose)
-        if eris is None:
-            fcasci = copy.copy(self)
-            fcasci.ao2mo = self.get_h2cas
-        else:
-            fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
-
+        fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
         e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log,
                                             envs=envs)
         if not isinstance(e_cas, (float, numpy.number)):
@@ -997,23 +992,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
         return mc_ao2mo._ERIS(self, mo_coeff, method='incore',
                               level=self.ao2mo_level)
 
-    # Don't remove the two functions.  They are used in df.approx_hessian code
-    def get_h2eff(self, mo_coeff=None):
-        '''Computing active space two-particle Hamiltonian.
-
-        Note It is different to get_h2cas when df.approx_hessian is applied,
-        in which get_h2eff function returns the DF integrals while get_h2cas
-        returns the regular 2-electron integrals.
-        '''
-        return self.get_h2cas(mo_coeff)
-    def get_h2cas(self, mo_coeff=None):
-        '''Computing active space two-particle Hamiltonian.
-
-        Note It is different to get_h2eff when df.approx_hessian is applied,
-        in which get_h2eff function returns the DF integrals while get_h2cas
-        returns the regular 2-electron integrals.
-        '''
-        return casci.CASCI.ao2mo(self, mo_coeff)
+    get_h2eff = CASCI.get_h2eff
 
     def update_jk_in_ah(self, mo, r, casdm1, eris):
         # J3 = eri_popc * pc + eri_cppo * cp
@@ -1313,7 +1292,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
         return mc1
 
     def reset(self, mol=None):
-        casci.CASCI.reset(self, mol=mol)
+        casci.CASBase.reset(self, mol=mol)
         self._max_stepsize = None
 
 scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
@@ -1322,8 +1301,12 @@ scf.uhf.UHF.CASSCF = None
 
 # to avoid calculating AO integrals
 def _fake_h_for_fast_casci(casscf, mo, eris):
-    mc = copy.copy(casscf)
+    mc = casscf.view(CASCI)
     mc.mo_coeff = mo
+
+    if eris is None:
+        return mc
+
     ncore = casscf.ncore
     nocc = ncore + casscf.ncas
 

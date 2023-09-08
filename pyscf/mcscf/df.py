@@ -24,6 +24,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
+from pyscf.mcscf.casci import CASCI
 from pyscf import df
 
 
@@ -66,7 +67,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             with_df.verbose = casscf.verbose
             with_df.auxbasis = auxbasis
 
-    if isinstance(casscf, _DFCASSCF):
+    if isinstance(casscf, _DFCAS):
         if casscf.with_df is None:
             casscf.with_df = with_df
         elif getattr(casscf.with_df, 'auxbasis', None) != auxbasis:
@@ -75,12 +76,14 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             casscf.with_df = with_df
         return casscf
 
-    dfcas = _DFCASSCF(casscf, with_df)
-    return lib.set_class(dfcas, (_DFCASSCF, casscf.__class__))
+    if isinstance(casscf, CASCI):
+        cls = _DFCASCI
+    else:
+        cls = _DFCASSCF
+    return lib.set_class(cls(casscf, with_df), (cls, casscf.__class__))
 
 # A tag to label the derived MCSCF class
-class _DFCASSCF:
-
+class _DFCAS:
     __name_mixin__ = 'DF'
 
     _keys = set(['with_df'])
@@ -91,8 +94,8 @@ class _DFCASSCF:
         self.with_df = with_df
 
     def undo_df(self):
-        '''Remove the DFCASSCF Mixin'''
-        obj = lib.view(self, lib.drop_class(self.__class__, _DFCASSCF))
+        '''Remove the DFCASCI/DFCASSCF Mixin'''
+        obj = lib.view(self, lib.drop_class(self.__class__, _DFCAS))
         del obj.with_df
         return obj
 
@@ -105,24 +108,6 @@ class _DFCASSCF:
     def reset(self, mol=None):
         self.with_df.reset(mol)
         return super().reset(mol)
-
-    def ao2mo(self, mo_coeff=None):
-        if self.with_df and 'CASSCF' in self.__class__.__name__:
-            return _ERIS(self, mo_coeff, self.with_df)
-        else:
-            return super().ao2mo(mo_coeff)
-
-    def get_h2eff(self, mo_coeff=None):  # For CASCI
-        if self.with_df:
-            ncore = self.ncore
-            nocc = ncore + self.ncas
-            if mo_coeff is None:
-                mo_coeff = self.mo_coeff[:,ncore:nocc]
-            elif mo_coeff.shape[1] != self.ncas:
-                mo_coeff = mo_coeff[:,ncore:nocc]
-            return self.with_df.ao2mo(mo_coeff)
-        else:
-            return super().get_h2eff(mo_coeff)
 
     # Modify get_veff for JK matrix of core density because get_h1eff calls
     # self.get_veff to generate core JK
@@ -156,18 +141,40 @@ class _DFCASSCF:
             return super()._exact_paaa(mol, u, out)
 
     def nuc_grad_method(self):
-        if 'CASCI' in self.__class__.__name__:
-            raise NotImplementedError ("DFCASCI nuclear gradients")
+        raise NotImplementedError
+
+    def _state_average_nuc_grad_method (self, state=None):
+        raise NotImplementedError
+
+class _DFCASCI(_DFCAS):
+    def get_h2eff(self, mo_coeff=None):
+        if self.with_df:
+            ncore = self.ncore
+            nocc = ncore + self.ncas
+            if mo_coeff is None:
+                mo_coeff = self.mo_coeff[:,ncore:nocc]
+            elif mo_coeff.shape[1] != self.ncas:
+                mo_coeff = mo_coeff[:,ncore:nocc]
+            return self.with_df.ao2mo(mo_coeff)
+        else:
+            return super(_DFCAS, self).get_h2eff(mo_coeff)
+
+class _DFCASSCF(_DFCAS):
+    get_h2eff = _DFCASCI.get_h2eff
+
+    def ao2mo(self, mo_coeff=None):
+        if self.with_df:
+            return _ERIS(self, mo_coeff, self.with_df)
+        else:
+            return super(_DFCAS, self).ao2mo(mo_coeff)
+
+    def nuc_grad_method(self):
         from pyscf.df.grad import casscf
         return casscf.Gradients (self)
 
     def _state_average_nuc_grad_method (self, state=None):
-        if 'CASCI' in self.__class__.__name__:
-            raise NotImplementedError ("DFCASCI nuclear gradients")
         from pyscf.df.grad import sacasscf
         return sacasscf.Gradients (self, state=state)
-
-_DFCASCI = _DFCASSCF
 
 
 def approx_hessian(casscf, auxbasis=None, with_df=None):
@@ -197,7 +204,7 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
     -100.06458716530391
     '''
 
-    if 'CASCI' in casscf.__class__.__name__:
+    if isinstance(casscf, CASCI):
         return casscf  # because CASCI does not need orbital optimization
 
     if getattr(casscf, 'with_df', None):

@@ -128,15 +128,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(fci.addons.overlap(ci0, ci1, 4, 4, s)), 1, 9)
 
     def test_get_h2eff(self):
-        mc1 = mcscf.CASSCF(m, 4, 4).approx_hessian()
+        mc1 = mcscf.CASSCF(m, 4, 4)
+        mc2 = mc1.approx_hessian()
         eri1 = mc1.get_h2eff(m.mo_coeff[:,5:9])
-        eri2 = mc1.get_h2cas(m.mo_coeff[:,5:9])
+        eri2 = mc2.get_h2eff(m.mo_coeff[:,5:9])
         self.assertAlmostEqual(abs(eri1-eri2).max(), 0, 12)
 
-        mc1 = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
-        eri1 = mc1.get_h2eff(m.mo_coeff[:,5:9])
-        eri2 = mc1.get_h2cas(m.mo_coeff[:,5:9])
-        self.assertTrue(abs(eri1-eri2).max() > 1e-5)
+        mc3 = mcscf.density_fit(mc1)
+        eri3 = mc3.get_h2eff(m.mo_coeff[:,5:9])
+        self.assertTrue(abs(eri1-eri3).max() > 1e-5)
 
     def test_get_veff(self):
         mf = m.view(dft.rks.RKS)

@@ -675,8 +675,8 @@ class CASCI_Scanner(lib.SinglePointScanner):
         return e_tot
 
 
-class CASCI(lib.StreamObject):
-    '''CASCI
+class CASBase(lib.StreamObject):
+    '''CASCI/CASSCF
 
     Args:
         mf_or_mol : SCF object or Mole object
@@ -872,6 +872,7 @@ To enable the solvent model for CASCI, the following code needs to be called
         return self
 
     def check_sanity(self):
+        super().check_sanity()
         assert self.ncas > 0
         ncore = self.ncore
         nvir = self.mo_coeff.shape[1] - ncore - self.ncas
@@ -914,42 +915,17 @@ To enable the solvent model for CASCI, the following code needs to be called
         return scf.hf.eig(h, None)
 
     def get_h2cas(self, mo_coeff=None):
-        '''Compute the active space two-particle Hamiltonian.
-
-        Note It is different to get_h2eff when df.approx_hessian is applied,
-        in which get_h2eff function returns the DF integrals while get_h2cas
-        returns the regular 2-electron integrals.
-        '''
-        return self.ao2mo(mo_coeff)
+        raise DeprecationWarning
 
     def get_h2eff(self, mo_coeff=None):
         '''Compute the active space two-particle Hamiltonian.
-
-        Note It is different to get_h2cas when df.approx_hessian is applied.
-        in which get_h2eff function returns the DF integrals while get_h2cas
-        returns the regular 2-electron integrals.
         '''
-        return self.ao2mo(mo_coeff)
+        raise NotImplementedError
 
     def ao2mo(self, mo_coeff=None):
         '''Compute the active space two-particle Hamiltonian.
         '''
-        ncore = self.ncore
-        ncas = self.ncas
-        nocc = ncore + ncas
-        if mo_coeff is None:
-            ncore = self.ncore
-            mo_coeff = self.mo_coeff[:,ncore:nocc]
-        elif mo_coeff.shape[1] != ncas:
-            mo_coeff = mo_coeff[:,ncore:nocc]
-
-        if hasattr(self._scf, '_eri') and self._scf._eri is not None:
-            eri = ao2mo.full(self._scf._eri, mo_coeff,
-                             max_memory=self.max_memory)
-        else:
-            eri = ao2mo.full(self.mol, mo_coeff, verbose=self.verbose,
-                             max_memory=self.max_memory)
-        return eri
+        raise NotImplementedError
 
     get_h1cas = h1e_for_cas = h1e_for_cas
 
@@ -958,7 +934,8 @@ To enable the solvent model for CASCI, the following code needs to be called
     get_h1eff.__doc__ = h1e_for_cas.__doc__
 
     def casci(self, mo_coeff=None, ci0=None, verbose=None):
-        return self.kernel(mo_coeff, ci0, verbose)
+        raise NotImplementedError
+
     def kernel(self, mo_coeff=None, ci0=None, verbose=None):
         '''
         Returns:
@@ -972,43 +949,7 @@ To enable the solvent model for CASCI, the following code needs to be called
         They are attributes of mcscf object, which can be accessed by
         .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
         '''
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        else:
-            self.mo_coeff = mo_coeff
-        if ci0 is None:
-            ci0 = self.ci
-        log = logger.new_logger(self, verbose)
-
-        self.check_sanity()
-        self.dump_flags(log)
-
-        self.e_tot, self.e_cas, self.ci = \
-                kernel(self, mo_coeff, ci0=ci0, verbose=log)
-
-        if self.canonicalization:
-            self.canonicalize_(mo_coeff, self.ci,
-                               sort=self.sorting_mo_energy,
-                               cas_natorb=self.natorb, verbose=log)
-        elif self.natorb:
-            # FIXME (pyscf-2.0): Whether to transform natural orbitals in
-            # active space when this flag is enabled?
-            log.warn('The attribute .natorb of mcscf object affects only the '
-                     'orbital canonicalization.\n'
-                     'If you would like to get natural orbitals in active space '
-                     'without touching core and external orbitals, an explicit '
-                     'call to mc.cas_natorb_() is required')
-
-        if getattr(self.fcisolver, 'converged', None) is not None:
-            self.converged = numpy.all(self.fcisolver.converged)
-            if self.converged:
-                log.info('CASCI converged')
-            else:
-                log.info('CASCI not converged')
-        else:
-            self.converged = True
-        self._finalize()
-        return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
+        raise NotImplementedError
 
     def _finalize(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -1039,8 +980,6 @@ To enable the solvent model for CASCI, the following code needs to be called
                     log.note('CASCI state %3d  E = %#.15g  E(CI) = %#.15g',
                              i, self.e_tot[i], e)
         return self
-
-    as_scanner = as_scanner
 
     @lib.with_doc(cas_natorb.__doc__)
     def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,
@@ -1154,6 +1093,85 @@ To enable the solvent model for CASCI, the following code needs to be called
         self.mo_energy = self._scf.mo_energy
         return self
     x2c = x2c1e = sfx2c1e
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+class CASCI(CASBase):
+    def get_h2eff(self, mo_coeff=None):
+        '''Compute the active space two-particle Hamiltonian.
+        '''
+        ncore = self.ncore
+        ncas = self.ncas
+        nocc = ncore + ncas
+        if mo_coeff is None:
+            ncore = self.ncore
+            mo_coeff = self.mo_coeff[:,ncore:nocc]
+        elif mo_coeff.shape[1] != ncas:
+            mo_coeff = mo_coeff[:,ncore:nocc]
+
+        if hasattr(self._scf, '_eri') and self._scf._eri is not None:
+            eri = ao2mo.full(self._scf._eri, mo_coeff,
+                             max_memory=self.max_memory)
+        else:
+            eri = ao2mo.full(self.mol, mo_coeff, verbose=self.verbose,
+                             max_memory=self.max_memory)
+        return eri
+
+    def casci(self, mo_coeff=None, ci0=None, verbose=None):
+        return self.kernel(mo_coeff, ci0, verbose)
+    def kernel(self, mo_coeff=None, ci0=None, verbose=None):
+        '''
+        Returns:
+            Five elements, they are
+            total energy,
+            active space CI energy,
+            the active space FCI wavefunction coefficients or DMRG wavefunction ID,
+            the MCSCF canonical orbital coefficients,
+            the MCSCF canonical orbital coefficients.
+
+        They are attributes of mcscf object, which can be accessed by
+        .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
+        '''
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        else:
+            self.mo_coeff = mo_coeff
+        if ci0 is None:
+            ci0 = self.ci
+        log = logger.new_logger(self, verbose)
+
+        self.check_sanity()
+        self.dump_flags(log)
+
+        self.e_tot, self.e_cas, self.ci = \
+                kernel(self, mo_coeff, ci0=ci0, verbose=log)
+
+        if self.canonicalization:
+            self.canonicalize_(mo_coeff, self.ci,
+                               sort=self.sorting_mo_energy,
+                               cas_natorb=self.natorb, verbose=log)
+        elif self.natorb:
+            # FIXME (pyscf-2.0): Whether to transform natural orbitals in
+            # active space when this flag is enabled?
+            log.warn('The attribute .natorb of mcscf object affects only the '
+                     'orbital canonicalization.\n'
+                     'If you would like to get natural orbitals in active space '
+                     'without touching core and external orbitals, an explicit '
+                     'call to mc.cas_natorb_() is required')
+
+        if getattr(self.fcisolver, 'converged', None) is not None:
+            self.converged = numpy.all(self.fcisolver.converged)
+            if self.converged:
+                log.info('CASCI converged')
+            else:
+                log.info('CASCI not converged')
+        else:
+            self.converged = True
+        self._finalize()
+        return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
+
+    as_scanner = as_scanner
 
     def nuc_grad_method(self):
         from pyscf.grad import casci

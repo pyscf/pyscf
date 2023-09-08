@@ -117,7 +117,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
     return e_tot, e_cas, fcivec
 
 
-class UCASCI(casci.CASCI):
+class UCASBase(casci.CASBase):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
         #assert ('UHF' == mf.__class__.__name__)
@@ -227,62 +227,11 @@ class UCASCI(casci.CASCI):
     def _eig(self, h, *args):
         return scf.hf.eig(h, None)
 
-    def get_h2cas(self, mo_coeff=None):
-        return self.ao2mo(mo_coeff)
-    def get_h2eff(self, mo_coeff=None):
-        return self.ao2mo(mo_coeff)
-    def ao2mo(self, mo_coeff=None):
-        if mo_coeff is None:
-            mo_coeff = (self.mo_coeff[0][:,self.ncore[0]:self.ncore[0]+self.ncas],
-                        self.mo_coeff[1][:,self.ncore[1]:self.ncore[1]+self.ncas])
-        nao, nmo = mo_coeff[0].shape
-        if self._scf._eri is not None and \
-           (nao*nao*nmo*nmo*12+self._scf._eri.size)*8/1e6 < self.max_memory*.95:
-            moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
-            na = mo_coeff[0].shape[1]
-            nab = moab.shape[1]
-            eri = pyscf.ao2mo.incore.full(self._scf._eri, moab)
-            eri = pyscf.ao2mo.restore(1, eri, nab)
-            eri_aa = eri[:na,:na,:na,:na].copy()
-            eri_ab = eri[:na,:na,na:,na:].copy()
-            eri_bb = eri[na:,na:,na:,na:].copy()
-        else:
-            moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
-            eri = pyscf.ao2mo.full(self.mol, moab, verbose=self.verbose)
-            na = mo_coeff[0].shape[1]
-            nab = moab.shape[1]
-            eri = pyscf.ao2mo.restore(1, eri, nab)
-            eri_aa = eri[:na,:na,:na,:na].copy()
-            eri_ab = eri[:na,:na,na:,na:].copy()
-            eri_bb = eri[na:,na:,na:,na:].copy()
-
-        return (eri_aa, eri_ab, eri_bb)
-
     get_h1cas = h1e_for_cas = h1e_for_cas
 
     def get_h1eff(self, mo_coeff=None, ncas=None, ncore=None):
         return self.h1e_for_cas(mo_coeff, ncas, ncore)
     get_h1eff.__doc__ = h1e_for_cas.__doc__
-
-    def casci(self, mo_coeff=None, ci0=None):
-        return self.kernel(mo_coeff, ci0)
-    def kernel(self, mo_coeff=None, ci0=None):
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        else: # overwrite self.mo_coeff because it is needed in many methods of this class
-            self.mo_coeff = mo_coeff
-
-        if ci0 is None:
-            ci0 = self.ci
-
-        self.check_sanity()
-        self.dump_flags()
-
-        log = logger.Logger(self.stdout, self.verbose)
-        self.e_tot, self.e_cas, self.ci = \
-                kernel(self, mo_coeff, ci0=ci0, verbose=log)
-        self._finalize()
-        return self.e_tot, self.e_cas, self.ci
 
     def _finalize(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -445,6 +394,54 @@ class UCASCI(casci.CASCI):
                   ncore=None, **kwargs):
         dm1a,dm1b = self.make_rdm1s(mo_coeff, ci, ncas, nelecas, ncore)
         return dm1a+dm1b
+
+class UCASCI(UCASBase):
+    def get_h2eff(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = (self.mo_coeff[0][:,self.ncore[0]:self.ncore[0]+self.ncas],
+                        self.mo_coeff[1][:,self.ncore[1]:self.ncore[1]+self.ncas])
+        nao, nmo = mo_coeff[0].shape
+        if self._scf._eri is not None and \
+           (nao*nao*nmo*nmo*12+self._scf._eri.size)*8/1e6 < self.max_memory*.95:
+            moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
+            na = mo_coeff[0].shape[1]
+            nab = moab.shape[1]
+            eri = pyscf.ao2mo.incore.full(self._scf._eri, moab)
+            eri = pyscf.ao2mo.restore(1, eri, nab)
+            eri_aa = eri[:na,:na,:na,:na].copy()
+            eri_ab = eri[:na,:na,na:,na:].copy()
+            eri_bb = eri[na:,na:,na:,na:].copy()
+        else:
+            moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
+            eri = pyscf.ao2mo.full(self.mol, moab, verbose=self.verbose)
+            na = mo_coeff[0].shape[1]
+            nab = moab.shape[1]
+            eri = pyscf.ao2mo.restore(1, eri, nab)
+            eri_aa = eri[:na,:na,:na,:na].copy()
+            eri_ab = eri[:na,:na,na:,na:].copy()
+            eri_bb = eri[na:,na:,na:,na:].copy()
+
+        return (eri_aa, eri_ab, eri_bb)
+
+    def casci(self, mo_coeff=None, ci0=None):
+        return self.kernel(mo_coeff, ci0)
+    def kernel(self, mo_coeff=None, ci0=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        else: # overwrite self.mo_coeff because it is needed in many methods of this class
+            self.mo_coeff = mo_coeff
+
+        if ci0 is None:
+            ci0 = self.ci
+
+        self.check_sanity()
+        self.dump_flags()
+
+        log = logger.Logger(self.stdout, self.verbose)
+        self.e_tot, self.e_cas, self.ci = \
+                kernel(self, mo_coeff, ci0=ci0, verbose=log)
+        self._finalize()
+        return self.e_tot, self.e_cas, self.ci
 
 CASCI = UCASCI
 
