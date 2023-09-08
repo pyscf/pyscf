@@ -197,17 +197,15 @@ class QMMMSCF(QMMM):
 class QMMMPostSCF(QMMM):
     def __init__(self, method, mm_mol=None):
         self.__dict__.update(method.__dict__)
-        self._scf = qmmm_for_scf(method._scf, mm_mol).run()
+        mf = qmmm_for_scf(method._scf, mm_mol).run()
+        self._scf = mf
+        self.mo_coeff = mf.mo_coeff
+        self.mo_energy = mf.mo_energy
 
     def undo_qmmm(self):
         obj = lib.view(self, lib.drop_class(self.__class__, QMMM))
         obj._scf = self._scf.undo_qmmm()
         return obj
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
-
-    Gradients = nuc_grad_method
 
 
 def add_mm_charges_grad(scf_grad, atoms_or_coords, charges, radii=None, unit=None):

@@ -217,8 +217,15 @@ C     F
         self.assertAlmostEqual(mf.e_tot, ref.e_tot, 9)
 
     def test_undo_x2c(self):
-        mf = mol.RHF().x2c().density_fit().undo_x2c()
+        mf = mol.RHF().x2c().density_fit()
+        self.assertEqual(mf.__class__.__name__, 'DFsfX2C1eRHF')
+        mf = mf.undo_x2c()
         self.assertEqual(mf.__class__.__name__, 'DFRHF')
+
+        mf = mol.GHF().x2c().density_fit()
+        self.assertEqual(mf.__class__.__name__, 'DFX2C1eGHF')
+        mf = mf.undo_x2c()
+        self.assertEqual(mf.__class__.__name__, 'DFGHF')
 
 
 if __name__ == "__main__":

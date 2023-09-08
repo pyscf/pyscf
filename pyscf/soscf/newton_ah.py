@@ -860,7 +860,7 @@ class _SecondOrderGHF(_CIAH_SOSCF):
         if WITH_EX_EY_DEGENERACY:
             mol = self._scf.mol
             if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
-                orbsym = scf.ghf_symm.get_orbsym(mol, mo_coeff)
+                orbsym = ghf_symm.get_orbsym(mol, mo_coeff)
                 if mol.groupname == 'SO3':
                     _force_SO3_degeneracy_(dr, orbsym)
                 else:
@@ -870,7 +870,7 @@ class _SecondOrderGHF(_CIAH_SOSCF):
     def rotate_mo(self, mo_coeff, u, log=None):
         mo = numpy.dot(mo_coeff, u)
         if self._scf.mol.symmetry:
-            orbsym = scf.ghf_symm.get_orbsym(self._scf.mol, mo_coeff)
+            orbsym = ghf_symm.get_orbsym(self._scf.mol, mo_coeff)
             mo = lib.tag_array(mo, orbsym=orbsym)
         return mo
 

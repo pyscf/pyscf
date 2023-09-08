@@ -95,6 +95,10 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(df.density_fit(cc.CCSD(scf.RHF(mol))),
                                    dfccsd.RCCSD))
 
+        mf = mol.RHF().density_fit().newton().x2c1e().undo_df()
+        self.assertTrue(not isinstance(mf, df_jk._DFHF))
+        self.assertEqual(mf.__class__.__name__, 'sfX2C1eSecondOrderRHF')
+
     def test_rsh_get_jk(self):
         nao = mol.nao_nr()
         numpy.random.seed(1)

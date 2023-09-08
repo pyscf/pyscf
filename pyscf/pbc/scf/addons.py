@@ -148,7 +148,7 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
                           _partition_occ(mo_occs[1], mo_energy_kpts[1]))
             tools.print_mo_energy_occ_kpts(self, mo_energy_kpts, mo_occ_kpts, True)
             if is_rohf:
-                mo_occ_kpts = np.array(mo_occ_kpts, dtype=numpy.float64).sum(axis=0)
+                mo_occ_kpts = numpy.array(mo_occ_kpts, dtype=numpy.float64).sum(axis=0)
         else:
             nocc = nelectron = self.mol.tot_electrons(nkpts)
             if is_uhf:

@@ -52,6 +52,10 @@ class KnownValues(unittest.TestCase):
         g = g_scan(mol)[1]
         self.assertAlmostEqual(lib.fp(g), 0.0055116240804341972, 7)
 
+        gobj = g_scan.undo_scanner()
+        g = gobj.kernel()
+        self.assertAlmostEqual(lib.fp(g), 0.0055116240804341972, 7)
+
         mfs = g_scan.base.as_scanner()
         e1 = mfs('O  0.  0. -0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
         e2 = mfs('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')

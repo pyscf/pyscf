@@ -368,8 +368,11 @@ def as_scanner(mcscf_grad, state=None):
 class CASSCF_GradScanner(lib.GradScanner):
     def __init__(self, g, state):
         lib.GradScanner.__init__(self, g)
-        if state is not None:
+        if state is None:
+            self.state = g.state
+        else:
             self.state = state
+        self._converged = False
 
     def __call__(self, mol_or_geom, **kwargs):
         if isinstance(mol_or_geom, Mole):
@@ -387,6 +390,13 @@ class CASSCF_GradScanner(lib.GradScanner):
             kwargs['state'] = self.state
         de = self.kernel(**kwargs)
         return e_tot, de
+
+    @property
+    def converged(self):
+        return self._converged
+    @converged.setter
+    def converged(self, x):
+        self._converged = x
 
 
 class Gradients (lagrange.Gradients):
@@ -557,7 +567,6 @@ class Gradients (lagrange.Gradients):
             eris = self.eris = self.base.ao2mo (mo)
         if mf_grad is None: mf_grad = self.base._scf.nuc_grad_method ()
         if state is None:
-            self.converged = True
             return casscf_grad.Gradients (self.base).kernel (
                 mo_coeff=mo, ci=ci, atmlst=atmlst, verbose=verbose)
         if e_states is None:

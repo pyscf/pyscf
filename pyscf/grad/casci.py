@@ -234,8 +234,6 @@ class CASCI_GradScanner(lib.GradScanner):
 
         if state is None:
             state = self.state
-        else:
-            self.state = state
 
         mc_scanner = self.base
 # TODO: Check root flip

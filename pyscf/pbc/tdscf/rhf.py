@@ -26,7 +26,7 @@ from pyscf.pbc import scf
 from pyscf import __config__
 
 class TDBase(rhf.TDBase):
-    _keys = set.union(['cell'])
+    _keys = set(['cell'])
 
     def __init__(self, mf):
         rhf.TDBase.__init__(self, mf)

@@ -346,10 +346,11 @@ class CASCIWithSolvent(_Solvation):
         log1 = copy.copy(log)
         log1.verbose -= 1  # Suppress a few output messages
 
+        mc_base_kernel = super().kernel
         def casci_iter_(ci0, log):
             # self.e_tot, self.e_cas, and self.ci are updated in the call
             # to super().kernel
-            e_tot, e_cas, ci0 = super().kernel(mo_coeff, ci0, log)[:3]
+            e_tot, e_cas, ci0 = mc_base_kernel(mo_coeff, ci0, log)[:3]
 
             if isinstance(self.e_cas, (float, numpy.number)):
                 dm = self.make_rdm1(ci=ci0)

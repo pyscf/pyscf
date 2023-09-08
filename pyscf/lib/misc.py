@@ -560,7 +560,7 @@ class StreamObject(object):
     verbose = 0
     stdout = sys.stdout
     # Store the keys appeared in the module.  It is used to check misinput attributes
-    _keys = set(['verbose', 'stdout', 'max_memory'])
+    _keys = set(['output', 'verbose', 'stdout', 'max_memory'])
 
     def kernel(self, *args, **kwargs):
         '''
@@ -616,7 +616,8 @@ class StreamObject(object):
         #if unknown_keys:
         #    warnings.warn(f'{self.__class__} does not have attributes {unknown_keys}')
 
-        self.__dict__.update(kwargs)
+        for k,v in kwargs.items():
+            setattr(self, k, v)
         return self
 
     # An alias to .set method
@@ -842,8 +843,7 @@ def make_class(bases, name=None, attrs=None):
         name = ''.join(getattr(x, '__name_mixin__', x.__name__) for x in bases)
     if attrs is None:
         attrs = {}
-    elif not isinstance(attrs, dict):
-        attrs = dict(attrs)
+    attrs = {**attrs, '__name_mixin__': name}
     return type(name, bases, attrs)
 
 def set_class(obj, bases, name=None, attrs=None):
@@ -876,10 +876,11 @@ def drop_class(cls, base_cls, name_mixin=None):
 
     if name_mixin is None:
         name_mixin = getattr(base_cls, '__name_mixin__', base_cls.__name__)
-    cls_name = cls.__name__.replace(name_mixin, '', count=1)
+    cls_name = cls.__name__.replace(name_mixin, '', 1)
 
     # rebuild the dynamic_mixin class
-    cls_undressed = type(cls_name, tuple(filter_bases), dict(cls.__dict__))
+    attrs = {**cls.__dict__, '__name_mixin__': cls_name}
+    cls_undressed = type(cls_name, tuple(filter_bases), attrs)
     return cls_undressed
 
 def replace_class(cls, old_cls, new_cls):
@@ -900,7 +901,8 @@ def replace_class(cls, old_cls, new_cls):
         return cls
 
     name = cls.__name__.replace(old_cls.__name__, new_cls.__name__)
-    return type(name, tuple(bases), dict(cls.__dict__))
+    attrs = {**cls.__dict__, '__name_mixin__': name}
+    return type(name, tuple(bases), attrs)
 
 def overwrite_mro(obj, mro):
     '''A hacky function to overwrite the __mro__ attribute'''

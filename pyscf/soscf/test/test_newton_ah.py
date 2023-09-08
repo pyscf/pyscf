@@ -326,6 +326,8 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(mf._scf._eri is not None)
         self.assertAlmostEqual(mf.e_tot, -75.9839484980661, 9)
 
+        mf = mf.undo_newton()
+        self.assertEqual(mf.__class__.__name__, 'DFRHF')
 
     def test_rohf_dinfh(self):
         mol = gto.M(atom='Ti 0 0 0; O 0 0 1.9',
@@ -338,6 +340,7 @@ class KnownValues(unittest.TestCase):
         mf = mf.newton().run()
         self.assertTrue(mf.converged)
         self.assertAlmostEqual(mf.e_tot, -914.539361470649, 9)
+        self.assertEqual(mf.undo_newton().__class__.__name__, 'SymAdaptedROHF')
 
     def test_rohf_so3(self):
         mol = gto.M(atom='C', basis='ccpvdz', spin=4, symmetry=True)

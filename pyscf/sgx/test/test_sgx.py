@@ -29,6 +29,7 @@ class KnownValues(unittest.TestCase):
         mf.reset(mol1)
         self.assertTrue(mf.mol is mol1)
         self.assertTrue(mf.with_df.mol is mol1)
+        self.assertEqual(mf.undo_sgx().__class__.__name__, 'RHF')
 
     def test_sgx_scf(self):
         mol = gto.Mole()

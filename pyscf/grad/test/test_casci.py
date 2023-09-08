@@ -336,7 +336,7 @@ class KnownValues(unittest.TestCase):
         g1 = g_scan(mol, atmlst=range(4))[1]
         self.assertAlmostEqual(lib.fp(g1), -0.058112001722577293, 6)
 
-        g2 = g_scan.kernel()
+        g2 = g_scan.kernel(state=0)
         self.assertAlmostEqual(lib.fp(g2), -0.066025991364829367, 6)
 
         mcs = mc.as_scanner()

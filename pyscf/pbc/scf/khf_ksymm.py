@@ -327,7 +327,7 @@ class KsymAdaptedKSCF(khf.KSCF):
                      krks_ksymm.KRKS : krks.KRKS,
                      kuks_ksymm.KUKS : kuks.KUKS}
 
-        out = mol_addons._substitute_class(self, known_cls)
+        out = mol_addons._object_without_soscf(self, known_cls, False)
         out.__dict__.pop('kpts', None)
         return update_mo_(self, out)
 
