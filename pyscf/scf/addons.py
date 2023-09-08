@@ -74,7 +74,7 @@ def _smearing_optimize(f_occ, mo_es, nocc, sigma):
         mo_occ = f_occ(m, mo_es, sigma)
         return (mo_occ.sum() - nocc)**2
 
-    fermi = _get_fermi_level(mo_es, nocc)
+    fermi = _get_fermi(mo_es, nocc)
     res = scipy.optimize.minimize(
         nelec_cost_fn, fermi, args=(mo_es, nocc), method='Powell',
         options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
@@ -82,7 +82,7 @@ def _smearing_optimize(f_occ, mo_es, nocc, sigma):
     mo_occs = f_occ(mu, mo_es, sigma)
     return mu, mo_occs
 
-def _get_fermi_level(mo_energy, nocc):
+def _get_fermi(mo_energy, nocc):
     mo_e_sorted = numpy.sort(mo_energy)
     return mo_e_sorted[nocc-1]
 
@@ -151,8 +151,7 @@ class _SmearingSCF:
                 mo_occs = f_occ(mu[1], mo_es[1], sigma)
             self.entropy  = self._get_entropy(mo_es[0], mo_occs[0], mu[0])
             self.entropy += self._get_entropy(mo_es[1], mo_occs[1], mu[1])
-            fermi = (_get_fermi_level(mo_es[0], nocc[0]),
-                     _get_fermi_level(mo_es[1], nocc[1]))
+            fermi = (_get_fermi(mo_es[0], nocc[0]), _get_fermi(mo_es[1], nocc[1]))
 
             logger.debug(self, '    Alpha-spin Fermi level %g  Sum mo_occ = %s  should equal nelec = %s',
                          fermi[0], mo_occs[0].sum(), nocc[0])
@@ -186,7 +185,7 @@ class _SmearingSCF:
                 mo_occs *= 2
                 self.entropy *= 2
 
-            fermi = _get_fermi_level(mo_es, nocc)
+            fermi = _get_fermi(mo_es, nocc)
             logger.debug(self, '    Fermi level %g  Sum mo_occ = %s  should equal nelec = %s',
                          fermi, mo_occs.sum(), nelectron)
             logger.info(self, '    sigma = %g  Optimized mu = %.12g  entropy = %.12g',
@@ -988,93 +987,99 @@ def convert_to_ghf(mf, out=None, remove_df=False):
 
 def _update_mo_to_uhf_(mf, mf1):
     from pyscf import scf
-    if mf.mo_energy is not None:
-        if isinstance(mf, scf.uhf.UHF):
-            mf1.mo_occ = mf.mo_occ
-            mf1.mo_coeff = mf.mo_coeff
-            mf1.mo_energy = mf.mo_energy
-        elif getattr(mf, 'kpts', None) is None:  # RHF/ROHF
-            mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
-            # ROHF orbital energies, not canonical UHF orbital energies
-            mo_ea = getattr(mf.mo_energy, 'mo_ea', mf.mo_energy)
-            mo_eb = getattr(mf.mo_energy, 'mo_eb', mf.mo_energy)
-            mf1.mo_energy = numpy.array((mo_ea, mo_eb))
-            mf1.mo_coeff = numpy.array((mf.mo_coeff, mf.mo_coeff))
-        else:  # This to handle KRHF object
-            mf1.mo_occ = numpy.array([
-                [numpy.asarray(occ> 0, dtype=numpy.double) for occ in mf.mo_occ],
-                [numpy.asarray(occ==2, dtype=numpy.double) for occ in mf.mo_occ]])
-            mo_ea = getattr(mf.mo_energy, 'mo_ea', mf.mo_energy)
-            mo_eb = getattr(mf.mo_energy, 'mo_eb', mf.mo_energy)
-            mf1.mo_energy = numpy.array((mo_ea, mo_eb))
-            mf1.mo_coeff = numpy.array((mf.mo_coeff, mf.mo_coeff))
+    if mf.mo_energy is None:
+        return mf1
+
+    if isinstance(mf, scf.uhf.UHF):
+        mf1.mo_occ = mf.mo_occ
+        mf1.mo_coeff = mf.mo_coeff
+        mf1.mo_energy = mf.mo_energy
+    elif getattr(mf, 'kpts', None) is None:  # RHF/ROHF
+        mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
+        # ROHF orbital energies, not canonical UHF orbital energies
+        mo_ea = getattr(mf.mo_energy, 'mo_ea', mf.mo_energy)
+        mo_eb = getattr(mf.mo_energy, 'mo_eb', mf.mo_energy)
+        mf1.mo_energy = numpy.array((mo_ea, mo_eb))
+        mf1.mo_coeff = numpy.array((mf.mo_coeff, mf.mo_coeff))
+    else:  # This to handle KRHF object
+        mf1.mo_occ = numpy.array([
+            [numpy.asarray(occ> 0, dtype=numpy.double) for occ in mf.mo_occ],
+            [numpy.asarray(occ==2, dtype=numpy.double) for occ in mf.mo_occ]])
+        mo_ea = getattr(mf.mo_energy, 'mo_ea', mf.mo_energy)
+        mo_eb = getattr(mf.mo_energy, 'mo_eb', mf.mo_energy)
+        mf1.mo_energy = numpy.array((mo_ea, mo_eb))
+        mf1.mo_coeff = numpy.array((mf.mo_coeff, mf.mo_coeff))
     return mf1
 
 def _update_mo_to_rhf_(mf, mf1):
     from pyscf import scf
-    if mf.mo_energy is not None:
-        if isinstance(mf, scf.hf.RHF): # RHF/ROHF/KRHF/KROHF
-            mf1.mo_occ = mf.mo_occ
-            mf1.mo_coeff = mf.mo_coeff
-            mf1.mo_energy = mf.mo_energy
-        elif getattr(mf, 'kpts', None) is None:  # UHF
-            mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
-            mf1.mo_energy = mf.mo_energy[0]
-            mf1.mo_coeff =  mf.mo_coeff[0]
-            if getattr(mf.mo_coeff[0], 'orbsym', None) is not None:
-                mf1.mo_coeff = lib.tag_array(mf1.mo_coeff, orbsym=mf.mo_coeff[0].orbsym)
-            mf1.converged = False
-        else:  # KUHF
-            mf1.mo_occ = [occa+occb for occa, occb in zip(*mf.mo_occ)]
-            mf1.mo_energy = mf.mo_energy[0]
-            mf1.mo_coeff =  mf.mo_coeff[0]
-            mf1.converged = False
+    if mf.mo_energy is None:
+        return mf1
+
+    if isinstance(mf, scf.hf.RHF): # RHF/ROHF/KRHF/KROHF
+        mf1.mo_occ = mf.mo_occ
+        mf1.mo_coeff = mf.mo_coeff
+        mf1.mo_energy = mf.mo_energy
+    elif getattr(mf, 'kpts', None) is None:  # UHF
+        mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
+        mf1.mo_energy = mf.mo_energy[0]
+        mf1.mo_coeff =  mf.mo_coeff[0]
+        if getattr(mf.mo_coeff[0], 'orbsym', None) is not None:
+            mf1.mo_coeff = lib.tag_array(mf1.mo_coeff, orbsym=mf.mo_coeff[0].orbsym)
+        mf1.converged = False
+    else:  # KUHF
+        mf1.mo_occ = [occa+occb for occa, occb in zip(*mf.mo_occ)]
+        mf1.mo_energy = mf.mo_energy[0]
+        mf1.mo_coeff =  mf.mo_coeff[0]
+        mf1.converged = False
     return mf1
 
 def _update_mo_to_ghf_(mf, mf1):
     from pyscf import scf
-    if mf.mo_energy is not None:
-        if isinstance(mf, scf.hf.RHF): # RHF
-            nao, nmo = mf.mo_coeff.shape
-            orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, True)
+    if mf.mo_energy is None:
+        return mf1
 
-            mf1.mo_energy = numpy.empty(nmo*2)
-            mf1.mo_energy[orbspin==0] = mf.mo_energy
-            mf1.mo_energy[orbspin==1] = mf.mo_energy
-            mf1.mo_occ = numpy.empty(nmo*2)
-            mf1.mo_occ[orbspin==0] = mf.mo_occ > 0
-            mf1.mo_occ[orbspin==1] = mf.mo_occ == 2
+    if isinstance(mf, scf.hf.RHF): # RHF
+        nao, nmo = mf.mo_coeff.shape
+        orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, True)
 
-            mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
-            mo_coeff[:nao,orbspin==0] = mf.mo_coeff
-            mo_coeff[nao:,orbspin==1] = mf.mo_coeff
-            if getattr(mf.mo_coeff, 'orbsym', None) is not None:
-                orbsym = numpy.zeros_like(orbspin)
-                orbsym[orbspin==0] = mf.mo_coeff.orbsym
-                orbsym[orbspin==1] = mf.mo_coeff.orbsym
-                mo_coeff = lib.tag_array(mo_coeff, orbsym=orbsym)
-            mf1.mo_coeff = lib.tag_array(mo_coeff, orbspin=orbspin)
+        mf1.mo_energy = numpy.empty(nmo*2)
+        mf1.mo_energy[orbspin==0] = mf.mo_energy
+        mf1.mo_energy[orbspin==1] = mf.mo_energy
+        mf1.mo_occ = numpy.empty(nmo*2)
+        mf1.mo_occ[orbspin==0] = mf.mo_occ > 0
+        mf1.mo_occ[orbspin==1] = mf.mo_occ == 2
 
-        else: # UHF
-            nao, nmo = mf.mo_coeff[0].shape
-            orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, False)
+        mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
+        mo_coeff[:nao,orbspin==0] = mf.mo_coeff
+        mo_coeff[nao:,orbspin==1] = mf.mo_coeff
+        if getattr(mf.mo_coeff, 'orbsym', None) is not None:
+            orbsym = numpy.zeros_like(orbspin)
+            orbsym[orbspin==0] = mf.mo_coeff.orbsym
+            orbsym[orbspin==1] = mf.mo_coeff.orbsym
+            mo_coeff = lib.tag_array(mo_coeff, orbsym=orbsym)
+        mf1.mo_coeff = lib.tag_array(mo_coeff, orbspin=orbspin)
 
-            mf1.mo_energy = numpy.empty(nmo*2)
-            mf1.mo_energy[orbspin==0] = mf.mo_energy[0]
-            mf1.mo_energy[orbspin==1] = mf.mo_energy[1]
-            mf1.mo_occ = numpy.empty(nmo*2)
-            mf1.mo_occ[orbspin==0] = mf.mo_occ[0]
-            mf1.mo_occ[orbspin==1] = mf.mo_occ[1]
+    else: # UHF
+        nao, nmo = mf.mo_coeff[0].shape
+        orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, False)
 
-            mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff[0].dtype)
-            mo_coeff[:nao,orbspin==0] = mf.mo_coeff[0]
-            mo_coeff[nao:,orbspin==1] = mf.mo_coeff[1]
-            if getattr(mf.mo_coeff[0], 'orbsym', None) is not None:
-                orbsym = numpy.zeros_like(orbspin)
-                orbsym[orbspin==0] = mf.mo_coeff[0].orbsym
-                orbsym[orbspin==1] = mf.mo_coeff[1].orbsym
-                mo_coeff = lib.tag_array(mo_coeff, orbsym=orbsym)
-            mf1.mo_coeff = lib.tag_array(mo_coeff, orbspin=orbspin)
+        mf1.mo_energy = numpy.empty(nmo*2)
+        mf1.mo_energy[orbspin==0] = mf.mo_energy[0]
+        mf1.mo_energy[orbspin==1] = mf.mo_energy[1]
+        mf1.mo_occ = numpy.empty(nmo*2)
+        mf1.mo_occ[orbspin==0] = mf.mo_occ[0]
+        mf1.mo_occ[orbspin==1] = mf.mo_occ[1]
+
+        mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff[0].dtype)
+        mo_coeff[:nao,orbspin==0] = mf.mo_coeff[0]
+        mo_coeff[nao:,orbspin==1] = mf.mo_coeff[1]
+        if getattr(mf.mo_coeff[0], 'orbsym', None) is not None:
+            orbsym = numpy.zeros_like(orbspin)
+            orbsym[orbspin==0] = mf.mo_coeff[0].orbsym
+            orbsym[orbspin==1] = mf.mo_coeff[1].orbsym
+            mo_coeff = lib.tag_array(mo_coeff, orbsym=orbsym)
+        mf1.mo_coeff = lib.tag_array(mo_coeff, orbspin=orbspin)
     return mf1
 
 def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):

@@ -292,7 +292,7 @@ from pyscf import tdscf
 scf.hf.SCF.ddCOSMO    = scf.hf.SCF.DDCOSMO    = ddcosmo_for_scf
 mp.mp2.MP2.ddCOSMO    = mp.mp2.MP2.DDCOSMO    = ddcosmo_for_post_scf
 ci.cisd.CISD.ddCOSMO  = ci.cisd.CISD.DDCOSMO  = ddcosmo_for_post_scf
-cc.ccsd.CCSD.ddCOSMO  = cc.ccsd.CCSD.DDCOSMO  = ddcosmo_for_post_scf
+cc.ccsd.CCSDBase.ddCOSMO  = cc.ccsd.CCSDBase.DDCOSMO  = ddcosmo_for_post_scf
 tdscf.rhf.TDBase.ddCOSMO = tdscf.rhf.TDBase.DDCOSMO = ddcosmo_for_tdscf
 mcscf.casci.CASCI.ddCOSMO = mcscf.casci.CASCI.DDCOSMO = ddcosmo_for_casci
 mcscf.mc1step.CASSCF.ddCOSMO = mcscf.mc1step.CASSCF.DDCOSMO = ddcosmo_for_casscf

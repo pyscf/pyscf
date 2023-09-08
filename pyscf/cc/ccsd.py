@@ -51,10 +51,11 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
 
+    name = mycc.__class__.__name__
     cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     eold = 0
     eccsd = mycc.energy(t1, t2, eris)
-    log.info('Init E_corr(CCSD) = %.15g', eccsd)
+    log.info('Init E_corr(%s) = %.15g', name, eccsd)
 
     if isinstance(mycc.diis, lib.diis.DIIS):
         adiis = mycc.diis
@@ -82,13 +83,13 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         t1new = t2new = None
         t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
-        log.info('cycle = %d  E_corr(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
-                 istep+1, eccsd, eccsd - eold, normt)
-        cput1 = log.timer('CCSD iter', *cput1)
+        log.info('cycle = %d  E_corr(%s) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
+                 istep+1, name, eccsd, eccsd - eold, normt)
+        cput1 = log.timer(f'{name} iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
             conv = True
             break
-    log.timer('CCSD', *cput0)
+    log.timer(name, *cput0)
     return conv, eccsd, t1, t2
 
 
@@ -713,7 +714,8 @@ def energy(mycc, t1=None, t2=None, eris=None):
         e += 2 * numpy.einsum('ijab,iabj', tau, eris_ovvo)
         e -=     numpy.einsum('jiab,iabj', tau, eris_ovvo)
     if abs(e.imag) > 1e-4:
-        logger.warn(mycc, 'Non-zero imaginary part found in CCSD energy %s', e)
+        logger.warn(mycc, 'Non-zero imaginary part found in %s energy %s',
+                    mycc.__class__.__name__, e)
     return e.real
 
 def restore_from_diis_(mycc, diis_file, inplace=True):
@@ -841,7 +843,7 @@ class CCSD_Scanner(lib.SinglePointScanner):
         return self.e_tot
 
 
-class CCSD(lib.StreamObject):
+class CCSDBase(lib.StreamObject):
     '''restricted CCSD
 
     Attributes:
@@ -919,6 +921,7 @@ class CCSD(lib.StreamObject):
     async_io = getattr(__config__, 'cc_ccsd_CCSD_async_io', True)
     incore_complete = getattr(__config__, 'cc_ccsd_CCSD_incore_complete', False)
     cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
+    callback = None
 
     _keys = set((
         'max_cycle', 'conv_tol', 'iterative_damping',
@@ -927,7 +930,7 @@ class CCSD(lib.StreamObject):
         'async_io', 'incore_complete', 'cc2', 'callback',
         'mol', 'verbose', 'stdout', 'frozen', 'level_shift',
         'mo_coeff', 'mo_occ', 'converged', 'converged_lambda', 'emp2', 'e_hf',
-        'e_corr', 't1', 't2', 'l1', 'l2', 'chkfile', 'callback',
+        'e_corr', 't1', 't2', 'l1', 'l2', 'chkfile',
     ))
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -977,7 +980,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self._nocc = None
         self._nmo = None
         self.chkfile = mf.chkfile
-        self.callback = None
 
     @property
     def ecc(self):
@@ -1035,12 +1037,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log.info('diis_start_energy_diff = %g', self.diis_start_energy_diff)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
-        if (log.verbose >= logger.DEBUG1 and
-            self.__class__ == CCSD):
-            nocc = self.nocc
-            nvir = self.nmo - self.nocc
-            flops = _flops(nocc, nvir)
-            log.debug1('total FLOPs %s', flops)
         return self
 
     def get_init_guess(self, eris=None):
@@ -1113,78 +1109,45 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     as_scanner = as_scanner
     restore_from_diis_ = restore_from_diis_
 
-
-    def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
-                     eris=None):
-        from pyscf.cc import ccsd_lambda
-        if t1 is None: t1 = self.t1
-        if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
-        self.converged_lambda, self.l1, self.l2 = \
-                ccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
-                                   max_cycle=self.max_cycle,
-                                   tol=self.conv_tol_normt,
-                                   verbose=self.verbose)
-        return self.l1, self.l2
+    def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, eris=None):
+        raise NotImplementedError
 
     def ccsd_t(self, t1=None, t2=None, eris=None):
-        from pyscf.cc import ccsd_t
-        if t1 is None: t1 = self.t1
-        if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
-        return ccsd_t.kernel(self, eris, t1, t2, self.verbose)
+        raise NotImplementedError
 
     def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,
                partition=None, eris=None):
-        from pyscf.cc import eom_rccsd
-        return eom_rccsd.EOMIP(self).kernel(nroots, left, koopmans, guess,
-                                            partition, eris)
+        raise NotImplementedError
 
     def eaccsd(self, nroots=1, left=False, koopmans=False, guess=None,
                partition=None, eris=None):
-        from pyscf.cc import eom_rccsd
-        return eom_rccsd.EOMEA(self).kernel(nroots, left, koopmans, guess,
-                                            partition, eris)
+        raise NotImplementedError
 
     def eeccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
-        from pyscf.cc import eom_rccsd
-        return eom_rccsd.EOMEE(self).kernel(nroots, koopmans, guess, eris)
+        raise NotImplementedError
 
     def eomee_ccsd_singlet(self, nroots=1, koopmans=False, guess=None, eris=None):
-        from pyscf.cc import eom_rccsd
-        return eom_rccsd.EOMEESinglet(self).kernel(nroots, koopmans, guess, eris)
+        raise NotImplementedError
 
     def eomee_ccsd_triplet(self, nroots=1, koopmans=False, guess=None, eris=None):
-        from pyscf.cc import eom_rccsd
-        return eom_rccsd.EOMEETriplet(self).kernel(nroots, koopmans, guess, eris)
+        raise NotImplementedError
 
     def eomsf_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
-        from pyscf.cc import eom_rccsd
-        return eom_rccsd.EOMEESpinFlip(self).kernel(nroots, koopmans, guess, eris)
+        raise NotImplementedError
 
     def eomip_method(self):
-        from pyscf.cc import eom_rccsd
-        return eom_rccsd.EOMIP(self)
+        raise NotImplementedError
 
     def eomea_method(self):
-        from pyscf.cc import eom_rccsd
-        return eom_rccsd.EOMEA(self)
+        raise NotImplementedError
 
     def eomee_method(self):
-        from pyscf.cc import eom_rccsd
-        return eom_rccsd.EOMEE(self)
+        raise NotImplementedError
 
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
                   with_frozen=True, with_mf=True):
         '''Un-relaxed 1-particle density matrix in MO space'''
-        from pyscf.cc import ccsd_rdm
-        if t1 is None: t1 = self.t1
-        if t2 is None: t2 = self.t2
-        if l1 is None: l1 = self.l1
-        if l2 is None: l2 = self.l2
-        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr,
-                                  with_frozen=with_frozen, with_mf=with_mf)
+        raise NotImplementedError
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
                   with_frozen=True, with_dm1=True):
@@ -1193,14 +1156,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
         dm2[p,r,q,s] = <p^+ q^+ s r>
         '''
-        from pyscf.cc import ccsd_rdm
-        if t1 is None: t1 = self.t1
-        if t2 is None: t2 = self.t2
-        if l1 is None: l1 = self.l1
-        if l2 is None: l2 = self.l2
-        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr,
-                                  with_frozen=with_frozen, with_dm1=with_dm1)
+        raise NotImplementedError
 
     def ao2mo(self, mo_coeff=None):
         # Pseudo code how eris are implemented:
@@ -1289,6 +1245,111 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         lib.chkfile.save(self.chkfile, 'ccsd', cc_chk)
 
     def density_fit(self, auxbasis=None, with_df=None):
+        raise NotImplementedError
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+class CCSD(CCSDBase):
+    __doc__ = CCSDBase.__doc__
+
+    def dump_flags(self, verbose=None):
+        CCSDBase.dump_flags(self, verbose)
+        if self.verbose >= logger.DEBUG1 and self.__class__ == CCSD:
+            nocc = self.nocc
+            nvir = self.nmo - self.nocc
+            flops = _flops(nocc, nvir)
+            logger.debug1(self, 'total FLOPs %s', flops)
+        return self
+
+    def solve_lambda(self, t1=None, t2=None, l1=None, l2=None, eris=None):
+        from pyscf.cc import ccsd_lambda
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        self.converged_lambda, self.l1, self.l2 = \
+                ccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
+                                   max_cycle=self.max_cycle,
+                                   tol=self.conv_tol_normt,
+                                   verbose=self.verbose)
+        return self.l1, self.l2
+
+    def ccsd_t(self, t1=None, t2=None, eris=None):
+        from pyscf.cc import ccsd_t
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        return ccsd_t.kernel(self, eris, t1, t2, self.verbose)
+
+    def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,
+               partition=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMIP(self).kernel(nroots, left, koopmans, guess,
+                                            partition, eris)
+
+    def eaccsd(self, nroots=1, left=False, koopmans=False, guess=None,
+               partition=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEA(self).kernel(nroots, left, koopmans, guess,
+                                            partition, eris)
+
+    def eeccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEE(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomee_ccsd_singlet(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEESinglet(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomee_ccsd_triplet(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEETriplet(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomsf_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEESpinFlip(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomip_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMIP(self)
+
+    def eomea_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEA(self)
+
+    def eomee_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEE(self)
+
+    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
+                  with_frozen=True, with_mf=True):
+        '''Un-relaxed 1-particle density matrix in MO space'''
+        from pyscf.cc import ccsd_rdm
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if l1 is None: l1 = self.l1
+        if l2 is None: l2 = self.l2
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
+        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr,
+                                  with_frozen=with_frozen, with_mf=with_mf)
+
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
+                  with_frozen=True, with_dm1=True):
+        '''2-particle density matrix in MO space.  The density matrix is
+        stored as
+
+        dm2[p,r,q,s] = <p^+ q^+ s r>
+        '''
+        from pyscf.cc import ccsd_rdm
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if l1 is None: l1 = self.l1
+        if l2 is None: l2 = self.l2
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
+        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr,
+                                  with_frozen=with_frozen, with_dm1=with_dm1)
+
+    def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.cc import dfccsd
         mycc = dfccsd.RCCSD(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
         if with_df is not None:
@@ -1314,7 +1375,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def get_d2_diagnostic(self, t2=None):
         if t2 is None: t2 = self.t2
         return get_d2_diagnostic(t2)
-
 
 CC = RCCSD = CCSD
 

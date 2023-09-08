@@ -94,13 +94,13 @@ class KnownValues(unittest.TestCase):
         cell.build()
         nks = [2,1,1]
         mf = pscf.KUHF(cell, cell.make_kpts(nks)).density_fit()
-        mf = smearing_(mf, .1)
+        mf = pscf.addons.smearing_(mf, .1)
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -5.56769351866668, 6)
-        mf = smearing_(mf, .1, mu0=0.351195741757)
+        mf = pscf.addons.smearing_(mf, .1, mu0=0.351195741757)
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -5.56769351866668, 6)
-        mf = smearing_(mf, .1, method='gauss')
+        mf = pscf.addons.smearing_(mf, .1, method='gauss')
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -5.56785857886738, 6)
 

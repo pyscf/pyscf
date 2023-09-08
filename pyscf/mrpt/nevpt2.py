@@ -618,7 +618,7 @@ class NEVPT(lib.StreamObject):
 
     _keys = set((
         'ncore', 'root', 'compressed_mps', 'e_corr', 'canonicalized', 'onerdm',
-    )).union(casci.CASCI._keys, mc1step.CASSCF._keys)
+    )).union(casci.CASBase._keys, mc1step.CASSCF._keys)
 
     def __init__(self, mc, root=0):
         self.__dict__.update(mc.__dict__)
@@ -849,7 +849,7 @@ def sc_nevpt(mc, ci=None, verbose=None):
 
 
 # register NEVPT2 in MCSCF
-casci.CASCI.NEVPT2 = NEVPT
+casci.CASBase.NEVPT2 = NEVPT
 
 
 

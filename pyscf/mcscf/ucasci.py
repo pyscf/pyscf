@@ -32,7 +32,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import fci
 from pyscf.mcscf import addons
-from pyscf.mcscf import casci
+from pyscf.mcscf.casci import as_scanner, CASBase
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
@@ -117,7 +117,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
     return e_tot, e_cas, fcivec
 
 
-class UCASBase(casci.CASBase):
+class UCASBase(CASBase):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
         #assert ('UHF' == mf.__class__.__name__)
@@ -227,11 +227,7 @@ class UCASBase(casci.CASBase):
     def _eig(self, h, *args):
         return scf.hf.eig(h, None)
 
-    get_h1cas = h1e_for_cas = h1e_for_cas
-
-    def get_h1eff(self, mo_coeff=None, ncas=None, ncore=None):
-        return self.h1e_for_cas(mo_coeff, ncas, ncore)
-    get_h1eff.__doc__ = h1e_for_cas.__doc__
+    get_h1eff = h1e_for_cas
 
     def _finalize(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -442,6 +438,8 @@ class UCASCI(UCASBase):
                 kernel(self, mo_coeff, ci0=ci0, verbose=log)
         self._finalize()
         return self.e_tot, self.e_cas, self.ci
+
+    as_scanner = as_scanner
 
 CASCI = UCASCI
 

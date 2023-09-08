@@ -134,6 +134,8 @@ class KsymAdaptedKSCF(khf.KSCF):
     KRHF with k-point symmetry
     """
 
+    _keys = set(['use_ao_symmetry'])
+
     get_occ = get_occ
     get_rho = get_rho
     energy_elec = energy_elec

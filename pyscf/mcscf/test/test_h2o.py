@@ -144,6 +144,30 @@ class KnownValues(unittest.TestCase):
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
 
+    def test_casci(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['O', ( 0., 0.    , 0.   )],
+            ['H', ( 0., -0.757, 0.587)],
+            ['H', ( 0., 0.757 , 0.587)],]
+
+        mol.basis = {'H': 'sto-3g',
+                     'O': '6-31g',}
+        mol.build()
+
+        m = scf.RHF(mol).run()
+        mc = mcscf.CASCI(m, 4, 4)
+        mc.fcisolver = fci.solver(mol)
+        mc.natorb = 1
+        emc = mc.kernel()[0]
+        self.assertAlmostEqual(emc, -75.9624554777, 9)
+
+        mc = CASCI(m, 4, (3,1))
+        mc.fcisolver = fci.solver(mol, False)
+        emc = mc.casci()[0]
+        self.assertAlmostEqual(emc, -75.439016172976, 9)
+
 if __name__ == "__main__":
     print("Full Tests for H2O")
     unittest.main()

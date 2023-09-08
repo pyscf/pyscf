@@ -90,15 +90,3 @@ class AtomSphAverageRKS(rks.RKS, atom_hf.AtomSphericAverageRHF):
     get_grad = atom_hf.AtomSphericAverageRHF.get_grad
 
 AtomSphericAverageRKS = AtomSphAverageRKS
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = None
-
-    mol.atom = [["N", (0. , 0., .5)],
-                ["N", (0. , 0.,-.5)] ]
-
-    mol.basis = {"N": '6-31g'}
-    mol.build()
-    print(get_atm_nrks(mol))

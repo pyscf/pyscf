@@ -395,7 +395,7 @@ class KsymAdaptedRCCSD(RCCSD):
         '''
         # NOTE self._scf is a non-symmetry object, see RCCSD.__init__
         RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        self.kqrts = KQuartets(self.kpts).build()
+        self.kqrts = KQuartets(mf.kpts).build()
         self.rmat = None
         self.ktensor_direct = False
         self.eris_outcore = False

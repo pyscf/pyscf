@@ -91,7 +91,7 @@ def qmmm_for_scf(method, mm_mol):
     Args:
         mm_mol : MM Mole object
     '''
-    assert (isinstance(method, (scf.hf.SCF, mcscf.casci.CASCI)))
+    assert (isinstance(method, (scf.hf.SCF, mcscf.casci.CASBase)))
 
     if isinstance(method, scf.hf.SCF):
         # Avoid to initialize QMMM twice
@@ -400,7 +400,7 @@ _QMMMGrad = QMMMGrad
 
 # Inject QMMM interface wrapper to other modules
 scf.hf.SCF.QMMM = mm_charge
-mcscf.casci.CASCI.QMMM = mm_charge
+mcscf.casci.CASBase.QMMM = mm_charge
 grad.rhf.Gradients.QMMM = mm_charge_grad
 
 if __name__ == '__main__':

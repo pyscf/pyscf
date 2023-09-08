@@ -1129,6 +1129,7 @@ class KQuartets:
     The class holding the symmetry relations between k-quartets.
     '''
     def __init__(self, kpts):
+        assert isinstance(kpts, KPoints)
         self.kpts = kpts
         self.kqrts_ibz = None
         self.weights_ibz = None

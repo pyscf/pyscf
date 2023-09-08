@@ -200,16 +200,3 @@ def _angular_momentum_for_each_ao(mol):
         p0, p1 = ao_loc[i], ao_loc[i+1]
         ao_ang[p0:p1] = mol.bas_angular(i)
     return ao_ang
-
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = None
-
-    mol.atom = [["N", (0. , 0., .5)],
-                ["N", (0. , 0.,-.5)] ]
-
-    mol.basis = {"N": '6-31g'}
-    mol.build()
-    print(get_atm_nrhf(mol))

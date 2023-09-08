@@ -132,9 +132,10 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
                 mo_occs = f_occ(mu[1], mo_es[1], sigma)
             self.entropy  = self._get_entropy(mo_es[0], mo_occs[0], mu[0])
             self.entropy += self._get_entropy(mo_es[1], mo_occs[1], mu[1])
+            self.entropy /= nkpts
 
-            fermi = (mol_addons._get_fermi_level(mo_es[0], nocc[0]),
-                     mol_addons._get_fermi_level(mo_es[1], nocc[1]))
+            fermi = (mol_addons._get_fermi(mo_es[0], nocc[0]),
+                     mol_addons._get_fermi(mo_es[1], nocc[1]))
             logger.debug(self, '    Alpha-spin Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
                          fermi[0], mo_occs[0].sum(), nocc[0])
             logger.debug(self, '    Beta-spin  Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
@@ -166,12 +167,12 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
                 # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
                 mu = self.mu0
                 mo_occs = f_occ(mu, mo_es, sigma)
-            self.entropy = self._get_entropy(mo_es, mo_occs, mu)
+            self.entropy = self._get_entropy(mo_es, mo_occs, mu) / nkpts
             if is_rhf:
                 mo_occs *= 2
                 self.entropy *= 2
 
-            fermi = mol_addons._get_fermi_level(mo_es, nocc)
+            fermi = mol_addons._get_fermi(mo_es, nocc)
             logger.debug(self, '    Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
                          fermi, mo_occs.sum(), nelectron)
             logger.info(self, '    sigma = %g  Optimized mu = %.12g  entropy = %.12g',
@@ -483,14 +484,15 @@ def convert_to_kscf(mf, out=None):
             scf.ghf.GHF   : scf.kghf.KGHF  ,
         }
         mf = mol_addons._object_without_soscf(mf, known_cls, False)
-        if isinstance(mf, scf.uhf.UHF):
-            mf.mo_occ = mf.mo_occ[:,numpy.newaxis]
-            mf.mo_coeff = mf.mo_coeff[:,numpy.newaxis]
-            mf.mo_energy = mf.mo_energy[:,numpy.newaxis]
-        else:
-            mf.mo_occ = mf.mo_occ[numpy.newaxis]
-            mf.mo_coeff = mf.mo_coeff[numpy.newaxis]
-            mf.mo_energy = mf.mo_energy[numpy.newaxis]
+        if mf.mo_energy is not None:
+            if isinstance(mf, scf.uhf.UHF):
+                mf.mo_occ = mf.mo_occ[:,numpy.newaxis]
+                mf.mo_coeff = mf.mo_coeff[:,numpy.newaxis]
+                mf.mo_energy = mf.mo_energy[:,numpy.newaxis]
+            else:
+                mf.mo_occ = mf.mo_occ[numpy.newaxis]
+                mf.mo_coeff = mf.mo_coeff[numpy.newaxis]
+                mf.mo_energy = mf.mo_energy[numpy.newaxis]
 
     if out is None:
         return mf

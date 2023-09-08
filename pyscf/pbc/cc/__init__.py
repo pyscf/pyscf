@@ -38,20 +38,17 @@ def GCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     return ccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
 
 def KGCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.pbc.cc import kccsd
     mf = scf.addons.convert_to_ghf(mf)
-    return kccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
+    return kgccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
 
 def KRCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.pbc.cc import kccsd_rhf
     if not isinstance(mf, scf.khf.KRHF):
         mf = scf.addons.convert_to_rhf(mf)
-    return kccsd_rhf.RCCSD(mf, frozen, mo_coeff, mo_occ)
+    return krccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
 KCCSD = KRCCSD
 
 def KUCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.pbc.cc import kccsd_uhf
     if not isinstance(mf, scf.kuhf.KUHF):
         mf = scf.addons.convert_to_uhf(mf)
-    return kccsd_uhf.UCCSD(mf, frozen, mo_coeff, mo_occ)
+    return kuccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)

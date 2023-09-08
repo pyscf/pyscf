@@ -927,11 +927,10 @@ To enable the solvent model for CASCI, the following code needs to be called
         '''
         raise NotImplementedError
 
-    get_h1cas = h1e_for_cas = h1e_for_cas
+    def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):
+        raise DeprecationWarning
 
-    def get_h1eff(self, mo_coeff=None, ncas=None, ncore=None):
-        return self.h1e_for_cas(mo_coeff, ncas, ncore)
-    get_h1eff.__doc__ = h1e_for_cas.__doc__
+    get_h1eff = h1e_for_cas
 
     def casci(self, mo_coeff=None, ci0=None, verbose=None):
         raise NotImplementedError
@@ -1181,70 +1180,3 @@ scf.hf.RHF.CASCI = scf.rohf.ROHF.CASCI = lib.class_as_method(CASCI)
 scf.uhf.UHF.CASCI = None
 
 del (WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
-
-
-if __name__ == '__main__':
-    from pyscf import mcscf
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None#"out_h2o"
-    mol.atom = [
-        ['O', ( 0., 0.    , 0.   )],
-        ['H', ( 0., -0.757, 0.587)],
-        ['H', ( 0., 0.757 , 0.587)],]
-
-    mol.basis = {'H': 'sto-3g',
-                 'O': '6-31g',}
-    mol.build()
-
-    m = scf.RHF(mol)
-    ehf = m.scf()
-    mc = mcscf.CASCI(m, 4, 4)
-    mc.fcisolver = fci.solver(mol)
-    mc.natorb = 1
-    emc = mc.kernel()[0]
-    print(ehf, emc, emc-ehf)
-    #-75.9577817425 -75.9624554777 -0.00467373522233
-    print(emc+75.9624554777)
-
-#    mc = CASCI(m, 4, (3,1))
-#    #mc.fcisolver = fci.direct_spin1
-#    mc.fcisolver = fci.solver(mol, False)
-#    emc = mc.casci()[0]
-#    print(emc - -75.439016172976)
-#
-#    mol = gto.Mole()
-#    mol.verbose = 0
-#    mol.output = "out_casci"
-#    mol.atom = [
-#        ["C", (-0.65830719,  0.61123287, -0.00800148)],
-#        ["C", ( 0.73685281,  0.61123287, -0.00800148)],
-#        ["C", ( 1.43439081,  1.81898387, -0.00800148)],
-#        ["C", ( 0.73673681,  3.02749287, -0.00920048)],
-#        ["C", (-0.65808819,  3.02741487, -0.00967948)],
-#        ["C", (-1.35568919,  1.81920887, -0.00868348)],
-#        ["H", (-1.20806619, -0.34108413, -0.00755148)],
-#        ["H", ( 1.28636081, -0.34128013, -0.00668648)],
-#        ["H", ( 2.53407081,  1.81906387, -0.00736748)],
-#        ["H", ( 1.28693681,  3.97963587, -0.00925948)],
-#        ["H", (-1.20821019,  3.97969587, -0.01063248)],
-#        ["H", (-2.45529319,  1.81939187, -0.00886348)],]
-#
-#    mol.basis = {'H': 'sto-3g',
-#                 'C': 'sto-3g',}
-#    mol.build()
-#
-#    m = scf.RHF(mol)
-#    ehf = m.scf()
-#    mc = CASCI(m, 9, 8)
-#    mc.fcisolver = fci.solver(mol)
-#    emc = mc.casci()[0]
-#    print(ehf, emc, emc-ehf)
-#    print(emc - -227.948912536)
-#
-#    mc = CASCI(m, 9, (5,3))
-#    #mc.fcisolver = fci.direct_spin1
-#    mc.fcisolver = fci.solver(mol, False)
-#    mc.fcisolver.nroots = 3
-#    emc = mc.casci()[0]
-#    print(emc[0] - -227.7674519720)

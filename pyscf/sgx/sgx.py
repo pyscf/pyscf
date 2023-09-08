@@ -230,7 +230,7 @@ class _SGXHF:
     CASSCF = method_not_implemented
 
 scf.hf.SCF.COSX = sgx_fit
-mcscf.casci.CASCI.COSX = sgx_fit
+mcscf.casci.CASBase.COSX = sgx_fit
 
 
 def _make_opt(mol, pjs=False,

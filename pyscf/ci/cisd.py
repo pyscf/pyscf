@@ -860,7 +860,7 @@ class CISD(lib.StreamObject):
     direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
     async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
 
-    keys = set((
+    _keys = set((
         'conv_tol', 'max_cycle', 'max_space', 'lindep',
         'level_shift', 'direct', 'async_io', 'mol', 'max_memory',
         'nroots', 'frozen', 'chkfile', 'converged', 'mo_coeff', 'mo_occ',
