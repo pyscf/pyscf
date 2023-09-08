@@ -34,9 +34,203 @@ CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
 FORCE_PIVOTED_CHOLESKY = getattr(__config__, 'scf_addons_force_cholesky', False)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
 
-def smearing_(*args, **kwargs):
-    from pyscf.pbc.scf.addons import smearing_
-    return smearing_(*args, **kwargs)
+SMEARING_METHOD = getattr(__config__, 'pbc_scf_addons_smearing_method', 'fermi')
+
+def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
+    '''Fermi-Dirac or Gaussian smearing'''
+    if isinstance(mf, _SmearingSCF):
+        mf.sigma = sigma
+        mf.method = method
+        mf.mu0 = mu0
+        mf.fix_spin = fix_spin
+        return mf
+
+    return lib.set_class(_SmearingSCF(mf, sigma, method, mu0, fix_spin),
+                         (_SmearingSCF, mf.__class__))
+
+def smearing_(mf, *args, **kwargs):
+    mf1 = smearing(mf, *args, **kwargs)
+    mf.__class__ = mf1.__class__
+    mf.__dict__.update(mf1.__dict__)
+    return mf
+
+def _get_grad_tril(mo_coeff, mo_occ, fock):
+    f_mo = reduce(numpy.dot, (mo_coeff.T.conj(), fock, mo_coeff))
+    return f_mo[numpy.tril_indices_from(f_mo, -1)]
+
+def _fermi_smearing_occ(mu, mo_energy, sigma):
+    '''Fermi-Dirac smearing'''
+    occ = numpy.zeros_like(mo_energy)
+    de = (mo_energy - mu) / sigma
+    occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
+    return occ
+
+def _gaussian_smearing_occ(mu, mo_energy, sigma):
+    '''Gaussian smearing'''
+    return 0.5 * scipy.special.erfc((mo_energy - mu) / sigma)
+
+def _smearing_optimize(f_occ, mo_es, nocc, sigma):
+    def nelec_cost_fn(m, mo_es, nocc):
+        mo_occ = f_occ(m, mo_es, sigma)
+        return (mo_occ.sum() - nocc)**2
+
+    fermi = _get_fermi_level(mo_es, nocc)
+    res = scipy.optimize.minimize(
+        nelec_cost_fn, fermi, args=(mo_es, nocc), method='Powell',
+        options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
+    mu = res.x
+    mo_occs = f_occ(mu, mo_es, sigma)
+    return mu, mo_occs
+
+def _get_fermi_level(mo_energy, nocc):
+    mo_e_sorted = numpy.sort(mo_energy)
+    return mo_e_sorted[nocc-1]
+
+class _SmearingSCF:
+
+    __name_mixin__ = 'Smearing'
+
+    _keys = set([
+        'sigma', 'smearing_method', 'mu0', 'fix_spin', 'entropy', 'e_free', 'e_zero'
+    ])
+
+    def __init__(self, mf, sigma, method, mu0, fix_spin):
+        self.__dict__.update(mf.__dict__)
+        self.sigma = sigma
+        self.smearing_method = method
+        self.mu0 = mu0
+        self.fix_spin = fix_spin
+        self.entropy = None
+        self.e_free = None
+        self.e_zero = None
+
+    def undo_smearing(self):
+        obj = lib.view(self, lib.drop_class(self.__class__, _SmearingSCF))
+        del obj.sigma
+        del obj.smearing_method
+        del obj.fix_spin
+        del obj.entropy
+        del obj.e_free
+        del obj.e_zero
+        return obj
+
+    def get_occ(self, mo_energy=None, mo_coeff=None):
+        '''Label the occupancies for each orbital
+        '''
+        from pyscf.scf import uhf, rohf, ghf
+        from pyscf.pbc.tools import print_mo_energy_occ
+        if (self.sigma == 0) or (not self.sigma) or (not self.smearing_method):
+            mo_occ = super().get_occ(mo_energy, mo_coeff)
+            return mo_occ
+
+        is_uhf = isinstance(self, uhf.UHF)
+        is_ghf = isinstance(self, ghf.GHF)
+        is_rhf = (not is_uhf) and (not is_ghf)
+        is_rohf = isinstance(self, rohf.ROHF)
+
+        sigma = self.sigma
+        if self.smearing_method.lower() == 'fermi':
+            f_occ = _fermi_smearing_occ
+        else:
+            f_occ = _gaussian_smearing_occ
+
+        if self.fix_spin and (is_uhf or is_rohf): # spin separated fermi level
+            if is_rohf: # treat rohf as uhf
+                mo_es = (mo_energy, mo_energy)
+            else:
+                mo_es = mo_energy
+            nocc = self.nelec
+            if self.mu0 is None:
+                mu_a, occa = _smearing_optimize(f_occ, mo_es[0], nocc[0], sigma)
+                mu_b, occb = _smearing_optimize(f_occ, mo_es[1], nocc[1], sigma)
+                mu = [mu_a, mu_b]
+                mo_occs = [occa, occb]
+            else:
+                mu = self.mu0
+                mo_occs = f_occ(mu[0], mo_es[0], sigma)
+                mo_occs = f_occ(mu[1], mo_es[1], sigma)
+            self.entropy  = self._get_entropy(mo_es[0], mo_occs[0], mu[0])
+            self.entropy += self._get_entropy(mo_es[1], mo_occs[1], mu[1])
+            fermi = (_get_fermi_level(mo_es[0], nocc[0]),
+                     _get_fermi_level(mo_es[1], nocc[1]))
+
+            logger.debug(self, '    Alpha-spin Fermi level %g  Sum mo_occ = %s  should equal nelec = %s',
+                         fermi[0], mo_occs[0].sum(), nocc[0])
+            logger.debug(self, '    Beta-spin  Fermi level %g  Sum mo_occ = %s  should equal nelec = %s',
+                         fermi[1], mo_occs[1].sum(), nocc[1])
+            logger.info(self, '    sigma = %g  Optimized mu_alpha = %.12g  entropy = %.12g',
+                        sigma, mu[0], self.entropy)
+            logger.info(self, '    sigma = %g  Optimized mu_beta  = %.12g  entropy = %.12g',
+                        sigma, mu[1], self.entropy)
+            if self.verbose >= logger.DEBUG:
+                print_mo_energy_occ(self, mo_energy, mo_occs, True)
+            if is_rohf:
+                mo_occs = mo_occs[0] + mo_occs[1]
+        else: # all orbitals treated with the same fermi level
+            nocc = nelectron = self.mol.tot_electrons()
+            if is_uhf:
+                mo_es = numpy.hstack(mo_energy)
+            else:
+                mo_es = mo_energy
+            if is_rhf:
+                nocc = (nelectron + 1) // 2
+
+            if self.mu0 is None:
+                mu, mo_occs = _smearing_optimize(f_occ, mo_es, nocc, sigma)
+            else:
+                # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
+                mu = self.mu0
+                mo_occs = f_occ(mu, mo_es, sigma)
+            self.entropy = self._get_entropy(mo_es, mo_occs, mu)
+            if is_rhf:
+                mo_occs *= 2
+                self.entropy *= 2
+
+            fermi = _get_fermi_level(mo_es, nocc)
+            logger.debug(self, '    Fermi level %g  Sum mo_occ = %s  should equal nelec = %s',
+                         fermi, mo_occs.sum(), nelectron)
+            logger.info(self, '    sigma = %g  Optimized mu = %.12g  entropy = %.12g',
+                        sigma, mu, self.entropy)
+            if is_uhf:
+                mo_occs = mo_occs.reshape(2, -1)
+            if self.verbose >= logger.DEBUG:
+                print_mo_energy_occ(self, mo_energy, mo_occs, is_uhf)
+        return mo_occs
+
+    # See https://www.vasp.at/vasp-workshop/slides/k-points.pdf
+    def _get_entropy(self, mo_energy, mo_occ, mu):
+        if self.smearing_method.lower() == 'fermi':
+            f = mo_occ
+            f = f[(f>0) & (f<1)]
+            entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum()
+        else:
+            entropy = (numpy.exp(-((mo_energy-mu)/self.sigma)**2).sum()
+                       / (2*numpy.sqrt(numpy.pi)))
+        return entropy
+
+    def get_grad(self, mo_coeff, mo_occ, fock=None):
+        from pyscf.scf import uhf
+        if (self.sigma == 0) or (not self.sigma) or (not self.smearing_method):
+            return super().get_grad(mo_coeff, mo_occ, fock)
+
+        if fock is None:
+            dm1 = self.make_rdm1(mo_coeff, mo_occ)
+            fock = self.get_hcore() + self.get_veff(self.mol, dm1)
+        if isinstance(self, uhf.UHF):
+            ga = _get_grad_tril(mo_coeff[0], mo_occ[0], fock[0])
+            gb = _get_grad_tril(mo_coeff[1], mo_occ[1], fock[1])
+            return numpy.hstack((ga,gb))
+        else: # rhf and ghf
+            return _get_grad_tril(mo_coeff, mo_occ, fock)
+
+    def energy_tot(self, dm=None, h1e=None, vhf=None):
+        e_tot = self.energy_elec(dm, h1e, vhf)[0] + self.energy_nuc()
+        if self.sigma and self.smearing_method and self.entropy is not None:
+            self.e_free = e_tot - self.sigma * self.entropy
+            self.e_zero = e_tot - self.sigma * self.entropy * .5
+            logger.info(self, '    Total E(T) = %.15g  Free energy = %.15g  E0 = %.15g',
+                        e_tot, self.e_free, self.e_zero)
+        return e_tot
 
 def frac_occ_(mf, tol=1e-3):
     '''
