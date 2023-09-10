@@ -912,7 +912,7 @@ class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
 # These attributes are initialized by build function if not specified
         self.mesh = None
         self.rcut = None
-        for key val in kwargs.items():
+        for key, val in kwargs.items():
             setattr(self, key, val)
 
     @property
@@ -949,20 +949,18 @@ class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
     def ew_cut(self, val):
         warnings.warn("ew_cut is no longer stored in the cell object. Setting it has no effect")
 
-    if not getattr(__config__, 'pbc_gto_cell_Cell_verify_nelec', False):
+    @property
+    def nelec(self):
+        ne = self.nelectron
+        nalpha = (ne + self.spin) // 2
+        nbeta = nalpha - self.spin
         # nelec method defined in Mole class raises error when the attributes .spin
         # and .nelectron are inconsistent.  In PBC, when the system has even number of
         # k-points, it is valid that .spin is odd while .nelectron is even.
-        # Overwriting nelec method to avoid this check.
-        @property
-        def nelec(self):
-            ne = self.nelectron
-            nalpha = (ne + self.spin) // 2
-            nbeta = nalpha - self.spin
-            if nalpha + nbeta != ne:
-                warnings.warn('Electron number %d and spin %d are not consistent '
-                              'in cell\n' % (ne, self.spin))
-            return nalpha, nbeta
+        if nalpha + nbeta != ne:
+            warnings.warn('Electron number %d and spin %d are not consistent '
+                          'in cell\n' % (ne, self.spin))
+        return nalpha, nbeta
 
     def __getattr__(self, key):
         '''To support accessing methods (cell.HF, cell.KKS, cell.KUCCSD, ...)
