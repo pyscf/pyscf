@@ -19,6 +19,7 @@
 import sys
 
 from functools import reduce
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -648,21 +649,12 @@ class CASCI_Scanner(lib.SinglePointScanner):
         self._scf = mc._scf.as_scanner()
 
     def __call__(self, mol_or_geom, mo_coeff=None, ci0=None):
-        if isinstance(mol_or_geom, gto.Mole):
+        if isinstance(mol_or_geom, gto.MoleBase):
             mol = mol_or_geom
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-        # These properties can be updated when calling mf_scanner(mol) if
-        # they are shared with mc._scf. In certain scenario the properties
-        # may be created for mc separately, e.g. when mcscf.approx_hessian is
-        # called. For safety, the code below explicitly resets these
-        # properties.
         self.reset (mol)
-        for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
-            sub_mod = getattr(self, key, None)
-            if sub_mod:
-                sub_mod.reset(mol)
 
         if mo_coeff is None:
             mf_scanner = self._scf
@@ -915,7 +907,8 @@ To enable the solvent model for CASCI, the following code needs to be called
         return scf.hf.eig(h, None)
 
     def get_h2cas(self, mo_coeff=None):
-        raise DeprecationWarning
+        '''An alias of get_h2eff method'''
+        return self.get_h2eff(mo_coeff)
 
     def get_h2eff(self, mo_coeff=None):
         '''Compute the active space two-particle Hamiltonian.
@@ -928,9 +921,10 @@ To enable the solvent model for CASCI, the following code needs to be called
         raise NotImplementedError
 
     def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):
-        raise DeprecationWarning
+        '''An alias of get_h1eff method'''
+        return self.get_h1eff(mo_coeff, ncas, ncore)
 
-    get_h1eff = h1e_for_cas
+    get_h1eff = h1e_for_cas = h1e_for_cas
 
     def casci(self, mo_coeff=None, ci0=None, verbose=None):
         raise NotImplementedError

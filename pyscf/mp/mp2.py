@@ -419,7 +419,7 @@ class MP2_Scanner(lib.SinglePointScanner):
         self._scf = mp._scf.as_scanner()
 
     def __call__(self, mol_or_geom, **kwargs):
-        if isinstance(mol_or_geom, gto.Mole):
+        if isinstance(mol_or_geom, gto.MoleBase):
             mol = mol_or_geom
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)

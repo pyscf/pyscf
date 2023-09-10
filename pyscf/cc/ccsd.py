@@ -821,7 +821,7 @@ class CCSD_Scanner(lib.SinglePointScanner):
         self._scf = cc._scf.as_scanner()
 
     def __call__(self, mol_or_geom, **kwargs):
-        if isinstance(mol_or_geom, gto.Mole):
+        if isinstance(mol_or_geom, gto.MoleBase):
             mol = mol_or_geom
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)
@@ -934,12 +934,6 @@ class CCSDBase(lib.StreamObject):
     ))
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        if isinstance(mf, gto.Mole):
-            raise RuntimeError('''
-You see this error message because of the API updates in pyscf v0.10.
-In the new API, the first argument of CC class is HF objects.  Please see
-http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventions''')
-
         from pyscf.scf import hf
         if isinstance(mf, hf.KohnShamDFT):
             raise RuntimeError(

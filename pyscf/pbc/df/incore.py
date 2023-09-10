@@ -66,7 +66,7 @@ def aux_e2(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', comp=None,
     Returns:
         (nao_pair, naux) array
     '''
-    if isinstance(auxcell_or_auxbasis, (gto.Mole, pbcgto.Cell)):
+    if isinstance(auxcell_or_auxbasis, gto.MoleBase):
         auxcell = auxcell_or_auxbasis
     else:
         assert isinstance(auxcell_or_auxbasis, str)
@@ -132,7 +132,7 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
 def fill_2c2e(cell, auxcell_or_auxbasis, intor='int2c2e', hermi=0, kpt=np.zeros(3)):
     '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
-    if isinstance(auxcell_or_auxbasis, gto.Mole):
+    if isinstance(auxcell_or_auxbasis, gto.MoleBase):
         auxcell = auxcell_or_auxbasis
     else:
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)

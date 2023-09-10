@@ -21,7 +21,7 @@ import sys
 from functools import reduce
 import numpy
 import scipy.linalg
-from pyscf.gto import Mole
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import casci
@@ -538,7 +538,7 @@ class CASSCF_Scanner(lib.SinglePointScanner):
 
     def __call__(self, mol_or_geom, **kwargs):
         from pyscf.mcscf.addons import project_init_guess
-        if isinstance(mol_or_geom, Mole):
+        if isinstance(mol_or_geom, gto.MoleBase):
             mol = mol_or_geom
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)

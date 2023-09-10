@@ -24,6 +24,7 @@ __all__ = ['parse', 'load']
 
 import re
 import numpy
+import numpy as np
 
 try:
     from pyscf.gto.basis.parse_nwchem import optimize_contraction

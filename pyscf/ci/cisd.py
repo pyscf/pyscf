@@ -23,7 +23,7 @@ Solve CISD equation  H C = C e  where e = E_HF + E_CORR
 
 from functools import reduce
 import numpy
-from pyscf.gto import Mole
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import ccsd
@@ -786,7 +786,7 @@ class CISD_Scanner(lib.SinglePointScanner):
         self._scf = ci._scf.as_scanner()
 
     def __call__(self, mol_or_geom, ci0=None, **kwargs):
-        if isinstance(mol_or_geom, Mole):
+        if isinstance(mol_or_geom, gto.Mole):
             mol = mol_or_geom
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)

@@ -466,6 +466,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(len(cl3._ecpbas), 20)
         self.assertTrue(len(cl3._bas), 12)
         self.assertTrue(len(cl3._atm), 8)
+        self.assertAlmostEqual(abs(cl3.lattice_vectors() - cl1.lattice_vectors()).max(), 0, 12)
 
     def test_eval_gto(self):
         cell = pgto.M(a=np.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]], precision=1e-10)

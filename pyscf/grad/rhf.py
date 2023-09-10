@@ -250,7 +250,8 @@ class SCF_GradScanner(lib.GradScanner):
         lib.GradScanner.__init__(self, g)
 
     def __call__(self, mol_or_geom, **kwargs):
-        if isinstance(mol_or_geom, gto.Mole):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
             mol = mol_or_geom
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)

@@ -61,33 +61,49 @@ def load(basisfile, symb, optimize=False):
     return _parse(search_seg(basisfile, symb), optimize)
 
 def _parse(blines, optimize=False):
-    header_ln = blines.pop(0)  # noqa: F841
-    nsets = int(blines.pop(0))
+    blines_iter = iter(blines)
+    try:
+        header_ln = next(blines_iter)  # noqa: F841
+        nsets = int(next(blines_iter))
+    except Exception:
+        raise BasisNotFoundError('Not basis data')
+
     basis = []
-    for n in range(nsets):
-        comp = [int(p) for p in blines.pop(0).split()]
-        lmin, lmax, nexps, ncontractions = comp[1], comp[2], comp[3], comp[4:]
-        basis_n = [[l] for l in range(lmin,lmax+1)]
-        for nexp in range(nexps):
-            line = blines.pop(0)
-            dat = line.split()
-            try:
-                bfun = [float(x) for x in dat]
-            except ValueError:
-                if DISABLE_EVAL:
-                    raise ValueError('Failed to parse basis %s' % line)
-                else:
-                    bfun = eval(','.join(dat))
-            exp = bfun.pop(0)
-            for i,l in enumerate(range(lmin,lmax+1)):
-                cl = [exp]
-                for c in range(ncontractions[i]):
-                    cl.append(bfun.pop(0))
-                basis_n[i].append(tuple(cl))
-        basis.extend(basis_n)
+    try:
+        for n in range(nsets):
+            comp = [int(p) for p in next(blines_iter).split()]
+            lmin, lmax, nexps, ncontractions = comp[1], comp[2], comp[3], comp[4:]
+            basis_n = [[l] for l in range(lmin,lmax+1)]
+            for nexp in range(nexps):
+                line = next(blines_iter)
+                dat = line.split()
+                try:
+                    bfun = [float(x) for x in dat]
+                except ValueError:
+                    if DISABLE_EVAL:
+                        raise ValueError('Failed to parse %s' % line)
+                    else:
+                        bfun = eval(','.join(dat))
+
+                if len(bfun) != sum(ncontractions) + 1:
+                    raise ValueError('Basis data incomplete')
+
+                bfun_iter = iter(bfun)
+                exp = next(bfun_iter)
+                for i,l in enumerate(range(lmin,lmax+1)):
+                    cl = [exp]
+                    for c in range(ncontractions[i]):
+                        cl.append(next(bfun_iter))
+                    basis_n[i].append(cl)
+            basis.extend(basis_n)
+    except StopIteration:
+        raise ValueError('Basis data incomplete')
+
     basis_sorted = []
     for l in range(MAXL):
         basis_sorted.extend([b for b in basis if b[0] == l])
+    if not basis_sorted:
+        raise BasisNotFoundError('Basis data not found')
 
     if optimize:
         basis_sorted = parse_nwchem.optimize_contraction(basis_sorted)

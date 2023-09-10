@@ -21,7 +21,7 @@ CISD analytical nuclear gradients
 '''
 
 import numpy
-from pyscf.gto import Mole
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ci import cisd
@@ -89,7 +89,8 @@ class CISD_GradScanner(lib.GradScanner):
             self.state = state
 
     def __call__(self, mol_or_geom, state=None, **kwargs):
-        if isinstance(mol_or_geom, Mole):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
             mol = mol_or_geom
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)

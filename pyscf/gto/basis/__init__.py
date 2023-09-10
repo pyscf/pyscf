@@ -608,27 +608,27 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb,
                                       optimize=optimize)
-        except IndexError:
-            raise BasisNotFoundError(filename_or_basisname)
         except BasisNotFoundError as basis_err:
             pass
+        except Exception:
+            raise BasisNotFoundError(filename_or_basisname)
 
         try:
             return parse_nwchem.parse(filename_or_basisname, optimize=optimize)
-        except IndexError:
-            raise BasisNotFoundError(f'Invalid basis {filename_or_basisname}')
         except BasisNotFoundError:
             pass
+        except Exception:
+            raise BasisNotFoundError(f'Invalid basis {filename_or_basisname}')
 
         try:
             return parse_cp2k.parse(filename_or_basisname, optimize=optimize)
-        except IndexError:
-            raise BasisNotFoundError(f'Invalid basis {filename_or_basisname}')
         except BasisNotFoundError:
             pass
+        except Exception:
+            raise BasisNotFoundError(f'Invalid basis {filename_or_basisname}')
 
         # Last, a trial to access Basis Set Exchange database
-        from pyscf.basis import bse
+        from pyscf.gto.basis import bse
         if bse.basis_set_exchange is not None:
             try:
                 bse_obj = bse.basis_set_exchange.api.get_basis(

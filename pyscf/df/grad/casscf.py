@@ -34,7 +34,7 @@ from functools import reduce
 from itertools import product
 import numpy
 from scipy import linalg
-from pyscf.gto import Mole
+from pyscf import gto
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
@@ -160,7 +160,8 @@ class CASSCF_GradScanner(lib.GradScanner):
         lib.GradScanner.__init__(self, g)
 
     def __call__(self, mol_or_geom, **kwargs):
-        if isinstance(mol_or_geom, gto.Mole):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
             mol = mol_or_geom
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)

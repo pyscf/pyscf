@@ -152,8 +152,8 @@ def conc_cell(cell1, cell2):
     cell3 = Cell()
     cell3.__dict__.update(mol3.__dict__)
 
-    # Whether to update the lattice_vectors?
-    cell3.a = cell1.a
+    # lattice_vectors needs to be consistent with cell3.unit (Bohr)
+    cell3.a = cell1.lattice_vectors()
     cell3.mesh = np.max((cell1.mesh, cell2.mesh), axis=0)
 
     ke_cutoff1 = cell1.ke_cutoff
@@ -833,7 +833,7 @@ def _mesh_inf_vaccum(cell):
     return int(meshz*.5 + .999) * 2
 
 
-class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
+class Cell(mole.MoleBase):
     '''A Cell object holds the basic information of a crystal.
 
     Attributes:
@@ -892,8 +892,7 @@ class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
     }
 
     def __init__(self, **kwargs):
-        mole.GTOIntegralMixin.__init__(self)
-        mole.GlobalOptionMixin.__init__(self)
+        mole.MoleBase.__init__(self)
         self.a = None # lattice vectors, (a1,a2,a3)
         # if set, defines a spherical cutoff
         # of fourier components, with .5 * G**2 < ke_cutoff
@@ -979,6 +978,11 @@ class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
         from pyscf.pbc import __all__  # noqa
         from pyscf.pbc import scf, dft
         from pyscf.dft import XC
+
+        for mod in (scf, dft):
+            method = getattr(mod, key, None)
+            if callable(method):
+                return method(self)
 
         if key[0] == 'K':  # with k-point sampling
             if 'TD' in key[:4]:
@@ -1128,7 +1132,7 @@ class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
             self.symmorphic = symmorphic
 
         dump_input = dump_input and not self._built and self.verbose > logger.NOTE
-        mole.GlobalOptionMixin.build(self, dump_input, parse_arg, *args, **kwargs)
+        mole.MoleBase.build(self, dump_input, parse_arg, *args, **kwargs)
 
         exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
         if self.exp_to_discard is None:

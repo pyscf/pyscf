@@ -673,14 +673,14 @@ def _get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol, dijs_lst, omega,
     where i and j shls are separated by d specified by "dijs_lst".
     """
 
-    if isinstance(bas_lst_or_mol, mol_gto.mole.Mole):
+    if isinstance(bas_lst_or_mol, mol_gto.mole.MoleBase):
         mol = bas_lst_or_mol
     else:
         bas_lst = bas_lst_or_mol
         mol = MoleNoBasSort()
         mol.build(dump_input=False, parse_arg=False, atom="H 0 0 0", basis=bas_lst, spin=None)
 
-    if isinstance(auxbas_lst_or_auxmol, mol_gto.mole.Mole):
+    if isinstance(auxbas_lst_or_auxmol, mol_gto.mole.MoleBase):
         auxmol = auxbas_lst_or_auxmol
     else:
         auxbas_lst = auxbas_lst_or_auxmol
@@ -1002,7 +1002,7 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     '''
     log = logger.Logger(cell.stdout, cell.verbose)
 
-    if isinstance(auxcell_or_auxbasis, mol_gto.Mole):
+    if isinstance(auxcell_or_auxbasis, mol_gto.MoleBase):
         auxcell = auxcell_or_auxbasis
     else:
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)

@@ -16,7 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 
-from pyscf.gto.basis import parse
+from pyscf.gto.basis.parse_cp2k_pp import parse
 from pyscf.gto.basis import load_pseudo as load
 from pyscf.gto.basis import PP_ALIAS as ALIAS
 from pyscf.pbc.gto.pseudo.pp import *

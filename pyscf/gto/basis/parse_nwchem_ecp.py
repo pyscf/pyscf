@@ -22,6 +22,8 @@ Parsers for basis set in the NWChem format
 
 __all__ = ['parse', 'load', 'convert_ecp_to_nwchem']
 
+import numpy
+import numpy as np
 import re
 from pyscf.data.elements import _std_symbol
 from pyscf.lib.exceptions import BasisNotFoundError
@@ -78,14 +80,20 @@ def _parse_ecp(raw_ecp):
         if not dat or dat.startswith('#'): # comment line
             continue
         elif dat[0].isalpha():
-            key = dat.split()[1].upper()
+            keys = dat.split()
+            if len(keys) == 1:
+                key = keys[0].upper()
+            else:
+                key = keys[1].upper()
             if key == 'NELEC':
                 nelec = int(dat.split()[2])
                 continue
             elif key == 'UL':
                 ecp_add.append([-1])
-            else:
+            elif key in MAPSPDF:
                 ecp_add.append([MAPSPDF[key]])
+            else:
+                raise BasisNotFoundError('Not basis data')
             # up to r^6
             by_ang = [[] for i in range(7)]
             ecp_add[-1].append(by_ang)
@@ -99,6 +107,8 @@ def _parse_ecp(raw_ecp):
                     raise ValueError('Failed to parse ecp %s' % line)
                 else:
                     coef = list(eval(','.join(line[1:])))
+            except Exception:
+                raise BasisNotFoundError('Not basis data')
             by_ang[l].append(coef)
 
     if nelec is None:

@@ -26,6 +26,7 @@ __all__ = ['parse', 'load', 'parse_ecp', 'load_ecp',
 
 import re
 import numpy
+import numpy as np
 import scipy.linalg
 from pyscf.data.elements import _std_symbol
 from pyscf.lib.exceptions import BasisNotFoundError
@@ -105,28 +106,34 @@ def _parse(raw_basis, optimize=True):
         if not dat or dat.startswith('#'):
             continue
         elif dat[0].isalpha():
-            key = dat.split()[1].upper()
+            keys = dat.split()
+            if len(keys) == 1:
+                key = keys[0].upper()
+            else:
+                key = keys[1].upper()
             if key == 'SP':
                 basis_parsed[0].append([0])
                 basis_parsed[1].append([1])
-            else:
+            elif key in MAPSPDF:
                 l = MAPSPDF[key]
                 current_basis = [l]
                 basis_parsed[l].append(current_basis)
+            else:
+                raise BasisNotFoundError('Not basis data')
         else:
             dat = dat.replace('D','e').split()
             try:
                 dat = [float(x) for x in dat]
             except ValueError:
                 if DISABLE_EVAL:
-                    raise ValueError('Failed to parse basis %s' % line)
+                    raise ValueError('Failed to parse %s' % line)
                 else:
                     dat = list(eval(','.join(dat)))
             except Exception as e:
                 raise BasisNotFoundError('\n' + str(e) +
                                          '\nor the required basis file not existed.')
             if key is None:
-                raise RuntimeError('Failed to parse basis')
+                raise BasisNotFoundError('Not basis data')
             elif key == 'SP':
                 basis_parsed[0][-1].append([dat[0], dat[1]])
                 basis_parsed[1][-1].append([dat[0], dat[2]])

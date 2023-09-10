@@ -1341,7 +1341,7 @@ class SCF_Scanner(lib.SinglePointScanner):
         self._last_mol_fp = mf_obj.mol.ao_loc
 
     def __call__(self, mol_or_geom, **kwargs):
-        if isinstance(mol_or_geom, gto.Mole):
+        if isinstance(mol_or_geom, gto.MoleBase):
             mol = mol_or_geom
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)
@@ -1637,10 +1637,6 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     @lib.with_doc(init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
-        if isinstance(chkfile, gto.Mole):
-            raise TypeError('''
-    You see this error message because of the API updates.
-    The first argument needs to be the name of a chkfile.''')
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
     def from_chk(self, chkfile=None, project=None):

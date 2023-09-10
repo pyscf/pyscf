@@ -19,7 +19,7 @@ import numpy as np
 from functools import reduce
 from itertools import product
 from scipy import linalg
-from pyscf.gto import Mole
+from pyscf import gto
 from pyscf.grad import lagrange
 from pyscf.mcscf.addons import StateAverageMCSCFSolver, StateAverageFCISolver
 from pyscf.mcscf.addons import StateAverageMixFCISolver, state_average_mix_
@@ -374,7 +374,8 @@ class CASSCF_GradScanner(lib.GradScanner):
         self._converged = False
 
     def __call__(self, mol_or_geom, **kwargs):
-        if isinstance(mol_or_geom, Mole):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
             mol = mol_or_geom
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)
