@@ -129,7 +129,7 @@ def HF(mol, *args):
 HF.__doc__ = '''
 A wrap function to create SCF class (RHF or UHF).\n
 ''' + hf.SCF.__doc__
-gto.Mole.HF = HF
+gto.Mole.HF = property(HF)
 
 def RHF(mol, *args):
     if mol.spin == 0:
@@ -140,7 +140,7 @@ def RHF(mol, *args):
     else:
         return ROHF(mol, *args)
 RHF.__doc__ = hf.RHF.__doc__
-gto.Mole.RHF = RHF
+gto.Mole.RHF = property(RHF)
 
 def ROHF(mol, *args):
     if mol.nelectron == 1:
@@ -153,7 +153,7 @@ def ROHF(mol, *args):
     else:
         return hf_symm.ROHF(mol, *args)
 ROHF.__doc__ = rohf.ROHF.__doc__
-gto.Mole.ROHF = ROHF
+gto.Mole.ROHF = property(ROHF)
 
 def UHF(mol, *args):
     if mol.nelectron == 1:
@@ -166,7 +166,7 @@ def UHF(mol, *args):
     else:
         return uhf_symm.UHF(mol, *args)
 UHF.__doc__ = uhf.UHF.__doc__
-gto.Mole.UHF = UHF
+gto.Mole.UHF = property(UHF)
 
 def GHF(mol, *args):
     if mol.nelectron == 1:
@@ -179,7 +179,7 @@ def GHF(mol, *args):
     else:
         return ghf_symm.GHF(mol, *args)
 GHF.__doc__ = ghf.GHF.__doc__
-gto.Mole.GHF = GHF
+gto.Mole.GHF = property(GHF)
 
 def DHF(mol, *args):
     if mol.nelectron == 1:
@@ -189,7 +189,7 @@ def DHF(mol, *args):
     else:
         return dhf.DHF(mol, *args)
 DHF.__doc__ = dhf.DHF.__doc__
-gto.Mole.DHF = DHF
+gto.Mole.DHF = property(DHF)
 
 
 def X2C(mol, *args):
@@ -199,7 +199,7 @@ def X2C(mol, *args):
         return x2c.RHF(mol, *args)
     else:
         return x2c.UHF(mol, *args)
-gto.Mole.X2C = X2C
+gto.Mole.X2C = gto.Mole.X2C_HF = property(X2C)
 
 def sfx2c1e(mf):
     '''spin-free (the scalar part) X2C with 1-electron X-matrix'''

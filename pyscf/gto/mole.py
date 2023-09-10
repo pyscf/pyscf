@@ -56,10 +56,6 @@ from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
 from pyscf.lib.exceptions import BasisNotFoundError, PointGroupSymmetryError
 import warnings
 
-# For code compatibility in python-2 and python-3
-if sys.version_info >= (3,):
-    unicode = str
-
 
 # for _atm, _bas, _env
 CHARGE_OF  = 0
@@ -374,7 +370,7 @@ def format_atom(atoms, origin=0, axes=None,
             raise ValueError('Coordinates error in %s' % line)
         return [_atom_symbol(dat[0]), coords]
 
-    if isinstance(atoms, (str, unicode)):
+    if isinstance(atoms, str):
         # The input atoms points to a geometry file
         if os.path.isfile(atoms):
             try:
@@ -397,7 +393,7 @@ def format_atom(atoms, origin=0, axes=None,
     else:
         fmt_atoms = []
         for atom in atoms:
-            if isinstance(atom, (str, unicode)):
+            if isinstance(atom, str):
                 if atom.lstrip()[0] != '#':
                     fmt_atoms.append(str2atm(atom.replace(',',' ')))
             else:
@@ -412,7 +408,7 @@ def format_atom(atoms, origin=0, axes=None,
     if axes is None:
         axes = numpy.eye(3)
 
-    if isinstance(unit, (str, unicode)):
+    if isinstance(unit, str):
         if is_au(unit):
             unit = 1.
         else:
@@ -704,7 +700,7 @@ def format_ecp(ecp_tab):
     for atom, atom_ecp in ecp_tab.items():
         symb = _atom_symbol(atom)
 
-        if isinstance(atom_ecp, (str, unicode)):
+        if isinstance(atom_ecp, str):
             stdsymb = _std_symbol_without_ghost(symb)
             ecp_dat = basis.load_ecp(str(atom_ecp), stdsymb)
             if ecp_dat is None or len(ecp_dat) == 0:
@@ -1048,7 +1044,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, nucprop={}):
         if nucmod:
             if nucmod is None:
                 nuclear_model = NUC_POINT
-            elif isinstance(nucmod, (int, str, unicode, types.FunctionType)):
+            elif isinstance(nucmod, (int, str, types.FunctionType)):
                 nuclear_model = _parse_nuc_mod(nucmod)
             elif ia+1 in nucmod:
                 nuclear_model = _parse_nuc_mod(nucmod[ia+1])
@@ -1273,7 +1269,7 @@ def dumps(mol):
             dic1 = {}
             for k,v in dic.items():
                 if (v is None or
-                    isinstance(v, (str, unicode, bool, int, float))):
+                    isinstance(v, (str, bool, int, float))):
                     dic1[k] = v
                 elif isinstance(v, (list, tuple)):
                     dic1[k] = v   # Should I recursively skip_vaule?
@@ -1294,18 +1290,6 @@ def loads(molstr):
     # the numpy function array is used by eval function
     from numpy import array  # noqa
     moldic = json.loads(molstr)
-    if sys.version_info < (3,):
-        # Convert to utf8 because JSON loads function returns unicode.
-        def byteify(inp):
-            if isinstance(inp, dict):
-                return dict([(byteify(k), byteify(v)) for k, v in inp.iteritems()])
-            elif isinstance(inp, (tuple, list)):
-                return [byteify(x) for x in inp]
-            elif isinstance(inp, unicode):
-                return inp.encode('utf-8')
-            else:
-                return inp
-        moldic = byteify(moldic)
     mol = Mole()
     mol.__dict__.update(moldic)
     mol.atom = eval(mol.atom)
@@ -1603,7 +1587,7 @@ def sph_labels(mol, fmt=True, base=BASE):
                 label.append((ia+base, symb, '%d%s' % (n, strl),
                               str(param.REAL_SPHERIC[l][l+m])))
 
-    if isinstance(fmt, (str, unicode)):
+    if isinstance(fmt, str):
         return [(fmt % x) for x in label]
     elif fmt:
         return ['%d %s %s%-4s' % x for x in label]
@@ -1653,7 +1637,7 @@ def cart_labels(mol, fmt=True, base=BASE):
             for m in range(ncart):
                 label.append((ia+base, symb, '%d%s' % (n, strl), cartxyz[l][m]))
 
-    if isinstance(fmt, (str, unicode)):
+    if isinstance(fmt, str):
         return [(fmt % x) for x in label]
     elif fmt:
         return ['%d%3s %s%-4s' % x for x in label]
@@ -1708,7 +1692,7 @@ def spinor_labels(mol, fmt=True, base=BASE):
                     label.append((ia+base, symb, '%d%s%d/2' % (n, strl, l*2+1),
                                   '%d/2'%m))
 
-    if isinstance(fmt, (str, unicode)):
+    if isinstance(fmt, str):
         return [(fmt % x) for x in label]
     elif fmt:
         return ['%d %s %s,%-5s' % x for x in label]
@@ -2568,7 +2552,7 @@ class GTOIntegralMixin:
             mol.atom = atoms_or_coords
 
         if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
-            if isinstance(unit, (str, unicode)):
+            if isinstance(unit, str):
                 if is_au(unit):
                     unit = 1.
                 else:
@@ -3255,7 +3239,7 @@ class GlobalOptionMixin:
         if not DISABLE_GC:
             gc.collect()  # To release circular referred objects
 
-        if isinstance(dump_input, (str, unicode)):
+        if isinstance(dump_input, str):
             sys.stderr.write('Assigning the first argument %s to mol.atom\n' %
                              dump_input)
             dump_input, atom = True, dump_input
@@ -3431,8 +3415,7 @@ class GlobalOptionMixin:
                               '%16.12f %16.12f %16.12f Bohr  %4.1f\n'
                               % ((ia+1, _symbol(atom[0])) + coorda + coordb + (magmom,)))
         if self.nucmod:
-            if isinstance(self.nucmod, (int, str, unicode,
-                                        types.FunctionType)):
+            if isinstance(self.nucmod, (int, str, types.FunctionType)):
                 nucatms = [_symbol(atom[0]) for atom in self._atom]
             else:
                 nucatms = self.nucmod.keys()
@@ -3502,7 +3485,7 @@ class GlobalOptionMixin:
     def apply(self, fn, *args, **kwargs):
         if callable(fn):
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
-        elif isinstance(fn, (str, unicode)):
+        elif isinstance(fn, str):
             method = getattr(self, fn.upper())
             return method(*args, **kwargs)
         else:
@@ -3702,10 +3685,7 @@ class Mole(GTOIntegralMixin, GlobalOptionMixin, lib.StreamObject):
         else:
             mf = scf.HF(self)
 
-        if not hasattr(mf.__class__, key):
-            raise AttributeError('Mole object does not have method %s' % key)
-
-        method = getattr(mf, key, None)
+        method = getattr(mf, key)
 
         # Initialize SCF object for post-SCF methods if applicable
         if self.nelectron != 0:
@@ -3722,7 +3702,7 @@ class Mole(GTOIntegralMixin, GlobalOptionMixin, lib.StreamObject):
         # TODO: Consider ECP info in point group symmetry initialization
         self.topgroup, orig, axes = symm.detect_symm(self._atom, self._basis)
 
-        if isinstance(self.symmetry, (str, unicode)):
+        if isinstance(self.symmetry, str):
             self.symmetry = str(symm.std_symb(self.symmetry))
             groupname = None
             if abs(axes - np.eye(3)).max() < symm.TOLERANCE:
@@ -3848,7 +3828,7 @@ def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT
     if callable(str_or_int_or_fn):
         nucmod = str_or_int_or_fn
-    elif (isinstance(str_or_int_or_fn, (str, unicode)) and
+    elif (isinstance(str_or_int_or_fn, str) and
           str_or_int_or_fn[0].upper() == 'G'): # 'gauss_nuc'
         nucmod = NUC_GAUSS
     elif str_or_int_or_fn != 0:

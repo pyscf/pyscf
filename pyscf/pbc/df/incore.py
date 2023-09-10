@@ -66,9 +66,10 @@ def aux_e2(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', comp=None,
     Returns:
         (nao_pair, naux) array
     '''
-    if isinstance(auxcell_or_auxbasis, gto.Mole):
+    if isinstance(auxcell_or_auxbasis, (gto.Mole, pbcgto.Cell)):
         auxcell = auxcell_or_auxbasis
     else:
+        assert isinstance(auxcell_or_auxbasis, str)
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
 
 # For some unkown reasons, the pre-decontracted basis 'is slower than

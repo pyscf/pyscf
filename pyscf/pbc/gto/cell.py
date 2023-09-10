@@ -42,12 +42,6 @@ WITH_GAMMA = getattr(__config__, 'pbc_gto_cell_make_kpts_with_gamma', True)
 EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
                         [1.0, 0.5, 0.25, 0.1, 0])
 
-
-# For code compatiblity in python-2 and python-3
-if sys.version_info >= (3,):
-    unicode = str
-    long = int
-
 libpbc = _pbcintor.libpbc
 
 def M(*args, **kwargs):
@@ -112,7 +106,7 @@ def dumps(cell):
             dic1 = {}
             for k,v in dic.items():
                 if (v is None or
-                    isinstance(v, (str, unicode, bool, int, long, float))):
+                    isinstance(v, (str, bool, int, float))):
                     dic1[k] = v
                 elif isinstance(v, (list, tuple)):
                     dic1[k] = v   # Should I recursively skip_vaule?
@@ -132,18 +126,6 @@ def loads(cellstr):
     '''
     from numpy import array  # noqa
     celldic = json.loads(cellstr)
-    if sys.version_info < (3,):
-        # Convert to utf8 because JSON loads fucntion returns unicode.
-        def byteify(inp):
-            if isinstance(inp, dict):
-                return dict([(byteify(k), byteify(v)) for k, v in inp.iteritems()])
-            elif isinstance(inp, (tuple, list)):
-                return [byteify(x) for x in inp]
-            elif isinstance(inp, unicode):
-                return inp.encode('utf-8')
-            else:
-                return inp
-        celldic = byteify(celldic)
     cell = Cell()
     cell.__dict__.update(celldic)
     cell.atom = eval(cell.atom)
@@ -930,8 +912,8 @@ class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
 # These attributes are initialized by build function if not specified
         self.mesh = None
         self.rcut = None
-        if kwargs:
-            self.__dict__.update(kwargs)
+        for key val in kwargs.items():
+            setattr(self, key, val)
 
     @property
     def mesh(self):
@@ -1027,12 +1009,10 @@ class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
             else:
                 mf = scf.HF(self)
 
-        if not hasattr(mf.__class__, key):
-            raise AttributeError('Cell object does not have method %s' % key)
-
         method = getattr(mf, key)
 
-        mf.run()
+        if self.nelectron != 0:
+            mf.run()
         return method
 
     tot_electrons = tot_electrons
@@ -1309,7 +1289,7 @@ class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
     def h(self, x):
         warnings.warn('cell.h is deprecated.  It is replaced by the '
                       '(row-based) lattice vectors cell.a:  cell.a = cell.h.T\n')
-        if isinstance(x, (str, unicode)):
+        if isinstance(x, str):
             x = x.replace(';',' ').replace(',',' ').replace('\n',' ')
             self.a = np.asarray([float(z) for z in x.split()]).reshape(3,3).T
         else:
@@ -1365,12 +1345,12 @@ class Cell(mole.GTOIntegralMixin, mole.GlobalOptionMixin, lib.StreamObject):
         Return 3x3 array in which each row represents one direction of the
         lattice vectors (unit in Bohr)
         '''
-        if isinstance(self.a, (str, unicode)):
+        if isinstance(self.a, str):
             a = self.a.replace(';',' ').replace(',',' ').replace('\n',' ')
             a = np.asarray([float(x) for x in a.split()]).reshape(3,3)
         else:
             a = np.asarray(self.a, dtype=np.double)
-        if isinstance(self.unit, (str, unicode)):
+        if isinstance(self.unit, str):
             if is_au(self.unit):
                 return a
             else:

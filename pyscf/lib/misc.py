@@ -652,20 +652,6 @@ class StreamObject(object):
 
     view = view
 
-    def add_keys(self, **kwargs):
-        '''Add or update attributes of the object and register these attributes in ._keys'''
-        if kwargs:
-            keys = self._keys.union(kwargs.keys())
-            self.__dict__.update(**kwargs)
-            self._keys = keys
-        return self
-
-    @classmethod
-    def dir_attributes(cls):
-        '''Returns all attributes defined in class'''
-        return {key for key, val in vars(cls).items()
-                if not (key.startswith('__') or callable(val))}
-
     def copy(self):
         '''Returns a shallow copy'''
         return self.view(self.__class__)

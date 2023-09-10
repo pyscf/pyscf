@@ -942,14 +942,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
         from pyscf.scf import hf
         if isinstance(mf, hf.KohnShamDFT):
-            raise RuntimeError('CCSD Warning: The first argument mf is a DFT object. '
-                               'CCSD calculation should be initialized with HF object.\n'
-                               'DFT object can be converted to HF object with '
-                               'the code:\n'
-                               '    mf_hf = mol.HF()\n'
-                               '    if getattr(mf_dft, "with_x2c", False):\n'
-                               '        mf_hf = mf_hf.x2c()\n'
-                               '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
+            raise RuntimeError(
+                'CCSD Warning: The first argument mf is a DFT object. '
+                'CCSD calculation should be initialized with HF object.\n'
+                'DFT can be converted to HF object with the mf.to_hf() method\n')
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
         if mo_occ is None: mo_occ = mf.mo_occ

@@ -43,10 +43,6 @@ MO_BASE = getattr(__config__, 'MO_BASE', 1)
 TIGHT_GRAD_CONV_TOL = getattr(__config__, 'scf_hf_kernel_tight_grad_conv_tol', True)
 MUTE_CHKFILE = getattr(__config__, 'scf_hf_SCF_mute_chkfile', False)
 
-# For code compatibility in python-2 and python-3
-if sys.version_info >= (3,):
-    unicode = str
-
 def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
            dump_chk=True, dm0=None, callback=None, conv_check=True, **kwargs):
     '''kernel: the SCF driver.
@@ -1652,7 +1648,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
 
     def get_init_guess(self, mol=None, key='minao'):
-        if not isinstance(key, (str, unicode)):
+        if not isinstance(key, str):
             return key
 
         key = key.lower()
@@ -1946,7 +1942,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     def apply(self, fn, *args, **kwargs):
         if callable(fn):
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
-        elif isinstance(fn, (str, unicode)):
+        elif isinstance(fn, str):
             from pyscf import mp, cc, ci, mcscf, tdscf
             for mod in (mp, cc, ci, mcscf, tdscf):
                 method = getattr(mod, fn.upper(), None)

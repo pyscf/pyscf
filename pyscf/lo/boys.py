@@ -151,10 +151,6 @@ class OrbitalLocalizer(lib.StreamObject, ciah.CIAHOptimizerMixin):
         self.verbose = mol.verbose
         self.mo_coeff = mo_coeff
 
-        self._keys = set.union(OrbitalLocalizer.dir_attributes(),
-                               ciah.CIAHOptimizerMixin.dir_attributes(),
-                               self.__dict__)
-
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('\n')

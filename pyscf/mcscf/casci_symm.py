@@ -116,7 +116,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
             if getattr(mo_coeff, 'degen_mapping', None) is not None:
                 degen_mapping = mo_coeff.degen_mapping[ncore:nocc] - ncore
             else:
-                h1e = numpy.diag (mc.h1e_for_cas (mo_coeff=mo_coeff)[0])
+                h1e = numpy.diag (mc.get_h1eff (mo_coeff=mo_coeff)[0])
                 degen_mapping = map_degeneracy (h1e, orbsym[ncore:nocc])
             mc.fcisolver.orbsym = lib.tag_array(
                 orbsym[ncore:nocc], degen_mapping=degen_mapping)

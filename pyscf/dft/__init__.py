@@ -66,7 +66,8 @@ def KS(mol, xc='LDA,VWN'):
 KS.__doc__ = '''
 A wrap function to create DFT object (RKS or UKS).\n
 ''' + rks.RKS.__doc__
-gto.Mole.KS = gto.Mole.DFT = DFT = KS
+gto.Mole.KS = gto.Mole.DFT = property(KS)
+DFT = KS
 
 def RKS(mol, xc='LDA,VWN'):
     if mol.spin == 0:
@@ -77,7 +78,7 @@ def RKS(mol, xc='LDA,VWN'):
     else:
         return ROKS(mol, xc)
 RKS.__doc__ = rks.RKS.__doc__
-gto.Mole.RKS = RKS
+gto.Mole.RKS = property(RKS)
 
 def ROKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname == 'C1':
@@ -85,7 +86,7 @@ def ROKS(mol, xc='LDA,VWN'):
     else:
         return rks_symm.ROKS(mol, xc)
 ROKS.__doc__ = roks.ROKS.__doc__
-gto.Mole.ROKS = ROKS
+gto.Mole.ROKS = property(ROKS)
 
 def UKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname == 'C1':
@@ -93,7 +94,7 @@ def UKS(mol, xc='LDA,VWN'):
     else:
         return uks_symm.UKS(mol, xc)
 UKS.__doc__ = uks.UKS.__doc__
-gto.Mole.UKS = UKS
+gto.Mole.UKS = property(UKS)
 
 def GKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname == 'C1':
@@ -101,7 +102,7 @@ def GKS(mol, xc='LDA,VWN'):
     else:
         return gks_symm.GKS(mol, xc)
 GKS.__doc__ = gks.GKS.__doc__
-gto.Mole.GKS = GKS
+gto.Mole.GKS = property(GKS)
 
 def DKS(mol, xc='LDA,VWN'):
     from pyscf.scf import dhf
@@ -110,10 +111,11 @@ def DKS(mol, xc='LDA,VWN'):
     else:
         return dks.UDKS(mol, xc=xc)
 
-gto.Mole.DKS = DKS
-gto.Mole.UDKS = UDKS = dks.UDKS
-gto.Mole.RDKS = RDKS = dks.RDKS
-
+UDKS = dks.UDKS
+RDKS = dks.RDKS
+gto.Mole.DKS = property(DKS)
+gto.Mole.UDKS = property(UDKS)
+gto.Mole.RDKS = property(RDKS)
 
 def X2C(mol, *args):
     '''X2C Kohn-Sham'''
@@ -123,4 +125,4 @@ def X2C(mol, *args):
         return dft.RKS(mol, *args)
     else:
         return dft.UKS(mol, *args)
-gto.Mole.X2C_KS = X2C
+gto.Mole.X2C_KS = property(X2C)
