@@ -1189,13 +1189,13 @@ def copy(mol, deep=True):
     Deepcopy is utilized here to ensure that operations on the copied object do
     not affect the original object.
     '''
-    import copy
     # Avoid copy.copy(mol) for shallow copy because copy.copy automatically
     # calls __copy__, __reduce__, __getstate__, __setstate__ methods
     newmol = mol.view(mol.__class__)
     if not deep:
         return newmol
 
+    import copy
     newmol._atm    = numpy.copy(mol._atm)
     newmol._bas    = numpy.copy(mol._bas)
     newmol._env    = numpy.copy(mol._env)
@@ -2434,6 +2434,10 @@ class MoleBase(lib.StreamObject):
     def loads_(self, molstr):
         self.__dict__.update(loads(molstr).__dict__)
         return self
+
+    # when pickling, serialize as a JSON-formatted string
+    __getstate__ = dumps
+    __setstate__ = loads_
 
     def build(self, dump_input=True, parse_arg=ARGPARSE,
               verbose=None, output=None, max_memory=None,

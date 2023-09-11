@@ -844,7 +844,9 @@ def make_class(bases, name=None, attrs=None):
 
 def set_class(obj, bases, name=None, attrs=None):
     '''Change the class of an object'''
-    obj.__class__ = make_class(bases, name, attrs)
+    cls = make_class(bases, name, attrs)
+    cls.__module__ = obj.__class__.__module__
+    obj.__class__ = cls
     return obj
 
 def drop_class(cls, base_cls, name_mixin=None):
