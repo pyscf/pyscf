@@ -239,10 +239,10 @@ class Gradients(rhf_grad.GradientsBase):
     cphf_max_cycle = getattr(__config__, 'grad_tdrhf_Gradients_cphf_max_cycle', 20)
     cphf_conv_tol = getattr(__config__, 'grad_tdrhf_Gradients_cphf_conv_tol', 1e-8)
 
-    _keys = set((
+    _keys = {
         'cphf_max_cycle', 'cphf_conv_tol',
         'mol', 'base', 'chkfile', 'state', 'atmlst', 'de',
-    ))
+    }
 
     def __init__(self, td):
         self.verbose = td.verbose

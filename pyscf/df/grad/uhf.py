@@ -31,6 +31,9 @@ from pyscf.df.grad import rhf as df_rhf_grad
 
 class Gradients(uhf_grad.Gradients):
     '''Unrestricted density-fitting Hartree-Fock gradients'''
+
+    _keys = {'with_df', 'auxbasis_response'}
+
     def __init__(self, mf):
         # Whether to include the response of DF auxiliary basis when computing
         # nuclear gradients of J/K matrices

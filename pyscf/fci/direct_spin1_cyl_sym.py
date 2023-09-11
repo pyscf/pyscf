@@ -62,7 +62,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
 
     wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
     wfnsym_in_d2h = wfnsym % 10
-    wfn_ungerade = wfnsym_in_d2h >= 4
+    wfn_ungerade = int(wfnsym_in_d2h >= 4)
     orbsym_d2h = orbsym % 10
     orb_ungerade = orbsym_d2h >= 4
     if np.any(orb_ungerade) or wfn_ungerade:

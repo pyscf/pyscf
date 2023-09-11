@@ -275,7 +275,7 @@ class GradientsBase(lib.StreamObject):
     Basic nuclear gradient functions for non-relativistic methods
     '''
 
-    _keys = set(('mol', 'base', 'unit', 'atmlst', 'de'))
+    _keys = {'mol', 'base', 'unit', 'atmlst', 'de'}
 
     def __init__(self, method):
         self.verbose = method.verbose

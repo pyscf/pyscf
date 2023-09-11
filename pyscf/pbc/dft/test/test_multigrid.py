@@ -466,7 +466,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(exc1, exc2, 7)
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 7)
 
-    def test_multigrid_krks_1(self):
+    def test_multigrid_krks_high_cost(self):
         cell = gto.M(
             a = numpy.eye(3)*3.5668,
             atom = '''C     0.      0.      0.

@@ -179,6 +179,8 @@ class CASSCF_GradScanner(lib.GradScanner):
 class Gradients(casci_grad.Gradients):
     '''Non-relativistic restricted Hartree-Fock gradients'''
 
+    _keys = {'with_df', 'auxbasis_response'}
+
     def __init__(self, mc):
         self.with_df = mc.with_df
         self.auxbasis_response = True

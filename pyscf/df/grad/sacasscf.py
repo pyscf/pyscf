@@ -351,6 +351,8 @@ class CASSCF_GradScanner(lib.GradScanner):
 
 class Gradients (sacasscf_grad.Gradients):
 
+    _keys = {'with_df', 'auxbasis_response'}
+
     def __init__(self, mc, state=None):
         self.auxbasis_response = True
         sacasscf_grad.Gradients.__init__(self, mc, state=state)

@@ -158,12 +158,12 @@ class KnownValues(unittest.TestCase):
 
         celldims = [2, 1, 1]
         scell = pbctools.super_cell(cell, celldims)
-        e_nuc_2 = scell.energy_nuc() / np.product(celldims)
+        e_nuc_2 = scell.energy_nuc() / np.prod(celldims)
         self.assertAlmostEqual(e_nuc_1, e_nuc_2, 8)
 
         celldims = [2, 2, 1]
         scell = pbctools.super_cell(cell, celldims)
-        e_nuc_2 = scell.energy_nuc() / np.product(celldims)
+        e_nuc_2 = scell.energy_nuc() / np.prod(celldims)
         self.assertAlmostEqual(e_nuc_1, e_nuc_2, 8)
 
     def test_ewald_2d_inf_vacuum(self):

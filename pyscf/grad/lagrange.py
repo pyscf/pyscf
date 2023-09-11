@@ -65,6 +65,10 @@ class Gradients (rhf_grad.GradientsBase):
 
     ####################### Child classes SHOULD overwrite the methods below ######################
 
+    _keys = {
+        'Lvec', 'nlag', 'level_shift', 'conv_atol', 'conv_rtol', 'max_cycle',
+    }
+
     def __init__(self, method, nlag):
         self._conv = False
         self.Lvec = None

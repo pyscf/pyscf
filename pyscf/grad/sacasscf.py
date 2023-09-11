@@ -401,6 +401,13 @@ class CASSCF_GradScanner(lib.GradScanner):
 
 class Gradients (lagrange.Gradients):
 
+    _keys = {
+        'ngorb', 'nroots', 'spin_states', 'na_states', 'nb_states', 'nroots',
+        'nci', 'state', 'eris', 'weights', 'e_states', 'max_cycle', 'ncas',
+        'e_cas', 'nelecas', 'mo_occ', 'mo_energy', 'mo_coeff', 'callback',
+        'chkfile', 'nlag', 'frozen', 'level_shift', 'extrasym', 'fcisolver',
+    }
+
     def __init__(self, mc, state=None):
         self.__dict__.update (mc.__dict__)
         nmo = mc.mo_coeff.shape[-1]
@@ -499,14 +506,12 @@ class Gradients (lagrange.Gradients):
             else:
                 solver_class = self.base.fcisolver._base_class
                 solver_obj = self.base.fcisolver
-            fcasscf.fcisolver = solver_class (self.base.mol)
-            fcasscf.fcisolver.__dict__.update (solver_obj.__dict__)
+            fcasscf.fcisolver = solver_obj.view(solver_class)
             fcasscf.fcisolver.nroots = 1
         # Spin penalty method is inapplicable to response calc'ns
         # It must be deactivated for Lagrange multipliers to converge
         if isinstance (fcasscf.fcisolver, SpinPenaltyFCISolver):
-            fcasscf.fcisolver = fcasscf.fcisolver.copy()
-            fcasscf.fcisolver.ss_penalty = 0
+            fcasscf.fcisolver = fcasscf.fcisolver.undo_fix_spin()
         fcasscf.__dict__.update (casscf_attr)
         fcasscf.nelecas = nelecas
         fcasscf.fcisolver.__dict__.update (fcisolver_attr)
@@ -776,6 +781,11 @@ class SACASLagPrec (lagrange.LagPrec):
         note: right-hand bra and R_I factor not included due to storage considerations
         Make the operand's matrix element with <K|Rci(I) before taking the dot product!
 '''
+
+    _keys = {
+        'level_shift', 'nroots', 'nlag', 'ngorb', 'spin_states', 'na_states',
+        'nb_states', 'grad_method', 'Rorb', 'ci', 'Rci', 'Rci_sa',
+    }
 
     # TODO: fix me (subclass me? wrap me?) for state_average_mix
     def __init__(self, Adiag=None, level_shift=None, ci=None, grad_method=None):

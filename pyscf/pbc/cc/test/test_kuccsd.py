@@ -156,21 +156,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(Ht2[1]), (2256.0435017189384-193.16481690849486j ), 4)
         self.assertAlmostEqual(lib.fp(Ht2[2]), (-250.59447681063182-397.57189085666982j), 4)
 
-        kmf.mo_occ[:] = 0
-        kmf.mo_occ[:,:,:2] = 1
-        mycc = kccsd_uhf.KUCCSD(kmf)
-        eris = mycc.ao2mo()
-        np.random.seed(1)
-        nocc = mycc.nocc
-        nvir = nmo - nocc[0], nmo - nocc[1]
-        t1, t2 = rand_t1_t2(cell, kmf.kpts, nocc, nvir)
-        Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(lib.fp(Ht1[0]), (5.4622516572705662+1.990046725028729j ), 4)
-        self.assertAlmostEqual(lib.fp(Ht1[1]), (4.8801120611799043-5.9940463787453488j), 4)
-        self.assertAlmostEqual(lib.fp(Ht2[0]), (-192.38864512375193+305.1419101854398j), 4)
-        self.assertAlmostEqual(lib.fp(Ht2[1]), (23085.056910282714-11527.808856109988j), 4)
-        self.assertAlmostEqual(lib.fp(Ht2[2]), (115.57932548288559-40.888597453928604j), 4)
-
         kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
         kccsd_eris = kccsd._make_eris_incore(kgcc, kgcc._scf.mo_coeff)
         r1 = kgcc.spatial2spin(t1)

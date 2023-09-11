@@ -256,6 +256,9 @@ class CASCI_GradScanner(lib.GradScanner):
 
 class Gradients(rhf_grad.GradientsBase):
     '''Non-relativistic restricted Hartree-Fock gradients'''
+
+    _keys = {'state'}
+
     def __init__(self, mc):
         if isinstance(mc, StateAverageMCSCFSolver):
             self.state = None  # not a specific state

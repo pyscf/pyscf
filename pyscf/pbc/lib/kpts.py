@@ -273,7 +273,7 @@ def make_k4_ibz(kpts, sym='s1', return_ops=False):
             idx = np.lexsort(k4_s2.T[::-1,:])
             bz2ibz_s2 = np.arange(len(bz2ibz))
             for i in range(len(bz2ibz)):
-                bz2ibz_s2[i] = np.where(idx == ibz_s22ibz_s2_refine[ibz2ibz_s2[bz2ibz[i]]])[0]
+                bz2ibz_s2[i] = np.where(idx == ibz_s22ibz_s2_refine[ibz2ibz_s2[bz2ibz[i]]])[0][0]
             return k4_s2[idx], weight_s2[idx], bz2ibz_s2
         else:
             k4_s4 = []
