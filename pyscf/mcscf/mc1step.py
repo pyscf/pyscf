@@ -1331,7 +1331,7 @@ if __name__ == '__main__':
     from pyscf import fci
     from pyscf.mcscf import addons
 
-    mol = Mole()
+    mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"
     mol.atom = [

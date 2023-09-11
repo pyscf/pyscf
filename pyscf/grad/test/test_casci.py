@@ -462,4 +462,9 @@ class KnownValues(unittest.TestCase):
 
 if __name__ == "__main__":
     print("Tests for CASCI gradients")
-    unittest.main()
+    #unittest.main()
+    if 1:
+        setUpModule()
+        mc = mcscf.CASCI(mf, 4, 4)
+        mc = mcscf.addons.state_average_mix_(mc, [mc.fcisolver, mc.fcisolver], (.5, .5))
+        gs = mc.nuc_grad_method().as_scanner()

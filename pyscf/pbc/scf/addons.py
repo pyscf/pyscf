@@ -229,7 +229,7 @@ def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
 def smearing_(mf, *args, **kwargs):
     mf1 = smearing(mf, *args, **kwargs)
     mf.__class__ = mf1.__class__
-    mf.__dict__.update(mf1.__dict__)
+    mf.__dict__ = mf1.__dict__
     return mf
 
 def canonical_occ_(mf, nelec=None):

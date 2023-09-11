@@ -37,9 +37,12 @@ from pyscf.pbc.scf import newton_ah
 from pyscf.pbc.scf import addons
 from pyscf.pbc.lib import kpts as libkpts
 
-gto.Cell.GHF = GHF = ghf.GHF
-gto.Cell.UHF = UHF = uhf.UHF
-gto.Cell.ROHF = ROHF = rohf.ROHF
+GHF = ghf.GHF
+UHF = uhf.UHF
+ROHF = rohf.ROHF
+gto.Cell.GHF = property(GHF)
+gto.Cell.UHF = property(UHF)
+gto.Cell.ROHF = property(ROHF)
 
 def RHF(cell, *args, **kwargs):
     if cell.spin == 0:
@@ -47,7 +50,7 @@ def RHF(cell, *args, **kwargs):
     else:
         return rohf.ROHF(cell, *args, **kwargs)
 RHF.__doc__ = rhf.RHF.__doc__
-gto.Cell.RHF = RHF
+gto.Cell.RHF = property(RHF)
 
 #KRHF = krhf.KRHF  # KRHF supports cell.spin != 0 if number of k-points is even
 def KRHF(cell, *args, **kwargs):
@@ -58,7 +61,7 @@ def KRHF(cell, *args, **kwargs):
         if isinstance(kwargs['kpts'], libkpts.KPoints):
             return khf_ksymm.KRHF(cell, *args, **kwargs)
     return krhf.KRHF(cell, *args, **kwargs)
-gto.Cell.KRHF = KRHF
+gto.Cell.KRHF = property(KRHF)
 
 def KUHF(cell, *args, **kwargs):
     for arg in args:
@@ -68,9 +71,10 @@ def KUHF(cell, *args, **kwargs):
         if isinstance(kwargs['kpts'], libkpts.KPoints):
             return kuhf_ksymm.KUHF(cell, *args, **kwargs)
     return kuhf.KUHF(cell, *args, **kwargs)
-gto.Cell.KUHF = KUHF
+gto.Cell.KUHF = property(KUHF)
 
 KROHF = krohf.KROHF
+gto.Cell.KROHF = property(KROHF)
 
 #KGHF = kghf.KGHF
 def KGHF(cell, *args, **kwargs):
@@ -81,7 +85,7 @@ def KGHF(cell, *args, **kwargs):
         if isinstance(kwargs['kpts'], libkpts.KPoints):
             return kghf_ksymm.KGHF(cell, *args, **kwargs)
     return kghf.KGHF(cell, *args, **kwargs)
-gto.Cell.KGHF = KGHF
+gto.Cell.KGHF = property(KGHF)
 
 newton = newton_ah.newton
 
@@ -90,14 +94,14 @@ def HF(cell, *args, **kwargs):
         return rhf.RHF(cell, *args, **kwargs)
     else:
         return uhf.UHF(cell, *args, **kwargs)
-gto.Cell.HF = HF
+gto.Cell.HF = property(HF)
 
 def KHF(cell, *args, **kwargs):
     if cell.spin == 0:
         return KRHF(cell, *args, **kwargs)
     else:
         return KUHF(cell, *args, **kwargs)
-gto.Cell.KHF = KHF
+gto.Cell.KHF = property(KHF)
 
 
 def KS(cell, *args, **kwargs):

@@ -275,7 +275,9 @@ class KnownValues(unittest.TestCase):
         dm1 = mc.analyze()
         self.assertAlmostEqual(lib.fp(dm1[0]), 0.52396929381500434, 4)
 
-        self.assertRaises(TypeError, mc.state_average_, (.64,.36))
+        mc = mc.state_average((.64,.36)).run()
+        self.assertAlmostEqual(mc.e_tot, -108.83342083775061, 7)
+        self.assertAlmostEqual(mc.e_average, -108.83342083775061, 7)
 
     def test_state_average_fci_dmrg(self):
         fcisolver1 = fci.direct_spin1_symm.FCISolver(mol)

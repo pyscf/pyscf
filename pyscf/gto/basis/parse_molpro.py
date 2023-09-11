@@ -24,7 +24,6 @@ __all__ = ['parse', 'load']
 
 import re
 import numpy
-import numpy as np
 
 try:
     from pyscf.gto.basis.parse_nwchem import optimize_contraction
@@ -155,10 +154,7 @@ def _parse_ecp(raw_ecp):
             try:
                 coef = [float(x) for x in line[1:]]
             except ValueError:
-                if DISABLE_EVAL:
-                    raise ValueError('Failed to parse ecp %s' % line)
-                else:
-                    coef = list(eval(','.join(line[1:])))
+                raise ValueError('Failed to parse ecp %s' % line)
             r_orders[order].append(coef)
         return r_orders
 

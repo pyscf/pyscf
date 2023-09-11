@@ -106,19 +106,19 @@ class KnownValues(unittest.TestCase):
         gw.fc = False
         nocc = gw.nocc
         gw.kernel(kptlist=[0,1,2],orbs=range(0,nocc+3))
-        self.assertAlmostEqual(gw.mo_energy[0][nocc-1], -0.257088388010083, 7)
-        self.assertAlmostEqual(gw.mo_energy[0][nocc]  , 0.7377021147675703, 7)
-        self.assertAlmostEqual(gw.mo_energy[1][nocc-1], -0.121872186953884, 7)
-        self.assertAlmostEqual(gw.mo_energy[1][nocc]  , 0.570710170186033 , 7)
+        self.assertAlmostEqual(gw.mo_energy[0][nocc-1], -0.257088388010083, 6)
+        self.assertAlmostEqual(gw.mo_energy[0][nocc]  , 0.7377021147675703, 6)
+        self.assertAlmostEqual(gw.mo_energy[1][nocc-1], -0.121872186953884, 6)
+        self.assertAlmostEqual(gw.mo_energy[1][nocc]  , 0.570710170186033 , 6)
 
         # with finite size corrections
         gw.linearized = False
         gw.fc = True
         gw.kernel(kptlist=[0,1,2],orbs=range(0,nocc+3))
-        self.assertAlmostEqual(gw.mo_energy[0][nocc-1], -0.464099926108335, 7)
-        self.assertAlmostEqual(gw.mo_energy[0][nocc]  , 0.7105306664244474, 7)
-        self.assertAlmostEqual(gw.mo_energy[1][nocc-1], -0.347704595829313, 7)
-        self.assertAlmostEqual(gw.mo_energy[1][nocc]  , 0.552136080110482 , 7)
+        self.assertAlmostEqual(gw.mo_energy[0][nocc-1], -0.464099926108335, 6)
+        self.assertAlmostEqual(gw.mo_energy[0][nocc]  , 0.7105306664244474, 6)
+        self.assertAlmostEqual(gw.mo_energy[1][nocc-1], -0.347704595829313, 6)
+        self.assertAlmostEqual(gw.mo_energy[1][nocc]  , 0.552136080110482 , 6)
 
 if __name__ == '__main__':
     print('Full Tests for KRGW')

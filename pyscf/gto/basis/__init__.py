@@ -608,7 +608,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb,
                                       optimize=optimize)
-        except BasisNotFoundError as basis_err:
+        except BasisNotFoundError:
             pass
         except Exception:
             raise BasisNotFoundError(filename_or_basisname)
@@ -638,7 +638,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
             else:
                 return bse._orbital_basis(bse_obj)[0]
 
-        raise basis_err
+        raise BasisNotFoundError('Unknown basis format or basis name')
 
     if 'dat' in basmod:
         b = fload(join(basis_dir, basmod), symb, optimize)
@@ -669,20 +669,20 @@ def load_ecp(filename_or_basisname, symb):
 
     try:
         return parse_nwchem_ecp.parse(filename_or_basisname, symb)
-    except IndexError:
-        raise BasisNotFoundError(filename_or_basisname)
-    except BasisNotFoundError as basis_err:
+    except BasisNotFoundError:
         pass
+    except Exception:
+        raise BasisNotFoundError(filename_or_basisname)
 
     try:
         return parse_nwchem_ecp.parse(filename_or_basisname)
-    except IndexError:
-        raise BasisNotFoundError(f'Invalid ECP {filename_or_basisname}')
     except BasisNotFoundError:
         pass
+    except Exception:
+        raise BasisNotFoundError(f'Invalid ECP {filename_or_basisname}')
 
     # Last, a trial to access Basis Set Exchange database
-    from pyscf.basis import bse
+    from pyscf.gto.basis import bse
     if bse.basis_set_exchange is not None:
         try:
             bse_obj = bse.basis_set_exchange.api.get_basis(
@@ -692,7 +692,7 @@ def load_ecp(filename_or_basisname, symb):
         else:
             return bse._ecp_basis(bse_obj)[0]
 
-    raise basis_err
+    raise BasisNotFoundError('Unknown ECP format or ECP name')
 
 def load_pseudo(filename_or_basisname, symb):
     '''Parses PP database file
@@ -708,7 +708,9 @@ def load_pseudo(filename_or_basisname, symb):
 
     try:
         return parse_cp2k_pp.parse(filename_or_basisname)
-    except IndexError:
+    except BasisNotFoundError:
+        raise
+    except Exception:
         raise BasisNotFoundError(f'Invalid PP {filename_or_basisname}')
 
 def _load_external(module, filename_or_basisname, symb, **kwargs):

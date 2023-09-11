@@ -1143,7 +1143,6 @@ def _cp(a):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import ao2mo
 
     mol = gto.Mole()
