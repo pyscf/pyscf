@@ -130,7 +130,7 @@ def cc_Woooo(t1, t2, eris, kconserv, out=None, not2=False):
                 #Wklij[kk,kl,ki] += einsum('klcd,ic,jd->klij',eris.oovv[kk,kl,ki],t1[ki],t1[kj])
                 vvoo = eris.oovv[kk,kl].transpose(0,3,4,1,2).reshape(nkpts*nvir,nvir,nocc,nocc)
                 if not2:
-                    t2t = np.zeros_like(t2[ki,kj].transpose(0,3,4,1,2)) 
+                    t2t = np.zeros_like(t2[ki,kj].transpose(0,3,4,1,2))
                 else:
                     t2t  = t2[ki,kj].copy().transpose(0,3,4,1,2)
                 #for kc in range(nkpts):
