@@ -31,7 +31,7 @@ MAX_MEMORY = getattr(__config__, 'df_outcore_max_memory', 2000)  # 2GB
 LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
 
 
-# This funciton is aliased for backward compatibility.
+# This function is aliased for backward compatibility.
 format_aux_basis = addons.make_auxmol
 
 

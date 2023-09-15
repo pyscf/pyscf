@@ -254,7 +254,7 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
 
 def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                casdm1=None, verbose=None, with_meta_lowdin=WITH_META_LOWDIN):
-    '''Transform active orbitals to natrual orbitals, and update the CI wfn
+    '''Transform active orbitals to natural orbitals, and update the CI wfn
     accordingly
 
     Args:

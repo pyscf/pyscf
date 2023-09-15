@@ -199,7 +199,7 @@ def _get_k_lr(mol, dm, omega=0, hermi=0, vhfopt=None):
                      'It is replaced by mol.get_k(mol, dm, omege=omega)')
     dm = numpy.asarray(dm)
 # Note, ks object caches the ERIs for small systems. The cached eris are
-# computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evalute
+# computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evaluate
 # the K matrix with the range separated Coulomb operator.  Here jk.get_jk
 # function computes the K matrix with the modified Coulomb operator.
     nao = dm.shape[-1]

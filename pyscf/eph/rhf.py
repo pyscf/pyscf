@@ -39,7 +39,7 @@ def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
 
     # chkfile is used to pass first orbitals from hessian methods to eph methods
     # TODO: Remove the dependence to chfile and return first orbitals from a function
-    assert ephobj.chkfile is not None, 'chkfile is requred to save first order orbitals'
+    assert ephobj.chkfile is not None, 'chkfile is required to save first order orbitals'
 
     de = ephobj.hess_elec(mo_energy, mo_coeff, mo_occ)
     ephobj.de = de + ephobj.hess_nuc(ephobj.mol)

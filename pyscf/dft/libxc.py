@@ -709,12 +709,12 @@ else:
 def _xc_key_without_underscore(xc_keys):
     new_xc = []
     for key, xc_id in xc_keys.items():
-        for delimeter in ('_XC_', '_X_', '_C_', '_K_'):
-            if delimeter in key:
-                key0, key1 = key.split(delimeter)
+        for delimiter in ('_XC_', '_X_', '_C_', '_K_'):
+            if delimiter in key:
+                key0, key1 = key.split(delimiter)
                 new_key1 = key1.replace('_', '').replace('-', '')
                 if key1 != new_key1:
-                    new_xc.append((key0+delimeter+new_key1, xc_id))
+                    new_xc.append((key0+delimiter+new_key1, xc_id))
                 break
     return new_xc
 XC_CODES.update(_xc_key_without_underscore(XC_CODES))
@@ -1061,7 +1061,7 @@ def parse_xc(description):
         part blank. E.g. description='slater,' means pure LDA functional.
       - To neglect X functional (just apply C functional), leave the first
         part blank. E.g. description=',vwn' means pure VWN functional.
-      - If compound XC functional is specified, no matter whehter it is in the
+      - If compound XC functional is specified, no matter whether it is in the
         X part (the string in front of comma) or the C part (the string behind
         comma), both X and C functionals of the compound XC functional will be
         used.
@@ -1486,7 +1486,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         for rho_ud in [rho_u, rho_d]:
             assert rho_ud.shape[0] >= 6
     else:
-        raise ValueError("Unknow nvar {}".format(nvar))
+        raise ValueError("Unknown nvar {}".format(nvar))
 
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))

@@ -32,7 +32,7 @@ def make_strings(orb_list, nelec):
         orbital, bit-1 means occupied and bit-0 means unoccupied.  The lowest
         (right-most) bit corresponds to the lowest orbital in the orb_list.
 
-    Exampels:
+    Examples:
 
     >>> [bin(x) for x in make_strings((0,1,2,3),2)]
     [0b11, 0b101, 0b110, 0b1001, 0b1010, 0b1100]

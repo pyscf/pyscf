@@ -86,7 +86,7 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
         2D array of shape (N,nao) for AO values if deriv = 0.
         Or 3D array of shape (:,N,nao) for AO values and AO derivatives if deriv > 0.
         In the 3D array, the first (N,nao) elements are the AO values,
-        followed by (3,N,nao) for x,y,z compoents;
+        followed by (3,N,nao) for x,y,z components;
         Then 2nd derivatives (6,N,nao) for xx, xy, xz, yy, yz, zz;
         Then 3rd derivatives (10,N,nao) for xxx, xxy, xxz, xyy, xyz, xzz, yyy, yyz, yzz, zzz;
         ...
@@ -351,7 +351,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         xctype : str
             LDA/GGA/mGGA.  It affects the shape of the return density.
         with_lapl: bool
-            Wether to compute laplacian. It affects the shape of returns.
+            Whether to compute laplacian. It affects the shape of returns.
         verbose : int or object of :class:`Logger`
             No effects.
 
