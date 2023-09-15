@@ -40,7 +40,7 @@ def lz_adapt_(mol):
         mol.symm_orb[Ex] = lz_plus   # x+iy
     return mol
 
-mol = gto.M(atom='Ne', basis='ccpvtz', symmetry=True)
+mol = gto.M(atom='Ne', basis='ccpvtz', symmetry='d2h')
 mol = lz_adapt_(mol)
 mf = scf.RHF(mol)
 mf.run()
