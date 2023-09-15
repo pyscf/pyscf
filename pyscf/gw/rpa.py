@@ -74,7 +74,7 @@ def kernel(rpa, mo_energy, mo_coeff, Lpq=None, nw=40, x0=0.5, verbose=logger.NOT
     # Compute RPA correlation energy
     e_corr = get_rpa_ecorr(rpa, Lpq, freqs, wts)
 
-    # Compute totol energy
+    # Compute total energy
     e_tot = e_hf + e_corr
 
     logger.debug(rpa, '  RPA total energy = %s', e_tot)
@@ -228,7 +228,7 @@ class RPA(lib.StreamObject):
             mo_energy : 1D array (nmo), mean-field mo energy
             mo_coeff : 2D array (nmo, nmo), mean-field mo coefficient
             Lpq : 3D array (naux, nmo, nmo), 3-index ERI
-            nw: interger, grid number
+            nw: integer, grid number
             x0: real, scaling factor for frequency grid
 
         Returns:

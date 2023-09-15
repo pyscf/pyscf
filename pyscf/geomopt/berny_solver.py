@@ -131,12 +131,12 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     # When symmetry is enabled, the molecule may be shifted or rotated to make
     # the z-axis be the main axis. The transformation can cause inconsistency
     # between the optimization steps. The transformation is muted by setting
-    # an explict point group to the keyword mol.symmetry (see symmetry
+    # an explicit point group to the keyword mol.symmetry (see symmetry
     # detection code in Mole.build function).
     if mol.symmetry:
         mol.symmetry = mol.topgroup
 
-# temporary interface, taken from berny.py optimize function
+    # temporary interface, taken from berny.py optimize function
     berny_log = to_berny_log(log)
     geom = to_berny_geom(mol, include_ghost)
     optimizer = Berny(geom, logger=berny_log, **kwargs)

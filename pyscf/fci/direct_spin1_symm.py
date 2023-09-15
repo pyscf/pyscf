@@ -414,7 +414,7 @@ def reorder_eri(eri, norb, orbsym):
 
     # irrep of (ij| pair
     trilirrep = (orbsym[:,None] ^ orbsym)[np.tril_indices(norb)]
-    # and the number of occurence for each irrep
+    # and the number of occurrences for each irrep
     dimirrep = np.asarray(np.bincount(trilirrep), dtype=np.int32)
     # we sort the irreps of (ij| pair, to group the pairs which have same irreps
     # "order" is irrep-id-sorted index. The (ij| paired is ordered that the

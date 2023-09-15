@@ -209,7 +209,7 @@ def _basis_offset_for_atoms(atoms, basis_tab):
 
 def _num_contract(basis):
     if isinstance(basis[1], int):
-        # This branch should never be reached if basis_tab is formated by
+        # This branch should never be reached if basis_tab is formatted by
         # function mole.format_basis
         nctr = len(basis[2]) - 1
     else:

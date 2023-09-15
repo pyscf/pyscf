@@ -356,7 +356,7 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                 }
                 break;
         default:
-                fprintf(stderr, "functional %d '%s' is not implmented\n",
+                fprintf(stderr, "functional %d '%s' is not implemented\n",
                         func_x->info->number, func_x->info->name);
                 raise_error;
         }

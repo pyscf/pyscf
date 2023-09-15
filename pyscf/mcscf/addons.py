@@ -377,7 +377,7 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
 
     Kwargs:
         prev_mol : an instance of :class:`Mole`
-            If given, the inital guess orbitals are associated to the
+            If given, the initial guess orbitals are associated to the
             basis of prev_mol. Otherwise, the orbitals are presumed to
             be in the basis of casscf.mol. Beware linear dependencies if
             you are projecting from a LARGER basis to a SMALLER one.
@@ -555,7 +555,7 @@ def project_init_guess_old(casscf, init_mo, prev_mol=None):
 
     Kwargs:
         prev_mol : an instance of :class:`Mole`
-            If given, the inital guess orbitals are associated to the geometry
+            If given, the initial guess orbitals are associated to the geometry
             and basis of prev_mol.  Otherwise, the orbitals are based of
             the geometry and basis of casscf.mol
 
@@ -778,11 +778,11 @@ def get_fock(casscf, mo_coeff=None, ci=None):
         return casscf.get_fock(mo_coeff, ci)
 
 def cas_natorb(casscf, mo_coeff=None, ci=None, sort=False):
-    '''Natrual orbitals in CAS space
+    '''Natural orbitals in CAS space
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):
-        raise RuntimeError('TODO: UCAS natrual orbitals')
+        raise RuntimeError('TODO: UCAS natural orbitals')
     else:
         return casscf.cas_natorb(mo_coeff, ci, sort=sort)
 
@@ -851,7 +851,7 @@ class StateAverageMCSCFSolver:
     pass
 
 def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
-    ''' State average over the energy.  The energy funcitonal is
+    ''' State average over the energy.  The energy functional is
     E = w1<psi1|H|psi1> + w2<psi2|H|psi2> + ...
 
     Note we may need change the FCI solver to
