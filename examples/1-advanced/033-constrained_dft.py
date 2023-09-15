@@ -328,7 +328,7 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
             elif diis_type == 3:
                 fock = cdft_diis.update(fock, scf.diis.get_err_vec(s1e, dm, fock))
             else:
-                print("\nWARN: Unknow CDFT DIIS type, NO DIIS IS USED!!!\n")
+                print("\nWARN: Unknown CDFT DIIS type, NO DIIS IS USED!!!\n")
 
         if diis_pos == 'post' or diis_pos == 'both':
             cdft_conv_flag = False

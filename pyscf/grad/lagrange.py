@@ -114,7 +114,7 @@ class Gradients (rhf_grad.GradientsMixin):
             return Lvec_last
         precond = self.get_lagrange_precond (Adiag, level_shift=level_shift, **kwargs)
         it = np.asarray ([0])
-        logger.debug(self, 'Lagrange multiplier determination intial gradient norm: %.8g',
+        logger.debug(self, 'Lagrange multiplier determination initial gradient norm: %.8g',
                      linalg.norm(bvec))
         my_call = self.get_lagrange_callback (Lvec_last, it, my_geff)
         Aop_obj = sparse_linalg.LinearOperator ((self.nlag,self.nlag), matvec=Aop,

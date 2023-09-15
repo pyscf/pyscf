@@ -30,7 +30,7 @@ DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
 ETB_BETA = getattr(__config__, 'df_addons_aug_dfbasis', 2.0)
 FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'
 
-# For code compatiblity in python-2 and python-3
+# For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
     unicode = str
 

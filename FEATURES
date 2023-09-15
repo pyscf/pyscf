@@ -206,7 +206,7 @@
     Libcint library
   - Support for 4-index integral transformation with 4 different orbitals
   - PBC 2-electron MO integrals
-  - Integral transformation for (4-component and 2-compoent relativistic) spinor
+  - Integral transformation for (4-component and 2-component relativistic) spinor
     integrals
 
 

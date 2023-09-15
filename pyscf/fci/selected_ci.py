@@ -900,7 +900,7 @@ def _all_linkstr_index(ci_strs, norb, nelec):
     dd_indexb = des_des_linkstr_tril(ci_strs[1], norb, nelec[1])
     return cd_indexa, dd_indexa, cd_indexb, dd_indexb
 
-# numpy.ndarray does not allow to attach attribtues.  Overwrite the
+# numpy.ndarray does not allow to attach attributes.  Overwrite the
 # numpy.ndarray class to tag the ._strs attribute
 class SCIvector(numpy.ndarray):
     '''An 2D np array for selected CI coefficients'''

@@ -26,7 +26,7 @@ FCI wavefunction (called complex wavefunction here) is solved using the complex
 Hamiltonian. For 2D irreps, the real part and the imaginary part of the complex
 FCI wavefunction are identical to the Ex and Ey wavefunction obtained from
 direct_spin1_symm module. However, any observables from the complex FCI
-wavefunction should have an indentical one from either Ex or Ey wavefunction
+wavefunction should have an identical one from either Ex or Ey wavefunction
 of direct_spin1_symm.
 '''
 

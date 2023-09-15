@@ -132,13 +132,13 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     engine = PySCFEngine(g_scanner)
     engine.callback = callback
     engine.maxsteps = maxsteps
-    # To avoid overwritting method.mol
+    # To avoid overwriting method.mol
     engine.mol = g_scanner.mol.copy()
 
     # When symmetry is enabled, the molecule may be shifted or rotated to make
     # the z-axis be the main axis. The transformation can cause inconsistency
     # between the optimization steps. The transformation is muted by setting
-    # an explict point group to the keyword mol.symmetry (see symmetry
+    # an explicit point group to the keyword mol.symmetry (see symmetry
     # detection code in Mole.build function).
     if engine.mol.symmetry:
         engine.mol.symmetry = engine.mol.topgroup
