@@ -101,8 +101,8 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
         link_indexa, link_indexb = link_index
     na,nlinka = link_indexa.shape[:2]
     nb,nlinkb = link_indexb.shape[:2]
-    assert (cibra.size == na*nb)
-    assert (ciket.size == na*nb)
+    assert (cibra.size == na*nb), '{} {} {}'.format (cibra.size, na, nb)
+    assert (ciket.size == na*nb), '{} {} {}'.format (ciket.size, na, nb)
     rdm1 = numpy.empty((norb,norb))
     fn = getattr(librdm, fname)
     fn(rdm1.ctypes.data_as(ctypes.c_void_p),
