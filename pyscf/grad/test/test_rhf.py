@@ -201,8 +201,25 @@ class KnownValues(unittest.TestCase):
         g_x = scf.RHF (mol).run ().nuc_grad_method ().kernel ()
         self.assertAlmostEqual(abs(ref[:,2] - g_x[:,0]).max(), 0, 9)
 
+    def test_grad_nuc(self):
+        mol = gto.M(atom='He 0 0 0; He 0 1 2; H 1 2 1; H 1 0 0')
+        gs = grad.rhf.grad_nuc(mol)
+        ref = grad_nuc(mol)
+        self.assertAlmostEqual(abs(gs - ref).max(), 0, 9)
+
+def grad_nuc(mol):
+    gs = numpy.zeros((mol.natm,3))
+    for j in range(mol.natm):
+        q2 = mol.atom_charge(j)
+        r2 = mol.atom_coord(j)
+        for i in range(mol.natm):
+            if i != j:
+                q1 = mol.atom_charge(i)
+                r1 = mol.atom_coord(i)
+                r = numpy.sqrt(numpy.dot(r1-r2,r1-r2))
+                gs[j] -= q1 * q2 * (r2-r1) / r**3
+    return gs
 
 if __name__ == "__main__":
     print("Full Tests for RHF Gradients")
     unittest.main()
-
