@@ -93,20 +93,18 @@ def grad_nuc(mol, atmlst=None):
     '''
     Derivatives of nuclear repulsion energy wrt nuclear coordinates
     '''
-    gs = numpy.zeros((mol.natm,3))
-    for j in range(mol.natm):
-        q2 = mol.atom_charge(j)
-        r2 = mol.atom_coord(j)
-        for i in range(mol.natm):
-            if i != j:
-                q1 = mol.atom_charge(i)
-                r1 = mol.atom_coord(i)
-                r = numpy.sqrt(numpy.dot(r1-r2,r1-r2))
-                gs[j] -= q1 * q2 * (r2-r1) / r**3
+    z = mol.atom_charges()
+    r = mol.atom_coords()
+    dr = r[:,None,:] - r
+    dist = numpy.linalg.norm(dr, axis=2)
+    diag_idx = numpy.diag_indices(z.size)
+    dist[diag_idx] = 1e100
+    rinv = 1./dist
+    rinv[diag_idx] = 0.
+    gs = numpy.einsum('i,j,ijx,ij->ix', -z, z, dr, rinv**3)
     if atmlst is not None:
         gs = gs[atmlst]
     return gs
-
 
 def get_hcore(mol):
     '''Part of the nuclear gradients of core Hamiltonian'''
