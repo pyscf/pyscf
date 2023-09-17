@@ -2953,7 +2953,7 @@ class Mole(lib.StreamObject):
         '''Assume the charge distribution on the "rinv_origin".  zeta is the parameter
         to control the charge distribution: rho(r) = Norm * exp(-zeta * r^2).
         **Be careful** when call this function. It affects the behavior of
-        int1e_rinv_* functions.  Make sure to set it back to 0 after using it!
+        int1e_rinv_*, int1e_grids* functions.  Make sure to set it back to 0 after using it!
         '''
         self._env[PTR_RINV_ZETA] = zeta
         return self
