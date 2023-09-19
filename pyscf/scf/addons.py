@@ -41,9 +41,10 @@ def smearing_(*args, **kwargs):
 def frac_occ_(mf, tol=1e-3):
     '''
     Addons for SCF methods to assign fractional occupancy for degenerated
-    occpupied HOMOs.
+    occupied HOMOs.
 
     Examples::
+
         >>> mf = gto.M(atom='O 0 0 0; O 0 0 1', verbose=4).RHF()
         >>> mf = scf.addons.frac_occ(mf)
         >>> mf.run()
@@ -69,8 +70,6 @@ def frac_occ_(mf, tol=1e-3):
             lumo = 0.0
             frac_occ_lst = numpy.zeros_like(mo_energy, dtype=bool)
         return mo_occ, numpy.where(frac_occ_lst)[0], homo, lumo
-
-    get_grad = None
 
     if isinstance(mf, uhf.UHF):
         def get_occ(mo_energy, mo_coeff=None):
@@ -176,10 +175,13 @@ def frac_occ_(mf, tol=1e-3):
             return mo_occ
 
     mf.get_occ = get_occ
-    if get_grad is not None:
+    try:
         mf.get_grad = get_grad
+    except NameError:
+        pass
     return mf
 frac_occ = frac_occ_
+
 
 def dynamic_occ_(mf, tol=1e-3):
     '''
