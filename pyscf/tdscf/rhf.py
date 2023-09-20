@@ -743,7 +743,10 @@ class TDBase(lib.StreamObject):
             return None, x0
         else:
             heff = lib.einsum('xa,ya->xy', x0.conj(), vind(x0))
-            e, u = scipy.linalg.eig(heff)   # heff not necessarily Hermitian
+            if abs(heff - heff.conj().T).max() < 1e-12:
+                e, u = scipy.linalg.eigh(heff)
+            else:
+                e, u = scipy.linalg.eig(heff)   # heff not necessarily Hermitian
             e = e.real
             order = numpy.argsort(e)
             e = e[order]
@@ -869,7 +872,7 @@ class TDA(TDBase):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-            x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
+            #x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         self.converged, self.e, x1 = \
                 lib.davidson1(vind, x0, precond,
@@ -1039,7 +1042,7 @@ class TDHF(TDA):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-            x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
+            #x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,

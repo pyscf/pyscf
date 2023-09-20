@@ -451,7 +451,7 @@ class TDA(TDBase):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-            x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
+            #x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         # FIXME: Is it correct to call davidson1 for complex integrals?
         self.converged, self.e, x1 = \
@@ -563,7 +563,7 @@ class TDHF(TDBase):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-            x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
+            #x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,

@@ -145,7 +145,7 @@ class TDA(KTDBase):
 
             if x0 is None:
                 x0k = self.init_guess(self._scf, kshift, self.nstates)
-                x0k = self.trunc_workspace(vind, x0k, nstates=self.nstates, pick=pickeig)[1]
+                #x0k = self.trunc_workspace(vind, x0k, nstates=self.nstates, pick=pickeig)[1]
             else:
                 x0k = x0[i]
 
@@ -286,7 +286,7 @@ class TDHF(TDA):
 
             if x0 is None:
                 x0k = self.init_guess(self._scf, kshift, self.nstates)
-                x0k = self.trunc_workspace(vind, x0k, nstates=self.nstates, pick=pickeig)[1]
+                #x0k = self.trunc_workspace(vind, x0k, nstates=self.nstates, pick=pickeig)[1]
             else:
                 x0k = x0[i]
 
