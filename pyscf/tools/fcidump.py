@@ -211,6 +211,33 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
     from_integrals(filename, h1e, eri, h1e.shape[0], mf.mol.nelec, nuc, 0, orbsym,
                    tol, float_format)
 
+def from_mcscf(mc, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
+               molpro_orbsym=MOLPRO_ORBSYM):
+    '''Use the given MCSCF object to obtain the CAS 1-electron and 2-electron
+    integrals and dump them to FCIDUMP.
+
+    Kwargs:
+        tol (float): Threshold for writing elements to FCIDUMP
+        float_format (str): Float format for writing elements to FCIDUMP
+        molpro_orbsym (bool): Whether to dump the orbsym in Molpro orbsym
+            convention as documented in
+            https://www.molpro.net/manual/doku.php?id=general_program_structure#symmetry
+    '''
+    mol = mc.mol
+    mo_coeff = mc.mo_coeff
+    assert mo_coeff.dtype == numpy.double
+
+    h1eff, ecore = mc.get_h1eff()
+    h2eff = mc.get_h2eff()
+    orbsym = getattr(mo_coeff, 'orbsym', None)
+    if orbsym is not None:
+        orbsym = orbsym[mc.ncore:mc.ncore + mc.ncas]
+    if molpro_orbsym and orbsym is not None:
+        orbsym = [ORBSYM_MAP[mol.groupname][i] for i in orbsym]
+    nelecas = mc.nelecas[0] + mc.nelecas[1]
+    ms = abs(mc.nelecas[0] - mc.nelecas[1])
+    from_integrals(filename, h1eff, h2eff, mc.ncas, nelecas, nuc=ecore, ms=ms,
+                   orbsym=orbsym, tol=tol, float_format=float_format)
 
 def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
     '''Parse FCIDUMP.  Return a dictionary to hold the integrals and
