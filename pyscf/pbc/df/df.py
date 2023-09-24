@@ -350,8 +350,10 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             return LpqR, LpqI
 
         with _load3c(self._cderi, self._dataname, kpti_kptj) as j3c:
-            if aux_slice is None: aux_slice = (0, j3c.shape[0])
-            slices = lib.prange(*aux_slice, blksize)
+            if aux_slice is None:
+                slices = lib.prange(0, j3c.shape[0], blksize)
+            else:
+                slices = lib.prange(*aux_slice, blksize)
             for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                 yield LpqR, LpqI, 1
                 LpqR = LpqI = None
@@ -361,8 +363,10 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             # CDERI tensor of negative part.
             with _load3c(self._cderi, self._dataname+'-', kpti_kptj,
                          ignore_key_error=True) as j3c:
-                if aux_slice is None: aux_slice = (0, j3c.shape[0])
-                slices = lib.prange(*aux_slice, blksize)
+                if aux_slice is None:
+                    slices = lib.prange(0, j3c.shape[0], blksize)
+                else:
+                    slices = lib.prange(*aux_slice, blksize)
                 for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                     yield LpqR, LpqI, -1
                     LpqR = LpqI = None
