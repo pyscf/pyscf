@@ -1070,7 +1070,7 @@ int eval_mat_gga_orth_ip1(double *weights, double *out, int comp,
 }
 
 
-static void _apply_ints(int (*eval_ints)(), double *weights, double *mat,
+void _apply_ints(int (*eval_ints)(), double *weights, double *mat,
                         PGFPair* pgfpair, int comp, double fac, int dimension,
                         double* dh, double *a, double *b, int *mesh,
                         double* ish_gto_norm, double* jsh_gto_norm,

@@ -268,7 +268,7 @@ static size_t _rho_cache_size(int l, int nprim, int nctr, int* mesh, double radi
         size_orth_rho = l1l1*mesh[2] + l1*mesh[1]*mesh[2] + mesh_size;
     }
     size += MAX(size_orth_rho, size_orth_components);
-    //size += 1000000;
+    size += 1000000;
     //printf("Memory allocated per thread for make_rho: %ld MB.\n", (size+mesh_size)*sizeof(double) / 1000000);
     return size;
 }
@@ -487,4 +487,169 @@ void build_core_density(void (*eval_rho)(), double* rho,
         free(rho_priv);
     }
 }
+}
+
+
+
+
+static void make_pgfparis_orth(
+            PGFPair* pgfpair, int comp, int dimension,
+            double* dh, double *a, double *b, int *mesh,
+            double* ish_gto_norm, double* jsh_gto_norm,
+            int *ish_atm, int *ish_bas, double *ish_env,
+            int *jsh_atm, int *jsh_bas, double *jsh_env,
+            double* Ls, double *cache)
+{
+        int ish = pgfpair->ish;
+        int jsh = pgfpair->jsh;
+        int ipgf = pgfpair->ipgf;
+        int jpgf = pgfpair->jpgf;
+        int iL = pgfpair->iL;
+        double cutoff = pgfpair->radius;
+
+        double *ri = ish_env + ish_atm[PTR_COORD+ish_bas[ATOM_OF+ish*BAS_SLOTS]*ATM_SLOTS];
+        double *rj = jsh_env + jsh_atm[PTR_COORD+jsh_bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
+        double *rL = Ls + iL*3;
+        double rjL[3];
+        rjL[0] = rj[0] + rL[0];
+        rjL[1] = rj[1] + rL[1];
+        rjL[2] = rj[2] + rL[2];
+
+        const int li = ish_bas[ANG_OF+ish*BAS_SLOTS];
+        const int lj = jsh_bas[ANG_OF+jsh*BAS_SLOTS];
+        double ai = ish_env[ish_bas[PTR_EXP+ish*BAS_SLOTS]+ipgf];
+        double aj = jsh_env[jsh_bas[PTR_EXP+jsh*BAS_SLOTS]+jpgf];
+        double ci = ish_gto_norm[ipgf];
+        double cj = jsh_gto_norm[jpgf];
+        double aij = ai + aj;
+        double rrij = CINTsquare_dist(ri, rjL);
+        double eij = (ai * aj / aij) * rrij;
+        if (eij > EIJCUTOFF) {
+                return;
+        }
+        double fac = exp(-eij) * ci * cj * CINTcommon_fac_sp(li) * CINTcommon_fac_sp(lj);
+        if (fac < ish_env[PTR_EXPDROP] && fac < jsh_env[PTR_EXPDROP]) {
+                return;
+        }
+
+        int topl = li + lj;
+        int grid_slice[6];
+        double *xs_exp, *ys_exp, *zs_exp;
+        int data_size = init_orth_data(&xs_exp, &ys_exp, &zs_exp,
+                                       grid_slice, dh, mesh, topl, cutoff,
+                                       ai, aj, ri, rj, cache);
+}
+
+
+void eval_pgfpairs(TaskList** task_list,
+                    int comp, int hermi, int *shls_slice, int* ish_ao_loc, int* jsh_ao_loc,
+                    int dimension, double* Ls, double* a, double* b,
+                    int* ish_atm, int* ish_bas, double* ish_env,
+                    int* jsh_atm, int* jsh_bas, double* jsh_env, int cart)
+{
+    TaskList* tl = *task_list;
+    GridLevel_Info* gridlevel_info = tl->gridlevel_info;
+    int nlevels = gridlevel_info->nlevels;
+
+    const int ish0 = shls_slice[0];
+    const int ish1 = shls_slice[1];
+    const int jsh0 = shls_slice[2];
+    const int jsh1 = shls_slice[3];
+    const int nish = ish1 - ish0;
+    const int njsh = jsh1 - jsh0;
+    //const int nijsh = nish * njsh;
+    //const int naoi = ish_ao_loc[ish1] - ish_ao_loc[ish0];
+    //const int naoj = jsh_ao_loc[jsh1] - jsh_ao_loc[jsh0];
+
+    double **gto_norm_i = (double**) malloc(sizeof(double*) * nish);
+    double **cart2sph_coeff_i = (double**) malloc(sizeof(double*) * nish);
+    get_cart2sph_coeff(cart2sph_coeff_i, gto_norm_i, ish0, ish1, ish_bas, ish_env, cart);
+    double **gto_norm_j = gto_norm_i;
+    double **cart2sph_coeff_j = cart2sph_coeff_i;
+    if (hermi != 1) {
+        gto_norm_j = (double**) malloc(sizeof(double*) * njsh);
+        cart2sph_coeff_j = (double**) malloc(sizeof(double*) * njsh);
+        get_cart2sph_coeff(cart2sph_coeff_j, gto_norm_j, jsh0, jsh1, jsh_bas, jsh_env, cart);
+    }
+
+    int ish_lmax = get_lmax(ish0, ish1, ish_bas);
+    int jsh_lmax = ish_lmax;
+    if (hermi != 1) {
+        jsh_lmax = get_lmax(jsh0, jsh1, jsh_bas);
+    }
+
+    int ish_nprim_max = get_nprim_max(ish0, ish1, ish_bas);
+    int jsh_nprim_max = ish_nprim_max;
+    if (hermi != 1) {
+        jsh_nprim_max = get_nprim_max(jsh0, jsh1, jsh_bas);
+    }
+
+    int ish_nctr_max = get_nctr_max(ish0, ish1, ish_bas);
+    int jsh_nctr_max = ish_nctr_max;
+    if (hermi != 1) {
+        jsh_nctr_max = get_nctr_max(jsh0, jsh1, jsh_bas);
+    } 
+
+    int ilevel;
+    int *mesh;
+    double max_radius;
+    Task* task;
+    size_t ntasks;
+    PGFPair** pgfpairs;
+    for (ilevel = 0; ilevel < nlevels; ilevel++) {
+        task = (tl->tasks)[ilevel];
+        ntasks = task->ntasks;
+        if (ntasks <= 0) {
+            continue;
+        }
+        pgfpairs = task->pgfpairs;
+        max_radius = task->radius;
+
+        mesh = gridlevel_info->mesh + ilevel*3;
+
+        double dh[9];
+        get_grid_spacing(dh, a, mesh);
+
+        int *task_loc;
+        int nblock = get_task_loc(&task_loc, pgfpairs, ntasks, ish0, ish1, jsh0, jsh1, hermi);
+
+        size_t cache_size = _rho_cache_size(MAX(ish_lmax,jsh_lmax), 
+                                            MAX(ish_nprim_max, jsh_nprim_max),
+                                            MAX(ish_nctr_max, jsh_nctr_max), mesh, max_radius, dh);
+        //size_t ngrids = ((size_t)mesh[0]) * mesh[1] * mesh[2];
+
+#pragma omp parallel
+{
+    PGFPair *pgfpair = NULL;
+    int iblock, itask, ish, jsh;
+    double *ptr_gto_norm_i, *ptr_gto_norm_j;
+    double *cache = malloc(sizeof(double) * cache_size);
+
+    #pragma omp for schedule(dynamic)
+    for (iblock = 0; iblock < nblock; iblock+=2) {
+        itask = task_loc[iblock];
+        pgfpair = pgfpairs[itask];
+        ish = pgfpair->ish;
+        jsh = pgfpair->jsh;
+        ptr_gto_norm_i = gto_norm_i[ish];
+        ptr_gto_norm_j = gto_norm_j[jsh];
+        for (; itask < task_loc[iblock+1]; itask++) {
+            pgfpair = pgfpairs[itask];
+            make_pgfparis_orth(pgfpair, comp, dimension, dh, a, b, mesh,
+                               ptr_gto_norm_i, ptr_gto_norm_j, ish_atm, ish_bas, ish_env,
+                               jsh_atm, jsh_bas, jsh_env, Ls, cache);
+        }
+    }
+
+    free(cache);
+}
+    if (task_loc) {
+        free(task_loc);
+    }
+    } // loop ilevel
+
+    del_cart2sph_coeff(cart2sph_coeff_i, gto_norm_i, ish0, ish1);
+    if (hermi != 1) {
+        del_cart2sph_coeff(cart2sph_coeff_j, gto_norm_j, jsh0, jsh1);
+    }
 }

@@ -111,6 +111,8 @@ def multi_grids_tasks(cell, ke_cutoff=None, hermi=0,
     mesh = []
     for ke in cutoff:
         mesh.append(tools.cutoff_to_mesh(a, ke))
+    logger.info(cell, 'ke_cutoff for multigrid tasks:\n%s', cutoff)
+    logger.info(cell, 'meshes for multigrid tasks:\n%s', mesh)
     gridlevel_info = init_gridlevel_info(cutoff, rel_cutoff, mesh)
     task_list = build_task_list(cell, gridlevel_info, hermi=hermi)
     return task_list
