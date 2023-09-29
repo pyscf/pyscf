@@ -540,6 +540,9 @@ def nr_direct_drv(intor, aosym, jkscript,
                   dms, ncomp, atm, bas, env, cvhfopt=None, cintopt=None,
                   shls_slice=None, shls_excludes=None, out=None,
                   optimize_sr=True):
+    if cvhfopt is None:
+        optimize_sr = False
+
     if optimize_sr:
         assert aosym in ('s8', 's4', 's2ij', 's2kl', 's1')
     else:
