@@ -65,3 +65,11 @@ void CVHFnr_optimizer(CVHFOpt **vhfopt, int (*intor)(), CINTOpt *cintopt,
 void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
                           int *ao_loc, int *atm, int natm,
                           int *bas, int nbas, double *env);
+
+void CVHFnr_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
+                         int *ao_loc, int *atm, int natm,
+                         int *bas, int nbas, double *env);
+void CVHFnr_dm_cond1(double *dm_cond, double *dm, int nset, int *ao_loc,
+                     int *atm, int natm, int *bas, int nbas, double *env);
+void CVHFnr_dm_cond(double *dm_cond, double *dm, int nset, int *ao_loc,
+                    int *atm, int natm, int *bas, int nbas, double *env);

@@ -147,9 +147,10 @@ class VHFOpt(object):
         return numpy.ctypeslib.as_array(data, shape=shape)
     dm_cond = property(get_dm_cond)
 
+# TODO: replace VHFOpt in future release
 class _VHFOpt:
-    def __init__(self, mol, intor=None,
-                 prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
+    def __init__(self, mol, intor=None, prescreen='CVHFnoscreen',
+                 qcondname=None, dmcondname=None, direct_scf_tol=1e-14):
         '''New version of VHFOpt (under development).
 
         If function "qcondname" is presented, the qcond (sqrt(integrals))
@@ -159,19 +160,20 @@ class _VHFOpt:
         names of C functions defined in libcvhf module
         '''
         self.mol = mol
-        self._q_cond = None
-        self._dm_cond = None
         self._this = cvhfopt = _CVHFOpt()
         cvhfopt.nbas = mol.nbas
-        cvhfopt.direct_scf_cutoff = 1e-14
+        cvhfopt.direct_scf_cutoff = direct_scf_tol
         cvhfopt.fprescreen = _fpointer(prescreen)
         cvhfopt.r_vkscreen = _fpointer('CVHFr_vknoscreen')
+        self._q_cond = None
+        self._dm_cond = None
 
         if intor is None:
             self._intor = intor
             self._cintopt = lib.c_null_ptr()
         else:
-            self._intor = mol._add_suffix(intor)
+            intor = mol._add_suffix(intor)
+            self._intor = intor
             self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
 
         self._dmcondname = dmcondname
@@ -184,19 +186,23 @@ class _VHFOpt:
         defined in libcvhf module
         '''
         intor = mol._add_suffix(intor)
-        assert intor == self._intor
-        cintopt = self._cintopt
-        ao_loc = mol.ao_loc_nr()
+        if intor == self._intor:
+            cintopt = self._cintopt
+        else:
+            cintopt = lib.c_null_ptr()
+        ao_loc = make_loc(mol._bas, intor)
         if isinstance(qcondname, ctypes._CFuncPtr):
             fqcond = qcondname
         else:
             fqcond = getattr(libcvhf, qcondname)
         nbas = mol.nbas
-        q_cond = self._q_cond = numpy.empty((nbas, nbas))
-        fqcond(getattr(libcvhf, intor), cintopt, q_cond.ctypes,
-               ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
-               mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
-        self._this.q_cond = q_cond.ctypes.data_as(ctypes.c_void_p)
+        q_cond = numpy.empty((nbas, nbas))
+        with mol.with_integral_screen(self.direct_scf_tol**2):
+            fqcond(getattr(libcvhf, intor), cintopt, q_cond.ctypes,
+                   ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+                   mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+
+        self.q_cond = q_cond
         self._qcondname = qcondname
 
     @property
@@ -225,7 +231,7 @@ class _VHFOpt:
         else:
             n_dm = len(dm)
         dm = numpy.asarray(dm, order='C')
-        ao_loc = mol.ao_loc_nr()
+        ao_loc = make_loc(mol._bas, self._intor)
         if isinstance(self._dmcondname, ctypes._CFuncPtr):
             fdmcond = self._dmcondname
         else:
@@ -235,71 +241,58 @@ class _VHFOpt:
         fdmcond(dm_cond.ctypes, dm.ctypes, ctypes.c_int(n_dm),
                 ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
                 mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
-        self._dm_cond = dm_cond
-        self._this.dm_cond = dm_cond.ctypes.data_as(ctypes.c_void_p)
+        self.dm_cond = dm_cond
 
-    def get_q_cond(self, shape=None):
-        '''Return an array associated to q_cond. Contents of q_cond can be
-        modified through this array
-        '''
+    def get_q_cond(self):
         return self._q_cond
     q_cond = property(get_q_cond)
 
-    def get_dm_cond(self, shape=None):
-        '''Return an array associated to dm_cond. Contents of dm_cond can be
-        modified through this array
-        '''
+    @q_cond.setter
+    def q_cond(self, q_cond):
+        self._q_cond = q_cond
+        if q_cond is not None:
+            self._this.q_cond = q_cond.ctypes.data_as(ctypes.c_void_p)
+
+    def get_dm_cond(self):
         return self._dm_cond
     dm_cond = property(get_dm_cond)
 
+    @dm_cond.setter
+    def dm_cond(self, dm_cond):
+        self._dm_cond = dm_cond
+        if dm_cond is not None:
+            self._this.dm_cond = dm_cond.ctypes.data_as(ctypes.c_void_p)
 
-class SGXOpt(VHFOpt):
-    def __init__(self, mol, intor=None,
-                 prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
-        super(SGXOpt, self).__init__(mol, intor, prescreen, qcondname, dmcondname)
+class SGXOpt(_VHFOpt):
+    def __init__(self, mol, intor=None, prescreen='CVHFnoscreen',
+                 qcondname=None, dmcondname=None, direct_scf_cutoff=1e-14):
+        _VHFOpt.__init__(self, mol, intor, prescreen, qcondname, dmcondname,
+                         direct_scf_cutoff)
         self.ngrids = None
 
     def set_dm(self, dm, atm, bas, env):
-        if self._dmcondname is not None:
-            c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
-            c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
-            c_env = numpy.asarray(env, dtype=numpy.double, order='C')
-            natm = ctypes.c_int(c_atm.shape[0])
-            nbas = ctypes.c_int(c_bas.shape[0])
-            if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-                n_dm = 1
-                ngrids = dm.shape[0]
-            else:
-                n_dm = len(dm)
-                ngrids = dm.shape[1]
-            dm = numpy.asarray(dm, order='C')
-            ao_loc = make_loc(c_bas, self._intor)
-            if isinstance(self._dmcondname, ctypes._CFuncPtr):
-                fsetdm = self._dmcondname
-            else:
-                fsetdm = getattr(libcvhf, self._dmcondname)
-            if self._dmcondname == 'SGXsetnr_direct_scf_dm':
-                fsetdm(self._this,
-                       dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
-                       ao_loc.ctypes.data_as(ctypes.c_void_p),
-                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                       c_env.ctypes.data_as(ctypes.c_void_p),
-                       ctypes.c_int(ngrids))
-                self.ngrids = ngrids
-            else:
-                raise ValueError('Can only use SGX dm screening for SGXOpt')
+        if self._dmcondname is None:
+            return
 
-    def get_dm_cond(self):
-        '''Return an array associated to dm_cond. Contents of dm_cond can be
-        modified through this array
-        '''
-        nbas = self._this.contents.nbas
-        shape = (nbas, self.ngrids)
-        data = ctypes.cast(self._this.contents.dm_cond,
-                           ctypes.POINTER(ctypes.c_double))
-        return numpy.ctypeslib.as_array(data, shape=shape)
-    dm_cond = property(get_dm_cond)
+        mol = self.mol
+        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+            n_dm = 1
+        else:
+            n_dm = len(dm)
+        dm = numpy.asarray(dm, order='C')
+        ao_loc = make_loc(mol._bas, self._intor)
+        if isinstance(self._dmcondname, ctypes._CFuncPtr):
+            fdmcond = self._dmcondname
+        else:
+            if self._dmcondname != 'SGXnr_dm_cond':
+                raise ValueError('SGXOpt only supports SGXnr_dm_cond')
+            fdmcond = getattr(libcvhf, self._dmcondname)
+        dm_cond = numpy.empty((mol.nbas, self.ngrids))
+        fdmcond(dm_cond.ctypes, dm.ctypes, ctypes.c_int(n_dm),
+                ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+                mol._bas.ctypes, ctypes.c_int(mol.nbas), mol._env.ctypes,
+                ctypes.c_int(self.ngrids))
+        self.dm_cond = dm_cond
 
 
 class _CVHFOpt(ctypes.Structure):
@@ -477,6 +470,15 @@ def direct_mapdm(intor, aosym, jkdescript,
         single_dm = True
     else:
         single_dm = False
+    intor = ascint3(intor)
+    if vhfopt is None:
+        cvhfopt = lib.c_null_ptr()
+        cintopt = None
+    else:
+        vhfopt.set_dm(dms, atm, bas, env)
+        cvhfopt = vhfopt._this
+        cintopt = vhfopt._cintopt
+
     n_dm = len(dms)
     dms = [numpy.asarray(dm, order='C', dtype=numpy.double) for dm in dms]
     if isinstance(jkdescript, str):
@@ -489,15 +491,6 @@ def direct_mapdm(intor, aosym, jkdescript,
     dms = dms * n_jk
     # make n_dm copies for each jk script
     jkscripts = numpy.repeat(jkscripts, n_dm)
-
-    intor = ascint3(intor)
-    if vhfopt is None:
-        cvhfopt = lib.c_null_ptr()
-        cintopt = None
-    else:
-        vhfopt.set_dm(dms, atm, bas, env)
-        cvhfopt = vhfopt._this
-        cintopt = vhfopt._cintopt
 
     vjk = nr_direct_drv(intor, aosym, jkscripts, dms, ncomp, atm, bas, env,
                         cvhfopt, cintopt, shls_slice, shls_excludes, out,
@@ -602,7 +595,7 @@ def nr_direct_drv(intor, aosym, jkscript,
             buf = numpy.empty(vshape)
         else:
             buf = out[i]
-            assert buf.shape == vshape
+            assert buf.size == numpy.prod(vshape)
             assert buf.dtype == numpy.double
             assert buf.flags.c_contiguous
         vjk.append(buf)
@@ -678,7 +671,10 @@ def rdirect_mapdm(intor, aosym, jkdescript,
         cvhfopt = lib.c_null_ptr()
     else:
         vhfopt.set_dm(dms, atm, bas, env)
-        cvhfopt = vhfopt._this
+        if isinstance(vhfopt, _VHFOpt):
+            cvhfopt = ctypes.byref(vhfopt._this)
+        else:
+            cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = getattr(libcvhf, vhfopt._intor)
     if cintopt is None:
@@ -750,7 +746,10 @@ def rdirect_bindm(intor, aosym, jkdescript,
         cvhfopt = lib.c_null_ptr()
     else:
         vhfopt.set_dm(dms, atm, bas, env)
-        cvhfopt = vhfopt._this
+        if isinstance(vhfopt, _VHFOpt):
+            cvhfopt = ctypes.byref(vhfopt._this)
+        else:
+            cvhfopt = vhfopt._this
         cintopt = vhfopt._cintopt
         cintor = getattr(libcvhf, vhfopt._intor)
     if cintopt is None:

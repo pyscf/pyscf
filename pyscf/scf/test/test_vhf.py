@@ -202,12 +202,13 @@ libcvhf = _vhf.libcvhf
 
 class _VHFOpt(_vhf._VHFOpt):
     def __init__(self, mol, intor=None, prescreen='CVHFnoscreen',
-                 qcondname=None, dmcondname=None, omega=None):
+                 qcondname=None, dmcondname=None, direct_scf_tol=1e-14,
+                 omega=None):
         assert omega is not None
         with mol.with_short_range_coulomb(omega):
             _vhf._VHFOpt.__init__(self, mol, intor, prescreen, qcondname, dmcondname)
         self.omega = omega
-        self._this.direct_scf_cutoff = numpy.log(1e-14)
+        self._this.direct_scf_cutoff = numpy.log(direct_scf_tol)
 
     def init_cvhf_direct(self, mol, intor=None, qcondname=None):
         nbas = mol.nbas

@@ -225,21 +225,17 @@ scf.hf.SCF.COSX = sgx_fit
 mcscf.casci.CASCI.COSX = sgx_fit
 
 
-def _make_opt(mol, pjs=False):
+def _make_opt(mol, pjs=False,
+              direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)):
     '''Optimizer to genrate 3-center 2-electron integrals'''
-    intor = mol._add_suffix('int1e_grids')
-    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, intor)
-    # intor 'int1e_ovlp' is used by the prescreen method
-    # 'SGXnr_ovlp_prescreen' only. Not used again in other places.
-    # It can be released early
     if pjs:
-        vhfopt = _vhf.SGXOpt(mol, 'int1e_ovlp', 'SGXnr_ovlp_prescreen',
-                             'SGXsetnr_direct_scf', 'SGXsetnr_direct_scf_dm')
+        vhfopt = _vhf.SGXOpt(mol, 'int1e_grids', 'SGXnr_ovlp_prescreen',
+                             dmcondname='SGXnr_dm_cond',
+                             direct_scf_tol=direct_scf_tol)
     else:
-        vhfopt = _vhf.VHFOpt(mol, 'int1e_ovlp', 'SGXnr_ovlp_prescreen',
-                             'SGXsetnr_direct_scf')
-    vhfopt._intor = intor
-    vhfopt._cintopt = cintopt
+        vhfopt = _vhf._VHFOpt(mol, 'int1e_grids', 'SGXnr_ovlp_prescreen',
+                              direct_scf_tol=direct_scf_tol)
+    vhfopt.init_cvhf_direct(mol, 'int1e_ovlp', 'SGXnr_q_cond')
     return vhfopt
 
 
@@ -366,21 +362,3 @@ class SGX(lib.StreamObject):
         else:
             vj, vk = sgx_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
         return vj, vk
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.build(
-        atom = [["O" , (0. , 0.     , 0.)],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)] ],
-        basis = 'ccpvdz',
-    )
-    method = sgx_fit(scf.RHF(mol), 'weigend')
-    energy = method.scf()
-    print(energy - -76.02673747045691)
-
-    method.with_df.dfj = True
-    energy = method.scf()
-    print(energy - -76.02686422219752)

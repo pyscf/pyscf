@@ -260,7 +260,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=
     '''
     if sgxopt is None:
         from pyscf.sgx import sgx
-        sgxopt = sgx._make_opt(mol, pjs=pjs)
+        sgxopt = sgx._make_opt(mol, pjs, direct_scf_tol)
     sgxopt.direct_scf_tol = direct_scf_tol
 
     ncomp = 1
@@ -316,7 +316,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=
         drv(cintor, fdot, fjk, dmsptr, vjkptr, n_dm, ncomp,
             (ctypes.c_int*4)(*shls_slice),
             ao_loc.ctypes.data_as(ctypes.c_void_p),
-            sgxopt._cintopt, sgxopt._this,
+            sgxopt._cintopt, ctypes.byref(sgxopt._this),
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
             env.ctypes.data_as(ctypes.c_void_p),
@@ -355,45 +355,3 @@ def get_gridss(mol, level=1, gthrd=1e-10):
     return grids
 
 get_jk = get_jk_favorj
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    from pyscf.sgx import sgx
-    mol = gto.Mole()
-    mol.build(
-        verbose = 0,
-        atom = [["O" , (0. , 0.     , 0.)],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)] ],
-        basis = 'ccpvdz',
-    )
-    dm = scf.RHF(mol).run().make_rdm1()
-    vjref, vkref = scf.hf.get_jk(mol, dm)
-    print(numpy.einsum('ij,ji->', vjref, dm))
-    print(numpy.einsum('ij,ji->', vkref, dm))
-
-    sgxobj = sgx.SGX(mol)
-    sgxobj.grids = get_gridss(mol, 0, 1e-10)
-    with lib.temporary_env(sgxobj, debug=True):
-        vj, vk = get_jk_favork(sgxobj, dm)
-    print(numpy.einsum('ij,ji->', vj, dm))
-    print(numpy.einsum('ij,ji->', vk, dm))
-    print(abs(vjref-vj).max().max())
-    print(abs(vkref-vk).max().max())
-    with lib.temporary_env(sgxobj, debug=False):
-        vj1, vk1 = get_jk_favork(sgxobj, dm)
-    print(abs(vj - vj1).max())
-    print(abs(vk - vk1).max())
-
-    with lib.temporary_env(sgxobj, debug=True):
-        vj, vk = get_jk_favorj(sgxobj, dm)
-    print(numpy.einsum('ij,ji->', vj, dm))
-    print(numpy.einsum('ij,ji->', vk, dm))
-    print(abs(vjref-vj).max().max())
-    print(abs(vkref-vk).max().max())
-
-    with lib.temporary_env(sgxobj, debug=False):
-        vj1, vk1 = get_jk_favorj(sgxobj, dm)
-    print(abs(vj - vj1).max())
-    print(abs(vk - vk1).max())

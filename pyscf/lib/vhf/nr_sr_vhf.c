@@ -840,9 +840,9 @@ void CVHFnr_sr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
 // sqrt(-log(1e-9))
 #define R_GUESS_FAC     4.5f
 
-void CVHFsetnr_sr_direct_scf(int (*intor)(), CINTOpt *cintopt, float *q_cond,
-                             int *ao_loc, int *atm, int natm,
-                             int *bas, int nbas, double *env)
+void CVHFnr_sr_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, float *q_cond,
+                            int *ao_loc, int *atm, int natm,
+                            int *bas, int nbas, double *env)
 {
         size_t Nbas = nbas;
         size_t Nbas2 = Nbas * Nbas;
@@ -993,4 +993,12 @@ void CVHFsetnr_sr_direct_scf(int (*intor)(), CINTOpt *cintopt, float *q_cond,
         free(cache);
 }
         free(exps);
+}
+
+void CVHFsetnr_sr_direct_scf(int (*intor)(), CINTOpt *cintopt, float *q_cond,
+                             int *ao_loc, int *atm, int natm,
+                             int *bas, int nbas, double *env)
+{
+        CVHFnr_sr_int2e_q_cond(intor, cintopt, q_cond, ao_loc,
+                               atm, natm, bas, nbas, env);
 }

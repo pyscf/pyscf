@@ -521,13 +521,10 @@ class SCF(hf.SCF):
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
-        def set_vkscreen(opt, name):
-            opt._this.contents.r_vkscreen = _vhf._fpointer(name)
-        opt = _vhf.VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
-                          'CVHFrkbllll_direct_scf',
-                          'CVHFrkbllll_direct_scf_dm')
-        opt.direct_scf_tol = self.direct_scf_tol
-        set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
+        opt = dhf._VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
+                          'CVHFrkb_q_cond', 'CVHFrkb_dm_cond',
+                          direct_scf_tol=self.direct_scf_tol)
+        opt._this.r_vkscreen = _vhf._fpointer('CVHFrkbllll_vkscreen')
         return opt
 
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,

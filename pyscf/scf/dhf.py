@@ -22,6 +22,7 @@ Dirac Hartree-Fock
 
 
 from functools import reduce
+import ctypes
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -554,38 +555,32 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
         def set_vkscreen(opt, name):
-            opt._this.contents.r_vkscreen = _vhf._fpointer(name)
+            opt._this.r_vkscreen = _vhf._fpointer(name)
 
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        with mol.with_integral_screen(self.direct_scf_tol**2):
-            opt_llll = _vhf.VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
-                                   'CVHFrkbllll_direct_scf',
-                                   'CVHFrkbllll_direct_scf_dm')
-            opt_llll.direct_scf_tol = self.direct_scf_tol
-            set_vkscreen(opt_llll, 'CVHFrkbllll_vkscreen')
-            opt_ssss = _vhf.VHFOpt(mol, 'int2e_spsp1spsp2_spinor',
-                                   'CVHFrkbllll_prescreen',
-                                   'CVHFrkbssss_direct_scf',
-                                   'CVHFrkbssss_direct_scf_dm')
-            c1 = .5 / lib.param.LIGHT_SPEED
-            q_cond = opt_ssss.get_q_cond()
-            q_cond *= c1**2
-            opt_ssss.direct_scf_tol = self.direct_scf_tol
-            set_vkscreen(opt_ssss, 'CVHFrkbllll_vkscreen')
-            opt_ssll = _vhf.VHFOpt(mol, 'int2e_spsp1_spinor',
-                                   'CVHFrkbssll_prescreen',
-                                   'CVHFrkbssll_direct_scf',
-                                   'CVHFrkbssll_direct_scf_dm')
-            opt_ssll.direct_scf_tol = self.direct_scf_tol
-            set_vkscreen(opt_ssll, 'CVHFrkbssll_vkscreen')
-            nbas = mol.nbas
-            # The second parts of q_cond corresponds to ssss integrals. They
-            # need to be scaled by the factor (1/2c)^2
-            q_cond = opt_ssll.get_q_cond(shape=(2, nbas, nbas))
-            q_cond[1] *= c1**2
+        opt_llll = _VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
+                           'CVHFrkb_q_cond', 'CVHFrkb_dm_cond',
+                           direct_scf_tol=self.direct_scf_tol)
+        set_vkscreen(opt_llll, 'CVHFrkbllll_vkscreen')
 
-#TODO: prescreen for gaunt
-            opt_gaunt = None
+        c1 = .5 / lib.param.LIGHT_SPEED
+        opt_ssss = _VHFOpt(mol, 'int2e_spsp1spsp2_spinor',
+                           'CVHFrkbllll_prescreen', 'CVHFrkb_q_cond',
+                           'CVHFrkb_dm_cond',
+                           direct_scf_tol=self.direct_scf_tol/c1**4)
+        opt_ssss.direct_scf_tol = self.direct_scf_tol
+        opt_ssss.q_cond *= c1**2
+        set_vkscreen(opt_ssss, 'CVHFrkbllll_vkscreen')
+
+        opt_ssll = _VHFOpt(mol, 'int2e_spsp1_spinor',
+                           'CVHFrkbssll_prescreen',
+                           dmcondname='CVHFrkbssll_dm_cond',
+                           direct_scf_tol=self.direct_scf_tol)
+        opt_ssll.q_cond = numpy.array([opt_llll.q_cond, opt_ssss.q_cond])
+        set_vkscreen(opt_ssll, 'CVHFrkbssll_vkscreen')
+
+        #TODO: prescreen for gaunt
+        opt_gaunt = None
         logger.timer(self, 'init_direct_scf', *cpu0)
         return opt_llll, opt_ssll, opt_ssss, opt_gaunt
 
@@ -988,6 +983,29 @@ def _proj_dmll(mol_nr, dm_nr, mol):
     dm_ll = reduce(numpy.dot, (proj, dm_nr*.5, proj.T.conj()))
     dm[:n2c,:n2c] = (dm_ll + time_reversal_matrix(mol, dm_ll)) * .5
     return dm
+
+class _VHFOpt(_vhf._VHFOpt):
+    def set_dm(self, dm, atm, bas, env):
+        if self._dmcondname is None:
+            return
+
+        mol = self.mol
+        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+            n_dm = 1
+        else:
+            n_dm = len(dm)
+        dm = numpy.asarray(dm, order='C')
+        ao_loc = mol.ao_loc_2c()
+        if isinstance(self._dmcondname, ctypes._CFuncPtr):
+            fdmcond = self._dmcondname
+        else:
+            fdmcond = getattr(_vhf.libcvhf, self._dmcondname)
+        nbas = mol.nbas
+        dm_cond = numpy.empty((n_dm*2, nbas, nbas))
+        fdmcond(dm_cond.ctypes, dm.ctypes, ctypes.c_int(n_dm),
+                ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+                mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+        self.dm_cond = dm_cond
 
 
 if __name__ == '__main__':

@@ -338,12 +338,12 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     mol = dfobj.mol
     if dfobj._vjopt is None:
         dfobj.auxmol = auxmol = addons.make_auxmol(mol, dfobj.auxbasis)
-        opt = _vhf.VHFOpt(mol, 'int3c2e', 'CVHFnr3c2e_schwarz_cond')
-        opt.direct_scf_tol = direct_scf_tol
+        opt = _vhf._VHFOpt(mol, 'int3c2e', 'CVHFnr3c2e_schwarz_cond',
+                           dmcondname='CVHFnr_dm_cond',
+                           direct_scf_tol=direct_scf_tol)
 
         # q_cond part 1: the regular int2e (ij|ij) for mol's basis
-        opt.init_cvhf_direct(mol, 'int2e', 'CVHFsetnr_direct_scf')
-        mol_q_cond = lib.frompointer(opt._this.contents.q_cond, mol.nbas**2)
+        opt.init_cvhf_direct(mol, 'int2e', 'CVHFnr_int2e_q_cond')
 
         # Update q_cond to include the 2e-integrals (auxmol|auxmol)
         j2c = auxmol.intor('int2c2e', hermi=1)
@@ -351,10 +351,8 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
         aux_loc = auxmol.ao_loc
         aux_q_cond = [j2c_diag[i0:i1].max()
                       for i0, i1 in zip(aux_loc[:-1], aux_loc[1:])]
-        q_cond = numpy.hstack((mol_q_cond, aux_q_cond))
-        fsetqcond = _vhf.libcvhf.CVHFset_q_cond
-        fsetqcond(opt._this, q_cond.ctypes.data_as(ctypes.c_void_p),
-                  ctypes.c_int(q_cond.size))
+        q_cond = numpy.hstack((opt.q_cond.ravel(), aux_q_cond))
+        opt.q_cond = q_cond
 
         try:
             opt.j2c = j2c = scipy.linalg.cho_factor(j2c, lower=True)
@@ -388,8 +386,7 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     nbas = mol.nbas
     nbas1 = mol.nbas + dfobj.auxmol.nbas
     shls_slice = (0, nbas, 0, nbas, nbas, nbas1, nbas1, nbas1+1)
-    with lib.temporary_env(opt, prescreen='CVHFnr3c2e_vj_pass1_prescreen',
-                           _dmcondname='CVHFsetnr_direct_scf_dm'):
+    with lib.temporary_env(opt, prescreen='CVHFnr3c2e_vj_pass1_prescreen'):
         jaux = jk.get_jk(fakemol, dm, ['ijkl,ji->kl']*n_dm, 'int3c2e',
                          aosym='s2ij', hermi=0, shls_slice=shls_slice,
                          vhfopt=opt)
@@ -408,17 +405,14 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     # Next compute the Coulomb matrix
     # j3c = fauxe2(mol, auxmol)
     # vj = numpy.einsum('ijk,k->ij', j3c, rho)
+    # temporarily set "_dmcondname=None" to skip the call to set_dm method.
     with lib.temporary_env(opt, prescreen='CVHFnr3c2e_vj_pass2_prescreen',
                            _dmcondname=None):
         # CVHFnr3c2e_vj_pass2_prescreen requires custom dm_cond
         aux_loc = dfobj.auxmol.ao_loc
         dm_cond = [abs(rho[:,:,i0:i1]).max()
                    for i0, i1 in zip(aux_loc[:-1], aux_loc[1:])]
-        dm_cond = numpy.array(dm_cond)
-        fsetcond = _vhf.libcvhf.CVHFset_dm_cond
-        fsetcond(opt._this, dm_cond.ctypes.data_as(ctypes.c_void_p),
-                  ctypes.c_int(dm_cond.size))
-
+        opt.dm_cond = numpy.array(dm_cond)
         vj = jk.get_jk(fakemol, rho, ['ijkl,lk->ij']*n_dm, 'int3c2e',
                        aosym='s2ij', hermi=1, shls_slice=shls_slice,
                        vhfopt=opt)
@@ -546,7 +540,7 @@ if __name__ == '__main__':
     energy = method.scf()
     print(energy, -76.0807386770) # normal DHF energy is -76.0815679438127
 
-    method = density_fit(pyscf.scf.UKS(mol), 'weigend')
+    method = density_fit(pyscf.scf.UKS(mol), 'weigend', only_dfj = True)
     energy = method.scf()
     print(energy, -75.8547753298)
 

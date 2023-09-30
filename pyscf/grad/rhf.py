@@ -150,28 +150,26 @@ def get_jk(mol, dm):
     '''J = ((-nabla i) j| kl) D_lk
     K = ((-nabla i) j| kl) D_jk
     '''
-    vhfopt = _vhf.VHFOpt(mol, 'int2e_ip1ip2', 'CVHFgrad_jk_prescreen',
-                         'CVHFgrad_jk_direct_scf')
-    dm = numpy.asarray(dm, order='C')
-    if dm.ndim == 3:
-        n_dm = dm.shape[0]
-    else:
-        n_dm = 1
+    libcvhf = _vhf.libcvhf
+    vhfopt = _vhf._VHFOpt(mol, 'int2e_ip1', 'CVHFgrad_jk_prescreen',
+                          dmcondname='CVHFnr_dm_cond1')
     ao_loc = mol.ao_loc_nr()
-    fsetdm = getattr(_vhf.libcvhf, 'CVHFgrad_jk_direct_scf_dm')
-    fsetdm(vhfopt._this,
-           dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
-           ao_loc.ctypes.data_as(ctypes.c_void_p),
-           mol._atm.ctypes.data_as(ctypes.c_void_p), mol.natm,
-           mol._bas.ctypes.data_as(ctypes.c_void_p), mol.nbas,
-           mol._env.ctypes.data_as(ctypes.c_void_p))
+    nbas = mol.nbas
+    q_cond = numpy.empty((2, nbas, nbas))
+    with mol.with_integral_screen(vhfopt.direct_scf_tol**2):
+        libcvhf.CVHFnr_int2e_pp_q_cond(
+            getattr(libcvhf, mol._add_suffix('int2e_ip1ip2')),
+            lib.c_null_ptr(), q_cond[0].ctypes,
+            ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+            mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+        libcvhf.CVHFnr_int2e_q_cond(
+            getattr(libcvhf, mol._add_suffix('int2e')),
+            lib.c_null_ptr(), q_cond[1].ctypes,
+            ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+            mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+    vhfopt.q_cond = q_cond
 
-    # Update the vhfopt's attributes intor.  Function direct_mapdm needs
-    # vhfopt._intor and vhfopt._cintopt to compute J/K.  intor was initialized
-    # as int2e_ip1ip2. It should be int2e_ip1
-    vhfopt._intor = intor = mol._add_suffix('int2e_ip1')
-    vhfopt._cintopt = None
-
+    intor = mol._add_suffix('int2e_ip1')
     vj, vk = _vhf.direct_mapdm(intor,  # (nabla i,j|k,l)
                                's2kl', # ip1_sph has k>=l,
                                ('lk->s1ij', 'jk->s1il'),

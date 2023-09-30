@@ -464,6 +464,28 @@ void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, int len)
         NPdcopy(opt->q_cond, q_cond, len);
 }
 
+void CVHFnr_dm_cond1(double *dm_cond, double *dm, int nset, int *ao_loc,
+                     int *atm, int natm, int *bas, int nbas, double *env)
+{
+        size_t nao = ao_loc[nbas];
+        double dmax;
+        int i, j, ish, jsh;
+        int iset;
+        double *pdm;
+        for (ish = 0; ish < nbas; ish++) {
+        for (jsh = 0; jsh < nbas; jsh++) {
+                dmax = 0;
+                for (iset = 0; iset < nset; iset++) {
+                        pdm = dm + nao*nao*iset;
+                        for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
+                        for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
+                                dmax = MAX(dmax, fabs(pdm[i*nao+j]));
+                        } }
+                }
+                dm_cond[ish*nbas+jsh] = dmax;
+        } }
+}
+
 void CVHFnr_dm_cond(double *dm_cond, double *dm, int nset, int *ao_loc,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
