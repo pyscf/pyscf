@@ -491,7 +491,6 @@ class KnownValues(unittest.TestCase):
         td = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
         ref = numpy.array([0.30124900879, 0.358722766464, 0.3950184783571])
         self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
-        
 
         # TDA without equilibrium_solvation
         mf = mol.RHF().ddCOSMO().run(conv_tol=1e-10)

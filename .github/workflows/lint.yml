@@ -29,7 +29,7 @@ jobs:
     - name: Install pycodestyle
       run: pip install pycodestyle
     - name: Lint using pycodestyle
-      run: pycodestyle --select=E111,W191 pyscf
+      run: pycodestyle --select=E111,W191,W293 pyscf
 
 #      - name: Static analysis
 #        uses: suo/flake8-github-action@releases/v1

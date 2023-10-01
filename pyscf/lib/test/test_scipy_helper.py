@@ -53,7 +53,7 @@ class KnownValues(unittest.TestCase):
             self.assertTrue(numpy.allclose(L, L_ref, atol=1.0e-14))
             self.assertTrue(numpy.array_equal(piv, piv_ref))
             self.assertEqual(rank, 1)
-    
+
     def test_pivoted_cholesky_10x10(self):
         for func in self.pivoted_cholesky:
             # Positive-definite 10x10 matrix A
@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
                 for j in range(i+1, 10):
                     self.assertEqual(L[i, j], 0)
             self.assertTrue(numpy.allclose(LtL, PtAP, atol=1.0e-12))
-    
+
     def test_10x10_singular(self):
         for func in self.pivoted_cholesky:
             # Positive-semidefinite 10x10 matrix A with rank 7

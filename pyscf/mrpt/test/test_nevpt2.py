@@ -186,7 +186,7 @@ class KnownValues(unittest.TestCase):
         mc.fcisolver=fci.solver(mol,singlet=True)
         mc.fcisolver.nroots=2
         mc.kernel(orbital)
-        
+
         # Ground State
         mp0 = nevpt2.NEVPT(mc, root=0)
         mp0.kernel()
