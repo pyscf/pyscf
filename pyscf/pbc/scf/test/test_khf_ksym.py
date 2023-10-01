@@ -122,7 +122,7 @@ class KnownValues(unittest.TestCase):
     def test_krhf_df(self):
         kpts0 = He.make_kpts(nk)
         kmf0 = khf.KRHF(He, kpts=kpts0).density_fit().run()
-        
+
         kpts = He.make_kpts(nk, space_group_symmetry=True,time_reversal_symmetry=True)
         kmf = pscf.KRHF(He, kpts=kpts).density_fit().run()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)

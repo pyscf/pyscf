@@ -36,7 +36,7 @@ class KnownValues(unittest.TestCase):
     @classmethod
     def tearDownClass(self):
         del self.mol, self.mf, self.gf2
-        
+
     def test_dfuagf2_beh_ground_state(self):
         # tests the ground state AGF2 energies for BeH/cc-pvdz
         self.assertTrue(self.gf2.converged)

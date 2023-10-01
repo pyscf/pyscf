@@ -64,13 +64,13 @@ class KnownValues(unittest.TestCase):
 
         driver = md.integrators.NVTBerendson(h2o_scanner, veloc=init_veloc,
                                              dt=20, steps=50, T=300, taut=413)
-        
+
         driver._masses = np.array(
                 [data.elements.COMMON_ISOTOPE_MASSES[m] * data.nist.AMU2AU
                  for m in driver.mol.atom_charges()])
         driver.ekin = driver.compute_kinetic_energy()
         self.assertAlmostEqual(driver.temperature(), 298.13, delta=0.2)
-        
+
     def test_temperature_linear(self):
         # Property Checked: Linear Molecule Temperature
         # unit-converted velocities temp = 468.31 obtained from ORCA
@@ -79,7 +79,7 @@ class KnownValues(unittest.TestCase):
 
         driver = md.integrators.NVTBerendson(o2_scanner, veloc=init_veloc,
                                              dt=20, steps=50, T=300, taut=413)
-        
+
         driver._masses = np.array(
                 [data.elements.COMMON_ISOTOPE_MASSES[m] * data.nist.AMU2AU
                  for m in driver.mol.atom_charges()])
