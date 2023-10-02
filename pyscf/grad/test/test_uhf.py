@@ -207,4 +207,3 @@ H             -0.43459905    0.65805058   -0.00861418''')
 if __name__ == "__main__":
     print("Full Tests for UHF Gradients")
     unittest.main()
-

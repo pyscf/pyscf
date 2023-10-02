@@ -115,4 +115,3 @@ def load(file_or_basis_name, symb, optimize=OPTIMIZE_CONTRACTION):
     return b
 
 del(OPTIMIZE_CONTRACTION)
-

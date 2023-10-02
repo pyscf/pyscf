@@ -415,4 +415,3 @@ if __name__ == '__main__':
     gw.kernel(orbs=[nocc-1,nocc])
     print(gw.mo_energy[nocc-1] - -0.44684106)
     print(gw.mo_energy[nocc] - 0.17292032)
-

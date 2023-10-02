@@ -1538,4 +1538,3 @@ if __name__ == '__main__':
     mc.verbose = 4
     mc = state_specific_(mc, 2)
     emc = mc.kernel()[0]
-

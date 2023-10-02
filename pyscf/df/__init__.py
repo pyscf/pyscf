@@ -43,4 +43,3 @@ def density_fit(obj, *args, **kwargs):
     '''Given SCF/MCSCF or post-HF object, use density fitting technique to
     approximate the 2e integrals.'''
     return obj.density_fit(*args, **kwargs)
-

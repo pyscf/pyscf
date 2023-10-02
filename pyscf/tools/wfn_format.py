@@ -245,4 +245,3 @@ if __name__ == '__main__':
         write_mo(f2, mol, mc.mo_coeff[:,:nmo])
     with open('rdm_wfn.wfn', 'w') as f2:
         write_mo(f2, mol, mc.mo_coeff[:,:nmo], mo_occ=mf.mo_occ[:nmo])
-

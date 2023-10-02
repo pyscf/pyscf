@@ -125,4 +125,3 @@ def KROKS(cell, *args, **kwargs):
 def KUKS(cell, *args, **kwargs):
     from pyscf.pbc import dft
     return dft.KUKS(cell, *args, **kwargs)
-

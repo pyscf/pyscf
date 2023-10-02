@@ -237,4 +237,3 @@ def new_logger(rec=None, verbose=None):
     else:
         log = Logger(rec.stdout, rec.verbose)
     return log
-

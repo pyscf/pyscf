@@ -114,4 +114,3 @@ scf.hf.RHF.CISD = lib.class_as_method(RCISD)
 scf.uhf.UHF.CISD = lib.class_as_method(UCISD)
 scf.ghf.GHF.CISD = lib.class_as_method(GCISD)
 scf.rohf.ROHF.CISD = None
-

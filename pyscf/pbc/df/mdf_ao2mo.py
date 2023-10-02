@@ -174,4 +174,3 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
             process(uniq_id, kpt, fswap)
 
     return out
-

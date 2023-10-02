@@ -23,4 +23,3 @@ from pyscf.scf.chkfile import dump_scf
 
 def load_scf(chkfile):
     return load_cell(chkfile), load(chkfile, 'scf')
-

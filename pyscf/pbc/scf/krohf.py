@@ -430,4 +430,3 @@ if __name__ == '__main__':
     mf = KROHF(cell, [2,1,1])
     mf.kernel()
     mf.analyze()
-

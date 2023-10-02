@@ -245,4 +245,3 @@ if __name__ == '__main__':
 
     e1 = cis.kernel(h1e, eri, norb, nelec)[0]
     print(e1, e1 - -7.7466756526056004)
-

@@ -62,4 +62,3 @@ def ecp_int(cell, kpts=None):
     if kpts is None or numpy.shape(kpts) == (3,):
         mat = mat[0]
     return mat
-
