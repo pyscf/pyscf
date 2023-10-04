@@ -1033,9 +1033,9 @@ void PBCVHF_direct_drv_nodddd(
         free(qidx_iijj);
 }
 
-void PBCVHFsetnr_direct_scf(int (*intor)(), CINTOpt *cintopt, int16_t *qindex,
-                            int *ao_loc, int *atm, int natm,
-                            int *bas, int nbas, double *env)
+void PBCVHFnr_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, int16_t *qindex,
+                           int *ao_loc, int *atm, int natm,
+                           int *bas, int nbas, double *env)
 {
         size_t Nbas = nbas;
         size_t Nbas2 = Nbas * Nbas;
@@ -1109,8 +1109,15 @@ void PBCVHFsetnr_direct_scf(int (*intor)(), CINTOpt *cintopt, int16_t *qindex,
 }
 }
 
-void PBCVHFsetnr_sindex(int16_t *sindex, int *atm, int natm,
-                        int *bas, int nbas, double *env)
+void PBCVHFsetnr_direct_scf(int (*intor)(), CINTOpt *cintopt, int16_t *qindex,
+                            int *ao_loc, int *atm, int natm,
+                            int *bas, int nbas, double *env)
+{
+        PBCVHFnr_int2e_q_cond(intor, cintopt, qindex, ao_loc, atm, natm, bas, nbas, env);
+}
+
+void PBCVHFnr_sindex(int16_t *sindex, int *atm, int natm,
+                     int *bas, int nbas, double *env)
 {
         size_t Nbas = nbas;
         size_t Nbas1 = nbas + 1;
@@ -1219,4 +1226,10 @@ void PBCVHFsetnr_sindex(int16_t *sindex, int *atm, int natm,
 }
         free(exps);
         free(exps_group_loc);
+}
+
+void PBCVHFsetnr_sindex(int16_t *sindex, int *atm, int natm,
+                        int *bas, int nbas, double *env)
+{
+        PBCVHFnr_sindex(sindex, atm, natm, bas, nbas, env);
 }

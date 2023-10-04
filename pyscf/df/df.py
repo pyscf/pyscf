@@ -91,7 +91,7 @@ class DF(lib.StreamObject):
 # Following are not input options
         self.auxmol = None
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
-        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        self._cderi_to_save = None
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._vjopt = None
@@ -118,10 +118,6 @@ class DF(lib.StreamObject):
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
                      self._cderi)
-        if isinstance(self._cderi_to_save, str):
-            log.info('_cderi_to_save = %s', self._cderi_to_save)
-        else:
-            log.info('_cderi_to_save = %s', self._cderi_to_save.name)
         return self
 
     def build(self):
@@ -130,6 +126,9 @@ class DF(lib.StreamObject):
 
         self.check_sanity()
         self.dump_flags()
+        if self._cderi is not None and self.auxmol is None:
+            log.info('Skip DF.build(). Tensor _cderi will be used.')
+            return self
 
         mol = self.mol
         auxmol = self.auxmol = addons.make_auxmol(self.mol, self.auxbasis)
@@ -146,15 +145,20 @@ class DF(lib.StreamObject):
                                               auxmol=auxmol,
                                               max_memory=max_memory, verbose=log)
         else:
-            if is_custom_storage:
-                cderi = self._cderi_to_save
-            else:
-                cderi = self._cderi_to_save.name
+            if self._cderi_to_save is None:
+                self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            cderi = self._cderi_to_save
 
-            if isinstance(self._cderi, str):
+            if is_custom_storage:
+                cderi_name = cderi
+            else:
+                cderi_name = cderi.name
+            if self._cderi is None:
+                log.info('_cderi_to_save = %s', cderi_name)
+            else:
                 # If cderi needs to be saved in
                 log.warn('Value of _cderi is ignored. DF integrals will be '
-                         'saved in file %s .', cderi)
+                         'saved in file %s .', cderi_name)
 
             if self._compatible_format:
                 outcore.cholesky_eri(mol, cderi, dataname=self._dataname,
@@ -272,6 +276,8 @@ class DF(lib.StreamObject):
         '''Creates a temporary density fitting object for RSH-DF integrals.
         In this context, only LR or SR integrals for mol and auxmol are computed.
         '''
+        if omega is None:
+            omega = 0
         key = '%.6f' % omega
         if key in self._rsh_df:
             rsh_df = self._rsh_df[key]

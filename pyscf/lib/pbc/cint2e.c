@@ -78,11 +78,19 @@ static void update_int2e_envs(CINTEnvVars *envs, int *shls)
 
         int ibase = envs->li_ceil > envs->lj_ceil;
         int kbase = envs->lk_ceil > envs->ll_ceil;
+#ifdef CINT_SOVERSION
+#if CINT_SOVERSION < 6
         if (envs->nrys_roots <= 2) {
                 ibase = 0;
                 kbase = 0;
         }
-
+#endif
+#else
+        if (envs->nrys_roots <= 2) {
+                ibase = 0;
+                kbase = 0;
+        }
+#endif
         if (kbase) {
                 envs->rx_in_rklrx = envs->rk;
                 envs->rkrl[0] = envs->rk[0] - envs->rl[0];
