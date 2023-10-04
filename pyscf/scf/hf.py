@@ -866,17 +866,9 @@ def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True, omega=None):
         dm = numpy.vstack((dm.real, dm.imag)).reshape(-1,nao,nao)
         hermi = 0
 
-    if omega is None:
+    with mol.with_range_coulomb(omega):
         vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
                              vhfopt, hermi, mol.cart, with_j, with_k)
-    else:
-        # The vhfopt of standard Coulomb operator can be used here as an approximate
-        # integral prescreening conditioner since long-range part Coulomb is always
-        # smaller than standard Coulomb.  It's safe to filter LR integrals with the
-        # integral estimation from standard Coulomb.
-        with mol.with_range_coulomb(omega):
-            vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
-                                 vhfopt, hermi, mol.cart, with_j, with_k)
 
     if dm_dtype == numpy.complex128:
         if with_j:
@@ -1514,7 +1506,7 @@ class SCF(lib.StreamObject):
         self.callback = None
         self.scf_summary = {}
 
-        self.opt = None
+        self._opt = {None: None}
         self._eri = None # Note: self._eri requires large amount of memory
 
         keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'init_guess',
@@ -1527,9 +1519,14 @@ class SCF(lib.StreamObject):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        # lazily initialize direct SCF
-        self.opt = None
         return self
+
+    @property
+    def opt(self):
+        return self._opt[None]
+    @opt.setter
+    def opt(self, x):
+        self._opt[None] = x
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -1550,6 +1547,8 @@ class SCF(lib.StreamObject):
             log.info('DIIS = %s', self.DIIS)
             log.info('diis_start_cycle = %d', self.diis_start_cycle)
             log.info('diis_space = %d', self.diis_space)
+        else:
+            log.info('DIIS disabled')
         log.info('SCF conv_tol = %g', self.conv_tol)
         log.info('SCF conv_tol_grad = %s', self.conv_tol_grad)
         log.info('SCF max_cycles = %d', self.max_cycle)
@@ -1752,11 +1751,11 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         if mol is None: mol = self.mol
         # Integrals < direct_scf_tol may be set to 0 in int2e.
         # Higher accuracy is required for Schwartz inequality prescreening.
-        with mol.with_integral_screen(self.direct_scf_tol**2):
-            opt = _vhf.VHFOpt(mol, 'int2e', 'CVHFnrs8_prescreen',
-                              'CVHFsetnr_direct_scf',
-                              'CVHFsetnr_direct_scf_dm')
-            opt.direct_scf_tol = self.direct_scf_tol
+        cpu0 = (logger.process_clock(), logger.perf_counter())
+        opt = _vhf._VHFOpt(mol, 'int2e', 'CVHFnrs8_prescreen',
+                          'CVHFnr_int2e_q_cond', 'CVHFnr_dm_cond',
+                           self.direct_scf_tol)
+        logger.timer(self, 'init_direct_scf', *cpu0)
         return opt
 
     @lib.with_doc(get_jk.__doc__)
@@ -1765,18 +1764,22 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        if self.direct_scf and self.opt is None:
-            self.opt = self.init_direct_scf(mol)
+        if self.direct_scf and self._opt.get(omega) is None:
+            # Be careful that opt has to be initialized with a proper setting of
+            # omega. opt of regular ERI and SR ERI are incompatible since cint 5.4.0
+            with mol.with_range_coulomb(omega):
+                self._opt[omega] = self.init_direct_scf(mol)
+        vhfopt = self._opt.get(omega)
 
         if with_j and with_k:
-            vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k, omega)
+            vj, vk = get_jk(mol, dm, hermi, vhfopt, with_j, with_k, omega)
         else:
             if with_j:
                 prescreen = 'CVHFnrs8_vj_prescreen'
             else:
                 prescreen = 'CVHFnrs8_vk_prescreen'
-            with lib.temporary_env(self.opt, prescreen=prescreen):
-                vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k, omega)
+            with lib.temporary_env(vhfopt, prescreen=prescreen):
+                vj, vk = get_jk(mol, dm, hermi, vhfopt, with_j, with_k, omega)
 
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
@@ -1897,7 +1900,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         '''Reset mol and relevant attributes associated to the old mol object'''
         if mol is not None:
             self.mol = mol
-        self.opt = None
+        self._opt = {None: None}
         self._eri = None
         return self
 

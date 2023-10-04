@@ -208,7 +208,7 @@ def make_auxmol(mol, auxbasis=None):
 
     if auxbasis is None:
         auxbasis = make_auxbasis(mol)
-    elif '+etb' in auxbasis:
+    elif isinstance(auxbasis, str) and '+etb' in auxbasis:
         dfbasis = auxbasis[:-4]
         auxbasis = aug_etb_for_dfbasis(mol, dfbasis)
     pmol.basis = auxbasis
