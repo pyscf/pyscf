@@ -113,7 +113,7 @@ def PE(method_or_mol, solvent_obj, dm=None):
         return pol_embed.pe_for_post_scf(method_or_mol, solvent_obj, dm)
 
 def PCM(method_or_mol, solvent_obj=None, dm=None):
-    '''Initialize ddPCM model.
+    '''Initialize PCM model.
 
     Examples:
 
