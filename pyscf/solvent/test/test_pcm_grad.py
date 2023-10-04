@@ -15,7 +15,7 @@
 
 import unittest
 import numpy
-from pyscf import scf, gto, df
+from pyscf import scf, gto, mcscf, solvent, cc, lib, tddft, tdscf
 from pyscf.solvent import pcm 
 from pyscf.solvent.grad import pcm as pcm_grad
 
@@ -33,10 +33,17 @@ H       0.7570000000     0.0000000000    -0.4696000000
     epsilon = 35.9
     lebedev_order = 3
 
+    global dx, mol0, mol1, mol2
+    dx = 1e-4
+    mol0 = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B', verbose=0)
+    mol1 = gto.M(atom='H 0 0 %g; H 0 1 1.2; H 1. .1 0; H .5 .5 1'%(-dx), unit='B', verbose=0)
+    mol2 = gto.M(atom='H 0 0 %g; H 0 1 1.2; H 1. .1 0; H .5 .5 1'%dx, unit='B', verbose=0)
+    dx = 2.0*dx
+
 def tearDownModule():
-    global mol
+    global mol, mol0, mol1, mol2
     mol.stdout.close()
-    del mol
+    del mol, mol0, mol1, mol2
 
 class KnownValues(unittest.TestCase):
     def test_dA_dF(self):
@@ -185,6 +192,66 @@ class KnownValues(unittest.TestCase):
         print(f"Gradient error in SS(V)PE: {numpy.linalg.norm(g0 - grad)}")
         assert numpy.linalg.norm(g0 - grad) < 1e-9
     
+    def test_casci_grad(self):
+        mf = scf.RHF(mol0).PCM().run()
+        mc = solvent.PCM(mcscf.CASCI(mf, 2, 2))
+        e, de = mc.nuc_grad_method().as_scanner()(mol0)
+
+        mf = scf.RHF(mol1).run()
+        mc1 = solvent.PCM(mcscf.CASCI(mf, 2, 2)).run()
+        e1 = mc1.e_tot
+        mf = scf.RHF(mol2).run()
+        mc2 = solvent.PCM(mcscf.CASCI(mf, 2, 2)).run()
+        e2 = mc2.e_tot
+        self.assertAlmostEqual((e2-e1)/dx, de[0,2], 3)
+
+
+    def test_casscf_grad(self):
+        mf = scf.RHF(mol0).PCM().run()
+        mc = solvent.PCM(mcscf.CASSCF(mf, 2, 2)).set(conv_tol=1e-9)
+        mc_g = mc.nuc_grad_method().as_scanner()
+        e, de = mc_g(mol0)
+
+        mf = scf.RHF(mol1).run()
+        mc1 = solvent.PCM(mcscf.CASSCF(mf, 2, 2)).run(conv_tol=1e-9)
+        e1 = mc1.e_tot
+        mf = scf.RHF(mol2).run()
+        mc2 = solvent.PCM(mcscf.CASSCF(mf, 2, 2)).run(conv_tol=1e-9)
+        e2 = mc2.e_tot
+        
+        self.assertAlmostEqual((e2-e1)/dx, de[0,2], 2)
+    
+    def test_ccsd_grad(self):
+        mf = scf.RHF(mol0).PCM()
+        mf.conv_tol = 1e-12
+        mf.kernel()
+        mycc = cc.CCSD(mf).PCM()
+        mycc.with_solvent.conv_tol = 1e-12
+        mycc.conv_tol = 1e-12
+        mycc.kernel()
+        e, de = mycc.nuc_grad_method().as_scanner()(mol0)
+
+        mf = scf.RHF(mol1)
+        mf.conv_tol = 1e-12
+        mf.kernel()
+        mycc1 = solvent.PCM(cc.CCSD(mf))
+        mycc1.with_solvent.conv_tol = 1e-12
+        mycc1.conv_tol = 1e-12
+        mycc1.kernel()
+        e1 = mycc1.e_tot
+        
+        mf = scf.RHF(mol2)
+        mf.conv_tol = 1e-12
+        mf.run()
+        mycc2 = solvent.PCM(cc.CCSD(mf))
+        mycc2.with_solvent.conv_tol = 1e-12
+        mycc2.conv_tol = 1e-12
+        mycc2.kernel()
+        e2 = mycc2.e_tot
+        
+        self.assertAlmostEqual((e2-e1)/dx, de[0,2], 3)
+
+
 if __name__ == "__main__":
     print("Full Tests for Gradient of PCMs")
     unittest.main()

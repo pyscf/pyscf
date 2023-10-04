@@ -806,6 +806,7 @@ class DDCOSMO(lib.StreamObject):
             f_epsilon = 1
         epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, Xvec)
         vpcm = .5 * f_epsilon * vmat
+        print(dm[:3,:3])
         return epcm, vpcm
 
     def _B_dot_x(self, dm):

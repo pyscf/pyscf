@@ -15,7 +15,7 @@
 
 import unittest
 import numpy
-from pyscf import scf, gto, df
+from pyscf import scf, gto, solvent, mcscf, cc
 from pyscf.solvent import pcm 
 
 def setUpModule():
@@ -81,6 +81,35 @@ class KnownValues(unittest.TestCase):
         e_tot = mf.kernel()
         print(f"Energy error in SS(V)PE: {numpy.abs(e_tot - -74.9689577454)}")
         assert numpy.abs(e_tot - -74.9689577454) < 1e-9
+    
+    def test_reset(self):
+        mol1 = gto.M(atom='H 0 0 0; H 0 0 .9', basis='cc-pvdz')
+        mf = scf.RHF(mol).density_fit().PCM().newton()
+        mf.reset(mol1)
+        self.assertTrue(mf.mol is mol1)
+        self.assertTrue(mf.with_df.mol is mol1)
+        self.assertTrue(mf.with_solvent.mol is mol1)
+        self.assertTrue(mf._scf.with_df.mol is mol1)
+        self.assertTrue(mf._scf.with_solvent.mol is mol1)
+
+    def test_casci(self):
+        mf = scf.RHF(mol).PCM().run()
+        mc = solvent.PCM(mcscf.CASCI(mf,2,2)).run()
+        assert numpy.abs(mc.e_tot - -74.97040819700919) < 1e-8
+    
+    def test_casscf(self):
+        mf = scf.RHF(mol).run()
+        mc1 = solvent.PCM(mcscf.CASSCF(mf, 2, 2)).run(conv_tol=1e-9)
+        e1 = mc1.e_tot
+        assert numpy.abs(e1 - -74.9709884530835) < 1e-8
+
+    def test_ccsd(self):
+        mf = scf.RHF(mol).PCM()
+        mf.conv_tol = 1e-12
+        mf.kernel()
+        mycc = cc.CCSD(mf).PCM()
+        mycc.kernel()
+        assert numpy.abs(mycc.e_tot - -75.0172322934944) < 1e-8
     
 if __name__ == "__main__":
     print("Full Tests for PCMs")

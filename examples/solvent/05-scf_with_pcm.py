@@ -3,7 +3,7 @@
 An example of using PCM solvent models in the mean-field calculations.
 '''
 
-from pyscf import gto, scf, dft
+from pyscf import gto, scf, dft, cc, solvent, mcscf
 from pyscf.solvent import pcm
 
 mol = gto.M(atom='''
@@ -34,4 +34,16 @@ mf.kernel()
 g = mf.nuc_grad_method()
 grad = g.kernel()
 
+# CCSD, solvent for MP2 can be calcualted in the similar way
+mf = scf.RHF(mol) # default method is C-PCM
+mf.kernel()
+mycc = cc.CCSD(mf).PCM()
+mycc.kernel()
+de = mycc.nuc_grad_method().as_scanner()(mol)
+
+# CASCI
+mf = scf.RHF(mol).PCM()
+mf.kernel()
+mc = solvent.PCM(mcscf.CASCI(mf,2,2))
+de = mc.nuc_grad_method().as_scanner()(mol)
 

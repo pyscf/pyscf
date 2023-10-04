@@ -27,6 +27,7 @@ from pyscf.lib import logger
 from pyscf import gto, df
 from pyscf.solvent import pcm
 from pyscf.solvent.pcm import PI, switch_h
+from pyscf.solvent._attach_solvent import _Solvation
 
 libdft = lib.load_library('libdft')
 
@@ -143,6 +144,11 @@ def grad_kernel(pcmobj, dm):
     dE = 0.5*v* d(K^-1 R) *v + q*dv
     v^T* d(K^-1 R)v = v^T*K^-1(dR - dK K^-1R)v = v^T K^-1(dR - dK q)
     '''
+    if pcmobj.surface is None:
+        pcmobj.build()
+    if 'v_grids' not in pcmobj._intermediates:
+        pcmobj._get_vind(dm)
+
     mol = pcmobj.mol
     nao = mol.nao
     aoslice = mol.aoslice_by_atom()
@@ -267,6 +273,12 @@ def make_grad_object(mf, grad_method):
     '''
     return solvent gradient object
     '''
+    # Zeroth order method object must be a solvation-enabled method
+    assert isinstance(grad_method.base, _Solvation)
+    if grad_method.base.with_solvent.frozen:
+        raise RuntimeError('Frozen solvent model is not avialbe for energy gradients')
+
+
     grad_method_class = grad_method.__class__
     class WithSolventGrad(grad_method_class):
         def __init__(self, grad_method):
@@ -279,11 +291,11 @@ def make_grad_object(mf, grad_method):
             dm = kwargs.pop('dm', None)
             if dm is None:
                 dm = self.base.make_rdm1(ao_repr=True)
-            
+
             self.de_solvent = grad_kernel(self.base.with_solvent, dm)
-            self.de_solute = grad_method_class.kernel(self, *args, **kwargs)
+            self.de_solute = grad_method_class.kernel(self, *args, **kwargs)            
             self.de = self.de_solute + self.de_solvent
-            
+
             if self.verbose >= logger.NOTE:
                 logger.note(self, '--------------- %s (+%s) gradients ---------------',
                             self.base.__class__.__name__,
