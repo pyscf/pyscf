@@ -376,8 +376,18 @@ Eu F
 2      5.3988000000      -63.6010500000
                     ''')}, charge=2, verbose=0)
         mf = scf.RHF(mol)
+        mf.get_init_guess()
         self.assertEqual(mol.ao_labels()[0], '0 Eu1 5s    ')
         self.assertAlmostEqual(lib.fp(mf.get_hcore()), 22.59028455662168)
+
+    def test_ecp_f_in_valence(self):
+        mol = gto.M(atom='U, 0.00, 0.00, 0.00',
+                    basis={'U': 'crenbl'}, ecp={'U': 'crenbl'},
+                    charge=3, spin=3, verbose=0)
+        mf = scf.ROHF(mol)
+        mf.get_init_guess()
+        self.assertEqual(mol.ao_labels()[40], '0 U 5f-3  ')
+        self.assertAlmostEqual(lib.fp(mf.get_hcore()), -55.38627201912257)
 
 
 if __name__ == '__main__':
