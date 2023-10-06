@@ -65,12 +65,12 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         orbsym = mf.get_orbsym(mo_coeff, ovlp_ao)
         wfnsym = 0
         noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
-        if mol.groupname in ('SO3', 'Dooh', 'Coov'):
-            # TODO: check wave function symmetry
-            log.note('Wave-function symmetry = %s', mol.groupname)
-        else:
+        if mol.groupname in symm.param.POINTGROUP:
             log.note('Wave-function symmetry = %s',
                      symm.irrep_id2name(mol.groupname, wfnsym))
+        else:
+            # TODO: check wave function symmetry for ('SO3', 'Dooh', 'Coov') etc
+            log.note('Wave-function symmetry id = %s', wfnsym)
         log.note('occupancy for each irrep:  ' + (' %4s'*nirrep), *mol.irrep_name)
         log.note('                           ' + (' %4d'*nirrep), *noccs)
         log.note('**** MO energy ****')

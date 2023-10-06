@@ -41,14 +41,15 @@ def smearing_(*args, **kwargs):
 def frac_occ_(mf, tol=1e-3):
     '''
     Addons for SCF methods to assign fractional occupancy for degenerated
-    occpupied HOMOs.
+    occupied HOMOs.
 
     Examples::
+
         >>> mf = gto.M(atom='O 0 0 0; O 0 0 1', verbose=4).RHF()
         >>> mf = scf.addons.frac_occ(mf)
         >>> mf.run()
     '''
-    from pyscf.scf import uhf, rohf
+    from pyscf.scf import hf, uhf, rohf
     old_get_occ = mf.get_occ
     mol = mf.mol
 
@@ -69,8 +70,6 @@ def frac_occ_(mf, tol=1e-3):
             lumo = 0.0
             frac_occ_lst = numpy.zeros_like(mo_energy, dtype=bool)
         return mo_occ, numpy.where(frac_occ_lst)[0], homo, lumo
-
-    get_grad = None
 
     if isinstance(mf, uhf.UHF):
         def get_occ(mo_energy, mo_coeff=None):
@@ -145,7 +144,7 @@ def frac_occ_(mf, tol=1e-3):
             g[uniq_var_b] += fockb[uniq_var_b]
             return g[uniq_var_a | uniq_var_b]
 
-    else:  # RHF
+    elif isinstance(mf, hf.RHF):
         def get_occ(mo_energy, mo_coeff=None):
             nocc = (mol.nelectron+1) // 2  # n_docc + n_socc
             mo_occ, frac_lst, homo, lumo = guess_occ(mo_energy, nocc)
@@ -162,16 +161,31 @@ def frac_occ_(mf, tol=1e-3):
             else:
                 mo_occ = old_get_occ(mo_energy, mo_coeff)
             return mo_occ
+    else:
+        def get_occ(mo_energy, mo_coeff=None):
+            nocc = mol.nelectron
+            mo_occ, frac_lst, homo, lumo = guess_occ(mo_energy, nocc)
+            if abs(homo - lumo) < tol:
+                logger.warn(mf, 'fraction occ = %6g  for orbitals %s',
+                            mo_occ[frac_lst[0]], frac_lst)
+                logger.info(mf, 'HOMO = %.12g  LUMO = %.12g', homo, lumo)
+                logger.debug(mf, '  mo_energy = %s', mo_energy)
+            else:
+                mo_occ = old_get_occ(mo_energy, mo_coeff)
+            return mo_occ
 
     mf.get_occ = get_occ
-    if get_grad is not None:
+    try:
         mf.get_grad = get_grad
+    except NameError:
+        pass
     return mf
 frac_occ = frac_occ_
 
+
 def dynamic_occ_(mf, tol=1e-3):
     '''
-    Dyanmically adjust the occupancy to avoid degeneracy between HOMO and LUMO
+    Dynamically adjust the occupancy to avoid degeneracy between HOMO and LUMO
     '''
     assert (isinstance(mf, hf.RHF))
     old_get_occ = mf.get_occ
@@ -613,7 +627,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
         # Remove with_df for SOSCF method because the post-HF code checks the
         # attribute .with_df to identify whether an SCF object is DF-SCF method.
         # with_df in SOSCF is used in orbital hessian approximation only.  For the
-        # returned SCF object, whehter with_df exists in SOSCF has no effects on the
+        # returned SCF object, whether with_df exists in SOSCF has no effects on the
         # mean-field energy and other properties.
         if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
@@ -918,8 +932,9 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     function first setup the initial guess
     from density fitting calculation then use  for
     Newton solver and call Newton solver.
+
     Newton solver attributes [max_cycle_inner, max_stepsize, ah_start_tol,
-    ah_conv_tol, ah_grad_trust_region, ...] can be passed through **newton_kwargs.
+    ah_conv_tol, ah_grad_trust_region, ...] can be passed through ``**newton_kwargs``.
     '''
     import copy
     from pyscf.lib import logger
@@ -973,7 +988,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
             mf0._numint = approx_numint
 # Note: by setting small_rho_cutoff, dft.get_veff function may overwrite
 # approx_grids and approx_numint.  It will further changes the corresponding
-# mf1 grids and _numint.  If inital guess dm0 or mo_coeff/mo_occ were given,
+# mf1 grids and _numint.  If initial guess dm0 or mo_coeff/mo_occ were given,
 # dft.get_veff are not executed so that more grid points may be found in
 # approx_grids.
             mf0.small_rho_cutoff = mf.small_rho_cutoff * 10
@@ -1005,7 +1020,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 #    def mf_kernel(*args, **kwargs):
 #        logger.warn(mf, "fast_newton is a wrap function to quickly setup and call Newton solver. "
 #                    "There's no need to call kernel function again for fast_newton.")
-#        del (mf.kernel)  # warn once and remove circular depdence
+#        del (mf.kernel)  # warn once and remove circular dependence
 #        return mf.e_tot
 #    mf.kernel = mf_kernel
     return mf

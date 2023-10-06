@@ -313,7 +313,7 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
         vxc = xc_deriv.transform_vxc(rhop, vxc, xctype, spin)
     return exc, vxc, fxc, kxc
 
-# * Mcfun requires functional derivaties to total-density and spin-density.
+# * Mcfun requires functional derivatives to total-density and spin-density.
 # * Make it a global function than a closure so as to be callable by multiprocessing
 def __mcfun_fn_eval_xc(ni, xc_code, xctype, rho, deriv):
     exc, vxc, fxc, kxc = ni.eval_xc_eff(xc_code, rho, deriv=deriv, xctype=xctype)

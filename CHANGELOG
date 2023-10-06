@@ -1,3 +1,8 @@
+PySCF (2023-08-01)
+-----------------------
+* Added
+  - NVT Molecular Dynamics
+
 PySCF 2.3.0 (2023-07-04)
 ------------------------
 * Added
@@ -8,7 +13,7 @@ PySCF 2.3.0 (2023-07-04)
   - TDDFT gradients for triplet states
   - Support complex-valued h1e in fci_slow.absorb_h1e
 * Improved
-  - Update B3LYP functional to make it behave the same to ORCA
+  - Update B3LYP functional to correspond to the original definition
   - Disable CLI parser by default
   - Accuracy and performance of RSDF, GDF and RSJK methods
   - get_lattice_Ls, and energy cutoff estimation

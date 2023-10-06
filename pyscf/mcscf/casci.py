@@ -254,7 +254,7 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
 
 def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                casdm1=None, verbose=None, with_meta_lowdin=WITH_META_LOWDIN):
-    '''Transform active orbitals to natrual orbitals, and update the CI wfn
+    '''Transform active orbitals to natural orbitals, and update the CI wfn
     accordingly
 
     Args:
@@ -282,8 +282,17 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     nmo = mo_coeff.shape[1]
     if casdm1 is None:
         casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
+    if getattr(mo_coeff, 'orbsym', None) is not None:
+        orbsym = numpy.copy(mo_coeff.orbsym)
+    else:
+        orbsym = numpy.zeros(mo_coeff.shape[1], dtype=int)
+    if getattr(mc, 'extrasym', None) is not None:
+        orbsym_extra = numpy.asarray([str(i1) + str(i2)
+                                      for i1, i2 in zip(orbsym, mc.extrasym)])
+    else:
+        orbsym_extra = orbsym
     # orbital symmetry is reserved in this _eig call
-    cas_occ, ucas = mc._eig(-casdm1, ncore, nocc)
+    cas_occ, ucas = mc._eig(-casdm1, ncore, nocc, orbsym_extra[ncore:nocc])
     if sort:
         casorb_idx = numpy.argsort(cas_occ.round(9), kind='mergesort')
         cas_occ = cas_occ[casorb_idx]
@@ -297,7 +306,6 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     mo_coeff1 = mo_coeff.copy()
     mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
     if getattr(mo_coeff, 'orbsym', None) is not None:
-        orbsym = numpy.copy(mo_coeff.orbsym)
         if sort:
             orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
@@ -504,13 +512,19 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         orbsym = mo_coeff.orbsym
     else:
         orbsym = numpy.zeros(nmo, dtype=int)
+    extrasym = getattr(mc, 'extrasym', None)
+    if extrasym is not None:
+        orbsym_extra = numpy.asarray([str(i1) + str(i2)
+                                      for i1, i2 in zip(orbsym, extrasym)])
+    else:
+        orbsym_extra = orbsym
 
     def _diag_subfock_(idx):
         if idx.size > 1:
             c = mo_coeff1[:,idx]
             fock = reduce(numpy.dot, (c.conj().T, fock_ao, c))
             # note the last argument orbysm is needed by mc1step_symm._eig
-            w, c = mc._eig(fock, None, None, orbsym[idx])
+            w, c = mc._eig(fock, None, None, orbsym_extra[idx])
 
             if sort:
                 sub_order = numpy.argsort(w.round(9), kind='mergesort')
@@ -787,6 +801,8 @@ class CASCI(lib.StreamObject):
                                            'mcscf_casci_CASCI_fcisolver_max_cycle', 200)
         self.fcisolver.conv_tol = getattr(__config__,
                                           'mcscf_casci_CASCI_fcisolver_conv_tol', 1e-8)
+        self.frozen = None
+        self.extrasym = None
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -825,6 +841,10 @@ class CASCI(lib.StreamObject):
         nvir = self.mo_coeff.shape[1] - ncore - ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d',
                  self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
+        if self.frozen is not None:
+            log.info('frozen orbitals %s', str(self.frozen))
+        if self.extrasym is not None:
+            log.info('extra symmetry labels:\n%s', str(self.extrasym))
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
         log.info('sorting_mo_energy = %s', self.sorting_mo_energy)

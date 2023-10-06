@@ -293,7 +293,8 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
 #    h_diag[ncore:nocc,ncore:nocc] -= v_diag[:,ncore:nocc]*2
     h_diag = casscf.pack_uniq_var(h_diag)
 
-    hci_diag = [hd - ec - gc*c*4 for hd, ec, gc, c in zip (_Hdiag (h1cas_0, eri_cas), eci0, gci, ci0)]
+    # Fix intermediate normalization? - MRH 2023/09/15
+    hci_diag = [hd - ec - gc*c*2 for hd, ec, gc, c in zip (_Hdiag (h1cas_0, eri_cas), eci0, gci, ci0)]
     hci_diag = [h * w for h, w in zip (hci_diag, weights)]
     hdiag_all = numpy.hstack((h_diag*2, _pack_ci (hci_diag)*2))
 
@@ -308,9 +309,10 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         ci1 = _unpack_ci (x[ngorb:])
 
         # H_cc
+        # Fix intermediate normalization? - MRH 2023/09/15
         hci1 = [hc1 - c1 * ec0 for hc1, c1, ec0 in zip (_Hci (h1cas_0, eri_cas, ci1), ci1, eci0)]
-        hci1 = [hc1 - 2*(hc0 - c0*ec0)*c0.dot(c1) for hc1, hc0, c0, ec0, c1 in zip (hci1, hci0, ci0, eci0, ci1)]
-        hci1 = [hc1 - 2*c0*(hc0 - c0*ec0).dot(c1) for hc1, hc0, c0, ec0, c1 in zip (hci1, hci0, ci0, eci0, ci1)]
+        hci1 = [hc1 - (hc0 - c0*ec0)*c0.dot(c1) for hc1, hc0, c0, ec0, c1 in zip (hci1, hci0, ci0, eci0, ci1)]
+        hci1 = [hc1 - c0*(hc0 - c0*ec0).dot(c1) for hc1, hc0, c0, ec0, c1 in zip (hci1, hci0, ci0, eci0, ci1)]
 
         # H_co
         rc = x1[:,:ncore]

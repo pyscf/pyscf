@@ -282,6 +282,21 @@ def get_kconserv(cell, kpts):
         kconserv[mask] = N
     return kconserv
 
+def get_kconserv_ria(cell, kpts):
+    r''' Get the momentum conservation array for single excitation amplitudes
+    for a set of k-points with appropriate k-shift.
+
+    Given k-point indices m the array kconserv[kshift,m] returns the index n that
+    satifies a shifted momentum conservation,
+
+        (k(m) - k(n) - k(kshift)) \dot a = 2n\pi
+
+    This is used in CIS/EOM-CCSD where the single excitation amplitudes
+        r_{i k(m)}^{a k(n)}
+    are zero unless n satisfies the above.
+    '''
+    # TODO: implement it more efficiently
+    return get_kconserv(cell, kpts)[:,:,0].T
 
 def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     '''Checks antipermutational symmetry for k-point array.

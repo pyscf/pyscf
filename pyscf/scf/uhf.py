@@ -59,6 +59,9 @@ def init_guess_by_atom(mol, breaksym=BREAKSYM):
 def init_guess_by_huckel(mol, breaksym=BREAKSYM):
     return UHF(mol).init_guess_by_huckel(mol, breaksym)
 
+def init_guess_by_mod_huckel(mol, breaksym=BREAKSYM):
+    return UHF(mol).init_guess_by_mod_huckel(mol, breaksym)
+
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for UHF initial guess.
 
@@ -67,7 +70,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
             Whether to project chkfile's orbitals to the new basis.  Note when
             the geometry of the chkfile and the given molecule are very
             different, this projection can produce very poor initial guess.
-            In PES scanning, it is recommended to swith off project.
+            In PES scanning, it is recommended to switch off project.
 
             If project is set to None, the projection is only applied when the
             basis sets of the chkfile's molecule are different to the basis
@@ -863,7 +866,23 @@ class UHF(hf.SCF):
         if user_set_breaksym is not None:
             breaksym = user_set_breaksym
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
-        mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol)
+        mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol, updated_rule = False)
+        mo_energy = (mo_energy, mo_energy)
+        mo_coeff = (mo_coeff, mo_coeff)
+        mo_occ = self.get_occ(mo_energy, mo_coeff)
+        dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
+        if breaksym:
+            dma, dmb = _break_dm_spin_symm(mol, (dma, dmb))
+        return numpy.array((dma,dmb))
+
+    def init_guess_by_mod_huckel(self, mol=None, breaksym=BREAKSYM):
+        if mol is None: mol = self.mol
+        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
+        if user_set_breaksym is not None:
+            breaksym = user_set_breaksym
+        logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+employing the updated GWH rule from doi:10.1021/ja00480a005.''')
+        mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol, updated_rule = True)
         mo_energy = (mo_energy, mo_energy)
         mo_coeff = (mo_coeff, mo_coeff)
         mo_occ = self.get_occ(mo_energy, mo_coeff)

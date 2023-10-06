@@ -78,10 +78,17 @@ static void update_int3c2e_envs(CINTEnvVars *envs, int *shls)
         envs->rk = env + atm(PTR_COORD, bas(ATOM_OF, k_sh));
 
         int ibase = envs->li_ceil > envs->lj_ceil;
+#ifdef CINT_SOVERSION
+#if CINT_SOVERSION < 6
         if (envs->nrys_roots <= 2) {
                 ibase = 0;
         }
-
+#endif
+#else
+        if (envs->nrys_roots <= 2) {
+                ibase = 0;
+        }
+#endif
         if (ibase) {
                 envs->rx_in_rijrx = envs->ri;
                 envs->rirj[0] = envs->ri[0] - envs->rj[0];

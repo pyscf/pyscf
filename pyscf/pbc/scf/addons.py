@@ -579,6 +579,42 @@ def convert_to_khf(mf, out=None):
         out.__dict__.update(mf.__dict__)
         return out
 
+def mo_energy_with_exxdiv_none(mf, mo_coeff=None):
+    ''' compute mo energy from the diagonal of fock matrix with exxdiv=None
+    '''
+    from pyscf.pbc import scf, dft
+    from pyscf.lib import logger
+    log = logger.new_logger(mf)
+
+    if mo_coeff is None: mo_coeff = mf.mo_coeff
+
+    if mf.exxdiv is None and mf.mo_coeff is mo_coeff:
+        return mf.mo_energy
+
+    with lib.temporary_env(mf, exxdiv=None):
+        dm = mf.make_rdm1(mo_coeff)
+        vhf = mf.get_veff(mf.mol, dm)
+        fockao = mf.get_fock(vhf=vhf, dm=dm)
+
+    def _get_moe1(C, fao):
+        return lib.einsum('pi,pq,qi->i', C.conj(), fao, C)
+    def _get_moek(kC, kfao):
+        return [_get_moe1(C, fao) for C,fao in zip(kC, kfao)]
+
+    # avoid using isinstance as some are other's derived class
+    if mf.__class__ in [scf.rhf.RHF, scf.ghf.GHF, dft.rks.RKS, dft.gks.GKS]:
+        return _get_moe1(mo_coeff, fockao)
+    elif mf.__class__ in [scf.uhf.UHF, dft.uks.UKS]:
+        return _get_moek(mo_coeff, fockao)
+    elif mf.__class__ in [scf.krhf.KRHF, scf.kghf.KGHF, dft.krks.KRKS, dft.kgks.KGKS]:
+        return _get_moek(mo_coeff, fockao)
+    elif mf.__class__ in [scf.kuhf.KUHF, dft.kuks.KUKS]:
+        return [_get_moek(kC, kfao) for kC,kfao in zip(mo_coeff,fockao)]
+    else:
+        log.error(f'Unknown SCF type {mf.__class__.__name__}')
+        raise NotImplementedError
+
+
 del (SMEARING_METHOD)
 
 

@@ -61,7 +61,7 @@ if sys.version_info >= (3,):
 
 libpbc = _pbcintor.libpbc
 
-def M(**kwargs):
+def M(*args, **kwargs):
     r'''This is a shortcut to build up Cell object.
 
     Examples:
@@ -70,7 +70,7 @@ def M(**kwargs):
     >>> cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g')
     '''
     cell = Cell()
-    cell.build(**kwargs)
+    cell.build(*args, **kwargs)
     return cell
 C = M
 
@@ -276,12 +276,7 @@ def loads(cellstr):
     # Symmetry class cannot be serialized by dumps function.
     # Recreate it manually
     if cell.natm > 0 and cell.space_group_symmetry:
-        from pyscf.pbc.symm import Symmetry
-        _lattice_symm = Symmetry(cell)
-        _lattice_symm.build(space_group_symmetry=True,
-                            symmorphic=cell.symmorphic,
-                            check_mesh_symmetry=False)
-        cell.lattice_symmetry = _lattice_symm
+        cell.build_lattice_symmetry()
 
     return cell
 
@@ -1268,6 +1263,32 @@ class Cell(mole.Mole):
             logger.debug(self, 'mesh %s is symmetrized as %s', mesh, mesh1)
         return mesh1
 
+    def build_lattice_symmetry(self, check_mesh_symmetry=True):
+        '''Build cell.lattice_symmetry object.
+
+        Kwargs:
+            check_mesh_symmetry : bool
+                For nonsymmorphic symmetry groups, `cell.mesh` may have
+                lower symmetry than the lattice. In this case, if
+                `check_mesh_symmetry` is `True`, the lower symmetry group will
+                be used. Otherwise, if `check_mesh_symmetry` is `False`,
+                the mesh grid will be modified to satisfy the higher symmetry.
+                Default value is `True`.
+
+        Note:
+            This function modifies the attributes of `cell`.
+        '''
+        from pyscf.pbc.symm import Symmetry
+        self.lattice_symmetry = Symmetry(self).build(
+                                    space_group_symmetry=True,
+                                    symmorphic=self.symmorphic,
+                                    check_mesh_symmetry=check_mesh_symmetry)
+        if not check_mesh_symmetry:
+            _mesh_from_build = self._mesh_from_build
+            self.mesh = self.symmetrize_mesh()
+            self._mesh_from_build = _mesh_from_build
+        return self
+
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=mole.ARGPARSE,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
@@ -1484,17 +1505,8 @@ class Cell(mole.Mole):
             self._mesh_from_build = True
 
         if self.space_group_symmetry:
-            from pyscf.pbc.symm import Symmetry
-            _check_mesh_symm = False
-            if not self._mesh_from_build:
-                _check_mesh_symm = True
-            _lattice_symm = Symmetry(self)
-            _lattice_symm.build(space_group_symmetry=True,
-                                symmorphic=self.symmorphic,
-                                check_mesh_symmetry=_check_mesh_symm)
-            self.lattice_symmetry = _lattice_symm
-            if self._mesh_from_build:
-                self._mesh = self.symmetrize_mesh()
+            _check_mesh_symm = not self._mesh_from_build
+            self.build_lattice_symmetry(check_mesh_symmetry=_check_mesh_symm)
 
         if dump_input and not _built and self.verbose > logger.NOTE:
             self.dump_input()
@@ -1505,7 +1517,7 @@ class Cell(mole.Mole):
             logger.info(self, 'low_dim_ft_type = %s', self.low_dim_ft_type)
             logger.info(self, 'Cell volume = %g', self.vol)
             # Check atoms coordinates
-            if self.dimension > 0:
+            if self.dimension > 0 and self.natm > 0:
                 scaled_atom_coords = np.linalg.solve(_a.T, self.atom_coords().T).T
                 atom_boundary_max = scaled_atom_coords[:,:self.dimension].max(axis=0)
                 atom_boundary_min = scaled_atom_coords[:,:self.dimension].min(axis=0)
@@ -1677,6 +1689,7 @@ class Cell(mole.Mole):
 
         Args:
             abs_kpts : (nkpts, 3) ndarray of floats or :class:`KPoints` object
+
             kpts_in_ibz : bool
                 If True, return k-points in IBZ; otherwise, return k-points in BZ.
                 Default value is True. This has effects only if abs_kpts is a

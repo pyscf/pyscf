@@ -50,6 +50,9 @@ class SymAdaptedCASCI(casci.CASCI):
     def kernel(self, mo_coeff=None, ci0=None, verbose=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
+        else: # overwrite self.mo_coeff because it is needed in many methods of this class
+            self.mo_coeff = mo_coeff
+
         if ci0 is None:
             ci0 = self.ci
 

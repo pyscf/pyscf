@@ -517,9 +517,6 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
     # cached twice.
     if mol is mf.mol and not getattr(mf, 'with_df', None):
         mf._eri = mf._scf._eri
-        # If different direct_scf_cutoff is assigned to newton_ah mf.opt
-        # object, mf.opt should be different to mf._scf.opt
-        #mf.opt = mf._scf.opt
 
     rotaiter = _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad, verbose=log)
     next(rotaiter)  # start the iterator
@@ -684,7 +681,7 @@ class _CIAH_SOSCF(object):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self._scf.build(mol)
-        self.opt = None
+        self._opt = {None: None}
         self._eri = None
         return self
 

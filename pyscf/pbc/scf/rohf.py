@@ -128,6 +128,7 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
     init_guess_by_minao  = mol_rohf.ROHF.init_guess_by_minao
     init_guess_by_atom   = mol_rohf.ROHF.init_guess_by_atom
     init_guess_by_huckel = mol_rohf.ROHF.init_guess_by_huckel
+    init_guess_by_mod_huckel = mol_rohf.ROHF.init_guess_by_mod_huckel
 
     analyze = mol_rohf.ROHF.analyze
     canonicalize = mol_rohf.ROHF.canonicalize

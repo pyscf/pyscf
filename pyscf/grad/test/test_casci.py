@@ -272,10 +272,10 @@ def casci_grad_with_ccsd_solver(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad
             casdm2[i,i,j,j] -= 4
             casdm2[i,j,j,i] += 2
     for i in range(no):
-       casdm2[i,i,:,:] -= casdm1 * 2
-       casdm2[:,:,i,i] -= casdm1 * 2
-       casdm2[:,i,i,:] += casdm1
-       casdm2[i,:,:,i] += casdm1
+        casdm2[i,i,:,:] -= casdm1 * 2
+        casdm2[:,:,i,i] -= casdm1 * 2
+        casdm2[:,i,i,:] += casdm1
+        casdm2[i,:,:,i] += casdm1
 
     mc.mo_occ = mc._scf.mo_occ
     mask = numpy.zeros(nmo, dtype=bool)

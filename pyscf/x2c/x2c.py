@@ -521,13 +521,10 @@ class SCF(hf.SCF):
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
-        def set_vkscreen(opt, name):
-            opt._this.contents.r_vkscreen = _vhf._fpointer(name)
-        opt = _vhf.VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
-                          'CVHFrkbllll_direct_scf',
-                          'CVHFrkbllll_direct_scf_dm')
-        opt.direct_scf_tol = self.direct_scf_tol
-        set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
+        opt = dhf._VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
+                          'CVHFrkb_q_cond', 'CVHFrkb_dm_cond',
+                          direct_scf_tol=self.direct_scf_tol)
+        opt._this.r_vkscreen = _vhf._fpointer('CVHFrkbllll_vkscreen')
         return opt
 
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
@@ -535,9 +532,11 @@ class SCF(hf.SCF):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (logger.process_clock(), logger.perf_counter())
-        if self.direct_scf and self.opt is None:
-            self.opt = self.init_direct_scf(mol)
-        vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
+        if self.direct_scf and self._opt.get(omega) is None:
+            with mol.with_range_coulomb(omega):
+                self._opt[omega] = self.init_direct_scf(mol)
+        vhfopt = self._opt.get(omega)
+        vj, vk = get_jk(mol, dm, hermi, vhfopt, with_j, with_k)
         logger.timer(self, 'vj and vk', *t0)
         return vj, vk
 
@@ -758,13 +757,12 @@ def x2c1e_ghf(mf):
             log = logger.new_logger(mol, verbose)
 
             nao = mol.nao
-            dm = dm[:nao,:nao] + dm[nao:,nao:]
-
             charges = mol.atom_charges()
             coords  = mol.atom_coords()
             nucl_dip = numpy.einsum('i,ix->x', charges, coords)
             with mol.with_common_orig(nucl_dip):
-                ao_dip = _block_diag(mol.intor_symmetric('int1e_r'))
+                r = mol.intor_symmetric('int1e_r')
+                ao_dip = numpy.array([_block_diag(x) for x in r])
                 if picture_change:
                     xmol = self.with_x2c.get_xmol()[0]
                     nao = xmol.nao

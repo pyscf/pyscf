@@ -594,13 +594,13 @@ class KnownValues(unittest.TestCase):
         # Manually zero'ing out the frozen elements of the t1/t2
         t1[2, :, 0] = 0.0
         for ki in range(rand_cc.nkpts):
-          for kj in range(rand_cc.nkpts):
-            for ka in range(rand_cc.nkpts):
-              kb = kconserv[ki, ka, kj]
-              if ka == 2:
-                  t2[ki, kj, ka, :, :, 0] = 0.0
-              if kb == 2:
-                  t2[ki, kj, ka, :, :, :, 0] = 0.0
+            for kj in range(rand_cc.nkpts):
+                for ka in range(rand_cc.nkpts):
+                    kb = kconserv[ki, ka, kj]
+                    if ka == 2:
+                        t2[ki, kj, ka, :, :, 0] = 0.0
+                    if kb == 2:
+                        t2[ki, kj, ka, :, :, :, 0] = 0.0
 
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
         self.assertAlmostEqual(fp(Ht1), (-19.6637196882-16.2773841431j), 6)

@@ -44,7 +44,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
             Whether to project chkfile's orbitals to the new basis.  Note when
             the geometry of the chkfile and the given molecule are very
             different, this projection can produce very poor initial guess.
-            In PES scanning, it is recommended to swith off project.
+            In PES scanning, it is recommended to switch off project.
 
             If project is set to None, the projection is only applied when the
             basis sets of the chkfile's molecule are different to the basis
@@ -431,6 +431,13 @@ class GHF(hf.SCF):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
         return _from_rhf_init_dm(hf.init_guess_by_huckel(mol))
+
+    @lib.with_doc(hf.SCF.init_guess_by_mod_huckel.__doc__)
+    def init_guess_by_mod_huckel(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+employing the updated GWH rule from doi:10.1021/ja00480a005.''')
+        return _from_rhf_init_dm(hf.init_guess_by_mod_huckel(mol))
 
     @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):

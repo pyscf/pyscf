@@ -1,12 +1,12 @@
 import unittest
-from pyscf import gto,scf,lib
+from pyscf import gto, scf, lib
 import numpy as np
 from pyscf.mcscf import apc
 
 APC_VERBOSE = 5
 
 class KnownValues(unittest.TestCase):
-        
+
     def test_water(self):
         mol = gto.Mole()
         mol.atom = [('O', [0.0, 0.0, -0.13209669380597672]),
@@ -15,10 +15,10 @@ class KnownValues(unittest.TestCase):
         mol.basis = "6-31g"
         mol.unit = "bohr"
         mol.build()
-            
+
         mf = scf.RHF(mol)
         mf.kernel()
-        
+
         #With (nelec,ncas) size constraint:
         myapc = apc.APC(mf,max_size=(10,10),verbose=APC_VERBOSE)
         ncas,nelecas,casorbs = myapc.kernel()
@@ -27,7 +27,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(na, 4)
         self.assertAlmostEqual(nb, 4)
         self.assertAlmostEqual(lib.fp(np.abs(casorbs)),1.7403225684990318,4)
-        
+
         #With ncas size constraint:
         myapc = apc.APC(mf,max_size=12,verbose=APC_VERBOSE)
         ncas,nelecas,casorbs = myapc.kernel()
@@ -36,7 +36,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(na, 4)
         self.assertAlmostEqual(nb, 4)
         self.assertAlmostEqual(lib.fp(np.abs(casorbs)),3.405630497055709,4)
-        
+
         #With n=0
         myapc = apc.APC(mf,max_size=(2,2),n=0,verbose=APC_VERBOSE)
         ncas,nelecas,casorbs = myapc.kernel()
@@ -56,7 +56,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(na, 3)
         self.assertAlmostEqual(nb, 3)
         self.assertAlmostEqual(lib.fp(np.abs(casorbs)),-2.449707369711791,4)
-        
+
         #With user-input mos:
         mf2 = scf.RKS(mol) #example: dft MOs
         mf2.kernel()
@@ -68,7 +68,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(na, 4)
         self.assertAlmostEqual(nb, 4)
         self.assertAlmostEqual(lib.fp(np.abs(casorbs)),0.15825224792265288,4)
-        
+
     def test_vinyl(self):
         mol = gto.Mole()
         mol.atom = [('C', [0.0, 1.16769663781575, -0.043031463808524656]),
@@ -80,7 +80,7 @@ class KnownValues(unittest.TestCase):
         mol.unit = "bohr"
         mol.spin = 1
         mol.build()
-        
+
         #With ROHF:
         mf = scf.ROHF(mol)
         mf.kernel()
@@ -91,7 +91,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(na, 6)
         self.assertAlmostEqual(nb, 5)
         self.assertAlmostEqual(lib.fp(np.abs(casorbs)),-4.619108890673209,4)
-        
+
         #With UHF:
         mf = scf.UHF(mol)
         mf.max_cycle = 100

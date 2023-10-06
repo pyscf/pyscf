@@ -254,18 +254,10 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
 }
 }
 
-
-void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
-                         int *ao_loc, int *atm, int natm,
-                         int *bas, int nbas, double *env)
+void SGXnr_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
+                  int *ao_loc, int *atm, int natm,
+                  int *bas, int nbas, double *env)
 {
-        if (opt->q_cond != NULL) {
-                free(opt->q_cond);
-        }
-        nbas = opt->nbas;
-        double *q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-        opt->q_cond = q_cond;
-
         int shls_slice[] = {0, nbas};
         int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                            atm, natm, bas, nbas, env);
@@ -316,6 +308,40 @@ void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
 }
 }
 
+void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
+                         int *ao_loc, int *atm, int natm,
+                         int *bas, int nbas, double *env)
+{
+        if (opt->q_cond != NULL) {
+                free(opt->q_cond);
+        }
+        nbas = opt->nbas;
+        double *q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        opt->q_cond = q_cond;
+        SGXnr_q_cond(intor, cintopt, q_cond, ao_loc, atm, natm, bas, nbas, env);
+}
+
+void SGXnr_dm_cond(double *dm_cond, double *dm, int nset, int *ao_loc,
+                   int *atm, int natm, int *bas, int nbas, double *env,
+                   int ngrids)
+{
+        size_t nao = ao_loc[nbas] - ao_loc[0];
+        double dmax;
+        size_t i, j, jsh, iset;
+        double *pdm;
+        for (i = 0; i < ngrids; i++) {
+        for (jsh = 0; jsh < nbas; jsh++) {
+                dmax = 0;
+                for (iset = 0; iset < nset; iset++) {
+                        pdm = dm + nao*ngrids*iset;
+                        for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
+                                dmax = MAX(dmax, fabs(pdm[i*nao+j]));
+                        }
+                }
+                dm_cond[jsh*ngrids+i] = dmax;
+        } }
+}
+
 void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                             int *atm, int natm, int *bas, int nbas, double *env,
                             int ngrids)
@@ -330,21 +356,8 @@ void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         memset(opt->dm_cond, 0, sizeof(double)*nbas*ngrids);
         opt->ngrids = ngrids;
 
-        const size_t nao = ao_loc[nbas] - ao_loc[0];
-        double dmax;
-        size_t i, j, jsh, iset;
-        double *pdm;
-        for (i = 0; i < ngrids; i++) {
-        for (jsh = 0; jsh < nbas; jsh++) {
-                dmax = 0;
-                for (iset = 0; iset < nset; iset++) {
-                        pdm = dm + nao*ngrids*iset;
-                        for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
-                                dmax = MAX(dmax, fabs(pdm[i*nao+j]));
-                        }
-                }
-                opt->dm_cond[jsh*ngrids+i] = dmax;
-        } }
+        SGXnr_dm_cond(opt->dm_cond, dm, nset, ao_loc,
+                      atm, natm, bas, nbas, env, ngrids);
 }
 
 int SGXnr_ovlp_prescreen(int *shls, CVHFOpt *opt,

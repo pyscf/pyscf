@@ -19,10 +19,22 @@
 from pyscf import lib
 from pyscf.pbc import dft
 from pyscf.pbc.tdscf import kuhf
+from pyscf.pbc.tdscf.krks import _rebuild_df
 
 
-KTDA = TDA = kuhf.TDA
-RPA = KTDDFT = TDDFT = kuhf.TDHF
+class TDA(kuhf.TDA):
+    def kernel(self, x0=None):
+        _rebuild_df(self)
+        kuhf.TDA.kernel(self, x0=x0)
+
+KTDA = TDA
+
+class TDDFT(kuhf.TDHF):
+    def kernel(self, x0=None):
+        _rebuild_df(self)
+        kuhf.TDHF.kernel(self, x0=x0)
+
+RPA = KTDDFT = TDDFT
 
 dft.kuks.KUKS.TDA   = lib.class_as_method(KTDA)
 dft.kuks.KUKS.TDHF  = None
@@ -59,14 +71,14 @@ if __name__ == '__main__':
     td = TDDFT(mf)
     td.verbose = 5
     td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
+    print(td.kernel()[0][0] * 27.2114)
 
     mf.xc = 'lda,vwn'
     mf.run()
     td = TDA(mf)
     td.verbose = 5
     td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
+    print(td.kernel()[0][0] * 27.2114)
 
     cell.spin = 2
     mf = dft.KUKS(cell, cell.make_kpts([2,1,1])).set(exxdiv=None, xc='b88,p86')
@@ -75,11 +87,11 @@ if __name__ == '__main__':
     td = TDDFT(mf)
     td.verbose = 5
     td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
+    print(td.kernel()[0][0] * 27.2114)
 
     mf.xc = 'lda,vwn'
     mf.run()
     td = TDA(mf)
     td.verbose = 5
     td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
+    print(td.kernel()[0][0] * 27.2114)

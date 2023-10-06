@@ -478,6 +478,11 @@ class KnownValues(unittest.TestCase):
         ao_value = cell.pbc_eval_gto("GTOval_ip_cart", coords, kpts=cell.make_kpts([3]*3))
         self.assertAlmostEqual(lib.fp(ao_value), (0.38051517609460028+0.062526488684770759j), 9)
 
+    def test_empty_cell(self):
+        cell = pgto.M(a=np.eye(3)*4)
+        Ls = pbctools.get_lattice_Ls(cell)
+        self.assertEqual(abs(Ls-np.zeros([1,3])).max(), 0)
+
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
     unittest.main()

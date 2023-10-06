@@ -140,7 +140,7 @@ The Following attributes are used for CASSCF
         can affect the accuracy and performance of CASSCF solver.  Lower
         ``ah_conv_tol`` and ``ah_lindep`` can improve the accuracy of CASSCF
         optimization, but slow down the performance.
-        
+
         >>> from pyscf import gto, scf, mcscf
         >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
         >>> mf = scf.UHF(mol)

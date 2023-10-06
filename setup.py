@@ -96,7 +96,7 @@ class CMakeBuildExt(build_ext):
         self.announce('Building binaries', level=3)
         # Do not use high level parallel compilation. OOM may be triggered
         # when compiling certain functionals in libxc.
-        cmd = ['cmake', '--build', self.build_temp, '-j2']
+        cmd = ['cmake', '--build', self.build_temp, '-j', '2']
         build_args = os.getenv('CMAKE_BUILD_ARGS')
         if build_args:
             cmd.extend(build_args.split(' '))

@@ -295,7 +295,7 @@ def is_hybrid_xc(xc_code):
         xc_code = xc_code.replace(' ','').upper()
         return ('HF' in xc_code or xc_code in HYB_XC or
                 hybrid_coeff(xc_code) != 0)
-    elif isinstance(xc_code, int):
+    elif numpy.issubdtype(type(xc_code), numpy.integer):
         return False
     else:
         return any((is_hybrid_xc(x) for x in xc_code))
@@ -409,7 +409,7 @@ def parse_xc(description):
     hyb = [0, 0, 0]  # hybrid, alpha, omega
     if description is None:
         return tuple(hyb), ()
-    elif isinstance(description, int):
+    elif numpy.issubdtype(type(description), numpy.integer):
         return tuple(hyb), ((description, 1.),)
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
@@ -436,7 +436,7 @@ def parse_xc(description):
                 fac, key = token.split('*')
                 if fac[0].isalpha():
                     fac, key = key, fac
-                fac = sign * float(fac)
+                fac = sign * float(fac.replace('_', '-'))
             else:
                 fac, key = sign, token
 
@@ -507,7 +507,8 @@ _NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
                    'M06-L'  : 'M06L',
                    'M05-2X' : 'M052X',
                    'M06-HF' : 'M06HF',
-                   'M06-2X' : 'M062X',}
+                   'M06-2X' : 'M062X',
+                   'E-'     : 'E_'} # For scientific notation
 
 
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):

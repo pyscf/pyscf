@@ -709,12 +709,12 @@ else:
 def _xc_key_without_underscore(xc_keys):
     new_xc = []
     for key, xc_id in xc_keys.items():
-        for delimeter in ('_XC_', '_X_', '_C_', '_K_'):
-            if delimeter in key:
-                key0, key1 = key.split(delimeter)
+        for delimiter in ('_XC_', '_X_', '_C_', '_K_'):
+            if delimiter in key:
+                key0, key1 = key.split(delimiter)
                 new_key1 = key1.replace('_', '').replace('-', '')
                 if key1 != new_key1:
-                    new_xc.append((key0+delimeter+new_key1, xc_id))
+                    new_xc.append((key0+delimiter+new_key1, xc_id))
                 break
     return new_xc
 XC_CODES.update(_xc_key_without_underscore(XC_CODES))
@@ -770,7 +770,8 @@ XC_CODES.update({
 # Issue 1480
 if not hasattr(__config__, 'B3LYP_WITH_VWN5'):
     warnings.warn('Since PySCF-2.3, B3LYP (and B3P86) are changed to the VWN-RPA variant, '
-                  'the same to the B3LYP functional in Gaussian and ORCA (issue 1480). '
+                  'corresponding to the original definition by Stephens et al. (issue 1480) '
+                  'and the same as the B3LYP functional in Gaussian. '
                   'To restore the VWN5 definition, you can put the setting '
                   '"B3LYP_WITH_VWN5 = True" in pyscf_conf.py')
 elif getattr(__config__, 'B3LYP_WITH_VWN5', False):
@@ -883,7 +884,7 @@ def xc_type(xc_code):
             raise RuntimeError('Deprecated notation for NLC functional.')
         hyb, fn_facs = parse_xc(xc_code)
     else:
-        assert isinstance(xc_code, int)
+        assert numpy.issubdtype(type(xc_code), numpy.integer)
         fn_facs = [(xc_code, 1)]  # mimic fn_facs
 
     if not fn_facs:
@@ -915,7 +916,7 @@ def is_hybrid_xc(xc_code):
             if rsh_coeff(xc_code) != (0, 0, 0):
                 return True
             return False
-    elif isinstance(xc_code, int):
+    elif numpy.issubdtype(type(xc_code), numpy.integer):
         return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
     else:
         return any((is_hybrid_xc(x) for x in xc_code))
@@ -934,7 +935,7 @@ def is_nlc(xc_code):
         else:
             fn_facs = parse_xc(xc_code)[1]
             return any(_itrf.LIBXC_is_nlc(ctypes.c_int(xid)) for xid, fac in fn_facs)
-    elif isinstance(xc_code, int):
+    elif numpy.issubdtype(type(xc_code), numpy.integer):
         return _itrf.LIBXC_is_nlc(ctypes.c_int(xc_code))
     else:
         return any((is_nlc(x) for x in xc_code))
@@ -1060,7 +1061,7 @@ def parse_xc(description):
         part blank. E.g. description='slater,' means pure LDA functional.
       - To neglect X functional (just apply C functional), leave the first
         part blank. E.g. description=',vwn' means pure VWN functional.
-      - If compound XC functional is specified, no matter whehter it is in the
+      - If compound XC functional is specified, no matter whether it is in the
         X part (the string in front of comma) or the C part (the string behind
         comma), both X and C functionals of the compound XC functional will be
         used.
@@ -1095,7 +1096,7 @@ def parse_xc(description):
     hyb = [0, 0, 0]  # hybrid, alpha, omega (== SR_HF, LR_HF, omega)
     if description is None:
         return tuple(hyb), ()
-    elif isinstance(description, int):
+    elif numpy.issubdtype(type(description), numpy.integer):
         return tuple(hyb), ((description, 1.),)
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
@@ -1485,7 +1486,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         for rho_ud in [rho_u, rho_d]:
             assert rho_ud.shape[0] >= 6
     else:
-        raise ValueError("Unknow nvar {}".format(nvar))
+        raise ValueError("Unknown nvar {}".format(nvar))
 
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))

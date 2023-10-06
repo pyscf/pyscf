@@ -1,4 +1,6 @@
-import os, sys
+import os
+import sys
+import tempfile
 
 #
 # All parameters initialized before loading pyscf_conf.py will be overwritten
@@ -8,8 +10,7 @@ import os, sys
 DEBUG = False
 
 MAX_MEMORY = int(os.environ.get('PYSCF_MAX_MEMORY', 4000)) # MB
-TMPDIR = os.environ.get('TMPDIR', '.')
-TMPDIR = os.environ.get('PYSCF_TMPDIR', TMPDIR)
+TMPDIR = os.environ.get('PYSCF_TMPDIR', tempfile.gettempdir())
 ARGPARSE = bool(os.getenv('PYSCF_ARGPARSE', False))
 
 VERBOSE = 3  # default logger level (logger.NOTE)

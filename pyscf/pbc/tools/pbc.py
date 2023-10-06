@@ -197,7 +197,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         k : (3,) ndarray
             k-point
         exx : bool or str
-            Whether this is an exchange matrix element.
+            Whether this is an exchange matrix element
         mf : instance of :class:`SCF`
 
     Returns:
@@ -206,8 +206,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         mesh : (3,) ndarray of ints (= nx,ny,nz)
             The number G-vectors along each direction.
         omega : float
-            Enable Coulomb kernel erf(|omega|*r12)/r12 if omega > 0
-            and erfc(|omega|*r12)/r12 if omega < 0.
+            Enable Coulomb kernel ``erf(|omega|*r12)/r12`` if omega > 0
+            and ``erfc(|omega|*r12)/r12`` if omega < 0.
             Note this parameter is slightly different to setting cell.omega
             for the treatment of exxdiv (at G0).  cell.omega affects Ewald
             probe charge at G0. It is used mostly by RSH functionals for
@@ -503,7 +503,7 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     if rcut is None:
         rcut = cell.rcut
 
-    if dimension == 0 or rcut <= 0:
+    if dimension == 0 or rcut <= 0 or cell.natm == 0:
         return np.zeros((1, 3))
 
     a = cell.lattice_vectors()
@@ -553,12 +553,14 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
 
 def super_cell(cell, ncopy, wrap_around=False):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
-    Note this function differs from :fun:`cell_plus_imgs` that cell_plus_imgs
+    Note this function differs from :func:`cell_plus_imgs` that cell_plus_imgs
     creates images in both +/- direction.
 
     Args:
         cell : instance of :class:`Cell`
+
         ncopy : (3,) array
+
         wrap_around : bool
             Put the original cell centered on the super cell. It has the
             effects corresponding to the parameter wrap_around of
@@ -589,12 +591,14 @@ def super_cell(cell, ncopy, wrap_around=False):
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
     mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
     supcell.mesh = (mesh // 2) * 2 + 1
+    supcell.magmom = np.repeat(np.asarray(cell.magmom).reshape(1,-1),
+                               np.prod(ncopy), axis=0).ravel()
     return _build_supcell_(supcell, cell, Ls)
 
 
 def cell_plus_imgs(cell, nimgs):
     '''Create a supercell via nimgs[i] in each +/- direction, as in get_lattice_Ls().
-    Note this function differs from :fun:`super_cell` that super_cell only
+    Note this function differs from :func:`super_cell` that super_cell only
     stacks the images in + direction.
 
     Args:
@@ -621,6 +625,7 @@ def _build_supcell_(supcell, cell, Ls):
     Construct supcell ._env directly without calling supcell.build() method.
     This reserves the basis contraction coefficients defined in cell
     '''
+    from pyscf.pbc import gto as pbcgto
     nimgs = len(Ls)
     symbs = [atom[0] for atom in cell._atom] * nimgs
     coords = Ls.reshape(-1,1,3) + cell.atom_coords()
@@ -646,6 +651,9 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._atm = np.asarray(_atm, dtype=np.int32)
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
+
+    if isinstance(supcell, pbcgto.Cell) and supcell.space_group_symmetry:
+        supcell.build_lattice_symmetry(not cell._mesh_from_build)
     return supcell
 
 

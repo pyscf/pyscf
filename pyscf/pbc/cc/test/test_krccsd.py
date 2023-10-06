@@ -922,13 +922,13 @@ class KnownValues(unittest.TestCase):
         # Manually zero'ing out the frozen elements of the t1/t2
         t1[2, :, 0] = 0.0
         for ki in range(rand_cc.nkpts):
-          for kj in range(rand_cc.nkpts):
-            for ka in range(rand_cc.nkpts):
-              kb = kconserv[ki, ka, kj]
-              if ka == 2:
-                  t2[ki, kj, ka, :, :, 0] = 0.0
-              if kb == 2:
-                  t2[ki, kj, ka, :, :, :, 0] = 0.0
+            for kj in range(rand_cc.nkpts):
+                for ka in range(rand_cc.nkpts):
+                    kb = kconserv[ki, ka, kj]
+                    if ka == 2:
+                        t2[ki, kj, ka, :, :, 0] = 0.0
+                    if kb == 2:
+                        t2[ki, kj, ka, :, :, :, 0] = 0.0
 
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
         self.assertAlmostEqual(lib.fp(Ht1), (5.3320153970710118-7.9402122992688602j), 6)
@@ -941,10 +941,10 @@ class KnownValues(unittest.TestCase):
         r1, r2 = rand_r1_r2_ip(kmf, rand_cc)
         r1[0] = 0.0
         for ki in range(rand_cc.nkpts):
-          for kj in range(rand_cc.nkpts):
-            ka = kconserv[ki, kshift, kj]
-            if ka == 2:
-                r2[ki, kj, :, :, 0] = 0.0
+            for kj in range(rand_cc.nkpts):
+                ka = kconserv[ki, kshift, kj]
+                if ka == 2:
+                    r2[ki, kj, :, :, 0] = 0.0
 
         Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
         self.assertAlmostEqual(lib.fp(Hr1), (0.4067595510145880 +  0.0770280877446436j), 6)
@@ -953,12 +953,12 @@ class KnownValues(unittest.TestCase):
         r1, r2 = rand_r1_r2_ea(kmf, rand_cc)
         r1[0] = 0.0
         for kj in range(rand_cc.nkpts):
-          for ka in range(rand_cc.nkpts):
-            kb = kconserv[kshift, ka, kj]
-            if ka == 2:
-                r2[kj, ka, :, 0, :] = 0.0
-            if kb == 2:
-                r2[kj, ka, :, :, 0] = 0.0
+            for ka in range(rand_cc.nkpts):
+                kb = kconserv[kshift, ka, kj]
+                if ka == 2:
+                    r2[kj, ka, :, 0, :] = 0.0
+                if kb == 2:
+                    r2[kj, ka, :, :, 0] = 0.0
 
         Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
         self.assertAlmostEqual(lib.fp(Hr1), (0.0070404498167285 + -0.1646809321907418j), 6)

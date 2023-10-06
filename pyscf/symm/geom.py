@@ -49,9 +49,10 @@ from pyscf import __config__
 
 TOLERANCE = getattr(__config__, 'symm_geom_tol', 1e-5)
 
-# For code compatiblity in python-2 and python-3
+# For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
     unicode = str
+
 
 def parallel_vectors(v1, v2, tol=TOLERANCE):
     if numpy.allclose(v1, 0, atol=tol) or numpy.allclose(v2, 0, atol=tol):
@@ -121,7 +122,7 @@ def alias_axes(axes, ref):
 def _adjust_planar_c2v(atom_coords, axes):
     '''Adjust axes for planar molecules'''
     # Following http://iopenshell.usc.edu/resources/howto/symmetry/
-    # See also dicussions in issue #1201
+    # See also discussions in issue #1201
     # * planar C2v molecules should be oriented such that the X axis is perpendicular
     # to the plane of the molecule, and the Z axis is the axis of symmetry;
     natm = len(atom_coords)
@@ -135,7 +136,7 @@ def _adjust_planar_c2v(atom_coords, axes):
 def _adjust_planar_d2h(atom_coords, axes):
     '''Adjust axes for planar molecules'''
     # Following http://iopenshell.usc.edu/resources/howto/symmetry/
-    # See also dicussions in issue #1201
+    # See also discussions in issue #1201
     # * planar D2h molecules should be oriented such that the X axis is
     # perpendicular to the plane of the molecule, and the Z axis passes through
     # the greatest number of atoms.
@@ -553,7 +554,7 @@ class RotationAxisNotFound(PointGroupSymmetryError):
 class SymmSys(object):
     def __init__(self, atoms, basis=None):
         self.atomtypes = mole.atom_types(atoms, basis)
-        # fake systems, which treates the atoms of different basis as different atoms.
+        # fake systems, which treats the atoms of different basis as different atoms.
         # the fake systems do not have the same symmetry as the potential
         # it's only used to determine the main (Z-)axis
         chg1 = numpy.pi - 2
@@ -614,7 +615,7 @@ class SymmSys(object):
         for lst in self.group_atoms_by_distance:
             r0 = self.atoms[lst,1:]
             r1 = numpy.dot(r0, op)
-# FIXME: compare whehter two sets of coordinates are identical
+            # FIXME: compare whether two sets of coordinates are identical
             yield all((_vec_in_vecs(x, r0) for x in r1))
 
     def has_icenter(self):

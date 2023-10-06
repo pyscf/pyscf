@@ -14,7 +14,8 @@
 # limitations under the License.
 #
 
-import copy, gc
+import copy
+import gc
 import numpy as np
 from functools import reduce
 from itertools import product

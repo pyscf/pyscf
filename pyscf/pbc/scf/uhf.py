@@ -231,6 +231,7 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
     init_guess_by_minao  = mol_uhf.UHF.init_guess_by_minao
     init_guess_by_atom   = mol_uhf.UHF.init_guess_by_atom
     init_guess_by_huckel = mol_uhf.UHF.init_guess_by_huckel
+    init_guess_by_mod_huckel = mol_uhf.UHF.init_guess_by_mod_huckel
 
     analyze = mol_uhf.UHF.analyze
     mulliken_pop = mol_uhf.UHF.mulliken_pop

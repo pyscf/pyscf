@@ -17,11 +17,12 @@
 #
 
 '''
-Mole class and helper functions to handle paramters and attributes for GTO
+Mole class and helper functions to handle parameters and attributes for GTO
 integrals. This module serves the interface to the integral library libcint.
 '''
 
-import os, sys
+import os
+import sys
 import types
 import re
 import platform
@@ -106,7 +107,7 @@ DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 DISABLE_GC = getattr(__config__, 'DISABLE_GC', False)
 ARGPARSE = getattr(__config__, 'ARGPARSE', False)
 
-def M(**kwargs):
+def M(*args, **kwargs):
     r'''This is a shortcut to build up Mole object.
 
     Args: Same to :func:`Mole.build`
@@ -117,7 +118,7 @@ def M(**kwargs):
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='6-31g')
     '''
     mol = Mole()
-    mol.build(**kwargs)
+    mol.build(*args, **kwargs)
     return mol
 
 def gaussian_int(n, alpha):
@@ -304,7 +305,7 @@ def atom_types(atoms, basis=None, magmom=None):
 
     if magmom is not None:
         atmgroup_new = {}
-        suffix = {1.0:'u', -1.0:'d', 0.0:'o'}
+        suffix = {1:'u', -1:'d', 0:'o'}
         magmom = np.asarray(magmom)
         for elem, idx in atmgroup.items():
             uniq_mag = np.unique(magmom[idx])
@@ -312,7 +313,7 @@ def atom_types(atoms, basis=None, magmom=None):
                 for i, mag in enumerate(uniq_mag):
                     subgrp = np.asarray(idx)[np.where(magmom[idx] == mag)[0]]
                     if mag not in suffix:
-                        raise RuntimeError("Magmom should be chosen from [-1., 0., 1.], but %s is given" % mag)
+                        raise RuntimeError("Magmom should be chosen from [-1, 0, 1], but %s is given" % mag)
                     atmgroup_new[elem+'_'+suffix[mag]] = subgrp.tolist()
             else:
                 atmgroup_new[elem] = idx
@@ -438,7 +439,7 @@ def format_basis(basis_tab):
             Similar to :attr:`Mole.basis`, it **cannot** be a str
 
     Returns:
-        Formated :attr:`~Mole.basis`
+        Formatted :attr:`~Mole.basis`
 
     Examples:
 
@@ -712,7 +713,7 @@ def expand_etb(l, n, alpha, beta):
             Number of GTOs
 
     Returns:
-        Formated :attr:`~Mole.basis`
+        Formatted :attr:`~Mole.basis`
 
     Examples:
 
@@ -727,7 +728,7 @@ def expand_etbs(etbs):
         etbs = [(l, n, alpha, beta), (l, n, alpha, beta),...]
 
     Returns:
-        Formated :attr:`~Mole.basis`
+        Formatted :attr:`~Mole.basis`
 
     Examples:
 
@@ -918,7 +919,7 @@ def make_atm_env(atom, ptr=0, nuclear_model=NUC_POINT, nucprop={}):
 def make_bas_env(basis_add, atom_id=0, ptr=0):
     '''Convert :attr:`Mole.basis` to the argument ``bas`` for ``libcint`` integrals
     '''
-    # First sort basis accroding to l. This is important for method
+    # First sort basis according to l. This is important for method
     # decontract_basis, which assumes that basis functions with the same angular
     # momentum are grouped together
     basis_add = [b for b in basis_add if b]
@@ -1223,7 +1224,7 @@ def loads(molstr):
     from numpy import array  # noqa
     moldic = json.loads(molstr)
     if sys.version_info < (3,):
-        # Convert to utf8 because JSON loads fucntion returns unicode.
+        # Convert to utf8 because JSON loads function returns unicode.
         def byteify(inp):
             if isinstance(inp, dict):
                 return dict([(byteify(k), byteify(v)) for k, v in inp.iteritems()])
@@ -1336,7 +1337,7 @@ def nao_nr_range(mol, bas_id0, bas_id1):
             stop shell id
 
     Returns:
-        tupel of start basis function id and the stop function id
+        tuple of start basis function id and the stop function id
 
     Examples:
 
@@ -1372,7 +1373,7 @@ def nao_2c_range(mol, bas_id0, bas_id1):
             stop shell id, 0-based
 
     Returns:
-        tupel of start basis function id and the stop function id
+        tuple of start basis function id and the stop function id
 
     Examples:
 
@@ -1420,7 +1421,7 @@ def ao_loc_2c(mol):
 
 def time_reversal_map(mol):
     r'''The index to map the spinor functions and its time reversal counterpart.
-    The returned indices have postive or negative values.  For the i-th basis function,
+    The returned indices have positive or negative values.  For the i-th basis function,
     if the returned j = idx[i] < 0, it means :math:`T|i\rangle = -|j\rangle`,
     otherwise :math:`T|i\rangle = |j\rangle`
     '''
@@ -2003,7 +2004,7 @@ def tostring(mol, format='raw'):
     '''Convert molecular geometry to a string of the required format.
 
     Supported output formats:
-        | raw: Each line is  <symobl> <x> <y> <z>
+        | raw: Each line is  <symbol> <x> <y> <z>
         | xyz: XYZ cartesian coordinates format
         | zmat: Z-matrix format
     '''
@@ -2036,7 +2037,7 @@ def tofile(mol, filename, format=None):
     '''Write molecular geometry to a file of the required format.
 
     Supported output formats:
-        | raw: Each line is  <symobl> <x> <y> <z>
+        | raw: Each line is  <symbol> <x> <y> <z>
         | xyz: XYZ cartesian coordinates format
         | zmat: Z-matrix format
     '''
@@ -2053,7 +2054,7 @@ def fromfile(filename, format=None):
     (in testing)
 
     Supported formats:
-        | raw: Each line is  <symobl> <x> <y> <z>
+        | raw: Each line is  <symbol> <x> <y> <z>
         | xyz: XYZ cartesian coordinates format
         | zmat: Z-matrix format
     '''
@@ -2070,7 +2071,7 @@ def fromstring(string, format='xyz'):
     (in testing)
 
     Supported formats:
-        | raw: Each line is  <symobl> <x> <y> <z>
+        | raw: Each line is  <symbol> <x> <y> <z>
         | xyz: XYZ cartesian coordinates format
         | zmat: Z-matrix format
     '''
@@ -2095,7 +2096,7 @@ def fromstring(string, format='xyz'):
         raise NotImplementedError
 
 def is_au(unit):
-    '''Return whether the unit is recogized as A.U. or not
+    '''Return whether the unit is recognized as A.U. or not
     '''
     return unit.upper().startswith(('B', 'AU'))
 
@@ -2105,7 +2106,7 @@ def is_au(unit):
 #    .atom (input) <=>  ._atom (for python) <=> ._atm (for libcint)
 #   .basis (input) <=> ._basis (for python) <=> ._bas (for libcint)
 # input layer does not talk to libcint directly.  Data are held in python
-# internal fomrat layer.  Most of methods defined in this class only operates
+# internal format layer.  Most of methods defined in this class only operates
 # on the internal format.  Exceptions are make_env, make_atm_env, make_bas_env,
 # set_common_orig_, set_rinv_orig_ which are used to manipulate the libcint arguments.
 #
@@ -2160,7 +2161,7 @@ class Mole(lib.StreamObject):
         cart : boolean
             Using Cartesian GTO basis and integrals (6d,10f,15g)
         magmom : list
-            Collinear spin of each atom. Default is [0.0,]*natm
+            Collinear spin of each atom. Default is [0,]*natm
 
         ** Following attributes are generated by :func:`Mole.build` **
 
@@ -2199,12 +2200,12 @@ class Mole(lib.StreamObject):
 
         _atm :
             :code:`[[charge, ptr-of-coord, nuc-model, ptr-zeta, 0, 0], [...]]`
-            each element reperesents one atom
+            each element represents one atom
         natm :
             number of atoms
         _bas :
             :code:`[[atom-id, angular-momentum, num-primitive-GTO, num-contracted-GTO, 0, ptr-of-exps, ptr-of-contract-coeff, 0], [...]]`
-            each element reperesents one shell
+            each element represents one shell
         nbas :
             number of shells
         _env :
@@ -2259,7 +2260,7 @@ class Mole(lib.StreamObject):
         self.ecp = {}
 # Nuclear property. self.nucprop = {atom_symbol: {key: value}}
         self.nucprop = {}
-# Collinear spin of each atom. self.magmom = [0., ...]
+# Collinear spin of each atom. self.magmom = [0, ...]
         self.magmom = []
 ##################################################
 # don't modify the following private variables, they are not input options
@@ -2405,7 +2406,7 @@ class Mole(lib.StreamObject):
 #        cls = self.__class__
 #        newmol = cls.__new__(cls)
 #        newmol = ...
-# do not use __copy__ to aovid iteratively call copy.copy
+# do not use __copy__ to avoid iteratively call copy.copy
     copy = copy
 
     pack = pack
@@ -2451,7 +2452,7 @@ class Mole(lib.StreamObject):
             output : str or None
                 Output file.  If given, overwrite :attr:`Mole.output`
             max_memory : int, float
-                Allowd memory in MB.  If given, overwrite :attr:`Mole.max_memory`
+                Allowed memory in MB.  If given, overwrite :attr:`Mole.max_memory`
             atom : list or str
                 To define molecluar structure.
             basis : dict or str
@@ -2470,7 +2471,7 @@ class Mole(lib.StreamObject):
                 Whether to use symmetry.  If given a string of point group
                 name, the given point group symmetry will be used.
             magmom : list
-                Collinear spin of each atom. Default is [0.0,]*natm
+                Collinear spin of each atom. Default is [0,]*natm
 
         '''
         if not DISABLE_GC:
@@ -2563,9 +2564,9 @@ class Mole(lib.StreamObject):
             # number of electrons are consistent.
             self.nelec
 
-        if not self.magmom:
-            self.magmom = [0.,]*self.natm
-        if self.spin == 0 and abs(numpy.sum(numpy.asarray(self.magmom)) - self.spin) > 1e-6:
+        if self.magmom is None or len(self.magmom) != self.natm:
+            self.magmom = [0,] * self.natm
+        if self.spin == 0 and abs(numpy.sum(self.magmom) - self.spin) > 1e-6:
             #don't check for unrestricted calcs.
             raise ValueError("mol.magmom is set incorrectly.")
 
@@ -2834,7 +2835,7 @@ class Mole(lib.StreamObject):
     set_common_origin_ = set_common_orig  # for backward compatibility
 
     def with_common_origin(self, coord):
-        '''Return a temporary mol context which has the rquired common origin.
+        '''Return a temporary mol context which has the required common origin.
         The required common origin has no effects out of the temporary context.
         See also :func:`mol.set_common_origin`
 
@@ -2863,7 +2864,7 @@ class Mole(lib.StreamObject):
     set_rinv_origin_ = set_rinv_orig  # for backward compatibility
 
     def with_rinv_origin(self, coord):
-        '''Return a temporary mol context which has the rquired origin of 1/r
+        '''Return a temporary mol context which has the required origin of 1/r
         operator.  The required origin has no effects out of the temporary
         context.  See also :func:`mol.set_rinv_origin`
 
@@ -2908,6 +2909,8 @@ class Mole(lib.StreamObject):
         >>> with mol.with_range_coulomb(omega=1.5):
         ...     mol.intor('int2e')
         '''
+        if omega is None:
+            return contextlib.nullcontext()
         omega0 = self._env[PTR_RANGE_OMEGA].copy()
         return self._TemporaryMoleContext(self.set_range_coulomb, (omega,), (omega0,))
 
@@ -2915,12 +2918,16 @@ class Mole(lib.StreamObject):
         '''Return a temporary mol context for long-range part of
         range-separated Coulomb operator.
         '''
+        if omega is None:
+            return contextlib.nullcontext()
         return self.with_range_coulomb(abs(omega))
 
     def with_short_range_coulomb(self, omega):
         '''Return a temporary mol context for short-range part of
         range-separated Coulomb operator.
         '''
+        if omega is None:
+            return contextlib.nullcontext()
         return self.with_range_coulomb(-abs(omega))
 
     def set_f12_zeta(self, zeta):
@@ -2952,14 +2959,14 @@ class Mole(lib.StreamObject):
         '''Assume the charge distribution on the "rinv_origin".  zeta is the parameter
         to control the charge distribution: rho(r) = Norm * exp(-zeta * r^2).
         **Be careful** when call this function. It affects the behavior of
-        int1e_rinv_* functions.  Make sure to set it back to 0 after using it!
+        int1e_rinv_*, int1e_grids* functions.  Make sure to set it back to 0 after using it!
         '''
         self._env[PTR_RINV_ZETA] = zeta
         return self
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
 
     def with_rinv_zeta(self, zeta):
-        '''Return a temporary mol context which has the rquired Gaussian charge
+        '''Return a temporary mol context which has the required Gaussian charge
         distribution placed at "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
         See also :func:`mol.set_rinv_zeta`
 
@@ -2998,7 +3005,7 @@ class Mole(lib.StreamObject):
     with_rinv_as_nucleus = with_rinv_at_nucleus  # For backward compatibility
 
     def with_integral_screen(self, threshold):
-        '''Return a temporary mol context which has the rquired integral
+        '''Return a temporary mol context which has the required integral
         screen threshold
         '''
         if threshold is None:

@@ -48,6 +48,7 @@ class PhysERI(MolecularMFMixin, TDERIMatrixBlocks):
     def ao2mo(self, coeff):
         """
         Phys ERI in MO basis.
+
         Args:
             coeff (Iterable): MO orbitals;
 
@@ -130,6 +131,7 @@ class PhysERI8(PhysERI4):
 def vector_to_amplitudes(vectors, nocc, nmo):
     """
     Transforms (reshapes) and normalizes vectors into amplitudes.
+
     Args:
         vectors (numpy.ndarray): raw eigenvectors to transform;
         nocc (int): number of occupied orbitals;
