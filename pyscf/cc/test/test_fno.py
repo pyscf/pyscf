@@ -152,5 +152,5 @@ class Water_density_fitting(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print("Full Tests for krhf-TDA and krhf-TDHF")
+    print("Full Tests for FNO-CCSD and FNO-CCSD(T)")
     unittest.main()
