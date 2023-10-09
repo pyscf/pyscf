@@ -282,6 +282,7 @@ class PCM(ddcosmo.DDCOSMO):
     def reset(self, mol=None):
         super().reset(mol)
         self.surface = None
+        return self
 
     def build(self, ng=None):
         vdw_scale = self.vdw_scale

@@ -85,7 +85,7 @@ class KnownValues(unittest.TestCase):
     def test_reset(self):
         mol1 = gto.M(atom='H 0 0 0; H 0 0 .9', basis='cc-pvdz')
         mf = scf.RHF(mol).density_fit().PCM().newton()
-        mf.reset(mol1)
+        mf = mf.reset(mol1)
         self.assertTrue(mf.mol is mol1)
         self.assertTrue(mf.with_df.mol is mol1)
         self.assertTrue(mf.with_solvent.mol is mol1)
