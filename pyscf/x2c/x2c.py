@@ -767,8 +767,6 @@ class X2C1E_GSCF(_X2C_SCF):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         log = logger.new_logger(mol, verbose)
-
-        nao = mol.nao
         charges = mol.atom_charges()
         coords  = mol.atom_coords()
         nucl_dip = numpy.einsum('i,ix->x', charges, coords)

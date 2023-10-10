@@ -73,7 +73,7 @@ if sys.platform.startswith('linux'):
                 break
         del p, so_file, _ldd
 
-from pyscf.lib import param
+from pyscf.lib import parameters as param
 from pyscf import __config__
 
 if h5py.version.version[:4] == '2.2.':

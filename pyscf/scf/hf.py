@@ -1902,39 +1902,6 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         self._eri = None
         return self
 
-    @property
-    def hf_energy(self):  # pragma: no cover
-        sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
-                         'It is replaced by attribute .e_tot\n')
-        return self.e_tot
-    @hf_energy.setter
-    def hf_energy(self, x):  # pragma: no cover
-        sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
-                         'It is replaced by attribute .e_tot\n')
-        self.hf_energy = x
-
-    @property
-    def level_shift_factor(self):  # pragma: no cover
-        sys.stderr.write('WARN: Attribute .level_shift_factor will be removed in PySCF v1.1. '
-                         'It is replaced by attribute .level_shift\n')
-        return self.level_shift
-    @level_shift_factor.setter
-    def level_shift_factor(self, x):  # pragma: no cover
-        sys.stderr.write('WARN: Attribute .level_shift_factor will be removed in PySCF v1.1. '
-                         'It is replaced by attribute .level_shift\n')
-        self.level_shift = x
-
-    @property
-    def damp_factor(self):  # pragma: no cover
-        sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
-                         'It is replaced by attribute .damp\n')
-        return self.damp
-    @damp_factor.setter
-    def damp_factor(self, x):  # pragma: no cover
-        sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
-                         'It is replaced by attribute .damp\n')
-        self.damp = x
-
     def apply(self, fn, *args, **kwargs):
         if callable(fn):
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
