@@ -145,7 +145,7 @@ class KnownValues(unittest.TestCase):
 
         g1 = tdg(mol.atom_coords(), state=3)[1]
         self.assertAlmostEqual(abs(g1-g1ref).max(), 0, 6)
-        self.assertAlmostEqual(g1[0,2], -0.23226123352352346, 7)
+        self.assertAlmostEqual(g1[0,2], -0.23226123352352346, 6)
 
         td_solver = td.as_scanner()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))

@@ -98,14 +98,10 @@ class TDA(KTDBase):
         e_ia_a = _get_e_ia(mo_energy[0], mo_occ[0], kconserv)
         e_ia_b = _get_e_ia(mo_energy[1], mo_occ[1], kconserv)
         e_ia = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
-        e_ia = numpy.ceil(e_ia / self.deg_eia_thresh) * self.deg_eia_thresh
-        e_ia_uniq = numpy.unique(e_ia)
 
-        e_ia_max = e_ia.max()
         nov = e_ia.size
         nstates = min(nstates, nov)
-        nstates_thresh = min(nstates, e_ia_uniq.size)
-        e_threshold = min(e_ia_max, e_ia_uniq[numpy.argsort(e_ia_uniq)[nstates_thresh-1]])
+        e_threshold = numpy.sort(e_ia)[nstates-1]
         e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
@@ -145,7 +141,6 @@ class TDA(KTDBase):
 
             if x0 is None:
                 x0k = self.init_guess(self._scf, kshift, self.nstates)
-                #x0k = self.trunc_workspace(vind, x0k, nstates=self.nstates, pick=pickeig)[1]
             else:
                 x0k = x0[i]
 
@@ -286,7 +281,6 @@ class TDHF(TDA):
 
             if x0 is None:
                 x0k = self.init_guess(self._scf, kshift, self.nstates)
-                #x0k = self.trunc_workspace(vind, x0k, nstates=self.nstates, pick=pickeig)[1]
             else:
                 x0k = x0[i]
 

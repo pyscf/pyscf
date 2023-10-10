@@ -205,6 +205,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(exc, -3.8870579114663886, 8)
         self.assertAlmostEqual(lib.fp(vmat), 0.42538491159934377+0.14139753327162483j, 8)
 
+        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], 0, kpts[0])
+        self.assertAlmostEqual(lib.fp(vmat), 0.42538491159934377+0.14139753327162483j, 8)
+
         ni = numint.KNumInt()
         with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
             ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, hermi=1, kpts=kpts)
@@ -219,6 +222,32 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(exc[1], -3.9899423803106466, 8)
         self.assertAlmostEqual(lib.fp(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 5)
         self.assertAlmostEqual(lib.fp(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 5)
+
+        cell = pbcgto.Cell()
+        cell.atom = 'C 0 0 0; C 0.8925000000 0.8925000000 0.8925000000'
+        cell.a = '''
+        1.7850000000 1.7850000000 0.0000000000
+        0.0000000000 1.7850000000 1.7850000000
+        1.7850000000 0.0000000000 1.7850000000
+        '''
+        cell.pseudo = 'gth-pbe'
+        cell.basis = {'C': [[0, (0.8, 1.0)],
+                            [1, (1.0, 1.0)]]}
+        cell.precision = 1e-10
+        cell.build()
+        nao = cell.nao
+        grids = gen_grid.UniformGrids(cell)
+        grids.build()
+
+        np.random.seed(1)
+        kpts = np.random.random((2,3))
+        dm = np.random.random((nao,nao))
+        dm = dm + dm.T
+        ni = numint.NumInt()
+        ne, exc, vmat1 = ni.nr_rks(cell, grids, 'blyp', dm, 1, kpts[0])
+        ne, exc, vmat2 = ni.nr_rks(cell, grids, 'blyp', dm, 0, kpts[0])
+        self.assertAlmostEqual(lib.fp(vmat1), (6.238900947350686+0.6026114431281391j), 8)
+        self.assertAlmostEqual(abs(vmat1 - vmat2).max(), 0, 9)
 
     def test_eval_rho(self):
         cell, grids = make_grids([61]*3)

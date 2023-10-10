@@ -387,9 +387,6 @@ class TDA(TDBase):
         occidx = numpy.where(mo_occ==1)[0]
         viridx = numpy.where(mo_occ==0)[0]
         e_ia = mo_energy[viridx] - mo_energy[occidx,None]
-        # make degenerate excitations equal for later selection by energy
-        e_ia = numpy.ceil(e_ia / self.deg_eia_thresh) * self.deg_eia_thresh
-        e_ia_max = e_ia.max()
 
         if wfnsym is not None and mf.mol.symmetry:
             if isinstance(wfnsym, str):
@@ -399,13 +396,10 @@ class TDA(TDBase):
             orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
             e_ia[(orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym] = 1e99
 
-        e_ia_uniq = numpy.unique(e_ia)
-
         nov = e_ia.size
         nstates = min(nstates, nov)
-        nstates_thresh = min(nstates, e_ia_uniq.size)
         e_ia = e_ia.ravel()
-        e_threshold = min(e_ia_max, e_ia_uniq[numpy.argsort(e_ia_uniq)[nstates_thresh-1]])
+        e_threshold = numpy.sort(e_ia)[nstates-1]
         e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
@@ -436,7 +430,6 @@ class TDA(TDBase):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-            #x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         # FIXME: Is it correct to call davidson1 for complex integrals
         self.converged, self.e, x1 = \
@@ -577,7 +570,6 @@ class TDHF(TDBase):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-            #x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
