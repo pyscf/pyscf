@@ -65,6 +65,14 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
         '''Convert to ROHF object.'''
         return self._transfer_attrs_(self.mol.ROHF())
 
+    def to_gpu(self):
+        from gpu4pyscf.dft.uks import UKS
+        obj = lib.to_gpu(self.__class__.reset(self.view(UKS)))
+        # Attributes only defined in gpu4pyscf.RKS
+        obj.screen_tol = 1e-14
+        obj.disp = None
+        return obj
+
 
 if __name__ == '__main__':
     from pyscf import gto

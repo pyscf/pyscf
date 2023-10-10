@@ -2881,6 +2881,11 @@ class NumInt(lib.StreamObject, LibXCMixin):
                                      with_lapl)
         return make_rho, ndms, nao
 
+    def to_gpu(self):
+        from gpu4pyscf.dft.numint import NumInt
+        # Note: gpu4pyscf NumInt initializes additional things in __init__.py
+        return NumInt()
+
 _NumInt = NumInt
 
 

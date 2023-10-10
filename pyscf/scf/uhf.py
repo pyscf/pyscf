@@ -1071,6 +1071,10 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         from pyscf import dft
         return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
 
+    def to_gpu(self):
+        from gpu4pyscf.scf import UHF
+        return lib.to_gpu(self.__class__.reset(self.view(UHF)))
+
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')
     logger.info(mf, '******** 1 electron system ********')

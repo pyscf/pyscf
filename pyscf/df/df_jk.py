@@ -227,6 +227,11 @@ class _DFHF:
         from pyscf import mcscf
         return mcscf.DFCASSCF(self, ncas, nelecas, auxbasis, ncore, frozen)
 
+    def to_gpu(self):
+        obj = self.undo_df().to_gpu().density_fit()
+        obj.__dict__.update(self.__dict__)
+        return lib.to_gpu(self.__class__.reset(obj))
+
 
 def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
     assert (with_j or with_k)

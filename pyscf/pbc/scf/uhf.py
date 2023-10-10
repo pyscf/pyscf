@@ -258,3 +258,6 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
         '''Convert given mean-field object to UHF'''
         addons.convert_to_uhf(mf, self)
         return self
+
+    def to_gpu(self):
+        raise NotImplementedError

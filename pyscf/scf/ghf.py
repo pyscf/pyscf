@@ -541,6 +541,10 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         from pyscf import dft
         return self._transfer_attrs_(dft.GKS(self.mol, xc=xc))
 
+    def to_gpu(self):
+        from gpu4pyscf.scf import GHF
+        return lib.to_gpu(self.__class__.reset(self.view(GHF)))
+
 def _from_rhf_init_dm(dm, breaksym=True):
     dma = dm * .5
     dm = scipy.linalg.block_diag(dma, dma)

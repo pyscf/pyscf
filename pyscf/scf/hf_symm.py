@@ -572,6 +572,10 @@ class SymAdaptedRHF(hf.RHF):
     wfnsym = property(get_wfnsym)
 
     canonicalize = canonicalize
+
+    def to_gpu(self):
+        raise NotImplementedError
+
 RHF = SymAdaptedRHF
 
 
@@ -929,6 +933,9 @@ class SymAdaptedROHF(rohf.ROHF):
 
     get_wfnsym = get_wfnsym
     wfnsym = property(get_wfnsym)
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 ROHF = SymAdaptedROHF
 

@@ -2002,6 +2002,11 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         dst.converged = False
         return dst
 
+    def to_gpu(self):
+        '''Converts to the object with GPU support.
+        '''
+        raise NotImplementedError
+
 
 class KohnShamDFT:
     '''A mock DFT base class
@@ -2111,6 +2116,11 @@ class RHF(SCF):
         '''
         from pyscf import dft
         return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
+
+    def to_gpu(self):
+        # FIXME: consider the density_fit, x2c and soscf decoration
+        from gpu4pyscf.scf import RHF
+        return lib.to_gpu(self.__class__.reset(self.view(RHF)))
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

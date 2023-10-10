@@ -312,6 +312,9 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
             t0 = logger.timer(self, 'setting up nlc grids', *t0)
         return self
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 # Update the KohnShamDFT label in pbc.scf.hf module
 pbchf.KohnShamDFT = KohnShamDFT
 
@@ -342,6 +345,9 @@ class RKS(KohnShamDFT, pbchf.RHF):
         '''Convert to RHF object.'''
         from pyscf.pbc import scf
         return self._transfer_attrs_(scf.RHF(self.cell, self.kpt))
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 
 if __name__ == '__main__':

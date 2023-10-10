@@ -132,3 +132,6 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
         '''
         from pyscf.pbc import dft
         return self._transfer_attrs_(dft.ROKS(self.cell, self.kpt, xc=xc))
+
+    def to_gpu(self):
+        raise NotImplementedError

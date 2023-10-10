@@ -572,3 +572,6 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         '''Convert given mean-field object to KUHF'''
         addons.convert_to_uhf(mf, self)
         return self
+
+    def to_gpu(self):
+        raise NotImplementedError

@@ -196,3 +196,11 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
     def to_hf(self):
         '''Convert to UHF object.'''
         return self._transfer_attrs_(self.mol.UHF())
+
+    def to_gpu(self):
+        from gpu4pyscf.dft.uks import UKS
+        obj = lib.to_gpu(self.__class__.reset(self.view(UKS)))
+        # Attributes only defined in gpu4pyscf.RKS
+        obj.screen_tol = 1e-14
+        obj.disp = None
+        return obj

@@ -901,6 +901,9 @@ class RHF(SCF, mol_hf.RHF):
         addons.convert_to_rhf(mf, self)
         return self
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 
 def _format_jks(vj, dm, kpts_band):
     if kpts_band is None:

@@ -165,6 +165,9 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
         addons.convert_to_ghf(mf, self)
         return self
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto

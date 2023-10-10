@@ -755,3 +755,6 @@ class KRHF(KSCF, pbchf.RHF):
         '''Convert given mean-field object to KRHF/KROHF'''
         addons.convert_to_rhf(mf, self)
         return self
+
+    def to_gpu(self):
+        raise NotImplementedError

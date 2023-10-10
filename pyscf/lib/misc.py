@@ -1331,3 +1331,14 @@ def isintsequence(obj):
         for i in obj:
             are_ints = are_ints and isinteger(i)
         return are_ints
+
+def to_gpu(method):
+    '''Recursively converts all attributes of a method to cupy objects or
+    gpu4pyscf objects.
+    '''
+    for key, val in method.__dict__.items():
+        if isinstance(val, numpy.ndarray):
+            setattr(method, key, cupy.asarray(val))
+        elif hasattr(val, 'to_gpu'):
+            setattr(method, key, val.to_gpu())
+    return method

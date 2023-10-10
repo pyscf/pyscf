@@ -181,7 +181,7 @@ class DF(lib.StreamObject):
         '''Reset mol and clean up relevant attributes for scanner mode'''
         if mol is not None:
             self.mol = mol
-        self.auxmol = None
+            self.auxmol = None
         self._cderi = None
         self._vjopt = None
         self._rsh_df = {}
@@ -307,6 +307,10 @@ class DF(lib.StreamObject):
             mol.omega = mol_omega
             if auxmol_omega is not None:
                 auxmol.omega = auxmol_omega
+
+    def to_gpu(self):
+        from gpu4pyscf.df.df import DF as DF
+        return to_gpu(self.__class__.reset(self.view(DF)))
 
 GDF = DF
 

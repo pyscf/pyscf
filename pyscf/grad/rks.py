@@ -622,6 +622,10 @@ class Gradients(rhf_grad.Gradients):
         else:
             return 0
 
+    def to_gpu(self):
+        from gpu4pyscf.grad.rks import Gradients
+        return lib.to_gpu(self.view(Gradients))
+
 Grad = Gradients
 
 from pyscf import dft

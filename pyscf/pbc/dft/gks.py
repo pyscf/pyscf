@@ -143,3 +143,6 @@ class GKS(rks.KohnShamDFT, pbcghf.GHF):
         '''Convert to GHF object.'''
         from pyscf.pbc import scf
         return self._transfer_attrs_(scf.GHF(self.cell, self.kpt))
+
+    def to_gpu(self):
+        raise NotImplementedError

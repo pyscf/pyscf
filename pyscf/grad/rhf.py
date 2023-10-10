@@ -438,6 +438,9 @@ class GradientsBase(lib.StreamObject):
         to be split into alpha,beta in DF-ROHF subclass'''
         return lib.tag_array (dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 # export the symbol GradientsMixin for backward compatibility.
 # GradientsMixin should be dropped in the future.
 GradientsMixin = GradientsBase
@@ -457,6 +460,10 @@ class Gradients(GradientsBase):
         return make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     grad_elec = grad_elec
+
+    def to_gpu(self):
+        from gpu4pyscf.grad.rhf import Gradients
+        return lib.to_gpu(self.view(Gradients))
 
 Grad = Gradients
 
