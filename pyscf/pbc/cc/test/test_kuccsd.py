@@ -237,8 +237,8 @@ class KnownValues(unittest.TestCase):
         kmf.mo_coeff = np.empty_like(mo)
         nkpts = len(kmf.kpts)
         for k in range(nkpts):
-             kmf.mo_coeff[0,k] = lo.orth.vec_lowdin(mo[0,k], s[k])
-             kmf.mo_coeff[1,k] = lo.orth.vec_lowdin(mo[1,k], s[k])
+            kmf.mo_coeff[0,k] = lo.orth.vec_lowdin(mo[0,k], s[k])
+            kmf.mo_coeff[1,k] = lo.orth.vec_lowdin(mo[1,k], s[k])
 
         kmf.mo_occ[:] = 0
         kmf.mo_occ[:,:,:2] = 1
