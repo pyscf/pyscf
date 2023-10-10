@@ -278,11 +278,6 @@ class KGHF(khf.KSCF, pbcghf.GHF):
         from pyscf.pbc import dft
         return self._transfer_attrs_(dft.KGKS(self.cell, self.kpts, xc=xc))
 
-    def convert_from_(self, mf):
-        '''Convert given mean-field object to KGHF'''
-        addons.convert_to_ghf(mf, self)
-        return self
-
 del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 if __name__ == '__main__':

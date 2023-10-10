@@ -165,7 +165,7 @@ class _SGXHF:
         if dm is None: dm = self.make_rdm1()
         with_df = self.with_df
         if not with_df:
-            return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+            return super().get_jk(self, mol, dm, hermi, with_j, with_k, omega)
         if (self._opt.get(omega) is None and
             self.with_df.direct_j and (not self.with_df.dfj)):
             with mol.with_range_coulomb(omega):
