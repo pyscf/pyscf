@@ -27,8 +27,8 @@ from pyscf import df
 from pyscf import cc
 from pyscf import ao2mo
 from pyscf import mp
-from pyscf.cc import ccsd
-from pyscf.cc import rccsd
+from pyscf.cc import ccsd, dcsd
+from pyscf.cc import rccsd, rdcsd
 
 def setUpModule():
     global mol, mf, eris, mycc
@@ -59,6 +59,18 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    def test_dcsd(self):
+        mf = scf.RHF(mol).run()
+        mycc = dcsd.DCSD(mf)
+        mycc.kernel()
+        self.assertAlmostEqual(mycc.e_tot, -76.12243069638626, 7)
+
+    def test_rdcsd(self):
+        mf = scf.RHF(mol).run()
+        mycc = rdcsd.RDCSD(mf)
+        mycc.kernel()
+        self.assertAlmostEqual(mycc.e_tot, -76.12243069638626, 7)
+    
     def test_roccsd(self):
         mf = scf.ROHF(mol).run()
         mycc = cc.RCCSD(mf).run()

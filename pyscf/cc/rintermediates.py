@@ -27,23 +27,27 @@ from pyscf import ao2mo
 
 ### Eqs. (37)-(39) "kappa"
 
-def cc_Foo(t1, t2, eris):
+def cc_Foo(t1, t2, eris, dcsd=False):
     nocc, nvir = t1.shape
     foo = eris.fock[:nocc,:nocc]
     eris_ovov = np.asarray(eris.ovov)
     Fki  = 2*lib.einsum('kcld,ilcd->ki', eris_ovov, t2)
     Fki -=   lib.einsum('kdlc,ilcd->ki', eris_ovov, t2)
+    if dcsd:
+        Fki *= 0.5
     Fki += 2*lib.einsum('kcld,ic,ld->ki', eris_ovov, t1, t1)
     Fki -=   lib.einsum('kdlc,ic,ld->ki', eris_ovov, t1, t1)
     Fki += foo
     return Fki
 
-def cc_Fvv(t1, t2, eris):
+def cc_Fvv(t1, t2, eris, dcsd=False):
     nocc, nvir = t1.shape
     fvv = eris.fock[nocc:,nocc:]
     eris_ovov = np.asarray(eris.ovov)
     Fac  =-2*lib.einsum('kcld,klad->ac', eris_ovov, t2)
     Fac +=   lib.einsum('kdlc,klad->ac', eris_ovov, t2)
+    if dcsd:
+        Fac *= 0.5
     Fac -= 2*lib.einsum('kcld,ka,ld->ac', eris_ovov, t1, t1)
     Fac +=   lib.einsum('kdlc,ka,ld->ac', eris_ovov, t1, t1)
     Fac += fvv
@@ -60,19 +64,19 @@ def cc_Fov(t1, t2, eris):
 
 ### Eqs. (40)-(41) "lambda"
 
-def Loo(t1, t2, eris):
+def Loo(t1, t2, eris, dcsd=False):
     nocc, nvir = t1.shape
     fov = eris.fock[:nocc,nocc:]
-    Lki = cc_Foo(t1, t2, eris) + np.einsum('kc,ic->ki',fov, t1)
+    Lki = cc_Foo(t1, t2, eris, dcsd) + np.einsum('kc,ic->ki',fov, t1)
     eris_ovoo = np.asarray(eris.ovoo)
     Lki += 2*np.einsum('lcki,lc->ki', eris_ovoo, t1)
     Lki -=   np.einsum('kcli,lc->ki', eris_ovoo, t1)
     return Lki
 
-def Lvv(t1, t2, eris):
+def Lvv(t1, t2, eris, dcsd=False):
     nocc, nvir = t1.shape
     fov = eris.fock[:nocc,nocc:]
-    Lac = cc_Fvv(t1, t2, eris) - np.einsum('kc,ka->ac',fov, t1)
+    Lac = cc_Fvv(t1, t2, eris, dcsd) - np.einsum('kc,ka->ac',fov, t1)
     eris_ovvv = np.asarray(eris.get_ovvv())
     Lac += 2*np.einsum('kdac,kd->ac', eris_ovvv, t1)
     Lac -=   np.einsum('kcad,kd->ac', eris_ovvv, t1)
@@ -80,12 +84,13 @@ def Lvv(t1, t2, eris):
 
 ### Eqs. (42)-(45) "chi"
 
-def cc_Woooo(t1, t2, eris):
+def cc_Woooo(t1, t2, eris, dcsd=False):
     eris_ovoo = np.asarray(eris.ovoo)
     Wklij  = lib.einsum('lcki,jc->klij', eris_ovoo, t1)
     Wklij += lib.einsum('kclj,ic->klij', eris_ovoo, t1)
     eris_ovov = np.asarray(eris.ovov)
-    Wklij += lib.einsum('kcld,ijcd->klij', eris_ovov, t2)
+    if not dcsd:
+        Wklij += lib.einsum('kcld,ijcd->klij', eris_ovov, t2)
     Wklij += lib.einsum('kcld,ic,jd->klij', eris_ovov, t1, t1)
     Wklij += np.asarray(eris.oooo).transpose(0,2,1,3)
     return Wklij
@@ -98,7 +103,7 @@ def cc_Wvvvv(t1, t2, eris):
     Wabcd += np.asarray(_get_vvvv(eris)).transpose(0,2,1,3)
     return Wabcd
 
-def cc_Wvoov(t1, t2, eris):
+def cc_Wvoov(t1, t2, eris, dcsd=False):
     eris_ovvv = np.asarray(eris.get_ovvv())
     eris_ovoo = np.asarray(eris.ovoo)
     Wakic  = lib.einsum('kcad,id->akic', eris_ovvv, t1)
@@ -106,19 +111,21 @@ def cc_Wvoov(t1, t2, eris):
     Wakic += np.asarray(eris.ovvo).transpose(2,0,3,1)
     eris_ovov = np.asarray(eris.ovov)
     Wakic -= 0.5*lib.einsum('ldkc,ilda->akic', eris_ovov, t2)
-    Wakic -= 0.5*lib.einsum('lckd,ilad->akic', eris_ovov, t2)
+    if not dcsd:
+        Wakic -= 0.5*lib.einsum('lckd,ilad->akic', eris_ovov, t2)
     Wakic -= lib.einsum('ldkc,id,la->akic', eris_ovov, t1, t1)
     Wakic += lib.einsum('ldkc,ilad->akic', eris_ovov, t2)
     return Wakic
 
-def cc_Wvovo(t1, t2, eris):
+def cc_Wvovo(t1, t2, eris, dcsd=False):
     eris_ovvv = np.asarray(eris.get_ovvv())
     eris_ovoo = np.asarray(eris.ovoo)
     Wakci  = lib.einsum('kdac,id->akci', eris_ovvv, t1)
     Wakci -= lib.einsum('lcki,la->akci', eris_ovoo, t1)
     Wakci += np.asarray(eris.oovv).transpose(2,0,3,1)
     eris_ovov = np.asarray(eris.ovov)
-    Wakci -= 0.5*lib.einsum('lckd,ilda->akci', eris_ovov, t2)
+    if not dcsd:
+        Wakci -= 0.5*lib.einsum('lckd,ilda->akci', eris_ovov, t2)
     Wakci -= lib.einsum('lckd,id,la->akci', eris_ovov, t1, t1)
     return Wakci
 

@@ -24,7 +24,7 @@ from pyscf import scf, dft
 from pyscf import mp
 from pyscf import cc
 from pyscf import ao2mo
-from pyscf.cc import uccsd
+from pyscf.cc import uccsd, udcsd
 from pyscf.cc import gccsd
 from pyscf.cc import addons
 from pyscf.cc import uccsd_rdm
@@ -69,6 +69,12 @@ def tearDownModule():
     del mol, rhf, mf, myucc, mol_s2, mf_s2, eris
 
 class KnownValues(unittest.TestCase):
+
+    def test_udcsd(self):
+        mf = scf.UHF(mol).run()
+        mycc = udcsd.UDCSD(mf)
+        mycc.kernel()
+        self.assertAlmostEqual(mycc.e_tot, -76.12243069638626, 7)
 
     def test_with_df_s0(self):
         mf = scf.UHF(mol).density_fit(auxbasis='weigend').run()

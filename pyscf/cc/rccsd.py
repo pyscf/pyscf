@@ -110,18 +110,26 @@ def update_amps(cc, t1, t2, eris):
         tmp = lib.einsum('ki,kjab->ijab', Loo2, t2)
         t2new -= (tmp + tmp.transpose(1,0,3,2))
     else:
-        Loo = imd.Loo(t1, t2, eris)
-        Lvv = imd.Lvv(t1, t2, eris)
+        Loo = imd.Loo(t1, t2, eris, cc.dcsd)
+        Lvv = imd.Lvv(t1, t2, eris, cc.dcsd)
         Loo[np.diag_indices(nocc)] -= mo_e_o
         Lvv[np.diag_indices(nvir)] -= mo_e_v
 
-        Woooo = imd.cc_Woooo(t1, t2, eris)
-        Wvoov = imd.cc_Wvoov(t1, t2, eris)
-        Wvovo = imd.cc_Wvovo(t1, t2, eris)
+        Woooo = imd.cc_Woooo(t1, t2, eris, cc.dcsd)
+        if cc.dcsd:
+            Woooo_witht2 = imd.cc_Woooo(t1, t2, eris, False)
+        Wvoov = imd.cc_Wvoov(t1, t2, eris, cc.dcsd)
+        Wvovo = imd.cc_Wvovo(t1, t2, eris, cc.dcsd)
         Wvvvv = imd.cc_Wvvvv(t1, t2, eris)
 
-        tau = t2 + np.einsum('ia,jb->ijab', t1, t1)
-        t2new += lib.einsum('klij,klab->ijab', Woooo, tau)
+        if not cc.dcsd:
+            tau = t2 + np.einsum('ia,jb->ijab', t1, t1)
+            t2new += lib.einsum('klij,klab->ijab', Woooo, tau)
+        else:
+            t2new += lib.einsum('klij,klab->ijab', Woooo, t2)
+            tau = np.einsum('ia,jb->ijab', t1, t1)
+            t2new += lib.einsum('klij,klab->ijab', Woooo_witht2, tau)
+            tau += t2
         t2new += lib.einsum('abcd,ijcd->ijab', Wvvvv, tau)
         tmp = lib.einsum('ac,ijcb->ijab', Lvv, t2)
         t2new += (tmp + tmp.transpose(1,0,3,2))
@@ -177,6 +185,8 @@ class RCCSD(ccsd.CCSD):
             mbpt2 : bool
                 Use one-shot MBPT2 approximation to CCSD.
         '''
+        if mbpt2 and self.dcsd:
+            raise RuntimeError('MBPT2 and DCSD are mutually exclusive approximations.')
         if mbpt2:
             pt = mp2.MP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
