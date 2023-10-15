@@ -576,7 +576,7 @@ def r_fxc(ni, mol, grids, xc_code, dm0, dms, spin=0, relativity=1, hermi=0,
     make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
     with_s = (nao == n2c*2)  # 4C DM
 
-    matLL = numpy.zeros((nset,n2c,n2c), dtype=dms.dtype)
+    matLL = numpy.zeros((nset,n2c,n2c), dtype=numpy.complex128)
     matSS = numpy.zeros_like(matLL)
     if xctype in ('LDA', 'GGA', 'MGGA'):
         f_eval_mat = {

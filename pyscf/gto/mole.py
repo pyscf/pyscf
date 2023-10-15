@@ -98,9 +98,6 @@ NUC_ECP = 4  # atoms with pseudo potential
 BASE = getattr(__config__, 'BASE', 0)
 NORMALIZE_GTO = getattr(__config__, 'NORMALIZE_GTO', True)
 DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
-# Whether to disable the explicit call to gc.collect(). gc.collect() may cause
-# non-negligible overhead (https://github.com/pyscf/pyscf/issues/1038).
-DISABLE_GC = getattr(__config__, 'DISABLE_GC', False)
 ARGPARSE = getattr(__config__, 'ARGPARSE', False)
 
 def M(*args, **kwargs):
@@ -2480,9 +2477,6 @@ class MoleBase(lib.StreamObject):
                 Collinear spin of each atom. Default is [0.0,]*natm
 
         '''
-        if not DISABLE_GC:
-            gc.collect()  # To release circular referred objects
-
         if isinstance(dump_input, str):
             sys.stderr.write('Assigning the first argument %s to mol.atom\n' %
                              dump_input)
