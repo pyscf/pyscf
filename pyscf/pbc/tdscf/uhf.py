@@ -49,4 +49,3 @@ RPA = TDUHF = TDHF
 from pyscf.pbc import scf
 scf.uhf.UHF.TDA = lib.class_as_method(TDA)
 scf.uhf.UHF.TDHF = lib.class_as_method(TDHF)
-

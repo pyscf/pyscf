@@ -739,4 +739,3 @@ def _unpack_nelec(nelec, spin=None):
     return nelec
 
 del (LARGE_CI_TOL, RETURN_STRS, PENALTY)
-

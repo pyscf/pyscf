@@ -459,4 +459,3 @@ if __name__ == '__main__':
     e, c = cis.kernel(h1e, eri, norb, nelec)
     print(e - -15.9977886375)
     print('t',logger.process_clock())
-

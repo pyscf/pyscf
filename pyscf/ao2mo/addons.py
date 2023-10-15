@@ -210,4 +210,3 @@ def _stand_sym_code(sym):
         return sym[1:]
     else:
         return sym
-

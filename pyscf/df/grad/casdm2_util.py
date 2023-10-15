@@ -572,5 +572,3 @@ if __name__ == '__main__':
     print ('Analytical CASSCF gradient:\n', dE_conv)
     #print ('DF-CASSCF analytical-numerical disagreement:\n', dE-dE_num)
     print ('Analytical DF-CASSCF - CASSCF disagreement:\n', dE-dE_conv)
-
-

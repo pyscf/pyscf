@@ -189,4 +189,3 @@ def save_mol(mol, chkfile):
     '''
     dump(chkfile, 'mol', mol.dumps())
 dump_mol = save_mol
-

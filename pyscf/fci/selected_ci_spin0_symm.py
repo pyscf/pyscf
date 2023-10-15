@@ -150,4 +150,3 @@ if __name__ == '__main__':
     myci = direct_spin1_symm.FCISolver().set(orbsym=orbsym)
     e2, c2 = myci.kernel(h1e, eri, norb, nelec)
     print(e1 - e2)
-

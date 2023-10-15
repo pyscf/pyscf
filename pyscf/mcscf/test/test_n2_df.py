@@ -244,4 +244,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for density fitting N2")
     unittest.main()
-

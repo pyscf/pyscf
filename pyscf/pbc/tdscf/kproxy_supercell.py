@@ -662,4 +662,3 @@ class TDProxy(mol_proxy.TDProxy):
             frozen=self.frozen,
             **self.__k2s_kwargs__
         )
-

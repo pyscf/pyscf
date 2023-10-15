@@ -374,4 +374,3 @@ if __name__ == '__main__':
     print('IAPCV', numpy.allclose(IAPCV, eris0.IAPCV))
     print('apCV ', numpy.allclose(apCV , eris0.apCV ))
     print('APcv ', numpy.allclose(APcv , eris0.APcv ))
-

@@ -83,6 +83,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full tests for vvo")
     unittest.main()
-
-
-

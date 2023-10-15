@@ -387,4 +387,3 @@ if __name__ == '__main__':
     uagf2.run()
     uagf2.ipagf2(nroots=5)
     uagf2.eaagf2(nroots=5)
-

@@ -359,4 +359,3 @@ def reorder_dm1234(rdm1, rdm2, rdm3, rdm4, inplace=True):
             for u in range(norb):
                 rdm4[:,q,q,s,s,u,u,:] -= rdm1.T
     return rdm1, rdm2, rdm3, rdm4
-

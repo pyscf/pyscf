@@ -306,4 +306,3 @@ if __name__ == '__main__':
     print (mf.U_val)
     print (mf.C_ao_lo.shape)
     print (mf.kernel())
-

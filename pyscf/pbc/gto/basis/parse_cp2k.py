@@ -89,5 +89,3 @@ def search_seg(basisfile, symb):
             return [x.strip() for x in dat.splitlines()
                     if x.strip() and 'END' not in x]
     raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
-
-

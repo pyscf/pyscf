@@ -87,4 +87,3 @@ def symmetrize(mol, coords):
     from pyscf.grad.rhf import symmetrize
     # Symmetrizing coordinates is the same to the symmetrization of gradients.
     return symmetrize(mol, coords)
-

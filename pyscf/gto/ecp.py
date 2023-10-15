@@ -184,4 +184,3 @@ if __name__ == '__main__':
                 verbose=0)
     mf = scf.RHF(mol)
     print(mf.kernel(), -0.45002315562861461)
-

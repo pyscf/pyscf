@@ -359,4 +359,3 @@ if __name__ == '__main__':
          numpy.einsum('ijkl,ijkl->', eri_ab, dm2[1])    +
          mf.mol.energy_nuc())
     print(e3 - e3ref)
-

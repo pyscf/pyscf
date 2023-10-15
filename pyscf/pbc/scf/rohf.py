@@ -140,4 +140,3 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
         from pyscf.pbc.scf import addons
         addons.convert_to_rhf(mf, self)
         return self
-

@@ -122,4 +122,3 @@ if __name__ == '__main__':
     conv, l1, l2 = kernel(mcc, mcc.ao2mo(), t1, t2, tol=1e-8)
     print(numpy.linalg.norm(l1)-0.013575484203926739)
     print(numpy.linalg.norm(l2)-0.22029981372536928)
-

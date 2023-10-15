@@ -321,5 +321,3 @@ if __name__ == '__main__':
     mf.kernel()
     mf.max_cycle = 5
     pscf.newton(mf).kernel()
-
-

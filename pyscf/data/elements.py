@@ -1235,4 +1235,3 @@ def is_ghost_atom(symb_or_chg):
         return True
     else:
         return symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE'
-

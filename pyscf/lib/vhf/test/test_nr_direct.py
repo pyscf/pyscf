@@ -290,4 +290,3 @@ class KnowValues(unittest.TestCase):
 if __name__ == '__main__':
     print('Full Tests for nr_direct')
     unittest.main()
-
