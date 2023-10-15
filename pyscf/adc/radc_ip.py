@@ -996,5 +996,3 @@ class RADCIP(radc.RADC):
         diag = self.get_diag(imds, eris)
         matvec = self.matvec(imds, eris)
         return matvec, diag
-
-

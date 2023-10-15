@@ -169,4 +169,3 @@ if __name__ == '__main__':
     e3 =(numpy.einsum('ij,ji->', h1, dm1) +
          numpy.einsum('ijkl,ijkl->', eri_mo, dm2)*.5 + mf.mol.energy_nuc())
     print(e3ref, e3-(mf.e_tot+ecc))
-

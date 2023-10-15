@@ -44,4 +44,3 @@ if __name__ == '__main__':
         print(kappa,l,j)
         for mj in range(-j, j+1, 2):
             print(cg_spin(l, j, mj, 1), cg_spin(l, j, mj, -1))
-

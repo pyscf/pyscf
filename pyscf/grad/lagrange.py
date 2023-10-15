@@ -186,4 +186,3 @@ class LagPrec (object):
         Adiagd[abs(Adiagd)<1e-8] = 1e-8
         x /= Adiagd
         return x
-

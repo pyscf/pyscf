@@ -82,4 +82,3 @@ if __name__ == '__main__':
     m._numint.libxc = xcfun
     m.xc = 'b88,lyp'
     print(m.scf())  # -2.8978518405
-

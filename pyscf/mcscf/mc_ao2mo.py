@@ -363,4 +363,3 @@ if __name__ == '__main__':
     print('k_pc ', numpy.allclose(k_pc, eris1.k_pc))
     print('ppaa ', numpy.allclose(ppaa , eris0.ppaa ))
     print('papa ', numpy.allclose(papa , eris0.papa ))
-

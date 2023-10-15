@@ -278,4 +278,3 @@ if __name__ == '__main__':
     eri0 = general(rhf._eri, (rhf.mo_coeff,)*4)
     print(abs(eri0).sum()-5384.460843787659)
     print(logger.process_clock())
-

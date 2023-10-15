@@ -1170,4 +1170,3 @@ if __name__ == '__main__':
     print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
 
     print(abs(rdm1 - numpy.einsum('ijkk->ji', rdm2)/(mol.nelectron-1)).sum())
-

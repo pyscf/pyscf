@@ -314,5 +314,3 @@ def _dgemv(v, m):
     for i,vi in enumerate(v[1:]):
         vm += vi * m[i+1]
     return vm
-
-

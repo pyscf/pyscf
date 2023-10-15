@@ -228,4 +228,3 @@ def FCI(mol_or_mf, mo=None, singlet=False):
     cisolver.__dict__.update(fcisolver.__dict__)
     cisolver.orbsym = orbsym
     return cisolver
-

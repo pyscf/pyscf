@@ -326,4 +326,3 @@ if __name__ == '__main__':
             max_memory=.2, verbose=6)
     with h5py.File('cderi.dat', 'r') as feri:
         print(numpy.allclose(feri['j3c'], cderi0))
-

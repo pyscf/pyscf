@@ -430,4 +430,3 @@ if __name__ == '__main__':
     t2ab = t2new[0::2,1::2,0::2,1::2]
     print(abs(t2ab-t2new_ref).max())
     print(abs(t2ab-t2ab.transpose(1,0,2,3) - t2aa).max())
-

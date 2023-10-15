@@ -302,4 +302,3 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
            int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi'),
            int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi'))
     return out
-

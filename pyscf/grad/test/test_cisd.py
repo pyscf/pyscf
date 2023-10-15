@@ -112,4 +112,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Tests for CISD gradients")
     unittest.main()
-

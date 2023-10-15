@@ -306,4 +306,3 @@ approx_hessian = df.approx_hessian
 
 def density_fit(mc, auxbasis=None, with_df=None):
     return mc.density_fit(auxbasis, with_df)
-

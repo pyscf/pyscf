@@ -426,6 +426,3 @@ class APC():
         nactorbs, nactel, casorbs, active_idx = chooser.kernel()
         self.active_idx = active_idx
         return nactorbs, nactel, casorbs
-
-
-

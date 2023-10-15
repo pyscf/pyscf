@@ -314,4 +314,3 @@ if __name__ == '__main__':
     print('E(SFX2C1E) = %.12g' % method.kernel())
     method.with_x2c.approx = 'atom1e'
     print('E(SFX2C1E) = %.12g' % method.kernel())
-

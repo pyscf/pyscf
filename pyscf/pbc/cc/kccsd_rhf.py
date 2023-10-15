@@ -1199,4 +1199,3 @@ if __name__ == '__main__':
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
     print(lib.finger(Ht1) - (6.608150224325518  -0.2219476427503148j))
     print(lib.finger(Ht2) - (-23.253955060531297-137.76211601171295j))
-
