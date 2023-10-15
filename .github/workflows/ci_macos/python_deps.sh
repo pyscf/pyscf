@@ -8,7 +8,3 @@ version=$(python -c 'import sys; version=sys.version_info[:2]; print("{0}.{1}".f
 if [ $version != '3.12' ]; then
     pip install geometric
 fi
-
-if [ $version != '3.5' ]; then
-    pip install cppe
-fi
