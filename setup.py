@@ -14,8 +14,10 @@
 # limitations under the License.
 
 import os
+import sys
 from setuptools import setup, find_packages, Extension
-from setuptools.command.build_ext import build_ext
+from setuptools.command.build_py import build_py
+from distutils.util import get_platform
 
 CLASSIFIERS = [
 'Development Status :: 5 - Production/Stable',
@@ -24,12 +26,12 @@ CLASSIFIERS = [
 'License :: OSI Approved :: Apache Software License',
 'Programming Language :: C',
 'Programming Language :: Python',
-'Programming Language :: Python :: 3.6',
 'Programming Language :: Python :: 3.7',
 'Programming Language :: Python :: 3.8',
 'Programming Language :: Python :: 3.9',
 'Programming Language :: Python :: 3.10',
 'Programming Language :: Python :: 3.11',
+'Programming Language :: Python :: 3.12',
 'Topic :: Software Development',
 'Topic :: Scientific/Engineering',
 'Operating System :: POSIX',
@@ -78,13 +80,13 @@ EXTRAS['nao'] = ['pyscf-nao']
 EXTRAS['fciqmcscf'] = ['pyscf-fciqmc']
 EXTRAS['tblis'] = ['pyscf-tblis']
 
-class CMakeBuildExt(build_ext):
+class CMakeBuildPy(build_py):
     def run(self):
-        extension = self.extensions[0]
-        assert extension.name == 'pyscf_lib_placeholder'
-        self.build_cmake(extension)
+        self.plat_name = get_platform()
+        self.build_base = 'build'
+        self.build_lib = os.path.join(self.build_base, 'lib')
+        self.build_temp = os.path.join(self.build_base, f'temp.{self.plat_name}')
 
-    def build_cmake(self, extension):
         self.announce('Configuring extensions', level=3)
         src_dir = os.path.abspath(os.path.join(__file__, '..', 'pyscf', 'lib'))
         cmd = ['cmake', f'-S{src_dir}', f'-B{self.build_temp}']
@@ -104,29 +106,20 @@ class CMakeBuildExt(build_ext):
             self.announce(' '.join(cmd))
         else:
             self.spawn(cmd)
+        super().run()
 
-    # To remove the infix string like cpython-37m-x86_64-linux-gnu.so
-    # Python ABI updates since 3.5
-    # https://www.python.org/dev/peps/pep-3149/
-    def get_ext_filename(self, ext_name):
-        ext_path = ext_name.split('.')
-        filename = build_ext.get_ext_filename(self, ext_name)
-        name, ext_suffix = os.path.splitext(filename)
-        return os.path.join(*ext_path) + ext_suffix
-
-# Here to change the order of sub_commands to ['build_py', ..., 'build_ext']
-# C extensions by build_ext are installed in source directory.
-# build_py then copy all .so files into "build_ext.build_lib" directory.
-# We have to ensure build_ext being executed earlier than build_py.
-# A temporary workaround is to modifying the order of sub_commands in build class
-from distutils.command.build import build
-build.sub_commands = ([c for c in build.sub_commands if c[0] == 'build_ext'] +
-                      [c for c in build.sub_commands if c[0] != 'build_ext'])
+# build_py will produce plat_name = 'any'. Patch the bdist_wheel to change the
+# platform tag because the C extensions are platform dependent.
+from wheel.bdist_wheel import bdist_wheel
+initialize_options = bdist_wheel.initialize_options
+def initialize_with_default_plat_name(self):
+    initialize_options(self)
+    self.plat_name = get_platform()
+bdist_wheel.initialize_options = initialize_with_default_plat_name
 
 # scipy bugs
 # https://github.com/scipy/scipy/issues/12533
 _scipy_version = 'scipy!=1.5.0,!=1.5.1'
-import sys
 if sys.platform == 'darwin':
     if sys.version_info < (3, 8):
         _scipy_version = 'scipy<=1.1.0'
@@ -153,11 +146,10 @@ setup(
     #package_data={'': ['*.so', '*.dylib', '*.dll', '*.dat']},
     include_package_data=True,  # include everything in source control
     packages=find_packages(exclude=['*test*', '*examples*']),
-    # The ext_modules placeholder is to ensure build_ext getting initialized
-    ext_modules=[Extension('pyscf_lib_placeholder', [])],
-    cmdclass={'build_ext': CMakeBuildExt},
+    cmdclass={'build_py': CMakeBuildPy},
     install_requires=['numpy>=1.13,!=1.16,!=1.17',
                       _scipy_version,
-                      'h5py>=2.7'],
+                      'h5py>=2.7',
+                      'setuptools'],
     extras_require=EXTRAS,
 )

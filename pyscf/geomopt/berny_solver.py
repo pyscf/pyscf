@@ -17,18 +17,6 @@
 Interface to geometry optimizer pyberny https://github.com/jhrmnn/pyberny
 '''
 
-from __future__ import absolute_import
-import pkg_resources
-try:
-    dist = pkg_resources.get_distribution('pyberny')
-except pkg_resources.DistributionNotFound:
-    dist = None
-if dist is None or [int(x) for x in dist.version.split('.')] < [0, 6, 2]:
-    msg = ('Geometry optimizer Pyberny not found or outdated. Install or update '
-           'with:\n\n\tpip install -U pyberny')
-    raise ImportError(msg)
-
-
 import numpy
 import logging
 from pyscf import lib
