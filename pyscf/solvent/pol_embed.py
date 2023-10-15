@@ -43,16 +43,13 @@ References:
   https://doi.org/10.1016/B978-0-12-386013-2.00003-6
 '''
 
-import sys
 import numpy
-from pkg_resources import parse_version
 
-try:
-    import cppe
-except ModuleNotFoundError:
-    sys.stderr.write('cppe library was not found\n')
-    sys.stderr.write(__doc__)
-    raise
+import cppe
+from packaging.version import parse as _parse_version
+if _parse_version(cppe.__version__) < _parse_version('0.3.1'):
+    raise ModuleNotFoundError("cppe version {} is required at least. "
+                              "Version {} was found.".format(min_version, cppe.__version__))
 
 from pyscf import lib
 from pyscf.lib import logger
@@ -177,13 +174,6 @@ class PolEmbed(lib.StreamObject):
             options = {"potfile": options_or_potfile}
         else:
             options = options_or_potfile
-
-        min_version = "0.3.1"
-        if parse_version(cppe.__version__) < parse_version(min_version):
-            raise ModuleNotFoundError("cppe version {} is required at least. "
-                                      "Version {}"
-                                      " was found.".format(min_version,
-                                                           cppe.__version__))
 
         if not isinstance(options, dict):
             raise TypeError("Options should be a dictionary.")

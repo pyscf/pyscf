@@ -18,20 +18,11 @@
 '''
 Interface to spglib
 '''
-import pkg_resources
-try:
-    dist = pkg_resources.get_distribution('spglib')
-except pkg_resources.DistributionNotFound:
-    dist = None
-if dist is None or [int(x) for x in dist.version.split('.')] < [1, 15, 1]:
-    msg = ('spglib not found or outdated. Install or update with:\n\t pip install -U spglib')
-    raise ImportError(msg)
-
-import sys
-if sys.version_info >= (3,):
-    unicode = str
-
 import spglib
+from packaging.version import parse as _parse_version
+if _parse_version(spglib.__version__) < _parse_version('1.15.1'):
+    msg = ('spglib outdated. Install or update with:\n\t pip install -U spglib')
+    raise ImportError(msg)
 
 def cell_to_spgcell(cell):
     '''
