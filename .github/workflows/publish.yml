@@ -15,10 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Build wheels
-        uses: docker://pyscf/pyscf-pypa-env:latest
-        with:
-          entrypoint: /build-wheels.sh
-          #args: http://www.sunqm.net/pyscf/files/bin/pyscf-2.2a-deps.tar.gz
+        run: |
+            docker run --rm -v ${{ github.workspace }}:/src/pyscf pyscf/pyscf-pypa-env:latest \
+            bash /src/pyscf/docker/pypa-env/build-wheels.sh
       - name: List available wheels
         run: |
           ls ${{ github.workspace }}/linux-wheels
@@ -37,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pyver: [cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310, cp311-cp311]
+        pyver: [cp39-cp39]
       fail-fast: false
     env:
       img: quay.io/pypa/manylinux2014_aarch64:2023-03-12-25fd859
@@ -106,8 +105,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.14.1
         env:
-          CIBW_BUILD: cp*-macosx_x86_64 cp*-macosx_arm64
-          CIBW_SKIP: cp36-macosx_*
+          CIBW_BUILD: cp39-macosx_x86_64 cp39-macosx_arm64
           CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF"
         with:
           output-dir: mac-wheels
