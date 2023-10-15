@@ -17,14 +17,6 @@
 Interface to geometry optimizer pyberny https://github.com/jhrmnn/pyberny
 '''
 
-import berny
-from packaging.version import parse as _parse_version
-if _parse_version(berny.__version__) < _parse_version('0.6.2'):
-    msg = ('Geometry optimizer Pyberny not found or outdated. Install or update '
-           'with:\n\n\tpip install -U pyberny')
-    raise ImportError(msg)
-
-
 import numpy
 import logging
 from pyscf import lib
