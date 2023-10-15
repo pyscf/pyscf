@@ -47,7 +47,8 @@ import numpy
 
 import cppe
 from packaging.version import parse as _parse_version
-if _parse_version(cppe.__version__) < _parse_version('0.3.1'):
+min_version = '0.3.1'
+if _parse_version(cppe.__version__) < _parse_version(min_version):
     raise ModuleNotFoundError("cppe version {} is required at least. "
                               "Version {} was found.".format(min_version, cppe.__version__))
 
