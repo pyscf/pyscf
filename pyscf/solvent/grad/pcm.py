@@ -33,7 +33,7 @@ libdft = lib.load_library('libdft')
 
 def grad_switch_h(x):
     ''' first derivative of h(x)'''
-    dy = 30.0*x**2 - 60.0*x**3 + 30.0*x**4 
+    dy = 30.0*x**2 - 60.0*x**3 + 30.0*x**4
     dy[x<0] = 0.0
     dy[x>1] = 0.0
     return dy
@@ -61,7 +61,7 @@ def get_dF_dA(surface):
     natom = atom_coords.shape[0]
     dF = numpy.zeros([ngrids, natom, 3])
     dA = numpy.zeros([ngrids, natom, 3])
-    
+
     for ia in range(atom_coords.shape[0]):
         p0,p1 = surface['gslice_by_atom'][ia]
         coords = grid_coords[p0:p1]
@@ -80,12 +80,12 @@ def get_dF_dA(surface):
 
         Fi = switch_fun[p0:p1]
         Ai = area[p0:p1]
-        
+
         # grids response
         Fi = numpy.expand_dims(Fi, axis=-1)
         Ai = numpy.expand_dims(Ai, axis=-1)
         dFi_grid = numpy.sum(dfiJ, axis=1)
-        
+
         dF[p0:p1,ia,:] += Fi * dFi_grid
         dA[p0:p1,ia,:] += Ai * dFi_grid
 
@@ -94,7 +94,7 @@ def get_dF_dA(surface):
         Ai = numpy.expand_dims(Ai, axis=-2)
         dF[p0:p1,:,:] -= Fi * dfiJ
         dA[p0:p1,:,:] -= Ai * dfiJ
-    
+
     return dF, dA
 
 def get_dD_dS(surface, dF, with_S=True, with_D=False):
@@ -113,10 +113,10 @@ def get_dD_dS(surface, dF, with_S=True, with_D=False):
     rij = numpy.linalg.norm(ri_rj, axis=-1)
     xi_r_ij = xi_ij * rij
     numpy.fill_diagonal(rij, 1)
-    
+
     dS_dr = -(scipy.special.erf(xi_r_ij) - 2.0*xi_r_ij/PI**0.5*numpy.exp(-xi_r_ij**2))/rij**2
     numpy.fill_diagonal(dS_dr, 0)
-    
+
     dS_dr= numpy.expand_dims(dS_dr, axis=-1)
     drij = ri_rj/numpy.expand_dims(rij, axis=-1)
     dS = dS_dr * drij
@@ -126,12 +126,12 @@ def get_dD_dS(surface, dF, with_S=True, with_D=False):
         nj_rij = numpy.sum(ri_rj * norm_vec, axis=-1)
         dD_dri = 4.0*xi_r_ij**2 * xi_ij / PI**0.5 * numpy.exp(-xi_r_ij**2) * nj_rij / rij**3
         numpy.fill_diagonal(dD_dri, 0.0)
-        
+
         rij = numpy.expand_dims(rij, axis=-1)
         nj_rij = numpy.expand_dims(nj_rij, axis=-1)
         nj = numpy.expand_dims(norm_vec, axis=0)
         dD_dri = numpy.expand_dims(dD_dri, axis=-1)
-        
+
         dD = dD_dri * drij + dS_dr * (-nj/rij + 3.0*nj_rij/rij**2 * drij)
 
     dSii_dF = -exponents * (2.0/PI)**0.5 / switch_fun**2
@@ -155,12 +155,10 @@ def grad_kernel(pcmobj, dm):
     gridslice    = pcmobj.surface['gslice_by_atom']
     grid_coords  = pcmobj.surface['grid_coords']
     exponents    = pcmobj.surface['charge_exp']
-    switch_fun   = pcmobj.surface['switch_fun']
     v_grids      = pcmobj._intermediates['v_grids']
     A            = pcmobj._intermediates['A']
     D            = pcmobj._intermediates['D']
     S            = pcmobj._intermediates['S']
-    R            = pcmobj._intermediates['R']
     K            = pcmobj._intermediates['K']
     q            = pcmobj._intermediates['q']
     q_sym        = pcmobj._intermediates['q_sym']
@@ -188,13 +186,13 @@ def grad_kernel(pcmobj, dm):
         dq_slice = numpy.einsum('xijn,ij->nx', v_nj_ip2, dm)
         dq[p0:p1] = numpy.einsum('nx,n->nx', dq_slice, q_sym[p0:p1])
 
-    de = numpy.zeros_like(atom_coords)        
+    de = numpy.zeros_like(atom_coords)
     de += numpy.asarray([numpy.sum(dq[p0:p1], axis=0) for p0,p1 in gridslice])
     de += numpy.asarray([numpy.sum(dvj[p0:p1], axis=0) for p0,p1 in aoslice[:,2:]])
-    
+
     atom_charges = mol.atom_charges()
     fakemol_nuc = gto.fakemol_for_charges(atom_coords)
-    
+
     # nuclei response
     int2c2e_ip1 = mol._add_suffix('int2c2e_ip1')
     v_ng_ip1 = gto.mole.intor_cross(int2c2e_ip1, fakemol_nuc, fakemol)
@@ -207,11 +205,11 @@ def grad_kernel(pcmobj, dm):
     dv_g = numpy.einsum('n,xng->gx', atom_charges, v_ng_ip2)
     dv_g = numpy.einsum('gx,g->gx', dv_g, q_sym)
     de -= numpy.asarray([numpy.sum(dv_g[p0:p1], axis=0) for p0,p1 in gridslice])
-    
+
     ## --------------- response from stiffness matrices ----------------
     gridslice = pcmobj.surface['gslice_by_atom']
     dF, dA = get_dF_dA(pcmobj.surface)
-    
+
     with_D = pcmobj.method.upper() == 'IEF-PCM' or pcmobj.method.upper() == 'SS(V)PE'
     dD, dS, dSii = get_dD_dS(pcmobj.surface, dF, with_D=with_D, with_S=True)
 
@@ -219,7 +217,7 @@ def grad_kernel(pcmobj, dm):
         DA = D*A
 
     epsilon = pcmobj.eps
-    
+
     #de_dF = v0 * -dSii_dF * q
     #de += 0.5*numpy.einsum('i,inx->nx', de_dF, dF)
     # dQ = v^T K^-1 (dR - dK K^-1 R) v
@@ -228,10 +226,10 @@ def grad_kernel(pcmobj, dm):
         de_dS = numpy.einsum('i,ijx,j->ix', vK_1, dS, q)
         de -= numpy.asarray([numpy.sum(de_dS[p0:p1], axis=0) for p0,p1, in gridslice])
         de -= 0.5*numpy.einsum('i,ijx,i->jx', vK_1, dSii, q)
-    
+
     elif pcmobj.method.upper() == 'IEF-PCM' or pcmobj.method.upper() == 'SS(V)PE':
         # IEF-PCM and SS(V)PE formally are the same in gradient calculation
-        # dR = f_eps/(2*pi) * (dD*A + D*dA), 
+        # dR = f_eps/(2*pi) * (dD*A + D*dA),
         # dK = dS - f_eps/(2*pi) * (dD*A*S + D*dA*S + D*A*dS)
         f_epsilon = (epsilon - 1.0)/(epsilon + 1.0)
         fac = f_epsilon/(2.0*PI)
@@ -241,12 +239,12 @@ def grad_kernel(pcmobj, dm):
         de_dR -= 0.5*fac * numpy.einsum('i,ijx,j->jx', vK_1, dD, Av)
         de_dR  = numpy.asarray([numpy.sum(de_dR[p0:p1], axis=0) for p0,p1 in gridslice])
         de_dR += 0.5*fac * numpy.einsum('i,ij,jnx,j->nx', vK_1, D, dA, v_grids)
-        
+
         de_dS0  = 0.5*numpy.einsum('i,ijx,j->ix', vK_1, dS, q)
         de_dS0 -= 0.5*numpy.einsum('i,ijx,j->jx', vK_1, dS, q)
         de_dS0  = numpy.asarray([numpy.sum(de_dS0[p0:p1], axis=0) for p0,p1 in gridslice])
         de_dS0 += 0.5*numpy.einsum('i,inx,i->nx', vK_1, dSii, q)
-        
+
         vK_1_DA = numpy.dot(vK_1, DA)
         de_dS1  = 0.5*numpy.einsum('j,jkx,k->jx', vK_1_DA, dS, q)
         de_dS1 -= 0.5*numpy.einsum('j,jkx,k->kx', vK_1_DA, dS, q)
@@ -266,9 +264,9 @@ def grad_kernel(pcmobj, dm):
         de += de_dR - de_dK
     else:
         raise RuntimeError(f"Unknown implicit solvent model: {pcmobj.method}")
-    
+
     return de
-    
+
 def make_grad_object(mf, grad_method):
     '''
     return solvent gradient object
@@ -293,7 +291,7 @@ def make_grad_object(mf, grad_method):
                 dm = self.base.make_rdm1(ao_repr=True)
 
             self.de_solvent = grad_kernel(self.base.with_solvent, dm)
-            self.de_solute = grad_method_class.kernel(self, *args, **kwargs)            
+            self.de_solute = grad_method_class.kernel(self, *args, **kwargs)
             self.de = self.de_solute + self.de_solvent
 
             if self.verbose >= logger.NOTE:

@@ -91,45 +91,44 @@ mcscf.mc1step.CASSCF.PCM = mcscf.mc1step.CASSCF.PCM = pcm_for_casscf
 
 # TABLE II,  J. Chem. Phys. 122, 194110 (2005)
 XI = {
-6: 4.84566077868,
-14: 4.86458714334,
-26: 4.85478226219,
-38: 4.90105812685,
-50: 4.89250673295,
-86: 4.89741372580,
-110: 4.90101060987,
-146: 4.89825187392,
-170: 4.90685517725,
-194: 4.90337644248,
-302: 4.90498088169,
-350: 4.86879474832,
-434: 4.90567349080,
-590: 4.90624071359,
-770: 4.90656435779,
-974: 4.90685167998,
-1202: 4.90704098216,
-1454: 4.90721023869,
-1730: 4.90733270691,
-2030: 4.90744499142,
-2354: 4.90753082825,
-2702: 4.90760972766,
-3074: 4.90767282394,
-3470: 4.90773141371,
-3890: 4.90777965981,
-4334: 4.90782469526,
-4802: 4.90749125553,
-5294: 4.90762073452,
-5810: 4.90792902522,
+    6: 4.84566077868,
+    14: 4.86458714334,
+    26: 4.85478226219,
+    38: 4.90105812685,
+    50: 4.89250673295,
+    86: 4.89741372580,
+    110: 4.90101060987,
+    146: 4.89825187392,
+    170: 4.90685517725,
+    194: 4.90337644248,
+    302: 4.90498088169,
+    350: 4.86879474832,
+    434: 4.90567349080,
+    590: 4.90624071359,
+    770: 4.90656435779,
+    974: 4.90685167998,
+    1202: 4.90704098216,
+    1454: 4.90721023869,
+    1730: 4.90733270691,
+    2030: 4.90744499142,
+    2354: 4.90753082825,
+    2702: 4.90760972766,
+    3074: 4.90767282394,
+    3470: 4.90773141371,
+    3890: 4.90777965981,
+    4334: 4.90782469526,
+    4802: 4.90749125553,
+    5294: 4.90762073452,
+    5810: 4.90792902522,
 }
 
 Bondi = radii.VDW
 Bondi[1] = 1.1/radii.BOHR      # modified version
-#radii_table = bondi * 1.2
 PI = numpy.pi
 
 def switch_h(x):
     '''
-    switching function (eq. 3.19)  
+    switching function (eq. 3.19)
     J. Chem. Phys. 133, 244111 (2010)
     notice the typo in the paper
     '''
@@ -150,7 +149,7 @@ def gen_surface(mol, ng=302, vdw_scale=1.2):
     R_sw_J = R_J * (14.0 / N_J)**0.5
     alpha_J = 1.0/2.0 + R_J/R_sw_J - ((R_J/R_sw_J)**2 - 1.0/28)**0.5
     R_in_J = R_J - alpha_J * R_sw_J
-    
+
     grid_coords = []
     weights = []
     charge_exp = []
@@ -164,16 +163,16 @@ def gen_surface(mol, ng=302, vdw_scale=1.2):
         symb = mol.atom_symbol(ia)
         chg = gto.charge(symb)
         r_vdw = vdw_scale*Bondi[chg]
-        
+
         atom_grid = r_vdw * unit_sphere[:,:3] + atom_coords[ia,:]
         riJ = scipy.spatial.distance.cdist(atom_grid[:,:3], atom_coords)
         diJ = (riJ - R_in_J) / R_sw_J
         diJ[:,ia] = 1.0
         diJ[diJ < 1e-8] = 0.0
         fiJ = switch_h(diJ)
-        
+
         w = unit_sphere[:,3] * 4.0 * PI
-        swf = numpy.prod(fiJ, axis=1) 
+        swf = numpy.prod(fiJ, axis=1)
         idx = w*swf > 1e-16
 
         p0, p1 = p1, p1+sum(idx)
@@ -186,7 +185,7 @@ def gen_surface(mol, ng=302, vdw_scale=1.2):
         charge_exp.append(xi)
         R_vdw.append(numpy.ones(sum(idx)) * r_vdw)
         area.append(w[idx]*r_vdw**2*swf[idx])
-    
+
     grid_coords = numpy.vstack(grid_coords)
     norm_vec = numpy.vstack(norm_vec)
     weights = numpy.concatenate(weights)
@@ -194,7 +193,7 @@ def gen_surface(mol, ng=302, vdw_scale=1.2):
     switch_fun = numpy.concatenate(switch_fun)
     area = numpy.concatenate(area)
     R_vdw = numpy.concatenate(R_vdw)
-    
+
     surface = {
         'ng': ng,
         'gslice_by_atom': gslice_by_atom,
@@ -240,12 +239,12 @@ def get_D_S(surface, with_S=True, with_D=False):
     numpy.fill_diagonal(rij, 1)
     S = scipy.special.erf(xi_r_ij) / rij
     numpy.fill_diagonal(S, charge_exp * (2.0 / PI)**0.5 / switch_fun)
-    
+
     D = None
     if with_D:
         drij = numpy.expand_dims(grid_coords, axis=1) - grid_coords
         nrij = numpy.sum(drij * norm_vec, axis=-1)
-        
+
         D = S*nrij/rij**2 -2.0*xi_r_ij/PI**0.5*numpy.exp(-xi_r_ij**2)*nrij/rij**3
         numpy.fill_diagonal(D, -charge_exp * (2.0 / PI)**0.5 / (2.0 * R_vdw))
 
@@ -278,7 +277,7 @@ class PCM(ddcosmo.DDCOSMO):
             logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
         self.grids.dump_flags(verbose)
         return self
-    
+
     def reset(self, mol=None):
         super().reset(mol)
         self.surface = None
@@ -288,14 +287,14 @@ class PCM(ddcosmo.DDCOSMO):
         vdw_scale = self.vdw_scale
         self.radii_table = vdw_scale * Bondi
         mol = self.mol
-        if ng is None: 
+        if ng is None:
             ng = gen_grid.LEBEDEV_ORDER[self.lebedev_order]
-        
+
         self.surface = gen_surface(mol, ng=ng, vdw_scale=vdw_scale)
         self._intermediates = {}
         F, A = get_F_A(self.surface)
         D, S = get_D_S(self.surface, with_S=True, with_D=True)
-        
+
         epsilon = self.eps
         if self.method.upper() == 'C-PCM':
             f_epsilon = (epsilon-1.)/epsilon
@@ -310,7 +309,7 @@ class PCM(ddcosmo.DDCOSMO):
             DA = D*A
             DAS = numpy.dot(DA, S)
             K = S - f_epsilon/(2.0*PI) * DAS
-            R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)            
+            R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)
         elif self.method.upper() == 'SS(V)PE':
             f_epsilon = (epsilon - 1.0)/(epsilon + 1.0)
             DA = D*A
@@ -348,13 +347,13 @@ class PCM(ddcosmo.DDCOSMO):
 
         vmat = self._get_vmat(q_sym)
         epcm = 0.5 * numpy.dot(q_sym, v_grids)
-        
+
         self._intermediates['K'] = K
         self._intermediates['R'] = R
         self._intermediates['q'] = q
         self._intermediates['q_sym'] = q_sym
         self._intermediates['v_grids'] = v_grids
-        
+
         return epcm, vmat
 
     def _get_v(self, surface, dms):
@@ -384,7 +383,7 @@ class PCM(ddcosmo.DDCOSMO):
         fakemol_nuc = gto.fakemol_for_charges(atom_coords)
         v_ng = gto.mole.intor_cross(int2c2e, fakemol_nuc, fakemol)
         v_grids_n = numpy.dot(atom_charges, v_ng)
-        
+
         v_grids = v_grids_n - v_grids_e
         return v_grids
 
