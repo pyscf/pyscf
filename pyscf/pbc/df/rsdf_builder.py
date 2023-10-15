@@ -75,6 +75,10 @@ class _RSGDFBuilder(Int3cBuilder):
     j2c_eig_always = False
     linear_dep_threshold = LINEAR_DEP_THR
 
+    _keys = {
+        'mesh', 'omega', 'rs_auxcell', 'supmol_ft'
+    }
+
     def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
         self.mesh = None
         if cell.omega == 0:
