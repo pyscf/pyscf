@@ -268,11 +268,11 @@ class KnownValues(unittest.TestCase):
                                     [0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]]})
         mol = cell.to_mol()
-        mf = scf.RHF(mol).run()
+        mf = mol.RHF().run()
         eref = mf.kernel()
 
         mf = cell.RHF()
-        mf.with_df = df.AFTDF(cell)
+        mf.with_df = pdf.AFTDF(cell)
         e1 = mf.kernel()
         self.assertAlmostEqual(eref, -4.165713858819728, 8)
         self.assertAlmostEqual(e1, eref, 4)
@@ -295,12 +295,12 @@ class KnownValues(unittest.TestCase):
         cell.a = numpy.eye(3)
         cell.dimension = 0
         cell.build()
-        mf = pbcscf.RHF(cell)
-        mf.with_df = df.AFTDF(cell)
+        mf = pscf.RHF(cell)
+        mf.with_df = pdf.AFTDF(cell)
         mf.run()
 
         mol = cell.to_mol()
-        mf1 = scf.RHF(mol).run()
+        mf1 = mol.RHF().run()
         self.assertAlmostEqual(mf1.e_tot, -5.66198034773817, 8)
         self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 4)
 
