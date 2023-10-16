@@ -687,7 +687,7 @@ class KSCF(pbchf.SCF):
     def convert_from_(self, mf):
         raise NotImplementedError
 
-class KRHF(KSCF, pbchf.RHF):
+class KRHF(KSCF):
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square
@@ -755,6 +755,3 @@ class KRHF(KSCF, pbchf.RHF):
         '''Convert given mean-field object to KRHF/KROHF'''
         addons.convert_to_rhf(mf, self)
         return self
-
-    def to_gpu(self):
-        raise NotImplementedError

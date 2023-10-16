@@ -346,9 +346,6 @@ class RKS(KohnShamDFT, pbchf.RHF):
         from pyscf.pbc import scf
         return self._transfer_attrs_(scf.RHF(self.cell, self.kpt))
 
-    def to_gpu(self):
-        raise NotImplementedError
-
 
 if __name__ == '__main__':
     from pyscf.pbc import gto

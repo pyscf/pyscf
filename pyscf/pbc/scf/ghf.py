@@ -97,7 +97,7 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
 
     return vj, vk
 
-class GHF(pbchf.SCF, mol_ghf.GHF):
+class GHF(pbchf.SCF):
     '''GHF class for PBCs.
     '''
 
@@ -164,9 +164,6 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
         '''Convert given mean-field object to GHF'''
         addons.convert_to_ghf(mf, self)
         return self
-
-    def to_gpu(self):
-        raise NotImplementedError
 
 
 if __name__ == '__main__':

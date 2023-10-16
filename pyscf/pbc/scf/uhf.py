@@ -104,7 +104,7 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
 
 get_rho = pbchf.get_rho
 
-class UHF(pbchf.SCF, mol_uhf.UHF):
+class UHF(pbchf.SCF):
     '''UHF class for PBCs.
     '''
     _keys = set(["init_guess_breaksym"])
@@ -258,6 +258,3 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
         '''Convert given mean-field object to UHF'''
         addons.convert_to_uhf(mf, self)
         return self
-
-    def to_gpu(self):
-        raise NotImplementedError
