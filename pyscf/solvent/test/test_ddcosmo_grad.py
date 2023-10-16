@@ -627,7 +627,6 @@ def B1_dot_x(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, L):
 
     return Bx
 
-
 def setUpModule():
     global dx, mol0, mol1, mol2, nao, dm
     dx = 0.0001
@@ -861,7 +860,7 @@ class KnownValues(unittest.TestCase):
         # ddcosmo-CASSCF is not fully variational. Errors will be found large
         # in this test.
         self.assertAlmostEqual((e2-e1)/dx, de[0,2], 2)
-    
+
     def test_ccsd_grad(self):
         mf = scf.RHF(mol0).ddCOSMO().run()
         mycc = cc.CCSD(mf).ddCOSMO()
@@ -876,7 +875,7 @@ class KnownValues(unittest.TestCase):
         mycc2 = solvent.ddCOSMO(cc.CCSD(mf)).run()
         e2 = mycc2.e_tot
         self.assertAlmostEqual((e2-e1)/dx, de[0,2], 4)
-    
+
     def test_tda_grad(self):
         mol0 = gto.M(atom='H 0 0 0    ; H .5 .5 .1', unit='B', basis='321g')
         mol1 = gto.M(atom='H 0 0 -.001; H .5 .5 .1', unit='B', basis='321g')
