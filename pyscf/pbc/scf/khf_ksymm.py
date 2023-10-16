@@ -133,6 +133,13 @@ class KsymAdaptedKSCF(khf.KSCF):
     """
     KRHF with k-point symmetry
     """
+
+    _keys = set(['use_ao_symmetry'])
+
+    get_occ = get_occ
+    get_rho = get_rho
+    energy_elec = energy_elec
+
     def __init__(self, cell, kpts=libkpts.KPoints(),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
                  use_ao_symmetry=True):
@@ -185,27 +192,6 @@ class KsymAdaptedKSCF(khf.KSCF):
         if not getattr(self.with_df, 'build', None):
             self.with_df.dump_flags(verbose)
         return self
-
-    def get_init_guess(self, cell=None, key='minao'):
-        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
-        if dm_kpts.ndim == 2:
-            dm_kpts = np.asarray([dm_kpts]*self.kpts.nkpts_ibz)
-        elif len(dm_kpts) != self.kpts.nkpts_ibz:
-            dm_kpts = dm_kpts[self.kpts.ibz2bz]
-
-        ne = np.einsum('k,kij,kji', self.kpts.weights_ibz, dm_kpts, self.get_ovlp(cell)).real
-        nkpts = self.kpts.nkpts
-        ne *= nkpts
-        nelectron = float(self.cell.tot_electrons(nkpts))
-        if abs(ne - nelectron) > 0.01*nkpts:
-            logger.debug(self, 'Big error detected in the electron number '
-                         'of initial guess density matrix (Ne/cell = %g)!\n'
-                         '  This can cause huge error in Fock matrix and '
-                         'lead to instability in SCF for low-dimensional '
-                         'systems.\n  DM is normalized wrt the number '
-                         'of electrons %s', ne/nkpts, nelectron/nkpts)
-            dm_kpts *= (nelectron / ne).reshape(-1,1,1)
-        return dm_kpts
 
     @lib.with_doc(khf.get_ovlp.__doc__)
     def get_ovlp(self, cell=None, kpts=None):
@@ -306,10 +292,6 @@ class KsymAdaptedKSCF(khf.KSCF):
                        'mo_coeff': self.mo_coeff, 'mo_occ': self.mo_occ})
         return self
 
-    get_occ = get_occ
-    get_rho = get_rho
-    energy_elec = energy_elec
-
     def to_khf(self):
         '''transform to non-symmetry object
         '''
@@ -347,14 +329,39 @@ class KsymAdaptedKSCF(khf.KSCF):
                      krks_ksymm.KRKS : krks.KRKS,
                      kuks_ksymm.KUKS : kuks.KUKS}
 
-        out = mol_addons._object_without_soscf(self, known_cls, remove_df=False)
+        out = mol_addons._object_without_soscf(self, known_cls, False)
         out.__dict__.pop('kpts', None)
-        out.with_df = self.with_df
         return update_mo_(self, out)
+
+    def sfx2c1e(self):
+        raise NotImplementedError
+    x2c = x2c1e = sfx2c1e
 
 
 class KsymAdaptedKRHF(KsymAdaptedKSCF, khf.KRHF):
-    def nuc_grad_method(self):
-        raise NotImplementedError()
+
+    to_ks = khf.KRHF.to_ks
+    convert_from_ = khf.KRHF.convert_from_
+
+    def get_init_guess(self, cell=None, key='minao'):
+        dm_kpts = mol_hf.SCF.get_init_guess(self, cell, key)
+        if dm_kpts.ndim == 2:
+            dm_kpts = np.asarray([dm_kpts]*self.kpts.nkpts_ibz)
+        elif len(dm_kpts) != self.kpts.nkpts_ibz:
+            dm_kpts = dm_kpts[self.kpts.ibz2bz]
+
+        ne = np.einsum('k,kij,kji', self.kpts.weights_ibz, dm_kpts, self.get_ovlp(cell)).real
+        nkpts = self.kpts.nkpts
+        ne *= nkpts
+        nelectron = float(self.cell.tot_electrons(nkpts))
+        if abs(ne - nelectron) > 0.01*nkpts:
+            logger.debug(self, 'Big error detected in the electron number '
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %s', ne/nkpts, nelectron/nkpts)
+            dm_kpts *= (nelectron / ne).reshape(-1,1,1)
+        return dm_kpts
 
 KRHF = KsymAdaptedKRHF

@@ -17,7 +17,6 @@
 #
 
 import sys
-import copy
 import numpy
 from pyscf.lib import logger
 from pyscf import gto
@@ -29,10 +28,6 @@ from pyscf import __config__
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
 ETB_BETA = getattr(__config__, 'df_addons_aug_dfbasis', 2.0)
 FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'
-
-# For code compatibility in python-2 and python-3
-if sys.version_info >= (3,):
-    unicode = str
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
@@ -204,16 +199,16 @@ def make_auxmol(mol, auxbasis=None):
 
     See also the paper JCTC, 13, 554 about generating auxiliary fitting basis.
     '''
-    pmol = copy.copy(mol)  # just need shallow copy
+    pmol = mol.copy(deep=False)
 
     if auxbasis is None:
         auxbasis = make_auxbasis(mol)
-    elif '+etb' in auxbasis:
+    elif isinstance(auxbasis, str) and '+etb' in auxbasis:
         dfbasis = auxbasis[:-4]
         auxbasis = aug_etb_for_dfbasis(mol, dfbasis)
     pmol.basis = auxbasis
 
-    if isinstance(auxbasis, (str, unicode, list, tuple)):
+    if isinstance(auxbasis, (str, list, tuple)):
         uniq_atoms = set([a[0] for a in mol._atom])
         _basis = dict([(a, auxbasis) for a in uniq_atoms])
     elif 'default' in auxbasis:

@@ -17,7 +17,6 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import copy
 import unittest
 import numpy as np
 
@@ -713,7 +712,7 @@ class KnownValues(unittest.TestCase):
     def test_rccsd_t_vs_gccsd_t(self):
         '''Test rccsd(t) vs gccsd(t) with k-points.'''
         from pyscf.pbc.scf.addons import convert_to_ghf
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -747,7 +746,7 @@ class KnownValues(unittest.TestCase):
 
     def test_rand_ccsd(self):
         '''Single (eom-)ccsd iteration with random t1/t2.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -779,7 +778,7 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen0(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and lowest lying orbital
         at multiple k-points frozen.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -820,7 +819,7 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen1(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and single frozen occupied
         orbital.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -863,7 +862,7 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen2(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and full occupied frozen
         at a single k-point.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -906,7 +905,7 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen3(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and single frozen virtual
         orbital.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff

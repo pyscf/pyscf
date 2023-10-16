@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 import unittest
 from pyscf import gto
@@ -125,7 +124,7 @@ class KnownValues(unittest.TestCase):
         v = mf.get_veff(mol, dm)
         self.assertAlmostEqual(lib.fp(v), (-21.613084684028077-28.50754366262467j), 8)
 
-        mf1 = copy.copy(mf)
+        mf1 = mf.copy()
         mf1.direct_scf = False
         v1 = mf1.get_veff(mol, dm)
         self.assertAlmostEqual(abs(v-v1).max(), 0, 9)

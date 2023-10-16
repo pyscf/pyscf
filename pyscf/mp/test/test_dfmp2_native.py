@@ -15,7 +15,6 @@
 
 
 import unittest
-import copy
 import numpy
 from pyscf import gto
 from pyscf import scf
@@ -60,7 +59,7 @@ class KnownValues(unittest.TestCase):
 
     def setUp(self):
         self.assertTrue(mf.converged)
-        self.mf = copy.copy(mf)
+        self.mf = mf.copy()
         self.mf.mol = mf.mol.copy()
         self.mf.mo_coeff = mf.mo_coeff.copy()
         self.mf.mo_occ = mf.mo_occ.copy()
@@ -77,7 +76,7 @@ class KnownValues(unittest.TestCase):
             pt.kernel()
             self.assertAlmostEqual(pt.e_corr, -0.274767743344, delta=1.0e-8)
             self.assertAlmostEqual(pt.e_tot, -78.252218528769, delta=1.0e-8)
-    
+
     def test_energy_fclist(self):
         for arr in self.mf.mo_coeff.T, self.mf.mo_occ, self.mf.mo_energy:
             arr[[0, 2]] = arr[[2, 0]]
@@ -86,7 +85,7 @@ class KnownValues(unittest.TestCase):
             pt.kernel()
             self.assertAlmostEqual(pt.e_corr, -0.274767743344, delta=1.0e-8)
             self.assertAlmostEqual(pt.e_tot, -78.252218528769, delta=1.0e-8)
-    
+
     def test_natorbs(self):
         mol = self.mf.mol
         with DFMP2(self.mf) as pt:
@@ -100,7 +99,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(natocc[7], 1.9384231532, delta=1.0e-7)
             self.assertAlmostEqual(natocc[8], 0.0459829060, delta=1.0e-7)
             self.assertAlmostEqual(natocc[47], 0.0000761012, delta=1.0e-7)
-    
+
     def test_natorbs_fc(self):
         mol = self.mf.mol
         with DFMP2(self.mf, frozen=2) as pt:
@@ -116,7 +115,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(natocc[7], 1.9384836199, delta=1.0e-7)
             self.assertAlmostEqual(natocc[8], 0.0459325459, delta=1.0e-7)
             self.assertAlmostEqual(natocc[47], 0.0000751662, delta=1.0e-7)
-    
+
     def test_natorbs_fclist(self):
         for arr in self.mf.mo_coeff.T, self.mf.mo_occ, self.mf.mo_energy:
             arr[[0, 5]] = arr[[5, 0]]
@@ -187,7 +186,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(natocc[7], 1.9402044334, delta=1.0e-7)
             self.assertAlmostEqual(natocc[8], 0.0459829060, delta=1.0e-7)
             self.assertAlmostEqual(natocc[47], 0.0000658464, delta=1.0e-7)
-    
+
     def test_natorbs_relaxed_fc(self):
         mol = self.mf.mol
         with DFMP2(self.mf, frozen=2) as pt:

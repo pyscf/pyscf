@@ -140,7 +140,7 @@ The Following attributes are used for CASSCF
         can affect the accuracy and performance of CASSCF solver.  Lower
         ``ah_conv_tol`` and ``ah_lindep`` can improve the accuracy of CASSCF
         optimization, but slow down the performance.
-        
+
         >>> from pyscf import gto, scf, mcscf
         >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
         >>> mf = scf.UHF(mol)
@@ -193,8 +193,8 @@ from pyscf.mcscf import chkfile
 def CASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.RHF(mf_or_mol)
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.RHF()
     else:
         mf = mf_or_mol
 
@@ -215,8 +215,8 @@ RCASSCF = CASSCF
 def CASCI(mf_or_mol, ncas, nelecas, ncore=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.RHF(mf_or_mol)
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.RHF()
     else:
         mf = mf_or_mol
 
@@ -238,8 +238,8 @@ RCASCI = CASCI
 def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.UHF(mf_or_mol)
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.UHF()
     else:
         mf = mf_or_mol
 
@@ -252,8 +252,8 @@ def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
 def UCASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.UHF(mf_or_mol)
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.UHF()
     else:
         mf = mf_or_mol
 
@@ -271,8 +271,8 @@ def DFCASSCF(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None,
              frozen=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.RHF(mf_or_mol).density_fit()
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.RHF().density_fit()
     else:
         mf = mf_or_mol
 
@@ -288,8 +288,8 @@ def DFCASSCF(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None,
 def DFCASCI(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.RHF(mf_or_mol).density_fit()
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.RHF().density_fit()
     else:
         mf = mf_or_mol
 
@@ -306,4 +306,3 @@ approx_hessian = df.approx_hessian
 
 def density_fit(mc, auxbasis=None, with_df=None):
     return mc.density_fit(auxbasis, with_df)
-

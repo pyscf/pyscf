@@ -28,7 +28,7 @@ import numpy
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.cc.ccsd import CCSD, _add_vvvv, _flops, _ChemistsERIs
+from pyscf.cc.ccsd import CCSDBase, as_scanner, _add_vvvv, _ChemistsERIs
 from pyscf import __config__
 
 BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
@@ -305,7 +305,7 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
         return fswap['wVOov'], fswap['wVooV']
 
 def energy(mycc, t1=None, t2=None, eris=None):
-    '''CCSD correlation energy'''
+    '''QCISD correlation energy'''
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if eris is None: eris = mycc.ao2mo()
@@ -324,47 +324,8 @@ def energy(mycc, t1=None, t2=None, eris=None):
         logger.warn(mycc, 'Non-zero imaginary part found in QCISD energy %s', e)
     return e.real
 
-def as_scanner(cc):
-    '''Generating a scanner/solver for QCISD PES.
 
-    The returned solver is a function. This function requires one argument
-    "mol" as input and returns total QCISD energy.
-
-    '''
-    if isinstance(cc, lib.SinglePointScanner):
-        return cc
-
-    logger.info(cc, 'Set %s as a scanner', cc.__class__)
-
-    class QCISD_Scanner(cc.__class__, lib.SinglePointScanner):
-        def __init__(self, cc):
-            self.__dict__.update(cc.__dict__)
-            self._scf = cc._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
-
-            if self.t2 is not None:
-                last_size = self.vector_size()
-            else:
-                last_size = 0
-
-            self.reset(mol)
-
-            mf_scanner = self._scf
-            mf_scanner(mol)
-            self.mo_coeff = mf_scanner.mo_coeff
-            self.mo_occ = mf_scanner.mo_occ
-            if last_size != self.vector_size():
-                self.t1 = self.t2 = None
-            self.kernel(self.t1, self.t2, **kwargs)
-            return self.e_tot
-    return QCISD_Scanner(cc)
-
-
-class QCISD(CCSD):
+class QCISD(CCSDBase):
     '''restricted QCISD
     '''
 
@@ -385,40 +346,13 @@ class QCISD(CCSD):
         log.info('diis_start_energy_diff = %g', self.diis_start_energy_diff)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
-        if (log.verbose >= logger.DEBUG1 and
-            self.__class__ == QCISD):
-            nocc = self.nocc
-            nvir = self.nmo - self.nocc
-            flops = _flops(nocc, nvir)
-            log.debug1('total FLOPs %s', flops)
         return self
 
     energy = energy
     _add_vvvv = _add_vvvv
     update_amps = update_amps
-
-    def kernel(self, t1=None, t2=None, eris=None):
-        return self.qcisd(t1, t2, eris)
-    def qcisd(self, t1=None, t2=None, eris=None):
-        assert (self.mo_coeff is not None)
-        assert (self.mo_occ is not None)
-
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
-        self.dump_flags()
-
-        self.e_hf = self.get_e_hf()
-
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
-
-        self.converged, self.e_corr, self.t1, self.t2 = \
-                kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                       tol=self.conv_tol, tolnormt=self.conv_tol_normt,
-                       verbose=self.verbose)
-        self._finalize()
-        return self.e_corr, self.t1, self.t2
-
+    kernel = CCSDBase.ccsd
+    ccsd = lib.invalid_method('ccsd')
     as_scanner = as_scanner
 
     def qcisd_t(self, t1=None, t2=None, eris=None):
@@ -428,44 +362,4 @@ class QCISD(CCSD):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         return qcisd_t.kernel(self, eris, t1, t2, self.verbose)
 
-
 RQCISD = QCISD
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-
-    mol = gto.Mole()
-    #mol.atom = [
-    #    [8 , (0. , 0.     , 0.)],
-    #    [1 , (0. , -0.757 , 0.587)],
-    #    [1 , (0. , 0.757  , 0.587)]]
-    mol.atom = [['Ne', (0,0,0)]]
-    mol.basis = 'cc-pvdz'
-    mol.verbose = 7
-    mol.spin = 0
-    mol.build()
-    mf = scf.RHF(mol).run(conv_tol=1e-14)
-
-    mycc = QCISD(mf, frozen=1)
-    ecc, t1, t2 = mycc.kernel()
-    et = mycc.qcisd_t()
-    print("QCISD(T) =", mycc.e_tot+et)
-
-    mol = gto.Mole()
-    mol.atom = """C  0.000  0.000  0.000
-                  H  0.637  0.637  0.637
-                  H -0.637 -0.637  0.637
-                  H -0.637  0.637 -0.637
-                  H  0.637 -0.637 -0.637"""
-    mol.basis = 'cc-pvdz'
-    mol.verbose = 7
-    mol.spin = 0
-    mol.build()
-    mf = scf.RHF(mol).run(conv_tol=1e-14)
-
-    mycc = QCISD(mf, frozen=1)
-    ecc, t1, t2 = mycc.kernel()
-    print(mycc.e_tot - -40.383989)
-    et = mycc.qcisd_t()
-    print(mycc.e_tot+et - -40.387679)

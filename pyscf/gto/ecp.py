@@ -145,10 +145,12 @@ def core_configuration(nelec_core, atom_symbol=None):
     elements_4f = ELEMENTS[57:71]
     elements_5f = ELEMENTS[89:103]
     if atom_symbol in elements_4f:
-        for i in range(46, 60):
+        # TODO: fix La3+ and Ce4+ ECP46MWB f-in-core ECPs
+        for i in range(47, 59):
             conf_dic[i] = '4s3p2d1f'
     if atom_symbol in elements_5f:
-        for i in range(78, 92):
+        # TODO: fix Ac3+, Th4+, Pa5+ and U6+ ECP78MWB f-in-core ECPs
+        for i in range(79, 91):
             conf_dic[i] = '5s4p3d2f'
     if nelec_core not in conf_dic:
         raise RuntimeError('Core configuration for %d core electrons is not available.' % nelec_core)
@@ -182,4 +184,3 @@ if __name__ == '__main__':
                 verbose=0)
     mf = scf.RHF(mol)
     print(mf.kernel(), -0.45002315562861461)
-

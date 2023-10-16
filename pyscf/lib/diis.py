@@ -338,4 +338,3 @@ class DIIS(object):
 def restore(filename):
     '''Restore/construct diis object based on a diis file'''
     return DIIS().restore(filename)
-

@@ -17,7 +17,6 @@
 #
 
 import ctypes
-import copy
 import numpy as np
 from pyscf import lib
 from pyscf import gto
@@ -67,9 +66,10 @@ def aux_e2(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', comp=None,
     Returns:
         (nao_pair, naux) array
     '''
-    if isinstance(auxcell_or_auxbasis, gto.Mole):
+    if isinstance(auxcell_or_auxbasis, gto.MoleBase):
         auxcell = auxcell_or_auxbasis
     else:
+        assert isinstance(auxcell_or_auxbasis, str)
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
 
 # For some unkown reasons, the pre-decontracted basis 'is slower than
@@ -132,7 +132,7 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
 def fill_2c2e(cell, auxcell_or_auxbasis, intor='int2c2e', hermi=0, kpt=np.zeros(3)):
     '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
-    if isinstance(auxcell_or_auxbasis, gto.Mole):
+    if isinstance(auxcell_or_auxbasis, gto.MoleBase):
         auxcell = auxcell_or_auxbasis
     else:
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
@@ -147,6 +147,12 @@ def fill_2c2e(cell, auxcell_or_auxbasis, intor='int2c2e', hermi=0, kpt=np.zeros(
 class Int3cBuilder(lib.StreamObject):
     '''helper functions to compute 3-center integral tensor with double-lattice sum
     '''
+
+    _keys = set((
+        'cell', 'auxcell', 'kpts', 'rs_cell', 'bvk_kmesh',
+        'supmol', 'ke_cutoff', 'direct_scf_tol',
+    ))
+
     def __init__(self, cell, auxcell, kpts=None):
         self.cell = cell
         self.auxcell = auxcell
@@ -164,8 +170,6 @@ class Int3cBuilder(lib.StreamObject):
         self.supmol = None
         self.ke_cutoff = None
         self.direct_scf_tol = None
-
-        self._keys = set(self.__dict__.keys())
 
     def reset(self, cell=None):
         if cell is not None:

@@ -144,6 +144,45 @@ class KnownValues(unittest.TestCase):
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
 
+    def test_casci(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['O', ( 0., 0.    , 0.   )],
+            ['H', ( 0., -0.757, 0.587)],
+            ['H', ( 0., 0.757 , 0.587)],]
+
+        mol.basis = {'H': 'sto-3g',
+                     'O': '6-31g',}
+        mol.build()
+
+        m = scf.RHF(mol).run()
+        mc = mcscf.CASCI(m, 4, 4)
+        mc.fcisolver = fci.solver(mol)
+        mc.natorb = 1
+        emc = mc.kernel()[0]
+        self.assertAlmostEqual(emc, -75.9624554777, 7)
+
+        mc = mcscf.CASCI(m, 4, (3,1))
+        mc.fcisolver = fci.solver(mol, False)
+        emc = mc.casci()[0]
+        self.assertAlmostEqual(emc, -75.439016172976, 6)
+
+    def test_addons(self):
+        mc = mcscf.CASSCF(msym, 4, 4)
+        mc.fcisolver = fci.solver(molsym, False) # to mix the singlet and triplet
+        mc = mc.state_average_((.64,.36))
+        emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()[:5]
+        self.assertAlmostEqual(emc, -75.85387884606675, 8)
+        mc = mcscf.CASCI(msym, 4, 4)
+        emc = mc.casci(mo)[0]
+        self.assertAlmostEqual(emc, -75.98341123168858, 8)
+
+        mc = mcscf.CASSCF(msym, 4, 4)
+        mc = mc.state_specific_(2)
+        emc = mc.kernel()[0]
+        self.assertAlmostEqual(emc, -75.59353002290788, 8)
+
 if __name__ == "__main__":
     print("Full Tests for H2O")
     unittest.main()

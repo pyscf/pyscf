@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import copy
 import numpy
 import scipy.linalg
 
@@ -307,7 +306,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(addons.convert_to_uhf(sym_mf_u), scf.uhf_symm.UHF))
         self.assertTrue(isinstance(addons.convert_to_ghf(sym_mf_u), scf.ghf_symm.GHF))
 
-        mf1 = copy.copy(mf)
+        mf1 = mf.copy()
         self.assertTrue(isinstance(mf1.convert_from_(mf), scf.rhf.RHF))
         self.assertTrue(isinstance(mf1.convert_from_(mf_u), scf.rhf.RHF))
         self.assertFalse(isinstance(mf1.convert_from_(mf_u), scf.rohf.ROHF))
@@ -316,7 +315,7 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(isinstance(mf1.convert_from_(sym_mf_u), scf.rohf.ROHF))
         self.assertFalse(isinstance(mf1.convert_from_(sym_mf), scf.hf_symm.RHF))
         self.assertFalse(isinstance(mf1.convert_from_(sym_mf_u), scf.hf_symm.RHF))
-        mf1 = copy.copy(mf_u)
+        mf1 = mf_u.copy()
         self.assertTrue(isinstance(mf1.convert_from_(mf), scf.uhf.UHF))
         self.assertTrue(isinstance(mf1.convert_from_(mf_u), scf.uhf.UHF))
         self.assertTrue(isinstance(mf1.convert_from_(sym_mf), scf.uhf.UHF))
@@ -413,6 +412,52 @@ class KnownValues(unittest.TestCase):
         mf = addons.remove_linear_dep_(scf.RHF(mol), threshold=1e-8,
                                        lindep=1e-9).run()
         self.assertAlmostEqual(mf.e_tot, -1.6291001503057689, 7)
+
+    def test_rohf_smearing(self):
+        # Fe2 from https://doi.org/10.1021/acs.jpca.1c05769
+        mol = gto.M(
+            atom='''
+        Fe       0. 0. 0.
+        Fe       2.01 0. 0.
+        ''', basis="lanl2dz", ecp="lanl2dz", symmetry=False, unit='Angstrom',
+            spin=6, charge=0, verbose=0)
+        myhf_s = scf.ROHF(mol)
+        myhf_s = addons.smearing(myhf_s, sigma=0.01, method='gaussian', fix_spin=True)
+        myhf_s.kernel()
+        # macos py3.7 CI -242.4828982467762
+        # linux py3.11 CI -242.48289824670388
+        self.assertAlmostEqual(myhf_s.e_tot, -242.482898246, 6)
+        self.assertAlmostEqual(myhf_s.entropy, 0.45197, 4)
+        myhf2 = myhf_s.undo_smearing().newton()
+        myhf2.kernel(myhf_s.make_rdm1())
+        # FIXME: note 16mHa lower energy than myhf
+        self.assertAlmostEqual(myhf2.e_tot, -244.9808750, 6)
+
+        myhf_s.smearing_method = 'fermi'
+        myhf_s.kernel()
+        self.assertAlmostEqual(myhf_s.e_tot, -244.200255453, 6)
+        self.assertAlmostEqual(myhf_s.entropy, 3.585155, 4)
+
+        myhf_s = scf.UHF(mol)
+        myhf_s = addons.smearing_(myhf_s, sigma=0.01, method='fermi', fix_spin=True)
+        myhf_s.kernel()
+        self.assertAlmostEqual(myhf_s.e_tot, -244.9873314, 5)
+        self.assertAlmostEqual(myhf_s.entropy, 0, 3)
+
+        myhf_s = scf.UHF(mol)
+        myhf_s = addons.smearing_(myhf_s, sigma=0.01, method='fermi', fix_spin=True)
+        myhf_s.sigma = 0.1
+        myhf_s.fix_spin = False
+        myhf_s.conv_tol = 1e-7
+        myhf_s.kernel()
+        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
+        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
+        self.assertTrue(myhf_s.converged)
+
+        myhf_s.mu = -0.2482816
+        myhf_s.kernel(dm0=myhf_s.make_rdm1())
+        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
+        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
 
 if __name__ == "__main__":
     print("Full Tests for addons")

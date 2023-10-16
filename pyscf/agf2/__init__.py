@@ -118,7 +118,7 @@ def RAGF2(mf, nmom=(None,0), frozen=None, mo_energy=None, mo_coeff=None, mo_occ=
     if nmom != (None,0): # redundant
         if nmom[1] == 0 and nmom[0] != 0:
             nmom = (None,0)
-    
+
     if nmom != (None,0) and getattr(mf, 'with_df', None) is not None:
         raise RuntimeError('AGF2 with custom moment orders does not '
                            'density fitting.')
@@ -141,7 +141,7 @@ def UAGF2(mf, nmom=(None,0), frozen=None, mo_energy=None, mo_coeff=None, mo_occ=
     if nmom != (None,0): # redundant
         if nmom[1] == 0 and nmom[0] != 0:
             nmom = (None,0)
-    
+
     if nmom != (None,0) and getattr(mf, 'with_df', None) is not None:
         raise RuntimeError('AGF2 with custom moment orders does not '
                            'density fitting.')

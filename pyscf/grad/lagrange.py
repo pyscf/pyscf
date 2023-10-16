@@ -26,7 +26,7 @@ default_conv_atol = getattr (__config__, 'grad_lagrange_Gradients_conv_atol', 1e
 default_conv_rtol = getattr (__config__, 'grad_lagrange_Gradients_conv_rtol', 1e-7)
 default_max_cycle = getattr (__config__, 'grad_lagrange_Gradients_max_cycle', 50)
 
-class Gradients (rhf_grad.GradientsMixin):
+class Gradients (rhf_grad.GradientsBase):
     r''' Dummy parent class for calculating analytical nuclear gradients using the technique of
     Lagrange multipliers:
     L = E + \sum_i z_i L_i
@@ -65,6 +65,10 @@ class Gradients (rhf_grad.GradientsMixin):
 
     ####################### Child classes SHOULD overwrite the methods below ######################
 
+    _keys = {
+        'Lvec', 'nlag', 'level_shift', 'conv_atol', 'conv_rtol', 'max_cycle',
+    }
+
     def __init__(self, method, nlag):
         self._conv = False
         self.Lvec = None
@@ -73,7 +77,7 @@ class Gradients (rhf_grad.GradientsMixin):
         self.conv_atol = default_conv_atol
         self.conv_rtol = default_conv_rtol
         self.max_cycle = default_max_cycle
-        rhf_grad.GradientsMixin.__init__(self, method)
+        rhf_grad.GradientsBase.__init__(self, method)
 
     def debug_lagrange (self, Lvec, bvec, Aop, Adiag, **kwargs):
         logger.debug (self, "{} gradient Lagrange factor debugging not enabled".format (
@@ -186,4 +190,3 @@ class LagPrec (object):
         Adiagd[abs(Adiagd)<1e-8] = 1e-8
         x /= Adiagd
         return x
-

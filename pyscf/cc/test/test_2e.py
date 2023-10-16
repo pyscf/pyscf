@@ -66,4 +66,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for 2e CCSD")
     unittest.main()
-

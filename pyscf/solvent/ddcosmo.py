@@ -292,8 +292,8 @@ from pyscf import tdscf
 scf.hf.SCF.ddCOSMO    = scf.hf.SCF.DDCOSMO    = ddcosmo_for_scf
 mp.mp2.MP2.ddCOSMO    = mp.mp2.MP2.DDCOSMO    = ddcosmo_for_post_scf
 ci.cisd.CISD.ddCOSMO  = ci.cisd.CISD.DDCOSMO  = ddcosmo_for_post_scf
-cc.ccsd.CCSD.ddCOSMO  = cc.ccsd.CCSD.DDCOSMO  = ddcosmo_for_post_scf
-tdscf.rhf.TDMixin.ddCOSMO = tdscf.rhf.TDMixin.DDCOSMO = ddcosmo_for_tdscf
+cc.ccsd.CCSDBase.ddCOSMO  = cc.ccsd.CCSDBase.DDCOSMO  = ddcosmo_for_post_scf
+tdscf.rhf.TDBase.ddCOSMO = tdscf.rhf.TDBase.DDCOSMO = ddcosmo_for_tdscf
 mcscf.casci.CASCI.ddCOSMO = mcscf.casci.CASCI.DDCOSMO = ddcosmo_for_casci
 mcscf.mc1step.CASSCF.ddCOSMO = mcscf.mc1step.CASSCF.DDCOSMO = ddcosmo_for_casscf
 
@@ -618,7 +618,13 @@ def atoms_with_vdw_overlap(atm_id, atom_coords, r_vdw):
     atoms_nearby = numpy.where(atm_dist < vdw_sum**2)[0]
     return atoms_nearby
 
-class DDCOSMO(lib.StreamObject):
+class ddCOSMO(lib.StreamObject):
+    _keys = set((
+        'mol', 'radii_table', 'atom_radii', 'lebedev_order', 'lmax', 'eta',
+        'eps', 'grids', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
+        'equilibrium_solvation', 'e', 'v',
+    ))
+
     def __init__(self, mol):
         self.mol = mol
         self.stdout = mol.stdout
@@ -667,7 +673,6 @@ class DDCOSMO(lib.StreamObject):
         self._dm = None
 
         self._intermediates = None
-        self._keys = set(self.__dict__.keys())
 
     @property
     def dm(self):
@@ -861,10 +866,12 @@ class DDCOSMO(lib.StreamObject):
         if self.frozen:
             raise RuntimeError('Frozen solvent model is not supported for '
                                'energy gradients')
-        if isinstance(grad_method.base, tdscf.rhf.TDMixin):
+        if isinstance(grad_method.base, tdscf.rhf.TDBase):
             return _ddcosmo_tdscf_grad.make_grad_object(grad_method)
         else:
             return ddcosmo_grad.make_grad_object(grad_method)
+
+DDCOSMO = ddCOSMO
 
 class Grids(gen_grid.Grids):
     '''DFT grids without sorting grids'''

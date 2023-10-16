@@ -25,11 +25,12 @@ from pyscf.tdscf import rhf
 from pyscf.pbc import scf
 from pyscf import __config__
 
-class TDMixin(rhf.TDMixin):
+class TDBase(rhf.TDBase):
+    _keys = set(['cell'])
+
     def __init__(self, mf):
-        rhf.TDMixin.__init__(self, mf)
+        rhf.TDBase.__init__(self, mf)
         self.cell = mf.cell
-        self._keys = self._keys.union(['cell'])
 
     def get_ab(self, mf=None):
         raise NotImplementedError
@@ -37,7 +38,7 @@ class TDMixin(rhf.TDMixin):
     def nuc_grad_method(self):
         raise NotImplementedError
 
-    get_nto = rhf.TDMixin.get_nto
+    get_nto = rhf.TDBase.get_nto
     analyze = lib.invalid_method('analyze')
     oscillator_strength = lib.invalid_method('oscillator_strength')
     transition_dipole              = lib.invalid_method('transition_dipole')
@@ -50,7 +51,7 @@ class TDMixin(rhf.TDMixin):
     transition_magnetic_quadrupole = lib.invalid_method('transition_magnetic_quadrupole')
 
 
-class TDA(TDMixin):
+class TDA(TDBase):
 
     init_guess = rhf.TDA.init_guess
     kernel = rhf.TDA.kernel

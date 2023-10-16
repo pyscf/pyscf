@@ -767,6 +767,9 @@ class UHF(hf.SCF):
     >>> print('S^2 = %.7f, 2S+1 = %.7f' % mf.spin_square())
     S^2 = 0.7570150, 2S+1 = 2.0070027
     '''
+
+    _keys = set(["init_guess_breaksym"])
+
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         # self.mo_coeff => [mo_a, mo_b]
@@ -774,7 +777,6 @@ class UHF(hf.SCF):
         # self.mo_energy => [mo_energy_a, mo_energy_b]
         self.nelec = None
         self.init_guess_breaksym = None
-        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):
@@ -1019,8 +1021,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     def convert_from_(self, mf):
         '''Create UHF object based on the RHF/ROHF object'''
-        from pyscf.scf import addons
-        return addons.convert_to_uhf(mf, out=self)
+        tgt = mf.to_uhf()
+        self.__dict__.update(tgt.__dict__)
+        return self
 
     def stability(self,
                   internal=getattr(__config__, 'scf_stability_internal', True),
@@ -1061,6 +1064,12 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     def nuc_grad_method(self):
         from pyscf.grad import uhf
         return uhf.Gradients(self)
+
+    def to_ks(self, xc='HF'):
+        '''Convert to UKS object.
+        '''
+        from pyscf import dft
+        return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

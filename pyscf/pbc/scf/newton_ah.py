@@ -24,6 +24,7 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.pbc.scf import _response_functions  # noqa
+from pyscf.soscf import newton_ah
 
 def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     cell = mf.cell
@@ -193,9 +194,69 @@ def _unpack(vo, mo_occ):
         z.append(vo[p0:p1].reshape(nv,no))
     return z
 
+class _SecondOrderKRHF(newton_ah._CIAH_SOSCF):
+    gen_g_hop = gen_g_hop_rhf
+
+    def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+        p0 = 0
+        u = []
+        for k, occ in enumerate(mo_occ):
+            occidx = occ > 0
+            viridx = ~occidx
+            nocc = occidx.sum()
+            nvir = viridx.sum()
+            nmo = nocc + nvir
+            dr = numpy.zeros((nmo,nmo), dtype=dx.dtype)
+            dr[viridx[:,None] & occidx] = dx[p0:p0+nocc*nvir]
+            dr = dr - dr.conj().T
+            p0 += nocc * nvir
+
+            u1 = newton_ah.expmat(dr)
+            if isinstance(u0, int) and u0 == 1:
+                u.append(u1)
+            else:
+                u.append(numpy.dot(u0[k], u1))
+        return lib.asarray(u)
+
+    def rotate_mo(self, mo_coeff, u, log=None):
+        return lib.asarray([numpy.dot(mo, u[k]) for k,mo in enumerate(mo_coeff)])
+
+class _SecondOrderKUHF(newton_ah._CIAH_SOSCF):
+    gen_g_hop = gen_g_hop_uhf
+
+    def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+        nkpts = len(mo_occ[0])
+        p0 = 0
+        u = []
+        for occ in mo_occ:
+            ua = []
+            for k in range(nkpts):
+                occidx = occ[k] > 0
+                viridx = ~occidx
+                nocc = occidx.sum()
+                nvir = viridx.sum()
+                nmo = nocc + nvir
+                dr = numpy.zeros((nmo,nmo), dtype=dx.dtype)
+                dr[viridx[:,None] & occidx] = dx[p0:p0+nocc*nvir]
+                dr = dr - dr.conj().T
+                p0 += nocc * nvir
+                u1 = newton_ah.expmat(dr)
+                if isinstance(u0, int) and u0 == 1:
+                    ua.append(u1)
+                else:
+                    ua.append(numpy.dot(u0[k], u1))
+            u.append(ua)
+        return lib.asarray(u)
+
+    def rotate_mo(self, mo_coeff, u, log=None):
+        mo = ([numpy.dot(mo, u[0][k]) for k, mo in enumerate(mo_coeff[0])],
+              [numpy.dot(mo, u[1][k]) for k, mo in enumerate(mo_coeff[1])])
+        return lib.asarray(mo)
+
+class _SecondOrderKROHF(_SecondOrderKRHF):
+    gen_g_hop = gen_g_hop_rohf
 
 def newton(mf):
-    from pyscf.soscf import newton_ah
     from pyscf.pbc import scf as pscf
     if not isinstance(mf, pscf.khf.KSCF):
         # Note for single k-point other than gamma point (mf.kpt != 0) mf object,
@@ -205,96 +266,15 @@ def newton(mf):
     if isinstance(mf, newton_ah._CIAH_SOSCF):
         return mf
 
-    if mf.__doc__ is None:
-        mf_doc = ''
-    else:
-        mf_doc = mf.__doc__
-
-    class SecondOrderKRHF(mf.__class__, newton_ah._CIAH_SOSCF):
-        __doc__ = mf_doc + newton_ah._CIAH_SOSCF.__doc__
-        __init__ = newton_ah._CIAH_SOSCF.__init__
-        dump_flags = newton_ah._CIAH_SOSCF.dump_flags
-        build = newton_ah._CIAH_SOSCF.build
-        kernel = newton_ah._CIAH_SOSCF.kernel
-
-        gen_g_hop = gen_g_hop_rhf
-
-        def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
-            p0 = 0
-            u = []
-            for k, occ in enumerate(mo_occ):
-                occidx = occ > 0
-                viridx = ~occidx
-                nocc = occidx.sum()
-                nvir = viridx.sum()
-                nmo = nocc + nvir
-                dr = numpy.zeros((nmo,nmo), dtype=dx.dtype)
-                dr[viridx[:,None] & occidx] = dx[p0:p0+nocc*nvir]
-                dr = dr - dr.conj().T
-                p0 += nocc * nvir
-
-                u1 = newton_ah.expmat(dr)
-                if isinstance(u0, int) and u0 == 1:
-                    u.append(u1)
-                else:
-                    u.append(numpy.dot(u0[k], u1))
-            return lib.asarray(u)
-
-        def rotate_mo(self, mo_coeff, u, log=None):
-            return lib.asarray([numpy.dot(mo, u[k]) for k,mo in enumerate(mo_coeff)])
-
     if isinstance(mf, pscf.kuhf.KUHF):
-        class SecondOrderKUHF(mf.__class__, newton_ah._CIAH_SOSCF):
-            __doc__ = mf_doc + newton_ah._CIAH_SOSCF.__doc__
-            __init__ = newton_ah._CIAH_SOSCF.__init__
-            dump_flags = newton_ah._CIAH_SOSCF.dump_flags
-            build = newton_ah._CIAH_SOSCF.build
-            kernel = newton_ah._CIAH_SOSCF.kernel
-
-            gen_g_hop = gen_g_hop_uhf
-
-            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
-                nkpts = len(mo_occ[0])
-                p0 = 0
-                u = []
-                for occ in mo_occ:
-                    ua = []
-                    for k in range(nkpts):
-                        occidx = occ[k] > 0
-                        viridx = ~occidx
-                        nocc = occidx.sum()
-                        nvir = viridx.sum()
-                        nmo = nocc + nvir
-                        dr = numpy.zeros((nmo,nmo), dtype=dx.dtype)
-                        dr[viridx[:,None] & occidx] = dx[p0:p0+nocc*nvir]
-                        dr = dr - dr.conj().T
-                        p0 += nocc * nvir
-                        u1 = newton_ah.expmat(dr)
-                        if isinstance(u0, int) and u0 == 1:
-                            ua.append(u1)
-                        else:
-                            ua.append(numpy.dot(u0[k], u1))
-                    u.append(ua)
-                return lib.asarray(u)
-
-            def rotate_mo(self, mo_coeff, u, log=None):
-                mo = ([numpy.dot(mo, u[0][k]) for k, mo in enumerate(mo_coeff[0])],
-                      [numpy.dot(mo, u[1][k]) for k, mo in enumerate(mo_coeff[1])])
-                return lib.asarray(mo)
-
-        return SecondOrderKUHF(mf)
-
+        cls = _SecondOrderKUHF
     elif isinstance(mf, pscf.krohf.KROHF):
-        class SecondOrderKROHF(SecondOrderKRHF):
-            gen_g_hop = gen_g_hop_rohf
-
-        return SecondOrderKROHF(mf)
-
+        cls = _SecondOrderKROHF
     elif isinstance(mf, pscf.kghf.KGHF):
         raise NotImplementedError
-
     else:
-        return SecondOrderKRHF(mf)
+        cls = _SecondOrderKRHF
+    return lib.set_class(cls(mf), (cls, mf.__class__))
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pbcgto
@@ -321,5 +301,3 @@ if __name__ == '__main__':
     mf.kernel()
     mf.max_cycle = 5
     pscf.newton(mf).kernel()
-
-

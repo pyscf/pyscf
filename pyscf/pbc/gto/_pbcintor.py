@@ -57,4 +57,3 @@ class PBCOpt(object):
 class _CPBCOpt(ctypes.Structure):
     _fields_ = [('rrcut', ctypes.c_void_p),
                 ('fprescreen', ctypes.c_void_p)]
-

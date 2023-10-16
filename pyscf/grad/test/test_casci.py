@@ -336,7 +336,7 @@ class KnownValues(unittest.TestCase):
         g1 = g_scan(mol, atmlst=range(4))[1]
         self.assertAlmostEqual(lib.fp(g1), -0.058112001722577293, 6)
 
-        g2 = g_scan.kernel()
+        g2 = g_scan.kernel(state=0)
         self.assertAlmostEqual(lib.fp(g2), -0.066025991364829367, 6)
 
         mcs = mc.as_scanner()
@@ -462,5 +462,9 @@ class KnownValues(unittest.TestCase):
 
 if __name__ == "__main__":
     print("Tests for CASCI gradients")
-    unittest.main()
-
+    #unittest.main()
+    if 1:
+        setUpModule()
+        mc = mcscf.CASCI(mf, 4, 4)
+        mc = mcscf.addons.state_average_mix_(mc, [mc.fcisolver, mc.fcisolver], (.5, .5))
+        gs = mc.nuc_grad_method().as_scanner()

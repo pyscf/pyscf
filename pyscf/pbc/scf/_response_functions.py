@@ -47,12 +47,12 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
 
         if singlet is None:  # for newton solver
-            rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
-                                                mo_occ, 0, kpts)
+            spin = 0
         else:
-            rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
-                                                mo_occ, 1, kpts)
-        dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
+            spin = 1
+        rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
+                                            mo_occ, spin, kpts)
+        dm0 = None
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]
@@ -144,8 +144,6 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
 
         rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1, kpts)
-        #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].conj().T),
-        #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].conj().T))
         dm0 = None
 
         if max_memory is None:
@@ -243,17 +241,12 @@ def _gen_rhf_response_gam(mf, mo_coeff=None, mo_occ=None,
             return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
 
         if singlet is None:  # for newton solver
-            rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
-                                                mo_occ, 0, kpt)
+            spin = 0
         else:
-            if isinstance(mo_occ, numpy.ndarray):
-                mo_occ = mo_occ*.5
-            else:
-                mo_occ = [x*.5 for x in mo_occ]
-            rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
-                                                [mo_coeff]*2, [mo_occ]*2,
-                                                spin=1, kpts=kpt)
-        dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
+            spin = 1
+        rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
+                                            mo_occ, spin, kpt)
+        dm0 = None
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]
@@ -345,8 +338,6 @@ def _gen_uhf_response_gam(mf, mo_coeff=None, mo_occ=None,
 
         rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1, kpt)
-        #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].conj().T),
-        #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].conj().T))
         dm0 = None
 
         if max_memory is None:

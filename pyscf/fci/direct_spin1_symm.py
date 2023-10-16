@@ -615,6 +615,8 @@ def sym_allowed_indices(nelec, orbsym, wfnsym):
 
 class FCISolver(direct_spin1.FCISolver):
 
+    _keys = {'wfnsym', 'sym_allowed_idx'}
+
     pspace_size = getattr(__config__, 'fci_direct_spin1_symm_FCI_pspace_size', 400)
 
     def __init__(self, mol=None, **kwargs):

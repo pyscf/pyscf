@@ -209,6 +209,8 @@ class DFUAGF2(uagf2.UAGF2):
             Auxiliaries of the Green's function for each spin
     '''
 
+    _keys = set(['_with_df', 'allow_lowmem_build'])
+
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
         uagf2.UAGF2.__init__(self, mf, frozen=frozen, mo_energy=mo_energy,
                              mo_coeff=mo_coeff, mo_occ=mo_occ)
@@ -220,8 +222,6 @@ class DFUAGF2(uagf2.UAGF2):
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
 
         self.allow_lowmem_build = True
-
-        self._keys.update(['_with_df', 'allow_lowmem_build'])
 
     build_se_part = build_se_part
     get_jk = dfragf2.get_jk
@@ -387,4 +387,3 @@ if __name__ == '__main__':
     uagf2.run()
     uagf2.ipagf2(nroots=5)
     uagf2.eaagf2(nroots=5)
-

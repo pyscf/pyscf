@@ -88,12 +88,9 @@ class KnownValues(unittest.TestCase):
         nb = fci.cistring.num_strings(norb, nelec[1])
         c0 = numpy.zeros((na,nb))
         c0[0,0] = 1
-        bak0 = fci.direct_spin0.contract_2e
-        bak1 = fci.direct_spin1.contract_2e
-        fci.addons.fix_spin_(fci.direct_spin1)
-        e, ci0 = fci.direct_spin1.kernel(h1, h2, norb, nelec, ci0=c0)
-        fci.direct_spin0.contract_2e = bak0
-        fci.direct_spin1.contract_2e = bak1
+        solver0 = fci.addons.fix_spin(fci.direct_spin0.FCI(), shift=0.02)
+        solver1 = fci.addons.fix_spin(fci.direct_spin1.FCI())
+        e, ci0 = solver1.kernel(h1, h2, norb, nelec, ci0=c0)
         self.assertAlmostEqual(e, -25.4437866823, 9)
         self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 2, 9)
 
@@ -102,15 +99,10 @@ class KnownValues(unittest.TestCase):
         # decrease the convergence tolerance. Otherwise the davidson solver
         # may produce vectors that break the symmetry required by direct_spin0.
         nelec = (5,5)
-        fci.addons.fix_spin_(fci.direct_spin0, shift=0.02)
         na = fci.cistring.num_strings(norb, nelec[0])
         c0 = numpy.zeros((na,na))
         c0[0,0] = 1
-        e, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0,
-                                         conv_tol=1e-8)
-
-        fci.direct_spin0.contract_2e = bak0
-        fci.direct_spin1.contract_2e = bak1
+        e, ci0 = solver0.kernel(h1, h2, norb, nelec, ci0=c0)
         self.assertAlmostEqual(e, -25.4095560762, 7)
         self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 0, 5)
 

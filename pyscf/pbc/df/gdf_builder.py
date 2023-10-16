@@ -25,7 +25,6 @@ for regular density fitting and SR-integral density fitting only.
 '''
 
 import os
-import copy
 import ctypes
 import tempfile
 import numpy as np
@@ -585,7 +584,7 @@ class _CCNucBuilder(_CCGDFBuilder):
         charge = -cell.atom_charges()
         if cell.dimension > 0:
             mod_cell = self.modchg_cell
-            fakenuc = copy.copy(fakenuc)
+            fakenuc = fakenuc.copy(deep=False)
             fakenuc._atm, fakenuc._bas, fakenuc._env = \
                     gto.conc_env(mod_cell._atm, mod_cell._bas, mod_cell._env,
                                  fakenuc._atm, fakenuc._bas, fakenuc._env)
@@ -767,7 +766,7 @@ def auxbar(fused_cell):
 def make_modchg_basis(auxcell, smooth_eta):
     # * chgcell defines smooth gaussian functions for each angular momentum for
     #   auxcell. The smooth functions may be used to carry the charge
-    chgcell = copy.copy(auxcell)  # smooth model density for coulomb integral to carry charge
+    chgcell = auxcell.copy(deep=False)  # smooth model density for coulomb integral to carry charge
     half_sph_norm = .5/np.sqrt(np.pi)
     chg_bas = []
     chg_env = [smooth_eta]
@@ -806,7 +805,7 @@ def fuse_auxcell(auxcell, eta):
         return auxcell, fuse
 
     chgcell = make_modchg_basis(auxcell, eta)
-    fused_cell = copy.copy(auxcell)
+    fused_cell = auxcell.copy(deep=False)
     fused_cell._atm, fused_cell._bas, fused_cell._env = \
             gto.conc_env(auxcell._atm, auxcell._bas, auxcell._env,
                          chgcell._atm, chgcell._bas, chgcell._env)
@@ -917,7 +916,7 @@ def _guess_eta(cell, kpts=None, mesh=None):
 
 def _compensate_nuccell(cell, eta):
     '''A cell of the compensated Gaussian charges for nucleus'''
-    modchg_cell = copy.copy(cell)
+    modchg_cell = cell.copy(deep=False)
     half_sph_norm = .5/np.sqrt(np.pi)
     norm = half_sph_norm/gto.gaussian_int(2, eta)
     chg_env = [eta, norm]

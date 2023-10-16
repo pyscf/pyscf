@@ -19,7 +19,6 @@
 '''Multigrid to compute DFT integrals'''
 
 import ctypes
-import copy
 import numpy
 import scipy.linalg
 
@@ -661,7 +660,7 @@ def _eval_rho_bra(cell, dms, shls_slice, hermi, xctype, kpts, grids,
     b = numpy.linalg.inv(a.T)
     ish0, ish1, jsh0, jsh1 = shls_slice
     nshells_j = jsh1 - jsh0
-    pcell = copy.copy(cell)
+    pcell = cell.copy(deep=False)
     rest_dms = []
     rest_bas = []
     i1 = 0
@@ -740,7 +739,7 @@ def _eval_rho_ket(cell, dms, shls_slice, hermi, xctype, kpts, grids,
     b = numpy.linalg.inv(a.T)
     ish0, ish1, jsh0, jsh1 = shls_slice
     nshells_i = ish1 - ish0
-    pcell = copy.copy(cell)
+    pcell = cell.copy(deep=False)
     rest_dms = []
     rest_bas = []
     j1 = 0
@@ -1410,7 +1409,10 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
     return veff.reshape(dm_kpts.shape)
 
 
-def cache_xc_kernel(mydf, xc_code, dm, spin=0, kpts=None):
+def cache_xc_kernel(mydf, xc_code, mo_coeff, mo_occ, spin=0, kpts=None):
+    raise NotImplementedError
+
+def cache_xc_kernel1(mydf, xc_code, dm, spin=0, kpts=None):
     '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
     DFT hessian module etc.
     '''
@@ -1436,16 +1438,22 @@ def cache_xc_kernel(mydf, xc_code, dm, spin=0, kpts=None):
     weight = cell.vol / ngrids
     rhoG = _eval_rhoG(mydf, dm, hermi, kpts, deriv)
     rho = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
+    rho = rho.reshape(rhoG.shape)
+
+    n_dm, comp, ngrids = rho.shape
+    if n_dm == 1 and spin == 1:
+        rho = numpy.repeat(rho, 2, axis=0)
+        rho *= .5
+
     if xctype == 'LDA':
-        if spin == 0:
-            rho = rho.ravel()
-        else:
-            rho = rho.reshape(2,ngrids)
+        assert comp == 1
+        rho = rho[:,0]
     else:
-        if spin == 0:
-            rho = rho.reshape(comp,ngrids)
-        else:
-            rho = rho.reshape(2,comp,ngrids)
+        assert comp > 1
+
+    if spin == 0:
+        assert n_dm == 1
+        rho = rho[0]
 
     vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
     return rho, vxc, fxc
@@ -1460,9 +1468,9 @@ def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
         kpts = mf.kpt.reshape(1,3)
 
     if singlet is None:  # for newton solver
-        rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, dm0, 0, kpts)
+        rho0, vxc, fxc = cache_xc_kernel1(mf.with_df, mf.xc, dm0, 0, kpts)
     else:
-        rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, [dm0*.5]*2, 1, kpts)
+        rho0, vxc, fxc = cache_xc_kernel1(mf.with_df, mf.xc, dm0, 1, kpts)
     dm0 = None
 
     def vind(dm1):
@@ -1490,7 +1498,7 @@ def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
     else:
         kpts = mf.kpt.reshape(1,3)
 
-    rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, dm0, 1, kpts)
+    rho0, vxc, fxc = cache_xc_kernel1(mf.with_df, mf.xc, dm0, 1, kpts)
     dm0 = None
 
     def vind(dm1):
@@ -1535,7 +1543,7 @@ def multi_grids_tasks_for_rcut(cell, fft_mesh=None, verbose=None):
     ao_loc = cell.ao_loc_nr()
 
     def make_cell_dense_exp(shls_dense, r0, r1):
-        cell_dense = copy.copy(cell)
+        cell_dense = cell.copy(deep=False)
         cell_dense._bas = cell._bas.copy()
         cell_dense._env = cell._env.copy()
 
@@ -1566,7 +1574,7 @@ def multi_grids_tasks_for_rcut(cell, fft_mesh=None, verbose=None):
         return cell_dense, ao_idx, ke_cutoff, rcut_atom
 
     def make_cell_sparse_exp(shls_sparse, r0, r1):
-        cell_sparse = copy.copy(cell)
+        cell_sparse = cell.copy(deep=False)
         cell_sparse._bas = cell._bas.copy()
         cell_sparse._env = cell._env.copy()
 
@@ -1654,7 +1662,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
 
     # cell that needs dense integration grids
     def make_cell_dense_exp(shls_dense, ke0, ke1):
-        cell_dense = copy.copy(cell)
+        cell_dense = cell.copy(deep=False)
         cell_dense._bas = cell._bas.copy()
         cell_dense._env = cell._env.copy()
 
@@ -1686,7 +1694,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
 
     # cell that needs sparse integration grids
     def make_cell_sparse_exp(shls_sparse, ke0, ke1):
-        cell_sparse = copy.copy(cell)
+        cell_sparse = cell.copy(deep=False)
         cell_sparse._bas = cell._bas.copy()
         cell_sparse._env = cell._env.copy()
 
@@ -1801,10 +1809,11 @@ def _primitive_gto_cutoff(cell, precision=None):
 
 
 class MultiGridFFTDF(fft.FFTDF):
+    _keys = set(['tasks'])
+
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         fft.FFTDF.__init__(self, cell, kpts)
         self.tasks = None
-        self._keys = self._keys.union(['tasks'])
 
     def build(self):
         self.tasks = multi_grids_tasks(self.cell, self.mesh, self.verbose)
@@ -1855,9 +1864,7 @@ def multigrid(mf):
     the DFT object.
     '''
     mf.with_df, old_df = MultiGridFFTDF(mf.cell), mf.with_df
-    keys = mf.with_df._keys
     mf.with_df.__dict__.update(old_df.__dict__)
-    mf.with_df._keys = keys
     return mf
 
 

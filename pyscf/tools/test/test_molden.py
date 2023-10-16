@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import copy
 import tempfile
 from pyscf import lib, gto, scf
 from pyscf.tools import molden
@@ -87,6 +86,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for molden")
     unittest.main()
-
-
-

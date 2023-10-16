@@ -87,4 +87,3 @@ if __name__ == '__main__':
     m = RKS(mol)
     m.xc = 'b3lyp'
     print(m.scf())  # -2.89992555753
-

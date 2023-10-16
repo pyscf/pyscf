@@ -183,4 +183,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for df.incore")
     unittest.main()
-

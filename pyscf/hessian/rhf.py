@@ -182,30 +182,33 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     return e1, ej, ek
 
 def _make_vhfopt(mol, dms, key, vhf_intor):
-    if not hasattr(_vhf.libcvhf, vhf_intor):
+    libcvhf = _vhf.libcvhf
+    if not hasattr(libcvhf, vhf_intor):
         return None
 
-    vhfopt = _vhf.VHFOpt(mol, vhf_intor, 'CVHF'+key+'_prescreen',
-                         'CVHF'+key+'_direct_scf')
-    dms = numpy.asarray(dms, order='C')
-    if dms.ndim == 3:
-        n_dm = dms.shape[0]
-    else:
-        n_dm = 1
+    vhfopt = _vhf._VHFOpt(mol, 'int2e_'+key, 'CVHF'+key+'_prescreen',
+                          dmcondname='CVHFnr_dm_cond1')
     ao_loc = mol.ao_loc_nr()
-    fsetdm = getattr(_vhf.libcvhf, 'CVHF'+key+'_direct_scf_dm')
-    fsetdm(vhfopt._this,
-           dms.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
-           ao_loc.ctypes.data_as(ctypes.c_void_p),
-           mol._atm.ctypes.data_as(ctypes.c_void_p), mol.natm,
-           mol._bas.ctypes.data_as(ctypes.c_void_p), mol.nbas,
-           mol._env.ctypes.data_as(ctypes.c_void_p))
-
-    # Update the vhfopt's attributes intor.  Function direct_mapdm needs
-    # vhfopt._intor and vhfopt._cintopt to compute J/K.
-    if vhf_intor != 'int2e_'+key:
-        vhfopt._intor = mol._add_suffix('int2e_'+key)
-        vhfopt._cintopt = None
+    nbas = mol.nbas
+    q_cond = numpy.empty((2, nbas, nbas))
+    with mol.with_integral_screen(vhfopt.direct_scf_tol**2):
+        if vhf_intor == 'int2e_ip1ip2':
+            fqcond = libcvhf.CVHFnr_int2e_pp_q_cond
+        elif vhf_intor in ('int2e_ipip1ipip2', 'int2e_ipvip1ipvip2'):
+            fqcond = libcvhf.CVHFnr_int2e_pppp_q_cond
+        else:
+            raise NotImplementedError(vhf_intor)
+        fqcond(
+            getattr(libcvhf, mol._add_suffix(vhf_intor)),
+            lib.c_null_ptr(), q_cond[0].ctypes,
+            ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+            mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+        libcvhf.CVHFnr_int2e_q_cond(
+            getattr(libcvhf, mol._add_suffix('int2e')),
+            lib.c_null_ptr(), q_cond[1].ctypes,
+            ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+            mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+    vhfopt.q_cond = q_cond
     return vhfopt
 
 
@@ -466,6 +469,11 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
 
 class Hessian(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock hessian'''
+
+    _keys = set((
+        'mol', 'base', 'chkfile', 'atmlst', 'de',
+    ))
+
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose
         self.stdout = scf_method.stdout
@@ -476,7 +484,6 @@ class Hessian(lib.StreamObject):
 
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
-        self._keys = set(self.__dict__.keys())
 
     partial_hess_elec = partial_hess_elec
     hess_elec = hess_elec

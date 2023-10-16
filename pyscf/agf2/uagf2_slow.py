@@ -205,14 +205,14 @@ class UAGF2(uagf2.UAGF2):
             Auxiliaries of the Green's function for each spin
     '''
 
+    _keys = set(['nmom'])
+
     def __init__(self, mf, nmom=(None,0), frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
         uagf2.UAGF2.__init__(self, mf, frozen=frozen, mo_energy=mo_energy,
                              mo_coeff=mo_coeff, mo_occ=mo_occ)
 
         self.nmom = nmom
-
-        self._keys.update(['nmom'])
 
     build_se_part = build_se_part
 

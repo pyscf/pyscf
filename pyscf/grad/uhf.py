@@ -90,7 +90,7 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
                           rhf_grad.make_rdm1e(mo_energy[1], mo_coeff[1], mo_occ[1])))
 
 
-class Gradients(rhf_grad.GradientsMixin):
+class Gradients(rhf_grad.GradientsBase):
     '''Non-relativistic unrestricted Hartree-Fock gradients
     '''
     def get_veff(self, mol=None, dm=None):

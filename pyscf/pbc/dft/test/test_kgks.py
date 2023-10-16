@@ -23,6 +23,10 @@ from pyscf import lib
 from pyscf.pbc import gto as gto
 from pyscf.pbc import dft as dft
 from pyscf.pbc.df import rsdf_builder, gdf_builder
+try:
+    import mcfun
+except ImportError:
+    mcfun = None
 
 def setUpModule():
     global cell, alle_cell, kpts, alle_kpts
@@ -103,6 +107,87 @@ class KnownValues(unittest.TestCase):
                 e_kgks = mf.kernel()
                 print(e_kgks)
             self.assertAlmostEqual(e_kgks, -75.66883793093882, 4)
+
+    def test_collinear_kgks_gga(self):
+        from pyscf.pbc import gto
+        cell = gto.Cell()
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+        cell.atom = 'He 0.,  0.,  0.; H 0.8917,  0.8917,  0.8917'
+        cell.basis = [[0, [2, 1]], [1, [.5, 1]]]
+        cell.spin = 1
+        cell.build()
+        mf = cell.KGKS(kpts=cell.make_kpts([3,1,1]))
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -0.7335936544788495, 7)
+
+    def test_collinear_kgks_gga(self):
+        from pyscf.pbc import gto
+        cell = gto.Cell()
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+        cell.atom = 'He 0.,  0.,  0.; H 0.8917,  0.8917,  0.8917'
+        cell.basis = [[0, [2, 1]], [1, [.5, 1]]]
+        cell.spin = 1
+        cell.build()
+        mf = cell.KGKS(kpts=cell.make_kpts([3,1,1]))
+        mf.xc = 'pbe'
+        mf.collinear = 'col'
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -1.5775787238220018, 7)
+
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
+    def test_mcol_kgks_gga(self):
+        from pyscf.pbc import gto
+        cell = gto.Cell()
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+        cell.atom = 'He 0.,  0.,  0.; H 0.8917,  0.8917,  0.8917'
+        cell.basis = [[0, [2, 1]], [1, [.5, 1]]]
+        cell.spin = 1
+        cell.build()
+        mf = cell.KGKS(kpts=cell.make_kpts([3,1,1])).density_fit()
+        mf.xc = 'pbe'
+        mf.collinear = 'mcol'
+        mf._numint.spin_samples = 6
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -1.5896974092061769, 7)
+
+    def test_ncol_x2c_kgks_lda(self):
+        from pyscf.pbc import gto
+        cell = gto.Cell()
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+        cell.atom = 'He 0.,  0.,  0.; H 0.8917,  0.8917,  0.8917'
+        cell.basis = [[0, [2, 1]], [1, [.5, 1]]]
+        cell.spin = 1
+        cell.build()
+        mf = cell.KGKS(kpts=cell.make_kpts([3,1,1])).x2c()
+        mf.xc = 'lda,vwn'
+        mf.collinear = 'ncol'
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -1.4910121442258883, 7)
+
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
+    def test_mcol_x2c_kgks_lda(self):
+        from pyscf.pbc import gto
+        cell = gto.Cell()
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+        cell.atom = 'He 0.,  0.,  0.; H 0.8917,  0.8917,  0.8917'
+        cell.basis = [[0, [2, 1]], [1, [.5, 1]]]
+        cell.spin = 1
+        cell.build()
+        mf = cell.KGKS(kpts=cell.make_kpts([3,1,1])).x2c()
+        mf.xc = 'lda,vwn'
+        mf._numint.spin_samples = 50
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -1.4910121442258883, 6)
 
 
 if __name__ == '__main__':

@@ -186,7 +186,7 @@ class RCCSD(ccsd.CCSD):
 
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-        return ccsd.CCSD.ccsd(self, t1, t2, eris)
+        return ccsd.CCSDBase.ccsd(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
         nmo = self.nmo
@@ -225,12 +225,6 @@ class RCCSD(ccsd.CCSD):
                                     tol=self.conv_tol_normt,
                                     verbose=self.verbose)
         return self.l1, self.l2
-
-    def ccsd_t(self, t1=None, t2=None, eris=None):
-        return ccsd.CCSD.ccsd_t(self, t1, t2, eris)
-
-    def density_fit(self, auxbasis=None, with_df=None):
-        raise NotImplementedError
 
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
@@ -430,4 +424,3 @@ if __name__ == '__main__':
     t2ab = t2new[0::2,1::2,0::2,1::2]
     print(abs(t2ab-t2new_ref).max())
     print(abs(t2ab-t2ab.transpose(1,0,2,3) - t2aa).max())
-

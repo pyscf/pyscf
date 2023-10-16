@@ -28,7 +28,6 @@ Ref:
 '''
 
 import os
-import copy
 import ctypes
 import warnings
 import tempfile
@@ -75,6 +74,10 @@ class _RSGDFBuilder(Int3cBuilder):
     # first, and ED is called only if CD fails.
     j2c_eig_always = False
     linear_dep_threshold = LINEAR_DEP_THR
+
+    _keys = {
+        'mesh', 'omega', 'rs_auxcell', 'supmol_ft'
+    }
 
     def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
         self.mesh = None

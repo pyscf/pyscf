@@ -17,25 +17,13 @@
 Interface to geometry optimizer pyberny https://github.com/jhrmnn/pyberny
 '''
 
-from __future__ import absolute_import
-import pkg_resources
-try:
-    dist = pkg_resources.get_distribution('pyberny')
-except pkg_resources.DistributionNotFound:
-    dist = None
-if dist is None or [int(x) for x in dist.version.split('.')] < [0, 6, 2]:
-    msg = ('Geometry optimizer Pyberny not found or outdated. Install or update '
-           'with:\n\n\tpip install -U pyberny')
-    raise ImportError(msg)
-
-
 import numpy
 import logging
 from pyscf import lib
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
                                   symmetrize)  # noqa
 from pyscf import __config__
-from pyscf.grad.rhf import GradientsMixin
+from pyscf.grad.rhf import GradientsBase
 
 from berny import Berny, geomlib, coords
 
@@ -119,7 +107,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     if isinstance(method, lib.GradScanner):
         g_scanner = method
-    elif isinstance(method, GradientsMixin):
+    elif isinstance(method, GradientsBase):
         g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
