@@ -1073,7 +1073,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     def to_gpu(self):
         from gpu4pyscf.scf import UHF
-        return lib.to_gpu(self.__class__.reset(self.view(UHF)))
+        return lib.to_gpu(hf.SCF.reset(self.view(UHF)))
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

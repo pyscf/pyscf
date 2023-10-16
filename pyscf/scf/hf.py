@@ -2120,7 +2120,8 @@ class RHF(SCF):
     def to_gpu(self):
         # FIXME: consider the density_fit, x2c and soscf decoration
         from gpu4pyscf.scf import RHF
-        return lib.to_gpu(self.__class__.reset(self.view(RHF)))
+        obj = SCF.reset(self.view(RHF))
+        return lib.to_gpu(obj)
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

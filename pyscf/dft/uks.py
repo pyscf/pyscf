@@ -24,7 +24,7 @@ Non-relativistic Unrestricted Kohn-Sham
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import uhf
+from pyscf.scf import hf, uhf
 from pyscf.dft import rks
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -198,8 +198,9 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
         return self._transfer_attrs_(self.mol.UHF())
 
     def to_gpu(self):
+        from pyscf.scf.hf import SCF
         from gpu4pyscf.dft.uks import UKS
-        obj = lib.to_gpu(self.__class__.reset(self.view(UKS)))
+        obj = lib.to_gpu(SCF.reset(self.view(UKS)))
         # Attributes only defined in gpu4pyscf.RKS
         obj.screen_tol = 1e-14
         obj.disp = None
