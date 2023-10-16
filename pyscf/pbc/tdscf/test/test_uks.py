@@ -59,7 +59,7 @@ class DiamondPBE(unittest.TestCase):
         self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda(self):
-        ref = [4.8137763755, 4.8137763755]
+        ref = [4.77090949, 4.77090949]
         self.kernel('TDA', ref)
 
     def test_tdhf(self):
@@ -161,7 +161,7 @@ class DiamondPBE0(unittest.TestCase):
         self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda(self):
-        ref = [5.1435121896, 5.1435121896]
+        ref = [5.1069789, 5.10697989]
         self.kernel('TDA', ref)
 
     def test_tdhf(self):

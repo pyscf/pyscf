@@ -736,26 +736,6 @@ class TDBase(lib.StreamObject):
             return x/diagd
         return precond
 
-    def trunc_workspace(self, vind, x0, nstates=None, pick=None):
-        log = logger.new_logger(self)
-        if nstates is None: nstates = self.nstates
-        if x0.shape[0] <= nstates:
-            return None, x0
-        else:
-            heff = lib.einsum('xa,ya->xy', x0.conj(), vind(x0))
-            e, u = scipy.linalg.eig(heff)   # heff not necessarily Hermitian
-            e = e.real
-            order = numpy.argsort(e)
-            e = e[order]
-            u = u[:,order]
-            if callable(pick):
-                e, u = pick(e, u, None, None)[:2]
-            e = e[:nstates]
-            log.debug('truncating %d states to %d states with excitation energy (eV): %s',
-                      x0.shape[0], e.size, e*27.211399)
-            x1 = numpy.dot(x0.T, u[:,:nstates]).T
-            return e, x1
-
     analyze = analyze
     get_nto = get_nto
     oscillator_strength = oscillator_strength
@@ -820,9 +800,6 @@ class TDA(TDBase):
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
         e_ia = mo_energy[viridx] - mo_energy[occidx,None]
-        # make degenerate excitations equal for later selection by energy
-        e_ia = numpy.ceil(e_ia / self.deg_eia_thresh) * self.deg_eia_thresh
-        e_ia_max = e_ia.max()
 
         if wfnsym is not None and mf.mol.symmetry:
             if isinstance(wfnsym, str):
@@ -832,13 +809,10 @@ class TDA(TDBase):
             orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
             e_ia[(orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym] = 1e99
 
-        e_ia_uniq = numpy.unique(e_ia)
-
         nov = e_ia.size
         nstates = min(nstates, nov)
-        nstates_thresh = min(nstates, e_ia_uniq.size)
         e_ia = e_ia.ravel()
-        e_threshold = min(e_ia_max, e_ia_uniq[numpy.argsort(e_ia_uniq)[nstates_thresh-1]])
+        e_threshold = numpy.sort(e_ia)[nstates-1]
         e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
@@ -869,7 +843,6 @@ class TDA(TDBase):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-            x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         self.converged, self.e, x1 = \
                 lib.davidson1(vind, x0, precond,
@@ -1039,7 +1012,6 @@ class TDHF(TDA):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-            x0 = self.trunc_workspace(vind, x0, nstates=self.nstates, pick=pickeig)[1]
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
