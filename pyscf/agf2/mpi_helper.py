@@ -130,8 +130,7 @@ def nrange(start, stop=None, step=1):
     if stop is None:
         start, stop = 0, start
 
-    for i in range(start+rank, stop, step*size):
-        yield i
+    yield from range(start+rank, stop, step*size)
 
 
 def prange(start, stop, step):

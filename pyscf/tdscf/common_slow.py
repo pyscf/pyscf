@@ -605,8 +605,7 @@ class VindTracker:
         return r
 
     def __iter__(self):
-        for i, o, e in zip(self.args, self.results, self.errors):
-            yield i, o, e
+        yield from zip(self.args, self.results, self.errors)
 
     @property
     def ncalls(self):
