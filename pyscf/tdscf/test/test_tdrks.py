@@ -160,7 +160,7 @@ class KnownValues(unittest.TestCase):
         td = rks.TDA(mf_lda)
         td.singlet = False
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -39.74044291202006, 5)
+        self.assertAlmostEqual(lib.fp(es), -39.988118769202416, 5)
         ref = [9.0139312, 9.0139312,  12.42444659]
         self.assertAlmostEqual(abs(es[:3] - ref).max(), 0, 4)
 

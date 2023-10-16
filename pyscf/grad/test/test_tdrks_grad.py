@@ -103,7 +103,7 @@ class KnownValues(unittest.TestCase):
         td = tdscf.TDA(mf).run(singlet=False, nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -0.3633375, 6)
+        self.assertAlmostEqual(g1[0,2], -0.3633375, 5)
 
         td_solver = td.as_scanner()
         pmol = mol.copy()

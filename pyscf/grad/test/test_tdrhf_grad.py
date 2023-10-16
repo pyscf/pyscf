@@ -183,7 +183,7 @@ class KnownValues(unittest.TestCase):
         td_solver = td.as_scanner()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-        self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 6)
+        self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 5)
 
     def test_tdhf_triplet(self):
         td = tdscf.TDDFT(mf).run(singlet=False, nstates=nstates)

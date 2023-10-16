@@ -322,7 +322,6 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
         excsum is the XC functional value.  vmat is the XC potential matrix in
         2D array of shape (nao,nao) where nao is the number of AO functions.
     '''
-    assert hermi == 1
     if kpts is None:
         kpts = numpy.zeros((1,3))
     elif isinstance(kpts, KPoints):
@@ -356,7 +355,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band,
                                  max_memory):
             for i in range(nset):
-                rho = make_rho(i, ao_k2, mask, xctype)
+                rho = make_rho(i, ao_k2, mask, xctype).real
                 exc, vxc = ni.eval_xc_eff(xc_code, rho, deriv, xctype=xctype)[:2]
                 if xctype == 'LDA':
                     den = rho*weight
@@ -423,7 +422,6 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
         excsum is the XC functional value.  vmat is the XC potential matrix in
         2D array of shape (nao,nao) where nao is the number of AO functions.
     '''
-    assert hermi == 1
     if kpts is None:
         kpts = numpy.zeros((1,3))
     elif isinstance(kpts, KPoints):
@@ -461,8 +459,8 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band,
                                  max_memory):
             for i in range(nset):
-                rho_a = make_rhoa(i, ao_k2, mask, xctype)
-                rho_b = make_rhob(i, ao_k2, mask, xctype)
+                rho_a = make_rhoa(i, ao_k2, mask, xctype).real
+                rho_b = make_rhob(i, ao_k2, mask, xctype).real
                 rho = (rho_a, rho_b)
                 exc, vxc = ni.eval_xc_eff(xc_code, rho, deriv, xctype=xctype)[:2]
                 if xctype == 'LDA':

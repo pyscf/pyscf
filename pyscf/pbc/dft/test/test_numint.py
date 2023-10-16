@@ -205,7 +205,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(exc, -3.8870579114663886, 8)
         self.assertAlmostEqual(lib.fp(vmat), 0.42538491159934377+0.14139753327162483j, 8)
 
-        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], 0, kpts[0])
+        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], hermi=0, kpt=kpts[0])
         self.assertAlmostEqual(lib.fp(vmat), 0.42538491159934377+0.14139753327162483j, 8)
 
         ni = numint.KNumInt()
@@ -244,8 +244,8 @@ class KnownValues(unittest.TestCase):
         dm = np.random.random((nao,nao))
         dm = dm + dm.T
         ni = numint.NumInt()
-        ne, exc, vmat1 = ni.nr_rks(cell, grids, 'blyp', dm, 1, kpts[0])
-        ne, exc, vmat2 = ni.nr_rks(cell, grids, 'blyp', dm, 0, kpts[0])
+        ne, exc, vmat1 = ni.nr_rks(cell, grids, 'blyp', dm, hermi=1, kpt=kpts[0])
+        ne, exc, vmat2 = ni.nr_rks(cell, grids, 'blyp', dm, hermi=0, kpt=kpts[0])
         self.assertAlmostEqual(lib.fp(vmat1), (6.238900947350686+0.6026114431281391j), 8)
         self.assertAlmostEqual(abs(vmat1 - vmat2).max(), 0, 9)
 
