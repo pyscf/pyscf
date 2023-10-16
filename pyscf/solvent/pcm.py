@@ -279,8 +279,8 @@ class PCM(ddcosmo.DDCOSMO):
         return self
 
     def reset(self, mol=None):
-        super().reset(mol)
         self.surface = None
+        super().reset(mol)
         return self
 
     def build(self, ng=None):

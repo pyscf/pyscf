@@ -39,7 +39,6 @@ def _for_scf(mf, solvent_obj, dm=None):
         return mf
 
     oldMF = mf.__class__
-
     if dm is not None:
         solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
         solvent_obj.frozen = True

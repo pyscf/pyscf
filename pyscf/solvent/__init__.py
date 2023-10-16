@@ -141,3 +141,5 @@ def PCM(method_or_mol, solvent_obj=None, dm=None):
         return pcm.pcm_for_tdscf(method_or_mol, solvent_obj, dm)
     else:
         return pcm.pcm_for_post_scf(method_or_mol, solvent_obj, dm)
+
+PCM = PCM

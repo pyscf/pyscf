@@ -691,7 +691,8 @@ class _CIAH_SOSCF(object):
     def reset(self, mol=None):
         if mol is not None:
             self.mol = mol
-        return self._scf.reset(mol)
+        self._scf.reset(mol)
+        return self
 
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
@@ -934,9 +935,12 @@ def newton(mf):
         return SecondOrderDHF(mf)
 
     else:
+        print('second order')
         class SecondOrderRHF(_CIAH_SOSCF, mf.__class__):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
             gen_g_hop = gen_g_hop_rhf
+        print('class', mf.__class__)
+        print('final', SecondOrderRHF(mf))
         return SecondOrderRHF(mf)
 
 def remove_soscf(mf):
