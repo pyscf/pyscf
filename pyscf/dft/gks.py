@@ -178,12 +178,7 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
         return self._transfer_attrs_(self.mol.GHF())
 
     def to_gpu(self):
-        from gpu4pyscf.dft.gks import GKS
-        obj = lib.to_gpu(self.__class__.reset(self.view(GKS)))
-        # Attributes only defined in gpu4pyscf.RKS
-        obj.screen_tol = 1e-14
-        obj.disp = None
-        return obj
+        raise NotImplementedError
 
 
 if __name__ == '__main__':

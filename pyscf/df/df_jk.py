@@ -237,7 +237,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
     assert (with_j or with_k)
     if (not with_k and not dfobj.mol.incore_anyway and
         # 3-center integral tensor is not initialized
-        dfobj._cderi is None):
+        dfobj.with_df._cderi is None):
         return get_j(dfobj, dm, hermi, direct_scf_tol), None
 
     t0 = t1 = (logger.process_clock(), logger.perf_counter())
