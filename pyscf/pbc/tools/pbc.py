@@ -651,7 +651,7 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
 
-    if isinstance(supcell, pbcgto.Cell) and supcell.space_group_symmetry:
+    if isinstance(supcell, pbcgto.Cell) and getattr(supcell, 'space_group_symmetry', False):
         supcell.build_lattice_symmetry(not cell._mesh_from_build)
     return supcell
 

@@ -399,6 +399,7 @@ def incore(eri, dms, hermi=0, with_j=True, with_k=True):
 # direct_mapdm
 def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
            with_j=True, with_k=True, out=None, optimize_sr=False):
+    omega = env[gto.PTR_RANGE_OMEGA]
     dms = numpy.asarray(dms, order='C', dtype=numpy.double)
     dms_shape = dms.shape
     nao = dms_shape[-1]

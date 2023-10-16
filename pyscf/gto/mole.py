@@ -2894,9 +2894,7 @@ class MoleBase(lib.StreamObject):
                 | > 0 : Long-range operator  erf(omega r12) / r12
                 | < 0 : Short-range operator  erfc(omega r12) /r12
         '''
-        if omega is None:
-            self._env[PTR_RANGE_OMEGA] = 0
-        else:
+        if omega is not None:
             self._env[PTR_RANGE_OMEGA] = omega
     set_range_coulomb_ = set_range_coulomb  # for backward compatibility
 
@@ -2916,6 +2914,8 @@ class MoleBase(lib.StreamObject):
         >>> with mol.with_range_coulomb(omega=1.5):
         ...     mol.intor('int2e')
         '''
+        if omega is None:
+            return contextlib.nullcontext()
         omega0 = self._env[PTR_RANGE_OMEGA].copy()
         return self._TemporaryMoleContext(self.set_range_coulomb, (omega,), (omega0,))
 

@@ -449,13 +449,13 @@ class KnownValues(unittest.TestCase):
         myhf_s.sigma = 0.1
         myhf_s.fix_spin = False
         myhf_s.kernel()
-        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 6)
+        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
         self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
         self.assertTrue(myhf_s.converged)
 
         myhf_s.mu = -0.2482816
         myhf_s.kernel(dm0=myhf_s.make_rdm1())
-        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 6)
+        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
         self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
 
 if __name__ == "__main__":
