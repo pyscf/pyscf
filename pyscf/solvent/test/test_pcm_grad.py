@@ -16,13 +16,13 @@
 import unittest
 import numpy
 from pyscf import scf, gto, mcscf, solvent, cc, lib, tddft, tdscf
-from pyscf.solvent import pcm 
+from pyscf.solvent import pcm
 from pyscf.solvent.grad import pcm as pcm_grad
 
 def setUpModule():
     global mol, epsilon, lebedev_order
     mol = gto.Mole()
-    mol.atom = ''' 
+    mol.atom = '''
 O       0.0000000000    -0.0000000000     0.1174000000
 H      -0.7570000000    -0.0000000000    -0.4696000000
 H       0.7570000000     0.0000000000    -0.4696000000
@@ -51,10 +51,10 @@ class KnownValues(unittest.TestCase):
         cm.lebedev_order = 3
         cm.method = 'IEF-PCM'
         cm.build()
-        
+
         dF, dA = pcm_grad.get_dF_dA(cm.surface)
         dD, dS, dSii = pcm_grad.get_dD_dS(cm.surface, dF, with_S=True, with_D=True)
-        
+
         def get_FADS(mol):
             mol.build()
             cm = pcm.PCM(mol)
@@ -66,7 +66,7 @@ class KnownValues(unittest.TestCase):
             D = cm._intermediates['D']
             S = cm._intermediates['S']
             return F, A, D, S
-        
+
         eps = 1e-5
         for ia in range(mol.natm):
             p0,p1 = cm.surface['gslice_by_atom'][ia]
@@ -91,7 +91,7 @@ class KnownValues(unittest.TestCase):
 
                 assert numpy.linalg.norm(dF0 - dF[:,ia,j]) < 1e-8
                 assert numpy.linalg.norm(dA0 - dA[:,ia,j]) < 1e-8
-                
+
                 # the diagonal entries are calcualted separately
                 assert numpy.linalg.norm(dSii[:,ia,j] - numpy.diag(dS0)) < 1e-8
                 numpy.fill_diagonal(dS0, 0)
@@ -100,12 +100,12 @@ class KnownValues(unittest.TestCase):
                 dS_ia[p0:p1] = dS[p0:p1,:,j]
                 dS_ia[:,p0:p1] -= dS[:,p0:p1,j]
                 assert numpy.linalg.norm(dS0 - dS_ia) < 1e-8
-            
+
                 dD_ia = numpy.zeros_like(dD0)
                 dD_ia[p0:p1] = dD[p0:p1,:,j]
                 dD_ia[:,p0:p1] -= dD[:,p0:p1,j]
                 assert numpy.linalg.norm(dD0 - dD_ia) < 1e-8
-    
+
     def test_grad_CPCM(self):
         cm = pcm.PCM(mol)
         cm.eps = epsilon
@@ -116,7 +116,7 @@ class KnownValues(unittest.TestCase):
         mf.verbose = 0
         mf.conv_tol = 1e-12
         e_tot = mf.kernel()
-        
+
         g = mf.nuc_grad_method()
         grad = g.kernel()
 
@@ -124,10 +124,10 @@ class KnownValues(unittest.TestCase):
              [0.49773047433563E-15,  -0.12128126037559E-15,  -0.58936988992306E-01],
              [0.22810111996954E-01,  -0.68951901317025E-17,   0.29468494708267E-01],
             [-0.22810111996957E-01,   0.12949813945902E-15,   0.29468494708266E-01]])
-        
+
         print(f"Gradient error in CPCM: {numpy.linalg.norm(g0 - grad)}")
         assert numpy.linalg.norm(g0 - grad) < 1e-9
-    
+
     def test_grad_COSMO(self):
         cm = pcm.PCM(mol)
         cm.eps = epsilon
@@ -141,15 +141,15 @@ class KnownValues(unittest.TestCase):
 
         g = mf.nuc_grad_method()
         grad = g.kernel()
-        
+
         g0 = numpy.asarray(
             [[-1.33560836e-16,  8.70874355e-17, -5.89638726e-02],
              [ 2.28202396e-02,  2.63784344e-17,  2.94819363e-02],
              [-2.28202396e-02, -1.08799896e-16,  2.94819363e-02]])
-        
+
         print(f"Gradient error in COSMO: {numpy.linalg.norm(g0 - grad)}")
         assert numpy.linalg.norm(g0 - grad) < 1e-9
-    
+
     def test_grad_IEFPCM(self):
         cm = pcm.PCM(mol)
         cm.eps = epsilon
@@ -160,17 +160,17 @@ class KnownValues(unittest.TestCase):
         mf.verbose = 0
         mf.conv_tol = 1e-12
         e_tot = mf.kernel()
-        
+
         g = mf.nuc_grad_method()
         grad = g.kernel()
-        
+
         g0 = numpy.asarray([
              [0.18357915015649E-14,   0.14192681822347E-15,  -0.58988087999658E-01],
              [0.22822709179063E-01,  -0.10002010417168E-15,   0.29494044211805E-01],
             [-0.22822709179066E-01,  -0.31051364515588E-16,   0.29494044211806E-01]])
         print(f"Gradient error in IEFPCM: {numpy.linalg.norm(g0 - grad)}")
         assert numpy.linalg.norm(g0 - grad) < 1e-9
-    
+
     def test_grad_SSVPE(self):
         cm = pcm.PCM(mol)
         cm.eps = epsilon
@@ -184,14 +184,14 @@ class KnownValues(unittest.TestCase):
 
         g = mf.nuc_grad_method()
         grad = g.kernel()
-        
+
         g0 = numpy.asarray([
              [0.76104817971710E-15,   0.11185701540547E-15,  -0.58909172879217E-01],
              [0.22862990009767E-01,  -0.13861633974903E-15,   0.29454586651678E-01],
             [-0.22862990009769E-01,   0.34988765678591E-16,   0.29454586651679E-01]])
         print(f"Gradient error in SS(V)PE: {numpy.linalg.norm(g0 - grad)}")
         assert numpy.linalg.norm(g0 - grad) < 1e-9
-    
+
     def test_casci_grad(self):
         mf = scf.RHF(mol0).PCM().run()
         mc = solvent.PCM(mcscf.CASCI(mf, 2, 2))
@@ -218,9 +218,9 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol2).run()
         mc2 = solvent.PCM(mcscf.CASSCF(mf, 2, 2)).run(conv_tol=1e-9)
         e2 = mc2.e_tot
-        
+
         self.assertAlmostEqual((e2-e1)/dx, de[0,2], 2)
-    
+
     def test_ccsd_grad(self):
         mf = scf.RHF(mol0).PCM()
         mf.conv_tol = 1e-12
@@ -239,7 +239,7 @@ class KnownValues(unittest.TestCase):
         mycc1.conv_tol = 1e-12
         mycc1.kernel()
         e1 = mycc1.e_tot
-        
+
         mf = scf.RHF(mol2)
         mf.conv_tol = 1e-12
         mf.run()
@@ -248,9 +248,8 @@ class KnownValues(unittest.TestCase):
         mycc2.conv_tol = 1e-12
         mycc2.kernel()
         e2 = mycc2.e_tot
-        
-        self.assertAlmostEqual((e2-e1)/dx, de[0,2], 3)
 
+        self.assertAlmostEqual((e2-e1)/dx, de[0,2], 3)
 
 if __name__ == "__main__":
     print("Full Tests for Gradient of PCMs")
