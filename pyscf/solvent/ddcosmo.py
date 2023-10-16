@@ -297,7 +297,6 @@ tdscf.rhf.TDBase.ddCOSMO = tdscf.rhf.TDBase.DDCOSMO = ddcosmo_for_tdscf
 mcscf.casci.CASCI.ddCOSMO = mcscf.casci.CASCI.DDCOSMO = ddcosmo_for_casci
 mcscf.mc1step.CASSCF.ddCOSMO = mcscf.mc1step.CASSCF.DDCOSMO = ddcosmo_for_casscf
 
-
 # Keep gen_ddcosmo_solver for backward compatibility
 def gen_ddcosmo_solver(pcmobj, verbose=None):
     '''Generate ddcosmo function to compute energy and potential matrix
@@ -811,6 +810,7 @@ class ddCOSMO(lib.StreamObject):
             f_epsilon = 1
         epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, Xvec)
         vpcm = .5 * f_epsilon * vmat
+
         return epcm, vpcm
 
     def _B_dot_x(self, dm):

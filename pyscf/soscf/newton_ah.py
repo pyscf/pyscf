@@ -705,7 +705,8 @@ class _CIAH_SOSCF:
     def reset(self, mol=None):
         if mol is not None:
             self.mol = mol
-        return self._scf.reset(mol)
+        self._scf.reset(mol)
+        return self
 
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
