@@ -37,7 +37,6 @@ from pyscf.pbc import gto
 from pyscf.pbc import tools
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
-from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc.scf import addons
 from pyscf.pbc import df
 from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
@@ -503,22 +502,19 @@ class SCF(mol_hf.SCF):
         with_df : density fitting object
             Default is the FFT based DF model. For all-electron calculation,
             MDF model is favored for better accuracy.  See also :mod:`pyscf.pbc.df`.
-
-        direct_scf : bool
-            When this flag is set to true, the J/K matrices will be computed
-            directly through the underlying with_df methods.  Otherwise,
-            depending the available memory, the 4-index integrals may be cached
-            and J/K matrices are computed based on the 4-index integrals.
     '''
 
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    _keys = set(['cell', 'exxdiv', 'with_df', 'rsjk'])
+
+    init_direct_scf = lib.invalid_method('init_direct_scf')
+    get_bands = get_bands
+    get_rho = get_rho
 
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
-        self.cell = cell
         mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
@@ -529,8 +525,6 @@ class SCF(mol_hf.SCF):
         self.kpt = kpt
         self.conv_tol = max(cell.precision * 10, 1e-8)
 
-        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df', 'rsjk'])
-
     @property
     def kpt(self):
         if 'kpt' in self.__dict__:
@@ -539,23 +533,46 @@ class SCF(mol_hf.SCF):
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
-        self.with_df.kpts = np.reshape(x, (-1, 3))
+        self.with_df.kpts = np.reshape(x, (1, 3))
+        if self.rsjk:
+            self.rsjk.kpts = self.with_df.kpts
+
+    @property
+    def kpts(self):
+        if 'kpts' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpts = self.__dict__.pop('kpts')
+        return self.with_df.kpts
+    @kpts.setter
+    def kpts(self, x):
+        self.with_df.kpts = np.reshape(x, (-1,3))
         if self.rsjk:
             self.rsjk.kpts = self.with_df.kpts
 
     def build(self, cell=None):
-        if 'kpt' in self.__dict__:
-            # To handle the attribute kpt loaded from chkfile
+        # To handle the attribute kpt or kpts loaded from chkfile
+        if 'kpts' in self.__dict__:
+            self.kpts = self.__dict__.pop('kpts')
+        elif 'kpt' in self.__dict__:
             self.kpt = self.__dict__.pop('kpt')
 
+        # "vcut_ws" precomputing is triggered by pbc.tools.pbc.get_coulG
+        #if self.exxdiv == 'vcut_ws':
+        #    if self.exx_built is False:
+        #        self.precompute_exx()
+        #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
+
+        kpts = self.kpts
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpt):
-                self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
+                self.rsjk = self.rsjk.__class__(cell, kpts)
 
-        # Let df.build() be called by get_jk function later on needs.
-        # DFT objects may need to initiailze df with different paramters.
-        #if self.with_df:
-        #    self.with_df.build()
+        # for GDF and MDF
+        with_df = self.with_df
+        if len(kpts) > 1 and getattr(with_df, '_j_only', False):
+            logger.warn(self, 'df.j_only cannot be used with k-point HF')
+            with_df._j_only = False
+            with_df.reset()
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -565,9 +582,16 @@ class SCF(mol_hf.SCF):
         '''Reset cell and relevant attributes associated to the old cell object'''
         if cell is not None:
             self.cell = cell
-            self.mol = cell # used by hf kernel
         self.with_df.reset(cell)
         return self
+
+    # used by hf kernel
+    @property
+    def mol(self):
+        return self.cell
+    @mol.setter
+    def mol(self, x):
+        self.cell = x
 
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)
@@ -640,7 +664,7 @@ class SCF(mol_hf.SCF):
             not self.rsjk and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
             (self._eri is not None or cell.incore_anyway or
-             (not self.direct_scf and self._is_mem_enough()))):
+             self._is_mem_enough())):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
@@ -716,17 +740,11 @@ class SCF(mol_hf.SCF):
     def energy_nuc(self):
         return self.cell.energy_nuc()
 
-    get_bands = get_bands
-
-    get_rho = get_rho
-
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
         if cell is None:
             cell = self.cell
-        if dm is None:
-            dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)
@@ -740,7 +758,11 @@ class SCF(mol_hf.SCF):
             makov_payne_correction(self)
         return self
 
-    get_init_guess = mol_hf.SCF.get_init_guess
+    def get_init_guess(self, cell=None, key='minao'):
+        if cell is None: cell = self.cell
+        dm = mol_hf.SCF.get_init_guess(self, cell, key)
+        dm = normalize_dm_(self, dm)
+        return dm
 
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell
@@ -771,6 +793,12 @@ class SCF(mol_hf.SCF):
             mem_need = nao**4*16/1e6
         return mem_need + lib.current_memory()[0] < self.max_memory*.95
 
+    def analyze(self, verbose=None, with_meta_lowdin=None, **kwargs):
+        raise NotImplementedError
+
+    def mulliken_pop(self):
+        raise NotImplementedError
+
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import df_jk
         return df_jk.density_fit(self, auxbasis, with_df=with_df)
@@ -788,23 +816,23 @@ class SCF(mol_hf.SCF):
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
 
-    def to_rhf(self, mf):
+    def to_rhf(self):
         '''Convert the input mean-field object to a RHF/ROHF/RKS/ROKS object'''
-        return addons.convert_to_rhf(mf)
+        return addons.convert_to_rhf(self)
 
-    def to_uhf(self, mf):
+    def to_uhf(self):
         '''Convert the input mean-field object to a UHF/UKS object'''
-        return addons.convert_to_uhf(mf)
+        return addons.convert_to_uhf(self)
 
-    def to_ghf(self, mf):
+    def to_ghf(self):
         '''Convert the input mean-field object to a GHF/GKS object'''
-        return addons.convert_to_ghf(mf)
+        return addons.convert_to_ghf(self)
 
-    def stability(self):
-        raise NotImplementedError
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
+    def to_kscf(self):
+        '''Convert gamma point SCF object to k-point SCF object
+        '''
+        from pyscf.pbc.scf.addons import convert_to_kscf
+        return convert_to_kscf(self)
 
     def jk_method(self, J='FFTDF', K=None):
         '''
@@ -828,17 +856,15 @@ class SCF(mol_hf.SCF):
                 assert J == K
             else:
                 df_method = J if 'DF' in J else K
-                self.with_df = getattr(df, df_method)(self.cell, self.kpt)
+                self.with_df = getattr(df, df_method)(self.cell, self.kpts)
 
         if 'RS' in J or 'RS' in K:
-            if not gamma_point(self.kpt):
-                raise NotImplementedError('Single k-point must be gamma point')
-            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpt)
+            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpts)
             self.rsjk.verbose = self.verbose
 
         # For nuclear attraction
         if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
-            self.with_df = df.GDF(self.cell, self.kpt)
+            self.with_df = df.GDF(self.cell, self.kpts)
 
         nuc = self.with_df.__class__.__name__
         logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
@@ -857,16 +883,21 @@ class KohnShamDFT:
 
 class RHF(SCF, mol_hf.RHF):
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
-        dm = SCF.get_init_guess(self, cell, key)
-        dm = normalize_dm_(self, dm)
-        return dm
-
+    analyze = mol_hf.RHF.analyze
+    spin_square = mol_hf.RHF.spin_square
     stability = mol_hf.RHF.stability
 
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+    def to_ks(self, xc='HF'):
+        '''Convert to RKS object.
+        '''
+        from pyscf.pbc import dft
+        return self._transfer_attrs_(dft.RKS(self.cell, xc=xc))
+
     def convert_from_(self, mf):
-        '''Convert given mean-field object to RHF'''
+        '''Convert given mean-field object to RHF/ROHF'''
         addons.convert_to_rhf(mf, self)
         return self
 
@@ -885,11 +916,8 @@ def normalize_dm_(mf, dm):
     Scale density matrix to make it produce the correct number of electrons.
     '''
     cell = mf.cell
-    if isinstance(dm, np.ndarray) and dm.ndim == 2:
-        ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
-    else:
-        ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
-    if abs(ne - cell.nelectron).sum() > 0.01:
+    ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
+    if abs(ne - cell.nelectron) > 0.01:
         logger.debug(mf, 'Big error detected in the electron number '
                      'of initial guess density matrix (Ne/cell = %g)!\n'
                      '  This can cause huge error in Fock matrix and '

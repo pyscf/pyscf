@@ -22,14 +22,14 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.tdscf import uhf
 from pyscf.pbc import scf
-from pyscf.pbc.tdscf.krhf import KTDMixin, _get_e_ia, purify_krlyov_heff
+from pyscf.pbc.tdscf.krhf import KTDBase, _get_e_ia, purify_krlyov_heff
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)
 
-class TDA(KTDMixin):
+class TDA(KTDBase):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     def gen_vind(self, mf, kshift):

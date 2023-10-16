@@ -19,7 +19,6 @@
 import unittest
 import tempfile
 import numpy
-import copy
 from pyscf import lib, gto, scf, dft
 from pyscf import tdscf
 try:

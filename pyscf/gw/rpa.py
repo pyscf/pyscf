@@ -162,6 +162,11 @@ def _mo_without_core(rpa, mo):
 
 class RPA(lib.StreamObject):
 
+    _keys = set((
+        'mol', 'frozen',
+        'with_df', 'mo_energy', 'mo_coeff', 'mo_occ', 'e_corr', 'e_hf', 'e_tot',
+    ))
+
     def __init__(self, mf, frozen=None, auxbasis=None):
         self.mol = mf.mol
         self._scf = mf
@@ -179,7 +184,6 @@ class RPA(lib.StreamObject):
                 self.with_df.auxbasis = auxbasis
             else:
                 self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
-        self._keys.update(['with_df'])
 
 ##################################################
 # don't modify the following attributes, they are not input options

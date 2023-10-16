@@ -478,6 +478,9 @@ def _cho_solve_rhojk (mf_grad, mol, auxmol, orbol, orbor,
 
 class Gradients(rhf_grad.Gradients):
     '''Restricted density-fitting Hartree-Fock gradients'''
+
+    _keys = {'with_df', 'auxbasis_response'}
+
     def __init__(self, mf):
         assert isinstance(mf, df.df_jk._DFHF)
         # Whether to include the response of DF auxiliary basis when computing

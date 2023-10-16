@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 import unittest
 import tempfile
@@ -328,11 +327,11 @@ class KnownValues(unittest.TestCase):
         popandchg, dip = mf1.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 3.2031790129016922, 6)
 
-        mf1 = copy.copy(n2mf)
+        mf1 = n2mf.copy()
         (pop, chg), dip = n2mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop), 4.5467414321488357, 6)
         self.assertAlmostEqual(numpy.linalg.norm(dip), 0, 9)
-        mf1 = copy.copy(n2mf)
+        mf1 = n2mf.copy()
         mf1.mo_coeff = numpy.array(n2mf.mo_coeff)
         popandchg, dip = mf1.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 3.8893148995392353, 6)
@@ -747,7 +746,7 @@ H     0    0.757    0.587'''
         self.assertAlmostEqual(abs(f1 + f1.T).max(), 0, 12)
 
     def test_check_convergence(self):
-        mf1 = copy.copy(n2mf)
+        mf1 = n2mf.copy()
         mf1.diis = False
         count = [0]
         def check_convergence(envs):
@@ -781,7 +780,7 @@ H     0    0.757    0.587'''
         self.assertEqual(irrep_nelec['A1g'], 6)
         self.assertEqual(irrep_nelec['E1ux'], 2)
         self.assertEqual(irrep_nelec['E1uy'], 2)
-        n2_rhf = copy.copy(n2mf)
+        n2_rhf = n2mf.copy()
         n2_rhf.irrep_nelec = irrep_nelec
         n2_rhf.irrep_nelec['A2g'] = 0
         n2_rhf.irrep_nelec['E2gx'] = 2

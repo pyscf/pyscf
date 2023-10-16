@@ -48,6 +48,7 @@ from pyscf import __config__
 class MDF(df.GDF):
     '''Gaussian and planewaves mixed density fitting
     '''
+
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
@@ -89,7 +90,6 @@ class MDF(df.GDF):
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
 
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
         df.GDF.build(self, j_only, with_j3c, kpts_band)

@@ -59,14 +59,13 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             dm0 = mf.make_rdm1(mo_coeff, mo_occ)
             return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
 
-        if singlet is None:
-            # for ground state orbital hessian
-            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                mo_coeff, mo_occ, spin=0)
+        if singlet is None: # for ground state orbital hessian
+            spin = 0
         else:
-            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                mo_coeff, mo_occ, spin=1)
-        dm0 = None  #mf.make_rdm1(mo_coeff, mo_occ)
+            spin = 1
+        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                            mo_coeff, mo_occ, spin)
+        dm0 = None
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]
@@ -171,7 +170,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1)
-        dm0 = None  #mf.make_rdm1(mo_coeff, mo_occ)
+        dm0 = None
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]

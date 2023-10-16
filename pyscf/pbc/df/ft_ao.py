@@ -21,7 +21,6 @@ Analytical Fourier transformation AO-pair product for PBC
 '''
 
 import ctypes
-import copy
 import numpy as np
 from pyscf import lib
 from pyscf import gto
@@ -426,7 +425,7 @@ class _RangeSeparatedCell(pbcgto.Cell):
 
     def compact_basis_cell(self):
         '''Construct a cell with only the smooth part of the AO basis'''
-        cell_c = copy.copy(self)
+        cell_c = self.copy(deep=False)
         mask = self.bas_type != SMOOTH_BASIS
         cell_c._bas = self._bas[mask]
         cell_c.bas_map = cell_c.bas_map[mask]

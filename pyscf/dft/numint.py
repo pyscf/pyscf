@@ -279,7 +279,7 @@ def eval_rho1(mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
 
     if pair_mask is None:
         ovlp_cond = mol.get_overlap_cond()
-        pair_mask = ovlp_cond < -numpy.log(cutoff)
+        pair_mask = numpy.asarray(ovlp_cond < -numpy.log(cutoff), dtype=numpy.uint8)
 
     ao_loc = mol.ao_loc_nr()
     if xctype == 'LDA' or xctype == 'HF':
@@ -1471,30 +1471,18 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError('complex density matrix')
 
     xctype = ni._xc_type(xc_code)
+    if fxc is None and xctype in ('LDA', 'GGA', 'MGGA'):
+        fxc = ni.cache_xc_kernel1(mol, grids, xc_code, dm0, spin=0,
+                                  max_memory=max_memory)[2]
+
     make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)
-    if fxc is None and rho0 is None:
-        make_rho0 = ni._gen_rho_evaluator(mol, dm0, 1, False, grids)[0]
-    else:
-        make_rho0 = None
 
     def block_loop(ao_deriv):
         p1 = 0
-        _rho0 = None
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
-            if fxc is None:
-                if rho0 is not None:
-                    if xctype == 'LDA':
-                        _rho0 = numpy.asarray(rho0[p0:p1], order='C')
-                    else:
-                        _rho0 = numpy.asarray(rho0[:,p0:p1], order='C')
-                elif make_rho0 is not None:
-                    _rho0 = make_rho0(0, ao, mask, xctype)
-                _fxc = ni.eval_xc_eff(xc_code, _rho0, deriv=2, xctype=xctype)[2]
-            else:
-                _fxc = fxc[:,:,p0:p1]
-
+            _fxc = fxc[:,:,p0:p1]
             for i in range(nset):
                 rho1 = make_rho1(i, ao, mask, xctype)
                 if xctype == 'LDA':
@@ -1753,38 +1741,21 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError('complex density matrix')
 
     xctype = ni._xc_type(xc_code)
+    if fxc is None and xctype in ('LDA', 'GGA', 'MGGA'):
+        fxc = ni.cache_xc_kernel1(mol, grids, xc_code, dm0, spin=1,
+                                  max_memory=max_memory)[2]
+
     dma, dmb = _format_uks_dm(dms)
     nao = dma.shape[-1]
     make_rhoa, nset = ni._gen_rho_evaluator(mol, dma, hermi, False, grids)[:2]
     make_rhob       = ni._gen_rho_evaluator(mol, dmb, hermi, False, grids)[0]
 
-    if fxc is None and rho0 is None:
-        make_rho0 = ni._gen_rho_evaluator(mol, _format_uks_dm(dm0), 1, False, grids)[0]
-    else:
-        make_rho0 = None
-
     def block_loop(ao_deriv):
         p1 = 0
-        rho0a = rho0b = None
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
-            if fxc is None:
-                if rho0 is not None:
-                    if xctype == 'LDA':
-                        rho0a = numpy.asarray(rho0[0][p0:p1], order='C')
-                        rho0b = numpy.asarray(rho0[1][p0:p1], order='C')
-                    else:
-                        rho0a = numpy.asarray(rho0[0][:,p0:p1], order='C')
-                        rho0b = numpy.asarray(rho0[1][:,p0:p1], order='C')
-                elif make_rho0 is not None:
-                    rho0a = make_rho0(0, ao, mask, xctype)
-                    rho0b = make_rho0(1, ao, mask, xctype)
-                _rho0 = (rho0a, rho0b)
-                _fxc = ni.eval_xc_eff(xc_code, _rho0, deriv=2, xctype=xctype)[2]
-            else:
-                _fxc = fxc[:,:,:,:,p0:p1]
-
+            _fxc = fxc[:,:,:,:,p0:p1]
             for i in range(nset):
                 rho1a = make_rhoa(i, ao, mask, xctype)
                 rho1b = make_rhob(i, ao, mask, xctype)
@@ -2609,7 +2580,8 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
 
 def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=0, max_memory=2000):
     '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
-    DFT hessian module etc.
+    DFT hessian module etc. Note dm the zeroth order density matrix must be a
+    hermitian matrix.
     '''
     xctype = ni._xc_type(xc_code)
     if xctype == 'GGA':
@@ -2619,7 +2591,8 @@ def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=0, max_memory=2000):
     else:
         ao_deriv = 0
 
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi=1)
+    hermi = 1
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi, False, grids)
     if dm[0].ndim == 1:  # RKS
         rho = []
         for ao, mask, weight, coords \
@@ -2655,55 +2628,11 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
         rho[p0:p1] = make_rho(0, ao, mask, 'LDA')
     return rho
 
-def _block_loop(ni, mol, grids, nao=None, deriv=0, max_memory=2000,
-                non0tab=None, blksize=None, buf=None):
-    '''Define this macro to loop over grids by blocks.
-    '''
-    if grids.coords is None:
-        grids.build(with_non0tab=True)
-    if nao is None:
-        nao = mol.nao
-    ngrids = grids.coords.shape[0]
-    comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-    # NOTE to index grids.non0tab, the blksize needs to be an integer
-    # multiplier of BLKSIZE
-    if blksize is None:
-        blksize = int(max_memory*1e6/((comp+1)*nao*8*BLKSIZE))
-        blksize = max(4, min(blksize, ngrids//BLKSIZE+1, 1200)) * BLKSIZE
-    assert blksize % BLKSIZE == 0
 
-    if non0tab is None and mol is grids.mol:
-        non0tab = grids.non0tab
-    if non0tab is None:
-        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                              dtype=numpy.uint8)
-        non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
-    screen_index = non0tab
-
-    # the xxx_sparse() functions require ngrids 8-byte aligned
-    allow_sparse = ngrids % ALIGNMENT_UNIT == 0
-
-    if buf is None:
-        buf = _empty_aligned(comp * blksize * nao)
-    for ip0, ip1 in lib.prange(0, ngrids, blksize):
-        coords = grids.coords[ip0:ip1]
-        weight = grids.weights[ip0:ip1]
-        mask = screen_index[ip0//BLKSIZE:]
-        # TODO: pass grids.cutoff to eval_ao
-        ao = ni.eval_ao(mol, coords, deriv=deriv, non0tab=mask,
-                        cutoff=grids.cutoff, out=buf)
-        if not allow_sparse and not _sparse_enough(mask):
-            # Unset mask for dense AO tensor. It determines which eval_rho
-            # to be called in make_rho
-            mask = None
-        yield ao, mask, weight, coords
-
-
-class _NumIntMixin(lib.StreamObject):
+class LibXCMixin:
     libxc = libxc
 
-    def __init__(self):
-        self.omega = None  # RSH paramter
+    omega = None  # RSH paramter
 
 ####################
 # Overwrite following functions to use custom XC functional
@@ -2814,8 +2743,12 @@ class _NumIntMixin(lib.StreamObject):
             hyb = self.hybrid_coeff(xc_code, spin)
         return omega, alpha, hyb
 
+# Export the symbol _NumIntMixin for backward compatibility.
+# _NumIntMixin should be dropped in the future.
+_NumIntMixin = LibXCMixin
 
-class NumInt(_NumIntMixin):
+
+class NumInt(lib.StreamObject, LibXCMixin):
     '''Numerical integration methods for non-relativistic RKS and UKS'''
 
     cutoff = CUTOFF * 1e2  # cutoff for small AO product
@@ -2859,7 +2792,48 @@ class NumInt(_NumIntMixin):
     eval_rho2 = staticmethod(eval_rho2)
     get_rho = get_rho
 
-    block_loop = _block_loop
+    def block_loop(self, mol, grids, nao=None, deriv=0, max_memory=2000,
+                   non0tab=None, blksize=None, buf=None):
+        '''Define this macro to loop over grids by blocks.
+        '''
+        if grids.coords is None:
+            grids.build(with_non0tab=True)
+        if nao is None:
+            nao = mol.nao
+        ngrids = grids.coords.shape[0]
+        comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+        # NOTE to index grids.non0tab, the blksize needs to be an integer
+        # multiplier of BLKSIZE
+        if blksize is None:
+            blksize = int(max_memory*1e6/((comp+1)*nao*8*BLKSIZE))
+            blksize = max(4, min(blksize, ngrids//BLKSIZE+1, 1200)) * BLKSIZE
+        assert blksize % BLKSIZE == 0
+
+        if non0tab is None and mol is grids.mol:
+            non0tab = grids.non0tab
+        if non0tab is None:
+            non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+                                  dtype=numpy.uint8)
+            non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
+        screen_index = non0tab
+
+        # the xxx_sparse() functions require ngrids 8-byte aligned
+        allow_sparse = ngrids % ALIGNMENT_UNIT == 0
+
+        if buf is None:
+            buf = _empty_aligned(comp * blksize * nao)
+        for ip0, ip1 in lib.prange(0, ngrids, blksize):
+            coords = grids.coords[ip0:ip1]
+            weight = grids.weights[ip0:ip1]
+            mask = screen_index[ip0//BLKSIZE:]
+            # TODO: pass grids.cutoff to eval_ao
+            ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=mask,
+                              cutoff=grids.cutoff, out=buf)
+            if not allow_sparse and not _sparse_enough(mask):
+                # Unset mask for dense AO tensor. It determines which eval_rho
+                # to be called in make_rho
+                mask = None
+            yield ao, mask, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=True, grids=None):
         if getattr(dms, 'mo_coeff', None) is not None:
@@ -2884,12 +2858,15 @@ class NumInt(_NumIntMixin):
         nao = dms[0].shape[0]
         ndms = len(dms)
 
-        ovlp_cond = mol.get_overlap_cond()
-        if dms[0].dtype == numpy.double:
-            dm_cond = numpy.max([mol.condense_to_shell(dm, 'absmax') for dm in dms], axis=0)
-            pair_mask = (numpy.exp(-ovlp_cond) * dm_cond) > self.cutoff
-        else:
-            pair_mask = ovlp_cond < -numpy.log(self.cutoff)
+        if grids is not None:
+            ovlp_cond = mol.get_overlap_cond()
+            if dms[0].dtype == numpy.double:
+                dm_cond = [mol.condense_to_shell(dm, 'absmax') for dm in dms]
+                dm_cond = numpy.max(dm_cond, axis=0)
+                pair_mask = numpy.exp(-ovlp_cond) * dm_cond > self.cutoff
+            else:
+                pair_mask = ovlp_cond < -numpy.log(self.cutoff)
+            pair_mask = numpy.asarray(pair_mask, dtype=numpy.uint8)
 
         def make_rho(idm, ao, sindex, xctype):
             if sindex is not None and grids is not None:

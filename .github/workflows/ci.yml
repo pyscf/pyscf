@@ -44,7 +44,7 @@ jobs:
   linux-build-aarch64:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [ubuntu-20.04]
         pyver: [cp39-cp39]
@@ -77,7 +77,7 @@ jobs:
   macos-build:
     runs-on: macos-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         python-version: ["3.10"]
     steps:

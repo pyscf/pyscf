@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 import tempfile
 from functools import reduce
@@ -555,13 +554,13 @@ O    SP
         self.assertRaises(RuntimeError, lambda *args: mol0.nelec)
         mol0.spin = 1
 
-        mol1 = copy.copy(mol0)
+        mol1 = mol0.copy()
         self.assertEqual(mol1.nelec, (5, 4))
         mol1.nelec = (3, 6)
         self.assertEqual(mol1.nelec, (3, 6))
 
     def test_multiplicity(self):
-        mol1 = copy.copy(mol0)
+        mol1 = mol0.copy()
         self.assertEqual(mol1.multiplicity, 2)
         mol1.multiplicity = 5
         self.assertEqual(mol1.multiplicity, 5)
@@ -569,7 +568,7 @@ O    SP
         self.assertRaises(RuntimeError, lambda:mol1.nelec)
 
     def test_ms(self):
-        mol1 = copy.copy(mol0)
+        mol1 = mol0.copy()
         self.assertEqual(mol1.ms, 0.5)
         mol1.ms = 1
         self.assertEqual(mol1.multiplicity, 3)

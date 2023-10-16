@@ -469,6 +469,11 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
 
 class Hessian(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock hessian'''
+
+    _keys = set((
+        'mol', 'base', 'chkfile', 'atmlst', 'de',
+    ))
+
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose
         self.stdout = scf_method.stdout
@@ -479,7 +484,6 @@ class Hessian(lib.StreamObject):
 
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
-        self._keys = set(self.__dict__.keys())
 
     partial_hess_elec = partial_hess_elec
     hess_elec = hess_elec

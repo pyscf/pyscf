@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import copy
 import numpy
 from pyscf import gto, dft, lib
 from pyscf.dft import radi
@@ -208,9 +207,9 @@ class KnownValues(unittest.TestCase):
         exc0 = dft.numint.nr_uks(mf._numint, mol, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_uks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
-        grids0_w = copy.copy(grids0)
+        grids0_w = grids0.copy()
         grids0_w.weights = grids1.weights
-        grids0_c = copy.copy(grids0)
+        grids0_c = grids0.copy()
         grids0_c.coords = grids1.coords
         exc0_w = dft.numint.nr_uks(mf._numint, mol, grids0_w, xc, dm0)[1]
         exc0_c = dft.numint.nr_uks(mf._numint, mol1, grids0_c, xc, dm0)[1]
@@ -232,9 +231,9 @@ class KnownValues(unittest.TestCase):
         exc0 = dft.numint.nr_uks(mf._numint, mol, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_uks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
-        grids0_w = copy.copy(grids0)
+        grids0_w = grids0.copy()
         grids0_w.weights = grids1.weights
-        grids0_c = copy.copy(grids0)
+        grids0_c = grids0.copy()
         grids0_c.coords = grids1.coords
         exc0_w = dft.numint.nr_uks(mf._numint, mol, grids0_w, xc, dm0)[1]
         exc0_c = dft.numint.nr_uks(mf._numint, mol1, grids0_c, xc, dm0)[1]
@@ -256,9 +255,9 @@ class KnownValues(unittest.TestCase):
         exc0 = dft.numint.nr_uks(mf._numint, mol, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_uks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
-        grids0_w = copy.copy(grids0)
+        grids0_w = grids0.copy()
         grids0_w.weights = grids1.weights
-        grids0_c = copy.copy(grids0)
+        grids0_c = grids0.copy()
         grids0_c.coords = grids1.coords
         exc0_w = dft.numint.nr_uks(mf._numint, mol, grids0_w, xc, dm0)[1]
         exc0_c = dft.numint.nr_uks(mf._numint, mol1, grids0_c, xc, dm0)[1]

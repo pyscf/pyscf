@@ -690,6 +690,8 @@ def _gamma1_intermediates(mp, t2=None):
 
 
 class KMP2(mp2.MP2):
+    _keys = set(('kpts', 'nkpts', 'khelper'))
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -730,7 +732,6 @@ class KMP2(mp2.MP2):
         self.e_corr_ss = None
         self.e_corr_os = None
         self.t2 = None
-        self._keys = set(self.__dict__.keys())
 
     get_nocc = get_nocc
     get_nmo = get_nmo

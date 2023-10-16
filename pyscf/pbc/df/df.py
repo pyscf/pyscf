@@ -30,7 +30,6 @@ J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import os
-import copy
 import ctypes
 import warnings
 import tempfile
@@ -136,6 +135,11 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     # If True, force using denisty matrix-based K-build
     force_dm_kbuild = False
 
+    _keys = set((
+        'blockdim', 'force_dm_kbuild', 'cell', 'kpts', 'kpts_band', 'eta',
+        'mesh', 'exp_to_discard', 'exxdiv', 'auxcell', 'linear_dep_threshold',
+    ))
+
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
@@ -168,7 +172,6 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
 
     @property
     def auxbasis(self):
@@ -447,7 +450,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     ao2mo_7d = df_ao2mo.ao2mo_7d
 
     def update_mp(self):
-        mf = copy.copy(self)
+        mf = self.copy()
         mf.with_df = self
         return mf
 

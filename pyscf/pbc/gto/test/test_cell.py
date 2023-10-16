@@ -158,12 +158,12 @@ class KnownValues(unittest.TestCase):
 
         celldims = [2, 1, 1]
         scell = pbctools.super_cell(cell, celldims)
-        e_nuc_2 = scell.energy_nuc() / np.product(celldims)
+        e_nuc_2 = scell.energy_nuc() / np.prod(celldims)
         self.assertAlmostEqual(e_nuc_1, e_nuc_2, 8)
 
         celldims = [2, 2, 1]
         scell = pbctools.super_cell(cell, celldims)
-        e_nuc_2 = scell.energy_nuc() / np.product(celldims)
+        e_nuc_2 = scell.energy_nuc() / np.prod(celldims)
         self.assertAlmostEqual(e_nuc_1, e_nuc_2, 8)
 
     def test_ewald_2d_inf_vacuum(self):
@@ -466,6 +466,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(len(cl3._ecpbas), 20)
         self.assertTrue(len(cl3._bas), 12)
         self.assertTrue(len(cl3._atm), 8)
+        self.assertAlmostEqual(abs(cl3.lattice_vectors() - cl1.lattice_vectors()).max(), 0, 12)
 
     def test_eval_gto(self):
         cell = pgto.M(a=np.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]], precision=1e-10)

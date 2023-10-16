@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 import unittest
 from pyscf import lib
@@ -102,7 +101,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(k1part - k1ref).max(), 0, 12)
 
     def test_mols(self):
-        pmol = copy.copy(mol)
+        pmol = mol.copy(deep=False)
         mols = (mol, pmol, pmol, mol)
         dm = mf.make_rdm1()
         vj0 = jk.get_jk(mols, dm, 'ijkl,lk->ij')

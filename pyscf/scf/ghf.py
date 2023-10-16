@@ -382,10 +382,15 @@ class GHF(hf.SCF):
         mo_coeff[nao:nao*2] are the coefficients of AO with beta spin.
     '''
 
+    _keys = set(['with_soc'])
+
+    get_init_guess = hf.RHF.get_init_guess
+    get_occ = get_occ
+    _finalize = uhf.UHF._finalize
+
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.with_soc = None
-        self._keys = self._keys.union(['with_soc'])
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -404,8 +409,6 @@ class GHF(hf.SCF):
         s = hf.get_ovlp(mol)
         return scipy.linalg.block_diag(s, s)
 
-    get_occ = get_occ
-
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
@@ -415,8 +418,6 @@ class GHF(hf.SCF):
         g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock,
                                mo_coeff[:,viridx]))
         return g.conj().T.ravel()
-
-    get_init_guess = hf.RHF.get_init_guess
 
     @lib.with_doc(hf.SCF.init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
@@ -510,23 +511,11 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         if dm is None: dm = self.make_rdm1()
         return dip_moment(mol, dm, unit_symbol, verbose=verbose)
 
-    def _finalize(self):
-        ss, s = self.spin_square()
-
-        if self.converged:
-            logger.note(self, 'converged SCF energy = %.15g  '
-                        '<S^2> = %.8g  2S+1 = %.8g', self.e_tot, ss, s)
-        else:
-            logger.note(self, 'SCF not converged.')
-            logger.note(self, 'SCF energy = %.15g after %d cycles  '
-                        '<S^2> = %.8g  2S+1 = %.8g',
-                        self.e_tot, self.max_cycle, ss, s)
-        return self
-
     def convert_from_(self, mf):
         '''Create GHF object based on the RHF/UHF object'''
-        from pyscf.scf import addons
-        return addons.convert_to_ghf(mf, out=self)
+        tgt = mf.to_ghf()
+        self.__dict__.update(tgt.__dict__)
+        return self
 
     def stability(self, internal=None, external=None, verbose=None, return_status=False):
         from pyscf.scf.stability import ghf_stability
@@ -545,6 +534,12 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         from pyscf.x2c.x2c import x2c1e_ghf
         return x2c1e_ghf(self)
     x2c = x2c1e
+
+    def to_ks(self, xc='HF'):
+        '''Convert to GKS object.
+        '''
+        from pyscf import dft
+        return self._transfer_attrs_(dft.GKS(self.mol, xc=xc))
 
 def _from_rhf_init_dm(dm, breaksym=True):
     dma = dm * .5

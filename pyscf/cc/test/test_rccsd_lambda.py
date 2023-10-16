@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 import numpy
 import numpy as np
@@ -170,7 +169,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, mycc.e_tot, 6)
 
         d1 = ccsd_rdm._gamma1_intermediates(mycc, mycc.t1, mycc.t2, mycc.l1, mycc.l2)
-        mycc1 = copy.copy(mycc)
+        mycc1 = mycc.copy()
         mycc1.max_memory = 0
         d2 = ccsd_rdm._gamma2_intermediates(mycc1, mycc.t1, mycc.t2, mycc.l1, mycc.l2, True)
         dm2 = ccsd_rdm._make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)

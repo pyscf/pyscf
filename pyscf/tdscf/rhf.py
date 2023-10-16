@@ -617,27 +617,29 @@ def as_scanner(td):
         return td
 
     logger.info(td, 'Set %s as a scanner', td.__class__)
+    name = td.__class__.__name__ + TD_Scanner.__name_mixin__
+    return lib.set_class(TD_Scanner(td), (TD_Scanner, td.__class__), name)
 
-    class TD_Scanner(td.__class__, lib.SinglePointScanner):
-        def __init__(self, td):
-            self.__dict__.update(td.__dict__)
-            self._scf = td._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class TD_Scanner(lib.SinglePointScanner):
+    def __init__(self, td):
+        self.__dict__.update(td.__dict__)
+        self._scf = td._scf.as_scanner()
 
-            self.reset(mol)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            mf_scanner = self._scf
-            mf_e = mf_scanner(mol)
-            self.kernel(**kwargs)
-            return mf_e + self.e
-    return TD_Scanner(td)
+        self.reset(mol)
+
+        mf_scanner = self._scf
+        mf_e = mf_scanner(mol)
+        self.kernel(**kwargs)
+        return mf_e + self.e
 
 
-class TDMixin(lib.StreamObject):
+class TDBase(lib.StreamObject):
     conv_tol = getattr(__config__, 'tdscf_rhf_TDA_conv_tol', 1e-9)
     nstates = getattr(__config__, 'tdscf_rhf_TDA_nstates', 3)
     singlet = getattr(__config__, 'tdscf_rhf_TDA_singlet', True)
@@ -649,6 +651,11 @@ class TDMixin(lib.StreamObject):
     positive_eig_threshold = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
     # Threshold to handle degeneracy in init guess
     deg_eia_thresh = getattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-3)
+
+    _keys = set((
+        'conv_tol', 'nstates', 'singlet', 'lindep', 'level_shift', 'max_space',
+        'max_cycle', 'mol', 'chkfile', 'wfnsym', 'converged', 'e', 'xy',
+    ))
 
     def __init__(self, mf):
         self.verbose = mf.verbose
@@ -665,10 +672,6 @@ class TDMixin(lib.StreamObject):
         self.converged = None
         self.e = None
         self.xy = None
-
-        keys = set(('conv_tol', 'nstates', 'singlet', 'lindep', 'level_shift',
-                    'max_space', 'max_cycle'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
     def nroots(self):
@@ -781,7 +784,7 @@ class TDMixin(lib.StreamObject):
         logger.note(self, 'Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self
 
-class TDA(TDMixin):
+class TDA(TDBase):
     '''Tamm-Dancoff approximation
 
     Attributes:

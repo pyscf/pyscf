@@ -74,6 +74,12 @@ def get_aux_chg(auxcell):
 class RSGDF(GDF):
     '''Range Separated Gaussian Density Fitting
     '''
+    _keys = {
+        'use_bvk', 'precision_R', 'precision_G', 'npw_max', '_omega_min',
+        'omega', 'ke_cutoff', 'mesh_compact', 'omega_j2c', 'mesh_j2c',
+        'precision_j2c', 'j2c_eig_always', 'kpts',
+    }
+
     def weighted_coulG(self, kpt=np.zeros(3), exx=False, mesh=None, omega=None):
         return aft.weighted_coulG(self, kpt, exx, mesh, omega)
 
@@ -313,6 +319,12 @@ RSDF = RSGDF
 
 
 class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
+    _keys = {
+        'use_bvk', 'precision_R', 'precision_G', 'npw_max', '_omega_min',
+        'omega', 'ke_cutoff', 'mesh_compact', 'omega_j2c', 'mesh_j2c',
+        'precision_j2c', 'j2c_eig_always', 'kpts',
+    }
+
     def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
         self.eta = None
         self.mesh = None

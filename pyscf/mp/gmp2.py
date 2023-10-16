@@ -17,7 +17,6 @@ GMP2 in spin-orbital form
 E(MP2) = 1/4 <ij||ab><ab||ij>/(ei+ej-ea-eb)
 '''
 
-import copy
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
@@ -203,7 +202,7 @@ class GMP2(mp2.MP2):
         if with_df is not None:
             mymp.with_df = with_df
         if mymp.with_df.auxbasis != auxbasis:
-            mymp.with_df = copy.copy(mymp.with_df)
+            mymp.with_df = mymp.with_df.copy()
             mymp.with_df.auxbasis = auxbasis
         return mymp
 

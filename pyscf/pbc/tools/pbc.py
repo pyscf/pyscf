@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import warnings
-import copy
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -442,7 +441,7 @@ def precompute_exx(cell, kpts):
 
 def madelung(cell, kpts):
     Nk = get_monkhorst_pack_size(cell, kpts)
-    ecell = copy.copy(cell)
+    ecell = cell.copy(deep=False)
     ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
     ecell._env = np.append(cell._env, [0., 0., 0.])
     ecell.unit = 'B'
@@ -587,7 +586,7 @@ def super_cell(cell, ncopy, wrap_around=False):
         zs[(ncopy[2]+1)//2:] -= ncopy[2]
     Ts = lib.cartesian_prod((xs, ys, zs))
     Ls = np.dot(Ts, a)
-    supcell = copy.copy(cell)
+    supcell = cell.copy(deep=False)
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
     mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
     supcell.mesh = (mesh // 2) * 2 + 1
@@ -613,7 +612,7 @@ def cell_plus_imgs(cell, nimgs):
                              np.arange(-nimgs[1], nimgs[1]+1),
                              np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
-    supcell = copy.copy(cell)
+    supcell = cell.copy(deep=False)
     supcell.a = np.einsum('i,ij->ij', nimgs, a)
     supcell.mesh = np.array([(nimgs[0]*2+1)*cell.mesh[0],
                              (nimgs[1]*2+1)*cell.mesh[1],
@@ -652,7 +651,7 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
 
-    if isinstance(supcell, pbcgto.Cell) and supcell.space_group_symmetry:
+    if isinstance(supcell, pbcgto.Cell) and getattr(supcell, 'space_group_symmetry', False):
         supcell.build_lattice_symmetry(not cell._mesh_from_build)
     return supcell
 

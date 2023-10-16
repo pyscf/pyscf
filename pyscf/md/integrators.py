@@ -22,7 +22,7 @@ import numpy as np
 from pyscf import data
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.grad.rhf import GradientsMixin
+from pyscf.grad.rhf import GradientsBase
 
 
 class Frame:
@@ -125,7 +125,7 @@ class _Integrator(lib.StreamObject):
     but inherited from.
 
     Args:
-        method : lib.GradScanner, rhf.GradientsMixin instance, or
+        method : lib.GradScanner, rhf.GradientsBase instance, or
         has nuc_grad_method method.
             Method by which to compute the energy gradients and energies
             in order to propogate the equations of motion. Realistically,
@@ -189,7 +189,7 @@ class _Integrator(lib.StreamObject):
 
         if isinstance(method, lib.GradScanner):
             self.scanner = method
-        elif isinstance(method, GradientsMixin):
+        elif isinstance(method, GradientsBase):
             self.scanner = method.as_scanner()
         elif getattr(method, 'nuc_grad_method', None):
             self.scanner = method.nuc_grad_method().as_scanner()
@@ -428,7 +428,7 @@ class VelocityVerlet(_Integrator):
     '''Velocity Verlet algorithm
 
     Args:
-        method : lib.GradScanner or rhf.GradientsMixin instance, or
+        method : lib.GradScanner or rhf.GradientsBase instance, or
         has nuc_grad_method method.
             Method by which to compute the energy gradients and energies
             in order to propagate the equations of motion. Realistically,

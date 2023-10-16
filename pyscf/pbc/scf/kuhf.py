@@ -36,7 +36,6 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf import __config__
 
-WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
 CHECK_COULOMB_IMAG = getattr(__config__, 'pbc_scf_check_coulomb_imag', True)
 
@@ -365,19 +364,31 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
 
 get_rho = khf.get_rho
 
-
 class KUHF(khf.KSCF, pbcuhf.UHF):
     '''UHF class with k-point sampling.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
+
+    _keys = set(["init_guess_breaksym"])
+
+    init_guess_by_1e     = pbcuhf.UHF.init_guess_by_1e
+    init_guess_by_minao  = pbcuhf.UHF.init_guess_by_minao
+    init_guess_by_atom   = pbcuhf.UHF.init_guess_by_atom
+    init_guess_by_huckel = pbcuhf.UHF.init_guess_by_huckel
+    init_guess_by_mod_huckel = pbcuhf.UHF.init_guess_by_mod_huckel
+    get_fock = get_fock
+    get_fermi = get_fermi
+    get_occ = get_occ
+    energy_elec = energy_elec
+    get_rho = get_rho
+    analyze = khf.analyze
+    canonicalize = canonicalize
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
         self.nelec = None
         self.init_guess_breaksym = None
-        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):
@@ -405,7 +416,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         return self
 
     def get_init_guess(self, cell=None, key='minao'):
-        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
+        dm_kpts = mol_hf.SCF.get_init_guess(self, cell, key)
         assert dm_kpts.shape[0] == 2
         nkpts = len(self.kpts)
         if dm_kpts.ndim != 4:
@@ -424,12 +435,6 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
             dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
         return dm_kpts
 
-    get_fock = get_fock
-    get_fermi = get_fermi
-    get_occ = get_occ
-    energy_elec = energy_elec
-    get_rho = get_rho
-
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
         if dm_kpts is None:
@@ -437,11 +442,6 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
         vhf = vj[0] + vj[1] - vk
         return vhf
-
-    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
-                **kwargs):
-        if verbose is None: verbose = self.verbose
-        return khf.analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         if fock is None:
@@ -504,12 +504,6 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
 
-    init_guess_by_1e     = pbcuhf.UHF.init_guess_by_1e
-    init_guess_by_minao  = pbcuhf.UHF.init_guess_by_minao
-    init_guess_by_atom   = pbcuhf.UHF.init_guess_by_atom
-    init_guess_by_huckel = pbcuhf.UHF.init_guess_by_huckel
-    init_guess_by_mod_huckel = pbcuhf.UHF.init_guess_by_mod_huckel
-
     @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
@@ -557,8 +551,6 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         s = np.sqrt(ss+.25) - .5
         return ss, s*2+1
 
-    canonicalize = canonicalize
-
     def stability(self,
                   internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),
                   external=getattr(__config__, 'pbc_scf_KSCF_stability_external', False),
@@ -566,30 +558,17 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         from pyscf.pbc.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)
 
-    def convert_from_(self, mf):
-        '''Convert given mean-field object to KUHF'''
-        addons.convert_to_uhf(mf, self)
-        return self
-
     def nuc_grad_method(self):
         from pyscf.pbc.grad import kuhf
         return kuhf.Gradients(self)
 
-del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
+    def to_ks(self, xc='HF'):
+        '''Convert to RKS object.
+        '''
+        from pyscf.pbc import dft
+        return self._transfer_attrs_(dft.KUKS(self.cell, self.kpts, xc=xc))
 
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.atom = '''
-    He 0 0 1
-    He 1 0 1
-    '''
-    cell.basis = '321g'
-    cell.a = np.eye(3) * 3
-    cell.mesh = [11] * 3
-    cell.verbose = 5
-    cell.build()
-    mf = KUHF(cell, [2,1,1])
-    mf.kernel()
-    mf.analyze()
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to KUHF'''
+        addons.convert_to_uhf(mf, self)
+        return self

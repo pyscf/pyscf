@@ -18,6 +18,7 @@ import unittest
 from pyscf import gto
 from pyscf import scf
 from pyscf import dft
+from pyscf import solvent
 
 def setUpModule():
     global mol0, mol1, mol2

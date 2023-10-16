@@ -308,11 +308,13 @@ class SymAdaptedUHF(uhf.UHF):
     >>> mf.get_irrep_nelec()
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 0), 'B2': (1, 1)}
     '''
+
+    _keys = set(['irrep_nelec'])
+
     def __init__(self, mol):
         uhf.UHF.__init__(self, mol)
         # number of electrons for each irreps
         self.irrep_nelec = {}
-        self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self, verbose=None):
         uhf.UHF.dump_flags(self, verbose)

@@ -1,4 +1,3 @@
-import copy
 import pyscf.pbc.tools.make_test_cell as make_test_cell
 import numpy
 import numpy as np
@@ -317,7 +316,7 @@ class KnownValues(unittest.TestCase):
     @unittest.skip('Highly sensitive to numerical noise')
     def test_t3p2_imds_complex_slow(self):
         '''Test `_slow` t3p2 implementation.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         # Round to make this insensitive to small changes between PySCF versions
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
@@ -341,7 +340,7 @@ class KnownValues(unittest.TestCase):
     @unittest.skip('Highly sensitive to numerical noise')
     def test_t3p2_imds_complex(self):
         '''Test t3p2 implementation.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         # Round to make this insensitive to small changes between PySCF versions
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
@@ -366,7 +365,7 @@ class KnownValues(unittest.TestCase):
     def test_t3p2_imds_complex_against_so(self):
         '''Test t3[2] implementation against spin-orbital implementation.'''
         from pyscf.pbc.scf.addons import convert_to_ghf
-        kmf = copy.copy(rand_kmf2)
+        kmf = rand_kmf2.copy()
         # Round to make this insensitive to small changes between PySCF versions
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
@@ -412,7 +411,7 @@ class KnownValues(unittest.TestCase):
     def test_t3p2_imds_complex_against_so_frozen(self):
         '''Test t3[2] implementation against spin-orbital implementation with frozen orbitals.'''
         from pyscf.pbc.scf.addons import convert_to_ghf
-        kmf = copy.copy(rand_kmf2)
+        kmf = rand_kmf2.copy()
         # Round to make this insensitive to small changes between PySCF versions
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
