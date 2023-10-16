@@ -551,7 +551,7 @@ def shift_atom(atoms, orig, axis):
 class RotationAxisNotFound(PointGroupSymmetryError):
     pass
 
-class SymmSys(object):
+class SymmSys:
     def __init__(self, atoms, basis=None):
         self.atomtypes = mole.atom_types(atoms, basis)
         # fake systems, which treats the atoms of different basis as different atoms.

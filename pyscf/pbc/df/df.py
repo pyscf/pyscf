@@ -783,7 +783,7 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False,
     dat = _load_and_unpack(h5group[key],hermi)
     return dat
 
-class _load_and_unpack(object):
+class _load_and_unpack:
     '''
     This class returns an array-like object to an hdf5 file that can
     be sliced, to allow for lazy loading

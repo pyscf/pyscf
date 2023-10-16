@@ -28,7 +28,7 @@ import marshal
 #import traceback
 from mpi4py import MPI
 
-class MPIPool(object):
+class MPIPool:
     """
     A pool that distributes tasks over a set of MPI processes using
     mpi4py. MPI is an API for distributed memory parallelism, used
@@ -157,12 +157,12 @@ class MPIPool(object):
         self.close()
 
 
-class _close_pool_message(object):
+class _close_pool_message:
     def __repr__(self):
         return "<Close pool message>"
 
 
-class _function_wrapper(object):
+class _function_wrapper:
     def __init__(self, function):
         #print(function.__closure__)
         self.func_code = marshal.dumps(function.func_code)
