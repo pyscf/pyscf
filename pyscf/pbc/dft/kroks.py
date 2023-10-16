@@ -44,6 +44,11 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 class KROKS(rks.KohnShamDFT, krohf.KROHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
+
+    get_veff = get_veff
+    energy_elec = energy_elec
+    get_rho = kuks.get_rho
+
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         krohf.KROHF.__init__(self, cell, kpts, exxdiv=exxdiv)
@@ -54,13 +59,10 @@ class KROKS(rks.KohnShamDFT, krohf.KROHF):
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
-    get_veff = get_veff
-    energy_elec = energy_elec
-    get_rho = kuks.get_rho
-
-    density_fit = rks._patch_df_beckegrids(krohf.KROHF.density_fit)
-    rs_density_fit = rks._patch_df_beckegrids(krohf.KROHF.rs_density_fit)
-    mix_density_fit = rks._patch_df_beckegrids(krohf.KROHF.mix_density_fit)
+    def to_hf(self):
+        '''Convert to KROHF object.'''
+        from pyscf.pbc import scf
+        return self._transfer_attrs_(scf.KROHF(self.cell, self.kpts))
 
 
 if __name__ == '__main__':

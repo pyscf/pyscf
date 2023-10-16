@@ -38,7 +38,7 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
         kptij_lst : (*,2,3) array
             A list of (kpti, kptj)
     '''
-    if isinstance(auxcell_or_auxbasis, gto.Mole):
+    if isinstance(auxcell_or_auxbasis, gto.MoleBase):
         auxcell = auxcell_or_auxbasis
     else:
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
@@ -159,7 +159,7 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
         kptij_lst : (*,2,3) array
             A list of (kpti, kptj)
     '''
-    if isinstance(auxcell_or_auxbasis, gto.Mole):
+    if isinstance(auxcell_or_auxbasis, gto.MoleBase):
         auxcell = auxcell_or_auxbasis
     else:
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)

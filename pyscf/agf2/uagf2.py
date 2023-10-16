@@ -633,8 +633,7 @@ class UAGF2(ragf2.RAGF2):
             myagf2.with_df = with_df
 
         if auxbasis is not None and myagf2.with_df.auxbasis != auxbasis:
-            import copy
-            myagf2.with_df = copy.copy(myagf2.with_df)
+            myagf2.with_df = myagf2.with_df.copy()
             myagf2.with_df.auxbasis = auxbasis
 
         return myagf2

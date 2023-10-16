@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 from pyscf import gto
 from pyscf.lib import logger
@@ -29,7 +28,7 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
     elements = set([a[0] for a in mol._atom])
     logger.info(mol, 'Spherically averaged atomic HF for %s', elements)
 
-    atm_template = copy.copy(mol)
+    atm_template = mol.copy(deep=False)
     atm_template.charge = 0
     atm_template.symmetry = False  # TODO: enable SO3 symmetry here
     atm_template.atom = atm_template._atom = []
@@ -200,16 +199,3 @@ def _angular_momentum_for_each_ao(mol):
         p0, p1 = ao_loc[i], ao_loc[i+1]
         ao_ang[p0:p1] = mol.bas_angular(i)
     return ao_ang
-
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = None
-
-    mol.atom = [["N", (0. , 0., .5)],
-                ["N", (0. , 0.,-.5)] ]
-
-    mol.basis = {"N": '6-31g'}
-    mol.build()
-    print(get_atm_nrhf(mol))

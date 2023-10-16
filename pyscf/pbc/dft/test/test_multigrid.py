@@ -304,9 +304,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(v-ref).max(), 0, 9)
 
         xc = 'b88,'
-        ref = dft.numint.nr_rks_fxc(ni, cell_he, mydf.grids, xc, dm_he, dm1,
+        ref = dft.numint.nr_rks_fxc(ni, cell_he, mydf.grids, xc, dm_he[0], dm1,
                                     hermi=1)
-        v = multigrid.nr_rks_fxc(mg_df, xc, dm_he, dm1, hermi=1)
+        v = multigrid.nr_rks_fxc(mg_df, xc, dm_he[0], dm1, hermi=1)
         self.assertEqual(ref.dtype, v.dtype)
         self.assertEqual(ref.shape, v.shape)
         self.assertAlmostEqual(abs(v-ref).max(), 0, 6)
@@ -326,8 +326,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(v-ref).max(), 0, 9)
 
         xc = 'b88,'
-        ref = dft.numint.nr_rks_fxc(ni, cell_he, mydf.grids, xc, dm_he, dm1, hermi=0)
-        v = multigrid.nr_rks_fxc(mg_df, xc, dm_he, dm1, hermi=0)
+        ref = dft.numint.nr_rks_fxc(ni, cell_he, mydf.grids, xc, dm_he[0], dm1, hermi=0)
+        v = multigrid.nr_rks_fxc(mg_df, xc, dm_he[0], dm1, hermi=0)
         self.assertEqual(ref.dtype, v.dtype)
         self.assertEqual(ref.shape, v.shape)
         self.assertAlmostEqual(abs(v-ref).max(), 0, 6)
@@ -466,8 +466,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(exc1, exc2, 7)
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 7)
 
-    def test_multigrid_krks_1(self):
-        numpy.random.seed(22)
+    def test_multigrid_krks_high_cost(self):
         cell = gto.M(
             a = numpy.eye(3)*3.5668,
             atom = '''C     0.      0.      0.
@@ -484,7 +483,8 @@ class KnownValues(unittest.TestCase):
             #basis = 'gth-szv',
             pseudo = 'gth-pade'
         )
-        multigrid.multi_grids_tasks(cell, cell.mesh, 5)
+        mesh = [21] * 3
+        multigrid.multi_grids_tasks(cell, mesh, 5)
 
         nao = cell.nao_nr()
         numpy.random.seed(1)

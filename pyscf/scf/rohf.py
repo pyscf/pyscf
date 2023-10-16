@@ -491,6 +491,14 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         from pyscf.grad import rohf
         return rohf.Gradients(self)
 
+    convert_from_ = hf.RHF.convert_from_
+
+    def to_ks(self, xc='HF'):
+        '''Convert to ROKS object.
+        '''
+        from pyscf import dft
+        return self._transfer_attrs_(dft.ROKS(self.mol, xc=xc))
+
 
 class HF1e(ROHF):
     scf = hf._hf1e_scf

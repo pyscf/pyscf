@@ -46,7 +46,7 @@ def aux_e2(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=
 
             cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
     '''
-    if isinstance(auxmol_or_auxbasis, gto.Mole):
+    if isinstance(auxmol_or_auxbasis, gto.MoleBase):
         auxmol = auxmol_or_auxbasis
     else:
         auxbasis = auxmol_or_auxbasis
@@ -76,7 +76,7 @@ def aux_e1(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=
 
     The same arguments as function aux_e2 can be input to aux_e1.
     '''
-    if isinstance(auxmol_or_auxbasis, gto.Mole):
+    if isinstance(auxmol_or_auxbasis, gto.MoleBase):
         auxmol = auxmol_or_auxbasis
     else:
         auxbasis = auxmol_or_auxbasis
@@ -96,7 +96,7 @@ def aux_e1(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=
 def fill_2c2e(mol, auxmol_or_auxbasis, intor='int2c2e', comp=None, hermi=1, out=None):
     '''2-center 2-electron AO integrals for auxiliary basis (auxmol)
     '''
-    if isinstance(auxmol_or_auxbasis, gto.Mole):
+    if isinstance(auxmol_or_auxbasis, gto.MoleBase):
         auxmol = auxmol_or_auxbasis
     else:
         auxbasis = auxmol_or_auxbasis

@@ -19,7 +19,6 @@ RMP2
 '''
 
 
-import copy
 import numpy
 from pyscf import gto
 from pyscf import lib
@@ -411,26 +410,28 @@ def as_scanner(mp):
         return mp
 
     logger.info(mp, 'Set %s as a scanner', mp.__class__)
+    name = mp.__class__.__name__ + MP2_Scanner.__name_mixin__
+    return lib.set_class(MP2_Scanner(mp), (MP2_Scanner, mp.__class__), name)
 
-    class MP2_Scanner(mp.__class__, lib.SinglePointScanner):
-        def __init__(self, mp):
-            self.__dict__.update(mp.__dict__)
-            self._scf = mp._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class MP2_Scanner(lib.SinglePointScanner):
+    def __init__(self, mp):
+        self.__dict__.update(mp.__dict__)
+        self._scf = mp._scf.as_scanner()
 
-            self.reset(mol)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            mf_scanner = self._scf
-            mf_scanner(mol)
-            self.mo_coeff = mf_scanner.mo_coeff
-            self.mo_occ = mf_scanner.mo_occ
-            self.kernel(**kwargs)
-            return self.e_tot
-    return MP2_Scanner(mp)
+        self.reset(mol)
+
+        mf_scanner = self._scf
+        mf_scanner(mol)
+        self.mo_coeff = mf_scanner.mo_coeff
+        self.mo_occ = mf_scanner.mo_occ
+        self.kernel(**kwargs)
+        return self.e_tot
 
 
 class MP2(lib.StreamObject):
@@ -486,6 +487,12 @@ class MP2(lib.StreamObject):
     conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
 
+    _keys = set((
+        'max_cycle', 'conv_tol', 'conv_tol_normt', 'mol', 'max_memory',
+        'frozen', 'level_shift', 'mo_coeff', 'mo_occ', 'e_hf', 'e_corr',
+        'e_corr_ss', 'e_corr_os', 't2',
+    ))
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -513,7 +520,6 @@ class MP2(lib.StreamObject):
         self.e_corr_ss = None
         self.e_corr_os = None
         self.t2 = None
-        self._keys = set(self.__dict__.keys())
 
     @property
     def nocc(self):
@@ -629,7 +635,7 @@ class MP2(lib.StreamObject):
         if with_df is not None:
             mymp.with_df = with_df
         if mymp.with_df.auxbasis != auxbasis:
-            mymp.with_df = copy.copy(mymp.with_df)
+            mymp.with_df = mymp.with_df.copy()
             mymp.with_df.auxbasis = auxbasis
         return mymp
 

@@ -62,9 +62,9 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_analyze(self):
-        rpop, rchg = kmf.analyze() # pop at gamma point
-        upop, uchg = kumf.analyze()
-        gpop, gchg = kgmf.analyze()
+        rpop, rchg = kmf.analyze()[0] # pop at gamma point
+        upop, uchg = kumf.analyze()[0]
+        gpop, gchg = kgmf.analyze()[0]
         self.assertTrue(isinstance(rpop, np.ndarray) and rpop.ndim == 1)
         self.assertAlmostEqual(abs(upop[0]+upop[1]-rpop).max(), 0, 7)
         self.assertAlmostEqual(abs(gpop[0]+gpop[1]-rpop).max(), 0, 5)

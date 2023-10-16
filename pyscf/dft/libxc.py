@@ -24,7 +24,6 @@ XC functional, the interface to libxc
 
 import sys
 import warnings
-import copy
 import ctypes
 import math
 import numpy
@@ -1661,5 +1660,5 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return ni
 
 def define_xc(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
-    return define_xc_(copy.copy(ni), description, xctype, hyb, rsh)
+    return define_xc_(ni.copy(), description, xctype, hyb, rsh)
 define_xc.__doc__ = define_xc_.__doc__

@@ -379,7 +379,7 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     raise NotImplementedError
 
 
-class TDMixin(rhf.TDMixin):
+class TDBase(rhf.TDBase):
 
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None):
@@ -395,7 +395,7 @@ class TDMixin(rhf.TDMixin):
 
 
 @lib.with_doc(rhf.TDA.__doc__)
-class TDA(TDMixin):
+class TDA(TDBase):
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
         if mf is None:
@@ -526,7 +526,7 @@ def gen_tdhf_operation(mf, fock_ao=None):
     return vind, hdiag
 
 
-class TDHF(TDMixin):
+class TDHF(TDBase):
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
         if mf is None:

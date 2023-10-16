@@ -21,7 +21,6 @@ J-metric density fitting
 '''
 
 
-import copy
 import tempfile
 import contextlib
 import numpy
@@ -80,6 +79,8 @@ class DF(lib.StreamObject):
     _compatible_format = getattr(__config__, 'df_df_DF_compatible_format', False)
     _dataname = 'j3c'
 
+    _keys = set(('mol', 'auxmol'))
+
     def __init__(self, mol, auxbasis=None):
         self.mol = mol
         self.stdout = mol.stdout
@@ -96,7 +97,6 @@ class DF(lib.StreamObject):
         self._cderi = None
         self._vjopt = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
 
     @property
     def auxbasis(self):
@@ -282,7 +282,7 @@ class DF(lib.StreamObject):
         if key in self._rsh_df:
             rsh_df = self._rsh_df[key]
         else:
-            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            rsh_df = self._rsh_df[key] = self.copy().reset()
             if hasattr(self, '_dataname'):
                 rsh_df._dataname = f'{self._dataname}/lr/{key}'
             logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)

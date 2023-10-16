@@ -29,7 +29,7 @@ from pyscf.lib import logger
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
                                   symmetrize)  # noqa
 from pyscf import __config__
-from pyscf.grad.rhf import GradientsMixin
+from pyscf.grad.rhf import GradientsBase
 
 try:
     from geometric import internal, optimize, nifty, engine, molecule
@@ -120,7 +120,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
-    elif isinstance(method, GradientsMixin):
+    elif isinstance(method, GradientsBase):
         g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()

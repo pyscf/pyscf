@@ -214,9 +214,9 @@ def cc_Woooo(cc, t1, t2, eris):
             WOOOO[km,ki,kn] += tmp_bbbbJ[ki,kj]
             WooOO[km,ki,kn] += tmp_aabbJ[ki,kj]
             WooOO[kn,ki,km] -= tmp_baabJ[ki,kj].transpose(0,3,2,1,4)
-            Woooo[km,ki,kn] += 0.25*einsum('yxijef,xmenf->yminj', tau_aa[ki,kj], eris.ovov[km,ki,kn])
-            WOOOO[km,ki,kn] += 0.25*einsum('yxijef,xmenf->yminj', tau_bb[ki,kj], eris.OVOV[km,ki,kn])
-            WooOO[km,ki,kn] += 0.5*einsum('yxijef,xmenf->yminj', tau_ab[ki,kj], eris.ovOV[km,ki,kn])
+            Woooo[km,ki,kn] += 0.25*einsum('yxijef,xmenf->yminj', tau_aa[ki,kj], eris.ovov[km,:,kn])
+            WOOOO[km,ki,kn] += 0.25*einsum('yxijef,xmenf->yminj', tau_bb[ki,kj], eris.OVOV[km,:,kn])
+            WooOO[km,ki,kn] += 0.5*einsum('yxijef,xmenf->yminj', tau_ab[ki,kj], eris.ovOV[km,:,kn])
 
     Woooo = Woooo - Woooo.transpose(2,1,0,5,4,3,6)
     WOOOO = WOOOO - WOOOO.transpose(2,1,0,5,4,3,6)

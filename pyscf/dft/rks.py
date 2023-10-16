@@ -320,6 +320,8 @@ class KohnShamDFT(object):
     -76.415443079840458
     '''
 
+    _keys = set(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
+
     def __init__(self, xc='LDA,VWN'):
         self.xc = xc
         self.nlc = ''
@@ -335,8 +337,6 @@ class KohnShamDFT(object):
 ##################################################
 # don't modify the following attributes, they are not input options
         self._numint = numint.NumInt()
-        self._keys = self._keys.union([
-            'xc', 'nlc', 'omega', 'grids', 'nlcgrids', 'small_rho_cutoff'])
 
     @property
     def omega(self):
@@ -379,9 +379,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = _update_keys_(scf.RHF(self.mol), self.to_rks())
-        mf.converged = False
-        return mf
+        return self.to_rks().to_hf()
 
     def to_uhf(self):
         '''Convert the input mean-field object to a UHF object.
@@ -390,9 +388,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = _update_keys_(scf.UHF(self.mol), self.to_uks())
-        mf.converged = False
-        return mf
+        return self.to_uks().to_hf()
 
     def to_ghf(self):
         '''Convert the input mean-field object to a GHF object.
@@ -401,9 +397,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = _update_keys_(scf.GHF(self.mol), self.to_gks())
-        mf.converged = False
-        return mf
+        return self.to_gks().to_hf()
 
     def to_hf(self):
         '''Convert the input KS object to the associated HF object.
@@ -412,14 +406,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        if isinstance(self, scf.hf.RHF):
-            return self.to_rhf()
-        elif isinstance(self, scf.hf.UHF):
-            return self.to_uhf()
-        elif isinstance(self, scf.hf.GHF):
-            return self.to_ghf()
-        else:
-            raise RuntimeError(f'to_hf does not support {self.__class__}')
+        raise NotImplementedError
 
     def to_rks(self, xc=None):
         '''Convert the input mean-field object to a RKS/ROKS object.
@@ -431,8 +418,7 @@ class KohnShamDFT(object):
         mf = scf.addons.convert_to_rhf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc or not isinstance(self, RKS):
-            mf.converged = False
+        mf.converged = xc == self.xc and mf.converged
         return mf
 
     def to_uks(self, xc=None):
@@ -445,8 +431,7 @@ class KohnShamDFT(object):
         mf = scf.addons.convert_to_uhf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc:
-            mf.converged = False
+        mf.converged = xc == self.xc and mf.converged
         return mf
 
     def to_gks(self, xc=None):
@@ -460,8 +445,7 @@ class KohnShamDFT(object):
         mf = scf.addons.convert_to_ghf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc:
-            mf.converged = False
+        mf.converged = xc == self.xc and mf.converged
         if not isinstance(mf._numint, numint2c.NumInt2C):
             mf._numint = numint2c.NumInt2C()
         return mf
@@ -503,15 +487,6 @@ class KohnShamDFT(object):
 # Update the KohnShamDFT label in scf.hf module
 hf.KohnShamDFT = KohnShamDFT
 
-def _update_keys_(mf, src):
-    src_keys = src.__dict__
-    res_keys = {key: src_keys[key] for key in mf._keys if key in src_keys}
-    # Avoid to overwrite the target's attribute "_keys". It may not be defined
-    # if the .build() method of src not called
-    res_keys.pop('_keys', None)
-    mf.__dict__.update(res_keys)
-    return mf
-
 def init_guess_by_vsap(mf, mol=None):
     '''Form SAP guess'''
     if mol is None: mol = mf.mol
@@ -550,3 +525,7 @@ class RKS(KohnShamDFT, hf.RHF):
     def nuc_grad_method(self):
         from pyscf.grad import rks as rks_grad
         return rks_grad.Gradients(self)
+
+    def to_hf(self):
+        '''Convert to RHF object.'''
+        return self._transfer_attrs_(self.mol.RHF())

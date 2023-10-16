@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import unittest
 import tempfile
 import numpy
@@ -243,7 +242,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(e - mfsym.mo_energy).max(), 0, 6)
 
     def test_get_occ(self):
-        mf1 = copy.copy(mfsym)
+        mf1 = mfsym.copy()
         mf1.irrep_nelec = {}
         mf1.irrep_nelec['B1'] = 1
         occ = mf1.get_occ(mf.mo_energy, mf.mo_coeff+0j)
@@ -346,7 +345,7 @@ H     0    0.757    0.587'''
         self.assertEqual(irrep_nelec['B1'], 2)
         self.assertEqual(irrep_nelec['B2'], 2)
 
-        mf1 = copy.copy(mfsym)
+        mf1 = mfsym.copy()
         mf1.irrep_nelec = irrep_nelec
         mf1.irrep_nelec['A1'] = 2
         mf1.irrep_nelec['A2'] = 2

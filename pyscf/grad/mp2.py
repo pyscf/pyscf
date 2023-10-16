@@ -24,6 +24,7 @@ MP2 analytical nuclear gradients
 import numpy
 from pyscf import lib
 from functools import reduce
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.scf import cphf
@@ -210,30 +211,33 @@ def as_scanner(grad_mp):
     >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
     >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    from pyscf import gto
     if isinstance(grad_mp, lib.GradScanner):
         return grad_mp
 
     logger.info(grad_mp, 'Create scanner for %s', grad_mp.__class__)
+    name = grad_mp.__class__.__name__ + MP2_GradScanner.__name_mixin__
+    return lib.set_class(MP2_GradScanner(grad_mp),
+                         (MP2_GradScanner, grad_mp.__class__), name)
 
-    class MP2_GradScanner(grad_mp.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
-            self.reset(mol)
+class MP2_GradScanner(lib.GradScanner):
+    def __init__(self, g):
+        lib.GradScanner.__init__(self, g)
 
-            mp_scanner = self.base
-            mp_scanner(mol, with_t2=True)
-            de = self.kernel(mp_scanner.t2)
-            return mp_scanner.e_tot, de
-        @property
-        def converged(self):
-            return self.base._scf.converged
-    return MP2_GradScanner(grad_mp)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+        self.reset(mol)
+
+        mp_scanner = self.base
+        mp_scanner(mol, with_t2=True)
+        de = self.kernel(mp_scanner.t2)
+        return mp_scanner.e_tot, de
+    @property
+    def converged(self):
+        return self.base._scf.converged
 
 
 def _shell_prange(mol, start, stop, blksize):
@@ -273,7 +277,7 @@ def _index_frozen_active(frozen_mask, mo_occ):
     VF = numpy.where((~frozen_mask) & (mo_occ==0))[0] # virtual frozen orbitals
     return OA, VA, OF, VF
 
-class Gradients(rhf_grad.GradientsMixin):
+class Gradients(rhf_grad.GradientsBase):
 
     grad_elec = grad_elec
 

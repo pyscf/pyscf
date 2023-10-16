@@ -61,6 +61,10 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
         from pyscf.grad import roks
         return roks.Gradients(self)
 
+    def to_hf(self):
+        '''Convert to ROHF object.'''
+        return self._transfer_attrs_(self.mol.ROHF())
+
 
 if __name__ == '__main__':
     from pyscf import gto

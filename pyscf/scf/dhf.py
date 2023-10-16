@@ -453,12 +453,13 @@ class DHF(hf.SCF):
     # corrections for small component when with_ssss is set to False
     ssss_approx = getattr(__config__, 'scf_dhf_SCF_ssss_approx', 'Visscher')
 
+    _keys = set(('conv_tol', 'with_ssss', 'with_gaunt',
+                 'with_breit', 'ssss_approx', 'opt'))
+
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self._coulomb_level = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
-        self._keys.update(('conv_tol', 'with_ssss', 'with_gaunt',
-                           'with_breit', 'ssss_approx', 'opt'))
 
     def dump_flags(self, verbose=None):
         hf.SCF.dump_flags(self, verbose)
@@ -671,9 +672,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     def x2c1e(self):
         from pyscf.x2c import x2c
         x2chf = x2c.UHF(self.mol)
-        x2c_keys = x2chf._keys
         x2chf.__dict__.update(self.__dict__)
-        x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
     x2c = x2c1e
 
@@ -778,9 +777,7 @@ class RDHF(DHF):
     def x2c1e(self):
         from pyscf.x2c import x2c
         x2chf = x2c.RHF(self.mol)
-        x2c_keys = x2chf._keys
         x2chf.__dict__.update(self.__dict__)
-        x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
     x2c = x2c1e
 

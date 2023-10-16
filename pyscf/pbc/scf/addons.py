@@ -17,7 +17,6 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import copy
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -32,7 +31,7 @@ from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.tools import k2gamma
 from pyscf import __config__
 
-SMEARING_METHOD = getattr(__config__, 'pbc_scf_addons_smearing_method', 'fermi')
+SMEARING_METHOD = mol_addons.SMEARING_METHOD
 
 
 def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
@@ -69,251 +68,168 @@ def _k2k_projection(kpts1, kpts2, Ls):
     c = expRk1.T.dot(expRk2) * weight
     return (c*c.conj()).real.copy()
 
-def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
-    '''Fermi-Dirac or Gaussian smearing'''
-    from pyscf.scf import uhf, rohf
-    from pyscf.scf import ghf
-    from pyscf.pbc.scf import khf
-    mf_class = mf.__class__
-    is_uhf = isinstance(mf, uhf.UHF)
-    is_ghf = isinstance(mf, ghf.GHF)
-    is_rhf = (not is_uhf) and (not is_ghf)
-    is_khf = isinstance(mf, khf.KSCF)
-    is_rohf = isinstance(mf, rohf.ROHF)
-    if is_rohf:
-        is_rhf = False
+def _partition_occ(mo_occ, mo_energy_kpts):
+    mo_occ_kpts = []
+    p1 = 0
+    for e in mo_energy_kpts:
+        p0, p1 = p1, p1 + e.size
+        occ = mo_occ[p0:p1]
+        mo_occ_kpts.append(occ)
+    return mo_occ_kpts
 
-    if fix_spin and not (is_uhf or is_rohf):
-        raise KeyError("fix_spin only supports UHF and ROHF.")
-    if fix_spin and mu0 is not None:
-        raise KeyError("fix_spin does not support fix mu0")
+def _get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock):
+    grad_kpts = []
+    for k, mo in enumerate(mo_coeff_kpts):
+        f_mo = reduce(numpy.dot, (mo.T.conj(), fock[k], mo))
+        nmo = f_mo.shape[0]
+        grad_kpts.append(f_mo[numpy.tril_indices(nmo, -1)])
+    return numpy.hstack(grad_kpts)
 
-    def fermi_smearing_occ(m, mo_energy_kpts, sigma):
-        occ = numpy.zeros_like(mo_energy_kpts)
-        de = (mo_energy_kpts - m) / sigma
-        occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
-        return occ
-    def gaussian_smearing_occ(m, mo_energy_kpts, sigma):
-        return 0.5 * scipy.special.erfc((mo_energy_kpts - m) / sigma)
-
-    def partition_occ(mo_occ, mo_energy_kpts):
-        mo_occ_kpts = []
-        p1 = 0
-        for e in mo_energy_kpts:
-            p0, p1 = p1, p1 + e.size
-            occ = mo_occ[p0:p1]
-            mo_occ_kpts.append(occ)
-        return mo_occ_kpts
-
-    def get_occ(mo_energy_kpts=None, mo_coeff_kpts=None):
+class _SmearingKSCF(mol_addons._SmearingSCF):
+    def get_occ(self, mo_energy_kpts=None, mo_coeff_kpts=None):
         '''Label the occupancies for each orbital for sampled k-points.
 
         This is a k-point version of scf.hf.SCF.get_occ
         '''
-        if is_rohf and fix_spin:
-            mo_energy_kpts=(mo_energy_kpts,mo_energy_kpts)
-        kpts = getattr(mf, 'kpts', None)
-        if isinstance(kpts, KPoints):
-            mo_energy_kpts = kpts.transform_mo_energy(mo_energy_kpts)
-
-        #mo_occ_kpts = mf_class.get_occ(mf, mo_energy_kpts, mo_coeff_kpts)
-        if (mf.sigma == 0) or (not mf.sigma) or (not mf.smearing_method):
-            mo_occ_kpts = mf_class.get_occ(mf, mo_energy_kpts, mo_coeff_kpts)
+        from pyscf.scf import uhf, rohf, ghf
+        if (self.sigma == 0) or (not self.sigma) or (not self.smearing_method):
+            mo_occ_kpts = super().get_occ(mo_energy_kpts, mo_coeff_kpts)
             return mo_occ_kpts
 
-        if is_khf:
-            if isinstance(kpts, KPoints):
-                nkpts = kpts.nkpts
-            else:
-                nkpts = len(kpts)
-        else:
-            nkpts = 1
-        if isinstance(mf.mol, pbcgto.Cell):
-            nelectron = mf.mol.tot_electrons(nkpts)
-        else:
-            nelectron = mf.mol.tot_electrons()
-        if is_uhf or (is_rohf and fix_spin):
-            nocc = nelectron
-            if fix_spin:
-                nocc = mf.nelec
-                mo_es = []
-                mo_es.append(numpy.hstack(mo_energy_kpts[0]))
-                mo_es.append(numpy.hstack(mo_energy_kpts[1]))
-            else:
-                mo_es = numpy.append(numpy.hstack(mo_energy_kpts[0]),
-                                     numpy.hstack(mo_energy_kpts[1]))
-        elif is_ghf:
-            nocc = nelectron
-            mo_es = numpy.hstack(mo_energy_kpts)
-        else:
-            nocc = nelectron // 2
-            mo_es = numpy.hstack(mo_energy_kpts)
+        is_uhf = isinstance(self, uhf.UHF)
+        is_ghf = isinstance(self, ghf.GHF)
+        is_rhf = (not is_uhf) and (not is_ghf)
+        is_rohf = isinstance(self, rohf.ROHF)
 
-        if mf.smearing_method.lower() == 'fermi':  # Fermi-Dirac smearing
-            f_occ = fermi_smearing_occ
-        else:  # Gaussian smearing
-            f_occ = gaussian_smearing_occ
-
-        if fix_spin:
-            mo_energy = []
-            mo_energy.append(numpy.sort(mo_es[0].ravel()))
-            mo_energy.append(numpy.sort(mo_es[1].ravel()))
+        sigma = self.sigma
+        if self.smearing_method.lower() == 'fermi':
+            f_occ = mol_addons._fermi_smearing_occ
         else:
-            mo_energy = numpy.sort(mo_es.ravel())
+            f_occ = mol_addons._gaussian_smearing_occ
 
-        sigma = mf.sigma
-        if fix_spin:
-            fermi = [mo_energy[0][nocc[0]-1], mo_energy[1][nocc[1]-1]]
+        kpts = getattr(self, 'kpts', None)
+        if isinstance(kpts, KPoints):
+            nkpts = kpts.nkpts
+            mo_energy_kpts = kpts.transform_mo_energy(mo_energy_kpts)
         else:
-            fermi = mo_energy[nocc-1]
-        if mu0 is None:
-            def nelec_cost_fn(m, _mo_es, _nelectron):
-                mo_occ_kpts = f_occ(m, _mo_es, sigma)
-                if is_rhf and not is_rohf:
-                    mo_occ_kpts *= 2
-                return (mo_occ_kpts.sum() - _nelectron)**2
-            if fix_spin:
-                mu = []
-                mo_occs = []
-                res = scipy.optimize.minimize(nelec_cost_fn, fermi[0], args=(mo_es[0], nocc[0]), method='Powell',
-                                              options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
-                mu.append(res.x)
-                mo_occs.append(f_occ(mu[0], mo_es[0], sigma))
-                res = scipy.optimize.minimize(nelec_cost_fn, fermi[1], args=(mo_es[1], nocc[1]), method='Powell',
-                                              options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
-                mu.append(res.x)
-                mo_occs.append(f_occ(mu[1], mo_es[1], sigma))
-                f = copy.copy(mo_occs)
-            else:
-                res = scipy.optimize.minimize(nelec_cost_fn, fermi, args=(mo_es, nelectron), method='Powell',
-                                              options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
-                mu = res.x
-                mo_occs = f = f_occ(mu, mo_es, sigma)
-        else:
-            # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
-            mu = mu0
-            mo_occs = f = f_occ(mu, mo_es, sigma)
+            nkpts = len(kpts)
 
-        # See https://www.vasp.at/vasp-workshop/slides/k-points.pdf
-        if mf.smearing_method.lower() == 'fermi':
-            if fix_spin:
-                f[0] = f[0][(f[0]>0) & (f[0]<1)]
-                mf.entropy = -(f[0]*numpy.log(f[0]) + (1-f[0])*numpy.log(1-f[0])).sum() / nkpts
-                f[1] = f[1][(f[1]>0) & (f[1]<1)]
-                mf.entropy += -(f[1]*numpy.log(f[1]) + (1-f[1])*numpy.log(1-f[1])).sum() / nkpts
+        if self.fix_spin and (is_uhf or is_rohf): # spin separated fermi level
+            if is_rohf: # treat rohf as uhf
+                mo_energy_kpts = (mo_energy_kpts, mo_energy_kpts)
+            mo_es = [numpy.hstack(mo_energy_kpts[0]),
+                     numpy.hstack(mo_energy_kpts[1])]
+            nocc = self.nelec
+            if self.mu0 is None:
+                mu_a, occa = mol_addons._smearing_optimize(f_occ, mo_es[0], nocc[0], sigma)
+                mu_b, occb = mol_addons._smearing_optimize(f_occ, mo_es[1], nocc[1], sigma)
+                mu = [mu_a, mu_b]
+                mo_occs = [occa, occb]
             else:
-                f = f[(f>0) & (f<1)]
-                mf.entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum() / nkpts
-        else:
-            if fix_spin:
-                mf.entropy = (numpy.exp(-((mo_es[0]-mu[0])/mf.sigma)**2).sum()
-                              / (2*numpy.sqrt(numpy.pi)) / nkpts)
-                mf.entropy += (numpy.exp(-((mo_es[1]-mu[1])/mf.sigma)**2).sum()
-                               / (2*numpy.sqrt(numpy.pi)) / nkpts)
-            else:
-                mf.entropy = (numpy.exp(-((mo_es-mu)/mf.sigma)**2).sum()
-                              / (2*numpy.sqrt(numpy.pi)) / nkpts)
-        if is_rhf:
-            mo_occs *= 2
-            mf.entropy *= 2
+                mu = self.mu0
+                mo_occs = f_occ(mu[0], mo_es[0], sigma)
+                mo_occs = f_occ(mu[1], mo_es[1], sigma)
+            self.entropy  = self._get_entropy(mo_es[0], mo_occs[0], mu[0])
+            self.entropy += self._get_entropy(mo_es[1], mo_occs[1], mu[1])
+            self.entropy /= nkpts
 
-        # DO NOT use numpy.array for mo_occ_kpts and mo_energy_kpts, they may
-        # have different dimensions for different k-points
-        if is_uhf:
-            if is_khf:
-                if fix_spin:
-                    mo_occ_kpts =(partition_occ(mo_occs[0], mo_energy_kpts[0]),
-                                  partition_occ(mo_occs[1], mo_energy_kpts[1]))
-                else:
-                    nao_tot = mo_occs.size//2
-                    mo_occ_kpts =(partition_occ(mo_occs[:nao_tot], mo_energy_kpts[0]),
-                                  partition_occ(mo_occs[nao_tot:], mo_energy_kpts[1]))
-            else:
-                mo_occ_kpts = partition_occ(mo_occs, mo_energy_kpts)
-        else: # rhf and ghf
-            if is_khf:
-                mo_occ_kpts = partition_occ(mo_occs, mo_energy_kpts)
-            else:
-                mo_occ_kpts = mo_occs
-
-        if fix_spin:
-            logger.debug(mf, '    Alpha-spin Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
+            fermi = (mol_addons._get_fermi(mo_es[0], nocc[0]),
+                     mol_addons._get_fermi(mo_es[1], nocc[1]))
+            logger.debug(self, '    Alpha-spin Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
                          fermi[0], mo_occs[0].sum(), nocc[0])
-            logger.debug(mf, '    Beta-spin  Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
+            logger.debug(self, '    Beta-spin  Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
                          fermi[1], mo_occs[1].sum(), nocc[1])
-            logger.info(mf, '    sigma = %g  Optimized mu_alpha = %.12g  entropy = %.12g',
-                        mf.sigma, mu[0], mf.entropy)
-            logger.info(mf, '    sigma = %g  Optimized mu_beta  = %.12g  entropy = %.12g',
-                        mf.sigma, mu[1], mf.entropy)
-        else:
-            logger.debug(mf, '    Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
-                         fermi, mo_occs.sum(), nelectron)
-            logger.info(mf, '    sigma = %g  Optimized mu = %.12g  entropy = %.12g',
-                        mf.sigma, mu, mf.entropy)
+            logger.info(self, '    sigma = %g  Optimized mu_alpha = %.12g  entropy = %.12g',
+                        sigma, mu[0], self.entropy)
+            logger.info(self, '    sigma = %g  Optimized mu_beta  = %.12g  entropy = %.12g',
+                        sigma, mu[1], self.entropy)
 
-        kpts = getattr(mf, 'kpts', None)
+            mo_occ_kpts =(_partition_occ(mo_occs[0], mo_energy_kpts[0]),
+                          _partition_occ(mo_occs[1], mo_energy_kpts[1]))
+            tools.print_mo_energy_occ_kpts(self, mo_energy_kpts, mo_occ_kpts, True)
+            if is_rohf:
+                mo_occ_kpts = numpy.array(mo_occ_kpts, dtype=numpy.float64).sum(axis=0)
+        else:
+            nocc = nelectron = self.mol.tot_electrons(nkpts)
+            if is_uhf:
+                mo_es_a = numpy.hstack(mo_energy_kpts[0])
+                mo_es_b = numpy.hstack(mo_energy_kpts[1])
+                mo_es = numpy.append(mo_es_a, mo_es_b)
+            else:
+                mo_es = numpy.hstack(mo_energy_kpts)
+            if is_rhf:
+                nocc = (nelectron + 1) // 2
+
+            if self.mu0 is None:
+                mu, mo_occs = mol_addons._smearing_optimize(f_occ, mo_es, nocc, sigma)
+            else:
+                # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
+                mu = self.mu0
+                mo_occs = f_occ(mu, mo_es, sigma)
+            self.entropy = self._get_entropy(mo_es, mo_occs, mu) / nkpts
+            if is_rhf:
+                mo_occs *= 2
+                self.entropy *= 2
+
+            fermi = mol_addons._get_fermi(mo_es, nocc)
+            logger.debug(self, '    Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
+                         fermi, mo_occs.sum(), nelectron)
+            logger.info(self, '    sigma = %g  Optimized mu = %.12g  entropy = %.12g',
+                        sigma, mu, self.entropy)
+
+            if is_uhf:
+                # mo_es_a and mo_es_b may have different dimensions for
+                # different k-points
+                nmo_a = mo_es_a.size
+                mo_occ_kpts =(_partition_occ(mo_occs[:nmo_a], mo_energy_kpts[0]),
+                              _partition_occ(mo_occs[nmo_a:], mo_energy_kpts[1]))
+            else:
+                mo_occ_kpts = _partition_occ(mo_occs, mo_energy_kpts)
+            tools.print_mo_energy_occ_kpts(self, mo_energy_kpts, mo_occ_kpts, is_uhf)
+
         if isinstance(kpts, KPoints):
             if is_uhf:
                 mo_occ_kpts = (kpts.check_mo_occ_symmetry(mo_occ_kpts[0]),
                                kpts.check_mo_occ_symmetry(mo_occ_kpts[1]))
             else:
                 mo_occ_kpts = kpts.check_mo_occ_symmetry(mo_occ_kpts)
-
-        if is_khf:
-            tools.print_mo_energy_occ_kpts(mf,mo_energy_kpts,mo_occ_kpts,is_uhf)
-        else:
-            tools.print_mo_energy_occ(mf,mo_energy_kpts,mo_occ_kpts,is_uhf)
-        if is_rohf and fix_spin:
-            mo_occ_kpts=mo_occ_kpts[0]+mo_occ_kpts[1]
         return mo_occ_kpts
 
-    def get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock):
-        if is_khf:
-            grad_kpts = []
-            for k, mo in enumerate(mo_coeff_kpts):
-                f_mo = reduce(numpy.dot, (mo.T.conj(), fock[k], mo))
-                nmo = f_mo.shape[0]
-                grad_kpts.append(f_mo[numpy.tril_indices(nmo, -1)])
-            return numpy.hstack(grad_kpts)
-        else:
-            f_mo = reduce(numpy.dot, (mo_coeff_kpts.T.conj(), fock, mo_coeff_kpts))
-            nmo = f_mo.shape[0]
-            return f_mo[numpy.tril_indices(nmo, -1)]
+    def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
+        from pyscf.scf import uhf
+        if (self.sigma == 0) or (not self.sigma) or (not self.smearing_method):
+            return super().get_grad(mo_coeff_kpts, mo_occ_kpts, fock)
 
-    def get_grad(mo_coeff_kpts, mo_occ_kpts, fock=None):
-        if (mf.sigma == 0) or (not mf.sigma) or (not mf.smearing_method):
-            return mf_class.get_grad(mf, mo_coeff_kpts, mo_occ_kpts, fock)
         if fock is None:
-            dm1 = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
-            fock = mf.get_hcore() + mf.get_veff(mf.mol, dm1)
-        if is_uhf:
-            ga = get_grad_tril(mo_coeff_kpts[0], mo_occ_kpts[0], fock[0])
-            gb = get_grad_tril(mo_coeff_kpts[1], mo_occ_kpts[1], fock[1])
+            dm1 = self.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
+            fock = self.get_hcore() + self.get_veff(self.mol, dm1)
+        if isinstance(self, uhf.UHF):
+            ga = _get_grad_tril(mo_coeff_kpts[0], mo_occ_kpts[0], fock[0])
+            gb = _get_grad_tril(mo_coeff_kpts[1], mo_occ_kpts[1], fock[1])
             return numpy.hstack((ga,gb))
         else: # rhf and ghf
-            return get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock)
+            return _get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock)
 
-    def energy_tot(dm=None, h1e=None, vhf=None):
-        e_tot = mf.energy_elec(dm, h1e, vhf)[0] + mf.energy_nuc()
-        if (mf.sigma and mf.smearing_method and
-            mf.entropy is not None):
-            mf.e_free = e_tot - mf.sigma * mf.entropy
-            mf.e_zero = e_tot - mf.sigma * mf.entropy * .5
-            logger.info(mf, '    Total E(T) = %.15g  Free energy = %.15g  E0 = %.15g',
-                        e_tot, mf.e_free, mf.e_zero)
-        return e_tot
+def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
+    '''Fermi-Dirac or Gaussian smearing'''
+    from pyscf.pbc.scf import khf
+    if not isinstance(mf, khf.KSCF):
+        return mol_addons.smearing(mf, sigma, method, mu0, fix_spin)
 
-    mf.sigma = sigma
-    mf.smearing_method = method
-    mf.entropy = None
-    mf.e_free = None
-    mf.e_zero = None
-    mf._keys = mf._keys.union(['sigma', 'smearing_method',
-                               'entropy', 'e_free', 'e_zero'])
+    if isinstance(mf, mol_addons._SmearingSCF):
+        mf.sigma = sigma
+        mf.smearing_method = method
+        mf.mu0 = mu0
+        mf.fix_spin = fix_spin
+        return mf
 
-    mf.get_occ = get_occ
-    mf.energy_tot = energy_tot
-    mf.get_grad = get_grad
+    return lib.set_class(_SmearingKSCF(mf, sigma, method, mu0, fix_spin),
+                         (_SmearingKSCF, mf.__class__))
+
+def smearing_(mf, *args, **kwargs):
+    mf1 = smearing(mf, *args, **kwargs)
+    mf.__class__ = mf1.__class__
+    mf.__dict__ = mf1.__dict__
     return mf
 
 def canonical_occ_(mf, nelec=None):
@@ -370,27 +286,27 @@ def convert_to_uhf(mf, out=None):
 
     if out is None:
         if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
-            return copy.copy(mf)
+            return mf.copy()
         else:
-            unknown_cls = [scf.kghf.KGHF]
-            for i, cls in enumerate(mf.__class__.__mro__):
-                if cls in unknown_cls:
-                    raise NotImplementedError(
-                        "No conversion from %s to uhf object" % cls)
+            if isinstance(mf, scf.kghf.KGHF):
+                raise NotImplementedError(
+                    f'No conversion from {mf.__class__} to uhf object')
 
-            known_cls = {dft.krks.KRKS  : dft.kuks.KUKS,
-                         dft.krks_ksymm.KRKS  : dft.kuks_ksymm.KUKS,
-                         dft.kroks.KROKS: dft.kuks.KUKS,
-                         scf.khf.KRHF   : scf.kuhf.KUHF,
-                         scf.khf_ksymm.KRHF : scf.kuhf_ksymm.KUHF,
-                         scf.krohf.KROHF: scf.kuhf.KUHF,
-                         dft.rks.RKS    : dft.uks.UKS  ,
-                         dft.roks.ROKS  : dft.uks.UKS  ,
-                         scf.hf.RHF     : scf.uhf.UHF  ,
-                         scf.rohf.ROHF  : scf.uhf.UHF  ,}
+            known_cls = {
+                dft.krks_ksymm.KRKS  : dft.kuks_ksymm.KUKS,
+                dft.kroks.KROKS: dft.kuks.KUKS,
+                dft.krks.KRKS  : dft.kuks.KUKS,
+                dft.roks.ROKS  : dft.uks.UKS  ,
+                dft.rks.RKS    : dft.uks.UKS  ,
+                scf.khf_ksymm.KRHF : scf.kuhf_ksymm.KUHF,
+                scf.krohf.KROHF: scf.kuhf.KUHF,
+                scf.khf.KRHF   : scf.kuhf.KUHF,
+                scf.rohf.ROHF  : scf.uhf.UHF  ,
+                scf.hf.RHF     : scf.uhf.UHF  ,
+            }
             # .with_df should never be removed or changed during the conversion.
             # It is needed to compute JK matrix in all pbc SCF objects
-            out = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
+            out = mol_addons._object_without_soscf(mf, known_cls, False)
     else:
         assert (isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
         if isinstance(mf, scf.khf.KSCF):
@@ -398,11 +314,10 @@ def convert_to_uhf(mf, out=None):
         else:
             assert (not isinstance(out, scf.khf.KSCF))
 
-    out = mol_addons.convert_to_uhf(mf, out, False)
-    # Manually update .with_df because this attribute may not be passed to the
-    # output object correctly in molecular convert function
-    out.with_df = mf.with_df
-    return out
+    if out is not None:
+        out = mol_addons._update_mf_without_soscf(mf, out, False)
+
+    return mol_addons._update_mo_to_uhf_(mf, out)
 
 def convert_to_rhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding restricted
@@ -422,48 +337,47 @@ def convert_to_rhf(mf, out=None):
             assert (isinstance(out, scf.khf.KSCF))
         else:
             assert (not isinstance(out, scf.khf.KSCF))
+        out = mol_addons._update_mf_without_soscf(mf, out, False)
 
     elif nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF):
         if getattr(mf, '_scf', None):
-            return mol_addons._update_mf_without_soscf(mf, copy.copy(mf._scf), False)
+            return mol_addons._update_mf_without_soscf(mf, mf._scf.copy(), False)
         else:
-            return copy.copy(mf)
+            return mf.copy()
 
     else:
         if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
-            return copy.copy(mf)
+            return mf.copy()
         else:
-            unknown_cls = [scf.kghf.KGHF]
-            for i, cls in enumerate(mf.__class__.__mro__):
-                if cls in unknown_cls:
-                    raise NotImplementedError(
-                        "No conversion from %s to rhf object" % cls)
+            if isinstance(mf, scf.kghf.KGHF):
+                raise NotImplementedError(
+                    f'No conversion from {mf.__class__} to rhf object')
 
             if nelec[0] == nelec[1]:
-                known_cls = {dft.kuks.KUKS : dft.krks.KRKS,
-                             dft.kuks_ksymm.KUKS : dft.krks_ksymm.KRKS,
-                             scf.kuhf.KUHF : scf.khf.KRHF ,
-                             scf.kuhf_ksymm.KUHF : scf.khf_ksymm.KRHF,
-                             dft.uks.UKS   : dft.rks.RKS  ,
-                             scf.uhf.UHF   : scf.hf.RHF   ,
-                             dft.kroks.KROKS : dft.krks.KRKS,
-                             scf.krohf.KROHF : scf.khf.KRHF ,
-                             dft.roks.ROKS   : dft.rks.RKS  ,
-                             scf.rohf.ROHF   : scf.hf.RHF   }
+                known_cls = {
+                    dft.kuks_ksymm.KUKS : dft.krks_ksymm.KRKS,
+                    dft.kuks.KUKS       : dft.krks.KRKS      ,
+                    dft.kroks.KROKS     : dft.krks.KRKS      ,
+                    dft.uks.UKS         : dft.rks.RKS        ,
+                    dft.roks.ROKS       : dft.rks.RKS        ,
+                    scf.kuhf_ksymm.KUHF : scf.khf_ksymm.KRHF ,
+                    scf.kuhf.KUHF       : scf.khf.KRHF       ,
+                    scf.krohf.KROHF     : scf.khf.KRHF       ,
+                    scf.uhf.UHF         : scf.hf.RHF         ,
+                    scf.rohf.ROHF       : scf.hf.RHF         ,
+                }
             else:
-                known_cls = {dft.kuks.KUKS : dft.krks.KROKS,
-                             scf.kuhf.KUHF : scf.khf.KROHF ,
-                             dft.uks.UKS   : dft.rks.ROKS  ,
-                             scf.uhf.UHF   : scf.hf.ROHF   }
+                known_cls = {
+                    dft.kuks.KUKS : dft.kroks.KROKS,
+                    dft.uks.UKS   : dft.roks.ROKS  ,
+                    scf.kuhf.KUHF : scf.krohf.KROHF,
+                    scf.uhf.UHF   : scf.rohf.ROHF  ,
+                }
             # .with_df should never be removed or changed during the conversion.
             # It is needed to compute JK matrix in all pbc SCF objects
-            out = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
+            out = mol_addons._object_without_soscf(mf, known_cls, False)
 
-    out = mol_addons.convert_to_rhf(mf, out, False)
-    # Manually update .with_df because this attribute may not be passed to the
-    # output object correctly in molecular convert function
-    out.with_df = mf.with_df
-    return out
+    return mol_addons._update_mo_to_rhf_(mf, out)
 
 def convert_to_ghf(mf, out=None):
     '''Convert the given mean-field object to the generalized HF/KS object
@@ -485,7 +399,7 @@ def convert_to_ghf(mf, out=None):
 
     if isinstance(mf, scf.ghf.GHF):
         if out is None:
-            return copy.copy(mf)
+            return mf.copy()
         else:
             out.__dict__.update(mf.__dict__)
             return out
@@ -493,9 +407,7 @@ def convert_to_ghf(mf, out=None):
     elif isinstance(mf, scf.khf.KSCF):
 
         def update_mo_(mf, mf1):
-            _keys = mf._keys.union(mf1._keys)
             mf1.__dict__.update(mf.__dict__)
-            mf1._keys = _keys
             if mf.mo_energy is not None:
                 mf1.mo_energy = []
                 mf1.mo_occ = []
@@ -555,29 +467,38 @@ def convert_to_ghf(mf, out=None):
         out.with_df = mf.with_df
         return out
 
-def convert_to_khf(mf, out=None):
+def convert_to_kscf(mf, out=None):
     '''Convert gamma point SCF object to k-point SCF object
     '''
     from pyscf.pbc import scf, dft
     if not isinstance(mf, scf.khf.KSCF):
-        known_cls = {dft.uks.UKS   : dft.kuks.KUKS,
-                     scf.uhf.UHF   : scf.kuhf.KUHF,
-                     dft.rks.RKS   : dft.krks.KRKS,
-                     scf.hf.RHF    : scf.khf.KRHF,
-                     dft.roks.ROKS : dft.kroks.KROKS,
-                     scf.rohf.ROHF : scf.krohf.KROHF,
-                     #TODO: dft.gks.GKS   : dft.kgks.KGKS,
-                     scf.ghf.GHF   : scf.kghf.KGHF}
-        # Keep the attribute with_df
-        with_df = mf.with_df
-        mf = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
-        mf.with_df = with_df
+        known_cls = {
+            dft.uks.UKS   : dft.kuks.KUKS  ,
+            dft.roks.ROKS : dft.kroks.KROKS,
+            dft.rks.RKS   : dft.krks.KRKS  ,
+            dft.gks.GKS   : dft.kgks.KGKS  ,
+            scf.uhf.UHF   : scf.kuhf.KUHF  ,
+            scf.rohf.ROHF : scf.krohf.KROHF,
+            scf.hf.RHF    : scf.khf.KRHF   ,
+            scf.ghf.GHF   : scf.kghf.KGHF  ,
+        }
+        mf = mol_addons._object_without_soscf(mf, known_cls, False)
+        if mf.mo_energy is not None:
+            if isinstance(mf, scf.uhf.UHF):
+                mf.mo_occ = mf.mo_occ[:,numpy.newaxis]
+                mf.mo_coeff = mf.mo_coeff[:,numpy.newaxis]
+                mf.mo_energy = mf.mo_energy[:,numpy.newaxis]
+            else:
+                mf.mo_occ = mf.mo_occ[numpy.newaxis]
+                mf.mo_coeff = mf.mo_coeff[numpy.newaxis]
+                mf.mo_energy = mf.mo_energy[numpy.newaxis]
 
     if out is None:
         return mf
-    else:
-        out.__dict__.update(mf.__dict__)
-        return out
+
+    return mol_addons._update_mf_without_soscf(mf, out, False)
+
+convert_to_khf = convert_to_kscf
 
 def mo_energy_with_exxdiv_none(mf, mo_coeff=None):
     ''' compute mo energy from the diagonal of fock matrix with exxdiv=None
@@ -613,31 +534,3 @@ def mo_energy_with_exxdiv_none(mf, mo_coeff=None):
     else:
         log.error(f'Unknown SCF type {mf.__class__.__name__}')
         raise NotImplementedError
-
-
-del (SMEARING_METHOD)
-
-
-if __name__ == '__main__':
-    import pyscf.pbc.scf as pscf
-    cell = pbcgto.Cell()
-    cell.atom = '''
-    He 0 0 1
-    He 1 0 1
-    '''
-    cell.basis = 'ccpvdz'
-    cell.a = numpy.eye(3) * 4
-    cell.mesh = [17] * 3
-    cell.verbose = 3
-    cell.build()
-    nks = [2,1,1]
-    mf = pscf.KUHF(cell, cell.make_kpts(nks)).density_fit()
-    mf = smearing_(mf, .1)
-    mf.kernel()
-    print(mf.e_tot - -5.56769351866668)
-    mf = smearing_(mf, .1, mu0=0.351195741757)
-    mf.kernel()
-    print(mf.e_tot - -5.56769351866668)
-    mf = smearing_(mf, .1, method='gauss')
-    mf.kernel()
-    print(mf.e_tot - -5.56785857886738)

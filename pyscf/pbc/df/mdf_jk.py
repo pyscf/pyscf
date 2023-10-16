@@ -22,7 +22,6 @@ Ref:
 J. Chem. Phys. 147, 164119 (2017)
 '''
 
-import copy
 import numpy
 from pyscf.lib import logger
 from pyscf.pbc.df import df_jk
@@ -63,7 +62,7 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
         if mesh is not None:
             with_df.mesh = mesh
 
-    mf = copy.copy(mf)
+    mf = mf.copy()
     mf.with_df = with_df
     mf._eri = None
     return mf

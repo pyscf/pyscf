@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 import scipy.linalg
 import unittest
@@ -318,7 +317,7 @@ class KnownValues(unittest.TestCase):
         (pop, chg), dip = mf.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 3.2031790129016922, 6)
 
-        mf1 = copy.copy(n2mf)
+        mf1 = n2mf.copy()
         (pop, chg), dip = n2mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 4.5467414321488357, 6)
         self.assertAlmostEqual(numpy.linalg.norm(dip), 0, 9)

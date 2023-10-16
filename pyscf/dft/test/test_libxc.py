@@ -250,38 +250,38 @@ class KnownValues(unittest.TestCase):
         test_ref = numpy.array([-1.57730394, -2.12127045,-2.11297165,-0.00315462,
                                  0.00000000, -0.00446935, 3.45640232, 4.42563831])  # libxc-5.1.2
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('1.38888888889*m05,', rho, 1, deriv=1)
-        self.assertAlmostEqual(float(exc)*1.8, test_ref[0], 5)
+        self.assertAlmostEqual(float(exc[0])*1.8, test_ref[0], 5)
         self.assertAlmostEqual(abs(vxc[0]-test_ref[1:3]).max(), 0, 6)
         self.assertAlmostEqual(abs(vxc[1]-test_ref[3:6]).max(), 0, 6)
         self.assertAlmostEqual(abs(vxc[3]-test_ref[6:8]).max(), 0, 5)
 
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('1.38888888889*m05,', rho[0], 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.5746231988116002, 5)
-        self.assertAlmostEqual(float(vxc[0]), -0.8806121005703862, 6)
-        self.assertAlmostEqual(float(vxc[1]), -0.0032300155406846756, 7)
-        self.assertAlmostEqual(float(vxc[3]), 0.4474953100487698, 5)
+        self.assertAlmostEqual(float(exc[0]), -0.5746231988116002, 5)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.8806121005703862, 6)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.0032300155406846756, 7)
+        self.assertAlmostEqual(float(vxc[3][0]), 0.4474953100487698, 5)
 
     def test_camb3lyp(self):
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('camb3lyp', rho, 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.5752559666317147, 7)
-        self.assertAlmostEqual(float(vxc[0]), -0.7709812578936763, 7)
-        self.assertAlmostEqual(float(vxc[1]), -0.0029862221286189846, 7)
+        self.assertAlmostEqual(float(exc[0]), -0.5752559666317147, 7)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.7709812578936763, 7)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.0029862221286189846, 7)
 
         self.assertEqual(dft.libxc.rsh_coeff('camb3lyp'), (0.33, 0.65, -0.46))
 
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('RSH(0.5,0.65,-0.46) + 0.46*ITYH + .35*B88,', rho, 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.48916154057161476, 9)
-        self.assertAlmostEqual(float(vxc[0]), -0.6761177630311709, 9)
-        self.assertAlmostEqual(float(vxc[1]), -0.002949151742087167, 9)
+        self.assertAlmostEqual(float(exc[0]), -0.48916154057161476, 9)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.6761177630311709, 9)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.002949151742087167, 9)
 
     def test_ityh(self):
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('ityh,', rho, 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.6359945579326314, 7)
-        self.assertAlmostEqual(float(vxc[0]), -0.8712041561251518, 7)
-        self.assertAlmostEqual(float(vxc[1]), -0.003911167644579979, 7)
+        self.assertAlmostEqual(float(exc[0]), -0.6359945579326314, 7)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.8712041561251518, 7)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.003911167644579979, 7)
         self.assertEqual(dft.libxc.rsh_coeff('ityh,'), (0.2, 0.0, 0.0))
 
     def test_deriv_order(self):

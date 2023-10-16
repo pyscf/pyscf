@@ -434,11 +434,13 @@ class SymAdaptedRHF(hf.RHF):
     >>> mf.get_irrep_nelec()
     {'A1': 6, 'A2': 2, 'B1': 2, 'B2': 0}
     '''
+
+    _keys = set(['irrep_nelec'])
+
     def __init__(self, mol):
         hf.RHF.__init__(self, mol)
         # number of electrons for each irreps
         self.irrep_nelec = {} # {'ir_name':int,...}
-        self._keys = self._keys.union(['irrep_nelec'])
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
@@ -596,6 +598,9 @@ class SymAdaptedROHF(rohf.ROHF):
     >>> mf.get_irrep_nelec()
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 0), 'B2': (1, 1)}
     '''
+
+    _keys = set(['irrep_nelec'])
+
     def __init__(self, mol):
         rohf.ROHF.__init__(self, mol)
         self.irrep_nelec = {}
@@ -603,7 +608,6 @@ class SymAdaptedROHF(rohf.ROHF):
 # do not overwrite them
         self._irrep_doccs = []
         self._irrep_soccs = []
-        self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self, verbose=None):
         rohf.ROHF.dump_flags(self, verbose)

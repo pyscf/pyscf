@@ -192,3 +192,7 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
     def nuc_grad_method(self):
         from pyscf.grad import uks
         return uks.Gradients(self)
+
+    def to_hf(self):
+        '''Convert to UHF object.'''
+        return self._transfer_attrs_(self.mol.UHF())

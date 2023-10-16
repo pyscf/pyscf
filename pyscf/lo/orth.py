@@ -287,7 +287,7 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=REF_BASIS, s=None):
     '''
     from pyscf import scf
     from pyscf.lo import nao
-    if isinstance(mf_or_mol, gto.Mole):
+    if isinstance(mf_or_mol, gto.MoleBase):
         mol = mf_or_mol
         mf = None
     else:
