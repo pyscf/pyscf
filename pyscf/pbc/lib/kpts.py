@@ -1173,5 +1173,4 @@ class KQuartets:
     def loop_stabilizer(self, index):
         if self._kqrts_stab is None or self._ops_stab is None:
             self.cache_stabilizer()
-        for klcd, iop in zip(self._kqrts_stab[index], self._ops_stab[index]):
-            yield klcd, iop
+        yield from zip(self._kqrts_stab[index], self._ops_stab[index])

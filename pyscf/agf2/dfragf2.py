@@ -306,8 +306,7 @@ class DF(df.DF):
         if stop is None: stop = self.get_naoaux()
         if step is None: step = self.blockdim
 
-        for p0, p1 in mpi_helper.prange(start, stop, step):
-            yield p0, p1
+        yield from mpi_helper.prange(start, stop, step)
 
 
 class _ChemistsERIs(ragf2._ChemistsERIs):
