@@ -260,7 +260,7 @@ class KnownValues(unittest.TestCase):
     def test_rhf_0d(self):
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
-                   a = np.eye(3)*5,
+                   a = numpy.eye(3)*5,
                    atom = '''He 2 2 2; He 2 2 3''',
                    dimension = 0,
                    verbose = 0,
@@ -292,7 +292,7 @@ class KnownValues(unittest.TestCase):
          0.32235865    2     2.25670239    -0.39677748
                                             0.93894690
                                                      ''')}
-        cell.a = np.eye(3)
+        cell.a = numpy.eye(3)
         cell.dimension = 0
         cell.build()
         mf = pbcscf.RHF(cell)

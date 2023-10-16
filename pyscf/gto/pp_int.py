@@ -40,7 +40,6 @@ def get_gth_pp(mol):
 
     intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
               'int3c1e_r4_origk', 'int3c1e_r6_origk')
-    fake_cells = {}
     for cn in range(1, 5):
         fakemol = pp_int.fake_cell_vloc(mol, cn)
         if fakemol.nbas > 0:
