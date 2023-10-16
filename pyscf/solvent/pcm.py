@@ -85,7 +85,7 @@ scf.hf.SCF.PCM    = scf.hf.SCF.PCM    = pcm_for_scf
 mp.mp2.MP2.PCM    = mp.mp2.MP2.PCM    = pcm_for_post_scf
 ci.cisd.CISD.PCM  = ci.cisd.CISD.PCM  = pcm_for_post_scf
 cc.ccsd.CCSD.PCM  = cc.ccsd.CCSD.PCM  = pcm_for_post_scf
-tdscf.rhf.TDMixin.PCM = tdscf.rhf.TDMixin.PCM = pcm_for_tdscf
+tdscf.rhf.TDBase.PCM = tdscf.rhf.TDBase.PCM = pcm_for_tdscf
 mcscf.casci.CASCI.PCM = mcscf.casci.CASCI.PCM = pcm_for_casci
 mcscf.mc1step.CASSCF.PCM = mcscf.mc1step.CASSCF.PCM = pcm_for_casscf
 
