@@ -523,6 +523,6 @@ class Gradients(rhf_grad.Gradients):
 
     def to_gpu(self):
         from gpu4pyscf.df.grad.rhf import Gradients
-        return lib.to_gpu(obj.view(Gradients))
+        return lib.to_gpu(self.view(Gradients))
 
 Grad = Gradients

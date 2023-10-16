@@ -483,7 +483,7 @@ class Hessian(rhf_hess.Hessian):
 
     def to_gpu(self):
         from gpu4pyscf.df.hessian.rhf import Hessian
-        return lib.to_gpu(obj.view(Hessian))
+        return lib.to_gpu(self.view(Hessian))
 
 #TODO: Insert into DF class
 

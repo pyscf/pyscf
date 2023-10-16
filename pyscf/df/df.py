@@ -310,7 +310,7 @@ class DF(lib.StreamObject):
 
     def to_gpu(self):
         from gpu4pyscf.df.df import DF as DF
-        return to_gpu(self.__class__.reset(self.view(DF)))
+        return lib.to_gpu(self.__class__.reset(self.view(DF)))
 
 GDF = DF
 

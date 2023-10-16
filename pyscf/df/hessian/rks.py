@@ -129,7 +129,7 @@ class Hessian(rks_hess.Hessian):
 
     def to_gpu(self):
         from gpu4pyscf.df.hessian.rks import Hessian
-        return lib.to_gpu(obj.view(Hessian))
+        return lib.to_gpu(self.view(Hessian))
 
 
 if __name__ == '__main__':

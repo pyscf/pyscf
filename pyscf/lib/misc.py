@@ -1336,6 +1336,7 @@ def to_gpu(method):
     '''Recursively converts all attributes of a method to cupy objects or
     gpu4pyscf objects.
     '''
+    import cupy
     for key, val in method.__dict__.items():
         if isinstance(val, numpy.ndarray):
             setattr(method, key, cupy.asarray(val))

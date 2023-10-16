@@ -125,6 +125,6 @@ class Gradients(rks_grad.Gradients):
 
     def to_gpu(self):
         from gpu4pyscf.df.grad.rks import Gradients
-        return lib.to_gpu(obj.view(Gradients))
+        return lib.to_gpu(self.view(Gradients))
 
 Grad = Gradients
