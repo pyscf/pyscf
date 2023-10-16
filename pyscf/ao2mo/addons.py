@@ -23,7 +23,7 @@ from pyscf import lib
 
 libao2mo = lib.load_library('libao2mo')
 
-class load(object):
+class load:
     '''load 2e integrals from hdf5 file
 
     Usage:
