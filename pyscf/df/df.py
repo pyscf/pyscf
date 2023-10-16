@@ -181,7 +181,7 @@ class DF(lib.StreamObject):
         '''Reset mol and clean up relevant attributes for scanner mode'''
         if mol is not None:
             self.mol = mol
-        self.auxmol = None
+            self.auxmol = None
         self._cderi = None
         self._vjopt = None
         self._rsh_df = {}

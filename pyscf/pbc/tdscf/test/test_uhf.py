@@ -45,7 +45,7 @@ class Diamond(unittest.TestCase):
         cls.cell = cell
         cls.mf = mf
 
-        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates = 8 # make sure first `nstates_test` states are converged
         cls.nstates_test = 2
     @classmethod
     def tearDownClass(cls):
