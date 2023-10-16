@@ -397,7 +397,7 @@ def get_kconserv3(cell, kpts, kijkab):
     return kconserv
 
 
-class VectorComposer(object):
+class VectorComposer:
     def __init__(self, dtype):
         """
         Composes vectors.
@@ -442,7 +442,7 @@ class VectorComposer(object):
         return result
 
 
-class VectorSplitter(object):
+class VectorSplitter:
     def __init__(self, vector):
         """
         Splits vectors into pieces.

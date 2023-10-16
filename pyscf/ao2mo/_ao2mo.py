@@ -24,7 +24,7 @@ libao2mo = lib.load_library('libao2mo')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libao2mo._handle, name))
 
-class AO2MOpt(object):
+class AO2MOpt:
     def __init__(self, mol, intor, prescreen='CVHFnoscreen', qcondname=None):
         intor = ascint3(intor)
         self._this = ctypes.POINTER(_vhf._CVHFOpt)()

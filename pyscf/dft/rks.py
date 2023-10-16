@@ -263,7 +263,7 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 def _dft_common_init_(mf, xc='LDA,VWN'):
     raise DeprecationWarning
 
-class KohnShamDFT(object):
+class KohnShamDFT:
     '''
     Attributes for Kohn-Sham DFT:
         xc : str

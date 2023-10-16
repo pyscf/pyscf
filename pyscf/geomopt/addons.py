@@ -49,7 +49,7 @@ def as_pyscf_method(mol, scan_function):
         def as_scanner(self):
             return OmniGrad(self)
 
-    class OmniMethod(object):
+    class OmniMethod:
         def __init__(self, mol):
             self.mol = mol
             self.verbose = mol.verbose

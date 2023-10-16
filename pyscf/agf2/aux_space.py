@@ -29,7 +29,7 @@ from pyscf import __config__
 from pyscf.lib.parameters import LARGE_DENOM
 
 
-class AuxiliarySpace(object):
+class AuxiliarySpace:
     ''' Simple container to hold the energies, couplings and chemical
         potential associated with an auxiliary space.
 

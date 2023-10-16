@@ -294,7 +294,7 @@ def diagonalize_asymm(H):
     return E,C
 
 
-class Arnoldi(object):
+class Arnoldi:
     def __init__(self,matr_multiply,xStart,inPreCon,nroots=1,tol=1e-10):
         self.matrMultiply = matr_multiply
         self.size = xStart.shape[0]
@@ -557,7 +557,7 @@ class Arnoldi(object):
             self.constructSubspace()
 
 
-class DavidsonZL(object):
+class DavidsonZL:
     def __init__(self):
         self.maxcycle = 200
         self.crit_e = 1.e-7

@@ -21,7 +21,7 @@ libpbc = lib.load_library('libpbc')
 def _fpointer(name):
     return ctypes.addressof(getattr(libpbc, name))
 
-class PBCOpt(object):
+class PBCOpt:
     def __init__(self, cell):
         self._this = ctypes.POINTER(_CPBCOpt)()
         natm = ctypes.c_int(cell._atm.shape[0])

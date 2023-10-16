@@ -257,7 +257,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
 
 # level = 1: ppaa, papa and vhf, jpc, kpc
 # level = 2: ppaa, papa, vhf,  jpc=0, kpc=0
-class _ERIS(object):
+class _ERIS:
     def __init__(self, casscf, mo, method='incore', level=1):
         mol = casscf.mol
         nao, nmo = mo.shape

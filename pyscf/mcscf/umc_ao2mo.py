@@ -218,7 +218,7 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 
 
 
-class _ERIS(object):
+class _ERIS:
     def __init__(self, casscf, mo, method='incore'):
         mol = casscf.mol
         ncore = self.ncore = casscf.ncore
