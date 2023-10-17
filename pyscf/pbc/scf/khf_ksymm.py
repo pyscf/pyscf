@@ -211,7 +211,7 @@ class KsymAdaptedKSCF(khf.KSCF):
     def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, **kwargs):
         if isinstance(kpts, np.ndarray):
-            return super(KsymAdaptedKSCF, self).get_jk(cell, dm_kpts, hermi, kpts, kpts_band,
+            return super().get_jk(cell, dm_kpts, hermi, kpts, kpts_band,
                                                        with_j, with_k, omega, **kwargs)
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
@@ -238,9 +238,9 @@ class KsymAdaptedKSCF(khf.KSCF):
 
     def init_guess_by_chkfile(self, chk=None, project=None, kpts=None):
         if isinstance(kpts, np.ndarray):
-            return super(KsymAdaptedKSCF, self).init_guess_by_chkfile(chk, project, kpts)
+            return super().init_guess_by_chkfile(chk, project, kpts)
         if kpts is None: kpts = self.kpts
-        return super(KsymAdaptedKSCF, self).init_guess_by_chkfile(chk, project, kpts.kpts_ibz)
+        return super().init_guess_by_chkfile(chk, project, kpts.kpts_ibz)
 
     def dump_chk(self, envs):
         if self.chkfile:
