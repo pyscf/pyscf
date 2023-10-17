@@ -245,7 +245,7 @@ class TDProxy(TDBase):
             proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
-        super(TDProxy, self).__init__(mf, frozen=frozen)
+        super().__init__(mf, frozen=frozen)
         self.__proxy__ = proxy
 
     def ao2mo(self):

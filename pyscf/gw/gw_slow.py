@@ -133,7 +133,7 @@ class IMDS(AbstractIMDS):
             td: a container with TD solution;
             eri: a container with electron repulsion integrals;
         """
-        super(IMDS, self).__init__(td, eri=eri)
+        super().__init__(td, eri=eri)
 
         # MF
         self.nocc = self.eri.nocc

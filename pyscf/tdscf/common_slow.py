@@ -361,7 +361,7 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
         Args:
             model: a pyscf base model to extract TD matrix from;
         """
-        super(TDProxyMatrixBlocks, self).__init__()
+        super().__init__()
         self.proxy_model = model
         self.proxy_vind, self.proxy_diag = self.proxy_model.gen_vind(self.proxy_model._scf)
         self.proxy_vind = VindTracker(self.proxy_vind)

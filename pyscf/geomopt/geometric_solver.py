@@ -57,7 +57,7 @@ class PySCFEngine(geometric.engine.Engine):
         # Molecule is the geometry parser for a bunch of formats which use
         # Angstrom for Cartesian coordinates by default.
         molecule.xyzs = [mol.atom_coords()*lib.param.BOHR]  # In Angstrom
-        super(PySCFEngine, self).__init__(molecule)
+        super().__init__(molecule)
 
         self.scanner = scanner
         self.cycle = 0
