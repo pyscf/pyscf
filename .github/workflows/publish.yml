@@ -115,7 +115,7 @@ jobs:
             ls mac-wheels
       - name: Publish to PyPI
         run: |
-            pip install twine
+            pip3 install twine
             export TWINE_USERNAME=__token__
             export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
             twine upload --verbose mac-wheels/*
@@ -141,7 +141,7 @@ jobs:
             ls mac-wheels
       - name: Publish to PyPI
         run: |
-            pip install twine
+            pip3 install twine
             export TWINE_USERNAME=__token__
             export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
             twine upload --verbose mac-wheels/*
