@@ -247,7 +247,7 @@ class KRKSpU(krks.KRKS):
 
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
-                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO'):
+                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO', **kwargs):
         """
         DFT+U args:
             U_idx: can be
@@ -264,7 +264,7 @@ class KRKSpU(krks.KRKS):
                      string, in 'minao'.
             minao_ref: reference for minao orbitals, default is 'MINAO'.
         """
-        super(self.__class__, self).__init__(cell, kpts, xc=xc, exxdiv=exxdiv)
+        super(self.__class__, self).__init__(cell, kpts, xc=xc, exxdiv=exxdiv, **kwargs)
 
         set_U(self, U_idx, U_val)
 

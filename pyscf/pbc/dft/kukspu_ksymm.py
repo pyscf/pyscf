@@ -32,10 +32,10 @@ class KsymAdaptedKUKSpU(kuks_ksymm.KUKS):
     @lib.with_doc(kukspu.KUKSpU.__init__.__doc__)
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
-                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO'):
+                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO', **kwargs):
         kukspu.KUKSpU.__init__(self, cell, kpts=kpts, xc=xc, exxdiv=exxdiv,
                                U_idx=U_idx, U_val=U_val, C_ao_lo=C_ao_lo,
-                               minao_ref=minao_ref)
+                               minao_ref=minao_ref, **kwargs)
 
 KUKSpU = KsymAdaptedKUKSpU
 
