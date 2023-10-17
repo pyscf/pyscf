@@ -99,7 +99,7 @@ jobs:
 
   release-pypi-macos-x86:
     name: Build wheels for macos
-    runs-on: macosx_x86_64
+    runs-on: macos-12
     steps:
       - uses: actions/checkout@v3
       - name: Build wheels
@@ -122,7 +122,7 @@ jobs:
 
   release-pypi-macos-arm64:
     name: Build wheels for Apple M chips
-    runs-on: macosx_x86_64
+    runs-on: macos-12
     steps:
       - uses: actions/checkout@v3
       - name: Build wheels
