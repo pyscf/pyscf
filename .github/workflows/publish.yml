@@ -130,6 +130,8 @@ jobs:
         env:
           CIBW_BUILD: cp311-macosx_arm64
           CIBW_BUILD_VERBOSITY: "1"
+          # Cross-platform build for arm64 wheels on x86 platform
+          CIBW_ARCHS_MACOS: "x86_64 universal2 arm64"
           CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF"
           CMAKE_OSX_ARCHITECTURES: arm64
         with:

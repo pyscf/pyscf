@@ -17,7 +17,6 @@ import os
 import sys
 from setuptools import setup, find_packages, Extension
 from setuptools.command.build_py import build_py
-from distutils.util import get_platform
 
 CLASSIFIERS = [
 'Development Status :: 5 - Production/Stable',
@@ -80,6 +79,28 @@ EXTRAS['nao'] = ['pyscf-nao']
 EXTRAS['fciqmcscf'] = ['pyscf-fciqmc']
 EXTRAS['tblis'] = ['pyscf-tblis']
 
+def get_platform():
+    from distutils.util import get_platform
+    platform = get_platform()
+    if sys.platform == 'darwin':
+        arch = os.getenv('CMAKE_OSX_ARCHITECTURES')
+        if arch:
+            osname = platform.rsplit('-', 1)[0]
+            if ';' in arch:
+                platform = f'{osname}-universal2'
+            else:
+                platform = f'{osname}-{arch}'
+        elif os.getenv('_PYTHON_HOST_PLATFORM'):
+            # the cibuildwheel environment
+            platform = os.getenv('_PYTHON_HOST_PLATFORM')
+            if platform.endswith('arm64'):
+                os.putenv('CMAKE_OSX_ARCHITECTURES', 'arm64')
+            elif platform.endswith('x86_64'):
+                os.putenv('CMAKE_OSX_ARCHITECTURES', 'x86_64')
+            else:
+                os.putenv('CMAKE_OSX_ARCHITECTURES', 'arm64;x86_64')
+    return platform
+
 class CMakeBuildPy(build_py):
     def run(self):
         self.plat_name = get_platform()
@@ -114,29 +135,7 @@ from wheel.bdist_wheel import bdist_wheel
 initialize_options = bdist_wheel.initialize_options
 def initialize_with_default_plat_name(self):
     initialize_options(self)
-    arch = os.getenv('CMAKE_OSX_ARCHITECTURES')
-    if sys.platform == 'darwin' and arch:
-        # Based on name convention in cibuildwheel
-        # if config_is_arm64:
-        #     # macOS 11 is the first OS with arm64 support, so the wheels
-        #     # have that as a minimum.
-        #     env.setdefault("_PYTHON_HOST_PLATFORM", "macosx-11.0-arm64")
-        #     env.setdefault("ARCHFLAGS", "-arch arm64")
-        # elif config_is_universal2:
-        #     env.setdefault("_PYTHON_HOST_PLATFORM", "macosx-10.9-universal2")
-        #     env.setdefault("ARCHFLAGS", "-arch arm64 -arch x86_64")
-        # elif python_configuration.identifier.endswith("x86_64"):
-        #     # even on the macos11.0 Python installer, on the x86_64 side it's
-        #     # compatible back to 10.9.
-        #     env.setdefault("_PYTHON_HOST_PLATFORM", "macosx-10.9-x86_64")
-        #     env.setdefault("ARCHFLAGS", "-arch x86_64")
-        osname = get_platform().rsplit('-', 1)[0]
-        if ';' in arch:
-            self.plat_name = f'{osname}-universal2'
-        else:
-            self.plat_name = f'{osname}-{arch}'
-    else:
-        self.plat_name = get_platform()
+    self.plat_name = get_platform()
 bdist_wheel.initialize_options = initialize_with_default_plat_name
 
 # scipy bugs
