@@ -125,7 +125,7 @@ class PhysERI8(PhysERI4):
         Args:
             model (RHF): the base model;
         """
-        super(PhysERI8, self).__init__(model, frozen=frozen)
+        super().__init__(model, frozen=frozen)
 
 
 def vector_to_amplitudes(vectors, nocc, nmo):
