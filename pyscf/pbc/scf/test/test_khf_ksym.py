@@ -87,11 +87,12 @@ class KnownValues(unittest.TestCase):
         cell1.build(symmorphic=True)
         kpts = cell1.make_kpts([2,2,2], with_gamma_point=True,space_group_symmetry=True)
         kmf = pscf.KRHF(cell1, kpts=kpts).run()
-        kmf1 = pscf.KRHF(cell1, kpts=kpts, use_ao_symmetry=True).run()
+        kmf1 = pscf.KRHF(cell1, kpts=kpts, use_ao_symmetry=False).run()
         self.assertAlmostEqual(kmf.e_tot, kmf1.e_tot, 7)
-        assert abs(kmf1.mo_coeff[0].orbsym - np.asarray([0, 4, 4, 4, 4, 4, 4, 0])).sum() == 0
-        assert abs(kmf1.mo_coeff[1].orbsym - np.asarray([0, 3, 4, 4, 0, 3, 4, 4])).sum() == 0
-        assert abs(kmf1.mo_coeff[2].orbsym - np.asarray([0, 0, 2, 2, 0, 2, 2, 0])).sum() == 0
+        assert abs(kmf.mo_coeff[0].orbsym - np.asarray([0, 4, 4, 4, 4, 4, 4, 0])).sum() == 0
+        assert abs(kmf.mo_coeff[1].orbsym - np.asarray([0, 3, 4, 4, 0, 3, 4, 4])).sum() == 0
+        assert abs(kmf.mo_coeff[2].orbsym - np.asarray([0, 0, 2, 2, 0, 2, 2, 0])).sum() == 0
+        assert getattr(kmf1.mo_coeff[0], 'orbsym', None) is None
 
     def test_kuhf_gamma_center(self):
         self.assertAlmostEqual(kumf_ksymm.e_tot, kumf0.e_tot, 7)
