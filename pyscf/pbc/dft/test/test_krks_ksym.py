@@ -116,6 +116,18 @@ class KnownValues(unittest.TestCase):
         kumf.kernel()
         self.assertAlmostEqual(kumf.e_tot, kumf0.e_tot, 6)
 
+    def test_krks_symorb(self):
+        cell1 = cell.copy()
+        cell1.build(symmorphic=True)
+        kpts = cell1.make_kpts([2,2,2], with_gamma_point=True,space_group_symmetry=True)
+        kmf = pscf.KRKS(cell1, kpts=kpts).run()
+        kmf1 = pscf.KRKS(cell1, kpts=kpts, use_ao_symmetry=False).run()
+        self.assertAlmostEqual(kmf.e_tot, kmf1.e_tot, 7)
+        assert abs(kmf.mo_coeff[0].orbsym - np.asarray([0, 4, 4, 4, 4, 4, 4, 0])).sum() == 0
+        assert abs(kmf.mo_coeff[1].orbsym - np.asarray([0, 3, 4, 4, 0, 3, 4, 4])).sum() == 0
+        assert abs(kmf.mo_coeff[2].orbsym - np.asarray([0, 0, 2, 2, 0, 2, 2, 0])).sum() == 0
+        assert getattr(kmf1.mo_coeff[0], 'orbsym', None) is None
+
     def test_rsh(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
         kmf0 = krks.KRKS(He, kpts=kpts0)

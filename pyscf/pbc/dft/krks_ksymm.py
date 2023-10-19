@@ -151,8 +151,9 @@ class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
     get_init_guess = khf_ksymm.KRHF.get_init_guess
 
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
-                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
-        khf_ksymm.KRHF.__init__(self, cell, kpts, exxdiv=exxdiv)
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
+                 **kwargs):
+        khf_ksymm.KRHF.__init__(self, cell, kpts, exxdiv=exxdiv, **kwargs)
         rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
