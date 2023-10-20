@@ -118,7 +118,7 @@ class _DFHF:
         # the incremental method in direct_scf.
         self.direct_scf = only_dfj
         self._keys = mf._keys.union(['with_df', 'only_dfj'])
-        
+
     def undo_df(self):
         '''Remove the DFHF Mixin'''
         obj = lib.view(self, lib.drop_class(self.__class__, _DFHF))
