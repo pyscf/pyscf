@@ -160,15 +160,15 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
                 eri1tmp = eri1tmp.reshape(p1-p0,nf,nao,nao)
                 de[k,i] -= numpy.einsum('ijkl,ij,kl', eri1tmp, hf_dm1[p0:p1,q0:q1], zvec_ao) * 2
                 de[k,i] -= numpy.einsum('ijkl,kl,ij', eri1tmp, hf_dm1, zvec_ao[p0:p1,q0:q1]) * 2
-                de[k,i] += numpy.einsum('ijkl,il,kj', eri1tmp, hf_dm1[p0:p1], zvec_ao[q0:q1])
+                de[k,i] += numpy.einsum('ijkl,il,kj', eri1tmp, hf_dm1[p0:p1], zvec_ao[:,q0:q1])
                 de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, hf_dm1[q0:q1], zvec_ao[p0:p1])
 
                 #:vhf1c, vhf1a = mc_grad.get_veff(mol, (dm_core, dm_cas))
                 #:de[k] += numpy.einsum('xij,ij->x', vhf1c[:,p0:p1], casci_dm1[p0:p1]) * 2
                 #:de[k] += numpy.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
-                de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_core[q0:q1], casci_dm1[p0:p1]) * 2
+                de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_core, casci_dm1[p0:p1,q0:q1]) * 2
                 de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, dm_core[q0:q1], casci_dm1[p0:p1])
-                de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_cas[q0:q1], dm_core[p0:p1]) * 2
+                de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_cas, dm_core[p0:p1,q0:q1]) * 2
                 de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, dm_cas[q0:q1], dm_core[p0:p1])
             eri1 = eri1tmp = None
 
