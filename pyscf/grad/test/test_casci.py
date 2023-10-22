@@ -461,7 +461,7 @@ class KnownValues(unittest.TestCase):
 
     # issue 1909
     def test_small_mem(self):
-        mol = M(atom="""
+        mol = gto.M(atom="""
             H                 -0.00021900   -0.20486000   -2.17721200
             H                 -0.00035900   -1.27718700   -2.17669400
             """, basis='6-31G')
