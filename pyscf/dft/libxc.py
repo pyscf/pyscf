@@ -30,6 +30,7 @@ import numpy
 from functools import lru_cache
 from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
+from pyscf.dft import xc_deriv
 from pyscf import __config__
 
 _itrf = lib.load_library('libxc_itrf')
@@ -1487,21 +1488,20 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:
         raise ValueError("Unknown nvar {}".format(nvar))
 
-    outlen = (math.factorial(nvar+deriv) //
-              (math.factorial(nvar) * math.factorial(deriv)))
+    outlen = lib.comb(nvar+deriv, deriv)
     outbuf = numpy.zeros((outlen,ngrids))
-
     density_threshold = 0
-    _itrf.LIBXC_eval_xc(ctypes.c_int(n),
-                        (ctypes.c_int*n)(*fn_ids),
-                        (ctypes.c_double*n)(*facs),
-                        (ctypes.c_double*n)(*omega),
-                        ctypes.c_int(nspin),
-                        ctypes.c_int(deriv), ctypes.c_int(ngrids),
-                        rho_u.ctypes.data_as(ctypes.c_void_p),
-                        rho_d.ctypes.data_as(ctypes.c_void_p),
-                        outbuf.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_double(density_threshold))
+    if n > 0:
+        _itrf.LIBXC_eval_xc(ctypes.c_int(n),
+                            (ctypes.c_int*n)(*fn_ids),
+                            (ctypes.c_double*n)(*facs),
+                            (ctypes.c_double*n)(*omega),
+                            ctypes.c_int(nspin),
+                            ctypes.c_int(deriv), ctypes.c_int(ngrids),
+                            rho_u.ctypes.data_as(ctypes.c_void_p),
+                            rho_d.ctypes.data_as(ctypes.c_void_p),
+                            outbuf.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_double(density_threshold))
 
     exc = outbuf[0]
     vxc = fxc = kxc = None
@@ -1599,6 +1599,132 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                 None, None, None, outbuf[216:220].T]
     return exc, vxc, fxc, kxc
 
+_UFXC_SORT = numpy.array([
+    0, 1,                   # v2rho2
+    2, 3, 4,                # v2rhosigma
+    11, 12, 13, 14, 15, 16, # v2rhotau
+    5, 6, 7, 8, 9, 10,      # v2sigma2
+    17, 18, 19, 20,         # v2sigmatau
+    21, 22, 23, 24, 25, 26, # v2tau2
+])
+_UKXC_SORT = numpy.array([
+    0, 1, 2,                                        # v3rho3
+    3, 4, 5, 6,                                     # v3rho2sigma
+    28, 29, 30, 31, 32, 33, 34, 35, 36, 37,         # v3rho2tau
+    7, 8, 9, 10, 11, 12, 13, 14, 15,                # v3rhosigma2
+    38, 39, 40, 41, 42, 43,                         # v3rhosigmatau
+    44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, # v3rhotau2
+    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, # v3sigma3
+    56, 57, 58, 59, 60, 61,                         # v3sigma2tau
+    62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, # v3sigmatau2
+    74, 75, 76, 77, 78, 79, 80, 81, 82,             # v3tau3
+])
+_ULXC_SORT = numpy.array([
+    0, 1, 2, 3,                                                                                                             # v4rho4
+    4, 5, 6, 7, 8,                                                                                                          # v4rho3sigma
+    59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,                                                             # v4rho3tau
+    9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,                                                                          # v4rho2sigma2
+    74, 75, 76, 77, 78, 79, 80, 81,                                                                                         # v4rho2sigmatau
+    82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99,                                                 # v4rho2tau2
+    21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,                                                 # v4rhosigma3
+    100, 101, 102, 103, 104, 105, 106, 107, 108,                                                                            # v4rhosigma2tau
+    109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, # v4rhosigmatau2
+    133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150,                               # v4rhotau3
+    39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,                                         # v4sigma4
+    151, 152, 153, 154, 155, 156, 157, 158,                                                                                 # v4sigma3tau
+    159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178,                     # v4sigma2tau2
+    179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196,                               # v4sigmatau3
+    197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208,                                                             # v4tau4
+])
+
+def eval_xc_eff(xc_code, rho, deriv=1, omega=None):
+    r'''Returns the derivative tensor against the density parameters
+
+    [density_a, (nabla_x)_a, (nabla_y)_a, (nabla_z)_a, tau_a]
+
+    or spin-polarized density parameters
+
+    [[density_a, (nabla_x)_a, (nabla_y)_a, (nabla_z)_a, tau_a],
+     [density_b, (nabla_x)_b, (nabla_y)_b, (nabla_z)_b, tau_b]].
+
+    It differs from the eval_xc method in the derivatives of non-local part.
+    The eval_xc method returns the XC functional derivatives to sigma
+    (|\nabla \rho|^2)
+
+    Args:
+        rho: 2-dimensional or 3-dimensional array
+            Total density or (spin-up, spin-down) densities (and their
+            derivatives if GGA or MGGA functionals) on grids
+
+    Kwargs:
+        deriv: int
+            derivative orders
+        omega: float
+            define the exponent in the attenuated Coulomb for RSH functional
+    '''
+    hyb, fn_facs = parse_xc(xc_code)
+    if omega is not None:
+        hyb = hyb[:2] + (float(omega),)
+
+    fn_ids = [x[0] for x in fn_facs]
+    facs   = [x[1] for x in fn_facs]
+    if hyb[2] != 0:
+        # Current implementation does not support different omegas for
+        # different RSH functionals if there are multiple RSHs
+        omega = [hyb[2]] * len(facs)
+    else:
+        omega = [0] * len(facs)
+    fn_ids_set = set(fn_ids)
+    if fn_ids_set.intersection(PROBLEMATIC_XC):
+        problem_xc = [PROBLEMATIC_XC[k]
+                      for k in fn_ids_set.intersection(PROBLEMATIC_XC)]
+        warnings.warn('Libxc functionals %s may have discrepancy to xcfun '
+                      'library.\n' % problem_xc)
+
+    if any([needs_laplacian(fid) for fid in fn_ids]):
+        raise NotImplementedError('laplacian in meta-GGA method')
+
+    rho = numpy.asarray(rho, order='C', dtype=numpy.double)
+    ngrids = rho.shape[-1]
+
+    xctype = xc_type(xc_code)
+    assert xctype in ('LDA', 'GGA', 'MGGA')
+
+    if xctype == 'MGGA' and rho.shape[-2] == 6:
+        rho = rho[...,[0,1,2,3,5],:]
+
+    if xctype == 'LDA':
+        spin_polarized = rho.ndim >= 2 and rho.shape[0] != 1
+    else:
+        spin_polarized = rho.ndim == 3 and rho.shape[0] != 1
+    if spin_polarized:
+        spin = 1
+    else:
+        spin = 0
+    nspin = spin + 1
+
+    nvar, xlen = xc_deriv._XC_NVAR[xctype, spin]
+
+    rho = rho.reshape(spin+1,nvar,ngrids)
+    outlen = lib.comb(xlen+deriv, deriv)
+    out = numpy.zeros((ngrids,outlen))
+    n = len(fn_ids)
+    density_threshold = 0
+    if n > 0:
+        _itrf.LIBXC_eval_xc1(ctypes.c_int(n),
+                             (ctypes.c_int*n)(*fn_ids),
+                             (ctypes.c_double*n)(*facs),
+                             (ctypes.c_double*n)(*omega),
+                             ctypes.c_int(spin), ctypes.c_int(deriv),
+                             ctypes.c_int(nvar), ctypes.c_int(ngrids),
+                             rho.ctypes.data_as(ctypes.c_void_p),
+                             out.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_double(density_threshold))
+    assert False
+    out = lib.transpose(out)
+    xc_tensor = xc_deriv.transform_xc(rho, out, xctype, spin, deriv)
+    exc = out[0]
+    return exc, xc_tensor
 
 def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     '''Define XC functional.  See also :func:`eval_xc` for the rules of input description.

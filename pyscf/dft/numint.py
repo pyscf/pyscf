@@ -2691,7 +2691,7 @@ class LibXCMixin:
         if spin_polarized:
             assert rhop.shape[0] == 2
             spin = 1
-            if rhop.shape[1] == 5:  # MGGA
+            if rhop.ndim == 3 and rhop.shape[1] == 5:  # MGGA
                 ngrids = rhop.shape[2]
                 rhop = numpy.empty((2, 6, ngrids))
                 rhop[0,:4] = rho[0][:4]
@@ -2701,7 +2701,7 @@ class LibXCMixin:
                 rhop[1,5] = rho[1][4]
         else:
             spin = 0
-            if rhop.shape[0] == 5:  # MGGA
+            if rhop.ndim == 2 and rhop.shape[0] == 5:  # MGGA
                 ngrids = rho.shape[1]
                 rhop = numpy.empty((6, ngrids))
                 rhop[:4] = rho[:4]

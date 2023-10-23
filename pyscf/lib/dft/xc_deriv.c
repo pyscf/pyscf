@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <assert.h>
 
 /*
  * tmp = fg[...,[[0,1],[1,2]],...]
@@ -170,4 +171,72 @@ void VXCud2ts_deriv3(double *v_ts, double *v_ud, int nvar, int ngrids)
                         vsss[ij+n] = (uss - dss) * .125;
                 }
         } }
+}
+
+#define frho_at(n, a, x, g)     frho[((n*2+a)*Nvg + x*Ngrids + g)]
+#define fsigma_at(x, n, g)      fsigma[(x*Ncg + n*Ngrids + g)]
+// spin0 shape: frho[...,nvar,ngrids], fsigma[:,...,ngrids], rho[nvar,ngrids]
+void VXCunfold_sigma_spin0(double *frho, double *fsigma, double *rho,
+                           int ncounts, int nvar, int ngrids)
+{
+        size_t Ngrids = ngrids;
+        size_t Ncg = ncounts * Ngrids;
+        size_t Nvg = nvar * Ngrids;
+        int g, n;
+        for (n = 0; n < ncounts; n++) {
+#pragma GCC ivdep
+                for (g = 0; g < ngrids; g++) {
+                        frho[n*Nvg+g] = fsigma[n*Ngrids+g];
+                        frho[n*Nvg+1*Ngrids+g] = fsigma[Ncg+n*Ngrids+g] * rho[1*Ngrids+g] * 2;
+                        frho[n*Nvg+2*Ngrids+g] = fsigma[Ncg+n*Ngrids+g] * rho[2*Ngrids+g] * 2;
+                        frho[n*Nvg+3*Ngrids+g] = fsigma[Ncg+n*Ngrids+g] * rho[3*Ngrids+g] * 2;
+                }
+        }
+        if (nvar > 4) {
+                // MGGA
+                assert(nvar == 5);
+                for (n = 0; n < ncounts; n++) {
+#pragma GCC ivdep
+                        for (g = 0; g < ngrids; g++) {
+                                frho[n*Nvg+4*Ngrids+g] = fsigma[2*Ncg+n*Ngrids+g];
+                        }
+                }
+        }
+}
+
+#define frho_at(n, a, x, g)     frho[((n*2+a)*Nvg + x*Ngrids + g)]
+#define fsigma_at(x, n, g)      fsigma[(x*Ncg + n*Ngrids + g)]
+#define rho_at(a, x, g)         rho[(a*Nvg + x*Ngrids + g)]
+// spin1 shape: frho[...,2,nvar,ngrids], fsigma[:,...,ngrids], rho[2,nvar,ngrids]
+void VXCunfold_sigma_spin1(double *frho, double *fsigma, double *rho,
+                           int ncounts, int nvar, int ngrids)
+{
+        size_t Ngrids = ngrids;
+        size_t Ncg = ncounts * Ngrids;
+        size_t Nvg = nvar * Ngrids;
+        int g, n;
+        for (n = 0; n < ncounts; n++) {
+#pragma GCC ivdep
+                for (g = 0; g < ngrids; g++) {
+                        frho_at(n,0,0,g) = fsigma_at(0,n,g);
+                        frho_at(n,1,0,g) = fsigma_at(1,n,g);
+                        frho_at(n,0,1,g) = fsigma_at(2,n,g) * rho_at(0,1,g) * 2 + fsigma_at(3,n,g) * rho_at(1,1,g);
+                        frho_at(n,1,1,g) = fsigma_at(3,n,g) * rho_at(0,1,g) + 2 * fsigma_at(4,n,g) * rho_at(1,1,g);
+                        frho_at(n,0,2,g) = fsigma_at(2,n,g) * rho_at(0,2,g) * 2 + fsigma_at(3,n,g) * rho_at(1,2,g);
+                        frho_at(n,1,2,g) = fsigma_at(3,n,g) * rho_at(0,2,g) + 2 * fsigma_at(4,n,g) * rho_at(1,2,g);
+                        frho_at(n,0,3,g) = fsigma_at(2,n,g) * rho_at(0,3,g) * 2 + fsigma_at(3,n,g) * rho_at(1,3,g);
+                        frho_at(n,1,3,g) = fsigma_at(3,n,g) * rho_at(0,3,g) + 2 * fsigma_at(4,n,g) * rho_at(1,3,g);
+                }
+        }
+        if (nvar > 4) {
+                // MGGA
+                assert(nvar == 5);
+                for (n = 0; n < ncounts; n++) {
+#pragma GCC ivdep
+                        for (g = 0; g < ngrids; g++) {
+                                frho_at(n,0,4,g) = fsigma_at(5,n,g);
+                                frho_at(n,1,4,g) = fsigma_at(6,n,g);
+                        }
+                }
+        }
 }
