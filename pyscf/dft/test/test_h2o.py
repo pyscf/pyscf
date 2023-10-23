@@ -505,6 +505,13 @@ class KnownValues(unittest.TestCase):
         mf2.kernel()
         self.assertAlmostEqual(mf1.e_tot, -76.36649222362115, 9)
 
+    def test_dispersion(self):
+        mf = dft.RKS(h2o)
+        mf.xc = 'B3LYP'
+        mf.disp = 'd3bj'
+        mf.run(xc='B3LYP', disp='d3bj')
+        self.assertAlmostEqual(mf.e_tot, -76.38552043811781, 9)
+
     def test_reset(self):
         mf = dft.RKS(h2o).newton()
         mf.reset(h2osym)

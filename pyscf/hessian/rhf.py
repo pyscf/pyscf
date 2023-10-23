@@ -27,7 +27,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
-from pyscf.scf import _vhf
+from pyscf.scf import _vhf, hf
 from pyscf.scf import cphf
 
 # import _response_functions to load gen_response methods in SCF class
@@ -295,6 +295,71 @@ def _get_jk(mol, intor, comp, aosym, script_dms,
                 lib.hermi_triu(vs[k], hermi=hermi, inplace=True)
     return vs
 
+
+def get_dispersion(hessobj):
+    mol = hessobj.base.mol
+    natm = mol.natm
+    mf = hessobj.base
+    disp_version = hessobj.base.disp
+    h_disp = numpy.zeros([natm,natm,3,3])
+    if disp_version is None:
+        return h_disp
+    if isinstance(hessobj.base, hf.KohnShamDFT):
+        method = hessobj.base.xc
+    else:
+        method = 'hf'
+
+    if mf.disp[:2].upper() == 'D3':
+        import dftd3.pyscf as disp
+        coords = hessobj.mol.atom_coords()
+        mol = mol.copy()
+        eps = 1e-5
+        for i in range(natm):
+            for j in range(3):
+                coords[i,j] += eps
+                mol.set_geom_(coords, unit='Bohr')
+                d3 = disp.DFTD3Dispersion(mol, xc=method, version=mf.disp)
+                _, g1 = d3.kernel()
+
+                coords[i,j] -= 2.0*eps
+                mol.set_geom_(coords, unit='Bohr')
+                d3 = disp.DFTD3Dispersion(mol, xc=method, version=mf.disp)
+                _, g2 = d3.kernel()
+
+                coords[i,j] += eps
+                h_disp[i,:,j,:] = (g1 - g2)/(2.0*eps)
+            return h_disp
+
+    elif mf.disp[:2].upper() == 'D4':
+        from pyscf.data.elements import charge
+        atoms = numpy.array([ charge(a[0]) for a in mol._atom])
+        coords = mol.atom_coords()
+        natm = mol.natm
+        from dftd4.interface import DampingParam, DispersionModel
+        params = DampingParam(method=method)
+        mol = mol.copy()
+        eps = 1e-5
+        for i in range(natm):
+            for j in range(3):
+                coords[i,j] += eps
+                mol.set_geom_(coords, unit='Bohr')
+                model = DispersionModel(atoms, coords)
+                res = model.get_dispersion(params, grad=True)
+                g1 = res.get("gradient")
+
+                coords[i,j] -= 2.0*eps
+                mol.set_geom_(coords, unit='Bohr')
+                model = DispersionModel(atoms, coords)
+                res = model.get_dispersion(params, grad=True)
+                g2 = res.get("gradient")
+
+                coords[i,j] += eps
+                h_disp[i,:,j,:] = (g1 - g2)/(2.0*eps)
+
+        return h_disp
+    else:
+        raise RuntimeError(f'dispersion correction: {disp_version} is not supported.')
+
 def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
               fx=None, atmlst=None, max_memory=4000, verbose=None):
     '''Solve the first order equation
@@ -488,6 +553,7 @@ class Hessian(lib.StreamObject):
     partial_hess_elec = partial_hess_elec
     hess_elec = hess_elec
     make_h1 = make_h1
+    get_dispersion = get_dispersion
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -581,6 +647,7 @@ class Hessian(lib.StreamObject):
 
         de = self.hess_elec(mo_energy, mo_coeff, mo_occ, atmlst=atmlst)
         self.de = de + self.hess_nuc(self.mol, atmlst=atmlst)
+        self.de += self.get_dispersion()
         return self.de
     hess = kernel
 

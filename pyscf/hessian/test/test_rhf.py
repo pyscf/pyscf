@@ -86,6 +86,20 @@ class KnownValues(unittest.TestCase):
 #        e2 = g_scanner(pmol.set_geom_('O  0. 0. 0.; 1  0. -0.757 0.5869; 1  0. 0.757 0.587'))[1]
 #        self.assertAlmostEqual(abs(hess[1,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 4)
 
+    def test_finite_diff_rhf_dispersion_hess(self):
+        mf = scf.RHF(mol)
+        mf.disp = 'd3bj'
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+        hess = hessian.RHF(mf).kernel()
+        self.assertAlmostEqual(lib.fp(hess), -0.7816353049729151, 6)
+
+        g_scanner = mf.nuc_grad_method().as_scanner()
+        pmol = mol.copy()
+        e1 = g_scanner(pmol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 4)
+
     def test_ecp_hess(self):
         mol = gto.M(atom='Cu 0 0 0; H 0 0 1.5', basis='lanl2dz',
                     ecp={'Cu':'lanl2dz'}, verbose=0)

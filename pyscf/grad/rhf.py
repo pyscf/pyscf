@@ -182,6 +182,35 @@ def get_veff(mf_grad, mol, dm):
     vj, vk = mf_grad.get_jk(mol, dm)
     return vj - vk * .5
 
+def get_dispersion(mf_grad):
+    '''gradient of dispersion correction for RHF/RKS'''
+    mol = mf_grad.base.mol
+    disp_version = mf_grad.base.disp
+    if disp_version is None:
+        return numpy.zeros([mol.natm,3])
+
+    if isinstance(mf_grad.base, hf.KohnShamDFT):
+        method = mf_grad.base.xc
+    else:
+        method = 'hf'
+
+    if disp_version[:2].upper() == 'D3':
+        # raised error in SCF module, assuming dftd3 installed
+        import dftd3.pyscf as disp
+        d3 = disp.DFTD3Dispersion(mol, xc=method, version=disp_version)
+        _, g_d3 = d3.kernel()
+        return g_d3
+    elif disp_version[:2].upper() == 'D4':
+        from pyscf.data.elements import charge
+        atoms = numpy.array([ charge(a[0]) for a in mol._atom])
+        coords = mol.atom_coords()
+        from dftd4.interface import DampingParam, DispersionModel
+        model = DispersionModel(atoms, coords)
+        res = model.get_dispersion(DampingParam(method=method), grad=True)
+        return res.get("gradient")
+    else:
+        raise RuntimeError(f'dispersion correction: {disp_version} is not supported.')
+
 def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     '''Energy weighted density matrix'''
     mo0 = mo_coeff[:,mo_occ>0]
@@ -414,6 +443,8 @@ class GradientsBase(lib.StreamObject):
 
         de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
         self.de = de + self.grad_nuc(atmlst=atmlst)
+        if self.base.disp is not None:
+            self.de += self.get_dispersion()
         if self.mol.symmetry:
             self.de = self.symmetrize(self.de, atmlst)
         logger.timer(self, 'SCF gradients', *cput0)
@@ -432,6 +463,8 @@ class GradientsBase(lib.StreamObject):
     _write = _write
 
     as_scanner = as_scanner
+
+    get_dispersion = get_dispersion
 
     def _tag_rdm1 (self, dm, mo_coeff, mo_occ):
         '''Tagging is necessary in DF subclass. Tagged arrays need
