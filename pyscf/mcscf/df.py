@@ -295,7 +295,7 @@ class _DFHessianCASSCF:
                                   with_j=with_j, with_k=with_k, omega=omega)
 
 
-class _ERIS(object):
+class _ERIS:
     def __init__(self, casscf, mo, with_df):
         log = logger.Logger(casscf.stdout, casscf.verbose)
 

@@ -146,7 +146,7 @@ def mkk2full(mk, k):
     return ab2full(*mkk2ab(mk, k))
 
 
-class TDMatrixBlocks(object):
+class TDMatrixBlocks:
     def tdhf_primary_form(self, *args, **kwargs):
         """
         A primary form of TDHF matrixes.
@@ -361,7 +361,7 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
         Args:
             model: a pyscf base model to extract TD matrix from;
         """
-        super(TDProxyMatrixBlocks, self).__init__()
+        super().__init__()
         self.proxy_model = model
         self.proxy_vind, self.proxy_diag = self.proxy_model.gen_vind(self.proxy_model._scf)
         self.proxy_vind = VindTracker(self.proxy_vind)
@@ -393,7 +393,7 @@ def format_frozen_mol(frozen, nmo):
     return space
 
 
-class MolecularMFMixin(object):
+class MolecularMFMixin:
     def __init__(self, model, frozen=None):
         """
         A mixin to support custom slices of mean-field attributes: `mo_coeff`, `mo_energy`, ...
@@ -513,7 +513,7 @@ def k_nmo(model):
     return tuple(i.shape[1] for i in model.mo_coeff)
 
 
-class PeriodicMFMixin(object):
+class PeriodicMFMixin:
     def __init__(self, model, frozen=None):
         """
         A mixin to support custom slices of mean-field attributes: `mo_coeff`, `mo_energy`, ...
@@ -569,7 +569,7 @@ class PeriodicMFMixin(object):
         return k_nmo(self.model)
 
 
-class VindTracker(object):
+class VindTracker:
     def __init__(self, vind):
         """
         Tracks calls to `vind` (a matrix-vector multiplication density response routine).
@@ -605,8 +605,7 @@ class VindTracker(object):
         return r
 
     def __iter__(self):
-        for i, o, e in zip(self.args, self.results, self.errors):
-            yield i, o, e
+        yield from zip(self.args, self.results, self.errors)
 
     @property
     def ncalls(self):
@@ -716,7 +715,7 @@ def kernel(eri, driver=None, fast=True, nroots=None, **kwargs):
         return eig(m, driver=driver, nroots=nroots)
 
 
-class TDBase(object):
+class TDBase:
     v2a = None
 
     def __init__(self, mf, frozen=None):

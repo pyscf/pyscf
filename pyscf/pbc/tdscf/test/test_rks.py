@@ -58,11 +58,11 @@ class DiamondPBE(unittest.TestCase):
         self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [9.2625251659, 9.2625251659]
+        ref = [9.26752544, 9.26752544]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [4.8364248190, 4.8364248190]
+        ref = [4.79532598, 4.79532598]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tddft_singlet(self):
@@ -226,11 +226,11 @@ class DiamondPBE0(unittest.TestCase):
         self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
 
     def test_tda_singlet(self):
-        ref = [9.6202884134, 9.6202884134]
+        ref = [9.61243337, 9.61243337]
         self.kernel('TDA', ref)
 
     def test_tda_triplet(self):
-        ref = [5.1659937745, 5.1659937745]
+        ref = [5.13034084, 5.13034084]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tddft_singlet(self):

@@ -616,7 +616,7 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
 
 
 # A tag to label the derived SCF class
-class _CIAH_SOSCF(object):
+class _CIAH_SOSCF:
     '''
     Attributes for Newton solver:
         max_cycle_inner : int

@@ -146,7 +146,7 @@ def num_threads(n=None):
         _np_helper.get_omp_threads.restype = ctypes.c_int
         return _np_helper.get_omp_threads()
 
-class with_omp_threads(object):
+class with_omp_threads:
     '''Using this macro to create a temporary context in which the number of
     OpenMP threads are set to the required value. When the program exits the
     context, the number OpenMP threads will be restored.
@@ -177,7 +177,7 @@ class with_omp_threads(object):
         if self.sys_threads is not None:
             num_threads(self.sys_threads)
 
-class with_multiproc_nproc(object):
+class with_multiproc_nproc:
     '''
     Using this macro to create a temporary context in which the number of
     multi-processing processes are set to the required value.
@@ -458,7 +458,7 @@ def square_mat_in_trilu_indices(n):
     tril2sq[idx[0],idx[1]] = tril2sq[idx[1],idx[0]] = numpy.arange(n*(n+1)//2)
     return tril2sq
 
-class capture_stdout(object):
+class capture_stdout:
     '''redirect all stdout (c printf & python print) into a string
 
     Examples:
@@ -494,7 +494,7 @@ class capture_stdout(object):
             return self.ftmp.file.read()
 ctypes_stdout = capture_stdout
 
-class quite_run(object):
+class quite_run:
     '''capture all stdout (c printf & python print) but output nothing
 
     Examples:
@@ -521,7 +521,7 @@ class quite_run(object):
 # this decorator lets me use methods as both static and instance methods
 # In contrast to classmethod, when obj.function() is called, the first
 # argument is obj in omnimethod rather than obj.__class__ in classmethod
-class omnimethod(object):
+class omnimethod:
     def __init__(self, func):
         self.func = func
 
@@ -536,7 +536,7 @@ def view(obj, cls):
 
 
 SANITY_CHECK = getattr(__config__, 'SANITY_CHECK', True)
-class StreamObject(object):
+class StreamObject:
     '''For most methods, there are three stream functions to pipe computing stream:
 
     1 ``.set_`` function to update object attributes, eg
@@ -995,7 +995,7 @@ bg = background = bg_thread = background_thread
 bp = bg_process = background_process
 
 ASYNC_IO = getattr(__config__, 'ASYNC_IO', True)
-class call_in_background(object):
+class call_in_background:
     '''Within this macro, function(s) can be executed asynchronously (the
     given functions are executed in background).
 
@@ -1182,7 +1182,7 @@ class GradScanner:
         conv = getattr(self.base, 'converged', True)
         return conv
 
-class temporary_env(object):
+class temporary_env:
     '''Within the context of this macro, the attributes of the object are
     temporarily updated. When the program goes out of the scope of the
     context, the original value of each attribute will be restored.

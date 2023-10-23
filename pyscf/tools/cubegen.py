@@ -211,7 +211,7 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION,
     return MEP
 
 
-class Cube(object):
+class Cube:
     '''  Read-write of the Gaussian CUBE files
 
     Attributes:

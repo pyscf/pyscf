@@ -461,7 +461,7 @@ def _cho_solve_rhojk (mf_grad, mol, auxmol, orbol, orbor,
     rhoj = solve_j2c(rhoj.T).T
     int2c = None
     t1 = logger.timer_debug1 (mf_grad, 'df grad vj and vk AO (P|Q) D_Q = (P|mn) D_mn solve', *t1)
-    class get_rhok_class (object):
+    class get_rhok_class :
         def __init__(self, my_f):
             self.f_rhok = my_f
         def __call__(self, set_id, p0, p1):

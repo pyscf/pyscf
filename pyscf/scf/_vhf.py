@@ -25,7 +25,7 @@ libcvhf = lib.load_library('libcvhf')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, name))
 
-class VHFOpt(object):
+class VHFOpt:
     def __init__(self, mol, intor=None,
                  prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
         '''If function "qcondname" is presented, the qcond (sqrt(integrals))

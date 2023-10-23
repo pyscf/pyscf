@@ -525,7 +525,7 @@ class Grids(lib.StreamObject):
         if key in ('atom_grid', 'atomic_radii', 'radii_adjust', 'radi_method',
                    'becke_scheme', 'prune', 'level'):
             self.reset()
-        super(Grids, self).__setattr__(key, val)
+        super().__setattr__(key, val)
 
     def dump_flags(self, verbose=None):
         logger.info(self, 'radial grids: %s', self.radi_method.__doc__)

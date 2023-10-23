@@ -176,7 +176,7 @@ class Gradients (rhf_grad.GradientsBase):
         self._finalize()
         return self.de
 
-class LagPrec (object):
+class LagPrec :
     ''' A callable preconditioner for solving the Lagrange equations.
         Default is 1/(Adiagd+level_shift)
     '''
