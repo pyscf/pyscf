@@ -66,111 +66,38 @@ void VXCfg_to_direct_deriv(double *qg, double *fg, double *rho,
         }
 }
 
-void VXCud2ts_deriv1(double *v_ts, double *v_ud, int nvar, int ngrids)
+void VXCud2ts(double *v_ts, double *v_ud, int ncounts, size_t ngrids)
 {
-        size_t Ngrids = ngrids;
-        size_t vg = nvar * Ngrids;
-        double *vu = v_ud;
-        double *vd = v_ud + vg;
-        double *vt = v_ts;
-        double *vs = v_ts + vg;
-        size_t n;
+        double *vu, *vd, *vt, *vs;
+        int i, n;
+        for (n = 0; n < ncounts; n++) {
+                vu = v_ud + 2*n    * ngrids;
+                vd = v_ud +(2*n+1) * ngrids;
+                vt = v_ts + 2*n    * ngrids;
+                vs = v_ts +(2*n+1) * ngrids;
 #pragma GCC ivdep
-        for (n = 0; n < vg; n++) {
-                vt[n] = (vu[n] + vd[n]) * .5;
-                vs[n] = (vu[n] - vd[n]) * .5;
-        }
-}
-
-void VXCud2ts_deriv2(double *v_ts, double *v_ud, int nvar, int ngrids)
-{
-        size_t Ngrids = ngrids;
-        size_t vg = nvar * Ngrids;
-        size_t vg2 = vg * 2;
-        size_t vvg = nvar * vg2;
-        double *vuu = v_ud;
-        double *vud = v_ud + vg;
-        double *vdu = vuu + vvg;
-        double *vdd = vud + vvg;
-        double *vtt = v_ts;
-        double *vts = v_ts + vg;
-        double *vst = vtt + vvg;
-        double *vss = vts + vvg;
-        double ut, us, dt, ds;
-        size_t i, n;
-        for (i = 0; i < nvar; i++) {
-#pragma GCC ivdep
-                for (n = 0; n < vg; n++) {
-                        ut = vuu[i*vg2+n] + vud[i*vg2+n];
-                        us = vuu[i*vg2+n] - vud[i*vg2+n];
-                        dt = vdu[i*vg2+n] + vdd[i*vg2+n];
-                        ds = vdu[i*vg2+n] - vdd[i*vg2+n];
-                        vtt[i*vg2+n] = (ut + dt) * .25;
-                        vts[i*vg2+n] = (us + ds) * .25;
-                        vst[i*vg2+n] = (ut - dt) * .25;
-                        vss[i*vg2+n] = (us - ds) * .25;
+                for (i = 0; i < ngrids; i++) {
+                        vt[i] = (vu[i] + vd[i]) * .5;
+                        vs[i] = (vu[i] - vd[i]) * .5;
                 }
         }
 }
 
-void VXCud2ts_deriv3(double *v_ts, double *v_ud, int nvar, int ngrids)
+void VXCts2ud(double *v_ud, double *v_ts, int ncounts, size_t ngrids)
 {
-        size_t Ngrids = ngrids;
-        size_t vg = nvar * Ngrids;
-        size_t vg2 = vg * 2;
-        size_t vvg = nvar * vg2;
-        size_t vvg2 = vvg * 2;
-        size_t vvvg = nvar * vvg2;
-        double *vuuu = v_ud;
-        double *vuud = v_ud + vg;
-        double *vudu = vuuu + vvg;
-        double *vudd = vuud + vvg;
-        double *vduu = vuuu + vvvg;
-        double *vdud = vuud + vvvg;
-        double *vddu = vudu + vvvg;
-        double *vddd = vudd + vvvg;
-        double *vttt = v_ts;
-        double *vtts = v_ts + vg;
-        double *vtst = vttt + vvg;
-        double *vtss = vtts + vvg;
-        double *vstt = vttt + vvvg;
-        double *vsts = vtts + vvvg;
-        double *vsst = vtst + vvvg;
-        double *vsss = vtss + vvvg;
-        double uut, uus, udt, uds, dut, dus, ddt, dds;
-        double utt, uts, ust, uss, dtt, dts, dst, dss;
-        size_t i, j, ij, n;
-        for (i = 0; i < nvar; i++) {
-        for (j = 0; j < nvar; j++) {
-                ij = (i * nvar * 2 + j) * vg2;
+        double *vu, *vd, *vt, *vs;
+        int i, n;
+        for (n = 0; n < ncounts; n++) {
+                vu = v_ud + 2*n    * ngrids;
+                vd = v_ud +(2*n+1) * ngrids;
+                vt = v_ts + 2*n    * ngrids;
+                vs = v_ts +(2*n+1) * ngrids;
 #pragma GCC ivdep
-                for (n = 0; n < vg; n++) {
-                        uut = vuuu[ij+n] + vuud[ij+n];
-                        uus = vuuu[ij+n] - vuud[ij+n];
-                        udt = vudu[ij+n] + vudd[ij+n];
-                        uds = vudu[ij+n] - vudd[ij+n];
-                        dut = vduu[ij+n] + vdud[ij+n];
-                        dus = vduu[ij+n] - vdud[ij+n];
-                        ddt = vddu[ij+n] + vddd[ij+n];
-                        dds = vddu[ij+n] - vddd[ij+n];
-                        utt = uut + udt;
-                        uts = uus + uds;
-                        ust = uut - udt;
-                        uss = uus - uds;
-                        dtt = dut + ddt;
-                        dts = dus + dds;
-                        dst = dut - ddt;
-                        dss = dus - dds;
-                        vttt[ij+n] = (utt + dtt) * .125;
-                        vtts[ij+n] = (uts + dts) * .125;
-                        vtst[ij+n] = (ust + dst) * .125;
-                        vtss[ij+n] = (uss + dss) * .125;
-                        vstt[ij+n] = (utt - dtt) * .125;
-                        vsts[ij+n] = (uts - dts) * .125;
-                        vsst[ij+n] = (ust - dst) * .125;
-                        vsss[ij+n] = (uss - dss) * .125;
+                for (i = 0; i < ngrids; i++) {
+                        vu[i] = vt[i] + vs[i];
+                        vd[i] = vt[i] - vs[i];
                 }
-        } }
+        }
 }
 
 #define frho_at(n, a, x, g)     frho[((n*2+a)*Nvg + x*Ngrids + g)]

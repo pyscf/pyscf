@@ -615,43 +615,38 @@ def ud2ts(v_ud):
     '''XC derivatives spin-up/spin-down representations to
     total-density/spin-density representations'''
     v_ud = np.asarray(v_ud, order='C')
-    nvar, ngrids = v_ud.shape[-2:]
-    #:c = np.array([[.5,  .5],    # vrho = (va + vb) / 2
-    #:              [.5, -.5]])   # vs   = (va - vb) / 2
-    if v_ud.ndim == 3:  # vxc
-        #:v_ts = np.einsum('ra,axg->rxg', c, v_ud)
-        drv = libdft.VXCud2ts_deriv1
-    elif v_ud.ndim == 5:  # fxc
-        #:v_ts = np.einsum('ra,axbyg->rxbyg', c, v_ud)
-        #:v_ts = np.einsum('sb,rxbyg->rxsyg', c, v_ts)
-        drv = libdft.VXCud2ts_deriv2
-    elif v_ud.ndim == 7:  # kxc
-        #:v_ts = np.einsum('ra,axbyczg->rxbyczg', c, v_ud)
-        #:v_ts = np.einsum('sb,rxbyczg->rxsyczg', c, v_ts)
-        #:v_ts = np.einsum('tc,rxsyczg->rxsytzg', c, v_ts)
-        drv = libdft.VXCud2ts_deriv3
-    else:
-        raise NotImplementedError(f'Shape {v_ud.shape} not supported')
     v_ts = np.empty_like(v_ud)
-    drv(v_ts.ctypes.data_as(ctypes.c_void_p),
-        v_ud.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(nvar), ctypes.c_int(ngrids))
+    nvar, ngrids = v_ts.shape[-2:]
+    nvar2 = nvar * 2
+    order = v_ud.ndim // 2
+    drv = libdft.VXCud2ts
+    v_ts, v_ud = v_ud, v_ts
+    for i in range(order):
+        v_ts, v_ud = v_ud, v_ts
+        n = nvar2**i
+        nvg = nvar * nvar2**(order-1-i) * ngrids
+        #:c = np.array([[.5,  .5],    # vrho = (va + vb) / 2
+        #:              [.5, -.5]])   # vs   = (va - vb) / 2
+        #:v_ts = np.einsum('ra,...ax...g->...rx...g', c, v_ud)
+        drv(v_ts.ctypes, v_ud.ctypes, ctypes.c_int(n), ctypes.c_int(nvg))
     return v_ts
 
 def ts2ud(v_ts):
     '''XC derivatives total-density/spin-density representations to
     spin-up/spin-down representations'''
-    c = np.array([[1,  1],    # va = vrho + vs
-                  [1, -1]])   # vb = vrho - vs
-    if v_ts.ndim == 3:  # vxc
-        v_ud = np.einsum('ra,axg->rxg', c, v_ts)
-    elif v_ts.ndim == 5:  # fxc
-        v_ud = np.einsum('ra,axbyg->rxbyg', c, v_ts)
-        v_ud = np.einsum('sb,rxbyg->rxsyg', c, v_ud)
-    elif v_ts.ndim == 7:  # kxc
-        v_ud = np.einsum('ra,axbyczg->rxbyczg', c, v_ts)
-        v_ud = np.einsum('sb,rxbyczg->rxsyczg', c, v_ud)
-        v_ud = np.einsum('tc,rxsyczg->rxsytzg', c, v_ud)
-    else:
-        raise NotImplementedError(f'Shape {v_ts.shape} not supported')
+    v_ts = np.asarray(v_ts, order='C')
+    v_ud = np.empty_like(v_ts)
+    nvar, ngrids = v_ts.shape[-2:]
+    nvar2 = nvar * 2
+    order = v_ud.ndim // 2
+    drv = libdft.VXCts2ud
+    v_ts, v_ud = v_ud, v_ts
+    for i in range(order):
+        v_ts, v_ud = v_ud, v_ts
+        n = nvar2**i
+        nvg = nvar * nvar2**(order-1-i) * ngrids
+        #:c = np.array([[1,  1],    # va = vrho + vs
+        #:              [1, -1]])   # vb = vrho - vs
+        #:v_ud = np.einsum('ra,...ax...g->...rx...g', c, v_ts)
+        drv(v_ud.ctypes, v_ts.ctypes, ctypes.c_int(n), ctypes.c_int(nvg))
     return v_ud

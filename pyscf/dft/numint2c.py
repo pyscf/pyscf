@@ -272,35 +272,28 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
         raise RuntimeError(f'Unknown collinear scheme {ni.collinear}')
 
     rho = np.stack([(t + s) * .5, (t - s) * .5])
-    spin = 1
     if xctype == 'MGGA' and rho.shape[1] == 6:
-        rho = numpy.asarray(rho[:,[0,1,2,3,5],:], order='C')
+        rho = np.asarray(rho[:,[0,1,2,3,5],:], order='C')
+
+    spin = 1
 
     out = ni.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
-    if deriv > 3:
-        return xc_deriv.transform_xc(rho, out, xctype, spin, deriv)
-
-    exc = out[0]
-    vxc = fxc = kxc = None
-    if deriv > 2:
-        kxc = xc_deriv.transform_xc(rho, out, xctype, spin, 3)
-    if deriv > 1:
-        fxc = xc_deriv.transform_xc(rho, out, xctype, spin, 2)
-    if deriv > 0:
-        vxc = xc_deriv.transform_xc(rho, out, xctype, spin, 1)
-    return exc, vxc, fxc, kxc
+    evfk = [out[0]]
+    for order in range(1, deriv+1):
+        evfk.append(xc_deriv.transform_xc(rho, out, xctype, spin, order))
+    if deriv < 3:
+        # The return has at least [e, v, f, k] terms
+        evfk.extend([None] * (3 - deriv))
+    return evfk
 
 # * Mcfun requires functional derivatives to total-density and spin-density.
 # * Make it a global function than a closure so as to be callable by multiprocessing
 def __mcfun_fn_eval_xc(ni, xc_code, xctype, rho, deriv):
-    exc, vxc, fxc, kxc = ni.eval_xc_eff(xc_code, rho, deriv=deriv, xctype=xctype)
-    if deriv > 0:
-        vxc = xc_deriv.ud2ts(vxc)
-    if deriv > 1:
-        fxc = xc_deriv.ud2ts(fxc)
-    if deriv > 2:
-        kxc = xc_deriv.ud2ts(kxc)
-    return exc, vxc, fxc, kxc
+    evfk = ni.eval_xc_eff(xc_code, rho, deriv=deriv, xctype=xctype)
+    for order in range(1, deriv+1):
+        if evfk[order] is not None:
+            evfk[order] = xc_deriv.ud2ts(evfk[order])
+    return evfk
 
 def mcfun_eval_xc_adapter(ni, xc_code):
     '''Wrapper to generate the eval_xc function required by mcfun'''

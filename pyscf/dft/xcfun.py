@@ -252,7 +252,7 @@ HYB_XC = {'PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
           'B97XC'   , 'B97_1XC' , 'B97_2XC' , 'M05XC'   , 'TPSSH'   ,
           'HFLYP'}
 RSH_XC = {'CAMB3LYP'}
-MAX_DERIV_ORDER = 5
+MAX_DERIV_ORDER = ctypes.c_int.in_dll(_itrf, 'XCFUN_max_deriv_order').value
 
 VV10_XC = {
     'B97M_V'    : (6.0, 0.01),

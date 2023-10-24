@@ -943,6 +943,7 @@ def is_nlc(xc_code):
 def needs_laplacian(xc_code):
     return _itrf.LIBXC_needs_laplacian(xc_code) != 0
 
+@lru_cache(100)
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
     if fn_facs:
@@ -1615,7 +1616,7 @@ def eval_xc1(xc_code, rho, spin=0, deriv=1, omega=None):
     return out[numpy.hstack(idx)]
 
 def _eval_xc(xc_code, rho, spin=0, deriv=1, omega=None):
-    assert deriv <= 4
+    assert deriv <= max_deriv_order(xc_code)
     xctype = xc_type(xc_code)
     assert xctype in ('HF', 'LDA', 'GGA', 'MGGA')
 

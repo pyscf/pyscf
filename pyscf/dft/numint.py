@@ -2686,6 +2686,7 @@ class LibXCMixin:
         rho = numpy.asarray(rho, order='C', dtype=numpy.double)
         if xctype == 'MGGA' and rho.shape[-2] == 6:
             rho = numpy.asarray(rho[...,[0,1,2,3,5],:], order='C')
+
         spin_polarized = rho.ndim >= 2 and rho.shape[0] == 2
         if spin_polarized:
             spin = 1
@@ -2693,18 +2694,13 @@ class LibXCMixin:
             spin = 0
 
         out = self.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
-        if deriv > 3:
-            return xc_deriv.transform_xc(rho, out, xctype, spin, deriv)
-
-        exc = out[0]
-        vxc = fxc = kxc = None
-        if deriv > 2:
-            kxc = xc_deriv.transform_xc(rho, out, xctype, spin, 3)
-        if deriv > 1:
-            fxc = xc_deriv.transform_xc(rho, out, xctype, spin, 2)
-        if deriv > 0:
-            vxc = xc_deriv.transform_xc(rho, out, xctype, spin, 1)
-        return exc, vxc, fxc, kxc
+        evfk = [out[0]]
+        for order in range(1, deriv+1):
+            evfk.append(xc_deriv.transform_xc(rho, out, xctype, spin, order))
+        if deriv < 3:
+            # The return has at least [e, v, f, k] terms
+            evfk.extend([None] * (3 - deriv))
+        return evfk
 
     def _xc_type(self, xc_code):
         return self.libxc.xc_type(xc_code)

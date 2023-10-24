@@ -25,6 +25,8 @@
 #include <XCFun/xcfun.h>
 #include "config.h"
 
+int XCFUN_max_deriv_order = XCFUN_MAX_DERIV_ORDER;
+
 static int eval_xc(xcfun_t* fun, int deriv, xcfun_vars vars,
                    int np, int ncol, int outlen, double *rho, double *output)
 {
