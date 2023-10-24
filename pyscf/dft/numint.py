@@ -2553,13 +2553,14 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
     else:
         ao_deriv = 0
+    with_lapl = MGGA_DENSITY_LAPL
 
     if mo_coeff[0].ndim == 1:  # RKS
         nao = mo_coeff.shape[0]
         rho = []
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
-            rho.append(ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype))
+            rho.append(ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype, with_lapl))
         rho = numpy.hstack(rho)
         if spin == 1:  # RKS with nr_rks_fxc_st
             rho *= .5
@@ -2572,8 +2573,8 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         rhob = []
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
-            rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype))
-            rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
+            rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype, with_lapl))
+            rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype, with_lapl))
         rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
     vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
     return rho, vxc, fxc
@@ -2681,41 +2682,28 @@ class LibXCMixin:
         '''
         if omega is None: omega = self.omega
         if xctype is None: xctype = self._xc_type(xc_code)
-        rhop = numpy.asarray(rho)
 
-        if xctype == 'LDA':
-            spin_polarized = rhop.ndim >= 2
-        else:
-            spin_polarized = rhop.ndim == 3
-
+        rho = numpy.asarray(rho, order='C', dtype=numpy.double)
+        if xctype == 'MGGA' and rho.shape[-2] == 6:
+            rho = numpy.asarray(rho[...,[0,1,2,3,5],:], order='C')
+        spin_polarized = rho.ndim >= 2 and rho.shape[0] == 2
         if spin_polarized:
-            assert rhop.shape[0] == 2
             spin = 1
-            if rhop.ndim == 3 and rhop.shape[1] == 5:  # MGGA
-                ngrids = rhop.shape[2]
-                rhop = numpy.empty((2, 6, ngrids))
-                rhop[0,:4] = rho[0][:4]
-                rhop[1,:4] = rho[1][:4]
-                rhop[:,4] = 0
-                rhop[0,5] = rho[0][4]
-                rhop[1,5] = rho[1][4]
         else:
             spin = 0
-            if rhop.ndim == 2 and rhop.shape[0] == 5:  # MGGA
-                ngrids = rho.shape[1]
-                rhop = numpy.empty((6, ngrids))
-                rhop[:4] = rho[:4]
-                rhop[4] = 0
-                rhop[5] = rho[4]
 
-        exc, vxc, fxc, kxc = self.eval_xc(xc_code, rhop, spin, 0, deriv, omega,
-                                          verbose)
+        out = self.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
+        if deriv > 3:
+            return xc_deriv.transform_xc(rho, out, xctype, spin, deriv)
+
+        exc = out[0]
+        vxc = fxc = kxc = None
         if deriv > 2:
-            kxc = xc_deriv.transform_kxc(rhop, fxc, kxc, xctype, spin)
+            kxc = xc_deriv.transform_xc(rho, out, xctype, spin, 3)
         if deriv > 1:
-            fxc = xc_deriv.transform_fxc(rhop, vxc, fxc, xctype, spin)
+            fxc = xc_deriv.transform_xc(rho, out, xctype, spin, 2)
         if deriv > 0:
-            vxc = xc_deriv.transform_vxc(rhop, vxc, xctype, spin)
+            vxc = xc_deriv.transform_xc(rho, out, xctype, spin, 1)
         return exc, vxc, fxc, kxc
 
     def _xc_type(self, xc_code):

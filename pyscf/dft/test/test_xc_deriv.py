@@ -117,6 +117,44 @@ def v5to6(v5):
         v6[:,[0,1,2,3,5]] = v5
     return v6
 
+def eval_xc_eff(xc_code, rho, deriv, mod):
+    xctype = mod.xc_type(xc_code)
+    rhop = np.asarray(rho)
+
+    if xctype == 'LDA':
+        spin_polarized = rhop.ndim >= 2
+    else:
+        spin_polarized = rhop.ndim == 3
+
+    if spin_polarized:
+        assert rhop.shape[0] == 2
+        spin = 1
+        if rhop.ndim == 3 and rhop.shape[1] == 5:  # MGGA
+            ngrids = rhop.shape[2]
+            rhop = np.empty((2, 6, ngrids))
+            rhop[0,:4] = rho[0][:4]
+            rhop[1,:4] = rho[1][:4]
+            rhop[:,4] = 0
+            rhop[0,5] = rho[0][4]
+            rhop[1,5] = rho[1][4]
+    else:
+        spin = 0
+        if rhop.ndim == 2 and rhop.shape[0] == 5:  # MGGA
+            ngrids = rho.shape[1]
+            rhop = np.empty((6, ngrids))
+            rhop[:4] = rho[:4]
+            rhop[4] = 0
+            rhop[5] = rho[4]
+
+    exc, vxc, fxc, kxc = mod.eval_xc(xc_code, rhop, spin, 0, deriv)
+    if deriv > 2:
+        kxc = xc_deriv.transform_kxc(rhop, fxc, kxc, xctype, spin)
+    if deriv > 1:
+        fxc = xc_deriv.transform_fxc(rhop, vxc, fxc, xctype, spin)
+    if deriv > 0:
+        vxc = xc_deriv.transform_vxc(rhop, vxc, xctype, spin)
+    return exc, vxc, fxc, kxc
+
 def setUpModule():
     global rho
     rho = np.array(
@@ -282,12 +320,115 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(xc_deriv.ud2ts(f_ud) - f_ts).max(), 0, 12)
         self.assertAlmostEqual(abs(xc_deriv.ud2ts(k_ud) - k_ts).max(), 0, 12)
 
+    def test_libxc_lda_deriv3(self):
+        rho1 = rho[:,0].copy()
+        ref = eval_xc_eff('LDA,', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 51.36053114469969, 9)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -13.323225829690143, 9)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -6.912554696220437, 9)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+        rho1 = rho[1,0].copy()
+        ref = eval_xc_eff('LDA,', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 20.21333987261437, 9)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -5.269784014086463, 9)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -2.7477984980958627, 9)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+    def test_libxc_gga_deriv3(self):
+        rho1 = rho[:,:4].copy()
+        ref = eval_xc_eff('PBE', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 61.29042037001073, 3)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -13.896034377219816, 4)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -7.616226587554259, 6)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+        rho1 = rho[1,:4].copy()
+        ni = numint.NumInt()
+        ref = eval_xc_eff('PBE', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 26.08081046374974, 3)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -5.559303849017572, 4)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -3.0715856471099032, 6)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+    def test_libxc_mgga_deriv3(self):
+        rho1 = rho
+        ref = eval_xc_eff('M06', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 3461867.985594323, 1)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -19196.865088253828, 3)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), 90.99262909378264, 6)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+        rho1 = rho[1]
+        ni = numint.NumInt()
+        ref = eval_xc_eff('M06', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 2506574.915698602, 1)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -9308.64852580393, 3)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), 19.977512805950784, 7)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+    @unittest.skip(dft.libxc.max_deriv_order('pbe,') <= 3)
+    def test_libxc_gga_deriv4(self):
+        rho1 = rho[:,:4].copy()
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=4)
+        self.assertAlmostEqual(xc1.sum(), -920.135878252819, 4)
+
+        rho1 = rho[1,:4].copy()
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=4)
+        self.assertAlmostEqual(xc1.sum(), -869.6617638095072, 4)
+
     @unittest.skip(not hasattr(dft, 'xcfun'))
     def test_xcfun_lda_deriv3(self):
         rho1 = rho[:,0].copy()
-        ni = numint.NumInt()
-        ni.libxc = dft.xcfun
-        ref = ni.eval_xc_eff('LDA,', rho1, deriv=3)
+        ref = eval_xc_eff('LDA,', rho1, 3, dft.xcfun)
 
         xc1 = dft.xcfun.eval_xc_eff('LDA,', rho1, deriv=3)
         self.assertAlmostEqual(xc1.sum(), 51.36053114469969, 9)
@@ -302,9 +443,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
 
         rho1 = rho[1,0].copy()
-        ni = numint.NumInt()
-        ni.libxc = dft.xcfun
-        ref = ni.eval_xc_eff('LDA,', rho1, deriv=3)
+        ref = eval_xc_eff('LDA,', rho1, 3, dft.xcfun)
 
         xc1 = dft.xcfun.eval_xc_eff('LDA,', rho1, deriv=3)
         self.assertAlmostEqual(xc1.sum(), 20.21333987261437, 9)
@@ -321,9 +460,7 @@ class KnownValues(unittest.TestCase):
     @unittest.skip(not hasattr(dft, 'xcfun'))
     def test_xcfun_gga_deriv3(self):
         rho1 = rho[:,:4].copy()
-        ni = numint.NumInt()
-        ni.libxc = dft.xcfun
-        ref = ni.eval_xc_eff('PBE', rho1, deriv=3)
+        ref = eval_xc_eff('PBE', rho1, 3, dft.xcfun)
 
         xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=3)
         self.assertAlmostEqual(xc1.sum(), 61.29042037001073, 9)
@@ -338,9 +475,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
 
         rho1 = rho[1,:4].copy()
-        ni = numint.NumInt()
-        ni.libxc = dft.xcfun
-        ref = ni.eval_xc_eff('PBE', rho1, deriv=3)
+        ref = eval_xc_eff('PBE', rho1, 3, dft.xcfun)
 
         xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=3)
         self.assertAlmostEqual(xc1.sum(), 26.08081046374974, 9)
@@ -357,9 +492,7 @@ class KnownValues(unittest.TestCase):
     @unittest.skip(not hasattr(dft, 'xcfun'))
     def test_xcfun_mgga_deriv3(self):
         rho1 = rho
-        ni = numint.NumInt()
-        ni.libxc = dft.xcfun
-        ref = ni.eval_xc_eff('M06', rho1, deriv=3)
+        ref = eval_xc_eff('M06', rho1, 3, dft.xcfun)
 
         xc1 = dft.xcfun.eval_xc_eff('M06', rho1, deriv=3)
         self.assertAlmostEqual(xc1.sum(), 3461867.985594323, 5)
@@ -374,9 +507,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
 
         rho1 = rho[1]
-        ni = numint.NumInt()
-        ni.libxc = dft.xcfun
-        ref = ni.eval_xc_eff('M06', rho1, deriv=3)
+        ref = eval_xc_eff('M06', rho1, 3, dft.xcfun)
 
         xc1 = dft.xcfun.eval_xc_eff('M06', rho1, deriv=3)
         self.assertAlmostEqual(xc1.sum(), 2506574.915698602, 5)

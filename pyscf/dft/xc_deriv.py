@@ -527,6 +527,8 @@ def _diagonal_indices(idx, order):
     return tuple(x for x in diag_idx for i in range(2))
 
 _XC_NVAR = {
+    ('HF', 0): (1, 1),
+    ('HF', 1): (1, 2),
     ('LDA', 0): (1, 1),
     ('LDA', 1): (1, 2),
     ('GGA', 0): (4, 2),
@@ -542,11 +544,10 @@ def transform_xc(rho, xc_val, xctype, spin, order):
         return xc_val[0]
 
     nvar, xlen = _XC_NVAR[xctype, spin]
-    xc_val = np.asarray(xc_val, order='C')
     ngrids = xc_val.shape[-1]
     offsets = [0] + [count_combinations(xlen, o) for o in range(order+1)]
     p0, p1 = offsets[order:order+2]
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         xc_out = xc_val[p0:p1]
         if spin == 0:
             return xc_out.reshape([1]*order + [ngrids])
@@ -554,6 +555,8 @@ def transform_xc(rho, xc_val, xctype, spin, order):
             idx = _product_uniq_indices(xlen, order)
             return xc_out[idx].reshape([2,1]*order + [ngrids])
 
+    rho = np.asarray(rho, order='C')
+    assert rho.size == (spin+1) * nvar * ngrids
     xc_tensor = _unfold_gga(rho, xc_val[p0:p1], spin, order, nvar, xlen)
     nabla_idx = np.arange(1, 4)
     if spin == 0:
@@ -589,7 +592,6 @@ def transform_xc(rho, xc_val, xctype, spin, order):
             sigma_idx = _product_uniq_indices(2, n_pairs*2)
             xc_sub = xc_sub.reshape((3**n_pairs,) + xc_sub.shape[n_pairs:])
             xc_sub = xc_sub[sigma_idx]
-            xc_sub_rest_dims = list(range(n_pairs*2, xc_sub.ndim))
 
             low_sigmas = itertools.combinations(range(order), n_pairs*2)
             pair_combs = [list(itertools.chain(*p[::-1]))

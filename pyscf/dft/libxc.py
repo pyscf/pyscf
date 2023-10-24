@@ -1406,28 +1406,226 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
 
         see also libxc_itrf.c
     '''  # noqa: E501
+    outbuf = _eval_xc(xc_code, rho, spin, deriv, omega)
+    exc = outbuf[0]
+    vxc = fxc = kxc = None
+    xctype = xc_type(xc_code)
+    if xctype == 'LDA' and spin == 0:
+        if deriv > 0:
+            vxc = [outbuf[1]]
+        if deriv > 1:
+            fxc = [outbuf[2]]
+        if deriv > 2:
+            kxc = [outbuf[3]]
+    elif xctype == 'GGA' and spin == 0:
+        if deriv > 0:
+            vxc = [outbuf[1], outbuf[2]]
+        if deriv > 1:
+            fxc = [outbuf[3], outbuf[4], outbuf[5]]
+        if deriv > 2:
+            kxc = [outbuf[6], outbuf[7], outbuf[8], outbuf[9]]
+    elif xctype == 'LDA' and spin == 1:
+        if deriv > 0:
+            vxc = [outbuf[1:3].T]
+        if deriv > 1:
+            fxc = [outbuf[3:6].T]
+        if deriv > 2:
+            kxc = [outbuf[6:10].T]
+    elif xctype == 'GGA' and spin == 1:
+        if deriv > 0:
+            vxc = [outbuf[1:3].T, outbuf[3:6].T]
+        if deriv > 1:
+            fxc = [outbuf[6:9].T, outbuf[9:15].T, outbuf[15:21].T]
+        if deriv > 2:
+            kxc = [outbuf[21:25].T, outbuf[25:34].T, outbuf[34:46].T, outbuf[46:56].T]
+    elif xctype == 'MGGA' and spin == 0:
+        if deriv > 0:
+            vxc = [outbuf[1], outbuf[2], None, outbuf[3]]
+        if deriv > 1:
+            fxc = [
+                # v2rho2, v2rhosigma, v2sigma2,
+                outbuf[4], outbuf[5], outbuf[6],
+                # v2lapl2, v2tau2,
+                None, outbuf[9],
+                # v2rholapl, v2rhotau,
+                None, outbuf[7],
+                # v2lapltau, v2sigmalapl, v2sigmatau,
+                None, None, outbuf[8]]
+        if deriv > 2:
+            # v3lapltau2 might not be strictly 0
+            # outbuf[18] = 0
+            kxc = [
+                # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+                outbuf[10], outbuf[11], outbuf[12], outbuf[13],
+                # v3rho2lapl, v3rho2tau,
+                None, outbuf[14],
+                # v3rhosigmalapl, v3rhosigmatau,
+                None, outbuf[15],
+                # v3rholapl2, v3rholapltau, v3rhotau2,
+                None, None, outbuf[16],
+                # v3sigma2lapl, v3sigma2tau,
+                None, outbuf[17],
+                # v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
+                None, None, outbuf[18],
+                # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
+                None, None, None, outbuf[19]]
+    elif xctype == 'MGGA' and spin == 1:
+        if deriv > 0:
+            vxc = [outbuf[1:3].T, outbuf[3:6].T, None, outbuf[6:8].T]
+        if deriv > 1:
+            # v2lapltau might not be strictly 0
+            # outbuf[39:43] = 0
+            fxc = [
+                # v2rho2, v2rhosigma, v2sigma2,
+                outbuf[8:11].T, outbuf[11:17].T, outbuf[17:23].T,
+                # v2lapl2, v2tau2,
+                None, outbuf[33:36].T,
+                # v2rholapl, v2rhotau,
+                None, outbuf[23:27].T,
+                # v2lapltau, v2sigmalapl, v2sigmatau,
+                None, None, outbuf[27:33].T]
+        if deriv > 2:
+            # v3lapltau2 might not be strictly 0
+            # outbuf[204:216] = 0
+            kxc = [
+                # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+                outbuf[36:40].T, outbuf[40:49].T, outbuf[49:61].T, outbuf[61:71].T,
+                # v3rho2lapl, v3rho2tau,
+                None, outbuf[71:77].T,
+                # v3rhosigmalapl, v3rhosigmatau,
+                None, outbuf[77:89].T,
+                # v3rholapl2, v3rholapltau, v3rhotau2,
+                None, None, outbuf[89:95].T,
+                # v3sigma2lapl, v3sigma2tau,
+                None, outbuf[95:107].T,
+                # v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
+                None, None, outbuf[107:116].T,
+                # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
+                None, None, None, outbuf[116:120].T]
+    return exc, vxc, fxc, kxc
+
+_GGA_SORT = {
+    (1, 2): numpy.array([
+        6, 7, 9, 10, 11, 8, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    ]),
+    (1, 3): numpy.array([
+        21, 22, 25, 26, 27, 23, 28, 29, 30, 34, 35, 36, 37, 38, 39, 24, 31, 32,
+        33, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
+    ]),
+    (1, 4): numpy.array([
+        56, 57, 61, 62, 63, 58, 64, 65, 66, 73, 74, 75, 76, 77, 78, 59, 67, 68,
+        69, 79, 80, 81, 82, 83, 84, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 60,
+        70, 71, 72, 85, 86, 87, 88, 89, 90, 101, 102, 103, 104, 105, 106, 107,
+        108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121,
+        122, 123, 124, 125,
+    ])
+}
+_MGGA_SORT = {
+    (0, 2): numpy.array([
+        0, # v2rho2
+        1, # v2rhosigma
+        3, # v2rhotau
+        2, # v2sigma2
+        4, # v2sigmatau
+        5, # v2tau2
+    ]) + 4,
+    (0, 3): numpy.array([
+        0, # v3rho3
+        1, # v3rho2sigma
+        4, # v3rho2tau
+        2, # v3rhosigma2
+        5, # v3rhosigmatau
+        6, # v3rhotau2
+        3, # v3sigma3
+        7, # v3sigma2tau
+        8, # v3sigmatau2
+        9, # v3tau3
+    ]) + 10,
+    (0, 4): numpy.array([
+        0,  # v4rho4
+        1,  # v4rho3sigma
+        5,  # v4rho3tau
+        2,  # v4rho2sigma2
+        6,  # v4rho2sigmatau
+        7,  # v4rho2tau2
+        3,  # v4rhosigma3
+        8,  # v4rhosigma2tau
+        9,  # v4rhosigmatau2
+        10, # v4rhotau3
+        4,  # v4sigma4
+        11, # v4sigma3tau
+        12, # v4sigma2tau2
+        13, # v4sigmatau3
+        14, # v4tau4
+    ]) + 20,
+    (1, 2): numpy.array([
+        8, 9, 11, 12, 13, 23, 24, 10, 14, 15, 16, 25, 26, 17, 18, 19, 27, 28,
+        20, 21, 29, 30, 22, 31, 32, 33, 34, 35,
+    ]),
+    (1, 3): numpy.array([
+        36, 37, 40, 41, 42, 71, 72, 38, 43, 44, 45, 73, 74, 49, 50, 51, 77, 78,
+        52, 53, 79, 80, 54, 81, 82, 89, 90, 91, 39, 46, 47, 48, 75, 76, 55, 56,
+        57, 83, 84, 58, 59, 85, 86, 60, 87, 88, 92, 93, 94, 61, 62, 63, 95, 96,
+        64, 65, 97, 98, 66, 99, 100, 107, 108, 109, 67, 68, 101, 102, 69, 103,
+        104, 110, 111, 112, 70, 105, 106, 113, 114, 115, 116, 117, 118, 119,
+    ]),
+    (1, 4): numpy.array([
+        120, 121, 125, 126, 127, 190, 191, 122, 128, 129, 130, 192, 193, 137,
+        138, 139, 198, 199, 140, 141, 200, 201, 142, 202, 203, 216, 217, 218,
+        123, 131, 132, 133, 194, 195, 143, 144, 145, 204, 205, 146, 147, 206,
+        207, 148, 208, 209, 219, 220, 221, 155, 156, 157, 225, 226, 158, 159,
+        227, 228, 160, 229, 230, 249, 250, 251, 161, 162, 231, 232, 163, 233,
+        234, 252, 253, 254, 164, 235, 236, 255, 256, 257, 267, 268, 269, 270,
+        124, 134, 135, 136, 196, 197, 149, 150, 151, 210, 211, 152, 153, 212,
+        213, 154, 214, 215, 222, 223, 224, 165, 166, 167, 237, 238, 168, 169,
+        239, 240, 170, 241, 242, 258, 259, 260, 171, 172, 243, 244, 173, 245,
+        246, 261, 262, 263, 174, 247, 248, 264, 265, 266, 271, 272, 273, 274,
+        175, 176, 177, 275, 276, 178, 179, 277, 278, 180, 279, 280, 295, 296,
+        297, 181, 182, 281, 282, 183, 283, 284, 298, 299, 300, 184, 285, 286,
+        301, 302, 303, 313, 314, 315, 316, 185, 186, 287, 288, 187, 289, 290,
+        304, 305, 306, 188, 291, 292, 307, 308, 309, 317, 318, 319, 320, 189,
+        293, 294, 310, 311, 312, 321, 322, 323, 324, 325, 326, 327, 328, 329,
+    ])
+}
+
+def eval_xc1(xc_code, rho, spin=0, deriv=1, omega=None):
+    '''Similar to eval_xc.
+    Returns an array with the order of derivatives following xcfun convention.
+    '''
+    out = _eval_xc(xc_code, rho, spin, deriv=deriv, omega=omega)
+    xctype = xc_type(xc_code)
+    if deriv <= 1:
+        return out
+    elif xctype == 'LDA' or xctype == 'HF':
+        return out
+    elif xctype == 'GGA':
+        if spin == 0:
+            return out
+        else:
+            idx = [numpy.arange(6)] # up to deriv=1
+            for i in range(2, deriv+1):
+                idx.append(_GGA_SORT[(spin, i)])
+    else: # MGGA
+        if spin == 0:
+            idx = [numpy.arange(4)] # up to deriv=1
+        else:
+            idx = [numpy.arange(8)] # up to deriv=1
+        for i in range(2, deriv+1):
+            idx.append(_MGGA_SORT[(spin, i)])
+    return out[numpy.hstack(idx)]
+
+def _eval_xc(xc_code, rho, spin=0, deriv=1, omega=None):
+    assert deriv <= 4
+    xctype = xc_type(xc_code)
+    assert xctype in ('HF', 'LDA', 'GGA', 'MGGA')
+
+    rho = numpy.asarray(rho, order='C', dtype=numpy.double)
+    if xctype == 'MGGA' and rho.shape[-2] == 6:
+        rho = numpy.asarray(rho[...,[0,1,2,3,5],:], order='C')
+
     hyb, fn_facs = parse_xc(xc_code)
     if omega is not None:
         hyb = hyb[:2] + (float(omega),)
-    return _eval_xc(hyb, fn_facs, rho, spin, relativity, deriv, verbose)
-
-
-def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
-    assert (deriv <= 3)
-    if spin == 0:
-        nspin = 1
-        rho_u = rho_d = numpy.asarray(rho, order='C')
-    else:
-        nspin = 2
-        rho_u = numpy.asarray(rho[0], order='C')
-        rho_d = numpy.asarray(rho[1], order='C')
-    assert (rho_u.dtype == numpy.double)
-    assert (rho_d.dtype == numpy.double)
-
-    if rho_u.ndim == 1:
-        rho_u = rho_u.reshape(1,-1)
-        rho_d = rho_d.reshape(1,-1)
-    ngrids = rho_u.shape[1]
 
     fn_ids = [x[0] for x in fn_facs]
     facs   = [x[1] for x in fn_facs]
@@ -1447,195 +1645,25 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     if any([needs_laplacian(fid) for fid in fn_ids]):
         raise NotImplementedError('laplacian in meta-GGA method')
 
+    nvar, xlen = xc_deriv._XC_NVAR[xctype, spin]
+    ngrids = rho.shape[-1]
+    rho = rho.reshape(spin+1,nvar,ngrids)
+    outlen = lib.comb(xlen+deriv, deriv)
+    out = numpy.zeros((outlen,ngrids))
     n = len(fn_ids)
-    if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
-        all((is_lda(x) for x in fn_ids))):
-        if spin == 0:
-            nvar = 1
-            xctype = 'R-LDA'
-        else:
-            nvar = 2
-            xctype = 'U-LDA'
-    elif any((is_meta_gga(x) for x in fn_ids)):
-        if spin == 0:
-            nvar = 4
-            xctype = 'R-MGGA'
-        else:
-            nvar = 9
-            xctype = 'U-MGGA'
-    else:  # GGA
-        if spin == 0:
-            nvar = 2
-            xctype = 'R-GGA'
-        else:
-            nvar = 5
-            xctype = 'U-GGA'
-
-    # Check that the density rho has the appropriate shape
-    # should it be >= or ==, in test test_xcfun.py, test_vs_libxc_rks
-    # the density contain 6 rows independently of the functional
-    if xctype[2:] == 'LDA':
-        for rho_ud in [rho_u, rho_d]:
-            assert rho_ud.shape[0] >= 1
-
-    elif xctype[2:] == 'GGA':
-        for rho_ud in [rho_u, rho_d]:
-            assert rho_ud.shape[0] >= 4
-
-    elif xctype[2:] == 'MGGA':
-        for rho_ud in [rho_u, rho_d]:
-            assert rho_ud.shape[0] >= 6
-    else:
-        raise ValueError("Unknown nvar {}".format(nvar))
-
-    outlen = lib.comb(nvar+deriv, deriv)
-    outbuf = numpy.zeros((outlen,ngrids))
-    density_threshold = 0
     if n > 0:
+        density_threshold = 0
         _itrf.LIBXC_eval_xc(ctypes.c_int(n),
                             (ctypes.c_int*n)(*fn_ids),
                             (ctypes.c_double*n)(*facs),
                             (ctypes.c_double*n)(*omega),
-                            ctypes.c_int(nspin),
-                            ctypes.c_int(deriv), ctypes.c_int(ngrids),
-                            rho_u.ctypes.data_as(ctypes.c_void_p),
-                            rho_d.ctypes.data_as(ctypes.c_void_p),
-                            outbuf.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(spin), ctypes.c_int(deriv),
+                            ctypes.c_int(nvar), ctypes.c_int(ngrids),
+                            ctypes.c_int(outlen),
+                            rho.ctypes.data_as(ctypes.c_void_p),
+                            out.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_double(density_threshold))
-
-    exc = outbuf[0]
-    vxc = fxc = kxc = None
-    if xctype == 'R-LDA':
-        if deriv > 0:
-            vxc = [outbuf[1]]
-        if deriv > 1:
-            fxc = [outbuf[2]]
-        if deriv > 2:
-            kxc = [outbuf[3]]
-    elif xctype == 'R-GGA':
-        if deriv > 0:
-            vxc = [outbuf[1], outbuf[2]]
-        if deriv > 1:
-            fxc = [outbuf[3], outbuf[4], outbuf[5]]
-        if deriv > 2:
-            kxc = [outbuf[6], outbuf[7], outbuf[8], outbuf[9]]
-    elif xctype == 'U-LDA':
-        if deriv > 0:
-            vxc = [outbuf[1:3].T]
-        if deriv > 1:
-            fxc = [outbuf[3:6].T]
-        if deriv > 2:
-            kxc = [outbuf[6:10].T]
-    elif xctype == 'U-GGA':
-        if deriv > 0:
-            vxc = [outbuf[1:3].T, outbuf[3:6].T]
-        if deriv > 1:
-            fxc = [outbuf[6:9].T, outbuf[9:15].T, outbuf[15:21].T]
-        if deriv > 2:
-            kxc = [outbuf[21:25].T, outbuf[25:34].T, outbuf[34:46].T, outbuf[46:56].T]
-    elif xctype == 'R-MGGA':
-        if deriv > 0:
-            vxc = [outbuf[1], outbuf[2], None, outbuf[4]]
-        if deriv > 1:
-            fxc = [
-                # v2rho2, v2rhosigma, v2sigma2,
-                outbuf[5], outbuf[6], outbuf[7],
-                # v2lapl2, v2tau2,
-                None, outbuf[9],
-                # v2rholapl, v2rhotau,
-                None, outbuf[11],
-                # v2lapltau, v2sigmalapl, v2sigmatau,
-                None, None, outbuf[14]]
-        if deriv > 2:
-            # v3lapltau2 might not be strictly 0
-            # outbuf[18] = 0
-            kxc = [
-                # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
-                outbuf[15], outbuf[16], outbuf[17], outbuf[18],
-                # v3rho2lapl, v3rho2tau,
-                None, outbuf[20],
-                # v3rhosigmalapl, v3rhosigmatau,
-                None, outbuf[22],
-                # v3rholapl2, v3rholapltau, v3rhotau2,
-                None, None, outbuf[25],
-                # v3sigma2lapl, v3sigma2tau,
-                None, outbuf[27],
-                # v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
-                None, None, outbuf[30],
-                # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
-                None, None, None, outbuf[34]]
-    elif xctype == 'U-MGGA':
-        if deriv > 0:
-            vxc = [outbuf[1:3].T, outbuf[3:6].T, None, outbuf[8:10].T]
-        if deriv > 1:
-            # v2lapltau might not be strictly 0
-            # outbuf[39:43] = 0
-            fxc = [
-                # v2rho2, v2rhosigma, v2sigma2,
-                outbuf[10:13].T, outbuf[13:19].T, outbuf[19:25].T,
-                # v2lapl2, v2tau2,
-                None, outbuf[28:31].T,
-                # v2rholapl, v2rhotau,
-                None, outbuf[35:39].T,
-                # v2lapltau, v2sigmalapl, v2sigmatau,
-                None, None, outbuf[49:55].T]
-        if deriv > 2:
-            # v3lapltau2 might not be strictly 0
-            # outbuf[204:216] = 0
-            kxc = [
-                # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
-                outbuf[55:59].T, outbuf[59:68].T, outbuf[68:80].T, outbuf[80:90].T,
-                # v3rho2lapl, v3rho2tau,
-                None, outbuf[96:102].T,
-                # v3rhosigmalapl, v3rhosigmatau,
-                None, outbuf[114:126].T,
-                # v3rholapl2, v3rholapltau, v3rhotau2,
-                None, None, outbuf[140:146].T,
-                # v3sigma2lapl, v3sigma2tau,
-                None, outbuf[158:170].T,
-                # v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
-                None, None, outbuf[191:200].T,
-                # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
-                None, None, None, outbuf[216:220].T]
-    return exc, vxc, fxc, kxc
-
-_UFXC_SORT = numpy.array([
-    0, 1,                   # v2rho2
-    2, 3, 4,                # v2rhosigma
-    11, 12, 13, 14, 15, 16, # v2rhotau
-    5, 6, 7, 8, 9, 10,      # v2sigma2
-    17, 18, 19, 20,         # v2sigmatau
-    21, 22, 23, 24, 25, 26, # v2tau2
-])
-_UKXC_SORT = numpy.array([
-    0, 1, 2,                                        # v3rho3
-    3, 4, 5, 6,                                     # v3rho2sigma
-    28, 29, 30, 31, 32, 33, 34, 35, 36, 37,         # v3rho2tau
-    7, 8, 9, 10, 11, 12, 13, 14, 15,                # v3rhosigma2
-    38, 39, 40, 41, 42, 43,                         # v3rhosigmatau
-    44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, # v3rhotau2
-    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, # v3sigma3
-    56, 57, 58, 59, 60, 61,                         # v3sigma2tau
-    62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, # v3sigmatau2
-    74, 75, 76, 77, 78, 79, 80, 81, 82,             # v3tau3
-])
-_ULXC_SORT = numpy.array([
-    0, 1, 2, 3,                                                                                                             # v4rho4
-    4, 5, 6, 7, 8,                                                                                                          # v4rho3sigma
-    59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,                                                             # v4rho3tau
-    9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,                                                                          # v4rho2sigma2
-    74, 75, 76, 77, 78, 79, 80, 81,                                                                                         # v4rho2sigmatau
-    82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99,                                                 # v4rho2tau2
-    21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,                                                 # v4rhosigma3
-    100, 101, 102, 103, 104, 105, 106, 107, 108,                                                                            # v4rhosigma2tau
-    109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, # v4rhosigmatau2
-    133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150,                               # v4rhotau3
-    39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,                                         # v4sigma4
-    151, 152, 153, 154, 155, 156, 157, 158,                                                                                 # v4sigma3tau
-    159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178,                     # v4sigma2tau2
-    179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196,                               # v4sigmatau3
-    197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208,                                                             # v4tau4
-])
+    return out
 
 def eval_xc_eff(xc_code, rho, deriv=1, omega=None):
     r'''Returns the derivative tensor against the density parameters
@@ -1662,69 +1690,18 @@ def eval_xc_eff(xc_code, rho, deriv=1, omega=None):
         omega: float
             define the exponent in the attenuated Coulomb for RSH functional
     '''
-    hyb, fn_facs = parse_xc(xc_code)
-    if omega is not None:
-        hyb = hyb[:2] + (float(omega),)
-
-    fn_ids = [x[0] for x in fn_facs]
-    facs   = [x[1] for x in fn_facs]
-    if hyb[2] != 0:
-        # Current implementation does not support different omegas for
-        # different RSH functionals if there are multiple RSHs
-        omega = [hyb[2]] * len(facs)
-    else:
-        omega = [0] * len(facs)
-    fn_ids_set = set(fn_ids)
-    if fn_ids_set.intersection(PROBLEMATIC_XC):
-        problem_xc = [PROBLEMATIC_XC[k]
-                      for k in fn_ids_set.intersection(PROBLEMATIC_XC)]
-        warnings.warn('Libxc functionals %s may have discrepancy to xcfun '
-                      'library.\n' % problem_xc)
-
-    if any([needs_laplacian(fid) for fid in fn_ids]):
-        raise NotImplementedError('laplacian in meta-GGA method')
-
-    rho = numpy.asarray(rho, order='C', dtype=numpy.double)
-    ngrids = rho.shape[-1]
-
     xctype = xc_type(xc_code)
-    assert xctype in ('LDA', 'GGA', 'MGGA')
-
+    rho = numpy.asarray(rho, order='C', dtype=numpy.double)
     if xctype == 'MGGA' and rho.shape[-2] == 6:
-        rho = rho[...,[0,1,2,3,5],:]
+        rho = numpy.asarray(rho[...,[0,1,2,3,5],:], order='C')
 
-    if xctype == 'LDA':
-        spin_polarized = rho.ndim >= 2 and rho.shape[0] != 1
-    else:
-        spin_polarized = rho.ndim == 3 and rho.shape[0] != 1
+    spin_polarized = rho.ndim >= 2 and rho.shape[0] == 2
     if spin_polarized:
         spin = 1
     else:
         spin = 0
-    nspin = spin + 1
-
-    nvar, xlen = xc_deriv._XC_NVAR[xctype, spin]
-
-    rho = rho.reshape(spin+1,nvar,ngrids)
-    outlen = lib.comb(xlen+deriv, deriv)
-    out = numpy.zeros((ngrids,outlen))
-    n = len(fn_ids)
-    density_threshold = 0
-    if n > 0:
-        _itrf.LIBXC_eval_xc1(ctypes.c_int(n),
-                             (ctypes.c_int*n)(*fn_ids),
-                             (ctypes.c_double*n)(*facs),
-                             (ctypes.c_double*n)(*omega),
-                             ctypes.c_int(spin), ctypes.c_int(deriv),
-                             ctypes.c_int(nvar), ctypes.c_int(ngrids),
-                             rho.ctypes.data_as(ctypes.c_void_p),
-                             out.ctypes.data_as(ctypes.c_void_p),
-                             ctypes.c_double(density_threshold))
-    assert False
-    out = lib.transpose(out)
-    xc_tensor = xc_deriv.transform_xc(rho, out, xctype, spin, deriv)
-    exc = out[0]
-    return exc, xc_tensor
+    out = eval_xc1(xc_code, rho, spin, deriv, omega)
+    return xc_deriv.transform_xc(rho, out, xctype, spin, deriv)
 
 def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     '''Define XC functional.  See also :func:`eval_xc` for the rules of input description.

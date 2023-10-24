@@ -823,7 +823,7 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
 
     See also :func:`pyscf.dft.libxc.eval_xc`
     '''
-    outbuf = eval_xc1(xc_code, rho, spin, deriv=deriv, omega=omega)
+    outbuf = eval_xc1(xc_code, rho, spin, deriv, omega)
     exc = outbuf[0]
     vxc = fxc = kxc = None
     xctype = xc_type(xc_code)
@@ -953,12 +953,13 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
                 outbuf[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T]
     return exc, vxc, fxc, kxc
 
-def eval_xc1(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
-    '''Similar to eval_xc. Returns an array of deriviates following xcfun convention.
+def eval_xc1(xc_code, rho, spin=0, deriv=1, omega=None):
+    '''Similar to eval_xc.
+    Returns an array with the order of derivatives following xcfun convention.
     '''
     assert deriv <= MAX_DERIV_ORDER
     xctype = xc_type(xc_code)
-    assert xctype in ('LDA', 'GGA', 'MGGA')
+    assert xctype in ('HF', 'LDA', 'GGA', 'MGGA')
 
     rho = numpy.asarray(rho, order='C', dtype=numpy.double)
     if xctype == 'MGGA' and rho.shape[-2] == 6:
@@ -1024,12 +1025,15 @@ def eval_xc_eff(xc_code, rho, deriv=1, omega=None):
     '''
     xctype = xc_type(xc_code)
     rho = numpy.asarray(rho, order='C', dtype=numpy.double)
+    if xctype == 'MGGA' and rho.shape[-2] == 6:
+        rho = numpy.asarray(rho[...,[0,1,2,3,5],:], order='C')
+
     spin_polarized = rho.ndim >= 2 and rho.shape[0] == 2
     if spin_polarized:
         spin = 1
     else:
         spin = 0
-    out = eval_xc1(xc_code, rho, spin, deriv=deriv, omega=omega)
+    out = eval_xc1(xc_code, rho, spin, deriv, omega)
     return xc_deriv.transform_xc(rho, out, xctype, spin, deriv)
 
 def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):

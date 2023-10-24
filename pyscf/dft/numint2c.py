@@ -271,28 +271,23 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
     else:
         raise RuntimeError(f'Unknown collinear scheme {ni.collinear}')
 
-    if xctype == 'MGGA':
-        ngrids = rho.shape[2]
-        rhop = np.empty((2, 6, ngrids))
-        rhop[0,:4] = (t[:4] + s[:4]) * .5
-        rhop[1,:4] = (t[:4] - s[:4]) * .5
-        # Padding for laplacian
-        rhop[:,4] = 0
-        rhop[0,5] = (t[4] + s[4]) * .5
-        rhop[1,5] = (t[4] - s[4]) * .5
-    else:
-        rhop = np.stack([(t + s) * .5, (t - s) * .5])
-
+    rho = np.stack([(t + s) * .5, (t - s) * .5])
     spin = 1
-    exc, vxc, fxc, kxc = ni.eval_xc(xc_code, rhop, spin, 0, deriv, omega,
-                                    verbose)
+    if xctype == 'MGGA' and rho.shape[1] == 6:
+        rho = numpy.asarray(rho[:,[0,1,2,3,5],:], order='C')
 
+    out = ni.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
+    if deriv > 3:
+        return xc_deriv.transform_xc(rho, out, xctype, spin, deriv)
+
+    exc = out[0]
+    vxc = fxc = kxc = None
     if deriv > 2:
-        kxc = xc_deriv.transform_kxc(rhop, fxc, kxc, xctype, spin)
+        kxc = xc_deriv.transform_xc(rho, out, xctype, spin, 3)
     if deriv > 1:
-        fxc = xc_deriv.transform_fxc(rhop, vxc, fxc, xctype, spin)
+        fxc = xc_deriv.transform_xc(rho, out, xctype, spin, 2)
     if deriv > 0:
-        vxc = xc_deriv.transform_vxc(rhop, vxc, xctype, spin)
+        vxc = xc_deriv.transform_xc(rho, out, xctype, spin, 1)
     return exc, vxc, fxc, kxc
 
 # * Mcfun requires functional derivatives to total-density and spin-density.
@@ -566,9 +561,9 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             ao_deriv = 0
         n2c = mo_coeff.shape[0]
         nao = n2c // 2
+        with_lapl = numint.MGGA_DENSITY_LAPL
 
         if self.collinear[0] in ('m', 'n'):  # mcol or ncol
-            with_lapl = False
             rho = []
             for ao, mask, weight, coords \
                     in self.block_loop(mol, grids, nao, ao_deriv, max_memory):
@@ -587,7 +582,6 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             dm_a = dm[:nao,:nao].real.copy('C')
             dm_b = dm[nao:,nao:].real.copy('C')
             ni = self._to_numint1c()
-            with_lapl = True
             hermi = 1
             rhoa = []
             rhob = []

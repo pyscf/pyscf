@@ -25,7 +25,7 @@ target_link_libraries(dft cvhf cgto cint np_helper ${BLAS_LIBRARIES} ${OPENMP_C_
 
 
 if(ENABLE_LIBXC)
-add_library(xc_itrf SHARED libxc_itrf1.c)
+add_library(xc_itrf SHARED libxc_itrf.c)
 set_target_properties(xc_itrf PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 target_link_libraries(xc_itrf xc ${OPENMP_C_PROPERTIES})
