@@ -965,7 +965,7 @@ def get_dispersion(mf):
         try:
             from dftd4.interface import DampingParam, DispersionModel
         except ImportError:
-            print("cannot find dftd3 in the current environment. Please install dftd3")
+            print("cannot find dftd4 in the current environment. Please install dftd4")
             print("                 pip3 install dftd4             ")
         model = DispersionModel(atoms, coords)
         res = model.get_dispersion(DampingParam(method=method), grad=False)
