@@ -838,6 +838,10 @@ def invalid_method(name):
     fn.__name__ = name
     return fn
 
+@functools.lru_cache(None)
+def _define_class(name, bases)
+    return type(name, bases, {})
+
 def make_class(bases, name=None, attrs=None):
     '''
     Construct a class
@@ -847,10 +851,13 @@ def make_class(bases, name=None, attrs=None):
     '''
     if name is None:
         name = ''.join(getattr(x, '__name_mixin__', x.__name__) for x in bases)
-    if attrs is None:
-        attrs = {}
-    attrs = {**attrs, '__name_mixin__': name}
-    return type(name, bases, attrs)
+
+    cls = _define_class(name, bases)
+    cls.__name_mixin__ = name
+    if attrs is not None:
+        for key, val in attrs.items():
+            setattr(cls, key, val)
+    return cls
 
 def set_class(obj, bases, name=None, attrs=None):
     '''Change the class of an object'''
