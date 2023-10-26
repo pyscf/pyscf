@@ -91,7 +91,7 @@ if __name__ == '__main__':
 
     numpy.random.seed(1)
     mf.mo_coeff = numpy.random.random(mf.mo_coeff.shape) - .9
-    mycc = cc.GCCSD(scf.addons.convert_to_ghf())
+    mycc = cc.GCCSD(mf.to_ghf())
     eris = mycc.ao2mo()
     nocc = 10
     nvir = mol.nao_nr() * 2 - nocc
