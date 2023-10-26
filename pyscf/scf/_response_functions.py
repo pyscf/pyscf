@@ -36,7 +36,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             orbital hessian or CPHF will be generated. If singlet is boolean,
             it is used in TDDFT response kernel.
     '''
-    assert (not isinstance(mf, (uhf.UHF, rohf.ROHF)))
+    assert isinstance(mf, hf.RHF) and not isinstance(mf, (uhf.UHF, rohf.ROHF))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
@@ -148,6 +148,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     '''Generate a function to compute the product of UHF response function and
     UHF density matrices.
     '''
+    assert isinstance(mf, (uhf.UHF, rohf.ROHF))
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol

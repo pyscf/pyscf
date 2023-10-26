@@ -925,15 +925,15 @@ def newton(mf):
 
     assert isinstance(mf, hf.SCF)
 
-    if isinstance(mf, rohf.ROHF):
+    if mf.istype('ROHF'):
         cls = _SecondOrderROHF
-    elif isinstance(mf, uhf.UHF):
+    elif mf.istype('UHF'):
         cls = _SecondOrderUHF
-    elif isinstance(mf, scf.ghf.GHF):
+    elif mf.istype('GHF'):
         cls = _SecondOrderGHF
-    elif isinstance(mf, scf.dhf.RDHF):
+    elif mf.istype('RDHF'):
         cls = _SecondOrderRDHF
-    elif isinstance(mf, scf.dhf.DHF):
+    elif mf.istype('DHF'):
         cls = _SecondOrderDHF
     else:
         cls = _SecondOrderRHF

@@ -2007,6 +2007,20 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         '''
         raise NotImplementedError
 
+    def istype(self, type_code):
+        '''
+        Checks if the object is an instance of the class specified by the type_code.
+        type_code can be a class or a str. If the type_code is a class, it is
+        equivalent to the Python built-in function `isinstance`. If the type_code
+        is a str, it checks the type_code against the names of the object and all
+        its parent classes.
+        '''
+        if isinstance(type_code, type):
+            # type_code is a class
+            return isinstance(self, type_code)
+
+        return any(type_code == t.__name__ for t in self.__class__.__mro__)
+
 
 class KohnShamDFT:
     '''A mock DFT base class
