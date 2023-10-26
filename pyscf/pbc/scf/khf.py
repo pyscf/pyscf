@@ -654,9 +654,6 @@ class KSCF(pbchf.SCF):
         from pyscf.pbc.scf import newton_ah
         return newton_ah.newton(self)
 
-    def remove_soscf(self):
-        raise NotImplementedError
-
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
