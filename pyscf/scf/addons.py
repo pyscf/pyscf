@@ -819,11 +819,7 @@ def _object_without_soscf(mf, known_class, remove_df=False):
     from pyscf.soscf import newton_ah
     from pyscf.df.df_jk import _DFHF
     if isinstance(mf, newton_ah._CIAH_SOSCF):
-        base_scf = mf._scf
         mf = mf.undo_soscf()
-        if isinstance(mf, _DFHF) and not isinstance(base_scf, _DFHF):
-            # where density fitting is only applied on SOSCF hessian
-            mf = mf.undo_df()
 
     if remove_df and isinstance(mf, _DFHF):
         mf = mf.undo_df()

@@ -52,6 +52,7 @@ def RCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
 RCISD.__doc__ = cisd.RCISD.__doc__
 
 def UCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    from pyscf.df.df_jk import _DFHF
     from pyscf.soscf import newton_ah
 
     if not mf.istype('UHF'):
@@ -70,6 +71,7 @@ UCISD.__doc__ = ucisd.UCISD.__doc__
 
 
 def GCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    from pyscf.df.df_jk import _DFHF
     from pyscf.soscf import newton_ah
 
     if not mf.istype('GHF'):

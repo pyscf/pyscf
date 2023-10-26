@@ -547,7 +547,6 @@ class UCCSD(ccsd.CCSDBase):
 # * A pair of list : First list is the orbital indices to be frozen for alpha
 #       orbitals, second list is for beta orbitals
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        assert mf.istype('UHF')
         ccsd.CCSDBase.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     get_nocc = get_nocc

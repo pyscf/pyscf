@@ -394,7 +394,7 @@ def convert_to_ghf(mf, out=None):
         else:
             assert (not isinstance(out, scf.khf.KSCF))
 
-    if isinstance(mf, (scf.ghf.GHF, scf.ghf.KGHF)):
+    if isinstance(mf, (scf.ghf.GHF, scf.kghf.KGHF)):
         if out is None:
             return mf.copy()
         else:
