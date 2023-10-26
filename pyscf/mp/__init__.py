@@ -24,9 +24,9 @@ from pyscf.mp import gmp2
 from pyscf.mp import dfgmp2
 
 def MP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    if isinstance(mf, scf.uhf.UHF):
+    if mf.istype('UHF'):
         return UMP2(mf, frozen, mo_coeff, mo_occ)
-    elif isinstance(mf, scf.ghf.GHF):
+    elif mf.istype('GHF'):
         return GMP2(mf, frozen, mo_coeff, mo_occ)
     else:
         return RMP2(mf, frozen, mo_coeff, mo_occ)
@@ -36,15 +36,17 @@ def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf import lib
     from pyscf.soscf import newton_ah
 
-    if isinstance(mf, scf.uhf.UHF):
+    if mf.istype('UHF'):
         raise RuntimeError('RMP2 cannot be used with UHF method.')
-    elif isinstance(mf, scf.rohf.ROHF):
+    elif mf.istype('ROHF'):
         lib.logger.warn(mf, 'RMP2 method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UMP2 method is called.')
         return UMP2(mf, frozen, mo_coeff, mo_occ)
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
+    if not mf.istype('RHF'):
         mf = mf.to_rhf()
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
+        mf = mf.undo_soscf()
 
     if getattr(mf, 'with_df', None):
         return dfmp2.DFMP2(mf, frozen, mo_coeff, mo_occ)
@@ -55,8 +57,10 @@ RMP2.__doc__ = mp2.RMP2.__doc__
 def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.soscf import newton_ah
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
+    if mf.istype('UHF'):
         mf = mf.to_uhf()
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
+        mf = mf.undo_soscf()
 
     if getattr(mf, 'with_df', None):
         #raise NotImplementedError('DF-UMP2')
@@ -68,8 +72,10 @@ UMP2.__doc__ = ump2.UMP2.__doc__
 def GMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.soscf import newton_ah
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
+    if not mf.istype('GHF'):
         mf = mf.to_ghf()
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
+        mf = mf.undo_soscf()
 
     if getattr(mf, 'with_df', None):
         return dfgmp2.DFGMP2(mf, frozen, mo_coeff, mo_occ)

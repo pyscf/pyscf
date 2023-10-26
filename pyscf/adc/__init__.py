@@ -46,7 +46,7 @@ def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     #elif isinstance(mf, scf.rohf.ROHF):
     #    lib.logger.warn(mf, 'RADC method does not support ROHF reference. ROHF object '
     #                    'is converted to UHF object and UADC method is called.')
-    #    mf = scf.addons.convert_to_uhf(mf)
+    #    mf = mf.to_uhf(mf)
     #    return UADC(mf, frozen, mo_coeff, mo_occ)
     # TODO add ROHF functionality
     elif isinstance(mf, scf.rhf.RHF):
@@ -64,8 +64,10 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
 
     from pyscf.soscf import newton_ah
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf)
+    if not isinstance(mf, scf.uhf.UHF):
+        mf = mf.to_uhf()
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
+        mf = mf.undo_soscf()
 
     return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
 
@@ -79,8 +81,10 @@ def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
 
     from pyscf.soscf import newton_ah
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.rhf.RHF):
-        mf = scf.addons.convert_to_rhf(mf)
+    if not isinstance(mf, scf.rhf.RHF):
+        mf = mf.to_rhf()
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
+        mf = mf.undo_soscf()
 
     return radc.RADC(mf, frozen, mo_coeff, mo_occ)
 

@@ -117,7 +117,6 @@ class GCCSD(ccsd.CCSDBase):
     conv_tol_normt = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol_normt', 1e-6)
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        assert (isinstance(mf, scf.ghf.GHF))
         ccsd.CCSDBase.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def init_amps(self, eris=None):
@@ -385,6 +384,8 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
+    from pyscf.scf.ghf import GHF
+    assert isinstance(mycc._scf, GHF)
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
 
