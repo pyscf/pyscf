@@ -320,14 +320,14 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(mf._eri is None)
         self.assertTrue(mf._scf._eri is None)
         self.assertAlmostEqual(mf.e_tot, -75.983944727996, 9)
+        self.assertEqual(mf.__class__.__name__, 'SecondOrderDFRHF')
 
         mf = scf.RHF(h2o_z0).newton().density_fit().run()
         self.assertTrue(mf._eri is None)
         self.assertTrue(mf._scf._eri is not None)
         self.assertAlmostEqual(mf.e_tot, -75.9839484980661, 9)
-
         mf = mf.undo_newton()
-        self.assertEqual(mf.__class__.__name__, 'DFRHF')
+        self.assertEqual(mf.__class__.__name__, 'RHF')
 
     def test_rohf_dinfh(self):
         mol = gto.M(atom='Ti 0 0 0; O 0 0 1.9',
