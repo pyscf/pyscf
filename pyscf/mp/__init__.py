@@ -34,7 +34,6 @@ MP2.__doc__ = mp2.MP2.__doc__
 
 def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf import lib
-    from pyscf.soscf import newton_ah
 
     if mf.istype('UHF'):
         raise RuntimeError('RMP2 cannot be used with UHF method.')
@@ -43,10 +42,9 @@ def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
                         'is converted to UHF object and UMP2 method is called.')
         return UMP2(mf, frozen, mo_coeff, mo_occ)
 
+    mf = mf.remove_soscf()
     if not mf.istype('RHF'):
         mf = mf.to_rhf()
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        mf = mf.undo_soscf()
 
     if getattr(mf, 'with_df', None):
         return dfmp2.DFMP2(mf, frozen, mo_coeff, mo_occ)
@@ -55,12 +53,9 @@ def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
 RMP2.__doc__ = mp2.RMP2.__doc__
 
 def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.soscf import newton_ah
-
+    mf = mf.remove_soscf()
     if mf.istype('UHF'):
         mf = mf.to_uhf()
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        mf = mf.undo_soscf()
 
     if getattr(mf, 'with_df', None):
         #raise NotImplementedError('DF-UMP2')
@@ -70,12 +65,9 @@ def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
 UMP2.__doc__ = ump2.UMP2.__doc__
 
 def GMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.soscf import newton_ah
-
+    mf = mf.remove_soscf()
     if not mf.istype('GHF'):
         mf = mf.to_ghf()
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        mf = mf.undo_soscf()
 
     if getattr(mf, 'with_df', None):
         return dfgmp2.DFGMP2(mf, frozen, mo_coeff, mo_occ)

@@ -94,7 +94,6 @@ def RCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     import numpy
     from pyscf import lib
     from pyscf.df.df_jk import _DFHF
-    from pyscf.soscf import newton_ah
     from pyscf.cc import dfccsd
 
     if mf.istype('UHF'):
@@ -105,10 +104,9 @@ def RCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = mf.to_uhf()
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
 
+    mf = mf.remove_soscf()
     if not mf.istype('RHF'):
         mf = mf.to_rhf()
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        mf = mf.undo_soscf()
 
     if isinstance(mf, _DFHF) and mf.with_df:
         return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
@@ -123,12 +121,10 @@ RCCSD.__doc__ = ccsd.CCSD.__doc__
 
 def UCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.df.df_jk import _DFHF
-    from pyscf.soscf import newton_ah
 
+    mf = mf.remove_soscf()
     if not mf.istype('UHF'):
         mf = mf.to_uhf()
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        mf = mf.undo_soscf()
 
     if isinstance(mf, _DFHF) and mf.with_df:
         # TODO: DF-UCCSD with memory-efficient particle-particle ladder,
@@ -141,12 +137,10 @@ UCCSD.__doc__ = uccsd.UCCSD.__doc__
 
 def GCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.df.df_jk import _DFHF
-    from pyscf.soscf import newton_ah
 
+    mf = mf.remove_soscf()
     if not mf.istype('GHF'):
         mf = mf.to_ghf()
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        mf = mf.undo_soscf()
 
     if isinstance(mf, _DFHF) and mf.with_df:
         raise NotImplementedError('DF-GCCSD')
@@ -169,7 +163,6 @@ scf.hf.SCF.QCISD = QCISD
 def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     import numpy
     from pyscf import lib
-    from pyscf.soscf import newton_ah
 
     if mf.istype('UHF'):
         raise RuntimeError('RQCISD cannot be used with UHF method.')
@@ -178,10 +171,9 @@ def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
                         'is converted to UHF object and UQCISD method is called.')
         raise NotImplementedError
 
+    mf = mf.remove_soscf()
     if not mf.istype('RHF'):
         mf = mf.to_rhf()
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        mf = mf.undo_soscf()
 
     elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
         raise NotImplementedError

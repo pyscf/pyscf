@@ -61,12 +61,9 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
-    from pyscf.soscf import newton_ah
-
+    mf = mf.remove_soscf()
     if not mf.istype('UHF'):
         mf = mf.to_uhf()
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        mf = mf.undo_soscf()
 
     return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
 
@@ -78,12 +75,9 @@ def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
-    from pyscf.soscf import newton_ah
-
+    mf = mf.remove_soscf()
     if not mf.istype('RHF'):
         mf = mf.to_rhf()
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        mf = mf.undo_soscf()
 
     return radc.RADC(mf, frozen, mo_coeff, mo_occ)
 
