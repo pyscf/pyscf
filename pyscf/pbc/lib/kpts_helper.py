@@ -548,7 +548,7 @@ class KptsHelper(lib.StreamObject):
             kpt = tuple(kpt)
             kp,kq,kr = kpt
             if not completed[kp,kq,kr]:
-                self.symm_map[kpt] = list()
+                self.symm_map[kpt] = []
                 ks = self.kconserv[kp,kq,kr]
 
                 completed[kp,kq,kr] = True

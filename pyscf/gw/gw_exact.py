@@ -157,10 +157,10 @@ class GWExact(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-8)
     linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
-    _keys = set((
+    _keys = {
         'eta', 'linearized',
         'mol', 'frozen', 'mo_energy', 'mo_coeff', 'mo_occ',
-    ))
+    }
 
     def __init__(self, mf, frozen=None, tdmf=None):
         self.mol = mf.mol

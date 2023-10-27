@@ -768,7 +768,7 @@ class UHF(hf.SCF):
     S^2 = 0.7570150, 2S+1 = 2.0070027
     '''
 
-    _keys = set(["init_guess_breaksym"])
+    _keys = {"init_guess_breaksym"}
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)

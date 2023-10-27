@@ -140,7 +140,7 @@ def cc_Wvvvv(cc,t1,t2,eris,kconserv):
 
             km = numpy.arange(nkpts).tolist()
             kn = kconserv[ka,km,kb].tolist()
-            kmn = tuple([km,kn])
+            kmn = (km,kn)
             Wabef[ka,kb] += 0.25*einsum('xmnab,xymnef->yabef',tau.transpose(2,0,1,3,4,5,6)[ka][kmn],eris.oovv[kmn])
 
             for ke in range(nkpts):

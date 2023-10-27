@@ -94,9 +94,9 @@ class _SGXHF:
 
     __name_mixin__ = 'SGX'
 
-    _keys = set([
+    _keys = {
         'auxbasis', 'with_df', 'direct_scf_sgx', 'rebuild_nsteps'
-    ])
+    }
 
     def __init__(self, mf, df=None, auxbasis=None):
         self.__dict__.update(mf.__dict__)
@@ -247,11 +247,11 @@ def _make_opt(mol, pjs=False,
 
 
 class SGX(lib.StreamObject):
-    _keys = set((
+    _keys = {
         'mol', 'grids_thrd', 'grids_level_i', 'grids_level_f',
         'grids_switch_thrd', 'dfj', 'direct_j', 'pjs', 'debug', 'grids',
         'blockdim', 'auxmol',
-    ))
+    }
 
     def __init__(self, mol, auxbasis=None, pjs=False):
         self.mol = mol

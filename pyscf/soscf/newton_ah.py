@@ -286,7 +286,7 @@ def gen_g_hop_dhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 # Dual basis for gradients and hessian
 def project_mol(mol, dual_basis={}):
     from pyscf import df
-    uniq_atoms = set([a[0] for a in mol._atom])
+    uniq_atoms = {a[0] for a in mol._atom}
     newbasis = {}
     for symb in uniq_atoms:
         if gto.charge(symb) <= 10:
@@ -644,11 +644,11 @@ class _CIAH_SOSCF:
     kf_interval = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_interval', 4)
     kf_trust_region = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_trust_region', 5)
 
-    _keys = set((
+    _keys = {
         'max_cycle_inner', 'max_stepsize', 'canonicalization', 'ah_start_tol',
         'ah_start_cycle', 'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
         'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval', 'kf_trust_region',
-    ))
+    }
 
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)
@@ -972,7 +972,7 @@ def _force_SO3_degeneracy_(dr, orbsym):
 def _force_Ex_Ey_degeneracy_(dr, orbsym):
     '''Force the Ex and Ey orbitals to use the same rotation matrix'''
     # 0,1,4,5 are 1D irreps
-    E_irrep_ids = set(orbsym).difference(set((0,1,4,5)))
+    E_irrep_ids = set(orbsym).difference({0,1,4,5})
     orbsym = numpy.asarray(orbsym)
 
     for ir in E_irrep_ids:

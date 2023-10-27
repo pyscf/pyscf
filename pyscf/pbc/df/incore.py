@@ -148,10 +148,10 @@ class Int3cBuilder(lib.StreamObject):
     '''helper functions to compute 3-center integral tensor with double-lattice sum
     '''
 
-    _keys = set((
+    _keys = {
         'cell', 'auxcell', 'kpts', 'rs_cell', 'bvk_kmesh',
         'supmol', 'ke_cutoff', 'direct_scf_tol',
-    ))
+    }
 
     def __init__(self, cell, auxcell, kpts=None):
         self.cell = cell

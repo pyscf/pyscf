@@ -73,7 +73,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     noa, nob = gf_occ[0].naux, gf_occ[1].naux
     nva, nvb = gf_vir[0].naux, gf_vir[1].naux
     tol = agf2.weight_tol
-    facs = dict(os_factor=os_factor, ss_factor=ss_factor)
+    facs = {'os_factor': os_factor, 'ss_factor': ss_factor}
 
     ci_a, ei_a = gf_occ[0].coupling, gf_occ[0].energy
     ci_b, ei_b = gf_occ[1].coupling, gf_occ[1].energy
@@ -206,7 +206,7 @@ def fock_loop(agf2, eri, gf, se):
     rdm1a_prev = 0
     rdm1b_prev = 0
     converged = False
-    opts = dict(tol=agf2.conv_tol_nelec, maxiter=agf2.max_cycle_inner)
+    opts = {'tol': agf2.conv_tol_nelec, 'maxiter': agf2.max_cycle_inner}
 
     for niter1 in range(1, agf2.max_cycle_outer+1):
         sea, opt = minimize_chempot(sea, focka, nalph, x0=sea.chempot,
@@ -557,7 +557,7 @@ class UAGF2(ragf2.RAGF2):
         if os_factor is None: os_factor = self.os_factor
         if ss_factor is None: ss_factor = self.ss_factor
 
-        facs = dict(os_factor=os_factor, ss_factor=ss_factor)
+        facs = {'os_factor': os_factor, 'ss_factor': ss_factor}
         gf_occ = (gf[0].get_occupied(), gf[1].get_occupied())
         gf_vir = (gf[0].get_virtual(), gf[1].get_virtual())
 

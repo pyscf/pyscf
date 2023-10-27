@@ -79,7 +79,7 @@ class DF(lib.StreamObject):
     _compatible_format = getattr(__config__, 'df_df_DF_compatible_format', False)
     _dataname = 'j3c'
 
-    _keys = set(('mol', 'auxmol'))
+    _keys = {'mol', 'auxmol'}
 
     def __init__(self, mol, auxbasis=None):
         self.mol = mol

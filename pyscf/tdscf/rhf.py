@@ -652,10 +652,10 @@ class TDBase(lib.StreamObject):
     # Threshold to handle degeneracy in init guess
     deg_eia_thresh = getattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-3)
 
-    _keys = set((
+    _keys = {
         'conv_tol', 'nstates', 'singlet', 'lindep', 'level_shift', 'max_space',
         'max_cycle', 'mol', 'chkfile', 'wfnsym', 'converged', 'e', 'xy',
-    ))
+    }
 
     def __init__(self, mf):
         self.verbose = mf.verbose

@@ -79,7 +79,7 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
     exps = alpha*beta^i for i = 1..N
     '''
     nuc_start = gto.charge(start_at)
-    uniq_atoms = set([a[0] for a in mol._atom])
+    uniq_atoms = {a[0] for a in mol._atom}
 
     newbasis = {}
     for symb in uniq_atoms:
@@ -143,12 +143,12 @@ def make_auxbasis(mol, mp2fit=False):
     '''Depending on the orbital basis, generating even-tempered Gaussians or
     the optimized auxiliary basis defined in DEFAULT_AUXBASIS
     '''
-    uniq_atoms = set([a[0] for a in mol._atom])
+    uniq_atoms = {a[0] for a in mol._atom}
     if isinstance(mol.basis, str):
-        _basis = dict(((a, mol.basis) for a in uniq_atoms))
+        _basis = {a: mol.basis for a in uniq_atoms}
     elif 'default' in mol.basis:
         default_basis = mol.basis['default']
-        _basis = dict(((a, default_basis) for a in uniq_atoms))
+        _basis = {a: default_basis for a in uniq_atoms}
         _basis.update(mol.basis)
         del (_basis['default'])
     else:
@@ -209,11 +209,11 @@ def make_auxmol(mol, auxbasis=None):
     pmol.basis = auxbasis
 
     if isinstance(auxbasis, (str, list, tuple)):
-        uniq_atoms = set([a[0] for a in mol._atom])
-        _basis = dict([(a, auxbasis) for a in uniq_atoms])
+        uniq_atoms = {a[0] for a in mol._atom}
+        _basis = {a: auxbasis for a in uniq_atoms}
     elif 'default' in auxbasis:
-        uniq_atoms = set([a[0] for a in mol._atom])
-        _basis = dict(((a, auxbasis['default']) for a in uniq_atoms))
+        uniq_atoms = {a[0] for a in mol._atom}
+        _basis = {a: auxbasis['default'] for a in uniq_atoms}
         _basis.update(auxbasis)
         del (_basis['default'])
     else:

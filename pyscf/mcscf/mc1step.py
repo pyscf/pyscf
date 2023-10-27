@@ -742,7 +742,7 @@ class CASSCF(casci.CASBase):
     extrasym = None
     callback = None
 
-    _keys = set((
+    _keys = {
         'max_stepsize', 'max_cycle_macro', 'max_cycle_micro', 'conv_tol',
         'conv_tol_grad', 'ah_level_shift', 'ah_conv_tol', 'ah_max_cycle',
         'ah_lindep', 'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
@@ -753,7 +753,7 @@ class CASSCF(casci.CASBase):
         'small_rot_tol', 'extrasym', 'callback',
         'frozen', 'chkfile', 'fcisolver', 'e_tot', 'e_cas', 'ci', 'mo_coeff',
         'mo_energy', 'converged',
-    ))
+    }
 
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
         casci.CASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)

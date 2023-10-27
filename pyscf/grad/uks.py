@@ -244,7 +244,7 @@ class Gradients(uhf_grad.Gradients):
 
     grid_response = getattr(__config__, 'grad_uks_Gradients_grid_response', False)
 
-    _keys = set(['grid_response', 'grids', 'nlcgrids'])
+    _keys = {'grid_response', 'grids', 'nlcgrids'}
 
     def __init__(self, mf):
         uhf_grad.Gradients.__init__(self, mf)
