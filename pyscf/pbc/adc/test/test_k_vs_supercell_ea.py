@@ -60,7 +60,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_ea_adc2_supercell(self):
-        e1,v1,p1,x1 = myadc.kernel(nroots=3)
+        e1,v1,p1,x1 = myadc.kernel(nroots=4)
         self.assertAlmostEqual(e1[1], 0.83425538, 6)
         self.assertAlmostEqual(e1[3], 1.29595017, 6)
 
