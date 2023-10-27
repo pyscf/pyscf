@@ -386,7 +386,7 @@ class PolEmbed(lib.StreamObject):
                                       implemented for order > 2.""")
 
         op = 0
-        for p0, p1 in lib.prange_split(all_sites.size, n_chunks):
+        for p0, p1 in lib.prange_split(all_sites.shape[0], n_chunks):
             sites = all_sites[p0:p1]
             orders = all_orders[p0:p1]
             moments = all_moments[p0:p1]
