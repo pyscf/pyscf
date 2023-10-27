@@ -62,6 +62,7 @@ def setUpModule():
         basis = basis,
         verbose = 0,
         max_memory = 1000,
+        precision = 1e-9,
     )
 
     kpts = cell.make_kpts([3,5,6])[[0, 2, 3, 4, 6, 12, 20]]
@@ -165,6 +166,7 @@ class KnownValues(unittest.TestCase):
         cell = pgto.M(atom='He 0 0 0; He 0.9 0 0',
                       basis=basis,
                       a='2.8 0 0; 0 2.8 0; 0 0 15',
+                      precision=1e-9,
                       dimension=2)
         auxcell = df.make_auxcell(cell, auxbasis)
         dfbuilder = gdf_builder._CCGDFBuilder(cell, auxcell).build()
@@ -360,6 +362,7 @@ class KnownValues(unittest.TestCase):
             atom = 'He    0.    2.2      1.; He    1.    1.       1.',
             basis = [[0, [1.2, 1.], [.7, .5], [0.4, .5]], [1, [1.1, .5], [0.4, .5]]],
             mesh = [15] * 3,
+            precision = 1e-9,
             verbose = 0,
         )
         cell_lr.omega = 0.9

@@ -61,6 +61,7 @@ def setUpModule():
         verbose = 7,
         output = '/dev/null',
         max_memory = 1000,
+        precision = 1e-9,
     )
 
     kpts = cell.make_kpts([3,5,6])[[0, 2, 3, 4, 6, 12, 20]]
@@ -171,6 +172,7 @@ class KnownValues(unittest.TestCase):
             basis = [[0, [1.2, 1.], [.7, .5], [0.4, .5]], [1, [1.1, .5], [0.3, .5]]],
             mesh = [14] * 3,
             verbose = 0,
+            precision = 1e-9,
         )
         auxcell = df.make_auxcell(cell,
             auxbasis=[[0, [1.2, 1.], [.7, .5], [0.4, .5]],
@@ -377,6 +379,7 @@ class KnownValues(unittest.TestCase):
             basis = [[0, [1.2, 1.], [.7, .5], [0.4, .5]], [1, [1.1, .5], [0.3, .5]]],
             mesh = [14] * 3,
             verbose = 0,
+            precision = 1e-9,
         )
         cell_lr.omega = 0.9
         auxcell_lr = df.make_auxcell(cell_lr,
@@ -497,6 +500,7 @@ class KnownValues(unittest.TestCase):
             basis = [[0, [1.2, 1.], [.7, .5], [0.4, .5]], [1, [1.1, .5], [0.3, .5]]],
             mesh = [14] * 3,
             verbose = 0,
+            precision = 1e-9,
         )
         cell_sr.omega = -0.9
         auxcell_sr = df.make_auxcell(cell_sr,

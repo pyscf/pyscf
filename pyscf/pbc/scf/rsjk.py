@@ -1176,7 +1176,8 @@ def estimate_rcut(rs_cell, omega, precision=None,
                   exclude_dd_block=True):
     '''Estimate rcut for 2e SR-integrals'''
     if precision is None:
-        precision = rs_cell.precision
+        # Adjust precision a little bit as errors are found slightly larger than cell.precision.
+        precision = rs_cell.precision * 1e-1
 
     rs_cell = rs_cell
     exps, cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')

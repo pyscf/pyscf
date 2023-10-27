@@ -745,7 +745,13 @@ def estimate_rcut(cell, precision=None):
     Q_ij ~ S_ij * (sqrt(2aij/pi) * aij**(lij*2) * (4*lij-1)!!)**.5
     '''
     if precision is None:
-        precision = cell.precision
+        # The rcut estimated with this function is sufficient to converge
+        # the integrals to the required precision. Errors around the required
+        # precision is found when checking hermitian symmetry of the integrals.
+        # The discrepancy in hermitian symmetry may cause issues in post-HF
+        # methods which assume the hermitian symmetry in MO integrals.
+        # Therefore precision is adjusted to ensure hermitian symmetry.
+        precision = cell.precision * 1e-2
 
     if cell.nbas == 0:
         return np.zeros(1)
