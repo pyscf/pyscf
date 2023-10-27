@@ -152,11 +152,11 @@ def _get_element_row(symbol):
 
 
 class PolEmbed(lib.StreamObject):
-    _keys = set((
+    _keys = {
         'mol', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
         'equilibrium_solvation', 'options', 'do_ecp', 'eef', 'cppe_state',
         'potentials', 'V_es', 'ecpmol', 'e', 'v',
-    ))
+    }
 
     def __init__(self, mol, options_or_potfile):
         self.mol = mol

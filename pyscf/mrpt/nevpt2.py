@@ -616,9 +616,9 @@ class NEVPT(lib.StreamObject):
     -0.14058324991532101
     '''
 
-    _keys = set((
+    _keys = {
         'ncore', 'root', 'compressed_mps', 'e_corr', 'canonicalized', 'onerdm',
-    )).union(casci.CASBase._keys, mc1step.CASSCF._keys)
+    }.union(casci.CASBase._keys, mc1step.CASSCF._keys)
 
     def __init__(self, mc, root=0):
         self.__dict__.update(mc.__dict__)

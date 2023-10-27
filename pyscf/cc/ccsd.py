@@ -923,7 +923,7 @@ class CCSDBase(lib.StreamObject):
     cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
     callback = None
 
-    _keys = set((
+    _keys = {
         'max_cycle', 'conv_tol', 'iterative_damping',
         'conv_tol_normt', 'diis', 'diis_space', 'diis_file',
         'diis_start_cycle', 'diis_start_energy_diff', 'direct',
@@ -931,7 +931,7 @@ class CCSDBase(lib.StreamObject):
         'mol', 'verbose', 'stdout', 'frozen', 'level_shift',
         'mo_coeff', 'mo_occ', 'converged', 'converged_lambda', 'emp2', 'e_hf',
         'e_corr', 't1', 't2', 'l1', 'l2', 'chkfile',
-    ))
+    }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import hf

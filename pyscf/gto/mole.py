@@ -1240,12 +1240,12 @@ def unpack(moldic):
 def dumps(mol):
     '''Serialize Mole object to a JSON formatted str.
     '''
-    exclude_keys = set(('output', 'stdout', '_keys',
+    exclude_keys = {'output', 'stdout', '_keys',
                         # Constructing in function loads
-                        'symm_orb', 'irrep_id', 'irrep_name'))
+                        'symm_orb', 'irrep_id', 'irrep_name'}
     # FIXME: nparray and kpts for cell objects may need to be excluded
-    nparray_keys = set(('_atm', '_bas', '_env', '_ecpbas',
-                        '_symm_orig', '_symm_axes'))
+    nparray_keys = {'_atm', '_bas', '_env', '_ecpbas',
+                        '_symm_orig', '_symm_axes'}
 
     moldic = dict(mol.__dict__)
     for k in exclude_keys:
@@ -2521,7 +2521,7 @@ class MoleBase(lib.StreamObject):
             self.check_sanity()
 
         self._atom = self.format_atom(self.atom, unit=self.unit)
-        uniq_atoms = set([a[0] for a in self._atom])
+        uniq_atoms = {a[0] for a in self._atom}
 
         _basis = _parse_default_basis(self.basis, uniq_atoms)
         self._basis = self.format_basis(_basis)

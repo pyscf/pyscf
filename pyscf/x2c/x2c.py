@@ -453,7 +453,7 @@ def get_init_guess(mol, key='minao'):
 class SCF(hf.SCF):
     '''The full X2C problem (scaler + soc terms) in j-adapted spinor basis'''
 
-    _keys = set(['with_x2c'])
+    _keys = {'with_x2c'}
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
@@ -733,7 +733,7 @@ class X2C1E_GSCF(_X2C_SCF):
 
     __name_mixin__ = 'X2C1e'
 
-    _keys = set(['with_x2c'])
+    _keys = {'with_x2c'}
 
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)

@@ -1809,7 +1809,7 @@ def _primitive_gto_cutoff(cell, precision=None):
 
 
 class MultiGridFFTDF(fft.FFTDF):
-    _keys = set(['tasks'])
+    _keys = {'tasks'}
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         fft.FFTDF.__init__(self, cell, kpts)

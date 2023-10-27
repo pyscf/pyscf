@@ -287,8 +287,8 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, t2=None, eris=None):
     mf = mp._scf
     dmab = mp.make_rdm1(t2=t2)
 
-    frozen = list()
-    no_coeff = list()
+    frozen = []
+    no_coeff = []
     for s,dm in enumerate(dmab):
         nocc = mp.nocc[s]
         nmo = mp.nmo[s]

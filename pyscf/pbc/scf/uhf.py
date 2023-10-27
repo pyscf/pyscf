@@ -107,7 +107,7 @@ get_rho = pbchf.get_rho
 class UHF(pbchf.SCF, mol_uhf.UHF):
     '''UHF class for PBCs.
     '''
-    _keys = set(["init_guess_breaksym"])
+    _keys = {"init_guess_breaksym"}
 
     init_guess_by_minao  = mol_uhf.UHF.init_guess_by_minao
     init_guess_by_atom   = mol_uhf.UHF.init_guess_by_atom

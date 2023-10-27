@@ -63,7 +63,7 @@ def make_grad_object(grad_method):
                          (WithSolventGrad, grad_method.__class__), name)
 
 class WithSolventGrad:
-    _keys = set(['de_solvent', 'de_solute'])
+    _keys = {'de_solvent', 'de_solute'}
 
     def __init__(self, grad_method):
         self.__dict__.update(grad_method.__dict__)

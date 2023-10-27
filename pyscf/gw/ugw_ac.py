@@ -385,10 +385,10 @@ class UGWAC(lib.StreamObject):
     # Analytic continuation: pade or twopole
     ac = getattr(__config__, 'gw_ugw_UGW_ac', 'pade')
 
-    _keys = set((
+    _keys = {
         'linearized','ac', 'mol', 'frozen', 'with_df',
         'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
-    ))
+    }
 
     def __init__(self, mf, frozen=None):
         self.mol = mf.mol

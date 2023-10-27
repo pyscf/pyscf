@@ -169,7 +169,7 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
 class KohnShamDFT(mol_ks.KohnShamDFT):
     '''PBC-KS'''
 
-    _keys = set(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
+    _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
 
     get_rho = get_rho
 

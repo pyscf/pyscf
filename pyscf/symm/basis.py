@@ -300,7 +300,7 @@ _SO3_SYMB2ID = {
     'i+5':    622,
     'i+6':    630,
 }
-_SO3_ID2SYMB = dict([(v, k) for k, v in _SO3_SYMB2ID.items()])
+_SO3_ID2SYMB = {v: k for k, v in _SO3_SYMB2ID.items()}
 _ANGULAR = 'spdfghiklmnortu'
 
 def so3_irrep_symb2id(symb):

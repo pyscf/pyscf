@@ -199,7 +199,7 @@ def as_scanner(td_grad, state=1):
                          (TDSCF_GradScanner, td_grad.__class__), name)
 
 class TDSCF_GradScanner(lib.GradScanner):
-    _keys = set(['e_tot'])
+    _keys = {'e_tot'}
 
     def __init__(self, g, state):
         lib.GradScanner.__init__(self, g)

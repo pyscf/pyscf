@@ -487,11 +487,11 @@ class MP2(lib.StreamObject):
     conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
 
-    _keys = set((
+    _keys = {
         'max_cycle', 'conv_tol', 'conv_tol_normt', 'mol', 'max_memory',
         'frozen', 'level_shift', 'mo_coeff', 'mo_occ', 'e_hf', 'e_corr',
         'e_corr_ss', 'e_corr_os', 't2',
-    ))
+    }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 

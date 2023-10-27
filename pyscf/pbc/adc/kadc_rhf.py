@@ -129,13 +129,13 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
 
 class RADC(pyscf.adc.radc.RADC):
-    _keys = set((
+    _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
         'mol', 'mo_energy', 'incore_complete',
         'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile',
         'max_space', 't2', 'mo_occ', 'max_cycle','kpts', 'khelper',
         'exxdiv', 'cell', 'nkop_chk', 'kop_npick', 'chnk_size', 'keep_exxdiv',
-    ))
+    }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 

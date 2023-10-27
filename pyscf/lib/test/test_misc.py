@@ -66,11 +66,11 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(issequence(numpy.array([1, 2, 3])))
         self.assertTrue(issequence(range(5)))
         self.assertTrue(issequence('abcde'))
-        self.assertTrue(issequence(tuple()))
+        self.assertTrue(issequence(()))
         self.assertFalse(issequence(True))
         self.assertFalse(issequence(2.0))
         self.assertFalse(issequence(1))
-        self.assertFalse(issequence(dict()))
+        self.assertFalse(issequence({}))
         self.assertFalse(issequence(set()))
 
     def test_isintsequence(self):

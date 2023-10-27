@@ -50,12 +50,12 @@ OMEGA_MIN = rsdf_builder.OMEGA_MIN
 INDEX_MIN = rsdf_builder.INDEX_MIN
 
 class RangeSeparatedJKBuilder(lib.StreamObject):
-    _keys = set((
+    _keys = {
         'cell', 'mesh', 'kpts', 'purify', 'omega', 'rs_cell', 'cell_d',
         'bvk_kmesh', 'supmol_sr', 'supmol_ft', 'supmol_d', 'cell0_basis_mask',
         'ke_cutoff', 'direct_scf_tol', 'time_reversal_symmetry',
         'exclude_dd_block', 'allow_drv_nodddd', 'approx_vk_lr_missing_mo',
-    ))
+    }
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell

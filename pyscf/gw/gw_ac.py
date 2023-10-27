@@ -334,10 +334,10 @@ class GWAC(lib.StreamObject):
     # Analytic continuation: pade or twopole
     ac = getattr(__config__, 'gw_gw_GW_ac', 'pade')
 
-    _keys = set((
+    _keys = {
         'linearized','ac', 'with_df', 'mol', 'frozen',
         'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
-    ))
+    }
 
     def __init__(self, mf, frozen=None):
         self.mol = mf.mol

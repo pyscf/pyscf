@@ -498,10 +498,10 @@ def kconserve_pmatrix(nkpts, kconserv):
 class RCCSD(pyscf.cc.ccsd.CCSD):
     max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
 
-    _keys = set([
+    _keys = {
         'kpts', 'khelper', 'ip_partition', 'ea_partition', 'max_space',
         'direct', 'keep_exxdiv',
-    ])
+    }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))

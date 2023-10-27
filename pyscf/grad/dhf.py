@@ -161,7 +161,7 @@ class GradientsBase(rhf_grad.GradientsBase):
 class Gradients(GradientsBase):
     '''Unrestricted Dirac-Hartree-Fock gradients'''
 
-    _keys = set(['level'])
+    _keys = {'level'}
 
     def __init__(self, scf_method):
         GradientsBase.__init__(self, scf_method)

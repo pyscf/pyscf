@@ -150,7 +150,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
     nmo = eri.nmo
     tol = agf2.weight_tol
-    facs = dict(os_factor=os_factor, ss_factor=ss_factor)
+    facs = {'os_factor': os_factor, 'ss_factor': ss_factor}
 
     ci, ei = gf_occ.coupling, gf_occ.energy
     ca, ea = gf_vir.coupling, gf_vir.energy
@@ -304,7 +304,7 @@ def fock_loop(agf2, eri, gf, se):
     nqmo = nmo + naux
     buf = np.zeros((nqmo, nqmo))
     converged = False
-    opts = dict(tol=agf2.conv_tol_nelec, maxiter=agf2.max_cycle_inner)
+    opts = {'tol': agf2.conv_tol_nelec, 'maxiter': agf2.max_cycle_inner}
     rdm1_prev = 0
 
     for niter1 in range(1, agf2.max_cycle_outer+1):
@@ -507,7 +507,7 @@ class RAGF2(lib.StreamObject):
     async_io = getattr(__config__, 'agf2_async_io', True)
     incore_complete = getattr(__config__, 'agf2_incore_complete', False)
 
-    _keys = set((
+    _keys = {
         'async_io', 'mol', 'incore_complete',
         'conv_tol', 'conv_tol_rdm1', 'conv_tol_nelec', 'max_cycle',
         'max_cycle_outer', 'max_cycle_inner', 'weight_tol', 'fock_diis_space',
@@ -515,7 +515,7 @@ class RAGF2(lib.StreamObject):
         'os_factor', 'ss_factor', 'damping',
         'mo_energy', 'mo_coeff', 'mo_occ', 'se', 'gf', 'e_1b', 'e_2b', 'e_init',
         'frozen', 'converged', 'chkfile',
-    ))
+    }
 
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
@@ -697,7 +697,7 @@ class RAGF2(lib.StreamObject):
         if os_factor is None: os_factor = self.os_factor
         if ss_factor is None: ss_factor = self.ss_factor
 
-        facs = dict(os_factor=os_factor, ss_factor=ss_factor)
+        facs = {'os_factor': os_factor, 'ss_factor': ss_factor}
         gf_occ = gf.get_occupied()
         gf_vir = gf.get_virtual()
 

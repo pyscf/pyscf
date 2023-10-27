@@ -320,7 +320,7 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = set(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
+    _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
 
     def __init__(self, xc='LDA,VWN'):
         self.xc = xc

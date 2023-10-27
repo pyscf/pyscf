@@ -179,9 +179,9 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
                                       mo_coeff[1], s, False)
     orbsyma = numpy.array(orbsyma)
     orbsymb = numpy.array(orbsymb)
-    irrep_nelec = dict([(mol.irrep_name[k], (int(sum(mo_occ[0][orbsyma==ir])),
-                                             int(sum(mo_occ[1][orbsymb==ir]))))
-                        for k, ir in enumerate(mol.irrep_id)])
+    irrep_nelec = {mol.irrep_name[k]: (int(sum(mo_occ[0][orbsyma==ir])),
+                                             int(sum(mo_occ[1][orbsymb==ir])))
+                        for k, ir in enumerate(mol.irrep_id)}
     return irrep_nelec
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
@@ -309,7 +309,7 @@ class SymAdaptedUHF(uhf.UHF):
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 0), 'B2': (1, 1)}
     '''
 
-    _keys = set(['irrep_nelec'])
+    _keys = {'irrep_nelec'}
 
     def __init__(self, mol):
         uhf.UHF.__init__(self, mol)

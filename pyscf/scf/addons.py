@@ -89,9 +89,9 @@ class _SmearingSCF:
 
     __name_mixin__ = 'Smearing'
 
-    _keys = set([
+    _keys = {
         'sigma', 'smearing_method', 'mu0', 'fix_spin', 'entropy', 'e_free', 'e_zero'
-    ])
+    }
 
     def __init__(self, mf, sigma, method, mu0, fix_spin):
         self.__dict__.update(mf.__dict__)

@@ -560,7 +560,7 @@ class StreamObject:
     verbose = 0
     stdout = sys.stdout
     # Store the keys appeared in the module.  It is used to check misinput attributes
-    _keys = set(['output', 'verbose', 'stdout', 'max_memory'])
+    _keys = {'output', 'verbose', 'stdout', 'max_memory'}
 
     def kernel(self, *args, **kwargs):
         '''

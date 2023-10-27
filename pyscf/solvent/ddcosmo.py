@@ -619,11 +619,11 @@ def atoms_with_vdw_overlap(atm_id, atom_coords, r_vdw):
     return atoms_nearby
 
 class ddCOSMO(lib.StreamObject):
-    _keys = set((
+    _keys = {
         'mol', 'radii_table', 'atom_radii', 'lebedev_order', 'lmax', 'eta',
         'eps', 'grids', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
         'equilibrium_solvation', 'e', 'v',
-    ))
+    }
 
     def __init__(self, mol):
         self.mol = mol
