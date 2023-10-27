@@ -602,10 +602,10 @@ class KRGWCD(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
     fc = getattr(__config__, 'gw_gw_GW_fc', True)
 
-    _keys = set([
+    _keys = {
         'linearized', 'eta', 'fc', 'frozen', 'mol', 'with_df',
         'kpts', 'nkpts', 'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
-    ])
+    }
 
     def __init__(self, mf, frozen=0):
         self.mol = mf.mol

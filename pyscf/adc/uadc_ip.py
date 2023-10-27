@@ -1838,7 +1838,7 @@ class UADCIP(uadc.UADC):
             Spectroscopic amplitudes for each IP transition.
     '''
 
-    _keys = set((
+    _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method',
         'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory',
         't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
@@ -1846,7 +1846,7 @@ class UADCIP(uadc.UADC):
         'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
-    ))
+    }
 
     def __init__(self, adc):
         self.verbose = adc.verbose

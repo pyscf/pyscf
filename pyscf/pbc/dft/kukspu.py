@@ -125,7 +125,7 @@ class KUKSpU(kuks.KUKS):
     UKSpU class adapted for PBCs with k-point sampling.
     """
 
-    _keys = set(["U_idx", "U_val", "C_ao_lo", "U_lab"])
+    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab"}
 
     get_veff = get_veff
     energy_elec = energy_elec

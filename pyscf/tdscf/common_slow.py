@@ -164,7 +164,7 @@ class TDMatrixBlocks:
             raise ValueError("Empty tuple returned by `tdhf_primary_form`")
         if not isinstance(m[0], (str, unicode)):
             raise ValueError("The first item returned by `tdhf_primary_form` must be a string")
-        forms = dict(ab=3, mk=3, full=2)
+        forms = {"ab": 3, "mk": 3, "full": 2}
         if m[0] in forms:
             if len(m) != forms[m[0]]:
                 raise ValueError("The {} form returned by `tdhf_primary_form` must contain {:d} values".format(
@@ -329,7 +329,7 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
 
     def __getitem__(self, item):
         if isinstance(item, str):
-            spec, args = item, tuple()
+            spec, args = item, ()
         else:
             spec, args = item[0], item[1:]
         if set(spec) == set("mknj"):

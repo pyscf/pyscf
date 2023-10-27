@@ -656,7 +656,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
 class Hessian(uhf_hess.Hessian):
     '''Non-relativistic UKS hessian'''
 
-    _keys = set(['grids', 'grid_response'])
+    _keys = {'grids', 'grid_response'}
 
     def __init__(self, mf):
         uhf_hess.Hessian.__init__(self, mf)

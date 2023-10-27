@@ -116,7 +116,7 @@ class QMMM:
 _QMMM = QMMM
 
 class QMMMSCF(QMMM):
-    _keys = set(['mm_mol'])
+    _keys = {'mm_mol'}
 
     def __init__(self, method, mm_mol=None):
         self.__dict__.update(method.__dict__)

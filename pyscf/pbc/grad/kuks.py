@@ -117,7 +117,7 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
 
 class Gradients(uhf_grad.Gradients):
     '''Non-relativistic restricted Hartree-Fock gradients'''
-    _keys = set(['grid_response', 'grids'])
+    _keys = {'grid_response', 'grids'}
 
     def __init__(self, mf):
         uhf_grad.Gradients.__init__(self, mf)

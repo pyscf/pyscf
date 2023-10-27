@@ -156,9 +156,9 @@ class FFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
 
-    _keys = set((
+    _keys = {
         'cell', 'kpts', 'grids', 'mesh', 'blockdim', 'exxdiv',
-    ))
+    }
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         from pyscf.pbc.dft import gen_grid

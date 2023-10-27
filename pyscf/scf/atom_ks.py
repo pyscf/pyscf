@@ -25,7 +25,7 @@ from pyscf.scf import atom_hf, ADIIS
 from pyscf.dft import rks
 
 def get_atm_nrks(mol, atomic_configuration=elements.NRSRHFS_CONFIGURATION, xc='slater', grid=(100, 434)):
-    elements = set([a[0] for a in mol._atom])
+    elements = {a[0] for a in mol._atom}
     logger.info(mol, 'Spherically averaged atomic KS for %s', elements)
 
     atm_template = mol.copy(deep=False)

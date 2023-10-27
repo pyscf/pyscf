@@ -103,7 +103,7 @@ def remove_exp_basis(basis, amin=None, amax=None):
     return basisnew
 def _binary_search(xlo, xhi, xtol, ret_bigger, fcheck, args=None,
                    MAX_RESCALE=5, MAX_CYCLE=20, early_exit=True):
-    if args is None: args = tuple()
+    if args is None: args = ()
 # rescale xlo/xhi if necessary
     first_time = True
     count = 0

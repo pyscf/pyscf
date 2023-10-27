@@ -370,14 +370,14 @@ class UCASSCF(ucasci.UCASBase):
 
     callback = None
 
-    _keys = set((
+    _keys = {
         'max_stepsize', 'max_cycle_macro', 'max_cycle_micro', 'conv_tol',
         'conv_tol_grad', 'ah_level_shift', 'ah_conv_tol', 'ah_max_cycle',
         'ah_lindep', 'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
         'internal_rotation', 'ci_response_space', 'with_dep4', 'chk_ci',
         'kf_interval', 'kf_trust_region', 'natorb', 'callback',
         'canonicalization', 'sorting_mo_energy',
-    ))
+    }
 
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
         ucasci.UCASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)

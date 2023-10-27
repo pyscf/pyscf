@@ -97,7 +97,7 @@ class SymAdaptedGHF(ghf.GHF):
             occupancy based on the orbital energies.
     '''
 
-    _keys = set(['irrep_nelec'])
+    _keys = {'irrep_nelec'}
 
     def __init__(self, mol):
         ghf.GHF.__init__(self, mol)

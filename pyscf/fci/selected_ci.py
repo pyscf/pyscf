@@ -731,10 +731,10 @@ class SelectedCI(direct_spin1.FCISolver):
     start_tol = getattr(__config__, 'fci_selected_ci_SCI_start_tol', 3e-4)
     tol_decay_rate = getattr(__config__, 'fci_selected_ci_SCI_tol_decay_rate', 0.3)
 
-    _keys = set((
+    _keys = {
         'ci_coeff_cutoff', 'select_cutoff', 'conv_tol', 'start_tol',
         'tol_decay_rate',
-    ))
+    }
 
     def __init__(self, mol=None):
         direct_spin1.FCISolver.__init__(self, mol)

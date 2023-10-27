@@ -504,7 +504,7 @@ class SCF(mol_hf.SCF):
             MDF model is favored for better accuracy.  See also :mod:`pyscf.pbc.df`.
     '''
 
-    _keys = set(['cell', 'exxdiv', 'with_df', 'rsjk'])
+    _keys = {'cell', 'exxdiv', 'with_df', 'rsjk'}
 
     init_direct_scf = lib.invalid_method('init_direct_scf')
     get_bands = get_bands

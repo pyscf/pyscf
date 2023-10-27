@@ -512,7 +512,7 @@ def overlap(bra, ket, norb, nelec, s=None):
 
 class SpinPenaltyFCISolver:
     __name_mixin__ = 'SpinPenalty'
-    _keys = set(('ss_value', 'ss_penalty', 'base'))
+    _keys = {'ss_value', 'ss_penalty', 'base'}
 
     def __init__(self, fcibase, shift, ss_value):
         self.base = fcibase.copy()

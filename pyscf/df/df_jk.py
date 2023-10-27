@@ -108,7 +108,7 @@ class _DFHF:
 
     __name_mixin__ = 'DF'
 
-    _keys = set(['with_df', 'only_dfj'])
+    _keys = {'with_df', 'only_dfj'}
 
     def __init__(self, mf, df=None, only_dfj=None):
         self.__dict__.update(mf.__dict__)

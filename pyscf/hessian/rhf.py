@@ -62,10 +62,10 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     if isinstance(h1ao, str):
         h1ao = lib.chkfile.load(h1ao, 'scf_f1ao')
-        h1ao = dict([(int(k), h1ao[k]) for k in h1ao])
+        h1ao = {int(k): h1ao[k] for k in h1ao}
     if isinstance(mo1, str):
         mo1 = lib.chkfile.load(mo1, 'scf_mo1')
-        mo1 = dict([(int(k), mo1[k]) for k in mo1])
+        mo1 = {int(k): mo1[k] for k in mo1}
 
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
@@ -470,9 +470,9 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
 class Hessian(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock hessian'''
 
-    _keys = set((
+    _keys = {
         'mol', 'base', 'chkfile', 'atmlst', 'de',
-    ))
+    }
 
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose

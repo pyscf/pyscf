@@ -427,8 +427,8 @@ def init_guess_by_minao(mol):
                     'elements. "atom" initial guess is used.')
         return init_guess_by_atom(mol)
 
-    nelec_ecp_dic = dict([(mol.atom_symbol(ia), mol.atom_nelec_core(ia))
-                          for ia in range(mol.natm)])
+    nelec_ecp_dic = {mol.atom_symbol(ia): mol.atom_nelec_core(ia)
+                          for ia in range(mol.natm)}
 
     basis = {}
     occdic = {}
@@ -1472,14 +1472,14 @@ class SCF(lib.StreamObject):
 
     callback = None
 
-    _keys = set((
+    _keys = {
         'conv_tol', 'conv_tol_grad', 'max_cycle', 'init_guess',
         'DIIS', 'diis', 'diis_space', 'diis_start_cycle',
         'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
         'direct_scf', 'direct_scf_tol', 'conv_check', 'callback',
         'mol', 'chkfile', 'mo_energy', 'mo_coeff', 'mo_occ',
         'e_tot', 'converged', 'scf_summary', 'opt',
-    ))
+    }
 
     def __init__(self, mol):
         if not mol._built:

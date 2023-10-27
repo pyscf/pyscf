@@ -607,10 +607,10 @@ class MomGFCCSD(lib.StreamObject):
             particle Green's function
     """
 
-    _keys = set((
+    _keys = {
         'verbose', 'stdout', 'niter', 'weight_tol',
         'hermi_moments', 'hermi_solver', 'eh', 'ep', 'vh', 'vp', 'chkfile',
-    ))
+    }
 
     def __init__(self, mycc, niter=(2, 2)):
         self._cc = mycc
