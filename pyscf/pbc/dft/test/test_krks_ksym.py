@@ -19,8 +19,10 @@
 import unittest
 import numpy as np
 
+from pyscf.lib import finger
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pscf
+from pyscf.pbc.scf import chkfile
 from pyscf.pbc.dft import krks, kuks, multigrid
 
 def make_primitive_cell(mesh):
@@ -293,6 +295,33 @@ class KnownValues(unittest.TestCase):
         kumf.max_cycle = 1
         kumf.kernel(np.asarray([dm,dm]) / 2.)
         self.assertAlmostEqual(kmf.e_tot, kumf.e_tot, 7)
+
+    def test_get_bands(self):
+        kpts = cell.make_kpts(nk,
+                              space_group_symmetry=True,
+                              time_reversal_symmetry=True)
+        kumf = pscf.KUKS(cell, kpts=kpts)
+        kumf.xc = 'lda'
+        kumf.chkfile = 'test_get_bands_ksymm.chk'
+        kumf.kernel()
+
+        band_kpts = np.array([[-0.205736, 0.308604, 0.308604],
+                              [-0.25717,  0.308604, 0.308604]])
+        kumf = pscf.KUKS(cell, kpts=kpts)
+        kumf.__dict__.update(chkfile.load('test_get_bands_ksymm.chk', 'scf'))
+        E_nk = kumf.get_bands(band_kpts, kpts=kpts)[0]
+        E_F = kumf.get_fermi()
+        self.assertAlmostEqual(finger(np.asarray(E_nk[0])), 0.5575755379561839, 6)
+        self.assertAlmostEqual(finger(np.asarray(E_nk[1])), 0.5575755379561839, 6)
+        self.assertAlmostEqual(E_F[0], 0.3093399745201863, 6)
+        self.assertAlmostEqual(E_F[1], 0.3093399745201863, 6)
+
+        kmf = pscf.KRKS(cell, kpts=kpts)
+        kmf = kmf.convert_from_(kumf)
+        E_nk = kmf.get_bands(band_kpts, kpts=kpts)[0]
+        E_F = kmf.get_fermi()
+        self.assertAlmostEqual(finger(np.asarray(E_nk)), 0.5575755379561839, 6)
+        self.assertAlmostEqual(E_F, 0.3093399745201863, 6)
 
 if __name__ == '__main__':
     print("Full Tests for DFT with k-point symmetry")
