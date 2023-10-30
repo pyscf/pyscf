@@ -41,14 +41,14 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
     ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
 
-    if kpts_band is None: kpts_band = kpts.kpts_ibz
-    dm_bz = dm
-    if ground_state:
-        if len(dm[0]) != kpts.nkpts_ibz:
-            raise RuntimeError("Number of input density matrices does not \
-                               match the number of IBZ kpts: %d vs %d."
-                               % (len(dm[0]), kpts.nkpts_ibz))
-        dm_bz = kpts.transform_dm(dm)
+    if kpts_band is None:
+        kpts_band = kpts.kpts_ibz
+
+    if len(dm[0]) != kpts.nkpts_ibz:
+        raise KeyError('Shape of the input density matrix does not '
+                       'match the number of IBZ k-points: '
+                       f'{len(dm[0])} vs {kpts.nkpts_ibz}.')
+    dm_bz = kpts.transform_dm(dm)
 
     hybrid = ni.libxc.is_hybrid_xc(ks.xc)
 
