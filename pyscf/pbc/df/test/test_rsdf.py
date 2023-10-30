@@ -36,6 +36,7 @@ def setUpModule():
     cell.basis = 'ccpvdz'
     cell.verbose = 0
     cell.max_memory = 1000
+    cell.precision = 1e-9
     cell.build(0,0)
 
     numpy.random.seed(1)

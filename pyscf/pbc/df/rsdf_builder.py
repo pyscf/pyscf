@@ -172,9 +172,9 @@ class _RSGDFBuilder(Int3cBuilder):
         self.rs_auxcell = rs_auxcell = ft_ao._RangeSeparatedCell.from_cell(
             auxcell, self.ke_cutoff, verbose=log)
 
-        rcut_sr = estimate_rcut(rs_cell, rs_auxcell, self.omega, rs_cell.precision,
-                                self.exclude_dd_block,
-                                self.exclude_d_aux and cell.dimension > 0)
+        rcut_sr = estimate_rcut(rs_cell, rs_auxcell, self.omega,
+                                exclude_dd_block=self.exclude_dd_block,
+                                exclude_d_aux=self.exclude_d_aux and cell.dimension > 0)
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_sr.max(), log)
         supmol.omega = -self.omega
         self.supmol = supmol.strip_basis(rcut_sr)
@@ -182,7 +182,7 @@ class _RSGDFBuilder(Int3cBuilder):
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
         if self.has_long_range():
-            rcut = estimate_ft_rcut(rs_cell, cell.precision, self.exclude_dd_block)
+            rcut = estimate_ft_rcut(rs_cell, exclude_dd_block=self.exclude_dd_block)
             supmol_ft = _ExtendedMoleFT.from_cell(rs_cell, kmesh, rcut.max(), log)
             supmol_ft.exclude_dd_block = self.exclude_dd_block
             self.supmol_ft = supmol_ft.strip_basis(rcut)
@@ -1140,14 +1140,14 @@ class _RSNucBuilder(_RSGDFBuilder):
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
         rcut_sr = estimate_rcut(rs_cell, fakenuc, self.omega,
-                                rs_cell.precision, self.exclude_dd_block)
+                                exclude_dd_block=self.exclude_dd_block)
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_sr.max(), log)
         supmol.omega = -self.omega
         self.supmol = supmol.strip_basis(rcut_sr)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
-        rcut = estimate_ft_rcut(rs_cell, cell.precision, self.exclude_dd_block)
+        rcut = estimate_ft_rcut(rs_cell, exclude_dd_block=self.exclude_dd_block)
         supmol_ft = _ExtendedMoleFT.from_cell(rs_cell, kmesh, rcut.max(), log)
         supmol_ft.exclude_dd_block = self.exclude_dd_block
         self.supmol_ft = supmol_ft.strip_basis(rcut)
@@ -1407,7 +1407,8 @@ def estimate_rcut(rs_cell, rs_auxcell, omega, precision=None,
                   exclude_dd_block=False, exclude_d_aux=False):
     '''Estimate rcut for 3c2e SR-integrals'''
     if precision is None:
-        precision = rs_cell.precision
+        # Adjust precision a little bit as errors are found slightly larger than cell.precision.
+        precision = rs_cell.precision * 1e-1
 
     if rs_cell.nbas == 0 or rs_auxcell.nbas == 0:
         return np.zeros(1)
@@ -1495,7 +1496,9 @@ def estimate_ft_rcut(rs_cell, precision=None, exclude_dd_block=False):
     Q_ij ~ S_ij * (sqrt(2aij/pi) * aij**(lij*2) * (4*lij-1)!!)**.5
     '''
     if precision is None:
-        precision = rs_cell.precision
+        # Similar to ft_ao.estimate_rcut, adjusts precision to improve hermitian
+        # symmetry of MO integrals for post-HF.
+        precision = rs_cell.precision * 1e-2
 
     # consider only the most diffused component of a basis
     exps, cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')

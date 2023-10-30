@@ -113,8 +113,8 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.fused_cell, self.fuse = fuse_auxcell(auxcell, self.eta)
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, rsdf_builder.RCUT_THRESHOLD, verbose=log)
-        rcut = estimate_rcut(rs_cell, self.fused_cell, rs_cell.precision,
-                             self.exclude_dd_block)
+        rcut = estimate_rcut(rs_cell, self.fused_cell,
+                             exclude_dd_block=self.exclude_dd_block)
         rcut_max = rcut.max()
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_max, log)
         supmol.exclude_dd_block = self.exclude_dd_block
@@ -123,8 +123,8 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
         if self.has_long_range():
-            rcut = rsdf_builder.estimate_ft_rcut(rs_cell, cell.precision,
-                                                 self.exclude_dd_block)
+            rcut = rsdf_builder.estimate_ft_rcut(
+                rs_cell, exclude_dd_block=self.exclude_dd_block)
             supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(rs_cell, kmesh,
                                                                rcut.max(), log)
             supmol_ft.exclude_dd_block = self.exclude_dd_block
@@ -560,8 +560,8 @@ class _CCNucBuilder(_CCGDFBuilder):
         self.direct_scf_tol = cutoff / cell.atom_charges().max()
         log.debug('Set _CCNucBuilder.direct_scf_tol to %g', cutoff)
 
-        rcut = rsdf_builder.estimate_ft_rcut(rs_cell, cell.precision,
-                                             self.exclude_dd_block)
+        rcut = rsdf_builder.estimate_ft_rcut(
+            rs_cell, exclude_dd_block=self.exclude_dd_block)
         supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(rs_cell, kmesh,
                                                            rcut.max(), log)
         supmol_ft.exclude_dd_block = self.exclude_dd_block
@@ -931,7 +931,8 @@ def _compensate_nuccell(cell, eta):
 def estimate_rcut(rs_cell, auxcell, precision=None, exclude_dd_block=False):
     '''Estimate rcut for 3c2e integrals'''
     if precision is None:
-        precision = rs_cell.precision
+        # Adjust precision a little bit as errors are found slightly larger than cell.precision.
+        precision = rs_cell.precision * 1e-1
 
     if rs_cell.nbas == 0 or auxcell.nbas == 0:
         return np.zeros(1)

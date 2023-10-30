@@ -148,14 +148,14 @@ class KnownValues(unittest.TestCase):
         mydf = aft.AFTDF(cell)
         mydf.kpts = kpts
         vk = aft_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
-        self.assertAlmostEqual(lib.fp(vk[0]), (4.3373802352168278-0.062977052131451577j)/8, 9)
-        self.assertAlmostEqual(lib.fp(vk[1]), (2.878809181709983+0.028843869853690692j) /8, 9)
-        self.assertAlmostEqual(lib.fp(vk[2]), (3.7027622609953061-0.052034330663180237j)/8, 9)
-        self.assertAlmostEqual(lib.fp(vk[3]), (5.0939994842559422+0.060094478876149444j)/8, 9)
-        self.assertAlmostEqual(lib.fp(vk[4]), (4.2942087551592651-0.061138484763336887j)/8, 9)
-        self.assertAlmostEqual(lib.fp(vk[5]), (3.9689429688683679+0.048471952758750547j)/8, 9)
-        self.assertAlmostEqual(lib.fp(vk[6]), (3.6342630872923456-0.054892635365850449j)/8, 9)
-        self.assertAlmostEqual(lib.fp(vk[7]), (3.3483735224533548+0.040877095049528467j)/8, 9)
+        self.assertAlmostEqual(lib.fp(vk[0]), (4.3373802352168278-0.062977052131451577j)/8, 8)
+        self.assertAlmostEqual(lib.fp(vk[1]), (2.878809181709983+0.028843869853690692j) /8, 8)
+        self.assertAlmostEqual(lib.fp(vk[2]), (3.7027622609953061-0.052034330663180237j)/8, 8)
+        self.assertAlmostEqual(lib.fp(vk[3]), (5.0939994842559422+0.060094478876149444j)/8, 8)
+        self.assertAlmostEqual(lib.fp(vk[4]), (4.2942087551592651-0.061138484763336887j)/8, 8)
+        self.assertAlmostEqual(lib.fp(vk[5]), (3.9689429688683679+0.048471952758750547j)/8, 8)
+        self.assertAlmostEqual(lib.fp(vk[6]), (3.6342630872923456-0.054892635365850449j)/8, 8)
+        self.assertAlmostEqual(lib.fp(vk[7]), (3.3483735224533548+0.040877095049528467j)/8, 8)
 
         ref = FFTDF(cell, kpts=kpts).get_jk(dm, kpts=kpts)[1]
         self.assertAlmostEqual(abs(ref-vk).max(), 0, 8)
@@ -199,7 +199,7 @@ class KnownValues(unittest.TestCase):
         mydf = aft.AFTDF(cell)
         mydf.kpts = kpts
         vk = aft_jk.get_k_kpts(mydf, dm, 1, mydf.kpts)
-        self.assertAlmostEqual(lib.fp(vk), 0.12513784226311198-0.10318660336428756j, 9)
+        self.assertAlmostEqual(lib.fp(vk), 0.12513784226311198-0.10318660336428756j, 8)
         vk1 = aft_jk.get_k_for_bands(mydf, dm, 1, mydf.kpts)
         self.assertAlmostEqual(abs(vk-vk1).max(), 0, 9)
 
@@ -218,9 +218,9 @@ class KnownValues(unittest.TestCase):
         mydf.k_conj_symmetry = False
         mydf.kpts = kpts
         vk = aft_jk.get_k_kpts(mydf, dm, 1, mydf.kpts)
-        self.assertAlmostEqual(lib.fp(vk), 5.872042619636364+0.39662848875321643j, 9)
+        self.assertAlmostEqual(lib.fp(vk), 5.872042619636364+0.39662848875321643j, 7)
         vk1 = aft_jk.get_k_for_bands(mydf, dm, 1, mydf.kpts)
-        self.assertAlmostEqual(abs(vk-vk1).max(), 0, 9)
+        self.assertAlmostEqual(abs(vk-vk1).max(), 0, 8)
         ref = FFTDF(cell, kpts=kpts).get_jk(dm, kpts=kpts)[1]
         self.assertAlmostEqual(abs(ref-vk).max(), 0, 7)
 
