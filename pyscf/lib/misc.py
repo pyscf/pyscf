@@ -1115,8 +1115,7 @@ class H5TmpFile(h5py.File):
     Kwargs:
         filename : str or None
             If a string is given, an HDF5 file of the given filename will be
-            created. The temporary file will exist even if the H5TmpFile
-            object is released.  If nothing is specified, the HDF5 temporary
+            created. If filename is not specified, the HDF5 temporary
             file will be deleted when the H5TmpFile object is released.
 
     The return object is an h5py.File object. The file will be automatically
@@ -1130,11 +1129,11 @@ class H5TmpFile(h5py.File):
     '''
     def __init__(self, filename=None, mode='a', *args, **kwargs):
         if filename is None:
-            tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
-            filename = tmpfile.name
-        h5py.File.__init__(self, filename, mode, *args, **kwargs)
-#FIXME: Does GC flush/close the HDF5 file when releasing the resource?
-# To make HDF5 file reusable, file has to be closed or flushed
+            with tempfile.NamedTemporaryFile(dir=param.TMPDIR) as tmpf:
+                h5py.File.__init__(self, tmpf.name, mode, *args, **kwargs)
+        else:
+            h5py.File.__init__(self, filename, mode, *args, **kwargs)
+
     def __del__(self):
         try:
             self.close()
