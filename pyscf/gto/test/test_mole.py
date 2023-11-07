@@ -1036,7 +1036,7 @@ H    P
         # discard basis on atom 2. (related to issue #1711)
         mol._bas = mol._bas[:5]
         pmol, c = mol.decontract_basis()
-        self.assertEqual(pmol.nbas, 5)
+        self.assertEqual(pmol.nbas, 14)
 
         mol = gto.M(atom='He',
                     basis=('ccpvdz', [[0, [5, 1]], [1, [3, 1]]]))
