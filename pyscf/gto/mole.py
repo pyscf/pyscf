@@ -1023,7 +1023,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, nucprop={}):
     '''
     _atm = []
     _bas = []
-    _env = []
+    _env = [pre_env]
     ptr_env = len(pre_env)
 
     for ia, atom in enumerate(atoms):
@@ -1092,10 +1092,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, nucprop={}):
         _bas = numpy.asarray(numpy.vstack(_bas), numpy.int32).reshape(-1, BAS_SLOTS)
     else:
         _bas = numpy.zeros((0,BAS_SLOTS), numpy.int32)
-    if _env:
-        _env = numpy.hstack((pre_env,numpy.hstack(_env)))
-    else:
-        _env = numpy.array(pre_env, copy=False)
+    _env = numpy.asarray(numpy.hstack(_env), dtype=numpy.float64)
     return _atm, _bas, _env
 
 def make_ecp_env(mol, _atm, ecp, pre_env=[]):
