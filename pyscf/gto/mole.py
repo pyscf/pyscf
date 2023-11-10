@@ -1292,7 +1292,10 @@ def loads(molstr):
     mol.atom = eval(mol.atom)
     mol.basis= eval(mol.basis)
     mol.ecp  = eval(mol.ecp)
-    mol.pseudo  = eval(mol.pseudo)
+    if 'pseudo' in moldic:
+        # backward compatibility with old dumps function, which does not have
+        # the pseudo attribute
+        mol.pseudo  = eval(mol.pseudo)
     mol._atm = numpy.array(mol._atm, dtype=numpy.int32)
     mol._bas = numpy.array(mol._bas, dtype=numpy.int32)
     mol._env = numpy.array(mol._env, dtype=numpy.double)
