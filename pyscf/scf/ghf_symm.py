@@ -281,6 +281,9 @@ class SymAdaptedGHF(ghf.GHF):
         return numpy.asarray(get_orbsym(self.mol, mo_coeff, s))
     orbsym = property(get_orbsym)
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 GHF = SymAdaptedGHF
 
 

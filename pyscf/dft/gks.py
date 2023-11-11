@@ -177,6 +177,9 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
         '''Convert to GHF object.'''
         return self._transfer_attrs_(self.mol.GHF())
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 
 if __name__ == '__main__':
     from pyscf import gto

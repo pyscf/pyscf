@@ -467,7 +467,7 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     return h_op, hdiag
 
 
-class Hessian(lib.StreamObject):
+class HessianBase(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock hessian'''
 
     _keys = {
@@ -485,9 +485,11 @@ class Hessian(lib.StreamObject):
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
 
-    partial_hess_elec = partial_hess_elec
-    hess_elec = hess_elec
-    make_h1 = make_h1
+    def hess_elec(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def make_h1(self, *args, **kwargs):
+        raise NotImplementedError
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -585,6 +587,20 @@ class Hessian(lib.StreamObject):
     hess = kernel
 
     gen_hop = gen_hop
+
+    def to_gpu(self):
+        raise NotImplementedError
+
+
+class Hessian(HessianBase):
+
+    partial_hess_elec = partial_hess_elec
+    hess_elec = hess_elec
+    make_h1 = make_h1
+
+    def to_gpu(self):
+        from gpu4pyscf.hessian.rhf import Hessian
+        return lib.to_gpu(self.view(Hessian))
 
 # Inject to RHF class
 from pyscf import scf

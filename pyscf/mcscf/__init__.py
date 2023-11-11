@@ -193,14 +193,15 @@ from pyscf.mcscf import chkfile
 def CASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto
     from pyscf import scf
+    from pyscf.df.df_jk import _DFHF
     if isinstance(mf_or_mol, gto.MoleBase):
         mf = mf_or_mol.RHF()
     else:
         mf = mf_or_mol
 
     if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_rhf(mf)
-    if getattr(mf, 'with_df', None):
+        mf = mf.to_rhf()
+    if isinstance(mf, _DFHF) and mf.with_df:
         return DFCASSCF(mf, ncas, nelecas, ncore, frozen)
 
     if mf.mol.symmetry:
@@ -215,15 +216,16 @@ RCASSCF = CASSCF
 def CASCI(mf_or_mol, ncas, nelecas, ncore=None):
     from pyscf import gto
     from pyscf import scf
+    from pyscf.df.df_jk import _DFHF
     if isinstance(mf_or_mol, gto.MoleBase):
         mf = mf_or_mol.RHF()
     else:
         mf = mf_or_mol
 
     if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_rhf(mf)
+        mf = mf.to_rhf()
 
-    if getattr(mf, 'with_df', None):
+    if isinstance(mf, _DFHF) and mf.with_df:
         return DFCASCI(mf, ncas, nelecas, ncore)
 
     if mf.mol.symmetry:
@@ -238,13 +240,19 @@ RCASCI = CASCI
 def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
     from pyscf import gto
     from pyscf import scf
+    from pyscf.df.df_jk import _DFHF
     if isinstance(mf_or_mol, gto.MoleBase):
         mf = mf_or_mol.UHF()
     else:
         mf = mf_or_mol
 
     if not isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf, remove_df=True)
+        mf = mf.to_uhf()
+    if isinstance(mf, _DFHF) and mf.with_df:
+        from pyscf.lib import logger
+        logger.warn(mf, f'DF-UCASCI for DFHF method {mf} is not available. '
+                    'Normal UCASCI method is called.')
+        mf = mf.undo_df()
     mc = ucasci.UCASCI(mf, ncas, nelecas, ncore)
     return mc
 
@@ -252,13 +260,19 @@ def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
 def UCASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto
     from pyscf import scf
+    from pyscf.df.df_jk import _DFHF
     if isinstance(mf_or_mol, gto.MoleBase):
         mf = mf_or_mol.UHF()
     else:
         mf = mf_or_mol
 
     if not isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf, remove_df=True)
+        mf = mf.to_uhf()
+    if isinstance(mf, _DFHF) and mf.with_df:
+        from pyscf.lib import logger
+        logger.warn(mf, f'DF-UCASSCF for DFHF method {mf} is not available. '
+                    'Normal UCASSCF method is called.')
+        mf = mf.undo_df()
     mc = umc1step.UCASSCF(mf, ncas, nelecas, ncore, frozen)
     return mc
 
@@ -277,7 +291,7 @@ def DFCASSCF(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None,
         mf = mf_or_mol
 
     if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
+        mf = mf.to_rhf()
 
     if mf.mol.symmetry:
         mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
@@ -294,7 +308,7 @@ def DFCASCI(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None):
         mf = mf_or_mol
 
     if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
+        mf = mf.to_rhf()
 
     if mf.mol.symmetry:
         mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)

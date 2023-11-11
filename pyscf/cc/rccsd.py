@@ -259,6 +259,8 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
+    from pyscf.scf.hf import RHF
+    assert isinstance(mycc._scf, RHF)
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()

@@ -364,7 +364,7 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
 
 get_rho = khf.get_rho
 
-class KUHF(khf.KSCF, pbcuhf.UHF):
+class KUHF(khf.KSCF):
     '''UHF class with k-point sampling.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)

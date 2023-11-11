@@ -121,6 +121,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, verbose)
 
 def _make_df_eris(cc, mo_coeff=None):
+    assert cc._scf.istype('RHF')
     eris = _ChemistsERIs()
     eris._common_init_(cc, mo_coeff)
     nocc = eris.nocc

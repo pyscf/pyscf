@@ -870,6 +870,9 @@ class SCF(mol_hf.SCF):
         logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
         return self
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 
 class KohnShamDFT:
     '''A mock DFT base class
@@ -881,7 +884,7 @@ class KohnShamDFT:
     '''
 
 
-class RHF(SCF, mol_hf.RHF):
+class RHF(SCF):
 
     analyze = mol_hf.RHF.analyze
     spin_square = mol_hf.RHF.spin_square
