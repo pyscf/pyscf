@@ -341,6 +341,14 @@ def prange_split(n_total, n_sections):
     div_points = numpy.array(section_sizes).cumsum()
     return zip(div_points[:-1], div_points[1:])
 
+izip = zip
+
+if sys.version_info > (3, 8):
+    from math import comb
+else:
+    import math
+    def comb(n, k):
+        return math.factorial(n) // math.factorial(n-k) // math.factorial(k)
 
 def map_with_prefetch(func, *iterables):
     '''
@@ -905,13 +913,6 @@ def replace_class(cls, old_cls, new_cls):
 def overwrite_mro(obj, mro):
     '''A hacky function to overwrite the __mro__ attribute'''
     raise DeprecationWarning
-
-def izip(*args):
-    '''python2 izip == python3 zip'''
-    if sys.version_info < (3,):
-        return itertools.izip(*args)
-    else:
-        return zip(*args)
 
 class ProcessWithReturnValue(Process):
     def __init__(self, group=None, target=None, name=None, args=(),
