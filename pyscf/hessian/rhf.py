@@ -296,7 +296,7 @@ def _get_jk(mol, intor, comp, aosym, script_dms,
     return vs
 
 def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
-              fx=None, atmlst=None, max_memory=4000, verbose=None):
+              fx=None, atmlst=None, max_memory=4000, verbose=None, max_cycle=50):
     '''Solve the first order equation
 
     Kwargs:
@@ -343,7 +343,7 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
 
         h1vo = numpy.vstack(h1vo)
         s1vo = numpy.vstack(s1vo)
-        mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo)
+        mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo, max_cycle=max_cycle)
         mo1 = numpy.einsum('pq,xqi->xpi', mo_coeff, mo1).reshape(-1,3,nao,nocc)
         e1 = e1.reshape(-1,3,nocc,nocc)
 
@@ -471,7 +471,7 @@ class HessianBase(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock hessian'''
 
     _keys = {
-        'mol', 'base', 'chkfile', 'atmlst', 'de',
+        'mol', 'base', 'chkfile', 'atmlst', 'de', 'max_cycle'
     }
 
     def __init__(self, scf_method):
@@ -481,7 +481,7 @@ class HessianBase(lib.StreamObject):
         self.base = scf_method
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
-
+        self.max_cycle = 50
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
 
@@ -566,7 +566,7 @@ class HessianBase(lib.StreamObject):
     def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
         return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
-                         fx, atmlst, max_memory, verbose)
+                         fx, atmlst, max_memory, verbose, max_cycle=self.max_cycle)
 
     def hess_nuc(self, mol=None, atmlst=None):
         if mol is None: mol = self.mol
