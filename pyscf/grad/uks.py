@@ -275,6 +275,9 @@ class Gradients(uhf_grad.Gradients):
         else:
             return 0
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 Grad = Gradients
 
 from pyscf import dft

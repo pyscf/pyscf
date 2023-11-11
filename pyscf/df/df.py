@@ -308,6 +308,10 @@ class DF(lib.StreamObject):
             if auxmol_omega is not None:
                 auxmol.omega = auxmol_omega
 
+    def to_gpu(self):
+        from gpu4pyscf.df.df import DF as DF
+        return lib.to_gpu(self.__class__.reset(self.view(DF)))
+
 GDF = DF
 
 

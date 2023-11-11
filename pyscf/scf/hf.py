@@ -2002,6 +2002,25 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         dst.converged = False
         return dst
 
+    def to_gpu(self):
+        '''Converts to the object with GPU support.
+        '''
+        raise NotImplementedError
+
+    def istype(self, type_code):
+        '''
+        Checks if the object is an instance of the class specified by the type_code.
+        type_code can be a class or a str. If the type_code is a class, it is
+        equivalent to the Python built-in function `isinstance`. If the type_code
+        is a str, it checks the type_code against the names of the object and all
+        its parent classes.
+        '''
+        if isinstance(type_code, type):
+            # type_code is a class
+            return isinstance(self, type_code)
+
+        return any(type_code == t.__name__ for t in self.__class__.__mro__)
+
 
 class KohnShamDFT:
     '''A mock DFT base class
@@ -2111,6 +2130,12 @@ class RHF(SCF):
         '''
         from pyscf import dft
         return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
+
+    def to_gpu(self):
+        # FIXME: consider the density_fit, x2c and soscf decoration
+        from gpu4pyscf.scf import RHF
+        obj = SCF.reset(self.view(RHF))
+        return lib.to_gpu(obj)
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

@@ -312,6 +312,9 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
             t0 = logger.timer(self, 'setting up nlc grids', *t0)
         return self
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 # Update the KohnShamDFT label in pbc.scf.hf module
 pbchf.KohnShamDFT = KohnShamDFT
 

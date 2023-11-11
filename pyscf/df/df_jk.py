@@ -123,8 +123,7 @@ class _DFHF:
     def undo_df(self):
         '''Remove the DFHF Mixin'''
         obj = lib.view(self, lib.drop_class(self.__class__, _DFHF))
-        del obj.with_df
-        del obj.only_dfj
+        del obj.with_df, obj.only_dfj
         return obj
 
     def reset(self, mol=None):
@@ -226,6 +225,11 @@ class _DFHF:
     def CASSCF(self, ncas, nelecas, auxbasis=None, ncore=None, frozen=None):
         from pyscf import mcscf
         return mcscf.DFCASSCF(self, ncas, nelecas, auxbasis, ncore, frozen)
+
+    def to_gpu(self):
+        obj = self.undo_df().to_gpu().density_fit()
+        obj.__dict__.update(self.__dict__)
+        return lib.to_gpu(obj)
 
 
 def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):

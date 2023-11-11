@@ -656,8 +656,16 @@ class _CIAH_SOSCF:
 
     def undo_soscf(self):
         '''Remove the SOSCF Mixin'''
-        obj = lib.view(self, lib.drop_class(self.__class__, _CIAH_SOSCF))
+        from pyscf.df.df_jk import _DFHF
+        if isinstance(self, _DFHF) and not isinstance(self._scf, _DFHF):
+            # where density fitting is only applied on the SOSCF hessian
+            mf = self.undo_df()
+        else:
+            mf = self
+        obj = lib.view(mf, lib.drop_class(mf.__class__, _CIAH_SOSCF))
         del obj._scf
+        # When both self and self._scf are DF objects, they may be different df
+        # objects. The DF object of the base scf object should be used.
         if hasattr(self._scf, 'with_df'):
             obj.with_df = self._scf.with_df
         return obj
@@ -926,15 +934,15 @@ def newton(mf):
 
     assert isinstance(mf, hf.SCF)
 
-    if isinstance(mf, rohf.ROHF):
+    if mf.istype('ROHF'):
         cls = _SecondOrderROHF
-    elif isinstance(mf, uhf.UHF):
+    elif mf.istype('UHF'):
         cls = _SecondOrderUHF
-    elif isinstance(mf, scf.ghf.GHF):
+    elif mf.istype('GHF'):
         cls = _SecondOrderGHF
-    elif isinstance(mf, scf.dhf.RDHF):
+    elif mf.istype('RDHF'):
         cls = _SecondOrderRDHF
-    elif isinstance(mf, scf.dhf.DHF):
+    elif mf.istype('DHF'):
         cls = _SecondOrderDHF
     else:
         cls = _SecondOrderRHF

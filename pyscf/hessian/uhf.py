@@ -438,8 +438,9 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     return h_op, hdiag
 
 
-class Hessian(rhf_hess.Hessian):
+class Hessian(rhf_hess.HessianBase):
     '''Non-relativistic UHF hessian'''
+
     partial_hess_elec = partial_hess_elec
     hess_elec = hess_elec
     make_h1 = make_h1
@@ -449,6 +450,9 @@ class Hessian(rhf_hess.Hessian):
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
         return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                          fx, atmlst, max_memory, verbose)
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 from pyscf import scf
 scf.uhf.UHF.Hessian = lib.class_as_method(Hessian)

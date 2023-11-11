@@ -40,7 +40,7 @@ energy_elec = mol_rohf.energy_elec
 dip_moment = pbcuhf.dip_moment
 get_rho = pbcuhf.get_rho
 
-class ROHF(pbchf.RHF, mol_rohf.ROHF):
+class ROHF(pbchf.RHF):
     '''ROHF class for PBCs.
     '''
 

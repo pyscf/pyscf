@@ -756,6 +756,8 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
 #   or    => (ij|ol) => (oj|ol) => (oj|ov) => (ov|ov)
 #
 def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
+    from pyscf.scf.hf import RHF
+    assert isinstance(mp._scf, RHF)
     time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
 
