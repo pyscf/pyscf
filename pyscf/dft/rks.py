@@ -243,12 +243,10 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     ecoul = vhf.ecoul.real
     exc = vhf.exc.real
     e2 = ecoul + exc
-    e_disp = ks.get_dispersion()
 
     ks.scf_summary['e1'] = e1
     ks.scf_summary['coul'] = ecoul
     ks.scf_summary['exc'] = exc
-    ks.scf_summary['dispersion'] = e_disp
     logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, exc)
     return e1+e2, e2
 
@@ -325,9 +323,8 @@ class KohnShamDFT:
 
     _keys = set(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
 
-    def __init__(self, xc='LDA,VWN', disp=None):
+    def __init__(self, xc='LDA,VWN'):
         self.xc = xc
-        self.disp = disp
         self.nlc = ''
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(
