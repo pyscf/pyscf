@@ -25,6 +25,8 @@ import numpy
 from pyscf.scf.hf import KohnShamDFT
 
 def get_dispersion(hessobj, disp_version=None):
+    if disp_version is None:
+        disp_version = hessobj.base.disp
     mol = hessobj.base.mol
     natm = mol.natm
     mf = hessobj.base

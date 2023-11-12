@@ -92,7 +92,7 @@ Saved results
         SCF converged or not
     e_tot : float
         Total HF energy (electronic energy plus nuclear repulsion)
-    mo_energy : 
+    mo_energy :
         Orbital energies
     mo_occ
         Orbital occupancy
@@ -115,6 +115,7 @@ from pyscf.scf import dhf
 from pyscf.scf import chkfile
 from pyscf.scf import addons
 from pyscf.scf import diis
+from pyscf.scf import dispersion
 from pyscf.scf.diis import DIIS, CDIIS, EDIIS, ADIIS
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess

@@ -346,11 +346,11 @@ class KnownValues(unittest.TestCase):
 
     def test_scf_dispersion(self):
         mf = scf.RHF(mol)
+        mf.disp = 'd3bj'
         mf.conv_tol = 1e-10
         mf.chkfile = None
         e_tot = mf.kernel()
-        e_disp = mf.get_dispersion(disp_version='d3bj')
-        self.assertAlmostEqual(e_tot+e_disp, -76.03127458778653, 9)
+        self.assertAlmostEqual(e_tot, -76.03127458778653, 9)
 
     def test_scf_negative_spin(self):
         mol = gto.M(atom = '''

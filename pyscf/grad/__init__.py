@@ -32,6 +32,7 @@ from . import rhf
 from . import dhf
 from . import uhf
 from . import rohf
+from . import dispersion
 from .rhf import Gradients as RHF
 from .dhf import Gradients as DHF
 from .uhf import Gradients as UHF

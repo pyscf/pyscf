@@ -25,6 +25,8 @@ import numpy
 from pyscf.scf.hf import KohnShamDFT
 
 def get_dispersion(mf, disp_version=None):
+    if disp_version is None:
+        disp_version = mf.disp
     mol = mf.mol
     if disp_version is None:
         return 0.0

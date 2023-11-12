@@ -25,6 +25,8 @@ from pyscf.scf.hf import KohnShamDFT
 
 def get_dispersion(mf_grad, disp_version=None):
     '''gradient of dispersion correction for RHF/RKS'''
+    if disp_version is None:
+        disp_version = mf_grad.base.disp
     mol = mf_grad.base.mol
     disp_version = mf_grad.base.disp
     if disp_version is None:
