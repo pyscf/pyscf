@@ -228,8 +228,8 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
         atom center; the second is the volume of that grid.
     '''
     if isinstance(atom_grid, (list, tuple)):
-        atom_grid = dict([(mol.atom_symbol(ia), atom_grid)
-                          for ia in range(mol.natm)])
+        atom_grid = {mol.atom_symbol(ia): atom_grid
+                          for ia in range(mol.natm)}
     atom_grids_tab = {}
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
@@ -495,11 +495,11 @@ class Grids(lib.StreamObject):
     alignment = ALIGNMENT_UNIT
     cutoff = CUTOFF
 
-    _keys = set((
+    _keys = {
         'atomic_radii', 'radii_adjust', 'radi_method', 'becke_scheme',
         'prune', 'level', 'alignment', 'cutoff', 'mol', 'symmetry',
         'atom_grid', 'non0tab', 'screen_index', 'coords', 'weights',
-    ))
+    }
 
     def __init__(self, mol):
         self.mol = mol
@@ -625,6 +625,10 @@ class Grids(lib.StreamObject):
             self.non0tab = self.make_mask(mol, self.coords)
             self.screen_index = self.non0tab
         return self
+
+    def to_gpu(self):
+        from gpu4pyscf.dft.gen_grid import Grids
+        return lib.to_gpu(self.view(Grids))
 
 
 def _default_rad(nuc, level=3):

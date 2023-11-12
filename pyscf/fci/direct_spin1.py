@@ -718,12 +718,12 @@ class FCIBase(lib.StreamObject):
     threads = getattr(__config__, 'fci_direct_spin1_FCI_threads', None)
     lessio = getattr(__config__, 'fci_direct_spin1_FCI_lessio', False)
 
-    _keys = set((
+    _keys = {
         'max_cycle', 'max_space', 'conv_tol', 'lindep',
         'level_shift', 'davidson_only', 'pspace_size', 'threads', 'lessio',
         'mol', 'nroots', 'spin', 'orbsym', 'wfnsym', 'converged', 'norb',
         'nelec', 'eci', 'ci',
-    ))
+    }
 
     def __init__(self, mol=None):
         if mol is None:

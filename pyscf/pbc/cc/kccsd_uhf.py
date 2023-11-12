@@ -639,7 +639,7 @@ class KUCCSD(uccsd.UCCSD):
 
     max_space = getattr(__config__, 'pbc_cc_kccsd_uhf_KUCCSD_max_space', 20)
 
-    _keys = set(['kpts', 'mo_energy', 'khelper', 'max_space', 'direct'])
+    _keys = {'kpts', 'mo_energy', 'khelper', 'max_space', 'direct'}
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))

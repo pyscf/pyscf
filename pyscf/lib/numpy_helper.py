@@ -190,8 +190,8 @@ def _contract(subscripts, *tensors, **kwargs):
         print("Reshaping A as (-1,", inner_shape, ")")
         print("Reshaping B as (", inner_shape, ",-1)")
 
-    shapeCt = list()
-    idxCt = list()
+    shapeCt = []
+    idxCt = []
     for idx in idxAt:
         if idx in shared_idxAB:
             break

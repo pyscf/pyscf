@@ -140,8 +140,8 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     {'A1': 6, 'A2': 0, 'B1': 2, 'B2': 2}
     '''
     orbsym = get_orbsym(mol, mo_coeff, s, False)
-    irrep_nelec = dict([(mol.irrep_name[k], int(sum(mo_occ[orbsym==ir])))
-                        for k, ir in enumerate(mol.irrep_id)])
+    irrep_nelec = {mol.irrep_name[k]: int(sum(mo_occ[orbsym==ir]))
+                        for k, ir in enumerate(mol.irrep_id)}
     return irrep_nelec
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
@@ -435,7 +435,7 @@ class SymAdaptedRHF(hf.RHF):
     {'A1': 6, 'A2': 2, 'B1': 2, 'B2': 0}
     '''
 
-    _keys = set(['irrep_nelec'])
+    _keys = {'irrep_nelec'}
 
     def __init__(self, mol):
         hf.RHF.__init__(self, mol)
@@ -572,6 +572,10 @@ class SymAdaptedRHF(hf.RHF):
     wfnsym = property(get_wfnsym)
 
     canonicalize = canonicalize
+
+    def to_gpu(self):
+        raise NotImplementedError
+
 RHF = SymAdaptedRHF
 
 
@@ -599,7 +603,7 @@ class SymAdaptedROHF(rohf.ROHF):
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 0), 'B2': (1, 1)}
     '''
 
-    _keys = set(['irrep_nelec'])
+    _keys = {'irrep_nelec'}
 
     def __init__(self, mol):
         rohf.ROHF.__init__(self, mol)
@@ -929,6 +933,9 @@ class SymAdaptedROHF(rohf.ROHF):
 
     get_wfnsym = get_wfnsym
     wfnsym = property(get_wfnsym)
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 ROHF = SymAdaptedROHF
 

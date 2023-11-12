@@ -764,11 +764,11 @@ class CASBase(lib.StreamObject):
     canonicalization = getattr(__config__, 'mcscf_casci_CASCI_canonicalization', True)
     sorting_mo_energy = getattr(__config__, 'mcscf_casci_CASCI_sorting_mo_energy', False)
 
-    _keys = set((
+    _keys = {
         'natorb', 'canonicalization', 'sorting_mo_energy', 'mol', 'max_memory',
         'ncas', 'nelecas', 'ncore', 'fcisolver', 'frozen', 'extrasym',
         'e_tot', 'e_cas', 'ci', 'mo_coeff', 'mo_energy', 'mo_occ', 'converged',
-    ))
+    }
 
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
         if isinstance(mf_or_mol, gto.Mole):

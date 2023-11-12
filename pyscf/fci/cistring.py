@@ -151,7 +151,7 @@ def gen_linkstr_index_o1(orb_list, nelec, strs=None, tril=False):
     norb = len(orb_list)
     assert (numpy.all(numpy.arange(norb) == orb_list))
 
-    strdic = dict((tuple(s), i) for i,s in enumerate(occslst))
+    strdic = {tuple(s): i for i,s in enumerate(occslst)}
     nvir = norb - nelec
     def propgate1e(str0):
         addr0 = strdic[tuple(str0)]

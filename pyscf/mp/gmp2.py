@@ -175,7 +175,6 @@ def make_rdm2(mp, t2=None, ao_repr=False):
 
 class GMP2(mp2.MP2):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        assert (isinstance(mf, scf.ghf.GHF))
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def ao2mo(self, mo_coeff=None):
@@ -302,6 +301,8 @@ def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     return eris
 
 def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
+    from pyscf.scf.ghf import GHF
+    assert isinstance(mp._scf, GHF)
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mp.stdout, mp.verbose)
     eris = _PhysicistsERIs()

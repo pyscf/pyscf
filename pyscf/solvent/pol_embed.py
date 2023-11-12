@@ -152,11 +152,11 @@ def _get_element_row(symbol):
 
 
 class PolEmbed(lib.StreamObject):
-    _keys = set((
+    _keys = {
         'mol', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
         'equilibrium_solvation', 'options', 'do_ecp', 'eef', 'cppe_state',
         'potentials', 'V_es', 'ecpmol', 'e', 'v',
-    ))
+    }
 
     def __init__(self, mol, options_or_potfile):
         self.mol = mol
@@ -386,7 +386,7 @@ class PolEmbed(lib.StreamObject):
                                       implemented for order > 2.""")
 
         op = 0
-        for p0, p1 in lib.prange_split(all_sites.size, n_chunks):
+        for p0, p1 in lib.prange_split(all_sites.shape[0], n_chunks):
             sites = all_sites[p0:p1]
             orders = all_orders[p0:p1]
             moments = all_moments[p0:p1]

@@ -50,12 +50,12 @@ OMEGA_MIN = rsdf_builder.OMEGA_MIN
 INDEX_MIN = rsdf_builder.INDEX_MIN
 
 class RangeSeparatedJKBuilder(lib.StreamObject):
-    _keys = set((
+    _keys = {
         'cell', 'mesh', 'kpts', 'purify', 'omega', 'rs_cell', 'cell_d',
         'bvk_kmesh', 'supmol_sr', 'supmol_ft', 'supmol_d', 'cell0_basis_mask',
         'ke_cutoff', 'direct_scf_tol', 'time_reversal_symmetry',
         'exclude_dd_block', 'allow_drv_nodddd', 'approx_vk_lr_missing_mo',
-    ))
+    }
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
@@ -1176,7 +1176,8 @@ def estimate_rcut(rs_cell, omega, precision=None,
                   exclude_dd_block=True):
     '''Estimate rcut for 2e SR-integrals'''
     if precision is None:
-        precision = rs_cell.precision
+        # Adjust precision a little bit as errors are found slightly larger than cell.precision.
+        precision = rs_cell.precision * 1e-1
 
     rs_cell = rs_cell
     exps, cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')

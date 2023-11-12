@@ -378,7 +378,7 @@ def energy(cc, t1, t2, eris):
 
 
 class KsymAdaptedRCCSD(RCCSD):
-    _keys = set(['kqrts', 'rmat', 'ktensor_direct', 'eris_outcore'])
+    _keys = {'kqrts', 'rmat', 'ktensor_direct', 'eris_outcore'}
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         '''

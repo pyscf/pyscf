@@ -95,7 +95,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri1[2]-eri2[2]).max(), 0, 12)
 
     def test_get_veff(self):
-        mc1 = mcscf.UCASCI(m.view(dft.rks.RKS), 5, (4,2))
+        mc1 = mcscf.UCASCI(m.to_rks(), 5, (4,2))
         nao = mol.nao_nr()
         dm = numpy.random.random((2,nao,nao))
         dm = dm + dm.transpose(0,2,1)

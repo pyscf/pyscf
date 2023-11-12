@@ -13,11 +13,13 @@
 # limitations under the License.
 
 from pyscf.pbc.cc import ccsd
-from pyscf.pbc import scf
 
 def KRCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    from pyscf.pbc import scf
     from pyscf.pbc.mpicc import kccsd_rhf
-    mf = scf.addons.convert_to_rhf(mf)
+    assert isinstance(mf, scf.khf.KSCF)
+    if not isinstance(mf, scf.khf.KRHF):
+        mf = mf.to_rhf()
     return kccsd_rhf.RCCSD(mf, frozen)
 
 KCCSD = KRCCSD

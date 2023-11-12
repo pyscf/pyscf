@@ -364,12 +364,12 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
 
 get_rho = khf.get_rho
 
-class KUHF(khf.KSCF, pbcuhf.UHF):
+class KUHF(khf.KSCF):
     '''UHF class with k-point sampling.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
 
-    _keys = set(["init_guess_breaksym"])
+    _keys = {"init_guess_breaksym"}
 
     init_guess_by_1e     = pbcuhf.UHF.init_guess_by_1e
     init_guess_by_minao  = pbcuhf.UHF.init_guess_by_minao

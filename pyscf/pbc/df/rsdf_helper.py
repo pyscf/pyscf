@@ -37,18 +37,21 @@ from pyscf.pbc.tools import k2gamma
 """
 class MoleNoBasSort(mol_gto.mole.Mole):
     def build(self, **kwargs):
-        mol_gto.mole.Mole.build(self, **kwargs)
+        self.atom = kwargs.pop('atom')
+        self.basis = kwargs.pop('basis')
+        self._atom = mol_gto.format_atom(self.atom)
+        if isinstance(self.basis, dict):
+            self._basis = self.basis
+        else:
+            self._basis = {a[0]: self.basis for a in self._atom}
 
-        # sort self._bas
-        _bas = []
-        for iatm in range(self.natm):
-            atm = self.atom_symbol(iatm)
-            basin = self._basis[atm]
-            bas_ls = [b[0] for b in basin]
-            ls_uniq, ls_inv = np.unique(bas_ls, return_inverse=True)
-            order = np.argsort(np.concatenate([np.where(ls_inv==l)[0] for l in ls_uniq]))
-            _bas.append( self._bas[np.where(self._bas[:,0] == iatm)[0][order]] )
-        self._bas = np.vstack(_bas).astype(np.int32)
+        env = np.zeros(mol_gto.PTR_ENV_START)
+        # _bas should be constructed as it is in the input (see issue #1942).
+        self._atm, self._bas, self._env = self.make_env(
+            self._atom, self._basis, env)
+        self._built = True
+        return self
+
 def _remove_exp_basis_(bold, amin, amax):
     bnew = []
     for b in bold:
@@ -103,7 +106,7 @@ def remove_exp_basis(basis, amin=None, amax=None):
     return basisnew
 def _binary_search(xlo, xhi, xtol, ret_bigger, fcheck, args=None,
                    MAX_RESCALE=5, MAX_CYCLE=20, early_exit=True):
-    if args is None: args = tuple()
+    if args is None: args = ()
 # rescale xlo/xhi if necessary
     first_time = True
     count = 0

@@ -334,7 +334,7 @@ class _IntPPBuilder(Int3cBuilder):
 
         rcut = self._estimate_rcut_3c1e(rs_cell, fake_cells)
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut.max(), log)
-        self.supmol = supmol.strip_basis(rcut)
+        self.supmol = supmol.strip_basis(rcut+1.)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
@@ -512,6 +512,7 @@ class AFTDFMixin:
         #TODO:
         # ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh)
         # rs_cell = ft_ao._RangeSeparatedCell.from_cell(cell, ke_cutoff, ft_ao.RCUT_THRESHOLD)
+
         rcut = ft_ao.estimate_rcut(cell)
         supmol = ft_ao.ExtendedMole.from_cell(cell, bvk_kmesh, rcut.max())
         supmol = supmol.strip_basis(rcut)
@@ -566,9 +567,9 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
     '''Density expansion on plane waves
     '''
 
-    _keys = set((
+    _keys = {
         'cell', 'mesh', 'kpts', 'time_reversal_symmetry', 'blockdim',
-    ))
+    }
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell

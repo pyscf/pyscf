@@ -37,6 +37,7 @@ def setUpModule():
     cell.basis = 'ccpvdz'
     cell.verbose = 0
     cell.max_memory = 0
+    cell.precision = 1e-9
     cell.build()
 
     cell0 = pgto.Cell()
@@ -45,6 +46,7 @@ def setUpModule():
                     C    1.    1.       1.'''
     cell0.basis = 'sto-3g'
     cell0.verbose = 0
+    cell0.precision = 1e-9
     cell0.build()
 
 def tearDownModule():

@@ -548,10 +548,10 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     return vmat
 
 
-class Hessian(rhf_hess.Hessian):
+class Hessian(rhf_hess.HessianBase):
     '''Non-relativistic RKS hessian'''
 
-    _keys = set(['grids', 'grid_response'])
+    _keys = {'grids', 'grid_response'}
 
     def __init__(self, mf):
         rhf_hess.Hessian.__init__(self, mf)
@@ -559,7 +559,12 @@ class Hessian(rhf_hess.Hessian):
         self.grid_response = False
 
     partial_hess_elec = partial_hess_elec
+    hess_elec = rhf_hess.hess_elec
     make_h1 = make_h1
+
+    def to_gpu(self):
+        from gpu4pyscf.hessian.rks import Hessian
+        return lib.to_gpu(self.view(Hessian))
 
 from pyscf import dft
 dft.rks.RKS.Hessian = dft.rks_symm.RKS.Hessian = lib.class_as_method(Hessian)

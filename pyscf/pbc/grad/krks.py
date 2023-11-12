@@ -112,7 +112,7 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
         return -vmat
 
 class Gradients(rhf_grad.Gradients):
-    _keys = set(['grid_response', 'grids'])
+    _keys = {'grid_response', 'grids'}
 
     def __init__(self, mf):
         rhf_grad.Gradients.__init__(self, mf)

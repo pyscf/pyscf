@@ -28,12 +28,14 @@ import math
 import numpy
 from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
+from pyscf.dft import xc_deriv
 from pyscf import __config__
 
 _itrf = lib.load_library('libxcfun_itrf')
 
 _itrf.xcfun_splash.restype = ctypes.c_char_p
 _itrf.xcfun_version.restype = ctypes.c_char_p
+_itrf.XCFUN_eval_xc.restype = ctypes.c_int
 
 __version__ = _itrf.xcfun_version().decode("UTF-8")
 __reference__ = _itrf.xcfun_splash().decode("UTF-8")
@@ -245,12 +247,12 @@ GGA_IDS = set([1, 4, 5, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26,
 MGGA_IDS =set([10, 11, 12, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
                42, 43, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 66, 70, 75])
 '''
-HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
-              'B3PW91G' , 'B3P86G'  , 'B3LYPG'  , 'O3LYP'   , 'CAMB3LYP',
-              'B97XC'   , 'B97_1XC' , 'B97_2XC' , 'M05XC'   , 'TPSSH'   ,
-              'HFLYP'))
-RSH_XC = set(('CAMB3LYP',))
-MAX_DERIV_ORDER = 3
+HYB_XC = {'PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
+          'B3PW91G' , 'B3P86G'  , 'B3LYPG'  , 'O3LYP'   , 'CAMB3LYP',
+          'B97XC'   , 'B97_1XC' , 'B97_2XC' , 'M05XC'   , 'TPSSH'   ,
+          'HFLYP'}
+RSH_XC = {'CAMB3LYP'}
+MAX_DERIV_ORDER = ctypes.c_int.in_dll(_itrf, 'XCFUN_max_deriv_order').value
 
 VV10_XC = {
     'B97M_V'    : (6.0, 0.01),
@@ -508,18 +510,6 @@ _NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
                    'M06-HF' : 'M06HF',
                    'M06-2X' : 'M062X',
                    'E-'     : 'E_'} # For scientific notation
-
-
-def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
-    r'''Interface to call xcfun library to evaluate XC functional, potential
-    and functional derivatives.
-
-    See also :func:`pyscf.dft.libxc.eval_xc`
-    '''
-    hyb, fn_facs = parse_xc(xc_code)
-    if omega is not None:
-        hyb = hyb[:2] + (float(omega),)
-    return _eval_xc(hyb, fn_facs, rho, spin, relativity, deriv, verbose)
 
 XC_D0 = 0
 XC_D1 = 1
@@ -827,93 +817,38 @@ XC_D0000021 = 117
 XC_D0000012 = 118
 XC_D0000003 = 119
 
-def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
-    assert (deriv < 4)
-    if spin == 0:
-        rho_u = rho_d = numpy.asarray(rho, order='C')
-    else:
-        rho_u = numpy.asarray(rho[0], order='C')
-        rho_d = numpy.asarray(rho[1], order='C')
-    assert (rho_u.dtype == numpy.double)
-    assert (rho_d.dtype == numpy.double)
+def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
+    r'''Interface to call xcfun library to evaluate XC functional, potential
+    and functional derivatives. Return deriviates following libxc convention.
 
-    if rho_u.ndim == 1:
-        rho_u = rho_u.reshape(1,-1)
-        rho_d = rho_d.reshape(1,-1)
-    ngrids = rho_u.shape[1]
-
-    fn_ids = [x[0] for x in fn_facs]
-    facs   = [x[1] for x in fn_facs]
-    if hyb[2] != 0:
-        # Current implementation does not support different omegas for
-        # different functionals
-        omega = [hyb[2]] * len(facs)
-    else:
-        omega = [0] * len(facs)
-
-    n = len(fn_ids)
-    if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
-        all((is_lda(x) for x in fn_ids))):  # LDA
-        if spin == 0:
-            nvar = 1
-            xctype = 'R-LDA'
-        else:
-            nvar = 2
-            xctype = 'U-LDA'
-    elif any((is_meta_gga(x) for x in fn_ids)):
-        if spin == 0:
-            nvar = 3
-            xctype = 'R-MGGA'
-        else:
-            nvar = 7
-            xctype = 'U-MGGA'
-    else:  # GGA
-        if spin == 0:
-            nvar = 2
-            xctype = 'R-GGA'
-        else:
-            nvar = 5
-            xctype = 'U-GGA'
-    outlen = (math.factorial(nvar+deriv) //
-              (math.factorial(nvar) * math.factorial(deriv)))
-    outbuf = numpy.zeros((ngrids,outlen))
-
-    if n > 0:
-        _itrf.XCFUN_eval_xc(ctypes.c_int(n),
-                            (ctypes.c_int*n)(*fn_ids),
-                            (ctypes.c_double*n)(*facs),
-                            (ctypes.c_double*n)(*omega),
-                            ctypes.c_int(spin),
-                            ctypes.c_int(deriv), ctypes.c_int(rho_u.shape[1]),
-                            rho_u.ctypes.data_as(ctypes.c_void_p),
-                            rho_d.ctypes.data_as(ctypes.c_void_p),
-                            outbuf.ctypes.data_as(ctypes.c_void_p))
-
-    outbuf = lib.transpose(outbuf)
+    See also :func:`pyscf.dft.libxc.eval_xc`
+    '''
+    outbuf = eval_xc1(xc_code, rho, spin, deriv, omega)
     exc = outbuf[0]
     vxc = fxc = kxc = None
-    if xctype == 'R-LDA':
+    xctype = xc_type(xc_code)
+    if xctype == 'LDA' and spin == 0:
         if deriv > 0:
             vxc = [outbuf[1]]
         if deriv > 1:
             fxc = [outbuf[2]]
         if deriv > 2:
             kxc = [outbuf[3]]
-    elif xctype == 'R-GGA':
+    elif xctype == 'GGA' and spin == 0:
         if deriv > 0:
             vxc = [outbuf[1], outbuf[2]]
         if deriv > 1:
             fxc = [outbuf[3], outbuf[4], outbuf[5]]
         if deriv > 2:
             kxc = [outbuf[6], outbuf[7], outbuf[8], outbuf[9]]
-    elif xctype == 'U-LDA':
+    elif xctype == 'LDA' and spin == 1:
         if deriv > 0:
             vxc = [outbuf[1:3].T]
         if deriv > 1:
             fxc = [outbuf[3:6].T]
         if deriv > 2:
             kxc = [outbuf[6:10].T]
-    elif xctype == 'U-GGA':
+    elif xctype == 'GGA' and spin == 1:
         if deriv > 0:
             vxc = [outbuf[1:3].T, outbuf[3:6].T]
         if deriv > 1:
@@ -933,7 +868,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 # MGGA/MLGGA: Note the MLGGA interface are not implemented. MGGA only needs 3
 # input arguments.  To make the interface compatible with libxc, treat MGGA as
 # MLGGA
-    elif xctype == 'R-MGGA':
+    elif xctype == 'MGGA' and spin == 0:
         if deriv > 0:
             vxc = [outbuf[1], outbuf[2], None, outbuf[3]]
         if deriv > 1:
@@ -962,7 +897,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                 None, None, outbuf[XC_D012],
                 # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
                 None, None, None, outbuf[XC_D003]]
-    elif xctype == 'U-MGGA':
+    elif xctype == 'MGGA' and spin == 1:
         if deriv > 0:
             vxc = (outbuf[1:3].T, outbuf[3:6].T, None, outbuf[6:8].T)
         if deriv > 1:
@@ -1018,6 +953,88 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                 outbuf[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T]
     return exc, vxc, fxc, kxc
 
+def eval_xc1(xc_code, rho, spin=0, deriv=1, omega=None):
+    '''Similar to eval_xc.
+    Returns an array with the order of derivatives following xcfun convention.
+    '''
+    assert deriv <= MAX_DERIV_ORDER
+    xctype = xc_type(xc_code)
+    assert xctype in ('HF', 'LDA', 'GGA', 'MGGA')
+
+    rho = numpy.asarray(rho, order='C', dtype=numpy.double)
+    if xctype == 'MGGA' and rho.shape[-2] == 6:
+        rho = numpy.asarray(rho[...,[0,1,2,3,5],:], order='C')
+
+    hyb, fn_facs = parse_xc(xc_code)
+    if omega is not None:
+        hyb = hyb[:2] + (float(omega),)
+
+    fn_ids = [x[0] for x in fn_facs]
+    facs   = [x[1] for x in fn_facs]
+    if hyb[2] != 0:
+        # Current implementation does not support different omegas for
+        # different RSH functionals if there are multiple RSHs
+        omega = [hyb[2]] * len(facs)
+    else:
+        omega = [0] * len(facs)
+
+    nvar, xlen = xc_deriv._XC_NVAR[xctype, spin]
+    ngrids = rho.shape[-1]
+    rho = rho.reshape(spin+1,nvar,ngrids)
+    outlen = lib.comb(xlen+deriv, deriv)
+    out = numpy.zeros((ngrids,outlen))
+    n = len(fn_ids)
+    if n > 0:
+        err = _itrf.XCFUN_eval_xc(ctypes.c_int(n),
+                                  (ctypes.c_int*n)(*fn_ids),
+                                  (ctypes.c_double*n)(*facs),
+                                  (ctypes.c_double*n)(*omega),
+                                  ctypes.c_int(spin), ctypes.c_int(deriv),
+                                  ctypes.c_int(nvar), ctypes.c_int(ngrids),
+                                  ctypes.c_int(outlen),
+                                  rho.ctypes.data_as(ctypes.c_void_p),
+                                  out.ctypes.data_as(ctypes.c_void_p))
+        if err != 0:
+            raise RuntimeError(f'Failed to eval {xc_code} for deriv={deriv}')
+    return lib.transpose(out)
+
+def eval_xc_eff(xc_code, rho, deriv=1, omega=None):
+    r'''Returns the derivative tensor against the density parameters
+
+    [density_a, (nabla_x)_a, (nabla_y)_a, (nabla_z)_a, tau_a]
+
+    or spin-polarized density parameters
+
+    [[density_a, (nabla_x)_a, (nabla_y)_a, (nabla_z)_a, tau_a],
+     [density_b, (nabla_x)_b, (nabla_y)_b, (nabla_z)_b, tau_b]].
+
+    It differs from the eval_xc method in the derivatives of non-local part.
+    The eval_xc method returns the XC functional derivatives to sigma
+    (|\nabla \rho|^2)
+
+    Args:
+        rho: 2-dimensional or 3-dimensional array
+            Total density or (spin-up, spin-down) densities (and their
+            derivatives if GGA or MGGA functionals) on grids
+
+    Kwargs:
+        deriv: int
+            derivative orders
+        omega: float
+            define the exponent in the attenuated Coulomb for RSH functional
+    '''
+    xctype = xc_type(xc_code)
+    rho = numpy.asarray(rho, order='C', dtype=numpy.double)
+    if xctype == 'MGGA' and rho.shape[-2] == 6:
+        rho = numpy.asarray(rho[...,[0,1,2,3,5],:], order='C')
+
+    spin_polarized = rho.ndim >= 2 and rho.shape[0] == 2
+    if spin_polarized:
+        spin = 1
+    else:
+        spin = 0
+    out = eval_xc1(xc_code, rho, spin, deriv, omega)
+    return xc_deriv.transform_xc(rho, out, xctype, spin, deriv)
 
 def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     '''Define XC functional.  See also :func:`eval_xc` for the rules of input description.

@@ -321,7 +321,7 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = set(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
+    _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
 
     def __init__(self, xc='LDA,VWN'):
         self.xc = xc
@@ -485,6 +485,9 @@ class KohnShamDFT:
             t0 = logger.timer(self, 'setting up nlc grids', *t0)
         return self
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 # Update the KohnShamDFT label in scf.hf module
 hf.KohnShamDFT = KohnShamDFT
 
@@ -530,3 +533,11 @@ class RKS(KohnShamDFT, hf.RHF):
     def to_hf(self):
         '''Convert to RHF object.'''
         return self._transfer_attrs_(self.mol.RHF())
+
+    def to_gpu(self):
+        from gpu4pyscf.dft.rks import RKS
+        obj = lib.to_gpu(hf.SCF.reset(self.view(RKS)))
+        # Attributes only defined in gpu4pyscf.RKS
+        obj.screen_tol = 1e-14
+        obj.disp = None
+        return obj
