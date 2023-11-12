@@ -295,9 +295,6 @@ def energy_tot(mf, dm=None, h1e=None, vhf=None):
     nuc = mf.energy_nuc()
     e_tot = mf.energy_elec(dm, h1e, vhf)[0] + nuc
     mf.scf_summary['nuc'] = nuc.real
-    e_disp = mf.get_dispersion()
-    mf.scf_summary['dispersion'] = e_disp
-    e_tot += e_disp
     return e_tot
 
 
@@ -936,43 +933,6 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
         vj, vk = get_jk(mol, ddm, hermi, vhfopt)
         return vj - vk * .5 + numpy.asarray(vhf_last)
 
-def get_dispersion(mf):
-    disp_version = mf.disp
-    mol = mf.mol
-    if disp_version is None:
-        return 0.0
-    if isinstance(mf, KohnShamDFT):
-        method = mf.xc
-    else:
-        method = 'hf'
-
-    # for dftd3
-    if disp_version[:2].upper() == 'D3':
-        try:
-            import dftd3.pyscf as disp
-        except ImportError:
-            print("cannot find dftd3 in the current environment. Please install dftd3")
-            print("                 pip3 install dftd3             ")
-        d3 = disp.DFTD3Dispersion(mol, xc=method, version=disp_version)
-        e_d3, _ = d3.kernel()
-        return e_d3
-
-    # for dftd4
-    elif disp_version[:2].upper() == 'D4':
-        from pyscf.data.elements import charge
-        atoms = numpy.array([ charge(a[0]) for a in mol._atom])
-        coords = mol.atom_coords()
-        try:
-            from dftd4.interface import DampingParam, DispersionModel
-        except ImportError:
-            print("cannot find dftd4 in the current environment. Please install dftd4")
-            print("                 pip3 install dftd4             ")
-        model = DispersionModel(atoms, coords)
-        res = model.get_dispersion(DampingParam(method=method), grad=False)
-        return res.get("energy")
-    else:
-        raise RuntimeError(f'dipersion correction: {disp_version} is not supported.')
-
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     '''F = h^{core} + V^{HF}
@@ -1518,16 +1478,15 @@ class SCF(lib.StreamObject):
         'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
         'direct_scf', 'direct_scf_tol', 'conv_check', 'callback',
         'mol', 'chkfile', 'mo_energy', 'mo_coeff', 'mo_occ',
-        'e_tot', 'converged', 'scf_summary', 'opt', 'disp'
+        'e_tot', 'converged', 'scf_summary', 'opt'
     ))
 
-    def __init__(self, mol, disp=None):
+    def __init__(self, mol):
         if not mol._built:
             sys.stderr.write('Warning: %s must be initialized before calling SCF.\n'
                              'Initialize %s in %s\n' % (mol, mol, self))
             mol.build()
         self.mol = mol
-        self.disp = disp
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
@@ -1621,7 +1580,6 @@ class SCF(lib.StreamObject):
 
     get_fock = get_fock
     get_occ = get_occ
-    get_dispersion = get_dispersion
 
     @lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
