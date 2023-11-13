@@ -40,8 +40,13 @@ def get_dispersion(mf, disp_version=None):
         try:
             import dftd3.pyscf as disp
         except ImportError:
-            print("cannot find dftd3 in the current environment. Please install dftd3")
-            print("                 pip3 install dftd3             ")
+            raise ImportError("\n \
+cannot find dftd3 in the current environment.\n \
+please install dftd3 via \n \
+**************************************\n\
+        pip3 install dftd3 \n \
+**************************************")
+
         d3 = disp.DFTD3Dispersion(mol, xc=method, version=disp_version)
         e_d3, _ = d3.kernel()
         mf.scf_summary['dispersion'] = e_d3
@@ -55,8 +60,13 @@ def get_dispersion(mf, disp_version=None):
         try:
             from dftd4.interface import DampingParam, DispersionModel
         except ImportError:
-            print("cannot find dftd4 in the current environment. Please install dftd4")
-            print("                 pip3 install dftd4             ")
+            raise ImportError("\n \
+cannot find dftd4 in the current environment. \n \
+please install dftd4 via \n \
+***************************************\n \
+        pip3 install dftd4 \n \
+***************************************")
+
         model = DispersionModel(atoms, coords)
         res = model.get_dispersion(DampingParam(method=method), grad=False)
         e_d4 = res.get("energy")
