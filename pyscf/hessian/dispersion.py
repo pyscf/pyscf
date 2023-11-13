@@ -91,4 +91,4 @@ def get_dispersion(hessobj, disp_version=None):
 
 # Inject to SCF class
 from pyscf import hessian
-hessian.rhf.Hessian.get_dispersion = get_dispersion
+hessian.rhf.HessianBase.get_dispersion = get_dispersion
