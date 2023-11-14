@@ -1290,9 +1290,9 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     >>> from pyscf import lib
     >>> a = numpy.random.random((10,10)) * 1e-2
     >>> b = numpy.random.random(10)
-    >>> aop = lambda x: numpy.dot(a,x)
+    >>> aop = lambda x: a.dot(x.T).T
     >>> x = lib.krylov(aop, b)
-    >>> numpy.allclose(numpy.dot(a,x)+x, b)
+    >>> numpy.allclose(aop(x)+x, b)
     True
     '''
     if isinstance(aop, numpy.ndarray) and aop.ndim == 2:
