@@ -183,7 +183,7 @@ def _cast_mol_init_guess(fn):
         'guess DM ' + fn.__doc__)
     return fn_init_guess
 
-class KGHF(khf.KSCF, pbcghf.GHF):
+class KGHF(khf.KSCF):
     '''GHF class for PBCs.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)),

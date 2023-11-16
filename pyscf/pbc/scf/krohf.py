@@ -255,7 +255,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
 
 init_guess_by_chkfile = kuhf.init_guess_by_chkfile
 
-class KROHF(khf.KRHF, pbcrohf.ROHF):
+class KROHF(khf.KRHF):
     '''UHF class with k-point sampling.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)

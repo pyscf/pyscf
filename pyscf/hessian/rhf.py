@@ -62,10 +62,10 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     if isinstance(h1ao, str):
         h1ao = lib.chkfile.load(h1ao, 'scf_f1ao')
-        h1ao = dict([(int(k), h1ao[k]) for k in h1ao])
+        h1ao = {int(k): h1ao[k] for k in h1ao}
     if isinstance(mo1, str):
         mo1 = lib.chkfile.load(mo1, 'scf_mo1')
-        mo1 = dict([(int(k), mo1[k]) for k in mo1])
+        mo1 = {int(k): mo1[k] for k in mo1}
 
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
@@ -296,7 +296,7 @@ def _get_jk(mol, intor, comp, aosym, script_dms,
     return vs
 
 def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
-              fx=None, atmlst=None, max_memory=4000, verbose=None):
+              fx=None, atmlst=None, max_memory=4000, verbose=None, max_cycle=50):
     '''Solve the first order equation
 
     Kwargs:
@@ -343,7 +343,7 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
 
         h1vo = numpy.vstack(h1vo)
         s1vo = numpy.vstack(s1vo)
-        mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo)
+        mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo, max_cycle=max_cycle)
         mo1 = numpy.einsum('pq,xqi->xpi', mo_coeff, mo1).reshape(-1,3,nao,nocc)
         e1 = e1.reshape(-1,3,nocc,nocc)
 
@@ -467,12 +467,12 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     return h_op, hdiag
 
 
-class Hessian(lib.StreamObject):
+class HessianBase(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock hessian'''
 
-    _keys = set((
-        'mol', 'base', 'chkfile', 'atmlst', 'de',
-    ))
+    _keys = {
+        'mol', 'base', 'chkfile', 'atmlst', 'de', 'max_cycle'
+    }
 
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose
@@ -481,13 +481,15 @@ class Hessian(lib.StreamObject):
         self.base = scf_method
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
-
+        self.max_cycle = 50
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
 
-    partial_hess_elec = partial_hess_elec
-    hess_elec = hess_elec
-    make_h1 = make_h1
+    def hess_elec(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def make_h1(self, *args, **kwargs):
+        raise NotImplementedError
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -564,7 +566,7 @@ class Hessian(lib.StreamObject):
     def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
         return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
-                         fx, atmlst, max_memory, verbose)
+                         fx, atmlst, max_memory, verbose, max_cycle=self.max_cycle)
 
     def hess_nuc(self, mol=None, atmlst=None):
         if mol is None: mol = self.mol
@@ -585,6 +587,20 @@ class Hessian(lib.StreamObject):
     hess = kernel
 
     gen_hop = gen_hop
+
+    def to_gpu(self):
+        raise NotImplementedError
+
+
+class Hessian(HessianBase):
+
+    partial_hess_elec = partial_hess_elec
+    hess_elec = hess_elec
+    make_h1 = make_h1
+
+    def to_gpu(self):
+        from gpu4pyscf.hessian.rhf import Hessian
+        return lib.to_gpu(self.view(Hessian))
 
 # Inject to RHF class
 from pyscf import scf

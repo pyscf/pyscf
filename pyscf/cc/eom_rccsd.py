@@ -96,10 +96,10 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
 
 
 class EOM(lib.StreamObject):
-    _keys = set((
+    _keys = {
         'mol', 'max_space', 'max_cycle', 'conv_tol', 'partition',
         'e', 'v', 'nocc', 'nmo',
-    ))
+    }
 
     def __init__(self, cc):
         self.mol = cc.mol

@@ -286,7 +286,7 @@ def gen_g_hop_dhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 # Dual basis for gradients and hessian
 def project_mol(mol, dual_basis={}):
     from pyscf import df
-    uniq_atoms = set([a[0] for a in mol._atom])
+    uniq_atoms = {a[0] for a in mol._atom}
     newbasis = {}
     for symb in uniq_atoms:
         if gto.charge(symb) <= 10:
@@ -644,11 +644,11 @@ class _CIAH_SOSCF:
     kf_interval = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_interval', 4)
     kf_trust_region = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_trust_region', 5)
 
-    _keys = set((
+    _keys = {
         'max_cycle_inner', 'max_stepsize', 'canonicalization', 'ah_start_tol',
         'ah_start_cycle', 'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
         'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval', 'kf_trust_region',
-    ))
+    }
 
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)
@@ -656,8 +656,16 @@ class _CIAH_SOSCF:
 
     def undo_soscf(self):
         '''Remove the SOSCF Mixin'''
-        obj = lib.view(self, lib.drop_class(self.__class__, _CIAH_SOSCF))
+        from pyscf.df.df_jk import _DFHF
+        if isinstance(self, _DFHF) and not isinstance(self._scf, _DFHF):
+            # where density fitting is only applied on the SOSCF hessian
+            mf = self.undo_df()
+        else:
+            mf = self
+        obj = lib.view(mf, lib.drop_class(mf.__class__, _CIAH_SOSCF))
         del obj._scf
+        # When both self and self._scf are DF objects, they may be different df
+        # objects. The DF object of the base scf object should be used.
         if hasattr(self._scf, 'with_df'):
             obj.with_df = self._scf.with_df
         return obj
@@ -926,15 +934,15 @@ def newton(mf):
 
     assert isinstance(mf, hf.SCF)
 
-    if isinstance(mf, rohf.ROHF):
+    if mf.istype('ROHF'):
         cls = _SecondOrderROHF
-    elif isinstance(mf, uhf.UHF):
+    elif mf.istype('UHF'):
         cls = _SecondOrderUHF
-    elif isinstance(mf, scf.ghf.GHF):
+    elif mf.istype('GHF'):
         cls = _SecondOrderGHF
-    elif isinstance(mf, scf.dhf.RDHF):
+    elif mf.istype('RDHF'):
         cls = _SecondOrderRDHF
-    elif isinstance(mf, scf.dhf.DHF):
+    elif mf.istype('DHF'):
         cls = _SecondOrderDHF
     else:
         cls = _SecondOrderRHF
@@ -972,7 +980,7 @@ def _force_SO3_degeneracy_(dr, orbsym):
 def _force_Ex_Ey_degeneracy_(dr, orbsym):
     '''Force the Ex and Ey orbitals to use the same rotation matrix'''
     # 0,1,4,5 are 1D irreps
-    E_irrep_ids = set(orbsym).difference(set((0,1,4,5)))
+    E_irrep_ids = set(orbsym).difference({0,1,4,5})
     orbsym = numpy.asarray(orbsym)
 
     for ir in E_irrep_ids:

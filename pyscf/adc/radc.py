@@ -111,7 +111,7 @@ class RADC(lib.StreamObject):
     blkmin = getattr(__config__, 'adc_radc_RADC_blkmin', 4)
     memorymin = getattr(__config__, 'adc_radc_RADC_memorymin', 2000)
 
-    _keys = set((
+    _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
         'mol', 'mo_energy', 'incore_complete',
         'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile',
@@ -119,7 +119,7 @@ class RADC(lib.StreamObject):
         'imds', 'method', 'method_type', 'with_df', 'compute_properties',
         'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
         'ncvs', 'E', 'U', 'P', 'X',
-    ))
+    }
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         from pyscf import gto

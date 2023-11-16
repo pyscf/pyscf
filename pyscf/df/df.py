@@ -79,7 +79,7 @@ class DF(lib.StreamObject):
     _compatible_format = getattr(__config__, 'df_df_DF_compatible_format', False)
     _dataname = 'j3c'
 
-    _keys = set(('mol', 'auxmol'))
+    _keys = {'mol', 'auxmol'}
 
     def __init__(self, mol, auxbasis=None):
         self.mol = mol
@@ -307,6 +307,10 @@ class DF(lib.StreamObject):
             mol.omega = mol_omega
             if auxmol_omega is not None:
                 auxmol.omega = auxmol_omega
+
+    def to_gpu(self):
+        from gpu4pyscf.df.df import DF as DF
+        return lib.to_gpu(self.__class__.reset(self.view(DF)))
 
 GDF = DF
 

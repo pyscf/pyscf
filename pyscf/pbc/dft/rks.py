@@ -169,7 +169,7 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
 class KohnShamDFT(mol_ks.KohnShamDFT):
     '''PBC-KS'''
 
-    _keys = set(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
+    _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
 
     get_rho = get_rho
 
@@ -311,6 +311,9 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
                     self, self.cell, dm, self.nlcgrids, kpts)
             t0 = logger.timer(self, 'setting up nlc grids', *t0)
         return self
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 # Update the KohnShamDFT label in pbc.scf.hf module
 pbchf.KohnShamDFT = KohnShamDFT

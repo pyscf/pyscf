@@ -135,10 +135,10 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     # If True, force using denisty matrix-based K-build
     force_dm_kbuild = False
 
-    _keys = set((
+    _keys = {
         'blockdim', 'force_dm_kbuild', 'cell', 'kpts', 'kpts_band', 'eta',
         'mesh', 'exp_to_discard', 'exxdiv', 'auxcell', 'linear_dep_threshold',
-    ))
+    }
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell

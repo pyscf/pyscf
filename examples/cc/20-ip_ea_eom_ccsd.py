@@ -51,7 +51,7 @@ eea,cea = mycc.eaccsd(nroots=1)
 
 # EOM-GCCSD
 mf = mf.to_ghf()
-mycc = mf.GCCSD()
+mycc = mf.CCSD()
 ecc, t1, t2 = mycc.kernel()
 e,v = mycc.ipccsd(nroots=6)
 e,v = mycc.eaccsd(nroots=6)

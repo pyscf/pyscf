@@ -20,17 +20,17 @@ from pyscf.pbc.mp import kmp2_ksymm
 from pyscf.pbc.lib import kpts as libkpts
 
 def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_rhf(mf)
+    mf = mf.to_rhf()
     return mp2.RMP2(mf, frozen, mo_coeff, mo_occ)
 
 MP2 = RMP2
 
 def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_uhf(mf)
+    mf = mf.to_uhf()
     return mp2.UMP2(mf, frozen, mo_coeff, mo_occ)
 
 def GMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_ghf(mf)
+    mf = mf.to_ghf()
     return mp2.GMP2(mf, frozen, mo_coeff, mo_occ)
 
 def KRMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):

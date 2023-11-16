@@ -653,18 +653,24 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     return vmata, vmatb
 
 
-class Hessian(uhf_hess.Hessian):
+class Hessian(rhf_hess.HessianBase):
     '''Non-relativistic UKS hessian'''
 
-    _keys = set(['grids', 'grid_response'])
+    _keys = {'grids', 'grid_response'}
 
     def __init__(self, mf):
         uhf_hess.Hessian.__init__(self, mf)
         self.grids = None
         self.grid_response = False
 
+    hess_elec = uhf_hess.hess_elec
+    gen_hop = uhf_hess.gen_hop
+    solve_mo1 = uhf_hess.Hessian.solve_mo1
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 from pyscf import dft
 dft.uks.UKS.Hessian = dft.uks_symm.UKS.Hessian = lib.class_as_method(Hessian)

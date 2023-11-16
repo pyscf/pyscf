@@ -58,8 +58,8 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         mo1 = lib.chkfile.load(mo1, 'scf_mo1')
         mo1a = mo1['0']
         mo1b = mo1['1']
-        mo1a = dict([(int(k), mo1a[k]) for k in mo1a])
-        mo1b = dict([(int(k), mo1b[k]) for k in mo1b])
+        mo1a = {int(k): mo1a[k] for k in mo1a}
+        mo1b = {int(k): mo1b[k] for k in mo1b}
 
     mol = ephobj.mol
     mf = ephobj.base

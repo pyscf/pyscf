@@ -567,9 +567,9 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
     '''Density expansion on plane waves
     '''
 
-    _keys = set((
+    _keys = {
         'cell', 'mesh', 'kpts', 'time_reversal_symmetry', 'blockdim',
-    ))
+    }
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell

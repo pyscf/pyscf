@@ -97,7 +97,7 @@ class SymAdaptedGHF(ghf.GHF):
             occupancy based on the orbital energies.
     '''
 
-    _keys = set(['irrep_nelec'])
+    _keys = {'irrep_nelec'}
 
     def __init__(self, mol):
         ghf.GHF.__init__(self, mol)
@@ -280,6 +280,9 @@ class SymAdaptedGHF(ghf.GHF):
             s = self.get_ovlp()
         return numpy.asarray(get_orbsym(self.mol, mo_coeff, s))
     orbsym = property(get_orbsym)
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 GHF = SymAdaptedGHF
 

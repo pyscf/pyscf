@@ -97,7 +97,7 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
 
     return vj, vk
 
-class GHF(pbchf.SCF, mol_ghf.GHF):
+class GHF(pbchf.SCF):
     '''GHF class for PBCs.
     '''
 

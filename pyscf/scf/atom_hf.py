@@ -25,7 +25,7 @@ from pyscf.scf import hf, rohf, addons
 
 
 def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
-    elements = set([a[0] for a in mol._atom])
+    elements = {a[0] for a in mol._atom}
     logger.info(mol, 'Spherically averaged atomic HF for %s', elements)
 
     atm_template = mol.copy(deep=False)

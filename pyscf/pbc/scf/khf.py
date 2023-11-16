@@ -419,7 +419,7 @@ class KSCF(pbchf.SCF):
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
 
-    _keys = set(['cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'])
+    _keys = {'cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'}
 
     reset = pbchf.SCF.reset
     mol = pbchf.SCF.mol
@@ -654,9 +654,6 @@ class KSCF(pbchf.SCF):
         from pyscf.pbc.scf import newton_ah
         return newton_ah.newton(self)
 
-    def remove_soscf(self):
-        raise NotImplementedError
-
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
@@ -687,7 +684,7 @@ class KSCF(pbchf.SCF):
     def convert_from_(self, mf):
         raise NotImplementedError
 
-class KRHF(KSCF, pbchf.RHF):
+class KRHF(KSCF):
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square

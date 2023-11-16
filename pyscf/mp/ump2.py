@@ -287,8 +287,8 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, t2=None, eris=None):
     mf = mp._scf
     dmab = mp.make_rdm1(t2=t2)
 
-    frozen = list()
-    no_coeff = list()
+    frozen = []
+    no_coeff = []
     for s,dm in enumerate(dmab):
         nocc = mp.nocc[s]
         nmo = mp.nmo[s]
@@ -558,6 +558,8 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     return eris
 
 def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
+    from pyscf.scf.uhf import UHF
+    assert isinstance(mp._scf, UHF)
     time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
     orboa = numpy.asarray(orbs[0], order='F')

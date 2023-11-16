@@ -81,7 +81,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
 
 class DFMP2(mp2.MP2):
-    _keys = set(['with_df'])
+    _keys = {'with_df'}
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)

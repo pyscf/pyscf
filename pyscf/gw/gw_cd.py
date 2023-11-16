@@ -258,10 +258,10 @@ class GWCD(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
     linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
-    _keys = set((
+    _keys = {
         'eta', 'linearized', 'mol', 'frozen', 'with_df',
         'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
-    ))
+    }
 
     def __init__(self, mf, frozen=None):
         self.mol = mf.mol

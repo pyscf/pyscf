@@ -38,7 +38,7 @@ from pyscf import __config__
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
 
 class KTDBase(TDBase):
-    _keys = set(['kconserv', 'kshift_lst'])
+    _keys = {'kconserv', 'kshift_lst'}
 
     def __init__(self, mf, kshift_lst=None):
         assert isinstance(mf, scf.khf.KSCF)

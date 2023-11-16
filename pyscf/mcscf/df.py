@@ -85,7 +85,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
 class _DFCAS:
     __name_mixin__ = 'DF'
 
-    _keys = set(['with_df'])
+    _keys = {'with_df'}
 
     def __init__(self, mc, with_df):
         self.__dict__.update(mc.__dict__)
@@ -228,7 +228,7 @@ class _DFHessianCASSCF:
 
     __name_mixin__ = 'DFHessian'
 
-    _keys = set(['with_df'])
+    _keys = {'with_df'}
 
     def __init__(self, mc, with_df):
         self.__dict__.update(mc.__dict__)

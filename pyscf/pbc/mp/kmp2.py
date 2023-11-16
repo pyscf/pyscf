@@ -690,7 +690,7 @@ def _gamma1_intermediates(mp, t2=None):
 
 
 class KMP2(mp2.MP2):
-    _keys = set(('kpts', 'nkpts', 'khelper'))
+    _keys = {'kpts', 'nkpts', 'khelper'}
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 

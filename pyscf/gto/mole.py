@@ -626,6 +626,9 @@ def decontract_basis(mol, atoms=None, to_cart=False):
 
     aoslices = mol.aoslice_by_atom()
     for ia, (ib0, ib1) in enumerate(aoslices[:,:2]):
+        if ib0 == ib1: # No basis on atom ia
+            continue
+
         if atoms is not None:
             if isinstance(atoms, str):
                 to_apply = ((atoms == mol.atom_pure_symbol(ia)) or
@@ -1023,7 +1026,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, nucprop={}):
     '''
     _atm = []
     _bas = []
-    _env = []
+    _env = [pre_env]
     ptr_env = len(pre_env)
 
     for ia, atom in enumerate(atoms):
@@ -1092,10 +1095,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, nucprop={}):
         _bas = numpy.asarray(numpy.vstack(_bas), numpy.int32).reshape(-1, BAS_SLOTS)
     else:
         _bas = numpy.zeros((0,BAS_SLOTS), numpy.int32)
-    if _env:
-        _env = numpy.hstack((pre_env,numpy.hstack(_env)))
-    else:
-        _env = numpy.array(pre_env, copy=False)
+    _env = numpy.asarray(numpy.hstack(_env), dtype=numpy.float64)
     return _atm, _bas, _env
 
 def make_ecp_env(mol, _atm, ecp, pre_env=[]):
@@ -1240,12 +1240,12 @@ def unpack(moldic):
 def dumps(mol):
     '''Serialize Mole object to a JSON formatted str.
     '''
-    exclude_keys = set(('output', 'stdout', '_keys',
+    exclude_keys = {'output', 'stdout', '_keys',
                         # Constructing in function loads
-                        'symm_orb', 'irrep_id', 'irrep_name'))
+                        'symm_orb', 'irrep_id', 'irrep_name'}
     # FIXME: nparray and kpts for cell objects may need to be excluded
-    nparray_keys = set(('_atm', '_bas', '_env', '_ecpbas',
-                        '_symm_orig', '_symm_axes'))
+    nparray_keys = {'_atm', '_bas', '_env', '_ecpbas',
+                        '_symm_orig', '_symm_axes'}
 
     moldic = dict(mol.__dict__)
     for k in exclude_keys:
@@ -1292,7 +1292,10 @@ def loads(molstr):
     mol.atom = eval(mol.atom)
     mol.basis= eval(mol.basis)
     mol.ecp  = eval(mol.ecp)
-    mol.pseudo  = eval(mol.pseudo)
+    if 'pseudo' in moldic:
+        # backward compatibility with old dumps function, which does not have
+        # the pseudo attribute
+        mol.pseudo  = eval(mol.pseudo)
     mol._atm = numpy.array(mol._atm, dtype=numpy.int32)
     mol._bas = numpy.array(mol._bas, dtype=numpy.int32)
     mol._env = numpy.array(mol._env, dtype=numpy.double)
@@ -2521,7 +2524,7 @@ class MoleBase(lib.StreamObject):
             self.check_sanity()
 
         self._atom = self.format_atom(self.atom, unit=self.unit)
-        uniq_atoms = set([a[0] for a in self._atom])
+        uniq_atoms = {a[0] for a in self._atom}
 
         _basis = _parse_default_basis(self.basis, uniq_atoms)
         self._basis = self.format_basis(_basis)

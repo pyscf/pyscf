@@ -186,7 +186,7 @@ class PipekMezey(boys.OrbitalLocalizer):
     conv_tol = getattr(__config__, 'lo_pipek_PM_conv_tol', 1e-6)
     exponent = getattr(__config__, 'lo_pipek_PM_exponent', 2)  # should be 2 or 4
 
-    _keys = set(['pop_method', 'conv_tol', 'exponent'])
+    _keys = {'pop_method', 'conv_tol', 'exponent'}
 
     def __init__(self, mol, mo_coeff=None, mf=None, pop_method=None):
         boys.OrbitalLocalizer.__init__(self, mol, mo_coeff)
