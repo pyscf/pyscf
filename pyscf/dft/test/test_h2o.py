@@ -19,6 +19,18 @@ from pyscf import gto
 from pyscf import lib
 from pyscf import dft
 
+
+import sys
+try:
+    import dftd3
+except ImportError:
+    pass
+
+try:
+    import dftd4
+except ImportError:
+    pass
+
 def setUpModule():
     global h2o, h2osym, h2o_cation, h2osym_cation
     h2o = gto.Mole()
@@ -505,6 +517,7 @@ class KnownValues(unittest.TestCase):
         mf2.kernel()
         self.assertAlmostEqual(mf1.e_tot, -76.36649222362115, 9)
 
+    @unittest.skipIf('dftd3' not in sys.modules, "requires the dftd3 library")
     def test_dispersion(self):
         mf = dft.RKS(h2o)
         mf.xc = 'B3LYP'
