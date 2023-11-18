@@ -2802,7 +2802,7 @@ class NumInt(lib.StreamObject, LibXCMixin):
         screen_index = non0tab
 
         # the xxx_sparse() functions require ngrids 8-byte aligned
-        allow_sparse = ngrids % ALIGNMENT_UNIT == 0
+        allow_sparse = ngrids % ALIGNMENT_UNIT == 0 and nao > SWITCH_SIZE
 
         if buf is None:
             buf = _empty_aligned(comp * blksize * nao)
