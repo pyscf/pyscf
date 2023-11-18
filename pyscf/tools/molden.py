@@ -239,8 +239,16 @@ def _parse_gto(lines, envs):
         elif dat[0].upper() in 'SPDFGHIJ':
             basis[symb].append(read_one_bas(*dat))
 
-    mol.basis = envs['basis'] = basis
     mol.atom = [atoms[i] for i in atom_seq]
+    uniq_atoms = {a[0] for a in mol.atom}
+
+    # To avoid the mol.build() sort the basis, disable mol.basis and set the
+    # internal data _basis directly. It is a workaround to solve issue #1961.
+    # Mole.decontract_basis function should be rewritten to support
+    # discontinuous bases that have the same angular momentum.
+    mol.basis = {}
+    _basis = gto.mole._parse_default_basis(basis, uniq_atoms)
+    mol._basis = envs['basis'] = gto.format_basis(_basis, sort_basis=False)
     return mol
 
 def _parse_mo(lines, envs):
@@ -353,6 +361,8 @@ def load(moldenfile, verbose=0):
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
+    mo_energy, mo_coeff, mo_occ, irrep_labels, spins = None, None, None, None, None
+
     for sec_kind in _SEC_ORDER:
         if sec_kind == 'MO' and 'MO' in sec_kinds:
             if len(sec_kinds['MO']) == 1:
@@ -392,6 +402,8 @@ def load(moldenfile, verbose=0):
     if isinstance(mo_occ, tuple):
         mol.spin = int(mo_occ[0].sum() - mo_occ[1].sum())
 
+    if not mol._built:
+        mol.build(0, 0)
     return mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins
 
 parse = read = load
@@ -503,8 +515,9 @@ def remove_high_l(mol, mo_coeff=None):
     '''
     pmol = mol.copy()
     pmol.basis = {}
+    pmol._basis = {}
     for symb, bas in mol._basis.items():
-        pmol.basis[symb] = [b for b in bas if b[0] <= 4]
+        pmol._basis[symb] = [b for b in bas if b[0] <= 4]
     pmol.build(0, 0)
     if mo_coeff is None:
         return pmol, None

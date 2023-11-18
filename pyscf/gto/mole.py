@@ -419,7 +419,7 @@ def format_atom(atoms, origin=0, axes=None,
     return list(zip(z, c.tolist()))
 
 #TODO: sort exponents
-def format_basis(basis_tab):
+def format_basis(basis_tab, sort_basis=True):
     '''Convert the input :attr:`Mole.basis` to the internal data format.
 
     ``{ atom: [(l, ((-exp, c_1, c_2, ..),
@@ -457,10 +457,16 @@ def format_basis(basis_tab):
     fmt_basis = {}
     for atom, atom_basis in basis_tab.items():
         symb = _atom_symbol(atom)
-        fmt_basis[symb] = basis_converter(symb, atom_basis)
-
-        if len(fmt_basis[symb]) == 0:
+        _basis = basis_converter(symb, atom_basis)
+        if len(_basis) == 0:
             raise BasisNotFoundError('Basis not found for  %s' % symb)
+
+        # Sort basis accroding to angular momentum. This is important for method
+        # decontract_basis, which assumes that basis functions with the same
+        # angular momentum are grouped together. Related to issue #1620 #1770
+        if sort_basis:
+            _basis = sorted([b for b in _basis if b], key=lambda b: b[0])
+        fmt_basis[symb] = _basis
     return fmt_basis
 
 def _generate_basis_converter():
@@ -503,11 +509,6 @@ def _generate_basis_converter():
                     _basis.extend(nparray_to_list(rawb))
         else:
             _basis = nparray_to_list(raw_basis)
-
-        # Sort basis accroding to angular momentum. This is important for method
-        # decontract_basis, which assumes that basis functions with the same
-        # angular momentum are grouped together. Related to issue #1620 #1770
-        _basis = sorted([b for b in _basis if b], key=lambda b: b[0])
         return _basis
     return converter
 
@@ -654,6 +655,8 @@ def decontract_basis(mol, atoms=None, to_cart=False):
             bas_idx = ib0 + numpy.where(mol._bas[ib0:ib1,ANG_OF] == l)[0]
             if len(bas_idx) == 0:
                 continue
+            if bas_idx[0] + len(bas_idx) != bas_idx[-1] + 1:
+                raise NotImplementedError('Discontinuous bases of same angular momentum')
 
             mol_exps, b_coeff = _to_full_contraction(mol, bas_idx)
             nprim, nc = b_coeff.shape
@@ -2523,11 +2526,13 @@ class MoleBase(lib.StreamObject):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        self._atom = self.format_atom(self.atom, unit=self.unit)
+        if self.atom:
+            self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = {a[0] for a in self._atom}
 
-        _basis = _parse_default_basis(self.basis, uniq_atoms)
-        self._basis = self.format_basis(_basis)
+        if self.basis:
+            _basis = _parse_default_basis(self.basis, uniq_atoms)
+            self._basis = self.format_basis(_basis)
         env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, env, self.nucmod,
@@ -2643,30 +2648,12 @@ class MoleBase(lib.StreamObject):
                            for ir in self.irrep_id]
         return self
 
-    @lib.with_doc(format_atom.__doc__)
-    def format_atom(self, atom, origin=0, axes=None, unit='Ang'):
-        return format_atom(atom, origin, axes, unit)
-
-    @lib.with_doc(format_basis.__doc__)
-    def format_basis(self, basis_tab):
-        return format_basis(basis_tab)
-
-    @lib.with_doc(format_pseudo.__doc__)
-    def format_pseudo(self, pseudo_tab):
-        return format_pseudo(pseudo_tab)
-
-    @lib.with_doc(format_ecp.__doc__)
-    def format_ecp(self, ecp_tab):
-        return format_ecp(ecp_tab)
-
-    @lib.with_doc(expand_etb.__doc__)
-    def expand_etb(self, l, n, alpha, beta):
-        return expand_etb(l, n, alpha, beta)
-
-    @lib.with_doc(expand_etbs.__doc__)
-    def expand_etbs(self, etbs):
-        return expand_etbs(etbs)
-    etbs = expand_etbs
+    format_atom = staticmethod(format_atom)
+    format_basis = staticmethod(format_basis)
+    format_pseudo = staticmethod(format_pseudo)
+    format_ecp = staticmethod(format_ecp)
+    expand_etb = staticmethod(expand_etb)
+    expand_etbs = etbs = staticmethod(expand_etbs)
 
     @lib.with_doc(make_env.__doc__)
     def make_env(self, atoms, basis, pre_env=[], nucmod={}, nucprop=None):
