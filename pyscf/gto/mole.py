@@ -2100,7 +2100,7 @@ def tofile(mol, filename, format=None):
     if format is None:  # Guess format based on filename
         format = os.path.splitext(filename)[1][1:]
     string = tostring(mol, format)
-    with open(filename, 'w') as f:
+    with open(filename, 'w', encoding='utf-8') as f:
         f.write(string)
         f.write('\n')
     return string
@@ -2516,9 +2516,9 @@ class MoleBase(lib.StreamObject):
                     print('output file: %s' % self.output)
 
             if self.output == '/dev/null':
-                self.stdout = open(os.devnull, 'w')
+                self.stdout = open(os.devnull, 'w', encoding='utf-8')
             else:
-                self.stdout = open(self.output, 'w')
+                self.stdout = open(self.output, 'w', encoding='utf-8')
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
