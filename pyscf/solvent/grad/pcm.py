@@ -174,7 +174,7 @@ def grad_kernel(pcmobj, dm):
     dvj = numpy.zeros([nao,3])
     dq = numpy.zeros([ngrids,3])
     for p0, p1 in lib.prange(0, ngrids, blksize):
-        fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents**2)
+        fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents[p0:p1]**2)
         # charge response
         v_nj_ip1 = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1', aosym='s1', comp=3)
         vj = numpy.einsum('xijn,n->xij', v_nj_ip1, q_sym)

@@ -243,6 +243,7 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     ecoul = vhf.ecoul.real
     exc = vhf.exc.real
     e2 = ecoul + exc
+
     ks.scf_summary['e1'] = e1
     ks.scf_summary['coul'] = ecoul
     ks.scf_summary['exc'] = exc
