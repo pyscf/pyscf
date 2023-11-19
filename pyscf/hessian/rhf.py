@@ -27,7 +27,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
-from pyscf.scf import _vhf
+from pyscf.scf import _vhf, hf
 from pyscf.scf import cphf
 
 # import _response_functions to load gen_response methods in SCF class
@@ -583,6 +583,8 @@ class HessianBase(lib.StreamObject):
 
         de = self.hess_elec(mo_energy, mo_coeff, mo_occ, atmlst=atmlst)
         self.de = de + self.hess_nuc(self.mol, atmlst=atmlst)
+        if self.base.disp is not None:
+            self.de += self.get_dispersion()
         return self.de
     hess = kernel
 

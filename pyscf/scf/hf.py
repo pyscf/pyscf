@@ -231,6 +231,11 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         if dump_chk:
             mf.dump_chk(locals())
 
+    if mf.disp is not None:
+        e_disp = mf.get_dispersion()
+        mf.scf_summary['dispersion'] = e_disp
+        e_tot += e_disp
+
     logger.timer(mf, 'scf_cycle', *cput0)
     # A post-processing hook before return
     mf.post_kernel(locals())
@@ -1478,7 +1483,7 @@ class SCF(lib.StreamObject):
         'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
         'direct_scf', 'direct_scf_tol', 'conv_check', 'callback',
         'mol', 'chkfile', 'mo_energy', 'mo_coeff', 'mo_occ',
-        'e_tot', 'converged', 'scf_summary', 'opt',
+        'e_tot', 'converged', 'scf_summary', 'opt', 'disp',
     }
 
     def __init__(self, mol):
@@ -1490,6 +1495,7 @@ class SCF(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
+        self.disp = None
 
         # If chkfile is muted, SCF intermediates will not be dumped anywhere.
         if MUTE_CHKFILE:
