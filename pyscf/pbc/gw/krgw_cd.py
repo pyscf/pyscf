@@ -607,7 +607,7 @@ class KRGWCD(lib.StreamObject):
         'kpts', 'nkpts', 'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
     }
 
-    def __init__(self, mf, frozen=0):
+    def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -615,7 +615,7 @@ class KRGWCD(lib.StreamObject):
         self.max_memory = mf.max_memory
 
         #TODO: implement frozen orbs
-        if frozen > 0:
+        if frozen is not None and frozen > 0:
             raise NotImplementedError
         self.frozen = frozen
 
