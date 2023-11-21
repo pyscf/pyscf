@@ -22,7 +22,7 @@ from pyscf.pbc.gw import krgw_cd
 from pyscf.pbc import scf
 
 def KRGW(mf, freq_int='ac', frozen=None):
-    mf = mf.to_rhf()
+    # mf = mf.to_rhf()
     if freq_int.lower() == 'ac':
         return krgw_ac.KRGWAC(mf, frozen)
     elif freq_int.lower() == 'cd':
@@ -32,7 +32,7 @@ def KRGW(mf, freq_int='ac', frozen=None):
                            "With PBC, options are 'ac' and 'cd'."%(freq_int))
 
 def KUGW(mf, freq_int='ac', frozen=None):
-    mf = mf.to_uhf()
+    # mf = mf.to_uhf()
     if freq_int.lower() == 'ac':
         return kugw_ac.KUGWAC(mf, frozen)
     elif freq_int.lower() == 'cd':
