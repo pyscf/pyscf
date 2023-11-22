@@ -86,6 +86,9 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
     uhf = scf.KUHF(gw.mol, gw.kpts, exxdiv=exxdiv)
     uhf.with_df = gw.with_df
     uhf.with_df._cderi = gw.with_df._cderi
+    if uhf.with_df._j_only:
+        logger.debug(gw, 'Rebuild CDERI for exchange integrals')
+        uhf.with_df.build(j_only=False)
     vk = uhf.get_veff(gw.mol,dm_kpts=dm)
     vj = uhf.get_j(gw.mol,dm_kpts=dm)
     vk[0] = vk[0] - (vj[0] + vj[1])
