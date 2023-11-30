@@ -136,6 +136,7 @@ static int binomial(int n, int m)
                         val *= i;
                         val /= i - m;
                 }
+                return val;
         }
 }
 
