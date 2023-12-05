@@ -115,7 +115,10 @@ def dipole_integral(mol, mo_coeff, charge_center=None):
     return dip
 
 def atomic_init_guess(mol, mo_coeff):
-    s = mol.intor_symmetric('int1e_ovlp')
+    if getattr(mol, 'pbc_intor', None):
+        s = mol.pbc_intor('int1e_ovlp', hermi=1)
+    else:
+        s = mol.intor_symmetric('int1e_ovlp')
     c = orth.orth_ao(mol, s=s)
     mo = reduce(numpy.dot, (c.conj().T, s, mo_coeff))
 # Find the AOs which have largest overlap to MOs
