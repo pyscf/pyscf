@@ -29,9 +29,10 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lo import orth
 from pyscf.lo import boys
+from pyscf.lo import pipek_jacobi
 from pyscf import __config__
 
-def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
+def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None, s=None):
     '''
     Kwargs:
         method : string
@@ -53,10 +54,11 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
     nmo = mo_coeff.shape[1]
     proj = numpy.empty((mol.natm,nmo,nmo))
 
-    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
-        s = mol.pbc_intor('int1e_ovlp_sph', hermi=1)
-    else:
-        s = mol.intor_symmetric('int1e_ovlp')
+    if s is None:
+        if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
+            s = mol.pbc_intor('int1e_ovlp', hermi=1)
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
 
     if method == 'becke':
         from pyscf.dft import gen_grid
@@ -261,7 +263,7 @@ class PipekMezey(boys.OrbitalLocalizer):
         return (lib.einsum('xii->xi', projR)**self.exponent).sum()
 
     @lib.with_doc(atomic_pops.__doc__)
-    def atomic_pops(self, mol, mo_coeff, method=None):
+    def atomic_pops(self, mol, mo_coeff, method=None, s=None):
         if method is None:
             method = self.pop_method
 
@@ -269,7 +271,11 @@ class PipekMezey(boys.OrbitalLocalizer):
             logger.error(self, 'PM with IAO scheme should include an scf '
                          'object when creating PM object.\n    PM(mol, mf=scf_object)')
             raise ValueError('PM attribute method is not valid')
-        return atomic_pops(mol, mo_coeff, method, self._scf)
+        return atomic_pops(mol, mo_coeff, method, self._scf, s=s)
+
+    def stability_jacobi(self):
+        return pipek_jacobi.PipekMezey_stability_jacobi(self)
+
 
 PM = Pipek = PipekMezey
 
@@ -286,4 +292,13 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.RHF(mol).run()
 
-    mo = PM(mol).kernel(mf.mo_coeff[:,5:9], verbose=4)
+    mlo = PM(mol)
+    mlo.verbose = 4
+    mlo.exponent = 2    # integer >= 2
+    mo0 = mf.mo_coeff[:,mf.mo_occ>1e-6]
+    mo = mlo.kernel(mo0)
+    isstable, mo1 = mlo.stability_jacobi()
+    if not isstable:
+        mo = mlo.kernel(mo1)
+        isstable, mo1 = mlo.stability_jacobi()
+        assert( isstable )
