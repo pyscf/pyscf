@@ -184,7 +184,7 @@ class PipekMezey(boys.OrbitalLocalizer):
 
     pop_method = getattr(__config__, 'lo_pipek_PM_pop_method', 'meta_lowdin')
     conv_tol = getattr(__config__, 'lo_pipek_PM_conv_tol', 1e-6)
-    exponent = getattr(__config__, 'lo_pipek_PM_exponent', 2)  # should be 2 or 4
+    exponent = getattr(__config__, 'lo_pipek_PM_exponent', 2)  # any integer >= 2
 
     _keys = {'pop_method', 'conv_tol', 'exponent'}
 
@@ -199,75 +199,66 @@ class PipekMezey(boys.OrbitalLocalizer):
         logger.info(self, 'pop_method = %s',self.pop_method)
 
     def gen_g_hop(self, u):
+        exponent = self.exponent
         mo_coeff = lib.dot(self.mo_coeff, u)
-        pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
-        if self.exponent == 2:
-            g0 = numpy.einsum('xii,xip->pi', pop, pop)
-            g = -self.pack_uniq_var(g0-g0.conj().T) * 2
-        elif self.exponent == 4:
-            pop3 = numpy.einsum('xii->xi', pop)**3
-            g0 = numpy.einsum('xi,xip->pi', pop3, pop)
-            g = -self.pack_uniq_var(g0-g0.conj().T) * 4
-        else:
-            raise NotImplementedError('exponent %s' % self.exponent)
+        projR = self.atomic_pops(self.mol, mo_coeff, self.pop_method).real
+        pop = lib.einsum('xii->xi', projR)
+        popexp1 = pop**(exponent-1)
+        popexp2 = pop**(exponent-2)
 
-        h_diag = numpy.einsum('xii,xpp->pi', pop, pop) * 2
-        g_diag = g0.diagonal()
-        h_diag-= g_diag + g_diag.reshape(-1,1)
-        h_diag+= numpy.einsum('xip,xip->pi', pop, pop) * 2
-        h_diag+= numpy.einsum('xip,xpi->pi', pop, pop) * 2
-        h_diag = -self.pack_uniq_var(h_diag) * 2
+        # gradient
+        g = lib.einsum('xj,xij->ij', popexp1, projR)
+        g = -2 * exponent * self.pack_uniq_var(g - g.T)
 
-        g0 = g0 + g0.conj().T
-        if self.exponent == 2:
-            def h_op(x):
-                x = self.unpack_uniq_var(x)
-                norb = x.shape[0]
-                hx = lib.dot(x.T, g0.T).conj()
-                hx+= numpy.einsum('xip,xi->pi', pop, numpy.einsum('qi,xiq->xi', x, pop)) * 2
-                hx-= numpy.einsum('xpp,xip->pi', pop,
-                                  lib.dot(pop.reshape(-1,norb), x).reshape(-1,norb,norb)) * 2
-                hx-= numpy.einsum('xip,xp->pi', pop, numpy.einsum('qp,xpq->xp', x, pop)) * 2
-                return -self.pack_uniq_var(hx-hx.conj().T)
-        else:
-            def h_op(x):
-                x = self.unpack_uniq_var(x)
-                norb = x.shape[0]
-                hx = lib.dot(x.T, g0.T).conj() * 2
-                pop2 = numpy.einsum('xii->xi', pop)**2
-                pop3 = numpy.einsum('xii->xi', pop)**3
-                tmp = numpy.einsum('qi,xiq->xi', x, pop) * pop2
-                hx+= numpy.einsum('xip,xi->pi', pop, tmp) * 12
-                hx-= numpy.einsum('xp,xip->pi', pop3,
-                                  lib.dot(pop.reshape(-1,norb), x).reshape(-1,norb,norb)) * 4
-                tmp = numpy.einsum('qp,xpq->xp', x, pop) * pop2
-                hx-= numpy.einsum('xip,xp->pi', pop, tmp) * 12
-                return -self.pack_uniq_var(hx-hx.conj().T)
+        # hessian diagonal
+        g1 = lib.einsum('xi,xi->i', popexp1, pop)
+        g2 = lib.einsum('xi,xj->ij', popexp1, pop)
+        h_diag  = -2 * exponent * (g1[:,None] - g2)
+        g1 = lib.einsum('xi,xij->ij', popexp2, projR**2.)
+        h_diag +=  4 * exponent * (exponent-1) * g1
+        h_diag = -self.pack_uniq_var(h_diag + h_diag.T)
+
+        # hessian vector product
+        G = lib.einsum('xi,xij->ij', popexp1, projR)
+        G += G.T
+
+        def h_op(x):
+            xR = self.unpack_uniq_var(x).real
+
+            # contributions from (nabla proj) x (nabla proj)
+            j0 = popexp2 * lib.einsum('xik,ki->xi', projR, xR)
+            j1 = lib.einsum('xi,xij->ij', j0, projR)
+            hx = -4 * exponent * (exponent-1) * j1
+
+            # contributions from nabla^2 proj: symmetric terms
+            j1 = numpy.dot(G,xR)
+            hx += -exponent * j1
+
+            # contributions from nabla^2 proj: asymmetric terms
+            j1 = lib.einsum('xj,xik,kj->ij', popexp1, projR, xR)
+            hx += 2 * exponent * j1
+
+            hx -= hx.T
+
+            return -self.pack_uniq_var(hx)
 
         return g, h_op, h_diag
 
     def get_grad(self, u=None):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
+        exponent = self.exponent
         mo_coeff = lib.dot(self.mo_coeff, u)
-        pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
-        if self.exponent == 2:
-            g0 = numpy.einsum('xii,xip->pi', pop, pop)
-            g = -self.pack_uniq_var(g0-g0.conj().T) * 2
-        else:
-            pop3 = numpy.einsum('xii->xi', pop)**3
-            g0 = numpy.einsum('xi,xip->pi', pop3, pop)
-            g = -self.pack_uniq_var(g0-g0.conj().T) * 4
+        projR = self.atomic_pops(self.mol, mo_coeff, self.pop_method).real
+        popexp1 = lib.einsum('xii->xi', projR)**(exponent-1)
+        g = lib.einsum('xj,xij->ij', popexp1, projR)
+        g = -2 * exponent * self.pack_uniq_var(g - g.T)
         return g
 
     def cost_function(self, u=None):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
-        pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
-        if self.exponent == 2:
-            return numpy.einsum('xii,xii->', pop, pop)
-        else:
-            pop2 = numpy.einsum('xii->xi', pop)**2
-            return numpy.einsum('xi,xi', pop2, pop2)
+        projR = self.atomic_pops(self.mol, mo_coeff, self.pop_method).real
+        return (lib.einsum('xii->xi', projR)**self.exponent).sum()
 
     @lib.with_doc(atomic_pops.__doc__)
     def atomic_pops(self, mol, mo_coeff, method=None):
