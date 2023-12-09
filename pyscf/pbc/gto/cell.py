@@ -971,7 +971,7 @@ class Cell(mole.MoleBase):
                      '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
             # https://github.com/jupyter/notebook/issues/2014
-            raise AttributeError
+            raise AttributeError(f'Cell object has no attribute {key}')
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
@@ -994,8 +994,10 @@ class Cell(mole.MoleBase):
                     if xc in XC:
                         mf.xc = xc
                         key = 'KTDDFT'
-            else:
+            elif 'CI' in key or 'CC' in key or 'MP' in key:
                 mf = scf.KHF(self)
+            else:
+                raise AttributeError(f'Cell object has no attribute {key}')
             # Remove prefix 'K' because methods are registered without the leading 'K'
             key = key[1:]
         else:
@@ -1008,8 +1010,10 @@ class Cell(mole.MoleBase):
                     if xc in XC:
                         mf.xc = xc
                         key = 'TDDFT'
-            else:
+            elif 'CI' in key or 'CC' in key or 'MP' in key:
                 mf = scf.HF(self)
+            else:
+                raise AttributeError(f'Cell object has no attribute {key}')
 
         method = getattr(mf, key)
 

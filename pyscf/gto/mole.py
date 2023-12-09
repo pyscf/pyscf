@@ -3700,7 +3700,7 @@ class Mole(MoleBase):
                      '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
             # https://github.com/jupyter/notebook/issues/2014
-            raise AttributeError
+            raise AttributeError(f'Mole object has no attribute {key}')
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
@@ -3721,8 +3721,10 @@ class Mole(MoleBase):
                 if xc in dft.XC:
                     mf.xc = xc
                     key = 'TDDFT'
-        else:
+        elif 'CI' in key or 'CC' in key or 'CAS' in key or 'MP' in key:
             mf = scf.HF(self)
+        else:
+            raise AttributeError(f'Mole object has no attribute {key}')
 
         method = getattr(mf, key)
 
