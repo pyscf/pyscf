@@ -538,5 +538,4 @@ class RKS(KohnShamDFT, hf.RHF):
         obj = lib.to_gpu(hf.SCF.reset(self.view(RKS)))
         # Attributes only defined in gpu4pyscf.RKS
         obj.screen_tol = 1e-14
-        obj.disp = None
         return obj
