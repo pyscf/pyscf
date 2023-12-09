@@ -203,5 +203,4 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
         obj = lib.to_gpu(SCF.reset(self.view(UKS)))
         # Attributes only defined in gpu4pyscf.RKS
         obj.screen_tol = 1e-14
-        obj.disp = None
         return obj
