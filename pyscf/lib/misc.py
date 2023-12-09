@@ -1340,7 +1340,10 @@ def to_gpu(method):
     gpu4pyscf objects.
     '''
     import cupy
+    from pyscf import gto
     for key, val in method.__dict__.items():
+        if isinstance(val, gto.MoleBase):
+            continue
         if isinstance(val, numpy.ndarray):
             setattr(method, key, cupy.asarray(val))
         elif hasattr(val, 'to_gpu'):
