@@ -241,12 +241,16 @@ class MP2_GradScanner(lib.GradScanner):
 
 
 def _shell_prange(mol, start, stop, blksize):
+    l = mol._bas[start:stop,gto.ANG_OF]
+    if mol.cart:
+        dims = (l+1)*(l+2)//2 * mol._bas[start:stop,gto.NCTR_OF]
+    else:
+        dims = (l*2+1) * mol._bas[start:stop,gto.NCTR_OF]
     nao = 0
     ib0 = start
-    for ib in range(start, stop):
-        now = (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
+    for ib, now in zip(range(start, stop), dims):
         nao += now
-        if nao > blksize and nao > now:
+        if nao > blksize:
             yield (ib0, ib, nao-now)
             ib0 = ib
             nao = now
