@@ -222,7 +222,7 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG a89b783
     # This patch adds the xcfun derivative order up to 5
-    PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch
+    PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || true
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
