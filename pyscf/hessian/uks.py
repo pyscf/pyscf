@@ -601,8 +601,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             vmatb[ia] = -vmatb[ia] - vmatb[ia].transpose(0,2,1)
 
     elif xctype == 'MGGA':
-        if grids.level < 5:
-            logger.warn(mol, 'MGGA Hessian is sensitive to dft grids.')
+        rks_hess._check_mgga_grids(grids)
         ao_deriv = 2
         vipa = numpy.zeros((3,nao,nao))
         vipb = numpy.zeros((3,nao,nao))
