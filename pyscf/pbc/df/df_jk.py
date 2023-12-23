@@ -297,14 +297,14 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     if not mydf.force_dm_kbuild:
         if mo_coeff is not None:
             if isinstance(mo_coeff[0], (list, tuple)) or (isinstance(mo_coeff[0], numpy.ndarray)
-                                                          and mo_coeff[0] == 3):
+                                                          and mo_coeff[0].ndim == 3):
                 mo_coeff = [mo for mo1 in mo_coeff for mo in mo1]
             if len(mo_coeff) != nset*nkpts: # wrong shape
                 log.warn('mo_coeff from dm tag has wrong shape. '
                          'Calculating mo from dm instead.')
                 mo_coeff = None
             elif isinstance(mo_occ[0], (list, tuple)) or (isinstance(mo_occ[0], numpy.ndarray)
-                                                          and mo_occ[0] == 2):
+                                                          and mo_occ[0].ndim == 2):
                 mo_occ = [mo for mo1 in mo_occ for mo in mo1]
         if mo_coeff is not None:
             skmoR, skmoI = _format_mo(mo_coeff, mo_occ, shape=(nset,nkpts), order='F',
@@ -707,14 +707,14 @@ def get_k_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), k
     if not mydf.force_dm_kbuild:
         if mo_coeff is not None:
             if isinstance(mo_coeff[0], (list, tuple)) or (isinstance(mo_coeff[0], numpy.ndarray)
-                                                          and mo_coeff[0] == 3):
+                                                          and mo_coeff[0].ndim == 3):
                 mo_coeff = [mo for mo1 in mo_coeff for mo in mo1]
             if len(mo_coeff) != nset*nkpts: # wrong shape
                 log.warn('mo_coeff from dm tag has wrong shape. '
                          'Calculating mo from dm instead.')
                 mo_coeff = None
             elif isinstance(mo_occ[0], (list, tuple)) or (isinstance(mo_occ[0], numpy.ndarray)
-                                                          and mo_occ[0] == 2):
+                                                          and mo_occ[0].ndim == 2):
                 mo_occ = [mo for mo1 in mo_occ for mo in mo1]
         if mo_coeff is not None:
             skmoR, skmoI = _format_mo(mo_coeff, mo_occ, shape=(nset,nkpts), order='F',
