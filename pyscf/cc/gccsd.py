@@ -362,6 +362,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
             mo = mo_a + mo_b
             eri = ao2mo.kernel(mycc._scf._eri, mo)
             if eri.size == nmo**4:  # if mycc._scf._eri is a complex array
+                eri = eri.reshape(nmo**2, nmo**2)
                 sym_forbid = (orbspin[:,None] != orbspin).ravel()
             else:  # 4-fold symmetry
                 sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nmo)]
