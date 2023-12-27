@@ -739,7 +739,7 @@ def cutoff_to_mesh(a, cutoff):
     # off-diagonal part
     # e.g r[:,2] = [1, .5, 1.2], Gx = max(Gx, Gy*.5, Gz*1.2)
     Gmax = (r * Gmax[:,None]).max(axis=0)
-    mesh = np.ceil(Gmax).astype(int) * 2 + 1
+    mesh = np.ceil(Gmax).astype(int) * 2# + 1
     return mesh
 
 def mesh_to_cutoff(a, mesh):

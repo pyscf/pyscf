@@ -630,7 +630,7 @@ class SCF(mol_hf.SCF):
         dm = np.asarray(dm)
         nao = dm.shape[-1]
 
-        if (not omega and kpts_band is None and
+        if (0 and not omega and kpts_band is None and
             # TODO: generate AO integrals with rsjk algorithm
             not self.rsjk and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
