@@ -839,7 +839,7 @@ def invalid_method(name):
     return fn
 
 @functools.lru_cache(None)
-def _define_class(name, bases)
+def _define_class(name, bases):
     return type(name, bases, {})
 
 def make_class(bases, name=None, attrs=None):
