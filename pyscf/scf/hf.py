@@ -656,12 +656,28 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read the HF results from checkpoint file, then project it to the
     basis defined by ``mol``
 
+    Kwargs:
+        project : None or bool
+            Whether to project chkfile's orbitals to the new basis.  Note when
+            the geometry of the chkfile and the given molecule are very
+            different, this projection can produce very poor initial guess.
+            In PES scanning, it is recommended to switch off project.
+
+            If project is set to None, the projection is only applied when the
+            basis sets of the chkfile's molecule are different to the basis
+            sets of the given molecule (regardless whether the geometry of
+            the two molecules are different).  Note the basis sets are
+            considered to be different if the two molecules are derived from
+            the same molecule with different ordering of atoms.
+
     Returns:
         Density matrix, 2D ndarray
     '''
     from pyscf.scf import uhf
     dm = uhf.init_guess_by_chkfile(mol, chkfile_name, project)
-    return dm[0] + dm[1]
+    mo_coeff = dm.mo_coeff[0]
+    mo_occ = dm.mo_occ[0] + dm.mo_occ[1]
+    return lib.tag_array(dm[0] + dm[1], mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 
 def get_init_guess(mol, key='minao'):
@@ -1358,11 +1374,9 @@ class SCF_Scanner(lib.SinglePointScanner):
             dm0 = kwargs.pop('dm0')
         elif self.mo_coeff is None:
             dm0 = None
-        elif self.chkfile and h5py.is_hdf5(self.chkfile):
-            dm0 = self.from_chk(self.chkfile)
         else:
             dm0 = None
-            # dm0 form last calculation cannot be used in the current
+            # dm0 form last calculation may not be used in the current
             # calculation if a completely different system is given.
             # Obviously, the systems are very different if the number of
             # basis functions are different.
@@ -1371,6 +1385,8 @@ class SCF_Scanner(lib.SinglePointScanner):
             # last calculation.
             if numpy.array_equal(self._last_mol_fp, mol.ao_loc):
                 dm0 = self.make_rdm1()
+            elif self.chkfile and h5py.is_hdf5(self.chkfile):
+                dm0 = self.from_chk(self.chkfile)
         self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
         e_tot = self.kernel(dm0=dm0, **kwargs)
         self._last_mol_fp = mol.ao_loc
