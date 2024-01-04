@@ -380,6 +380,8 @@ def str2addr(norb, nelec, string):
     '''Convert string to CI determinant address'''
     if norb >= 64:
         raise NotImplementedError('norb >= 64')
+    if num_strings(norb, nelec) >= 2**31:
+        raise NotImplementedError('Large address')
 
     if isinstance(string, str):
         assert (string.count('1') == nelec)
