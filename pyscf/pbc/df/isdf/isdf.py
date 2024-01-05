@@ -40,6 +40,8 @@ import numpy
 import scipy
 
 import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
+import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
+from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 
 def _get_rhoR(mydf, dm_kpts, hermi=1):
     ''' get the electron density in real space (on grids)
@@ -112,6 +114,8 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
 
     '''
 
+    t1 = (logger.process_clock(), logger.perf_counter())
+
     ### step 1 , evaluate ao_values on the grid
 
     cell   = mydf.cell
@@ -171,6 +175,10 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
 
     cput1 = log.timer('kmeans', *cput1)
 
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "kmeans")
+    t1 = t2
+
     ### step 4, get the auxiliary basis
 
     a = cell.lattice_vectors()
@@ -183,18 +191,26 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
     cput1 = log.timer('get idx', *cput1)
 
     aoRg = aoR[idx]  # (nIP, nao), nIP = naux
-    A = numpy.dot(aoRg, aoRg.T) ** 2  # (Naux, Naux)
+    # A = numpy.dot(aoRg, aoRg.T) ** 2  # (Naux, Naux)
+    A = np.asarray(lib.dot(aoRg, aoRg.T), order='C')
+    A = A ** 2
     cput1 = log.timer('get A', *cput1)
 
     X = np.empty((naux,ngrids))
     blksize = int(10*1e9/8/naux)
     for p0, p1 in lib.prange(0, ngrids, blksize):
-        B = numpy.dot(aoRg, aoR[p0:p1].T) ** 2
-        X[:,p0:p1] = scipy.linalg.lstsq(A, B, cond=1e-8)[0]
+        # B = numpy.dot(aoRg, aoR[p0:p1].T) ** 2
+        B = np.asarray(lib.dot(aoRg, aoR[p0:p1].T), order='C')
+        B = B ** 2
+        X[:,p0:p1] = scipy.linalg.lstsq(A, B)[0]
         B = None
     A = None
 
     cput1 = log.timer('least squre fit', *cput1)
+
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "Construct Xg")
+    t1 = t2
 
     ### step 5, get the ISDF potential, V(R_g, R')
 
@@ -213,11 +229,19 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
 
     cput1 = log.timer('fft', *cput1)
 
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "Construct VR")
+    t1 = t2
+
     W = np.zeros((naux,naux))
     for p0, p1 in lib.prange(0, ngrids, blksize):
         W += numpy.dot(X[:,p0:p1], V_R[:,p0:p1].T)
 
     cput1 = log.timer('get W', *cput1)
+
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "Construct WR")
+
     return W, aoRg.T, aoR.T, V_R, idx
 
 class ISDF(df.fft.FFTDF):
@@ -272,6 +296,10 @@ class ISDF(df.fft.FFTDF):
     get_eri = get_ao_eri = isdf_ao2mo.get_eri
     ao2mo = get_mo_eri = isdf_ao2mo.general
     ao2mo_7d = isdf_ao2mo.ao2mo_7d  # seems to be only called in kadc and kccsd, NOT implemented!
+
+    ##### functions defined in isdf_jk.py #####
+
+    get_jk = isdf_jk.get_jk_dm
 
 if __name__ == "__main__":
 

@@ -76,6 +76,7 @@ def isdf_eri_robust_fit(mydf, W, aoRg, aoR, V_r, verbose=None):
 
     path    = path[0]
     eri    -= np.einsum('ijx,xy,kly->ijkl', pair_Rg, W, pair_Rg, optimize=path)
+    # eri     = np.einsum('ijx,xy,kly->ijkl', pair_Rg, W, pair_Rg, optimize=path)
 
     print("ngrids = ", np.prod(cell.mesh))
 
