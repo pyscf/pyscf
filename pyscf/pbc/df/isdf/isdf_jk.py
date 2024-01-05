@@ -79,7 +79,10 @@ def _contract_j_mo(mydf, mo_coeffs):
     J = np.dot(V_R, density_R)
     # J = np.asarray(lib.dot(rho_mu_nu_Rg, J), order='C')
     J = np.dot(rho_mu_nu_Rg, J)
-    J += J.T
+    
+    J2 = np.dot(V_R.T, density_Rg)
+    J2 = np.einsum('ij,j->ij', aoR, J2)
+    J += np.asarray(lib.dot(aoR, J2.T), order='C')
 
     #### step 3. get J term3
 
@@ -227,7 +230,11 @@ def _contract_j_dm(mydf, dm):
     J = np.dot(V_R, density_R)
     # J = np.asarray(lib.dot(rho_mu_nu_Rg, J), order='C')
     J = np.dot(rho_mu_nu_Rg, J)
-    J += J.T
+    # J += J.T
+
+    J2 = np.dot(V_R.T, density_Rg)
+    J2 = np.einsum('ij,j->ij', aoR, J2)
+    J += np.asarray(lib.dot(aoR, J2.T), order='C')
 
     #### step 3. get J term3
 

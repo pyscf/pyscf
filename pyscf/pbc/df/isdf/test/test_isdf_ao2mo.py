@@ -43,57 +43,74 @@ def _check_eri(eri, eri_bench, tol=1e-6):
 
 if __name__ == '__main__':
 
-    cell   = pbcgto.Cell()
-    boxlen = 3.5668
-    cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
-    cell.atom = '''
-                   C     0.8917  0.8917  0.8917
-                   C     2.6751  2.6751  0.8917
-                   C     2.6751  0.8917  2.6751
-                   C     0.8917  2.6751  2.6751
-                '''
+    for c in [3, 5, 10, 15]:
+        for N in [1, 2]:
 
-    cell.basis   = 'gth-szv'
-    cell.pseudo  = 'gth-pade'
-    cell.verbose = 4
+            print("Testing c = ", c, "N = ", N, "...")
 
-    # cell.ke_cutoff  = 100   # kinetic energy cutoff in a.u.
-    cell.ke_cutoff = 128
-    cell.max_memory = 800  # 800 Mb
-    cell.precision  = 1e-8  # integral precision
-    cell.use_particle_mesh_ewald = True
+            cell   = pbcgto.Cell()
+            boxlen = 3.5668
+            cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+            
+            # cell.atom = '''
+            #                C     0.8917  0.8917  0.8917
+            #                C     2.6751  2.6751  0.8917
+            #                C     2.6751  0.8917  2.6751
+            #                C     0.8917  2.6751  2.6751
+            #             '''
 
-    cell.build()
+            cell.atom = '''
+                           C     0.      0.      0.
+                           C     0.8917  0.8917  0.8917
+                           C     1.7834  1.7834  0.
+                           C     2.6751  2.6751  0.8917
+                           C     1.7834  0.      1.7834
+                           C     2.6751  0.8917  2.6751
+                           C     0.      1.7834  1.7834
+                           C     0.8917  2.6751  2.6751
+                        '''
 
-    cell = tools.super_cell(cell, [1, 1, 1])
+            cell.basis   = 'gth-szv'
+            cell.pseudo  = 'gth-pade'
+            cell.verbose = 4
 
-    myisdf = ISDF(cell=cell)
-    myisdf.build(c=10)
+            # cell.ke_cutoff  = 100   # kinetic energy cutoff in a.u.
+            cell.ke_cutoff = 128
+            cell.max_memory = 800  # 800 Mb
+            cell.precision  = 1e-8  # integral precision
+            cell.use_particle_mesh_ewald = True
 
-    ######## ao eri benchmark ########
+            cell.build()
 
-    mydf_eri = df.FFTDF(cell)
+            cell = tools.super_cell(cell, [1, 1, 1])
 
-    eri = mydf_eri.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
-    eri_isdf = myisdf.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
-    _check_eri(eri, eri_isdf)
+            myisdf = ISDF(cell=cell)
+            myisdf.build(c=10)
 
-    eri = mydf_eri.get_eri(compact=True)
-    eri_isdf = myisdf.get_eri(compact=True)
-    _check_eri(eri, eri_isdf)
+            ######## ao eri benchmark ########
 
-    #### mo eri benchmark ########
+            mydf_eri = df.FFTDF(cell)
 
-    mo_coeff = np.random.random((cell.nao,cell.nao))
+            eri = mydf_eri.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
+            eri_isdf = myisdf.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
+            _check_eri(eri, eri_isdf)
 
-    ######## compact = False ########
+            eri = mydf_eri.get_eri(compact=True)
+            eri_isdf = myisdf.get_eri(compact=True)
+            _check_eri(eri, eri_isdf)
 
-    mo_eri = mydf_eri.ao2mo(mo_coeff, compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
-    mo_eri_isdf = myisdf.ao2mo(mo_coeff, compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
-    _check_eri(mo_eri, mo_eri_isdf)
+            #### mo eri benchmark ########
 
-    ######## compact = True ########
+            mo_coeff = np.random.random((cell.nao,cell.nao))
 
-    mo_eri = mydf_eri.ao2mo(mo_coeff, compact=True)
-    mo_eri_isdf = myisdf.ao2mo(mo_coeff, compact=True)
-    _check_eri(mo_eri, mo_eri_isdf)
+            ######## compact = False ########
+
+            mo_eri = mydf_eri.ao2mo(mo_coeff, compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
+            mo_eri_isdf = myisdf.ao2mo(mo_coeff, compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
+            _check_eri(mo_eri, mo_eri_isdf)
+
+            ######## compact = True ########
+
+            mo_eri = mydf_eri.ao2mo(mo_coeff, compact=True)
+            mo_eri_isdf = myisdf.ao2mo(mo_coeff, compact=True)
+            _check_eri(mo_eri, mo_eri_isdf)
