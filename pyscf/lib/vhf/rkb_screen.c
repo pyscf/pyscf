@@ -36,6 +36,92 @@
 int int2e_spinor();
 int int2e_spsp1spsp2_spinor();
 
+/* --------------- prescreen in ao2mo --------------- */
+
+// added by Ning, email: ningzhang1024@gmail.com
+
+int CVHFrkbllll_schwarz_cond(int *shls, CVHFOpt *opt,
+                             int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
+        return qijkl > opt->direct_scf_cutoff;
+}
+
+int CVHFrkbssll_schwarz_cond(int *shls, CVHFOpt *opt,
+                             int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double qijkl = opt->q_cond[n*n*SS+i*n+j] * opt->q_cond[k*n+l];
+        return qijkl > opt->direct_scf_cutoff;
+}
+
+int CVHFrkbllss_schwarz_cond(int *shls, CVHFOpt *opt,
+                             int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double qijkl = opt->q_cond[n*n*SS+k*n+l] * opt->q_cond[i*n+j];
+        return qijkl > opt->direct_scf_cutoff;
+}
+
+int CVHFrkbssss_schwarz_cond(int *shls, CVHFOpt *opt,
+                             int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
+        return qijkl > opt->direct_scf_cutoff;
+}
+
+/* --------------- the original code --------------- */
+
 int CVHFrkbllll_prescreen(int *shls, CVHFOpt *opt,
                           int *atm, int *bas, double *env)
 {

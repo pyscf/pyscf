@@ -199,15 +199,33 @@ def half_e1(mol, mo_coeffs, swapfile,
     shranges = outcore.guess_shell_ranges(mol, (aosym not in ('s1', 's2ij', 'a2ij')),
                                           aobuflen, e1buflen, mol.ao_loc_2c(), False)
     if ao2mopt is None:
+
+        c1 = .5 / lib.param.LIGHT_SPEED
+        nbas = mol.nbas
+
         # TODO:
-        #if intor == 'int2e_spinor':
-        #    ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
-        #                             'CVHFsetnr_direct_scf')
-        #elif intor == 'int2e_spsp1_spinor':
-        #elif intor == 'int2e_spsp1spsp2_spinor':
-        #else:
-        #    ao2mopt = _ao2mo.AO2MOpt(mol, intor)
-        ao2mopt = _ao2mo.AO2MOpt(mol, intor)
+        print("ao2mopt is called in r_outcore.py")
+        if intor == 'int2e_spinor':
+            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFrkbllll_schwarz_cond',
+                                     'CVHFrkbllll_direct_scf')
+        elif intor == 'int2e_spsp1_spinor':
+            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFrkbssll_schwarz_cond',
+                                     'CVHFrkbssll_direct_scf')
+            q_cond = ao2mopt.get_q_cond(shape=(2, nbas, nbas))
+            q_cond[1] *= c1**2
+        elif intor == 'int2e_spsp2_spinor':
+            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFrkbllss_schwarz_cond',
+                                     'CVHFrkbssll_direct_scf')
+            q_cond = ao2mopt.get_q_cond(shape=(2, nbas, nbas))
+            q_cond[1] *= c1**2
+        elif intor == 'int2e_spsp1spsp2_spinor':
+            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFrkbssss_schwarz_cond',
+                                     'CVHFrkbssss_direct_scf')
+            q_cond = ao2mopt.get_q_cond()
+            q_cond *= c1**2
+        else:
+            ao2mopt = _ao2mo.AO2MOpt(mol, intor)
+        # ao2mopt = _ao2mo.AO2MOpt(mol, intor)
 
     log.debug('step1: tmpfile %.8g MB', nij_pair*nao_pair*16/1e6)
     log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',

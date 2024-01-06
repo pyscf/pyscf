@@ -44,7 +44,7 @@ class AO2MOpt(object):
                                     c_env.ctypes.data_as(ctypes.c_void_p))
         self._this.contents.fprescreen = _fpointer(prescreen)
 
-        if prescreen != 'CVHFnoscreen' and intor in ('int2e_sph', 'int2e_cart'):
+        if prescreen != 'CVHFnoscreen' and intor in ('int2e_sph', 'int2e_cart', 'int2e_spinor', 'int2e_spsp1spsp2_spinor', "int2e_spsp1_spinor", "int2e_spsp2_spinor"):
             # for int2e_sph, qcondname is 'CVHFsetnr_direct_scf'
             ao_loc = make_loc(c_bas, intor)
             fsetqcond = getattr(libao2mo, qcondname)
@@ -61,6 +61,17 @@ class AO2MOpt(object):
         except AttributeError:
             pass
 
+    def get_q_cond(self, shape=None):
+        '''Return an array associated to q_cond. Contents of q_cond can be
+        modified through this array
+        '''
+        if shape is None:
+            nbas = self._this.contents.nbas
+            shape = (nbas, nbas)
+        data = ctypes.cast(self._this.contents.q_cond,
+                           ctypes.POINTER(ctypes.c_double))
+        return numpy.ctypeslib.as_array(data, shape=shape)
+    q_cond = property(get_q_cond)
 
 # if out is not None, transform AO to MO in-place
 def nr_e1fill(intor, sh_range, atm, bas, env,
