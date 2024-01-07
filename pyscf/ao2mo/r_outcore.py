@@ -39,6 +39,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo',
 def general(mol, mo_coeffs, erifile, dataname='eri_mo',
             intor='int2e_spinor', aosym='s4', comp=None,
             max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN):
+
     time_0pass = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
     if '_spinor' not in intor:
@@ -46,6 +47,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
                  'Suffix _spinor is added to %s', intor)
         intor = intor + '_spinor'
     intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)
+
     klsame = iden_coeffs(mo_coeffs[2], mo_coeffs[3])
 
     nmoi = mo_coeffs[0].shape[1]
@@ -109,6 +111,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
                            *time_0pass)
 
+    ioblk_size = max(max_memory*.1, ioblk_size)
     e2buflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
 
     log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, '
@@ -163,6 +166,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     log.timer('AO->MO transformation for %s '%intor, *time_0pass)
     return erifile
 
+def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
+    nrow, ncol = dat.shape
+    dset = h5group.create_dataset(key, (ncol,nrow), 'c16', chunks=chunks)
+    for col0, col1 in prange(0, ncol, blksize):
+        dset[col0:col1] = lib.transpose(dat[:,col0:col1])
 
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
@@ -194,17 +202,21 @@ def half_e1(mol, mo_coeffs, swapfile,
 
     e1buflen, mem_words, iobuf_words, ioblk_words = \
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
+    ioblk_size = ioblk_words * 16/1e6
     # The buffer to hold AO integrals in C code
     aobuflen = int((mem_words - iobuf_words) // (nao*nao*comp))
     shranges = outcore.guess_shell_ranges(mol, (aosym not in ('s1', 's2ij', 'a2ij')),
-                                          aobuflen, e1buflen, mol.ao_loc_2c(), False)
+                                          e1buflen, aobuflen, mol.ao_loc_2c(), False)
+    
+    ##### Add ao2mopt #####
+    
     if ao2mopt is None:
 
         c1 = .5 / lib.param.LIGHT_SPEED
         nbas = mol.nbas
 
-        # TODO:
-        print("ao2mopt is called in r_outcore.py")
+        # print("ao2mopt is called in r_outcore.py")
+
         if intor == 'int2e_spinor':
             ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFrkbllll_schwarz_cond',
                                      'CVHFrkbllll_direct_scf')
@@ -237,10 +249,15 @@ def half_e1(mol, mo_coeffs, swapfile,
 
     tao = numpy.asarray(mol.tmap(), dtype=numpy.int32)
 
+
     # transform e1
     ti0 = log.timer('Initializing ao2mo.outcore.half_e1', *time0)
     nstep = len(shranges)
-    for istep,sh_range in enumerate(shranges):
+    e1buflen = max([x[2] for x in shranges])
+
+    e2buflen, chunks = guess_e2bufsize(ioblk_size, nij_pair, e1buflen)
+
+    for istep, sh_range in enumerate(shranges):
         log.debug('step 1 [%d/%d], AO [%d:%d], len(buf) = %d',
                   istep+1, nstep, *(sh_range[:3]))
         buflen = sh_range[2]
@@ -257,7 +274,8 @@ def half_e1(mol, mo_coeffs, swapfile,
             p0 += aoshs[2]
         ti2 = log.timer('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
 
-        e2buflen, chunks = guess_e2bufsize(ioblk_size, nij_pair, buflen)
+        # e2buflen, chunks = guess_e2bufsize(ioblk_size, nij_pair, buflen)
+
         for icomp in range(comp):
             dset = fswap.create_dataset('%d/%d'%(icomp,istep),
                                         (nij_pair,iobuf.shape[1]), 'c16',
@@ -289,7 +307,7 @@ def general_iofree(mol, mo_coeffs, intor='int2e_spinor', aosym='s4', comp=None,
 
 def iden_coeffs(mo1, mo2):
     return (id(mo1) == id(mo2)) \
-            or (mo1.shape==mo2.shape and numpy.allclose(mo1,mo2))
+        or (mo1.shape==mo2.shape and numpy.allclose(mo1,mo2))
 
 def prange(start, end, step):
     for i in range(start, end, step):
