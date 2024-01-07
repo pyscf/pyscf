@@ -44,7 +44,8 @@ class AO2MOpt(object):
                                     c_env.ctypes.data_as(ctypes.c_void_p))
         self._this.contents.fprescreen = _fpointer(prescreen)
 
-        if prescreen != 'CVHFnoscreen' and intor in ('int2e_sph', 'int2e_cart', 'int2e_spinor', 'int2e_spsp1spsp2_spinor', "int2e_spsp1_spinor", "int2e_spsp2_spinor"):
+        if prescreen != 'CVHFnoscreen' and intor in ('int2e_sph', 'int2e_cart', 'int2e_spinor', 'int2e_spsp1spsp2_spinor', "int2e_spsp1_spinor", "int2e_spsp2_spinor", "int2e_breit_ssp1ssp2_spinor",
+                                                    "int2e_breit_sps1sps2_spinor", "int2e_breit_ssp1sps2_spinor",  "int2e_breit_sps1ssp2_spinor"):
             # for int2e_sph, qcondname is 'CVHFsetnr_direct_scf'
             ao_loc = make_loc(c_bas, intor)
             fsetqcond = getattr(libao2mo, qcondname)

@@ -207,9 +207,9 @@ def half_e1(mol, mo_coeffs, swapfile,
     aobuflen = int((mem_words - iobuf_words) // (nao*nao*comp))
     shranges = outcore.guess_shell_ranges(mol, (aosym not in ('s1', 's2ij', 'a2ij')),
                                           e1buflen, aobuflen, mol.ao_loc_2c(), False)
-    
+
     ##### Add ao2mopt #####
-    
+
     if ao2mopt is None:
 
         c1 = .5 / lib.param.LIGHT_SPEED
@@ -235,6 +235,26 @@ def half_e1(mol, mo_coeffs, swapfile,
                                      'CVHFrkbssss_direct_scf')
             q_cond = ao2mopt.get_q_cond()
             q_cond *= c1**2
+        elif intor == 'int2e_breit_ssp1ssp2_spinor':  # LSLS
+            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFrkblsls_schwarz_cond',
+                                     'CVHFrkblsls_direct_scf')
+            q_cond = ao2mopt.get_q_cond()
+            q_cond *= c1
+        elif intor == 'int2e_breit_sps1sps2_spinor':  # SLSL
+            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFrkbslsl_schwarz_cond',
+                                     'CVHFrkbslsl_direct_scf')
+            q_cond = ao2mopt.get_q_cond()
+            q_cond *= c1
+        elif intor == 'int2e_breit_ssp1sps2_spinor':  # LSSL
+            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFrkblssl_schwarz_cond',
+                                     'CVHFrkblssl_direct_scf')
+            q_cond = ao2mopt.get_q_cond()
+            q_cond *= c1
+        elif intor == 'int2e_breit_sps1ssp2_spinor':  # SLLS
+            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFrkbslls_schwarz_cond',
+                                        'CVHFrkbslls_direct_scf')
+            q_cond = ao2mopt.get_q_cond()
+            q_cond *= c1
         else:
             ao2mopt = _ao2mo.AO2MOpt(mol, intor)
         # ao2mopt = _ao2mo.AO2MOpt(mol, intor)

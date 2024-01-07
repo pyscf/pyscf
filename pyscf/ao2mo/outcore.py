@@ -762,6 +762,7 @@ def _stand_sym_code(sym):
 def balance_segs(segs_lst, blksize, start_id=0, stop_id=None):
     loc = numpy.append(0, numpy.cumsum(segs_lst))
     return balance_partition(loc, blksize, start_id, stop_id)
+
 def balance_partition(ao_loc, blksize, start_id=0, stop_id=None):
     if stop_id is None:
         stop_id = len(ao_loc) - 1
