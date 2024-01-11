@@ -1355,7 +1355,7 @@ class Cell(mole.MoleBase):
             a = self.a.replace(';',' ').replace(',',' ').replace('\n',' ')
             a = np.asarray([float(x) for x in a.split()]).reshape(3,3)
         else:
-            a = np.asarray(self.a, dtype=np.double)
+            a = np.asarray(self.a, dtype=np.double).reshape(3,3)
         if isinstance(self.unit, str):
             if is_au(self.unit):
                 return a
