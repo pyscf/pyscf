@@ -274,7 +274,7 @@ def _gamma1_intermediates(mp, t2):
     return ((dooa, doob), (dvva, dvvb))
 
 
-def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None, eris=None):
+def make_fno(mp, thresh=1e-6, pct_occ=None, pvir_act=None, nvir_act=None, t2=None, eris=None):
     r'''
     Frozen natural orbitals
 
@@ -305,12 +305,15 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None, eris=None):
         logger.debug1(mp, 'make_fno: noon = %s', n)
 
         if nvir_act is None:
-            if pct_occ is None:
-                nvir_act = numpy.count_nonzero(n>thresh)
+            if pvir_act is None:
+                if pct_occ is None:
+                    nvir_act = numpy.count_nonzero(n>thresh)
+                else:
+                    pct_occ_sum = numpy.cumsum(n/numpy.sum(n))
+                    logger.debug1(mp, 'make_fno: pctsum(noon) = %s', pct_occ_sum)
+                    nvir_act = numpy.count_nonzero(pct_occ_sum<pct_occ)
             else:
-                pct_occ_sum = numpy.cumsum(n/numpy.sum(n))
-                logger.debug1(mp, 'make_fno: pctsum(noon) = %s', pct_occ_sum)
-                nvir_act = numpy.count_nonzero(pct_occ_sum<pct_occ)
+                nvir_act = min(int(numpy.ceil(pvir_act*(nmo-nocc))), nmo-nocc)
         numpy.set_printoptions(threshold=1000)
 
         if nvir_act == 0:

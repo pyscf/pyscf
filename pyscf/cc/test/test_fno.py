@@ -83,6 +83,17 @@ class Water(unittest.TestCase):
         self.assertAlmostEqual(eccsd, eccsd0, 6)
         self.assertAlmostEqual(et, et0, 6)
 
+    def test_fno_by_pct_pvir_nvir_frozen(self):
+        tasks = [
+            [{'pct_occ': 0.99}, [-0.1401399124, -0.0002878929]],
+            [{'pvir_act': 0.8}, [-0.2087610498, -0.0027219407]],
+            [{'nvir_act': 16},  [-0.2087610498, -0.0027219407]],
+        ]
+        for kwargs,ref in tasks:
+            eccsd, et = self.kernel(cc.FNOCCSD, **kwargs, frozen=1)
+            self.assertAlmostEqual(eccsd, ref[0], 6)
+            self.assertAlmostEqual(et, ref[1], 6)
+
 
 class Water_density_fitting(unittest.TestCase):
     @classmethod
@@ -202,6 +213,16 @@ class Water_UHF(unittest.TestCase):
         eccsd0 = self.kernel(cc.CCSD, frozen=1)
         eccsd = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=1)
         self.assertAlmostEqual(eccsd, eccsd0, 6)
+
+    def test_fno_by_pct_pvir_nvir_frozen(self):
+        tasks = [
+            [{'pct_occ': 0.99}, -0.0946120432],
+            [{'pvir_act': 0.8}, -0.1655995100],
+            [{'nvir_act': 16},  -0.1655995100],
+        ]
+        for kwargs,ref in tasks:
+            eccsd = self.kernel(cc.FNOCCSD, **kwargs, frozen=1)
+            self.assertAlmostEqual(eccsd, ref, 6)
 
 
 if __name__ == "__main__":
