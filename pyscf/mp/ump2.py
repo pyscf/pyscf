@@ -301,6 +301,7 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None, eris=None):
         n,v = numpy.linalg.eigh(dm[nocc:,nocc:])
         idx = numpy.argsort(n)[::-1]
         n,v = n[idx], v[:,idx]
+        numpy.set_printoptions(threshold=nmo)
         logger.debug1(mp, 'make_fno: noon = %s', n)
 
         if nvir_act is None:
@@ -310,6 +311,7 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None, eris=None):
                 pct_occ_sum = numpy.cumsum(n/numpy.sum(n))
                 logger.debug1(mp, 'make_fno: pctsum(noon) = %s', pct_occ_sum)
                 nvir_act = numpy.count_nonzero(pct_occ_sum<pct_occ)
+        numpy.set_printoptions(threshold=1000)
 
         if nvir_act == 0:
             logger.warn(mp, 'make_fno: nvir_act = 0')
