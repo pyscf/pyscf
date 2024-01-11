@@ -32,9 +32,7 @@ class Water(unittest.TestCase):
         H          0.00000        0.75545       -0.47116
         H          0.00000       -0.75545       -0.47116
         '''
-        mol.pseudo = 'gth-hf-rev'
         mol.basis = 'cc-pvdz'
-        mol.precision = 1e-10
         mol.build()
         mf = scf.RHF(mol).run()
         cls.mol = mol
@@ -51,7 +49,6 @@ class Water(unittest.TestCase):
         et = CCSD_T(mcc, eris=eris)
         return mcc.e_corr, et
 
-    @unittest.skip('fail due to updates of pp_int?')
     def test_fno_by_thresh(self):
         threshs = [1e-2,1e-3,1e-4]
         refs = [
@@ -69,13 +66,12 @@ class Water(unittest.TestCase):
         self.assertAlmostEqual(eccsd, eccsd0, 6)
         self.assertAlmostEqual(et, et0, 6)
 
-    @unittest.skip('fail due to updates of pp_int?')
     def test_fno_by_thresh_frozen(self):
         threshs = [1e-2,1e-3,1e-4]
         refs = [
-            [-0.1173030018, -0.0001459448],
-            [-0.1889586685, -0.0006157799],
-            [-0.2109365568, -0.0029841323],
+            [-0.1263574545, -0.0002034468],
+            [-0.1930889232, -0.0009222680],
+            [-0.2111222951, -0.0030207054],
         ]
         for thresh,ref in zip(threshs,refs):
             eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=1)
@@ -99,9 +95,7 @@ class Water_density_fitting(unittest.TestCase):
         H          0.00000        0.75545       -0.47116
         H          0.00000       -0.75545       -0.47116
         '''
-        mol.pseudo = 'gth-hf-rev'
         mol.basis = 'cc-pvdz'
-        mol.precision = 1e-10
         mol.build()
         mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
         cls.mol = mol
@@ -118,7 +112,6 @@ class Water_density_fitting(unittest.TestCase):
         et = CCSD_T(mcc, eris=eris)
         return mcc.e_corr, et
 
-    @unittest.skip('fail due to updates of pp_int?')
     def test_fno_by_thresh(self):
         threshs = [1e-2,1e-3,1e-4]
         refs = [
@@ -136,13 +129,12 @@ class Water_density_fitting(unittest.TestCase):
         self.assertAlmostEqual(eccsd, eccsd0, 6)
         self.assertAlmostEqual(et, et0, 6)
 
-    @unittest.skip('fail due to updates of pp_int?')
     def test_fno_by_thresh_frozen(self):
         threshs = [1e-2,1e-3,1e-4]
         refs = [
-            [-0.1172906846, -0.0001457165],
-            [-0.1889855085, -0.0006158811],
-            [-0.2110052374, -0.0029866440],
+            [-0.1263431220, -0.0002032849],
+            [-0.1931236860, -0.0009223947],
+            [-0.2111917452, -0.0030234195],
         ]
         for thresh,ref in zip(threshs,refs):
             eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=1)
@@ -153,6 +145,63 @@ class Water_density_fitting(unittest.TestCase):
         eccsd, et = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=1)
         self.assertAlmostEqual(eccsd, eccsd0, 6)
         self.assertAlmostEqual(et, et0, 6)
+
+
+class Water_UHF(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        mol = gto.Mole()
+        mol.verbose = 4
+        mol.output = '/dev/null'
+        mol.atom = '''
+        O          0.00000        0.00000        0.11779
+        H          0.00000        0.75545       -0.47116
+        H          0.00000       -0.75545       -0.47116
+        '''
+        mol.basis = 'cc-pvdz'
+        mol.charge = 1
+        mol.spin = 1
+        mol.build()
+        mf = scf.UHF(mol).run()
+        cls.mol = mol
+        cls.mf = mf
+    @classmethod
+    def tearDownClass(cls):
+        cls.mol.stdout.close()
+        del cls.mol, cls.mf
+
+    def kernel(self, CC, **kwargs):
+        mcc = CC(self.mf, **kwargs)
+        mcc.kernel()
+        return mcc.e_corr
+
+    def test_fno_by_thresh(self):
+        threshs = [1e-3,1e-4]
+        refs = [
+            -0.1387658769,
+            -0.1691956216,
+        ]
+        for thresh,ref in zip(threshs,refs):
+            eccsd = self.kernel(cc.FNOCCSD, thresh=thresh)
+            self.assertAlmostEqual(eccsd, ref, 6)
+
+        eccsd0 = self.kernel(cc.CCSD)
+        eccsd = self.kernel(cc.FNOCCSD, thresh=1e-100)
+        self.assertAlmostEqual(eccsd, eccsd0, 6)
+
+    def test_fno_by_thresh_frozen(self):
+        threshs = [1e-3,1e-4]
+        refs = [
+            -0.1442231038,
+            -0.1676310018,
+        ]
+        for thresh,ref in zip(threshs,refs):
+            eccsd = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=1)
+            self.assertAlmostEqual(eccsd, ref, 6)
+
+        eccsd0 = self.kernel(cc.CCSD, frozen=1)
+        eccsd = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=1)
+        self.assertAlmostEqual(eccsd, eccsd0, 6)
 
 
 if __name__ == "__main__":

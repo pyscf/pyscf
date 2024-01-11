@@ -229,13 +229,18 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
     n,v = numpy.linalg.eigh(dm[nocc:,nocc:])
     idx = numpy.argsort(n)[::-1]
     n,v = n[idx], v[:,idx]
+    logger.debug1(mp, 'make_fno: noon = %s', n)
 
     if nvir_act is None:
         if pct_occ is None:
             nvir_act = numpy.count_nonzero(n>thresh)
         else:
-            print(numpy.cumsum(n/numpy.sum(n)))
-            nvir_act = numpy.count_nonzero(numpy.cumsum(n/numpy.sum(n))<pct_occ)
+            pct_occ_sum = numpy.cumsum(n/numpy.sum(n))
+            logger.debug1(mp, 'make_fno: pctsum(noon) = %s', pct_occ_sum)
+            nvir_act = numpy.count_nonzero(pct_occ_sum<pct_occ)
+
+    if nvir_act == 0:
+        logger.warn(mp, 'make_fno: nvir_act = 0')
 
     fvv = numpy.diag(mf.mo_energy[nocc:])
     fvv_no = numpy.dot(v.T, numpy.dot(fvv, v))
@@ -245,7 +250,11 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
     no_coeff_2 = numpy.dot(mf.mo_coeff[:,nocc:], v[:,nvir_act:])
     no_coeff = numpy.concatenate((mf.mo_coeff[:,:nocc], no_coeff_1, no_coeff_2), axis=1)
 
-    return numpy.arange(nocc+nvir_act,nmo), no_coeff
+    frozen_mask = mp.get_frozen_mask()
+    frozen_mask[numpy.where(frozen_mask)[0][numpy.arange(nocc+nvir_act,nmo)]] = False
+    frozen = numpy.where(~frozen_mask)[0]
+
+    return frozen, no_coeff
 
 
 def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
