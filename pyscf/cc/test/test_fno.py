@@ -69,28 +69,30 @@ class Water(unittest.TestCase):
     def test_fno_by_thresh_frozen(self):
         threshs = [1e-2,1e-3,1e-4]
         refs = [
-            [-0.1263574545, -0.0002034468],
-            [-0.1930889232, -0.0009222680],
-            [-0.2111222951, -0.0030207054],
+            [-0.0786641196, -0.0000408096],
+            [-0.1284412378, -0.0007116076],
+            [-0.1352476169, -0.0018534310],
         ]
+        frozen = [1,20,23]
         for thresh,ref in zip(threshs,refs):
-            eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=1)
+            eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=frozen)
             self.assertAlmostEqual(eccsd, ref[0], 6)
             self.assertAlmostEqual(et, ref[1], 6)
 
-        eccsd0, et0 = self.kernel(cc.CCSD, frozen=1)
-        eccsd, et = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=1)
+        eccsd0, et0 = self.kernel(cc.CCSD, frozen=frozen)
+        eccsd, et = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=frozen)
         self.assertAlmostEqual(eccsd, eccsd0, 6)
         self.assertAlmostEqual(et, et0, 6)
 
     def test_fno_by_pct_pvir_nvir_frozen(self):
         tasks = [
-            [{'pct_occ': 0.99}, [-0.1401399124, -0.0002878929]],
-            [{'pvir_act': 0.8}, [-0.2087610498, -0.0027219407]],
-            [{'nvir_act': 16},  [-0.2087610498, -0.0027219407]],
+            [{'pct_occ': 0.99}, [-0.1325843694, -0.0014600579]],
+            [{'pvir_act': 0.8}, [-0.1343480739, -0.0016905495]],
+            [{'nvir_act': 14},  [-0.1343480739, -0.0016905495]],
         ]
+        frozen = [1,20,23]
         for kwargs,ref in tasks:
-            eccsd, et = self.kernel(cc.FNOCCSD, **kwargs, frozen=1)
+            eccsd, et = self.kernel(cc.FNOCCSD, **kwargs, frozen=frozen)
             self.assertAlmostEqual(eccsd, ref[0], 6)
             self.assertAlmostEqual(et, ref[1], 6)
 
@@ -143,17 +145,18 @@ class Water_density_fitting(unittest.TestCase):
     def test_fno_by_thresh_frozen(self):
         threshs = [1e-2,1e-3,1e-4]
         refs = [
-            [-0.1263431220, -0.0002032849],
-            [-0.1931236860, -0.0009223947],
-            [-0.2111917452, -0.0030234195],
+            [-0.0786512769, -0.0000407462],
+            [-0.1284642121, -0.0007119538],
+            [-0.1352886314, -0.0018552359],
         ]
+        frozen = [1,20,23]
         for thresh,ref in zip(threshs,refs):
-            eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=1)
+            eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=frozen)
             self.assertAlmostEqual(eccsd, ref[0], 6)
             self.assertAlmostEqual(et, ref[1], 6)
 
-        eccsd0, et0 = self.kernel(cc.CCSD, frozen=1)
-        eccsd, et = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=1)
+        eccsd0, et0 = self.kernel(cc.CCSD, frozen=frozen)
+        eccsd, et = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=frozen)
         self.assertAlmostEqual(eccsd, eccsd0, 6)
         self.assertAlmostEqual(et, et0, 6)
 
@@ -203,25 +206,27 @@ class Water_UHF(unittest.TestCase):
     def test_fno_by_thresh_frozen(self):
         threshs = [1e-3,1e-4]
         refs = [
-            -0.1442231038,
-            -0.1676310018,
+            -0.0598508583,
+            -0.0776356337,
         ]
+        frozen = [[1,20,23],[2,21]]
         for thresh,ref in zip(threshs,refs):
-            eccsd = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=1)
+            eccsd = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=frozen)
             self.assertAlmostEqual(eccsd, ref, 6)
 
-        eccsd0 = self.kernel(cc.CCSD, frozen=1)
-        eccsd = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=1)
+        eccsd0 = self.kernel(cc.CCSD, frozen=frozen)
+        eccsd = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=frozen)
         self.assertAlmostEqual(eccsd, eccsd0, 6)
 
     def test_fno_by_pct_pvir_nvir_frozen(self):
         tasks = [
-            [{'pct_occ': 0.99}, -0.0946120432],
-            [{'pvir_act': 0.8}, -0.1655995100],
-            [{'nvir_act': 16},  -0.1655995100],
+            [{'pct_occ': 0.99}, -0.0799112209],
+            [{'pvir_act': 0.8}, -0.0812895797],
+            [{'nvir_act': [14,16]},  -0.0812895797],
         ]
+        frozen = [[1,20,23],[2,21]]
         for kwargs,ref in tasks:
-            eccsd = self.kernel(cc.FNOCCSD, **kwargs, frozen=1)
+            eccsd = self.kernel(cc.FNOCCSD, **kwargs, frozen=frozen)
             self.assertAlmostEqual(eccsd, ref, 6)
 
 
