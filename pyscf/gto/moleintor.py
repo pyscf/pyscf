@@ -18,7 +18,7 @@
 
 '''
 A low level interface to libcint library. It's recommended to use the
-Mole.intor method to drive the integral evaluation funcitons.
+Mole.intor method to drive the integral evaluation functions.
 '''
 
 import warnings

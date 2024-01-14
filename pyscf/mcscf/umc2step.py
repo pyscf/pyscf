@@ -23,7 +23,6 @@ UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
 
 
 import numpy
-import copy
 import pyscf.lib.logger as logger
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
@@ -78,8 +77,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             t3m = log.timer('orbital rotation', *t3m)
 
             eris = None
-            u = copy.copy(u)
-            g_orb = copy.copy(g_orb)
             mo = casscf.rotate_mo(mo, u, log)
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
@@ -181,5 +178,3 @@ if __name__ == '__main__':
     print(ehf, emc, emc-ehf)
     print(emc - -75.5644202701263, emc - -75.573930418500652,
           emc - -75.574137883405612, emc - -75.648547447838951)
-
-

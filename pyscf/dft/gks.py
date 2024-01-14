@@ -137,6 +137,10 @@ energy_elec = rks.energy_elec
 
 class GKS(rks.KohnShamDFT, ghf.GHF):
     '''Generalized Kohn-Sham'''
+
+    get_veff = get_veff
+    energy_elec = energy_elec
+
     def __init__(self, mol, xc='LDA,VWN'):
         ghf.GHF.__init__(self, mol)
         rks.KohnShamDFT.__init__(self, xc)
@@ -151,9 +155,6 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
             logger.info(self, 'mcfun collinear_thrd = %s', self._numint.collinear_thrd)
             logger.info(self, 'mcfun collinear_samples = %s', self._numint.collinear_samples)
         return self
-
-    get_veff = get_veff
-    energy_elec = energy_elec
 
     @property
     def collinear(self):
@@ -170,6 +171,13 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
         self._numint.spin_samples = val
 
     def nuc_grad_method(self):
+        raise NotImplementedError
+
+    def to_hf(self):
+        '''Convert to GHF object.'''
+        return self._transfer_attrs_(self.mol.GHF())
+
+    def to_gpu(self):
         raise NotImplementedError
 
 

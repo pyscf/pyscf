@@ -24,7 +24,6 @@ Ref:
     Q. Sun, arXiv:2302.11307
 '''
 
-import copy
 import ctypes
 import numpy as np
 import scipy.linalg
@@ -51,6 +50,13 @@ OMEGA_MIN = rsdf_builder.OMEGA_MIN
 INDEX_MIN = rsdf_builder.INDEX_MIN
 
 class RangeSeparatedJKBuilder(lib.StreamObject):
+    _keys = {
+        'cell', 'mesh', 'kpts', 'purify', 'omega', 'rs_cell', 'cell_d',
+        'bvk_kmesh', 'supmol_sr', 'supmol_ft', 'supmol_d', 'cell0_basis_mask',
+        'ke_cutoff', 'direct_scf_tol', 'time_reversal_symmetry',
+        'exclude_dd_block', 'allow_drv_nodddd', 'approx_vk_lr_missing_mo',
+    }
+
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
@@ -89,8 +95,6 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         # TODO: incrementally build SR part
         self._last_vs = (0, 0)
         self._qindex = None
-
-        self._keys = set(self.__dict__.keys())
 
     def has_long_range(self):
         '''Whether to add the long-range part computed with AFT/FFT integrals'''
@@ -205,14 +209,14 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         qindex = np.empty((3,nbas,nbas), dtype=np.int16)
         ao_loc = supmol_sr.ao_loc
         with supmol_sr.with_integral_screen(self.direct_scf_tol**2):
-            libpbc.PBCVHFsetnr_direct_scf(
+            libpbc.PBCVHFnr_int2e_q_cond(
                 libpbc.int2e_sph, self._cintopt,
                 qindex.ctypes.data_as(ctypes.c_void_p),
                 ao_loc.ctypes.data_as(ctypes.c_void_p),
                 supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
                 supmol_sr._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.nbas),
                 supmol_sr._env.ctypes.data_as(ctypes.c_void_p))
-        libpbc.PBCVHFsetnr_sindex(
+        libpbc.PBCVHFnr_sindex(
             qindex[2:].ctypes.data_as(ctypes.c_void_p),
             supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
             supmol_sr._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.nbas),
@@ -1172,7 +1176,8 @@ def estimate_rcut(rs_cell, omega, precision=None,
                   exclude_dd_block=True):
     '''Estimate rcut for 2e SR-integrals'''
     if precision is None:
-        precision = rs_cell.precision
+        # Adjust precision a little bit as errors are found slightly larger than cell.precision.
+        precision = rs_cell.precision * 1e-1
 
     rs_cell = rs_cell
     exps, cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')

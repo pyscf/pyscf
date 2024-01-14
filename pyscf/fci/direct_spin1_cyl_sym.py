@@ -26,7 +26,7 @@ FCI wavefunction (called complex wavefunction here) is solved using the complex
 Hamiltonian. For 2D irreps, the real part and the imaginary part of the complex
 FCI wavefunction are identical to the Ex and Ey wavefunction obtained from
 direct_spin1_symm module. However, any observables from the complex FCI
-wavefunction should have an indentical one from either Ex or Ey wavefunction
+wavefunction should have an identical one from either Ex or Ey wavefunction
 of direct_spin1_symm.
 '''
 
@@ -62,7 +62,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
 
     wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
     wfnsym_in_d2h = wfnsym % 10
-    wfn_ungerade = wfnsym_in_d2h >= 4
+    wfn_ungerade = int(wfnsym_in_d2h >= 4)
     orbsym_d2h = orbsym % 10
     orb_ungerade = orbsym_d2h >= 4
     if np.any(orb_ungerade) or wfn_ungerade:

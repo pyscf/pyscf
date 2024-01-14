@@ -192,8 +192,8 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
 def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     '''pspace Hamiltonian to improve Davidson preconditioner. See, CPL, 169, 463
     '''
-    if norb > 63:
-        raise NotImplementedError('norb > 63')
+    if norb >= 64:
+        raise NotImplementedError('norb >= 64')
 
     if h1e.dtype == numpy.complex128 or eri.dtype == numpy.complex128:
         raise NotImplementedError('Complex Hamiltonian')
@@ -525,28 +525,26 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     assert (0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
 
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec, compress=False).ravel()
+    num_dets = hdiag.size
+    pspace_size = min(num_dets, pspace_size)
+    addr = [0]
+    pw = pv = None
+    if pspace_size > 0 and norb < 64:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+        pw, pv = fci.eig(h0)
+        pspace_size = len(addr)
+
     if getattr(fci, 'sym_allowed_idx', None):
         # Remove symmetry forbidden elements
         sym_idx = numpy.hstack(fci.sym_allowed_idx)
         civec_size = sym_idx.size
     else:
         sym_idx = None
-        civec_size = hdiag.size
+        civec_size = num_dets
 
     if max_memory < civec_size*6*8e-6:
         log.warn('Not enough memory for FCI solver. '
                  'The minimal requirement is %.0f MB', civec_size*60e-6)
-
-    pspace_size = min(hdiag.size, pspace_size)
-    addr = [0]
-    pw = pv = None
-    if pspace_size > 0:
-        try:
-            addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
-            pspace_size = len(addr)
-        except NotImplementedError:
-            pass
-        pw, pv = fci.eig(h0)
 
     if pspace_size >= civec_size and ci0 is None and not davidson_only:
         if nroots > 1:
@@ -562,7 +560,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             return pw[0]+ecore, civec
     pw = pv = h0 = None
 
-    if hdiag.size == civec_size:
+    if sym_idx is None:
         precond = fci.make_precond(hdiag)
     else:
         precond = fci.make_precond(hdiag[sym_idx])
@@ -720,6 +718,13 @@ class FCIBase(lib.StreamObject):
     threads = getattr(__config__, 'fci_direct_spin1_FCI_threads', None)
     lessio = getattr(__config__, 'fci_direct_spin1_FCI_lessio', False)
 
+    _keys = {
+        'max_cycle', 'max_space', 'conv_tol', 'lindep',
+        'level_shift', 'davidson_only', 'pspace_size', 'threads', 'lessio',
+        'mol', 'nroots', 'spin', 'orbsym', 'wfnsym', 'converged', 'norb',
+        'nelec', 'eci', 'ci',
+    }
+
     def __init__(self, mol=None):
         if mol is None:
             self.stdout = sys.stdout
@@ -742,11 +747,6 @@ class FCIBase(lib.StreamObject):
         self.nelec = None
         self.eci = None
         self.ci = None
-
-        keys = set(('max_cycle', 'max_space', 'conv_tol', 'lindep',
-                    'level_shift', 'davidson_only', 'pspace_size', 'threads',
-                    'lessio'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
     def e_tot(self):

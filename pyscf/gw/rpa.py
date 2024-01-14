@@ -74,7 +74,7 @@ def kernel(rpa, mo_energy, mo_coeff, Lpq=None, nw=40, x0=0.5, verbose=logger.NOT
     # Compute RPA correlation energy
     e_corr = get_rpa_ecorr(rpa, Lpq, freqs, wts)
 
-    # Compute totol energy
+    # Compute total energy
     e_tot = e_hf + e_corr
 
     logger.debug(rpa, '  RPA total energy = %s', e_tot)
@@ -162,6 +162,11 @@ def _mo_without_core(rpa, mo):
 
 class RPA(lib.StreamObject):
 
+    _keys = {
+        'mol', 'frozen',
+        'with_df', 'mo_energy', 'mo_coeff', 'mo_occ', 'e_corr', 'e_hf', 'e_tot',
+    }
+
     def __init__(self, mf, frozen=None, auxbasis=None):
         self.mol = mf.mol
         self._scf = mf
@@ -179,7 +184,6 @@ class RPA(lib.StreamObject):
                 self.with_df.auxbasis = auxbasis
             else:
                 self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
-        self._keys.update(['with_df'])
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -228,7 +232,7 @@ class RPA(lib.StreamObject):
             mo_energy : 1D array (nmo), mean-field mo energy
             mo_coeff : 2D array (nmo, nmo), mean-field mo coefficient
             Lpq : 3D array (naux, nmo, nmo), 3-index ERI
-            nw: interger, grid number
+            nw: integer, grid number
             x0: real, scaling factor for frequency grid
 
         Returns:

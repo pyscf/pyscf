@@ -187,7 +187,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(t2[2]-myucc.t2[2]).max(), 0, 5)
 
     def test_uccsd_frozen(self):
-        ucc1 = copy.copy(myucc)
+        ucc1 = myucc.copy()
         ucc1.frozen = 1
         self.assertEqual(ucc1.nmo, (12,12))
         self.assertEqual(ucc1.nocc, (4,4))

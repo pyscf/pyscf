@@ -37,9 +37,7 @@ class UKS(dks.KohnShamDFT, x2c.UHF):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = self.view(x2c.UHF)
-        mf.converged = False
-        return mf
+        return x2c.SCF._transfer_attrs_(x2c.UHF(self.mol))
 
 X2C_UKS = UKS
 
@@ -60,8 +58,6 @@ class RKS(dks.KohnShamDFT, x2c.RHF):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = self.view(x2c.RHF)
-        mf.converged = False
-        return mf
+        return x2c.SCF._transfer_attrs_(x2c.RHF(self.mol))
 
 X2C_RKS = RKS

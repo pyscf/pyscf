@@ -1,3 +1,42 @@
+PySCF 2.4.0 (2023-10-16)
+------------------------
+* Added
+  - Mulliken population analysis for KGHF.
+  - Interface to libmsym (https://github.com/mcodev31/libmsym) for handeling non-abelian symmetry.
+  - A variant of the Hückel initial SCF guess.
+  - PBC TDDFT with non-zero particle-hole momentum transfer for GDF/RSDF (same as the kshift used in pbc eom-ee-ccsd).
+  - PBC TDDFT with twisted boundary conditions (both single k-point and k-point mesh).
+  - NVT Molecular Dynamics.
+  - Gaussian charge model for int1e_grids.
+  - GHF with fractional occupancy.
+  - FCIDUMP for MCSCF orbitals.
+  - DF-CCSD and frozen core for FNO-CCSD.
+  - multi-collinear functional for PBC DFT.
+  - non-local functional (VV10) for PBC DFT.
+  - "undo" method for dynamic classes. This method can revert the action for conversion methods such as "density_fit()", "x2c()", "newton()", "as_scanner()", etc..
+  - Merged basis parser for molecular GTO basis and GTH basis. GTH basis can be assigned to Mole object directly.
+  - Merged ECP and PP parser. PP can be assigned to Mole object directly.
+  - C-PCM, IEF-PCM, COSMO, and SS(V)PE solvent models and their Gradients.
+* Improved
+  - Performance of the gradients of nuclear repulsion energy.
+  - JK builder for short-range ERIs.
+  - The layout of the Mole class and Cell class. Remove the inheritance between Cell and Mole.
+  - The layout of various SCF classes and the conversion methods (to_ks, to_hf, to_uhf, to_ghf, etc.) between different SCF objects.
+  - The layout of various MCSCF classes.
+  - New style to generate dynamic class for DF methods, X2C, QMMM, SOSCF, Solvent model, StateAverageMCSCF, Scanner methods, etc.
+  - SCF smearing method.
+  - Make Mole and Cell object picklable.
+* Fixes
+  - supercell symmetry.
+  - NAO orbital localization.
+  - Finite-size correction for PBC TDDFT (1/Nk convergence to TDL and agreement with molecular code).
+  - Bugs in FCI for num. orbitals >= 64.
+  - PBC empty cell error.
+  - The edge case CAS(2,2) for Selected CI.
+  - Dimension issue in PBC-GDF cderi tensor.
+  - Assume 46 and 78 core configurations to be f-in-valence.
+  - Coding styles and deprecated warnings from numpy.
+
 PySCF 2.3.0 (2023-07-04)
 ------------------------
 * Added

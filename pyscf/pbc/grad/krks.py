@@ -112,11 +112,12 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
         return -vmat
 
 class Gradients(rhf_grad.Gradients):
+    _keys = {'grid_response', 'grids'}
+
     def __init__(self, mf):
         rhf_grad.Gradients.__init__(self, mf)
         self.grids = None
         self.grid_response = False
-        self._keys = self._keys.union(['grid_response', 'grids'])
 
     def dump_flags(self, verbose=None):
         rhf_grad.Gradients.dump_flags(self, verbose)

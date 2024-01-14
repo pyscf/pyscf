@@ -846,7 +846,7 @@ void PBCsupmol_ovlp_mask(int8_t *out, double cutoff,
                 rr_cutoff = (log_a1 - log_cutoff) / a1;
                 if (li > 0 && lj > 0 && a1 < 0.3) {
                         // the contribution of r^n should be considered for
-                        // overlap of smooth basis funcitons
+                        // overlap of smooth basis functions
                         li_a1 = li / -a1;
                         lj_a1 = lj / -a1;
                         for (i = i0; i < i1; i++) {

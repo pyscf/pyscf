@@ -272,10 +272,10 @@ def casci_grad_with_ccsd_solver(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad
             casdm2[i,i,j,j] -= 4
             casdm2[i,j,j,i] += 2
     for i in range(no):
-       casdm2[i,i,:,:] -= casdm1 * 2
-       casdm2[:,:,i,i] -= casdm1 * 2
-       casdm2[:,i,i,:] += casdm1
-       casdm2[i,:,:,i] += casdm1
+        casdm2[i,i,:,:] -= casdm1 * 2
+        casdm2[:,:,i,i] -= casdm1 * 2
+        casdm2[:,i,i,:] += casdm1
+        casdm2[i,:,:,i] += casdm1
 
     mc.mo_occ = mc._scf.mo_occ
     mask = numpy.zeros(nmo, dtype=bool)
@@ -336,7 +336,7 @@ class KnownValues(unittest.TestCase):
         g1 = g_scan(mol, atmlst=range(4))[1]
         self.assertAlmostEqual(lib.fp(g1), -0.058112001722577293, 6)
 
-        g2 = g_scan.kernel()
+        g2 = g_scan.kernel(state=0)
         self.assertAlmostEqual(lib.fp(g2), -0.066025991364829367, 6)
 
         mcs = mc.as_scanner()
@@ -459,8 +459,19 @@ class KnownValues(unittest.TestCase):
         g = mol.RHF.run().CASCI(4, 4).run().Gradients().kernel()
         self.assertAlmostEqual(lib.fp(g), 0.11555543375018221, 6)
 
+    # issue 1909
+    def test_small_mem(self):
+        mol = gto.M(atom="""
+            H                 -0.00021900   -0.20486000   -2.17721200
+            H                 -0.00035900   -1.27718700   -2.17669400
+            """, basis='6-31G')
+        casci = mol.CASCI(2, 2).run()
+        grad = casci.nuc_grad_method()
+        grad.max_memory = 0
+        nuc_grad = grad.kernel()
+        self.assertAlmostEqual(lib.fp(nuc_grad), 0.09424065197659935, 7)
+
 
 if __name__ == "__main__":
     print("Tests for CASCI gradients")
     unittest.main()
-

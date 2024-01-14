@@ -206,7 +206,7 @@ def adjust_td_phase(model1, model2, threshold=1e-5):
     m1, m2 = m1[o1, :], m2[o2, :]
 
     if common_space is not None:
-        space = list(common_space[i] if i is not None else common_space for i in space)
+        space = [common_space[i] if i is not None else common_space for i in space]
         s1, s2 = space
         m1 = m1[:, s1]
         m2 = m2[:, s2]

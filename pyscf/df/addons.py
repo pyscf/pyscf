@@ -17,7 +17,6 @@
 #
 
 import sys
-import copy
 import numpy
 from pyscf.lib import logger
 from pyscf import gto
@@ -29,10 +28,6 @@ from pyscf import __config__
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
 ETB_BETA = getattr(__config__, 'df_addons_aug_dfbasis', 2.0)
 FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'
-
-# For code compatiblity in python-2 and python-3
-if sys.version_info >= (3,):
-    unicode = str
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
@@ -84,7 +79,7 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
     exps = alpha*beta^i for i = 1..N
     '''
     nuc_start = gto.charge(start_at)
-    uniq_atoms = set([a[0] for a in mol._atom])
+    uniq_atoms = {a[0] for a in mol._atom}
 
     newbasis = {}
     for symb in uniq_atoms:
@@ -148,12 +143,12 @@ def make_auxbasis(mol, mp2fit=False):
     '''Depending on the orbital basis, generating even-tempered Gaussians or
     the optimized auxiliary basis defined in DEFAULT_AUXBASIS
     '''
-    uniq_atoms = set([a[0] for a in mol._atom])
+    uniq_atoms = {a[0] for a in mol._atom}
     if isinstance(mol.basis, str):
-        _basis = dict(((a, mol.basis) for a in uniq_atoms))
+        _basis = {a: mol.basis for a in uniq_atoms}
     elif 'default' in mol.basis:
         default_basis = mol.basis['default']
-        _basis = dict(((a, default_basis) for a in uniq_atoms))
+        _basis = {a: default_basis for a in uniq_atoms}
         _basis.update(mol.basis)
         del (_basis['default'])
     else:
@@ -204,21 +199,21 @@ def make_auxmol(mol, auxbasis=None):
 
     See also the paper JCTC, 13, 554 about generating auxiliary fitting basis.
     '''
-    pmol = copy.copy(mol)  # just need shallow copy
+    pmol = mol.copy(deep=False)
 
     if auxbasis is None:
         auxbasis = make_auxbasis(mol)
-    elif '+etb' in auxbasis:
+    elif isinstance(auxbasis, str) and '+etb' in auxbasis:
         dfbasis = auxbasis[:-4]
         auxbasis = aug_etb_for_dfbasis(mol, dfbasis)
     pmol.basis = auxbasis
 
-    if isinstance(auxbasis, (str, unicode, list, tuple)):
-        uniq_atoms = set([a[0] for a in mol._atom])
-        _basis = dict([(a, auxbasis) for a in uniq_atoms])
+    if isinstance(auxbasis, (str, list, tuple)):
+        uniq_atoms = {a[0] for a in mol._atom}
+        _basis = {a: auxbasis for a in uniq_atoms}
     elif 'default' in auxbasis:
-        uniq_atoms = set([a[0] for a in mol._atom])
-        _basis = dict(((a, auxbasis['default']) for a in uniq_atoms))
+        uniq_atoms = {a[0] for a in mol._atom}
+        _basis = {a: auxbasis['default'] for a in uniq_atoms}
         _basis.update(auxbasis)
         del (_basis['default'])
     else:

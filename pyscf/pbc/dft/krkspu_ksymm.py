@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,16 +24,18 @@ from pyscf.pbc.lib import kpts as libkpts
 
 @lib.with_doc(krkspu.KRKSpU.__doc__)
 class KsymAdaptedKRKSpU(krks_ksymm.KRKS):
-    @lib.with_doc(krkspu.KRKSpU.__init__.__doc__)
-    def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
-                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
-                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO'):
-        krkspu.KRKSpU.__init__(self, cell, kpts=kpts, xc=xc, exxdiv=exxdiv,
-                               U_idx=U_idx, U_val=U_val, C_ao_lo=C_ao_lo,
-                               minao_ref=minao_ref)
 
     get_veff = krkspu.get_veff
     energy_elec = krkspu.energy_elec
+    to_hf = lib.invalid_method('to_hf')
+
+    @lib.with_doc(krkspu.KRKSpU.__init__.__doc__)
+    def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
+                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO', **kwargs):
+        krkspu.KRKSpU.__init__(self, cell, kpts=kpts, xc=xc, exxdiv=exxdiv,
+                               U_idx=U_idx, U_val=U_val, C_ao_lo=C_ao_lo,
+                               minao_ref=minao_ref, **kwargs)
 
 KRKSpU = KsymAdaptedKRKSpU
 

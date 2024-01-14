@@ -23,13 +23,13 @@ This module exposes some ecp integration functions from the C implementation.
 
 Reference for ecp integral computation
 * Analytical integration
-J. Chem. Phys. 65, 3826
-J. Chem. Phys. 111, 8778
-J. Comput. Phys. 44, 289
+J. Chem. Phys. 65, 3826 (1976); https://doi.org/10.1063/1.432900
+J. Chem. Phys. 111, 8778 (1999); https://doi.org/10.1063/1.480225
+J. Comput. Phys. 44, 289 (1981); https://doi.org/10.1016/0021-9991(81)90053-X
 
 * Numerical integration
-J. Comput. Chem. 27, 1009
-Chem. Phys. Lett. 296, 445
+J. Comput. Chem. 27, 1009 (2006); https://doi.org/10.1002/jcc.20410
+Chem. Phys. Lett. 296, 445 (1998); https://doi.org/10.1016/S0009-2614(98)01077-X
 '''
 
 
@@ -145,10 +145,12 @@ def core_configuration(nelec_core, atom_symbol=None):
     elements_4f = ELEMENTS[57:71]
     elements_5f = ELEMENTS[89:103]
     if atom_symbol in elements_4f:
-        for i in range(46, 60):
+        # TODO: fix La3+ and Ce4+ ECP46MWB f-in-core ECPs
+        for i in range(47, 59):
             conf_dic[i] = '4s3p2d1f'
     if atom_symbol in elements_5f:
-        for i in range(78, 92):
+        # TODO: fix Ac3+, Th4+, Pa5+ and U6+ ECP78MWB f-in-core ECPs
+        for i in range(79, 91):
             conf_dic[i] = '5s4p3d2f'
     if nelec_core not in conf_dic:
         raise RuntimeError('Core configuration for %d core electrons is not available.' % nelec_core)
@@ -182,4 +184,3 @@ if __name__ == '__main__':
                 verbose=0)
     mf = scf.RHF(mol)
     print(mf.kernel(), -0.45002315562861461)
-

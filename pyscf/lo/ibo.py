@@ -178,7 +178,7 @@ def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
                     continue
                     #this saves us from replacing already fine orbitals
                 else:
-                    #THE BELOW IS TAKEN DIRECLTY FROMG KNIZIA's FREE CODE
+                    #THE BELOW IS TAKEN DIRECTLY FROMG KNIZIA's FREE CODE
                     # Calculate 2x2 rotation angle phi.
                     # This correspond to [2] (12)-(15), re-arranged and simplified.
                     phi = .25*numpy.arctan2(Bij,-Aij)
@@ -235,7 +235,7 @@ def PipekMezey(mol, orbocc, iaos, s, exponent, minao=MINAO):
     '''
 
     # Note: PM with Lowdin-orth IAOs is implemented in pipek.PM class
-    # TODO: Merge the implemenation here to pipek.PM
+    # TODO: Merge the implementation here to pipek.PM
 
     cs = numpy.dot(iaos.T.conj(), s)
     s_iao = numpy.dot(cs, iaos)
@@ -396,7 +396,7 @@ def MakeAtomInfos():
 
 
 def MakeAtomIbOffsets(Atoms):
-    """calcualte offset of first orbital of individual atoms
+    """calculate offset of first orbital of individual atoms
     in the valence minimal basis (IB)"""
     nCoreX, nAoX, AoLabels = MakeAtomInfos()
     iBfAt = [0]

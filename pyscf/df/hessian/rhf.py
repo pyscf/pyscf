@@ -481,6 +481,10 @@ class Hessian(rhf_hess.Hessian):
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
 
+    def to_gpu(self):
+        from gpu4pyscf.df.hessian.rhf import Hessian
+        return lib.to_gpu(self.view(Hessian))
+
 #TODO: Insert into DF class
 
 

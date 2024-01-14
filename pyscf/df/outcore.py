@@ -27,6 +27,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.outcore import _load_from_h5g
+from pyscf.df.incore import _eig_decompose
 from pyscf.df.addons import make_auxmol
 from pyscf import __config__
 
@@ -99,9 +100,20 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
 
 def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
                    int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
-                   max_memory=MAX_MEMORY, auxmol=None, verbose=logger.NOTE):
+                   max_memory=MAX_MEMORY, auxmol=None, decompose_j2c='CD',
+                   lindep=LINEAR_DEP_THR, verbose=logger.NOTE):
     '''3-center 2-electron DF tensor. Similar to cholesky_eri while this
     function stores DF tensor in blocks.
+
+    Args:
+        dataname: string
+            Dataset label of the DF tensor in HDF5 file.
+        decompose_j2c: string
+            The method to decompose the metric defined by int2c. It can be set
+            to CD (cholesky decomposition) or ED (eigenvalue decomposition).
+        lindep : float
+            The threshold to discard linearly dependent basis when decompose_j2c
+            is set to ED.
     '''
     assert (aosym in ('s1', 's2ij'))
     log = logger.new_logger(mol, verbose)
@@ -112,15 +124,16 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
     j2c = auxmol.intor(int2c, hermi=1)
     log.debug('size of aux basis %d', j2c.shape[0])
     time1 = log.timer('2c2e', *time0)
-    try:
-        low = scipy.linalg.cholesky(j2c, lower=True)
-        tag = 'cd'
-    except scipy.linalg.LinAlgError:
-        w, v = scipy.linalg.eigh(j2c)
-        idx = w > LINEAR_DEP_THR
-        low = (v[:,idx] / numpy.sqrt(w[idx]))
-        v = None
-        tag = 'eig'
+    decompose_j2c = decompose_j2c.upper()
+    if decompose_j2c != 'CD':
+        low = _eig_decompose(mol, j2c, lindep)
+    else:
+        try:
+            low = scipy.linalg.cholesky(j2c, lower=True)
+            decompose_j2c = 'CD'
+        except scipy.linalg.LinAlgError:
+            low = _eig_decompose(mol, j2c, lindep)
+            decompose_j2c = 'ED'
     j2c = None
     naoaux, naux = low.shape
     time1 = log.timer('Cholesky 2c2e', *time1)
@@ -156,13 +169,13 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
             b = lib.transpose(b.T, axes=(0,2,1)).reshape(naoaux,-1)
         else:
             b = b.reshape((-1,naoaux)).T
-        if tag == 'cd':
-            if b.flags.c_contiguous:
-                b = lib.transpose(b).T
-            return scipy.linalg.solve_triangular(low, b, lower=True,
-                                                 overwrite_b=True, check_finite=False)
-        else:
-            return lib.dot(low.T, b)
+        if decompose_j2c != 'CD':
+            return lib.dot(low, b)
+
+        if b.flags.c_contiguous:
+            b = lib.transpose(b).T
+        return scipy.linalg.solve_triangular(low, b, lower=True,
+                                             overwrite_b=True, check_finite=False)
 
     def process(sh_range):
         bstart, bend, nrow = sh_range
@@ -271,6 +284,10 @@ def _guess_shell_ranges(mol, buflen, aosym, start=0, stop=None):
         return balance_partition(ao_loc*nao, buflen, start, stop)
 
 def _create_h5file(erifile, dataname):
+    if isinstance(getattr(erifile, 'name', None), str):
+        # The TemporaryFile and H5Tmpfile
+        erifile = erifile.name
+
     if h5py.is_hdf5(erifile):
         feri = h5py.File(erifile, 'a')
         if dataname in feri:
@@ -309,4 +326,3 @@ if __name__ == '__main__':
             max_memory=.2, verbose=6)
     with h5py.File('cderi.dat', 'r') as feri:
         print(numpy.allclose(feri['j3c'], cderi0))
-

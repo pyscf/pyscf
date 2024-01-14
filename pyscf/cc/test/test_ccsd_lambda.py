@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import tempfile
 import unittest
 import numpy
@@ -114,7 +113,7 @@ class KnownValues(unittest.TestCase):
 
     def test_restart(self):
         ftmp = tempfile.NamedTemporaryFile()
-        cc1 = copy.copy(mycc)
+        cc1 = mycc.copy()
         cc1.max_cycle = 5
         cc1.solve_lambda()
         l1ref = cc1.l1

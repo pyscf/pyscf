@@ -49,7 +49,7 @@ print('Changed radial grids for DFT.  E = %.12f' % method.kernel())
 # Stratmann-Scuseria weight scheme
 method = dft.RKS(mol)
 method.grids.becke_scheme = dft.stratmann
-print('Changed grid partition funciton.  E = %.12f' % method.kernel())
+print('Changed grid partition function.  E = %.12f' % method.kernel())
 
 # Grids level 0 - 9.  Big number indicates dense grids. Default is 3
 method = dft.RKS(mol)
@@ -71,4 +71,4 @@ print('Dense grids for all atoms.  E = %.12f' % method.kernel())
 #grids.prune = dft.sg1_prune
 method = dft.RKS(mol)
 method.grids.prune = None
-print('Changed grid partition funciton.  E = %.12f' % method.kernel())
+print('Changed grid partition function.  E = %.12f' % method.kernel())

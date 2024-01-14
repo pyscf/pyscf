@@ -149,4 +149,3 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
         mo1_a, mo1_b = mo1_a[0], mo1_b[0]
         mo_e1_a, mo_e1_b = mo_e1_a[0], mo_e1_b[0]
     return (mo1_a, mo1_b), (mo_e1_a, mo_e1_b)
-

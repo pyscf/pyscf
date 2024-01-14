@@ -64,7 +64,7 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
         ioblk_size : float or int
             The block size for IO, large block size may **not** improve performance
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
@@ -305,7 +305,7 @@ if __name__ == '__main__':
                           verbose=verbose)
     stop_time2 = logger.perf_counter() - start_time
     print('    Time elapsed (s): ',stop_time2)
-    print('How worse is the custom implemenation?',stop_time/stop_time2)
+    print('How worse is the custom implementation?',stop_time/stop_time2)
     with h5py.File(tmpfile2.name, 'r') as f:
         print('\n\nIncore (pyscf) vs outcore (custom)?',numpy.allclose(onnn2,f['aa']))
         print('Outcore (pyscf) vs outcore (custom)?',numpy.allclose(f['ab'],f['aa']))
@@ -321,7 +321,7 @@ if __name__ == '__main__':
     ao2mo.outcore.full(mol, mo_coeff, tmpfile2.name, 'ab',verbose=verbose)
     stop_time2 = logger.perf_counter() - start_time
     print('    Time elapsed (s): ',stop_time2)
-    print('    How worse is the custom implemenation?',stop_time/stop_time2)
+    print('    How worse is the custom implementation?',stop_time/stop_time2)
     with h5py.File(tmpfile2.name, 'r') as f:
         print('\n\nIncore (pyscf) vs outcore (custom)?',numpy.allclose(eri_incore,f['aa']))
         print('Outcore (pyscf) vs outcore (custom)?',numpy.allclose(f['ab'],f['aa']))

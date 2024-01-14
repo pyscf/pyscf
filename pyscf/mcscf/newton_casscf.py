@@ -21,7 +21,6 @@ Second order CASSCF
 '''
 
 
-import copy
 from functools import reduce
 from itertools import product
 import numpy
@@ -293,7 +292,8 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
 #    h_diag[ncore:nocc,ncore:nocc] -= v_diag[:,ncore:nocc]*2
     h_diag = casscf.pack_uniq_var(h_diag)
 
-    hci_diag = [hd - ec - gc*c*4 for hd, ec, gc, c in zip (_Hdiag (h1cas_0, eri_cas), eci0, gci, ci0)]
+    # Fix intermediate normalization? - MRH 2023/09/15
+    hci_diag = [hd - ec - gc*c*2 for hd, ec, gc, c in zip (_Hdiag (h1cas_0, eri_cas), eci0, gci, ci0)]
     hci_diag = [h * w for h, w in zip (hci_diag, weights)]
     hdiag_all = numpy.hstack((h_diag*2, _pack_ci (hci_diag)*2))
 
@@ -308,9 +308,10 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         ci1 = _unpack_ci (x[ngorb:])
 
         # H_cc
+        # Fix intermediate normalization? - MRH 2023/09/15
         hci1 = [hc1 - c1 * ec0 for hc1, c1, ec0 in zip (_Hci (h1cas_0, eri_cas, ci1), ci1, eci0)]
-        hci1 = [hc1 - 2*(hc0 - c0*ec0)*c0.dot(c1) for hc1, hc0, c0, ec0, c1 in zip (hci1, hci0, ci0, eci0, ci1)]
-        hci1 = [hc1 - 2*c0*(hc0 - c0*ec0).dot(c1) for hc1, hc0, c0, ec0, c1 in zip (hci1, hci0, ci0, eci0, ci1)]
+        hci1 = [hc1 - (hc0 - c0*ec0)*c0.dot(c1) for hc1, hc0, c0, ec0, c1 in zip (hci1, hci0, ci0, eci0, ci1)]
+        hci1 = [hc1 - c0*(hc0 - c0*ec0).dot(c1) for hc1, hc0, c0, ec0, c1 in zip (hci1, hci0, ci0, eci0, ci1)]
 
         # H_co
         rc = x1[:,:ncore]
@@ -647,7 +648,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
 
 class CASSCF(mc1step.CASSCF):
-    __doc__ = casci.CASCI.__doc__ + '''CASSCF
+    __doc__ = casci.CASBase.__doc__ + '''CASSCF
 
     Extra attributes for CASSCF:
 
@@ -727,8 +728,9 @@ class CASSCF(mc1step.CASSCF):
     >>> mc.kernel()[0]
     -109.044401882238134
     '''
+
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
-        casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
+        casci.CASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 # the max orbital rotation and CI increment, prefer small step size
         self.max_stepsize = .03
@@ -749,8 +751,6 @@ class CASSCF(mc1step.CASSCF):
         self.kf_interval = 5
         self.internal_rotation = False
         self.chkfile = self._scf.chkfile
-
-        self.callback = None
         self.chk_ci = False
 
         self.fcisolver.max_cycle = 25
@@ -765,8 +765,6 @@ class CASSCF(mc1step.CASSCF):
         self.mo_energy = self._scf.mo_energy
         self.converged = False
         self._max_stepsize = None
-
-        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -804,7 +802,7 @@ class CASSCF(mc1step.CASSCF):
         except AttributeError:
             pass
         if self.mo_coeff is None:
-            log.warn('Orbital for CASCI is not specified.  You probably need '
+            log.warn('Orbital for CASSCF is not specified.  You probably need '
                      'call SCF.kernel() to initialize orbitals.')
         return self
 
@@ -813,12 +811,7 @@ class CASSCF(mc1step.CASSCF):
 
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
         log = logger.new_logger(self, verbose)
-        if eris is None:
-            fcasci = copy.copy(self)
-            fcasci.ao2mo = self.get_h2cas
-        else:
-            fcasci = mc1step._fake_h_for_fast_casci(self, mo_coeff, eris)
-
+        fcasci = mc1step._fake_h_for_fast_casci(self, mo_coeff, eris)
         e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log,
                                             envs=envs)
         if not isinstance(e_cas, (float, numpy.number)):
@@ -861,12 +854,6 @@ class CASSCF(mc1step.CASSCF):
     def update_ao2mo(self, mo):
         raise DeprecationWarning('update_ao2mo was obseleted since pyscf v1.0.  '
                                  'Use .ao2mo method instead')
-
-    # Don't remove the two functions.  They are used in df/approx_hessian code
-    def get_h2eff(self, mo_coeff=None):
-        return self.get_h2cas(mo_coeff)
-    def get_h2cas(self, mo_coeff=None):
-        return casci.CASCI.ao2mo(self, mo_coeff)
 
 
 if __name__ == '__main__':

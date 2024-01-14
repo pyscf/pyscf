@@ -5320,7 +5320,7 @@ static int check_3c_overlap(int *shls, int *atm, int *bas, double *env,
                 kprim = ecpbas[csh*BAS_SLOTS+NPRIM_OF];
                 ak = env + ecpbas[csh*BAS_SLOTS+PTR_EXP];
 
-                // Test the last primitive funciton only because the basis
+                // Test the last primitive function only because the basis
                 // functions are sorted so that the last one has the smallest
                 // exponent.
                 aijk = aij + ak[kprim-1];

@@ -64,16 +64,16 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         h1ao = lib.chkfile.load(h1ao, 'scf_f1ao')
         h1aoa = h1ao['0']
         h1aob = h1ao['1']
-        h1aoa = dict([(int(k), h1aoa[k]) for k in h1aoa])
-        h1aob = dict([(int(k), h1aob[k]) for k in h1aob])
+        h1aoa = {int(k): h1aoa[k] for k in h1aoa}
+        h1aob = {int(k): h1aob[k] for k in h1aob}
     else:
         h1aoa, h1aob = h1ao
     if isinstance(mo1, str):
         mo1 = lib.chkfile.load(mo1, 'scf_mo1')
         mo1a = mo1['0']
         mo1b = mo1['1']
-        mo1a = dict([(int(k), mo1a[k]) for k in mo1a])
-        mo1b = dict([(int(k), mo1b[k]) for k in mo1b])
+        mo1a = {int(k): mo1a[k] for k in mo1a}
+        mo1b = {int(k): mo1b[k] for k in mo1b}
     else:
         mo1a, mo1b = mo1
     mo_e1a, mo_e1b = mo_e1
@@ -438,8 +438,9 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     return h_op, hdiag
 
 
-class Hessian(rhf_hess.Hessian):
+class Hessian(rhf_hess.HessianBase):
     '''Non-relativistic UHF hessian'''
+
     partial_hess_elec = partial_hess_elec
     hess_elec = hess_elec
     make_h1 = make_h1
@@ -449,6 +450,9 @@ class Hessian(rhf_hess.Hessian):
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
         return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                          fx, atmlst, max_memory, verbose)
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 from pyscf import scf
 scf.uhf.UHF.Hessian = lib.class_as_method(Hessian)

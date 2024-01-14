@@ -283,14 +283,14 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     dm1e = [molgrad.make_rdm1e(mo_energy[k], mo_coeff[k], mo_occ[k]) for k in range(nkpts)]
     return np.asarray(dm1e)
 
-class GradientsMixin(molgrad.GradientsMixin):
+class GradientsBase(molgrad.GradientsBase):
     '''
     Basic nuclear gradient functions for non-relativistic methods
     '''
     def __init__(self, method):
         self.cell = method.cell
         self.kpts = method.kpts
-        molgrad.GradientsMixin.__init__(self, method)
+        molgrad.GradientsBase.__init__(self, method)
 
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
@@ -352,31 +352,34 @@ def as_scanner(mf_grad):
         return mf_grad
 
     logger.info(mf_grad, 'Create scanner for %s', mf_grad.__class__)
+    name = mf_grad.__class__.__name__ + SCF_GradScanner.__name_mixin__
+    return lib.set_class(SCF_GradScanner(mf_grad),
+                         (SCF_GradScanner, mf_grad.__class__), name)
 
-    class SCF_GradScanner(mf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-        def __call__(self, cell_or_geom, **kwargs):
-            if isinstance(cell_or_geom, gto.Cell):
-                cell = cell_or_geom
-            else:
-                cell = self.cell.set_geom_(cell_or_geom, inplace=False)
+class SCF_GradScanner(lib.GradScanner):
+    def __init__(self, g):
+        lib.GradScanner.__init__(self, g)
 
-            mf_scanner = self.base
-            e_tot = mf_scanner(cell)
-            self.cell = cell
+    def __call__(self, cell_or_geom, **kwargs):
+        if isinstance(cell_or_geom, gto.Cell):
+            cell = cell_or_geom
+        else:
+            cell = self.cell.set_geom_(cell_or_geom, inplace=False)
 
-            # If second integration grids are created for RKS and UKS
-            # gradients
-            if getattr(self, 'grids', None):
-                self.grids.reset(cell)
+        mf_scanner = self.base
+        e_tot = mf_scanner(cell)
+        self.cell = cell
 
-            de = self.kernel(**kwargs)
-            return e_tot, de
-    return SCF_GradScanner(mf_grad)
+        # If second integration grids are created for RKS and UKS
+        # gradients
+        if getattr(self, 'grids', None):
+            self.grids.reset(cell)
+
+        de = self.kernel(**kwargs)
+        return e_tot, de
 
 
-class Gradients(GradientsMixin):
+class Gradients(GradientsBase):
     '''Non-relativistic restricted Hartree-Fock gradients'''
 
     def get_veff(self, dm=None, kpts=None):

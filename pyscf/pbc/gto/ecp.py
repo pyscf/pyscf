@@ -21,7 +21,6 @@ Short range part of ECP under PBC
 '''
 
 from functools import reduce
-import copy
 import numpy
 from pyscf import lib
 from pyscf.pbc import gto
@@ -39,7 +38,7 @@ def ecp_int(cell, kpts=None):
     cell, contr_coeff = gto.cell._split_basis(cell)
     lib.logger.debug1(cell, 'nao %d -> nao %d', *(contr_coeff.shape))
 
-    ecpcell = copy.copy(cell)
+    ecpcell = cell.copy(deep=False)
     # append a fake s function to mimic the auxiliary index in pbc.incore.
     exp_ptr = cell._ecpbas[-1,PTR_EXP]
     ecpcell._bas = numpy.array([[0, 0, 1, 1, 0, exp_ptr, 0, 0]], dtype=numpy.int32)
@@ -62,4 +61,3 @@ def ecp_int(cell, kpts=None):
     if kpts is None or numpy.shape(kpts) == (3,):
         mat = mat[0]
     return mat
-

@@ -282,6 +282,21 @@ def get_kconserv(cell, kpts):
         kconserv[mask] = N
     return kconserv
 
+def get_kconserv_ria(cell, kpts):
+    r''' Get the momentum conservation array for single excitation amplitudes
+    for a set of k-points with appropriate k-shift.
+
+    Given k-point indices m the array kconserv[kshift,m] returns the index n that
+    satifies a shifted momentum conservation,
+
+        (k(m) - k(n) - k(kshift)) \dot a = 2n\pi
+
+    This is used in CIS/EOM-CCSD where the single excitation amplitudes
+        r_{i k(m)}^{a k(n)}
+    are zero unless n satisfies the above.
+    '''
+    # TODO: implement it more efficiently
+    return get_kconserv(cell, kpts)[:,:,0].T
 
 def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     '''Checks antipermutational symmetry for k-point array.
@@ -382,7 +397,7 @@ def get_kconserv3(cell, kpts, kijkab):
     return kconserv
 
 
-class VectorComposer(object):
+class VectorComposer:
     def __init__(self, dtype):
         """
         Composes vectors.
@@ -427,7 +442,7 @@ class VectorComposer(object):
         return result
 
 
-class VectorSplitter(object):
+class VectorSplitter:
     def __init__(self, vector):
         """
         Splits vectors into pieces.
@@ -533,7 +548,7 @@ class KptsHelper(lib.StreamObject):
             kpt = tuple(kpt)
             kp,kq,kr = kpt
             if not completed[kp,kq,kr]:
-                self.symm_map[kpt] = list()
+                self.symm_map[kpt] = []
                 ks = self.kconserv[kp,kq,kr]
 
                 completed[kp,kq,kr] = True

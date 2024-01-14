@@ -607,6 +607,11 @@ class MomGFCCSD(lib.StreamObject):
             particle Green's function
     """
 
+    _keys = {
+        'verbose', 'stdout', 'niter', 'weight_tol',
+        'hermi_moments', 'hermi_solver', 'eh', 'ep', 'vh', 'vp', 'chkfile',
+    }
+
     def __init__(self, mycc, niter=(2, 2)):
         self._cc = mycc
         self.verbose = mycc.verbose
@@ -631,7 +636,6 @@ class MomGFCCSD(lib.StreamObject):
         self._l1 = None
         self._l2 = None
         self.chkfile = self._cc.chkfile
-        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

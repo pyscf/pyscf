@@ -37,7 +37,6 @@ class SymAdaptedCASCI(casci.CASCI):
             self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)
         else:
             self.fcisolver = fci.direct_spin1_symm.FCISolver(self.mol)
-        delattr(fcisolver, '_keys')
         self.fcisolver.__dict__.update(fcisolver.__dict__)
 
     @property
@@ -50,6 +49,9 @@ class SymAdaptedCASCI(casci.CASCI):
     def kernel(self, mo_coeff=None, ci0=None, verbose=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
+        else: # overwrite self.mo_coeff because it is needed in many methods of this class
+            self.mo_coeff = mo_coeff
+
         if ci0 is None:
             ci0 = self.ci
 
@@ -114,7 +116,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
             if getattr(mo_coeff, 'degen_mapping', None) is not None:
                 degen_mapping = mo_coeff.degen_mapping[ncore:nocc] - ncore
             else:
-                h1e = numpy.diag (mc.h1e_for_cas (mo_coeff=mo_coeff)[0])
+                h1e = numpy.diag (mc.get_h1eff (mo_coeff=mo_coeff)[0])
                 degen_mapping = map_degeneracy (h1e, orbsym[ncore:nocc])
             mc.fcisolver.orbsym = lib.tag_array(
                 orbsym[ncore:nocc], degen_mapping=degen_mapping)

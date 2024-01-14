@@ -104,6 +104,9 @@ def get_veff(ks_grad, mol=None, dm=None):
 
 
 class Gradients(uks_grad.Gradients):
+
+    _keys = {'with_df', 'auxbasis_response'}
+
     def __init__(self, mf):
         # Whether to include the response of DF auxiliary basis when computing
         # nuclear gradients of J/K matrices

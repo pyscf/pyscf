@@ -334,6 +334,10 @@ class KnownValues(unittest.TestCase):
         mol1.build(0,0)
         self.assertAlmostEqual(mf_scanner(mol1), -76.273052274103648, 7)
 
+        mf = mf_scanner.undo_scanner()
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -76.273052274103648, 7)
+
     def test_init(self):
         from pyscf import dft
         from pyscf import x2c

@@ -19,8 +19,11 @@ from functools import reduce
 
 from pyscf import gto, scf, lib, symm
 from pyscf import cc
+from pyscf import ao2mo
 from pyscf.cc import ccsd_t
 from pyscf.cc import gccsd, gccsd_t
+from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
+from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
 
 def setUpModule():
     global mol, rhf, mcc
@@ -191,8 +194,35 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e0, e1.real, 9)
         self.assertAlmostEqual(e1, -0.98756910139720788-0.0019567929592079489j, 9)
 
+    def test_ccsd_t_rdm(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -.957 , .587)],
+            [1 , (0.2,  .757 , .487)]]
+
+        mol.basis = '631g'
+        mol.build()
+        mf = scf.RHF(mol)
+        mf.conv_tol = 1e-1
+        mf.scf()
+        mcc = mf.CCSD()
+        ecc, t1, t2 = mcc.kernel()
+        eris = mcc.ao2mo()
+        e3ref = ccsd_t.kernel(mcc, eris, t1, t2)
+        l1, l2 = ccsd_t_lambda.kernel(mcc, eris, t1, t2)[1:]
+
+        eri_mo = ao2mo.kernel(mf._eri, mf.mo_coeff, compact=False)
+        nmo = mf.mo_coeff.shape[1]
+        eri_mo = eri_mo.reshape(nmo,nmo,nmo,nmo)
+        dm1 = ccsd_t_rdm.make_rdm1(mcc, t1, t2, l1, l2, eris=eris)
+        dm2 = ccsd_t_rdm.make_rdm2(mcc, t1, t2, l1, l2, eris=eris)
+        h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
+        e3 =(numpy.einsum('ij,ji->', h1, dm1) +
+             numpy.einsum('ijkl,ijkl->', eri_mo, dm2)*.5 + mf.mol.energy_nuc())
+        self.assertAlmostEqual(e3ref, e3-(mf.e_tot+ecc), 7)
+
 
 if __name__ == "__main__":
     print("Full Tests for CCSD(T)")
     unittest.main()
-

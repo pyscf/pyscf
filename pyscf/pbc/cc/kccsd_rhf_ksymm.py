@@ -378,6 +378,8 @@ def energy(cc, t1, t2, eris):
 
 
 class KsymAdaptedRCCSD(RCCSD):
+    _keys = {'kqrts', 'rmat', 'ktensor_direct', 'eris_outcore'}
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         '''
         Attributes:
@@ -393,13 +395,10 @@ class KsymAdaptedRCCSD(RCCSD):
         '''
         # NOTE self._scf is a non-symmetry object, see RCCSD.__init__
         RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        self.kqrts = KQuartets(self.kpts).build()
+        self.kqrts = KQuartets(mf.kpts).build()
         self.rmat = None
         self.ktensor_direct = False
         self.eris_outcore = False
-
-        keys = set(['kqrts', 'rmat', 'ktensor_direct', 'eris_outcore'])
-        self._keys = self._keys.union(keys)
 
     def ao2mo(self, mo_coeff=None):
         eris = _PhysicistsERIs()

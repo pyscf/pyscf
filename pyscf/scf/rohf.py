@@ -48,6 +48,7 @@ def init_guess_by_atom(mol):
     return dm
 
 init_guess_by_huckel = uhf.init_guess_by_huckel
+init_guess_by_mod_huckel = uhf.init_guess_by_mod_huckel
 init_guess_by_chkfile = uhf.init_guess_by_chkfile
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
@@ -367,6 +368,12 @@ class ROHF(hf.RHF):
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
         return init_guess_by_huckel(mol)
 
+    def init_guess_by_mod_huckel(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+employing the updated GWH rule from doi:10.1021/ja00480a005.''')
+        return init_guess_by_mod_huckel(mol)
+
     def init_guess_by_1e(self, mol=None):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from hcore.')
@@ -483,6 +490,18 @@ class ROHF(hf.RHF):
     def nuc_grad_method(self):
         from pyscf.grad import rohf
         return rohf.Gradients(self)
+
+    convert_from_ = hf.RHF.convert_from_
+
+    def to_ks(self, xc='HF'):
+        '''Convert to ROKS object.
+        '''
+        from pyscf import dft
+        return self._transfer_attrs_(dft.ROKS(self.mol, xc=xc))
+
+    def to_gpu(self):
+        from gpu4pyscf.scf import ROHF
+        return lib.to_gpu(hf.SCF.reset(self.view(ROHF)))
 
 
 class HF1e(ROHF):

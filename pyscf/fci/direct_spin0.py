@@ -244,29 +244,27 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     assert (0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
 
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec, compress=True)
+    num_dets = hdiag.size
+    pspace_size = min(num_dets, pspace_size)
+    nroots = min(num_dets, nroots)
+    na = cistring.num_strings(norb, nelec[0])
+    addr = [0]
+    pw = pv = None
+    if pspace_size > 0 and norb < 64:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+        pw, pv = fci.eig(h0)
+
     if getattr(fci, 'sym_allowed_idx', None):
         # Remove symmetry forbidden elements
         sym_idx = numpy.hstack(fci.sym_allowed_idx)
         civec_size = sym_idx.size
     else:
         sym_idx = None
-        civec_size = hdiag.size
+        civec_size = num_dets
 
-    if max_memory < hdiag.size*6*8e-6:
+    if max_memory < num_dets*6*8e-6:
         log.warn('Not enough memory for FCI solver. '
                  'The minimal requirement is %.0f MB', hdiag.size*60e-6)
-
-    pspace_size = min(hdiag.size, pspace_size)
-    nroots = min(hdiag.size, nroots)
-    na = cistring.num_strings(norb, nelec[0])
-    addr = [0]
-    pw = pv = None
-    if pspace_size > 0:
-        try:
-            addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
-        except NotImplementedError:
-            pass
-        pw, pv = fci.eig(h0)
 
     if pspace_size >= civec_size and ci0 is None and not davidson_only:
         e = []
@@ -287,7 +285,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             return numpy.array(e)+ecore, civec
     pw = pv = h0 = None
 
-    if hdiag.size == civec_size:
+    if sym_idx is None:
         precond = fci.make_precond(hdiag)
     else:
         precond = fci.make_precond(hdiag[sym_idx])
@@ -461,4 +459,3 @@ if __name__ == '__main__':
     e, c = cis.kernel(h1e, eri, norb, nelec)
     print(e - -15.9977886375)
     print('t',logger.process_clock())
-

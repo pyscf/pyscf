@@ -427,4 +427,3 @@ if __name__ == '__main__':
     from pyscf.cc import gccsd_t_slow
     et = gccsd_t_slow.kernel(mycc, eris, t1, t2)
     print(et - 9877.2780859693339)
-

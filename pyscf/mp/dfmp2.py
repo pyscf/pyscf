@@ -81,6 +81,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
 
 class DFMP2(mp2.MP2):
+    _keys = {'with_df'}
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
         if getattr(mf, 'with_df', None):
@@ -88,7 +90,6 @@ class DFMP2(mp2.MP2):
         else:
             self.with_df = df.DF(mf.mol)
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
-        self._keys.update(['with_df'])
 
     def reset(self, mol=None):
         self.with_df.reset(mol)

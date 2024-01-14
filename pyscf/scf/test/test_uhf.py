@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 import scipy.linalg
 import unittest
@@ -95,6 +94,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm1), 0.6442338252028256, 7)
         dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='huckel')
         self.assertAlmostEqual(lib.fp(dm2), 0.6174062069308063, 7)
+
+    def test_init_guess_mod_huckel(self):
+        dm1 = mf.init_guess_by_mod_huckel(mol, breaksym=False)
+        self.assertAlmostEqual(lib.fp(dm1), 0.575004422279537, 7)
+        dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='mod_huckel')
+        self.assertAlmostEqual(lib.fp(dm2), 0.601086728278398, 7)
 
     def test_1e(self):
         mf = scf.uhf.HF1e(mol)
@@ -312,7 +317,7 @@ class KnownValues(unittest.TestCase):
         (pop, chg), dip = mf.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 3.2031790129016922, 6)
 
-        mf1 = copy.copy(n2mf)
+        mf1 = n2mf.copy()
         (pop, chg), dip = n2mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 4.5467414321488357, 6)
         self.assertAlmostEqual(numpy.linalg.norm(dip), 0, 9)

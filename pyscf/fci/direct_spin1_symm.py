@@ -414,7 +414,7 @@ def reorder_eri(eri, norb, orbsym):
 
     # irrep of (ij| pair
     trilirrep = (orbsym[:,None] ^ orbsym)[np.tril_indices(norb)]
-    # and the number of occurence for each irrep
+    # and the number of occurrences for each irrep
     dimirrep = np.asarray(np.bincount(trilirrep), dtype=np.int32)
     # we sort the irreps of (ij| pair, to group the pairs which have same irreps
     # "order" is irrep-id-sorted index. The (ij| paired is ordered that the
@@ -614,6 +614,8 @@ def sym_allowed_indices(nelec, orbsym, wfnsym):
     return ab_idx
 
 class FCISolver(direct_spin1.FCISolver):
+
+    _keys = {'wfnsym', 'sym_allowed_idx'}
 
     pspace_size = getattr(__config__, 'fci_direct_spin1_symm_FCI_pspace_size', 400)
 
