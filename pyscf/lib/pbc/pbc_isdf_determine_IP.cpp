@@ -17,12 +17,21 @@ void _VoronoiPartition_and_AOSparseRep(
 
     auto nBatch = nGrids / BATCHSIZE + (nGrids % BATCHSIZE == 0 ? 0 : 1);
 
+    for (size_t i = 0; i < nAO; i++)
+    {
+        printf("AO2AtomID[%d] = %d\n", i, AO2AtomID[i]);
+    }
+
     assert(AOonGrids != NULL);
     assert(AO2AtomID != NULL);
     assert(*VoronoiPartition == NULL);
-    assert(*AOSparseRepRow == NULL);
-    assert(*AOSparseRepCol == NULL);
-    assert(*AOSparseRepVal == NULL);
+
+    if constexpr (getAOSparseRep)
+    {
+        assert(*AOSparseRepRow == NULL);
+        assert(*AOSparseRepCol == NULL);
+        assert(*AOSparseRepVal == NULL);
+    }
 
     *VoronoiPartition = (int *)malloc(sizeof(int) * nGrids);
     Clear(*VoronoiPartition, nGrids);
@@ -37,8 +46,8 @@ void _VoronoiPartition_and_AOSparseRep(
     Clear(Buffer_aoABS.data(), Buffer_aoABS.size());
     Clear(Buffer_atmID.data(), Buffer_atmID.size());
 
-    std::vector<std::vector<double>> Buffer_AO_on_Grids_Value(nThreads);
-    std::vector<std::vector<int>> Buffer_AO_on_Grids_GridID(nThreads);
+    std::vector<std::vector<double>> Buffer_AO_on_Grids_Value;
+    std::vector<std::vector<int>> Buffer_AO_on_Grids_GridID;
 
     if constexpr (getAOSparseRep)
     {
@@ -62,9 +71,10 @@ void _VoronoiPartition_and_AOSparseRep(
         {
             const double *ao_ptr = AOonGrids + i * nGrids;
             int atmID = AO2AtomID[i];
+
             for (int j = 0; j < nGrids; ++j)
             {
-                if (fabs(ao_ptr[j]) > cutoff)
+                if (fabs(ao_ptr[j]) > aoABS_ptr[j])
                 {
                     aoABS_ptr[j] = fabs(ao_ptr[j]);
                     atmID_ptr[j] = atmID;
@@ -137,6 +147,10 @@ void _VoronoiPartition_and_AOSparseRep(
             memcpy(*AOSparseRepCol + nElmt, gridID.data(), sizeof(int) * gridID.size());
             memcpy(*AOSparseRepVal + nElmt, value.data(), sizeof(double) * value.size());
             nElmt += gridID.size();
+
+#ifdef PRINT_DEBUG
+            printf("AO %d has %d non-zero value\n", i, gridID.size());
+#endif
         }
     }
 }
@@ -199,7 +213,6 @@ std::vector<std::vector<int>> _get_atm_2_non_vanishing_AO(
             }
         }
     }
-
     return atm_2_non_vanishing_AO;
 }
 
@@ -249,6 +262,8 @@ int _get_AO_pairs_SparseRep(
     IN const int *j_Grid_ID,
     IN const double *j_Value_on_Grid,
     IN const double cutoff,
+    IN const int atmID,
+    IN const int *VoronoiPartition,
     OUT int *AO_pairs_sparseRepCol,
     OUT double *AO_pairs_sparseRepVal)
 {
@@ -268,7 +283,7 @@ int _get_AO_pairs_SparseRep(
         {
             double val = i_Value_on_Grid[i_loc] * j_Value_on_Grid[j_loc];
 
-            if (fabs(val) > cutoff)
+            if ((fabs(val) > cutoff) && (VoronoiPartition[i_gridID] == atmID))
             {
                 AO_pairs_sparseRepCol[nElmt] = i_gridID;
                 AO_pairs_sparseRepVal[nElmt] = val;
@@ -288,11 +303,22 @@ int _get_AO_pairs_SparseRep(
         }
     }
 
+    // #ifdef PRINT_DEBUG
+    //
+    //     printf("AO_pairs with atmID = %d has nElmt = %d\n", atmID, nElmt);
+    //     // for (int i = 0; i < nElmt; ++i)
+    //     // {
+    //     //     printf("gridID = %10d, value = %15.8e\n", AO_pairs_sparseRepCol[i], AO_pairs_sparseRepVal[i]);
+    //     // }
+    //
+    // #endif
+
     return nElmt;
 }
 
 int _get_AO_pairs_SparseRep_on_givan_Atm(
     IN const int atmID,
+    IN const int *VoronoiPartition,
     IN const int nAO,    // number of AOs
     IN const int *AO_ID, // AO has non-zero value on atm atmID
     IN const int *AOSparseRepRow,
@@ -323,7 +349,7 @@ int _get_AO_pairs_SparseRep_on_givan_Atm(
         int i_begin = AOSparseRepRow[iAO_ID];
         int i_end = AOSparseRepRow[iAO_ID + 1];
 
-        for (int j = i_begin; j < i_end; ++j)
+        for (int j = 0; j < nAO; ++j)
         {
             auto jAO_ID = AO_ID[j];
 
@@ -342,6 +368,8 @@ int _get_AO_pairs_SparseRep_on_givan_Atm(
                 AOSparseRepCol + j_begin,
                 AOSparseRepVal + j_begin,
                 cutoff,
+                atmID,
+                VoronoiPartition,
                 AO_pairs_sparseRepCol.data() + nnz,
                 AO_pairs_sparseRepVal.data() + nnz);
 
@@ -377,7 +405,6 @@ void _fill_AO_pairs_on_Grid(
         {
             int gridID = AO_pairs_sparseRepCol[j];
             double val = AO_pairs_sparseRepVal[j];
-
             AO_pairs_on_Grid[i * nAtmGrid + GridID_2_AtmGridID[gridID]] = val;
         }
     }
@@ -407,9 +434,10 @@ std::pair<std::vector<int>, std::vector<double>> _determine_IP_AuxiliaryBasis_vi
 
     //// (3) determine rank, find n, such that |R(n,n)| < epsilon * |R(0,0)|
 
-    int nAux = 1;
+    int nAux = -1;
+    int nRank = std::min(R.rows(), R.cols());
 
-    for (int i = 0; i < nPair; ++i)
+    for (int i = 0; i < nRank; ++i)
     {
         if (fabs(R(i, i)) < epsilon * fabs(R(0, 0)))
         {
@@ -417,6 +445,24 @@ std::pair<std::vector<int>, std::vector<double>> _determine_IP_AuxiliaryBasis_vi
             break;
         }
     }
+    if (nAux == -1)
+    {
+        nAux = nRank;
+    }
+
+#ifdef PRINT_DEBUG
+#pragma omp critical
+    {
+        printf("nPair = %d\n", nPair);
+        printf("nAtmGrid = %d\n", nAtmGrid);
+        printf("nAux = %d\n", nAux);
+
+        for (int i = 0; i < nAux; ++i)
+        {
+            printf("R(%4d) = %15.8f\n", i, R(i, i));
+        }
+    }
+#endif
 
     //// (4) fill AuxiliaryBasis
 
@@ -495,6 +541,8 @@ void PBC_ISDF_del(PBC_ISDF **input)
 
 void PBC_ISDF_build(PBC_ISDF *input)
 {
+    Eigen::initParallel();
+
     /// (1) build VoronoiPartition and AOSparseRep
 
     _VoronoiPartition(input->aoG, input->nao, input->ngrids, (const int *)input->ao2atomID, input->cutoff_aoValue,
@@ -515,13 +563,23 @@ void PBC_ISDF_build(PBC_ISDF *input)
     IP_index_per_atm.resize(input->natm);
     AuxiliaryBasis_per_atm.resize(input->natm);
 
-#pragma omp parallel for schedule(dynamic)
+    auto nThreads = OMP_NUM_OF_THREADS;
+    printf("nThreads = %d\n", nThreads);
+
+#pragma omp parallel for schedule(dynamic) num_threads(nThreads)
     for (int atmID = 0; atmID < input->natm; ++atmID)
     {
+        printf("atmID = %d\n", atmID);
+        printf("thread_ID = %d\n", OMP_THREAD_LABEL);
 
         auto &AO_ID = atm2AO[atmID];
         auto &atm_gridID = atmgridID_2_grid_ID[atmID];
         auto natmGrid = atm_gridID.size();
+
+        if (natmGrid == 0)
+        {
+            continue;
+        }
 
         std::vector<int> AO_pairs_sparseRepRow;
         std::vector<int> AO_pairs_sparseRepCol;
@@ -529,6 +587,7 @@ void PBC_ISDF_build(PBC_ISDF *input)
 
         int nPair = _get_AO_pairs_SparseRep_on_givan_Atm(
             atmID,
+            input->voronoi_partition,
             AO_ID.size(),
             AO_ID.data(),
             input->ao_sparse_rep_row,
@@ -576,6 +635,8 @@ void PBC_ISDF_build(PBC_ISDF *input)
     {
         input->naux += IP_index_per_atm[i].size();
     }
+    printf("naux = %d\n", input->naux);
+
     input->IP_index = (int *)malloc(sizeof(int) * input->naux);
     Clear(input->IP_index, input->naux);
     input->auxiliary_basis = (double *)malloc(sizeof(double) * input->naux * input->ngrids);
@@ -587,7 +648,7 @@ void PBC_ISDF_build(PBC_ISDF *input)
         atm_offset[i] = atm_offset[i - 1] + IP_index_per_atm[i - 1].size();
     }
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic) num_threads(nThreads)
     for (int atmID = 0; atmID < input->natm; ++atmID)
     {
         auto &IP_index = IP_index_per_atm[atmID];
@@ -609,4 +670,10 @@ void PBC_ISDF_build(PBC_ISDF *input)
             }
         }
     }
+}
+
+void PBC_ISDF_build_onlyVoronoiPartition(PBC_ISDF *input)
+{
+    _VoronoiPartition_Only(input->aoG, input->nao, input->ngrids, (const int *)input->ao2atomID, input->cutoff_aoValue,
+                           &input->voronoi_partition);
 }

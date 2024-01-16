@@ -44,7 +44,9 @@ def _check_eri(eri, eri_bench, tol=1e-6):
 if __name__ == '__main__':
 
     for c in [3, 5, 10, 15]:
+    # for c in [10]:
         for N in [1, 2]:
+        # for N in [1]:
 
             print("Testing c = ", c, "N = ", N, "...")
 
@@ -82,10 +84,10 @@ if __name__ == '__main__':
 
             cell.build()
 
-            cell = tools.super_cell(cell, [1, 1, 1])
+            cell = tools.super_cell(cell, [1, 1, N])
 
             myisdf = ISDF(cell=cell)
-            myisdf.build(c=10)
+            myisdf.build(c=c)
 
             ######## ao eri benchmark ########
 

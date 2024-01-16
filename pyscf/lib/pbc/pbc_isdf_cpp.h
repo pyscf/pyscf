@@ -1,13 +1,13 @@
+#pragma once
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <complex.h>
-#include "config.h"
-#include "cint.h"
-#include "pbc/cell.h"
 #include <string.h>
 #include <vector>
 #include <assert.h>
+#include "config.h"
 
 #include <Eigen/Dense>
 #include <Eigen/QR>
@@ -40,12 +40,6 @@ inline void Clear(std::complex<float> *_Input, size_t _n)
     memset((void *)_Input, 0, _n * sizeof(std::complex<float>));
 }
 
-/// struct ISDF_handler
-
-struct ISDF_handler
-{
-};
-
 /// declare functions
 
 void _VoronoiPartition_Only(IN const double *AOonGrids, // Row-major, (nAO, nGrids)
@@ -64,3 +58,5 @@ void _VoronoiPartition(IN const double *AOonGrids, // Row-major, (nAO, nGrids)
                        OUT int **AOSparseRepRow,
                        OUT int **AOSparseRepCol,
                        OUT double **AOSparseRepVal);
+
+// #define PRINT_DEBUG

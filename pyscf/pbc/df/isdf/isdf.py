@@ -131,6 +131,8 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
 
     aoR  *= np.sqrt(cell.vol / ngrids)   ## NOTE: scaled !
 
+    print("aoR.shape = ", aoR.shape)
+
     cput1 = log.timer('eval_ao', *cput0)
     if naux is None:
         naux = cell.nao * c  # number of auxiliary basis functions
@@ -187,6 +189,10 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
     idx = (np.rint(scaled_centers*mesh[None,:]) + mesh[None,:]) % (mesh[None,:])
     idx = idx[:,2] + idx[:,1]*mesh[2] + idx[:,0]*(mesh[1]*mesh[2])
     idx = idx.astype(int)
+    idx = list(set(idx))
+    idx.sort()
+    idx = np.asarray(idx)
+    print("idx = ", idx)
 
     cput1 = log.timer('get idx', *cput1)
 
@@ -237,12 +243,16 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
     for p0, p1 in lib.prange(0, ngrids, blksize):
         W += numpy.dot(X[:,p0:p1], V_R[:,p0:p1].T)
 
+    # for i in range(naux):
+    #     for j in range(i):
+    #         print("W[%5d, %5d] = %15.8e" % (i, j, W[i,j]))
+
     cput1 = log.timer('get W', *cput1)
 
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "Construct WR")
 
-    return W, aoRg.T, aoR.T, V_R, idx
+    return W, aoRg.T, aoR.T, V_R, idx, X
 
 class ISDF(df.fft.FFTDF):
     def __init__(self, cell):
@@ -278,8 +288,20 @@ class ISDF(df.fft.FFTDF):
             dm            = mf.get_init_guess(self.cell, 'atom')
 
         df_tmp = MultiGridFFTDF2(self.cell)
-        self.W, self.aoRg, self.aoR, self.V_R, _ = isdf(
+        self.W, self.aoRg, self.aoR, self.V_R, _, aux_basis = isdf(
             df_tmp, dm, naux=naux, c=c, max_iter=max_iter, verbose=self.cell.verbose)
+
+        ## check the error
+
+        # nao = self.cell.nao
+        # for i in range(nao):
+        #     coeff = numpy.einsum('k,jk->jk', self.aoRg[i, :], self.aoRg).reshape(-1, self.aoRg.shape[1])
+        #     aoPair = numpy.einsum('k,jk->jk', self.aoR[i, :], self.aoR).reshape(-1, self.aoR.shape[1])
+        #     aoPair_approx = coeff @ aux_basis
+        #     diff = aoPair - aoPair_approx
+        #     diff_pair_abs_max = np.max(np.abs(diff), axis=1)
+        #     for j in range(diff_pair_abs_max.shape[0]):
+        #         print("(%5d, %5d, %15.8e)" % (i, j, diff_pair_abs_max[j]))
 
         ## WARNING: self.aoRG, self.aoR is scaled by a factor of sqrt(cell.vol / ngrids)
 
@@ -330,7 +352,8 @@ if __name__ == "__main__":
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
-    cell.ke_cutoff  = 100   # kinetic energy cutoff in a.u.
+    # cell.ke_cutoff  = 100   # kinetic energy cutoff in a.u.
+    cell.ke_cutoff  = 128
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
@@ -380,7 +403,7 @@ if __name__ == "__main__":
     print("rhoR.shape = ", rhoR.shape)
     print("nelec from rhoR is ", np.sum(rhoR) * cell.vol / np.prod(cell.mesh))
 
-    W, aoRg, aoR, V_R, idx = isdf(mydf, dm1, naux=cell.nao*10, max_iter=100, verbose=4)
+    W, aoRg, aoR, V_R, idx, _ = isdf(mydf, dm1, naux=cell.nao*10, max_iter=100, verbose=4)
 
     print("W.shape    = ", W.shape)
     print("aoRg.shape = ", aoRg.shape)
