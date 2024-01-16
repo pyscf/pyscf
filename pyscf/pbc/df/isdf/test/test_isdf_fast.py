@@ -489,24 +489,37 @@ if __name__ == '__main__':
     print("aoR.shape = ", aoR.shape)
 
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR, cutoff_aoValue=1e-6, cutoff_QR=1e-3)
-    pbc_isdf_info.build_IP_Sandeep(c=15)
+    pbc_isdf_info.build_IP_Sandeep(c=20)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
     pbc_isdf_info.check_AOPairError()
 
     ### check eri ###
 
-    mydf_eri = df.FFTDF(cell)
-    eri = mydf_eri.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
-    print("eri.shape  = ", eri.shape)
-    eri_isdf = pbc_isdf_info.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
-    print("eri_isdf.shape  = ", eri_isdf.shape)
-    for i in range(cell.nao):
-        for j in range(cell.nao):
-            for k in range(cell.nao):
-                for l in range(cell.nao):
-                    if abs(eri[i,j,k,l] - eri_isdf[i,j,k,l]) > 1e-6:
-                        print("eri[{}, {}, {}, {}] = {} != {}".format(i,j,k,l,eri[i,j,k,l], eri_isdf[i,j,k,l]),
-                              "ration = ", eri[i,j,k,l]/eri_isdf[i,j,k,l])
+    # mydf_eri = df.FFTDF(cell)
+    # eri = mydf_eri.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
+    # print("eri.shape  = ", eri.shape)
+    # eri_isdf = pbc_isdf_info.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
+    # print("eri_isdf.shape  = ", eri_isdf.shape)
+    # for i in range(cell.nao):
+    #     for j in range(cell.nao):
+    #         for k in range(cell.nao):
+    #             for l in range(cell.nao):
+    #                 if abs(eri[i,j,k,l] - eri_isdf[i,j,k,l]) > 1e-6:
+    #                     print("eri[{}, {}, {}, {}] = {} != {}".format(i,j,k,l,eri[i,j,k,l], eri_isdf[i,j,k,l]),
+    #                           "ration = ", eri[i,j,k,l]/eri_isdf[i,j,k,l])
 
+    ### perform scf ###
 
+    from pyscf.pbc import scf
+
+    mf = scf.RHF(cell)
+    mf.with_df = pbc_isdf_info
+    mf.max_cycle = 100
+    mf.conv_tol = 1e-8
+    mf.kernel()
+
+    mf = scf.RHF(cell)
+    mf.max_cycle = 100
+    mf.conv_tol = 1e-8
+    mf.kernel()
 

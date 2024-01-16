@@ -196,9 +196,15 @@ def _contract_j_dm(mydf, dm):
 
     t1 = (logger.process_clock(), logger.perf_counter())
 
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+
     nao  = dm.shape[0]
 
     cell = mydf.cell
+    # print("cell.nao", cell.nao)
+    # print("nao     ", nao)
     assert cell.nao == nao
     ngrid = np.prod(cell.mesh)
     vol = cell.vol
@@ -260,6 +266,10 @@ def _contract_k_dm(mydf, dm):
 
     t1 = (logger.process_clock(), logger.perf_counter())
 
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+
     nao  = dm.shape[0]
 
     cell = mydf.cell
@@ -301,8 +311,13 @@ def _contract_k_dm(mydf, dm):
     return K * ngrid / vol
 
 def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
-           kpts_band=None, with_j=True, with_k=True, exxdiv=None):
+           kpts_band=None, with_j=True, with_k=True, omega=None, **kwargs):
     '''JK for given k-point'''
+
+    if "exxdiv" in kwargs:
+        exxdiv = kwargs["exxdiv"]
+    else:
+        exxdiv = None
 
     vj = vk = None
 
@@ -328,7 +343,8 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
     if with_k:
         vk = _contract_k_dm(mydf, dm)
         if exxdiv == 'ewald':
-            raise NotImplementedError("ISDF does not support ewald")
+            # raise NotImplemented("ISDF does not support ewald")
+            print("WARNING: ISDF does not support ewald")
 
 
     t1 = log.timer('sr jk', *t1)
