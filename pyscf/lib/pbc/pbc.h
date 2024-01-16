@@ -20,44 +20,47 @@
 
 #if !defined(HAVE_DEFINED_BVKENV_H)
 #define HAVE_DEFINED_BVKENV_H
-typedef struct {
-        // number of primitive cells in bvk-cell
-        int ncells;
-        // number of repeated images associated to cell.rcut
-        int nimgs;
-        int nkpts;
-        int nbands;
-        // nbas of primitive cell
-        int nbasp;
-        int ncomp;
-        // number of grids (or planewaves)
-        int nGv;
-        // length of kpt_ij_idx
-        int kpt_ij_size;
-        // indicates how to map basis in bvk-cell to supmol basis
-        int *sh_loc;
-        int *ao_loc;
-        // Map from supmol._bas to [bvk_cell-id, rs_basis-id, image-id]
-        int *bas_map;
-        int *shls_slice;
-        // index to get a sbuset of nkpts x nkpts output
-        int *kpt_ij_idx;
-        double *expLkR;
-        double *expLkI;
+typedef struct
+{
+    // number of primitive cells in bvk-cell
+    int ncells;
+    // number of repeated images associated to cell.rcut
+    int nimgs;
+    int nkpts;
+    int nbands;
+    // nbas of primitive cell
+    int nbasp;
+    int ncomp;
+    // number of grids (or planewaves)
+    int nGv;
+    // length of kpt_ij_idx
+    int kpt_ij_size;
+    // indicates how to map basis in bvk-cell to supmol basis
+    int *sh_loc;
+    int *ao_loc;
+    // Map from supmol._bas to [bvk_cell-id, rs_basis-id, image-id]
+    int *bas_map;
+    int *shls_slice;
+    // index to get a sbuset of nkpts x nkpts output
+    int *kpt_ij_idx;
+    double *expLkR;
+    double *expLkI;
 
-        // Integral mask of SupMole based on s-function overlap
-        int8_t *ovlp_mask;
-        // Integral screening condition
-        double *q_cond;
-        // cutoff for schwarz condtion
-        double cutoff;
+    // Integral mask of SupMole based on s-function overlap
+    int8_t *ovlp_mask;
+    // Integral screening condition
+    double *q_cond;
+    // cutoff for schwarz condtion
+    double cutoff;
 
-        // parameters for ft_ao
-        double *Gv;
-        double *b;
-        int *gxyz;
-        int *gs;
+    // parameters for ft_ao
+    double *Gv;
+    double *b;
+    int *gxyz;
+    int *gs;
 
-        int (*intor)();
+    int (*intor)();
 } BVKEnvs;
 #endif
+
+#include "pbc_isdf.h"
