@@ -140,6 +140,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                  cutoff_QR: float = 1e-8):
 
         super().__init__(cell=mol)
+        super().__init__(cell=mol)
 
         self._this = ctypes.POINTER(_PBC_ISDF)()
 
@@ -152,9 +153,17 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.W         = None 
         self.aoRg      = None 
         self.aoR       = aoR
+        self.aoR       = aoR
         self.V_R       = None
         self.cell      = mol
 
+        self.partition = None
+
+        # nao = ctypes.c_int(mol.nao_nr())
+        # natm = ctypes.c_int(mol.natm)
+        # ngrids = ctypes.c_int(aoR.shape[1])
+        # _cutoff_aoValue = ctypes.c_double(cutoff_aoValue)
+        # _cutoff_QR = ctypes.c_double(cutoff_QR)
         self.partition = None
 
         # nao = ctypes.c_int(mol.nao_nr())
@@ -168,7 +177,13 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.ngrids = aoR.shape[1]
 
         assert self.nao == aoR.shape[0]
+        self.natm = mol.natm
+        self.nao = mol.nao_nr()
+        self.ngrids = aoR.shape[1]
 
+        assert self.nao == aoR.shape[0]
+
+        ao2atomID = np.zeros(self.nao, dtype=np.int32)
         ao2atomID = np.zeros(self.nao, dtype=np.int32)
 
         # only valid for spherical GTO
@@ -184,6 +199,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         print("ao2atomID = ", ao2atomID)
 
+        self.ao2atomID = ao2atomID
         self.ao2atomID = ao2atomID
 
         # libpbc.PBC_ISDF_init(ctypes.byref(self._this),
@@ -206,8 +222,12 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     def build(self):
         # libpbc.PBC_ISDF_build(self._this)
         print("warning: not implemented yet")
+        # libpbc.PBC_ISDF_build(self._this)
+        print("warning: not implemented yet")
 
     def build_only_partition(self):
+        # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
+        pass
         # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
         pass
 
@@ -223,8 +243,17 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         aoR  = self.aoR
         natm = self.natm
         nao  = self.nao
+        # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
+        # ao2atomID = self.get_ao2atomID()
+        ao2atomID = self.ao2atomID
+        # partition = self.get_partition()
+        partition = self.partition
+        aoR  = self.aoR
+        natm = self.natm
+        nao  = self.nao
 
         nao_per_atm = np.zeros(natm, dtype=np.int32)
+        for i in range(self.nao):
         for i in range(self.nao):
             atm_id = ao2atomID[i]
             nao_per_atm[atm_id] += 1
@@ -384,6 +413,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         # ngrids = self._this.contents.ngrids
         ngrids = self.ngrids
+        # ngrids = self._this.contents.ngrids
+        ngrids = self.ngrids
         naux   = self.naux
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -431,6 +462,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         # nao = self._this.contents.nao
         nao = self.nao
+        # nao = self._this.contents.nao
+        nao = self.nao
 
         print("In check_AOPairError")
 
@@ -457,7 +490,20 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     #     # print("data = ", data)
     #     return numpy.ctypeslib.as_array(data, shape=shape)
     #     # pass
+    # def get_partition(self):
+    #     shape = (self._this.contents.ngrids,)
+    #     print("shape = ", shape)
+    #     data = ctypes.cast(self._this.contents.voronoi_partition,
+    #                        ctypes.POINTER(ctypes.c_int))
+    #     # print("data = ", data)
+    #     return numpy.ctypeslib.as_array(data, shape=shape)
+    #     # pass
 
+    # def get_ao2atomID(self):
+    #     shape = (self._this.contents.nao,)
+    #     data = ctypes.cast(self._this.contents.ao2atomID,
+    #                        ctypes.POINTER(ctypes.c_int))
+    #     return numpy.ctypeslib.as_array(data, shape=shape)
     # def get_ao2atomID(self):
     #     shape = (self._this.contents.nao,)
     #     data = ctypes.cast(self._this.contents.ao2atomID,
@@ -469,7 +515,18 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     #     data = ctypes.cast(self._this.contents.aoG,
     #                        ctypes.POINTER(ctypes.c_double))
     #     return numpy.ctypeslib.as_array(data, shape=shape)
+    # def get_aoG(self):
+    #     shape = (self._this.contents.nao, self._this.contents.ngrids)
+    #     data = ctypes.cast(self._this.contents.aoG,
+    #                        ctypes.POINTER(ctypes.c_double))
+    #     return numpy.ctypeslib.as_array(data, shape=shape)
 
+    # def get_auxiliary_basis(self):
+    #     shape = (self._this.contents.naux, self._this.contents.ngrids)
+    #     print("shape = ", shape)
+    #     data = ctypes.cast(self._this.contents.auxiliary_basis,
+    #                        ctypes.POINTER(ctypes.c_double))
+    #     return numpy.ctypeslib.as_array(data, shape=shape)
     # def get_auxiliary_basis(self):
     #     shape = (self._this.contents.naux, self._this.contents.ngrids)
     #     print("shape = ", shape)
