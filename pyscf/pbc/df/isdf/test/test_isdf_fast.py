@@ -254,7 +254,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         nao_per_atm = np.zeros(natm, dtype=np.int32)
         for i in range(self.nao):
-        for i in range(self.nao):
             atm_id = ao2atomID[i]
             nao_per_atm[atm_id] += 1
 
