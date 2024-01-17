@@ -327,7 +327,10 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             print("atm_id = ", atm_id)
             npt_find = R.shape[0]
             for i in range(npt_find):
-                print("R[%3d] = %15.8e" % (i, R[i, i]))
+                try:
+                    print("R[%3d] = %15.8e" % (i, R[i, i]))
+                except: 
+                    break
 
         # sort the possible_IP
 
@@ -358,6 +361,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         _, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
 
         print("global QRCP")
+        npt_find = R.shape[0] # may be smaller than c*nao
         for i in range(npt_find):
             print("R[%3d] = %15.8e" % (i, R[i, i]))
 
