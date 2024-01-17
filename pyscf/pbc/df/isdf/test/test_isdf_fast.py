@@ -45,7 +45,7 @@ def _fpointer(name):
 
 # python version colpilot_qr() function
 
-def colpivot_qr(A, max_rank=None):
+def colpivot_qr(A, max_rank=None, cutoff=1e-14):
     m, n = A.shape
     Q = np.zeros((m, m))
     R = np.zeros((m, n))
@@ -54,6 +54,8 @@ def colpivot_qr(A, max_rank=None):
 
     if max_rank is None:
         max_rank = min(m, n)
+
+    npt_find = 0
 
     for j in range(min(m, n, max_rank)):
         # Find the column with the largest norm
@@ -70,12 +72,15 @@ def colpivot_qr(A, max_rank=None):
         # perform Shimdt orthogonalization
 
         R[j, j] = np.linalg.norm(AA[:, j])
+        if R[j, j] < cutoff:
+            break
+        npt_find += 1
         Q[:, j] = AA[:, j] / R[j, j]
 
         R[j, j + 1:] = np.dot(Q[:, j].T, AA[:, j + 1:])
         AA[:, j + 1:] -= np.outer(Q[:, j], R[j, j + 1:])
 
-    return Q, R, pivot
+    return Q, R, pivot, npt_find
 
 @delayed
 def atm_IP_task(taskinfo:tuple):
@@ -95,10 +100,11 @@ def atm_IP_task(taskinfo:tuple):
         aoR_atm1 = G1.T @ aoR_atm
         aoR_atm2 = G2.T @ aoR_atm
     aoPair = np.einsum('ik,jk->ijk', aoR_atm1, aoR_atm2).reshape(-1, grid_ID.shape[0])
-    _, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
+    _, R, pivot, npt_find = colpivot_qr(aoPair, max_rank=npt_find)
+    # npt_find = min(R.shape[0], R.shape[1])
     pivot_ID = grid_ID[pivot[:npt_find]]
     # pack res
-    return pivot_ID, R[:npt_find, :npt_find]
+    return pivot_ID, R[:npt_find, :npt_find], npt_find
 
 '''
 /// the following variables are input variables
@@ -320,12 +326,13 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         # collect results
             
-        for result in results:
-            pivot_ID, R = result
+        for atm_id, result in enumerate(results):
+            pivot_ID, R, npt_find = result
             possible_IP.extend(pivot_ID.tolist())
 
             print("atm_id = ", atm_id)
-            npt_find = R.shape[0]
+            print("npt_find = ", npt_find)
+            # npt_find = min(R.shape[0], R.shape[1])
             for i in range(npt_find):
                 try:
                     print("R[%3d] = %15.8e" % (i, R[i, i]))
@@ -358,10 +365,11 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             aoR2 = G2.T @ aoR_IP
         aoPair = np.einsum('ik,jk->ijk', aoR1, aoR2).reshape(-1, possible_IP.shape[0])
         npt_find = c * nao
-        _, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
+        _, R, pivot, npt_find = colpivot_qr(aoPair, max_rank=npt_find)
 
         print("global QRCP")
-        npt_find = R.shape[0] # may be smaller than c*nao
+        print("npt_find = ", npt_find)
+        # npt_find = min(R.shape[0], R.shape[1]) # may be smaller than c*nao
         for i in range(npt_find):
             print("R[%3d] = %15.8e" % (i, R[i, i]))
 
@@ -567,7 +575,7 @@ if __name__ == '__main__':
     # Test the function
 
     A = np.random.rand(5, 5)
-    Q, R, pivot = colpivot_qr(A)
+    Q, R, pivot, _ = colpivot_qr(A)
 
     print("A = ", A)
     print("Q = ", Q)
@@ -632,7 +640,7 @@ if __name__ == '__main__':
     print("aoR.shape = ", aoR.shape)
 
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR, cutoff_aoValue=1e-6, cutoff_QR=1e-3)
-    pbc_isdf_info.build_IP_Sandeep(c=15)
+    pbc_isdf_info.build_IP_Sandeep(c=20)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
     pbc_isdf_info.check_AOPairError()
 
