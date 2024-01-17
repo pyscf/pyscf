@@ -169,3 +169,10 @@ def get_ase_graphene_xxx(vacuum=5.0):
     ase_atom = bulk('C', 'hcp', a=2.46*A2B, c=vacuum*A2B)
     ase_atom.positions[1,2] = 0.0
     return ase_atom
+
+if __name__ == "__main__":
+    print("Testing get_ase_atom")
+    print(get_ase_atom('lih'))
+    print(get_ase_atom('C'))
+    print(get_ase_diamond_cubic('C'))
+    print(get_ase_diamond_primitive('C'))

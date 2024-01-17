@@ -52,10 +52,12 @@ def colpivot_qr(A, max_rank=None):
 
     for j in range(min(m, n, max_rank)):
         # Find the column with the largest norm
+        
         norms = np.linalg.norm(AA[:, j:], axis=0)
         p = np.argmax(norms) + j
 
         # Swap columns j and p
+
         AA[:, [j, p]] = AA[:, [p, j]]
         R[:, [j, p]] = R[:, [p, j]]
         pivot[[j, p]] = pivot[[p, j]]
@@ -67,10 +69,6 @@ def colpivot_qr(A, max_rank=None):
 
         R[j, j + 1:] = np.dot(Q[:, j].T, AA[:, j + 1:])
         AA[:, j + 1:] -= np.outer(Q[:, j], R[j, j + 1:])
-
-        # for k in range(j + 1, n):
-        #     R[j, k] = np.dot(Q[:, j], AA[:, k])
-        #     AA[:, k] -= R[j, k] * Q[:, j]
 
     return Q, R, pivot
 
@@ -212,7 +210,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 aoR_atm1 = G1.T @ aoR_atm
                 aoR_atm2 = G2.T @ aoR_atm
             aoPair = np.einsum('ik,jk->ijk', aoR_atm1, aoR_atm2).reshape(-1, grid_ID.shape[0])
-            Q, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
+            _, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
             pivot_ID = grid_ID[pivot[:npt_find]]
             possible_IP.extend(pivot_ID.tolist())
 
@@ -246,7 +244,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             aoR2 = G2.T @ aoR_IP
         aoPair = np.einsum('ik,jk->ijk', aoR1, aoR2).reshape(-1, possible_IP.shape[0])
         npt_find = c * nao
-        Q, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
+        _, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
 
         print("global QRCP")
         for i in range(npt_find):
