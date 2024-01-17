@@ -34,6 +34,8 @@ import sys
 import ctypes
 import _ctypes
 
+from multiprocessing import Pool
+
 libpbc = lib.load_library('libpbc')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, name))
@@ -71,6 +73,28 @@ def colpivot_qr(A, max_rank=None):
         AA[:, j + 1:] -= np.outer(Q[:, j], R[j, j + 1:])
 
     return Q, R, pivot
+
+def atm_IP_task(taskinfo:tuple):
+    grid_ID, aoR_atm, nao, nao_atm, c, m = taskinfo
+
+    npt_find = c * nao_atm + 10
+    naux_tmp = int(np.sqrt(c*nao_atm)) + m
+    # generate to random orthogonal matrix of size (naux_tmp, nao), do not assume sparsity here
+    if npt_find > nao:
+        aoR_atm1 = aoR_atm
+        aoR_atm2 = aoR_atm
+    else:
+        G1 = np.random.rand(nao, naux_tmp)
+        G1, _ = numpy.linalg.qr(G1)
+        G2 = np.random.rand(nao, naux_tmp)
+        G2, _ = numpy.linalg.qr(G2)
+        aoR_atm1 = G1.T @ aoR_atm
+        aoR_atm2 = G2.T @ aoR_atm
+    aoPair = np.einsum('ik,jk->ijk', aoR_atm1, aoR_atm2).reshape(-1, grid_ID.shape[0])
+    _, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
+    pivot_ID = grid_ID[pivot[:npt_find]]
+    # pack res
+    return pivot_ID, R[:npt_find, :npt_find]
 
 '''
 /// the following variables are input variables
@@ -115,7 +139,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                  cutoff_aoValue: float = 1e-12,
                  cutoff_QR: float = 1e-8):
 
-        super().__init__(cell=cell)
+        super().__init__(cell=mol)
 
         self._this = ctypes.POINTER(_PBC_ISDF)()
 
@@ -127,19 +151,25 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.naux      = None
         self.W         = None 
         self.aoRg      = None 
-        self.aoR       = None
+        self.aoR       = aoR
         self.V_R       = None
         self.cell      = mol
 
-        nao = ctypes.c_int(mol.nao_nr())
-        natm = ctypes.c_int(mol.natm)
-        ngrids = ctypes.c_int(aoR.shape[1])
-        _cutoff_aoValue = ctypes.c_double(cutoff_aoValue)
-        _cutoff_QR = ctypes.c_double(cutoff_QR)
+        self.partition = None
 
-        assert nao.value == aoR.shape[0]
+        # nao = ctypes.c_int(mol.nao_nr())
+        # natm = ctypes.c_int(mol.natm)
+        # ngrids = ctypes.c_int(aoR.shape[1])
+        # _cutoff_aoValue = ctypes.c_double(cutoff_aoValue)
+        # _cutoff_QR = ctypes.c_double(cutoff_QR)
 
-        ao2atomID = np.zeros(nao.value, dtype=np.int32)
+        self.natm = mol.natm
+        self.nao = mol.nao_nr()
+        self.ngrids = aoR.shape[1]
+
+        assert self.nao == aoR.shape[0]
+
+        ao2atomID = np.zeros(self.nao, dtype=np.int32)
 
         # only valid for spherical GTO
 
@@ -154,33 +184,48 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         print("ao2atomID = ", ao2atomID)
 
+        self.ao2atomID = ao2atomID
 
-        libpbc.PBC_ISDF_init(ctypes.byref(self._this),
-                                nao, natm, ngrids,
-                                _cutoff_aoValue,
-                                ao2atomID.ctypes.data_as(ctypes.c_void_p),
-                                aoR.ctypes.data_as(ctypes.c_void_p),
-                                _cutoff_QR)
+        # libpbc.PBC_ISDF_init(ctypes.byref(self._this),
+        #                         nao, natm, ngrids,
+        #                         _cutoff_aoValue,
+        #                         ao2atomID.ctypes.data_as(ctypes.c_void_p),
+        #                         aoR.ctypes.data_as(ctypes.c_void_p),
+        #                         _cutoff_QR)
+
+        # given aoG, determine at given grid point, which ao has the maximal abs value 
+
+        self.partition = np.argmax(np.abs(aoR), axis=0)
+        print("partition = ", self.partition.shape)
+        # map aoID to atomID
+        self.partition = np.asarray([ao2atomID[x] for x in self.partition])
+        # for i in range(self.partition.shape[0]):
+        #     print("i = %5d, partition = %5d" % (i, self.partition[i]))
+
 
     def build(self):
-        libpbc.PBC_ISDF_build(self._this)
+        # libpbc.PBC_ISDF_build(self._this)
+        print("warning: not implemented yet")
 
     def build_only_partition(self):
-        libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
+        # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
+        pass
 
     def build_IP_Sandeep(self, c=5, m=5, ao_value_cutoff=1e-8, debug=True):
 
         # build partition
 
-        libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
-        ao2atomID = self.get_ao2atomID()
-        partition = self.get_partition()
-        aoR  = self.get_aoG()
-        natm = self._this.contents.natm
-        nao  = self._this.contents.nao
+        # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
+        # ao2atomID = self.get_ao2atomID()
+        ao2atomID = self.ao2atomID
+        # partition = self.get_partition()
+        partition = self.partition
+        aoR  = self.aoR
+        natm = self.natm
+        nao  = self.nao
 
         nao_per_atm = np.zeros(natm, dtype=np.int32)
-        for i in range(self._this.contents.nao):
+        for i in range(self.nao):
             atm_id = ao2atomID[i]
             nao_per_atm[atm_id] += 1
 
@@ -190,31 +235,60 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         possible_IP = []
 
+        # for atm_id in range(natm):
+        #     # find partition for this atm
+        #     grid_ID = np.where(partition == atm_id)[0]
+        #     # get aoR for this atm
+        #     aoR_atm = aoR[:, grid_ID]
+        #     nao_atm = nao_per_atm[atm_id]
+        #     npt_find = c * nao_atm + 10
+        #     naux_tmp = int(np.sqrt(c*nao_atm)) + m
+        #     # generate to random orthogonal matrix of size (naux_tmp, nao), do not assume sparsity here
+        #     if npt_find > nao:
+        #         aoR_atm1 = aoR_atm
+        #         aoR_atm2 = aoR_atm
+        #     else:
+        #         G1 = np.random.rand(nao, naux_tmp)
+        #         G1, _ = numpy.linalg.qr(G1)
+        #         G2 = np.random.rand(nao, naux_tmp)
+        #         G2, _ = numpy.linalg.qr(G2)
+        #         aoR_atm1 = G1.T @ aoR_atm
+        #         aoR_atm2 = G2.T @ aoR_atm
+        #     aoPair = np.einsum('ik,jk->ijk', aoR_atm1, aoR_atm2).reshape(-1, grid_ID.shape[0])
+        #     _, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
+        #     pivot_ID = grid_ID[pivot[:npt_find]]
+        #     possible_IP.extend(pivot_ID.tolist())
+
+        #     print("atm_id = ", atm_id)
+        #     for i in range(npt_find):
+        #         print("R[%3d] = %15.8e" % (i, R[i, i]))
+
+        nProcess = os.cpu_count()
+
+        # pack input info for each process
+
+        taskinfo = []
         for atm_id in range(natm):
             # find partition for this atm
             grid_ID = np.where(partition == atm_id)[0]
             # get aoR for this atm
             aoR_atm = aoR[:, grid_ID]
             nao_atm = nao_per_atm[atm_id]
-            npt_find = c * nao_atm + 10
-            naux_tmp = int(np.sqrt(c*nao_atm)) + m
-            # generate to random orthogonal matrix of size (naux_tmp, nao), do not assume sparsity here
-            if npt_find > nao:
-                aoR_atm1 = aoR_atm
-                aoR_atm2 = aoR_atm
-            else:
-                G1 = np.random.rand(nao, naux_tmp)
-                G1, _ = numpy.linalg.qr(G1)
-                G2 = np.random.rand(nao, naux_tmp)
-                G2, _ = numpy.linalg.qr(G2)
-                aoR_atm1 = G1.T @ aoR_atm
-                aoR_atm2 = G2.T @ aoR_atm
-            aoPair = np.einsum('ik,jk->ijk', aoR_atm1, aoR_atm2).reshape(-1, grid_ID.shape[0])
-            _, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
-            pivot_ID = grid_ID[pivot[:npt_find]]
+            taskinfo.append((grid_ID, aoR_atm, nao, nao_atm, c, m))
+        
+        # perform parallel computation
+            
+        with Pool(nProcess) as p:
+            results = p.map(atm_IP_task, taskinfo)
+
+        # collect results
+            
+        for result in results:
+            pivot_ID, R = result
             possible_IP.extend(pivot_ID.tolist())
 
             print("atm_id = ", atm_id)
+            npt_find = R.shape[0]
             for i in range(npt_find):
                 print("R[%3d] = %15.8e" % (i, R[i, i]))
 
@@ -308,7 +382,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         
         print("mesh = ", mesh)
 
-        ngrids = self._this.contents.ngrids
+        # ngrids = self._this.contents.ngrids
+        ngrids = self.ngrids
         naux   = self.naux
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -354,7 +429,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         aoRg = aoR[:, self.IP_ID]
 
 
-        nao = self._this.contents.nao
+        # nao = self._this.contents.nao
+        nao = self.nao
 
         print("In check_AOPairError")
 
@@ -373,33 +449,33 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 print("(%5d, %5d, %15.8e)" % (i, j, diff_pair_abs_max[j]))
 
 
-    def get_partition(self):
-        shape = (self._this.contents.ngrids,)
-        print("shape = ", shape)
-        data = ctypes.cast(self._this.contents.voronoi_partition,
-                           ctypes.POINTER(ctypes.c_int))
-        # print("data = ", data)
-        return numpy.ctypeslib.as_array(data, shape=shape)
-        # pass
+    # def get_partition(self):
+    #     shape = (self._this.contents.ngrids,)
+    #     print("shape = ", shape)
+    #     data = ctypes.cast(self._this.contents.voronoi_partition,
+    #                        ctypes.POINTER(ctypes.c_int))
+    #     # print("data = ", data)
+    #     return numpy.ctypeslib.as_array(data, shape=shape)
+    #     # pass
 
-    def get_ao2atomID(self):
-        shape = (self._this.contents.nao,)
-        data = ctypes.cast(self._this.contents.ao2atomID,
-                           ctypes.POINTER(ctypes.c_int))
-        return numpy.ctypeslib.as_array(data, shape=shape)
+    # def get_ao2atomID(self):
+    #     shape = (self._this.contents.nao,)
+    #     data = ctypes.cast(self._this.contents.ao2atomID,
+    #                        ctypes.POINTER(ctypes.c_int))
+    #     return numpy.ctypeslib.as_array(data, shape=shape)
 
-    def get_aoG(self):
-        shape = (self._this.contents.nao, self._this.contents.ngrids)
-        data = ctypes.cast(self._this.contents.aoG,
-                           ctypes.POINTER(ctypes.c_double))
-        return numpy.ctypeslib.as_array(data, shape=shape)
+    # def get_aoG(self):
+    #     shape = (self._this.contents.nao, self._this.contents.ngrids)
+    #     data = ctypes.cast(self._this.contents.aoG,
+    #                        ctypes.POINTER(ctypes.c_double))
+    #     return numpy.ctypeslib.as_array(data, shape=shape)
 
-    def get_auxiliary_basis(self):
-        shape = (self._this.contents.naux, self._this.contents.ngrids)
-        print("shape = ", shape)
-        data = ctypes.cast(self._this.contents.auxiliary_basis,
-                           ctypes.POINTER(ctypes.c_double))
-        return numpy.ctypeslib.as_array(data, shape=shape)
+    # def get_auxiliary_basis(self):
+    #     shape = (self._this.contents.naux, self._this.contents.ngrids)
+    #     print("shape = ", shape)
+    #     data = ctypes.cast(self._this.contents.auxiliary_basis,
+    #                        ctypes.POINTER(ctypes.c_double))
+    #     return numpy.ctypeslib.as_array(data, shape=shape)
 
     def __del__(self):
         try:
@@ -487,7 +563,7 @@ if __name__ == '__main__':
     print("aoR.shape = ", aoR.shape)
 
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR, cutoff_aoValue=1e-6, cutoff_QR=1e-3)
-    pbc_isdf_info.build_IP_Sandeep(c=20)
+    pbc_isdf_info.build_IP_Sandeep(c=15)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
     pbc_isdf_info.check_AOPairError()
 

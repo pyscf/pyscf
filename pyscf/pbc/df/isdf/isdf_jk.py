@@ -219,23 +219,31 @@ def _contract_j_dm(mydf, dm):
 
     #### TODO: make the following transformation linear-scaling
 
-    ao_pair_R  = np.einsum('ij,kj->ikj', aoR, aoR)
-    ao_pair_Rg = np.einsum('ij,kj->ikj', aoRg, aoRg)
+    # ao_pair_R  = np.einsum('ij,kj->ikj', aoR, aoR)
+    # ao_pair_Rg = np.einsum('ij,kj->ikj', aoRg, aoRg)
 
     #### step 2. get J term1 and term2
 
-    density_R  = np.einsum('ij,ijk->k', dm, ao_pair_R)
-    density_Rg = np.einsum('ij,ijk->k', dm, ao_pair_Rg)
+    ## constract dm and aoR
+
+    tmp1 = np.asarray(lib.dot(dm, aoR), order='C')
+    density_R = np.einsum('ik,ik->k', aoR, tmp1)
+    tmp1 = np.asarray(lib.dot(dm, aoRg), order='C')
+    density_Rg = np.einsum('ik,ik->k', aoRg, tmp1)
+
+    # density_R  = np.einsum('ij,ijk->k', dm, ao_pair_R)
+    # density_Rg = np.einsum('ij,ijk->k', dm, ao_pair_Rg)
 
     ## TODO: remove the redundancy due to the symmetry
 
     rho_mu_nu_Rg = np.einsum('ij,kj->ikj', aoRg, aoRg)
 
-
     # J = np.asarray(lib.dot(V_R, density_R), order='C')
     J = np.dot(V_R, density_R)
     # J = np.asarray(lib.dot(rho_mu_nu_Rg, J), order='C')
-    J = np.dot(rho_mu_nu_Rg, J)
+    # J = np.dot(rho_mu_nu_Rg, J)
+    J = np.einsum('ij,j->ij', aoRg, J)
+    J = np.asarray(lib.dot(aoRg, J.T), order='C')
     # J += J.T
 
     J2 = np.dot(V_R.T, density_Rg)
@@ -246,8 +254,10 @@ def _contract_j_dm(mydf, dm):
 
     # tmp = np.asarray(lib.dot(W, density_Rg), order='C')
     tmp = np.dot(W, density_Rg)
+    tmp = np.einsum('ij,j->ij', aoRg, tmp)
     # J -= np.asarray(lib.dot(rho_mu_nu_Rg, tmp), order='C')
-    J -= np.dot(rho_mu_nu_Rg, tmp)
+    # J -= np.dot(rho_mu_nu_Rg, tmp)
+    J -= np.asarray(lib.dot(aoRg, tmp.T), order='C')
     # J = np.dot(rho_mu_nu_Rg, tmp)
 
     t2 = (logger.process_clock(), logger.perf_counter())
