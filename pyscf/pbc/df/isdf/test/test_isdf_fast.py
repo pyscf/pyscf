@@ -36,6 +36,9 @@ import _ctypes
 
 from multiprocessing import Pool
 
+import dask.array as da
+from dask import delayed
+
 libpbc = lib.load_library('libpbc')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, name))
@@ -74,6 +77,7 @@ def colpivot_qr(A, max_rank=None):
 
     return Q, R, pivot
 
+@delayed
 def atm_IP_task(taskinfo:tuple):
     grid_ID, aoR_atm, nao, nao_atm, c, m = taskinfo
 
@@ -291,7 +295,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         #     for i in range(npt_find):
         #         print("R[%3d] = %15.8e" % (i, R[i, i]))
 
-        nProcess = os.cpu_count()
+        # nProcess = os.cpu_count()
 
         # pack input info for each process
 
@@ -302,12 +306,17 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             # get aoR for this atm
             aoR_atm = aoR[:, grid_ID]
             nao_atm = nao_per_atm[atm_id]
-            taskinfo.append((grid_ID, aoR_atm, nao, nao_atm, c, m))
+            # taskinfo.append((grid_ID, aoR_atm, nao, nao_atm, c, m))
+            taskinfo.append(atm_IP_task((grid_ID, aoR_atm, nao, nao_atm, c, m)))
         
         # perform parallel computation
             
-        with Pool(nProcess) as p:
-            results = p.map(atm_IP_task, taskinfo)
+        # with Pool(nProcess) as p:
+        #     results = p.map(atm_IP_task, taskinfo)
+        # results = da.map(atm_IP_task, taskinfo)
+            
+        results = da.compute(*taskinfo)
+        
 
         # collect results
             
