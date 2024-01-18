@@ -102,9 +102,35 @@ def atm_IP_task(taskinfo:tuple):
     aoPair = np.einsum('ik,jk->ijk', aoR_atm1, aoR_atm2).reshape(-1, grid_ID.shape[0])
     _, R, pivot, npt_find = colpivot_qr(aoPair, max_rank=npt_find)
     # npt_find = min(R.shape[0], R.shape[1])
-    pivot_ID = grid_ID[pivot[:npt_find]]
+    pivot_ID = grid_ID[pivot[:npt_find]] # the global ID
     # pack res
-    return pivot_ID, R[:npt_find, :npt_find], npt_find
+    return pivot_ID, pivot[:npt_find], R[:npt_find, :npt_find], npt_find
+
+@delayed
+def construct_local_basis(taskinfo:tuple):
+    IP_local_ID, aoR_atm, naoatm, c = taskinfo
+
+    naux = naoatm * c
+    assert IP_local_ID.shape[0] >= naux
+    IP_local_ID = IP_local_ID[:naux]
+
+    IP_local_ID.sort()
+    aoRg = aoR_atm[:, IP_local_ID]
+    A = np.asarray(lib.dot(aoRg.T, aoRg), order='C')
+    A = A ** 2
+    B = np.asarray(lib.dot(aoRg.T, aoR_atm), order='C')
+    B = B ** 2
+
+    e, h = np.linalg.eigh(A)
+    # remove those eigenvalues that are too small
+    where = np.where(abs(e) > 1e-12)[0]
+    e = e[where]
+    h = h[:, where]
+    aux_basis = np.asarray(lib.dot(h.T, B), order='C')
+    aux_basis = (1.0/e).reshape(-1, 1) * aux_basis
+    aux_basis = np.asarray(lib.dot(h, aux_basis), order='C')
+
+    return IP_local_ID, aux_basis
 
 '''
 /// the following variables are input variables
@@ -169,19 +195,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         self.partition = None
 
-        # nao = ctypes.c_int(mol.nao_nr())
-        # natm = ctypes.c_int(mol.natm)
-        # ngrids = ctypes.c_int(aoR.shape[1])
-        # _cutoff_aoValue = ctypes.c_double(cutoff_aoValue)
-        # _cutoff_QR = ctypes.c_double(cutoff_QR)
-        self.partition = None
-
-        # nao = ctypes.c_int(mol.nao_nr())
-        # natm = ctypes.c_int(mol.natm)
-        # ngrids = ctypes.c_int(aoR.shape[1])
-        # _cutoff_aoValue = ctypes.c_double(cutoff_aoValue)
-        # _cutoff_QR = ctypes.c_double(cutoff_QR)
-
         self.natm = mol.natm
         self.nao = mol.nao_nr()
         self.ngrids = aoR.shape[1]
@@ -241,7 +254,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
         pass
 
-    def build_IP_Sandeep(self, c=5, m=5, ao_value_cutoff=1e-8, debug=True):
+    def build_IP_Sandeep(self, c=5, m=5, build_global_basis=True, debug=True):
 
         # build partition
 
@@ -280,97 +293,154 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         results = da.compute(*taskinfo)
 
-        # collect results
+        if build_global_basis:
 
-        for atm_id, result in enumerate(results):
-            pivot_ID, R, npt_find = result
-            possible_IP.extend(pivot_ID.tolist())
+            # collect results
 
-            print("atm_id = ", atm_id)
+            for atm_id, result in enumerate(results):
+                pivot_ID, _, R, npt_find = result
+                possible_IP.extend(pivot_ID.tolist())
+
+                print("atm_id = ", atm_id)
+                print("npt_find = ", npt_find)
+                # npt_find = min(R.shape[0], R.shape[1])
+                for i in range(npt_find):
+                    try:
+                        print("R[%3d] = %15.8e" % (i, R[i, i]))
+                    except:
+                        break
+
+            # sort the possible_IP
+
+            possible_IP.sort()
+            possible_IP = np.array(possible_IP)
+
+            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            if debug:
+                _benchmark_time(t1, t2, "build_IP_Atm")
+            t1 = t2
+
+            # a final global QRCP
+
+            aoR_IP = aoR[:, possible_IP]
+            naux_tmp = int(np.sqrt(c*nao)) + m
+            if naux_tmp > nao:
+                aoR1 = aoR_IP
+                aoR2 = aoR_IP
+            else:
+                G1 = np.random.rand(nao, naux_tmp)
+                G1, _ = numpy.linalg.qr(G1)
+                G2 = np.random.rand(nao, naux_tmp)
+                G2, _ = numpy.linalg.qr(G2)
+                aoR1 = G1.T @ aoR_IP
+                aoR2 = G2.T @ aoR_IP
+            aoPair = np.einsum('ik,jk->ijk', aoR1, aoR2).reshape(-1, possible_IP.shape[0])
+            npt_find = c * nao
+            _, R, pivot, npt_find = colpivot_qr(aoPair, max_rank=npt_find)
+
+            print("global QRCP")
             print("npt_find = ", npt_find)
-            # npt_find = min(R.shape[0], R.shape[1])
+            # npt_find = min(R.shape[0], R.shape[1]) # may be smaller than c*nao
             for i in range(npt_find):
-                try:
-                    print("R[%3d] = %15.8e" % (i, R[i, i]))
-                except:
-                    break
+                print("R[%3d] = %15.8e" % (i, R[i, i]))
 
-        # sort the possible_IP
+            IP_ID = possible_IP[pivot[:npt_find]]
+            IP_ID.sort()
+            print("IP_ID = ", IP_ID)
 
-        possible_IP.sort()
-        possible_IP = np.array(possible_IP)
+            self.IP_ID = IP_ID
 
-        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        if debug:
-            _benchmark_time(t1, t2, "build_IP_Atm")
-        t1 = t2
+            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            if debug:
+                _benchmark_time(t1, t2, "build_IP_Global")
+            t1 = t2
 
-        # a final global QRCP
+            # build the auxiliary basis
 
-        aoR_IP = aoR[:, possible_IP]
-        naux_tmp = int(np.sqrt(c*nao)) + m
-        if naux_tmp > nao:
-            aoR1 = aoR_IP
-            aoR2 = aoR_IP
+            aoRg = aoR[:, IP_ID]
+            naux = IP_ID.shape[0]
+            A = np.asarray(lib.dot(aoRg.T, aoRg), order='C')
+            A = A ** 2
+            print("A.shape = ", A.shape)
+
+            B = np.asarray(lib.dot(aoRg.T, aoR), order='C')
+            B = B ** 2
+
+            # try:
+            # self.aux_basis = scipy.linalg.solve(A, B, assume_a='sym') # single thread too slow
+            # except np.linalg.LinAlgError:
+            # catch singular matrix error
+
+            # use diagonalization instead
+
+            e, h = np.linalg.eigh(A)
+            # remove those eigenvalues that are too small
+            where = np.where(abs(e) > 1e-12)[0]
+            e = e[where]
+            h = h[:, where]
+            # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
+            self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')
+            self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
+            self.aux_basis = np.asarray(lib.dot(h, self.aux_basis), order='C')
+
+            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            if debug:
+                _benchmark_time(t1, t2, "build_auxiliary_basis")
         else:
-            G1 = np.random.rand(nao, naux_tmp)
-            G1, _ = numpy.linalg.qr(G1)
-            G2 = np.random.rand(nao, naux_tmp)
-            G2, _ = numpy.linalg.qr(G2)
-            aoR1 = G1.T @ aoR_IP
-            aoR2 = G2.T @ aoR_IP
-        aoPair = np.einsum('ik,jk->ijk', aoR1, aoR2).reshape(-1, possible_IP.shape[0])
-        npt_find = c * nao
-        _, R, pivot, npt_find = colpivot_qr(aoPair, max_rank=npt_find)
 
-        print("global QRCP")
-        print("npt_find = ", npt_find)
-        # npt_find = min(R.shape[0], R.shape[1]) # may be smaller than c*nao
-        for i in range(npt_find):
-            print("R[%3d] = %15.8e" % (i, R[i, i]))
+            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
-        IP_ID = possible_IP[pivot[:npt_find]]
-        IP_ID.sort()
-        print("IP_ID = ", IP_ID)
+            # build info for the next task 
 
-        self.IP_ID = IP_ID
+            atmgridID_2_grid_ID = []
 
-        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        if debug:
-            _benchmark_time(t1, t2, "build_IP_Global")
-        t1 = t2
+            taskinfo = []
+            for atm_id, result in enumerate(results):
+                grid_ID = np.where(partition == atm_id)[0]
+                atmgridID_2_grid_ID.append(grid_ID)
 
-        # build the auxiliary basis
+                _, pivot_local_ID, R, npt_find = result
 
-        aoRg = aoR[:, IP_ID]
-        naux = IP_ID.shape[0]
-        A = np.asarray(lib.dot(aoRg.T, aoRg), order='C')
-        A = A ** 2
-        print("A.shape = ", A.shape)
+                print("atm_id = ", atm_id)
+                print("npt_find = ", npt_find)
 
-        B = np.asarray(lib.dot(aoRg.T, aoR), order='C')
-        B = B ** 2
+                for i in range(npt_find):
+                    try:
+                        print("R[%3d] = %15.8e" % (i, R[i, i]))
+                    except:
+                        break
+                
+                taskinfo.append(construct_local_basis((pivot_local_ID, aoR[:, grid_ID], nao_per_atm[atm_id], c)))
+            
+            results = da.compute(*taskinfo)
 
-        # try:
-        # self.aux_basis = scipy.linalg.solve(A, B, assume_a='sym') # single thread too slow
-        # except np.linalg.LinAlgError:
-        # catch singular matrix error
+            naux = c * nao
+            IP_ID = []
 
-        # use diagonalization instead
+            aux_basis_packed = []
 
-        e, h = np.linalg.eigh(A)
-        # remove those eigenvalues that are too small
-        where = np.where(abs(e) > 1e-12)[0]
-        e = e[where]
-        h = h[:, where]
-        # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
-        self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')
-        self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
-        self.aux_basis = np.asarray(lib.dot(h, self.aux_basis), order='C')
+            for atm_id, result in enumerate(results):
+                IP_local_ID, aux_basis = result
+                print("atm_id = ", atm_id)
+                print("IP_local_ID = ", IP_local_ID)
 
-        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        if debug:
-            _benchmark_time(t1, t2, "build_auxiliary_basis")
+                # sort IP_local_ID
+
+                IP_ID.extend(atmgridID_2_grid_ID[atm_id][IP_local_ID])
+
+                naux_atm = IP_local_ID.shape[0]
+                aux_full = np.zeros((naux_atm, ngrids))
+                aux_full[:, atmgridID_2_grid_ID[atm_id]] = aux_basis
+                aux_basis_packed.append(aux_full)
+            
+            self.aux_basis = np.concatenate(aux_basis_packed, axis=0)
+            self.IP_ID = np.array(IP_ID)
+            aoRg = aoR[:, IP_ID]
+
+            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+
+            if debug:
+                _benchmark_time(t1, t2, "build_auxiliary_basis")
 
         self.c    = c
         self.naux = naux
@@ -382,15 +452,10 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         @delayed
         def construct_V(input:np.ndarray, ngrids, mesh, coul_G, axes=None):
             return (np.fft.ifftn((np.fft.fftn(input, axes=axes).reshape(-1, ngrids) * coul_G[None,:]).reshape(*mesh), axes=axes).real).reshape(ngrids)
-        # @delayed
-        # def ifftn_array(input:np.ndarray, axes=None):
-        #     return np.fft.ifftn(input, axes=axes).real
 
         print("mesh = ", mesh)
 
-        # ngrids = self._this.contents.ngrids
         ngrids = self.ngrids
-        # ngrids = self._this.contents.ngrids
         ngrids = self.ngrids
         naux   = self.naux
 
@@ -428,10 +493,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             # W += numpy.dot(self.aux_basis[:,p0:p1], V_R[:,p0:p1].T)
             W += np.asarray(lib.dot(self.aux_basis[:,p0:p1], V_R[:,p0:p1].T), order='C')
 
-        # for i in range(naux):
-        #     for j in range(i):
-        #         print("W[%5d, %5d] = %15.8e" % (i, j, W[i,j]))
-
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if debug:
             _benchmark_time(t1, t2, "build_auxiliary_Coulomb_W")
@@ -446,11 +507,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         aoR = self.aoR
         aoRg = aoR[:, self.IP_ID]
-
-
-        # nao = self._this.contents.nao
-        nao = self.nao
-        # nao = self._this.contents.nao
         nao = self.nao
 
         print("In check_AOPairError")
@@ -530,7 +586,7 @@ if __name__ == '__main__':
     cell.verbose = 4
 
     # cell.ke_cutoff  = 100   # kinetic energy cutoff in a.u.
-    cell.ke_cutoff = 128
+    cell.ke_cutoff = 256
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
@@ -555,7 +611,7 @@ if __name__ == '__main__':
     print("aoR.shape = ", aoR.shape)
 
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR, cutoff_aoValue=1e-6, cutoff_QR=1e-3)
-    pbc_isdf_info.build_IP_Sandeep(c=20)
+    pbc_isdf_info.build_IP_Sandeep(build_global_basis=False, c=32)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
     pbc_isdf_info.check_AOPairError()
 
