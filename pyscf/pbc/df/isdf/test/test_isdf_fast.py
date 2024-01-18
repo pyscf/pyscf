@@ -43,6 +43,8 @@ libpbc = lib.load_library('libpbc')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, name))
 
+BASIS_CUTOFF = 1e-18 # too small may lead to numerical instability
+
 # python version colpilot_qr() function
 
 def colpivot_qr(A, max_rank=None, cutoff=1e-14):
@@ -148,7 +150,7 @@ def construct_local_basis(taskinfo:tuple):
 
     e, h = np.linalg.eigh(A)
     # remove those eigenvalues that are too small
-    where = np.where(abs(e) > 1e-12)[0]
+    where = np.where(abs(e) > BASIS_CUTOFF)[0]
     e = e[where]
     h = h[:, where]
     aux_basis = np.asarray(lib.dot(h.T, B), order='C')
@@ -429,7 +431,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             e, h = np.linalg.eigh(A)
             # remove those eigenvalues that are too small
-            where = np.where(abs(e) > 1e-12)[0]
+            where = np.where(abs(e) > BASIS_CUTOFF)[0]
             e = e[where]
             h = h[:, where]
             # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
@@ -677,7 +679,7 @@ if __name__ == '__main__':
     print("aoR.shape = ", aoR.shape)
 
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR, cutoff_aoValue=1e-6, cutoff_QR=1e-3)
-    pbc_isdf_info.build_IP_Sandeep(build_global_basis=False, c=20)
+    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=15)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
     pbc_isdf_info.check_AOPairError()
 
