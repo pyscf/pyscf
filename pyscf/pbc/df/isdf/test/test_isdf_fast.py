@@ -59,7 +59,7 @@ def colpivot_qr(A, max_rank=None, cutoff=1e-14):
 
     for j in range(min(m, n, max_rank)):
         # Find the column with the largest norm
-        
+
         norms = np.linalg.norm(AA[:, j:], axis=0)
         p = np.argmax(norms) + j
 
@@ -160,8 +160,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.aux_basis = None
         self.c         = None
         self.naux      = None
-        self.W         = None 
-        self.aoRg      = None 
+        self.W         = None
+        self.aoRg      = None
         self.aoR       = aoR
         self.aoR       = aoR
         self.V_R       = None
@@ -219,7 +219,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         #                         aoR.ctypes.data_as(ctypes.c_void_p),
         #                         _cutoff_QR)
 
-        # given aoG, determine at given grid point, which ao has the maximal abs value 
+        # given aoG, determine at given grid point, which ao has the maximal abs value
 
         self.partition = np.argmax(np.abs(aoR), axis=0)
         print("partition = ", self.partition.shape)
@@ -245,18 +245,12 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         # build partition
 
-        # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
-        # ao2atomID = self.get_ao2atomID()
         ao2atomID = self.ao2atomID
-        # partition = self.get_partition()
         partition = self.partition
         aoR  = self.aoR
         natm = self.natm
         nao  = self.nao
-        # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
-        # ao2atomID = self.get_ao2atomID()
         ao2atomID = self.ao2atomID
-        # partition = self.get_partition()
         partition = self.partition
         aoR  = self.aoR
         natm = self.natm
@@ -273,36 +267,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         possible_IP = []
 
-        # for atm_id in range(natm):
-        #     # find partition for this atm
-        #     grid_ID = np.where(partition == atm_id)[0]
-        #     # get aoR for this atm
-        #     aoR_atm = aoR[:, grid_ID]
-        #     nao_atm = nao_per_atm[atm_id]
-        #     npt_find = c * nao_atm + 10
-        #     naux_tmp = int(np.sqrt(c*nao_atm)) + m
-        #     # generate to random orthogonal matrix of size (naux_tmp, nao), do not assume sparsity here
-        #     if npt_find > nao:
-        #         aoR_atm1 = aoR_atm
-        #         aoR_atm2 = aoR_atm
-        #     else:
-        #         G1 = np.random.rand(nao, naux_tmp)
-        #         G1, _ = numpy.linalg.qr(G1)
-        #         G2 = np.random.rand(nao, naux_tmp)
-        #         G2, _ = numpy.linalg.qr(G2)
-        #         aoR_atm1 = G1.T @ aoR_atm
-        #         aoR_atm2 = G2.T @ aoR_atm
-        #     aoPair = np.einsum('ik,jk->ijk', aoR_atm1, aoR_atm2).reshape(-1, grid_ID.shape[0])
-        #     _, R, pivot = colpivot_qr(aoPair, max_rank=npt_find)
-        #     pivot_ID = grid_ID[pivot[:npt_find]]
-        #     possible_IP.extend(pivot_ID.tolist())
-
-        #     print("atm_id = ", atm_id)
-        #     for i in range(npt_find):
-        #         print("R[%3d] = %15.8e" % (i, R[i, i]))
-
-        # nProcess = os.cpu_count()
-
         # pack input info for each process
 
         taskinfo = []
@@ -312,20 +276,12 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             # get aoR for this atm
             aoR_atm = aoR[:, grid_ID]
             nao_atm = nao_per_atm[atm_id]
-            # taskinfo.append((grid_ID, aoR_atm, nao, nao_atm, c, m))
             taskinfo.append(atm_IP_task((grid_ID, aoR_atm, nao, nao_atm, c, m)))
-        
-        # perform parallel computation
-            
-        # with Pool(nProcess) as p:
-        #     results = p.map(atm_IP_task, taskinfo)
-        # results = da.map(atm_IP_task, taskinfo)
-            
+
         results = da.compute(*taskinfo)
-        
 
         # collect results
-            
+
         for atm_id, result in enumerate(results):
             pivot_ID, R, npt_find = result
             possible_IP.extend(pivot_ID.tolist())
@@ -336,7 +292,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             for i in range(npt_find):
                 try:
                     print("R[%3d] = %15.8e" % (i, R[i, i]))
-                except: 
+                except:
                     break
 
         # sort the possible_IP
@@ -395,40 +351,41 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         B = np.asarray(lib.dot(aoRg.T, aoR), order='C')
         B = B ** 2
 
-        try:
-            self.aux_basis = scipy.linalg.solve(A, B, assume_a='sym')
-        except np.linalg.LinAlgError:
-            # catch singular matrix error
-            e, h = np.linalg.eigh(A)
-            # remove those eigenvalues that are too small
-            where = np.where(abs(e) > 1e-12)[0]
-            e = e[where]
-            h = h[:, where]
-            self.aux_basis = h @ np.diag(1/e) @ h.T @ B
+        # try:
+        # self.aux_basis = scipy.linalg.solve(A, B, assume_a='sym') # single thread too slow
+        # except np.linalg.LinAlgError:
+        # catch singular matrix error
 
-        # construct the auxiliary basis
+        # use diagonalization instead
 
-        # self.aux_basis = np.empty((naux,ngrids))
-        # blksize = int(10*1e9/8/naux)
-        # for p0, p1 in lib.prange(0, ngrids, blksize):
-        #     # B = numpy.dot(aoRg, aoR[p0:p1].T) ** 2
-        #     B = np.asarray(lib.dot(aoRg.T, aoR[:, p0:p1]), order='C')
-        #     B = B ** 2
-        #     self.aux_basis[:,p0:p1] = scipy.linalg.lstsq(A, B)[0]
-        #     B = None
-        # A = None
+        e, h = np.linalg.eigh(A)
+        # remove those eigenvalues that are too small
+        where = np.where(abs(e) > 1e-12)[0]
+        e = e[where]
+        h = h[:, where]
+        # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
+        self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')
+        self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
+        self.aux_basis = np.asarray(lib.dot(h, self.aux_basis), order='C')
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if debug:
             _benchmark_time(t1, t2, "build_auxiliary_basis")
-        
+
         self.c    = c
         self.naux = naux
         self.aoRg = aoRg
         self.aoR  = aoR
 
     def build_auxiliary_Coulomb(self, cell:Cell, mesh, debug=True):
-        
+
+        @delayed
+        def construct_V(input:np.ndarray, ngrids, mesh, coul_G, axes=None):
+            return (np.fft.ifftn((np.fft.fftn(input, axes=axes).reshape(-1, ngrids) * coul_G[None,:]).reshape(*mesh), axes=axes).real).reshape(ngrids)
+        # @delayed
+        # def ifftn_array(input:np.ndarray, axes=None):
+        #     return np.fft.ifftn(input, axes=axes).real
+
         print("mesh = ", mesh)
 
         # ngrids = self._this.contents.ngrids
@@ -441,14 +398,24 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         V_R   = np.zeros((naux, ngrids))
         coulG = tools.get_coulG(cell, mesh=mesh)
-        
+
         blksize1 = int(5*1e9/8/ngrids)
         for p0, p1 in lib.prange(0, naux, blksize1):
-            X_freq     = numpy.fft.fftn(self.aux_basis[p0:p1].reshape(-1,*mesh), axes=(1,2,3)).reshape(-1,ngrids)
-            V_G        = X_freq * coulG[None,:]
-            X_freq     = None
-            V_R[p0:p1] = numpy.fft.ifftn(V_G.reshape(-1,*mesh), axes=(1,2,3)).real.reshape(-1,ngrids)
-            V_G        = None
+
+            tmp1 = self.aux_basis[p0:p1].reshape(-1,*mesh)
+            task = []
+            for i in range(tmp1.shape[0]):
+                task.append(construct_V(tmp1[i], ngrids, mesh, coulG))
+            res = da.compute(*task)
+            V_R[p0:p1] = np.asarray(res).reshape(-1, ngrids)
+
+
+            # X_freq     = numpy.fft.fftn(self.aux_basis[p0:p1].reshape(-1,*mesh), axes=(1,2,3)).reshape(-1,ngrids)
+            # V_G        = X_freq * coulG[None,:]
+            # X_freq     = None
+            # V_R[p0:p1] = numpy.fft.ifftn(V_G.reshape(-1,*mesh), axes=(1,2,3)).real.reshape(-1,ngrids)
+            # V_G        = None
+
         coulG = None
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -458,7 +425,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         W = np.zeros((naux,naux))
         for p0, p1 in lib.prange(0, ngrids, blksize1*2):
-            W += numpy.dot(self.aux_basis[:,p0:p1], V_R[:,p0:p1].T)
+            # W += numpy.dot(self.aux_basis[:,p0:p1], V_R[:,p0:p1].T)
+            W += np.asarray(lib.dot(self.aux_basis[:,p0:p1], V_R[:,p0:p1].T), order='C')
 
         # for i in range(naux):
         #     for j in range(i):
@@ -467,7 +435,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if debug:
             _benchmark_time(t1, t2, "build_auxiliary_Coulomb_W")
-        
+
         self.V_R  = V_R
         self.W    = W
         self.mesh = mesh
@@ -500,59 +468,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             for j in range(diff_pair_abs_max.shape[0]):
                 # print("i = %5d, j = %5d diff_pair_abs_max = %15.8e" % (i, j, diff_pair_abs_max[j]))
                 print("(%5d, %5d, %15.8e)" % (i, j, diff_pair_abs_max[j]))
-
-
-    # def get_partition(self):
-    #     shape = (self._this.contents.ngrids,)
-    #     print("shape = ", shape)
-    #     data = ctypes.cast(self._this.contents.voronoi_partition,
-    #                        ctypes.POINTER(ctypes.c_int))
-    #     # print("data = ", data)
-    #     return numpy.ctypeslib.as_array(data, shape=shape)
-    #     # pass
-    # def get_partition(self):
-    #     shape = (self._this.contents.ngrids,)
-    #     print("shape = ", shape)
-    #     data = ctypes.cast(self._this.contents.voronoi_partition,
-    #                        ctypes.POINTER(ctypes.c_int))
-    #     # print("data = ", data)
-    #     return numpy.ctypeslib.as_array(data, shape=shape)
-    #     # pass
-
-    # def get_ao2atomID(self):
-    #     shape = (self._this.contents.nao,)
-    #     data = ctypes.cast(self._this.contents.ao2atomID,
-    #                        ctypes.POINTER(ctypes.c_int))
-    #     return numpy.ctypeslib.as_array(data, shape=shape)
-    # def get_ao2atomID(self):
-    #     shape = (self._this.contents.nao,)
-    #     data = ctypes.cast(self._this.contents.ao2atomID,
-    #                        ctypes.POINTER(ctypes.c_int))
-    #     return numpy.ctypeslib.as_array(data, shape=shape)
-
-    # def get_aoG(self):
-    #     shape = (self._this.contents.nao, self._this.contents.ngrids)
-    #     data = ctypes.cast(self._this.contents.aoG,
-    #                        ctypes.POINTER(ctypes.c_double))
-    #     return numpy.ctypeslib.as_array(data, shape=shape)
-    # def get_aoG(self):
-    #     shape = (self._this.contents.nao, self._this.contents.ngrids)
-    #     data = ctypes.cast(self._this.contents.aoG,
-    #                        ctypes.POINTER(ctypes.c_double))
-    #     return numpy.ctypeslib.as_array(data, shape=shape)
-
-    # def get_auxiliary_basis(self):
-    #     shape = (self._this.contents.naux, self._this.contents.ngrids)
-    #     print("shape = ", shape)
-    #     data = ctypes.cast(self._this.contents.auxiliary_basis,
-    #                        ctypes.POINTER(ctypes.c_double))
-    #     return numpy.ctypeslib.as_array(data, shape=shape)
-    # def get_auxiliary_basis(self):
-    #     shape = (self._this.contents.naux, self._this.contents.ngrids)
-    #     print("shape = ", shape)
-    #     data = ctypes.cast(self._this.contents.auxiliary_basis,
-    #                        ctypes.POINTER(ctypes.c_double))
-    #     return numpy.ctypeslib.as_array(data, shape=shape)
 
     def __del__(self):
         try:

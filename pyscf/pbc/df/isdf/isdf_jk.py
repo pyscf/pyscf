@@ -79,7 +79,7 @@ def _contract_j_mo(mydf, mo_coeffs):
     J = np.dot(V_R, density_R)
     # J = np.asarray(lib.dot(rho_mu_nu_Rg, J), order='C')
     J = np.dot(rho_mu_nu_Rg, J)
-    
+
     J2 = np.dot(V_R.T, density_Rg)
     J2 = np.einsum('ij,j->ij', aoR, J2)
     J += np.asarray(lib.dot(aoR, J2.T), order='C')
@@ -90,7 +90,7 @@ def _contract_j_mo(mydf, mo_coeffs):
     tmp = np.dot(W, density_Rg)
     # J -= np.asarray(lib.dot(rho_mu_nu_Rg, tmp), order='C')
     J -= np.dot(rho_mu_nu_Rg, tmp)
-    # J = np.dot(rho_mu_nu_Rg, tmp) 
+    # J = np.dot(rho_mu_nu_Rg, tmp)
 
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "_contract_j_mo")
@@ -239,21 +239,24 @@ def _contract_j_dm(mydf, dm):
     rho_mu_nu_Rg = np.einsum('ij,kj->ikj', aoRg, aoRg)
 
     # J = np.asarray(lib.dot(V_R, density_R), order='C')
-    J = np.dot(V_R, density_R)
+    # J = np.dot(V_R, density_R)
+    J = np.asarray(lib.dot(V_R, density_R.reshape(-1,1)), order='C').reshape(-1)
     # J = np.asarray(lib.dot(rho_mu_nu_Rg, J), order='C')
     # J = np.dot(rho_mu_nu_Rg, J)
     J = np.einsum('ij,j->ij', aoRg, J)
     J = np.asarray(lib.dot(aoRg, J.T), order='C')
     # J += J.T
 
-    J2 = np.dot(V_R.T, density_Rg)
+    # J2 = np.dot(V_R.T, density_Rg)
+    J2 = np.asarray(lib.dot(V_R.T, density_Rg.reshape(-1,1)), order='C').reshape(-1)
     J2 = np.einsum('ij,j->ij', aoR, J2)
     J += np.asarray(lib.dot(aoR, J2.T), order='C')
 
     #### step 3. get J term3
 
     # tmp = np.asarray(lib.dot(W, density_Rg), order='C')
-    tmp = np.dot(W, density_Rg)
+    # tmp = np.dot(W, density_Rg)
+    tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1)), order='C').reshape(-1)
     tmp = np.einsum('ij,j->ij', aoRg, tmp)
     # J -= np.asarray(lib.dot(rho_mu_nu_Rg, tmp), order='C')
     # J -= np.dot(rho_mu_nu_Rg, tmp)
