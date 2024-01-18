@@ -638,7 +638,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
             else:
                 return bse._orbital_basis(bse_obj)[0]
 
-        raise BasisNotFoundError('Unknown basis format or basis name')
+        raise BasisNotFoundError(f'Unknown basis format or basis name for {filename_or_basisname}')
 
     if 'dat' in basmod:
         b = fload(join(basis_dir, basmod), symb, optimize)
