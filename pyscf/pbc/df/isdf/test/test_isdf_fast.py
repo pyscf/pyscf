@@ -100,7 +100,7 @@ def atm_IP_task(taskinfo:tuple):
     npt_find = c * nao_atm + 10
     naux_tmp = int(np.sqrt(c*nao_atm)) + m
     # generate to random orthogonal matrix of size (naux_tmp, nao), do not assume sparsity here
-    if npt_find > nao:
+    if naux_tmp > nao:
         aoR_atm1 = aoR_atm
         aoR_atm2 = aoR_atm
     else:
@@ -124,7 +124,7 @@ def partition_IP_task(taskinfo:tuple):
     npt_find = naux
     naux_tmp = int(np.sqrt(naux)) + m
     # generate to random orthogonal matrix of size (naux_tmp, nao), do not assume sparsity here
-    if npt_find > nao:
+    if naux_tmp > nao:
         aoR_atm1 = aoR_atm
         aoR_atm2 = aoR_atm
     else:
