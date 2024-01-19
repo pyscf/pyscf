@@ -214,6 +214,7 @@ def _contract_j_dm(mydf, dm):
     aoR  = mydf.aoR
     V_R  = mydf.V_R
     naux = aoRg.shape[1]
+    IP_ID = mydf.IP_ID
 
     #### step 1. get density value on real space grid and IPs
 
@@ -226,9 +227,11 @@ def _contract_j_dm(mydf, dm):
 
     ## constract dm and aoR
 
+    ## TODO: optimize the following 4 lines
     tmp1 = np.asarray(lib.dot(dm, aoR), order='C')
     density_R = np.einsum('ik,ik->k', aoR, tmp1)
-    tmp1 = np.asarray(lib.dot(dm, aoRg), order='C')
+    # tmp1 = np.asarray(lib.dot(dm, aoRg), order='C')
+    tmp1 = tmp1[:, IP_ID]
     density_Rg = np.einsum('ik,ik->k', aoRg, tmp1)
 
     # density_R  = np.einsum('ij,ijk->k', dm, ao_pair_R)
@@ -243,13 +246,13 @@ def _contract_j_dm(mydf, dm):
     J = np.asarray(lib.dot(V_R, density_R.reshape(-1,1)), order='C').reshape(-1)
     # J = np.asarray(lib.dot(rho_mu_nu_Rg, J), order='C')
     # J = np.dot(rho_mu_nu_Rg, J)
-    J = np.einsum('ij,j->ij', aoRg, J)
+    J = np.einsum('ij,j->ij', aoRg, J)  # TODO: parallelize this line
     J = np.asarray(lib.dot(aoRg, J.T), order='C')
     # J += J.T
 
     # J2 = np.dot(V_R.T, density_Rg)
     J2 = np.asarray(lib.dot(V_R.T, density_Rg.reshape(-1,1)), order='C').reshape(-1)
-    J2 = np.einsum('ij,j->ij', aoR, J2)
+    J2 = np.einsum('ij,j->ij', aoR, J2)  # TODO: parallelize this line
     J += np.asarray(lib.dot(aoR, J2.T), order='C')
 
     #### step 3. get J term3
@@ -295,16 +298,17 @@ def _contract_k_dm(mydf, dm):
     aoR  = mydf.aoR
     V_R  = mydf.V_R
     naux = aoRg.shape[1]
+    IP_ID = mydf.IP_ID
 
     #### step 1. get density value on real space grid and IPs
 
-    density_RgR = np.asarray(lib.dot(dm, aoR), order='C')
-    density_RgR = np.asarray(lib.dot(aoRg.T, density_RgR), order='C')
-    density_RgRg = np.asarray(lib.dot(dm, aoRg), order='C')
-    density_RgRg = np.asarray(lib.dot(aoRg.T, density_RgRg), order='C')
+    density_RgR  = np.asarray(lib.dot(dm, aoR), order='C')
+    density_RgR  = np.asarray(lib.dot(aoRg.T, density_RgR), order='C')
+    density_RgRg = density_RgR[:, IP_ID]
 
     #### step 2. get K term1 and term2
 
+    ### todo: optimize the following 4 lines, it seems that they may not parallize!
     tmp = V_R * density_RgR  # pointwise multiplication
 
     K = np.asarray(lib.dot(tmp, aoR.T), order='C')
@@ -313,6 +317,7 @@ def _contract_k_dm(mydf, dm):
 
     #### step 3. get K term3
 
+    ### todo: optimize the following 4 lines, it seems that they may not parallize!
     tmp = W * density_RgRg  # pointwise multiplication
     tmp = np.asarray(lib.dot(tmp, aoRg.T), order='C')
     K -= np.asarray(lib.dot(aoRg, tmp), order='C')

@@ -44,8 +44,64 @@ def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, name))
 
 BASIS_CUTOFF = 1e-18  # too small may lead to numerical instability
+CRITERION_CALL_PARALLEL_QR = 256
 
 # python version colpilot_qr() function
+
+@delayed
+def _vec_norm(vec):
+    return np.linalg.norm(vec)
+@delayed
+def _daxpy(a, x, y):
+    return y + a * x
+
+def _colpivot_qr_parallel(A, max_rank=None, cutoff=1e-14):
+    m, n = A.shape
+    Q = np.zeros((m, m))
+    R = np.zeros((m, n))
+    AA = A.T.copy()  # cache friendly
+    pivot = np.arange(n)
+
+    if max_rank is None:
+        max_rank = min(m, n)
+
+    npt_find = 0
+
+    for j in range(min(m, n, max_rank)):
+        # Find the column with the largest norm
+
+        # norms = np.linalg.norm(AA[j:, :], axis=1)
+        task_norm = []
+        for i in range(j, n):
+            task_norm.append(_vec_norm(AA[i, :]))
+        norms = da.compute(*task_norm)
+        norms = np.asarray(norms)
+        p = np.argmax(norms) + j
+
+        # Swap columns j and p
+
+        AA[[j, p], :] = AA[[p, j], :]
+        R[:, [j, p]] = R[:, [p, j]]
+        pivot[[j, p]] = pivot[[p, j]]
+
+        # perform Shimdt orthogonalization
+
+        R[j, j] = np.linalg.norm(AA[j, :])
+        if R[j, j] < cutoff:
+            break
+        npt_find += 1
+        Q[j, :] = AA[j, :] / R[j, j]
+
+        R[j, j + 1:] = np.dot(AA[j + 1:, :], Q[j, :].T)
+        # AA[j + 1:, :] -= np.outer(R[j, j + 1:], Q[j, :])
+        task_daxpy = []
+        for i in range(j + 1, n):
+            task_daxpy.append(_daxpy(-R[j, i], Q[j, :], AA[i, :]))
+        if len(task_daxpy) > 0:
+            res = da.compute(*task_daxpy)
+            AA[j + 1:, :] = np.concatenate(da.compute(res), axis=0)
+
+    return Q.T, R, pivot, npt_find
 
 def colpivot_qr(A, max_rank=None, cutoff=1e-14):
     '''
@@ -293,6 +349,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     def build_IP_Sandeep(self, c=5, m=5,
                          atomic_partition=True,
                          ratio=0.8,
+                         global_IP_selection = True,
                          build_global_basis=True, debug=True):
 
         # build partition
@@ -366,6 +423,13 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 pivot_ID, _, R, npt_find = result
                 possible_IP.extend(pivot_ID.tolist())
 
+                if global_IP_selection == False:
+                    nao_atm  = nao_per_atm[atm_id]
+                    naux_now = c * nao_atm
+                    pivot_ID = pivot_ID[:naux_now]
+                    npt_find = naux_now
+
+
                 print("atm_id = ", atm_id)
                 print("npt_find = ", npt_find)
                 # npt_find = min(R.shape[0], R.shape[1])
@@ -387,32 +451,38 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             # a final global QRCP
 
-            aoR_IP = aoR[:, possible_IP]
-            naux_tmp = int(np.sqrt(c*nao)) + m
-            if naux_tmp > nao:
-                aoR1 = aoR_IP
-                aoR2 = aoR_IP
+            if global_IP_selection:
+                aoR_IP = aoR[:, possible_IP]
+                naux_tmp = int(np.sqrt(c*nao)) + m
+                if naux_tmp > nao:
+                    aoR1 = aoR_IP
+                    aoR2 = aoR_IP
+                else:
+                    G1 = np.random.rand(nao, naux_tmp)
+                    G1, _ = numpy.linalg.qr(G1)
+                    G2 = np.random.rand(nao, naux_tmp)
+                    G2, _ = numpy.linalg.qr(G2)
+                    # aoR1 = G1.T @ aoR_IP
+                    # aoR2 = G2.T @ aoR_IP
+                    aoR1 = np.asarray(lib.dot(G1.T, aoR_IP), order='C')
+                    aoR2 = np.asarray(lib.dot(G2.T, aoR_IP), order='C')
+                aoPair = np.einsum('ik,jk->ijk', aoR1, aoR2).reshape(-1, possible_IP.shape[0])
+                npt_find = c * nao
+
+                _, R, pivot, npt_find = colpivot_qr(aoPair, max_rank=npt_find)
+
+                print("global QRCP")
+                print("npt_find = ", npt_find)
+                # npt_find = min(R.shape[0], R.shape[1]) # may be smaller than c*nao
+                for i in range(npt_find):
+                    print("R[%3d] = %15.8e" % (i, R[i, i]))
+
+                IP_ID = possible_IP[pivot[:npt_find]]
             else:
-                G1 = np.random.rand(nao, naux_tmp)
-                G1, _ = numpy.linalg.qr(G1)
-                G2 = np.random.rand(nao, naux_tmp)
-                G2, _ = numpy.linalg.qr(G2)
-                aoR1 = G1.T @ aoR_IP
-                aoR2 = G2.T @ aoR_IP
-            aoPair = np.einsum('ik,jk->ijk', aoR1, aoR2).reshape(-1, possible_IP.shape[0])
-            npt_find = c * nao
-            _, R, pivot, npt_find = colpivot_qr(aoPair, max_rank=npt_find)
+                IP_ID = possible_IP
 
-            print("global QRCP")
-            print("npt_find = ", npt_find)
-            # npt_find = min(R.shape[0], R.shape[1]) # may be smaller than c*nao
-            for i in range(npt_find):
-                print("R[%3d] = %15.8e" % (i, R[i, i]))
-
-            IP_ID = possible_IP[pivot[:npt_find]]
             IP_ID.sort()
             print("IP_ID = ", IP_ID)
-
             self.IP_ID = IP_ID
 
             t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -622,8 +692,8 @@ if __name__ == '__main__':
 
     # Test the function
 
-    A = np.random.rand(5, 5)
-    Q, R, pivot, _ = colpivot_qr(A)
+    A = np.random.rand(16, 16)
+    Q, R, pivot, _ = _colpivot_qr_parallel(A)
 
     print("A = ", A)
     print("Q = ", Q)
@@ -690,7 +760,7 @@ if __name__ == '__main__':
     print("aoR.shape = ", aoR.shape)
 
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR, cutoff_aoValue=1e-6, cutoff_QR=1e-3)
-    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=15)
+    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=15, global_IP_selection=False)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
     pbc_isdf_info.check_AOPairError()
 
