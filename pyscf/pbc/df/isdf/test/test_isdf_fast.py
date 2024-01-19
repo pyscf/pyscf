@@ -421,13 +421,13 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             for atm_id, result in enumerate(results):
                 pivot_ID, _, R, npt_find = result
-                possible_IP.extend(pivot_ID.tolist())
 
                 if global_IP_selection == False:
                     nao_atm  = nao_per_atm[atm_id]
                     naux_now = c * nao_atm
                     pivot_ID = pivot_ID[:naux_now]
                     npt_find = naux_now
+                possible_IP.extend(pivot_ID.tolist())
 
 
                 print("atm_id = ", atm_id)
