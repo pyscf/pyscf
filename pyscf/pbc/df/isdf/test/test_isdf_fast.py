@@ -43,15 +43,18 @@ libpbc = lib.load_library('libpbc')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, name))
 
-BASIS_CUTOFF = 1e-18 # too small may lead to numerical instability
+BASIS_CUTOFF = 1e-18  # too small may lead to numerical instability
 
 # python version colpilot_qr() function
 
 def colpivot_qr(A, max_rank=None, cutoff=1e-14):
+    '''
+    we do not need Q
+    '''
     m, n = A.shape
     Q = np.zeros((m, m))
     R = np.zeros((m, n))
-    AA = A.copy()
+    AA = A.T.copy()  # cache friendly
     pivot = np.arange(n)
 
     if max_rank is None:
@@ -62,27 +65,33 @@ def colpivot_qr(A, max_rank=None, cutoff=1e-14):
     for j in range(min(m, n, max_rank)):
         # Find the column with the largest norm
 
-        norms = np.linalg.norm(AA[:, j:], axis=0)
+        # norms = np.linalg.norm(AA[:, j:], axis=0)
+        norms = np.linalg.norm(AA[j:, :], axis=1)
         p = np.argmax(norms) + j
 
         # Swap columns j and p
 
-        AA[:, [j, p]] = AA[:, [p, j]]
+        # AA[:, [j, p]] = AA[:, [p, j]]
+        AA[[j, p], :] = AA[[p, j], :]
         R[:, [j, p]] = R[:, [p, j]]
         pivot[[j, p]] = pivot[[p, j]]
 
         # perform Shimdt orthogonalization
 
-        R[j, j] = np.linalg.norm(AA[:, j])
+        # R[j, j] = np.linalg.norm(AA[:, j])
+        R[j, j] = np.linalg.norm(AA[j, :])
         if R[j, j] < cutoff:
             break
         npt_find += 1
-        Q[:, j] = AA[:, j] / R[j, j]
+        # Q[:, j] = AA[:, j] / R[j, j]
+        Q[j, :] = AA[j, :] / R[j, j]
 
-        R[j, j + 1:] = np.dot(Q[:, j].T, AA[:, j + 1:])
-        AA[:, j + 1:] -= np.outer(Q[:, j], R[j, j + 1:])
+        # R[j, j + 1:] = np.dot(Q[:, j].T, AA[:, j + 1:])
+        R[j, j + 1:] = np.dot(AA[j + 1:, :], Q[j, :].T)
+        # AA[:, j + 1:] -= np.outer(Q[:, j], R[j, j + 1:])
+        AA[j + 1:, :] -= np.outer(R[j, j + 1:], Q[j, :])
 
-    return Q, R, pivot, npt_find
+    return Q.T, R, pivot, npt_find
 
 @delayed
 def atm_IP_task(taskinfo:tuple):
@@ -104,7 +113,7 @@ def atm_IP_task(taskinfo:tuple):
     aoPair = np.einsum('ik,jk->ijk', aoR_atm1, aoR_atm2).reshape(-1, grid_ID.shape[0])
     _, R, pivot, npt_find = colpivot_qr(aoPair, max_rank=npt_find)
     # npt_find = min(R.shape[0], R.shape[1])
-    pivot_ID = grid_ID[pivot[:npt_find]] # the global ID
+    pivot_ID = grid_ID[pivot[:npt_find]]  # the global ID
     # pack res
     return pivot_ID, pivot[:npt_find], R[:npt_find, :npt_find], npt_find
 
@@ -128,7 +137,7 @@ def partition_IP_task(taskinfo:tuple):
     aoPair = np.einsum('ik,jk->ijk', aoR_atm1, aoR_atm2).reshape(-1, grid_ID.shape[0])
     _, R, pivot, npt_find = colpivot_qr(aoPair, max_rank=npt_find)
     # npt_find = min(R.shape[0], R.shape[1])
-    pivot_ID = grid_ID[pivot[:npt_find]] # the global ID
+    pivot_ID = grid_ID[pivot[:npt_find]]  # the global ID
     # pack res
     return pivot_ID, pivot[:npt_find], R[:npt_find, :npt_find], npt_find
 
@@ -281,9 +290,9 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
         pass
 
-    def build_IP_Sandeep(self, c=5, m=5, 
-                         atomic_partition=True, 
-                         ratio = 0.8, 
+    def build_IP_Sandeep(self, c=5, m=5,
+                         atomic_partition=True,
+                         ratio=0.8,
                          build_global_basis=True, debug=True):
 
         # build partition
@@ -330,7 +339,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             atomID2AO = []
             for atm_id in range(natm):
                 atomID2AO.append(np.where(ao2atomID == atm_id)[0])
-            
+
             partition = _clever_partition(aoR, atomID2AO, ratio=ratio)
 
             naux_tot = nao * c
@@ -344,8 +353,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 naux_now = int(naux_now + 0.5)
                 if naux_now == 0:
                     naux_now = 1
-                print("naux_now = ", naux_now)  
-                taskinfo.append(partition_IP_task((grid_ID, aoR_now, nao, naux_now, m)))    
+                print("naux_now = ", naux_now)
+                taskinfo.append(partition_IP_task((grid_ID, aoR_now, nao, naux_now, m)))
 
         results = da.compute(*taskinfo)
 
@@ -446,7 +455,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
-            # build info for the next task 
+            # build info for the next task
 
             # atmgridID_2_grid_ID = []
 
@@ -467,9 +476,9 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                         print("R[%3d] = %15.8e" % (i, R[i, i]))
                     except:
                         break
-                
+
                 # print("pivot_local_ID = ", pivot_local_ID)
-                
+
                 if atomic_partition:
                     taskinfo.append(construct_local_basis((pivot_local_ID, aoR[:, grid_ID], nao_per_atm[atm_id] * c)))
                 else:
@@ -498,7 +507,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 aux_basis_packed.append(aux_full)
 
                 naux += naux_atm
-            
+
             print("naux = ", naux)
 
             self.aux_basis = np.concatenate(aux_basis_packed, axis=0)
@@ -626,6 +635,8 @@ if __name__ == '__main__':
     print("Q * R * inverse P = ", Q@R[:, np.argsort(pivot)])
     print("diff = ", Q@R[:, np.argsort(pivot)] - A)
     print("Q^T * Q = ", Q.T @ Q)
+
+    # exit(1)
 
     cell   = pbcgto.Cell()
     boxlen = 3.5668
