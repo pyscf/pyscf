@@ -532,8 +532,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             self.naux = naux
             self._allocate_jk_buffer(datatype=np.double)
             buffer1 = np.ndarray((self.naux , self.naux), dtype=np.double, buffer=self.jk_buffer, offset=0)
-            buffer2 = np.ndarray((self.naux , self.ngrids), dtype=np.double, buffer=self.jk_buffer,
-                                 offset=self.naux * self.naux * self.jk_buffer.dtype.itemsize)
+            # buffer2 = np.ndarray((self.naux , self.ngrids), dtype=np.double, buffer=self.jk_buffer,
+            #                      offset=self.naux * self.naux * self.jk_buffer.dtype.itemsize)
 
             ## TODO: optimize this code so that the memory allocation is minimal!
 
@@ -564,6 +564,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             print("e.shape = ", e.shape)
             # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
             # self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')  # maximal size = naux * ngrids
+            buffer2 = np.ndarray((e.shape[0] , self.ngrids), dtype=np.double, buffer=self.jk_buffer,
+                     offset=self.naux * self.naux * self.jk_buffer.dtype.itemsize)
             B = np.asarray(lib.ddot(h.T, self.aux_basis, c=buffer2), order='C')
             # self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
             # B = (1.0/e).reshape(-1, 1) * B
