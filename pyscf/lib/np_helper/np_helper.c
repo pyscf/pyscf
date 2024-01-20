@@ -632,3 +632,16 @@ void NPzconcatenate(double complex *out, double complex **arrays, int narrays,
         istart = iend;
     }
 }
+
+void NPdcwisemul(double *out, double *a, double *b, size_t n)
+{
+#pragma omp parallel
+    {
+        size_t i;
+#pragma omp for schedule(static)
+        for (i = 0; i < n; i++)
+        {
+            out[i] += a[i] * b[i];
+        }
+    }
+}

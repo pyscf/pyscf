@@ -1601,6 +1601,25 @@ def vdot(a, b):
        ctypes.c_size_t(a.size))
     return out[0]
 
+def cwise_mul(a, b):
+    assert(a.size == b.size)
+    assert(a.dtype == b.dtype)
+
+    if a.dtype != numpy.double:
+        raise NotImplementedError
+    else:
+        fn = getattr(_np_helper, "NPdcwisemul", None)
+        assert(fn is not None)
+
+    out = numpy.zeros_like(a)
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       b.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(a.size))
+
+    return out
+
+
 class NPArrayWithTag(numpy.ndarray):
     # Initialize kwargs in function tag_array
     #def __new__(cls, a, **kwargs):

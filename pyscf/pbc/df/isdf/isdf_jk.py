@@ -229,30 +229,32 @@ def _contract_j_dm(mydf, dm):
 
     ## TODO: optimize the following 4 lines
     tmp1 = np.asarray(lib.dot(dm, aoR), order='C')
-    density_R = np.einsum('ik,ik->k', aoR, tmp1)
+    # density_R = np.einsum('ik,ik->k', aoR, tmp1)
+    density_R = np.asarray(lib.multiply_sum(aoR, tmp1), order='C')
     # tmp1 = np.asarray(lib.dot(dm, aoRg), order='C')
     tmp1 = tmp1[:, IP_ID]
-    density_Rg = np.einsum('ik,ik->k', aoRg, tmp1)
+    # density_Rg = np.einsum('ik,ik->k', aoRg, tmp1)
+    density_Rg = np.asarray(lib.multiply_sum(aoRg, tmp1), order='C')
 
     # density_R  = np.einsum('ij,ijk->k', dm, ao_pair_R)
     # density_Rg = np.einsum('ij,ijk->k', dm, ao_pair_Rg)
 
     ## TODO: remove the redundancy due to the symmetry
 
-    rho_mu_nu_Rg = np.einsum('ij,kj->ikj', aoRg, aoRg)
+    rho_mu_nu_Rg = np.einsum('ij,kj->ikj', aoRg, aoRg) # This should be the leading term of the computation cost in a single-thread mode. 
 
     # J = np.asarray(lib.dot(V_R, density_R), order='C')
     # J = np.dot(V_R, density_R)
     J = np.asarray(lib.dot(V_R, density_R.reshape(-1,1)), order='C').reshape(-1)
     # J = np.asarray(lib.dot(rho_mu_nu_Rg, J), order='C')
     # J = np.dot(rho_mu_nu_Rg, J)
-    J = np.einsum('ij,j->ij', aoRg, J)  # TODO: parallelize this line
+    J = np.einsum('ij,j->ij', aoRg, J)  # TODO: parallelize this line, seems to be of no use
     J = np.asarray(lib.dot(aoRg, J.T), order='C')
     # J += J.T
 
     # J2 = np.dot(V_R.T, density_Rg)
     J2 = np.asarray(lib.dot(V_R.T, density_Rg.reshape(-1,1)), order='C').reshape(-1)
-    J2 = np.einsum('ij,j->ij', aoR, J2)  # TODO: parallelize this line
+    J2 = np.einsum('ij,j->ij', aoR, J2)  # TODO: parallelize this line, seems to be of no use
     J += np.asarray(lib.dot(aoR, J2.T), order='C')
 
     #### step 3. get J term3
@@ -260,7 +262,7 @@ def _contract_j_dm(mydf, dm):
     # tmp = np.asarray(lib.dot(W, density_Rg), order='C')
     # tmp = np.dot(W, density_Rg)
     tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1)), order='C').reshape(-1)
-    tmp = np.einsum('ij,j->ij', aoRg, tmp)
+    tmp = np.einsum('ij,j->ij', aoRg, tmp) # TODO: parallelize this line, seems to be of no use
     # J -= np.asarray(lib.dot(rho_mu_nu_Rg, tmp), order='C')
     # J -= np.dot(rho_mu_nu_Rg, tmp)
     J -= np.asarray(lib.dot(aoRg, tmp.T), order='C')
@@ -309,10 +311,11 @@ def _contract_k_dm(mydf, dm):
     #### step 2. get K term1 and term2
 
     ### todo: optimize the following 4 lines, it seems that they may not parallize!
-    tmp = V_R * density_RgR  # pointwise multiplication
+    # tmp = V_R * density_RgR  # pointwise multiplication, TODO: this term should be parallized 
+    tmp = np.asarray(lib.cwise_mul(V_R, density_RgR), order='C')
 
-    K = np.asarray(lib.dot(tmp, aoR.T), order='C')
-    K = np.asarray(lib.dot(aoRg, K), order='C')  ### the order due to the fact that naux << ngrid
+    K  = np.asarray(lib.dot(tmp, aoR.T), order='C')
+    K  = np.asarray(lib.dot(aoRg, K), order='C')  ### the order due to the fact that naux << ngrid
     K += K.T
 
     #### step 3. get K term3
@@ -320,7 +323,7 @@ def _contract_k_dm(mydf, dm):
     ### todo: optimize the following 4 lines, it seems that they may not parallize!
     tmp = W * density_RgRg  # pointwise multiplication
     tmp = np.asarray(lib.dot(tmp, aoRg.T), order='C')
-    K -= np.asarray(lib.dot(aoRg, tmp), order='C')
+    K  -= np.asarray(lib.dot(aoRg, tmp), order='C')
     # K = np.asarray(lib.dot(aoRg, tmp), order='C')
 
     t2 = (logger.process_clock(), logger.perf_counter())

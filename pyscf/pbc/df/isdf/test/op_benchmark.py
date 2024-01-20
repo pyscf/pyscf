@@ -26,28 +26,65 @@ libpbc = lib.load_library('libpbc')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, name))
 
+@delayed
+def _cwise_mul(a, b):
+    return a * b
 
 if __name__ == "__main__":
-   
-    t1 = (logger.process_clock(), logger.perf_counter()) 
-    NORB   = 128
-    NGRID  = 50000
-    aoR    = np.random.random((NORB, NGRID))
-    aoPair = np.einsum('ik,jk->ijk', aoR, aoR).reshape(-1, NGRID)
-    t2 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t1, t2, 'getaopair')
 
-    t1 = (logger.process_clock(), logger.perf_counter()) 
-    NORB   = 128
-    NGRID  = 2560
-    aoR    = np.random.random((NORB, NGRID))
-    aoPair = np.einsum('ik,jk->ijk', aoR, aoR).reshape(-1, NGRID)
+    NORB   = 256
+    NGRID  = 5120  # c=20
+    aoRg    = np.random.random((NORB, NGRID))
+    J      = np.random.random((NGRID))
+
+    t1 = (logger.process_clock(), logger.perf_counter())
+    J = np.einsum('ij,j->ij', aoRg, J)
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, 'getaopair')
 
     t1 = (logger.process_clock(), logger.perf_counter())
-    NORB2 = 32
-    Mat = np.random.random((NORB2, NORB))
-    Mat1 = Mat @ aoR
+    rho_mu_nu_Rg = np.einsum('ij,kj->ikj', aoRg, aoRg)   # this could be very costly !
     t2 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t1, t2, 'matvec')
+    _benchmark_time(t1, t2, 'getrho')
+    rho_mu_nu_Rg = None
+
+    NORB      = 64
+    NGRID_ALL = 46646
+    aoR       = np.random.random((NORB, NGRID_ALL))
+    tmp1      = np.random.random((NORB, NGRID_ALL))
+
+    t1 = (logger.process_clock(), logger.perf_counter())
+    density_R = np.einsum('ik,ik->k', aoR, tmp1)
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, 'getdensity')
+    tmp1 = None
+
+    J = np.random.random((NGRID_ALL))
+
+    t1 = (logger.process_clock(), logger.perf_counter())
+    J = np.einsum('ij,j->ij', aoR, J)
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, 'getaopair')
+
+    t1 = (logger.process_clock(), logger.perf_counter())
+    J = aoR * J
+    # print(J.shape)
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, 'getaopair')
+
+    J = None
+    aoR = None
+
+    NGRID_ALL = 30000
+    V_R = np.random.random((NGRID, NGRID_ALL))
+    density_RgR = np.random.random((NGRID, NGRID_ALL))
+
+    t1 = (logger.process_clock(), logger.perf_counter())
+    W = numpy.multiply(V_R, density_RgR)
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, 'get_K_kernel')
+
+    t1 = (logger.process_clock(), logger.perf_counter())
+    W = lib.cwise_mul(V_R, density_RgR)
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, 'get_K_kernel')

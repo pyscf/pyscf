@@ -760,7 +760,7 @@ if __name__ == '__main__':
     print("aoR.shape = ", aoR.shape)
 
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR, cutoff_aoValue=1e-6, cutoff_QR=1e-3)
-    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=15, global_IP_selection=False)
+    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=15, global_IP_selection=True)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
     pbc_isdf_info.check_AOPairError()
 
