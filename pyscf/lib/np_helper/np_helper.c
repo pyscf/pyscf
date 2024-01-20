@@ -660,6 +660,34 @@ void NPd_ij_j_ij(double *out, double *a, double *b, size_t nrow, size_t ncol)
     }
 }
 
+void NPd_i_ij_ij(double *out, double *a, double *b, size_t nrow, size_t ncol)
+{
+#pragma omp parallel
+    {
+        size_t i, j;
+        double *pb, *pout;
+#pragma omp for schedule(static)
+        for (i = 0; i < nrow; i++)
+        {
+            pb = b + i * ncol;
+            pout = out + i * ncol;
+            for (j = 0; j < ncol; j++)
+            {
+                pout[j] = a[i] * pb[j]; // out[i,j] = a[i] * b[i,j]
+            }
+        }
+    }
+}
+
+void NPdsquare_inPlace(double *a, size_t n)
+{
+#pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < n; i++)
+    {
+        a[i] = a[i] * a[i];
+    }
+}
+
 void NPdcwisemul(double *out, double *a, double *b, size_t n)
 {
 #pragma omp parallel

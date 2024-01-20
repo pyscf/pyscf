@@ -25,6 +25,9 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 
+
+from memory_profiler import profile
+
 ##################################################
 #
 # only Gamma Point
@@ -184,7 +187,7 @@ def get_jk_mo(mydf, occ_mo_coeff, hermi=1, kpt=np.zeros(3),
     t1 = log.timer('sr jk', *t1)
     return vj, vk
 
-
+# @profile
 def _contract_j_dm(mydf, dm):
     '''
 
@@ -216,6 +219,9 @@ def _contract_j_dm(mydf, dm):
     naux = aoRg.shape[1]
     IP_ID = mydf.IP_ID
 
+    # print("address of mydf.aoR = ", mydf.aoR.__array_interface__['data'][0])
+    # print("address of aoR      = ", aoR.__array_interface__['data'][0])
+
     #### step 2. get J term1 and term2
 
     # buffersize = nao * ngrid + ngrid + nao * naux + naux + naux + nao * nao
@@ -234,7 +240,14 @@ def _contract_j_dm(mydf, dm):
     buffer7 = np.ndarray((nao,naux), dtype=dm.dtype, buffer=buffer, offset=0)
     buffer8 = np.ndarray((naux), dtype=dm.dtype, buffer=buffer, offset=nao * ngrid * dm.dtype.itemsize)
 
+    # print("address of mydf.jk_buffer = ", id(mydf.jk_buffer))
+    # print("address of buffer         = ", id(buffer))
+    # print("address of buffer1        = ", id(buffer1))
+    # import sys
+    # print("size    of buffer1        = ", sys.getsizeof(buffer1))
+    # print(buffer.__array_interface__['data'][0])
     # print(buffer1.__array_interface__['data'][0])
+
     # print(buffer2.__array_interface__['data'][0])
     # print(buffer3.__array_interface__['data'][0])
     # print(buffer4.__array_interface__['data'][0])
@@ -257,82 +270,95 @@ def _contract_j_dm(mydf, dm):
 
     # need allocate memory, size = nao  * ngrid, (buffer 1)
 
-    tmp1 = np.asarray(lib.dot(dm, aoR, c=buffer1), order='C')
-    
+    # tmp1 = np.asarray(lib.dot(dm, aoR, c=buffer1), order='C')
+    # print('dm.flags: %s' % str(dm.flags))
+    # print('aoR.flags: %s' % str(aoR.flags))
+    # print("before calling ddot in _contract_j_dm")
+    # print("dm.shape", dm.shape)
+    # print("aoR.shape", aoR.shape)
+    lib.ddot(dm, aoR, c=buffer1)  
+    # print("after calling ddot in _contract_j_dm")
+    tmp1 = buffer1
+    # print(buffer1.__array_interface__['data'][0])
+    # print(tmp1.__array_interface__['data'][0])
+    # print("address of aoR      = ", aoR.__array_interface__['data'][0])
+
     # assert tmp1.__array_interface__['data'][0] == ptr1
 
-    density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')    # need allocate memory, size = ngrid, (buffer 2)
-    
+    # need allocate memory, size = ngrid, (buffer 2)
+    density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')
+
     # assert density_R.__array_interface__['data'][0] == ptr2
 
     # need allocate memory, size = nao  * naux, (buffer 3)
-    
-    lib.dslice(tmp1, IP_ID, buffer3)    
+
+    lib.dslice(tmp1, IP_ID, buffer3)
     tmp1 = buffer3
-    
+
     # assert tmp1.__array_interface__['data'][0] == ptr3
-    
-    density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg, tmp1, out=buffer4), order='C')  # need allocate memory, size = naux, (buffer 4)
-    
+
+    density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg, tmp1, out=buffer4),
+                            order='C')  # need allocate memory, size = naux, (buffer 4)
+
     # assert density_Rg.__array_interface__['data'][0] == ptr4
 
     # This should be the leading term of the computation cost in a single-thread mode.
 
     # need allocate memory, size = naux, (buffer 5)
-    
-    J = np.asarray(lib.dot(V_R, density_R.reshape(-1,1), c=buffer5.reshape(-1,1)), order='C').reshape(-1)
-    
+
+    J = np.asarray(lib.ddot_withbuffer(V_R, density_R.reshape(-1,1), c=buffer5.reshape(-1,1), buf=mydf.ddot_buf), order='C').reshape(-1)   # with buffer, size 
+
     # assert J.__array_interface__['data'][0] == ptr5
-    
+
     # do not need allocate memory, use buffer 3
-    
+
     # J = np.einsum('ij,j->ij', aoRg, J)
     J = np.asarray(lib.d_ij_j_ij(aoRg, J, out=buffer3), order='C')
-    
+
     # assert J.__array_interface__['data'][0] == ptr3
-    
+
     # need allocate memory, size = nao  * nao, (buffer 6)
-    
-    J = np.asarray(lib.dot(aoRg, J.T, c=buffer6), order='C')
+
+    J = np.asarray(lib.ddot_withbuffer(aoRg, J.T, c=buffer6, buf=mydf.ddot_buf), order='C')
     # assert J.__array_interface__['data'][0] == ptr6
 
     # do not need allocate memory, use buffer 2
-    
+
     J2 = np.asarray(lib.dot(V_R.T, density_Rg.reshape(-1,1), c=buffer2.reshape(-1,1)), order='C').reshape(-1)
     # assert J2.__array_interface__['data'][0] == ptr2
-    
+
     # do not need allocate memory, use buffer 1
-    
+
     # J2 = np.einsum('ij,j->ij', aoR, J2)
     J2 = np.asarray(lib.d_ij_j_ij(aoR, J2, out=buffer1), order='C')
     # assert J2.__array_interface__['data'][0] == ptr1
-    
+
     # do not need allocate memory, use buffer 6
-    
+
     # J += np.asarray(lib.dot(aoR, J2.T), order='C')
-    lib.dot(aoR, J2.T, c=J, beta=1)
+    lib.ddot_withbuffer(aoR, J2.T, c=J, beta=1, buf=mydf.ddot_buf)
     # assert J.__array_interface__['data'][0] == ptr6
 
     #### step 3. get J term3
 
     # do not need allocate memory, use buffer 2
-    
+
     tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1), c=buffer8.reshape(-1,1)), order='C').reshape(-1)
-    
+
     # assert tmp.__array_interface__['data'][0] == ptr8
-    
+
     # do not need allocate memory, use buffer 1 but viewed as buffer 7
-    
+
     # tmp = np.einsum('ij,j->ij', aoRg, tmp)
     tmp = np.asarray(lib.d_ij_j_ij(aoRg, tmp, out=buffer7), order='C')
-    
+
     # assert tmp.__array_interface__['data'][0] == ptr7
-    
+
     # do not need allocate memory, use buffer 6
-    
+
     # J -= np.asarray(lib.dot(aoRg, tmp.T), order='C')
-    lib.dot(aoRg, -tmp.T, c=J, beta=1)
-    
+    lib.ddot_withbuffer(aoRg, -tmp.T, c=J, beta=1, buf=mydf.ddot_buf)
+
     # assert J.__array_interface__['data'][0] == ptr6
 
     t2 = (logger.process_clock(), logger.perf_counter())
@@ -340,6 +366,7 @@ def _contract_j_dm(mydf, dm):
 
     return J * ngrid / vol
 
+# @profile
 def _contract_k_dm(mydf, dm):
     '''
 
@@ -380,18 +407,25 @@ def _contract_k_dm(mydf, dm):
     buffer5 = np.ndarray((naux,nao), dtype=dm.dtype, buffer=buffer, offset=0)
     buffer6 = np.ndarray((naux,nao), dtype=dm.dtype, buffer=buffer, offset=nao * ngrid * dm.dtype.itemsize)
 
+    print("address of mydf.jk_buffer = ", id(mydf.jk_buffer))
+    print("address of buffer         = ", id(buffer))
+    print("address of buffer1        = ", id(buffer1))
+
+    # ptr1 = buffer1.__array_interface__['data'][0]
+
     #### step 1. get density value on real space grid and IPs
 
     # need allocate memory, size = nao  * ngrid, this buffer does not need anymore  (buffer 1)
 
     density_RgR  = np.asarray(lib.dot(dm, aoR, c=buffer1), order='C')
-
-    # assert density_RgR.__array_interface__['data'] == buffer1.__array_interface__['data']
+    # print("buffer1.size", buffer1.size)
+    # assert density_RgR.__array_interface__['data'][0] == ptr1
 
     # need allocate memory, size = naux * ngrid                                     (buffer 2)
 
-    density_RgR  = np.asarray(lib.dot(aoRg.T, density_RgR, c=buffer2), order='C')
-
+    # density_RgR  = np.asarray(lib.dot(aoRg.T, density_RgR, c=buffer2), order='C')
+    lib.ddot(aoRg.T, density_RgR, c=buffer2)
+    density_RgR = buffer2
     # assert density_RgR.__array_interface__['data'] == buffer2.__array_interface__['data']
 
     # need allocate memory, size = naux * naux                                      (buffer 3)
@@ -418,13 +452,13 @@ def _contract_k_dm(mydf, dm):
 
     # do not need allocate memory, size = naux * nao,   (buffer 1, but viewed as buffer5)
 
-    K  = np.asarray(lib.dot(tmp, aoR.T, c=buffer5), order='C')
+    K  = np.asarray(lib.ddot_withbuffer(tmp, aoR.T, c=buffer5, buf=mydf.ddot_buf), order='C')
 
     # assert K.__array_interface__['data'] == buffer5.__array_interface__['data']
 
     ### the order due to the fact that naux << ngrid  # need allocate memory, size = nao * nao,           (buffer 4)
 
-    K  = np.asarray(lib.dot(aoRg, K, c=buffer4), order='C')
+    K  = np.asarray(lib.ddot_withbuffer(aoRg, K, c=buffer4, buf=mydf.ddot_buf), order='C')
     K += K.T
 
     # assert K.__array_interface__['data'] == buffer4.__array_interface__['data']
@@ -446,7 +480,7 @@ def _contract_k_dm(mydf, dm):
     # assert tmp.__array_interface__['data'] == buffer6.__array_interface__['data']
 
     # K  -= np.asarray(lib.dot(aoRg, tmp, c=K, beta=1), order='C')     # do not need allocate memory, size = nao * nao, (buffer 4)
-    lib.dot(aoRg, -tmp, c=K, beta=1)
+    lib.ddot_withbuffer(aoRg, -tmp, c=K, beta=1, buf=mydf.ddot_buf)
 
     # assert K.__array_interface__['data'] == buffer4.__array_interface__['data']
 

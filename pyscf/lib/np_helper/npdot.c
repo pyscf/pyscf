@@ -1,11 +1,11 @@
 /* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
-  
+
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
- 
+
         http://www.apache.org/licenses/LICENSE-2.0
- 
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,14 +17,15 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <complex.h>
-//#include <omp.h>
+// #include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
 #include "np_helper/np_helper.h"
 
-#define MIN(X,Y)        ((X) < (Y) ? (X) : (Y))
-#define MAX(X,Y)        ((X) > (Y) ? (X) : (Y))
+#define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 
 /*
  * numpy.dot may call unoptimized blas
@@ -38,104 +39,136 @@ void NPdgemm(const char trans_a, const char trans_b,
 {
         const size_t Ldc = ldc;
         int i, j;
-        if (m == 0 || n == 0) {
+        if (m == 0 || n == 0)
+        {
                 return;
-        } else if (k == 0) {
-                for (i = 0; i < n; i++) {
-                for (j = 0; j < m; j++) {
-                        c[i*Ldc+j] = 0;
-                } }
+        }
+        else if (k == 0)
+        {
+                for (i = 0; i < n; i++)
+                {
+                        for (j = 0; j < m; j++)
+                        {
+                                c[i * Ldc + j] = 0;
+                        }
+                }
                 return;
         }
         a += offseta;
         b += offsetb;
         c += offsetc;
 
-        if ((k/m) > 3 && (k/n) > 3) { // parallelize k
+        if ((k / m) > 3 && (k / n) > 3)
+        { // parallelize k
 
-                if (beta == 0) {
-                        for (i = 0; i < n; i++) {
-                                for (j = 0; j < m; j++) {
-                                        c[i*Ldc+j] = 0;
-                                }
-                        }
-                } else {
-                        for (i = 0; i < n; i++) {
-                                for (j = 0; j < m; j++) {
-                                        c[i*Ldc+j] *= beta;
+                if (beta == 0)
+                {
+                        for (i = 0; i < n; i++)
+                        {
+                                for (j = 0; j < m; j++)
+                                {
+                                        c[i * Ldc + j] = 0;
                                 }
                         }
                 }
+                else
+                {
+                        for (i = 0; i < n; i++)
+                        {
+                                for (j = 0; j < m; j++)
+                                {
+                                        c[i * Ldc + j] *= beta;
+                                }
+                        }
+                }
+
+                printf("k = %d\n", k);
+                printf("m = %d\n", m);
+                printf("n = %d\n", n);
+                printf("paralleize k , may cause performance issue\n");
+                // fflush(stdout);
 
 #pragma omp parallel private(i, j)
-{
-                double D0 = 0;
-                double *cpriv = malloc(sizeof(double) * (m*n+2));
-                size_t k0, k1, ij;
-                NPomp_split(&k0, &k1, k);
-                int dk = k1 - k0;
-                if (dk > 0) {
-                        size_t astride = k0;
-                        size_t bstride = k0;
-                        if (trans_a == 'N') {
-                                astride *= lda;
+                {
+                        double D0 = 0;
+                        double *cpriv = malloc(sizeof(double) * (m * n + 2)); // WARNING: this operation can cause performance issue when the data size is large
+                        size_t k0, k1, ij;
+                        NPomp_split(&k0, &k1, k);
+                        int dk = k1 - k0;
+                        if (dk > 0)
+                        {
+                                size_t astride = k0;
+                                size_t bstride = k0;
+                                if (trans_a == 'N')
+                                {
+                                        astride *= lda;
+                                }
+                                if (trans_b != 'N')
+                                {
+                                        bstride *= ldb;
+                                }
+                                dgemm_(&trans_a, &trans_b, &m, &n, &dk,
+                                       &alpha, a + astride, &lda, b + bstride, &ldb,
+                                       &D0, cpriv, &m);
                         }
-                        if (trans_b != 'N') {
-                                bstride *= ldb;
-                        }
-                        dgemm_(&trans_a, &trans_b, &m, &n, &dk,
-                               &alpha, a+astride, &lda, b+bstride, &ldb,
-                               &D0, cpriv, &m);
-                }
 #pragma omp critical
-                if (dk > 0) {
-                        for (ij = 0, i = 0; i < n; i++) {
-                        for (j = 0; j < m; j++, ij++) {
-                                c[i*Ldc+j] += cpriv[ij];
-                        } }
+                        if (dk > 0)
+                        {
+                                for (ij = 0, i = 0; i < n; i++)
+                                {
+                                        for (j = 0; j < m; j++, ij++)
+                                        {
+                                                c[i * Ldc + j] += cpriv[ij];
+                                        }
+                                }
+                        }
+
+                        free(cpriv);
                 }
-
-                free(cpriv);
-}
-
-        } else if (m > n*2) { // parallelize m
+        }
+        else if (m > n * 2)
+        { // parallelize m
 
 #pragma omp parallel
-{
-                size_t m0, m1;
-                NPomp_split(&m0, &m1, m);
-                int dm = m1 - m0;
-                if (dm > 0) {
-                        size_t astride = m0;
-                        if (trans_a != 'N') {
-                                astride *= lda;
+                {
+                        size_t m0, m1;
+                        NPomp_split(&m0, &m1, m);
+                        int dm = m1 - m0;
+                        if (dm > 0)
+                        {
+                                size_t astride = m0;
+                                if (trans_a != 'N')
+                                {
+                                        astride *= lda;
+                                }
+                                dgemm_(&trans_a, &trans_b, &dm, &n, &k,
+                                       &alpha, a + astride, &lda, b, &ldb,
+                                       &beta, c + m0, &ldc);
                         }
-                        dgemm_(&trans_a, &trans_b, &dm, &n, &k,
-                               &alpha, a+astride, &lda, b, &ldb,
-                               &beta, c+m0, &ldc);
                 }
-}
-
-        } else { // parallelize n
+        }
+        else
+        { // parallelize n
 
 #pragma omp parallel
-{
-                size_t n0, n1;
-                NPomp_split(&n0, &n1, n);
-                int dn = n1 - n0;
-                if (dn > 0) {
-                        size_t bstride = n0;
-                        if (trans_b == 'N') {
-                                bstride *= ldb;
+                {
+                        size_t n0, n1;
+                        NPomp_split(&n0, &n1, n);
+                        int dn = n1 - n0;
+                        if (dn > 0)
+                        {
+                                size_t bstride = n0;
+                                if (trans_b == 'N')
+                                {
+                                        bstride *= ldb;
+                                }
+                                dgemm_(&trans_a, &trans_b, &m, &dn, &k,
+                                       &alpha, a, &lda, b + bstride, &ldb,
+                                       &beta, c + Ldc * n0, &ldc);
                         }
-                        dgemm_(&trans_a, &trans_b, &m, &dn, &k,
-                               &alpha, a, &lda, b+bstride, &ldb,
-                               &beta, c+Ldc*n0, &ldc);
                 }
-}
         }
 }
-
 
 void NPzgemm(const char trans_a, const char trans_b,
              const int m, const int n, const int k,
@@ -146,99 +179,272 @@ void NPzgemm(const char trans_a, const char trans_b,
 {
         const size_t Ldc = ldc;
         int i, j;
-        if (m == 0 || n == 0) {
+        if (m == 0 || n == 0)
+        {
                 return;
-        } else if (k == 0) {
-                for (i = 0; i < n; i++) {
-                for (j = 0; j < m; j++) {
-                        c[i*Ldc+j] = 0;
-                } }
+        }
+        else if (k == 0)
+        {
+                for (i = 0; i < n; i++)
+                {
+                        for (j = 0; j < m; j++)
+                        {
+                                c[i * Ldc + j] = 0;
+                        }
+                }
                 return;
         }
         a += offseta;
         b += offsetb;
         c += offsetc;
 
-        if ((k/m) > 3 && (k/n) > 3) { // parallelize k
+        if ((k / m) > 3 && (k / n) > 3)
+        { // parallelize k
 
-                if (creal(*beta) == 0 && cimag(*beta) == 0) {
-                        for (i = 0; i < n; i++) {
-                                for (j = 0; j < m; j++) {
-                                        c[i*Ldc+j] = 0;
+                if (creal(*beta) == 0 && cimag(*beta) == 0)
+                {
+                        for (i = 0; i < n; i++)
+                        {
+                                for (j = 0; j < m; j++)
+                                {
+                                        c[i * Ldc + j] = 0;
                                 }
                         }
-                } else {
-                        for (i = 0; i < n; i++) {
-                                for (j = 0; j < m; j++) {
-                                        c[i*Ldc+j] *= beta[0];
+                }
+                else
+                {
+                        for (i = 0; i < n; i++)
+                        {
+                                for (j = 0; j < m; j++)
+                                {
+                                        c[i * Ldc + j] *= beta[0];
                                 }
                         }
                 }
 
 #pragma omp parallel private(i, j)
-{
-                double complex Z0 = 0;
-                double complex *cpriv = malloc(sizeof(double complex) * (m*n+2));
-                size_t k0, k1, ij;
-                NPomp_split(&k0, &k1, k);
-                int dk = k1 - k0;
-                if (dk > 0) {
-                        size_t astride = k0;
-                        size_t bstride = k0;
-                        if (trans_a == 'N') {
-                                astride *= lda;
+                {
+                        double complex Z0 = 0;
+                        double complex *cpriv = malloc(sizeof(double complex) * (m * n + 2));
+                        size_t k0, k1, ij;
+                        NPomp_split(&k0, &k1, k);
+                        int dk = k1 - k0;
+                        if (dk > 0)
+                        {
+                                size_t astride = k0;
+                                size_t bstride = k0;
+                                if (trans_a == 'N')
+                                {
+                                        astride *= lda;
+                                }
+                                if (trans_b != 'N')
+                                {
+                                        bstride *= ldb;
+                                }
+                                zgemm_(&trans_a, &trans_b, &m, &n, &dk,
+                                       alpha, a + astride, &lda, b + bstride, &ldb,
+                                       &Z0, cpriv, &m);
                         }
-                        if (trans_b != 'N') {
-                                bstride *= ldb;
-                        }
-                        zgemm_(&trans_a, &trans_b, &m, &n, &dk,
-                               alpha, a+astride, &lda, b+bstride, &ldb,
-                               &Z0, cpriv, &m);
-                }
 #pragma omp critical
-                if (dk > 0) {
-                        for (ij = 0, i = 0; i < n; i++) {
-                        for (j = 0; j < m; j++, ij++) {
-                                c[i*Ldc+j] += cpriv[ij];
-                        } }
+                        if (dk > 0)
+                        {
+                                for (ij = 0, i = 0; i < n; i++)
+                                {
+                                        for (j = 0; j < m; j++, ij++)
+                                        {
+                                                c[i * Ldc + j] += cpriv[ij];
+                                        }
+                                }
+                        }
+                        free(cpriv);
                 }
-                free(cpriv);
-}
-
-        } else if (m > n*2) { // parallelize m
+        }
+        else if (m > n * 2)
+        { // parallelize m
 
 #pragma omp parallel
-{
-                size_t m0, m1;
-                NPomp_split(&m0, &m1, m);
-                int dm = m1 - m0;
-                if (dm > 0) {
-                        size_t astride = m0;
-                        if (trans_a != 'N') {
-                                astride *= lda;
+                {
+                        size_t m0, m1;
+                        NPomp_split(&m0, &m1, m);
+                        int dm = m1 - m0;
+                        if (dm > 0)
+                        {
+                                size_t astride = m0;
+                                if (trans_a != 'N')
+                                {
+                                        astride *= lda;
+                                }
+                                zgemm_(&trans_a, &trans_b, &dm, &n, &k,
+                                       alpha, a + astride, &lda, b, &ldb,
+                                       beta, c + m0, &ldc);
                         }
-                        zgemm_(&trans_a, &trans_b, &dm, &n, &k,
-                               alpha, a+astride, &lda, b, &ldb,
-                               beta, c+m0, &ldc);
                 }
-}
-
-        } else { // parallelize n
+        }
+        else
+        { // parallelize n
 
 #pragma omp parallel
-{
-                size_t n0, n1;
-                NPomp_split(&n0, &n1, n);
-                int dn = n1 - n0;
-                if (dn > 0) {
-                        size_t bstride = n0;
-                        if (trans_b == 'N') {
-                                bstride *= ldb;
+                {
+                        size_t n0, n1;
+                        NPomp_split(&n0, &n1, n);
+                        int dn = n1 - n0;
+                        if (dn > 0)
+                        {
+                                size_t bstride = n0;
+                                if (trans_b == 'N')
+                                {
+                                        bstride *= ldb;
+                                }
+                                zgemm_(&trans_a, &trans_b, &m, &dn, &k,
+                                       alpha, a, &lda, b + bstride, &ldb,
+                                       beta, c + Ldc * n0, &ldc);
                         }
-                        zgemm_(&trans_a, &trans_b, &m, &dn, &k,
-                               alpha, a, &lda, b+bstride, &ldb,
-                               beta, c+Ldc*n0, &ldc);
                 }
+        }
 }
+
+/*
+ * numpy.dot may call unoptimized blas
+ */
+void NPdgemm_withbuffer(const char trans_a, const char trans_b,
+                        const int m, const int n, const int k,
+                        const int lda, const int ldb, const int ldc,
+                        const int offseta, const int offsetb, const int offsetc,
+                        double *a, double *b, double *c,
+                        const double alpha, const double beta,
+                        double *buf)
+{
+        const size_t Ldc = ldc;
+        int i, j;
+        if (m == 0 || n == 0)
+        {
+                return;
+        }
+        else if (k == 0)
+        {
+                for (i = 0; i < n; i++)
+                {
+                        for (j = 0; j < m; j++)
+                        {
+                                c[i * Ldc + j] = 0;
+                        }
+                }
+                return;
+        }
+        a += offseta;
+        b += offsetb;
+        c += offsetc;
+
+        if ((k / m) > 3 && (k / n) > 3)
+        { // parallelize k
+
+                if (beta == 0)
+                {
+                        for (i = 0; i < n; i++)
+                        {
+                                for (j = 0; j < m; j++)
+                                {
+                                        c[i * Ldc + j] = 0;
+                                }
+                        }
+                }
+                else
+                {
+                        for (i = 0; i < n; i++)
+                        {
+                                for (j = 0; j < m; j++)
+                                {
+                                        c[i * Ldc + j] *= beta;
+                                }
+                        }
+                }
+
+                // printf("k = %d\n", k);
+                // printf("m = %d\n", m);
+                // printf("n = %d\n", n);
+                // printf("paralleize k , may cause performance issue\n");
+                // fflush(stdout);
+
+#pragma omp parallel private(i, j)
+                {
+                        int thread_id = omp_get_thread_num();
+                        double D0 = 0;
+                        // double *cpriv = malloc(sizeof(double) * (m * n + 2)); // WARNING: this operation can cause performance issue when the data size is large
+                        double *cpriv = buf + thread_id * (m * n + 2);
+                        size_t k0, k1, ij;
+                        NPomp_split(&k0, &k1, k);
+                        int dk = k1 - k0;
+                        if (dk > 0)
+                        {
+                                size_t astride = k0;
+                                size_t bstride = k0;
+                                if (trans_a == 'N')
+                                {
+                                        astride *= lda;
+                                }
+                                if (trans_b != 'N')
+                                {
+                                        bstride *= ldb;
+                                }
+                                dgemm_(&trans_a, &trans_b, &m, &n, &dk,
+                                       &alpha, a + astride, &lda, b + bstride, &ldb,
+                                       &D0, cpriv, &m);
+                        }
+#pragma omp critical
+                        if (dk > 0)
+                        {
+                                for (ij = 0, i = 0; i < n; i++)
+                                {
+                                        for (j = 0; j < m; j++, ij++)
+                                        {
+                                                c[i * Ldc + j] += cpriv[ij];
+                                        }
+                                }
+                        }
+
+                        // free(cpriv);
+                }
+        }
+        else if (m > n * 2)
+        { // parallelize m
+
+#pragma omp parallel
+                {
+                        size_t m0, m1;
+                        NPomp_split(&m0, &m1, m);
+                        int dm = m1 - m0;
+                        if (dm > 0)
+                        {
+                                size_t astride = m0;
+                                if (trans_a != 'N')
+                                {
+                                        astride *= lda;
+                                }
+                                dgemm_(&trans_a, &trans_b, &dm, &n, &k,
+                                       &alpha, a + astride, &lda, b, &ldb,
+                                       &beta, c + m0, &ldc);
+                        }
+                }
+        }
+        else
+        { // parallelize n
+
+#pragma omp parallel
+                {
+                        size_t n0, n1;
+                        NPomp_split(&n0, &n1, n);
+                        int dn = n1 - n0;
+                        if (dn > 0)
+                        {
+                                size_t bstride = n0;
+                                if (trans_b == 'N')
+                                {
+                                        bstride *= ldb;
+                                }
+                                dgemm_(&trans_a, &trans_b, &m, &dn, &k,
+                                       &alpha, a, &lda, b + bstride, &ldb,
+                                       &beta, c + Ldc * n0, &ldc);
+                        }
+                }
         }
 }

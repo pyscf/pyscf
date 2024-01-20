@@ -70,3 +70,10 @@ void NPdgemm(const char trans_a, const char trans_b,
              const int offseta, const int offsetb, const int offsetc,
              double *a, double *b, double *c,
              const double alpha, const double beta);
+void NPdgemm_withbuffer(const char trans_a, const char trans_b,
+                        const int m, const int n, const int k,
+                        const int lda, const int ldb, const int ldc,
+                        const int offseta, const int offsetb, const int offsetc,
+                        double *a, double *b, double *c,
+                        const double alpha, const double beta,
+                        double *buf);

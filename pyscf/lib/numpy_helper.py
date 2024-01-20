@@ -693,6 +693,8 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
 # NOTE: NOT assume array a, b to be C-contiguous, since a and b are two
 # pointers we want to pass in.
 # numpy.dot might not call optimized blas
+from memory_profiler import profile
+# @profile
 def ddot(a, b, alpha=1, c=None, beta=0):
     '''Matrix-matrix multiplication for double precision arrays
     '''
@@ -727,6 +729,43 @@ def ddot(a, b, alpha=1, c=None, beta=0):
         assert (c.shape == (m,n))
 
     return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
+
+# @profile
+def ddot_withbuffer(a, b, buf, alpha=1, c=None, beta=0):
+    '''Matrix-matrix multiplication for double precision arrays
+    '''
+    m = a.shape[0]
+    k = a.shape[1]
+    n = b.shape[1]
+    if a.flags.c_contiguous:
+        trans_a = 'N'
+    elif a.flags.f_contiguous:
+        trans_a = 'T'
+        a = a.T
+    else:
+        a = numpy.asarray(a, order='C')
+        trans_a = 'N'
+        #raise ValueError('a.flags: %s' % str(a.flags))
+
+    assert (k == b.shape[0])
+    if b.flags.c_contiguous:
+        trans_b = 'N'
+    elif b.flags.f_contiguous:
+        trans_b = 'T'
+        b = b.T
+    else:
+        b = numpy.asarray(b, order='C')
+        trans_b = 'N'
+        #raise ValueError('b.flags: %s' % str(b.flags))
+        print("b is not contiguous")
+
+    if c is None:
+        c = numpy.empty((m,n))
+        beta = 0
+    else:
+        assert (c.shape == (m,n))
+
+    return _dgemm_withbuffer(trans_a, trans_b, m, n, k, a, b, c, alpha, beta, buf=buf)
 
 def zdot(a, b, alpha=1, c=None, beta=0):
     '''Matrix-matrix multiplication for double complex arrays
@@ -862,6 +901,7 @@ def dot(a, b, alpha=1, c=None, beta=0):
         return c
 
 # a, b, c in C-order
+# @profile
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
            offseta=0, offsetb=0, offsetc=0):
     if a.size == 0 or b.size == 0:
@@ -886,6 +926,33 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        a.ctypes.data_as(ctypes.c_void_p),
                        c.ctypes.data_as(ctypes.c_void_p),
                        ctypes.c_double(alpha), ctypes.c_double(beta))
+    return c
+# @profile
+def _dgemm_withbuffer(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
+                      offseta=0, offsetb=0, offsetc=0, buf=None):
+    if a.size == 0 or b.size == 0:
+        if beta == 0:
+            c[:] = 0
+        else:
+            c[:] *= beta
+        return c
+
+    assert (a.flags.c_contiguous)
+    assert (b.flags.c_contiguous)
+    assert (c.flags.c_contiguous)
+
+    _np_helper.NPdgemm_withbuffer(ctypes.c_char(trans_b.encode('ascii')), # ? 
+                       ctypes.c_char(trans_a.encode('ascii')),
+                       ctypes.c_int(n), ctypes.c_int(m), ctypes.c_int(k),
+                       ctypes.c_int(b.shape[1]), ctypes.c_int(a.shape[1]),
+                       ctypes.c_int(c.shape[1]),
+                       ctypes.c_int(offsetb), ctypes.c_int(offseta),
+                       ctypes.c_int(offsetc),
+                       b.ctypes.data_as(ctypes.c_void_p),
+                       a.ctypes.data_as(ctypes.c_void_p),
+                       c.ctypes.data_as(ctypes.c_void_p),
+                       ctypes.c_double(alpha), ctypes.c_double(beta),
+                       buf.ctypes.data_as(ctypes.c_void_p))
     return c
 def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
            offseta=0, offsetb=0, offsetc=0):
@@ -1617,7 +1684,7 @@ def multiply_sum_isdf(a, b, axis=0, out=None):
     else:
         assert(out.dtype == a.dtype)
         assert(out.size == ncol)
-    
+
     if a.dtype == numpy.double:
         fn = getattr(_np_helper, "NPdmultiplysum", None)
     else:
@@ -1627,7 +1694,7 @@ def multiply_sum_isdf(a, b, axis=0, out=None):
        a.ctypes.data_as(ctypes.c_void_p),
        b.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(nrow), ctypes.c_int(ncol), ctypes.c_int(axis))
-    
+
     return out
 
 def cwise_mul(a, b, out=None):
@@ -1672,6 +1739,39 @@ def d_ij_j_ij(a, b, out=None):
        ctypes.c_size_t(a.shape[1]))
 
     return out
+
+def d_i_ij_ij(a, b, out=None):
+    assert(a.dtype == b.dtype)
+    assert(a.shape[0] == b.shape[0])
+    assert(a.ndim == 1)
+    assert(b.ndim == 2)
+
+    if a.dtype != numpy.double:
+        raise NotImplementedError
+    else:
+        fn = getattr(_np_helper, "NPd_i_ij_ij", None)
+        assert(fn is not None)
+
+    if out is None:
+        out = numpy.empty_like(a)
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       b.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(b.shape[0]),
+       ctypes.c_size_t(b.shape[1]))
+
+    return out
+
+def square_inPlace(a):
+    assert(a.dtype == numpy.double)
+    fn = getattr(_np_helper, "NPdsquare_inPlace", None)
+    assert(fn is not None)
+
+    fn(a.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(a.size))
+
+    return a
 
 def dslice(a, locs, out=None, axis=1):
     assert(locs.ndim == 1)

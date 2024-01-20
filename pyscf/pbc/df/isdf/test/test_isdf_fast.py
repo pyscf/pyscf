@@ -39,6 +39,8 @@ from multiprocessing import Pool
 import dask.array as da
 from dask import delayed
 
+from memory_profiler import profile
+
 libpbc = lib.load_library('libpbc')
 def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, name))
@@ -263,6 +265,7 @@ class _PBC_ISDF(ctypes.Structure):
 from pyscf.pbc import df
 
 class PBC_ISDF_Info(df.fft.FFTDF):
+
     def __init__(self, mol:Cell, aoR: np.ndarray,
                  cutoff_aoValue: float = 1e-12,
                  cutoff_QR: float = 1e-8):
@@ -297,6 +300,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.ngrids = aoR.shape[1]
 
         self.jk_buffer = None
+        self.ddot_buf  = None
 
         assert self.nao == aoR.shape[0]
 
@@ -335,6 +339,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         # for i in range(self.partition.shape[0]):
         #     print("i = %5d, partition = %5d" % (i, self.partition[i]))
 
+    # @profile
     def _allocate_jk_buffer(self, datatype):
 
         if self.jk_buffer is None:
@@ -347,6 +352,18 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             buffersize_j = nao * ngrids + ngrids + nao * naux + naux + naux + nao * nao
 
             self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
+            # self.jk_buffer[-1] = 0.0 # memory allocate, well, you cannot cheat python in this way
+
+            print("address of self.jk_buffer = ", id(self.jk_buffer))
+
+            nThreadsOMP = lib.num_threads()
+            print("nThreadsOMP = ", nThreadsOMP)
+            self.ddot_buf = np.zeros((nThreadsOMP,(naux*naux)+2), dtype=datatype)
+            # self.ddot_buf[nThreadsOMP-1, (naux*naux)+1] = 0.0 # memory allocate, well, you cannot cheat python in this way
+
+        else:
+            assert self.jk_buffer.dtype == datatype
+            assert self.ddot_buf.dtype == datatype
 
     def build(self):
         # libpbc.PBC_ISDF_build(self._this)
@@ -360,10 +377,11 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
         pass
 
+    # @profile
     def build_IP_Sandeep(self, c=5, m=5,
                          atomic_partition=True,
                          ratio=0.8,
-                         global_IP_selection = True,
+                         global_IP_selection=True,
                          build_global_basis=True, debug=True):
 
         # build partition
@@ -405,6 +423,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 nao_atm = nao_per_atm[atm_id]
                 taskinfo.append(atm_IP_task((grid_ID, aoR_atm, nao, nao_atm, c, m)))
         else:
+            raise NotImplementedError
+
             from clever_partition import _clever_partition
 
             atomID2AO = []
@@ -463,7 +483,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 _benchmark_time(t1, t2, "build_IP_Atm")
             t1 = t2
 
-            # a final global QRCP
+            # a final global QRCP， which is not needed!
 
             if global_IP_selection:
                 aoR_IP = aoR[:, possible_IP]
@@ -506,16 +526,28 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             # build the auxiliary basis
 
+            # allocate memory for the auxiliary basis
+
+            naux = IP_ID.shape[0]
+            self.naux = naux
+            self._allocate_jk_buffer(datatype=np.double)
+            buffer1 = np.ndarray((self.naux , self.naux), dtype=np.double, buffer=self.jk_buffer, offset=0)
+            buffer2 = np.ndarray((self.naux , self.ngrids), dtype=np.double, buffer=self.jk_buffer,
+                                 offset=self.naux * self.naux * self.jk_buffer.dtype.itemsize)
+
+            ## TODO: optimize this code so that the memory allocation is minimal!
+
             aoRg = numpy.empty((nao, IP_ID.shape[0]))
             lib.dslice(aoR, IP_ID, out=aoRg)
             # aoRg = aoR[:, IP_ID]
-            naux = IP_ID.shape[0]
-            A = np.asarray(lib.dot(aoRg.T, aoRg), order='C')
-            A = A ** 2
+            A = np.asarray(lib.ddot(aoRg.T, aoRg, c=buffer1), order='C')  # buffer 1 size = naux * naux
+            # A = A ** 2
+            lib.square_inPlace(A)
             print("A.shape = ", A.shape)
 
-            B = np.asarray(lib.dot(aoRg.T, aoR), order='C')
-            B = B ** 2
+            self.aux_basis = np.asarray(lib.ddot(aoRg.T, aoR), order='C')   # buffer 2 size = naux * ngrids
+            # B = B ** 2
+            lib.square_inPlace(self.aux_basis)
 
             # try:
             # self.aux_basis = scipy.linalg.solve(A, B, assume_a='sym') # single thread too slow
@@ -524,20 +556,26 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             # use diagonalization instead
 
-            e, h = np.linalg.eigh(A)
+            e, h = np.linalg.eigh(A)  # single thread, but should not be slow, it should not be the bottleneck
             # remove those eigenvalues that are too small
             where = np.where(abs(e) > BASIS_CUTOFF)[0]
             e = e[where]
             h = h[:, where]
+            print("e.shape = ", e.shape)
             # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
-            self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')
-            self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
-            self.aux_basis = np.asarray(lib.dot(h, self.aux_basis), order='C')
+            # self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')  # maximal size = naux * ngrids
+            B = np.asarray(lib.ddot(h.T, self.aux_basis, c=buffer2), order='C')
+            # self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
+            # B = (1.0/e).reshape(-1, 1) * B
+            lib.d_i_ij_ij(1.0/e, B, out=B)
+            np.asarray(lib.ddot(h, B, c=self.aux_basis), order='C')
 
             t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
             if debug:
                 _benchmark_time(t1, t2, "build_auxiliary_basis")
         else:
+
+            raise NotImplementedError
 
             t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
@@ -598,7 +636,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             self.aux_basis = np.concatenate(aux_basis_packed, axis=0)
             self.IP_ID = np.array(IP_ID)
-            
+
             # aoRg = aoR[:, IP_ID]
             aoRg = numpy.zeros((nao, IP_ID.shape[0]))
             lib.dslice(aoR, IP_ID, out=aoRg)
@@ -613,40 +651,51 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.aoRg = aoRg
         self.aoR  = aoR
 
+    # @profile
     def build_auxiliary_Coulomb(self, cell:Cell, mesh, debug=True):
 
-        @delayed
-        def construct_V(input:np.ndarray, ngrids, mesh, coul_G, axes=None):
-            return (np.fft.ifftn((np.fft.fftn(input, axes=axes).reshape(-1, ngrids) * coul_G[None,:]).reshape(*mesh), axes=axes).real).reshape(ngrids)
-
-        print("mesh = ", mesh)
+        # build the ddot buffer
 
         ngrids = self.ngrids
         ngrids = self.ngrids
         naux   = self.naux
 
+        @delayed
+        def construct_V(input:np.ndarray, ngrids, mesh, coul_G, axes=None):
+            return (np.fft.ifftn((np.fft.fftn(input, axes=axes).reshape(-1, ngrids) * coul_G[None,:]).reshape(*mesh), axes=axes).real).reshape(ngrids)
+            # res = (np.fft.ifftn((np.fft.fftn(input, axes=axes).reshape(-1, ngrids) * coul_G[None,:]).reshape(*mesh), axes=axes).real).reshape(ngrids)
+
+        # print("mesh = ", mesh)
+
+        # ngrids = self.ngrids
+        # ngrids = self.ngrids
+        # naux   = self.naux
+
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
-        V_R   = np.zeros((naux, ngrids))
+        # V_R   = np.zeros((naux, ngrids))
         coulG = tools.get_coulG(cell, mesh=mesh)
 
-        blksize1 = int(5*1e9/8/ngrids)
-        for p0, p1 in lib.prange(0, naux, blksize1):
+        # blksize1 = int(5*1e9/8/ngrids)
+        # for p0, p1 in lib.prange(0, naux, blksize1):
+        #     tmp1 = self.aux_basis[p0:p1].reshape(-1,*mesh)
+        #     task = []
+        #     for i in range(tmp1.shape[0]):
+        #         task.append(construct_V(tmp1[i], ngrids, mesh, coulG))
+        #     res = da.compute(*task)
+        #     V_R[p0:p1] = np.asarray(res).reshape(-1, ngrids)
+        #     # X_freq     = numpy.fft.fftn(self.aux_basis[p0:p1].reshape(-1,*mesh), axes=(1,2,3)).reshape(-1,ngrids)
+        #     # V_G        = X_freq * coulG[None,:]
+        #     # X_freq     = None
+        #     # V_R[p0:p1] = numpy.fft.ifftn(V_G.reshape(-1,*mesh), axes=(1,2,3)).real.reshape(-1,ngrids)
+        #     # V_G        = None
 
-            tmp1 = self.aux_basis[p0:p1].reshape(-1,*mesh)
-            task = []
-            for i in range(tmp1.shape[0]):
-                task.append(construct_V(tmp1[i], ngrids, mesh, coulG))
-            res = da.compute(*task)
-            V_R[p0:p1] = np.asarray(res).reshape(-1, ngrids)
+        task = []
+        for i in range(naux):
+            task.append(construct_V(self.aux_basis[i].reshape(-1,*mesh), ngrids, mesh, coulG))
+        V_R = np.concatenate(da.compute(*task)).reshape(-1,ngrids)
 
-
-            # X_freq     = numpy.fft.fftn(self.aux_basis[p0:p1].reshape(-1,*mesh), axes=(1,2,3)).reshape(-1,ngrids)
-            # V_G        = X_freq * coulG[None,:]
-            # X_freq     = None
-            # V_R[p0:p1] = numpy.fft.ifftn(V_G.reshape(-1,*mesh), axes=(1,2,3)).real.reshape(-1,ngrids)
-            # V_G        = None
-
+        del task
         coulG = None
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -655,9 +704,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         t1 = t2
 
         W = np.zeros((naux,naux))
-        for p0, p1 in lib.prange(0, ngrids, blksize1*2):
-            # W += numpy.dot(self.aux_basis[:,p0:p1], V_R[:,p0:p1].T)
-            W += np.asarray(lib.dot(self.aux_basis[:,p0:p1], V_R[:,p0:p1].T), order='C')
+        lib.ddot_withbuffer(a=self.aux_basis, b=V_R.T, buf=self.ddot_buf, c=W, beta=1.0)
+        # lib.ddot(self.aux_basis, V_R.T, c=W, beta=1.0)
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if debug:
@@ -706,6 +754,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     ##### functions defined in isdf_jk.py #####
 
     get_jk = isdf_jk.get_jk_dm
+
+import tracemalloc
 
 if __name__ == '__main__':
 
@@ -808,8 +858,8 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-8
     mf.kernel()
 
-    mf = scf.RHF(cell)
-    mf.max_cycle = 100
-    mf.conv_tol = 1e-8
-    mf.kernel()
+    # mf = scf.RHF(cell)
+    # mf.max_cycle = 100
+    # mf.conv_tol = 1e-8
+    # mf.kernel()
 
