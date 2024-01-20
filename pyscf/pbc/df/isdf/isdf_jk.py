@@ -407,9 +407,9 @@ def _contract_k_dm(mydf, dm):
     buffer5 = np.ndarray((naux,nao), dtype=dm.dtype, buffer=buffer, offset=0)
     buffer6 = np.ndarray((naux,nao), dtype=dm.dtype, buffer=buffer, offset=nao * ngrid * dm.dtype.itemsize)
 
-    print("address of mydf.jk_buffer = ", id(mydf.jk_buffer))
-    print("address of buffer         = ", id(buffer))
-    print("address of buffer1        = ", id(buffer1))
+    # print("address of mydf.jk_buffer = ", id(mydf.jk_buffer))
+    # print("address of buffer         = ", id(buffer))
+    # print("address of buffer1        = ", id(buffer1))
 
     # ptr1 = buffer1.__array_interface__['data'][0]
 
