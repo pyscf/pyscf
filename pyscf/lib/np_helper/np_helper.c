@@ -151,6 +151,14 @@ void NPreciprocal_d2z(double complex *out, const double *in, const size_t n)
 
 void NPdmultiplysum(double *out, double *a, double *b, int nrow, int ncol, int axis)
 {
+    if (axis == 0)
+    {
+        memset(out, 0, sizeof(double) * ncol);
+    }
+    else
+    {
+        memset(out, 0, sizeof(double) * nrow);
+    }
 #pragma omp parallel
     {
         size_t i, j;
@@ -633,6 +641,25 @@ void NPzconcatenate(double complex *out, double complex **arrays, int narrays,
     }
 }
 
+void NPd_ij_j_ij(double *out, double *a, double *b, size_t nrow, size_t ncol)
+{
+#pragma omp parallel
+    {
+        size_t i, j;
+        double *pa, *pout;
+#pragma omp for schedule(static)
+        for (i = 0; i < nrow; i++)
+        {
+            pa = a + i * ncol;
+            pout = out + i * ncol;
+            for (j = 0; j < ncol; j++)
+            {
+                pout[j] = pa[j] * b[j]; // out[i,j] = a[i,j] * b[j]
+            }
+        }
+    }
+}
+
 void NPdcwisemul(double *out, double *a, double *b, size_t n)
 {
 #pragma omp parallel
@@ -641,7 +668,39 @@ void NPdcwisemul(double *out, double *a, double *b, size_t n)
 #pragma omp for schedule(static)
         for (i = 0; i < n; i++)
         {
-            out[i] += a[i] * b[i];
+            out[i] = a[i] * b[i];
+        }
+    }
+}
+
+void NPdslice32(double *out, double *a, __int32_t *slices, size_t ncol_left, size_t nrow, size_t ncol)
+{
+#pragma omp parallel
+    {
+        size_t i, j;
+#pragma omp for schedule(static)
+        for (i = 0; i < nrow; i++)
+        {
+            for (j = 0; j < ncol_left; j++)
+            {
+                out[i * ncol_left + j] = a[i * ncol + slices[j]];
+            }
+        }
+    }
+}
+
+void NPdslice64(double *out, double *a, __int64_t *slices, size_t ncol_left, size_t nrow, size_t ncol)
+{
+#pragma omp parallel
+    {
+        size_t i, j;
+#pragma omp for schedule(static)
+        for (i = 0; i < nrow; i++)
+        {
+            for (j = 0; j < ncol_left; j++)
+            {
+                out[i * ncol_left + j] = a[i * ncol + slices[j]];
+            }
         }
     }
 }

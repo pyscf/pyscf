@@ -216,57 +216,124 @@ def _contract_j_dm(mydf, dm):
     naux = aoRg.shape[1]
     IP_ID = mydf.IP_ID
 
-    #### step 1. get density value on real space grid and IPs
-
-    #### TODO: make the following transformation linear-scaling
-
-    # ao_pair_R  = np.einsum('ij,kj->ikj', aoR, aoR)
-    # ao_pair_Rg = np.einsum('ij,kj->ikj', aoRg, aoRg)
-
     #### step 2. get J term1 and term2
+
+    # buffersize = nao * ngrid + ngrid + nao * naux + naux + naux + nao * nao
+    # buffer = np.empty(buffersize, dtype=dm.dtype)
+    buffer = mydf.jk_buffer
+    buffer1 = np.ndarray((nao,ngrid), dtype=dm.dtype, buffer=buffer, offset=0)
+    buffer2 = np.ndarray((ngrid), dtype=dm.dtype, buffer=buffer, offset=nao * ngrid * dm.dtype.itemsize)
+    buffer3 = np.ndarray((nao,naux), dtype=dm.dtype, buffer=buffer,
+                         offset=(nao * ngrid + ngrid) * dm.dtype.itemsize)
+    buffer4 = np.ndarray((naux), dtype=dm.dtype, buffer=buffer, offset=(nao *
+                         ngrid + ngrid + nao * naux) * dm.dtype.itemsize)
+    buffer5 = np.ndarray((naux), dtype=dm.dtype, buffer=buffer, offset=(nao *
+                            ngrid + ngrid + nao * naux + naux) * dm.dtype.itemsize)
+    buffer6 = np.ndarray((nao,nao), dtype=dm.dtype, buffer=buffer, offset=(nao *
+                            ngrid + ngrid + nao * naux + naux + naux) * dm.dtype.itemsize)
+    buffer7 = np.ndarray((nao,naux), dtype=dm.dtype, buffer=buffer, offset=0)
+    buffer8 = np.ndarray((naux), dtype=dm.dtype, buffer=buffer, offset=nao * ngrid * dm.dtype.itemsize)
+
+    # print(buffer1.__array_interface__['data'][0])
+    # print(buffer2.__array_interface__['data'][0])
+    # print(buffer3.__array_interface__['data'][0])
+    # print(buffer4.__array_interface__['data'][0])
+    # print(buffer5.__array_interface__['data'][0])
+    # print(buffer6.__array_interface__['data'][0])
+    # print(buffer7.__array_interface__['data'][0])
+    # print(buffer8.__array_interface__['data'][0])
+    # print("begin_work")
+
+    # ptr1 = buffer1.__array_interface__['data'][0]
+    # ptr2 = buffer2.__array_interface__['data'][0]
+    # ptr3 = buffer3.__array_interface__['data'][0]
+    # ptr4 = buffer4.__array_interface__['data'][0]
+    # ptr5 = buffer5.__array_interface__['data'][0]
+    # ptr6 = buffer6.__array_interface__['data'][0]
+    # ptr7 = buffer7.__array_interface__['data'][0]
+    # ptr8 = buffer8.__array_interface__['data'][0]
 
     ## constract dm and aoR
 
-    ## TODO: optimize the following 4 lines
-    tmp1 = np.asarray(lib.dot(dm, aoR), order='C')
-    # density_R = np.einsum('ik,ik->k', aoR, tmp1)
-    density_R = np.asarray(lib.multiply_sum(aoR, tmp1), order='C')
-    # tmp1 = np.asarray(lib.dot(dm, aoRg), order='C')
-    tmp1 = tmp1[:, IP_ID]
-    # density_Rg = np.einsum('ik,ik->k', aoRg, tmp1)
-    density_Rg = np.asarray(lib.multiply_sum(aoRg, tmp1), order='C')
+    # need allocate memory, size = nao  * ngrid, (buffer 1)
 
-    # density_R  = np.einsum('ij,ijk->k', dm, ao_pair_R)
-    # density_Rg = np.einsum('ij,ijk->k', dm, ao_pair_Rg)
+    tmp1 = np.asarray(lib.dot(dm, aoR, c=buffer1), order='C')
+    
+    # assert tmp1.__array_interface__['data'][0] == ptr1
 
-    ## TODO: remove the redundancy due to the symmetry
+    density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')    # need allocate memory, size = ngrid, (buffer 2)
+    
+    # assert density_R.__array_interface__['data'][0] == ptr2
 
-    rho_mu_nu_Rg = np.einsum('ij,kj->ikj', aoRg, aoRg) # This should be the leading term of the computation cost in a single-thread mode. 
+    # need allocate memory, size = nao  * naux, (buffer 3)
+    
+    lib.dslice(tmp1, IP_ID, buffer3)    
+    tmp1 = buffer3
+    
+    # assert tmp1.__array_interface__['data'][0] == ptr3
+    
+    density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg, tmp1, out=buffer4), order='C')  # need allocate memory, size = naux, (buffer 4)
+    
+    # assert density_Rg.__array_interface__['data'][0] == ptr4
 
-    # J = np.asarray(lib.dot(V_R, density_R), order='C')
-    # J = np.dot(V_R, density_R)
-    J = np.asarray(lib.dot(V_R, density_R.reshape(-1,1)), order='C').reshape(-1)
-    # J = np.asarray(lib.dot(rho_mu_nu_Rg, J), order='C')
-    # J = np.dot(rho_mu_nu_Rg, J)
-    J = np.einsum('ij,j->ij', aoRg, J)  # TODO: parallelize this line, seems to be of no use
-    J = np.asarray(lib.dot(aoRg, J.T), order='C')
-    # J += J.T
+    # This should be the leading term of the computation cost in a single-thread mode.
 
-    # J2 = np.dot(V_R.T, density_Rg)
-    J2 = np.asarray(lib.dot(V_R.T, density_Rg.reshape(-1,1)), order='C').reshape(-1)
-    J2 = np.einsum('ij,j->ij', aoR, J2)  # TODO: parallelize this line, seems to be of no use
-    J += np.asarray(lib.dot(aoR, J2.T), order='C')
+    # need allocate memory, size = naux, (buffer 5)
+    
+    J = np.asarray(lib.dot(V_R, density_R.reshape(-1,1), c=buffer5.reshape(-1,1)), order='C').reshape(-1)
+    
+    # assert J.__array_interface__['data'][0] == ptr5
+    
+    # do not need allocate memory, use buffer 3
+    
+    # J = np.einsum('ij,j->ij', aoRg, J)
+    J = np.asarray(lib.d_ij_j_ij(aoRg, J, out=buffer3), order='C')
+    
+    # assert J.__array_interface__['data'][0] == ptr3
+    
+    # need allocate memory, size = nao  * nao, (buffer 6)
+    
+    J = np.asarray(lib.dot(aoRg, J.T, c=buffer6), order='C')
+    # assert J.__array_interface__['data'][0] == ptr6
+
+    # do not need allocate memory, use buffer 2
+    
+    J2 = np.asarray(lib.dot(V_R.T, density_Rg.reshape(-1,1), c=buffer2.reshape(-1,1)), order='C').reshape(-1)
+    # assert J2.__array_interface__['data'][0] == ptr2
+    
+    # do not need allocate memory, use buffer 1
+    
+    # J2 = np.einsum('ij,j->ij', aoR, J2)
+    J2 = np.asarray(lib.d_ij_j_ij(aoR, J2, out=buffer1), order='C')
+    # assert J2.__array_interface__['data'][0] == ptr1
+    
+    # do not need allocate memory, use buffer 6
+    
+    # J += np.asarray(lib.dot(aoR, J2.T), order='C')
+    lib.dot(aoR, J2.T, c=J, beta=1)
+    # assert J.__array_interface__['data'][0] == ptr6
 
     #### step 3. get J term3
 
-    # tmp = np.asarray(lib.dot(W, density_Rg), order='C')
-    # tmp = np.dot(W, density_Rg)
-    tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1)), order='C').reshape(-1)
-    tmp = np.einsum('ij,j->ij', aoRg, tmp) # TODO: parallelize this line, seems to be of no use
-    # J -= np.asarray(lib.dot(rho_mu_nu_Rg, tmp), order='C')
-    # J -= np.dot(rho_mu_nu_Rg, tmp)
-    J -= np.asarray(lib.dot(aoRg, tmp.T), order='C')
-    # J = np.dot(rho_mu_nu_Rg, tmp)
+    # do not need allocate memory, use buffer 2
+    
+    tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1), c=buffer8.reshape(-1,1)), order='C').reshape(-1)
+    
+    # assert tmp.__array_interface__['data'][0] == ptr8
+    
+    # do not need allocate memory, use buffer 1 but viewed as buffer 7
+    
+    # tmp = np.einsum('ij,j->ij', aoRg, tmp)
+    tmp = np.asarray(lib.d_ij_j_ij(aoRg, tmp, out=buffer7), order='C')
+    
+    # assert tmp.__array_interface__['data'][0] == ptr7
+    
+    # do not need allocate memory, use buffer 6
+    
+    # J -= np.asarray(lib.dot(aoRg, tmp.T), order='C')
+    lib.dot(aoRg, -tmp.T, c=J, beta=1)
+    
+    # assert J.__array_interface__['data'][0] == ptr6
 
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "_contract_j_dm")
@@ -293,6 +360,7 @@ def _contract_k_dm(mydf, dm):
     cell = mydf.cell
     assert cell.nao == nao
     ngrid = np.prod(cell.mesh)
+    assert ngrid == mydf.ngrids
     vol = cell.vol
 
     W    = mydf.W
@@ -302,29 +370,85 @@ def _contract_k_dm(mydf, dm):
     naux = aoRg.shape[1]
     IP_ID = mydf.IP_ID
 
+    buffer = mydf.jk_buffer
+    buffer1 = np.ndarray((nao,ngrid), dtype=dm.dtype, buffer=buffer, offset=0)
+    buffer2 = np.ndarray((naux,ngrid), dtype=dm.dtype, buffer=buffer, offset=nao * ngrid * dm.dtype.itemsize)
+    buffer3 = np.ndarray((naux,naux), dtype=dm.dtype, buffer=buffer,
+                         offset=(nao * ngrid + naux * ngrid) * dm.dtype.itemsize)
+    buffer4 = np.ndarray((nao,nao), dtype=dm.dtype, buffer=buffer, offset=(nao *
+                         ngrid + naux * ngrid + naux * naux) * dm.dtype.itemsize)
+    buffer5 = np.ndarray((naux,nao), dtype=dm.dtype, buffer=buffer, offset=0)
+    buffer6 = np.ndarray((naux,nao), dtype=dm.dtype, buffer=buffer, offset=nao * ngrid * dm.dtype.itemsize)
+
     #### step 1. get density value on real space grid and IPs
 
-    density_RgR  = np.asarray(lib.dot(dm, aoR), order='C')
-    density_RgR  = np.asarray(lib.dot(aoRg.T, density_RgR), order='C')
-    density_RgRg = density_RgR[:, IP_ID]
+    # need allocate memory, size = nao  * ngrid, this buffer does not need anymore  (buffer 1)
+
+    density_RgR  = np.asarray(lib.dot(dm, aoR, c=buffer1), order='C')
+
+    # assert density_RgR.__array_interface__['data'] == buffer1.__array_interface__['data']
+
+    # need allocate memory, size = naux * ngrid                                     (buffer 2)
+
+    density_RgR  = np.asarray(lib.dot(aoRg.T, density_RgR, c=buffer2), order='C')
+
+    # assert density_RgR.__array_interface__['data'] == buffer2.__array_interface__['data']
+
+    # need allocate memory, size = naux * naux                                      (buffer 3)
+
+    # density_RgRg = density_RgR[:, IP_ID]
+    lib.dslice(density_RgR, IP_ID, buffer3)
+    density_RgRg = buffer3
+
+    # assert density_RgRg.__array_interface__['data'] == buffer3.__array_interface__['data']
 
     #### step 2. get K term1 and term2
 
     ### todo: optimize the following 4 lines, it seems that they may not parallize!
-    # tmp = V_R * density_RgR  # pointwise multiplication, TODO: this term should be parallized 
-    tmp = np.asarray(lib.cwise_mul(V_R, density_RgR), order='C')
 
-    K  = np.asarray(lib.dot(tmp, aoR.T), order='C')
-    K  = np.asarray(lib.dot(aoRg, K), order='C')  ### the order due to the fact that naux << ngrid
+    # tmp = V_R * density_RgR  # pointwise multiplication, TODO: this term should be parallized
+    # do not need allocate memory, size = naux * ngrid, (buffer 2)
+
+    # tmp = np.asarray(lib.cwise_mul(V_R, density_RgR, out=buffer2), order='C')
+
+    lib.cwise_mul(V_R, density_RgR, out=buffer2)
+    tmp = buffer2
+
+    # assert tmp.__array_interface__['data'] == buffer2.__array_interface__['data']
+
+    # do not need allocate memory, size = naux * nao,   (buffer 1, but viewed as buffer5)
+
+    K  = np.asarray(lib.dot(tmp, aoR.T, c=buffer5), order='C')
+
+    # assert K.__array_interface__['data'] == buffer5.__array_interface__['data']
+
+    ### the order due to the fact that naux << ngrid  # need allocate memory, size = nao * nao,           (buffer 4)
+
+    K  = np.asarray(lib.dot(aoRg, K, c=buffer4), order='C')
     K += K.T
+
+    # assert K.__array_interface__['data'] == buffer4.__array_interface__['data']
 
     #### step 3. get K term3
 
     ### todo: optimize the following 4 lines, it seems that they may not parallize!
-    tmp = W * density_RgRg  # pointwise multiplication
-    tmp = np.asarray(lib.dot(tmp, aoRg.T), order='C')
-    K  -= np.asarray(lib.dot(aoRg, tmp), order='C')
-    # K = np.asarray(lib.dot(aoRg, tmp), order='C')
+    # pointwise multiplication, do not need allocate memory, size = naux * naux, use buffer for (buffer 3)
+    # tmp = W * density_RgRg
+
+    lib.cwise_mul(W, density_RgRg, out=density_RgRg)
+    tmp = density_RgRg
+
+    # assert tmp.__array_interface__['data'] == buffer3.__array_interface__['data']
+
+    # do not need allocate memory, size = naux * nao, use buffer 2 but viewed as buffer 6
+    tmp = np.asarray(lib.dot(tmp, aoRg.T, c=buffer6), order='C')
+
+    # assert tmp.__array_interface__['data'] == buffer6.__array_interface__['data']
+
+    # K  -= np.asarray(lib.dot(aoRg, tmp, c=K, beta=1), order='C')     # do not need allocate memory, size = nao * nao, (buffer 4)
+    lib.dot(aoRg, -tmp, c=K, beta=1)
+
+    # assert K.__array_interface__['data'] == buffer4.__array_interface__['data']
 
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "_contract_k_dm")
@@ -334,6 +458,9 @@ def _contract_k_dm(mydf, dm):
 def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
            kpts_band=None, with_j=True, with_k=True, omega=None, **kwargs):
     '''JK for given k-point'''
+
+    if mydf.jk_buffer is None:  # allocate the buffer for get jk
+        mydf._allocate_jk_buffer(dm.dtype)
 
     if "exxdiv" in kwargs:
         exxdiv = kwargs["exxdiv"]

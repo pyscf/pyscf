@@ -296,6 +296,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.nao = mol.nao_nr()
         self.ngrids = aoR.shape[1]
 
+        self.jk_buffer = None
+
         assert self.nao == aoR.shape[0]
 
         ao2atomID = np.zeros(self.nao, dtype=np.int32)
@@ -333,6 +335,18 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         # for i in range(self.partition.shape[0]):
         #     print("i = %5d, partition = %5d" % (i, self.partition[i]))
 
+    def _allocate_jk_buffer(self, datatype):
+
+        if self.jk_buffer is None:
+
+            nao    = self.nao
+            ngrids = self.ngrids
+            naux   = self.naux
+
+            buffersize_k = nao * ngrids + naux * ngrids + naux * naux + nao * nao
+            buffersize_j = nao * ngrids + ngrids + nao * naux + naux + naux + nao * nao
+
+            self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
 
     def build(self):
         # libpbc.PBC_ISDF_build(self._this)
@@ -492,7 +506,9 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             # build the auxiliary basis
 
-            aoRg = aoR[:, IP_ID]
+            aoRg = numpy.empty((nao, IP_ID.shape[0]))
+            lib.dslice(aoR, IP_ID, out=aoRg)
+            # aoRg = aoR[:, IP_ID]
             naux = IP_ID.shape[0]
             A = np.asarray(lib.dot(aoRg.T, aoRg), order='C')
             A = A ** 2
@@ -582,7 +598,10 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             self.aux_basis = np.concatenate(aux_basis_packed, axis=0)
             self.IP_ID = np.array(IP_ID)
-            aoRg = aoR[:, IP_ID]
+            
+            # aoRg = aoR[:, IP_ID]
+            aoRg = numpy.zeros((nao, IP_ID.shape[0]))
+            lib.dslice(aoR, IP_ID, out=aoRg)
 
             t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
 

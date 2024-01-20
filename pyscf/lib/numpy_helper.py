@@ -62,7 +62,7 @@ PauliMatrices = numpy.array([[[0., 1.],
                              [[0.,-1j],
                               [1j, 0.]],  # y
                              [[1., 0.],
-                              [0.,-1.]]]) # z
+                              [0.,-1.]]])  # z
 
 if hasattr(numpy, 'einsum_path'):
     _einsum_path = numpy.einsum_path
@@ -1601,7 +1601,36 @@ def vdot(a, b):
        ctypes.c_size_t(a.size))
     return out[0]
 
-def cwise_mul(a, b):
+#### the following operations are in isdf module ####
+
+def multiply_sum_isdf(a, b, axis=0, out=None):
+    assert(axis==0)
+    assert(a.dtype == b.dtype)
+    assert(a.ndim==2)
+
+    nrow, ncol = a.shape
+    assert(a.flags.c_contiguous)
+    assert(b.flags.c_contiguous)
+
+    if out is None:
+        out = numpy.zeros((ncol,), dtype=a.dtype)
+    else:
+        assert(out.dtype == a.dtype)
+        assert(out.size == ncol)
+    
+    if a.dtype == numpy.double:
+        fn = getattr(_np_helper, "NPdmultiplysum", None)
+    else:
+        raise NotImplementedError
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       b.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(nrow), ctypes.c_int(ncol), ctypes.c_int(axis))
+    
+    return out
+
+def cwise_mul(a, b, out=None):
     assert(a.size == b.size)
     assert(a.dtype == b.dtype)
 
@@ -1611,7 +1640,9 @@ def cwise_mul(a, b):
         fn = getattr(_np_helper, "NPdcwisemul", None)
         assert(fn is not None)
 
-    out = numpy.zeros_like(a)
+    if out is None:
+        out = numpy.empty_like(a)
+
     fn(out.ctypes.data_as(ctypes.c_void_p),
        a.ctypes.data_as(ctypes.c_void_p),
        b.ctypes.data_as(ctypes.c_void_p),
@@ -1619,6 +1650,61 @@ def cwise_mul(a, b):
 
     return out
 
+def d_ij_j_ij(a, b, out=None):
+    assert(a.dtype == b.dtype)
+    assert(a.shape[1] == b.shape[0])
+    assert(a.ndim == 2)
+    assert(b.ndim == 1)
+
+    if a.dtype != numpy.double:
+        raise NotImplementedError
+    else:
+        fn = getattr(_np_helper, "NPd_ij_j_ij", None)
+        assert(fn is not None)
+
+    if out is None:
+        out = numpy.empty_like(a)
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       b.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(a.shape[0]),
+       ctypes.c_size_t(a.shape[1]))
+
+    return out
+
+def dslice(a, locs, out=None, axis=1):
+    assert(locs.ndim == 1)
+    assert(a.ndim <= 2)
+
+    if axis!=1:
+        raise NotImplementedError
+
+    if a.dtype != numpy.double:
+        raise NotImplementedError
+    else:
+        if locs.dtype == numpy.int32:
+            fn = getattr(_np_helper, "NPdslice32", None)
+        elif locs.dtype == numpy.int64:
+            fn = getattr(_np_helper, "NPdslice64", None)
+        else:
+            raise NotImplementedError
+        assert(fn is not None)
+
+    if a.ndim == 1:
+        a = a.reshape(1,-1)
+
+    if out is None:
+        out = numpy.empty((a.shape[0], locs.shape[0]), dtype=a.dtype)
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       locs.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(locs.shape[0]),
+       ctypes.c_size_t(a.shape[0]),
+       ctypes.c_size_t(a.shape[1]))
+
+    return out
 
 class NPArrayWithTag(numpy.ndarray):
     # Initialize kwargs in function tag_array
