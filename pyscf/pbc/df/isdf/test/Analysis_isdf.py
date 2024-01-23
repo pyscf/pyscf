@@ -41,12 +41,16 @@ Basis = ['gth-dzvp']
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib
-matplotlib.use('TkAgg')
+# matplotlib.use('TkAgg')
 
 NBASIS_SELECTED = 16
 
 def _analysis_V_rank_block(V, row_partition:list[list], col_partition:list[list], threshold=1e-8):
     assert V.ndim == 2
+
+    R_max = numpy.zeros((len(row_partition), len(col_partition)))
+    R_min = numpy.zeros((len(row_partition), len(col_partition)))
+
     for id_row, row in enumerate(row_partition):
         V_tmp = V[row,:]
         for id_col, col in enumerate(col_partition):
@@ -54,33 +58,79 @@ def _analysis_V_rank_block(V, row_partition:list[list], col_partition:list[list]
             V_tmp3 = V_tmp2 @ V_tmp2.T
             # perform SVD
             e, h = np.linalg.eigh(V_tmp3)
-            S = np.sqrt(e[::-1])
+            e = e[::-1]
+            # for i, s in enumerate(e):
+            #     print("e[%3d] = %15.8e" % (i, e[i]))
+            #     if s < 0:
+            #         e[i] = 0.0
+            S = np.sqrt(e)
             # get the rank
             where = np.where(S > threshold)[0]
             rank = len(where)
-            print("row = ", id_row, "col = ", id_col, "rank = ", rank)
+            # print the largest eigenvalue and the smallest eigenvalue together with the ratio
+            print("row = ", id_row, "col = ", id_col, "rank = ", rank, "ratio = ", S[0]/S[-1], "max = ", S[0], "min = ", S[-1])
             # print S with large value
-            S = S[where]
-            for i, s in enumerate(S):
-                print("S[%3d] = %15.8e" % (i, s))
+            # S = S[where]
+            # for i, s in enumerate(S):
+            #     print("S[%3d] = %15.8e" % (i, s))
+
+            R_max[id_row, id_col] = S[0]
+            R_min[id_row, id_col] = S[-1]
+    
+    print("R_max = ", )
+    for i in range(len(row_partition)):
+        for j in range(len(col_partition)):
+            print("%16.12e," % R_max[i,j], end=' ')
+        print("")
+    
+    print("R_min = ", )
+    for i in range(len(row_partition)):
+        for j in range(len(col_partition)):
+            print("%16.12e," % R_min[i,j], end=' ')
+        print("")
 
 def _analysis_W_rank_block(W, partition:list[list], threshold=1e-8):
     assert W.ndim == 2
+
+    R_max = numpy.zeros((len(partition), len(partition)))
+    R_min = numpy.zeros((len(partition), len(partition)))
+
     for id_row, row in enumerate(partition):
         W_tmp = W[row,:]
         for id_col, col in enumerate(partition):
             W_tmp2 = W_tmp[:, col]
+            W_tmp3 = W_tmp2 @ W_tmp2.T
             # perform SVD
-            e, h = np.linalg.eigh(W_tmp2)
-            S = np.sqrt(e[::-1])
+            e, h = np.linalg.eigh(W_tmp3)
+            e = e[::-1]
+            # for i, s in enumerate(e):
+            #     print("e[%3d] = %15.8e" % (i, e[i]))
+            #     if s < 0:
+            #         e[i] = 0.0
+            S = np.sqrt(e)
             # get the rank
             where = np.where(S > threshold)[0]
             rank = len(where)
-            print("row = ", id_row, "col = ", id_col, "rank = ", rank)
+            print("row = ", id_row, "col = ", id_col, "rank = ", rank, "ratio = ", S[0]/S[-1], "max = ", S[0], "min = ", S[-1])
             # print S with large value
-            S = S[where]
-            for i, s in enumerate(S):
-                print("S[%3d] = %15.8e" % (i, s))
+            # S = S[where]
+            # for i, s in enumerate(S):
+            #     print("S[%3d] = %15.8e" % (i, s))
+
+            R_max[id_row, id_col] = S[0]
+            R_min[id_row, id_col] = S[-1]
+    
+    print("R_max = ", )
+    for i in range(len(partition)):
+        for j in range(len(partition)):
+            print("%16.12e," % R_max[i,j], end=' ')
+        print("")
+    
+    print("R_min = ", )
+    for i in range(len(partition)):
+        for j in range(len(partition)):
+            print("%16.12e," % R_min[i,j], end=' ')
+        print("")
 
 def _get_important_pnt(aux_basis:np.ndarray, weight, relative_cutoff=1e-3):
     assert aux_basis.ndim == 1
