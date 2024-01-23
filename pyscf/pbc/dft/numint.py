@@ -1069,6 +1069,7 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     nr_rks_fxc_st = nr_rks_fxc_st
+    nr_nlc_vxc = nr_nlc_vxc
 
     make_mask = staticmethod(make_mask)
     eval_ao = staticmethod(eval_ao)
