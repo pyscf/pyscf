@@ -695,7 +695,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         task = []
         for i in range(naux):
             task.append(construct_V(self.aux_basis[i].reshape(-1,*mesh), ngrids, mesh, coulG))
-        V_R = np.concatenate(da.compute(*task)).reshape(-1,ngrids)
+        V_R = np.concatenate(da.compute(*task)).reshape(-1,ngrids) # TODO: change it to C code. preallocate buffer, use fftw3! 
 
         del task
         coulG = None
@@ -756,8 +756,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     ##### functions defined in isdf_jk.py #####
 
     get_jk = isdf_jk.get_jk_dm
-
-import tracemalloc
 
 if __name__ == '__main__':
 
