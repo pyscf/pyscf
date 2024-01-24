@@ -673,11 +673,49 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     Returns:
         Density matrix, 2D ndarray
     '''
-    from pyscf.scf import uhf
-    dm = uhf.init_guess_by_chkfile(mol, chkfile_name, project)
-    mo_coeff = dm.mo_coeff[0]
-    mo_occ = dm.mo_occ[0] + dm.mo_occ[1]
-    return lib.tag_array(dm[0] + dm[1], mo_coeff=mo_coeff, mo_occ=mo_occ)
+    from pyscf.scf import addons
+    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    if project is None:
+        project = not gto.same_basis_set(chk_mol, mol)
+
+    # Check whether the two molecules are similar
+    im1 = scipy.linalg.eigvalsh(mol.inertia_moment())
+    im2 = scipy.linalg.eigvalsh(chk_mol.inertia_moment())
+    # im1+1e-7 to avoid 'divide by zero' error
+    if abs((im1-im2)/(im1+1e-7)).max() > 0.01:
+        logger.warn(mol, "Large deviations found between the input "
+                    "molecule and the molecule from chkfile\n"
+                    "Initial guess density matrix may have large error.")
+
+    if project:
+        s = get_ovlp(mol)
+
+    def fproj(mo):
+        if project:
+            mo = addons.project_mo_nr2nr(chk_mol, mo, mol)
+            norm = numpy.einsum('pi,pi->i', mo.conj(), s.dot(mo))
+            mo /= numpy.sqrt(norm)
+        return mo
+
+    mo = scf_rec['mo_coeff']
+    mo_occ = scf_rec['mo_occ']
+    if getattr(mo[0], 'ndim', None) == 1:  # RHF
+        if numpy.iscomplexobj(mo):
+            raise NotImplementedError('TODO: project DHF orbital to UHF orbital')
+        mo_coeff = fproj(mo)
+        dm = make_rdm1(mo_coeff, mo_occ)
+    else:  #UHF
+        if getattr(mo[0][0], 'ndim', None) == 2:  # KUHF
+            logger.warn(mol, 'k-point UHF results are found.  Density matrix '
+                        'at Gamma point is used for the molecular SCF initial guess')
+            mo = mo[0]
+        dma = make_rdm1(fproj(mo[0]), mo_occ[0])
+        dmb = make_rdm1(fproj(mo[1]), mo_occ[1])
+        dm = dma + dmb
+        s = get_ovlp(mol)
+        _, mo_coeff = scipy.linalg.eigh(dm, s, type=2)
+        dm = lib.tag_array(dm, mo_coeff=mo_coeff[:,::-1], mo_occ=mo_occ)
+    return dm
 
 
 def get_init_guess(mol, key='minao'):
