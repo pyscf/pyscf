@@ -415,7 +415,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(xc1.sum(), 19.977512805950784, 7)
         self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
 
-    @unittest.skip(dft.libxc.max_deriv_order('pbe,') <= 3)
+    @unittest.skipIf(dft.libxc.max_deriv_order('pbe,') <= 3, 'libxc order')
     def test_libxc_gga_deriv4(self):
         rho1 = rho[:,:4].copy()
         xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=4)
@@ -425,7 +425,7 @@ class KnownValues(unittest.TestCase):
         xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=4)
         self.assertAlmostEqual(xc1.sum(), -869.6617638095072, 4)
 
-    @unittest.skip(not hasattr(dft, 'xcfun'))
+    @unittest.skipIf(not hasattr(dft, 'xcfun'), 'xcfun order')
     def test_xcfun_lda_deriv3(self):
         rho1 = rho[:,0].copy()
         ref = eval_xc_eff('LDA,', rho1, 3, dft.xcfun)
@@ -457,7 +457,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(xc1.sum(), -2.7477984980958627, 9)
         self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
 
-    @unittest.skip(not hasattr(dft, 'xcfun'))
+    @unittest.skipIf(not hasattr(dft, 'xcfun'), 'xcfun order')
     def test_xcfun_gga_deriv3(self):
         rho1 = rho[:,:4].copy()
         ref = eval_xc_eff('PBE', rho1, 3, dft.xcfun)
@@ -489,7 +489,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(xc1.sum(), -3.0715856471099032, 9)
         self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
 
-    @unittest.skip(not hasattr(dft, 'xcfun'))
+    @unittest.skipIf(not hasattr(dft, 'xcfun'), 'xcfun order')
     def test_xcfun_mgga_deriv3(self):
         rho1 = rho
         ref = eval_xc_eff('M06', rho1, 3, dft.xcfun)
@@ -521,7 +521,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(xc1.sum(), 19.977512805950784, 9)
         self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
 
-    @unittest.skip(not (hasattr(dft, 'xcfun') and dft.xcfun.MAX_DERIV_ORDER > 3))
+    @unittest.skipIf(not (hasattr(dft, 'xcfun') and dft.xcfun.MAX_DERIV_ORDER > 3), 'xcfun order')
     def test_xcfun_gga_deriv4(self):
         rho1 = rho[:,:4].copy()
         xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=4)

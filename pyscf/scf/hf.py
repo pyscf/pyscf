@@ -656,12 +656,66 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read the HF results from checkpoint file, then project it to the
     basis defined by ``mol``
 
+    Kwargs:
+        project : None or bool
+            Whether to project chkfile's orbitals to the new basis.  Note when
+            the geometry of the chkfile and the given molecule are very
+            different, this projection can produce very poor initial guess.
+            In PES scanning, it is recommended to switch off project.
+
+            If project is set to None, the projection is only applied when the
+            basis sets of the chkfile's molecule are different to the basis
+            sets of the given molecule (regardless whether the geometry of
+            the two molecules are different).  Note the basis sets are
+            considered to be different if the two molecules are derived from
+            the same molecule with different ordering of atoms.
+
     Returns:
         Density matrix, 2D ndarray
     '''
-    from pyscf.scf import uhf
-    dm = uhf.init_guess_by_chkfile(mol, chkfile_name, project)
-    return dm[0] + dm[1]
+    from pyscf.scf import addons
+    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    if project is None:
+        project = not gto.same_basis_set(chk_mol, mol)
+
+    # Check whether the two molecules are similar
+    im1 = scipy.linalg.eigvalsh(mol.inertia_moment())
+    im2 = scipy.linalg.eigvalsh(chk_mol.inertia_moment())
+    # im1+1e-7 to avoid 'divide by zero' error
+    if abs((im1-im2)/(im1+1e-7)).max() > 0.01:
+        logger.warn(mol, "Large deviations found between the input "
+                    "molecule and the molecule from chkfile\n"
+                    "Initial guess density matrix may have large error.")
+
+    if project:
+        s = get_ovlp(mol)
+
+    def fproj(mo):
+        if project:
+            mo = addons.project_mo_nr2nr(chk_mol, mo, mol)
+            norm = numpy.einsum('pi,pi->i', mo.conj(), s.dot(mo))
+            mo /= numpy.sqrt(norm)
+        return mo
+
+    mo = scf_rec['mo_coeff']
+    mo_occ = scf_rec['mo_occ']
+    if getattr(mo[0], 'ndim', None) == 1:  # RHF
+        if numpy.iscomplexobj(mo):
+            raise NotImplementedError('TODO: project DHF orbital to UHF orbital')
+        mo_coeff = fproj(mo)
+        dm = make_rdm1(mo_coeff, mo_occ)
+    else:  #UHF
+        if getattr(mo[0][0], 'ndim', None) == 2:  # KUHF
+            logger.warn(mol, 'k-point UHF results are found.  Density matrix '
+                        'at Gamma point is used for the molecular SCF initial guess')
+            mo = mo[0]
+        dma = make_rdm1(fproj(mo[0]), mo_occ[0])
+        dmb = make_rdm1(fproj(mo[1]), mo_occ[1])
+        dm = dma + dmb
+        s = get_ovlp(mol)
+        _, mo_coeff = scipy.linalg.eigh(dm, s, type=2)
+        dm = lib.tag_array(dm, mo_coeff=mo_coeff[:,::-1], mo_occ=mo_occ)
+    return dm
 
 
 def get_init_guess(mol, key='minao'):
@@ -1358,11 +1412,9 @@ class SCF_Scanner(lib.SinglePointScanner):
             dm0 = kwargs.pop('dm0')
         elif self.mo_coeff is None:
             dm0 = None
-        elif self.chkfile and h5py.is_hdf5(self.chkfile):
-            dm0 = self.from_chk(self.chkfile)
         else:
             dm0 = None
-            # dm0 form last calculation cannot be used in the current
+            # dm0 form last calculation may not be used in the current
             # calculation if a completely different system is given.
             # Obviously, the systems are very different if the number of
             # basis functions are different.
@@ -1371,6 +1423,8 @@ class SCF_Scanner(lib.SinglePointScanner):
             # last calculation.
             if numpy.array_equal(self._last_mol_fp, mol.ao_loc):
                 dm0 = self.make_rdm1()
+            elif self.chkfile and h5py.is_hdf5(self.chkfile):
+                dm0 = self.from_chk(self.chkfile)
         self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
         e_tot = self.kernel(dm0=dm0, **kwargs)
         self._last_mol_fp = mol.ao_loc
