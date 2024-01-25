@@ -29,6 +29,7 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   endif()
 endif()
 set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")
+set(CMAKE_C_STANDARD 99)
 
 option(BUILD_MARCH_NATIVE "gcc flag -march=native" off)
 if (BUILD_MARCH_NATIVE)
@@ -168,7 +169,7 @@ if(BUILD_LIBCINT)
 
   ExternalProject_Add(libcint
     GIT_REPOSITORY ${LIBCINT_GIT}
-    GIT_TAG v6.0.0
+    GIT_TAG v6.1.1
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE
