@@ -250,7 +250,7 @@ def k2gamma(kmf, kmesh=None):
     if kmf.__class__ in known_cls:
         mf = known_cls[kmf.__class__](scell)
         mf.exxdiv = kmf.exxdiv
-        if isinstance(mf, KohnShamDFT):
+        if isinstance(mf, dft.KohnShamDFT):
             mf.xc = kmf.xc
     else:
         kmf.warn(f'Unknown SCF object {kmf}. '
