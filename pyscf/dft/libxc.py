@@ -1096,7 +1096,7 @@ def parse_xc(description):
         return parse_xc('%s,%s' % tuple(description))
 
     if (description.upper() in ('B3P86', 'B3LYP', 'X3LYP') and
-        not getattr(parse_xc, b3lyp5_warned, False) and
+        not getattr(parse_xc, 'b3lyp5_warned', False) and
         not hasattr(__config__, 'B3LYP_WITH_VWN5')):
         parse_xc.b3lyp5_warned = True
         warnings.warn('Since PySCF-2.3, B3LYP (and B3P86) are changed to the VWN-RPA variant, '
