@@ -1338,7 +1338,7 @@ def _guess_omega(cell, kpts, mesh=None):
 
     if mesh is None:
         nkpts = len(kpts)
-        ke_cutoff = 20. * nkpts**(-1./3)
+        ke_cutoff = 20. * (cell.nao/25 * nkpts)**(-1./3)
         ke_cutoff = max(ke_cutoff, ke_min)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:

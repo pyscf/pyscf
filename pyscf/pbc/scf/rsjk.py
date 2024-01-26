@@ -1266,7 +1266,7 @@ def _guess_omega(cell, kpts, mesh=None):
     if mesh is None:
         omega_min = OMEGA_MIN
         ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
-        nk = nkpts**(1./3)
+        nk = (cell.nao/25 * nkpts)**(1./3)
         ke_cutoff = 50 / (.7+.25*nk+.05*nk**3)
         ke_cutoff = max(ke_cutoff, ke_min)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
