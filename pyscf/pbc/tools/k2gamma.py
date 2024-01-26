@@ -205,7 +205,7 @@ def k2gamma(kmf, kmesh=None):
          C_{\nu ' n'} = C_{\vecR\mu, \veck m} = \frac{1}{\sqrt{N_{\UC}}}
          \e^{\ii \veck\cdot\vecR} C^{\veck}_{\mu  m}
     '''
-    from pyscf.pbc import scf
+    from pyscf.pbc import scf, dft
     def transform(mo_energy, mo_coeff, mo_occ):
         if isinstance(kmf.kpts, KPoints):
             kpts = kmf.kpts.kpts
@@ -228,16 +228,37 @@ def k2gamma(kmf, kmesh=None):
 
     if isinstance(kmf, scf.khf.KRHF):
         scell, E_g, C_gamma, mo_occ = transform(mo_energy, mo_coeff, mo_occ)
-        mf = scf.RHF(scell)
     elif isinstance(kmf, scf.kuhf.KUHF):
         scell, Ea, Ca, occ_a = transform(mo_energy[0], mo_coeff[0], mo_occ[0])
         scell, Eb, Cb, occ_b = transform(mo_energy[1], mo_coeff[1], mo_occ[1])
-        mf = scf.UHF(scell)
         E_g = [Ea, Eb]
         C_gamma = [Ca, Cb]
         mo_occ = [occ_a, occ_b]
     else:
         raise NotImplementedError('SCF object %s not supported' % kmf)
+
+    known_cls = {
+        dft.kuks.KUKS  : dft.uks.UKS  ,
+        dft.kroks.KROKS: dft.roks.ROKS,
+        dft.krks.KRKS  : dft.rks.RKS  ,
+        dft.kgks.KGKS  : dft.gks.GKS  ,
+        scf.kuhf.KUHF  : scf.uhf.UHF  ,
+        scf.krohf.KROHF: scf.rohf.ROHF,
+        scf.khf.KRHF   : scf.hf.RHF   ,
+        scf.kghf.KGHF  : scf.ghf.GHF  ,
+    }
+    if kmf.__class__ in known_cls:
+        mf = known_cls[kmf.__class__](scell)
+        mf.exxdiv = kmf.exxdiv
+        if isinstance(mf, KohnShamDFT):
+            mf.xc = kmf.xc
+    else:
+        kmf.warn(f'Unknown SCF object {kmf}. '
+                 'The supercell SCF object is initialized to an HF object.')
+        if isinstance(kmf, scf.khf.KRHF):
+            mf = scf.RHF(scell)
+        else:
+            mf = scf.UHF(scell)
 
     mf.mo_coeff = C_gamma
     mf.mo_energy = E_g
