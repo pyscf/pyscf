@@ -17,6 +17,7 @@
 #include "np_helper/np_helper.h"
 #include "config.h"
 #include <math.h>
+#include <string.h>
 
 void NPdset0(double *p, const size_t n)
 {

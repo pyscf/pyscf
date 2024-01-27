@@ -246,9 +246,6 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             Whether this is an exchange matrix element.
         mf : instance of :class:`SCF`
 
-    Returns:
-        coulG : (ngrids,) ndarray
-            The Coulomb kernel.
         mesh : (3,) ndarray of ints (= nx,ny,nz)
             The number G-vectors along each direction.
         omega : float
@@ -261,6 +258,11 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             range-separated JK builder and range-separated DF (and other
             range-separated integral methods) which require Ewald probe charge
             to be computed with regular Coulomb interaction (1/r12).
+        
+    Returns:
+        coulG : (ngrids,) ndarray
+            The Coulomb kernel.
+        
     '''
     exxdiv = exx
     if isinstance(exx, str):

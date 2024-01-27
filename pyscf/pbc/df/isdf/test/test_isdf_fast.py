@@ -284,7 +284,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.W         = None
         self.aoRg      = None
         self.aoR       = aoR
-        self.aoR       = aoR
         self.V_R       = None
         self.cell      = mol
 
@@ -292,17 +291,21 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         self.natm = mol.natm
         self.nao = mol.nao_nr()
-        self.ngrids = aoR.shape[1]
 
-        assert self.nao == aoR.shape[0]
-        self.natm = mol.natm
-        self.nao = mol.nao_nr()
-        self.ngrids = aoR.shape[1]
+        from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2, _eval_rhoG
+
+        df_tmp = None
+        if aoR is None:
+            df_tmp = MultiGridFFTDF2(mol)
+            self.ngrids = df_tmp.grids
+        else:
+            self.ngrids = aoR.shape[1]
+            assert self.nao == aoR.shape[0]
+
+        ## preallocated buffer for parallel calculation
 
         self.jk_buffer = None
         self.ddot_buf  = None
-
-        assert self.nao == aoR.shape[0]
 
         ao2atomID = np.zeros(self.nao, dtype=np.int32)
         ao2atomID = np.zeros(self.nao, dtype=np.int32)
@@ -314,7 +317,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             atm_id = mol._bas[i, ATOM_OF]
             nctr   = mol._bas[i, NCTR_OF]
             angl   = mol._bas[i, ANG_OF]
-            nao_now = nctr * (2 * angl + 1)
+            nao_now = nctr * (2 * angl + 1)  # NOTE: sph basis assumed!
             ao2atomID[ao_loc:ao_loc+nao_now] = atm_id
             ao_loc += nao_now
 
@@ -323,23 +326,31 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.ao2atomID = ao2atomID
         self.ao2atomID = ao2atomID
 
-        # libpbc.PBC_ISDF_init(ctypes.byref(self._this),
-        #                         nao, natm, ngrids,
-        #                         _cutoff_aoValue,
-        #                         ao2atomID.ctypes.data_as(ctypes.c_void_p),
-        #                         aoR.ctypes.data_as(ctypes.c_void_p),
-        #                         _cutoff_QR)
-
         # given aoG, determine at given grid point, which ao has the maximal abs value
 
-        self.partition = np.argmax(np.abs(aoR), axis=0)
-        print("partition = ", self.partition.shape)
-        # map aoID to atomID
-        self.partition = np.asarray([ao2atomID[x] for x in self.partition])
-        # for i in range(self.partition.shape[0]):
-        #     print("i = %5d, partition = %5d" % (i, self.partition[i]))
+        if aoR is not None:
+            self.partition = np.argmax(np.abs(aoR), axis=0)
+            print("partition = ", self.partition.shape)
+            # map aoID to atomID
+            self.partition = np.asarray([ao2atomID[x] for x in self.partition])
+        else:
+            grids   = df_tmp.grids
+            coords  = np.asarray(grids.coords).reshape(-1,3)
+            NumInts = df_tmp._numint
+
+            self.partition = np.zeros(coords.shape[0], dtype=np.int32)
+            MAX_MEMORY = 2 * 1e9  # 2 GB
+            bunchsize  = int(MAX_MEMORY / (self.nao * 8))  # 8 bytes per double
+            assert bunchsize > 0
+            # buf = np.array((MAX_MEMORY//8), dtype=np.double) # note the memory has to be allocated here, one cannot optimize it!
+            for p0, p1 in lib.prange(0, coords.shape[0], bunchsize):
+                res = NumInts.eval_ao(mol, coords[p0:p1]).T
+                res = np.argmax(np.abs(res), axis=0)
+                self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
 
     # @profile
+
+
     def _allocate_jk_buffer(self, datatype):
 
         if self.jk_buffer is None:
@@ -366,18 +377,17 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             assert self.ddot_buf.dtype == datatype
 
     def build(self):
-        # libpbc.PBC_ISDF_build(self._this)
-        print("warning: not implemented yet")
-        # libpbc.PBC_ISDF_build(self._this)
-        print("warning: not implemented yet")
+        raise NotImplementedError
+        # print("warning: not implemented yet")
 
     def build_only_partition(self):
-        # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
-        pass
-        # libpbc.PBC_ISDF_build_onlyVoronoiPartition(self._this)
-        pass
+        raise NotImplementedError
+        # print("warning: not implemented yet")
+
 
     # @profile
+
+
     def build_IP_Sandeep(self, c=5, m=5,
                          atomic_partition=True,
                          ratio=0.8,
@@ -665,7 +675,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         @delayed
         def construct_V(input:np.ndarray, ngrids, mesh, coul_G, axes=None):
             return (np.fft.ifftn((np.fft.fftn(input, axes=axes).reshape(-1, ngrids) * coul_G[None,:]).reshape(*mesh), axes=axes).real).reshape(ngrids)
-            # res = (np.fft.ifftn((np.fft.fftn(input, axes=axes).reshape(-1, ngrids) * coul_G[None,:]).reshape(*mesh), axes=axes).real).reshape(ngrids)
 
         # print("mesh = ", mesh)
 
@@ -675,27 +684,13 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
-        # V_R   = np.zeros((naux, ngrids))
         coulG = tools.get_coulG(cell, mesh=mesh)
-
-        # blksize1 = int(5*1e9/8/ngrids)
-        # for p0, p1 in lib.prange(0, naux, blksize1):
-        #     tmp1 = self.aux_basis[p0:p1].reshape(-1,*mesh)
-        #     task = []
-        #     for i in range(tmp1.shape[0]):
-        #         task.append(construct_V(tmp1[i], ngrids, mesh, coulG))
-        #     res = da.compute(*task)
-        #     V_R[p0:p1] = np.asarray(res).reshape(-1, ngrids)
-        #     # X_freq     = numpy.fft.fftn(self.aux_basis[p0:p1].reshape(-1,*mesh), axes=(1,2,3)).reshape(-1,ngrids)
-        #     # V_G        = X_freq * coulG[None,:]
-        #     # X_freq     = None
-        #     # V_R[p0:p1] = numpy.fft.ifftn(V_G.reshape(-1,*mesh), axes=(1,2,3)).real.reshape(-1,ngrids)
-        #     # V_G        = None
 
         task = []
         for i in range(naux):
             task.append(construct_V(self.aux_basis[i].reshape(-1,*mesh), ngrids, mesh, coulG))
-        V_R = np.concatenate(da.compute(*task)).reshape(-1,ngrids) # TODO: change it to C code. preallocate buffer, use fftw3! 
+        # TODO: change it to C code. preallocate buffer, use fftw3!
+        V_R = np.concatenate(da.compute(*task)).reshape(-1,ngrids)
 
         del task
         coulG = None
@@ -718,6 +713,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.mesh = mesh
 
     def check_AOPairError(self):
+        assert(self.aoR is not None)
         assert(self.IP_ID is not None)
         assert(self.aux_basis is not None)
 
@@ -734,11 +730,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             diff = aoPair - aoPair_approx
             diff_pair_abs_max = np.max(np.abs(diff), axis=1)
-            # print("diff_pair_abs_max = ", diff_pair_abs_max)
-            # print("diff_pair_abs_max.shape = ", diff_pair_abs_max.shape)
 
             for j in range(diff_pair_abs_max.shape[0]):
-                # print("i = %5d, j = %5d diff_pair_abs_max = %15.8e" % (i, j, diff_pair_abs_max[j]))
                 print("(%5d, %5d, %15.8e)" % (i, j, diff_pair_abs_max[j]))
 
     def __del__(self):
@@ -804,7 +797,7 @@ if __name__ == '__main__':
     cell.verbose = 4
 
     # cell.ke_cutoff  = 100   # kinetic energy cutoff in a.u.
-    cell.ke_cutoff = 256
+    cell.ke_cutoff = 25
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
@@ -819,6 +812,10 @@ if __name__ == '__main__':
 
     grids  = df_tmp.grids
     coords = np.asarray(grids.coords).reshape(-1,3)
+    nx = grids.mesh[0]
+    for i in range(coords.shape[0]):
+        print(coords[i])
+    exit(1)
     mesh   = grids.mesh
     ngrids = np.prod(mesh)
     assert ngrids == coords.shape[0]
