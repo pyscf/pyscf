@@ -387,9 +387,21 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     # @profile
 
+    def get_A_B(self):
+
+        aoR   = self.aoR
+        IP_ID = self.IP_ID
+        aoRG  = aoR[:, IP_ID]
+
+        A = np.asarray(lib.dot(aoRG.T, aoRG), order='C')
+        A = A ** 2
+        B = np.asarray(lib.dot(aoRG.T, aoR), order='C')
+        B = B ** 2
+
+        return A, B 
+
 
     def build_IP_Sandeep(self, c=5, m=5,
-                         atomic_partition=True,
                          ratio=0.8,
                          global_IP_selection=True,
                          build_global_basis=True, debug=True):
@@ -423,39 +435,14 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         grid_partition = []
         taskinfo = []
 
-        if atomic_partition:
-            for atm_id in range(natm):
-                # find partition for this atm
-                grid_ID = np.where(partition == atm_id)[0]
-                grid_partition.append(grid_ID)
-                # get aoR for this atm
-                aoR_atm = aoR[:, grid_ID]
-                nao_atm = nao_per_atm[atm_id]
-                taskinfo.append(atm_IP_task((grid_ID, aoR_atm, nao, nao_atm, c, m)))
-        else:
-            raise NotImplementedError
-
-            from clever_partition import _clever_partition
-
-            atomID2AO = []
-            for atm_id in range(natm):
-                atomID2AO.append(np.where(ao2atomID == atm_id)[0])
-
-            partition = _clever_partition(aoR, atomID2AO, ratio=ratio)
-
-            naux_tot = nao * c
-
-            for key in partition.keys():
-                grid_ID = partition[key]
-                grid_partition.append(grid_ID)
-                aoR_now = aoR[:, grid_ID]
-                naux_now = naux_tot * (float)(len(grid_ID)) / self.ngrids
-                # find the cloest integer
-                naux_now = int(naux_now + 0.5)
-                if naux_now == 0:
-                    naux_now = 1
-                print("naux_now = ", naux_now)
-                taskinfo.append(partition_IP_task((grid_ID, aoR_now, nao, naux_now, m)))
+        for atm_id in range(natm):
+            # find partition for this atm
+            grid_ID = np.where(partition == atm_id)[0]
+            grid_partition.append(grid_ID)
+            # get aoR for this atm
+            aoR_atm = aoR[:, grid_ID]
+            nao_atm = nao_per_atm[atm_id]
+            taskinfo.append(atm_IP_task((grid_ID, aoR_atm, nao, nao_atm, c, m)))
 
         results = da.compute(*taskinfo)
 
@@ -553,7 +540,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             A = np.asarray(lib.ddot(aoRg.T, aoRg, c=buffer1), order='C')  # buffer 1 size = naux * naux
             # A = A ** 2
             lib.square_inPlace(A)
-            print("A.shape = ", A.shape)
 
             self.aux_basis = np.asarray(lib.ddot(aoRg.T, aoR), order='C')   # buffer 2 size = naux * ngrids
             # B = B ** 2
@@ -567,6 +553,11 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             # use diagonalization instead
 
             e, h = np.linalg.eigh(A)  # single thread, but should not be slow, it should not be the bottleneck
+            print("e[-1] = ", e[-1])
+            print("e[0]  = ", e[0])
+            print("condition number = ", e[-1]/e[0])
+            for id, val in enumerate(e):
+                print("e[%5d] = %15.8e" % (id, val))
             # remove those eigenvalues that are too small
             where = np.where(abs(e) > BASIS_CUTOFF)[0]
             e = e[where]
@@ -588,75 +579,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         else:
 
             raise NotImplementedError
-
-            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-
-            # build info for the next task
-
-            # atmgridID_2_grid_ID = []
-
-            taskinfo = []
-            for atm_id, result in enumerate(results):
-
-                # grid_ID = np.where(partition == atm_id)[0]
-                # atmgridID_2_grid_ID.append(grid_ID)
-                grid_ID = grid_partition[atm_id]
-
-                _, pivot_local_ID, R, npt_find = result
-
-                print("atm_id = ", atm_id)
-                print("npt_find = ", npt_find)
-
-                for i in range(npt_find):
-                    try:
-                        print("R[%3d] = %15.8e" % (i, R[i, i]))
-                    except:
-                        break
-
-                # print("pivot_local_ID = ", pivot_local_ID)
-
-                if atomic_partition:
-                    taskinfo.append(construct_local_basis((pivot_local_ID, aoR[:, grid_ID], nao_per_atm[atm_id] * c)))
-                else:
-                    taskinfo.append(construct_local_basis((pivot_local_ID, aoR[:, grid_ID], npt_find)))
-
-            results = da.compute(*taskinfo)
-
-            # naux = c * nao
-            naux = 0
-            IP_ID = []
-
-            aux_basis_packed = []
-
-            for atm_id, result in enumerate(results):
-                IP_local_ID, aux_basis = result
-                print("atm_id = ", atm_id)
-                # print("IP_local_ID = ", IP_local_ID)
-
-                # sort IP_local_ID
-
-                IP_ID.extend(grid_partition[atm_id][IP_local_ID])
-
-                naux_atm = IP_local_ID.shape[0]
-                aux_full = np.zeros((naux_atm, self.ngrids))
-                aux_full[:, grid_partition[atm_id]] = aux_basis
-                aux_basis_packed.append(aux_full)
-
-                naux += naux_atm
-
-            print("naux = ", naux)
-
-            self.aux_basis = np.concatenate(aux_basis_packed, axis=0)
-            self.IP_ID = np.array(IP_ID)
-
-            # aoRg = aoR[:, IP_ID]
-            aoRg = numpy.zeros((nao, IP_ID.shape[0]))
-            lib.dslice(aoR, IP_ID, out=aoRg)
-
-            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-
-            if debug:
-                _benchmark_time(t1, t2, "build_auxiliary_basis")
 
         self.c    = c
         self.naux = naux
@@ -813,9 +735,11 @@ if __name__ == '__main__':
     grids  = df_tmp.grids
     coords = np.asarray(grids.coords).reshape(-1,3)
     nx = grids.mesh[0]
-    for i in range(coords.shape[0]):
-        print(coords[i])
-    exit(1)
+    
+    # for i in range(coords.shape[0]):
+    #     print(coords[i])
+    # exit(1)
+
     mesh   = grids.mesh
     ngrids = np.prod(mesh)
     assert ngrids == coords.shape[0]
@@ -828,7 +752,7 @@ if __name__ == '__main__':
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR, cutoff_aoValue=1e-6, cutoff_QR=1e-3)
     pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=15, global_IP_selection=True)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
-    pbc_isdf_info.check_AOPairError()
+    # pbc_isdf_info.check_AOPairError()
 
     ### check eri ###
 
@@ -855,8 +779,8 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-8
     mf.kernel()
 
-    # mf = scf.RHF(cell)
-    # mf.max_cycle = 100
-    # mf.conv_tol = 1e-8
-    # mf.kernel()
+    mf = scf.RHF(cell)
+    mf.max_cycle = 100
+    mf.conv_tol = 1e-8
+    mf.kernel()
 
