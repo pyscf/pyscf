@@ -126,7 +126,7 @@ class GMRES:
 
         self.B  = B
         self.X0 = X0
-        
+
         # print("self.B.shape = ", self.B.shape)
         # print("self.X0.shape = ", self.X0.shape)
 
@@ -388,7 +388,7 @@ if __name__ == '__main__':
 
     ############## test the construction of aux_basis ##############
 
-    #### seems to be useless ! 
+    #### seems to be useless !
 
     N = 256
 
@@ -470,7 +470,7 @@ if __name__ == '__main__':
 
     print("X  = ", X)
     print("X0 = ", X0)
-    
+
     ##################### check the preconditioner #####################
 
     from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2, _eval_rhoG
@@ -491,15 +491,15 @@ if __name__ == '__main__':
 
     partition = pbc_isdf_info.partition
     IP_ID = pbc_isdf_info.IP_ID
-    IP_2_atom = [partition[x] for x in IP_ID] 
-    
+    IP_2_atom = [partition[x] for x in IP_ID]
+
     # group IP_ID based on the atom index
 
     IP_ID_group = []
 
     for i in range(cell.natm):
         IP_ID_group.append([id for id, x in enumerate(IP_ID) if partition[x] == i])
-    
+
     print("IP_ID_group = ", IP_ID_group)
 
     permutation = []
@@ -530,8 +530,8 @@ if __name__ == '__main__':
         M[loc:loc+nrow, loc:loc+nrow] = h.dot(np.diag(1.0/e)).dot(h.T)
         loc += nrow
 
-    # perform svd on B 
-            
+    # perform svd on B
+
     C = B @ B.T
 
     e, h = np.linalg.eigh(C)
@@ -541,8 +541,8 @@ if __name__ == '__main__':
     for id, _e in enumerate(e):
         print("id = ", id, "_e = ", np.sqrt(_e))
 
-    # permutation first 
-        
+    # permutation first
+
     A2 = A[:, permutation]
     A2 = A2[permutation, :]
     B2 = B[permutation, :]
@@ -571,13 +571,13 @@ if __name__ == '__main__':
             u, s, vh = np.linalg.svd(tmp)
             print("cond tmp    = ", s[0]/s[-1])
             print("norm of tmp = ", np.linalg.norm(tmp))
-            loc_j += nrow_j 
+            loc_j += nrow_j
         loc += nrow
-    
+
     # exit(1)
 
     ##################### try GMRES to AX=B #####################
-        
+
     inv_permutation = np.argsort(permutation)
 
     # construct a initial guess by diagonal preconditioner
@@ -589,11 +589,11 @@ if __name__ == '__main__':
         nrow = len(IP_ID_group[i])
         A1 = A2[loc:loc+nrow, loc:loc+nrow]
         B1 = B2[loc:loc+nrow, :]
-        # diag A1 
+        # diag A1
         e, h = np.linalg.eigh(A1)
         X0[loc:loc+nrow, :] = h.dot(np.diag(1.0/e)).dot(h.T).dot(B1)
         loc += nrow
-    
+
     def func_Ax2(x, buf=None):
         if buf is None:
             buf = np.zeros_like(x)
@@ -613,6 +613,61 @@ if __name__ == '__main__':
 
     # pbc_isdf_info.aux_basis = X
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
+    # pbc_isdf_info.check_AOPairError()
+
+    # solve AX = B via LLT
+
+    L = np.linalg.cholesky(A)
+    print(np.allclose(L.dot(L.T), A))
+
+    # solve Ly = B
+
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    y = np.linalg.solve(L, B)
+    x = np.linalg.solve(L.T, y)
+    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+
+    _benchmark_time(t1, t2, "LLT_Solve")  # too slow
+
+
+    fn_cholesky = getattr(libpbc, "Cholesky", None)
+    assert(fn_cholesky is not None)
+
+    fn_build_aux = getattr(libpbc, "Solve_LLTEqualB_Parallel", None)
+    assert(fn_build_aux is not None)
+
+    fn_cholesky(
+        A.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(A.shape[0]),
+    )
+
+    nThread = lib.num_threads()
+    fn_build_aux(
+        ctypes.c_int(A.shape[0]),
+        A.ctypes.data_as(ctypes.c_void_p),
+        B.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(B.shape[1]),
+        ctypes.c_int(B.shape[1]//nThread)
+    )
+
+    # print(B[:, 0])
+    # print(pbc_isdf_info.aux_basis[:, 0])
+
+    np.allclose(B, pbc_isdf_info.aux_basis)
+
+    # for i in range(B.shape[1]):
+    #     print("i = ", i, "np.allclose(B[:,i], pbc_isdf_info.aux_basis[:,i]) = ", np.allclose(B[:,i], pbc_isdf_info.aux_basis[:,i]))
+
+    exit(1)
+
+    print(x[:, 0])
+    print(pbc_isdf_info.aux_basis[:, 0])
+    # print("np.allclose(x, X) = ", np.allclose(x, pbc_isdf_info.aux_basis))
+    # for i in range(x.shape[0]):
+    #     print("i = ", i, "np.allclose(x[:,i], pbc_isdf_info.aux_basis[:,i]) = ", np.allclose(x[:,i], pbc_isdf_info.aux_basis[:,i]))
+
+    pbc_isdf_info.aux_basis = x
+    pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
     pbc_isdf_info.check_AOPairError()
 
     from pyscf.pbc import scf
@@ -621,4 +676,4 @@ if __name__ == '__main__':
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 100
     mf.conv_tol = 1e-8
-    mf.kernel() # the accuracy is not enough
+    mf.kernel()  # the accuracy is not enough

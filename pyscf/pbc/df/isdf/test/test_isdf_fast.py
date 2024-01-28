@@ -387,6 +387,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     # @profile
 
+
     def get_A_B(self):
 
         aoR   = self.aoR
@@ -398,7 +399,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         B = np.asarray(lib.dot(aoRG.T, aoR), order='C')
         B = B ** 2
 
-        return A, B 
+        return A, B
 
 
     def build_IP_Sandeep(self, c=5, m=5,
@@ -529,49 +530,59 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             self.naux = naux
             self._allocate_jk_buffer(datatype=np.double)
             buffer1 = np.ndarray((self.naux , self.naux), dtype=np.double, buffer=self.jk_buffer, offset=0)
-            # buffer2 = np.ndarray((self.naux , self.ngrids), dtype=np.double, buffer=self.jk_buffer,
-            #                      offset=self.naux * self.naux * self.jk_buffer.dtype.itemsize)
 
             ## TODO: optimize this code so that the memory allocation is minimal!
 
             aoRg = numpy.empty((nao, IP_ID.shape[0]))
             lib.dslice(aoR, IP_ID, out=aoRg)
-            # aoRg = aoR[:, IP_ID]
             A = np.asarray(lib.ddot(aoRg.T, aoRg, c=buffer1), order='C')  # buffer 1 size = naux * naux
-            # A = A ** 2
             lib.square_inPlace(A)
 
             self.aux_basis = np.asarray(lib.ddot(aoRg.T, aoR), order='C')   # buffer 2 size = naux * ngrids
-            # B = B ** 2
             lib.square_inPlace(self.aux_basis)
 
-            # try:
-            # self.aux_basis = scipy.linalg.solve(A, B, assume_a='sym') # single thread too slow
-            # except np.linalg.LinAlgError:
-            # catch singular matrix error
+            fn_cholesky = getattr(libpbc, "Cholesky", None)
+            assert(fn_cholesky is not None)
 
-            # use diagonalization instead
+            fn_build_aux = getattr(libpbc, "Solve_LLTEqualB_Parallel", None)
+            assert(fn_build_aux is not None)
 
-            e, h = np.linalg.eigh(A)  # single thread, but should not be slow, it should not be the bottleneck
-            print("e[-1] = ", e[-1])
-            print("e[0]  = ", e[0])
-            print("condition number = ", e[-1]/e[0])
-            for id, val in enumerate(e):
-                print("e[%5d] = %15.8e" % (id, val))
-            # remove those eigenvalues that are too small
-            where = np.where(abs(e) > BASIS_CUTOFF)[0]
-            e = e[where]
-            h = h[:, where]
-            print("e.shape = ", e.shape)
-            # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
-            # self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')  # maximal size = naux * ngrids
-            buffer2 = np.ndarray((e.shape[0] , self.ngrids), dtype=np.double, buffer=self.jk_buffer,
-                     offset=self.naux * self.naux * self.jk_buffer.dtype.itemsize)
-            B = np.asarray(lib.ddot(h.T, self.aux_basis, c=buffer2), order='C')
-            # self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
-            # B = (1.0/e).reshape(-1, 1) * B
-            lib.d_i_ij_ij(1.0/e, B, out=B)
-            np.asarray(lib.ddot(h, B, c=self.aux_basis), order='C')
+            fn_cholesky(
+                A.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(naux),
+            )
+            nThread = lib.num_threads()
+            nGrids  = aoR.shape[1]
+            Bunchsize = nGrids // nThread
+            fn_build_aux(
+                ctypes.c_int(naux),
+                A.ctypes.data_as(ctypes.c_void_p),
+                self.aux_basis.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nGrids),
+                ctypes.c_int(Bunchsize)
+            )
+
+            # use diagonalization instead, but too slow for large system
+            # e, h = np.linalg.eigh(A)  # single thread, but should not be slow, it should not be the bottleneck
+            # print("e[-1] = ", e[-1])
+            # print("e[0]  = ", e[0])
+            # print("condition number = ", e[-1]/e[0])
+            # for id, val in enumerate(e):
+            #     print("e[%5d] = %15.8e" % (id, val))
+            # # remove those eigenvalues that are too small
+            # where = np.where(abs(e) > BASIS_CUTOFF)[0]
+            # e = e[where]
+            # h = h[:, where]
+            # print("e.shape = ", e.shape)
+            # # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
+            # # self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')  # maximal size = naux * ngrids
+            # buffer2 = np.ndarray((e.shape[0] , self.ngrids), dtype=np.double, buffer=self.jk_buffer,
+            #          offset=self.naux * self.naux * self.jk_buffer.dtype.itemsize)
+            # B = np.asarray(lib.ddot(h.T, self.aux_basis, c=buffer2), order='C')
+            # # self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
+            # # B = (1.0/e).reshape(-1, 1) * B
+            # lib.d_i_ij_ij(1.0/e, B, out=B)
+            # np.asarray(lib.ddot(h, B, c=self.aux_basis), order='C')
 
             t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
             if debug:
@@ -598,6 +609,32 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         def construct_V(input:np.ndarray, ngrids, mesh, coul_G, axes=None):
             return (np.fft.ifftn((np.fft.fftn(input, axes=axes).reshape(-1, ngrids) * coul_G[None,:]).reshape(*mesh), axes=axes).real).reshape(ngrids)
 
+        def constrcuct_V_CCode(aux_basis:np.ndarray, mesh, coul_G):
+            coulG_real         = coul_G.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1)
+            nThread            = lib.num_threads()
+            bunchsize          = naux // (2*nThread)
+            bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
+            bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
+            nAux               = aux_basis.shape[0]
+            ngrids             = aux_basis.shape[1]
+            mesh_int32         = np.array(mesh, dtype=np.int32)
+
+            V                  = np.zeros((nAux, ngrids), dtype=np.double)
+
+            fn = getattr(libpbc, "_construct_V", None)
+            assert(fn is not None)
+
+            fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(nAux),
+               aux_basis.ctypes.data_as(ctypes.c_void_p),
+               coulG_real.ctypes.data_as(ctypes.c_void_p),
+               V.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(bunchsize),
+               self.jk_buffer.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(bufsize_per_thread))
+
+            return V
+
         # print("mesh = ", mesh)
 
         # ngrids = self.ngrids
@@ -608,13 +645,15 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         coulG = tools.get_coulG(cell, mesh=mesh)
 
-        task = []
-        for i in range(naux):
-            task.append(construct_V(self.aux_basis[i].reshape(-1,*mesh), ngrids, mesh, coulG))
-        # TODO: change it to C code. preallocate buffer, use fftw3!
-        V_R = np.concatenate(da.compute(*task)).reshape(-1,ngrids)
+        # task = []
+        # for i in range(naux):
+        #     task.append(construct_V(self.aux_basis[i].reshape(-1,*mesh), ngrids, mesh, coulG))
+        # # TODO: change it to C code. preallocate buffer, use fftw3!
+        # V_R = np.concatenate(da.compute(*task)).reshape(-1,ngrids)
 
-        del task
+        V_R = constrcuct_V_CCode(self.aux_basis, mesh, coulG)
+
+        # del task
         coulG = None
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -718,8 +757,8 @@ if __name__ == '__main__':
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
-    # cell.ke_cutoff  = 100   # kinetic energy cutoff in a.u.
-    cell.ke_cutoff = 25
+    cell.ke_cutoff  = 256   # kinetic energy cutoff in a.u.
+    # cell.ke_cutoff = 25
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
@@ -735,7 +774,7 @@ if __name__ == '__main__':
     grids  = df_tmp.grids
     coords = np.asarray(grids.coords).reshape(-1,3)
     nx = grids.mesh[0]
-    
+
     # for i in range(coords.shape[0]):
     #     print(coords[i])
     # exit(1)
