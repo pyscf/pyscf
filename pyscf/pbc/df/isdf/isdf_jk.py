@@ -382,6 +382,11 @@ def _contract_k_dm(mydf, dm):
         assert dm.shape[0] == 1
         dm = dm[0]
 
+    # for i in range(dm.shape[0]):
+    #     for j in range(dm.shape[1]):
+    #         if abs(dm[i,j]) > 1e-6:
+    #             print("dm[%d,%d] = %12.6f" % (i,j,dm[i,j]))
+
     nao  = dm.shape[0]
 
     cell = mydf.cell
@@ -492,6 +497,30 @@ def _contract_k_dm(mydf, dm):
 def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
            kpts_band=None, with_j=True, with_k=True, omega=None, **kwargs):
     '''JK for given k-point'''
+    
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+
+    #### explore the linearity of J K with respect to dm #### 
+
+    if mydf._cached_dm is None:
+        mydf._cached_dm = dm
+        mydf._cached_j = None
+        mydf._cached_k = None
+    else:
+
+        if mydf._cached_j is None and with_j == True or \
+           mydf._cached_k is None and with_k == True:
+            # recalculate the J or K
+            mydf._cached_j = None
+            mydf._cached_k = None
+        else:
+            assert(mydf._cached_dm.shape == dm.shape)
+            dm = dm - mydf._cached_dm
+            mydf._cached_dm += dm
+
+    #### perform the calculation ####
 
     if mydf.jk_buffer is None:  # allocate the buffer for get jk
         mydf._allocate_jk_buffer(dm.dtype)
@@ -530,7 +559,22 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
 
 
     t1 = log.timer('sr jk', *t1)
-    return vj, vk
+
+    #### explore the linearity of J K with respect to dm #### 
+
+    if with_j and mydf._cached_j is None:
+        mydf._cached_j = vj
+    elif with_j:
+        mydf._cached_j += vj
+    
+    if with_k and mydf._cached_k is None:
+        mydf._cached_k = vk
+    elif with_k:
+        mydf._cached_k += vk
+
+    # return vj, vk
+
+    return mydf._cached_j, mydf._cached_k
 
 
 ### TODO use sparse matrix to store the data

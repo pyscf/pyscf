@@ -348,6 +348,14 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 res = np.argmax(np.abs(res), axis=0)
                 self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
 
+        # cached jk and dm
+                
+        # NOTE: it seems that the linearity of JK w.r.t dm is not fully explored in pbc/df module 
+                
+        self._cached_dm = None
+        self._cached_j  = None
+        self._cached_k  = None
+
     # @profile
 
 
@@ -754,6 +762,7 @@ if __name__ == '__main__':
     #             '''
 
     cell.basis   = 'gth-szv'
+    # cell.basis   = 'gth-tzvp'
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
@@ -789,7 +798,7 @@ if __name__ == '__main__':
     print("aoR.shape = ", aoR.shape)
 
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR, cutoff_aoValue=1e-6, cutoff_QR=1e-3)
-    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=15, global_IP_selection=True)
+    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=15, global_IP_selection=False)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
     # pbc_isdf_info.check_AOPairError()
 
