@@ -632,6 +632,11 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             fn = getattr(libpbc, "_construct_V", None)
             assert(fn is not None)
 
+            print("V.shape = ", V.shape)
+            print("aux_basis.shape = ", aux_basis.shape)
+            print("self.jk_buffer.size    = ", self.jk_buffer.size)
+            print("self.jk_buffer.shape   = ", self.jk_buffer.shape)
+
             fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(nAux),
                aux_basis.ctypes.data_as(ctypes.c_void_p),

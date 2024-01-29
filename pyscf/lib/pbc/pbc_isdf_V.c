@@ -1,4 +1,5 @@
 #include "fft.h"
+#include <omp.h>
 
 int get_omp_threads();
 int omp_get_thread_num();
@@ -15,14 +16,14 @@ void _construct_V(int *mesh,
 {
     // print all the input info 
 
-    // printf("mesh: %d %d %d\n", mesh[0], mesh[1], mesh[2]);
-    // printf("naux: %d\n", naux);
-    // printf("BunchSize: %d\n", BunchSize);
-    // printf("buffersize: %d\n", buffersize);
-    // printf("auxBasis: %p\n", auxBasis);
-    // printf("CoulG: %p\n", CoulG);
-    // printf("V: %p\n", V);
-    // printf("buf: %p\n", buf);
+    // printf("mesh       : %d %d %d\n", mesh[0], mesh[1], mesh[2]);
+    // printf("naux       : %d\n", naux);
+    // printf("BunchSize  : %d\n", BunchSize);
+    // printf("buffersize : %d\n", buffersize);
+    // printf("auxBasis   : %p\n", auxBasis);
+    // printf("CoulG      : %p\n", CoulG);
+    // printf("V          : %p\n", V);
+    // printf("buf        : %p\n", buf);
 
     static const int SMALL_SIZE = 8;
 
@@ -32,9 +33,9 @@ void _construct_V(int *mesh,
 
     // print the dispatch info
 
-    // printf("nThread: %d\n", nThread);
-    // printf("nBunch: %d\n", nBunch);
-    // printf("nLeft: %d\n", nLeft);
+    // printf("nThread : %d\n", nThread);
+    // printf("nBunch  : %d\n", nBunch);
+    // printf("nLeft   : %d\n", nLeft);
 
     int mesh_complex[3] = {mesh[0], mesh[1], mesh[2] / 2 + 1};
 
@@ -56,21 +57,22 @@ void _construct_V(int *mesh,
 #pragma omp parallel num_threads(nThread)
     {
         int thread_id = omp_get_thread_num();
-        double *buf_thread = buf + thread_id * buffersize;
-        int bunch_i, bunch_start, bunch_end, j, k;
+        double *buf_thread = buf + thread_id * (size_t)buffersize;
+        size_t bunch_i, bunch_start, bunch_end, j, k;
         double *ptr;
 
         // printf("thread_id: %d\n", thread_id);
 
 #pragma omp for schedule(static)
         for (bunch_i = 0; bunch_i < nBunch; ++bunch_i)
+        // for (bunch_i = 0; bunch_i < 0; ++bunch_i)
         {
             bunch_start = bunch_i * BunchSize;
             bunch_end = bunch_start + BunchSize;
 
             // forward transform
 
-            fftw_execute_dft_r2c(p_forward, auxBasis + bunch_start * n_real, (fftw_complex *)buf_thread);
+            fftw_execute_dft_r2c(p_forward, auxBasis + (size_t)bunch_start * (size_t)n_real, (fftw_complex *)buf_thread);
 
             // multiply CoulG
 
@@ -87,11 +89,11 @@ void _construct_V(int *mesh,
 
             // backward transform
 
-            fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + bunch_start * n_real);
+            fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + (size_t)bunch_start * (size_t)n_real);
 
             // scale
 
-            ptr = V + bunch_start * n_real;
+            ptr = V + (size_t)bunch_start * (size_t)n_real;
 
             for (j = bunch_start; j < bunch_end; ++j)
             {
@@ -110,9 +112,12 @@ void _construct_V(int *mesh,
 
     // printf("nLeft: %d\n", nLeft);
 
+    // return;
+
     if (nLeft > 0)
     {
         if ((nLeft <= SMALL_SIZE) && (nLeft <= BunchSize))
+        // if (1)
         {
             // use single thread to handle the left
 
@@ -120,6 +125,9 @@ void _construct_V(int *mesh,
 
             int bunch_start = nBunch * BunchSize;
             int bunch_end = bunch_start + nLeft;
+
+            // printf("bunch_start : %d\n", bunch_start);
+            // printf("bunch_end   : %d\n", bunch_end);   
 
             // create plan
 
@@ -130,7 +138,15 @@ void _construct_V(int *mesh,
 
             // forward transform
 
-            fftw_execute_dft_r2c(p_forward, auxBasis + bunch_start * n_real, (fftw_complex *)buf);
+            // printf("forward transform\n");
+            // printf("buf = %p\n", buf);
+            // printf("auxBasis   = %p\n", auxBasis + (size_t)bunch_start * (size_t)n_real);
+            // fflush(stdout);
+
+            fftw_execute_dft_r2c(p_forward, auxBasis + (size_t)bunch_start * (size_t)n_real, (fftw_complex *)buf);
+
+            // printf("forward transform done\n");
+            // fflush(stdout);
 
             // multiply CoulG
 
@@ -147,11 +163,22 @@ void _construct_V(int *mesh,
 
             // backward transform
 
-            fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf, V + bunch_start * n_real);
+            // printf("backward transform\n");
+            // printf("buf = %p\n", buf);
+            // printf("V   = %p\n", V);
+            // printf("stride = %lu\n", (size_t)n_real * bunch_start);
+            // printf("V   = %p\n", V + (size_t)bunch_start * (size_t)n_real);
+            // fflush(stdout);
+            // printf("bunch_start: %d\n", bunch_start);
+            // printf("n_real:      %d\n", n_real);
+            // printf("buf required = %d\n", n_complex * 2 * nLeft);
+            // printf("buf max      = %d\n", buffersize*nThread);
+
+            fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf, V + (size_t)bunch_start * (size_t)n_real);
 
             // scale
 
-            ptr = V + bunch_start * n_real;
+            ptr = V + (size_t)bunch_start * (size_t)n_real;
 
             for (int j = bunch_start; j < bunch_end; ++j)
             {
@@ -170,32 +197,40 @@ void _construct_V(int *mesh,
         {
 
             // printf("use parallel thread to handle the left\n");
+            // printf("n_real    = %d\n", n_real);
+            // printf("n_complex = %d\n", n_complex);
 
             // use parallel thread to handle the left, assume the nTransform is 1
 
             int bunch_start = nBunch * BunchSize;
             int bunch_end = bunch_start + nLeft;
 
+            // printf("bunch_start: %d\n", bunch_start);   
+            // printf("bunch_end: %d\n", bunch_end);
+
             // create plan
 
             fftw_plan p_forward = fftw_plan_dft_r2c(3, mesh, auxBasis + bunch_start * n_real, (fftw_complex *)buf, FFTW_ESTIMATE);
             fftw_plan p_backward = fftw_plan_dft_c2r(3, mesh, (fftw_complex *)buf, V + bunch_start * n_real, FFTW_ESTIMATE);
 
+            size_t nbuf_per_thread = ((n_complex * 2 + 15)/16)*16; // make sure the memory is aligned
+
 #pragma omp parallel num_threads(nThread)
             {
                 int thread_id = omp_get_thread_num();
                 // printf("thread_id: %d\n", thread_id);
-                // printf("buffsize per thread: %d\n", n_complex * 2);
-                double *buf_thread = buf + thread_id * n_complex * 2;
-                int k;
+                // printf("buffsize per thread: %d\n", nbuf_per_thread);
+                double *buf_thread = buf + thread_id * (size_t)nbuf_per_thread;
+                size_t k;
                 double *ptr;
 
 #pragma omp for schedule(static)
-                for (int j = bunch_start; j < bunch_end; ++j)
+                for (size_t j = bunch_start; j < bunch_end; ++j)
                 {
+                
                     // forward transform
 
-                    fftw_execute_dft_r2c(p_forward, auxBasis + j * n_real, (fftw_complex *)buf_thread);
+                    fftw_execute_dft_r2c(p_forward, auxBasis + j * (size_t)n_real, (fftw_complex *)buf_thread);
 
                     // multiply CoulG
 
@@ -209,11 +244,11 @@ void _construct_V(int *mesh,
 
                     // backward transform
 
-                    fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + j * n_real);
+                    fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + j * (size_t)n_real);
 
                     // scale
 
-                    ptr = V + j * n_real;
+                    ptr = V + j * (size_t)n_real;
 
                     for (k = 0; k < n_real; ++k)
                     {
