@@ -1,15 +1,19 @@
 import numpy as np
 from pyscf import gto, scf, mcscf
+from pyscf.gto.mole import MoleBase
 from pyscf.nac.sacasscf import NonAdiabaticCouplings
 import unittest
 
 
 def diatomic(atom1, atom2, r, basis, ncas, nelecas, nstates,
              charge=None, spin=None, symmetry=False, cas_irrep=None):
+    global mols
     xyz = '{:s} 0.0 0.0 0.0; {:s} {:.3f} 0.0 0.0'.format(atom1, atom2, r)
     mol = gto.M(atom=xyz, basis=basis, charge=charge, spin=spin,
                 symmetry=symmetry, verbose=0, output='/dev/null')
     #mol = gto.M (atom=xyz, basis=basis, charge=charge, spin=spin, symmetry=symmetry, verbose=3)
+
+    mols.append(mol)
 
     mf = scf.RHF(mol)
 
@@ -33,10 +37,14 @@ def diatomic(atom1, atom2, r, basis, ncas, nelecas, nstates,
 
     return NonAdiabaticCouplings(mc)
 
+def setUpModule():
+    global mols 
+    mols = []
 
 def tearDownModule():
-    global diatomic
-    del diatomic
+    global mols, diatomic
+    [m.stdout.close() for m in mols]
+    del mols, diatomic
 
 
 class KnownValues(unittest.TestCase):
