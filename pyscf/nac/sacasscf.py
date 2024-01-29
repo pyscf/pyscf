@@ -284,22 +284,22 @@ if __name__=='__main__':
     de_1 = mc_grad.kernel (state=1)
     print (de_1)
 
-    from mrh.my_pyscf.tools.molcas2pyscf import *
-    mol = get_mol_from_h5 ('LiH_sa2casscf22_sto3g.rasscf.h5',
-                           output='sacasscf_nacs_fromh5.log',
-                           verbose=lib.logger.INFO)
-    mo = get_mo_from_h5 (mol, 'LiH_sa2casscf22_sto3g.rasscf.h5')
-    nac_etfs_ref = np.array ([9.14840490109073E-02, -9.14840490109074E-02])
-    nac_ref = np.array ([1.83701578323929E-01, -6.91459741744125E-02])
-    mf = scf.RHF (mol).run ()
-    mc = mcscf.CASSCF (mol, 2, 2).fix_spin_(ss=0).state_average ([0.5,0.5])
-    mc.run (mo, natorb=True, conv_tol=1e-10)
-    mc_nacs = NonAdiabaticCouplings (mc)
-    nac = mc_nacs.kernel (state=(0,1))
-    print (nac)
-    print (nac_ref)
-    nac_etfs = mc_nacs.kernel (state=(0,1), use_etfs=True)
-    print (nac_etfs)
-    print (nac_etfs_ref)
+    # from mrh.my_pyscf.tools.molcas2pyscf import *
+    # mol = get_mol_from_h5 ('LiH_sa2casscf22_sto3g.rasscf.h5',
+                           # output='sacasscf_nacs_fromh5.log',
+                           # verbose=lib.logger.INFO)
+    # mo = get_mo_from_h5 (mol, 'LiH_sa2casscf22_sto3g.rasscf.h5')
+    # nac_etfs_ref = np.array ([9.14840490109073E-02, -9.14840490109074E-02])
+    # nac_ref = np.array ([1.83701578323929E-01, -6.91459741744125E-02])
+    # mf = scf.RHF (mol).run ()
+    # mc = mcscf.CASSCF (mol, 2, 2).fix_spin_(ss=0).state_average ([0.5,0.5])
+    # mc.run (mo, natorb=True, conv_tol=1e-10)
+    # mc_nacs = NonAdiabaticCouplings (mc)
+    # nac = mc_nacs.kernel (state=(0,1))
+    # print (nac)
+    # print (nac_ref)
+    # nac_etfs = mc_nacs.kernel (state=(0,1), use_etfs=True)
+    # print (nac_etfs)
+    # print (nac_etfs_ref)
 
 
