@@ -827,9 +827,13 @@ if __name__ == '__main__':
     from pyscf.pbc import scf
 
     mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf = False
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 100
     mf.conv_tol = 1e-8
+
+    print("mf.direct_scf = ", mf.direct_scf)
+
     mf.kernel()
 
     mf = scf.RHF(cell)

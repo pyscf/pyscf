@@ -504,21 +504,21 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     #### explore the linearity of J K with respect to dm #### 
 
-    if mydf._cached_dm is None:
-        mydf._cached_dm = dm
-        mydf._cached_j = None
-        mydf._cached_k = None
-    else:
-
-        if mydf._cached_j is None and with_j == True or \
-           mydf._cached_k is None and with_k == True:
-            # recalculate the J or K
+    if mydf.direct_scf == False:
+        if mydf._cached_dm is None:
+            mydf._cached_dm = dm
             mydf._cached_j = None
             mydf._cached_k = None
         else:
-            assert(mydf._cached_dm.shape == dm.shape)
-            dm = dm - mydf._cached_dm
-            mydf._cached_dm += dm
+            if mydf._cached_j is None and with_j == True or \
+               mydf._cached_k is None and with_k == True:
+                # recalculate the J or K
+                mydf._cached_j = None
+                mydf._cached_k = None
+            else:
+                assert(mydf._cached_dm.shape == dm.shape)
+                dm = dm - mydf._cached_dm
+                mydf._cached_dm += dm
 
     #### perform the calculation ####
 
@@ -562,15 +562,16 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     #### explore the linearity of J K with respect to dm #### 
 
-    if with_j and mydf._cached_j is None:
-        mydf._cached_j = vj
-    elif with_j:
-        mydf._cached_j += vj
+    if mydf.direct_scf == False:
+        if with_j and mydf._cached_j is None:
+            mydf._cached_j = vj
+        elif with_j:
+            mydf._cached_j += vj
     
-    if with_k and mydf._cached_k is None:
-        mydf._cached_k = vk
-    elif with_k:
-        mydf._cached_k += vk
+        if with_k and mydf._cached_k is None:
+            mydf._cached_k = vk
+        elif with_k:
+            mydf._cached_k += vk
 
     # return vj, vk
 
