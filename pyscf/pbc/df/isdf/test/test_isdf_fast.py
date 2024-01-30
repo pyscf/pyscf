@@ -109,6 +109,7 @@ def colpivot_qr(A, max_rank=None, cutoff=1e-14):
     '''
     we do not need Q
     '''
+
     m, n = A.shape
     Q = np.zeros((m, m))
     R = np.zeros((m, n))
@@ -266,11 +267,10 @@ from pyscf.pbc import df
 
 class PBC_ISDF_Info(df.fft.FFTDF):
 
-    def __init__(self, mol:Cell, aoR: np.ndarray,
+    def __init__(self, mol:Cell, aoR: np.ndarray = None,
                  cutoff_aoValue: float = 1e-12,
                  cutoff_QR: float = 1e-8):
 
-        super().__init__(cell=mol)
         super().__init__(cell=mol)
 
         self._this = ctypes.POINTER(_PBC_ISDF)()
@@ -284,7 +284,10 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.W         = None
         self.aoRg      = None
         self.aoR       = aoR
-        self.aoRT      = aoR.T
+        if aoR is not None:
+            self.aoRT  = aoR.T
+        else:
+            self.aoRT  = None
         self.V_R       = None
         self.cell      = mol
 
@@ -298,7 +301,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         df_tmp = None
         if aoR is None:
             df_tmp = MultiGridFFTDF2(mol)
-            self.ngrids = df_tmp.grids
+            self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
+            self.ngrids = self.coords.shape[0]
         else:
             self.ngrids = aoR.shape[1]
             assert self.nao == aoR.shape[0]
@@ -334,6 +338,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             print("partition = ", self.partition.shape)
             # map aoID to atomID
             self.partition = np.asarray([ao2atomID[x] for x in self.partition])
+            self.coords    = None
+            self._numints  = None
         else:
             grids   = df_tmp.grids
             coords  = np.asarray(grids.coords).reshape(-1,3)
@@ -345,9 +351,12 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             assert bunchsize > 0
             # buf = np.array((MAX_MEMORY//8), dtype=np.double) # note the memory has to be allocated here, one cannot optimize it!
             for p0, p1 in lib.prange(0, coords.shape[0], bunchsize):
-                res = NumInts.eval_ao(mol, coords[p0:p1]).T
+                res = NumInts.eval_ao(mol, coords[p0:p1])[0].T
                 res = np.argmax(np.abs(res), axis=0)
                 self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
+            res = None
+            self.coords = coords
+            self._numints = NumInts
 
         # cached jk and dm
                 
