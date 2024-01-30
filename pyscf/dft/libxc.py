@@ -767,14 +767,7 @@ XC_CODES.update({
     'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
 })  # noqa: E501
 
-# Issue 1480
-if not hasattr(__config__, 'B3LYP_WITH_VWN5'):
-    warnings.warn('Since PySCF-2.3, B3LYP (and B3P86) are changed to the VWN-RPA variant, '
-                  'corresponding to the original definition by Stephens et al. (issue 1480) '
-                  'and the same as the B3LYP functional in Gaussian. '
-                  'To restore the VWN5 definition, you can put the setting '
-                  '"B3LYP_WITH_VWN5 = True" in pyscf_conf.py')
-elif getattr(__config__, 'B3LYP_WITH_VWN5', False):
+if getattr(__config__, 'B3LYP_WITH_VWN5', False):
     XC_CODES['B3P86' ] = 'B3P86V5'
     XC_CODES['B3LYP' ] = 'B3LYP5'
     XC_CODES['X3LYP' ] = 'X3LYP5'
@@ -1101,6 +1094,16 @@ def parse_xc(description):
         return tuple(hyb), ((description, 1.),)
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
+
+    if (description.upper() in ('B3P86', 'B3LYP', 'X3LYP') and
+        not getattr(parse_xc, 'b3lyp5_warned', False) and
+        not hasattr(__config__, 'B3LYP_WITH_VWN5')):
+        parse_xc.b3lyp5_warned = True
+        warnings.warn('Since PySCF-2.3, B3LYP (and B3P86) are changed to the VWN-RPA variant, '
+                      'corresponding to the original definition by Stephens et al. (issue 1480) '
+                      'and the same as the B3LYP functional in Gaussian. '
+                      'To restore the VWN5 definition, you can put the setting '
+                      '"B3LYP_WITH_VWN5 = True" in pyscf_conf.py')
 
     def assign_omega(omega, hyb_or_sr, lr=0):
         if hyb[2] == omega or omega == 0:
