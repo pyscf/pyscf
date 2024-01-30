@@ -284,6 +284,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.W         = None
         self.aoRg      = None
         self.aoR       = aoR
+        self.aoRT      = aoR.T
         self.V_R       = None
         self.cell      = mol
 
@@ -356,8 +357,23 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self._cached_j  = None
         self._cached_k  = None
 
-    # @profile
+        # check the sparsity 
 
+        self._check_sparsity          = True
+        self._explore_sparsity        = False
+        self._dm_cutoff               = 1e-8
+        self._rho_on_grid_cutoff      = 1e-10
+        self._dm_on_grid_cutoff       = 1e-10
+
+        self.dm_RowNElmt = None
+        self.dm_RowLoc   = None
+        self.dm_ColIndx  = None
+        self.dm_Elmt     = None
+        self.K_Indx      = None
+
+        self.dm_compressed = False
+
+    # @profile
 
     def _allocate_jk_buffer(self, datatype):
 
@@ -377,12 +393,21 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             nThreadsOMP = lib.num_threads()
             print("nThreadsOMP = ", nThreadsOMP)
-            self.ddot_buf = np.zeros((nThreadsOMP,(naux*naux)+2), dtype=datatype)
+            self.ddot_buf = np.zeros((nThreadsOMP,max((naux*naux)+2, ngrids)), dtype=datatype)
             # self.ddot_buf[nThreadsOMP-1, (naux*naux)+1] = 0.0 # memory allocate, well, you cannot cheat python in this way
 
         else:
             assert self.jk_buffer.dtype == datatype
             assert self.ddot_buf.dtype == datatype
+
+    def _allocate_dm_sparse_handler(self, datatype):
+
+        if self.dm_RowNElmt is None:
+            self.dm_RowNElmt = np.ndarray((self.nao,), dtype=datatype)
+            self.dm_RowLoc   = np.ndarray((self.nao,), dtype=np.int32)
+            self.dm_ColIndx  = np.ndarray((self.nao*self.nao,), dtype=np.int32)
+            self.dm_Elmt     = np.ndarray((self.nao*self.nao,), dtype=datatype)
+            self.K_Indx      = np.ndarray((self.naux,), dtype=np.int32)
 
     def build(self):
         raise NotImplementedError
@@ -724,6 +749,193 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     get_jk = isdf_jk.get_jk_dm
 
+    ##### explore sparsity #####
+
+    def compress_dm(self, dm:np.ndarray):
+        self._allocate_dm_sparse_handler(datatype=dm.dtype)
+
+        fn_compress = getattr(libpbc, "_compress_dm", None)
+        assert(fn_compress is not None)
+
+        fn_compress(
+            dm.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(dm.shape[0]),
+            ctypes.c_double(self._dm_cutoff),
+            self.dm_RowNElmt.ctypes.data_as(ctypes.c_void_p),
+            self.dm_RowLoc.ctypes.data_as(ctypes.c_void_p),
+            self.dm_ColIndx.ctypes.data_as(ctypes.c_void_p),
+            self.dm_Elmt.ctypes.data_as(ctypes.c_void_p)
+        )
+
+        self.dm_compressed = True
+
+    def _dm_aoR_spMM(self, out: np.ndarray):
+        fn_dmaoRspMM = getattr(libpbc, "_dm_aoR_spMM", None)
+        assert(fn_dmaoRspMM is not None)
+
+        print("_dm_aoR_spMM is called")
+
+        fn_dmaoRspMM(
+            self.dm_Elmt.ctypes.data_as(ctypes.c_void_p),
+            self.dm_RowLoc.ctypes.data_as(ctypes.c_void_p),
+            self.dm_ColIndx.ctypes.data_as(ctypes.c_void_p),
+            self.aoR.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(self.nao),
+            ctypes.c_int(self.ngrids),
+            out.ctypes.data_as(ctypes.c_void_p)
+        )
+
+    def process_dm(self, dm:np.ndarray):
+        self._allocate_dm_sparse_handler(datatype=dm.dtype)
+
+        nNonZero = ctypes.c_int(0)
+
+        fn_process = getattr(libpbc, "_process_dm", None)
+        assert(fn_process is not None)
+
+        fn_process(
+            dm.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(dm.shape[0]),
+            ctypes.c_double(self._dm_cutoff),
+            self.dm_RowNElmt.ctypes.data_as(ctypes.c_void_p),
+            ctypes.byref(nNonZero),
+        )
+
+        nNonZero = nNonZero.value
+
+        # if nNonZero > self.nao * self.nao * 0.1:
+        
+        return nNonZero
+
+        #### the following code is not needed, only for test purpose ####
+
+        self._allocate_jk_buffer(datatype=dm.dtype)
+
+        fn_compress = getattr(libpbc, "_compress_dm", None)
+        assert(fn_compress is not None)
+
+        fn_compress(
+            dm.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(dm.shape[0]),
+            ctypes.c_double(self._dm_cutoff),
+            self.dm_RowNElmt.ctypes.data_as(ctypes.c_void_p),
+            self.dm_RowLoc.ctypes.data_as(ctypes.c_void_p),
+            self.dm_ColIndx.ctypes.data_as(ctypes.c_void_p),
+            self.dm_Elmt.ctypes.data_as(ctypes.c_void_p)
+        )
+
+        #### test dm * aoR, to see the sparsity ####
+
+        res1 = np.zeros((self.nao, self.ngrids))
+        res2 = np.zeros_like(res1)
+
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        lib.ddot(dm, self.aoR, c=res1)  
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "dm aoR ddot")
+
+        fn_dmaoRspMM = getattr(libpbc, "_dm_aoR_spMM", None)
+        assert(fn_dmaoRspMM is not None)
+
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        fn_dmaoRspMM(
+            self.dm_Elmt.ctypes.data_as(ctypes.c_void_p),
+            self.dm_RowLoc.ctypes.data_as(ctypes.c_void_p),
+            self.dm_ColIndx.ctypes.data_as(ctypes.c_void_p),
+            self.aoR.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(self.nao),
+            ctypes.c_int(self.ngrids),
+            res2.ctypes.data_as(ctypes.c_void_p)
+        )
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "dm aoR spMM")
+
+        print(np.allclose(res1, res2))
+
+        return nNonZero
+
+    def V_DM_cwise_mul(self, dmDgR:np.ndarray, out: np.ndarray):
+        # dmDgR: (naux, ngrids)
+        # out: (naux, ngrids)
+        # V_DM_cwise_mul(self._this, dmDgR.ctypes.data_as(ctypes.c_void_p), out.ctypes.data_as(ctypes.c_void_p))
+
+        fn = getattr(libpbc, "_cwise_product_check_Sparsity", None)
+        assert(fn is not None)
+
+        UseSparsity = ctypes.c_int(0)
+
+        fn(
+            self.V_R.ctypes.data_as(ctypes.c_void_p),
+            dmDgR.ctypes.data_as(ctypes.c_void_p),
+            out.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(self.naux),
+            ctypes.c_int(self.ngrids),
+            ctypes.c_double(self._dm_on_grid_cutoff),
+            self.ddot_buf.ctypes.data_as(ctypes.c_void_p),
+            ctypes.byref(UseSparsity),
+            self.K_Indx.ctypes.data_as(ctypes.c_void_p)
+        )
+
+        return UseSparsity.value
+
+    def V_DM_product_spMM(self, product:np.ndarray, out: np.ndarray):
+        fn = getattr(libpbc, "_V_Dm_product_SpMM2", None)
+        assert(fn is not None)
+
+        fn(
+            product.ctypes.data_as(ctypes.c_void_p),
+            self.K_Indx.ctypes.data_as(ctypes.c_void_p),
+            self.aoRT.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(self.nao),
+            ctypes.c_int(self.naux),
+            ctypes.c_int(self.ngrids),
+            out.ctypes.data_as(ctypes.c_void_p)
+        )
+
+    def _check_V_DM_product_spMM(self, product:np.ndarray, out: np.ndarray):
+
+        fn = getattr(libpbc, "_V_Dm_product_SpMM", None)
+        assert(fn is not None)
+
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        fn(
+            product.ctypes.data_as(ctypes.c_void_p),
+            self.K_Indx.ctypes.data_as(ctypes.c_void_p),
+            self.aoR.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(self.nao),
+            ctypes.c_int(self.naux),
+            ctypes.c_int(self.ngrids),
+            out.ctypes.data_as(ctypes.c_void_p)
+        )
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "V_DM_product_spMM")
+
+        fn = getattr(libpbc, "_V_Dm_product_SpMM2", None)
+        assert(fn is not None)
+
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        fn(
+            product.ctypes.data_as(ctypes.c_void_p),
+            self.K_Indx.ctypes.data_as(ctypes.c_void_p),
+            self.aoRT.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(self.nao),
+            ctypes.c_int(self.naux),
+            ctypes.c_int(self.ngrids),
+            out.ctypes.data_as(ctypes.c_void_p)
+        )
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "V_DM_product_spMM2")
+
+
+        tmp = np.zeros_like(self.V_R)
+        res = np.zeros((self.naux, self.nao))
+
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        lib.ddot_withbuffer(tmp, self.aoR.T, c=res, buf=self.ddot_buf)
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+
+        _benchmark_time(t1, t2, "V_DM_product_MM")
+
 if __name__ == '__main__':
 
     # Test the function
@@ -766,7 +978,7 @@ if __name__ == '__main__':
     #                C     0.8917  2.6751  2.6751
     #             '''
 
-    cell.basis   = 'gth-szv'
+    cell.basis   = 'gth-dzv'
     # cell.basis   = 'gth-tzvp'
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
@@ -827,10 +1039,11 @@ if __name__ == '__main__':
     from pyscf.pbc import scf
 
     mf = scf.RHF(cell)
-    pbc_isdf_info.direct_scf = mf.direct_scf = False
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    pbc_isdf_info._explore_sparsity = True
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 100
-    mf.conv_tol = 1e-8
+    mf.conv_tol = 1e-7
 
     print("mf.direct_scf = ", mf.direct_scf)
 

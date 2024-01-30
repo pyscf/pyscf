@@ -276,7 +276,11 @@ def _contract_j_dm(mydf, dm):
     # print("before calling ddot in _contract_j_dm")
     # print("dm.shape", dm.shape)
     # print("aoR.shape", aoR.shape)
-    lib.ddot(dm, aoR, c=buffer1)  
+
+    if mydf._explore_sparsity and mydf.dm_compressed == True:
+        mydf._dm_aoR_spMM(buffer1)
+    else:
+        lib.ddot(dm, aoR, c=buffer1)  
     # print("after calling ddot in _contract_j_dm")
     tmp1 = buffer1
     # print(buffer1.__array_interface__['data'][0])
@@ -286,7 +290,25 @@ def _contract_j_dm(mydf, dm):
     # assert tmp1.__array_interface__['data'][0] == ptr1
 
     # need allocate memory, size = ngrid, (buffer 2)
+    
     density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')
+
+    # NOTE: it is not possible to explore sparsity of J as in most cases, the electron density is uniform in real space
+
+    # if mydf._check_sparsity:
+    #     small_comp = 0
+    #     norm       = 0
+    #     for i in range(density_R.size):
+    #         if abs(density_R[i]) < mydf._rho_on_grid_cutoff:
+    #             small_comp += 1
+    #             norm       += density_R[i] * density_R[i]
+    #     print("density_R small_comp = %10.2f %%" % (small_comp / density_R.size * 100.0))
+    #     print("density_R cut norm   = %10.2e" % np.sqrt(norm))
+
+    # if mydf._explore_sparsity:
+    #     for i in range(density_R.size):
+    #         if abs(density_R[i]) < mydf._rho_on_grid_cutoff:
+    #             density_R[i] = 0.0
 
     # assert density_R.__array_interface__['data'][0] == ptr2
 
@@ -422,7 +444,12 @@ def _contract_k_dm(mydf, dm):
 
     # need allocate memory, size = nao  * ngrid, this buffer does not need anymore  (buffer 1)
 
-    density_RgR  = np.asarray(lib.dot(dm, aoR, c=buffer1), order='C')
+    if mydf._explore_sparsity and mydf.dm_compressed == True:
+        mydf._dm_aoR_spMM(buffer1)
+        density_RgR  = buffer1
+    else:
+        density_RgR  = np.asarray(lib.dot(dm, aoR, c=buffer1), order='C')
+    
     # print("buffer1.size", buffer1.size)
     # assert density_RgR.__array_interface__['data'][0] == ptr1
 
@@ -450,14 +477,31 @@ def _contract_k_dm(mydf, dm):
 
     # tmp = np.asarray(lib.cwise_mul(V_R, density_RgR, out=buffer2), order='C')
 
-    lib.cwise_mul(V_R, density_RgR, out=buffer2)
+    # lib.cwise_mul(V_R, density_RgR, out=buffer2)
+    
+    use_sparsity = mydf.V_DM_cwise_mul(density_RgR, buffer2)
     tmp = buffer2
+
+    # if mydf._check_sparsity:
+    #     small_comp = 0
+    #     norm       = 0
+    #     for i in range(tmp.shape[0]):
+    #         for j in range(tmp.shape[1]):
+    #             if abs(tmp[i,j]) < mydf._rho_on_grid_cutoff:
+    #                 small_comp += 1
+    #                 norm       += tmp[i,j] * tmp[i,j]
+    #     print("tmp small_comp = %10.2f %%" % (small_comp / tmp.size * 100.0))
+    #     print("tmp cut norm   = %10.2e" % np.sqrt(norm))
 
     # assert tmp.__array_interface__['data'] == buffer2.__array_interface__['data']
 
     # do not need allocate memory, size = naux * nao,   (buffer 1, but viewed as buffer5)
-
-    K  = np.asarray(lib.ddot_withbuffer(tmp, aoR.T, c=buffer5, buf=mydf.ddot_buf), order='C')
+    
+    if use_sparsity == 1:
+        mydf.V_DM_product_spMM(tmp, buffer5)
+        K = buffer5
+    else:
+        K  = np.asarray(lib.ddot_withbuffer(tmp, aoR.T, c=buffer5, buf=mydf.ddot_buf), order='C')
 
     # assert K.__array_interface__['data'] == buffer5.__array_interface__['data']
 
@@ -519,6 +563,24 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
                 assert(mydf._cached_dm.shape == dm.shape)
                 dm = dm - mydf._cached_dm
                 mydf._cached_dm += dm
+
+    if mydf._explore_sparsity:
+
+        nNonZero = mydf.process_dm(dm)
+
+        print("dm nNonZero   = %10.2f %%" % (nNonZero / dm.size * 100.0))
+
+        # if small_comp == dm.size:
+        if nNonZero == 0:
+            # nothing to do
+            assert mydf._cached_j is not None
+            assert mydf._cached_k is not None
+            return mydf._cached_j, mydf._cached_k
+
+        if nNonZero < dm.size * 0.1:
+            mydf.compress_dm(dm)
+        else:
+            mydf.dm_compressed = False
 
     #### perform the calculation ####
 
