@@ -48,7 +48,7 @@ def diatomic(atom1, atom2, r, basis, ncas, nelecas, nstates,
 
     mc.kernel(mo)
 
-    return NonAdiabaticCouplings(mc)
+    return mc.nac_method()
 
 def setUpModule():
     global mols 
