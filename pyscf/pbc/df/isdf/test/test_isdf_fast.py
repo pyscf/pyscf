@@ -359,11 +359,11 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         # check the sparsity 
 
-        self._check_sparsity          = True
-        self._explore_sparsity        = False
-        self._dm_cutoff               = 1e-8
-        self._rho_on_grid_cutoff      = 1e-10
-        self._dm_on_grid_cutoff       = 1e-10
+        self._check_sparsity      = True
+        self._explore_sparsity    = False
+        self._dm_cutoff           = 1e-8
+        self._rho_on_grid_cutoff  = 1e-10
+        self._dm_on_grid_cutoff   = 1e-10
 
         self.dm_RowNElmt = None
         self.dm_RowLoc   = None
@@ -1040,7 +1040,7 @@ if __name__ == '__main__':
 
     mf = scf.RHF(cell)
     pbc_isdf_info.direct_scf = mf.direct_scf
-    pbc_isdf_info._explore_sparsity = True
+    # pbc_isdf_info._explore_sparsity = True
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 100
     mf.conv_tol = 1e-7

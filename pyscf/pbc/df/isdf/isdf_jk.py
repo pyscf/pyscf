@@ -290,7 +290,7 @@ def _contract_j_dm(mydf, dm):
     # assert tmp1.__array_interface__['data'][0] == ptr1
 
     # need allocate memory, size = ngrid, (buffer 2)
-    
+
     density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')
 
     # NOTE: it is not possible to explore sparsity of J as in most cases, the electron density is uniform in real space
@@ -479,7 +479,11 @@ def _contract_k_dm(mydf, dm):
 
     # lib.cwise_mul(V_R, density_RgR, out=buffer2)
     
-    use_sparsity = mydf.V_DM_cwise_mul(density_RgR, buffer2)
+    if mydf._explore_sparsity:
+        use_sparsity = mydf.V_DM_cwise_mul(density_RgR, buffer2)
+    else:
+        use_sparsity = 0
+        lib.cwise_mul(V_R, density_RgR, out=buffer2)
     tmp = buffer2
 
     # if mydf._check_sparsity:
