@@ -1109,7 +1109,7 @@ class StateAverageMCSCF(StateAverageMCSCFSolver):
             return self._state_average_nac_method()
         else:
             raise NotImplementedError("NAC method")
-    
+
     NACs = nac_method
 
 def state_average_(casscf, weights=(0.5,0.5), wfnsym=None):
