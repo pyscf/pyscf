@@ -206,25 +206,21 @@ def k2gamma(kmf, kmesh=None):
          \e^{\ii \veck\cdot\vecR} C^{\veck}_{\mu  m}
     '''
     from pyscf.pbc import scf, dft
+    if isinstance(kmf.kpts, KPoints):
+        kmf = kmf.to_khf()
+
     def transform(mo_energy, mo_coeff, mo_occ):
-        if isinstance(kmf.kpts, KPoints):
-            kpts = kmf.kpts.kpts
-        else:
-            kpts = kmf.kpts
+        assert not isinstance(kmf.kpts, KPoints)
+        kpts = kmf.kpts
         scell, E_g, C_gamma = mo_k2gamma(kmf.cell, mo_energy, mo_coeff,
                                          kpts, kmesh)[:3]
         E_sort_idx = np.argsort(np.hstack(mo_energy), kind='stable')
         mo_occ = np.hstack(mo_occ)[E_sort_idx]
         return scell, E_g, C_gamma, mo_occ
 
-    if isinstance(kmf.kpts, KPoints):
-        mo_coeff = kmf.kpts.transform_mo_coeff(kmf.mo_coeff)
-        mo_energy = kmf.kpts.transform_mo_energy(kmf.mo_energy)
-        mo_occ = kmf.kpts.transform_mo_occ(kmf.mo_occ)
-    else:
-        mo_coeff = kmf.mo_coeff
-        mo_energy = kmf.mo_energy
-        mo_occ = kmf.mo_occ
+    mo_coeff = kmf.mo_coeff
+    mo_energy = kmf.mo_energy
+    mo_occ = kmf.mo_occ
 
     if isinstance(kmf, scf.khf.KRHF):
         scell, E_g, C_gamma, mo_occ = transform(mo_energy, mo_coeff, mo_occ)
@@ -253,12 +249,7 @@ def k2gamma(kmf, kmesh=None):
         if isinstance(mf, dft.KohnShamDFT):
             mf.xc = kmf.xc
     else:
-        kmf.warn(f'Unknown SCF object {kmf}. '
-                 'The supercell SCF object is initialized to an HF object.')
-        if isinstance(kmf, scf.khf.KRHF):
-            mf = scf.RHF(scell)
-        else:
-            mf = scf.UHF(scell)
+        raise RuntimeError(f'k2gamma for SCF object {kmf} not supported.')
 
     mf.mo_coeff = C_gamma
     mf.mo_energy = E_g
