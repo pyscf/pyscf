@@ -32,8 +32,12 @@ libfft = lib.load_library('libfft')
 libpbc = lib.load_library('libpbc')
 
 AUX_BASIS_DATASET = 'aux_basis'
+V_DATASET         = 'V'
 
-def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf_memory:int, IO_buf:np.ndarray):
+def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray):
+    '''
+    IO_buf_memory: seems to be redundant
+    '''
 
     if isinstance(IO_File, str):
         if h5py.is_hdf5(IO_File):
@@ -47,6 +51,8 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf_me
         f_aux_basis = IO_File
 
     ### do the work ###
+
+    IO_buf_memory = IO_buf.size * IO_buf.dtype.itemsize
 
     nao    = mydf.nao
     naux   = mydf.naux
@@ -145,6 +151,204 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf_me
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     _benchmark_time(t1,t2,"_aux_basis_IO.build")
 
+def _construct_V_W_IO(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:np.ndarray):
+
+    if isinstance(IO_File, str):
+        if h5py.is_hdf5(IO_File):
+            f_dataset = h5py.File(IO_File, 'a')
+            if V_DATASET in f_dataset:
+                del (f_dataset[V_DATASET])
+            assert (AUX_BASIS_DATASET in f_dataset)
+        else:
+            raise ValueError("IO_File should be a h5py.File object")
+    else:
+        assert (isinstance(IO_File, h5py.Group))
+        f_dataset = IO_File
+
+    ### do the work ###
+
+    IO_buf_memory = IO_buf.size * IO_buf.dtype.itemsize
+
+    nao    = mydf.nao
+    naux   = mydf.naux
+    aoRg   = mydf.aoRg
+    ngrids = mydf.ngrids
+
+    mesh = np.asarray(mesh, dtype=np.int32)
+    mesh_complex = np.asarray([mesh[0], mesh[1], mesh[2]//2+1], dtype=np.int32)
+
+    ### the Coulomb kernel ###
+
+    coulG      = tools.get_coulG(cell, mesh=mesh)
+    coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1)
+    nThread    = lib.num_threads()
+
+    ### buffer needed ###
+
+    ### two to hold for read in aux_basis to construct V, two to hold another aux_basis to construct W ###
+    ### one further buffer to hold the buf to construct V, suppose it consists of 5% of the total memory ###
+
+    # suppose that nwork_per_thread , then the memory should be
+    # buf size = nThreads * nwork_per_thread * mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2
+    # suppose  V is of size (nThreads * nwork_per_thread) * mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2
+    # then the memory needed is 5 * nThreads * nwork_per_thread * mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2
+    # we set that the maximal nwork_per_thread is 16
+
+    THREAD_BUF_PERCENTAGE = 0.05
+
+    print("IO_buf.size = ", IO_buf.size)
+
+    memory_thread      = int(0.05 * IO_buf.size)
+
+    bunchsize          = memory_thread // nThread // (mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2)
+    if bunchsize > 16:
+        bunchsize = 16
+    if bunchsize == 0:
+        bunchsize = 1
+
+    print("bunchsize = ", bunchsize)
+
+    bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
+    bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
+    memory_thread      = bufsize_per_thread * nThread
+
+    if memory_thread > IO_buf.size:
+        raise ValueError("IO_buf is not large enough, memory_thread = %d, IO_buf.size = %d" %
+                         (memory_thread, IO_buf.size))
+
+    print("memory_thread = ", memory_thread)
+
+    bunch_size_IO = ((IO_buf.size - memory_thread) // 5) // (ngrids)
+
+    if bunch_size_IO > naux:
+        bunch_size_IO = naux
+    if bunch_size_IO == 0:
+        raise ValueError("IO_buf is not large enough, bunch_size_IO = %d, IO_buf.size = %d" %
+                         (bunch_size_IO, IO_buf.size))
+    if bunch_size_IO < nThread:
+        print("WARNING: bunch_size_IO = %d < nThread = %d" % (bunch_size_IO, nThread))
+
+    print("bunch_size_IO = ", bunch_size_IO)
+
+    ### allocate buffer ###
+
+    buf_thread = np.ndarray((nThread, bufsize_per_thread), dtype=IO_buf.dtype, buffer=IO_buf)
+    offset     = nThread * bufsize_per_thread * IO_buf.dtype.itemsize
+
+    buf_V1  = np.ndarray((bunch_size_IO, ngrids), dtype=IO_buf.dtype, buffer=IO_buf, offset=offset)
+    offset += bunch_size_IO * ngrids * IO_buf.dtype.itemsize
+    buf_V2  = np.ndarray((bunch_size_IO, ngrids), dtype=IO_buf.dtype, buffer=IO_buf, offset=offset)
+    offset += bunch_size_IO * ngrids * IO_buf.dtype.itemsize
+
+    buf_aux_basis = np.ndarray((bunch_size_IO, ngrids), dtype=IO_buf.dtype, buffer=IO_buf, offset=offset)
+    offset += bunch_size_IO * ngrids * IO_buf.dtype.itemsize
+    buf_aux_basis_bra = np.ndarray((bunch_size_IO, ngrids), dtype=IO_buf.dtype, buffer=IO_buf, offset=offset)
+    offset += bunch_size_IO * ngrids * IO_buf.dtype.itemsize
+    buf_aux_basis_ket = np.ndarray((bunch_size_IO, ngrids), dtype=IO_buf.dtype, buffer=IO_buf, offset=offset)
+
+    if hasattr(mydf, 'ddot_buf') and mydf.ddot_buf is not None:
+        if mydf.ddot_buf.size < bunch_size_IO * bunch_size_IO * nThread:
+            mydf.ddot_buf = np.zeros(((bunch_size_IO * bunch_size_IO + 2) * (nThread+1)),
+                                     dtype=np.float64)  # reallocate
+    else:
+        mydf.ddot_buf = np.zeros(((bunch_size_IO * bunch_size_IO + 2) * (nThread+1)), dtype=np.float64)
+
+    ddot_buf = mydf.ddot_buf
+    ddot_out = ddot_buf[(bunch_size_IO * bunch_size_IO + 2) * nThread:]
+
+    ### create data set
+
+    chunks = (bunch_size_IO, ngrids)
+
+    h5d_V = f_dataset.create_dataset(V_DATASET, (naux, ngrids), 'f8', chunks=chunks)
+
+    ### perform the task ###
+
+    def save_V(row0, row1, buf:np.ndarray):
+        # assert(buf.shape == (row1-row0, ngrids))
+        if row0 < row1:
+            h5d_V[row0:row1] = buf[:row1-row0]
+
+    def load_aux_basis_async(row0, row1, buf:np.ndarray):
+        # assert(buf.shape == (row1-row0, ngrids))
+        if row0 < row1:
+            buf[:row1-row0] = f_dataset[AUX_BASIS_DATASET][row0:row1]
+
+    def load_aux_basis(row0, row1, buf:np.ndarray):
+        # assert(buf.shape == (row1-row0, ngrids))
+        if row0 < row1:
+            buf[:row1-row0] = f_dataset[AUX_BASIS_DATASET][row0:row1]
+
+    fn = getattr(libpbc, "_construct_V", None)
+    assert(fn is not None)
+
+    # mydf.W = np.zeros((naux, naux), dtype=np.float64)
+
+    with lib.call_in_background(load_aux_basis_async, sync=True) as prefetch:
+        with lib.call_in_background(save_V, sync=True) as async_write:
+
+            load_aux_basis(0, min(bunch_size_IO, naux), buf_aux_basis_bra) # force to load first bunch
+
+            for p0, p1 in lib.prange(0, naux, bunch_size_IO):
+
+                t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+
+                # load aux basis
+
+                buf_aux_basis, buf_aux_basis_bra = buf_aux_basis_bra, buf_aux_basis
+
+                prefetch(p1, min(p1+bunch_size_IO, naux), buf_aux_basis_bra)
+                prefetch(p1, min(p1+bunch_size_IO, naux), buf_aux_basis_ket)
+
+                # construct V
+
+                fn(mesh.ctypes.data_as(ctypes.c_void_p),
+                   ctypes.c_int(bunch_size_IO),
+                   buf_aux_basis.ctypes.data_as(ctypes.c_void_p),
+                   coulG_real.ctypes.data_as(ctypes.c_void_p),
+                   buf_V1.ctypes.data_as(ctypes.c_void_p),
+                   ctypes.c_int(bunchsize),
+                   buf_thread.ctypes.data_as(ctypes.c_void_p),
+                   ctypes.c_int(bufsize_per_thread))
+
+                t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+
+                print("construct V[%5d:%5d] wall time: %12.6f CPU time: %12.6f" %
+                      (p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
+
+                t1 = t2
+
+                # perform the current mvp
+
+                _ddot_out = np.ndarray((p1-p0, p1-p0), dtype=ddot_out.dtype, buffer=ddot_out)
+                lib.ddot_withbuffer(buf_V1[:p1-p0, :], buf_aux_basis[:p1-p0, :].T, buf=ddot_buf, c=_ddot_out)
+                mydf.W[p0:p1, p0:p1] = _ddot_out
+
+                # load aux basis one loop
+
+                for q0, q1 in lib.prange(p1, naux, bunch_size_IO):
+
+                    buf_aux_basis, buf_aux_basis_ket = buf_aux_basis_ket, buf_aux_basis
+                    prefetch(q1, min(q1+bunch_size_IO, naux), buf_aux_basis_ket)
+
+                    # perform the current mvp
+
+                    _ddot_out = np.ndarray((p1-p0, q1-q0), dtype=ddot_out.dtype, buffer=ddot_out)
+                    lib.ddot_withbuffer(buf_V1[:p1-p0, :], buf_aux_basis[:q1-q0,:].T, buf=ddot_buf, c=_ddot_out)
+                    mydf.W[p0:p1, q0:q1] = _ddot_out
+                    mydf.W[q0:q1, p0:p1] = _ddot_out.T
+
+                async_write(p0, p1, buf_V1)
+                
+                buf_V1, buf_V2 = buf_V2, buf_V1
+
+                t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+
+                print("construct W[%5d:%5d] wall time: %12.6f CPU time: %12.6f" %
+                      (p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
+
+    # print(buf_aux_basis[:, 0])
+
 #### the following subroutines is designed for cache-friendly IP selection ####
 
 # @profile
@@ -200,7 +404,6 @@ def _atm_IP_task(taskinfo:tuple, buffer):
     grid_ID, aoR_atm, nao, nao_atm, c, m = taskinfo
     Q, R, aoR_atm1, aoR_atm2, aoPairBuffer = buffer
 
-    # npt_find = c * nao_atm + 10
     npt_find = c * nao_atm
     naux_tmp = int(np.sqrt(c*nao_atm)) + m
     # generate to random orthogonal matrix of size (naux_tmp, nao), do not assume sparsity here
@@ -212,16 +415,12 @@ def _atm_IP_task(taskinfo:tuple, buffer):
         G1, _ = numpy.linalg.qr(G1)
         G2 = np.random.rand(nao, naux_tmp)
         G2, _ = numpy.linalg.qr(G2)
-        # print("G1.shape = ", G1.shape)
-        # print("G2.shape = ", G2.shape)
-        # print("aoR_atm.shape = ", aoR_atm.shape)
-        # print("aoR_atm1.shape = ", aoR_atm1.shape)
         lib.dot(aoR_atm, G1, c=aoR_atm1)
         lib.dot(aoR_atm, G2, c=aoR_atm2)
-    aoPair = np.einsum('ki,kj->kij', aoR_atm1, aoR_atm2, out=aoPairBuffer.reshape(aoR_atm.shape[0],naux_tmp,naux_tmp)).reshape(grid_ID.shape[0], -1)
+    aoPair = np.einsum('ki,kj->kij', aoR_atm1, aoR_atm2,
+                       out=aoPairBuffer.reshape(aoR_atm.shape[0],naux_tmp,naux_tmp)).reshape(grid_ID.shape[0], -1)
     pivot = _colpivot_qr(aoPair, Q, R, max_rank=npt_find)
     pivot_ID = grid_ID[pivot]  # the global ID
-    # print("pivot_ID = ", pivot_ID)
     return pivot_ID
 
 def _copy_b_to_a(a:np.ndarray, b:np.ndarray, size:int):
@@ -229,26 +428,15 @@ def _copy_b_to_a(a:np.ndarray, b:np.ndarray, size:int):
     a.ravel()[:size] = b.ravel()[:size]
 
 # @profile
-def _select_IP_direct(mydf:isdf_fast.PBC_ISDF_Info, buf:np.ndarray, c:int, m:int):
+def _select_IP_direct(mydf:isdf_fast.PBC_ISDF_Info, c:int, m:int):
 
     bunchsize = lib.num_threads()
 
     ### determine the largest grids point of one atm ###
 
-    # ngrid_on_atm = np.zeros((mydf.cell.natm), dtype=np.int32)
-
-    # for atm_id in mydf.partition:
-    #     ngrid_on_atm[atm_id] += 1
-
-    # ngrid_on_atm = np.max(ngrid_on_atm)
-
     natm         = mydf.cell.natm
     nao          = mydf.nao
-    # naux         = mydf.naux
-    # aoRg         = mydf.aoRg
-    # ngrids       = mydf.ngrids
-
-    naux_max = 0
+    naux_max     = 0
 
     nao_per_atm = np.zeros((natm), dtype=np.int32)
     for i in range(mydf.nao):
@@ -275,10 +463,13 @@ def _select_IP_direct(mydf:isdf_fast.PBC_ISDF_Info, buf:np.ndarray, c:int, m:int
     print("buf_size       = ", buf_size)
     print("buf_per_thread = ", buf_size//nthread)
 
+    buf = mydf.IO_buf
+
     if buf.size < buf_size:
         # reallocate
-        buf = np.zeros((buf_size), dtype=np.float64)
-        print("reallocate buf of size = ", buf_size * 8)
+        mydf.IO_buf = np.zeros((buf_size), dtype=np.float64)
+        print("reallocate buf of size = ", buf_size)
+        buf = mydf.IO_buf
     buf_tmp = np.ndarray((buf_size), dtype=np.float64, buffer=buf)
 
     ### loop over atm ###
@@ -297,7 +488,7 @@ def _select_IP_direct(mydf:isdf_fast.PBC_ISDF_Info, buf:np.ndarray, c:int, m:int
     for p0, p1 in lib.prange(0, natm, nthread):
         taskinfo = []
 
-        # clear buffer 
+        # clear buffer
 
         buf_tmp[:] = 0.0
 
@@ -362,17 +553,23 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
 
         self.max_buf_memory = max_buf_memory
         self.IO_buf         = np.zeros((max_buf_memory//8), dtype=np.float64)
+        self.IO_FILE        = None
 
-    def build_IP_Sandeep_IO(self, IO_File:str, c:int, m:int=5):
-        
+    def __del__(self):
+
+        if self.IO_FILE is not None:
+            os.system("rm %s" % (self.IO_FILE))
+
+    def build_IP_Sandeep_IO(self, IO_File:str, c:int, m:int = 5):
+
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        self.IP_ID = _select_IP_direct(self, self.IO_buf, c, m)
+        self.IP_ID = _select_IP_direct(self, c, m)
         self.IP_ID = np.asarray(self.IP_ID, dtype=np.int32)
         print("IP_ID = ", self.IP_ID)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t1, t2, "select IP")
 
-        # construct aoR 
+        # construct aoR
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         coords_IP = self.coords[self.IP_ID]
@@ -381,7 +578,7 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t1, t2, "construct aoR")
 
-        self.naux = self.aoRg.shape[1]  
+        self.naux = self.aoRg.shape[1]
         self.c    = c
 
         print("naux = ", self.naux)
@@ -389,10 +586,11 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         # construct aux basis
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _construct_aux_basis_IO(self, IO_File, self.max_buf_memory, self.IO_buf)
+        _construct_aux_basis_IO(self, IO_File, self.IO_buf)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t1, t2, "construct aux basis")
 
+        self.IO_FILE = IO_File
 
     def get_buffer_size_in_IP_selection(self, c, m=5):
         natm = self.cell.natm
@@ -418,11 +616,22 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         buf_size += naux_max2*ngrid_on_atm                     # R
         buf_size += naux_max*ngrid_on_atm*2                    # aoR_atm1, aoR_atm2
         buf_size += naux_max*naux_max*ngrid_on_atm             # aoPairBuffer
-                    
+
 
         return buf_size
 
-C = 10
+    def build_auxiliary_Coulomb_IO(self, mesh):
+
+        self.mesh = mesh
+        self.W = np.zeros((self.naux, self.naux), dtype=np.float64)
+
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _construct_V_W_IO(self, mesh, self.IO_FILE, self.IO_buf)
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "construct V and W")
+
+
+C = 12
 
 if __name__ == "__main__":
 
@@ -454,7 +663,7 @@ if __name__ == "__main__":
     cell.verbose = 4
 
     cell.ke_cutoff  = 256   # kinetic energy cutoff in a.u.
-    # cell.ke_cutoff = 32
+    # cell.ke_cutoff = 128
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
@@ -482,19 +691,17 @@ if __name__ == "__main__":
 
     pbc_isdf_info = isdf_fast.PBC_ISDF_Info(cell, aoR, cutoff_aoValue=1e-6, cutoff_QR=1e-3)
     pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=C, global_IP_selection=False)
-    pbc_isdf_info.check_AOPairError()
 
     IO_buf_memory = int(3e7)  # 30M
-    IO_buf = np.zeros((IO_buf_memory), dtype=np.float64)
+    IO_buf = np.zeros((IO_buf_memory//8), dtype=np.float64)
     IO_File = "test.h5"
 
-    _construct_aux_basis_IO(pbc_isdf_info, IO_File, IO_buf_memory, IO_buf)
+    _construct_aux_basis_IO(pbc_isdf_info, IO_File, IO_buf)
 
     f_aux_basis = h5py.File(IO_File, 'r')
     aux_basis   = f_aux_basis[AUX_BASIS_DATASET]
 
     print("aux_basis.shape = ", aux_basis.shape)
-    # print(np.allclose(aux_basis, pbc_isdf_info.aux_basis))
 
     if np.allclose(aux_basis, pbc_isdf_info.aux_basis):
         print("PASS")
@@ -520,12 +727,56 @@ if __name__ == "__main__":
 
     pbc_isdf_info_IO = PBC_ISDF_Info_IO(cell, max_buf_memory=IO_buf_memory)
 
-    pbc_isdf_info_IO.build_IP_Sandeep_IO(c=C, IO_File=IO_File) 
+    pbc_isdf_info_IO.build_IP_Sandeep_IO(c=C, IO_File=IO_File)
+    pbc_isdf_info_IO.build_auxiliary_Coulomb_IO(mesh)
 
     f_aux_basis = h5py.File(IO_File, 'r')
-    aux_basis   = f_aux_basis[AUX_BASIS_DATASET]    
+    aux_basis   = f_aux_basis[AUX_BASIS_DATASET][:]
+    print("aux_basis.shape = ", aux_basis.shape)
     pbc_isdf_info_IO.aux_basis = aux_basis
     pbc_isdf_info_IO.aoR       = aoR
-    pbc_isdf_info_IO.check_AOPairError()
+    # pbc_isdf_info_IO.check_AOPairError()
+    
+    pbc_isdf_info.aoRg      = pbc_isdf_info_IO.aoRg
+    pbc_isdf_info.IP_ID     = pbc_isdf_info_IO.IP_ID
+    pbc_isdf_info.aux_basis = aux_basis
+    pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
 
-    os.system("rm %s" % (IO_File))
+    if np.allclose(pbc_isdf_info_IO.W, pbc_isdf_info.W):
+        print("PASS")
+    else:
+        ## print the difference
+
+        diff = pbc_isdf_info_IO.W - pbc_isdf_info.W
+
+        ## find where is the large difference
+
+        idx = np.where(np.abs(diff) > 1e-8)
+
+        ## print
+
+        print("idx = ", idx)
+
+        for i in range(idx[0].shape[0]):
+            print("idx = ", idx[0][i], idx[1][i], diff[idx[0][i], idx[1][i]])
+
+    V = f_aux_basis[V_DATASET][:]
+    V_bench = pbc_isdf_info.V_R
+
+    if np.allclose(V, V_bench):
+        print("PASS")
+    else:
+        ## print the difference
+
+        diff = V - V_bench
+
+        ## find where is the large difference
+
+        idx = np.where(np.abs(diff) > 1e-8)
+
+        ## print
+
+        print("idx = ", idx)
+
+        for i in range(idx[0].shape[0]):
+            print("idx = ", idx[0][i], idx[1][i], diff[idx[0][i], idx[1][i]])
