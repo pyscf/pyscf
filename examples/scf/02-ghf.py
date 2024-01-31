@@ -30,6 +30,6 @@ mf.kernel()
 #
 mf = scf.GHF(mol)
 dm = mf.get_init_guess() + 0j
-dm[0,:] += .1j
-dm[:,0] -= .1j
+dm[0,:] += .05j
+dm[:,0] -= .05j
 mf.kernel(dm0=dm)
