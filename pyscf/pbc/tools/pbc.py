@@ -590,8 +590,7 @@ def super_cell(cell, ncopy, wrap_around=False):
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
     mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
     supcell.mesh = (mesh // 2) * 2 + 1
-    supcell.magmom = np.repeat(np.asarray(cell.magmom).reshape(1,-1),
-                               np.prod(ncopy), axis=0).ravel()
+    supcell.magmom = list(cell.magmom) * np.prod(ncopy)
     return _build_supcell_(supcell, cell, Ls)
 
 

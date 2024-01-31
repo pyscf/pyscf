@@ -1209,6 +1209,7 @@ def copy(mol, deep=True):
     newmol._ecp    = copy.deepcopy(mol._ecp)
     newmol.pseudo  = copy.deepcopy(mol.pseudo)
     newmol._pseudo = copy.deepcopy(mol._pseudo)
+    newmol.magmom  = list(mol.magmom)
     return newmol
 
 def pack(mol):
@@ -1229,6 +1230,7 @@ def pack(mol):
             'ecp'     : mol.ecp,
             'pseudo'  : mol.pseudo,
             '_nelectron': mol._nelectron,
+            'magmom'  : mol.magmom,
             'verbose' : mol.verbose}
     return mdic
 def unpack(moldic):
