@@ -343,12 +343,13 @@ def addr2str(norb, nelec, addr):
     '''Convert CI determinant address to string'''
     if norb >= 64:
         raise NotImplementedError('norb >= 64')
-    assert num_strings(norb, nelec) > addr
+    max_addr = num_strings(norb, nelec)
+    assert max_addr > addr
 
-    if addr < 2**31:
+    if max_addr < 2**31:
         return addrs2str(norb, nelec, [addr])[0]
-
-    return _addr2str(norb, nelec, addr)
+    else:
+        return _addr2str(norb, nelec, addr)
 
 def _addr2str(norb, nelec, addr):
     if addr == 0 or nelec == norb or nelec == 0:
