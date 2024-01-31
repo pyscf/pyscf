@@ -2577,11 +2577,16 @@ class MoleBase(lib.StreamObject):
             # number of electrons are consistent.
             self.nelec
 
-        if self.magmom is None or len(self.magmom) != self.natm:
+        if self.magmom is None:
+            self.magmom = [0,] * self.natm
+        elif len(self.magmom) != self.natm:
+            logger.warn(self, 'len(magmom) != natm. Set magmom to zero')
             self.magmom = [0,] * self.natm
         if self.spin == 0 and abs(numpy.sum(self.magmom) - self.spin) > 1e-6:
             #don't check for unrestricted calcs.
             raise ValueError("mol.magmom is set incorrectly.")
+        if isinstance(self.magmom, np.ndarray):
+            self.magmom = self.magmom.tolist()
 
         if self.symmetry:
             self._build_symmetry()
