@@ -231,6 +231,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         if dump_chk:
             mf.dump_chk(locals())
 
+    #FIX DISP!!
     if mf.disp is not None:
         e_disp = mf.get_dispersion()
         mf.scf_summary['dispersion'] = e_disp
@@ -775,11 +776,7 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
         One-particle density matrix, 2D ndarray
     '''
     mocc = mo_coeff[:,mo_occ>0]
-# DO NOT make tag_array for dm1 here because this DM array may be modified and
-# passed to functions like get_jk, get_vxc.  These functions may take the tags
-# (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
-# array and modifications to DM array may be ignored.
-    dm = numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
+    dm = (mocc*mo_occ[mo_occ>0]).dot(mocc.conj().T)
     return lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ, **kwargs):
@@ -1064,7 +1061,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     e_idx = numpy.argsort(mo_energy)
     e_sort = mo_energy[e_idx]
     nmo = mo_energy.size
-    mo_occ = numpy.zeros(nmo)
+    mo_occ = numpy.zeros_like(mo_energy)
     nocc = mf.mol.nelectron // 2
     mo_occ[e_idx[:nocc]] = 2
     if mf.verbose >= logger.INFO and nocc < nmo:
@@ -1097,8 +1094,8 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     '''
     occidx = mo_occ > 0
     viridx = ~occidx
-    g = reduce(numpy.dot, (mo_coeff[:,viridx].conj().T, fock_ao,
-                           mo_coeff[:,occidx])) * 2
+    g = mo_coeff[:,viridx].conj().T.dot(
+        fock_ao.dot(mo_coeff[:,occidx])) * 2
     return g.ravel()
 
 
@@ -1960,6 +1957,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
             self.mol = mol
         self._opt = {None: None}
         self._eri = None
+        self.scf_summary = {}
         return self
 
     def apply(self, fn, *args, **kwargs):

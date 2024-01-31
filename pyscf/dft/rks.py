@@ -461,12 +461,11 @@ class KohnShamDFT:
         '''Initialize self.grids the first time call get_veff'''
         if mol is None: mol = self.mol
 
+        ground_state = getattr(dm, 'ndim', 0) == 2
         if self.grids.coords is None:
             t0 = (logger.process_clock(), logger.perf_counter())
             self.grids.build(with_non0tab=True)
-            if (self.small_rho_cutoff > 1e-20 and
-                # dm.ndim == 2 indicates ground state
-                isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            if self.small_rho_cutoff > 1e-20 and ground_state:
                 # Filter grids the first time setup grids
                 self.grids = prune_small_rho_grids_(self, self.mol, dm,
                                                     self.grids)
@@ -476,9 +475,7 @@ class KohnShamDFT:
         if is_nlc and self.nlcgrids.coords is None:
             t0 = (logger.process_clock(), logger.perf_counter())
             self.nlcgrids.build(with_non0tab=True)
-            if (self.small_rho_cutoff > 1e-20 and
-                # dm.ndim == 2 indicates ground state
-                isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            if self.small_rho_cutoff > 1e-20 and ground_state:
                 # Filter grids the first time setup grids
                 self.nlcgrids = prune_small_rho_grids_(self, self.mol, dm,
                                                        self.nlcgrids)

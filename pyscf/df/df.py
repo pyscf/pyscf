@@ -357,7 +357,12 @@ class DF4C(DF):
         with self.range_coulomb(omega) as rsh_df:
             return df_jk.r_get_jk(rsh_df, dm, hermi, with_j, with_k)
 
+    def get_eri(self):
+        raise NotImplementedError
+    get_ao_eri = get_eri
+
     def ao2mo(self, mo_coeffs):
         raise NotImplementedError
+    get_mo_eri = ao2mo
 
 GDF4C = DF4C

@@ -166,7 +166,6 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     else:
         mo_ea = mo_eb = mo_energy
     nmo = mo_ea.size
-    mo_occ = numpy.zeros(nmo)
     if getattr(mf, 'nelec', None) is None:
         nelec = mf.mol.nelec
     else:
@@ -241,8 +240,8 @@ def get_grad(mo_coeff, mo_occ, fock):
         focka, fockb = fock
     else:
         focka = fockb = fock
-    focka = reduce(numpy.dot, (mo_coeff.conj().T, focka, mo_coeff))
-    fockb = reduce(numpy.dot, (mo_coeff.conj().T, fockb, mo_coeff))
+    focka = mo_coeff.conj().T.dot(focka).dot(mo_coeff)
+    fockb = mo_coeff.conj().T.dot(fockb).dot(mo_coeff)
 
     g = numpy.zeros_like(focka)
     g[uniq_var_a]  = focka[uniq_var_a]
