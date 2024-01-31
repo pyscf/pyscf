@@ -21,6 +21,7 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.gto.basis import parse_molpro
 from pyscf.gto.basis import parse_gaussian
+from pyscf.gto.basis import parse_cp2k
 from pyscf.lib.exceptions import BasisNotFoundError
 
 class KnownValues(unittest.TestCase):
@@ -462,6 +463,47 @@ ECP,I,46,4,3;
                 [3, [[], [], [[2.928812, -11.777154, 7.851436], [2.904069, -15.525522, -7.762761], [0.287352, -0.14855, 0.099033], [0.48938, -0.273682, -0.136841]], [], [], [], []]]]]
         self.assertEqual(ecp_data, ref)
 
+    def test_parse_gth_basis(self):
+        basis_str = '''
+                        #BASIS SET
+                        C DZV-GTH
+                          1
+                          2  0  1  4  2  2
+                                4.3362376436   0.1490797872   0.0000000000  -0.0878123619   0.0000000000
+                                1.2881838513  -0.0292640031   0.0000000000  -0.2775560300   0.0000000000
+                                0.4037767149  -0.6882040510   0.0000000000  -0.4712295093   0.0000000000
+                                0.1187877657  -0.3964426906   1.0000000000  -0.4058039291   1.0000000000
+                        #
+                        #BASIS SET
+                        N DZV-GTH
+                          1
+                          2  0  1  4  2  2
+                                6.1526903413   0.1506300537   0.0000000000  -0.0950603476   0.0000000000
+                                1.8236332280  -0.0360100734   0.0000000000  -0.2918864295   0.0000000000
+                                0.5676628870  -0.6942023212   0.0000000000  -0.4739050050   0.0000000000
+                                0.1628222852  -0.3878929987   1.0000000000  -0.3893418670   1.0000000000
+                        #
+                    '''
+        basis1 = parse_cp2k.parse(basis_str, 'C')
+        ref = gto.basis.load('gth-dzv', 'C')
+        self.assertEqual(ref, basis1)
+        basis1 = parse_cp2k.parse(basis_str, 'N')
+        ref = gto.basis.load('gth-dzv', 'N')
+        self.assertEqual(ref, basis1)
+
+        basis_str = '''
+                        C DZV-GTH
+                          1
+                          2  0  1  4  2  2
+                                4.3362376436   0.1490797872   0.0000000000  -0.0878123619   0.0000000000
+                                1.2881838513  -0.0292640031   0.0000000000  -0.2775560300   0.0000000000
+                                0.4037767149  -0.6882040510   0.0000000000  -0.4712295093   0.0000000000
+                                0.1187877657  -0.3964426906   1.0000000000  -0.4058039291   1.0000000000
+                        #
+                    '''
+        basis1 = parse_cp2k.parse(basis_str)
+        ref = gto.basis.load('gth-dzv', 'C')
+        self.assertEqual(ref, basis1)
 
 if __name__ == "__main__":
     print("test basis module")
