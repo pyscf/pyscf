@@ -98,6 +98,8 @@ def dumps(cell):
     celldic['basis']= repr(cell.basis)
     celldic['pseudo'] = repr(cell.pseudo)
     celldic['ecp'] = repr(cell.ecp)
+    # Explicitly convert mesh because it is often created as numpy array
+    celldic['mesh'] = list(cell.mesh)
 
     try:
         return json.dumps(celldic)
