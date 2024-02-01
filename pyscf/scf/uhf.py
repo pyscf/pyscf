@@ -148,10 +148,6 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
     mo_b = mo_coeff[1]
     dm_a = numpy.dot(mo_a*mo_occ[0], mo_a.conj().T)
     dm_b = numpy.dot(mo_b*mo_occ[1], mo_b.conj().T)
-# DO NOT make tag_array for DM here because the DM arrays may be modified and
-# passed to functions like get_jk, get_vxc.  These functions may take the tags
-# (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
-# arrays and modifications to DM arrays may be ignored.
     return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ):
@@ -327,10 +323,8 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     viridxa = ~occidxa
     viridxb = ~occidxb
 
-    ga = reduce(numpy.dot, (mo_coeff[0][:,viridxa].conj().T, fock_ao[0],
-                            mo_coeff[0][:,occidxa]))
-    gb = reduce(numpy.dot, (mo_coeff[1][:,viridxb].conj().T, fock_ao[1],
-                            mo_coeff[1][:,occidxb]))
+    ga = mo_coeff[0][:,viridxa].conj().T.dot(fock_ao[0].dot(mo_coeff[0][:,occidxa]))
+    gb = mo_coeff[1][:,viridxb].conj().T.dot(fock_ao[1].dot(mo_coeff[1][:,occidxb]))
     return numpy.hstack((ga.ravel(), gb.ravel()))
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):

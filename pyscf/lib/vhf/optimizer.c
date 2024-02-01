@@ -393,6 +393,11 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         // Use opt->nbas because it is used in the prescreen function
         nbas = opt->nbas;
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        if (opt->q_cond == NULL) {
+                fprintf(stderr, "malloc(%zu) falied in CVHFsetnr_direct_scf\n",
+                        sizeof(double) * nbas*nbas);
+                exit(1);
+        }
         CVHFset_int2e_q_cond(intor, cintopt, opt->q_cond, ao_loc,
                              atm, natm, bas, nbas, env);
 }
@@ -522,6 +527,11 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         // Use opt->nbas because it is used in the prescreen function
         nbas = opt->nbas;
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        if (opt->dm_cond == NULL) {
+                fprintf(stderr, "malloc(%zu) falied in CVHFsetnr_direct_scf_dm\n",
+                        sizeof(double) * nbas*nbas);
+                exit(1);
+        }
         CVHFnr_dm_cond(opt->dm_cond, dm, nset, ao_loc, atm, natm, bas, nbas, env);
 }
 

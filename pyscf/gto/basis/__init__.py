@@ -629,7 +629,13 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
 
         # Last, a trial to access Basis Set Exchange database
         from pyscf.gto.basis import bse
-        if bse.basis_set_exchange is not None:
+        if bse.basis_set_exchange is None:
+            import warnings
+            warnings.warn(
+                'Basis may be available in basis-set-exchange. '
+                'It is recommended to install basis-set-exchange: '
+                'pip install basis-set-exchange')
+        else:
             try:
                 bse_obj = bse.basis_set_exchange.api.get_basis(
                     filename_or_basisname, elements=symb)
