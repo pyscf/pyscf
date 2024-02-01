@@ -107,6 +107,8 @@ def gen_occslst(orb_list, nelec):
         return res
     occslst = gen_occs_iter(orb_list, nelec)
     return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
+# Add this symbol for backward compatibility. Should remove in the future.
+_gen_occslst = gen_occslst
 
 def _strs2occslst(strs, norb):
     na = len(strs)
