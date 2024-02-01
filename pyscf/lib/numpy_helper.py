@@ -1612,6 +1612,17 @@ def concatenate(arrays, axis=0, out=None, dtype=None, casting="same_kind"):
 
     return out
 
+def z2d_InPlace(z):
+    '''Convert complex array to double array in-place'''
+    assert(z.dtype == numpy.complex128)
+    
+    fn = getattr(_np_helper, "NPz2d_InPlace")
+    assert(fn is not None)
+    fn(z.ctypes.data_as(ctypes.c_void_p),
+         ctypes.c_size_t(z.size))
+    z_real = numpy.ndarray(shape=z.shape, dtype=numpy.double, buffer=z)
+    return z_real
+
 def copy(a, order='K', subok=False, dtype=None, out=None):
     if (subok or a.dtype not in [float, numpy.double, numpy.complex128]
         or order != 'K' or not (a.flags.c_contiguous or a.flags.f_contiguous)):
@@ -1803,6 +1814,41 @@ def dslice(a, locs, out=None, axis=1):
        ctypes.c_size_t(locs.shape[0]),
        ctypes.c_size_t(a.shape[0]),
        ctypes.c_size_t(a.shape[1]))
+
+    return out
+
+def dslice_offset(a, locs, offset, out=None, axis=1):
+    assert(locs.ndim == 1)
+    assert(a.ndim    <= 2)
+
+    if axis!=1:
+        raise NotImplementedError
+
+    if a.dtype != numpy.double:
+        raise NotImplementedError
+    else:
+        if locs.dtype == numpy.int32:
+            fn = getattr(_np_helper, "NPdslice32_offset", None)
+        elif locs.dtype == numpy.int64:
+            fn = getattr(_np_helper, "NPdslice64_offset", None)
+        else:
+            raise NotImplementedError
+        assert(fn is not None)
+
+    if a.ndim == 1:
+        a = a.reshape(1,-1)
+
+    if out is None:
+        raise NotImplementedError
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       locs.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(locs.shape[0]),
+       ctypes.c_size_t(out.shape[1]),
+       ctypes.c_size_t(a.shape[0]),
+       ctypes.c_size_t(a.shape[1]),
+       ctypes.c_size_t(offset))
 
     return out
 

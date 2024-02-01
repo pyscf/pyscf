@@ -67,7 +67,7 @@ void NPdcopy_omp(double *out, const double *in, const size_t n)
 #pragma omp for schedule(static)
         for (i = 0; i < n; i++)
         {
-            out[i] = in[i];
+            out[i] = in[i]; // too abstract what the hell of it!
         }
     }
 }
@@ -106,8 +106,62 @@ void NPcopy_z2d(double *out, const double complex *in, const size_t n)
 #pragma omp for schedule(static)
         for (i = 0; i < n; i++)
         {
-            out[i] = creal(in[i]);
+            out[i] = creal(in[i]); /// WARNING: this part of code is correct if in = out, i.e. inplace operation
         }
+    }
+}
+
+int get_omp_threads();
+
+#include <stdio.h>
+
+void NPz2d_InPlace(double complex *in, const size_t n)
+{
+    // printf("n = %d\n", n);
+    // fflush(stdout);
+
+    double *out = (double *)in;
+
+    int nThread = get_omp_threads();
+
+    int BunchSize = n / nThread;
+    int nLeft = n - BunchSize * nThread;
+
+#pragma omp parallel num_threads(nThread)
+    {
+        size_t i;
+
+        int tid = omp_get_thread_num();
+        int start = tid * BunchSize;
+        int end = start + BunchSize;
+
+        if (tid == nThread - 1)
+        {
+            end += nLeft;
+        }
+
+        double *ptr_real = (double *)(in + start);
+        double complex *ptr_complex = in + start;
+
+        for (i = 0; i < end-start; i++)
+        {
+            ptr_real[i] = creal(ptr_complex[i]);
+        }
+    }
+
+    // copy back
+
+    for (int i = 1; i < nThread; i++)
+    {
+        int start = i * BunchSize;
+        int end = start + BunchSize;
+
+        if (i == nThread - 1)
+        {
+            end += nLeft;
+        }
+
+        memcpy(out + start, in + start, sizeof(double) * (end - start));
     }
 }
 
@@ -729,6 +783,44 @@ void NPdslice64(double *out, double *a, __int64_t *slices, size_t ncol_left, siz
             for (j = 0; j < ncol_left; j++)
             {
                 out[i * ncol_left + j] = a[i * ncol + slices[j]];
+            }
+        }
+    }
+}
+
+void NPdslice32_offset(double *out, double *a, __int32_t *slices, size_t nslices, size_t ncol_left, size_t nrow, size_t ncol, size_t offset)
+{
+    // printf("ncol_left = %d\n", ncol_left);
+    // printf("nrow      = %d\n", nrow);
+    // printf("ncol      = %d\n", ncol);
+    // printf("offset    = %d\n", offset);
+    // fflush(stdout);
+
+#pragma omp parallel
+    {
+        size_t i, j;
+#pragma omp for schedule(static)
+        for (i = 0; i < nrow; i++)
+        {
+            for (j = 0; j < nslices; j++)
+            {
+                out[i * ncol_left + j + offset] = a[i * ncol + slices[j]];
+            }
+        }
+    }
+}
+
+void NPdslice64_offset(double *out, double *a, __int64_t *slices, size_t nslices, size_t ncol_left, size_t nrow, size_t ncol, size_t offset)
+{
+#pragma omp parallel
+    {
+        size_t i, j;
+#pragma omp for schedule(static)
+        for (i = 0; i < nrow; i++)
+        {
+            for (j = 0; j < nslices; j++)
+            {
+                out[i * ncol_left + j + offset] = a[i * ncol + slices[j]];
             }
         }
     }

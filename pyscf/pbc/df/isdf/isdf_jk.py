@@ -329,7 +329,6 @@ def _contract_j_dm(mydf, dm):
     # need allocate memory, size = naux, (buffer 5)
 
     J = np.asarray(lib.ddot_withbuffer(V_R, density_R.reshape(-1,1), c=buffer5.reshape(-1,1), buf=mydf.ddot_buf), order='C').reshape(-1)   # with buffer, size 
-
     # assert J.__array_interface__['data'][0] == ptr5
 
     # do not need allocate memory, use buffer 3
@@ -505,7 +504,7 @@ def _contract_k_dm(mydf, dm):
         mydf.V_DM_product_spMM(tmp, buffer5)
         K = buffer5
     else:
-        K  = np.asarray(lib.ddot_withbuffer(tmp, aoR.T, c=buffer5, buf=mydf.ddot_buf), order='C')
+        K = np.asarray(lib.ddot_withbuffer(tmp, aoR.T, c=buffer5, buf=mydf.ddot_buf), order='C')
 
     # assert K.__array_interface__['data'] == buffer5.__array_interface__['data']
 
@@ -522,8 +521,10 @@ def _contract_k_dm(mydf, dm):
     # pointwise multiplication, do not need allocate memory, size = naux * naux, use buffer for (buffer 3)
     # tmp = W * density_RgRg
 
+    # print("D5 = ", density_RgRg[0])
     lib.cwise_mul(W, density_RgRg, out=density_RgRg)
     tmp = density_RgRg
+
 
     # assert tmp.__array_interface__['data'] == buffer3.__array_interface__['data']
 

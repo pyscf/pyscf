@@ -28,11 +28,27 @@ EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 
 libpbc = _pbcintor.libpbc
 
-import memory_profiler
-from memory_profiler import profile
+# import memory_profiler
+# from memory_profiler import profile
 
-# @profile
-def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
+
+def _estimate_rcut(cell):
+    '''Cutoff raidus, above which each shell decays to a value less than the
+    required precsion'''
+    log_prec = numpy.log(cell.precision * EXTRA_PREC)
+    rcut = []
+    for ib in range(cell.nbas):
+        l = cell.bas_angular(ib)
+        es = cell.bas_exp(ib)
+        cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
+        r = 5.
+        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        r[r < 1.] = 1.
+        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        rcut.append(r.max())
+    return numpy.array(rcut)
+
+def ISDF_eval_gto(cell, eval_name=None, coords=None, comp=None, kpts=numpy.zeros((1,3)), kpt=None,
              shls_slice=None, non0tab=None, ao_loc=None, cutoff=None,
              out=None, Ls=None, rcut=None):
     r'''Evaluate PBC-AO function value on the given grids,
@@ -74,28 +90,16 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
             If provided, results are written into this array.
 
     Returns:
-        A list of 2D (or 3D) arrays to hold the AO values on grids.  Each
-        element of the list corresponds to a k-point and it has the shape
-        (N,nao) Or shape (\*,N,nao).
+        A list of 2D (or 3D) arrays to hold the AO values on grids. 
 
-    Examples:
-
-    >>> cell = pbc.gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g')
-    >>> coords = cell.get_uniform_grids([10,10,10])
-    >>> kpts = cell.make_kpts([3,3,3])
-    >>> ao_value = cell.pbc_eval_gto("GTOval_sph", coords, kpts)
-    >>> len(ao_value)
-    27
-    >>> ao_value[0].shape
-    (1000, 2)
-    >>> ao_value = cell.pbc_eval_gto("GTOval_ig_sph", coords, kpts, comp=3)
-    >>> print(ao_value.shape)
-    >>> len(ao_value)
-    27
-    >>> ao_value[0].shape
-    (3, 1000, 2)
     '''
-    
+
+    if eval_name is None:
+        if cell.cart:
+            eval_name = 'GTOval_cart_deriv%d' % 0
+        else:
+            eval_name = 'GTOval_sph_deriv%d' % 0
+
     # print("eval_name = ", eval_name)
     if eval_name[:3] == 'PBC':  # PBCGTOval_xxx
         eval_name, comp = _get_intor_and_comp(cell, eval_name[3:], comp)
@@ -104,6 +108,8 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     eval_name = 'PBC' + eval_name
     # print("eval_name = ", eval_name)
 
+    assert comp == 1
+
     atm = numpy.asarray(cell._atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(cell._bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(cell._env, dtype=numpy.double, order='C')
@@ -111,6 +117,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     nbas = bas.shape[0]
     if kpts is None:
         if kpt is not None:
+            raise RuntimeError('kpt should be a list of k-points')
             kpts_lst = numpy.reshape(kpt, (1,3))
         else:
             kpts_lst = numpy.zeros((1,3))
@@ -118,6 +125,10 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
     ngrids = len(coords)
+
+    assert kpts_lst.shape[0] == 1
+
+    # print("kpts_lst = ", kpts_lst)
 
     if non0tab is None:
         non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
@@ -134,7 +145,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     nao = ao_loc[sh1] - ao_loc[sh0]
 
     if out is None:
-        out = numpy.empty((nkpts,comp,nao,ngrids), dtype=numpy.complex128)
+        out = numpy.empty((nkpts,comp,nao,ngrids), dtype=numpy.complex128)  # NOTE THE definition of the shape!
     else:
         # print("out is given")
         out = numpy.ndarray((nkpts,comp,nao,ngrids), dtype=numpy.complex128,
@@ -167,49 +178,25 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
             env.ctypes.data_as(ctypes.c_void_p))
 
-    ao_kpts = []
-    for k, kpt in enumerate(kpts_lst):
-        v = out[k]
-        if abs(kpt).sum() < 1e-9:
-            # v = numpy.asarray(v.real, order='C')
-            v = lib.z2d_InPlace(v)
-        v = v.transpose(0,2,1)
-        if comp == 1:
-            v = v[0]
-        ao_kpts.append(v)
+    # ao_kpts = []
+    # for k, kpt in enumerate(kpts_lst):
+    #     v = out[k]
+    #     if abs(kpt).sum() < 1e-9:
+    #         # v = numpy.asarray(v.real, order='C')
+    #         v = lib.z2d_InPlace(v)
+    #     # v = v.transpose(0,2,1)
+    #     if comp == 1:
+    #         v = v[0]
+    #     ao_kpts.append(v)
+    # if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
+    #     ao_kpts = ao_kpts[0]
+    # # else:
+    # return ao_kpts
+        
+    out = out[0]
+    out = lib.z2d_InPlace(out)
+    return out[0]
 
-    if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
-        ao_kpts = ao_kpts[0]
-    return ao_kpts
+# pbc_eval_gto = eval_gto
 
-pbc_eval_gto = eval_gto
-
-def _estimate_rcut(cell):
-    '''Cutoff raidus, above which each shell decays to a value less than the
-    required precsion'''
-    log_prec = numpy.log(cell.precision * EXTRA_PREC)
-    rcut = []
-    for ib in range(cell.nbas):
-        l = cell.bas_angular(ib)
-        es = cell.bas_exp(ib)
-        cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
-        r = 5.
-        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
-        r[r < 1.] = 1.
-        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
-        rcut.append(r.max())
-    return numpy.array(rcut)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
-    coords = cell.get_uniform_grids([10]*3)
-    ao_value = eval_gto(cell, "GTOval_sph", coords, kpts=cell.make_kpts([3]*3))
-    print(lib.finger(numpy.asarray(ao_value)) - (-0.27594803231989179+0.0064644591759109114j))
-
-    cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
-    coords = cell.get_uniform_grids([10]*3)
-    ao_value = eval_gto(cell, "GTOval_ip_cart", coords, kpts=cell.make_kpts([3]*3))
-    print(lib.finger(numpy.asarray(ao_value)) - (0.38051517609460028+0.062526488684770759j))
 
