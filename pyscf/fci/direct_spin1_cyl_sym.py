@@ -42,9 +42,9 @@ from pyscf.scf.hf_symm import map_degeneracy
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
-from pyscf.fci.direct_spin1_symm import (_sv_associated_det,
-                                         _strs_angular_momentum,
-                                         _cyl_sym_orbital_rotation)
+from pyscf.fci.direct_spin1_symm import (
+    _sv_associated_det, _strs_angular_momentum, _cyl_sym_orbital_rotation,
+    _validate_degen_mapping)
 from pyscf.fci import direct_nosym
 from pyscf.fci import addons
 from pyscf import __config__
@@ -558,6 +558,10 @@ class FCISolver(direct_spin1_symm.FCISolver):
         if not hasattr(orbsym, 'degen_mapping'):
             degen_mapping = map_degeneracy(h1e.diagonal(), orbsym)
             orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
+        if not _validate_degen_mapping(orbsym.degen_mapping, norb):
+            raise lib.exceptions.PointGroupSymmetryError(
+                'Incomplete 2D-irrep orbitals for cylindrical symmetry.\n'
+                f'orbsym = {orbsym}.')
 
         u = _cyl_sym_orbital_rotation(orbsym, orbsym.degen_mapping)
         h1e = u.dot(h1e).dot(u.conj().T)
