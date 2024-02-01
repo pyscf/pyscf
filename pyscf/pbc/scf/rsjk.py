@@ -1266,9 +1266,16 @@ def _guess_omega(cell, kpts, mesh=None):
     if mesh is None:
         omega_min = OMEGA_MIN
         ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
-        nk = nkpts**(1./3)
+        nk = (cell.nao/25 * nkpts)**(1./3)
         ke_cutoff = 50 / (.7+.25*nk+.05*nk**3)
         ke_cutoff = max(ke_cutoff, ke_min)
+        # avoid large omega since nuermical issues were found in Rys
+        # polynomials when computing SR integrals with nroots > 3
+        exps = [e for l, e in zip(cell._bas[:,gto.ANG_OF], cell.bas_exps()) if l != 0]
+        if exps:
+            omega_max = np.hstack(exps).min()**.5 * 2
+            ke_max = estimate_ke_cutoff_for_omega(cell, omega_max)
+            ke_cutoff = min(ke_cutoff, ke_max)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
         mesh = np.asarray(mesh)
