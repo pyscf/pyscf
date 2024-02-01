@@ -406,7 +406,8 @@ def dynamic_level_shift_(mf, factor=1.):
     old_get_fock = mf.get_fock
     mf._last_e = None
     def get_fock(h1e, s1e, vhf, dm, cycle=-1, diis=None,
-                 diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+                 diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
+                 fock_last=None):
         if cycle > 0 or diis is not None:
             if 'exc' in mf.scf_summary:  # DFT
                 e_tot = mf.scf_summary['e1'] + mf.scf_summary['coul'] + mf.scf_summary['exc']
@@ -417,7 +418,7 @@ def dynamic_level_shift_(mf, factor=1.):
                 logger.info(mf, 'Set level shift to %g', level_shift_factor)
             mf._last_e = e_tot
         return old_get_fock(h1e, s1e, vhf, dm, cycle, diis, diis_start_cycle,
-                            level_shift_factor, damp_factor)
+                            level_shift_factor, damp_factor, fock_last=fock_last)
     mf.get_fock = get_fock
     return mf
 dynamic_level_shift = dynamic_level_shift_

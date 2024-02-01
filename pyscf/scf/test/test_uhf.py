@@ -399,7 +399,7 @@ H     0    0.757    0.587'''
     def test_damping(self):
         nao = mol.nao_nr()
         numpy.random.seed(1)
-        f = np.asarray([scf.hf.get_hcore(mol)]*2)
+        f = numpy.asarray([scf.hf.get_hcore(mol)]*2)
         df  = numpy.random.rand(2,nao,nao)
         f_prev = f + df
         damp = 0.3

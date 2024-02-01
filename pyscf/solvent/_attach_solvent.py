@@ -92,14 +92,15 @@ class SCFWithSolvent(_Solvation):
 
     def get_fock(self, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1,
                  diis=None, diis_start_cycle=None,
-                 level_shift_factor=None, damp_factor=None):
+                 level_shift_factor=None, damp_factor=None, fock_last=None):
         # DIIS was called inside super().get_fock. v_solvent, as a function of
         # dm, should be extrapolated as well. To enable it, v_solvent has to be
         # added to the fock matrix before DIIS was called.
         if getattr(vhf, 'v_solvent', None) is None:
             vhf = self.get_veff(self.mol, dm)
         return super().get_fock(h1e, s1e, vhf+vhf.v_solvent, dm, cycle, diis,
-                                diis_start_cycle, level_shift_factor, damp_factor)
+                                diis_start_cycle, level_shift_factor, damp_factor,
+                                fock_last)
 
     def energy_elec(self, dm=None, h1e=None, vhf=None):
         if dm is None:
