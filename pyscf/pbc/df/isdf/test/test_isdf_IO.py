@@ -992,7 +992,7 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         assert (self._cached_IP_partition is not None)
         return self._cached_IP_partition
 
-    def build_IP_Sandeep_IO(self, IO_File:str, c:int, m:int = 5):
+    def build_IP_Sandeep_IO(self, IO_File:str = None, c:int = 5, m:int = 5):
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         self.IP_ID = _select_IP_direct(self, c, m)
@@ -1000,6 +1000,12 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         print("IP_ID = ", self.IP_ID)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t1, t2, "select IP")
+
+        if IO_File is None:
+            # generate a random file name start with tmp_
+            import random
+            import string
+            IO_File = "tmp_" + ''.join(random.choices(string.ascii_lowercase + string.digits, k=8)) + ".hdf5"
 
         # construct aoR
 
