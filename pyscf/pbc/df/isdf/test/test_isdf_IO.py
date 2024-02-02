@@ -66,6 +66,7 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
 
     blksize = IO_buf_memory  // ((4 * nao + 2 * naux) * IO_buf.dtype.itemsize)  # suppose that the memory is enough
     # chunks  = (IO_buf_memory // (8*2)//ngrids, ngrids)
+    blksize = min(blksize, ngrids)
     chunks = (naux, blksize)
 
     # if chunks[0] > naux:
@@ -141,7 +142,7 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
                 AoR_Buf1 = np.ndarray((nao, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_aoR1)
                 AoR_Buf2 = np.ndarray((nao, p1-p0), dtype=np.float64, buffer=IO_buf, offset=offset_aoR2)
 
-                AoR_Buf1 = ISDF_eval_gto(cell, coords=coords[p0:p1], out=AoR_Buf1) * weight
+                AoR_Buf1 = ISDF_eval_gto(mydf.cell, coords=coords[p0:p1], out=AoR_Buf1) * weight
                 aoR      = AoR_Buf1
 
                 if p1!=p0 + blksize:
@@ -200,7 +201,7 @@ def _construct_V_W_IO(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:np
 
     ### the Coulomb kernel ###
 
-    coulG      = tools.get_coulG(cell, mesh=mesh)
+    coulG      = tools.get_coulG(mydf.cell, mesh=mesh)
     coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1)
     nThread    = lib.num_threads()
 
@@ -658,7 +659,7 @@ def _get_jk_dm_IO(mydf, dm):
 
     ##### construct buffer #####
 
-    buf_size_fixed = 2 * naux + 2 * ngrids + naux * naux  # to store the temporaries J1 J4 D3 and D2 D5
+    buf_size_fixed = 2 * naux + 2 * ngrid + naux * naux  # to store the temporaries J1 J4 D3 and D2 D5
 
     if buf_size_fixed > buf_size:
         print("buf_size_fixed requires %d buf %d provide" % (buf_size_fixed, buf_size))
@@ -668,15 +669,15 @@ def _get_jk_dm_IO(mydf, dm):
     J1     = np.ndarray((naux,), dtype=np.float64, buffer=buf)
 
     offset += naux * buf.dtype.itemsize
-    J4      = np.ndarray((ngrids,), dtype=np.float64, buffer=buf, offset=offset)
+    J4      = np.ndarray((ngrid,), dtype=np.float64, buffer=buf, offset=offset)
 
-    offset += ngrids * buf.dtype.itemsize
+    offset += ngrid * buf.dtype.itemsize
     D3      = np.ndarray((naux,), dtype=np.float64, buffer=buf, offset=offset)
 
     offset += naux * buf.dtype.itemsize
-    D2      = np.ndarray((ngrids,), dtype=np.float64, buffer=buf, offset=offset)
+    D2      = np.ndarray((ngrid,), dtype=np.float64, buffer=buf, offset=offset)
 
-    offset += ngrids * buf.dtype.itemsize
+    offset += ngrid * buf.dtype.itemsize
 
     ### STEP 1 construct rhoR and prefetch V1 ###
 
@@ -722,7 +723,7 @@ def _get_jk_dm_IO(mydf, dm):
     offset += size_K2 * buf.dtype.itemsize
 
     bunchsize_readV = (buf_size - offset//8 - size_K2//8) // (naux + naux + nao + naux + nao*2 + nao + nao)
-    bunchsize_readV = min(bunchsize_readV, ngrids)
+    bunchsize_readV = min(bunchsize_readV, ngrid)
     if naux < MAX_BUNCHSIZE: # NOTE: we cannot load too large chunk of grids
         bunchsize_readV = min(bunchsize_readV, MAX_BUNCHSIZE)
     else:
@@ -831,14 +832,14 @@ def _get_jk_dm_IO(mydf, dm):
     with lib.call_in_background(load_V_async) as prefetch:
         with lib.call_in_background(load_aoR_async) as prefetch_aoR:
 
-            for ibunch, (p0, p1) in enumerate(lib.prange(0, ngrids, bunchsize_readV)):
+            for ibunch, (p0, p1) in enumerate(lib.prange(0, ngrid, bunchsize_readV)):
 
                 t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
-                V2   = np.ndarray((naux, min(p1+bunchsize_readV,ngrids)-p1), dtype=np.float64, buffer=buf, offset=offset_V2)
-                aoR2 = np.ndarray((nao,  min(p1+bunchsize_readV,ngrids)-p1), dtype=np.float64, buffer=buf, offset=offset_aoR2)
-                prefetch(p1, min(p1+bunchsize_readV,ngrids), V2)
-                prefetch_aoR(p1, min(p1+bunchsize_readV,ngrids), aoR2)
+                V2   = np.ndarray((naux, min(p1+bunchsize_readV,ngrid)-p1), dtype=np.float64, buffer=buf, offset=offset_V2)
+                aoR2 = np.ndarray((nao,  min(p1+bunchsize_readV,ngrid)-p1), dtype=np.float64, buffer=buf, offset=offset_aoR2)
+                prefetch(p1, min(p1+bunchsize_readV,ngrid), V2)
+                prefetch_aoR(p1, min(p1+bunchsize_readV,ngrid), aoR2)
 
                 # construct D1
 
@@ -945,6 +946,107 @@ def _get_jk_dm_IO(mydf, dm):
 
     return J * ngrid / vol, K * ngrid / vol
 
+def get_jk_dm_IO(mydf, dm, hermi=1, kpt=np.zeros(3),
+                 kpts_band=None, with_j=True, with_k=True, omega=None, **kwargs):
+    '''JK for given k-point'''
+    
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+
+    assert with_j is True and with_k is True
+
+    #### explore the linearity of J K with respect to dm #### 
+
+    if mydf.direct_scf == False:
+        if mydf._cached_dm is None:
+            mydf._cached_dm = dm
+            mydf._cached_j = None
+            mydf._cached_k = None
+        else:
+            if mydf._cached_j is None and with_j == True or \
+               mydf._cached_k is None and with_k == True:
+                # recalculate the J or K
+                mydf._cached_j = None
+                mydf._cached_k = None
+            else:
+                assert(mydf._cached_dm.shape == dm.shape)
+                dm = dm - mydf._cached_dm
+                mydf._cached_dm += dm
+
+    # if mydf._explore_sparsity:
+    #     nNonZero = mydf.process_dm(dm)
+    #     print("dm nNonZero   = %10.2f %%" % (nNonZero / dm.size * 100.0))
+    #     # if small_comp == dm.size:
+    #     if nNonZero == 0:
+    #         # nothing to do
+    #         assert mydf._cached_j is not None
+    #         assert mydf._cached_k is not None
+    #         return mydf._cached_j, mydf._cached_k
+    #     if nNonZero < dm.size * 0.1:
+    #         mydf.compress_dm(dm)
+    #     else:
+    #         mydf.dm_compressed = False
+
+    #### perform the calculation ####
+
+    if mydf.jk_buffer is None:  # allocate the buffer for get jk
+        mydf._allocate_jk_buffer(dm.dtype)
+
+    if "exxdiv" in kwargs:
+        exxdiv = kwargs["exxdiv"]
+    else:
+        exxdiv = None
+
+    vj = vk = None
+
+    if kpts_band is not None and abs(kpt-kpts_band).sum() > 1e-9:
+        raise NotImplementedError("ISDF does not support kpts_band != kpt")
+
+    log = logger.Logger(mydf.stdout, mydf.verbose)
+    t1 = (logger.process_clock(), logger.perf_counter())
+
+    j_real = gamma_point(kpt)
+    k_real = gamma_point(kpt) and not np.iscomplexobj(dm)
+
+    assert j_real
+    assert k_real
+
+    mem_now = lib.current_memory()[0]
+    max_memory = max(2000, (mydf.max_memory - mem_now))
+
+    log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
+
+    # if with_j:
+    #     vj = _contract_j_dm(mydf, dm)
+    # if with_k:
+    #     vk = _contract_k_dm(mydf, dm)
+    #     if exxdiv == 'ewald':
+    #         # raise NotImplemented("ISDF does not support ewald")
+    #         print("WARNING: ISDF does not support ewald")
+
+    vj, vk = _get_jk_dm_IO(mydf, dm)
+
+
+    t1 = log.timer('sr jk', *t1)
+
+    #### explore the linearity of J K with respect to dm #### 
+
+    if mydf.direct_scf == False:
+        if with_j and mydf._cached_j is None:
+            mydf._cached_j = vj
+        elif with_j:
+            mydf._cached_j += vj
+    
+        if with_k and mydf._cached_k is None:
+            mydf._cached_k = vk
+        elif with_k:
+            mydf._cached_k += vk
+
+    # return vj, vk
+
+    return mydf._cached_j, mydf._cached_k
+
 class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
     def __init__(self, mol:Cell, max_buf_memory:int):
         super().__init__(mol=mol)
@@ -1007,6 +1109,8 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
             import string
             IO_File = "tmp_" + ''.join(random.choices(string.ascii_lowercase + string.digits, k=8)) + ".hdf5"
 
+        print("IO_File = ", IO_File)
+
         # construct aoR
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -1067,7 +1171,7 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t1, t2, "construct V and W")
 
-    get_jk = _get_jk_dm_IO
+    get_jk = get_jk_dm_IO
 
 C = 4
 
