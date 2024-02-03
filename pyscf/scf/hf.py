@@ -506,7 +506,7 @@ def init_guess_by_atom(mol):
 
     dm = scipy.linalg.block_diag(*atm_dms)
     mo_coeff = scipy.linalg.block_diag(*mo_coeff)
-    mo_occ = numpy.hstack(occ)
+    mo_occ = numpy.hstack(mo_occ)
 
     if mol.cart:
         cart2sph = mol.cart2sph_coeff(normalized='sp')
