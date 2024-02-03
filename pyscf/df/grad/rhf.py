@@ -342,6 +342,9 @@ def _decompose_rdm1 (mf_grad, mol, dm):
     if hasattr (dm, 'mo_coeff') and hasattr (dm, 'mo_occ'):
         mo_coeff = dm.mo_coeff
         mo_occ = dm.mo_occ
+        if getattr(mo_occ, 'ndim', None) == 1: # RHF orbitals
+            mo_coeff = [mo_coeff]
+            mo_occ = [mo_occ]
     else:
         s0 = mol.intor ('int1e_ovlp')
         mo_occ = []
@@ -352,10 +355,7 @@ def _decompose_rdm1 (mf_grad, mol, dm):
             mo_occ.append (n)
             mo_coeff.append (c)
         mo_occ = numpy.stack (mo_occ, axis=0)
-    nmo = mo_occ.shape[-1]
 
-    mo_coeff = numpy.asarray(mo_coeff).reshape(-1,nao,nmo)
-    mo_occ   = numpy.asarray(mo_occ).reshape(-1,nmo)
     orbor = []
     orbol = []
     for i in range(nset):
