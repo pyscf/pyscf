@@ -75,7 +75,6 @@ from pyscf.cc import eom_rccsd
 from pyscf.cc import eom_uccsd
 from pyscf.cc import eom_gccsd
 from pyscf.cc import qcisd
-from pyscf.cc import momgfccsd
 from pyscf import scf
 
 def CCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
