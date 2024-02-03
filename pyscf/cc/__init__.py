@@ -222,5 +222,3 @@ def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None, frozen=None):
         return self
     mycc._finalize = _finalize.__get__(mycc, mycc.__class__)
     return mycc
-
-MomGFCCSD = momgfccsd.MomGFCCSD
