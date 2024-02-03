@@ -530,7 +530,7 @@ class SymAdaptedUHF(uhf.UHF):
             mo_b = lib.tag_array(self.mo_coeff[1][:,idxb], orbsym=orbsymb,
                                  degen_mapping=degen_b)
         self.mo_coeff = (mo_a, mo_b)
-        self.mo_occ = (self.mo_occ[0][idxa], self.mo_occ[1][idxb])
+        self.mo_occ = numpy.asarray([self.mo_occ[0][idxa], self.mo_occ[1][idxb]])
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile, self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
