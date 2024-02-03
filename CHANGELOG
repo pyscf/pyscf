@@ -1,3 +1,31 @@
+PySCF 2.5.0 (2024-02-03)
+------------------------
+* Added
+  - SA-CASSCF Nonadiabatic Coupling Vectors 
+  - The to_gpu function to convert pyscf objects to gpu4pyscf objects.
+  - 4th, and 5th order XC derivatives.
+* Improved
+  - DIIS with damping for gapless systems.
+  - CPHF solver with level shift for gapless systems.
+  - The memory footprint for rsdf_builder and rsjk_builder.
+  - Use UHF natural orbital for RHF chkfile initial guess.
+  - Pipek Mezey + Stability check using Jacobi sweep.
+  - The conversion between FCI strings and addresses for more than 64 orbitals.
+  - The interface to the dftd3 and dftd4 dispersion correction modules.
+  - Switch off the sparsity treatment in DFT numerical integration for small system.
+  - Lattice-sum cutoff for non-orthogonal cell.
+  - Allow turning off AO symmetry for PBC DFT.
+* Fixes
+  - cp2k basis parsers
+  - k2gamma for dft classes.
+  - Mole.magmom attribute serialization error.
+  - post-hf Gradients with Cartesian GTOs.
+  - Basis order problem in molden.load .
+  - PBC DFT Becke grids rounding error.
+  - PBC rsdf for un-sorted basis.
+  - The get_bands function with k-point symmetry.
+
+
 PySCF 2.4.0 (2023-10-16)
 ------------------------
 * Added
@@ -36,6 +64,7 @@ PySCF 2.4.0 (2023-10-16)
   - Dimension issue in PBC-GDF cderi tensor.
   - Assume 46 and 78 core configurations to be f-in-valence.
   - Coding styles and deprecated warnings from numpy.
+
 
 PySCF 2.3.0 (2023-07-04)
 ------------------------
