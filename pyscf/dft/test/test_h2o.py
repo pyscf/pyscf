@@ -91,6 +91,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_nr_lda(self):
         method = dft.RKS(h2o)
+        method.init_guess = 'atom' # initial guess problem, issue #2056
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         method.xc = 'lda, vwn_rpa'
@@ -372,7 +373,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vxc), 22.767792068559917, 8)
 
         method.xc = 'B97M_V'
-        vxc = method.get_veff(h2o, dm)
+        vxc = method.get_veff(h2o, dm, dm, vxc)
         self.assertAlmostEqual(lib.fp(vxc), 23.067046560473408, 8)
 
     def test_nr_rks_nlc_small_memory_high_cost(self):
@@ -381,7 +382,7 @@ class KnownValues(unittest.TestCase):
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
-        vxc = method.get_veff(h2o, dm, dm, vxc)
+        vxc = method.get_veff(h2o, dm)
         self.assertAlmostEqual(lib.fp(vxc), 22.767792068559917, 8)
 
         method._eri = None
@@ -419,7 +420,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vxc[1]), 22.767792068559917, 8)
 
         method.xc = 'B97M_V'
-        vxc = method.get_veff(h2o, dm)
+        vxc = method.get_veff(h2o, dm, dm, vxc)
         self.assertAlmostEqual(lib.fp(vxc[0]), 23.067046560473408, 8)
         self.assertAlmostEqual(lib.fp(vxc[1]), 23.067046560473408, 8)
 
@@ -430,7 +431,7 @@ class KnownValues(unittest.TestCase):
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
-        vxc = method.get_veff(h2o, dm, dm, vxc)
+        vxc = method.get_veff(h2o, dm)
         self.assertAlmostEqual(lib.fp(vxc[0]), 22.767792068559917, 8)
         self.assertAlmostEqual(lib.fp(vxc[1]), 22.767792068559917, 8)
 
@@ -471,7 +472,7 @@ class KnownValues(unittest.TestCase):
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
-        vxc = method.get_veff(h2o, dm, dm, vxc)
+        vxc = method.get_veff(h2o, dm)
         self.assertAlmostEqual(lib.fp(vxc), 3.172920887028461+0j, 8)
 
         method._eri = None

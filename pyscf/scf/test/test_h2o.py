@@ -191,6 +191,8 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_minao(self):
         dm = scf.hf.init_guess_by_minao(mol)
+        self.assertEqual(dm.mo_coeff.shape[0], mol.nao)
+        self.assertEqual(dm.mo_occ.size, dm.mo_coeff.shape[1])
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
@@ -213,6 +215,8 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_atom(self):
         dm = scf.hf.init_guess_by_atom(mol)
+        self.assertEqual(dm.mo_coeff.shape[0], mol.nao)
+        self.assertEqual(dm.mo_occ.size, dm.mo_coeff.shape[1])
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
@@ -240,6 +244,8 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_1e(self):
         dm = scf.hf.init_guess_by_1e(mol)
+        self.assertEqual(dm.mo_coeff.shape[0], mol.nao)
+        self.assertEqual(dm.mo_occ.size, dm.mo_coeff.shape[1])
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
