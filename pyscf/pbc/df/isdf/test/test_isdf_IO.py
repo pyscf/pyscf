@@ -36,6 +36,7 @@ AUX_BASIS_DATASET = 'aux_basis'  # NOTE: indeed can be over written
 V_DATASET         = 'V'
 AOR_DATASET       = 'aoR'
 MAX_BUNCHSIZE     = 4096
+MAX_CHUNKSIZE     = int(3e9//8)  # 2GB
 
 def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray):
     '''
@@ -67,10 +68,8 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
     blksize = IO_buf_memory  // ((4 * nao + 2 * naux) * IO_buf.dtype.itemsize)  # suppose that the memory is enough
     # chunks  = (IO_buf_memory // (8*2)//ngrids, ngrids)
     blksize = min(blksize, ngrids)
+    blksize = min(blksize, MAX_CHUNKSIZE//naux)
     chunks = (naux, blksize)
-
-    # if chunks[0] > naux:
-    #     chunks = (naux, ngrids)
 
     assert(blksize > 0)
     assert(chunks[0] > 0)
@@ -228,8 +227,6 @@ def _construct_V_W_IO(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:np
     if bunchsize == 0:
         bunchsize = 1
 
-    print("bunchsize = ", bunchsize)
-
     if bunchsize * nThread > naux:
         bunchsize = naux // nThread  # force to use all the aux basis
 
@@ -254,7 +251,11 @@ def _construct_V_W_IO(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:np
         print("WARNING: bunch_size_IO = %d < nThread = %d" % (bunch_size_IO, nThread))
 
     bunch_size_IO = (bunch_size_IO // (bunchsize * nThread)) * bunchsize * nThread
+    bunch_size_IO = min(bunch_size_IO, MAX_CHUNKSIZE//ngrids)
+    bunchsize     = bunch_size_IO // nThread
+    bunch_size_IO = nThread * bunchsize
 
+    print("bunchsize = ", bunchsize)
     print("bunch_size_IO = ", bunch_size_IO)
 
     ### allocate buffer ###
@@ -343,6 +344,8 @@ def _construct_V_W_IO(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:np
                 print("construct V[%5d:%5d] wall time: %12.6f CPU time: %12.6f" %
                       (p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
 
+                async_write(p0, p1, buf_V1)
+
                 t1 = t2
 
                 # perform the current mvp
@@ -364,8 +367,6 @@ def _construct_V_W_IO(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:np
                     lib.ddot_withbuffer(buf_V1[:p1-p0, :], buf_aux_basis[:q1-q0,:].T, buf=ddot_buf, c=_ddot_out)
                     mydf.W[p0:p1, q0:q1] = _ddot_out
                     mydf.W[q0:q1, p0:p1] = _ddot_out.T
-
-                async_write(p0, p1, buf_V1)
 
                 buf_V1, buf_V2 = buf_V2, buf_V1
 
