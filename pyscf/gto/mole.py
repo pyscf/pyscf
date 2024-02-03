@@ -1209,7 +1209,8 @@ def copy(mol, deep=True):
     newmol._ecp    = copy.deepcopy(mol._ecp)
     newmol.pseudo  = copy.deepcopy(mol.pseudo)
     newmol._pseudo = copy.deepcopy(mol._pseudo)
-    newmol.magmom  = list(mol.magmom)
+    if mol.magmom:
+        newmol.magmom  = list(mol.magmom)
     return newmol
 
 def pack(mol):
@@ -2577,16 +2578,16 @@ class MoleBase(lib.StreamObject):
             # number of electrons are consistent.
             self.nelec
 
-        if self.magmom is None:
+        if not self.magmom:
             self.magmom = [0,] * self.natm
         elif len(self.magmom) != self.natm:
             logger.warn(self, 'len(magmom) != natm. Set magmom to zero')
             self.magmom = [0,] * self.natm
+        elif isinstance(self.magmom, np.ndarray):
+            self.magmom = self.magmom.tolist()
         if self.spin == 0 and abs(numpy.sum(self.magmom) - self.spin) > 1e-6:
             #don't check for unrestricted calcs.
             raise ValueError("mol.magmom is set incorrectly.")
-        if isinstance(self.magmom, np.ndarray):
-            self.magmom = self.magmom.tolist()
 
         if self.symmetry:
             self._build_symmetry()
