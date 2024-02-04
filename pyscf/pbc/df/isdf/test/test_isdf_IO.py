@@ -32,12 +32,113 @@ from memory_profiler import profile
 libfft = lib.load_library('libfft')
 libpbc = lib.load_library('libpbc')
 
-AUX_BASIS_DATASET = 'aux_basis'  # NOTE: indeed can be over written
+AUX_BASIS_DATASET     = 'aux_basis'  # NOTE: indeed can be over written
 AUX_BASIS_FFT_DATASET = 'aux_basis_fft'
-V_DATASET         = 'V'
-AOR_DATASET       = 'aoR'
-MAX_BUNCHSIZE     = 4096
-MAX_CHUNKSIZE     = int(3e9//8)  # 2GB
+V_DATASET             = 'V'
+AOR_DATASET           = 'aoR'
+MAX_BUNCHSIZE         = 4096
+MAX_CHUNKSIZE         = int(3e9//8)  # 2GB
+THREAD_BUF_PERCENTAGE = 0.15
+
+
+def _determine_bunchsize(nao, naux, mesh, buf_size):
+    
+    mesh         = np.asarray(mesh, dtype=np.int32)
+    mesh_complex = np.asarray([mesh[0], mesh[1], mesh[2]//2+1], dtype=np.int32)
+    ncomplex     = mesh[0] * mesh[1] * (mesh[2] // 2 + 1) * 2
+    ngrids       = mesh[0] * mesh[1] * mesh[2]
+    nThread      = lib.num_threads()
+
+    #### 1. calculate the bunchsize for the construction of aux basis ####
+    
+    blksize_aux = (buf_size - naux*naux) // (4 * nao + 2 * naux)   # suppose that the memory is enough
+    blksize_aux = min(blksize_aux, ngrids)
+    blksize_aux = min(blksize_aux, MAX_CHUNKSIZE//naux) # the maximal bunchsize in the construction of aux basis
+
+    #### 2. calculate the bunchsize for the construction of V and W ####
+
+    ### you have to read the aux basis row by row ### 
+
+    bunch_size_IO = ((buf_size) // 7) // (ncomplex) # ncomplex > ngrids 
+    if bunch_size_IO > naux:
+        bunch_size_IO = naux
+    if bunch_size_IO < nThread:
+        print("WARNING: bunch_size_IO = %d < nThread = %d" % (bunch_size_IO, nThread))
+    bunchsize          = bunch_size_IO // nThread
+    bunch_size_IO      = (bunch_size_IO // (bunchsize * nThread)) * bunchsize * nThread
+    if bunch_size_IO == 0:
+        raise ValueError("IO_buf is not large enough, bunch_size_IO = %d, buf_size= %d" %
+                            (bunch_size_IO, buf_size))
+    # bufsize_per_thread = bunchsize * ncomplex
+    # bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
+
+    chunk_row = bunch_size_IO  # this is the only restriction on the row size of chunk 
+
+    #### 3. calculate the bunchsize for the construction of W ####
+
+    blksize_W = (buf_size - nThread * (naux * naux + 2)) // 3 // naux
+    blksize_W = min(blksize_W, ncomplex)
+
+    use_large_chunk = True
+    if blksize_W < nThread * naux // 2:
+        use_large_chunk = False
+
+    if use_large_chunk == False:
+        blksize_W = IO_buf.size // 3 // naux
+        blksize_W = min(blksize_W, ncomplex)
+        blksize_W = min(blksize_W, 3*naux-4) # do not need to read a large chunk
+    blksize_W = blksize_W // 2 * 2     # make it even
+
+    #### 4. calculate the bunchsize for read J,K ####
+
+    offset = naux + ngrids + naux + ngrids + naux * naux + naux * nao
+    bunchsize_readV = (buf_size - offset - naux * nao) // (naux + naux + nao + naux + nao*2 + nao + nao)
+    bunchsize_readV = min(bunchsize_readV, MAX_BUNCHSIZE)
+    # if naux < MAX_BUNCHSIZE: # NOTE: we cannot load too large chunk of grids
+    #     bunchsize_readV = min(bunchsize_readV, MAX_BUNCHSIZE)
+    # else:
+    #     bunchsize_readV = min(bunchsize_readV, naux)
+
+    offset += naux * bunchsize_readV
+    offset += nao * bunchsize_readV
+    nElmt_left = buf_size - offset
+    grid_bunchsize = nElmt_left // nao // 3
+    grid_bunchsize = min(grid_bunchsize, ngrids)
+    grid_bunchsize = min(grid_bunchsize, MAX_BUNCHSIZE)
+    # if nao < MAX_BUNCHSIZE: # NOTE: we cannot load too large chunk of grids
+    #     grid_bunchsize = min(grid_bunchsize, MAX_BUNCHSIZE)
+    # else:
+    #     grid_bunchsize = min(grid_bunchsize, nao)
+
+    print("bunch_size_IO   = ", bunch_size_IO)
+    print("blksize_aux     = ", blksize_aux)
+    print("bunchsize_readV = ", bunchsize_readV)
+    print("grid_bunchsize  = ", grid_bunchsize)
+    print("blksize_W       = ", blksize_W)
+
+    chunk_col = min(bunchsize_readV, grid_bunchsize, blksize_W, blksize_aux)
+
+    if chunk_row * chunk_col * 8 < 16000000: # at least 16MB
+        print("too small chunk, change the chunk row")
+        chunk_row_new = 16000000 // (chunk_col * 8)
+        chunk_row_new = (chunk_row_new // chunk_row) * chunk_row
+        chunk_row = chunk_row_new
+        chunk_row = min(chunk_row, naux)
+
+    bunchsize_readV = (bunchsize_readV // chunk_col) * chunk_col
+    grid_bunchsize  = (grid_bunchsize // chunk_col) * chunk_col
+    blksize_W       = (blksize_W // chunk_col) * chunk_col
+    blksize_aux     = (blksize_aux // chunk_col) * chunk_col
+
+    print("blksize_aux = ", blksize_aux)
+    print("bunchsize_readV = ", bunchsize_readV)
+    print("grid_bunchsize = ", grid_bunchsize)
+    print("blksize_W = ", blksize_W)
+    print("chunk_row = ", chunk_row)
+    print("chunk_col = ", chunk_col)
+
+    return (chunk_row, chunk_col), bunch_size_IO, blksize_aux, bunchsize_readV, grid_bunchsize, blksize_W, use_large_chunk
+    
 
 def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray):
     '''
@@ -66,7 +167,7 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
     aoRg   = mydf.aoRg
     ngrids = mydf.ngrids
 
-    blksize = IO_buf_memory  // ((4 * nao + 2 * naux) * IO_buf.dtype.itemsize)  # suppose that the memory is enough
+    blksize = (IO_buf_memory - naux*naux*IO_buf.dtype.itemsize) // ((4 * nao + 2 * naux) * IO_buf.dtype.itemsize)  # suppose that the memory is enough
     # chunks  = (IO_buf_memory // (8*2)//ngrids, ngrids)
     blksize = min(blksize, ngrids)
     blksize = min(blksize, MAX_CHUNKSIZE//naux)
@@ -75,11 +176,15 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
     assert(blksize > 0)
     assert(chunks[0] > 0)
 
+    if hasattr(mydf, 'blksize_aux'):
+        blksize = mydf.blksize_aux
+
     print("IO_buf_memory = ", IO_buf_memory)
     print("blksize       = ", blksize)
-    print("chunks        = ", chunks)
+    # print("chunks        = ", chunks)
 
-    A = np.asarray(lib.dot(aoRg.T, aoRg), order='C')
+    A = np.ndarray((naux, naux), dtype=IO_buf.dtype, buffer=IO_buf)
+    A = np.asarray(lib.dot(aoRg.T, aoRg, c=A), order='C') # no memory allocation here! 
     lib.square_inPlace(A)
 
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -92,17 +197,32 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     _benchmark_time(t1,t2,"_aux_basis_IO.Cholesky")
 
-    h5d_aux_basis = f_aux_basis.create_dataset(AUX_BASIS_DATASET, (naux, ngrids), 'f8', chunks=(naux, blksize))
-    h5d_aoR       = f_aux_basis.create_dataset(AOR_DATASET, (nao, ngrids), 'f8', chunks=(nao, blksize))
+    chunks1 = (naux, ngrids)
+    chunks2 = (nao, ngrids)
+
+    if hasattr(mydf, 'chunk_size'):
+        chunks1 = mydf.chunk_size
+        chunks2 = (min(mydf.chunk_size[0], nao), mydf.chunk_size[1])
+
+    print("chunks1        = ", chunks1)
+    print("chunks2        = ", chunks2)
+
+    h5d_aux_basis = f_aux_basis.create_dataset(AUX_BASIS_DATASET, (naux, ngrids), 'f8', chunks=chunks1)
+    h5d_aoR       = f_aux_basis.create_dataset(AOR_DATASET, (nao, ngrids), 'f8', chunks=chunks2)
 
     def save(col0, col1, buf:np.ndarray):
-        h5d_aux_basis[:, col0:col1] = buf[:, :col1-col0]
+        dest_sel   = np.s_[:, col0:col1]
+        source_sel = np.s_[:, :]
+        h5d_aux_basis.write_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
 
     def save_aoR(col0, col1, buf:np.ndarray):
-        h5d_aoR[:, col0:col1] = buf[:, :col1-col0]
+        dest_sel   = np.s_[:, col0:col1]
+        source_sel = np.s_[:, :]
+        h5d_aoR.write_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
+        
 
-    offset        = 0
-    buf_calculate = np.ndarray((naux, blksize), dtype=IO_buf.dtype, buffer=IO_buf)
+    offset        = naux * naux * IO_buf.dtype.itemsize
+    buf_calculate = np.ndarray((naux, blksize), dtype=IO_buf.dtype, buffer=IO_buf, offset=offset)
     offset       += naux*blksize*IO_buf.dtype.itemsize
     buf_write     = np.ndarray((naux, blksize), dtype=IO_buf.dtype, buffer=IO_buf, offset=offset)
     offset       += naux*blksize*IO_buf.dtype.itemsize
@@ -215,8 +335,6 @@ def _construct_V_W_IO(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:np
     # suppose  V is of size (nThreads * nwork_per_thread) * mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2
     # then the memory needed is 5 * nThreads * nwork_per_thread * mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2
     # we set that the maximal nwork_per_thread is 16
-
-    THREAD_BUF_PERCENTAGE = 0.15
 
     print("IO_buf.size = ", IO_buf.size)
 
@@ -432,51 +550,60 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
     # then the memory needed is 5 * nThreads * nwork_per_thread * mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2
     # we set that the maximal nwork_per_thread is 16
 
-    THREAD_BUF_PERCENTAGE = 0.15
+    # print("IO_buf.size = ", IO_buf.size)
+    # memory_thread      = int(THREAD_BUF_PERCENTAGE * IO_buf.size)
+    # bunchsize     = memory_thread // nThread // (mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2)
+    # if bunchsize > 16:
+    #     bunchsize = 16
+    # if bunchsize == 0:
+    #     bunchsize = 1
+    # if bunchsize * nThread > naux:
+    #     bunchsize = naux // nThread  # force to use all the aux basis
+    # bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
+    # bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
+    # memory_thread      = bufsize_per_thread * nThread
+    # if memory_thread > IO_buf.size:
+    #     raise ValueError("IO_buf is not large enough, memory_thread = %d, IO_buf.size = %d" %
+    #                      (memory_thread, IO_buf.size))
+    # print("memory_thread = ", memory_thread)
+    # bunch_size_IO = ((IO_buf.size - memory_thread) // 6) // (ncomplex) # ncomplex > ngrids 
+    # print("bunch_size_IO = ", bunch_size_IO)
+    # if bunch_size_IO > naux:
+    #     bunch_size_IO = naux
+    # if bunch_size_IO == 0:
+    #     raise ValueError("IO_buf is not large enough, bunch_size_IO = %d, IO_buf.size = %d" %
+    #                      (bunch_size_IO, IO_buf.size))
+    # bunchsize          = bunch_size_IO // nThread
+    # bunch_size_IO      = (bunch_size_IO // (bunchsize * nThread)) * bunchsize * nThread
+    # bunch_size_IO      = min(bunch_size_IO, MAX_CHUNKSIZE//ngrids)
+    # if bunch_size_IO < nThread:
+    #     print("WARNING: bunch_size_IO = %d < nThread = %d" % (bunch_size_IO, nThread))
+    # bunchsize          = bunch_size_IO // nThread
+    # bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
+    # bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
+    # memory_thread      = bufsize_per_thread * nThread
+    # bunch_size_IO      = nThread * bunchsize
 
-    print("IO_buf.size = ", IO_buf.size)
-
-    memory_thread      = int(THREAD_BUF_PERCENTAGE * IO_buf.size)
-
-    bunchsize     = memory_thread // nThread // (mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2)
-    if bunchsize > 16:
-        bunchsize = 16
-    if bunchsize == 0:
-        bunchsize = 1
-
-    if bunchsize * nThread > naux:
-        bunchsize = naux // nThread  # force to use all the aux basis
-
-    bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
-    bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
-    memory_thread      = bufsize_per_thread * nThread
-
-    if memory_thread > IO_buf.size:
-        raise ValueError("IO_buf is not large enough, memory_thread = %d, IO_buf.size = %d" %
-                         (memory_thread, IO_buf.size))
-
-    print("memory_thread = ", memory_thread)
-
-    bunch_size_IO = ((IO_buf.size - memory_thread) // 6) // (ncomplex) # ncomplex > ngrids 
-
-    print("bunch_size_IO = ", bunch_size_IO)
-
+    bunch_size_IO = ((IO_buf.size) // 7) // (ncomplex) # ncomplex > ngrids 
     if bunch_size_IO > naux:
         bunch_size_IO = naux
-    if bunch_size_IO == 0:
-        raise ValueError("IO_buf is not large enough, bunch_size_IO = %d, IO_buf.size = %d" %
-                         (bunch_size_IO, IO_buf.size))
-    
-    bunchsize          = bunch_size_IO // nThread
-    bunch_size_IO      = (bunch_size_IO // (bunchsize * nThread)) * bunchsize * nThread
-    bunch_size_IO      = min(bunch_size_IO, MAX_CHUNKSIZE//ngrids)
     if bunch_size_IO < nThread:
         print("WARNING: bunch_size_IO = %d < nThread = %d" % (bunch_size_IO, nThread))
     bunchsize          = bunch_size_IO // nThread
+    bunch_size_IO      = (bunch_size_IO // (bunchsize * nThread)) * bunchsize * nThread
+    if bunch_size_IO == 0:
+        raise ValueError("IO_buf is not large enough, bunch_size_IO = %d, IO_buf.size = %d" %
+                            (bunch_size_IO, IO_buf.size))
     bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
     bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
-    memory_thread      = bufsize_per_thread * nThread
-    bunch_size_IO      = nThread * bunchsize
+    # memory_thread      = bufsize_per_thread * nThread
+    # bunch_size_IO      = nThread * bunchsize
+
+    if hasattr(mydf, 'nRow_IO_V'):
+        bunch_size_IO = mydf.nRow_IO_V
+        bunchsize     = bunch_size_IO // nThread
+        bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
+        bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
 
     print("bunchsize = ", bunchsize)
     print("bunch_size_IO = ", bunch_size_IO)
@@ -503,35 +630,41 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
 
     ### create data set
 
-    chunks = (bunch_size_IO, ngrids)
+    chunks1 = (bunch_size_IO, ngrids)
+    chunks2 = (bunch_size_IO, ncomplex)
 
-    h5d_V = f_dataset.create_dataset(V_DATASET, (naux, ngrids), 'f8', chunks=chunks)
+    if hasattr(mydf, 'chunk_size'):
+        chunks1 = mydf.chunk_size
+        chunks2 = mydf.chunk_size
 
-    chunks = (bunch_size_IO, ncomplex)
-
-    h5d_aux_basis_fft = f_dataset.create_dataset(AUX_BASIS_FFT_DATASET, (naux, ncomplex), 'f8', chunks=chunks)
+    h5d_V = f_dataset.create_dataset(V_DATASET, (naux, ngrids), 'f8', chunks=chunks1)
+    h5d_aux_basis_fft = f_dataset.create_dataset(AUX_BASIS_FFT_DATASET, (naux, ncomplex), 'f8', chunks=chunks2)
 
     ### perform the task ###
 
     def save_V(row0, row1, buf:np.ndarray):
-        # assert(buf.shape == (row1-row0, ngrids))
         if row0 < row1:
-            h5d_V[row0:row1] = buf[:row1-row0]
+            dset_sel   = np.s_[row0:row1, :]
+            source_sel = np.s_[:row1-row0, :]
+            h5d_V.write_direct(buf, source_sel=source_sel, dest_sel=dset_sel)
     
     def save_auxbasisfft(row0, row1, buf:np.ndarray):
-        # assert(buf.shape == (row1-row0, ngrids))
         if row0 < row1:
-            h5d_aux_basis_fft[row0:row1] = buf[:row1-row0]
+            dset_sel   = np.s_[row0:row1, :]
+            source_sel = np.s_[:row1-row0, :]
+            h5d_aux_basis_fft.write_direct(buf, source_sel=source_sel, dest_sel=dset_sel)
 
     def load_aux_basis_async(row0, row1, buf:np.ndarray):
-        # assert(buf.shape == (row1-row0, ngrids))
         if row0 < row1:
-            buf[:row1-row0] = f_dataset[AUX_BASIS_DATASET][row0:row1]
+            source   = np.s_[row0:row1, :]
+            dest     = np.s_[:row1-row0, :]
+            f_dataset[AUX_BASIS_DATASET].read_direct(buf, source_sel=source, dest_sel=dest)
 
     def load_aux_basis(row0, row1, buf:np.ndarray):
-        # assert(buf.shape == (row1-row0, ngrids))
         if row0 < row1:
-            buf[:row1-row0] = f_dataset[AUX_BASIS_DATASET][row0:row1]
+            source   = np.s_[row0:row1, :]
+            dest     = np.s_[:row1-row0, :]
+            f_dataset[AUX_BASIS_DATASET].read_direct(buf, source_sel=source, dest_sel=dest)
 
     fn = getattr(libpbc, "_construct_V2", None)
     assert(fn is not None)
@@ -579,11 +712,15 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
 
     def load_aux_basis_fft_async(col0, col1, buf:np.ndarray):
         if col0 < col1:
-            buf[:, :col1-col0] = f_dataset[AUX_BASIS_FFT_DATASET][:, col0:col1]
+            source   = np.s_[:, col0:col1]
+            dest     = np.s_[:, :col1-col0]
+            f_dataset[AUX_BASIS_FFT_DATASET].read_direct(buf, source_sel=source, dest_sel=dest)
 
     def load_aux_basis_fft(col0, col1, buf:np.ndarray):
         if col0 < col1:
-            buf[:, :col1-col0] = f_dataset[AUX_BASIS_FFT_DATASET][:, col0:col1]
+            source   = np.s_[:, col0:col1]
+            dest     = np.s_[:, :col1-col0]
+            f_dataset[AUX_BASIS_FFT_DATASET].read_direct(buf, source_sel=source, dest_sel=dest)
 
     # first to check whether we can offer enough memory to hold the buffer for ddot
 
@@ -599,6 +736,10 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
         blksize = min(blksize, ncomplex)
         blksize = min(blksize, 3*naux-4) # do not need to read a large chunk
     blksize = blksize // 2 * 2     # make it even
+
+    if hasattr(mydf, 'use_large_chunk_W') and hasattr(mydf, 'blksize_W'):
+        use_large_chunk = mydf.use_large_chunk_W
+        blksize = mydf.blksize_W
 
     offset_buf1         = 0
     buf_aux_basis_fft_1 = np.ndarray((naux, blksize), dtype=IO_buf.dtype, buffer=IO_buf)
@@ -657,10 +798,6 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
                buf_aux_basis_fft_copy.ctypes.data_as(ctypes.c_void_p),
                coulG_real.ctypes.data_as(ctypes.c_void_p))
 
-            # print(buf_aux_basis_fft_1[0, :10])
-            # print(coulG_real[p0:p0+10])
-            # print(buf_aux_basis_fft_copy[0, :10])
-
             ## ddot with buf_aux_basis_fft_2
             
             if use_large_chunk:
@@ -672,9 +809,7 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
 
             print("construct W[%5d:%5d] wall time: %12.6f CPU time: %12.6f" % (p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
 
-    # print("mesh = ", mesh)
     factor = 1.0 / np.prod(mesh)
-    # print("factor = ", factor)
     mydf.W *= factor
 
 #### the following subroutines is designed for cache-friendly IP selection ####
@@ -989,21 +1124,23 @@ def _get_jk_dm_IO(mydf, dm):
         assert (isinstance(mydf.IO_FILE, h5py.Group))
         f_dataset = mydf.IO_FILE
 
-    def load_V(col0, col1, buf:np.ndarray):  # loop over grids
-        if col0 < col1:
-            buf[:, :col1-col0] = f_dataset[V_DATASET][:, col0:col1]
-
     def load_V_async(col0, col1, buf:np.ndarray):
         if col0 < col1:
-            buf[:, :col1-col0] = f_dataset[V_DATASET][:, col0:col1]
-    
+            source_sel   = np.s_[:, col0:col1]
+            dset_sel     = np.s_[:, :col1-col0]
+            f_dataset[V_DATASET].read_direct(buf, source_sel=source_sel, dest_sel=dset_sel)
+
     def load_aoR(col0, col1, buf:np.ndarray):  # loop over grids
         if col0 < col1:
-            buf[:, :col1-col0] = f_dataset[AOR_DATASET][:, col0:col1]
+            source_sel   = np.s_[:, col0:col1]
+            dset_sel     = np.s_[:, :col1-col0]
+            f_dataset[AOR_DATASET].read_direct(buf, source_sel=source_sel, dest_sel=dset_sel)
 
     def load_aoR_async(col0, col1, buf:np.ndarray):
         if col0 < col1:
-            buf[:, :col1-col0] = f_dataset[AOR_DATASET][:, col0:col1]
+            source_sel   = np.s_[:, col0:col1]
+            dset_sel     = np.s_[:, :col1-col0]
+            f_dataset[AOR_DATASET].read_direct(buf, source_sel=source_sel, dest_sel=dset_sel)
 
     offset_D5 = offset
     D5        = np.ndarray((naux,naux), dtype=np.float64, buffer=buf, offset=offset)
@@ -1025,6 +1162,10 @@ def _get_jk_dm_IO(mydf, dm):
         bunchsize_readV = min(bunchsize_readV, MAX_BUNCHSIZE)
     else:
         bunchsize_readV = min(bunchsize_readV, naux)
+
+    if hasattr(mydf, 'bunchsize_readV'):
+        bunchsize_readV = mydf.bunchsize_readV
+
     print("bunchsize_readV = ", bunchsize_readV)
 
     offset_V1 = offset
@@ -1038,10 +1179,14 @@ def _get_jk_dm_IO(mydf, dm):
     nElmt_left     = buf_size - offset // buf.dtype.itemsize
     grid_bunchsize = nElmt_left // nao // 3
     grid_bunchsize = min(grid_bunchsize, ngrid)
-    if nao < MAX_BUNCHSIZE: # NOTE: we cannot load too large chunk of grids
-        grid_bunchsize = min(grid_bunchsize, MAX_BUNCHSIZE)
-    else:
-        grid_bunchsize = min(grid_bunchsize, nao)
+    # if nao < MAX_BUNCHSIZE: # NOTE: we cannot load too large chunk of grids
+    #     grid_bunchsize = min(grid_bunchsize, MAX_BUNCHSIZE)
+    # else:
+    #     grid_bunchsize = min(grid_bunchsize, nao)
+
+    if hasattr(mydf, 'grid_bunchsize'):
+        grid_bunchsize = mydf.grid_bunchsize
+    print("grid_bunchsize = ", grid_bunchsize)
 
     offset_AoR1 = offset 
     offset_AoR2 = offset + nao * grid_bunchsize * buf.dtype.itemsize
@@ -1329,6 +1474,10 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         self._cached_bunchsize_ReadV = None
         self._cached_IP_partition    = None
 
+        self.mesh = mol.mesh
+
+        print("self.mesh = ", self.mesh)
+
     def __del__(self):
 
         if self.IO_FILE is not None:
@@ -1396,6 +1545,8 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
 
         print("naux = ", self.naux)
 
+        self.chunk_size, self.nRow_IO_V, self.blksize_aux, self.bunchsize_readV, self.grid_bunchsize, self.blksize_W, self.use_large_chunk_W  = _determine_bunchsize(self.nao, self.naux, self.mesh, self.IO_buf.size)
+
         # construct aux basis
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -1433,6 +1584,15 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         return buf_size
 
     def build_auxiliary_Coulomb_IO(self, mesh):
+        
+        mesh = np.asarray(mesh, dtype=np.int32)
+        self.mesh = np.asarray(self.mesh, dtype=np.int32)
+
+        print("mesh      = ", mesh)
+        print("self.mesh = ", self.mesh)
+
+        if mesh[0] != self.mesh[0] or mesh[1] != self.mesh[1] or mesh[2] != self.mesh[2]:
+            print("warning: mesh is not consistent with the previous one")
 
         self.mesh = mesh
         self.W = np.zeros((self.naux, self.naux), dtype=np.float64)
@@ -1567,8 +1727,10 @@ if __name__ == "__main__":
         idx = np.where(np.abs(diff) > 1e-8)
         ## print
         print("idx = ", idx)
-        for i in range(idx[0].shape[0]):
-            print("idx = ", idx[0][i], idx[1][i], diff[idx[0][i], idx[1][i]])
+        # for i in range(idx[0].shape[0]):
+        #     print("idx = ", idx[0][i], idx[1][i], diff[idx[0][i], idx[1][i]])
+
+    # exit(1)
 
     # IO_File = None
 
@@ -1615,8 +1777,8 @@ if __name__ == "__main__":
         idx = np.where(np.abs(diff) > 1e-12)
         ## print
         print("idx = ", idx)
-        for i in range(idx[0].shape[0]):
-            print("idx = ", idx[0][i], idx[1][i], diff[idx[0][i], idx[1][i]])
+        # for i in range(idx[0].shape[0]):
+        #    print("idx = ", idx[0][i], idx[1][i], diff[idx[0][i], idx[1][i]])
 
     # exit(1)
 
