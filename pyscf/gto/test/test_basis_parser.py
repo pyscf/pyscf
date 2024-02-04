@@ -21,7 +21,7 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.gto.basis import parse_molpro
 from pyscf.gto.basis import parse_gaussian
-from pyscf.gto.basis import parse_cp2k
+from pyscf.gto.basis import parse_cp2k, parse_cp2k_pp
 from pyscf.lib.exceptions import BasisNotFoundError
 
 class KnownValues(unittest.TestCase):
@@ -504,6 +504,29 @@ ECP,I,46,4,3;
         basis1 = parse_cp2k.parse(basis_str)
         ref = gto.basis.load('gth-dzv', 'C')
         self.assertEqual(ref, basis1)
+
+    def test_parse_gth_pp(self):
+        pp_str = '''
+            #PSEUDOPOTENTIAL
+            B GTH-PADE-q3 GTH-LDA-q3 GTH-PADE GTH-LDA
+                2    1
+                 0.43392956    2    -5.57864173     0.80425145
+                2
+                 0.37384326    1     6.23392822
+                 0.36039317    0
+            #PSEUDOPOTENTIAL
+            C GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
+                2    2
+                 0.34883045    2    -8.51377110     1.22843203
+                2
+                 0.30455321    1     9.52284179
+                 0.23267730    0'''
+        pp1 = parse_cp2k_pp.parse(pp_str, 'B')
+        ref = gto.basis.load_pseudo('gth-pade', 'B')
+        self.assertEqual(ref, pp1)
+        pp1 = parse_cp2k_pp.parse(pp_str, 'C')
+        ref = gto.basis.load_pseudo('gth-pade', 'C')
+        self.assertEqual(ref, pp1)
 
 if __name__ == "__main__":
     print("test basis module")
