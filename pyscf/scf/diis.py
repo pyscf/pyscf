@@ -43,6 +43,7 @@ class CDIIS(lib.diis.DIIS):
         self.rollback = 0
         self.space = 8
         self.Corth = Corth
+        self.damp = 0
         #?self._scf = mf
         #?if hasattr(self._scf, 'get_orbsym'): # Symmetry adapted SCF objects
         #?    self.orbsym = mf.get_orbsym(Corth)
@@ -51,7 +52,11 @@ class CDIIS(lib.diis.DIIS):
     def update(self, s, d, f, *args, **kwargs):
         errvec = get_err_vec(s, d, f, self.Corth)
         logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
-        xnew = lib.diis.DIIS.update(self, f, xerr=errvec)
+        f_prev = kwargs.get('f_prev', None)
+        if abs(self.damp) < 1e-6 or f_prev is None:
+            xnew = lib.diis.DIIS.update(self, f, xerr=errvec)
+        else:
+            xnew = lib.diis.DIIS.update(self, f*(1-self.damp) + f_prev*self.damp, xerr=errvec)
         if self.rollback > 0 and len(self._bookkeep) == self.space:
             self._bookkeep = self._bookkeep[-self.rollback:]
         return xnew
@@ -125,7 +130,7 @@ class EDIIS(lib.diis.DIIS):
     '''SCF-EDIIS
     Ref: JCP 116, 8255 (2002); DOI:10.1063/1.1470195
     '''
-    def update(self, s, d, f, mf, h1e, vhf):
+    def update(self, s, d, f, mf, h1e, vhf, *args, **kwargs):
         if self._head >= self.space:
             self._head = 0
         if not self._buffer:
@@ -185,7 +190,7 @@ class ADIIS(lib.diis.DIIS):
     '''
     Ref: JCP 132, 054109 (2010); DOI:10.1063/1.3304922
     '''
-    def update(self, s, d, f, mf, h1e, vhf):
+    def update(self, s, d, f, mf, h1e, vhf, *args, **kwargs):
         if self._head >= self.space:
             self._head = 0
         if not self._buffer:

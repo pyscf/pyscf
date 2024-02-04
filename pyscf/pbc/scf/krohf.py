@@ -51,7 +51,8 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     return lib.tag_array((dma, dmb), mo_coeff=mo_coeff_kpts, mo_occ=mo_occ_kpts)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
-             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
+             fock_last=None):
     h1e_kpts, s_kpts, vhf_kpts, dm_kpts = h1e, s1e, vhf, dm
     if h1e_kpts is None: h1e_kpts = mf.get_hcore()
     if vhf_kpts is None: vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
@@ -71,10 +72,10 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
     dm_sf = dm_kpts[0] + dm_kpts[1]
-    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4 and fock_last is not None:
         raise NotImplementedError('ROHF Fock-damping')
     if diis and cycle >= diis_start_cycle:
-        f_kpts = diis.update(s_kpts, dm_sf, f_kpts, mf, h1e_kpts, vhf_kpts)
+        f_kpts = diis.update(s_kpts, dm_sf, f_kpts, mf, h1e_kpts, vhf_kpts, f_prev=fock_last)
     if abs(level_shift_factor) > 1e-4:
         f_kpts = [mol_hf.level_shift(s, dm_sf[k]*.5, f_kpts[k], level_shift_factor)
                   for k, s in enumerate(s_kpts)]
