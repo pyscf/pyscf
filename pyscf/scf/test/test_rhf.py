@@ -416,11 +416,14 @@ class KnownValues(unittest.TestCase):
     def test_damping(self):
         nao = mol.nao_nr()
         numpy.random.seed(1)
-        s = scf.hf.get_ovlp(mol)
-        d = numpy.random.random((nao,nao))
-        d = d + d.T
-        f = scf.hf.damping(s, d, scf.hf.get_hcore(mol), .5)
-        self.assertAlmostEqual(numpy.linalg.norm(f), 23361.854064083178, 9)
+        f = scf.hf.get_hcore(mol)
+        df  = numpy.random.rand(nao,nao)
+        df += df.T
+        f_prev = f + df
+        damp = 0.3
+        f_damp = scf.hf.get_fock(mf, h1e=0, s1e=0, vhf=f, dm=0, cycle=0,
+                                 diis_start_cycle=2, damp_factor=damp, fock_last=f_prev)
+        self.assertAlmostEqual(abs(f_damp - (f*(1-damp) + f_prev*damp)).max(), 0, 9)
 
     def test_level_shift(self):
         nao = mol.nao_nr()

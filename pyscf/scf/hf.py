@@ -149,6 +149,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mf_diis = mf.DIIS(mf, mf.diis_file)
         mf_diis.space = mf.diis_space
         mf_diis.rollback = mf.diis_space_rollback
+        mf_diis.damp = mf.diis_damp
 
         # We get the used orthonormalized AO basis from any old eigendecomposition.
         # Since the ingredients for the Fock matrix has already been built, we can
@@ -166,12 +167,13 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     # A preprocessing hook before the SCF iteration
     mf.pre_kernel(locals())
 
+    fock_last = None
     cput1 = logger.timer(mf, 'initialize scf', *cput0)
     for cycle in range(mf.max_cycle):
         dm_last = dm
         last_hf_e = e_tot
 
-        fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, mf_diis)
+        fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, mf_diis, fock_last=fock_last)
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
@@ -181,6 +183,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         # Here Fock matrix is h1e + vhf, without DIIS.  Calling get_fock
         # instead of the statement "fock = h1e + vhf" because Fock matrix may
         # be modified in some methods.
+        fock_last = fock
         fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf, no DIIS
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         if not TIGHT_GRAD_CONV_TOL:
@@ -753,14 +756,8 @@ def level_shift(s, d, f, factor):
     return f + dm_vir * factor
 
 
-def damping(s, d, f, factor):
-    #dm_vir = s - reduce(numpy.dot, (s,d,s))
-    #sinv = numpy.linalg.inv(s)
-    #f0 = reduce(numpy.dot, (dm_vir, sinv, f, d, s))
-    dm_vir = numpy.eye(s.shape[0]) - numpy.dot(s, d)
-    f0 = reduce(numpy.dot, (dm_vir, f, d, s))
-    f0 = (f0+f0.conj().T) * (factor/(factor+1.))
-    return f - f0
+def damping(f, f_prev, factor):
+    return f*(1-factor) + f_prev*factor
 
 
 # full density matrix for RHF
@@ -990,7 +987,8 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
         return vj - vk * .5 + numpy.asarray(vhf_last)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
-             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
+             fock_last=None):
     '''F = h^{core} + V^{HF}
 
     Special treatment (damping, DIIS, or level shift) will be applied to the
@@ -1030,10 +1028,10 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if s1e is None: s1e = mf.get_ovlp()
     if dm is None: dm = mf.make_rdm1()
 
-    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
-        f = damping(s1e, dm*.5, f, damp_factor)
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4 and fock_last is not None:
+        f = damping(f, fock_last, damp_factor)
     if diis is not None and cycle >= diis_start_cycle:
-        f = diis.update(s1e, dm, f, mf, h1e, vhf)
+        f = diis.update(s1e, dm, f, mf, h1e, vhf, f_prev=fock_last)
     if abs(level_shift_factor) > 1e-4:
         f = level_shift(s1e, dm*.5, f, level_shift_factor)
     return f
@@ -1463,6 +1461,8 @@ class SCF(lib.StreamObject):
             vector) will be reused.
         diis_space : int
             DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
+        diis_damp : float
+            DIIS damping factor.  Default is 0.
         diis_start_cycle : int
             The step to start DIIS.  Default is 1.
         diis_file: 'str'
@@ -1515,6 +1515,7 @@ class SCF(lib.StreamObject):
     DIIS = diis.SCF_DIIS
     diis = getattr(__config__, 'scf_hf_SCF_diis', True)
     diis_space = getattr(__config__, 'scf_hf_SCF_diis_space', 8)
+    diis_damp = getattr(__config__, 'scf_hf_SCF_diis_damp', 0)
     # need > 0 if initial DM is numpy.zeros array
     diis_start_cycle = getattr(__config__, 'scf_hf_SCF_diis_start_cycle', 1)
     diis_file = None
@@ -1530,7 +1531,7 @@ class SCF(lib.StreamObject):
 
     _keys = {
         'conv_tol', 'conv_tol_grad', 'max_cycle', 'init_guess',
-        'DIIS', 'diis', 'diis_space', 'diis_start_cycle',
+        'DIIS', 'diis', 'diis_space', 'diis_damp', 'diis_start_cycle',
         'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
         'direct_scf', 'direct_scf_tol', 'conv_check', 'callback',
         'mol', 'chkfile', 'mo_energy', 'mo_coeff', 'mo_occ',
@@ -1597,10 +1598,13 @@ class SCF(lib.StreamObject):
             log.info('DIIS = %s', self.diis)
             log.info('diis_start_cycle = %d', self.diis_start_cycle)
             log.info('diis_space = %d', self.diis.space)
+            if getattr(self.diis, 'damp', None):
+                log.info('diis_damp = %g', self.diis.damp)
         elif self.diis:
             log.info('DIIS = %s', self.DIIS)
             log.info('diis_start_cycle = %d', self.diis_start_cycle)
             log.info('diis_space = %d', self.diis_space)
+            log.info('diis_damp = %g', self.diis_damp)
         else:
             log.info('DIIS disabled')
         log.info('SCF conv_tol = %g', self.conv_tol)
