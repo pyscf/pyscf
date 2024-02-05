@@ -44,6 +44,7 @@ ALIAS = {
     'gthtzv2pmolopt'    : 'gth-tzv2p-molopt.dat',
     'gthszvmoloptsr'    : 'gth-szv-molopt-sr.dat',
     'gthdzvpmoloptsr'   : 'gth-dzvp-molopt-sr.dat',
+    'gthccpvdz'         : 'gth-cc-pvdz.dat',
 }
 
 OPTIMIZE_CONTRACTION = getattr(__config__, 'pbc_gto_basis_parse_optimize', False)

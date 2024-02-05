@@ -39,7 +39,8 @@ AOR_DATASET           = 'aoR'
 MAX_BUNCHSIZE         = 4096
 MAX_CHUNKSIZE         = int(3e9//8)  # 2GB
 THREAD_BUF_PERCENTAGE = 0.15
-
+CHUNK_COL_LIMITED     = 8192
+CHUNK_ROW_LIMITED     = 1024
 
 def _determine_bunchsize(nao, naux, mesh, buf_size):
     
@@ -54,6 +55,7 @@ def _determine_bunchsize(nao, naux, mesh, buf_size):
     blksize_aux = (buf_size - naux*naux) // (4 * nao + 2 * naux)   # suppose that the memory is enough
     blksize_aux = min(blksize_aux, ngrids)
     blksize_aux = min(blksize_aux, MAX_CHUNKSIZE//naux) # the maximal bunchsize in the construction of aux basis
+    blksize_aux = (blksize_aux // nThread) * nThread
 
     #### 2. calculate the bunchsize for the construction of V and W ####
 
@@ -84,7 +86,7 @@ def _determine_bunchsize(nao, naux, mesh, buf_size):
         use_large_chunk = False
 
     if use_large_chunk == False:
-        blksize_W = IO_buf.size // 3 // naux
+        blksize_W = buf_size // 3 // naux
         blksize_W = min(blksize_W, ncomplex)
         blksize_W = min(blksize_W, 3*naux-4) # do not need to read a large chunk
     blksize_W = blksize_W // 2 * 2     # make it even
@@ -121,14 +123,27 @@ def _determine_bunchsize(nao, naux, mesh, buf_size):
     if chunk_row * chunk_col * 8 < 16000000: # at least 16MB
         print("too small chunk, change the chunk row")
         chunk_row_new = 16000000 // (chunk_col * 8)
-        chunk_row_new = (chunk_row_new // chunk_row) * chunk_row
+        chunk_row_new = (chunk_row_new // chunk_row + 1) * chunk_row
         chunk_row = chunk_row_new
         chunk_row = min(chunk_row, naux)
+
+    if CHUNK_COL_LIMITED is not None:
+        chunk_col = min(chunk_col, CHUNK_COL_LIMITED)
+    if CHUNK_ROW_LIMITED is not None:
+        chunk_row = min(chunk_row, CHUNK_ROW_LIMITED)
+    
+    # if chunk_row * chunk_col * 8 < 16000000: # at least 16MB
+    #     print("too small chunk, change the chunk row")
+    #     chunk_row_new = 16000000 // (chunk_col * 8)
+    #     chunk_row_new = (chunk_row_new // chunk_row + 1) * chunk_row
+    #     chunk_row = chunk_row_new
+    #     chunk_row = min(chunk_row, naux)
 
     bunchsize_readV = (bunchsize_readV // chunk_col) * chunk_col
     grid_bunchsize  = (grid_bunchsize // chunk_col) * chunk_col
     blksize_W       = (blksize_W // chunk_col) * chunk_col
     blksize_aux     = (blksize_aux // chunk_col) * chunk_col
+    blksize_aux     = (blksize_aux // nThread) * nThread
 
     print("blksize_aux = ", blksize_aux)
     print("bunchsize_readV = ", bunchsize_readV)
