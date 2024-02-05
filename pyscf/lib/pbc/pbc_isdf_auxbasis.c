@@ -307,6 +307,10 @@ void NP_d_ik_jk_ijk(
     const int nB,
     const int nC)
 {
+    // printf("nA: %d\n", nA);
+    // printf("nB: %d\n", nB);
+    // printf("nC: %d\n", nC);
+
     int i, j;
 #pragma omp parallel for private(i, j)
     for (i = 0; i < nA * nB; ++i)
@@ -315,7 +319,7 @@ void NP_d_ik_jk_ijk(
         int i2 = i % nB;
         for (j = 0; j < nC; ++j)
         {
-            out[i * nC + j] = A[i1 + nC + j] * B[i2 + nC + j];
+            out[i * nC + j] = A[i1 * nC + j] * B[i2 * nC + j];
         }
     }
 }
