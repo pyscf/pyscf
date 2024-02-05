@@ -16,14 +16,8 @@ from functools import reduce
 # a. Option to multiply NACs by the energy difference to control
 #    singularities
 
-
-def _valid_state(state):
-    assert len(state) == 2
-    assert state[0] != state[1]
-
-
 def _unpack_state(state):
-    _valid_state(state)
+    assert len(state) == 2
     return state[0], state[1]
 
 
@@ -131,7 +125,8 @@ class NonAdiabaticCouplings (sacasscf_grad.Gradients):
     def __init__(self, mc, state=None, mult_ediff=False, use_etfs=False):
         self.mult_ediff = mult_ediff
         self.use_etfs = use_etfs
-        _valid_state(state) # Assert statements to check validity of states
+        if state is not None:
+            assert len(state) == 2
         sacasscf_grad.Gradients.__init__(self, mc, state=state)
 
     def make_fcasscf_nacs (self, state=None, casscf_attr=None,
@@ -240,6 +235,10 @@ class NonAdiabaticCouplings (sacasscf_grad.Gradients):
     def kernel (self, *args, **kwargs):
         mult_ediff = kwargs.get ('mult_ediff', self.mult_ediff)
         state = kwargs.get ('state', self.state)
+        assert len(state) == 2
+        if state[0] == state[1]:
+            return np.zeros((len(self.mol.natm), 3))
+
         nac = sacasscf_grad.Gradients.kernel (self, *args, **kwargs)
         if not mult_ediff:
             ket, bra = _unpack_state (state)
