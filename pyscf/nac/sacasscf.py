@@ -17,7 +17,7 @@ from functools import reduce
 #    singularities
 
 def _unpack_state(state):
-    assert len(state) == 2
+    assert len(state) == 2, "derivative couplings are defined between 2 states"
     return state[0], state[1]
 
 
@@ -126,7 +126,7 @@ class NonAdiabaticCouplings (sacasscf_grad.Gradients):
         self.mult_ediff = mult_ediff
         self.use_etfs = use_etfs
         if state is not None:
-            assert len(state) == 2
+            assert len(state) == 2, "derivative couplings are defined between 2 states"
         sacasscf_grad.Gradients.__init__(self, mc, state=state)
 
     def make_fcasscf_nacs (self, state=None, casscf_attr=None,
@@ -235,9 +235,11 @@ class NonAdiabaticCouplings (sacasscf_grad.Gradients):
     def kernel (self, *args, **kwargs):
         mult_ediff = kwargs.get ('mult_ediff', self.mult_ediff)
         state = kwargs.get ('state', self.state)
-        assert len(state) == 2
+        assert len(state) == 2, "derivative couplings are defined between 2 states"
         if state[0] == state[1]:
-            return np.zeros((len(self.mol.natm), 3))
+            mol = kwargs.get('mol', self.mol)
+            atmlst = kwargs.get('atmlst', range(mol.natm))
+            return np.zeros((len(atmlst), 3))
 
         nac = sacasscf_grad.Gradients.kernel (self, *args, **kwargs)
         if not mult_ediff:
