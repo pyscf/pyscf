@@ -16,14 +16,20 @@ from functools import reduce
 # a. Option to multiply NACs by the energy difference to control
 #    singularities
 
-def _unpack_state (state):
-    if hasattr (state, '__len__'): return state[0], state[1]
-    return state, state
 
-def grad_elec_core (mc_grad, mo_coeff=None, atmlst=None, eris=None,
-                    mf_grad=None):
-    '''Compute the core-electron part of the CASSCF (Hellmann-Feynman)
-    gradient using a modified RHF grad_elec call.'''
+def _valid_state(state):
+    assert len(state) == 2
+    assert state[0] != state[1]
+
+
+def _unpack_state(state):
+    _valid_state(state)
+    return state[0], state[1]
+
+
+def grad_elec_core(mc_grad, mo_coeff=None, atmlst=None, eris=None, mf_grad=None):
+    """Compute the core-electron part of the CASSCF (Hellmann-Feynman)
+    gradient using a modified RHF grad_elec call."""
     mc = mc_grad.base
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if eris is None: eris = mc.ao2mo (mo_coeff)
@@ -125,6 +131,7 @@ class NonAdiabaticCouplings (sacasscf_grad.Gradients):
     def __init__(self, mc, state=None, mult_ediff=False, use_etfs=False):
         self.mult_ediff = mult_ediff
         self.use_etfs = use_etfs
+        _valid_state(state) # Assert statements to check validity of states
         sacasscf_grad.Gradients.__init__(self, mc, state=state)
 
     def make_fcasscf_nacs (self, state=None, casscf_attr=None,
