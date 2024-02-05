@@ -1472,10 +1472,12 @@ def get_jk_dm_IO(mydf, dm, hermi=1, kpt=np.zeros(3),
 
 class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
     def __init__(self, mol:Cell, max_buf_memory:int):
-        super().__init__(mol=mol)
 
         self.max_buf_memory = max_buf_memory
         self.IO_buf         = np.zeros((max_buf_memory//8), dtype=np.float64)
+
+        super().__init__(mol=mol)
+
         self.IO_FILE        = None
 
         self._cached_bunchsize_ReadV = None

@@ -346,13 +346,37 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             NumInts = df_tmp._numint
 
             self.partition = np.zeros(coords.shape[0], dtype=np.int32)
-            MAX_MEMORY = 2 * 1e9  # 2 GB
-            bunchsize  = int(MAX_MEMORY / (self.nao * 8))  # 8 bytes per double
+
+
+            # MAX_MEMORY = 2 * 1e9  # 2 GB
+            # bunchsize  = int(MAX_MEMORY / (self.nao * 8))  # 8 bytes per double
+            # assert bunchsize > 0
+            # # buf = np.array((MAX_MEMORY//8), dtype=np.double) # note the memory has to be allocated here, one cannot optimize it!
+            # for p0, p1 in lib.prange(0, coords.shape[0], bunchsize):
+            #     res = NumInts.eval_ao(mol, coords[p0:p1])[0].T
+            #     res = np.argmax(np.abs(res), axis=0)
+            #     self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
+            # res = None
+            # self.coords = coords
+            # self._numints = NumInts
+
+            from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
+
+            if hasattr(self, "IO_buf"):
+                print("IO_buf is already allocated")
+            else:
+                print("IO_buf is not allocated")
+                MAX_MEMORY = 2 * 1e9  # 2 GB
+                self.IO_buf = np.zeros((int(MAX_MEMORY//8),), dtype=np.double)
+
+            bufsize = self.IO_buf.size // 2
+            bunchsize = int(bufsize / (self.nao))
             assert bunchsize > 0
-            # buf = np.array((MAX_MEMORY//8), dtype=np.double) # note the memory has to be allocated here, one cannot optimize it!
             for p0, p1 in lib.prange(0, coords.shape[0], bunchsize):
-                res = NumInts.eval_ao(mol, coords[p0:p1])[0].T
-                res = np.argmax(np.abs(res), axis=0)
+                AoR_Buf = np.ndarray((self.nao, p1-p0), dtype=np.complex128, buffer=self.IO_buf, offset=0)
+                # res = NumInts.eval_ao(mol, coords[p0:p1], deriv=0, out=self.IO_buf[:bufsize])[0].T
+                AoR_Buf = ISDF_eval_gto(self.cell, coords=coords[p0:p1], out=AoR_Buf)
+                res = np.argmax(np.abs(AoR_Buf), axis=0)
                 self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
             res = None
             self.coords = coords
