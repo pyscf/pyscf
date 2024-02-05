@@ -1275,6 +1275,10 @@ To enable the solvent model for CASSCF, the following code needs to be called
         from pyscf.grad import sacasscf as sacasscf_grad
         return sacasscf_grad.Gradients (self, state=state)
 
+    def _state_average_nac_method(self):
+        from pyscf.nac import sacasscf as sacasscf_nac
+        return sacasscf_nac.NonAdiabaticCouplings(self)
+
     def newton(self):
         from pyscf.mcscf import newton_casscf
         from pyscf.mcscf.addons import StateAverageMCSCFSolver
