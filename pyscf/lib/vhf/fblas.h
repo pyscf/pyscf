@@ -29,6 +29,7 @@ extern "C"
     void dscal_(const int *n, const double *da, double *dx, const int *incx);
     void daxpy_(const int *n, const double *da, const double *dx,
                 const int *incx, double *dy, const int *incy);
+    double dnrm2_(const int *n, const double *dx, const int *incx);
     double ddot_(const int *n, const double *dx, const int *incx,
                  const double *dy, const int *incy);
     void dcopy_(const int *n, const double *dx, const int *incx,
