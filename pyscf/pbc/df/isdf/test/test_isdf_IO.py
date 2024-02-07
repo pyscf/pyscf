@@ -873,7 +873,7 @@ def _select_IP_direct(mydf:isdf_fast.PBC_ISDF_Info, c:int, m:int):
     return results
 
 # @profile
-def _select_IP_direct2(mydf:isdf_fast.PBC_ISDF_Info, c:int, m:int):
+def _select_IP_direct2(mydf:isdf_fast.PBC_ISDF_Info, c:int, m:int, global_IP_selection=True):
 
     bunchsize = lib.num_threads()
 
@@ -984,8 +984,10 @@ def _select_IP_direct2(mydf:isdf_fast.PBC_ISDF_Info, c:int, m:int):
                          ctypes.c_int(naux_now),
                          ctypes.c_int(naux_now),
                          ctypes.c_int(grid_ID.shape[0]))
-
-            max_rank      = min(naux2_now, grid_ID.shape[0], nao_atm * c)
+            if global_IP_selection:
+                max_rank  = min(naux2_now, grid_ID.shape[0], nao_atm * c + m)
+            else:
+                max_rank  = min(naux2_now, grid_ID.shape[0], nao_atm * c)
             npt_find      = ctypes.c_int(0)
             pivot         = np.arange(grid_ID.shape[0], dtype=np.int32)
             thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64, buffer=buf_tmp, offset=offset)
@@ -997,7 +999,7 @@ def _select_IP_direct2(mydf:isdf_fast.PBC_ISDF_Info, c:int, m:int):
                             ctypes.c_int(naux2_now),
                             ctypes.c_int(grid_ID.shape[0]),
                             ctypes.c_int(max_rank),
-                            ctypes.c_double(1e-12),
+                            ctypes.c_double(1e-14),
                             pivot.ctypes.data_as(ctypes.c_void_p),
                             R.ctypes.data_as(ctypes.c_void_p),
                             ctypes.byref(npt_find),
@@ -1013,6 +1015,97 @@ def _select_IP_direct2(mydf:isdf_fast.PBC_ISDF_Info, c:int, m:int):
             results.extend(list(grid_ID[pivot]))
 
     results.sort()
+
+    ### global IP selection, we can use this step to avoid numerical issue ###
+
+    if global_IP_selection:
+        
+        print("global IP selection")
+
+        bufsize = mydf.get_buffer_size_in_global_IP_selection(len(results), c, m)
+
+        if buf.size < bufsize:
+            mydf.IO_buf = np.zeros((bufsize), dtype=np.float64)
+            buf = mydf.IO_buf
+            print("reallocate buf of size = ", bufsize)
+        
+        dtypesize = buf.dtype.itemsize  
+
+        buf_tmp = np.ndarray((bufsize), dtype=np.float64, buffer=buf)
+
+        offset = 0
+        aoRg   = np.ndarray((nao, len(results)), dtype=np.complex128, buffer=buf_tmp)
+        aoRg   = ISDF_eval_gto(mydf.cell, coords=coords[results], out=aoRg) * weight    
+
+        offset += nao*len(results) * dtypesize
+
+        naux_now  = int(np.sqrt(c*nao)) + m
+        naux2_now = naux_now * naux_now
+
+        print("naux_now = ", naux_now)
+        print("naux2_now = ", naux2_now)
+
+        R = np.ndarray((naux2_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        offset += naux2_now*len(results) * dtypesize
+
+        aoRg1 = np.ndarray((naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        offset += naux_now*len(results) * dtypesize
+
+        aoRg2 = np.ndarray((naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        offset += naux_now*len(results) * dtypesize
+
+        aoPairBuffer = np.ndarray(
+            (naux_now*naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        offset += naux_now*naux_now*len(results) * dtypesize
+
+        G1 = np.random.rand(nao, naux_now)
+        G1, _ = numpy.linalg.qr(G1)
+        G1    = G1.T
+        G2 = np.random.rand(nao, naux_now)
+        G2, _ = numpy.linalg.qr(G2)
+        G2    = G2.T
+
+        lib.dot(G1, aoRg, c=aoRg1)
+        lib.dot(G2, aoRg, c=aoRg2)
+
+        fn_ik_jk_ijk(aoRg1.ctypes.data_as(ctypes.c_void_p),
+                     aoRg2.ctypes.data_as(ctypes.c_void_p),
+                     aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
+                     ctypes.c_int(naux_now),
+                     ctypes.c_int(naux_now),
+                     ctypes.c_int(len(results)))
+
+        max_rank  = min(naux2_now, len(results), nao * c)
+
+        print("max_rank = ", max_rank)
+
+        npt_find      = ctypes.c_int(0)
+        pivot         = np.arange(len(results), dtype=np.int32)
+        thread_buffer = np.ndarray((nthread+1, len(results)+1), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        offset       += (nthread+1)*(len(results)+1) * dtypesize
+        global_buffer = np.ndarray((1, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        offset       += len(results) * dtypesize
+
+        fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(naux2_now),
+                        ctypes.c_int(len(results)),
+                        ctypes.c_int(max_rank),
+                        ctypes.c_double(1e-14),
+                        pivot.ctypes.data_as(ctypes.c_void_p),
+                        R.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.byref(npt_find),
+                        thread_buffer.ctypes.data_as(ctypes.c_void_p),
+                        global_buffer.ctypes.data_as(ctypes.c_void_p))
+
+        npt_find = npt_find.value
+        cutoff   = abs(R[npt_find-1, npt_find-1])
+        print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (len(results), npt_find, cutoff))
+        pivot = pivot[:npt_find]
+
+        pivot.sort()
+
+        results = np.array(results, dtype=np.int32)
+        results = list(results[pivot])
 
     return results
 
@@ -1629,7 +1722,6 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         nThread = lib.num_threads()
 
         buf_size  = self.nao*ngrid_on_atm                      # aoR_atm
-        # buf_size += naux_max2*ngrid_on_atm                     # Q
         buf_size += naux_max2*ngrid_on_atm                     # R
         buf_size += naux_max*ngrid_on_atm*2                    # aoR_atm1, aoR_atm2
         buf_size += naux_max*naux_max*ngrid_on_atm             # aoPairBuffer
@@ -1637,6 +1729,24 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         buf_size += ngrid_on_atm
 
         return max(buf_size, 2*self.nao*ngrid_on_atm)
+    
+    def get_buffer_size_in_global_IP_selection(self, ngrids_possible, c, m=5):
+
+        nao        = self.nao
+        naux_max   = int(np.sqrt(c*nao)) + m
+        ngrids_now = ngrids_possible
+        naux_max2  = naux_max * naux_max
+
+        nThread    = lib.num_threads()
+        
+        buf_size   = self.nao*ngrids_now                      # aoR_atm
+        buf_size  += naux_max2*ngrids_now                     # R
+        buf_size  += naux_max*ngrids_now*2                    # aoR_atm1, aoR_atm2
+        buf_size  += naux_max*naux_max*ngrids_now             # aoPairBuffer
+        buf_size  += (nThread+1)*(ngrids_now+1)
+        buf_size  += ngrids_now
+
+        return max(buf_size, 2*self.nao*ngrids_now)
 
     def build_auxiliary_Coulomb_IO(self, mesh):
 
@@ -1659,7 +1769,7 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
 
     get_jk = get_jk_dm_IO
 
-C = 15
+C = 8
 
 if __name__ == "__main__":
 
@@ -1720,8 +1830,8 @@ if __name__ == "__main__":
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
-    # cell.ke_cutoff  = 256   # kinetic energy cutoff in a.u.
-    cell.ke_cutoff = 128
+    cell.ke_cutoff  = 256   # kinetic energy cutoff in a.u.
+    # cell.ke_cutoff = 128
     # cell.ke_cutoff = 48
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
