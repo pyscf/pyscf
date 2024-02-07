@@ -369,14 +369,23 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 MAX_MEMORY = 2 * 1e9  # 2 GB
                 self.IO_buf = np.zeros((int(MAX_MEMORY//8),), dtype=np.double)
 
-            bufsize = self.IO_buf.size // 2
+            print("IO_buf.size = ", self.IO_buf.size)
+            print("coords.shape[0] = ", coords.shape[0])
+            print("self.nao = ", self.nao)
+
+            bufsize = min(self.IO_buf.size, 4*1e9/8) // 2
             bunchsize = int(bufsize / (self.nao))
+
+            print("bunchsize = ", bunchsize)
+
             assert bunchsize > 0
             for p0, p1 in lib.prange(0, coords.shape[0], bunchsize):
+                print("p0 = %d p1 = %d" % (p0, p1))
                 AoR_Buf = np.ndarray((self.nao, p1-p0), dtype=np.complex128, buffer=self.IO_buf, offset=0)
                 # res = NumInts.eval_ao(mol, coords[p0:p1], deriv=0, out=self.IO_buf[:bufsize])[0].T
                 AoR_Buf = ISDF_eval_gto(self.cell, coords=coords[p0:p1], out=AoR_Buf)
                 res = np.argmax(np.abs(AoR_Buf), axis=0)
+                print("res = ", res)
                 self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
             res = None
             self.coords = coords
