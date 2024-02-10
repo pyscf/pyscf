@@ -1209,7 +1209,7 @@ def copy(mol, deep=True):
     newmol._ecp    = copy.deepcopy(mol._ecp)
     newmol.pseudo  = copy.deepcopy(mol.pseudo)
     newmol._pseudo = copy.deepcopy(mol._pseudo)
-    if mol.magmom:
+    if mol.magmom is not None:
         newmol.magmom  = list(mol.magmom)
     return newmol
 
