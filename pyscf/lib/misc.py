@@ -22,6 +22,8 @@ Some helper functions
 
 import os
 import sys
+import time
+import platform
 import warnings
 import tempfile
 import functools
@@ -30,6 +32,7 @@ import inspect
 import collections
 import ctypes
 import numpy
+import scipy
 import h5py
 from threading import Thread
 from multiprocessing import Queue, Process
@@ -1302,6 +1305,22 @@ def git_info(repo_path):
     except IOError:
         pass
     return orig_head, head, branch
+
+def format_sys_info():
+    '''Format a list of system information for printing.'''
+    import pyscf
+    info = repo_info(os.path.join(__file__, '..', '..'))
+    result = [
+        f'System: {platform.uname()}  Threads {num_threads()}',
+        f'Python {sys.version}',
+        f'numpy {numpy.__version__}  scipy {scipy.__version__}',
+        f'Date: {time.ctime()}',
+        f'PySCF version {pyscf.__version__}',
+        f'PySCF path  {info["path"]}',
+    ]
+    if 'git' in info:
+        result.append(info['git'])
+    return result
 
 
 def isinteger(obj):
