@@ -63,6 +63,7 @@ PTR_COORD  = 1
 NUC_MOD_OF = 2
 PTR_ZETA   = 3
 PTR_FRAC_CHARGE = 4
+PTR_RADIUS = 5
 ATM_SLOTS  = 6
 ATOM_OF    = 0
 ANG_OF     = 1
@@ -2414,6 +2415,15 @@ class MoleBase(lib.StreamObject):
         else:
             self.spin = int(round(2*x, 4))
 
+    @property
+    def enuc(self):
+        '''nuclear repulsion energy'''
+        if self._enuc is None:
+            self._enuc = self.energy_nuc()
+        return self._enuc
+    @enuc.setter
+    def enuc(self, enuc):
+        self._enuc = enuc
 
     copy = copy
 
@@ -2577,6 +2587,9 @@ class MoleBase(lib.StreamObject):
             # Access self.nelec in which the code checks whether the spin and
             # number of electrons are consistent.
             self.nelec
+
+        # reset nuclear energy
+        self.enuc = None
 
         if not self.magmom:
             self.magmom = [0,] * self.natm
@@ -2797,7 +2810,7 @@ class MoleBase(lib.StreamObject):
 
         if self.verbose >= logger.INFO:
             self.stdout.write('\n')
-            logger.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
+            logger.info(self, 'nuclear repulsion = %.15g', self.enuc)
             if self.symmetry:
                 if self.topgroup == self.groupname:
                     logger.info(self, 'point group symmetry = %s', self.topgroup)
@@ -3062,6 +3075,9 @@ class MoleBase(lib.StreamObject):
         else:
             mol.symmetry = symmetry
             mol.build(False, False)
+
+        # reset nuclear energy
+        mol.enuc = None
 
         if mol.verbose >= logger.INFO:
             logger.info(mol, 'New geometry')
@@ -3555,7 +3571,9 @@ class MoleBase(lib.StreamObject):
 
     eval_ao = eval_gto = eval_gto
 
-    energy_nuc = get_enuc = energy_nuc
+    energy_nuc = energy_nuc
+    def get_enuc(self):
+        return self.enuc
 
     def get_ao_indices(self, bas_list, ao_loc=None):
         '''

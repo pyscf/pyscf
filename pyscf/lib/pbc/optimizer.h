@@ -20,6 +20,7 @@
 #define HAVE_DEFINED_CVHFOPT_H
 typedef struct PBCOpt_struct {
     double *rrcut;
+    double *rcut;
     int (*fprescreen)(int *shls, struct PBCOpt_struct *opt,
                       int *atm, int *bas, double *env);
 } PBCOpt;

@@ -22,6 +22,7 @@ import ctypes
 import numpy
 import scipy.linalg
 
+from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, PTR_EXP, PTR_COEFF
@@ -33,8 +34,8 @@ from pyscf.pbc.dft import numint, gen_grid
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.df import fft
-from pyscf.pbc.df import ft_ao
-from pyscf import __config__
+from pyscf.pbc.dft.multigrid.pp import _get_pp_with_erf as get_pp
+from pyscf.pbc.dft.multigrid.utils import _take_4d, _take_5d, _takebak_4d, _takebak_5d
 
 #sys.stderr.write('WARN: multigrid is an experimental feature. It is still in '
 #                 'testing\nFeatures and APIs may be changed in the future.\n')
@@ -366,93 +367,6 @@ def get_nuc(mydf, kpts=None):
     if is_single_kpt:
         vne = vne[0]
     return numpy.asarray(vne)
-
-def get_pp(mydf, kpts=None):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
-    '''
-    from pyscf import gto
-    kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
-    cell = mydf.cell
-    mesh = mydf.mesh
-    SI = cell.get_SI()
-    Gv = cell.get_Gv(mesh)
-    vpplocG = pseudo.get_vlocG(cell, Gv)
-    vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
-    # from get_jvloc_G0 function
-    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell))
-    ngrids = len(vpplocG)
-
-    hermi = 1
-    vpp = _get_j_pass2(mydf, vpplocG, hermi, kpts)[0]
-
-    # vppnonloc evaluated in reciprocal space
-    fakemol = gto.Mole()
-    fakemol._atm = numpy.zeros((1,gto.ATM_SLOTS), dtype=numpy.int32)
-    fakemol._bas = numpy.zeros((1,gto.BAS_SLOTS), dtype=numpy.int32)
-    ptr = gto.PTR_ENV_START
-    fakemol._env = numpy.zeros(ptr+10)
-    fakemol._bas[0,gto.NPRIM_OF ] = 1
-    fakemol._bas[0,gto.NCTR_OF  ] = 1
-    fakemol._bas[0,gto.PTR_EXP  ] = ptr+3
-    fakemol._bas[0,gto.PTR_COEFF] = ptr+4
-
-    # buf for SPG_lmi upto l=0..3 and nl=3
-    buf = numpy.empty((48,ngrids), dtype=numpy.complex128)
-
-    def vppnl_by_k(kpt):
-        Gk = Gv + kpt
-        G_rad = lib.norm(Gk, axis=1)
-        aokG = ft_ao.ft_ao(cell, Gv, kpt=kpt) * (ngrids/cell.vol)
-        vppnl = 0
-        for ia in range(cell.natm):
-            symb = cell.atom_symbol(ia)
-            if symb not in cell._pseudo:
-                continue
-            pp = cell._pseudo[symb]
-            p1 = 0
-            for l, proj in enumerate(pp[5:]):
-                rl, nl, hl = proj
-                if nl > 0:
-                    fakemol._bas[0,gto.ANG_OF] = l
-                    fakemol._env[ptr+3] = .5*rl**2
-                    fakemol._env[ptr+4] = rl**(l+1.5)*numpy.pi**1.25
-                    pYlm_part = fakemol.eval_gto('GTOval', Gk)
-
-                    p0, p1 = p1, p1+nl*(l*2+1)
-                    # pYlm is real, SI[ia] is complex
-                    pYlm = numpy.ndarray((nl,l*2+1,ngrids), dtype=numpy.complex128, buffer=buf[p0:p1])
-                    for k in range(nl):
-                        qkl = pseudo.pp._qli(G_rad*rl, l, k)
-                        pYlm[k] = pYlm_part.T * qkl
-                    #:SPG_lmi = numpy.einsum('g,nmg->nmg', SI[ia].conj(), pYlm)
-                    #:SPG_lm_aoG = numpy.einsum('nmg,gp->nmp', SPG_lmi, aokG)
-                    #:tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
-                    #:vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-            if p1 > 0:
-                SPG_lmi = buf[:p1]
-                SPG_lmi *= SI[ia].conj()
-                SPG_lm_aoGs = lib.zdot(SPG_lmi, aokG)
-                p1 = 0
-                for l, proj in enumerate(pp[5:]):
-                    rl, nl, hl = proj
-                    if nl > 0:
-                        p0, p1 = p1, p1+nl*(l*2+1)
-                        hl = numpy.asarray(hl)
-                        SPG_lm_aoG = SPG_lm_aoGs[p0:p1].reshape(nl,l*2+1,-1)
-                        tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
-                        vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-        return vppnl * (1./ngrids**2)
-
-    for k, kpt in enumerate(kpts):
-        vppnl = vppnl_by_k(kpt)
-        if gamma_point(kpt):
-            vpp[k] = vpp[k].real + vppnl.real
-        else:
-            vpp[k] += vppnl
-
-    if is_single_kpt:
-        vpp = vpp[0]
-    return numpy.asarray(vpp)
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
@@ -1859,7 +1773,7 @@ class MultiGridFFTDF(fft.FFTDF):
     get_rho = get_rho
 
 
-def multigrid(mf):
+def multigrid_fftdf(mf):
     '''Use MultiGridFFTDF to replace the default FFTDF integration method in
     the DFT object.
     '''
@@ -1870,53 +1784,3 @@ def multigrid(mf):
 
 def _pgto_shells(cell):
     return cell._bas[:,NPRIM_OF].sum()
-
-def _take_4d(a, indices):
-    a_shape = a.shape
-    ranges = []
-    for i, s in enumerate(indices):
-        if s is None:
-            idx = numpy.arange(a_shape[i], dtype=numpy.int32)
-        else:
-            idx = numpy.asarray(s, dtype=numpy.int32)
-            idx[idx < 0] += a_shape[i]
-        ranges.append(idx)
-    idx = ranges[0][:,None] * a_shape[1] + ranges[1]
-    idy = ranges[2][:,None] * a_shape[3] + ranges[3]
-    a = a.reshape(a_shape[0]*a_shape[1], a_shape[2]*a_shape[3])
-    out = lib.take_2d(a, idx.ravel(), idy.ravel())
-    return out.reshape([len(s) for s in ranges])
-
-def _takebak_4d(out, a, indices):
-    out_shape = out.shape
-    a_shape = a.shape
-    ranges = []
-    for i, s in enumerate(indices):
-        if s is None:
-            idx = numpy.arange(a_shape[i], dtype=numpy.int32)
-        else:
-            idx = numpy.asarray(s, dtype=numpy.int32)
-            idx[idx < 0] += out_shape[i]
-        assert (len(idx) == a_shape[i])
-        ranges.append(idx)
-    idx = ranges[0][:,None] * out_shape[1] + ranges[1]
-    idy = ranges[2][:,None] * out_shape[3] + ranges[3]
-    nx = idx.size
-    ny = idy.size
-    out = out.reshape(out_shape[0]*out_shape[1], out_shape[2]*out_shape[3])
-    lib.takebak_2d(out, a.reshape(nx,ny), idx.ravel(), idy.ravel())
-    return out
-
-def _take_5d(a, indices):
-    a_shape = a.shape
-    a = a.reshape((a_shape[0]*a_shape[1],) + a_shape[2:])
-    indices = (None,) + indices[2:]
-    return _take_4d(a, indices)
-
-def _takebak_5d(out, a, indices):
-    a_shape = a.shape
-    out_shape = out.shape
-    a = a.reshape((a_shape[0]*a_shape[1],) + a_shape[2:])
-    out = out.reshape((out_shape[0]*out_shape[1],) + out_shape[2:])
-    indices = (None,) + indices[2:]
-    return _takebak_4d(out, a, indices)

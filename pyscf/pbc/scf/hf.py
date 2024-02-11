@@ -48,7 +48,10 @@ def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
     precision = cell.precision * 1e-5
-    rcut = max(cell.rcut, gto.estimate_rcut(cell, precision))
+    if cell.use_loose_rcut:
+        rcut = max(cell.rcut, gto.estimate_rcut_loose(cell, precision))
+    else:
+        rcut = max(cell.rcut, gto.estimate_rcut(cell, precision))
     with lib.temporary_env(cell, rcut=rcut, precision=precision):
         # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
         s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
@@ -60,16 +63,18 @@ def get_ovlp(cell, kpt=np.zeros(3)):
                     'cell.precision  or  cell.rcut  can be adjusted to '
                     'improve accuracy.', hermi_error)
 
-    cond = np.max(lib.cond(s))
-    if cond * precision > 1e2:
-        prec = 1e7 / cond
-        rmin = gto.estimate_rcut(cell, prec*1e-5)
-        logger.warn(cell, 'Singularity detected in overlap matrix.  '
-                    'Integral accuracy may be not enough.\n      '
-                    'You can adjust  cell.precision  or  cell.rcut  to '
-                    'improve accuracy.  Recommended settings are\n      '
-                    'cell.precision < %.2g\n      '
-                    'cell.rcut > %.4g', prec, rmin)
+    # cond is slow, skip for performance runs
+    if cell.verbose >= logger.DEBUG:
+        cond = np.max(lib.cond(s))
+        if cond * precision > 1e2:
+            prec = 1e7 / cond
+            rmin = gto.estimate_rcut(cell, prec*1e-5)
+            logger.warn(cell, 'Singularity detected in overlap matrix.  '
+                        'Integral accuracy may be not enough.\n      '
+                        'You can adjust  cell.precision  or  cell.rcut  to '
+                        'improve accuracy.  Recommended settings are\n      '
+                        'cell.precision < %.2g\n      '
+                        'cell.rcut > %.4g', prec, rmin)
     return s
 
 
@@ -738,7 +743,7 @@ class SCF(mol_hf.SCF):
         return self.get_jk(cell, dm, hermi, kpt)
 
     def energy_nuc(self):
-        return self.cell.energy_nuc()
+        return self.cell.enuc
 
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
@@ -758,10 +763,10 @@ class SCF(mol_hf.SCF):
             makov_payne_correction(self)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None: cell = self.cell
         dm = mol_hf.SCF.get_init_guess(self, cell, key)
-        dm = normalize_dm_(self, dm)
+        dm = normalize_dm_(self, dm, s1e)
         return dm
 
     def init_guess_by_1e(self, cell=None):
@@ -914,12 +919,14 @@ def _format_jks(vj, dm, kpts_band):
         vj = vj[0]
     return vj
 
-def normalize_dm_(mf, dm):
+def normalize_dm_(mf, dm, s1e=None):
     '''
     Scale density matrix to make it produce the correct number of electrons.
     '''
     cell = mf.cell
-    ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
+    if s1e is None:
+        s1e = mf.get_ovlp(cell)
+    ne = lib.einsum('ij,ji->', dm, s1e).real
     if abs(ne - cell.nelectron) > 0.01:
         logger.debug(mf, 'Big error detected in the electron number '
                      'of initial guess density matrix (Ne/cell = %g)!\n'

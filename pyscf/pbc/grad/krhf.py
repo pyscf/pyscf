@@ -27,7 +27,6 @@ from pyscf.pbc.gto.pseudo.pp import get_vlocG, get_alphas, get_projG, projG_li, 
 from pyscf.pbc.dft.numint import eval_ao_kpts
 from pyscf.pbc import gto, tools
 from pyscf.gto import mole
-import scipy
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
@@ -208,57 +207,6 @@ def hcore_generator(mf, cell=None, kpts=None):
         return hcore
     return hcore_deriv
 
-def grad_nuc(cell, atmlst):
-    '''
-    Derivatives of nuclear repulsion energy wrt nuclear coordinates
-    '''
-    chargs = cell.atom_charges()
-    ew_eta, ew_cut = cell.get_ewald_params()
-    log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
-    ke_cutoff = -2*ew_eta**2*log_precision
-    mesh = cell.cutoff_to_mesh(ke_cutoff)
-    logger.debug1(cell, 'mesh for ewald %s', mesh)
-
-    coords = cell.atom_coords()
-    Lall = cell.get_lattice_Ls()
-    natom = len(chargs)
-    ewovrl_grad = np.zeros([natom,3])
-
-    for i, qi in enumerate(chargs):
-        ri = coords[i]
-        for j in range(natom):
-            if j == i:
-                continue
-            qj = chargs[j]
-            rj = coords[j]
-            r1 = ri-rj + Lall
-            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
-            r = r.reshape(len(r),1)
-            ewovrl_grad[i] += np.sum(- (qi * qj / r ** 3 * r1 *
-                                        scipy.special.erfc(ew_eta * r).reshape(len(r),1)), axis = 0)
-            ewovrl_grad[i] += np.sum(- qi * qj / r ** 2 * r1 * 2 * ew_eta / np.sqrt(np.pi) *
-                                     np.exp(-ew_eta**2 * r ** 2).reshape(len(r),1), axis = 0)
-
-    Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = np.einsum('gi,gi->g', Gv, Gv)
-    absG2[absG2==0] = 1e200
-    ewg_grad = np.zeros([natom,3])
-    SI = cell.get_SI(Gv)
-    if cell.low_dim_ft_type is None or cell.dimension == 3:
-        coulG = 4*np.pi / absG2
-        coulG *= weights
-        ZSI = np.einsum("i,ij->j", chargs, SI)
-        ZexpG2 = coulG * np.exp(-absG2/(4*ew_eta**2))
-        ZexpG2_mod = ZexpG2.reshape(len(ZexpG2),1) * Gv
-    for i, qi in enumerate(chargs):
-        Zfac = np.imag(ZSI * SI[i].conj()) * qi
-        ewg_grad[i] = - np.sum(Zfac.reshape((len(Zfac),1)) * ZexpG2_mod, axis = 0)
-
-    ew_grad = ewg_grad + ewovrl_grad
-    if atmlst is not None:
-        ew_grad = ew_grad[atmlst]
-    return ew_grad
-
 def get_jk(mf_grad, dm, kpts):
     '''J = ((-nabla i) j| kl) D_lk
     K = ((-nabla i) j| kl) D_jk
@@ -331,6 +279,7 @@ class GradientsBase(molgrad.GradientsBase):
         return vk
 
     def grad_nuc(self, cell=None, atmlst=None):
+        from .rhf import grad_nuc
         if cell is None: cell = self.cell
         return grad_nuc(cell, atmlst)
 

@@ -41,6 +41,9 @@ WRAP_AROUND = getattr(__config__, 'pbc_gto_cell_make_kpts_wrap_around', False)
 WITH_GAMMA = getattr(__config__, 'pbc_gto_cell_make_kpts_with_gamma', True)
 EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
                         [1.0, 0.5, 0.25, 0.1, 0])
+# defined in lib/pbc/cell.h
+RCUT_EPS = 1e-3
+RCUT_MAX_CYCLE = 10
 
 libpbc = _pbcintor.libpbc
 
@@ -491,7 +494,27 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
             weights = np.einsum('i,k->ik', wxy, wz).reshape(-1)
 
     Gvbase = (rx, ry, rz)
-    Gv = np.dot(lib.cartesian_prod(Gvbase), b)
+
+    #:Gv = np.dot(lib.cartesian_prod(Gvbase), b)
+    # NOTE mesh can be different from the input mesh
+    mesh = np.asarray([len(rx),len(ry),len(rz)], dtype=np.int32)
+    Gv = np.empty((*mesh,3), order='C', dtype=float)
+    b = np.asarray(b, order='C')
+    rx = np.asarray(rx, order='C')
+    ry = np.asarray(ry, order='C')
+    rz = np.asarray(rz, order='C')
+    fn = getattr(libpbc, 'get_Gv', None)
+    try:
+        fn(Gv.ctypes.data_as(ctypes.c_void_p),
+           rx.ctypes.data_as(ctypes.c_void_p),
+           ry.ctypes.data_as(ctypes.c_void_p),
+           rz.ctypes.data_as(ctypes.c_void_p),
+           mesh.ctypes.data_as(ctypes.c_void_p),
+           b.ctypes.data_as(ctypes.c_void_p))
+    except Exception as e:
+        raise RuntimeError("Failed to get Gv. %s" % e)
+    Gv = Gv.reshape(-1, 3)
+
     # 1/cell.vol == det(b)/(2pi)^3
     weights *= 1/(2*np.pi)**3
     return Gv, Gvbase, weights
@@ -504,7 +527,7 @@ def _non_uniform_Gv_base(n):
     #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
     return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
 
-def get_SI(cell, Gv=None, mesh=None):
+def get_SI(cell, Gv=None, mesh=None, atmlst=None):
     '''Calculate the structure factor (0D, 1D, 2D, 3D) for all atoms; see MH (3.34).
 
     Args:
@@ -513,11 +536,16 @@ def get_SI(cell, Gv=None, mesh=None):
         Gv : (N,3) array
             G vectors
 
+        atmlst : list of ints, optional
+            Indices of atoms for which the structure factors are computed.
+
     Returns:
         SI : (natm, ngrids) ndarray, dtype=np.complex128
             The structure factor for each atom at each G-vector.
     '''
     coords = cell.atom_coords()
+    if atmlst is not None:
+        coords = coords[np.asarray(atmlst)]
     if Gv is None:
         if mesh is None:
             mesh = cell.mesh
@@ -531,7 +559,20 @@ def get_SI(cell, Gv=None, mesh=None):
         natm = coords.shape[0]
         SI = SI.reshape(natm, -1)
     else:
-        SI = np.exp(-1j*np.dot(coords, Gv.T))
+        #:SI = np.exp(-1j*lib.dot(coords, Gv.T))
+        fn = getattr(libpbc, 'get_SI', None)
+        natm = coords.shape[0]
+        ngrids = Gv.shape[0]
+        SI = np.empty((natm, ngrids), order='C', dtype=np.complex128)
+        coords = np.asarray(coords, order='C', dtype=np.double)
+        Gv = np.asarray(Gv, order='C', dtype=np.double)
+        try:
+            fn(SI.ctypes.data_as(ctypes.c_void_p),
+               coords.ctypes.data_as(ctypes.c_void_p),
+               Gv.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(natm), ctypes.c_int(ngrids))
+        except Exception as e:
+            raise RuntimeError("Failed to get structure factor. %s" % e)
     return SI
 
 def get_ewald_params(cell, precision=None, mesh=None):
@@ -598,6 +639,10 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if cell.natm == 0:
         return 0
 
+    if cell.dimension == 3 and cell.use_particle_mesh_ewald:
+        from pyscf.pbc.gto import ewald_methods
+        return ewald_methods.particle_mesh_ewald(cell, ew_eta, ew_cut)
+
     chargs = cell.atom_charges()
 
     if ew_eta is None or ew_cut is None:
@@ -631,7 +676,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
 
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = np.einsum('gi,gi->g', Gv, Gv)
+    #:absG2 = np.einsum('gi,gi->g', Gv, Gv)
+    absG2 = lib.multiply_sum(Gv, Gv, axis=1)
     absG2[absG2==0] = 1e200
 
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
@@ -639,7 +685,16 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         # have relatively large error
         coulG = 4*np.pi / absG2
         coulG *= weights
-        ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
+
+        #:ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
+        ngrids = len(Gv)
+        ZSI = np.empty((ngrids,), dtype=np.complex128)
+        mem_avail = cell.max_memory - lib.current_memory()[0]
+        blksize = int((mem_avail*1e6 - cell.natm*24)/((3+cell.natm*2)*8))
+        blksize = min(ngrids, max(mesh[2], blksize))
+        for ig0, ig1 in lib.prange(0, ngrids, blksize):
+            ZSI[ig0:ig1] = lib.einsum("i,ij->j", chargs, cell.get_SI(Gv[ig0:ig1]))
+
         ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
         ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
 
@@ -835,6 +890,75 @@ def _mesh_inf_vaccum(cell):
     # meshz has to be even number due to the symmetry on z+ and z-
     return int(meshz*.5 + .999) * 2
 
+def pgf_rcut(l, alpha, coeff, precision=INTEGRAL_PRECISION,
+             rcut=0, max_cycle=RCUT_MAX_CYCLE, eps=RCUT_EPS):
+    '''Estimate the cutoff radii of primitive Gaussian functions
+    based on their values in real space:
+    `c*rcut^(l+2)*exp(-alpha*rcut^2) ~ precision`.
+    '''
+    c = np.log(coeff / precision)
+
+    rmin = np.sqrt(.5 * (l+2) / alpha) * 2
+    eps = np.minimum(rmin/10, eps)
+    rcut = np.maximum(rcut, rmin+eps)
+    for i in range(max_cycle):
+        rcut_last = rcut
+        rcut = np.sqrt(((l+2) * np.log(rcut) + c) / alpha)
+        if np.all(abs(rcut - rcut_last) < eps):
+            return rcut
+    warnings.warn(f'Cell.pgf_rcut failed to converge in {max_cycle} cycles.')
+    return rcut
+
+_estimate_rcut_loose = pgf_rcut
+
+def bas_rcut_loose(cell, bas_id, precision=None):
+    '''Estimate the cutoff radius of a shell
+    based on its value in real space.
+    '''
+    if precision is None:
+        precision = cell.precision
+    l = cell.bas_angular(bas_id)
+    es = cell.bas_exp(bas_id)
+    cs = abs(cell._libcint_ctr_coeff(bas_id)).max(axis=1)
+    rcut = _estimate_rcut_loose(l, es, cs, precision)
+    return rcut.max()
+
+def rcut_by_shells(cell, precision=None, rcut=0,
+                   return_pgf_radius=False):
+    '''Compute shell and primitive gaussian function radii.
+    '''
+    # TODO the internal implementation loops over all shells,
+    # which can be optimized to loop over atom types.
+    if precision is None:
+        precision = cell.precision
+
+    bas = np.asarray(cell._bas, order='C')
+    env = np.asarray(cell._env, order='C')
+    nbas = len(bas)
+    shell_radius = np.empty((nbas,), order='C', dtype=float)
+    if return_pgf_radius:
+        nprim = bas[:,mole.NPRIM_OF].max()
+        # be careful that the unused memory blocks are not initialized
+        pgf_radius = np.empty((nbas,nprim), order='C', dtype=np.double)
+        ptr_pgf_radius = lib.ndarray_pointer_2d(pgf_radius)
+    else:
+        ptr_pgf_radius = lib.c_null_ptr()
+    fn = getattr(libpbc, 'rcut_by_shells', None)
+    try:
+        fn(shell_radius.ctypes.data_as(ctypes.c_void_p),
+           ptr_pgf_radius,
+           bas.ctypes.data_as(ctypes.c_void_p),
+           env.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_int(nbas), ctypes.c_double(rcut),
+           ctypes.c_double(precision))
+    except Exception as e:
+        raise RuntimeError(f'Failed to get shell radii.\n{e}')
+    if return_pgf_radius:
+        return shell_radius, pgf_radius
+    return shell_radius
+
+def estimate_rcut_loose(cell, precision=None):
+    return rcut_by_shells(cell, precision).max()
 
 class Cell(mole.MoleBase):
     '''A Cell object holds the basic information of a crystal.
@@ -864,6 +988,14 @@ class Cell(mole.MoleBase):
             infinity vacuum (inf_vacuum) or truncated Coulomb potential
             (analytic_2d_1). Unless explicitly specified, analytic_2d_1 is
             used for 2D system and inf_vacuum is assumed for 1D and 0D.
+        use_loose_rcut : bool
+            If set to True, a loose `rcut` determined by shell radius is used,
+            which is usually accurate enough for pure DFT calculations;
+            otherwise, a tight `rcut` determined by overlap integral is used.
+            Default value is False. Has no effect if `rcut` is set manually.
+        use_particle_mesh_ewald : bool
+            If set to True, use particle-mesh Ewald to compute the nuclear repulsion.
+            Default value is False, meaning to use classical Ewald summation.
         space_group_symmetry : bool
             Whether to consider space group symmetry. Default is False.
         symmorphic : bool
@@ -892,6 +1024,7 @@ class Cell(mole.MoleBase):
         'precision', 'exp_to_discard',
         'a', 'ke_cutoff', 'pseudo', 'dimension', 'low_dim_ft_type',
         'space_group_symmetry', 'symmorphic', 'lattice_symmetry', 'mesh', 'rcut',
+        'use_loose_rcut', 'use_particle_mesh_ewald',
     }
 
     def __init__(self, **kwargs):
@@ -906,6 +1039,8 @@ class Cell(mole.MoleBase):
         #       density-fitting class.  This determines how the ewald produces
         #       its energy.
         self.low_dim_ft_type = None
+        self.use_loose_rcut = False
+        self.use_particle_mesh_ewald = False
         self.space_group_symmetry = False
         self.symmorphic = False
         self.lattice_symmetry = None
@@ -1082,7 +1217,9 @@ class Cell(mole.MoleBase):
     def build(self, dump_input=True, parse_arg=mole.ARGPARSE,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
               h=None, dimension=None, rcut= None, low_dim_ft_type=None,
-              space_group_symmetry=None, symmorphic=None, *args, **kwargs):
+              space_group_symmetry=None, symmorphic=None,
+              use_loose_rcut=None, use_particle_mesh_ewald=None,
+              *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
         you need call this function to refresh the internal data of Cell.
@@ -1133,6 +1270,10 @@ class Cell(mole.MoleBase):
         if rcut is not None: self.rcut = rcut
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
         if low_dim_ft_type is not None: self.low_dim_ft_type = low_dim_ft_type
+        if use_loose_rcut is not None:
+            self.use_loose_rcut = use_loose_rcut
+        if use_particle_mesh_ewald is not None:
+            self.use_particle_mesh_ewald = use_particle_mesh_ewald
         if space_group_symmetry is not None:
             self.space_group_symmetry = space_group_symmetry
         if symmorphic is not None:
@@ -1222,7 +1363,10 @@ class Cell(mole.MoleBase):
             return self
 
         if self.rcut is None or self._rcut_from_build:
-            self._rcut = estimate_rcut(self, self.precision)
+            if self.use_loose_rcut:
+                self._rcut = estimate_rcut_loose(self, self.precision)
+            else:
+                self._rcut = estimate_rcut(self, self.precision)
             self._rcut_from_build = True
 
         _a = self.lattice_vectors()
@@ -1265,7 +1409,7 @@ class Cell(mole.MoleBase):
             logger.info(self, 'Cell volume = %g', self.vol)
             # Check atoms coordinates
             if self.dimension > 0 and self.natm > 0:
-                scaled_atom_coords = np.linalg.solve(_a.T, self.atom_coords().T).T
+                scaled_atom_coords = self.get_scaled_atom_coords(_a)
                 atom_boundary_max = scaled_atom_coords[:,:self.dimension].max(axis=0)
                 atom_boundary_min = scaled_atom_coords[:,:self.dimension].min(axis=0)
                 if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
@@ -1367,13 +1511,12 @@ class Cell(mole.MoleBase):
         else:
             return a/self.unit
 
-    def get_scaled_positions(self):
-        ''' Get scaled atom positions.
+    def get_scaled_atom_coords(self, a=None):
+        ''' Get scaled atomic coordinates.
         '''
-        a = self.lattice_vectors()
-        atm_pos = self.atom_coords()
-        scaled_atm_pos = np.dot(atm_pos,np.linalg.inv(a))
-        return scaled_atm_pos
+        if a is None:
+            a = self.lattice_vectors()
+        return np.dot(self.atom_coords(), np.linalg.inv(a))
 
     def reciprocal_vectors(self, norm_to=2*np.pi):
         r'''
@@ -1475,6 +1618,8 @@ class Cell(mole.MoleBase):
         return self
 
     bas_rcut = bas_rcut
+    bas_rcut_loose = bas_rcut_loose
+    rcut_by_shells = rcut_by_shells
 
     get_lattice_Ls = pbctools.get_lattice_Ls
 
@@ -1551,6 +1696,7 @@ class Cell(mole.MoleBase):
         mol = self.view(mole.Mole)
         delattr(mol, 'a')
         delattr(mol, '_mesh')
+        mol.enuc = None #reset nuclear energy
         if mol.symmetry:
             mol._build_symmetry()
         return mol

@@ -1341,6 +1341,15 @@ def isintsequence(obj):
             are_ints = are_ints and isinteger(i)
         return are_ints
 
+def ndarray_pointer_2d(array):
+    assert array.ndim == 2
+    assert array.flags.c_contiguous
+
+    ptr = (array.ctypes.data +
+           numpy.arange(array.shape[0])*array.strides[0]).astype(numpy.uintp)
+    ptr = ptr.ctypes.data_as(ctypes.c_void_p)
+    return ptr
+
 def to_gpu(method):
     '''Recursively converts all attributes of a method to cupy objects or
     gpu4pyscf objects.

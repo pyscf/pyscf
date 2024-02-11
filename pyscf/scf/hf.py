@@ -105,6 +105,7 @@ def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
     >>> print('conv = %s, E(HF) = %.12f' % (conv, e))
     conv = True, E(HF) = -1.081170784378
     '''
+    from pyscf.pbc.scf import hf as pbchf
     if 'init_dm' in kwargs:
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.11.
@@ -115,8 +116,17 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         logger.info(mf, 'Set gradient conv threshold to %g', conv_tol_grad)
 
     mol = mf.mol
+    s1e = mf.get_ovlp(mol)
+    # condition number check has been done in pbchf.get_ovlp
+    if not isinstance(mf, pbchf.SCF):
+        cond = lib.cond(s1e)
+        logger.debug(mf, 'cond(S) = %s', cond)
+        if numpy.max(cond)*1e-17 > conv_tol:
+            logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
+                        'SCF may be inaccurate and hard to converge.', numpy.max(cond))
+
     if dm0 is None:
-        dm = mf.get_init_guess(mol, mf.init_guess)
+        dm = mf.get_init_guess(mol, mf.init_guess, s1e=s1e)
     else:
         dm = dm0
 
@@ -127,13 +137,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     scf_conv = False
     mo_energy = mo_coeff = mo_occ = None
-
-    s1e = mf.get_ovlp(mol)
-    cond = lib.cond(s1e)
-    logger.debug(mf, 'cond(S) = %s', cond)
-    if numpy.max(cond)*1e-17 > conv_tol:
-        logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
-                    'SCF may be inaccurate and hard to converge.', numpy.max(cond))
 
     # Skip SCF iterations. Compute only the total energy of the initial density
     if mf.max_cycle <= 0:
@@ -722,14 +725,14 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     return dm
 
 
-def get_init_guess(mol, key='minao'):
+def get_init_guess(mol, key='minao', **kwargs):
     '''Generate density matrix for initial guess
 
     Kwargs:
         key : str
             One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
     '''
-    return RHF(mol).get_init_guess(mol, key)
+    return RHF(mol).get_init_guess(mol, key, **kwargs)
 
 
 # eigenvalue of d is 1
@@ -752,7 +755,7 @@ def level_shift(s, d, f, factor):
     Returns:
         New Fock matrix, 2D ndarray
     '''
-    dm_vir = s - reduce(numpy.dot, (s, d, s))
+    dm_vir = s - reduce(lib.dot, (s, d, s))
     return f + dm_vir * factor
 
 
@@ -1704,7 +1707,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return self.init_guess_by_chkfile(chkfile, project)
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
 
-    def get_init_guess(self, mol=None, key='minao'):
+    def get_init_guess(self, mol=None, key='minao', **kwargs):
         if not isinstance(key, str):
             return key
 
@@ -1742,7 +1745,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     energy_tot = energy_tot
 
     def energy_nuc(self):
-        return self.mol.energy_nuc()
+        return self.mol.enuc
 
     # A hook for overloading convergence criteria in SCF iterations. Assigning
     # a function
@@ -2103,8 +2106,8 @@ class RHF(SCF):
                         mol.nelectron)
         return SCF.check_sanity(self)
 
-    def get_init_guess(self, mol=None, key='minao'):
-        dm = SCF.get_init_guess(self, mol, key)
+    def get_init_guess(self, mol=None, key='minao', **kwargs):
+        dm = SCF.get_init_guess(self, mol, key, **kwargs)
         if self.verbose >= logger.DEBUG1:
             s = self.get_ovlp()
             nelec = numpy.einsum('ij,ji', dm, s).real
