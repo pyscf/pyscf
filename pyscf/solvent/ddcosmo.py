@@ -340,9 +340,7 @@ def regularize_xt(t, eta):
 
 def make_grids_one_sphere(lebedev_order):
     ngrid_1sph = gen_grid.LEBEDEV_ORDER[lebedev_order]
-    leb_grid = numpy.empty((ngrid_1sph,4))
-    gen_grid.libdft.MakeAngularGrid(leb_grid.ctypes.data_as(ctypes.c_void_p),
-                                    ctypes.c_int(ngrid_1sph))
+    leb_grid = gen_grid.MakeAngularGrid(ngrid_1sph)
     coords_1sph = leb_grid[:,:3]
     # Note the Lebedev angular grids are normalized to 1 in pyscf
     weights_1sph = 4*numpy.pi * leb_grid[:,3]
