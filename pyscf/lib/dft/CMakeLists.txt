@@ -13,7 +13,7 @@
 # limitations under the License.
 
 add_library(dft SHARED
-  CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c
+  grid_basis.c nr_numint.c r_numint.c
   numint_uniform_grid.c xc_deriv.c nr_numint_sparse.c
   )
 add_dependencies(dft cgto cvhf np_helper)
