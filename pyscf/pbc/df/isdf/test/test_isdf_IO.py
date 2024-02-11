@@ -41,9 +41,9 @@ MAX_CHUNKSIZE         = int(3e9//8)  # 2GB
 THREAD_BUF_PERCENTAGE = 0.15
 CHUNK_COL_LIMITED     = 8192
 CHUNK_ROW_LIMITED     = 1024
-CHUNK_MINIMAL         = 16000000 # 16MB
+CHUNK_MINIMAL         = 16000000  # 16MB
 
-def _determine_bunchsize(nao, naux, mesh, buf_size):
+def _determine_bunchsize(nao, naux, mesh, buf_size, saveAoR=False):
 
     mesh         = np.asarray(mesh, dtype=np.int32)
     mesh_complex = np.asarray([mesh[0], mesh[1], mesh[2]//2+1], dtype=np.int32)
@@ -53,7 +53,10 @@ def _determine_bunchsize(nao, naux, mesh, buf_size):
 
     #### 1. calculate the bunchsize for the construction of aux basis ####
 
-    blksize_aux = (buf_size - naux*naux) // (4 * nao + 2 * naux)   # suppose that the memory is enough
+    if saveAoR:
+        blksize_aux = (buf_size - naux*naux) // (4 * nao + 2 * naux)   # suppose that the memory is enough
+    else:
+        blksize_aux = (buf_size - naux*naux) // (2 * nao + 2 * naux)  # we still need one to hold AoR
     blksize_aux = min(blksize_aux, ngrids)
     blksize_aux = min(blksize_aux, MAX_CHUNKSIZE//naux)  # the maximal bunchsize in the construction of aux basis
     blksize_aux = (blksize_aux // nThread) * nThread
@@ -137,7 +140,7 @@ def _determine_bunchsize(nao, naux, mesh, buf_size):
         chunk_col = min(chunk_col, CHUNK_COL_LIMITED)
     if CHUNK_ROW_LIMITED is not None:
         chunk_row = min(chunk_row, CHUNK_ROW_LIMITED)
-    
+
     if chunk_row * chunk_col * 8 < CHUNK_MINIMAL:  # at least 16MB
         print("too small chunk, change the chunk row")
         chunk_row_new = CHUNK_MINIMAL // (chunk_col * 8)
@@ -153,7 +156,7 @@ def _determine_bunchsize(nao, naux, mesh, buf_size):
         blksize_W       = (blksize_W // chunk_col) * chunk_col
     if blksize_aux > chunk_col:
         blksize_aux     = (blksize_aux // chunk_col) * chunk_col
-        
+
 
     blksize_aux     = (blksize_aux // nThread) * nThread
 
@@ -166,6 +169,40 @@ def _determine_bunchsize(nao, naux, mesh, buf_size):
 
     return (chunk_row, chunk_col), bunch_size_IO, blksize_aux, bunchsize_readV, grid_bunchsize, blksize_W, use_large_chunk
 
+def _construct_aux_basis(mydf:isdf_fast.PBC_ISDF_Info):
+    
+    naux = mydf.naux
+    mydf._allocate_jk_buffer(datatype=np.double)
+    buffer1 = np.ndarray((mydf.naux , mydf.naux), dtype=np.double, buffer=mydf.jk_buffer, offset=0)
+    nao = mydf.nao
+    aoR = mydf.aoR
+
+    A = np.asarray(lib.ddot(mydf.aoRg.T, mydf.aoRg, c=buffer1), order='C')  # buffer 1 size = naux * naux
+    lib.square_inPlace(A)
+
+    mydf.aux_basis = np.asarray(lib.ddot(mydf.aoRg.T, aoR), order='C')   # buffer 2 size = naux * ngrids
+    lib.square_inPlace(mydf.aux_basis)
+
+    fn_cholesky = getattr(libpbc, "Cholesky", None)
+    assert(fn_cholesky is not None)
+
+    fn_build_aux = getattr(libpbc, "Solve_LLTEqualB_Parallel", None)
+    assert(fn_build_aux is not None)
+
+    fn_cholesky(
+        A.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(naux),
+    )
+    nThread = lib.num_threads()
+    nGrids  = aoR.shape[1]
+    Bunchsize = nGrids // nThread
+    fn_build_aux(
+        ctypes.c_int(naux),
+        A.ctypes.data_as(ctypes.c_void_p),
+        mydf.aux_basis.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nGrids),
+        ctypes.c_int(Bunchsize)
+    )
 
 def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray):
     '''
@@ -196,16 +233,18 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
 
     blksize = (IO_buf_memory - naux*naux*IO_buf.dtype.itemsize) // ((4 * nao + 2 * naux)
                * IO_buf.dtype.itemsize)  # suppose that the memory is enough
-    # chunks  = (IO_buf_memory // (8*2)//ngrids, ngrids)
+    chunks  = (IO_buf_memory // (8*2)//ngrids, ngrids)
     blksize = min(blksize, ngrids)
     blksize = min(blksize, MAX_CHUNKSIZE//naux)
     chunks = (naux, blksize)
 
-    assert(blksize > 0)
-    assert(chunks[0] > 0)
+    # assert(blksize > 0)
+    # assert(chunks[0] > 0)
 
     if hasattr(mydf, 'blksize_aux'):
         blksize = mydf.blksize_aux
+    # else:
+    #     raise ValueError("blksize_aux should be provided")
 
     print("IO_buf_memory = ", IO_buf_memory)
     print("blksize       = ", blksize)
@@ -231,12 +270,18 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
     if hasattr(mydf, 'chunk_size'):
         chunks1 = mydf.chunk_size
         chunks2 = (min(mydf.chunk_size[0], nao), mydf.chunk_size[1])
+    # else:
+    #     raise ValueError("chunk_size should be provided")
 
     print("chunks1        = ", chunks1)
     print("chunks2        = ", chunks2)
 
     h5d_aux_basis = f_aux_basis.create_dataset(AUX_BASIS_DATASET, (naux, ngrids), 'f8', chunks=chunks1)
-    h5d_aoR       = f_aux_basis.create_dataset(AOR_DATASET, (nao, ngrids), 'f8', chunks=chunks2)
+
+    if mydf.saveAoR:
+        h5d_aoR       = f_aux_basis.create_dataset(AOR_DATASET, (nao, ngrids), 'f8', chunks=chunks2)
+    else:
+        h5d_aoR       = None
 
     def save(col0, col1, buf:np.ndarray):
         dest_sel   = np.s_[:, col0:col1]
@@ -253,10 +298,15 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
     buf_calculate = np.ndarray((naux, blksize), dtype=IO_buf.dtype, buffer=IO_buf, offset=offset)
     offset       += naux*blksize*IO_buf.dtype.itemsize
     buf_write     = np.ndarray((naux, blksize), dtype=IO_buf.dtype, buffer=IO_buf, offset=offset)
+
     offset       += naux*blksize*IO_buf.dtype.itemsize
     offset_aoR1   = offset
-    offset       += nao*blksize*IO_buf.dtype.itemsize*2  # complex
-    offset_aoR2   = offset
+
+    if mydf.saveAoR:
+        offset       += nao*blksize*IO_buf.dtype.itemsize*2  # complex
+        offset_aoR2   = offset
+    else:
+        offset_aoR2 = None
 
     fn_build_aux = getattr(libpbc, "Solve_LLTEqualB_Parallel", None)
     assert(fn_build_aux is not None)
@@ -288,7 +338,11 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
                 # aoR = NumInts.eval_ao(mydf.cell, coords[p0:p1])[0].T * weight  # TODO: write to disk
 
                 AoR_Buf1 = np.ndarray((nao, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_aoR1)
-                AoR_Buf2 = np.ndarray((nao, p1-p0), dtype=np.float64, buffer=IO_buf, offset=offset_aoR2)
+
+                if mydf.saveAoR:
+                    AoR_Buf2 = np.ndarray((nao, p1-p0), dtype=np.float64, buffer=IO_buf, offset=offset_aoR2)
+                else:
+                    AoR_Buf2 = None
 
                 AoR_Buf1 = ISDF_eval_gto(mydf.cell, coords=coords[p0:p1], out=AoR_Buf1) * weight
                 aoR      = AoR_Buf1
@@ -311,11 +365,13 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
                 )
 
                 async_write(p0, p1, buf_calculate)
-                async_write_aoR(p0, p1, AoR_Buf1)
+
+                if mydf.saveAoR:
+                    async_write_aoR(p0, p1, AoR_Buf1)
+                    AoR_Buf1, AoR_Buf2       = AoR_Buf2, AoR_Buf1
+                    offset_aoR1, offset_aoR2 = offset_aoR2, offset_aoR1
 
                 buf_write, buf_calculate = buf_calculate, buf_write
-                AoR_Buf1, AoR_Buf2       = AoR_Buf2, AoR_Buf1
-                offset_aoR1, offset_aoR2 = offset_aoR2, offset_aoR1
 
     ### close ###
 
@@ -1019,7 +1075,7 @@ def _select_IP_direct2(mydf:isdf_fast.PBC_ISDF_Info, c:int, m:int, global_IP_sel
     ### global IP selection, we can use this step to avoid numerical issue ###
 
     if global_IP_selection:
-        
+
         print("global IP selection")
 
         bufsize = mydf.get_buffer_size_in_global_IP_selection(len(results), c, m)
@@ -1028,14 +1084,14 @@ def _select_IP_direct2(mydf:isdf_fast.PBC_ISDF_Info, c:int, m:int, global_IP_sel
             mydf.IO_buf = np.zeros((bufsize), dtype=np.float64)
             buf = mydf.IO_buf
             print("reallocate buf of size = ", bufsize)
-        
-        dtypesize = buf.dtype.itemsize  
+
+        dtypesize = buf.dtype.itemsize
 
         buf_tmp = np.ndarray((bufsize), dtype=np.float64, buffer=buf)
 
         offset = 0
         aoRg   = np.ndarray((nao, len(results)), dtype=np.complex128, buffer=buf_tmp)
-        aoRg   = ISDF_eval_gto(mydf.cell, coords=coords[results], out=aoRg) * weight    
+        aoRg   = ISDF_eval_gto(mydf.cell, coords=coords[results], out=aoRg) * weight
 
         offset += nao*len(results) * dtypesize
 
@@ -1553,8 +1609,11 @@ def get_jk_dm_IO(mydf, dm, hermi=1, kpt=np.zeros(3),
     #         # raise NotImplemented("ISDF does not support ewald")
     #         print("WARNING: ISDF does not support ewald")
 
-    vj, vk = _get_jk_dm_IO(mydf, dm)
-
+    if mydf.outcore:
+        vj, vk = _get_jk_dm_IO(mydf, dm)
+    else:
+        vj = isdf_jk._contract_j_dm(mydf, dm, mydf.with_robust_fitting)
+        vk = isdf_jk._contract_k_dm(mydf, dm, mydf.with_robust_fitting)
 
     t1 = log.timer('sr jk', *t1)
 
@@ -1576,12 +1635,12 @@ def get_jk_dm_IO(mydf, dm, hermi=1, kpt=np.zeros(3),
     return mydf._cached_j, mydf._cached_k
 
 class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
-    def __init__(self, mol:Cell, max_buf_memory:int):
+    def __init__(self, mol:Cell, max_buf_memory:int, outcore=True, with_robust_fitting=True, aoR=None):
 
         self.max_buf_memory = max_buf_memory
         self.IO_buf         = np.zeros((max_buf_memory//8), dtype=np.float64)
 
-        super().__init__(mol=mol)
+        super().__init__(mol=mol,aoR=aoR)
 
         self.IO_FILE        = None
 
@@ -1592,10 +1651,19 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
 
         print("self.mesh = ", self.mesh)
 
+        self.saveAoR = True
+        assert self.saveAoR  # we do not support saveAoR = False
+
+        self.outcore             = outcore
+        self.with_robust_fitting = with_robust_fitting
+
     def __del__(self):
 
         if self.IO_FILE is not None:
-            os.system("rm %s" % (self.IO_FILE))
+            try:
+                os.system("rm %s" % (self.IO_FILE))
+            except:
+                pass
 
     def set_bunchsize_ReadV(self, input:int):
         if self._cached_bunchsize_ReadV is None or self._cached_bunchsize_ReadV != input:
@@ -1628,7 +1696,7 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         assert (self._cached_IP_partition is not None)
         return self._cached_IP_partition
 
-    select_IP = _select_IP_direct2 # you can change it!
+    select_IP = _select_IP_direct2  # you can change it!
 
     def build_IP_Sandeep_IO(self, IO_File:str = None, c:int = 5, m:int = 5):
 
@@ -1649,6 +1717,11 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
 
         # construct aoR
 
+        if self.coords is None:
+            from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2, _eval_rhoG
+            df_tmp = MultiGridFFTDF2(self.cell)
+            self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
+
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         coords_IP = self.coords[self.IP_ID]
         weight    = np.sqrt(self.cell.vol / self.ngrids)
@@ -1662,12 +1735,17 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         print("naux = ", self.naux)
 
         self.chunk_size, self.nRow_IO_V, self.blksize_aux, self.bunchsize_readV, self.grid_bunchsize, self.blksize_W, self.use_large_chunk_W  = _determine_bunchsize(
-            self.nao, self.naux, self.mesh, self.IO_buf.size)
+            self.nao, self.naux, self.mesh, self.IO_buf.size, self.saveAoR)
 
         # construct aux basis
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _construct_aux_basis_IO(self, IO_File, self.IO_buf)
+        if self.outcore:
+            print("construct aux basis in outcore mode")
+            _construct_aux_basis_IO(self, IO_File, self.IO_buf)
+        else:
+            print("construct aux basis in incore mode")
+            _construct_aux_basis(self)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t1, t2, "construct aux basis")
 
@@ -1729,7 +1807,7 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         buf_size += ngrid_on_atm
 
         return max(buf_size, 2*self.nao*ngrid_on_atm)
-    
+
     def get_buffer_size_in_global_IP_selection(self, ngrids_possible, c, m=5):
 
         nao        = self.nao
@@ -1738,7 +1816,7 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
         naux_max2  = naux_max * naux_max
 
         nThread    = lib.num_threads()
-        
+
         buf_size   = self.nao*ngrids_now                      # aoR_atm
         buf_size  += naux_max2*ngrids_now                     # R
         buf_size  += naux_max*ngrids_now*2                    # aoR_atm1, aoR_atm2
@@ -1769,7 +1847,7 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
 
     get_jk = get_jk_dm_IO
 
-C = 8
+C = 10
 
 if __name__ == "__main__":
 
@@ -1830,9 +1908,9 @@ if __name__ == "__main__":
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
-    cell.ke_cutoff  = 256   # kinetic energy cutoff in a.u.
+    # cell.ke_cutoff  = 256   # kinetic energy cutoff in a.u.
     # cell.ke_cutoff = 128
-    # cell.ke_cutoff = 48
+    cell.ke_cutoff = 70
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
@@ -1902,6 +1980,7 @@ if __name__ == "__main__":
     pbc_isdf_info.aoR = aoR
     pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=C, global_IP_selection=False)
     # pbc_isdf_info.check_AOPairError()
+    pbc_isdf_info.saveAoR = True
 
     IO_buf_memory = int(10e7)  # 100M
     IO_buf = np.zeros((IO_buf_memory//8), dtype=np.float64)
@@ -2037,7 +2116,29 @@ if __name__ == "__main__":
 
     mf.kernel()
 
+    # mf = scf.RHF(cell)
+    # mf.max_cycle = 100
+    # mf.conv_tol = 1e-8
+    # mf.kernel()
+    
+    # a third way 
+
+    pbc_isdf_info_IO = PBC_ISDF_Info_IO(cell, max_buf_memory=IO_buf_memory, aoR=aoR, outcore=False)
+    pbc_isdf_info_IO.build_IP_Sandeep_IO(c=C)
+    pbc_isdf_info_IO.build_auxiliary_Coulomb(mesh=mesh)
+    
     mf = scf.RHF(cell)
+    pbc_isdf_info_IO.direct_scf = mf.direct_scf
+    mf.with_df   = pbc_isdf_info_IO
     mf.max_cycle = 100
-    mf.conv_tol = 1e-8
+    mf.conv_tol  = 1e-7
+    mf.kernel()
+    
+    pbc_isdf_info_IO.with_robust_fitting = False
+    
+    mf = scf.RHF(cell)
+    pbc_isdf_info_IO.direct_scf = mf.direct_scf
+    mf.with_df   = pbc_isdf_info_IO
+    mf.max_cycle = 100
+    mf.conv_tol  = 1e-7
     mf.kernel()

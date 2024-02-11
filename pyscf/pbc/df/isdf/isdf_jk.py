@@ -188,7 +188,7 @@ def get_jk_mo(mydf, occ_mo_coeff, hermi=1, kpt=np.zeros(3),
     return vj, vk
 
 # @profile
-def _contract_j_dm(mydf, dm):
+def _contract_j_dm(mydf, dm, with_robust_fitting=True):
     '''
 
     Args:
@@ -293,23 +293,6 @@ def _contract_j_dm(mydf, dm):
 
     density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')
 
-    # NOTE: it is not possible to explore sparsity of J as in most cases, the electron density is uniform in real space
-
-    # if mydf._check_sparsity:
-    #     small_comp = 0
-    #     norm       = 0
-    #     for i in range(density_R.size):
-    #         if abs(density_R[i]) < mydf._rho_on_grid_cutoff:
-    #             small_comp += 1
-    #             norm       += density_R[i] * density_R[i]
-    #     print("density_R small_comp = %10.2f %%" % (small_comp / density_R.size * 100.0))
-    #     print("density_R cut norm   = %10.2e" % np.sqrt(norm))
-
-    # if mydf._explore_sparsity:
-    #     for i in range(density_R.size):
-    #         if abs(density_R[i]) < mydf._rho_on_grid_cutoff:
-    #             density_R[i] = 0.0
-
     # assert density_R.__array_interface__['data'][0] == ptr2
 
     # need allocate memory, size = nao  * naux, (buffer 3)
@@ -378,7 +361,13 @@ def _contract_j_dm(mydf, dm):
     # do not need allocate memory, use buffer 6
 
     # J -= np.asarray(lib.dot(aoRg, tmp.T), order='C')
-    lib.ddot_withbuffer(aoRg, -tmp.T, c=J, beta=1, buf=mydf.ddot_buf)
+    
+    if with_robust_fitting:
+        print("with robust fitting")
+        lib.ddot_withbuffer(aoRg, -tmp.T, c=J, beta=1, buf=mydf.ddot_buf)
+    else:
+        print("without robust fitting")
+        lib.ddot_withbuffer(aoRg, tmp.T, c=J, beta=0, buf=mydf.ddot_buf)
 
     # assert J.__array_interface__['data'][0] == ptr6
 
@@ -388,7 +377,7 @@ def _contract_j_dm(mydf, dm):
     return J * ngrid / vol
 
 # @profile
-def _contract_k_dm(mydf, dm):
+def _contract_k_dm(mydf, dm, with_robust_fitting=True):
     '''
 
     Args:
@@ -534,7 +523,13 @@ def _contract_k_dm(mydf, dm):
     # assert tmp.__array_interface__['data'] == buffer6.__array_interface__['data']
 
     # K  -= np.asarray(lib.dot(aoRg, tmp, c=K, beta=1), order='C')     # do not need allocate memory, size = nao * nao, (buffer 4)
-    lib.ddot_withbuffer(aoRg, -tmp, c=K, beta=1, buf=mydf.ddot_buf)
+    
+    if with_robust_fitting:
+        print("with robust fitting")
+        lib.ddot_withbuffer(aoRg, -tmp, c=K, beta=1, buf=mydf.ddot_buf)
+    else:
+        print("without robust fitting")
+        lib.ddot_withbuffer(aoRg, tmp, c=K, beta=0, buf=mydf.ddot_buf)
 
     # assert K.__array_interface__['data'] == buffer4.__array_interface__['data']
 

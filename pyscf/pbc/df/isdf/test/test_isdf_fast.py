@@ -428,15 +428,25 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             buffersize_k = nao * ngrids + naux * ngrids + naux * naux + nao * nao
             buffersize_j = nao * ngrids + ngrids + nao * naux + naux + naux + nao * nao
 
-            self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
-            # self.jk_buffer[-1] = 0.0 # memory allocate, well, you cannot cheat python in this way
+            nThreadsOMP   = lib.num_threads()
+            size_ddot_buf = max((naux*naux)+2, ngrids) * nThreadsOMP
 
-            print("address of self.jk_buffer = ", id(self.jk_buffer))
-
-            nThreadsOMP = lib.num_threads()
-            print("nThreadsOMP = ", nThreadsOMP)
-            self.ddot_buf = np.zeros((nThreadsOMP,max((naux*naux)+2, ngrids)), dtype=datatype)
-            # self.ddot_buf[nThreadsOMP-1, (naux*naux)+1] = 0.0 # memory allocate, well, you cannot cheat python in this way
+            if hasattr(self, "IO_buf"):
+                
+                if self.IO_buf.size < (max(buffersize_k, buffersize_j) + size_ddot_buf):
+                    self.IO_buf = np.zeros((max(buffersize_k, buffersize_j) + size_ddot_buf,), dtype=datatype)
+                
+                self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype, buffer=self.IO_buf, offset=0)
+                offset         = max(buffersize_k, buffersize_j) * self.jk_buffer.dtype.itemsize
+                self.ddot_buf  = np.ndarray((nThreadsOMP, max((naux*naux)+2, ngrids)), dtype=datatype, buffer=self.IO_buf, offset=offset)
+                
+            else:
+                
+                self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
+                self.ddot_buf = np.zeros((nThreadsOMP, max((naux*naux)+2, ngrids)), dtype=datatype)
+                
+                # print("address of self.jk_buffer = ", id(self.jk_buffer))
+                # print("nThreadsOMP = ", nThreadsOMP)
 
         else:
             assert self.jk_buffer.dtype == datatype
@@ -559,6 +569,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             # a final global QRCP， which is not needed!
 
             if global_IP_selection:
+                
                 aoR_IP = aoR[:, possible_IP]
                 naux_tmp = int(np.sqrt(c*nao)) + m
                 if naux_tmp > nao:
@@ -672,7 +683,9 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.aoR  = aoR
 
     # @profile
-    def build_auxiliary_Coulomb(self, cell:Cell, mesh, debug=True):
+    def build_auxiliary_Coulomb(self, cell:Cell=None, mesh=None, debug=True):
+
+        self._allocate_jk_buffer(datatype=np.double)
 
         # build the ddot buffer
 
@@ -680,9 +693,9 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         ngrids = self.ngrids
         naux   = self.naux
 
-        @delayed
-        def construct_V(input:np.ndarray, ngrids, mesh, coul_G, axes=None):
-            return (np.fft.ifftn((np.fft.fftn(input, axes=axes).reshape(-1, ngrids) * coul_G[None,:]).reshape(*mesh), axes=axes).real).reshape(ngrids)
+        # @delayed
+        # def construct_V(input:np.ndarray, ngrids, mesh, coul_G, axes=None):
+        #     return (np.fft.ifftn((np.fft.fftn(input, axes=axes).reshape(-1, ngrids) * coul_G[None,:]).reshape(*mesh), axes=axes).real).reshape(ngrids)
 
         def constrcuct_V_CCode(aux_basis:np.ndarray, mesh, coul_G):
             coulG_real         = coul_G.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1)
@@ -722,6 +735,10 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         # naux   = self.naux
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+
+        if cell is None:
+            cell = self.cell
+            print("cell.__class__ = ", cell.__class__)
 
         coulG = tools.get_coulG(cell, mesh=mesh)
 
