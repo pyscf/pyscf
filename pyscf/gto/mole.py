@@ -25,9 +25,7 @@ import os
 import sys
 import types
 import re
-import platform
 import gc
-import time
 
 import json
 import ctypes
@@ -2695,7 +2693,6 @@ class MoleBase(lib.StreamObject):
 
     def dump_input(self):
         import __main__
-        import pyscf
         if hasattr(__main__, '__file__'):
             try:
                 filename = os.path.abspath(__main__.__file__)
@@ -2709,19 +2706,9 @@ class MoleBase(lib.StreamObject):
             except IOError:
                 logger.warn(self, 'input file does not exist')
 
-        self.stdout.write('System: %s  Threads %s\n' %
-                          (str(platform.uname()), lib.num_threads()))
-        self.stdout.write('Python %s\n' % sys.version)
-        self.stdout.write('numpy %s  scipy %s\n' %
-                          (numpy.__version__, scipy.__version__))
-        self.stdout.write('Date: %s\n' % time.ctime())
-        self.stdout.write('PySCF version %s\n' % pyscf.__version__)
-        info = lib.repo_info(os.path.join(__file__, '..', '..'))
-        self.stdout.write('PySCF path  %s\n' % info['path'])
-        if 'git' in info:
-            self.stdout.write(info['git'] + '\n')
+        self.stdout.write('\n'.join(lib.misc.format_sys_info()))
 
-        self.stdout.write('\n')
+        self.stdout.write('\n\n')
         for key in os.environ:
             if 'PYSCF' in key:
                 self.stdout.write('[ENV] %s %s\n' % (key, os.environ[key]))
