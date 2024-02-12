@@ -5040,7 +5040,7 @@ def MakeAngularGrid(points):
         return np.array((0., 0., 0., 1.))
 
     if points not in LEBEDEV_NGRID:
-        raise ValueError('Unsupported angular grids %d' % n_ang)
+        raise ValueError('Unsupported angular grids %d' % points)
 
     fn = globals()['MakeAngularGrid_' + str(points)]
     grids = fn()
