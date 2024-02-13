@@ -503,13 +503,3 @@ void PackAB(
         memcpy(out + i * nOutCol + nACol, B + i * nBCol, sizeof(double) * nBCol);
     }
 }
-
-void Solve_QRPinvEqualB_Parallel(
-    const int n,
-    const int rank, 
-    const double *Q, // (n, rank)
-    const double *R, // (rank, n)
-    const double *B, // (n, nrhs)
-    double *X,       // (rank, nrhs)
-    double
-)

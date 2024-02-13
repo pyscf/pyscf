@@ -30,9 +30,7 @@ from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 
-import sys
 import ctypes
-import _ctypes
 
 from multiprocessing import Pool
 

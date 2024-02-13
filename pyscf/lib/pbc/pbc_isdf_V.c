@@ -218,10 +218,12 @@ void _construct_V2(int *mesh,
                    double *V,
                    double *auxBasisFFT,
                    const int BunchSize,
-                   double *buf,         // use the ptr of the ptr to ensure that the memory for each thread is aligned
-                   const int buffersize // must be a multiple of 16 to ensure memory alignment
-)
+                   double *buf,          // use the ptr of the ptr to ensure that the memory for each thread is aligned
+                   const int buffersize, // must be a multiple of 16 to ensure memory alignment
+                   const int CONSTRUCT_V)
 {
+    // printf("CONSTRUCT_V: %d\n", CONSTRUCT_V);
+
     // print all the input info
 
     static const int SMALL_SIZE = 8;
@@ -273,28 +275,31 @@ void _construct_V2(int *mesh,
 
             memcpy(auxBasisFFT + (size_t)bunch_start * (size_t)n_complex * 2, buf_thread, (size_t)BunchSize * (size_t)n_complex * sizeof(double) * 2);
 
-            for (j = bunch_start; j < bunch_end; ++j)
+            if (CONSTRUCT_V > 0)
             {
-                for (k = 0; k < n_complex; ++k)
+                for (j = bunch_start; j < bunch_end; ++j)
                 {
-                    *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
-                    *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
+                    for (k = 0; k < n_complex; ++k)
+                    {
+                        *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
+                        *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
+                    }
                 }
-            }
 
-            // backward transform
+                // backward transform
 
-            fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + (size_t)bunch_start * (size_t)n_real);
+                fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + (size_t)bunch_start * (size_t)n_real);
 
-            // scale
+                // scale
 
-            ptr = V + (size_t)bunch_start * (size_t)n_real;
+                ptr = V + (size_t)bunch_start * (size_t)n_real;
 
-            for (j = bunch_start; j < bunch_end; ++j)
-            {
-                for (k = 0; k < n_real; ++k)
+                for (j = bunch_start; j < bunch_end; ++j)
                 {
-                    *ptr++ *= fac; /// TODO: use ISPC to accelerate
+                    for (k = 0; k < n_real; ++k)
+                    {
+                        *ptr++ *= fac; /// TODO: use ISPC to accelerate
+                    }
                 }
             }
         }
@@ -334,28 +339,31 @@ void _construct_V2(int *mesh,
 
             memcpy(auxBasisFFT + (size_t)bunch_start * (size_t)n_complex * 2, buf, (size_t)nLeft * (size_t)n_complex * sizeof(double) * 2);
 
-            for (int j = bunch_start; j < bunch_end; ++j)
+            if (CONSTRUCT_V > 0)
             {
-                for (int k = 0; k < n_complex; ++k)
+                for (int j = bunch_start; j < bunch_end; ++j)
                 {
-                    *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
-                    *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
+                    for (int k = 0; k < n_complex; ++k)
+                    {
+                        *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
+                        *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
+                    }
                 }
-            }
 
-            // backward transform
+                // backward transform
 
-            fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf, V + (size_t)bunch_start * (size_t)n_real);
+                fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf, V + (size_t)bunch_start * (size_t)n_real);
 
-            // scale
+                // scale
 
-            ptr = V + (size_t)bunch_start * (size_t)n_real;
+                ptr = V + (size_t)bunch_start * (size_t)n_real;
 
-            for (int j = bunch_start; j < bunch_end; ++j)
-            {
-                for (int k = 0; k < n_real; ++k)
+                for (int j = bunch_start; j < bunch_end; ++j)
                 {
-                    *ptr++ *= fac; /// TODO: use ISPC to accelerate
+                    for (int k = 0; k < n_real; ++k)
+                    {
+                        *ptr++ *= fac; /// TODO: use ISPC to accelerate
+                    }
                 }
             }
 
@@ -402,23 +410,26 @@ void _construct_V2(int *mesh,
 
                     memcpy(auxBasisFFT + j * (size_t)n_complex * 2, buf_thread, (size_t)n_complex * sizeof(double) * 2);
 
-                    for (k = 0; k < n_complex; ++k)
+                    if (CONSTRUCT_V > 0)
                     {
-                        *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
-                        *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
-                    }
+                        for (k = 0; k < n_complex; ++k)
+                        {
+                            *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
+                            *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
+                        }
 
-                    // backward transform
+                        // backward transform
 
-                    fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + j * (size_t)n_real);
+                        fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + j * (size_t)n_real);
 
-                    // scale
+                        // scale
 
-                    ptr = V + j * (size_t)n_real;
+                        ptr = V + j * (size_t)n_real;
 
-                    for (k = 0; k < n_real; ++k)
-                    {
-                        *ptr++ *= fac; /// TODO: use ISPC to accelerate
+                        for (k = 0; k < n_real; ++k)
+                        {
+                            *ptr++ *= fac; /// TODO: use ISPC to accelerate
+                        }
                     }
                 }
             }
