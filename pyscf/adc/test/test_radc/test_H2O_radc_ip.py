@@ -22,6 +22,7 @@ import math
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
+from pyscf import ao2mo
 
 def setUpModule():
     global mol, mf, myadc
@@ -53,8 +54,17 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
+        r2_int = mol.intor('int1e_r2')
+        dm1_gs = myadc.make_rdm1_ground()
+        dm1_gs_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm1_gs, mf.mo_coeff.conj())
+        r2_gs = np.einsum('pq,pq->',r2_int,dm1_gs_ao) 
+        self.assertAlmostEqual(r2_gs, 19.073700043115412, 6)
+
         myadcip = adc.radc_ip.RADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
+        dm1_ip = myadcip.make_rdm1_excited()
+        dm1_ip_ao = np.einsum('pi,ij,kqj->kpq', mf.mo_coeff, dm1_ip, mf.mo_coeff.conj())
+        r2_ip = np.einsum('pq,pq->',r2_int,dm1_ip_ao) 
 
         self.assertAlmostEqual(e[0], 0.4034634878946100, 6)
         self.assertAlmostEqual(e[1], 0.4908881395275673, 6)
@@ -63,6 +73,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.8162558898737797, 6)
         self.assertAlmostEqual(p[1], 1.8274312312239454, 6)
         self.assertAlmostEqual(p[2], 1.8582314560275948, 6)
+
+        self.assertAlmostEqual(r2_ip[0], 14.49574021, 6)
+        self.assertAlmostEqual(r2_ip[1], 14.42088654, 6)
+        self.assertAlmostEqual(r2_ip[2], 14.22291443, 6)
 
     def test_ip_adc2x(self):
         myadc.method = "adc(2)-x"

@@ -462,8 +462,6 @@ def matvec(adc, kshift, M_ij=None, eris=None):
     if M_ij is None:
         M_ij = adc.get_imds()
 
-    e,_ = np.linalg.eig(M_ij[kshift])
-    print(f'M_ij[kshift] = {e}')
     #Calculate sigma vector
     def sigma_(r):
         cput0 = (time.process_time(), time.time())
