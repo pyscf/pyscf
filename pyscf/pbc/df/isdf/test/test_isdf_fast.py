@@ -1106,6 +1106,8 @@ if __name__ == '__main__':
 
     print("mf.direct_scf = ", mf.direct_scf)
 
+    # without robust fit 
+
     mf.kernel()
 
     mf = scf.RHF(cell)

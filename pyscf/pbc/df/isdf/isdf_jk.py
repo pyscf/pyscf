@@ -215,7 +215,10 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True):
     W    = mydf.W
     aoRg = mydf.aoRg
     aoR  = mydf.aoR
-    V_R  = mydf.V_R
+    if hasattr(mydf, "V_R"):
+        V_R  = mydf.V_R
+    else:
+        V_R = None
     naux = aoRg.shape[1]
     IP_ID = mydf.IP_ID
 
@@ -226,6 +229,7 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True):
 
     # buffersize = nao * ngrid + ngrid + nao * naux + naux + naux + nao * nao
     # buffer = np.empty(buffersize, dtype=dm.dtype)
+    
     buffer = mydf.jk_buffer
     buffer1 = np.ndarray((nao,ngrid), dtype=dm.dtype, buffer=buffer, offset=0)
     buffer2 = np.ndarray((ngrid), dtype=dm.dtype, buffer=buffer, offset=nao * ngrid * dm.dtype.itemsize)
@@ -277,10 +281,7 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True):
     # print("dm.shape", dm.shape)
     # print("aoR.shape", aoR.shape)
 
-    if mydf._explore_sparsity and mydf.dm_compressed == True:
-        mydf._dm_aoR_spMM(buffer1)
-    else:
-        lib.ddot(dm, aoR, c=buffer1)  
+    lib.ddot(dm, aoR, c=buffer1)  
     # print("after calling ddot in _contract_j_dm")
     tmp1 = buffer1
     # print(buffer1.__array_interface__['data'][0])
@@ -311,37 +312,38 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True):
 
     # need allocate memory, size = naux, (buffer 5)
 
-    J = np.asarray(lib.ddot_withbuffer(V_R, density_R.reshape(-1,1), c=buffer5.reshape(-1,1), buf=mydf.ddot_buf), order='C').reshape(-1)   # with buffer, size 
-    # assert J.__array_interface__['data'][0] == ptr5
+    if with_robust_fitting:
+        J = np.asarray(lib.ddot_withbuffer(V_R, density_R.reshape(-1,1), c=buffer5.reshape(-1,1), buf=mydf.ddot_buf), order='C').reshape(-1)   # with buffer, size 
+        # assert J.__array_interface__['data'][0] == ptr5
 
-    # do not need allocate memory, use buffer 3
+        # do not need allocate memory, use buffer 3
 
-    # J = np.einsum('ij,j->ij', aoRg, J)
-    J = np.asarray(lib.d_ij_j_ij(aoRg, J, out=buffer3), order='C')
+        # J = np.einsum('ij,j->ij', aoRg, J)
+        J = np.asarray(lib.d_ij_j_ij(aoRg, J, out=buffer3), order='C')
 
-    # assert J.__array_interface__['data'][0] == ptr3
+        # assert J.__array_interface__['data'][0] == ptr3
 
-    # need allocate memory, size = nao  * nao, (buffer 6)
+        # need allocate memory, size = nao  * nao, (buffer 6)
 
-    J = np.asarray(lib.ddot_withbuffer(aoRg, J.T, c=buffer6, buf=mydf.ddot_buf), order='C')
-    # assert J.__array_interface__['data'][0] == ptr6
+        J = np.asarray(lib.ddot_withbuffer(aoRg, J.T, c=buffer6, buf=mydf.ddot_buf), order='C')
+        # assert J.__array_interface__['data'][0] == ptr6
 
-    # do not need allocate memory, use buffer 2
+        # do not need allocate memory, use buffer 2
 
-    J2 = np.asarray(lib.dot(V_R.T, density_Rg.reshape(-1,1), c=buffer2.reshape(-1,1)), order='C').reshape(-1)
-    # assert J2.__array_interface__['data'][0] == ptr2
+        J2 = np.asarray(lib.dot(V_R.T, density_Rg.reshape(-1,1), c=buffer2.reshape(-1,1)), order='C').reshape(-1)
+        # assert J2.__array_interface__['data'][0] == ptr2
 
-    # do not need allocate memory, use buffer 1
+        # do not need allocate memory, use buffer 1
 
-    # J2 = np.einsum('ij,j->ij', aoR, J2)
-    J2 = np.asarray(lib.d_ij_j_ij(aoR, J2, out=buffer1), order='C')
-    # assert J2.__array_interface__['data'][0] == ptr1
+        # J2 = np.einsum('ij,j->ij', aoR, J2)
+        J2 = np.asarray(lib.d_ij_j_ij(aoR, J2, out=buffer1), order='C')
+        # assert J2.__array_interface__['data'][0] == ptr1
 
-    # do not need allocate memory, use buffer 6
+        # do not need allocate memory, use buffer 6
 
-    # J += np.asarray(lib.dot(aoR, J2.T), order='C')
-    lib.ddot_withbuffer(aoR, J2.T, c=J, beta=1, buf=mydf.ddot_buf)
-    # assert J.__array_interface__['data'][0] == ptr6
+        # J += np.asarray(lib.dot(aoR, J2.T), order='C')
+        lib.ddot_withbuffer(aoR, J2.T, c=J, beta=1, buf=mydf.ddot_buf)
+        # assert J.__array_interface__['data'][0] == ptr6
 
     #### step 3. get J term3
 
@@ -363,10 +365,11 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True):
     # J -= np.asarray(lib.dot(aoRg, tmp.T), order='C')
     
     if with_robust_fitting:
-        print("with robust fitting")
+        # print("with robust fitting")
         lib.ddot_withbuffer(aoRg, -tmp.T, c=J, beta=1, buf=mydf.ddot_buf)
     else:
-        print("without robust fitting")
+        # print("without robust fitting")
+        J = buffer6
         lib.ddot_withbuffer(aoRg, tmp.T, c=J, beta=0, buf=mydf.ddot_buf)
 
     # assert J.__array_interface__['data'][0] == ptr6
@@ -408,7 +411,10 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True):
     W    = mydf.W
     aoRg = mydf.aoRg
     aoR  = mydf.aoR
-    V_R  = mydf.V_R
+    if hasattr(mydf, "V_R"):
+        V_R = mydf.V_R
+    else:
+        V_R = None
     naux = aoRg.shape[1]
     IP_ID = mydf.IP_ID
 
@@ -432,11 +438,7 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True):
 
     # need allocate memory, size = nao  * ngrid, this buffer does not need anymore  (buffer 1)
 
-    if mydf._explore_sparsity and mydf.dm_compressed == True:
-        mydf._dm_aoR_spMM(buffer1)
-        density_RgR  = buffer1
-    else:
-        density_RgR  = np.asarray(lib.dot(dm, aoR, c=buffer1), order='C')
+    density_RgR  = np.asarray(lib.dot(dm, aoR, c=buffer1), order='C')
     
     # print("buffer1.size", buffer1.size)
     # assert density_RgR.__array_interface__['data'][0] == ptr1
@@ -466,41 +468,23 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True):
     # tmp = np.asarray(lib.cwise_mul(V_R, density_RgR, out=buffer2), order='C')
 
     # lib.cwise_mul(V_R, density_RgR, out=buffer2)
-    
-    if mydf._explore_sparsity:
-        use_sparsity = mydf.V_DM_cwise_mul(density_RgR, buffer2)
-    else:
-        use_sparsity = 0
+
+    if with_robust_fitting:
         lib.cwise_mul(V_R, density_RgR, out=buffer2)
-    tmp = buffer2
+        tmp = buffer2
 
-    # if mydf._check_sparsity:
-    #     small_comp = 0
-    #     norm       = 0
-    #     for i in range(tmp.shape[0]):
-    #         for j in range(tmp.shape[1]):
-    #             if abs(tmp[i,j]) < mydf._rho_on_grid_cutoff:
-    #                 small_comp += 1
-    #                 norm       += tmp[i,j] * tmp[i,j]
-    #     print("tmp small_comp = %10.2f %%" % (small_comp / tmp.size * 100.0))
-    #     print("tmp cut norm   = %10.2e" % np.sqrt(norm))
+        # assert tmp.__array_interface__['data'] == buffer2.__array_interface__['data']
 
-    # assert tmp.__array_interface__['data'] == buffer2.__array_interface__['data']
-
-    # do not need allocate memory, size = naux * nao,   (buffer 1, but viewed as buffer5)
+        # do not need allocate memory, size = naux * nao,   (buffer 1, but viewed as buffer5)
     
-    if use_sparsity == 1:
-        mydf.V_DM_product_spMM(tmp, buffer5)
-        K = buffer5
-    else:
         K = np.asarray(lib.ddot_withbuffer(tmp, aoR.T, c=buffer5, buf=mydf.ddot_buf), order='C')
 
-    # assert K.__array_interface__['data'] == buffer5.__array_interface__['data']
+        # assert K.__array_interface__['data'] == buffer5.__array_interface__['data']
 
-    ### the order due to the fact that naux << ngrid  # need allocate memory, size = nao * nao,           (buffer 4)
+        ### the order due to the fact that naux << ngrid  # need allocate memory, size = nao * nao,           (buffer 4)
 
-    K  = np.asarray(lib.ddot_withbuffer(aoRg, K, c=buffer4, buf=mydf.ddot_buf), order='C')
-    K += K.T
+        K  = np.asarray(lib.ddot_withbuffer(aoRg, K, c=buffer4, buf=mydf.ddot_buf), order='C')
+        K += K.T
 
     # assert K.__array_interface__['data'] == buffer4.__array_interface__['data']
 
@@ -511,6 +495,7 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True):
     # tmp = W * density_RgRg
 
     # print("D5 = ", density_RgRg[0])
+    
     lib.cwise_mul(W, density_RgRg, out=density_RgRg)
     tmp = density_RgRg
 
@@ -525,10 +510,11 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True):
     # K  -= np.asarray(lib.dot(aoRg, tmp, c=K, beta=1), order='C')     # do not need allocate memory, size = nao * nao, (buffer 4)
     
     if with_robust_fitting:
-        print("with robust fitting")
+        # print("with robust fitting")
         lib.ddot_withbuffer(aoRg, -tmp, c=K, beta=1, buf=mydf.ddot_buf)
     else:
-        print("without robust fitting")
+        # print("without robust fitting")
+        K = buffer4
         lib.ddot_withbuffer(aoRg, tmp, c=K, beta=0, buf=mydf.ddot_buf)
 
     # assert K.__array_interface__['data'] == buffer4.__array_interface__['data']
@@ -545,42 +531,6 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
     if len(dm.shape) == 3:
         assert dm.shape[0] == 1
         dm = dm[0]
-
-    #### explore the linearity of J K with respect to dm #### 
-
-    if mydf.direct_scf == False:
-        if mydf._cached_dm is None:
-            mydf._cached_dm = dm
-            mydf._cached_j = None
-            mydf._cached_k = None
-        else:
-            if mydf._cached_j is None and with_j == True or \
-               mydf._cached_k is None and with_k == True:
-                # recalculate the J or K
-                mydf._cached_j = None
-                mydf._cached_k = None
-            else:
-                assert(mydf._cached_dm.shape == dm.shape)
-                dm = dm - mydf._cached_dm
-                mydf._cached_dm += dm
-
-    if mydf._explore_sparsity:
-
-        nNonZero = mydf.process_dm(dm)
-
-        print("dm nNonZero   = %10.2f %%" % (nNonZero / dm.size * 100.0))
-
-        # if small_comp == dm.size:
-        if nNonZero == 0:
-            # nothing to do
-            assert mydf._cached_j is not None
-            assert mydf._cached_k is not None
-            return mydf._cached_j, mydf._cached_k
-
-        if nNonZero < dm.size * 0.1:
-            mydf.compress_dm(dm)
-        else:
-            mydf.dm_compressed = False
 
     #### perform the calculation ####
 
@@ -612,41 +562,12 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
     log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
 
     if with_j:
-        vj = _contract_j_dm(mydf, dm)
+        vj = _contract_j_dm(mydf, dm, mydf.with_robust_fitting)
     if with_k:
-        vk = _contract_k_dm(mydf, dm)
+        vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting)
         if exxdiv == 'ewald':
-            # raise NotImplemented("ISDF does not support ewald")
             print("WARNING: ISDF does not support ewald")
-
 
     t1 = log.timer('sr jk', *t1)
 
-    #### explore the linearity of J K with respect to dm #### 
-
-    if mydf.direct_scf == False:
-        if with_j and mydf._cached_j is None:
-            mydf._cached_j = vj
-        elif with_j:
-            mydf._cached_j += vj
-    
-        if with_k and mydf._cached_k is None:
-            mydf._cached_k = vk
-        elif with_k:
-            mydf._cached_k += vk
-
-    # return vj, vk
-
-    return mydf._cached_j, mydf._cached_k
-
-
-### TODO use sparse matrix to store the data
-
-def _contract_j_mo_sparse():
-    pass
-
-def _contract_k_mo_sparse():
-    pass
-
-def get_jk_mo_sparse():
-    pass
+    return vj, vk
