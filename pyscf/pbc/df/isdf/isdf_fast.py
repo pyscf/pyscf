@@ -41,7 +41,7 @@ libpbc = lib.load_library('libpbc')
 BASIS_CUTOFF               = 1e-18  # too small may lead to numerical instability
 CRITERION_CALL_PARALLEL_QR = 256
 
-from isdf_eval_gto import ISDF_eval_gto
+from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
 # python version colpilot_qr() function
 

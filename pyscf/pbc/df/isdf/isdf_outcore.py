@@ -1232,7 +1232,7 @@ def get_jk_dm_outcore(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     return vj, vk
 
-class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
+class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
     def __init__(self, mol:Cell, max_buf_memory:int, outcore=True, with_robust_fitting=True, aoR=None):
 
         self.max_buf_memory = max_buf_memory
@@ -1394,9 +1394,9 @@ class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
 
     get_jk = get_jk_dm_outcore
 
-C = 25
+C = 20
 
-from isdf_fast import PBC_ISDF_Info
+from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 
 if __name__ == '__main__':
 
@@ -1421,14 +1421,14 @@ if __name__ == '__main__':
     cell.verbose = 4
 
     # cell.ke_cutoff  = 256   # kinetic energy cutoff in a.u.
-    cell.ke_cutoff = 128
+    cell.ke_cutoff = 70
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
 
     cell.build()
 
-    cell = tools.super_cell(cell, [1, 1, 1])
+    cell = tools.super_cell(cell, [1, 1, 2])
 
     from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
 
@@ -1480,7 +1480,7 @@ if __name__ == '__main__':
 
     max_memory = 1000*1000*1000 # 10M
         
-    pbc_isdf_info1 = PBC_ISDF_Info_IO(cell, max_buf_memory=max_memory, outcore=False, with_robust_fitting=False, aoR=aoR)
+    pbc_isdf_info1 = PBC_ISDF_Info_outcore(cell, max_buf_memory=max_memory, outcore=False, with_robust_fitting=False, aoR=aoR)
     pbc_isdf_info1.build_IP_Sandeep_outcore(c=C)
     pbc_isdf_info1.build_auxiliary_Coulomb(mesh=mesh)
     
@@ -1489,7 +1489,7 @@ if __name__ == '__main__':
     
     IP_ID = pbc_isdf_info1.IP_ID
     
-    pbc_isdf_info = PBC_ISDF_Info_IO(cell, max_buf_memory=max_memory, outcore=True, with_robust_fitting=False)
+    pbc_isdf_info = PBC_ISDF_Info_outcore(cell, max_buf_memory=max_memory, outcore=True, with_robust_fitting=False)
     pbc_isdf_info.build_IP_Sandeep_outcore(c=C, IP_ID=IP_ID)
     pbc_isdf_info.build_auxiliary_Coulomb_outcore(mesh=mesh)
     # print(pbc_isdf_info.W[:10,:10])
