@@ -80,7 +80,7 @@ class KnownValues(unittest.TestCase):
         assert abs(g-g0).max() < 2e-5
         assert abs(g1-g0).max() < 2e-5
 
-    def test_orth_rks_gga(self):
+    def test_orth_gga(self):
         xc = 'pbe, pbe'
         e0, g0 = _fftdf_energy_grad(cell, xc)
         e,  g  = _multigrid2_energy_grad(cell, xc, 0)

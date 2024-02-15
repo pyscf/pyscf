@@ -52,7 +52,7 @@ double pgf_rcut(int l, double alpha, double coeff, double precision, double r0)
         }
     }
     if (i == RCUT_MAX_CYCLE) {
-        printf("r0 = %.6e, l = %d, alpha = %.6e, coeff = %.6e, precision=%.6e\n", r0, l, alpha, coeff, precision);
+        //printf("r0 = %.6e, l = %d, alpha = %.6e, coeff = %.6e, precision=%.6e\n", r0, l, alpha, coeff, precision);
         fprintf(stderr, "pgf_rcut did not converge in %d cycles: %.6f > %.6f.\n",
                 RCUT_MAX_CYCLE, fabs(rcut - rcut_last), eps);
     }
