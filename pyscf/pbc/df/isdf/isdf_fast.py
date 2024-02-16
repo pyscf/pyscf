@@ -524,7 +524,24 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         return max(buf_size, 2*self.nao*ngrid_on_atm)
 
+    def get_buffer_size_in_global_IP_selection(self, ngrids_possible, c, m=5):
 
+        nao        = self.nao
+        naux_max   = int(np.sqrt(c*nao)) + m
+        ngrids_now = ngrids_possible
+        naux_max2  = naux_max * naux_max
+
+        nThread    = lib.num_threads()
+
+        buf_size   = self.nao*ngrids_now                      # aoR_atm
+        buf_size  += naux_max2*ngrids_now                     # R
+        buf_size  += naux_max*ngrids_now*2                    # aoR_atm1, aoR_atm2
+        buf_size  += naux_max*naux_max*ngrids_now             # aoPairBuffer
+        buf_size  += (nThread+1)*(ngrids_now+1)
+        buf_size  += ngrids_now
+
+        return max(buf_size, 2*self.nao*ngrids_now)
+    
     # @profile
 
 
