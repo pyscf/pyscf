@@ -14,7 +14,7 @@
 
 add_library(pbc SHARED ft_ao.c fill_ints.c fill_ints_sr.c optimizer.c grid_ao.c
   nr_direct.c symmetry.c inner_dot.c cint2e.c cint3c2e.c
-  neighbor_list.c cell.c pp.c hf_grad.c sccs.c tools.c fill_ints_screened.c pbc_isdf_determine_IP.cpp pbc_isdf_samplek.cpp pbc_isdf_V.c pbc_isdf_auxbasis.c pbc_isdf_sparse.c)
+  neighbor_list.c cell.c pp.c hf_grad.c sccs.c tools.c fill_ints_screened.c pbc_isdf_samplek.cpp pbc_isdf_V.c pbc_isdf_auxbasis.c pbc_isdf_sparse.c)
 add_dependencies(pbc cgto cvhf np_helper)
 
 set_target_properties(pbc PROPERTIES
