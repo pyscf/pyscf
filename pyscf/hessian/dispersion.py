@@ -22,7 +22,8 @@ Hessian of dispersion correction for HF and DFT
 
 
 import numpy
-from pyscf.scf.hf import KohnShamDFT, dftd3_xc_map
+from pyscf.scf.hf import KohnShamDFT,
+from pyscf.scf.dispersion import dftd3_xc_map
 
 def get_dispersion(hessobj, disp_version=None):
     if disp_version is None:
