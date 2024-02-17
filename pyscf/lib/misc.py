@@ -22,6 +22,8 @@ Some helper functions
 
 import os
 import sys
+import time
+import platform
 import warnings
 import tempfile
 import functools
@@ -30,6 +32,7 @@ import inspect
 import collections
 import ctypes
 import numpy
+import scipy
 import h5py
 from threading import Thread
 from multiprocessing import Queue, Process
@@ -348,6 +351,8 @@ if sys.version_info > (3, 8):
 else:
     import math
     def comb(n, k):
+        if k < 0 or k > n:
+            return 0
         return math.factorial(n) // math.factorial(n-k) // math.factorial(k)
 
 def map_with_prefetch(func, *iterables):
@@ -836,6 +841,10 @@ def invalid_method(name):
     fn.__name__ = name
     return fn
 
+@functools.lru_cache(None)
+def _define_class(name, bases):
+    return type(name, bases, {})
+
 def make_class(bases, name=None, attrs=None):
     '''
     Construct a class
@@ -845,10 +854,13 @@ def make_class(bases, name=None, attrs=None):
     '''
     if name is None:
         name = ''.join(getattr(x, '__name_mixin__', x.__name__) for x in bases)
-    if attrs is None:
-        attrs = {}
-    attrs = {**attrs, '__name_mixin__': name}
-    return type(name, bases, attrs)
+
+    cls = _define_class(name, bases)
+    cls.__name_mixin__ = name
+    if attrs is not None:
+        for key, val in attrs.items():
+            setattr(cls, key, val)
+    return cls
 
 def set_class(obj, bases, name=None, attrs=None):
     '''Change the class of an object'''
@@ -1106,8 +1118,7 @@ class H5TmpFile(h5py.File):
     Kwargs:
         filename : str or None
             If a string is given, an HDF5 file of the given filename will be
-            created. The temporary file will exist even if the H5TmpFile
-            object is released.  If nothing is specified, the HDF5 temporary
+            created. If filename is not specified, the HDF5 temporary
             file will be deleted when the H5TmpFile object is released.
 
     The return object is an h5py.File object. The file will be automatically
@@ -1121,11 +1132,11 @@ class H5TmpFile(h5py.File):
     '''
     def __init__(self, filename=None, mode='a', *args, **kwargs):
         if filename is None:
-            tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
-            filename = tmpfile.name
-        h5py.File.__init__(self, filename, mode, *args, **kwargs)
-#FIXME: Does GC flush/close the HDF5 file when releasing the resource?
-# To make HDF5 file reusable, file has to be closed or flushed
+            with tempfile.NamedTemporaryFile(dir=param.TMPDIR) as tmpf:
+                h5py.File.__init__(self, tmpf.name, mode, *args, **kwargs)
+        else:
+            h5py.File.__init__(self, filename, mode, *args, **kwargs)
+
     def __del__(self):
         try:
             self.close()
@@ -1295,6 +1306,22 @@ def git_info(repo_path):
         pass
     return orig_head, head, branch
 
+def format_sys_info():
+    '''Format a list of system information for printing.'''
+    import pyscf
+    info = repo_info(os.path.join(__file__, '..', '..'))
+    result = [
+        f'System: {platform.uname()}  Threads {num_threads()}',
+        f'Python {sys.version}',
+        f'numpy {numpy.__version__}  scipy {scipy.__version__}',
+        f'Date: {time.ctime()}',
+        f'PySCF version {pyscf.__version__}',
+        f'PySCF path  {info["path"]}',
+    ]
+    if 'git' in info:
+        result.append(info['git'])
+    return result
+
 
 def isinteger(obj):
     '''
@@ -1338,7 +1365,10 @@ def to_gpu(method):
     gpu4pyscf objects.
     '''
     import cupy
+    from pyscf import gto
     for key, val in method.__dict__.items():
+        if isinstance(val, gto.MoleBase):
+            continue
         if isinstance(val, numpy.ndarray):
             setattr(method, key, cupy.asarray(val))
         elif hasattr(val, 'to_gpu'):

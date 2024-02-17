@@ -1104,6 +1104,14 @@ class StateAverageMCSCF(StateAverageMCSCFSolver):
 
     Gradients = nuc_grad_method
 
+    def nac_method(self):
+        if callable(getattr(self, '_state_average_nac_method', None)):
+            return self._state_average_nac_method()
+        else:
+            raise NotImplementedError("NAC method")
+
+    NACs = nac_method
+
 def state_average_(casscf, weights=(0.5,0.5), wfnsym=None):
     ''' Inplace version of state_average '''
     sacasscf = state_average (casscf, weights, wfnsym)

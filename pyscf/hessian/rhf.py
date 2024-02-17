@@ -296,7 +296,8 @@ def _get_jk(mol, intor, comp, aosym, script_dms,
     return vs
 
 def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
-              fx=None, atmlst=None, max_memory=4000, verbose=None):
+              fx=None, atmlst=None, max_memory=4000, verbose=None,
+              max_cycle=50, level_shift=0):
     '''Solve the first order equation
 
     Kwargs:
@@ -343,7 +344,8 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
 
         h1vo = numpy.vstack(h1vo)
         s1vo = numpy.vstack(s1vo)
-        mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo)
+        mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo,
+                             max_cycle=max_cycle, level_shift=level_shift)
         mo1 = numpy.einsum('pq,xqi->xpi', mo_coeff, mo1).reshape(-1,3,nao,nocc)
         e1 = e1.reshape(-1,3,nocc,nocc)
 
@@ -470,8 +472,15 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
 class HessianBase(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock hessian'''
 
+    # Max. number of iterations for Krylov solver
+    max_cycle = 50
+    # Shift virtual orbitals to slightly improve the convergence speed of Krylov solver
+    # A small level_shift ~ 0.1 is often helpful to decrease 2 - 3 iterations
+    # while the error of cphf solver may be increased by one magnitude.
+    level_shift = 0
+
     _keys = {
-        'mol', 'base', 'chkfile', 'atmlst', 'de',
+        'mol', 'base', 'chkfile', 'atmlst', 'de', 'max_cycle', 'level_shift'
     }
 
     def __init__(self, scf_method):
@@ -481,7 +490,6 @@ class HessianBase(lib.StreamObject):
         self.base = scf_method
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
-
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
 
@@ -566,7 +574,8 @@ class HessianBase(lib.StreamObject):
     def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
         return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
-                         fx, atmlst, max_memory, verbose)
+                         fx, atmlst, max_memory, verbose,
+                         max_cycle=self.max_cycle, level_shift=self.level_shift)
 
     def hess_nuc(self, mol=None, atmlst=None):
         if mol is None: mol = self.mol

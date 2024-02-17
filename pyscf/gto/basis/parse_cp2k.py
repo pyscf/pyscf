@@ -23,13 +23,14 @@ parse CP2K format
 import re
 from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf.gto.basis import parse_nwchem
+from pyscf.gto.basis.parse_nwchem import _search_basis_block
 from pyscf import __config__
 
 DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 
 MAXL = 8
 
-def parse(string, optimize=False):
+def parse(string, symb=None, optimize=False):
     '''Parse the basis text which is in CP2K format, return an internal
     basis format which can be assigned to :attr:`Mole.basis`
     Lines started with # are ignored.
@@ -50,6 +51,12 @@ def parse(string, optimize=False):
     ... #
     ... """)}
     '''
+    if symb is not None:
+        raw_data = list(filter(None, re.split(BASIS_SET_DELIMITER, string)))
+        string = _search_basis_block(raw_data, symb)
+        if not string:
+            raise BasisNotFoundError(f'Basis not found for {symb}')
+
     bastxt = []
     for dat in string.splitlines():
         x = dat.split('#')[0].strip()
@@ -115,10 +122,8 @@ BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 def search_seg(basisfile, symb):
     with open(basisfile, 'r') as fin:
         fdata = re.split(BASIS_SET_DELIMITER, fin.read())
-    for dat in fdata[1:]:
-        dat0 = dat.split(None, 1)
-        if dat0 and dat0[0] == symb:
-            # remove blank lines
-            return [x.strip() for x in dat.splitlines()
-                    if x.strip() and 'END' not in x]
-    raise BasisNotFoundError(f'Basis for {symb} not found in {basisfile}')
+    raw_basis = _search_basis_block(fdata[1:], symb)
+    if not raw_basis:
+        raise BasisNotFoundError(f'Basis for {symb} not found in {basisfile}')
+    return [x.strip() for x in raw_basis.splitlines()
+            if x.strip() and 'END' not in x]

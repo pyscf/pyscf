@@ -84,6 +84,10 @@ class KnownValues(unittest.TestCase):
 
     def test_dumps_loads(self):
         cl1.loads(cl1.dumps())
+        # see issue 2026
+        from pyscf.pbc.tools.pbc import super_cell
+        sc = super_cell(cl1, [1,1,1])
+        sc.dumps()
 
     def test_get_lattice_Ls(self):
         #self.assertEqual(cl1.get_lattice_Ls([0,0,0]).shape, (1  , 3))

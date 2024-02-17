@@ -257,6 +257,13 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
+def _validate_degen_mapping(mapping, norb):
+    '''Check if 2D irreps are properly paired'''
+    mapping = np.asarray(mapping)
+    return (mapping.max() < norb and
+            # Must be self-conjugated
+            numpy.array_equal(mapping[mapping], numpy.arange(norb)))
+
 def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     neleca, nelecb = _unpack_nelec(nelec)
     strsa = strsb = cistring.gen_strings4orblist(range(norb), neleca)
@@ -751,6 +758,11 @@ class FCISolver(direct_spin1.FCISolver):
                 orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
             if davidson_only is None:
                 davidson_only = True
+            if not _validate_degen_mapping(orbsym.degen_mapping, norb):
+                raise lib.exceptions.PointGroupSymmetryError(
+                    'Incomplete 2D-irrep orbitals for cylindrical symmetry.\n'
+                    f'orbsym = {orbsym}. '
+                    f'Retry {self.__class__} with D2h subgroup symmetry.')
 
         wfnsym_ir = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
         self.sym_allowed_idx = sym_allowed_indices(nelec, orbsym, wfnsym_ir)

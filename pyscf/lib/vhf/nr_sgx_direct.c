@@ -351,6 +351,11 @@ void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*ngrids);
+        if (opt->dm_cond == NULL) {
+                fprintf(stderr, "malloc(%zu) falied in SGXsetnr_direct_scf_dm\n",
+                        sizeof(double) * nbas*ngrids);
+                exit(1);
+        }
         // nbas in the input arguments may different to opt->nbas.
         // Use opt->nbas because it is used in the prescreen function
         memset(opt->dm_cond, 0, sizeof(double)*nbas*ngrids);

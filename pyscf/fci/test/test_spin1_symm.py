@@ -15,7 +15,7 @@
 
 import unittest
 import numpy
-from pyscf import gto
+from pyscf import gto, lib
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
@@ -196,6 +196,17 @@ Li    P
         self.assertAlmostEqual(abs(ci1.ravel().dot(ci_x.ravel())), 1, 9)
         ci1 = fci.addons.transform_ci(ci_y, (3,3), u.T)
         self.assertAlmostEqual(abs(ci1.ravel().dot(ci_y.ravel())), 1, 9)
+
+    def test_incomplete_orbsym(self):
+        mol = gto.Mole()
+        mol.groupname = 'Dooh'
+        sol = direct_spin1_symm.FCI(mol)
+        no, ne = 2, 2
+        h1 = numpy.ones((no,no))
+        h2 = numpy.ones((no,no,no,no))
+        orbsym = lib.tag_array(numpy.array([0,3]), degen_mapping=[0,2])
+        with self.assertRaises(lib.exceptions.PointGroupSymmetryError):
+            sol.kernel(h1, h2, no, ne, orbsym=orbsym)
 
 if __name__ == "__main__":
     print("Full Tests for spin1-symm")

@@ -257,7 +257,8 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
         return chkfile
 
 def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
-              fx=None, atmlst=None, max_memory=4000, verbose=None):
+              fx=None, atmlst=None, max_memory=4000, verbose=None,
+              max_cycle=50, level_shift=0):
     mol = mf.mol
     if atmlst is None: atmlst = range(mol.natm)
 
@@ -306,7 +307,8 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
 
         h1vo = (numpy.vstack(h1voa), numpy.vstack(h1vob))
         s1vo = (numpy.vstack(s1voa), numpy.vstack(s1vob))
-        mo1, e1 = ucphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo)
+        mo1, e1 = ucphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo,
+                              max_cycle=max_cycle, level_shift=level_shift)
         mo1a = numpy.einsum('pq,xqi->xpi', mo_coeff[0], mo1[0]).reshape(-1,3,nao,nocca)
         mo1b = numpy.einsum('pq,xqi->xpi', mo_coeff[1], mo1[1]).reshape(-1,3,nao,noccb)
         e1a = e1[0].reshape(-1,3,nocca,nocca)
@@ -449,7 +451,8 @@ class Hessian(rhf_hess.HessianBase):
     def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
         return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
-                         fx, atmlst, max_memory, verbose)
+                         fx, atmlst, max_memory, verbose,
+                         max_cycle=self.max_cycle, level_shift=self.level_shift)
 
     def to_gpu(self):
         raise NotImplementedError

@@ -25,9 +25,7 @@ import os
 import sys
 import types
 import re
-import platform
 import gc
-import time
 
 import json
 import ctypes
@@ -419,7 +417,7 @@ def format_atom(atoms, origin=0, axes=None,
     return list(zip(z, c.tolist()))
 
 #TODO: sort exponents
-def format_basis(basis_tab):
+def format_basis(basis_tab, sort_basis=True):
     '''Convert the input :attr:`Mole.basis` to the internal data format.
 
     ``{ atom: [(l, ((-exp, c_1, c_2, ..),
@@ -457,10 +455,16 @@ def format_basis(basis_tab):
     fmt_basis = {}
     for atom, atom_basis in basis_tab.items():
         symb = _atom_symbol(atom)
-        fmt_basis[symb] = basis_converter(symb, atom_basis)
-
-        if len(fmt_basis[symb]) == 0:
+        _basis = basis_converter(symb, atom_basis)
+        if len(_basis) == 0:
             raise BasisNotFoundError('Basis not found for  %s' % symb)
+
+        # Sort basis accroding to angular momentum. This is important for method
+        # decontract_basis, which assumes that basis functions with the same
+        # angular momentum are grouped together. Related to issue #1620 #1770
+        if sort_basis:
+            _basis = sorted([b for b in _basis if b], key=lambda b: b[0])
+        fmt_basis[symb] = _basis
     return fmt_basis
 
 def _generate_basis_converter():
@@ -503,11 +507,6 @@ def _generate_basis_converter():
                     _basis.extend(nparray_to_list(rawb))
         else:
             _basis = nparray_to_list(raw_basis)
-
-        # Sort basis accroding to angular momentum. This is important for method
-        # decontract_basis, which assumes that basis functions with the same
-        # angular momentum are grouped together. Related to issue #1620 #1770
-        _basis = sorted([b for b in _basis if b], key=lambda b: b[0])
         return _basis
     return converter
 
@@ -654,6 +653,8 @@ def decontract_basis(mol, atoms=None, to_cart=False):
             bas_idx = ib0 + numpy.where(mol._bas[ib0:ib1,ANG_OF] == l)[0]
             if len(bas_idx) == 0:
                 continue
+            if bas_idx[0] + len(bas_idx) != bas_idx[-1] + 1:
+                raise NotImplementedError('Discontinuous bases of same angular momentum')
 
             mol_exps, b_coeff = _to_full_contraction(mol, bas_idx)
             nprim, nc = b_coeff.shape
@@ -1206,6 +1207,8 @@ def copy(mol, deep=True):
     newmol._ecp    = copy.deepcopy(mol._ecp)
     newmol.pseudo  = copy.deepcopy(mol.pseudo)
     newmol._pseudo = copy.deepcopy(mol._pseudo)
+    if mol.magmom is not None:
+        newmol.magmom  = list(mol.magmom)
     return newmol
 
 def pack(mol):
@@ -1226,6 +1229,7 @@ def pack(mol):
             'ecp'     : mol.ecp,
             'pseudo'  : mol.pseudo,
             '_nelectron': mol._nelectron,
+            'magmom'  : mol.magmom,
             'verbose' : mol.verbose}
     return mdic
 def unpack(moldic):
@@ -2100,7 +2104,7 @@ def tofile(mol, filename, format=None):
     if format is None:  # Guess format based on filename
         format = os.path.splitext(filename)[1][1:]
     string = tostring(mol, format)
-    with open(filename, 'w') as f:
+    with open(filename, 'w', encoding='utf-8') as f:
         f.write(string)
         f.write('\n')
     return string
@@ -2516,18 +2520,20 @@ class MoleBase(lib.StreamObject):
                     print('output file: %s' % self.output)
 
             if self.output == '/dev/null':
-                self.stdout = open(os.devnull, 'w')
+                self.stdout = open(os.devnull, 'w', encoding='utf-8')
             else:
-                self.stdout = open(self.output, 'w')
+                self.stdout = open(self.output, 'w', encoding='utf-8')
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        self._atom = self.format_atom(self.atom, unit=self.unit)
+        if self.atom:
+            self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = {a[0] for a in self._atom}
 
-        _basis = _parse_default_basis(self.basis, uniq_atoms)
-        self._basis = self.format_basis(_basis)
+        if self.basis:
+            _basis = _parse_default_basis(self.basis, uniq_atoms)
+            self._basis = self.format_basis(_basis)
         env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, env, self.nucmod,
@@ -2570,8 +2576,13 @@ class MoleBase(lib.StreamObject):
             # number of electrons are consistent.
             self.nelec
 
-        if self.magmom is None or len(self.magmom) != self.natm:
+        if not self.magmom:
             self.magmom = [0,] * self.natm
+        elif len(self.magmom) != self.natm:
+            logger.warn(self, 'len(magmom) != natm. Set magmom to zero')
+            self.magmom = [0,] * self.natm
+        elif isinstance(self.magmom, np.ndarray):
+            self.magmom = self.magmom.tolist()
         if self.spin == 0 and abs(numpy.sum(self.magmom) - self.spin) > 1e-6:
             #don't check for unrestricted calcs.
             raise ValueError("mol.magmom is set incorrectly.")
@@ -2643,30 +2654,12 @@ class MoleBase(lib.StreamObject):
                            for ir in self.irrep_id]
         return self
 
-    @lib.with_doc(format_atom.__doc__)
-    def format_atom(self, atom, origin=0, axes=None, unit='Ang'):
-        return format_atom(atom, origin, axes, unit)
-
-    @lib.with_doc(format_basis.__doc__)
-    def format_basis(self, basis_tab):
-        return format_basis(basis_tab)
-
-    @lib.with_doc(format_pseudo.__doc__)
-    def format_pseudo(self, pseudo_tab):
-        return format_pseudo(pseudo_tab)
-
-    @lib.with_doc(format_ecp.__doc__)
-    def format_ecp(self, ecp_tab):
-        return format_ecp(ecp_tab)
-
-    @lib.with_doc(expand_etb.__doc__)
-    def expand_etb(self, l, n, alpha, beta):
-        return expand_etb(l, n, alpha, beta)
-
-    @lib.with_doc(expand_etbs.__doc__)
-    def expand_etbs(self, etbs):
-        return expand_etbs(etbs)
-    etbs = expand_etbs
+    format_atom = staticmethod(format_atom)
+    format_basis = staticmethod(format_basis)
+    format_pseudo = staticmethod(format_pseudo)
+    format_ecp = staticmethod(format_ecp)
+    expand_etb = staticmethod(expand_etb)
+    expand_etbs = etbs = staticmethod(expand_etbs)
 
     @lib.with_doc(make_env.__doc__)
     def make_env(self, atoms, basis, pre_env=[], nucmod={}, nucprop=None):
@@ -2700,7 +2693,6 @@ class MoleBase(lib.StreamObject):
 
     def dump_input(self):
         import __main__
-        import pyscf
         if hasattr(__main__, '__file__'):
             try:
                 filename = os.path.abspath(__main__.__file__)
@@ -2714,19 +2706,9 @@ class MoleBase(lib.StreamObject):
             except IOError:
                 logger.warn(self, 'input file does not exist')
 
-        self.stdout.write('System: %s  Threads %s\n' %
-                          (str(platform.uname()), lib.num_threads()))
-        self.stdout.write('Python %s\n' % sys.version)
-        self.stdout.write('numpy %s  scipy %s\n' %
-                          (numpy.__version__, scipy.__version__))
-        self.stdout.write('Date: %s\n' % time.ctime())
-        self.stdout.write('PySCF version %s\n' % pyscf.__version__)
-        info = lib.repo_info(os.path.join(__file__, '..', '..'))
-        self.stdout.write('PySCF path  %s\n' % info['path'])
-        if 'git' in info:
-            self.stdout.write(info['git'] + '\n')
+        self.stdout.write('\n'.join(lib.misc.format_sys_info()))
 
-        self.stdout.write('\n')
+        self.stdout.write('\n\n')
         for key in os.environ:
             if 'PYSCF' in key:
                 self.stdout.write('[ENV] %s %s\n' % (key, os.environ[key]))
@@ -3713,7 +3695,7 @@ class Mole(MoleBase):
                      '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
             # https://github.com/jupyter/notebook/issues/2014
-            raise AttributeError
+            raise AttributeError(f'Mole object has no attribute {key}')
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
@@ -3734,8 +3716,10 @@ class Mole(MoleBase):
                 if xc in dft.XC:
                     mf.xc = xc
                     key = 'TDDFT'
-        else:
+        elif 'CI' in key or 'CC' in key or 'CAS' in key or 'MP' in key:
             mf = scf.HF(self)
+        else:
+            raise AttributeError(f'Mole object has no attribute {key}')
 
         method = getattr(mf, key)
 

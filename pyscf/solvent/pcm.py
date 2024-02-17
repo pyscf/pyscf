@@ -139,9 +139,7 @@ def switch_h(x):
 
 def gen_surface(mol, ng=302, vdw_scale=1.2):
     '''J. Phys. Chem. A 1999, 103, 11060-11079'''
-    unit_sphere = numpy.empty((ng,4))
-    libdft.MakeAngularGrid(unit_sphere.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ng))
-
+    unit_sphere = gen_grid.MakeAngularGrid(ng)
     atom_coords = mol.atom_coords(unit='B')
     charges = mol.atom_charges()
     N_J = ng * numpy.ones(mol.natm)

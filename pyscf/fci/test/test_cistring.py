@@ -156,6 +156,12 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(bin(cistring.addr2str(6, 3, 8)), '0b11010')
         self.assertEqual(bin(cistring.addr2str(7, 4, 9)), '0b110011')
 
+        # Test large addresss
+        string = 0b101101111101101111001110111111110111111100
+        address = cistring.str2addr(norb=63, nelec=32, string=string)
+        string2 = cistring.addr2str(norb=63, nelec=32, addr=address)
+        self.assertEqual(string, string2)
+
     def test_str2addr(self):
         self.assertEqual(str2addr(6, 3, int('0b11001' ,2)), cistring.str2addr(6, 3, int('0b11001' ,2)))
         self.assertEqual(str2addr(6, 3, int('0b11010' ,2)), cistring.str2addr(6, 3, int('0b11010' ,2)))

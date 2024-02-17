@@ -38,7 +38,6 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger, zdotCN
 from pyscf.df.outcore import _guess_shell_ranges
-from pyscf.gto import ANG_OF
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
@@ -1333,13 +1332,20 @@ def _guess_omega(cell, kpts, mesh=None):
     # enough to truncate the interaction.
     # omega_min = estimate_omega_min(cell, cell.precision*1e-2)
     omega_min = OMEGA_MIN
-    ke_min = estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
+    ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
     a = cell.lattice_vectors()
 
     if mesh is None:
         nkpts = len(kpts)
-        ke_cutoff = 20. * nkpts**(-1./3)
+        ke_cutoff = 20. * (cell.nao/25 * nkpts)**(-1./3)
         ke_cutoff = max(ke_cutoff, ke_min)
+        # avoid large omega since nuermical issues were found in Rys
+        # polynomials when computing SR integrals with nroots > 3
+        exps = [e for l, e in zip(cell._bas[:,gto.ANG_OF], cell.bas_exps()) if l != 0]
+        if exps:
+            omega_max = np.hstack(exps).min()**.5 * 2
+            ke_max = estimate_ke_cutoff_for_omega(cell, omega_max)
+            ke_cutoff = min(ke_cutoff, ke_max)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
         mesh = np.asarray(mesh)
