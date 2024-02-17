@@ -21,7 +21,7 @@ gradient of dispersion correction for HF and DFT
 '''
 
 import numpy
-from pyscf.scf.hf import KohnShamDFT
+from pyscf.scf.hf import KohnShamDFT, dftd3_xc_map
 
 def get_dispersion(mf_grad, disp_version=None):
     '''gradient of dispersion correction for RHF/RKS'''
@@ -36,6 +36,10 @@ def get_dispersion(mf_grad, disp_version=None):
         method = mf_grad.base.xc
     else:
         method = 'hf'
+
+    # use xc name defined in dftd3 for special cases
+    if method in dftd3_xc_map:
+        method = dftd3_xc_map[method]
 
     if disp_version[:2].upper() == 'D3':
         # raised error in SCF module, assuming dftd3 installed

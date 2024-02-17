@@ -500,6 +500,23 @@ class KnownValues(unittest.TestCase):
         method.nlcgrids.atom_grid = {"H": (40, 110), "O": (40, 110),}
         self.assertAlmostEqual(method.scf(), -76.352381513158718, 8)
 
+    def test_dft_parser(self):
+        method = dft.RKS(h2o, xc='wb97m-d3bj')
+        nlc_coefs = method._numint.nlc_coeff('wb97m-v')
+        print(nlc_coefs)
+        #e_tot = method.kernel()
+        assert method.xc == 'wb97m-v'
+        assert len(nlc_coefs) == 0
+        assert method.disp == 'd3bj'
+
+        method = dft.RKS(h2o, xc='wb97x-d3zero')
+        nlc_coefs = method._numint.nlc_coeff('wb97x-v')
+        print(nlc_coefs)
+        #e_tot = method.kernel()
+        assert method.xc == 'wb97x'
+        assert len(nlc_coefs) == 0
+        assert method.disp == 'd3zero'
+
     def test_camb3lyp_rsh_omega(self):
         mf = dft.RKS(h2o)
         mf.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}

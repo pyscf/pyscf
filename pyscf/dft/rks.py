@@ -260,6 +260,26 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     ks._numint = libxc.define_xc_(ks._numint, description, xctype, hyb, rsh)
     return ks
 
+def dft_method_parser(dft_method):
+    ''' conventional dft method -> internal xc, disable nlc, dispersion version'''
+    method_lower = dft_method.lower()
+    xc = dft_method
+    with_nlc = None
+    disp = None
+    print(method_lower)
+    # special cases
+    if method_lower == 'wb97m-d3bj':
+        return 'wb97m-v', False, 'd3bj'
+    if method_lower == 'b97m-d3bj':
+        return 'b97m-v', False, 'd3bj'
+    if method_lower == 'wb97x-d3bj':
+        return 'wb97x-v', False, 'd3bj'
+
+    for d in ['d3bj','d3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']:
+        if method_lower[-len(d):] == d:
+            disp = d
+            xc = method_lower[:-len(d)-1]
+    return xc, None, disp
 
 def _dft_common_init_(mf, xc='LDA,VWN'):
     raise DeprecationWarning
@@ -324,7 +344,9 @@ class KohnShamDFT:
     _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
 
     def __init__(self, xc='LDA,VWN'):
+        xc, with_nlc, disp = dft_method_parser(xc)
         self.xc = xc
+        self.disp = disp
         self.nlc = ''
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(
@@ -338,6 +360,11 @@ class KohnShamDFT:
 ##################################################
 # don't modify the following attributes, they are not input options
         self._numint = numint.NumInt()
+
+        # disable nlc for certain xc such as wb97m-d3bj
+        if with_nlc is not None:
+            self.nlc = None
+            self._numint.libxc.nlc_coeff = lambda x: []
 
     @property
     def omega(self):

@@ -24,6 +24,12 @@ dispersion correction for HF and DFT
 import numpy
 from pyscf.scf.hf import KohnShamDFT
 
+dftd3_xc_map = {
+    'wb97m-v': 'wb97m',
+    'b97m-v': 'b97m',
+    'wb97x-v': 'wb97x'
+}
+
 def get_dispersion(mf, disp_version=None):
     if disp_version is None:
         disp_version = mf.disp
@@ -34,6 +40,10 @@ def get_dispersion(mf, disp_version=None):
         method = mf.xc
     else:
         method = 'hf'
+
+    # use xc name defined in dftd3 for special cases
+    if method in dftd3_xc_map:
+        method = dftd3_xc_map[method]
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':
