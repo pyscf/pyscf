@@ -264,9 +264,8 @@ def dft_method_parser(dft_method):
     ''' conventional dft method -> internal xc, disable nlc, dispersion version'''
     method_lower = dft_method.lower()
     xc = dft_method
-    with_nlc = None
     disp = None
-    print(method_lower)
+
     # special cases
     if method_lower == 'wb97m-d3bj':
         return 'wb97m-v', False, 'd3bj'
@@ -341,7 +340,7 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
+    _keys = {'xc', 'nlc', 'disp', 'grids', 'nlcgrids', 'small_rho_cutoff'}
 
     def __init__(self, xc='LDA,VWN'):
         xc, with_nlc, disp = dft_method_parser(xc)

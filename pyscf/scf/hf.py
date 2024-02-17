@@ -234,12 +234,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         if dump_chk:
             mf.dump_chk(locals())
 
-    #FIX DISP!!
-    if mf.disp is not None:
-        e_disp = mf.get_dispersion()
-        mf.scf_summary['dispersion'] = e_disp
-        e_tot += e_disp
-
     logger.timer(mf, 'scf_cycle', *cput0)
     # A post-processing hook before return
     mf.post_kernel(locals())
@@ -303,7 +297,16 @@ def energy_tot(mf, dm=None, h1e=None, vhf=None):
     '''
     nuc = mf.energy_nuc()
     e_tot = mf.energy_elec(dm, h1e, vhf)[0] + nuc
+    if mf.disp is not None:
+        if 'dispersion' in mf.scf_summary:
+            e_tot += mf.scf_summary['dispersion']
+        else:
+            e_disp = mf.get_dispersion()
+            mf.scf_summary['dispersion'] = e_disp
+            e_tot += e_disp
+
     mf.scf_summary['nuc'] = nuc.real
+
     return e_tot
 
 
