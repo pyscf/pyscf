@@ -79,11 +79,11 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_rks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
-        if ks.nlc or ni.libxc.is_nlc(ks.xc):
-            if ni.libxc.is_nlc(ks.xc):
+        if ks.nlc or ni.is_nlc(ks.xc):
+            if ni.is_nlc(ks.xc):
                 xc = ks.xc
             else:
-                assert ni.libxc.is_nlc(ks.nlc)
+                assert ni.is_nlc(ks.nlc)
                 xc = ks.nlc
             n, enlc, vnlc = ni.nr_nlc_vxc(mol, ks.nlcgrids, xc, dm,
                                           max_memory=max_memory)
@@ -363,8 +363,8 @@ class KohnShamDFT:
         # disable nlc for certain xc such as wb97m-d3bj
         if with_nlc is not None:
             self.nlc = None
-            self._numint.libxc.nlc_coeff = lambda x: []
-
+            self._numint.nlc_coeff = lambda x: []
+            self._numint.is_nlc = lambda x: False
     @property
     def omega(self):
         return self._numint.omega
@@ -386,7 +386,7 @@ class KohnShamDFT:
 
         self.grids.dump_flags(verbose)
 
-        if self.nlc or self._numint.libxc.is_nlc(self.xc):
+        if self.nlc or self._numint.is_nlc(self.xc):
             log.info('** Following is NLC and NLC Grids **')
             if self.nlc:
                 log.info('NLC functional = %s', self.nlc)
@@ -497,7 +497,7 @@ class KohnShamDFT:
                                                     self.grids)
             t0 = logger.timer(self, 'setting up grids', *t0)
 
-        is_nlc = self.nlc or self._numint.libxc.is_nlc(self.xc)
+        is_nlc = self.nlc or self._numint.is_nlc(self.xc)
         if is_nlc and self.nlcgrids.coords is None:
             t0 = (logger.process_clock(), logger.perf_counter())
             self.nlcgrids.build(with_non0tab=True)
