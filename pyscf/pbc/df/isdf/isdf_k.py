@@ -74,9 +74,9 @@ def _extract_grid_primitive_cell(cell_a, mesh, Ls, coords):
     # print("Ly = ", Ly)
     # print("Lz = ", Lz)
     
-    # print("Length supercell x = %15.6f , primitive cell x = %15.6f" % (cell_a[0, 0], cell_a[0, 0] / Lx))
-    # print("Length supercell y = %15.6f , primitive cell y = %15.6f" % (cell_a[1, 1], cell_a[1, 1] / Ly))
-    # print("Length supercell z = %15.6f , primitive cell z = %15.6f" % (cell_a[2, 2], cell_a[2, 2] / Lz))
+    print("Length supercell x = %15.6f , primitive cell x = %15.6f" % (cell_a[0, 0], cell_a[0, 0] / Lx))
+    print("Length supercell y = %15.6f , primitive cell y = %15.6f" % (cell_a[1, 1], cell_a[1, 1] / Ly))
+    print("Length supercell z = %15.6f , primitive cell z = %15.6f" % (cell_a[2, 2], cell_a[2, 2] / Lz))
     
     nx, ny, nz = mesh
     
@@ -228,6 +228,7 @@ def build_supercell(prim_atm,
     Cell.precision = precision
     Cell.use_particle_mesh_ewald = use_particle_mesh_ewald
     Cell.verbose = 4
+    Cell.unit = 'angstorm'
     
     Cell.build(mesh=mesh)
     
@@ -287,7 +288,13 @@ def _get_possible_IP(pbc_isdf_info:PBC_ISDF_Info, Ls, coords):
     return possible_grid_ID, np.array(coords[possible_grid_ID])
 
   
-####################### Select IP #######################
+####################### build aux basis #######################
+
+## Incore 
+
+
+
+## Outcore
 
     
 class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
@@ -306,12 +313,15 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
             df_tmp = MultiGridFFTDF2(self.cell)
             self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
+
+        print("self.cell.lattice_vectors = ", self.cell.lattice_vectors())
+        self.ordered_grid_coords = _extract_grid_primitive_cell(self.cell.lattice_vectors(), self.mesh, self.Ls, self.coords)
     
     ################ select IP ################
     
     def select_IP(self, c:int, m:int):
         first_natm = self.cell.natm // np.prod(self.Ls)
-        IP_GlobalID = ISDF._select_IP_direct(self, c, m, first_natm, True)
+        IP_GlobalID = ISDF._select_IP_direct(self, c, m, first_natm, True) # we do not have to perform selection IP over the whole supercell ! 
         
         # get primID
         

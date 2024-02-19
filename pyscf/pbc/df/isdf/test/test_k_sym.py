@@ -682,6 +682,7 @@ if __name__ == '__main__':
     assert np.allclose(X4, X_Diag_bench)  # we get the correct answer!!!
     
     ####### check the structure of X after FFT ####### 
+    
     print(coords)
     aoR_unordered    = df_tmp._numint.eval_ao(cell, coords)[0].T
     aoR_unordered   *= np.sqrt(cell.vol / ngrids)
@@ -729,15 +730,6 @@ if __name__ == '__main__':
             assert np.allclose(basis_after, 0.0)
     
     _check_X_symmetry(X_unorder, Ls, mesh)
-    
-    ### remove the negative frequency 
-    
-    # X_unorder = X_unorder.reshape(Ls[0], Ls[1], Ls[2], NPOINT, Ls[0], Ls[1], Ls[2], np.prod(nBox))
-    
-    # X_real_unorder = X_unorder[:,:,:Ls[2]//2+1,:,:,:,:Ls[2]//2+1,:]
-    # X_real_unorder = X_real_unorder.reshape(-1, Ls[0] * Ls[1] * (Ls[2]//2+1) * np.prod(nBox))
-    
-    # ncell_complex = np.prod([Ls[0], Ls[1], Ls[2]//2+1])
     
     nBox = [mesh[0]//Ls[0], mesh[1]//Ls[1], mesh[2]//Ls[2]]
     
@@ -800,4 +792,130 @@ if __name__ == '__main__':
 
         assert np.allclose(Hmat, bench)
     
+    ######### remove the negative frequency #########
     
+    ## get the frequency of Q ## 
+    
+    freq1 = np.array(range(Ls[0]), dtype=np.float64)
+    freq2 = np.array(range(Ls[1]), dtype=np.float64)
+    freq3 = np.array(range(Ls[2]//2+1), dtype=np.float64)
+    freq_Q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+    
+    FREQ = np.einsum("ijkl,ipqs->ijklpqs", freq_Q, freq_q)
+    FREQ[0] /= (Ls[0] * nBox[0])
+    FREQ[1] /= (Ls[1] * nBox[1])
+    FREQ[2] /= (Ls[2] * nBox[2])
+    FREQ = np.einsum("ijklpqs->jklpqs", FREQ)
+    FREQ  = FREQ.reshape(-1, np.prod(nBox))
+    FREQ  = np.exp(-2.0j * np.pi * FREQ)  # this is the only correct way to construct the factor
+    
+    def permutation(nx, ny, nz, shift_x, shift_y, shift_z):
+        
+        res = np.zeros((nx*ny*nz), dtype=numpy.int32)
+        
+        loc_now = 0
+        for ix in range(nx):
+            for iy in range(ny):
+                for iz in range(nz):
+                    ix2 = (nx - ix - shift_x) % nx
+                    iy2 = (ny - iy - shift_y) % ny
+                    iz2 = (nz - iz - shift_z) % nz
+                    
+                    loc = ix2 * ny * nz + iy2 * nz + iz2
+                    # res[loc_now] = loc
+                    res[loc] = loc_now
+                    loc_now += 1
+        return res
+    
+    # pert = permutation(nBox[0], nBox[1], nBox[2])
+    
+    # print(pert[:10])
+    
+    ibox = 0
+    for ix in range(Ls[0]):
+        for iy in range(Ls[1]):
+            for iz in range(Ls[2]//2+1):
+                
+                print("ix = %d iy = %d iz = %d" % (ix,iy,iz))
+                print("Cell %d" % (ibox))
+                
+                b_begin = ibox * NPOINT
+                b_end   = (ibox + 1) * NPOINT
+                k_begin = ibox * ngrid_prim
+                k_end   = (ibox + 1) * ngrid_prim 
+                
+                basis_test = X_Diag_bench[:, k_begin:k_end]
+                
+                basis_test = basis_test * FREQ[ibox]
+                basis_test = basis_test.reshape(-1, *nBox)
+                basis_test = np.fft.fftn(basis_test, axes=(1, 2, 3)) # shit
+                basis_test = basis_test.reshape(-1, np.prod(nBox))
+                
+                
+                ibox_full = ix * Ls[1] * Ls[2] + iy * Ls[2] + iz
+                b_begin = ibox_full * NPOINT
+                b_end   = (ibox_full + 1) * NPOINT
+                k_begin = ibox_full * ngrid_prim
+                k_end   = (ibox_full + 1) * ngrid_prim
+                
+                benchmark = X_unorder[b_begin:b_end, k_begin:k_end]
+                
+                # benchmark = X_Diag_bench_full[:, k_begin:k_end]
+                
+                assert np.allclose(basis_test, benchmark)
+                
+                # print(basis_test)
+                # print(benchmark)
+                
+                ibox+=1
+                
+                # benchmark = benchmark.reshape(-1, *nBox)
+                # benchmark = np.fft.ifftn(benchmark, axes=(1, 2, 3)) # shit
+                # benchmark = benchmark.reshape(-1, np.prod(nBox))
+                
+                # check complex conjugate symmetry 
+                
+                ix2 = (Ls[0] - ix) % Ls[0]
+                iy2 = (Ls[1] - iy) % Ls[1]
+                iz2 = (Ls[2] - iz) % Ls[2]
+                
+                ibox_full2 = ix2 * Ls[1] * Ls[2] + iy2 * Ls[2] + iz2
+                b_begin2 = ibox_full2 * NPOINT
+                b_end2   = (ibox_full2 + 1) * NPOINT
+                k_begin2 = ibox_full2 * ngrid_prim
+                k_end2   = (ibox_full2 + 1) * ngrid_prim
+                benchmark2 = X_unorder[b_begin2:b_end2, k_begin2:k_end2]
+                
+                shift_x = 0
+                shift_y = 0
+                shift_z = 0
+                
+                if ix != 0:
+                    shift_x = 1
+                if iy != 0:
+                    shift_y = 1
+                if iz != 0:
+                    shift_z = 1
+                
+                pert = permutation(nBox[0], nBox[1], nBox[2], shift_x, shift_y, shift_z)
+                
+                benchmark = benchmark[:, pert].conj() # this is the k symmetry ! 
+                # benchmark2 = benchmark2[:, pert].conj()
+                # benchmark2 = benchmark2.conj()
+                
+                # print(benchmark.shape)
+                # print(benchmark2.shape)
+                
+                # print(benchmark[1])
+                # print(benchmark2[1])
+                
+                # benchmark2 = benchmark2.reshape(-1, *nBox)
+                # benchmark2 = np.fft.ifftn(benchmark2, axes=(1, 2, 3)) # shit
+                # benchmark2 = benchmark2.reshape(-1, np.prod(nBox))
+                
+                # print(benchmark)
+                # print(benchmark2)
+                
+                # print(benchmark-benchmark2)
+                
+                assert np.allclose(benchmark, benchmark2)
