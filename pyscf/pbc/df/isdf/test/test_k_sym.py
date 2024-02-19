@@ -144,6 +144,79 @@ def _extract_grid_primitive_cell(cell_a, mesh, Ls, coords):
     
     return res, res_dict
                 
+# the following subroutine are all testing functions
+
+def _RowCol_FFT_bench(input, Ls):
+    """
+    A is a 3D array, (nbra, nket, ngrid_prim)
+    """
+    A = input
+    ncell = np.prod(Ls)
+    assert A.shape[1] % ncell == 0
+    assert A.shape[0] % ncell == 0
+    NPOINT_KET = A.shape[1] // ncell
+    A = A.reshape(A.shape[0], -1, NPOINT_KET) # nbra, nBox, NPOINT
+    A = A.transpose(0, 2, 1)                  # nbra, NPOINT, nBox
+    shape_tmp = A.shape
+    A = A.reshape(A.shape[0] * NPOINT_KET, *Ls)
+    # perform 3d fft 
+    A = np.fft.fftn(A, axes=(1, 2, 3))
+    A = A.reshape(shape_tmp)
+    A = A.transpose(0, 2, 1)
+    A = A.reshape(A.shape[0], -1)
+    print("finish transform ket")
+    # transform bra
+    NPOINT_BRA = A.shape[0] // ncell
+    A = A.reshape(-1, NPOINT_BRA, A.shape[1])
+    A = A.transpose(1, 2, 0)
+    shape_tmp = A.shape
+    A = A.reshape(-1, *Ls)
+    A = np.fft.ifftn(A, axes=(1, 2, 3))
+    A = A.reshape(shape_tmp)
+    A = A.transpose(2, 0, 1)
+    A = A.reshape(-1, A.shape[2])
+    print("finish transform bra")
+    # print(A[:NPOINT, :NPOINT])
+    return A
+
+def _RowCol_FFT_Fast(input, Ls):
+    A = input
+    ncell = np.prod(Ls)
+    assert A.shape[1] % ncell == 0
+    
+    NPOINT_KET = A.shape[1] // ncell
+    A = A.reshape(A.shape[0], -1, NPOINT_KET) # nbra, nBox, NPOINT
+    A = A.transpose(0, 2, 1)                  # nbra, NPOINT, nBox
+    shape_tmp = A.shape
+    A = A.reshape(A.shape[0] * NPOINT_KET, *Ls)
+    # perform 3d fft
+    A = np.fft.fftn(A, axes=(1, 2, 3))
+    A = A.reshape(shape_tmp)
+    A = A.transpose(0, 2, 1)
+    A = A.reshape(A.shape[0], -1)
+    
+    return A
+
+def _RowCol_rFFT_Fast(input, Ls):
+    A = input
+    ncell = np.prod(Ls)
+    assert A.shape[1] % ncell == 0
+    
+    NPOINT_KET = A.shape[1] // ncell
+    A = A.reshape(A.shape[0], -1, NPOINT_KET) # nbra, nBox, NPOINT
+    A = A.transpose(0, 2, 1)                  # nbra, NPOINT, nBox
+    shape_tmp = A.shape
+    A = A.reshape(A.shape[0] * NPOINT_KET, *Ls)
+    # perform 3d fft
+    # print(A.shape)
+    A = np.fft.rfftn(A, axes=(1, 2, 3)) # the input is real 
+    # print(A.shape)
+    nComplex = np.prod([Ls[0], Ls[1], Ls[2]//2+1])
+    A = A.reshape((shape_tmp[0], shape_tmp[1], nComplex))
+    A = A.transpose(0, 2, 1)
+    A = A.reshape(A.shape[0], -1)
+    
+    return A
 
 if __name__ == '__main__':
 
@@ -203,24 +276,7 @@ if __name__ == '__main__':
     ngrid_prim = grid_primitive[0].size // 3
     print(ngrid_prim)
     
-    # for i in range(len(grid_primitive)):
-    #     print(grid_primitive[i].shape)
-    #     print(grid_primitive[i])
-    
-    for i in range(len(grid_primitive)):
-        # print("Line %d" % i)
-        for j in range(len(grid_primitive)):
-            # for k in range(ngrid_prim):
-                # print(grid_primitive[i][k], grid_primitive[j][k])
-                # print(grid_primitive[j][k] - grid_primitive[i][k])
-            shift = grid_primitive[i] - grid_primitive[j]
-            # print(shift[0])
-            # print(shift)
-            ## assert all the elements in shift is equal 
-            # for k in range(3):
-            #     assert np.allclose(shift[:,k], shift[0,k])
-    
-    NPOINT = 4
+    NPOINT = 8
     
     # generate NPOINT random ints (no repeated) from [0, ngrid_prim)
     
@@ -252,67 +308,11 @@ if __name__ == '__main__':
     print(A.shape)
     ncell = np.prod(Ls)
     
-    # for i in range(ncell):
-    #     for j in range(ncell):
-    #         b_begin = i * NPOINT
-    #         b_end   = (i + 1) * NPOINT
-    #         k_begin = j * NPOINT
-    #         k_end   = (j + 1) * NPOINT
-    #         mat     = A[b_begin:b_end, k_begin:k_end]
-    #         # print(mat)
-    #         # print(mat- mat.T)
-    #         assert np.allclose(mat, mat.T)  # fail not the case
-
     B = np.asarray(lib.dot(aoRg.T, aoR), order='C')
     B = B ** 2
     
-    # transform ket 
-    A = A.reshape(A.shape[0], -1, NPOINT) # nbra, nBox, NPOINT
-    A = A.transpose(0, 2, 1)              # nbra, NPOINT, nBox
-    shape_tmp = A.shape
-    A = A.reshape(A.shape[0] * NPOINT, *Ls)
-    # perform 3d fft 
-    A = np.fft.fftn(A, axes=(1, 2, 3))
-    A = A.reshape(shape_tmp)
-    A = A.transpose(0, 2, 1)
-    A = A.reshape(A.shape[0], -1)
-    print("finish transform ket")
-    # transform bra
-    A = A.reshape(-1,NPOINT, A.shape[1])
-    A = A.transpose(1, 2, 0)
-    shape_tmp = A.shape
-    A = A.reshape(-1, *Ls)
-    A = np.fft.ifftn(A, axes=(1, 2, 3))
-    A = A.reshape(shape_tmp)
-    A = A.transpose(2, 0, 1)
-    A = A.reshape(-1, A.shape[2])
-    print("finish transform bra")
-    # print(A[:NPOINT, :NPOINT])
-    
-    # exit(1)
-    
-    ### transform B 
-    
-    B = B.reshape(B.shape[0], -1, ngrid_prim) # nbra, nBox, NPOINT
-    B = B.transpose(0, 2, 1)              # nbra, NPOINT, nBox
-    shape_tmp = B.shape
-    B = B.reshape(B.shape[0] * ngrid_prim, *Ls)
-    # perform 3d fft
-    B = np.fft.fftn(B, axes=(1, 2, 3))
-    B = B.reshape(shape_tmp)
-    B = B.transpose(0, 2, 1)
-    B = B.reshape(B.shape[0], -1)
-    print("finish transform ket")
-    # transform bra
-    B = B.reshape(-1,NPOINT, B.shape[1])
-    B = B.transpose(1, 2, 0)
-    shape_tmp = B.shape
-    B = B.reshape(-1, *Ls)
-    B = np.fft.ifftn(B, axes=(1, 2, 3))
-    B = B.reshape(shape_tmp)
-    B = B.transpose(2, 0, 1)
-    B = B.reshape(-1, B.shape[2])
-    print("finish transform bra")
+    A = _RowCol_FFT_bench(A, Ls)
+    B = _RowCol_FFT_bench(B, Ls)
     
     for i in range(ncell):
         b_begin = i * NPOINT
@@ -321,9 +321,11 @@ if __name__ == '__main__':
         k_end   = (i + 1) * NPOINT
         mat     = A[b_begin:b_end, k_begin:k_end]
 
+        assert np.allclose(mat, mat.T.conj()) # block diagonal， A is Hermitian Conjugate and positive definite
+
         mat_before = A[b_begin:b_end, :k_begin]
         assert np.allclose(mat_before, 0.0)  # block diagonal 
-        mat_after = A[b_begin:b_end, k_end:]
+        mat_after  = A[b_begin:b_end, k_end:]
         assert np.allclose(mat_after, 0.0)   # block diagonal 
     
         # test B 
@@ -349,36 +351,21 @@ if __name__ == '__main__':
     A2 = A2 ** 2
     
     A_tmp = A2[:NPOINT, :].copy()
-    A_tmp = A_tmp.reshape(A_tmp.shape[0], -1, NPOINT) # nbra, nBox, NPOINT
-    print(A_tmp.shape)
-    A_tmp = A_tmp.transpose(0, 2, 1)              # nbra, NPOINT, nBox
-    shape_tmp = A_tmp.shape
-    A_tmp = A_tmp.reshape(A_tmp.shape[0] * NPOINT, *Ls)
-    # perform 3d fft 
-    A_tmp = np.fft.fftn(A_tmp, axes=(1, 2, 3))
-    A_tmp = A_tmp.reshape(shape_tmp)
-    A_tmp = A_tmp.transpose(0, 2, 1)
-    # A_tmp = A_tmp.transpose(2, 0, 1)
-    A_tmp = A_tmp.reshape(A_tmp.shape[0], -1)
-    # A_tmp *= np.sqrt(np.prod(Ls))
+    A_tmp = _RowCol_FFT_Fast(A_tmp, Ls)
     
     B2 = np.asarray(lib.dot(aoRg.T, aoR), order='C')
     print(B2.shape)
     B2 = B2 ** 2
+    print(B2.dtype)
     
     B_tmp = B2[:NPOINT, :].copy()
-    B_tmp = B_tmp.reshape(B_tmp.shape[0], -1, ngrid_prim) # nbra, nBox, NPOINT
-    B_tmp = B_tmp.transpose(0, 2, 1)              # nbra, NPOINT, nBox
-    shape_tmp = B_tmp.shape
-    B_tmp = B_tmp.reshape(B_tmp.shape[0] * ngrid_prim, *Ls)
-    # perform 3d fft
-    B_tmp = np.fft.fftn(B_tmp, axes=(1, 2, 3))
-    B_tmp = B_tmp.reshape(shape_tmp)
-    B_tmp = B_tmp.transpose(0, 2, 1)
-    B_tmp = B_tmp.reshape(B_tmp.shape[0], -1)
-    
+    print(B_tmp)
+    B_tmp = _RowCol_FFT_Fast(B_tmp, Ls)
     
     # diagonal block
+    
+    A_Diag = []
+    B_Diag = []
     
     for i in range(ncell):
         
@@ -396,7 +383,92 @@ if __name__ == '__main__':
         # mat2 = A[b_begin:b_end, k_begin:k_end]
         # print(mat/mat2)
         
+        A_Diag.append(mat)
+        
         k_begin = i * ngrid_prim
         k_end   = (i + 1) * ngrid_prim
         mat     = B_tmp[:, k_begin:k_end]
         assert np.allclose(mat, B[b_begin:b_end, k_begin:k_end])
+    
+        B_Diag.append(mat)
+    
+    ################################ test rFFT, both python and C ################################
+    
+    B_tmp2 = B2[:NPOINT, :].copy()
+    print(B_tmp2)
+
+    mesh_complex = np.asarray([Ls[0], Ls[1], Ls[2]//2+1], dtype=np.int32)
+    mesh_real = np.asarray(Ls, dtype=np.int32)
+    nMeshReal = np.prod(Ls)
+    nMeshComplex = np.prod(mesh_complex)
+    assert B_tmp2.shape[1] % nMeshReal == 0
+    nPoint = B_tmp2.shape[1] // nMeshReal
+    
+    Matrix = np.zeros((B_tmp2.shape[0], nPoint, nMeshComplex), dtype=np.complex128, order='C')
+    Matrix_real = np.ndarray((B_tmp2.shape[0], nPoint, nMeshReal), dtype=np.float64, order='C', buffer=Matrix)
+    Matrix_real.ravel()[:] = B_tmp2.ravel()
+    
+    Buf = np.zeros((B_tmp2.shape[0], nPoint, nMeshComplex), dtype=np.complex128, order='C')
+    
+    fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+    assert fn is not None
+    
+    fn(
+        Matrix_real.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(B_tmp.shape[0]),
+        ctypes.c_int(nPoint),
+        mesh_real.ctypes.data_as(ctypes.c_void_p),
+        Buf.ctypes.data_as(ctypes.c_void_p)
+    )
+
+    Matrix = Matrix.reshape(Matrix.shape[0], -1)    
+    B_tmp2 = _RowCol_rFFT_Fast(B_tmp2, Ls)
+    
+    assert np.allclose(Matrix, B_tmp2) # we get the correct answer!!!
+    
+    ################################ solve AX=B ################################
+    
+    fn_cholesky = getattr(libpbc, "Complex_Cholesky", None)
+    assert fn_cholesky is not None
+    fn_solve = getattr(libpbc, "Solve_LLTEqualB_Complex_Parallel", None)
+    assert fn_solve is not None
+    
+    # X_Diag = []
+    # X_Diag_C = []
+    
+
+    for i in range(ncell):
+        A = A_Diag[i].copy()
+        B = B_Diag[i].copy()
+        X = np.linalg.solve(A, B)
+        # X_Diag.append(X)
+
+        # print("A = ", A)
+        # print("A.shape = ", A.shape)
+        # print("A.dtype = ", A.dtype)
+        # e, h = np.linalg.eigh(A)
+        # print(e)
+        
+        fn_cholesky(
+            A.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(A.shape[0])
+        )
+        
+        nrhs = B.shape[1]
+        num_threads = lib.num_threads()
+        bunchsize = nrhs // num_threads
+        
+        fn_solve(
+            ctypes.c_int(A.shape[0]),
+            A.ctypes.data_as(ctypes.c_void_p),
+            B.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(B.shape[1]),
+            ctypes.c_int(bunchsize)
+        )
+        
+        # print(X)
+        # print(B)
+        
+        assert np.allclose(X, B)
+    
+    
