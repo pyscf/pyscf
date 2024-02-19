@@ -509,10 +509,10 @@ class KnownValues(unittest.TestCase):
         assert len(nlc_coefs) == 0
         assert method.disp == 'd3bj'
 
-        method = dft.RKS(h2o, xc='wb97x-d3zero')
+        method = dft.RKS(h2o, xc='wb97x-d3')
         nlc_coefs = method._numint.nlc_coeff('wb97x-v')
         #e_tot = method.kernel()
-        assert method.xc == 'wb97x'
+        assert method.xc == 'wb97x-d3'
         assert len(nlc_coefs) == 1
         assert method.disp == 'd3zero'
 

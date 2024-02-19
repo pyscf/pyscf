@@ -273,6 +273,8 @@ def dft_method_parser(dft_method):
         return 'b97m-v', False, 'd3bj'
     if method_lower == 'wb97x-d3bj':
         return 'wb97x-v', False, 'd3bj'
+    if method_lower in ['wb97x-d3', 'wb97x-d3zero']:
+        return 'wb97x-d3', False, 'd3zero'
 
     for d in ['d3bj','d3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']:
         if method_lower[-len(d):] == d:
