@@ -67,7 +67,7 @@ void _FFT_Matrix_Col_InPlace(double *matrix, // the size of matrix should be (nR
 
     // (2) perform FFT on the last dimension
 
-    auto nFFT = nRow * nCol;
+    int nFFT = nRow * nCol;
 
     double __complex__ *mat_complex = (double __complex__ *)buf;
     double __complex__ *buf_complex = (double __complex__ *)matrix;
@@ -130,8 +130,22 @@ void _iFFT_Matrix_Col_InPlace(double __complex__ *matrix, // the size of matrix 
 
     const int m = nRow;
     const int n = nCol * mesh[0] * mesh[1] * mesh[2];
+    const int n_Complex = nCol * mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
     const int nMesh = mesh[0] * mesh[1] * mesh[2];
     const int nMeshComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    const double factor = 1.0 / (double)(nMesh);
+
+    printf("m: %d\n", m);
+    printf("n: %d\n", n);
+    printf("n_Complex: %d\n", n_Complex);
+    printf("nMesh: %d\n", nMesh);
+    printf("nMeshComplex: %d\n", nMeshComplex);
+    printf("nThread: %d\n", nThread);
+    printf("nRow: %d\n", nRow);
+    printf("nCol: %d\n", nCol);
+    printf("mesh: %d %d %d\n", mesh[0], mesh[1], mesh[2]);
+    printf("nComplex: %d\n", nComplex);
+    printf("nReal: %d\n", nReal);
 
     // (1) transform (Row, Block, Col) -> (Row, Col, Block)
 
@@ -144,14 +158,14 @@ void _iFFT_Matrix_Col_InPlace(double __complex__ *matrix, // the size of matrix 
         {
             for (int j = 0; j < nCol; j++, iCol++)
             {
-                buf[i * n + j * nMeshComplex + iBlock] = matrix[i * n + iCol];
+                buf[i * n_Complex + j * nMeshComplex + iBlock] = matrix[i * n_Complex + iCol];
             }
         }
     }
 
     // (2) perform iFFT on the last dimension
 
-    auto nFFT = nRow * nCol;
+    int nFFT = nRow * nCol;
 
     double *mat_real = (double *)buf;
     double *buf_real = (double *)matrix;
@@ -170,7 +184,7 @@ void _iFFT_Matrix_Col_InPlace(double __complex__ *matrix, // the size of matrix 
             end = nFFT;
         }
 
-        fftw_plan plan = fftw_plan_many_dft_c2r(3, mesh, end - start, (fftw_complex *)buf + start * nComplex, mesh_complex, 1, nComplex, mat_real + start * nReal, mesh, 1, nReal, FFTW_ESTIMATE);
+        fftw_plan plan = fftw_plan_many_dft_c2r(3, mesh, end - start, (fftw_complex *)buf + start * nComplex, mesh_complex, 1, nComplex, buf_real + start * nReal, mesh, 1, nReal, FFTW_ESTIMATE);
         fftw_execute(plan);
         fftw_destroy_plan(plan);
     }
@@ -189,12 +203,13 @@ void _iFFT_Matrix_Col_InPlace(double __complex__ *matrix, // the size of matrix 
         {
             for (int iBlock = 0; iBlock < nMesh; iBlock++, iCol++)
             {
-                buf_real[i * n + iBlock * nCol + j] = mat_real[i * n + iCol];
+                // printf("i: %d, j: %d, iBlock: %d, iCol: %d %15.8f\n", i, j, iBlock, iCol, mat_real[i * n + iCol]);
+                buf_real[i * n + iBlock * nCol + j] = mat_real[i * n + iCol] * factor;
             }
         }
     }
 
-    memcpy(matrix, buf, sizeof(double) * m * nCol * mesh[0] * mesh[1] * mesh[2]);
+    memcpy(mat_real, buf_real, sizeof(double) * m * nCol * mesh[0] * mesh[1] * mesh[2]);
 }
 
 void Solve_LLTEqualB_Complex_Parallel(
