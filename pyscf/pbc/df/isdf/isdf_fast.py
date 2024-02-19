@@ -92,7 +92,7 @@ def colpivot_qr(A, max_rank=None, cutoff=1e-14):  # python code, benchmark, but 
 
     return Q.T, R, pivot, npt_find
 
-def _select_IP_direct(mydf, c:int, m:int, global_IP_selection=True):
+def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=True):
 
     bunchsize = lib.num_threads()
 
@@ -157,7 +157,11 @@ def _select_IP_direct(mydf, c:int, m:int, global_IP_selection=True):
 
         # clear buffer
 
-        for atm_id in range(natm):
+        if first_natm is None:
+            first_natm = natm
+    
+        # for atm_id in range(natm):
+        for atm_id in range(first_natm):
 
             buf_tmp[:buf_size_per_thread] = 0.0
 
@@ -297,7 +301,9 @@ def _select_IP_direct(mydf, c:int, m:int, global_IP_selection=True):
                      ctypes.c_int(naux_now),
                      ctypes.c_int(len(results)))
 
-        max_rank  = min(naux2_now, len(results), nao * c)
+        nao_first = np.sum(nao_per_atm[:first_natm])
+
+        max_rank  = min(naux2_now, len(results), nao_first * c)
 
         print("max_rank = ", max_rank)
 

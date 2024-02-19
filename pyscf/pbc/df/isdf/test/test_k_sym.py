@@ -146,6 +146,33 @@ def _extract_grid_primitive_cell(cell_a, mesh, Ls, coords):
                 
 # the following subroutine are all testing functions
 
+def _RowCol_FFT_ColFull_bench(input, Ls, mesh):
+    """
+    A is a 3D array, (nbra, nket, ngrid_prim)
+    """
+    A = input
+    ncell = np.prod(Ls)
+    nGrids = np.prod(mesh)
+    assert A.shape[1] == nGrids
+    assert A.shape[0] % ncell == 0
+    A = A.reshape(A.shape[0], *mesh)
+    # perform 3d fft 
+    A = np.fft.fftn(A, axes=(1, 2, 3))
+    A = A.reshape(A.shape[0], -1)
+    print("finish transform ket")
+    # transform bra
+    NPOINT_BRA = A.shape[0] // ncell
+    A = A.reshape(-1, NPOINT_BRA, A.shape[1])
+    A = A.transpose(1, 2, 0)
+    shape_tmp = A.shape
+    A = A.reshape(-1, *Ls)
+    A = np.fft.ifftn(A, axes=(1, 2, 3))
+    A = A.reshape(shape_tmp)
+    A = A.transpose(2, 0, 1)
+    A = A.reshape(-1, A.shape[2])
+    print("finish transform bra")
+    return A
+
 def _RowCol_FFT_bench(input, Ls, inv=False, TransBra = True, TransKet = True):
     """
     A is a 3D array, (nbra, nket, ngrid_prim)
@@ -225,7 +252,7 @@ def _RowCol_rFFT_Fast(input, Ls, inv=False):
     # print(A)
     if inv:
         assert A.dtype == np.complex128
-        A = np.fft.irfftn(A, axes=(1, 2, 3)) # the input is real
+        A = np.fft.irfftn(A, axes=(1, 2, 3), s=Ls) # the input is real
         nReal = np.prod(Ls)
         A = A.reshape((shape_tmp[0], shape_tmp[1], nReal))
     else:
@@ -273,7 +300,7 @@ if __name__ == '__main__':
 
     cell.build()
 
-    Ls   = [2, 3, 4]
+    Ls   = [2, 3, 5]
     cell = tools.super_cell(cell, Ls)
 
     from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2, _eval_rhoG
@@ -341,6 +368,14 @@ if __name__ == '__main__':
     A = _RowCol_FFT_bench(A, Ls)
     B = _RowCol_FFT_bench(B, Ls)
     
+    # print(A)
+    # print(B)
+    
+    # assert np.allclose(A.imag, 0.0)
+    # assert np.allclose(B.imag, 0.0)
+    
+    # exit(1)
+    
     for i in range(ncell):
         b_begin = i * NPOINT
         b_end   = (i + 1) * NPOINT
@@ -392,6 +427,7 @@ if __name__ == '__main__':
     A_Diag = []
     B_Diag = []
     X_Diag_bench = np.zeros_like(B_tmp_rFFT)
+    X_Diag_bench_full = np.zeros_like(B_tmp)
     
     for i in range(ncell):
 
@@ -399,17 +435,26 @@ if __name__ == '__main__':
         b_end   = (i + 1) * NPOINT
         k_begin = i * NPOINT
         k_end   = (i + 1) * NPOINT
-        mat     = A_tmp[:, k_begin:k_end]
-        assert np.allclose(mat, A[b_begin:b_end, k_begin:k_end])
+        matA     = A_tmp[:, k_begin:k_end]
+        assert np.allclose(matA, A[b_begin:b_end, k_begin:k_end])
         
-        A_Diag.append(mat)
+        A_Diag.append(matA)
         
         k_begin = i * ngrid_prim
         k_end   = (i + 1) * ngrid_prim
-        mat     = B_tmp[:, k_begin:k_end]
-        assert np.allclose(mat, B[b_begin:b_end, k_begin:k_end])
+        matB     = B_tmp[:, k_begin:k_end]
+        assert np.allclose(matB, B[b_begin:b_end, k_begin:k_end])
     
-        B_Diag.append(mat)
+        B_Diag.append(matB)
+        
+        X_Diag_bench_full[:,k_begin:k_end] = np.linalg.solve(matA, matB)
+
+        X_tmp = np.linalg.solve(matA, matB)
+        print("cell %d" % i)
+        print(matA)
+        print(matB)
+        # print(X_tmp[:2,:2])
+        print(X_tmp)
     
     ncell_complex = np.prod([Ls[0], Ls[1], Ls[2]//2+1])
     
@@ -636,27 +681,123 @@ if __name__ == '__main__':
     
     assert np.allclose(X4, X_Diag_bench)  # we get the correct answer!!!
     
-    ### it seems that we do not need this step at all ! 
+    ####### check the structure of X after FFT ####### 
+    print(coords)
+    aoR_unordered    = df_tmp._numint.eval_ao(cell, coords)[0].T
+    aoR_unordered   *= np.sqrt(cell.vol / ngrids)
     
-    # print(X4)
+    A = np.asarray(lib.dot(aoRg.T, aoRg), order='C')
+    A = A ** 2
+    B_unordered = np.asarray(lib.dot(aoRg.T, aoR_unordered), order='C')
+    B_unordered = B_unordered ** 2
     
-    # Buf3 = np.zeros((X4.shape[0], nPoint_B, nMeshComplex), dtype=np.complex128, order='C')
-    # X4_real = np.ndarray((X4.shape[0], nPoint_B, nMeshReal), dtype=np.float64, order='C', buffer=X4)
-    # fn2 = getattr(libpbc, "_iFFT_Matrix_Col_InPlace", None)
-    # assert fn2 is not None
-    # # print(X4.shape)
-    # # print(Buf3.shape)
-    # fn2(
-    #     X4.ctypes.data_as(ctypes.c_void_p),
-    #     ctypes.c_int(X4.shape[0]),
-    #     ctypes.c_int(nPoint_B),
-    #     mesh_real.ctypes.data_as(ctypes.c_void_p),
-    #     Buf3.ctypes.data_as(ctypes.c_void_p)
-    # )
-    # X4_real = X4_real.reshape(X4_real.shape[0], -1)
-    # print(X4_real[0,0:10])
-    # print(X3_first_RowBlock[0,0:10])
-    # print(X4_real[0,0:10]/X3_first_RowBlock[0,0:10])
-    # assert np.allclose(X4_real, X3_first_RowBlock)
+    X_unorder = np.linalg.solve(A, B_unordered)
+    print("Ls   = ", Ls)
+    print("mesh = ", mesh)
+    X_unorder = _RowCol_FFT_ColFull_bench(X_unorder, Ls, mesh)
+    
+    nBox = [mesh[0]//Ls[0], mesh[1]//Ls[1], mesh[2]//Ls[2]] 
+    
+    X_unorder = X_unorder.reshape(-1, nBox[0], Ls[0], nBox[1],Ls[1], nBox[2], Ls[2])
+    X_unorder = X_unorder.transpose(0, 2, 4, 6, 1, 3, 5)
+    X_unorder = X_unorder.reshape(-1, np.prod(mesh))
+    
+    def _check_X_symmetry(input_X, Ls, mesh):
+        assert input_X.shape[1] == np.prod(mesh)
+        ncell = np.prod(Ls)
+        NPOINT_per_cell = input_X.shape[0] // ncell
+        ngrid_prim = input_X.shape[1] // ncell
+                
+        print("ncell = ", ncell)
+        print("NPOINT_per_cell = ", NPOINT_per_cell)
+        print("ngrid_prim = ", ngrid_prim)
+                
+        for i in range(ncell):
+            row_begin = i * NPOINT_per_cell
+            row_end   = (i + 1) * NPOINT_per_cell
+            col_begin = i * ngrid_prim
+            col_end   = (i + 1) * ngrid_prim
+            basis_aux_now = input_X[row_begin:row_end, col_begin:col_end]
+            
+            assert np.allclose(basis_aux_now, 0) == False
+                
+            # check block diagonal
+            
+            basis_before = input_X[row_begin:row_end, :col_begin]
+            assert np.allclose(basis_before, 0.0)
+            basis_after  = input_X[row_begin:row_end, col_end:]
+            assert np.allclose(basis_after, 0.0)
+    
+    _check_X_symmetry(X_unorder, Ls, mesh)
+    
+    ### remove the negative frequency 
+    
+    # X_unorder = X_unorder.reshape(Ls[0], Ls[1], Ls[2], NPOINT, Ls[0], Ls[1], Ls[2], np.prod(nBox))
+    
+    # X_real_unorder = X_unorder[:,:,:Ls[2]//2+1,:,:,:,:Ls[2]//2+1,:]
+    # X_real_unorder = X_real_unorder.reshape(-1, Ls[0] * Ls[1] * (Ls[2]//2+1) * np.prod(nBox))
+    
+    # ncell_complex = np.prod([Ls[0], Ls[1], Ls[2]//2+1])
+    
+    nBox = [mesh[0]//Ls[0], mesh[1]//Ls[1], mesh[2]//Ls[2]]
+    
+    ncell = np.prod(Ls)
+    ngrid_prim = np.prod(mesh) // ncell
+    
+    X_Diag_2 = np.zeros_like(X_Diag_bench)
+        
+    ### construct the factor before transform X_diag_bench_full 
+    freq1 = np.array(range(nBox[0]), dtype=np.float64)
+    freq2 = np.array(range(nBox[1]), dtype=np.float64)
+    freq3 = np.array(range(nBox[2]), dtype=np.float64)
+    freq_q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+
+    freq1 = np.array(range(Ls[0]), dtype=np.float64)
+    freq2 = np.array(range(Ls[1]), dtype=np.float64)
+    freq3 = np.array(range(Ls[2]), dtype=np.float64)
+    freq_Q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+        
+    FREQ = np.einsum("ijkl,ipqs->ijklpqs", freq_Q, freq_q)
+    FREQ[0] /= (Ls[0] * nBox[0])
+    FREQ[1] /= (Ls[1] * nBox[1])
+    FREQ[2] /= (Ls[2] * nBox[2])
+    FREQ = np.einsum("ijklpqs->jklpqs", FREQ)
+    FREQ  = FREQ.reshape(np.prod(Ls), np.prod(nBox))
+    FREQ  = np.exp(-2.0j * np.pi * FREQ)  # this is the only correct way to construct the factor
+    
+    for i in range(ncell):
+        
+        print("cell %d" % i)
+        
+        b_begin = i * NPOINT
+        b_end   = (i + 1) * NPOINT
+        k_begin = i * ngrid_prim
+        k_end   = (i + 1) * ngrid_prim
+
+        Hmat = X_unorder[b_begin:b_end, k_begin:k_end]
+        
+        assert np.allclose(Hmat, 0.0) == False  
+        
+        # before and after 
+        
+        Hmat_before = X_unorder[b_begin:b_end, :k_begin]
+        assert np.allclose(Hmat_before, 0.0)
+        Hmat_after  = X_unorder[b_begin:b_end, k_end:]
+        assert np.allclose(Hmat_after, 0.0)
+
+        bench = X_Diag_bench_full[:, k_begin:k_end]
+        
+        # print(bench.shape)
+        # print(Hmat.shape)
+        bench2 = bench * FREQ[i]
+        # bench2 = bench
+        # print(bench2/bench)
+        bench = bench2
+        bench = bench.reshape(-1, *nBox)
+        # print(bench.shape)
+        bench = np.fft.fftn(bench, axes=(1, 2, 3)) # shit
+        bench = bench.reshape(-1, np.prod(nBox))
+
+        assert np.allclose(Hmat, bench)
     
     
