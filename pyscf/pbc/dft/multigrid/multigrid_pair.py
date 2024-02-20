@@ -57,17 +57,6 @@ IMAG_TOL = 1e-9
 libpbc = lib.load_library('libpbc')
 libdft = lib.load_library('libdft')
 
-def ndarray_pointer_2d(array):
-    '''Get the C pointer of a 2D array
-    '''
-    assert array.ndim == 2
-    assert array.flags.c_contiguous
-
-    ptr = (array.ctypes.data +
-           np.arange(array.shape[0])*array.strides[0]).astype(np.uintp)
-    ptr = ptr.ctypes.data_as(ctypes.c_void_p)
-    return ptr
-
 def gradient_gs(f_gs, Gv):
     r'''Compute the G-space components of :math:`\nabla f(r)`
     given :math:`f(G)` and :math:`G`,
@@ -293,7 +282,7 @@ def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precisio
     ish_rcut, ipgf_rcut = cell.rcut_by_shells(precision=precision,
                                               return_pgf_radius=True)
     assert nish == len(ish_rcut)
-    ptr_ipgf_rcut = ndarray_pointer_2d(ipgf_rcut)
+    ptr_ipgf_rcut = lib.ndarray_pointer_2d(ipgf_rcut)
 
     if cell1 is cell:
         jsh_atm = ish_atm
@@ -308,7 +297,7 @@ def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precisio
         jsh_env = np.asarray(cell1._env, order='C', dtype=float)
         jsh_rcut, jpgf_rcut = cell1.rcut_by_shells(precision=precision,
                                                    return_pgf_radius=True)
-        ptr_jpgf_rcut = ndarray_pointer_2d(jpgf_rcut)
+        ptr_jpgf_rcut = lib.ndarray_pointer_2d(jpgf_rcut)
     njsh = len(jsh_bas)
     assert njsh == len(jsh_rcut)
 
