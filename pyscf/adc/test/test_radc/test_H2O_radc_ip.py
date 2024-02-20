@@ -60,11 +60,10 @@ class KnownValues(unittest.TestCase):
         r2_gs = np.einsum('pq,pq->',r2_int,dm1_gs_ao) 
         self.assertAlmostEqual(r2_gs, 19.073700043115412, 6)
 
-        myadcip = adc.radc_ip.RADCIP(myadc)
-        e,v,p,x = myadcip.kernel(nroots=3)
-        dm1_ip = myadcip.make_rdm1_excited()
-        dm1_ip_ao = np.einsum('pi,ij,kqj->kpq', mf.mo_coeff, dm1_ip, mf.mo_coeff.conj())
-        r2_ip = np.einsum('pq,pq->',r2_int,dm1_ip_ao) 
+        e,v,p,x = myadc.kernel(nroots=3)
+        dm1_ip = myadc.make_rdm1_excited()
+        dm1_ip_ao = np.einsum('pi,kij,qj->kpq', mf.mo_coeff, dm1_ip, mf.mo_coeff.conj())
+        r2_ip = np.einsum('pq,kpq->k',r2_int,dm1_ip_ao) 
 
         self.assertAlmostEqual(e[0], 0.4034634878946100, 6)
         self.assertAlmostEqual(e[1], 0.4908881395275673, 6)
