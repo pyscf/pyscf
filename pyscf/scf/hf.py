@@ -105,7 +105,6 @@ def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
     >>> print('conv = %s, E(HF) = %.12f' % (conv, e))
     conv = True, E(HF) = -1.081170784378
     '''
-    from pyscf.pbc.scf import hf as pbchf
     if 'init_dm' in kwargs:
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.11.
@@ -117,13 +116,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     mol = mf.mol
     s1e = mf.get_ovlp(mol)
-    # condition number check has been done in pbchf.get_ovlp
-    if not isinstance(mf, pbchf.SCF):
-        cond = lib.cond(s1e)
-        logger.debug(mf, 'cond(S) = %s', cond)
-        if numpy.max(cond)*1e-17 > conv_tol:
-            logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
-                        'SCF may be inaccurate and hard to converge.', numpy.max(cond))
 
     if dm0 is None:
         dm = mf.get_init_guess(mol, mf.init_guess, s1e=s1e)
@@ -1572,6 +1564,15 @@ class SCF(lib.StreamObject):
 
         self._opt = {None: None}
         self._eri = None # Note: self._eri requires large amount of memory
+
+    def check_sanity(self):
+        s1e = self.get_ovlp()
+        cond = lib.cond(s1e)
+        logger.debug(self, 'cond(S) = %s', cond)
+        if numpy.max(cond)*1e-17 > self.conv_tol:
+            logger.warn(self, 'Singularity detected in overlap matrix (condition number = %4.3g). '
+                        'SCF may be inaccurate and hard to converge.', numpy.max(cond))
+        return super().check_sanity()
 
     def build(self, mol=None):
         if mol is None: mol = self.mol

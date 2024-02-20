@@ -19,7 +19,6 @@
 import ctypes
 import numpy as np
 from pyscf import __config__
-from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import uhf as mol_uhf
 from pyscf.grad.rhf import _write
@@ -44,24 +43,24 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
     log.timer('gradients of 2e part', *t0)
 
     dme0 = mf_grad.make_rdm1e(mo_energy, mo_coeff, mo_occ)
-    dm0_sf = lib.add(dm0[0], dm0[1])
-    dme0_sf = lib.add(dme0[0], dme0[1])
+    dm0_sf = dm0[0] + dm0[1]
+    dme0_sf = dme0[0] + dme0[1]
 
     if atmlst is None:
         atmlst = range(mol.natm)
 
     de = 0
     if gamma_point(kpt):
-        de = mf.with_df.vpploc_part1_nuc_grad(dm0_sf, kpts=kpt.reshape(-1,3))
-        de = lib.add(de, pp_int.vpploc_part2_nuc_grad(mol, dm0_sf), out=de)
-        de = lib.add(de, pp_int.vppnl_nuc_grad(mol, dm0_sf), out=de)
+        de  = mf.with_df.vpploc_part1_nuc_grad(dm0_sf, kpts=kpt.reshape(-1,3))
+        de += pp_int.vpploc_part2_nuc_grad(mol, dm0_sf)
+        de += pp_int.vppnl_nuc_grad(mol, dm0_sf)
         h1ao = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
-        if mf.with_df.vpplocG_part1 is None or mf.with_df.pp_with_erf:
+        if getattr(mf.with_df, 'vpplocG_part1', None) is None:
             h1ao += -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
-        de = lib.add(de, rhf_grad._contract_vhf_dm(mf_grad, h1ao, dm0_sf) * 2)
+        de += rhf_grad._contract_vhf_dm(mf_grad, h1ao, dm0_sf) * 2
         for s in range(2):
-            de = lib.add(de, rhf_grad._contract_vhf_dm(mf_grad, vhf[s], dm0[s]) * 2)
-        de = lib.add(de, rhf_grad._contract_vhf_dm(mf_grad, s1, dme0_sf) * -2)
+            de += rhf_grad._contract_vhf_dm(mf_grad, vhf[s], dm0[s]) * 2
+        de += rhf_grad._contract_vhf_dm(mf_grad, s1, dme0_sf) * -2
         h1ao = s1 = vhf = dm0 = dme0 = dm0_sf = dme0_sf = None
         de = de[atmlst]
     else:

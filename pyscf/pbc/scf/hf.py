@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,22 +48,18 @@ def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
     precision = cell.precision * 1e-5
-    if cell.use_loose_rcut:
-        rcut = max(cell.rcut, gto.estimate_rcut_loose(cell, precision))
-    else:
-        rcut = max(cell.rcut, gto.estimate_rcut(cell, precision))
+    rcut = max(cell.rcut, gto.estimate_rcut(cell, precision))
     with lib.temporary_env(cell, rcut=rcut, precision=precision):
         # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
         s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
                            pbcopt=lib.c_null_ptr())
-    s = lib.asarray(s)
+    s = np.asarray(s)
     hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
     if hermi_error > cell.precision and hermi_error > 1e-12:
         logger.warn(cell, '%.4g error found in overlap integrals. '
                     'cell.precision  or  cell.rcut  can be adjusted to '
                     'improve accuracy.', hermi_error)
 
-    # cond is slow, skip for performance runs
     if cell.verbose >= logger.DEBUG:
         cond = np.max(lib.cond(s))
         if cond * precision > 1e2:
@@ -620,11 +616,18 @@ class SCF(mol_hf.SCF):
         return self
 
     def check_sanity(self):
-        mol_hf.SCF.check_sanity(self)
+        lib.StreamObject.check_sanity(self)
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
                         self.exxdiv)
+
+        if self.verbose >= logger.DEBUG:
+            s = self.get_ovlp()
+            cond = np.max(lib.cond(s))
+            if cond * 1e-17 > self.conv_tol:
+                logger.warn(self, 'Singularity detected in overlap matrix (condition number = %4.3g). '
+                            'SCF may be inaccurate and hard to converge.', cond)
         return self
 
     def get_hcore(self, cell=None, kpt=None):

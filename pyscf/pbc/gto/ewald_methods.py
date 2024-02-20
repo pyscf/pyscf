@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2021- The PySCF Developers. All Rights Reserved.
+# Copyright 2021-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -162,7 +162,7 @@ def particle_mesh_ewald(cell, ew_eta=None, ew_cut=None,
     B = np.einsum('x,y,z->xyz', bx*bx.conj(), by*by.conj(), bz*bz.conj())
 
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = lib.multiply_sum(Gv, Gv, axis=1)
+    absG2 = np.einsum('ix,ix->i', Gv, Gv)
     absG2[absG2==0] = 1e200
     coulG = 4*np.pi / absG2
     C = weights * coulG * np.exp(-absG2/(4*ew_eta**2))
@@ -216,7 +216,7 @@ def particle_mesh_ewald_nuc_grad(cell, ew_eta=None, ew_cut=None,
     B = np.einsum('x,y,z->xyz', bx*bx.conj(), by*by.conj(), bz*bz.conj())
 
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = lib.multiply_sum(Gv, Gv, axis=1)
+    absG2 = np.einsum('ix,ix->i', Gv, Gv)
     absG2[absG2==0] = 1e200
     coulG = 4*np.pi / absG2
     C = weights * coulG * np.exp(-absG2/(4*ew_eta**2))
@@ -276,8 +276,7 @@ def ewald_nuc_grad(cell, ew_eta=None, ew_cut=None):
         if mem_avail <= 0:
             logger.warn(cell, "Not enough memory for computing ewald force.")
         blksize = min(ngrids, max(mesh[2], int(mem_avail*1e6 / ((2+cell.natm*2)*8))))
-        for ig0 in range(0, ngrids, blksize):
-            ig1 = min(ngrids, ig0+blksize)
+        for ig0, ig1 in lib.prange(0, ngrids, blksize):
             ngrid_sub = ig1 - ig0
             Gv_sub = np.asarray(Gv[ig0:ig1], order="C")
             fn(grad_rec.ctypes.data_as(ctypes.c_void_p),

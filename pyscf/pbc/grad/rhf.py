@@ -53,14 +53,14 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     de = 0
     if gamma_point(kpt):
-        de = mf.with_df.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
-        de = lib.add(de, pp_int.vpploc_part2_nuc_grad(mol, dm0), out=de)
-        de = lib.add(de, pp_int.vppnl_nuc_grad(mol, dm0), out=de)
+        de  = mf.with_df.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
+        de += pp_int.vpploc_part2_nuc_grad(mol, dm0)
+        de += pp_int.vppnl_nuc_grad(mol, dm0)
         h1ao = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
-        if mf.with_df.vpplocG_part1 is None or mf.with_df.pp_with_erf:
+        if getattr(mf.with_df, 'vpplocG_part1', None) is None:
             h1ao += -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
-        de = lib.add(de, _contract_vhf_dm(mf_grad, lib.add(h1ao, vhf), dm0) * 2)
-        de = lib.add(de, _contract_vhf_dm(mf_grad, s1, dme0) * -2)
+        de += _contract_vhf_dm(mf_grad, np.add(h1ao, vhf), dm0) * 2
+        de += _contract_vhf_dm(mf_grad, s1, dme0) * -2
         h1ao = s1 = vhf = dm0 = dme0 = None
         de = de[atmlst]
     else:

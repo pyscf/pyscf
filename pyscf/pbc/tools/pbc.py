@@ -23,7 +23,6 @@ from pyscf.gto import ATM_SLOTS, BAS_SLOTS, ATOM_OF, PTR_COORD
 from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
 from pyscf import __config__
 
-libpbc = lib.load_library('libpbc')
 FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'BLAS')
 
 def _fftn_blas(f, mesh):
@@ -34,10 +33,9 @@ def _fftn_blas(f, mesh):
     expRGy = np.exp(np.einsum('x,k->xk', -2j*np.pi*np.arange(mesh[1]), Gy))
     expRGz = np.exp(np.einsum('x,k->xk', -2j*np.pi*np.arange(mesh[2]), Gz))
     out = np.empty(f.shape, dtype=np.complex128)
-    #buf = np.empty(mesh, dtype=np.complex128)
+    buf = np.empty(mesh, dtype=np.complex128)
     for i, fi in enumerate(f):
-        #buf[:] = fi.reshape(mesh)
-        buf = lib.copy(fi.reshape(mesh), dtype=np.complex128)
+        buf[:] = fi.reshape(mesh)
         g = lib.dot(buf.reshape(mesh[0],-1).T, expRGx, c=out[i].reshape(-1,mesh[0]))
         g = lib.dot(g.reshape(mesh[1],-1).T, expRGy, c=buf.reshape(-1,mesh[1]))
         g = lib.dot(g.reshape(mesh[2],-1).T, expRGz, c=out[i].reshape(-1,mesh[2]))
@@ -51,10 +49,9 @@ def _ifftn_blas(g, mesh):
     expRGy = np.exp(np.einsum('x,k->xk', 2j*np.pi*np.arange(mesh[1]), Gy))
     expRGz = np.exp(np.einsum('x,k->xk', 2j*np.pi*np.arange(mesh[2]), Gz))
     out = np.empty(g.shape, dtype=np.complex128)
-    #buf = np.empty(mesh, dtype=np.complex128)
+    buf = np.empty(mesh, dtype=np.complex128)
     for i, gi in enumerate(g):
-        #buf[:] = gi.reshape(mesh)
-        buf = lib.copy(gi.reshape(mesh), dtype=np.complex128)
+        buf[:] = gi.reshape(mesh)
         f = lib.dot(buf.reshape(mesh[0],-1).T, expRGx, 1./mesh[0], c=out[i].reshape(-1,mesh[0]))
         f = lib.dot(f.reshape(mesh[1],-1).T, expRGy, 1./mesh[1], c=buf.reshape(-1,mesh[1]))
         f = lib.dot(f.reshape(mesh[2],-1).T, expRGz, 1./mesh[2], c=out[i].reshape(-1,mesh[2]))
@@ -67,10 +64,7 @@ if FFT_ENGINE == 'FFTW':
         raise RuntimeError("Failed to load libfft")
 
     def _complex_fftn_fftw(f, mesh, func):
-        if f.dtype == np.double and f.flags.c_contiguous:
-            f = lib.copy(f, dtype=np.complex128)
-        else:
-            f = np.asarray(f, order='C', dtype=np.complex128)
+        f = np.asarray(f, order='C', dtype=np.complex128)
         mesh = np.asarray(mesh, order='C', dtype=np.int32)
         rank = len(mesh)
         out = np.empty_like(f)
@@ -295,8 +289,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             kG[on_edge[:,2]== 1] -= 2 * box_edge[2]
             kG[on_edge[:,2]==-1] += 2 * box_edge[2]
 
-    #:absG2 = np.einsum('gi,gi->g', kG, kG)
-    absG2 = lib.multiply_sum(kG, kG, axis=1)
+    absG2 = np.einsum('gi,gi->g', kG, kG)
 
     if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
@@ -347,8 +340,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         G0_idx = np.where(absG2==0)[0]
         if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
             with np.errstate(divide='ignore'):
-                #:coulG = 4*np.pi/absG2
-                coulG = lib.multiply(4*np.pi, lib.reciprocal(absG2))
+                coulG = 4*np.pi/absG2
                 coulG[G0_idx] = 0
 
         elif cell.dimension == 2:
@@ -750,26 +742,3 @@ def round_to_cell0(r, tol=1e-6):
     '''
     from pyscf.pbc.lib import kpts_helper
     return kpts_helper.round_to_fbz(r, wrap_around=False, tol=tol)
-
-def gradient_gs(f_gs, Gv):
-    r'''Compute the G-space components of :math:`\nabla f(r)`
-    given :math:`f(G)` and :math:`G`,
-    which is equivalent to einsum('np,px->nxp', f_gs, 1j*Gv)
-    '''
-    ng, dim = Gv.shape
-    if dim != 3:
-        raise NotImplementedError
-    Gv = np.asarray(Gv, order='C', dtype=float)
-    f_gs = np.asarray(f_gs.reshape(-1,ng), order='C', dtype=np.complex128)
-    n = f_gs.shape[0]
-    out = np.empty((n,dim,ng), dtype=np.complex128)
-
-    fn = getattr(libpbc, 'gradient_gs', None)
-    try:
-        fn(out.ctypes.data_as(ctypes.c_void_p),
-           f_gs.ctypes.data_as(ctypes.c_void_p),
-           Gv.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(n), ctypes.c_size_t(ng))
-    except Exception as e:
-        raise RuntimeError("Failed to contract f_gs and iGv. %s" % e)
-    return out

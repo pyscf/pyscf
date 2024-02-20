@@ -25,9 +25,22 @@ from pyscf.gto import moleintor
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.df import fft
-from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
-from pyscf.pbc.dft.multigrid.pp import get_pp, vpploc_part1_nuc_grad
-from pyscf.pbc.dft.multigrid.utils import _take_4d, _take_5d, _takebak_4d, _takebak_5d
+from pyscf.pbc.df.df_jk import (
+    _format_dms,
+    _format_kpts_band,
+    _format_jks,
+)
+from pyscf.pbc.dft.multigrid.pp import (
+    _get_vpplocG_part1,
+    _get_pp_without_erf,
+    vpploc_part1_nuc_grad,
+)
+from pyscf.pbc.dft.multigrid.utils import (
+    _take_4d,
+    _take_5d,
+    _takebak_4d,
+    _takebak_5d,
+)
 from pyscf.pbc.dft.multigrid.multigrid import MultiGridFFTDF
 
 NGRIDS = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
@@ -41,7 +54,41 @@ PTR_EXPDROP = 16
 EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-12)
 IMAG_TOL = 1e-9
 
+libpbc = lib.load_library('libpbc')
 libdft = lib.load_library('libdft')
+
+def ndarray_pointer_2d(array):
+    '''Get the C pointer of a 2D array
+    '''
+    assert array.ndim == 2
+    assert array.flags.c_contiguous
+
+    ptr = (array.ctypes.data +
+           np.arange(array.shape[0])*array.strides[0]).astype(np.uintp)
+    ptr = ptr.ctypes.data_as(ctypes.c_void_p)
+    return ptr
+
+def gradient_gs(f_gs, Gv):
+    r'''Compute the G-space components of :math:`\nabla f(r)`
+    given :math:`f(G)` and :math:`G`,
+    which is equivalent to einsum('np,px->nxp', f_gs, 1j*Gv)
+    '''
+    ng, dim = Gv.shape
+    assert dim == 3
+    Gv = np.asarray(Gv, order='C', dtype=np.double)
+    f_gs = np.asarray(f_gs.reshape(-1,ng), order='C', dtype=np.complex128)
+    n = f_gs.shape[0]
+    out = np.empty((n,dim,ng), dtype=np.complex128)
+
+    fn = getattr(libpbc, 'gradient_gs', None)
+    try:
+        fn(out.ctypes.data_as(ctypes.c_void_p),
+           f_gs.ctypes.data_as(ctypes.c_void_p),
+           Gv.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_int(n), ctypes.c_size_t(ng))
+    except Exception as e:
+        raise RuntimeError(f'Error in gradient_gs: {e}')
+    return out
 
 
 class GridLevel_Info(ctypes.Structure):
@@ -246,7 +293,7 @@ def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precisio
     ish_rcut, ipgf_rcut = cell.rcut_by_shells(precision=precision,
                                               return_pgf_radius=True)
     assert nish == len(ish_rcut)
-    ptr_ipgf_rcut = lib.ndarray_pointer_2d(ipgf_rcut)
+    ptr_ipgf_rcut = ndarray_pointer_2d(ipgf_rcut)
 
     if cell1 is cell:
         jsh_atm = ish_atm
@@ -261,7 +308,7 @@ def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precisio
         jsh_env = np.asarray(cell1._env, order='C', dtype=float)
         jsh_rcut, jpgf_rcut = cell1.rcut_by_shells(precision=precision,
                                                    return_pgf_radius=True)
-        ptr_jpgf_rcut = lib.ndarray_pointer_2d(jpgf_rcut)
+        ptr_jpgf_rcut = ndarray_pointer_2d(jpgf_rcut)
     njsh = len(jsh_bas)
     assert njsh == len(jsh_rcut)
 
@@ -450,7 +497,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
     assert(deriv < 2)
     cell = mydf.cell
 
-    dm_kpts = lib.asarray(dm_kpts, order='C')
+    dm_kpts = np.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
@@ -517,8 +564,8 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
     if gga_high_order:
         Gv = cell.get_Gv(mydf.mesh)
         #:rhoG1 = np.einsum('np,px->nxp', 1j*rhoG[:,0], Gv)
-        rhoG1 = tools.gradient_gs(rhoG, Gv)
-        rhoG = lib.concatenate([rhoG, rhoG1], axis=1)
+        rhoG1 = gradient_gs(rhoG[:,0], Gv)
+        rhoG = np.concatenate([rhoG, rhoG1], axis=1)
         Gv = rhoG1 = None
     return rhoG
 
@@ -760,7 +807,8 @@ def _get_j_pass2_ip1(mydf, vG, kpts=np.zeros((1,3)), hermi=0, deriv=1, verbose=N
 
         mat = eval_mat(cell, vR, task_list, comp=comp, hermi=hermi, deriv=deriv,
                        xctype='LDA', kpts=kpts, grid_level=ilevel, mesh=mesh)
-        vj_kpts = lib.add(vj_kpts, np.asarray(mat).reshape(nset,-1,comp,nao,nao), out=vj_kpts)
+        mat = np.asarray(mat).reshape(nset,-1,comp,nao,nao)
+        vj_kpts = np.add(vj_kpts, mat, out=vj_kpts)
 
     if nset == 1:
         vj_kpts = vj_kpts[0]
@@ -797,9 +845,10 @@ def _get_gga_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
         wv = tools.ifft(sub_vG, mesh).real.reshape(nset,4,ngrids)
         wv = np.asarray(wv, order='C')
 
-        mat = np.asarray(eval_mat(cell, wv, task_list, comp=1, hermi=hermi,
-                         xctype='GGA', kpts=kpts, grid_level=ilevel, mesh=mesh)).reshape(nset,-1,nao,nao)
-        veff = lib.add(veff, mat, out=veff)
+        mat = eval_mat(cell, wv, task_list, comp=1, hermi=hermi,
+                       xctype='GGA', kpts=kpts, grid_level=ilevel, mesh=mesh)
+        mat = np.asarray(mat).reshape(nset,-1,nao,nao)
+        veff = np.add(veff, mat, out=veff)
         if not gamma_point(kpts):
             raise NotImplementedError
 
@@ -864,9 +913,9 @@ def _rks_gga_wv0(rho, vxc, weight):
     vrho, vgamma = vxc[:2]
     ngrid = vrho.size
     wv = np.empty((4,ngrid))
-    wv[0]  = lib.multiply(weight, vrho, out=wv[0])
+    wv[0]  = np.multiply(weight, vrho, out=wv[0])
     for i in range(1, 4):
-        wv[i] = lib.multiply(weight * 2, lib.multiply(vgamma, rho[i], out=wv[i]), out=wv[i])
+        wv[i] = np.multiply(weight * 2, np.multiply(vgamma, rho[i], out=wv[i]), out=wv[i])
     return wv
 
 
@@ -875,16 +924,16 @@ def _uks_gga_wv0(rho, vxc, weight):
     vrho, vsigma = vxc[:2]
     ngrids = vrho.shape[0]
     wv = np.empty((2, 4, ngrids))
-    wv[0,0]  = lib.multiply(weight, vrho[:,0], out=wv[0,0])
+    wv[0,0]  = np.multiply(weight, vrho[:,0], out=wv[0,0])
     for i in range(1,4):
-        wv[0,i] = lib.multiply(2., lib.multiply(rhoa[i], vsigma[:,0], out=wv[0,i]), out=wv[0,i])
-        wv[0,i] = lib.add(wv[0,i], lib.multiply(rhob[i], vsigma[:,1]), out=wv[0,i])
-        wv[0,i] = lib.multiply(weight, wv[0,i], out=wv[0,i])
-    wv[1,0]  = lib.multiply(weight, vrho[:,1], out=wv[1,0])
+        wv[0,i] = np.multiply(2., np.multiply(rhoa[i], vsigma[:,0], out=wv[0,i]), out=wv[0,i])
+        wv[0,i] = np.add(wv[0,i], np.multiply(rhob[i], vsigma[:,1]), out=wv[0,i])
+        wv[0,i] = np.multiply(weight, wv[0,i], out=wv[0,i])
+    wv[1,0]  = np.multiply(weight, vrho[:,1], out=wv[1,0])
     for i in range(1,4):
-        wv[1,i] = lib.multiply(2., lib.multiply(rhob[i], vsigma[:,2], out=wv[1,i]), out=wv[1,i])
-        wv[1,i] = lib.add(wv[1,i], lib.multiply(rhoa[i], vsigma[:,1]), out=wv[1,i])
-        wv[1,i] = lib.multiply(weight, wv[1,i], out=wv[1,i])
+        wv[1,i] = np.multiply(2., np.multiply(rhob[i], vsigma[:,2], out=wv[1,i]), out=wv[1,i])
+        wv[1,i] = np.add(wv[1,i], np.multiply(rhoa[i], vsigma[:,1]), out=wv[1,i])
+        wv[1,i] = np.multiply(weight, wv[1,i], out=wv[1,i])
     return wv
 
 
@@ -893,7 +942,7 @@ def _rks_gga_wv0_pw(cell, rho, vxc, weight, mesh):
     ngrid = vrho.size
     buf = np.empty((3,ngrid))
     for i in range(1, 4):
-        buf[i-1] = lib.multiply(vgamma, rho[i], out=buf[i-1])
+        buf[i-1] = np.multiply(vgamma, rho[i], out=buf[i-1])
 
     vrho_freq = tools.fft(vrho, mesh).reshape((1,ngrid))
     buf_freq = tools.fft(buf, mesh).reshape((3,ngrid))
@@ -917,15 +966,15 @@ def _uks_gga_wv0_pw(cell, rho, vxc, weight, mesh):
     ngrid = vrho.shape[0]
     buf = np.empty((2,3,ngrid))
     for i in range(1, 4):
-        buf[0,i-1] = lib.multiply(vgamma[:,0], rhoa[i], out=buf[0,i-1])
-        tmp = lib.multiply(vgamma[:,1], rhob[i])
-        tmp = lib.multiply(.5, tmp, out=tmp)
-        buf[0,i-1] = lib.add(buf[0,i-1], tmp, out=buf[0,i-1])
+        buf[0,i-1] = np.multiply(vgamma[:,0], rhoa[i], out=buf[0,i-1])
+        tmp = np.multiply(vgamma[:,1], rhob[i])
+        tmp = np.multiply(.5, tmp, out=tmp)
+        buf[0,i-1] = np.add(buf[0,i-1], tmp, out=buf[0,i-1])
 
-        buf[1,i-1] = lib.multiply(vgamma[:,2], rhob[i], out=buf[1,i-1])
-        tmp = lib.multiply(vgamma[:,1], rhoa[i])
-        tmp = lib.multiply(.5, tmp, out=tmp)
-        buf[1,i-1] = lib.add(buf[1,i-1], tmp, out=buf[1,i-1])
+        buf[1,i-1] = np.multiply(vgamma[:,2], rhob[i], out=buf[1,i-1])
+        tmp = np.multiply(vgamma[:,1], rhoa[i])
+        tmp = np.multiply(.5, tmp, out=tmp)
+        buf[1,i-1] = np.add(buf[1,i-1], tmp, out=buf[1,i-1])
 
 
     vrho_freq = tools.fft(vrho.T, mesh).reshape((2,ngrid))
@@ -953,7 +1002,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     if kpts is None: kpts = mydf.kpts
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
-    dm_kpts = lib.asarray(dm_kpts, order='C')
+    dm_kpts = np.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
@@ -973,27 +1022,27 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     #vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
     vG = np.empty_like(rhoG[:,0], dtype=np.result_type(rhoG[:,0], coulG))
     for i, rhoG_i in enumerate(rhoG[:,0]):
-        vG[i] = lib.multiply(rhoG_i, coulG, out=vG[i])
+        vG[i] = np.multiply(rhoG_i, coulG, out=vG[i])
     coulG = None
 
-    if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
+    if mydf.vpplocG_part1 is not None:
         for i in range(nset):
             #vG[i] += mydf.vpplocG_part1 * 2
-            vG[i] = lib.add(vG[i], lib.multiply(2., mydf.vpplocG_part1), out=vG[i])
+            vG[i] = np.add(vG[i], np.multiply(2., mydf.vpplocG_part1), out=vG[i])
 
     #ecoul = .5 * np.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
     #ecoul+= .5 * np.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
     ecoul = np.zeros((rhoG.shape[0],))
     for i in range(rhoG.shape[0]):
-        ecoul[i] = .5 * lib.vdot(rhoG[i,0], vG[i]).real
+        ecoul[i] = .5 * np.vdot(rhoG[i,0], vG[i]).real
 
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
-    if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
+    if mydf.vpplocG_part1 is not None:
         for i in range(nset):
             #vG[i] -= mydf.vpplocG_part1
-            vG[i] = lib.subtract(vG[i], mydf.vpplocG_part1, out=vG[i])
+            vG[i] = np.subtract(vG[i], mydf.vpplocG_part1, out=vG[i])
 
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
@@ -1006,7 +1055,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     for i in range(nset):
         exc, vxc = ni.eval_xc(xc_code, rhoR[i], spin=0, deriv=1)[:2]
         if xctype == 'LDA':
-            wv = lib.multiply(weight, vxc[0])
+            wv = np.multiply(weight, vxc[0])
             wv_freq.append(tools.fft(wv, mesh))
             wv = None
         elif xctype == 'GGA':
@@ -1019,8 +1068,8 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         else:
             raise NotImplementedError
 
-        nelec[i]  += lib.sum(rhoR[i,0]) * weight
-        excsum[i] += lib.sum(lib.multiply(rhoR[i,0], exc)) * weight
+        nelec[i]  += np.sum(rhoR[i,0]) * weight
+        excsum[i] += np.sum(np.multiply(rhoR[i,0], exc)) * weight
         exc = vxc = None
 
     rhoR = rhoG = None
@@ -1044,7 +1093,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     elif xctype == 'GGA':
         if with_j:
             #wv_freq[:,0] += vG.reshape(nset,*mesh)
-            wv_freq[:,0] = lib.add(wv_freq[:,0], vG.reshape(nset,*mesh), out=wv_freq[:,0])
+            wv_freq[:,0] = np.add(wv_freq[:,0], vG.reshape(nset,*mesh), out=wv_freq[:,0])
         if GGA_METHOD.upper() == 'FFT':
             veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
         else:
@@ -1067,7 +1116,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     if kpts is None: kpts = mydf.kpts
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
-    dm_kpts = lib.asarray(dm_kpts, order='C')
+    dm_kpts = np.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
     nset //= 2
@@ -1089,25 +1138,25 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     #vG = np.einsum('nsg,g->ng', rhoG[:,:,0], coulG)
     vG = np.empty((nset,ngrids), dtype=np.result_type(rhoG[:,:,0], coulG))
     for i, rhoG_i in enumerate(rhoG[:,:,0]):
-        vG[i] = lib.multiply(lib.add(rhoG_i[0], rhoG_i[1]), coulG, out=vG[i])
+        vG[i] = np.multiply(np.add(rhoG_i[0], rhoG_i[1]), coulG, out=vG[i])
     coulG = None
 
-    if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
+    if mydf.vpplocG_part1 is not None:
         for i in range(nset):
             #vG[i] += mydf.vpplocG_part1 * 2
-            vG[i] = lib.add(vG[i], lib.multiply(2., mydf.vpplocG_part1), out=vG[i])
+            vG[i] = np.add(vG[i], np.multiply(2., mydf.vpplocG_part1), out=vG[i])
 
     ecoul = np.zeros(nset)
     for i in range(nset):
-        ecoul[i] = .5 * lib.vdot(lib.add(rhoG[i,0,0], rhoG[i,1,0]), vG[i]).real
+        ecoul[i] = .5 * np.vdot(np.add(rhoG[i,0,0], rhoG[i,1,0]), vG[i]).real
 
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
-    if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
+    if mydf.vpplocG_part1 is not None:
         for i in range(nset):
             #vG[i] -= mydf.vpplocG_part1
-            vG[i] = lib.subtract(vG[i], mydf.vpplocG_part1, out=vG[i])
+            vG[i] = np.subtract(vG[i], mydf.vpplocG_part1, out=vG[i])
 
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
@@ -1120,7 +1169,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     for i in range(nset):
         exc, vxc = ni.eval_xc(xc_code, rhoR[i], spin=1, deriv=1)[:2]
         if xctype == 'LDA':
-            wv = lib.multiply(weight, vxc[0].T)
+            wv = np.multiply(weight, vxc[0].T)
             wv_freq.append(tools.fft(wv, mesh))
             wv = None
         elif xctype == 'GGA':
@@ -1133,8 +1182,8 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         else:
             raise NotImplementedError
 
-        nelec[i]  += lib.sum(rhoR[i,:,0]).sum() * weight
-        excsum[i] += lib.sum(lib.multiply(lib.add(rhoR[i,0,0],rhoR[i,1,0]), exc)) * weight
+        nelec[i]  += np.sum(rhoR[i,:,0]).sum() * weight
+        excsum[i] += np.sum(np.multiply(np.add(rhoR[i,0,0],rhoR[i,1,0]), exc)) * weight
         exc = vxc = None
 
     rhoR = rhoG = None
@@ -1160,7 +1209,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         if with_j:
             #wv_freq[:,:,0] += vG.reshape(nset,*mesh)
             for s in range(2):
-                wv_freq[:,s,0] = lib.add(wv_freq[:,s,0], vG.reshape(nset,*mesh), out=wv_freq[:,s,0])
+                wv_freq[:,s,0] = np.add(wv_freq[:,s,0], vG.reshape(nset,*mesh), out=wv_freq[:,s,0])
         if GGA_METHOD.upper() == 'FFT':
             veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
         else:
@@ -1180,7 +1229,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
 def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=None, spin=0):
     cell = mydf.cell
-    dm_kpts = lib.asarray(dm_kpts, order='C')
+    dm_kpts = np.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
     kpts_band = _format_kpts_band(kpts_band, kpts)
@@ -1205,14 +1254,14 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
     vG = np.empty((nset,ngrids), dtype=np.result_type(rhoG, coulG))
     for i in range(nset):
         if spin == 0:
-            vG[i] = lib.multiply(rhoG[i,0], coulG, out=vG[i])
+            vG[i] = np.multiply(rhoG[i,0], coulG, out=vG[i])
         elif spin == 1:
-            tmp = lib.add(rhoG[i,0,0], rhoG[i,1,0])
-            vG[i] = lib.multiply(tmp, coulG, out=vG[i])
+            tmp = np.add(rhoG[i,0,0], rhoG[i,1,0])
+            vG[i] = np.multiply(tmp, coulG, out=vG[i])
 
-    if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
+    if mydf.vpplocG_part1 is not None:
         for i in range(nset):
-            vG[i] = lib.add(vG[i], mydf.vpplocG_part1, out=vG[i])
+            vG[i] = np.add(vG[i], mydf.vpplocG_part1, out=vG[i])
 
     weight = cell.vol / ngrids
 
@@ -1229,7 +1278,7 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
         exc, vxc = ni.eval_xc(xc_code, rhoR[i], spin=spin, deriv=1)[:2]
         if spin == 0:
             if xctype == 'LDA':
-                wv = lib.multiply(weight, vxc[0])
+                wv = np.multiply(weight, vxc[0])
                 wv_freq.append(tools.fft(wv, mesh))
                 wv = None
             elif xctype == 'GGA':
@@ -1242,7 +1291,7 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
                 raise NotImplementedError
         elif spin == 1:
             if xctype == 'LDA':
-                wv = lib.multiply(weight, vxc[0].T)
+                wv = np.multiply(weight, vxc[0].T)
                 wv_freq.append(tools.fft(wv, mesh))
                 wv = None
             elif xctype == 'GGA':
@@ -1269,10 +1318,10 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
 
     for i in range(nset):
         if spin == 0:
-            wv_freq[i,0] = lib.add(wv_freq[i,0], vG[i].reshape(*mesh), out=wv_freq[i,0])
+            wv_freq[i,0] = np.add(wv_freq[i,0], vG[i].reshape(*mesh), out=wv_freq[i,0])
         elif spin == 1:
             for s in range(2):
-                wv_freq[i,s,0] = lib.add(wv_freq[i,s,0], vG[i].reshape(*mesh), out=wv_freq[i,s,0])
+                wv_freq[i,s,0] = np.add(wv_freq[i,s,0], vG[i].reshape(*mesh), out=wv_freq[i,s,0])
 
     if xctype == 'LDA':
         vj_kpts = _get_j_pass2_ip1(mydf, wv_freq, kpts_band, hermi=0, deriv=1)
@@ -1314,11 +1363,10 @@ class MultiGridFFTDF2(MultiGridFFTDF):
             Electronic density represented in the reciprocal space.
             It is cached in nuclear gradient calculations to reduce cost.
     '''
-    pp_with_erf = getattr(__config__, 'pbc_dft_multigrid_pp_with_erf', False)
     ngrids = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
     ke_ratio = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
     rel_cutoff = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 20.0)
-    _keys = {'pp_with_erf', 'ngrids', 'ke_ratio', 'rel_cutoff',
+    _keys = {'ngrids', 'ke_ratio', 'rel_cutoff',
              'task_list', 'vpplocG_part1', 'rhoG'}
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
@@ -1354,5 +1402,16 @@ class MultiGridFFTDF2(MultiGridFFTDF):
                           kpts=kpts, kpts_band=kpts_band, spin=spin)
         return vj
 
-    get_pp = get_pp
+    def get_pp(self, kpts=None):
+        '''Compute the GTH pseudopotential matrix, which includes
+        the second part of the local potential and the non-local potential.
+        The first part of the local potential is cached as `vpplocG_part1`,
+        which is the reciprocal space representation, to be added to the electron
+        density for computing the Coulomb matrix.
+        In order to get the full PP matrix, the potential due to `vpplocG_part1`
+        needs to be added.
+        '''
+        self.vpplocG_part1 = _get_vpplocG_part1(self, with_rho_core=True)
+        return _get_pp_without_erf(self, kpts)
+
     vpploc_part1_nuc_grad = vpploc_part1_nuc_grad

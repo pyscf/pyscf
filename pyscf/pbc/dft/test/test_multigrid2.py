@@ -87,8 +87,8 @@ class KnownValues(unittest.TestCase):
         e1, g1 = _multigrid2_energy_grad(cell, xc, 1)
         assert abs(e-e0) < 1e-6
         assert abs(e1-e0) < 1e-6
-        assert abs(g-g0).max() < 2e-4
-        assert abs(g1-g0).max() < 2e-4
+        assert abs(g-g0).max() < 1e-4
+        assert abs(g1-g0).max() < 1e-4
 
 if __name__ == '__main__':
     print("Full Tests for multigrid2")

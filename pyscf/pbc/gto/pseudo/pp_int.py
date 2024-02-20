@@ -66,7 +66,7 @@ def get_gth_vlocG_part1(cell, Gv):
             if symb in cell._pseudo:
                 pp = cell._pseudo[symb]
                 rloc, nexp, cexp = pp[1:3+1]
-                vlocG[ia] *= lib.exp(-0.5*rloc**2 * G2)
+                vlocG[ia] *= numpy.exp(-0.5*rloc**2 * G2)
                 # alpha parameters from the non-divergent Hartree+Vloc G=0 term.
                 vlocG[ia,G0idx] = -2*numpy.pi*Zia*rloc**2
 
@@ -158,7 +158,7 @@ def get_pp_loc_part2_gamma(cell):
         if i == 0:
             buf = v
         else:
-            buf = lib.add(buf, v, out=buf)
+            buf = numpy.add(buf, v, out=buf)
         v = None
         free_neighbor_list(neighbor_list)
 
@@ -199,7 +199,7 @@ def vpploc_part2_nuc_grad(cell, dm, kpts=None):
             if count == 0:
                 grad = buf
             else:
-                grad = lib.add(grad, buf, out=grad)
+                grad = numpy.add(grad, buf, out=grad)
             buf = None
             count += 1
             free_neighbor_list(neighbor_list)

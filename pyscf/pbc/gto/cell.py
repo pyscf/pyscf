@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -342,6 +342,9 @@ def estimate_rcut(cell, precision=None):
         return 0.01
     if precision is None:
         precision = cell.precision
+    if cell.use_loose_rcut:
+        return cell.rcut_by_shells(precision).max()
+
     exps, cs = _extract_pgto_params(cell, 'min')
     ls = cell._bas[:,mole.ANG_OF]
     rcut = _estimate_rcut(exps, ls, cs, precision)
@@ -676,8 +679,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
 
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    #:absG2 = np.einsum('gi,gi->g', Gv, Gv)
-    absG2 = lib.multiply_sum(Gv, Gv, axis=1)
+    absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
 
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
@@ -906,22 +908,8 @@ def pgf_rcut(l, alpha, coeff, precision=INTEGRAL_PRECISION,
         rcut = np.sqrt(((l+2) * np.log(rcut) + c) / alpha)
         if np.all(abs(rcut - rcut_last) < eps):
             return rcut
-    warnings.warn(f'Cell.pgf_rcut failed to converge in {max_cycle} cycles.')
+    warnings.warn(f'cell.pgf_rcut failed to converge in {max_cycle} cycles.')
     return rcut
-
-_estimate_rcut_loose = pgf_rcut
-
-def bas_rcut_loose(cell, bas_id, precision=None):
-    '''Estimate the cutoff radius of a shell
-    based on its value in real space.
-    '''
-    if precision is None:
-        precision = cell.precision
-    l = cell.bas_angular(bas_id)
-    es = cell.bas_exp(bas_id)
-    cs = abs(cell._libcint_ctr_coeff(bas_id)).max(axis=1)
-    rcut = _estimate_rcut_loose(l, es, cs, precision)
-    return rcut.max()
 
 def rcut_by_shells(cell, precision=None, rcut=0,
                    return_pgf_radius=False):
@@ -957,8 +945,6 @@ def rcut_by_shells(cell, precision=None, rcut=0,
         return shell_radius, pgf_radius
     return shell_radius
 
-def estimate_rcut_loose(cell, precision=None):
-    return rcut_by_shells(cell, precision).max()
 
 class Cell(mole.MoleBase):
     '''A Cell object holds the basic information of a crystal.
@@ -1363,10 +1349,7 @@ class Cell(mole.MoleBase):
             return self
 
         if self.rcut is None or self._rcut_from_build:
-            if self.use_loose_rcut:
-                self._rcut = estimate_rcut_loose(self, self.precision)
-            else:
-                self._rcut = estimate_rcut(self, self.precision)
+            self._rcut = estimate_rcut(self, self.precision)
             self._rcut_from_build = True
 
         _a = self.lattice_vectors()
@@ -1618,7 +1601,6 @@ class Cell(mole.MoleBase):
         return self
 
     bas_rcut = bas_rcut
-    bas_rcut_loose = bas_rcut_loose
     rcut_by_shells = rcut_by_shells
 
     get_lattice_Ls = pbctools.get_lattice_Ls

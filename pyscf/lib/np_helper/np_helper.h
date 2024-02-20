@@ -61,8 +61,6 @@ void NPdset0(double *p, const size_t n);
 void NPzset0(double complex *p, const size_t n);
 void NPdcopy(double *out, const double *in, const size_t n);
 void NPzcopy(double complex *out, const double complex *in, const size_t n);
-void NPdcopy_omp(double *out, const double *in, const size_t n);
-void NPzcopy_omp(double complex *out, const double complex *in, const size_t n);
 
 void NPdgemm(const char trans_a, const char trans_b,
              const int m, const int n, const int k,
