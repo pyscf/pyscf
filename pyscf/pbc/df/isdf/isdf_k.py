@@ -102,7 +102,7 @@ def _extract_grid_primitive_cell(cell_a, mesh, Ls, coords):
     
     res_dict = {}
     
-    # res = []
+    res = []
         
     prim_grid = coords[:nx_prim, :ny_prim, :nz_prim].reshape(-1, 3)
         
@@ -143,10 +143,10 @@ def _extract_grid_primitive_cell(cell_a, mesh, Ls, coords):
                         assert np.allclose(tmp[2], nz * cell_a[2, 2])
                         # grid_tmp[ID] = prim_grid[ID] + shift_bench, do not shift to avoid numerical error
 
-                # res.append(grid_tmp)
-                res_dict[(nx, ny, nz)] = grid_tmp
-    
-    return res_dict
+                res.append(grid_tmp)
+                res_dict[(ix, iy, iz)] = grid_tmp
+    res = np.array(res).reshape(-1, 3)
+    return res, res_dict
 
 def _split_partition(Voroini_partition, mesh, Ls):
     ngrids = np.prod(mesh)
@@ -283,7 +283,7 @@ def _get_possible_IP(pbc_isdf_info:PBC_ISDF_Info, Ls, coords):
                 possible_grid_ID.append(grid_id)
     
     possible_grid_ID.sort()
-    print("possible_grid_ID = ", possible_grid_ID)
+    # print("possible_grid_ID = ", possible_grid_ID)
     
     return possible_grid_ID, np.array(coords[possible_grid_ID])
 
@@ -292,10 +292,369 @@ def _get_possible_IP(pbc_isdf_info:PBC_ISDF_Info, Ls, coords):
 
 ## Incore 
 
+def _RowCol_FFT_bench(input, Ls, inv=False, TransBra = True, TransKet = True):
+    """
+    A is a 3D array, (nbra, nket, ngrid_prim)
+    """
+    A = input
+    ncell = np.prod(Ls)
+    assert A.shape[1] % ncell == 0
+    assert A.shape[0] % ncell == 0
+    NPOINT_KET = A.shape[1] // ncell
+    if TransKet:
+        A = A.reshape(A.shape[0], -1, NPOINT_KET) # nbra, nBox, NPOINT
+        A = A.transpose(0, 2, 1)                  # nbra, NPOINT, nBox
+        shape_tmp = A.shape
+        A = A.reshape(A.shape[0] * NPOINT_KET, *Ls)
+        # perform 3d fft 
+        if inv:
+            A = np.fft.ifftn(A, axes=(1, 2, 3))
+        else:
+            A = np.fft.fftn(A, axes=(1, 2, 3))
+        A = A.reshape(shape_tmp)
+        A = A.transpose(0, 2, 1)
+        A = A.reshape(A.shape[0], -1)
+        print("finish transform ket")
+    # transform bra
+    NPOINT_BRA = A.shape[0] // ncell
+    if TransBra:
+        A = A.reshape(-1, NPOINT_BRA, A.shape[1])
+        A = A.transpose(1, 2, 0)
+        shape_tmp = A.shape
+        A = A.reshape(-1, *Ls)
+        if inv:
+            A = np.fft.fftn(A, axes=(1, 2, 3))
+        else:
+            A = np.fft.ifftn(A, axes=(1, 2, 3))
+        A = A.reshape(shape_tmp)
+        A = A.transpose(2, 0, 1)
+        A = A.reshape(-1, A.shape[2])
+        print("finish transform bra")
+    # print(A[:NPOINT, :NPOINT])
+    return A
 
+def _RowCol_FFT_ColFull_bench(input, Ls, mesh):
+    """
+    A is a 3D array, (nbra, nket, ngrid_prim)
+    """
+    A = input
+    ncell = np.prod(Ls)
+    nGrids = np.prod(mesh)
+    assert A.shape[1] == nGrids
+    assert A.shape[0] % ncell == 0
+    A = A.reshape(A.shape[0], *mesh)
+    # perform 3d fft 
+    A = np.fft.fftn(A, axes=(1, 2, 3))
+    A = A.reshape(A.shape[0], -1)
+    print("finish transform ket")
+    # transform bra
+    NPOINT_BRA = A.shape[0] // ncell
+    A = A.reshape(-1, NPOINT_BRA, A.shape[1])
+    A = A.transpose(1, 2, 0)
+    shape_tmp = A.shape
+    A = A.reshape(-1, *Ls)
+    A = np.fft.ifftn(A, axes=(1, 2, 3))
+    A = A.reshape(shape_tmp)
+    A = A.transpose(2, 0, 1)
+    A = A.reshape(-1, A.shape[2])
+    print("finish transform bra")
+    return A
 
+def _construct_aux_basis_benchmark(mydf:ISDF.PBC_ISDF_Info):
+
+    aoRg = mydf.aoRg
+    coords = mydf.coords
+    weight = np.sqrt(mydf.cell.vol / mydf.ngrids)
+    aoR_unordered = mydf._numint.eval_ao(mydf.cell, coords)[0].T * weight
+    Ls = mydf.Ls
+    mesh = mydf.mesh
+    meshPrim = np.array(mesh) // np.array(Ls)
+    
+    
+    A = np.asarray(lib.ddot(aoRg.T, aoRg), order='C')
+    lib.square_inPlace(A)
+    
+    mydf.aux_basis_bench = np.asarray(lib.ddot(aoRg.T, aoR_unordered), order='C')
+    lib.square_inPlace(mydf.aux_basis_bench)
+    
+    mydf.aux_basis_bench = np.linalg.solve(A, mydf.aux_basis_bench)
+    
+    # perform FFT 
+    
+    mydf.aux_basis_bench = _RowCol_FFT_ColFull_bench(mydf.aux_basis_bench, Ls, mesh)
+    
+    mydf.aux_basis_bench = mydf.aux_basis_bench.reshape(-1, meshPrim[0], Ls[0], meshPrim[1],Ls[1], meshPrim[2], Ls[2])
+    mydf.aux_basis_bench = mydf.aux_basis_bench.transpose(0, 2, 4, 6, 1, 3, 5)
+    mydf.aux_basis_bench = mydf.aux_basis_bench.reshape(-1, np.prod(mesh))
+    
+    ### test the blockdiag matrixstructure ### 
+    
+    ncell     = np.prod(mydf.Ls)
+    mesh      = mydf.mesh
+    mesh_prim = np.array(mesh) // np.array(mydf.Ls)
+    nGridPrim = mydf.nGridPrim
+    nIP_Prim  = mydf.nIP_Prim
+    nGrids    = mydf.ngrids
+    
+    aux_basis_bench_res = np.zeros((nIP_Prim, nGrids), dtype=np.complex128)
+
+    for icell in range(ncell):
+        b_begin = icell * nIP_Prim
+        b_end   = (icell + 1) * nIP_Prim
+        k_begin = icell * nGridPrim
+        k_end   = (icell + 1) * nGridPrim
+        
+        matrix_before = mydf.aux_basis_bench[b_begin:b_end, :k_begin]
+        matrix_after  = mydf.aux_basis_bench[b_begin:b_end, k_end:]
+        assert np.allclose(matrix_before, 0.0)
+        assert np.allclose(matrix_after, 0.0)
+        
+        aux_basis_bench_res[:, k_begin:k_end] = mydf.aux_basis_bench[b_begin:b_end, k_begin:k_end]
+
+    mydf.aux_basis_bench = aux_basis_bench_res
+
+def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
+
+    #### get the buffer ####
+    
+    nGrids   = mydf.ngrids
+    nGridPrim = mydf.nGridPrim
+    nIP_Prim = mydf.nIP_Prim
+    
+    Mesh = mydf.mesh
+    Mesh = np.array(Mesh, dtype=np.int32)
+    Ls   = mydf.Ls
+    Ls   = np.array(Ls, dtype=np.int32)
+    MeshPrim = np.array(Mesh) // np.array(Ls)
+    ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
+
+    print("nGrids        = ", nGrids)
+    print("nGridPrim     = ", nGridPrim)
+    print("nIP_Prim      = ", nIP_Prim)
+    print("ncell_complex = ", ncell_complex)
+    print("Mesh          = ", Mesh)
+    print("Ls            = ", Ls)
+    print("MeshPrim      = ", MeshPrim)
+
+    naux = mydf.naux
+    
+    mydf._allocate_jk_buffer() #
+    
+    buffer1 = np.ndarray((nIP_Prim, ncell_complex*nIP_Prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=0)
+    buffer1_real = np.ndarray((nIP_Prim, naux), dtype=np.double, buffer=mydf.jk_buffer, offset=0)
+    offset  = nIP_Prim * ncell_complex*nIP_Prim * buffer1.itemsize
+    buffer2 = np.ndarray((nIP_Prim, ncell_complex*nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    offset += nIP_Prim * ncell_complex*nGridPrim * buffer2.itemsize
+    buffer3 = np.ndarray((nIP_Prim, ncell_complex*nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    buffer3_real = np.ndarray((nIP_Prim, nGrids), dtype=np.double, buffer=mydf.jk_buffer, offset=offset)
+    offset += nIP_Prim * ncell_complex*nGridPrim * buffer3.itemsize
+    nthread = lib.num_threads()
+    buffer_final_fft = np.ndarray((nthread, nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    nao = mydf.nao
+    aoR = mydf.aoR
+    
+    #### do the work ####
+
+    aoRg = mydf.aoRg[:, :nIP_Prim] # only the first box is used
+    
+    print("aoRg.shape         = ", aoRg.shape)
+    print("mydf.aoRg          = ", mydf.aoRg.shape)
+    print("buffer1_real.shape = ", buffer1_real.shape)
+
+    A = np.asarray(lib.ddot(aoRg.T, mydf.aoRg, c=buffer1_real), order='C')
+    lib.square_inPlace(A)
+    
+    # mydf.aux_basis = buffer3
+    B              = np.asarray(lib.ddot(aoRg.T, mydf.aoR, c=buffer3_real), order='C')
+    lib.square_inPlace(B)
+    
+    ##### FFT #####
+    
+    fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+    assert fn is not None
+    
+    print("A.shape = ", A.shape)
+    print("B.shape = ", B.shape)
+    print("buffer2.shape = ", buffer2.shape)
+    print("mesh = ", Mesh)
+    
+    fn(
+        A.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_Prim),
+        ctypes.c_int(nIP_Prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buffer2.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    fn(
+        B.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_Prim),
+        ctypes.c_int(nGridPrim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buffer2.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    print("before solve linear equation")
+        
+    ##### solve the linear equation #####
+    
+    A_complex = buffer1
+    B_complex = buffer3
+    
+    mydf.aux_basis = np.zeros((nIP_Prim, nGrids), dtype=np.complex128)
+    
+    fn_cholesky = getattr(libpbc, "Complex_Cholesky", None)
+    assert fn_cholesky is not None
+    fn_solve = getattr(libpbc, "Solve_LLTEqualB_Complex_Parallel", None)
+    assert fn_solve is not None
+    
+    nthread = lib.num_threads()
+    bunchsize = nGridPrim // nthread
+    
+    ### after solve linear equation, we have to perform another FFT ### 
+    
+    freq1 = np.array(range(MeshPrim[0]), dtype=np.float64)
+    freq2 = np.array(range(MeshPrim[1]), dtype=np.float64)
+    freq3 = np.array(range(MeshPrim[2]), dtype=np.float64)
+    freq_q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+    
+    freq1 = np.array(range(Ls[0]), dtype=np.float64)
+    freq2 = np.array(range(Ls[1]), dtype=np.float64)
+    freq3 = np.array(range(Ls[2]//2+1), dtype=np.float64)
+    freq_Q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+    
+    FREQ = np.einsum("ijkl,ipqs->ijklpqs", freq_Q, freq_q)
+    FREQ[0] /= (Ls[0] * MeshPrim[0])
+    FREQ[1] /= (Ls[1] * MeshPrim[1])
+    FREQ[2] /= (Ls[2] * MeshPrim[2])
+    FREQ = np.einsum("ijklpqs->jklpqs", FREQ)
+    FREQ  = FREQ.reshape(-1, np.prod(MeshPrim))
+    FREQ  = np.exp(-2.0j * np.pi * FREQ)  # this is the only correct way to construct the factor
+    
+    fn_final_fft = getattr(libpbc, "_FinalFFT", None)
+    assert fn_final_fft is not None
+    fn_permutation_conj = getattr(libpbc, "_PermutationConj", None)
+    assert fn_permutation_conj is not None
+    
+    def _permutation(nx, ny, nz, shift_x, shift_y, shift_z):
+        
+        res = np.zeros((nx*ny*nz), dtype=numpy.int32)
+        
+        loc_now = 0
+        for ix in range(nx):
+            for iy in range(ny):
+                for iz in range(nz):
+                    ix2 = (nx - ix - shift_x) % nx
+                    iy2 = (ny - iy - shift_y) % ny
+                    iz2 = (nz - iz - shift_z) % nz
+                    
+                    loc = ix2 * ny * nz + iy2 * nz + iz2
+                    # res[loc_now] = loc
+                    res[loc] = loc_now
+                    loc_now += 1
+        return res
+    
+    permutation = np.zeros((8, nGridPrim), dtype=np.int32)
+    print("permutation.shape = ", permutation.shape)
+    permutation[0] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 0, 0)
+    permutation[1] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 0, 1)
+    permutation[2] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 1, 0)
+    permutation[3] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 1, 1)
+    permutation[4] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 0, 0)
+    permutation[5] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 0, 1)
+    permutation[6] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 1, 0)
+    permutation[7] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 1, 1)
+    
+    i=0
+    for ix in range(Ls[0]):
+        for iy in range(Ls[1]):
+            for iz in range(Ls[2]//2+1):
+                
+                A_tmp = A_complex[:, i*nIP_Prim:(i+1)*nIP_Prim].copy()
+                B_tmp = B_complex[:, i*nGridPrim:(i+1)*nGridPrim].copy()
+                
+                fn_cholesky(
+                    A_tmp.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nIP_Prim)
+                )
+        
+                fn_solve(
+                    ctypes.c_int(nIP_Prim),
+                    A_tmp.ctypes.data_as(ctypes.c_void_p),
+                    B_tmp.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(B_tmp.shape[1]),
+                    ctypes.c_int(bunchsize)
+                )
+                
+                # print("B_tmp = ", B_tmp[:5,:5])
+                
+                # B_tmp1 = B_tmp.copy()
+                # B_tmp1 = B_tmp1 * FREQ[i]
+                # B_tmp1 = B_tmp1.reshape(-1, *MeshPrim)
+                # B_tmp1 = np.fft.fftn(B_tmp1, axes=(1, 2, 3)) # shit
+                # B_tmp1 = B_tmp1.reshape(-1, np.prod(MeshPrim))
+                
+                # print("B_tmp = ", B_tmp[:5,:5])
+                
+                fn_final_fft(
+                    B_tmp.ctypes.data_as(ctypes.c_void_p),
+                    FREQ[i].ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nIP_Prim),
+                    ctypes.c_int(nGridPrim),
+                    MeshPrim.ctypes.data_as(ctypes.c_void_p),
+                    buffer_final_fft.ctypes.data_as(ctypes.c_void_p)
+                )
+                
+                # print("B_tmp1 = ", B_tmp1[:5,:5])
+                # print("B_tmp  = ", B_tmp[:5,:5])
+                
+                # assert np.allclose(B_tmp1, B_tmp)
+                
+                #### perform the last FFT ####
+                
+                iloc = ix * Ls[1] * Ls[2] + iy * Ls[2] + iz
+                mydf.aux_basis[:, iloc*nGridPrim:(iloc+1)*nGridPrim] = B_tmp
+                
+                # perform the complex conjugate transpose
+                
+                ix2 = (Ls[0] - ix) % Ls[0]
+                iy2 = (Ls[1] - iy) % Ls[1]
+                iz2 = (Ls[2] - iz) % Ls[2]
+                
+                i+=1
+                
+                if ix2==ix and iy2==iy and iz2==iz:
+                    print("skip the complex conjugate transpose for (ix,iy,iz) = ", ix, iy, iz)
+                    continue
+                
+                perm_id = 0
+                if ix != 0:
+                    perm_id += 4
+                if iy != 0:
+                    perm_id += 2
+                if iz != 0:
+                    perm_id += 1
+                
+                fn_permutation_conj(
+                    B_tmp.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nIP_Prim),
+                    ctypes.c_int(nGridPrim),
+                    permutation[perm_id].ctypes.data_as(ctypes.c_void_p),
+                    buffer_final_fft.ctypes.data_as(ctypes.c_void_p)
+                )
+                
+                iloc2 = ix2 * Ls[1] * Ls[2] + iy2 * Ls[2] + iz2
+                
+                mydf.aux_basis[:, iloc2*nGridPrim:(iloc2+1)*nGridPrim] = B_tmp
+                
 ## Outcore
 
+####################### construct W #######################
+    
+## Incore
+
+## Outcore
     
 class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     def __init__(self, mol:Cell, max_buf_memory:int, Ls=[1,1,1], outcore=True, with_robust_fitting=True, aoR=None):
@@ -309,19 +668,74 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         
         self.Ls = Ls
         
-        if self.coords is None :
+        if self.coords is None:
             from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
             df_tmp = MultiGridFFTDF2(self.cell)
             self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
 
         print("self.cell.lattice_vectors = ", self.cell.lattice_vectors())
-        self.ordered_grid_coords = _extract_grid_primitive_cell(self.cell.lattice_vectors(), self.mesh, self.Ls, self.coords)
+        self.ordered_grid_coords, self.ordered_grid_coords_dict = _extract_grid_primitive_cell(self.cell.lattice_vectors(), self.mesh, self.Ls, self.coords)
+
+        if outcore is False:
+            weight   = np.sqrt(self.cell.vol / self.ngrids)
+            self.aoR = self._numint.eval_ao(self.cell, self.ordered_grid_coords)[0].T * weight # the T is important
+    
+    ################ test function ################ 
+    
+    def construct_auxbasis_benchmark(self):
+        _construct_aux_basis_benchmark(self)
+    
+    ################ allocate buffer ################ 
+    
+    def _allocate_jk_buffer(self):
+        
+        if self.jk_buffer is not None:
+            return
+            
+        num_threads = lib.num_threads()
+        
+        nIP_Prim = self.nIP_Prim
+        nGridPrim = self.nGridPrim
+        ncell_complex = self.Ls[0] * self.Ls[1] * (self.Ls[2]//2+1)
+        
+        if self.outcore is False:
+            
+            ### in build aux basis ###
+            
+            size_buf1 = nIP_Prim * ncell_complex*nIP_Prim * 2
+            size_buf1+= nIP_Prim * ncell_complex*nGridPrim * 2 * 2
+            size_buf1+= num_threads * nGridPrim * 2
+            
+            
+            size_buf = size_buf1
+            
+            if hasattr(self, "IO_buf"):
+                if self.IO_buf.size < (size_buf):
+                    self.IO_buf = np.zeros((size_buf), dtype=np.float64)
+                self.jk_buffer = np.ndarray((size_buf1), dtype=np.float64, buffer=self.IO_buf, offset=0)
+                # offset         = max(buffersize_k, buffersize_j) * self.jk_buffer.dtype.itemsize
+                # self.ddot_buf  = np.ndarray((nThreadsOMP, max((naux*naux)+2, ngrids)),
+                #                             dtype=np.float64, buffer=self.IO_buf, offset=offset)
+
+            else:
+
+                self.jk_buffer = np.ndarray((size_buf), dtype=np.float64)
+                # self.ddot_buf = np.zeros((nThreadsOMP, max((naux*naux)+2, ngrids)), dtype=np.float64) 
+            
+            
+        else:
+            raise NotImplementedError
     
     ################ select IP ################
     
     def select_IP(self, c:int, m:int):
         first_natm = self.cell.natm // np.prod(self.Ls)
+        
+        print("first_natm = ", first_natm)
+        
         IP_GlobalID = ISDF._select_IP_direct(self, c, m, first_natm, True) # we do not have to perform selection IP over the whole supercell ! 
+        
+        print("len of IP_GlobalID = ", len(IP_GlobalID))
         
         # get primID
         
@@ -336,7 +750,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             box_id = (pnt_id[0] // mesh_prim[0], pnt_id[1] // mesh_prim[1], pnt_id[2] // mesh_prim[2])
             pnt_prim_id = (pnt_id[0] % mesh_prim[0], pnt_id[1] % mesh_prim[1], pnt_id[2] % mesh_prim[2])
             pnt_prim_ravel_id = pnt_prim_id[0] * mesh_prim[1] * mesh_prim[2] + pnt_prim_id[1] * mesh_prim[2] + pnt_prim_id[2]
-            # print("grid_id = %d, pnt_id = %s, box_id = %s, pnt_prim_id = %s" % (grid_id, pnt_id, box_id, pnt_prim_id))
+            print("grid_id = %d, pnt_id = %s, box_id = %s, pnt_prim_id = %s" % (grid_id, pnt_id, box_id, pnt_prim_id))
             possible_grid_ID.append(pnt_prim_ravel_id)
 
         possible_grid_ID = list(set(possible_grid_ID))
@@ -344,16 +758,86 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         
         print("nIP = ", len(possible_grid_ID))
         
+        ordered_IP_coords = []
+        
+        # print("self.ordered_grid_coords_dict = ", self.ordered_grid_coords_dict.keys())
+        
+        for ix in range(self.Ls[0]):
+            for iy in range(self.Ls[1]):
+                for iz in range(self.Ls[2]):
+                    ordered_IP_coords.append(self.ordered_grid_coords_dict[(ix,iy,iz)][possible_grid_ID]) # enforce translation symmetry
+        
+        self.ordered_IP_coords = np.array(ordered_IP_coords).reshape(-1,3)
+        
+        grid_primitive = self.ordered_grid_coords_dict[(0,0,0)]
+        # self.IP_coords = grid_primitive[possible_grid_ID]
+        weight         = np.sqrt(self.cell.vol / self.ngrids)
+        self.aoRg      = self._numint.eval_ao(self.cell, self.ordered_IP_coords)[0].T * weight
+        self.nGridPrim = grid_primitive.shape[0]
+        self.nIP_Prim  = len(possible_grid_ID)
+        
         return np.array(possible_grid_ID, dtype=np.int32)
-    
-    ################ construct aux basis ################
-    
-    
+        
     ################ construct W ################
+
+    ################ driver for build ################
     
+    def build_IP_auxbasis(self, IO_File:str = None, c:int = 5, m:int = 5):
+        
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        self.IP_ID = self.select_IP(c, m)  # prim_gridID
+        self.IP_ID = np.asarray(self.IP_ID, dtype=np.int32)
+        print("IP_ID = ", self.IP_ID)
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "select IP")
+
+        if IO_File is None:
+            # generate a random file name start with tmp_
+            import random
+            import string
+            IO_File = "tmp_" + ''.join(random.choices(string.ascii_lowercase + string.digits, k=8)) + ".hdf5"
+
+        print("IO_File = ", IO_File)
+
+        # construct aoR
+
+        if self.coords is None:
+            from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
+            df_tmp = MultiGridFFTDF2(self.cell)
+            self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
+
+        # t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        # coords_IP = self.coords[self.IP_ID]
+        # weight    = np.sqrt(self.cell.vol / self.ngrids)
+        # self.aoRg = self._numint.eval_ao(self.cell, coords_IP)[0].T * weight  # the T is important
+        # t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        # _benchmark_time(t1, t2, "construct aoR") # built in select_IP
+
+        self.naux = self.aoRg.shape[1]
+        self.c    = c
+        
+        # print("naux = ", self.naux)
+        # self.chunk_size, self.nRow_IO_V, self.blksize_aux, self.bunchsize_readV, self.grid_bunchsize, self.blksize_W, self.use_large_chunk_W  = _determine_bunchsize(
+        #     self.nao, self.naux, self.mesh, self.IO_buf.size, self.saveAoR)
+
+        # construct aux basis
+
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        if self.outcore:
+            # print("construct aux basis in outcore mode")
+            # _construct_aux_basis_IO(self, IO_File, self.IO_buf)
+            raise NotImplementedError   
+        else:
+            print("construct aux basis in incore mode")
+            _construct_aux_basis_kSym(self)
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "construct aux basis")
+
+        self.IO_FILE = IO_File
+        
     ################ get jk ################
 
-C = 2
+C = 1
 M = 5
 
 if __name__ == "__main__":
@@ -376,10 +860,10 @@ if __name__ == "__main__":
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
     
-    Ls = [3,3,3]
+    Ls = [2,2,2]
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     
-    cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=4, mesh=mesh)
+    cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=2, mesh=mesh)
     
     for i in range(cell.natm):
         print('%s %s  charge %f  xyz %s' % (cell.atom_symbol(i),
@@ -414,9 +898,28 @@ if __name__ == "__main__":
     
     ############ construct ISDF object ############
     
-    pbc_isdf_info_ksym = PBC_ISDF_Info_kSym(cell, 20 * 1000 * 1000, Ls=Ls, outcore=True, with_robust_fitting=False, aoR=None)
+    pbc_isdf_info_ksym = PBC_ISDF_Info_kSym(cell, 20 * 1000 * 1000, Ls=Ls, outcore=False, with_robust_fitting=False, aoR=None)
     
     ############ test select IP ############
     
     possible_IP = pbc_isdf_info_ksym.select_IP(C, M)
     print("possible_IP = ", possible_IP)
+    
+    pbc_isdf_info_ksym.build_IP_auxbasis(c=C, m=M)
+    pbc_isdf_info_ksym.construct_auxbasis_benchmark()
+    
+    basis1 = pbc_isdf_info_ksym.aux_basis
+    basis2 = pbc_isdf_info_ksym.aux_basis_bench
+    
+    print("basis1.shape = ", basis1.shape)
+    print("basis2.shape = ", basis2.shape)
+    
+    # print(basis1[:10,:10])
+    # print(basis2[:10,:10])
+    # print(basis1[:10,:10]/basis2[:10,:10])
+    
+    # print(basis1[-10:, -10:])
+    # print(basis2[-10:, -10:])
+    # print(basis1[-10:, -10:]/basis2[-10:, -10:])
+    
+    assert np.allclose(basis1, basis2) # we get the same result, correct ! 

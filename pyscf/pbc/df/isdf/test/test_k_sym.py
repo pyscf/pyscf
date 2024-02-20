@@ -895,7 +895,7 @@ if __name__ == '__main__':
                 if iy != 0:
                     shift_y = 1
                 if iz != 0:
-                    shift_z = 1
+                    shift_z = 1 # only up to 8 possible! 
                 
                 pert = permutation(nBox[0], nBox[1], nBox[2], shift_x, shift_y, shift_z)
                 

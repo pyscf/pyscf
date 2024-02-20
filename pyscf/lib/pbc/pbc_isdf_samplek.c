@@ -10,7 +10,7 @@ int get_omp_threads();
 int omp_get_thread_num();
 
 void Complex_Cholesky(double __complex__ *A, int n)
-{    
+{
     // A will be overwritten with the lower triangular Cholesky factor
     lapack_int info;
     info = LAPACKE_zpotrf(LAPACK_ROW_MAJOR, 'U', n, A, n);
@@ -272,6 +272,70 @@ void Solve_LLTEqualB_Complex_Parallel(
                     exit(1);
                 }
             }
+        }
+    }
+}
+
+void _FinalFFT(
+    double __complex__ *a,
+    const double __complex__ *freq,
+    int m, int n, int *mesh,
+    double __complex__ *buf)
+{
+    const int nThread = get_omp_threads();
+
+    if (n != mesh[0] * mesh[1] * mesh[2])
+    {
+        fprintf(stderr, "The size of a is not compatible with mesh\n");
+        exit(1);
+    }
+
+#pragma omp parallel num_threads(nThread)
+    {
+        int thread_id = omp_get_thread_num();
+
+        double __complex__ *buf_thread = buf + thread_id * n;
+
+        fftw_plan plan = fftw_plan_dft_3d(mesh[0], mesh[1], mesh[2], (fftw_complex *)buf_thread, (fftw_complex *)a, FFTW_FORWARD, FFTW_ESTIMATE);
+
+#pragma omp for schedule(static, 1) nowait
+        for (size_t i = 0; i < m; i++)
+        {
+            double __complex__ *in = a + i * n;
+            for (int j = 0; j < n; j++)
+            {
+                buf_thread[j] = in[j] * freq[j];
+            }
+            fftw_execute_dft(plan, (fftw_complex *)buf_thread, (fftw_complex *)in);
+        }
+
+        fftw_destroy_plan(plan);
+    }
+}
+
+void _PermutationConj(
+    double __complex__ *a,
+    int m, int n, int *permutation,
+    double __complex__ *buf)
+{
+    const int nThread = get_omp_threads();
+
+#pragma omp parallel num_threads(nThread)
+    {
+        int thread_id = omp_get_thread_num();
+
+        double __complex__ *buf_thread = buf + thread_id * n;
+
+#pragma omp for schedule(static, 1) nowait
+        for (size_t i = 0; i < m; i++)
+        {
+            double __complex__ *in = a + i * n;
+            for (int j = 0; j < n; j++)
+            {
+                buf_thread[j] = conj(in[permutation[j]]);
+                // buf_thread[permutation[j]] = conj(in[j]);
+            }
+            memcpy(in, buf_thread, sizeof(double __complex__) * n);
         }
     }
 }
