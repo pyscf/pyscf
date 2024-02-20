@@ -300,6 +300,8 @@ def _RowCol_FFT_bench(input, Ls, inv=False, TransBra = True, TransKet = True):
     ncell = np.prod(Ls)
     assert A.shape[1] % ncell == 0
     assert A.shape[0] % ncell == 0
+    print("A.shape = ", A.shape)
+    print("Ls = ", Ls)
     NPOINT_KET = A.shape[1] // ncell
     if TransKet:
         A = A.reshape(A.shape[0], -1, NPOINT_KET) # nbra, nBox, NPOINT
@@ -381,6 +383,8 @@ def _construct_aux_basis_benchmark(mydf:ISDF.PBC_ISDF_Info):
     
     # perform FFT 
     
+    mydf.aux_basis_bench_Grid = mydf.aux_basis_bench.copy()
+    
     mydf.aux_basis_bench = _RowCol_FFT_ColFull_bench(mydf.aux_basis_bench, Ls, mesh)
     
     mydf.aux_basis_bench = mydf.aux_basis_bench.reshape(-1, meshPrim[0], Ls[0], meshPrim[1],Ls[1], meshPrim[2], Ls[2])
@@ -411,7 +415,9 @@ def _construct_aux_basis_benchmark(mydf:ISDF.PBC_ISDF_Info):
         
         aux_basis_bench_res[:, k_begin:k_end] = mydf.aux_basis_bench[b_begin:b_end, k_begin:k_end]
 
-    mydf.aux_basis_bench = aux_basis_bench_res
+    fac = np.sqrt(np.prod(Ls) / np.prod(mesh)) # normalization factor 
+
+    mydf.aux_basis_bench = aux_basis_bench_res * fac
 
 def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
 
@@ -566,6 +572,8 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
     permutation[6] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 1, 0)
     permutation[7] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 1, 1)
     
+    fac = np.sqrt(np.prod(Ls) / np.prod(Mesh)) # normalization factor
+    
     i=0
     for ix in range(Ls[0]):
         for iy in range(Ls[1]):
@@ -647,12 +655,119 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 iloc2 = ix2 * Ls[1] * Ls[2] + iy2 * Ls[2] + iz2
                 
                 mydf.aux_basis[:, iloc2*nGridPrim:(iloc2+1)*nGridPrim] = B_tmp
-                
+    
+    mydf.aux_basis = mydf.aux_basis * fac
+                     
 ## Outcore
 
 ####################### construct W #######################
     
+def _construct_W_benchmark_grid(cell, aux_basis:np.ndarray):
+    def constrcuct_V_CCode(aux_basis:np.ndarray, mesh, coul_G):
+        coulG_real         = coul_G.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1)
+        nThread            = lib.num_threads()
+        nAux               = aux_basis.shape[0]
+        bunchsize          = nAux // (2*nThread)
+        bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
+        bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
+        ngrids             = aux_basis.shape[1]
+        mesh_int32         = np.array(mesh, dtype=np.int32)
+
+        V                  = np.zeros((nAux, ngrids), dtype=np.double)
+        buffer             = np.zeros((nThread, bufsize_per_thread), dtype=np.double)
+
+        fn = getattr(libpbc, "_construct_V", None)
+        assert(fn is not None)
+
+        print("V.shape = ", V.shape)
+        print("aux_basis.shape = ", aux_basis.shape)
+        # print("self.jk_buffer.size    = ", self.jk_buffer.size)
+        # print("self.jk_buffer.shape   = ", self.jk_buffer.shape)
+
+        fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_int(nAux),
+           aux_basis.ctypes.data_as(ctypes.c_void_p),
+           coulG_real.ctypes.data_as(ctypes.c_void_p),
+           V.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_int(bunchsize),
+           buffer.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_int(bufsize_per_thread))
+
+        return V
+    
+    mesh  = cell.mesh
+    coulG = tools.get_coulG(cell, mesh=mesh)
+    
+    V_R = constrcuct_V_CCode(aux_basis, mesh, coulG)
+    
+    naux = aux_basis.shape[0]
+    
+    W = np.zeros((naux,naux))
+    lib.ddot(a=aux_basis, b=V_R.T, c=W, beta=1.0)
+    
+    return W
+    
 ## Incore
+
+def _construct_W_incore(mydf:ISDF.PBC_ISDF_Info):
+    
+    mydf._allocate_jk_buffer()
+    
+    mesh  = mydf.mesh
+    coulG = tools.get_coulG(mydf.cell, mesh=mesh)
+    Ls    = mydf.Ls
+    mesh_prim = np.array(mesh) // np.array(Ls)
+    coulG = coulG.reshape(mesh_prim[0], Ls[0], mesh_prim[1], Ls[1], mesh_prim[2], Ls[2])
+    coulG = coulG.transpose(1, 3, 5, 0, 2, 4).reshape(-1, np.prod(mesh_prim))
+    
+    nIP_prim   = mydf.nIP_Prim
+    nGrid_prim = mydf.nGridPrim
+    ncell      = np.prod(Ls)
+    
+    #### allocate buffer ####
+    
+    W = np.zeros((nIP_prim, nIP_prim*ncell), dtype=np.complex128)
+    
+    offset  = 0
+    A_buf   = np.ndarray((nIP_prim, nGrid_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=0)
+    offset += nIP_prim * nGrid_prim * A_buf.itemsize
+    B_buf   = np.ndarray((nIP_prim, nGrid_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    offset += nIP_prim * nGrid_prim * B_buf.itemsize
+    W_buf   = np.ndarray((nIP_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+
+    fn = getattr(libpbc, "_construct_W_multiG", None)
+    assert(fn is not None)
+
+    for i in range(ncell):
+        k_begin = i * nGrid_prim
+        k_end   = (i + 1) * nGrid_prim
+        
+        A_buf[:] = mydf.aux_basis[:, k_begin:k_end]
+
+        B_buf[:] = A_buf[:]
+
+        fn(
+            ctypes.c_int(nIP_prim),
+            ctypes.c_int(0),
+            ctypes.c_int(nGrid_prim),
+            B_buf.ctypes.data_as(ctypes.c_void_p),
+            coulG[i].ctypes.data_as(ctypes.c_void_p)
+        )
+
+        # print("A_buf.shape = ", A_buf.shape)
+        # print("B_buf.shape = ", B_buf.shape)
+        # print("W_buf.shape = ", W_buf.shape)
+            
+        lib.dot(B_buf, A_buf.T.conj(), c=W_buf)
+
+        k_begin = i * nIP_prim
+        k_end   = (i + 1) * nIP_prim
+
+        W[:, k_begin:k_end] = W_buf
+    
+    mydf.W = W
+    return W
+
 
 ## Outcore
     
@@ -706,8 +821,12 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             size_buf1+= nIP_Prim * ncell_complex*nGridPrim * 2 * 2
             size_buf1+= num_threads * nGridPrim * 2
             
+            ### in construct W ###
             
-            size_buf = size_buf1
+            size_buf2  = nIP_Prim * nIP_Prim * 2
+            size_buf2 += nIP_Prim * nGridPrim * 2 * 2
+            
+            size_buf = max(size_buf1,size_buf2)
             
             if hasattr(self, "IO_buf"):
                 if self.IO_buf.size < (size_buf):
@@ -835,6 +954,20 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
 
         self.IO_FILE = IO_File
         
+    def build_auxiliary_Coulomb(self):
+
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+
+        if self.outcore:
+            raise NotImplementedError
+        else:
+            
+            print("construct W in incore mode")
+            _construct_W_incore(self)
+        
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "construct W")
+    
     ################ get jk ################
 
 C = 1
@@ -860,10 +993,10 @@ if __name__ == "__main__":
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
     
-    Ls = [2,2,2]
+    Ls = [3, 2, 4]
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     
-    cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=2, mesh=mesh)
+    cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=1, mesh=mesh)
     
     for i in range(cell.natm):
         print('%s %s  charge %f  xyz %s' % (cell.atom_symbol(i),
@@ -898,7 +1031,7 @@ if __name__ == "__main__":
     
     ############ construct ISDF object ############
     
-    pbc_isdf_info_ksym = PBC_ISDF_Info_kSym(cell, 20 * 1000 * 1000, Ls=Ls, outcore=False, with_robust_fitting=False, aoR=None)
+    pbc_isdf_info_ksym = PBC_ISDF_Info_kSym(cell, 8 * 1000 * 1000, Ls=Ls, outcore=False, with_robust_fitting=False, aoR=None)
     
     ############ test select IP ############
     
@@ -923,3 +1056,73 @@ if __name__ == "__main__":
     # print(basis1[-10:, -10:]/basis2[-10:, -10:])
     
     assert np.allclose(basis1, basis2) # we get the same result, correct ! 
+    
+    basis3 = pbc_isdf_info_ksym.aux_basis_bench_Grid
+    print("basis3.shape = ", basis3.shape)
+    print("basis3.dtype = ", basis3.dtype)
+    
+    W_grid = _construct_W_benchmark_grid(cell, basis3)
+    
+    # print("W_grid = ", W_grid[:4,:4])
+    
+    print("W_grid.shape = ", W_grid.shape)
+    # W_grid = W_grid.reshape(-1, mesh[0], mesh[1], mesh[2])
+    # print("W_grid.shape = ", W_grid.shape)
+    # W_grid = np.fft.fftn(W_grid, axes=(1, 2, 3))
+    # W_grid = W_grid.reshape(-1, np.prod(mesh))
+    # W_grid = W_grid.reshape(mesh[0], mesh[1], mesh[2], -1)
+    # W_grid = W_grid.transpose(3, 0, 1, 2)
+    # W_grid = np.fft.ifftn(W_grid, axes=(1, 2, 3))
+    # W_grid = W_grid.transpose(1, 2, 3, 0)
+    # W_grid = W_grid.reshape(-1, np.prod(mesh))
+    
+    # W_grid = _RowCol_FFT_bench(W_grid, Ls)
+    
+    nIP_prim = pbc_isdf_info_ksym.nIP_Prim
+
+    # print(W_grid[:nIP_prim, nIP_prim:2*nIP_prim])
+    # print(W_grid[nIP_prim:2*nIP_prim,:nIP_prim])
+    
+    
+    W_fft  = _RowCol_FFT_bench(W_grid, Ls)
+    
+    # print(W_fft[:nIP_prim, :nIP_prim])
+    
+    ## check W_fft's diagonal structure ##
+    
+    ncell = np.prod(Ls)
+    
+    W_fft_packed = np.zeros((nIP_prim, nIP_prim*ncell), dtype=np.complex128)
+
+    
+    for icell in range(ncell):
+        b_begin = icell * nIP_prim
+        b_end   = (icell + 1) * nIP_prim
+        k_begin = icell * nIP_prim
+        k_end   = (icell + 1) * nIP_prim
+        
+        matrix_before = W_fft[b_begin:b_end, :k_begin]
+        matrix_after  = W_fft[b_begin:b_end, k_end:]
+        assert np.allclose(matrix_before, 0.0)
+        assert np.allclose(matrix_after, 0.0)
+        
+        mat = W_fft[b_begin:b_end, k_begin:k_end]
+        assert np.allclose(mat, mat.T.conj())
+        
+        W_fft_packed[:, k_begin:k_end] = W_fft[b_begin:b_end, k_begin:k_end]
+    
+    pbc_isdf_info_ksym.build_auxiliary_Coulomb()
+    
+    W = pbc_isdf_info_ksym.W
+    
+    # print(W_fft_packed.shape)
+    # print(W.shape)
+    
+    W1 = W[:4, :4]
+    W2 = W_fft_packed[:4, :4]
+    
+    # print(W1)
+    # print(W2)
+    # print(W1/W2)
+    
+    assert np.allclose(W, W_fft_packed)
