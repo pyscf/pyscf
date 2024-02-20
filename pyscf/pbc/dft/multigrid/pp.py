@@ -157,14 +157,6 @@ def _get_vpplocG_part1(mydf, with_rho_core=PP_WITH_RHO_CORE):
     return vpplocG_part1
 
 
-def get_pp(mydf, kpts=None, max_memory=2000):
-    if not getattr(mydf, 'pp_with_erf', True):
-        mydf.vpplocG_part1 = _get_vpplocG_part1(mydf)
-        return _get_pp_without_erf(mydf, kpts, max_memory)
-    else:
-        return _get_pp_with_erf(mydf, kpts, max_memory)
-
-
 def get_vpploc_part1_ip1(mydf, kpts=numpy.zeros((1,3))):
     from .multigrid_pair import _get_j_pass2_ip1
     if mydf.pp_with_erf:
