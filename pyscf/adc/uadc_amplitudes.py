@@ -747,18 +747,13 @@ def _make_rdm1_ground(myadc):
         raise NotImplementedError(myadc.method)
     t1 = myadc.t1
     t2 = myadc.t2
-    
+ 
     einsum_type = True
     
     nocc_a = myadc._nocc[0]
     nocc_b = myadc._nocc[1]
     nvir_a = myadc._nvir[0]
     nvir_b = myadc._nvir[1]
-
-    vir_list_a = range(nvir_a)
-    vir_list_b = range(nvir_b)
-    occ_list_a = range(nocc_a)
-    occ_list_b = range(nocc_b)
 
     t2_ce_aa = t1[0][0][:]
     t2_ce_bb = t1[0][1][:]
@@ -786,7 +781,6 @@ def _make_rdm1_ground(myadc):
     OPDM_b[:nocc_b, :nocc_b]  = lib.einsum('il->il', np.identity(nocc_b), optimize = einsum_type).copy()
     OPDM_b[:nocc_b, :nocc_b] -= 1/2 * lib.einsum('ijab,ljab->il', t1_ccee_bbbb, t1_ccee_bbbb, optimize = einsum_type)
     OPDM_b[:nocc_b, :nocc_b] -= lib.einsum('jiab,jlab->il', t1_ccee_abab, t1_ccee_abab, optimize = einsum_type)
-
     OPDM_b[nocc_b:, nocc_b:] += lib.einsum('ijba,ijbc->ac', t1_ccee_abab, t1_ccee_abab, optimize = einsum_type)
     OPDM_b[nocc_b:, nocc_b:] += 1/2 * lib.einsum('ijab,ijcb->ac', t1_ccee_bbbb, t1_ccee_bbbb, optimize = einsum_type)
 

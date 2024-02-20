@@ -784,7 +784,6 @@ def _make_rdm1_excited(adc):
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    nroots = adc.U.shape[1]
     U = adc.U
 
     list_rdm1 = []
