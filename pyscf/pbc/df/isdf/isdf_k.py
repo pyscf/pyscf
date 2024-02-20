@@ -296,13 +296,18 @@ def _RowCol_FFT_bench(input, Ls, inv=False, TransBra = True, TransKet = True):
     """
     A is a 3D array, (nbra, nket, ngrid_prim)
     """
+    
     A = input
     ncell = np.prod(Ls)
+    
     assert A.shape[1] % ncell == 0
     assert A.shape[0] % ncell == 0
+    
     print("A.shape = ", A.shape)
     print("Ls = ", Ls)
+    
     NPOINT_KET = A.shape[1] // ncell
+    
     if TransKet:
         A = A.reshape(A.shape[0], -1, NPOINT_KET) # nbra, nBox, NPOINT
         A = A.transpose(0, 2, 1)                  # nbra, NPOINT, nBox
@@ -535,7 +540,7 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
     FREQ[1] /= (Ls[1] * MeshPrim[1])
     FREQ[2] /= (Ls[2] * MeshPrim[2])
     FREQ = np.einsum("ijklpqs->jklpqs", FREQ)
-    FREQ  = FREQ.reshape(-1, np.prod(MeshPrim))
+    FREQ  = FREQ.reshape(-1, np.prod(MeshPrim)).copy()
     FREQ  = np.exp(-2.0j * np.pi * FREQ)  # this is the only correct way to construct the factor
     
     fn_final_fft = getattr(libpbc, "_FinalFFT", None)
@@ -663,7 +668,9 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
 ####################### construct W #######################
     
 def _construct_W_benchmark_grid(cell, aux_basis:np.ndarray):
+    
     def constrcuct_V_CCode(aux_basis:np.ndarray, mesh, coul_G):
+        
         coulG_real         = coul_G.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1)
         nThread            = lib.num_threads()
         nAux               = aux_basis.shape[0]
@@ -718,7 +725,7 @@ def _construct_W_incore(mydf:ISDF.PBC_ISDF_Info):
     Ls    = mydf.Ls
     mesh_prim = np.array(mesh) // np.array(Ls)
     coulG = coulG.reshape(mesh_prim[0], Ls[0], mesh_prim[1], Ls[1], mesh_prim[2], Ls[2])
-    coulG = coulG.transpose(1, 3, 5, 0, 2, 4).reshape(-1, np.prod(mesh_prim))
+    coulG = coulG.transpose(1, 3, 5, 0, 2, 4).reshape(-1, np.prod(mesh_prim)).copy()
     
     nIP_prim   = mydf.nIP_Prim
     nGrid_prim = mydf.nGridPrim
@@ -739,6 +746,7 @@ def _construct_W_incore(mydf:ISDF.PBC_ISDF_Info):
     assert(fn is not None)
 
     for i in range(ncell):
+                
         k_begin = i * nGrid_prim
         k_end   = (i + 1) * nGrid_prim
         
@@ -753,12 +761,13 @@ def _construct_W_incore(mydf:ISDF.PBC_ISDF_Info):
             B_buf.ctypes.data_as(ctypes.c_void_p),
             coulG[i].ctypes.data_as(ctypes.c_void_p)
         )
-
+        
         # print("A_buf.shape = ", A_buf.shape)
         # print("B_buf.shape = ", B_buf.shape)
         # print("W_buf.shape = ", W_buf.shape)
             
-        lib.dot(B_buf, A_buf.T.conj(), c=W_buf)
+        # lib.dot(B_buf, A_buf.T.conj(), c=W_buf)
+        lib.dot(A_buf, B_buf.T.conj(), c=W_buf)
 
         k_begin = i * nIP_prim
         k_end   = (i + 1) * nIP_prim
@@ -770,6 +779,63 @@ def _construct_W_incore(mydf:ISDF.PBC_ISDF_Info):
 
 
 ## Outcore
+
+####################### get_j #######################
+    
+def _get_j_with_Wgrid(mydf:ISDF.PBC_ISDF_Info, W_grid, dm):
+    
+    W_backup = mydf.W
+    mydf.W   = W_grid
+    J = ISDF_outcore._get_j_dm_wo_robust_fitting(mydf, dm)
+    mydf.W   = W_backup
+    return J
+    
+def _get_j_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
+    
+    ### preprocess
+    
+    mydf._allocate_jk_buffer(dm.dtype)
+    
+    t1 = (logger.process_clock(), logger.perf_counter())
+    
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+    
+    nao  = dm.shape[0]
+    cell = mydf.cell
+    assert cell.nao == nao
+    ngrid = np.prod(cell.mesh)
+    vol = cell.vol
+    
+    W = mydf.W
+    aoRg = mydf.aoRg
+    naux = aoRg.shape[1]
+    
+    Ls = mydf.Ls
+    mesh = mydf.mesh
+    meshPrim = np.array(mesh) // np.array(Ls)
+    ncell = np.prod(Ls)
+    ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
+    nIP_prim = mydf.nIP_Prim
+    
+    ### allocate buffer
+    
+    buffer = mydf.jk_buffer
+    buffer1 = np.ndarray((nao,naux),  dtype=dm.dtype, buffer=buffer, offset=0)
+    buffer2 = np.ndarray((naux),      dtype=dm.dtype, buffer=buffer, offset=(nao * naux) * dm.dtype.itemsize)
+    
+    lib.ddot(dm, aoRg, c=buffer1) 
+    tmp1       = buffer1
+    density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg, tmp1, out=buffer2), order='C') 
+    
+    ### check the symmetry of density_Rg
+    
+    for i in range(ncell):
+        k_begin = i * nIP_prim
+        k_end   = (i + 1) * nIP_prim
+        assert np.allclose(density_Rg[k_begin:k_end], density_Rg[:nIP_prim].conj())
+    
     
 class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     def __init__(self, mol:Cell, max_buf_memory:int, Ls=[1,1,1], outcore=True, with_robust_fitting=True, aoR=None):
@@ -786,7 +852,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         if self.coords is None:
             from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
             df_tmp = MultiGridFFTDF2(self.cell)
-            self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
+            self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3).copy()
 
         print("self.cell.lattice_vectors = ", self.cell.lattice_vectors())
         self.ordered_grid_coords, self.ordered_grid_coords_dict = _extract_grid_primitive_cell(self.cell.lattice_vectors(), self.mesh, self.Ls, self.coords)
@@ -802,7 +868,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     
     ################ allocate buffer ################ 
     
-    def _allocate_jk_buffer(self):
+    def _allocate_jk_buffer(self, dtype=np.float64):
         
         if self.jk_buffer is not None:
             return
@@ -826,21 +892,32 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             size_buf2  = nIP_Prim * nIP_Prim * 2
             size_buf2 += nIP_Prim * nGridPrim * 2 * 2
             
-            size_buf = max(size_buf1,size_buf2)
+            ### in get_j ###
+            
+            naux       = self.naux
+            nao        = self.nao
+            size_buf3  = nao * naux + naux + naux + nao * nao
+            
+            ### ddot_buf ###
+            
+            size_ddot_buf = max(naux*naux+2,ngrids)*num_threads
+            
+            size_buf = max(size_buf1,size_buf2,size_buf3)
             
             if hasattr(self, "IO_buf"):
-                if self.IO_buf.size < (size_buf):
-                    self.IO_buf = np.zeros((size_buf), dtype=np.float64)
+                if self.IO_buf.size < (size_buf+size_ddot_buf):
+                    self.IO_buf = np.zeros((size_buf+size_ddot_buf), dtype=np.float64)
                 self.jk_buffer = np.ndarray((size_buf1), dtype=np.float64, buffer=self.IO_buf, offset=0)
                 # offset         = max(buffersize_k, buffersize_j) * self.jk_buffer.dtype.itemsize
                 # self.ddot_buf  = np.ndarray((nThreadsOMP, max((naux*naux)+2, ngrids)),
                 #                             dtype=np.float64, buffer=self.IO_buf, offset=offset)
+                self.ddot_buf = np.ndarray((size_ddot_buf), dtype=np.float64, buffer=self.IO_buf, offset=size_buf)
 
             else:
 
                 self.jk_buffer = np.ndarray((size_buf), dtype=np.float64)
                 # self.ddot_buf = np.zeros((nThreadsOMP, max((naux*naux)+2, ngrids)), dtype=np.float64) 
-            
+                self.ddot_buf = np.zeros((size_ddot_buf), dtype=np.float64)
             
         else:
             raise NotImplementedError
@@ -886,7 +963,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
                 for iz in range(self.Ls[2]):
                     ordered_IP_coords.append(self.ordered_grid_coords_dict[(ix,iy,iz)][possible_grid_ID]) # enforce translation symmetry
         
-        self.ordered_IP_coords = np.array(ordered_IP_coords).reshape(-1,3)
+        self.ordered_IP_coords = np.array(ordered_IP_coords).reshape(-1,3).copy()
         
         grid_primitive = self.ordered_grid_coords_dict[(0,0,0)]
         # self.IP_coords = grid_primitive[possible_grid_ID]
@@ -895,6 +972,31 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         self.nGridPrim = grid_primitive.shape[0]
         self.nIP_Prim  = len(possible_grid_ID)
         
+        nao_prim = self.nao // np.prod(self.Ls)
+        Ls       = np.array(self.Ls, dtype=np.int32)    
+        ncell_complex = self.Ls[0] * self.Ls[1] * (self.Ls[2]//2+1)
+        
+        # self.aoRg_FFT  = self.aoRg[:nao_prim,:].copy()
+        self.aoRg_FFT  = np.zeros((nao_prim, ncell_complex*self.nIP_Prim), dtype=np.complex128)
+        self.aoRg_FFT_real = np.ndarray((nao_prim, np.prod(Ls)*self.nIP_Prim), dtype=np.double, buffer=self.aoRg_FFT, offset=0)
+        self.aoRg_FFT_real.ravel()[:] = self.aoRg[:nao_prim,:].ravel()
+        
+        nthread        = lib.num_threads()
+        buffer         = np.ndarray((nao_prim, ncell_complex*self.nIP_Prim), dtype=np.complex128, buffer=self.jk_buffer, offset=0)
+        
+        fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+        assert fn is not None
+        
+        print("self.aoRg_FFT.shape = ", self.aoRg_FFT.shape)
+        
+        fn(
+            self.aoRg_FFT_real.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_prim),
+            ctypes.c_int(self.nIP_Prim),
+            Ls.ctypes.data_as(ctypes.c_void_p),
+            buffer.ctypes.data_as(ctypes.c_void_p)
+        ) # no normalization factor ! 
+                
         return np.array(possible_grid_ID, dtype=np.int32)
         
     ################ construct W ################
@@ -923,7 +1025,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         if self.coords is None:
             from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
             df_tmp = MultiGridFFTDF2(self.cell)
-            self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
+            self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3).copy()
 
         # t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         # coords_IP = self.coords[self.IP_ID]
@@ -993,7 +1095,8 @@ if __name__ == "__main__":
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
     
-    Ls = [3, 2, 4]
+    Ls = [1, 1, 3]
+    #Ls = [1,1,2]
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     
     cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=1, mesh=mesh)
@@ -1006,7 +1109,6 @@ if __name__ == "__main__":
 
     print("Atoms' charges in a vector\n%s" % cell.atom_charges())
     print("Atoms' coordinates in an array\n%s" % cell.atom_coords())
-    
     
     from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
 
@@ -1121,8 +1223,21 @@ if __name__ == "__main__":
     W1 = W[:4, :4]
     W2 = W_fft_packed[:4, :4]
     
-    # print(W1)
-    # print(W2)
-    # print(W1/W2)
+    print(W1)
+    print(W2)
+    print(W1/W2)
     
     assert np.allclose(W, W_fft_packed)
+    
+    from pyscf.pbc import dft as pbcdft
+    mf=pbcdft.RKS(cell)
+    mf.xc = "PBE,PBE"
+    mf.init_guess='atom'  # atom guess is fast
+    # mf.with_df = multigrid.MultiGridFFTDF2(cell)
+    # mf.with_df.ngrids = 4  # number of sets of grid points ? ? ? 
+
+    dm1 = mf.get_init_guess(cell, 'atom')
+    
+    J_bench = _get_j_with_Wgrid(pbc_isdf_info_ksym, W_grid, dm1)
+    
+    _get_j_kSym(pbc_isdf_info_ksym, dm1)

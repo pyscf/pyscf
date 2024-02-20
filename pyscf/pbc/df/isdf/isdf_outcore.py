@@ -1091,7 +1091,9 @@ def _allocate_jk_buffer_outcore(mydf:isdf_fast.PBC_ISDF_Info, datatype):
             
 def _get_j_dm_wo_robust_fitting(mydf:isdf_fast.PBC_ISDF_Info, dm):
     
-    mydf._allocate_jk_buffer(mydf, dm.dtype)
+    # mydf._allocate_jk_buffer(mydf, dm.dtype)
+    
+    mydf._allocate_jk_buffer(dm.dtype)
     
     t1 = (logger.process_clock(), logger.perf_counter())
     
@@ -1191,7 +1193,8 @@ def get_jk_dm_outcore(mydf, dm, hermi=1, kpt=np.zeros(3),
     #### perform the calculation ####
 
     if mydf.jk_buffer is None:  # allocate the buffer for get jk
-        mydf._allocate_jk_buffer(mydf, datatype=dm.dtype)
+        # mydf._allocate_jk_buffer(mydf, datatype=dm.dtype)
+        mydf._allocate_jk_buffer(datatype=dm.dtype)
 
     if "exxdiv" in kwargs:
         exxdiv = kwargs["exxdiv"]
@@ -1254,8 +1257,14 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
 
         self.outcore = outcore
         
-        if outcore:
-            self._allocate_jk_buffer = _allocate_jk_buffer_outcore
+        # if outcore:
+        #     self._allocate_jk_buffer = _allocate_jk_buffer_outcore
+
+    def _allocate_jk_buffer(self, datatype):
+        if self.outcore:
+            _allocate_jk_buffer_outcore(self, datatype)
+        else:
+            super()._allocate_jk_buffer(datatype)
 
     def __del__(self):
 
@@ -1376,7 +1385,7 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
 
     get_jk = get_jk_dm_outcore
 
-C = 20
+C = 10
 
 from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 
@@ -1403,7 +1412,7 @@ if __name__ == '__main__':
     cell.verbose = 4
 
     # cell.ke_cutoff  = 256   # kinetic energy cutoff in a.u.
-    cell.ke_cutoff = 70
+    cell.ke_cutoff = 16
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True

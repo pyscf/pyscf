@@ -592,7 +592,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
-        IP_ID = _select_IP_direct(self, c, m, global_IP_selection)
+        IP_ID = _select_IP_direct(self, c, m, global_IP_selection=global_IP_selection)
         IP_ID.sort()
         IP_ID = np.array(IP_ID, dtype=np.int32)
         self.IP_ID = IP_ID
