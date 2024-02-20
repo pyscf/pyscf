@@ -746,10 +746,8 @@ def _make_rdm1_ground(myadc):
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
     t1 = myadc.t1
-    t2 = myadc.t2
- 
+    t2 = myadc.t2 
     einsum_type = True
-    
     nocc_a = myadc._nocc[0]
     nocc_b = myadc._nocc[1]
     nvir_a = myadc._nvir[0]
