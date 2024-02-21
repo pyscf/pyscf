@@ -229,7 +229,7 @@ class M3SOSCF:
         if purge_solvers >= 0:
             self.purge_solvers = purge_solvers
         if convergence >= 0:
-            self.convergene_thresh = convergence
+            self.convergene_thresh = 10**-convergence
         if init_scattering >= 0:
             self.init_scattering = init_scattering
         if isinstance(trust_scale_range, list):
@@ -360,8 +360,11 @@ class M3SOSCF:
             
             if cycle > 0 and len(self.subconvergers) > 1:
                 sorted_indices = numpy.argsort(self.current_trusts[readCursor])
-                purge_indices = sorted_indices[0:min(int(len(sorted_indices) * (self.purge_subconvergers)),
-                        len(sorted_indices))]
+                print(len(sorted_indices))
+                print(self.purge_subconvergers)
+                print(min(int(len(sorted_indices) * self.purge_subconvergers), len(sorted_indices)))
+                purge_indices = sorted_indices[0:int(min(int(len(sorted_indices) * (self.purge_subconvergers)),
+                        len(sorted_indices)))]
                 uniquevals, uniqueindices = numpy.unique(self.current_trusts[readCursor], return_index=True)
                 nonuniqueindices = []
 
@@ -408,9 +411,8 @@ class M3SOSCF:
             for j in range(len(self.subconvergers)):
 
                 sol, trust, etot = self.subconvergers[j].getLocalSolAndTrust(h1e, s1e)
-                self.current_energies[j] = etot
 
-                numpy.set_printoptions(linewidth=500, precision=2)
+                #numpy.set_printoptions(linewidth=500, precision=2)
                 log.info("J: " + str(j) + " Trust: " + str(trust))
 
                 if trust == 0:
@@ -433,7 +435,9 @@ class M3SOSCF:
                 elif numpy.random.rand(1) < mc_threshold:
                     self.current_trusts[writeCursor,writeTrustIndex] = trust
                     newMoCoeffs[writeTrustIndex] = sol
+                    self.current_energies[writeTrustIndex] = etot
                     self.subconverger_indices[j] = writeTrustIndex
+                    
 
                 cpu_timer2 = logger.timer(self.mf, f'Solving for Local Sol and Trust, Iteration {cycle}, Subconverger {j}', *cpu_timer2) 
 
@@ -460,6 +464,9 @@ class M3SOSCF:
             scf_tconv =  1 - self.current_trusts[writeCursor,highestTrustIndex]**4 < self.convergence_thresh
             current_energy = numpy.min(self.current_energies)
             log.info("Lowest Energy: " + str(current_energy))
+            log.info("Current Highest Trust Energy: " + str(self.current_energies[highestTrustIndex]))
+            log.info("Energy Difference: " + str(current_energy - self.current_energies[highestTrustIndex]))
+            log.info("Convergence Thresh: " + str(-self.convergence_thresh))
             if scf_tconv and current_energy - self.current_energies[highestTrustIndex] < -self.convergence_thresh:
                 del_array1 = numpy.where(self.current_energies >= self.current_energies[highestTrustIndex])[0]
                 del_array2 = numpy.where(1 - self.current_trusts[writeCursor,:]**4 < self.convergence_thresh)[0]
