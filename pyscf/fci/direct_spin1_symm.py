@@ -257,6 +257,13 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
+def _validate_degen_mapping(mapping, norb):
+    '''Check if 2D irreps are properly paired'''
+    mapping = np.asarray(mapping)
+    return (mapping.max() < norb and
+            # Must be self-conjugated
+            numpy.array_equal(mapping[mapping], numpy.arange(norb)))
+
 def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     neleca, nelecb = _unpack_nelec(nelec)
     strsa = strsb = cistring.gen_strings4orblist(range(norb), neleca)
@@ -414,7 +421,7 @@ def reorder_eri(eri, norb, orbsym):
 
     # irrep of (ij| pair
     trilirrep = (orbsym[:,None] ^ orbsym)[np.tril_indices(norb)]
-    # and the number of occurence for each irrep
+    # and the number of occurrences for each irrep
     dimirrep = np.asarray(np.bincount(trilirrep), dtype=np.int32)
     # we sort the irreps of (ij| pair, to group the pairs which have same irreps
     # "order" is irrep-id-sorted index. The (ij| paired is ordered that the
@@ -615,6 +622,8 @@ def sym_allowed_indices(nelec, orbsym, wfnsym):
 
 class FCISolver(direct_spin1.FCISolver):
 
+    _keys = {'wfnsym', 'sym_allowed_idx'}
+
     pspace_size = getattr(__config__, 'fci_direct_spin1_symm_FCI_pspace_size', 400)
 
     def __init__(self, mol=None, **kwargs):
@@ -749,6 +758,11 @@ class FCISolver(direct_spin1.FCISolver):
                 orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
             if davidson_only is None:
                 davidson_only = True
+            if not _validate_degen_mapping(orbsym.degen_mapping, norb):
+                raise lib.exceptions.PointGroupSymmetryError(
+                    'Incomplete 2D-irrep orbitals for cylindrical symmetry.\n'
+                    f'orbsym = {orbsym}. '
+                    f'Retry {self.__class__} with D2h subgroup symmetry.')
 
         wfnsym_ir = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
         self.sym_allowed_idx = sym_allowed_indices(nelec, orbsym, wfnsym_ir)

@@ -93,4 +93,3 @@ scf.hf.RHF.MP2 = lib.class_as_method(RMP2)
 scf.uhf.UHF.MP2 = lib.class_as_method(UMP2)
 scf.ghf.GHF.MP2 = lib.class_as_method(GMP2)
 scf.rohf.ROHF.MP2 = None
-

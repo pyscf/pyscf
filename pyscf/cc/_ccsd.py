@@ -25,4 +25,3 @@ def make_tau(t2, t1a, t1b, fac=1, out=None):
     out = numpy.einsum('ia,jb->ijab', t1a*fac, t1b, out=out)
     out += t2
     return out
-

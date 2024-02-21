@@ -31,26 +31,20 @@ except (ImportError, IOError):
     pass
 
 def TDHF(mf):
-    import numpy
     if isinstance(mf, scf.khf.KSCF):
         return KTDHF(mf)
-    if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
-        raise NotImplementedError('Only supports gamma-point TDHF')
     if isinstance(mf, scf.hf.KohnShamDFT):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
-    #TODO: mf = mf.remove_soscf()
+    mf = mf.remove_soscf()
     if isinstance(mf, scf.rohf.ROHF):
         # Is it correct to call TDUHF for ROHF?
         mf = mf.to_uhf()
     return mf.TDHF()
 
 def TDA(mf):
-    import numpy
     if isinstance(mf, scf.khf.KSCF):
         return KTDA(mf)
-    if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
-        raise NotImplementedError('Only supports gamma-point TDA')
-    #TODO: mf = mf.remove_soscf()
+    mf = mf.remove_soscf()
     if isinstance(mf, scf.rohf.ROHF):
         if isinstance(mf, scf.hf.KohnShamDFT):
             mf = mf.to_uks()
@@ -59,13 +53,10 @@ def TDA(mf):
     return mf.TDA()
 
 def TDDFT(mf):
-    import numpy
     if isinstance(mf, scf.khf.KSCF):
         return KTDDFT(mf)
-    if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
-        raise NotImplementedError('Only supports gamma-point TDDFT')
     if isinstance(mf, scf.hf.KohnShamDFT):
-        #TODO: mf = mf.remove_soscf()
+        mf = mf.remove_soscf()
         if isinstance(mf, scf.rohf.ROHF):
             mf = mf.to_uks()
         return mf.TDDFT()
@@ -75,13 +66,13 @@ def TDDFT(mf):
 def KTDHF(mf):
     if isinstance(mf, scf.hf.KohnShamDFT):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
-    #TODO: mf = mf.remove_soscf()
+    mf = mf.remove_soscf()
     if isinstance(mf, scf.rohf.ROHF):
         mf = mf.to_uhf()
     return mf.TDHF()
 
 def KTDA(mf):
-    #TODO: mf = mf.remove_soscf()
+    mf = mf.remove_soscf()
     if isinstance(mf, scf.rohf.ROHF):
         if isinstance(mf, scf.hf.KohnShamDFT):
             mf = mf.to_uks()
@@ -91,7 +82,7 @@ def KTDA(mf):
 
 def KTDDFT(mf):
     if isinstance(mf, scf.hf.KohnShamDFT):
-        #TODO: mf = mf.remove_soscf()
+        mf = mf.remove_soscf()
         if isinstance(mf, scf.rohf.ROHF):
             mf = mf.to_uks()
         return mf.TDDFT()
@@ -99,4 +90,3 @@ def KTDDFT(mf):
         return KTDHF(mf)
 
 KTD = KTDDFT
-

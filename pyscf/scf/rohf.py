@@ -48,10 +48,33 @@ def init_guess_by_atom(mol):
     return dm
 
 init_guess_by_huckel = uhf.init_guess_by_huckel
-init_guess_by_chkfile = uhf.init_guess_by_chkfile
+init_guess_by_mod_huckel = uhf.init_guess_by_mod_huckel
+
+def init_guess_by_chkfile(mol, chkfile_name, project=None):
+    '''Read SCF chkfile and make the density matrix for ROHF initial guess.
+
+    Kwargs:
+        project : None or bool
+            Whether to project chkfile's orbitals to the new basis.  Note when
+            the geometry of the chkfile and the given molecule are very
+            different, this projection can produce very poor initial guess.
+            In PES scanning, it is recommended to switch off project.
+
+            If project is set to None, the projection is only applied when the
+            basis sets of the chkfile's molecule are different to the basis
+            sets of the given molecule (regardless whether the geometry of
+            the two molecules are different).  Note the basis sets are
+            considered to be different if the two molecules are derived from
+            the same molecule with different ordering of atoms.
+    '''
+    dm = uhf.init_guess_by_chkfile(mol, chkfile_name, project)
+    mo_coeff = dm.mo_coeff[0]
+    mo_occ = dm.mo_occ[0] + dm.mo_occ[1]
+    return lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
-             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
+             fock_last=None):
     '''Build fock matrix based on Roothaan's effective fock.
     See also :func:`get_roothaan_fock`
     '''
@@ -78,10 +101,10 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         damp_factor = mf.damp
 
     dm_tot = dm[0] + dm[1]
-    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4 and fock_last is not None:
         raise NotImplementedError('ROHF Fock-damping')
     if diis and cycle >= diis_start_cycle:
-        f = diis.update(s1e, dm_tot, f, mf, h1e, vhf)
+        f = diis.update(s1e, dm_tot, f, mf, h1e, vhf, f_prev=fock_last)
     if abs(level_shift_factor) > 1e-4:
         f = hf.level_shift(s1e, dm_tot*.5, f, level_shift_factor)
     f = lib.tag_array(f, focka=focka, fockb=fockb)
@@ -144,7 +167,6 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     else:
         mo_ea = mo_eb = mo_energy
     nmo = mo_ea.size
-    mo_occ = numpy.zeros(nmo)
     if getattr(mf, 'nelec', None) is None:
         nelec = mf.mol.nelec
     else:
@@ -219,8 +241,8 @@ def get_grad(mo_coeff, mo_occ, fock):
         focka, fockb = fock
     else:
         focka = fockb = fock
-    focka = reduce(numpy.dot, (mo_coeff.conj().T, focka, mo_coeff))
-    fockb = reduce(numpy.dot, (mo_coeff.conj().T, fockb, mo_coeff))
+    focka = mo_coeff.conj().T.dot(focka).dot(mo_coeff)
+    fockb = mo_coeff.conj().T.dot(fockb).dot(mo_coeff)
 
     g = numpy.zeros_like(focka)
     g[uniq_var_a]  = focka[uniq_var_a]
@@ -367,6 +389,12 @@ class ROHF(hf.RHF):
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
         return init_guess_by_huckel(mol)
 
+    def init_guess_by_mod_huckel(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+employing the updated GWH rule from doi:10.1021/ja00480a005.''')
+        return init_guess_by_mod_huckel(mol)
+
     def init_guess_by_1e(self, mol=None):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from hcore.')
@@ -483,6 +511,18 @@ class ROHF(hf.RHF):
     def nuc_grad_method(self):
         from pyscf.grad import rohf
         return rohf.Gradients(self)
+
+    convert_from_ = hf.RHF.convert_from_
+
+    def to_ks(self, xc='HF'):
+        '''Convert to ROKS object.
+        '''
+        from pyscf import dft
+        return self._transfer_attrs_(dft.ROKS(self.mol, xc=xc))
+
+    def to_gpu(self):
+        from gpu4pyscf.scf import ROHF
+        return lib.to_gpu(hf.SCF.reset(self.view(ROHF)))
 
 
 class HF1e(ROHF):

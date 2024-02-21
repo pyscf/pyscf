@@ -103,6 +103,9 @@ def get_veff(ks_grad, mol=None, dm=None):
 
 
 class Gradients(rks_grad.Gradients):
+
+    _keys = {'with_df', 'auxbasis_response'}
+
     def __init__(self, mf):
         # Whether to include the response of DF auxiliary basis when computing
         # nuclear gradients of J/K matrices
@@ -119,5 +122,9 @@ class Gradients(rks_grad.Gradients):
         if self.auxbasis_response:
             e1 += envs['vhf'].aux[atom_id]
         return e1
+
+    def to_gpu(self):
+        from gpu4pyscf.df.grad.rks import Gradients
+        return lib.to_gpu(self.view(Gradients))
 
 Grad = Gradients

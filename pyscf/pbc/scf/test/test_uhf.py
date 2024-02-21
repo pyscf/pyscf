@@ -49,9 +49,11 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_kuhf_kernel(self):
         self.assertAlmostEqual(kmf.e_tot, -4.586720023431593, 8)
+        kmf.analyze()
 
     def test_uhf_kernel(self):
         self.assertAlmostEqual(mf.e_tot, -3.3634535013441855, 8)
+        mf.analyze()
 
     def test_kuhf_vs_uhf(self):
         np.random.seed(1)

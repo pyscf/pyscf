@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import warnings
-import copy
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -197,7 +196,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         k : (3,) ndarray
             k-point
         exx : bool or str
-            Whether this is an exchange matrix element.
+            Whether this is an exchange matrix element
         mf : instance of :class:`SCF`
 
     Returns:
@@ -206,8 +205,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         mesh : (3,) ndarray of ints (= nx,ny,nz)
             The number G-vectors along each direction.
         omega : float
-            Enable Coulomb kernel erf(|omega|*r12)/r12 if omega > 0
-            and erfc(|omega|*r12)/r12 if omega < 0.
+            Enable Coulomb kernel ``erf(|omega|*r12)/r12`` if omega > 0
+            and ``erfc(|omega|*r12)/r12`` if omega < 0.
             Note this parameter is slightly different to setting cell.omega
             for the treatment of exxdiv (at G0).  cell.omega affects Ewald
             probe charge at G0. It is used mostly by RSH functionals for
@@ -442,7 +441,7 @@ def precompute_exx(cell, kpts):
 
 def madelung(cell, kpts):
     Nk = get_monkhorst_pack_size(cell, kpts)
-    ecell = copy.copy(cell)
+    ecell = cell.copy(deep=False)
     ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
     ecell._env = np.append(cell._env, [0., 0., 0.])
     ecell.unit = 'B'
@@ -503,7 +502,7 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     if rcut is None:
         rcut = cell.rcut
 
-    if dimension == 0 or rcut <= 0:
+    if dimension == 0 or rcut <= 0 or cell.natm == 0:
         return np.zeros((1, 3))
 
     a = cell.lattice_vectors()
@@ -553,12 +552,14 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
 
 def super_cell(cell, ncopy, wrap_around=False):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
-    Note this function differs from :fun:`cell_plus_imgs` that cell_plus_imgs
+    Note this function differs from :func:`cell_plus_imgs` that cell_plus_imgs
     creates images in both +/- direction.
 
     Args:
         cell : instance of :class:`Cell`
+
         ncopy : (3,) array
+
         wrap_around : bool
             Put the original cell centered on the super cell. It has the
             effects corresponding to the parameter wrap_around of
@@ -585,18 +586,20 @@ def super_cell(cell, ncopy, wrap_around=False):
         zs[(ncopy[2]+1)//2:] -= ncopy[2]
     Ts = lib.cartesian_prod((xs, ys, zs))
     Ls = np.dot(Ts, a)
-    supcell = copy.copy(cell)
+    supcell = cell.copy(deep=False)
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
     mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
     supcell.mesh = (mesh // 2) * 2 + 1
-    supcell.magmom = np.repeat(np.asarray(cell.magmom).reshape(1,-1),
-                               np.prod(ncopy), axis=0).ravel()
+    if isinstance(cell.magmom, np.ndarray):
+        supcell.magmom = cell.magmom.tolist() * np.prod(ncopy)
+    else:
+        supcell.magmom = cell.magmom * np.prod(ncopy)
     return _build_supcell_(supcell, cell, Ls)
 
 
 def cell_plus_imgs(cell, nimgs):
     '''Create a supercell via nimgs[i] in each +/- direction, as in get_lattice_Ls().
-    Note this function differs from :fun:`super_cell` that super_cell only
+    Note this function differs from :func:`super_cell` that super_cell only
     stacks the images in + direction.
 
     Args:
@@ -611,7 +614,7 @@ def cell_plus_imgs(cell, nimgs):
                              np.arange(-nimgs[1], nimgs[1]+1),
                              np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
-    supcell = copy.copy(cell)
+    supcell = cell.copy(deep=False)
     supcell.a = np.einsum('i,ij->ij', nimgs, a)
     supcell.mesh = np.array([(nimgs[0]*2+1)*cell.mesh[0],
                              (nimgs[1]*2+1)*cell.mesh[1],
@@ -650,7 +653,7 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
 
-    if isinstance(supcell, pbcgto.Cell) and supcell.space_group_symmetry:
+    if isinstance(supcell, pbcgto.Cell) and getattr(supcell, 'space_group_symmetry', False):
         supcell.build_lattice_symmetry(not cell._mesh_from_build)
     return supcell
 

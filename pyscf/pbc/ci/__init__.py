@@ -16,21 +16,21 @@ from pyscf.pbc import scf
 from pyscf.pbc.ci import cisd, kcis_rhf
 
 def RCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_rhf(mf)
+    mf = mf.to_rhf()
     return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
 
 CISD = RCISD
 
 def UCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_uhf(mf)
+    mf = mf.to_uhf()
     return cisd.UCISD(mf, frozen, mo_coeff, mo_occ)
 
 def GCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_ghf(mf)
+    mf = mf.to_ghf()
     return cisd.GCISD(mf, frozen, mo_coeff, mo_occ)
 
 def KCIS(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_rhf(mf)
+    mf = mf.to_rhf()
     return kcis_rhf.KCIS(mf, frozen, mo_coeff, mo_occ)
 
 CIS = KCIS

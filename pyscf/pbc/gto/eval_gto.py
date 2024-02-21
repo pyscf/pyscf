@@ -34,7 +34,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     r'''Evaluate PBC-AO function value on the given grids,
 
     Args:
-        eval_name : str
+        eval_name : str::
 
             ==========================  =======================
             Function                    Expression

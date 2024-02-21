@@ -129,6 +129,13 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
 
 class RADC(pyscf.adc.radc.RADC):
+    _keys = {
+        'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
+        'mol', 'mo_energy', 'incore_complete',
+        'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile',
+        'max_space', 't2', 'mo_occ', 'max_cycle','kpts', 'khelper',
+        'exxdiv', 'cell', 'nkop_chk', 'kop_npick', 'chnk_size', 'keep_exxdiv',
+    }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
@@ -175,13 +182,6 @@ class RADC(pyscf.adc.radc.RADC):
         self.imds = lambda:None
 
         self.keep_exxdiv = False
-        keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
-                    'mol', 'mo_energy', 'max_memory', 'incore_complete',
-                    'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile',
-                    'max_space', 't2', 'mo_occ', 'max_cycle','kpts', 'khelper'))
-
-        self._keys = set(self.__dict__.keys()).union(keys)
-
         self.mo_energy = mf.mo_energy
 
     transform_integrals = kadc_ao2mo.transform_integrals_incore

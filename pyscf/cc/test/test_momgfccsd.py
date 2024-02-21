@@ -2,6 +2,7 @@ import os
 import unittest
 import numpy as np
 from pyscf import gto, scf, cc, lib
+from pyscf.cc import momgfccsd
 
 
 class KnownValues(unittest.TestCase):
@@ -22,7 +23,7 @@ class KnownValues(unittest.TestCase):
         cls.mycc.kernel()
         cls.mycc.solve_lambda()
 
-        gfcc = cc.momgfccsd.MomGFCCSD(cls.mycc, niter=(5, 5))
+        gfcc = momgfccsd.MomGFCCSD(cls.mycc, niter=(5, 5))
         imds = gfcc.make_imds()
         cls.hole_moments = gfcc.build_hole_moments(imds=imds)
         cls.part_moments = gfcc.build_part_moments(imds=imds)
@@ -54,7 +55,7 @@ class KnownValues(unittest.TestCase):
 
     def test_lambda_assertion(self):
         with lib.temporary_env(self.mycc, l1=None, l2=None):
-            gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(0, 0))
+            gfcc = momgfccsd.MomGFCCSD(self.mycc, niter=(0, 0))
             self.assertRaises(ValueError, gfcc.kernel)
 
     def _test_moments(self, e, v, nmax, ref):
@@ -64,7 +65,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(np.max(np.abs(m1-m2)), 0.0, 7)
 
     def _test_niter(self, niter):
-        gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
+        gfcc = momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
         eh, vh, ep, vp = gfcc.kernel()
         self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
         self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
@@ -96,7 +97,7 @@ class KnownValues(unittest.TestCase):
         imds.make_ea()
         t1, t2, l1, l2 = self.mycc.t1, self.mycc.t2, self.mycc.l1, self.mycc.l2
         with lib.temporary_env(self.mycc, t1=None, t2=None, l1=None, l2=None):
-            gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
+            gfcc = momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
             eh, vh, ep, vp = gfcc.kernel(t1=t1, t2=t2, l1=l1, l2=l2, imds=imds)
             self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
             self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
@@ -105,7 +106,7 @@ class KnownValues(unittest.TestCase):
 
     def test_mom_input(self):
         niter = 2
-        gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
+        gfcc = momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
         hole_moments = self.hole_moments[:2*niter+2]
         part_moments = self.part_moments[:2*niter+2]
         eh, vh, ep, vp = gfcc.kernel(hole_moments=hole_moments, part_moments=part_moments)
@@ -116,7 +117,7 @@ class KnownValues(unittest.TestCase):
 
     def test_hermi_moments(self):
         niter = 2
-        gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
+        gfcc = momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
         gfcc.hermi_moments = True
         hole_moments = self.hole_moments[:2*niter+2]
         part_moments = self.part_moments[:2*niter+2]
@@ -128,7 +129,7 @@ class KnownValues(unittest.TestCase):
 
     def test_hermi_moments(self):
         niter = 2
-        gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
+        gfcc = momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
         gfcc.hermi_moments = True
         gfcc.hermi_solver = True
         hole_moments = self.hole_moments[:2*niter+2]
@@ -141,7 +142,7 @@ class KnownValues(unittest.TestCase):
 
     def test_misc(self):
         niter = 2
-        gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
+        gfcc = momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
         gfcc.reset()
         eh, vh, ep, vp = gfcc.kernel()
         self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
@@ -157,14 +158,14 @@ class KnownValues(unittest.TestCase):
 
     def test_chkfile(self):
         niter = 1
-        gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
+        gfcc = momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
         eh, vh, ep, vp = gfcc.kernel()
         self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
         self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
         self._test_moments(eh, vh, 2*niter+1, self.hole_moments)
         self._test_moments(ep, vp, 2*niter+1, self.part_moments)
         gfcc.dump_chk(chkfile="tmp.chk")
-        gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
+        gfcc = momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
         gfcc.update("tmp.chk")
         self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
         self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
@@ -184,7 +185,7 @@ class KnownValues(unittest.TestCase):
         mycc.solve_lambda()
 
         niter = 3
-        gfcc = cc.momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
+        gfcc = momgfccsd.MomGFCCSD(self.mycc, niter=(niter, niter))
         eh, vh, ep, vp = gfcc.kernel()
         self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
         self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])

@@ -24,7 +24,6 @@ For GTH/HGH PPs, see:
 '''
 
 import ctypes
-import copy
 import numpy
 import scipy.special
 from pyscf import lib
@@ -191,7 +190,7 @@ def fake_cell_vloc(cell, cn=0):
                 fake_bas.append([ia, 0, 1, 1, 0, ptr, ptr+1, 0])
                 ptr += 2
 
-    fakecell = copy.copy(cell)
+    fakecell = cell.copy(deep=False)
     fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32).reshape(-1, gto.ATM_SLOTS)
     fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32).reshape(-1, gto.BAS_SLOTS)
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
@@ -248,7 +247,7 @@ def fake_cell_vnl(cell):
                     hl_blocks.append(hl)
                     ptr += 2
 
-    fakecell = copy.copy(cell)
+    fakecell = cell.copy(deep=False)
     fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32)
     fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32)
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
@@ -302,4 +301,3 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
            int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi'),
            int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi'))
     return out
-

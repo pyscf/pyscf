@@ -96,6 +96,11 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
 
 
 class EOM(lib.StreamObject):
+    _keys = {
+        'mol', 'max_space', 'max_cycle', 'conv_tol', 'partition',
+        'e', 'v', 'nocc', 'nmo',
+    }
+
     def __init__(self, cc):
         self.mol = cc.mol
         self._cc = cc
@@ -114,7 +119,6 @@ class EOM(lib.StreamObject):
         self.v = None
         self.nocc = cc.nocc
         self.nmo = cc.nmo
-        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         logger.info(self, '')

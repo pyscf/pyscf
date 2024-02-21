@@ -19,10 +19,10 @@
 from pyscf import lib
 from pyscf.tdscf import uhf
 from pyscf.pbc.tdscf import rhf as td_rhf
-from pyscf.pbc.tdscf.rhf import TDMixin
+from pyscf.pbc.tdscf.rhf import TDBase
 
 
-class TDA(TDMixin):
+class TDA(TDBase):
 
     singlet = None
 
@@ -49,4 +49,3 @@ RPA = TDUHF = TDHF
 from pyscf.pbc import scf
 scf.uhf.UHF.TDA = lib.class_as_method(TDA)
 scf.uhf.UHF.TDHF = lib.class_as_method(TDHF)
-

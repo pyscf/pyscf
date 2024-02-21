@@ -698,4 +698,3 @@ if __name__ == "__main__":
     mycis = ci.KCIS(kmf)
     e_cis, v_cis = mycis.kernel(nroots=1, kptlist=[0])
     print(e_cis[0] - 0.2239201285373249)
-

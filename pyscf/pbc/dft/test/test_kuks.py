@@ -45,6 +45,10 @@ class KnownValues(unittest.TestCase):
         mf.run()
         self.assertAlmostEqual(mf.e_tot, -0.3846075202893169, 7)
 
+        mf.kpts = cell.make_kpts([2,2,1])
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -0.3846075202893169, 7)
+
     def test_klda8_cubic_kpt_222_high_cost(self):
         cell = pbcgto.Cell()
         cell.unit = 'A'

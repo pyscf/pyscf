@@ -90,6 +90,7 @@ class KnownValues(unittest.TestCase):
             ['O' , (0. , 0.     , 0.)],
             [1   , (0. , -0.757 , 0.587)],
             [1   , (0. , 0.757  , 0.587)] ]
+        mol.symmetry = True
         mol.verbose = 0
         mol.basis = '631g'
         mol.spin = 2

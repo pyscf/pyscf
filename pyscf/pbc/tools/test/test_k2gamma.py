@@ -88,10 +88,14 @@ class KnownValues(unittest.TestCase):
         kpts = cell.make_kpts(kmesh, space_group_symmetry=True)
         kmf = scf.KRKS(cell, kpts).density_fit()
         kmf.kernel()
-        c_g_ao = k2gamma.k2gamma(kmf).mo_coeff
+        mf = k2gamma.k2gamma(kmf)
+        c_g_ao = mf.mo_coeff
 
         scell = tools.super_cell(cell, kmesh)
         mf_sc = scf.RKS(scell).density_fit()
+        self.assertEqual(mf.__class__, mf_sc.__class__)
+        self.assertEqual(mf.xc, kmf.xc)
+
         s = mf_sc.get_ovlp()
         mf_sc.run()
         sc_mo = mf_sc.mo_coeff

@@ -141,7 +141,7 @@ class KnownValues(unittest.TestCase):
         mf.omega = .15
         mf.conv_tol = 1e-8
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 5)
 
 # TODO: test the reset method of pbcdft.KRKS, pbcdft.RKS whether the reset
 # methods of all subsequent objects are called

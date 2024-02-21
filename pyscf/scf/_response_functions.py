@@ -36,7 +36,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             orbital hessian or CPHF will be generated. If singlet is boolean,
             it is used in TDDFT response kernel.
     '''
-    assert (not isinstance(mf, (uhf.UHF, rohf.ROHF)))
+    assert isinstance(mf, hf.RHF) and not isinstance(mf, (uhf.UHF, rohf.ROHF))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
@@ -59,14 +59,13 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             dm0 = mf.make_rdm1(mo_coeff, mo_occ)
             return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
 
-        if singlet is None:
-            # for ground state orbital hessian
-            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                mo_coeff, mo_occ, spin=0)
+        if singlet is None: # for ground state orbital hessian
+            spin = 0
         else:
-            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                mo_coeff, mo_occ, spin=1)
-        dm0 = None  #mf.make_rdm1(mo_coeff, mo_occ)
+            spin = 1
+        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                            mo_coeff, mo_occ, spin)
+        dm0 = None
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]
@@ -149,6 +148,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     '''Generate a function to compute the product of UHF response function and
     UHF density matrices.
     '''
+    assert isinstance(mf, (uhf.UHF, rohf.ROHF))
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
@@ -171,7 +171,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1)
-        dm0 = None  #mf.make_rdm1(mo_coeff, mo_occ)
+        dm0 = None
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]

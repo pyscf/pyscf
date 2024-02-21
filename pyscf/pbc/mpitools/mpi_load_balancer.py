@@ -171,4 +171,3 @@ class load_balancer:
 #                print("SLAVE : ", self.rank, " just finished work on ", self.curr_block, ". sending tag...")
         else:
             return
-

@@ -46,4 +46,3 @@ def print_mo_energy_occ(mf,mo_energy,mo_occ,is_uhf):
         logger.debug(mf, '  %s', mo_energy)
         logger.debug(mf, '  %s', mo_occ)
         numpy.set_printoptions()
-

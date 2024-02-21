@@ -99,4 +99,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full kpoint test")
     unittest.main()
-

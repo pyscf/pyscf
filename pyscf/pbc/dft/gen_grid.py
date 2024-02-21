@@ -165,6 +165,7 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
     b = cell.reciprocal_vectors(norm_to=1)
     supatm_idx = []
     k = 0
+    tol = 1e-15
     for iL, L in enumerate(Ls):
         for ia in range(cell.natm):
             coords, vol = atom_grids_tab[cell.atom_symbol(ia)]
@@ -174,24 +175,24 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
 
             mask = np.ones(c.shape[1], dtype=bool)
             if dimension >= 1:
-                mask &= (c[0]>=-.5) & (c[0]<=.5)
+                mask &= (c[0]>-.5-tol) & (c[0]<.5+tol)
             if dimension >= 2:
-                mask &= (c[1]>=-.5) & (c[1]<=.5)
+                mask &= (c[1]>-.5-tol) & (c[1]<.5+tol)
             if dimension == 3:
-                mask &= (c[2]>=-.5) & (c[2]<=.5)
+                mask &= (c[2]>-.5-tol) & (c[2]<.5+tol)
 
             vol = vol[mask]
             if vol.size > 8:
                 c = c[:,mask]
                 if dimension >= 1:
-                    vol[c[0]==-.5] *= .5
-                    vol[c[0]== .5] *= .5
+                    vol[abs(c[0]+.5) < tol] *= .5
+                    vol[abs(c[0]-.5) < tol] *= .5
                 if dimension >= 2:
-                    vol[c[1]==-.5] *= .5
-                    vol[c[1]== .5] *= .5
+                    vol[abs(c[1]+.5) < tol] *= .5
+                    vol[abs(c[1]-.5) < tol] *= .5
                 if dimension == 3:
-                    vol[c[2]==-.5] *= .5
-                    vol[c[2]== .5] *= .5
+                    vol[abs(c[2]+.5) < tol] *= .5
+                    vol[abs(c[2]-.5) < tol] *= .5
                 coords = coords[mask]
                 coords_all.append(coords)
                 weights_all.append(vol)

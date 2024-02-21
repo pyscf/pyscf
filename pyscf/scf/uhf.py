@@ -59,6 +59,9 @@ def init_guess_by_atom(mol, breaksym=BREAKSYM):
 def init_guess_by_huckel(mol, breaksym=BREAKSYM):
     return UHF(mol).init_guess_by_huckel(mol, breaksym)
 
+def init_guess_by_mod_huckel(mol, breaksym=BREAKSYM):
+    return UHF(mol).init_guess_by_mod_huckel(mol, breaksym)
+
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for UHF initial guess.
 
@@ -67,7 +70,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
             Whether to project chkfile's orbitals to the new basis.  Note when
             the geometry of the chkfile and the given molecule are very
             different, this projection can produce very poor initial guess.
-            In PES scanning, it is recommended to swith off project.
+            In PES scanning, it is recommended to switch off project.
 
             If project is set to None, the projection is only applied when the
             basis sets of the chkfile's molecule are different to the basis
@@ -145,10 +148,6 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
     mo_b = mo_coeff[1]
     dm_a = numpy.dot(mo_a*mo_occ[0], mo_a.conj().T)
     dm_b = numpy.dot(mo_b*mo_occ[1], mo_b.conj().T)
-# DO NOT make tag_array for DM here because the DM arrays may be modified and
-# passed to functions like get_jk, get_vxc.  These functions may take the tags
-# (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
-# arrays and modifications to DM arrays may be ignored.
     return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ):
@@ -237,7 +236,8 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     return vhf
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
-             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
+             fock_last=None):
     if h1e is None: h1e = mf.get_hcore()
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     f = numpy.asarray(h1e) + vhf
@@ -266,11 +266,11 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
 
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = [dm*.5] * 2
-    if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4:
-        f = (hf.damping(s1e, dm[0], f[0], dampa),
-             hf.damping(s1e, dm[1], f[1], dampb))
+    if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4 and fock_last is not None:
+        f = (hf.damping(f[0], fock_last[0], dampa),
+             hf.damping(f[1], fock_last[1], dampa))
     if diis and cycle >= diis_start_cycle:
-        f = diis.update(s1e, dm, f, mf, h1e, vhf)
+        f = diis.update(s1e, dm, f, mf, h1e, vhf, f_prev=fock_last)
     if abs(shifta)+abs(shiftb) > 1e-4:
         f = (hf.level_shift(s1e, dm[0], f[0], shifta),
              hf.level_shift(s1e, dm[1], f[1], shiftb))
@@ -324,10 +324,8 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     viridxa = ~occidxa
     viridxb = ~occidxb
 
-    ga = reduce(numpy.dot, (mo_coeff[0][:,viridxa].conj().T, fock_ao[0],
-                            mo_coeff[0][:,occidxa]))
-    gb = reduce(numpy.dot, (mo_coeff[1][:,viridxb].conj().T, fock_ao[1],
-                            mo_coeff[1][:,occidxb]))
+    ga = mo_coeff[0][:,viridxa].conj().T.dot(fock_ao[0].dot(mo_coeff[0][:,occidxa]))
+    gb = mo_coeff[1][:,viridxb].conj().T.dot(fock_ao[1].dot(mo_coeff[1][:,occidxb]))
     return numpy.hstack((ga.ravel(), gb.ravel()))
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
@@ -764,6 +762,9 @@ class UHF(hf.SCF):
     >>> print('S^2 = %.7f, 2S+1 = %.7f' % mf.spin_square())
     S^2 = 0.7570150, 2S+1 = 2.0070027
     '''
+
+    _keys = {"init_guess_breaksym"}
+
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         # self.mo_coeff => [mo_a, mo_b]
@@ -771,7 +772,6 @@ class UHF(hf.SCF):
         # self.mo_energy => [mo_energy_a, mo_energy_b]
         self.nelec = None
         self.init_guess_breaksym = None
-        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):
@@ -863,7 +863,23 @@ class UHF(hf.SCF):
         if user_set_breaksym is not None:
             breaksym = user_set_breaksym
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
-        mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol)
+        mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol, updated_rule = False)
+        mo_energy = (mo_energy, mo_energy)
+        mo_coeff = (mo_coeff, mo_coeff)
+        mo_occ = self.get_occ(mo_energy, mo_coeff)
+        dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
+        if breaksym:
+            dma, dmb = _break_dm_spin_symm(mol, (dma, dmb))
+        return numpy.array((dma,dmb))
+
+    def init_guess_by_mod_huckel(self, mol=None, breaksym=BREAKSYM):
+        if mol is None: mol = self.mol
+        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
+        if user_set_breaksym is not None:
+            breaksym = user_set_breaksym
+        logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+employing the updated GWH rule from doi:10.1021/ja00480a005.''')
+        mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol, updated_rule = True)
         mo_energy = (mo_energy, mo_energy)
         mo_coeff = (mo_coeff, mo_coeff)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
@@ -1000,8 +1016,9 @@ class UHF(hf.SCF):
 
     def convert_from_(self, mf):
         '''Create UHF object based on the RHF/ROHF object'''
-        from pyscf.scf import addons
-        return addons.convert_to_uhf(mf, out=self)
+        tgt = mf.to_uhf()
+        self.__dict__.update(tgt.__dict__)
+        return self
 
     def stability(self,
                   internal=getattr(__config__, 'scf_stability_internal', True),
@@ -1042,6 +1059,16 @@ class UHF(hf.SCF):
     def nuc_grad_method(self):
         from pyscf.grad import uhf
         return uhf.Gradients(self)
+
+    def to_ks(self, xc='HF'):
+        '''Convert to UKS object.
+        '''
+        from pyscf import dft
+        return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
+
+    def to_gpu(self):
+        from gpu4pyscf.scf import UHF
+        return lib.to_gpu(hf.SCF.reset(self.view(UHF)))
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

@@ -122,14 +122,13 @@ def spin2spatial(tx, orbspin):
         return t2aa,t2ab,t2bb
 
 def convert_to_uccsd(mycc):
-    from pyscf import scf
     from pyscf.cc import uccsd, gccsd
     if isinstance(mycc, uccsd.UCCSD):
         return mycc
     elif isinstance(mycc, gccsd.GCCSD):
         raise NotImplementedError
 
-    mf = scf.addons.convert_to_uhf(mycc._scf)
+    mf = mycc._scf.to_uhf()
     ucc = uccsd.UCCSD(mf)
     assert (mycc._nocc is None)
     assert (mycc._nmo is None)
@@ -143,12 +142,11 @@ def convert_to_uccsd(mycc):
     return ucc
 
 def convert_to_gccsd(mycc):
-    from pyscf import scf
     from pyscf.cc import gccsd
     if isinstance(mycc, gccsd.GCCSD):
         return mycc
 
-    mf = scf.addons.convert_to_ghf(mycc._scf)
+    mf = mycc._scf.to_ghf()
     gcc = gccsd.GCCSD(mf)
     assert (mycc._nocc is None)
     assert (mycc._nmo is None)

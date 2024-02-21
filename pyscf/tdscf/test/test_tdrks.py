@@ -18,7 +18,6 @@
 
 import unittest
 import numpy
-import copy
 from pyscf import lib, gto, scf, dft
 from pyscf.tdscf import rhf, rks
 from pyscf import tdscf
@@ -197,7 +196,7 @@ class KnownValues(unittest.TestCase):
         e = mf.kernel()
         self.assertAlmostEqual(e, -1.14670613191817, 8)
 
-        e_td = mf.TDA().kernel()[0]
+        e_td = mf.TDA().set(nstates=5).kernel()[0]
         ref = [16.25021865, 27.93720198, 49.4665691]
         self.assertAlmostEqual(abs(e_td*nist.HARTREE2EV - ref).max(), 0, 4)
 
@@ -286,7 +285,7 @@ class KnownValues(unittest.TestCase):
 
     def test_nto(self):
         mf = scf.RHF(mol).run()
-        td = rks.TDA(mf).run()
+        td = rks.TDA(mf).run(nstates=5)
         w, nto = td.get_nto(state=3)
         self.assertAlmostEqual(w[0], 0.98655300613468389, 7)
         self.assertAlmostEqual(lib.fp(w), 0.98625701534112464, 7)
@@ -295,7 +294,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(w[0], 0.99997335352278072, 7)
         self.assertAlmostEqual(lib.fp(w), 0.99998775067586554, 7)
 
-        pmol = copy.copy(mol)
+        pmol = mol.copy(deep=False)
         pmol.symmetry = True
         pmol.build(0, 0)
         mf = scf.RHF(pmol).run()

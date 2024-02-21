@@ -292,11 +292,10 @@ from pyscf import tdscf
 scf.hf.SCF.ddCOSMO    = scf.hf.SCF.DDCOSMO    = ddcosmo_for_scf
 mp.mp2.MP2.ddCOSMO    = mp.mp2.MP2.DDCOSMO    = ddcosmo_for_post_scf
 ci.cisd.CISD.ddCOSMO  = ci.cisd.CISD.DDCOSMO  = ddcosmo_for_post_scf
-cc.ccsd.CCSD.ddCOSMO  = cc.ccsd.CCSD.DDCOSMO  = ddcosmo_for_post_scf
-tdscf.rhf.TDMixin.ddCOSMO = tdscf.rhf.TDMixin.DDCOSMO = ddcosmo_for_tdscf
+cc.ccsd.CCSDBase.ddCOSMO  = cc.ccsd.CCSDBase.DDCOSMO  = ddcosmo_for_post_scf
+tdscf.rhf.TDBase.ddCOSMO = tdscf.rhf.TDBase.DDCOSMO = ddcosmo_for_tdscf
 mcscf.casci.CASCI.ddCOSMO = mcscf.casci.CASCI.DDCOSMO = ddcosmo_for_casci
 mcscf.mc1step.CASSCF.ddCOSMO = mcscf.mc1step.CASSCF.DDCOSMO = ddcosmo_for_casscf
-
 
 # Keep gen_ddcosmo_solver for backward compatibility
 def gen_ddcosmo_solver(pcmobj, verbose=None):
@@ -341,9 +340,7 @@ def regularize_xt(t, eta):
 
 def make_grids_one_sphere(lebedev_order):
     ngrid_1sph = gen_grid.LEBEDEV_ORDER[lebedev_order]
-    leb_grid = numpy.empty((ngrid_1sph,4))
-    gen_grid.libdft.MakeAngularGrid(leb_grid.ctypes.data_as(ctypes.c_void_p),
-                                    ctypes.c_int(ngrid_1sph))
+    leb_grid = gen_grid.MakeAngularGrid(ngrid_1sph)
     coords_1sph = leb_grid[:,:3]
     # Note the Lebedev angular grids are normalized to 1 in pyscf
     weights_1sph = 4*numpy.pi * leb_grid[:,3]
@@ -619,7 +616,13 @@ def atoms_with_vdw_overlap(atm_id, atom_coords, r_vdw):
     atoms_nearby = numpy.where(atm_dist < vdw_sum**2)[0]
     return atoms_nearby
 
-class DDCOSMO(lib.StreamObject):
+class ddCOSMO(lib.StreamObject):
+    _keys = {
+        'mol', 'radii_table', 'atom_radii', 'lebedev_order', 'lmax', 'eta',
+        'eps', 'grids', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
+        'equilibrium_solvation', 'e', 'v',
+    }
+
     def __init__(self, mol):
         self.mol = mol
         self.stdout = mol.stdout
@@ -668,7 +671,6 @@ class DDCOSMO(lib.StreamObject):
         self._dm = None
 
         self._intermediates = None
-        self._keys = set(self.__dict__.keys())
 
     @property
     def dm(self):
@@ -806,6 +808,7 @@ class DDCOSMO(lib.StreamObject):
             f_epsilon = 1
         epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, Xvec)
         vpcm = .5 * f_epsilon * vmat
+
         return epcm, vpcm
 
     def _B_dot_x(self, dm):
@@ -861,10 +864,12 @@ class DDCOSMO(lib.StreamObject):
         if self.frozen:
             raise RuntimeError('Frozen solvent model is not supported for '
                                'energy gradients')
-        if isinstance(grad_method.base, tdscf.rhf.TDMixin):
+        if isinstance(grad_method.base, tdscf.rhf.TDBase):
             return _ddcosmo_tdscf_grad.make_grad_object(grad_method)
         else:
             return ddcosmo_grad.make_grad_object(grad_method)
+
+DDCOSMO = ddCOSMO
 
 class Grids(gen_grid.Grids):
     '''DFT grids without sorting grids'''

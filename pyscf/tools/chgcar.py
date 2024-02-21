@@ -251,4 +251,3 @@ if __name__ == '__main__':
     chgcar.density(cell, 'h2.CHGCAR', mf.make_rdm1()) #makes total density
     chgcar.orbital(cell, 'h2_mo1.CHGCAR', mf.mo_coeff[:,0]) # makes mo#1 (sigma)
     chgcar.orbital(cell, 'h2_mo2.CHGCAR', mf.mo_coeff[:,1]) # makes mo#2 (sigma*)
-

@@ -212,6 +212,15 @@ class KnownValues(unittest.TestCase):
         mc.run()
         self.assertAlmostEqual(mc.e_tot, 2.8999951068356475, 8)
 
+    def test_incomplete_orbsym(self):
+        sol = direct_spin1_cyl_sym.FCI(gto.Mole())
+        no, ne = 2, 2
+        h1 = np.ones((no,no))
+        h2 = np.ones((no,no,no,no))
+        orbsym = lib.tag_array(np.array([0,3]), degen_mapping=[0,2])
+        with self.assertRaises(lib.exceptions.PointGroupSymmetryError):
+            sol.kernel(h1, h2, no, ne, orbsym=orbsym)
+
 if __name__ == "__main__":
     print("Full Tests for spin1-symm")
     unittest.main()

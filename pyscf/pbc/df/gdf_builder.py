@@ -25,7 +25,6 @@ for regular density fitting and SR-integral density fitting only.
 '''
 
 import os
-import copy
 import ctypes
 import tempfile
 import numpy as np
@@ -114,8 +113,8 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.fused_cell, self.fuse = fuse_auxcell(auxcell, self.eta)
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, rsdf_builder.RCUT_THRESHOLD, verbose=log)
-        rcut = estimate_rcut(rs_cell, self.fused_cell, rs_cell.precision,
-                             self.exclude_dd_block)
+        rcut = estimate_rcut(rs_cell, self.fused_cell,
+                             exclude_dd_block=self.exclude_dd_block)
         rcut_max = rcut.max()
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_max, log)
         supmol.exclude_dd_block = self.exclude_dd_block
@@ -124,8 +123,8 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
         if self.has_long_range():
-            rcut = rsdf_builder.estimate_ft_rcut(rs_cell, cell.precision,
-                                                 self.exclude_dd_block)
+            rcut = rsdf_builder.estimate_ft_rcut(
+                rs_cell, exclude_dd_block=self.exclude_dd_block)
             supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(rs_cell, kmesh,
                                                                rcut.max(), log)
             supmol_ft.exclude_dd_block = self.exclude_dd_block
@@ -561,8 +560,8 @@ class _CCNucBuilder(_CCGDFBuilder):
         self.direct_scf_tol = cutoff / cell.atom_charges().max()
         log.debug('Set _CCNucBuilder.direct_scf_tol to %g', cutoff)
 
-        rcut = rsdf_builder.estimate_ft_rcut(rs_cell, cell.precision,
-                                             self.exclude_dd_block)
+        rcut = rsdf_builder.estimate_ft_rcut(
+            rs_cell, exclude_dd_block=self.exclude_dd_block)
         supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(rs_cell, kmesh,
                                                            rcut.max(), log)
         supmol_ft.exclude_dd_block = self.exclude_dd_block
@@ -585,7 +584,7 @@ class _CCNucBuilder(_CCGDFBuilder):
         charge = -cell.atom_charges()
         if cell.dimension > 0:
             mod_cell = self.modchg_cell
-            fakenuc = copy.copy(fakenuc)
+            fakenuc = fakenuc.copy(deep=False)
             fakenuc._atm, fakenuc._bas, fakenuc._env = \
                     gto.conc_env(mod_cell._atm, mod_cell._bas, mod_cell._env,
                                  fakenuc._atm, fakenuc._bas, fakenuc._env)
@@ -767,7 +766,7 @@ def auxbar(fused_cell):
 def make_modchg_basis(auxcell, smooth_eta):
     # * chgcell defines smooth gaussian functions for each angular momentum for
     #   auxcell. The smooth functions may be used to carry the charge
-    chgcell = copy.copy(auxcell)  # smooth model density for coulomb integral to carry charge
+    chgcell = auxcell.copy(deep=False)  # smooth model density for coulomb integral to carry charge
     half_sph_norm = .5/np.sqrt(np.pi)
     chg_bas = []
     chg_env = [smooth_eta]
@@ -806,7 +805,7 @@ def fuse_auxcell(auxcell, eta):
         return auxcell, fuse
 
     chgcell = make_modchg_basis(auxcell, eta)
-    fused_cell = copy.copy(auxcell)
+    fused_cell = auxcell.copy(deep=False)
     fused_cell._atm, fused_cell._bas, fused_cell._env = \
             gto.conc_env(auxcell._atm, auxcell._bas, auxcell._env,
                          chgcell._atm, chgcell._bas, chgcell._env)
@@ -917,7 +916,7 @@ def _guess_eta(cell, kpts=None, mesh=None):
 
 def _compensate_nuccell(cell, eta):
     '''A cell of the compensated Gaussian charges for nucleus'''
-    modchg_cell = copy.copy(cell)
+    modchg_cell = cell.copy(deep=False)
     half_sph_norm = .5/np.sqrt(np.pi)
     norm = half_sph_norm/gto.gaussian_int(2, eta)
     chg_env = [eta, norm]
@@ -932,7 +931,8 @@ def _compensate_nuccell(cell, eta):
 def estimate_rcut(rs_cell, auxcell, precision=None, exclude_dd_block=False):
     '''Estimate rcut for 3c2e integrals'''
     if precision is None:
-        precision = rs_cell.precision
+        # Adjust precision a little bit as errors are found slightly larger than cell.precision.
+        precision = rs_cell.precision * 1e-1
 
     if rs_cell.nbas == 0 or auxcell.nbas == 0:
         return np.zeros(1)

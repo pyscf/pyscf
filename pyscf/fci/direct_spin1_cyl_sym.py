@@ -26,7 +26,7 @@ FCI wavefunction (called complex wavefunction here) is solved using the complex
 Hamiltonian. For 2D irreps, the real part and the imaginary part of the complex
 FCI wavefunction are identical to the Ex and Ey wavefunction obtained from
 direct_spin1_symm module. However, any observables from the complex FCI
-wavefunction should have an indentical one from either Ex or Ey wavefunction
+wavefunction should have an identical one from either Ex or Ey wavefunction
 of direct_spin1_symm.
 '''
 
@@ -42,9 +42,9 @@ from pyscf.scf.hf_symm import map_degeneracy
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
-from pyscf.fci.direct_spin1_symm import (_sv_associated_det,
-                                         _strs_angular_momentum,
-                                         _cyl_sym_orbital_rotation)
+from pyscf.fci.direct_spin1_symm import (
+    _sv_associated_det, _strs_angular_momentum, _cyl_sym_orbital_rotation,
+    _validate_degen_mapping)
 from pyscf.fci import direct_nosym
 from pyscf.fci import addons
 from pyscf import __config__
@@ -62,7 +62,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
 
     wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
     wfnsym_in_d2h = wfnsym % 10
-    wfn_ungerade = wfnsym_in_d2h >= 4
+    wfn_ungerade = int(wfnsym_in_d2h >= 4)
     orbsym_d2h = orbsym % 10
     orb_ungerade = orbsym_d2h >= 4
     if np.any(orb_ungerade) or wfn_ungerade:
@@ -558,6 +558,10 @@ class FCISolver(direct_spin1_symm.FCISolver):
         if not hasattr(orbsym, 'degen_mapping'):
             degen_mapping = map_degeneracy(h1e.diagonal(), orbsym)
             orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
+        if not _validate_degen_mapping(orbsym.degen_mapping, norb):
+            raise lib.exceptions.PointGroupSymmetryError(
+                'Incomplete 2D-irrep orbitals for cylindrical symmetry.\n'
+                f'orbsym = {orbsym}.')
 
         u = _cyl_sym_orbital_rotation(orbsym, orbsym.degen_mapping)
         h1e = u.dot(h1e).dot(u.conj().T)

@@ -478,4 +478,3 @@ if __name__ == '__main__':
     print(myci.e_tot - e2)   # = 0
 
     print(abs(rdm1 - numpy.einsum('ijkk->ji', rdm2)/(mol.nelectron-1)).sum())
-

@@ -23,7 +23,6 @@ One-electron spin-free X2C approximation for extended systems
 
 
 from functools import reduce
-import copy
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -36,7 +35,7 @@ from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import gdf_builder
-from pyscf.pbc.scf import ghf
+from pyscf.pbc.scf import ghf, khf, kghf
 from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
@@ -71,53 +70,42 @@ def sfx2c1e(mf):
         else:
             return mf
 
-    mf_class = mf.__class__
-    if mf_class.__doc__ is None:
-        doc = ''
-    else:
-        doc = mf_class.__doc__
-
-    class SFX2C1E_SCF(mf_class, x2c._X2C_SCF):
-        __doc__ = doc + '''
-        Attributes for spin-free X2C:
-            with_x2c : X2C object
-        '''
-        def __init__(self, mf):
-            self.__dict__.update(mf.__dict__)
-            self.with_x2c = SpinFreeX2CHelper(mf.mol)
-            self._keys = self._keys.union(['with_x2c'])
-
-        def get_hcore(self, cell=None, kpts=None, kpt=None):
-            if cell is None: cell = self.cell
-            if kpts is None:
-                if getattr(self, 'kpts', None) is not None:
-                    kpts = self.kpts
-                else:
-                    if kpt is None:
-                        kpts = self.kpt
-                    else:
-                        kpts = kpt
-            if self.with_x2c:
-                hcore = self.with_x2c.get_hcore(cell, kpts)
-                if isinstance(self, ghf.GHF):
-                    if kpts.ndim == 1:
-                        hcore = scipy.linalg.block_diag(hcore, hcore)
-                    else:
-                        hcore = [scipy.linalg.block_diag(h, h) for h in hcore]
-                return hcore
-            else:
-                return mf_class.get_hcore(self, cell, kpts)
-
-        def dump_flags(self, verbose=None):
-            mf_class.dump_flags(self, verbose)
-            if self.with_x2c:
-                self.with_x2c.dump_flags(verbose)
-            return self
-
-    with_x2c = SpinFreeX2CHelper(mf.mol)
-    return mf.view(SFX2C1E_SCF).add_keys(with_x2c=with_x2c)
+    return lib.set_class(SFX2C1E_SCF(mf), (SFX2C1E_SCF, mf.__class__))
 
 sfx2c = sfx2c1e
+
+class SFX2C1E_SCF(x2c._X2C_SCF):
+    '''
+    Attributes for spin-free X2C:
+        with_x2c : X2C object
+    '''
+
+    __name_mixin__ = 'sfX2C1e'
+
+    _keys = {'with_x2c'}
+
+    def __init__(self, mf):
+        self.__dict__.update(mf.__dict__)
+        self.with_x2c = SpinFreeX2CHelper(mf.mol)
+
+    def get_hcore(self, cell=None, kpts=None, kpt=None):
+        if cell is None: cell = self.cell
+        if kpts is None:
+            if isinstance(self, khf.KSCF):
+                kpts = self.kpts
+            elif kpt is None:
+                kpts = self.kpt
+            else:
+                kpts = kpt
+        if self.with_x2c:
+            hcore = self.with_x2c.get_hcore(cell, kpts)
+            if isinstance(self, kghf.KGHF):
+                hcore = [scipy.linalg.block_diag(h, h) for h in hcore]
+            elif isinstance(self, ghf.GHF):
+                hcore = scipy.linalg.block_diag(hcore, hcore)
+            return hcore
+        else:
+            return super(x2c._X2C_SCF, self).get_hcore(cell, kpts)
 
 class PBCX2CHelper(x2c.X2C):
 
@@ -136,6 +124,7 @@ class SpinFreeX2CHelper(PBCX2CHelper):
     '''1-component X2c Foldy-Wouthuysen (FW Hamiltonian  (spin-free part only)
     '''
     def get_hcore(self, cell=None, kpts=None):
+        from pyscf.pbc.df import df
         if cell is None: cell = self.cell
         if kpts is None:
             kpts_lst = numpy.zeros((1,3))
@@ -143,7 +132,6 @@ class SpinFreeX2CHelper(PBCX2CHelper):
             kpts_lst = numpy.reshape(kpts, (-1,3))
         # By default, we use uncontracted cell.basis plus additional steep orbital for modified Dirac equation.
         xcell, contr_coeff = self.get_xmol(cell)
-        from pyscf.pbc.df import df
         with_df = df.DF(xcell)
 
         c = lib.param.LIGHT_SPEED

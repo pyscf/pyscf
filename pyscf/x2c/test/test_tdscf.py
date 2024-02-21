@@ -19,7 +19,6 @@
 import unittest
 import tempfile
 import numpy
-import copy
 from pyscf import lib, gto, scf
 from pyscf.x2c import x2c, dft, tdscf
 try:

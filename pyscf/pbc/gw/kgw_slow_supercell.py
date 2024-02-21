@@ -116,7 +116,7 @@ class IMDS(gw_slow.IMDS):
         return corrected_moe(self.eri, k, kp)
 
     def get_sigma_element(self, omega, p, eta, vir_sgn=1):
-        return super(IMDS, self).get_sigma_element(omega, self.__plain_index__(p, spec=False), eta, vir_sgn=vir_sgn)
+        return super().get_sigma_element(omega, self.__plain_index__(p, spec=False), eta, vir_sgn=vir_sgn)
 
     def initial_guess(self, p):
         k, kp = p

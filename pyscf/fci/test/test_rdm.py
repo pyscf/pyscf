@@ -259,5 +259,3 @@ def reorder_dm1234_o0(rdm1, rdm2, rdm3, rdm4, inplace=True):
 if __name__ == "__main__":
     print("Full Tests for fci.rdm")
     unittest.main()
-
-

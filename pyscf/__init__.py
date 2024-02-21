@@ -21,7 +21,7 @@ How to use
 ----------
 There are two ways to access the documentation: the docstrings come with
 the code, and an online program reference, available from
-http://www.sunqm.net/pyscf/index.html
+http://www.pyscf.org
 
 We recommend the enhanced Python interpreter `IPython <http://ipython.org>`_
 and the web-based Python IDE `Ipython notebook <http://ipython.org/notebook.html>`_
@@ -35,7 +35,7 @@ to try out the package::
 
 '''
 
-__version__ = '2.3.0'
+__version__ = '2.5.0'
 
 import os
 import sys

@@ -610,7 +610,7 @@ def uspatial2spin(cc, moidx, mo_coeff):
 
     dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
     fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-    fockab = list()
+    fockab = []
     for a in range(2):
         fockab.append( reduce(numpy.dot, (mo_coeff[a].T, fockao[a], mo_coeff[a])) )
 

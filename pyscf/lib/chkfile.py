@@ -65,8 +65,7 @@ def load(chkfile, key):
             if key.endswith('__from_list__'):
                 return [load_as_dic(k, val) for k in val]
             else:
-                return dict([(k.replace('__from_list__', ''),
-                              load_as_dic(k, val)) for k in val])
+                return {k.replace('__from_list__', ''): load_as_dic(k, val) for k in val}
         else:
             return val[()]
 
@@ -189,4 +188,3 @@ def save_mol(mol, chkfile):
     '''
     dump(chkfile, 'mol', mol.dumps())
 dump_mol = save_mol
-

@@ -579,7 +579,7 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     return pol
 
 
-class TDMixin(rhf.TDMixin):
+class TDBase(rhf.TDBase):
 
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None):
@@ -596,7 +596,7 @@ class TDMixin(rhf.TDMixin):
 
 
 @lib.with_doc(rhf.TDA.__doc__)
-class TDA(TDMixin):
+class TDA(TDBase):
 
     singlet = None
 
@@ -631,12 +631,10 @@ class TDA(TDMixin):
             e_ia_b[(orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym] = 1e99
 
         e_ia = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
-        e_ia_max = e_ia.max()
         nov = e_ia.size
         nstates = min(nstates, nov)
-        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
-        # Handle degeneracy
-        e_threshold += 1e-6
+        e_threshold = numpy.sort(e_ia)[nstates-1]
+        e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
         x0 = numpy.zeros((idx.size, nov))
@@ -658,12 +656,13 @@ class TDA(TDMixin):
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
 
         def pickeig(w, v, nroots, envs):
             idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
 
         self.converged, self.e, x1 = \
                 lib.davidson1(vind, x0, precond,
@@ -812,8 +811,6 @@ class TDHF(TDA):
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
@@ -821,6 +818,9 @@ class TDHF(TDA):
                                   (w.real > self.positive_eig_threshold))[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
                                                       real_eigenvectors=True)
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,

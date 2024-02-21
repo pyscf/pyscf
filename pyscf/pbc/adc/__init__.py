@@ -21,5 +21,5 @@ from pyscf.pbc.adc import kadc_rhf_ea
 def KRADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.adc import kadc_rhf
     if not isinstance(mf, scf.khf.KRHF):
-        mf = scf.addons.convert_to_rhf(mf)
+        mf = mf.to_rhf()
     return kadc_rhf.RADC(mf, frozen, mo_coeff, mo_occ)

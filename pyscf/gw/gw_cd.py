@@ -258,6 +258,11 @@ class GWCD(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
     linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
+    _keys = {
+        'eta', 'linearized', 'mol', 'frozen', 'with_df',
+        'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
+    }
+
     def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
@@ -276,7 +281,6 @@ class GWCD(lib.StreamObject):
         else:
             self.with_df = df.DF(mf.mol)
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
-        self._keys.update(['with_df'])
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -287,9 +291,6 @@ class GWCD(lib.StreamObject):
         self.mo_coeff = mf.mo_coeff
         self.mo_occ = mf.mo_occ
         self.sigma = None
-
-        keys = set(('eta', 'linearized'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)

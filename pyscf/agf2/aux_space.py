@@ -29,7 +29,7 @@ from pyscf import __config__
 from pyscf.lib.parameters import LARGE_DENOM
 
 
-class AuxiliarySpace(object):
+class AuxiliarySpace:
     ''' Simple container to hold the energies, couplings and chemical
         potential associated with an auxiliary space.
 
@@ -39,7 +39,7 @@ class AuxiliarySpace(object):
         coupling : 2D array
             Coupling vector of the poles to each physical state
         chempot : float
-            Chemical potental associated with the energies
+            Chemical potential associated with the energies
     '''
 
     def __init__(self, energy, coupling, chempot=0.0):
@@ -355,7 +355,7 @@ class SelfEnergy(AuxiliarySpace):
                 Compression level of the Green's function and
                 self-energy, respectively.
             tol : float
-                Linear dependecy tolerance. Default value is 1e-12
+                Linear dependency tolerance. Default value is 1e-12
 
         Returns:
             :class:`SelfEnergy` with reduced auxiliary dimension.
@@ -613,7 +613,7 @@ def _compress_part_via_se(se_occ, n=0):
     return e, v
 
 def _compress_via_se(se, n=0):
-    ''' Compress the auxiliaries of the seperate occupied and
+    ''' Compress the auxiliaries of the separate occupied and
         virtual parts of the self-energy according to consistency
         in its moments.
     '''
@@ -643,7 +643,7 @@ def _compress_via_se(se, n=0):
     return e, v
 
 def compress_via_se(se, n=0):
-    ''' Compress the auxiliaries of the seperate occupied and
+    ''' Compress the auxiliaries of the separate occupied and
         virtual parts of the self-energy according to consistency
         in its moments.
 
@@ -653,7 +653,7 @@ def compress_via_se(se, n=0):
 
     Kwargs:
         n : int
-            Truncation parameter, conserves the seperate particle
+            Truncation parameter, conserves the separate particle
             and hole moments to order 2*n+1.
 
     Returns:
@@ -678,7 +678,7 @@ def compress_via_se(se, n=0):
 
 def _build_projector(se, phys, n=0, tol=1e-12):
     ''' Builds the vectors which project the auxiliary space into a
-        compress one with consistency in the seperate particle and
+        compress one with consistency in the separate particle and
         hole moments up to order 2n+1.
     '''
 
@@ -710,7 +710,7 @@ def _build_projector(se, phys, n=0, tol=1e-12):
     return p
 
 def _compress_via_gf(se, phys, n=0, tol=1e-12):
-    ''' Compress the auxiliaries of the seperate occupied and
+    ''' Compress the auxiliaries of the separate occupied and
         virtual parts of the self-energy according to consistency
         in the moments of the Green's function
     '''
@@ -727,7 +727,7 @@ def _compress_via_gf(se, phys, n=0, tol=1e-12):
     return e, v
 
 def compress_via_gf(se, phys, n=0, tol=1e-12):
-    ''' Compress the auxiliaries of the seperate occupied and
+    ''' Compress the auxiliaries of the separate occupied and
         virtual parts of the self-energy according to consistency
         in the moments of the Green's function
 
@@ -739,10 +739,10 @@ def compress_via_gf(se, phys, n=0, tol=1e-12):
 
     Kwargs:
         n : int
-            Truncation parameter, conserves the seperate particle
+            Truncation parameter, conserves the separate particle
             and hole moments to order 2*n+1.
         tol : float
-            Linear dependecy tolerance. Default value is 1e-12
+            Linear dependency tolerance. Default value is 1e-12
 
     Returns:
         :class:`SelfEnergy` with reduced auxiliary dimension

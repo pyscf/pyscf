@@ -39,4 +39,3 @@ def dump_scf(mol, chkfile, e_tot, mo_energy, mo_coeff, mo_occ,
                'mo_occ'   : mo_occ,
                'mo_coeff' : mo_coeff}
     save(chkfile, 'scf', scf_dic)
-

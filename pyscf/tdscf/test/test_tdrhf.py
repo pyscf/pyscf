@@ -18,7 +18,7 @@ import unittest
 from pyscf import lib, gto, scf, tdscf
 
 def setUpModule():
-    global mol, mf
+    global mol, mf, nstates
     mol = gto.Mole()
     mol.verbose = 7
     mol.output = '/dev/null'
@@ -28,6 +28,7 @@ def setUpModule():
     mol.basis = '631g'
     mol.build()
     mf = scf.RHF(mol).run()
+    nstates = 5 # make sure first 3 states are converged
 
 def tearDownModule():
     global mol, mf
@@ -36,30 +37,30 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_tda_singlet(self):
-        td = mf.TDA()
+        td = mf.TDA().set(nstates=nstates)
         e = td.kernel()[0]
         ref = [11.90276464, 11.90276464, 16.86036434]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
 
     def test_tda_triplet(self):
-        td = mf.TDA()
+        td = mf.TDA().set(nstates=nstates)
         td.singlet = False
         e = td.kernel()[0]
         ref = [11.01747918, 11.01747918, 13.16955056]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
 
     def test_tdhf_singlet(self):
-        td = mf.TDHF()
+        td = mf.TDHF().set(nstates=nstates)
         e = td.kernel()[0]
         ref = [11.83487199, 11.83487199, 16.66309285]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
 
     def test_tdhf_triplet(self):
-        td = mf.TDHF()
+        td = mf.TDHF().set(nstates=nstates)
         td.singlet = False
         e = td.kernel()[0]
         ref = [10.8919234, 10.8919234, 12.63440705]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
 
 
 if __name__ == "__main__":

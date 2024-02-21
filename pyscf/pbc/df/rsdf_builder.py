@@ -28,7 +28,6 @@ Ref:
 '''
 
 import os
-import copy
 import ctypes
 import warnings
 import tempfile
@@ -39,7 +38,6 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger, zdotCN
 from pyscf.df.outcore import _guess_shell_ranges
-from pyscf.gto import ANG_OF
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
@@ -75,6 +73,10 @@ class _RSGDFBuilder(Int3cBuilder):
     # first, and ED is called only if CD fails.
     j2c_eig_always = False
     linear_dep_threshold = LINEAR_DEP_THR
+
+    _keys = {
+        'mesh', 'omega', 'rs_auxcell', 'supmol_ft'
+    }
 
     def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
         self.mesh = None
@@ -169,9 +171,9 @@ class _RSGDFBuilder(Int3cBuilder):
         self.rs_auxcell = rs_auxcell = ft_ao._RangeSeparatedCell.from_cell(
             auxcell, self.ke_cutoff, verbose=log)
 
-        rcut_sr = estimate_rcut(rs_cell, rs_auxcell, self.omega, rs_cell.precision,
-                                self.exclude_dd_block,
-                                self.exclude_d_aux and cell.dimension > 0)
+        rcut_sr = estimate_rcut(rs_cell, rs_auxcell, self.omega,
+                                exclude_dd_block=self.exclude_dd_block,
+                                exclude_d_aux=self.exclude_d_aux and cell.dimension > 0)
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_sr.max(), log)
         supmol.omega = -self.omega
         self.supmol = supmol.strip_basis(rcut_sr)
@@ -179,7 +181,7 @@ class _RSGDFBuilder(Int3cBuilder):
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
         if self.has_long_range():
-            rcut = estimate_ft_rcut(rs_cell, cell.precision, self.exclude_dd_block)
+            rcut = estimate_ft_rcut(rs_cell, exclude_dd_block=self.exclude_dd_block)
             supmol_ft = _ExtendedMoleFT.from_cell(rs_cell, kmesh, rcut.max(), log)
             supmol_ft.exclude_dd_block = self.exclude_dd_block
             self.supmol_ft = supmol_ft.strip_basis(rcut)
@@ -1137,14 +1139,14 @@ class _RSNucBuilder(_RSGDFBuilder):
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
         rcut_sr = estimate_rcut(rs_cell, fakenuc, self.omega,
-                                rs_cell.precision, self.exclude_dd_block)
+                                exclude_dd_block=self.exclude_dd_block)
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_sr.max(), log)
         supmol.omega = -self.omega
         self.supmol = supmol.strip_basis(rcut_sr)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
-        rcut = estimate_ft_rcut(rs_cell, cell.precision, self.exclude_dd_block)
+        rcut = estimate_ft_rcut(rs_cell, exclude_dd_block=self.exclude_dd_block)
         supmol_ft = _ExtendedMoleFT.from_cell(rs_cell, kmesh, rcut.max(), log)
         supmol_ft.exclude_dd_block = self.exclude_dd_block
         self.supmol_ft = supmol_ft.strip_basis(rcut)
@@ -1330,13 +1332,20 @@ def _guess_omega(cell, kpts, mesh=None):
     # enough to truncate the interaction.
     # omega_min = estimate_omega_min(cell, cell.precision*1e-2)
     omega_min = OMEGA_MIN
-    ke_min = estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
+    ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
     a = cell.lattice_vectors()
 
     if mesh is None:
         nkpts = len(kpts)
-        ke_cutoff = 20. * nkpts**(-1./3)
+        ke_cutoff = 20. * (cell.nao/25 * nkpts)**(-1./3)
         ke_cutoff = max(ke_cutoff, ke_min)
+        # avoid large omega since nuermical issues were found in Rys
+        # polynomials when computing SR integrals with nroots > 3
+        exps = [e for l, e in zip(cell._bas[:,gto.ANG_OF], cell.bas_exps()) if l != 0]
+        if exps:
+            omega_max = np.hstack(exps).min()**.5 * 2
+            ke_max = estimate_ke_cutoff_for_omega(cell, omega_max)
+            ke_cutoff = min(ke_cutoff, ke_max)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
         mesh = np.asarray(mesh)
@@ -1404,7 +1413,8 @@ def estimate_rcut(rs_cell, rs_auxcell, omega, precision=None,
                   exclude_dd_block=False, exclude_d_aux=False):
     '''Estimate rcut for 3c2e SR-integrals'''
     if precision is None:
-        precision = rs_cell.precision
+        # Adjust precision a little bit as errors are found slightly larger than cell.precision.
+        precision = rs_cell.precision * 1e-1
 
     if rs_cell.nbas == 0 or rs_auxcell.nbas == 0:
         return np.zeros(1)
@@ -1492,7 +1502,9 @@ def estimate_ft_rcut(rs_cell, precision=None, exclude_dd_block=False):
     Q_ij ~ S_ij * (sqrt(2aij/pi) * aij**(lij*2) * (4*lij-1)!!)**.5
     '''
     if precision is None:
-        precision = rs_cell.precision
+        # Similar to ft_ao.estimate_rcut, adjusts precision to improve hermitian
+        # symmetry of MO integrals for post-HF.
+        precision = rs_cell.precision * 1e-2
 
     # consider only the most diffused component of a basis
     exps, cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')

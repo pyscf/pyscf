@@ -15,10 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Build wheels
-        uses: docker://pyscf/pyscf-pypa-env:latest
-        with:
-          entrypoint: /build-wheels.sh
-          #args: http://www.sunqm.net/pyscf/files/bin/pyscf-2.2a-deps.tar.gz
+        run: |
+            docker run --rm -v ${{ github.workspace }}:/src/pyscf pyscf/pyscf-pypa-env:latest \
+            bash /src/pyscf/docker/pypa-env/build-wheels.sh
       - name: List available wheels
         run: |
           ls ${{ github.workspace }}/linux-wheels
@@ -37,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pyver: [cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310, cp311-cp311]
+        pyver: [cp39-cp39]
       fail-fast: false
     env:
       img: quay.io/pypa/manylinux2014_aarch64:2023-03-12-25fd859
@@ -98,16 +97,16 @@ jobs:
           packages-dir: ${{ github.workspace }}/dist
           verbose: true
 
-  release-pypi-macos:
-    name: Build wheels on macos
-    runs-on: macos-latest
+  release-pypi-macos-x86:
+    name: Build wheels for macos
+    runs-on: macos-12
     steps:
       - uses: actions/checkout@v3
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.14.1
         env:
-          CIBW_BUILD: cp*-macosx_x86_64 cp*-macosx_arm64
-          CIBW_SKIP: cp36-macosx_*
+          CIBW_BUILD: cp311-macosx_x86_64
+          CIBW_BUILD_VERBOSITY: "1"
           CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF"
         with:
           output-dir: mac-wheels
@@ -116,10 +115,36 @@ jobs:
             ls mac-wheels
       - name: Publish to PyPI
         run: |
-            pip install twine
+            pip3 install twine
             export TWINE_USERNAME=__token__
             export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
-            twine upload --verbose /mac-wheels/*
+            twine upload --verbose mac-wheels/*
+
+  release-pypi-macos-arm64:
+    name: Build wheels for Apple M chips
+    runs-on: macos-12
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.14.1
+        env:
+          CIBW_BUILD: cp311-macosx_arm64
+          CIBW_BUILD_VERBOSITY: "1"
+          # Cross-platform build for arm64 wheels on x86 platform
+          CIBW_ARCHS_MACOS: "x86_64 universal2 arm64"
+          CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF"
+          CMAKE_OSX_ARCHITECTURES: arm64
+        with:
+          output-dir: mac-wheels
+      - name: List available wheels
+        run: |
+            ls mac-wheels
+      - name: Publish to PyPI
+        run: |
+            pip3 install twine
+            export TWINE_USERNAME=__token__
+            export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
+            twine upload --verbose mac-wheels/*
 
   release-conda-linux:
     runs-on: ubuntu-latest
