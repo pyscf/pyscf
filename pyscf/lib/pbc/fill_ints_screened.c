@@ -1,4 +1,4 @@
-/* Copyright 2021- The PySCF Developers. All Rights Reserved.
+/* Copyright 2021-2024 The PySCF Developers. All Rights Reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -19,10 +19,12 @@
 #include <stdlib.h>
 #include <complex.h>
 #include <assert.h>
+#include <string.h>
 #include "config.h"
 #include "cint.h"
 #include "vhf/fblas.h"
 #include "pbc/optimizer.h"
+#include "pbc/fill_ints.h"
 #include "pbc/neighbor_list.h"
 #include "np_helper/np_helper.h"
 
@@ -707,6 +709,7 @@ void PBCnr3c_screened_drv(int (*intor)(), void (*fill)(), double complex *eri,
                  int *atm, int natm, int *bas, int nbas, double *env, int nenv,
                  NeighborList** neighbor_list)
 {
+        assert(neighbor_list != NULL);
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
@@ -755,6 +758,7 @@ void PBCnr3c_screened_sum_auxbas_drv(int (*intor)(), void (*fill)(), double comp
                  int *atm, int natm, int *bas, int nbas, double *env, int nenv,
                  NeighborList** neighbor_list)
 {
+        assert(neighbor_list != NULL);
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
@@ -805,6 +809,7 @@ void PBCnr3c1e_screened_nuc_grad_drv(int (*intor)(), void (*fill)(),
                  int *atm, int natm, int *bas, int nbas, double *env, int nenv, int nao,
                  NeighborList** neighbor_list)
 {
+        assert(neighbor_list != NULL);
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
@@ -859,4 +864,149 @@ void PBCnr3c1e_screened_nuc_grad_drv(int (*intor)(), void (*fill)(),
         }
 }
         //free(expkL_r);
+}
+
+
+static int _nr2c_screened_fill(
+                int (*intor)(), double complex *out,
+                int nkpts, int comp, int nimgs, int jsh, int ish0,
+                double *buf, double *env_loc, double *Ls,
+                double *expkL_r, double *expkL_i,
+                int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                int *atm, int natm, int *bas, int nbas, double *env,
+                NeighborList** neighbor_list)
+{
+        const int ish1 = shls_slice[1];
+        const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
+        const int nshi = ish1 - shls_slice[0];
+        const int nshj = jsh1 - jsh0;
+
+        const double D1 = 1;
+        const int I1 = 1;
+
+        ish0 += shls_slice[0];
+        jsh += jsh0;
+        int jsh_off = jsh - nshi;
+        int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
+        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        int dimax = INTBUFMAX10 / dj;
+        int ishloc[ish1-ish0+1];
+        int nishloc = shloc_partition(ishloc, ao_loc, ish0, ish1, dimax);
+
+        int m, msh0, msh1, dijc, dmjc, ish, di, empty;
+        int jL, idx_j;
+        int shls[2];
+        double *bufk_r = buf;
+        double *bufk_i, *bufL, *pbufk_r, *pbufk_i, *cache;
+
+        NeighborList *nl0 = *neighbor_list;
+        NeighborPair *np0;
+
+        shls[1] = jsh;
+        for (m = 0; m < nishloc; m++) {
+                msh0 = ishloc[m];
+                msh1 = ishloc[m+1];
+                dimax = ao_loc[msh1] - ao_loc[msh0];
+                dmjc = dj * dimax * comp;
+                bufk_i = bufk_r + dmjc * nkpts;
+                bufL   = bufk_i + dmjc * nkpts;
+                cache  = bufL   + dmjc;
+
+                memset(bufk_r, 0, 2*dmjc*nkpts*sizeof(double));
+                pbufk_r = bufk_r;
+                pbufk_i = bufk_i;
+                for (ish = msh0; ish < msh1; ish++) {
+                        shls[0] = ish;
+                        di = ao_loc[ish+1] - ao_loc[ish];
+                        dijc = di * dj * comp;
+                        np0 = (nl0->pairs)[ish*nshj + jsh_off];
+                        if (np0->nimgs > 0) {
+                                for (idx_j = 0; idx_j < np0->nimgs; idx_j++){
+                                        jL = (np0->Ls_list)[idx_j];
+                                        shift_bas(env_loc, env, Ls, jptrxyz, jL);
+                                        if ((*intor)(bufL, NULL, shls, atm, natm, bas, nbas,
+                                                     env_loc, cintopt, cache)) {
+                                                empty = 0;
+                                                dger_(&dijc, &nkpts, &D1, bufL, &I1,
+                                                      expkL_r+jL, &nimgs, pbufk_r, &dmjc);
+                                                dger_(&dijc, &nkpts, &D1, bufL, &I1,
+                                                      expkL_i+jL, &nimgs, pbufk_i, &dmjc);
+                                        }
+                                }
+                        }
+                        pbufk_r += dijc;
+                        pbufk_i += dijc;
+                }
+                sort2c_ks1(out, bufk_r, bufk_i, shls_slice, ao_loc,
+                           nkpts, comp, jsh, msh0, msh1);
+        }
+        return !empty;
+}
+
+void PBCnr2c_screened_fill_ks1(int (*intor)(), double complex *out,
+                      int nkpts, int comp, int nimgs, int jsh,
+                      double *buf, double *env_loc, double *Ls,
+                      double *expkL_r, double *expkL_i,
+                      int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                      int *atm, int natm, int *bas, int nbas, double *env,
+                      NeighborList** neighbor_list)
+{
+        _nr2c_screened_fill(intor, out, nkpts, comp, nimgs, jsh, 0,
+                   buf, env_loc, Ls, expkL_r, expkL_i, shls_slice, ao_loc,
+                   cintopt, atm, natm, bas, nbas, env, neighbor_list);
+}
+
+void PBCnr2c_screened_fill_ks2(int (*intor)(), double complex *out,
+                      int nkpts, int comp, int nimgs, int jsh,
+                      double *buf, double *env_loc, double *Ls,
+                      double *expkL_r, double *expkL_i,
+                      int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                      int *atm, int natm, int *bas, int nbas, double *env,
+                      NeighborList** neighbor_list)
+{
+        _nr2c_screened_fill(intor, out, nkpts, comp, nimgs, jsh, jsh,
+                   buf, env_loc, Ls, expkL_r, expkL_i, shls_slice, ao_loc,
+                   cintopt, atm, natm, bas, nbas, env, neighbor_list);
+}
+
+void PBCnr2c_screened_drv(int (*intor)(), void (*fill)(), double complex *out,
+                 int nkpts, int comp, int nimgs,
+                 double *Ls, double complex *expkL,
+                 int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                 int *atm, int natm, int *bas, int nbas, double *env, int nenv,
+                 NeighborList** neighbor_list)
+{
+        assert(neighbor_list != NULL);
+        const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
+        const int njsh = jsh1 - jsh0;
+        double *expkL_r = malloc(sizeof(double) * nimgs*nkpts * OF_CMPLX);
+        double *expkL_i = expkL_r + nimgs*nkpts;
+        int i;
+        for (i = 0; i < nimgs*nkpts; i++) {
+                expkL_r[i] = creal(expkL[i]);
+                expkL_i[i] = cimag(expkL[i]);
+        }
+        const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
+                                                 atm, natm, bas, nbas, env);
+
+#pragma omp parallel
+{
+        int jsh;
+        double *env_loc = malloc(sizeof(double)*nenv);
+        NPdcopy(env_loc, env, nenv);
+        size_t count = (nkpts+1) * OF_CMPLX;
+        double *buf = malloc(sizeof(double)*(count*INTBUFMAX10*comp+cache_size));
+#pragma omp for schedule(dynamic)
+        for (jsh = 0; jsh < njsh; jsh++) {
+                (*fill)(intor, out, nkpts, comp, nimgs, jsh,
+                        buf, env_loc, Ls, expkL_r, expkL_i,
+                        shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env,
+                        neighbor_list);
+        }
+        free(buf);
+        free(env_loc);
+}
+        free(expkL_r);
 }

@@ -284,6 +284,89 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
         mat = mat[0]
     return mat
 
+def _intor_cross_screened(
+        intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
+        shls_slice=None, **kwargs):
+    '''`intor_cross` with prescreening.
+
+    Notes:
+         This function may be subject to change.
+    '''
+    from pyscf.pbc.gto.neighborlist import NeighborListOpt
+    intor, comp = moleintor._get_intor_and_comp(cell1._add_suffix(intor), comp)
+
+    if kpts is None:
+        if kpt is not None:
+            kpts_lst = np.reshape(kpt, (1,3))
+        else:
+            kpts_lst = np.zeros((1,3))
+    else:
+        kpts_lst = np.reshape(kpts, (-1,3))
+    nkpts = len(kpts_lst)
+
+    pcell = cell1.copy(deep=False)
+    pcell.precision = min(cell1.precision, cell2.precision)
+    pcell._atm, pcell._bas, pcell._env = \
+            atm, bas, env = conc_env(cell1._atm, cell1._bas, cell1._env,
+                                     cell2._atm, cell2._bas, cell2._env)
+    if shls_slice is None:
+        shls_slice = (0, cell1.nbas, 0, cell2.nbas)
+    i0, i1, j0, j1 = shls_slice[:4]
+    j0 += cell1.nbas
+    j1 += cell1.nbas
+    ao_loc = moleintor.make_loc(bas, intor)
+    ni = ao_loc[i1] - ao_loc[i0]
+    nj = ao_loc[j1] - ao_loc[j0]
+    out = np.empty((nkpts,comp,ni,nj), dtype=np.complex128)
+
+    if hermi == 0:
+        aosym = 's1'
+    else:
+        aosym = 's2'
+    fill = getattr(libpbc, 'PBCnr2c_screened_fill_k'+aosym)
+    fintor = getattr(moleintor.libcgto, intor)
+    drv = libpbc.PBCnr2c_screened_drv
+
+    rcut = max(cell1.rcut, cell2.rcut)
+    Ls = cell1.get_lattice_Ls(rcut=rcut)
+    expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
+
+    neighbor_list = kwargs.get('neighbor_list', None)
+    if neighbor_list is None:
+        nlopt = NeighborListOpt(cell1)
+        nlopt.build(cell1, cell2, Ls, set_optimizer=False)
+        neighbor_list = nlopt.nl
+
+    cintopt = lib.c_null_ptr()
+
+    drv(fintor, fill, out.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(len(Ls)),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        expkL.ctypes.data_as(ctypes.c_void_p),
+        (ctypes.c_int*4)(i0, i1, j0, j1),
+        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
+        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
+        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
+        env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size),
+        ctypes.byref(neighbor_list))
+
+    nlopt = None
+
+    mat = []
+    for k, kpt in enumerate(kpts_lst):
+        v = out[k]
+        if hermi != 0:
+            for ic in range(comp):
+                lib.hermi_triu(v[ic], hermi=hermi, inplace=True)
+        if comp == 1:
+            v = v[0]
+        if abs(kpt).sum() < 1e-9:  # gamma_point
+            v = v.real
+        mat.append(v)
+
+    if kpts is None or np.shape(kpts) == (3,):  # A single k-point
+        mat = mat[0]
+    return mat
 
 def get_nimgs(cell, precision=None):
     r'''Choose number of basis function images in lattice sums
@@ -1638,6 +1721,10 @@ class Cell(mole.MoleBase):
             # FIXME: Whether to check _built and call build?  ._bas and .basis
             # may not be consistent. calling .build() may leads to wrong intor env.
             #self.build(False, False)
+        if self.use_loose_rcut:
+            return _intor_cross_screened(
+                            intor, self, self, comp, hermi, kpts, kpt,
+                            shls_slice, **kwargs)
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt,
                            shls_slice, **kwargs)
 

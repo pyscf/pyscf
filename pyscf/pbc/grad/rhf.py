@@ -119,8 +119,8 @@ def _contract_vhf_dm(mf_grad, vhf, dm, comp=3, atmlst=None,
     return de
 
 
-def get_ovlp(mol, kpt=np.zeros(3)):
-    return -mol.pbc_intor('int1e_ipovlp', kpt=kpt)
+def get_ovlp(cell, kpt=np.zeros(3)):
+    return -cell.pbc_intor('int1e_ipovlp', kpt=kpt)
 
 
 def get_veff(mf_grad, mol, dm, kpt=np.zeros(3)):

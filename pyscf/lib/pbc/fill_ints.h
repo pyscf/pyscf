@@ -23,4 +23,7 @@ void sort2c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_loc,
                      int comp, int ish, int jsh);
 void sort2c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_loc,
                      int comp, int ish, int jsh);
+void sort2c_ks1(double complex *out, double *bufr, double *bufi,
+                int *shls_slice, int *ao_loc, int nkpts, int comp,
+                int jsh, int msh0, int msh1);
 #endif
