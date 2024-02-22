@@ -1117,15 +1117,11 @@ def expm(a):
     return y
 
 def ndarray_pointer_2d(array):
-    '''Get the C pointer of a 2D array
+    '''Get the memory addresses for each element within the given 2D array
     '''
-    assert array.ndim == 2
-    assert array.flags.c_contiguous
-
-    ptr = (array.ctypes.data +
-           numpy.arange(array.shape[0])*array.strides[0]).astype(numpy.uintp)
-    ptr = ptr.ctypes.data_as(ctypes.c_void_p)
-    return ptr
+    indices = numpy.indices(array.shape)
+    addr = sum(i * s for i, s in zip(indices, array.strides))
+    return array.ctypes.data + addr.astype(numpy.uintp).ravel()
 
 class NPArrayWithTag(numpy.ndarray):
     # Initialize kwargs in function tag_array
