@@ -221,10 +221,13 @@ class UHF(pbchf.SCF):
             rho = self.get_rho(dm)
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
+        if cell is None:
+            cell = self.cell
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
         dm = mol_uhf.UHF.get_init_guess(self, cell, key)
-        ne = np.einsum('xij,ji->x', dm, self.get_ovlp(cell)).real
+        ne = np.einsum('xij,ji->x', dm, s1e).real
         nelec = self.nelec
         if np.any(abs(ne - nelec) > 0.01):
             logger.debug(self, 'Big error detected in the electron number '

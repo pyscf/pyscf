@@ -343,14 +343,16 @@ class KsymAdaptedKRHF(KsymAdaptedKSCF, khf.KRHF):
     to_ks = khf.KRHF.to_ks
     convert_from_ = khf.KRHF.convert_from_
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
         dm_kpts = mol_hf.SCF.get_init_guess(self, cell, key)
         if dm_kpts.ndim == 2:
             dm_kpts = np.asarray([dm_kpts]*self.kpts.nkpts_ibz)
         elif len(dm_kpts) != self.kpts.nkpts_ibz:
             dm_kpts = dm_kpts[self.kpts.ibz2bz]
 
-        ne = np.einsum('k,kij,kji', self.kpts.weights_ibz, dm_kpts, self.get_ovlp(cell)).real
+        ne = lib.einsum('k,kij,kji', self.kpts.weights_ibz, dm_kpts, s1e).real
         nkpts = self.kpts.nkpts
         ne *= nkpts
         nelectron = float(self.cell.tot_electrons(nkpts))
