@@ -127,6 +127,7 @@ def particle_mesh_ewald(cell, ew_eta=None, ew_cut=None,
 
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
+    natm = len(coords)
 
     if ew_eta is None or ew_cut is None:
         ew_eta, ew_cut = cell.get_ewald_params()
@@ -149,9 +150,9 @@ def particle_mesh_ewald(cell, ew_eta=None, ew_cut=None,
     idx = np.asarray(idx).T
     idy = np.asarray(idy).T
     idz = np.asarray(idz).T
-    Mx_s = Mx[np.indices(idx.shape)[0], idx]
-    My_s = My[np.indices(idy.shape)[0], idy]
-    Mz_s = Mz[np.indices(idz.shape)[0], idz]
+    Mx_s = Mx[np.arange(natm)[:,None], idx]
+    My_s = My[np.arange(natm)[:,None], idy]
+    Mz_s = Mz[np.arange(natm)[:,None], idz]
 
     #:Q = np.einsum('i,ix,iy,iz->xyz', chargs, Mx, My, Mz)
     Q = np.zeros([*mesh])
