@@ -63,8 +63,20 @@ if FFT_ENGINE == 'FFTW':
     except OSError:
         raise RuntimeError("Failed to load libfft")
 
+    def _copy_d2z(a):
+        fn = libfft._copy_d2z
+        out = np.empty(a.shape, dtype=np.complex128)
+        fn(out.ctypes.data_as(ctypes.c_void_p),
+           a.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_size_t(a.size))
+        return out
+
     def _complex_fftn_fftw(f, mesh, func):
-        f = np.asarray(f, order='C', dtype=np.complex128)
+        if f.dtype == np.double and f.flags.c_contiguous:
+            # np.asarray or np.astype is too slow
+            f = _copy_d2z(f)
+        else:
+            f = np.asarray(f, order='C', dtype=np.complex128)
         mesh = np.asarray(mesh, order='C', dtype=np.int32)
         rank = len(mesh)
         out = np.empty_like(f)

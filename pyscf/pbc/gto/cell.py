@@ -583,22 +583,19 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
 
     #:Gv = np.dot(lib.cartesian_prod(Gvbase), b)
     # NOTE mesh can be different from the input mesh
-    mesh = np.asarray([len(rx),len(ry),len(rz)], dtype=np.int32)
+    mesh = np.asarray((len(rx),len(ry),len(rz)), dtype=np.int32)
     Gv = np.empty((*mesh,3), order='C', dtype=float)
     b = np.asarray(b, order='C')
     rx = np.asarray(rx, order='C')
     ry = np.asarray(ry, order='C')
     rz = np.asarray(rz, order='C')
-    fn = getattr(libpbc, 'get_Gv', None)
-    try:
-        fn(Gv.ctypes.data_as(ctypes.c_void_p),
-           rx.ctypes.data_as(ctypes.c_void_p),
-           ry.ctypes.data_as(ctypes.c_void_p),
-           rz.ctypes.data_as(ctypes.c_void_p),
-           mesh.ctypes.data_as(ctypes.c_void_p),
-           b.ctypes.data_as(ctypes.c_void_p))
-    except Exception as e:
-        raise RuntimeError("Failed to get Gv. %s" % e)
+    fn = libpbc.get_Gv
+    fn(Gv.ctypes.data_as(ctypes.c_void_p),
+       rx.ctypes.data_as(ctypes.c_void_p),
+       ry.ctypes.data_as(ctypes.c_void_p),
+       rz.ctypes.data_as(ctypes.c_void_p),
+       mesh.ctypes.data_as(ctypes.c_void_p),
+       b.ctypes.data_as(ctypes.c_void_p))
     Gv = Gv.reshape(-1, 3)
 
     # 1/cell.vol == det(b)/(2pi)^3
@@ -645,20 +642,7 @@ def get_SI(cell, Gv=None, mesh=None, atmlst=None):
         natm = coords.shape[0]
         SI = SI.reshape(natm, -1)
     else:
-        #:SI = np.exp(-1j*lib.dot(coords, Gv.T))
-        fn = getattr(libpbc, 'get_SI', None)
-        natm = coords.shape[0]
-        ngrids = Gv.shape[0]
-        SI = np.empty((natm, ngrids), order='C', dtype=np.complex128)
-        coords = np.asarray(coords, order='C', dtype=np.double)
-        Gv = np.asarray(Gv, order='C', dtype=np.double)
-        try:
-            fn(SI.ctypes.data_as(ctypes.c_void_p),
-               coords.ctypes.data_as(ctypes.c_void_p),
-               Gv.ctypes.data_as(ctypes.c_void_p),
-               ctypes.c_int(natm), ctypes.c_int(ngrids))
-        except Exception as e:
-            raise RuntimeError("Failed to get structure factor. %s" % e)
+        SI = np.exp(-1j*np.dot(coords, Gv.T))
     return SI
 
 def get_ewald_params(cell, precision=None, mesh=None):
@@ -771,14 +755,14 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         coulG = 4*np.pi / absG2
         coulG *= weights
 
-        #:ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
+        #:ZSI = np.einsum('i,ij->j', chargs, cell.get_SI(Gv))
         ngrids = len(Gv)
         ZSI = np.empty((ngrids,), dtype=np.complex128)
         mem_avail = cell.max_memory - lib.current_memory()[0]
         blksize = int((mem_avail*1e6 - cell.natm*24)/((3+cell.natm*2)*8))
         blksize = min(ngrids, max(mesh[2], blksize))
         for ig0, ig1 in lib.prange(0, ngrids, blksize):
-            ZSI[ig0:ig1] = lib.einsum("i,ij->j", chargs, cell.get_SI(Gv[ig0:ig1]))
+            np.einsum('i,ij->j', chargs, cell.get_SI(Gv[ig0:ig1]), out=ZSI[ig0:ig1])
 
         ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
         ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real

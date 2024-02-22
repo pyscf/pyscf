@@ -133,3 +133,15 @@ void irfft(complex double* in, double* out, int* mesh, int rank)
         out[i] *= fac;
     }
 }
+
+void _copy_d2z(double complex *out, const double *in, const size_t n)
+{
+#pragma omp parallel
+{
+    size_t i;
+    #pragma omp for schedule(static)
+    for (i = 0; i < n; i++) {
+        out[i] = in[i] + 0*_Complex_I;
+    }
+}
+}

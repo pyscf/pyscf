@@ -54,7 +54,6 @@ PTR_EXPDROP = 16
 EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-12)
 IMAG_TOL = 1e-9
 
-libpbc = lib.load_library('libpbc')
 libdft = lib.load_library('libdft')
 
 def gradient_gs(f_gs, Gv):
@@ -69,7 +68,7 @@ def gradient_gs(f_gs, Gv):
     n = f_gs.shape[0]
     out = np.empty((n,dim,ng), dtype=np.complex128)
 
-    fn = getattr(libpbc, 'gradient_gs', None)
+    fn = getattr(libdft, 'gradient_gs', None)
     try:
         fn(out.ctypes.data_as(ctypes.c_void_p),
            f_gs.ctypes.data_as(ctypes.c_void_p),
