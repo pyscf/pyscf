@@ -790,6 +790,54 @@ def _get_j_with_Wgrid(mydf:ISDF.PBC_ISDF_Info, W_grid, dm):
     mydf.W   = W_backup
     return J
     
+def _pack_JK(input_mat:np.ndarray, Ls, nao_prim, output=None):
+    
+    assert input_mat.dtype == np.float64    
+    ncell = np.prod(Ls)
+    # print("ncell = ", ncell)
+    # print("Ls = ", Ls)  
+    # print("nao_prim = ", nao_prim)
+    # print("input_mat.shape = ", input_mat.shape)
+    assert input_mat.shape[0] == nao_prim
+    assert input_mat.shape[1] == nao_prim * ncell
+    
+    if output is None:
+        output = np.zeros((ncell*nao_prim, ncell*nao_prim), dtype=np.float64)  
+    else:
+        assert output.shape == (ncell*nao_prim, ncell*nao_prim)  
+    
+    for ix_row in range(Ls[0]):
+        for iy_row in range(Ls[1]):
+            for iz_row in range(Ls[2]):
+                
+                loc_row = ix_row * Ls[1] * Ls[2] + iy_row * Ls[2] + iz_row
+                
+                b_begin = loc_row * nao_prim
+                b_end   = (loc_row + 1) * nao_prim
+                
+                for ix_col in range(Ls[0]):
+                    for iy_col in range(Ls[1]):
+                        for iz_col in range(Ls[2]):
+                            
+                            loc_col = ix_col * Ls[1] * Ls[2] + iy_col * Ls[2] + iz_col
+                            
+                            k_begin = loc_col * nao_prim
+                            k_end   = (loc_col + 1) * nao_prim
+                            
+                            ix = (ix_col - ix_row) % Ls[0]
+                            iy = (iy_col - iy_row) % Ls[1]
+                            iz = (iz_col - iz_row) % Ls[2]
+                            
+                            loc_col2 = ix * Ls[1] * Ls[2] + iy * Ls[2] + iz
+                            
+                            k_begin2 = loc_col2 * nao_prim
+                            k_end2   = (loc_col2 + 1) * nao_prim
+                            
+                            output[b_begin:b_end, k_begin:k_end] = input_mat[:, k_begin2:k_end2]
+                            
+    return output
+    
+    
 def _get_j_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
     
     ### preprocess
@@ -808,34 +856,141 @@ def _get_j_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
     ngrid = np.prod(cell.mesh)
     vol = cell.vol
     
-    W = mydf.W
-    aoRg = mydf.aoRg
-    naux = aoRg.shape[1]
+    W         = mydf.W
+    aoRg      = mydf.aoRg
+    aoRg_Prim = mydf.aoRg_Prim
+    # aoR_Prim  = mydf.aoR_Prim
+    naux      = aoRg.shape[1]
     
     Ls = mydf.Ls
     mesh = mydf.mesh
     meshPrim = np.array(mesh) // np.array(Ls)
+    nGridPrim = mydf.nGridPrim
     ncell = np.prod(Ls)
     ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
     nIP_prim = mydf.nIP_Prim
+    nao_prim = nao // ncell
     
     ### allocate buffer
     
-    buffer = mydf.jk_buffer
-    buffer1 = np.ndarray((nao,naux),  dtype=dm.dtype, buffer=buffer, offset=0)
-    buffer2 = np.ndarray((naux),      dtype=dm.dtype, buffer=buffer, offset=(nao * naux) * dm.dtype.itemsize)
+    assert dm.dtype == np.float64
     
-    lib.ddot(dm, aoRg, c=buffer1) 
-    tmp1       = buffer1
-    density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg, tmp1, out=buffer2), order='C') 
+    buffer  = mydf.jk_buffer
+    
+    buffer1 = np.ndarray((nao,nIP_prim),  dtype=dm.dtype, buffer=buffer, offset=0) 
+    
+    buffer2 = np.ndarray((nIP_prim),      dtype=dm.dtype, buffer=buffer, offset=(nao * nIP_prim) * dm.dtype.itemsize)
+    
+    offset  = (nao * nIP_prim + nIP_prim) * dm.dtype.itemsize
+    
+    buffer3 = np.ndarray((nao_prim,nao),   dtype=np.float64, buffer=buffer, offset=offset)
+    
+    offset += (nao_prim * nao) * dm.dtype.itemsize
+    
+    bufferW = np.ndarray((nIP_prim,1), dtype=np.float64, buffer=buffer, offset=offset)
+    
+    offset += (nIP_prim) * dm.dtype.itemsize
+    
+    bufferJ_block = np.ndarray((nao_prim, nao_prim), dtype=np.float64, buffer=buffer, offset=offset)
+    
+    offset += (nao_prim * nao_prim) * dm.dtype.itemsize
+    
+    bufferi = np.ndarray((nao_prim,nIP_prim), dtype=np.float64, buffer=buffer, offset=offset)
+    
+    offset += (nao_prim * nIP_prim) * dm.dtype.itemsize
+    
+    bufferj = np.ndarray((nao_prim,nIP_prim), dtype=np.float64, buffer=buffer, offset=offset)
+    
+    offset += (nao_prim * nIP_prim) * dm.dtype.itemsize
+    
+    buffer4 = np.ndarray((nao_prim,nIP_prim), dtype=np.float64, buffer=buffer, offset=offset)
+    
+    lib.ddot(dm, aoRg_Prim, c=buffer1)
+    tmp1 = buffer1
+    density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg_Prim, tmp1, out=buffer2), order='C')
     
     ### check the symmetry of density_Rg
     
-    for i in range(ncell):
-        k_begin = i * nIP_prim
-        k_end   = (i + 1) * nIP_prim
-        assert np.allclose(density_Rg[k_begin:k_end], density_Rg[:nIP_prim].conj())
+    # buffer1 = np.ndarray((nao,naux),  dtype=dm.dtype, buffer=buffer, offset=0)
+    # buffer2 = np.ndarray((naux),      dtype=dm.dtype, buffer=buffer, offset=(nao * naux) * dm.dtype.itemsize)
+    # offset = (nao * naux + naux) * dm.dtype.itemsize
+    # buffer3 = np.ndarray((nao_prim,nao),   dtype=np.complex128, buffer=buffer, offset=offset)
     
+    # lib.ddot(dm, aoRg, c=buffer1) 
+    # tmp1       = buffer1
+    # density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg, tmp1, out=buffer2), order='C') 
+    
+    # for i in range(ncell):
+    #     k_begin = i * nIP_prim
+    #     k_end   = (i + 1) * nIP_prim
+    #     assert np.allclose(density_Rg[k_begin:k_end], density_Rg[:nIP_prim].conj()) # pass 
+    
+    ### get J
+    
+    # density_Rg *= np.prod(Ls)
+    W_0 = W[:, :nIP_prim].real # must be real
+    
+    # W_imag = W[:, :nIP_prim].imag
+    # assert np.allclose(W_imag, 0.0)
+    
+    lib.ddot(W_0, density_Rg.reshape(-1,1), c=bufferW)
+    bufferW = bufferW.reshape(-1)
+    buffer_J = buffer3
+    
+    for ix_q in range(Ls[0]):
+        for iy_q in range(Ls[1]):
+            for iz_q in range(Ls[2]):
+                
+                bufferJ_block.ravel()[:] = 0.0 # set to zero
+    
+                ### loop over the blocks
+                
+                for ix in range(Ls[0]):
+                    for iy in range(Ls[1]):
+                        for iz in range(Ls[2]):
+                            
+                            ipx = (Ls[0] - ix) % Ls[0]
+                            ipy = (Ls[1] - iy) % Ls[1]
+                            ipz = (Ls[2] - iz) % Ls[2]
+                            
+                            loc_p = ipx * Ls[1] * Ls[2] + ipy * Ls[2] + ipz
+                            
+                            begin = loc_p * nao_prim
+                            end   = (loc_p + 1) * nao_prim
+                            
+                            buffer_i = aoRg_Prim[begin:end, :]
+                            
+                            iqx = (ix_q - ix + Ls[0]) % Ls[0]
+                            iqy = (iy_q - iy + Ls[1]) % Ls[1]
+                            iqz = (iz_q - iz + Ls[2]) % Ls[2]
+                            
+                            loc_q = iqx * Ls[1] * Ls[2] + iqy * Ls[2] + iqz
+                            
+                            begin = loc_q * nao_prim
+                            end   = (loc_q + 1) * nao_prim
+                            
+                            buffer_j = aoRg_Prim[begin:end, :]
+                            tmp = np.asarray(lib.d_ij_j_ij(buffer_j, bufferW, out=buffer4), order='C')
+                            lib.ddot_withbuffer(buffer_i, tmp.T, c=bufferJ_block, beta=1, buf=mydf.ddot_buf)
+                
+                ### set ### 
+                
+                loc_q = ix_q * Ls[1] * Ls[2] + iy_q * Ls[2] + iz_q
+                
+                begin = loc_q * nao_prim
+                end   = (loc_q + 1) * nao_prim
+                
+                buffer_J[:, begin:end] = bufferJ_block
+    
+    buffer_J = buffer_J * ngrid / vol
+    
+    J = _pack_JK(buffer_J, Ls, nao_prim, output=None)
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    _benchmark_time(t1, t2, "_contract_j_dm")
+    
+    return J
     
 class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     def __init__(self, mol:Cell, max_buf_memory:int, Ls=[1,1,1], outcore=True, with_robust_fitting=True, aoR=None):
@@ -856,6 +1011,8 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
 
         print("self.cell.lattice_vectors = ", self.cell.lattice_vectors())
         self.ordered_grid_coords, self.ordered_grid_coords_dict = _extract_grid_primitive_cell(self.cell.lattice_vectors(), self.mesh, self.Ls, self.coords)
+
+        # self.aoR_Prim = self._numint.eval_ao(self.cell, self.ordered_grid_coords_dict[(0,0,0)])[0].T
 
         if outcore is False:
             weight   = np.sqrt(self.cell.vol / self.ngrids)
@@ -878,6 +1035,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         nIP_Prim = self.nIP_Prim
         nGridPrim = self.nGridPrim
         ncell_complex = self.Ls[0] * self.Ls[1] * (self.Ls[2]//2+1)
+        nao_prim  = self.nao // np.prod(self.Ls)
         
         if self.outcore is False:
             
@@ -898,11 +1056,19 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             nao        = self.nao
             size_buf3  = nao * naux + naux + naux + nao * nao
             
+            size_buf4  = nao * nIP_Prim
+            size_buf4 += nIP_Prim
+            size_buf4 += nao_prim * nao
+            size_buf4 += nIP_Prim
+            size_buf4 += nao_prim * nao_prim
+            size_buf4 += nao_prim * nIP_Prim * 3
+            
+            
             ### ddot_buf ###
             
             size_ddot_buf = max(naux*naux+2,ngrids)*num_threads
             
-            size_buf = max(size_buf1,size_buf2,size_buf3)
+            size_buf = max(size_buf1,size_buf2,size_buf3,size_buf4)
             
             if hasattr(self, "IO_buf"):
                 if self.IO_buf.size < (size_buf+size_ddot_buf):
@@ -969,6 +1135,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         # self.IP_coords = grid_primitive[possible_grid_ID]
         weight         = np.sqrt(self.cell.vol / self.ngrids)
         self.aoRg      = self._numint.eval_ao(self.cell, self.ordered_IP_coords)[0].T * weight
+        self.aoRg_Prim = self.aoRg[:, :len(possible_grid_ID)].copy()
         self.nGridPrim = grid_primitive.shape[0]
         self.nIP_Prim  = len(possible_grid_ID)
         
@@ -1072,7 +1239,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     
     ################ get jk ################
 
-C = 1
+C = 2
 M = 5
 
 if __name__ == "__main__":
@@ -1095,7 +1262,7 @@ if __name__ == "__main__":
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
     
-    Ls = [1, 1, 3]
+    Ls = [2, 2, 3]
     #Ls = [1,1,2]
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     
@@ -1240,4 +1407,9 @@ if __name__ == "__main__":
     
     J_bench = _get_j_with_Wgrid(pbc_isdf_info_ksym, W_grid, dm1)
     
-    _get_j_kSym(pbc_isdf_info_ksym, dm1)
+    J2      = _get_j_kSym(pbc_isdf_info_ksym, dm1)
+    
+    # print(J_bench[:4, :4])
+    # print(J2[:4, :4])
+    
+    assert np.allclose(J_bench, J2)  # we get the correct answer!
