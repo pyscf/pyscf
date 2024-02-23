@@ -45,6 +45,8 @@ libpbc = lib.load_library('libpbc')
 
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
+COND_CUTOFF = 1e-16
+
 ####################### Util Module #######################
 
 def _extract_grid_primitive_cell(cell_a, mesh, Ls, coords):
@@ -507,6 +509,7 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
     offset += nIP_Prim * ncell_complex*nGridPrim * buffer3.itemsize
     nthread = lib.num_threads()
     buffer_final_fft = np.ndarray((nthread, nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    offset += nthread * nGridPrim * buffer_final_fft.itemsize
     
     nao = mydf.nao
     aoR = mydf.aoR
@@ -625,28 +628,51 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
     
     fac = np.sqrt(np.prod(Ls) / np.prod(Mesh)) # normalization factor
     
+    buf_A = np.ndarray((nIP_Prim, nIP_Prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    offset += nIP_Prim * nIP_Prim * buf_A.itemsize
+    buf_B = np.ndarray((nIP_Prim, nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    offset += nIP_Prim * nGridPrim * buf_B.itemsize
+    # buf_C = np.ndarray((nIP_Prim, nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    
     i=0
     for ix in range(Ls[0]):
         for iy in range(Ls[1]):
             for iz in range(Ls[2]//2+1):
                 
-                A_tmp = A_complex[:, i*nIP_Prim:(i+1)*nIP_Prim].copy()
-                B_tmp = B_complex[:, i*nGridPrim:(i+1)*nGridPrim].copy()
+                # A_tmp = A_complex[:, i*nIP_Prim:(i+1)*nIP_Prim].copy()
+                # B_tmp = B_complex[:, i*nGridPrim:(i+1)*nGridPrim].copy()
                 
-                fn_cholesky(
-                    A_tmp.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(nIP_Prim)
-                )
+                buf_A.ravel()[:] = A_complex[:, i*nIP_Prim:(i+1)*nIP_Prim].ravel()[:]
+                buf_B.ravel()[:] = B_complex[:, i*nGridPrim:(i+1)*nGridPrim].ravel()[:]
+                
+                # fn_cholesky(
+                #     A_tmp.ctypes.data_as(ctypes.c_void_p),
+                #     ctypes.c_int(nIP_Prim)
+                # )
                 
                 # X = np.linalg.solve(A_tmp, B_tmp)
         
-                fn_solve(
-                    ctypes.c_int(nIP_Prim),
-                    A_tmp.ctypes.data_as(ctypes.c_void_p),
-                    B_tmp.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(B_tmp.shape[1]),
-                    ctypes.c_int(bunchsize)
-                )
+                # fn_solve(
+                #     ctypes.c_int(nIP_Prim),
+                #     A_tmp.ctypes.data_as(ctypes.c_void_p),
+                #     B_tmp.ctypes.data_as(ctypes.c_void_p),
+                #     ctypes.c_int(B_tmp.shape[1]),
+                #     ctypes.c_int(bunchsize)
+                # )
+                
+                e, h = np.linalg.eigh(buf_A)  # we get back to this mode, because numerical issue ! 
+                print("condition number = ", e[-1]/e[0])
+                e_max = np.max(e)
+                e_min_cutoff = e_max * COND_CUTOFF
+                # throw away the small eigenvalues
+                where = np.where(abs(e) > e_min_cutoff)[0]
+                e = e[where]
+                h = h[:, where].copy()
+                buf_C = np.ndarray((e.shape[0], nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+                buf_C = np.asarray(lib.dot(h.T, buf_B, c=buf_C), order='C')
+                buf_C = (1.0/e).reshape(-1,1) * buf_C
+                lib.dot(h, buf_C, c=buf_B)
                 
                 # print("B_tmp = ", B_tmp[:5,:5])
                 
@@ -659,7 +685,8 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 # print("B_tmp = ", B_tmp[:5,:5])
                 
                 fn_final_fft(
-                    B_tmp.ctypes.data_as(ctypes.c_void_p),
+                    buf_B.ctypes.data_as(ctypes.c_void_p),
+                    # B_tmp.ctypes.data_as(ctypes.c_void_p),
                     # X.ctypes.data_as(ctypes.c_void_p),
                     FREQ[i].ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(nIP_Prim),
@@ -676,8 +703,9 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 #### perform the last FFT ####
                 
                 iloc = ix * Ls[1] * Ls[2] + iy * Ls[2] + iz
-                mydf.aux_basis[:, iloc*nGridPrim:(iloc+1)*nGridPrim] = B_tmp
+                # mydf.aux_basis[:, iloc*nGridPrim:(iloc+1)*nGridPrim] = B_tmp
                 # mydf.aux_basis[:, iloc*nGridPrim:(iloc+1)*nGridPrim] = X
+                mydf.aux_basis[:, iloc*nGridPrim:(iloc+1)*nGridPrim] = buf_B
                 
                 # perform the complex conjugate transpose
                 
@@ -701,7 +729,8 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 
                 fn_permutation_conj(
                     # B_tmp.ctypes.data_as(ctypes.c_void_p),
-                    X.ctypes.data_as(ctypes.c_void_p),
+                    # X.ctypes.data_as(ctypes.c_void_p),
+                    buf_B.ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(nIP_Prim),
                     ctypes.c_int(nGridPrim),
                     permutation[perm_id].ctypes.data_as(ctypes.c_void_p),
@@ -710,8 +739,9 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 
                 iloc2 = ix2 * Ls[1] * Ls[2] + iy2 * Ls[2] + iz2
                 
-                mydf.aux_basis[:, iloc2*nGridPrim:(iloc2+1)*nGridPrim] = B_tmp
+                # mydf.aux_basis[:, iloc2*nGridPrim:(iloc2+1)*nGridPrim] = B_tmp
                 # mydf.aux_basis[:, iloc2*nGridPrim:(iloc2+1)*nGridPrim] = X
+                mydf.aux_basis[:, iloc*nGridPrim:(iloc+1)*nGridPrim] = buf_B
     
     mydf.aux_basis = mydf.aux_basis * fac
                      
@@ -1591,6 +1621,8 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             size_buf1 = nIP_Prim * ncell_complex*nIP_Prim * 2
             size_buf1+= nIP_Prim * ncell_complex*nGridPrim * 2 * 2
             size_buf1+= num_threads * nGridPrim * 2
+            size_buf1+= nIP_Prim * nIP_Prim * 2
+            size_buf1+= nIP_Prim * nGridPrim * 2 * 2
             
             ### in construct W ###
             
