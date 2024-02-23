@@ -1124,6 +1124,9 @@ def _get_j_dm_wo_robust_fitting(mydf:isdf_fast.PBC_ISDF_Info, dm):
     density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg, tmp1, out=buffer4),
                             order='C')  # need allocate memory, size = naux, (buffer 4)
 
+    # print("density_Rg = ", density_Rg.shape)
+    # print("buffer8    = ", buffer8.shape)
+
     tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1), c=buffer8.reshape(-1,1)), order='C').reshape(-1)
     tmp = np.asarray(lib.d_ij_j_ij(aoRg, tmp, out=buffer7), order='C')
     
