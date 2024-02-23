@@ -836,11 +836,29 @@ def _get_j_with_Wgrid(mydf:ISDF.PBC_ISDF_Info, W_grid, dm):
 
 def _get_k_with_Wgrid(mydf:ISDF.PBC_ISDF_Info, W_grid, dm):
     
-    W_backup = mydf.W
-    mydf.W   = W_grid
-    K = ISDF_outcore._get_k_dm_wo_robust_fitting(mydf, dm)
-    mydf.W   = W_backup
-    return K
+    # W_backup = mydf.W
+    # mydf.W   = W_grid
+    # K = ISDF_outcore._get_k_dm_wo_robust_fitting(mydf, dm)
+    # mydf.W   = W_backup
+    
+    t1 = (logger.process_clock(), logger.perf_counter())
+    
+    aoRg = mydf.aoRg
+    
+    density_RgRg = lib.dot(dm, aoRg)
+    density_RgRg = lib.dot(aoRg.T, density_RgRg)
+    lib.cwise_mul(W_grid, density_RgRg, out=density_RgRg)
+    K = lib.dot(density_RgRg, aoRg.T)
+    K = lib.dot(aoRg, K)
+    
+    ngrid = np.prod(mydf.cell.mesh)
+    vol = mydf.cell.vol
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    _benchmark_time(t1, t2, "_contract_k_dm")
+    
+    return K * ngrid / vol
     
 def _pack_JK(input_mat:np.ndarray, Ls, nao_prim, output=None):
     
@@ -1040,8 +1058,257 @@ def _get_j_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
     
     return J
     
+def _get_DM_RgRg_benchmark(mydf:ISDF.PBC_ISDF_Info, dm):
+    
+    aoRg = mydf.aoRg
+    
+    tmp1 = lib.ddot(dm, aoRg, c=None)
+    
+    return lib.ddot(aoRg.T, tmp1, c=None)
+    
+def _get_DM_RgRg_real(mydf:ISDF.PBC_ISDF_Info, dm_real, dm_complex, dm_RgRg_real, dm_RgRg_complex, offset):
+    
+    nao   = mydf.nao
+    Ls    = np.array(mydf.Ls, dtype=np.int32)
+    ncell = np.prod(Ls)
+    ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
+    nao_prim  = nao // ncell
+    nIP_prim  = mydf.nIP_Prim
+    mesh      = np.array(mydf.mesh, dtype=np.int32)  
+    meshPrim  = np.array(mesh) // np.array(Ls)
+    nGridPrim = mydf.nGridPrim
+    
+    fn1 = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+    assert fn is not None
+    
+    buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    # buf_fft = np.zeros((nao_prim, nao_prim*ncell_complex), dtype=np.complex128)
+    
+    fn1(
+        dm_real.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao_prim),
+        ctypes.c_int(nao_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    buf_A = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    offset2 = offset + (nao_prim * nao_prim) * buf_A.itemsize
+    buf_B = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset2)
+    
+    offset3 = offset2 + (nao_prim * nIP_prim) * buf_B.itemsize
+    buf_C = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset3)
+    
+    offset4 = offset3 + (nao_prim * nIP_prim) * buf_C.itemsize
+    buf_D = np.ndarray((nIP_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset4)
+    
+    aoRg_FFT = mydf.aoRg_FFT
+    
+    for i in range(ncell_complex):
+        
+        k_begin = i * nao_prim
+        k_end   = (i + 1) * nao_prim
+        
+        buf_A[:] = dm_complex[:, k_begin:k_end]
+        buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+        
+        lib.dot(buf_A, buf_B, c=buf_C)
+        lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
+        
+        k_begin = i * nIP_prim
+        k_end   = (i + 1) * nIP_prim
+        
+        dm_RgRg_complex[:, k_begin:k_end] = buf_D
+    
+    buf_fft = np.ndarray((nIP_prim, nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    fn2 = getattr(libpbc, "_iFFT_Matrix_Col_InPlace", None)
+    assert fn is not None
+    
+    fn2(
+        dm_RgRg_complex.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_prim),
+        ctypes.c_int(nIP_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    # print("dm_RgRg_complex = ", dm_RgRg_complex[:5,:5])
+    
+    return dm_RgRg_real
+    
 def _get_k_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
-    pass
+    
+    
+    #### preprocess ####  
+    
+    mydf._allocate_jk_buffer(dm.dtype)
+    t1 = (logger.process_clock(), logger.perf_counter())
+    
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+    
+    nao  = dm.shape[0]
+    cell = mydf.cell    
+    assert cell.nao == nao
+    ngrid = np.prod(cell.mesh)
+    vol = cell.vol
+    
+    W         = mydf.W
+    aoRg      = mydf.aoRg
+    aoRg_Prim = mydf.aoRg_Prim
+    naux      = aoRg.shape[1]
+    
+    Ls = np.array(mydf.Ls, dtype=np.int32)
+    mesh = mydf.mesh
+    meshPrim = np.array(mesh) // np.array(Ls)
+    nGridPrim = mydf.nGridPrim
+    ncell = np.prod(Ls)
+    ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
+    nIP_prim = mydf.nIP_Prim
+    nao_prim = nao // ncell
+    
+    #### allocate buffer ####
+     
+    
+    offset = 0
+    DM_RgRg_complex = np.ndarray((nIP_prim,nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    DM_RgRg_real = np.ndarray((nIP_prim,nIP_prim*ncell), dtype=np.float64, buffer=mydf.jk_buffer, offset=offset)
+    
+    offset += (nIP_prim * nIP_prim * ncell_complex) * DM_RgRg_complex.itemsize
+    DM_complex = np.ndarray((nao_prim,nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    DM_real = np.ndarray((nao_prim,nao), dtype=np.float64, buffer=mydf.jk_buffer, offset=offset)
+    DM_real.ravel()[:] = dm[:nao_prim, :].ravel()[:]
+    offset += (nao_prim * nao_prim * ncell_complex) * DM_complex.itemsize
+    
+    #### get D ####
+    
+    #_get_DM_RgRg_real(mydf, DM_real, DM_complex, DM_RgRg_real, DM_RgRg_complex, offset)
+    
+    fn1 = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+    assert fn1 is not None
+    
+    buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+        
+    fn1(
+        DM_real.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao_prim),
+        ctypes.c_int(nao_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    buf_A = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    offset2 = offset + (nao_prim * nao_prim) * buf_A.itemsize
+    buf_B = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset2)
+    
+    offset3 = offset2 + (nao_prim * nIP_prim) * buf_B.itemsize
+    buf_C = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset3)
+    
+    offset4 = offset3 + (nao_prim * nIP_prim) * buf_C.itemsize
+    buf_D = np.ndarray((nIP_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset4)
+    
+    aoRg_FFT = mydf.aoRg_FFT
+    
+    for i in range(ncell_complex):
+        
+        k_begin = i * nao_prim
+        k_end   = (i + 1) * nao_prim
+        
+        buf_A[:] = DM_complex[:, k_begin:k_end]
+        buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+        
+        lib.dot(buf_A, buf_B, c=buf_C)
+        lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
+        
+        k_begin = i * nIP_prim
+        k_end   = (i + 1) * nIP_prim
+        
+        DM_RgRg_complex[:, k_begin:k_end] = buf_D
+    
+    buf_fft = np.ndarray((nIP_prim, nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    fn2 = getattr(libpbc, "_iFFT_Matrix_Col_InPlace", None)
+    assert fn2 is not None
+    
+    fn2(
+        DM_RgRg_complex.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_prim),
+        ctypes.c_int(nIP_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    # inplace multiplication
+    
+    lib.cwise_mul(mydf.W, DM_RgRg_real, out=DM_RgRg_real)
+    
+    offset = nIP_prim * nIP_prim * ncell_complex * DM_RgRg_complex.itemsize
+    
+    buf_fft = np.ndarray((nIP_prim, nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    fn1(
+        DM_RgRg_real.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_prim),
+        ctypes.c_int(nIP_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    K_complex_buf = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    K_real_buf    = np.ndarray((nao_prim, nao_prim*ncell), dtype=np.float64, buffer=mydf.jk_buffer, offset=offset)
+    offset += (nao_prim * nao_prim * ncell_complex) * K_complex_buf.itemsize
+    offset_now = offset    
+    
+    buf_A = np.ndarray((nIP_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    offset_now += (nIP_prim * nIP_prim) * buf_A.itemsize
+    buf_B = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    offset_now += (nao_prim * nIP_prim) * buf_B.itemsize
+    buf_C = np.ndarray((nIP_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    offset_now += (nIP_prim * nao_prim) * buf_C.itemsize
+    buf_D = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    
+    for i in range(ncell_complex):
+        
+        k_begin = i * nIP_prim
+        k_end   = (i + 1) * nIP_prim
+        
+        buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
+        buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
+        
+        lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+        lib.dot(buf_B, buf_C, c=buf_D)
+        
+        k_begin = i * nao_prim
+        k_end   = (i + 1) * nao_prim
+        
+        K_complex_buf[:, k_begin:k_end] = buf_D
+    
+    buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    fn2(
+        K_complex_buf.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao_prim),
+        ctypes.c_int(nao_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    K_real_buf *= (ngrid / vol)
+    
+    K = _pack_JK(K_real_buf, Ls, nao_prim, output=None)
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    _benchmark_time(t1, t2, "_contract_k_dm")
+    
+    return K
+    
+    # return DM_RgRg_real # temporary return for debug
 
 class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     def __init__(self, mol:Cell, max_buf_memory:int, Ls=[1,1,1], outcore=True, with_robust_fitting=True, aoR=None):
@@ -1115,12 +1382,24 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             size_buf4 += nao_prim * nao_prim
             size_buf4 += nao_prim * nIP_Prim * 3
             
+            ### in get_k ### 
+            
+            size_buf5  = nIP_Prim * nIP_Prim * ncell_complex * 2
+            size_buf5 += nao_prim * nao_prim * 2
+            size_buf5 += nIP_Prim * nIP_Prim * ncell_complex * 2
+            
+            size_buf6  = nIP_Prim * nIP_Prim * ncell_complex * 2
+            size_buf6 += nIP_Prim * nIP_Prim * ncell_complex * 2
+            size_buf6 += nao_prim * nao_prim * ncell_complex * 2
+            size_buf6 += nIP_Prim * nIP_Prim  * 2
+            size_buf6 += nao_prim * nIP_Prim  * 2 * 2
+            size_buf6 += nao_prim * nao_prim  * 2
             
             ### ddot_buf ###
             
             size_ddot_buf = max(naux*naux+2,ngrids)*num_threads
             
-            size_buf = max(size_buf1,size_buf2,size_buf3,size_buf4)
+            size_buf = max(size_buf1,size_buf2,size_buf3,size_buf4,size_buf5,size_buf6)
             
             if hasattr(self, "IO_buf"):
                 if self.IO_buf.size < (size_buf+size_ddot_buf):
@@ -1314,11 +1593,11 @@ if __name__ == "__main__":
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
     
-    Ls = [2, 2, 2]
-    #Ls = [1,1,2]
+    # Ls = [2, 2, 2]
+    Ls = [2, 1, 3]
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     
-    cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=1, mesh=mesh)
+    cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=4, mesh=mesh)
     
     for i in range(cell.natm):
         print('%s %s  charge %f  xyz %s' % (cell.atom_symbol(i),
@@ -1490,3 +1769,19 @@ if __name__ == "__main__":
         
         mat = dm_packed[b_begin:b_end, k_begin:k_end]
         assert np.allclose(mat, mat.T.conj())
+    
+    # DM_bencharmk = _get_DM_RgRg_benchmark(pbc_isdf_info_ksym, dm1)
+    # DM_test2 = _get_k_kSym(pbc_isdf_info_ksym, dm1)
+    # print(DM_bencharmk[:4, :4])
+    # print(DM_test2[:4, :4])
+    
+    # assert np.allclose(DM_bencharmk[:nIP_prim,:], DM_test2)
+    
+    K_bench = _get_k_with_Wgrid(pbc_isdf_info_ksym, W_grid, dm1)
+    K2      = _get_k_kSym(pbc_isdf_info_ksym, dm1)
+    
+    # print(K_bench[:4, :4])
+    # print(K2[:4, :4])
+    # print(K_bench[:4, :4]/K2[:4, :4])
+    
+    assert np.allclose(K_bench, K2)  # we get the correct answer!
