@@ -135,17 +135,17 @@ void _iFFT_Matrix_Col_InPlace(double __complex__ *matrix, // the size of matrix 
     const int nMeshComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
     const double factor = 1.0 / (double)(nMesh);
 
-    printf("m: %d\n", m);
-    printf("n: %d\n", n);
-    printf("n_Complex: %d\n", n_Complex);
-    printf("nMesh: %d\n", nMesh);
-    printf("nMeshComplex: %d\n", nMeshComplex);
-    printf("nThread: %d\n", nThread);
-    printf("nRow: %d\n", nRow);
-    printf("nCol: %d\n", nCol);
-    printf("mesh: %d %d %d\n", mesh[0], mesh[1], mesh[2]);
-    printf("nComplex: %d\n", nComplex);
-    printf("nReal: %d\n", nReal);
+    // printf("m: %d\n", m);
+    // printf("n: %d\n", n);
+    // printf("n_Complex: %d\n", n_Complex);
+    // printf("nMesh: %d\n", nMesh);
+    // printf("nMeshComplex: %d\n", nMeshComplex);
+    // printf("nThread: %d\n", nThread);
+    // printf("nRow: %d\n", nRow);
+    // printf("nCol: %d\n", nCol);
+    // printf("mesh: %d %d %d\n", mesh[0], mesh[1], mesh[2]);
+    // printf("nComplex: %d\n", nComplex);
+    // printf("nReal: %d\n", nReal);
 
     // (1) transform (Row, Block, Col) -> (Row, Col, Block)
 
@@ -339,3 +339,4 @@ void _PermutationConj(
         }
     }
 }
+
