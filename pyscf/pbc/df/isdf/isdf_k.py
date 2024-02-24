@@ -2485,6 +2485,30 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     
     ################ test function ################ 
     
+    def check_data(self, criterion=1e4):
+        print("check data")
+        if hasattr(self, "W"):
+            for i in range(self.W.shape[0]):
+                for j in range(self.W.shape[1]):
+                    if abs(self.W[i,j]) > criterion:
+                        print("W[{},{}] = {}".format(i,j,self.W[i,j]))
+        if hasattr(self, "W0"):
+            for i in range(self.W0.shape[0]):
+                for j in range(self.W0.shape[1]):
+                    if abs(self.W0[i,j]) > criterion:
+                        print("W0[{},{}] = {}".format(i,j,self.W0[i,j]))
+        if hasattr(self, "aoRg"):
+            for i in range(self.aoRg.shape[0]):
+                for j in range(self.aoRg.shape[1]):
+                    if abs(self.aoRg[i,j]) > criterion:
+                        print("aoRg[{},{}] = {}".format(i,j,self.aoRg[i,j]))
+        if hasattr(self, "aoRg_FFT"):
+            for i in range(self.aoRg_FFT.shape[0]):
+                for j in range(self.aoRg_FFT.shape[1]):
+                    if abs(self.aoRg_FFT[i,j]) > criterion:
+                        print("aoRg_FFT[{},{}] = {}".format(i,j,self.aoRg_FFT[i,j]))
+        print("end check data")
+        
     # @profile 
     def construct_auxbasis_benchmark(self):
         _construct_aux_basis_benchmark(self)

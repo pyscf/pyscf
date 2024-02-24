@@ -99,6 +99,8 @@ if __name__ == "__main__":
     ISDF_K._construct_aux_basis_kSym(pbc_isdf_info_ksym)
     W_bench = ISDF_K._construct_W_incore(pbc_isdf_info_ksym)
     
+    pbc_isdf_info_ksym.check_data()
+    
     aux_benchmark = pbc_isdf_info_ksym.aux_basis
     
     print("aux_benchmark = ", aux_benchmark.shape)
@@ -283,6 +285,8 @@ if __name__ == "__main__":
     pbc_isdf_info = ISDF_K.PBC_ISDF_Info_kSym(cell, 800 * 1000 * 1000, Ls=Ls, outcore=True, with_robust_fitting=False, aoR=None)
     pbc_isdf_info.build_IP_auxbasis(c=C, m=M)
     pbc_isdf_info.build_auxiliary_Coulomb()
+    
+    pbc_isdf_info.check_data()
     
     W = pbc_isdf_info.W
     
