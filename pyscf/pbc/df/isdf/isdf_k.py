@@ -633,18 +633,20 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 A_tmp = A_complex[:, i*nIP_Prim:(i+1)*nIP_Prim].copy()
                 B_tmp = B_complex[:, i*nGridPrim:(i+1)*nGridPrim].copy()
                 
-                fn_cholesky(
-                    A_tmp.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(nIP_Prim)
-                )
+                # fn_cholesky(
+                #     A_tmp.ctypes.data_as(ctypes.c_void_p),
+                #     ctypes.c_int(nIP_Prim)
+                # )
+                
+                X = np.linalg.solve(A_tmp, B_tmp)
         
-                fn_solve(
-                    ctypes.c_int(nIP_Prim),
-                    A_tmp.ctypes.data_as(ctypes.c_void_p),
-                    B_tmp.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(B_tmp.shape[1]),
-                    ctypes.c_int(bunchsize)
-                )
+                # fn_solve(
+                #     ctypes.c_int(nIP_Prim),
+                #     A_tmp.ctypes.data_as(ctypes.c_void_p),
+                #     B_tmp.ctypes.data_as(ctypes.c_void_p),
+                #     ctypes.c_int(B_tmp.shape[1]),
+                #     ctypes.c_int(bunchsize)
+                # )
                 
                 # print("B_tmp = ", B_tmp[:5,:5])
                 
@@ -657,7 +659,8 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 # print("B_tmp = ", B_tmp[:5,:5])
                 
                 fn_final_fft(
-                    B_tmp.ctypes.data_as(ctypes.c_void_p),
+                    # B_tmp.ctypes.data_as(ctypes.c_void_p),
+                    X.ctypes.data_as(ctypes.c_void_p),
                     FREQ[i].ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(nIP_Prim),
                     ctypes.c_int(nGridPrim),
@@ -696,7 +699,8 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                     perm_id += 1
                 
                 fn_permutation_conj(
-                    B_tmp.ctypes.data_as(ctypes.c_void_p),
+                    # B_tmp.ctypes.data_as(ctypes.c_void_p),
+                    X.ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(nIP_Prim),
                     ctypes.c_int(nGridPrim),
                     permutation[perm_id].ctypes.data_as(ctypes.c_void_p),
@@ -705,7 +709,8 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 
                 iloc2 = ix2 * Ls[1] * Ls[2] + iy2 * Ls[2] + iz2
                 
-                mydf.aux_basis[:, iloc2*nGridPrim:(iloc2+1)*nGridPrim] = B_tmp
+                # mydf.aux_basis[:, iloc2*nGridPrim:(iloc2+1)*nGridPrim] = B_tmp
+                mydf.aux_basis[:, iloc2*nGridPrim:(iloc2+1)*nGridPrim] = X
     
     mydf.aux_basis = mydf.aux_basis * fac
                      
@@ -1576,6 +1581,8 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         ncell_complex = self.Ls[0] * self.Ls[1] * (self.Ls[2]//2+1)
         nao_prim  = self.nao // np.prod(self.Ls)
         
+        ngrids = nGridPrim * self.Ls[0] * self.Ls[1] * self.Ls[2]
+        
         if self.outcore is False:
             
             ### in build aux basis ###
@@ -2050,7 +2057,7 @@ if __name__ == "__main__":
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
     
-    C = 15
+    C = 25
     
     # Ls = [2, 2, 2]
     Ls = [1, 2, 2]
