@@ -265,7 +265,7 @@ if __name__ == "__main__":
         ['C', (0.8917 , 2.6751 , 2.6751)],
     ]
     
-    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis='gth-cc-tzvp')
+    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis='gth-cc-dzvp')
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
     
@@ -273,16 +273,23 @@ if __name__ == "__main__":
     
     # Ls = [2, 2, 2]
     # Ls = [1, 2, 2]
-    Ls = [1, 1, 1]
+    Ls = [1, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
-    cell = ISDF_K.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh, basis='gth-cc-tzvp')
+    cell = ISDF_K.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh, basis='gth-cc-dzvp')
     
     pbc_isdf_info = ISDF_K.PBC_ISDF_Info_kSym(cell, 800 * 1000 * 1000, Ls=Ls, outcore=True, with_robust_fitting=False, aoR=None)
     pbc_isdf_info.build_IP_auxbasis(c=C, m=M)
     pbc_isdf_info.build_auxiliary_Coulomb()
+    
+    W = pbc_isdf_info.W
+    
+    for i in range(W.shape[0]):
+        for j in range(W.shape[1]):
+            if abs(W[i,j]) > 10000:
+                print("W[{},{}] = {}".format(i,j,W[i,j]))
     
     from pyscf.pbc import scf
     

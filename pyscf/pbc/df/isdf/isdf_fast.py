@@ -345,7 +345,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     def __init__(self, mol:Cell, aoR: np.ndarray = None,
                  # cutoff_aoValue: float = 1e-12,
                  # cutoff_QR: float = 1e-8
-                 with_robust_fitting=True
+                 with_robust_fitting=True,
+                 Ls=None
                  ):
 
         super().__init__(cell=mol)
@@ -423,7 +424,18 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             coords  = np.asarray(grids.coords).reshape(-1,3)
             NumInts = df_tmp._numint
 
-            self.partition = np.zeros(coords.shape[0], dtype=np.int32)
+            coords_now = coords
+            
+            if Ls is not None:
+                
+                mesh = mol.mesh
+                meshPrim = np.array(mesh, dtype=np.int32) // Ls
+                print("meshPrim = ", meshPrim)
+                coords_now = coords_now.reshape(Ls[0], meshPrim[0], Ls[1], meshPrim[1], Ls[2], meshPrim[2], 3)
+                coords_now = coords_now.transpose(0, 2, 4, 1, 3, 5, 6).reshape(-1, 3)
+                coords_now = coords_now[:np.prod(meshPrim), :]
+
+            self.partition = np.zeros(coords_now.shape[0], dtype=np.int32)
 
             from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
@@ -435,7 +447,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 self.IO_buf = np.zeros((int(MAX_MEMORY//8),), dtype=np.double)
 
             print("IO_buf.size = ", self.IO_buf.size)
-            print("coords.shape[0] = ", coords.shape[0])
+            print("coords.shape[0] = ", coords_now.shape[0])
             print("self.nao = ", self.nao)
 
             bufsize = min(self.IO_buf.size, 4*1e9/8) // 2
@@ -444,15 +456,17 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             print("bunchsize = ", bunchsize)
 
             assert bunchsize > 0
-            for p0, p1 in lib.prange(0, coords.shape[0], bunchsize):
+            for p0, p1 in lib.prange(0, coords_now.shape[0], bunchsize):
                 # print("p0 = %d p1 = %d" % (p0, p1))
                 AoR_Buf = np.ndarray((self.nao, p1-p0), dtype=np.complex128, buffer=self.IO_buf, offset=0)
                 # res = NumInts.eval_ao(mol, coords[p0:p1], deriv=0, out=self.IO_buf[:bufsize])[0].T
-                AoR_Buf = ISDF_eval_gto(self.cell, coords=coords[p0:p1], out=AoR_Buf)
+                AoR_Buf = ISDF_eval_gto(self.cell, coords=coords_now[p0:p1], out=AoR_Buf)
                 res = np.argmax(np.abs(AoR_Buf), axis=0)
                 # print("res = ", res)
                 self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
+                
             res = None
+            
             self.coords = coords
             self._numints = NumInts
 

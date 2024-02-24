@@ -1239,12 +1239,12 @@ def get_jk_dm_outcore(mydf, dm, hermi=1, kpt=np.zeros(3),
     return vj, vk
 
 class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
-    def __init__(self, mol:Cell, max_buf_memory:int, outcore=True, with_robust_fitting=True, aoR=None):
+    def __init__(self, mol:Cell, max_buf_memory:int, outcore=True, with_robust_fitting=True, aoR=None, Ls=None):
 
         self.max_buf_memory = max_buf_memory
         self.IO_buf         = np.zeros((max_buf_memory//8), dtype=np.float64)
 
-        super().__init__(mol=mol,aoR=aoR,with_robust_fitting=with_robust_fitting)
+        super().__init__(mol=mol,aoR=aoR,with_robust_fitting=with_robust_fitting, Ls=Ls)
 
         self.IO_FILE        = None
 

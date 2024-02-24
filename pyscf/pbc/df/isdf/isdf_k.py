@@ -2420,7 +2420,9 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     # @profile 
     def __init__(self, mol:Cell, max_buf_memory:int, Ls=[1,1,1], outcore=True, with_robust_fitting=True, aoR=None):
         
-        super().__init__(mol=mol, max_buf_memory=max_buf_memory, outcore=outcore, with_robust_fitting=with_robust_fitting, aoR=aoR)
+        print("Ls = ", Ls)
+        
+        super().__init__(mol=mol, max_buf_memory=max_buf_memory, outcore=outcore, with_robust_fitting=with_robust_fitting, aoR=aoR, Ls=Ls)
         
         assert with_robust_fitting == False
         assert self.mesh[0] % Ls[0] == 0
@@ -2436,6 +2438,41 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
 
         print("self.cell.lattice_vectors = ", self.cell.lattice_vectors())
         self.ordered_grid_coords, self.ordered_grid_coords_dict = _extract_grid_primitive_cell(self.cell.lattice_vectors(), self.mesh, self.Ls, self.coords)
+
+        #### symmetrize the partition ####
+
+        self.partition = np.array(self.partition, dtype=np.int32)
+        print("self.partition.shape = ", self.partition.shape)
+        assert self.partition.shape[0] == np.prod(self.coords.shape[0]) // np.prod(self.Ls)
+
+        self.meshPrim = np.array(self.mesh) // np.array(self.Ls)
+        print("meshprim = ", self.meshPrim)
+        self.natm     = self.cell.natm
+        self.natmPrim = self.cell.natm // np.prod(self.Ls)
+
+        # partition = self.partition.reshape(self.Ls[0], self.meshPrim[0], self.Ls[1], self.meshPrim[1], self.Ls[2], self.meshPrim[2])
+        # partition = partition.transpose(0,2,4,1,3,5).reshape(-1, np.prod(self.meshPrim))
+        # partition = self.partition.reshape(self.meshPrim[0], self.meshPrim[1], self.meshPrim[2])
+        partition = np.zeros((np.prod(Ls), np.prod(self.meshPrim)), dtype=np.int32)
+        nmeshPrim = np.prod(self.meshPrim)
+
+        # for ix in range(self.Ls[0]):
+        #     for iy in range(self.Ls[1]):
+        #         for iz in range(self.Ls[2]):
+        #             loc = ix * self.Ls[1] * self.Ls[2] + iy * self.Ls[2] + iz
+        #             shift = loc * self.natmPrim
+        
+        partition[0] = self.partition
+        for i in range(nmeshPrim):
+            atm_id = partition[0][i]
+            atm_id = (atm_id % self.natmPrim)
+            partition[0][i] = atm_id
+        for i in range(1, np.prod(Ls)):
+            partition[i] = self.natmPrim * i + partition[0]
+        
+        partition = partition.reshape(self.Ls[0], self.Ls[1], self.Ls[2], self.meshPrim[0], self.meshPrim[1], self.meshPrim[2])
+        partition = partition.transpose(0,3,1,4,2,5).reshape(-1)
+        self.partition = partition
 
         # self.aoR_Prim = self._numint.eval_ao(self.cell, self.ordered_grid_coords_dict[(0,0,0)])[0].T
 
