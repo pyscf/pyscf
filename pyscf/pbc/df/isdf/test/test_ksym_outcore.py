@@ -252,7 +252,7 @@ if __name__ == "__main__":
     boxlen = 3.5668
     prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     
-    KE_CUTOFF = 70
+    KE_CUTOFF = 128
     
     atm = [
         ['C', (0.     , 0.     , 0.    )],
@@ -265,21 +265,22 @@ if __name__ == "__main__":
         ['C', (0.8917 , 2.6751 , 2.6751)],
     ]
     
-    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
+    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis='gth-cc-tzvp')
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
     
-    C = 15
+    C = 7
     
     # Ls = [2, 2, 2]
-    Ls = [2, 2, 2]
+    # Ls = [1, 2, 2]
+    Ls = [1, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
-    cell = ISDF_K.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh)
+    cell = ISDF_K.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh, basis='gth-cc-tzvp')
     
-    pbc_isdf_info = ISDF_K.PBC_ISDF_Info_kSym(cell, 80 * 1000 * 1000, Ls=Ls, outcore=True, with_robust_fitting=False, aoR=None)
+    pbc_isdf_info = ISDF_K.PBC_ISDF_Info_kSym(cell, 800 * 1000 * 1000, Ls=Ls, outcore=True, with_robust_fitting=False, aoR=None)
     pbc_isdf_info.build_IP_auxbasis(c=C, m=M)
     pbc_isdf_info.build_auxiliary_Coulomb()
     

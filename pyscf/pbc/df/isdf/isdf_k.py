@@ -1134,7 +1134,13 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
                 e_max = np.max(e)
                 e_min_cutoff = e_max * COND_CUTOFF
                 # throw away the small eigenvalues
-                where = np.where(abs(e) > e_min_cutoff)[0]
+                # where = np.where(abs(e) > e_min_cutoff)[0]
+                where1 = np.where(e < e_min_cutoff)[0]
+                e1 = e[where1]
+                print("eigenvalues indicate numerical instability")
+                for loc, x in enumerate(e1):
+                    print("e1[%3d] = %15.6e" % (loc, x))
+                where = np.where(e > e_min_cutoff)[0]
                 e = e[where]
                 
                 buf_A2 = np.ndarray((nIP_Prim, e.shape[0]), dtype=np.complex128, buffer=IO_buf, offset=offset_A2)
@@ -1666,7 +1672,7 @@ def _construct_W_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray
     W_real = np.ndarray((nIP_Prim, nIP_Prim*ncell), dtype=np.float64, buffer=W, offset = 0)
 
     IO_buf_size = IO_buf.size
-    bunchsize = (IO_buf_size - nIP_Prim * nIP_Prim * 2 - nIP_Prim * nIP_Prim * ncell_complex * 2) / (3 * 2 * nIP_Prim)
+    bunchsize = (IO_buf_size - nIP_Prim * nIP_Prim * 2 - nIP_Prim * nIP_Prim * ncell_complex * 2) // (3 * 2 * nIP_Prim)
     bunchsize = min(bunchsize, nGridPrim)
 
     if nGridPrim % bunchsize == 0:
@@ -1691,6 +1697,10 @@ def _construct_W_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray
     offset+= nIP_Prim * nIP_Prim * W_buf.itemsize
     
     aux_Buf1_offset = offset
+    print("aux_Buf1_offset = ", aux_Buf1_offset)
+    print("offset          = ", offset)
+    print("nIP_Prim        = ", nIP_Prim)
+    print("bunchsize       = ", bunchsize)
     aux_FFT_Buf1 = np.ndarray((nIP_Prim, bunchsize), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     offset += nIP_Prim * bunchsize * aux_FFT_Buf1.itemsize
     
