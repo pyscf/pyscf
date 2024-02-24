@@ -144,8 +144,12 @@ class _SmearingSCF:
                 mo_occs = [occa, occb]
             else:
                 mu = self.mu0
-                mo_occs = f_occ(mu[0], mo_es[0], sigma)
-                mo_occs = f_occ(mu[1], mo_es[1], sigma)
+                try:
+                    mu_a, mu_b = mu 
+                except:
+                    mu = [mu, mu] 
+                mo_occs = [f_occ(mu[0], mo_es[0], sigma)]
+                mo_occs.append(f_occ(mu[1], mo_es[1], sigma))
             self.entropy  = self._get_entropy(mo_es[0], mo_occs[0], mu[0])
             self.entropy += self._get_entropy(mo_es[1], mo_occs[1], mu[1])
             fermi = (_get_fermi(mo_es[0], nocc[0]), _get_fermi(mo_es[1], nocc[1]))
@@ -164,6 +168,9 @@ class _SmearingSCF:
                 mo_occs = mo_occs[0] + mo_occs[1]
         else: # all orbitals treated with the same fermi level
             nocc = nelectron = self.mol.tot_electrons()
+            if abs(nocc) < 1:
+                # model systems don't have atoms 
+                nocc = nelectron = numpy.sum(self.mol.nelec)
             if is_uhf:
                 mo_es = numpy.hstack(mo_energy)
             else:
