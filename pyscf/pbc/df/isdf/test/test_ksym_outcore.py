@@ -55,7 +55,7 @@ if __name__ == "__main__":
     boxlen = 3.5668
     prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     
-    KE_CUTOFF = 16
+    KE_CUTOFF = 8
     
     atm = [
         ['C', (0.     , 0.     , 0.    )],
@@ -68,14 +68,14 @@ if __name__ == "__main__":
         ['C', (0.8917 , 2.6751 , 2.6751)],
     ]
     
-    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
+    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis='gth-szv')
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
 
-    Ls = [2, 2, 2]
+    Ls = [4, 4, 4]
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     
-    cell = ISDF_K.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh)
+    cell = ISDF_K.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh, basis='gth-szv')
     
     ncell = np.prod(Ls)
     ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
@@ -83,6 +83,8 @@ if __name__ == "__main__":
     memory = 8 * 1000 * 1000 # 8 MB
     pbc_isdf_info_ksym = ISDF_K.PBC_ISDF_Info_kSym(cell, 8 * 1000 * 1000, Ls=Ls, outcore=True, with_robust_fitting=False, aoR=None) 
     pbc_isdf_info_ksym.build_IP_auxbasis(c=C, m=M)
+    
+    print("we get here!")
     
     ### check ### 
     
@@ -98,12 +100,16 @@ if __name__ == "__main__":
     
     aux_benchmark = pbc_isdf_info_ksym.aux_basis
     
+    print("aux_benchmark = ", aux_benchmark.shape)
+    
     IO_File = pbc_isdf_info_ksym.IO_FILE
     f_aux_basis = h5py.File(IO_File, 'r')
     
     aux_basis = f_aux_basis[ISDF_K.AUX_BASIS_DATASET][:]
     print("aux_basis = ", aux_basis.shape)
     # print("aux_basis = ", aux_basis)
+    
+    f_aux_basis.close()
     
     aux_basis = aux_basis.reshape(ncell_complex, -1, prim_mesh[0] * prim_mesh[1] * prim_mesh[2])
     # aux_basis = aux_basis.transpose(3, 0, 1, 2, 4, 5, 6).reshape(-1, prim_mesh[0], prim_mesh[1], prim_mesh[2])
@@ -171,21 +177,60 @@ if __name__ == "__main__":
     for ix in range(Ls[0]):
         for iy in range(Ls[1]):
             for iz in range(Ls[2]//2+1):
-                # final FFT # 
-                basis_now = aux_basis[i] 
-                basis_now = basis_now * FREQ[i].reshape(1,-1)
-                basis_now = basis_now.reshape(-1, prim_mesh[0], prim_mesh[1], prim_mesh[2])
-                basis_now = np.fft.fftn(basis_now, axes=(1,2,3))
-                basis_now = basis_now.reshape(-1, np.prod(prim_mesh))
-                basis_now*=fac
                 
-                i_begin = i * ngrim_prim
-                i_end = (i+1) * ngrim_prim
+                print("i = ", i)
+                
+                # final FFT # 
+                basis_now = aux_basis[i].copy()
+                
+                # print basis_now 
+                
+                # basis_now = res_test[i]
+                basis_now1 = basis_now * FREQ[i].reshape(1,-1)
+                # print(basis_now1/basis_now)
+                basis_now1 = basis_now1.reshape(-1, prim_mesh[0], prim_mesh[1], prim_mesh[2])
+                basis_now1 = np.fft.fftn(basis_now1, axes=(1,2,3))
+                basis_now1 = basis_now1.reshape(-1, np.prod(prim_mesh))
+                basis_now1*=fac
+
+                
+                loc = ix * Ls[1] * (Ls[2]) + iy * (Ls[2]) + iz
+
+                i_begin = loc * ngrim_prim
+                i_end = (loc+1) * ngrim_prim
                 
                 basis_bench = aux_benchmark[:, i_begin:i_end]
                 
-                # print(basis_now[:4,:4])
-                # print(basis_bench[:4,:4])
-                # print(basis_now[:4,:4]/basis_bench[:4,:4])
+                assert np.allclose(basis_now1, basis_bench)
                 
-                assert np.allclose(basis_now, basis_bench)
+                i += 1
+    
+    ISDF_K._aux_basis_FFT_outcore(pbc_isdf_info_ksym, pbc_isdf_info_ksym.IO_FILE, pbc_isdf_info_ksym.IO_buf)
+    
+    f_aux_basis = h5py.File(IO_File, 'r')
+    aux_basis_fft = f_aux_basis[ISDF_K.AUX_BASIS_FFT_DATASET][:]
+    print("aux_basis = ", aux_basis.shape)
+    # print("aux_basis = ", aux_basis)
+    f_aux_basis.close()
+    
+    # aux_basis_fft = aux_basis_fft.transpose(1,0,2).reshape(aux_benchmark.shape)
+    
+    # print(aux_benchmark[:4,:4])
+    # print(aux_basis_fft[:4,:4])
+    # print(aux_benchmark[:4,:4]/aux_basis_fft[:4,:4])
+    # print(aux_benchmark[-4:,-4:])
+    # print(aux_basis_fft[-4:,-4:])
+    # print(aux_benchmark[-4:,-4:]/aux_basis_fft[-4:,-4:])
+    
+    for i in range(ncell):
+        print("i = ", i)
+        i_begin = i * ngrim_prim
+        i_end = (i+1) * ngrim_prim
+        basis_bench = aux_benchmark[:, i_begin:i_end]
+        basis_fft = aux_basis_fft[i]
+        # print(basis_bench[:4,:4])
+        # print(basis_fft[:4,:4])
+        # print(basis_bench[:4,:4]/basis_fft[:4,:4])
+        print("max diff = ", np.max(np.abs(basis_bench - basis_fft)))
+        
+        assert np.allclose(basis_bench, basis_fft)

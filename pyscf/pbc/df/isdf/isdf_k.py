@@ -792,7 +792,7 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 
                 iloc2 = ix2 * Ls[1] * Ls[2] + iy2 * Ls[2] + iz2
                 
-                mydf.aux_basis[:, iloc*nGridPrim:(iloc+1)*nGridPrim] = buf_B
+                mydf.aux_basis[:, iloc2*nGridPrim:(iloc2+1)*nGridPrim] = buf_B
     
     mydf.aux_basis = mydf.aux_basis * fac
                      
@@ -846,15 +846,20 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
     h5d_aoR       = f_aux_basis.create_dataset(AOR_DATASET, (nao, nGridPrim), 'f8', chunks=chunk_size2)
     
     def save_B(col0, col1, buf:np.ndarray):
-        dest_sel   = np.s_[:, :, col0:col1]
-        source_sel = np.s_[:, :, :]
-        h5d_B.write_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
+        if col0<col1:
+            dest_sel   = np.s_[:, :, col0:col1]
+            source_sel = np.s_[:, :, :]
+            h5d_B.write_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
         # h5d_B[:, :, col0:col1] = buf.transpose(1, 0, 2)
 
     def save_aoR(col0, col1, buf:np.ndarray):
-        dest_sel   = np.s_[:, col0:col1]
-        source_sel = np.s_[:, :]
-        h5d_aoR.write_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
+        if col0<col1:
+            # print("write ", col0, col1)
+            # print("buf", buf.dtype)
+            # print(buf.shape)
+            dest_sel   = np.s_[:, col0:col1]
+            source_sel = np.s_[:, :]
+            h5d_aoR.write_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
     
     
     ####### 2. construct A ########
@@ -867,8 +872,8 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
     buf_A_real = np.ndarray((nIP_Prim, nIP_Prim * ncell), dtype=np.double, buffer=IO_buf, offset=offset)
     
     offset += nIP_Prim * nIP_Prim * ncell_complex * buf_A.itemsize
-    print("offset = ", offset//8)
-    print("allocate size = ", nIP_Prim * nIP_Prim * ncell_complex * buf_A.itemsize//8)
+    # print("offset = ", offset//8)
+    # print("allocate size = ", nIP_Prim * nIP_Prim * ncell_complex * buf_A.itemsize//8)
     buf_A_fft = np.ndarray((nIP_Prim, nIP_Prim * ncell_complex), dtype=np.complex128, buffer=IO_buf, offset=offset)
     
     # NOTE：size of IO_buf at least 2 * nIP_Prim * nIP_Prim * ncell_complex * 2
@@ -949,33 +954,46 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
     
     weight  = np.sqrt(mydf.cell.vol / nGrids)
     
+    print("weight = ", weight)
+    
     fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
     assert fn is not None
     
     with lib.call_in_background(save_B) as async_write_B:
+    # for _ in range(1):
         with lib.call_in_background(save_aoR) as async_write_aoR:
+        # for _ in range(1):
+            
+            async_write_aoR = save_aoR
+            async_write_B = save_B
             
             iloc = 0
             for ix in range(Ls[0]):
                 for iy in range(Ls[1]):
                     for iz in range(Ls[2]//2+1):
-                        
+                                                
                         bunch_begin = iloc * bunchsize
                         bunch_end   = (iloc + 1) * bunchsize
+                        bunch_begin = min(bunch_begin, nGridPrim)
                         bunch_end   = min(bunch_end, nGridPrim)
                         
                         # print("iloc = ", iloc)
                         # print("bunch_begin = ", bunch_begin)
                         # print("bunch_end   = ", bunch_end)
+                        # print("offset_aOR_buf1 = ", offset_aoR_buf1)
                         
                         AoR_Buf1 = np.ndarray((nao, bunch_end-bunch_begin), dtype=np.complex128, buffer=IO_buf, offset=offset_aoR_buf1)
                         AoR_Buf1 = ISDF_eval_gto(mydf.cell, coords=coords_prim[bunch_begin:bunch_end], out=AoR_Buf1) * weight
 
+                        # print("after AO")
+
                         ### asyc write aoR ###
                         
                         async_write_aoR(bunch_begin, bunch_end, AoR_Buf1)
+                        
+                        # print("get here after write aoR")
             
-                        for p0,p1 in lib.prange(0, bunch_end-bunch_begin, sub_bunchsize):
+                        for p0, p1 in lib.prange(0, bunch_end-bunch_begin, sub_bunchsize):
                             
                             AoR_BufPack = np.ndarray((nao, p1-p0), dtype=np.float64, buffer=IO_buf, offset=offset_aoR_bufpack)
 
@@ -1010,8 +1028,13 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
                                         # perform one dot #
                                     
                                         loc = ix2 * Ls[1] * Ls[2] + iy2 * Ls[2] + iz2
-                                        # k_begin = loc * bunchsize
-                                        # k_end   = (loc + 1) * bunchsize
+                                        
+                                        k_begin = loc * bunchsize
+                                        k_end   = (loc + 1) * bunchsize
+                                        # print("p1 = ", p1)
+                                        # print("p0 = ", p0)
+                                        # print("ddot_buf.shape = ", ddot_buf.shape)
+                                        # print("aoRg.shape = ", aoRg.shape)
                                         
                                         buf_ddot_res = np.ndarray((nIP_Prim, p1-p0), dtype=np.float64, buffer=IO_buf, offset=offset_ddot_res)
                                         lib.ddot_withbuffer(aoRg.T, AoR_BufPack, c=buf_ddot_res, buf=ddot_buf)
@@ -1019,6 +1042,7 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
                                         
                             lib.square_inPlace(B_Buf1)
                             
+                            # print("we get here!")
                             fn(
                                 B_Buf1.ctypes.data_as(ctypes.c_void_p),
                                 ctypes.c_int(nIP_Prim),
@@ -1026,10 +1050,9 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
                                 Ls.ctypes.data_as(ctypes.c_void_p),
                                 B_BufFFT.ctypes.data_as(ctypes.c_void_p)
                             )
+                            # print("we get here!")
                             
                             B_Buf1_complex = np.ndarray((nIP_Prim, ncell_complex, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_B_buf1)
-
-                            # B_Buf1 = B_Buf1.transpose(1, 0, 2)
                             
                             B_Buf_transpose = np.ndarray((ncell_complex,nIP_Prim, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_B_buf3)
                             B_Buf_transpose = B_Buf1_complex.transpose(1, 0, 2)
@@ -1038,7 +1061,8 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
                             
                             async_write_B(p0+bunch_begin, p1+bunch_begin, B_Buf1)
                             offset_B_buf1, offset_B_buf2 = offset_B_buf2, offset_B_buf1
-
+                            
+                            # print("we get here!")
                         
                         #### diag A ####
                         
@@ -1146,6 +1170,277 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
         
         # the final FFT is postponed to the next step # 
         
+       
+def _aux_basis_FFT_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray):
+    
+    t1 = (logger.process_clock(), logger.perf_counter())
+    
+    #### preprocess ####
+    
+    if isinstance(IO_File, str):
+        if h5py.is_hdf5(IO_File):
+            f_aux_basis = h5py.File(IO_File, 'a')
+            assert AUX_BASIS_DATASET in f_aux_basis
+            if AUX_BASIS_FFT_DATASET in f_aux_basis:
+                del (f_aux_basis[AUX_BASIS_FFT_DATASET])
+        else:
+            raise ValueError("IO_File must be a h5py.File object")
+    else:
+        assert (isinstance(IO_File, h5py.Group))
+        f_aux_basis = IO_File
+
+    nGridPrim = mydf.nGridPrim
+    nIP_Prim = mydf.nIP_Prim
+    mesh = mydf.mesh
+    meshPrim = np.array(mesh) // np.array(mydf.Ls)
+    meshPrim = np.array(meshPrim, dtype=np.int32)
+    Ls = np.array(mydf.Ls, dtype=np.int32)
+    ncell = np.prod(Ls)
+    ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
+    
+    itask_2_xyz = np.zeros((ncell_complex, 3), dtype=np.int32)
+    
+    loc = 0
+    for ix in range(Ls[0]):
+        for iy in range(Ls[1]):
+            for iz in range(Ls[2]//2+1):
+                itask_2_xyz[loc, 0] = ix
+                itask_2_xyz[loc, 1] = iy
+                itask_2_xyz[loc, 2] = iz
+                loc += 1
+
+    # get freq #
+    
+    freq1 = np.array(range(meshPrim[0]), dtype=np.float64)
+    freq2 = np.array(range(meshPrim[1]), dtype=np.float64)
+    freq3 = np.array(range(meshPrim[2]), dtype=np.float64)
+    freq_q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+    freq1 = np.array(range(Ls[0]), dtype=np.float64)
+    freq2 = np.array(range(Ls[1]), dtype=np.float64)
+    freq3 = np.array(range(Ls[2]//2+1), dtype=np.float64)
+    freq_Q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+    FREQ = np.einsum("ijkl,ipqs->ijklpqs", freq_Q, freq_q)
+    FREQ[0] /= (Ls[0] * meshPrim[0])
+    FREQ[1] /= (Ls[1] * meshPrim[1])
+    FREQ[2] /= (Ls[2] * meshPrim[2])
+    FREQ = np.einsum("ijklpqs->jklpqs", FREQ)
+    FREQ  = FREQ.reshape(-1, np.prod(meshPrim)).copy()
+    FREQ  = np.exp(-2.0j * np.pi * FREQ)
+    
+    print("FREQ.shape = ", FREQ.shape)
+    
+    def _permutation(nx, ny, nz, shift_x, shift_y, shift_z):
+        
+        res = np.zeros((nx*ny*nz), dtype=numpy.int32)
+        
+        loc_now = 0
+        for ix in range(nx):
+            for iy in range(ny):
+                for iz in range(nz):
+                    ix2 = (nx - ix - shift_x) % nx
+                    iy2 = (ny - iy - shift_y) % ny
+                    iz2 = (nz - iz - shift_z) % nz
+                    
+                    loc = ix2 * ny * nz + iy2 * nz + iz2
+                    # res[loc_now] = loc
+                    res[loc] = loc_now
+                    loc_now += 1
+        return res
+    
+    permutation = np.zeros((8, nGridPrim), dtype=np.int32)
+    # print("permutation.shape = ", permutation.shape)
+    permutation[0] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 0, 0)
+    permutation[1] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 0, 1)
+    permutation[2] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 1, 0)
+    permutation[3] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 1, 1)
+    permutation[4] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 0, 0)
+    permutation[5] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 0, 1)
+    permutation[6] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 0)
+    permutation[7] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 1)
+    
+    fac = np.sqrt(np.prod(Ls) / np.prod(mesh))
+    
+    # allocate buffer #
+
+    IO_Buf_Size = IO_buf.size 
+    
+    nthread = lib.num_threads()
+    
+    
+    bunchsize = (IO_Buf_Size - nthread * nGridPrim * 2) // (nGridPrim * 2 * 4)
+    
+    if bunchsize < 1:
+        raise ValueError("IO_buf is too small") 
+    
+    # if bunchsize > nIP_Prim // 5: # for test only
+    #     bunchsize = nIP_Prim // 5
+    
+    IBunch = nIP_Prim // bunchsize + 1
+    bunchsize_now = nIP_Prim // IBunch + 1
+    bunchsize_now = min(bunchsize_now, nIP_Prim)
+    bunchsize = bunchsize_now
+    
+    print("itask = ", ncell_complex)
+    print("Ibunch = ", IBunch)
+    print("bunchsize = ", bunchsize_now) 
+    
+    offset = 0
+    buffer_final_fft = np.ndarray((nthread, nGridPrim), dtype=np.complex128, buffer=IO_buf, offset=offset)
+    offset += nthread * nGridPrim * buffer_final_fft.itemsize
+    
+    offset_buf1 = offset
+    aux_FFT_buf1 = np.ndarray((bunchsize_now, nGridPrim), dtype=np.complex128, buffer=IO_buf, offset=offset)
+    offset += bunchsize_now * nGridPrim * aux_FFT_buf1.itemsize
+    
+    offset_buf2 = offset
+    aux_FFT_buf2 = np.ndarray((bunchsize_now, nGridPrim), dtype=np.complex128, buffer=IO_buf, offset=offset)
+    offset += bunchsize_now * nGridPrim * aux_FFT_buf2.itemsize
+    
+    offset_buf3 = offset
+    auf_FFT_conj_buf1 = np.ndarray((bunchsize_now, nGridPrim), dtype=np.complex128, buffer=IO_buf, offset=offset)
+    offset += bunchsize_now * nGridPrim * auf_FFT_conj_buf1.itemsize
+    
+    offset_buf4 = offset
+    auf_FFT_conj_buf2 = np.ndarray((bunchsize_now, nGridPrim), dtype=np.complex128, buffer=IO_buf, offset=offset)
+    offset += bunchsize_now * nGridPrim * auf_FFT_conj_buf2.itemsize
+    
+    #aux_basis_dataset = f_aux_basis[AUX_BASIS_DATASET]
+    h5d_aux_basis = f_aux_basis[AUX_BASIS_DATASET]
+    h5d_aux_FFT   = f_aux_basis.create_dataset(AUX_BASIS_FFT_DATASET, (ncell, nIP_Prim, nGridPrim), dtype='complex128', chunks=(1, nIP_Prim, nIP_Prim))
+
+    print("h5d_aux_basis.dtype = ", h5d_aux_basis.dtype)
+
+    def load_aux_basis(icell, row0, row1, buf:np.ndarray):
+        if row0<row1:
+            dest_sel   = np.s_[:, :]
+            source_sel = np.s_[icell, row0:row1, :]
+            h5d_aux_basis.read_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
+    
+    def load_aux_basis2(icell, row0, row1, buf:np.ndarray):
+        if row0<row1:
+            dest_sel   = np.s_[:, :]
+            source_sel = np.s_[icell, row0:row1, :]
+            h5d_aux_basis.read_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
+
+    def save_aux_FFT(icell, row0, row1, buf:np.ndarray):
+        if row0<row1:
+            source_sel = np.s_[:, :]
+            dest_sel   = np.s_[icell, row0:row1, :]
+            h5d_aux_FFT.write_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
+    
+    def save_aux_FFT2(icell, row0, row1, buf:np.ndarray):
+        if row0<row1:
+            source_sel = np.s_[:, :]
+            dest_sel   = np.s_[icell, row0:row1, :]
+            h5d_aux_FFT.write_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
+    
+    def save_aux_FFT3(icell, row0, row1, buf:np.ndarray):
+        if row0<row1:
+            source_sel = np.s_[:, :]
+            dest_sel   = np.s_[icell, row0:row1, :]
+            h5d_aux_FFT.write_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
+    
+    nTask_tot = ncell_complex * IBunch
+    
+    fn_final_fft = getattr(libpbc, "_FinalFFT", None)
+    assert fn_final_fft is not None
+    fn_permutation_conj = getattr(libpbc, "_PermutationConj", None)
+    assert fn_permutation_conj is not None
+                
+    with lib.call_in_background(save_aux_FFT) as async_write_aux_FFT:
+        with lib.call_in_background(save_aux_FFT2) as async_write_aux_FFT2:
+            with lib.call_in_background(load_aux_basis) as async_load_aux_basis:
+           
+                icell = 0
+                row0  = 0
+                row1  = bunchsize_now   
+            
+                aux_FFT_buf1 = np.ndarray((bunchsize_now, nGridPrim), dtype=np.complex128, buffer=IO_buf, offset=offset_buf1)
+                load_aux_basis2(icell, row0, row1, aux_FFT_buf1)
+            
+                for itask in range(nTask_tot):
+                                
+                    t3 = (logger.process_clock(), logger.perf_counter())
+                
+                    icell = itask // IBunch
+                    p0 = itask % IBunch * bunchsize_now
+                    p1 = p0 + bunchsize_now
+                    p1 = min(p1, nIP_Prim)
+                
+                    aux_FFT_buf1 = np.ndarray((p1-p0, nGridPrim), dtype=np.complex128, buffer=IO_buf, offset=offset_buf1)
+                    
+                    ### preload the next task ###
+                
+                    itask_next = itask + 1
+                    icell_next = itask_next // IBunch
+                    p0_next = itask_next % IBunch * bunchsize_now
+                    p1_next = p0_next + bunchsize_now
+                    p1_next = min(p1_next, nIP_Prim)
+                    
+                    if itask_next == nTask_tot:
+                        p0_next = 0
+                        p1_next = 0
+                    aux_FFT_buf2 = np.ndarray((p1_next-p0_next, nGridPrim), dtype=np.complex128, buffer=IO_buf, offset=offset_buf2)
+                    async_load_aux_basis(icell_next, p0_next, p1_next, aux_FFT_buf2)
+                
+                    ### do the work ###
+                
+                    ix, iy, iz = itask_2_xyz[icell]
+
+                    fn_final_fft(
+                        aux_FFT_buf1.ctypes.data_as(ctypes.c_void_p),
+                        FREQ[icell].ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(p1-p0),
+                        ctypes.c_int(nGridPrim),
+                        meshPrim.ctypes.data_as(ctypes.c_void_p),
+                        buffer_final_fft.ctypes.data_as(ctypes.c_void_p)
+                    )
+                
+                    aux_FFT_buf1 *= fac
+                                        
+                    ### complex conjugate ###
+
+                    ix2 = (Ls[0] - ix) % Ls[0]
+                    iy2 = (Ls[1] - iy) % Ls[1]
+                    iz2 = (Ls[2] - iz) % Ls[2]
+                
+                    if ix2!=ix or iy2!=iy or iz2!=iz:
+                        
+                        perm_id = 0
+                        if ix != 0:
+                            perm_id += 4
+                        if iy != 0:
+                            perm_id += 2
+                        if iz != 0:
+                            perm_id += 1
+                        aux_FFT_conj_buf1 = np.ndarray((p1-p0, nGridPrim), dtype=np.complex128, buffer=IO_buf, offset=offset_buf3)
+                        aux_FFT_conj_buf1.ravel()[:] = aux_FFT_buf1.ravel()[:]
+                        fn_permutation_conj(
+                            aux_FFT_conj_buf1.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(p1-p0),
+                            ctypes.c_int(nGridPrim),
+                            permutation[perm_id].ctypes.data_as(ctypes.c_void_p),
+                            buffer_final_fft.ctypes.data_as(ctypes.c_void_p)
+                        )
+                        real_cell_loc2 = ix2 * Ls[1] * (Ls[2]) + iy2 * (Ls[2]) + iz2
+                        # async_write_aux_FFT2(real_cell_loc2, p0, p1, aux_FFT_conj_buf1)
+                        save_aux_FFT3(real_cell_loc2, p0, p1, aux_FFT_conj_buf1)
+                        offset_buf3, offset_buf4 = offset_buf4, offset_buf3
+                
+                    ## final swtich ### 
+
+                    real_cell_loc = ix * Ls[1] * (Ls[2]) + iy * (Ls[2]) + iz
+                    # async_write_aux_FFT(real_cell_loc, p0, p1, aux_FFT_buf1)
+                    save_aux_FFT3(real_cell_loc, p0, p1, aux_FFT_buf1)
+                    offset_buf1, offset_buf2 = offset_buf2, offset_buf1
+                
+                    t4 = (logger.process_clock(), logger.perf_counter())
+                
+                    print("itask %5d wall time: %12.6f CPU time: %12.6f" % (itask, t4[1] - t3[1], t4[0] - t3[0]))
+
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "aux_basis_FFT_outcore")
+
 
 ####################### construct W #######################
     
@@ -2103,7 +2398,8 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             
             size_buf = max(size_buf1, size_buf2, size_buf3, buf_J, buf_K)
             
-            size_ddot_buf = (nIP_Prim*nIP_Prim+2)*num_threads
+            size1 = sub_bunchsize * nao
+            size_ddot_buf = (max(size1,nIP_Prim*nIP_Prim)+2)*num_threads
             
             if hasattr(self, "IO_buf"):
                 if self.IO_buf.size < size_buf:
@@ -2247,6 +2543,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             # print("construct aux basis in outcore mode")
             # _construct_aux_basis_IO(self, IO_File, self.IO_buf)
             self._allocate_jk_buffer()
+            print("after allocate buffer")
             _construct_aux_basis_kSym_outcore(self, IO_File, self.IO_buf)
             # raise NotImplementedError   
         else:
