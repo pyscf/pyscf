@@ -97,6 +97,7 @@ if __name__ == "__main__":
     pbc_isdf_info_ksym.jk_buffer = None
     pbc_isdf_info_ksym._allocate_jk_buffer()
     ISDF_K._construct_aux_basis_kSym(pbc_isdf_info_ksym)
+    W_bench = ISDF_K._construct_W_incore(pbc_isdf_info_ksym)
     
     aux_benchmark = pbc_isdf_info_ksym.aux_basis
     
@@ -223,6 +224,12 @@ if __name__ == "__main__":
     # print(aux_benchmark[-4:,-4:]/aux_basis_fft[-4:,-4:])
     
     for i in range(ncell):
+        
+        iz = i % Ls[2]
+        
+        if iz >= Ls[2]//2+1:
+            continue
+        
         print("i = ", i)
         i_begin = i * ngrim_prim
         i_end = (i+1) * ngrim_prim
@@ -234,3 +241,68 @@ if __name__ == "__main__":
         print("max diff = ", np.max(np.abs(basis_bench - basis_fft)))
         
         assert np.allclose(basis_bench, basis_fft)
+    
+    W_outcore = ISDF_K._construct_W_outcore(pbc_isdf_info_ksym, pbc_isdf_info_ksym.IO_FILE, pbc_isdf_info_ksym.IO_buf)
+    
+    print("max diff = ", np.max(np.abs(W_bench - W_outcore)))
+    assert np.allclose(W_bench, W_outcore)
+    
+    ### do the SCF ### 
+    
+    boxlen = 3.5668
+    prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    
+    KE_CUTOFF = 70
+    
+    atm = [
+        ['C', (0.     , 0.     , 0.    )],
+        ['C', (0.8917 , 0.8917 , 0.8917)],
+        ['C', (1.7834 , 1.7834 , 0.    )],
+        ['C', (2.6751 , 2.6751 , 0.8917)],
+        ['C', (1.7834 , 0.     , 1.7834)],
+        ['C', (2.6751 , 0.8917 , 2.6751)],
+        ['C', (0.     , 1.7834 , 1.7834)],
+        ['C', (0.8917 , 2.6751 , 2.6751)],
+    ]
+    
+    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
+    prim_mesh = prim_cell.mesh
+    print("prim_mesh = ", prim_mesh)
+    
+    C = 15
+    
+    # Ls = [2, 2, 2]
+    Ls = [2, 2, 2]
+    Ls = np.array(Ls, dtype=np.int32)
+    mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
+    mesh = np.array(mesh, dtype=np.int32)
+    
+    cell = ISDF_K.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh)
+    
+    pbc_isdf_info = ISDF_K.PBC_ISDF_Info_kSym(cell, 80 * 1000 * 1000, Ls=Ls, outcore=True, with_robust_fitting=False, aoR=None)
+    pbc_isdf_info.build_IP_auxbasis(c=C, m=M)
+    pbc_isdf_info.build_auxiliary_Coulomb()
+    
+    from pyscf.pbc import scf
+    
+    mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    mf.with_df = pbc_isdf_info
+    mf.max_cycle = 16
+    mf.conv_tol = 1e-7
+
+    print("mf.direct_scf = ", mf.direct_scf)
+
+    mf.kernel()
+        
+    exit(1)
+        
+    mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    # mf.with_df = pbc_isdf_info
+    mf.max_cycle = 64
+    mf.conv_tol = 1e-7
+
+    print("mf.direct_scf = ", mf.direct_scf)
+
+    mf.kernel()
