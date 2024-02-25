@@ -146,7 +146,7 @@ class _SmearingSCF:
                 elif len(self.mu0) == 2:
                     mu_a, mu_b = self.mu0
                 else:
-                    raise TypeError('Unsupported mu0: {self.mu0}')
+                    raise TypeError(f'Unsupported mu0: {self.mu0}')
                 occa = f_occ(mu_a, mo_es[0], sigma)
                 occb = f_occ(mu_b, mo_es[1], sigma)
             mu = [mu_a, mu_b]
