@@ -140,16 +140,17 @@ class _SmearingSCF:
             if self.mu0 is None:
                 mu_a, occa = _smearing_optimize(f_occ, mo_es[0], nocc[0], sigma)
                 mu_b, occb = _smearing_optimize(f_occ, mo_es[1], nocc[1], sigma)
-                mu = [mu_a, mu_b]
-                mo_occs = [occa, occb]
             else:
-                mu = self.mu0
-                try:
-                    mu_a, mu_b = mu 
-                except:
-                    mu = [mu, mu] 
-                mo_occs = [f_occ(mu[0], mo_es[0], sigma)]
-                mo_occs.append(f_occ(mu[1], mo_es[1], sigma))
+                if numpy.isscalar(self.mu0):
+                    mu_a = mu_b = self.mu0
+                elif len(self.mu0) == 2:
+                    mu_a, mu_b = self.mu0
+                else:
+                    raise TypeError('Unsupported mu0: {self.mu0}')
+                occa = f_occ(mu_a, mo_es[0], sigma)
+                occb = f_occ(mu_b, mo_es[1], sigma)
+            mu = [mu_a, mu_b]
+            mo_occs = [occa, occb]
             self.entropy  = self._get_entropy(mo_es[0], mo_occs[0], mu[0])
             self.entropy += self._get_entropy(mo_es[1], mo_occs[1], mu[1])
             fermi = (_get_fermi(mo_es[0], nocc[0]), _get_fermi(mo_es[1], nocc[1]))
@@ -167,10 +168,7 @@ class _SmearingSCF:
             if is_rohf:
                 mo_occs = mo_occs[0] + mo_occs[1]
         else: # all orbitals treated with the same fermi level
-            nocc = nelectron = self.mol.tot_electrons()
-            if abs(nocc) < 1:
-                # model systems don't have atoms 
-                nocc = nelectron = numpy.sum(self.mol.nelec)
+            nocc = nelectron = self.mol.nelectron
             if is_uhf:
                 mo_es = numpy.hstack(mo_energy)
             else:
@@ -183,6 +181,7 @@ class _SmearingSCF:
             else:
                 # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
                 mu = self.mu0
+                assert numpy.isscalar(mu)
                 mo_occs = f_occ(mu, mo_es, sigma)
             self.entropy = self._get_entropy(mo_es, mo_occs, mu)
             if is_rhf:
