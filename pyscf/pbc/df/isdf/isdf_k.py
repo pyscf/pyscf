@@ -1672,6 +1672,7 @@ def _construct_W_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray
     W_real = np.ndarray((nIP_Prim, nIP_Prim*ncell), dtype=np.float64, buffer=W, offset = 0)
 
     IO_buf_size = IO_buf.size
+    print("size IO Buf = ", IO_buf.size)
     bunchsize = (IO_buf_size - nIP_Prim * nIP_Prim * 2 - nIP_Prim * nIP_Prim * ncell_complex * 2) // (3 * 2 * nIP_Prim)
     bunchsize = min(bunchsize, nGridPrim)
 
@@ -1693,26 +1694,32 @@ def _construct_W_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray
     #     bunchsize = nIP_Prim // nBunch + 1
 
     offset = 0
-    W_buf  =  np.ndarray((nIP_Prim, nIP_Prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    W_buf  =  np.ndarray((nIP_Prim, nIP_Prim), dtype=np.complex128, buffer=IO_buf, offset=offset)
     offset+= nIP_Prim * nIP_Prim * W_buf.itemsize
     
     aux_Buf1_offset = offset
-    print("aux_Buf1_offset = ", aux_Buf1_offset)
-    print("offset          = ", offset)
+    print("aux_Buf1_offset = ", aux_Buf1_offset//8)
+    print("offset          = ", offset//8)
     print("nIP_Prim        = ", nIP_Prim)
     print("bunchsize       = ", bunchsize)
-    aux_FFT_Buf1 = np.ndarray((nIP_Prim, bunchsize), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    aux_FFT_Buf1 = np.ndarray((nIP_Prim, bunchsize), dtype=np.complex128, buffer=IO_buf, offset=offset)
     offset += nIP_Prim * bunchsize * aux_FFT_Buf1.itemsize
     
     aux_Buf2_offset = offset
-    aux_FFT_Buf2 = np.ndarray((nIP_Prim, bunchsize), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    print("aux_Buf2_offset = ", aux_Buf2_offset//8)
+    aux_FFT_Buf2 = np.ndarray((nIP_Prim, bunchsize), dtype=np.complex128, buffer=IO_buf, offset=offset)
     offset += nIP_Prim * bunchsize * aux_FFT_Buf2.itemsize
     
     aux_Buf3_offset = offset
-    aux_FFT_Buf3 = np.ndarray((nIP_Prim, bunchsize), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    print("aux_Buf3_offset = ", aux_Buf3_offset//8)
+    print("offset          = ", offset//8)
+    print("nIP_Prim        = ", nIP_Prim)
+    print("bunchsize       = ", bunchsize)
+    print("buffersize      = ", mydf.jk_buffer.size)
+    aux_FFT_Buf3 = np.ndarray((nIP_Prim, bunchsize), dtype=np.complex128, buffer=IO_buf, offset=offset)
     offset += nIP_Prim * bunchsize * aux_FFT_Buf3.itemsize
     
-    W_buf_fft = np.ndarray((nIP_Prim, nIP_Prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    W_buf_fft = np.ndarray((nIP_Prim, nIP_Prim*ncell_complex), dtype=np.complex128, buffer=IO_buf, offset=offset)
     
     coulG = tools.get_coulG(mydf.cell, mesh=mesh)
     coulG = coulG.reshape(meshPrim[0], Ls[0], meshPrim[1], Ls[1], meshPrim[2], Ls[2])
@@ -1742,7 +1749,7 @@ def _construct_W_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray
             ix, iy, iz = icell_2_xyz[i]
             icell = ix * Ls[1] * (Ls[2]) + iy * (Ls[2]) + iz
             
-            aux_FFT_Buf1 = np.ndarray((nIP_Prim, bunchsize), dtype=np.complex128, buffer=mydf.jk_buffer, offset=aux_Buf1_offset)
+            aux_FFT_Buf1 = np.ndarray((nIP_Prim, bunchsize), dtype=np.complex128, buffer=IO_buf, offset=aux_Buf1_offset)
             load_aux_basis_fft2(icell, 0, bunchsize, aux_FFT_Buf1)
             
             W_buf.ravel()[:] = 0.0 # reset W_buf
@@ -1751,17 +1758,17 @@ def _construct_W_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray
             
             for p0, p1 in lib.prange(0, nGridPrim, bunchsize):
                 
-                aux_FFT_Buf1 = np.ndarray((nIP_Prim, p1-p0), dtype=np.complex128, buffer=mydf.jk_buffer, offset=aux_Buf1_offset)
+                aux_FFT_Buf1 = np.ndarray((nIP_Prim, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=aux_Buf1_offset)
                 
                 p2 = p1 + bunchsize
                 p2 = min(p2, nGridPrim)
-                aux_FFT_Buf2 = np.ndarray((nIP_Prim, p2-p1), dtype=np.complex128, buffer=mydf.jk_buffer, offset=aux_Buf2_offset)
+                aux_FFT_Buf2 = np.ndarray((nIP_Prim, p2-p1), dtype=np.complex128, buffer=IO_buf, offset=aux_Buf2_offset)
                 
                 prefetch(icell, p1, p2, aux_FFT_Buf2)
                 
                 ### do the work ###
                 
-                aux_buf3 = np.ndarray((nIP_Prim, p1-p0), dtype=np.complex128, buffer=mydf.jk_buffer, offset=aux_Buf3_offset)
+                aux_buf3 = np.ndarray((nIP_Prim, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=aux_Buf3_offset)
                 
                 # copy 1 to 3
                 

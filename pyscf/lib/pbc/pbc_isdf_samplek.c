@@ -26,8 +26,8 @@ void _FFT_Matrix_Col_InPlace(double *matrix, // the size of matrix should be (nR
                              double *buf)
 {
     int mesh_complex[3] = {mesh[0], mesh[1], mesh[2] / 2 + 1};
-    int nComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
-    int nReal = mesh[0] * mesh[1] * mesh[2];
+    int64_t nComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    int64_t nReal = mesh[0] * mesh[1] * mesh[2];
     const int nThread = get_omp_threads();
 
     // printf("nThread: %d\n", nThread);
@@ -36,11 +36,11 @@ void _FFT_Matrix_Col_InPlace(double *matrix, // the size of matrix should be (nR
     // printf("mesh: %d %d %d\n", mesh[0], mesh[1], mesh[2]);
     // printf("nComplex: %d\n", nComplex);
 
-    const int m = nRow;
-    const int n = nCol * mesh[0] * mesh[1] * mesh[2];
-    const int n_complex = nCol * mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
-    const int nMesh = mesh[0] * mesh[1] * mesh[2];
-    const int nMeshComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    const int64_t m = nRow;
+    const int64_t n = nCol * mesh[0] * mesh[1] * mesh[2];
+    const int64_t n_complex = nCol * mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    const int64_t nMesh = mesh[0] * mesh[1] * mesh[2];
+    const int64_t nMeshComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
 
     // printf("m: %d\n", m);
     // printf("n: %d\n", n);
@@ -50,13 +50,13 @@ void _FFT_Matrix_Col_InPlace(double *matrix, // the size of matrix should be (nR
     // (1) transform (Row, Block, Col) -> (Row, Col, Block)
 
 #pragma omp parallel for num_threads(nThread)
-    for (int i = 0; i < m; i++)
+    for (int64_t i = 0; i < m; i++)
     {
-        int iCol = 0;
+        int64_t iCol = 0;
 
-        for (int iBlock = 0; iBlock < nMesh; iBlock++)
+        for (int64_t iBlock = 0; iBlock < nMesh; iBlock++)
         {
-            for (int j = 0; j < nCol; j++, iCol++)
+            for (int64_t j = 0; j < nCol; j++, iCol++)
             {
                 buf[i * n + j * nMesh + iBlock] = matrix[i * n + iCol];
             }
@@ -67,7 +67,7 @@ void _FFT_Matrix_Col_InPlace(double *matrix, // the size of matrix should be (nR
 
     // (2) perform FFT on the last dimension
 
-    int nFFT = nRow * nCol;
+    int64_t nFFT = nRow * nCol;
 
     double __complex__ *mat_complex = (double __complex__ *)buf;
     double __complex__ *buf_complex = (double __complex__ *)matrix;
@@ -79,8 +79,8 @@ void _FFT_Matrix_Col_InPlace(double *matrix, // the size of matrix should be (nR
 #pragma omp parallel num_threads(nThread)
     {
         int tid = omp_get_thread_num();
-        int start = tid * BunchSize;
-        int end = (tid + 1) * BunchSize;
+        int64_t start = tid * BunchSize;
+        int64_t end = (tid + 1) * BunchSize;
         if (end > nFFT)
         {
             end = nFFT;
@@ -99,13 +99,13 @@ void _FFT_Matrix_Col_InPlace(double *matrix, // the size of matrix should be (nR
     buf_complex = (double __complex__ *)buf;
 
 #pragma omp parallel for num_threads(nThread)
-    for (int i = 0; i < m; i++)
+    for (int64_t i = 0; i < m; i++)
     {
-        int iCol = 0;
+        int64_t iCol = 0;
 
-        for (int j = 0; j < nCol; j++)
+        for (int64_t j = 0; j < nCol; j++)
         {
-            for (int iBlock = 0; iBlock < nMeshComplex; iBlock++, iCol++)
+            for (int64_t iBlock = 0; iBlock < nMeshComplex; iBlock++, iCol++)
             {
                 buf_complex[i * n_complex + iBlock * nCol + j] = mat_complex[i * n_complex + iCol];
             }
@@ -124,15 +124,15 @@ void _iFFT_Matrix_Col_InPlace(double __complex__ *matrix, // the size of matrix 
                               double __complex__ *buf)
 {
     int mesh_complex[3] = {mesh[0], mesh[1], mesh[2] / 2 + 1};
-    int nComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
-    int nReal = mesh[0] * mesh[1] * mesh[2];
-    const int nThread = get_omp_threads();
+    int64_t nComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    int64_t nReal = mesh[0] * mesh[1] * mesh[2];
+    const int64_t nThread = get_omp_threads();
 
-    const int m = nRow;
-    const int n = nCol * mesh[0] * mesh[1] * mesh[2];
-    const int n_Complex = nCol * mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
-    const int nMesh = mesh[0] * mesh[1] * mesh[2];
-    const int nMeshComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    const int64_t m = nRow;
+    const int64_t n = nCol * mesh[0] * mesh[1] * mesh[2];
+    const int64_t n_Complex = nCol * mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    const int64_t nMesh = mesh[0] * mesh[1] * mesh[2];
+    const int64_t nMeshComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
     const double factor = 1.0 / (double)(nMesh);
 
     // printf("m: %d\n", m);
@@ -150,13 +150,13 @@ void _iFFT_Matrix_Col_InPlace(double __complex__ *matrix, // the size of matrix 
     // (1) transform (Row, Block, Col) -> (Row, Col, Block)
 
 #pragma omp parallel for num_threads(nThread)
-    for (int i = 0; i < m; i++)
+    for (int64_t i = 0; i < m; i++)
     {
-        int iCol = 0;
+        int64_t iCol = 0;
 
-        for (int iBlock = 0; iBlock < nMeshComplex; iBlock++)
+        for (int64_t iBlock = 0; iBlock < nMeshComplex; iBlock++)
         {
-            for (int j = 0; j < nCol; j++, iCol++)
+            for (int64_t j = 0; j < nCol; j++, iCol++)
             {
                 buf[i * n_Complex + j * nMeshComplex + iBlock] = matrix[i * n_Complex + iCol];
             }
@@ -165,20 +165,20 @@ void _iFFT_Matrix_Col_InPlace(double __complex__ *matrix, // the size of matrix 
 
     // (2) perform iFFT on the last dimension
 
-    int nFFT = nRow * nCol;
+    int64_t nFFT = nRow * nCol;
 
     double *mat_real = (double *)buf;
     double *buf_real = (double *)matrix;
 
     // create plan
 
-    const int BunchSize = nFFT / nThread + 1;
+    const int64_t BunchSize = nFFT / nThread + 1;
 
 #pragma omp parallel num_threads(nThread)
     {
-        int tid = omp_get_thread_num();
-        int start = tid * BunchSize;
-        int end = (tid + 1) * BunchSize;
+        int64_t tid = omp_get_thread_num();
+        int64_t start = tid * BunchSize;
+        int64_t end = (tid + 1) * BunchSize;
         if (end > nFFT)
         {
             end = nFFT;
@@ -195,13 +195,13 @@ void _iFFT_Matrix_Col_InPlace(double __complex__ *matrix, // the size of matrix 
     buf_real = (double *)buf;
 
 #pragma omp parallel for num_threads(nThread)
-    for (int i = 0; i < m; i++)
+    for (int64_t i = 0; i < m; i++)
     {
-        int iCol = 0;
+        int64_t iCol = 0;
 
-        for (int j = 0; j < nCol; j++)
+        for (int64_t j = 0; j < nCol; j++)
         {
-            for (int iBlock = 0; iBlock < nMesh; iBlock++, iCol++)
+            for (int64_t iBlock = 0; iBlock < nMesh; iBlock++, iCol++)
             {
                 // printf("i: %d, j: %d, iBlock: %d, iCol: %d %15.8f\n", i, j, iBlock, iCol, mat_real[i * n + iCol]);
                 buf_real[i * n + iBlock * nCol + j] = mat_real[i * n + iCol] * factor;
@@ -221,8 +221,8 @@ void Solve_LLTEqualB_Complex_Parallel(
 {
     int nThread = get_omp_threads();
 
-    int nBunch = (nrhs / BunchSize);
-    int nLeft = nrhs - nBunch * BunchSize;
+    int64_t nBunch = (nrhs / BunchSize);
+    int64_t nLeft = nrhs - nBunch * BunchSize;
 
     printf("nThread  : %d\n", nThread);
     printf("nBunch   : %d\n", nBunch);
@@ -237,7 +237,7 @@ void Solve_LLTEqualB_Complex_Parallel(
         lapack_int info;
 
 #pragma omp for schedule(static, 1) nowait
-        for (int i = 0; i < nBunch; i++)
+        for (int64_t i = 0; i < nBunch; i++)
         {
             ptr_b = b + BunchSize * i;
 
