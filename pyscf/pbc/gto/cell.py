@@ -995,7 +995,7 @@ def rcut_by_shells(cell, precision=None, rcut=0,
         nprim = bas[:,mole.NPRIM_OF].max()
         # be careful that the unused memory blocks are not initialized
         pgf_radius = np.empty((nbas,nprim), order='C', dtype=np.double)
-        ptr_pgf_radius = lib.ndarray_pointer_2d(pgf_radius)
+        ptr_pgf_radius = lib.ndarray_pointer_2d(pgf_radius).ctypes
     else:
         ptr_pgf_radius = lib.c_null_ptr()
     fn = getattr(libpbc, 'rcut_by_shells', None)

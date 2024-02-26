@@ -1117,15 +1117,13 @@ def expm(a):
     return y
 
 def ndarray_pointer_2d(array):
-    '''Get the C pointer of a 2D array
+    '''Return an array that contains the addresses of the first element in each
+    row of the input 2d array.
     '''
     assert array.ndim == 2
     assert array.flags.c_contiguous
-
-    ptr = (array.ctypes.data +
-           numpy.arange(array.shape[0])*array.strides[0]).astype(numpy.uintp)
-    ptr = ptr.ctypes.data_as(ctypes.c_void_p)
-    return ptr
+    i = numpy.arange(array.shape[0])
+    return array.ctypes.data + (i * array.strides[0]).astype(numpy.uintp)
 
 class NPArrayWithTag(numpy.ndarray):
     # Initialize kwargs in function tag_array
