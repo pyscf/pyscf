@@ -504,17 +504,30 @@ class KnownValues(unittest.TestCase):
     def test_dft_parser(self):
         method = dft.RKS(h2o, xc='wb97m-d3bj')
         nlc_coefs = method._numint.nlc_coeff('wb97m-v')
-        #e_tot = method.kernel()
         assert method.xc == 'wb97m-v'
         assert len(nlc_coefs) == 0
         assert method.disp == 'd3bj'
 
         method = dft.RKS(h2o, xc='wb97x-d3')
         nlc_coefs = method._numint.nlc_coeff('wb97x-v')
-        #e_tot = method.kernel()
         assert method.xc == 'wb97x-d3'
-        assert len(nlc_coefs) == 1
+        assert len(nlc_coefs) == 0
         assert method.disp == 'd3zero'
+
+        method = dft.RKS(h2o, xc='b3lyp-d3bj')
+        assert method.xc == 'b3lyp'
+        assert method.disp == 'd3bj'
+        assert method.disp_with_3body == False
+
+        method = dft.RKS(h2o, xc='b3lyp-d3bjm2b')
+        assert method.xc == 'b3lyp'
+        assert method.disp == 'd3bjm'
+        assert method.disp_with_3body == False
+
+        method = dft.RKS(h2o, xc='b3lyp-d3bjmatm')
+        assert method.xc == 'b3lyp'
+        assert method.disp == 'd3bjm'
+        assert method.disp_with_3body == True
 
     def test_camb3lyp_rsh_omega(self):
         mf = dft.RKS(h2o)

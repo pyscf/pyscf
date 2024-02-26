@@ -260,27 +260,46 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     ks._numint = libxc.define_xc_(ks._numint, description, xctype, hyb, rsh)
     return ks
 
+# supported dispersion corrections
+DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
+
 def dft_method_parser(dft_method):
-    ''' conventional dft method -> internal xc, disable nlc, dispersion version'''
+    ''' conventional dft method ->
+    ( internal xc,
+      disable nlc,
+      dispersion version
+      with 3-body dispersion or not
+      '''
     method_lower = dft_method.lower()
     xc = dft_method
     disp = None
 
     # special cases
     if method_lower == 'wb97m-d3bj':
-        return 'wb97m-v', False, 'd3bj'
+        return 'wb97m-v', False, 'd3bj', False
     if method_lower == 'b97m-d3bj':
-        return 'b97m-v', False, 'd3bj'
+        return 'b97m-v', False, 'd3bj', False
     if method_lower == 'wb97x-d3bj':
-        return 'wb97x-v', False, 'd3bj'
+        return 'wb97x-v', False, 'd3bj', False
     if method_lower in ['wb97x-d3', 'wb97x-d3zero']:
-        return 'wb97x-d3', False, 'd3zero'
+        return 'wb97x-d3', False, 'd3zero', False
+    if method_lower.endswith('-3c'):
+        raise NotImplementedError('*-3c methods are not supported yet.')
 
-    for d in ['d3bj','d3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']:
-        if method_lower[-len(d):] == d:
+    for d in DISP_VERSIONS:
+        if method_lower.endswith(d):
             disp = d
-            xc = method_lower[:-len(d)-1]
-    return xc, None, disp
+            xc = method_lower.removesuffix(f'-{d}')
+            return xc, None, disp, False
+        if method_lower.endswith(d+'2b'):
+            disp = d.removeprefix('2b')
+            xc = method_lower.removesuffix(f'-{d}2b')
+            return xc, None, disp, False
+        if method_lower.endswith(d+'atm'):
+            disp = d
+            xc = method_lower.removesuffix(f'-{d}atm')
+            return xc, None, disp, True
+    return xc, None, None, False
 
 def _dft_common_init_(mf, xc='LDA,VWN'):
     raise DeprecationWarning
@@ -345,9 +364,10 @@ class KohnShamDFT:
     _keys = {'xc', 'nlc', 'grids', 'disp', 'nlcgrids', 'small_rho_cutoff'}
 
     def __init__(self, xc='LDA,VWN'):
-        xc, with_nlc, disp = dft_method_parser(xc)
+        xc, with_nlc, disp, with_3body = dft_method_parser(xc)
         self.xc = xc
         self.disp = disp
+        self.disp_with_3body = with_3body
         self.nlc = ''
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(

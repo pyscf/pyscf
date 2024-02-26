@@ -25,7 +25,7 @@ import numpy
 from pyscf.scf.hf import KohnShamDFT
 from pyscf.scf.dispersion import dftd3_xc_map
 
-def get_dispersion(hessobj, disp_version=None):
+def get_dispersion(hessobj, disp_version=None, with_3body=False):
     if disp_version is None:
         disp_version = hessobj.base.disp
     mol = hessobj.base.mol
@@ -34,6 +34,8 @@ def get_dispersion(hessobj, disp_version=None):
     h_disp = numpy.zeros([natm,natm,3,3])
     if disp_version is None:
         return h_disp
+    if hasattr(mf, 'with_3body'):
+        with_3body = mf.disp_with_3body
     if isinstance(hessobj.base, KohnShamDFT):
         method = hessobj.base.xc
     else:
@@ -52,12 +54,12 @@ def get_dispersion(hessobj, disp_version=None):
             for j in range(3):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')
-                d3 = disp.DFTD3Dispersion(mol, xc=method, version=mf.disp)
+                d3 = disp.DFTD3Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
                 _, g1 = d3.kernel()
 
                 coords[i,j] -= 2.0*eps
                 mol.set_geom_(coords, unit='Bohr')
-                d3 = disp.DFTD3Dispersion(mol, xc=method, version=mf.disp)
+                d3 = disp.DFTD3Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
                 _, g2 = d3.kernel()
 
                 coords[i,j] += eps
@@ -65,27 +67,21 @@ def get_dispersion(hessobj, disp_version=None):
             return h_disp
 
     elif mf.disp[:2].upper() == 'D4':
-        from pyscf.data.elements import charge
-        atoms = numpy.array([ charge(a[0]) for a in mol._atom])
-        coords = mol.atom_coords()
-        natm = mol.natm
-        from dftd4.interface import DampingParam, DispersionModel
-        params = DampingParam(method=method)
+        import dftd4.pyscf as disp
+        coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5
         for i in range(natm):
             for j in range(3):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')
-                model = DispersionModel(atoms, coords)
-                res = model.get_dispersion(params, grad=True)
-                g1 = res.get("gradient")
+                d4 = disp.DFTD4Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
+                _, g1 = d4.kernel()
 
                 coords[i,j] -= 2.0*eps
                 mol.set_geom_(coords, unit='Bohr')
-                model = DispersionModel(atoms, coords)
-                res = model.get_dispersion(params, grad=True)
-                g2 = res.get("gradient")
+                d4 = disp.DFTD4Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
+                _, g2 = d4.kernel()
 
                 coords[i,j] += eps
                 h_disp[i,:,j,:] = (g1 - g2)/(2.0*eps)

@@ -24,7 +24,7 @@ import numpy
 from pyscf.scf.hf import KohnShamDFT
 from pyscf.scf.dispersion import dftd3_xc_map
 
-def get_dispersion(mf_grad, disp_version=None):
+def get_dispersion(mf_grad, disp_version=None, with_3body=False):
     '''gradient of dispersion correction for RHF/RKS'''
     if disp_version is None:
         disp_version = mf_grad.base.disp
@@ -32,7 +32,8 @@ def get_dispersion(mf_grad, disp_version=None):
     disp_version = mf_grad.base.disp
     if disp_version is None:
         return numpy.zeros([mol.natm,3])
-
+    if hasattr(mf_grad.base, 'with_3body'):
+        with_3body = mf_grad.base.disp_with_3body
     if isinstance(mf_grad.base, KohnShamDFT):
         method = mf_grad.base.xc
     else:
@@ -45,17 +46,15 @@ def get_dispersion(mf_grad, disp_version=None):
     if disp_version[:2].upper() == 'D3':
         # raised error in SCF module, assuming dftd3 installed
         import dftd3.pyscf as disp
-        d3 = disp.DFTD3Dispersion(mol, xc=method, version=disp_version)
+        d3 = disp.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
         _, g_d3 = d3.kernel()
         return g_d3
     elif disp_version[:2].upper() == 'D4':
-        from pyscf.data.elements import charge
-        atoms = numpy.array([ charge(a[0]) for a in mol._atom])
-        coords = mol.atom_coords()
-        from dftd4.interface import DampingParam, DispersionModel
-        model = DispersionModel(atoms, coords)
-        res = model.get_dispersion(DampingParam(method=method), grad=True)
-        return res.get("gradient")
+        # raised error in SCF module, assuming dftd3 installed
+        import dftd4.pyscf as disp
+        d4 = disp.DFTD4Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
+        _, g_d4 = d4.kernel()
+        return g_d4
     else:
         raise RuntimeError(f'dispersion correction: {disp_version} is not supported.')
 
