@@ -72,13 +72,13 @@ SCFDIIS = SCF_DIIS = DIIS = CDIIS
 def get_err_vec_orig(s, d, f):
     '''error vector = SDF - FDS'''
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
-        sdf = reduce(numpy.dot, (s,d,f))
+        sdf = reduce(lib.dot, (s,d,f))
         errvec = (sdf.conj().T - sdf).ravel()
 
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
         errvec = []
         for i in range(f.shape[0]):
-            sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
+            sdf = reduce(lib.dot, (s[i], d[i], f[i]))
             errvec.append((sdf.conj().T - sdf).ravel())
         errvec = numpy.hstack(errvec)
 
@@ -98,7 +98,7 @@ def get_err_vec_orth(s, d, f, Corth):
         sym_forbid = orbsym[:,None] != orbsym
 
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
-        sdf = reduce(numpy.dot, (Corth.conj().T, s, d, f, Corth))
+        sdf = reduce(lib.dot, (Corth.conj().T, s, d, f, Corth))
         if orbsym is not None:
             sdf[sym_forbid] = 0
         errvec = (sdf.conj().T - sdf).ravel()
@@ -106,7 +106,7 @@ def get_err_vec_orth(s, d, f, Corth):
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
         errvec = []
         for i in range(f.shape[0]):
-            sdf = reduce(numpy.dot, (Corth[i].conj().T, s[i], d[i], f[i], Corth[i]))
+            sdf = reduce(lib.dot, (Corth[i].conj().T, s[i], d[i], f[i], Corth[i]))
             if orbsym is not None:
                 sdf[sym_forbid] = 0
             errvec.append((sdf.conj().T - sdf).ravel())

@@ -84,7 +84,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     ni = ks._numint
     n, exc, vxc = ni.get_vxc(cell, ks.grids, ks.xc, dm, hermi=hermi, kpts=kpts,
                              kpts_band=kpts_band, max_memory=max_memory)
-    logger.debug(ks, 'nelec by numeric integration = %s', n)
+    logger.info(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
     nkpts = len(kpts)
