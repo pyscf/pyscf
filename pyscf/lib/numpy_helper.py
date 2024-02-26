@@ -1117,11 +1117,13 @@ def expm(a):
     return y
 
 def ndarray_pointer_2d(array):
-    '''Get the memory addresses for each element within the given 2D array
+    '''Return an array that contains the addresses of the first element in each
+    row of the input 2d array.
     '''
-    indices = numpy.indices(array.shape)
-    addr = sum(i * s for i, s in zip(indices, array.strides))
-    return array.ctypes.data + addr.astype(numpy.uintp).ravel()
+    assert array.ndim == 2
+    assert array.flags.c_contiguous
+    i = numpy.arange(array.shape[0])
+    return array.ctypes.data + (i * array.strides[0]).astype(numpy.uintp)
 
 class NPArrayWithTag(numpy.ndarray):
     # Initialize kwargs in function tag_array

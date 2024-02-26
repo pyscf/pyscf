@@ -228,10 +228,7 @@ class KnownValues(unittest.TestCase):
     def test_ndarray_pointer_2d(self):
         a = numpy.eye(3)
         addr = lib.ndarray_pointer_2d(a)
-        self.assertTrue(all(addr == a.ctypes.data + itemsize*numpy.arange(9)))
-
-        addr = lib.ndarray_pointer_2d(a[:2,:2].T)
-        self.assertTrue(all(addr == a.ctypes.data + numpy.array([0, 24, 8, 32])))
+        self.assertTrue(all(addr == a.ctypes.data + numpy.array([0, 24, 48])))
 
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")
