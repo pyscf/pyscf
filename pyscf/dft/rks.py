@@ -289,15 +289,15 @@ def dft_method_parser(dft_method):
     for d in DISP_VERSIONS:
         if method_lower.endswith(d):
             disp = d
-            xc = method_lower.removesuffix(f'-{d}')
+            xc = method_lower.replace(f'-{d}','')
             return xc, None, disp, False
         if method_lower.endswith(d+'2b'):
-            disp = d.removeprefix('2b')
-            xc = method_lower.removesuffix(f'-{d}2b')
+            disp = d
+            xc = method_lower.replace(f'-{d}2b', '')
             return xc, None, disp, False
         if method_lower.endswith(d+'atm'):
             disp = d
-            xc = method_lower.removesuffix(f'-{d}atm')
+            xc = method_lower.replace(f'-{d}atm', '')
             return xc, None, disp, True
     return xc, None, None, False
 

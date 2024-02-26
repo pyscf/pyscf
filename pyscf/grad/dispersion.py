@@ -52,7 +52,7 @@ def get_dispersion(mf_grad, disp_version=None, with_3body=False):
     elif disp_version[:2].upper() == 'D4':
         # raised error in SCF module, assuming dftd3 installed
         import dftd4.pyscf as disp
-        d4 = disp.DFTD4Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
+        d4 = disp.DFTD4Dispersion(mol, xc=method, atm=with_3body)
         _, g_d4 = d4.kernel()
         return g_d4
     else:

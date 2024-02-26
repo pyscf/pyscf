@@ -75,12 +75,12 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
             for j in range(3):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')
-                d4 = disp.DFTD4Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
+                d4 = disp.DFTD4Dispersion(mol, xc=method, atm=with_3body)
                 _, g1 = d4.kernel()
 
                 coords[i,j] -= 2.0*eps
                 mol.set_geom_(coords, unit='Bohr')
-                d4 = disp.DFTD4Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
+                d4 = disp.DFTD4Dispersion(mol, xc=method, atm=with_3body)
                 _, g2 = d4.kernel()
 
                 coords[i,j] += eps

@@ -77,7 +77,7 @@ please install dftd4 via \n \
         pip3 install dftd4 \n \
 ***************************************")
 
-        d4 = disp.DFTD4Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
+        d4 = disp.DFTD4Dispersion(mol, xc=method, atm=with_3body)
         e_d4, _ = d4.kernel()
         mf.scf_summary['dispersion'] = e_d4
         return e_d4
