@@ -121,12 +121,17 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
             if self.mu0 is None:
                 mu_a, occa = mol_addons._smearing_optimize(f_occ, mo_es[0], nocc[0], sigma)
                 mu_b, occb = mol_addons._smearing_optimize(f_occ, mo_es[1], nocc[1], sigma)
-                mu = [mu_a, mu_b]
-                mo_occs = [occa, occb]
             else:
-                mu = self.mu0
-                mo_occs = f_occ(mu[0], mo_es[0], sigma)
-                mo_occs = f_occ(mu[1], mo_es[1], sigma)
+                if numpy.isscalar(self.mu0):
+                    mu_a = mu_b = self.mu0
+                elif len(self.mu0) == 2:
+                    mu_a, mu_b = self.mu0
+                else:
+                    raise TypeError(f'Unsupported mu0: {self.mu0}')
+                occa = f_occ(mu_a, mo_es[0], sigma)
+                occb = f_occ(mu_b, mo_es[1], sigma)
+            mu = [mu_a, mu_b]
+            mo_occs = [occa, occb]
             self.entropy  = self._get_entropy(mo_es[0], mo_occs[0], mu[0])
             self.entropy += self._get_entropy(mo_es[1], mo_occs[1], mu[1])
             self.entropy /= nkpts
@@ -163,6 +168,7 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
             else:
                 # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
                 mu = self.mu0
+                assert numpy.isscalar(mu)
                 mo_occs = f_occ(mu, mo_es, sigma)
             self.entropy = self._get_entropy(mo_es, mo_occs, mu) / nkpts
             if is_rhf:
