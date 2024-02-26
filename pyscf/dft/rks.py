@@ -270,6 +270,8 @@ def dft_method_parser(dft_method):
       dispersion version
       with 3-body dispersion or not
       '''
+    if not isinstance(dft_method, str):
+        return dft_method, None, None, False
     method_lower = dft_method.lower()
     xc = dft_method
     disp = None
@@ -361,7 +363,7 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = {'xc', 'nlc', 'grids', 'disp', 'nlcgrids', 'small_rho_cutoff'}
+    _keys = {'xc', 'nlc', 'grids', 'disp', 'disp_with_3body', 'nlcgrids', 'small_rho_cutoff'}
 
     def __init__(self, xc='LDA,VWN'):
         xc, with_nlc, disp, with_3body = dft_method_parser(xc)
