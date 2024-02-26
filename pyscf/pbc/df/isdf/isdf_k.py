@@ -442,7 +442,7 @@ def _construct_aux_basis_benchmark(mydf:ISDF.PBC_ISDF_Info):
     
     A = np.asarray(lib.ddot(aoRg.T, aoRg), order='C')
     lib.square_inPlace(A)
-    
+            
     mydf.aux_basis_bench = np.asarray(lib.ddot(aoRg.T, aoR_unordered), order='C')
     lib.square_inPlace(mydf.aux_basis_bench)
     
@@ -544,7 +544,6 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
     buf_ddot_res = np.ndarray((nIP_Prim, nGridPrim), dtype=np.double, buffer=mydf.jk_buffer, offset=offset_aoR_ddot)
     ddot_buf = mydf.ddot_buf
     
-    
     # mydf.aux_basis = buffer3
     # B              = np.asarray(lib.ddot(aoRg.T, mydf.aoR, c=buffer3_real), order='C')
     
@@ -584,7 +583,7 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 buffer3_real[:, k_begin:k_end] = buf_ddot_res
     B = buffer3_real
     lib.square_inPlace(B)
-    
+            
     ##### FFT #####
     
     fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
@@ -688,11 +687,6 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
     offset += nIP_Prim * nIP_Prim * buf_A.itemsize
     buf_B = np.ndarray((nIP_Prim, nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     offset += nIP_Prim * nGridPrim * buf_B.itemsize
-    # buf_C = np.ndarray((nIP_Prim, nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
-    
-    # print("fac = ", fac)
-    # print("A[0,0] = ", A_complex[0,0])
-    # print("B[0,0] = ", B_complex[0,0])
     
     i=0
     for ix in range(Ls[0]):
@@ -729,7 +723,7 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 e = e[where]
                 h = h[:, where].copy()
                 buf_C = np.ndarray((e.shape[0], nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
-                buf_C = np.asarray(lib.dot(h.T, buf_B, c=buf_C), order='C')
+                buf_C = np.asarray(lib.dot(h.T.conj(), buf_B, c=buf_C), order='C')
                 buf_C = (1.0/e).reshape(-1,1) * buf_C
                 lib.dot(h, buf_C, c=buf_B)
                 
@@ -964,8 +958,8 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
         with lib.call_in_background(save_aoR) as async_write_aoR:
         # for _ in range(1):
             
-            async_write_aoR = save_aoR
-            async_write_B = save_B
+            # async_write_aoR = save_aoR
+            # async_write_B = save_B
             
             iloc = 0
             for ix in range(Ls[0]):
@@ -1024,6 +1018,7 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
                                                     row_end2   = (loc_row2 + 1) * naoPrim
                                                     
                                                     AoR_BufPack[row_begin1:row_end1, :] = AoR_Buf1[row_begin2:row_end2, p0:p1]
+                                                    # AoR_BufPack[row_begin2:row_end2, :] = AoR_Buf1[row_begin1:row_end1, p0:p1]
 
                                         # perform one dot #
                                     
@@ -1165,7 +1160,7 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
                     ### do the work ### 
                     
                     B_ddot = np.ndarray((e.shape[0], p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_B_ddot)
-                    lib.dot(buf_A2.T, B_Buf1, c=B_ddot)
+                    lib.dot(buf_A2.T.conj(), B_Buf1, c=B_ddot)
                     B_ddot = (1.0/e).reshape(-1,1) * B_ddot
                     lib.dot(buf_A2, B_ddot, c=B_Buf1)
                     
@@ -2485,28 +2480,35 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     
     ################ test function ################ 
     
-    def check_data(self, criterion=1e4):
+    def check_data(self, criterion=1e12):
         print("check data")
+        not_correct = False
         if hasattr(self, "W"):
             for i in range(self.W.shape[0]):
                 for j in range(self.W.shape[1]):
                     if abs(self.W[i,j]) > criterion:
-                        print("W[{},{}] = {}".format(i,j,self.W[i,j]))
+                        # print("W[{},{}] = {}".format(i,j,self.W[i,j]))
+                        not_correct = True
         if hasattr(self, "W0"):
             for i in range(self.W0.shape[0]):
                 for j in range(self.W0.shape[1]):
                     if abs(self.W0[i,j]) > criterion:
-                        print("W0[{},{}] = {}".format(i,j,self.W0[i,j]))
+                        # print("W0[{},{}] = {}".format(i,j,self.W0[i,j]))
+                        not_correct = True
         if hasattr(self, "aoRg"):
             for i in range(self.aoRg.shape[0]):
                 for j in range(self.aoRg.shape[1]):
                     if abs(self.aoRg[i,j]) > criterion:
-                        print("aoRg[{},{}] = {}".format(i,j,self.aoRg[i,j]))
+                        # print("aoRg[{},{}] = {}".format(i,j,self.aoRg[i,j]))
+                        not_correct = True
         if hasattr(self, "aoRg_FFT"):
             for i in range(self.aoRg_FFT.shape[0]):
                 for j in range(self.aoRg_FFT.shape[1]):
                     if abs(self.aoRg_FFT[i,j]) > criterion:
-                        print("aoRg_FFT[{},{}] = {}".format(i,j,self.aoRg_FFT[i,j]))
+                        # print("aoRg_FFT[{},{}] = {}".format(i,j,self.aoRg_FFT[i,j]))
+                        not_correct = True
+        if not_correct:
+            raise ValueError("data is not correct")
         print("end check data")
         
     # @profile 
@@ -2855,7 +2857,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
 
     get_jk = get_jk_dm_kSym
 
-C = 5
+C = 2
 M = 5
 
 if __name__ == "__main__":
@@ -2863,7 +2865,7 @@ if __name__ == "__main__":
     boxlen = 3.5668
     prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     
-    KE_CUTOFF = 16
+    KE_CUTOFF = 8
     
     atm = [
         ['C', (0.     , 0.     , 0.    )],
@@ -2882,7 +2884,7 @@ if __name__ == "__main__":
     
     # Ls = [2, 2, 2]
     # Ls = [2, 1, 3]
-    Ls = [1, 1, 2]
+    Ls = [1, 1, 3]
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     
     cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh)
@@ -2942,6 +2944,28 @@ if __name__ == "__main__":
     # print(basis1[-10:, -10:])
     # print(basis2[-10:, -10:])
     # print(basis1[-10:, -10:]/basis2[-10:, -10:])
+    
+    for ix in range(Ls[0]):
+        for iy in range(Ls[1]):
+            for iz in range(Ls[2]):
+                icell = ix * Ls[1] * Ls[2] + iy * Ls[2] + iz
+                
+                k_begin = icell * pbc_isdf_info_ksym.nGridPrim
+                k_end   = (icell + 1) * pbc_isdf_info_ksym.nGridPrim
+                
+                basis1 = pbc_isdf_info_ksym.aux_basis[:, k_begin:k_end]
+                basis2 = pbc_isdf_info_ksym.aux_basis_bench[:, k_begin:k_end]
+                
+                print(basis1[:3,:3])
+                print(basis2[:3,:3])
+                print(basis1[:3,:3]/basis2[:3,:3])
+                
+                for i in range(basis1.shape[1]):
+                    print("%3d %15.8e %15.8e %15.8e %15.8e" % (i, basis1[0,i].real, basis1[0,i].imag, basis2[0,i].real, basis2[0,i].imag))
+                
+                assert np.allclose(basis1, basis2) # we get the same result, correct !
+                
+                print("Cell %d pass" % icell)
     
     assert np.allclose(basis1, basis2) # we get the same result, correct ! 
     
@@ -3099,7 +3123,7 @@ if __name__ == "__main__":
     C = 15
     
     # Ls = [2, 2, 2]
-    Ls = [1, 2, 2]
+    Ls = [1, 1, 3]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)

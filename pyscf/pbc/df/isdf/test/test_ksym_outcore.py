@@ -72,7 +72,8 @@ if __name__ == "__main__":
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
 
-    Ls = [4, 4, 4]
+    # Ls = [4, 4, 4]
+    Ls = [1, 1, 3]
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     
     cell = ISDF_K.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh, basis='gth-szv')
@@ -254,7 +255,7 @@ if __name__ == "__main__":
     boxlen = 3.5668
     prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     
-    KE_CUTOFF = 128
+    KE_CUTOFF = 70
     
     atm = [
         ['C', (0.     , 0.     , 0.    )],
@@ -275,14 +276,15 @@ if __name__ == "__main__":
     
     # Ls = [2, 2, 2]
     # Ls = [1, 2, 2]
-    Ls = [1, 2, 2]
+    # Ls = [2, 2, 2]
+    Ls = [1, 1, 3]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
     cell = ISDF_K.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh, basis='gth-cc-dzvp')
     
-    pbc_isdf_info = ISDF_K.PBC_ISDF_Info_kSym(cell, 800 * 1000 * 1000, Ls=Ls, outcore=True, with_robust_fitting=False, aoR=None)
+    pbc_isdf_info = ISDF_K.PBC_ISDF_Info_kSym(cell, 800 * 1000 * 1000, Ls=Ls, outcore=False, with_robust_fitting=False, aoR=None)
     pbc_isdf_info.build_IP_auxbasis(c=C, m=M)
     pbc_isdf_info.build_auxiliary_Coulomb()
     
