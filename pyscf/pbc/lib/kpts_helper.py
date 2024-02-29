@@ -377,7 +377,7 @@ def get_kconserv3(cell, kpts, kijkab):
     a = cell.lattice_vectors() / (2*np.pi)
 
     kpts_i, kpts_j, kpts_k, kpts_a, kpts_b = \
-            [kpts[x].reshape(-1,3) for x in kijkab]
+            (kpts[x].reshape(-1,3) for x in kijkab)
     shape = [np.size(x) for x in kijkab]
     kconserv = np.zeros(shape, dtype=int)
 

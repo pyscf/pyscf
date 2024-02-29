@@ -742,7 +742,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
 
     elif intor_name.startswith('int2e') or intor_name.startswith('int4c'):
         assert (len(shls) == 4)
-        di, dj, dk, dl = [num_cgto_of(x) for x in shls]
+        di, dj, dk, dl = (num_cgto_of(x) for x in shls)
         buf = numpy.empty((di,dj,dk,dl,comp), dtype, order='F')
         fintor = getattr(libcgto, intor_name)
         fintor(buf.ctypes.data_as(ctypes.c_void_p),

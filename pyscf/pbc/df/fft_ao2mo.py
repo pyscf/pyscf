@@ -186,7 +186,7 @@ def _contract_compact(mydf, mos, coulG, max_memory):
 def _contract_plain(mydf, mos, coulG, phase, max_memory):
     cell = mydf.cell
     moiT, mojT, mokT, molT = mos
-    nmoi, nmoj, nmok, nmol = [x.shape[0] for x in mos]
+    nmoi, nmoj, nmok, nmol = (x.shape[0] for x in mos)
     ngrids = moiT.shape[1]
     wcoulG = coulG * (cell.vol/ngrids)
     dtype = numpy.result_type(phase, *mos)
@@ -364,7 +364,7 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     # orbital coefficients must be formatted (padded by zeros) so that the
     # shape of the orbital coefficients are the same on all k-points. This can
     # be achieved by calling pbc.mp.kmp2.padded_mo_coeff function
-    nmoi, nmoj, nmok, nmol = [x.shape[2] for x in mo_coeff_kpts]
+    nmoi, nmoj, nmok, nmol = (x.shape[2] for x in mo_coeff_kpts)
     eri_shape = (nkpts, nkpts, nkpts, nmoi, nmoj, nmok, nmol)
     if gamma_point(kpts):
         dtype = numpy.result_type(*mo_coeff_kpts)

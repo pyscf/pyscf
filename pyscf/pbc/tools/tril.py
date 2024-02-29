@@ -28,8 +28,8 @@ def unpack_tril(in_array,nkpts,kp,kq,kr,ks):
     nints = sum([isinstance(x, (int, numpy.integer)) for x in (kp,kq,kr)])
     assert (nints>=2)
 
-    kp,kq,kr,ks = [[x] if isinstance(x, (int, numpy.integer)) else x for x in (kp,kq,kr,ks)]
-    kp,kq,kr,ks = [numpy.array(x) for x in (kp,kq,kr,ks)]
+    kp,kq,kr,ks = ([x] if isinstance(x, (int, numpy.integer)) else x for x in (kp,kq,kr,ks))
+    kp,kq,kr,ks = (numpy.array(x) for x in (kp,kq,kr,ks))
     indices = numpy.array(pyscf.lib.cartesian_prod((kp,kq,kr)))
 
     not_tril = numpy.array([x[0]>x[1] for x in indices])

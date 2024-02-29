@@ -57,7 +57,7 @@ def parse(symb, basistype):
         bas_by_l = [l]
         basis.append(bas_by_l)
         for bas in reversed(dat):
-            expnt, coeff = [float(x) for x in bas.split()[1:]]
+            expnt, coeff = (float(x) for x in bas.split()[1:])
             bas_by_l.append([expnt, coeff])
     return basis
 
@@ -75,13 +75,13 @@ def parse_ecp(symb):
 
     loc = [[]]  # r^0 is empty
     loc_dat = loc_dat.replace('\t', ' ').split('\n')[2:5]
-    zeff, rorder, expnta = [float(x) for x in loc_dat[0].split(' ')]
+    zeff, rorder, expnta = (float(x) for x in loc_dat[0].split(' '))
     assert (rorder == -1)
     loc.append([[expnta, zeff]])
-    gamma, rorder, expnt = [float(x) for x in loc_dat[2].split(' ')]
+    gamma, rorder, expnt = (float(x) for x in loc_dat[2].split(' '))
     assert (rorder == 0)
     loc.append([[expnt, gamma]])
-    alpha, rorder, expnt = [float(x) for x in loc_dat[1].split(' ')]
+    alpha, rorder, expnt = (float(x) for x in loc_dat[1].split(' '))
     assert (rorder == 1)
     assert (abs(zeff*expnta-alpha) < 1e-7)
     loc.append([[expnt, alpha]])
@@ -89,7 +89,7 @@ def parse_ecp(symb):
     nloc = []
     for dat in nloc_dat.replace('\t', ' ').split('\n')[2:]:
         if dat:  # remove blank lines
-            coeff, rorder, expnt = [float(x) for x in dat.split(' ')[:3]]
+            coeff, rorder, expnt = (float(x) for x in dat.split(' ')[:3])
             assert (rorder == 0)
             nloc.append([[], [],  # r^0, r^1 are empty
                          [[expnt, coeff]]])

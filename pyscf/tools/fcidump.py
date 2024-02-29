@@ -306,7 +306,7 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
     h2e = numpy.zeros(norb_pair*(norb_pair+1)//2)
     dat = finp.readline().split()
     while dat:
-        i, j, k, l = [int(x) for x in dat[1:5]]
+        i, j, k, l = (int(x) for x in dat[1:5])
         if k != 0:
             if i >= j:
                 ij = i * (i-1) // 2 + j-1

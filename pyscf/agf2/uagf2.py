@@ -875,8 +875,8 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     # npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
     cia, cja, caa = coeffs_a
     cib, cjb, cab = coeffs_b
-    nia, nja, naa = [x.shape[1] for x in coeffs_a]
-    nib, njb, nab = [x.shape[1] for x in coeffs_b]
+    nia, nja, naa = (x.shape[1] for x in coeffs_a)
+    nib, njb, nab = (x.shape[1] for x in coeffs_b)
 
     if spin is None or spin == 0:
         c_aa = (cxa, cia, cja, caa)
@@ -930,8 +930,8 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     # npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
     cia, cja, caa = coeffs_a
     cib, cjb, cab = coeffs_b
-    nia, nja, naa = [x.shape[1] for x in coeffs_a]
-    nib, njb, nab = [x.shape[1] for x in coeffs_b]
+    nia, nja, naa = (x.shape[1] for x in coeffs_a)
+    nib, njb, nab = (x.shape[1] for x in coeffs_b)
 
     # possible to have incore MO, outcore QMO
     if getattr(eri, 'feri', None) is None:

@@ -112,7 +112,7 @@ def transform_fxc(rho, vxc, fxc, xctype, spin=0):
         order = 2
         nvar = 5
         fg = vxc[1].T
-        frr, frg, fgg, ftt, frt, fgt = [fxc[i].T for i in [0, 1, 2, 4, 6, 9]]
+        frr, frg, fgg, ftt, frt, fgt = (fxc[i].T for i in [0, 1, 2, 4, 6, 9])
     else:  # LDA
         order = 0
         nvar = 1
@@ -196,7 +196,7 @@ def transform_kxc(rho, fxc, kxc, xctype, spin=0):
         nvar = 4
         frg = fxc[1].T
         fgg = fxc[2].T
-        frrr, frrg, frgg, fggg = [x.T for x in kxc[:4]]
+        frrr, frrg, frgg, fggg = (x.T for x in kxc[:4])
     elif xctype == 'MGGA':
         order = 2
         nvar = 5
@@ -204,7 +204,7 @@ def transform_kxc(rho, fxc, kxc, xctype, spin=0):
         fgg = fxc[2].T
         fgt = fxc[9].T
         frrr, frrg, frgg, fggg, frrt, frgt, frtt, fggt, fgtt, fttt = \
-                [kxc[i].T for i in [0, 1, 2, 3, 5, 7, 10, 12, 15, 19]]
+                (kxc[i].T for i in [0, 1, 2, 3, 5, 7, 10, 12, 15, 19])
     else:  # LDA
         order = 0
         nvar = 1

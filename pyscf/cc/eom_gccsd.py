@@ -175,7 +175,7 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
     ipccsd_evecs = np.array(ipccsd_evecs)
     lipccsd_evecs = np.array(lipccsd_evecs)
     e_star = []
-    ipccsd_evecs, lipccsd_evecs = [np.atleast_2d(x) for x in [ipccsd_evecs, lipccsd_evecs]]
+    ipccsd_evecs, lipccsd_evecs = (np.atleast_2d(x) for x in [ipccsd_evecs, lipccsd_evecs])
     ipccsd_evals = np.atleast_1d(ipccsd_evals)
     for ip_eval, ip_evec, ip_levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
         # Enforcing <L|R> = 1
@@ -400,7 +400,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
     eaccsd_evecs = np.array(eaccsd_evecs)
     leaccsd_evecs = np.array(leaccsd_evecs)
     e_star = []
-    eaccsd_evecs, leaccsd_evecs = [np.atleast_2d(x) for x in [eaccsd_evecs, leaccsd_evecs]]
+    eaccsd_evecs, leaccsd_evecs = (np.atleast_2d(x) for x in [eaccsd_evecs, leaccsd_evecs])
     eaccsd_evals = np.atleast_1d(eaccsd_evals)
     for ea_eval, ea_evec, ea_levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
         # Enforcing <L|R> = 1

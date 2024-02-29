@@ -123,7 +123,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vk0-get_vk_s8(mol, dm)).max(), 0, 12)
 
         shls_slice = (2,4,0,2,0,8,0,5)
-        i0,i1,j0,j1,k0,k1,l0,l1 = [ao_loc[x] for x in shls_slice]
+        i0,i1,j0,j1,k0,k1,l0,l1 = (ao_loc[x] for x in shls_slice)
         vk0 = numpy.einsum('ijkl,jk->il', eri0[i0:i1,j0:j1,k0:k1,l0:l1], dm[j0:j1,k0:k1])
         vk1 = numpy.einsum('ijkl,jl->ik', eri0[i0:i1,j0:j1,k0:k1,l0:l1], dm[j0:j1,l0:l1])
         vk2 = numpy.einsum('ijkl,ik->jl', eri0[i0:i1,j0:j1,k0:k1,l0:l1], dm[i0:i1,k0:k1])
@@ -148,7 +148,7 @@ def get_vk_s4(mol, dm):
             for kp, (ksh0, ksh1) in enumerate(bas_groups):
                 for lp, (lsh0, lsh1) in enumerate(bas_groups[:kp]):
                     shls_slice = (ish0, ish1, jsh0, jsh1, ksh0, ksh1, lsh0, lsh1)
-                    i0, i1, j0, j1, k0, k1, l0, l1 = [ao_loc[x] for x in shls_slice]
+                    i0, i1, j0, j1, k0, k1, l0, l1 = (ao_loc[x] for x in shls_slice)
                     dms = [dm[j0:j1,k0:k1],
                            dm[i0:i1,k0:k1],
                            dm[j0:j1,l0:l1],
@@ -165,7 +165,7 @@ def get_vk_s4(mol, dm):
 
                 lsh0, lsh1 = ksh0, ksh1
                 shls_slice = (ish0, ish1, jsh0, jsh1, ksh0, ksh1, lsh0, lsh1)
-                i0, i1, j0, j1, k0, k1, l0, l1 = [ao_loc[x] for x in shls_slice]
+                i0, i1, j0, j1, k0, k1, l0, l1 = (ao_loc[x] for x in shls_slice)
                 kparts = jk.get_jk(mol,
                                    [dm[j0:j1,k0:k1], dm[i0:i1,k0:k1]],
                                    scripts=['ijkl,jk->il', 'ijkl,ik->jl'],
@@ -177,7 +177,7 @@ def get_vk_s4(mol, dm):
         for kp, (ksh0, ksh1) in enumerate(bas_groups):
             for lp, (lsh0, lsh1) in enumerate(bas_groups[:kp]):
                 shls_slice = (ish0, ish1, jsh0, jsh1, ksh0, ksh1, lsh0, lsh1)
-                i0, i1, j0, j1, k0, k1, l0, l1 = [ao_loc[x] for x in shls_slice]
+                i0, i1, j0, j1, k0, k1, l0, l1 = (ao_loc[x] for x in shls_slice)
                 kparts = jk.get_jk(mol,
                                    [dm[j0:j1,k0:k1], dm[j0:j1,l0:l1]],
                                    scripts=['ijkl,jk->il', 'ijkl,jl->ik'],
@@ -187,7 +187,7 @@ def get_vk_s4(mol, dm):
 
             lsh0, lsh1 = ksh0, ksh1
             shls_slice = (ish0, ish1, jsh0, jsh1, ksh0, ksh1, lsh0, lsh1)
-            i0, i1, j0, j1, k0, k1, l0, l1 = [ao_loc[x] for x in shls_slice]
+            i0, i1, j0, j1, k0, k1, l0, l1 = (ao_loc[x] for x in shls_slice)
             kparts = jk.get_jk(mol,
                                [dm[j0:j1,k0:k1]],
                                scripts=['ijkl,jk->il'],
@@ -205,7 +205,7 @@ def get_vk_s8(mol, dm):
             for kp, (ksh0, ksh1) in enumerate(bas_groups[:ip]):
                 for lp, (lsh0, lsh1) in enumerate(bas_groups[:kp]):
                     shls_slice = (ish0, ish1, jsh0, jsh1, ksh0, ksh1, lsh0, lsh1)
-                    i0, i1, j0, j1, k0, k1, l0, l1 = [ao_loc[x] for x in shls_slice]
+                    i0, i1, j0, j1, k0, k1, l0, l1 = (ao_loc[x] for x in shls_slice)
                     dms = [dm[j0:j1,k0:k1],
                            dm[j0:j1,l0:l1],
                            dm[i0:i1,k0:k1],
@@ -235,7 +235,7 @@ def get_vk_s8(mol, dm):
                 # ip > jp, ip > kp, kp == lp
                 lsh0, lsh1 = ksh0, ksh1
                 shls_slice = (ish0, ish1, jsh0, jsh1, ksh0, ksh1, lsh0, lsh1)
-                i0, i1, j0, j1, k0, k1, l0, l1 = [ao_loc[x] for x in shls_slice]
+                i0, i1, j0, j1, k0, k1, l0, l1 = (ao_loc[x] for x in shls_slice)
                 dms = [dm[j0:j1,k0:k1],
                        dm[i0:i1,k0:k1],
                        dm[k0:k1,j0:j1],
@@ -254,7 +254,7 @@ def get_vk_s8(mol, dm):
             kp, ksh0, ksh1 = ip, ish0, ish1
             for lp, (lsh0, lsh1) in enumerate(bas_groups[:kp]):
                 shls_slice = (ish0, ish1, jsh0, jsh1, ksh0, ksh1, lsh0, lsh1)
-                i0, i1, j0, j1, k0, k1, l0, l1 = [ao_loc[x] for x in shls_slice]
+                i0, i1, j0, j1, k0, k1, l0, l1 = (ao_loc[x] for x in shls_slice)
                 dms = [dm[j0:j1,k0:k1],
                        dm[i0:i1,k0:k1],
                        dm[j0:j1,l0:l1],
@@ -274,7 +274,7 @@ def get_vk_s8(mol, dm):
         for kp, (ksh0, ksh1) in enumerate(bas_groups[:ip+1]):
             for lp, (lsh0, lsh1) in enumerate(bas_groups[:kp]):
                 shls_slice = (ish0, ish1, jsh0, jsh1, ksh0, ksh1, lsh0, lsh1)
-                i0, i1, j0, j1, k0, k1, l0, l1 = [ao_loc[x] for x in shls_slice]
+                i0, i1, j0, j1, k0, k1, l0, l1 = (ao_loc[x] for x in shls_slice)
                 dms = [dm[j0:j1,k0:k1],
                        dm[j0:j1,l0:l1],
                        dm[k0:k1,j0:j1],
@@ -293,7 +293,7 @@ def get_vk_s8(mol, dm):
         for kp, (ksh0, ksh1) in enumerate(bas_groups[:ip]):
             lsh0, lsh1 = ksh0, ksh1
             shls_slice = (ish0, ish1, jsh0, jsh1, ksh0, ksh1, lsh0, lsh1)
-            i0, i1, j0, j1, k0, k1, l0, l1 = [ao_loc[x] for x in shls_slice]
+            i0, i1, j0, j1, k0, k1, l0, l1 = (ao_loc[x] for x in shls_slice)
             dms = [dm[j0:j1,k0:k1],
                    dm[l0:l1,i0:i1]]
             scripts = ['ijkl,jk->il',
@@ -306,7 +306,7 @@ def get_vk_s8(mol, dm):
         kp, ksh0, ksh1 = ip, ish0, ish1
         lsh0, lsh1 = ksh0, ksh1
         shls_slice = (ish0, ish1, jsh0, jsh1, ksh0, ksh1, lsh0, lsh1)
-        i0, i1, j0, j1, k0, k1, l0, l1 = [ao_loc[x] for x in shls_slice]
+        i0, i1, j0, j1, k0, k1, l0, l1 = (ao_loc[x] for x in shls_slice)
         kparts = jk.get_jk(mol,
                            [dm[j0:j1,k0:k1]],
                            scripts=['ijkl,jk->il'],

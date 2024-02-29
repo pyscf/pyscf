@@ -168,9 +168,9 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
     '''
     log = logger.Logger(eom.stdout, eom.verbose)
 
-    right_evecs, left_evecs = [np.atleast_2d(x) for x in [right_evecs, left_evecs]]
-    right_evals, left_evals = [np.atleast_1d(x) for x in [right_evals, left_evals]]
-    right_converged, left_converged = [np.atleast_1d(x) for x in [right_converged, left_converged]]
+    right_evecs, left_evecs = (np.atleast_2d(x) for x in [right_evecs, left_evecs])
+    right_evals, left_evals = (np.atleast_1d(x) for x in [right_evals, left_evals])
+    right_converged, left_converged = (np.atleast_1d(x) for x in [right_converged, left_converged])
 
     srt_right_idx = []
     srt_left_idx = []
@@ -483,7 +483,7 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
     ipccsd_evecs  = np.array(ipccsd_evecs)
     lipccsd_evecs = np.array(lipccsd_evecs)
     e = []
-    ipccsd_evecs, lipccsd_evecs = [np.atleast_2d(x) for x in [ipccsd_evecs, lipccsd_evecs]]
+    ipccsd_evecs, lipccsd_evecs = (np.atleast_2d(x) for x in [ipccsd_evecs, lipccsd_evecs])
     ipccsd_evals = np.atleast_1d(ipccsd_evals)
     for eval_, evec_, levec_ in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
         l1, l2 = eom.vector_to_amplitudes(levec_)
@@ -850,7 +850,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
     eaccsd_evecs  = np.array(eaccsd_evecs)
     leaccsd_evecs = np.array(leaccsd_evecs)
     e = []
-    eaccsd_evecs, leaccsd_evecs = [np.atleast_2d(x) for x in [eaccsd_evecs, leaccsd_evecs]]
+    eaccsd_evecs, leaccsd_evecs = (np.atleast_2d(x) for x in [eaccsd_evecs, leaccsd_evecs])
     eaccsd_evals = np.atleast_1d(eaccsd_evals)
     for eval_, evec_, levec_ in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
         l1, l2 = eom.vector_to_amplitudes(levec_)

@@ -681,9 +681,9 @@ def _add_pt2(pt2, nkpts, kconserv, kpt_indices, orb_indices, val):
     assert (len(orb_indices) == 4)
     ki, kj, ka = kpt_indices
     kb = kconserv[ki,ka,kj]
-    idxi, idxj, idxa, idxb = [slice(None, None)
+    idxi, idxj, idxa, idxb = (slice(None, None)
                               if x is None else slice(x[0],x[1])
-                              for x in orb_indices]
+                              for x in orb_indices)
     if len(pt2.shape) == 7 and pt2.shape[:2] == (nkpts, nkpts):
         pt2[ki,kj,ka,idxi,idxj,idxa,idxb] += val
         pt2[kj,ki,kb,idxj,idxi,idxb,idxa] += val.transpose(1,0,3,2)

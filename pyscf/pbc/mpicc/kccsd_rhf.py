@@ -252,7 +252,7 @@ def update_t1(cc,t1,t2,eris,ints1e):
             break
         ranges0,ranges1 = loader.get_blocks_from_data(data)
 
-        s0,s1= [slice(min(x),max(x)+1) for x in (ranges0,ranges1)]
+        s0,s1= (slice(min(x),max(x)+1) for x in (ranges0,ranges1))
 
         eris_ovvv_kaX = _cp(eris.ovvv[s1,s0,:])
         eris_ooov_kXi = _cp(eris.ooov[s1,:,s0])
@@ -373,7 +373,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             loader.slave_finished()
             continue
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
+        s0,s1,s2 = (slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2))
         eris_oovv = _cp(eris.oovv[s0,s1,s2])
 
         eris_oooo = _cp(eris.oooo[s1,s0])
@@ -468,7 +468,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                 loader.slave_finished()
                 continue
 
-            s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
+            s0,s1,s2 = (slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2))
 
             eris_ovvv_ab = _cp(eris.ovvv[s1,s2])
             eris_vovv_ab = _cp(eris.vovv[s1,s2])
@@ -535,7 +535,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             loader.slave_finished()
             continue
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
+        s0,s1,s2 = (slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2))
         # TODO this can sometimes not be optimal for ooov, calls for all kb,
         # but in most block set-ups you only need 1 index
         eris_ooov_ji = _cp(eris.ooov[s1,s0])
@@ -654,7 +654,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             loader.slave_finished()
             continue
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
+        s0,s1,s2 = (slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2))
 
         # TODO this is not optimal for ooov, calls for all ka, but in most block set-ups you only need 1 index
         eris_ooov_ij = _cp(eris.ooov[:,s1])
@@ -754,7 +754,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             loader.slave_finished()
             continue
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
+        s0,s1,s2 = (slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2))
 
         eris_ovovRev_Xbi = _cp(eris.ovovRev[s0,s2,:])
         eris_ooovRev_Xbi = _cp(eris.ooovRev[s0,s2,:])
@@ -840,7 +840,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
             loader.slave_finished()
             continue
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
+        s0,s1,s2 = (slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2))
 
         eris_ovovRev_Xaj = _cp(eris.ovovRev[s1,s2,:])
         eris_ooovRev_Xaj = _cp(eris.ooovRev[s1,s2,:])
@@ -1179,7 +1179,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                 break
             ranges0, ranges1 = loader.get_blocks_from_data(data)
 
-            s0,s1 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1)]
+            s0,s1 = (slice(min(x),max(x)+1) for x in (ranges0,ranges1))
 
             for iterki,ki in enumerate(ranges0):
                 for iterkj,kj in enumerate(ranges1):
@@ -1325,7 +1325,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                 break
             ranges0, ranges1 = loader.get_blocks_from_data(data)
 
-            s0,s1 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1)]
+            s0,s1 = (slice(min(x),max(x)+1) for x in (ranges0,ranges1))
             Wovoo_sXi  = _cp(imds.Wovoo[kshift,:,s0])
             WooooS_Xij = _cp(imds.WooooS[:,s0,s1])
 
@@ -1923,7 +1923,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                 break
             ranges0, ranges1 = loader.get_blocks_from_data(data)
 
-            s0,s1 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1)]
+            s0,s1 = (slice(min(x),max(x)+1) for x in (ranges0,ranges1))
 
             for iterkj,kj in enumerate(ranges0):
                 for iterka,ka in enumerate(ranges1):
@@ -2066,7 +2066,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                 break
             ranges0, ranges1 = loader.get_blocks_from_data(data)
 
-            s0,s1 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1)]
+            s0,s1 = (slice(min(x),max(x)+1) for x in (ranges0,ranges1))
 
             for iterkj,kj in enumerate(ranges0):
                 for iterka,ka in enumerate(ranges1):
