@@ -464,6 +464,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 res = np.argmax(np.abs(AoR_Buf), axis=0)
                 # print("res = ", res)
                 self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
+                AoR_Buf = None
                 
             res = None
             

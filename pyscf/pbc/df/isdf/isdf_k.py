@@ -713,6 +713,9 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 
                 with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
                     e, h = scipy.linalg.eigh(buf_A)
+
+                # print("e = ", e)
+                # print(buf_B)
         
                 # e, h = np.linalg.eigh(buf_A)  # we get back to this mode, because numerical issue ! 
                 print("condition number = ", e[-1]/e[0])
@@ -737,6 +740,9 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 
                 # print("B_tmp = ", B_tmp[:5,:5])
                 
+                # print(buf_B)
+
+
                 fn_final_fft(
                     buf_B.ctypes.data_as(ctypes.c_void_p),
                     FREQ[i].ctypes.data_as(ctypes.c_void_p),
@@ -746,9 +752,11 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                     buffer_final_fft.ctypes.data_as(ctypes.c_void_p)
                 )
                 
+                # print("aux_basis = ", buf_B)
+                
                 # print("B_tmp1 = ", B_tmp1[:5,:5])
                 # print("B_tmp  = ", B_tmp[:5,:5])
-                
+                                
                 # assert np.allclose(B_tmp1, B_tmp)
                 
                 #### perform the last FFT ####
@@ -1578,9 +1586,14 @@ def _construct_W_incore(mydf:ISDF.PBC_ISDF_Info):
                 # print("A_buf.shape = ", A_buf.shape)
                 # print("B_buf.shape = ", B_buf.shape)
                 # print("W_buf.shape = ", W_buf.shape)
+                # print("coulG = ", coulG[i])
+                # print("A_buf = ", A_buf)
+                # print("B_buf = ", B_buf)
             
                 # lib.dot(B_buf, A_buf.T.conj(), c=W_buf)
                 lib.dot(A_buf, B_buf.T.conj(), c=W_buf)
+                
+                # print("W_buf = ", W_buf)
 
                 k_begin = loc * nIP_prim
                 k_end   = (loc + 1) * nIP_prim
@@ -2692,33 +2705,36 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     ################ select IP ################
     
     # @profile 
-    def select_IP(self, c:int, m:int):
+    def select_IP(self, c:int, m:int, possible_grid_ID=None):
         first_natm = self.cell.natm // np.prod(self.Ls)
         
         print("first_natm = ", first_natm)
-        
-        IP_GlobalID = ISDF._select_IP_direct(self, c, m, first_natm, True) # we do not have to perform selection IP over the whole supercell ! 
-        
-        print("len of IP_GlobalID = ", len(IP_GlobalID))
+        print("c = ", c)
+        print("m = ", m)
         
         # get primID
         
         mesh = self.cell.mesh
         mesh_prim = np.array(mesh) // np.array(self.Ls)
         ngrid_prim = np.prod(mesh_prim)
-                
-        possible_grid_ID = []
+        
+        if possible_grid_ID is None:
+            IP_GlobalID = ISDF._select_IP_direct(self, c, m, first_natm, True) # we do not have to perform selection IP over the whole supercell ! 
+            print("len of IP_GlobalID = ", len(IP_GlobalID))
     
-        for grid_id in IP_GlobalID:
-            pnt_id = (grid_id // (mesh[1] * mesh[2]), (grid_id // mesh[2]) % mesh[1], grid_id % mesh[2])
-            box_id = (pnt_id[0] // mesh_prim[0], pnt_id[1] // mesh_prim[1], pnt_id[2] // mesh_prim[2])
-            pnt_prim_id = (pnt_id[0] % mesh_prim[0], pnt_id[1] % mesh_prim[1], pnt_id[2] % mesh_prim[2])
-            pnt_prim_ravel_id = pnt_prim_id[0] * mesh_prim[1] * mesh_prim[2] + pnt_prim_id[1] * mesh_prim[2] + pnt_prim_id[2]
-            # print("grid_id = %d, pnt_id = %s, box_id = %s, pnt_prim_id = %s" % (grid_id, pnt_id, box_id, pnt_prim_id))
-            possible_grid_ID.append(pnt_prim_ravel_id)
+            possible_grid_ID = []
+    
+            for grid_id in IP_GlobalID:
+                pnt_id = (grid_id // (mesh[1] * mesh[2]), (grid_id // mesh[2]) % mesh[1], grid_id % mesh[2])
+                box_id = (pnt_id[0] // mesh_prim[0], pnt_id[1] // mesh_prim[1], pnt_id[2] // mesh_prim[2])
+                pnt_prim_id = (pnt_id[0] % mesh_prim[0], pnt_id[1] % mesh_prim[1], pnt_id[2] % mesh_prim[2])
+                pnt_prim_ravel_id = pnt_prim_id[0] * mesh_prim[1] * mesh_prim[2] + pnt_prim_id[1] * mesh_prim[2] + pnt_prim_id[2]
+                # print("grid_id = %d, pnt_id = %s, box_id = %s, pnt_prim_id = %s" % (grid_id, pnt_id, box_id, pnt_prim_id))
+                possible_grid_ID.append(pnt_prim_ravel_id)
 
-        possible_grid_ID = list(set(possible_grid_ID))
-        possible_grid_ID.sort()
+            possible_grid_ID = list(set(possible_grid_ID))
+            possible_grid_ID.sort()
+            
         
         print("nIP = ", len(possible_grid_ID))
         print("possible_grid_ID = ", possible_grid_ID)
@@ -2774,10 +2790,13 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     ################ driver for build ################
     
     # @profile 
-    def build_IP_auxbasis(self, IO_File:str = None, c:int = 5, m:int = 5):
+    def build_IP_auxbasis(self, IO_File:str = None, c:int = 5, m:int = 5, IP_ID=None):
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        self.IP_ID = self.select_IP(c, m)  # prim_gridID
+        # if IP_ID is not None:
+        #     self.IP_ID = IP_ID
+        # else:
+        self.IP_ID = self.select_IP(c, m, possible_grid_ID=IP_ID)  # prim_gridID
         self.IP_ID = np.asarray(self.IP_ID, dtype=np.int32)
         print("IP_ID = ", self.IP_ID)
         print("len(IP_ID) = ", len(self.IP_ID))
