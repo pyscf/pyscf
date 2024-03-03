@@ -284,7 +284,7 @@ if __name__ == "__main__":
     
     cell = ISDF_K.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh, basis='gth-cc-dzvp')
     
-    pbc_isdf_info = ISDF_K.PBC_ISDF_Info_kSym(cell, 800 * 1000 * 1000, Ls=Ls, outcore=False, with_robust_fitting=False, aoR=None)
+    pbc_isdf_info = ISDF_K.PBC_ISDF_Info_kSym(cell, 8000 * 1000 * 1000, Ls=Ls, outcore=True, with_robust_fitting=False, aoR=None)
     pbc_isdf_info.build_IP_auxbasis(c=C, m=M)
     pbc_isdf_info.build_auxiliary_Coulomb()
     
