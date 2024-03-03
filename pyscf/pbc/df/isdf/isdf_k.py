@@ -953,13 +953,13 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
     fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
     assert fn is not None
     
-    with lib.call_in_background(save_B) as async_write_B:
-    # for _ in range(1):
-        with lib.call_in_background(save_aoR) as async_write_aoR:
-        # for _ in range(1):
+    # with lib.call_in_background(save_B) as async_write_B:
+    for _ in range(1):
+        # with lib.call_in_background(save_aoR) as async_write_aoR:
+        for _ in range(1):
             
-            # async_write_aoR = save_aoR
-            # async_write_B = save_B
+            async_write_aoR = save_aoR
+            async_write_B = save_B
             
             iloc = 0
             for ix in range(Ls[0]):
@@ -1115,8 +1115,13 @@ def _construct_aux_basis_kSym_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_b
         source_sel = np.s_[icell, :, col0:col1]
         f_aux_basis[B_MATRIX].read_direct(buf, source_sel=source_sel, dest_sel=dest_sel)
 
-    with lib.call_in_background(save_auxbasis) as async_write:
-        with lib.call_in_background(load_B) as async_loadB: 
+    # with lib.call_in_background(save_auxbasis) as async_write:
+    #     with lib.call_in_background(load_B) as async_loadB: 
+
+    for _ in range(1):
+        for _ in range(1):
+            async_write = save_auxbasis
+            async_loadB = load_B
 
             for icell in range(ncell_complex):
         
@@ -1348,8 +1353,14 @@ def _aux_basis_FFT_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarr
     fn_permutation_conj = getattr(libpbc, "_PermutationConj", None)
     assert fn_permutation_conj is not None
                 
-    with lib.call_in_background(save_aux_FFT) as async_write_aux_FFT:
-        with lib.call_in_background(load_aux_basis) as async_load_aux_basis:
+    # with lib.call_in_background(save_aux_FFT) as async_write_aux_FFT:
+    #     with lib.call_in_background(load_aux_basis) as async_load_aux_basis:
+    
+    for _ in range(1):
+        for _ in range(1):
+            
+            async_write_aux_FFT = save_aux_FFT
+            async_load_aux_basis = load_aux_basis
            
             icell = 0
             row0  = 0
@@ -1735,7 +1746,10 @@ def _construct_W_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarray
                 loc += 1
     
     
-    with lib.call_in_background(load_aux_basis_fft) as prefetch:
+    # with lib.call_in_background(load_aux_basis_fft) as prefetch:
+    
+    for _ in range(1):
+        prefetch = load_aux_basis_fft
     
         for i in range(ncell_complex):
             
