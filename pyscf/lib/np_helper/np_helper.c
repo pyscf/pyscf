@@ -143,7 +143,7 @@ void NPz2d_InPlace(double complex *in, const size_t n)
         double *ptr_real = (double *)(in + start);
         double complex *ptr_complex = in + start;
 
-        for (i = 0; i < end-start; i++)
+        for (i = 0; i < end - start; i++)
         {
             ptr_real[i] = creal(ptr_complex[i]);
         }
@@ -734,6 +734,26 @@ void NPd_i_ij_ij(double *out, double *a, double *b, size_t nrow, size_t ncol)
     }
 }
 
+void NPz_i_ij_ij(double complex *out, double *a, double complex *b, size_t nrow, size_t ncol)
+{
+#pragma omp parallel
+    {
+        size_t i, j;
+        double *pb, *pout;
+#pragma omp for schedule(static)
+        for (i = 0; i < nrow; i++)
+        {
+            pb = (double *)b + 2 * i * ncol;
+            pout = (double *)out + 2 * i * ncol;
+            for (j = 0; j < 2 * ncol; j += 2)
+            {
+                pout[j] = a[i] * pb[j];         // out[i,j] = a[i] * b[i,j]
+                pout[j + 1] = a[i] * pb[j + 1]; // out[i,j] = a[i] * b[i,j]
+            }
+        }
+    }
+}
+
 void NPdsquare_inPlace(double *a, size_t n)
 {
 #pragma omp parallel for schedule(static)
@@ -757,6 +777,22 @@ void NPdcwisemul(double *out, double *a, double *b, size_t n)
 }
 
 void NPdslice32(double *out, double *a, __int32_t *slices, size_t ncol_left, size_t nrow, size_t ncol)
+{
+#pragma omp parallel
+    {
+        size_t i, j;
+#pragma omp for schedule(static)
+        for (i = 0; i < nrow; i++)
+        {
+            for (j = 0; j < ncol_left; j++)
+            {
+                out[i * ncol_left + j] = a[i * ncol + slices[j]];
+            }
+        }
+    }
+}
+
+void NPzslice32(double complex *out, double complex *a, __int32_t *slices, size_t ncol_left, size_t nrow, size_t ncol)
 {
 #pragma omp parallel
     {
@@ -823,5 +859,111 @@ void NPdslice64_offset(double *out, double *a, __int64_t *slices, size_t nslices
                 out[i * ncol_left + j + offset] = a[i * ncol + slices[j]];
             }
         }
+    }
+}
+
+void NPzcopy_col(
+    const int nRow,
+    double complex *A,
+    const int A_begin, const int A_end,
+    const int lda,
+    const double complex *B,
+    const int B_begin, const int B_end,
+    const int ldb)
+{
+    // int i;
+    if ((A_end - A_begin) != (B_end - B_begin))
+    {
+        printf("A_end - A_begin != B_end - B_begin\n");
+        exit(1);
+    }
+#pragma omp parallel for
+    for (int i = 0; i < nRow; i++)
+    {
+        memcpy(A + i * lda + A_begin, B + i * ldb + B_begin, (A_end - A_begin) * sizeof(double complex));
+    }
+}
+
+void NPdcopy_row(
+    const int nCol,
+    double *A,
+    const int A_begin, const int A_end,
+    const int lda,
+    const double *B,
+    const int B_begin, const int B_end,
+    const int ldb)
+{
+    // int i;
+    if ((A_end - A_begin) != (B_end - B_begin))
+    {
+        printf("A_end - A_begin != B_end - B_begin\n");
+        exit(1);
+    }
+    if (nCol != lda)
+    {
+        printf("nCol != lda\n");
+        exit(1);
+    }
+    if (nCol != ldb)
+    {
+        printf("nCol != ldb\n");
+        exit(1);
+    }
+    memcpy(A + A_begin * nCol, B + B_begin * nCol, (A_end - A_begin) * nCol * sizeof(double));
+}
+
+void NPdpack_tensor_3d_midloc(
+    const int nRow,
+    const int nMid,
+    const int nCol,
+    double *A,
+    const double *B,
+    const int ldb,
+    const int midloc)
+{
+    // int i;
+    if (nCol != ldb)
+    {
+        printf("nRow != ldb\n");
+        exit(1);
+    }
+    if (midloc < 0 || midloc >= nCol)
+    {
+        printf("midloc < 0 || midloc >= nCol\n");
+        exit(1);
+    }
+
+#pragma omp parallel for
+    for (size_t i = 0; i < nRow; i++)
+    {
+        memcpy(A + i * (size_t)nMid * (size_t)nCol + (size_t)midloc * (size_t)nCol, B + i * (size_t)nCol, (size_t)nCol * sizeof(double));
+    }
+}
+
+void NPzextract_tensor_3d_midloc(
+    const int nRow,
+    const int nMid,
+    const int nCol,
+    double complex *B,
+    const double complex *A,
+    const int ldb,
+    const int midloc)
+{
+    // int i;
+    if (nCol != ldb)
+    {
+        printf("nRow != ldb\n");
+        exit(1);
+    }
+    if (midloc < 0 || midloc >= nCol)
+    {
+        printf("midloc < 0 || midloc >= nCol\n");
+        exit(1);
+    }
+
+#pragma omp parallel for
+    for (size_t i = 0; i < nRow; i++)
+    {
+        memcpy(B + i * (size_t)nCol, A + i * (size_t)nMid * (size_t)nCol + (size_t)midloc * (size_t)nCol, (size_t)nCol * sizeof(double complex));
     }
 }

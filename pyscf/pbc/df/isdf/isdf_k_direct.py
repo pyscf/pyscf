@@ -27,6 +27,9 @@ from memory_profiler import profile
 libfft = lib.load_library('libfft')
 libpbc = lib.load_library('libpbc')
 
+from pyscf.lib import misc
+_np_helper = misc.load_library('libnp_helper')
+
 ####### construct aux basis and W ####### 
 
 @profile
@@ -83,6 +86,9 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
     
     ####### 3. diag A ########
      
+    fn_zcopy_col = getattr(_np_helper, "NPzcopy_col", None)
+    assert fn_zcopy_col is not None
+     
     block_A_e = np.zeros((ncell_complex, nIP_Prim), dtype=np.double)
     
     iloc = 0
@@ -95,11 +101,35 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                 #### diag A ####
                         
                 buf_A_diag = np.ndarray((nIP_Prim, nIP_Prim), dtype=np.complex128, buffer=IO_buf, offset=offset) 
-                buf_A_diag.ravel()[:] = A[:, iloc*nIP_Prim:(iloc+1)*nIP_Prim].ravel()[:]
+                # buf_A_diag.ravel()[:] = A[:, iloc*nIP_Prim:(iloc+1)*nIP_Prim].ravel()[:]
+                fn_zcopy_col(
+                    ctypes.c_int(nIP_Prim),
+                    buf_A_diag.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(0),
+                    ctypes.c_int(nIP_Prim),
+                    ctypes.c_int(buf_A_diag.shape[1]),
+                    A.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(iloc*nIP_Prim),
+                    ctypes.c_int((iloc+1)*nIP_Prim),
+                    ctypes.c_int(A.shape[1])
+                )
+                
                 with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
                     e, h = scipy.linalg.eigh(buf_A_diag)
                 block_A_e[iloc] = e
-                A[:, iloc*nIP_Prim:(iloc+1)*nIP_Prim] = h
+                h = h.copy()
+                # A[:, iloc*nIP_Prim:(iloc+1)*nIP_Prim] = h
+                fn_zcopy_col(
+                    ctypes.c_int(nIP_Prim),
+                    A.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(iloc*nIP_Prim),
+                    ctypes.c_int((iloc+1)*nIP_Prim),
+                    ctypes.c_int(A.shape[1]),
+                    h.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(0),
+                    ctypes.c_int(nIP_Prim),
+                    ctypes.c_int(h.shape[1])
+                )
                 h = None
                 
                 t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -296,6 +326,21 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
     
     weight = np.sqrt(mydf.cell.vol / mydf.ngrids)
 
+    fn_dcopy_row = getattr(_np_helper, "NPdcopy_row", None)
+    assert fn_dcopy_row is not None
+    
+    fn_zslice = getattr(_np_helper, "NPzslice32", None)
+    assert fn_zslice is not None
+
+    fn_z_i_ij_ij = getattr(_np_helper, "NPz_i_ij_ij", None)
+    assert fn_z_i_ij_ij is not None
+
+    fn_dpack_tensor_3d_midloc = getattr(_np_helper, "NPdpack_tensor_3d_midloc", None)
+    assert fn_dpack_tensor_3d_midloc is not None
+
+    fn_zextract_tensor_3d_midloc = getattr(_np_helper, "NPzextract_tensor_3d_midloc", None)
+    assert fn_zextract_tensor_3d_midloc is not None
+
     iloc = 0
     for ix_B in range(Ls[0]):
         for iy_B in range(Ls[1]):
@@ -355,7 +400,19 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                                             # print("AoR_BufPack.shape = ", AoR_BufPack.shape)
                                             # print("AoR_Buf1.shape    = ", AoR_Buf1.shape)
 
-                                            AoR_BufPack[row_begin1:row_end1, :] = AoR_Buf1[row_begin2:row_end2, :]
+                                            # AoR_BufPack[row_begin1:row_end1, :] = AoR_Buf1[row_begin2:row_end2, :]
+                                            
+                                            fn_dcopy_row(
+                                                ctypes.c_int(AoR_BufPack.shape[1]),
+                                                AoR_BufPack.ctypes.data_as(ctypes.c_void_p),
+                                                ctypes.c_int(row_begin1),
+                                                ctypes.c_int(row_end1),
+                                                ctypes.c_int(AoR_BufPack.shape[1]),
+                                                AoR_Buf1.ctypes.data_as(ctypes.c_void_p),
+                                                ctypes.c_int(row_begin2),
+                                                ctypes.c_int(row_end2),
+                                                ctypes.c_int(AoR_Buf1.shape[1])
+                                            )
 
                                 # perform one dot #
                                     
@@ -366,7 +423,19 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                                         
                                 buf_ddot_res = np.ndarray((nIP_Prim, p1-p0), dtype=np.float64, buffer=IO_buf, offset=offset_ddot_res)
                                 lib.ddot_withbuffer(aoRg.T, AoR_BufPack, c=buf_ddot_res, buf=ddot_buf)
-                                B_Buf1[:, loc, :] = buf_ddot_res
+                                # B_Buf1[:, loc, :] = buf_ddot_res
+                                
+                                fn_dpack_tensor_3d_midloc(
+                                    ctypes.c_int(B_Buf1.shape[0]),
+                                    ctypes.c_int(B_Buf1.shape[1]),
+                                    ctypes.c_int(B_Buf1.shape[2]),
+                                    B_Buf1.ctypes.data_as(ctypes.c_void_p),
+                                    buf_ddot_res.ctypes.data_as(ctypes.c_void_p),
+                                    ctypes.c_int(buf_ddot_res.shape[1]),
+                                    ctypes.c_int(loc)
+                                )
+                                
+                                buf_ddot_res = None
 
                     lib.square_inPlace(B_Buf1)
                     
@@ -380,11 +449,34 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
 
                     B_Buf1_complex = np.ndarray((nIP_Prim, ncell_complex, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_B_buf1)
                     B_Buf2 = np.ndarray((nIP_Prim, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_B_buf2)
-                    B_Buf2.ravel()[:] = B_Buf1_complex[:, iloc, :].ravel()[:]
+                    # B_Buf2.ravel()[:] = B_Buf1_complex[:, iloc, :].ravel()[:]
+                    
+                    fn_zextract_tensor_3d_midloc(
+                        ctypes.c_int(B_Buf1_complex.shape[0]),
+                        ctypes.c_int(B_Buf1_complex.shape[1]),
+                        ctypes.c_int(B_Buf1_complex.shape[2]),
+                        B_Buf2.ctypes.data_as(ctypes.c_void_p),
+                        B_Buf1_complex.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(B_Buf2.shape[1]),
+                        ctypes.c_int(iloc)
+                    )
                     
                     # print("p0 = %5d, p1 = %5d" % (p0, p1))                       
                     # print("B_buf2 = ", B_Buf2)
-                    B_block[:, bunch_begin:bunch_end] = B_Buf2
+                    
+                    # B_block[:, bunch_begin:bunch_end] = B_Buf2
+                    
+                    fn_zcopy_col(
+                        ctypes.c_int(nIP_Prim),
+                        B_block.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(bunch_begin),
+                        ctypes.c_int(bunch_end),
+                        ctypes.c_int(B_block.shape[1]),
+                        B_Buf2.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(0),
+                        ctypes.c_int(p1-p0),
+                        ctypes.c_int(B_Buf2.shape[1])
+                    )
                     
                 
                 # print("B_block = ", B_block)
@@ -395,7 +487,20 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                 begin = iloc       * nIP_Prim
                 end   = (iloc + 1) * nIP_Prim
                 
-                buf_A.ravel()[:] = A[:, begin:end].ravel()[:]
+                # buf_A.ravel()[:] = A[:, begin:end].ravel()[:]
+                
+                fn_zcopy_col(
+                    ctypes.c_int(nIP_Prim),
+                    buf_A.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(0),
+                    ctypes.c_int(nIP_Prim),
+                    ctypes.c_int(buf_A.shape[1]),
+                    A.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(begin),
+                    ctypes.c_int(end),
+                    ctypes.c_int(A.shape[1])
+                )
+                
                 e = block_A_e[iloc]
                 
                 # print("e = ", e)
@@ -409,26 +514,69 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                     for loc_e, x in enumerate(e1):
                         print("e1[%3d] = %15.6e" % (loc_e, x))
                 where = np.where(e > e_min_cutoff)[0]
+                where = np.array(where, dtype=np.int32)
                 e = e[where]
                 
                 buf_A2 = np.ndarray((nIP_Prim, e.shape[0]), dtype=np.complex128, buffer=IO_buf, offset=offset_A2)
-                buf_A2.ravel()[:] = buf_A[:, where].ravel()[:]
+                # buf_A2.ravel()[:] = buf_A[:, where].ravel()[:]
                 
+                fn_zslice(
+                    buf_A2.ctypes.data_as(ctypes.c_void_p),
+                    buf_A.ctypes.data_as(ctypes.c_void_p),
+                    where.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(e.shape[0]),
+                    ctypes.c_int(nIP_Prim),
+                    ctypes.c_int(buf_A.shape[1]),
+                )
+            
                 # buf_A2 = buf_A[:, where]
                 
                 # print("we get here!")
                 
+                e = 1.0 / e
+                
                 for p0, p1 in lib.prange(0, nGridPrim, B_bunchsize):
                     B_Buf_in_W = np.ndarray((nIP_Prim, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_buf_W2)
-                    B_Buf_in_W.ravel()[:] = B_block[:, p0:p1].ravel()[:]
+                    # B_Buf_in_W.ravel()[:] = B_block[:, p0:p1].ravel()[:]
+                    fn_zcopy_col(
+                        ctypes.c_int(nIP_Prim),
+                        B_Buf_in_W.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(0),
+                        ctypes.c_int(p1-p0),
+                        ctypes.c_int(B_Buf_in_W.shape[1]),
+                        B_block.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(p0),
+                        ctypes.c_int(p1),
+                        ctypes.c_int(B_block.shape[1])
+                    )
                     B_ddot = np.ndarray((e.shape[0], p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_buf_W3)
                     lib.dot(buf_A2.T.conj(), B_Buf_in_W, c=B_ddot)
-                    B_ddot = (1.0/e).reshape(-1,1) * B_ddot
+                    # B_ddot = (1.0/e).reshape(-1,1) * B_ddot
+                    fn_z_i_ij_ij(
+                        B_ddot.ctypes.data_as(ctypes.c_void_p),
+                        e.ctypes.data_as(ctypes.c_void_p),
+                        B_ddot.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(e.shape[0]),
+                        ctypes.c_int(p1-p0),
+                    )
                     lib.dot(buf_A2, B_ddot, c=B_Buf_in_W)
-                    B_block[:, p0:p1] = B_Buf_in_W
+                    # B_block[:, p0:p1] = B_Buf_in_W
+                    fn_zcopy_col(
+                        ctypes.c_int(nIP_Prim),
+                        B_block.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(p0),
+                        ctypes.c_int(p1),
+                        ctypes.c_int(B_block.shape[1]),
+                        B_Buf_in_W.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(0),
+                        ctypes.c_int(p1-p0),
+                        ctypes.c_int(B_Buf_in_W.shape[1])
+                    )
                     ##### clear #####
                     B_Buf_in_W = None
                     B_ddot = None
+                
+                e = None    
                 
                 # B1 = np.dot(buf_A2.T.conj(), B_block)
                 # B1 = (1.0/e).reshape(-1,1) * B1
@@ -440,8 +588,15 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                                 
                 ########### 5. construct W ###########
                 
+                fn_zset0 = getattr(_np_helper, "NPzset0", None)
+                assert fn_zset0 is not None
                 
-                W_buf.ravel()[:] = 0.0 # reset W_buf
+                # W_buf.ravel()[:] = 0.0 # reset W_buf
+                
+                fn_zset0(
+                    W_buf.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int64(W_buf.size)
+                )
                 
                 B_fft_buf = np.ndarray((nIP_Prim, nGridPrim), dtype=np.complex128, buffer=IO_buf, offset=offset_B_fft_buf)
                                 
@@ -460,9 +615,32 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                                 
                 for p0, p1 in lib.prange(0, nGridPrim, B_bunchsize):
                     W_buf_2 = np.ndarray((nIP_Prim, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_buf_W2)
-                    W_buf_2.ravel()[:] = B_block[:, p0:p1].ravel()[:]
+                    # W_buf_2.ravel()[:] = B_block[:, p0:p1].ravel()[:]
+                    fn_zcopy_col(
+                        ctypes.c_int(nIP_Prim),
+                        W_buf_2.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(0),
+                        ctypes.c_int(p1-p0),
+                        ctypes.c_int(W_buf_2.shape[1]),
+                        B_block.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(p0),
+                        ctypes.c_int(p1),
+                        ctypes.c_int(B_block.shape[1])
+                    )
                     W_buf_3 = np.ndarray((nIP_Prim, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_buf_W3)
-                    W_buf_3.ravel()[:] = W_buf_2.ravel()[:]
+                    # W_buf_3.ravel()[:] = W_buf_2.ravel()[:]
+                    fn_zcopy_col(
+                        ctypes.c_int(nIP_Prim),
+                        W_buf_3.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(0),
+                        ctypes.c_int(p1-p0),
+                        ctypes.c_int(W_buf_3.shape[1]),
+                        B_block.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(p0),
+                        ctypes.c_int(p1),
+                        ctypes.c_int(B_block.shape[1])
+                    )
+                        
                     iloc2 = ix_B * Ls[1] * (Ls[2]) + iy_B * (Ls[2]) + iz_B
                     fn_coulG(
                         ctypes.c_int(nIP_Prim),
@@ -479,7 +657,19 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                 k_begin = iloc * nIP_Prim
                 k_end   = (iloc + 1) * nIP_Prim
                 
-                W_buf2[:, k_begin:k_end] = W_buf
+                # W_buf2[:, k_begin:k_end] = W_buf
+                
+                fn_zcopy_col(
+                    ctypes.c_int(nIP_Prim),
+                    W_buf2.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(k_begin),
+                    ctypes.c_int(k_end),
+                    ctypes.c_int(W_buf2.shape[1]),
+                    W_buf.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(0),
+                    ctypes.c_int(nIP_Prim),
+                    ctypes.c_int(W_buf.shape[1])
+                )
                 
                 iloc += 1
 
@@ -495,8 +685,8 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
     fn = getattr(libpbc, "_iFFT_Matrix_Col_InPlace", None)
     assert(fn is not None)
     
-    # W_buf_fft = np.ndarray((nIP_Prim, nIP_Prim * ncell_complex), dtype=np.complex128, buffer=IO_buf, offset=offset_W_fft)
-    W_buf_fft = np.zeros((nIP_Prim, nIP_Prim * ncell_complex), dtype=np.complex128)
+    W_buf_fft = np.ndarray((nIP_Prim, nIP_Prim * ncell_complex), dtype=np.complex128, buffer=IO_buf, offset=offset_W_fft)
+    # W_buf_fft = np.zeros((nIP_Prim, nIP_Prim * ncell_complex), dtype=np.complex128)
     
     fn(
         W_buf2.ctypes.data_as(ctypes.c_void_p),
@@ -507,7 +697,16 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
     )
     
     W = np.zeros((nIP_Prim, nIP_Prim*ncell), dtype=np.float64)
-    W.ravel()[:] = W_buf3.ravel()[:]
+    # W.ravel()[:] = W_buf3.ravel()[:]
+    
+    fn_dcopy = getattr(_np_helper, "NPdcopy", None)
+    assert fn_dcopy is not None
+    
+    fn_dcopy(
+        W.ctypes.data_as(ctypes.c_void_p),
+        W_buf3.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(W.size)
+    )
     
     mydf.W = W
     
@@ -528,6 +727,9 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
 
     mydf.W0 = W0
     
+    W_buf2 = None
+    W_buf3 = None
+    
     return W
 
 class PBC_ISDF_Info_kSym_Direct(isdf_k.PBC_ISDF_Info_kSym):
@@ -540,7 +742,7 @@ class PBC_ISDF_Info_kSym_Direct(isdf_k.PBC_ISDF_Info_kSym):
     def __del__(self):
         pass
     
-    @profile
+    # @profile
     def _allocate_jk_buffer(self, dtype=np.float64):
         
         if self.jk_buffer is not None:
@@ -574,7 +776,7 @@ class PBC_ISDF_Info_kSym_Direct(isdf_k.PBC_ISDF_Info_kSym):
         size_ddot_buf = ((nIP_Prim*nIP_Prim)+2)*num_threads
         self.ddot_buf  = np.ndarray((size_ddot_buf), dtype=np.float64)
 
-    @profile
+    # @profile
     def build_kISDF_obj(self, c:int = 5, m:int = 5):
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -607,7 +809,7 @@ class PBC_ISDF_Info_kSym_Direct(isdf_k.PBC_ISDF_Info_kSym):
     def build_auxiliary_Coulomb(self):
         raise NotImplementedError("build_auxiliary_Coulomb is not implemented in PBC_ISDF_Info_kSym_Direct")
 
-C = 15
+C = 25
 M = 5
 
 from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
@@ -617,7 +819,7 @@ if __name__ == '__main__':
     boxlen = 3.5668
     prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     
-    KE_CUTOFF = 70
+    KE_CUTOFF = 30
     
     atm = [
         ['C', (0.     , 0.     , 0.    )],
