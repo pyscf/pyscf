@@ -29,6 +29,7 @@ libpbc = lib.load_library('libpbc')
 
 ####### construct aux basis and W ####### 
 
+@profile
 def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.ndarray):
     
     #### preprocess ####
@@ -167,7 +168,7 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
     permutation[6] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 0)
     permutation[7] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 1)
     
-    fac = np.sqrt(np.prod(Ls) / np.prod(mesh))
+    fac = np.sqrt(np.prod(Ls) / np.prod(Mesh))
     
     coords_prim = mydf.ordered_grid_coords[:nGridPrim]
     
@@ -197,7 +198,7 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
     
     #### construct coulG ####
     
-    coulG = tools.get_coulG(mydf.cell, mesh=mesh)
+    coulG = tools.get_coulG(mydf.cell, mesh=Mesh)
     coulG = coulG.reshape(meshPrim[0], Ls[0], meshPrim[1], Ls[1], meshPrim[2], Ls[2])
     coulG = coulG.transpose(1, 3, 5, 0, 2, 4).reshape(-1, np.prod(meshPrim)).copy()
     
@@ -538,7 +539,8 @@ class PBC_ISDF_Info_kSym_Direct(isdf_k.PBC_ISDF_Info_kSym):
     
     def __del__(self):
         pass
-        
+    
+    @profile
     def _allocate_jk_buffer(self, dtype=np.float64):
         
         if self.jk_buffer is not None:
@@ -572,7 +574,7 @@ class PBC_ISDF_Info_kSym_Direct(isdf_k.PBC_ISDF_Info_kSym):
         size_ddot_buf = ((nIP_Prim*nIP_Prim)+2)*num_threads
         self.ddot_buf  = np.ndarray((size_ddot_buf), dtype=np.float64)
 
-
+    @profile
     def build_kISDF_obj(self, c:int = 5, m:int = 5):
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
