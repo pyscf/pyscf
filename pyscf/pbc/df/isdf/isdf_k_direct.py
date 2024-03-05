@@ -46,6 +46,7 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
     Ls   = mydf.Ls
     Ls   = np.array(Ls, dtype=np.int32)
     MeshPrim = np.array(Mesh) // np.array(Ls)
+    MeshPrim = np.array(MeshPrim, dtype=np.int32)
     meshPrim = MeshPrim
     ncell = np.prod(Ls)
     ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
@@ -79,6 +80,7 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
         buf_A_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
+    A = None    
     A = buf_A
     
     buf_A_real = None
@@ -151,52 +153,81 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
     
     # get freq # 
     
-    freq1 = np.array(range(meshPrim[0]), dtype=np.float64)
-    freq2 = np.array(range(meshPrim[1]), dtype=np.float64)
-    freq3 = np.array(range(meshPrim[2]), dtype=np.float64)
-    freq_q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
-    freq1 = np.array(range(Ls[0]), dtype=np.float64)
-    freq2 = np.array(range(Ls[1]), dtype=np.float64)
-    freq3 = np.array(range(Ls[2]//2+1), dtype=np.float64)
-    freq_Q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
-    FREQ = np.einsum("ijkl,ipqs->ijklpqs", freq_Q, freq_q)
-    FREQ[0] /= (Ls[0] * meshPrim[0])
-    FREQ[1] /= (Ls[1] * meshPrim[1])
-    FREQ[2] /= (Ls[2] * meshPrim[2])
-    FREQ = np.einsum("ijklpqs->jklpqs", FREQ)
-    FREQ  = FREQ.reshape(-1, np.prod(meshPrim)).copy()
-    FREQ  = np.exp(-2.0j * np.pi * FREQ)
+    fn_FREQ = getattr(libpbc, "_FREQ", None)
+    assert fn_FREQ is not None
     
-    freq_Q = None
-    freq_q = None
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
-    def _permutation(nx, ny, nz, shift_x, shift_y, shift_z):
-        
-        res = np.zeros((nx*ny*nz), dtype=numpy.int32)
-        
-        loc_now = 0
-        for ix in range(nx):
-            for iy in range(ny):
-                for iz in range(nz):
-                    ix2 = (nx - ix - shift_x) % nx
-                    iy2 = (ny - iy - shift_y) % ny
-                    iz2 = (nz - iz - shift_z) % nz
-                    
-                    loc = ix2 * ny * nz + iy2 * nz + iz2
-                    # res[loc_now] = loc
-                    res[loc] = loc_now
-                    loc_now += 1
-        return res
+    FREQ = np.zeros((ncell_complex, nGridPrim), dtype=np.complex128)
+    
+    fn_FREQ(
+        FREQ.ctypes.data_as(ctypes.c_void_p),
+        meshPrim.ctypes.data_as(ctypes.c_void_p),
+        Ls.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    # freq1 = np.array(range(meshPrim[0]), dtype=np.float64)
+    # freq2 = np.array(range(meshPrim[1]), dtype=np.float64)
+    # freq3 = np.array(range(meshPrim[2]), dtype=np.float64)
+    # freq_q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+    # freq1 = np.array(range(Ls[0]), dtype=np.float64)
+    # freq2 = np.array(range(Ls[1]), dtype=np.float64)
+    # freq3 = np.array(range(Ls[2]//2+1), dtype=np.float64)
+    # freq_Q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+    # FREQ = np.einsum("ijkl,ipqs->ijklpqs", freq_Q, freq_q)
+    # FREQ[0] /= (Ls[0] * meshPrim[0])
+    # FREQ[1] /= (Ls[1] * meshPrim[1])
+    # FREQ[2] /= (Ls[2] * meshPrim[2])
+    # FREQ = np.einsum("ijklpqs->jklpqs", FREQ)
+    # FREQ  = FREQ.reshape(-1, np.prod(meshPrim)).copy()
+    # FREQ  = np.exp(-2.0j * np.pi * FREQ)
+    # freq_Q = None
+    # freq_q = None
+    
+    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    
+    _benchmark_time(t1, t2, "FREQ")
+    
+    t1 = t2
+    
+    fn_permutation = getattr(libpbc, "_get_permutation", None)
+    assert fn_permutation is not None
+    
+    # def _permutation(nx, ny, nz, shift_x, shift_y, shift_z):
+    #     res = np.zeros((nx*ny*nz), dtype=numpy.int32)
+    #     loc_now = 0
+    #     for ix in range(nx):
+    #         for iy in range(ny):
+    #             for iz in range(nz):
+    #                 ix2 = (nx - ix - shift_x) % nx
+    #                 iy2 = (ny - iy - shift_y) % ny
+    #                 iz2 = (nz - iz - shift_z) % nz
+    #                 
+    #                 loc = ix2 * ny * nz + iy2 * nz + iz2
+    #                 # res[loc_now] = loc
+    #                 res[loc] = loc_now
+    #                 loc_now += 1
+    #     return res
 
     permutation = np.zeros((8, nGridPrim), dtype=np.int32)
-    permutation[0] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 0, 0)
-    permutation[1] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 0, 1)
-    permutation[2] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 1, 0)
-    permutation[3] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 1, 1)
-    permutation[4] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 0, 0)
-    permutation[5] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 0, 1)
-    permutation[6] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 0)
-    permutation[7] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 1)
+    # permutation[0] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 0, 0)
+    # permutation[1] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 0, 1)
+    # permutation[2] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 1, 0)
+    # permutation[3] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 1, 1)
+    # permutation[4] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 0, 0)
+    # permutation[5] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 0, 1)
+    # permutation[6] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 0)
+    # permutation[7] = _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 1)
+    
+    fn_permutation(
+        meshPrim.ctypes.data_as(ctypes.c_void_p),
+        permutation.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    
+    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    
+    _benchmark_time(t1, t2, "permutation")
     
     fac = np.sqrt(np.prod(Ls) / np.prod(Mesh))
     
@@ -439,6 +470,8 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
 
                     lib.square_inPlace(B_Buf1)
                     
+                    B_Buf1_FFT_buf = np.ndarray((nIP_Prim, ncell_complex, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_B_buf1_FFT)
+                    
                     fn(
                         B_Buf1.ctypes.data_as(ctypes.c_void_p),
                         ctypes.c_int(nIP_Prim),
@@ -446,6 +479,8 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                         Ls.ctypes.data_as(ctypes.c_void_p),
                         B_Buf1_FFT_buf.ctypes.data_as(ctypes.c_void_p)
                     )
+                    
+                    B_Buf1_FFT_buf = None
 
                     B_Buf1_complex = np.ndarray((nIP_Prim, ncell_complex, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_B_buf1)
                     B_Buf2 = np.ndarray((nIP_Prim, p1-p0), dtype=np.complex128, buffer=IO_buf, offset=offset_B_buf2)
@@ -478,6 +513,11 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                         ctypes.c_int(B_Buf2.shape[1])
                     )
                     
+                    AoR_Buf1       = None
+                    AoR_BufPack    = None
+                    B_Buf1         = None
+                    B_Buf1_complex = None
+                    B_Buf2         = None
                 
                 # print("B_block = ", B_block)
                     
@@ -593,6 +633,8 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                 
                 # W_buf.ravel()[:] = 0.0 # reset W_buf
                 
+                W_buf = np.ndarray((nIP_Prim, nIP_Prim), dtype=np.complex128, buffer=IO_buf, offset=offset_buf_W)
+                
                 fn_zset0(
                     W_buf.ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int64(W_buf.size)
@@ -608,6 +650,9 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                     meshPrim.ctypes.data_as(ctypes.c_void_p),
                     B_fft_buf.ctypes.data_as(ctypes.c_void_p)
                 )
+                
+                B_fft_buf = None
+                
                 
                 # print("aux_basis = ", B_block)
                 
@@ -650,7 +695,10 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
                         coulG[iloc2].ctypes.data_as(ctypes.c_void_p)
                     )                    
                     lib.dot(W_buf_2, W_buf_3.T.conj(), c=W_buf, beta=1)
-                
+                    
+                    W_buf_2 = None
+                    W_buf_3 = None  
+                    
                 # print("W_buf = ", W_buf)
                 # print("we get here!")
                 
@@ -675,6 +723,7 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
 
                 buf_A  = None
                 buf_A2 = None
+                W_buf  = None
                 
                 t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
                 
@@ -729,6 +778,8 @@ def _construct_aux_basis_W_kSym_Direct(mydf:isdf_fast.PBC_ISDF_Info, IO_buf:np.n
     
     W_buf2 = None
     W_buf3 = None
+    coulG  = None
+    permutation = None
     
     return W
 
@@ -819,7 +870,7 @@ if __name__ == '__main__':
     boxlen = 3.5668
     prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     
-    KE_CUTOFF = 30
+    KE_CUTOFF = 70
     
     atm = [
         ['C', (0.     , 0.     , 0.    )],
@@ -839,7 +890,7 @@ if __name__ == '__main__':
     # Ls = [2, 2, 2]
     # Ls = [2, 1, 3]
     # Ls = [3, 3, 3]
-    Ls = [2, 2, 2]
+    Ls = [1, 2, 3]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)

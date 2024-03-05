@@ -340,3 +340,167 @@ void _PermutationConj(
     }
 }
 
+#define PI 3.14159265358979323846
+
+void meshgrid(int *range1, int size1, int *range2, int size2, int *range3, int size3, int *output)
+{
+#pragma omp parallel for collapse(3)
+    for (int i = 0; i < size1; i++)
+    {
+        for (int j = 0; j < size2; j++)
+        {
+            for (int k = 0; k < size3; k++)
+            {
+                output[(i * size2 * size3 + j * size3 + k) * 3 + 0] = range1[i];
+                output[(i * size2 * size3 + j * size3 + k) * 3 + 1] = range2[j];
+                output[(i * size2 * size3 + j * size3 + k) * 3 + 2] = range3[k];
+            }
+        }
+    }
+}
+
+void _FREQ(
+    double __complex__ *FREQ,
+    const int *meshPrim,
+    const int *Ls)
+{
+    int *freq1_q = (int *)malloc(meshPrim[0] * sizeof(int));
+    int *freq2_q = (int *)malloc(meshPrim[1] * sizeof(int));
+    int *freq3_q = (int *)malloc(meshPrim[2] * sizeof(int));
+
+    for (int i = 0; i < meshPrim[0]; i++)
+    {
+        freq1_q[i] = i;
+    }
+    for (int i = 0; i < meshPrim[1]; i++)
+    {
+        freq2_q[i] = i;
+    }
+    for (int i = 0; i < meshPrim[2]; i++)
+    {
+        freq3_q[i] = i;
+    }
+
+    int *freq_q = (int *)malloc(meshPrim[0] * meshPrim[1] * meshPrim[2] * 3 * sizeof(int));
+    meshgrid(freq1_q, meshPrim[0], freq2_q, meshPrim[1], freq3_q, meshPrim[2], freq_q);
+
+    int *freq1_Q = (int *)malloc(Ls[0] * sizeof(int));
+    int *freq2_Q = (int *)malloc(Ls[1] * sizeof(int));
+    int *freq3_Q = (int *)malloc((Ls[2] / 2 + 1) * sizeof(int));
+
+    for (int i = 0; i < Ls[0]; i++)
+    {
+        freq1_Q[i] = i;
+    }
+    for (int i = 0; i < Ls[1]; i++)
+    {
+        freq2_Q[i] = i;
+    }
+    for (int i = 0; i < Ls[2] / 2 + 1; i++)
+    {
+        freq3_Q[i] = i;
+    }
+
+    int *freq_Q = (int *)malloc(Ls[0] * Ls[1] * (Ls[2] / 2 + 1) * 3 * sizeof(int));
+    meshgrid(freq1_Q, Ls[0], freq2_Q, Ls[1], freq3_Q, Ls[2] / 2 + 1, freq_Q);
+
+#pragma omp parallel for collapse(6)
+    for (int i = 0; i < Ls[0]; i++)
+    {
+        for (int j = 0; j < Ls[1]; j++)
+        {
+            for (int k = 0; k < Ls[2] / 2 + 1; k++)
+            {
+                for (int p = 0; p < meshPrim[0]; p++)
+                {
+                    for (int q = 0; q < meshPrim[1]; q++)
+                    {
+                        for (int s = 0; s < meshPrim[2]; s++)
+                        {
+                            FREQ[(i * Ls[1] * (Ls[2] / 2 + 1) * meshPrim[0] * meshPrim[1] * meshPrim[2] +
+                                  j * (Ls[2] / 2 + 1) * meshPrim[0] * meshPrim[1] * meshPrim[2] +
+                                  k * meshPrim[0] * meshPrim[1] * meshPrim[2] +
+                                  p * meshPrim[1] * meshPrim[2] +
+                                  q * meshPrim[2] +
+                                  s)] = freq_Q[(i * Ls[1] * (Ls[2] / 2 + 1) + j * (Ls[2] / 2 + 1) + k) * 3 + 0] * freq_q[(p * meshPrim[1] * meshPrim[2] + q * meshPrim[2] + s) * 3 + 0] / (double)(Ls[0] * meshPrim[0]) +
+                                        freq_Q[(i * Ls[1] * (Ls[2] / 2 + 1) + j * (Ls[2] / 2 + 1) + k) * 3 + 1] * freq_q[(p * meshPrim[1] * meshPrim[2] + q * meshPrim[2] + s) * 3 + 1] / (double)(Ls[1] * meshPrim[1]) +
+                                        freq_Q[(i * Ls[1] * (Ls[2] / 2 + 1) + j * (Ls[2] / 2 + 1) + k) * 3 + 2] * freq_q[(p * meshPrim[1] * meshPrim[2] + q * meshPrim[2] + s) * 3 + 2] / (double)(Ls[2] * meshPrim[2]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+#pragma omp parallel for
+    for (int i = 0; i < Ls[0] * Ls[1] * (Ls[2] / 2 + 1) * meshPrim[0] * meshPrim[1] * meshPrim[2]; i++)
+    {
+        FREQ[i] = cexp(-2.0 * PI * I * FREQ[i]);
+    }
+
+    free(freq1_q);
+    free(freq2_q);
+    free(freq3_q);
+    free(freq_q);
+    free(freq1_Q);
+    free(freq2_Q);
+    free(freq3_Q);
+    free(freq_Q);
+}
+
+#undef PI
+
+void _permutation(int nx, int ny, int nz, int shift_x, int shift_y, int shift_z, int *res)
+{
+
+#pragma omp parallel for collapse(3)
+    for (int ix = 0; ix < nx; ix++)
+    {
+        for (int iy = 0; iy < ny; iy++)
+        {
+            for (int iz = 0; iz < nz; iz++)
+            {
+                int ix2 = (nx - ix - shift_x) % nx;
+                int iy2 = (ny - iy - shift_y) % ny;
+                int iz2 = (nz - iz - shift_z) % nz;
+                int loc = ix2 * ny * nz + iy2 * nz + iz2;
+                int loc_now = ix * ny * nz + iy * nz + iz;
+                res[loc] = loc_now;
+            }
+        }
+    }
+}
+
+void _get_permutation(
+    const int *meshPrim,
+    int *res)
+{
+    int nGridPrim = meshPrim[0] * meshPrim[1] * meshPrim[2];
+
+#pragma omp parallel sections
+    {
+#pragma omp section
+        _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 0, 0, &res[0 * nGridPrim]);
+
+#pragma omp section
+        _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 0, 1, &res[1 * nGridPrim]);
+
+#pragma omp section
+        _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 1, 0, &res[2 * nGridPrim]);
+
+#pragma omp section
+        _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 0, 1, 1, &res[3 * nGridPrim]);
+
+#pragma omp section
+        _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 0, 0, &res[4 * nGridPrim]);
+
+#pragma omp section
+        _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 0, 1, &res[5 * nGridPrim]);
+
+#pragma omp section
+        _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 0, &res[6 * nGridPrim]);
+
+#pragma omp section
+        _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 1, &res[7 * nGridPrim]);
+    }
+}
