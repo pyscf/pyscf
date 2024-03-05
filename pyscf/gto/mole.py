@@ -2420,8 +2420,8 @@ class MoleBase(lib.StreamObject):
             self._enuc = self.energy_nuc()
         return self._enuc
     @enuc.setter
-    def enuc(self, enuc):
-        self._enuc = enuc
+    def enuc(self, x):
+        self._enuc = x
 
     copy = copy
 
@@ -2797,8 +2797,7 @@ class MoleBase(lib.StreamObject):
 
         if self.verbose >= logger.INFO:
             self.stdout.write('\n')
-            if hasattr(self, "enuc"):
-                logger.info(self, 'nuclear repulsion = %.15g', self.enuc)
+            logger.info(self, 'nuclear repulsion = %.15g', self.enuc)
 
             if self.symmetry:
                 if self.topgroup == self.groupname:
