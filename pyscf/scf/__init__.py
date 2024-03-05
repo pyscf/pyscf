@@ -123,8 +123,8 @@ from pyscf.scf.addons import *
 from pyscf.soscf.m3soscf import M3SOSCF as m3soscf_py
 from pyscf.scf.diis_m3 import DIIS_M3 as diis_m3
 
-def M3SOSCF(mf, threads, purge_solvers=0.5, convergence=8, init_scattering=0.3, trust_scale_range=(0.05, 0.5, 0.5), mem_size=1, mem_scale=0.2, init_guess='minao', stepsize=0.2):
-    return m3soscf_py(mf, threads, purge_solvers, convergence, init_scattering, trust_scale_range, mem_size, mem_scale, init_guess, stepsize)
+def M3SOSCF(mf, threads, purge_solvers=0.5, convergence=8, init_scattering=0.3, trust_scale_range=(0.05, 0.5, 0.5), init_guess='minao', stepsize=0.2):
+    return m3soscf_py(mf, threads, purge_solvers, convergence, init_scattering, trust_scale_range, init_guess, stepsize)
 
 def DIIS_M3(mf, threads, purge_solvers=0.5, convergence=8, init_scattering=0.1, trust_scale_range=(0.01, 0.2, 8), mem_size=1, mem_scale=0.2):
     return diis_m3(mf, threads, purge_solvers, convergence, init_scattering, trust_scale_range, mem_size, mem_scale)
