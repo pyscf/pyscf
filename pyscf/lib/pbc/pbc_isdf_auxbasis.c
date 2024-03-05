@@ -180,15 +180,22 @@ void ColPivotQR(
 
             // get the local max
 
-            double max_norm2 = global_buffer[begin_id];
-            reduce_indx_buffer[thread_id] = begin_id;
-            for (j = begin_id + 1; j < end_id; j++)
+            if (begin_id < end_id)
             {
-                if (global_buffer[j] > max_norm2)
+                double max_norm2 = global_buffer[begin_id];
+                reduce_indx_buffer[thread_id] = begin_id;
+                for (j = begin_id + 1; j < end_id; j++)
                 {
-                    max_norm2 = global_buffer[j];
-                    reduce_indx_buffer[thread_id] = j;
+                    if (global_buffer[j] > max_norm2)
+                    {
+                        max_norm2 = global_buffer[j];
+                        reduce_indx_buffer[thread_id] = j;
+                    }
                 }
+            }
+            else
+            {
+                reduce_indx_buffer[thread_id] = begin_id - 1;
             }
 
             // printf("max_norm2: %.3e\n", max_norm2);
@@ -197,26 +204,46 @@ void ColPivotQR(
 
 #pragma omp single
             {
+                // printf("--------------------------------\n");
                 maxnorm = global_buffer[reduce_indx_buffer[0]];
                 argmaxnorm = reduce_indx_buffer[0];
+                // printf("maxnorm: %.3e\n", maxnorm);
+                // printf("argmaxnorm: %d\n", argmaxnorm);
                 for (j = 1; j < nThread; j++)
                 {
                     if (global_buffer[reduce_indx_buffer[j]] > maxnorm)
                     {
+                        // printf("j = %d\n", j);
+                        // printf("global_buffer[reduce_indx_buffer[j]]: %.3e\n", global_buffer[reduce_indx_buffer[j]]);
+
                         maxnorm = global_buffer[reduce_indx_buffer[j]];
                         argmaxnorm = reduce_indx_buffer[j];
+
+                        // printf("maxnorm: %.3e\n", maxnorm);
+                        // printf("argmaxnorm: %d\n", argmaxnorm);
                     }
                 }
+
+                // printf("i = %d\n", i);
+                // printf("argmaxnorm = %d\n", argmaxnorm);
 
                 int tmp;
                 tmp = pivot[i];
                 pivot[i] = pivot[argmaxnorm];
                 pivot[argmaxnorm] = tmp;
 
+                // printf("argmaxnorm: %d\n", argmaxnorm);
+                // printf("tmp = %d\n", tmp);
+                // printf("pivot[i] = %d\n", pivot[i]);
+                // printf("pivot[argmaxnorm] = %d\n", pivot[argmaxnorm]);
+                // printf("--------------------------------\n");
+
                 maxnorm = sqrt(maxnorm);
                 R[i * nGrid + i] = maxnorm;
                 // printf("R[%3d,%3d] = maxnorm = %10.3e\n", i, i, maxnorm);
             }
+
+#pragma omp barrier
 
             //// 2. switch
 

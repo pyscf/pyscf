@@ -34,7 +34,7 @@ MOL_STRUCTURE = '''
                 '''
                 
 # C_ARRAY = [7, 15, 25, 35]
-C_ARRAY = [15]
+C_ARRAY = [7]
 SuperCell_ARRAY = [
     [1, 1, 1],
     # [1, 1, 2],
@@ -165,7 +165,7 @@ if __name__ == '__main__':
                         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
                         mf = scf.RHF(cell)
                         mf.with_df = pbc_isdf_info
-                        mf.max_cycle = 64
+                        mf.max_cycle = 128
                         mf.conv_tol = 1e-7
                         pbc_isdf_info.direct_scf = mf.direct_scf
                         mf.kernel()
