@@ -321,7 +321,6 @@ def _select_IP_ksym_global_direct(mydf, c:int, m:int, first_natm=None):
         naux_max = max(naux_max, int(np.sqrt(c*nao_atm)) + m)
 
     nthread = lib.num_threads()
-    nthread = min(nthread, natm)
 
     buf_size_per_thread = mydf.get_buffer_size_in_IP_selection(c, m)
     # buf_size            = buf_size_per_thread

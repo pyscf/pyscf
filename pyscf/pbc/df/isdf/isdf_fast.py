@@ -340,6 +340,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         cutoff   = abs(R[npt_find-1, npt_find-1])
         print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (len(results), npt_find, cutoff))
         pivot = pivot[:npt_find]
+        print("pivot = ", pivot)
 
         pivot.sort()
 

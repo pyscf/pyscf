@@ -860,7 +860,7 @@ class PBC_ISDF_Info_kSym_Direct(isdf_k.PBC_ISDF_Info_kSym):
     def build_auxiliary_Coulomb(self):
         raise NotImplementedError("build_auxiliary_Coulomb is not implemented in PBC_ISDF_Info_kSym_Direct")
 
-C = 15
+C = 7
 M = 5
 
 from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
@@ -881,7 +881,7 @@ if __name__ == '__main__':
     #     ['C', (0.8917 , 2.6751 , 2.6751)],
     # ]
     
-    KE_CUTOFF = 128
+    KE_CUTOFF = 256
     boxlen = 4.2
     prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     atm = [
@@ -895,7 +895,7 @@ if __name__ == '__main__':
         ['H',  (2.1 , 2.1 , 2.1)],
     ]
     
-    prim_cell = isdf_k.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
+    prim_cell = isdf_k.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis='gth-dzvp')
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
     
@@ -908,7 +908,7 @@ if __name__ == '__main__':
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
-    cell = isdf_k.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh)
+    cell = isdf_k.build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh, basis='gth-dzvp')
     
     pbc_isdf_info = PBC_ISDF_Info_kSym_Direct(cell, 800 * 1000 * 1000, Ls=Ls)
     pbc_isdf_info.build_kISDF_obj(c=C, m=M)
@@ -929,6 +929,8 @@ if __name__ == '__main__':
     print("mf.direct_scf = ", mf.direct_scf)
 
     mf.kernel()
+    
+    exit(1)
     
     #### another test ####
     
