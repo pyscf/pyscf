@@ -1388,7 +1388,7 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
 
     get_jk = get_jk_dm_outcore
 
-C = 10
+C = 15
 
 from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 
@@ -1398,31 +1398,44 @@ if __name__ == '__main__':
     boxlen = 3.5668
     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
 
+    # cell.atom = '''
+    #                C     0.      0.      0.
+    #                C     0.8917  0.8917  0.8917
+    #                C     1.7834  1.7834  0.
+    #                C     2.6751  2.6751  0.8917
+    #                C     1.7834  0.      1.7834
+    #                C     2.6751  0.8917  2.6751
+    #                C     0.      1.7834  1.7834
+    #                C     0.8917  2.6751  2.6751
+    #             '''
+
+    boxlen = 4.2
+    cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     cell.atom = '''
-                   C     0.      0.      0.
-                   C     0.8917  0.8917  0.8917
-                   C     1.7834  1.7834  0.
-                   C     2.6751  2.6751  0.8917
-                   C     1.7834  0.      1.7834
-                   C     2.6751  0.8917  2.6751
-                   C     0.      1.7834  1.7834
-                   C     0.8917  2.6751  2.6751
-                '''
+Li 0.0   0.0   0.0
+Li 2.1   2.1   0.0
+Li 0.0   2.1   2.1
+Li 2.1   0.0   2.1
+H  0.0   0.0   2.1
+H  0.0   2.1   0.0
+H  2.1   0.0   0.0
+H  2.1   2.1   2.1
+'''
 
     cell.basis   = 'gth-dzvp'
     # cell.basis   = 'gth-tzvp'
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
-    # cell.ke_cutoff  = 256   # kinetic energy cutoff in a.u.
-    cell.ke_cutoff = 16
+    cell.ke_cutoff  = 128   # kinetic energy cutoff in a.u.
+    # cell.ke_cutoff = 16
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
 
     cell.build()
 
-    cell = tools.super_cell(cell, [1, 1, 2])
+    cell = tools.super_cell(cell, [1, 1, 1])
 
     from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
 

@@ -128,6 +128,7 @@ void ColPivotQR(
 
 #pragma omp parallel num_threads(nThread)
         {
+
             int thread_id = omp_get_thread_num();
             double *buf = thread_buffer + thread_id * nGrid;
             memset(buf, 0, sizeof(double) * nGrid);
@@ -148,10 +149,20 @@ void ColPivotQR(
                 }
             }
 
-            int bunchsize = (nGrid - i) / nThread;
+            int bunchsize = (nGrid - i) / nThread + 1;
             int begin_id = i + thread_id * bunchsize;
             int end_id = i + (thread_id + 1) * bunchsize;
             if (thread_id == nThread - 1)
+            {
+                end_id = nGrid;
+            }
+
+            if (begin_id >= nGrid)
+            {
+                begin_id = nGrid;
+            }
+
+            if (end_id > nGrid)
             {
                 end_id = nGrid;
             }
@@ -179,6 +190,8 @@ void ColPivotQR(
                     reduce_indx_buffer[thread_id] = j;
                 }
             }
+
+            // printf("max_norm2: %.3e\n", max_norm2);
 
 #pragma omp barrier
 

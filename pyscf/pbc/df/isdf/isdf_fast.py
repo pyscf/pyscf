@@ -111,7 +111,6 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         naux_max = max(naux_max, int(np.sqrt(c*nao_atm)) + m)
 
     nthread = lib.num_threads()
-    nthread = min(nthread, natm)
 
     buf_size_per_thread = mydf.get_buffer_size_in_IP_selection(c, m)
     buf_size            = buf_size_per_thread
@@ -181,7 +180,8 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
             naux_now = int(np.sqrt(c*nao_atm)) + m
             naux2_now = naux_now * naux_now
 
-            R = np.ndarray((naux2_now, grid_ID.shape[0]), dtype=np.float64, buffer=buf_tmp, offset=offset)
+            # R = np.ndarray((naux2_now, grid_ID.shape[0]), dtype=np.float64, buffer=buf_tmp, offset=offset)
+            R = np.ndarray((naux2_now, grid_ID.shape[0]), dtype=np.float64)
             offset += naux2_now*grid_ID.shape[0] * dtypesize
 
             aoR_atm1 = np.ndarray((naux_now, grid_ID.shape[0]), dtype=np.float64, buffer=buf_tmp, offset=offset)
@@ -217,10 +217,13 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
             npt_find      = ctypes.c_int(0)
             pivot         = np.arange(grid_ID.shape[0], dtype=np.int32)
             thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64, buffer=buf_tmp, offset=offset)
+            # thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64)
             offset       += (nthread+1)*(grid_ID.shape[0]+1) * dtypesize
             global_buffer = np.ndarray((1, grid_ID.shape[0]), dtype=np.float64, buffer=buf_tmp, offset=offset)
+            # global_buffer = np.ndarray((1, grid_ID.shape[0]), dtype=np.float64)
             offset       += grid_ID.shape[0] * dtypesize
 
+            print("thread_buffer.shape = ", thread_buffer.shape)
             fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(naux2_now),
                             ctypes.c_int(grid_ID.shape[0]),
@@ -232,6 +235,9 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                             thread_buffer.ctypes.data_as(ctypes.c_void_p),
                             global_buffer.ctypes.data_as(ctypes.c_void_p))
             npt_find = npt_find.value
+            
+            # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
+            
             cutoff   = abs(R[npt_find-1, npt_find-1])
             print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
             pivot = pivot[:npt_find]
@@ -271,7 +277,8 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         print("naux_now = ", naux_now)
         print("naux2_now = ", naux2_now)
 
-        R = np.ndarray((naux2_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        # R = np.ndarray((naux2_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        R = np.ndarray((naux2_now, len(results)), dtype=np.float64)
         offset += naux2_now*len(results) * dtypesize
 
         aoRg1 = np.ndarray((naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
@@ -310,8 +317,10 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         npt_find      = ctypes.c_int(0)
         pivot         = np.arange(len(results), dtype=np.int32)
         thread_buffer = np.ndarray((nthread+1, len(results)+1), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        # thread_buffer = np.ndarray((nthread+1, len(results)+1), dtype=np.float64)
         offset       += (nthread+1)*(len(results)+1) * dtypesize
         global_buffer = np.ndarray((1, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        # global_buffer = np.ndarray((1, len(results)), dtype=np.float64)
         offset       += len(results) * dtypesize
 
         fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
@@ -324,8 +333,10 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                         ctypes.byref(npt_find),
                         thread_buffer.ctypes.data_as(ctypes.c_void_p),
                         global_buffer.ctypes.data_as(ctypes.c_void_p))
-
         npt_find = npt_find.value
+        
+        # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
+        
         cutoff   = abs(R[npt_find-1, npt_find-1])
         print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (len(results), npt_find, cutoff))
         pivot = pivot[:npt_find]
@@ -790,30 +801,44 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     get_jk = isdf_jk.get_jk_dm
 
+C = 20
+
 if __name__ == '__main__':
 
     cell   = pbcgto.Cell()
-    boxlen = 3.5668
-    cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    # boxlen = 3.5668
+    # cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    # cell.atom = '''
+    #                C     0.      0.      0.
+    #                C     0.8917  0.8917  0.8917
+    #                C     1.7834  1.7834  0.
+    #                C     2.6751  2.6751  0.8917
+    #                C     1.7834  0.      1.7834
+    #                C     2.6751  0.8917  2.6751
+    #                C     0.      1.7834  1.7834
+    #                C     0.8917  2.6751  2.6751
+    #             '''
 
+    boxlen = 4.2
+    cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     cell.atom = '''
-                   C     0.      0.      0.
-                   C     0.8917  0.8917  0.8917
-                   C     1.7834  1.7834  0.
-                   C     2.6751  2.6751  0.8917
-                   C     1.7834  0.      1.7834
-                   C     2.6751  0.8917  2.6751
-                   C     0.      1.7834  1.7834
-                   C     0.8917  2.6751  2.6751
-                '''
+Li 0.0   0.0   0.0
+Li 2.1   2.1   0.0
+Li 0.0   2.1   2.1
+Li 2.1   0.0   2.1
+H  0.0   0.0   2.1
+H  0.0   2.1   0.0
+H  2.1   0.0   0.0
+H  2.1   2.1   2.1
+'''
 
     cell.basis   = 'gth-dzvp'
     # cell.basis   = 'gth-tzvp'
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
-    # cell.ke_cutoff  = 256   # kinetic energy cutoff in a.u.
-    cell.ke_cutoff = 70
+    cell.ke_cutoff  = 128   # kinetic energy cutoff in a.u.
+    # cell.ke_cutoff = 70
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
@@ -844,7 +869,7 @@ if __name__ == '__main__':
     print("aoR.shape = ", aoR.shape)
 
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR)
-    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=20, global_IP_selection=False)
+    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=C, global_IP_selection=False)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
     # pbc_isdf_info.check_AOPairError()
 
