@@ -2797,7 +2797,9 @@ class MoleBase(lib.StreamObject):
 
         if self.verbose >= logger.INFO:
             self.stdout.write('\n')
-            logger.info(self, 'nuclear repulsion = %.15g', self.enuc)
+            if hasattr(self, "enuc"):
+                logger.info(self, 'nuclear repulsion = %.15g', self.enuc)
+
             if self.symmetry:
                 if self.topgroup == self.groupname:
                     logger.info(self, 'point group symmetry = %s', self.topgroup)
