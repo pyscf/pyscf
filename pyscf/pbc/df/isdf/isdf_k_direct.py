@@ -828,10 +828,10 @@ class PBC_ISDF_Info_kSym_Direct(isdf_k.PBC_ISDF_Info_kSym):
         self.ddot_buf  = np.ndarray((size_ddot_buf), dtype=np.float64)
 
     # @profile
-    def build_kISDF_obj(self, c:int = 5, m:int = 5):
+    def build_kISDF_obj(self, c:int = 5, m:int = 5, global_selection=False):
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        self.IP_ID = self.select_IP(c, m)  # prim_gridID
+        self.IP_ID = self.select_IP(c, m, global_selection=global_selection)  # prim_gridID
         self.IP_ID = np.asarray(self.IP_ID, dtype=np.int32)
         # print("IP_ID = ", self.IP_ID)
         # print("len(IP_ID) = ", len(self.IP_ID))
@@ -860,7 +860,7 @@ class PBC_ISDF_Info_kSym_Direct(isdf_k.PBC_ISDF_Info_kSym):
     def build_auxiliary_Coulomb(self):
         raise NotImplementedError("build_auxiliary_Coulomb is not implemented in PBC_ISDF_Info_kSym_Direct")
 
-C = 25
+C = 15
 M = 5
 
 from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
@@ -870,7 +870,7 @@ if __name__ == '__main__':
     boxlen = 3.5668
     prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     
-    KE_CUTOFF = 70
+    KE_CUTOFF = 24
     
     atm = [
         ['C', (0.     , 0.     , 0.    )],
@@ -890,7 +890,7 @@ if __name__ == '__main__':
     # Ls = [2, 2, 2]
     # Ls = [2, 1, 3]
     # Ls = [3, 3, 3]
-    Ls = [1, 2, 3]
+    Ls = [2, 2, 3]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -917,4 +917,20 @@ if __name__ == '__main__':
 
     mf.kernel()
     
+    #### another test ####
+    
+    pbc_isdf_info = PBC_ISDF_Info_kSym_Direct(cell, 800 * 1000 * 1000, Ls=Ls)
+    pbc_isdf_info.build_kISDF_obj(c=C, m=M, global_selection=True)
+    
+    from pyscf.pbc import scf
+    
+    mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    mf.with_df = pbc_isdf_info
+    mf.max_cycle = 16
+    mf.conv_tol = 1e-7
+
+    print("mf.direct_scf = ", mf.direct_scf)
+
+    mf.kernel()
     

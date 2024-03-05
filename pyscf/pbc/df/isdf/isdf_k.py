@@ -298,6 +298,175 @@ def _get_possible_IP(pbc_isdf_info:PBC_ISDF_Info, Ls, coords):
     
     return possible_grid_ID, np.array(coords[possible_grid_ID])
 
+####### global IP selection #######
+
+def _select_IP_ksym_global_direct(mydf, c:int, m:int, first_natm=None):
+
+    print("In _select_IP_ksym_global_direct")
+
+    bunchsize = lib.num_threads()
+
+    ### determine the largest grids point of one atm ###
+
+    natm         = mydf.cell.natm
+    nao          = mydf.nao
+    naux_max     = 0
+
+    nao_per_atm = np.zeros((natm), dtype=np.int32)
+    for i in range(mydf.nao):
+        atm_id = mydf.ao2atomID[i]
+        nao_per_atm[atm_id] += 1
+
+    for nao_atm in nao_per_atm:
+        naux_max = max(naux_max, int(np.sqrt(c*nao_atm)) + m)
+
+    nthread = lib.num_threads()
+    nthread = min(nthread, natm)
+
+    buf_size_per_thread = mydf.get_buffer_size_in_IP_selection(c, m)
+    # buf_size            = buf_size_per_thread
+    buf_size = 0
+
+    # print("nthread        = ", nthread)
+    # print("buf_size       = ", buf_size)
+    # print("buf_per_thread = ", buf_size_per_thread)
+
+    if hasattr(mydf, "IO_buf"):
+        buf = mydf.IO_buf
+    else:
+        buf = np.zeros((buf_size), dtype=np.float64)
+        mydf.IO_buf = buf
+
+    if buf.size < buf_size:
+        # reallocate
+        mydf.IO_buf = np.zeros((buf_size), dtype=np.float64)
+        print("reallocate buf of size = ", buf_size)
+        buf = mydf.IO_buf
+    buf_tmp = np.ndarray((buf_size), dtype=np.float64, buffer=buf)
+
+    ### loop over atm ###
+
+    from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
+
+    df_tmp  = MultiGridFFTDF2(mydf.cell)
+    grids   = df_tmp.grids
+    coords  = np.asarray(grids.coords).reshape(-1,3)
+    assert coords is not None
+
+    results = []
+
+    fn_colpivot_qr = getattr(libpbc, "ColPivotQR", None)
+    assert(fn_colpivot_qr is not None)
+    fn_ik_jk_ijk = getattr(libpbc, "NP_d_ik_jk_ijk", None)
+    assert(fn_ik_jk_ijk is not None)
+
+    weight = np.sqrt(mydf.cell.vol / coords.shape[0])
+
+    aoR = mydf.aoR
+    ngrid_prim = mydf.nGridPrim
+    
+    if aoR is None:
+        aoR = mydf._numint.eval_ao(mydf.cell, mydf.ordered_grid_coords[:ngrid_prim])[0].T * weight
+    
+    assert ngrid_prim == aoR.shape[1]
+    assert nao == aoR.shape[0]
+
+    results = list(range(ngrid_prim))
+    results = np.array(results, dtype=np.int32)
+
+    ### global IP selection, we can use this step to avoid numerical issue ###
+
+    print("global IP selection")
+
+    bufsize = mydf.get_buffer_size_in_global_IP_selection(ngrid_prim, c, m)
+
+    if buf.size < bufsize:
+        mydf.IO_buf = np.zeros((bufsize), dtype=np.float64)
+        buf = mydf.IO_buf
+        print("reallocate buf of size = ", bufsize)
+
+    dtypesize = buf.dtype.itemsize
+
+    buf_tmp = np.ndarray((bufsize), dtype=np.float64, buffer=buf)
+
+    offset = 0
+    aoRg   = np.ndarray((nao, len(results)), dtype=np.complex128, buffer=buf_tmp)
+    aoRg = aoR
+    
+    offset += nao*len(results) * dtypesize
+
+    naux_now  = int(np.sqrt(c*nao)) + m
+    naux2_now = naux_now * naux_now
+
+    print("naux_now = ", naux_now)
+    print("naux2_now = ", naux2_now)
+
+    R = np.ndarray((naux2_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+    offset += naux2_now*len(results) * dtypesize
+
+    aoRg1 = np.ndarray((naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+    offset += naux_now*len(results) * dtypesize
+
+    aoRg2 = np.ndarray((naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+    offset += naux_now*len(results) * dtypesize
+
+    aoPairBuffer = np.ndarray(
+            (naux_now*naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+    offset += naux_now*naux_now*len(results) * dtypesize
+
+    G1 = np.random.rand(nao, naux_now)
+    G1, _ = numpy.linalg.qr(G1)
+    G1    = G1.T
+    G2 = np.random.rand(nao, naux_now)
+    G2, _ = numpy.linalg.qr(G2)
+    G2    = G2.T
+
+    lib.dot(G1, aoRg, c=aoRg1)
+    lib.dot(G2, aoRg, c=aoRg2)
+
+    fn_ik_jk_ijk(aoRg1.ctypes.data_as(ctypes.c_void_p),
+                 aoRg2.ctypes.data_as(ctypes.c_void_p),
+                 aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
+                 ctypes.c_int(naux_now),
+                 ctypes.c_int(naux_now),
+                 ctypes.c_int(len(results)))
+
+    nao_first = np.sum(nao_per_atm[:first_natm])
+
+    max_rank  = min(naux2_now, len(results), nao_first * c)
+
+    print("max_rank = ", max_rank)
+
+    npt_find      = ctypes.c_int(0)
+    pivot         = np.arange(len(results), dtype=np.int32)
+    thread_buffer = np.ndarray((nthread+1, len(results)+1), dtype=np.float64, buffer=buf_tmp, offset=offset)
+    offset       += (nthread+1)*(len(results)+1) * dtypesize
+    global_buffer = np.ndarray((1, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+    offset       += len(results) * dtypesize
+
+    fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(naux2_now),
+                    ctypes.c_int(len(results)),
+                    ctypes.c_int(max_rank),
+                    ctypes.c_double(1e-14),
+                    pivot.ctypes.data_as(ctypes.c_void_p),
+                    R.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.byref(npt_find),
+                    thread_buffer.ctypes.data_as(ctypes.c_void_p),
+                    global_buffer.ctypes.data_as(ctypes.c_void_p))
+
+    npt_find = npt_find.value
+    cutoff   = abs(R[npt_find-1, npt_find-1])
+    print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (len(results), npt_find, cutoff))
+    pivot = pivot[:npt_find]
+
+    pivot.sort()
+
+    results = np.array(results, dtype=np.int32)
+    results = list(results[pivot])
+
+    return results
+
   
 ####################### build aux basis #######################
 
@@ -2719,7 +2888,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     ################ select IP ################
     
     # @profile 
-    def select_IP(self, c:int, m:int, possible_grid_ID=None):
+    def select_IP(self, c:int, m:int, possible_grid_ID=None, global_selection=False):
         first_natm = self.cell.natm // np.prod(self.Ls)
         
         print("first_natm = ", first_natm)
@@ -2731,20 +2900,31 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         mesh = self.cell.mesh
         mesh_prim = np.array(mesh) // np.array(self.Ls)
         ngrid_prim = np.prod(mesh_prim)
+        grid_primitive = self.ordered_grid_coords_dict[(0,0,0)]
+        # self.IP_coords = grid_primitive[possible_grid_ID]
+        weight         = np.sqrt(self.cell.vol / self.ngrids)
+        self.nGridPrim = grid_primitive.shape[0]
+        
         
         if possible_grid_ID is None:
-            IP_GlobalID = ISDF._select_IP_direct(self, c, m, first_natm, True) # we do not have to perform selection IP over the whole supercell ! 
+            if global_selection:
+                IP_GlobalID = _select_IP_ksym_global_direct(self, c, m, first_natm)
+            else:
+                IP_GlobalID = ISDF._select_IP_direct(self, c, m, first_natm, True) # we do not have to perform selection IP over the whole supercell ! 
             print("len of IP_GlobalID = ", len(IP_GlobalID))
     
             possible_grid_ID = []
-    
-            for grid_id in IP_GlobalID:
-                pnt_id = (grid_id // (mesh[1] * mesh[2]), (grid_id // mesh[2]) % mesh[1], grid_id % mesh[2])
-                box_id = (pnt_id[0] // mesh_prim[0], pnt_id[1] // mesh_prim[1], pnt_id[2] // mesh_prim[2])
-                pnt_prim_id = (pnt_id[0] % mesh_prim[0], pnt_id[1] % mesh_prim[1], pnt_id[2] % mesh_prim[2])
-                pnt_prim_ravel_id = pnt_prim_id[0] * mesh_prim[1] * mesh_prim[2] + pnt_prim_id[1] * mesh_prim[2] + pnt_prim_id[2]
-                # print("grid_id = %d, pnt_id = %s, box_id = %s, pnt_prim_id = %s" % (grid_id, pnt_id, box_id, pnt_prim_id))
-                possible_grid_ID.append(pnt_prim_ravel_id)
+
+            if global_selection == False:
+                for grid_id in IP_GlobalID:
+                    pnt_id = (grid_id // (mesh[1] * mesh[2]), (grid_id // mesh[2]) % mesh[1], grid_id % mesh[2])
+                    box_id = (pnt_id[0] // mesh_prim[0], pnt_id[1] // mesh_prim[1], pnt_id[2] // mesh_prim[2])
+                    pnt_prim_id = (pnt_id[0] % mesh_prim[0], pnt_id[1] % mesh_prim[1], pnt_id[2] % mesh_prim[2])
+                    pnt_prim_ravel_id = pnt_prim_id[0] * mesh_prim[1] * mesh_prim[2] + pnt_prim_id[1] * mesh_prim[2] + pnt_prim_id[2]
+                    # print("grid_id = %d, pnt_id = %s, box_id = %s, pnt_prim_id = %s" % (grid_id, pnt_id, box_id, pnt_prim_id))
+                    possible_grid_ID.append(pnt_prim_ravel_id)
+            else:
+                possible_grid_ID = IP_GlobalID.copy()
 
             possible_grid_ID = list(set(possible_grid_ID))
             possible_grid_ID.sort()
@@ -2763,13 +2943,9 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
                     ordered_IP_coords.append(self.ordered_grid_coords_dict[(ix,iy,iz)][possible_grid_ID]) # enforce translation symmetry
         
         self.ordered_IP_coords = np.array(ordered_IP_coords).reshape(-1,3).copy()
-        
-        grid_primitive = self.ordered_grid_coords_dict[(0,0,0)]
-        # self.IP_coords = grid_primitive[possible_grid_ID]
-        weight         = np.sqrt(self.cell.vol / self.ngrids)
+    
         self.aoRg      = self._numint.eval_ao(self.cell, self.ordered_IP_coords)[0].T * weight
         self.aoRg_Prim = self.aoRg[:, :len(possible_grid_ID)].copy()
-        self.nGridPrim = grid_primitive.shape[0]
         self.nIP_Prim  = len(possible_grid_ID)
         
         nao_prim = self.nao // np.prod(self.Ls)
