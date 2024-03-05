@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import ctypes
 import numpy
 import scipy.linalg
 
+from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, PTR_EXP, PTR_COEFF
@@ -29,12 +30,21 @@ from pyscf.dft.numint import libdft, BLKSIZE, MGGA_DENSITY_LAPL
 from pyscf.pbc import tools
 from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
+from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.dft import numint, gen_grid
-from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
+from pyscf.pbc.df.df_jk import (
+    _format_dms,
+    _format_kpts_band,
+    _format_jks,
+)
 from pyscf.pbc.lib.kpts_helper import gamma_point
-from pyscf.pbc.df import fft
-from pyscf.pbc.df import ft_ao
-from pyscf import __config__
+from pyscf.pbc.df import fft, ft_ao
+from pyscf.pbc.dft.multigrid.utils import (
+    _take_4d,
+    _take_5d,
+    _takebak_4d,
+    _takebak_5d,
+)
 
 #sys.stderr.write('WARN: multigrid is an experimental feature. It is still in '
 #                 'testing\nFeatures and APIs may be changed in the future.\n')
@@ -367,23 +377,31 @@ def get_nuc(mydf, kpts=None):
         vne = vne[0]
     return numpy.asarray(vne)
 
-def get_pp(mydf, kpts=None):
+def get_pp(mydf, kpts=None, max_memory=4000):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
     from pyscf import gto
     kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
     cell = mydf.cell
     mesh = mydf.mesh
-    SI = cell.get_SI()
     Gv = cell.get_Gv(mesh)
-    vpplocG = pseudo.get_vlocG(cell, Gv)
-    vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
-    # from get_jvloc_G0 function
-    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell))
-    ngrids = len(vpplocG)
+
+    ngrids = len(Gv)
+    vpplocG = numpy.empty((ngrids,), dtype=numpy.complex128)
+
+    mem_avail = max(max_memory, mydf.max_memory-lib.current_memory()[0])
+    blksize = int(mem_avail*1e6/((cell.natm*2)*16))
+    blksize = min(ngrids, max(21**3, blksize))
+    for ig0, ig1 in lib.prange(0, ngrids, blksize):
+        vpplocG_batch = pp_int.get_gth_vlocG_part1(cell, Gv[ig0:ig1])
+        SI = cell.get_SI(Gv[ig0:ig1])
+        vpplocG[ig0:ig1] = -numpy.einsum('ij,ij->j', SI, vpplocG_batch)
 
     hermi = 1
     vpp = _get_j_pass2(mydf, vpplocG, hermi, kpts)[0]
+    vpp2 = pp_int.get_pp_loc_part2(cell, kpts)
+    for k, kpt in enumerate(kpts):
+        vpp[k] += vpp2[k]
 
     # vppnonloc evaluated in reciprocal space
     fakemol = gto.Mole()
@@ -396,14 +414,61 @@ def get_pp(mydf, kpts=None):
     fakemol._bas[0,gto.PTR_EXP  ] = ptr+3
     fakemol._bas[0,gto.PTR_COEFF] = ptr+4
 
-    # buf for SPG_lmi upto l=0..3 and nl=3
-    buf = numpy.empty((48,ngrids), dtype=numpy.complex128)
-
     def vppnl_by_k(kpt):
-        Gk = Gv + kpt
-        G_rad = lib.norm(Gk, axis=1)
-        aokG = ft_ao.ft_ao(cell, Gv, kpt=kpt) * (ngrids/cell.vol)
+        SPG_lm_aoGs = []
+        for ia in range(cell.natm):
+            symb = cell.atom_symbol(ia)
+            if symb not in cell._pseudo:
+                SPG_lm_aoGs.append(None)
+                continue
+            pp = cell._pseudo[symb]
+            p1 = 0
+            for l, proj in enumerate(pp[5:]):
+                rl, nl, hl = proj
+                if nl > 0:
+                    p1 = p1+nl*(l*2+1)
+            SPG_lm_aoGs.append(numpy.zeros((p1, cell.nao), dtype=numpy.complex128))
+
+        mem_avail = max(max_memory, mydf.max_memory-lib.current_memory()[0])
+        blksize = int(mem_avail*1e6/((48+cell.nao+13+3)*16))
+        blksize = min(ngrids, max(21**3, blksize))
         vppnl = 0
+        for ig0, ig1 in lib.prange(0, ngrids, blksize):
+            ng = ig1 - ig0
+            # buf for SPG_lmi upto l=0..3 and nl=3
+            buf = numpy.empty((48,ng), dtype=numpy.complex128)
+            Gk = Gv[ig0:ig1] + kpt
+            G_rad = numpy.linalg.norm(Gk, axis=1)
+            aokG = ft_ao.ft_ao(cell, Gv[ig0:ig1], kpt=kpt) * (ngrids/cell.vol)
+            for ia in range(cell.natm):
+                symb = cell.atom_symbol(ia)
+                if symb not in cell._pseudo:
+                    continue
+                pp = cell._pseudo[symb]
+                p1 = 0
+                for l, proj in enumerate(pp[5:]):
+                    rl, nl, hl = proj
+                    if nl > 0:
+                        fakemol._bas[0,gto.ANG_OF] = l
+                        fakemol._env[ptr+3] = .5*rl**2
+                        fakemol._env[ptr+4] = rl**(l+1.5)*numpy.pi**1.25
+                        pYlm_part = fakemol.eval_gto('GTOval', Gk)
+
+                        p0, p1 = p1, p1+nl*(l*2+1)
+                        # pYlm is real, SI[ia] is complex
+                        pYlm = numpy.ndarray((nl,l*2+1,ng), dtype=numpy.complex128, buffer=buf[p0:p1])
+                        for k in range(nl):
+                            qkl = pseudo.pp._qli(G_rad*rl, l, k)
+                            pYlm[k] = pYlm_part.T * qkl
+                        #:SPG_lmi = numpy.einsum('g,nmg->nmg', SI[ia].conj(), pYlm)
+                        #:SPG_lm_aoG = numpy.einsum('nmg,gp->nmp', SPG_lmi, aokG)
+                        #:tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
+                        #:vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
+                if p1 > 0:
+                    SPG_lmi = buf[:p1]
+                    SPG_lmi *= cell.get_SI(Gv[ig0:ig1], atmlst=[ia,]).conj()
+                    SPG_lm_aoGs[ia] += lib.zdot(SPG_lmi, aokG)
+            buf = None
         for ia in range(cell.natm):
             symb = cell.atom_symbol(ia)
             if symb not in cell._pseudo:
@@ -413,34 +478,12 @@ def get_pp(mydf, kpts=None):
             for l, proj in enumerate(pp[5:]):
                 rl, nl, hl = proj
                 if nl > 0:
-                    fakemol._bas[0,gto.ANG_OF] = l
-                    fakemol._env[ptr+3] = .5*rl**2
-                    fakemol._env[ptr+4] = rl**(l+1.5)*numpy.pi**1.25
-                    pYlm_part = fakemol.eval_gto('GTOval', Gk)
-
                     p0, p1 = p1, p1+nl*(l*2+1)
-                    # pYlm is real, SI[ia] is complex
-                    pYlm = numpy.ndarray((nl,l*2+1,ngrids), dtype=numpy.complex128, buffer=buf[p0:p1])
-                    for k in range(nl):
-                        qkl = pseudo.pp._qli(G_rad*rl, l, k)
-                        pYlm[k] = pYlm_part.T * qkl
-                    #:SPG_lmi = numpy.einsum('g,nmg->nmg', SI[ia].conj(), pYlm)
-                    #:SPG_lm_aoG = numpy.einsum('nmg,gp->nmp', SPG_lmi, aokG)
-                    #:tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
-                    #:vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-            if p1 > 0:
-                SPG_lmi = buf[:p1]
-                SPG_lmi *= SI[ia].conj()
-                SPG_lm_aoGs = lib.zdot(SPG_lmi, aokG)
-                p1 = 0
-                for l, proj in enumerate(pp[5:]):
-                    rl, nl, hl = proj
-                    if nl > 0:
-                        p0, p1 = p1, p1+nl*(l*2+1)
-                        hl = numpy.asarray(hl)
-                        SPG_lm_aoG = SPG_lm_aoGs[p0:p1].reshape(nl,l*2+1,-1)
-                        tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
-                        vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
+                    hl = numpy.asarray(hl)
+                    SPG_lm_aoG = SPG_lm_aoGs[ia][p0:p1].reshape(nl,l*2+1,-1)
+                    tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
+                    vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
+        SPG_lm_aoGs=None
         return vppnl * (1./ngrids**2)
 
     for k, kpt in enumerate(kpts):
@@ -453,7 +496,6 @@ def get_pp(mydf, kpts=None):
     if is_single_kpt:
         vpp = vpp[0]
     return numpy.asarray(vpp)
-
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     '''Get the Coulomb (J) AO matrix at sampled k-points.
@@ -1859,7 +1901,7 @@ class MultiGridFFTDF(fft.FFTDF):
     get_rho = get_rho
 
 
-def multigrid(mf):
+def multigrid_fftdf(mf):
     '''Use MultiGridFFTDF to replace the default FFTDF integration method in
     the DFT object.
     '''
@@ -1867,56 +1909,7 @@ def multigrid(mf):
     mf.with_df.__dict__.update(old_df.__dict__)
     return mf
 
+multigrid = multigrid_fftdf # for backward compatibility
 
 def _pgto_shells(cell):
     return cell._bas[:,NPRIM_OF].sum()
-
-def _take_4d(a, indices):
-    a_shape = a.shape
-    ranges = []
-    for i, s in enumerate(indices):
-        if s is None:
-            idx = numpy.arange(a_shape[i], dtype=numpy.int32)
-        else:
-            idx = numpy.asarray(s, dtype=numpy.int32)
-            idx[idx < 0] += a_shape[i]
-        ranges.append(idx)
-    idx = ranges[0][:,None] * a_shape[1] + ranges[1]
-    idy = ranges[2][:,None] * a_shape[3] + ranges[3]
-    a = a.reshape(a_shape[0]*a_shape[1], a_shape[2]*a_shape[3])
-    out = lib.take_2d(a, idx.ravel(), idy.ravel())
-    return out.reshape([len(s) for s in ranges])
-
-def _takebak_4d(out, a, indices):
-    out_shape = out.shape
-    a_shape = a.shape
-    ranges = []
-    for i, s in enumerate(indices):
-        if s is None:
-            idx = numpy.arange(a_shape[i], dtype=numpy.int32)
-        else:
-            idx = numpy.asarray(s, dtype=numpy.int32)
-            idx[idx < 0] += out_shape[i]
-        assert (len(idx) == a_shape[i])
-        ranges.append(idx)
-    idx = ranges[0][:,None] * out_shape[1] + ranges[1]
-    idy = ranges[2][:,None] * out_shape[3] + ranges[3]
-    nx = idx.size
-    ny = idy.size
-    out = out.reshape(out_shape[0]*out_shape[1], out_shape[2]*out_shape[3])
-    lib.takebak_2d(out, a.reshape(nx,ny), idx.ravel(), idy.ravel())
-    return out
-
-def _take_5d(a, indices):
-    a_shape = a.shape
-    a = a.reshape((a_shape[0]*a_shape[1],) + a_shape[2:])
-    indices = (None,) + indices[2:]
-    return _take_4d(a, indices)
-
-def _takebak_5d(out, a, indices):
-    a_shape = a.shape
-    out_shape = out.shape
-    a = a.reshape((a_shape[0]*a_shape[1],) + a_shape[2:])
-    out = out.reshape((out_shape[0]*out_shape[1],) + out_shape[2:])
-    indices = (None,) + indices[2:]
-    return _takebak_4d(out, a, indices)

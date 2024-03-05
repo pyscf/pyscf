@@ -416,7 +416,9 @@ class KUHF(khf.KSCF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
         dm_kpts = mol_hf.SCF.get_init_guess(self, cell, key)
         assert dm_kpts.shape[0] == 2
         nkpts = len(self.kpts)
@@ -424,7 +426,7 @@ class KUHF(khf.KSCF):
             # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
             dm_kpts = np.repeat(dm_kpts[:,None,:,:], nkpts, axis=1)
 
-        ne = np.einsum('xkij,kji->x', dm_kpts, self.get_ovlp(cell)).real
+        ne = lib.einsum('xkij,kji->x', dm_kpts, s1e).real
         nelec = np.asarray(self.nelec)
         if np.any(abs(ne - nelec) > 0.01*nkpts):
             logger.debug(self, 'Big error detected in the electron number '

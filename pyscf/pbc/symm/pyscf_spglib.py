@@ -29,7 +29,7 @@ def cell_to_spgcell(cell):
     Convert PySCF Cell object to spglib cell object
     '''
     a = cell.lattice_vectors()
-    atm_pos = cell.get_scaled_positions()
+    atm_pos = cell.get_scaled_atom_coords()
     atm_num = []
     from pyscf.data import elements
     for symbol in cell.elements:

@@ -130,12 +130,7 @@ static int binomial(int n, int m)
                 if (m*2 <= n) {
                         m = n - m;
                 }
-                uint64_t i;
-                uint64_t val = 1;
-                for (i = m; i <= n; i++) {
-                        val *= i;
-                        val /= i - m;
-                }
+		int val = binomial(n-1,m-1) + binomial(n-1,m);
                 return val;
         }
 }

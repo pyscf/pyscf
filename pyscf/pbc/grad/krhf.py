@@ -211,6 +211,10 @@ def hcore_generator(mf, cell=None, kpts=None):
 def grad_nuc(cell, atmlst):
     '''
     Derivatives of nuclear repulsion energy wrt nuclear coordinates
+
+    Notes:
+        An optimized version of this function is available in
+        `pbc.gto.ewald_methods.ewald_nuc_grad`
     '''
     chargs = cell.atom_charges()
     ew_eta, ew_cut = cell.get_ewald_params()
@@ -244,12 +248,14 @@ def grad_nuc(cell, atmlst):
     absG2[absG2==0] = 1e200
     ewg_grad = np.zeros([natom,3])
     SI = cell.get_SI(Gv)
-    if cell.low_dim_ft_type is None or cell.dimension == 3:
+    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         coulG = 4*np.pi / absG2
         coulG *= weights
         ZSI = np.einsum("i,ij->j", chargs, SI)
         ZexpG2 = coulG * np.exp(-absG2/(4*ew_eta**2))
         ZexpG2_mod = ZexpG2.reshape(len(ZexpG2),1) * Gv
+    else:
+        raise NotImplementedError
     for i, qi in enumerate(chargs):
         Zfac = np.imag(ZSI * SI[i].conj()) * qi
         ewg_grad[i] = - np.sum(Zfac.reshape((len(Zfac),1)) * ZexpG2_mod, axis = 0)

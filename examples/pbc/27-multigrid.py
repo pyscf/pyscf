@@ -31,9 +31,9 @@ mf.xc = 'lda,vwn'
 #
 # There are two ways to enable multigrid numerical integration
 #
-# Method 1: use multigrid.multigrid function to update SCF object
+# Method 1: use multigrid.multigrid_fftdf function to update SCF object
 #
-mf = multigrid.multigrid(mf)
+mf = multigrid.multigrid_fftdf(mf)
 mf.kernel()
 
 #
