@@ -45,19 +45,19 @@ def kernel(rpa, mo_energy, mo_coeff, cderi_ov=None, nw=40, x0=0.5, verbose=logge
     RPA correlation and total energy
 
     Args:
-        cderi_ov :
+        cderi_ov:
             Array-like object, Cholesky decomposed ERI in OV subspace.
-        nw :
+        nw:
             number of frequency point on imaginary axis.
-        x0 :
+        x0:
             scaling factor for frequency grid.
 
     Returns:
-        e_tot : 
+        e_tot:
             RPA total energy
-        e_hf :
+        e_hf:
             EXX energy
-        e_corr :
+        e_corr:
             RPA correlation energy
     """
     mf = rpa._scf
@@ -77,15 +77,20 @@ def kernel(rpa, mo_energy, mo_coeff, cderi_ov=None, nw=40, x0=0.5, verbose=logge
     max_memory = max(0, rpa.max_memory * 0.9 - lib.current_memory()[0])
     if max_memory < naux ** 2 / 1e6:
         logger.warn(
-            rpa, 'Memory may not be enough! Available memory %d MB < %d MB', 
+            rpa, 'Memory may not be enough! Available memory %d MB < %d MB',
             max_memory, naux ** 2 / 1e6
-            )
+                   )
         raise MemoryError
 
     # AO -> MO transformation
     if cderi_ov is None:
-        blksize = int(max_memory * 1e6 / 8 / (nocc * nvir))
+        blksize = int(max_memory * 1e6 / (8 * nocc * nvir))
         blksize = min(naux, blksize)
+
+        logger.debug(rpa, 'cderi    memory: %6d MB', naux * norb ** 2 * 8 / 1e6)
+        logger.debug(rpa, 'cderi_ov memory: %6d MB', naux * nocc * nvir * 8 / 1e6)
+        logger.debug(rpa, 'ao2mo blksize = %d', blksize)
+
         tmp = rpa.ao2mo(mo_coeff, blksize=blksize)
         cderi_ov = tmp if isinstance(tmp, np.ndarray) else tmp["cderi_ov"]
 
@@ -100,7 +105,7 @@ def kernel(rpa, mo_energy, mo_coeff, cderi_ov=None, nw=40, x0=0.5, verbose=logge
 
     # Compute exact exchange energy (EXX)
     dm = mf.make_rdm1()
-    rhf = scf.RHF(rpa.mol)
+    rhf = scf.RHF(rpa.mol).density_fit(with_df=rpa.with_df)
     e_hf = rhf.energy_elec(dm=dm)[0]
     e_hf += mf.energy_nuc()
 
@@ -109,6 +114,8 @@ def kernel(rpa, mo_energy, mo_coeff, cderi_ov=None, nw=40, x0=0.5, verbose=logge
 
     # Grids for numerical integration on imaginary axis
     blksize = int(max_memory * 1e6 / 8 / naux)
+    logger.debug(rpa, 'diel blksize = %d', blksize)
+
     for omega, weigh in zip(*_get_scaled_legendre_roots(nw, x0)):
         chi0 = (4.0 * e_ov / (omega ** 2 + e_ov ** 2)).ravel()
         diel = np.zeros((naux, naux))
@@ -177,8 +184,8 @@ class DirectRPA(lib.StreamObject):
 
     _keys = {
         'mol', 'frozen',
-        'with_df', 'mo_energy', 
-        'mo_coeff', 'mo_occ', 
+        'with_df', 'mo_energy',
+        'mo_coeff', 'mo_occ',
         'e_corr', 'e_hf', 'e_tot',
     }
 
@@ -226,7 +233,6 @@ class DirectRPA(lib.StreamObject):
     @property
     def nocc(self):
         return self.get_nocc()
-    
     @nocc.setter
     def nocc(self, n):
         self._nocc = n
@@ -234,7 +240,6 @@ class DirectRPA(lib.StreamObject):
     @property
     def nmo(self):
         return self.get_nmo()
-    
     @nmo.setter
     def nmo(self, n):
         self._nmo = n
@@ -266,11 +271,12 @@ class DirectRPA(lib.StreamObject):
 
         cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
-        self.e_tot, self.e_hf, self.e_corr = kernel(
-            self, mo_energy, mo_coeff, 
-            cderi_ov=cderi_ov, nw=nw, x0=x0, 
+        res = kernel(
+            self, mo_energy, mo_coeff,
+            cderi_ov=cderi_ov, nw=nw, x0=x0,
             verbose=self.verbose
-            )
+                    )
+        self.e_tot, self.e_hf, self.e_corr = res
 
         logger.timer(self, 'RPA', *cput0)
         return self.e_corr
@@ -283,18 +289,20 @@ class DirectRPA(lib.StreamObject):
         norb = self.nmo
         nvir = norb - nocc
         naux = self.with_df.get_naoaux()
+        sov = (0, nocc, nocc, norb) # slice for OV block
 
         blksize  = naux if blksize is None else blksize
         cderi_ov = None
 
+        cput0 = (logger.process_clock(), logger.perf_counter())
         if blksize >= naux or self.mol.incore_anyway:
             assert isinstance(self.with_df._cderi, np.ndarray)
             cderi_ov = _ao2mo.nr_e2(
                 self.with_df._cderi, mo_coeff,
-                (0, nocc, nocc, norb), aosym='s2',
-                out=cderi_ov
-                )
-        
+                sov, aosym='s2', out=cderi_ov
+                                    )
+            logger.timer(self, 'incore ao2mo', *cput0)
+
         else:
             fswap = lib.H5TmpFile()
             fswap.create_dataset('cderi_ov', (naux, nocc * nvir))
@@ -302,12 +310,15 @@ class DirectRPA(lib.StreamObject):
             q0 = 0
             for cderi in self.with_df.loop(blksize=blksize):
                 q1 = q0 + cderi.shape[0]
-                fswap['cderi_ov'][q0:q1] = _ao2mo.nr_e2(
-                    cderi, mo_coeff, 
-                    (0, nocc, nocc, norb),
-                    aosym='s2'
-                    )
+                v_ov = _ao2mo.nr_e2(
+                    cderi, mo_coeff,
+                    sov, aosym='s2'
+                                    )
+                fswap['cderi_ov'][q0:q1] = v_ov
+                v_ov = None
                 q0 = q1
+
+            logger.timer(self, 'outcore ao2mo', *cput0)
 
             cderi_ov = fswap
 
@@ -339,8 +350,8 @@ if __name__ == '__main__':
     e_corr_0 = rpa.kernel(cderi_ov=v_ov)
 
     print ('RPA e_tot, e_hf, e_corr = ', rpa.e_tot, rpa.e_hf, rpa.e_corr)
-    assert (abs(rpa.e_corr - -0.30783004035780076) < 1e-6)
-    assert (abs(rpa.e_tot  - -76.26428191794182) < 1e-6)
+    assert (abs(rpa.e_corr - -0.307830040357800) < 1e-6)
+    assert (abs(rpa.e_tot  - -76.26651423730257) < 1e-6)
 
     # Another implementation of direct RPA
     a = e_ov * np.eye(nocc * nvir) + 2 * np.dot(v_ov.T, v_ov)

@@ -589,8 +589,10 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     rx = np.asarray(rx, order='C')
     ry = np.asarray(ry, order='C')
     rz = np.asarray(rz, order='C')
-    
+
     fn = getattr(libpbc, 'get_Gv', None)
+    assert fn is not None
+
     try:
         fn(Gv.ctypes.data_as(ctypes.c_void_p),
         rx.ctypes.data_as(ctypes.c_void_p),
@@ -599,8 +601,8 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
         mesh.ctypes.data_as(ctypes.c_void_p),
         b.ctypes.data_as(ctypes.c_void_p))
 
-    except Exception as e:
-        raise RuntimeError(f'Failed to call get_Gv.')
+    except Exception:
+        raise RuntimeError('Failed to call get_Gv.')
     
     Gv = Gv.reshape(-1, 3)
 
