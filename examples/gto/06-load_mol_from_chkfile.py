@@ -29,4 +29,3 @@ print('mol.basis s STO-3G. nbas = %d' % mol.nbas)
 
 mol.update_from_chk('h2o.chk')
 print('After calling update_from_chk, mol.basis becomes cc-pvdz. nbas = %d' % mol.nbas)
-

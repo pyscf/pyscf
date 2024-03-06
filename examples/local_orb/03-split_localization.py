@@ -36,4 +36,3 @@ molden.from_mo(mol, 'edmiston.molden', loc_orb)
 
 loc_orb = lo.PM(mol, mf.mo_coeff[:,pz_idx]).kernel()
 molden.from_mo(mol, 'pm.molden', loc_orb)
-

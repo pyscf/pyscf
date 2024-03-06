@@ -66,4 +66,3 @@ mc.kernel(mo)
 
 mc.fix_spin_(shift=.5, ss=0)
 mc.kernel(mo)
-

@@ -45,4 +45,3 @@ with open('cr2-scan.txt', 'w') as fout:
     for i, xi in enumerate(x):
         fout.write('%2.1f  %12.8f  %12.8f  %12.8f\n'
                    % (xi, ehf[i], emc[i], ept[i]))
-

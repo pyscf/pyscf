@@ -32,4 +32,3 @@ mf = mol.UKS()
 mf.xc = 'b3lyp'
 mf = solvent.PE(mf, '4NP_in_water/4NP_in_water.pot')
 mf.run()
-

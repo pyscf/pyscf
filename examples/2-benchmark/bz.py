@@ -43,4 +43,3 @@ h   0.000000000000000 -2.509154418614532  0.000000000000000
 
     mf = mf.density_fit().run()
     cpu0 = log.timer('C6H6 %s density-fit RHF'%bas, *cpu0)
-

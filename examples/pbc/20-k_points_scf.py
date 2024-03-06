@@ -47,4 +47,3 @@ kmf.kernel()
 #
 mf = scf.KRHF(cell, kpts).newton()
 mf.kernel()
-

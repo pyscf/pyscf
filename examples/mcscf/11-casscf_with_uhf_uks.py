@@ -30,4 +30,3 @@ mf.kernel()
 mc = mcscf.CASSCF(mf, 6, 6)
 e = mc.kernel()[0]
 print('CASSCF based on UKS, E = %.12f, ref = -109.075063732553' % e)
-

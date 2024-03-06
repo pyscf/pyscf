@@ -13,4 +13,3 @@ mf = scf.UHF(mol)
 mf.verbose = 4
 mf = scf.addons.dynamic_sz_(mf)
 mf.kernel()
-

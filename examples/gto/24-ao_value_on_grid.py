@@ -59,4 +59,3 @@ ao_hess = ao_p[4:10]  # xx, xy, xz, yy, yz, zz
 ao_3rd  = ao_p[10:15] # xxx, xxy, xxz, xyy, xyz, xzz, yyy, yyz, yzz, zzz
 
 # deriv=4: ...
-

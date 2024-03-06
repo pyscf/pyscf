@@ -40,4 +40,3 @@ print("KRGW energies =", mygw.mo_energy)
 #mygw = gw.KRGW(kmf, freq_int='cd')
 #mygw.kernel()
 #print("KRGW-CD energies =", mygw.mo_energy)
-

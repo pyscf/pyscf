@@ -59,4 +59,3 @@ mf.kernel(dm)
 mf.level_shift = 0
 mf.conv_tol = 1e-9
 mf.kernel(mf.make_rdm1())
-

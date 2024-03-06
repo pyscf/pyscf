@@ -45,4 +45,3 @@ def get_jk(mol, dm, *args, **kwargs):
 mf.get_jk = get_jk
 mf.kernel()
 print('Approximate HF total energy =', mf.e_tot)
-

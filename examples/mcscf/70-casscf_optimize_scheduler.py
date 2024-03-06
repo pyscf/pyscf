@@ -49,4 +49,3 @@ def callback(envs):
 mc.callback = callback
 
 mc.kernel()
-

@@ -70,4 +70,3 @@ mf = dft.RKS(mol)
 mf = mf.define_xc_(eval_xc, 'GGA', rsh=rsh_coeff)
 mf.verbose = 4
 mf.kernel()
-

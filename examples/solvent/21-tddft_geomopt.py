@@ -25,4 +25,3 @@ td = mf.TDA().ddCOSMO()
 td.with_solvent.equilibrium_solvation = True
 
 mol_eq = td.nuc_grad_method().as_scanner(state=2).optimizer().kernel()
-

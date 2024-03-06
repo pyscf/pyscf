@@ -117,4 +117,3 @@ mf = scf.RHF(mol).x2c().newton()
 mo_occ[9:15] = 1
 mf.kernel(mo, mo_occ)
 #mf.analyze()
-

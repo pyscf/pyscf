@@ -34,5 +34,3 @@ octa = mol.intor('int1e_rrr').reshape(3,3,3,nao,nao)
 
 # hexadecapole
 hexa = mol.intor('int1e_rrrr').reshape(3,3,3,3,nao,nao)
-
-

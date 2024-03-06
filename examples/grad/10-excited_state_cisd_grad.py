@@ -60,4 +60,3 @@ mol.set_geom_('''O   0.   0.      0.1
 e, g = g_scanner(mol, state=2)
 print('Gradients of the 2nd excited state')
 print(g)
-

@@ -37,4 +37,3 @@ natocc, natorb = symm.eigh(rdm1, orbsym)
 natorb = numpy.dot(mf.mo_coeff, natorb)
 natorb_sym = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, natorb)
 print(natorb_sym)
-

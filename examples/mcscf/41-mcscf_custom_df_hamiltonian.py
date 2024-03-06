@@ -48,4 +48,3 @@ with h5py.File(ftmp.name, 'r') as file1:
 # still needs access the HDF5 integral array on disk
     mc = mcscf.DFCASSCF(mf, 8, 8)
     mc.kernel()
-

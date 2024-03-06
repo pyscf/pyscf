@@ -402,4 +402,3 @@ class PCM(ddcosmo.DDCOSMO):
             v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
             vmat += -numpy.einsum('ijL,L->ij', v_nj, q[p0:p1])
         return vmat
-

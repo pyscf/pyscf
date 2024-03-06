@@ -115,4 +115,3 @@ e, fcivec = fs.kernel(verbose=5)
 for i, c in enumerate(fcivec):
     print('state = %d, E = %.9f, S^2=%.4f' %
           (i, e[i], fci.spin_op.spin_square(c, norb, nelec)[0]))
-

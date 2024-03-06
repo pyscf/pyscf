@@ -34,4 +34,3 @@ scf.hf.SCF.kernel = kernel
 # Using the patched SCF kernel
 import pyscf
 pyscf.M(atom='Ne', basis='ccpvdz', verbose=3).RKS().density_fit().run(max_cycle=3)
-

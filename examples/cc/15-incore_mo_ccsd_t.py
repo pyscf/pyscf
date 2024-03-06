@@ -61,5 +61,3 @@ print('CCSD correlation energy =', e_corr)
 e_corr += ccsd.ccsd_t(eris=eris)
 
 print('CCSD(T) correlation energy =', e_corr)
-
-

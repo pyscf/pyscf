@@ -73,4 +73,3 @@ iaos = lo.iao.iao(mol, mo_occ)
 ibo = lo.ibo.ibo(mol, mo_occ, locmethod='PM', iaos=iaos).kernel()
 for i in range(ibo.shape[1]):
     tools.cubegen.orbital(mol, 'benzene_ibo2_{:02d}.cube'.format(i+1), ibo[:,i])
-

@@ -112,4 +112,3 @@ for LpqR, LpqI in a_gdf.sr_loop((kpt,kpt), compact=False):
 
 from pyscf import lib
 eri = lib.einsum('lpq,lrs->pqrs', A_lpq, A_lrs)
-

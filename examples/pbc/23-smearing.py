@@ -43,4 +43,3 @@ mf.sigma = .05
 mf.smearing_method = 'fermi'
 mf.max_cycle = 50
 mf.kernel()
-

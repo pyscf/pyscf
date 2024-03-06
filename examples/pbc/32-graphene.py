@@ -107,4 +107,3 @@ print('Energy (AFTDF) (FFTDF) (GDF)   (MDF)')
 print(e)
 print('Timing (AFTDF) (FFTDF) (GDF)   (MDF)')
 print(t)
-

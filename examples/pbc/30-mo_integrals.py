@@ -56,4 +56,3 @@ for kp in range(nkpts):
             eri_kpt = kmf.with_df.ao2mo([kmf.mo_coeff[i] for i in (kp,kq,kr,ks)],
                                         [kpts[i] for i in (kp,kq,kr,ks)])
             eri_kpt = eri_kpt.reshape([nmo]*4)
-

@@ -66,4 +66,3 @@ cell = gto.M(
     atom = 'Cl 0 0 1; Na 0 1 0',
     basis = {'na': 'gth-szv', 'Cl': 'bfd-vdz'},
     pseudo = {'Na': 'gthbp', 'Cl': 'bfd-pp'})
-

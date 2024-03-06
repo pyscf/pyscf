@@ -33,4 +33,3 @@ mol1 = gto.unpack(eval(pickle.loads(ar)))
 # In JSON format
 ar = mol.dumps()
 mol1 = gto.loads(ar)
-

@@ -45,4 +45,3 @@ print(thermo_info['G_tot' ])
 
 print('Heat capacity at 298.15 K')
 print(thermo_info['Cv_tot'])
-

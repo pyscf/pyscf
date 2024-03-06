@@ -47,4 +47,3 @@ mycas.natorb = True
 # canonical orbitals.  They are not fully sorted wrt the occpancies.
 # The mcscf active orbitals are sorted only within each irreps.
 mycas.kernel()
-

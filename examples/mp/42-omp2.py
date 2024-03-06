@@ -48,4 +48,3 @@ mc.fcisolver = MP2AsFCISolver()
 # active space which were modeled by MP2
 mc.internal_rotation = True
 mc.kernel()
-

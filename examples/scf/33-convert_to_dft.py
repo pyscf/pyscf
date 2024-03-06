@@ -31,4 +31,3 @@ print('Convert %s to %s', mf, mf_dft)
 mf = mol.KS(xc='b88,lyp').run()
 mf_hf = mol.to_rhf()
 print('Convert %s to %s', mf, mf_hf)
-

@@ -31,4 +31,3 @@ print('CCSD correlation energy', mycc.e_corr)
 mycc.diis_start_cycle = 4
 mycc.kernel()
 print('CCSD correlation energy', mycc.e_corr)
-

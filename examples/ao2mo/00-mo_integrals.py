@@ -37,4 +37,3 @@ mol = pyscf.M(
 )
 orb = mol.RHF().run().mo_coeff
 eri_4fold = mol.ao2mo(orb)
-

@@ -35,4 +35,3 @@ mycc = cc.CCSD(mf)
 mycc.__dict__.update(scf.chkfile.load('h10.chk', 'cc'))
 eris = mycc.ao2mo()
 ccsd_t.kernel(mycc, eris)
-

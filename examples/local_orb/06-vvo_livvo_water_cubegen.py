@@ -56,4 +56,3 @@ for i in range(vvo.shape[1]):
     count += 1
     tools.cubegen.orbital(mol, 'h2o_vvo_{:02d}.cube'.format(count), vvo[:,i])
     tools.cubegen.orbital(mol, 'h2o_livvo_{:02d}.cube'.format(count), livvo[:,i])
-

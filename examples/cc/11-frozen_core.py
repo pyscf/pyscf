@@ -80,4 +80,3 @@ mf = scf.RHF(mol).run()
 mycc = cc.CCSD(mf)
 mycc.set_frozen()
 print('Number of core orbital frozen: %d' % mycc.frozen)
-

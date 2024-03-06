@@ -61,4 +61,3 @@ mc = mc.state_average_([.25, .25, .25, .25])
 mc.fcisolver.spin = 2
 mc.fix_spin_(ss=2)
 mc.kernel()
-

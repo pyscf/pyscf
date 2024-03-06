@@ -28,4 +28,3 @@ mf=pbcdft.RKS(cell)
 mf.xc='lda,vwn'
 
 print(mf.kernel()) # [10,10,10]: -44.8811199336
-

@@ -35,4 +35,3 @@ from pyscf import fci
 e, fcivec = fci.direct_spin1.kernel(h1e_cas, h2e_cas, norb, nelec,
                                     ecore=ecore, verbose=5)
 print('Total energy', e)
-

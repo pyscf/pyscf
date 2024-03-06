@@ -32,4 +32,3 @@ mf = qmmm.mm_charge(scf.RHF(mol), coords, charges)
 mf.run()
 
 mf = mf.newton().run()
-

@@ -203,4 +203,3 @@ eris = mycc.ao2mo(mycc.mo_coeff)
 et = kernel(mycc, eris, mycc.t1, mycc.t2) 
 e_r_ccsd_t = e_ccsd + et
 print(' R-CCSD(T) error / mEh = %.3f' % ((e_r_ccsd_t - e_fci) * 1e3))
-

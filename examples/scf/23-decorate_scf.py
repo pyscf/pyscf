@@ -109,4 +109,3 @@ mf = scf.density_fit(scf.newton(scf.density_fit(scf.RHF(mol))), 'ahlrichs')
 mf = scf.RHF(mol).density_fit().newton().density_fit(auxbasis='ahlrichs')
 energy = mf.kernel()
 print('E = %.12f, ref = -76.026744737357' % energy)
-

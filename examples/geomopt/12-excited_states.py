@@ -43,4 +43,3 @@ excited_grad = myci.nuc_grad_method().as_scanner(state=1)
 mol1 = excited_grad.optimizer().kernel()
 # or
 #geomopt.optimize(excited_grad)
-

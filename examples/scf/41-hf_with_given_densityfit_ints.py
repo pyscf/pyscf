@@ -54,4 +54,3 @@ with h5py.File(ftmp.name, 'r') as file1:
     mf.get_ovlp = lambda *args: mol.intor('cint1e_ovlp_sph')
     mf.init_guess = '1e'  # Initial guess from Hcore
     mf.kernel()
-

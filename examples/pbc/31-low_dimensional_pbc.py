@@ -148,4 +148,3 @@ e.append(mf.kernel()/16)
 
 print('2D:  FFT      AFT      DF       MDF       super-mole')
 print(e)
-

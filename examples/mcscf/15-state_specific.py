@@ -43,4 +43,3 @@ emc = mc.casci(mo)[0]
 #
 mc = mcscf.CASCI(mf, 4, 4).state_specific_(7)
 emc = mc.casci(mo)[0]
-

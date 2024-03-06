@@ -80,4 +80,3 @@ mydf.build()
 cderi = df.incore.cholesky_eri(mol, auxbasis='weigend')
 df.outcore.cholesky_eri(mol, 'saved_cderi.h5', dataname='j3c',
                         auxbasis=df.make_auxbasis(mol))
-

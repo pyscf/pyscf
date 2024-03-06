@@ -45,4 +45,3 @@ molden.from_mo(mol, 'be12.molden', c)
 mol = gto.M(atom = [('Al', x) for x in ring.make(12, 2.4)], basis='ccpvtz')
 c = lo.orth.orth_ao(mol)
 molden.from_mo(mol, 'al12.molden', c)
-

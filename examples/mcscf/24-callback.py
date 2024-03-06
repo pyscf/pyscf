@@ -36,4 +36,3 @@ mc.kernel()
 mc = mcscf.CASSCF(mf, 6, (4,2))
 mo = numpy.load('mcscf-mo-6-2.npy')
 mc.kernel(mo)
-

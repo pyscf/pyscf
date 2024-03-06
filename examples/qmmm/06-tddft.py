@@ -37,4 +37,3 @@ mf = qmmm.mm_charge(mf, coords, charges).run()
 tddft.TDA(mf).run()
 
 tddft.TDHF(mf).run()
-

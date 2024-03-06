@@ -43,6 +43,3 @@ print('E(DHF-FCI) = %.12f' % cisolver.kernel()[0])
 #
 cisolver = pyscf.fci.FCI(mol, myhf.mo_coeff)
 print('E(FCI) = %.12f' % cisolver.kernel()[0])
-
-
-

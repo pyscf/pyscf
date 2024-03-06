@@ -84,6 +84,3 @@ solver2.spin = 2
 mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2], (.5, .5))
 excited_grad = mc.nuc_grad_method().as_scanner(state=1)
 mol1 = excited_grad.optimizer().kernel()
-
-
-

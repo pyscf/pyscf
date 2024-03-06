@@ -79,4 +79,3 @@ mycas = mcscf.CASSCF(mf, 6, 6)
 # objects to be sorted.
 cas_orbs = mycas.sort_mo(cas_list, loc_orbs, base=0)
 mycas.kernel(cas_orbs)
-

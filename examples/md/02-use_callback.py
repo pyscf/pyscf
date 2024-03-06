@@ -35,4 +35,3 @@ def my_callback(local_dict):
 myintegrator.callback = my_callback
 
 myintegrator.run()
-

@@ -89,7 +89,3 @@ ci_nevpt_e2 = mrpt.NEVPT(mycas, root=1).kernel()
 ci_nevpt_e3 = mrpt.NEVPT(mycas, root=2).kernel()
 ci_nevpt_e4 = mrpt.NEVPT(mycas, root=3).kernel()
 ci_nevpt_e5 = mrpt.NEVPT(mycas, root=4).kernel()
-
-
-
-

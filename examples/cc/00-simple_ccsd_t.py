@@ -22,4 +22,3 @@ mf = mol.UHF().run()
 mycc = mf.CCSD().run()
 et = mycc.ccsd_t()
 print('UCCSD(T) correlation energy', mycc.e_corr + et)
-

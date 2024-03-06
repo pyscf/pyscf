@@ -30,4 +30,3 @@ from pyscf import __all__
 mf = mol.RHF().run()
 ccobj = mol.CCSD(frozen=2).run()
 tdobj = mol.TDHF().run(nstates=5)
-

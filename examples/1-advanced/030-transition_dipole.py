@@ -86,4 +86,3 @@ def makedip(ci_id):
 # 3rd and 4th excited states are triplet states, dipole == 0
 for i in range(8):
     print('Transition dipole between |0> and |%d>'%(i+1), makedip(i))
-

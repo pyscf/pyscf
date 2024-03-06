@@ -76,4 +76,3 @@ print('Error in spin-free 1-PDM %g' % numpy.linalg.norm(ref1-dm1))
 print('Error in 2-PDM aaaa %g' % numpy.linalg.norm(ref2aaaa.transpose(0,2,1,3)-dm2aaaa))
 print('Error in 2-PDM aabb %g' % numpy.linalg.norm(ref2aabb.transpose(0,2,1,3)-dm2abab))
 print('Error in 2-PDM bbbb %g' % numpy.linalg.norm(ref2bbbb.transpose(0,2,1,3)-dm2bbbb))
-

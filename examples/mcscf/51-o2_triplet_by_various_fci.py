@@ -51,4 +51,3 @@ caspace = [6,7,8,9,10,12]
 mo = mc.sort_mo(caspace)
 emc1 = mc.kernel(mo)[0]
 print('* Symmetry-broken singlet, using fci.direct_spin0 solver, E = %.15g' % emc1)
-

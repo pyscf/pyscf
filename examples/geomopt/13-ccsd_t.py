@@ -48,4 +48,3 @@ print(mol.atom_coords())
 
 print('New geometry (Bohr)')
 print(new_mol.atom_coords())
-

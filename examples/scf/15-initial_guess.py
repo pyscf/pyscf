@@ -112,4 +112,3 @@ mf.kernel()
 mf = scf.RHF(mol)
 dm = mf.from_chk(chkfile_name)
 mf.kernel(dm)
-

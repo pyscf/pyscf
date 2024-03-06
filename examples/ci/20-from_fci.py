@@ -72,4 +72,3 @@ ciq_bbbb = fcivec[0, t4addrs] * t4signs
 ciq_aaab = numpy.einsum('ij,i,j->ij', fcivec[t3addrs[:,None], t1addrs], t3signs, t1signs)
 ciq_aabb = numpy.einsum('ij,i,j->ij', fcivec[t2addrs[:,None], t2addrs], t2signs, t2signs)
 ciq_abbb = numpy.einsum('ij,i,j->ij', fcivec[t1addrs[:,None], t3addrs], t1signs, t3signs)
-

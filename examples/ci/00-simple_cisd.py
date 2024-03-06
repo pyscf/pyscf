@@ -20,4 +20,3 @@ print('RCISD correlation energy', mycc.e_corr)
 mf = mol.UHF().run()
 mycc = mf.CISD().run()
 print('UCISD correlation energy', mycc.e_corr)
-

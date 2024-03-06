@@ -64,4 +64,3 @@ mf.kernel()
 mf = scf.RHF(mol).density_fit()
 mf.with_df.auxbasis = df.aug_etb(mol, beta=1.7)
 mf.kernel()
-

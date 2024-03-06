@@ -40,4 +40,3 @@ ccsd_t.kernel(mycc, eris=eris)
 #
 from pyscf.grad.ccsd import Gradients
 grad_e = Gradients(mycc).kernel(eris=eris)  # The electronic part only
-

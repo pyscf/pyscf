@@ -54,4 +54,3 @@ eris = mycc.ao2mo()
 conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, mycc.t1, mycc.t2)
 dm1 = ccsd_t_rdm.make_rdm1(mycc, mycc.t1, mycc.t2, l1, l2, eris=eris)
 dm2 = ccsd_t_rdm.make_rdm2(mycc, mycc.t1, mycc.t2, l1, l2, eris=eris)
-

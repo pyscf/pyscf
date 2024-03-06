@@ -143,4 +143,3 @@ mf.xc = 'PBE + SLATER*.5'
 
 # The above input is equivalent to
 mf.xc = 'PBE + SLATER*.5, PBE'
-

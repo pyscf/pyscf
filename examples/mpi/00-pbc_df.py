@@ -42,4 +42,3 @@ kmf.grids = dft.gen_grid.BeckeGrids(cell)
 kmf.xc = 'm06,m06'
 kmf.with_df = mpidf.FFTDF(cell, kpts)
 kmf.kernel()
-

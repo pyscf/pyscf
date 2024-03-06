@@ -46,4 +46,3 @@ for i, ir in enumerate(mol.irrep_id):
 mo = np.hstack(mo)
 # Check normalization to ensure no bug
 print (np.einsum('ji,jk,ki->i', mo, mol.intor('cint1e_ovlp_sph'), mo))
-

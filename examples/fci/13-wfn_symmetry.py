@@ -117,4 +117,3 @@ fs.wfnsym = 0
 e, c = fs.kernel(h1, h2, norb, nelec, ecore=ecore, orbsym=orbsym)
 print('''Using symmetry adapted FCI solver, FCI converges to
   wfnsym = %s  E(FCI) = %.12f''' % (fci.addons.guess_wfnsym(c, len(cas_idx), nelec, orbsym), e))
-

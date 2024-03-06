@@ -105,4 +105,3 @@ eri_mo[:,:,orbspin[:,None]!=orbspin] = 0
 h1 = reduce(numpy.dot, (mf.mo_coeff.conj().T, mf.get_hcore(), mf.mo_coeff))
 e_tot = numpy.einsum('ij,ji', h1, dm1) + numpy.einsum('ijkl,jilk', eri_mo, dm2)*.5 + mf.energy_nuc()
 print("GMP2 energy based on MP2 density matrices =", e_tot.real)
-

@@ -17,4 +17,3 @@ mf = mol.RHF().run()
 
 mycc = mf.CCSD().run()
 print('CCSD correlation energy', mycc.e_corr)
-

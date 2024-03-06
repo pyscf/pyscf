@@ -119,4 +119,3 @@ dm_a = np.array([np.eye(Nsite)]*Nk)
 dm_b = dm_a * 0
 dm = [dm_a, dm_b]
 kmf.kernel(dm)
-

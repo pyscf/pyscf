@@ -168,4 +168,3 @@ ao_list_for_atom3_4 = mol.search_ao_label(['2 O', '3 O'])
 ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(),
                             ao_list_for_atom3_4)
 print('local spin for another O2 = %.7f, 2S+1 = %.7f' % ss)
-

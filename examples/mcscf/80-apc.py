@@ -41,5 +41,3 @@ ncas,nelecas,casorbs = myapc.kernel()
 mc = mcscf.CASCI(mf, ncas, nelecas)
 mc.mo_coeff = casorbs
 mc.kernel()
-
-

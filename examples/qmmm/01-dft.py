@@ -31,4 +31,3 @@ charges = (numpy.arange(5) + 1.) * -.1
 mf = dft.RKS(mol)
 mf = qmmm.mm_charge(mf, coords, charges)
 mf.run(xc='pbe')
-

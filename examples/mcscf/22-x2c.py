@@ -36,4 +36,3 @@ mf.kernel()
 mc = mcscf.CASSCF(mf, 6, 8).x2c()
 mc.kernel()
 print('E = %.12f, ref = -76.128478294795' % mc.e_tot)
-

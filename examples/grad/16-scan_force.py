@@ -56,4 +56,3 @@ print('finite difference', e_diff, 'analytical gradients', grad0[1,0])
 # examples/geomopt/02-as_pyscf_method.py
 from pyscf.geomopt import berny_solver
 berny_solver.optimize(mf_grad_scan)
-

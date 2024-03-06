@@ -87,4 +87,3 @@ print ("derivative of the off-diagonal element of the potential matrix. This")
 print ("tells you one of the two components of the branching plane at the CI.")
 print ("<1|d0/dR>*(E1-E0) w/ ETFs = <1|dH/dR|0>:\n", v01)
 print ("<0|d1/dR>*(E0-E1) w/ ETFs = <0|dH/dR|1>:\n", v10)
-

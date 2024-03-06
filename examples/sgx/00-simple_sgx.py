@@ -48,4 +48,3 @@ mf = sgx.sgx_fit(scf.RHF(mol), pjs=False)
 mf.with_df.direct_j = True
 mf.with_df.dfj = False
 mf.kernel()
-

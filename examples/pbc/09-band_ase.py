@@ -76,4 +76,3 @@ plt.axis(xmin=0, xmax=sp_points[-1], ymin=emin, ymax=emax)
 plt.xlabel('k-vector')
 
 plt.show()
-

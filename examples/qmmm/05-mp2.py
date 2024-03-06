@@ -35,4 +35,3 @@ charges = (numpy.arange(5) + 1.) * -.1
 mf = qmmm.mm_charge(scf.RHF(mol), coords, charges).run()
 
 mp.MP2(mf).run()
-

@@ -25,4 +25,3 @@ mycc.update_amps = update_amps
 mycc.kernel()
 
 print('CCD correlation energy', mycc.e_corr)
-

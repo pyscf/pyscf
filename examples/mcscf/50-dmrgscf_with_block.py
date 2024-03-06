@@ -42,4 +42,3 @@ mc = dmrgscf.DMRGSCF(mf, 8, 8)
 mc.state_average_([0.5, 0.5])
 mc.kernel()
 print(mc.e_tot)
-

@@ -35,4 +35,3 @@ print('13 basis, 8000 xyz  %s' % str(ao_value.shape))
 # AO value and its gradients
 ao_value = numint.eval_ao(mol, coords, deriv=1)
 print('13 basis, 8000 xyz  %s' % str(ao_value.shape))
-

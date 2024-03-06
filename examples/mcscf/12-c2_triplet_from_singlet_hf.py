@@ -24,4 +24,3 @@ mf.kernel()
 mc = mcscf.CASSCF(mf, 6, (4, 2))
 emc = mc.kernel()[0]
 print('E(CAS) = %.12f, ref = -75.549397771485' % emc)
-

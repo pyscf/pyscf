@@ -39,4 +39,3 @@ myadc.method = "adc(3)"
 myadc.method_type = "ea"
 eea,vea,pea,xea = myadc.kernel(nroots = 3)
 myadc.analyze()
-

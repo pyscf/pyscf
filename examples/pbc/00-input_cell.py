@@ -42,4 +42,3 @@ cell = gto.M(
     basis = 'gth-szv',
     pseudo = 'gth-pade',
     a = numpy.eye(3)*3.5668)
-

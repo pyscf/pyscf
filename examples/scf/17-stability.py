@@ -84,4 +84,3 @@ print('loop example')
 mol = gto.M(atom='C 0 0 0; C 0 0 2.0', basis='631g*')
 mf2 = scf.UHF(mol).run()
 mf2 = stable_opt_internal(mf2)
-

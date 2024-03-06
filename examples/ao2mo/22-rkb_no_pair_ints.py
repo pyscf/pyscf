@@ -64,5 +64,3 @@ with h5py.File('dhf_ovov.h5', 'r') as f:
     print('Number of DHF occupied orbitals %s' % nocc)
     print('Number of DHF virtual orbitals in positive states %s' % nvir)
     print('No-pair MO integrals (ov|ov) have shape %s' % str(f['dhf_ovov'].shape))
-
-

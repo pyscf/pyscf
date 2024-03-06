@@ -75,5 +75,3 @@ mo = mcscf.project_init_guess (mc1, mo_init_guess)
 mo = mcscf.project_init_guess (mc3, mo, prev_mol=mol1)
 e3b = mc3.kernel(mo)[0] # geom, then basis
 print ('E(CAS) = %.12f, %.12f, ref = -75.503011798165' % (e3a, e3b))
-
-

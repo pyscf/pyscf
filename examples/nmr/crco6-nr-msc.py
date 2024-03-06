@@ -44,4 +44,3 @@ m = nmr.hf.MSC(nrscf)
 m.cphf = False
 m.gauge_origin = None
 print(m.msc())
-

@@ -62,4 +62,3 @@ dm = numpy.dot(mo_occ, mo_occ.T) * 2
 iao_mol = cell.copy()
 iao_mol.build(False, False, basis='minao')
 mullic = mf.mulliken_pop(iao_mol, dm, s=numpy.eye(iao_mol.nao_nr()))
-

@@ -48,4 +48,3 @@ mf = scf.UHF(mol)
 mf.verbose = 4
 mf = scf.addons.frac_occ(mf)
 mf.kernel()
-

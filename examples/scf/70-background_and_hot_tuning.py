@@ -47,4 +47,3 @@ molden.from_scf(mf, 'unconverged_scf.molden')
 print('\n ** Write SCF intemediates to molden file\n')
 e_scf = b.get()
 print('E(HF) = %s ' % e_scf)
-

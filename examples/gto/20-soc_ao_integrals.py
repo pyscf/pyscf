@@ -50,4 +50,3 @@ def ss(mol):
     fac = alpha ** 2 / 2
     mat = numpy.einsum('swx,tyz,stijkl->wxyzijkl', s, s, mat) * fac
     return mat
-

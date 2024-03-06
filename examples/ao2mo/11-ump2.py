@@ -40,4 +40,3 @@ def myump2(mol, mo_energy, mo_coeff, mo_occ):
 
 e = myump2(mol, m.mo_energy, m.mo_coeff, m.mo_occ)
 print('E(UMP2) = %.9g, ref = -0.346926068' % e)
-

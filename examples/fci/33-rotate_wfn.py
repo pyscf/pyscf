@@ -113,4 +113,3 @@ u[4,5] = 1
 u[5,7] = 1
 civec1_ref = fci.addons.transform_ci(civec, nelec, u)
 print(np.allclose(civec1, civec1_ref))
-

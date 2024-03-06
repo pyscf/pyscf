@@ -19,4 +19,3 @@ mycc = cc.CCSD(mf).run()
 
 mf = scf.addons.remove_linear_dep_(mol.RHF()).run()
 mycc = cc.CCSD(mf).run()
-

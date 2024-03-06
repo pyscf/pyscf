@@ -43,4 +43,3 @@ locobj = HubbardPM(mol, loc_orb_init_guess)
 print('PM cost function  ', locobj.cost_function())
 loc_orb = locobj.kernel()
 print('PM cost function  ', locobj.cost_function())
-

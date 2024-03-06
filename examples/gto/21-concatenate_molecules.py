@@ -107,4 +107,3 @@ mf = scf.RHF(mol)
 mf.verbose = 0
 mf.get_veff = get_vhf
 print('E(DF-HF) = %.12f, ref = %.12f' % (mf.kernel(), scf.density_fit(mf).kernel()))
-

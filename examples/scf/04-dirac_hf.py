@@ -32,4 +32,3 @@ lib.param.LIGHT_SPEED = 90.  # Change light speed globally
 
 mf = scf.DHF(mol)
 mf.kernel()
-

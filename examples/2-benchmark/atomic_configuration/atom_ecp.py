@@ -37,4 +37,3 @@ for z, atm in atoms.items():
 
 print('E(NRSRHF) is lower in %d samples' % sum([(v[1] - v[3] < 1e-7) for v in counts.values()]))
 print('E(NRSRHF) is higher in %d samples' % sum([(v[1] - v[3] > 1e-7) for v in counts.values()]))
-

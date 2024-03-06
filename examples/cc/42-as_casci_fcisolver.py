@@ -60,4 +60,3 @@ nelec = 8
 mc = mcscf.CASCI(mf, norb, nelec)
 mc.fcisolver = AsFCISolver()
 mc.kernel()
-

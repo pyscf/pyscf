@@ -35,4 +35,3 @@ dm = mf.get_init_guess() + 0j
 dm[0,:] += .1j
 dm[:,0] -= .1j
 mf.kernel(dm0=dm)
-

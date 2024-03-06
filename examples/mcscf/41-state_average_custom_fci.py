@@ -65,4 +65,3 @@ mc = pyscf.mcscf.CASSCF(mf, 8, 8)
 mc = pyscf.mcscf.addons.state_average_mix_(mc, [solver1, solver2], weights=(0.5, 0.25, 0.25))
 mc.verbose = 4
 mc.run()
-

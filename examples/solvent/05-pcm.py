@@ -46,4 +46,3 @@ mf = scf.RHF(mol).PCM()
 mf.kernel()
 mc = solvent.PCM(mcscf.CASCI(mf,2,2))
 de = mc.nuc_grad_method().as_scanner()(mol)
-

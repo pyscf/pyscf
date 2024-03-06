@@ -53,4 +53,3 @@ mf.kernel()
 #
 mf = scf.RHF(cell).newton()
 mf.kernel()
-

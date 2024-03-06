@@ -35,4 +35,3 @@ print('SSO 2e integrals shape %s' % str(h2.shape))
 mol.set_rinv_origin(mol.atom_coord(1))  # set the gauge origin on second atom
 h1 = numpy.einsum('xpq,pi,qj->xij', mol.intor('int1e_prinvxp_sph'), cas_orb, cas_orb)
 print('1e integral shape %s' % str(h1.shape))
-

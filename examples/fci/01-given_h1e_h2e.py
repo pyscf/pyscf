@@ -43,4 +43,3 @@ e, fcivec = cisolver.kernel(h1, h2, norb, (3,1))  # 3 alpha, 1 beta electrons
 cisolver = fci.direct_spin0.FCI()
 cisolver.verbose = 5
 e, fcivec = cisolver.kernel(h1, h2, norb, 8)
-

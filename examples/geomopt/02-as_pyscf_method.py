@@ -43,4 +43,3 @@ print(new_mol.atom_coords())
 # Geometry can be also optimized with geomeTRIC library
 #
 new_mol = geometric_solver.optimize(fake_method)
-

@@ -62,4 +62,3 @@ nocc = scell.nelectron // 2
 print("Supercell gamma MO from direct calculation:")
 print(np.linalg.det(c_g_ao[:,:nocc].T.conj().dot(s).dot(sc_mo[:,:nocc])))
 print(np.linalg.svd(c_g_ao[:,:nocc].T.conj().dot(s).dot(sc_mo[:,:nocc]))[1])
-

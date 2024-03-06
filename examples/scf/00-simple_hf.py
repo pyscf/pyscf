@@ -36,4 +36,3 @@ mol = gto.M(
 )
 myhf = scf.HF(mol)
 myhf.kernel()
-

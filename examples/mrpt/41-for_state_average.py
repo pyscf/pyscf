@@ -45,4 +45,3 @@ mc.kernel(orbital)
 e_corr = mrpt.NEVPT(mc,root=1).kernel()
 e_tot = mc.e_tot[1] + e_corr
 print('Total energy of first excited state', e_tot)
-

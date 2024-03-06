@@ -39,4 +39,3 @@ myadcea.analyze()
 #IP/EA-RADC(3) for 1 root
 eip,vip,pip,xip,adc_es = myadc.ip_adc()
 eea,vea,pea,xea,adc_es = myadc.ea_adc()
-

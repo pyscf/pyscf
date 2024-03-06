@@ -102,5 +102,3 @@ print('Gradients of the 3rd excited state using symmetry')
 print(g3_symm)
 print('Gradients of the 3rd excited state at a shifted geometry using symmetry')
 print(g3_symm_shift)
-
-
