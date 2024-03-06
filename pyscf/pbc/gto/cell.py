@@ -603,7 +603,7 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
 
     except Exception:
         raise RuntimeError('Failed to call get_Gv.')
-    
+
     Gv = Gv.reshape(-1, 3)
 
     # 1/cell.vol == det(b)/(2pi)^3
