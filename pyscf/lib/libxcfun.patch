@@ -36,7 +36,7 @@ index 239cef5..6288e40 100644
 +        ttype in[XC_MAX_INVARS], out = 0;
 +        for (int i = 0; i < inlen; i++)
 +          in[i] = input[i];
-+        int k = 1 + inlen + (inlen * (inlen + 1)) / 2;
++        int k = (inlen + 1) * (inlen + 2) * (inlen + 3) * (inlen + 4) / 24; // comb(deriv-1+inlen, deriv-1);
 +        for (int i = 0; i < inlen; i++) {
 +          in[i].set(VAR0, 1);
 +          for (int j = i; j < inlen; j++) {
@@ -46,7 +46,7 @@ index 239cef5..6288e40 100644
 +              for (int s1 = s; s1 < inlen; s1++) {
 +                in[s1].set(VAR3, 1);
 +                for (int s2 = s1; s2 < inlen; s2++) {
-+                  in[s1].set(VAR4, 1);
++                  in[s2].set(VAR4, 1);
 +                  densvars<ttype> d(fun, in);
 +                  out = 0;
 +                  for (int n = 0; n < fun->nr_active_functionals; n++)
@@ -71,7 +71,7 @@ index 239cef5..6288e40 100644
 +        ttype in[XC_MAX_INVARS], out = 0;
 +        for (int i = 0; i < inlen; i++)
 +          in[i] = input[i];
-+        int k = 1 + inlen + (inlen * (inlen + 1)) / 2;
++        int k = (inlen + 1) * (inlen + 2) * (inlen + 3) / 6; // comb(deriv-1+inlen, deriv-1);
 +        for (int i = 0; i < inlen; i++) {
 +          in[i].set(VAR0, 1);
 +          for (int j = i; j < inlen; j++) {
