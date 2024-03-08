@@ -595,16 +595,16 @@ class CASSCF(casci.CASBase):
             Converge threshold.  Default is 1e-7
         conv_tol_grad : float
             Converge threshold for CI gradients and orbital rotation gradients.
-            Default is 1e-4
+            If not specified, it is set to sqrt(conv_tol).
         max_stepsize : float
             The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
-            Default is 0.03.
+            Default is 0.02.
         max_cycle_macro : int
             Max number of macro iterations.  Default is 50.
         max_cycle_micro : int
             Max number of micro iterations in each macro iteration.  Depending on
             systems, increasing this value might reduce the total macro
-            iterations.  Generally, 2 - 5 steps should be enough.  Default is 3.
+            iterations.  Generally, 2 - 5 steps should be enough.  Default is 4.
         small_rot_tol : float
             Threshold for orbital rotation to be considered small. If the largest orbital
             rotation is smaller than this value, the CI solver will restart from the
@@ -620,10 +620,10 @@ class CASSCF(casci.CASBase):
             Linear dependence threshold for AH solver.  Default is 1e-14.
         ah_start_tol : flat, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
-            This value is to control the start point. Default is 0.2.
+            This value is to control the start point. Default is 2.5.
         ah_start_cycle : int, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
-            This value is to control the start point. Default is 2.
+            This value is to control the start point. Default is 3.
 
             ``ah_conv_tol``, ``ah_max_cycle``, ``ah_lindep``, ``ah_start_tol`` and ``ah_start_cycle``
             can affect the accuracy and performance of CASSCF solver.  Lower
