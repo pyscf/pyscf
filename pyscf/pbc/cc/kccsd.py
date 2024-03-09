@@ -463,6 +463,8 @@ class GCCSD(gccsd.GCCSD):
     def to_uccsd(self, t1, t2, orbspin=None):
         return spin2spatial(t1, orbspin), spin2spatial(t2, orbspin)
 
+    to_gpu = lib.to_gpu
+
 CCSD = KCCSD = KGCCSD = GCCSD
 
 

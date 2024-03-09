@@ -1365,6 +1365,8 @@ class CCSD(CCSDBase):
         if t2 is None: t2 = self.t2
         return get_d2_diagnostic(t2)
 
+    to_gpu = lib.to_gpu
+
 CC = RCCSD = CCSD
 
 

@@ -374,3 +374,5 @@ class SGX(lib.StreamObject):
         else:
             vj, vk = sgx_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
         return vj, vk
+
+    to_gpu = lib.to_gpu

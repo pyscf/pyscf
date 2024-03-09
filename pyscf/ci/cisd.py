@@ -1131,6 +1131,8 @@ class CISD(lib.StreamObject):
         from pyscf.grad import cisd
         return cisd.Gradients(self)
 
+    to_gpu = lib.to_gpu
+
 class RCISD(CISD):
     pass
 

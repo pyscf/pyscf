@@ -57,6 +57,8 @@ class GKS(rks.KohnShamDFT, ghf_symm.GHF):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+    to_gpu = lib.to_gpu
+
 
 if __name__ == '__main__':
     import numpy

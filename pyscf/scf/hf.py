@@ -1504,6 +1504,7 @@ class SCF(lib.StreamObject):
     conv_tol_grad = getattr(__config__, 'scf_hf_SCF_conv_tol_grad', None)
     max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
     init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
+    disp = None  # for DFT-D3 and DFT-D4
 
     # To avoid diis pollution from previous run, self.diis should not be
     # initialized as DIIS instance here
@@ -1542,7 +1543,6 @@ class SCF(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
-        self.disp = None
 
         # If chkfile is muted, SCF intermediates will not be dumped anywhere.
         if MUTE_CHKFILE:
@@ -2197,11 +2197,8 @@ class RHF(SCF):
         from pyscf import dft
         return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
 
-    def to_gpu(self):
-        # FIXME: consider the density_fit, x2c and soscf decoration
-        from gpu4pyscf.scf import RHF
-        obj = SCF.reset(self.view(RHF))
-        return lib.to_gpu(obj)
+    # FIXME: consider the density_fit, x2c and soscf decoration
+    to_gpu = lib.to_gpu
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

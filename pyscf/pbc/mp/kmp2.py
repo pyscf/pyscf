@@ -783,6 +783,8 @@ class KMP2(mp2.MP2):
 
         return self.e_corr, self.t2
 
+    to_gpu = lib.to_gpu
+
 KRMP2 = KMP2
 
 

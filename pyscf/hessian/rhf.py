@@ -487,9 +487,9 @@ class HessianBase(lib.StreamObject):
         self.verbose = scf_method.verbose
         self.stdout = scf_method.stdout
         self.mol = scf_method.mol
-        self.base = scf_method
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
+        self.base = scf_method
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
 
@@ -608,10 +608,7 @@ class Hessian(HessianBase):
     partial_hess_elec = partial_hess_elec
     hess_elec = hess_elec
     make_h1 = make_h1
-
-    def to_gpu(self):
-        from gpu4pyscf.hessian.rhf import Hessian
-        return lib.to_gpu(self.view(Hessian))
+    to_gpu = lib.to_gpu
 
 # Inject to RHF class
 from pyscf import scf

@@ -47,6 +47,8 @@ class SymAdaptedUKS(rks.KohnShamDFT, uhf_symm.UHF):
         from pyscf.grad import uks
         return uks.Gradients(self)
 
+    to_gpu = lib.to_gpu
+
 UKS = SymAdaptedUKS
 
 

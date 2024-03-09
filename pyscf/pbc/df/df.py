@@ -524,6 +524,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                     naux += dat.shape[0]
         return naux
 
+    to_gpu = lib.to_gpu
+
 DF = GDF
 
 class CDERIArray:

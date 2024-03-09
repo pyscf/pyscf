@@ -659,6 +659,8 @@ class UHF(SCF):
         from pyscf.x2c import dft
         return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
 
+    to_gpu = lib.to_gpu
+
 X2C_UHF = UHF
 
 class RHF(SCF):
@@ -679,6 +681,8 @@ class RHF(SCF):
         '''
         from pyscf.x2c import dft
         return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
+
+    to_gpu = lib.to_gpu
 
 X2C_RHF = RHF
 

@@ -727,13 +727,7 @@ class FCIBase(lib.StreamObject):
 
     def __init__(self, mol=None):
         if mol is None:
-            self.stdout = sys.stdout
-            self.verbose = logger.NOTE
-            self.max_memory = lib.param.MAX_MEMORY
-        else:
-            self.stdout = mol.stdout
-            self.verbose = mol.verbose
-            self.max_memory = mol.max_memory
+            mol = lib.omniobj
         self.mol = mol
         self.nroots = 1
         self.spin = None
@@ -942,6 +936,8 @@ class FCISolver(FCIBase):
     def transform_ci_for_orbital_rotation(self, fcivec, norb, nelec, u):
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.transform_ci_for_orbital_rotation(fcivec, norb, nelec, u)
+
+    to_gpu = lib.to_gpu
 
 FCI = FCISolver
 
