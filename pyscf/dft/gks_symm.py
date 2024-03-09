@@ -20,6 +20,7 @@
 Generalized Kohn-Sham
 '''
 
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import ghf_symm
 from pyscf.dft import gks

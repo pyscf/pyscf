@@ -20,6 +20,7 @@
 Non-relativistic Unrestricted Kohn-Sham
 '''
 
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import uhf_symm
 from pyscf.dft import uks

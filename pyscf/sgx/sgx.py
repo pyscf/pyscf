@@ -214,6 +214,9 @@ class _SGXHF:
         self._last_vj = 0
         self._last_vk = 0
 
+    def to_gpu(self):
+        raise NotImplementedError
+
     def method_not_implemented(self, *args, **kwargs):
         raise NotImplementedError
     nuc_grad_method = Gradients = method_not_implemented

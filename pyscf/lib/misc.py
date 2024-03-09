@@ -843,10 +843,7 @@ def invalid_method(name):
 
 @functools.lru_cache(None)
 def _define_class(name, bases):
-    cls = type(name, bases, {})
-    # Register the dynamic class to the corresponding module
-    setattr(bases[0], name, cls)
-    return cls
+    return type(name, bases, {})
 
 def make_class(bases, name=None, attrs=None):
     '''
@@ -1406,6 +1403,10 @@ def to_gpu(method, out=None):
                   '    pip install gpu4pyscf-cuda11x\n'
                   'See more installation info at https://github.com/pyscf/gpu4pyscf')
             raise
+
+        # TODO: Is it necessary to implement scanner in gpu4pyscf?
+        if isinstance(method, (SinglePointScanner, GradScanner)):
+            method = method.undo_scanner()
 
         import import_module
         mod = import_module(method.__module__.replace('pyscf', 'gpu4pyscf'))

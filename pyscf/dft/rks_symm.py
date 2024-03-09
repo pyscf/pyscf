@@ -20,6 +20,7 @@
 Non-relativistic Restricted Kohn-Sham
 '''
 
+from pyscf import lib
 from pyscf.scf import hf_symm
 from pyscf.dft import rks
 from pyscf.dft import uks
