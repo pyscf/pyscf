@@ -136,7 +136,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
         h2e = ao2mo.restore(1, eri.copy(), norb)
     else:
         assert eri.ndim == 4
-        h2e = eri.copy()
+        h2e = eri.astype(dtype=numpy.result_type(h1e, eri), copy=True)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
@@ -177,9 +177,6 @@ class FCISolver(direct_spin1.FCISolver):
     def make_hdiag(self, h1e, eri, norb, nelec, compress=False):
         nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         return make_hdiag(h1e, eri, norb, nelec, compress)
-
-    def pspace(self, h1e, eri, norb, nelec, hdiag=None, np=400):
-        raise NotImplementedError
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
