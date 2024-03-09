@@ -2062,8 +2062,12 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         '''This helper function transfers attributes from one SCF object to
         another SCF object. It is invoked by to_ks and to_hf methods.
         '''
+        # Search for all traced attributes, including those in base classes
+        cls_keys = [getattr(cls, '_keys', ()) for cls in dst.__class__.__mro__[:-1]]
+        dst_keys = set(dst.__dict__).union(*cls_keys)
+
         loc_dic = self.__dict__
-        keys = dst.__dict__.keys() & loc_dic.keys()
+        keys = set(loc_dic).intersection(dst_keys)
         dst.__dict__.update({k: loc_dic[k] for k in keys})
         dst.converged = False
         return dst
