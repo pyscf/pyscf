@@ -20,7 +20,7 @@
 dispersion correction for HF and DFT
 '''
 
-from pyscf.scf.hf import KohnShamDFT
+from pyscf.dft.rks import KohnShamDFT
 from pyscf.dft import dft_parser
 
 def get_dispersion(mf, disp_version=None):

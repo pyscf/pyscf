@@ -502,32 +502,45 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(method.scf(), -76.352381513158718, 8)
 
     def test_dft_parser(self):
+        from pyscf.scf import dispersion
         method = dft.RKS(h2o, xc='wb97m-d3bj')
-        nlc_coefs = method._numint.nlc_coeff('wb97m-v')
-        assert method.xc == 'wb97m-v'
-        assert len(nlc_coefs) == 0
-        assert method.disp == 'd3bj'
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0007551366628786623, 9)
+        assert method._numint.libxc.is_nlc(method.xc) == False
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 531
 
         method = dft.RKS(h2o, xc='wb97x-d3')
-        nlc_coefs = method._numint.nlc_coeff('wb97x-v')
-        assert method.xc == 'wb97x-d3'
-        assert len(nlc_coefs) == 0
-        assert method.disp == 'd3zero'
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -1.2566116169235249e-06, 9)
+        assert method._numint.libxc.is_nlc(method.xc) == False
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 399
+
+        method = dft.RKS(h2o, xc='wb97x-d3bj')
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0005697890844546384, 9)
+        assert method._numint.libxc.is_nlc(method.xc) == False
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 466
 
         method = dft.RKS(h2o, xc='b3lyp-d3bj')
-        assert method.xc == 'b3lyp'
-        assert method.disp == 'd3bj'
-        assert method.disp_with_3body == False
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0005738788210828446, 9)
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 402
 
         method = dft.RKS(h2o, xc='b3lyp-d3bjm2b')
-        assert method.xc == 'b3lyp'
-        assert method.disp == 'd3bjm'
-        assert method.disp_with_3body == False
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0006949127588605776, 9)
 
         method = dft.RKS(h2o, xc='b3lyp-d3bjmatm')
-        assert method.xc == 'b3lyp'
-        assert method.disp == 'd3bjm'
-        assert method.disp_with_3body == True
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
+
+        method = dft.UKS(h2o, xc='b3lyp-d3bjmatm')
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
 
     def test_camb3lyp_rsh_omega(self):
         mf = dft.RKS(h2o)

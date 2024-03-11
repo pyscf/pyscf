@@ -21,7 +21,7 @@ gradient of dispersion correction for HF and DFT
 '''
 
 import numpy
-from pyscf.scf.hf import KohnShamDFT
+from pyscf.dft.rks import KohnShamDFT
 from pyscf.dft import dft_parser
 
 def get_dispersion(mf_grad, disp_version=None, with_3body=False):
@@ -41,7 +41,6 @@ def get_dispersion(mf_grad, disp_version=None, with_3body=False):
         if hasattr(mf, 'disp') and mf.disp is not None:
             disp_version = mf.disp
 
-    natm = mol.natm
     if disp_version is None:
         return numpy.zeros([mol.natm,3])
 

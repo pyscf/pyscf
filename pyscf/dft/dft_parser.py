@@ -38,12 +38,17 @@ def parse_dft(dft_method):
     disp = None
 
     # special cases
+    if method_lower == 'wb97x-d':
+        raise NotImplementedError('wb97x-d is not supported')
+
     if method_lower == 'wb97m-d3bj':
         return 'wb97m-v', False, ('wb97m', 'd3bj', False)
     if method_lower == 'b97m-d3bj':
-        return 'b97m-v', False, ('b97m-v', 'd3bj', False)
+        return 'b97m-v', False, ('b97m', 'd3bj', False)
     if method_lower == 'wb97x-d3bj':
         return 'wb97x-v', False, ('wb97x', 'd3bj', False)
+
+    # J. Chem. Theory Comput. 2013, 9, 1, 263–272
     if method_lower in ['wb97x-d3', 'wb97x-d3zero']:
         return 'wb97x-d3', False, ('wb97x', 'd3zero', False)
     if method_lower.endswith('-3c'):
