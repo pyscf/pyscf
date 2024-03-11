@@ -20,33 +20,29 @@
 dispersion correction for HF and DFT
 '''
 
-
-import numpy
 from pyscf.scf.hf import KohnShamDFT
+from pyscf.dft import dft_parser
 
-# dispersion correction for these xc functionals are replacing nlc
-dftd3_xc_map = {
-    'wb97m-v': 'wb97m',
-    'b97m-v': 'b97m',
-    'wb97x-v': 'wb97x'
-}
-
-def get_dispersion(mf, disp_version=None, with_3body=False):
-    if disp_version is None:
-        disp_version = mf.disp
+def get_dispersion(mf, disp_version=None):
     mol = mf.mol
-    if disp_version is None:
-        return 0.0
-    if hasattr(mf, 'with_3body'):
-        with_3body = mf.disp_with_3body
     if isinstance(mf, KohnShamDFT):
         method = mf.xc
     else:
         method = 'hf'
+    method, disp, with_3body = dft_parser.parse_dft(method)[2]
 
-    # use xc name defined in dftd3 for special cases
-    if method in dftd3_xc_map:
-        method = dftd3_xc_map[method]
+    # priority: args > mf.disp > dft_parser
+    if disp_version is None:
+        disp_version = disp
+        # dispersion version can be customized via mf.disp
+        if hasattr(mf, 'disp') and mf.disp is not None:
+            disp_version = mf.disp
+    if disp_version is None:
+        return 0.0
+
+    # 3-body contribution can be disabled with mf.disp_with_3body
+    if hasattr(mf, 'disp_with_3body') and mf.disp_with_3body is not None:
+        with_3body = mf.disp_with_3body
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':

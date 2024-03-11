@@ -2644,9 +2644,6 @@ class LibXCMixin:
     def nlc_coeff(self, xc_code):
         return self.libxc.nlc_coeff(xc_code)
 
-    def is_nlc(self, xc_code):
-        return self.libxc.is_nlc(xc_code)
-
     def rsh_coeff(self, xc_code):
         return self.libxc.rsh_coeff(xc_code)
 

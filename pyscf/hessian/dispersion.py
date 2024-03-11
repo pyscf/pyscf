@@ -23,27 +23,32 @@ Hessian of dispersion correction for HF and DFT
 
 import numpy
 from pyscf.scf.hf import KohnShamDFT
-from pyscf.scf.dispersion import dftd3_xc_map
+from pyscf.dft import dft_parser
 
 def get_dispersion(hessobj, disp_version=None, with_3body=False):
-    if disp_version is None:
-        disp_version = hessobj.base.disp
-    mol = hessobj.base.mol
-    natm = mol.natm
     mf = hessobj.base
+    mol = mf.mol
+    if isinstance(mf, KohnShamDFT):
+        method = mf.xc
+    else:
+        method = 'hf'
+    method, disp, with_3body = dft_parser.parse_dft(method)[2]
+
+    # priority: args > mf.disp > dft_parser
+    if disp_version is None:
+        disp_version = disp
+        # dispersion version can be customized via mf.disp
+        if hasattr(mf, 'disp') and mf.disp is not None:
+            disp_version = mf.disp
+
+    natm = mol.natm
     h_disp = numpy.zeros([natm,natm,3,3])
     if disp_version is None:
         return h_disp
-    if hasattr(mf, 'with_3body'):
-        with_3body = mf.disp_with_3body
-    if isinstance(hessobj.base, KohnShamDFT):
-        method = hessobj.base.xc
-    else:
-        method = 'hf'
 
-    # use xc name defined in dftd3 for special cases
-    if method in dftd3_xc_map:
-        method = dftd3_xc_map[method]
+    # 3-body contribution can be disabled with mf.disp_with_3body
+    if hasattr(mf, 'disp_with_3body') and mf.disp_with_3body is not None:
+        with_3body = mf.disp_with_3body
 
     if mf.disp[:2].upper() == 'D3':
         import dftd3.pyscf as disp

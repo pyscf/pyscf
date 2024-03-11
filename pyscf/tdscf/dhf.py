@@ -123,7 +123,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.nlc or ni.is_nlc(mf.xc):
+        if mf.nlc or ni.libxc.is_nlc(mf.xc):
             raise NotImplementedError('DKS-TDDFT for NLC functionals')
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)

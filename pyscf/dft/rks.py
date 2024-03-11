@@ -79,11 +79,11 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_rks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
-        if ks.nlc or ni.is_nlc(ks.xc):
-            if ni.is_nlc(ks.xc):
+        if ks.nlc or ni.libxc.is_nlc(ks.xc):
+            if ni.libxc.is_nlc(ks.xc):
                 xc = ks.xc
             else:
-                assert ni.is_nlc(ks.nlc)
+                assert ni.libxc.is_nlc(ks.nlc)
                 xc = ks.nlc
             n, enlc, vnlc = ni.nr_nlc_vxc(mol, ks.nlcgrids, xc, dm,
                                           max_memory=max_memory)
@@ -260,49 +260,6 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     ks._numint = libxc.define_xc_(ks._numint, description, xctype, hyb, rsh)
     return ks
 
-# supported dispersion corrections
-DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
-
-def dft_method_parser(dft_method):
-    ''' conventional dft method ->
-    ( internal xc,
-      disable nlc,
-      dispersion version
-      with 3-body dispersion or not
-      '''
-    if not isinstance(dft_method, str):
-        return dft_method, None, None, False
-    method_lower = dft_method.lower()
-    xc = dft_method
-    disp = None
-
-    # special cases
-    if method_lower == 'wb97m-d3bj':
-        return 'wb97m-v', False, 'd3bj', False
-    if method_lower == 'b97m-d3bj':
-        return 'b97m-v', False, 'd3bj', False
-    if method_lower == 'wb97x-d3bj':
-        return 'wb97x-v', False, 'd3bj', False
-    if method_lower in ['wb97x-d3', 'wb97x-d3zero']:
-        return 'wb97x-d3', False, 'd3zero', False
-    if method_lower.endswith('-3c'):
-        raise NotImplementedError('*-3c methods are not supported yet.')
-
-    for d in DISP_VERSIONS:
-        if method_lower.endswith(d):
-            disp = d
-            xc = method_lower.replace(f'-{d}','')
-            return xc, None, disp, False
-        if method_lower.endswith(d+'2b'):
-            disp = d
-            xc = method_lower.replace(f'-{d}2b', '')
-            return xc, None, disp, False
-        if method_lower.endswith(d+'atm'):
-            disp = d
-            xc = method_lower.replace(f'-{d}atm', '')
-            return xc, None, disp, True
-    return xc, None, None, False
-
 def _dft_common_init_(mf, xc='LDA,VWN'):
     raise DeprecationWarning
 
@@ -366,10 +323,9 @@ class KohnShamDFT:
     _keys = {'xc', 'nlc', 'grids', 'disp', 'disp_with_3body', 'nlcgrids', 'small_rho_cutoff'}
 
     def __init__(self, xc='LDA,VWN'):
-        xc, with_nlc, disp, with_3body = dft_method_parser(xc)
         self.xc = xc
-        self.disp = disp
-        self.disp_with_3body = with_3body
+        self.disp = None
+        self.disp_with_3body = None
         self.nlc = ''
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(
@@ -384,11 +340,6 @@ class KohnShamDFT:
 # don't modify the following attributes, they are not input options
         self._numint = numint.NumInt()
 
-        # disable nlc for certain xc such as wb97m-d3bj
-        if with_nlc is not None:
-            self.nlc = None
-            self._numint.nlc_coeff = lambda x: []
-            self._numint.is_nlc = lambda x: False
     @property
     def omega(self):
         return self._numint.omega
@@ -410,7 +361,7 @@ class KohnShamDFT:
 
         self.grids.dump_flags(verbose)
 
-        if self.nlc or self._numint.is_nlc(self.xc):
+        if self.nlc or self._numint.libxc.is_nlc(self.xc):
             log.info('** Following is NLC and NLC Grids **')
             if self.nlc:
                 log.info('NLC functional = %s', self.nlc)
@@ -521,7 +472,7 @@ class KohnShamDFT:
                                                     self.grids)
             t0 = logger.timer(self, 'setting up grids', *t0)
 
-        is_nlc = self.nlc or self._numint.is_nlc(self.xc)
+        is_nlc = self.nlc or self._numint.libxc.is_nlc(self.xc)
         if is_nlc and self.nlcgrids.coords is None:
             t0 = (logger.process_clock(), logger.perf_counter())
             self.nlcgrids.build(with_non0tab=True)
