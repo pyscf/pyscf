@@ -80,7 +80,7 @@ class URPA(pyscf.gw.rpa.RPA):
 
         gap = (-e_ov_a.max(), -e_ov_b.max())
         logger.info(self, 'Lowest orbital energy difference: (% 6.4e, % 6.4e)', gap[0], gap[1])
-        
+
         if (np.min(gap) < 1e-3):
             logger.warn(self, 'RPA code not well-defined for degenerate systems!')
             logger.warn(self, 'Lowest orbital energy difference: % 6.4e', np.min(gap))
@@ -138,13 +138,13 @@ class URPA(pyscf.gw.rpa.RPA):
                 self.with_df._cderi, mo_coeff_a,
                 sov_a, aosym='s2', out=cderi_ov_a
                                     )
-            
+
             cderi_ov_b = _ao2mo.nr_e2(
                 self.with_df._cderi, mo_coeff_b,
                 sov_b, aosym='s2', out=cderi_ov_b
                                     )
             cderi_ov = (cderi_ov_a, cderi_ov_b)
-            
+
             logger.timer(self, 'incore ao2mo', *cput0)
 
         else:
@@ -194,7 +194,7 @@ if __name__ == '__main__':
     mf = dft.UKS(mol)
     mf.xc = 'pbe'
     mf.kernel()
-     
+
     # Shall be identical to the restricted RPA result
     rpa = URPA(mf)
     rpa.max_memory = 0

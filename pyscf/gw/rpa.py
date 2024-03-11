@@ -291,7 +291,7 @@ class DirectRPA(lib.StreamObject):
         """
 
         cput0 = (logger.process_clock(), logger.perf_counter())
-        
+
         self.dump_flags()
         res = kernel(
             self, mo_energy, mo_coeff,
@@ -302,7 +302,7 @@ class DirectRPA(lib.StreamObject):
 
         logger.timer(self, 'RPA', *cput0)
         return self.e_corr
-    
+
     def make_e_ov(self, mo_energy=None):
         """
         Compute orbital energy differences
@@ -315,13 +315,13 @@ class DirectRPA(lib.StreamObject):
 
         gap = (-e_ov.max(), )
         logger.info(self, 'Lowest orbital energy difference: % 6.4e', np.min(gap))
-        
+
         if (np.min(gap) < 1e-3):
             logger.warn(rpa, 'RPA code not well-defined for degenerate systems!')
             logger.warn(rpa, 'Lowest orbital energy difference: % 6.4e', np.min(gap))
 
         return e_ov
-    
+
     def make_dielectric_matrix(self, omega, e_ov=None, cderi_ov=None, blksize=None):
         """
         Args:
@@ -344,7 +344,7 @@ class DirectRPA(lib.StreamObject):
             cderi_ov if isinstance(cderi_ov, np.ndarray) else cderi_ov["cderi_ov"],
             blksize=blksize
                                      )
-        
+
         return diel
 
     def ao2mo(self, mo_coeff=None, blksize=None):
