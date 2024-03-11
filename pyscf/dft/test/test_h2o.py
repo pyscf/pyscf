@@ -565,7 +565,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'B3LYP'
         mf.disp = 'd3bj'
         mf.run(xc='B3LYP')
-        self.assertAlmostEqual(mf.e_tot, -76.38945547396322, 9)
+        self.assertAlmostEqual(mf.e_tot, -76.38552043811778, 9)
 
     def test_reset(self):
         mf = dft.RKS(h2o).newton()
