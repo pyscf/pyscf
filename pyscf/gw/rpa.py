@@ -65,13 +65,12 @@ def kernel(rpa, mo_energy, mo_coeff, cderi_ov=None, nw=40, x0=0.5, verbose=logge
     # only support frozen core
     if rpa.frozen is not None:
         assert isinstance(rpa.frozen, int)
-        assert rpa.frozen < rpa.nocc
+        assert rpa.frozen < np.min(rpa.nocc)
 
     # Get orbital number
     with_df = rpa.with_df
     naux = with_df.get_naoaux()
-    norb = rpa.nmo
-    nocc, nvir = rpa.nocc, norb - rpa.nocc
+    norb = rpa._scf.mol.nao_nr()
 
     # Get memory information
     max_memory = max(0, rpa.max_memory * 0.9 - lib.current_memory()[0])
@@ -80,50 +79,40 @@ def kernel(rpa, mo_energy, mo_coeff, cderi_ov=None, nw=40, x0=0.5, verbose=logge
             rpa, 'Memory may not be enough! Available memory %d MB < %d MB',
             max_memory, naux ** 2 / 1e6
                    )
-        raise MemoryError
 
     # AO -> MO transformation
     if cderi_ov is None:
-        blksize = int(max_memory * 1e6 / (8 * nocc * nvir))
+        blksize = int(max_memory * 1e6 / (8 * norb ** 2))
         blksize = min(naux, blksize)
+        blksize = max(1, blksize)
 
-        logger.debug(rpa, 'cderi    memory: %6d MB', naux * norb ** 2 * 8 / 1e6)
-        logger.debug(rpa, 'cderi_ov memory: %6d MB', naux * nocc * nvir * 8 / 1e6)
+        # logger.debug(rpa, 'cderi    memory: %6d MB', naux * norb ** 2 * 8 / 1e6)
+        # logger.debug(rpa, 'cderi_ov memory: %6d MB', naux * nocc * nvir * 8 / 1e6)
         logger.debug(rpa, 'ao2mo blksize = %d', blksize)
+        if blksize == 1:
+            logger.warn(rpa, 'Memory too small for ao2mo! blksize = 1')
 
-        tmp = rpa.ao2mo(mo_coeff, blksize=blksize)
-        cderi_ov = tmp if isinstance(tmp, np.ndarray) else tmp["cderi_ov"]
-
-    if isinstance(cderi_ov, np.ndarray):
-        assert cderi_ov.shape == (naux, nocc * nvir)
-
-    # Compute orbital energy differences
-    e_ov = (mo_energy[:nocc, None] - mo_energy[None, nocc:]).ravel()
-    if np.min(-e_ov) < 1e-3:
-        logger.warn(rpa, 'RPA code not well-defined for degenerate systems!')
-        logger.warn(rpa, 'Lowest orbital energy difference: % 6.4e', np.min(-e_ov))
+        cderi_ov = rpa.ao2mo(mo_coeff, blksize=blksize)
 
     # Compute exact exchange energy (EXX)
-    dm = mf.make_rdm1()
-    rhf = scf.RHF(rpa.mol).density_fit(with_df=rpa.with_df)
-    e_hf = rhf.energy_elec(dm=dm)[0]
-    e_hf += mf.energy_nuc()
+    e_hf = _ene_hf(mf, with_df)
+    e_ov = rpa.make_e_ov(mo_energy)
 
     # Compute RPA correlation energy
     e_corr = 0.0
 
-    # Grids for numerical integration on imaginary axis
+    # Determine block size for dielectric matrix
     blksize = int(max_memory * 1e6 / 8 / naux)
+    blksize = max(blksize, 1)
+
+    if blksize == 1:
+        logger.warn(rpa, 'Memory too small for dielectric matrix! blksize = 1')
+
     logger.debug(rpa, 'diel blksize = %d', blksize)
 
+    # Grids for numerical integration on imaginary axis
     for omega, weigh in zip(*_get_scaled_legendre_roots(nw, x0)):
-        chi0 = (4.0 * e_ov / (omega ** 2 + e_ov ** 2)).ravel()
-        diel = np.zeros((naux, naux))
-
-        for s in [slice(*x) for x in lib.prange(0, nocc * nvir, blksize)]:
-            v_ov  = cderi_ov[:, s]
-            diel += np.dot(v_ov * chi0[s], v_ov.T)
-
+        diel = rpa.make_dielectric_matrix(omega, e_ov, cderi_ov, blksize=blksize)
         factor = weigh / (2.0 * np.pi)
         e_corr += factor * np.log(np.linalg.det(np.eye(naux) - diel))
         e_corr += factor * np.trace(diel)
@@ -138,6 +127,33 @@ def kernel(rpa, mo_energy, mo_coeff, cderi_ov=None, nw=40, x0=0.5, verbose=logge
 # ****************************************************************************
 # frequency integral quadrature, legendre, clenshaw_curtis
 # ****************************************************************************
+
+def make_dielectric_matrix(omega, e_ov, cderi_ov, blksize=None):
+    """
+    Compute dielectric matrix at a given frequency omega
+
+    Args:
+        omega : float, frequency
+        e_ov : 1D array (nocc * nvir), orbital energy differences
+        cderi_ov : 2D array (naux, nocc * nvir), Cholesky decomposed ERI
+                   in OV subspace.
+
+    Returns:
+        diel : 2D array (naux, naux), dielectric matrix
+    """
+    assert blksize is not None
+
+    naux, nov = cderi_ov.shape
+
+    chi0 = (2.0 * e_ov / (omega ** 2 + e_ov ** 2)).ravel()
+    diel = np.zeros((naux, naux))
+
+    for s in [slice(*x) for x in lib.prange(0, nov, blksize)]:
+        v_ov = cderi_ov[:, s]
+        diel += np.dot(v_ov * chi0[s], v_ov.T)
+        v_ov = None
+
+    return diel
 
 def _get_scaled_legendre_roots(nw, x0=0.5):
     """
@@ -158,6 +174,7 @@ def _get_clenshaw_curtis_roots(nw):
     """
     Clenshaw-Curtis qaudrature on [0,inf)
     Ref: J. Chem. Phys. 132, 234114 (2010)
+
     Returns:
         freqs : 1D array
         wts : 1D array
@@ -169,10 +186,30 @@ def _get_clenshaw_curtis_roots(nw):
         t = (w + 1.0) / nw * np.pi * 0.5
         freqs[w] = a / np.tan(t)
         if w != nw - 1:
-            wts[w] = a*np.pi * 0.5 / nw / (np.sin(t)**2)
+            wts[w] = a * np.pi * 0.50 / nw / (np.sin(t)**2)
         else:
-            wts[w] = a*np.pi * 0.25 / nw / (np.sin(t)**2)
+            wts[w] = a * np.pi * 0.25 / nw / (np.sin(t)**2)
     return freqs[::-1], wts[::-1]
+
+def _ene_hf(mf=None, with_df=None):
+    """
+    Args:
+        mf: converged mean-field object, can be either HF or KS
+        with_df: density fitting object
+
+    Returns:
+        e_hf: float, total Hartree-Fock energy
+    """
+    assert mf.converged
+    hf_obj = mf if not isinstance(mf, scf.hf.KohnShamDFT) else mf.to_hf()
+
+    if not getattr(hf_obj, 'with_df', None):
+        hf_obj = hf_obj.density_fit(with_df=with_df)
+    dm = hf_obj.make_rdm1()
+
+    e_hf  = hf_obj.energy_elec(dm=dm)[0]
+    e_hf += hf_obj.energy_nuc()
+    return e_hf
 
 def _mo_energy_without_core(rpa, mo_energy):
     return mo_energy[get_frozen_mask(rpa)]
@@ -250,26 +287,11 @@ class DirectRPA(lib.StreamObject):
 
     def kernel(self, mo_energy=None, mo_coeff=None, cderi_ov=None, nw=40, x0=0.5):
         """
-        Args:
-            mo_energy : 1D array (nmo), mean-field mo energy
-            mo_coeff : 2D array (nmo, nmo), mean-field mo coefficient
-            cderi_ov : 3D array (naux, nocc, nvir), Cholesky decomposed ERI
-                       in OV subspace.
-            nw: integer, grid number
-            x0: real, scaling factor for frequency grid
-
-        Returns:
-            self.e_tot : RPA total eenrgy
-            self.e_hf :  exact exchange energy
-            self.e_corr : RPA correlation energy
+        The kernel function for direct RPA
         """
-        if mo_coeff is None:
-            mo_coeff = _mo_without_core(self, self._scf.mo_coeff)
-
-        if mo_energy is None:
-            mo_energy = _mo_energy_without_core(self, self._scf.mo_energy)
 
         cput0 = (logger.process_clock(), logger.perf_counter())
+        
         self.dump_flags()
         res = kernel(
             self, mo_energy, mo_coeff,
@@ -280,10 +302,54 @@ class DirectRPA(lib.StreamObject):
 
         logger.timer(self, 'RPA', *cput0)
         return self.e_corr
+    
+    def make_e_ov(self, mo_energy=None):
+        """
+        Compute orbital energy differences
+        """
+        if mo_energy is None:
+            mo_energy = _mo_energy_without_core(self, self.mo_energy)
+
+        nocc = self.nocc
+        e_ov = (mo_energy[:nocc, None] - mo_energy[None, nocc:]).ravel()
+
+        gap = (-e_ov.max(), )
+        logger.info(self, 'Lowest orbital energy difference: % 6.4e', np.min(gap))
+        
+        if (np.min(gap) < 1e-3):
+            logger.warn(rpa, 'RPA code not well-defined for degenerate systems!')
+            logger.warn(rpa, 'Lowest orbital energy difference: % 6.4e', np.min(gap))
+
+        return e_ov
+    
+    def make_dielectric_matrix(self, omega, e_ov=None, cderi_ov=None, blksize=None):
+        """
+        Args:
+            omega : float, frequency
+            e_ov : 1D array (nocc * nvir), orbital energy differences
+            mo_coeff :  (nao, nmo), mean-field mo coefficient
+            cderi_ov :  (naux, nocc, nvir), Cholesky decomposed ERI in OV subspace.
+
+        Returns:
+            diel : 2D array (naux, naux), dielectric matrix
+        """
+
+        assert e_ov is not None
+        assert cderi_ov is not None
+
+        blksize = blksize or max(e_ov.size)
+
+        diel = 2.0 * make_dielectric_matrix(
+            omega, e_ov,
+            cderi_ov if isinstance(cderi_ov, np.ndarray) else cderi_ov["cderi_ov"],
+            blksize=blksize
+                                     )
+        
+        return diel
 
     def ao2mo(self, mo_coeff=None, blksize=None):
         if mo_coeff is None:
-            mo_coeff = self.mo_coeff
+            mo_coeff = _mo_without_core(self, self.mo_coeff)
 
         nocc = self.nocc
         norb = self.nmo
@@ -319,7 +385,6 @@ class DirectRPA(lib.StreamObject):
                 q0 = q1
 
             logger.timer(self, 'outcore ao2mo', *cput0)
-
             cderi_ov = fswap
 
         return cderi_ov
@@ -327,7 +392,7 @@ class DirectRPA(lib.StreamObject):
 RPA = dRPA = DirectRPA
 
 if __name__ == '__main__':
-    from pyscf import gto, dft, tdscf
+    from pyscf import gto, dft
     mol = gto.Mole()
     mol.verbose = 4
     mol.atom = [
@@ -342,18 +407,21 @@ if __name__ == '__main__':
     mf.kernel()
 
     rpa = RPA(mf)
+    rpa.verbose = 6
+
     nocc = rpa.nocc
     nvir = rpa.nmo - nocc
     norb = rpa.nmo
     e_ov = - (rpa.mo_energy[:nocc, None] - rpa.mo_energy[None, nocc:]).ravel()
-    v_ov = rpa.ao2mo(rpa.mo_coeff, blksize=None)
+    v_ov = rpa.ao2mo(rpa.mo_coeff, blksize=1)
     e_corr_0 = rpa.kernel(cderi_ov=v_ov)
 
     print ('RPA e_tot, e_hf, e_corr = ', rpa.e_tot, rpa.e_hf, rpa.e_corr)
     assert (abs(rpa.e_corr - -0.307830040357800) < 1e-6)
     assert (abs(rpa.e_tot  - -76.26651423730257) < 1e-6)
 
-    # Another implementation of direct RPA
+    # Another implementation of direct RPA N^6
+    v_ov = np.array(v_ov["cderi_ov"])
     a = e_ov * np.eye(nocc * nvir) + 2 * np.dot(v_ov.T, v_ov)
     b = 2 * np.dot(v_ov.T, v_ov)
     apb = a + b
