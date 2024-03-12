@@ -800,6 +800,9 @@ class _CIAH_SOSCF:
                       _effective_svd(u[idx][:,idx], 1e-5))
         return mo
 
+    def to_gpu(self):
+        return self.undo_soscf().to_gpu()
+
 class _SecondOrderROHF(_CIAH_SOSCF):
     gen_g_hop = gen_g_hop_rohf
 

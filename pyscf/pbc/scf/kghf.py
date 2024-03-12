@@ -200,6 +200,8 @@ class KGHF(khf.KSCF):
     analyze = khf.analyze
     convert_from_ = pbcghf.GHF.convert_from_
 
+    to_gpu = lib.to_gpu
+
     def get_hcore(self, cell=None, kpts=None):
         hcore = khf.KSCF.get_hcore(self, cell, kpts)
         hcore = lib.asarray([scipy.linalg.block_diag(h, h) for h in hcore])

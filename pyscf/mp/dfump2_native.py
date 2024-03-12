@@ -226,6 +226,8 @@ class DFUMP2(DFRMP2):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+    to_gpu = lib.to_gpu
+
 
 MP2 = UMP2 = DFMP2 = DFUMP2
 

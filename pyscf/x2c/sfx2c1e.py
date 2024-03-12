@@ -154,6 +154,10 @@ class SFX2C1E_SCF(x2c._X2C_SCF):
             dst = dst.sfx2c()
         return hf.SCF._transfer_attrs_(self, dst)
 
+    def to_gpu(self):
+        obj = self.undo_x2c().to_gpu().sfx2c1e()
+        return lib.to_gpu(self, obj)
+
 
 class SpinFreeX2CHelper(x2c.X2CHelperBase):
     '''1-component X2c (spin-free part only)

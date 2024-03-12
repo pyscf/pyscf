@@ -355,3 +355,5 @@ class FFTDF(lib.StreamObject):
         return ngrids * 2
 
     range_coulomb = aft.AFTDF.range_coulomb
+
+    to_gpu = lib.to_gpu

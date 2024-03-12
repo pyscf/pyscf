@@ -450,6 +450,8 @@ class UMP2(mp2.MP2):
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 
+    to_gpu = lib.to_gpu
+
 MP2 = UMP2
 
 from pyscf import scf

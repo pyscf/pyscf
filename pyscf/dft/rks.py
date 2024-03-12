@@ -531,9 +531,4 @@ class RKS(KohnShamDFT, hf.RHF):
         '''Convert to RHF object.'''
         return self._transfer_attrs_(self.mol.RHF())
 
-    def to_gpu(self):
-        from gpu4pyscf.dft.rks import RKS
-        obj = lib.to_gpu(hf.SCF.reset(self.view(RKS)))
-        # Attributes only defined in gpu4pyscf.RKS
-        obj.screen_tol = 1e-14
-        return obj
+    to_gpu = lib.to_gpu

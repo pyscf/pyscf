@@ -106,8 +106,7 @@ class Gradients(rhf_grad.GradientsBase):
 
     grad_elec = grad_elec
 
-    def to_gpu(self):
-        raise NotImplementedError
+    to_gpu = lib.to_gpu
 
 Grad = Gradients
 

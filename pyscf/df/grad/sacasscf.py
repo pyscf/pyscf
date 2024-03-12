@@ -370,3 +370,5 @@ class Gradients (sacasscf_grad.Gradients):
     def get_LdotJnuc (self, Lvec, **kwargs):
         with lib.temporary_env (sacasscf_grad, Lci_dot_dgci_dx=Lci_dot_dgci_dx, Lorb_dot_dgorb_dx=Lorb_dot_dgorb_dx):
             return sacasscf_grad.Gradients.get_LdotJnuc (self, Lvec, **kwargs)
+
+    to_gpu = lib.to_gpu

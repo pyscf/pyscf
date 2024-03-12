@@ -482,11 +482,13 @@ class Gradients(rhf_grad.Gradients):
     _keys = {'with_df', 'auxbasis_response'}
 
     def __init__(self, mf):
-        assert isinstance(mf, df.df_jk._DFHF)
         # Whether to include the response of DF auxiliary basis when computing
         # nuclear gradients of J/K matrices
         self.auxbasis_response = True
         rhf_grad.Gradients.__init__(self, mf)
+
+    def check_sanity(self):
+        assert isinstance(self.base, df.df_jk._DFHF)
 
     def get_jk(self, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
                omega=None):
@@ -521,8 +523,6 @@ class Gradients(rhf_grad.Gradients):
         else:
             return 0
 
-    def to_gpu(self):
-        from gpu4pyscf.df.grad.rhf import Gradients
-        return lib.to_gpu(self.view(Gradients))
+    to_gpu = lib.to_gpu
 
 Grad = Gradients

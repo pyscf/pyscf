@@ -214,6 +214,9 @@ class _SGXHF:
         self._last_vj = 0
         self._last_vk = 0
 
+    def to_gpu(self):
+        raise NotImplementedError
+
     def method_not_implemented(self, *args, **kwargs):
         raise NotImplementedError
     nuc_grad_method = Gradients = method_not_implemented
@@ -374,3 +377,5 @@ class SGX(lib.StreamObject):
         else:
             vj, vk = sgx_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
         return vj, vk
+
+    to_gpu = lib.to_gpu

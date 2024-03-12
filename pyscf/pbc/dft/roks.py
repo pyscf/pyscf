@@ -68,6 +68,8 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
         from pyscf.pbc import scf
         return self._transfer_attrs_(scf.ROHF(self.cell, self.kpt))
 
+    to_gpu = lib.to_gpu
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto

@@ -20,6 +20,7 @@
 Non-relativistic Unrestricted Kohn-Sham
 '''
 
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import uhf_symm
 from pyscf.dft import uks
@@ -46,6 +47,8 @@ class SymAdaptedUKS(rks.KohnShamDFT, uhf_symm.UHF):
     def nuc_grad_method(self):
         from pyscf.grad import uks
         return uks.Gradients(self)
+
+    to_gpu = lib.to_gpu
 
 UKS = SymAdaptedUKS
 

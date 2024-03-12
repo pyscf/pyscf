@@ -897,6 +897,7 @@ class RHF(SCF):
     analyze = mol_hf.RHF.analyze
     spin_square = mol_hf.RHF.spin_square
     stability = mol_hf.RHF.stability
+    to_gpu = lib.to_gpu
 
     def nuc_grad_method(self):
         raise NotImplementedError

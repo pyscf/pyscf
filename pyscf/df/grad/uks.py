@@ -124,4 +124,6 @@ class Gradients(uks_grad.Gradients):
             e1 += envs['vhf'].aux[atom_id]
         return e1
 
+    to_gpu = lib.to_gpu
+
 Grad = Gradients

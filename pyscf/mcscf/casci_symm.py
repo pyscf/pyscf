@@ -28,7 +28,7 @@ from pyscf.mcscf import addons
 from pyscf.scf.hf_symm import map_degeneracy
 
 class SymAdaptedCASCI(casci.CASCI):
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
 
         assert (self.mol.symmetry)
@@ -73,6 +73,8 @@ class SymAdaptedCASCI(casci.CASCI):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
                                        cas_irrep_ncore, s)
+
+    to_gpu = lib.to_gpu
 
 CASCI = SymAdaptedCASCI
 

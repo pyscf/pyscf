@@ -764,6 +764,9 @@ class TDBase(lib.StreamObject):
         logger.note(self, 'Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self
 
+    def to_gpu(self):
+        raise NotImplementedError
+
 class TDA(TDBase):
     '''Tamm-Dancoff approximation
 
@@ -865,6 +868,8 @@ class TDA(TDBase):
         log.timer('TDA', *cpu0)
         self._finalize()
         return self.e, self.xy
+
+    to_gpu = lib.to_gpu
 
 CIS = TDA
 
@@ -1043,6 +1048,8 @@ class TDHF(TDA):
     def nuc_grad_method(self):
         from pyscf.grad import tdrhf
         return tdrhf.Gradients(self)
+
+    to_gpu = lib.to_gpu
 
 RPA = TDRHF = TDHF
 
