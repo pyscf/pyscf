@@ -3708,12 +3708,11 @@ class Mole(MoleBase):
         from Mole object.
         '''
         if key[0] == '_':  # Skip private attributes and Python builtins
-            raise AttributeError('Mole object does not have attribute %s' % key)
-        elif key in ('_ipython_canary_method_should_not_exist_',
-                     '_repr_mimebundle_'):
-            # https://github.com/mewwts/addict/issues/26
-            # https://github.com/jupyter/notebook/issues/2014
-            raise AttributeError(f'Mole object has no attribute {key}')
+            # https://bugs.python.org/issue45985
+            # https://github.com/python/cpython/issues/103936
+            # @property and __getattr__ conflicts. As a temporary fix, call
+            # object.__getattribute__ method to re-raise AttributeError
+            return object.__getattribute__(self, key)
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
@@ -3737,7 +3736,7 @@ class Mole(MoleBase):
         elif 'CI' in key or 'CC' in key or 'CAS' in key or 'MP' in key:
             mf = scf.HF(self)
         else:
-            raise AttributeError(f'Mole object has no attribute {key}')
+            return object.__getattribute__(self, key)
 
         method = getattr(mf, key)
 
