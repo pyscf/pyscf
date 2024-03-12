@@ -53,29 +53,15 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                                     max_memory, log)
 
     if h1ao is None:
-        h1ao = hessobj.make_h1(mo_coeff, mo_occ, hessobj.chkfile, atmlst, log)
+        h1ao = hessobj.make_h1(mo_coeff, mo_occ, None, atmlst, log)
         t1 = log.timer_debug1('making H1', *time0)
     if mo1 is None or mo_e1 is None:
         mo1, mo_e1 = hessobj.solve_mo1(mo_energy, mo_coeff, mo_occ, h1ao,
                                        None, atmlst, max_memory, log)
         t1 = log.timer_debug1('solving MO1', *t1)
 
-    if isinstance(h1ao, str):
-        h1ao = lib.chkfile.load(h1ao, 'scf_f1ao')
-        h1aoa = h1ao['0']
-        h1aob = h1ao['1']
-        h1aoa = {int(k): h1aoa[k] for k in h1aoa}
-        h1aob = {int(k): h1aob[k] for k in h1aob}
-    else:
-        h1aoa, h1aob = h1ao
-    if isinstance(mo1, str):
-        mo1 = lib.chkfile.load(mo1, 'scf_mo1')
-        mo1a = mo1['0']
-        mo1b = mo1['1']
-        mo1a = {int(k): mo1a[k] for k in mo1a}
-        mo1b = {int(k): mo1b[k] for k in mo1b}
-    else:
-        mo1a, mo1b = mo1
+    h1aoa, h1aob = h1ao
+    mo1a, mo1b = mo1
     mo_e1a, mo_e1b = mo_e1
 
     nao, nmo = mo_coeff[0].shape
@@ -242,21 +228,11 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
         vhfa[:,p0:p1] += vj2 - vk2a
         vhfb[:,p0:p1] += vj2 - vk2b
         h1 = hcore_deriv(ia)
-        h1a = h1 + vhfa + vhfa.transpose(0,2,1)
-        h1b = h1 + vhfb + vhfb.transpose(0,2,1)
+        h1aoa[ia] = h1 + vhfa + vhfa.transpose(0,2,1)
+        h1aob[ia] = h1 + vhfb + vhfb.transpose(0,2,1)
+    return (h1aoa,h1aob)
 
-        if chkfile is None:
-            h1aoa[ia] = h1a
-            h1aob[ia] = h1b
-        else:
-            lib.chkfile.save(chkfile, 'scf_f1ao/0/%d' % ia, h1a)
-            lib.chkfile.save(chkfile, 'scf_f1ao/1/%d' % ia, h1b)
-    if chkfile is None:
-        return (h1aoa,h1aob)
-    else:
-        return chkfile
-
-def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
+def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao,
               fx=None, atmlst=None, max_memory=4000, verbose=None,
               max_cycle=50, level_shift=0):
     mol = mf.mol
@@ -271,6 +247,7 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
     if fx is None:
         fx = gen_vind(mf, mo_coeff, mo_occ)
     s1a = -mol.intor('int1e_ipovlp', comp=3)
+    h1aoa, h1aob = h1ao
 
     def _ao2mo(mat, mo_coeff, mocc):
         return numpy.asarray([reduce(numpy.dot, (mo_coeff.T, x, mocc)) for x in mat])
@@ -296,14 +273,8 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
             s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
             s1voa.append(_ao2mo(s1ao, mo_coeff[0], mocca))
             s1vob.append(_ao2mo(s1ao, mo_coeff[1], moccb))
-            if isinstance(h1ao_or_chkfile, str):
-                h1aoa = lib.chkfile.load(h1ao_or_chkfile, 'scf_f1ao/0/%d'%ia)
-                h1aob = lib.chkfile.load(h1ao_or_chkfile, 'scf_f1ao/1/%d'%ia)
-            else:
-                h1aoa = h1ao_or_chkfile[0][ia]
-                h1aob = h1ao_or_chkfile[1][ia]
-            h1voa.append(_ao2mo(h1aoa, mo_coeff[0], mocca))
-            h1vob.append(_ao2mo(h1aob, mo_coeff[1], moccb))
+            h1voa.append(_ao2mo(h1aoa[ia], mo_coeff[0], mocca))
+            h1vob.append(_ao2mo(h1aob[ia], mo_coeff[1], moccb))
 
         h1vo = (numpy.vstack(h1voa), numpy.vstack(h1vob))
         s1vo = (numpy.vstack(s1voa), numpy.vstack(s1vob))
@@ -317,20 +288,13 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
 
         for k in range(ia1-ia0):
             ia = atmlst[k+ia0]
-            if isinstance(h1ao_or_chkfile, str):
-                lib.chkfile.save(h1ao_or_chkfile, 'scf_mo1/0/%d'%ia, mo1a[k])
-                lib.chkfile.save(h1ao_or_chkfile, 'scf_mo1/1/%d'%ia, mo1b[k])
-            else:
-                mo1sa[ia] = mo1a[k]
-                mo1sb[ia] = mo1b[k]
+            mo1sa[ia] = mo1a[k]
+            mo1sb[ia] = mo1b[k]
             e1sa[ia] = e1a[k].reshape(3,nocca,nocca)
             e1sb[ia] = e1b[k].reshape(3,noccb,noccb)
         mo1 = e1 = mo1a = mo1b = e1a = e1b = None
 
-    if isinstance(h1ao_or_chkfile, str):
-        return h1ao_or_chkfile, (e1sa,e1sb)
-    else:
-        return (mo1sa,mo1sb), (e1sa,e1sb)
+    return (mo1sa,mo1sb), (e1sa,e1sb)
 
 def gen_vind(mf, mo_coeff, mo_occ):
     nao, nmoa = mo_coeff[0].shape
@@ -385,8 +349,8 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
                                  max_memory, log)
     de2 += hobj.hess_nuc()
 
-    # Compute H1 integrals and store in hobj.chkfile
-    hobj.make_h1(mo_coeff, mo_occ, hobj.chkfile, atmlst, log)
+    h1ao_cache = hobj.make_h1(mo_coeff, mo_occ, None, atmlst, log)
+    h1aoa_cache, h1aob_cache = h1ao_cache
 
     aoslices = mol.aoslice_by_atom()
     s1a = -mol.intor('int1e_ipovlp', comp=3)
@@ -400,10 +364,8 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
         s1ao = 0
         for ia in range(natm):
             shl0, shl1, p0, p1 = aoslices[ia]
-            h1ao_i = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/0/%d' % ia)
-            h1aoa += numpy.einsum('x,xij->ij', x[ia], h1ao_i)
-            h1ao_i = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/1/%d' % ia)
-            h1aob += numpy.einsum('x,xij->ij', x[ia], h1ao_i)
+            h1aoa += numpy.einsum('x,xij->ij', x[ia], h1aoa_cache[ia])
+            h1aob += numpy.einsum('x,xij->ij', x[ia], h1aob_cache[ia])
             s1ao_i = numpy.zeros((3,nao,nao))
             s1ao_i[:,p0:p1] += s1a[:,p0:p1]
             s1ao_i[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
@@ -429,10 +391,8 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
 
         for ja in range(natm):
             q0, q1 = aoslices[ja][2:]
-            h1aoa = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/0/%d' % ja)
-            h1aob = lib.chkfile.load(hobj.chkfile, 'scf_f1ao/1/%d' % ja)
-            hx[ja] += numpy.einsum('xpq,pq->x', h1aoa, dm1a) * 2
-            hx[ja] += numpy.einsum('xpq,pq->x', h1aob, dm1b) * 2
+            hx[ja] += numpy.einsum('xpq,pq->x', h1aoa_cache[ja], dm1a) * 2
+            hx[ja] += numpy.einsum('xpq,pq->x', h1aob_cache[ja], dm1b) * 2
             hx[ja] -= numpy.einsum('xpq,pq->x', s1a[:,q0:q1], dme1[q0:q1])
             hx[ja] -= numpy.einsum('xpq,qp->x', s1a[:,q0:q1], dme1[:,q0:q1])
         return hx.ravel()
@@ -449,9 +409,9 @@ class Hessian(rhf_hess.HessianBase):
     make_h1 = make_h1
     gen_hop = gen_hop
 
-    def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
+    def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
-        return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
+        return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao,
                          fx, atmlst, max_memory, verbose,
                          max_cycle=self.max_cycle, level_shift=self.level_shift)
 
