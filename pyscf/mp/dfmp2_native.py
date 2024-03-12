@@ -236,6 +236,8 @@ class DFRMP2(lib.StreamObject):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+    to_gpu = lib.to_gpu
+
 
 MP2 = RMP2 = DFMP2 = DFRMP2
 

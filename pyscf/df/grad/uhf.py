@@ -60,4 +60,6 @@ class Gradients(uhf_grad.Gradients):
         else:
             return 0
 
+    to_gpu = lib.to_gpu
+
 Grad = Gradients

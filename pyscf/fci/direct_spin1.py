@@ -945,6 +945,8 @@ class FCISolver(FCIBase):
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.transform_ci_for_orbital_rotation(fcivec, norb, nelec, u)
 
+    to_gpu = lib.to_gpu
+
 FCI = FCISolver
 
 class FCIvector(numpy.ndarray):

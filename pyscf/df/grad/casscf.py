@@ -224,6 +224,8 @@ class Gradients(casci_grad.Gradients):
 
     as_scanner = as_scanner
 
+    to_gpu = lib.to_gpu
+
 Grad = Gradients
 
 #from pyscf import mcscf

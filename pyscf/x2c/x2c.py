@@ -659,6 +659,8 @@ class UHF(SCF):
         from pyscf.x2c import dft
         return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
 
+    to_gpu = lib.to_gpu
+
 X2C_UHF = UHF
 
 class RHF(SCF):
@@ -679,6 +681,8 @@ class RHF(SCF):
         '''
         from pyscf.x2c import dft
         return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
+
+    to_gpu = lib.to_gpu
 
 X2C_RHF = RHF
 
@@ -798,6 +802,10 @@ class X2C1E_GSCF(_X2C_SCF):
 
     def to_ks(self, xc='HF'):
         raise NotImplementedError
+
+    def to_gpu(self):
+        obj = self.undo_x2c().to_gpu().x2c1e()
+        return lib.to_gpu(self, obj)
 
 
 def _uncontract_mol(mol, xuncontract=None, exp_drop=0.2):

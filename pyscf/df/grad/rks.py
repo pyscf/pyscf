@@ -123,8 +123,6 @@ class Gradients(rks_grad.Gradients):
             e1 += envs['vhf'].aux[atom_id]
         return e1
 
-    def to_gpu(self):
-        from gpu4pyscf.df.grad.rks import Gradients
-        return lib.to_gpu(self.view(Gradients))
+    to_gpu = lib.to_gpu
 
 Grad = Gradients

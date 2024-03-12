@@ -755,7 +755,7 @@ class CASSCF(casci.CASBase):
         'mo_energy', 'converged',
     }
 
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None, frozen=None):
         casci.CASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 
@@ -1295,6 +1295,8 @@ To enable the solvent model for CASSCF, the following code needs to be called
     def reset(self, mol=None):
         casci.CASBase.reset(self, mol=mol)
         self._max_stepsize = None
+
+    to_gpu = lib.to_gpu
 
 scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
 scf.uhf.UHF.CASSCF = None

@@ -152,7 +152,7 @@ def make_auxbasis(mol, mp2fit=False):
         _basis.update(mol.basis)
         del (_basis['default'])
     else:
-        _basis = mol._basis
+        _basis = mol._basis or {}
 
     auxbasis = {}
     for k in _basis:

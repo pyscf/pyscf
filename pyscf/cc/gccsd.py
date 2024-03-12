@@ -289,6 +289,8 @@ class GCCSD(ccsd.CCSDBase):
                 orbspin = orbspin[self.get_frozen_mask()]
         return spin2spatial(tx, orbspin)
 
+    to_gpu = lib.to_gpu
+
 CCSD = GCCSD
 
 

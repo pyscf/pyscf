@@ -763,6 +763,8 @@ class UHF(hf.SCF):
     S^2 = 0.7570150, 2S+1 = 2.0070027
     '''
 
+    init_guess_breaksym = None
+
     _keys = {"init_guess_breaksym"}
 
     def __init__(self, mol):
@@ -771,7 +773,6 @@ class UHF(hf.SCF):
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
         self.nelec = None
-        self.init_guess_breaksym = None
 
     @property
     def nelec(self):
@@ -1066,9 +1067,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         from pyscf import dft
         return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
 
-    def to_gpu(self):
-        from gpu4pyscf.scf import UHF
-        return lib.to_gpu(hf.SCF.reset(self.view(UHF)))
+    to_gpu = lib.to_gpu
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')
