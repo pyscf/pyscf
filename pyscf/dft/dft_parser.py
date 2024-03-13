@@ -55,7 +55,7 @@ def parse_dft(dft_method):
 
     # J. Chem. Theory Comput. 2013, 9, 1, 263–272
     if method_lower in ['wb97x-d3']:
-        return NotADirectoryError('wb97x-d3 is not supported yet.')
+        raise NotImplementedError('wb97x-d3 is not supported yet.')
 
     if method_lower.endswith('-3c'):
         raise NotImplementedError('*-3c methods are not supported yet.')

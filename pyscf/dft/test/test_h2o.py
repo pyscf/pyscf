@@ -501,6 +501,7 @@ class KnownValues(unittest.TestCase):
         method.nlcgrids.atom_grid = {"H": (40, 110), "O": (40, 110),}
         self.assertAlmostEqual(method.scf(), -76.352381513158718, 8)
 
+    @unittest.skipIf('dftd3' not in sys.modules, "requires the dftd3 library")
     def test_dft_parser(self):
         from pyscf.scf import dispersion
         method = dft.RKS(h2o, xc='wb97m-d3bj')
@@ -509,13 +510,6 @@ class KnownValues(unittest.TestCase):
         assert method._numint.libxc.is_nlc(method.xc) == False
         fn_facs = method._numint.libxc.parse_xc(method.xc)
         assert fn_facs[1][0][0] == 531
-
-        method = dft.RKS(h2o, xc='wb97x-d3')
-        e_disp = dispersion.get_dispersion(method)
-        self.assertAlmostEqual(e_disp, -1.2566116169235249e-06, 9)
-        assert method._numint.libxc.is_nlc(method.xc) == False
-        fn_facs = method._numint.libxc.parse_xc(method.xc)
-        assert fn_facs[1][0][0] == 399
 
         method = dft.RKS(h2o, xc='wb97x-d3bj')
         e_disp = dispersion.get_dispersion(method)
