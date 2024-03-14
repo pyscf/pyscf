@@ -1,0 +1,57 @@
+[build-system]
+requires = ["scikit-build-core"]
+build-backend = "scikit_build_core.build"
+
+
+[project]
+name = "pyscf"
+dynamic = ["version"]
+description = "PySCF: Python-based Simulations of Chemistry Framework"
+classifiers = [
+  'Development Status :: 5 - Production/Stable',
+  'Intended Audience :: Science/Research',
+  'Intended Audience :: Developers',
+  'License :: OSI Approved :: Apache Software License',
+  'Programming Language :: C',
+  'Programming Language :: Python',
+  'Programming Language :: Python :: 3.7',
+  'Programming Language :: Python :: 3.8',
+  'Programming Language :: Python :: 3.9',
+  'Programming Language :: Python :: 3.10',
+  'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
+  'Topic :: Software Development',
+  'Topic :: Scientific/Engineering',
+  'Operating System :: POSIX',
+  'Operating System :: Unix',
+  'Operating System :: MacOS',
+]
+
+maintainers = [{ name = "Qiming Sun", email = "osirpt.sun@gmail.com" }]
+
+authors = [{ name = "Qiming Sun", email = "osirpt.sun@gmail.com" }]
+
+license = { file = "LICENSE" }
+
+dependencies = [
+  'numpy>=1.13,!=1.16,!=1.17',
+  'scipy!=1.5.0,!=1.5.1',
+  'h5py>=2.7',
+  'setuptools',
+]
+
+[project.urls]
+Homepage = "http://www.pyscf.org"
+Repository = "https://github.com/pyscf/pyscf"
+Documentation = "http://www.pyscf.org"
+
+[tool.scikit-build]
+cmake.source-dir = "pyscf/lib"
+cmake.verbose = true
+logging.level = "DEBUG"
+wheel.install-dir = "pyscf"
+wheel.py-api = "py3"
+
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "pyscf/__init__.py"

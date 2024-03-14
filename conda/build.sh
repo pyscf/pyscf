@@ -13,8 +13,10 @@ set -x -e
 
 # C extensions must be installed with sequential BLAS library
 # https://pyscf.org/install.html#using-optimized-blas
-export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF -DBLA_VENDOR=Intel10_64lp_seq"
+# Finding sequential BLAS is is now handled in pyscf/lib/CMakeLists.txt
+
+export CMAKE_ARGS="-DWITH_F12=OFF"
 
 # env PYTHON not defined in certain conda-build version
 # $PYTHON -m pip install . -vv
-pip install -v --prefix=$PREFIX .
+MAKEFLAGS="-j" $PYTHON -m pip install -vv .

@@ -17,6 +17,6 @@ add_library(agf2 SHARED
 add_dependencies(agf2 cvhf)
 
 set_target_properties(agf2 PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+  LIBRARY_OUTPUT_DIRECTORY ${PYSCF_LIBOUTDIR_ROOT})
 
 target_link_libraries(agf2 cvhf ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})

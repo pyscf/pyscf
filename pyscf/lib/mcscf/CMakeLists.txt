@@ -21,7 +21,7 @@ add_library(fci SHARED
 add_dependencies(fci np_helper)
 
 set_target_properties(fci PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+  LIBRARY_OUTPUT_DIRECTORY ${PYSCF_LIBOUTDIR_ROOT})
 
 target_link_libraries(fci np_helper ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})
 
@@ -30,6 +30,6 @@ add_library(mcscf SHARED
 add_dependencies(mcscf fci np_helper)
 
 set_target_properties(mcscf PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+  LIBRARY_OUTPUT_DIRECTORY ${PYSCF_LIBOUTDIR_ROOT})
 
 target_link_libraries(mcscf fci cvhf ao2mo np_helper ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})

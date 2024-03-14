@@ -1,9 +1,6 @@
-{% set data = load_setup_py_data() %}
-
-
 package:
   name: "pyscf"
-  version: "{{ data['version'] }}"
+  version: "{{ version }}"
 
 source:
   path: ..
@@ -19,8 +16,11 @@ requirements:
     - mkl
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
+    - llvm-openmp # [osx]
+    - libgomp # [linux]
   host:
     - python
+    - scikit-build-core
   run:
     - python
     - mkl

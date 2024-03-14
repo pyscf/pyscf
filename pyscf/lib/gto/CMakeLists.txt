@@ -17,10 +17,10 @@ add_library(cgto SHARED
   ft_ao.c ft_ao_deriv.c fill_grids_int2c.c
   grid_ao_drv.c deriv1.c deriv2.c nr_ecp.c nr_ecp_deriv.c
   autocode/auto_eval1.c)
-add_dependencies(cgto np_helper)
+add_dependencies(cgto np_helper cint)
 
 set_target_properties(cgto PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+  LIBRARY_OUTPUT_DIRECTORY ${PYSCF_LIBOUTDIR_ROOT})
 
-target_link_libraries(cgto cint np_helper ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})
+target_link_libraries(cgto PRIVATE cint np_helper ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})
 

@@ -20,7 +20,7 @@ add_library(dft SHARED
 add_dependencies(dft cgto cvhf np_helper pbc)
 
 set_target_properties(dft PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+  LIBRARY_OUTPUT_DIRECTORY ${PYSCF_LIBOUTDIR_ROOT})
 
 if(ENABLE_LIBXSMM)
   add_definitions(-DHAVE_LIBXSMM)
@@ -32,13 +32,15 @@ endif()
 if(ENABLE_LIBXC)
 add_library(xc_itrf SHARED libxc_itrf.c)
 set_target_properties(xc_itrf PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+  LIBRARY_OUTPUT_DIRECTORY ${PYSCF_LIBOUTDIR_ROOT})
 target_link_libraries(xc_itrf xc ${OPENMP_C_PROPERTIES})
+target_compile_options(xc_itrf PRIVATE "$<$<BOOL:${PYSCF_DEBINFO}>:-g>")
 endif()
 
 if(ENABLE_XCFUN)
 add_library(xcfun_itrf SHARED xcfun_itrf.c)
 set_target_properties(xcfun_itrf PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+  LIBRARY_OUTPUT_DIRECTORY ${PYSCF_LIBOUTDIR_ROOT})
 target_link_libraries(xcfun_itrf xcfun ${OPENMP_C_PROPERTIES})
+target_compile_options(xc_itrf PRIVATE "$<$<BOOL:${PYSCF_DEBINFO}>:-g>")
 endif()

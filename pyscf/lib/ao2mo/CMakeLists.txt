@@ -17,6 +17,6 @@ add_library(ao2mo SHARED
 add_dependencies(ao2mo cvhf)
 
 set_target_properties(ao2mo PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+  LIBRARY_OUTPUT_DIRECTORY ${PYSCF_LIBOUTDIR_ROOT})
 
 target_link_libraries(ao2mo cvhf cint np_helper ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})
