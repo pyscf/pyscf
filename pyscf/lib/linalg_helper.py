@@ -578,10 +578,12 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
 def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=25):
     omega0 = numpy.zeros((nroots))
+    u0 = 0.0 # save the eigenvectors.
     
     for icycle in range(max_cycle):
         if icycle%max_space == 0: 
             x0 = x0[:nroots]
+        print(x0.shape)
             
         axt = aop(x0)
         xaxt = numpy.einsum('nv,mv->mn',axt,x0)
@@ -594,6 +596,8 @@ def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=25):
         omega_tmp = omega_tmp[idx_eigen]
         c_small = c_small[:,idx_eigen]
         omega_p = omega_tmp*1.0
+        
+        u0 += numpy.einsum('nt,tm->mn',x0.T,c_small)[:nroots].real
         
         if omega_p.size < x0.shape[0]:
             er_value = x0.shape[0] - omega_p.size
@@ -624,11 +628,12 @@ def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=25):
             x1[i,:] = numpy.einsum('ts,s->t',Dinv,x1[i,:], optimize=True)
 
         x0 = numpy.linalg.qr(numpy.concatenate((x0.T, x1[:nroots].real.T),axis=1))[0].T
-    
+        
     if icycle == max_cycle-1:
         raise RuntimeError("Not convergence!")
     
-    return omega_diff, omega_p[:nroots].real, x0[:nroots]
+    # ToDo: x0 is not the eigenvectors.
+    return omega_diff, omega_p[:nroots].real, u0[:nroots]
 
 def make_diag_precond(diag, level_shift=0):
     '''Generate the preconditioner function with the diagonal function.'''
