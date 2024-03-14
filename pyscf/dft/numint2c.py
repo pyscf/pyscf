@@ -26,8 +26,11 @@ from pyscf import lib
 from pyscf.dft import numint
 from pyscf.dft.numint import _dot_ao_dm, _dot_ao_ao, _scale_ao, _tau_dot, BLKSIZE
 from pyscf.dft import xc_deriv
+from pyscf import dft
 from pyscf import __config__
+# from XC_Library.eval_xc_AB import transform_arbitrary_order_gamma2ud # add by lihao
 
+MGGA_DENSITY_LAPL = False
 
 @lib.with_doc(
     '''Calculate the electron density and magnetization spin density in the
@@ -281,6 +284,36 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
     evfk = [out[0]]
     for order in range(1, deriv+1):
         evfk.append(xc_deriv.transform_xc(rho, out, xctype, spin, order))
+    # rhoa = (t + s) * .5 # add by lihao
+    # rhob = (t - s) * .5 # add by lihao
+    # rhop = np.array([rhoa,rhob]) # add by lihao
+    # import pdb
+    # pdb.set_trace()
+    # print(deriv) # add by lihao
+    # tives = transform_arbitrary_order_gamma2ud(xctype,rhop,out,deriv=deriv,spin=1) # add by lihao
+    # # print(len(tives)) # add by lihao
+    # if deriv ==1:  # add by lihao
+    #     exc3,vxc3= tives # add by lihao
+    #     evfk.append(vxc3) # add by lihao
+        
+    # elif deriv ==2:  # add by lihao
+    #     exc3,vxc3,fxc3= tives # add by lihao
+    #     evfk.append(vxc3) # add by lihao
+    #     evfk.append(fxc3) # add by lihao
+
+    # elif deriv ==3:  # add by lihao
+    #     exc3,vxc3,fxc3,kxc3 = tives # add by lihao
+    #     evfk.append(vxc3) # add by lihao
+    #     evfk.append(fxc3) # add by lihao
+    #     evfk.append(kxc3) # add by lihao
+
+    # else:    # add by lihao
+    #     exc3,vxc3,fxc3,kxc3,lxc3 = tives # add by lihao
+    #     evfk.append(vxc3) # add by lihao
+    #     evfk.append(fxc3) # add by lihao
+    #     evfk.append(kxc3) # add by lihao
+    #     evfk.append(lxc3) # add by lihao
+    
     if deriv < 3:
         # The return has at least [e, v, f, k] terms
         evfk.extend([None] * (3 - deriv))
@@ -311,6 +344,24 @@ def mcfun_eval_xc_adapter(ni, xc_code):
         return mcfun.eval_xc_eff(
             fn_eval_xc, rho, deriv, spin_samples=ni.spin_samples,
             collinear_threshold=ni.collinear_thrd,
+            collinear_samples=ni.collinear_samples, workers=nproc)
+    return eval_xc_eff
+
+def mcfun_eval_xc_adapter_sf(ni, xc_code):
+    '''Wrapper to generate the eval_xc function required by mcfun'''
+    try:
+        import mcfun
+    except ImportError:
+        raise ImportError('This feature requires mcfun library.\n'
+                          'Try install mcfun with `pip install mcfun`')
+
+    xctype = ni._xc_type(xc_code)
+    fn_eval_xc = functools.partial(__mcfun_fn_eval_xc, ni, xc_code, xctype)
+    nproc = lib.num_threads()
+    def eval_xc_eff(xc_code, rho, deriv=1, omega=None, xctype=None,
+                    verbose=None):
+        return mcfun.eval_xc_eff_sf(
+            fn_eval_xc, rho, deriv, 
             collinear_samples=ni.collinear_samples, workers=nproc)
     return eval_xc_eff
 
@@ -524,6 +575,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             # TODO:
             dm = np.dot(mo_coeff * mo_occ, mo_coeff.conj().T)
             hermi = 1
+
             rho = self.eval_rho(mol, ao, dm, non0tab, xctype, hermi, with_lapl, verbose)
             return rho
 
@@ -633,6 +685,41 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             assert rho.dtype == np.double
             vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
         return rho, vxc, fxc
+    
+    def cache_xc_kernel_sf(self, mol, grids, xc_code, mo_coeff, mo_occ, spin=1,max_memory=2000):
+        '''Compute the fxc_sf, which can be used in SF-TDDFT
+        '''
+        xctype = self._xc_type(xc_code)
+        if xctype == 'GGA':
+            ao_deriv = 1
+        elif xctype == 'MGGA':
+            ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
+        else:
+            ao_deriv = 0
+        with_lapl = MGGA_DENSITY_LAPL
+            
+        assert mo_coeff[0].ndim == 2
+        assert spin == 1
+        
+        nao = mo_coeff[0].shape[0]
+        rhoa = []
+        rhob = []
+        
+        ni = numint.NumInt()
+        for ao, mask, weight, coords \
+                in self.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
+            rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype, with_lapl))
+            rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype, with_lapl))
+
+        rho_ab = (np.hstack(rhoa), np.hstack(rhob))
+        rho_ab = np.asarray(rho_ab)
+        rho_tmz = np.zeros_like(rho_ab)
+        rho_tmz[0] += rho_ab[0]+rho_ab[1]
+        rho_tmz[1] += rho_ab[0]-rho_ab[1]
+
+        eval_xc = self.mcfun_eval_xc_adapter_sf(xc_code)
+        fxc_sf = eval_xc(xc_code, rho_tmz, deriv=2, xctype=xctype)
+        return fxc_sf
 
     def get_rho(self, mol, dm, grids, max_memory=2000):
         '''Density in real space
@@ -715,6 +802,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
 
     eval_xc_eff = _eval_xc_eff
     mcfun_eval_xc_adapter = mcfun_eval_xc_adapter
+    mcfun_eval_xc_adapter_sf = mcfun_eval_xc_adapter_sf
 
     block_loop = numint.NumInt.block_loop
     _gen_rho_evaluator = numint.NumInt._gen_rho_evaluator

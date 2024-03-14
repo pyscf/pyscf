@@ -32,6 +32,7 @@ try:
     from pyscf.tdscf import dks
     from pyscf.tdscf.rks import TDRKS
     from pyscf.tdscf.uks import TDUKS
+    from pyscf.tdscf.uks_sf import TDUKS_SF # add by lihao
     from pyscf.tdscf.gks import TDGKS
 except (ImportError, IOError):
     pass
@@ -63,6 +64,9 @@ def TDDFT(mf):
         return mf.TDDFT()
     else:
         return TDHF(mf)
+    
+def TDDFT_SF(mf):
+    return mf.TDDFT_SF()
 
 TD = TDDFT
 

@@ -464,6 +464,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
         fill_heff(heff, xs, ax, xt, axt, dot)
         xt = axt = None
+
         w, v = scipy.linalg.eigh(heff[:space,:space])
         if callable(pick):
             w, v, idx = pick(w, v, nroots, locals())
@@ -575,6 +576,59 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
     return numpy.asarray(conv), e, x0
 
+def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=25):
+    omega0 = numpy.zeros((nroots))
+    
+    for icycle in range(max_cycle):
+        if icycle%max_space == 0: 
+            x0 = x0[:nroots]
+            
+        axt = aop(x0)
+        xaxt = numpy.einsum('nv,mv->mn',axt,x0)
+        omega_tmp, c_small = numpy.linalg.eig(xaxt)
+        idx_pov = numpy.where(omega_tmp.real>0)[0]
+        omega_tmp = omega_tmp[idx_pov]
+        c_small = c_small[:,idx_pov]
+        
+        idx_eigen = numpy.argsort(omega_tmp)
+        omega_tmp = omega_tmp[idx_eigen]
+        c_small = c_small[:,idx_eigen]
+        omega_p = omega_tmp*1.0
+        
+        if omega_p.size < x0.shape[0]:
+            er_value = x0.shape[0] - omega_p.size
+            if omega_p.size >= 2:
+                w_step = omega_p[-1] - omega_p[-2]
+                for i in range(er_value):
+                    omega_p = numpy.append(omega_p,w_step+omega_p[-1])
+            else:
+                for i in range(er_value):
+                    omega_p = numpy.append(omega_p,omega_p[-1]+0.05)
+                    
+        omega_diff = numpy.abs(omega_p[:nroots]-omega0)
+        print(f"In circle {icycle}, difference of omega:")
+        print(omega_diff)
+        omega0 = omega_p[:nroots]
+        print(f"In total, {(omega_diff<tol).sum()}/{nroots} states converged. The values listed below:")
+        print(omega_p[:nroots].real)
+        print('\n')
+        
+        if (omega_diff<tol).sum() == nroots:
+            break 
+        
+        x1 = -numpy.einsum('t,nt->tn',omega_tmp,x0.T@c_small, optimize=True)
+        x1 += numpy.einsum('tn,tm->mn',axt,c_small)
+        
+        for i in range(x1.shape[0]):
+            Dinv = numpy.diag(1/(omega_tmp[i]-precond+1e-99))
+            x1[i,:] = numpy.einsum('ts,s->t',Dinv,x1[i,:], optimize=True)
+
+        x0 = numpy.linalg.qr(numpy.concatenate((x0.T, x1[:nroots].real.T),axis=1))[0].T
+    
+    if icycle == max_cycle-1:
+        raise RuntimeError("Not convergence!")
+    
+    return omega_diff, omega_p[:nroots].real, x0[:nroots]
 
 def make_diag_precond(diag, level_shift=0):
     '''Generate the preconditioner function with the diagonal function.'''
@@ -838,6 +892,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
         fill_heff(heff, xs, ax, xt, axt, dot)
         xt = axt = None
         w, v = scipy.linalg.eig(heff[:space,:space])
+        
         if callable(pick):
             w, v, idx = pick(w, v, nroots, locals())
             if len(w) == 0:
@@ -1290,9 +1345,9 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     >>> from pyscf import lib
     >>> a = numpy.random.random((10,10)) * 1e-2
     >>> b = numpy.random.random(10)
-    >>> aop = lambda x: a.dot(x.T).T
+    >>> aop = lambda x: numpy.dot(a,x)
     >>> x = lib.krylov(aop, b)
-    >>> numpy.allclose(aop(x)+x, b)
+    >>> numpy.allclose(numpy.dot(a,x)+x, b)
     True
     '''
     if isinstance(aop, numpy.ndarray) and aop.ndim == 2:

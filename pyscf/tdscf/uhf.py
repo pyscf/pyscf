@@ -642,6 +642,58 @@ class TDA(TDBase):
             x0[i, j] = 1  # Koopmans' excitations
         return x0
 
+    def init_guess_sf(self, mf, nstates=None, wfnsym=None):
+        if nstates is None: nstates = self.nstates
+        if wfnsym is None: wfnsym = self.wfnsym
+
+        mol = mf.mol
+        mo_energy = mf.mo_energy
+        mo_occ = mf.mo_occ
+        occidxa = numpy.where(mo_occ[0]>0)[0]
+        occidxb = numpy.where(mo_occ[1]>0)[0]
+        viridxa = numpy.where(mo_occ[0]==0)[0]
+        viridxb = numpy.where(mo_occ[1]==0)[0]
+        e_ia_b2a = (mo_energy[0][viridxa,None] - mo_energy[1][occidxb]).T
+        e_ia_a2b = (mo_energy[1][viridxb,None] - mo_energy[0][occidxa]).T
+
+        if wfnsym is not None and mol.symmetry:
+            raise NotImplementedError("UKS Spin Flip TDA/ TDDFT haven't taken symmetry\
+                                      into account.")
+            
+        e_ia_b2a = e_ia_b2a.ravel()
+        e_ia_a2b = e_ia_a2b.ravel()
+        nov_b2a = e_ia_b2a.size
+        nov_a2b = e_ia_a2b.size
+        
+        if self.extype==0:
+            nstates = min(nstates, nov_b2a)
+            # 处理简并
+            e_threshold = numpy.sort(e_ia_b2a)[nstates-1]
+            e_threshold += self.deg_eia_thresh
+
+            idx = numpy.where(e_ia_b2a <= e_threshold)[0]
+            x0 = numpy.zeros((idx.size, nov_b2a))
+            for i, j in enumerate(idx):
+                x0[i, j] = 1  # Koopmans' excitations
+                
+            y0 = numpy.zeros((len(idx),nov_a2b))
+            z0 = numpy.concatenate((x0,y0),axis=1)
+            
+        elif self.extype==1:
+            nstates = min(nstates, nov_a2b)
+            # 处理简并
+            e_threshold = numpy.sort(e_ia_a2b)[nstates-1]
+            e_threshold += self.deg_eia_thresh
+
+            idx = numpy.where(e_ia_a2b <= e_threshold)[0]
+            x0 = numpy.zeros((idx.size, nov_a2b))
+            for i, j in enumerate(idx):
+                x0[i, j] = 1  # Koopmans' excitations
+                
+            y0 = numpy.zeros((len(idx),nov_b2a))
+            z0 = numpy.concatenate((x0,y0),axis=1)
+        return z0
+
     def kernel(self, x0=None, nstates=None):
         '''TDA diagonalization solver
         '''
@@ -660,7 +712,7 @@ class TDA(TDBase):
         def pickeig(w, v, nroots, envs):
             idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
-
+        
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
@@ -689,8 +741,6 @@ class TDA(TDBase):
         log.timer('TDA', *cpu0)
         self._finalize()
         return self.e, self.xy
-
-    to_gpu = lib.to_gpu
 
 CIS = TDA
 
@@ -859,8 +909,6 @@ class TDHF(TDA):
         log.timer('TDDFT', *cpu0)
         self._finalize()
         return self.e, self.xy
-
-    to_gpu = lib.to_gpu
 
 RPA = TDUHF = TDHF
 
