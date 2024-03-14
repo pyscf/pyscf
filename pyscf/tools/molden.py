@@ -53,7 +53,7 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
                                       mo_coeff, tol=1e-5)
             except ValueError as e:
                 logger.warn(mol, str(e))
-    if ene is None:
+    if ene is None or len(ene) != nmo:
         ene = numpy.arange(nmo)
     assert (spin == 'Alpha' or spin == 'Beta')
     if occ is None:
@@ -135,14 +135,17 @@ def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=IGNORE_H):
                 ene = dat['mo_energy']
             else:
                 ene = None
-            occ = dat['mo_occ']
+            if 'mo_occ' in dat:
+                occ = dat['mo_occ']
+            else:
+                occ = None
             mo = dat['mo_coeff']
 
         if isinstance(ene, str) and ene == 'None':
             ene = None
         if isinstance(ene, str) and occ == 'None':
             occ = None
-        if occ.ndim == 2:
+        if occ is not None and occ.ndim == 2:
             orbital_coeff(mol, f, mo[0], spin='Alpha', ene=ene[0], occ=occ[0],
                           ignore_h=ignore_h)
             orbital_coeff(mol, f, mo[1], spin='Beta', ene=ene[1], occ=occ[1],
@@ -236,8 +239,16 @@ def _parse_gto(lines, envs):
         elif dat[0].upper() in 'SPDFGHIJ':
             basis[symb].append(read_one_bas(*dat))
 
-    mol.basis = envs['basis'] = basis
     mol.atom = [atoms[i] for i in atom_seq]
+    uniq_atoms = {a[0] for a in mol.atom}
+
+    # To avoid the mol.build() sort the basis, disable mol.basis and set the
+    # internal data _basis directly. It is a workaround to solve issue #1961.
+    # Mole.decontract_basis function should be rewritten to support
+    # discontinuous bases that have the same angular momentum.
+    mol.basis = {}
+    _basis = gto.mole._parse_default_basis(basis, uniq_atoms)
+    mol._basis = envs['basis'] = gto.format_basis(_basis, sort_basis=False)
     return mol
 
 def _parse_mo(lines, envs):
@@ -300,7 +311,7 @@ def _parse_core(lines, envs):
             mol.ecp[atoms[atm_id][0]] = [nelec_core, []]
 
     if mol.ecp:
-        sys.stderr.write('\nECP were dectected in the molden file.\n'
+        sys.stderr.write('\nECP were detected in the molden file.\n'
                          'Note Molden format does not support ECP data. '
                          'ECP information was lost when saving to molden format.\n\n')
     return mol.ecp
@@ -350,6 +361,8 @@ def load(moldenfile, verbose=0):
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
+    mo_energy, mo_coeff, mo_occ, irrep_labels, spins = None, None, None, None, None
+
     for sec_kind in _SEC_ORDER:
         if sec_kind == 'MO' and 'MO' in sec_kinds:
             if len(sec_kinds['MO']) == 1:
@@ -389,6 +402,8 @@ def load(moldenfile, verbose=0):
     if isinstance(mo_occ, tuple):
         mol.spin = int(mo_occ[0].sum() - mo_occ[1].sum())
 
+    if not mol._built:
+        mol.build(0, 0)
     return mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins
 
 parse = read = load
@@ -438,7 +453,7 @@ def header(mol, fout, ignore_h=IGNORE_H):
     fout.write('\n')
 
 def order_ao_index(mol):
-    # reorder d,f,g fucntion to
+    # reorder d,f,g function to
     #  5D: D 0, D+1, D-1, D+2, D-2
     #  6D: xx, yy, zz, xy, xz, yz
     #
@@ -500,8 +515,9 @@ def remove_high_l(mol, mo_coeff=None):
     '''
     pmol = mol.copy()
     pmol.basis = {}
+    pmol._basis = {}
     for symb, bas in mol._basis.items():
-        pmol.basis[symb] = [b for b in bas if b[0] <= 4]
+        pmol._basis[symb] = [b for b in bas if b[0] <= 4]
     pmol.build(0, 0)
     if mo_coeff is None:
         return pmol, None

@@ -123,8 +123,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if getattr(mf, 'nlc', '') != '':
-            raise NotImplementedError
+        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+            raise NotImplementedError('DKS-TDDFT for NLC functionals')
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
@@ -379,7 +379,7 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     raise NotImplementedError
 
 
-class TDMixin(rhf.TDMixin):
+class TDBase(rhf.TDBase):
 
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None):
@@ -395,7 +395,7 @@ class TDMixin(rhf.TDMixin):
 
 
 @lib.with_doc(rhf.TDA.__doc__)
-class TDA(TDMixin):
+class TDA(TDBase):
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
         if mf is None:
@@ -411,14 +411,12 @@ class TDA(TDMixin):
         occidx = n2c + numpy.where(mo_occ[n2c:] == 1)[0]
         viridx = n2c + numpy.where(mo_occ[n2c:] == 0)[0]
         e_ia = mo_energy[viridx] - mo_energy[occidx,None]
-        e_ia_max = e_ia.max()
 
         nov = e_ia.size
         nstates = min(nstates, nov)
         e_ia = e_ia.ravel()
-        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
-        # Handle degeneracy, include all degenerated states in initial guess
-        e_threshold += 1e-6
+        e_threshold = numpy.sort(e_ia)[nstates-1]
+        e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
         x0 = numpy.zeros((idx.size, nov))
@@ -442,12 +440,12 @@ class TDA(TDMixin):
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
-
         def pickeig(w, v, nroots, envs):
             idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
 
         # FIXME: Is it correct to call davidson1 for complex integrals?
         self.converged, self.e, x1 = \
@@ -522,7 +520,7 @@ def gen_tdhf_operation(mf, fock_ao=None):
     return vind, hdiag
 
 
-class TDHF(TDMixin):
+class TDHF(TDBase):
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
         if mf is None:
@@ -549,8 +547,6 @@ class TDHF(TDMixin):
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
 
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
@@ -558,6 +554,9 @@ class TDHF(TDMixin):
             # FIXME: Should the amplitudes be real?
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
                                                       real_eigenvectors=False)
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,

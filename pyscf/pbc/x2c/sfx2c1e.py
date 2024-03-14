@@ -23,7 +23,6 @@ One-electron spin-free X2C approximation for extended systems
 
 
 from functools import reduce
-import copy
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -35,9 +34,9 @@ from pyscf.pbc import tools
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.df import incore
 from pyscf.pbc.df import gdf_builder
-from pyscf.pbc.scf import ghf
+from pyscf.pbc.scf import ghf, khf, kghf
+from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
 
@@ -71,53 +70,42 @@ def sfx2c1e(mf):
         else:
             return mf
 
-    mf_class = mf.__class__
-    if mf_class.__doc__ is None:
-        doc = ''
-    else:
-        doc = mf_class.__doc__
-
-    class SFX2C1E_SCF(mf_class, x2c._X2C_SCF):
-        __doc__ = doc + '''
-        Attributes for spin-free X2C:
-            with_x2c : X2C object
-        '''
-        def __init__(self, mf):
-            self.__dict__.update(mf.__dict__)
-            self.with_x2c = SpinFreeX2CHelper(mf.mol)
-            self._keys = self._keys.union(['with_x2c'])
-
-        def get_hcore(self, cell=None, kpts=None, kpt=None):
-            if cell is None: cell = self.cell
-            if kpts is None:
-                if getattr(self, 'kpts', None) is not None:
-                    kpts = self.kpts
-                else:
-                    if kpt is None:
-                        kpts = self.kpt
-                    else:
-                        kpts = kpt
-            if self.with_x2c:
-                hcore = self.with_x2c.get_hcore(cell, kpts)
-                if isinstance(self, ghf.GHF):
-                    if kpts.ndim == 1:
-                        hcore = scipy.linalg.block_diag(hcore, hcore)
-                    else:
-                        hcore = [scipy.linalg.block_diag(h, h) for h in hcore]
-                return hcore
-            else:
-                return mf_class.get_hcore(self, cell, kpts)
-
-        def dump_flags(self, verbose=None):
-            mf_class.dump_flags(self, verbose)
-            if self.with_x2c:
-                self.with_x2c.dump_flags(verbose)
-            return self
-
-    with_x2c = SpinFreeX2CHelper(mf.mol)
-    return mf.view(SFX2C1E_SCF).add_keys(with_x2c=with_x2c)
+    return lib.set_class(SFX2C1E_SCF(mf), (SFX2C1E_SCF, mf.__class__))
 
 sfx2c = sfx2c1e
+
+class SFX2C1E_SCF(x2c._X2C_SCF):
+    '''
+    Attributes for spin-free X2C:
+        with_x2c : X2C object
+    '''
+
+    __name_mixin__ = 'sfX2C1e'
+
+    _keys = {'with_x2c'}
+
+    def __init__(self, mf):
+        self.__dict__.update(mf.__dict__)
+        self.with_x2c = SpinFreeX2CHelper(mf.mol)
+
+    def get_hcore(self, cell=None, kpts=None, kpt=None):
+        if cell is None: cell = self.cell
+        if kpts is None:
+            if isinstance(self, khf.KSCF):
+                kpts = self.kpts
+            elif kpt is None:
+                kpts = self.kpt
+            else:
+                kpts = kpt
+        if self.with_x2c:
+            hcore = self.with_x2c.get_hcore(cell, kpts)
+            if isinstance(self, kghf.KGHF):
+                hcore = [scipy.linalg.block_diag(h, h) for h in hcore]
+            elif isinstance(self, ghf.GHF):
+                hcore = scipy.linalg.block_diag(hcore, hcore)
+            return hcore
+        else:
+            return super(x2c._X2C_SCF, self).get_hcore(cell, kpts)
 
 class PBCX2CHelper(x2c.X2C):
 
@@ -136,6 +124,7 @@ class SpinFreeX2CHelper(PBCX2CHelper):
     '''1-component X2c Foldy-Wouthuysen (FW Hamiltonian  (spin-free part only)
     '''
     def get_hcore(self, cell=None, kpts=None):
+        from pyscf.pbc.df import df
         if cell is None: cell = self.cell
         if kpts is None:
             kpts_lst = numpy.zeros((1,3))
@@ -143,7 +132,6 @@ class SpinFreeX2CHelper(PBCX2CHelper):
             kpts_lst = numpy.reshape(kpts, (-1,3))
         # By default, we use uncontracted cell.basis plus additional steep orbital for modified Dirac equation.
         xcell, contr_coeff = self.get_xmol(cell)
-        from pyscf.pbc.df import df
         with_df = df.DF(xcell)
 
         c = lib.param.LIGHT_SPEED
@@ -254,13 +242,17 @@ def get_pnucp(mydf, kpts=None):
     eta, mesh, ke_cutoff = gdf_builder._guess_eta(cell, kpts_lst)
     log.debug1('get_pnucp eta = %s mesh = %s', eta, mesh)
 
-    nuccell = incore._compensate_nuccell(cell, eta)
-    wj = mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1')
+    dfbuilder = gdf_builder._CCNucBuilder(cell, kpts_lst)
+    dfbuilder.exclude_dd_block = False
+    dfbuilder.build()
+    fakenuc = aft._fake_nuc(cell, with_pseudo=cell._pseudo)
+    wj = dfbuilder._int_nuc_vloc(fakenuc, 'int3c2e_pvp1', aosym='s2')
     t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 
     charge = -cell.atom_charges() # Apply Koseki effective charge?
     if cell.dimension == 3:
-        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+        mod_cell = dfbuilder.modchg_cell
+        nucbar = (charge / numpy.hstack(mod_cell.bas_exps())).sum()
         nucbar *= numpy.pi/cell.vol
 
         ovlp = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
@@ -269,10 +261,9 @@ def get_pnucp(mydf, kpts=None):
             # *2 due to the factor 1/2 in T
             wj[k] -= nucbar*2 * s
 
-    dfbuilder = incore._IntNucBuilder(cell, kpts_lst).build()
-    supmol_ft = dfbuilder.supmol.strip_basis()
-    ft_kern = supmol_ft.gen_ft_kernel('s2', intor='GTO_ft_pdotp',
-                                      return_complex=False, verbose=log)
+    ft_kern = dfbuilder.supmol_ft.gen_ft_kernel(
+        's2', intor='GTO_ft_pdotp', return_complex=False,
+        kpts=kpts_lst, verbose=log)
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
@@ -280,7 +271,7 @@ def get_pnucp(mydf, kpts=None):
     kpt_allow = numpy.zeros(3)
     coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
     coulG *= kws
-    aoaux = ft_ao.ft_ao(nuccell, Gv)
+    aoaux = ft_ao.ft_ao(dfbuilder.modchg_cell, Gv)
     vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
     vGR = vG.real
     vGI = vG.imag
@@ -293,12 +284,12 @@ def get_pnucp(mydf, kpts=None):
     buf = numpy.empty((2, nkpts, Gblksize, nao_pair))
     for p0, p1 in lib.prange(0, ngrids, Gblksize):
         # shape of Gpq (nkpts, nGv, nao_pair)
-        Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts_lst, out=buf)
+        Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, out=buf)
         for k, (GpqR, GpqI) in enumerate(zip(*Gpq)):
             vR  = numpy.einsum('k,kx->x', vGR[p0:p1], GpqR)
             vR += numpy.einsum('k,kx->x', vGI[p0:p1], GpqI)
             wj[k] += vR
-            if not aft_jk.gamma_point(kpts_lst[k]):
+            if not is_zero(kpts_lst[k]):
                 vI  = numpy.einsum('k,kx->x', vGR[p0:p1], GpqI)
                 vI -= numpy.einsum('k,kx->x', vGI[p0:p1], GpqR)
                 wj[k] += vI * 1j
@@ -306,7 +297,7 @@ def get_pnucp(mydf, kpts=None):
 
     wj_kpts = []
     for k, kpt in enumerate(kpts_lst):
-        if aft_jk.gamma_point(kpt):
+        if is_zero(kpt):
             wj_kpts.append(lib.unpack_tril(wj[k].real.copy()))
         else:
             wj_kpts.append(lib.unpack_tril(wj[k]))

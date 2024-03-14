@@ -9,5 +9,3 @@ class Gradients (uhf.Gradients):
     _tag_rdm1 = rohf._tag_rdm1
 
 Grad = Gradients
-
-

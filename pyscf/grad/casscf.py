@@ -30,12 +30,14 @@ Contains my modifications for SA-CASSCF gradients
 
 from functools import reduce
 import numpy
+from pyscf import gto
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.grad import casci as casci_grad
 from pyscf.grad import rhf as rhf_grad  # noqa
 from pyscf.grad.mp2 import _shell_prange
+from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
 def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     mc = mc_grad.base
@@ -156,31 +158,33 @@ def as_scanner(mcscf_grad):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf import gto
-    from pyscf.mcscf.addons import StateAverageMCSCFSolver
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
 
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
+    name = mcscf_grad.__class__.__name__ + CASSCF_GradScanner.__name_mixin__
+    return lib.set_class(CASSCF_GradScanner(mcscf_grad),
+                         (CASSCF_GradScanner, mcscf_grad.__class__), name)
 
-    class CASSCF_GradScanner(mcscf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class CASSCF_GradScanner(lib.GradScanner):
+    def __init__(self, g):
+        lib.GradScanner.__init__(self, g)
 
-            mc_scanner = self.base
-            e_tot = mc_scanner(mol)
-            if isinstance(mc_scanner, StateAverageMCSCFSolver):
-                e_tot = mc_scanner.e_average
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+        self.reset(mol)
 
-            self.mol = mol
-            de = self.kernel(**kwargs)
-            return e_tot, de
-    return CASSCF_GradScanner(mcscf_grad)
+        mc_scanner = self.base
+        e_tot = mc_scanner(mol)
+        if isinstance(mc_scanner, StateAverageMCSCFSolver):
+            e_tot = mc_scanner.e_average
+
+        de = self.kernel(**kwargs)
+        return e_tot, de
 
 
 class Gradients(casci_grad.Gradients):
@@ -215,6 +219,8 @@ class Gradients(casci_grad.Gradients):
             logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
+
+    to_gpu = lib.to_gpu
 
 Grad = Gradients
 

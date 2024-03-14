@@ -60,4 +60,3 @@ class KnowValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for gamma point vs k-points")
     unittest.main()
-

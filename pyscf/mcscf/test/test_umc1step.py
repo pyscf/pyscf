@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 import numpy
 from pyscf import lib
@@ -96,7 +95,7 @@ class KnownValues(unittest.TestCase):
 
     def test_state_average_mix(self):
         mc = mcscf.UCASSCF(m, 5, (4, 2))
-        cis1 = copy.copy(mc.fcisolver)
+        cis1 = mc.fcisolver.copy()
         cis1.spin = 0
         mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [0.5, 0.5])
         mc.kernel()
@@ -150,4 +149,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for umc1step")
     unittest.main()
-

@@ -119,7 +119,7 @@ def _kernel(avas_obj):
     pmol.build(False, False)
 
     baslst = pmol.search_ao_label(avas_obj.aolabels)
-    log.info('reference AO indices for %s %s: %s',
+    log.info('reference AO indices for %s %s:\n %s',
              avas_obj.minao, avas_obj.aolabels, baslst)
 
     if avas_obj.with_iao:
@@ -131,7 +131,7 @@ def _kernel(avas_obj):
         s2 = pmol.intor_symmetric('int1e_ovlp')[baslst][:,baslst]
         s21 = gto.intor_cross('int1e_ovlp', pmol, mol)[baslst]
         s21 = numpy.dot(s21, mo_coeff[:, ncore:])
-    sa = s21.T.dot(scipy.linalg.solve(s2, s21, sym_pos=True))
+    sa = s21.T.dot(scipy.linalg.solve(s2, s21, assume_a='pos'))
 
     threshold = avas_obj.threshold
     if avas_obj.openshell_option == 2:

@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <complex.h>
 #include <assert.h>
 #include <string.h>
@@ -146,17 +147,14 @@ static void _nr2c_k_fill(int (*intor)(), double complex *out,
     int ishloc[ish1-ish0+1];
     int nishloc = shloc_partition(ishloc, ao_loc, ish0, ish1, dimax);
 
-    int m, msh0, msh1, dmjc, ish, di, empty;
+    int m, msh0, msh1, dmjc, ish, di;
     int jL;
     int shls[2];
     double *bufk_r = buf;
     double *bufk_i, *bufL, *pbuf, *pbuf2, *cache;
-// >>>>>>>>>
     int iptrxyz, dijc, ISH, JSH, IJSH, i;
     JSH = refuniqshl_map[jsh-jsh0];
     double *ri, *rj, Rij2, Rij2_cut;
-    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
-// <<<<<<<<<
 
     shls[1] = jsh;
     for (m = 0; m < nishloc; m++) {
@@ -172,9 +170,7 @@ static void _nr2c_k_fill(int (*intor)(), double complex *out,
         pbuf = bufL;
         for (jL = 0; jL < nimgs; jL++) {
             shift_bas(env_loc, env, Ls, jptrxyz, jL);
-// >>>>>>>>>>>
             rj = env_loc + jptrxyz;
-// <<<<<<<<<<<
             for (ish = msh0; ish < msh1; ish++) {
                 shls[0] = ish;
                 di = ao_loc[ish+1] - ao_loc[ish];
@@ -186,18 +182,8 @@ static void _nr2c_k_fill(int (*intor)(), double complex *out,
                 IJSH = (ISH>=JSH)?(ISH*(ISH+1)/2+JSH):(JSH*(JSH+1)/2+ISH);
                 Rij2_cut = uniq_Rcut2s[IJSH];
                 if (Rij2 < Rij2_cut) {
-                    env_loc[PTR_RANGE_OMEGA] = 0.;
-                    if ((*intor)(pbuf, NULL, shls, atm, natm, bas, nbas,
-                                 env_loc, cintopt, cache)) {
-                        empty = 0;
-                    }
-                    env_loc[PTR_RANGE_OMEGA] = omega;
-                    if ((*intor)(pbuf2, NULL, shls, atm, natm, bas, nbas,
-                                 env_loc, cintopt, cache)) {
-                        for (i = 0; i < dijc; ++i) {
-                            pbuf[i] -= pbuf2[i];
-                        }
-                    }
+                    (*intor)(pbuf, NULL, shls, atm, natm, bas, nbas,
+                             env_loc, cintopt, cache);
                 }
                 else {
                     for (i = 0; i < dijc; ++i) {
@@ -417,8 +403,6 @@ static void _nr3c_g(int (*intor)(), void (*fsort)(), double *out,
     double *cache = bufL + dijmc;
     double *pbuf;
 
-    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
-
     shls[0] = ish;
     shls[1] = jsh;
 // >>>>>>>>
@@ -473,18 +457,10 @@ static void _nr3c_g(int (*intor)(), void (*fsort)(), double *out,
                     rk = env_loc + kptrxyz;
                     Rijk2 = get_dsqure(rc, rk);
                     if(Rijk2 < Rcut2) {
-                        env_loc[PTR_RANGE_OMEGA] = 0.;
                         if ((*intor)(buf, NULL, shls, atm, natm, bas, nbas,
                                      env_loc, cintopt, cache)) {
                             for (i = 0; i < dijkc; i++) {
                                 pbuf[i] += buf[i];
-                            }
-                        }
-                        env_loc[PTR_RANGE_OMEGA] = omega;
-                        if ((*intor)(buf, NULL, shls, atm, natm, bas, nbas,
-                                     env_loc, cintopt, cache)) {
-                            for (i = 0; i < dijkc; i++) {
-                                pbuf[i] -= buf[i];
                             }
                         }
                     } // if Rcut
@@ -778,7 +754,7 @@ static void _nr3c_bvk_k(int (*intor)(), void (*fsort)(),
     int kshloc[ksh1-ksh0+1];
     int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
-    int i, m, msh0, msh1, dijmc, empty;
+    int i, m, msh0, msh1, dijmc;
     size_t dijmk, dijkc;
     int ksh, dk;
     int iL_bvk, iL0, iL1, iL, jL_bvk, jL0, jL1, jL;
@@ -791,7 +767,6 @@ static void _nr3c_bvk_k(int (*intor)(), void (*fsort)(),
     shls[0] = ish;
     shls[1] = jsh;
 // >>>>>>>>>>
-    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
     int Ish, Jsh, IJsh, Ksh, idij, kiLj, kiLi;
     Ish = refuniqshl_map[ish];
     Jsh = refuniqshl_map[jsh-nbas];
@@ -859,20 +834,8 @@ static void _nr3c_bvk_k(int (*intor)(), void (*fsort)(),
                             rk = env_loc + kptrxyz;
                             Rijk2 = get_dsqure(rc, rk);
                             if (Rijk2 < Rcut2) {
-                                env_loc[PTR_RANGE_OMEGA] = 0.;
-                                if ((*intor)(pbuf1, NULL, shls, atm, natm,
-                                             bas, nbas, env_loc, cintopt,
-                                             cache)) {
-                                    empty = 0;
-                                }
-                                env_loc[PTR_RANGE_OMEGA] = omega;
-                                if ((*intor)(pbuf2, NULL, shls, atm, natm,
-                                             bas, nbas, env_loc, cintopt,
-                                             cache)) {
-                                    for (i = 0; i < dijkc; i++) {
-                                        pbuf1[i] -= pbuf2[i];
-                                    }
-                                }
+                                (*intor)(pbuf1, NULL, shls, atm, natm, bas, nbas,
+                                         env_loc, cintopt, cache);
                             } else {
                                 for (i = 0; i < dijkc; i++) {
                                     pbuf1[i] = 0;
@@ -1069,7 +1032,7 @@ static void _nr3c_k(int (*intor)(), void (*fsort)(),
     int kshloc[ksh1-ksh0+1];
     int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
-    int i, m, msh0, msh1, dijmc, empty;
+    int i, m, msh0, msh1, dijmc; 
     size_t dijmk, dijkc;
     int ksh, dk;
     int iL, jL, jLcount;
@@ -1082,7 +1045,6 @@ static void _nr3c_k(int (*intor)(), void (*fsort)(),
     shls[0] = ish;
     shls[1] = jsh;
 // >>>>>>>>>>
-    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
     int Ish, Jsh, IJsh, Ksh, idij, kiLj, kiLjc, kiLi;
     Ish = refuniqshl_map[ish];
     Jsh = refuniqshl_map[jsh-nbas];
@@ -1139,20 +1101,8 @@ static void _nr3c_k(int (*intor)(), void (*fsort)(),
                     rk = env_loc + kptrxyz;
                     Rijk2 = get_dsqure(rc, rk);
                     if (Rijk2 < Rcut2) {
-                        env_loc[PTR_RANGE_OMEGA] = 0.;
-                        if ((*intor)(pbuf, NULL, shls, atm, natm,
-                                     bas, nbas, env_loc, cintopt,
-                                     cache)) {
-                            empty = 0;
-                        }
-                        env_loc[PTR_RANGE_OMEGA] = omega;
-                        if ((*intor)(pbuf2, NULL, shls, atm, natm,
-                                     bas, nbas, env_loc, cintopt,
-                                     cache)) {
-                            for (i = 0; i < dijkc; i++) {
-                                pbuf[i] -= pbuf2[i];
-                            }
-                        }
+                        (*intor)(pbuf, NULL, shls, atm, natm, bas, nbas,
+                                 env_loc, cintopt, cache);
                     } else {
                         for (i = 0; i < dijkc; i++) {
                             pbuf[i] = 0;
@@ -1474,14 +1424,12 @@ static void _nr3c_bvk_kk(int (*intor)(), void (*fsort)(),
     int kshloc[ksh1-ksh0+1];
     int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
-    int i, m, msh0, msh1, dijm, dijmc, dijmk, dijkc, empty;
+    int i, m, msh0, msh1, dijm, dijmc, dijmk, dijkc;
     int ksh, dk;
     int iL_bvk, iL0_bvk, iLcount_bvk, iL0, iL1, iL, jL_bvk, jL0, jL1, jL;
     int shls[3];
     double *bufkk_r, *bufkk_i, *bufkL_r, *bufkL_i, *bufL, *pbuf, *cache;
     double *buf_rs, *buf_rs0, *pbuf_rs;
-
-    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
 
     shls[0] = ish;
     shls[1] = jsh;
@@ -1558,20 +1506,8 @@ static void _nr3c_bvk_kk(int (*intor)(), void (*fsort)(),
                                 rk = env_loc + kptrxyz;
                                 Rijk2 = get_dsqure(rc, rk);
                                 if (Rijk2 < Rcut2) {
-                                    env_loc[PTR_RANGE_OMEGA] = 0.;
-                                    if ((*intor)(buf_rs, NULL, shls, atm, natm,
-                                                 bas, nbas, env_loc, cintopt,
-                                                 cache)) {
-                                        empty = 0;
-                                    }
-                                    env_loc[PTR_RANGE_OMEGA] = omega;
-                                    if ((*intor)(pbuf_rs, NULL, shls, atm, natm,
-                                                 bas, nbas, env_loc, cintopt,
-                                                 cache)) {
-                                        for (i = 0; i < dijkc; i++) {
-                                            buf_rs[i] -= pbuf_rs[i];
-                                        }
-                                    }
+                                    (*intor)(buf_rs, NULL, shls, atm, natm, bas, nbas,
+                                             env_loc, cintopt, cache);
                                 } else {
                                     for (i = 0; i < dijkc; i++) {
                                         buf_rs[i] = 0;
@@ -1756,7 +1692,7 @@ static void _nr3c_kk(int (*intor)(), void (*fsort)(),
     int kshloc[ksh1-ksh0+1];
     int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
-    int i, m, msh0, msh1, dijm, dijmc, dijmk, dijkc, empty;
+    int i, m, msh0, msh1, dijm, dijmc, dijmk, dijkc;
     int ksh, dk, iL0, iL, jL, iLcount;
     int shls[3];
     double *bufkk_r, *bufkk_i, *bufkL_r, *bufkL_i, *bufL, *pbuf, *pbuf2, *cache;
@@ -1764,7 +1700,6 @@ static void _nr3c_kk(int (*intor)(), void (*fsort)(),
     shls[0] = ish;
     shls[1] = jsh;
 
-    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
     int Ish, Jsh, IJsh, Ksh, idij;
     Ish = refuniqshl_map[ish];
     Jsh = refuniqshl_map[jsh-nbas];
@@ -1830,20 +1765,8 @@ static void _nr3c_kk(int (*intor)(), void (*fsort)(),
                         rk = env_loc + kptrxyz;
                         Rijk2 = get_dsqure(rc, rk);
                         if (Rijk2 < Rcut2) {
-                            env_loc[PTR_RANGE_OMEGA] = 0.;
-                            if ((*intor)(pbuf, NULL, shls, atm, natm,
-                                         bas, nbas, env_loc, cintopt,
-                                         cache)) {
-                                empty = 0;
-                            }
-                            env_loc[PTR_RANGE_OMEGA] = omega;
-                            if ((*intor)(pbuf2, NULL, shls, atm, natm,
-                                         bas, nbas, env_loc, cintopt,
-                                         cache)) {
-                                for (i = 0; i < dijkc; i++) {
-                                    pbuf[i] -= pbuf2[i];
-                                }
-                            }
+                            (*intor)(pbuf, NULL, shls, atm, natm, bas, nbas,
+                                     env_loc, cintopt, cache);
                         } else {
                             for (i = 0; i < dijkc; i++) {
                                 pbuf[i] = 0;

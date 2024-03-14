@@ -75,19 +75,21 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         ni = ks._numint
         n, exc, vxc = ni.get_vxc(mol, ks.grids, ks.xc, dm,
                                  hermi=hermi, max_memory=max_memory)
-        if ks.nlc != '':
-            assert ('VV10' in ks.nlc.upper())
-            _, enlc, vnlc = ni.get_vxc(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm,
-                                       hermi=hermi, max_memory=max_memory)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        if ks.nlc or ni.libxc.is_nlc(ks.xc):
+            if ni.libxc.is_nlc(ks.xc):
+                xc = ks.xc
+            else:
+                assert ni.libxc.is_nlc(ks.nlc)
+                xc = ks.nlc
+            n, enlc, vnlc = ni.nr_nlc_vxc(mol, ks.nlcgrids, xc, dm,
+                                          hermi=hermi, max_memory=max_memory)
             exc += enlc
             vxc += vnlc
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+            logger.debug(ks, 'nelec with nlc grids = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    #enabling range-separated hybrids
-    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
-
-    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
+    if not ni.libxc.is_hybrid_xc(ks.xc):
         vk = None
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
@@ -98,12 +100,13 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj = ks.get_j(mol, dm, hermi)
         vxc += vj
     else:
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vk', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
-            if abs(omega) > 1e-10:
+            if omega != 0:
                 vklr = ks.get_k(mol, ddm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
@@ -112,7 +115,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
             vk *= hyb
-            if abs(omega) > 1e-10:
+            if omega != 0:
                 vklr = ks.get_k(mol, dm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
@@ -134,6 +137,10 @@ energy_elec = rks.energy_elec
 
 class GKS(rks.KohnShamDFT, ghf.GHF):
     '''Generalized Kohn-Sham'''
+
+    get_veff = get_veff
+    energy_elec = energy_elec
+
     def __init__(self, mol, xc='LDA,VWN'):
         ghf.GHF.__init__(self, mol)
         rks.KohnShamDFT.__init__(self, xc)
@@ -148,9 +155,6 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
             logger.info(self, 'mcfun collinear_thrd = %s', self._numint.collinear_thrd)
             logger.info(self, 'mcfun collinear_samples = %s', self._numint.collinear_samples)
         return self
-
-    get_veff = get_veff
-    energy_elec = energy_elec
 
     @property
     def collinear(self):
@@ -168,6 +172,12 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
 
     def nuc_grad_method(self):
         raise NotImplementedError
+
+    def to_hf(self):
+        '''Convert to GHF object.'''
+        return self._transfer_attrs_(self.mol.GHF())
+
+    to_gpu = lib.to_gpu
 
 
 if __name__ == '__main__':

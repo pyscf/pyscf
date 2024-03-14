@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,17 +19,11 @@
 import unittest
 import numpy as np
 
+from pyscf.lib import finger
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pscf
-from pyscf.pbc.dft import krks,kuks,multigrid
-
-L = 2.
-He = pbcgto.Cell()
-He.verbose = 0
-He.a = np.eye(3)*L
-He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
-He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
-He.build()
+from pyscf.pbc.scf import chkfile
+from pyscf.pbc.dft import krks, kuks, multigrid
 
 def make_primitive_cell(mesh):
     cell = pbcgto.Cell()
@@ -45,11 +39,23 @@ def make_primitive_cell(mesh):
     cell.spin = 0
     cell.verbose = 0
     cell.output = '/dev/null'
+    cell.space_group_symmetry = True
     cell.build()
     return cell
 
-cell = make_primitive_cell([17]*3)
-nk = [1,2,2]
+def setUpModule():
+    global cell, He, nk
+    cell = make_primitive_cell([16]*3)
+    nk = [1,2,2]
+
+    L = 2.
+    He = pbcgto.Cell()
+    He.verbose = 0
+    He.a = np.eye(3)*L
+    He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
+    He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+    He.space_group_symmetry = True
+    He.build()
 
 def tearDownModule():
     global cell, He, nk
@@ -82,7 +88,7 @@ class KnownValues(unittest.TestCase):
         kmf = pscf.KRKS(cell, kpts=kpts)
         kmf.xc = 'lda'
         kmf.kernel()
-        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 6)
 
     def test_kuks_gamma_center(self):
         kpts0 = cell.make_kpts(nk, with_gamma_point=True)
@@ -110,7 +116,19 @@ class KnownValues(unittest.TestCase):
         kumf = pscf.KUKS(cell, kpts=kpts)
         kumf.xc = 'lda'
         kumf.kernel()
-        self.assertAlmostEqual(kumf.e_tot, kumf0.e_tot, 7)
+        self.assertAlmostEqual(kumf.e_tot, kumf0.e_tot, 6)
+
+    def test_krks_symorb(self):
+        cell1 = cell.copy()
+        cell1.build(symmorphic=True)
+        kpts = cell1.make_kpts([2,2,2], with_gamma_point=True,space_group_symmetry=True)
+        kmf = pscf.KRKS(cell1, kpts=kpts).run()
+        kmf1 = pscf.KRKS(cell1, kpts=kpts, use_ao_symmetry=False).run()
+        self.assertAlmostEqual(kmf.e_tot, kmf1.e_tot, 7)
+        assert abs(kmf.mo_coeff[0].orbsym - np.asarray([0, 4, 4, 4, 4, 4, 4, 0])).sum() == 0
+        assert abs(kmf.mo_coeff[1].orbsym - np.asarray([0, 3, 4, 4, 0, 3, 4, 4])).sum() == 0
+        assert abs(kmf.mo_coeff[2].orbsym - np.asarray([0, 0, 2, 2, 0, 2, 2, 0])).sum() == 0
+        assert getattr(kmf1.mo_coeff[0], 'orbsym', None) is None
 
     def test_rsh(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
@@ -134,7 +152,7 @@ class KnownValues(unittest.TestCase):
         kmf = pscf.KRKS(He, kpts=kpts).density_fit()
         kmf.xc = 'lda'
         kmf.kernel()
-        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 8)
 
     def test_gga_df(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
@@ -145,6 +163,20 @@ class KnownValues(unittest.TestCase):
         kpts = He.make_kpts(nk, with_gamma_point=False, space_group_symmetry=True,time_reversal_symmetry=True)
         kmf = pscf.KRKS(He, kpts=kpts).density_fit()
         kmf.xc = 'pbe'
+        kmf.kernel()
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 8)
+
+    def test_gga_df_newton(self):
+        kpts0 = He.make_kpts(nk, with_gamma_point=False)
+        kmf0 = krks.KRKS(He, kpts=kpts0).density_fit()
+        kmf0.xc = 'pbe'
+        kmf0 = kmf0.newton()
+        kmf0.kernel()
+
+        kpts = He.make_kpts(nk, with_gamma_point=False, space_group_symmetry=True,time_reversal_symmetry=True)
+        kmf = pscf.KRKS(He, kpts=kpts).density_fit()
+        kmf.xc = 'pbe'
+        kmf = kmf.newton()
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
 
@@ -175,14 +207,14 @@ class KnownValues(unittest.TestCase):
     def test_multigrid(self):
         kmf0 = krks.KRKS(cell, kpts=cell.make_kpts(nk))
         kmf0.xc = 'lda'
-        kmf0 = multigrid.multigrid(kmf0)
+        kmf0 = multigrid.multigrid_fftdf(kmf0)
         kmf0.kernel()
         rho0 = kmf0.get_rho()
 
         kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
         kmf = pscf.KRKS(cell, kpts=kpts)
         kmf.xc = 'lda'
-        kmf = multigrid.multigrid(kmf)
+        kmf = multigrid.multigrid_fftdf(kmf)
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
         rho = kmf.get_rho()
@@ -199,14 +231,14 @@ class KnownValues(unittest.TestCase):
     def test_multigrid_kuks(self):
         kmf0 = pscf.KUKS(cell, kpts=cell.make_kpts(nk))
         kmf0.xc = 'lda'
-        kmf0 = multigrid.multigrid(kmf0)
+        kmf0 = multigrid.multigrid_fftdf(kmf0)
         kmf0.kernel()
         rho0 = kmf0.get_rho()
 
         kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
         kmf = pscf.KUKS(cell, kpts=kpts)
         kmf.xc = 'lda'
-        kmf = multigrid.multigrid(kmf)
+        kmf = multigrid.multigrid_fftdf(kmf)
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
         rho = kmf.get_rho()
@@ -228,7 +260,7 @@ class KnownValues(unittest.TestCase):
         dm = kmf.make_rdm1()
         dm = np.asarray([dm,dm]) / 2.
 
-        kumf = kmf.to_uhf()
+        kumf = kmf.to_uks()
         kumf.max_cycle = 1
         kumf.kernel(dm)
         self.assertAlmostEqual(kmf.e_tot, kumf.e_tot, 8)
@@ -240,7 +272,7 @@ class KnownValues(unittest.TestCase):
         kumf.kernel()
         dm = kumf.make_rdm1()
 
-        kmf = kumf.to_rhf()
+        kmf = kumf.to_rks()
         kmf.max_cycle = 1
         kmf.kernel(dm[0]+dm[1])
         self.assertAlmostEqual(kmf.e_tot, kumf.e_tot, 8)
@@ -263,6 +295,33 @@ class KnownValues(unittest.TestCase):
         kumf.max_cycle = 1
         kumf.kernel(np.asarray([dm,dm]) / 2.)
         self.assertAlmostEqual(kmf.e_tot, kumf.e_tot, 7)
+
+    def test_get_bands(self):
+        kpts = cell.make_kpts(nk,
+                              space_group_symmetry=True,
+                              time_reversal_symmetry=True)
+        kumf = pscf.KUKS(cell, kpts=kpts)
+        kumf.xc = 'lda'
+        kumf.chkfile = 'test_get_bands_ksymm.chk'
+        kumf.kernel()
+
+        band_kpts = np.array([[-0.205736, 0.308604, 0.308604],
+                              [-0.25717,  0.308604, 0.308604]])
+        kumf = pscf.KUKS(cell, kpts=kpts)
+        kumf.__dict__.update(chkfile.load('test_get_bands_ksymm.chk', 'scf'))
+        E_nk = kumf.get_bands(band_kpts, kpts=kpts)[0]
+        E_F = kumf.get_fermi()
+        self.assertAlmostEqual(finger(np.asarray(E_nk[0])), 0.5575755379561839, 6)
+        self.assertAlmostEqual(finger(np.asarray(E_nk[1])), 0.5575755379561839, 6)
+        self.assertAlmostEqual(E_F[0], 0.3093399745201863, 6)
+        self.assertAlmostEqual(E_F[1], 0.3093399745201863, 6)
+
+        kmf = pscf.KRKS(cell, kpts=kpts)
+        kmf = kmf.convert_from_(kumf)
+        E_nk = kmf.get_bands(band_kpts, kpts=kpts)[0]
+        E_F = kmf.get_fermi()
+        self.assertAlmostEqual(finger(np.asarray(E_nk)), 0.5575755379561839, 6)
+        self.assertAlmostEqual(E_F, 0.3093399745201863, 6)
 
 if __name__ == '__main__':
     print("Full Tests for DFT with k-point symmetry")

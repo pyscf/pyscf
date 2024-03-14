@@ -160,7 +160,7 @@ def from_integrals(filename, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=None,
 def from_mo(mol, filename, mo_coeff, orbsym=None,
             tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
             molpro_orbsym=MOLPRO_ORBSYM, ms=0):
-    '''Use the given MOs to transfrom the 1-electron and 2-electron integrals
+    '''Use the given MOs to transform the 1-electron and 2-electron integrals
     then dump them to FCIDUMP.
 
     Kwargs:
@@ -184,7 +184,7 @@ def from_mo(mol, filename, mo_coeff, orbsym=None,
 
 def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
              molpro_orbsym=MOLPRO_ORBSYM):
-    '''Use the given SCF object to transfrom the 1-electron and 2-electron
+    '''Use the given SCF object to transform the 1-electron and 2-electron
     integrals then dump them to FCIDUMP.
 
     Kwargs:
@@ -211,6 +211,33 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
     from_integrals(filename, h1e, eri, h1e.shape[0], mf.mol.nelec, nuc, 0, orbsym,
                    tol, float_format)
 
+def from_mcscf(mc, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
+               molpro_orbsym=MOLPRO_ORBSYM):
+    '''Use the given MCSCF object to obtain the CAS 1-electron and 2-electron
+    integrals and dump them to FCIDUMP.
+
+    Kwargs:
+        tol (float): Threshold for writing elements to FCIDUMP
+        float_format (str): Float format for writing elements to FCIDUMP
+        molpro_orbsym (bool): Whether to dump the orbsym in Molpro orbsym
+            convention as documented in
+            https://www.molpro.net/manual/doku.php?id=general_program_structure#symmetry
+    '''
+    mol = mc.mol
+    mo_coeff = mc.mo_coeff
+    assert mo_coeff.dtype == numpy.double
+
+    h1eff, ecore = mc.get_h1eff()
+    h2eff = mc.get_h2eff()
+    orbsym = getattr(mo_coeff, 'orbsym', None)
+    if orbsym is not None:
+        orbsym = orbsym[mc.ncore:mc.ncore + mc.ncas]
+    if molpro_orbsym and orbsym is not None:
+        orbsym = [ORBSYM_MAP[mol.groupname][i] for i in orbsym]
+    nelecas = mc.nelecas[0] + mc.nelecas[1]
+    ms = abs(mc.nelecas[0] - mc.nelecas[1])
+    from_integrals(filename, h1eff, h2eff, mc.ncas, nelecas, nuc=ecore, ms=ms,
+                   orbsym=orbsym, tol=tol, float_format=float_format)
 
 def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
     '''Parse FCIDUMP.  Return a dictionary to hold the integrals and
@@ -218,10 +245,13 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
 
     Kwargs:
         molpro_orbsym (bool): Whether the orbsym in the FCIDUMP file is in
-            Molpro orbsym convention as documented in
-            https://www.molpro.net/info/current/doc/manual/node36.html
+            Molpro orbsym convention as documented in::
+
+                https://www.molpro.net/info/current/doc/manual/node36.html
+
             In return, orbsym is converted to pyscf symmetry convention
         verbose (bool): Whether to print debugging information
+
     '''
     if verbose:
         print('Parsing %s' % filename)
@@ -248,7 +278,7 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
         else:
             result[key] = val
 
-    # Convert to molpr orbsym convert_orbsym
+    # Convert to Molpro orbsym convert_orbsym
     if 'ORBSYM' in result:
         if molpro_orbsym:
             # Guess which point group the orbsym belongs to. FCIDUMP does not
@@ -267,7 +297,7 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
                 result['ORBSYM'] = [0] * len(orbsym)
             else:
                 raise RuntimeError('Unknown orbsym')
-        elif max(result['ORBSYM']) >= 8:
+        elif min(result['ORBSYM']) < 0:
             raise RuntimeError('Unknown orbsym convention')
 
     norb = result['NORB']

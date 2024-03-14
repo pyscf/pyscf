@@ -93,7 +93,7 @@ def full(eri_or_mol, mo_coeff, erifile=None, dataname='eri_mo', intor='int2e',
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
@@ -216,7 +216,7 @@ def general(eri_or_mol, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
@@ -367,7 +367,7 @@ def kernel(eri_or_mol, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e'
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
@@ -477,30 +477,3 @@ def get_ao_eri(mol):
     return mol.intor('int2e', aosym='s4')
 
 get_mo_eri = kernel
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    from pyscf import gto
-    from pyscf.ao2mo import addons
-    mol = gto.M(
-        verbose = 0,
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = 'ccpvdz')
-
-    mf = scf.RHF(mol)
-    mf.scf()
-
-    eri0 = full(mf._eri, mf.mo_coeff)
-    mos = (mf.mo_coeff,)*4
-    print(numpy.allclose(eri0, full(mol, mf.mo_coeff)))
-    print(numpy.allclose(eri0, general(mf._eri, mos)))
-    print(numpy.allclose(eri0, general(mol, mos)))
-    with load(full(mol, mf.mo_coeff, 'h2oeri.h5', dataname='dat1'), 'dat1') as eri1:
-        print(numpy.allclose(eri0, eri1))
-    with load(general(mol, mos, 'h2oeri.h5', dataname='dat1'), 'dat1') as eri1:
-        print(numpy.allclose(eri0, eri1))
-

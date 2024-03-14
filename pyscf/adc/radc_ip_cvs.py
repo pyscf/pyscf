@@ -938,6 +938,15 @@ class RADCIPCVS(radc.RADC):
             Spectroscopic amplitudes for each IP transition.
     '''
 
+    _keys = {
+        'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
+        'mo_energy_b', 't1', 'mo_energy_a',
+        'max_space', 't2', 'max_cycle',
+        'nmo', 'transform_integrals', 'with_df', 'compute_properties',
+        'approx_trans_moments', 'E', 'U', 'P', 'X',
+        'evec_print_tol', 'spec_factor_print_tol', 'ncvs',
+    }
+
     def __init__(self, adc):
         self.mol = adc.mol
         self.verbose = adc.verbose
@@ -971,11 +980,6 @@ class RADCIPCVS(radc.RADC):
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.ncvs = adc.ncvs
-
-        keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
-                    'mo_energy_b', 'max_memory', 't1', 'mo_energy_a',
-                    'max_space', 't2', 'max_cycle'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     kernel = radc.kernel
     get_imds = get_imds
@@ -1013,5 +1017,3 @@ class RADCIPCVS(radc.RADC):
         diag = self.get_diag(imds, eris)
         matvec = self.matvec(imds, eris)
         return matvec, diag
-
-

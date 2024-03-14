@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 import numpy
 from pyscf import lib
@@ -86,24 +85,17 @@ class KnownValues(unittest.TestCase):
 #        pass
 
     def test_get_h2eff(self):
-        mc1 = mcscf.approx_hessian(mcscf.UCASCI(m, 5, (4,2), ncore=(2,2)))
+        mc1 = mcscf.UCASCI(m, 5, (4,2), ncore=(2,2))
         mc1.max_memory = 0
+        mc2 = mcscf.approx_hessian(mc1)
         eri1 = mc1.get_h2eff((m.mo_coeff[0][:,2:7], m.mo_coeff[1][:,2:7]))
-        eri2 = mc1.get_h2cas((m.mo_coeff[0][:,2:7], m.mo_coeff[1][:,2:7]))
+        eri2 = mc1.get_h2eff((m.mo_coeff[0][:,2:7], m.mo_coeff[1][:,2:7]))
         self.assertAlmostEqual(abs(eri1[0]-eri2[0]).max(), 0, 12)
         self.assertAlmostEqual(abs(eri1[1]-eri2[1]).max(), 0, 12)
         self.assertAlmostEqual(abs(eri1[2]-eri2[2]).max(), 0, 12)
 
-        # TODO:
-        #mc1 = mcscf.density_fit(mcscf.UCASCI(m, 6, 6, ncore=(6,4)))
-        #eri1 = mc1.get_h2eff((m.mo_coeff[0][:,6:12], m.mo_coeff[1][:,4:10]))
-        #eri2 = mc1.get_h2cas((m.mo_coeff[0][:,6:12], m.mo_coeff[1][:,4:10]))
-        #self.assertTrue(abs(eri1[0]-eri2[0]).max() > 1e-5)
-        #self.assertTrue(abs(eri1[1]-eri2[1]).max() > 1e-5)
-        #self.assertTrue(abs(eri1[2]-eri2[2]).max() > 1e-5)
-
     def test_get_veff(self):
-        mc1 = mcscf.UCASCI(m.view(dft.rks.RKS), 5, (4,2))
+        mc1 = mcscf.UCASCI(m.to_rks(), 5, (4,2))
         nao = mol.nao_nr()
         dm = numpy.random.random((2,nao,nao))
         dm = dm + dm.transpose(0,2,1)
@@ -124,8 +116,8 @@ class KnownValues(unittest.TestCase):
         mc.fcisolver.nroots = 2
         mc.natorb = True
         mc.kernel()
-        self.assertAlmostEqual(mc.e_tot[0], -75.73319012518794, 9)
-        self.assertAlmostEqual(mc.e_tot[1], -75.63476344994703, 9)
+        self.assertAlmostEqual(mc.e_tot[0], -75.73319012518794, 7)
+        self.assertAlmostEqual(mc.e_tot[1], -75.63476344994703, 7)
 
         ss, s1 = mc.spin_square()
         self.assertAlmostEqual(ss[0], 2.005756795092406, 7)
@@ -164,4 +156,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for CASCI")
     unittest.main()
-

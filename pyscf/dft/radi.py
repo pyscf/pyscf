@@ -156,4 +156,3 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
         g1 += g
         return g1
     return fadjust
-

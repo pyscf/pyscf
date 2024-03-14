@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 import tempfile
 from functools import reduce
@@ -555,13 +554,13 @@ O    SP
         self.assertRaises(RuntimeError, lambda *args: mol0.nelec)
         mol0.spin = 1
 
-        mol1 = copy.copy(mol0)
+        mol1 = mol0.copy()
         self.assertEqual(mol1.nelec, (5, 4))
         mol1.nelec = (3, 6)
         self.assertEqual(mol1.nelec, (3, 6))
 
     def test_multiplicity(self):
-        mol1 = copy.copy(mol0)
+        mol1 = mol0.copy()
         self.assertEqual(mol1.multiplicity, 2)
         mol1.multiplicity = 5
         self.assertEqual(mol1.multiplicity, 5)
@@ -569,7 +568,7 @@ O    SP
         self.assertRaises(RuntimeError, lambda:mol1.nelec)
 
     def test_ms(self):
-        mol1 = copy.copy(mol0)
+        mol1 = mol0.copy()
         self.assertEqual(mol1.ms, 0.5)
         mol1.ms = 1
         self.assertEqual(mol1.multiplicity, 3)
@@ -1033,6 +1032,29 @@ H    P
         ctr_coeff = scipy.linalg.block_diag(*ctr_coeff)
         s = ctr_coeff.T.dot(pmol.intor('int1e_ovlp')).dot(ctr_coeff)
         self.assertAlmostEqual(abs(s - mol.intor('int1e_ovlp')).max(), 0, 12)
+
+        # discard basis on atom 2. (related to issue #1711)
+        mol._bas = mol._bas[:5]
+        pmol, c = mol.decontract_basis()
+        self.assertEqual(pmol.nbas, 14)
+
+        mol = gto.M(atom='He',
+                    basis=('ccpvdz', [[0, [5, 1]], [1, [3, 1]]]))
+        pmol, contr_coeff = mol.decontract_basis()
+        contr_coeff = scipy.linalg.block_diag(*contr_coeff)
+        s = contr_coeff.T.dot(pmol.intor('int1e_ovlp')).dot(contr_coeff)
+        self.assertAlmostEqual(abs(s - mol.intor('int1e_ovlp')).max(), 0, 12)
+
+    def test_ao_rotation_matrix(self):
+        mol = gto.M(atom='O 0 0 0.2; H1 0 -.8 -.5; H2 0 .8 -.5', basis='ccpvdz')
+        numpy.random.seed(1)
+        axes = numpy.linalg.svd(numpy.random.rand(3,3))[0]
+        mol1 = gto.M(atom=list(zip(['O', 'H', 'H'], mol.atom_coords().dot(axes.T))),
+                     basis='ccpvdz', unit='Bohr')
+        u = mol.ao_rotation_matrix(axes)
+        v0 = u.T.dot(mol.intor('int1e_nuc')).dot(u)
+        v1 = mol1.intor('int1e_nuc')
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 12)
 
 if __name__ == "__main__":
     print("test mole.py")

@@ -157,6 +157,11 @@ class GWExact(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-8)
     linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
+    _keys = {
+        'eta', 'linearized',
+        'mol', 'frozen', 'mo_energy', 'mo_coeff', 'mo_occ',
+    }
+
     def __init__(self, mf, frozen=None, tdmf=None):
         self.mol = mf.mol
         self._scf = mf
@@ -174,9 +179,6 @@ class GWExact(lib.StreamObject):
         self.mo_energy = None
         self.mo_coeff = mf.mo_coeff
         self.mo_occ = mf.mo_occ
-
-        keys = set(('eta', 'linearized'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -415,4 +417,3 @@ if __name__ == '__main__':
     gw.kernel(orbs=[nocc-1,nocc])
     print(gw.mo_energy[nocc-1] - -0.44684106)
     print(gw.mo_energy[nocc] - 0.17292032)
-

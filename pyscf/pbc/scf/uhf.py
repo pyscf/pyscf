@@ -104,19 +104,37 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
 
 get_rho = pbchf.get_rho
 
-
-class UHF(pbchf.SCF, mol_uhf.UHF):
+class UHF(pbchf.SCF):
     '''UHF class for PBCs.
     '''
+    _keys = {"init_guess_breaksym"}
 
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    init_guess_by_minao  = mol_uhf.UHF.init_guess_by_minao
+    init_guess_by_atom   = mol_uhf.UHF.init_guess_by_atom
+    init_guess_by_huckel = mol_uhf.UHF.init_guess_by_huckel
+    init_guess_by_mod_huckel = mol_uhf.UHF.init_guess_by_mod_huckel
+    eig = mol_uhf.UHF.eig
+    get_fock = mol_uhf.UHF.get_fock
+    get_grad = mol_uhf.UHF.get_grad
+    get_occ = mol_uhf.UHF.get_occ
+    make_rdm1 = mol_uhf.UHF.make_rdm1
+    make_rdm2 = mol_uhf.UHF.make_rdm2
+    energy_elec = mol_uhf.UHF.energy_elec
+    _finalize = mol_uhf.UHF._finalize
+    get_rho = get_rho
+    analyze = mol_uhf.UHF.analyze
+    mulliken_pop = mol_uhf.UHF.mulliken_pop
+    mulliken_meta = mol_uhf.UHF.mulliken_meta
+    canonicalize = mol_uhf.UHF.canonicalize
+    spin_square = mol_uhf.UHF.spin_square
+    stability = mol_uhf.UHF.stability
+    to_gpu = lib.to_gpu
 
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.nelec = None
         self.init_guess_breaksym = None
-        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):
@@ -142,16 +160,6 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    get_rho = get_rho
-
-    eig = mol_uhf.UHF.eig
-
-    get_fock = mol_uhf.UHF.get_fock
-    get_grad = mol_uhf.UHF.get_grad
-    get_occ = mol_uhf.UHF.get_occ
-    make_rdm1 = mol_uhf.UHF.make_rdm1
-    energy_elec = mol_uhf.UHF.energy_elec
-
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
         if cell is None: cell = self.cell
@@ -159,15 +167,8 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
         if kpt is None: kpt = self.kpt
         if isinstance(dm, np.ndarray) and dm.ndim == 2:
             dm = np.asarray((dm*.5,dm*.5))
-        if self.rsjk and self.direct_scf:
-            # Enable direct-SCF for real space JK builder
-            ddm = dm - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
-            vhf = vj[0] + vj[1] - vk
-            vhf += vhf_last
-        else:
-            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-            vhf = vj[0] + vj[1] - vk
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+        vhf = vj[0] + vj[1] - vk
         return vhf
 
     def get_bands(self, kpts_band, cell=None, dm=None, kpt=None):
@@ -221,10 +222,22 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
             rho = self.get_rho(dm)
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
+        if cell is None:
+            cell = self.cell
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
         dm = mol_uhf.UHF.get_init_guess(self, cell, key)
-        dm = pbchf.normalize_dm_(self, dm)
+        ne = np.einsum('xij,ji->x', dm, s1e).real
+        nelec = self.nelec
+        if np.any(abs(ne - nelec) > 0.01):
+            logger.debug(self, 'Big error detected in the electron number '
+                         'of initial guess density matrix (Ne/cell = %s)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %s', ne, nelec)
+            dm *= (nelec / ne).reshape(2,1,1)
         return dm
 
     def init_guess_by_1e(self, cell=None):
@@ -239,18 +252,13 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
         if kpt is None: kpt = self.kpt
         return init_guess_by_chkfile(self.cell, chk, project, kpt)
 
-    init_guess_by_minao  = mol_uhf.UHF.init_guess_by_minao
-    init_guess_by_atom   = mol_uhf.UHF.init_guess_by_atom
-    init_guess_by_huckel = mol_uhf.UHF.init_guess_by_huckel
-
-    analyze = mol_uhf.UHF.analyze
-    mulliken_pop = mol_uhf.UHF.mulliken_pop
-    mulliken_meta = mol_uhf.UHF.mulliken_meta
-    spin_square = mol_uhf.UHF.spin_square
-    canonicalize = mol_uhf.UHF.canonicalize
-    stability = mol_uhf.UHF.stability
+    def to_ks(self, xc='HF'):
+        '''Convert to RKS object.
+        '''
+        from pyscf.pbc import dft
+        return self._transfer_attrs_(dft.UKS(self.cell, self.kpt, xc=xc))
 
     def convert_from_(self, mf):
-        '''Convert given mean-field object to RHF/ROHF'''
+        '''Convert given mean-field object to UHF'''
         addons.convert_to_uhf(mf, self)
         return self

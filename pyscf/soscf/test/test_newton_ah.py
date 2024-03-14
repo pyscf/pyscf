@@ -214,7 +214,7 @@ class KnownValues(unittest.TestCase):
     def test_rks_gen_g_hop(self):
         mf = dft.RKS(h2o_z0)
         mf.grids.build()
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         nao = h2o_z0.nao_nr()
         numpy.random.seed(1)
         mo = numpy.random.random((nao,nao))
@@ -281,7 +281,7 @@ class KnownValues(unittest.TestCase):
 
     def test_nr_uks_fast_newton(self):
         mf = dft.UKS(h4_z1_s)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf1 = scf.fast_newton(mf)
         self.assertAlmostEqual(mf1.e_tot, -39.696083841107587, 8)
 
@@ -290,7 +290,7 @@ class KnownValues(unittest.TestCase):
 
     def test_nr_rks_fast_newton(self):
         mf = dft.RKS(h4_z0_s)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf1 = scf.fast_newton(mf)
         self.assertAlmostEqual(mf1.e_tot, -40.10277421254213, 9)
 
@@ -302,7 +302,7 @@ class KnownValues(unittest.TestCase):
     def test_uks_gen_g_hop(self):
         mf = dft.UKS(h2o_z0)
         mf.grids.build()
-        mf.xc = 'b3p86'
+        mf.xc = 'b3p86v5'
         nao = h2o_z0.nao_nr()
         numpy.random.seed(1)
         mo =(numpy.random.random((nao,nao)),
@@ -320,12 +320,14 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(mf._eri is None)
         self.assertTrue(mf._scf._eri is None)
         self.assertAlmostEqual(mf.e_tot, -75.983944727996, 9)
+        self.assertEqual(mf.__class__.__name__, 'SecondOrderDFRHF')
 
         mf = scf.RHF(h2o_z0).newton().density_fit().run()
         self.assertTrue(mf._eri is None)
         self.assertTrue(mf._scf._eri is not None)
         self.assertAlmostEqual(mf.e_tot, -75.9839484980661, 9)
-
+        mf = mf.undo_newton()
+        self.assertEqual(mf.__class__.__name__, 'RHF')
 
     def test_rohf_dinfh(self):
         mol = gto.M(atom='Ti 0 0 0; O 0 0 1.9',
@@ -338,6 +340,7 @@ class KnownValues(unittest.TestCase):
         mf = mf.newton().run()
         self.assertTrue(mf.converged)
         self.assertAlmostEqual(mf.e_tot, -914.539361470649, 9)
+        self.assertEqual(mf.undo_newton().__class__.__name__, 'SymAdaptedROHF')
 
     def test_rohf_so3(self):
         mol = gto.M(atom='C', basis='ccpvdz', spin=4, symmetry=True)
@@ -363,8 +366,12 @@ class KnownValues(unittest.TestCase):
         mf.irrep_nelec = {'s+0': 4}
         self.assertAlmostEqual(mf.e_tot, -54.3973578450836, 9)
 
+    def test_no_virtual(self):
+        mol = gto.M(atom='He', basis='sto3g')
+        mf = mol.RHF().newton().run()
+        self.assertAlmostEqual(mf.e_tot, -2.80778395753997, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for Newton solver")
     unittest.main()
-

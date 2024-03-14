@@ -20,28 +20,33 @@ import unittest
 import numpy as np
 from pyscf.pbc import gto, scf, mp
 
-L = 2.
-He = gto.Cell()
-He.verbose = 0
-He.a = np.eye(3)*L
-He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
-He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
-He.build()
+def setUpModule():
+    global He, nk, kpts0, kpts, kmf0, kmf, kmp2ref
+    L = 2.
+    He = gto.Cell()
+    He.verbose = 0
+    He.a = np.eye(3)*L
+    He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
+    He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+    He.space_group_symmetry=True
+    He.output = '/dev/null'
+    He.build()
 
-nk = [2,2,2]
+    nk = [2,2,2]
 
-kpts0 = He.make_kpts(nk)
-kmf0 = scf.KRHF(He, kpts0, exxdiv=None).density_fit()
-kmf0.kernel()
-kmp2ref = mp.KMP2(kmf0)
-kmp2ref.kernel()
+    kpts0 = He.make_kpts(nk)
+    kmf0 = scf.KRHF(He, kpts0, exxdiv=None).density_fit()
+    kmf0.kernel()
+    kmp2ref = mp.KMP2(kmf0)
+    kmp2ref.kernel()
 
-kpts = He.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
-kmf = scf.KRHF(He, kpts, exxdiv=None).density_fit()
-kmf.kernel()
+    kpts = He.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
+    kmf = scf.KRHF(He, kpts, exxdiv=None).density_fit()
+    kmf.kernel()
 
 def tearDownModule():
     global He, nk, kpts0, kpts, kmf0, kmf, kmp2ref
+    He.stdout.close()
     del He, nk, kpts0, kpts, kmf0, kmf, kmp2ref
 
 class KnownValues(unittest.TestCase):

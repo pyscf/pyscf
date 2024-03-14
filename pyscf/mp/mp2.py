@@ -19,7 +19,6 @@ RMP2
 '''
 
 
-import copy
 import numpy
 from pyscf import gto
 from pyscf import lib
@@ -52,7 +51,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     else:
         t2 = None
 
-    emp2 = 0
+    emp2_ss = emp2_os = 0
     for i in range(nocc):
         if isinstance(eris.ovov, numpy.ndarray) and eris.ovov.ndim == 4:
             # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
@@ -63,10 +62,16 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
-        emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
-        emp2 -= numpy.einsum('jab,jba', t2i, gi)
+        edi = numpy.einsum('jab,jab', t2i, gi) * 2
+        exi = -numpy.einsum('jab,jba', t2i, gi)
+        emp2_ss += edi*0.5 + exi
+        emp2_os += edi*0.5
         if with_t2:
             t2[i] = t2i
+
+    emp2_ss = emp2_ss.real
+    emp2_os = emp2_os.real
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
 
     return emp2.real, t2
 
@@ -113,9 +118,12 @@ def energy(mp, t2, eris):
     '''MP2 energy'''
     nocc, nvir = t2.shape[1:3]
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocc,nvir,nocc,nvir)
-    emp2  = numpy.einsum('ijab,iajb', t2, eris_ovov) * 2
-    emp2 -= numpy.einsum('ijab,ibja', t2, eris_ovov)
-    return emp2.real
+    ed = numpy.einsum('ijab,iajb', t2, eris_ovov) * 2
+    ex = -numpy.einsum('ijab,ibja', t2, eris_ovov)
+    emp2_ss = (ed*0.5 + ex).real
+    emp2_os = ed.real*0.5
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
+    return emp2
 
 def update_amps(mp, t2, eris):
     '''Update non-canonical MP2 amplitudes'''
@@ -402,26 +410,28 @@ def as_scanner(mp):
         return mp
 
     logger.info(mp, 'Set %s as a scanner', mp.__class__)
+    name = mp.__class__.__name__ + MP2_Scanner.__name_mixin__
+    return lib.set_class(MP2_Scanner(mp), (MP2_Scanner, mp.__class__), name)
 
-    class MP2_Scanner(mp.__class__, lib.SinglePointScanner):
-        def __init__(self, mp):
-            self.__dict__.update(mp.__dict__)
-            self._scf = mp._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class MP2_Scanner(lib.SinglePointScanner):
+    def __init__(self, mp):
+        self.__dict__.update(mp.__dict__)
+        self._scf = mp._scf.as_scanner()
 
-            self.reset(mol)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            mf_scanner = self._scf
-            mf_scanner(mol)
-            self.mo_coeff = mf_scanner.mo_coeff
-            self.mo_occ = mf_scanner.mo_occ
-            self.kernel(**kwargs)
-            return self.e_tot
-    return MP2_Scanner(mp)
+        self.reset(mol)
+
+        mf_scanner = self._scf
+        mf_scanner(mol)
+        self.mo_coeff = mf_scanner.mo_coeff
+        self.mo_occ = mf_scanner.mo_occ
+        self.kernel(**kwargs)
+        return self.e_tot
 
 
 class MP2(lib.StreamObject):
@@ -464,6 +474,8 @@ class MP2(lib.StreamObject):
 
         e_corr : float
             MP2 correlation correction
+        e_corr_ss/os : float
+            Same-spin and opposite-spin component of the MP2 correlation energy
         e_tot : float
             Total MP2 energy (HF + correlation)
         t2 :
@@ -474,6 +486,12 @@ class MP2(lib.StreamObject):
     max_cycle = getattr(__config__, 'cc_ccsd_CCSD_max_cycle', 50)
     conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
+
+    _keys = {
+        'max_cycle', 'conv_tol', 'conv_tol_normt', 'mol', 'max_memory',
+        'frozen', 'level_shift', 'mo_coeff', 'mo_occ', 'e_hf', 'e_corr',
+        'e_corr_ss', 'e_corr_os', 't2',
+    }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
@@ -499,8 +517,9 @@ class MP2(lib.StreamObject):
         self._nmo = None
         self.e_hf = None
         self.e_corr = None
+        self.e_corr_ss = None
+        self.e_corr_os = None
         self.t2 = None
-        self._keys = set(self.__dict__.keys())
 
     @property
     def nocc(self):
@@ -549,8 +568,18 @@ class MP2(lib.StreamObject):
         return self.e_corr
 
     @property
+    def emp2_scs(self):
+        # J. Chem. Phys. 118, 9095 (2003)
+        return self.e_corr_ss*1./3. + self.e_corr_os*1.2
+
+    @property
     def e_tot(self):
         return self.e_hf + self.e_corr
+
+    @property
+    def e_tot_scs(self):
+        # J. Chem. Phys. 118, 9095 (2003)
+        return self.e_hf + self.emp2_scs
 
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         '''
@@ -573,13 +602,22 @@ class MP2(lib.StreamObject):
         else:
             self.converged, self.e_corr, self.t2 = _iterative_kernel(self, eris)
 
+        self.e_corr_ss = getattr(self.e_corr, 'e_corr_ss', 0)
+        self.e_corr_os = getattr(self.e_corr, 'e_corr_os', 0)
+        self.e_corr = float(self.e_corr)
+
         self._finalize()
         return self.e_corr, self.t2
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
-        logger.note(self, 'E(%s) = %.15g  E_corr = %.15g',
-                    self.__class__.__name__, self.e_tot, self.e_corr)
+        log = logger.new_logger(self)
+        log.note('E(%s) = %.15g  E_corr = %.15g',
+                 self.__class__.__name__, self.e_tot, self.e_corr)
+        log.note('E(SCS-%s) = %.15g  E_corr = %.15g',
+                 self.__class__.__name__, self.e_tot_scs, self.emp2_scs)
+        log.info('E_corr(same-spin) = %.15g', self.e_corr_ss)
+        log.info('E_corr(oppo-spin) = %.15g', self.e_corr_os)
         return self
 
     def ao2mo(self, mo_coeff=None):
@@ -597,7 +635,7 @@ class MP2(lib.StreamObject):
         if with_df is not None:
             mymp.with_df = with_df
         if mymp.with_df.auxbasis != auxbasis:
-            mymp.with_df = copy.copy(mymp.with_df)
+            mymp.with_df = mymp.with_df.copy()
             mymp.with_df.auxbasis = auxbasis
         return mymp
 
@@ -610,6 +648,8 @@ class MP2(lib.StreamObject):
     update_amps = update_amps
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
+
+    to_gpu = lib.to_gpu
 
 RMP2 = MP2
 
@@ -718,6 +758,8 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
 #   or    => (ij|ol) => (oj|ol) => (oj|ov) => (ov|ov)
 #
 def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
+    from pyscf.scf.hf import RHF
+    assert isinstance(mp._scf, RHF)
     time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
 

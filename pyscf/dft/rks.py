@@ -78,19 +78,21 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_rks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
-        if ks.nlc:
-            assert 'VV10' in ks.nlc.upper()
-            _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm,
-                                      max_memory=max_memory)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        if ks.nlc or ni.libxc.is_nlc(ks.xc):
+            if ni.libxc.is_nlc(ks.xc):
+                xc = ks.xc
+            else:
+                assert ni.libxc.is_nlc(ks.nlc)
+                xc = ks.nlc
+            n, enlc, vnlc = ni.nr_nlc_vxc(mol, ks.nlcgrids, xc, dm,
+                                          max_memory=max_memory)
             exc += enlc
             vxc += vnlc
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+            logger.debug(ks, 'nelec with nlc grids = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    #enabling range-separated hybrids
-    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
-
-    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
+    if not ni.libxc.is_hybrid_xc(ks.xc):
         vk = None
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
@@ -101,12 +103,13 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj = ks.get_j(mol, dm, hermi)
         vxc += vj
     else:
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vk', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
-            if abs(omega) > 1e-10:  # For range separated Coulomb operator
+            if omega != 0:  # For range separated Coulomb
                 vklr = ks.get_k(mol, ddm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
@@ -115,7 +118,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
             vk *= hyb
-            if abs(omega) > 1e-10:
+            if omega != 0:
                 vklr = ks.get_k(mol, dm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
@@ -196,7 +199,7 @@ def _get_k_lr(mol, dm, omega=0, hermi=0, vhfopt=None):
                      'It is replaced by mol.get_k(mol, dm, omege=omega)')
     dm = numpy.asarray(dm)
 # Note, ks object caches the ERIs for small systems. The cached eris are
-# computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evalute
+# computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evaluate
 # the K matrix with the range separated Coulomb operator.  Here jk.get_jk
 # function computes the K matrix with the modified Coulomb operator.
     nao = dm.shape[-1]
@@ -240,6 +243,7 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     ecoul = vhf.ecoul.real
     exc = vhf.exc.real
     e2 = ecoul + exc
+
     ks.scf_summary['e1'] = e1
     ks.scf_summary['coul'] = ecoul
     ks.scf_summary['exc'] = exc
@@ -258,23 +262,9 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 
 
 def _dft_common_init_(mf, xc='LDA,VWN'):
-    mf.xc = xc
-    mf.nlc = ''
-    mf.grids = gen_grid.Grids(mf.mol)
-    mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
-                             mf.grids.level)
-    mf.nlcgrids = gen_grid.Grids(mf.mol)
-    mf.nlcgrids.level = getattr(__config__, 'dft_rks_RKS_nlcgrids_level',
-                                mf.nlcgrids.level)
-    # Use rho to filter grids
-    mf.small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
-##################################################
-# don't modify the following attributes, they are not input options
-    mf._numint = numint.NumInt()
-    mf._keys = mf._keys.union(['xc', 'nlc', 'omega', 'grids', 'nlcgrids',
-                               'small_rho_cutoff'])
+    raise DeprecationWarning
 
-class KohnShamDFT(object):
+class KohnShamDFT:
     '''
     Attributes for Kohn-Sham DFT:
         xc : str
@@ -331,7 +321,23 @@ class KohnShamDFT(object):
     -76.415443079840458
     '''
 
-    __init__ = _dft_common_init_
+    _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
+
+    def __init__(self, xc='LDA,VWN'):
+        self.xc = xc
+        self.nlc = ''
+        self.grids = gen_grid.Grids(self.mol)
+        self.grids.level = getattr(
+            __config__, 'dft_rks_RKS_grids_level', self.grids.level)
+        self.nlcgrids = gen_grid.Grids(self.mol)
+        self.nlcgrids.level = getattr(
+            __config__, 'dft_rks_RKS_nlcgrids_level', self.nlcgrids.level)
+        # Use rho to filter grids
+        self.small_rho_cutoff = getattr(
+            __config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
+##################################################
+# don't modify the following attributes, they are not input options
+        self._numint = numint.NumInt()
 
     @property
     def omega(self):
@@ -352,12 +358,14 @@ class KohnShamDFT(object):
             if hasattr(self._numint.libxc, 'xc_reference'):
                 log.info(textwrap.indent('\n'.join(self._numint.libxc.xc_reference(self.xc)), '    '))
 
-        if self.nlc!='':
-            log.info('NLC functional = %s', self.nlc)
-
         self.grids.dump_flags(verbose)
-        if self.nlc!='':
-            log.info('** Following is NLC Grids **')
+
+        if self.nlc or self._numint.libxc.is_nlc(self.xc):
+            log.info('** Following is NLC and NLC Grids **')
+            if self.nlc:
+                log.info('NLC functional = %s', self.nlc)
+            else:
+                log.info('NLC functional = %s', self.xc)
             self.nlcgrids.dump_flags(verbose)
 
         log.info('small_rho_cutoff = %g', self.small_rho_cutoff)
@@ -372,9 +380,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = _update_keys_(scf.RHF(self.mol), self.to_rks())
-        mf.converged = False
-        return mf
+        return self.to_rks().to_hf()
 
     def to_uhf(self):
         '''Convert the input mean-field object to a UHF object.
@@ -383,9 +389,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = _update_keys_(scf.UHF(self.mol), self.to_uks())
-        mf.converged = False
-        return mf
+        return self.to_uks().to_hf()
 
     def to_ghf(self):
         '''Convert the input mean-field object to a GHF object.
@@ -394,9 +398,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = _update_keys_(scf.GHF(self.mol), self.to_gks())
-        mf.converged = False
-        return mf
+        return self.to_gks().to_hf()
 
     def to_hf(self):
         '''Convert the input KS object to the associated HF object.
@@ -405,14 +407,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        if isinstance(self, scf.hf.RHF):
-            return self.to_rhf()
-        elif isinstance(self, scf.hf.UHF):
-            return self.to_uhf()
-        elif isinstance(self, scf.hf.GHF):
-            return self.to_ghf()
-        else:
-            raise RuntimeError(f'to_hf does not support {self.__class__}')
+        raise NotImplementedError
 
     def to_rks(self, xc=None):
         '''Convert the input mean-field object to a RKS/ROKS object.
@@ -424,8 +419,7 @@ class KohnShamDFT(object):
         mf = scf.addons.convert_to_rhf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc or not isinstance(self, RKS):
-            mf.converged = False
+        mf.converged = xc == self.xc and mf.converged
         return mf
 
     def to_uks(self, xc=None):
@@ -438,8 +432,7 @@ class KohnShamDFT(object):
         mf = scf.addons.convert_to_uhf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc:
-            mf.converged = False
+        mf.converged = xc == self.xc and mf.converged
         return mf
 
     def to_gks(self, xc=None):
@@ -453,8 +446,7 @@ class KohnShamDFT(object):
         mf = scf.addons.convert_to_ghf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc:
-            mf.converged = False
+        mf.converged = xc == self.xc and mf.converged
         if not isinstance(mf._numint, numint2c.NumInt2C):
             mf._numint = numint2c.NumInt2C()
         return mf
@@ -469,41 +461,32 @@ class KohnShamDFT(object):
         '''Initialize self.grids the first time call get_veff'''
         if mol is None: mol = self.mol
 
+        ground_state = getattr(dm, 'ndim', 0) == 2
         if self.grids.coords is None:
             t0 = (logger.process_clock(), logger.perf_counter())
             self.grids.build(with_non0tab=True)
-            if (self.small_rho_cutoff > 1e-20 and
-                # dm.ndim == 2 indicates ground state
-                isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            if self.small_rho_cutoff > 1e-20 and ground_state:
                 # Filter grids the first time setup grids
                 self.grids = prune_small_rho_grids_(self, self.mol, dm,
                                                     self.grids)
             t0 = logger.timer(self, 'setting up grids', *t0)
 
-        if self.nlc != '':
-            if self.nlcgrids.coords is None:
-                t0 = (logger.process_clock(), logger.perf_counter())
-                self.nlcgrids.build(with_non0tab=True)
-                if (self.small_rho_cutoff > 1e-20 and
-                    # dm.ndim == 2 indicates ground state
-                    isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-                    # Filter grids the first time setup grids
-                    self.nlcgrids = prune_small_rho_grids_(self, self.mol, dm,
-                                                           self.nlcgrids)
-                t0 = logger.timer(self, 'setting up nlc grids', *t0)
+        is_nlc = self.nlc or self._numint.libxc.is_nlc(self.xc)
+        if is_nlc and self.nlcgrids.coords is None:
+            t0 = (logger.process_clock(), logger.perf_counter())
+            self.nlcgrids.build(with_non0tab=True)
+            if self.small_rho_cutoff > 1e-20 and ground_state:
+                # Filter grids the first time setup grids
+                self.nlcgrids = prune_small_rho_grids_(self, self.mol, dm,
+                                                       self.nlcgrids)
+            t0 = logger.timer(self, 'setting up nlc grids', *t0)
         return self
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 # Update the KohnShamDFT label in scf.hf module
 hf.KohnShamDFT = KohnShamDFT
-
-def _update_keys_(mf, src):
-    src_keys = src.__dict__
-    res_keys = {key: src_keys[key] for key in mf._keys if key in src_keys}
-    # Avoid to overwrite the target's attribute "_keys". It may not be defined
-    # if the .build() method of src not called
-    res_keys.pop('_keys', None)
-    mf.__dict__.update(res_keys)
-    return mf
 
 def init_guess_by_vsap(mf, mol=None):
     '''Form SAP guess'''
@@ -543,3 +526,9 @@ class RKS(KohnShamDFT, hf.RHF):
     def nuc_grad_method(self):
         from pyscf.grad import rks as rks_grad
         return rks_grad.Gradients(self)
+
+    def to_hf(self):
+        '''Convert to RHF object.'''
+        return self._transfer_attrs_(self.mol.RHF())
+
+    to_gpu = lib.to_gpu

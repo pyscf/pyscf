@@ -1,13 +1,101 @@
-diff --git a/src/functionals/common_parameters.cpp b/src/functionals/common_parameters.cpp
-index 4142b0d..210b4ab 100644
---- a/src/functionals/common_parameters.cpp
-+++ b/src/functionals/common_parameters.cpp
-@@ -3,7 +3,7 @@
- PARAMETER(XC_RANGESEP_MU) = 
- {
-   "Range separation inverse length [1/a0]",
--  0.4
-+  0.33
- };
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4281527..8a2f4bb 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -2,7 +2,7 @@
+ # Copyright (c) 2015-2020 by Radovan Bast, Roberto Di Remigio, Jonas Juselius, and contributors.
  
- PARAMETER(XC_EXX) = 
+ # set minimum cmake version
+-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
++cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
+
+ # project name
+ project(XCFun LANGUAGES CXX)
+diff --git a/src/XCFunctional.cpp b/src/XCFunctional.cpp
+index 239cef5..6288e40 100644
+--- a/src/XCFunctional.cpp
++++ b/src/XCFunctional.cpp
+@@ -432,7 +432,7 @@ int xcfun_eval_setup(XCFunctional * fun,
+     return xcfun::XC_EVARS;
+   }
+   if ((order < 0 || order > XCFUN_MAX_ORDER) ||
+-      (mode == XC_PARTIAL_DERIVATIVES && order > 4))
++      (mode == XC_PARTIAL_DERIVATIVES && order > 6))
+     return xcfun::XC_EORDER;
+   if (mode == XC_POTENTIAL) {
+     // GGA potential needs full laplacian
+@@ -557,6 +557,74 @@ void xcfun_eval(const XCFunctional * fun, const double input[], double output[])
+ #endif
+ #if XCFUN_MAX_ORDER >= 2
+ #if XCFUN_MAX_ORDER >= 3
++#if XCFUN_MAX_ORDER >= 4
++#if XCFUN_MAX_ORDER >= 5
++      case 5: {
++        typedef ctaylor<ireal_t, 5> ttype;
++        int inlen = xcint_vars[fun->vars].len;
++        ttype in[XC_MAX_INVARS], out = 0;
++        for (int i = 0; i < inlen; i++)
++          in[i] = input[i];
++        int k = (inlen + 1) * (inlen + 2) * (inlen + 3) * (inlen + 4) / 24; // comb(deriv-1+inlen, deriv-1);
++        for (int i = 0; i < inlen; i++) {
++          in[i].set(VAR0, 1);
++          for (int j = i; j < inlen; j++) {
++            in[j].set(VAR1, 1);
++            for (int s = j; s < inlen; s++) {
++              in[s].set(VAR2, 1);
++              for (int s1 = s; s1 < inlen; s1++) {
++                in[s1].set(VAR3, 1);
++                for (int s2 = s1; s2 < inlen; s2++) {
++                  in[s2].set(VAR4, 1);
++                  densvars<ttype> d(fun, in);
++                  out = 0;
++                  for (int n = 0; n < fun->nr_active_functionals; n++)
++                    out += fun->settings[fun->active_functionals[n]->id] *
++                           fun->active_functionals[n]->fp5(d);
++                  output[k++] = out.get(VAR0 | VAR1 | VAR2 | VAR3 | VAR4);
++                  in[s2].set(VAR4, 0);
++                }
++                in[s1].set(VAR3, 0);
++              }
++              in[s].set(VAR2, 0);
++            }
++            in[j].set(VAR1, 0);
++          }
++          in[i] = input[i];
++        }
++      }
++#endif
++      case 4: {
++        typedef ctaylor<ireal_t, 4> ttype;
++        int inlen = xcint_vars[fun->vars].len;
++        ttype in[XC_MAX_INVARS], out = 0;
++        for (int i = 0; i < inlen; i++)
++          in[i] = input[i];
++        int k = (inlen + 1) * (inlen + 2) * (inlen + 3) / 6; // comb(deriv-1+inlen, deriv-1);
++        for (int i = 0; i < inlen; i++) {
++          in[i].set(VAR0, 1);
++          for (int j = i; j < inlen; j++) {
++            in[j].set(VAR1, 1);
++            for (int s = j; s < inlen; s++) {
++              in[s].set(VAR2, 1);
++              for (int s1 = s; s1 < inlen; s1++) {
++                  in[s1].set(VAR3, 1);
++                  densvars<ttype> d(fun, in);
++                  out = 0;
++                  for (int n = 0; n < fun->nr_active_functionals; n++)
++                    out += fun->settings[fun->active_functionals[n]->id] *
++                           fun->active_functionals[n]->fp4(d);
++                  output[k++] = out.get(VAR0 | VAR1 | VAR2 | VAR3);
++                  in[s1].set(VAR3, 0);
++              }
++              in[s].set(VAR2, 0);
++            }
++            in[j].set(VAR1, 0);
++          }
++          in[i] = input[i];
++        }
++      }
++#endif
+       // Do the third order derivatives here, then use the second order code. This is
+       // getting expensive..
+       case 3: {

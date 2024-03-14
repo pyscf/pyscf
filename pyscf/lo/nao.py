@@ -23,7 +23,7 @@ Ref:
 '''
 
 import sys
-from functools import reduce
+from functools import reduce, lru_cache
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -35,7 +35,7 @@ from pyscf.data import elements
 from pyscf import __config__
 
 # Note the valence space for Li, Be may need include 2p, Al..Cl may need 3d ...
-# This is No. of shells, not the atomic configuations
+# This is No. of shells, not the atomic configurations
 #     core       core+valence
 # core+valence = lambda nuc, l: \
 #            int(numpy.ceil(elements.CONFIGURATION[nuc][l]/(4*l+2.)))
@@ -72,6 +72,11 @@ def nao(mol, mf, s=None, restore=True):
     pre_occ, pre_nao = _prenao_sub(mol, p, s)
     cnao = _nao_sub(mol, pre_occ, pre_nao)
     if restore:
+        if mol.cart:
+            # The atomic natural character for Cartesian basis is not clearly
+            # defined. Skip restore.
+            return cnao
+
         # restore natural character
         p_nao = reduce(numpy.dot, (cnao.T, p, cnao))
         s_nao = numpy.eye(p_nao.shape[0])
@@ -98,10 +103,12 @@ def _prenao_sub(mol, p, s):
 
             if mol.cart:
                 degen = (l + 1) * (l + 2) // 2
+                p_frag = _cart_average_mat(p, l, idx)
+                s_frag = _cart_average_mat(s, l, idx)
             else:
                 degen = l * 2 + 1
-            p_frag = _spheric_average_mat(p, l, idx, degen)
-            s_frag = _spheric_average_mat(s, l, idx, degen)
+                p_frag = _sph_average_mat(p, l, idx)
+                s_frag = _sph_average_mat(s, l, idx)
             e, v = scipy.linalg.eigh(p_frag, s_frag)
             e = e[::-1]
             v = v[:,::-1]
@@ -167,7 +174,7 @@ def _core_val_ryd_list(mol):
         nc = mol.bas_nctr(ib)
 
         nelec_ecp = mol.atom_nelec_core(ia)
-        ecpcore = core_configuration(nelec_ecp)
+        ecpcore = core_configuration(nelec_ecp, atom_symbol=mol.atom_pure_symbol(ia))
         coreshell = [int(x) for x in AOSHELL[nuc][0][::2]]
         cvshell = [int(x) for x in AOSHELL[nuc][1][::2]]
         if mol.cart:
@@ -187,12 +194,24 @@ def _core_val_ryd_list(mol):
         count[ia,l] += nc
     return core_lst, val_lst, rydbg_lst
 
-def _spheric_average_mat(mat, l, lst, degen=None):
-    if degen is None:
-        degen = l * 2 + 1
-    nd = len(lst) // degen
-    mat_frag = mat[lst][:,lst].reshape(nd,degen,nd,degen)
-    return numpy.einsum('imjn->ij', mat_frag) / degen
+@lru_cache(10)
+def _cart_averge_wt(l):
+    '''Weight matrix for spherical symmetry averaging in Cartesian GTOs'''
+    c = mole.cart2sph(l, normalized='sp')
+    return numpy.einsum('pi,qi->pq', c, c)
+
+def _cart_average_mat(mat, l, lst):
+    degen = (l+1) * (l+2) // 2
+    nshl = len(lst) // degen
+    submat = mat[lst[:,None],lst].reshape(nshl,degen,nshl,degen)
+    wt = _cart_averge_wt(l)
+    return numpy.einsum('imjn,mn->ij', submat, wt) / (2*l+1)
+
+def _sph_average_mat(mat, l, lst):
+    degen = 2 * l + 1
+    nshl = len(lst) // degen
+    submat = mat[lst[:,None],lst].reshape(nshl,degen,nshl,degen)
+    return numpy.einsum('imjm->ij', submat) / (2*l+1)
 
 def set_atom_conf(element, description):
     '''Change the default atomic core and valence configuration to the one

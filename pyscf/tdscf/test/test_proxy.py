@@ -79,7 +79,8 @@ class H20Test(unittest.TestCase):
                 model.kernel()
                 mask_o, mask_v = tdhf_frozen_mask(model.eri, kind="o,v")
                 testing.assert_allclose(model.e, self.td_model_rks.e, atol=1e-3)
-                assert_vectors_close(model.xy, numpy.array(self.td_model_rks.xy)[..., mask_o, :][..., mask_v], atol=1e-3)
+                assert_vectors_close(model.xy,
+                    numpy.array(self.td_model_rks.xy)[..., mask_o, :][..., mask_v], atol=1e-3)
 
             except Exception:
                 print("When testing class with frozen={} the following exception occurred:".format(repr(frozen)))
@@ -193,7 +194,8 @@ class H20HFTest(unittest.TestCase):
                 model.kernel()
                 mask_o, mask_v = tdhf_frozen_mask(model.eri, kind="o,v")
                 testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-3)
-                assert_vectors_close(model.xy, numpy.array(self.td_model_rhf.xy)[..., mask_o, :][..., mask_v], atol=1e-3)
+                assert_vectors_close(model.xy,
+                    numpy.array(self.td_model_rhf.xy)[..., mask_o, :][..., mask_v], atol=1e-3)
 
             except Exception:
                 print("When testing class with frozen={} the following exception occurred:".format(repr(frozen)))

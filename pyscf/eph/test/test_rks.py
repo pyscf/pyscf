@@ -35,7 +35,7 @@ def setUpModule():
     mf = dft.RKS(mol)
     mf.chkfile = tempfile.NamedTemporaryFile().name
     mf.grids.level = 3
-    mf.xc = 'b3lyp'
+    mf.xc = 'b3lyp5'
     mf.conv_tol = 1e-14
     mf.conv_tol_grad = 1e-9
     mf.kernel()

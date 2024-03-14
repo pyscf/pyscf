@@ -23,7 +23,7 @@ from pyscf import lib
 
 libao2mo = lib.load_library('libao2mo')
 
-class load(object):
+class load:
     '''load 2e integrals from hdf5 file
 
     Usage:
@@ -40,10 +40,10 @@ class load(object):
             feri = self.feri = h5py.File(self.eri, 'r')
         elif isinstance(self.eri, h5py.Group):
             feri = self.eri
+        elif isinstance(self.eri, (numpy.ndarray, h5py.Dataset)):
+            return self.eri
         elif isinstance(getattr(self.eri, 'name', None), str):
             feri = self.feri = h5py.File(self.eri.name, 'r')
-        elif isinstance(self.eri, numpy.ndarray):
-            return self.eri
         else:
             raise RuntimeError('Unknown eri type %s', type(self.eri))
 
@@ -210,4 +210,3 @@ def _stand_sym_code(sym):
         return sym[1:]
     else:
         return sym
-

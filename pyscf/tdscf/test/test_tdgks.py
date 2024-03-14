@@ -19,7 +19,6 @@
 import unittest
 import tempfile
 import numpy
-import copy
 from pyscf import lib, gto, scf, dft
 from pyscf import tdscf
 try:
@@ -104,7 +103,7 @@ class KnownValues(unittest.TestCase):
         self._check_against_ab_ks_real(tdscf.gks.TDDFT(mf_lda), -0.5233726312108345, 0.07876886521779444)
 
     def test_col_gga_ab_ks(self):
-        mf_b3lyp = dft.GKS(mol).set(xc='b3lyp')
+        mf_b3lyp = dft.GKS(mol).set(xc='b3lyp5')
         mf_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks_real(mf_b3lyp.TDDFT(), -0.47606715615564554, 0.1771403691719411)
 
@@ -119,7 +118,7 @@ class KnownValues(unittest.TestCase):
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gga_ab_ks(self):
-        mcol_b3lyp = dft.GKS(mol).set(xc='b3lyp', collinear='mcol')
+        mcol_b3lyp = dft.GKS(mol).set(xc='b3lyp5', collinear='mcol')
         mcol_b3lyp._numint.spin_samples = 6
         mcol_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks_complex(mcol_b3lyp.TDDFT(), -0.49573245956851275, 0.4808293930369838)

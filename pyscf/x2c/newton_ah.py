@@ -18,6 +18,7 @@ Second order X2C-SCF solver
 '''
 
 import numpy
+from pyscf import lib
 from pyscf.scf import hf
 from pyscf.x2c import x2c
 # To ensure .gen_response() methods are registered
@@ -42,34 +43,37 @@ def newton(mf):
         return mf
 
     if isinstance(mf, x2c.RHF):
-        class SecondOrderX2CHF(newton_ah._CIAH_SOSCF, mf.__class__):
-            gen_g_hop = gen_g_hop_x2chf
-
-            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
-                nmo = mo_occ.size
-                nocc = numpy.count_nonzero(mo_occ)
-                nvir = nmo - nocc
-                dx = dx.reshape(nvir, nocc)
-                dx_aa = dx[::2,::2]
-                dr_aa = hf.unpack_uniq_var(dx_aa.ravel(), mo_occ[::2])
-                u = numpy.zeros((nmo, nmo), dtype=dr_aa.dtype)
-                # Allows only the rotation within the up-up space and down-down space
-                u[::2,::2] = u[1::2,1::2] = newton_ah.expmat(dr_aa)
-                return numpy.dot(u0, u)
-
-            def rotate_mo(self, mo_coeff, u, log=None):
-                mo = numpy.dot(mo_coeff, u)
-                return mo
+        cls = SecondOrderX2CRHF
     else:
-        class SecondOrderX2CHF(newton_ah._CIAH_SOSCF, mf.__class__):
-            gen_g_hop = gen_g_hop_x2chf
+        cls = SecondOrderX2CUHF
+    return lib.set_class(cls(mf), (cls, mf.__class__))
 
-            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
-                dr = hf.unpack_uniq_var(dx, mo_occ)
-                return numpy.dot(u0, newton_ah.expmat(dr))
+class SecondOrderX2CRHF(newton_ah._CIAH_SOSCF):
+    gen_g_hop = gen_g_hop_x2chf
 
-            def rotate_mo(self, mo_coeff, u, log=None):
-                mo = numpy.dot(mo_coeff, u)
-                return mo
+    def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+        nmo = mo_occ.size
+        nocc = numpy.count_nonzero(mo_occ)
+        nvir = nmo - nocc
+        dx = dx.reshape(nvir, nocc)
+        dx_aa = dx[::2,::2]
+        dr_aa = hf.unpack_uniq_var(dx_aa.ravel(), mo_occ[::2])
+        u = numpy.zeros((nmo, nmo), dtype=dr_aa.dtype)
+        # Allows only the rotation within the up-up space and down-down space
+        u[::2,::2] = u[1::2,1::2] = newton_ah.expmat(dr_aa)
+        return numpy.dot(u0, u)
 
-    return SecondOrderX2CHF(mf)
+    def rotate_mo(self, mo_coeff, u, log=None):
+        mo = numpy.dot(mo_coeff, u)
+        return mo
+
+class SecondOrderX2CUHF(newton_ah._CIAH_SOSCF):
+    gen_g_hop = gen_g_hop_x2chf
+
+    def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+        dr = hf.unpack_uniq_var(dx, mo_occ)
+        return numpy.dot(u0, newton_ah.expmat(dr))
+
+    def rotate_mo(self, mo_coeff, u, log=None):
+        mo = numpy.dot(mo_coeff, u)
+        return mo

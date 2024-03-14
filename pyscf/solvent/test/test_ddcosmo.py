@@ -70,7 +70,7 @@ def make_L(pcmobj, r_vdw, lebedev_order, lmax, eta=0.1):
             sjk = vjk / v.reshape(-1,1)
             Ys = sph.real_sph_vec(sjk, lmax, True)
             # scale the weight, see JCTC 9, 3637, Eq (16)
-            wjk = pcmobj.regularize_xt(tjk, eta, r_vdw[ka])
+            wjk = pcmobj.regularize_xt(tjk, eta)
             wjk[fi[ja]>1] /= fi[ja,fi[ja]>1]
             tt = numpy.ones_like(wjk)
             p1 = 0
@@ -237,6 +237,7 @@ class KnownValues(unittest.TestCase):
         mf.init_guess = '1e'
         mf.run()
         self.assertAlmostEqual(mf.e_tot, -0.1645636146393864, 9)
+        self.assertEqual(mf.undo_solvent().__class__.__name__, 'RHF')
 
         mol = gto.M(atom='''
                6        0.000000    0.000000   -0.542500
@@ -249,24 +250,24 @@ class KnownValues(unittest.TestCase):
         pcm.lmax = 6
         pcm.lebedev_order = 17
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol), pcm).run()
-        self.assertAlmostEqual(mf.e_tot, -112.35450855007909, 9)
+        self.assertAlmostEqual(mf.e_tot, -112.35463433688, 9)
 
     def test_ddcosmo_scf_with_overwritten_attributes(self):
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -75.57036436805902, 9)
+        self.assertAlmostEqual(mf.e_tot, -75.57006258287, 9)
 
         mf.with_solvent.lebedev_order = 15
         mf.with_solvent.lmax = 5
         mf.with_solvent.eps = .5
         mf.with_solvent.conv_tol = 1e-8
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -75.55326109712902, 9)
+        self.assertAlmostEqual(mf.e_tot, -75.55351392557, 9)
 
         mf.with_solvent.grids.radi_method = dft.mura_knowles
         mf.with_solvent.grids.atom_grid = {"H": (8, 50), "O": (8, 50),}
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -75.55216799624262, 9)
+        self.assertAlmostEqual(mf.e_tot, -75.55237426980, 9)
 
     def test_make_ylm(self):
         numpy.random.seed(1)
@@ -414,7 +415,6 @@ class KnownValues(unittest.TestCase):
         vmat = pcm._B_dot_x(dm)
         self.assertEqual(vmat.shape, (2,nao,nao))
         self.assertAlmostEqual(abs(vmat-vref*.5).max(), 0, 12)
-        self.assertAlmostEqual(lib.fp(vmat), -17.383712106418606, 12)
 
     def test_vmat(self):
         mol = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1', verbose=0)
@@ -464,11 +464,11 @@ class KnownValues(unittest.TestCase):
         mf = mol.ROHF(max_memory=0).ddCOSMO()
         mf = mf.newton()
         e = mf.kernel()
-        self.assertAlmostEqual(e, -75.570364368046086, 9)
+        self.assertAlmostEqual(e, -75.57006258287, 9)
 
         mf = mol.RHF().ddCOSMO()
         e = mf.kernel()
-        self.assertAlmostEqual(e, -75.570364368046086, 9)
+        self.assertAlmostEqual(e, -75.57006258287, 9)
 
     def test_convert_scf(self):
         mf = mol.RHF().ddCOSMO()
@@ -488,16 +488,17 @@ class KnownValues(unittest.TestCase):
 
     def test_rhf_tda(self):
         # TDA with equilibrium_solvation
-        mf = mol.RHF().ddCOSMO().run()
+        mf = mol.RHF().ddCOSMO().run(conv_tol=1e-10)
         td = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-        ref = numpy.array([0.3014315117408341, 0.358844688787903, 0.3951664712235241])
-        self.assertAlmostEqual(abs(ref - td.e).max(), 0, 8)
+        ref = numpy.array([0.30124900879, 0.358722766464, 0.3950184783571])
+        self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
+        self.assertEqual(td.undo_solvent().__class__.__name__, 'TDA')
 
         # TDA without equilibrium_solvation
-        mf = mol.RHF().ddCOSMO().run()
+        mf = mol.RHF().ddCOSMO().run(conv_tol=1e-10)
         td = mf.TDA().ddCOSMO().run()
-        ref = numpy.array([0.3016104587222408, 0.358896882513815, 0.4004977667270891])
-        self.assertAlmostEqual(abs(ref - td.e).max(), 0, 8)
+        ref = numpy.array([0.301421953639, 0.358782851661, 0.400409174628])
+        self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
 
 # TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
 

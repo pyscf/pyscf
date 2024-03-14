@@ -50,7 +50,12 @@ def setUpModule():
     msym.scf()
 
     mc_ref = mcscf.CASSCF (m, 4, 4).state_average_([0.25,]*4)
-    mc_ref.kernel ()
+    # SA-CASSCF may be stuck at a local minimum e_tot = -75.75381945 with the
+    # default initial guess from HF orbitals. The initial guess below is closed
+    # to the single state CASSCF orbitals which can lead to a lower SA-CASSCF
+    # energy e_tot = -75.762754627
+    mo = mc_ref.sort_mo([4,5,6,10], base=1)
+    mc_ref.kernel (mo)
 
 def tearDownModule():
     global mol, molsym, m, msym, mc_ref
@@ -63,7 +68,8 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_nosymm_sa4_newton (self):
         mc = mcscf.CASSCF (m, 4, 4).state_average_([0.25,]*4).newton ()
-        mc.kernel ()
+        mo = mc.sort_mo([4,5,6,10], base=1)
+        mc.kernel(mo)
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (mc.e_states, mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
@@ -72,7 +78,9 @@ class KnownValues(unittest.TestCase):
         fcisolvers = [fci.solver (mol, singlet=not(bool(i)), symm=False) for i in range (2)]
         fcisolvers[0].nroots = fcisolvers[1].nroots = 2
         fcisolvers[1].spin = 2
-        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (m, 4, 4), fcisolvers, [0.25,]*4).run ()
+        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (m, 4, 4), fcisolvers, [0.25,]*4)
+        mo = mc.sort_mo([4,5,6,10], base=1)
+        mc.kernel(mo)
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
@@ -81,7 +89,9 @@ class KnownValues(unittest.TestCase):
         fcisolvers = [fci.solver (mol, singlet=not(bool(i)), symm=False) for i in range (2)]
         fcisolvers[0].nroots = fcisolvers[1].nroots = 2
         fcisolvers[1].spin = 2
-        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (m, 4, 4), fcisolvers, [0.25,]*4).newton ().run ()
+        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (m, 4, 4), fcisolvers, [0.25,]*4).newton ()
+        mo = mc.sort_mo([4,5,6,10], base=1)
+        mc.kernel(mo)
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
@@ -91,7 +101,9 @@ class KnownValues(unittest.TestCase):
         fcisolvers[0].nroots = fcisolvers[1].nroots = 2
         fcisolvers[0].wfnsym = 'A1'
         fcisolvers[1].wfnsym = 'B1'
-        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).run ()
+        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4)
+        mo = mc.sort_mo([4,5,6,10], base=1)
+        mc.kernel(mo)
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
@@ -101,7 +113,9 @@ class KnownValues(unittest.TestCase):
         fcisolvers[0].nroots = fcisolvers[1].nroots = 2
         fcisolvers[0].wfnsym = 'A1'
         fcisolvers[1].wfnsym = 'B1'
-        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).newton ().run ()
+        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).newton ()
+        mo = mc.sort_mo([4,5,6,10], base=1)
+        mc.kernel(mo)
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
@@ -111,7 +125,9 @@ class KnownValues(unittest.TestCase):
         fcisolvers[0].wfnsym = fcisolvers[1].wfnsym = 'B1'
         fcisolvers[2].wfnsym = fcisolvers[3].wfnsym = 'A1'
         fcisolvers[1].spin = fcisolvers[3].spin = 2
-        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).run ()
+        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4)
+        mo = mc.sort_mo([4,5,6,10], base=1)
+        mc.kernel(mo)
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
@@ -121,12 +137,52 @@ class KnownValues(unittest.TestCase):
         fcisolvers[0].wfnsym = fcisolvers[1].wfnsym = 'B1'
         fcisolvers[2].wfnsym = fcisolvers[3].wfnsym = 'A1'
         fcisolvers[1].spin = fcisolvers[3].spin = 2
-        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).newton ().run ()
+        mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).newton ()
+        mo = mc.sort_mo([4,5,6,10], base=1)
+        mc.kernel(mo)
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
 
+    def test_casci(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['O', ( 0., 0.    , 0.   )],
+            ['H', ( 0., -0.757, 0.587)],
+            ['H', ( 0., 0.757 , 0.587)],]
+
+        mol.basis = {'H': 'sto-3g',
+                     'O': '6-31g',}
+        mol.build()
+
+        m = scf.RHF(mol).run()
+        mc = mcscf.CASCI(m, 4, 4)
+        mc.fcisolver = fci.solver(mol)
+        mc.natorb = 1
+        emc = mc.kernel()[0]
+        self.assertAlmostEqual(emc, -75.9624554777, 7)
+
+        mc = mcscf.CASCI(m, 4, (3,1))
+        mc.fcisolver = fci.solver(mol, False)
+        emc = mc.casci()[0]
+        self.assertAlmostEqual(emc, -75.439016172976, 6)
+
+    def test_addons(self):
+        mc = mcscf.CASSCF(msym, 4, 4)
+        mc.fcisolver = fci.solver(molsym, False) # to mix the singlet and triplet
+        mc = mc.state_average_((.64,.36))
+        emc, e_ci, fcivec, mo, mo_energy = mc.mc1step()[:5]
+        self.assertAlmostEqual(emc, -75.85387884606675, 8)
+        mc = mcscf.CASCI(msym, 4, 4)
+        emc = mc.casci(mo)[0]
+        self.assertAlmostEqual(emc, -75.98341123168858, 8)
+
+        mc = mcscf.CASSCF(msym, 4, 4)
+        mc = mc.state_specific_(2)
+        emc = mc.kernel()[0]
+        self.assertAlmostEqual(emc, -75.59353002290788, 8)
+
 if __name__ == "__main__":
     print("Full Tests for H2O")
     unittest.main()
-

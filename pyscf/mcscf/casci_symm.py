@@ -25,10 +25,10 @@ from pyscf import symm
 from pyscf import fci
 from pyscf.mcscf import casci
 from pyscf.mcscf import addons
-
+from pyscf.scf.hf_symm import map_degeneracy
 
 class SymAdaptedCASCI(casci.CASCI):
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
 
         assert (self.mol.symmetry)
@@ -49,6 +49,9 @@ class SymAdaptedCASCI(casci.CASCI):
     def kernel(self, mo_coeff=None, ci0=None, verbose=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
+        else: # overwrite self.mo_coeff because it is needed in many methods of this class
+            self.mo_coeff = mo_coeff
+
         if ci0 is None:
             ci0 = self.ci
 
@@ -70,6 +73,8 @@ class SymAdaptedCASCI(casci.CASCI):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
                                        cas_irrep_ncore, s)
+
+    to_gpu = lib.to_gpu
 
 CASCI = SymAdaptedCASCI
 
@@ -107,39 +112,45 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
 
     active_orbsym = getattr(mc.fcisolver, 'orbsym', [])
     if (not getattr(active_orbsym, '__len__', None)) or len(active_orbsym) == 0:
-        mc.fcisolver.orbsym = orbsym[ncore:nocc]
+        if getattr(mc.mol, 'groupname', None) in ('Dooh', 'Coov'):
+            # Attach to degen_mapping to orbsym, this is a temporary solution
+            # for fci.direct_spin1_symm
+            if getattr(mo_coeff, 'degen_mapping', None) is not None:
+                degen_mapping = mo_coeff.degen_mapping[ncore:nocc] - ncore
+            else:
+                h1e = numpy.diag (mc.get_h1eff (mo_coeff=mo_coeff)[0])
+                degen_mapping = map_degeneracy (h1e, orbsym[ncore:nocc])
+            mc.fcisolver.orbsym = lib.tag_array(
+                orbsym[ncore:nocc], degen_mapping=degen_mapping)
+        else:
+            mc.fcisolver.orbsym = orbsym[ncore:nocc]
     log.info('Symmetries of active orbitals: %s',
-             ' '.join([symm.irrep_id2name(mc.mol.groupname, irrep) for irrep in mc.fcisolver.orbsym]))
+             ' '.join([symm.irrep_id2name(mc.mol.groupname, irrep)
+                       for irrep in mc.fcisolver.orbsym]))
 
-    wfnsym = 0
-    if getattr(mc.fcisolver, 'wfnsym', None) is not None:
-        wfnsym = mc.fcisolver.wfnsym
+    wfnsym = getattr(mc.fcisolver, 'wfnsym', None)
+    if wfnsym is not None:
         log.debug('Use fcisolver.wfnsym %s', wfnsym)
 
     elif (ci0 is None and
-          # mc._scf may not be initialized
-          mc._scf.mo_coeff is not None):
+        # mc._scf may not be initialized
+        mc._scf.mo_coeff is not None):
         # Guess wfnsym based on HF determinant.  mo_coeff may not be HF
         # canonical orbitals.  Some checks are needed to ensure that mo_coeff
         # are derived from the symmetry adapted SCF calculations.
         if mo_coeff is mc._scf.mo_coeff:
-            wfnsym = 0
-            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
-            for ir in orbsym_in_d2h[mc._scf.mo_occ == 1]:
-                wfnsym ^= ir
-            mc.fcisolver.wfnsym = wfnsym
+            mc.fcisolver.wfnsym = wfnsym = mc._scf.get_wfnsym()
             log.debug('Set CASCI wfnsym %s based on HF determinant', wfnsym)
 
-        elif getattr(mo_coeff, 'orbsym', None) is not None:  # It may be reordered SCF orbitals
+        else:
             cas_orb = mo_coeff[:,ncore:nocc]
-            s = reduce(numpy.dot, (cas_orb.conj().T, mc._scf.get_ovlp(), mc._scf.mo_coeff))
-            if numpy.all(numpy.max(s, axis=1) > 1-1e-9):
-                idx = numpy.argmax(s, axis=1)
-                cas_orbsym_in_d2h = numpy.asarray(orbsym[ncore:nocc]) % 10
+            # check if cas_orb are SCF orbitals reordered
+            s1 = reduce(numpy.dot, (cas_orb.conj().T, s, mc._scf.mo_coeff))
+            if numpy.all(numpy.max(s1, axis=1) > 1-1e-9):
+                idx = numpy.argmax(s1, axis=1)
+                cas_orbsym = orbsym[ncore:nocc]
                 cas_occ = mc._scf.mo_occ[idx]
-                wfnsym = 0
-                for ir in cas_orbsym_in_d2h[cas_occ == 1]:
-                    wfnsym ^= ir
+                wfnsym = mc._scf.get_wfnsym(mo_occ=cas_occ, orbsym=cas_orbsym)
                 mc.fcisolver.wfnsym = wfnsym
                 log.debug('Active space are constructed from canonical SCF '
                           'orbitals %s', idx)
@@ -156,8 +167,8 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
             log.warn('mwfnsym Id %s not found in group %s. This might be caused by '
                      'the projection from high-symmetry group to D2h symmetry.',
                      wfnsym, mc.mol.groupname)
-
-    log.info('Active space CI wfn symmetry = %s', wfnsym)
+    if wfnsym is not None:
+        log.info('Active space CI wfn symmetry = %s', wfnsym)
 
     return mo_coeff_with_orbsym
 

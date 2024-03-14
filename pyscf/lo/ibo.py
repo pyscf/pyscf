@@ -178,7 +178,7 @@ def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
                     continue
                     #this saves us from replacing already fine orbitals
                 else:
-                    #THE BELOW IS TAKEN DIRECLTY FROMG KNIZIA's FREE CODE
+                    #THE BELOW IS TAKEN DIRECTLY FROMG KNIZIA's FREE CODE
                     # Calculate 2x2 rotation angle phi.
                     # This correspond to [2] (12)-(15), re-arranged and simplified.
                     phi = .25*numpy.arctan2(Bij,-Aij)
@@ -235,7 +235,7 @@ def PipekMezey(mol, orbocc, iaos, s, exponent, minao=MINAO):
     '''
 
     # Note: PM with Lowdin-orth IAOs is implemented in pipek.PM class
-    # TODO: Merge the implemenation here to pipek.PM
+    # TODO: Merge the implementation here to pipek.PM
 
     cs = numpy.dot(iaos.T.conj(), s)
     s_iao = numpy.dot(cs, iaos)
@@ -287,17 +287,17 @@ def MakeAtomInfos():
     for At in "Li Be B C O N F Ne".split(): nCoreX[At] = 1
     for At in "Na Mg Al Si P S Cl Ar".split(): nCoreX[At] = 5
     for At in "Na Mg Al Si P S Cl Ar".split(): nCoreX[At] = 5
-    for At in "K Ca".split(): nCoreX[At] = 18/2
-    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nCoreX[At] = 18/2
-    for At in "Ga Ge As Se Br Kr".split(): nCoreX[At] = 18/2+5 # [Ar] and the 5 d orbitals.
+    for At in "K Ca".split(): nCoreX[At] = 18//2
+    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nCoreX[At] = 18//2
+    for At in "Ga Ge As Se Br Kr".split(): nCoreX[At] = 18//2 + 5  # [Ar] and the 5d orbitals.
     nAoX = {"H": 1, "He": 1}
     for At in "Li Be".split(): nAoX[At] = 2
     for At in "B C O N F Ne".split(): nAoX[At] = 5
     for At in "Na Mg".split(): nAoX[At] = 3*1 + 1*3
     for At in "Al Si P S Cl Ar".split(): nAoX[At] = 3*1 + 2*3
-    for At in "K Ca".split(): nAoX[At] = 18/2+1
-    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nAoX[At] = 18/2+1+5   # 4s, 3d
-    for At in "Ga Ge As Se Br Kr".split(): nAoX[At] = 18/2+1+5+3
+    for At in "K Ca".split(): nAoX[At] = 18//2 + 1
+    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nAoX[At] = 18//2 + 1 + 5  # 4s, 3d
+    for At in "Ga Ge As Se Br Kr".split(): nAoX[At] = 18//2 + 1 + 5 + 3
 
     AoLabels = {}
 
@@ -396,7 +396,7 @@ def MakeAtomInfos():
 
 
 def MakeAtomIbOffsets(Atoms):
-    """calcualte offset of first orbital of individual atoms
+    """calculate offset of first orbital of individual atoms
     in the valence minimal basis (IB)"""
     nCoreX, nAoX, AoLabels = MakeAtomInfos()
     iBfAt = [0]

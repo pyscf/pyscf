@@ -56,4 +56,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Test rcut and the errorsin pbc.gto.cell")
     unittest.main()
-

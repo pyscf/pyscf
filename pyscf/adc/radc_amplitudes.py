@@ -570,4 +570,3 @@ def _create_t2_h5cache():
     '''
     tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     return h5py.File(tmpfile.name, 'w')
-

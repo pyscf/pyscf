@@ -27,12 +27,14 @@ import sys
 
 from functools import reduce
 import numpy
+from pyscf import gto
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.scf import cphf
+from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
 if sys.version_info < (3,):
     RANGE_TYPE = list
@@ -158,15 +160,15 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
                 eri1tmp = eri1tmp.reshape(p1-p0,nf,nao,nao)
                 de[k,i] -= numpy.einsum('ijkl,ij,kl', eri1tmp, hf_dm1[p0:p1,q0:q1], zvec_ao) * 2
                 de[k,i] -= numpy.einsum('ijkl,kl,ij', eri1tmp, hf_dm1, zvec_ao[p0:p1,q0:q1]) * 2
-                de[k,i] += numpy.einsum('ijkl,il,kj', eri1tmp, hf_dm1[p0:p1], zvec_ao[q0:q1])
+                de[k,i] += numpy.einsum('ijkl,il,kj', eri1tmp, hf_dm1[p0:p1], zvec_ao[:,q0:q1])
                 de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, hf_dm1[q0:q1], zvec_ao[p0:p1])
 
                 #:vhf1c, vhf1a = mc_grad.get_veff(mol, (dm_core, dm_cas))
                 #:de[k] += numpy.einsum('xij,ij->x', vhf1c[:,p0:p1], casci_dm1[p0:p1]) * 2
                 #:de[k] += numpy.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
-                de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_core[q0:q1], casci_dm1[p0:p1]) * 2
+                de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_core, casci_dm1[p0:p1,q0:q1]) * 2
                 de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, dm_core[q0:q1], casci_dm1[p0:p1])
-                de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_cas[q0:q1], dm_core[p0:p1]) * 2
+                de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_cas, dm_core[p0:p1,q0:q1]) * 2
                 de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, dm_cas[q0:q1], dm_core[p0:p1])
             eri1 = eri1tmp = None
 
@@ -205,8 +207,6 @@ def as_scanner(mcscf_grad, state=None):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf import gto
-    from pyscf.mcscf.addons import StateAverageMCSCFSolver
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
     if (state is not None and
@@ -215,48 +215,56 @@ def as_scanner(mcscf_grad, state=None):
                            'state-specific nuclear gradients.')
 
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
+    name = mcscf_grad.__class__.__name__ + CASCI_GradScanner.__name_mixin__
+    return lib.set_class(CASCI_GradScanner(mcscf_grad, state),
+                         (CASCI_GradScanner, mcscf_grad.__class__), name)
 
-    class CASCI_GradScanner(mcscf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-        def __call__(self, mol_or_geom, state=state, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class CASCI_GradScanner(lib.GradScanner):
+    def __init__(self, g, state):
+        lib.GradScanner.__init__(self, g)
+        if state is not None:
+            self.state = state
 
-            if state is None:
-                state = self.state
+    def __call__(self, mol_or_geom, state=None, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+        self.reset(mol)
 
-            mc_scanner = self.base
+        if state is None:
+            state = self.state
+
+        mc_scanner = self.base
 # TODO: Check root flip
-            e_tot = mc_scanner(mol)
-            ci = mc_scanner.ci
-            if isinstance(mc_scanner, StateAverageMCSCFSolver):
-                e_tot = mc_scanner.e_average
-            elif not isinstance(e_tot, float):
-                if state >= mc_scanner.fcisolver.nroots:
-                    raise ValueError('State ID greater than the number of CASCI roots')
-                e_tot = e_tot[state]
-                # target at a specific state, to avoid overwriting self.state
-                # in self.kernel
-                ci = ci[state]
+        e_tot = mc_scanner(mol)
+        ci = mc_scanner.ci
+        if isinstance(mc_scanner, StateAverageMCSCFSolver):
+            e_tot = mc_scanner.e_average
+        elif not isinstance(e_tot, float):
+            if state >= mc_scanner.fcisolver.nroots:
+                raise ValueError('State ID greater than the number of CASCI roots')
+            e_tot = e_tot[state]
+            # target at a specific state, to avoid overwriting self.state
+            # in self.kernel
+            ci = ci[state]
 
-            self.mol = mol
-            de = self.kernel(ci=ci, state=state, **kwargs)
-            return e_tot, de
-    return CASCI_GradScanner(mcscf_grad)
+        de = self.kernel(ci=ci, state=state, **kwargs)
+        return e_tot, de
 
 
-class Gradients(rhf_grad.GradientsMixin):
+class Gradients(rhf_grad.GradientsBase):
     '''Non-relativistic restricted Hartree-Fock gradients'''
+
+    _keys = {'state'}
+
     def __init__(self, mc):
-        from pyscf.mcscf.addons import StateAverageMCSCFSolver
         if isinstance(mc, StateAverageMCSCFSolver):
             self.state = None  # not a specific state
         else:
             self.state = 0  # of which the gradients to be computed.
-        rhf_grad.GradientsMixin.__init__(self, mc)
+        rhf_grad.GradientsBase.__init__(self, mc)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -333,6 +341,8 @@ class Gradients(rhf_grad.GradientsMixin):
             logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
+
+    to_gpu = lib.to_gpu
 
 Grad = Gradients
 

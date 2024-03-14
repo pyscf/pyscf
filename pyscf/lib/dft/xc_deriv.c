@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <assert.h>
 
 /*
  * tmp = fg[...,[[0,1],[1,2]],...]
@@ -65,109 +66,104 @@ void VXCfg_to_direct_deriv(double *qg, double *fg, double *rho,
         }
 }
 
-void VXCud2ts_deriv1(double *v_ts, double *v_ud, int nvar, int ngrids)
+void VXCud2ts(double *v_ts, double *v_ud, int ncounts, size_t ngrids)
 {
-        size_t Ngrids = ngrids;
-        size_t vg = nvar * Ngrids;
-        double *vu = v_ud;
-        double *vd = v_ud + vg;
-        double *vt = v_ts;
-        double *vs = v_ts + vg;
-        size_t n;
+        double *vu, *vd, *vt, *vs;
+        int i, n;
+        for (n = 0; n < ncounts; n++) {
+                vu = v_ud + 2*n    * ngrids;
+                vd = v_ud +(2*n+1) * ngrids;
+                vt = v_ts + 2*n    * ngrids;
+                vs = v_ts +(2*n+1) * ngrids;
 #pragma GCC ivdep
-        for (n = 0; n < vg; n++) {
-                vt[n] = (vu[n] + vd[n]) * .5;
-                vs[n] = (vu[n] - vd[n]) * .5;
-        }
-}
-
-void VXCud2ts_deriv2(double *v_ts, double *v_ud, int nvar, int ngrids)
-{
-        size_t Ngrids = ngrids;
-        size_t vg = nvar * Ngrids;
-        size_t vg2 = vg * 2;
-        size_t vvg = nvar * vg2;
-        double *vuu = v_ud;
-        double *vud = v_ud + vg;
-        double *vdu = vuu + vvg;
-        double *vdd = vud + vvg;
-        double *vtt = v_ts;
-        double *vts = v_ts + vg;
-        double *vst = vtt + vvg;
-        double *vss = vts + vvg;
-        double ut, us, dt, ds;
-        size_t i, n;
-        for (i = 0; i < nvar; i++) {
-#pragma GCC ivdep
-                for (n = 0; n < vg; n++) {
-                        ut = vuu[i*vg2+n] + vud[i*vg2+n];
-                        us = vuu[i*vg2+n] - vud[i*vg2+n];
-                        dt = vdu[i*vg2+n] + vdd[i*vg2+n];
-                        ds = vdu[i*vg2+n] - vdd[i*vg2+n];
-                        vtt[i*vg2+n] = (ut + dt) * .25;
-                        vts[i*vg2+n] = (us + ds) * .25;
-                        vst[i*vg2+n] = (ut - dt) * .25;
-                        vss[i*vg2+n] = (us - ds) * .25;
+                for (i = 0; i < ngrids; i++) {
+                        vt[i] = (vu[i] + vd[i]) * .5;
+                        vs[i] = (vu[i] - vd[i]) * .5;
                 }
         }
 }
 
-void VXCud2ts_deriv3(double *v_ts, double *v_ud, int nvar, int ngrids)
+void VXCts2ud(double *v_ud, double *v_ts, int ncounts, size_t ngrids)
+{
+        double *vu, *vd, *vt, *vs;
+        int i, n;
+        for (n = 0; n < ncounts; n++) {
+                vu = v_ud + 2*n    * ngrids;
+                vd = v_ud +(2*n+1) * ngrids;
+                vt = v_ts + 2*n    * ngrids;
+                vs = v_ts +(2*n+1) * ngrids;
+#pragma GCC ivdep
+                for (i = 0; i < ngrids; i++) {
+                        vu[i] = vt[i] + vs[i];
+                        vd[i] = vt[i] - vs[i];
+                }
+        }
+}
+
+#define frho_at(n, a, x, g)     frho[((n*2+a)*Nvg + x*Ngrids + g)]
+#define fsigma_at(x, n, g)      fsigma[(x*Ncg + n*Ngrids + g)]
+// spin0 shape: frho[...,nvar,ngrids], fsigma[:,...,ngrids], rho[nvar,ngrids]
+void VXCunfold_sigma_spin0(double *frho, double *fsigma, double *rho,
+                           int ncounts, int nvar, int ngrids)
 {
         size_t Ngrids = ngrids;
-        size_t vg = nvar * Ngrids;
-        size_t vg2 = vg * 2;
-        size_t vvg = nvar * vg2;
-        size_t vvg2 = vvg * 2;
-        size_t vvvg = nvar * vvg2;
-        double *vuuu = v_ud;
-        double *vuud = v_ud + vg;
-        double *vudu = vuuu + vvg;
-        double *vudd = vuud + vvg;
-        double *vduu = vuuu + vvvg;
-        double *vdud = vuud + vvvg;
-        double *vddu = vudu + vvvg;
-        double *vddd = vudd + vvvg;
-        double *vttt = v_ts;
-        double *vtts = v_ts + vg;
-        double *vtst = vttt + vvg;
-        double *vtss = vtts + vvg;
-        double *vstt = vttt + vvvg;
-        double *vsts = vtts + vvvg;
-        double *vsst = vtst + vvvg;
-        double *vsss = vtss + vvvg;
-        double uut, uus, udt, uds, dut, dus, ddt, dds;
-        double utt, uts, ust, uss, dtt, dts, dst, dss;
-        size_t i, j, ij, n;
-        for (i = 0; i < nvar; i++) {
-        for (j = 0; j < nvar; j++) {
-                ij = (i * nvar * 2 + j) * vg2;
+        size_t Ncg = ncounts * Ngrids;
+        size_t Nvg = nvar * Ngrids;
+        int g, n;
+        for (n = 0; n < ncounts; n++) {
 #pragma GCC ivdep
-                for (n = 0; n < vg; n++) {
-                        uut = vuuu[ij+n] + vuud[ij+n];
-                        uus = vuuu[ij+n] - vuud[ij+n];
-                        udt = vudu[ij+n] + vudd[ij+n];
-                        uds = vudu[ij+n] - vudd[ij+n];
-                        dut = vduu[ij+n] + vdud[ij+n];
-                        dus = vduu[ij+n] - vdud[ij+n];
-                        ddt = vddu[ij+n] + vddd[ij+n];
-                        dds = vddu[ij+n] - vddd[ij+n];
-                        utt = uut + udt;
-                        uts = uus + uds;
-                        ust = uut - udt;
-                        uss = uus - uds;
-                        dtt = dut + ddt;
-                        dts = dus + dds;
-                        dst = dut - ddt;
-                        dss = dus - dds;
-                        vttt[ij+n] = (utt + dtt) * .125;
-                        vtts[ij+n] = (uts + dts) * .125;
-                        vtst[ij+n] = (ust + dst) * .125;
-                        vtss[ij+n] = (uss + dss) * .125;
-                        vstt[ij+n] = (utt - dtt) * .125;
-                        vsts[ij+n] = (uts - dts) * .125;
-                        vsst[ij+n] = (ust - dst) * .125;
-                        vsss[ij+n] = (uss - dss) * .125;
+                for (g = 0; g < ngrids; g++) {
+                        frho[n*Nvg+g] = fsigma[n*Ngrids+g];
+                        frho[n*Nvg+1*Ngrids+g] = fsigma[Ncg+n*Ngrids+g] * rho[1*Ngrids+g] * 2;
+                        frho[n*Nvg+2*Ngrids+g] = fsigma[Ncg+n*Ngrids+g] * rho[2*Ngrids+g] * 2;
+                        frho[n*Nvg+3*Ngrids+g] = fsigma[Ncg+n*Ngrids+g] * rho[3*Ngrids+g] * 2;
                 }
-        } }
+        }
+        if (nvar > 4) {
+                // MGGA
+                assert(nvar == 5);
+                for (n = 0; n < ncounts; n++) {
+#pragma GCC ivdep
+                        for (g = 0; g < ngrids; g++) {
+                                frho[n*Nvg+4*Ngrids+g] = fsigma[2*Ncg+n*Ngrids+g];
+                        }
+                }
+        }
+}
+
+#define frho_at(n, a, x, g)     frho[((n*2+a)*Nvg + x*Ngrids + g)]
+#define fsigma_at(x, n, g)      fsigma[(x*Ncg + n*Ngrids + g)]
+#define rho_at(a, x, g)         rho[(a*Nvg + x*Ngrids + g)]
+// spin1 shape: frho[...,2,nvar,ngrids], fsigma[:,...,ngrids], rho[2,nvar,ngrids]
+void VXCunfold_sigma_spin1(double *frho, double *fsigma, double *rho,
+                           int ncounts, int nvar, int ngrids)
+{
+        size_t Ngrids = ngrids;
+        size_t Ncg = ncounts * Ngrids;
+        size_t Nvg = nvar * Ngrids;
+        int g, n;
+        for (n = 0; n < ncounts; n++) {
+#pragma GCC ivdep
+                for (g = 0; g < ngrids; g++) {
+                        frho_at(n,0,0,g) = fsigma_at(0,n,g);
+                        frho_at(n,1,0,g) = fsigma_at(1,n,g);
+                        frho_at(n,0,1,g) = fsigma_at(2,n,g) * rho_at(0,1,g) * 2 + fsigma_at(3,n,g) * rho_at(1,1,g);
+                        frho_at(n,1,1,g) = fsigma_at(3,n,g) * rho_at(0,1,g) + 2 * fsigma_at(4,n,g) * rho_at(1,1,g);
+                        frho_at(n,0,2,g) = fsigma_at(2,n,g) * rho_at(0,2,g) * 2 + fsigma_at(3,n,g) * rho_at(1,2,g);
+                        frho_at(n,1,2,g) = fsigma_at(3,n,g) * rho_at(0,2,g) + 2 * fsigma_at(4,n,g) * rho_at(1,2,g);
+                        frho_at(n,0,3,g) = fsigma_at(2,n,g) * rho_at(0,3,g) * 2 + fsigma_at(3,n,g) * rho_at(1,3,g);
+                        frho_at(n,1,3,g) = fsigma_at(3,n,g) * rho_at(0,3,g) + 2 * fsigma_at(4,n,g) * rho_at(1,3,g);
+                }
+        }
+        if (nvar > 4) {
+                // MGGA
+                assert(nvar == 5);
+                for (n = 0; n < ncounts; n++) {
+#pragma GCC ivdep
+                        for (g = 0; g < ngrids; g++) {
+                                frho_at(n,0,4,g) = fsigma_at(5,n,g);
+                                frho_at(n,1,4,g) = fsigma_at(6,n,g);
+                        }
+                }
+        }
 }

@@ -45,4 +45,3 @@ from . import geomopt
 from . import pbc
 from .pbc import __all__
 del __all__
-

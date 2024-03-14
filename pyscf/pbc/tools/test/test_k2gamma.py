@@ -67,12 +67,12 @@ class KnownValues(unittest.TestCase):
         mf.kernel()
 
         popa, popb = mf.mulliken_meta()[0]
-        self.assertAlmostEqual(lib.finger(popa).sum(), 1.5403023058, 7)
-        self.assertAlmostEqual(lib.finger(popb).sum(), 1.5403023058, 7)
+        self.assertAlmostEqual(lib.fp(popa), 1.5403023058, 7)
+        self.assertAlmostEqual(lib.fp(popb), 1.5403023058, 7)
 
         popa, popb = k2gamma.k2gamma(mf).mulliken_meta()[0]
-        self.assertAlmostEqual(lib.finger(popa), 0.8007278745, 7)
-        self.assertAlmostEqual(lib.finger(popb), 0.8007278745, 7)
+        self.assertAlmostEqual(lib.fp(popa), 0.8007278745, 7)
+        self.assertAlmostEqual(lib.fp(popb), 0.8007278745, 7)
 
     def test_k2gamma_ksymm(self):
         cell = gto.Cell()
@@ -81,16 +81,21 @@ class KnownValues(unittest.TestCase):
         '''
         cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
         cell.a = np.eye(3) * 2.
+        cell.space_group_symmetry = True
         cell.build()
 
         kmesh = [2,2,1]
         kpts = cell.make_kpts(kmesh, space_group_symmetry=True)
         kmf = scf.KRKS(cell, kpts).density_fit()
         kmf.kernel()
-        c_g_ao = k2gamma.k2gamma(kmf).mo_coeff
+        mf = k2gamma.k2gamma(kmf)
+        c_g_ao = mf.mo_coeff
 
         scell = tools.super_cell(cell, kmesh)
         mf_sc = scf.RKS(scell).density_fit()
+        self.assertEqual(mf.__class__, mf_sc.__class__)
+        self.assertEqual(mf.xc, kmf.xc)
+
         s = mf_sc.get_ovlp()
         mf_sc.run()
         sc_mo = mf_sc.mo_coeff

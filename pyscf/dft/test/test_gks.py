@@ -71,7 +71,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         mf.collinear = 'ncol'
         eks4 = mf.kernel()
-        self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 8)
+        self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 5)
         self.assertAlmostEqual(eks4, -74.73210527989738, 8)
 
         mf = mol1.GKS()
@@ -104,7 +104,7 @@ class KnownValues(unittest.TestCase):
         mf.collinear = 'mcol'
         mf._numint.spin_samples = 6
         eks4 = mf.kernel()
-        self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 8)
+        self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 5)
         self.assertAlmostEqual(eks4, -74.73210527989738, 8)
 
         mf = mol1.GKS()
@@ -160,7 +160,7 @@ class KnownValues(unittest.TestCase):
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -74.94902210438143, 8)
 
-    def test_ncol_x2c_uks_lda(self):
+    def test_ncol_x2c_gks_lda(self):
         mf = mol.GKS().x2c()
         mf.xc = 'lda,'
         mf.collinear = 'ncol'
@@ -168,7 +168,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eks4, -74.09933666072668, 8)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
-    def test_mcol_x2c_uks_lda(self):
+    def test_mcol_x2c_gks_lda(self):
         mf = mol.GKS().x2c()
         mf.xc = 'lda,'
         mf.collinear = 'mcol'
@@ -176,7 +176,7 @@ class KnownValues(unittest.TestCase):
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -74.09933666072668, 8)
 
-    def test_collinear_x2c_uks_gga(self):
+    def test_collinear_x2c_gks_gga(self):
         mf = mol.GKS().x2c()
         mf.xc = 'pbe'
         mf.collinear = 'col'

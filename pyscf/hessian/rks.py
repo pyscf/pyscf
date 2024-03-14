@@ -23,10 +23,11 @@ Non-relativistic RKS analytical Hessian
 
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.grad import rks as rks_grad
-from pyscf.dft import numint
+from pyscf.dft import numint, gen_grid
 
 
 # import pyscf.grad.rks to activate nuc_grad_method method
@@ -40,6 +41,10 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     mol = hessobj.mol
     mf = hessobj.base
+    ni = mf._numint
+    if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        raise NotImplementedError('RKS Hessian for NLC functional')
+
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -49,23 +54,18 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     mocc = mo_coeff[:,mo_occ>0]
     dm0 = numpy.dot(mocc, mocc.T) * 2
 
-    if mf.nlc != '':
-        raise NotImplementedError
-    #enabling range-separated hybrids
-    omega, alpha, beta = mf._numint.rsh_coeff(mf.xc)
-    if abs(omega) > 1e-10:
-        hyb = alpha + beta
-    else:
-        hyb = mf._numint.hybrid_coeff(mf.xc, spin=mol.spin)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+
     de2, ej, ek = rhf_hess._partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
                                              atmlst, max_memory, verbose,
-                                             abs(hyb) > 1e-10)
+                                             with_k=hybrid)
     de2 += ej - hyb * ek  # (A,B,dR_A,dR_B)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     veff_diag = _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory)
-    if abs(omega) > 1e-10:
+    if hybrid and omega != 0:
         with mol.with_range_coulomb(omega):
             vk1 = rhf_hess._get_jk(mol, 'int2e_ipip1', 9, 's2kl',
                                    ['jk->s1il', dm0])[0]
@@ -80,7 +80,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         veff = vxc[ia]
-        if abs(omega) > 1e-10:
+        if hybrid and omega != 0:
             with mol.with_range_coulomb(omega):
                 vk1, vk2 = rhf_hess._get_jk(mol, 'int2e_ip1ip2', 9, 's1',
                                             ['li->s1kj', dm0[:,p0:p1],  # vk1
@@ -122,6 +122,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
@@ -130,7 +131,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
-        if abs(hyb) > 1e-10:
+        if hybrid:
             vj1, vj2, vk1, vk2 = \
                     rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
                                      ['ji->s2kl', -dm0[:,p0:p1],  # vj1
@@ -140,7 +141,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
                                      shls_slice=shls_slice)
             veff = vj1 - hyb * .5 * vk1
             veff[:,p0:p1] += vj2 - hyb * .5 * vk2
-            if abs(omega) > 1e-10:
+            if omega != 0:
                 with mol.with_range_coulomb(omega):
                     vk1, vk2 = \
                         rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
@@ -512,8 +513,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             ao_dm0 = aow = None
 
     elif xctype == 'MGGA':
-        if grids.level < 5:
-            logger.warn(mol, 'MGGA Hessian is sensitive to dft grids.')
+        _check_mgga_grids(grids)
         ao_deriv = 2
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
@@ -547,17 +547,50 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
 
     return vmat
 
+def _check_mgga_grids(grids):
+    mol = grids.mol
+    atom_grid = grids.atom_grid
+    if atom_grid:
+        if isinstance(atom_grid, (tuple, list)):
+            n_rad = atom_grid[0]
+            if n_rad < 150 and any(mol.atom_charges() > 10):
+                logger.warn(mol, 'MGGA Hessian is sensitive to dft grids. '
+                            f'{atom_grid} may not be dense enough.')
+        else:
+            symbols = [mol.atom_symbol(ia) for ia in range(mol.natm)]
+            problematic = []
+            for symb in symbols:
+                chg = gto.charge(symb)
+                if symb in atom_grid:
+                    n_rad = atom_grid[symb][0]
+                else:
+                    n_rad = gen_grid._default_rad(chg, grids.level)
+                if n_rad < 150 and chg > 10:
+                    problematic.append((symb, n_rad))
+            if problematic:
+                problematic = [f'{symb}: {r}' for symb, r in problematic]
+                logger.warn(mol, 'MGGA Hessian is sensitive to dft grids. '
+                            f'Radial grids {",".join(problematic)} '
+                            'may not be dense enough.')
+    elif grids.level < 5:
+        logger.warn(mol, 'MGGA Hessian is sensitive to dft grids. '
+                    f'grids.level {grids.level} may not be dense enough.')
 
-class Hessian(rhf_hess.Hessian):
+
+class Hessian(rhf_hess.HessianBase):
     '''Non-relativistic RKS hessian'''
+
+    _keys = {'grids', 'grid_response'}
+
     def __init__(self, mf):
         rhf_hess.Hessian.__init__(self, mf)
         self.grids = None
         self.grid_response = False
-        self._keys = self._keys.union(['grids'])
 
     partial_hess_elec = partial_hess_elec
+    hess_elec = rhf_hess.hess_elec
     make_h1 = make_h1
+    to_gpu = lib.to_gpu
 
 from pyscf import dft
 dft.rks.RKS.Hessian = dft.rks_symm.RKS.Hessian = lib.class_as_method(Hessian)

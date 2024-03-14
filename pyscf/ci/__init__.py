@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyscf import lib
 from pyscf import scf
 from pyscf.ci import cisd
 from pyscf.ci import ucisd
@@ -21,11 +20,10 @@ from pyscf.ci import gcisd
 from pyscf.cc import qcisd
 
 def CISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.soscf import newton_ah
-
-    if isinstance(mf, scf.uhf.UHF):
+    if mf.istype('UHF'):
         return UCISD(mf, frozen, mo_coeff, mo_occ)
-    elif isinstance(mf, scf.rohf.ROHF):
+    elif mf.istype('ROHF'):
+        from pyscf import lib
         lib.logger.warn(mf, 'RCISD method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UCISD method is called.')
         return UCISD(mf, frozen, mo_coeff, mo_occ)
@@ -34,37 +32,46 @@ def CISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
 CISD.__doc__ = cisd.CISD.__doc__
 
 def RCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.soscf import newton_ah
+    from pyscf.df.df_jk import _DFHF
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
-        mf = scf.addons.convert_to_rhf(mf)
+    mf = mf.remove_soscf()
+    if not mf.istype('RHF'):
+        mf = mf.to_rhf()
 
-    if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-RCISD')
+    if isinstance(mf, _DFHF) and mf.with_df:
+        from pyscf import lib
+        lib.logger.warn(mf, f'DF-RCISD for DFHF method {mf} is not available. '
+                        'Normal RCISD method is called.')
+        return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
     else:
         return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
 RCISD.__doc__ = cisd.RCISD.__doc__
 
 def UCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.soscf import newton_ah
+    from pyscf.df.df_jk import _DFHF
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf)
+    mf = mf.remove_soscf()
+    if not mf.istype('UHF'):
+        mf = mf.to_uhf()
 
-    if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-UCISD')
+    if isinstance(mf, _DFHF) and mf.with_df:
+        from pyscf import lib
+        lib.logger.warn(mf, f'DF-UCISD for DFHF method {mf} is not available. '
+                        'Normal UCISD method is called.')
+        return ucisd.UCISD(mf, frozen, mo_coeff, mo_occ)
     else:
         return ucisd.UCISD(mf, frozen, mo_coeff, mo_occ)
 UCISD.__doc__ = ucisd.UCISD.__doc__
 
 
 def GCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.soscf import newton_ah
+    from pyscf.df.df_jk import _DFHF
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
-        mf = scf.addons.convert_to_ghf(mf)
+    mf = mf.remove_soscf()
+    if not mf.istype('GHF'):
+        mf = mf.to_ghf()
 
-    if getattr(mf, 'with_df', None):
+    if isinstance(mf, _DFHF) and mf.with_df:
         raise NotImplementedError('DF-GCISD')
     else:
         return gcisd.GCISD(mf, frozen, mo_coeff, mo_occ)
@@ -72,10 +79,10 @@ GCISD.__doc__ = gcisd.GCISD.__doc__
 
 
 def QCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    if isinstance(mf, scf.uhf.UHF):
-        raise NotImplementedError 
-    elif isinstance(mf, scf.ghf.GHF):
-        raise NotImplementedError 
+    if mf.istype('UHF'):
+        raise NotImplementedError
+    elif mf.istype('GHF'):
+        raise NotImplementedError
     else:
         return RQCISD(mf, frozen, mo_coeff, mo_occ)
 QCISD.__doc__ = qcisd.QCISD.__doc__
@@ -85,21 +92,20 @@ scf.hf.SCF.QCISD = QCISD
 def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     import numpy
     from pyscf import lib
-    from pyscf.soscf import newton_ah
 
-    if isinstance(mf, scf.uhf.UHF):
+    if mf.istype('UHF'):
         raise RuntimeError('RQCISD cannot be used with UHF method.')
-    elif isinstance(mf, scf.rohf.ROHF):
+    elif mf.istype('ROHF'):
         lib.logger.warn(mf, 'RQCISD method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UQCISD method is called.')
-        mf = scf.addons.convert_to_uhf(mf)
-        raise NotImplementedError 
+        raise NotImplementedError
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
-        mf = scf.addons.convert_to_rhf(mf)
+    mf = mf.remove_soscf()
+    if not mf.istype('RHF'):
+        mf = mf.to_rhf()
 
     elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
-        raise NotImplementedError 
+        raise NotImplementedError
 
     else:
         return qcisd.QCISD(mf, frozen, mo_coeff, mo_occ)

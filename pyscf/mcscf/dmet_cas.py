@@ -253,4 +253,3 @@ if __name__ == '__main__':
     mc = mcscf.CASSCF(mf, ncas, nelecas).set(verbose=4)
     emc = mc.kernel(mo)[0]
     print(emc,)
-

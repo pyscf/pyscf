@@ -29,19 +29,17 @@ from pyscf.dft import xc_deriv
 from pyscf import __config__
 
 
-def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
-             with_lapl=True, verbose=None):
+@lib.with_doc(
     '''Calculate the electron density and magnetization spin density in the
     framework of 2-component real basis.
-    ''' + numint.eval_rho.__doc__
+    ''' + numint.eval_rho.__doc__)
+def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
+             with_lapl=True, verbose=None):
     nao = ao.shape[-1]
     assert dm.ndim == 2 and nao * 2 == dm.shape[0]
 
     ngrids, nao = ao.shape[-2:]
     xctype = xctype.upper()
-    if non0tab is None:
-        non0tab = np.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                          dtype=np.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc
 
@@ -107,7 +105,7 @@ def _gks_mcol_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
-    make_rho, nset, n2c = ni._gen_rho_evaluator(mol, dms, hermi)
+    make_rho, nset, n2c = ni._gen_rho_evaluator(mol, dms, hermi, False)
     nao = n2c // 2
 
     nelec = np.zeros(nset)
@@ -159,6 +157,10 @@ def _gks_mcol_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                   rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
     assert ni.collinear[0] == 'm'  # mcol
     xctype = ni._xc_type(xc_code)
+    if fxc is None and xctype in ('LDA', 'GGA', 'MGGA'):
+        fxc = ni.cache_xc_kernel1(mol, grids, xc_code, dm0,
+                                  max_memory=max_memory)[2]
+
     if xctype == 'MGGA':
         fmat, ao_deriv = (_mcol_mgga_fxc_mat , 1)
     elif xctype == 'GGA':
@@ -168,37 +170,17 @@ def _gks_mcol_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
-
-    if rho0 is None and (xctype != 'LDA' or fxc is None):
-        make_rho0 = ni._gen_rho_evaluator(mol, dm0, 1)[0]
-    else:
-        make_rho0 = None
-
-    make_rho1, nset, n2c = ni._gen_rho_evaluator(mol, dms, hermi)
+    make_rho1, nset, n2c = ni._gen_rho_evaluator(mol, dms, hermi, False)
     nao = n2c // 2
     vmat = np.zeros((nset,n2c,n2c), dtype=np.complex128)
-    eval_xc = ni.mcfun_eval_xc_adapter(xc_code)
 
     if xctype in ('LDA', 'GGA', 'MGGA'):
         _rho0 = None
-        deriv = 2
         p1 = 0
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             p0, p1 = p1, p1 + weight.size
-            if fxc is None:
-                if rho0 is not None:
-                    if xctype == 'LDA':
-                        _rho0 = np.asarray(rho0[:,p0:p1], order='C')
-                    else:
-                        _rho0 = np.asarray(rho0[:,:,p0:p1], order='C')
-                elif make_rho0 is not None:
-                    _rho0 = make_rho0(0, ao, mask, xctype)
-
-                _fxc = eval_xc(xc_code, _rho0, deriv=deriv, xctype=xctype)[2]
-            else:
-                _fxc = fxc[:,:,:,:,p0:p1]
-
+            _fxc = fxc[:,:,:,:,p0:p1]
             for i in range(nset):
                 rho1 = make_rho1(i, ao, mask, xctype)
                 vmat[i] += fmat(mol, ao, weight, _rho0, rho1, _fxc,
@@ -289,41 +271,29 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
     else:
         raise RuntimeError(f'Unknown collinear scheme {ni.collinear}')
 
-    if xctype == 'MGGA':
-        ngrids = rho.shape[2]
-        rhop = np.empty((2, 6, ngrids))
-        rhop[0,:4] = (t[:4] + s[:4]) * .5
-        rhop[1,:4] = (t[:4] - s[:4]) * .5
-        # Padding for laplacian
-        rhop[:,4] = 0
-        rhop[0,5] = (t[4] + s[4]) * .5
-        rhop[1,5] = (t[4] - s[4]) * .5
-    else:
-        rhop = np.stack([(t + s) * .5, (t - s) * .5])
+    rho = np.stack([(t + s) * .5, (t - s) * .5])
+    if xctype == 'MGGA' and rho.shape[1] == 6:
+        rho = np.asarray(rho[:,[0,1,2,3,5],:], order='C')
 
     spin = 1
-    exc, vxc, fxc, kxc = ni.eval_xc(xc_code, rhop, spin, 0, deriv, omega,
-                                    verbose)
 
-    if deriv > 2:
-        kxc = xc_deriv.transform_kxc(rhop, fxc, kxc, xctype, spin)
-    if deriv > 1:
-        fxc = xc_deriv.transform_fxc(rhop, vxc, fxc, xctype, spin)
-    if deriv > 0:
-        vxc = xc_deriv.transform_vxc(rhop, vxc, xctype, spin)
-    return exc, vxc, fxc, kxc
+    out = ni.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
+    evfk = [out[0]]
+    for order in range(1, deriv+1):
+        evfk.append(xc_deriv.transform_xc(rho, out, xctype, spin, order))
+    if deriv < 3:
+        # The return has at least [e, v, f, k] terms
+        evfk.extend([None] * (3 - deriv))
+    return evfk
 
-# * Mcfun requires functional derivaties to total-density and spin-density.
+# * Mcfun requires functional derivatives to total-density and spin-density.
 # * Make it a global function than a closure so as to be callable by multiprocessing
 def __mcfun_fn_eval_xc(ni, xc_code, xctype, rho, deriv):
-    exc, vxc, fxc, kxc = ni.eval_xc_eff(xc_code, rho, deriv=deriv, xctype=xctype)
-    if deriv > 0:
-        vxc = xc_deriv.ud2ts(vxc)
-    if deriv > 1:
-        fxc = xc_deriv.ud2ts(fxc)
-    if deriv > 2:
-        kxc = xc_deriv.ud2ts(kxc)
-    return exc, vxc, fxc, kxc
+    evfk = ni.eval_xc_eff(xc_code, rho, deriv=deriv, xctype=xctype)
+    for order in range(1, deriv+1):
+        if evfk[order] is not None:
+            evfk[order] = xc_deriv.ud2ts(evfk[order])
+    return evfk
 
 def mcfun_eval_xc_adapter(ni, xc_code):
     '''Wrapper to generate the eval_xc function required by mcfun'''
@@ -523,7 +493,7 @@ def _contract_rho_m(bra, ket, hermi=0, bra_eq_ket=False):
     return rho_m
 
 
-class NumInt2C(numint._NumIntMixin):
+class NumInt2C(lib.StreamObject, numint.LibXCMixin):
     '''Numerical integration methods for 2-component basis (used by GKS)'''
 
     # collinear schemes:
@@ -580,21 +550,20 @@ class NumInt2C(numint._NumIntMixin):
         xctype = self._xc_type(xc_code)
         if xctype in ('GGA', 'MGGA'):
             ao_deriv = 1
-        elif xctype == 'NLC':
-            raise NotImplementedError('NLC')
         else:
             ao_deriv = 0
         n2c = mo_coeff.shape[0]
         nao = n2c // 2
+        with_lapl = numint.MGGA_DENSITY_LAPL
 
         if self.collinear[0] in ('m', 'n'):  # mcol or ncol
-            with_lapl = False
             rho = []
             for ao, mask, weight, coords \
                     in self.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho.append(self.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype,
                                           with_lapl))
             rho = np.concatenate(rho,axis=-1)
+            assert rho.dtype == np.double
             if self.collinear[0] == 'm':  # mcol
                 eval_xc = self.mcfun_eval_xc_adapter(xc_code)
             else:
@@ -603,11 +572,56 @@ class NumInt2C(numint._NumIntMixin):
         else:
             # rhoa and rhob must be real
             dm = np.dot(mo_coeff * mo_occ, mo_coeff.conj().T)
-            dm_a = dm[:nao,:nao].real.copy()
-            dm_b = dm[nao:,nao:].real.copy()
+            dm_a = dm[:nao,:nao].real.copy('C')
+            dm_b = dm[nao:,nao:].real.copy('C')
+            ni = self._to_numint1c()
+            hermi = 1
+            rhoa = []
+            rhob = []
+            for ao, mask, weight, coords \
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                # rhoa and rhob must be real
+                rhoa.append(ni.eval_rho(mol, ao, dm_a, mask, xctype, hermi, with_lapl))
+                rhob.append(ni.eval_rho(mol, ao, dm_b, mask, xctype, hermi, with_lapl))
+            rho = np.stack([np.concatenate(rhoa,axis=-1), np.concatenate(rhob,axis=-1)])
+            assert rho.dtype == np.double
+            vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
+        return rho, vxc, fxc
+
+    def cache_xc_kernel1(self, mol, grids, xc_code, dm, spin=0, max_memory=2000):
+        '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
+        DFT hessian module etc.
+        '''
+        xctype = self._xc_type(xc_code)
+        if xctype in ('GGA', 'MGGA'):
+            ao_deriv = 1
+        else:
+            ao_deriv = 0
+        n2c = dm.shape[0]
+        nao = n2c // 2
+
+        if self.collinear[0] in ('m', 'n'):  # mcol or ncol
+            hermi = 1 # rho must be real. We need to assume dm hermitian
+            with_lapl = False
+            rho = []
+            for ao, mask, weight, coords \
+                    in self.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                rho.append(self.eval_rho1(mol, ao, dm, mask, xctype, hermi, with_lapl))
+            rho = np.concatenate(rho,axis=-1)
+            assert rho.dtype == np.double
+            if self.collinear[0] == 'm':  # mcol
+                eval_xc = self.mcfun_eval_xc_adapter(xc_code)
+            else:
+                eval_xc = self.eval_xc_eff
+            vxc, fxc = eval_xc(xc_code, rho, deriv=2, xctype=xctype)[1:3]
+        else:
+            # rhoa and rhob must be real. We need to assume dm hermitian
+            hermi = 1
+            # TODO: test if dm[:nao,:nao].imag == 0
+            dm_a = dm[:nao,:nao].real.copy('C')
+            dm_b = dm[nao:,nao:].real.copy('C')
             ni = self._to_numint1c()
             with_lapl = True
-            hermi = 1
             rhoa = []
             rhob = []
             for ao, mask, weight, coords \
@@ -641,8 +655,8 @@ class NumInt2C(numint._NumIntMixin):
         else:
             nao = dms.shape[-1] // 2
             # ground state density is always real
-            dm_a = dms[...,:nao,:nao].real.copy()
-            dm_b = dms[...,nao:,nao:].real.copy()
+            dm_a = dms[...,:nao,:nao].real.copy('C')
+            dm_b = dms[...,nao:,nao:].real.copy('C')
             dm1 = (dm_a, dm_b)
             ni = self._to_numint1c()
             n, exc, v = ni.nr_uks(mol, grids, xc_code, dm1, relativity,
@@ -650,8 +664,24 @@ class NumInt2C(numint._NumIntMixin):
             vmat = np.zeros_like(dms)
             vmat[...,:nao,:nao] = v[0]
             vmat[...,nao:,nao:] = v[1]
-        return n, exc, vmat
+        return n.sum(), exc, vmat
     get_vxc = nr_gks_vxc = nr_vxc
+
+    @lib.with_doc(numint.nr_nlc_vxc.__doc__)
+    def nr_nlc_vxc(self, mol, grids, xc_code, dm, spin=0, relativity=0, hermi=1,
+                   max_memory=2000, verbose=None):
+        assert dm.ndim == 2
+        nao = dm.shape[-1] // 2
+        # ground state density is always real
+        dm_a = dm[:nao,:nao].real
+        dm_b = dm[nao:,nao:].real
+        ni = self._to_numint1c()
+        n, exc, v = ni.nr_nlc_vxc(mol, grids, xc_code, dm_a+dm_b, relativity,
+                                  hermi, max_memory, verbose)
+        vmat = np.zeros_like(dm)
+        vmat[:nao,:nao] = v[0]
+        vmat[nao:,nao:] = v[1]
+        return n, exc, vmat
 
     @lib.with_doc(numint.nr_rks_fxc.__doc__)
     def nr_fxc(self, mol, grids, xc_code, dm0, dms, spin=0, relativity=0, hermi=0,
@@ -667,8 +697,8 @@ class NumInt2C(numint._NumIntMixin):
             dms = np.asarray(dms)
             nao = dms.shape[-1] // 2
             if dm0 is not None:
-                dm0a = dm0[:nao,:nao].real.copy()
-                dm0b = dm0[nao:,nao:].real.copy()
+                dm0a = dm0[:nao,:nao].real.copy('C')
+                dm0b = dm0[nao:,nao:].real.copy('C')
                 dm0 = (dm0a, dm0b)
             # dms_a and dms_b may be complex if they are TDDFT amplitudes
             dms_a = dms[...,:nao,:nao].copy()
@@ -686,35 +716,8 @@ class NumInt2C(numint._NumIntMixin):
     eval_xc_eff = _eval_xc_eff
     mcfun_eval_xc_adapter = mcfun_eval_xc_adapter
 
-    block_loop = numint._block_loop
-
-    def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=False, grids=None):
-        if getattr(dms, 'mo_coeff', None) is not None:
-            #TODO: test whether dm.mo_coeff matching dm
-            mo_coeff = dms.mo_coeff
-            mo_occ = dms.mo_occ
-            if isinstance(dms, np.ndarray) and dms.ndim == 2:
-                mo_coeff = [mo_coeff]
-                mo_occ = [mo_occ]
-            nao = mo_coeff[0].shape[0]
-            ndms = len(mo_occ)
-            def make_rho(idm, ao, non0tab, xctype):
-                return self.eval_rho2(mol, ao, mo_coeff[idm], mo_occ[idm],
-                                      non0tab, xctype, with_lapl)
-        else:
-            if isinstance(dms, np.ndarray) and dms.ndim == 2:
-                dms = [dms]
-            if hermi != 1 and dms[0].dtype == np.double:
-                # (D + D.T)/2 because eval_rho computes 2*(|\nabla i> D_ij <j|) instead of
-                # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency when dm is real
-                dms = [(dm+dm.T)*.5 for dm in dms]
-                hermi = 1
-            nao = dms[0].shape[0]
-            ndms = len(dms)
-            def make_rho(idm, ao, non0tab, xctype):
-                return self.eval_rho(mol, ao, dms[idm], non0tab, xctype,
-                                     hermi, with_lapl)
-        return make_rho, ndms, nao
+    block_loop = numint.NumInt.block_loop
+    _gen_rho_evaluator = numint.NumInt._gen_rho_evaluator
 
     def _to_numint1c(self):
         '''Converts to the associated class to handle collinear systems'''

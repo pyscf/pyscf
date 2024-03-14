@@ -108,4 +108,3 @@ class PySCF(Calculator):
 
 def make_kpts(cell, nks):
     raise DeprecationWarning('Use cell.make_kpts(nks) instead.')
-

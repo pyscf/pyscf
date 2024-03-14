@@ -30,7 +30,7 @@ from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci.addons import _unpack_nelec
 
-librdm = lib.load_library('libfci')
+librdm = cistring.libfci
 
 def reorder_rdm(rdm1, rdm2, inplace=False):
     nmo = rdm1.shape[0]
@@ -101,8 +101,8 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
         link_indexa, link_indexb = link_index
     na,nlinka = link_indexa.shape[:2]
     nb,nlinkb = link_indexb.shape[:2]
-    assert (cibra.size == na*nb)
-    assert (ciket.size == na*nb)
+    assert (cibra.size == na*nb), '{} {} {}'.format (cibra.size, na, nb)
+    assert (ciket.size == na*nb), '{} {} {}'.format (ciket.size, na, nb)
     rdm1 = numpy.empty((norb,norb))
     fn = getattr(librdm, fname)
     fn(rdm1.ctypes.data_as(ctypes.c_void_p),
@@ -359,4 +359,3 @@ def reorder_dm1234(rdm1, rdm2, rdm3, rdm4, inplace=True):
             for u in range(norb):
                 rdm4[:,q,q,s,s,u,u,:] -= rdm1.T
     return rdm1, rdm2, rdm3, rdm4
-

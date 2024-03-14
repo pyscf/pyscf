@@ -35,6 +35,18 @@ def tearDownModule():
     del mol
 
 class KnownValues(unittest.TestCase):
+    def test_rhf_hess(self):
+        mf = scf.RHF(mol)
+        e0 = mf.kernel()
+        hess = hessian.RHF(mf).kernel()
+        self.assertAlmostEqual(lib.fp(hess), -0.7816352153153946, 6)
+
+        hobj = hessian.RHF(mf)
+        hobj.max_cycle = 10
+        hobj.level_shift = .1
+        hess = hobj.kernel()
+        self.assertAlmostEqual(lib.fp(hess), -0.7816352153153946, 6)
+
     def test_finite_diff_x2c_rhf_hess(self):
         mf = scf.RHF(mol).x2c()
         mf.conv_tol = 1e-14
@@ -107,4 +119,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for RHF Hessian")
     unittest.main()
-

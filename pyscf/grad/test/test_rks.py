@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import copy
 import numpy
 from pyscf import gto, dft, lib
 from pyscf.dft import radi
@@ -246,6 +245,27 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-3*lib.param.BOHR, 5)
 
+    def test_finite_diff_rks_grad_nlc(self):
+#[[ 2.91036539e-16  1.22693574e-15  2.45978284e-02]
+# [ 2.83888198e-17  2.66388957e-02 -1.23039325e-02]
+# [ 1.17327811e-16 -2.66388957e-02 -1.23039325e-02]]
+        mf = mol.RKS()
+        mf.set(xc='VV10', nlc='VV10', conv_tol=1e-12)
+        mf.nlcgrids.level = 1
+        mf.kernel()
+        g = mf.nuc_grad_method().set().kernel()
+        self.assertAlmostEqual(lib.fp(g), -0.049431714073528615, 6)
+
+        mf.nlcgrids.level = 0
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mol1 = mol.copy()
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-3*lib.param.BOHR, 5)
+
     def test_finite_diff_rks_grad_mgga(self):
         mf = mol.RKS().run(xc='m06l', conv_tol=1e-12)
         g = mf.nuc_grad_method().set(grid_response=True).kernel()
@@ -390,9 +410,9 @@ class KnownValues(unittest.TestCase):
         exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
-        grids0_w = copy.copy(grids0)
+        grids0_w = grids0.copy()
         grids0_w.weights = grids1.weights
-        grids0_c = copy.copy(grids0)
+        grids0_c = grids0.copy()
         grids0_c.coords = grids1.coords
         exc0_w = dft.numint.nr_rks(mf0._numint, mol0, grids0_w, xc, dm0)[1]
         exc0_c = dft.numint.nr_rks(mf1._numint, mol1, grids0_c, xc, dm0)[1]
@@ -414,9 +434,9 @@ class KnownValues(unittest.TestCase):
         exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
-        grids0_w = copy.copy(grids0)
+        grids0_w = grids0.copy()
         grids0_w.weights = grids1.weights
-        grids0_c = copy.copy(grids0)
+        grids0_c = grids0.copy()
         grids0_c.coords = grids1.coords
         exc0_w = dft.numint.nr_rks(mf0._numint, mol0, grids0_w, xc, dm0)[1]
         exc0_c = dft.numint.nr_rks(mf1._numint, mol1, grids0_c, xc, dm0)[1]
@@ -441,9 +461,9 @@ class KnownValues(unittest.TestCase):
         exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
-        grids0_w = copy.copy(grids0)
+        grids0_w = grids0.copy()
         grids0_w.weights = grids1.weights
-        grids0_c = copy.copy(grids0)
+        grids0_c = grids0.copy()
         grids0_c.coords = grids1.coords
         exc0_w = dft.numint.nr_rks(mf0._numint, mol0, grids0_w, xc, dm0)[1]
         exc0_c = dft.numint.nr_rks(mf1._numint, mol1, grids0_c, xc, dm0)[1]
@@ -465,9 +485,9 @@ class KnownValues(unittest.TestCase):
         exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
-        grids0_w = copy.copy(grids0)
+        grids0_w = grids0.copy()
         grids0_w.weights = grids1.weights
-        grids0_c = copy.copy(grids0)
+        grids0_c = grids0.copy()
         grids0_c.coords = grids1.coords
         exc0_w = dft.numint.nr_rks(mf0._numint, mol0, grids0_w, xc, dm0)[1]
         exc0_c = dft.numint.nr_rks(mf1._numint, mol1, grids0_c, xc, dm0)[1]

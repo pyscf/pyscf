@@ -39,14 +39,14 @@ einsum = lib.einsum
 # core routines, kernel, rpa_ecorr, rho_response
 # ****************************************************************************
 
-def kernel(rpa, mo_energy, mo_coeff, Lpq=None, nw=None, verbose=logger.NOTE):
+def kernel(rpa, mo_energy, mo_coeff, Lpq=None, nw=40, x0=0.5, verbose=logger.NOTE):
     """
     RPA correlation and total energy
 
     Args:
         Lpq : density fitting 3-center integral in MO basis.
         nw : number of frequency point on imaginary axis.
-        vhf_df : using density fitting integral to compute HF exchange.
+        x0: scaling factor for frequency grid.
 
     Returns:
         e_tot : RPA total energy
@@ -63,7 +63,7 @@ def kernel(rpa, mo_energy, mo_coeff, Lpq=None, nw=None, verbose=logger.NOTE):
         Lpq = rpa.ao2mo(mo_coeff)
 
     # Grids for integration on imaginary axis
-    freqs, wts = _get_scaled_legendre_roots(nw)
+    freqs, wts = _get_scaled_legendre_roots(nw, x0)
 
     # Compute HF exchange energy (EXX)
     dm = mf.make_rdm1()
@@ -74,7 +74,7 @@ def kernel(rpa, mo_energy, mo_coeff, Lpq=None, nw=None, verbose=logger.NOTE):
     # Compute RPA correlation energy
     e_corr = get_rpa_ecorr(rpa, Lpq, freqs, wts)
 
-    # Compute totol energy
+    # Compute total energy
     e_tot = e_hf + e_corr
 
     logger.debug(rpa, '  RPA total energy = %s', e_tot)
@@ -162,6 +162,11 @@ def _mo_without_core(rpa, mo):
 
 class RPA(lib.StreamObject):
 
+    _keys = {
+        'mol', 'frozen',
+        'with_df', 'mo_energy', 'mo_coeff', 'mo_occ', 'e_corr', 'e_hf', 'e_tot',
+    }
+
     def __init__(self, mf, frozen=None, auxbasis=None):
         self.mol = mf.mol
         self._scf = mf
@@ -179,7 +184,6 @@ class RPA(lib.StreamObject):
                 self.with_df.auxbasis = auxbasis
             else:
                 self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
-        self._keys.update(['with_df'])
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -222,13 +226,14 @@ class RPA(lib.StreamObject):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def kernel(self, mo_energy=None, mo_coeff=None, Lpq=None, nw=40):
+    def kernel(self, mo_energy=None, mo_coeff=None, Lpq=None, nw=40, x0=0.5):
         """
         Args:
             mo_energy : 1D array (nmo), mean-field mo energy
             mo_coeff : 2D array (nmo, nmo), mean-field mo coefficient
             Lpq : 3D array (naux, nmo, nmo), 3-index ERI
-            nw: interger, grid number
+            nw: integer, grid number
+            x0: real, scaling factor for frequency grid
 
         Returns:
             self.e_tot : RPA total eenrgy
@@ -243,7 +248,7 @@ class RPA(lib.StreamObject):
         cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         self.e_tot, self.e_hf, self.e_corr = \
-                        kernel(self, mo_energy, mo_coeff, Lpq=Lpq, nw=nw, verbose=self.verbose)
+                        kernel(self, mo_energy, mo_coeff, Lpq=Lpq, nw=nw, x0=x0, verbose=self.verbose)
 
         logger.timer(self, 'RPA', *cput0)
         return self.e_corr

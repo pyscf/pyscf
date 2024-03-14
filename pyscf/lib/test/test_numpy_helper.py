@@ -225,6 +225,11 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(ValueError, lib.split_reshape, numpy.arange(3), ((2,2),))
         self.assertRaises(ValueError, lib.split_reshape, numpy.arange(3), (2,2))
 
+    def test_ndarray_pointer_2d(self):
+        a = numpy.eye(3)
+        addr = lib.ndarray_pointer_2d(a)
+        self.assertTrue(all(addr == a.ctypes.data + numpy.array([0, 24, 48])))
+
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")
     unittest.main()

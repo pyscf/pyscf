@@ -16,10 +16,11 @@
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
-#if !defined(HAVE_DEFINED_CVHFOPT_H)
-#define HAVE_DEFINED_CVHFOPT_H
+#if !defined(HAVE_DEFINED_PBCOPT_H)
+#define HAVE_DEFINED_PBCOPT_H
 typedef struct PBCOpt_struct {
     double *rrcut;
+    double *rcut;
     int (*fprescreen)(int *shls, struct PBCOpt_struct *opt,
                       int *atm, int *bas, double *env);
 } PBCOpt;
@@ -27,4 +28,3 @@ typedef struct PBCOpt_struct {
 
 int PBCnoscreen(int *shls, PBCOpt *opt, int *atm, int *bas, double *env);
 int PBCrcut_screen(int *shls, PBCOpt *opt, int *atm, int *bas, double *env);
-

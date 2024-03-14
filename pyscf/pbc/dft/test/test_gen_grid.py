@@ -54,7 +54,7 @@ class KnownValues(unittest.TestCase):
         s1 = get_ovlp(cell, grids)
         s2 = cell.pbc_intor('int1e_ovlp_sph')
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 4)
-        self.assertEqual(grids.weights.size, 14742)
+        self.assertEqual(grids.weights.size, 15042)
 
     def test_becke_grids_2d(self):
         L = 4.
@@ -76,7 +76,7 @@ class KnownValues(unittest.TestCase):
         s1 = get_ovlp(cell, grids)
         s2 = cell.pbc_intor('int1e_ovlp_sph')
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
-        self.assertEqual(grids.weights.size, 7624)
+        self.assertEqual(grids.weights.size, 7615)
 
     def test_becke_grids_1d(self):
         L = 4.
@@ -119,12 +119,38 @@ class KnownValues(unittest.TestCase):
         s1 = get_ovlp(cell, grids)
         s2 = cell.pbc_intor('int1e_ovlp_sph')
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
-        self.assertEqual(grids.weights.size, 7560)
+        self.assertEqual(grids.weights.size, 7251)
 
         grids = gen_grid.UniformGrids(cell)
         s1 = get_ovlp(cell, grids)
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
 
+    def test_becke_grids_round_error(self):
+        cell = pgto.Cell()
+        cell.atom = '''
+            Cu1    1.927800000000   1.927800000000   1.590250000000
+            Cu1    5.783400000000   5.783400000000   1.590250000000
+            Cu2    1.927800000000   5.783400000000   1.590250000000
+            Cu2    5.783400000000   1.927800000000   1.590250000000
+            O1     1.927800000000   3.855600000000   1.590250000000
+            O1     3.855600000000   5.783400000000   1.590250000000
+            O1     5.783400000000   3.855600000000   1.590250000000
+            O1     3.855600000000   1.927800000000   1.590250000000
+            O1     0.000000000000   1.927800000000   1.590250000000
+            O1     1.927800000000   7.711200000000   1.590250000000
+            O1     7.711200000000   5.783400000000   1.590250000000
+            O1     5.783400000000   0.000000000000   1.590250000000
+        '''
+        cell.a = numpy.array(
+            [[7.7112,    0.,    0.],
+             [0.,    7.7112,    0.],
+             [0.,    0.,    3.1805]])
+        cell.build()
+
+        grids = gen_grid.BeckeGrids(cell)
+        grids.level = 1
+        grids.build()
+        assert abs(cell.vol - grids.weights.sum()) < .1
 
 if __name__ == '__main__':
     print("Full Tests for Becke grids")

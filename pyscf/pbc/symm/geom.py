@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
     '''
     Search for the allowed space group operations for a specific cell.
 
-    Note:
+    Notes:
         The current implementation treats the cell with the spins on all
         atoms flipped as the same as the original cell. If this is not desired,
         then one can use different names for the two sets of atoms and set their
@@ -77,7 +77,7 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
     '''
     if rotations is None: rotations = search_point_group_ops(cell, tol=tol)
     a = cell.lattice_vectors()
-    coords = cell.get_scaled_positions()
+    coords = cell.get_scaled_atom_coords()
     atmgrp = mole.atom_types(cell._atom, magmom=cell.magmom)
     atmgrp_spin_inv = {} #spin up and down inverted
     has_spin = False
@@ -116,7 +116,7 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
     if atm[-2:] in ['_u', '_d']:
         x_spin_inv = coords[atmgrp_spin_inv[atm]]
 
-    from pyscf.pbc.symm.space_group import SpaceGroup_element
+    from pyscf.pbc.symm.space_group import SPGElement
     ops = []
     for rot in rotations:
         w = x - np.dot(x[0], rot.T)
@@ -129,10 +129,10 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
         w = np.unique(w, axis=0)
         for trans in w:
             if test_trans(rot, trans):
-                ops.append(SpaceGroup_element(rot, trans))
+                ops.append(SPGElement(rot, trans))
             elif has_spin:
                 if test_trans(rot, trans, True):
-                    ops.append(SpaceGroup_element(rot, trans))
+                    ops.append(SPGElement(rot, trans))
     return ops
 
 def get_crystal_class(cell, ops=None, tol=SYMPREC):
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     """
     cell.a = [[4.0, 0., 0.], [0., 4.0, 0.], [0., 0., 16.0]]
     cell.dimension = 2
-    cell.magmom = [1., 1., -1., -1., 1., -1., 1., 1., -1., -1., 1., -1.]
+    cell.magmom = [1, 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, -1]
     cell.build()
 
     ops = search_space_group_ops(cell)

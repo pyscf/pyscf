@@ -181,7 +181,7 @@ def project_to_atomic_orbitals(mol, ref_basis):
             if not PROJECT_ECP_BASIS:
                 continue
 
-            ecpcore = core_configuration(nelec_ecp_dic[symb])
+            ecpcore = core_configuration(nelec_ecp_dic[symb], atom_symbol=gto.mole._std_symbol(symb))
             # Comparing to ANO valence basis, to check whether the ECP basis set has
             # reasonable AO-character contraction.  The ANO valence AO should have
             # significant overlap to ECP basis if the ECP basis has AO-character.
@@ -287,7 +287,7 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=REF_BASIS, s=None):
     '''
     from pyscf import scf
     from pyscf.lo import nao
-    if isinstance(mf_or_mol, gto.Mole):
+    if isinstance(mf_or_mol, gto.MoleBase):
         mol = mf_or_mol
         mf = None
     else:
@@ -331,28 +331,3 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=REF_BASIS, s=None):
     return c_orth
 
 del (ORTH_METHOD)
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    from pyscf.lo import nao
-    mol = gto.Mole()
-    mol.verbose = 1
-    mol.output = 'out_orth'
-    mol.atom.extend([
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ])
-    mol.basis = {'H': '6-31g',
-                 'O': '6-31g',}
-    mol.build()
-
-    mf = scf.RHF(mol)
-    mf.scf()
-
-    c0 = nao.prenao(mol, mf.make_rdm1())
-    c = orth_ao(mol, 'meta_lowdin', c0)
-
-    s = mol.intor_symmetric('int1e_ovlp_sph')
-    p = reduce(numpy.dot, (s, mf.make_rdm1(), s))
-    print(reduce(numpy.dot, (c.T, p, c)).diagonal())

@@ -24,7 +24,7 @@ from pyscf import tdscf
 from pyscf.grad import tdrks as tdrks_grad
 
 def setUpModule():
-    global mol, mf_lda, mf_gga
+    global mol, mf_lda, mf_gga, nstates
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
@@ -36,10 +36,13 @@ def setUpModule():
     mol.build()
     mf_lda = dft.RKS(mol).set(xc='LDA,')
     mf_lda.grids.prune = False
+    mf_lda.conv_tol = 1e-10
     mf_lda.kernel()
     mf_gga = dft.RKS(mol).set(xc='b88,')
     mf_gga.grids.prune = False
+    mf_gga.conv_tol = 1e-10
     mf_gga.kernel()
+    nstates = 5 # to ensure the first 3 TDSCF states are converged
 
 def tearDownModule():
     global mol, mf_lda, mf_gga
@@ -47,40 +50,39 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_tda_singlet_lda(self):
-        td = tdscf.TDA(mf_lda).run(nstates=3)
+        td = tdscf.TDA(mf_lda).run(nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(td.xy[2])
-        self.assertAlmostEqual(g1[0,2], -9.23916667e-02, 8)
+        self.assertAlmostEqual(g1[0,2], -9.23916667e-02, 6)
 
-    @unittest.skip('not implmented')
     def test_tda_triplet_lda(self):
-        td = tdscf.TDA(mf_lda).run(singlet=False, nstates=3)
+        td = tdscf.TDA(mf_lda).run(singlet=False, nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -0.3633334, 8)
+        self.assertAlmostEqual(g1[0,2], -0.3311324654, 6)
 
         td_solver = td.as_scanner()
         pmol = mol.copy()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-        self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 5)
+        self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 4)
 
     def test_tda_singlet_b88(self):
-        td = tdscf.TDA(mf_gga).run(nstates=3)
+        td = tdscf.TDA(mf_gga).run(nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 7)
+        self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 6)
 
     @unittest.skipIf(not hasattr(dft, 'xcfun'), 'xcfun not available')
     def test_tda_singlet_b3lyp_xcfun(self):
         mf = dft.RKS(mol)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf._numint.libxc = dft.xcfun
         mf.conv_tol = 1e-14
         mf.scf()
 
         td = mf.TDA()
-        td.nstates = 3
+        td.nstates = nstates
         e, z = td.kernel()
         tdg = td.Gradients()
         g1 = tdg.kernel(state=3)
@@ -91,31 +93,30 @@ class KnownValues(unittest.TestCase):
         pmol = mol.copy()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-        self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 5)
+        self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 4)
 
-    @unittest.skip('not implmented')
     def test_tda_triplet_b3lyp(self):
         mf = dft.RKS(mol)
-        mf.xc = 'b3lyp'
-        mf.conv_tol = 1e-14
+        mf.xc = 'b3lyp5'
+        mf.conv_tol = 1e-12
         mf.kernel()
-        td = tdscf.TDA(mf).run(singlet=False, nstates=3)
+        td = tdscf.TDA(mf).run(singlet=False, nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -0.3633334, 8)
+        self.assertAlmostEqual(g1[0,2], -0.3633375, 5)
 
         td_solver = td.as_scanner()
         pmol = mol.copy()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-        self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 5)
+        self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 4)
 
     def test_tda_singlet_mgga(self):
         mf = dft.RKS(mol)
         mf.xc = 'm06l'
         mf.conv_tol = 1e-14
         mf.kernel()
-        td = mf.TDA().run(nstates=3)
+        td = mf.TDA().run(nstates=nstates)
         tdg = td.Gradients()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -0.1461843283, 6)
@@ -124,14 +125,14 @@ class KnownValues(unittest.TestCase):
         pmol = mol.copy()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-        # FIXME: why the error is larger than 1e-4?
+        # FIXME: why the error is larger than 1e-4? Issue of grids response?
         self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 3)
 
     def test_tddft_lda(self):
-        td = tdscf.TDDFT(mf_lda).run(nstates=3)
+        td = tdscf.TDDFT(mf_lda).run(nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -1.31315477e-01, 8)
+        self.assertAlmostEqual(g1[0,2], -1.31315477e-01, 6)
 
         td_solver = td.as_scanner()
         pmol = mol.copy()
@@ -141,23 +142,23 @@ class KnownValues(unittest.TestCase):
 
     def test_tddft_b3lyp_high_cost(self):
         mf = dft.RKS(mol)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf._numint.libxc = dft.xcfun
         mf.grids.prune = False
         mf.scf()
-        td = tdscf.TDDFT(mf).run(nstates=3)
+        td = tdscf.TDDFT(mf).run(nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 7)
+        self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 6)
 
     def test_range_separated_high_cost(self):
         mol = gto.M(atom="H; H 1 1.", basis='631g', verbose=0)
         mf = dft.RKS(mol).set(xc='CAMB3LYP')
         mf._numint.libxc = dft.xcfun
-        td = mf.apply(tdscf.TDA)
+        td = mf.apply(tdscf.TDA).set(nstates=nstates)
         tdg_scanner = td.nuc_grad_method().as_scanner().as_scanner()
         g = tdg_scanner(mol, state=3)[1]
-        self.assertAlmostEqual(lib.fp(g), 0.60109310253094916, 7)
+        self.assertAlmostEqual(lib.fp(g), 0.60109310253094916, 6)
         smf = td.as_scanner()
         e1 = smf(mol.set_geom_("H; H 1 1.001"))[2]
         e2 = smf(mol.set_geom_("H; H 1 0.999"))[2]

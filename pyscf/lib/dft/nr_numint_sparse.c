@@ -18,7 +18,6 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include <assert.h>
 #include "config.h"
 #include "np_helper/np_helper.h"
 #include "cint.h"
@@ -605,7 +604,6 @@ void VXCdot_aow_ao_sparse(double *out, double *bra, double *ket, double *wv,
                           int nao, int ngrids, int nbas, int hermi, int nbins,
                           uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
 {
-        assert(ngrids & 0xfffffffffff8 == ngrids);
         size_t Nao = nao;
         int shls_slice[2] = {0, nbas};
         int *box_l1_loc = malloc(sizeof(int) * (nbas+1));
@@ -893,7 +891,6 @@ void VXCdot_ao_ao_sparse(double *out, double *bra, double *ket,
                          int nao, int ngrids, int nbas, int hermi, int nbins,
                          uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
 {
-        assert(ngrids & 0xfffffffffff8 == ngrids);
         size_t Nao = nao;
         int shls_slice[2] = {0, nbas};
         int *box_l1_loc = malloc(sizeof(int) * (nbas+1));

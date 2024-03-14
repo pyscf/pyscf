@@ -13,23 +13,24 @@ build:
 
 requirements:
   build:
+    - python {{ python }}
     - cmake
     - make
     - mkl
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
+  host:
+    - python
   run:
+    - python
     - mkl
     - numpy>=1.13
     - scipy!=1.5
     - h5py>=2.7
 
 test:
-  commands:
-    - test -f ${PREFIX}/lib/python*/site-packages/pyscf/lib/libcvhf.so
-    # python version in testing environment is often changed to a different
-    # version than the building
-    # - python -c "import pyscf.lib"
+  imports:
+    - pyscf.lib
 
 about:
   home: "{{ data['url'] }}"

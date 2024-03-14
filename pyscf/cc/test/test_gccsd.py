@@ -54,6 +54,22 @@ class KnownValues(unittest.TestCase):
     def test_gccsd(self):
         self.assertAlmostEqual(gcc1.e_corr, -0.10805861695870976, 6)
 
+    def test_frozen(self):
+        mol = gto.Mole()
+        mol.atom = [['O', (0.,   0., 0.)],
+                    ['O', (1.21, 0., 0.)]]
+        mol.basis = 'cc-pvdz'
+        mol.spin = 2
+        mol.build()
+        mf = scf.UHF(mol).run()
+        mf = scf.addons.convert_to_ghf(mf)
+
+        # Freeze 1s electrons
+        frozen = [0,1,2,3]
+        gcc = gccsd.GCCSD(mf, frozen=frozen)
+        ecc, t1, t2 = gcc.kernel()
+        self.assertAlmostEqual(ecc, -0.3486987472235819, 6)
+
     def test_ERIS(self):
         gcc = gccsd.GCCSD(mf, frozen=4)
         numpy.random.seed(9)
@@ -181,6 +197,7 @@ class KnownValues(unittest.TestCase):
     def test_rdm_real(self):
         nocc = 6
         nvir = 10
+        mol = gto.M()
         mf = scf.GHF(mol)
         nmo = nocc + nvir
         npair = nmo*(nmo//2+1)//4

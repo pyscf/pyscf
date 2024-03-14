@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Localization funciton: pmloc.loc(mol,mocoeff)
+# Localization function: pmloc.loc(mol,mocoeff)
 #
 # -ZL@20151227- Add Boys. Note that to view LMOs
 #		in jmol, 'orbital energies' need

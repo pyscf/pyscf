@@ -41,8 +41,6 @@ class DFRMP2(lib.StreamObject):
             auxbasis : name of auxiliary basis set, otherwise determined automatically
         '''
 
-        if not isinstance(mf, scf.rhf.RHF):
-            raise TypeError('Class initialization with non-RHF object')
         self.mo_coeff = mf.mo_coeff
         self.mo_energy = mf.mo_energy
         self.nocc = np.count_nonzero(mf.mo_occ)
@@ -204,6 +202,8 @@ class DFRMP2(lib.StreamObject):
         '''
         Calculates the three center integrals for MP2.
         '''
+        if not isinstance(self._scf, scf.rhf.RHF):
+            raise TypeError('Class initialization with non-RHF object')
         Co = self.mo_coeff[:, self.occ_mask]
         Cv = self.mo_coeff[:, self.nocc:]
         logger = lib.logger.new_logger(self)
@@ -235,6 +235,8 @@ class DFRMP2(lib.StreamObject):
 
     def nuc_grad_method(self):
         raise NotImplementedError
+
+    to_gpu = lib.to_gpu
 
 
 MP2 = RMP2 = DFMP2 = DFRMP2
@@ -342,7 +344,7 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
         bufsize = int((max_memory - lib.current_memory()[0]) * 1e6 / (nauxfcns * nmo2 * 8))
         if bufsize < 1:
             raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-        bufsize = min(nmo1, bufsize)
+        bufsize = max(1, min(nmo1, bufsize))
         logger.debug('    Batch size: {0:d} (of {1:d})'.format(bufsize, nmo1))
 
         # In batches:

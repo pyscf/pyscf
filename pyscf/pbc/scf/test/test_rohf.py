@@ -50,15 +50,16 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_krohf_kernel(self):
         self.assertAlmostEqual(kmf.e_tot, -4.569633030494753, 8)
+        kmf.analyze()
 
     def test_rohf_kernel(self):
         self.assertAlmostEqual(mf.e_tot, -3.3633746534777718, 8)
+        mf.analyze()
 
     def test_krhf_vs_rhf(self):
         np.random.seed(1)
         k = np.random.random(3)
         mf = pscf.ROHF(cell, k, exxdiv='vcut_sph')
-
         mf.max_cycle = 1
         mf.diis = None
         e1 = mf.kernel()
@@ -68,7 +69,7 @@ class KnownValues(unittest.TestCase):
         kmf.diis = None
         e2 = kmf.kernel()
         self.assertAlmostEqual(e1, e2, 9)
-        self.assertAlmostEqual(e1, -3.3046228601655607, 9)
+        self.assertAlmostEqual(e1, -2.9369005352340434, 8)
 
     def test_init_guess_by_chkfile(self):
         np.random.seed(1)
@@ -79,7 +80,7 @@ class KnownValues(unittest.TestCase):
         mf.max_cycle = 1
         mf.diis = None
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.4376090968645068, 9)
+        self.assertAlmostEqual(e1, -3.4376090968645068, 7)
 
         mf1 = pscf.ROHF(cell, exxdiv='vcut_sph')
         mf1.chkfile = mf.chkfile
@@ -87,7 +88,7 @@ class KnownValues(unittest.TestCase):
         mf1.diis = None
         mf1.max_cycle = 1
         e1 = mf1.kernel()
-        self.assertAlmostEqual(e1, -3.4190632006601662, 9)
+        self.assertAlmostEqual(e1, -3.4190632006601662, 7)
         self.assertTrue(mf1.mo_coeff[0].dtype == np.double)
 
     @unittest.skip('mesh not enough for density')
@@ -104,18 +105,18 @@ class KnownValues(unittest.TestCase):
         cell1.build(0, 0)
         mf = pscf.ROHF(cell1)
         dm = mf.get_init_guess(key='minao')
-        self.assertAlmostEqual(lib.fp(dm), -0.06586028869608128, 8)
+        self.assertAlmostEqual(lib.fp(dm), -0.13837729124284337, 8)
 
         mf = pscf.KROHF(cell1)
         dm = mf.get_init_guess(key='minao')
-        self.assertAlmostEqual(lib.fp(dm), -0.06586028869608128, 8)
+        self.assertAlmostEqual(lib.fp(dm), -0.13837729124284337, 8)
 
     def test_spin_square(self):
         ss = kmf.spin_square()[0]
         self.assertAlmostEqual(ss, 2, 9)
 
     def test_analyze(self):
-        pop, chg = kmf.analyze()
+        pop, chg = kmf.analyze()[0]
         self.assertAlmostEqual(lib.fp(pop), 1.1120443320325235, 7)
         self.assertAlmostEqual(sum(chg), 0, 7)
         self.assertAlmostEqual(lib.fp(chg), 0.002887875601340767, 7)

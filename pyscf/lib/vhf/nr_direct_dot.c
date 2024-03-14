@@ -55,10 +55,93 @@ JKOP_DATA_SIZE(I, K)
 JKOP_DATA_SIZE(J, L)
 JKOP_DATA_SIZE(L, J)
 
+void JKOperator_write_back(double *vjk, JKArray *jkarray, int *ao_loc,
+                           int *ishls, int *jshls, int *block_iloc, int *block_jloc)
+{
+        int ish0 = ishls[0];
+        int ish1 = ishls[1];
+        int jsh0 = jshls[0];
+        int jsh1 = jshls[1];
+        size_t vrow = ao_loc[ish1] - ao_loc[ish0];
+        size_t vcol = ao_loc[jsh1] - ao_loc[jsh0];
+        int ncomp = jkarray->ncomp;
+        int voffset = ao_loc[ish0] * vcol + ao_loc[jsh0];
+        int nblock = jkarray->nblock;
+        int key_counts = jkarray->key_counts;
+        int *keys_cache = jkarray->keys_cache;
+        int *offsets_dic = jkarray->outptr;
+        double *jkarray_data = jkarray->data;
+        int key_id, key, block_i, block_j;
+        int i, j, ish, jsh, i0, j0;
+        int di, dj, icomp;
+        int block_i0, block_j0, block_dj;
+        double *data, *pd, *pv;
+
+        for (key_id = 0; key_id < key_counts; key_id++) {
+                key = keys_cache[key_id];
+                block_i = key / nblock;
+                block_j = key % nblock;
+                ish0 = block_iloc[block_i];
+                ish1 = block_iloc[block_i+1];
+                jsh0 = block_jloc[block_j];
+                jsh1 = block_jloc[block_j+1];
+                block_i0 = ao_loc[ish0];
+                block_j0 = ao_loc[jsh0];
+                block_dj = ao_loc[jsh1] - ao_loc[jsh0];
+
+                data = jkarray_data + offsets_dic[key];
+                offsets_dic[key] = NOVALUE;
+                for (ish = ish0; ish < ish1; ish++) {
+                for (jsh = jsh0; jsh < jsh1; jsh++) {
+                        i0 = ao_loc[ish];
+                        j0 = ao_loc[jsh];
+                        di = ao_loc[ish+1] - i0;
+                        dj = ao_loc[jsh+1] - j0;
+                        pd = data + ((i0 - block_i0) * block_dj + (j0 - block_j0) * di) * ncomp;
+                        pv = vjk + i0*vcol+j0 - voffset;
+                        for (icomp = 0; icomp < ncomp; icomp++) {
+                                for (i = 0; i < di; i++) {
+                                for (j = 0; j < dj; j++) {
+                                        pv[i*vcol+j] += pd[i*dj+j];
+                                } }
+                                pv += vrow * vcol;
+                                pd += di * dj;
+                        }
+                } }
+        }
+        jkarray->stack_size = 0;
+        jkarray->key_counts = 0;
+}
+
+#define JKOP_WRITE_BACK(obra, oket) \
+        void JKOperator_write_back_##obra##oket(double *vjk, JKArray *jkarray, \
+                                                int *shls_slice, int *ao_loc, \
+                                                int *block_Iloc, int *block_Jloc, \
+                                                int *block_Kloc, int *block_Lloc) \
+{ \
+        int *ishls = shls_slice + obra##SH0; \
+        int *jshls = shls_slice + oket##SH0; \
+        JKOperator_write_back(vjk, jkarray, ao_loc, ishls, jshls, \
+                              block_##obra##loc, block_##oket##loc); \
+}
+JKOP_WRITE_BACK(K, L)
+JKOP_WRITE_BACK(L, K)
+JKOP_WRITE_BACK(I, J)
+JKOP_WRITE_BACK(J, I)
+JKOP_WRITE_BACK(K, J)
+JKOP_WRITE_BACK(J, K)
+JKOP_WRITE_BACK(I, L)
+JKOP_WRITE_BACK(L, I)
+JKOP_WRITE_BACK(K, I)
+JKOP_WRITE_BACK(I, K)
+JKOP_WRITE_BACK(J, L)
+JKOP_WRITE_BACK(L, J)
+
 #define ADD_JKOP(fname, ibra, iket, obra, oket, type) \
 JKOperator CVHF##fname = {ibra##SH0, iket##SH0, obra##SH0, oket##SH0, \
         fname, JKOperator_data_size_##obra##oket, \
-        JKOperator_sanity_check_##type}
+        JKOperator_sanity_check_##type, \
+        JKOperator_write_back_##obra##oket}
 
 static void JKOperator_sanity_check_s1(int *shls_slice)
 {
@@ -96,13 +179,19 @@ static void JKOperator_sanity_check_s8(int *shls_slice)
 #define lSH     3
 #define LOCATE(v, i, j) \
         int d##i##j = d##i * d##j; \
-        _poutptr = out->outptr + shls[i##SH]*out->v_ket_nsh+shls[j##SH] - out->offset0_outptr; \
+        _key = block[i##SH]*out->nblock+block[j##SH]; \
+        _poutptr = out->outptr + _key; \
         if (*_poutptr == NOVALUE) { \
                 *_poutptr = out->stack_size; \
-                out->stack_size += d##i##j * ncomp; \
-                NPdset0(out->data+*_poutptr, d##i##j*ncomp); \
+                int v_size = shape[i##SH]*shape[j##SH]; \
+                out->stack_size += v_size * ncomp; \
+                NPdset0(out->data+*_poutptr, v_size*ncomp); \
+                out->keys_cache[out->key_counts] = _key; \
+                out->key_counts++; \
         } \
-        double *v = out->data + *_poutptr;
+        double *v = out->data + *_poutptr; \
+        v += ((i##0-ao_off[i##SH]) * shape[j##SH] + (j##0-ao_off[j##SH]) * d##i) * ncomp;
+
 #define DECLARE(v, i, j) \
         int ncomp = out->ncomp; \
         int ncol = out->dm_dims[1]; \
@@ -110,7 +199,11 @@ static void JKOperator_sanity_check_s8(int *shls_slice)
         int dj = j1 - j0; \
         int dk = k1 - k0; \
         int dl = l1 - l0; \
+        int _key; \
         int *_poutptr; \
+        int *shape = out->shape; \
+        int *block = out->block_quartets; \
+        int *ao_off = out->ao_off; \
         LOCATE(v, i, j)
 
 #define DEF_NRS1_CONTRACT(D1, D2, V1, V2) \
@@ -134,7 +227,7 @@ static void nrs1_##D1##D2##_s1##V1##V2(double *eri, double *dm, JKArray *out, in
 }
 
 #define DEF_DM(I, J) \
-        double *dm##I##J = dm + I##0 * ncol + J##0 * d##I
+        double *dm##I##J = dm + I##0 * ncol + J##0 * d##I;
 
 /* eri in Fortran order; dm, out in C order */
 
