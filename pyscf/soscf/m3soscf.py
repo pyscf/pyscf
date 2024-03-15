@@ -481,7 +481,7 @@ class M3SOSCF:
                            ['uhf', 'uks'] else numpy.where(self.mf.mo_occ > 0.5)[0]
         no_occs = numpy.where(self.mf.mo_occ[0, :] < 0.5)[0] if self.method in \
                            ['uhf', 'uks'] else numpy.where(self.mf.mo_occ < 0.5)[0]
-
+       
         homo_index = (0, occs[numpy.argmax(self.mf.mo_energy[0, occs])]) if self.method in \
                       ['uhf', 'uks'] else occs[numpy.argmax(self.mf.mo_energy[occs])]
         lumo_index = (0, no_occs[numpy.argmin(self.mf.mo_energy[0, no_occs])]) if self.method in \
@@ -861,3 +861,4 @@ class SubconvergerReassigmentManager:
             dpoints[i] = spoint * radii[i]
 
         return dpoints
+
