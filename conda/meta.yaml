@@ -1,6 +1,11 @@
+{% set version_match = load_file_regex(
+  load_file="pyscf/_version.py",
+  regex_pattern='(?i)^__version__ = [\'"]v?(.+)[\'"]') %}
+{% set version = version_match[1] %}
+
 package:
-  name: "pyscf"
-  version: "{{ version }}"
+  name: pyscf
+  version: {{ version }}
 
 source:
   path: ..
@@ -14,6 +19,7 @@ requirements:
     - cmake
     - make
     - mkl
+    - scikit-build-core
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - llvm-openmp # [osx]
@@ -33,6 +39,9 @@ test:
     - pyscf.lib
 
 about:
-  home: "{{ data['url'] }}"
-  license: "{{ data['license'] }}"
-  summary: "{{ data['description'] }}"
+  home: https://www.pyscf.org
+  dev_url: https://github.com/pyscf/pyscf
+  doc_url: https://www.pyscf.org
+  license: Apache-2.0
+  license_file: LICENSE
+  summary: "PySCF: Python-based Simulations of Chemistry Framework"

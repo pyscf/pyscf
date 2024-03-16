@@ -11,9 +11,9 @@ last_version=$(get_last_tag)
 echo Last version: $last_version
 
 # Get current version tag
-cur_version=$(sed -n "/^__version__ =/s/.*'\(.*\)'/\1/p" pyscf/__init__.py)
+cur_version=$(sed -n "/^__version__ =/s/.*'\(.*\)'/\1/p" pyscf/_version.py)
 if [ -z "$cur_version" ]; then
-  cur_version=$(sed -n '/^__version__ =/s.*"\(.*\)"/\1/p' pyscf/__init__.py)
+  cur_version=$(sed -n '/^__version__ =/s.*"\(.*\)"/\1/p' pyscf/_version.py)
 fi
 echo Current version: $cur_version
 

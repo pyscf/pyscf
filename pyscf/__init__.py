@@ -35,7 +35,7 @@ to try out the package::
 
 '''
 
-__version__ = '2.6.0'
+from pyscf._version import __version__
 
 import os
 import sys
