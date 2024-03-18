@@ -530,7 +530,7 @@ def contract(A:HOSVD_4D, B:HOSVD_4D, indx, path = None, verbose=False):
         return res
         
 
-def HOSVD(A:np.ndarray, diff_scale=1e5, diff_scale_cutoff=1e-10, cutoff=1e-12):
+def HOSVD(A:np.ndarray, diff_scale=1e5, diff_scale_cutoff=1e-10, cutoff=1e-12, rela_cutoff=1e-8):
     Res = {
         'U':[],
         'S':[],
@@ -547,6 +547,8 @@ def HOSVD(A:np.ndarray, diff_scale=1e5, diff_scale_cutoff=1e-10, cutoff=1e-12):
         tmp = tmp.reshape(tmp.shape[0], -1)
         tmp = numpy.dot(tmp, tmp.conj().T)
         e, h = np.linalg.eigh(tmp)
+        
+        cutoff_now = max(cutoff, e[-1]*rela_cutoff)
         
         ## cutoff ## 
         
