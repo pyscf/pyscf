@@ -31,6 +31,8 @@ import numpy as np
 
 from copy import deepcopy
 
+from itertools import permutations
+
 class HOSVD_4D:
     
     def __init__(self, 
@@ -49,6 +51,48 @@ class HOSVD_4D:
         assert len(S) == 4
         assert B.ndim == 4
     
+    def size(self):
+        return self.B.size + sum([np.prod(data.shape) for data in self.U])
+    
+    def _analysis_GetFullMat_cost(self):
+        
+        ### GENERATE ALL POSSIBLE PATHS ###
+        
+        perms = list(permutations([0,1,2,3]))
+        all_path = []
+        for perm in perms:
+            all_path.append(list(perm)) 
+        
+        ## analysis all possible path ##
+        
+        min_cost = None
+        min_path = None
+        min_path_storage = 0
+        
+        for path in all_path:
+            shape_now = deepcopy(self.Bshape)
+            cost = 0    
+            storage = 0
+            for idx in path:
+                shape_now = list(shape_now)
+                shape_now[idx] = self.U[idx].shape[0]
+                shape_now = tuple(shape_now)
+                cost += np.prod(shape_now) * self.Bshape[idx]
+                storage = max(storage, np.prod(shape_now))
+            
+            if min_cost is None:
+                min_cost = cost
+                min_path = path
+                min_path_storage = storage
+            else:
+                if cost < min_cost:
+                    min_cost = cost
+                    min_path = path
+                    min_path_storage = storage
+        
+        return min_cost, min_path, min_path_storage
+        
+    
     def getFullMat(self): ## for testing, extremply slow !
         U = self.U
         S = self.S
@@ -56,10 +100,19 @@ class HOSVD_4D:
 
         A = B.copy()
 
-        A = np.einsum('abcd,dl->abcl', A, U[3].conj().T)
-        A = np.einsum('abcl,ck->abkl', A, U[2].conj().T)
-        A = np.einsum('abkl,bj->ajkl', A, U[1].conj().T)
-        A = np.einsum('ajkl,ai->ijkl', A, U[0].conj().T)
+        _, path, _ = self._analysis_GetFullMat_cost()
+        
+        for idx in path:
+            if idx == 0:
+                A = np.einsum('ijkl,ia->ajkl', A, U[0].conj().T)
+            elif idx == 1:
+                A = np.einsum('ajkl,jb->abkl', A, U[1].conj().T)
+            elif idx == 2:
+                A = np.einsum('abkl,kc->abcl', A, U[2].conj().T)
+            elif idx == 3:
+                A = np.einsum('abcl,ld->abcd', A, U[3].conj().T)
+            else:
+                raise RuntimeError("idx error")
 
         return A
 

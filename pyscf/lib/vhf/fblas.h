@@ -66,18 +66,18 @@ extern "C"
                 const double *beta, double *c, const int *ldc);
 
     void zgerc_(const int *m, const int *n,
-                const double complex *alpha, const double complex *x, const int *incx,
-                const double complex *y, const int *incy,
-                double complex *a, const int *lda);
+                const double __complex__ *alpha, const double __complex__ *x, const int *incx,
+                const double __complex__ *y, const int *incy,
+                double __complex__ *a, const int *lda);
     void zgemv_(const char *, const int *, const int *,
-                const double complex *, const double complex *, const int *,
-                const double complex *, const int *,
-                const double complex *, double complex *, const int *);
+                const double __complex__ *, const double __complex__ *, const int *,
+                const double __complex__ *, const int *,
+                const double __complex__ *, double __complex__ *, const int *);
     void zgemm_(const char *, const char *,
                 const int *, const int *, const int *,
-                const double complex *, const double complex *, const int *,
-                const double complex *, const int *,
-                const double complex *, double complex *, const int *);
+                const double __complex__ *, const double __complex__ *, const int *,
+                const double __complex__ *, const int *,
+                const double __complex__ *, double __complex__ *, const int *);
 
     lapack_int LAPACKE_dpotrf(int matrix_layout, char uplo, lapack_int n, double *a,
                               lapack_int lda);
@@ -90,9 +90,9 @@ extern "C"
                      const double *x, const double *y, double *v);
     void CINTdmat_transpose(double *a_t, const double *a,
                             const int m, const int n);
-    void CINTzmat_transpose(double complex *a_t, const double complex *a,
+    void CINTzmat_transpose(double __complex__ *a_t, const double __complex__ *a,
                             const int m, const int n);
-    void CINTzmat_dagger(double complex *a_c, const double complex *a,
+    void CINTzmat_dagger(double __complex__ *a_c, const double __complex__ *a,
                          const int m, const int n);
 
 #if defined __cplusplus

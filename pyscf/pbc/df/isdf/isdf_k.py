@@ -54,6 +54,8 @@ B_MATRIX              = 'B'
 
 BUNCHSIZE_IN_AUX_BASIS_OUTCORE = 10000
 
+## TODO: with k-symmetry and robust fitting ! 
+
 ####################### Util Module #######################
 
 def _extract_grid_primitive_cell(cell_a, mesh, Ls, coords):
