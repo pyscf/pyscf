@@ -1238,7 +1238,7 @@ def _get_jk_dm_IO(mydf, dm):
     W     = mydf.W
     aoRg  = mydf.aoRg
     aoR   = mydf.aoR
-    V_R   = mydf.V_R
+    # V_R   = mydf.V_R
     naux  = aoRg.shape[1]
     IP_ID = mydf.IP_ID
 
@@ -1542,21 +1542,21 @@ def get_jk_dm_IO(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     #### explore the linearity of J K with respect to dm ####
 
-    if mydf.direct_scf == False:
-        if mydf._cached_dm is None:
-            mydf._cached_dm = dm
-            mydf._cached_j = None
-            mydf._cached_k = None
-        else:
-            if mydf._cached_j is None and with_j == True or \
-               mydf._cached_k is None and with_k == True:
-                # recalculate the J or K
-                mydf._cached_j = None
-                mydf._cached_k = None
-            else:
-                assert(mydf._cached_dm.shape == dm.shape)
-                dm = dm - mydf._cached_dm
-                mydf._cached_dm += dm
+    # if mydf.direct_scf == False:
+    #     if hasattr(mydf, "_cached_dm") and mydf._cached_dm is None:
+    #         mydf._cached_dm = dm
+    #         mydf._cached_j = None
+    #         mydf._cached_k = None
+    #     else:
+    #         if mydf._cached_j is None and with_j == True or \
+    #            mydf._cached_k is None and with_k == True:
+    #             # recalculate the J or K
+    #             mydf._cached_j = None
+    #             mydf._cached_k = None
+    #         else:
+    #             assert(mydf._cached_dm.shape == dm.shape)
+    #             dm = dm - mydf._cached_dm
+    #             mydf._cached_dm += dm
 
     # if mydf._explore_sparsity:
     #     nNonZero = mydf.process_dm(dm)
@@ -1619,20 +1619,19 @@ def get_jk_dm_IO(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     #### explore the linearity of J K with respect to dm ####
 
-    if mydf.direct_scf == False:
-        if with_j and mydf._cached_j is None:
-            mydf._cached_j = vj
-        elif with_j:
-            mydf._cached_j += vj
+    # if mydf.direct_scf == False:
+    #     if with_j and mydf._cached_j is None:
+    #         mydf._cached_j = vj
+    #     elif with_j:
+    #         mydf._cached_j += vj
+    #     if with_k and mydf._cached_k is None:
+    #         mydf._cached_k = vk
+    #     elif with_k:
+    #         mydf._cached_k += vk
 
-        if with_k and mydf._cached_k is None:
-            mydf._cached_k = vk
-        elif with_k:
-            mydf._cached_k += vk
+    return vj, vk
 
-    # return vj, vk
-
-    return mydf._cached_j, mydf._cached_k
+    # return mydf._cached_j, mydf._cached_k
 
 class PBC_ISDF_Info_IO(isdf_fast.PBC_ISDF_Info):
     def __init__(self, mol:Cell, max_buf_memory:int, outcore=True, with_robust_fitting=True, aoR=None):
@@ -1903,8 +1902,8 @@ if __name__ == "__main__":
     #                C     0.8917  2.6751  2.6751
     #             '''
 
-    cell.basis   = 'gth-szv'
-    # cell.basis   = 'gth-tzvp'
+    # cell.basis   = 'gth-szv'
+    cell.basis   = 'gth-dzvp'
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
@@ -1982,7 +1981,7 @@ if __name__ == "__main__":
     # pbc_isdf_info.check_AOPairError()
     pbc_isdf_info.saveAoR = True
 
-    IO_buf_memory = int(10e7)  # 100M
+    IO_buf_memory = int(10 * 1000 * 1000)  # 100M
     IO_buf = np.zeros((IO_buf_memory//8), dtype=np.float64)
     IO_File = "test.h5"
 
@@ -2075,6 +2074,7 @@ if __name__ == "__main__":
     _benchmark_time(t1, t2, "get_jk_dm_IO")
 
     pbc_isdf_info.direct_scf = False
+    pbc_isdf_info.with_robust_fitting = True
     J_bench, K_bench = pbc_isdf_info.get_jk(dm)
 
     if np.allclose(J, J_bench):
@@ -2106,6 +2106,10 @@ if __name__ == "__main__":
 
     from pyscf.pbc import scf
 
+    pbc_isdf_info_IO = PBC_ISDF_Info_IO(cell, max_buf_memory=IO_buf_memory)
+    pbc_isdf_info_IO.build_IP_Sandeep_IO(c=C, IO_File=IO_File)
+    pbc_isdf_info_IO.build_auxiliary_Coulomb_IO(mesh)
+
     mf = scf.RHF(cell)
     pbc_isdf_info_IO.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info_IO
@@ -2122,6 +2126,8 @@ if __name__ == "__main__":
     # mf.kernel()
     
     # a third way 
+
+    pbc_isdf_info_IO = None
 
     pbc_isdf_info_IO = PBC_ISDF_Info_IO(cell, max_buf_memory=IO_buf_memory, aoR=aoR, outcore=False)
     pbc_isdf_info_IO.build_IP_Sandeep_IO(c=C)

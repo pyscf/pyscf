@@ -575,6 +575,11 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
                     async_write_auxbasisfft(p0, p1, buf_aux_basis_fft_1)
                     buf_aux_basis_fft_1, buf_aux_basis_fft_2 = buf_aux_basis_fft_2, buf_aux_basis_fft_1
                     
+                    # if p0 == 0:
+                    #     print("V init  = ", buf_V1[0,  :])
+                    # if p1 == ngrid:
+                    #     print("V final = ", buf_V1[-1, :])
+                    
                     if CONSTRUCT_V == 1:
                         async_write(p0, p1, buf_V1)
                         buf_V1, buf_V2 = buf_V2, buf_V1
@@ -831,6 +836,7 @@ def _get_jk_dm_outcore(mydf, dm):
 
     offset_D5 = offset
     D5        = np.ndarray((naux,naux), dtype=np.float64, buffer=buf, offset=offset)
+    # D5 = np.zeros((naux,naux), dtype=np.float64)
     offset   += naux * naux * buf.dtype.itemsize
 
     print("offset_D5 = ", offset_D5//8)
@@ -883,6 +889,10 @@ def _get_jk_dm_outcore(mydf, dm):
 
     with lib.call_in_background(load_V_async) as prefetch:
         with lib.call_in_background(load_aoR_async) as prefetch_aoR:
+     
+            prefetch = load_V_async
+            prefetch_aoR = load_aoR_async
+      
             prefetch(0, bunchsize_readV, V1)
             prefetch_aoR(0, bunchsize_readV, aoR1)
 
@@ -946,7 +956,7 @@ def _get_jk_dm_outcore(mydf, dm):
 
     # print(IP_partition)
 
-    print("bunchsize_readV = ", bunchsize_readV)
+    # print("bunchsize_readV = ", bunchsize_readV)
 
     t1_ReadV = (lib.logger.process_clock(), lib.logger.perf_counter())
 
@@ -961,7 +971,10 @@ def _get_jk_dm_outcore(mydf, dm):
 
     with lib.call_in_background(load_V_async) as prefetch:
         with lib.call_in_background(load_aoR_async) as prefetch_aoR:
-
+            
+            prefetch = load_V_async
+            prefetch_aoR = load_aoR_async
+      
             for ibunch, (p0, p1) in enumerate(lib.prange(0, ngrid, bunchsize_readV)):
 
                 t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -977,7 +990,6 @@ def _get_jk_dm_outcore(mydf, dm):
 
                 D1 = np.ndarray((nao, p1-p0),  dtype=np.float64, buffer=buf, offset=offset_D1)
                 D4 = np.ndarray((naux, p1-p0), dtype=np.float64, buffer=buf, offset=offset_D4)
-
                 lib.ddot(dm, aoR1, c=D1)
                 lib.ddot(aoRg.T, D1, c=D4)
 
@@ -995,7 +1007,8 @@ def _get_jk_dm_outcore(mydf, dm):
                 lib.copy(aoR1, out=aoR3)
                 J_tmp = np.ndarray((nao, p1-p0), dtype=np.float64, buffer=buf, offset=offset_J_tmp)
                 lib.d_ij_j_ij(aoR3, J4[p0:p1], out=J_tmp)
-                lib.ddot_withbuffer(aoR1, J_tmp.T, c=J, beta=beta, buf=mydf.ddot_buf)
+                # lib.ddot_withbuffer(aoR1, J_tmp.T, c=J, beta=beta, buf=mydf.ddot_buf)
+                J += lib.ddot(aoR1, J_tmp.T, beta=beta)
 
                 # pack D5
 
@@ -1005,10 +1018,14 @@ def _get_jk_dm_outcore(mydf, dm):
 
                 # construct K1 inplace
 
-                lib.cwise_mul(V1, D4, out=D4)
+                # lib.cwise_mul(V1, D4, out=D4)
+                D4 = lib.cwise_mul(V1, D4)
                 K1 = D4
+                # K2 = np.zeros((naux, nao), dtype=np.float64)
                 lib.ddot_withbuffer(K1, aoR1.T, c=K2, buf=mydf.ddot_buf)
-                lib.ddot_withbuffer(aoRg, K2, c=K, beta=beta, buf=mydf.ddot_buf)
+                # lib.ddot_withbuffer(aoRg, K2, c=K, beta=beta, buf=mydf.ddot_buf)
+                # K2 = lib.ddot(K1, aoR1.T)
+                K += lib.ddot(aoRg, K2, beta=beta)
 
                 # switch
 
@@ -1027,7 +1044,11 @@ def _get_jk_dm_outcore(mydf, dm):
 
     #### 2.3 construct K's W matrix ####
 
+    # print("D5 = ", D5[0,:]) 
+
     K += K.T
+
+    # print("K = ", K[0,:])
 
     lib.cwise_mul(W, D5, out=D5)
     lib.ddot(D5, aoRg.T, c=K2)
@@ -1038,6 +1059,8 @@ def _get_jk_dm_outcore(mydf, dm):
     J2 = np.ndarray((nao,naux), dtype=np.float64, buffer=buf, offset=offset_D5)
     lib.d_ij_j_ij(aoRg, J1, out=J2)
     lib.ddot_withbuffer(aoRg, J2.T, c=J, beta=1, buf=mydf.ddot_buf)
+
+    # print("J = ", J[0,:])
 
     #### 2.5 construct J's W matrix ####
 
@@ -1051,6 +1074,9 @@ def _get_jk_dm_outcore(mydf, dm):
 
     all_t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(all_t1, all_t2, "get_jk")
+
+    # print("J = ", J[0,:])
+    # print("K = ", K[0,:])
 
     return J * ngrid / vol, K * ngrid / vol
 
@@ -1224,7 +1250,7 @@ def get_jk_dm_outcore(mydf, dm, hermi=1, kpt=np.zeros(3),
     log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
 
     if mydf.outcore and mydf.with_robust_fitting == True:
-        raise NotImplementedError("outcore robust fitting has bugs and is extremely slow.")
+        # raise NotImplementedError("outcore robust fitting has bugs and is extremely slow.")
         vj, vk = _get_jk_dm_outcore(mydf, dm)
     else:
         if mydf.outcore:
@@ -1237,6 +1263,8 @@ def get_jk_dm_outcore(mydf, dm, hermi=1, kpt=np.zeros(3),
     t1 = log.timer('sr jk', *t1)
 
     return vj, vk
+
+import pyscf.pbc.df.isdf.test.test_isdf_IO as test_IO
 
 class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
     def __init__(self, mol:Cell, max_buf_memory:int, outcore=True, with_robust_fitting=True, aoR=None, Ls=None):
@@ -1387,8 +1415,9 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
         _benchmark_time(t1, t2, "construct V and W")
 
     get_jk = get_jk_dm_outcore
+    # get_jk = test_IO.get_jk_dm_IO
 
-C = 15
+C = 5
 
 from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 
@@ -1398,16 +1427,16 @@ if __name__ == '__main__':
     boxlen = 3.5668
     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
 
-    # cell.atom = '''
-    #                C     0.      0.      0.
-    #                C     0.8917  0.8917  0.8917
-    #                C     1.7834  1.7834  0.
-    #                C     2.6751  2.6751  0.8917
-    #                C     1.7834  0.      1.7834
-    #                C     2.6751  0.8917  2.6751
-    #                C     0.      1.7834  1.7834
-    #                C     0.8917  2.6751  2.6751
-    #             '''
+    cell.atom = '''
+                   C     0.      0.      0.
+                   C     0.8917  0.8917  0.8917
+                   C     1.7834  1.7834  0.
+                   C     2.6751  2.6751  0.8917
+                   C     1.7834  0.      1.7834
+                   C     2.6751  0.8917  2.6751
+                   C     0.      1.7834  1.7834
+                   C     0.8917  2.6751  2.6751
+                '''
 
     boxlen = 4.2
     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
@@ -1427,8 +1456,8 @@ H  2.1   2.1   2.1
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
-    cell.ke_cutoff  = 128   # kinetic energy cutoff in a.u.
-    # cell.ke_cutoff = 16
+    # cell.ke_cutoff  = 70   # kinetic energy cutoff in a.u.
+    cell.ke_cutoff = 32
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
@@ -1455,7 +1484,7 @@ H  2.1   2.1   2.1
     print("aoR.shape = ", aoR.shape)
 
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR)
-    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=C, global_IP_selection=False)
+    pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=C, global_IP_selection=True)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
 
     ### perform scf ###
@@ -1470,7 +1499,7 @@ H  2.1   2.1   2.1
 
     print("mf.direct_scf = ", mf.direct_scf)
 
-    mf.kernel()
+    # mf.kernel()
 
     # without robust fitting 
     
@@ -1481,25 +1510,54 @@ H  2.1   2.1   2.1
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 100
     mf.conv_tol = 1e-7
-    mf.kernel()
+    # mf.kernel()
     
     ### outcore ###
 
-    max_memory = 1000*1000*1000 # 10M
+    max_memory = 10*1000*1000 # 10M
         
-    pbc_isdf_info1 = PBC_ISDF_Info_outcore(cell, max_buf_memory=max_memory, outcore=False, with_robust_fitting=False, aoR=aoR)
+    pbc_isdf_info1 = PBC_ISDF_Info_outcore(cell, max_buf_memory=max_memory, outcore=False, with_robust_fitting=True, aoR=aoR)
     pbc_isdf_info1.build_IP_Sandeep_outcore(c=C)
     pbc_isdf_info1.build_auxiliary_Coulomb(mesh=mesh)
+    
+    V_R = pbc_isdf_info1.V_R
+    aux_bas = pbc_isdf_info1.aux_basis
+    aoR = pbc_isdf_info1.aoR
+    W = pbc_isdf_info1.W
     
     # print(pbc_isdf_info1.aux_basis[:10,:10])
     # print(pbc_isdf_info1.W[:10,:10])
     
     IP_ID = pbc_isdf_info1.IP_ID
     
-    pbc_isdf_info = PBC_ISDF_Info_outcore(cell, max_buf_memory=max_memory, outcore=True, with_robust_fitting=False)
+    pbc_isdf_info = PBC_ISDF_Info_outcore(cell, max_buf_memory=max_memory, outcore=True, with_robust_fitting=True)
     pbc_isdf_info.build_IP_Sandeep_outcore(c=C, IP_ID=IP_ID)
     pbc_isdf_info.build_auxiliary_Coulomb_outcore(mesh=mesh)
     # print(pbc_isdf_info.W[:10,:10])
+    
+    f_aux_basis = h5py.File(pbc_isdf_info.IO_FILE, 'r')
+    V_R_IO      = f_aux_basis[V_DATASET]
+    
+    diff = np.linalg.norm(V_R - V_R_IO)
+    print("diff = ", diff)
+    
+    aux_basis_IO = f_aux_basis[AUX_BASIS_DATASET]
+    diff = np.linalg.norm(aux_basis_IO - aux_bas)
+    print("diff = ", diff)
+    
+    aoR_IO = f_aux_basis[AOR_DATASET]
+    diff = np.linalg.norm(aoR_IO - aoR)
+    print("diff = ", diff)
+    
+    W2 = pbc_isdf_info.W
+    
+    diff = np.linalg.norm(W - W2)
+    print("diff = ", diff)
+    
+    # pbc_isdf_info.V_R = V_R_IO[:]
+    # pbc_isdf_info.aux_basis = aux_basis_IO[:]
+    # pbc_isdf_info.aoR = aoR_IO[:]
+    # pbc_isdf_info.outcore = False
     
     # exit(1) 
     

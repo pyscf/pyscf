@@ -583,7 +583,7 @@ def contract(A:HOSVD_4D, B:HOSVD_4D, indx, path = None, verbose=False):
         return res
         
 
-def HOSVD(A:np.ndarray, diff_scale=1e5, diff_scale_cutoff=1e-10, cutoff=1e-12):
+def HOSVD(A:np.ndarray, diff_scale=1e5, diff_scale_cutoff=1e-10, cutoff=1e-12, rela_cutoff=1e-8):
     Res = {
         'U':[],
         'S':[],
@@ -601,6 +601,13 @@ def HOSVD(A:np.ndarray, diff_scale=1e5, diff_scale_cutoff=1e-10, cutoff=1e-12):
         tmp = numpy.dot(tmp, tmp.conj().T)
         e, h = np.linalg.eigh(tmp)
         
+        # cutoff_now = max(cutoff, e[-1]*rela_cutoff)
+        
+        if e[-1] *rela_cutoff < cutoff:
+            cutoff_now = e[-1] *rela_cutoff
+        
+        # print("e = ", e)
+        
         ## cutoff ## 
         
         dim_tmp = len(e)
@@ -613,7 +620,9 @@ def HOSVD(A:np.ndarray, diff_scale=1e5, diff_scale_cutoff=1e-10, cutoff=1e-12):
                 break
             else:
                 if i!=0:
-                    if e[i]/e[i-1] > diff_scale_cutoff and e[i-1] < diff_scale_cutoff:
+                    if e[i]/e[i-1] > diff_scale and e[i-1] < diff_scale_cutoff:
+                        print("e[i] = ", e[i])
+                        print("e[i-1] = ", e[i-1])
                         loc_i = i
                         break
         
@@ -621,7 +630,7 @@ def HOSVD(A:np.ndarray, diff_scale=1e5, diff_scale_cutoff=1e-10, cutoff=1e-12):
             loc_i = 0
         
         Res['U'].append(h[:, loc_i:])
-        Res['S'].append(e[loc_i:])
+        Res['S'].append(np.sqrt(e[loc_i:]))
     
     B = A.copy()
     
@@ -640,6 +649,76 @@ def HOSVD(A:np.ndarray, diff_scale=1e5, diff_scale_cutoff=1e-10, cutoff=1e-12):
     Res['B'] = B.real
     
     return HOSVD_4D(U=Res['U'], S=Res['S'], B=Res['B'])
+
+def HOSVD_5D(A:np.ndarray, diff_scale=1e5, diff_scale_cutoff=1e-10, cutoff=1e-12, rela_cutoff=1e-8):
+    Res = {
+        'U':[],
+        'S':[],
+        'B':[]
+    }
+    
+    ndim = A.ndim
+    
+    for i in range(ndim):
+        
+        ## move the i-th axis to the left 
+        
+        tmp = np.moveaxis(A, i, 0)
+        tmp = tmp.reshape(tmp.shape[0], -1)
+        tmp = numpy.dot(tmp, tmp.conj().T)
+        e, h = np.linalg.eigh(tmp)
+        
+        # cutoff_now = max(cutoff, e[-1]*rela_cutoff)
+        
+        if e[-1] *rela_cutoff < cutoff:
+            cutoff_now = e[-1] *rela_cutoff
+        
+        # print("e = ", e)
+        
+        ## cutoff ## 
+        
+        dim_tmp = len(e)
+        
+        loc_i = None
+        
+        for i in range(dim_tmp-1, -1, -1):
+            if e[i] < cutoff:
+                loc_i = i + 1
+                break
+            else:
+                if i!=0:
+                    if e[i]/e[i-1] > diff_scale and e[i-1] < diff_scale_cutoff:
+                        print("e[i] = ", e[i])
+                        print("e[i-1] = ", e[i-1])
+                        loc_i = i
+                        break
+        
+        if loc_i is None:
+            loc_i = 0
+        
+        Res['U'].append(h[:, loc_i:])
+        Res['S'].append(np.sqrt(e[loc_i:]))
+    
+    B = A.copy()
+    
+    assert ndim == 5
+    
+    
+    
+    B = np.einsum('ijklm,me->ijkle', B, Res['U'][4])
+    B = np.einsum('ijkle,ld->ijkde', B, Res['U'][3])
+    B = np.einsum('ijkde,kc->ijcde', B, Res['U'][2])
+    B = np.einsum('ijcde,jb->ibcde', B, Res['U'][1])
+    B = np.einsum('ibcde,ia->abcde', B, Res['U'][0])
+    
+    B_imag = B.imag
+
+    if np.linalg.norm(B_imag) > 1e-10:
+        print("warning: B_imag = ", np.linalg.norm(B_imag))
+
+    Res['B'] = B.real
+    
+    return Res
 
 def Check_HOSVD(A:np.ndarray, Res:HOSVD_4D):
     A1 = Res.getFullMat()

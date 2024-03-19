@@ -235,7 +235,7 @@ if __name__ == "__main__":
     
     boxlen = 3.5668
     prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
-    KE_CUTOFF = 70
+    KE_CUTOFF = 32
     atm = [
         ['C', (0.     , 0.     , 0.    )],
         ['C', (0.8917 , 0.8917 , 0.8917)],
@@ -251,7 +251,7 @@ if __name__ == "__main__":
     prim_mesh = prim_cell.mesh
     print("prim_mesh = ", prim_mesh)
     
-    Ls = [1, 1, 3]
+    Ls = [1, 2, 2]
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
@@ -351,10 +351,43 @@ if __name__ == "__main__":
 
     # exit(1)
     
-    V_R = pbc_isdf_info.V_R
-    
+    # V_R = pbc_isdf_info.V_R
     aux_bas = pbc_isdf_info.aux_basis
     
+    ##### check the sparsity of A and B ##### 
+    
+    A, B = pbc_isdf_info.get_A_B()
+    
+    e, h = np.linalg.eigh(A)
+    
+    print("e = ", e)
+    size = 0
+    for i in range(B.shape[0]):
+        tmp = B[i:i+1, :].reshape(-1, *mesh)
+        # print("tmp.shape = ")
+        tmp_HOSVD = HOSVD.HOSVD(tmp, cutoff=1e-20, rela_cutoff=1e-10)
+        # print(tmp_HOSVD.S[1])
+        # print("row i ", i, " tmp_HOSVD.Bshape = ", tmp_HOSVD.Bshape)
+        size += tmp_HOSVD.size()
+        tmp_full = tmp_HOSVD.getFullMat()
+        B[i:i+1, :] = tmp_full.reshape(1, -1)
+    print("compress = %15.8f"%(size/B.size))
+    
+    aux_basis = np.dot(h.T, B)
+    aux_basis = (1.0/e).reshape(-1,1) * aux_basis
+    aux_basis = np.dot(h, aux_basis)
+    
+    diff = aux_bas - aux_basis 
+    
+    print("Diff = %15.8e" % (np.linalg.norm(diff)))
+        
+    # exit(1)
+        
+    # pbc_isdf_info.aux_basis = aux_basis
+    # aux_bas = None
+    # pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
+    
+    # exit(1)
     
     # tmp = aux_bas[0:1, :].reshape(-1, *mesh)
     # tmp_HOSVD = HOSVD.HOSVD(tmp)
@@ -386,8 +419,10 @@ if __name__ == "__main__":
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 100
     mf.conv_tol = 1e-7
-    print("mf.direct_scf = ", mf.direct_scf)
+    print("mf.direct_scf = ", mf.direct_scf)    
     mf.kernel()
+    
+    # exit(1)
     
     dm1 = mf.make_rdm1()
     
@@ -396,15 +431,19 @@ if __name__ == "__main__":
     
     ###################### individual compression ######################
     
+    V_R = pbc_isdf_info.V_R
+    
     size = 0
     for i in range(aux_bas.shape[0]):
         tmp = aux_bas[i:i+1, :].reshape(-1, *mesh)
-        tmp_HOSVD = HOSVD.HOSVD(tmp, cutoff=CUTOFF)
+        tmp_HOSVD = HOSVD.HOSVD(tmp, cutoff=CUTOFF*10)
         # print("row i ", i, " tmp_HOSVD.Bshape = ", tmp_HOSVD.Bshape)
         size += tmp_HOSVD.size()
     
     print("compression of aux_bas = %15.8f" % (size / aux_bas.size))
     print("mesh = ", mesh)
+    
+    # exit(1)
     
     DM_RgR = lib.ddot(aoRg.T, dm1)
     DM_RgR = lib.ddot(DM_RgR, aoR)
@@ -445,13 +484,28 @@ if __name__ == "__main__":
     
     ###################### cluster compression ######################
     
-    DM_RgR = lib.ddot(aoRg.T, dm1)
-    DM_RgR = lib.ddot(DM_RgR, aoR)
-    
     flat_IP_ID = {}
     
     for id_, ip_id in enumerate(pbc_isdf_info.IP_ID):
         flat_IP_ID[ip_id] = id_
+        
+    for key in IP_cluster:
+        IP_cluster_now = IP_cluster[key]
+        flat_id = [flat_IP_ID[ip_id] for ip_id in IP_cluster_now]
+        flat_id = np.array(flat_id)
+        
+        aux_bas_now = aux_bas[flat_id, :]
+        print("aux_bas_now.shape = ", aux_bas_now.shape)
+        print("mesh = ", mesh)
+        aux_bas_now = aux_bas_now.reshape(-1, *mesh)
+        tmp_HOSVD = HOSVD.HOSVD(aux_bas_now, cutoff=CUTOFF)
+        size = len(IP_cluster_now) * np.prod(mesh)
+        print("Bshape of tmp_HOSVD = ", tmp_HOSVD.Bshape)
+        size_compressed = tmp_HOSVD.size()
+        print("compression of aux_bas of cluster %s = %15.8f" % (key, size_compressed / size))
+    
+    DM_RgR = lib.ddot(aoRg.T, dm1)
+    DM_RgR = lib.ddot(DM_RgR, aoR)
     
     for key in IP_cluster:
         IP_cluster_now = IP_cluster[key]

@@ -222,6 +222,9 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True):
     naux = aoRg.shape[1]
     IP_ID = mydf.IP_ID
 
+    # print("V1 = ", V_R[0,:])
+    # print("V1 = ", V_R[-1,:])
+
     # print("address of mydf.aoR = ", mydf.aoR.__array_interface__['data'][0])
     # print("address of aoR      = ", aoR.__array_interface__['data'][0])
 
@@ -306,6 +309,8 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True):
     density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg, tmp1, out=buffer4),
                             order='C')  # need allocate memory, size = naux, (buffer 4)
 
+    # print("D3 = ", density_Rg)
+
     # assert density_Rg.__array_interface__['data'][0] == ptr4
 
     # This should be the leading term of the computation cost in a single-thread mode.
@@ -345,6 +350,9 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True):
         lib.ddot_withbuffer(aoR, J2.T, c=J, beta=1, buf=mydf.ddot_buf)
         # assert J.__array_interface__['data'][0] == ptr6
 
+        # print("J = ", J[0,:])
+
+
     #### step 3. get J term3
 
     # do not need allocate memory, use buffer 2
@@ -363,7 +371,7 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True):
     # do not need allocate memory, use buffer 6
 
     # J -= np.asarray(lib.dot(aoRg, tmp.T), order='C')
-    
+        
     if with_robust_fitting:
         # print("with robust fitting")
         lib.ddot_withbuffer(aoRg, -tmp.T, c=J, beta=1, buf=mydf.ddot_buf)
@@ -376,6 +384,8 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True):
 
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "_contract_j_dm")
+
+    # print("J = ", J[0,:])   
 
     return J * ngrid / vol
 
@@ -485,6 +495,8 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True):
 
         K  = np.asarray(lib.ddot_withbuffer(aoRg, K, c=buffer4, buf=mydf.ddot_buf), order='C')
         K += K.T
+        
+        # print("K = ", K[0,:])
 
     # assert K.__array_interface__['data'] == buffer4.__array_interface__['data']
 
@@ -494,7 +506,8 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True):
     # pointwise multiplication, do not need allocate memory, size = naux * naux, use buffer for (buffer 3)
     # tmp = W * density_RgRg
 
-    # print("D5 = ", density_RgRg[0])
+    # print("D5 = ", density_RgRg[0,:])
+    
     
     lib.cwise_mul(W, density_RgRg, out=density_RgRg)
     tmp = density_RgRg
@@ -521,6 +534,9 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True):
 
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "_contract_k_dm")
+    
+
+    # print("K = ", K[0,:])
 
     return K * ngrid / vol
 
