@@ -125,11 +125,9 @@ if(ENABLE_OPENMP)
   endif()
 endif()
 
-# if(NOT DEFINED XCFUN_MAX_ORDER)
-#   set(XCFUN_MAX_ORDER 3)
-# endif()
+# These are cache variables and are overridden if the user specifies them
+# on the command line.
 set(XCFUN_MAX_ORDER 3 CACHE STRING "XCFun maximum derivative order")
-
 set(PYSCF_LIBXC_MAX_ORDER 3 CACHE STRING "Libxc maximum derivative order")
 
 #find_package(PythonInterp REQUIRED)
@@ -228,8 +226,19 @@ if(BUILD_LIBCINT)
   message("libcint source dir: ${cint_SOURCE_DIR}")
   message("libcint binary dir: ${cint_BINARY_DIR}")
 
-else() # BUILD_LIBCINT
-  find_package(cint REQUIRED)
+else() # Search for built libcint
+  find_package(cint)
+  if(NOT cint_FOUND)
+    if(EXISTS ${PROJECT_SOURCE_DIR}/deps/include/cint.h)
+      add_library(cint SHARED IMPORTED GLOBAL)
+      set_target_properties(cint 
+        PROPERTIES
+        IMPORTED_LOCATION ${PROJECT_SOURCE_DIR}/deps/lib/${CMAKE_SHARED_LIBRARY_PREFIX}cint${CMAKE_SHARED_LIBRARY_SUFFIX}
+      )
+    else()
+      message(FATAL_ERROR "You set BUILD_LIBCINT to OFF, but libcint can't be found")
+    endif()
+  endif()
 endif()
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
@@ -260,16 +269,16 @@ if(ENABLE_LIBXC)
     set(DISABLE_KXC OFF)
     set(DISABLE_LXC OFF)
     if(PYSCF_LIBXC_MAX_ORDER LESS 1)
-      set(DISABLE_VXC ON)
+      set(DISABLE_VXC ON) # do not build first derivative
     endif()
     if(PYSCF_LIBXC_MAX_ORDER LESS 2)
-      set(DISABLE_FXC ON)
+      set(DISABLE_FXC ON) # do not build second derivative
     endif()
     if(PYSCF_LIBXC_MAX_ORDER LESS 3)
-      set(DISABLE_KXC ON)
+      set(DISABLE_KXC ON) # do not build third derivative
     endif()
     if(PYSCF_LIBXC_MAX_ORDER LESS 4)
-      set(DISABLE_LXC ON)
+      set(DISABLE_LXC ON) # do not build fourth derivative
     endif()
 
     set(ENABLE_XHOST ${BUILD_MARCH_NATIVE})
@@ -289,9 +298,14 @@ if(ENABLE_LIBXC)
     )
   
   else()
-    find_package(Libxc REQUIRED)
-    if(NOT Libxc_FOUND)
-      message(FATAL_ERROR "You set ENABLE_LIBXC, but not BUILD_LIBXC, and libxc can't be found")
+    if(EXISTS ${PROJECT_SOURCE_DIR}/deps/include/xc.h)
+      add_library(xc SHARED IMPORTED GLOBAL)
+      set_target_properties(xc 
+        PROPERTIES
+        IMPORTED_LOCATION ${PROJECT_SOURCE_DIR}/deps/lib/${CMAKE_SHARED_LIBRARY_PREFIX}xc${CMAKE_SHARED_LIBRARY_SUFFIX}
+      )
+    else()
+      find_package(Libxc REQUIRED)
     endif()
   endif() # BUILD_LIBXC
 endif() # ENABLE_LIBXC
@@ -299,30 +313,44 @@ endif() # ENABLE_LIBXC
 if(ENABLE_XCFUN)
   if(BUILD_XCFUN)
 
-  FetchContent_Declare(
-    xcfun
-    GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
-    GIT_TAG a89b783
-    PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || true
-  )
-  set(ENABLE_TESTALL 0)
+    FetchContent_Declare(
+      xcfun
+      GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
+      GIT_TAG a89b783
+      PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || true
+    )
+    set(ENABLE_TESTALL 0)
 
-  FetchContent_GetProperties(xcfun)
-  if(NOT xcfun_POPULATED)
-    FetchContent_Populate(xcfun)
-    # EXCLUDE_FROM_ALL means not to use the install commands from xcfun.
-    add_subdirectory(${xcfun_SOURCE_DIR} ${xcfun_BINARY_DIR} EXCLUDE_FROM_ALL)
-  endif()
+    FetchContent_GetProperties(xcfun)
+    if(NOT xcfun_POPULATED)
+      FetchContent_Populate(xcfun)
+      # EXCLUDE_FROM_ALL means not to use the install commands from xcfun.
+      add_subdirectory(${xcfun_SOURCE_DIR} ${xcfun_BINARY_DIR} EXCLUDE_FROM_ALL)
+    endif()
 
-  set_target_properties(xcfun
-    PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${PYSCF_THIRDPARTY_LIBOUTDIR}
-  )
+    set_target_properties(xcfun
+      PROPERTIES
+      LIBRARY_OUTPUT_DIRECTORY ${PYSCF_THIRDPARTY_LIBOUTDIR}
+    )
 
   else()
-    find_package(XCFun REQUIRED)
-    if(NOT XCFun_FOUND)
-      message(FATAL_ERROR "You set ENABLE_XCFUN, but not BUILD_XCFUN, and xcfun can't be found")
+    if(EXISTS ${PROJECT_SOURCE_DIR}/deps/include/XCFun)
+      add_library(xcfun SHARED IMPORTED GLOBAL)
+      if(EXISTS ${PROJECT_SOURCE_DIR}/deps/lib/${CMAKE_SHARED_LIBRARY_PREFIX}xcfun${CMAKE_SHARED_LIBRARY_SUFFIX})
+        set_target_properties(xcfun
+          PROPERTIES
+          IMPORTED_LOCATION ${PROJECT_SOURCE_DIR}/deps/lib/${CMAKE_SHARED_LIBRARY_PREFIX}xcfun${CMAKE_SHARED_LIBRARY_SUFFIX}
+        )
+      elseif(EXISTS ${PROJECT_SOURCE_DIR}/deps/lib64/${CMAKE_SHARED_LIBRARY_PREFIX}xcfun${CMAKE_SHARED_LIBRARY_SUFFIX})
+        set_target_properties(xcfun
+          PROPERTIES
+          IMPORTED_LOCATION ${PROJECT_SOURCE_DIR}/deps/lib64/${CMAKE_SHARED_LIBRARY_PREFIX}xcfun${CMAKE_SHARED_LIBRARY_SUFFIX}
+        )
+      else()
+        message(FATAL_ERROR "Found XCFun headers but not the shared library")
+      endif()
+    else() # headers were not found locally; search for CMake package
+      find_package(XCFun REQUIRED)
     endif()
   endif() # BUILD_XCFUN
 endif() # ENABLE_XCFUN
