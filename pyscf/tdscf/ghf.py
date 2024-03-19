@@ -189,7 +189,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                                 ba + ab,        # mx
                                 (ba - ab) * 1j, # my
                                 aa - bb])       # mz
-
         if xctype == 'LDA':
             ao_deriv = 0
             for ao, mask, weight, coords \
@@ -555,7 +554,7 @@ class TDHF(TDBase):
             nstates = self.nstates
         else:
             self.nstates = nstates
-
+        
         log = logger.Logger(self.stdout, self.verbose)
 
         vind, hdiag = self.gen_vind(self._scf)
@@ -567,7 +566,8 @@ class TDHF(TDBase):
                                   (w.real > self.positive_eig_threshold))[0]
             # FIXME: Should the amplitudes be real? It also affects x2c-tdscf
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, ensure_real)
-
+        import pdb
+        pdb.set_trace()
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 

@@ -731,8 +731,7 @@ class TDBase(lib.StreamObject):
 
     def get_precond(self, hdiag):
         def precond(x, e, x0):
-            diagd = hdiag - (e-self.level_shift)
-            diagd[abs(diagd)<1e-8] = 1e-8
+            diagd = hdiag - (e-1e-99)
             return x/diagd
         return precond
 
@@ -763,9 +762,6 @@ class TDBase(lib.StreamObject):
                         [i for i, x in enumerate(self.converged) if not x])
         logger.note(self, 'Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self
-
-    def to_gpu(self):
-        raise NotImplementedError
 
 class TDA(TDBase):
     '''Tamm-Dancoff approximation
@@ -868,8 +864,6 @@ class TDA(TDBase):
         log.timer('TDA', *cpu0)
         self._finalize()
         return self.e, self.xy
-
-    to_gpu = lib.to_gpu
 
 CIS = TDA
 
@@ -1048,8 +1042,6 @@ class TDHF(TDA):
     def nuc_grad_method(self):
         from pyscf.grad import tdrhf
         return tdrhf.Gradients(self)
-
-    to_gpu = lib.to_gpu
 
 RPA = TDRHF = TDHF
 

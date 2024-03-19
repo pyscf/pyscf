@@ -576,16 +576,17 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
     return numpy.asarray(conv), e, x0
 
-def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=25):
+def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=12):
     omega0 = numpy.zeros((nroots))
     u0 = 0.0 # save the eigenvectors.
     
     for icycle in range(max_cycle):
+        print(x0.shape)
         if icycle%max_space == 0: 
             x0 = x0[:nroots]
-        print(x0.shape)
             
         axt = aop(x0)
+
         xaxt = numpy.einsum('nv,mv->mn',axt,x0)
         omega_tmp, c_small = numpy.linalg.eig(xaxt)
         idx_pov = numpy.where(omega_tmp.real>0)[0]
@@ -624,6 +625,7 @@ def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=25):
         x1 += numpy.einsum('tn,tm->mn',axt,c_small)
         
         for i in range(x1.shape[0]):
+            # +1e-99 is for zero in denominator
             Dinv = numpy.diag(1/(omega_tmp[i]-precond+1e-99))
             x1[i,:] = numpy.einsum('ts,s->t',Dinv,x1[i,:], optimize=True)
 
@@ -632,7 +634,6 @@ def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=25):
     if icycle == max_cycle-1:
         raise RuntimeError("Not convergence!")
     
-    # ToDo: x0 is not the eigenvectors.
     return omega_diff, omega_p[:nroots].real, u0[:nroots]
 
 def make_diag_precond(diag, level_shift=0):

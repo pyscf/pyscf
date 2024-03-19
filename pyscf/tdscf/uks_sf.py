@@ -31,7 +31,7 @@ class TDA_SF(uhf.TDA):
 
 class TDDFT_SF(uhf.TDHF):
     print('Remember to set collinear_samples in SF-TDDFT, \
-        the default value is 200.')
+           the default value is 200.')
     
     def nuc_grad_method(self):
         from pyscf.grad import tduks
@@ -152,7 +152,7 @@ class CasidaTDDFT(TDDFT_SF, TDA_SF):
 
         def pickeig(w, v, nroots, envs):
             # ToDo: as a function serving for davidson2
-            idx = numpy.where(w > self.positive_eig_threshold)[0]
+            idx = numpy.where(w.real>0)[0]
             return w[idx], v[:,idx], idx
 
         if x0 is None:

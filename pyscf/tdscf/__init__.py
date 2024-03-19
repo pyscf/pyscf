@@ -64,7 +64,16 @@ def TDDFT(mf):
         return mf.TDDFT()
     else:
         return TDHF(mf)
-    
+
+def TDA_SF(mf):
+    mf = mf.remove_soscf()
+    if isinstance(mf, scf.rohf.ROHF):
+        if isinstance(mf, KohnShamDFT):
+            mf = mf.to_uks()
+        else:
+            mf = mf.to_uhf()
+    return mf.TDA_SF()
+
 def TDDFT_SF(mf):
     return mf.TDDFT_SF()
 

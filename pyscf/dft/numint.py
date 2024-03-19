@@ -1939,6 +1939,81 @@ def nr_uks_fxc_sf(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,rho0=
         vmat = numpy.asarray(vmat, dtype=dtype)
     return vmat
 
+def nr_uks_fxc_sf_tda(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,rho0=None,
+                      vxc=None, fxc=None, extype=0, max_memory=2000, verbose=None):
+    if isinstance(dms, numpy.ndarray):
+        dtype = dms.dtype
+    else:
+        dtype = numpy.result_type(*dms)
+    if hermi != 1 and dtype != numpy.double:
+        raise NotImplementedError('complex density matrix')
+
+    xctype = ni._xc_type(xc_code)
+
+    nao = dms.shape[-1]
+    make_rhosf, nset = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)[:2]
+
+    def block_loop(ao_deriv):
+        p1 = 0
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
+            p0, p1 = p1, p1 + weight.size
+            _fxc = fxc[...,p0:p1]
+            for i in range(nset):
+                rho1sf = make_rhosf(i, ao, mask, xctype)
+                if xctype == 'LDA':
+                    # *2.0 becausue kernel xx,yy parts.
+                    wv = rho1sf * _fxc[0,0]*2.0 *weight
+                else:
+                    # *2.0 becausue kernel xx,yy parts.
+                    wv = lib.einsum('bg,abg->ag',rho1sf,_fxc*2.0)*weight
+                yield i, ao, mask, wv
+    
+    ao_loc = mol.ao_loc_nr()
+    cutoff = grids.cutoff * 1e2
+    nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(grids.cutoff))
+    pair_mask = mol.get_overlap_cond() < -numpy.log(ni.cutoff)
+    vmat = numpy.zeros((nset,nao,nao))
+    aow = None
+    if xctype == 'LDA':
+        ao_deriv = 0
+        for i, ao, mask, wv in block_loop(ao_deriv):
+            _dot_ao_ao_sparse(ao, ao, wv, nbins, mask, pair_mask, ao_loc,
+                              hermi, vmat[i])
+    elif xctype == 'GGA':
+        ao_deriv = 1
+        # import pdb
+        # pdb.set_trace()
+        for i, ao, mask, wv in block_loop(ao_deriv):
+            wv[0] *= .5
+            aow = _scale_ao_sparse(ao, wv, mask, ao_loc, out=aow)
+            _dot_ao_ao_sparse(ao[0], aow, None, nbins, mask, pair_mask, ao_loc,
+                              hermi=0, out=vmat[i])
+            
+        # [(\nabla mu) nu + mu (\nabla nu)] * fxc_jb = ((\nabla mu) nu f_jb) + h.c.
+        vmat = lib.hermi_sum(vmat.reshape(-1,nao,nao), axes=(0,2,1)).reshape(nset,nao,nao)
+        
+    elif xctype == 'MGGA':
+        assert not MGGA_DENSITY_LAPL
+        ao_deriv = 1
+        v1 = numpy.zeros_like(vmat)
+        for i, ao, mask, wv in block_loop(ao_deriv):
+            wv[0] *= .5
+            wv[4] *= .5
+            aow = _scale_ao_sparse(ao[:4], wv[:4], mask, ao_loc, out=aow)
+            _dot_ao_ao_sparse(ao[0], aow, None, nbins, mask, pair_mask, ao_loc,
+                              hermi=0, out=vmat[i])
+            _tau_dot_sparse(ao, ao, wv[4], nbins, mask, pair_mask, ao_loc, out=v1[i])
+            
+        vmat = lib.hermi_sum(vmat.reshape(-1,nao,nao), axes=(0,2,1)).reshape(nset,nao,nao)
+        vmat += v1
+        
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        vmat = vmat[:,0]
+    if vmat.dtype != dtype:
+        vmat = numpy.asarray(vmat, dtype=dtype)
+    return vmat
+
 def _uks_gga_wv0(rho, vxc, weight):
     rhoa, rhob = rho
     vrho, vsigma = vxc[:2]
@@ -2883,6 +2958,7 @@ class NumInt(lib.StreamObject, LibXCMixin):
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     nr_uks_fxc_sf = nr_uks_fxc_sf
+    nr_uks_fxc_sf_tda = nr_uks_fxc_sf_tda
     nr_rks_fxc_st = nr_rks_fxc_st
     cache_xc_kernel  = cache_xc_kernel
     cache_xc_kernel1 = cache_xc_kernel1
