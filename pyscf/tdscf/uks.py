@@ -44,7 +44,6 @@ RPA = TDUKS = TDDFT
 class CasidaTDDFT(TDDFT, TDA):
     '''Solve the Casida TDDFT formula (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
-
     init_guess = TDA.init_guess
 
     def gen_vind(self, mf=None):

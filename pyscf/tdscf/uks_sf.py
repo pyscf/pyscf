@@ -24,18 +24,18 @@ from pyscf.dft.rks import KohnShamDFT
 from pyscf import __config__
 
 
-class TDA_SF(uhf.TDA):
+class TDA_SF(uhf.TDA_SF):
     def nuc_grad_method(self):
         from pyscf.grad import tduks
         return tduks.Gradients(self)
 
-class TDDFT_SF(uhf.TDHF):
-    print('Remember to set collinear_samples in SF-TDDFT, \
-           the default value is 200.')
-    
-    def nuc_grad_method(self):
-        from pyscf.grad import tduks
-        return tduks.Gradients(self)
+class TDDFT_SF(uhf.TDA_SF):
+    pass
+    # print('Remember to set collinear_samples in SF-TDDFT, \
+    #        the default value is 200.')
+    # def nuc_grad_method(self):
+    #     from pyscf.grad import tduks
+    #     return tduks.Gradients(self)
     
 TDUKS_SF = TDDFT_SF
 
@@ -156,7 +156,7 @@ class CasidaTDDFT(TDDFT_SF, TDA_SF):
             return w[idx], v[:,idx], idx
 
         if x0 is None:
-            x0 = self.init_guess_sf(self._scf, self.nstates)
+            x0 = self.init_guess(self._scf, self.nstates)
         
         # Because the degeneracy has been dealt with by init_guess_sf function.
         nstates_new = x0.shape[0]   
@@ -212,7 +212,7 @@ class CasidaTDDFT(TDDFT_SF, TDA_SF):
         return tduks.Gradients(self)
 
 def tddft(mf):
-    '''Driver to create TDDFT or CasidaTDDFT object'''
+    '''Driver to create TDDFT_SF or CasidaTDDFT_SF object'''
     return CasidaTDDFT(mf)
 
 from pyscf import dft

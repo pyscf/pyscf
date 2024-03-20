@@ -578,7 +578,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
 def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=12):
     omega0 = numpy.zeros((nroots))
-    u0 = 0.0 # save the eigenvectors.
+    u0 = numpy.zeros((nroots,x0.shape[-1])) # save the eigenvectors.
     
     for icycle in range(max_cycle):
         print(x0.shape)
@@ -597,8 +597,9 @@ def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=12):
         omega_tmp = omega_tmp[idx_eigen]
         c_small = c_small[:,idx_eigen]
         omega_p = omega_tmp*1.0
-        
-        u0 += numpy.einsum('nt,tm->mn',x0.T,c_small)[:nroots].real
+        # import pdb
+        # pdb.set_trace()
+        u0[:len(omega_p)] += numpy.einsum('nt,tm->mn',x0.T,c_small)[:nroots].real
         
         if omega_p.size < x0.shape[0]:
             er_value = x0.shape[0] - omega_p.size
