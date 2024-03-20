@@ -799,57 +799,74 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
     
     ### after solve linear equation, we have to perform another FFT ### 
     
-    freq1 = np.array(range(MeshPrim[0]), dtype=np.float64)
-    freq2 = np.array(range(MeshPrim[1]), dtype=np.float64)
-    freq3 = np.array(range(MeshPrim[2]), dtype=np.float64)
-    freq_q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+    # freq1 = np.array(range(MeshPrim[0]), dtype=np.float64)
+    # freq2 = np.array(range(MeshPrim[1]), dtype=np.float64)
+    # freq3 = np.array(range(MeshPrim[2]), dtype=np.float64)
+    # freq_q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
     
-    freq1 = np.array(range(Ls[0]), dtype=np.float64)
-    freq2 = np.array(range(Ls[1]), dtype=np.float64)
-    freq3 = np.array(range(Ls[2]//2+1), dtype=np.float64)
-    freq_Q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
+    # freq1 = np.array(range(Ls[0]), dtype=np.float64)
+    # freq2 = np.array(range(Ls[1]), dtype=np.float64)
+    # freq3 = np.array(range(Ls[2]//2+1), dtype=np.float64)
+    # freq_Q = np.array(np.meshgrid(freq1, freq2, freq3, indexing='ij'))
     
-    FREQ = np.einsum("ijkl,ipqs->ijklpqs", freq_Q, freq_q)
-    FREQ[0] /= (Ls[0] * MeshPrim[0])
-    FREQ[1] /= (Ls[1] * MeshPrim[1])
-    FREQ[2] /= (Ls[2] * MeshPrim[2])
-    FREQ = np.einsum("ijklpqs->jklpqs", FREQ)
-    FREQ  = FREQ.reshape(-1, np.prod(MeshPrim)).copy()
-    FREQ  = np.exp(-2.0j * np.pi * FREQ)  # this is the only correct way to construct the factor
+    # FREQ = np.einsum("ijkl,ipqs->ijklpqs", freq_Q, freq_q)
+    # FREQ[0] /= (Ls[0] * MeshPrim[0])
+    # FREQ[1] /= (Ls[1] * MeshPrim[1])
+    # FREQ[2] /= (Ls[2] * MeshPrim[2])
+    # FREQ = np.einsum("ijklpqs->jklpqs", FREQ)
+    # FREQ  = FREQ.reshape(-1, np.prod(MeshPrim)).copy()
+    # FREQ  = np.exp(-2.0j * np.pi * FREQ)  # this is the only correct way to construct the factor
+    
+    fn_FREQ = getattr(libpbc, "_FREQ", None)
+    assert fn_FREQ is not None
+    
+    FREQ = np.zeros((ncell_complex, nGridPrim), dtype=np.complex128)
+    
+    fn_FREQ(
+        FREQ.ctypes.data_as(ctypes.c_void_p),
+        MeshPrim.ctypes.data_as(ctypes.c_void_p),
+        Ls.ctypes.data_as(ctypes.c_void_p)
+    )
     
     fn_final_fft = getattr(libpbc, "_FinalFFT", None)
     assert fn_final_fft is not None
     fn_permutation_conj = getattr(libpbc, "_PermutationConj", None)
     assert fn_permutation_conj is not None
     
-    def _permutation(nx, ny, nz, shift_x, shift_y, shift_z):
-        
-        res = np.zeros((nx*ny*nz), dtype=numpy.int32)
-        
-        loc_now = 0
-        for ix in range(nx):
-            for iy in range(ny):
-                for iz in range(nz):
-                    ix2 = (nx - ix - shift_x) % nx
-                    iy2 = (ny - iy - shift_y) % ny
-                    iz2 = (nz - iz - shift_z) % nz
-                    
-                    loc = ix2 * ny * nz + iy2 * nz + iz2
-                    # res[loc_now] = loc
-                    res[loc] = loc_now
-                    loc_now += 1
-        return res
+    # def _permutation(nx, ny, nz, shift_x, shift_y, shift_z):
+    #     res = np.zeros((nx*ny*nz), dtype=numpy.int32)
+    #     loc_now = 0
+    #     for ix in range(nx):
+    #         for iy in range(ny):
+    #             for iz in range(nz):
+    #                 ix2 = (nx - ix - shift_x) % nx
+    #                 iy2 = (ny - iy - shift_y) % ny
+    #                 iz2 = (nz - iz - shift_z) % nz
+    #                 
+    #                 loc = ix2 * ny * nz + iy2 * nz + iz2
+    #                 # res[loc_now] = loc
+    #                 res[loc] = loc_now
+    #                 loc_now += 1
+    #     return res
+    
+    fn_permutation = getattr(libpbc, "_get_permutation", None)
+    assert fn_permutation is not None
     
     permutation = np.zeros((8, nGridPrim), dtype=np.int32)
-    print("permutation.shape = ", permutation.shape)
-    permutation[0] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 0, 0)
-    permutation[1] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 0, 1)
-    permutation[2] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 1, 0)
-    permutation[3] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 1, 1)
-    permutation[4] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 0, 0)
-    permutation[5] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 0, 1)
-    permutation[6] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 1, 0)
-    permutation[7] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 1, 1)
+    # print("permutation.shape = ", permutation.shape)
+    # permutation[0] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 0, 0)
+    # permutation[1] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 0, 1)
+    # permutation[2] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 1, 0)
+    # permutation[3] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 0, 1, 1)
+    # permutation[4] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 0, 0)
+    # permutation[5] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 0, 1)
+    # permutation[6] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 1, 0)
+    # permutation[7] = _permutation(MeshPrim[0], MeshPrim[1], MeshPrim[2], 1, 1, 1)
+    
+    fn_permutation(
+        MeshPrim.ctypes.data_as(ctypes.c_void_p),
+        permutation.ctypes.data_as(ctypes.c_void_p)
+    )
     
     fac = np.sqrt(np.prod(Ls) / np.prod(Mesh)) # normalization factor
     
@@ -866,39 +883,40 @@ def _construct_aux_basis_kSym(mydf:ISDF.PBC_ISDF_Info):
                 buf_A.ravel()[:] = A_complex[:, i*nIP_Prim:(i+1)*nIP_Prim].ravel()[:]
                 buf_B.ravel()[:] = B_complex[:, i*nGridPrim:(i+1)*nGridPrim].ravel()[:]
                 
-                # fn_cholesky(
-                #     A_tmp.ctypes.data_as(ctypes.c_void_p),
-                #     ctypes.c_int(nIP_Prim)
-                # )
+                fn_cholesky(
+                    buf_A.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nIP_Prim)
+                )
                 
                 # X = np.linalg.solve(A_tmp, B_tmp)
         
-                # fn_solve(
-                #     ctypes.c_int(nIP_Prim),
-                #     A_tmp.ctypes.data_as(ctypes.c_void_p),
-                #     B_tmp.ctypes.data_as(ctypes.c_void_p),
-                #     ctypes.c_int(B_tmp.shape[1]),
-                #     ctypes.c_int(bunchsize)
-                # )
+                fn_solve(
+                    ctypes.c_int(nIP_Prim),
+                    buf_A.ctypes.data_as(ctypes.c_void_p),
+                    buf_B.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(buf_B.shape[1]),
+                    ctypes.c_int(bunchsize)
+                )
                 
-                with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
-                    e, h = scipy.linalg.eigh(buf_A)
+                # with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
+                #     e, h = scipy.linalg.eigh(buf_A)
 
                 # print("e = ", e)
                 # print(buf_B)
         
                 # e, h = np.linalg.eigh(buf_A)  # we get back to this mode, because numerical issue ! 
-                print("condition number = ", e[-1]/e[0])
-                e_max = np.max(e)
-                e_min_cutoff = e_max * COND_CUTOFF
-                # throw away the small eigenvalues
-                where = np.where(abs(e) > e_min_cutoff)[0]
-                e = e[where]
-                h = h[:, where].copy()
-                buf_C = np.ndarray((e.shape[0], nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
-                buf_C = np.asarray(lib.dot(h.T.conj(), buf_B, c=buf_C), order='C')
-                buf_C = (1.0/e).reshape(-1,1) * buf_C
-                lib.dot(h, buf_C, c=buf_B)
+                
+                # print("condition number = ", e[-1]/e[0])
+                # e_max = np.max(e)
+                # e_min_cutoff = e_max * COND_CUTOFF
+                # # throw away the small eigenvalues
+                # where = np.where(abs(e) > e_min_cutoff)[0]
+                # e = e[where]
+                # h = h[:, where].copy()
+                # buf_C = np.ndarray((e.shape[0], nGridPrim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+                # buf_C = np.asarray(lib.dot(h.T.conj(), buf_B, c=buf_C), order='C')
+                # buf_C = (1.0/e).reshape(-1,1) * buf_C
+                # lib.dot(h, buf_C, c=buf_B)
                 
                 # print("B_tmp = ", B_tmp[:5,:5])
                 
@@ -1645,7 +1663,7 @@ def _aux_basis_FFT_outcore(mydf:ISDF.PBC_ISDF_Info, IO_File:str, IO_buf:np.ndarr
 
 ####################### construct W #######################
     
-def _construct_W_benchmark_grid(cell, aux_basis:np.ndarray):
+def _construct_W_benchmark_grid(cell, aux_basis:np.ndarray, Ls, mesh):
     
     def constrcuct_V_CCode(aux_basis:np.ndarray, mesh, coul_G):
         
@@ -1690,7 +1708,11 @@ def _construct_W_benchmark_grid(cell, aux_basis:np.ndarray):
     W = np.zeros((naux,naux))
     lib.ddot(a=aux_basis, b=V_R.T, c=W, beta=1.0)
     
-    return W
+    meshPrim = np.array(mesh) // np.array(Ls)
+    V_R = V_R.reshape(-1, Ls[0], meshPrim[0], Ls[1], meshPrim[1], Ls[2], meshPrim[2])
+    V_R = V_R.transpose(0, 1, 3, 5, 2, 4, 6).reshape(V_R.shape[0], -1)
+    
+    return V_R, W
     
 ## Incore
 
@@ -2028,6 +2050,7 @@ def _construct_V_W_incore(mydf:ISDF.PBC_ISDF_Info):
     Ls    = mydf.Ls
     Ls    = np.array(Ls, dtype=np.int32)
     mesh_prim = np.array(mesh) // np.array(Ls)
+    mesh_prim = np.array(mesh_prim, dtype=np.int32)
     coulG = coulG.reshape(mesh_prim[0], Ls[0], mesh_prim[1], Ls[1], mesh_prim[2], Ls[2])
     coulG = coulG.transpose(1, 3, 5, 0, 2, 4).reshape(-1, np.prod(mesh_prim)).copy()
     
@@ -2040,7 +2063,7 @@ def _construct_V_W_incore(mydf:ISDF.PBC_ISDF_Info):
     
     W = np.zeros((nIP_prim, nIP_prim*ncell), dtype=np.float64)
     V2 = np.zeros((nIP_prim, nGrid_prim*ncell_complex), dtype=np.complex128)
-    V = np.zeros((nIP_prim, nGrid_prim*ncell), dtype=np.float64, buf=V2, offset=0)
+    V = np.ndarray((nIP_prim, nGrid_prim*ncell), dtype=np.float64, buffer=V2)
     V_fftbuf = np.zeros((nIP_prim, nGrid_prim*ncell_complex), dtype=np.complex128)
     
     # print("nIP_prim = ", nIP_prim)
@@ -2068,8 +2091,28 @@ def _construct_V_W_incore(mydf:ISDF.PBC_ISDF_Info):
 
     # for i in range(ncell):
     
-    loc = 0
+    fn_FREQ = getattr(libpbc, "_FREQ", None)
+    assert fn_FREQ is not None
     
+    FREQ = np.zeros((ncell_complex, nGrid_prim), dtype=np.complex128)
+    
+    # print("mesh_prim = ", mesh_prim)
+    
+    fn_FREQ(
+        FREQ.ctypes.data_as(ctypes.c_void_p),
+        mesh_prim.ctypes.data_as(ctypes.c_void_p),
+        Ls.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    # print("mesh_prim = ", mesh_prim)
+    
+    fn_final_ifft = getattr(libpbc, "_FinaliFFT", None)
+    assert fn_final_ifft is not None
+    
+    nthread = lib.num_threads()
+    buffer_final_fft = np.ndarray((nthread, nGrid_prim), dtype=np.complex128)
+    
+    loc = 0
     for ix in range(Ls[0]):
         for iy in range(Ls[1]):
             for iz in range(Ls[2]//2+1):
@@ -2091,8 +2134,6 @@ def _construct_V_W_incore(mydf:ISDF.PBC_ISDF_Info):
                     coulG[i].ctypes.data_as(ctypes.c_void_p)
                 )
         
-                V2[:, k_begin:k_end] = B_buf
-        
                 # print("A_buf.shape = ", A_buf.shape)
                 # print("B_buf.shape = ", B_buf.shape)
                 # print("W_buf.shape = ", W_buf.shape)
@@ -2109,6 +2150,25 @@ def _construct_V_W_incore(mydf:ISDF.PBC_ISDF_Info):
                 k_end   = (loc + 1) * nIP_prim
 
                 W_buf2[:, k_begin:k_end] = W_buf
+
+                # print("B_Buf = ", B_buf)
+                
+                # print("mesh_prim = ", mesh_prim)
+                fn_final_ifft(
+                    B_buf.ctypes.data_as(ctypes.c_void_p),
+                    FREQ[i].ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nIP_prim),
+                    ctypes.c_int(nGrid_prim),
+                    mesh_prim.ctypes.data_as(ctypes.c_void_p),
+                    buffer_final_fft.ctypes.data_as(ctypes.c_void_p)
+                )
+                
+                # print("B_Buf = ", B_buf)
+                
+                k_begin = i * nGrid_prim
+                k_end   = (i + 1) * nGrid_prim
+                
+                V2[:, k_begin:k_end] = B_buf
             
                 loc += 1
     
@@ -2137,21 +2197,21 @@ def _construct_V_W_incore(mydf:ISDF.PBC_ISDF_Info):
     
     W.ravel()[:] = W_buf3.ravel()[:]
     mydf.W = W
-    mydf.V_R = V.copy()
+    mydf.V_R = V.copy() * np.sqrt(np.prod(mesh_prim))
     V = None
     V2 = None
 
     ### used in get J ### 
     
     W0 = np.zeros((nIP_prim, nIP_prim), dtype=np.float64)
-    V0 = np.zeros((nIP_prim, nIP_prim), dtype=np.float64)
+    V0 = np.zeros((nIP_prim, nGrid_prim), dtype=np.float64)
     for i in range(ncell):
             
         k_begin = i * nIP_prim
         k_end   = (i + 1) * nIP_prim
             
         W0 += W[:, k_begin:k_end]
-        V0 += V[:, i*nGrid_prim:(i+1)*nGrid_prim]
+        V0 += mydf.V_R[:, i*nGrid_prim:(i+1)*nGrid_prim]
 
     mydf.W0 = W0
     mydf.V0 = V0
@@ -2169,7 +2229,7 @@ def _get_j_with_Wgrid(mydf:ISDF.PBC_ISDF_Info, W_grid=None, dm=None):
         else:
             mydf.construct_auxbasis_benchmark()
             aux_basis = mydf.aux_basis_bench_Grid
-            W_grid = _construct_W_benchmark_grid(mydf.cell, aux_basis)
+            _, W_grid = _construct_W_benchmark_grid(mydf.cell, aux_basis, mydf.Ls, mydf.mesh)
             mydf.W_grid = W_grid
     print("W_grid.shape = ", W_grid.shape)
     
@@ -2432,6 +2492,7 @@ def _get_j_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     # bufferW = np.ndarray((nIP_prim,1), dtype=np.float64, buffer=buffer, offset=offset)
     # offset += (nIP_prim) * dm.dtype.itemsize
     # bufferJ_block = np.ndarray((nao_prim, nao_prim), dtype=np.float64, buffer=buffer, offset=offset)
+    bufferJ_block = np.zeros((nao_prim, nao_prim), dtype=np.float64)
     # offset += (nao_prim * nao_prim) * dm.dtype.itemsize
     # bufferi = np.ndarray((nao_prim,nIP_prim), dtype=np.float64, buffer=buffer, offset=offset)
     # offset += (nao_prim * nIP_prim) * dm.dtype.itemsize
@@ -2449,17 +2510,73 @@ def _get_j_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     density_R  = lib.ddot(dm, aoR_Prim)
     density_R = np.asarray(lib.multiply_sum_isdf(aoR_Prim, density_R), order='C')
     
-    ### construct J part 
+    J = np.zeros((nao_prim,nao), dtype=np.float64)
     
+    ### construct J1 part 
     
+    V_0 = mydf.V0
+    bufferV  = lib.ddot(V_0.T, density_Rg.reshape(-1,1)).reshape(-1)
+    buffer_J = np.zeros((nao_prim,nao), dtype=np.float64)
     
-    ### check the symmetry of density_Rg
+    for ix_q in range(Ls[0]):
+        for iy_q in range(Ls[1]):
+            for iz_q in range(Ls[2]):
+                
+                bufferJ_block.ravel()[:] = 0.0 # set to zero
+    
+                ### loop over the blocks
+                
+                for ix in range(Ls[0]):
+                    for iy in range(Ls[1]):
+                        for iz in range(Ls[2]):
+                            
+                            ipx = (Ls[0] - ix) % Ls[0]
+                            ipy = (Ls[1] - iy) % Ls[1]
+                            ipz = (Ls[2] - iz) % Ls[2]
+                            
+                            loc_p = ipx * Ls[1] * Ls[2] + ipy * Ls[2] + ipz
+                            
+                            begin = loc_p * nao_prim
+                            end   = (loc_p + 1) * nao_prim
+                            
+                            buffer_i = aoR_Prim[begin:end, :]
+                            
+                            iqx = (ix_q - ix + Ls[0]) % Ls[0]
+                            iqy = (iy_q - iy + Ls[1]) % Ls[1]
+                            iqz = (iz_q - iz + Ls[2]) % Ls[2]
+                            
+                            loc_q = iqx * Ls[1] * Ls[2] + iqy * Ls[2] + iqz
+                            
+                            begin = loc_q * nao_prim
+                            end   = (loc_q + 1) * nao_prim
+                            
+                            buffer_j = aoR_Prim[begin:end, :]
+                            tmp = np.asarray(lib.d_ij_j_ij(buffer_j, bufferV), order='C')
+                            lib.ddot(buffer_i, tmp.T, c=bufferJ_block, beta=1)
+                            tmp = None
+                            buffer_j = None
+                            buffer_i = None
+                
+                ### set ### 
+                
+                loc_q = ix_q * Ls[1] * Ls[2] + iy_q * Ls[2] + iz_q
+                
+                begin = loc_q * nao_prim
+                end   = (loc_q + 1) * nao_prim
+                
+                buffer_J[:, begin:end] = bufferJ_block
+    
+    J += buffer_J * (ngrid / vol)
+    
+    ### construct J2 - W part 
     
     W_0 = mydf.W0
-    
-    lib.ddot(W_0, density_Rg.reshape(-1,1), c=bufferW)
-    bufferW = bufferW.reshape(-1)
-    buffer_J = buffer3
+    V_0 = mydf.V0
+    bufferW  = lib.ddot(W_0, density_Rg.reshape(-1,1)).reshape(-1)
+    bufferV  = lib.ddot(V_0, density_R.reshape(-1,1)).reshape(-1)
+    bufferW -= bufferV
+    # bufferW = -bufferW
+    buffer_J = np.zeros((nao_prim,nao), dtype=np.float64)
     
     for ix_q in range(Ls[0]):
         for iy_q in range(Ls[1]):
@@ -2494,8 +2611,13 @@ def _get_j_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
                             end   = (loc_q + 1) * nao_prim
                             
                             buffer_j = aoRg_Prim[begin:end, :]
-                            tmp = np.asarray(lib.d_ij_j_ij(buffer_j, bufferW, out=buffer4), order='C')
-                            lib.ddot_withbuffer(buffer_i, tmp.T, c=bufferJ_block, beta=1, buf=mydf.ddot_buf)
+                            tmp = np.asarray(lib.d_ij_j_ij(buffer_j, bufferW), order='C')
+                            # lib.ddot_withbuffer(buffer_i, tmp.T, c=bufferJ_block, beta=1, buf=mydf.ddot_buf)
+                            lib.ddot(buffer_i, tmp.T, c=bufferJ_block, beta=1)
+                            tmp = None
+                            buffer_j = None
+                            buffer_i = None
+                            
                 
                 ### set ### 
                 
@@ -2506,9 +2628,9 @@ def _get_j_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
                 
                 buffer_J[:, begin:end] = bufferJ_block
     
-    buffer_J = buffer_J * (ngrid / vol)
+    J -= buffer_J * (ngrid / vol)
     
-    J = _pack_JK(buffer_J, Ls, nao_prim, output=None)
+    J = _pack_JK(J, Ls, nao_prim, output=None)
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
@@ -2767,6 +2889,322 @@ def _get_k_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
     
     # return DM_RgRg_real # temporary return for debug
 
+def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
+ 
+    #### preprocess ####  
+    
+    mydf._allocate_jk_buffer(dm.dtype)
+    t1 = (logger.process_clock(), logger.perf_counter())
+    
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+    
+    nao  = dm.shape[0]
+    cell = mydf.cell    
+    assert cell.nao == nao
+    ngrid = np.prod(cell.mesh)
+    vol = cell.vol
+    
+    W         = mydf.W
+    aoRg      = mydf.aoRg
+    aoRg_Prim = mydf.aoRg_Prim
+    naux      = aoRg.shape[1]
+    
+    Ls = np.array(mydf.Ls, dtype=np.int32)
+    mesh = mydf.mesh
+    meshPrim = np.array(mesh) // np.array(Ls)
+    nGridPrim = mydf.nGridPrim
+    ncell = np.prod(Ls)
+    ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
+    nIP_prim = mydf.nIP_Prim
+    nao_prim = nao // ncell
+    
+    #### allocate buffer ####
+     
+    
+    offset = 0
+    DM_RgRg_complex = np.ndarray((nIP_prim,nIP_prim*ncell_complex), dtype=np.complex128)
+    DM_RgRg_real = np.ndarray((nIP_prim,nIP_prim*ncell), dtype=np.float64, buffer=DM_RgRg_complex)
+    
+    offset += (nIP_prim * nIP_prim * ncell_complex) * DM_RgRg_complex.itemsize
+    DM_complex = np.ndarray((nao_prim,nao_prim*ncell_complex), dtype=np.complex128)
+    DM_real = np.ndarray((nao_prim,nao), dtype=np.float64, buffer=DM_complex, offset=0)
+    DM_real.ravel()[:] = dm[:nao_prim, :].ravel()[:]
+    offset += (nao_prim * nao_prim * ncell_complex) * DM_complex.itemsize
+    
+    #### get D ####
+    
+    #_get_DM_RgRg_real(mydf, DM_real, DM_complex, DM_RgRg_real, DM_RgRg_complex, offset)
+    
+    fn1 = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+    assert fn1 is not None
+    
+    buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+        
+    fn1(
+        DM_real.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao_prim),
+        ctypes.c_int(nao_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    buf_A = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    offset2 = offset + (nao_prim * nao_prim) * buf_A.itemsize
+    buf_B = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset2)
+    
+    offset3 = offset2 + (nao_prim * nIP_prim) * buf_B.itemsize
+    buf_C = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset3)
+    
+    offset4 = offset3 + (nao_prim * nIP_prim) * buf_C.itemsize
+    buf_D = np.ndarray((nIP_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset4)
+    
+    aoRg_FFT = mydf.aoRg_FFT
+    
+    for i in range(ncell_complex):
+        
+        k_begin = i * nao_prim
+        k_end   = (i + 1) * nao_prim
+        
+        buf_A[:] = DM_complex[:, k_begin:k_end]
+        buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+        
+        lib.dot(buf_A, buf_B, c=buf_C)
+        lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
+        
+        k_begin = i * nIP_prim
+        k_end   = (i + 1) * nIP_prim
+        
+        DM_RgRg_complex[:, k_begin:k_end] = buf_D
+    
+    buf_fft = np.ndarray((nIP_prim, nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    fn2 = getattr(libpbc, "_iFFT_Matrix_Col_InPlace", None)
+    assert fn2 is not None
+    
+    DM_RgRg_complex2 = DM_RgRg_complex.copy()
+    
+    fn2(
+        DM_RgRg_complex.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_prim),
+        ctypes.c_int(nIP_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    # inplace multiplication
+    
+    lib.cwise_mul(mydf.W, DM_RgRg_real, out=DM_RgRg_real)
+    
+    offset = nIP_prim * nIP_prim * ncell_complex * DM_RgRg_complex.itemsize
+    
+    buf_fft = np.ndarray((nIP_prim, nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    fn1(
+        DM_RgRg_real.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_prim),
+        ctypes.c_int(nIP_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    K_complex_buf = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    K_real_buf    = np.ndarray((nao_prim, nao_prim*ncell), dtype=np.float64, buffer=mydf.jk_buffer, offset=offset)
+    offset += (nao_prim * nao_prim * ncell_complex) * K_complex_buf.itemsize
+    offset_now = offset    
+    
+    buf_A = np.ndarray((nIP_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    offset_now += (nIP_prim * nIP_prim) * buf_A.itemsize
+    buf_B = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    offset_now += (nao_prim * nIP_prim) * buf_B.itemsize
+    buf_C = np.ndarray((nIP_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    offset_now += (nIP_prim * nao_prim) * buf_C.itemsize
+    buf_D = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    
+    for i in range(ncell_complex):
+        
+        k_begin = i * nIP_prim
+        k_end   = (i + 1) * nIP_prim
+        
+        buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
+        buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
+        
+        lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+        lib.dot(buf_B, buf_C, c=buf_D)
+        
+        k_begin = i * nao_prim
+        k_end   = (i + 1) * nao_prim
+        
+        K_complex_buf[:, k_begin:k_end] = buf_D
+    
+    buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    fn2(
+        K_complex_buf.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao_prim),
+        ctypes.c_int(nao_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    K_real_buf *= (ngrid / vol)
+    
+    K = -_pack_JK(K_real_buf, Ls, nao_prim, output=None) # "-" due to robust fitting
+    
+    # return -K
+    
+    ########### do the same thing on V ###########
+    
+    DM_RgR_complex = np.ndarray((nIP_prim,nGridPrim*ncell_complex), dtype=np.complex128)
+    DM_RgR_real = np.ndarray((nIP_prim,nGridPrim*ncell), dtype=np.float64, buffer=DM_RgR_complex)
+    
+    aoR_FFT = mydf.aoR_FFT
+    
+    buf_A = np.ndarray((nao_prim, nao_prim), dtype=np.complex128)
+    buf_B = np.ndarray((nao_prim, nGridPrim), dtype=np.complex128)
+    buf_B2 = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128)
+    buf_C = np.ndarray((nao_prim, nGridPrim), dtype=np.complex128)
+    buf_D = np.ndarray((nIP_prim, nGridPrim), dtype=np.complex128)
+    
+    for i in range(ncell_complex):
+        
+        k_begin = i * nao_prim
+        k_end   = (i + 1) * nao_prim
+        
+        buf_A[:] = DM_complex[:, k_begin:k_end]
+        buf_B[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim]
+        buf_B2[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+        
+        lib.dot(buf_A, buf_B, c=buf_C)
+        lib.dot(buf_B2.T.conj(), buf_C, c=buf_D)
+        
+        k_begin = i * nGridPrim
+        k_end   = (i + 1) * nGridPrim
+        
+        DM_RgR_complex[:, k_begin:k_end] = buf_D
+    
+    # DM_RgRg1 = DM_RgR_complex[:, mydf.IP_ID]
+    # DM_RgRg2 = DM_RgRg_complex2[:, :nIP_prim]
+    # diff = np.linalg.norm(DM_RgRg1 - DM_RgRg2)
+    # print("diff = ", diff)
+    # for i in range(10):
+    #     for j in range(10):
+    #         print(DM_RgRg1[i,j], DM_RgRg2[i,j])
+    # assert np.allclose(DM_RgRg1, DM_RgRg2)
+    
+    buf_A = None
+    buf_B = None
+    buf_B2 = None
+    buf_C = None
+    buf_D = None
+    
+    buf_fft = np.ndarray((nIP_prim, nGridPrim*ncell_complex), dtype=np.complex128)
+    
+    fn2(
+        DM_RgR_complex.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_prim),
+        ctypes.c_int(nGridPrim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+        
+    # inplace multiplication
+    
+    # print("DM_RgR_complex = ", DM_RgR_complex[:5,:5])
+    # print("mydf.V_R       = ", mydf.V_R[:5,:5])
+    
+    lib.cwise_mul(mydf.V_R, DM_RgR_real, out=DM_RgR_real)
+    
+    # buf_fft = np.ndarray((nIP_prim, nGridPrim*ncell_complex), dtype=np.complex128)
+    
+    fn1(
+        DM_RgR_real.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_prim),
+        ctypes.c_int(nGridPrim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    # print("DM_RgR_complex = ", DM_RgR_complex[:5,:5])
+    
+    buf_fft = None
+    
+    K_complex_buf = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128)
+    K_real_buf    = np.ndarray((nao_prim, nao_prim*ncell), dtype=np.float64, buffer=K_complex_buf)
+    
+    buf_A = np.ndarray((nIP_prim, nGridPrim), dtype=np.complex128)
+    buf_B = np.ndarray((nao_prim, nGridPrim), dtype=np.complex128)
+    buf_B2 = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128)
+    buf_C = np.ndarray((nIP_prim, nao_prim), dtype=np.complex128)
+    buf_D = np.ndarray((nao_prim, nao_prim), dtype=np.complex128)
+    
+    for i in range(ncell_complex):
+        
+        k_begin = i * nGridPrim
+        k_end   = (i + 1) * nGridPrim
+        
+        buf_A.ravel()[:] = DM_RgR_complex[:, k_begin:k_end].ravel()[:]
+        # print("buf_A = ", buf_A[:5,:5])
+        buf_B.ravel()[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim].ravel()[:]
+        # print("buf_B = ", buf_B[:5,:5])
+        buf_B2.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]  
+        # print("buf_B2 = ", buf_B2[:5,:5]) 
+        
+        lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+        lib.dot(buf_B2, buf_C, c=buf_D)
+        
+        # print("buf_D = ", buf_D[:5,:5])
+        
+        k_begin = i * nao_prim
+        k_end   = (i + 1) * nao_prim
+        
+        K_complex_buf[:, k_begin:k_end] = buf_D
+    
+    buf_A = None
+    buf_B = None
+    buf_B2 = None
+    buf_C = None
+    buf_D = None
+    
+    buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128)
+    
+   #  print("K_complex_buf = ", K_complex_buf[:5,:5])
+    
+    fn2(
+        K_complex_buf.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao_prim),
+        ctypes.c_int(nao_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    buf_fft = None
+    
+    K_real_buf *= (ngrid / vol)
+    
+    K2 = _pack_JK(K_real_buf, Ls, nao_prim, output=None)
+    
+    # print("K2 = ", K2[:5,:5])
+    # print("K = ", -K[:5,:5])
+    
+    K += K2 + K2.T
+    
+    # print("K = ", K[:5,:5])
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    _benchmark_time(t1, t2, "_contract_k_dm")
+    
+    DM_RgR_complex = None
+    DM_RgR_real = None
+    
+    return K
+    
+    # return DM_RgRg_real # temporary return for debug
+
+
 # @profile 
 def _symmetrize_dm(dm, Ls):
         
@@ -2867,7 +3305,9 @@ def get_jk_dm_kSym(mydf, dm, hermi=1, kpt=np.zeros(3),
         if mydf.with_robust_fitting == True:
             # vj = _get_j_dm_wo_robust_fitting(mydf, dm)
             # vk = _get_k_dm_wo_robust_fitting(mydf, dm)
-            raise NotImplementedError
+            # raise NotImplementedError
+            vj = _get_j_kSym_robust_fitting(mydf, dm)
+            vk = _get_k_kSym_robust_fitting(mydf, dm)
         else:
             # print(dm[:10, :10])
             vj1 = _get_j_kSym(mydf, dm)
@@ -2891,7 +3331,7 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         
         super().__init__(mol=mol, max_buf_memory=max_buf_memory, outcore=outcore, with_robust_fitting=with_robust_fitting, aoR=aoR, Ls=Ls)
         
-        assert with_robust_fitting == False
+        # assert with_robust_fitting == False
         assert self.mesh[0] % Ls[0] == 0
         assert self.mesh[1] % Ls[1] == 0
         assert self.mesh[2] % Ls[2] == 0
@@ -2990,7 +3430,9 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
     ################ allocate buffer ################ 
     
     def _get_bufsize_get_j(self):
-        if self.with_robust_fitting == False:
+        
+        # if self.with_robust_fitting == False:
+        if True:
             
             naux       = self.naux
             nao        = self.nao
@@ -3007,12 +3449,13 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             
             return max(size_buf3, size_buf4)
             
-        else:
-            raise NotImplementedError
+        # else:
+        #     raise NotImplementedError
 
     def _get_bufsize_get_k(self):
         
-        if self.with_robust_fitting == False:
+        # if self.with_robust_fitting == False:
+        if True:
             
             naux     = self.naux
             nao      = self.nao
@@ -3033,9 +3476,9 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         
             return max(size_buf5, size_buf6)
         
-        else:
+        # else:
             
-            raise NotImplementedError
+        #     raise NotImplementedError
     
     # @profile 
     def _allocate_jk_buffer(self, dtype=np.float64):
@@ -3249,6 +3692,37 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             buffer.ctypes.data_as(ctypes.c_void_p)
         ) # no normalization factor ! 
                 
+        if self.with_robust_fitting:
+            
+            shl_loc_begin = None
+            shl_loc_end = None
+    
+            for i in range(cell.nbas):
+                if cell.bas_atom(i) < first_natm:
+                    if shl_loc_begin is None:
+                        shl_loc_begin = i
+                    shl_loc_end = i+1
+            
+            print("shl_loc_begin = ", shl_loc_begin)
+            print("shl_loc_end = ", shl_loc_end)
+    
+            # aoR_FFT_eval = ISDF_eval_gto(cell=self.cell, coords=self.ordered_grid_coords, shls_slice=(shl_loc_begin, shl_loc_end)) * weight
+            aoR_FFT_eval = self._numint.eval_ao(self.cell, self.ordered_grid_coords, shls_slice=(shl_loc_begin, shl_loc_end))[0].T * weight
+            print("aoR_FFT_eval.shape = ", aoR_FFT_eval.shape)
+            self.aoR_FFT = np.ndarray((nao_prim, ncell_complex*self.nGridPrim), dtype=np.complex128)
+            self.aoR_FFT_real = np.ndarray((nao_prim, np.prod(Ls)*self.nGridPrim), dtype=np.double, buffer=self.aoR_FFT, offset=0)
+            self.aoR_FFT_real.ravel()[:] = aoR_FFT_eval.ravel()[:]
+            
+            buffer = np.ndarray((nao_prim, ncell_complex*self.nGridPrim), dtype=np.complex128)
+            fn(self.aoR_FFT_real.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_prim),
+                ctypes.c_int(self.nGridPrim),
+                Ls.ctypes.data_as(ctypes.c_void_p),
+                buffer.ctypes.data_as(ctypes.c_void_p)
+            )
+            buffer = None
+            aoR_FFT_eval = None
+                
         return np.array(possible_grid_ID, dtype=np.int32)
         
     ################ construct W ################
@@ -3326,14 +3800,21 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
             # raise NotImplementedError
 
             print("construct W in outcore mode")
-        
-            _aux_basis_FFT_outcore(self, self.IO_FILE, self.IO_buf)
-            _construct_W_outcore(self, self.IO_FILE, self.IO_buf)
+
+            if self.with_robust_fitting:
+                raise NotImplementedError
+            else:
+                _aux_basis_FFT_outcore(self, self.IO_FILE, self.IO_buf)
+                _construct_W_outcore(self, self.IO_FILE, self.IO_buf)
         
         else:
             
             print("construct W in incore mode")
-            _construct_W_incore(self)
+            
+            if self.with_robust_fitting:
+                _construct_V_W_incore(self)
+            else:
+                _construct_W_incore(self)
         
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t1, t2, "construct W")
@@ -3406,7 +3887,7 @@ if __name__ == "__main__":
     
     ############ construct ISDF object ############
     
-    pbc_isdf_info_ksym = PBC_ISDF_Info_kSym(cell, 8 * 1000 * 1000, Ls=Ls, outcore=False, with_robust_fitting=False, aoR=None)
+    pbc_isdf_info_ksym = PBC_ISDF_Info_kSym(cell, 8 * 1000 * 1000, Ls=Ls, outcore=False, with_robust_fitting=True, aoR=None)
     
     ############ test select IP ############
     
@@ -3458,7 +3939,7 @@ if __name__ == "__main__":
     print("basis3.shape = ", basis3.shape)
     print("basis3.dtype = ", basis3.dtype)
     
-    W_grid = _construct_W_benchmark_grid(cell, basis3)
+    V_R_grid, W_grid = _construct_W_benchmark_grid(cell, basis3, Ls, mesh)
     
     # print("W_grid = ", W_grid[:4,:4])
     
@@ -3476,12 +3957,14 @@ if __name__ == "__main__":
     # W_grid = _RowCol_FFT_bench(W_grid, Ls)
     
     nIP_prim = pbc_isdf_info_ksym.nIP_Prim
+    nGrim_prim = pbc_isdf_info_ksym.nGridPrim
 
     # print(W_grid[:nIP_prim, nIP_prim:2*nIP_prim])
     # print(W_grid[nIP_prim:2*nIP_prim,:nIP_prim])
     
     
     W_fft  = _RowCol_FFT_bench(W_grid, Ls)
+    V_R_fft = _RowCol_FFT_bench(V_R_grid, Ls)
     
     # print(W_fft[:nIP_prim, :nIP_prim])
     
@@ -3506,6 +3989,18 @@ if __name__ == "__main__":
         mat = W_fft[b_begin:b_end, k_begin:k_end]
         assert np.allclose(mat, mat.T.conj())
         
+        k_begin = icell * nGrim_prim
+        k_end   = (icell + 1) * nGrim_prim
+        matrix_before = V_R_fft[b_begin:b_end, :k_begin]
+        matrix_after = V_R_fft[b_begin:b_end, k_end:]
+        # assert np.allclose(matrix_before, 0.0)
+        # assert np.allclose(matrix_after, 0.0)
+        
+        if np.allclose(matrix_before, 0.0) == False:
+            print("norm of matrix_before = ", np.linalg.norm(matrix_before))
+        if np.allclose(matrix_after, 0.0) == False:
+            print("norm of matrix_after = ", np.linalg.norm(matrix_after))
+        
         W_fft_packed[:, k_begin:k_end] = W_fft[b_begin:b_end, k_begin:k_end]
     
     pbc_isdf_info_ksym.build_auxiliary_Coulomb()
@@ -3524,6 +4019,18 @@ if __name__ == "__main__":
     print(W1/W2)
     
     assert np.allclose(W, W_bench)
+    
+    V_R = pbc_isdf_info_ksym.V_R
+    V_R_bench = V_R_grid[:nIP_prim, :]
+    
+    V1 = V_R[:4, :4]
+    V2 = V_R_bench[:4, :4]
+    
+    print(V1)
+    print(V2)
+    print(V1/V2)
+    
+    assert np.allclose(V_R, V_R_bench)
     
     # exit(1)
     
@@ -3608,14 +4115,14 @@ if __name__ == "__main__":
     C = 15
     
     # Ls = [2, 2, 2]
-    Ls = [1, 1, 3]
+    Ls = [1, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
     cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh)
     
-    pbc_isdf_info = PBC_ISDF_Info_kSym(cell, 80 * 1000 * 1000, Ls=Ls, outcore=False, with_robust_fitting=False, aoR=None)
+    pbc_isdf_info = PBC_ISDF_Info_kSym(cell, 80 * 1000 * 1000, Ls=Ls, outcore=False, with_robust_fitting=True, aoR=None)
     pbc_isdf_info.build_IP_auxbasis(c=C, m=M)
     pbc_isdf_info.build_auxiliary_Coulomb()
     
@@ -3630,7 +4137,7 @@ if __name__ == "__main__":
     print("mf.direct_scf = ", mf.direct_scf)
 
     mf.kernel()
-        
+    
     exit(1)
         
     mf = scf.RHF(cell)

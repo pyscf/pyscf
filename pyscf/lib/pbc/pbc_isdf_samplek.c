@@ -313,6 +313,48 @@ void _FinalFFT(
     }
 }
 
+void _FinaliFFT(
+    double __complex__ *a,
+    const double __complex__ *freq,
+    int m, int n, int *mesh,
+    double __complex__ *buf)
+{
+    const int nThread = get_omp_threads();
+
+    double factor = 1.0 / (double)n;
+
+    if (n != mesh[0] * mesh[1] * mesh[2])
+    {
+        printf("n: %d\n", n);
+        printf("mesh: %d %d %d\n", mesh[0], mesh[1], mesh[2]);
+        fprintf(stderr, "The size of a is not compatible with mesh\n");
+        exit(1);
+    }
+
+#pragma omp parallel num_threads(nThread)
+    {
+        int thread_id = omp_get_thread_num();
+
+        double __complex__ *buf_thread = buf + thread_id * n;
+
+        fftw_plan plan = fftw_plan_dft_3d(mesh[0], mesh[1], mesh[2], (fftw_complex *)buf_thread, (fftw_complex *)a, FFTW_BACKWARD, FFTW_ESTIMATE);
+
+#pragma omp for schedule(static, 1) nowait
+        for (size_t i = 0; i < m; i++)
+        {
+            double __complex__ *in = a + i * n;
+            fftw_execute_dft(plan, (fftw_complex *)in, (fftw_complex *)buf_thread);
+            for (int j = 0; j < n; j++)
+            {
+                // buf_thread[j] = in[j] * conj(freq[j]) * factor;
+                in[j] = buf_thread[j] * conj(freq[j]) * factor;
+            }
+        }
+
+        fftw_destroy_plan(plan);
+    }
+}
+
 void _PermutationConj(
     double __complex__ *a,
     int m, int n, int *permutation,
