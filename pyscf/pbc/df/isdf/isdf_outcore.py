@@ -791,9 +791,11 @@ def _get_jk_dm_outcore(mydf, dm):
 
     offset = 0
     J1     = np.ndarray((naux,), dtype=np.float64, buffer=buf)
+    # J1      = np.zeros((naux,), dtype=np.float64)
 
     offset += naux * buf.dtype.itemsize
     J4      = np.ndarray((ngrid,), dtype=np.float64, buffer=buf, offset=offset)
+    # J4      = np.zeros((ngrid,), dtype=np.float64)
 
     offset += ngrid * buf.dtype.itemsize
     D3      = np.ndarray((naux,), dtype=np.float64, buffer=buf, offset=offset)
@@ -988,8 +990,10 @@ def _get_jk_dm_outcore(mydf, dm):
 
                 # construct D1
 
-                D1 = np.ndarray((nao, p1-p0),  dtype=np.float64, buffer=buf, offset=offset_D1)
-                D4 = np.ndarray((naux, p1-p0), dtype=np.float64, buffer=buf, offset=offset_D4)
+                # D1 = np.ndarray((nao, p1-p0),  dtype=np.float64, buffer=buf, offset=offset_D1)
+                # D4 = np.ndarray((naux, p1-p0), dtype=np.float64, buffer=buf, offset=offset_D4)
+                D1 = np.zeros((nao, p1-p0),  dtype=np.float64)
+                D4 = np.zeros((naux, p1-p0),  dtype=np.float64)
                 lib.ddot(dm, aoR1, c=D1)
                 lib.ddot(aoRg.T, D1, c=D4)
 
@@ -999,9 +1003,11 @@ def _get_jk_dm_outcore(mydf, dm):
                 if ibunch == 0:
                     beta = 0
 
-                lib.ddot_withbuffer(V1, D2[p0:p1].reshape(-1,1), c=J1.reshape(-1,1), beta=beta, buf=mydf.ddot_buf)
+                # lib.ddot_withbuffer(V1, D2[p0:p1].reshape(-1,1), c=J1.reshape(-1,1), beta=beta, buf=mydf.ddot_buf)
+                lib.ddot(V1, D2[p0:p1].reshape(-1,1), c=J1.reshape(-1,1), beta=beta)
                 # NOTE we do not need another loop for J4
                 lib.ddot_withbuffer(D3.reshape(1,-1), V1, c=J4[p0:p1].reshape(1,-1), buf=mydf.ddot_buf)
+                lib.ddot(D3.reshape(1,-1), V1, c=J4[p0:p1].reshape(1,-1))
 
                 aoR3  = np.ndarray((nao, p1-p0), dtype=np.float64, buffer=buf, offset=offset_aoR3)  # used in copy
                 lib.copy(aoR1, out=aoR3)
@@ -1021,10 +1027,10 @@ def _get_jk_dm_outcore(mydf, dm):
                 # lib.cwise_mul(V1, D4, out=D4)
                 D4 = lib.cwise_mul(V1, D4)
                 K1 = D4
-                # K2 = np.zeros((naux, nao), dtype=np.float64)
-                lib.ddot_withbuffer(K1, aoR1.T, c=K2, buf=mydf.ddot_buf)
+                K2 = np.zeros((naux, nao), dtype=np.float64)
+                # lib.ddot_withbuffer(K1, aoR1.T, c=K2, buf=mydf.ddot_buf)
                 # lib.ddot_withbuffer(aoRg, K2, c=K, beta=beta, buf=mydf.ddot_buf)
-                # K2 = lib.ddot(K1, aoR1.T)
+                K2 = lib.ddot(K1, aoR1.T)
                 K += lib.ddot(aoRg, K2, beta=beta)
 
                 # switch
@@ -1514,7 +1520,7 @@ H  2.1   2.1   2.1
     
     ### outcore ###
 
-    max_memory = 10*1000*1000 # 10M
+    max_memory = 100*1000*1000 # 10M
         
     pbc_isdf_info1 = PBC_ISDF_Info_outcore(cell, max_buf_memory=max_memory, outcore=False, with_robust_fitting=True, aoR=aoR)
     pbc_isdf_info1.build_IP_Sandeep_outcore(c=C)
