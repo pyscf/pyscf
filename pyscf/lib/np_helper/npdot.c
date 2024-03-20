@@ -82,10 +82,10 @@ void NPdgemm(const char trans_a, const char trans_b,
                         }
                 }
 
-                printf("k = %d\n", k);
-                printf("m = %d\n", m);
-                printf("n = %d\n", n);
-                printf("paralleize k , may cause performance issue\n");
+                // printf("k = %d\n", k);
+                // printf("m = %d\n", m);
+                // printf("n = %d\n", n);
+                // printf("paralleize k , may cause performance issue\n");
                 // fflush(stdout);
 
 #pragma omp parallel private(i, j)
