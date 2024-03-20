@@ -60,7 +60,7 @@ jobs:
             mkdir -p /root/wheelhouse $src/linux-wheels && \
             sed -i "/            if basename(fn) not in needed_libs:/s/basename.*libs/1/" /opt/_internal/pipx/venvs/auditwheel/lib/python*/site-packages/auditwheel/wheel_abi.py && \
             /opt/python/${{ matrix.pyver }}/bin/pip wheel -v --no-deps --no-clean -w /root/wheelhouse $src && \
-            export whl=`ls /root/wheelhouse/pyscf-*-linux_*.whl` && \
+            export whl=`ls /root/wheelhouse/pyscf-*linux_*.whl` && \
             auditwheel -v repair "$whl" --lib-sdir /lib -w $dst'
     - name: List available wheels
       run: |
