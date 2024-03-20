@@ -182,7 +182,7 @@ def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
 RQCISD.__doc__ = qcisd.QCISD.__doc__
 
 
-def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None, frozen=None):
+def FNOCCSD(mf, thresh=1e-6, pct_occ=None, pvir_act=None, nvir_act=None, frozen=None):
     """Frozen natural orbital CCSD
 
     Attributes:
@@ -190,21 +190,19 @@ def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None, frozen=None):
             Threshold on NO occupation numbers. Default is 1e-6 (very conservative).
         pct_occ : float
             Percentage of total occupation number. Default is None. If present, overrides `thresh`.
+        pvir_act : float
+            Percentage of total number of virtuals (ceiling is taken to get an integer number).
+            Default is None. If present, overrides `thresh` and `pct_occ`.
         nvir_act : int
             Number of virtual NOs to keep. Default is None. If present, overrides `thresh` and `pct_occ`.
     """
     import numpy
-    if frozen is None:
-        frozenocc = 0
-    else:
-        assert(isinstance(frozen, (int,numpy.int64)))
-        frozenocc = frozen
     from pyscf import mp
-    pt = mp.MP2(mf).set(verbose=0).run()
-    frozen, no_coeff = pt.make_fno(thresh=thresh, pct_occ=pct_occ, nvir_act=nvir_act)
-    frozen = numpy.hstack([numpy.arange(frozenocc),frozen])
+    pt = mp.MP2(mf, frozen=frozen).set(verbose=2).run()
+    frozen, no_coeff = pt.make_fno(thresh=thresh, pct_occ=pct_occ, pvir_act=pvir_act,
+                                   nvir_act=nvir_act)
     if len(frozen) == 0: frozen = None
-    pt_no = mp.MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run()
+    pt_no = mp.MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=2).run()
     mycc = CCSD(mf, frozen=frozen, mo_coeff=no_coeff)
     mycc.delta_emp2 = pt.e_corr - pt_no.e_corr
     from pyscf.lib import logger
