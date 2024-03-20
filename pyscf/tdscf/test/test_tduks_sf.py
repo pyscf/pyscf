@@ -72,9 +72,9 @@ def setUpModule():
     mf_tpss = mf_tpss.newton().run()
 
 def tearDownModule():
-    global mol, mf_lda , mf_bp86 , mf_b3lyp # , mf_tpss
+    global mol, mf_lda , mf_bp86 , mf_b3lyp, mf_tpss
     mol.stdout.close()
-    del mol, mf_lda , mf_bp86 , mf_b3lyp # , mf_tpss
+    del mol, mf_lda , mf_bp86 , mf_b3lyp, mf_tpss
 
 
 class KnownValues(unittest.TestCase):
