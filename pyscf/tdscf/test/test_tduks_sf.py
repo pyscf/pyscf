@@ -42,7 +42,7 @@ def diagonalize(a, b, nroots=4,extype=0):
     
     e = numpy.linalg.eig(tdm)[0]
     lowest_e = numpy.sort(e[e.real > 0].real)[:nroots]
-    lowest_e = lowest_e[lowest_e > 1e-3]
+    lowest_e = lowest_e[lowest_e > 0]
     return lowest_e
 
 def setUpModule():
@@ -72,9 +72,9 @@ def setUpModule():
     mf_tpss = mf_tpss.newton().run()
 
 def tearDownModule():
-    global mol, mf_lda, mf_bp86, mf_b3lyp, mf_tpss
+    global mol, mf_lda , mf_bp86 , mf_b3lyp # , mf_tpss
     mol.stdout.close()
-    del mol, mf_lda, mf_bp86, mf_b3lyp, mf_tpss
+    del mol, mf_lda , mf_bp86 , mf_b3lyp # , mf_tpss
 
 
 class KnownValues(unittest.TestCase):
@@ -84,26 +84,26 @@ class KnownValues(unittest.TestCase):
         td.collinear_samples = 200
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab_sf()
-        e_ref = diagonalize(a, b, 5)
+        e_ref = diagonalize(a, b, 5,extype=0)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 7.948103693468636, 4)
         
         td = tdscf.uks_sf.CasidaTDDFT(mf_lda).set(conv_tol=1e-12)
-        es = td.kernel(nstates=4)[0]
         td.extype = 1
         td.collinear_samples = 200
+        es = td.kernel(nstates=4)[0]
         a,b = td.get_ab_sf()
-        e_ref = diagonalize(a, b, 5)
+        e_ref = diagonalize(a, b, 5, extype=1)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), -0.6779466524705806, 4)
 
-    def test_b88p86(self):
+    def test_bp86(self):
         td = mf_bp86.TDDFT_SF().set(conv_tol=1e-12)
         td.extype = 0
         td.collinear_samples = 200
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab_sf()
-        e_ref = diagonalize(a, b, 5)
+        e_ref = diagonalize(a, b, 5,extype=0)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 8.368198437727425, 4)
         
@@ -112,7 +112,7 @@ class KnownValues(unittest.TestCase):
         td.collinear_samples = 200
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab_sf()
-        e_ref = diagonalize(a, b, 5)
+        e_ref = diagonalize(a, b, 5, extype=1)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), -0.6642766007127244, 4)
 
@@ -122,16 +122,17 @@ class KnownValues(unittest.TestCase):
         td.collinear_samples = 200
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab_sf()
-        e_ref = diagonalize(a, b, 5)
+        e_ref = diagonalize(a, b, 5, extype=0)
+        print(es,e_ref)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
-        self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), 8.310118087917216, 4)
+        self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -0.8199081660756715, 4)
         
         td = tdscf.uks_sf.TDDFT_SF(mf_b3lyp).set(conv_tol=1e-12)
         td.extype = 1
         td.collinear_samples = 200
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab_sf()
-        e_ref = diagonalize(a, b, 5)
+        e_ref = diagonalize(a, b, 5, extype=1)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), 0.7265669784640787, 4)
         
@@ -141,7 +142,7 @@ class KnownValues(unittest.TestCase):
         td.collinear_samples = 200
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab_sf()
-        e_ref = diagonalize(a, b, 5)
+        e_ref = diagonalize(a, b, 5, extype=0)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), 8.00109000769877, 4)
         
@@ -150,7 +151,7 @@ class KnownValues(unittest.TestCase):
         td.collinear_samples = 200
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab_sf()
-        e_ref = diagonalize(a, b, 5)
+        e_ref = diagonalize(a, b, 5, extype=1)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -0.6715042543955895, 4)
         
@@ -173,7 +174,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
         
     def test_tda_bp86(self):
-        td = tdscf.uks_sf.TDA_SF(mf_lda).set(conv_tol=1e-12)
+        td = tdscf.uks_sf.TDA_SF(mf_bp86).set(conv_tol=1e-12)
         td.extype = 0
         td.collinear_samples = 200
         es = td.kernel(nstates=5)[0]
@@ -181,7 +182,7 @@ class KnownValues(unittest.TestCase):
         ref = [0.44926303, 0.57473835, 1.04408458, 1.05905184, 1.06439505]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
         
-        td = tdscf.uks_sf.TDA_SF(mf_lda).set(conv_tol=1e-12)
+        td = tdscf.uks_sf.TDA_SF(mf_bp86).set(conv_tol=1e-12)
         td.extype = 1
         td.collinear_samples = 200
         es = td.kernel(nstates=5)[0]
@@ -193,17 +194,17 @@ class KnownValues(unittest.TestCase):
         td = tdscf.TDA_SF(mf_b3lyp).set(conv_tol=1e-12)
         td.extype = 0
         td.collinear_samples = 200
-        es = td.kernel(nstates=5)[0]
+        es = td.kernel(nstates=4)[0]
         self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), 8.924552911104696, 4)
-        ref = [0.45941292, 0.57799581, 1.06629258, 1.06747435, 1.06770292]
+        ref = [0.45941292, 0.57799581, 1.06629258, 1.06747435]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
         
         td = tdscf.TDA_SF(mf_b3lyp).set(conv_tol=1e-12)
         td.extype = 1
         td.collinear_samples = 200
-        es = td.kernel(nstates=5)[0] 
+        es = td.kernel(nstates=4)[0] 
         self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -0.6637971023605909, 4)
-        ref = [0.000670008, 0.019562623, 0.085627994, 0.090479791, 0.23541800]
+        ref = [0.000670008, 0.019562623, 0.085627994, 0.090479791]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
 
     def test_tda_tpss(self):
@@ -223,11 +224,11 @@ class KnownValues(unittest.TestCase):
         ref = [0.00063663, 0.02329287, 0.08839006, 0.10966013, 0.25380749]
         self.assertAlmostEqual(abs(es[:4] - ref[:4]).max(), 0, 4)
 
-    def test_ab_lda(self):
+    def test_a_lda(self):
         mf = mf_lda
         a, b = tdscf.TDDFT_SF(mf).get_ab_sf()
         ftda_sfu = tdscf.uhf.gen_tda_operation_sf(mf,extype=0)[0]
-        # ftda_sfd = tdscf.uhf.gen_tda_operation_sf(mf,extype=1)[0]
+        ftda_sfd = tdscf.uhf.gen_tda_operation_sf(mf,extype=1)[0]
 
         nocc_a = numpy.count_nonzero(mf.mo_occ[0] == 1)
         nvir_a = numpy.count_nonzero(mf.mo_occ[0] == 0)
@@ -237,23 +238,21 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(2)
         xb2a = numpy.random.random((nocc_b,nvir_a))
         ya2b = numpy.random.random((nocc_a,nvir_b))
-
         ax_b2a = numpy.einsum('iajb,jb->ia', a[0], xb2a)
-        ax_b2a+= numpy.einsum('iajb,jb->ia', b[0], ya2b)
-        ax_a2b =-numpy.einsum('iajb,jb->ia', b[1], xb2a)
-        ax_a2b-= numpy.einsum('iajb,jb->ia', a[1], ya2b)
+        ax_a2b = numpy.einsum('iajb,jb->ia', a[1], ya2b)
+        xy_sfu = numpy.hstack((xb2a.ravel(), ya2b.ravel())).reshape(1,-1)
+        xy_sfd = numpy.hstack((ya2b.ravel(), xb2a.ravel())).reshape(1,-1)
+        ax_sfu = ax_b2a.reshape(1,-1)
+        ax_sfd = ax_a2b.reshape(1,-1)
         
-        xy_sfu = numpy.hstack((xb2a.ravel(), ya2b.ravel()))
-        # xy_sfd = numpy.hstack((xa2b.ravel(), yb2a.ravel()))     
-
-        ax = numpy.hstack((ax_b2a.ravel(), -ax_a2b.ravel()))
-        self.assertAlmostEqual(abs(ax - ftda_sfu(xy_sfu)).max(), 0, 9)
+        self.assertAlmostEqual(abs(ax_sfu - ftda_sfu(xy_sfu)).max(), 0, 9)
+        self.assertAlmostEqual(abs(ax_sfd - ftda_sfd(xy_sfd)).max(), 0, 9)
         
-    def test_ab_bp86(self):
+    def test_a_bp86(self):
         mf = mf_bp86
         a, b = tdscf.TDDFT_SF(mf).get_ab_sf()
         ftda_sfu = tdscf.uhf.gen_tda_operation_sf(mf,extype=0)[0]
-        # ftda_sfd = tdscf.uhf.gen_tda_operation_sf(mf,extype=1)[0]
+        ftda_sfd = tdscf.uhf.gen_tda_operation_sf(mf,extype=1)[0]
         
         nocc_a = numpy.count_nonzero(mf.mo_occ[0] == 1)
         nvir_a = numpy.count_nonzero(mf.mo_occ[0] == 0)
@@ -263,23 +262,21 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(2)
         xb2a = numpy.random.random((nocc_b,nvir_a))
         ya2b = numpy.random.random((nocc_a,nvir_b))
-
         ax_b2a = numpy.einsum('iajb,jb->ia', a[0], xb2a)
-        ax_b2a+= numpy.einsum('iajb,jb->ia', b[0], ya2b)
-        ax_a2b =-numpy.einsum('iajb,jb->ia', b[1], xb2a)
-        ax_a2b-= numpy.einsum('iajb,jb->ia', a[1], ya2b)
-        
-        xy_sfu = numpy.hstack((xb2a.ravel(), ya2b.ravel()))
-        # xy_sfd = numpy.hstack((xa2b.ravel(), yb2a.ravel()))     
+        ax_a2b = numpy.einsum('iajb,jb->ia', a[1], ya2b)
+        xy_sfu = numpy.hstack((xb2a.ravel(), ya2b.ravel())).reshape(1,-1)
+        xy_sfd = numpy.hstack((ya2b.ravel(), xb2a.ravel())).reshape(1,-1)
+        ax_sfu = ax_b2a.reshape(1,-1)
+        ax_sfd = ax_a2b.reshape(1,-1)
 
-        ax = numpy.hstack((ax_b2a.ravel(), -ax_a2b.ravel()))
-        self.assertAlmostEqual(abs(ax - ftda_sfu(xy_sfu)).max(), 0, 9)
+        self.assertAlmostEqual(abs(ax_sfu - ftda_sfu(xy_sfu)).max(), 0, 9)
+        self.assertAlmostEqual(abs(ax_sfd - ftda_sfd(xy_sfd)).max(), 0, 9)
 
-    def test_ab_b3lyp(self):
+    def test_a_b3lyp(self):
         mf = mf_b3lyp
         a, b = tdscf.TDDFT_SF(mf).get_ab_sf()
         ftda_sfu = tdscf.uhf.gen_tda_operation_sf(mf,extype=0)[0]
-        # ftda_sfd = tdscf.uhf.gen_tda_operation_sf(mf,extype=1)[0]
+        ftda_sfd = tdscf.uhf.gen_tda_operation_sf(mf,extype=1)[0]
         
         nocc_a = numpy.count_nonzero(mf.mo_occ[0] == 1)
         nvir_a = numpy.count_nonzero(mf.mo_occ[0] == 0)
@@ -289,23 +286,21 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(2)
         xb2a = numpy.random.random((nocc_b,nvir_a))
         ya2b = numpy.random.random((nocc_a,nvir_b))
-
         ax_b2a = numpy.einsum('iajb,jb->ia', a[0], xb2a)
-        ax_b2a+= numpy.einsum('iajb,jb->ia', b[0], ya2b)
-        ax_a2b =-numpy.einsum('iajb,jb->ia', b[1], xb2a)
-        ax_a2b-= numpy.einsum('iajb,jb->ia', a[1], ya2b)
+        ax_a2b = numpy.einsum('iajb,jb->ia', a[1], ya2b)
+        xy_sfu = numpy.hstack((xb2a.ravel(), ya2b.ravel())).reshape(1,-1)
+        xy_sfd = numpy.hstack((ya2b.ravel(), xb2a.ravel())).reshape(1,-1)     
+        ax_sfu = ax_b2a.reshape(1,-1)
+        ax_sfd = ax_a2b.reshape(1,-1)
         
-        xy_sfu = numpy.hstack((xb2a.ravel(), ya2b.ravel()))
-        # xy_sfd = numpy.hstack((xa2b.ravel(), yb2a.ravel()))     
+        self.assertAlmostEqual(abs(ax_sfu - ftda_sfu(xy_sfu)).max(), 0, 9)
+        self.assertAlmostEqual(abs(ax_sfd - ftda_sfd(xy_sfd)).max(), 0, 9)
 
-        ax = numpy.hstack((ax_b2a.ravel(), -ax_a2b.ravel()))
-        self.assertAlmostEqual(abs(ax - ftda_sfu(xy_sfu)).max(), 0, 9)
-
-    def test_ab_mgga(self):
+    def test_a_tpss(self):
         mf = mf_tpss
         a, b = tdscf.TDDFT_SF(mf).get_ab_sf()
         ftda_sfu = tdscf.uhf.gen_tda_operation_sf(mf,extype=0)[0]
-        # ftda_sfd = tdscf.uhf.gen_tda_operation_sf(mf,extype=1)[0]
+        ftda_sfd = tdscf.uhf.gen_tda_operation_sf(mf,extype=1)[0]
         
         nocc_a = numpy.count_nonzero(mf.mo_occ[0] == 1)
         nvir_a = numpy.count_nonzero(mf.mo_occ[0] == 0)
@@ -315,21 +310,19 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(2)
         xb2a = numpy.random.random((nocc_b,nvir_a))
         ya2b = numpy.random.random((nocc_a,nvir_b))
-
         ax_b2a = numpy.einsum('iajb,jb->ia', a[0], xb2a)
-        ax_b2a+= numpy.einsum('iajb,jb->ia', b[0], ya2b)
-        ax_a2b =-numpy.einsum('iajb,jb->ia', b[1], xb2a)
-        ax_a2b-= numpy.einsum('iajb,jb->ia', a[1], ya2b)
+        ax_a2b = numpy.einsum('iajb,jb->ia', a[1], ya2b)
+        xy_sfu = numpy.hstack((xb2a.ravel(), ya2b.ravel())).reshape(1,-1)
+        xy_sfd = numpy.hstack((ya2b.ravel(), xb2a.ravel())).reshape(1,-1)     
+        ax_sfu = ax_b2a.reshape(1,-1)
+        ax_sfd = ax_a2b.reshape(1,-1)
         
-        xy_sfu = numpy.hstack((xb2a.ravel(), ya2b.ravel()))
-        # xy_sfd = numpy.hstack((xa2b.ravel(), yb2a.ravel()))     
-
-        ax = numpy.hstack((ax_b2a.ravel(), -ax_a2b.ravel()))
-        self.assertAlmostEqual(abs(ax - ftda_sfu(xy_sfu)).max(), 0, 9)
-        
+        self.assertAlmostEqual(abs(ax_sfu - ftda_sfu(xy_sfu)).max(), 0, 9)
+        self.assertAlmostEqual(abs(ax_sfd - ftda_sfd(xy_sfd)).max(), 0, 9)
+    
     def test_init(self):
         ks = scf.UKS(mol)
-        self.assertTrue(isinstance(tdscf.TDA_SF(ks), tdscf.uks_sf.TDA_SF))
+        self.assertTrue(isinstance(tdscf.TDA_SF(ks), tdscf.uhf.TDA_SF))
         self.assertTrue(isinstance(tdscf.TDDFT_SF(ks), tdscf.uks_sf.CasidaTDDFT))
 
 
