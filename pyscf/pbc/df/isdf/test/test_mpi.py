@@ -214,8 +214,15 @@ H  2.1   2.1   2.1
         mf.max_cycle = 100
         mf.conv_tol = 1e-7
         # print("mf.direct_scf = ", mf.direct_scf)
-        mf.kernel()
-        mf = None
+        # mf.kernel()
+        # mf = None
+        
+        dm1 = mf.get_init_guess(cell, 'atom')
+        
+        dm1 = bcast(dm1, root=0)
+
+        res = pbc_isdf_info.get_jk(dm, with_j=True, with_k=True)
+        print("finish atm dm1 get jk")
     
     # if rank == 0:
     #     dm = mf.make_rdm1()

@@ -597,8 +597,8 @@ class PBC_ISDF_Info_MPI(PBC_ISDF_Info):
     # from functools import partial
     get_jk = get_jk_dm_mpi
 
-C = 10
-KE_CUTOFF = 32
+C = 12
+KE_CUTOFF = 128
 
 if __name__ == '__main__':
 
@@ -648,13 +648,13 @@ if __name__ == '__main__':
     cell.build()
     
     prim_mesh = cell.mesh
-    Ls = [1, 1, 2]
+    Ls = [1, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh)
     
-    pbc_isdf_info = PBC_ISDF_Info_MPI(cell, with_robust_fitting=False)
+    pbc_isdf_info = PBC_ISDF_Info_MPI(cell, with_robust_fitting=True)
     # build_partition(pbc_isdf_info)        
     pbc_isdf_info.build_IP_Sandeep(C, 5, global_IP_selection=True, debug=True)
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
@@ -689,7 +689,7 @@ if __name__ == '__main__':
         aoR_bench  *= np.sqrt(cell.vol / ngrids)
         df_tmp = None
         
-        pbc_isdf_info_benchmark = isdf.PBC_ISDF_Info(cell, aoR=aoR_bench, with_robust_fitting=False)
+        pbc_isdf_info_benchmark = isdf.PBC_ISDF_Info(cell, aoR=aoR_bench, with_robust_fitting=True)
         partition_bench = np.array(pbc_isdf_info_benchmark.partition, dtype=np.int32)
         print("partition_bench.shape = ", partition_bench.shape)
         loc_diff = []

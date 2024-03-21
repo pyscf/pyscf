@@ -546,21 +546,40 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
     
     # print("aoR = ", aoR)
     
+    # A = None
+    e = None
+    h = None
+    
     if not use_mpi or (use_mpi and rank == 0):
         A = np.asarray(lib.ddot(aoRg.T, aoRg, c=buffer1), order='C')  # buffer 1 size = naux * naux
         lib.square_inPlace(A)
         
-        fn_cholesky = getattr(libpbc, "Cholesky", None)
-        assert(fn_cholesky is not None)
-        fn_cholesky(
-            A.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(naux),
-        )
-    else:
-        A = None
+        # fn_cholesky = getattr(libpbc, "Cholesky", None)
+        # assert(fn_cholesky is not None)
+        # fn_cholesky(
+        #     A.ctypes.data_as(ctypes.c_void_p),
+        #     ctypes.c_int(naux),
+        # )
+        
+        t11 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
+            e, h = scipy.linalg.eigh(A)
+        t12 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t11, t12, "diag_A")
+        print("condition number = ", e[-1]/e[0])
+        where = np.where(e > e[-1]*1e-16)[0]
+        # for id, val in enumerate(e):
+        #     print("e[%5d] = %15.8e" % (id, val))
+        e = e[where]
+        h = h[:, where]
+    # else:
+    #     A = None
+        
         
     if use_mpi:
-        A = bcast(A)
+        # A = bcast(A)
+        e = bcast(e)
+        h = bcast(h)
     
     mydf.aux_basis = np.asarray(lib.ddot(aoRg.T, aoR), order='C')   # buffer 2 size = naux * ngrids
     lib.square_inPlace(mydf.aux_basis)
@@ -573,16 +592,14 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
     nThread = lib.num_threads()
     nGrids  = aoR.shape[1]
     Bunchsize = nGrids // nThread
-    fn_build_aux(
-        ctypes.c_int(naux),
-        A.ctypes.data_as(ctypes.c_void_p),
-        mydf.aux_basis.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(nGrids),
-        ctypes.c_int(Bunchsize)
-    )
-
-    if use_mpi:
-        comm.Barrier()
+    
+    # fn_build_aux(
+    #     ctypes.c_int(naux),
+    #     A.ctypes.data_as(ctypes.c_void_p),
+    #     mydf.aux_basis.ctypes.data_as(ctypes.c_void_p),
+    #     ctypes.c_int(nGrids),
+    #     ctypes.c_int(Bunchsize)
+    # )
 
     # use diagonalization instead, but too slow for large system
     # e, h = np.linalg.eigh(A)  # single thread, but should not be slow, it should not be the bottleneck
@@ -598,13 +615,17 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
     # print("e.shape = ", e.shape)
     # # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
     # # self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')  # maximal size = naux * ngrids
-    # buffer2 = np.ndarray((e.shape[0] , self.ngrids), dtype=np.double, buffer=self.jk_buffer,
-    #          offset=self.naux * self.naux * self.jk_buffer.dtype.itemsize)
-    # B = np.asarray(lib.ddot(h.T, self.aux_basis, c=buffer2), order='C')
-    # # self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
-    # # B = (1.0/e).reshape(-1, 1) * B
-    # lib.d_i_ij_ij(1.0/e, B, out=B)
-    # np.asarray(lib.ddot(h, B, c=self.aux_basis), order='C')
+    
+    buffer2 = np.ndarray((e.shape[0] , mydf.aux_basis.shape[1]), dtype=np.double, buffer=mydf.jk_buffer,
+             offset=mydf.naux * mydf.naux * mydf.jk_buffer.dtype.itemsize)
+    B = np.asarray(lib.ddot(h.T, mydf.aux_basis, c=buffer2), order='C')
+    # self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
+    # B = (1.0/e).reshape(-1, 1) * B
+    lib.d_i_ij_ij(1.0/e, B, out=B)
+    np.asarray(lib.ddot(h, B, c=mydf.aux_basis), order='C')
+
+    if use_mpi:
+        comm.Barrier()
 
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     if debug and mydf.verbose:
@@ -1023,36 +1044,36 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     get_jk = isdf_jk.get_jk_dm
 
-C = 7
+C = 12
 
 if __name__ == '__main__':
 
     cell   = pbcgto.Cell()
-    # boxlen = 3.5668
-    # cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
-    # cell.atom = '''
-    #                C     0.      0.      0.
-    #                C     0.8917  0.8917  0.8917
-    #                C     1.7834  1.7834  0.
-    #                C     2.6751  2.6751  0.8917
-    #                C     1.7834  0.      1.7834
-    #                C     2.6751  0.8917  2.6751
-    #                C     0.      1.7834  1.7834
-    #                C     0.8917  2.6751  2.6751
-    #             '''
-
-    boxlen = 4.2
+    boxlen = 3.5668
     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     cell.atom = '''
-Li 0.0   0.0   0.0
-Li 2.1   2.1   0.0
-Li 0.0   2.1   2.1
-Li 2.1   0.0   2.1
-H  0.0   0.0   2.1
-H  0.0   2.1   0.0
-H  2.1   0.0   0.0
-H  2.1   2.1   2.1
-'''
+                   C     0.      0.      0.
+                   C     0.8917  0.8917  0.8917
+                   C     1.7834  1.7834  0.
+                   C     2.6751  2.6751  0.8917
+                   C     1.7834  0.      1.7834
+                   C     2.6751  0.8917  2.6751
+                   C     0.      1.7834  1.7834
+                   C     0.8917  2.6751  2.6751
+                '''
+
+#     boxlen = 4.2
+#     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+#     cell.atom = '''
+# Li 0.0   0.0   0.0
+# Li 2.1   2.1   0.0
+# Li 0.0   2.1   2.1
+# Li 2.1   0.0   2.1
+# H  0.0   0.0   2.1
+# H  0.0   2.1   0.0
+# H  2.1   0.0   0.0
+# H  2.1   2.1   2.1
+# '''
 
     cell.basis   = 'gth-dzvp'
     # cell.basis   = 'gth-tzvp'

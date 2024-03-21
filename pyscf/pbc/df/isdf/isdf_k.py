@@ -209,7 +209,8 @@ def build_supercell(prim_atm,
                     ke_cutoff=70, 
                     max_memory=2000, 
                     precision=1e-8,
-                    use_particle_mesh_ewald=True):
+                    use_particle_mesh_ewald=True,
+                    verbose=4):
     
     Cell = pbcgto.Cell()
     
@@ -239,7 +240,7 @@ def build_supercell(prim_atm,
     Cell.max_memory = max_memory
     Cell.precision = precision
     Cell.use_particle_mesh_ewald = use_particle_mesh_ewald
-    Cell.verbose = 4
+    Cell.verbose = verbose
     Cell.unit = 'angstorm'
     
     Cell.build(mesh=mesh)
@@ -2156,7 +2157,7 @@ def _construct_V_W_incore(mydf:ISDF.PBC_ISDF_Info):
                 # print("mesh_prim = ", mesh_prim)
                 fn_final_ifft(
                     B_buf.ctypes.data_as(ctypes.c_void_p),
-                    FREQ[i].ctypes.data_as(ctypes.c_void_p),
+                    FREQ[loc].ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(nIP_prim),
                     ctypes.c_int(nGrid_prim),
                     mesh_prim.ctypes.data_as(ctypes.c_void_p),
@@ -3693,6 +3694,8 @@ class PBC_ISDF_Info_kSym(ISDF_outcore.PBC_ISDF_Info_outcore):
         ) # no normalization factor ! 
                 
         if self.with_robust_fitting:
+            
+            cell = self.cell
             
             shl_loc_begin = None
             shl_loc_end = None

@@ -379,8 +379,8 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
         # print("J = ", J[:16])
 
         if use_mpi:
-            # J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
-            J = comm.reduce(J, op=MPI.SUM, root=0)
+            J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
+            # J = comm.reduce(J, op=MPI.SUM, root=0)
         
         # do not need allocate memory, use buffer 3
 
@@ -419,8 +419,8 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
         # print("J = ", J[0,:])
 
     if use_mpi and J is not None:
-        # J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
-        J = comm.reduce(J, op=MPI.SUM, root=0)
+        J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
+        # J = comm.reduce(J, op=MPI.SUM, root=0)
 
     # if (use_mpi and rank == 0) or use_mpi == False:
     #     print("J = ", J[0,-10:] * ngrid / vol)
@@ -591,9 +591,9 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
         K  = np.asarray(lib.ddot_withbuffer(aoRg, K, c=buffer4, buf=mydf.ddot_buf), order='C')
         
         if use_mpi:
-            # K2 = mpi_reduce(K, comm, rank, op=MPI.SUM, root=0)
-            K = comm.reduce(K, op=MPI.SUM, root=0)
-            # K = K2
+            K2 = mpi_reduce(K, comm, rank, op=MPI.SUM, root=0)
+            # K = comm.reduce(K, op=MPI.SUM, root=0)
+            K = K2
 
         if (use_mpi and rank == 0) or use_mpi == False:
             K += K.T
