@@ -510,6 +510,7 @@ def make_modchg_basis(auxcell, smooth_eta):
     return chgcell
 
 def fuse_auxcell(auxcell, eta):
+    print("eta = ", eta)
     chgcell = make_modchg_basis(auxcell, eta)
     fused_cell = copy.copy(auxcell)
     fused_cell._atm, fused_cell._bas, fused_cell._env = \

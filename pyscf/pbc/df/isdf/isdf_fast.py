@@ -43,6 +43,157 @@ CRITERION_CALL_PARALLEL_QR = 256
 
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
+################### the MPI module ##########################
+
+import mpi4py
+from mpi4py import MPI
+# from mpi4pyscf.tools.mpi import allgather
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+comm_size = comm.Get_size()
+
+## some tools copy from mpi4pyscf ##
+
+INT_MAX = 2147483647
+BLKSIZE = INT_MAX // 32 + 1
+
+def matrix_all2all_Row2Col(comm, nRow, nCol, Mat):
+    assert nRow % comm_size == 0
+    assert nCol % comm_size == 0
+    sendbuf = Mat
+    assert sendbuf.shape == (nRow, nCol//comm_size)
+    recvbuf = numpy.empty((Mat.size,), dtype=Mat.dtype)
+    comm.Alltoall(sendbuf, recvbuf)
+    Mat_packed = numpy.empty((nRow//comm_size, nCol), dtype=Mat.dtype)
+    for i in range(comm_size):
+        Mat_packed[:, nCol//comm_size * i: nCol//comm_size * (i+1)] = recvbuf[recvbuf.size//comm_size * i: recvbuf.size//comm_size * (i+1)].reshape(nRow//comm_size, -1)
+    return Mat_packed
+
+def matrix_all2all_Col2Row(comm, nRow, nCol, Mat):
+    assert nRow % comm_size == 0
+    assert nCol % comm_size == 0
+    sendbuf = numpy.empty((Mat.size,), dtype=Mat.dtype)
+    for i in range(comm_size):
+        sendbuf[sendbuf.size//comm_size * i: sendbuf.size//comm_size * (i+1)] = Mat[:, nCol//comm_size * i: nCol//comm_size * (i+1)].ravel()[:]    
+    recvbuf = numpy.empty((Mat.size,), dtype=Mat.dtype)
+    comm.Alltoall(sendbuf, recvbuf)
+    sendbuf = None
+    return recvbuf.reshape(nRow, nCol//comm_size)
+
+def _assert(condition):
+    if not condition:
+        sys.stderr.write(''.join(traceback.format_stack()[:-1]))
+        comm.Abort()
+
+def _segment_counts(counts, p0, p1):
+    counts_seg = counts - p0
+    counts_seg[counts<=p0] = 0
+    counts_seg[counts> p1] = p1 - p0
+    return counts_seg
+     
+def allgather(sendbuf, split_recvbuf=False):
+    sendbuf = numpy.asarray(sendbuf, order='C')
+    shape = sendbuf.shape
+    attr = comm.allgather((shape, sendbuf.dtype.char))
+    rshape = [x[0] for x in attr]
+    counts = numpy.array([numpy.prod(x) for x in rshape])
+    mpi_dtype = numpy.result_type(*[x[1] for x in attr]).char
+    _assert(sendbuf.dtype.char == mpi_dtype or sendbuf.size == 0)
+
+    displs = numpy.append(0, numpy.cumsum(counts[:-1]))
+    recvbuf = numpy.empty(sum(counts), dtype=mpi_dtype)
+
+    sendbuf = sendbuf.ravel()
+    for p0, p1 in lib.prange(0, numpy.max(counts), BLKSIZE):
+        counts_seg = _segment_counts(counts, p0, p1)
+        comm.Allgatherv([sendbuf[p0:p1], mpi_dtype],
+                        [recvbuf, counts_seg, displs+p0, mpi_dtype])
+    if split_recvbuf:
+        return [recvbuf[p0:p0+c].reshape(shape)
+                for p0,c,shape in zip(displs,counts,rshape)]
+    else:
+        try:
+            return recvbuf.reshape((-1,) + shape[1:])
+        except ValueError:
+            return recvbuf
+
+def reduce(sendbuf, op=MPI.SUM, root=0):
+    sendbuf = numpy.asarray(sendbuf, order='C')
+    shape, mpi_dtype = comm.bcast((sendbuf.shape, sendbuf.dtype.char))
+    _assert(sendbuf.shape == shape and sendbuf.dtype.char == mpi_dtype)
+
+    dtype = sendbuf.dtype.char
+    recvbuf = numpy.zeros_like(sendbuf)
+    send_seg = numpy.ndarray(sendbuf.size, dtype=sendbuf.dtype, buffer=sendbuf)
+    recv_seg = numpy.ndarray(recvbuf.size, dtype=recvbuf.dtype, buffer=recvbuf)
+    for p0, p1 in lib.prange(0, sendbuf.size, BLKSIZE):
+        comm.Reduce([send_seg[p0:p1], dtype],
+                    [recv_seg[p0:p1], dtype], op, root)
+
+    if rank == root:
+        return recvbuf
+    else:
+        return sendbuf
+    
+def bcast(buf, root=0):
+    buf = numpy.asarray(buf, order='C')
+    shape, dtype = comm.bcast((buf.shape, buf.dtype.char))
+    if rank != root:
+        buf = numpy.empty(shape, dtype=dtype)
+
+    dtype = buf.dtype.char
+    buf_seg = numpy.ndarray(buf.size, dtype=buf.dtype, buffer=buf)
+    for p0, p1 in lib.prange(0, buf.size, BLKSIZE):
+        comm.Bcast([buf_seg[p0:p1], dtype], root)
+    return buf
+
+def gather(sendbuf, root=0, split_recvbuf=False):
+    #if pool.debug:
+    #    if rank == 0:
+    #        res = [sendbuf]
+    #        for k in range(1, pool.size):
+    #            dat = comm.recv(source=k)
+    #            res.append(dat)
+    #        return numpy.vstack([x for x in res if len(x) > 0])
+    #    else:
+    #        comm.send(sendbuf, dest=0)
+    #        return sendbuf
+
+    sendbuf = numpy.asarray(sendbuf, order='C')
+    shape = sendbuf.shape
+    size_dtype = comm.allgather((shape, sendbuf.dtype.char))
+    rshape = [x[0] for x in size_dtype]
+    counts = numpy.array([numpy.prod(x) for x in rshape])
+
+    mpi_dtype = numpy.result_type(*[x[1] for x in size_dtype]).char
+    _assert(sendbuf.dtype == mpi_dtype or sendbuf.size == 0)
+
+    if rank == root:
+        displs = numpy.append(0, numpy.cumsum(counts[:-1]))
+        recvbuf = numpy.empty(sum(counts), dtype=mpi_dtype)
+
+        sendbuf = sendbuf.ravel()
+        for p0, p1 in lib.prange(0, numpy.max(counts), BLKSIZE):
+            counts_seg = _segment_counts(counts, p0, p1)
+            comm.Gatherv([sendbuf[p0:p1], mpi_dtype],
+                         [recvbuf, counts_seg, displs+p0, mpi_dtype], root)
+        if split_recvbuf:
+            return [recvbuf[p0:p0+c].reshape(shape)
+                    for p0,c,shape in zip(displs,counts,rshape)]
+        else:
+            try:
+                return recvbuf.reshape((-1,) + shape[1:])
+            except ValueError:
+                return recvbuf
+    else:
+        send_seg = sendbuf.ravel()
+        for p0, p1 in lib.prange(0, numpy.max(counts), BLKSIZE):
+            comm.Gatherv([send_seg[p0:p1], mpi_dtype], None, root)
+        return sendbuf
+    
+################### end of the MPI module ##########################
+
 # python version colpilot_qr() function
 
 def colpivot_qr(A, max_rank=None, cutoff=1e-14):  # python code, benchmark, but not efficient
@@ -92,9 +243,13 @@ def colpivot_qr(A, max_rank=None, cutoff=1e-14):  # python code, benchmark, but 
 
     return Q.T, R, pivot, npt_find
 
-def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=True):
+def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=True, 
+                      use_mpi=False):
 
-    bunchsize = lib.num_threads()
+    # bunchsize = lib.num_threads()
+
+    if mydf.verbose:
+        print("In select_IP, num_threads = ", lib.num_threads())
 
     ### determine the largest grids point of one atm ###
 
@@ -115,9 +270,9 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
     buf_size_per_thread = mydf.get_buffer_size_in_IP_selection(c, m)
     buf_size            = buf_size_per_thread
 
-    print("nthread        = ", nthread)
-    print("buf_size       = ", buf_size)
-    print("buf_per_thread = ", buf_size_per_thread)
+    # print("nthread        = ", nthread)
+    # print("buf_size       = ", buf_size)
+    # print("buf_per_thread = ", buf_size_per_thread)
 
     if hasattr(mydf, "IO_buf"):
         buf = mydf.IO_buf
@@ -128,7 +283,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
     if buf.size < buf_size:
         # reallocate
         mydf.IO_buf = np.zeros((buf_size), dtype=np.float64)
-        print("reallocate buf of size = ", buf_size)
+        # print("reallocate buf of size = ", buf_size)
         buf = mydf.IO_buf
     buf_tmp = np.ndarray((buf_size), dtype=np.float64, buffer=buf)
 
@@ -159,8 +314,11 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         if first_natm is None:
             first_natm = natm
     
-        # for atm_id in range(natm):
         for atm_id in range(first_natm):
+            
+            if use_mpi:
+                if atm_id % comm_size != rank:
+                    continue
 
             buf_tmp[:buf_size_per_thread] = 0.0
 
@@ -223,7 +381,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
             # global_buffer = np.ndarray((1, grid_ID.shape[0]), dtype=np.float64)
             offset       += grid_ID.shape[0] * dtypesize
 
-            print("thread_buffer.shape = ", thread_buffer.shape)
+            # print("thread_buffer.shape = ", thread_buffer.shape)
             fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(naux2_now),
                             ctypes.c_int(grid_ID.shape[0]),
@@ -239,27 +397,35 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
             # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
             
             cutoff   = abs(R[npt_find-1, npt_find-1])
-            print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
+            # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
             pivot = pivot[:npt_find]
-
             pivot.sort()
-
             results.extend(list(grid_ID[pivot]))
 
+    # print("results = ", results)
+
+    if use_mpi:
+        comm.Barrier()
+        results = allgather(results)
+        # results.sort()
     results.sort()
+    
+    # print("results = ", results)
 
     ### global IP selection, we can use this step to avoid numerical issue ###
 
-    if global_IP_selection:
+    if global_IP_selection and rank == 0:
 
-        print("global IP selection")
+        if mydf.verbose:
+            print("global IP selection")
 
         bufsize = mydf.get_buffer_size_in_global_IP_selection(len(results), c, m)
 
         if buf.size < bufsize:
             mydf.IO_buf = np.zeros((bufsize), dtype=np.float64)
             buf = mydf.IO_buf
-            print("reallocate buf of size = ", bufsize)
+            if mydf.verbose:
+                print("reallocate buf of size = ", bufsize)
 
         dtypesize = buf.dtype.itemsize
 
@@ -274,8 +440,8 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         naux_now  = int(np.sqrt(c*nao)) + m
         naux2_now = naux_now * naux_now
 
-        print("naux_now = ", naux_now)
-        print("naux2_now = ", naux2_now)
+        # print("naux_now = ", naux_now)
+        # print("naux2_now = ", naux2_now)
 
         # R = np.ndarray((naux2_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
         R = np.ndarray((naux2_now, len(results)), dtype=np.float64)
@@ -312,7 +478,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
 
         max_rank  = min(naux2_now, len(results), nao_first * c)
 
-        print("max_rank = ", max_rank)
+        # print("max_rank = ", max_rank)
 
         npt_find      = ctypes.c_int(0)
         pivot         = np.arange(len(results), dtype=np.int32)
@@ -338,17 +504,112 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
         
         cutoff   = abs(R[npt_find-1, npt_find-1])
-        print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (len(results), npt_find, cutoff))
+        # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (len(results), npt_find, cutoff))
         pivot = pivot[:npt_find]
-        print("pivot = ", pivot)
+        # print("pivot = ", pivot)
 
         pivot.sort()
 
         results = np.array(results, dtype=np.int32)
         results = list(results[pivot])
 
+    if global_IP_selection and use_mpi:
+        results = bcast(results)
+
+    if mydf.verbose:
+        print("In select_IP, num_threads = ", lib.num_threads())
+
     return results
 
+def build_aux_basis(mydf, debug=True, use_mpi=False):
+    
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    
+    # allocate memory for the auxiliary basis
+
+    naux = mydf.IP_ID.shape[0]
+    mydf.naux = naux
+    mydf._allocate_jk_buffer(datatype=np.double)
+    buffer1 = np.ndarray((mydf.naux , mydf.naux), dtype=np.double, buffer=mydf.jk_buffer, offset=0)
+    
+    nao = mydf.nao
+    IP_ID = mydf.IP_ID
+    aoR = mydf.aoR
+
+    if not hasattr(mydf, "aoRg") or mydf.aoRg is None:
+        aoRg = numpy.empty((mydf.nao, mydf.IP_ID.shape[0]))
+        lib.dslice(aoR, IP_ID, out=aoRg)
+    else:
+        aoRg = mydf.aoRg
+    
+    # print("aoR = ", aoR)
+    
+    if not use_mpi or (use_mpi and rank == 0):
+        A = np.asarray(lib.ddot(aoRg.T, aoRg, c=buffer1), order='C')  # buffer 1 size = naux * naux
+        lib.square_inPlace(A)
+        
+        fn_cholesky = getattr(libpbc, "Cholesky", None)
+        assert(fn_cholesky is not None)
+        fn_cholesky(
+            A.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(naux),
+        )
+    else:
+        A = None
+        
+    if use_mpi:
+        A = bcast(A)
+    
+    mydf.aux_basis = np.asarray(lib.ddot(aoRg.T, aoR), order='C')   # buffer 2 size = naux * ngrids
+    lib.square_inPlace(mydf.aux_basis)
+    
+    # print("mydf.aux_basis = ", mydf.aux_basis)
+
+    fn_build_aux = getattr(libpbc, "Solve_LLTEqualB_Parallel", None)
+    assert(fn_build_aux is not None)
+
+    nThread = lib.num_threads()
+    nGrids  = aoR.shape[1]
+    Bunchsize = nGrids // nThread
+    fn_build_aux(
+        ctypes.c_int(naux),
+        A.ctypes.data_as(ctypes.c_void_p),
+        mydf.aux_basis.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nGrids),
+        ctypes.c_int(Bunchsize)
+    )
+
+    if use_mpi:
+        comm.Barrier()
+
+    # use diagonalization instead, but too slow for large system
+    # e, h = np.linalg.eigh(A)  # single thread, but should not be slow, it should not be the bottleneck
+    # print("e[-1] = ", e[-1])
+    # print("e[0]  = ", e[0])
+    # print("condition number = ", e[-1]/e[0])
+    # for id, val in enumerate(e):
+    #     print("e[%5d] = %15.8e" % (id, val))
+    # # remove those eigenvalues that are too small
+    # where = np.where(abs(e) > BASIS_CUTOFF)[0]
+    # e = e[where]
+    # h = h[:, where]
+    # print("e.shape = ", e.shape)
+    # # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
+    # # self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')  # maximal size = naux * ngrids
+    # buffer2 = np.ndarray((e.shape[0] , self.ngrids), dtype=np.double, buffer=self.jk_buffer,
+    #          offset=self.naux * self.naux * self.jk_buffer.dtype.itemsize)
+    # B = np.asarray(lib.ddot(h.T, self.aux_basis, c=buffer2), order='C')
+    # # self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
+    # # B = (1.0/e).reshape(-1, 1) * B
+    # lib.d_i_ij_ij(1.0/e, B, out=B)
+    # np.asarray(lib.ddot(h, B, c=self.aux_basis), order='C')
+
+    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    if debug and mydf.verbose:
+        _benchmark_time(t1, t2, "build_auxiliary_basis")
+
+    mydf.naux = naux
+    mydf.aoRg = aoRg
 
 from pyscf.pbc import df
 
@@ -358,7 +619,9 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                  # cutoff_aoValue: float = 1e-12,
                  # cutoff_QR: float = 1e-8
                  with_robust_fitting=True,
-                 Ls=None
+                 Ls=None,
+                 get_partition=True,
+                 verbose = 1
                  ):
 
         super().__init__(cell=mol)
@@ -367,6 +630,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         self.with_robust_fitting = with_robust_fitting
 
+        self.verbose   = verbose
         self.IP_ID     = None
         self.aux_basis = None
         self.c         = None
@@ -374,6 +638,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.W         = None
         self.aoRg      = None
         self.aoR       = aoR
+        self.grid_begin = 0
         if aoR is not None:
             self.aoRT  = aoR.T
         else:
@@ -398,6 +663,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             self.ngrids = aoR.shape[1]
             assert self.nao == aoR.shape[0]
 
+        self.grid_end  = self.ngrids
+
         ## preallocated buffer for parallel calculation
 
         self.jk_buffer = None
@@ -417,7 +684,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             ao2atomID[ao_loc:ao_loc+nao_now] = atm_id
             ao_loc += nao_now
 
-        print("ao2atomID = ", ao2atomID)
+        # print("ao2atomID = ", ao2atomID)
 
         self.ao2atomID = ao2atomID
         self.ao2atomID = ao2atomID
@@ -426,7 +693,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         if aoR is not None:
             self.partition = np.argmax(np.abs(aoR), axis=0)
-            print("partition = ", self.partition.shape)
+            # print("partition = ", self.partition.shape)
             # map aoID to atomID
             self.partition = np.asarray([ao2atomID[x] for x in self.partition])
             self.coords    = None
@@ -442,7 +709,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 
                 mesh = mol.mesh
                 meshPrim = np.array(mesh, dtype=np.int32) // Ls
-                print("meshPrim = ", meshPrim)
+                # print("meshPrim = ", meshPrim)
                 coords_now = coords_now.reshape(Ls[0], meshPrim[0], Ls[1], meshPrim[1], Ls[2], meshPrim[2], 3)
                 coords_now = coords_now.transpose(0, 2, 4, 1, 3, 5, 6).reshape(-1, 3)
                 coords_now = coords_now[:np.prod(meshPrim), :]
@@ -452,31 +719,38 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
             if hasattr(self, "IO_buf"):
-                print("IO_buf is already allocated")
+                if verbose:
+                    print("IO_buf is already allocated")
             else:
-                print("IO_buf is not allocated")
+                if verbose:
+                    print("IO_buf is not allocated")
                 MAX_MEMORY = 2 * 1e9  # 2 GB
                 self.IO_buf = np.zeros((int(MAX_MEMORY//8),), dtype=np.double)
 
-            print("IO_buf.size = ", self.IO_buf.size)
-            print("coords.shape[0] = ", coords_now.shape[0])
-            print("self.nao = ", self.nao)
+            if verbose:
+                print("IO_buf.size = ", self.IO_buf.size)
+                print("coords.shape[0] = ", coords_now.shape[0])
+                print("self.nao = ", self.nao)
 
             bufsize = min(self.IO_buf.size, 4*1e9/8) // 2
             bunchsize = int(bufsize / (self.nao))
 
-            print("bunchsize = ", bunchsize)
+            # print("bunchsize = ", bunchsize)
 
             assert bunchsize > 0
-            for p0, p1 in lib.prange(0, coords_now.shape[0], bunchsize):
-                # print("p0 = %d p1 = %d" % (p0, p1))
-                AoR_Buf = np.ndarray((self.nao, p1-p0), dtype=np.complex128, buffer=self.IO_buf, offset=0)
-                # res = NumInts.eval_ao(mol, coords[p0:p1], deriv=0, out=self.IO_buf[:bufsize])[0].T
-                AoR_Buf = ISDF_eval_gto(self.cell, coords=coords_now[p0:p1], out=AoR_Buf)
-                res = np.argmax(np.abs(AoR_Buf), axis=0)
-                # print("res = ", res)
-                self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
-                AoR_Buf = None
+            
+            if get_partition and aoR is None:
+                for p0, p1 in lib.prange(0, coords_now.shape[0], bunchsize):
+                    # print("p0 = %d p1 = %d" % (p0, p1))
+                    AoR_Buf = np.ndarray((self.nao, p1-p0), dtype=np.complex128, buffer=self.IO_buf, offset=0)
+                    # res = NumInts.eval_ao(mol, coords[p0:p1], deriv=0, out=self.IO_buf[:bufsize])[0].T
+                    AoR_Buf = ISDF_eval_gto(self.cell, coords=coords_now[p0:p1], out=AoR_Buf)
+                    res = np.argmax(np.abs(AoR_Buf), axis=0)
+                    # print("res = ", res)
+                    self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
+                    AoR_Buf = None
+            else:
+                self.partition = None
                 
             res = None
             
@@ -595,6 +869,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     def build_IP_Sandeep(self, c=5, m=5,
                          global_IP_selection=True,
                          build_global_basis=True,
+                         IP_ID=None,
                          debug=True):
 
         # build partition
@@ -610,93 +885,32 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         natm = self.natm
         nao  = self.nao
 
-        nao_per_atm = np.zeros(natm, dtype=np.int32)
-        for i in range(self.nao):
-            atm_id = ao2atomID[i]
-            nao_per_atm[atm_id] += 1
+        # nao_per_atm = np.zeros(natm, dtype=np.int32)
+        # for i in range(self.nao):
+        #     atm_id = ao2atomID[i]
+        #     nao_per_atm[atm_id] += 1
 
         # for each atm
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    
-        IP_ID = _select_IP_direct(self, c, m, global_IP_selection=global_IP_selection)
-        IP_ID.sort()
-        IP_ID = np.array(IP_ID, dtype=np.int32)
-        self.IP_ID = IP_ID
+
+        if IP_ID is None:
+            IP_ID = _select_IP_direct(self, c, m, global_IP_selection=global_IP_selection)
+            IP_ID.sort()
+            IP_ID = np.array(IP_ID, dtype=np.int32)
+        self.IP_ID = np.array(IP_ID, dtype=np.int32)
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        if debug:
+        if debug and rank == 0:
             _benchmark_time(t1, t2, "build_IP")
         t1 = t2
 
         # build the auxiliary basis
 
-        # allocate memory for the auxiliary basis
-
-        naux = IP_ID.shape[0]
-        self.naux = naux
-        self._allocate_jk_buffer(datatype=np.double)
-        buffer1 = np.ndarray((self.naux , self.naux), dtype=np.double, buffer=self.jk_buffer, offset=0)
-
-        aoRg = numpy.empty((nao, IP_ID.shape[0]))
-        lib.dslice(aoR, IP_ID, out=aoRg)
-        A = np.asarray(lib.ddot(aoRg.T, aoRg, c=buffer1), order='C')  # buffer 1 size = naux * naux
-        lib.square_inPlace(A)
-
-        self.aux_basis = np.asarray(lib.ddot(aoRg.T, aoR), order='C')   # buffer 2 size = naux * ngrids
-        lib.square_inPlace(self.aux_basis)
-
-        fn_cholesky = getattr(libpbc, "Cholesky", None)
-        assert(fn_cholesky is not None)
-
-        fn_build_aux = getattr(libpbc, "Solve_LLTEqualB_Parallel", None)
-        assert(fn_build_aux is not None)
-
-        fn_cholesky(
-            A.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(naux),
-        )
-        nThread = lib.num_threads()
-        nGrids  = aoR.shape[1]
-        Bunchsize = nGrids // nThread
-        fn_build_aux(
-            ctypes.c_int(naux),
-            A.ctypes.data_as(ctypes.c_void_p),
-            self.aux_basis.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(nGrids),
-            ctypes.c_int(Bunchsize)
-        )
-
-        # use diagonalization instead, but too slow for large system
-        # e, h = np.linalg.eigh(A)  # single thread, but should not be slow, it should not be the bottleneck
-        # print("e[-1] = ", e[-1])
-        # print("e[0]  = ", e[0])
-        # print("condition number = ", e[-1]/e[0])
-        # for id, val in enumerate(e):
-        #     print("e[%5d] = %15.8e" % (id, val))
-        # # remove those eigenvalues that are too small
-        # where = np.where(abs(e) > BASIS_CUTOFF)[0]
-        # e = e[where]
-        # h = h[:, where]
-        # print("e.shape = ", e.shape)
-        # # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
-        # # self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')  # maximal size = naux * ngrids
-        # buffer2 = np.ndarray((e.shape[0] , self.ngrids), dtype=np.double, buffer=self.jk_buffer,
-        #          offset=self.naux * self.naux * self.jk_buffer.dtype.itemsize)
-        # B = np.asarray(lib.ddot(h.T, self.aux_basis, c=buffer2), order='C')
-        # # self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
-        # # B = (1.0/e).reshape(-1, 1) * B
-        # lib.d_i_ij_ij(1.0/e, B, out=B)
-        # np.asarray(lib.ddot(h, B, c=self.aux_basis), order='C')
-
-        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        if debug:
-            _benchmark_time(t1, t2, "build_auxiliary_basis")
-
         self.c    = c
-        self.naux = naux
-        self.aoRg = aoRg
-        self.aoR  = aoR
+
+        build_aux_basis(self)
+        # t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
     # @profile
     def build_auxiliary_Coulomb(self, cell:Cell = None, mesh=None, debug=True):
@@ -706,6 +920,11 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         # build the ddot buffer
 
         naux   = self.naux
+
+        if cell is None:
+            cell = self.cell
+        if mesh is None:
+            mesh = self.cell.mesh
 
         def constrcuct_V_CCode(aux_basis:np.ndarray, mesh, coul_G):
             coulG_real         = coul_G.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1)
@@ -722,10 +941,10 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             fn = getattr(libpbc, "_construct_V", None)
             assert(fn is not None)
 
-            print("V.shape = ", V.shape)
-            print("aux_basis.shape = ", aux_basis.shape)
-            print("self.jk_buffer.size    = ", self.jk_buffer.size)
-            print("self.jk_buffer.shape   = ", self.jk_buffer.shape)
+            # print("V.shape = ", V.shape)
+            # print("aux_basis.shape = ", aux_basis.shape)
+            # print("self.jk_buffer.size    = ", self.jk_buffer.size)
+            # print("self.jk_buffer.shape   = ", self.jk_buffer.shape)
 
             fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(nAux),
@@ -802,7 +1021,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     get_jk = isdf_jk.get_jk_dm
 
-C = 20
+C = 7
 
 if __name__ == '__main__':
 

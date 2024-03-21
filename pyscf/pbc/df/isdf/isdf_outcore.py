@@ -223,8 +223,9 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
     # assert(blksize > 0)
     # assert(chunks[0] > 0)
 
-    if hasattr(mydf, 'blksize_aux'):
-        blksize = mydf.blksize_aux
+    print("blksize       = ", blksize)
+    # if hasattr(mydf, 'blksize_aux'):
+    #     blksize = mydf.blksize_aux
     # else:
     #     raise ValueError("blksize_aux should be provided")
 
@@ -652,6 +653,8 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
         coulG_real[:,:,1:] *= 2
     coulG_real = coulG_real.reshape(-1)
 
+    # print("coulG_real = ", coulG_real)
+
     with lib.call_in_background(load_aux_basis_fft_async) as prefetch:
         load_aux_basis_fft(0, blksize, buf_aux_basis_fft_2)  # force to load first bunch
 
@@ -681,6 +684,8 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
                ctypes.c_int(p1//2),
                buf_aux_basis_fft_copy.ctypes.data_as(ctypes.c_void_p),
                coulG_real.ctypes.data_as(ctypes.c_void_p))
+
+            # print("buf_aux_basis_fft_copy = ", buf_aux_basis_fft_copy)
 
             ## ddot with buf_aux_basis_fft_2
 
