@@ -27,12 +27,23 @@ from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 from pyscf.gto.mole import *
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
-import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
+# import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 import pyscf.pbc.df.isdf.isdf_fast as isdf
-import pyscf.pbc.df.isdf.isdf_outcore as isdf_outcore
+from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
+# import pyscf.pbc.df.isdf.isdf_outcore as isdf_outcore
+from pyscf.pbc.df.isdf.isdf_k import build_supercell
 
 from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, matrix_all2all_Col2Row, matrix_all2all_Row2Col, reduce
+
+# from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, matrix_all2all_Col2Row, matrix_all2all_Row2Col
+
+# from mpi4pyscf.tools import mpi
+# from mpi4pyscf.tools.mpi import allgather, bcast,  reduce
+
+# comm = mpi.comm
+# rank = mpi.rank
+# comm_size = comm.Get_size()
 
 import ctypes
 from multiprocessing import Pool
@@ -179,7 +190,8 @@ def _get_packed_mat_Col2Row(recvbuf:np.ndarray, nRow, nCol, force_bunch_even=Fal
         else:
             return recvbuf[:nRow, :col_id_end-col_id_begin].copy()
 
-def build_partition(mydf:isdf.PBC_ISDF_Info):
+# @mpi.parallel_call
+def build_partition(mydf):
         
     nGrids = mydf.ngrids
     if nGrids % comm_size == 0:
@@ -225,7 +237,8 @@ def build_partition(mydf:isdf.PBC_ISDF_Info):
     mydf.partition = partition_new
     mydf.aoR = aoR
 
-def build_aoRg(mydf:isdf.PBC_ISDF_Info):
+# @mpi.parallel_call
+def build_aoRg(mydf):
     
     aoR = mydf.aoR
     assert aoR is not None
@@ -237,14 +250,12 @@ def build_aoRg(mydf:isdf.PBC_ISDF_Info):
     p0 = min(nIP, rank * nIP // comm_size)
     p1 = min(nIP, (rank+1) * nIP // comm_size)
     
-    aoRg = ISDF_eval_gto(mydf.cell, coords=mydf.coords[mydf.IP_ID[p0:p1]]).real * weight
+    mydf.aoRg = ISDF_eval_gto(mydf.cell, coords=mydf.coords[mydf.IP_ID]).real * weight
         
-    mydf.aoRg = comm.allgather(aoRg)
-    
-    for i in range(len(mydf.aoRg)):
-        mydf.aoRg[i] = mydf.aoRg[i].reshape(nao, -1)
-    
-    mydf.aoRg = np.hstack(mydf.aoRg)
+    # mydf.aoRg = comm.allgather(aoRg)
+    # for i in range(len(mydf.aoRg)):
+    #     mydf.aoRg[i] = mydf.aoRg[i].reshape(nao, -1)
+    # mydf.aoRg = np.hstack(mydf.aoRg)
     
     if rank == 0:
         print("aoRg.shape = ", mydf.aoRg.shape)
@@ -264,7 +275,8 @@ def build_aoRg(mydf:isdf.PBC_ISDF_Info):
     
     comm.Barrier()
 
-def build_auxiliary_Coulomb(mydf:isdf.PBC_ISDF_Info, debug=True):
+# @mpi.parallel_call
+def build_auxiliary_Coulomb(mydf, debug=True):
     
     t0 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
@@ -361,6 +373,8 @@ def build_auxiliary_Coulomb(mydf:isdf.PBC_ISDF_Info, debug=True):
     basis_fft = None
     basis_fft = basis_fft_fullrow
     
+    mydf.basis_fft = basis_fft_fullrow.copy()
+    
     # print("basis_fft = ", basis_fft)
     
     t1_comm = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -381,17 +395,6 @@ def build_auxiliary_Coulomb(mydf:isdf.PBC_ISDF_Info, debug=True):
         coulG_real[:,:,1:] *= 2
     coulG_real = coulG_real.reshape(-1)
     
-    # col_bunchsize = ngrids // comm_size + 1
-    # p0 = min(ngrids, rank * col_bunchsize)
-    # p1 = min(ngrids, (rank+1) * col_bunchsize)
-
-    coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1]
-    # if mesh[2] % 2 == 0:
-    #     coulG_real[:,:,1:-1] *= 2
-    # else:
-    #     coulG_real[:,:,1:] *= 2
-    coulG_real = coulG_real.reshape(-1) 
-    
     basis_fft2 = basis_fft.copy()
     
     if ncomplex % comm_size == 0:
@@ -403,6 +406,9 @@ def build_auxiliary_Coulomb(mydf:isdf.PBC_ISDF_Info, debug=True):
     
     p0 = min(ncomplex, rank * ColBunch)
     p1 = min(ncomplex, (rank+1) * ColBunch)
+    
+    print("p0 = ", p0)
+    print("p1 = ", p1)  
     
     assert p1 - p0 == basis_fft2.shape[1]
     assert naux == basis_fft2.shape[0]
@@ -457,23 +463,14 @@ def get_jk_dm_mpi(mydf, dm, hermi=1, kpt=np.zeros(3),
            **kwargs):
     '''JK for given k-point'''
     
-    # print("get_jk_dm_mpi")
-    # sys.stdout.flush()
-    
     comm.Barrier()
     
     dm = bcast(dm, root=0)
-    
-    # print("get_jk_dm_mpi")
-    # sys.stdout.flush()
     
     if len(dm.shape) == 3:
         assert dm.shape[0] == 1
         dm = dm[0]
     
-    # print("get_jk_dm_mpi")
-    # sys.stdout.flush()
-        
     #### perform the calculation ####
 
     if mydf.jk_buffer is None:  # allocate the buffer for get jk
@@ -512,9 +509,14 @@ def get_jk_dm_mpi(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     t1 = log.timer('sr jk', *t1)
 
-    return vj, vk
+    # if rank == 0:
+    #     print("vj = ", vj[0,-10:])
+    #     print("vk = ", vk[0,-10:])
 
-class PBC_ISDF_Info_MPI(isdf.PBC_ISDF_Info):
+    return vj * comm_size, vk * comm_size ### ? 
+
+# @mpi.register_class
+class PBC_ISDF_Info_MPI(PBC_ISDF_Info):
 
     def __init__(self, mol:Cell,
                  with_robust_fitting=True,
@@ -596,24 +598,38 @@ class PBC_ISDF_Info_MPI(isdf.PBC_ISDF_Info):
     get_jk = get_jk_dm_mpi
 
 C = 10
+KE_CUTOFF = 32
 
 if __name__ == '__main__':
 
-    cell   = pbcgto.Cell()
-    
-    boxlen = 4.2
-    cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
-    cell.atom = '''
-Li 0.0   0.0   0.0
-Li 2.1   2.1   0.0
-Li 0.0   2.1   2.1
-Li 2.1   0.0   2.1
-H  0.0   0.0   2.1
-H  0.0   2.1   0.0
-H  2.1   0.0   0.0
-H  2.1   2.1   2.1
-'''
+    # from pyscf.pbc.df.isdf import isdf_fast_mpi
 
+#     atm = '''
+# Li 0.0   0.0   0.0
+# Li 2.1   2.1   0.0
+# Li 0.0   2.1   2.1
+# Li 2.1   0.0   2.1
+# H  0.0   0.0   2.1
+# H  0.0   2.1   0.0
+# H  2.1   0.0   0.0
+# H  2.1   2.1   2.1
+# ''' 
+    atm = [
+        ['C', (0.     , 0.     , 0.    )],
+        ['C', (0.8917 , 0.8917 , 0.8917)],
+        ['C', (1.7834 , 1.7834 , 0.    )],
+        ['C', (2.6751 , 2.6751 , 0.8917)],
+        ['C', (1.7834 , 0.     , 1.7834)],
+        ['C', (2.6751 , 0.8917 , 2.6751)],
+        ['C', (0.     , 1.7834 , 1.7834)],
+        ['C', (0.8917 , 2.6751 , 2.6751)],
+    ]
+    boxlen = 3.5668
+    prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+
+    cell   = pbcgto.Cell()
+    cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    cell.atom = atm
     cell.basis   = 'gth-dzvp'
     # cell.basis   = 'gth-tzvp'
     cell.pseudo  = 'gth-pade'
@@ -623,7 +639,7 @@ H  2.1   2.1   2.1
     else:
         cell.verbose = 0
 
-    cell.ke_cutoff  = 70   # kinetic energy cutoff in a.u.
+    cell.ke_cutoff  = KE_CUTOFF   # kinetic energy cutoff in a.u.
     # cell.ke_cutoff = 70
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
@@ -631,10 +647,19 @@ H  2.1   2.1   2.1
 
     cell.build()
     
-    pbc_isdf_info = PBC_ISDF_Info_MPI(cell)
+    prim_mesh = cell.mesh
+    Ls = [1, 1, 2]
+    Ls = np.array(Ls, dtype=np.int32)
+    mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
+    mesh = np.array(mesh, dtype=np.int32)
+    cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh)
+    
+    pbc_isdf_info = PBC_ISDF_Info_MPI(cell, with_robust_fitting=False)
     # build_partition(pbc_isdf_info)        
     pbc_isdf_info.build_IP_Sandeep(C, 5, global_IP_selection=True, debug=True)
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
+    
+    sys.stdout.flush()
     
     aux_bas = comm.gather(pbc_isdf_info.aux_basis, root=0)
     aoR = comm.gather(pbc_isdf_info.aoR, root=0)
@@ -662,8 +687,9 @@ H  2.1   2.1   2.1
         assert ngrids == coords.shape[0]
         aoR_bench   = df_tmp._numint.eval_ao(cell, coords)[0].T  # the T is important
         aoR_bench  *= np.sqrt(cell.vol / ngrids)
+        df_tmp = None
         
-        pbc_isdf_info_benchmark = isdf.PBC_ISDF_Info(cell, aoR=aoR_bench)
+        pbc_isdf_info_benchmark = isdf.PBC_ISDF_Info(cell, aoR=aoR_bench, with_robust_fitting=False)
         partition_bench = np.array(pbc_isdf_info_benchmark.partition, dtype=np.int32)
         print("partition_bench.shape = ", partition_bench.shape)
         loc_diff = []

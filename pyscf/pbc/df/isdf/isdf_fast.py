@@ -49,6 +49,8 @@ import mpi4py
 from mpi4py import MPI
 # from mpi4pyscf.tools.mpi import allgather
 
+# from mpi4pyscf.tools import mpi
+
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 comm_size = comm.Get_size()

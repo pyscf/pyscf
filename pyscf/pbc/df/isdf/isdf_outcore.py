@@ -151,7 +151,7 @@ def _determine_bunchsize(nao, naux, mesh, buf_size, with_robust_fitting=True):
 
     return (chunk_row, chunk_col), bunch_size_IO, blksize_aux, bunchsize_readV, grid_bunchsize, blksize_W, use_large_chunk
 
-def _construct_aux_basis(mydf:isdf_fast.PBC_ISDF_Info):
+def _construct_aux_basis(mydf):
 
     naux = mydf.naux
     mydf._allocate_jk_buffer(datatype=np.double)
