@@ -576,12 +576,17 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
     return numpy.asarray(conv), e, x0
 
-def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=12):
+def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=12,
+              max_memory=MAX_MEMORY,verbose=logger.WARN):
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
+        
     omega0 = numpy.zeros((nroots))
     u0 = numpy.zeros((nroots,x0.shape[-1])) # save the eigenvectors.
     
     for icycle in range(max_cycle):
-        print(x0.shape)
         if icycle%max_space == 0: 
             x0 = x0[:nroots]
             
@@ -612,12 +617,18 @@ def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=12):
                     omega_p = numpy.append(omega_p,omega_p[-1]+0.05)
                     
         omega_diff = numpy.abs(omega_p[:nroots]-omega0)
-        print(f"In circle {icycle}, difference of omega:")
-        print(omega_diff)
         omega0 = omega_p[:nroots]
-        print(f"In total, {(omega_diff<tol).sum()}/{nroots} states converged. The values listed below:")
-        print(omega_p[:nroots].real)
-        print('\n')
+        
+        _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*3
+        
+        log.debug1('max_cycle %d  max_space %d  max_memory %d  incore %s',
+                    max_cycle, max_space, max_memory, _incore)
+        log.debug1('the shape of project vector is: %s',x0.shape)
+        log.debug1('In circle %d, difference of omega:\n%s', icycle,omega_diff)
+        
+        
+        log.debug1('In total, %s/%s states converged. The values listed below:\n%s\n',
+                    (omega_diff<tol).sum(),nroots,omega_p[:nroots].real)
         
         if (omega_diff<tol).sum() == nroots:
             break 
