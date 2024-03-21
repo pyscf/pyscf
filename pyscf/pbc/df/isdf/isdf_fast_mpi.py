@@ -373,7 +373,7 @@ def build_auxiliary_Coulomb(mydf, debug=True):
     basis_fft = None
     basis_fft = basis_fft_fullrow
     
-    mydf.basis_fft = basis_fft_fullrow.copy()
+    # mydf.basis_fft = basis_fft_fullrow.copy()
     
     # print("basis_fft = ", basis_fft)
     
@@ -432,12 +432,12 @@ def build_auxiliary_Coulomb(mydf, debug=True):
     
     W = lib.ddot(basis_fft2, basis_fft.T)
     
-    W = reduce(W, root=0)
+    # W = reduce(W, root=0)
     
     factor = 1.0 / np.prod(mesh)
     W *= factor
     
-    W = bcast(W, root=0)
+    # W = bcast(W, root=0)
     
     mydf.W = W
     
@@ -453,6 +453,12 @@ def build_auxiliary_Coulomb(mydf, debug=True):
     
     if mydf.verbose:
         _benchmark_time(t0, t2, "build_auxiliary_Coulomb")
+    
+    # clean # 
+    
+    basis_fft_fullrow = None
+    basis_fft = None
+    basis_fft2 = None
     
     return V, W
     
@@ -664,6 +670,7 @@ if __name__ == '__main__':
     aux_bas = comm.gather(pbc_isdf_info.aux_basis, root=0)
     aoR = comm.gather(pbc_isdf_info.aoR, root=0)
     V_R = comm.gather(pbc_isdf_info.V_R, root=0)
+    W = reduce(pbc_isdf_info.W, root=0)
     
     if rank == 0:
         for x in aux_bas:
@@ -739,7 +746,7 @@ if __name__ == '__main__':
         
         print("diff VR = ", diff)
         
-        W = pbc_isdf_info.W
+        # W = pbc_isdf_info.W
         W_bench = pbc_isdf_info_benchmark.W
         
         diff = np.linalg.norm(W - W_bench) / np.sqrt(W.size)

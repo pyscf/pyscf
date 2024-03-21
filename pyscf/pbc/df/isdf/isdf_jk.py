@@ -378,26 +378,26 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
         # print("J = ", J[:16])
 
-        if use_mpi:
-            J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
+        # if use_mpi:
+        # J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
             # J = comm.reduce(J, op=MPI.SUM, root=0)
         
         # do not need allocate memory, use buffer 3
 
         # J = np.einsum('ij,j->ij', aoRg, J)
         
-        if (use_mpi and rank == 0) or use_mpi == False:
-            J = np.asarray(lib.d_ij_j_ij(aoRg, J, out=buffer3), order='C')
+        # if (use_mpi and rank == 0) or use_mpi == False:
+        J = np.asarray(lib.d_ij_j_ij(aoRg, J, out=buffer3), order='C')
 
             # assert J.__array_interface__['data'][0] == ptr3
 
             # need allocate memory, size = nao  * nao, (buffer 6)
 
-            J = np.asarray(lib.ddot_withbuffer(aoRg, J.T, c=buffer6, buf=mydf.ddot_buf), order='C')
+        J = np.asarray(lib.ddot_withbuffer(aoRg, J.T, c=buffer6, buf=mydf.ddot_buf), order='C')
             
             # assert J.__array_interface__['data'][0] == ptr6
-        else:
-            J = np.zeros((nao, nao))
+        # else:
+        #     J = np.zeros((nao, nao))
 
         # do not need allocate memory, use buffer 2
 
@@ -418,8 +418,8 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
         # print("J = ", J[0,:])
 
-    if use_mpi and J is not None:
-        J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
+    # if use_mpi and J is not None:
+        # J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
         # J = comm.reduce(J, op=MPI.SUM, root=0)
 
     # if (use_mpi and rank == 0) or use_mpi == False:
@@ -431,35 +431,28 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
     # do not need allocate memory, use buffer 2
 
-    if (use_mpi and rank == 0) or use_mpi == False:
+    # if (use_mpi and rank == 0) or use_mpi == False:
 
-        tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1), c=buffer8.reshape(-1,1)), order='C').reshape(-1)
-
-        # assert tmp.__array_interface__['data'][0] == ptr8
-
-        # do not need allocate memory, use buffer 1 but viewed as buffer 7
-
-        # tmp = np.einsum('ij,j->ij', aoRg, tmp)
-        tmp = np.asarray(lib.d_ij_j_ij(aoRg, tmp, out=buffer7), order='C')
-
-        # assert tmp.__array_interface__['data'][0] == ptr7
-
-        # do not need allocate memory, use buffer 6
-
-        # J -= np.asarray(lib.dot(aoRg, tmp.T), order='C')
-        
-        if with_robust_fitting:
-            # print("with robust fitting")
-            lib.ddot_withbuffer(aoRg, -tmp.T, c=J, beta=1, buf=mydf.ddot_buf)
-        else:
-            # print("without robust fitting")
-            J = buffer6
-            lib.ddot_withbuffer(aoRg, tmp.T, c=J, beta=0, buf=mydf.ddot_buf)
-
-        # assert J.__array_interface__['data'][0] == ptr6
+    tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1), c=buffer8.reshape(-1,1)), order='C').reshape(-1)
+    # assert tmp.__array_interface__['data'][0] == ptr8
+    # do not need allocate memory, use buffer 1 but viewed as buffer 7
+    # tmp = np.einsum('ij,j->ij', aoRg, tmp)
+    tmp = np.asarray(lib.d_ij_j_ij(aoRg, tmp, out=buffer7), order='C')
+    # assert tmp.__array_interface__['data'][0] == ptr7
+    # do not need allocate memory, use buffer 6
+    # J -= np.asarray(lib.dot(aoRg, tmp.T), order='C')
+    if with_robust_fitting:
+        # print("with robust fitting")
+        lib.ddot_withbuffer(aoRg, -tmp.T, c=J, beta=1, buf=mydf.ddot_buf)
+    else:
+        # print("without robust fitting")
+        J = buffer6
+        lib.ddot_withbuffer(aoRg, tmp.T, c=J, beta=0, buf=mydf.ddot_buf)
+    # assert J.__array_interface__['data'][0] == ptr6
 
     if use_mpi:
-        J = mpi_bcast(J, comm, rank, root=0)
+        J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
+        # J = mpi_bcast(J, comm, rank, root=0)
 
     t2 = (logger.process_clock(), logger.perf_counter())
     
@@ -590,13 +583,13 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
         K  = np.asarray(lib.ddot_withbuffer(aoRg, K, c=buffer4, buf=mydf.ddot_buf), order='C')
         
-        if use_mpi:
-            K2 = mpi_reduce(K, comm, rank, op=MPI.SUM, root=0)
-            # K = comm.reduce(K, op=MPI.SUM, root=0)
-            K = K2
+        # if use_mpi:
+        # K2 = mpi_reduce(K, comm, rank, op=MPI.SUM, root=0)
+        # K = comm.reduce(K, op=MPI.SUM, root=0)
+        # K = K2
 
-        if (use_mpi and rank == 0) or use_mpi == False:
-            K += K.T
+        # if (use_mpi and rank == 0) or use_mpi == False:
+        K += K.T
             
         # print("K = ", K[0,:])
 
@@ -610,30 +603,31 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
     # print("D5 = ", density_RgRg[0,:])
     
-    if (use_mpi and rank == 0) or use_mpi == False:
+    # if (use_mpi and rank == 0) or use_mpi == False:
     
-        lib.cwise_mul(W, density_RgRg, out=density_RgRg)
-        tmp = density_RgRg
+    lib.cwise_mul(W, density_RgRg, out=density_RgRg)
+    tmp = density_RgRg
 
         # assert tmp.__array_interface__['data'] == buffer3.__array_interface__['data']
 
         # do not need allocate memory, size = naux * nao, use buffer 2 but viewed as buffer 6
-        tmp = np.asarray(lib.dot(tmp, aoRg.T, c=buffer6), order='C')
+    tmp = np.asarray(lib.dot(tmp, aoRg.T, c=buffer6), order='C')
 
         # assert tmp.__array_interface__['data'] == buffer6.__array_interface__['data']
 
         # K  -= np.asarray(lib.dot(aoRg, tmp, c=K, beta=1), order='C')     # do not need allocate memory, size = nao * nao, (buffer 4)
     
-        if with_robust_fitting:
-            # print("with robust fitting")
-            lib.ddot_withbuffer(aoRg, -tmp, c=K, beta=1, buf=mydf.ddot_buf)
-        else:
-            # print("without robust fitting")
-            K = buffer4
-            lib.ddot_withbuffer(aoRg, tmp, c=K, beta=0, buf=mydf.ddot_buf)
+    if with_robust_fitting:
+        # print("with robust fitting")
+        lib.ddot_withbuffer(aoRg, -tmp, c=K, beta=1, buf=mydf.ddot_buf)
+    else:
+        # print("without robust fitting")
+        K = buffer4
+        lib.ddot_withbuffer(aoRg, tmp, c=K, beta=0, buf=mydf.ddot_buf)
 
-    # if use_mpi:
-    #     K = mpi_bcast(K, comm, rank, root=0)
+    if use_mpi:
+        # K = mpi_bcast(K, comm, rank, root=0)
+        K = mpi_reduce(K, comm, rank, op=MPI.SUM, root=0)
 
     # assert K.__array_interface__['data'] == buffer4.__array_interface__['data']
 

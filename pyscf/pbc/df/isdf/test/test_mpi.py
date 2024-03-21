@@ -102,7 +102,7 @@ H  2.1   2.1   2.1
     aoR = comm.gather(pbc_isdf_info.aoR, root=0)
     V_R = comm.gather(pbc_isdf_info.V_R, root=0)
     
-    aux_bas_fft = comm.gather(pbc_isdf_info.basis_fft, root=0)
+    #aux_bas_fft = comm.gather(pbc_isdf_info.basis_fft, root=0)
     
     # if rank == 0:
     #     print("aux_bas_fft = ", aux_bas_fft)
