@@ -336,6 +336,7 @@ def build_auxiliary_Coulomb(mydf, debug=True):
     nCol = sendbuf.shape[1] * comm_size
     # print("sendbuf.shape = ", sendbuf.shape, " on rank = ", rank)
     aux_fullcol = matrix_all2all_Row2Col(comm, nRow, nCol, sendbuf)
+    mydf.aux_basis = None
     # print("aux_fullcol.shape = ", aux_fullcol.shape, " on rank = ", rank)
     aux_fullcol = _get_packed_mat_Row2Col(aux_fullcol, mydf.naux, mydf.ngrids)
     
@@ -667,15 +668,15 @@ if __name__ == '__main__':
     
     sys.stdout.flush()
     
-    aux_bas = comm.gather(pbc_isdf_info.aux_basis, root=0)
+    # aux_bas = comm.gather(pbc_isdf_info.aux_basis, root=0)
     aoR = comm.gather(pbc_isdf_info.aoR, root=0)
     V_R = comm.gather(pbc_isdf_info.V_R, root=0)
     W = reduce(pbc_isdf_info.W, root=0)
     
     if rank == 0:
-        for x in aux_bas:
-            print("x.shape = ", x.shape) 
-        aux_bas = np.hstack(aux_bas) 
+        # for x in aux_bas:
+        #     print("x.shape = ", x.shape) 
+        # aux_bas = np.hstack(aux_bas) 
         aoR  = np.hstack(aoR)
         V_R  = np.hstack(V_R)
     
@@ -721,24 +722,24 @@ if __name__ == '__main__':
         
         # check aux_bas 
         
-        print("aux_bas.shape = ", aux_bas.shape)
+        # print("aux_bas.shape = ", aux_bas.shape)
         
-        aux_bas_bench = pbc_isdf_info_benchmark.aux_basis   
+        # aux_bas_bench = pbc_isdf_info_benchmark.aux_basis   
         
-        diff = np.linalg.norm(aux_bas - aux_bas_bench) / np.sqrt(aux_bas.size)
-        print("diff = ", diff)
+        # diff = np.linalg.norm(aux_bas - aux_bas_bench) / np.sqrt(aux_bas.size)
+        # print("diff = ", diff)
         # print("aux_bas = ", aux_bas[:5,:5])
         # print("aux_bas_bench = ", aux_bas_bench[:5,:5])
         # print(" / ", aux_bas[:5,:5] / aux_bas_bench[:5,:5])
         # assert np.allclose(aux_bas, aux_bas_bench, atol=1e-7)
         
-        for i in range(aux_bas.shape[0]):
-            for j in range(aux_bas.shape[1]):
-                if abs(aux_bas[i,j] - aux_bas_bench[i,j]) > 1e-5:
-                    print("i, j = ", i, j)
-                    print(aux_bas[i,j], aux_bas_bench[i,j])
-                    print(" / ", aux_bas[i,j] / aux_bas_bench[i,j])
-                    # raise ValueError("aux_bas not equal")
+        # for i in range(aux_bas.shape[0]):
+        #     for j in range(aux_bas.shape[1]):
+        #         if abs(aux_bas[i,j] - aux_bas_bench[i,j]) > 1e-5:
+        #             print("i, j = ", i, j)
+        #             print(aux_bas[i,j], aux_bas_bench[i,j])
+        #             print(" / ", aux_bas[i,j] / aux_bas_bench[i,j])
+        #             # raise ValueError("aux_bas not equal")
         
         V_R_bench = pbc_isdf_info_benchmark.V_R 
         
