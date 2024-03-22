@@ -60,31 +60,9 @@ comm_size = comm.Get_size()
 INT_MAX = 2147483647
 BLKSIZE = INT_MAX // 32 + 1
 
-def matrix_all2all_Row2Col(comm, nRow, nCol, Mat):
-    assert nRow % comm_size == 0
-    assert nCol % comm_size == 0
-    sendbuf = Mat
-    assert sendbuf.shape == (nRow, nCol//comm_size)
-    recvbuf = numpy.empty((Mat.size,), dtype=Mat.dtype)
-    comm.Alltoall(sendbuf, recvbuf)
-    Mat_packed = numpy.empty((nRow//comm_size, nCol), dtype=Mat.dtype)
-    for i in range(comm_size):
-        Mat_packed[:, nCol//comm_size * i: nCol//comm_size * (i+1)] = recvbuf[recvbuf.size//comm_size * i: recvbuf.size//comm_size * (i+1)].reshape(nRow//comm_size, -1)
-    return Mat_packed
-
-def matrix_all2all_Col2Row(comm, nRow, nCol, Mat):
-    assert nRow % comm_size == 0
-    assert nCol % comm_size == 0
-    sendbuf = numpy.empty((Mat.size,), dtype=Mat.dtype)
-    for i in range(comm_size):
-        sendbuf[sendbuf.size//comm_size * i: sendbuf.size//comm_size * (i+1)] = Mat[:, nCol//comm_size * i: nCol//comm_size * (i+1)].ravel()[:]    
-    recvbuf = numpy.empty((Mat.size,), dtype=Mat.dtype)
-    comm.Alltoall(sendbuf, recvbuf)
-    sendbuf = None
-    return recvbuf.reshape(nRow, nCol//comm_size)
-
 def _assert(condition):
     if not condition:
+        import traceback
         sys.stderr.write(''.join(traceback.format_stack()[:-1]))
         comm.Abort()
 
@@ -151,20 +129,11 @@ def bcast(buf, root=0):
     return buf
 
 def gather(sendbuf, root=0, split_recvbuf=False):
-    #if pool.debug:
-    #    if rank == 0:
-    #        res = [sendbuf]
-    #        for k in range(1, pool.size):
-    #            dat = comm.recv(source=k)
-    #            res.append(dat)
-    #        return numpy.vstack([x for x in res if len(x) > 0])
-    #    else:
-    #        comm.send(sendbuf, dest=0)
-    #        return sendbuf
 
     sendbuf = numpy.asarray(sendbuf, order='C')
     shape = sendbuf.shape
     size_dtype = comm.allgather((shape, sendbuf.dtype.char))
+    # print(size_dtype)
     rshape = [x[0] for x in size_dtype]
     counts = numpy.array([numpy.prod(x) for x in rshape])
 
@@ -193,6 +162,59 @@ def gather(sendbuf, root=0, split_recvbuf=False):
         for p0, p1 in lib.prange(0, numpy.max(counts), BLKSIZE):
             comm.Gatherv([send_seg[p0:p1], mpi_dtype], None, root)
         return sendbuf
+
+def prange(start, stop, step):
+    '''Similar to lib.prange. This function ensures that all processes have the
+    same number of steps.  It is required by alltoall communication.
+    '''
+    nsteps = (stop - start + step - 1) // step
+    nsteps = max(comm.allgather(nsteps))
+    for i in range(nsteps):
+        i0 = min(stop, start + i * step)
+        i1 = min(stop, i0 + step)
+        yield i0, i1
+        
+def alltoall(sendbuf, split_recvbuf=False):
+    if isinstance(sendbuf, numpy.ndarray):
+        raise NotImplementedError
+        mpi_dtype = comm.bcast(sendbuf.dtype.char)
+        sendbuf = numpy.asarray(sendbuf, mpi_dtype, 'C')
+        nrow = sendbuf.shape[0]
+        ncol = sendbuf.size // nrow
+        segsize = (nrow+comm_size-1) // comm_size * ncol
+        sdispls = numpy.arange(0, comm_size*segsize, segsize)
+        sdispls[sdispls>sendbuf.size] = sendbuf.size
+        scounts = numpy.append(sdispls[1:]-sdispls[:-1], sendbuf.size-sdispls[-1])
+        rshape = comm.alltoall(scounts)
+    else:
+        _assert(len(sendbuf) == comm_size)
+        mpi_dtype = comm.bcast(sendbuf[0].dtype.char)
+        sendbuf = [numpy.asarray(x, mpi_dtype) for x in sendbuf]
+        rshape = comm.alltoall([x.shape for x in sendbuf])
+        scounts = numpy.asarray([x.size for x in sendbuf])
+        sdispls = numpy.append(0, numpy.cumsum(scounts[:-1]))
+        sendbuf = numpy.hstack([x.ravel() for x in sendbuf])
+
+    rcounts = numpy.asarray([numpy.prod(x) for x in rshape])
+    rdispls = numpy.append(0, numpy.cumsum(rcounts[:-1]))
+    recvbuf = numpy.empty(sum(rcounts), dtype=mpi_dtype)
+
+    # print("rcounts = ", rcounts)
+
+    max_counts = max(numpy.max(scounts), numpy.max(rcounts))
+    sendbuf = sendbuf.ravel()
+    #DONOT use lib.prange. lib.prange may terminate early in some processes
+    for p0, p1 in prange(0, max_counts, BLKSIZE):
+        scounts_seg = _segment_counts(scounts, p0, p1)
+        rcounts_seg = _segment_counts(rcounts, p0, p1)
+        comm.Alltoallv([sendbuf, scounts_seg, sdispls+p0, mpi_dtype],
+                       [recvbuf, rcounts_seg, rdispls+p0, mpi_dtype])
+
+    if split_recvbuf:
+        return [recvbuf[p0:p0+c].reshape(shape)
+                for p0,c,shape in zip(rdispls, rcounts, rshape)]
+    else:
+        return recvbuf
     
 ################### end of the MPI module ##########################
 

@@ -193,6 +193,10 @@ def get_jk_mo(mydf, occ_mo_coeff, hermi=1, kpt=np.zeros(3),
 
 def _assert(condition):
     if not condition:
+        import sys 
+        import traceback
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
         sys.stderr.write(''.join(traceback.format_stack()[:-1]))
         comm.Abort()
         

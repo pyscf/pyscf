@@ -34,7 +34,7 @@ from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 # import pyscf.pbc.df.isdf.isdf_outcore as isdf_outcore
 from pyscf.pbc.df.isdf.isdf_k import build_supercell
 
-from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, matrix_all2all_Col2Row, matrix_all2all_Row2Col, reduce
+from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall
 
 # from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, matrix_all2all_Col2Row, matrix_all2all_Row2Col
 
@@ -54,150 +54,23 @@ from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
 ####### the following subroutines are used to get the sendbuf for all2all #######
 
-def _get_sendbuf_Row2Col(Mat:np.ndarray, nRow, nCol):
-
-    RowPad = (nRow % comm_size) != 0
-    if RowPad:
-        RowBunch = nRow // comm_size + 1
+def _comm_bunch(size_of_comm, force_even=False):
+    if size_of_comm % comm_size == 0:
+        res = size_of_comm // comm_size
     else:
-        RowBunch = nRow // comm_size
-    ColPad = (nCol % comm_size) != 0
-    if ColPad:
-        ColBunch = nCol // comm_size + 1
-    else:
-        ColBunch = nCol // comm_size
-
-    # if RowPad:
-    #     sendbuf = numpy.zeros((comm_size * RowBunch, ColBunch), dtype=Mat.dtype)
-    #     # print("sendbuf.shape = ", sendbuf.shape)
-    #     # print("Mat.shape = ", Mat.shape)
-    #     sendbuf[:Mat.shape[0], :Mat.shape[1]] = Mat
-    # else:
-    #     if ColPad:
-    #         if rank == comm_size - 1:
-    #             sendbuf = numpy.zeros((comm_size * RowBunch, ColBunch), dtype=Mat.dtype)
-    #             sendbuf[:Mat.shape[0], :Mat.shape[1]] = Mat
-    #         else:
-    #             assert Mat.shape[1] == ColBunch
-    #             sendbuf = Mat
-    #     else:
-    #         sendbuf = Mat
+        res = (size_of_comm // comm_size) + 1
     
-    if Mat.shape != (comm_size * RowBunch, ColBunch):
-        sendbuf = numpy.zeros((comm_size * RowBunch, ColBunch), dtype=Mat.dtype)
-        sendbuf[:Mat.shape[0], :Mat.shape[1]] = Mat
-    else:
-        sendbuf = Mat
+    if force_even:
+        if res % 2 == 1 :
+            res += 1
     
-    return sendbuf
-
-def _get_sendbuf_Col2Row(Mat:np.ndarray, nRow, nCol, force_bunch_even=False):
-    
-    RowPad = (nRow % comm_size) != 0
-    if RowPad:
-        RowBunch = nRow // comm_size + 1
-    else:
-        RowBunch = nRow // comm_size
-    ColPad = (nCol % comm_size) != 0
-    if ColPad:
-        ColBunch = nCol // comm_size + 1
-    else:
-        ColBunch = nCol // comm_size
-
-    if force_bunch_even:
-        if ColBunch % 2 == 1:
-            ColBunch += 1
-
-    # if ColPad:
-    #     sendbuf = numpy.zeros((RowBunch, comm_size * ColBunch), dtype=Mat.dtype)
-    #     sendbuf[:Mat.shape[0], :Mat.shape[1]] = Mat
-    # else:
-    #     if RowPad:
-    #         if rank == comm_size - 1:
-    #             sendbuf = numpy.zeros((RowBunch, comm_size * ColBunch), dtype=Mat.dtype)
-    #             sendbuf[:Mat.shape[0], :Mat.shape[1]] = Mat
-    #         else:
-    #             assert Mat.shape[0] == RowBunch
-    #             sendbuf = Mat
-    #     else:
-    #         sendbuf = Mat
-    
-    if Mat.shape != (RowBunch, comm_size * ColBunch):
-        sendbuf = numpy.zeros((RowBunch, comm_size * ColBunch), dtype=Mat.dtype)
-        sendbuf[:Mat.shape[0], :Mat.shape[1]] = Mat
-    else:
-        sendbuf = Mat
-    
-    return sendbuf
-    
-def _get_packed_mat_Row2Col(recvbuf:np.ndarray, nRow, nCol):
-    
-    RowPad = (nRow % comm_size) != 0
-    if RowPad:
-        RowBunch = nRow // comm_size + 1
-    else:
-        RowBunch = nRow // comm_size
-    ColPad = (nCol % comm_size) != 0
-    if ColPad:
-        ColBunch = nCol // comm_size + 1
-    else:
-        ColBunch = nCol // comm_size
-    
-    print("RowBunch = ", RowBunch)
-    print("ColBunch = ", ColBunch)
-    print("recvbuf.shape = ", recvbuf.shape)
-    print((RowBunch, ColBunch*comm_size))
-    assert recvbuf.shape == (RowBunch, ColBunch*comm_size)
-    
-    row_id_begin = rank * RowBunch
-    row_id_end = min(row_id_begin + RowBunch, nRow)
-
-    if ColPad:
-        return recvbuf[:row_id_end-row_id_begin, :nCol].copy()
-    else:
-        if row_id_end - row_id_begin == recvbuf.shape[0]:
-            return recvbuf
-        else:
-            return recvbuf[:row_id_end-row_id_begin, :nCol].copy()
-
-def _get_packed_mat_Col2Row(recvbuf:np.ndarray, nRow, nCol, force_bunch_even=False):
-    
-    RowPad = (nRow % comm_size) != 0
-    if RowPad:
-        RowBunch = nRow // comm_size + 1
-    else:
-        RowBunch = nRow // comm_size
-    ColPad = (nCol % comm_size) != 0
-    if ColPad:
-        ColBunch = nCol // comm_size + 1
-    else:
-        ColBunch = nCol // comm_size
-    
-    if force_bunch_even:
-        if ColBunch % 2 == 1:
-            ColBunch += 1
-            
-    assert recvbuf.shape == (RowBunch*comm_size, ColBunch)
-    
-    col_id_begin = rank * ColBunch
-    col_id_end = min(col_id_begin + ColBunch, nCol)
-
-    if RowPad:
-        return recvbuf[:nRow, :col_id_end-col_id_begin].copy()
-    else:
-        if col_id_end - col_id_begin == recvbuf.shape[1]:
-            return recvbuf
-        else:
-            return recvbuf[:nRow, :col_id_end-col_id_begin].copy()
+    return res
 
 # @mpi.parallel_call
 def build_partition(mydf):
         
-    nGrids = mydf.ngrids
-    if nGrids % comm_size == 0:
-        grid_bunch = nGrids // comm_size
-    else:
-        grid_bunch = nGrids // comm_size + 1
+    nGrids = mydf.ngrids    
+    grid_bunch = _comm_bunch(nGrids)
     
     p0 = min(nGrids, rank * grid_bunch)
     p1 = min(nGrids, (rank+1) * grid_bunch)
@@ -251,12 +124,7 @@ def build_aoRg(mydf):
     p1 = min(nIP, (rank+1) * nIP // comm_size)
     
     mydf.aoRg = ISDF_eval_gto(mydf.cell, coords=mydf.coords[mydf.IP_ID]).real * weight
-        
-    # mydf.aoRg = comm.allgather(aoRg)
-    # for i in range(len(mydf.aoRg)):
-    #     mydf.aoRg[i] = mydf.aoRg[i].reshape(nao, -1)
-    # mydf.aoRg = np.hstack(mydf.aoRg)
-    
+            
     if rank == 0:
         print("aoRg.shape = ", mydf.aoRg.shape)
         assert mydf.aoRg.ndim == 2
@@ -331,14 +199,15 @@ def build_auxiliary_Coulomb(mydf, debug=True):
     
     t0_comm = (lib.logger.process_clock(), lib.logger.perf_counter())
     
-    sendbuf = _get_sendbuf_Row2Col(mydf.aux_basis, mydf.naux, mydf.ngrids)
-    nRow = sendbuf.shape[0]
-    nCol = sendbuf.shape[1] * comm_size
-    # print("sendbuf.shape = ", sendbuf.shape, " on rank = ", rank)
-    aux_fullcol = matrix_all2all_Row2Col(comm, nRow, nCol, sendbuf)
+    comm_size_row = _comm_bunch(mydf.naux)
+    sendbuf = []
+    for i in range(comm_size):
+        p0 = min(i*comm_size_row, mydf.naux)
+        p1 = min((i+1)*comm_size_row, mydf.naux)
+        sendbuf.append(mydf.aux_basis[p0:p1, :])
+    aux_fullcol = np.hstack(alltoall(sendbuf, split_recvbuf=True))
     mydf.aux_basis = None
-    # print("aux_fullcol.shape = ", aux_fullcol.shape, " on rank = ", rank)
-    aux_fullcol = _get_packed_mat_Row2Col(aux_fullcol, mydf.naux, mydf.ngrids)
+    sendbuf = None
     
     t1_comm = (lib.logger.process_clock(), lib.logger.perf_counter())
     
@@ -352,27 +221,28 @@ def build_auxiliary_Coulomb(mydf, debug=True):
     
     t0_comm = (lib.logger.process_clock(), lib.logger.perf_counter())
     
-    sendbuf = _get_sendbuf_Col2Row(V, mydf.naux, mydf.ngrids)
-    nRow = sendbuf.shape[0] * comm_size
-    nCol = sendbuf.shape[1]
-    V_fullrow = matrix_all2all_Col2Row(comm, nRow, nCol, sendbuf)
-    # print("V_fullrow.shape = ", V_fullrow.shape, " on rank = ", rank)
-    # comm.Barrier()
-    V_fullrow = _get_packed_mat_Col2Row(V_fullrow, mydf.naux, mydf.ngrids)
-    # print("V_fullrow.shape = ", V_fullrow.shape, " on rank = ", rank)
-    mydf.V_R = V_fullrow
+    comm_size_col = _comm_bunch(mydf.ngrids)
+    sendbuf = []
+    for i in range(comm_size):
+        p0 = min(i*comm_size_col, mydf.ngrids)
+        p1 = min((i+1)*comm_size_col, mydf.ngrids)
+        sendbuf.append(V[:, p0:p1])
+    V_fullrow = np.vstack(alltoall(sendbuf, split_recvbuf=True))
+    sendbuf = None
     V = None
     
-    sendbuf = _get_sendbuf_Col2Row(basis_fft, mydf.naux, ncomplex, force_bunch_even=True)
-    nRow = sendbuf.shape[0] * comm_size
-    nCol = sendbuf.shape[1]
-    basis_fft_fullrow = matrix_all2all_Col2Row(comm, nRow, nCol, sendbuf)
-    # print("basis_fft_fullrow.shape = ", basis_fft_fullrow.shape, " on rank = ", rank)
-    # comm.Barrier()
-    basis_fft_fullrow = _get_packed_mat_Col2Row(basis_fft_fullrow, mydf.naux, ncomplex, force_bunch_even=True)
-    # print("basis_fft_fullrow.shape = ", basis_fft_fullrow.shape, " on rank = ", rank)
+    mydf.V_R = V_fullrow
+    
+    comm_size_col = _comm_bunch(ncomplex, force_even=True)
+    sendbuf = []
+    for i in range(comm_size):
+        p0 = min(i*comm_size_col, ncomplex)
+        p1 = min((i+1)*comm_size_col, ncomplex)
+        sendbuf.append(basis_fft[:, p0:p1])
+    basis_fft_fullrow = np.vstack(alltoall(sendbuf, split_recvbuf=True))
+    sendbuf = None
     basis_fft = None
-    basis_fft = basis_fft_fullrow
+    basis_fft = basis_fft_fullrow 
     
     # mydf.basis_fft = basis_fft_fullrow.copy()
     
@@ -397,13 +267,8 @@ def build_auxiliary_Coulomb(mydf, debug=True):
     coulG_real = coulG_real.reshape(-1)
     
     basis_fft2 = basis_fft.copy()
-    
-    if ncomplex % comm_size == 0:
-        ColBunch = ncomplex // comm_size
-    else:
-        ColBunch = ncomplex // comm_size + 1
-    if ColBunch % 2 == 1:
-        ColBunch += 1
+
+    ColBunch = comm_size_col
     
     p0 = min(ncomplex, rank * ColBunch)
     p1 = min(ncomplex, (rank+1) * ColBunch)
@@ -520,7 +385,7 @@ def get_jk_dm_mpi(mydf, dm, hermi=1, kpt=np.zeros(3),
     #     print("vj = ", vj[0,-10:])
     #     print("vk = ", vk[0,-10:])
 
-    return vj * comm_size, vk * comm_size ### ? 
+    return vj * comm_size , vk * comm_size ### ? 
 
 # @mpi.register_class
 class PBC_ISDF_Info_MPI(PBC_ISDF_Info):
@@ -604,7 +469,7 @@ class PBC_ISDF_Info_MPI(PBC_ISDF_Info):
     # from functools import partial
     get_jk = get_jk_dm_mpi
 
-C = 12
+C = 7
 KE_CUTOFF = 128
 
 if __name__ == '__main__':
@@ -668,9 +533,21 @@ if __name__ == '__main__':
     
     sys.stdout.flush()
     
+    comm.Barrier()
+    
+    # aoR = pbc_isdf_info.aoR.copy()
+    # V_R = pbc_isdf_info.V_R.copy()
+    # W = pbc_isdf_info.W.copy()
+    
     # aux_bas = comm.gather(pbc_isdf_info.aux_basis, root=0)
-    aoR = comm.gather(pbc_isdf_info.aoR, root=0)
-    V_R = comm.gather(pbc_isdf_info.V_R, root=0)
+    # aoR = comm.gather(pbc_isdf_info.aoR, root=0)
+    # V_R = comm.gather(pbc_isdf_info.V_R, root=0)
+    # W = reduce(pbc_isdf_info.W, root=0)
+    
+    # aoR = comm.gather(aoR, root=0)
+    # V_R = comm.gather(V_R, root=0)
+    aoR = gather(pbc_isdf_info.aoR, split_recvbuf=True)
+    V_R = gather(pbc_isdf_info.V_R, split_recvbuf=True)
     W = reduce(pbc_isdf_info.W, root=0)
     
     if rank == 0:
@@ -746,6 +623,11 @@ if __name__ == '__main__':
         diff = np.linalg.norm(V_R - V_R_bench) / np.sqrt(V_R.size)
         
         print("diff VR = ", diff)
+        
+        for i in range(V_R.shape[0]):
+            for j in range(V_R.shape[0]):
+                if abs(V_R[i,j]-V_R_bench[i,j]) > 1e-6:
+                    print("%2d %2d %15.8f %15.8f" % (i, j, V_R[i,j], V_R_bench[i,j]))
         
         # W = pbc_isdf_info.W
         W_bench = pbc_isdf_info_benchmark.W
