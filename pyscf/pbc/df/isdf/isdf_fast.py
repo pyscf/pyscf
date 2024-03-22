@@ -60,6 +60,16 @@ comm_size = comm.Get_size()
 INT_MAX = 2147483647
 BLKSIZE = INT_MAX // 32 + 1
 
+def _comm_bunch(size_of_comm, force_even=False):
+    if size_of_comm % comm_size == 0:
+        res = size_of_comm // comm_size
+    else:
+        res = (size_of_comm // comm_size) + 1
+    if force_even:
+        if res % 2 == 1 :
+            res += 1
+    return res
+
 def _assert(condition):
     if not condition:
         import traceback
@@ -1013,7 +1023,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         V_R = constrcuct_V_CCode(self.aux_basis, mesh, coulG)
 
         # del task
-        coulG = None
+        # coulG = None
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if debug:
@@ -1022,6 +1032,15 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         W = np.zeros((naux,naux))
         lib.ddot_withbuffer(a=self.aux_basis, b=V_R.T, buf=self.ddot_buf, c=W, beta=1.0)
+
+        # coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1]
+        # if mesh[2] % 2 == 0:
+        #     coulG_real[:,:,1:-1] *= 2
+        # else:
+        #     coulG_real[:,:,1:] *= 2
+        # coulG_real = coulG_real.reshape(-1) 
+        
+        self.coulG = coulG.copy()
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if debug:

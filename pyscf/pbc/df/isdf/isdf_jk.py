@@ -31,6 +31,9 @@ INT_MAX = 2147483647
 BLKSIZE = INT_MAX // 32 + 1
 
 from memory_profiler import profile
+import ctypes
+
+libpbc = lib.load_library('libpbc')
 
 ##################################################
 #
@@ -191,6 +194,16 @@ def get_jk_mo(mydf, occ_mo_coeff, hermi=1, kpt=np.zeros(3),
     t1 = log.timer('sr jk', *t1)
     return vj, vk
 
+def _comm_bunch(size_of_comm, comm_size, force_even=False):
+    if size_of_comm % comm_size == 0:
+        res = size_of_comm // comm_size
+    else:
+        res = (size_of_comm // comm_size) + 1
+    if force_even:
+        if res % 2 == 1 :
+            res += 1
+    return res
+
 def _assert(condition):
     if not condition:
         import sys 
@@ -232,6 +245,79 @@ def mpi_bcast(buf, comm, rank, root=0):
         comm.Bcast([buf_seg[p0:p1], dtype], root)
     return buf
 
+def _segment_counts(counts, p0, p1):
+    counts_seg = counts - p0
+    counts_seg[counts<=p0] = 0
+    counts_seg[counts> p1] = p1 - p0
+    return counts_seg
+
+def prange(comm, start, stop, step):
+    '''Similar to lib.prange. This function ensures that all processes have the
+    same number of steps.  It is required by alltoall communication.
+    '''
+    nsteps = (stop - start + step - 1) // step
+    nsteps = max(comm.allgather(nsteps))
+    for i in range(nsteps):
+        i0 = min(stop, start + i * step)
+        i1 = min(stop, i0 + step)
+        yield i0, i1
+
+def mpi_gather(sendbuf, comm, rank, root=0, split_recvbuf=False):
+
+    sendbuf = numpy.asarray(sendbuf, order='C')
+    shape = sendbuf.shape
+    size_dtype = comm.allgather((shape, sendbuf.dtype.char))
+    # print(size_dtype)
+    rshape = [x[0] for x in size_dtype]
+    counts = numpy.array([numpy.prod(x) for x in rshape])
+
+    mpi_dtype = numpy.result_type(*[x[1] for x in size_dtype]).char
+    _assert(sendbuf.dtype == mpi_dtype or sendbuf.size == 0)
+
+    if rank == root:
+        displs = numpy.append(0, numpy.cumsum(counts[:-1]))
+        recvbuf = numpy.empty(sum(counts), dtype=mpi_dtype)
+
+        sendbuf = sendbuf.ravel()
+        for p0, p1 in lib.prange(0, numpy.max(counts), BLKSIZE):
+            counts_seg = _segment_counts(counts, p0, p1)
+            comm.Gatherv([sendbuf[p0:p1], mpi_dtype],
+                         [recvbuf, counts_seg, displs+p0, mpi_dtype], root)
+        if split_recvbuf:
+            return [recvbuf[p0:p0+c].reshape(shape)
+                    for p0,c,shape in zip(displs,counts,rshape)]
+        else:
+            try:
+                return recvbuf.reshape((-1,) + shape[1:])
+            except ValueError:
+                return recvbuf
+    else:
+        send_seg = sendbuf.ravel()
+        for p0, p1 in lib.prange(0, numpy.max(counts), BLKSIZE):
+            comm.Gatherv([send_seg[p0:p1], mpi_dtype], None, root)
+        return sendbuf
+
+def mpi_scatter(sendbuf, comm, rank, root=0):
+    if rank == root:
+        mpi_dtype = numpy.result_type(*sendbuf).char
+        shape = comm.scatter([x.shape for x in sendbuf])
+        counts = numpy.asarray([x.size for x in sendbuf])
+        comm.bcast((mpi_dtype, counts))
+        sendbuf = [numpy.asarray(x, mpi_dtype).ravel() for x in sendbuf]
+        sendbuf = numpy.hstack(sendbuf)
+    else:
+        shape = comm.scatter(None)
+        mpi_dtype, counts = comm.bcast(None)
+
+    displs = numpy.append(0, numpy.cumsum(counts[:-1]))
+    recvbuf = numpy.empty(numpy.prod(shape), dtype=mpi_dtype)
+
+    #DONOT use lib.prange. lib.prange may terminate early in some processes
+    for p0, p1 in prange(comm, 0, numpy.max(counts), BLKSIZE):
+        counts_seg = _segment_counts(counts, p0, p1)
+        comm.Scatterv([sendbuf, counts_seg, displs+p0, mpi_dtype],
+                      [recvbuf[p0:p1], mpi_dtype], root)
+    return recvbuf.reshape(shape)
 
 # @profile
 def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
@@ -350,6 +436,9 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
     density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')
 
+    # if use_mpi and rank == 0:
+    #    print("density_R = ", density_R[:16])
+
     # print("D1 = ", density_R)
 
     # assert density_R.__array_interface__['data'][0] == ptr2
@@ -465,9 +554,124 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
     # print("J = ", J[0,:])   
 
-    if use_mpi:
-        comm.Barrier()
+    # if use_mpi:
+    #     comm.Barrier()
 
+    return J * ngrid / vol
+
+def _contract_j_dm_fast(mydf, dm, with_robust_fitting=True, use_mpi=False):
+    
+    if use_mpi:
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        size = comm.Get_size()
+    
+    t1 = (logger.process_clock(), logger.perf_counter())
+
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+        
+    nao  = dm.shape[0]
+    cell = mydf.cell
+    assert cell.nao == nao
+    ngrid = np.prod(cell.mesh)
+    assert ngrid == mydf.ngrids
+    vol = cell.vol
+
+    W    = mydf.W
+    aoRg = mydf.aoRg
+    aoR  = mydf.aoR
+    ngrid = aoR.shape[1]
+    if hasattr(mydf, "V_R"):
+        V_R = mydf.V_R
+    else:
+        V_R = None
+    naux = aoRg.shape[1] 
+    IP_ID = mydf.IP_ID
+    
+    mesh = np.array(cell.mesh, dtype=np.int32)
+    
+    #### step 0. allocate buffer 
+    
+    buffer = mydf.jk_buffer
+    buffer1 = np.ndarray((nao,ngrid), dtype=dm.dtype, buffer=buffer, offset=0)
+    buffer2 = np.ndarray((ngrid), dtype=dm.dtype, buffer=buffer, offset=nao * ngrid * dm.dtype.itemsize)
+    buffer3 = np.ndarray((nao,naux), dtype=dm.dtype, buffer=buffer,
+                         offset=(nao * ngrid + ngrid) * dm.dtype.itemsize)
+    buffer4 = np.ndarray((naux), dtype=dm.dtype, buffer=buffer, offset=(nao *
+                         ngrid + ngrid + nao * naux) * dm.dtype.itemsize)
+    buffer5 = np.ndarray((naux), dtype=dm.dtype, buffer=buffer, offset=(nao *
+                            ngrid + ngrid + nao * naux + naux) * dm.dtype.itemsize)
+    buffer6 = np.ndarray((nao,nao), dtype=dm.dtype, buffer=buffer, offset=(nao *
+                            ngrid + ngrid + nao * naux + naux + naux) * dm.dtype.itemsize)
+    buffer7 = np.ndarray((nao,naux), dtype=dm.dtype, buffer=buffer, offset=0)
+    buffer8 = np.ndarray((naux), dtype=dm.dtype, buffer=buffer, offset=nao * ngrid * dm.dtype.itemsize)
+
+    #### step 1. get density value on real space grid and IPs
+    
+    lib.ddot(dm, aoR, c=buffer1) 
+    tmp1 = buffer1
+    density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')
+    
+    if use_mpi:
+        density_R = np.hstack(mpi_gather(density_R, comm, rank, root=0, split_recvbuf=True))
+    
+    # if (use_mpi and rank == 0) or (use_mpi == False):
+    #     print("density_R = ", density_R[:16])
+    #     print("density_R = ", density_R[-16:])
+    #     print("density_R.shape = ", density_R.shape)
+    
+    J = None
+    
+    if (use_mpi and rank == 0) or (use_mpi == False):
+    
+        fn_J = getattr(libpbc, "_construct_J", None)
+        assert(fn_J is not None)
+
+        J = np.zeros_like(density_R)
+
+        fn_J(
+            mesh.ctypes.data_as(ctypes.c_void_p),
+            density_R.ctypes.data_as(ctypes.c_void_p),
+            mydf.coulG.ctypes.data_as(ctypes.c_void_p),
+            J.ctypes.data_as(ctypes.c_void_p),
+        )
+        
+        # print("J = ", J[:16])   
+    
+    if use_mpi:
+        
+        ngrid_global = np.prod(cell.mesh)
+        
+        comm_bunch = _comm_bunch(ngrid_global, size)
+        sendbuf = None
+        if rank == 0:
+            sendbuf = []
+            for i in range(size):
+                p0 = min(i * comm_bunch, ngrid_global)
+                p1 = min((i + 1) * comm_bunch, ngrid_global)
+                sendbuf.append(J[p0:p1])
+        
+        J = mpi_scatter(sendbuf, comm, rank, root=0)
+    
+    #### step 3. get J 
+    
+    # if use_mpi:
+    #     print("rank = ", rank, " J_shape = ", J.shape, " aoR.shape = ", aoR.shape)
+    
+    J = np.asarray(lib.d_ij_j_ij(aoR, J, out=buffer1), order='C') 
+    J = lib.ddot_withbuffer(aoR, J.T, buf=mydf.ddot_buf)
+
+    if use_mpi:
+        J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    if mydf.verbose:
+        _benchmark_time(t1, t2, "_contract_j_dm_fast")
+    
     return J * ngrid / vol
 
 # @profile
@@ -640,8 +844,8 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
     if mydf.verbose:
         _benchmark_time(t1, t2, "_contract_k_dm")
 
-    if use_mpi:
-        comm.Barrier()
+    # if use_mpi:
+    #     comm.Barrier()
 
     if K is None:
         K = np.zeros((nao, nao))
@@ -687,7 +891,13 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
     log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
 
     if with_j:
-        vj = _contract_j_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
+        if mydf.with_robust_fitting:
+            vj = _contract_j_dm_fast(mydf, dm, mydf.with_robust_fitting, use_mpi)
+        else:
+            vj = _contract_j_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
+        # print("vj2 = ", vj2[0, :16])
+        # print("vj  = ", vj[0, :16])
+        # print("vj/vj2 = ", vj[0, :16] / vj2[0, :16])    
     if with_k:
         vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
         if exxdiv == 'ewald':

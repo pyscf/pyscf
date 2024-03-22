@@ -402,6 +402,7 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
     ### the Coulomb kernel ###
 
     coulG      = tools.get_coulG(mydf.cell, mesh=mesh)
+    mydf.coulG = coulG.copy()
     coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1)  # drop the minus frequency part
     nThread    = lib.num_threads()
 
@@ -651,7 +652,10 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
         coulG_real[:,:,1:-1] *= 2
     else:
         coulG_real[:,:,1:] *= 2
-    coulG_real = coulG_real.reshape(-1)
+    coulG_real = coulG_real.reshape(-1) 
+    
+    # mydf.coulG_real = coulG_real
+    # mydf.coulG = coulG.copy()
 
     # print("coulG_real = ", coulG_real)
 

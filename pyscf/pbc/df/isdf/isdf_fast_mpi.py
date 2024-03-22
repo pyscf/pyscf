@@ -34,7 +34,7 @@ from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 # import pyscf.pbc.df.isdf.isdf_outcore as isdf_outcore
 from pyscf.pbc.df.isdf.isdf_k import build_supercell
 
-from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall
+from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch
 
 # from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, matrix_all2all_Col2Row, matrix_all2all_Row2Col
 
@@ -51,20 +51,6 @@ from memory_profiler import profile
 
 libpbc = lib.load_library('libpbc')
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
-
-####### the following subroutines are used to get the sendbuf for all2all #######
-
-def _comm_bunch(size_of_comm, force_even=False):
-    if size_of_comm % comm_size == 0:
-        res = size_of_comm // comm_size
-    else:
-        res = (size_of_comm // comm_size) + 1
-    
-    if force_even:
-        if res % 2 == 1 :
-            res += 1
-    
-    return res
 
 # @mpi.parallel_call
 def build_partition(mydf):
@@ -195,6 +181,8 @@ def build_auxiliary_Coulomb(mydf, debug=True):
 
     coulG = tools.get_coulG(cell, mesh=mesh)
     
+    mydf.coulG = coulG.copy()
+    
     ############### the first communication ##############
     
     t0_comm = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -264,7 +252,10 @@ def build_auxiliary_Coulomb(mydf, debug=True):
         coulG_real[:,:,1:-1] *= 2
     else:
         coulG_real[:,:,1:] *= 2
-    coulG_real = coulG_real.reshape(-1)
+    coulG_real = coulG_real.reshape(-1) 
+    
+    # mydf.coulG_real = coulG_real
+    # mydf.coulG = coulG.copy()
     
     basis_fft2 = basis_fft.copy()
 
@@ -373,7 +364,15 @@ def get_jk_dm_mpi(mydf, dm, hermi=1, kpt=np.zeros(3),
     log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
 
     if with_j:
-        vj = isdf_jk._contract_j_dm(mydf, dm, mydf.with_robust_fitting, True)
+        if mydf.with_robust_fitting:
+            vj = isdf_jk._contract_j_dm_fast(mydf, dm, mydf.with_robust_fitting, True)
+            # vj2 = isdf_jk._contract_j_dm(mydf, dm, mydf.with_robust_fitting, True)
+            # print("vj = ", vj[0,-10:])
+            # print("vj2 = ", vj2[0,-10:])
+            # print("vj/vj2 = ", vj[0,-10:] / vj2[0,-10:])
+        else:
+            vj = isdf_jk._contract_j_dm(mydf, dm, mydf.with_robust_fitting, True)
+
     if with_k:
         vk = isdf_jk._contract_k_dm(mydf, dm, mydf.with_robust_fitting, True)
         if exxdiv == 'ewald':
@@ -469,7 +468,7 @@ class PBC_ISDF_Info_MPI(PBC_ISDF_Info):
     # from functools import partial
     get_jk = get_jk_dm_mpi
 
-C = 7
+C = 12
 KE_CUTOFF = 128
 
 if __name__ == '__main__':

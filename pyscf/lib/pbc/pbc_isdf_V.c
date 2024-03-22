@@ -1,8 +1,66 @@
 #include "fft.h"
 #include <omp.h>
+#include <string.h>
+#include <complex.h>
 
 int get_omp_threads();
 int omp_get_thread_num();
+
+void _construct_J(
+    int *mesh,
+    double *DensityR,
+    double *CoulG,
+    double *J)
+{
+    const int nThread = get_omp_threads();
+    // int mesh_complex[3] = {mesh[0], mesh[1], mesh[2] / 2 + 1};
+    const int n_real = mesh[0] * mesh[1] * mesh[2];
+    // const int n_complex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    const double fac = 1. / (double)n_real;
+
+    fftw_complex *DensityR_complex = fftw_malloc(sizeof(double __complex__) * n_real);
+    fftw_complex *buf = fftw_malloc(sizeof(double __complex__) * n_real);
+    fftw_complex *J_complex = fftw_malloc(sizeof(double __complex__) * n_real);
+
+    memset(buf, 0, sizeof(double __complex__) * n_real);
+    memset(J_complex, 0, sizeof(double __complex__) * n_real);
+    memset(DensityR_complex, 0, sizeof(double __complex__) * n_real);
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < n_real; ++i)
+    {
+        DensityR_complex[i][0] = DensityR[i];
+    }
+
+    fftw_plan p_forward = fftw_plan_dft_3d(mesh[0], mesh[1], mesh[2], DensityR_complex, (fftw_complex *)buf, FFTW_BACKWARD, FFTW_ESTIMATE);
+    fftw_plan p_backward = fftw_plan_dft_3d(mesh[0], mesh[1], mesh[2], (fftw_complex *)buf, J_complex, FFTW_FORWARD, FFTW_ESTIMATE);
+
+    fftw_execute(p_forward);
+
+    double *ptr = (double *)buf;
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < n_real; i++)
+    {
+        ptr[i * 2] *= CoulG[i] * fac;
+        ptr[i * 2 + 1] *= CoulG[i] * fac;
+    }
+
+    fftw_execute(p_backward);
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < n_real; i++)
+    {
+        J[i] = J_complex[i][0];
+    }
+
+    fftw_destroy_plan(p_forward);
+    fftw_destroy_plan(p_backward);
+
+    fftw_free(buf);
+    fftw_free(DensityR_complex);
+    fftw_free(J_complex);
+}
 
 void _construct_V(int *mesh,
                   int naux,
