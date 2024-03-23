@@ -58,6 +58,7 @@ comm_size = comm.Get_size()
 ## some tools copy from mpi4pyscf ##
 
 INT_MAX = 2147483647
+# INT_MAX = 65536
 BLKSIZE = INT_MAX // 32 + 1
 
 def _comm_bunch(size_of_comm, force_even=False):
@@ -201,24 +202,72 @@ def alltoall(sendbuf, split_recvbuf=False):
         mpi_dtype = comm.bcast(sendbuf[0].dtype.char)
         sendbuf = [numpy.asarray(x, mpi_dtype) for x in sendbuf]
         rshape = comm.alltoall([x.shape for x in sendbuf])
-        scounts = numpy.asarray([x.size for x in sendbuf])
+        scounts = numpy.asarray([x.size for x in sendbuf], dtype=np.int64)
         sdispls = numpy.append(0, numpy.cumsum(scounts[:-1]))
         sendbuf = numpy.hstack([x.ravel() for x in sendbuf])
 
-    rcounts = numpy.asarray([numpy.prod(x) for x in rshape])
+    rcounts = numpy.asarray([numpy.prod(x) for x in rshape], dtype=np.int64)
     rdispls = numpy.append(0, numpy.cumsum(rcounts[:-1]))
     recvbuf = numpy.empty(sum(rcounts), dtype=mpi_dtype)
 
-    # print("rcounts = ", rcounts)
+    if rank == 0:
+        print("sdispls = ", sdispls)
+        print("rcounts = ", rcounts)
+        print("rdispls = ", rdispls)
 
     max_counts = max(numpy.max(scounts), numpy.max(rcounts))
+    
+    if rank == 0:
+        print("max_counts = ", max_counts)
+    
     sendbuf = sendbuf.ravel()
     #DONOT use lib.prange. lib.prange may terminate early in some processes
-    for p0, p1 in prange(0, max_counts, BLKSIZE):
-        scounts_seg = _segment_counts(scounts, p0, p1)
-        rcounts_seg = _segment_counts(rcounts, p0, p1)
-        comm.Alltoallv([sendbuf, scounts_seg, sdispls+p0, mpi_dtype],
-                       [recvbuf, rcounts_seg, rdispls+p0, mpi_dtype])
+    
+    if sdispls[-1] >= INT_MAX:
+        blk_size_small = min((INT_MAX // comm_size),BLKSIZE)
+        sendbuf_small = numpy.empty(comm_size*blk_size_small, dtype=mpi_dtype)
+        recvbuf_small = numpy.empty(comm_size*blk_size_small, dtype=mpi_dtype)
+        sdispls_small = numpy.arange(comm_size)*blk_size_small
+        if rank == 0:
+            print("blk_size_small = ", blk_size_small)
+            print("sdispls_small = ", sdispls_small)
+            sys.stdout.flush()
+        for p0, p1 in prange(0, max_counts, blk_size_small):
+            scounts_seg = _segment_counts(scounts, p0, p1)
+            rcounts_seg = _segment_counts(rcounts, p0, p1)
+            
+            # if rank == 0:
+            #     print("p0 p1 = ", p0, p1)
+            #     print("scounts_seg = ", scounts_seg)
+            #     print("rcounts_seg = ", rcounts_seg)
+            #     sys.stdout.flush()
+            ### copy data to sendbuf_small
+            for i in range(comm_size):
+                begin = sdispls[i]+p0
+                end = begin + scounts_seg[i]
+                sendbuf_small[i*blk_size_small:i*blk_size_small+scounts_seg[i]] = sendbuf[begin:end]
+            
+            comm.Alltoallv([sendbuf_small, scounts_seg, sdispls_small, mpi_dtype],
+                           [recvbuf_small, rcounts_seg, sdispls_small, mpi_dtype])
+            
+            for i in range(comm_size):
+                begin = rdispls[i]+p0
+                end = begin + rcounts_seg[i]
+                recvbuf[begin:end] = recvbuf_small[i*blk_size_small:i*blk_size_small+rcounts_seg[i]]
+                
+        sendbuf_small = None
+        recvbuf_small = None
+    else:
+        for p0, p1 in prange(0, max_counts, BLKSIZE):
+            scounts_seg = _segment_counts(scounts, p0, p1)
+            rcounts_seg = _segment_counts(rcounts, p0, p1)
+            # if rank == 0:
+            #     print("scounts_seg = ", scounts_seg)
+            #     print("rcounts_seg = ", rcounts_seg)
+            comm.Alltoallv([sendbuf, scounts_seg, sdispls+p0, mpi_dtype],
+                           [recvbuf, rcounts_seg, rdispls+p0, mpi_dtype])
+
+    # return None
 
     if split_recvbuf:
         return [recvbuf[p0:p0+c].reshape(shape)

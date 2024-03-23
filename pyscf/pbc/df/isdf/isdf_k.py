@@ -2166,8 +2166,8 @@ def _construct_V_W_incore(mydf:ISDF.PBC_ISDF_Info):
                 
                 # print("B_Buf = ", B_buf)
                 
-                k_begin = i * nGrid_prim
-                k_end   = (i + 1) * nGrid_prim
+                k_begin = loc * nGrid_prim
+                k_end   = (loc + 1) * nGrid_prim
                 
                 V2[:, k_begin:k_end] = B_buf
             

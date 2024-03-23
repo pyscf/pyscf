@@ -52,6 +52,54 @@ from memory_profiler import profile
 libpbc = lib.load_library('libpbc')
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
+    
+def test_alltoall(cell:Cell, c):
+    mesh = cell.mesh
+    nao = cell.nao
+    ngrids = np.prod(mesh)
+    
+    naux = c * nao 
+    
+    ncomplex = mesh[0] * mesh[1] * (mesh[2] // 2 + 1) * 2
+    
+    comm_size_row = _comm_bunch(naux)
+    comm_size_col = _comm_bunch(ncomplex)
+
+    if rank == 0:
+        print(" ******** In TEST test_alltoall ******** ")
+        print("naux = ", naux)
+        print("ngrids = ", ngrids)
+        print("ncomplex = ", ncomplex)
+        print("comm_size_row = ", comm_size_row)
+        print("comm_size_col = ", comm_size_col)
+    
+    col_p0 = min(ncomplex, rank * comm_size_col)
+    col_p1 = min((rank + 1) * comm_size_col, ncomplex)
+
+    aux_bas = np.zeros((naux, col_p1-col_p0), dtype=np.float64)
+    sendbuf = []
+    for i in range(comm_size):
+        p0 = min(i*comm_size_row, naux)
+        p1 = min((i+1)*comm_size_row, naux)
+        sendbuf.append(aux_bas[p0:p1,:])
+    aux_fullcol = np.hstack(alltoall(sendbuf, split_recvbuf=True))
+    aux_bas = None
+    send_buf = None
+    
+    sendbuf = []
+    for i in range(comm_size):
+        p0 = min(i*comm_size_col, ngrids)
+        p1 = min((i+1)*comm_size_col, ngrids)
+        sendbuf.append(aux_fullcol[:, p0:p1])
+    V_fullrow = np.vstack(alltoall(sendbuf, split_recvbuf=True))
+    sendbuf = None
+    aux_fullcol = None
+    
+    if rank == 0:
+        print(" ******* END ******** ")
+    
+    return V_fullrow
+
 # @mpi.parallel_call
 def build_partition(mydf):
         
@@ -524,6 +572,8 @@ if __name__ == '__main__':
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     cell = build_supercell(atm, prim_a, Ls = Ls, ke_cutoff=KE_CUTOFF, mesh=mesh)
+    
+    test_alltoall(cell, C)
     
     pbc_isdf_info = PBC_ISDF_Info_MPI(cell, with_robust_fitting=True)
     # build_partition(pbc_isdf_info)        
