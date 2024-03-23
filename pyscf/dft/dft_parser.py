@@ -22,6 +22,7 @@ unified dft parser for coordinating dft protocols with
 '''
 
 from functools import lru_cache
+import warnings
 
 # supported dispersion corrections
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
@@ -63,18 +64,24 @@ def parse_dft(dft_method):
     for d in DISP_VERSIONS:
         if method_lower.endswith(d):
             disp = d
+            with_3body = False
             xc = method_lower.replace(f'-{d}','')
-        if method_lower.endswith(d+'2b'):
+        elif method_lower.endswith(d+'2b'):
             disp = d
+            with_3body = False
             xc = method_lower.replace(f'-{d}2b', '')
-        if method_lower.endswith(d+'atm'):
+        elif method_lower.endswith(d+'atm'):
             disp = d
+            with_3body = True
             xc = method_lower.replace(f'-{d}atm', '')
 
         if disp is not None:
-            if xc in ('b97m', 'wb97m', 'wb97x'):
-                return xc+'-v', False, (xc, disp, False)
+            if xc in ('b97m', 'wb97m'):
+                warnings.warn(
+                    f'{dft_method} is not a well-defined functional. '
+                    'The XC part is changed to {xc}-v')
+                return xc+'-v', False, (xc, disp, with_3body)
             else:
-                return xc, None, (xc, disp, False)
+                return xc, None, (xc, disp, with_3body)
 
     return xc, None, (xc, None, False)

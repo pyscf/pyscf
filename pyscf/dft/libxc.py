@@ -923,7 +923,7 @@ def is_gga(xc_code):
 @lru_cache(100)
 def is_nlc(xc_code):
     enable_nlc = dft_parser.parse_dft(xc_code)[1]
-    if not (enable_nlc is None and enable_nlc):
+    if enable_nlc is False:
         return False
     # identify nlc by xc_code itself if enable_nlc is None
     if isinstance(xc_code, str):

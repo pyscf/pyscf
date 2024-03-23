@@ -319,7 +319,7 @@ VV10_XC.update([(5000+i, VV10_XC[key]) for i, key in enumerate(VV10_XC)])
 
 def is_nlc(xc_code):
     enable_nlc = dft_parser.parse_dft(xc_code)[1]
-    if not (enable_nlc is None and enable_nlc):
+    if enable_nlc is False:
         return False
     fn_facs = parse_xc(xc_code)[1]
     return any(xid >= 5000 for xid, c in fn_facs)
