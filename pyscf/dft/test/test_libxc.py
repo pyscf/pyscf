@@ -341,6 +341,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(numpy.hstack([fxc[i] for i in [0,1,2,4,6,9]])-fxc_ref).max(), 0, 7)
         self.assertAlmostEqual(abs(numpy.hstack([kxc[i] for i in [0,1,2,3,5,7,10,12,15,19]])-kxc_ref).max(), 0, 6)
 
+    def test_dft_parser(self):
+        from pyscf.dft.dft_parser import parse_dft
+        self.assertEqual(parse_dft('wb97m-d3bj'), ('wb97m-v', False, ('wb97m', 'd3bj', False)))
+        self.assertEqual(dft.libxc.parse_xc('wb97m-d3bj')[1][0][0] == 531)
+        self.assertTrue(not dft.libxc.is_nlc('wb97m-d3bj'))
+
+        self.assertEqual(parse_dft('wb97-d3zerom'), ('wb97', None, ('wb97', 'd3zerom', False)))
+        self.assertTrue(not dft.libxc.is_nlc('wb97-d3zerom'))
+
+        self.assertEqual(parse_dft('wb97m-d3bjatm'), ('wb97m-v', False, ('wb97m', 'd3bj', True)))
+        self.assertTrue(not dft.libxc.is_nlc('wb97m-d3bjatm'))
+
+        self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x-v', False, ('wb97x', 'd3zero', False)))
+        self.assertTrue(not dft.libxc.is_nlc('wb97x-d3zero2b'))
 
 if __name__ == "__main__":
     print("Test libxc")

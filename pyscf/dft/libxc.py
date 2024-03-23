@@ -923,9 +923,9 @@ def is_gga(xc_code):
 @lru_cache(100)
 def is_nlc(xc_code):
     enable_nlc = dft_parser.parse_dft(xc_code)[1]
-    if enable_nlc is False:
+    if not (enable_nlc is None and enable_nlc):
         return False
-
+    # identify nlc by xc_code itself if enable_nlc is None
     if isinstance(xc_code, str):
         if xc_code.isdigit():
             return _itrf.LIBXC_is_nlc(ctypes.c_int(int(xc_code)))
@@ -1092,7 +1092,6 @@ def parse_xc(description):
         (hybrid, alpha, omega), ((libxc-Id, fac), (libxc-Id, fac), ...)
     '''  # noqa: E501
 
-    description = dft_parser.parse_dft(description)[0]
     hyb = [0, 0, 0]  # hybrid, alpha, omega (== SR_HF, LR_HF, omega)
     if description is None:
         return tuple(hyb), ()
@@ -1110,6 +1109,8 @@ def parse_xc(description):
                       'and the same as the B3LYP functional in Gaussian. '
                       'To restore the VWN5 definition, you can put the setting '
                       '"B3LYP_WITH_VWN5 = True" in pyscf_conf.py')
+
+    description = dft_parser.parse_dft(description)[0]
 
     def assign_omega(omega, hyb_or_sr, lr=0):
         if hyb[2] == omega or omega == 0:
@@ -1237,6 +1238,8 @@ def parse_xc(description):
             parse_token(token, 'C')
     else:
         for token in description.replace('-', '+-').replace(';+', ';').split('+'):
+            # dftd3 cannot be used in a custom xc description
+            assert '-d3' not in token
             parse_token(token, 'compound XC', search_xc_alias=True)
     if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
         hyb[1] = 0
