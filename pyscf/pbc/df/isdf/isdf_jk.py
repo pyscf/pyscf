@@ -588,7 +588,8 @@ def _contract_j_dm_fast(mydf, dm, with_robust_fitting=True, use_mpi=False):
         V_R = mydf.V_R
     else:
         V_R = None
-    naux = aoRg.shape[1] 
+    # naux = aoRg.shape[1] 
+    naux = mydf.naux
     IP_ID = mydf.IP_ID
     
     mesh = np.array(cell.mesh, dtype=np.int32)
@@ -716,7 +717,8 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
         V_R = mydf.V_R
     else:
         V_R = None
-    naux = aoRg.shape[1]
+    # naux = aoRg.shape[1]
+    naux = mydf.naux
     IP_ID = mydf.IP_ID
 
     buffer = mydf.jk_buffer

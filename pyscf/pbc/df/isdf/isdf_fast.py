@@ -431,7 +431,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
             # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
             
             cutoff   = abs(R[npt_find-1, npt_find-1])
-            # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
+            print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
             pivot = pivot[:npt_find]
             pivot.sort()
             results.extend(list(grid_ID[pivot]))
@@ -538,7 +538,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
         
         cutoff   = abs(R[npt_find-1, npt_find-1])
-        # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (len(results), npt_find, cutoff))
+        print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (len(results), npt_find, cutoff))
         pivot = pivot[:npt_find]
         # print("pivot = ", pivot)
 
@@ -709,9 +709,9 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
 
-        df_tmp = None
+        df_tmp = MultiGridFFTDF2(mol)
         if aoR is None:
-            df_tmp = MultiGridFFTDF2(mol)
+            # df_tmp = MultiGridFFTDF2(mol)
             self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
             self.ngrids = self.coords.shape[0]
         else:
@@ -751,8 +751,11 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             # print("partition = ", self.partition.shape)
             # map aoID to atomID
             self.partition = np.asarray([ao2atomID[x] for x in self.partition])
-            self.coords    = None
-            self._numints  = None
+            # self.coords    = None
+            # self._numints  = None
+            grids   = df_tmp.grids
+            self.coords  = np.asarray(grids.coords).reshape(-1,3)
+            self._numints = df_tmp._numint
         else:
             grids   = df_tmp.grids
             coords  = np.asarray(grids.coords).reshape(-1,3)
@@ -821,7 +824,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             ngrids = self.ngrids
             naux   = self.naux
 
-            buffersize_k = nao * ngrids + naux * ngrids + naux * naux + nao * nao
+            print("nao = %d, ngrids = %d, naux = %d" % (nao, ngrids, naux)) 
+            buffersize_k = nao * ngrids + naux * ngrids + naux * naux + nao * nao           
             buffersize_j = nao * ngrids + ngrids + nao * naux + naux + naux + nao * nao
 
             nThreadsOMP   = lib.num_threads()
@@ -1085,7 +1089,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     get_jk = isdf_jk.get_jk_dm
 
-C = 12
+C = 15
 
 if __name__ == '__main__':
 
@@ -1155,7 +1159,9 @@ if __name__ == '__main__':
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR)
     pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=C, global_IP_selection=False)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
-    # pbc_isdf_info.check_AOPairError()
+    pbc_isdf_info.check_AOPairError()
+
+    exit(1)
 
     ### check eri ###
 
