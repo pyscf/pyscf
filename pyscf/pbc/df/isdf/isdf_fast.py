@@ -223,7 +223,10 @@ def alltoall(sendbuf, split_recvbuf=False):
     sendbuf = sendbuf.ravel()
     #DONOT use lib.prange. lib.prange may terminate early in some processes
     
-    if sdispls[-1] >= INT_MAX:
+    size_of_sendbuf = sendbuf.size
+    
+    # if sdispls[-1] >= INT_MAX:
+    if size_of_sendbuf >=INT_MAX:
         blk_size_small = min((INT_MAX // comm_size),BLKSIZE)
         sendbuf_small = numpy.empty(comm_size*blk_size_small, dtype=mpi_dtype)
         recvbuf_small = numpy.empty(comm_size*blk_size_small, dtype=mpi_dtype)

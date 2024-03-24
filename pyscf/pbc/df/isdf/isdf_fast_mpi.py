@@ -241,8 +241,12 @@ def build_auxiliary_Coulomb(mydf, debug=True):
         p0 = min(i*comm_size_row, mydf.naux)
         p1 = min((i+1)*comm_size_row, mydf.naux)
         sendbuf.append(mydf.aux_basis[p0:p1, :])
+    # mydf.aux_basis = None
+    del mydf.aux_basis
+    mydf.aux_basis = None
     aux_fullcol = np.hstack(alltoall(sendbuf, split_recvbuf=True))
     mydf.aux_basis = None
+    del sendbuf
     sendbuf = None
     
     t1_comm = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -263,7 +267,10 @@ def build_auxiliary_Coulomb(mydf, debug=True):
         p0 = min(i*comm_size_col, mydf.ngrids)
         p1 = min((i+1)*comm_size_col, mydf.ngrids)
         sendbuf.append(V[:, p0:p1])
+    del V
+    V = None
     V_fullrow = np.vstack(alltoall(sendbuf, split_recvbuf=True))
+    del sendbuf
     sendbuf = None
     V = None
     
@@ -275,7 +282,10 @@ def build_auxiliary_Coulomb(mydf, debug=True):
         p0 = min(i*comm_size_col, ncomplex)
         p1 = min((i+1)*comm_size_col, ncomplex)
         sendbuf.append(basis_fft[:, p0:p1])
+    del basis_fft
+    basis_fft = None
     basis_fft_fullrow = np.vstack(alltoall(sendbuf, split_recvbuf=True))
+    del sendbuf
     sendbuf = None
     basis_fft = None
     basis_fft = basis_fft_fullrow 
@@ -361,8 +371,11 @@ def build_auxiliary_Coulomb(mydf, debug=True):
     
     # clean # 
     
+    del basis_fft_fullrow
     basis_fft_fullrow = None
+    del basis_fft
     basis_fft = None
+    del basis_fft2
     basis_fft2 = None
     
     return V, W
