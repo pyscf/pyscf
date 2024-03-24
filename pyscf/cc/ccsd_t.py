@@ -176,7 +176,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
 
 def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
     assert (t2.flags.c_contiguous)
-    vooo = numpy.asarray(eris.ovoo).transpose(1,0,3,2).conj().copy()
+    vooo = numpy.asarray(eris.ovoo).transpose(1,0,2,3).conj().copy()
     nocc, nvir = t1.shape
     if mycc.mol.symmetry:
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32)
