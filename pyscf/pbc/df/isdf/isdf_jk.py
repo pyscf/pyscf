@@ -624,6 +624,22 @@ def _contract_j_dm_fast(mydf, dm, with_robust_fitting=True, use_mpi=False):
     #     print("density_R = ", density_R[-16:])
     #     print("density_R.shape = ", density_R.shape)
     
+    if hasattr(mydf, "grid_ID_ordered"):
+        if (use_mpi and rank == 0) or (use_mpi == False):
+            density_R_original = np.zeros_like(density_R)
+            
+            fn_order = getattr(libpbc, "_Reorder_Grid_to_Original_Grid", None)
+            assert fn_order is not None
+            
+            fn_order(
+                ctypes.c_int(density_R.size),
+                mydf.grid_ID_ordered.ctypes.data_as(ctypes.c_void_p),
+                density_R.ctypes.data_as(ctypes.c_void_p),
+                density_R_original.ctypes.data_as(ctypes.c_void_p),
+            )
+
+            density_R = density_R_original.copy()
+    
     J = None
     
     if (use_mpi and rank == 0) or (use_mpi == False):
@@ -640,22 +656,51 @@ def _contract_j_dm_fast(mydf, dm, with_robust_fitting=True, use_mpi=False):
             J.ctypes.data_as(ctypes.c_void_p),
         )
         
+        if hasattr(mydf, "grid_ID_ordered"):
+            
+            J_ordered = np.zeros_like(J)
+
+            fn_order = getattr(libpbc, "_Original_Grid_to_Reorder_Grid", None)
+            assert fn_order is not None 
+            
+            fn_order(
+                ctypes.c_int(J.size),
+                mydf.grid_ID_ordered.ctypes.data_as(ctypes.c_void_p),
+                J.ctypes.data_as(ctypes.c_void_p),
+                J_ordered.ctypes.data_as(ctypes.c_void_p),
+            )
+            
+            J = J_ordered.copy()
+        
         # print("J = ", J[:16])   
     
     if use_mpi:
         
-        ngrid_global = np.prod(cell.mesh)
-        
-        comm_bunch = _comm_bunch(ngrid_global, size)
-        sendbuf = None
-        if rank == 0:
-            sendbuf = []
-            for i in range(size):
-                p0 = min(i * comm_bunch, ngrid_global)
-                p1 = min((i + 1) * comm_bunch, ngrid_global)
-                sendbuf.append(J[p0:p1])
-        
-        J = mpi_scatter(sendbuf, comm, rank, root=0)
+        if hasattr(mydf, "grid_segment"):
+            grid_segment = mydf.grid_segment
+            sendbuf = None
+            if rank == 0:
+                sendbuf = []
+                for i in range(size):
+                    p0 = grid_segment[i]
+                    p1 = grid_segment[i+1]
+                    sendbuf.append(J[p0:p1])
+            J = mpi_scatter(sendbuf, comm, rank, root=0)
+            del sendbuf
+            sendbuf = None
+        else:
+            ngrid_global = np.prod(cell.mesh)
+            comm_bunch = _comm_bunch(ngrid_global, size)
+            sendbuf = None
+            if rank == 0:
+                sendbuf = []
+                for i in range(size):
+                    p0 = min(i * comm_bunch, ngrid_global)
+                    p1 = min((i + 1) * comm_bunch, ngrid_global)
+                    sendbuf.append(J[p0:p1])
+            J = mpi_scatter(sendbuf, comm, rank, root=0)
+            del sendbuf
+            sendbuf = None
     
     #### step 3. get J 
     
@@ -898,10 +943,11 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
         else:
             vj = _contract_j_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
         # print("vj2 = ", vj2[0, :16])
-        # print("vj  = ", vj[0, :16])
+        print("vj  = ", vj[0, :16])
         # print("vj/vj2 = ", vj[0, :16] / vj2[0, :16])    
     if with_k:
         vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
+        print("vk = ", vk[0,:16])
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
 

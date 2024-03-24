@@ -191,7 +191,11 @@ def select_IP_local_drive(mydf, c, m, IP_possible_group, group, use_mpi=False):
             IP_group[i] = _select_IP_given_group(mydf, c, m, group=group[i], IP_possible=IP_possible_group[i])
 
     if use_mpi:
+        comm.Barrier()
         for i in range(len(group)):
+            # if i % comm_size == rank:
+            #     print("rank = %d, group[%d] = " % (rank, i), group[i])
+            #     print("rank = %d, IP_group[%d] = " % (rank, i), IP_group[i])
             IP_group[i] = bcast(IP_group[i], root=i % comm_size)
 
     mydf.IP_group = IP_group
@@ -219,34 +223,32 @@ def select_IP_local_drive(mydf, c, m, IP_possible_group, group, use_mpi=False):
 
 ############ build aux bas ############
 
-def build_aux_basis(mydf, group, IP_group, debug=True):
+def build_aux_basis_0(mydf, group, IP_group, debug=True):
 
     natm = mydf.natm
 
-    #aux_basis = []
+    aux_basis = []
+    
+    mydf.group_begin = 0
+    mydf.group_end = len(group)
     
     print("mydf.naux = ", mydf.naux)
     print("mydf.ngrids = ", mydf.ngrids)
 
-    aux_basis = np.zeros((mydf.naux, mydf.ngrids), dtype=mydf.aoRg.dtype)
-
     aoRg = mydf.aoRg
 
     for i in range(len(group)):
-        # ao_loc_begin = mydf.aoloc_atm[mydf.shl_atm[i][0]]
-        # ao_loc_end   = mydf.aoloc_atm[mydf.shl_atm[i][1]]
-        
+
         IP_loc_begin = mydf.IP_segment[i]
         IP_loc_end   = mydf.IP_segment[i+1]
         
         aoRg1 = aoRg[:,IP_loc_begin:IP_loc_end]
         
         A = lib.ddot(aoRg1.T, aoRg1)
-        A = A * A 
-        # B1 = lib.ddot(aoRg1.T, mydf.aoR[ao_loc_begin:ao_loc_end,:])
+        lib.square_inPlace(A)
         grid_ID = mydf.partition_group_to_gridID[i]
         B = lib.ddot(aoRg1.T, mydf.aoR[:, grid_ID])
-        B = B * B 
+        B = lib.square(B)
         
         with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
             e, h = scipy.linalg.eigh(A)
@@ -259,37 +261,50 @@ def build_aux_basis(mydf, group, IP_group, debug=True):
         B = lib.ddot(h.T, B)
         lib.d_i_ij_ij(1.0/e, B, out=B)
         aux_tmp = lib.ddot(h, B)
-        # aux_basis.append(lib.ddot(h, B))
-        aux_basis[IP_loc_begin:IP_loc_end, grid_ID] = aux_tmp
+        aux_basis.append(lib.ddot(h, B))
+        # aux_basis[IP_loc_begin:IP_loc_end, grid_ID] = aux_tmp
         
+        del e
         e = None
+        del h
         h = None
         B = None
-        A1 = None
-        A2 = None
         A = None
-        B1 = None
-        B2 = None
         aux_tmp = None
     
-    mydf.aux_basis = aux_basis
-    mydf.naux = mydf.aux_basis.shape[0]
-    print("aux_basis.shape = ", mydf.aux_basis.shape)
+    del aux_tmp
+    aux_tmp = None
+    del B
+    B = None
+    del A
+    A = None
+    
+    # mydf.aux_basis = aux_basis
+    # mydf.naux = mydf.aux_basis.shape[0]
+    mydf.naux = mydf.aoRg.shape[1]
+    # print("aux_basis.shape = ", mydf.aux_basis.shape)
 
-def build_aux_basis_mpi(mydf, group, IP_group, debug=True):
+def build_aux_basis_fast(mydf, group, IP_group, debug=True, use_mpi=False):
     
     ###### split task ######
     
     ngroup = len(group)
     nthread = lib.num_threads()
     
-    if ngroup % comm_size == 0 :
-        group_bunchsize = ngroup // comm_size
-    else:
-        group_bunchsize = ngroup // comm_size + 1
+    group_bunchsize = ngroup
     
-    group_begin = min(ngroup, rank * group_bunchsize)
-    group_end = min(ngroup, (rank+1) * group_bunchsize)
+    if use_mpi:
+        if ngroup % comm_size == 0 :
+            group_bunchsize = ngroup // comm_size
+        else:
+            group_bunchsize = ngroup // comm_size + 1
+    
+    if use_mpi:
+        group_begin = min(ngroup, rank * group_bunchsize)
+        group_end = min(ngroup, (rank+1) * group_bunchsize)
+    else:
+        group_begin = 0
+        group_end = ngroup
     
     ngroup_local = group_end - group_begin
     
@@ -303,15 +318,18 @@ def build_aux_basis_mpi(mydf, group, IP_group, debug=True):
     
     grid_segment = [0]
     
-    for i in range(comm_size):
-        p0 = min(ngroup, i * group_bunchsize)
-        p1 = min(ngroup, (i+1) * group_bunchsize)
-        size_now = 0
-        for j in range(p0, p1):
-            size_now += mydf.partition_group_to_gridID[j].size
-        grid_segment.append(grid_segment[-1] + size_now)
+    if use_mpi:
+        for i in range(comm_size):
+            p0 = min(ngroup, i * group_bunchsize)
+            p1 = min(ngroup, (i+1) * group_bunchsize)
+            size_now = 0
+            for j in range(p0, p1):
+                size_now += mydf.partition_group_to_gridID[j].size
+            grid_segment.append(grid_segment[-1] + size_now)
+    else:
+        grid_segment.append(mydf.ngrids)
     
-    if rank == 0:
+    if use_mpi == False or (use_mpi and rank == 0):
         print("grid_segment = ", grid_segment)
     
     mydf.grid_segment = grid_segment
@@ -370,9 +388,18 @@ def build_aux_basis_mpi(mydf, group, IP_group, debug=True):
         aux_tmp = lib.ddot(h, B)
             
         mydf.aux_basis.append(aux_tmp)
+        
+    del A 
+    A = None
+    del B
+    B = None
+    del e
+    e = None
+    del h
+    h = None
             
 
-def build_auxiliary_Coulomb_local_bas(mydf, debug=True):
+def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
     
     t0 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
@@ -427,8 +454,8 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True):
             assert aux_basis_now.shape[1] == grid_ID.size
         
             fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(aux_basis.shape[0]),
-                ctypes.c_int(aux_basis.shape[1]),
+                ctypes.c_int(aux_basis_now.shape[0]),
+                ctypes.c_int(aux_basis_now.shape[1]),
                 grid_ID.ctypes.data_as(ctypes.c_void_p),
                 aux_basis_now.ctypes.data_as(ctypes.c_void_p),
                 coulG_real.ctypes.data_as(ctypes.c_void_p),
@@ -451,32 +478,37 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True):
     mydf.coulG = coulG.copy()
     V = constrcuct_V_CCode(mydf.aux_basis, mesh, coulG)
 
-    ############# the only communication #############
+    if use_mpi:
+
+        ############# the only communication #############
     
-    grid_segment = mydf.grid_segment 
-    assert len(grid_segment) == comm_size + 1
+        grid_segment = mydf.grid_segment 
+        assert len(grid_segment) == comm_size + 1
     
-    t0_comm = (lib.logger.process_clock(), lib.logger.perf_counter())
+        t0_comm = (lib.logger.process_clock(), lib.logger.perf_counter())
     
-    sendbuf = []
-    for i in range(comm_size):
-        p0 = grid_segment[i]
-        p1 = grid_segment[i+1]
-        sendbuf.append(V[:, p0:p1])
-    del V
-    V = None
-    V_fullrow = np.vstack(alltoall(sendbuf, split_recvbuf=True))
-    del sendbuf
-    sendbuf = None
+        sendbuf = []
+        for i in range(comm_size):
+            p0 = grid_segment[i]
+            p1 = grid_segment[i+1]
+            sendbuf.append(V[:, p0:p1])
+        del V
+        V = None
+        V_fullrow = np.vstack(alltoall(sendbuf, split_recvbuf=True))
+        del sendbuf
+        sendbuf = None
     
-    mydf.V_R = V_fullrow
+        mydf.V_R = V_fullrow
     
-    t1_comm = (lib.logger.process_clock(), lib.logger.perf_counter()) 
+        t1_comm = (lib.logger.process_clock(), lib.logger.perf_counter()) 
     
-    t_comm = t1_comm[1] - t0_comm[1]
+        t_comm = t1_comm[1] - t0_comm[1]
     
-    if mydf.verbose > 0:
-        print("rank = %d, t_comm = %12.6e" % (rank, t_comm))
+        if mydf.verbose > 0:
+            print("rank = %d, t_comm = %12.6e" % (rank, t_comm))
+    else:
+        t_comm = 0.0
+        mydf.V_R = V
 
     ########### construct W ###########
     
@@ -494,10 +526,17 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True):
         aux_begin = aux_group_shift[i]
         aux_end   = aux_group_shift[i+1]
         ngrid_now = mydf.partition_group_to_gridID[i].size
-        mydf.W[:, aux_begin:aux_end] = lib.ddot(mydf.V_R[grid_shift:grid_shift+ngrid_now], mydf.aux_basis[i-group_begin].T)
+        # print("aux_begin = %d, aux_end = %d, ngrid_now = %d" % (aux_begin, aux_end, ngrid_now))
+        # print("grid_shift = %d" % grid_shift)
+        # print("shape 1 = ", mydf.V_R[:,grid_shift:grid_shift+ngrid_now].shape)
+        # print("shape 2 = ", mydf.aux_basis[i-group_begin].T.shape)
+        mydf.W[:, aux_begin:aux_end] = lib.ddot(mydf.V_R[:, grid_shift:grid_shift+ngrid_now], mydf.aux_basis[i-group_begin].T)
         grid_shift += ngrid_now
     
-    comm.Barrier()
+    if use_mpi:
+        comm.Barrier()
+    
+    # print("W = ", mydf.W[:5,:5])
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
@@ -542,6 +581,41 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
         
         self.use_mpi = False
 
+    def _allocate_jk_buffer(self, datatype, ngrids_local):
+
+        if self.jk_buffer is None:
+            
+            nao = self.nao
+            ngrids = ngrids_local
+            naux = self.naux
+            
+            buffersize_k = nao * ngrids + naux * ngrids + naux * naux + nao * nao
+            buffersize_j = nao * ngrids + ngrids + nao * naux + naux + naux + nao * nao
+            
+            nThreadsOMP   = lib.num_threads()
+            size_ddot_buf = max((naux*naux)+2, ngrids) * nThreadsOMP
+            
+            if hasattr(self, "IO_buf"):
+
+                if self.IO_buf.size < (max(buffersize_k, buffersize_j) + size_ddot_buf):
+                    self.IO_buf = np.zeros((max(buffersize_k, buffersize_j) + size_ddot_buf,), dtype=datatype)
+
+                self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),),
+                                            dtype=datatype, buffer=self.IO_buf, offset=0)
+                offset         = max(buffersize_k, buffersize_j) * self.jk_buffer.dtype.itemsize
+                self.ddot_buf  = np.ndarray((nThreadsOMP, max((naux*naux)+2, ngrids)),
+                                            dtype=datatype, buffer=self.IO_buf, offset=offset)
+
+            else:
+
+                self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
+                self.ddot_buf = np.zeros((nThreadsOMP, max((naux*naux)+2, ngrids)), dtype=datatype)
+
+
+        else:
+            assert self.jk_buffer.dtype == datatype
+            assert self.ddot_buf.dtype == datatype
+            
     def get_buffer_size_in_IP_selection_given_atm(self, c, m):
         pass
 
@@ -635,20 +709,27 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
         grid_ID_ordered = np.array(grid_ID_ordered, dtype=np.int32)
         self.grid_ID_ordered = grid_ID_ordered
         
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        
+        if debug and self.verbose > 0:
+            _benchmark_time(t1, t2, 'build_aux_info')
+            
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            
         self.group = group
         select_IP_local_drive(self, c, m, possible_IP_group, group, use_mpi=self.use_mpi)
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if debug and self.verbose > 0:
-            _benchmark_time(t1, t2, 'build_aux_info')
+            _benchmark_time(t1, t2, 'select_IP_local_drive')
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
-        if self.use_mpi == False:
-            build_aux_basis(self, group, self.IP_group, debug=True)
-        else:
-            build_aux_basis_mpi(self, group, self.IP_group, debug=True) 
+        # if self.use_mpi == False:
+        #     build_aux_basis(self, group, self.IP_group, debug=True)
+        # else:
+        build_aux_basis_fast(self, group, self.IP_group, debug=debug, use_mpi=self.use_mpi) 
             
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
@@ -695,6 +776,9 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
                 # for i in range(diff_pair_abs_max.shape[0]):
                 #     print("diff_pair_abs_max[%d] = %12.6e" % (i, diff_pair_abs_max[i]))
 
+    def build_auxiliary_Coulomb(self, debug=True):
+        return build_auxiliary_Coulomb_local_bas(self, debug=debug, use_mpi=self.use_mpi)
+
     get_jk = isdf_jk.get_jk_dm
 
 
@@ -720,47 +804,7 @@ class PBC_ISDF_Info_SplitGrid_MPI(PBC_ISDF_Info_SplitGrid):
         
         self.use_mpi = True
     
-    def _allocate_jk_buffer(self, datatype, ngrids_local):
-
-        if self.jk_buffer is None:
-            
-            nao = self.nao
-            ngrids = ngrids_local
-            naux = self.naux
-            
-            buffersize_k = nao * ngrids + naux * ngrids + naux * naux + nao * nao
-            buffersize_j = nao * ngrids + ngrids + nao * naux + naux + naux + nao * nao
-            
-            nThreadsOMP   = lib.num_threads()
-            size_ddot_buf = max((naux*naux)+2, ngrids) * nThreadsOMP
-            
-            if hasattr(self, "IO_buf"):
-
-                if self.IO_buf.size < (max(buffersize_k, buffersize_j) + size_ddot_buf):
-                    self.IO_buf = np.zeros((max(buffersize_k, buffersize_j) + size_ddot_buf,), dtype=datatype)
-
-                self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),),
-                                            dtype=datatype, buffer=self.IO_buf, offset=0)
-                offset         = max(buffersize_k, buffersize_j) * self.jk_buffer.dtype.itemsize
-                self.ddot_buf  = np.ndarray((nThreadsOMP, max((naux*naux)+2, ngrids)),
-                                            dtype=datatype, buffer=self.IO_buf, offset=offset)
-
-            else:
-
-                self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
-                self.ddot_buf = np.zeros((nThreadsOMP, max((naux*naux)+2, ngrids)), dtype=datatype)
-
-
-        else:
-            assert self.jk_buffer.dtype == datatype
-            assert self.ddot_buf.dtype == datatype
-
-    def build_auxiliary_Coulomb(self, debug=True):
-        return build_auxiliary_Coulomb_local_bas(self, debug=debug)
-
     get_jk = get_jk_dm_mpi
-
-C = 25
 
 from pyscf.pbc.df.isdf.isdf_k import build_supercell
 
@@ -799,6 +843,8 @@ def build_supercell_with_partition(prim_atm,
 
 #### split over grid points ? ####
 
+C = 15
+
 if __name__ == '__main__':
 
     cell   = pbcgto.Cell()
@@ -829,49 +875,24 @@ if __name__ == '__main__':
     
     KE_CUTOFF = 70
     
-    # cell.basis   = 'gth-dzvp'
-    # # cell.basis   = 'gth-tzvp'
-    # cell.pseudo  = 'gth-pade'
-    # cell.verbose = 4
-    # # cell.ke_cutoff  = 128   # kinetic energy cutoff in a.u.
-    # cell.ke_cutoff = 70
-    # cell.max_memory = 800  # 800 Mb
-    # cell.precision  = 1e-8  # integral precision
-    # cell.use_particle_mesh_ewald = True
-    # cell.build()
+    verbose = 4
+    if rank != 0:
+        verbose = 0
     
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
     prim_mesh = prim_cell.mesh
     # cell = tools.super_cell(cell, [1, 1, 2])
-    prim_partition = [[0,1,2,3],[4,5,6,7]]
-    # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
+    # prim_partition = [[0,1,2,3],[4,5,6,7]]
+    prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     # prim_partition = [[0,1,2,3,4,5,6,7]]
     
-    Ls = [1, 1, 2]
+    Ls = [1, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
-    cell, partition = build_supercell_with_partition(atm, prim_a, mesh=mesh, Ls=Ls, partition=prim_partition, ke_cutoff=KE_CUTOFF)
-    
-    print(cell.ao_loc_nr())
-    
-    shl_atm = []
+    cell, partition = build_supercell_with_partition(atm, prim_a, mesh=mesh, Ls=Ls, partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
         
-    natm = cell.natm
-    # cell = self.cell
-        
-    for i in range(natm):
-        shl_atm.append([None, None])
-        
-    for i in range(cell.nbas):
-        atm_id = cell.bas_atom(i)
-        if shl_atm[atm_id][0] is None:
-            shl_atm[atm_id][0] = i
-        shl_atm[atm_id][1] = i+1
-    
-    print("shl_atm = ", shl_atm) 
-    
     ########## get aoR ##########
     
     from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2, _eval_rhoG
@@ -891,30 +912,51 @@ if __name__ == '__main__':
     
     ##############################
     
-    pbc_isdf_info = PBC_ISDF_Info_SplitGrid(cell, aoR)
-    # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=[[0,1,2,3,4,5,6,7]])
-    # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=[[0,1],[2,3],[4,5],[6,7]])
-    # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11],[12,13],[14,15]])
-    # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C)
-    # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=[[0,1,2,3],[4,5,6,7]])
-    # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=[[0,1,2,3],[4,5,6,7], [8,9,10,11], [12,13,14,15]])
-    pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition)
-    print(pbc_isdf_info.IP_group) 
+    if rank == 0:
+        
+        pbc_isdf_info = PBC_ISDF_Info_SplitGrid(cell, None)
+        pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition)
+        print(pbc_isdf_info.IP_group) 
     
-    # pbc_isdf_info.check_AOPairError()
+        # pbc_isdf_info.check_AOPairError()
 
-    pbc_isdf_info.build_auxiliary_Coulomb()
+        pbc_isdf_info.build_auxiliary_Coulomb()
     
-    # exit(1)
+        # exit(1)
     
-    from pyscf.pbc import scf
+        from pyscf.pbc import scf
 
-    mf = scf.RHF(cell)
-    pbc_isdf_info.direct_scf = mf.direct_scf
-    mf.with_df = pbc_isdf_info
-    mf.max_cycle = 100
-    mf.conv_tol = 1e-7
+        mf = scf.RHF(cell)
+        pbc_isdf_info.direct_scf = mf.direct_scf
+        mf.with_df = pbc_isdf_info
+        mf.max_cycle = 100
+        mf.conv_tol = 1e-7
 
-    print("mf.direct_scf = ", mf.direct_scf)
+        print("mf.direct_scf = ", mf.direct_scf)
 
-    mf.kernel()
+        mf.kernel()
+        
+        del mf
+        del pbc_isdf_info
+    
+    if comm_size > 1:
+        comm.Barrier()
+        ### test MPI version ###
+        pbc_isdf_info = PBC_ISDF_Info_SplitGrid_MPI(cell,verbose=verbose)
+        pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition)
+        pbc_isdf_info.build_auxiliary_Coulomb()
+        
+        from pyscf.pbc import scf
+
+        mf = scf.RHF(cell)
+        pbc_isdf_info.direct_scf = mf.direct_scf
+        mf.with_df = pbc_isdf_info
+        mf.max_cycle = 100
+        mf.conv_tol = 1e-7
+
+        print("mf.direct_scf = ", mf.direct_scf)
+
+        mf.kernel()
+        
+        del mf
+        del pbc_isdf_info

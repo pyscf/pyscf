@@ -111,7 +111,7 @@ def allgather(sendbuf, split_recvbuf=False):
 
 def reduce(sendbuf, op=MPI.SUM, root=0):
     sendbuf = numpy.asarray(sendbuf, order='C')
-    shape, mpi_dtype = comm.bcast((sendbuf.shape, sendbuf.dtype.char))
+    shape, mpi_dtype = comm.bcast((sendbuf.shape, sendbuf.dtype.char),root=root)
     _assert(sendbuf.shape == shape and sendbuf.dtype.char == mpi_dtype)
 
     dtype = sendbuf.dtype.char
@@ -129,7 +129,7 @@ def reduce(sendbuf, op=MPI.SUM, root=0):
     
 def bcast(buf, root=0):
     buf = numpy.asarray(buf, order='C')
-    shape, dtype = comm.bcast((buf.shape, buf.dtype.char))
+    shape, dtype = comm.bcast((buf.shape, buf.dtype.char), root=root)
     if rank != root:
         buf = numpy.empty(shape, dtype=dtype)
 

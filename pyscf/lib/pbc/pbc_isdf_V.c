@@ -62,6 +62,26 @@ void _construct_J(
     fftw_free(J_complex);
 }
 
+void _Reorder_Grid_to_Original_Grid(int ngrid, int *gridID, double *Density_or_J,
+                                    double *out)
+{
+    int i;
+    for (i = 0; i < ngrid; i++)
+    {
+        out[gridID[i]] = Density_or_J[i];
+    }
+}
+
+void _Original_Grid_to_Reorder_Grid(
+    int ngrid, int *gridID, double *Density_or_J, double *out)
+{
+    int i;
+    for (i = 0; i < ngrid; i++)
+    {
+        out[i] = Density_or_J[gridID[i]];
+    }
+}
+
 void _construct_V_local_bas(
     int *mesh,
     int nrow,
@@ -76,6 +96,9 @@ void _construct_V_local_bas(
     const int buffersize // must be a multiple of 16 to ensure memory alignment
 )
 {
+    // printf("nrow: %d, ncol: %d\n", nrow, ncol);
+    // printf("row_shift: %d\n", row_shift);
+
     const int nThread = get_omp_threads();
     int mesh_complex[3] = {mesh[0], mesh[1], mesh[2] / 2 + 1};
     const int n_real = mesh[0] * mesh[1] * mesh[2];
@@ -90,7 +113,7 @@ void _construct_V_local_bas(
 #pragma omp parallel num_threads(nThread)
     {
         int thread_id = omp_get_thread_num();
-        double *buf_thread = buf + omp_get_thread_num() * buffersize;
+        double *buf_thread = buf + thread_id * buffersize;
         fftw_complex *buf_fft = (fftw_complex *)(buf_thread + n_real);
 
 #pragma omp for schedule(static)
@@ -121,6 +144,8 @@ void _construct_V_local_bas(
 
             // backward transform
 
+            memset(buf_thread, 0, sizeof(double) * n_real);
+
             fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_fft, buf_thread);
 
             // scale
@@ -130,7 +155,8 @@ void _construct_V_local_bas(
             for (int j = 0; j < n_real; j++)
             {
                 // *ptr++ *= fac; /// TODO: use ISPC to accelerate
-                ptr[grid_ordering[j]] = buf_thread[j] * fac;
+                // ptr[grid_ordering[j]] = buf_thread[j] * fac;
+                ptr[j] = buf_thread[grid_ordering[j]] * fac;
             }
         }
     }
