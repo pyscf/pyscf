@@ -62,6 +62,83 @@ void _construct_J(
     fftw_free(J_complex);
 }
 
+void _construct_V_local_bas(
+    int *mesh,
+    int nrow,
+    int ncol,
+    int *gridID,
+    double *auxBasis,
+    double *CoulG,
+    int row_shift,
+    double *V,
+    int *grid_ordering,
+    double *buf,         // use the ptr of the ptr to ensure that the memory for each thread is aligned
+    const int buffersize // must be a multiple of 16 to ensure memory alignment
+)
+{
+    const int nThread = get_omp_threads();
+    int mesh_complex[3] = {mesh[0], mesh[1], mesh[2] / 2 + 1};
+    const int n_real = mesh[0] * mesh[1] * mesh[2];
+    const int n_complex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    const double fac = 1. / (double)n_real;
+
+    // create plan for fft
+
+    fftw_plan p_forward = fftw_plan_dft_r2c(3, mesh, auxBasis, (fftw_complex *)buf, FFTW_ESTIMATE);
+    fftw_plan p_backward = fftw_plan_dft_c2r(3, mesh, (fftw_complex *)buf, V, FFTW_ESTIMATE);
+
+#pragma omp parallel num_threads(nThread)
+    {
+        int thread_id = omp_get_thread_num();
+        double *buf_thread = buf + omp_get_thread_num() * buffersize;
+        fftw_complex *buf_fft = (fftw_complex *)(buf_thread + n_real);
+
+#pragma omp for schedule(static)
+        for (int i = 0; i < nrow; i++)
+        {
+            // pack
+
+            memset(buf_thread, 0, sizeof(double) * n_real);
+
+            for (int j = 0; j < ncol; j++)
+            {
+                buf_thread[gridID[j]] = auxBasis[i * ncol + j];
+            }
+
+            // forward transform
+
+            fftw_execute_dft_r2c(p_forward, buf_thread, (fftw_complex *)buf_fft);
+
+            // multiply CoulG
+
+            double *ptr = (double *)buf_fft;
+
+            for (int j = 0; j < n_complex; j++)
+            {
+                *ptr++ *= CoulG[j]; /// TODO: use ISPC to accelerate
+                *ptr++ *= CoulG[j]; /// TODO: use ISPC to accelerate
+            }
+
+            // backward transform
+
+            fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_fft, buf_thread);
+
+            // scale
+
+            ptr = V + (i + row_shift) * n_real;
+
+            for (int j = 0; j < n_real; j++)
+            {
+                // *ptr++ *= fac; /// TODO: use ISPC to accelerate
+                ptr[grid_ordering[j]] = buf_thread[j] * fac;
+            }
+        }
+    }
+
+    fftw_destroy_plan(p_forward);
+    fftw_destroy_plan(p_backward);
+}
+
 void _construct_V(int *mesh,
                   int naux,
                   double *auxBasis,

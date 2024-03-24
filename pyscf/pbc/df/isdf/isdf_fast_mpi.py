@@ -203,8 +203,6 @@ def build_auxiliary_Coulomb(mydf, debug=True):
         mesh_int32         = np.array(mesh, dtype=np.int32)
 
         V                  = np.zeros((nAux, ngrids), dtype=np.double)
-        # basis_fft          = np.zeros((nAux, ncomplex), dtype=np.double)
-        # CONSTRUCT_V = 1
         
         fn = getattr(libpbc, "_construct_V", None)
         assert(fn is not None)
@@ -213,17 +211,6 @@ def build_auxiliary_Coulomb(mydf, debug=True):
         # print("aux_basis.shape = ", aux_basis.shape)
         # print("self.jk_buffer.size    = ", self.jk_buffer.size)
         # print("self.jk_buffer.shape   = ", self.jk_buffer.shape)
-
-        # fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
-        #    ctypes.c_int(nAux),
-        #    aux_basis.ctypes.data_as(ctypes.c_void_p),
-        #    coulG_real.ctypes.data_as(ctypes.c_void_p),
-        #    V.ctypes.data_as(ctypes.c_void_p),
-        #    basis_fft.ctypes.data_as(ctypes.c_void_p),
-        #    ctypes.c_int(bunchsize),
-        #    mydf.jk_buffer.ctypes.data_as(ctypes.c_void_p),
-        #    ctypes.c_int(bufsize_per_thread),
-        #    ctypes.c_int(CONSTRUCT_V)) 
         
         fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nAux),
@@ -303,6 +290,8 @@ def build_auxiliary_Coulomb(mydf, debug=True):
         
     if mydf.verbose:
         print("t_comm = ", t_comm)
+    
+    comm.Barrier()
     
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
