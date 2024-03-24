@@ -203,10 +203,10 @@ def build_auxiliary_Coulomb(mydf, debug=True):
         mesh_int32         = np.array(mesh, dtype=np.int32)
 
         V                  = np.zeros((nAux, ngrids), dtype=np.double)
-        basis_fft          = np.zeros((nAux, ncomplex), dtype=np.double)
-        CONSTRUCT_V = 1
+        # basis_fft          = np.zeros((nAux, ncomplex), dtype=np.double)
+        # CONSTRUCT_V = 1
         
-        fn = getattr(libpbc, "_construct_V2", None)
+        fn = getattr(libpbc, "_construct_V", None)
         assert(fn is not None)
 
         # print("V.shape = ", V.shape)
@@ -214,18 +214,27 @@ def build_auxiliary_Coulomb(mydf, debug=True):
         # print("self.jk_buffer.size    = ", self.jk_buffer.size)
         # print("self.jk_buffer.shape   = ", self.jk_buffer.shape)
 
+        # fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
+        #    ctypes.c_int(nAux),
+        #    aux_basis.ctypes.data_as(ctypes.c_void_p),
+        #    coulG_real.ctypes.data_as(ctypes.c_void_p),
+        #    V.ctypes.data_as(ctypes.c_void_p),
+        #    basis_fft.ctypes.data_as(ctypes.c_void_p),
+        #    ctypes.c_int(bunchsize),
+        #    mydf.jk_buffer.ctypes.data_as(ctypes.c_void_p),
+        #    ctypes.c_int(bufsize_per_thread),
+        #    ctypes.c_int(CONSTRUCT_V)) 
+        
         fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(nAux),
-           aux_basis.ctypes.data_as(ctypes.c_void_p),
-           coulG_real.ctypes.data_as(ctypes.c_void_p),
-           V.ctypes.data_as(ctypes.c_void_p),
-           basis_fft.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(bunchsize),
-           mydf.jk_buffer.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(bufsize_per_thread),
-           ctypes.c_int(CONSTRUCT_V))
+            ctypes.c_int(nAux),
+            aux_basis.ctypes.data_as(ctypes.c_void_p),
+            coulG_real.ctypes.data_as(ctypes.c_void_p),
+            V.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(bunchsize),
+            mydf.jk_buffer.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(bufsize_per_thread))
 
-        return V, basis_fft
+        return V
 
     coulG = tools.get_coulG(cell, mesh=mesh)
     
@@ -241,11 +250,7 @@ def build_auxiliary_Coulomb(mydf, debug=True):
         p0 = min(i*comm_size_row, mydf.naux)
         p1 = min((i+1)*comm_size_row, mydf.naux)
         sendbuf.append(mydf.aux_basis[p0:p1, :])
-    # mydf.aux_basis = None
-    del mydf.aux_basis
-    mydf.aux_basis = None
     aux_fullcol = np.hstack(alltoall(sendbuf, split_recvbuf=True))
-    mydf.aux_basis = None
     del sendbuf
     sendbuf = None
     
@@ -255,7 +260,7 @@ def build_auxiliary_Coulomb(mydf, debug=True):
 
     #### construct V ####
 
-    V, basis_fft = constrcuct_V_CCode(aux_fullcol, mesh, coulG)
+    V = constrcuct_V_CCode(aux_fullcol, mesh, coulG)
     
     ############### the second communication ##############
     
@@ -275,82 +280,17 @@ def build_auxiliary_Coulomb(mydf, debug=True):
     V = None
     
     mydf.V_R = V_fullrow
-    
-    comm_size_col = _comm_bunch(ncomplex, force_even=True)
-    sendbuf = []
-    for i in range(comm_size):
-        p0 = min(i*comm_size_col, ncomplex)
-        p1 = min((i+1)*comm_size_col, ncomplex)
-        sendbuf.append(basis_fft[:, p0:p1])
-    del basis_fft
-    basis_fft = None
-    basis_fft_fullrow = np.vstack(alltoall(sendbuf, split_recvbuf=True))
-    del sendbuf
-    sendbuf = None
-    basis_fft = None
-    basis_fft = basis_fft_fullrow 
-    
-    # mydf.basis_fft = basis_fft_fullrow.copy()
-    
-    # print("basis_fft = ", basis_fft)
-    
+            
     t1_comm = (lib.logger.process_clock(), lib.logger.perf_counter())
     
     t_comm += (t1_comm[1] - t0_comm[1])
-    
-    #### construct W ####
-    
-    fn = getattr(libpbc, "_construct_W_multiG", None)
-    assert(fn is not None)
-
-    # to account for the rfft
-
-    coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1]
-    if mesh[2] % 2 == 0:
-        coulG_real[:,:,1:-1] *= 2
-    else:
-        coulG_real[:,:,1:] *= 2
-    coulG_real = coulG_real.reshape(-1) 
-    
-    # mydf.coulG_real = coulG_real
-    # mydf.coulG = coulG.copy()
-    
-    basis_fft2 = basis_fft.copy()
-
-    ColBunch = comm_size_col
-    
-    p0 = min(ncomplex, rank * ColBunch)
-    p1 = min(ncomplex, (rank+1) * ColBunch)
-    
-    print("p0 = ", p0)
-    print("p1 = ", p1)  
-    
-    assert p1 - p0 == basis_fft2.shape[1]
-    assert naux == basis_fft2.shape[0]
-    
-    # W = np.zeros((naux, naux), dtype=np.double)
-    
-    # print("ncomplex = ", ncomplex)
-    # print("p0, p1 = ", p0, p1)
-    # print("basis_fft2.shape = ", basis_fft2.shape)
-    # print("coulG_real = ", coulG_real)
-    # print("naux = ", naux)
-    
-    fn(ctypes.c_int(naux),
-       ctypes.c_int(p0//2),
-       ctypes.c_int(p1//2),
-       basis_fft2.ctypes.data_as(ctypes.c_void_p),
-       coulG_real.ctypes.data_as(ctypes.c_void_p))
-    
-    # print("buf_aux_basis_fft_copy = ", basis_fft2)
-    # print("basis_fft = ", basis_fft)
-    
-    W = lib.ddot(basis_fft2, basis_fft.T)
+        
+    W = lib.ddot(V_fullrow, mydf.aux_basis.T)
     
     # W = reduce(W, root=0)
     
-    factor = 1.0 / np.prod(mesh)
-    W *= factor
+    # factor = 1.0 / np.prod(mesh)
+    # W *= factor
     
     # W = bcast(W, root=0)
     
@@ -368,15 +308,6 @@ def build_auxiliary_Coulomb(mydf, debug=True):
     
     if mydf.verbose:
         _benchmark_time(t0, t2, "build_auxiliary_Coulomb")
-    
-    # clean # 
-    
-    del basis_fft_fullrow
-    basis_fft_fullrow = None
-    del basis_fft
-    basis_fft = None
-    del basis_fft2
-    basis_fft2 = None
     
     return V, W
     
