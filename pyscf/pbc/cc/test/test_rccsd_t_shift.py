@@ -51,14 +51,14 @@ class KnownValues(unittest.TestCase):
         pseudo = 'gth-hf-rev'
         a = np.eye(3) * 30
         cell = gto.M(atom=atom, basis=basis, a=a, pseudo=pseudo)
-        
+
         eccsd_gamma, et_gamma = run_cell(cell, [0,0,0])
         self.assertAlmostEqual(eccsd_gamma, -0.2082317212, 8)
         self.assertAlmostEqual(et_gamma   , -0.0033716894, 8)
 
         eccsd_shifted, et_shifted = run_cell(cell, [0.1,0.1,0.1])
         self.assertAlmostEqual(eccsd_gamma, eccsd_shifted, 8)
-        self.assertAlmostEqual(et_gamma, et_shifted, 8)
+        self.assertAlmostEqual(et_gamma   , et_shifted   , 8)
 
 if __name__ == '__main__':
     print("RCCSD(T) with shift k-point test")
