@@ -760,7 +760,42 @@ class PBC_ISDF_Info_SplitGrid_MPI(PBC_ISDF_Info_SplitGrid):
 
     get_jk = get_jk_dm_mpi
 
-C = 12
+C = 25
+
+from pyscf.pbc.df.isdf.isdf_k import build_supercell
+
+def build_supercell_with_partition(prim_atm, 
+                                   prim_a, 
+                                   mesh=None, 
+                                   Ls = [1,1,1],
+                                   partition = None, 
+                                   basis='gth-dzvp', 
+                                   pseudo='gth-pade', 
+                                   ke_cutoff=70, 
+                                   max_memory=2000, 
+                                   precision=1e-8,
+                                   use_particle_mesh_ewald=True,
+                                   verbose=4):
+
+    cell = build_supercell(prim_atm, prim_a, mesh=mesh, Ls=Ls, basis=basis, pseudo=pseudo, ke_cutoff=ke_cutoff, max_memory=max_memory, precision=precision, use_particle_mesh_ewald=use_particle_mesh_ewald, verbose=verbose)
+
+    natm_prim = len(prim_atm)
+    
+    if partition is None:
+        partition = []
+        for i in range(natm_prim):
+            partition.append([i])
+
+    partition_supercell = []
+
+    for ix in range(Ls[0]):
+        for iy in range(Ls[1]):
+            for iz in range(Ls[2]):
+                cell_id = ix * Ls[1] * Ls[2] + iy * Ls[2] + iz
+                for sub_partition in partition:
+                    partition_supercell.append([x + cell_id * natm_prim for x in sub_partition])
+
+    return cell, partition_supercell
 
 #### split over grid points ? ####
 
@@ -769,31 +804,55 @@ if __name__ == '__main__':
     cell   = pbcgto.Cell()
     boxlen = 3.5668
     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
-    cell.atom = '''
-                   C     0.      0.      0.
-                   C     0.8917  0.8917  0.8917
-                   C     1.7834  1.7834  0.
-                   C     2.6751  2.6751  0.8917
-                   C     1.7834  0.      1.7834
-                   C     2.6751  0.8917  2.6751
-                   C     0.      1.7834  1.7834
-                   C     0.8917  2.6751  2.6751
-                '''
+    prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    # cell.atom = '''
+    #                C     0.      0.      0.
+    #                C     0.8917  0.8917  0.8917
+    #                C     1.7834  1.7834  0.
+    #                C     2.6751  2.6751  0.8917
+    #                C     1.7834  0.      1.7834
+    #                C     2.6751  0.8917  2.6751
+    #                C     0.      1.7834  1.7834
+    #                C     0.8917  2.6751  2.6751
+    #             '''
     
-    cell.basis   = 'gth-dzvp'
-    # cell.basis   = 'gth-tzvp'
-    cell.pseudo  = 'gth-pade'
-    cell.verbose = 4
-
-    # cell.ke_cutoff  = 128   # kinetic energy cutoff in a.u.
-    cell.ke_cutoff = 70
-    cell.max_memory = 800  # 800 Mb
-    cell.precision  = 1e-8  # integral precision
-    cell.use_particle_mesh_ewald = True
-
-    cell.build()
+    atm = [
+        ['C', (0.     , 0.     , 0.    )],
+        ['C', (0.8917 , 0.8917 , 0.8917)],
+        ['C', (1.7834 , 1.7834 , 0.    )],
+        ['C', (2.6751 , 2.6751 , 0.8917)],
+        ['C', (1.7834 , 0.     , 1.7834)],
+        ['C', (2.6751 , 0.8917 , 2.6751)],
+        ['C', (0.     , 1.7834 , 1.7834)],
+        ['C', (0.8917 , 2.6751 , 2.6751)],
+    ]
     
-    cell = tools.super_cell(cell, [1, 1, 2])
+    KE_CUTOFF = 70
+    
+    # cell.basis   = 'gth-dzvp'
+    # # cell.basis   = 'gth-tzvp'
+    # cell.pseudo  = 'gth-pade'
+    # cell.verbose = 4
+    # # cell.ke_cutoff  = 128   # kinetic energy cutoff in a.u.
+    # cell.ke_cutoff = 70
+    # cell.max_memory = 800  # 800 Mb
+    # cell.precision  = 1e-8  # integral precision
+    # cell.use_particle_mesh_ewald = True
+    # cell.build()
+    
+    prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
+    prim_mesh = prim_cell.mesh
+    # cell = tools.super_cell(cell, [1, 1, 2])
+    prim_partition = [[0,1,2,3],[4,5,6,7]]
+    # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
+    # prim_partition = [[0,1,2,3,4,5,6,7]]
+    
+    Ls = [1, 1, 2]
+    Ls = np.array(Ls, dtype=np.int32)
+    mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
+    mesh = np.array(mesh, dtype=np.int32)
+    
+    cell, partition = build_supercell_with_partition(atm, prim_a, mesh=mesh, Ls=Ls, partition=prim_partition, ke_cutoff=KE_CUTOFF)
     
     print(cell.ao_loc_nr())
     
@@ -838,7 +897,8 @@ if __name__ == '__main__':
     # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11],[12,13],[14,15]])
     # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C)
     # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=[[0,1,2,3],[4,5,6,7]])
-    pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=[[0,1,2,3],[4,5,6,7], [8,9,10,11], [12,13,14,15]])
+    # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=[[0,1,2,3],[4,5,6,7], [8,9,10,11], [12,13,14,15]])
+    pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition)
     print(pbc_isdf_info.IP_group) 
     
     # pbc_isdf_info.check_AOPairError()
