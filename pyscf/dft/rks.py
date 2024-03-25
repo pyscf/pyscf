@@ -260,7 +260,6 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     ks._numint = libxc.define_xc_(ks._numint, description, xctype, hyb, rsh)
     return ks
 
-
 def _dft_common_init_(mf, xc='LDA,VWN'):
     raise DeprecationWarning
 
@@ -321,10 +320,12 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
+    _keys = {'xc', 'nlc', 'grids', 'disp', 'disp_with_3body', 'nlcgrids', 'small_rho_cutoff'}
 
     def __init__(self, xc='LDA,VWN'):
         self.xc = xc
+        self.disp = None
+        self.disp_with_3body = None
         self.nlc = ''
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(
