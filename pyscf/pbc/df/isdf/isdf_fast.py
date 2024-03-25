@@ -43,6 +43,8 @@ CRITERION_CALL_PARALLEL_QR = 256
 
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
+from pyscf.pbc.dft import multigrid
+
 ################### the MPI module ##########################
 
 import mpi4py
@@ -1131,6 +1133,25 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     def __del__(self):
         return
 
+    def get_pp(self, kpts=None):
+        
+        if hasattr(self, "PP") and self.PP is not None:
+            return self.PP
+        else:
+            t0 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            
+            df_tmp = multigrid.MultiGridFFTDF2(cell)
+            v_pp_loc2_nl = df_tmp.get_pp(max_memory=self.cell.max_memory)
+            v_pp_loc1_G = df_tmp.vpplocG_part1
+            v_pp_loc1 = multigrid.multigrid_pair._get_j_pass2(df_tmp, v_pp_loc1_G)
+            self.PP = (v_pp_loc1 + v_pp_loc2_nl)[0]
+            
+            t1 = (lib.logger.process_clock(), lib.logger.perf_counter()) 
+            
+            if self.verbose:
+                _benchmark_time(t0, t1, "get_pp")
+            return self.PP
+    
     ##### functions defined in isdf_ao2mo.py #####
 
     get_eri = get_ao_eri = isdf_ao2mo.get_eri
@@ -1141,7 +1162,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     get_jk = isdf_jk.get_jk_dm
 
-C = 25
+C = 15
 
 if __name__ == '__main__':
 
