@@ -720,6 +720,55 @@ def _contract_j_dm_fast(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     return J * ngrid / vol
 
+def _contract_j_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mpi=False):
+    
+    assert with_robust_fitting == False
+    
+    if use_mpi:
+        raise NotImplementedError("MPI is not supported in this function")
+
+    t1 = (logger.process_clock(), logger.perf_counter())
+    
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+
+    nao  = dm.shape[0]
+    
+    cell = mydf.cell
+    assert cell.nao == nao
+    vol = cell.vol
+    mesh = np.array(cell.mesh, dtype=np.int32)
+    ngrid = np.prod(cell.mesh)
+
+    W    = mydf.W
+    aoRg = mydf.aoRg
+    
+    naux = aoRg.shape[1]
+    # IP_ID = mydf.IP_ID
+    
+    tmp1 = lib.ddot(dm, aoRg)  
+    density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg, tmp1),
+                            order='C') 
+    tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1)), order='C').reshape(-1)
+    tmp = np.asarray(lib.d_ij_j_ij(aoRg, tmp), order='C')
+
+    J = lib.ddot_withbuffer(aoRg, tmp.T, buf=mydf.ddot_buf)
+
+    del tmp1 
+    tmp1 = None
+    del tmp 
+    tmp = None
+    del density_Rg
+    density_Rg = None
+
+    t2 = (logger.process_clock(), logger.perf_counter())
+
+    if mydf.verbose:
+        _benchmark_time(t1, t2, "_contract_j_dm_wo_robust_fitting")
+    
+    return J * ngrid / vol
+
 # @profile
 def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
     '''
@@ -899,6 +948,52 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
     return K * ngrid / vol
 
+def _contract_k_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mpi=False):
+    
+    assert with_robust_fitting == False
+    
+    if use_mpi:
+        raise NotImplementedError("MPI is not supported in this function")
+
+    t1 = (logger.process_clock(), logger.perf_counter())
+    
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+
+    nao  = dm.shape[0]
+    
+    cell = mydf.cell
+    assert cell.nao == nao
+    vol = cell.vol
+    mesh = np.array(cell.mesh, dtype=np.int32)
+    ngrid = np.prod(cell.mesh)
+
+    W    = mydf.W
+    aoRg = mydf.aoRg
+    
+    naux = aoRg.shape[1]
+    
+    density_RgRg = lib.ddot(dm, aoRg)
+    density_RgRg = lib.ddot(aoRg.T, density_RgRg)
+    
+    lib.cwise_mul(W, density_RgRg, out=density_RgRg)
+    tmp = density_RgRg
+    tmp = np.asarray(lib.dot(tmp, aoRg.T), order='C')
+    K = lib.ddot_withbuffer(aoRg, tmp, buf=mydf.ddot_buf)
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    if mydf.verbose:
+        _benchmark_time(t1, t2, "_contract_k_dm_wo_robust_fitting")
+    
+    del tmp
+    tmp = None
+    del density_RgRg
+    density_RgRg = None
+    
+    return K * ngrid / vol
+
 def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
            kpts_band=None, with_j=True, with_k=True, omega=None, 
            use_mpi = False, **kwargs):
@@ -941,12 +1036,16 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
         if mydf.with_robust_fitting:
             vj = _contract_j_dm_fast(mydf, dm, mydf.with_robust_fitting, use_mpi)
         else:
-            vj = _contract_j_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
+            # vj = _contract_j_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
+            vj = _contract_j_dm_wo_robust_fitting(mydf, dm, mydf.with_robust_fitting, use_mpi)
         # print("vj2 = ", vj2[0, :16])
         # print("vj  = ", vj[0, :16])
         # print("vj/vj2 = ", vj[0, :16] / vj2[0, :16])    
     if with_k:
-        vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
+        if mydf.with_robust_fitting:
+            vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
+        else:
+            vk = _contract_k_dm_wo_robust_fitting(mydf, dm, mydf.with_robust_fitting, use_mpi)
         # print("vk = ", vk[0,:16])
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")

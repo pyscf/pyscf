@@ -1141,7 +1141,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     get_jk = isdf_jk.get_jk_dm
 
-C = 15
+C = 25
 
 if __name__ == '__main__':
 
@@ -1211,9 +1211,9 @@ if __name__ == '__main__':
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR)
     pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=C, global_IP_selection=False)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
-    pbc_isdf_info.check_AOPairError()
+    # pbc_isdf_info.check_AOPairError()
 
-    exit(1)
+    # exit(1)
 
     ### check eri ###
 
@@ -1258,4 +1258,4 @@ if __name__ == '__main__':
     mf = scf.RHF(cell)
     mf.max_cycle = 100
     mf.conv_tol = 1e-8
-    mf.kernel()
+    # mf.kernel()
