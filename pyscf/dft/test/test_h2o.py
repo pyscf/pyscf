@@ -608,4 +608,11 @@ class KnownValues(unittest.TestCase):
 
 if __name__ == "__main__":
     print("Full Tests for H2O")
-    unittest.main()
+    #unittest.main()
+    if 1:
+        setUpModule()
+        method = dft.RKS(h2o)
+        dm = method.get_init_guess()
+        method.xc = 'wB97M_V'
+        vxc = method.get_veff(h2o, dm)
+        print(lib.fp(vxc), 22.767792068559917, 8)

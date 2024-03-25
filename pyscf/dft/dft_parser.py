@@ -22,6 +22,7 @@ unified dft parser for coordinating dft protocols with
 '''
 
 from functools import lru_cache
+import warnings
 
 # supported dispersion corrections
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
@@ -29,13 +30,11 @@ DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
 @lru_cache(128)
 def parse_dft(dft_method):
     ''' conventional dft method ->
-    (xc, enable nlc, dispersion, with 3-body dispersion)
+    (xc, enable nlc, (xc for dftd3, dispersion version, with 3-body dispersion))
     '''
     if not isinstance(dft_method, str):
-        return dft_method, None, None, False
+        return dft_method, None, (dft_method, None, False)
     method_lower = dft_method.lower()
-    xc = dft_method
-    disp = None
 
     # special cases:
     # - wb97x-d is not supported yet
@@ -53,24 +52,36 @@ def parse_dft(dft_method):
     if method_lower == 'wb97x-d3bj':
         return 'wb97x-v', False, ('wb97x', 'd3bj', False)
 
-    # J. Chem. Theory Comput. 2013, 9, 1, 263–272
+    # J. Chem. Theory Comput. 2013, 9, 1, 263-272
     if method_lower in ['wb97x-d3']:
         raise NotImplementedError('wb97x-d3 is not supported yet.')
 
     if method_lower.endswith('-3c'):
         raise NotImplementedError('*-3c methods are not supported yet.')
 
+    xc = dft_method
+    disp = None
     for d in DISP_VERSIONS:
         if method_lower.endswith(d):
             disp = d
+            with_3body = False
             xc = method_lower.replace(f'-{d}','')
-            return xc, None, (xc, disp, False)
-        if method_lower.endswith(d+'2b'):
+        elif method_lower.endswith(d+'2b'):
             disp = d
+            with_3body = False
             xc = method_lower.replace(f'-{d}2b', '')
-            return xc, None, (xc, disp, False)
-        if method_lower.endswith(d+'atm'):
+        elif method_lower.endswith(d+'atm'):
             disp = d
+            with_3body = True
             xc = method_lower.replace(f'-{d}atm', '')
-            return xc, None, (xc, disp, True)
+
+        if disp is not None:
+            if xc in ('b97m', 'wb97m'):
+                warnings.warn(
+                    f'{dft_method} is not a well-defined functional. '
+                    'The XC part is changed to {xc}-v')
+                return xc+'-v', False, (xc, disp, with_3body)
+            else:
+                return xc, None, (xc, disp, with_3body)
+
     return xc, None, (xc, None, False)
