@@ -39,7 +39,7 @@ from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast,
 
 from pyscf.pbc.df.isdf.isdf_fast_mpi import get_jk_dm_mpi
 
-import ctypes
+import ctypes, sys
 
 from multiprocessing import Pool
 
@@ -421,7 +421,7 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
         
         coulG_real         = coul_G.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1).copy()
         nThread            = lib.num_threads()
-        bufsize_per_thread = coulG_real.shape[0] * 2 + mesh[0] * mesh[1] * mesh[2]
+        bufsize_per_thread = int((coulG_real.shape[0] * 2 + mesh[0] * mesh[1] * mesh[2]) * 1.1)
         bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
         
         buf = np.zeros((nThread, bufsize_per_thread), dtype=np.double)
@@ -441,17 +441,27 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
         assert(fn is not None)
 
         # print("V.shape = ", V.shape)
-        # print("aux_basis.shape = ", aux_basis.shape)
-        # print("self.jk_buffer.size    = ", self.jk_buffer.size)
-        # print("self.jk_buffer.shape   = ", self.jk_buffer.shape)
+        # # print("aux_basis.shape = ", aux_basis.shape)
+        # print("self.jk_buffer.size    = ", mydf.jk_buffer.size)
+        # print("self.jk_buffer.shape   = ", mydf.jk_buffer.shape)
+        # sys.stdout.flush()
+        # print("len(aux_bas) = ", len(aux_basis))
         
         shift_row = 0
-        
+        ngrid_now = 0
         for i in range(len(aux_basis)):
             
             aux_basis_now = aux_basis[i]
             grid_ID = mydf.partition_group_to_gridID[group_begin+i]
-            assert aux_basis_now.shape[1] == grid_ID.size
+            assert aux_basis_now.shape[1] == grid_ID.size 
+            ngrid_now += grid_ID.size
+            # print("i = ", i)
+            # print("shift_row = ", shift_row) 
+            # print("aux_bas_now = ", aux_basis_now.shape)
+            # print("ngrid_now = ", ngrid_now)
+            # print("buf = ", buf.shape)
+            # print("ngrid_ordering = ", grid_ordering.size)
+            # sys.stdout.flush()
         
             fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(aux_basis_now.shape[0]),
@@ -530,6 +540,7 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
         # print("grid_shift = %d" % grid_shift)
         # print("shape 1 = ", mydf.V_R[:,grid_shift:grid_shift+ngrid_now].shape)
         # print("shape 2 = ", mydf.aux_basis[i-group_begin].T.shape)
+        sys.stdout.flush()
         mydf.W[:, aux_begin:aux_end] = lib.ddot(mydf.V_R[:, grid_shift:grid_shift+ngrid_now], mydf.aux_basis[i-group_begin].T)
         grid_shift += ngrid_now
     
@@ -542,7 +553,8 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
     
     if mydf.verbose > 0:
         _benchmark_time(t0, t1, 'build_auxiliary_Coulomb')
-        
+    
+    sys.stdout.flush()
 
 class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
     
@@ -583,6 +595,9 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
 
     def _allocate_jk_buffer(self, datatype, ngrids_local):
 
+        # print("In _allocate_jk_buffer")
+        # print("ngrids_local = ", ngrids_local)
+        
         if self.jk_buffer is None:
             
             nao = self.nao
@@ -593,7 +608,9 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
             buffersize_j = nao * ngrids + ngrids + nao * naux + naux + naux + nao * nao
             
             nThreadsOMP   = lib.num_threads()
-            size_ddot_buf = max((naux*naux)+2, ngrids) * nThreadsOMP
+            size_ddot_buf = max((naux*naux)+2, ngrids) * nThreadsOMP 
+            
+            print("buffersize_k = ", buffersize_k)
             
             if hasattr(self, "IO_buf"):
 
@@ -735,6 +752,8 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
         
         if debug and self.verbose > 0:
             _benchmark_time(t1, t2, 'build_aux_basis')
+            
+        sys.stdout.flush()
             
     def check_AOPairError(self):
         

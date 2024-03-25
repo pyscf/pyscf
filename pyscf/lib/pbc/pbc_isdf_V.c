@@ -100,9 +100,9 @@ void _construct_V_local_bas(
     // printf("row_shift: %d\n", row_shift);
 
     const int nThread = get_omp_threads();
-    int mesh_complex[3] = {mesh[0], mesh[1], mesh[2] / 2 + 1};
-    const int n_real = mesh[0] * mesh[1] * mesh[2];
-    const int n_complex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    size_t mesh_complex[3] = {mesh[0], mesh[1], mesh[2] / 2 + 1};
+    const size_t n_real = mesh[0] * mesh[1] * mesh[2];
+    const size_t n_complex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
     const double fac = 1. / (double)n_real;
 
     // create plan for fft
@@ -117,13 +117,13 @@ void _construct_V_local_bas(
         fftw_complex *buf_fft = (fftw_complex *)(buf_thread + n_real);
 
 #pragma omp for schedule(static)
-        for (int i = 0; i < nrow; i++)
+        for (size_t i = 0; i < nrow; i++)
         {
             // pack
 
             memset(buf_thread, 0, sizeof(double) * n_real);
 
-            for (int j = 0; j < ncol; j++)
+            for (size_t j = 0; j < ncol; j++)
             {
                 buf_thread[gridID[j]] = auxBasis[i * ncol + j];
             }
@@ -136,7 +136,7 @@ void _construct_V_local_bas(
 
             double *ptr = (double *)buf_fft;
 
-            for (int j = 0; j < n_complex; j++)
+            for (size_t j = 0; j < n_complex; j++)
             {
                 *ptr++ *= CoulG[j]; /// TODO: use ISPC to accelerate
                 *ptr++ *= CoulG[j]; /// TODO: use ISPC to accelerate
@@ -152,7 +152,7 @@ void _construct_V_local_bas(
 
             ptr = V + (i + row_shift) * n_real;
 
-            for (int j = 0; j < n_real; j++)
+            for (size_t j = 0; j < n_real; j++)
             {
                 // *ptr++ *= fac; /// TODO: use ISPC to accelerate
                 // ptr[grid_ordering[j]] = buf_thread[j] * fac;

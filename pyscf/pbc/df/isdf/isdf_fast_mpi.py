@@ -348,8 +348,8 @@ def get_jk_dm_mpi(mydf, dm, hermi=1, kpt=np.zeros(3),
         if mydf.with_robust_fitting:
             vj = isdf_jk._contract_j_dm_fast(mydf, dm, mydf.with_robust_fitting, True)
             # vj2 = isdf_jk._contract_j_dm(mydf, dm, mydf.with_robust_fitting, True)
-            if rank == 0:
-                print("vj = ", vj[0,:16] * comm_size)
+            # if rank == 0:
+            #     print("vj = ", vj[0,:16] * comm_size)
             # print("vj2 = ", vj2[0,-10:])
             # print("vj/vj2 = ", vj[0,-10:] / vj2[0,-10:])
         else:
@@ -357,8 +357,8 @@ def get_jk_dm_mpi(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     if with_k:
         vk = isdf_jk._contract_k_dm(mydf, dm, mydf.with_robust_fitting, True)
-        if rank == 0:
-            print("vk = ", vk[0,:16] * comm_size)
+        # if rank == 0:
+        #     print("vk = ", vk[0,:16] * comm_size)
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
 
@@ -503,7 +503,7 @@ if __name__ == '__main__':
     cell.build()
     
     prim_mesh = cell.mesh
-    Ls = [1, 1, 1]
+    Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)

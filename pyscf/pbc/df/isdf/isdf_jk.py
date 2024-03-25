@@ -943,11 +943,11 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
         else:
             vj = _contract_j_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
         # print("vj2 = ", vj2[0, :16])
-        print("vj  = ", vj[0, :16])
+        # print("vj  = ", vj[0, :16])
         # print("vj/vj2 = ", vj[0, :16] / vj2[0, :16])    
     if with_k:
         vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
-        print("vk = ", vk[0,:16])
+        # print("vk = ", vk[0,:16])
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
 
