@@ -95,7 +95,16 @@ def _select_IP_given_group(mydf, c:int, m:int, group=None, IP_possible = None):
     nao = mydf.nao
     
     aoR_atm = ISDF_eval_gto(mydf.cell, coords=coords[IP_possible]) * weight
-    
+
+    if hasattr(mydf, "aoR_cutoff"):
+        max_row = np.max(np.abs(aoR_atm), axis=1)
+        # print("max_row = ", max_row)
+        # print("max_row.shape = ", max_row.shape)
+        where = np.where(max_row > mydf.aoR_cutoff)[0]
+        print("before cutoff aoR_atm.shape = ", aoR_atm.shape)
+        aoR_atm = aoR_atm[where]
+        print("after  cutoff aoR_atm.shape = ", aoR_atm.shape)
+        nao = aoR_atm.shape[0]
 
     # print("nao_group = ", nao_group)
     # print("nao = ", nao)    
@@ -705,6 +714,8 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
         
         self.use_mpi = False
 
+        self.aoR_cutoff = 1e-8
+
     def _allocate_jk_buffer(self, datatype, ngrids_local):
 
         # print("In _allocate_jk_buffer")
@@ -1025,9 +1036,10 @@ if __name__ == '__main__':
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
     prim_mesh = prim_cell.mesh
     # cell = tools.super_cell(cell, [1, 1, 2])
-    prim_partition = [[0,1,2,3],[4,5,6,7]]
+    # prim_partition = [[0,1,2,3],[4,5,6,7]]
     # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     # prim_partition = [[0,1,2,3,4,5,6,7]]
+    prim_partition = [[0],[1], [2], [3], [4], [5], [6], [7]]
     
     Ls = [1, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)

@@ -1140,7 +1140,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         else:
             t0 = (lib.logger.process_clock(), lib.logger.perf_counter())
             
-            df_tmp = multigrid.MultiGridFFTDF2(cell)
+            df_tmp = multigrid.MultiGridFFTDF2(self.cell)
             v_pp_loc2_nl = df_tmp.get_pp(max_memory=self.cell.max_memory)
             v_pp_loc1_G = df_tmp.vpplocG_part1
             v_pp_loc1 = multigrid.multigrid_pair._get_j_pass2(df_tmp, v_pp_loc1_G)
