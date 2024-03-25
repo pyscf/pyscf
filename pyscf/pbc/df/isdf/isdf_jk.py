@@ -753,7 +753,7 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mp
     tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1)), order='C').reshape(-1)
     tmp = np.asarray(lib.d_ij_j_ij(aoRg, tmp), order='C')
 
-    J = lib.ddot_withbuffer(aoRg, tmp.T, buf=mydf.ddot_buf)
+    J = lib.ddot(aoRg, tmp.T)
 
     del tmp1 
     tmp1 = None

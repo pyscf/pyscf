@@ -725,24 +725,29 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
             if self.with_robust_fitting == False:
                 buffersize_k = 0
                 buffersize_j = 0
+                size_ddot_buf = max((nao*nao)+2, ngrids) * nThreadsOMP 
             
             # print("buffersize_k = ", buffersize_k)
             
             if hasattr(self, "IO_buf"):
-
-                if self.IO_buf.size < (max(buffersize_k, buffersize_j) + size_ddot_buf):
-                    self.IO_buf = np.zeros((max(buffersize_k, buffersize_j) + size_ddot_buf,), dtype=datatype)
-
-                self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),),
-                                            dtype=datatype, buffer=self.IO_buf, offset=0)
-                offset         = max(buffersize_k, buffersize_j) * self.jk_buffer.dtype.itemsize
-                self.ddot_buf  = np.ndarray((nThreadsOMP, max((naux*naux)+2, ngrids)),
-                                            dtype=datatype, buffer=self.IO_buf, offset=offset)
+                
+                if self.with_robust_fitting == False:
+                    self.IO_buf = None
+                    self.jk_buffer = np.ndarray((1,), dtype=datatype)
+                    self.ddot_buf = np.ndarray((nThreadsOMP, max((nao*nao)+2, ngrids)), dtype=datatype)
+                else:
+                    if self.IO_buf.size < (max(buffersize_k, buffersize_j) + size_ddot_buf):
+                        self.IO_buf = np.zeros((max(buffersize_k, buffersize_j) + size_ddot_buf,), dtype=datatype)
+                    self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),),
+                                                dtype=datatype, buffer=self.IO_buf, offset=0)
+                    offset         = max(buffersize_k, buffersize_j) * self.jk_buffer.dtype.itemsize
+                    self.ddot_buf  = np.ndarray((nThreadsOMP, max((naux*naux)+2, ngrids)),
+                                                dtype=datatype, buffer=self.IO_buf, offset=offset)
 
             else:
-
+                
                 self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
-                self.ddot_buf = np.zeros((nThreadsOMP, max((naux*naux)+2, ngrids)), dtype=datatype)
+                self.ddot_buf = np.zeros((size_ddot_buf,), dtype=datatype)
 
 
         else:
