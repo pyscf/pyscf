@@ -28,7 +28,7 @@ import math
 import numpy
 from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
-from pyscf.dft import xc_deriv
+from pyscf.dft import xc_deriv, dft_parser
 from pyscf import __config__
 
 _itrf = lib.load_library('libxcfun_itrf')
@@ -318,6 +318,9 @@ XC_CODES.update([(key, 5000+i) for i, key in enumerate(VV10_XC)])
 VV10_XC.update([(5000+i, VV10_XC[key]) for i, key in enumerate(VV10_XC)])
 
 def is_nlc(xc_code):
+    enable_nlc = dft_parser.parse_dft(xc_code)[1]
+    if enable_nlc is False:
+        return False
     fn_facs = parse_xc(xc_code)[1]
     return any(xid >= 5000 for xid, c in fn_facs)
 
@@ -420,6 +423,8 @@ def parse_xc(description):
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
+    description = dft_parser.parse_dft(description)[0]
+
     def assign_omega(omega, hyb_or_sr, lr=0):
         if hyb[2] == omega or omega == 0:
             hyb[0] += hyb_or_sr
@@ -430,6 +435,7 @@ def parse_xc(description):
             hyb[2] = omega
         else:
             raise ValueError('Different values of omega found for RSH functionals')
+
     fn_facs = []
     def parse_token(token, suffix, search_xc_alias=False):
         if token:
@@ -503,6 +509,8 @@ def parse_xc(description):
             parse_token(token, 'C')
     else:
         for token in description.replace('-', '+-').replace(';+', ';').split('+'):
+            # dftd3 cannot be used in a custom xc description
+            assert '-d3' not in token
             parse_token(token, 'XC', search_xc_alias=True)
     if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
         hyb[1] = 0

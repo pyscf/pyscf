@@ -21,36 +21,45 @@ gradient of dispersion correction for HF and DFT
 '''
 
 import numpy
-from pyscf.scf.hf import KohnShamDFT
+from pyscf.dft.rks import KohnShamDFT
+from pyscf.dft import dft_parser
 
-def get_dispersion(mf_grad, disp_version=None):
+def get_dispersion(mf_grad, disp_version=None, with_3body=False):
     '''gradient of dispersion correction for RHF/RKS'''
+    mf = mf_grad.base
+    mol = mf.mol
+    if isinstance(mf, KohnShamDFT):
+        method = mf.xc
+    else:
+        method = 'hf'
+    method, disp, with_3body = dft_parser.parse_dft(method)[2]
+
+    # priority: args > mf.disp > dft_parser
     if disp_version is None:
-        disp_version = mf_grad.base.disp
-    mol = mf_grad.base.mol
-    disp_version = mf_grad.base.disp
+        disp_version = disp
+        # dispersion version can be customized via mf.disp
+        if hasattr(mf, 'disp') and mf.disp is not None:
+            disp_version = mf.disp
+
     if disp_version is None:
         return numpy.zeros([mol.natm,3])
 
-    if isinstance(mf_grad.base, KohnShamDFT):
-        method = mf_grad.base.xc
-    else:
-        method = 'hf'
+    # 3-body contribution can be disabled with mf.disp_with_3body
+    if hasattr(mf, 'disp_with_3body') and mf.disp_with_3body is not None:
+        with_3body = mf.disp_with_3body
 
     if disp_version[:2].upper() == 'D3':
         # raised error in SCF module, assuming dftd3 installed
         import dftd3.pyscf as disp
-        d3 = disp.DFTD3Dispersion(mol, xc=method, version=disp_version)
+        d3 = disp.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
         _, g_d3 = d3.kernel()
         return g_d3
     elif disp_version[:2].upper() == 'D4':
-        from pyscf.data.elements import charge
-        atoms = numpy.array([ charge(a[0]) for a in mol._atom])
-        coords = mol.atom_coords()
-        from dftd4.interface import DampingParam, DispersionModel
-        model = DispersionModel(atoms, coords)
-        res = model.get_dispersion(DampingParam(method=method), grad=True)
-        return res.get("gradient")
+        # raised error in SCF module, assuming dftd3 installed
+        import dftd4.pyscf as disp
+        d4 = disp.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+        _, g_d4 = d4.kernel()
+        return g_d4
     else:
         raise RuntimeError(f'dispersion correction: {disp_version} is not supported.')
 
