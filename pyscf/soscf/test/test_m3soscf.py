@@ -24,30 +24,6 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import dft
 
-'''
-def setUpModule():
-    global mol1, mol3
-    mol1 = gto.M(
-        verbose = 5,
-        output = '/dev/null',
-        atom = "He 0.0 0.0 0.0; He 1.0 0.0 0.0",
-        spin = 0,
-        basis = '6-31g*')
-
-    mol3 = gto.M(
-        verbose = 5,
-        output = '/dev/null',
-        atom = "He 0.0 0.0 0.0; He 1.0 0.0 0.0",
-        basis = '6-31g*',
-        spin = 2,)
-
-def tearDownModule():
-    global mol1, mol3
-    mol1.stdout.close()
-    mol3.stdout.close()
-    del mol1, mol3
-'''
-
 class KnownValues(unittest.TestCase):
 
     def setUp(self):
