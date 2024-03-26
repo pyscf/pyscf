@@ -53,6 +53,22 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(e_corr, -0.16402828164387906, 6)
 
+        r2_int = mol.intor('int1e_r2')
+        dm1_gs_a,dm1_gs_b = myadc.make_rdm1_ground()
+        mo_coeff_a,mo_coeff_b = mf.mo_coeff
+        dm1_gs_ao_a = np.einsum('pi,ij,qj->pq', mo_coeff_a, dm1_gs_a, mo_coeff_a.conj())
+        dm1_gs_ao_b = np.einsum('pi,ij,qj->pq', mo_coeff_b, dm1_gs_b, mo_coeff_b.conj())
+        r2_gs_a = np.einsum('pq,pq->',r2_int,dm1_gs_ao_a) 
+        r2_gs_b = np.einsum('pq,pq->',r2_int,dm1_gs_ao_b) 
+        self.assertAlmostEqual(r2_gs_a, 11.90325443138132, 6)
+        self.assertAlmostEqual(r2_gs_b, 9.493284854541251, 6)
+
+        dm1_ip_a,dm1_ip_b = myadc.make_rdm1_excited()
+        dm1_ip_ao_a = np.einsum('pi,kij,qj->kpq', mo_coeff_a, dm1_ip_a, mo_coeff_a.conj())
+        dm1_ip_ao_b = np.einsum('pi,kij,qj->kpq', mo_coeff_b, dm1_ip_b, mo_coeff_b.conj())
+        r2_ip_a = np.einsum('pq,kpq->k',r2_int,dm1_ip_ao_a) 
+        r2_ip_b = np.einsum('pq,kpq->k',r2_int,dm1_ip_ao_b) 
+
         self.assertAlmostEqual(e[0], 0.4342864327917968, 6)
         self.assertAlmostEqual(e[1], 0.47343844767816784, 6)
         self.assertAlmostEqual(e[2], 0.5805631452815511, 6)
@@ -60,6 +76,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.9066975034860368, 6)
         self.assertAlmostEqual(p[1], 0.8987660491377468, 6)
         self.assertAlmostEqual(p[2], 0.9119655964285802, 6)
+
+        self.assertAlmostEqual(r2_ip_a[0], 10.54712633, 6)
+        self.assertAlmostEqual(r2_ip_a[1], 8.12486002, 6)
+        self.assertAlmostEqual(r2_ip_a[2], 10.72181645, 6)
+        self.assertAlmostEqual(r2_ip_b[0], 5.79620476, 6)
+        self.assertAlmostEqual(r2_ip_b[1], 8.29867476, 6)
+        self.assertAlmostEqual(r2_ip_b[2], 5.39662535, 6)
 
     def test_ip_adc2x(self):
 
