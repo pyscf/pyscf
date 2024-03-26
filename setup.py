@@ -18,37 +18,6 @@ import sys
 from setuptools import setup, find_packages, Extension
 from setuptools.command.build_py import build_py
 
-CLASSIFIERS = [
-'Development Status :: 5 - Production/Stable',
-'Intended Audience :: Science/Research',
-'Intended Audience :: Developers',
-'License :: OSI Approved :: Apache Software License',
-'Programming Language :: C',
-'Programming Language :: Python',
-'Programming Language :: Python :: 3.7',
-'Programming Language :: Python :: 3.8',
-'Programming Language :: Python :: 3.9',
-'Programming Language :: Python :: 3.10',
-'Programming Language :: Python :: 3.11',
-'Programming Language :: Python :: 3.12',
-'Topic :: Software Development',
-'Topic :: Scientific/Engineering',
-'Operating System :: POSIX',
-'Operating System :: Unix',
-'Operating System :: MacOS',
-]
-
-NAME             = 'pyscf'
-MAINTAINER       = 'Qiming Sun'
-MAINTAINER_EMAIL = 'osirpt.sun@gmail.com'
-DESCRIPTION      = 'PySCF: Python-based Simulations of Chemistry Framework'
-#LONG_DESCRIPTION = ''
-URL              = 'http://www.pyscf.org'
-DOWNLOAD_URL     = 'http://github.com/pyscf/pyscf'
-LICENSE          = 'Apache License 2.0'
-AUTHOR           = 'Qiming Sun'
-AUTHOR_EMAIL     = 'osirpt.sun@gmail.com'
-PLATFORMS        = ['Linux', 'Mac OS-X', 'Unix']
 def get_version():
     topdir = os.path.abspath(os.path.join(__file__, '..'))
     with open(os.path.join(topdir, 'pyscf', '__init__.py'), 'r') as f:
@@ -59,25 +28,6 @@ def get_version():
     raise ValueError("Version string not found")
 VERSION = get_version()
 
-EXTRAS = {
-    'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2', 'pyscf-qsdopt'],
-    #'dmrgscf': ['pyscf-dmrgscf'],
-    'doci': ['pyscf-doci'],
-    'icmpspt': ['pyscf-icmpspt'],
-    'properties': ['pyscf-properties'],
-    'semiempirical': ['pyscf-semiempirical'],
-    'shciscf': ['pyscf-shciscf'],
-    'cppe': ['cppe'],
-    'pyqmc': ['pyqmc'],
-    'mcfun': ['mcfun>=0.2.1'],
-    'bse': ['basis-set-exchange'],
-}
-EXTRAS['all'] = [p for extras in EXTRAS.values() for p in extras]
-# extras which should not be installed by "all" components
-EXTRAS['cornell_shci'] = ['pyscf-cornell-shci']
-EXTRAS['nao'] = ['pyscf-nao']
-EXTRAS['fciqmcscf'] = ['pyscf-fciqmc']
-EXTRAS['tblis'] = ['pyscf-tblis']
 
 def get_platform():
     from distutils.util import get_platform
@@ -117,9 +67,11 @@ class CMakeBuildPy(build_py):
         self.spawn(cmd)
 
         self.announce('Building binaries', level=3)
-        # Do not use high level parallel compilation. OOM may be triggered
-        # when compiling certain functionals in libxc.
-        cmd = ['cmake', '--build', self.build_temp, '-j', '2']
+        # By default do not use high level parallel compilation.
+        # OOM may be triggered when compiling certain functionals in libxc.
+        # Set the shell variable CMAKE_BUILD_PARALLEL_LEVEL=n to enable
+        # parallel compilation.
+        cmd = ['cmake', '--build', self.build_temp]
         build_args = os.getenv('CMAKE_BUILD_ARGS')
         if build_args:
             cmd.extend(build_args.split(' '))
@@ -150,27 +102,11 @@ if sys.platform == 'darwin':
               'https://github.com/scipy/scipy/issues/16151)')
 
 setup(
-    name=NAME,
     version=VERSION,
-    description=DESCRIPTION,
-    long_description_content_type="text/markdown",
-    long_description=DESCRIPTION,
-    url=URL,
-    download_url=DOWNLOAD_URL,
-    license=LICENSE,
-    classifiers=CLASSIFIERS,
-    author=AUTHOR,
-    author_email=AUTHOR_EMAIL,
-    platforms=PLATFORMS,
     #package_dir={'pyscf': 'pyscf'},  # packages are under directory pyscf
     #include *.so *.dat files. They are now placed in MANIFEST.in
     #package_data={'': ['*.so', '*.dylib', '*.dll', '*.dat']},
     include_package_data=True,  # include everything in source control
     packages=find_packages(exclude=['*test*', '*examples*']),
     cmdclass={'build_py': CMakeBuildPy},
-    install_requires=['numpy>=1.13,!=1.16,!=1.17',
-                      _scipy_version,
-                      'h5py>=2.7',
-                      'setuptools'],
-    extras_require=EXTRAS,
 )
