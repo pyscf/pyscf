@@ -1118,7 +1118,7 @@ def build_supercell_with_partition(prim_atm,
 
 #### split over grid points ? ####
 
-C = 70
+C = 20
 
 if __name__ == '__main__':
 
@@ -1162,7 +1162,7 @@ if __name__ == '__main__':
     # prim_partition = [[0,1,2,3,4,5,6,7]]
     prim_partition = [[0],[1], [2], [3], [4], [5], [6], [7]]
     
-    Ls = [1, 1, 1]
+    Ls = [1, 1, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -1190,7 +1190,8 @@ if __name__ == '__main__':
     
     if rank == 0:
         
-        pbc_isdf_info = PBC_ISDF_Info_SplitGrid(cell, None, with_robust_fitting=False)
+        pbc_isdf_info = PBC_ISDF_Info_SplitGrid(cell, None, with_robust_fitting=True)
+        pbc_isdf_info.Ls = Ls
         # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition,separate_grid_pnt_criterion=0.04)
         pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition,separate_grid_pnt_criterion=None)
         #print(pbc_isdf_info.IP_group) 

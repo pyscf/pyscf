@@ -1003,6 +1003,10 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
         assert dm.shape[0] == 1
         dm = dm[0]
 
+    if hasattr(mydf, 'Ls'):
+        from pyscf.pbc.df.isdf.isdf_k import _symmetrize_dm
+        dm = _symmetrize_dm(dm, mydf.Ls)
+
     #### perform the calculation ####
 
     if mydf.jk_buffer is None:  # allocate the buffer for get jk
