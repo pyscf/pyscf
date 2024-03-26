@@ -1833,7 +1833,7 @@ def nr_uks_fxc_sf(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,rho0=
 
     xctype = ni._xc_type(xc_code)
 
-    dmb2a, dma2b = dms
+    dmb2a,dma2b = dms
     nao = dmb2a.shape[-1]
     make_rhob2a, nset = ni._gen_rho_evaluator(mol, dmb2a, hermi, False, grids)[:2]
     make_rhoa2b       = ni._gen_rho_evaluator(mol, dma2b, hermi, False, grids)[0]
@@ -1883,8 +1883,6 @@ def nr_uks_fxc_sf(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,rho0=
 
     elif xctype == 'GGA':
         ao_deriv = 1
-        # import pdb
-        # pdb.set_trace()
         for i, ao, mask, wv in block_loop(ao_deriv):
             wv[:,0] *= .5
             aow = _scale_ao_sparse(ao, wv[0], mask, ao_loc, out=aow)
@@ -1982,8 +1980,6 @@ def nr_uks_fxc_sf_tda(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,r
                               hermi, vmat[i])
     elif xctype == 'GGA':
         ao_deriv = 1
-        # import pdb
-        # pdb.set_trace()
         for i, ao, mask, wv in block_loop(ao_deriv):
             wv[0] *= .5
             aow = _scale_ao_sparse(ao, wv, mask, ao_loc, out=aow)
@@ -3059,10 +3055,7 @@ class NumInt(lib.StreamObject, LibXCMixin):
                                      with_lapl)
         return make_rho, ndms, nao
 
-    def to_gpu(self):
-        from gpu4pyscf.dft.numint import NumInt
-        # Note: gpu4pyscf NumInt initializes additional things in __init__.py
-        return NumInt()
+    to_gpu = lib.to_gpu
 
 _NumInt = NumInt
 

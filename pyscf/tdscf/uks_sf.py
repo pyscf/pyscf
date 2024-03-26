@@ -29,17 +29,7 @@ class TDA_SF(uhf.TDA_SF):
         from pyscf.grad import tduks
         return tduks.Gradients(self)
 
-class TDDFT_SF(uhf.TDA_SF):
-    pass
-    # print('Remember to set collinear_samples in SF-TDDFT, \
-    #        the default value is 200.')
-    # def nuc_grad_method(self):
-    #     from pyscf.grad import tduks
-    #     return tduks.Gradients(self)
-    
-TDUKS_SF = TDDFT_SF
-
-class CasidaTDDFT(TDDFT_SF, TDA_SF):
+class CasidaTDDFT(TDA_SF):
     '''Solve the Casida TDDFT formula
        [ A  B][X]
        [-B -A][Y]
@@ -77,7 +67,7 @@ class CasidaTDDFT(TDDFT_SF, TDA_SF):
             
         e_ia_b2a = (mo_energy[0][viridxa,None] - mo_energy[1][occidxb]).T
         e_ia_a2b = (mo_energy[1][viridxb,None] - mo_energy[0][occidxa]).T
-        
+
         if self.extype==0:
             hdiag = numpy.hstack((e_ia_b2a.ravel(), -e_ia_a2b.ravel()))
         elif self.extype==1:
@@ -87,6 +77,7 @@ class CasidaTDDFT(TDDFT_SF, TDA_SF):
                                    collinear_samples=collinear_samples)
             
         def vind(zs):
+
             nz = len(zs)
             zs = numpy.asarray(zs).reshape(nz,-1)
             if self.extype==0:
@@ -120,7 +111,7 @@ class CasidaTDDFT(TDDFT_SF, TDA_SF):
             return hx
             
         return vind, hdiag
-
+    
     def kernel(self, x0=None, nstates=None,extype=None,collinear_samples=None):
         '''SF-TDDFT diagonalization solver
         '''
@@ -149,23 +140,31 @@ class CasidaTDDFT(TDDFT_SF, TDA_SF):
 
         vind, hdiag = self.gen_vind(self._scf,extype=extype,collinear_samples=collinear_samples)
         precond = hdiag
-
-        def pickeig(w, v, nroots, envs):
-            # ToDo: as a function serving for davidson2
-            idx = numpy.where(w.real>0)[0]
-            return w[idx], v[:,idx], idx
+        # precond = self.get_precond(hdiag)
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
+            
+        def pickeig(w, v, nroots, envs):
+            idx = numpy.where(w > 1e-3)[0]
+            return w[idx], v[:,idx], idx
         
         # Because the degeneracy has been dealt with by init_guess_sf function.
-        nstates_new = x0.shape[0]   
+        nstates_new = x0.shape[0]
         converged, w, x1 = \
             lib.davidson2(vind, x0, precond,
                           tol=self.conv_tol,
                           nroots=nstates_new,
                           max_cycle=self.max_cycle,
-                          max_space=self.max_space)
+                          max_space=self.max_space,
+                          verbose=log)
+        # converged, w, x1 = \
+        #     lib.davidson1(vind, x0, precond,
+        #                   tol=self.conv_tol,
+        #                   nroots=nstates_new, lindep=self.lindep,
+        #                   max_cycle=self.max_cycle,
+        #                   max_space=self.max_space, pick=pickeig,
+        #                   verbose=log)
 
         mo_occ = self._scf.mo_occ
         occidxa = numpy.where(mo_occ[0]>0)[0]
@@ -205,11 +204,16 @@ class CasidaTDDFT(TDDFT_SF, TDA_SF):
         log.timer('TDDFT', *cpu0)
 
         self._finalize()
-        return self.e, self.xy
+        return self.e # , self.xy
 
     def nuc_grad_method(self):
         from pyscf.grad import tduks
         return tduks.Gradients(self)
+
+class TDDFT_SF(CasidaTDDFT):
+    pass
+
+TDUKS_SF = TDDFT_SF
 
 def tddft(mf):
     '''Driver to create TDDFT_SF or CasidaTDDFT_SF object'''

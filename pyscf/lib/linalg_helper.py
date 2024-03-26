@@ -25,6 +25,7 @@ import inspect
 import warnings
 from functools import reduce
 import numpy
+import time
 import scipy.linalg
 from pyscf.lib import logger
 from pyscf.lib import numpy_helper
@@ -438,8 +439,9 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 conv = numpy.zeros(nroots, dtype=bool)
         elif len(xt) > 1:
             xt = _qr(xt, dot, lindep)[0]
-            xt = xt[:40]  # 40 trial vectors at most
+            # xt = xt[:40]  # 40 trial vectors at most
 
+        print(numpy.array(xt).shape)
         axt = aop(xt)
         for k, xi in enumerate(xt):
             xs.append(xt[k])
@@ -576,7 +578,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
     return numpy.asarray(conv), e, x0
 
-def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=12,
+def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=100,max_space=40,
               max_memory=MAX_MEMORY,verbose=logger.WARN):
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -585,25 +587,26 @@ def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=12,
         
     omega0 = numpy.zeros((nroots))
     u0 = numpy.zeros((nroots,x0.shape[-1])) # save the eigenvectors.
+    max_space = max_space + (nroots-1) * 4
     
     for icycle in range(max_cycle):
-        if icycle%max_space == 0: 
+        if icycle == 0: 
             x0 = x0[:nroots]
-            
-        axt = aop(x0)
+        print(x0.shape)
 
+        axt = aop(x0)
+        
         xaxt = numpy.einsum('nv,mv->mn',axt,x0)
         omega_tmp, c_small = numpy.linalg.eig(xaxt)
-        idx_pov = numpy.where(omega_tmp.real>0)[0]
+        idx_pov = numpy.where(omega_tmp.real>1e-3)[0]
         omega_tmp = omega_tmp[idx_pov]
         c_small = c_small[:,idx_pov]
-        
+
         idx_eigen = numpy.argsort(omega_tmp)
         omega_tmp = omega_tmp[idx_eigen]
         c_small = c_small[:,idx_eigen]
         omega_p = omega_tmp*1.0
-        # import pdb
-        # pdb.set_trace()
+
         u0[:len(omega_p)] += numpy.einsum('nt,tm->mn',x0.T,c_small)[:nroots].real
         
         if omega_p.size < x0.shape[0]:
@@ -625,23 +628,22 @@ def davidson2(aop,x0,precond,nroots=1,tol=1e-12,max_cycle=50,max_space=12,
                     max_cycle, max_space, max_memory, _incore)
         log.debug1('the shape of project vector is: %s',x0.shape)
         log.debug1('In circle %d, difference of omega:\n%s', icycle,omega_diff)
-        
-        
         log.debug1('In total, %s/%s states converged. The values listed below:\n%s\n',
                     (omega_diff<tol).sum(),nroots,omega_p[:nroots].real)
         
         if (omega_diff<tol).sum() == nroots:
             break 
         
-        x1 = -numpy.einsum('t,nt->tn',omega_tmp,x0.T@c_small, optimize=True)
-        x1 += numpy.einsum('tn,tm->mn',axt,c_small)
+        x1 =numpy.einsum('t,nt->tn',omega_tmp,x0.T@c_small, optimize=True)
+        x1-= numpy.einsum('tn,tm->mn',axt,c_small)
         
         for i in range(x1.shape[0]):
             # +1e-99 is for zero in denominator
             Dinv = numpy.diag(1/(omega_tmp[i]-precond+1e-99))
             x1[i,:] = numpy.einsum('ts,s->t',Dinv,x1[i,:], optimize=True)
 
-        x0 = numpy.linalg.qr(numpy.concatenate((x0.T, x1[:nroots].real.T),axis=1))[0].T
+        x0 = numpy.linalg.qr(numpy.concatenate((x0.T, x1[:nroots].T),axis=1))[0].T
+        x0 = x0.real
         
     if icycle == max_cycle-1:
         raise RuntimeError("Not convergence!")

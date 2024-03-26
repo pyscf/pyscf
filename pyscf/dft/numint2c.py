@@ -26,9 +26,7 @@ from pyscf import lib
 from pyscf.dft import numint
 from pyscf.dft.numint import _dot_ao_dm, _dot_ao_ao, _scale_ao, _tau_dot, BLKSIZE
 from pyscf.dft import xc_deriv
-from pyscf import dft
 from pyscf import __config__
-# from XC_Library.eval_xc_AB import transform_arbitrary_order_gamma2ud # add by lihao
 
 MGGA_DENSITY_LAPL = False
 
@@ -284,36 +282,7 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
     evfk = [out[0]]
     for order in range(1, deriv+1):
         evfk.append(xc_deriv.transform_xc(rho, out, xctype, spin, order))
-    # rhoa = (t + s) * .5 # add by lihao
-    # rhob = (t - s) * .5 # add by lihao
-    # rhop = np.array([rhoa,rhob]) # add by lihao
-    # import pdb
-    # pdb.set_trace()
-    # print(deriv) # add by lihao
-    # tives = transform_arbitrary_order_gamma2ud(xctype,rhop,out,deriv=deriv,spin=1) # add by lihao
-    # # print(len(tives)) # add by lihao
-    # if deriv ==1:  # add by lihao
-    #     exc3,vxc3= tives # add by lihao
-    #     evfk.append(vxc3) # add by lihao
         
-    # elif deriv ==2:  # add by lihao
-    #     exc3,vxc3,fxc3= tives # add by lihao
-    #     evfk.append(vxc3) # add by lihao
-    #     evfk.append(fxc3) # add by lihao
-
-    # elif deriv ==3:  # add by lihao
-    #     exc3,vxc3,fxc3,kxc3 = tives # add by lihao
-    #     evfk.append(vxc3) # add by lihao
-    #     evfk.append(fxc3) # add by lihao
-    #     evfk.append(kxc3) # add by lihao
-
-    # else:    # add by lihao
-    #     exc3,vxc3,fxc3,kxc3,lxc3 = tives # add by lihao
-    #     evfk.append(vxc3) # add by lihao
-    #     evfk.append(fxc3) # add by lihao
-    #     evfk.append(kxc3) # add by lihao
-    #     evfk.append(lxc3) # add by lihao
-    
     if deriv < 3:
         # The return has at least [e, v, f, k] terms
         evfk.extend([None] * (3 - deriv))
@@ -328,8 +297,16 @@ def __mcfun_fn_eval_xc(ni, xc_code, xctype, rho, deriv):
             evfk[order] = xc_deriv.ud2ts(evfk[order])
     return evfk
 
-def mcfun_eval_xc_adapter(ni, xc_code):
-    '''Wrapper to generate the eval_xc function required by mcfun'''
+def mcfun_eval_xc_adapter(ni, xc_code, dim=0):
+    '''Wrapper to generate the eval_xc function required by mcfun
+    
+    Kwargs:
+        dim: int
+            determine which eval_xc_eff will be used.add()
+            dim=0, eval_xc_eff is for mc nocollinear case.add(),
+            dim=1, eval_xc_eff_sf is for mc collinear sf tddft/ tda.
+    '''
+    
     try:
         import mcfun
     except ImportError:
@@ -339,30 +316,19 @@ def mcfun_eval_xc_adapter(ni, xc_code):
     xctype = ni._xc_type(xc_code)
     fn_eval_xc = functools.partial(__mcfun_fn_eval_xc, ni, xc_code, xctype)
     nproc = lib.num_threads()
-    def eval_xc_eff(xc_code, rho, deriv=1, omega=None, xctype=None,
+    if dim == 0:
+        def eval_xc_eff(xc_code, rho, deriv=1, omega=None, xctype=None,
+                        verbose=None):
+            return mcfun.eval_xc_eff(
+                fn_eval_xc, rho, deriv, spin_samples=ni.spin_samples,
+                collinear_threshold=ni.collinear_thrd,
+                collinear_samples=ni.collinear_samples, workers=nproc)
+    elif dim == 1:
+        def eval_xc_eff(xc_code, rho, deriv=1, omega=None, xctype=None,
                     verbose=None):
-        return mcfun.eval_xc_eff(
-            fn_eval_xc, rho, deriv, spin_samples=ni.spin_samples,
-            collinear_threshold=ni.collinear_thrd,
-            collinear_samples=ni.collinear_samples, workers=nproc)
-    return eval_xc_eff
-
-def mcfun_eval_xc_adapter_sf(ni, xc_code):
-    '''Wrapper to generate the eval_xc function required by mcfun'''
-    try:
-        import mcfun
-    except ImportError:
-        raise ImportError('This feature requires mcfun library.\n'
-                          'Try install mcfun with `pip install mcfun`')
-
-    xctype = ni._xc_type(xc_code)
-    fn_eval_xc = functools.partial(__mcfun_fn_eval_xc, ni, xc_code, xctype)
-    nproc = lib.num_threads()
-    def eval_xc_eff(xc_code, rho, deriv=1, omega=None, xctype=None,
-                    verbose=None):
-        return mcfun.eval_xc_eff_sf(
-            fn_eval_xc, rho, deriv, 
-            collinear_samples=ni.collinear_samples, workers=nproc)
+            return mcfun.eval_xc_eff_sf(
+                fn_eval_xc, rho, deriv, 
+                collinear_samples=ni.collinear_samples, workers=nproc)
     return eval_xc_eff
 
 def _mcol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi):
@@ -717,7 +683,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
         rho_tmz[0] += rho_ab[0]+rho_ab[1]
         rho_tmz[1] += rho_ab[0]-rho_ab[1]
 
-        eval_xc = self.mcfun_eval_xc_adapter_sf(xc_code)
+        eval_xc = self.mcfun_eval_xc_adapter(xc_code,dim=1)
         fxc_sf = eval_xc(xc_code, rho_tmz, deriv=2, xctype=xctype)
         return fxc_sf
 
@@ -802,7 +768,6 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
 
     eval_xc_eff = _eval_xc_eff
     mcfun_eval_xc_adapter = mcfun_eval_xc_adapter
-    mcfun_eval_xc_adapter_sf = mcfun_eval_xc_adapter_sf
 
     block_loop = numint.NumInt.block_loop
     _gen_rho_evaluator = numint.NumInt._gen_rho_evaluator

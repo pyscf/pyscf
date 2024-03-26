@@ -115,6 +115,9 @@ def gen_tda_operation_sf(mf, fock_ao=None, wfnsym=None,extype=0):
     Kwargs:
         wfnsym : int or str
             Point group symmetry irrep symbol or ID for excited CIS wavefunction.
+        extype : int (0 or 1)
+            Determine which spin flip excitation will be calculated.
+            Spin flip up: exytpe=0. Spin flip down: exytpe=1.
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
@@ -125,15 +128,6 @@ def gen_tda_operation_sf(mf, fock_ao=None, wfnsym=None,extype=0):
     if wfnsym is not None and mol.symmetry:
         raise NotImplementedError("UKS Spin Flip TDA/ TDDFT haven't taken symmetry\
                                       into account.")
-        # if isinstance(wfnsym, str):
-        #     wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
-        # orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-        # wfnsym = wfnsym % 10  # convert to D2h subgroup
-        # orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
-        # orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
-        # sym_forbida = (orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym
-        # sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
-        # sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
     if extype==0:
         occidxb = numpy.where(mo_occ[1]>0)[0]
@@ -156,24 +150,18 @@ def gen_tda_operation_sf(mf, fock_ao=None, wfnsym=None,extype=0):
         orboa = mo_coeff[0][:,occidxa]
         orbvb = mo_coeff[1][:,viridxb]
         orbov = (orboa,orbvb)
-        ndim = nocca,nvirb
+        ndim = (nocca,nvirb)
         
         e_ia = (mo_energy[1][viridxb,None] - mo_energy[0][occidxa]).T
         hdiag = e_ia.ravel()
-    
-    # if wfnsym is not None and mol.symmetry:
-    #     hdiag[sym_forbid] = 0
-
+        
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
     vresp = mf.gen_tda_response_sf(hermi=0, max_memory=max_memory)
 
     def vind(zs):
         zs = numpy.asarray(zs)
-        # if wfnsym is not None and mol.symmetry:
-        #     zs = numpy.copy(zs)
-        #     zs[:,sym_forbid] = 0
-        
+
         ndim0,ndim1 = ndim
         orbo,orbv = orbov
         zs = zs[:,:ndim0*ndim1].reshape(-1,ndim0,ndim1)
@@ -184,9 +172,7 @@ def gen_tda_operation_sf(mf, fock_ao=None, wfnsym=None,extype=0):
         v1 += lib.einsum('ov,xov->xov', e_ia, zs)
         nz = zs.shape[0]
         hx = v1.reshape(nz,-1)
-        # if wfnsym is not None and mol.symmetry:
-        #     hx[:,sym_forbid] = 0
-        
+
         return hx
 
     return vind, hdiag
@@ -449,10 +435,10 @@ def get_ab_sf(mf, mo_energy=None, mo_coeff=None, mo_occ=None,collinear_samples=2
         a_b2a, a_a2b = a
         b_b2a, b_a2b = b
 
-        a_b2a+= numpy.einsum('ijba->iajb', eri_a_b2a) * hyb
-        a_a2b+= numpy.einsum('ijba->iajb', eri_a_a2b) * hyb
-        b_b2a+= numpy.einsum('ibja->iajb', eri_b_b2a) * hyb
-        b_a2b+= numpy.einsum('ibja->iajb', eri_b_a2b) * hyb
+        a_b2a-= numpy.einsum('ijba->iajb', eri_a_b2a) * hyb
+        a_a2b-= numpy.einsum('ijba->iajb', eri_a_a2b) * hyb
+        b_b2a-= numpy.einsum('ibja->iajb', eri_b_b2a) * hyb
+        b_a2b-= numpy.einsum('ibja->iajb', eri_b_a2b) * hyb
 
     if isinstance(mf, scf.hf.KohnShamDFT):
         from pyscf.dft import xc_deriv
@@ -1059,8 +1045,19 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
 @lib.with_doc(rhf.TDA.__doc__)
 class TDA_SF(TDBase):
-    singlet = None
+    extype = getattr(__config__, 'tdscf_uhf_sf_SF-TDA_extype', 0)
+    collinear_samples = getattr(__config__, 'tdscf_uhf_sf_SF-TDA_collinear_samples', 200)
     
+    _keys = {'extype','collinear_samples'}
+    
+    def __init__(self,mf,extype=0,collinear_samples=200):
+        TDBase.__init__(self,mf)
+        # extype is used to determine which spin flip excitation will be calculated.
+        # spin flip up: exytpe=0, spin flip down: exytpe=1.
+        self.extype=extype
+        # collinear_samples controls the 1d spin sample points in TDDFT/TDA.
+        self.collinear_samples = collinear_samples
+
     def gen_vind(self, mf=None,extype=None):
         '''Generate function to compute Ax'''
         if mf is None:
@@ -1165,7 +1162,7 @@ class TDA_SF(TDBase):
             y0 = numpy.zeros((len(idx),nov_b2a))
             z0 = numpy.concatenate((x0,y0),axis=1)
         return z0
-
+    
     def kernel(self, x0=None, nstates=None, extype=None):
         '''SF_TDA diagonalization solver
         '''
@@ -1185,28 +1182,18 @@ class TDA_SF(TDBase):
 
         vind, hdiag = self.gen_vind(self._scf,extype=extype)
         precond = hdiag
-
-        def pickeig(w, v, nroots, envs):
-            idx = numpy.where(w > self.positive_eig_threshold)[0]
-            return w[idx], v[:,idx], idx
         
         if x0 is None:
             x0 = self.init_guess0(self._scf, self.nstates,extype=extype)
 
-        # self.converged, self.e, x1 = \
-        #         lib.solve(vind, x0, precond,
-        #                       tol=self.conv_tol,
-        #                       nroots=nstates, lindep=self.lindep,
-        #                       max_cycle=self.max_cycle,
-        #                       max_space=self.max_space, pick=pickeig,
-        #                       verbose=log)
         nstates_new = x0.shape[0]
         self.converged, self.e, x1 = \
             lib.davidson2(vind, x0, precond,
                           tol=self.conv_tol,
                           nroots=nstates_new,
                           max_cycle=self.max_cycle,
-                          max_space=self.max_space)
+                          max_space=self.max_space,
+                          verbose=log)
                 
         nmo = self._scf.mo_occ[0].size
         nocca = (self._scf.mo_occ[0]>0).sum()
