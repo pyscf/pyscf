@@ -332,6 +332,9 @@ def colpivot_qr(A, max_rank=None, cutoff=1e-14):  # python code, benchmark, but 
     return Q.T, R, pivot, npt_find
 
 def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=True, 
+                      aoR_cutoff = None,
+                      rela_cutoff = 0.0, 
+                      no_retriction_on_nIP = False,
                       use_mpi=False):
 
     # bunchsize = lib.num_threads()
@@ -386,7 +389,8 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
 
     results = []
 
-    fn_colpivot_qr = getattr(libpbc, "ColPivotQR", None)
+    # fn_colpivot_qr = getattr(libpbc, "ColPivotQR", None)
+    fn_colpivot_qr = getattr(libpbc, "ColPivotQRRelaCut", None)
     assert(fn_colpivot_qr is not None)
     fn_ik_jk_ijk = getattr(libpbc, "NP_d_ik_jk_ijk", None)
     assert(fn_ik_jk_ijk is not None)
@@ -415,12 +419,22 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
             offset  = 0
             aoR_atm = np.ndarray((nao, grid_ID.shape[0]), dtype=np.complex128, buffer=buf_tmp, offset=offset)
             aoR_atm = ISDF_eval_gto(mydf.cell, coords=coords[grid_ID], out=aoR_atm) * weight
+            
+            nao_tmp = nao
+            
+            if aoR_cutoff is not None:
+                max_row = np.max(np.abs(aoR_atm), axis=1)
+                where = np.where(max_row > mydf.aoR_cutoff)[0]
+                print("before cutoff aoR_atm.shape = ", aoR_atm.shape)
+                aoR_atm = aoR_atm[where]
+                print("after  cutoff aoR_atm.shape = ", aoR_atm.shape)
+                nao_tmp = aoR_atm.shape[0]
 
             # create buffer for this atm
 
             dtypesize = buf.dtype.itemsize
 
-            offset += nao*grid_ID.shape[0] * dtypesize
+            offset += nao_tmp*grid_ID.shape[0] * dtypesize
 
             nao_atm  = nao_per_atm[atm_id]
             naux_now = int(np.sqrt(c*nao_atm)) + m
@@ -440,10 +454,10 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                 (naux_now*naux_now, grid_ID.shape[0]), dtype=np.float64, buffer=buf_tmp, offset=offset)
             offset += naux_now*naux_now*grid_ID.shape[0] * dtypesize
 
-            G1 = np.random.rand(nao, naux_now)
+            G1 = np.random.rand(nao_tmp, naux_now)
             G1, _ = numpy.linalg.qr(G1)
             G1    = G1.T
-            G2 = np.random.rand(nao, naux_now)
+            G2 = np.random.rand(nao_tmp, naux_now)
             G2, _ = numpy.linalg.qr(G2)
             G2    = G2.T
 
@@ -457,9 +471,15 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                          ctypes.c_int(naux_now),
                          ctypes.c_int(grid_ID.shape[0]))
             if global_IP_selection:
-                max_rank  = min(naux2_now, grid_ID.shape[0], nao_atm * c + m)
+                if no_retriction_on_nIP:
+                    max_rank = min(naux2_now, grid_ID.shape[0])
+                else:
+                    max_rank  = min(naux2_now, grid_ID.shape[0], nao_atm * c + m)
             else:
-                max_rank  = min(naux2_now, grid_ID.shape[0], nao_atm * c)
+                if no_retriction_on_nIP:
+                    max_rank = min(naux2_now, grid_ID.shape[0])
+                else:
+                    max_rank  = min(naux2_now, grid_ID.shape[0], nao_atm * c)
             npt_find      = ctypes.c_int(0)
             pivot         = np.arange(grid_ID.shape[0], dtype=np.int32)
             thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64, buffer=buf_tmp, offset=offset)
@@ -475,6 +495,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                             ctypes.c_int(grid_ID.shape[0]),
                             ctypes.c_int(max_rank),
                             ctypes.c_double(1e-14),
+                            ctypes.c_double(rela_cutoff),
                             pivot.ctypes.data_as(ctypes.c_void_p),
                             R.ctypes.data_as(ctypes.c_void_p),
                             ctypes.byref(npt_find),
@@ -564,7 +585,10 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
 
         nao_first = np.sum(nao_per_atm[:first_natm])
 
-        max_rank  = min(naux2_now, len(results), nao_first * c)
+        if no_retriction_on_nIP:
+            max_rank = min(naux2_now, len(results))
+        else:
+            max_rank  = min(naux2_now, len(results), nao_first * c)
 
         # print("max_rank = ", max_rank)
 
@@ -582,6 +606,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                         ctypes.c_int(len(results)),
                         ctypes.c_int(max_rank),
                         ctypes.c_double(1e-14),
+                        ctypes.c_double(rela_cutoff),
                         pivot.ctypes.data_as(ctypes.c_void_p),
                         R.ctypes.data_as(ctypes.c_void_p),
                         ctypes.byref(npt_find),

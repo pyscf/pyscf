@@ -85,14 +85,14 @@ void Solve_LLTEqualB_Parallel(
     }
 }
 
-void ColPivotQR(
+void ColPivotQRRelaCut(
     double *aoPaironGrid, // (nPair, nGrid)
     const int nPair,
     const int nGrid,
     const int max_rank,
-    const double cutoff,
+    const double cutoff, // abs_cutoff
+    const double relacutoff,
     int *pivot,
-    // double *Q,
     double *R,
     int *npt_find,
     double *thread_buffer, // (nThread, nGrid)
@@ -328,7 +328,7 @@ void ColPivotQR(
             }
         }
 
-        if (maxnorm < cutoff)
+        if ((maxnorm < cutoff) || (maxnorm < R[0] * relacutoff))
         {
             break;
         }
@@ -337,6 +337,22 @@ void ColPivotQR(
             (*npt_find)++;
         }
     }
+}
+
+void ColPivotQR(
+    double *aoPaironGrid, // (nPair, nGrid)
+    const int nPair,
+    const int nGrid,
+    const int max_rank,
+    const double cutoff,
+    int *pivot,
+    double *R,
+    int *npt_find,
+    double *thread_buffer, // (nThread, nGrid)
+    double *global_buffer) // nGrid
+{
+    ColPivotQRRelaCut(
+        aoPaironGrid, nPair, nGrid, max_rank, cutoff, 0.0, pivot, R, npt_find, thread_buffer, global_buffer);
 }
 
 void NP_d_ik_jk_ijk(

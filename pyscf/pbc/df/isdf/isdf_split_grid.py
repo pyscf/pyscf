@@ -67,7 +67,8 @@ def _select_IP_given_group(mydf, c:int, m:int, group=None, IP_possible = None):
     
     weight = np.sqrt(mydf.cell.vol / coords.shape[0])
     
-    fn_colpivot_qr = getattr(libpbc, "ColPivotQR", None)
+    # fn_colpivot_qr = getattr(libpbc, "ColPivotQR", None)
+    fn_colpivot_qr = getattr(libpbc, "ColPivotQRRelaCut", None)
     assert(fn_colpivot_qr is not None)
     fn_ik_jk_ijk = getattr(libpbc, "NP_d_ik_jk_ijk", None)
     assert(fn_ik_jk_ijk is not None)
@@ -142,7 +143,10 @@ def _select_IP_given_group(mydf, c:int, m:int, group=None, IP_possible = None):
     aoR_atm1 = None
     aoR_atm2 = None
 
-    max_rank  = min(naux2_now, IP_possible.shape[0], nao_group * c)  
+    if mydf.no_restriction_on_nIP:
+        max_rank = min(naux2_now, IP_possible.shape[0])
+    else:
+        max_rank  = min(naux2_now, IP_possible.shape[0], nao_group * c)  
     # print("naux2_now = %d, max_rank = %d" % (naux2_now, max_rank))
     # print("IP_possible.shape = ", IP_possible.shape)
     # print("nao_group = ", nao_group)
@@ -160,6 +164,7 @@ def _select_IP_given_group(mydf, c:int, m:int, group=None, IP_possible = None):
                    ctypes.c_int(IP_possible.shape[0]),
                    ctypes.c_int(max_rank),
                    ctypes.c_double(1e-14),
+                   ctypes.c_double(mydf.rela_cutoff_QRCP),
                    pivot.ctypes.data_as(ctypes.c_void_p),
                    R.ctypes.data_as(ctypes.c_void_p),
                    ctypes.byref(npt_find),
@@ -500,7 +505,7 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
             aux_bas_ket = mydf.aux_basis[j]
             naux_ket = aux_bas_ket.shape[0]
             ngrid_now = grid_ID_now.size
-            W[aux_row_loc:aux_row_loc+naux_bra, aux_col_loc:aux_col_loc+naux_ket] = lib.ddot(V[:, grid_shift:grid_shift+ngrid_now], aux_bas_ket.T)
+            W[aux_row_loc:aux_row_loc+naux_bra, aux_col_loc:aux_col_loc+naux_ket] = lib.ddot(V[:naux_bra, grid_shift:grid_shift+ngrid_now], aux_bas_ket.T)
             grid_shift += ngrid_now
             aux_col_loc += naux_ket
         aux_row_loc += aux_basis_now.shape[0]
@@ -684,6 +689,7 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
                  Ls=None,
                  get_partition=True,
                  verbose = 1,
+                 rela_cutoff_QRCP = None,
                  ):
     
         super().__init__(
@@ -715,6 +721,13 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
         self.use_mpi = False
 
         self.aoR_cutoff = 1e-8
+        
+        if rela_cutoff_QRCP is None:
+            self.no_restriction_on_nIP = False
+            self.rela_cutoff_QRCP = 0.0
+        else:
+            self.no_restriction_on_nIP = True
+            self.rela_cutoff_QRCP = rela_cutoff_QRCP
 
     def _allocate_jk_buffer(self, datatype, ngrids_local):
 
@@ -792,7 +805,11 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
         
         possible_IP = None
         if IP_ID is None:
-            IP_ID = ISDF._select_IP_direct(self, c+1, m, global_IP_selection=False, use_mpi=self.use_mpi) # get a little bit more possible IPs
+            IP_ID = ISDF._select_IP_direct(self, c+1, m, global_IP_selection=False, 
+                                           aoR_cutoff=self.aoR_cutoff,
+                                           rela_cutoff=self.rela_cutoff_QRCP,
+                                           no_retriction_on_nIP=self.no_restriction_on_nIP,
+                                           use_mpi=self.use_mpi) # get a little bit more possible IPs
             IP_ID.sort()
             IP_ID = np.array(IP_ID, dtype=np.int32)
         possible_IP = np.array(IP_ID, dtype=np.int32)
@@ -810,7 +827,7 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
         self.aoR_possible_IP = aoR_possible_IP
         self.possible_IP = possible_IP
         
-        if group==None:
+        if group == None:
             group = []
             for i in range(natm):
                 group.append([i])
@@ -1069,9 +1086,12 @@ if __name__ == '__main__':
     
     if rank == 0:
         
-        pbc_isdf_info = PBC_ISDF_Info_SplitGrid(cell, None, with_robust_fitting=False)
+        pbc_isdf_info = PBC_ISDF_Info_SplitGrid(cell, None, with_robust_fitting=False, rela_cutoff_QRCP=1e-5)
         pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition)
-        print(pbc_isdf_info.IP_group) 
+        #print(pbc_isdf_info.IP_group) 
+    
+        print("pbc_isdf_info.naux = ", pbc_isdf_info.naux) 
+        print("effective c = ", float(pbc_isdf_info.naux) / pbc_isdf_info.nao) 
     
         # pbc_isdf_info.check_AOPairError()
 
