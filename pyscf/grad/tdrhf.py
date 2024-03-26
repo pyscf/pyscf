@@ -325,6 +325,8 @@ class Gradients(rhf_grad.GradientsBase):
 
     as_scanner = as_scanner
 
+    to_gpu = lib.to_gpu
+
 Grad = Gradients
 
 from pyscf import tdscf

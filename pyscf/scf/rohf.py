@@ -520,9 +520,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         from pyscf import dft
         return self._transfer_attrs_(dft.ROKS(self.mol, xc=xc))
 
-    def to_gpu(self):
-        from gpu4pyscf.scf import ROHF
-        return lib.to_gpu(hf.SCF.reset(self.view(ROHF)))
+    to_gpu = lib.to_gpu
 
 
 class HF1e(ROHF):

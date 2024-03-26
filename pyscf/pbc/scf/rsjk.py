@@ -1160,6 +1160,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         log.timer_debug1('get_lr_k_kpts', *cpu0)
         return vk_kpts
 
+    to_gpu = lib.to_gpu
+
 RangeSeparationJKBuilder = RangeSeparatedJKBuilder
 
 def _purify(mat_kpts, phase):

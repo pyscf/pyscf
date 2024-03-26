@@ -274,6 +274,7 @@ class KROHF(khf.KRHF):
     analyze = khf.analyze
     spin_square = pbcrohf.ROHF.spin_square
     canonicalize = canonicalize
+    to_gpu = lib.to_gpu
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):

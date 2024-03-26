@@ -770,7 +770,7 @@ class CASBase(lib.StreamObject):
         'e_tot', 'e_cas', 'ci', 'mo_coeff', 'mo_energy', 'mo_occ', 'converged',
     }
 
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None):
         if isinstance(mf_or_mol, gto.Mole):
             mf = scf.RHF(mf_or_mol)
         else:
@@ -1169,6 +1169,8 @@ class CASCI(CASBase):
     def nuc_grad_method(self):
         from pyscf.grad import casci
         return casci.Gradients(self)
+
+    to_gpu = lib.to_gpu
 
 scf.hf.RHF.CASCI = scf.rohf.ROHF.CASCI = lib.class_as_method(CASCI)
 scf.uhf.UHF.CASCI = None

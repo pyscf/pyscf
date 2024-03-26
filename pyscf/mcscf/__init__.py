@@ -81,42 +81,28 @@ The Following attributes are used for CASSCF
         Converge threshold.  Default is 1e-7
     conv_tol_grad : float
         Converge threshold for CI gradients and orbital rotation gradients.
-        Default is 1e-4
+        If not specified, it is set to sqrt(conv_tol).
     max_stepsize : float
         The step size for orbital rotation.  Small step size is prefered.
-        Default is 0.03.  
+        Default is 0.02.  
         (NOTE although the default step size is small enough for many systems,
         it happens that the orbital optimizor crosses the barriar of local
         minimum and converge to the neighbour solution, e.g. the CAS(4,4) for
         C2H4 in the test files.  In these systems, adjusting max_stepsize,
-        max_ci_stepsize and max_cycle_micro, max_cycle_micro_inner and
-        ah_start_tol may be helpful)
+        max_ci_stepsize and max_cycle_micro and ah_start_tol may be helpful)
 
         >>> mc = mcscf.CASSCF(mf, 6, 6)
         >>> mc.max_stepsize = .01
         >>> mc.max_cycle_micro = 1
         >>> mc.max_cycle_macro = 100
-        >>> mc.max_cycle_micro_inner = 1
         >>> mc.ah_start_tol = 1e-6
 
-    max_ci_stepsize : float
-        The max size for approximate CI updates.  The approximate updates are
-        used in 1-step algorithm, to estimate the change of CI wavefunction wrt
-        the orbital rotation.  Small step size is prefered.  Default is 0.01.
     max_cycle_macro : int
         Max number of macro iterations.  Default is 50.
     max_cycle_micro : int
         Max number of micro iterations in each macro iteration.  Depending on
         systems, increasing this value might reduce the total macro
-        iterations.  Generally, 2 - 3 steps should be enough.  Default is 2.
-    max_cycle_micro_inner : int
-        Max number of steps for the orbital rotations allowed for the augmented
-        hessian solver.  It can affect the actual size of orbital rotation.
-        Even with a small max_stepsize, a few max_cycle_micro_inner can
-        accumulate the rotation and leads to a significant change of the CAS
-        space.  Depending on systems, increasing this value migh reduce the
-        total number of macro iterations.  The value between 2 - 8 is preferred.
-        Default is 4.
+        iterations.  Generally, 2 - 5 steps should be enough.  Default is 4.
     frozen : int or list
         If integer is given, the inner-most orbitals are excluded from optimization.
         Given the orbital indices (0-based) in a list, any doubly occupied core
@@ -131,7 +117,7 @@ The Following attributes are used for CASSCF
         Linear dependence threshold for AH solver.  Default is 1e-16.
     ah_start_tol : flat, for AH solver.
         In AH solver, the orbital rotation is started without completely solving the AH problem.
-        This value is to control the start point. Default is 1e-4.
+        This value is to control the start point. Default is 2.5.
     ah_start_cycle : int, for AH solver.
         In AH solver, the orbital rotation is started without completely solving the AH problem.
         This value is to control the start point. Default is 3.

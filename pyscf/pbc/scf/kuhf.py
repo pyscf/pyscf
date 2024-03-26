@@ -384,6 +384,7 @@ class KUHF(khf.KSCF):
     get_rho = get_rho
     analyze = khf.analyze
     canonicalize = canonicalize
+    to_gpu = lib.to_gpu
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):

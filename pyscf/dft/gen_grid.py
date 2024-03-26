@@ -586,9 +586,7 @@ class Grids(lib.StreamObject):
             self.screen_index = self.non0tab
         return self
 
-    def to_gpu(self):
-        from gpu4pyscf.dft.gen_grid import Grids
-        return lib.to_gpu(self.view(Grids))
+    to_gpu = lib.to_gpu
 
 
 def _default_rad(nuc, level=3):

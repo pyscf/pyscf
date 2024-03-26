@@ -217,6 +217,8 @@ class Gradients(GradientsBase):
 
     as_scanner = rhf_grad.as_scanner
 
+    to_gpu = lib.to_gpu
+
 Grad = Gradients
 
 from pyscf import scf

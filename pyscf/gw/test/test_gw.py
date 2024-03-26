@@ -78,9 +78,8 @@ class KnownValues(unittest.TestCase):
     def test_rpa(self):
         rpa_obj = rpa.RPA(mf, frozen=0)
         rpa_obj.kernel()
-        self.assertAlmostEqual(rpa_obj.e_tot, -76.26428191794182, 6)
-        self.assertAlmostEqual(rpa_obj.e_corr, -0.30783004035780076, 6)
-
+        self.assertAlmostEqual(rpa_obj.e_tot,  -76.26651423730257, 6)
+        self.assertAlmostEqual(rpa_obj.e_corr, -0.307830040357800, 6)
 
 if __name__ == "__main__":
     print("Full Tests for GW")

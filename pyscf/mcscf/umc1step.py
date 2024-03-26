@@ -379,7 +379,7 @@ class UCASSCF(ucasci.UCASBase):
         'canonicalization', 'sorting_mo_energy',
     }
 
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None, frozen=None):
         ucasci.UCASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 

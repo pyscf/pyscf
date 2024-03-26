@@ -229,12 +229,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         if dump_chk:
             mf.dump_chk(locals())
 
-    #FIX DISP!!
-    if mf.disp is not None:
-        e_disp = mf.get_dispersion()
-        mf.scf_summary['dispersion'] = e_disp
-        e_tot += e_disp
-
     logger.timer(mf, 'scf_cycle', *cput0)
     # A post-processing hook before return
     mf.post_kernel(locals())
@@ -298,7 +292,16 @@ def energy_tot(mf, dm=None, h1e=None, vhf=None):
     '''
     nuc = mf.energy_nuc()
     e_tot = mf.energy_elec(dm, h1e, vhf)[0] + nuc
+    if mf.disp is not None:
+        if 'dispersion' in mf.scf_summary:
+            e_tot += mf.scf_summary['dispersion']
+        else:
+            e_disp = mf.get_dispersion()
+            mf.scf_summary['dispersion'] = e_disp
+            e_tot += e_disp
+
     mf.scf_summary['nuc'] = nuc.real
+
     return e_tot
 
 
@@ -1504,6 +1507,7 @@ class SCF(lib.StreamObject):
     conv_tol_grad = getattr(__config__, 'scf_hf_SCF_conv_tol_grad', None)
     max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
     init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
+    disp = None  # for DFT-D3 and DFT-D4
 
     # To avoid diis pollution from previous run, self.diis should not be
     # initialized as DIIS instance here
@@ -1530,7 +1534,7 @@ class SCF(lib.StreamObject):
         'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
         'direct_scf', 'direct_scf_tol', 'conv_check', 'callback',
         'mol', 'chkfile', 'mo_energy', 'mo_coeff', 'mo_occ',
-        'e_tot', 'converged', 'scf_summary', 'opt', 'disp',
+        'e_tot', 'converged', 'scf_summary', 'opt', 'disp', 'disp_with_3body',
     }
 
     def __init__(self, mol):
@@ -1542,7 +1546,6 @@ class SCF(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
-        self.disp = None
 
         # If chkfile is muted, SCF intermediates will not be dumped anywhere.
         if MUTE_CHKFILE:
@@ -2071,8 +2074,12 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         '''This helper function transfers attributes from one SCF object to
         another SCF object. It is invoked by to_ks and to_hf methods.
         '''
+        # Search for all tracked attributes, including those in base classes
+        cls_keys = [getattr(cls, '_keys', ()) for cls in dst.__class__.__mro__[:-1]]
+        dst_keys = set(dst.__dict__).union(*cls_keys)
+
         loc_dic = self.__dict__
-        keys = dst.__dict__.keys() & loc_dic.keys()
+        keys = set(loc_dic).intersection(dst_keys)
         dst.__dict__.update({k: loc_dic[k] for k in keys})
         dst.converged = False
         return dst
@@ -2206,11 +2213,8 @@ class RHF(SCF):
         from pyscf import dft
         return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
 
-    def to_gpu(self):
-        # FIXME: consider the density_fit, x2c and soscf decoration
-        from gpu4pyscf.scf import RHF
-        obj = SCF.reset(self.view(RHF))
-        return lib.to_gpu(obj)
+    # FIXME: consider the density_fit, x2c and soscf decoration
+    to_gpu = lib.to_gpu
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

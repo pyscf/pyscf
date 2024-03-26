@@ -134,6 +134,8 @@ class UniformGrids(lib.StreamObject):
         if coords is None: coords = self.coords
         return make_mask(cell, coords, relativity, shls_slice, verbose)
 
+    to_gpu = lib.to_gpu
+
 
 # modified from pyscf.dft.gen_grid.gen_partition
 def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
@@ -256,6 +258,8 @@ class BeckeGrids(dft.gen_grid.Grids):
         if cell is None: cell = self.cell
         if coords is None: coords = self.coords
         return make_mask(cell, coords, relativity, shls_slice, verbose)
+
+    to_gpu = lib.to_gpu
 
 AtomicGrids = BeckeGrids
 

@@ -580,6 +580,7 @@ def transform_xc(rho, xc_val, xctype, spin, order):
                         [dim_lst[i] for i in pair_comb] + rest_dims)
                     xc_tensor_1[diag_idx] += xc_sub
     else:
+        i3to2x2 = _product_uniq_indices(2, 2)
         for n_pairs in range(1, order//2+1):
             p0, p1 = offsets[order-n_pairs:order-n_pairs+2]
             xc_sub = _unfold_gga(rho, xc_val[p0:p1], spin, order-n_pairs,
@@ -589,9 +590,9 @@ def transform_xc(rho, xc_val, xctype, spin, order):
             for i in range(n_pairs):
                 xc_sub[(slice(None),)*i+(0,)] *= 2
                 xc_sub[(slice(None),)*i+(2,)] *= 2
-            sigma_idx = _product_uniq_indices(2, n_pairs*2)
-            xc_sub = xc_sub.reshape((3**n_pairs,) + xc_sub.shape[n_pairs:])
-            xc_sub = xc_sub[sigma_idx]
+            sigma_idx = (i3to2x2[(slice(None),)*2 + (np.newaxis,)*(i*2)]
+                         for i in reversed(range(n_pairs)))
+            xc_sub = xc_sub[tuple(sigma_idx)]
 
             low_sigmas = itertools.combinations(range(order), n_pairs*2)
             pair_combs = [list(itertools.chain(*p[::-1]))

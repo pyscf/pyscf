@@ -688,6 +688,7 @@ class KRHF(KSCF):
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square
+    to_gpu = lib.to_gpu
 
     def check_sanity(self):
         cell = self.cell
