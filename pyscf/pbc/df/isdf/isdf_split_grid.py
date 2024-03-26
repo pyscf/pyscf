@@ -212,6 +212,7 @@ def select_IP_local_drive(mydf, c, m, IP_possible_group, group, use_mpi=False):
             #     print("rank = %d, IP_group[%d] = " % (rank, i), IP_group[i])
             IP_group[i] = bcast(IP_group[i], root=i % comm_size)
 
+    IP_group.append(mydf.grid_pnt_near_atm)
     mydf.IP_group = IP_group
     
     mydf.IP_flat = []
@@ -221,6 +222,7 @@ def select_IP_local_drive(mydf, c, m, IP_possible_group, group, use_mpi=False):
         mydf.IP_flat.extend(x)
         nIP_now += len(x)
         mydf.IP_segment.append(nIP_now)
+    mydf.IP_segment.append(nIP_now)
     mydf.IP_flat = np.array(mydf.IP_flat, dtype=np.int32)
     
     ### build ### 
@@ -304,6 +306,7 @@ def build_aux_basis_fast(mydf, group, IP_group, debug=True, use_mpi=False):
     
     ngroup = len(group)
     nthread = lib.num_threads()
+    assert len(IP_group) == ngroup + 1
     
     group_bunchsize = ngroup
     
@@ -355,6 +358,9 @@ def build_aux_basis_fast(mydf, group, IP_group, debug=True, use_mpi=False):
     grid_ID_local = []
     for i in range(group_begin, group_end):
         grid_ID_local.extend(mydf.partition_group_to_gridID[i])
+    
+    if use_mpi == False or (use_mpi and rank == comm_size - 1):
+        grid_ID_local.extend(mydf.grid_pnt_near_atm)
     
     grid_ID_local = np.array(grid_ID_local, dtype=np.int32)
     
@@ -482,6 +488,10 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
     for i in range(group_begin, group_end):
         naux_local += mydf.aux_basis[i].shape[0]    
         max_naux_bunch = max(max_naux_bunch, mydf.aux_basis[i].shape[0])
+    max_naux_bunch = max(max_naux_bunch, len(mydf.grid_pnt_near_atm))
+    
+    if use_mpi == False or (use_mpi and rank == comm_size - 1):
+        naux_local += len(mydf.grid_pnt_near_atm)
     
     V = np.zeros((max_naux_bunch, np.prod(mesh_int32)), dtype=np.double)
     
@@ -490,6 +500,7 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
     W = np.zeros((naux_local, naux), dtype=np.double)
     
     aux_row_loc = 0
+    grid_ID_near_atm = mydf.grid_pnt_near_atm
     for i in range(group_begin, group_end):
         
         aux_basis_now = mydf.aux_basis[i]
@@ -508,7 +519,30 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
             W[aux_row_loc:aux_row_loc+naux_bra, aux_col_loc:aux_col_loc+naux_ket] = lib.ddot(V[:naux_bra, grid_shift:grid_shift+ngrid_now], aux_bas_ket.T)
             grid_shift += ngrid_now
             aux_col_loc += naux_ket
+        print("aux_row_loc = %d, aux_col_loc = %d" % (aux_row_loc, aux_col_loc))
+        print("V.shape = ", V[:naux_bra,:].shape)
+        W[aux_row_loc:aux_row_loc+naux_bra, aux_col_loc:] = V[:naux_bra, grid_shift:]
         aux_row_loc += aux_basis_now.shape[0]
+    
+    if (use_mpi == False or (use_mpi and rank == comm_size - 1)) and len(mydf.grid_pnt_near_atm) != 0:
+        ### construct the final row ### 
+        grid_ID = mydf.grid_pnt_near_atm
+        aux_basis_now = np.identity(len(grid_ID), dtype=np.double)
+        construct_V(aux_basis_now, buf, V, grid_ID, grid_ordering)
+        grid_shift = 0
+        aux_col_loc = 0
+        naux_bra = len(grid_ID)
+        for j in range(0, ngroup):
+            grid_ID_now = mydf.partition_group_to_gridID[j]
+            aux_bas_ket = mydf.aux_basis[j]
+            naux_ket = aux_bas_ket.shape[0]
+            ngrid_now = grid_ID_now.size
+            W[aux_row_loc:aux_row_loc+naux_bra, aux_col_loc:aux_col_loc+naux_ket] = lib.ddot(V[:naux_bra, grid_shift:grid_shift+ngrid_now], aux_bas_ket.T)
+            grid_shift += ngrid_now
+            aux_col_loc += naux_ket
+        # for j in range(0, len(mydf.grid_pnt_near_atm)):
+        assert aux_row_loc == aux_col_loc
+        W[aux_row_loc:, aux_col_loc:] = V[:naux_bra, grid_shift:]
     
     del buf
     buf = None
@@ -526,6 +560,9 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
         _benchmark_time(t0, t1, 'build_auxiliary_Coulomb')
 
 def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
+    
+    if len(mydf.grid_pnt_near_atm) != 0 :
+        raise NotImplementedError("grid_pnt_near_atm is not supported")
     
     t0 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
@@ -786,6 +823,7 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
                        build_global_basis=True,
                        IP_ID=None,
                        group=None,
+                       separate_grid_pnt_criterion = None,
                        debug=True):
     
         # build partition
@@ -795,11 +833,45 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
         aoR  = self.aoR
         natm = self.natm
         nao  = self.nao
-        ao2atomID = self.ao2atomID
-        partition = self.partition
-        aoR  = self.aoR
-        natm = self.natm
-        nao  = self.nao
+        
+        # separate grid pnt near atms 
+        
+        if separate_grid_pnt_criterion is not None:
+            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            assert isinstance(separate_grid_pnt_criterion, float)
+            if self.use_mpi == True:
+                raise NotImplementedError("separate_grid_pnt_criterion is not supported in MPI")
+
+            print("separate_grid_pnt_criterion = ", separate_grid_pnt_criterion)
+            blksize = 16384
+            ngrids = np.prod(self.cell.mesh)
+            grid_pnt_near_atm = []
+            weight = np.sqrt(self.cell.vol / self.coords.shape[0])
+            for p0, p1 in lib.prange(0, self.ngrids, blksize):
+                aoR = ISDF_eval_gto(self.cell, coords=self.coords[p0:p1]) * weight
+                max_aoR = np.max(np.abs(aoR), axis=0)
+                where = np.where(max_aoR > separate_grid_pnt_criterion)[0] + p0
+                grid_pnt_near_atm.extend(where)
+            grid_pnt_near_atm.sort()
+            grid_pnt_near_atm = np.array(grid_pnt_near_atm, dtype=np.int32)
+            print("ngrid_pnt_near_atm = ", len(grid_pnt_near_atm))
+            print("effective c = ", float(len(grid_pnt_near_atm))/self.nao)
+            self.grid_pnt_near_atm = grid_pnt_near_atm
+            self.ngrid_pnt_near_atm = len(grid_pnt_near_atm)
+            
+            #### construct array to indicate whether a grid point is near an atom ####
+            
+            IsGridNearAtm = np.zeros((self.ngrids,), dtype=np.int32)
+            IsGridNearAtm[grid_pnt_near_atm] = 1
+            self.IsGridNearAtm = IsGridNearAtm
+            
+            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            if debug and self.verbose > 0:
+                _benchmark_time(t1, t2, 'separate_grid_pnt_near_atm')
+        else:
+            self.IsGridNearAtm = np.zeros((self.ngrids,), dtype=np.int32)
+            self.grid_pnt_near_atm = []
+            self.ngrid_pnt_near_atm = 0
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
@@ -813,6 +885,15 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
             IP_ID.sort()
             IP_ID = np.array(IP_ID, dtype=np.int32)
         possible_IP = np.array(IP_ID, dtype=np.int32)
+        
+        ### filter out grid points near atoms ###
+        
+        possible_IP_filtered = []
+        for ip_id in possible_IP:
+            if self.IsGridNearAtm[ip_id] == 0:
+                possible_IP_filtered.append(ip_id)
+        possible_IP_filtered = np.array(possible_IP_filtered, dtype=np.int32)
+        possible_IP = possible_IP_filtered
         
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if debug and self.verbose > 0:
@@ -856,7 +937,8 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
         for i in range(natm):
             partition_atmID_to_gridID.append([])
         for i in range(len(partition)):
-            partition_atmID_to_gridID[partition[i]].append(i) # this can be extremely slow
+            if self.IsGridNearAtm[i] == 0:
+                partition_atmID_to_gridID[partition[i]].append(i) # this can be extremely slow
         for i in range(natm):
             partition_atmID_to_gridID[i] = np.array(partition_atmID_to_gridID[i], dtype=np.int32)
             partition_atmID_to_gridID[i].sort()
@@ -872,6 +954,7 @@ class PBC_ISDF_Info_SplitGrid(ISDF.PBC_ISDF_Info):
         grid_ID_ordered = []
         for i in range(len(group)):
             grid_ID_ordered.extend(self.partition_group_to_gridID[i])
+        grid_ID_ordered.extend(self.grid_pnt_near_atm)
         grid_ID_ordered = np.array(grid_ID_ordered, dtype=np.int32)
         self.grid_ID_ordered = grid_ID_ordered
         
@@ -1014,7 +1097,7 @@ def build_supercell_with_partition(prim_atm,
 
 #### split over grid points ? ####
 
-C = 35
+C = 70
 
 if __name__ == '__main__':
 
@@ -1086,8 +1169,9 @@ if __name__ == '__main__':
     
     if rank == 0:
         
-        pbc_isdf_info = PBC_ISDF_Info_SplitGrid(cell, None, with_robust_fitting=False, rela_cutoff_QRCP=1e-5)
-        pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition)
+        pbc_isdf_info = PBC_ISDF_Info_SplitGrid(cell, None, with_robust_fitting=False)
+        pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition,separate_grid_pnt_criterion=0.04)
+        # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition,separate_grid_pnt_criterion=None)
         #print(pbc_isdf_info.IP_group) 
     
         print("pbc_isdf_info.naux = ", pbc_isdf_info.naux) 

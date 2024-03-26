@@ -372,6 +372,8 @@ void _construct_V(int *mesh,
     }
 }
 
+
+
 void _construct_V2(int *mesh,
                    int naux,
                    double *auxBasis,
