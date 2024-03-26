@@ -382,6 +382,12 @@ def build_aux_basis_fast(mydf, group, IP_group, debug=True, use_mpi=False):
     
     grid_loc_now = 0
     
+    fn_cholesky = getattr(libpbc, "Cholesky", None)
+    assert (fn_cholesky is not None)
+    
+    fn_build_aux = getattr(libpbc, "Solve_LLTEqualB_Parallel", None)
+    assert(fn_build_aux is not None)
+    
     for i in range(group_begin, group_end):
             
         IP_loc_begin = mydf.IP_segment[i]
@@ -401,29 +407,44 @@ def build_aux_basis_fast(mydf, group, IP_group, debug=True, use_mpi=False):
         grid_loc_now = grid_loc_end
         lib.square_inPlace(B)
             
-        with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
-            e, h = scipy.linalg.eigh(A)
-            
-        print("block %d condition number = " % i, e[-1]/e[0])
-            
-        # where = np.where(e > e[-1]*1e-16)[0]
+        # with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
+        #     e, h = scipy.linalg.eigh(A)
+        # print("block %d condition number = " % i, e[-1]/e[0])
+        # # where = np.where(e > e[-1]*1e-16)[0]
+        # where = np.where(e > 0)[0]
         # e = e[where]
         # h = h[:,where]
-            
-        B = lib.ddot(h.T, B)
-        lib.d_i_ij_ij(1.0/e, B, out=B)
-        aux_tmp = lib.ddot(h, B)
-            
-        mydf.aux_basis.append(aux_tmp)
+        # B = lib.ddot(h.T, B)
+        # lib.d_i_ij_ij(1.0/e, B, out=B)
+        # aux_tmp = lib.ddot(h, B)
+        # mydf.aux_basis.append(aux_tmp)
         
+        fn_cholesky = getattr(libpbc, "Cholesky", None)
+        assert(fn_cholesky is not None)
+        fn_cholesky(
+            A.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(A.shape[0]),
+        ) 
+        nThread = lib.num_threads()
+        bunchsize = B.shape[1]//nThread
+        fn_build_aux(
+            ctypes.c_int(B.shape[0]),
+            A.ctypes.data_as(ctypes.c_void_p),
+            B.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(B.shape[1]),
+            ctypes.c_int(bunchsize)
+        )
+        
+        mydf.aux_basis.append(B.copy())
+                    
     del A 
     A = None
     del B
     B = None
-    del e
-    e = None
-    del h
-    h = None
+    # del e
+    # e = None
+    # del h
+    # h = None
             
 def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mpi=False):
     
@@ -1170,8 +1191,8 @@ if __name__ == '__main__':
     if rank == 0:
         
         pbc_isdf_info = PBC_ISDF_Info_SplitGrid(cell, None, with_robust_fitting=False)
-        pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition,separate_grid_pnt_criterion=0.04)
-        # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition,separate_grid_pnt_criterion=None)
+        # pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition,separate_grid_pnt_criterion=0.04)
+        pbc_isdf_info.build_IP_Local(build_global_basis=True, c=C, group=partition,separate_grid_pnt_criterion=None)
         #print(pbc_isdf_info.IP_group) 
     
         print("pbc_isdf_info.naux = ", pbc_isdf_info.naux) 

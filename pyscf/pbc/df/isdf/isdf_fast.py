@@ -423,6 +423,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
             nao_tmp = nao
             
             if aoR_cutoff is not None:
+                print("aoR_cutoff = ", aoR_cutoff)
                 max_row = np.max(np.abs(aoR_atm), axis=1)
                 where = np.where(max_row > mydf.aoR_cutoff)[0]
                 print("before cutoff aoR_atm.shape = ", aoR_atm.shape)
