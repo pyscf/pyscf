@@ -918,13 +918,13 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),),
                                             dtype=datatype, buffer=self.IO_buf, offset=0)
                 offset         = max(buffersize_k, buffersize_j) * self.jk_buffer.dtype.itemsize
-                self.ddot_buf  = np.ndarray((nThreadsOMP, max((naux*naux)+2, ngrids)),
+                self.ddot_buf  = np.ndarray((nThreadsOMP, max((nao*nao)+2, ngrids)),
                                             dtype=datatype, buffer=self.IO_buf, offset=offset)
 
             else:
 
                 self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
-                self.ddot_buf = np.zeros((nThreadsOMP, max((naux*naux)+2, ngrids)), dtype=datatype)
+                self.ddot_buf = np.zeros((nThreadsOMP, max((nao*nao)+2, ngrids)), dtype=datatype)
 
 
         else:
@@ -1113,8 +1113,9 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             _benchmark_time(t1, t2, "build_auxiliary_Coulomb_V_R")
         t1 = t2
 
-        W = np.zeros((naux,naux))
-        lib.ddot_withbuffer(a=self.aux_basis, b=V_R.T, buf=self.ddot_buf, c=W, beta=1.0)
+        # W = np.zeros((naux,naux))
+        # lib.ddot_withbuffer(a=self.aux_basis, b=V_R.T, buf=self.ddot_buf, c=W, beta=1.0) # allocate, just allocate!
+        W = lib.ddot(a=self.aux_basis, b=V_R.T)
 
         # coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1]
         # if mesh[2] % 2 == 0:

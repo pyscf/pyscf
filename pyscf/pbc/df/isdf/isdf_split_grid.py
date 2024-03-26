@@ -400,9 +400,9 @@ def build_aux_basis_fast(mydf, group, IP_group, debug=True, use_mpi=False):
             
         print("block %d condition number = " % i, e[-1]/e[0])
             
-        where = np.where(e > e[-1]*1e-16)[0]
-        e = e[where]
-        h = h[:,where]
+        # where = np.where(e > e[-1]*1e-16)[0]
+        # e = e[where]
+        # h = h[:,where]
             
         B = lib.ddot(h.T, B)
         lib.d_i_ij_ij(1.0/e, B, out=B)
