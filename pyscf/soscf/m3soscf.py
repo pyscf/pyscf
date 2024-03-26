@@ -51,7 +51,7 @@ class M3SOSCF:
         >>> mf = scf.RHF(mol)
         >>> agents = 5
         >>> m3 = M3SOSCF(agents)
-        >>> m3.converge()
+        >>> m3.kernel()
     '''
 
     def __init__(self, mf, agents, purge_solvers=0.5, convergence=8,
@@ -62,16 +62,10 @@ class M3SOSCF:
         self.mf = mf
 
         if self.method in ('uhf', 'uks'):
-            # Density matrix of the current state. Used for import/export and
-            # to determine system size
-            self.current_dm = numpy.zeros((2, self.mf.mol.nao_nr(),
-                                          self.mf.mol.nao_nr()))
             # MO coeffs of each subconverger (agents,n,n).
             self.mo_coeffs = numpy.zeros((agents, 2, self.mf.mol.nao_nr(),
                                          self.mf.mol.nao_nr()))
         else:
-            self.current_dm = numpy.zeros((self.mf.mol.nao_nr(),
-                                          self.mf.mol.nao_nr()))
             self.mo_coeffs = numpy.zeros((agents, self.mf.mol.nao_nr(),
                                          self.mf.mol.nao_nr()))
         # Number of subconvergers
@@ -81,7 +75,7 @@ class M3SOSCF:
         # Array of current energies (agents,)
         self.current_energies = numpy.zeros(agents)
         # MO coeffs used for initalisation (n,n)
-        self.mo_basis_coeff = numpy.zeros(self.current_dm.shape)
+        self.mo_basis_coeff = numpy.zeros(self.mo_coeffs[0].shape)
         # Array of subconverger objects
         self.subconvergers = []
         # Manager for subconverger reassignment
@@ -137,7 +131,7 @@ class M3SOSCF:
         '''
         Returns the number of Degrees Of Freedom: N(N-1)/2
         '''
-        return int(0.5 * len(self.current_dm[0]) * (len(self.current_dm[0])-1))
+        return int(0.5 * len(self.mo_basis_coeff[0]) * (len(self.mo_basis_coeff[0])-1))
 
     def init_dm_directly(self, idc):
         self.mo_basis_coeff = idc
@@ -149,7 +143,6 @@ class M3SOSCF:
             mo_pe = numpy.array(numpy.arange(len(idc[0])))
         mo_occ = self.mf.get_occ(mo_pe, idc)
         self.mf.mo_occ = mo_occ
-        self.current_dm = self.mf.make_rdm1(idc, mo_occ)
 
     def init_dm_with_roothaan_step(self, idm=None):
         '''
@@ -173,13 +166,9 @@ class M3SOSCF:
             self.mf.mo_occ = mo_occ
             idm = mf.make_rdm1(mo_coeff, mo_occ)
         self.mo_basis_coeff = mo_coeff
-        self.current_dm = idm
 
-    def set(self, current_dm=None, purge_solvers=-1, convergence=-1,
-            init_scattering=-1, trust_scale_range=None, mo_coeffs=None,
-            stepsize=-1):
-        if isinstance(current_dm, numpy.ndarray):
-            self.current_dm = current_dm
+    def set(self, purge_solvers=-1, convergence=-1, init_scattering=-1, trust_scale_range=None, 
+            mo_coeffs=None, stepsize=-1):
         if purge_solvers >= 0:
             self.purge_subconvergers = purge_solvers
         if convergence >= 0:
@@ -410,13 +399,12 @@ class M3SOSCF:
 
 
             if scf_tconv:
-                self.current_dm = self.mf.make_rdm1(self.mo_coeffs[highest_trust_index],
-                                                    self.mf.mo_occ)
+                dm0 = self.mf.make_rdm1(self.mo_coeffs[highest_trust_index], self.mf.mo_occ)
 
-                final_fock = self.mf.get_fock(dm=self.current_dm, h1e=h1e, s1e=s1e)
+                final_fock = self.mf.get_fock(dm=dm0, h1e=h1e, s1e=s1e)
                 final_mo_coeffs = self.mo_coeffs[highest_trust_index]
                 final_mo_energy = self.calcuate_orbital_energies(final_mo_coeffs, final_fock, s1e)
-                final_energy = self.mf.energy_tot(self.current_dm, h1e=h1e)
+                final_energy = self.mf.energy_tot(dm0, h1e=h1e)
                 total_cycles = cycle+1
 
                 self.mf.mo_energy = final_mo_energy
@@ -503,6 +491,9 @@ class M3SOSCF:
             ss = self.mf.spin_square()
             log.info(f"Spin-Square:              {ss[0]}")
             log.info(f"Multiplicity:             {ss[1]}")
+
+        if not self.converged:
+            return
 
         irreps = ['-'] * len(self.mf.mo_coeff[0])
         forced_irreps = False
@@ -782,9 +773,11 @@ class SubconvergerReassigmentManager:
         # generate Points in each trust region
 
         if self.m3.method in ('uhf', 'uks'):
-            shifts = numpy.zeros((total, 2, len(self.m3.current_dm[0]), len(self.m3.current_dm[0])))
+            shifts = numpy.zeros((total, 2, len(self.m3.mo_basis_coeff[0]), 
+                                  len(self.m3.mo_basis_coeff[0])))
         else:
-            shifts = numpy.zeros((total, len(self.m3.current_dm[0]), len(self.m3.current_dm[0])))
+            shifts = numpy.zeros((total, len(self.m3.mo_basis_coeff[0]), 
+                                  len(self.m3.mo_basis_coeff[0])))
 
         for i, si in enumerate(selected_indices):
             if self.m3.method in ('uhf', 'uks'):
