@@ -44,7 +44,6 @@ RPA = TDUKS = TDDFT
 class CasidaTDDFT(TDDFT, TDA):
     '''Solve the Casida TDDFT formula (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
-
     init_guess = TDA.init_guess
 
     def gen_vind(self, mf=None):
@@ -90,7 +89,7 @@ class CasidaTDDFT(TDDFT, TDA):
         d_ia = numpy.sqrt(e_ia).ravel()
         ed_ia = e_ia.ravel() * d_ia
         hdiag = e_ia.ravel() ** 2
-
+        
         vresp = mf.gen_response(mo_coeff, mo_occ, hermi=1)
 
         def vind(zs):
@@ -124,6 +123,7 @@ class CasidaTDDFT(TDDFT, TDA):
         '''
         cpu0 = (logger.process_clock(), logger.perf_counter())
         mf = self._scf
+        
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
             raise RuntimeError('%s cannot be used with hybrid functional'
                                % self.__class__)
@@ -134,7 +134,7 @@ class CasidaTDDFT(TDDFT, TDA):
         else:
             self.nstates = nstates
         log = logger.Logger(self.stdout, self.verbose)
-
+        
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
@@ -188,7 +188,7 @@ class CasidaTDDFT(TDDFT, TDA):
                             y[nocca*nvira:].reshape(noccb,nvirb) * norm)))# Y_beta
         self.e = numpy.array(e)
         self.xy = xy
-
+        
         if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)

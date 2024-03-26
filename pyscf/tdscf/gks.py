@@ -111,7 +111,8 @@ class CasidaTDDFT(TDDFT, TDA):
             nstates = self.nstates
         else:
             self.nstates = nstates
-
+        import pdb
+        pdb.set_trace()
         log = lib.logger.Logger(self.stdout, self.verbose)
 
         vind, hdiag = self.gen_vind(self._scf)

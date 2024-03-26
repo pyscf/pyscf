@@ -28,10 +28,12 @@ try:
     from pyscf.dft import KohnShamDFT
     from pyscf.tdscf import rks
     from pyscf.tdscf import uks
+    from pyscf.tdscf import uks_sf
     from pyscf.tdscf import gks
     from pyscf.tdscf import dks
     from pyscf.tdscf.rks import TDRKS
     from pyscf.tdscf.uks import TDUKS
+    from pyscf.tdscf.uks_sf import TDUKS_SF
     from pyscf.tdscf.gks import TDGKS
 except (ImportError, IOError):
     pass
@@ -63,6 +65,18 @@ def TDDFT(mf):
         return mf.TDDFT()
     else:
         return TDHF(mf)
+
+def TDA_SF(mf):
+    mf = mf.remove_soscf()
+    if isinstance(mf, scf.rohf.ROHF):
+        if isinstance(mf, KohnShamDFT):
+            mf = mf.to_uks()
+        else:
+            mf = mf.to_uhf()
+    return mf.TDA_SF()
+
+def TDDFT_SF(mf):
+    return mf.TDDFT_SF()
 
 TD = TDDFT
 
