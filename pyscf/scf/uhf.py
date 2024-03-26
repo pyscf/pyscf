@@ -124,10 +124,13 @@ def _break_dm_spin_symm(mol, dm):
     dma, dmb = dm
     # For spin polarized system, no need to manually break spin symmetry
     if mol.spin == 0 and abs(dma - dmb).max() < 1e-2:
-        #remove off-diagonal part of beta DM
-        dmb = numpy.zeros_like(dma)
-        for b0, b1, p0, p1 in mol.aoslice_by_atom():
-            dmb[...,p0:p1,p0:p1] = dma[...,p0:p1,p0:p1]
+        # Get overlap matrix
+        s1e = mol.intor_symmetric('int1e_ovlp')
+        # Compute norm of density matrices
+        nelec_half = numpy.trace(numpy.dot(dma,s1e))
+        # Scale density matrices to form doublet state
+        dma = dma * (nelec_half+1) / nelec_half
+        dmb = dmb * (nelec_half-1) / nelec_half
     return dma, dmb
 
 def get_init_guess(mol, key='minao', **kwargs):
