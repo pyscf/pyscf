@@ -2165,7 +2165,8 @@ class RHF(SCF):
                   internal=getattr(__config__, 'scf_stability_internal', True),
                   external=getattr(__config__, 'scf_stability_external', False),
                   verbose=None,
-                  return_status=False):
+                  return_status=False,
+                  tol=1e-4):
         '''
         RHF/RKS stability analysis.
 
@@ -2192,7 +2193,8 @@ class RHF(SCF):
             and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import rhf_stability
-        return rhf_stability(self, internal, external, verbose, return_status)
+        return rhf_stability(self, internal, external, verbose, return_status,
+                             tol=tol)
 
     def nuc_grad_method(self):
         from pyscf.grad import rhf
