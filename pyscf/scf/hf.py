@@ -203,6 +203,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         if scf_conv:
             break
 
+    mf.scf_cycles = cycle + 1
     if scf_conv and conv_check:
         # An extra diagonalization, to remove level shift
         #fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf
