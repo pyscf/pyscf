@@ -62,6 +62,43 @@ void _construct_J(
     fftw_free(J_complex);
 }
 
+void _Pack_Matrix_SparseRow_DenseCol(
+    double *target,
+    const int nrow_target,
+    const int ncol_target,
+    double *source,
+    const int nrow_source,
+    const int ncol_source,
+    int *RowLoc,
+    const int ColBegin,
+    const int ColEnd)
+{
+    if (ColEnd - ColBegin <= 0)
+    {
+        return;
+    }
+
+    if (ColEnd != (ColBegin + ncol_source))
+    {
+        printf("ColEnd!=ColBegin+ncol_source\n");
+        exit(1);
+    }
+
+    if (ColEnd > ncol_target)
+    {
+        printf("ColEnd>ncol_target\n");
+        exit(1);
+    }
+
+    int i;
+
+    for (i = 0; i < nrow_source; i++)
+    {
+        int row_loc = RowLoc[i];
+        memcpy(target + row_loc * ncol_target + ColBegin, source + i * ncol_source, sizeof(double) * ncol_source);
+    }
+}
+
 void _Reorder_Grid_to_Original_Grid(int ngrid, int *gridID, double *Density_or_J,
                                     double *out)
 {
@@ -371,8 +408,6 @@ void _construct_V(int *mesh,
         }
     }
 }
-
-
 
 void _construct_V2(int *mesh,
                    int naux,

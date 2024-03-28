@@ -992,7 +992,7 @@ def _contract_k_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mp
     del density_RgRg
     density_RgRg = None
     
-    return K * ngrid / vol
+    return K * ngrid / vol # take care this factor 
 
 def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
            kpts_band=None, with_j=True, with_k=True, omega=None, 
