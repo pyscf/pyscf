@@ -666,3 +666,43 @@ void _construct_W_multiG(
         }
     }
 }
+
+///////////// get_jk linear scaling /////////////
+
+void _extract_dm_involved_ao(
+    double *dm,
+    const int nao,
+    double *res_buf,
+    const int *ao_involved,
+    const int nao_involved)
+{
+    int nThread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < nao_involved; ++i)
+    {
+        for (int j = 0; j < nao_involved; ++j)
+        {
+            res_buf[i * nao_involved + j] = dm[ao_involved[i] * nao + ao_involved[j]];
+        }
+    }
+}
+
+void _packadd_local_dm(
+    double *local_dm,
+    const int nao_involved,
+    const int *ao_involved,
+    double *dm,
+    const int nao)
+{
+    int nThread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < nao_involved; ++i)
+    {
+        for (int j = 0; j < nao_involved; ++j)
+        {
+            dm[ao_involved[i] * nao + ao_involved[j]] += local_dm[i * nao_involved + j];
+        }
+    }
+}

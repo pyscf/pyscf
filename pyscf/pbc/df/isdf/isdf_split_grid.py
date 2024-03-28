@@ -49,7 +49,9 @@ libpbc = lib.load_library('libpbc')
 
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
-########## WARNING: ABANDON, THIS IDEA DOES NOT WORK ! !!! ##########
+########## WARNING: ABANDON, THIS IDEA DOES WORK ! !!! ##########
+
+############### but we have better implementation ###############
 
 ############ select IP ############
 
