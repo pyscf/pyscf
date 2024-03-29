@@ -33,6 +33,7 @@ import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 
 from memory_profiler import profile
 import ctypes
+# from profilehooks import profile
 
 libpbc = lib.load_library('libpbc')
 
@@ -262,7 +263,8 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
 
 ############# quadratic scaling (not cubic!) #############
 
-def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, verbose = 1, use_mpi=False):
+# @profile
+def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, res:np.ndarray=None, verbose = 1, use_mpi=False):
     
     t1 = (logger.process_clock(), logger.perf_counter())
     
@@ -285,12 +287,19 @@ def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, verb
         size = comm.Get_size()
         raise NotImplementedError("MPI is not supported yet.")
 
-    res = np.zeros((ngrid_bra, ngrid_ket), dtype=np.float64)
+    if res is None:
+        res = np.zeros((ngrid_bra, ngrid_ket), dtype=np.float64)
+    else:
+        assert res.ndim == 2
+        assert res.shape[0] == ngrid_bra
+        assert res.shape[1] == ngrid_ket
     
     ### allocate buf ###
     
     tmp1 = np.zeros((ngrid_bra, dm.shape[0]), dtype=np.float64) 
     ddot_buf = np.zeros((ngrid_bra, max(max_ngrid_ket, dm.shape[0])), dtype=np.float64)
+    
+    nao = dm.shape[0]
     
     ### perform aoR_bra.T * dm
     
@@ -303,7 +312,10 @@ def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, verb
         ngrid_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
         
-        dm_packed = dm[aoR_holder.ao_involved, :].copy()
+        if nao_involved == nao:
+            dm_packed = dm
+        else:
+            dm_packed = dm[aoR_holder.ao_involved, :]
         
         ddot_res = np.ndarray((ngrid_now, nao), buffer=ddot_buf)
         lib.ddot(aoR_holder.aoR.T, dm_packed, c=ddot_res)
@@ -311,7 +323,7 @@ def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, verb
         
         ngrid_loc += ngrid_now
         
-    del dm_packed
+    # del dm_packed
     assert ngrid_loc == ngrid_bra
     
     ### perform tmp1 * aoR_ket
@@ -325,14 +337,17 @@ def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, verb
         ngrid_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
         
-        tmp1_packed = tmp1[:, aoR_holder.ao_involved].copy()
+        if nao_involved == nao:
+            tmp1_packed = tmp1
+        else:
+            tmp1_packed = tmp1[:, aoR_holder.ao_involved]
         
         ddot_res = np.ndarray((ngrid_bra, ngrid_now), buffer=ddot_buf)
         lib.ddot(tmp1_packed, aoR_holder.aoR, c=ddot_res)
         res[:, ngrid_loc:ngrid_loc+ngrid_now] = ddot_res
         
         ngrid_loc += ngrid_now
-    del tmp1_packed
+    # del tmp1_packed
     assert ngrid_loc == ngrid_ket
     
     #### free buffer 
@@ -342,12 +357,13 @@ def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, verb
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    if verbose:
+    if verbose>0:
         _benchmark_time(t1, t2, "__get_DensityMatrixonGrid_qradratic")
         
     
     return res
 
+# @profile
 def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     if use_mpi:
@@ -381,13 +397,17 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     max_nao_involved = np.max([aoR_holder.aoR.shape[0] for aoR_holder in aoR if aoR_holder is not None])
     max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
-    ddot_res_buf = np.zeros((naux, max_nao_involved), dtype=np.float64)
+    
+    mydf.allocate_k_buffer(max_nao_involved)
+    
+    # ddot_res_buf = np.zeros((naux, max_nao_involved), dtype=np.float64)
+    ddot_res_buf = mydf.ddot_k_buf
     
     #### step 1. get density matrix value on real space grid and IPs
     
-    Density_RgRg = __get_DensityMatrixonGrid_qradratic(dm, aoRg, aoRg, use_mpi)
+    Density_RgRg = __get_DensityMatrixonGrid_qradratic(dm, aoRg, aoRg, mydf.Density_RgRg_buf, use_mpi)
     if with_robust_fitting:
-        Density_RgR  = __get_DensityMatrixonGrid_qradratic(dm, aoRg, aoR, use_mpi)
+        Density_RgR  = __get_DensityMatrixonGrid_qradratic(dm, aoRg, aoR, mydf.Density_RgR_buf, use_mpi)
     else:
         Density_RgR = None
     
@@ -418,15 +438,18 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         nIP_now = aoRg_holder.aoR.shape[1]
         nao_invovled = aoRg_holder.aoR.shape[0]
         
-        W_tmp = Density_RgRg[:, nIP_loc:nIP_loc+nIP_now].copy()
+        W_tmp = Density_RgRg[:, nIP_loc:nIP_loc+nIP_now]
         
         ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_res_buf)
         lib.ddot(W_tmp, aoRg_holder.aoR.T, c=ddot_res)
         
-        K1[: , aoRg_holder.ao_involved] += ddot_res
+        if nao_invovled == nao:
+            K1 += ddot_res
+        else:
+            K1[: , aoRg_holder.ao_involved] += ddot_res
 
         nIP_loc += nIP_now
-    del W_tmp
+    # del W_tmp
     assert nIP_loc == naux
     
     K = np.zeros((nao, nao), dtype=np.float64) 
@@ -440,16 +463,19 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         nIP_now = aoRg_holder.aoR.shape[1]
         nao_invovled = aoRg_holder.aoR.shape[0]
         
-        K_tmp = K1[nIP_loc:nIP_loc+nIP_now, :].copy()
+        K_tmp = K1[nIP_loc:nIP_loc+nIP_now, :]
         
         ddot_res = np.ndarray((nao_invovled, nao), buffer=ddot_res_buf)
         # lib.ddot(K_tmp, aoRg_holder.ao.T, c=ddot_res)
         lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
         
-        K[aoRg_holder.ao_involved, :] += ddot_res
+        if nao_invovled == nao:
+            K += ddot_res
+        else:
+            K[aoRg_holder.ao_involved, :] += ddot_res
         
         nIP_loc += nIP_now
-    del K_tmp
+    # del K_tmp
     assert nIP_loc == naux
     
     
@@ -478,7 +504,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             ngrid_now = aoR_holder.aoR.shape[1]
             nao_invovled = aoR_holder.aoR.shape[0]
             
-            V_tmp = Density_RgR[:, ngrid_loc:ngrid_loc+ngrid_now].copy()
+            V_tmp = Density_RgR[:, ngrid_loc:ngrid_loc+ngrid_now]
             
             ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_res_buf)
             lib.ddot(V_tmp, aoR_holder.aoR.T, c=ddot_res)
@@ -486,7 +512,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             K2[: , aoR_holder.ao_involved] += ddot_res
             
             ngrid_loc += ngrid_now
-        del V_tmp
+        # del V_tmp
 
         assert ngrid_loc == ngrid
         
@@ -501,7 +527,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             nIP_now = aoRg_holder.aoR.shape[1]
             nao_invovled = aoRg_holder.aoR.shape[0]
             
-            K_tmp = K2[nIP_loc:nIP_loc+nIP_now, :].copy()
+            K_tmp = K2[nIP_loc:nIP_loc+nIP_now, :]
             
             ddot_res = np.ndarray((nao_invovled, nao), buffer=ddot_res_buf)
             lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
@@ -509,7 +535,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             K_add[aoRg_holder.ao_involved, :] += ddot_res
             
             nIP_loc += nIP_now
-        del K_tmp
+        # del K_tmp
         assert nIP_loc == naux
         
         K_add += K_add.T
@@ -518,9 +544,9 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     ######### finally delete the buffer #########
     
-    del Density_RgRg
-    del Density_RgR
-    del ddot_res_buf
+    # del Density_RgRg
+    # del Density_RgR
+    # del ddot_res_buf
     
     t2 = (logger.process_clock(), logger.perf_counter())
     

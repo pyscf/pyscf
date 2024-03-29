@@ -283,7 +283,10 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
     aoRg_unpacked = []
     for atm_id in group:
         aoRg_unpacked.append(aoRg_possible[atm_id])
-    aoRg_packed = ISDF_LinearScalingBase._pack_aoR_holder(aoRg_unpacked, nao).aoR
+    if len(aoRg_unpacked) == 1:
+        aoRg_packed = aoRg_unpacked[0].aoR
+    else:
+        aoRg_packed = ISDF_LinearScalingBase._pack_aoR_holder(aoRg_unpacked, nao).aoR
     
     nao = aoRg_packed.shape[0]
 
@@ -291,7 +294,8 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
     # print("nao = ", nao)    
     # print("c = %d, m = %d" % (c, m))
 
-    naux_now = int(np.sqrt(c*nao)) + m
+    # naux_now = int(np.sqrt(c*nao)) + m # seems to be too large
+    naux_now = int(np.sqrt(c*nao_group)) + m
     G1 = np.random.rand(nao, naux_now)
     G1, _ = numpy.linalg.qr(G1)
     G1 = G1.T
@@ -398,9 +402,15 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
     for i in range(len(group)):
         IP_group.append(None)
 
-    for i in range(len(group)):
-        if use_mpi == False or ((use_mpi == True) and (i % comm_size == rank)):
-            IP_group[i] = select_IP_group_ls(mydf, aoRg_possible, c, m, group=group[i], atm_2_IP_possible=IP_possible_atm)
+    if len(group) < natm:
+        for i in range(len(group)):
+            if use_mpi == False or ((use_mpi == True) and (i % comm_size == rank)):
+                IP_group[i] = select_IP_group_ls(mydf, aoRg_possible, c, m, group=group[i], atm_2_IP_possible=IP_possible_atm)
+    else:
+        # print("use possible IP, do not perform select_IP_group_ls")
+        # print("IP_possible_atm = ", IP_possible_atm)
+        # IP_group = copy.deepcopy(IP_possible_atm)
+        IP_group = IP_possible_atm
 
     if use_mpi:
         comm.Barrier()
@@ -438,19 +448,27 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
     
     ### build ### 
     
-    coords = mydf.coords
-    weight = np.sqrt(mydf.cell.vol / mydf.coords.shape[0])
+    if len(group) < natm:
+        
+        coords = mydf.coords
+        weight = np.sqrt(mydf.cell.vol / mydf.coords.shape[0])
     
-    del mydf.aoRg_possible
-    mydf.aoRg_possible = None
+        del mydf.aoRg_possible
+        mydf.aoRg_possible = None
     
-    # mydf.aoRg = ISDF_eval_gto(mydf.cell, coords=coords[mydf.IP_flat]) * weight
+        # mydf.aoRg = ISDF_eval_gto(mydf.cell, coords=coords[mydf.IP_flat]) * weight
+
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        mydf.aoRg = ISDF_LinearScalingBase.get_aoR(mydf.cell, mydf.coords, 
+                                                   partition_IP, 
+                                                   mydf.distance_matrix,
+                                                   mydf.AtmConnectionInfo, 
+                                                   False, False)
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "build_aoRg")
     
-    mydf.aoRg = ISDF_LinearScalingBase.get_aoR(mydf.cell, mydf.coords, 
-                                               partition_IP, 
-                                               mydf.distance_matrix,
-                                               mydf.AtmConnectionInfo, 
-                                               False, False)
+    else:
+        mydf.aoRg = mydf.aoRg_possible
     
     print("IP_segment = ", mydf.IP_segment)
     
@@ -706,19 +724,25 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             
             Ls = [int(lattice_x/3)+1, int(lattice_y/3)+1, int(lattice_z/3)+1]
 
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         self.partition = ISDF_LinearScalingBase.get_partition(self.cell, self.coords, self.AtmConnectionInfo, 
                                                               Ls, self.use_mpi)
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "build_partition")
         
         for i in range(self.natm):
             self.partition[i] = np.array(self.partition[i], dtype=np.int32)
             self.partition[i].sort()
         
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         self.aoR = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, self.partition, self.distance_matrix, 
                                                   self.AtmConnectionInfo, 
                                                   self.use_mpi, self.use_mpi)
     
         memory = ISDF_LinearScalingBase._get_aoR_holders_memory(self.aoR)
         print("memory to store aoR is ", memory)
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "build_aoR")
     
         ### check aoR ###
         
@@ -729,6 +753,18 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
     
     def _allocate_jk_buffer(self, datatype, ngrids_local):
         pass
+    
+    def allocate_k_buffer(self, max_nao_involved):
+        if hasattr(self, "ddot_k_buf"):
+            return
+        else:
+            self.Density_RgRg_buf = np.zeros((self.naux, self.naux), dtype=np.float64)
+            if self.with_robust_fitting:
+                self.Density_RgR_buf = np.zeros((self.naux, np.prod(self.cell.mesh)), dtype=np.float64)
+            else:
+                self.Density_RgR_buf = None
+            self.ddot_k_buf = np.zeros((self.naux, max_nao_involved), dtype=np.float64)
+        
     
     def build_IP_local(self, c=5, m=5, first_natm=None, group=None, Ls = None, debug=True):
         
@@ -789,15 +825,23 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             _benchmark_time(t1, t2, "build_partition_aoR")
         
         t1 = t2
-                
-        IP_Atm = select_IP_atm_ls(self, c+1, m, first_natm, 
-                                  rela_cutoff=self.rela_cutoff_QRCP,
-                                  no_retriction_on_nIP=self.no_restriction_on_nIP,
-                                  use_mpi=self.use_mpi)
         
+        if len(group) < natm:
+            IP_Atm = select_IP_atm_ls(self, c+1, m, first_natm, 
+                                      rela_cutoff=self.rela_cutoff_QRCP,
+                                      no_retriction_on_nIP=self.no_restriction_on_nIP,
+                                      use_mpi=self.use_mpi)
+        else:
+            IP_Atm = select_IP_atm_ls(self, c, 0, first_natm, 
+                                      rela_cutoff=self.rela_cutoff_QRCP,
+                                      no_retriction_on_nIP=self.no_restriction_on_nIP,
+                                      use_mpi=self.use_mpi)
+        t3 = (lib.logger.process_clock(), lib.logger.perf_counter())
         self.aoRg_possible = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, 
                                                             IP_Atm, self.distance_matrix, 
                                                             self.AtmConnectionInfo, self.use_mpi, self.use_mpi)
+        t4 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t3, t4, "build_aoRg_possible")
         
         select_IP_local_ls_drive(self, c, m, IP_Atm, group, use_mpi=self.use_mpi)
         
@@ -854,11 +898,11 @@ if __name__ == '__main__':
         
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
     prim_mesh = prim_cell.mesh
-    # prim_partition = [[0],[1], [2], [3], [4], [5], [6], [7]]
+    prim_partition = [[0],[1], [2], [3], [4], [5], [6], [7]]
     # prim_partition = [[0, 1, 2, 3, 4, 5, 6, 7]]
-    prim_partition = [[0,1],[2,3],[4,5],[6,7]]
+    # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     
-    Ls = [1, 1, 2]
+    Ls = [1, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -872,12 +916,14 @@ if __name__ == '__main__':
     
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
     
+    
+    
     from pyscf.pbc import scf
 
     mf = scf.RHF(cell)
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
-    mf.max_cycle = 100
+    mf.max_cycle = 3
     mf.conv_tol = 1e-7
     
     mf.kernel()
