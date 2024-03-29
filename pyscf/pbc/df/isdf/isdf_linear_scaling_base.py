@@ -45,13 +45,13 @@ import ctypes, sys
 
 from multiprocessing import Pool
 
-from memory_profiler import profile
+# from memory_profiler import profile
 
 libpbc = lib.load_library('libpbc')
 
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
-# from profilehooks import profile
+from profilehooks import profile
 
 ############ build atm connection graph ############
 
@@ -253,7 +253,7 @@ def get_cell_distance_matrix(cell:Cell):
 
 ############ algorithm based on the distance graph and AtmConnectionInfo ############
 
-# @profile
+@profile
 def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInfo], 
                   Ls=[3,3,3], use_mpi=False): # by default split the cell into 4x4x4 supercell
     
@@ -491,6 +491,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     
     return partition
 
+@profile
 def get_aoR(cell:Cell, coords, partition, distance_matrix, AtmConnectionInfoList:list[AtmConnectionInfo], distributed = False, use_mpi=False):
     
     print("************* get_aoR *************")
@@ -609,10 +610,11 @@ def get_aoR(cell:Cell, coords, partition, distance_matrix, AtmConnectionInfoList
         
         max_row = np.max(np.abs(aoR), axis=1)
         where = np.where(max_row > precision)[0]
-        if len(where) < aoR.shape[0] * 0.33:
+        print("atm %d involved %d ao after  prune" % (atm_id, len(where)))
+        if len(where) < aoR.shape[0] * 0.85:
+        # if len(where) < aoR.shape[0]:
             aoR = aoR[where]
             bas_id = np.array(bas_id)[where]
-        
         print("atm %d involved %d ao after  prune" % (atm_id, aoR.shape[0]))
         
         aoR_holder[atm_id] = aoR_Holder(aoR, bas_id, local_gridID_begin, local_gridID_begin+len(grid_ID), global_gridID_begin, global_gridID_begin+len(grid_ID))

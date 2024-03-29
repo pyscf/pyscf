@@ -2,6 +2,7 @@
 #include <omp.h>
 #include <string.h>
 #include <complex.h>
+#include "vhf/fblas.h"
 
 int get_omp_threads();
 int omp_get_thread_num();
@@ -703,6 +704,51 @@ void _packadd_local_dm(
         for (int j = 0; j < nao_involved; ++j)
         {
             dm[ao_involved[i] * nao + ao_involved[j]] += local_dm[i * nao_involved + j];
+        }
+    }
+}
+
+void _buildK_packaddrow(
+    double *target,
+    const int nrow_target,
+    const int ncol_target,
+    double *source,
+    const int nrow_source,
+    const int ncol_source,
+    const int *ao_involved)
+{
+    int nThread = get_omp_threads();
+
+    static const int INC = 1;
+    static const double ONE = 1.0;
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < nrow_source; ++i)
+    {
+        int row_loc = ao_involved[i];
+        // memcpy(target + row_loc * ncol_target, source + i * ncol_source, sizeof(double) * ncol_source);
+        daxpy_(&ncol_source, &ONE, source + i * ncol_source, &INC, target + row_loc * ncol_target, &INC);
+    }
+}
+
+void _buildK_packaddcol(
+    double *target,
+    const int nrow_target,
+    const int ncol_target,
+    double *source,
+    const int nrow_source,
+    const int ncol_source,
+    const int *ao_involved)
+
+{
+    int nThread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < nrow_source; ++i)
+    {
+        for (int j = 0; j < ncol_source; ++j)
+        {
+            target[i * ncol_target + ao_involved[j]] += source[i * ncol_source + j];
         }
     }
 }

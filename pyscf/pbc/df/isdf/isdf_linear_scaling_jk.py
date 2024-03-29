@@ -31,9 +31,9 @@ from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, scatter
 import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 
-from memory_profiler import profile
+# from memory_profiler import profile
 import ctypes
-# from profilehooks import profile
+from profilehooks import profile
 
 libpbc = lib.load_library('libpbc')
 
@@ -45,6 +45,7 @@ libpbc = lib.load_library('libpbc')
 
 ### ls = linear scaling
 
+@profile
 def _contract_j_dm_ls(mydf, dm, use_mpi=False):
     
     if use_mpi:
@@ -265,7 +266,7 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
 
 ############# quadratic scaling (not cubic!) #############
 
-# @profile
+@profile
 def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, res:np.ndarray=None, verbose = 1, use_mpi=False):
     
     t1 = (logger.process_clock(), logger.perf_counter())
@@ -365,7 +366,7 @@ def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, res:
     
     return res
 
-# @profile
+@profile
 def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     if use_mpi:
@@ -405,6 +406,13 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     # ddot_res_buf = np.zeros((naux, max_nao_involved), dtype=np.float64)
     ddot_res_buf = mydf.ddot_k_buf
     
+    ##### get the involved C function ##### 
+    
+    fn_packadd_row = getattr(libpbc, "_buildK_packaddrow", None)
+    assert fn_packadd_row is not None
+    fn_packadd_col = getattr(libpbc, "_buildK_packaddcol", None)
+    assert fn_packadd_col is not None
+    
     #### step 1. get density matrix value on real space grid and IPs
     
     Density_RgRg = __get_DensityMatrixonGrid_qradratic(dm, aoRg, aoRg, mydf.Density_RgRg_buf, use_mpi)
@@ -427,7 +435,8 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     lib.cwise_mul(W, Density_RgRg, out=Density_RgRg)
     
-    K1 = np.zeros((naux, nao), dtype=np.float64)
+    # K1 = np.zeros((naux, nao), dtype=np.float64)
+    K1 = np.zeros((nao, naux), dtype=np.float64)
     
     ### TODO: consider MPI 
     
@@ -440,19 +449,34 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         nIP_now = aoRg_holder.aoR.shape[1]
         nao_invovled = aoRg_holder.aoR.shape[0]
         
-        W_tmp = Density_RgRg[:, nIP_loc:nIP_loc+nIP_now]
+        # W_tmp = Density_RgRg[:, nIP_loc:nIP_loc+nIP_now]
+        W_tmp = Density_RgRg[nIP_loc:nIP_loc+nIP_now, :]
         
-        ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_res_buf)
-        lib.ddot(W_tmp, aoRg_holder.aoR.T, c=ddot_res)
+        # ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_res_buf)
+        ddot_res = np.ndarray((nao_invovled, naux), buffer=ddot_res_buf)
+        # lib.ddot(W_tmp, aoRg_holder.aoR.T, c=ddot_res)
+        lib.ddot(aoRg_holder.aoR, W_tmp, c=ddot_res)
         
         if nao_invovled == nao:
             K1 += ddot_res
         else:
-            K1[: , aoRg_holder.ao_involved] += ddot_res
+            # K1[: , aoRg_holder.ao_involved] += ddot_res
+            # K1[aoRg_holder.ao_involved, :] += ddot_res 
+            fn_packadd_row(
+                K1.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(K1.shape[0]),
+                ctypes.c_int(K1.shape[1]),
+                ddot_res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(ddot_res.shape[0]),
+                ctypes.c_int(ddot_res.shape[1]),
+                aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+            )
 
         nIP_loc += nIP_now
     # del W_tmp
     assert nIP_loc == naux
+    
+    K1 = K1.T.copy()
     
     K = np.zeros((nao, nao), dtype=np.float64) 
     
@@ -474,7 +498,16 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         if nao_invovled == nao:
             K += ddot_res
         else:
-            K[aoRg_holder.ao_involved, :] += ddot_res
+            # K[aoRg_holder.ao_involved, :] += ddot_res 
+            fn_packadd_row(
+                K.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(K.shape[0]),
+                ctypes.c_int(K.shape[1]),
+                ddot_res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(ddot_res.shape[0]),
+                ctypes.c_int(ddot_res.shape[1]),
+                aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+            )
         
         nIP_loc += nIP_now
     # del K_tmp
@@ -511,7 +544,19 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_res_buf)
             lib.ddot(V_tmp, aoR_holder.aoR.T, c=ddot_res)
             
-            K2[: , aoR_holder.ao_involved] += ddot_res
+            if nao_invovled == nao:
+                K2 += ddot_res
+            else:
+                # K2[: , aoR_holder.ao_involved] += ddot_res 
+                fn_packadd_col(
+                    K2.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(K2.shape[0]),
+                    ctypes.c_int(K2.shape[1]),
+                    ddot_res.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(ddot_res.shape[0]),
+                    ctypes.c_int(ddot_res.shape[1]),
+                    aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+                )
             
             ngrid_loc += ngrid_now
         # del V_tmp
@@ -534,7 +579,19 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             ddot_res = np.ndarray((nao_invovled, nao), buffer=ddot_res_buf)
             lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
             
-            K_add[aoRg_holder.ao_involved, :] += ddot_res
+            if nao == nao_invovled:
+                K_add += ddot_res
+            else:
+                # K_add[aoRg_holder.ao_involved, :] += ddot_res 
+                fn_packadd_row(
+                    K_add.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(K_add.shape[0]),
+                    ctypes.c_int(K_add.shape[1]),
+                    ddot_res.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(ddot_res.shape[0]),
+                    ctypes.c_int(ddot_res.shape[1]),
+                    aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+                )
             
             nIP_loc += nIP_now
         # del K_tmp

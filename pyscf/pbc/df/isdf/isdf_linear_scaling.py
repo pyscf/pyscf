@@ -923,7 +923,7 @@ if __name__ == '__main__':
     mf = scf.RHF(cell)
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
-    mf.max_cycle = 3
+    mf.max_cycle = 16
     mf.conv_tol = 1e-7
     
     mf.kernel()
