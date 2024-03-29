@@ -461,6 +461,23 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
 
 ############ build aux bas ############
 
+def find_common_elements_positions(arr1, arr2):
+    position1 = []
+    position2 = []
+    i, j = 0, 0
+    while i < len(arr1) and j < len(arr2):
+        if arr1[i] < arr2[j]:
+            i += 1
+        elif arr1[i] > arr2[j]:
+            j += 1
+        else:
+            # positions.append(((i, arr1[i]), (j, arr2[j])))
+            position1.append(i)
+            position2.append(j)
+            i += 1
+            j += 1
+    return np.array(position1, dtype=np.int32), np.array(position2, dtype=np.int32)
+
 def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     
     ###### split task ######
@@ -552,13 +569,23 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
             aoRg_unpacked.append(mydf.aoRg[atm_id])
             aoR_unpacked.append(mydf.aoR[atm_id])
         
-        aoRg1 = ISDF_LinearScalingBase._pack_aoR_holder(aoRg_unpacked, mydf.nao).aoR
-        aoR1 = ISDF_LinearScalingBase._pack_aoR_holder(aoR_unpacked, mydf.nao).aoR
-        assert aoRg1.shape[0] == aoR1.shape[0]
+        aoRg1 = ISDF_LinearScalingBase._pack_aoR_holder(aoRg_unpacked, mydf.nao)
+        aoR1 = ISDF_LinearScalingBase._pack_aoR_holder(aoR_unpacked, mydf.nao)
+        # assert aoRg1.shape[0] == aoR1.shape[0]
+        
+        if aoRg1.aoR.shape[0] == aoR1.aoR.shape[0]:
+            aoRg1 = aoRg1.aoR
+            aoR1 = aoR1.aoR
+        else:
+            pos1, pos2 = find_common_elements_positions(aoRg1.ao_involved, aoR1.ao_involved)
+            assert len(pos1) == aoRg1.aoR.shape[0]
+            aoRg1 = aoRg1.aoR
+            aoR1 = aoR1.aoR[pos2,:]
+        
             
         A = lib.ddot(aoRg1.T, aoRg1)
         lib.square_inPlace(A)
-        e, h = np.linalg.eigh(A)
+        # e, h = np.linalg.eigh(A)
         # print("e = ", e)
         grid_ID = mydf.partition_group_to_gridID[i]
         grid_loc_end = grid_loc_now + grid_ID.size
@@ -618,6 +645,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             verbose=verbose
         )
         
+        cell = self.cell
+        
         #### get other info #### 
         
         shl_atm = []
@@ -659,7 +688,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         self.distance_matrix = ISDF_LinearScalingBase.get_cell_distance_matrix(self.cell)
         weight = np.sqrt(self.cell.vol / self.coords.shape[0])
         precision = self.aoR_cutoff
-        rcut = ISDF_LinearScalingBase._estimate_rcut(cell, self.coords.shape[0], precision)
+        rcut = ISDF_LinearScalingBase._estimate_rcut(self.cell, self.coords.shape[0], precision)
         rcut_max = np.max(rcut)
         atm2_bas = ISDF_LinearScalingBase._atm_to_bas(self.cell)
         self.AtmConnectionInfo = []
@@ -671,9 +700,9 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         ##### build partition #####
         
         if Ls is None:
-            lattice_x = cell.lattice_vectors()[0][0]
-            lattice_y = cell.lattice_vectors()[1][1]
-            lattice_z = cell.lattice_vectors()[2][2]
+            lattice_x = self.cell.lattice_vectors()[0][0]
+            lattice_y = self.cell.lattice_vectors()[1][1]
+            lattice_z = self.cell.lattice_vectors()[2][2]
             
             Ls = [int(lattice_x/3)+1, int(lattice_y/3)+1, int(lattice_z/3)+1]
 

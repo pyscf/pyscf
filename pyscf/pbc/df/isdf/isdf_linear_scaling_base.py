@@ -472,6 +472,9 @@ def get_aoR(cell:Cell, coords, partition, distance_matrix, AtmConnectionInfoList
         RcutMax = max(RcutMax, np.max(_info_.bas_cut))
     
     precision = AtmConnectionInfoList[0].precision
+    
+    print("RcutMax   = ", RcutMax)
+    print("precision = ", precision)
         
     aoR_holder = []
     
@@ -506,6 +509,8 @@ def get_aoR(cell:Cell, coords, partition, distance_matrix, AtmConnectionInfoList
         bas_id = []
 
         ao_loc_now = 0
+        
+        #### TODO: do not perform this loop #### 
         
         for atm_id_other in atm_involved:
             
@@ -549,7 +554,7 @@ def get_aoR(cell:Cell, coords, partition, distance_matrix, AtmConnectionInfoList
         
         assert ao_loc_now == nao_invovled
         
-        ##### screening the aoR ##### 
+        ##### screening the aoR, TODO: in C ##### 
         
         max_row = np.max(np.abs(aoR), axis=1)
         where = np.where(max_row > precision)[0]
