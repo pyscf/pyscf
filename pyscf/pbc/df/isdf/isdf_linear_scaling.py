@@ -50,7 +50,9 @@ from memory_profiler import profile
 libpbc = lib.load_library('libpbc')
 
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
+from pyscf.pbc.df.isdf.isdf_k import build_supercell
 import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
+import pyscf.pbc.df.isdf.isdf_linear_scaling_jk as ISDF_LinearScalingJK
 
 ##### all the involved algorithm in ISDF based on aoR_Holder ##### 
 
@@ -58,7 +60,7 @@ import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 
 # ls stands for linear scaling
 
-def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None, global_IP_selection=True, 
+def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None, 
                   rela_cutoff = 0.0, 
                   no_retriction_on_nIP = False,
                   use_mpi=False):
@@ -87,21 +89,20 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None, global_IP_selection=Tr
 
     nthread = lib.num_threads()
 
-    buf_size_per_thread = mydf.get_buffer_size_in_IP_selection(c, m)
-    buf_size            = buf_size_per_thread
+    # buf_size = mydf.get_buffer_size_in_IP_selection(c, m)
 
-    if hasattr(mydf, "IO_buf"):
-        buf = mydf.IO_buf
-    else:
-        buf = np.zeros((buf_size), dtype=np.float64)
-        mydf.IO_buf = buf
-
-    if buf.size < buf_size:
-        # reallocate
-        mydf.IO_buf = np.zeros((buf_size), dtype=np.float64)
-        # print("reallocate buf of size = ", buf_size)
-        buf = mydf.IO_buf
-    buf_tmp = np.ndarray((buf_size), dtype=np.float64, buffer=buf)
+    # if hasattr(mydf, "IO_buf"):
+    #     buf = mydf.IO_buf
+    # else:
+    #     buf = np.zeros((buf_size), dtype=np.float64)
+    #     mydf.IO_buf = buf
+    # if buf.size < buf_size:
+    #     # reallocate
+    #     mydf.IO_buf = np.zeros((buf_size), dtype=np.float64)
+    #     # print("reallocate buf of size = ", buf_size)
+    #     buf = mydf.IO_buf
+        
+    # buf_tmp = np.ndarray((buf_size), dtype=np.float64)
 
     ### loop over atm ###
     
@@ -134,7 +135,7 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None, global_IP_selection=Tr
         if aoR is None:
             continue
 
-        buf_tmp[:buf_size_per_thread] = 0.0
+        # buf_tmp[:] = 0.0
 
         # grid_ID = np.where(mydf.partition == atm_id)[0]
         grid_ID = mydf.partition[atm_id] 
@@ -148,9 +149,9 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None, global_IP_selection=Tr
         
         # create buffer for this atm
 
-        dtypesize = buf.dtype.itemsize
+        dtypesize = aoR_atm.dtype.itemsize
 
-        offset += nao_tmp*grid_ID.shape[0] * dtypesize
+        # offset += nao_tmp*grid_ID.shape[0] * dtypesize
 
         nao_atm  = nao_per_atm[atm_id]
         naux_now = int(np.sqrt(c*nao_atm)) + m
@@ -206,10 +207,15 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None, global_IP_selection=Tr
         # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
             
         cutoff = abs(R[npt_find-1, npt_find-1])
-        # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
+        print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
         pivot = pivot[:npt_find]
         pivot.sort()
-        results.extend(list(grid_ID[pivot]))
+        # results.extend(list(grid_ID[pivot]))
+        
+        atm_IP = grid_ID[pivot]
+        atm_IP = np.array(atm_IP, dtype=np.int32)
+        atm_IP.sort()
+        results.append(atm_IP)
 
     # print("results = ", results)
 
@@ -217,7 +223,7 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None, global_IP_selection=Tr
         comm.Barrier()
         results = allgather(results)
         # results.sort()
-    results.sort()
+    # results.sort()
     
     if mydf.verbose:
         print("In select_IP, num_threads = ", lib.num_threads())
@@ -228,14 +234,19 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None, global_IP_selection=Tr
     del R
     del thread_buffer
     del global_buffer
+    # del buf_size
 
     return results
 
-def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, group_2_IP_possible = None):
+def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_possible = None):
     
     assert isinstance(aoRg_possible, list)
     assert isinstance(group, list)
-    assert isinstance(group_2_IP_possible, dict)
+    assert isinstance(atm_2_IP_possible, list)
+    
+    assert len(aoRg_possible) == len(atm_2_IP_possible)
+    assert len(aoRg_possible) == mydf.natm
+    
     
     if group is None:
         raise ValueError("group must be specified")
@@ -274,6 +285,7 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, group_2_IP
         aoRg_unpacked.append(aoRg_possible[atm_id])
     aoRg_packed = ISDF_LinearScalingBase._pack_aoR_holder(aoRg_unpacked, nao).aoR
     
+    nao = aoRg_packed.shape[0]
 
     # print("nao_group = ", nao_group)
     # print("nao = ", nao)    
@@ -314,7 +326,7 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, group_2_IP
 
     IP_possible = []
     for atm_id in group:
-        IP_possible.extend(group_2_IP_possible[atm_id])
+        IP_possible.extend(atm_2_IP_possible[atm_id])
     IP_possible = np.array(IP_possible, dtype=np.int32)
 
     if mydf.no_restriction_on_nIP:
@@ -372,6 +384,80 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, group_2_IP
     global_buffer = None
     
     return results
+
+def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
+    
+    IP_group  = []
+    
+    aoRg_possible = mydf.aoRg_possible
+
+    ######### allocate buffer #########
+
+    natm = mydf.natm
+    
+    for i in range(len(group)):
+        IP_group.append(None)
+
+    for i in range(len(group)):
+        if use_mpi == False or ((use_mpi == True) and (i % comm_size == rank)):
+            IP_group[i] = select_IP_group_ls(mydf, aoRg_possible, c, m, group=group[i], atm_2_IP_possible=IP_possible_atm)
+
+    if use_mpi:
+        comm.Barrier()
+        for i in range(len(group)):
+            # if i % comm_size == rank:
+            #     print("rank = %d, group[%d] = " % (rank, i), group[i])
+            #     print("rank = %d, IP_group[%d] = " % (rank, i), IP_group[i])
+            IP_group[i] = bcast(IP_group[i], root=i % comm_size)
+
+    mydf.IP_group = IP_group
+    
+    mydf.IP_flat = []
+    mydf.IP_segment = [0]
+    nIP_now = 0
+    for x in IP_group:
+        mydf.IP_flat.extend(x)
+        nIP_now += len(x)
+        mydf.IP_segment.append(nIP_now)
+    mydf.IP_flat = np.array(mydf.IP_flat, dtype=np.int32)
+    mydf.naux = mydf.IP_flat.shape[0]
+    
+    gridID_2_atmID = mydf.gridID_2_atmID
+    
+    partition_IP = []
+    for i in range(natm):
+        partition_IP.append([])
+    
+    for _ip_id_ in mydf.IP_flat:
+        atm_id = gridID_2_atmID[_ip_id_]
+        partition_IP[atm_id].append(_ip_id_)
+    
+    for i in range(natm):
+        partition_IP[i] = np.array(partition_IP[i], dtype=np.int32)
+        # print("partition_IP[%d] = " % i, partition_IP[i])
+    
+    ### build ### 
+    
+    coords = mydf.coords
+    weight = np.sqrt(mydf.cell.vol / mydf.coords.shape[0])
+    
+    del mydf.aoRg_possible
+    mydf.aoRg_possible = None
+    
+    # mydf.aoRg = ISDF_eval_gto(mydf.cell, coords=coords[mydf.IP_flat]) * weight
+    
+    mydf.aoRg = ISDF_LinearScalingBase.get_aoR(mydf.cell, mydf.coords, 
+                                               partition_IP, 
+                                               mydf.distance_matrix,
+                                               mydf.AtmConnectionInfo, 
+                                               False, False)
+    
+    print("IP_segment = ", mydf.IP_segment)
+    
+    memory = ISDF_LinearScalingBase._get_aoR_holders_memory(mydf.aoRg)
+    print("memory to store aoRg is ", memory)
+        
+    return IP_group
 
 ############ build aux bas ############
 
@@ -438,7 +524,7 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     
     mydf.ngrids_local = grid_ID_local.size
     mydf.grid_ID_local = grid_ID_local
-    mydf._allocate_jk_buffer(mydf.aoRg.dtype, mydf.ngrids_local)
+    # mydf._allocate_jk_buffer(mydf.aoRg.dtype, mydf.ngrids_local)
 
     ###### build aux basis ######
     
@@ -468,10 +554,12 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
         
         aoRg1 = ISDF_LinearScalingBase._pack_aoR_holder(aoRg_unpacked, mydf.nao).aoR
         aoR1 = ISDF_LinearScalingBase._pack_aoR_holder(aoR_unpacked, mydf.nao).aoR
-        assert aoRg1.shape[0] == B.shape[0]
+        assert aoRg1.shape[0] == aoR1.shape[0]
             
         A = lib.ddot(aoRg1.T, aoRg1)
         lib.square_inPlace(A)
+        e, h = np.linalg.eigh(A)
+        # print("e = ", e)
         grid_ID = mydf.partition_group_to_gridID[i]
         grid_loc_end = grid_loc_now + grid_ID.size
         B = lib.ddot(aoRg1.T, aoR1)
@@ -504,3 +592,274 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     aoRg1 = None
     del aoR1
     aoR1 = None
+    
+from pyscf.pbc.df.isdf.isdf_split_grid import build_auxiliary_Coulomb_local_bas_wo_robust_fitting, build_auxiliary_Coulomb_local_bas
+    
+class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
+    
+    # Quad stands for quadratic scaling
+    
+    def __init__(self, mol:Cell, 
+                 # aoR: np.ndarray = None,
+                 with_robust_fitting=True,
+                 Ls=None,
+                 # get_partition=True,
+                 verbose = 1,
+                 rela_cutoff_QRCP = None,
+                 aoR_cutoff = 1e-8,
+                 ):
+        
+        super().__init__(
+            mol=mol,
+            aoR=None,
+            with_robust_fitting=with_robust_fitting,
+            Ls=Ls,
+            get_partition=False,
+            verbose=verbose
+        )
+        
+        #### get other info #### 
+        
+        shl_atm = []
+        
+        for i in range(self.natm):
+            shl_atm.append([None, None])
+        
+        for i in range(cell.nbas):
+            atm_id = cell.bas_atom(i)
+            if shl_atm[atm_id][0] is None:
+                shl_atm[atm_id][0] = i
+            shl_atm[atm_id][1] = i+1
+        
+        self.shl_atm = shl_atm
+        self.aoloc_atm = cell.ao_loc_nr() 
+        
+        self.use_mpi = False
+
+        self.aoR_cutoff = aoR_cutoff
+        
+        if rela_cutoff_QRCP is None:
+            self.no_restriction_on_nIP = False
+            self.rela_cutoff_QRCP = 0.0
+        else:
+            self.no_restriction_on_nIP = True
+            self.rela_cutoff_QRCP = rela_cutoff_QRCP
+    
+        self.aoR = None
+        self.partition = None
+
+    def build_partition_aoR(self, Ls):
+        
+        if self.aoR is not None and self.partition is not None:
+            return
+            
+        
+        ##### build cutoff info #####   
+        
+        self.distance_matrix = ISDF_LinearScalingBase.get_cell_distance_matrix(self.cell)
+        weight = np.sqrt(self.cell.vol / self.coords.shape[0])
+        precision = self.aoR_cutoff
+        rcut = ISDF_LinearScalingBase._estimate_rcut(cell, self.coords.shape[0], precision)
+        rcut_max = np.max(rcut)
+        atm2_bas = ISDF_LinearScalingBase._atm_to_bas(self.cell)
+        self.AtmConnectionInfo = []
+        
+        for i in range(self.cell.natm):
+            tmp = ISDF_LinearScalingBase.AtmConnectionInfo(self.cell, i, self.distance_matrix, precision, rcut, rcut_max, atm2_bas)
+            self.AtmConnectionInfo.append(tmp)
+        
+        ##### build partition #####
+        
+        if Ls is None:
+            lattice_x = cell.lattice_vectors()[0][0]
+            lattice_y = cell.lattice_vectors()[1][1]
+            lattice_z = cell.lattice_vectors()[2][2]
+            
+            Ls = [int(lattice_x/3)+1, int(lattice_y/3)+1, int(lattice_z/3)+1]
+
+        self.partition = ISDF_LinearScalingBase.get_partition(self.cell, self.coords, self.AtmConnectionInfo, 
+                                                              Ls, self.use_mpi)
+        
+        for i in range(self.natm):
+            self.partition[i] = np.array(self.partition[i], dtype=np.int32)
+            self.partition[i].sort()
+        
+        self.aoR = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, self.partition, self.distance_matrix, 
+                                                  self.AtmConnectionInfo, 
+                                                  self.use_mpi, self.use_mpi)
+    
+        memory = ISDF_LinearScalingBase._get_aoR_holders_memory(self.aoR)
+        print("memory to store aoR is ", memory)
+    
+        ### check aoR ###
+        
+        # for i in range(self.natm):
+        #     benchmark = ISDF_eval_gto(self.cell, coords=self.coords[self.partition[i]]) * weight
+        #     aoR_test = self.aoR[i].todense(self.nao)
+        #     np.allclose(benchmark, aoR_test)
+    
+    def _allocate_jk_buffer(self, datatype, ngrids_local):
+        pass
+    
+    def build_IP_local(self, c=5, m=5, first_natm=None, group=None, Ls = None, debug=True):
+        
+        if first_natm is None:
+            first_natm = self.natm
+        
+        if group == None:
+            group = []
+            for i in range(natm):
+                group.append([i])
+        
+        self.group = group
+        
+        # build partition and aoR # 
+        
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        
+        self.build_partition_aoR(Ls)
+        
+        ao2atomID = self.ao2atomID
+        partition = self.partition
+        aoR  = self.aoR
+        natm = self.natm
+        nao  = self.nao
+        
+        self.partition_atmID_to_gridID = partition
+        
+        self.partition_group_to_gridID = []
+        for i in range(len(group)):
+            self.partition_group_to_gridID.append([])
+            for atm_id in group[i]:
+                self.partition_group_to_gridID[i].extend(partition[atm_id])
+            self.partition_group_to_gridID[i] = np.array(self.partition_group_to_gridID[i], dtype=np.int32)
+            # self.partition_group_to_gridID[i].sort()
+        
+        ngrids = self.coords.shape[0]
+        
+        gridID_2_atmID = np.zeros((ngrids), dtype=np.int32)
+        
+        for atm_id in range(natm):
+            gridID_2_atmID[partition[atm_id]] = atm_id
+        
+        self.gridID_2_atmID = gridID_2_atmID
+        
+        grid_ID_ordered = []
+        # for i in range(len(group)):
+        #     print("group_gridID = ", self.partition_group_to_gridID[i])
+        #     grid_ID_ordered.extend(self.partition_group_to_gridID[i])
+        for i in range(natm):  
+            grid_ID_ordered.extend(partition[i])
+        grid_ID_ordered = np.array(grid_ID_ordered, dtype=np.int32)
+        self.grid_ID_ordered = grid_ID_ordered
+        
+        
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        
+        if self.verbose and debug:
+            _benchmark_time(t1, t2, "build_partition_aoR")
+        
+        t1 = t2
+                
+        IP_Atm = select_IP_atm_ls(self, c+1, m, first_natm, 
+                                  rela_cutoff=self.rela_cutoff_QRCP,
+                                  no_retriction_on_nIP=self.no_restriction_on_nIP,
+                                  use_mpi=self.use_mpi)
+        
+        self.aoRg_possible = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, 
+                                                            IP_Atm, self.distance_matrix, 
+                                                            self.AtmConnectionInfo, self.use_mpi, self.use_mpi)
+        
+        select_IP_local_ls_drive(self, c, m, IP_Atm, group, use_mpi=self.use_mpi)
+        
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        
+        if self.verbose and debug:
+            _benchmark_time(t1, t2, "select_IP")
+        
+        t1 = t2
+        
+        build_aux_basis_ls(self, group, self.IP_group, debug=debug, use_mpi=self.use_mpi)
+        
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        
+        if self.verbose and debug:
+            _benchmark_time(t1, t2, "build_aux_basis")
+        
+        sys.stdout.flush()
+        
+
+    def build_auxiliary_Coulomb(self, debug=True):
+        if self.with_robust_fitting:
+            return build_auxiliary_Coulomb_local_bas(self, debug=debug, use_mpi=self.use_mpi)
+        else:
+            return build_auxiliary_Coulomb_local_bas_wo_robust_fitting(self, debug=debug, use_mpi=self.use_mpi)
+        
+    get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
+        
+C = 15
+
+from pyscf.pbc.df.isdf.isdf_split_grid import build_supercell_with_partition
+
+if __name__ == '__main__':
+    
+    cell   = pbcgto.Cell()
+    boxlen = 3.5668
+    cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    atm = [
+        ['C', (0.     , 0.     , 0.    )],
+        ['C', (0.8917 , 0.8917 , 0.8917)],
+        ['C', (1.7834 , 1.7834 , 0.    )],
+        ['C', (2.6751 , 2.6751 , 0.8917)],
+        ['C', (1.7834 , 0.     , 1.7834)],
+        ['C', (2.6751 , 0.8917 , 2.6751)],
+        ['C', (0.     , 1.7834 , 1.7834)],
+        ['C', (0.8917 , 2.6751 , 2.6751)],
+    ]
+    
+    KE_CUTOFF = 70
+    verbose = 4
+    if rank != 0:
+        verbose = 0
+        
+    prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
+    prim_mesh = prim_cell.mesh
+    # prim_partition = [[0],[1], [2], [3], [4], [5], [6], [7]]
+    # prim_partition = [[0, 1, 2, 3, 4, 5, 6, 7]]
+    prim_partition = [[0,1],[2,3],[4,5],[6,7]]
+    
+    Ls = [1, 1, 2]
+    Ls = np.array(Ls, dtype=np.int32)
+    mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
+    mesh = np.array(mesh, dtype=np.int32)
+    
+    cell, group_partition = build_supercell_with_partition(atm, prim_a, mesh=mesh, 
+                                                     Ls=Ls,
+                                                     partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
+    print("group_partition = ", group_partition)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8)
+    pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
+    
+    pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
+    
+    from pyscf.pbc import scf
+
+    mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    mf.with_df = pbc_isdf_info
+    mf.max_cycle = 100
+    mf.conv_tol = 1e-7
+    
+    mf.kernel()
+    
+    # pp = pbc_isdf_info.get_pp()
+    # mf = scf.RHF(cell)
+    # pbc_isdf_info.direct_scf = mf.direct_scf
+    # # mf.with_df = pbc_isdf_info
+    # mf.with_df.get_pp = lambda *args, **kwargs: pp
+    # mf.max_cycle = 1
+    # mf.conv_tol = 1e-7
+    # mf.kernel()
+    
+    

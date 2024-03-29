@@ -253,7 +253,9 @@ def get_cell_distance_matrix(cell:Cell):
 ############ algorithm based on the distance graph and AtmConnectionInfo ############
 
 def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInfo], 
-                  Ls=[3,3,3]): # by default split the cell into 4x4x4 supercell
+                  Ls=[3,3,3], use_mpi=False): # by default split the cell into 4x4x4 supercell
+    
+    print("************* get_partition *************")
     
     ##### construct the box info #####
 
@@ -281,12 +283,12 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
         mesh_box[2] = mesh[2] // Ls[2]
         nbox[2] = mesh[2] // mesh_box[2]
     
-    print("mesh = ", mesh)
-    print("mesh_box = ", mesh_box)
-    print("nbox = ", nbox)
+    # print("mesh = ", mesh)
+    # print("mesh_box = ", mesh_box)
+    # print("nbox = ", nbox)
     # print("lattice_vector = ", lattice_vector)
     Ls_box = [lattice_vector[0] / mesh[0] * mesh_box[0], lattice_vector[1] / mesh[1] * mesh_box[1], lattice_vector[2] / mesh[2] * mesh_box[2]]
-    print("Ls_box = ", Ls_box)
+    # print("Ls_box = ", Ls_box)
     assert Ls_box[0][0] < 3.0
     assert Ls_box[1][1] < 3.0
     assert Ls_box[2][2] < 3.0 # the box cannot be too large
@@ -314,7 +316,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
 
     for i in range(cell.natm):
         # print(cell.atom_coord(i))
-        print("atm %d at %s is in box %s" % (i, cell.atom_coord(i), get_box_id_from_coord(cell.atom_coord(i))))
+        # print("atm %d at %s is in box %s" % (i, cell.atom_coord(i), get_box_id_from_coord(cell.atom_coord(i))))
         box_id = get_box_id_from_coord(cell.atom_coord(i))
         atm_box_id.append(box_id)
         if box_id not in box_2_atm:
@@ -322,8 +324,8 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
         else:
             box_2_atm[box_id].append(i)
     
-    print("atm_box_id = ", atm_box_id)
-    print("box_2_atm = ", box_2_atm)
+    # print("atm_box_id = ", atm_box_id)
+    # print("box_2_atm = ", box_2_atm)
 
     ######## a rough partition of the cell based on distance only ######## 
 
@@ -451,9 +453,13 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     del aoR_tmp
     del aoR
     
+    print("************* end get_partition *************")
+    
     return partition
 
-def get_aoR(cell:Cell, coords, partition, AtmConnectionInfoList:list[AtmConnectionInfo], distributed = False, use_mpi=False):
+def get_aoR(cell:Cell, coords, partition, distance_matrix, AtmConnectionInfoList:list[AtmConnectionInfo], distributed = False, use_mpi=False):
+    
+    print("************* get_aoR *************")
     
     weight = np.sqrt(cell.vol / coords.shape[0])
     
@@ -494,7 +500,7 @@ def get_aoR(cell:Cell, coords, partition, AtmConnectionInfoList:list[AtmConnecti
             shl_end = AtmConnectionInfoList[atm_id_other].bas_range[-1]+1
             nao_invovled += ao_loc[shl_end] - ao_loc[shl_begin]
         
-        # print("atm %d involved %d ao" % (atm_id, nao_invovled))
+        print("atm %d involved %d ao" % (atm_id, nao_invovled))
         
         aoR = np.zeros((nao_invovled, len(grid_ID)))
         bas_id = []
@@ -557,6 +563,8 @@ def get_aoR(cell:Cell, coords, partition, AtmConnectionInfoList:list[AtmConnecti
                         
     del aoR
     del aoR_tmp
+    
+    print("************* end get_aoR *************")
     
     return aoR_holder
 
@@ -677,7 +685,7 @@ if __name__ == '__main__':
     
     partition = get_partition(cell, coords, AtmConnectionInfoList, Ls=[supercell[0]*3, supercell[1]*3, supercell[2]*3])
     
-    aoR_list = get_aoR(cell, coords, partition, AtmConnectionInfoList)
+    aoR_list = get_aoR(cell, coords, partition, distance_matrix, AtmConnectionInfoList)
     
     print("memory of aoR_list = ", _get_aoR_holders_memory(aoR_list))
     for x in aoR_list:

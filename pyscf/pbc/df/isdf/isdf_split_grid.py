@@ -460,7 +460,8 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
     cell = mydf.cell
     mesh = cell.mesh
     mesh_int32         = np.array(mesh, dtype=np.int32)
-    mydf._allocate_jk_buffer(mydf.aoRg.dtype, mydf.ngrids_local)
+    # mydf._allocate_jk_buffer(mydf.aoRg.dtype, mydf.ngrids_local)
+    # mydf._allocate_jk_buffer(mydf.aoRg.dtype, mydf.ngrids_local)
     
     naux = mydf.naux
     
@@ -511,10 +512,11 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
     for i in range(group_begin, group_end):
         naux_local += mydf.aux_basis[i].shape[0]    
         max_naux_bunch = max(max_naux_bunch, mydf.aux_basis[i].shape[0])
-    max_naux_bunch = max(max_naux_bunch, len(mydf.grid_pnt_near_atm))
     
-    if use_mpi == False or (use_mpi and rank == comm_size - 1):
-        naux_local += len(mydf.grid_pnt_near_atm)
+    if hasattr(mydf, "grid_pnt_near_atm"):
+        max_naux_bunch = max(max_naux_bunch, len(mydf.grid_pnt_near_atm))
+        if use_mpi == False or (use_mpi and rank == comm_size - 1):
+            naux_local += len(mydf.grid_pnt_near_atm)
     
     V = np.zeros((max_naux_bunch, np.prod(mesh_int32)), dtype=np.double)
     
@@ -523,7 +525,12 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
     W = np.zeros((naux_local, naux), dtype=np.double)
     
     aux_row_loc = 0
-    grid_ID_near_atm = mydf.grid_pnt_near_atm
+    
+    if hasattr(mydf, "grid_pnt_near_atm"):
+        grid_ID_near_atm = mydf.grid_pnt_near_atm
+    else:
+        grid_ID_near_atm = []
+        grid_ID_near_atm = np.array(grid_ID_near_atm, dtype=np.int32)
     for i in range(group_begin, group_end):
         
         aux_basis_now = mydf.aux_basis[i]
@@ -547,9 +554,9 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
         W[aux_row_loc:aux_row_loc+naux_bra, aux_col_loc:] = V[:naux_bra, grid_shift:]
         aux_row_loc += aux_basis_now.shape[0]
     
-    if (use_mpi == False or (use_mpi and rank == comm_size - 1)) and len(mydf.grid_pnt_near_atm) != 0:
+    if (use_mpi == False or (use_mpi and rank == comm_size - 1)) and len(grid_ID_near_atm) != 0:
         ### construct the final row ### 
-        grid_ID = mydf.grid_pnt_near_atm
+        grid_ID = grid_ID_near_atm
         aux_basis_now = np.identity(len(grid_ID), dtype=np.double)
         construct_V(aux_basis_now, buf, V, grid_ID, grid_ordering)
         grid_shift = 0
@@ -563,7 +570,6 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
             W[aux_row_loc:aux_row_loc+naux_bra, aux_col_loc:aux_col_loc+naux_ket] = lib.ddot(V[:naux_bra, grid_shift:grid_shift+ngrid_now], aux_bas_ket.T)
             grid_shift += ngrid_now
             aux_col_loc += naux_ket
-        # for j in range(0, len(mydf.grid_pnt_near_atm)):
         assert aux_row_loc == aux_col_loc
         W[aux_row_loc:, aux_col_loc:] = V[:naux_bra, grid_shift:]
     
@@ -584,7 +590,7 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
 
 def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
     
-    if len(mydf.grid_pnt_near_atm) != 0 :
+    if hasattr(mydf, "grid_pnt_near_atm") and len(mydf.grid_pnt_near_atm) != 0 :
         raise NotImplementedError("grid_pnt_near_atm is not supported")
     
     t0 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -592,7 +598,7 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
     cell = mydf.cell
     mesh = cell.mesh
     
-    mydf._allocate_jk_buffer(mydf.aoR.dtype, mydf.ngrids_local)
+    # mydf._allocate_jk_buffer(mydf.aoR.dtype, mydf.ngrids_local)
     
     naux = mydf.naux
     
@@ -715,7 +721,7 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
         naux_now += len(IP_group_now)
         aux_group_shift.append(naux_now)
     
-    mydf.W = np.zeros((mydf.naux, mydf.naux), dtype=mydf.aoRg.dtype) 
+    mydf.W = np.zeros((mydf.naux, mydf.naux), dtype=np.float64) 
     
     grid_shift = 0
     for i in range(group_begin, group_end):
@@ -1120,7 +1126,7 @@ def build_supercell_with_partition(prim_atm,
 
 #### split over grid points ? ####
 
-C = 20
+C = 35
 
 if __name__ == '__main__':
 
@@ -1164,7 +1170,7 @@ if __name__ == '__main__':
     # prim_partition = [[0,1,2,3,4,5,6,7]]
     prim_partition = [[0],[1], [2], [3], [4], [5], [6], [7]]
     
-    Ls = [1, 1, 2]
+    Ls = [1, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -1212,7 +1218,7 @@ if __name__ == '__main__':
         mf = scf.RHF(cell)
         pbc_isdf_info.direct_scf = mf.direct_scf
         mf.with_df = pbc_isdf_info
-        mf.max_cycle = 100
+        mf.max_cycle = 1
         mf.conv_tol = 1e-7
 
         print("mf.direct_scf = ", mf.direct_scf)

@@ -128,7 +128,29 @@ def reduce(sendbuf, op=MPI.SUM, root=0):
         return recvbuf
     else:
         return sendbuf
-    
+
+def scatter(sendbuf, root=0):
+    if rank == root:
+        mpi_dtype = numpy.result_type(*sendbuf).char
+        shape = comm.scatter([x.shape for x in sendbuf])
+        counts = numpy.asarray([x.size for x in sendbuf])
+        comm.bcast((mpi_dtype, counts))
+        sendbuf = [numpy.asarray(x, mpi_dtype).ravel() for x in sendbuf]
+        sendbuf = numpy.hstack(sendbuf)
+    else:
+        shape = comm.scatter(None)
+        mpi_dtype, counts = comm.bcast(None)
+
+    displs = numpy.append(0, numpy.cumsum(counts[:-1]))
+    recvbuf = numpy.empty(numpy.prod(shape), dtype=mpi_dtype)
+
+    #DONOT use lib.prange. lib.prange may terminate early in some processes
+    for p0, p1 in prange(comm, 0, numpy.max(counts), BLKSIZE):
+        counts_seg = _segment_counts(counts, p0, p1)
+        comm.Scatterv([sendbuf, counts_seg, displs+p0, mpi_dtype],
+                      [recvbuf[p0:p1], mpi_dtype], root)
+    return recvbuf.reshape(shape)
+
 def bcast(buf, root=0):
     buf = numpy.asarray(buf, order='C')
     shape, dtype = comm.bcast((buf.shape, buf.dtype.char), root=root)
@@ -1225,8 +1247,8 @@ if __name__ == '__main__':
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
-    cell.ke_cutoff  = 128   # kinetic energy cutoff in a.u.
-    # cell.ke_cutoff = 70
+    # cell.ke_cutoff  = 128   # kinetic energy cutoff in a.u.
+    cell.ke_cutoff = 70
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True
@@ -1291,6 +1313,8 @@ if __name__ == '__main__':
     print("mf.direct_scf = ", mf.direct_scf)
 
     mf.kernel()
+
+    exit(1)
 
     # without robust fitting 
     

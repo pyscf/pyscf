@@ -27,6 +27,7 @@ from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 
 #### MPI SUPPORT ####
 
+from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, scatter
 import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 
@@ -105,13 +106,16 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
         ngrids_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
         
-        fn_extract_dm(
-            dm.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(nao),
-            dm_buf.ctypes.data_as(ctypes.c_void_p),
-            aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(nao_involved),
-        )
+        if nao_involved < nao:
+            fn_extract_dm(
+                dm.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao),
+                dm_buf.ctypes.data_as(ctypes.c_void_p),
+                aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_involved),
+            )
+        else:
+            dm_buf.ravel()[:] = dm.ravel()
         
         dm_now = np.ndarray((nao_involved, nao_involved), buffer=dm_buf)
     
@@ -125,12 +129,17 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
     
     assert local_grid_loc == ngrids_local
     
+    if use_mpi == False:
+        assert ngrids_local == np.prod(mesh)
+    
     if use_mpi:
         density_R = np.hstack(gather(density_R, comm, rank, root=0, split_recvbuf=True))
-    
+        
     # if hasattr(mydf, "grid_ID_ordered"):
     
     grid_ID_ordered = mydf.grid_ID_ordered
+    
+    # print("grid_ID_ordered = ", grid_ID_ordered[:64])
     
     if (use_mpi and rank == 0) or (use_mpi == False):
         density_R_original = np.zeros_like(density_R)
@@ -146,6 +155,8 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
         )
 
         density_R = density_R_original.copy()
+    
+    # print("density_R = ", density_R[:64])
     
     J = None
     
@@ -210,17 +221,25 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
         
         J_tmp = J[local_grid_loc:local_grid_loc+ngrids_now] 
         
-        lib.d_ij_j_ij(aoR_holder.aoR, J_tmp, out=aoR_buf1)
+        aoR_J_res = np.ndarray(aoR_holder.aoR.shape, buffer=aoR_buf1)
+        lib.d_ij_j_ij(aoR_holder.aoR, J_tmp, out=aoR_J_res)
         ddot_res = np.ndarray((nao_involved, nao_involved), buffer=ddot_buf)
-        lib.ddot(aoR_holder.aoR, aoR_buf1.T, c=ddot_res)
+        lib.ddot(aoR_holder.aoR, aoR_J_res.T, c=ddot_res)
+        
+        if nao_involved == nao:
+            J_Res += ddot_res
+        else:
+            fn_packadd_dm(
+                ddot_res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_involved),
+                aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
+                J_Res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao)
+            )        
 
-        fn_packadd_dm(
-            ddot_res.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(nao_involved),
-            aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
-            J_Res.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(nao)
-        )        
+        local_grid_loc += ngrids_now
+    
+    assert local_grid_loc == ngrids_local
 
     J = J_Res
 
@@ -243,13 +262,16 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
 
 ############# quadratic scaling (not cubic!) #############
 
-def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, use_mpi=False):
+def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, verbose = 1, use_mpi=False):
+    
+    t1 = (logger.process_clock(), logger.perf_counter())
     
     if len(dm.shape) == 3:
         assert dm.shape[0] == 1
         dm = dm[0]
     
     assert dm.shape[0] == dm.shape[1]
+    nao = dm.shape[0]
     
     ngrid_bra = np.sum([aoR_holder.aoR.shape[1] for aoR_holder in bra_aoR_holder if aoR_holder is not None])
     ngrid_ket = np.sum([aoR_holder.aoR.shape[1] for aoR_holder in ket_aoR_holder if aoR_holder is not None])
@@ -283,9 +305,12 @@ def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, use_
         
         dm_packed = dm[aoR_holder.ao_involved, :].copy()
         
-        ddot_res = np.ndarray((ngrid_now, nao), buffer=tmp1)
+        ddot_res = np.ndarray((ngrid_now, nao), buffer=ddot_buf)
         lib.ddot(aoR_holder.aoR.T, dm_packed, c=ddot_res)
         tmp1[ngrid_loc:ngrid_loc+ngrid_now, :] = ddot_res
+        
+        ngrid_loc += ngrid_now
+        
     del dm_packed
     assert ngrid_loc == ngrid_bra
     
@@ -314,6 +339,12 @@ def __get_DensityMatrixonGrid_qradratic(dm, bra_aoR_holder, ket_aoR_holder, use_
     
     del tmp1
     del ddot_buf
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    if verbose:
+        _benchmark_time(t1, t2, "__get_DensityMatrixonGrid_qradratic")
+        
     
     return res
 
@@ -360,6 +391,12 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     else:
         Density_RgR = None
     
+    # print("density_RgRg.shape = ", Density_RgRg.shape)
+    # print("Density_RgRg = ", Density_RgRg[0, :16])
+    # if with_robust_fitting:
+    #     print("Density_RgR.shape = ", Density_RgR.shape)
+    #     print("Density_RgR = ", Density_RgR[0, :16])
+    
     #### step 2. get K, those part which W is involved 
     
     W = mydf.W
@@ -384,7 +421,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         W_tmp = Density_RgRg[:, nIP_loc:nIP_loc+nIP_now].copy()
         
         ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_res_buf)
-        lib.ddot(W_tmp, aoRg_holder.aoR, c=ddot_res)
+        lib.ddot(W_tmp, aoRg_holder.aoR.T, c=ddot_res)
         
         K1[: , aoRg_holder.ao_involved] += ddot_res
 
@@ -407,7 +444,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         
         ddot_res = np.ndarray((nao_invovled, nao), buffer=ddot_res_buf)
         # lib.ddot(K_tmp, aoRg_holder.ao.T, c=ddot_res)
-        lib.ddot(aoRg_holder.ao, K_tmp, c=ddot_res)
+        lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
         
         K[aoRg_holder.ao_involved, :] += ddot_res
         
@@ -427,6 +464,8 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         assert V_R is not None
         assert isinstance(V_R, np.ndarray)
         
+        lib.cwise_mul(V_R, Density_RgR, out=Density_RgR)
+        
         K2 = K1
         K2.ravel()[:] = 0.0    
     
@@ -442,7 +481,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             V_tmp = Density_RgR[:, ngrid_loc:ngrid_loc+ngrid_now].copy()
             
             ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_res_buf)
-            lib.ddot(V_tmp, aoR_holder.ao, c=ddot_res)
+            lib.ddot(V_tmp, aoR_holder.aoR.T, c=ddot_res)
             
             K2[: , aoR_holder.ao_involved] += ddot_res
             
@@ -465,13 +504,15 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             K_tmp = K2[nIP_loc:nIP_loc+nIP_now, :].copy()
             
             ddot_res = np.ndarray((nao_invovled, nao), buffer=ddot_res_buf)
-            lib.ddot(aoRg_holder.ao, K_tmp, c=ddot_res)
+            lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
             
             K_add[aoRg_holder.ao_involved, :] += ddot_res
             
             nIP_loc += nIP_now
         del K_tmp
         assert nIP_loc == naux
+        
+        K_add += K_add.T
         
         K += K_add
     
@@ -480,6 +521,11 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     del Density_RgRg
     del Density_RgR
     del ddot_res_buf
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    if mydf.verbose:
+        _benchmark_time(t1, t2, "_contract_k_dm_quadratic")
     
     return K * ngrid / vol
     
@@ -529,12 +575,14 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     if with_j:
         vj = _contract_j_dm_ls(mydf, dm, use_mpi)  
+        # print("vj = ", vj[0, :16])
     if with_k:
         # if mydf.with_robust_fitting:
         #     vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
         # else:
         #     vk = _contract_k_dm_wo_robust_fitting(mydf, dm, mydf.with_robust_fitting, use_mpi)
         vk = _contract_k_dm_quadratic(mydf, dm, mydf.with_robust_fitting, use_mpi=use_mpi)
+        # print("vk = ", vk[0, :16])
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
 

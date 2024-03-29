@@ -640,6 +640,8 @@ def _contract_j_dm_fast(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
             density_R = density_R_original.copy()
     
+    # print("density_R = ", density_R[:32])
+    
     J = None
     
     if (use_mpi and rank == 0) or (use_mpi == False):
@@ -855,6 +857,8 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
     density_RgRg = lib.ddot(dm, aoRg)
     density_RgRg = lib.ddot(aoRg.T, density_RgRg)
+
+    # print("density_RgRg = ", density_RgRg[0,:16])
 
     # assert density_RgRg.__array_interface__['data'] == buffer3.__array_interface__['data']
 
