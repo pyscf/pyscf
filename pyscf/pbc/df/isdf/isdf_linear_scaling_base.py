@@ -611,8 +611,8 @@ def get_aoR(cell:Cell, coords, partition, distance_matrix, AtmConnectionInfoList
         max_row = np.max(np.abs(aoR), axis=1)
         where = np.where(max_row > precision)[0]
         print("atm %d involved %d ao after  prune" % (atm_id, len(where)))
-        if len(where) < aoR.shape[0] * 0.85:
-        # if len(where) < aoR.shape[0]:
+        # if len(where) < aoR.shape[0] * 0.85:
+        if len(where) < aoR.shape[0]:
             aoR = aoR[where]
             bas_id = np.array(bas_id)[where]
         print("atm %d involved %d ao after  prune" % (atm_id, aoR.shape[0]))

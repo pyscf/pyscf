@@ -754,7 +754,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
     def _allocate_jk_buffer(self, datatype, ngrids_local):
         pass
     
-    def allocate_k_buffer(self, max_nao_involved):
+    def allocate_k_buffer(self, max_nao_involved, max_ngrid_involved):
         if hasattr(self, "ddot_k_buf"):
             return
         else:
@@ -763,7 +763,21 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                 self.Density_RgR_buf = np.zeros((self.naux, np.prod(self.cell.mesh)), dtype=np.float64)
             else:
                 self.Density_RgR_buf = None
-            self.ddot_k_buf = np.zeros((self.naux, max_nao_involved), dtype=np.float64)
+                
+            ### size1 in getting Density Matrix ### 
+            
+            max_dim = max(max_nao_involved, max_ngrid_involved)
+            size1  = self.naux * self.nao + self.naux * max_dim + self.nao * self.nao
+            size1 += self.naux * max_nao_involved 
+            
+            ### size2 in getting K ### 
+                
+            size2 = self.naux * max_nao_involved
+            if self.with_robust_fitting:
+                size2 += self.naux * max_ngrid_involved
+                
+            # self.ddot_k_buf = np.zeros((self.naux, max_nao_involved), dtype=np.float64)
+            self.build_k_buf = np.zeros((max(size1, size2)), dtype=np.float64)
         
     
     def build_IP_local(self, c=5, m=5, first_natm=None, group=None, Ls = None, debug=True):

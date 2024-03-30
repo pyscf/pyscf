@@ -752,3 +752,71 @@ void _buildK_packaddcol(
         }
     }
 }
+
+void _buildK_packrow(
+    double *target,
+    const int nrow_target,
+    const int ncol_target,
+    double *source,
+    const int nrow_source,
+    const int ncol_source,
+    const int *ao_involved)
+{
+    int nThread = get_omp_threads();
+
+    // static const int INC = 1;
+    // static const double ONE = 1.0;
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < nrow_target; ++i)
+    {
+        int row_loc = ao_involved[i];
+        memcpy(target + i * ncol_target, source + row_loc * ncol_source, sizeof(double) * ncol_source);
+    }
+}
+
+void _buildK_packcol(
+    double *target,
+    const int nrow_target,
+    const int ncol_target,
+    double *source,
+    const int nrow_source,
+    const int ncol_source,
+    const int *ao_involved)
+{
+    int nThread = get_omp_threads();
+
+    // static const int INC = 1;
+    // static const double ONE = 1.0;
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < nrow_target; ++i)
+    {
+        for (int j = 0; j < ncol_target; ++j)
+        {
+            target[i * ncol_target + j] = source[i * ncol_source + ao_involved[j]];
+        }
+    }
+}
+
+void _buildK_packcol2(
+    double *target,
+    const int nrow_target,
+    const int ncol_target,
+    double *source,
+    const int nrow_source,
+    const int ncol_source,
+    const int col_indx_begin,
+    const int col_indx_end)
+{
+    int nThread = get_omp_threads();
+
+    // static const int INC = 1;
+    // static const double ONE = 1.0;
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < nrow_target; ++i)
+    {
+        memcpy(target + i * ncol_target, source + i * ncol_source + col_indx_begin, sizeof(double) * (col_indx_end - col_indx_begin));
+    }
+}
