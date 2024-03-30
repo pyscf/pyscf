@@ -754,13 +754,22 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
     def _allocate_jk_buffer(self, datatype, ngrids_local):
         pass
     
-    def allocate_k_buffer(self, max_nao_involved, max_ngrid_involved):
-        if hasattr(self, "ddot_k_buf"):
+    def allocate_k_buffer(self, max_nao_involved, max_ngrid_involved): ### TODO: split grid again to reduce the size of buf when robust fitting is true! 
+        if hasattr(self, "build_k_buf"):
             return
         else:
+            
+            print("In allocate_k_buffer ")
+            print("max_nao_involved   = ", max_nao_involved)
+            print("max_ngrid_involved = ", max_ngrid_involved)
+            
             self.Density_RgRg_buf = np.zeros((self.naux, self.naux), dtype=np.float64)
+            
+            print("self.Density_RgRg_buf shape = ", self.Density_RgRg_buf.shape)
+            
             if self.with_robust_fitting:
                 self.Density_RgR_buf = np.zeros((self.naux, np.prod(self.cell.mesh)), dtype=np.float64)
+                print("self.Density_RgR_buf shape = ", self.Density_RgR_buf.shape)
             else:
                 self.Density_RgR_buf = None
                 
@@ -770,15 +779,22 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             size1  = self.naux * self.nao + self.naux * max_dim + self.nao * self.nao
             size1 += self.naux * max_nao_involved 
             
+            print("max_dim = ", max_dim)
+            print("size1 = ", size1)
+            
             ### size2 in getting K ### 
                 
             size2 = self.naux * max_nao_involved
             if self.with_robust_fitting:
                 size2 += self.naux * max_ngrid_involved
+            
+            print("size2 = ", size2)
                 
             # self.ddot_k_buf = np.zeros((self.naux, max_nao_involved), dtype=np.float64)
             self.build_k_buf = np.zeros((max(size1, size2)), dtype=np.float64)
-        
+
+            print("build_k_buf shape = ", self.build_k_buf.shape)
+            
     
     def build_IP_local(self, c=5, m=5, first_natm=None, group=None, Ls = None, debug=True):
         

@@ -652,14 +652,14 @@ void _construct_W_multiG(
     int ngrid = p1 - p0;
     int nThread = get_omp_threads();
 
-    int i;
+    size_t i;
 
     const double *ptr_G = CoulG + p0;
 
 #pragma omp parallel for num_threads(nThread) schedule(static)
     for (i = 0; i < naux; i++)
     {
-        int j;
+        size_t j;
         double *ptr_basis = auxBasisFFT + i * ngrid * 2;
         for (j = 0; j < ngrid; j++)
         {
@@ -681,9 +681,9 @@ void _extract_dm_involved_ao(
     int nThread = get_omp_threads();
 
 #pragma omp parallel for num_threads(nThread) schedule(static)
-    for (int i = 0; i < nao_involved; ++i)
+    for (size_t i = 0; i < nao_involved; ++i)
     {
-        for (int j = 0; j < nao_involved; ++j)
+        for (size_t j = 0; j < nao_involved; ++j)
         {
             res_buf[i * nao_involved + j] = dm[ao_involved[i] * nao + ao_involved[j]];
         }
@@ -700,9 +700,9 @@ void _packadd_local_dm(
     int nThread = get_omp_threads();
 
 #pragma omp parallel for num_threads(nThread) schedule(static)
-    for (int i = 0; i < nao_involved; ++i)
+    for (size_t i = 0; i < nao_involved; ++i)
     {
-        for (int j = 0; j < nao_involved; ++j)
+        for (size_t j = 0; j < nao_involved; ++j)
         {
             dm[ao_involved[i] * nao + ao_involved[j]] += local_dm[i * nao_involved + j];
         }
@@ -724,9 +724,9 @@ void _buildK_packaddrow(
     static const double ONE = 1.0;
 
 #pragma omp parallel for num_threads(nThread) schedule(static)
-    for (int i = 0; i < nrow_source; ++i)
+    for (size_t i = 0; i < nrow_source; ++i)
     {
-        int row_loc = ao_involved[i];
+        size_t row_loc = ao_involved[i];
         // memcpy(target + row_loc * ncol_target, source + i * ncol_source, sizeof(double) * ncol_source);
         daxpy_(&ncol_source, &ONE, source + i * ncol_source, &INC, target + row_loc * ncol_target, &INC);
     }
@@ -745,9 +745,9 @@ void _buildK_packaddcol(
     int nThread = get_omp_threads();
 
 #pragma omp parallel for num_threads(nThread) schedule(static)
-    for (int i = 0; i < nrow_source; ++i)
+    for (size_t i = 0; i < nrow_source; ++i)
     {
-        for (int j = 0; j < ncol_source; ++j)
+        for (size_t j = 0; j < ncol_source; ++j)
         {
             target[i * ncol_target + ao_involved[j]] += source[i * ncol_source + j];
         }
@@ -769,9 +769,9 @@ void _buildK_packrow(
     // static const double ONE = 1.0;
 
 #pragma omp parallel for num_threads(nThread) schedule(static)
-    for (int i = 0; i < nrow_target; ++i)
+    for (size_t i = 0; i < nrow_target; ++i)
     {
-        int row_loc = ao_involved[i];
+        size_t row_loc = ao_involved[i];
         memcpy(target + i * ncol_target, source + row_loc * ncol_source, sizeof(double) * ncol_source);
     }
 }
@@ -791,9 +791,9 @@ void _buildK_packcol(
     // static const double ONE = 1.0;
 
 #pragma omp parallel for num_threads(nThread) schedule(static)
-    for (int i = 0; i < nrow_target; ++i)
+    for (size_t i = 0; i < nrow_target; ++i)
     {
-        for (int j = 0; j < ncol_target; ++j)
+        for (size_t j = 0; j < ncol_target; ++j)
         {
             target[i * ncol_target + j] = source[i * ncol_source + ao_involved[j]];
         }
@@ -816,7 +816,7 @@ void _buildK_packcol2(
     // static const double ONE = 1.0;
 
 #pragma omp parallel for num_threads(nThread) schedule(static)
-    for (int i = 0; i < nrow_target; ++i)
+    for (size_t i = 0; i < nrow_target; ++i)
     {
         memcpy(target + i * ncol_target, source + i * ncol_source + col_indx_begin, sizeof(double) * (col_indx_end - col_indx_begin));
     }
@@ -890,9 +890,9 @@ void distance_between_points_atms(
     a[2] = lattice_vector[2 * 3 + 2];
 
 #pragma omp parallel for schedule(static) num_threads(get_omp_threads())
-    for (int i = 0; i < npnt; i++)
+    for (size_t i = 0; i < npnt; i++)
     {
-        for (int j = 0; j < natm; j++)
+        for (size_t j = 0; j < natm; j++)
         {
             distance[i * natm + j] = _distance_translation(pnt + i * 3, atm_coords + j * 3, a);
         }
