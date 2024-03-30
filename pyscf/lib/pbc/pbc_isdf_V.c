@@ -3,6 +3,7 @@
 #include <string.h>
 #include <complex.h>
 #include "vhf/fblas.h"
+#include <math.h>
 
 int get_omp_threads();
 int omp_get_thread_num();
@@ -818,5 +819,82 @@ void _buildK_packcol2(
     for (int i = 0; i < nrow_target; ++i)
     {
         memcpy(target + i * ncol_target, source + i * ncol_source + col_indx_begin, sizeof(double) * (col_indx_end - col_indx_begin));
+    }
+}
+
+////////// in determing partition //////////
+
+double _distance_translation(double *pa, double *pb, double *a)
+{
+    double dx, dx1, dx2;
+    double dy, dy1, dy2;
+    double dz, dz1, dz2;
+
+    dx = pa[0] - pb[0];
+    dx1 = dx - a[0];
+    dx2 = dx + a[0];
+    dx = fabs(dx);
+    dx1 = fabs(dx1);
+    dx2 = fabs(dx2);
+    dx = fmin(fmin(dx, dx1), dx2);
+
+    dy = pa[1] - pb[1];
+    dy1 = dy - a[1];
+    dy2 = dy + a[1];
+    dy = fabs(dy);
+    dy1 = fabs(dy1);
+    dy2 = fabs(dy2);
+    dy = fmin(fmin(dy, dy1), dy2);
+
+    dz = pa[2] - pb[2];
+    dz1 = dz - a[2];
+    dz2 = dz + a[2];
+    dz = fabs(dz);
+    dz1 = fabs(dz1);
+    dz2 = fabs(dz2);
+    dz = fmin(fmin(dz, dz1), dz2);
+
+    return sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+void distance_between_point_atms(
+    double *distance,
+    double *pnt,
+    double *atm_coords,
+    const int natm,
+    const double *lattice_vector)
+{
+    double a[3];
+    a[0] = lattice_vector[0 * 3 + 0];
+    a[1] = lattice_vector[1 * 3 + 1];
+    a[2] = lattice_vector[2 * 3 + 2];
+
+#pragma omp parallel for schedule(static) num_threads(get_omp_threads())
+    for (int i = 0; i < natm; i++)
+    {
+        distance[i] = _distance_translation(pnt, atm_coords + i * 3, a);
+    }
+}
+
+void distance_between_points_atms(
+    double *distance,
+    double *pnt,
+    const int npnt,
+    double *atm_coords,
+    const int natm,
+    const double *lattice_vector)
+{
+    double a[3];
+    a[0] = lattice_vector[0 * 3 + 0];
+    a[1] = lattice_vector[1 * 3 + 1];
+    a[2] = lattice_vector[2 * 3 + 2];
+
+#pragma omp parallel for schedule(static) num_threads(get_omp_threads())
+    for (int i = 0; i < npnt; i++)
+    {
+        for (int j = 0; j < natm; j++)
+        {
+            distance[i * natm + j] = _distance_translation(pnt + i * 3, atm_coords + j * 3, a);
+        }
     }
 }

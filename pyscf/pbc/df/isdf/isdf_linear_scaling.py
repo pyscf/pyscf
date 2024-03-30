@@ -884,12 +884,17 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
-C = 15
+C = 60
 
+from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_split_grid import build_supercell_with_partition
 
 if __name__ == '__main__':
     
+    verbose = 4
+    if rank != 0:
+        verbose = 0
+        
     cell   = pbcgto.Cell()
     boxlen = 3.5668
     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
@@ -903,31 +908,51 @@ if __name__ == '__main__':
         ['C', (2.6751 , 0.8917 , 2.6751)],
         ['C', (0.     , 1.7834 , 1.7834)],
         ['C', (0.8917 , 2.6751 , 2.6751)],
-    ]
+    ] 
+    
+#     prim_a = np.array(
+#                     [[14.572056092/2, 0.000000000, 0.000000000],
+#                      [0.000000000, 14.572056092/2, 0.000000000],
+#                      [0.000000000, 0.000000000,  6.010273939],]) * BOHR
+#     atm = [
+# ['Cu1',	(1.927800,	1.927800,	1.590250)],
+# ['O1',	(1.927800,	0.000000,	1.590250)],
+# ['O1',	(0.000000,	1.927800,	1.590250)],
+# ['Ca',	(0.000000,	0.000000,	0.000000)],
+#     ]
+#     basis = {
+#         'Cu1':'ecpccpvdz', 'Cu2':'ecpccpvdz', 'O1': 'ecpccpvdz', 'Ca':'ecpccpvdz'
+#     }
+#     pseudo = {'Cu1': 'gth-pbe-q19', 'Cu2': 'gth-pbe-q19', 'O1': 'gth-pbe', 'Ca': 'gth-pbe'}
+#     ke_cutoff = 128 
+#     prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
+#     prim_mesh = prim_cell.mesh
     
     KE_CUTOFF = 70
-    verbose = 4
-    if rank != 0:
-        verbose = 0
+    # KE_CUTOFF = 128
         
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
     prim_mesh = prim_cell.mesh
-    prim_partition = [[0],[1], [2], [3], [4], [5], [6], [7]]
+    prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
     # prim_partition = [[0, 1, 2, 3, 4, 5, 6, 7]]
     # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     
-    Ls = [1, 2, 2]
+    # prim_partition = [[0], [1], [2], [3]]
+    
+    Ls = [1, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
     cell, group_partition = build_supercell_with_partition(atm, prim_a, mesh=mesh, 
                                                      Ls=Ls,
+                                                     # basis=basis, pseudo=pseudo,
                                                      partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
     print("group_partition = ", group_partition)
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=False, aoR_cutoff=1e-8)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
-    
+    # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
+    pbc_isdf_info.Ls = Ls
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
     
     
@@ -937,7 +962,7 @@ if __name__ == '__main__':
     mf = scf.RHF(cell)
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
-    mf.max_cycle = 16
+    mf.max_cycle = 45
     mf.conv_tol = 1e-7
     
     mf.kernel()
