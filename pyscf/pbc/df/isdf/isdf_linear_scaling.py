@@ -754,7 +754,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
     def _allocate_jk_buffer(self, datatype, ngrids_local):
         pass
     
-    def allocate_k_buffer(self, max_nao_involved, max_ngrid_involved): ### TODO: split grid again to reduce the size of buf when robust fitting is true! 
+    def allocate_k_buffer(self, max_nao_involved, max_nIP_involved, max_ngrid_involved): ### TODO: split grid again to reduce the size of buf when robust fitting is true! 
         if hasattr(self, "build_k_buf"):
             return
         else:
@@ -763,21 +763,31 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             print("max_nao_involved   = ", max_nao_involved)
             print("max_ngrid_involved = ", max_ngrid_involved)
             
-            self.Density_RgRg_buf = np.zeros((self.naux, self.naux), dtype=np.float64)
+            self.Density_RgAO_buf = np.zeros((self.naux, self.nao), dtype=np.float64)
+            # self.Density_RgRg_buf = np.zeros((self.naux, self.naux), dtype=np.float64)
             
-            print("self.Density_RgRg_buf shape = ", self.Density_RgRg_buf.shape)
+            # print("self.Density_RgRg_buf shape = ", self.Density_RgRg_buf.shape)
             
-            if self.with_robust_fitting:
-                self.Density_RgR_buf = np.zeros((self.naux, np.prod(self.cell.mesh)), dtype=np.float64)
-                print("self.Density_RgR_buf shape = ", self.Density_RgR_buf.shape)
-            else:
-                self.Density_RgR_buf = None
+            # if self.with_robust_fitting:
+            #     self.Density_RgR_buf = np.zeros((self.naux, np.prod(self.cell.mesh)), dtype=np.float64)
+            #     print("self.Density_RgR_buf shape = ", self.Density_RgR_buf.shape)
+            # else:
+            #     self.Density_RgR_buf = None
+                
+            max_dim = max(max_nao_involved, max_ngrid_involved, self.nao)
+                
+            ### size0 in getting W part of K ###
+            
+            size0 = self.naux * max_nIP_involved + self.naux * max_nao_involved + self.naux * max(max_nIP_involved, max_nao_involved)
                 
             ### size1 in getting Density Matrix ### 
             
-            max_dim = max(max_nao_involved, max_ngrid_involved)
+            size11 = self.nao * max_nIP_involved + self.nao * self.nao
+            
             size1  = self.naux * self.nao + self.naux * max_dim + self.nao * self.nao
             size1 += self.naux * max_nao_involved 
+            
+            size1 = max(size1, size11)
             
             print("max_dim = ", max_dim)
             print("size1 = ", size1)
@@ -786,12 +796,13 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                 
             size2 = self.naux * max_nao_involved
             if self.with_robust_fitting:
+                size2 += self.naux * max_ngrid_involved + self.naux * max_nao_involved
                 size2 += self.naux * max_ngrid_involved
             
             print("size2 = ", size2)
                 
             # self.ddot_k_buf = np.zeros((self.naux, max_nao_involved), dtype=np.float64)
-            self.build_k_buf = np.zeros((max(size1, size2)), dtype=np.float64)
+            self.build_k_buf = np.zeros((max(size0, size1, size2)), dtype=np.float64)
 
             print("build_k_buf shape = ", self.build_k_buf.shape)
             
@@ -900,7 +911,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
-C = 60
+C = 25
 
 from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_split_grid import build_supercell_with_partition
@@ -955,7 +966,7 @@ if __name__ == '__main__':
     
     # prim_partition = [[0], [1], [2], [3]]
     
-    Ls = [1, 1, 1]
+    Ls = [1, 1, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -965,7 +976,7 @@ if __name__ == '__main__':
                                                      # basis=basis, pseudo=pseudo,
                                                      partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
     print("group_partition = ", group_partition)
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=False, aoR_cutoff=1e-8)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -978,7 +989,7 @@ if __name__ == '__main__':
     mf = scf.RHF(cell)
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
-    mf.max_cycle = 45
+    mf.max_cycle = 12
     mf.conv_tol = 1e-7
     
     mf.kernel()
