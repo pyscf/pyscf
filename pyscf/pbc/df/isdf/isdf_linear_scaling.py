@@ -911,7 +911,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
-C = 25
+C = 7
 
 from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_split_grid import build_supercell_with_partition
@@ -960,13 +960,13 @@ if __name__ == '__main__':
         
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
     prim_mesh = prim_cell.mesh
-    prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
-    # prim_partition = [[0, 1, 2, 3, 4, 5, 6, 7]]
+    # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
+    prim_partition = [[0, 1, 2, 3, 4, 5, 6, 7]]
     # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     
     # prim_partition = [[0], [1], [2], [3]]
     
-    Ls = [1, 1, 2]
+    Ls = [1, 1, 8]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -993,6 +993,14 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-7
     
     mf.kernel()
+    
+    from pyscf.pbc.df.isdf.isdf_densitymatrix_tool import analysis_dm, analysis_dm_on_grid
+    
+    dm = mf.make_rdm1()
+    
+    analysis_dm(cell, dm, pbc_isdf_info.distance_matrix)
+    
+    analysis_dm_on_grid(pbc_isdf_info, dm, pbc_isdf_info.distance_matrix)
     
     # pp = pbc_isdf_info.get_pp()
     # mf = scf.RHF(cell)
