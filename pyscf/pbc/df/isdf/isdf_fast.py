@@ -111,6 +111,14 @@ def allgather(sendbuf, split_recvbuf=False):
         except ValueError:
             return recvbuf
 
+def allgather_pickle(sendbuf):
+    sendbuf_serialized = MPI.pickle.dumps(sendbuf)
+    sendbuf_serialized = np.frombuffer(sendbuf_serialized, dtype=np.uint8)
+    received = allgather(sendbuf_serialized, split_recvbuf=True)
+    received = [MPI.pickle.loads(x.tobytes()) for x in received]
+    del sendbuf_serialized 
+    return received
+
 def reduce(sendbuf, op=MPI.SUM, root=0):
     sendbuf = numpy.asarray(sendbuf, order='C')
     shape, mpi_dtype = comm.bcast((sendbuf.shape, sendbuf.dtype.char),root=root)
@@ -162,6 +170,16 @@ def bcast(buf, root=0):
     for p0, p1 in lib.prange(0, buf.size, BLKSIZE):
         comm.Bcast([buf_seg[p0:p1], dtype], root)
     return buf
+
+def bcast_pickel(buf, root=0):
+    if rank == root:
+        buf_serialized = MPI.pickle.dumps(buf)
+        buf_serialized = np.frombuffer(buf_serialized, dtype=np.uint8)
+    else:
+        buf_serialized = None
+    res = bcast(buf_serialized, root)
+    res = MPI.pickle.loads(res.tobytes())
+    return res
 
 def gather(sendbuf, root=0, split_recvbuf=False):
 

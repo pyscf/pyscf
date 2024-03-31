@@ -50,7 +50,7 @@ def _estimate_rcut(cell):
         rcut.append(r.max())
     return numpy.array(rcut)
 
-@profile
+# @profile
 def ISDF_eval_gto(cell, eval_name=None, coords=None, comp=None, kpts=numpy.zeros((1,3)), kpt=None,
              shls_slice=None, non0tab=None, ao_loc=None, cutoff=None,
              out=None, Ls=None, rcut=None):
