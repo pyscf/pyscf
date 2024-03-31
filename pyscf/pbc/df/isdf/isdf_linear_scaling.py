@@ -695,6 +695,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         self.aoR = None
         self.partition = None
 
+        self.V_W_cutoff = None
+
     def build_partition_aoR(self, Ls):
         
         if self.aoR is not None and self.partition is not None:
@@ -904,11 +906,60 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
 
     def build_auxiliary_Coulomb(self, debug=True):
-        if self.with_robust_fitting:
-            return build_auxiliary_Coulomb_local_bas(self, debug=debug, use_mpi=self.use_mpi)
-        else:
-            return build_auxiliary_Coulomb_local_bas_wo_robust_fitting(self, debug=debug, use_mpi=self.use_mpi)
         
+        ### the cutoff based on distance for V and W is used only for testing now ! ###
+        
+        distance_max = np.max(self.distance_matrix)
+        if self.V_W_cutoff is not None and self.V_W_cutoff > distance_max:
+            print("WARNING : V_W_cutoff is larger than the maximum distance in the cell")
+            self.V_W_cutoff = None # no cutoff indeed 
+        if self.V_W_cutoff is not None:
+            print("V_W_cutoff   = ", self.V_W_cutoff)
+            print("distance_max = ", distance_max)
+        
+        if self.with_robust_fitting:
+            build_auxiliary_Coulomb_local_bas(self, debug=debug, use_mpi=self.use_mpi)
+        else:
+            build_auxiliary_Coulomb_local_bas_wo_robust_fitting(self, debug=debug, use_mpi=self.use_mpi)
+        
+        print("self.V_W_cutoff = ", self.V_W_cutoff)
+        
+        if self.V_W_cutoff is not None:
+            
+            if hasattr(self, "V_R"):
+                V = self.V_R
+                
+                bra_loc = 0
+                for atm_i, aoRg_holder in enumerate(self.aoRg):
+                    nbra = aoRg_holder.aoR.shape[1]
+                    ket_loc = 0
+                    for atm_j, aoR_holder in enumerate(self.aoR):
+                        nket = aoR_holder.aoR.shape[1]
+                        # print("distance between %d and %d is %12.6e" % (atm_i, atm_j, self.distance_matrix[atm_i, atm_j]))
+                        if self.distance_matrix[atm_i, atm_j] > self.V_W_cutoff:
+                            # print("cutoff V_R between %d and %d" % (atm_i, atm_j))
+                            V[bra_loc:bra_loc+nbra, ket_loc:ket_loc+nket] = 0.0
+                        ket_loc += nket
+                    bra_loc += nbra
+                    
+                self.V_R = V
+
+            W = self.W
+            
+            bra_loc = 0
+            for atm_i, aoRg_holder_bra in enumerate(self.aoRg):
+                nbra = aoRg_holder.aoR.shape[1]
+                ket_loc = 0
+                for atm_j, aoRg_holder_ket in enumerate(self.aoRg):
+                    nket = aoRg_holder.aoR.shape[1]
+                    if self.distance_matrix[atm_i, atm_j] > self.V_W_cutoff:
+                        # print("cutoff W between %d and %d" % (atm_i, atm_j))
+                        W[bra_loc:bra_loc+nbra, ket_loc:ket_loc+nket] = 0.0
+                    ket_loc += nket
+                bra_loc += nbra
+            
+            self.W = W
+
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
 C = 7
@@ -966,7 +1017,7 @@ if __name__ == '__main__':
     
     # prim_partition = [[0], [1], [2], [3]]
     
-    Ls = [1, 1, 8]
+    Ls = [1, 1, 6]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -998,9 +1049,8 @@ if __name__ == '__main__':
     
     dm = mf.make_rdm1()
     
-    analysis_dm(cell, dm, pbc_isdf_info.distance_matrix)
-    
-    analysis_dm_on_grid(pbc_isdf_info, dm, pbc_isdf_info.distance_matrix)
+    # analysis_dm(cell, dm, pbc_isdf_info.distance_matrix)
+    # analysis_dm_on_grid(pbc_isdf_info, dm, pbc_isdf_info.distance_matrix)
     
     # pp = pbc_isdf_info.get_pp()
     # mf = scf.RHF(cell)
@@ -1011,4 +1061,16 @@ if __name__ == '__main__':
     # mf.conv_tol = 1e-7
     # mf.kernel()
     
+    dm = mf.make_rdm1()
+    
+    pbc_isdf_info.V_W_cutoff = 13.0 
+    pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
+    
+    mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    mf.with_df = pbc_isdf_info
+    mf.max_cycle = 12
+    mf.conv_tol = 1e-7
+    
+    mf.kernel(dm)
     
