@@ -1379,6 +1379,7 @@ class _OmniObject:
 # Then class can be instantiated easily like cls(omniobj) in the following
 # to_gpu function.
 omniobj = _OmniObject()
+omniobj._built = True
 omniobj.mol = omniobj
 omniobj._scf = omniobj
 omniobj.base = omniobj
@@ -1408,7 +1409,7 @@ def to_gpu(method, out=None):
         if isinstance(method, (SinglePointScanner, GradScanner)):
             method = method.undo_scanner()
 
-        import import_module
+        from importlib import import_module
         mod = import_module(method.__module__.replace('pyscf', 'gpu4pyscf'))
         cls = getattr(mod, method.__class__.__name__)
         # A temporary GPU instance. This ensures to initialize private
@@ -1430,3 +1431,4 @@ def to_gpu(method, out=None):
         setattr(out, key, val)
     out.reset()
     return out
+

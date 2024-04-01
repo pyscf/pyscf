@@ -2866,7 +2866,12 @@ class NumInt(lib.StreamObject, LibXCMixin):
         return make_rho, ndms, nao
 
     to_gpu = lib.to_gpu
-
+    def to_gpu(self):
+        try:
+            from gpu4pyscf.dft import numint
+            return numint.NumInt()
+        except:
+            raise ImportError('Cannot find GPU4PySCF')
 _NumInt = NumInt
 
 
