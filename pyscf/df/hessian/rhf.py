@@ -480,7 +480,6 @@ class Hessian(rhf_hess.Hessian):
 
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
-    #to_gpu = lib.to_gpu
 
 #TODO: Insert into DF class
 
