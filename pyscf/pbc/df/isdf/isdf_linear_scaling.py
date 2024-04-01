@@ -61,9 +61,9 @@ import pyscf.pbc.df.isdf.isdf_linear_scaling_jk as ISDF_LinearScalingJK
 # ls stands for linear scaling
 
 def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None, 
-                  rela_cutoff = 0.0, 
-                  no_retriction_on_nIP = False,
-                  use_mpi=False):
+                     rela_cutoff = 0.0, 
+                     no_retriction_on_nIP = False,
+                     use_mpi=False):
 
     # bunchsize = lib.num_threads()
 
@@ -122,8 +122,9 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
     if first_natm is None:
         first_natm = natm
     
+    group_begin, group_end = ISDF_LinearScalingBase._range_partition(first_natm, rank, comm_size, use_mpi)
+    
     for i in range(first_natm):
-        
         results.append(None)
     
     aoR_atm1 = None
@@ -133,7 +134,8 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
     thread_buffer = None
     global_buffer = None
     
-    for atm_id in range(first_natm):
+    # for atm_id in range(first_natm): 
+    for atm_id in range(group_begin, group_end):
         
         aoR = mydf.aoR[atm_id]
         if aoR is None:  # it is used to split the task when using MPI
@@ -189,6 +191,9 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
             max_rank = min(naux2_now, grid_ID.shape[0])
         else:
             max_rank  = min(naux2_now, grid_ID.shape[0], nao_atm * c + m)
+        # print("naux2_now = ", naux2_now)
+        # print('nao_atm = ', nao_atm)
+        # print("max_rank = ", max_rank)
         npt_find      = ctypes.c_int(0)
         pivot         = np.arange(grid_ID.shape[0], dtype=np.int32)
         thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64)
@@ -241,6 +246,9 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
     del thread_buffer
     del global_buffer
     # del buf_size
+
+    if use_mpi:
+        results = ISDF_LinearScalingBase._sync_list(results, first_natm)
 
     assert len(results) == first_natm
 
@@ -429,23 +437,9 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
             ISDF_LinearScalingBase._sync_list(IP_group, len(group))
 
     else:
-        # print("use possible IP, do not perform select_IP_group_ls")
-        # print("IP_possible_atm = ", IP_possible_atm)
-        # IP_group = copy.deepcopy(IP_possible_atm)
-        # IP_group = IP_possible_atm
+        IP_group = IP_possible_atm 
 
-        if use_mpi:
-            ISDF_LinearScalingBase._sync_list_related_to_partition(IP_possible_atm, mydf.group)
-        else:
-            IP_group = IP_possible_atm
-
-    # if use_mpi:
-    #     comm.Barrier()
-    #     for i in range(len(group)):
-    #         # if i % comm_size == rank:
-    #         #     print("rank = %d, group[%d] = " % (rank, i), group[i])
-    #         #     print("rank = %d, IP_group[%d] = " % (rank, i), IP_group[i])
-    #         IP_group[i] = bcast(IP_group[i], root=i % comm_size)
+    # print("IP_group = ", IP_group)  
 
     mydf.IP_group = IP_group
     
@@ -471,7 +465,6 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
     
     for i in range(natm):
         partition_IP[i] = np.array(partition_IP[i], dtype=np.int32)
-        # print("partition_IP[%d] = " % i, partition_IP[i])
     
     ### build ### 
     
@@ -499,7 +492,10 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
     
     else:
         if use_mpi:
-            ISDF_LinearScalingBase._sync_list_related_to_partition(mydf.aoRg_possible, mydf.group)
+            mydf.aoRg = ISDF_LinearScalingBase._sync_list_related_to_partition(mydf.aoRg_possible, mydf.group)
+            if rank == 0:
+                for aoR_holder in mydf.aoRg:
+                    print('aoR-holder begin = ', aoR_holder.global_gridID_begin)
         else:
             mydf.aoRg = mydf.aoRg_possible
     
@@ -541,20 +537,21 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     # assert len(IP_group) == ngroup + 1
     assert len(IP_group) == ngroup
     
-    group_bunchsize = ngroup
+    # group_bunchsize = ngroup
+    # if use_mpi:
+    #     if ngroup % comm_size == 0 :
+    #         group_bunchsize = ngroup // comm_size
+    #     else:
+    #         group_bunchsize = ngroup // comm_size + 1
+    # if use_mpi:
+    #     group_begin = min(ngroup, rank * group_bunchsize)
+    #     group_end = min(ngroup, (rank+1) * group_bunchsize)
+    # else:
+    #     group_begin = 0
+    #     group_end = ngroup
     
-    if use_mpi:
-        if ngroup % comm_size == 0 :
-            group_bunchsize = ngroup // comm_size
-        else:
-            group_bunchsize = ngroup // comm_size + 1
-    
-    if use_mpi:
-        group_begin = min(ngroup, rank * group_bunchsize)
-        group_end = min(ngroup, (rank+1) * group_bunchsize)
-    else:
-        group_begin = 0
-        group_end = ngroup
+    group_begin, group_end = ISDF_LinearScalingBase._range_partition(ngroup, rank, comm_size, use_mpi)
+    # grid_segment = ISDF_LinearScalingBase._get
     
     ngroup_local = group_end - group_begin
     
@@ -568,16 +565,7 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     
     grid_segment = [0]
     
-    if use_mpi:
-        for i in range(comm_size):
-            p0 = min(ngroup, i * group_bunchsize)
-            p1 = min(ngroup, (i+1) * group_bunchsize)
-            size_now = 0
-            for j in range(p0, p1):
-                size_now += mydf.partition_group_to_gridID[j].size
-            grid_segment.append(grid_segment[-1] + size_now)
-    else:
-        grid_segment.append(mydf.ngrids)
+    grid_segment = ISDF_LinearScalingBase._get_grid_partition(mydf.partition, group, use_mpi)
     
     if use_mpi == False or (use_mpi and rank == 0):
         print("grid_segment = ", grid_segment)
@@ -587,21 +575,15 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     ###### build grid_ID_local ###### 
     
     coords = mydf.coords
-    grid_ID_local = []
-    for i in range(group_begin, group_end):
-        grid_ID_local.extend(mydf.partition_group_to_gridID[i])
-    
-    grid_ID_local = np.array(grid_ID_local, dtype=np.int32)
-    
-    mydf.ngrids_local = grid_ID_local.size
-    mydf.grid_ID_local = grid_ID_local
-    # mydf._allocate_jk_buffer(mydf.aoRg.dtype, mydf.ngrids_local)
 
     ###### build aux basis ######
     
     mydf.aux_basis = []
     
-    grid_loc_now = 0
+    for i in range(ngroup):
+        mydf.aux_basis.append(None)
+    
+    # grid_loc_now = 0
     
     fn_cholesky = getattr(libpbc, "Cholesky", None)
     assert (fn_cholesky is not None)
@@ -611,9 +593,8 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     
     for i in range(group_begin, group_end):
             
-        IP_loc_begin = mydf.IP_segment[i]
-        IP_loc_end   = mydf.IP_segment[i+1]
-            
+        # IP_loc_begin = mydf.IP_segment[i]
+        # IP_loc_end   = mydf.IP_segment[i+1]
         # aoRg1 = mydf.aoRg[:, IP_loc_begin:IP_loc_end] 
         
         aoRg_unpacked = []
@@ -642,9 +623,9 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
         # e, h = np.linalg.eigh(A)
         # print("e = ", e)
         grid_ID = mydf.partition_group_to_gridID[i]
-        grid_loc_end = grid_loc_now + grid_ID.size
+        # grid_loc_end = grid_loc_now + grid_ID.size
         B = lib.ddot(aoRg1.T, aoR1)
-        grid_loc_now = grid_loc_end
+        # grid_loc_now = grid_loc_end
         lib.square_inPlace(B)
                     
         fn_cholesky = getattr(libpbc, "Cholesky", None)
@@ -663,8 +644,18 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
             ctypes.c_int(bunchsize)
         )
         
-        mydf.aux_basis.append(B.copy())
-                    
+        # mydf.aux_basis.append(B.copy())
+        mydf.aux_basis[i] = B.copy()
+
+    ### sync aux_basis ###
+    
+    if use_mpi:
+        mydf.aux_basis = ISDF_LinearScalingBase._sync_list(mydf.aux_basis, ngroup)
+
+        if rank == 0:
+            for aux_basis in mydf.aux_basis:
+                print("aux_basis.shape = ", aux_basis.shape)
+    
     del A 
     A = None
     del B
@@ -771,11 +762,15 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         self.partition = ISDF_LinearScalingBase.get_partition(self.cell, self.coords, self.AtmConnectionInfo, 
                                                               Ls, self.use_mpi)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _benchmark_time(t1, t2, "build_partition")
+        
+        if rank == 0:
+            _benchmark_time(t1, t2, "build_partition")
         
         for i in range(self.natm):
             self.partition[i] = np.array(self.partition[i], dtype=np.int32)
             self.partition[i].sort()
+            # if rank == 1:
+            #     print("rank %d partition[%d] = " % (rank, i), self.partition[i])
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         sync_aoR = False
@@ -788,12 +783,14 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                                                   self.use_mpi, self.use_mpi, sync_aoR)
     
         memory = ISDF_LinearScalingBase._get_aoR_holders_memory(self.aoR)
-        for i in range(comm_size):
-            if rank == i:
-                print("rank = %d, memory to store aoR is " % i, memory)
+        # for i in range(comm_size):
+        #     if rank == i:
+        #         print("rank = %d, memory to store aoR is " % i, memory)
         # print("memory to store aoR is ", memory)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _benchmark_time(t1, t2, "build_aoR")
+        
+        if rank == 0:
+            _benchmark_time(t1, t2, "build_aoR")
     
         ### check aoR ###
         
@@ -978,11 +975,14 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                                       no_retriction_on_nIP=self.no_restriction_on_nIP,
                                       use_mpi=self.use_mpi)
         else:
-            IP_Atm = select_IP_atm_ls(self, c, 0, first_natm, 
+            IP_Atm = select_IP_atm_ls(self, c, m, first_natm, 
                                       rela_cutoff=self.rela_cutoff_QRCP,
                                       no_retriction_on_nIP=self.no_restriction_on_nIP,
                                       use_mpi=self.use_mpi)
         t3 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        
+        # if rank == 0:
+        #     print("IP_Atm = ", IP_Atm)
         
         self.aoRg_possible = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, 
                                                             IP_Atm, 
@@ -991,7 +991,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                                                             self.AtmConnectionInfo, self.use_mpi, self.use_mpi)
         
         t4 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _benchmark_time(t3, t4, "build_aoRg_possible")
+        if self.verbose and debug:
+            _benchmark_time(t3, t4, "build_aoRg_possible")
         
         select_IP_local_ls_drive(self, c, m, IP_Atm, group, use_mpi=self.use_mpi)
         
@@ -1125,10 +1126,10 @@ if __name__ == '__main__':
     # prim_partition = [[0, 1, 2, 3, 4, 5, 6, 7]]
     # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     
-    # prim_partition = [[0], [1], [2], [3]]
-    prim_partition = [[0, 1, 2, 3]]
+    prim_partition = [[0], [1], [2], [3]]
+    # prim_partition = [[0, 1, 2, 3]]
     
-    Ls = [2, 2, 1]
+    Ls = [1, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)

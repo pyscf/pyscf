@@ -567,7 +567,7 @@ def _range_partition(ngroup, rank, comm_size, use_mpi=False):
             ## solve equation a * ngroup_local + b * (ngroup_local - 1) = ngroup ## 
             ## a + b = comm_size ##
             
-            b = (ngroup_local * ngroup - ngroup)    
+            b = (ngroup_local * comm_size - ngroup)    
             a = comm_size - b
             
             if rank < a:
@@ -592,8 +592,12 @@ def _range_partition_array(ngroup, comm_size, use_mpi=False):
             ## solve equation a * ngroup_local + b * (ngroup_local - 1) = ngroup ## 
             ## a + b = comm_size ##
             
-            b = (ngroup_local * ngroup - ngroup)    
+            b = (ngroup_local * comm_size - ngroup)    
             a = comm_size - b
+            
+            # print("ngroup_local = %d" % ngroup_local)
+            # print("ngroup = %d" % ngroup)
+            # print("a = %d, b = %d" % (a, b))
             
             for i in range(comm_size):
                 if i < a:
@@ -606,6 +610,10 @@ def _range_partition_array(ngroup, comm_size, use_mpi=False):
                         res = np.vstack((res, np.array([a * ngroup_local, a * ngroup_local + (ngroup_local - 1)], dtype=np.int32)))
                     else:
                         res = np.vstack((res, np.array([a * ngroup_local + (i - a) * (ngroup_local - 1), a * ngroup_local + (i - a + 1) * (ngroup_local - 1)], dtype=np.int32)))
+
+        if comm_size == 1:
+            res = res.reshape(1, 2)
+        return res
 
 def _get_grid_ordering(atmid_to_gridID, group, use_mpi=False):
     
@@ -650,13 +658,33 @@ def _get_grid_partition(atmid_to_gridID, group, use_mpi=False):
             grid_partition.append(grid_partition[-1] + ngrid_local)
         
         return np.array(grid_partition, dtype=np.int32)
+
+def _get_atm_2_grid_segment(atmid_to_gridID, group):
+
+    natm = len(atmid_to_gridID)
+    assert sum([len(x) for x in group]) == natm
+    
+    res = []
+    for _ in range(natm):
+        res.append([None, None])
         
+    grid_loc_now = 0
+    for j in range(len(group)):
+        for atmid in group[j]:
+            res[atmid][0] = grid_loc_now
+            res[atmid][1] = grid_loc_now + len(atmid_to_gridID[atmid])
+            grid_loc_now += len(atmid_to_gridID[atmid])
+    
+    return res
+    
 
 def _get_atmid_involved(natm, group, rank, use_mpi=False):
     if use_mpi == False:
         return np.arange(natm, dtype=np.int32)
     else:
         group_partition_array = _range_partition_array(len(group), comm_size, use_mpi)
+        
+        # print("group_partition_array = ", group_partition_array)
         
         atmid_involved = []
         group_begin = group_partition_array[rank][0]
@@ -753,8 +781,8 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
     
     weight = np.sqrt(cell.vol / coords.shape[0])
     
-    if use_mpi:
-        raise NotImplementedError("not implemented yet")
+    # if use_mpi:
+    #     raise NotImplementedError("not implemented yet")
     
     RcutMax = -1e10
     
@@ -779,6 +807,12 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
     
     atm_involved = _get_atmid_involved(cell.natm, group, rank, use_mpi)
     grid_partition = _get_grid_partition(partition, group, use_mpi)
+    
+    atm_2_grid_segment = _get_atm_2_grid_segment(partition, group)
+    
+    if rank == 0:
+        print("grid_partition = ", grid_partition)
+        print("atm_2_grid_segment = ", atm_2_grid_segment)
     
     local_gridID_begin = 0
     global_gridID_begin = grid_partition[rank]
@@ -888,6 +922,9 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
             print("atm %d involved %d ao after  prune" % (atm_id, aoR.shape[0]))
         
         aoR_holder[atm_id] = aoR_Holder(aoR, bas_id, local_gridID_begin, local_gridID_begin+len(grid_ID), global_gridID_begin, global_gridID_begin+len(grid_ID))
+        
+        assert global_gridID_begin == atm_2_grid_segment[atm_id][0]
+        assert global_gridID_begin + len(grid_ID) == atm_2_grid_segment[atm_id][1]
         
         local_gridID_begin += len(grid_ID)
         global_gridID_begin += len(grid_ID)
