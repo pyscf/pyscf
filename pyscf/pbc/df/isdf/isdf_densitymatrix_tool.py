@@ -281,5 +281,9 @@ if __name__ == '__main__':
     
     res = get_atm_nrhf(cell, atm_config)
     
-    print(res)
-    print(cell.aoslice_by_atom())
+    init_guess = init_guess_by_atom(cell, atm_config)
+    
+    print("init_guess = ", init_guess)
+    
+    # print(res)
+    # print(cell.aoslice_by_atom())

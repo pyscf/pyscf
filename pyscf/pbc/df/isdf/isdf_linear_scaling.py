@@ -248,8 +248,10 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
 
 def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_possible = None):
     
+    # print("group = ", group)
+    
     assert isinstance(aoRg_possible, list)
-    assert isinstance(group, list)
+    assert isinstance(group, list) or isinstance(group, np.ndarray)
     assert isinstance(atm_2_IP_possible, list)
     
     assert len(aoRg_possible) == len(atm_2_IP_possible)
@@ -490,7 +492,7 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
                                                    mydf.distance_matrix,
                                                    mydf.AtmConnectionInfo, 
                                                    False, 
-                                                   self.use_mpi,
+                                                   mydf.use_mpi,
                                                    True)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t1, t2, "build_aoRg")
@@ -686,6 +688,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                  verbose = 1,
                  rela_cutoff_QRCP = None,
                  aoR_cutoff = 1e-8,
+                 direct=False
                  ):
         
         super().__init__(
@@ -731,6 +734,10 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
         self.V_W_cutoff = None
 
+        self.direct = direct # whether to use direct method to calculate J and K, if True, the memory usage will be reduced, V W will not be stored
+        if self.direct:
+            self.with_robust_fitting = True
+
     def build_partition_aoR(self, Ls):
         
         if self.aoR is not None and self.partition is not None:
@@ -771,11 +778,14 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             self.partition[i].sort()
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        sync_aoR = False
+        if self.direct:
+            sync_aoR = True
         self.aoR = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, self.partition, 
                                                   self.group,
                                                   self.distance_matrix, 
                                                   self.AtmConnectionInfo, 
-                                                  self.use_mpi, self.use_mpi)
+                                                  self.use_mpi, self.use_mpi, sync_aoR)
     
         memory = ISDF_LinearScalingBase._get_aoR_holders_memory(self.aoR)
         for i in range(comm_size):
@@ -795,57 +805,106 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
     def _allocate_jk_buffer(self, datatype, ngrids_local):
         pass
     
-    def allocate_k_buffer(self, max_nao_involved, max_nIP_involved, max_ngrid_involved): ### TODO: split grid again to reduce the size of buf when robust fitting is true! 
-        if hasattr(self, "build_k_buf"):
-            return
+    def _get_max_nao_involved(self):
+        return np.max([aoR_holder.aoR.shape[0] for aoR_holder in self.aoR if aoR_holder is not None])
+    def _get_max_ngrid_involved(self):
+        return np.max([aoR_holder.aoR.shape[1] for aoR_holder in self.aoR if aoR_holder is not None])
+    def _get_max_nIP_involved(self):
+        return np.max([aoR_holder.aoR.shape[1] for aoR_holder in self.aoRg if aoR_holder is not None])
+    def _get_maxsize_group_naux(self):
+        maxsize_group_naux = 0
+        for group_id, atm_ids in enumerate(self.group):
+            naux_tmp = 0
+            for atm_id in atm_ids:
+                naux_tmp += self.aoRg[atm_id].aoR.shape[1]
+            maxsize_group_naux = max(maxsize_group_naux, naux_tmp)
+        return maxsize_group_naux
+    
+    def allocate_k_buffer(self): 
+        ### TODO: split grid again to reduce the size of buf when robust fitting is true! 
+        # TODO: try to calculate the size when direct is true
+        
+        max_nao_involved = self._get_max_nao_involved()
+        max_ngrid_involved = self._get_max_ngrid_involved()
+        max_nIP_involved = self._get_max_nIP_involved()
+        maxsize_group_naux = self._get_maxsize_group_naux()
+        
+        allocated = False
+        
+        if self.direct:
+            if hasattr(self, "build_k_buf") and self.build_k_buf is not None:
+                if hasattr(self, "build_VW_in_k_buf") and self.build_VW_in_k_buf is not None:
+                    allocated = True
+        else:
+            if hasattr(self, "build_k_buf") and self.build_k_buf is not None:
+                allocated = True
+        
+        
+        if allocated:
+            pass
         else:
             
-            print("In allocate_k_buffer ")
-            print("max_nao_involved   = ", max_nao_involved)
-            print("max_ngrid_involved = ", max_ngrid_involved)
-            
-            self.Density_RgAO_buf = np.zeros((self.naux, self.nao), dtype=np.float64)
-            # self.Density_RgRg_buf = np.zeros((self.naux, self.naux), dtype=np.float64)
-            
-            # print("self.Density_RgRg_buf shape = ", self.Density_RgRg_buf.shape)
-            
-            # if self.with_robust_fitting:
-            #     self.Density_RgR_buf = np.zeros((self.naux, np.prod(self.cell.mesh)), dtype=np.float64)
-            #     print("self.Density_RgR_buf shape = ", self.Density_RgR_buf.shape)
-            # else:
-            #     self.Density_RgR_buf = None
+            if self.direct:
                 
-            max_dim = max(max_nao_involved, max_ngrid_involved, self.nao)
-                
-            ### size0 in getting W part of K ###
-            
-            size0 = self.naux * max_nIP_involved + self.naux * max_nao_involved + self.naux * max(max_nIP_involved, max_nao_involved)
-                
-            ### size1 in getting Density Matrix ### 
-            
-            size11 = self.nao * max_nIP_involved + self.nao * self.nao
-            
-            size1  = self.naux * self.nao + self.naux * max_dim + self.nao * self.nao
-            size1 += self.naux * max_nao_involved 
-            
-            size1 = max(size1, size11)
-            
-            print("max_dim = ", max_dim)
-            print("size1 = ", size1)
-            
-            ### size2 in getting K ### 
-                
-            size2 = self.naux * max_nao_involved
-            if self.with_robust_fitting:
-                size2 += self.naux * max_ngrid_involved + self.naux * max_nao_involved
-                size2 += self.naux * max_ngrid_involved
-            
-            print("size2 = ", size2)
-                
-            # self.ddot_k_buf = np.zeros((self.naux, max_nao_involved), dtype=np.float64)
-            self.build_k_buf = np.zeros((max(size0, size1, size2)), dtype=np.float64)
+                # self.Density_RgAO_buf = np.zeros((self.naux, self.nao, 2), dtype=np.float64)
 
-            print("build_k_buf shape = ", self.build_k_buf.shape)
+                size1 = maxsize_group_naux * self.nao
+                size2 = maxsize_group_naux * max_nao_involved
+                self.Density_RgAO_buf = np.zeros((size1+size2,), dtype=np.float64)
+
+                #### allocate build_VW_in_k_buf ####                
+                mesh = self.cell.mesh
+                ncomplex = mesh[0] * mesh[1] * (mesh[2]//2+1)
+                nthread = lib.num_threads()
+                size0 = (np.prod(self.cell.mesh) + 2 * ncomplex) * nthread
+                size1 = maxsize_group_naux * np.prod(self.cell.mesh) 
+                size2 = maxsize_group_naux * self.naux
+                self.build_VW_in_k_buf = np.zeros((size0+size1+size2,), dtype=np.float64)
+                
+                #### allocate build_k_buf ####
+                
+                size1 = maxsize_group_naux * np.prod(self.cell.mesh)
+                size2 = maxsize_group_naux * max_ngrid_involved
+                size3 = maxsize_group_naux * self.nao
+                size4 = max_ngrid_involved * max_nao_involved
+                size5 = max_ngrid_involved * max_ngrid_involved
+                size6 = max_nao_involved * self.nao
+                
+                size = size1 + size2 + size3 + size4 + size5 + size6
+                
+                self.build_k_buf = np.zeros((size,), dtype=np.float64)
+                
+            else:
+            
+                print("In allocate_k_buffer ")
+                print("max_nao_involved   = ", max_nao_involved)
+                print("max_ngrid_involved = ", max_ngrid_involved)
+                            
+                self.Density_RgAO_buf = np.zeros((self.naux, self.nao), dtype=np.float64)
+                max_dim = max(max_nao_involved, max_ngrid_involved, self.nao)
+                
+                ### size0 in getting W part of K ###
+            
+                size0 = self.naux * max_nIP_involved + self.naux * max_nao_involved + self.naux * max(max_nIP_involved, max_nao_involved)
+                
+                ### size1 in getting Density Matrix ### 
+            
+                size11 = self.nao * max_nIP_involved + self.nao * self.nao
+                size1  = self.naux * self.nao + self.naux * max_dim + self.nao * self.nao
+                size1 += self.naux * max_nao_involved     
+                size1 = max(size1, size11)
+                print("max_dim = ", max_dim)
+                print("size1 = ", size1)
+            
+                ### size2 in getting K ### 
+                
+                size2 = self.naux * max_nao_involved
+                if self.with_robust_fitting:
+                    size2 += self.naux * max_ngrid_involved + self.naux * max_nao_involved
+                    size2 += self.naux * max_ngrid_involved
+                print("size2 = ", size2)                
+                self.build_k_buf = np.zeros((max(size0, size1, size2)), dtype=np.float64)
+                print("build_k_buf shape = ", self.build_k_buf.shape)
             
     
     def build_IP_local(self, c=5, m=5, first_natm=None, group=None, Ls = None, debug=True):
@@ -955,6 +1014,9 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
     def build_auxiliary_Coulomb(self, debug=True):
         
+        if self.direct == True:
+            return # do nothing
+        
         ### the cutoff based on distance for V and W is used only for testing now ! ###
         
         distance_max = np.max(self.distance_matrix)
@@ -1010,7 +1072,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
-C = 25
+C = 15
 
 from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_split_grid import build_supercell_with_partition
@@ -1021,77 +1083,87 @@ if __name__ == '__main__':
     if rank != 0:
         verbose = 0
         
-    cell   = pbcgto.Cell()
-    boxlen = 3.5668
-    cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
-    prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    # cell   = pbcgto.Cell()
+    # boxlen = 3.5668
+    # cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    # prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    # atm = [
+    #     ['C', (0.     , 0.     , 0.    )],
+    #     ['C', (0.8917 , 0.8917 , 0.8917)],
+    #     ['C', (1.7834 , 1.7834 , 0.    )],
+    #     ['C', (2.6751 , 2.6751 , 0.8917)],
+    #     ['C', (1.7834 , 0.     , 1.7834)],
+    #     ['C', (2.6751 , 0.8917 , 2.6751)],
+    #     ['C', (0.     , 1.7834 , 1.7834)],
+    #     ['C', (0.8917 , 2.6751 , 2.6751)],
+    # ] 
+    
+    prim_a = np.array(
+                    [[14.572056092/2, 0.000000000, 0.000000000],
+                     [0.000000000, 14.572056092/2, 0.000000000],
+                     [0.000000000, 0.000000000,  6.010273939],]) * BOHR
     atm = [
-        ['C', (0.     , 0.     , 0.    )],
-        ['C', (0.8917 , 0.8917 , 0.8917)],
-        ['C', (1.7834 , 1.7834 , 0.    )],
-        ['C', (2.6751 , 2.6751 , 0.8917)],
-        ['C', (1.7834 , 0.     , 1.7834)],
-        ['C', (2.6751 , 0.8917 , 2.6751)],
-        ['C', (0.     , 1.7834 , 1.7834)],
-        ['C', (0.8917 , 2.6751 , 2.6751)],
-    ] 
+['Cu1',	(1.927800,	1.927800,	1.590250)],
+['O1',	(1.927800,	0.000000,	1.590250)],
+['O1',	(0.000000,	1.927800,	1.590250)],
+['Ca',	(0.000000,	0.000000,	0.000000)],
+    ]
+    basis = {
+        'Cu1':'ecpccpvdz', 'Cu2':'ecpccpvdz', 'O1': 'ecpccpvdz', 'Ca':'ecpccpvdz'
+    }
+    pseudo = {'Cu1': 'gth-pbe-q19', 'Cu2': 'gth-pbe-q19', 'O1': 'gth-pbe', 'Ca': 'gth-pbe'}
+    ke_cutoff = 128 
+    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
+    prim_mesh = prim_cell.mesh
     
-#     prim_a = np.array(
-#                     [[14.572056092/2, 0.000000000, 0.000000000],
-#                      [0.000000000, 14.572056092/2, 0.000000000],
-#                      [0.000000000, 0.000000000,  6.010273939],]) * BOHR
-#     atm = [
-# ['Cu1',	(1.927800,	1.927800,	1.590250)],
-# ['O1',	(1.927800,	0.000000,	1.590250)],
-# ['O1',	(0.000000,	1.927800,	1.590250)],
-# ['Ca',	(0.000000,	0.000000,	0.000000)],
-#     ]
-#     basis = {
-#         'Cu1':'ecpccpvdz', 'Cu2':'ecpccpvdz', 'O1': 'ecpccpvdz', 'Ca':'ecpccpvdz'
-#     }
-#     pseudo = {'Cu1': 'gth-pbe-q19', 'Cu2': 'gth-pbe-q19', 'O1': 'gth-pbe', 'Ca': 'gth-pbe'}
-#     ke_cutoff = 128 
-#     prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
-#     prim_mesh = prim_cell.mesh
-    
-    KE_CUTOFF = 70
-    # KE_CUTOFF = 128
+    # KE_CUTOFF = 70
+    KE_CUTOFF = 128
         
-    prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
+    # prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
     prim_mesh = prim_cell.mesh
     prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
     # prim_partition = [[0, 1, 2, 3, 4, 5, 6, 7]]
     # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     
     # prim_partition = [[0], [1], [2], [3]]
+    prim_partition = [[0, 1, 2, 3]]
     
-    Ls = [1, 1, 1]
+    Ls = [2, 2, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
     cell, group_partition = build_supercell_with_partition(atm, prim_a, mesh=mesh, 
                                                      Ls=Ls,
-                                                     # basis=basis, pseudo=pseudo,
+                                                     basis=basis, pseudo=pseudo,
                                                      partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
     print("group_partition = ", group_partition)
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8)
-    pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
-    # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=True)
+    # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
+    pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
     
+    from pyscf.pbc.df.isdf.isdf_densitymatrix_tool import init_guess_by_atom
     
+    atm_config = {
+        'Cu': {'charge': 2, 'occ_config': [6,12,9,0]},
+        'O': {'charge': -2, 'occ_config': [4,6,0,0]},
+        'Ca': {'charge': 2, 'occ_config': [6,12,0,0]},
+    }
+    
+    dm = init_guess_by_atom(cell, atm_config) # a better init guess than the default one ! 
     
     from pyscf.pbc import scf
 
     mf = scf.RHF(cell)
+    mf = scf.addons.smearing_(mf, sigma=0.2, method='fermi')
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
-    mf.max_cycle = 12
+    mf.max_cycle = 32
     mf.conv_tol = 1e-7
     
-    mf.kernel()
+    mf.kernel(dm)
     
     from pyscf.pbc.df.isdf.isdf_densitymatrix_tool import analysis_dm, analysis_dm_on_grid
     
@@ -1109,16 +1181,13 @@ if __name__ == '__main__':
     # mf.conv_tol = 1e-7
     # mf.kernel()
     
-    dm = mf.make_rdm1()
-    
-    pbc_isdf_info.V_W_cutoff = 13.0 
-    pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
-    
-    mf = scf.RHF(cell)
-    pbc_isdf_info.direct_scf = mf.direct_scf
-    mf.with_df = pbc_isdf_info
-    mf.max_cycle = 12
-    mf.conv_tol = 1e-7
-    
-    mf.kernel(dm)
+    # dm = mf.make_rdm1()
+    # pbc_isdf_info.V_W_cutoff = 13.0 
+    # pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
+    # mf = scf.RHF(cell)
+    # pbc_isdf_info.direct_scf = mf.direct_scf
+    # mf.with_df = pbc_isdf_info
+    # mf.max_cycle = 12
+    # mf.conv_tol = 1e-7
+    # mf.kernel(dm)
     

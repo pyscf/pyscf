@@ -624,7 +624,6 @@ def _get_grid_ordering(atmid_to_gridID, group, use_mpi=False):
             atmid_local = []
             for j in range(group_partition[0], group_partition[1]):
                 atmid_local.extend(group[j])
-            atmid_local.sort()
             for atmid in atmid_local:
                 grid_ordering.extend(atmid_to_gridID[atmid])
         
