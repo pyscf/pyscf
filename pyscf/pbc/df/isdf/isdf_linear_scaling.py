@@ -429,7 +429,7 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
             for i in range(len(group)):
                 IP_group[i] = select_IP_group_ls(mydf, aoRg_possible, c, m, group=group[i], atm_2_IP_possible=IP_possible_atm)
         else:
-            group_begin, group_end = ISDF_LinearScalingBase._range_partition(len(group), rank, comm_size)
+            group_begin, group_end = ISDF_LinearScalingBase._range_partition(len(group), rank, comm_size, use_mpi)
             for i in range(group_begin, group_end):
                 IP_group[i] = select_IP_group_ls(mydf, aoRg_possible, c, m, group=group[i], atm_2_IP_possible=IP_possible_atm)
             # allgather(IP_group)
@@ -492,7 +492,9 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
     
     else:
         if use_mpi:
-            mydf.aoRg = ISDF_LinearScalingBase._sync_list_related_to_partition(mydf.aoRg_possible, mydf.group)
+            # mydf.aoRg = ISDF_LinearScalingBase._sync_list_related_to_partition(mydf.aoRg_possible, mydf.group)
+            # mydf.aoRg = ISDF_LinearScalingBase._sync_aoRg(mydf.aoRg_possible, mydf.natm)
+            mydf.aoRg = mydf.aoRg_possible
             if rank == 0:
                 for aoR_holder in mydf.aoRg:
                     print('aoR-holder begin = ', aoR_holder.global_gridID_begin)
@@ -651,7 +653,6 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     
     if use_mpi:
         mydf.aux_basis = ISDF_LinearScalingBase._sync_list(mydf.aux_basis, ngroup)
-
         if rank == 0:
             for aux_basis in mydf.aux_basis:
                 print("aux_basis.shape = ", aux_basis.shape)
@@ -988,7 +989,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                                                             IP_Atm, 
                                                             self.group,
                                                             self.distance_matrix, 
-                                                            self.AtmConnectionInfo, self.use_mpi, self.use_mpi)
+                                                            self.AtmConnectionInfo, self.use_mpi, self.use_mpi, True)
         
         t4 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if self.verbose and debug:

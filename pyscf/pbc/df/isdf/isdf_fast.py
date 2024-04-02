@@ -98,18 +98,86 @@ def allgather(sendbuf, split_recvbuf=False):
     recvbuf = numpy.empty(sum(counts), dtype=mpi_dtype)
 
     sendbuf = sendbuf.ravel()
-    for p0, p1 in lib.prange(0, numpy.max(counts), BLKSIZE):
-        counts_seg = _segment_counts(counts, p0, p1)
-        comm.Allgatherv([sendbuf[p0:p1], mpi_dtype],
-                        [recvbuf, counts_seg, displs+p0, mpi_dtype])
-    if split_recvbuf:
-        return [recvbuf[p0:p0+c].reshape(shape)
-                for p0,c,shape in zip(displs,counts,rshape)]
-    else:
-        try:
-            return recvbuf.reshape((-1,) + shape[1:])
-        except ValueError:
+
+    size_of_recvbuf = recvbuf.size
+
+    if size_of_recvbuf >= INT_MAX:
+
+        blk_size_small = min((INT_MAX // comm_size),BLKSIZE)
+        recvbuf_small = numpy.empty(comm_size*blk_size_small, dtype=mpi_dtype)
+        rdispls_small = numpy.arange(comm_size)*blk_size_small
+        if rank == 0:
+            print("blk_size_small = ", blk_size_small)
+            print("rdispls_small = ", rdispls_small)
+            sys.stdout.flush()
+        for p0, p1 in prange(0, numpy.max(counts), blk_size_small):
+            counts_seg = _segment_counts(counts, p0, p1)
+            comm.Allgatherv([sendbuf[p0:p1], mpi_dtype],
+                            [recvbuf_small, counts_seg, rdispls_small, mpi_dtype])
+            # recvbuf[p0:p1] = recvbuf_small[:p1-p0]
+
+            for i in range(comm_size):
+                begin = displs[i]+p0
+                end = begin + counts_seg[i]
+                recvbuf[begin:end] = recvbuf_small[i*blk_size_small:i*blk_size_small+counts_seg[i]]
+
+        del recvbuf_small
+        del rdispls_small   
+        
+        if split_recvbuf:
+            return [recvbuf[p0:p0+c].reshape(shape)
+                    for p0,c,shape in zip(displs,counts,rshape)]
+        else:
             return recvbuf
+    else:
+        for p0, p1 in lib.prange(0, numpy.max(counts), BLKSIZE):
+            counts_seg = _segment_counts(counts, p0, p1)
+            comm.Allgatherv([sendbuf[p0:p1], mpi_dtype],
+                            [recvbuf, counts_seg, displs+p0, mpi_dtype])
+        if split_recvbuf:
+            return [recvbuf[p0:p0+c].reshape(shape)
+                    for p0,c,shape in zip(displs,counts,rshape)]
+        else:
+            # try:
+            #     return recvbuf.reshape((-1,) + shape[1:])
+            # except ValueError:
+            return recvbuf
+            # raise ValueError("split_recvbuf is not supported")
+
+def allgather_list(sendbuf):
+    
+    assert isinstance(sendbuf, list)
+    for _data_ in sendbuf:
+        assert isinstance(_data_, numpy.ndarray)
+    
+    shape = [x.shape for x in sendbuf]
+    attr = comm.allgather(shape)
+    attr_flat = []
+    for x in attr:
+        for y in x:
+            attr_flat.append(y)
+
+    if rank == 0:
+        for x in attr_flat:
+            print("x = ", x)
+
+    size_tot = np.sum([x.size for x in sendbuf])
+    sendbuf_flat = np.empty(size_tot, dtype=sendbuf[0].dtype)
+    offset = 0
+    for x in sendbuf:
+        sendbuf_flat[offset:offset+x.size] = x.ravel()
+        offset += x.size
+    
+    recvbuf_flat = allgather(sendbuf_flat)
+    
+    res = []
+    
+    offset = 0
+    for x in attr_flat:
+        res.append(recvbuf_flat[offset:offset+np.prod(x)].reshape(x))
+        offset += np.prod(x)
+
+    return res
 
 def allgather_pickle(sendbuf):
     sendbuf_serialized = MPI.pickle.dumps(sendbuf)

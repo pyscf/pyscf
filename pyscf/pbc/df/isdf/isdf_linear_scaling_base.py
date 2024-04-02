@@ -37,7 +37,7 @@ import pyscf.pbc.df.isdf.isdf_fast as ISDF
 import pyscf.pbc.df.isdf.isdf_split_grid as ISDF_split_grid
 import pyscf.pbc.df.isdf.isdf_k as ISDF_K
 
-from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch
+from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_list
 from pyscf.pbc.df.isdf.isdf_fast import bcast_pickel
 
 from pyscf.pbc.df.isdf.isdf_fast_mpi import get_jk_dm_mpi
@@ -710,6 +710,11 @@ def _sync_list(list_data, ngroup):
     for i in range(group_begin, group_end):
         assert list_data[i] is not None
     
+    list_data_new = []
+    for i in range(group_begin, group_end):
+        list_data_new.append(list_data[i])
+    list_data = list_data_new
+    
     ### generate groupid_2_root ###
     
     groupid_2_root = [] 
@@ -724,8 +729,10 @@ def _sync_list(list_data, ngroup):
     
     ### sync ### 
     
-    for i in range(ngroup):
-        list_data[i] = bcast_pickel(list_data[i], root=groupid_2_root[i])
+    # for i in range(ngroup):
+    #     list_data[i] = bcast_pickel(list_data[i], root=groupid_2_root[i])
+    
+    list_data = allgather_list(list_data)
     
     return list_data
 
@@ -766,9 +773,35 @@ def _sync_list_related_to_partition(list_data, group):
 
     return list_data
 
-def _sync_aoR(aoR_holders, group):
+def _sync_aoR(aoR_holders, natm):
     
-    return _sync_list_related_to_partition(aoR_holders, group)
+    # return _sync_list_related_to_partition(aoR_holders, group)
+
+    aoR = []
+    bas_id = []
+    grid_ID_begin = []
+    for i in range(natm):
+        if aoR_holders[i] is not None:
+            aoR.append(aoR_holders[i].aoR)
+            bas_id.append(aoR_holders[i].ao_involved)
+            grid_ID_begin.append(np.asarray([aoR_holders[i].global_gridID_begin],dtype=np.int32))
+        else:
+            aoR.append(None)
+            bas_id.append(None)
+            grid_ID_begin.append(None)
+
+    aoR = _sync_list(aoR, natm)
+    bas_id = _sync_list(bas_id, natm)
+    grid_ID_begin = _sync_list(grid_ID_begin, natm)
+
+    aoR_holders = []
+    
+    for i in range(natm):
+        aoR_holders.append(
+            aoR_Holder(aoR[i], bas_id[i], grid_ID_begin[i][0], grid_ID_begin[i][0] + aoR[i].shape[1], grid_ID_begin[i][0], grid_ID_begin[i][0] + aoR[i].shape[1])
+        )
+
+    return aoR_holders
 
 def _build_submol(cell:Cell, atm_invovled):
     import pyscf.pbc.gto as pbcgto
@@ -842,8 +875,14 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
     global_gridID_begin = grid_partition[rank]
     ao_loc = cell.ao_loc_nr()
     
+    atm_begin, atm_end = _range_partition(cell.natm, rank, comm_size, use_mpi)
+    # aoR_holder_raw = []
+    # for i in range(cell.natm):
+    #     aoR_holder_raw.append(None)
+    
     # for atm_id, grid_ID in enumerate(partition):
-    for atm_id in atm_involved:
+    # for atm_id in atm_involved:
+    for atm_id in range(atm_begin, atm_end):
         
         grid_ID = partition[atm_id]
         
@@ -950,6 +989,7 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
             print("atm %d involved %d ao after  prune" % (atm_id, aoR.shape[0]))
         
         aoR_holder[atm_id] = aoR_Holder(aoR, bas_id, local_gridID_begin, local_gridID_begin+len(grid_ID), global_gridID_begin, global_gridID_begin+len(grid_ID))
+        # aoR_holder_raw[atm_id] = aoR.copy()
         
         assert global_gridID_begin == atm_2_grid_segment[atm_id][0]
         assert global_gridID_begin + len(grid_ID) == atm_2_grid_segment[atm_id][1]
@@ -961,7 +1001,9 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
     # del aoR_tmp
     
     if use_mpi and sync_res:
-        aoR_holder = _sync_aoR(aoR_holder, group)
+        # aoR_holder = _sync_aoR(aoR_holder, group)
+        aoR_holder = _sync_aoR(aoR_holder, cell.natm)
+    
     
     if rank == 0:
         print("************* end get_aoR *************")
