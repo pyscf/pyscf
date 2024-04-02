@@ -988,6 +988,7 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
         if use_mpi == False:
             print("atm %d involved %d ao after  prune" % (atm_id, aoR.shape[0]))
         
+        global_gridID_begin = atm_2_grid_segment[atm_id][0]
         aoR_holder[atm_id] = aoR_Holder(aoR, bas_id, local_gridID_begin, local_gridID_begin+len(grid_ID), global_gridID_begin, global_gridID_begin+len(grid_ID))
         # aoR_holder_raw[atm_id] = aoR.copy()
         

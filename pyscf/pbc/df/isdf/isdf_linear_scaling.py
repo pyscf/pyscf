@@ -434,7 +434,7 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
                 IP_group[i] = select_IP_group_ls(mydf, aoRg_possible, c, m, group=group[i], atm_2_IP_possible=IP_possible_atm)
             # allgather(IP_group)
             
-            ISDF_LinearScalingBase._sync_list(IP_group, len(group))
+            IP_group = ISDF_LinearScalingBase._sync_list(IP_group, len(group))
 
     else:
         IP_group = IP_possible_atm 
