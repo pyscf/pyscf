@@ -770,6 +770,30 @@ def _sync_aoR(aoR_holders, group):
     
     return _sync_list_related_to_partition(aoR_holders, group)
 
+def _build_submol(cell:Cell, atm_invovled):
+    import pyscf.pbc.gto as pbcgto
+    
+    subcell = pbcgto.Cell()
+    subcell.a = cell.a
+    
+    atm = []
+    for atm_id in atm_invovled:
+        atm.append(cell.atom[atm_id])
+    
+    subcell.atom = atm
+    subcell.basis = cell.basis
+    subcell.pseudo = cell.pseudo
+    subcell.verbose = 0
+    subcell.ke_cutoff = cell.ke_cutoff
+    subcell.max_memory = cell.max_memory
+    subcell.precision = cell.precision
+    subcell.use_particle_mesh_ewald = cell.use_particle_mesh_ewald
+    subcell.mesh = cell.mesh
+    subcell.unit = cell.unit
+    subcell.build(mesh = cell.mesh)
+    
+    return subcell
+
 # @profile
 def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmConnectionInfoList:list[AtmConnectionInfo]=None, distributed = False, use_mpi=False, sync_res = False):
     
@@ -842,7 +866,7 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
         if use_mpi == False:
             print("atm %d involved %d ao before prune" % (atm_id, nao_invovled))
         
-        aoR = np.zeros((nao_invovled, len(grid_ID)))
+        # aoR = np.zeros((nao_invovled, len(grid_ID)))
         bas_id = []
 
         ao_loc_now = 0
@@ -901,12 +925,16 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
             shl_begin = shell_slice[i]
             shl_end = shell_slice[i+1]
             bas_id.extend(np.arange(ao_loc[shl_begin], ao_loc[shl_end]))
-            aoR_tmp = ISDF_eval_gto(cell, coords=coords[grid_ID], shls_slice=(shl_begin, shl_end)) * weight
-            aoR[ao_loc_now:ao_loc_now+aoR_tmp.shape[0]] = aoR_tmp
-            ao_loc_now += aoR_tmp.shape[0]
-            aoR_tmp = None
+            # aoR_tmp = ISDF_eval_gto(cell, coords=coords[grid_ID], shls_slice=(shl_begin, shl_end)) * weight
+            # aoR[ao_loc_now:ao_loc_now+aoR_tmp.shape[0]] = aoR_tmp
+            # ao_loc_now += aoR_tmp.shape[0]
+            # aoR_tmp = None
         
-        assert ao_loc_now == nao_invovled
+        # assert ao_loc_now == nao_invovled
+        
+        subcell = _build_submol(cell, atm_involved)
+        
+        aoR = ISDF_eval_gto(subcell, coords=coords[grid_ID]) * weight
         
         ##### screening the aoR, TODO: in C ##### 
         
@@ -930,7 +958,7 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
         global_gridID_begin += len(grid_ID)
                         
     del aoR
-    del aoR_tmp
+    # del aoR_tmp
     
     if use_mpi and sync_res:
         aoR_holder = _sync_aoR(aoR_holder, group)
@@ -982,6 +1010,10 @@ if __name__ == '__main__':
     mesh = np.array(mesh, dtype=np.int32)
     
     cell = ISDF_K.build_supercell(atm, prim_a, Ls = supercell, ke_cutoff=ke_cutoff, mesh=mesh, basis=basis, pseudo=pseudo)
+    
+    print(cell.atom)
+    print(cell.basis)
+    exit(1)
     
     from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
 
