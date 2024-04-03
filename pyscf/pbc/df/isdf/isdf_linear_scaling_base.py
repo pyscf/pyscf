@@ -256,10 +256,16 @@ def get_cell_distance_matrix(cell:Cell):
 
 # @profile
 def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInfo], 
-                  Ls=[3,3,3], use_mpi=False): # by default split the cell into 4x4x4 supercell
+                  Ls=[3,3,3], 
+                  with_translation_symmetry=False,
+                  kmesh=None,
+                  use_mpi=False): # by default split the cell into 4x4x4 supercell
     
     ##### this step is super fast #####
     ##### we simply perform it on root and broadcast it to all other processes #####
+    
+    if with_translation_symmetry and kmesh is None:
+        raise ValueError("kmesh must be provided if with_translation_symmetry is True")
     
     if (use_mpi and rank == 0) or use_mpi == False:
         print("************* get_partition *************")
@@ -269,6 +275,10 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     mesh = cell.mesh
     lattice_vector = cell.lattice_vectors()
     lattice_vector = np.array(lattice_vector)
+    
+    meshPrim = None
+    if with_translation_symmetry:
+        meshPrim = np.array(mesh) // np.array(kmesh)
     
     mesh_box = np.array([0,0,0])
     nbox = np.array([0,0,0])
@@ -384,6 +394,20 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
                 if mesh_z_begin == mesh_z_end:
                     continue
             
+                IsValidBox=True
+                if with_translation_symmetry:
+                    if mesh_x_begin >= meshPrim[0]:
+                        IsValidBox=False
+                    if mesh_y_begin >= meshPrim[1]:
+                        IsValidBox=False
+                    if mesh_z_begin >= meshPrim[2]:
+                        IsValidBox=False
+                if not IsValidBox:
+                    continue
+                mesh_x_end = min(mesh_x_end, meshPrim[0])
+                mesh_y_end = min(mesh_y_end, meshPrim[1])
+                mesh_z_end = min(mesh_z_end, meshPrim[2])
+            
                 # grid_ID = []
                 grid_ID = grid_id_global[mesh_x_begin:mesh_x_end, mesh_y_begin:mesh_y_end, mesh_z_begin:mesh_z_end].flatten()
                 
@@ -436,6 +460,9 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     ######## refine the partition based on the AtmConnectionInfo ########
     
     partition = []
+    natm_tmp = cell.natm
+    if with_translation_symmetry:
+        natm_tmp = cell.natm // np.prod(kmesh)
     for i in range(cell.natm):
         partition.append([])
     
@@ -534,7 +561,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
         )
         argmin_distance = np.argmin(distance, axis=1)
         for grid_id, atm_id in zip(grid_ID, argmin_distance):
-            partition[atm_involved[atm_id]].append(grid_id)
+            partition[atm_involved[atm_id]%natm_tmp].append(grid_id)
     
     if use_mpi == False or (use_mpi == True and rank == 0):
         len_grid_involved = 0
@@ -828,7 +855,10 @@ def _build_submol(cell:Cell, atm_invovled):
     return subcell
 
 # @profile
-def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmConnectionInfoList:list[AtmConnectionInfo]=None, distributed = False, use_mpi=False, sync_res = False):
+def get_aoR(cell:Cell, coords, partition, first_natm=None, group=None, distance_matrix=None, AtmConnectionInfoList:list[AtmConnectionInfo]=None, distributed = False, use_mpi=False, sync_res = False):
+    
+    if first_natm is None:
+        first_natm = cell.natm
     
     ## aoR is stored distributedly ##
     
@@ -862,7 +892,7 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
     for _ in range(cell.natm):
         aoR_holder.append(None)
     
-    atm_involved = _get_atmid_involved(cell.natm, group, rank, use_mpi)
+    # atm_involved = _get_atmid_involved(first_natm, group, rank, use_mpi)
     grid_partition = _get_grid_partition(partition, group, use_mpi)
     
     atm_2_grid_segment = _get_atm_2_grid_segment(partition, group)
@@ -890,7 +920,7 @@ def get_aoR(cell:Cell, coords, partition, group=None, distance_matrix=None, AtmC
         
         atm_involved = []
         for atm_id_other, distance in AtmConnectionInfoList[atm_id].atm_connected_info:
-            if distance < RcutMax:
+            if distance < RcutMax and atm_id_other < first_natm:
                 atm_involved.append(atm_id_other)
         atm_involved.sort()
         

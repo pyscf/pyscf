@@ -481,6 +481,7 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         mydf.aoRg = ISDF_LinearScalingBase.get_aoR(mydf.cell, mydf.coords, 
                                                    partition_IP, 
+                                                   mydf._get_first_natm(),
                                                    mydf.group,
                                                    mydf.distance_matrix,
                                                    mydf.AtmConnectionInfo, 
@@ -730,6 +731,15 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         if self.direct:
             self.with_robust_fitting = True
 
+        self.with_translation_symmetry = False
+        self.kmesh = None
+
+    def _get_first_natm(self):
+        if self.kmesh is not None:
+            return self.cell.natm // np.prod(self.kmesh)
+        else:
+            return self.cell.natm
+
     def build_partition_aoR(self, Ls):
         
         if self.aoR is not None and self.partition is not None:
@@ -761,7 +771,10 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         self.partition = ISDF_LinearScalingBase.get_partition(self.cell, self.coords, self.AtmConnectionInfo, 
-                                                              Ls, self.use_mpi)
+                                                              Ls, 
+                                                              self.with_translation_symmetry,
+                                                              self.kmesh,
+                                                              self.use_mpi)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if rank == 0:
@@ -777,7 +790,13 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         sync_aoR = False
         if self.direct:
             sync_aoR = True
+            
+        ## deal with translation symmetry ##
+        first_natm = self._get_first_natm()
+        ####################################
+        
         self.aoR = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, self.partition, 
+                                                  first_natm,
                                                   self.group,
                                                   self.distance_matrix, 
                                                   self.AtmConnectionInfo, 
@@ -986,7 +1005,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         #     print("IP_Atm = ", IP_Atm)
         
         self.aoRg_possible = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, 
-                                                            IP_Atm, 
+                                                            IP_Atm,
+                                                            self._get_first_natm(), 
                                                             self.group,
                                                             self.distance_matrix, 
                                                             self.AtmConnectionInfo, self.use_mpi, self.use_mpi, True)
