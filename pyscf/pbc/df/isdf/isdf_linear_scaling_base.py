@@ -404,9 +404,11 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
                         IsValidBox=False
                 if not IsValidBox:
                     continue
-                mesh_x_end = min(mesh_x_end, meshPrim[0])
-                mesh_y_end = min(mesh_y_end, meshPrim[1])
-                mesh_z_end = min(mesh_z_end, meshPrim[2])
+                
+                if with_translation_symmetry:
+                    mesh_x_end = min(mesh_x_end, meshPrim[0])
+                    mesh_y_end = min(mesh_y_end, meshPrim[1])
+                    mesh_z_end = min(mesh_z_end, meshPrim[2])
             
                 # grid_ID = []
                 grid_ID = grid_id_global[mesh_x_begin:mesh_x_end, mesh_y_begin:mesh_y_end, mesh_z_begin:mesh_z_end].flatten()
@@ -575,7 +577,12 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     # del aoR
     
     if use_mpi:
-        partition = bcast_pickel(partition)
+        partition_sendbuf = [np.array(x, dtype=np.int32) for x in partition]
+        partition = []
+        # partition = bcast_pickel(partition)
+        for x in partition_sendbuf:
+            partition.append(bcast(x))
+        del partition_sendbuf
     
     if (use_mpi and rank == 0) or use_mpi == False:
         print("************* end get_partition *************")
