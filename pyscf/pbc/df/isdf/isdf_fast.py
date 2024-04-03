@@ -101,8 +101,10 @@ def allgather(sendbuf, split_recvbuf=False):
 
     size_of_recvbuf = recvbuf.size
 
-    if size_of_recvbuf >= INT_MAX:
+    print("rank %d size recvbf %d" % (rank, size_of_recvbuf))
 
+    if size_of_recvbuf >= INT_MAX:
+        print("large data size go this branch")
         blk_size_small = min((INT_MAX // comm_size),BLKSIZE)
         recvbuf_small = numpy.empty(comm_size*blk_size_small, dtype=mpi_dtype)
         rdispls_small = numpy.arange(comm_size)*blk_size_small
@@ -130,10 +132,15 @@ def allgather(sendbuf, split_recvbuf=False):
         else:
             return recvbuf
     else:
-        for p0, p1 in lib.prange(0, numpy.max(counts), BLKSIZE):
+        print("small data size go this branch")
+        print("maxcount = ", numpy.max(counts))
+        end = numpy.max(counts)
+        for p0, p1 in lib.prange(0, end, BLKSIZE):
+            print("rank %d send p0 p1 %d %d"%(rank,p0,p1))
             counts_seg = _segment_counts(counts, p0, p1)
             comm.Allgatherv([sendbuf[p0:p1], mpi_dtype],
                             [recvbuf, counts_seg, displs+p0, mpi_dtype])
+        print("rank %d finish all gather" % (rank))
         if split_recvbuf:
             return [recvbuf[p0:p0+c].reshape(shape)
                     for p0,c,shape in zip(displs,counts,rshape)]
@@ -161,6 +168,9 @@ def allgather_list(sendbuf):
         for x in attr_flat:
             print("x = ", x)
 
+    print("rank %d get here 1" % (rank))
+    sys.stdout.flush()
+
     size_tot = np.sum([x.size for x in sendbuf])
     sendbuf_flat = np.empty(size_tot, dtype=sendbuf[0].dtype)
     offset = 0
@@ -168,8 +178,13 @@ def allgather_list(sendbuf):
         sendbuf_flat[offset:offset+x.size] = x.ravel()
         offset += x.size
     
+    print("rank %d get here 2" % (rank))
+    sys.stdout.flush()
+
     recvbuf_flat = allgather(sendbuf_flat)
     
+    print("rank %d get here 3" % (rank))
+    sys.stdout.flush()
     res = []
     
     offset = 0
