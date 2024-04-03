@@ -737,10 +737,10 @@ def _sync_list(list_data, ngroup):
     for i in range(group_begin, group_end):
         assert list_data[i] is not None
     
-    list_data_new = []
-    for i in range(group_begin, group_end):
-        list_data_new.append(list_data[i])
-    list_data = list_data_new
+    # list_data_new = []
+    # for i in range(group_begin, group_end):
+    #     list_data_new.append(list_data[i])
+    # list_data = list_data_new
     
     ### generate groupid_2_root ###
     
@@ -756,10 +756,13 @@ def _sync_list(list_data, ngroup):
     
     ### sync ### 
     
-    # for i in range(ngroup):
-    #     list_data[i] = bcast_pickel(list_data[i], root=groupid_2_root[i])
+    for i in range(ngroup):
+        if rank == groupid_2_root[i]:
+            # print("rank %d sync %d" % (rank,i))
+            sys.stdout.flush()
+        list_data[i] = bcast(list_data[i], root=groupid_2_root[i])
     
-    list_data = allgather_list(list_data)
+    # list_data = allgather_list(list_data)
     
     return list_data
 
