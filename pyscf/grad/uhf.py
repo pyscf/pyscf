@@ -106,8 +106,6 @@ class Gradients(rhf_grad.GradientsBase):
 
     grad_elec = grad_elec
 
-    to_gpu = lib.to_gpu
-
 Grad = Gradients
 
 from pyscf import scf

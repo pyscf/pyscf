@@ -590,7 +590,6 @@ class Hessian(rhf_hess.HessianBase):
     partial_hess_elec = partial_hess_elec
     hess_elec = rhf_hess.hess_elec
     make_h1 = make_h1
-    to_gpu = lib.to_gpu
 
 from pyscf import dft
 dft.rks.RKS.Hessian = dft.rks_symm.RKS.Hessian = lib.class_as_method(Hessian)
