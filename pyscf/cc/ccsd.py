@@ -1240,6 +1240,15 @@ class CCSDBase(lib.StreamObject):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+    # to_gpu can be reused only when __init__ still takes mf
+    def to_gpu(self):
+        mf = self.base.to_gpu()
+        from importlib import import_module
+        mod = import_module(self.__module__.replace('pyscf', 'gpu4pyscf'))
+        cls = getattr(mod, self.__class__.__name__)
+        obj = cls(mf)
+        return obj
+
 class CCSD(CCSDBase):
     __doc__ = CCSDBase.__doc__
 
@@ -1364,8 +1373,6 @@ class CCSD(CCSDBase):
     def get_d2_diagnostic(self, t2=None):
         if t2 is None: t2 = self.t2
         return get_d2_diagnostic(t2)
-
-    to_gpu = lib.to_gpu
 
 CC = RCCSD = CCSD
 
