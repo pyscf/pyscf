@@ -54,7 +54,7 @@ RMP2.__doc__ = mp2.RMP2.__doc__
 
 def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     mf = mf.remove_soscf()
-    if mf.istype('UHF'):
+    if not mf.istype('UHF'):
         mf = mf.to_uhf()
 
     if getattr(mf, 'with_df', None):
