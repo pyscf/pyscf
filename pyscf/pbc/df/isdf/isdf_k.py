@@ -247,6 +247,42 @@ def build_supercell(prim_atm,
     
     return Cell
 
+def build_primitive_cell(supercell:Cell, kmesh):
+    
+    Cell = pbcgto.Cell()
+    
+    # assert prim_a[0, 1] == 0.0
+    # assert prim_a[0, 2] == 0.0
+    # assert prim_a[1, 0] == 0.0
+    # assert prim_a[1, 2] == 0.0
+    # assert prim_a[2, 0] == 0.0
+    # assert prim_a[2, 1] == 0.0
+    
+    prim_a = np.array( [supercell.a[0]/kmesh[0], supercell.a[1]/kmesh[1], supercell.a[2]/kmesh[2]], dtype=np.float64 )
+    
+    print("supercell.a = ", supercell.a)
+    print("prim_a = ", prim_a)
+    
+    Cell.a = prim_a
+    
+    atm = supercell.atom[:supercell.natm//np.prod(kmesh)]
+    
+    Cell.atom = atm
+    Cell.basis = supercell.basis
+    Cell.pseudo = supercell.pseudo
+    Cell.ke_cutoff = supercell.ke_cutoff
+    Cell.max_memory = supercell.max_memory
+    Cell.precision = supercell.precision
+    Cell.use_particle_mesh_ewald = supercell.use_particle_mesh_ewald
+    Cell.verbose = supercell.verbose
+    Cell.unit = supercell.unit
+    
+    mesh = np.array(supercell.mesh) // np.array(kmesh)
+    
+    Cell.build(mesh=mesh)
+    
+    return Cell
+
 ####################### Select IP #######################
 
 # @profile 

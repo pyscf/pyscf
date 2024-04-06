@@ -263,7 +263,7 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
     assert isinstance(atm_2_IP_possible, list)
     
     assert len(aoRg_possible) == len(atm_2_IP_possible)
-    assert len(aoRg_possible) == mydf.natm
+    # assert len(aoRg_possible) == mydf.natm
     
     
     if group is None:
@@ -481,6 +481,7 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         mydf.aoRg = ISDF_LinearScalingBase.get_aoR(mydf.cell, mydf.coords, 
                                                    partition_IP, 
+                                                   None,
                                                    mydf._get_first_natm(),
                                                    mydf.group,
                                                    mydf.distance_matrix,
@@ -566,14 +567,11 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     
     ###### calculate grid segment ######
     
-    grid_segment = [0]
-    
-    grid_segment = ISDF_LinearScalingBase._get_grid_partition(mydf.partition, group, use_mpi)
-    
-    if use_mpi == False or (use_mpi and rank == 0):
-        print("grid_segment = ", grid_segment)
-    
-    mydf.grid_segment = grid_segment
+    # grid_segment = [0]
+    # grid_segment = ISDF_LinearScalingBase._get_grid_partition(mydf.partition, group, use_mpi)
+    # if use_mpi == False or (use_mpi and rank == 0):
+    #     print("grid_segment = ", grid_segment)
+    # mydf.grid_segment = grid_segment
     
     ###### build grid_ID_local ###### 
     
@@ -796,6 +794,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         ####################################
         
         self.aoR = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, self.partition, 
+                                                  None,
                                                   first_natm,
                                                   self.group,
                                                   self.distance_matrix, 
@@ -893,9 +892,9 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                 
             else:
             
-                print("In allocate_k_buffer ")
-                print("max_nao_involved   = ", max_nao_involved)
-                print("max_ngrid_involved = ", max_ngrid_involved)
+                # print("In allocate_k_buffer ")
+                # print("max_nao_involved   = ", max_nao_involved)
+                # print("max_ngrid_involved = ", max_ngrid_involved)
                             
                 self.Density_RgAO_buf = np.zeros((self.naux, self.nao), dtype=np.float64)
                 max_dim = max(max_nao_involved, max_ngrid_involved, self.nao)
@@ -910,8 +909,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                 size1  = self.naux * self.nao + self.naux * max_dim + self.nao * self.nao
                 size1 += self.naux * max_nao_involved     
                 size1 = max(size1, size11)
-                print("max_dim = ", max_dim)
-                print("size1 = ", size1)
+                # print("max_dim = ", max_dim)
+                # print("size1 = ", size1)
             
                 ### size2 in getting K ### 
                 
@@ -919,9 +918,9 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                 if self.with_robust_fitting:
                     size2 += self.naux * max_ngrid_involved + self.naux * max_nao_involved
                     size2 += self.naux * max_ngrid_involved
-                print("size2 = ", size2)                
+                # print("size2 = ", size2)                
                 self.build_k_buf = np.zeros((max(size0, size1, size2)), dtype=np.float64)
-                print("build_k_buf shape = ", self.build_k_buf.shape)
+                # print("build_k_buf shape = ", self.build_k_buf.shape)
             
     
     def build_IP_local(self, c=5, m=5, first_natm=None, group=None, Ls = None, debug=True):
@@ -989,7 +988,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
         t1 = t2
         
-        if len(group) < natm:
+        if len(group) < first_natm:
             IP_Atm = select_IP_atm_ls(self, c+1, m, first_natm, 
                                       rela_cutoff=self.rela_cutoff_QRCP,
                                       no_retriction_on_nIP=self.no_restriction_on_nIP,
@@ -1006,6 +1005,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
         self.aoRg_possible = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, 
                                                             IP_Atm,
+                                                            None,
                                                             self._get_first_natm(), 
                                                             self.group,
                                                             self.distance_matrix, 
@@ -1150,7 +1150,7 @@ if __name__ == '__main__':
     # prim_partition = [[0], [1], [2], [3]]
     prim_partition = [[0, 1, 2, 3]]
     
-    Ls = [2, 2, 1]
+    Ls = [2, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -1160,7 +1160,7 @@ if __name__ == '__main__':
                                                      basis=basis, pseudo=pseudo,
                                                      partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
     print("group_partition = ", group_partition)
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=True)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False)
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls

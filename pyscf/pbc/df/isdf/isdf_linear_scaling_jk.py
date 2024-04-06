@@ -559,6 +559,8 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     Density_RgAO = __get_DensityMatrixonRgAO_qradratic(mydf, dm, aoRg, mydf.Density_RgAO_buf, use_mpi)
     
+    # print("Density_RgAO = ", Density_RgAO[0, :16])
+    
     # if with_robust_fitting:
     #     Density_RgR  = __get_DensityMatrixonGrid_qradratic(mydf, dm, aoRg, aoR, mydf.Density_RgR_buf, use_mpi)
     # else:
@@ -1008,7 +1010,7 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
         
         Density_RgAO_tmp.ravel()[:] = 0.0
         Density_RgAO_tmp = __get_DensityMatrixonRgAO_qradratic(mydf, dm, aoRg_holders, Density_RgAO_tmp, verbose=mydf.verbose)
-    
+        
         #### 2. build the V matrix #### 
         
         V_tmp = np.ndarray((naux_tmp, ngrid), buffer=build_VW_buf, offset=offset_now, dtype=np.float64)
@@ -1061,6 +1063,8 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
         # assert ngrid_loc == ngrid
         
         Density_RgR = Density_RgR_tmp
+        
+        # print("RgRg = ", RgRg[0, :16])
         
         #### 3.2 V_tmp = Density_RgR * V
         
@@ -1320,6 +1324,9 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     # K2.ravel()[:] = 0.0
     # K2 = -K2
     
+    # print("K1 = ", K1[0, :16])
+    # print("K2 = ", K2[0, :16])
+    
     if use_mpi:
         K1 = reduce(K1, root = 0)
         K2 = reduce(K2, root = 0)
@@ -1396,8 +1403,8 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     if with_j:
         vj = _contract_j_dm_ls(mydf, dm, use_mpi)  
         # if rank == 0:
-            # print("vj = ", vj[0, :16])
-            # print("vj = ", vj[0, -16:])
+        # print("vj = ", vj[0, :16])
+        # print("vj = ", vj[0, -16:])
     if with_k:
         # if mydf.with_robust_fitting:
         #     vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
@@ -1408,8 +1415,8 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         else:
             vk = _contract_k_dm_quadratic(mydf, dm, mydf.with_robust_fitting, use_mpi=use_mpi)
         # if rank == 0:
-            # print("vk = ", vk[0, :16])
-            # print("vk = ", vk[0, -16:])
+        # print("vk = ", vk[0, :16])
+        # print("vk = ", vk[0, -16:])
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
 

@@ -709,6 +709,29 @@ void _packadd_local_dm(
     }
 }
 
+void _buildJ_k_packaddrow(
+    double *target,
+    const int nrow_target,
+    const int ncol_target,
+    double *source,
+    const int nrow_source,
+    const int ncol_source,
+    const int *rowloc,
+    const int *colloc)
+{
+    int nThread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < nrow_source; ++i)
+    {
+        size_t row_loc = rowloc[i];
+        for (size_t j = 0; j < ncol_source; ++j)
+        {
+            target[row_loc * ncol_target + colloc[j]] += source[i * ncol_source + j];
+        }
+    }
+}
+
 void _buildK_packaddrow(
     double *target,
     const int nrow_target,
