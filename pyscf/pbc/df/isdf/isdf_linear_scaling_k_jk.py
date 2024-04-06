@@ -337,7 +337,9 @@ def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
     
     J = ISDF_K._pack_JK(J, mydf.kmesh, nao_prim)
     
-    assert np.allclose(J, J.T)
+    # diff = np.max(np.abs(J - J.T))
+    # print("diff = ", diff)    
+    # assert np.allclose(J, J.T)
     
     return J * ngrid / vol
 

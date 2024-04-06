@@ -764,6 +764,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                     box_z_new = (box_z + box_z_) % self.kmesh[2]
                     nao_id_new = box_x_new * self.kmesh[1] * self.kmesh[2] * self.nao_prim + box_y_new * self.kmesh[2] * self.nao_prim + box_z_new * self.nao_prim + nao_id
                     ao_permutated.append(nao_id_new)
+                # print("ao_permutated = ", ao_permutated)
                 permutation.append(np.array(ao_permutated, dtype=np.int32))
             self.aoR_col_permutation[loc] = permutation
         
@@ -924,7 +925,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             # dm_tmp = dm[permutation, :]
             # benchmark = lib.ddot(aoR_holder.aoR.T, dm_tmp)
             # diff = benchmark - ddot_res
-            # print("diff = ", np.linalg.norm(diff)/np.sqrt(ddot_res.size))
+            # print("_construct_RgAO diff = ", np.linalg.norm(diff)/np.sqrt(ddot_res.size))
             
             grid_loc += ngrid_now
         
@@ -1028,13 +1029,13 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         #     aoR_benchmark = ISDF_eval_gto(self.cell, coords=self.coords[self.grid_ID_ordered]) * weight
         #     res_bench = lib.ddot(RgAO, aoR_benchmark)
         #     diff = res_bench - Res
-        #     print("diff = ", np.linalg.norm(diff)/np.sqrt(Res.size))
+        #     print("_construct_RgR False diff = ", np.linalg.norm(diff)/np.sqrt(Res.size))
         # else:
         #     weight = np.sqrt(self.cell.vol / self.coords.shape[0])
         #     aoRg_benchmark = ISDF_eval_gto(self.cell, coords=self.coords[self.IP_flat]) * weight
         #     res_bench = lib.ddot(RgAO, aoRg_benchmark)
         #     diff = res_bench - Res
-        #     print("diff = ", np.linalg.norm(diff)/np.sqrt(Res.size))
+        #     print("_construct_RgR True  diff = ", np.linalg.norm(diff)/np.sqrt(Res.size))
 
         return Res
 
@@ -1178,7 +1179,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                     iy_ = (j - box_y + self.kmesh[1]) % self.kmesh[1]
                     iz_ = (k - box_z + self.kmesh[2]) % self.kmesh[2]
                     loc_ = ix_ * self.kmesh[1] * self.kmesh[2] + iy_ * self.kmesh[2] + iz_
-                    K_tmp1_permutation[:, loc*nao_prim:(loc+1)*nao_prim] = K_tmp1[:, loc_*nao_prim:(loc_+1)*nao_prim]
+                    K_tmp1_permutation[:, loc*self.nao_prim:(loc+1)*self.nao_prim] = K_tmp1[:, loc_*self.nao_prim:(loc_+1)*self.nao_prim]
                     loc += 1    
     
     
@@ -1255,7 +1256,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
 from pyscf.pbc.df.isdf.isdf_k import build_supercell
 from pyscf.pbc.df.isdf.isdf_split_grid import build_supercell_with_partition
 
-C = 25
+C = 8
 
 if __name__ == "__main__":
     
@@ -1278,14 +1279,14 @@ if __name__ == "__main__":
         ['C', (0.8917 , 2.6751 , 2.6751)],
     ] 
     
-    KE_CUTOFF = 70
+    KE_CUTOFF = 64
     
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
     prim_mesh = prim_cell.mesh
     prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
     # prim_partition = [[0,1,2,3,4,5,6,7]]
     
-    Ls = [2, 2, 2]
+    Ls = [1, 3, 3]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -1304,15 +1305,14 @@ if __name__ == "__main__":
     
     print("len of grid_ordering = ", len(pbc_isdf_info.grid_ID_ordered))
     
-    # aoR_unpacked = []
-    # for aoR_holder in pbc_isdf_info.aoR1:
-    #     aoR_unpacked.append(aoR_holder.todense(prim_cell.nao_nr()))
-    # aoR_unpacked = np.concatenate(aoR_unpacked, axis=1)
-    # print("aoR_unpacked shape = ", aoR_unpacked.shape)
+    aoR_unpacked = []
+    for aoR_holder in pbc_isdf_info.aoR1:
+        aoR_unpacked.append(aoR_holder.todense(prim_cell.nao_nr()))
+    aoR_unpacked = np.concatenate(aoR_unpacked, axis=1)
+    print("aoR_unpacked shape = ", aoR_unpacked.shape)
     
     weight = np.sqrt(cell.vol / pbc_isdf_info.coords.shape[0])
     aoR_benchmark = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords[pbc_isdf_info.grid_ID_ordered]) * weight
-    
     loc = 0
     nao_prim = prim_cell.nao_nr()
     for ix in range(Ls[0]):
@@ -1328,7 +1328,16 @@ if __name__ == "__main__":
                 loc += 1
     # aoR_benchmark = aoR_benchmark[:prim_cell.nao_nr(),:]
                 diff = aoR_benchmark_now - aoR_unpacked
+                where = np.where(np.abs(diff) > 1e-4)
+                # print(aoR_benchmark_now[78,:])
+                # print(aoR_unpacked[78,:])
+                # print("where = ", where)    
+                # print(aoR_benchmark_now[0,0], aoR_unpacked[0,0])
                 print("diff = ", np.linalg.norm(diff)/np.sqrt(aoR_unpacked.size))
+    
+    print("prim_mesh = ", prim_mesh)
+    
+    # exit(1)
     
     naux_prim = 0
     for data in pbc_isdf_info.aoRg:
@@ -1345,9 +1354,27 @@ if __name__ == "__main__":
                 for _loc_, data in enumerate(pbc_isdf_info.aoR):
                     aoR_unpacked[perm_col[_loc_], ngrid:ngrid+data.aoR.shape[1]] = data.aoR
                     ngrid += data.aoR.shape[1]
-    
+    assert ngrid == np.prod(mesh)
     diff = aoR_benchmark - aoR_unpacked
-    print("diff = ", np.linalg.norm(diff)/np.sqrt(aoR_unpacked.size))
+    where = np.where(np.abs(diff) > 1e-4)
+    print("where = ", where)
+    print("diff = ", np.linalg.norm(diff)/np.sqrt(aoR_unpacked.size)) 
+    
+    ngrid_prim = np.prod(prim_mesh)
+    diff = aoR_benchmark[:, :ngrid_prim] - aoR_unpacked[:,:ngrid_prim]
+    print("diff.shape = ", diff.shape)
+    print("diff = ", np.linalg.norm(diff)/np.sqrt(diff.size))
+    where = np.where(np.abs(diff) > 1e-4)
+    print("where = ", where)
+    
+    grid_ID_prim = pbc_isdf_info.grid_ID_ordered[:ngrid_prim]
+    grid_ID_prim2 = []
+    for i in range(pbc_isdf_info.natmPrim):
+        grid_ID_prim2.extend(pbc_isdf_info.partition[i])
+    grid_ID_prim2 = np.array(grid_ID_prim2, dtype=np.int32)
+    assert np.allclose(grid_ID_prim, grid_ID_prim2)
+    
+    # exit(1)
     
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
     
@@ -1374,9 +1401,19 @@ if __name__ == "__main__":
     pbc_isdf_info.Ls = Ls
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
     
+    aoR_unpacked = []
+    for aoR_holder in pbc_isdf_info.aoR:
+        aoR_unpacked.append(aoR_holder.todense(cell.nao_nr()))
+    aoR_unpacked = np.concatenate(aoR_unpacked, axis=1)
+    grid_ordered = pbc_isdf_info.grid_ID_ordered
+    aoR_benchmark = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords[grid_ordered]) * weight
+    diff = aoR_benchmark - aoR_unpacked
+    print("diff = ", np.linalg.norm(diff)/np.sqrt(aoR_unpacked.size))
+    exit(1)
+    
     mf = scf.RHF(cell)
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 16
     mf.conv_tol = 1e-7
-    mf.kernel()
+    # mf.kernel()

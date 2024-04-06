@@ -966,11 +966,20 @@ def get_aoR(cell:Cell, coords, partition,
         
         ##### find the involved atms within RcutMax #####
         
-        atm_involved = []
-        for atm_id_other, distance in AtmConnectionInfoList[atm_id].atm_connected_info:
-            if distance < RcutMax and atm_id_other < first_natm:
-                atm_involved.append(atm_id_other)
-        atm_involved.sort()
+        if first_natm!=cell.natm:
+            atm_involved = np.arange(first_natm) # with kmesh ! 
+        else:
+            if first_npartition == len(partition):
+                
+                atm_involved = []
+                for atm_id_other, distance in AtmConnectionInfoList[atm_id].atm_connected_info:
+                    if distance < RcutMax and atm_id_other < first_natm:
+                        atm_involved.append(atm_id_other)
+                atm_involved.sort()
+            else:
+                atm_involved = np.arange(cell.natm) # with kmesh ! 
+        
+        print("atm %d involved atm = %s" % (atm_id, atm_involved))
         
         ##### get the involved ao #####
         
@@ -989,19 +998,26 @@ def get_aoR(cell:Cell, coords, partition,
         ao_loc_now = 0
         
         shell_slice = []
+        shl_end_test = 0
         for atm_id_other in atm_involved:
             shl_begin = AtmConnectionInfoList[atm_id_other].bas_range[0]
             shl_end = AtmConnectionInfoList[atm_id_other].bas_range[-1]+1
-            if len(shell_slice) == 0:
-                shell_slice.append(shl_begin)
-                shell_slice.append(shl_end)
-            else:
-                if shl_begin == shell_slice[-1]:
-                    shell_slice[-1] = shl_end
-                else:
-                    # shell_slice.append(shl_end)
-                    shell_slice.append(shl_begin)
-                    shell_slice.append(shl_end)
+            # print("atm_id_other = ", atm_id_other)
+            # print("shl_begin = %d, shl_end = %d" % (shl_begin, shl_end))
+            bas_id.extend(np.arange(ao_loc[shl_begin], ao_loc[shl_end]))
+            # shl_end_test = shl_end
+            # if len(shell_slice) == 0:
+            #     shell_slice.append(shl_begin)
+            #     shell_slice.append(shl_end)
+            # else:
+            #     if shl_begin == shell_slice[-1]:
+            #         shell_slice[-1] = shl_end
+            #     else:
+            #         # shell_slice.append(shl_end)
+            #         shell_slice.append(shl_begin)
+            #         shell_slice.append(shl_end)
+        
+        bas_id = np.array(bas_id)
         
         #### TODO: do not perform this loop #### 
         
@@ -1038,20 +1054,23 @@ def get_aoR(cell:Cell, coords, partition,
         #         aoR[ao_loc_begin:ao_loc_end] = aoR_tmp
         #     ao_loc_now = ao_loc_end 
         
-        for i in range(0, len(shell_slice), 2):
-            shl_begin = shell_slice[i]
-            shl_end = shell_slice[i+1]
-            bas_id.extend(np.arange(ao_loc[shl_begin], ao_loc[shl_end]))
-            # aoR_tmp = ISDF_eval_gto(cell, coords=coords[grid_ID], shls_slice=(shl_begin, shl_end)) * weight
-            # aoR[ao_loc_now:ao_loc_now+aoR_tmp.shape[0]] = aoR_tmp
-            # ao_loc_now += aoR_tmp.shape[0]
-            # aoR_tmp = None
+        # for i in range(0, len(shell_slice), 2):
+        #     shl_begin = shell_slice[i]
+        #     shl_end = shell_slice[i+1]
+        #     bas_id.extend(np.arange(ao_loc[shl_begin], ao_loc[shl_end]))
+        #     # aoR_tmp = ISDF_eval_gto(cell, coords=coords[grid_ID], shls_slice=(shl_begin, shl_end)) * weight
+        #     # aoR[ao_loc_now:ao_loc_now+aoR_tmp.shape[0]] = aoR_tmp
+        #     # ao_loc_now += aoR_tmp.shape[0]
+        #     # aoR_tmp = None
         
         # assert ao_loc_now == nao_invovled
         
         subcell = _build_submol(cell, atm_involved)
         
         aoR = ISDF_eval_gto(subcell, coords=coords[grid_ID]) * weight
+        # aoR = ISDF_eval_gto(cell, coords=coords[grid_ID], shls_slice=(0, shl_end_test)) * weight
+        
+        assert aoR.shape[0] == len(bas_id)
         
         ##### screening the aoR, TODO: in C ##### 
         
@@ -1224,7 +1243,7 @@ if __name__ == '__main__':
     else:
         partition = get_partition(cell, coords, AtmConnectionInfoList, Ls=[supercell[0]*3, supercell[1]*3, supercell[2]*3], use_mpi=False)    
         
-    exit(1)
+    # exit(1)
 
     aoR_list = get_aoR(cell, coords, partition, 
                        distance_matrix=distance_matrix, 
