@@ -414,12 +414,11 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
     
         #### information dealing grids , build parition ####
         
-        if Ls is None:
-            lattice_x = self.cell.lattice_vectors()[0][0]
-            lattice_y = self.cell.lattice_vectors()[1][1]
-            lattice_z = self.cell.lattice_vectors()[2][2]
-            
-            Ls = [int(lattice_x/3)+1, int(lattice_y/3)+1, int(lattice_z/3)+1]
+        # if Ls is None:
+        #     lattice_x = self.cell.lattice_vectors()[0][0]
+        #     lattice_y = self.cell.lattice_vectors()[1][1]
+        #     lattice_z = self.cell.lattice_vectors()[2][2]
+        #     Ls = [int(lattice_x/3)+1, int(lattice_y/3)+1, int(lattice_z/3)+1]
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
@@ -1157,6 +1156,37 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         return K1_tmp1
        
+    def _permutate_K1_tmp1(self, K_tmp1, box_id):
+        
+        box_x = box_id // (self.kmesh[1] * self.kmesh[2])
+        box_y = (box_id % (self.kmesh[1] * self.kmesh[2])) // self.kmesh[2]
+        box_z = box_id % self.kmesh[2]
+        
+        if hasattr(self, "K_tmp1_permutation_buf") is False:
+            self.K_tmp1_permutation_buf = np.zeros_like(K_tmp1)
+        else:
+            if self.K_tmp1_permutation_buf.shape[0] < K_tmp1.shape[0]:
+                self.K_tmp1_permutation_buf = np.zeros_like(K_tmp1)
+        
+        K_tmp1_permutation = np.ndarray(K_tmp1.shape, buffer=self.K_tmp1_permutation_buf)
+
+        loc = 0
+        for i in range(self.kmesh[0]):
+            for j in range(self.kmesh[1]):
+                for k in range(self.kmesh[2]):
+                    ix_ = (i - box_x + self.kmesh[0]) % self.kmesh[0]
+                    iy_ = (j - box_y + self.kmesh[1]) % self.kmesh[1]
+                    iz_ = (k - box_z + self.kmesh[2]) % self.kmesh[2]
+                    loc_ = ix_ * self.kmesh[1] * self.kmesh[2] + iy_ * self.kmesh[2] + iz_
+                    K_tmp1_permutation[:, loc*nao_prim:(loc+1)*nao_prim] = K_tmp1[:, loc_*nao_prim:(loc_+1)*nao_prim]
+                    loc += 1    
+    
+    
+        return K_tmp1_permutation
+        
+        
+        
+       
     def _construct_W_tmp(self, V_tmp, Res):
         
         assert V_tmp.shape[0] == Res.shape[0]
@@ -1265,7 +1295,7 @@ if __name__ == "__main__":
                                                      #basis=basis, pseudo=pseudo,
                                                      partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
     
-    pbc_isdf_info = PBC_ISDF_Info_Quad_K(cell, Ls=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=True, rela_cutoff_QRCP=3e-3)
+    pbc_isdf_info = PBC_ISDF_Info_Quad_K(cell, Ls=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=True, rela_cutoff_QRCP=1e-3)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=prim_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     
     # exit(1)
@@ -1333,6 +1363,8 @@ if __name__ == "__main__":
     mf.conv_tol = 1e-7
     
     mf.kernel()
+    
+    exit(1)
     
     ######### bench mark #########
     

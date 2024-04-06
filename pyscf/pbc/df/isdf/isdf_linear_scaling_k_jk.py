@@ -402,6 +402,7 @@ def _contract_k_dm_k_quadratic_direct(mydf, dm, use_mpi=False):
     
     group = mydf.group
     assert len(group) == len(aux_basis)
+    ngroup_prim = len(group)
     
     group = mydf.group_global
     
@@ -487,7 +488,14 @@ def _contract_k_dm_k_quadratic_direct(mydf, dm, use_mpi=False):
         
     print("group_activated = ", group_activated)
         
+    prim_group_2_activated_group = []
+    for i in range(ngroup_prim):
+        prim_group_2_activated_group.append([])
     for group_id in group_activated:
+        prim_group_2_activated_group[group_id%ngroup_prim].append(group_id)
+        
+    # for group_id in group_activated:
+    for group_id in range(ngroup_prim):
     
         aoRg_packed = [] 
         
@@ -552,40 +560,48 @@ def _contract_k_dm_k_quadratic_direct(mydf, dm, use_mpi=False):
         
         #### 3.4 K1 += aoRg * K1_tmp1 
         
-        IP_loc = 0
-        for atm_id in atm_ids:
-            
-            aoRg_holder = aoRg1[atm_id]
-            
-            if aoRg_holder is None:
-                IP_loc += IP_segment[atm_id+1] - IP_segment[atm_id]
-                continue
-            
-            nIP_now = aoRg_holder.aoR.shape[1]
-            
-            nao_involved = aoRg_holder.aoR.shape[0]
-            
-            K_tmp = K1_tmp1[IP_loc:IP_loc+nIP_now, :]
-            
-            ddot_res = np.ndarray((nao_involved, nao), buffer=build_VW_buf, dtype=np.float64, offset=offset_after_V_tmp)
-            lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
-            
-            if nao_involved == nao_prim:
-                K1 += ddot_res
-            else:
-                fn_packadd_row(
-                    K1.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(nao_prim),
-                    ctypes.c_int(nao),
-                    ddot_res.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(nao_involved),
-                    ctypes.c_int(nao),
-                    aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
-                )
-            
-            IP_loc += nIP_now
+        for group_id_global in prim_group_2_activated_group[group_id]:
         
-        assert IP_loc == naux_tmp
+            atm_ids = group[group_id_global]
+            
+            box_id = group_id_global // ngroup_prim
+            
+            K1_tmp1_pert = mydf._permutate_K1_tmp1(K1_tmp1, box_id)
+        
+            IP_loc = 0
+            for atm_id in atm_ids:
+            
+                aoRg_holder = aoRg1[atm_id]
+            
+                if aoRg_holder is None:
+                    IP_loc += IP_segment[atm_id+1] - IP_segment[atm_id]
+                    continue
+            
+                nIP_now = aoRg_holder.aoR.shape[1]
+            
+                nao_involved = aoRg_holder.aoR.shape[0]
+            
+                K_tmp = K1_tmp1_pert[IP_loc:IP_loc+nIP_now, :]
+            
+                ddot_res = np.ndarray((nao_involved, nao), buffer=build_VW_buf, dtype=np.float64, offset=offset_after_V_tmp)
+                lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
+            
+                if nao_involved == nao_prim:
+                    K1 += ddot_res
+                else:
+                    fn_packadd_row(
+                        K1.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(nao_prim),
+                        ctypes.c_int(nao),
+                        ddot_res.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(nao_involved),
+                        ctypes.c_int(nao),
+                        aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
+                    )
+            
+                IP_loc += nIP_now
+        
+            assert IP_loc == naux_tmp
         
         # continue
         
@@ -629,49 +645,58 @@ def _contract_k_dm_k_quadratic_direct(mydf, dm, use_mpi=False):
         
         #### 5.4 K2 += aoRg * K2_tmp1
         
-        IP_loc = 0
+        for group_id_global in prim_group_2_activated_group[group_id]:
         
-        # print("atm_ids = ", atm_ids)
-        # print("K2_tmp1.shape = ", K2_tmp1.shape)
+            IP_loc = 0
         
-        for atm_id in atm_ids:
+            atm_ids = group[group_id_global]
             
-            aoRg_holder = aoRg1[atm_id]
+            box_id = group_id_global // ngroup_prim
             
-            if aoRg_holder is None:
-                IP_loc += IP_segment[atm_id+1] - IP_segment[atm_id]
-                continue
-            
-            nIP_now = aoRg_holder.aoR.shape[1]
-            
-            nao_involved = aoRg_holder.aoR.shape[0]
-            
-            assert nao_involved <= nao_prim
-            
-            # print("IP_loc  = ", IP_loc)
-            # print("nIP_now = ", nIP_now)
-            
-            K_tmp = K2_tmp1[IP_loc:IP_loc+nIP_now, :]
-            
-            ddot_res = np.ndarray((nao_involved, nao), buffer=build_VW_buf, dtype=np.float64, offset=offset_after_W_tmp)
-            lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
-            
-            if nao_involved == nao_prim:
-                K2 += ddot_res
-            else:
-                fn_packadd_row(
-                    K2.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(nao_prim),
-                    ctypes.c_int(nao),
-                    ddot_res.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(nao_involved),
-                    ctypes.c_int(nao),
-                    aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
-                )
-            
-            IP_loc += nIP_now
+            K2_tmp1_pert = mydf._permutate_K1_tmp1(K2_tmp1, box_id)
         
-        assert IP_loc == naux_tmp
+            # print("atm_ids = ", atm_ids)
+            # print("K2_tmp1.shape = ", K2_tmp1.shape)
+
+            
+            for atm_id in atm_ids:
+            
+                aoRg_holder = aoRg1[atm_id]
+            
+                if aoRg_holder is None:
+                    IP_loc += IP_segment[atm_id+1] - IP_segment[atm_id]
+                    continue
+            
+                nIP_now = aoRg_holder.aoR.shape[1]
+            
+                nao_involved = aoRg_holder.aoR.shape[0]
+            
+                assert nao_involved <= nao_prim
+            
+                # print("IP_loc  = ", IP_loc)
+                # print("nIP_now = ", nIP_now)
+            
+                K_tmp = K2_tmp1_pert[IP_loc:IP_loc+nIP_now, :]
+            
+                ddot_res = np.ndarray((nao_involved, nao), buffer=build_VW_buf, dtype=np.float64, offset=offset_after_W_tmp)
+                lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
+            
+                if nao_involved == nao_prim:
+                    K2 += ddot_res
+                else:
+                    fn_packadd_row(
+                        K2.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(nao_prim),
+                        ctypes.c_int(nao),
+                        ddot_res.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(nao_involved),
+                        ctypes.c_int(nao),
+                        aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
+                    )
+            
+                IP_loc += nIP_now
+        
+            assert IP_loc == naux_tmp
     
     # RgRg_check = np.vstack(RgRg_check)
     # print("diff = ", np.linalg.norm(RgRg_check - RgRg_check.T))
