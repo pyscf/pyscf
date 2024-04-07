@@ -104,6 +104,38 @@ H              0.99207379    1.16253558   -0.88226569
 H             -0.43459905    0.65805058   -0.00861418''')
         self.assertAlmostEqual(g[2,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
 
+    def test_finite_diff_uhf_d3_grad(self):
+        mf = scf.UHF(mol)
+        mf.disp = 'd3bj'
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+        g = grad.UHF(mf).kernel()
+        mf_scanner = mf.as_scanner()
+
+        e1 = mf_scanner('''O    0.   0.       0.
+                        1    0.   -0.758   0.587
+                        1    0.   0.757    0.587''')
+        e2 = mf_scanner('''O    0.   0.       0.
+                        1    0.   -0.756   0.587
+                        1    0.   0.757    0.587''')
+        self.assertAlmostEqual(g[1,1], (e2-e1)/2e-3*lib.param.BOHR, 5)
+
+    def test_finite_diff_uhf_d4_grad(self):
+        mf = scf.UHF(mol)
+        mf.disp = 'd4'
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+        g = grad.UHF(mf).kernel()
+        mf_scanner = mf.as_scanner()
+
+        e1 = mf_scanner('''O    0.   0.       0.
+                        1    0.   -0.758   0.587
+                        1    0.   0.757    0.587''')
+        e2 = mf_scanner('''O    0.   0.       0.
+                        1    0.   -0.756   0.587
+                        1    0.   0.757    0.587''')
+        self.assertAlmostEqual(g[1,1], (e2-e1)/2e-3*lib.param.BOHR, 5)
+
     def test_finite_diff_df_uhf_grad(self):
         mf = scf.UHF(mol).density_fit ()
         mf.conv_tol = 1e-14
@@ -156,6 +188,38 @@ H              0.99205538   -0.35077261   -0.00861418
 H              0.99207379    1.16253558   -0.88226569
 H             -0.43459905    0.65805058   -0.00861418''')
         self.assertAlmostEqual(g[2,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
+
+    def test_finite_diff_df_uhf_d4_grad(self):
+        mf = scf.UHF(mol).density_fit ()
+        mf.conv_tol = 1e-14
+        mf.disp = 'd3bj'
+        e0 = mf.kernel()
+        g = mf.nuc_grad_method ().kernel()
+        mf_scanner = mf.as_scanner()
+
+        e1 = mf_scanner('''O    0.   0.       0.
+                        1    0.   -0.758   0.587
+                        1    0.   0.757    0.587''')
+        e2 = mf_scanner('''O    0.   0.       0.
+                        1    0.   -0.756   0.587
+                        1    0.   0.757    0.587''')
+        self.assertAlmostEqual(g[1,1], (e2-e1)/2e-3*lib.param.BOHR, 5)
+
+    def test_finite_diff_df_uhf_d4_grad(self):
+        mf = scf.UHF(mol).density_fit ()
+        mf.conv_tol = 1e-14
+        mf.disp = 'd4'
+        e0 = mf.kernel()
+        g = mf.nuc_grad_method ().kernel()
+        mf_scanner = mf.as_scanner()
+
+        e1 = mf_scanner('''O    0.   0.       0.
+                        1    0.   -0.758   0.587
+                        1    0.   0.757    0.587''')
+        e2 = mf_scanner('''O    0.   0.       0.
+                        1    0.   -0.756   0.587
+                        1    0.   0.757    0.587''')
+        self.assertAlmostEqual(g[1,1], (e2-e1)/2e-3*lib.param.BOHR, 5)
 
     def test_uhf_grad_one_atom(self):
         mol = gto.Mole()

@@ -18,17 +18,6 @@ import numpy
 from pyscf import gto, dft, lib
 from pyscf import grad, hessian
 
-import sys
-try:
-    import dftd3
-except ImportError:
-    pass
-
-try:
-    import dftd4
-except ImportError:
-    pass
-
 def setUpModule():
     global mol, h4
     mol = gto.Mole()
@@ -127,13 +116,12 @@ class KnownValues(unittest.TestCase):
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
 
-    @unittest.skipIf('dftd3' not in sys.modules, "requires the dftd3 library")
     def test_finite_diff_b3lyp_d3_hess(self):
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'b3lyp'
         mf.disp = 'd3bj'
-        e0 = mf.kernel()
+        mf.kernel()
         hess = mf.Hessian().kernel()
         self.assertAlmostEqual(lib.fp(hess), -0.7586078053657133, 6)
 
@@ -144,13 +132,12 @@ class KnownValues(unittest.TestCase):
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
 
-    @unittest.skipIf('dftd4' not in sys.modules, "requires the dftd4 library")
     def test_finite_diff_b3lyp_d4_hess(self):
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'b3lyp'
         mf.disp = 'd4'
-        e0 = mf.kernel()
+        mf.kernel()
         hess = mf.Hessian().kernel()
         self.assertAlmostEqual(lib.fp(hess), -0.7588415571313422, 6)
 

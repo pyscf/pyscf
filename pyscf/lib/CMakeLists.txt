@@ -168,7 +168,7 @@ if(BUILD_LIBCINT)
     set(LIBCINT_GIT https://github.com/sunqm/qcint.git) # qcint is an optimized implementation for x86-64 architecture
     set(LIBCINT_VERSION v6.1.2)
     if(NOT BUILD_MARCH_NATIVE)
-      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")    
+      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")
     endif()
   endif()
 
@@ -281,4 +281,58 @@ endif()
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.user.inc")
   include("${PROJECT_SOURCE_DIR}/cmake.user.inc")
+endif()
+
+option(BUILD_DFTD3 "Using DFTD3 for DFT" ON)
+if(BUILD_DFTD3)
+  include(ExternalProject)
+  ExternalProject_Add(dftd3_static
+    GIT_REPOSITORY "https://github.com/dftd3/simple-dftd3"
+    GIT_TAG v1.0.0
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    CMAKE_ARGS -DWITH_OpenMP=OFF
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            -DCMAKE_INSTALL_LIBDIR:PATH=lib
+            -DCMAKE_CURRENT_SOURCE_DIR:PATH=dftd3
+  )
+
+  include(ExternalProject)
+  ExternalProject_Add(dftd3
+    GIT_REPOSITORY "https://github.com/dftd3/simple-dftd3"
+    GIT_TAG v1.0.0
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    CMAKE_ARGS -DWITH_OpenMP=OFF -DBUILD_SHARED_LIBS=ON
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            -DCMAKE_INSTALL_LIBDIR:PATH=lib
+            -DCMAKE_CURRENT_SOURCE_DIR:PATH=dftd3
+  )
+  add_dependencies(dftd3 dftd3_static)
+endif()
+
+option(BUILD_DFTD4 "Using DFTD4 for DFT" ON)
+if(BUILD_DFTD4)
+  include(ExternalProject)
+  ExternalProject_Add(dftd4_static
+    GIT_REPOSITORY "https://github.com/dftd4/dftd4"
+    GIT_TAG v3.6.0
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    CMAKE_ARGS -DWITH_OpenMP=OFF
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            -DCMAKE_INSTALL_LIBDIR:PATH=lib
+  )
+
+  include(ExternalProject)
+  ExternalProject_Add(dftd4
+    GIT_REPOSITORY "https://github.com/dftd4/dftd4"
+    GIT_TAG v3.6.0
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    CMAKE_ARGS -DWITH_OpenMP=OFF -DBUILD_SHARED_LIBS=ON
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            -DCMAKE_INSTALL_LIBDIR:PATH=lib
+  )
+  add_dependencies(dftd4 dftd4_static)
 endif()

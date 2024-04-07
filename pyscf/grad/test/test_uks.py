@@ -73,6 +73,30 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
+    def test_fnite_diff_uks_d3_grad(self):
+        mol1 = mol.copy()
+        mf = dft.UKS(mol)
+        mf.conv_tol = 1e-14
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
+    def test_fnite_diff_uks_d4_grad(self):
+        mol1 = mol.copy()
+        mf = dft.UKS(mol)
+        mf.conv_tol = 1e-14
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
     def test_uks_grad_lda(self):
         mol = gto.Mole()
         mol.atom = [
