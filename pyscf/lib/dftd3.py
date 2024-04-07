@@ -109,5 +109,5 @@ class DFTD3Dispersion(lib.StreamObject):
             res.update(virial=_sigma)
 
         libdftd3.dftd3_delete_error(ctypes.byref(err))
-        
+
         return res
