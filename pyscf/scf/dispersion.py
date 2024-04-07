@@ -51,6 +51,7 @@ def get_dispersion(mf, disp_version=None):
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':
+        from pyscf.lib import dftd3
         d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
         res = d3_model.get_dispersion()
         e_d3 = res.get('energy')
@@ -59,6 +60,7 @@ def get_dispersion(mf, disp_version=None):
 
     # for dftd4
     elif disp_version[:2].upper() == 'D4':
+        from pyscf.lib import dftd4
         d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
         res = d4_model.get_dispersion()
         e_d4 = res.get('energy')

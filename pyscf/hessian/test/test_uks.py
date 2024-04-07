@@ -125,14 +125,14 @@ class KnownValues(unittest.TestCase):
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
 
-    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
-    def test_finite_diff_b3lyp_d3_hess_high_cost(self):
+    def test_finite_diff_b3lyp_d3_hess(self):
         mf = dft.UKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'b3lyp'
         mf.disp = 'd3bj'
         mf.kernel()
         hess = mf.Hessian().kernel()
+        self.assertAlmostEqual(lib.fp(hess), -0.8208641727673912, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -141,14 +141,14 @@ class KnownValues(unittest.TestCase):
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
 
-    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
-    def test_finite_diff_b3lyp_d4_hess_high_cost(self):
+    def test_finite_diff_b3lyp_d4_hess(self):
         mf = dft.UKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'b3lyp'
         mf.disp = 'd4'
         mf.kernel()
         hess = mf.Hessian().kernel()
+        self.assertAlmostEqual(lib.fp(hess), -0.8208641727673912, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
