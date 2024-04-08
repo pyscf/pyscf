@@ -32,17 +32,18 @@ def setUpModule():
     mol.spin = 1
     mol.build()
 
-h4 = gto.Mole()
-h4.verbose = 0
-h4.atom = [
-    [1 , (1. ,  0.     , 0.000)],
-    [1 , (0. ,  1.     , 0.000)],
-    [1 , (0. , -1.517  , 1.177)],
-    [1 , (0. ,  1.517  , 1.177)]]
-h4.basis = '631g'
-h4.spin = 2
-h4.unit = 'B'
-h4.build()
+    h4 = gto.Mole()
+    h4.verbose = 0
+    h4.output = '/dev/null'
+    h4.atom = [
+        [1 , (1. ,  0.     , 0.000)],
+        [1 , (0. ,  1.     , 0.000)],
+        [1 , (0. , -1.517  , 1.177)],
+        [1 , (0. ,  1.517  , 1.177)]]
+    h4.basis = '631g'
+    h4.spin = 2
+    h4.unit = 'B'
+    h4.build()
 
 def tearDownModule():
     global mol, h4

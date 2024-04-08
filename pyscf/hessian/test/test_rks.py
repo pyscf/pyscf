@@ -32,6 +32,7 @@ def setUpModule():
 
     h4 = gto.Mole()
     h4.verbose = 0
+    h4.output = '/dev/null'
     h4.atom = [
         [1 , (1. ,  0.     , 0.000)],
         [1 , (0. ,  1.     , 0.000)],
