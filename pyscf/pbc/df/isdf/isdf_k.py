@@ -3021,7 +3021,9 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     assert fn_packcol2 is not None
     
     buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
-        
+    
+    t3 = (logger.process_clock(), logger.perf_counter())
+    
     fn1(
         DM_real.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nao_prim),
@@ -3029,6 +3031,9 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         Ls.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
+    
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "_fft1")
     
     buf_A = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     
@@ -3042,6 +3047,8 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     buf_D = np.ndarray((nIP_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset4)
     
     aoRg_FFT = mydf.aoRg_FFT
+    
+    t3 = (logger.process_clock(), logger.perf_counter())
     
     if isinstance(aoRg_FFT, list):
         
@@ -3090,6 +3097,11 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         
             DM_RgRg_complex[:, k_begin:k_end] = buf_D
     
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "DM_RgRg_complex")
+    
+    t3 = t4
+    
     buf_fft = np.ndarray((nIP_prim, nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     
     fn2 = getattr(libpbc, "_iFFT_Matrix_Col_InPlace", None)
@@ -3105,9 +3117,17 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "DM_RgRg_complex 2")
+    t3 = t4
+    
     # inplace multiplication
     
     lib.cwise_mul(mydf.W, DM_RgRg_real, out=DM_RgRg_real)
+    
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "lib.cwise_mul 2")
+    t3 = t4
     
     offset = nIP_prim * nIP_prim * ncell_complex * DM_RgRg_complex.itemsize
     
@@ -3120,6 +3140,10 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         Ls.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
+    
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "DM_RgRg_real")
+    t3 = t4
     
     K_complex_buf = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     K_real_buf    = np.ndarray((nao_prim, nao_prim*ncell), dtype=np.float64, buffer=mydf.jk_buffer, offset=offset)
@@ -3179,6 +3203,10 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         
             K_complex_buf[:, k_begin:k_end] = buf_D
     
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "K_complex_buf")
+    t3 = t4
+    
     buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     
     fn2(
@@ -3188,6 +3216,10 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         Ls.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
+    
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "K_real_buf")
+    t3 = t4
     
     K_real_buf *= (ngrid / vol)
     
@@ -3257,6 +3289,10 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         
             DM_RgR_complex[:, k_begin:k_end] = buf_D
     
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "DM_RgR_complex")
+    t3 = t4
+    
     # DM_RgRg1 = DM_RgR_complex[:, mydf.IP_ID]
     # DM_RgRg2 = DM_RgRg_complex2[:, :nIP_prim]
     # diff = np.linalg.norm(DM_RgRg1 - DM_RgRg2)
@@ -3282,12 +3318,20 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
         
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "DM_RgR_real")
+    t3 = t4
+        
     # inplace multiplication
     
     # print("DM_RgR_complex = ", DM_RgR_complex[:5,:5])
     # print("mydf.V_R       = ", mydf.V_R[:5,:5])
     
     lib.cwise_mul(mydf.V_R, DM_RgR_real, out=DM_RgR_real)
+    
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "cwise_mul")
+    t3 = t4
     
     # buf_fft = np.ndarray((nIP_prim, nGridPrim*ncell_complex), dtype=np.complex128)
     
@@ -3298,6 +3342,10 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         Ls.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
+    
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "DM_RgR_complex 2")
+    t3 = t4
     
     # print("DM_RgR_complex = ", DM_RgR_complex[:5,:5])
     
@@ -3371,6 +3419,10 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         
             K_complex_buf[:, k_begin:k_end] = buf_D
     
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "K_complex_buf 1")
+    t3 = t4
+    
     buf_A = None
     buf_B = None
     buf_B2 = None
@@ -3388,6 +3440,10 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
         Ls.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
+    
+    t4 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t3, t4, "K_complex_buf 2")
+    t3 = t4
     
     buf_fft = None
     
