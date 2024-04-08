@@ -237,7 +237,9 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
     assert fn is not None
         
     print("aoRg_FFT.shape = ", mydf.aoRg_FFT.shape)
-        
+    
+    kmesh = np.array(kmesh, dtype=np.int32)
+    
     fn(
         mydf.aoRg_FFT_real.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nao_prim),
