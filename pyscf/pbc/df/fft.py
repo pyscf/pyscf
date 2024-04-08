@@ -30,6 +30,7 @@ from pyscf.pbc.df import fft_ao2mo
 from pyscf.pbc.df import fft_jk
 from pyscf.pbc.df import aft
 from pyscf.pbc.df.aft import _check_kpts
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
@@ -168,6 +169,8 @@ class FFTDF(lib.StreamObject):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
 
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
         self.kpts = kpts
 
         self.grids = gen_grid.UniformGrids(cell)

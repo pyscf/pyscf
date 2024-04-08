@@ -28,7 +28,6 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger, zdotNN, zdotCN, zdotNC
 from pyscf.pbc import tools
-from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, get_kconserv_ria
 from pyscf import __config__
 
@@ -53,8 +52,6 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
         else:
             kpts = numpy.reshape(mf.kpt, (1,3))
 
-        if isinstance(kpts, KPoints):
-            kpts = kpts.kpts
         with_df = df.DF(mf.cell, kpts)
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout
