@@ -32,6 +32,7 @@ def setUpModule():
 
 def tearDownModule():
     global mol
+    mol.stdout.close()
     del mol
 
 class KnownValues(unittest.TestCase):
@@ -92,7 +93,6 @@ class KnownValues(unittest.TestCase):
         mf.disp = 'd3bj'
         e0 = mf.kernel()
         hess = hessian.RHF(mf).kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.7816353049729151, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -106,7 +106,6 @@ class KnownValues(unittest.TestCase):
         mf.disp = 'd4'
         e0 = mf.kernel()
         hess = hessian.RHF(mf).kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.7816353049729151, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()

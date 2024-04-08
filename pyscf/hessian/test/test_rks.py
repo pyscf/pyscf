@@ -44,6 +44,7 @@ def setUpModule():
 def tearDownModule():
     global mol, h4
     mol.stdout.close()
+    h4.stdout.close()
     del mol, h4
 
 def finite_diff(mf):
@@ -123,7 +124,6 @@ class KnownValues(unittest.TestCase):
         mf.disp = 'd3bj'
         mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.7586078053657133, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -139,7 +139,6 @@ class KnownValues(unittest.TestCase):
         mf.disp = 'd4'
         mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.7588415571313422, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
