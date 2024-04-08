@@ -19,7 +19,7 @@ from pyscf import gto, dft, lib
 from pyscf import grad, hessian
 
 def setUpModule():
-    global mol
+    global mol, h4
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = '/dev/null'
