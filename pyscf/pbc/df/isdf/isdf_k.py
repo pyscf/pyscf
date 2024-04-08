@@ -3017,6 +3017,9 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     fn1 = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
     assert fn1 is not None
     
+    fn_packcol2 = getattr(libpbc, "_buildK_packcol2", None)
+    assert fn_packcol2 is not None
+    
     buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
         
     fn1(
@@ -3047,7 +3050,17 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
             k_begin = i * nao_prim
             k_end   = (i + 1) * nao_prim
         
-            buf_A[:] = DM_complex[:, k_begin:k_end]
+            # buf_A[:] = DM_complex[:, k_begin:k_end]
+            fn_packcol2(
+                buf_A.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_prim),
+                ctypes.c_int(2*nao_prim),
+                DM_complex.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(DM_complex.shape[0]),
+                ctypes.c_int(2*DM_complex.shape[1]),
+                ctypes.c_int(2*k_begin),
+                ctypes.c_int(2*k_end)
+            )
             # buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
             buf_B.ravel()[:] = aoRg_FFT[i].ravel()[:]
         
@@ -3127,7 +3140,17 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
             k_begin = i * nIP_prim
             k_end   = (i + 1) * nIP_prim
         
-            buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
+            # buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
+            fn_packcol2(
+                buf_A.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nIP_prim),
+                ctypes.c_int(2*nIP_prim),
+                DM_RgRg_complex.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(DM_RgRg_complex.shape[0]),
+                ctypes.c_int(2*DM_RgRg_complex.shape[1]),
+                ctypes.c_int(2*k_begin),
+                ctypes.c_int(2*k_end)
+            )
             # buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
             buf_B.ravel()[:] = aoRg_FFT[i].ravel()[:]
         
@@ -3193,7 +3216,17 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
             k_begin = i * nao_prim
             k_end   = (i + 1) * nao_prim
         
-            buf_A[:] = DM_complex[:, k_begin:k_end]
+            # buf_A[:] = DM_complex[:, k_begin:k_end]
+            fn_packcol2(
+                buf_A.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_prim),
+                ctypes.c_int(2*nao_prim),
+                DM_complex.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(DM_complex.shape[0]),
+                ctypes.c_int(2*DM_complex.shape[1]),
+                ctypes.c_int(2*k_begin),
+                ctypes.c_int(2*k_end)
+            )
             # buf_B[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim]
             # buf_B2[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
             buf_B.ravel()[:] = aoR_FFT[i].ravel()[:]
@@ -3286,7 +3319,17 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
             k_begin = i * nGridPrim
             k_end   = (i + 1) * nGridPrim
         
-            buf_A.ravel()[:] = DM_RgR_complex[:, k_begin:k_end].ravel()[:]
+            # buf_A.ravel()[:] = DM_RgR_complex[:, k_begin:k_end].ravel()[:]
+            fn_packcol2(
+                buf_A.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nIP_prim),
+                ctypes.c_int(2*nGridPrim),
+                DM_RgR_complex.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(DM_RgR_complex.shape[0]),
+                ctypes.c_int(2*DM_RgR_complex.shape[1]),
+                ctypes.c_int(2*k_begin),
+                ctypes.c_int(2*k_end)
+            )
             # print("buf_A = ", buf_A[:5,:5])
             # buf_B.ravel()[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim].ravel()[:]
             # print("buf_B = ", buf_B[:5,:5])
@@ -3350,7 +3393,17 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     
     K_real_buf *= (ngrid / vol)
     
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    _benchmark_time(t1, t2, "_contract_k_dm")
+    
+    t1 = t2
+    
     K2 = _pack_JK(K_real_buf, Ls, nao_prim, output=None)
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    _benchmark_time(t1, t2, "_pack_JK")
     
     # print("K2 = ", K2[:5,:5])
     # print("K = ", -K[:5,:5])
@@ -3358,10 +3411,6 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     K += K2 + K2.T
     
     # print("K = ", K[:5,:5])
-    
-    t2 = (logger.process_clock(), logger.perf_counter())
-    
-    _benchmark_time(t1, t2, "_contract_k_dm")
     
     DM_RgR_complex = None
     DM_RgR_real = None
