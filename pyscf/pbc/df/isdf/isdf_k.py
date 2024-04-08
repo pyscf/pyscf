@@ -2966,6 +2966,10 @@ def _get_k_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
     # return DM_RgRg_real # temporary return for debug
 
 def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
+    
+    '''
+    this is a slow version, abandon ! 
+    '''
  
     #### preprocess ####  
     

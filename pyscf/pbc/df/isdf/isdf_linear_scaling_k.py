@@ -847,7 +847,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
     def _get_bufsize_get_k(self):
         
         # if self.with_robust_fitting == False:
-        if True:
+        if self.with_robust_fitting == False:
             
             naux     = self.naux
             nao      = self.nao
@@ -855,18 +855,59 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             nao_prim = self.nao // np.prod(self.Ls)
             ncell_complex = self.Ls[0] * self.Ls[1] * (self.Ls[2]//2+1)
             
-            size_buf5  = nIP_Prim * nIP_Prim * ncell_complex * 2
-            size_buf5 += nao_prim * nao_prim * 2
-            size_buf5 += nIP_Prim * nIP_Prim * ncell_complex * 2
+            #### size of density matrix ####
             
-            size_buf6  = nIP_Prim * nIP_Prim * ncell_complex * 2
-            size_buf6 += nIP_Prim * nIP_Prim * ncell_complex * 2
-            size_buf6 += nao_prim * nao_prim * ncell_complex * 2
-            size_buf6 += nIP_Prim * nIP_Prim  * 2
-            size_buf6 += nao_prim * nIP_Prim  * 2 * 2
-            size_buf6 += nao_prim * nao_prim  * 2
+            size_dm = nao_prim * nao_prim * ncell_complex * 2
+            size_dm += nIP_Prim * nIP_Prim * ncell_complex * 2
+            
+            #### size of buf to construct dm ####
+            
+            size_buf5 = nao_prim * nao_prim * 2 * 2
+            size_buf5 += nao_prim * nIP_Prim * 2 * 2
+            
+            size_fft_buf = nIP_Prim * nIP_Prim * ncell_complex * 2
+            
+            #### size of buf to construct K ####
+            
+            size_buf6  = nao_prim * nao_prim * ncell_complex * 2 # k-buf
+            size_buf6 += nIP_Prim * nIP_Prim * 2     # buf_A
+            size_buf6 += nao_prim * nIP_Prim * 2 *2  # buf_B/C
+            size_buf6 += nao_prim * nao_prim * 2     # buf_D
         
-            return max(size_buf5, size_buf6)
+            return size_dm + max(size_buf5, size_buf6, size_fft_buf)
+        
+        else:
+            
+            naux     = self.naux
+            nao      = self.nao
+            nIP_Prim = self.nIP_Prim
+            nGrid_Prim = self.nGridPrim
+            nao_prim = self.nao // np.prod(self.Ls)
+            ncell_complex = self.Ls[0] * self.Ls[1] * (self.Ls[2]//2+1)
+            
+            #### size of density matrix ####
+            
+            size_dm = nao_prim * nao_prim * ncell_complex * 2
+            size_dm += nIP_Prim * nGrid_Prim * ncell_complex * 2
+            
+            #### size of buf to construct dm ####
+            
+            size_buf5 = nao_prim * nao_prim * 2 
+            size_buf5 += nao_prim * nIP_Prim * 2 
+            size_buf5 += nao_prim * nGrid_Prim * 2 * 2
+            size_buf5 += nIP_Prim * nGrid_Prim * 2 
+            
+            size_fft_buf = nIP_Prim * nGrid_Prim * ncell_complex * 2
+            
+            #### size of buf to construct K ####
+            
+            size_buf6  = nao_prim * nao_prim * ncell_complex * 2 # k-buf
+            size_buf6 += nIP_Prim * nGrid_Prim * 2     # buf_A
+            size_buf6 += nao_prim * nGrid_Prim * 2     # buf_B
+            size_buf6 += nao_prim * nIP_Prim * 2 * 2   # buf_B2/C
+            size_buf6 += nao_prim * nao_prim * 2       # buf_D
+        
+            return size_dm + max(size_buf5, size_buf6, size_fft_buf)
 
     def _allocate_jk_buffer(self, dtype=np.float64):
         
@@ -911,6 +952,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             ### in get_j ###
                     
             buf_J = self._get_bufsize_get_j()
+            buf_J = 0
             
             ### in get_k ### 
         

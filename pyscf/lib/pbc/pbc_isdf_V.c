@@ -845,6 +845,33 @@ void _buildK_packcol2(
     }
 }
 
+void _buildK_packcol3(
+    double *target,
+    const int nrow_target,
+    const int ncol_target,
+    const int col_indx_begin,
+    const int col_indx_end,
+    double *source,
+    const int nrow_source,
+    const int ncol_source)
+{
+    int nThread = get_omp_threads();
+
+    // static const int INC = 1;
+    // static const double ONE = 1.0;
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < nrow_target; ++i)
+    {
+        memcpy(target + i * ncol_target + col_indx_begin, source + i * ncol_source, sizeof(double) * (col_indx_end - col_indx_begin));
+    }
+}
+
+void _buildK_copy(double *target, double *source, const size_t size)
+{
+    memcpy(target, source, sizeof(double) * size);
+}
+
 ////////// in determing partition //////////
 
 double _distance_translation(double *pa, double *pb, double *a)
