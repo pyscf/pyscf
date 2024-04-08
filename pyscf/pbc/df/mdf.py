@@ -38,6 +38,7 @@ from pyscf.pbc.df.aft import _check_kpts
 from pyscf.pbc.df.gdf_builder import _CCGDFBuilder
 from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
 from pyscf.pbc.df.incore import libpbc, make_auxcell
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, member, unique
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
@@ -55,6 +56,8 @@ class MDF(df.GDF):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
 
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
