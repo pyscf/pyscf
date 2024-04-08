@@ -256,6 +256,7 @@ class KnownValues(unittest.TestCase):
     def test_finite_diff_df_rks_d3_grad(self):
         mf1 = mf.density_fit ()
         mf1.disp = 'd3bj'
+        g = mf1.nuc_grad_method ().set (grid_response=True).kernel ()
         mf1 = mf1.run ()
 
         mol1 = mol.copy()
@@ -267,6 +268,7 @@ class KnownValues(unittest.TestCase):
     def test_finite_diff_df_rks_d4_grad(self):
         mf1 = mf.density_fit ()
         mf1.disp = 'd4'
+        g = mf1.nuc_grad_method ().set (grid_response=True).kernel ()
         mf1 = mf1.run ()
 
         mol1 = mol.copy()

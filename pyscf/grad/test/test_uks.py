@@ -80,6 +80,7 @@ class KnownValues(unittest.TestCase):
     def test_fnite_diff_uks_d3_grad(self):
         mol1 = mol.copy()
         mf = dft.UKS(mol)
+        mf.disp = 'd3bj'
         mf.conv_tol = 1e-14
         mf.kernel()
         g = mf.nuc_grad_method().set(grid_response=True).kernel()
@@ -92,6 +93,7 @@ class KnownValues(unittest.TestCase):
     def test_fnite_diff_uks_d4_grad(self):
         mol1 = mol.copy()
         mf = dft.UKS(mol)
+        mf.disp = 'd4'
         mf.conv_tol = 1e-14
         mf.kernel()
         g = mf.nuc_grad_method().set(grid_response=True).kernel()

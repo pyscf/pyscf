@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-brew install gcc openblas
+brew install gcc openblas gfortran
