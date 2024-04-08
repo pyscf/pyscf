@@ -129,6 +129,9 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
     # mydf.IP_segment = _expand_primlist_2_superlist(mydf.IP_segment_prim[:-1], mydf.kmesh, mydf.mesh)
     # mydf.IP_segment = np.append(mydf.IP_segment, mydf.naux)
     
+    mydf.nIP_Prim = len(mydf.IP_flat_prim)
+    mydf.nGridPrim = len(mydf.grid_ID_ordered_prim)
+    
     gridID_2_atmID = mydf.gridID_2_atmID
     
     partition_IP = []
@@ -174,18 +177,18 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
     
     assert len(mydf.aoRg) == first_natm
     
-    mydf.aoRg1 = ISDF_LinearScalingBase.get_aoR(
-        mydf.cell, coords, partition_IP,
-        mydf.cell.natm,
-        first_natm,
-        mydf.group_global,
-        mydf.distance_matrix,
-        mydf.AtmConnectionInfo,
-        False,
-        mydf.use_mpi,
-        True)
+    # mydf.aoRg1 = ISDF_LinearScalingBase.get_aoR(
+    #     mydf.cell, coords, partition_IP,
+    #     mydf.cell.natm,
+    #     first_natm,
+    #     mydf.group_global,
+    #     mydf.distance_matrix,
+    #     mydf.AtmConnectionInfo,
+    #     False,
+    #     mydf.use_mpi,
+    #     True)
     
-    assert len(mydf.aoRg1) == mydf.cell.natm
+    # assert len(mydf.aoRg1) == mydf.cell.natm
     
     # mydf.aoRg1 = ISDF_LinearScalingBase.get_aoR(
     #     mydf.cell, coords, partition_IP,
@@ -208,6 +211,82 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
         
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
+    #################### build aoRg_FFT ####################
+
+    kmesh = mydf.kmesh
+    ncell_complex = kmesh[0] * kmesh[1] * (kmesh[2]//2+1)
+    nao_prim = mydf.nao // np.prod(kmesh)
+    nbas_prim = mydf.cell.nbas // np.prod(mydf.kmesh)
+    weight = np.sqrt(mydf.cell.vol / coords.shape[0])
+    nIP_Prim = mydf.nIP_Prim
+
+    aoRg_Tmp = ISDF_eval_gto(mydf.cell, coords=coords[mydf.IP_flat], shls_slice=(0, nbas_prim)) * weight
+
+    ### todo make it a list ! ### 
+    
+    mydf.aoRg_FFT  = np.zeros((nao_prim, ncell_complex*mydf.nIP_Prim), dtype=np.complex128)
+    mydf.aoRg_FFT_real = np.ndarray((nao_prim, np.prod(kmesh)*mydf.nIP_Prim), dtype=np.double, buffer=mydf.aoRg_FFT, offset=0)
+    mydf.aoRg_FFT_real.ravel()[:] = aoRg_Tmp.ravel()
+    
+    del aoRg_Tmp
+        
+    nthread        = lib.num_threads()
+    buffer         = np.zeros((nao_prim, ncell_complex*mydf.nIP_Prim), dtype=np.complex128)
+        
+    fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+    assert fn is not None
+        
+    print("aoRg_FFT.shape = ", mydf.aoRg_FFT.shape)
+        
+    fn(
+        mydf.aoRg_FFT_real.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao_prim),
+        ctypes.c_int(nIP_Prim),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
+        buffer.ctypes.data_as(ctypes.c_void_p)
+    ) # no normalization factor ! 
+
+    aoRg_packed = []
+    for i in range(ncell_complex):
+        aoRg_packed.append(mydf.aoRg_FFT[:, i*nIP_Prim:(i+1)*nIP_Prim].copy())
+    del mydf.aoRg_FFT
+    mydf.aoRg_FFT = aoRg_packed
+
+    #################### build aoR_FFT ####################
+
+    if mydf.with_robust_fitting:
+        ngrids = coords.shape[0]
+        ngrids_prim = ngrids // np.prod(kmesh)
+        aoR_tmp = ISDF_eval_gto(mydf.cell, coords=coords[mydf.grid_ID_ordered], shls_slice=(0, nbas_prim)) * weight
+        mydf.aoR_FFT  = np.zeros((nao_prim, ncell_complex*ngrids_prim), dtype=np.complex128)
+        mydf.aoR_FFT_real = np.ndarray((nao_prim, np.prod(kmesh)*ngrids_prim), dtype=np.double, buffer=mydf.aoR_FFT, offset=0)
+        mydf.aoR_FFT_real.ravel()[:] = aoR_tmp.ravel()
+        
+        del aoR_tmp
+        
+        buffer         = np.zeros((nao_prim, ncell_complex*ngrids_prim), dtype=np.complex128)
+        
+        # fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+        # assert fn is not None
+
+        print("self.aoR_FFT.shape = ", mydf.aoR_FFT.shape)
+        
+        fn(
+            mydf.aoR_FFT_real.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_prim),
+            ctypes.c_int(ngrids_prim),
+            kmesh.ctypes.data_as(ctypes.c_void_p),
+            buffer.ctypes.data_as(ctypes.c_void_p)
+        )
+
+        aoR_packed = []
+        for i in range(ncell_complex):
+            aoR_packed.append(mydf.aoR_FFT[:, i*ngrids_prim:(i+1)*ngrids_prim].copy())
+        del mydf.aoR_FFT
+        mydf.aoR_FFT = aoR_packed
+
+    del buffer
+        
     if rank == 0:
         print("IP_segment = ", mydf.IP_segment)
         print("aoRg memory: ", ISDF_LinearScalingBase._get_aoR_holders_memory(mydf.aoRg))          
@@ -351,6 +430,11 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
             
     del buf
     buf = None
+    
+    assert V.shape[0] == mydf.naux // np.prod(mydf.kmesh)
+    assert V.shape[1] == np.prod(mesh)
+    assert mydf.W.shape[0] == mydf.naux // np.prod(mydf.kmesh)
+    assert mydf.W.shape[1] == mydf.naux
     
 ##### get_jk #####
     
@@ -717,20 +801,144 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         t1 = t2
         
         self.aoR_Full = []
-        self.aoRg_FUll = []
+        # self.aoRg_FUll = []
         
         for i in range(self.kmesh[0]):
             for j in range(self.kmesh[1]):
                 for k in range(self.kmesh[2]):
                     self.aoR_Full.append(self._get_aoR_Row(i, j, k))
-                    self.aoRg_FUll.append(self._get_aoRg_Row(i, j, k))
+                    # self.aoRg_FUll.append(self._get_aoRg_Row(i, j, k))
         
         
         sys.stdout.flush()
     
     def build_auxiliary_Coulomb(self, debug=True):
+        
         if self.direct == False:
             build_auxiliary_Coulomb_local_bas_k(self, debug=debug, use_mpi=self.use_mpi)
+
+        ################ allocate buffer ################ 
+    
+    def _get_bufsize_get_j(self):
+        
+        # if self.with_robust_fitting == False:
+        if True:
+            
+            naux       = self.naux
+            nao        = self.nao
+            nIP_Prim   = self.nIP_Prim
+            nao_prim   = self.nao // np.prod(self.Ls)
+            
+            size_buf3  = nao * naux + naux + naux + nao * nao
+            size_buf4  = nao * nIP_Prim
+            size_buf4 += nIP_Prim
+            size_buf4 += nao_prim * nao
+            size_buf4 += nIP_Prim
+            size_buf4 += nao_prim * nao_prim
+            size_buf4 += nao_prim * nIP_Prim * 3
+            
+            return max(size_buf3, size_buf4)
+            
+        # else:
+        #     raise NotImplementedError
+
+    def _get_bufsize_get_k(self):
+        
+        # if self.with_robust_fitting == False:
+        if True:
+            
+            naux     = self.naux
+            nao      = self.nao
+            nIP_Prim = self.nIP_Prim
+            nao_prim = self.nao // np.prod(self.Ls)
+            ncell_complex = self.Ls[0] * self.Ls[1] * (self.Ls[2]//2+1)
+            
+            size_buf5  = nIP_Prim * nIP_Prim * ncell_complex * 2
+            size_buf5 += nao_prim * nao_prim * 2
+            size_buf5 += nIP_Prim * nIP_Prim * ncell_complex * 2
+            
+            size_buf6  = nIP_Prim * nIP_Prim * ncell_complex * 2
+            size_buf6 += nIP_Prim * nIP_Prim * ncell_complex * 2
+            size_buf6 += nao_prim * nao_prim * ncell_complex * 2
+            size_buf6 += nIP_Prim * nIP_Prim  * 2
+            size_buf6 += nao_prim * nIP_Prim  * 2 * 2
+            size_buf6 += nao_prim * nao_prim  * 2
+        
+            return max(size_buf5, size_buf6)
+
+    def _allocate_jk_buffer(self, dtype=np.float64):
+        
+        if self.jk_buffer is not None:
+            return
+            
+        num_threads = lib.num_threads()
+        
+        nIP_Prim = self.nIP_Prim
+        nGridPrim = self.nGridPrim
+        ncell_complex = self.kmesh[0] * self.kmesh[1] * (self.kmesh[2]//2+1)
+        nao_prim  = self.nao // np.prod(self.kmesh)
+        naux       = self.naux
+        nao        = self.nao
+        ngrids = nGridPrim * self.kmesh[0] * self.kmesh[1] * self.kmesh[2]
+        ncell  = np.prod(self.kmesh)
+        
+        self.outcore = False 
+        
+        if self.outcore is False:
+            
+            ### in build aux basis ###
+            size_buf1 = nIP_Prim * ncell_complex*nIP_Prim * 2
+            size_buf1+= nIP_Prim * ncell_complex*nGridPrim * 2 * 2
+            size_buf1+= num_threads * nGridPrim * 2
+            size_buf1+= nIP_Prim * nIP_Prim * 2
+            size_buf1+= nIP_Prim * nGridPrim * 2 * 2
+            size_buf1 = 0
+            
+            ### in construct W ###
+            
+            # print("nIP_Prim = ", nIP_Prim)
+            # print("ncell_complex = ", ncell_complex)    
+            
+            size_buf2  = nIP_Prim * nIP_Prim * 2
+            size_buf2 += nIP_Prim * nGridPrim * 2 * 2
+            size_buf2 += nIP_Prim * nIP_Prim *  ncell_complex * 2 * 2
+            size_buf2 = 0
+            
+            # print("size_buf2 = ", size_buf2)
+            
+            ### in get_j ###
+                    
+            buf_J = self._get_bufsize_get_j()
+            
+            ### in get_k ### 
+        
+            buf_K = self._get_bufsize_get_k()
+            
+            ### ddot_buf ###
+            
+            # size_ddot_buf = max(naux*naux+2,ngrids)*num_threads
+            size_ddot_buf = (nIP_Prim*nIP_Prim+2)*num_threads
+            
+            # print("size_buf1 = ", size_buf1)
+            # print("size_buf2 = ", size_buf2)
+            # print("size_buf3 = ", size_buf3)
+            # print("size_buf4 = ", size_buf4)
+            # print("size_buf5 = ", size_buf5)
+            
+            size_buf = max(size_buf1,size_buf2,buf_J,buf_K)
+            
+            # print("size_buf = ", size_buf)
+            
+            if hasattr(self, "IO_buf"):
+                if self.IO_buf.size < (size_buf+size_ddot_buf):
+                    self.IO_buf = np.zeros((size_buf+size_ddot_buf), dtype=np.float64)
+                self.jk_buffer = np.ndarray((size_buf), dtype=np.float64, buffer=self.IO_buf, offset=0)
+                self.ddot_buf  = np.ndarray((size_ddot_buf), dtype=np.float64, buffer=self.IO_buf, offset=size_buf)
+
+            else:
+
+                self.jk_buffer = np.ndarray((size_buf), dtype=np.float64)
+                self.ddot_buf  = np.zeros((size_ddot_buf), dtype=np.float64)
 
     ##### all the following functions are used to deal with translation symmetry when getting j and getting k #####
     
@@ -815,9 +1023,9 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         loc = box_x * self.kmesh[1] * self.kmesh[2] + box_y * self.kmesh[2] + box_z
         return self.aoR_Full[loc]
 
-    def get_aoRg_Row(self, box_x, box_y, box_z):
-        loc = box_x * self.kmesh[1] * self.kmesh[2] + box_y * self.kmesh[2] + box_z
-        return self.aoRg_FUll[loc]
+    # def get_aoRg_Row(self, box_x, box_y, box_z):
+    #     loc = box_x * self.kmesh[1] * self.kmesh[2] + box_y * self.kmesh[2] + box_z
+    #     return self.aoRg_FUll[loc]
     
     def _get_aoR_Row(self, box_x, box_y, box_z):
         
@@ -860,403 +1068,13 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                             Res.append(self.aoRg1[i])
             return Res
 
-    def _construct_RgAO(self, dm, aoRg_holders):
-        
-        fn_packrow = getattr(libpbc, "_buildK_packrow", None)
-        assert fn_packrow is not None
-        fn_packcol = getattr(libpbc, "_buildK_packcol", None)
-        assert fn_packcol is not None
-    
-        # if hasattr(self, "dm_reorder_buf") is False:
-        #     self.dm_reorder_buf = np.zeros((self.nao_prim, self.nao), dtype=np.double)
-        
-        naux_involved_tot = 0
-        naux_involved_max = 0
-        nao_involved_max = 0
-        for data, _ in aoRg_holders:
-            naux_involved_tot += data.aoR.shape[1]
-            naux_involved_max = max(naux_involved_max, data.aoR.shape[1])
-            nao_involved_max = max(nao_involved_max, data.ao_involved.size)
-
-        if hasattr(self, "dm_pack_buf") is False:
-            self.dm_pack_buf = np.zeros((nao_involved_max, self.nao), dtype=np.double)
-        else:
-            if self.dm_pack_buf.shape[0] < nao_involved_max:
-                self.dm_pack_buf = np.zeros((nao_involved_max, self.nao), dtype=np.double)
-        
-        if hasattr(self, "RgAO_ddot_buf") is False:
-            self.RgAO_ddot_buf = np.zeros((naux_involved_max, self.nao), dtype=np.double)
-        else:
-            if self.RgAO_ddot_buf.shape[0] < naux_involved_max:
-                self.RgAO_ddot_buf = np.zeros((naux_involved_max, self.nao), dtype=np.double)
-        
-        if hasattr(self, "RgAO") is False:
-            self.RgAO = np.zeros((naux_involved_tot, self.nao), dtype=np.double)
-        else:
-            if self.RgAO.shape[0] < naux_involved_tot:
-                self.RgAO = np.zeros((naux_involved_tot, self.nao), dtype=np.double)
-        
-        grid_loc = 0
-        
-        
-        res = np.ndarray((naux_involved_tot, self.nao), buffer=self.RgAO)
-        
-        for aoR_holder, permutation in aoRg_holders:
-            
-            ngrid_now = aoR_holder.aoR.shape[1]
-            nao_invovled = aoR_holder.ao_involved.size
-            
-            dm_packed = np.ndarray((nao_invovled, self.nao), buffer=self.dm_pack_buf)
-            
-            fn_packrow(
-                dm_packed.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nao_invovled),
-                ctypes.c_int(self.nao),
-                dm.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(self.nao), # TODO: optimized 
-                ctypes.c_int(self.nao), # TODO: optimized 
-                permutation.ctypes.data_as(ctypes.c_void_p),
-            )
-            
-            ddot_res = np.ndarray((ngrid_now, self.nao), buffer=self.RgAO_ddot_buf)
-            lib.ddot(aoR_holder.aoR.T, dm_packed, c=ddot_res)
-            res[grid_loc:grid_loc+ngrid_now,:] = ddot_res
-            
-            # dm_tmp = dm[permutation, :]
-            # benchmark = lib.ddot(aoR_holder.aoR.T, dm_tmp)
-            # diff = benchmark - ddot_res
-            # print("_construct_RgAO diff = ", np.linalg.norm(diff)/np.sqrt(ddot_res.size))
-            
-            grid_loc += ngrid_now
-        
-        return res
-
-    def _construct_RgR(self, RgAO, construct_RgRg=False):
-
-        naux = RgAO.shape[0]
-        ngrid = np.prod(self.mesh)
-        
-        if hasattr(self, "RgR") is False:
-            self.RgR = np.zeros((naux, ngrid), dtype=np.double)
-        else:
-            if self.RgR.shape[0] < naux:
-                self.RgR = np.zeros((naux, ngrid), dtype=np.double)
-
-        if hasattr(self, "RgAO_pack_buf") is False:
-            max_nao_involved = np.max([x.ao_involved.size for x in self.aoR1 if x is not None])
-            self.RgAO_pack_buf = np.zeros((naux, max_nao_involved), dtype=np.double)
-        else:
-            if self.RgAO_pack_buf.shape[0] < naux:
-                self.RgAO_pack_buf = np.zeros((naux, self.RgAO_pack_buf.shape[1]), dtype=np.double)
-
-        if hasattr(self, "ddot_res_RgR_buf") is False:
-            max_ngrid_invovled = np.max([x.aoR.shape[1] for x in self.aoR1 if x is not None])
-            self.ddot_res_RgR_buf = np.zeros((naux, max_ngrid_invovled), dtype=np.double)
-        else:
-            if self.ddot_res_RgR_buf.shape[0] < naux:
-                self.ddot_res_RgR_buf = np.zeros((naux, self.ddot_res_RgR_buf.shape[1]), dtype=np.double)
-
-        if construct_RgRg:
-            Res = np.ndarray((naux, self.naux), buffer=self.RgR)
-        else:
-            Res = np.ndarray((naux, ngrid), buffer=self.RgR)
-            
-        Res.ravel()[:] = 0.0
-
-        kmesh = self.kmesh
-
-        fn_packcol1 = getattr(libpbc, "_buildK_packcol", None)
-        assert fn_packcol1 is not None
-
-        loc = 0
-        for ix in range(kmesh[0]):
-            for iy in range(kmesh[1]):
-                for iz in range(kmesh[2]):
-                    
-                    if construct_RgRg:
-                        aoR_now = self.get_aoRg_Row(ix, iy, iz)
-                    else:
-                        aoR_now = self.get_aoR_Row(ix, iy, iz)
-                    
-                    RgAO_packed = RgAO[:, loc*self.nao_prim:(loc+1)*self.nao_prim].copy()
-
-                    # for _loc_, aoR_holder in enumerate(aoR_now):
-                    
-                    for _loc_ in self.atm_ordering:
-                        
-                        aoR_holder = aoR_now[_loc_]
-                        
-                        if aoR_holder is None:
-                            continue # achieve linear scaling here
-                    
-                        aoR = aoR_holder.aoR
-                        ao_involved = aoR_holder.ao_involved
-                        nao_involved = ao_involved.size
-                        
-                        ngrid_now = aoR.shape[1]
-                        if construct_RgRg:
-                            grid_begin = self.IP_segment[_loc_]
-                            assert grid_begin + ngrid_now == self.IP_segment[_loc_+1]
-                        else:
-                            grid_begin = self.grid_segment[_loc_]
-                            assert grid_begin + ngrid_now == self.grid_segment[_loc_+1]
-
-                        if nao_involved == self.nao_prim:
-                            Density_RgAO_packed = RgAO_packed
-                        else:
-                            Density_RgAO_packed = np.ndarray((naux, nao_involved), buffer=self.RgAO_pack_buf)
-                            fn_packcol1(
-                                Density_RgAO_packed.ctypes.data_as(ctypes.c_void_p),
-                                ctypes.c_int(naux),
-                                ctypes.c_int(nao_involved),
-                                RgAO_packed.ctypes.data_as(ctypes.c_void_p),
-                                ctypes.c_int(naux),
-                                ctypes.c_int(self.nao_prim),
-                                ao_involved.ctypes.data_as(ctypes.c_void_p)
-                            )
-
-                        ddot_res = np.ndarray((naux, ngrid_now), buffer=self.ddot_res_RgR_buf)
-                        lib.ddot(Density_RgAO_packed, aoR, c=ddot_res)
-                        # print("grid_begin = ", grid_begin, "ngrid_now = ", ngrid_now)
-                        Res[:, grid_begin:grid_begin+ngrid_now] += ddot_res
-
-                    loc += 1
-
-        ## only for debug ## 
-        
-        # if construct_RgRg is False:
-        #     weight = np.sqrt(self.cell.vol / self.coords.shape[0])
-        #     aoR_benchmark = ISDF_eval_gto(self.cell, coords=self.coords[self.grid_ID_ordered]) * weight
-        #     res_bench = lib.ddot(RgAO, aoR_benchmark)
-        #     diff = res_bench - Res
-        #     print("_construct_RgR False diff = ", np.linalg.norm(diff)/np.sqrt(Res.size))
-        # else:
-        #     weight = np.sqrt(self.cell.vol / self.coords.shape[0])
-        #     aoRg_benchmark = ISDF_eval_gto(self.cell, coords=self.coords[self.IP_flat]) * weight
-        #     res_bench = lib.ddot(RgAO, aoRg_benchmark)
-        #     diff = res_bench - Res
-        #     print("_construct_RgR True  diff = ", np.linalg.norm(diff)/np.sqrt(Res.size))
-
-        return Res
-
-    def _construct_K1_tmp1(self, V2, construct_K2_W=False):
-        
-        naux = V2.shape[0]
-        nao = self.nao
-        nao_prim = self.nao_prim
-        # ngrid = np.prod(self.mesh)
-        ngrid = V2.shape[1]
-        
-        if hasattr(self, "K1_tmp1_buf") is False:
-            self.K1_tmp1_buf = np.zeros((naux, nao), dtype=np.double)
-            self.K1_tmp1_subres_buf = np.zeros((naux, nao_prim), dtype=np.double)
-            self.K1_ddot_res_buf = np.zeros((naux, nao_prim), dtype=np.double)
-            
-            max_ngrid_involved = np.max([x.aoR.shape[1] for x in self.aoR1 if x is not None])
-            self.K1_tmp1_V_pack_buf = np.zeros((naux, max_ngrid_involved), dtype=np.double)
-            
-        else:
-            if self.K1_tmp1_buf.shape[0] < naux:
-                self.K1_tmp1_buf = np.zeros((naux, nao), dtype=np.double)
-                self.K1_tmp1_subres_buf = np.zeros((naux, nao_prim), dtype=np.double)
-                self.K1_ddot_res_buf = np.zeros((naux, nao_prim), dtype=np.double)
-                self.K1_tmp1_V_pack_buf = np.zeros((naux, self.K1_tmp1_V_pack_buf.shape[1]), dtype=np.double)
-        
-        K1_tmp1 = np.ndarray((naux, nao), buffer=self.K1_tmp1_buf)
-        
-        # return K1_tmp1
-        
-        K1_tmp1_subres = np.ndarray((naux, nao_prim), buffer=self.K1_tmp1_subres_buf)
-        
-        fn_packcol2 = getattr(libpbc, "_buildK_packcol2", None)
-        assert fn_packcol2 is not None
-        fn_packadd_col = getattr(libpbc, "_buildK_packaddcol", None)
-        assert fn_packadd_col is not None
-    
-        # K1_tmp1.ravel()[:] = 0.0
-        
-        # if construct_K2_W:
-        #     weight = np.sqrt(self.cell.vol / self.coords.shape[0])
-        #     aoRg_tmp = ISDF_eval_gto(self.cell, coords=self.coords[self.IP_flat]) * weight
-        #     benchmark = lib.ddot(V2, aoRg_tmp.T)
-        # else:
-        #     weight = np.sqrt(self.cell.vol / self.coords.shape[0])
-        #     aoR_tmp = ISDF_eval_gto(self.cell, coords=self.coords[self.grid_ID_ordered]) * weight
-        #     benchmark = lib.ddot(V2, aoR_tmp.T)
-        
-        loc = 0
-        
-        for ix in range(self.kmesh[0]):
-            for iy in range(self.kmesh[1]):
-                for iz in range(self.kmesh[2]):
-                    
-                    if construct_K2_W:
-                        aoR_holders = self.get_aoRg_Row(ix, iy, iz)
-                    else:
-                        aoR_holders = self.get_aoR_Row(ix, iy, iz)
-                    
-                    K1_tmp1_subres.ravel()[:] = 0.0
-                    
-                    # grid_loc = 0
-                    
-                    for _loc_ in self.atm_ordering:
-                        
-                        aoR_holder = aoR_holders[_loc_]
-                        
-                        if aoR_holder is None:
-                            continue
-                        
-                        if construct_K2_W:
-                            grid_loc = self.IP_segment[_loc_]
-                        else:
-                            grid_loc = self.grid_segment[_loc_]
-                    
-                        ngrid_now = aoR_holder.aoR.shape[1]
-                        nao_involved = aoR_holder.ao_involved.size
-                        
-                        ddot_res = np.ndarray((naux, nao_involved), buffer=self.K1_ddot_res_buf)
-                        
-                        V_packed = np.ndarray((naux, ngrid_now), buffer=self.K1_tmp1_V_pack_buf)
-                        
-                        fn_packcol2(
-                            V_packed.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_int(naux),
-                            ctypes.c_int(ngrid_now),
-                            V2.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_int(naux),
-                            ctypes.c_int(ngrid),
-                            ctypes.c_int(grid_loc),
-                            ctypes.c_int(grid_loc+ngrid_now)
-                        )
-                        
-                        lib.ddot(V_packed, aoR_holder.aoR.T, c=ddot_res)
-                        
-                        if nao_involved == nao_prim:
-                            K1_tmp1_subres += ddot_res
-                        else:
-                            fn_packadd_col(
-                                K1_tmp1_subres.ctypes.data_as(ctypes.c_void_p),
-                                ctypes.c_int(naux),
-                                ctypes.c_int(nao_prim),
-                                ddot_res.ctypes.data_as(ctypes.c_void_p),
-                                ctypes.c_int(naux),
-                                ctypes.c_int(nao_involved),
-                                aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
-                            )
-                        
-                        # grid_loc += ngrid_now
-                    
-                    
-                    K1_tmp1[:, loc * nao_prim:(loc+1) * nao_prim] = K1_tmp1_subres
-                    loc += 1
-                    
-        # assert loc == np.prod(self.kmesh)
-        
-        # print("diff = ", np.linalg.norm(K1_tmp1.ravel() - benchmark.ravel())/np.sqrt(benchmark.size))
-        # assert np.allclose(benchmark, K1_tmp1)
-        
-        return K1_tmp1
-       
-    def _permutate_K1_tmp1(self, K_tmp1, box_id):
-        
-        box_x = box_id // (self.kmesh[1] * self.kmesh[2])
-        box_y = (box_id % (self.kmesh[1] * self.kmesh[2])) // self.kmesh[2]
-        box_z = box_id % self.kmesh[2]
-        
-        if hasattr(self, "K_tmp1_permutation_buf") is False:
-            self.K_tmp1_permutation_buf = np.zeros_like(K_tmp1)
-        else:
-            if self.K_tmp1_permutation_buf.shape[0] < K_tmp1.shape[0]:
-                self.K_tmp1_permutation_buf = np.zeros_like(K_tmp1)
-        
-        K_tmp1_permutation = np.ndarray(K_tmp1.shape, buffer=self.K_tmp1_permutation_buf)
-
-        loc = 0
-        for i in range(self.kmesh[0]):
-            for j in range(self.kmesh[1]):
-                for k in range(self.kmesh[2]):
-                    ix_ = (i - box_x + self.kmesh[0]) % self.kmesh[0]
-                    iy_ = (j - box_y + self.kmesh[1]) % self.kmesh[1]
-                    iz_ = (k - box_z + self.kmesh[2]) % self.kmesh[2]
-                    loc_ = ix_ * self.kmesh[1] * self.kmesh[2] + iy_ * self.kmesh[2] + iz_
-                    K_tmp1_permutation[:, loc*self.nao_prim:(loc+1)*self.nao_prim] = K_tmp1[:, loc_*self.nao_prim:(loc_+1)*self.nao_prim]
-                    loc += 1    
-    
-    
-        return K_tmp1_permutation
-        
-        
-        
-       
-    def _construct_W_tmp(self, V_tmp, Res):
-        
-        assert V_tmp.shape[0] == Res.shape[0]
-        assert Res.shape[1] == self.naux
-        
-        # Res.ravel()[:] = 0.0
-        # return Res
-        
-        grid_loc = 0 
-        aux_col_loc = 0
-        for ix in range(self.kmesh[0]):
-            for iy in range(self.kmesh[1]):
-                for iz in range(self.kmesh[2]):
-                    
-                    for j in range(len(self.group)):
-                        
-                        aux_bas_ket = self.aux_basis[j]
-                        naux_ket = aux_bas_ket.shape[0]
-                        ngrid_now = aux_bas_ket.shape[1]
-                        Res[:, aux_col_loc:aux_col_loc+naux_ket] = lib.ddot(V_tmp[:, grid_loc:grid_loc+ngrid_now], aux_bas_ket.T)
-
-                        aux_col_loc += naux_ket
-                        grid_loc    += ngrid_now
-        
-        assert aux_col_loc == self.naux
-        assert grid_loc == np.prod(self.mesh)   
-        
-        return Res
-         
-    def allocate_k_buffer(self): 
-        ### TODO: split grid again to reduce the size of buf when robust fitting is true! 
-        # TODO: try to calculate the size when direct is true
-        
-        max_nao_involved = self._get_max_nao_involved()
-        max_ngrid_involved = self._get_max_ngrid_involved()
-        max_nIP_involved = self._get_max_nIP_involved()
-        maxsize_group_naux = self._get_maxsize_group_naux()
-        
-        allocated = False
-        
-        if self.direct:
-            if hasattr(self, "build_VW_in_k_buf") and self.build_VW_in_k_buf is not None:
-                allocated = True
-        else:
-            raise NotImplementedError("allocate_k_buffer for robust fitting without direct is not implemented yet!") 
-                   
-        if allocated:
-            pass
-        else:
-            
-            nThread = lib.num_threads()
-            bufsize_per_thread = np.prod(self.mesh) * 4
-            
-            size1 = nThread * bufsize_per_thread 
-            size2 = maxsize_group_naux * np.prod(self.mesh)
-            size3 = max_nao_involved * self.nao
-            size4 = maxsize_group_naux * self.naux
-            size3 = max(size3, size4)
-            size4 = max_nao_involved * self.nao
-            
-            self.build_VW_in_k_buf = np.zeros((size1+size2+size3+size4), dtype=np.double)
-            
                        
     get_jk = get_jk_dm_k_quadratic
 
 from pyscf.pbc.df.isdf.isdf_k import build_supercell
 from pyscf.pbc.df.isdf.isdf_split_grid import build_supercell_with_partition
 
-C = 8
+C = 25
 
 if __name__ == "__main__":
     
@@ -1279,14 +1097,14 @@ if __name__ == "__main__":
         ['C', (0.8917 , 2.6751 , 2.6751)],
     ] 
     
-    KE_CUTOFF = 64
+    KE_CUTOFF = 70
     
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
     prim_mesh = prim_cell.mesh
-    prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
-    # prim_partition = [[0,1,2,3,4,5,6,7]]
+    # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
+    prim_partition = [[0,1,2,3,4,5,6,7]]
     
-    Ls = [1, 3, 3]
+    Ls = [1, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -1296,7 +1114,7 @@ if __name__ == "__main__":
                                                      #basis=basis, pseudo=pseudo,
                                                      partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
     
-    pbc_isdf_info = PBC_ISDF_Info_Quad_K(cell, Ls=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=True, rela_cutoff_QRCP=1e-3)
+    pbc_isdf_info = PBC_ISDF_Info_Quad_K(cell, Ls=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=3e-3)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=prim_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     
     # exit(1)
@@ -1395,7 +1213,7 @@ if __name__ == "__main__":
     
     ######### bench mark #########
     
-    pbc_isdf_info = ISDF_LinearScaling.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=True, rela_cutoff_QRCP=3e-3)
+    pbc_isdf_info = ISDF_LinearScaling.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=True, rela_cutoff_QRCP=1e-3)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -1409,11 +1227,20 @@ if __name__ == "__main__":
     aoR_benchmark = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords[grid_ordered]) * weight
     diff = aoR_benchmark - aoR_unpacked
     print("diff = ", np.linalg.norm(diff)/np.sqrt(aoR_unpacked.size))
-    exit(1)
+    # exit(1)
     
     mf = scf.RHF(cell)
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 16
     mf.conv_tol = 1e-7
-    # mf.kernel()
+    mf.kernel()
+    
+    pp = mf.with_df.get_pp()
+    
+    mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    mf.with_df.get_pp = lambda *args, **kwargs: pp
+    mf.max_cycle = 16
+    mf.conv_tol = 1e-7
+    mf.kernel()

@@ -2774,9 +2774,10 @@ def _get_k_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
     vol = cell.vol
     
     W         = mydf.W
-    aoRg      = mydf.aoRg
-    aoRg_Prim = mydf.aoRg_Prim
-    naux      = aoRg.shape[1]
+    # aoRg      = mydf.aoRg
+    # aoRg_Prim = mydf.aoRg_Prim
+    # naux      = aoRg.shape[1]
+    naux = mydf.naux
     
     Ls = np.array(mydf.Ls, dtype=np.int32)
     mesh = mydf.mesh
@@ -2830,21 +2831,39 @@ def _get_k_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
     
     aoRg_FFT = mydf.aoRg_FFT
     
-    for i in range(ncell_complex):
+    if isinstance(aoRg_FFT, list): 
+        for i in range(ncell_complex):
         
-        k_begin = i * nao_prim
-        k_end   = (i + 1) * nao_prim
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
         
-        buf_A[:] = DM_complex[:, k_begin:k_end]
-        buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+            buf_A[:] = DM_complex[:, k_begin:k_end]
+            # buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+            buf_B = aoRg_FFT[i]
         
-        lib.dot(buf_A, buf_B, c=buf_C)
-        lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
+            lib.dot(buf_A, buf_B, c=buf_C)
+            lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
         
-        k_begin = i * nIP_prim
-        k_end   = (i + 1) * nIP_prim
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
         
-        DM_RgRg_complex[:, k_begin:k_end] = buf_D
+            DM_RgRg_complex[:, k_begin:k_end] = buf_D
+    else:
+        for i in range(ncell_complex):
+        
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            buf_A[:] = DM_complex[:, k_begin:k_end]
+            buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+        
+            lib.dot(buf_A, buf_B, c=buf_C)
+            lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
+        
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
+        
+            DM_RgRg_complex[:, k_begin:k_end] = buf_D
     
     buf_fft = np.ndarray((nIP_prim, nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     
@@ -2888,21 +2907,41 @@ def _get_k_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
     offset_now += (nIP_prim * nao_prim) * buf_C.itemsize
     buf_D = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
     
-    for i in range(ncell_complex):
+    if isinstance(aoRg_FFT, list): 
         
-        k_begin = i * nIP_prim
-        k_end   = (i + 1) * nIP_prim
+        for i in range(ncell_complex):
         
-        buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
-        buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
         
-        lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
-        lib.dot(buf_B, buf_C, c=buf_D)
+            buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
+            # buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
+            buf_B = aoRg_FFT[i]
         
-        k_begin = i * nao_prim
-        k_end   = (i + 1) * nao_prim
+            lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+            lib.dot(buf_B, buf_C, c=buf_D)
         
-        K_complex_buf[:, k_begin:k_end] = buf_D
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            K_complex_buf[:, k_begin:k_end] = buf_D
+    else:
+        
+        for i in range(ncell_complex):
+        
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
+        
+            buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
+            buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
+        
+            lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+            lib.dot(buf_B, buf_C, c=buf_D)
+        
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            K_complex_buf[:, k_begin:k_end] = buf_D
     
     buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     
@@ -2944,9 +2983,10 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     vol = cell.vol
     
     W         = mydf.W
-    aoRg      = mydf.aoRg
-    aoRg_Prim = mydf.aoRg_Prim
-    naux      = aoRg.shape[1]
+    # aoRg      = mydf.aoRg
+    # aoRg_Prim = mydf.aoRg_Prim
+    # naux      = aoRg.shape[1]
+    naux = mydf.naux
     
     Ls = np.array(mydf.Ls, dtype=np.int32)
     mesh = mydf.mesh
@@ -3000,21 +3040,42 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     
     aoRg_FFT = mydf.aoRg_FFT
     
-    for i in range(ncell_complex):
+    if isinstance(aoRg_FFT, list):
         
-        k_begin = i * nao_prim
-        k_end   = (i + 1) * nao_prim
+        for i in range(ncell_complex):
         
-        buf_A[:] = DM_complex[:, k_begin:k_end]
-        buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
         
-        lib.dot(buf_A, buf_B, c=buf_C)
-        lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
+            buf_A[:] = DM_complex[:, k_begin:k_end]
+            # buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+            buf_B.ravel()[:] = aoRg_FFT[i].ravel()[:]
         
-        k_begin = i * nIP_prim
-        k_end   = (i + 1) * nIP_prim
+            lib.dot(buf_A, buf_B, c=buf_C)
+            lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
         
-        DM_RgRg_complex[:, k_begin:k_end] = buf_D
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
+        
+            DM_RgRg_complex[:, k_begin:k_end] = buf_D
+            
+    else:
+    
+        for i in range(ncell_complex):
+        
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            buf_A[:] = DM_complex[:, k_begin:k_end]
+            buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+        
+            lib.dot(buf_A, buf_B, c=buf_C)
+            lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
+        
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
+        
+            DM_RgRg_complex[:, k_begin:k_end] = buf_D
     
     buf_fft = np.ndarray((nIP_prim, nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     
@@ -3060,21 +3121,40 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     offset_now += (nIP_prim * nao_prim) * buf_C.itemsize
     buf_D = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
     
-    for i in range(ncell_complex):
+    if isinstance(aoRg_FFT, list):
+        for i in range(ncell_complex):
         
-        k_begin = i * nIP_prim
-        k_end   = (i + 1) * nIP_prim
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
         
-        buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
-        buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
+            buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
+            # buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
+            buf_B.ravel()[:] = aoRg_FFT[i].ravel()[:]
         
-        lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
-        lib.dot(buf_B, buf_C, c=buf_D)
+            lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+            lib.dot(buf_B, buf_C, c=buf_D)
         
-        k_begin = i * nao_prim
-        k_end   = (i + 1) * nao_prim
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
         
-        K_complex_buf[:, k_begin:k_end] = buf_D
+            K_complex_buf[:, k_begin:k_end] = buf_D
+            
+    else:
+        for i in range(ncell_complex):
+        
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
+        
+            buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
+            buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
+        
+            lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+            lib.dot(buf_B, buf_C, c=buf_D)
+        
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            K_complex_buf[:, k_begin:k_end] = buf_D
     
     buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     
@@ -3105,22 +3185,44 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     buf_C = np.ndarray((nao_prim, nGridPrim), dtype=np.complex128)
     buf_D = np.ndarray((nIP_prim, nGridPrim), dtype=np.complex128)
     
-    for i in range(ncell_complex):
+    if isinstance(aoRg_FFT, list):
+        assert isinstance(aoR_FFT, list)
         
-        k_begin = i * nao_prim
-        k_end   = (i + 1) * nao_prim
+        for i in range(ncell_complex):
         
-        buf_A[:] = DM_complex[:, k_begin:k_end]
-        buf_B[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim]
-        buf_B2[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
         
-        lib.dot(buf_A, buf_B, c=buf_C)
-        lib.dot(buf_B2.T.conj(), buf_C, c=buf_D)
+            buf_A[:] = DM_complex[:, k_begin:k_end]
+            # buf_B[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim]
+            # buf_B2[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+            buf_B.ravel()[:] = aoR_FFT[i].ravel()[:]
+            buf_B2.ravel()[:] = aoRg_FFT[i].ravel()[:]
         
-        k_begin = i * nGridPrim
-        k_end   = (i + 1) * nGridPrim
+            lib.dot(buf_A, buf_B, c=buf_C)
+            lib.dot(buf_B2.T.conj(), buf_C, c=buf_D)
         
-        DM_RgR_complex[:, k_begin:k_end] = buf_D
+            k_begin = i * nGridPrim
+            k_end   = (i + 1) * nGridPrim
+        
+            DM_RgR_complex[:, k_begin:k_end] = buf_D
+    else:
+        for i in range(ncell_complex):
+        
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            buf_A[:] = DM_complex[:, k_begin:k_end]
+            buf_B[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim]
+            buf_B2[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+        
+            lib.dot(buf_A, buf_B, c=buf_C)
+            lib.dot(buf_B2.T.conj(), buf_C, c=buf_D)
+        
+            k_begin = i * nGridPrim
+            k_end   = (i + 1) * nGridPrim
+        
+            DM_RgR_complex[:, k_begin:k_end] = buf_D
     
     # DM_RgRg1 = DM_RgR_complex[:, mydf.IP_ID]
     # DM_RgRg2 = DM_RgRg_complex2[:, :nIP_prim]
@@ -3177,27 +3279,54 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
     buf_C = np.ndarray((nIP_prim, nao_prim), dtype=np.complex128)
     buf_D = np.ndarray((nao_prim, nao_prim), dtype=np.complex128)
     
-    for i in range(ncell_complex):
+    if isinstance(aoRg_FFT, list):
         
-        k_begin = i * nGridPrim
-        k_end   = (i + 1) * nGridPrim
+        for i in range(ncell_complex):
         
-        buf_A.ravel()[:] = DM_RgR_complex[:, k_begin:k_end].ravel()[:]
-        # print("buf_A = ", buf_A[:5,:5])
-        buf_B.ravel()[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim].ravel()[:]
-        # print("buf_B = ", buf_B[:5,:5])
-        buf_B2.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]  
-        # print("buf_B2 = ", buf_B2[:5,:5]) 
+            k_begin = i * nGridPrim
+            k_end   = (i + 1) * nGridPrim
         
-        lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
-        lib.dot(buf_B2, buf_C, c=buf_D)
+            buf_A.ravel()[:] = DM_RgR_complex[:, k_begin:k_end].ravel()[:]
+            # print("buf_A = ", buf_A[:5,:5])
+            # buf_B.ravel()[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim].ravel()[:]
+            # print("buf_B = ", buf_B[:5,:5])
+            # buf_B2.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]  
+            # print("buf_B2 = ", buf_B2[:5,:5]) 
+            
+            buf_B.ravel()[:] = aoR_FFT[i].ravel()[:]
+            buf_B2.ravel()[:] = aoRg_FFT[i].ravel()[:]
         
-        # print("buf_D = ", buf_D[:5,:5])
+            lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+            lib.dot(buf_B2, buf_C, c=buf_D)
         
-        k_begin = i * nao_prim
-        k_end   = (i + 1) * nao_prim
+            # print("buf_D = ", buf_D[:5,:5])
         
-        K_complex_buf[:, k_begin:k_end] = buf_D
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            K_complex_buf[:, k_begin:k_end] = buf_D
+    else:
+        for i in range(ncell_complex):
+        
+            k_begin = i * nGridPrim
+            k_end   = (i + 1) * nGridPrim
+        
+            buf_A.ravel()[:] = DM_RgR_complex[:, k_begin:k_end].ravel()[:]
+            # print("buf_A = ", buf_A[:5,:5])
+            buf_B.ravel()[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim].ravel()[:]
+            # print("buf_B = ", buf_B[:5,:5])
+            buf_B2.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]  
+            # print("buf_B2 = ", buf_B2[:5,:5]) 
+        
+            lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+            lib.dot(buf_B2, buf_C, c=buf_D)
+        
+            # print("buf_D = ", buf_D[:5,:5])
+        
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            K_complex_buf[:, k_begin:k_end] = buf_D
     
     buf_A = None
     buf_B = None

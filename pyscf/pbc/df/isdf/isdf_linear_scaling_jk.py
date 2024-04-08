@@ -1403,8 +1403,8 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     if with_j:
         vj = _contract_j_dm_ls(mydf, dm, use_mpi)  
         # if rank == 0:
-        # print("vj = ", vj[0, :16])
-        # print("vj = ", vj[0, -16:])
+        print("vj = ", vj[0, :16])
+        print("vj = ", vj[0, -16:])
     if with_k:
         # if mydf.with_robust_fitting:
         #     vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
@@ -1415,8 +1415,8 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         else:
             vk = _contract_k_dm_quadratic(mydf, dm, mydf.with_robust_fitting, use_mpi=use_mpi)
         # if rank == 0:
-        # print("vk = ", vk[0, :16])
-        # print("vk = ", vk[0, -16:])
+        print("vk = ", vk[0, :16])
+        print("vk = ", vk[0, -16:])
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
 
