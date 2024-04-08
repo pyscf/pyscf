@@ -51,7 +51,7 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
         with_3body = mf.disp_with_3body
 
     if mf.disp[:2].upper() == 'D3':
-        import pyscf.lib as dftd3
+        from pyscf.lib import dftd3
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5
@@ -74,7 +74,7 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
             return h_disp
 
     elif mf.disp[:2].upper() == 'D4':
-        import pyscf.lib as dftd4
+        from pyscf.lib import dftd4
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5
@@ -83,13 +83,13 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')
                 d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
-                res = d4_model.kernel(grad=True)
+                res = d4_model.get_dispersion(grad=True)
                 g1 = res.get('gradient')
 
                 coords[i,j] -= 2.0*eps
                 mol.set_geom_(coords, unit='Bohr')
                 d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
-                res = d4_model.kernel()
+                res = d4_model.get_dispersion(grad=True)
                 g2 = res.get('gradient')
 
                 coords[i,j] += eps
