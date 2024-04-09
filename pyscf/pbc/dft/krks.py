@@ -181,25 +181,13 @@ class KRKS(rks.KohnShamDFT, khf.KRHF):
 
     def to_hf(self):
         '''Convert to KRHF object.'''
-        from pyscf.pbc import scf
-        return self._transfer_attrs_(scf.KRHF(self.cell, self.kpts))
+        from pyscf.pbc import scf, df
+        out = self._transfer_attrs_(scf.KRHF(self.cell, self.kpts))
+        # Pure functionals only construct J-type integrals. Enable all integrals for KHF.
+        if (not self._numint.libxc.is_hybrid_xc(self.xc) and
+            len(self.kpts) > 1 and getattr(self.with_df, '_j_only', False)):
+            out.with_df._j_only = False
+            out.with_df.reset()
+        return out
 
     to_gpu = lib.to_gpu
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.unit = 'A'
-    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-    cell.a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    '''
-
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.verbose = 7
-    cell.output = '/dev/null'
-    cell.build()
-    mf = KRKS(cell, cell.make_kpts([2,1,1]))
-    print(mf.kernel())
