@@ -29,7 +29,6 @@ from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, scatter
-import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 
 # from memory_profiler import profile
 import ctypes

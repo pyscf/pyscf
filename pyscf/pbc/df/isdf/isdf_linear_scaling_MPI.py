@@ -45,7 +45,6 @@ from memory_profiler import profile
 libpbc = lib.load_library('libpbc')
 
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
-import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
 import pyscf.pbc.df.isdf.isdf_linear_scaling_jk as ISDF_LinearScalingJK
 

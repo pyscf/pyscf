@@ -35,7 +35,7 @@ libpbc = lib.load_library('libpbc')
 
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto 
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
-import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
+import pyscf.pbc.df.isdf.isdf_tools_local as ISDF_Local_Utils
 from pyscf.pbc.df.isdf.isdf_linear_scaling_k_jk import get_jk_dm_k_quadratic
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
@@ -104,14 +104,14 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
                     atm_2_IP_possible=IP_possible_atm
                 )
         else:
-            group_begin, group_end = ISDF_LinearScalingBase._range_partition(len(group), rank, comm_size, use_mpi)
+            group_begin, group_end = ISDF_Local_Utils._range_partition(len(group), rank, comm_size, use_mpi)
             for i in range(group_begin, group_end):
                 IP_group[i] = ISDF_LinearScaling.select_IP_local_ls(
                     mydf, aoRg_possible, c, m,
                     group = group[i],
                     atm_2_IP_possible=IP_possible_atm
                 )
-            IP_group = ISDF_LinearScalingBase._sync_list(IP_group, len(group))
+            IP_group = ISDF_Local_Utils._sync_list(IP_group, len(group))
     else:
         IP_group = IP_possible_atm
 
@@ -164,7 +164,7 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
     
     weight = np.sqrt(mydf.cell.vol / coords.shape[0])
     
-    mydf.aoRg = ISDF_LinearScalingBase.get_aoR(
+    mydf.aoRg = ISDF_Local_Utils.get_aoR(
         mydf.cell, coords, partition_IP,
         first_natm,
         mydf.cell.natm,
@@ -177,7 +177,7 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
     
     assert len(mydf.aoRg) == first_natm
     
-    # mydf.aoRg1 = ISDF_LinearScalingBase.get_aoR(
+    # mydf.aoRg1 = ISDF_Local_Utils.get_aoR(
     #     mydf.cell, coords, partition_IP,
     #     mydf.cell.natm,
     #     first_natm,
@@ -190,7 +190,7 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
     
     # assert len(mydf.aoRg1) == mydf.cell.natm
     
-    # mydf.aoRg1 = ISDF_LinearScalingBase.get_aoR(
+    # mydf.aoRg1 = ISDF_Local_Utils.get_aoR(
     #     mydf.cell, coords, partition_IP,
     #     first_natm,
     #     mydf.group,
@@ -291,7 +291,7 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
         
     if rank == 0:
         print("IP_segment = ", mydf.IP_segment)
-        print("aoRg memory: ", ISDF_LinearScalingBase._get_aoR_holders_memory(mydf.aoRg))          
+        print("aoRg memory: ", ISDF_Local_Utils._get_aoR_holders_memory(mydf.aoRg))          
 
 def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
     
@@ -487,16 +487,16 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         ##### build cutoff info #####   
         
-        self.distance_matrix = ISDF_LinearScalingBase.get_cell_distance_matrix(self.cell)
+        self.distance_matrix = ISDF_Local_Utils.get_cell_distance_matrix(self.cell)
         weight = np.sqrt(self.cell.vol / self.coords.shape[0])
         precision = self.aoR_cutoff
-        rcut = ISDF_LinearScalingBase._estimate_rcut(self.cell, self.coords.shape[0], precision)
+        rcut = ISDF_Local_Utils._estimate_rcut(self.cell, self.coords.shape[0], precision)
         rcut_max = np.max(rcut)
-        atm2_bas = ISDF_LinearScalingBase._atm_to_bas(self.cell)
+        atm2_bas = ISDF_Local_Utils._atm_to_bas(self.cell)
         self.AtmConnectionInfo = []
         
         for i in range(self.cell.natm):
-            tmp = ISDF_LinearScalingBase.AtmConnectionInfo(self.cell, i, self.distance_matrix, precision, rcut, rcut_max, atm2_bas)
+            tmp = ISDF_Local_Utils.AtmConnectionInfo(self.cell, i, self.distance_matrix, precision, rcut, rcut_max, atm2_bas)
             self.AtmConnectionInfo.append(tmp)
     
         #### information dealing grids , build parition ####
@@ -518,7 +518,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                 int(self.cell.lattice_vectors()[2][2]/2)+1
             ]
         
-        self.partition_prim = ISDF_LinearScalingBase.get_partition(
+        self.partition_prim = ISDF_Local_Utils.get_partition(
             self.cell, self.coords,
             self.AtmConnectionInfo,
             Ls,
@@ -568,7 +568,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         weight = np.sqrt(self.cell.vol / self.coords.shape[0])
         
-        self.aoR = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, self.partition, 
+        self.aoR = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
                                                   first_natm,
                                                   natm,
                                                   self.group_global,
@@ -577,7 +577,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                                                   self.use_mpi, self.use_mpi, sync_aoR)
         
     
-        memory = ISDF_LinearScalingBase._get_aoR_holders_memory(self.aoR)
+        memory = ISDF_Local_Utils._get_aoR_holders_memory(self.aoR)
         
         assert len(self.aoR) == first_natm
         
@@ -586,7 +586,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         weight = np.sqrt(self.cell.vol / self.coords.shape[0])
         
-        self.aoR1 = ISDF_LinearScalingBase.get_aoR(self.cell, self.coords, self.partition, 
+        self.aoR1 = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
                                                    None,
                                                    first_natm,
                                                    self.group_global,
@@ -625,7 +625,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         #     else:
         #         partition_tmp.append([])
         
-        # self.aoR2 = ISDF_LinearScalingBase.get_aoR2(self.cell, self.coords, partition_tmp, 
+        # self.aoR2 = ISDF_Local_Utils.get_aoR2(self.cell, self.coords, partition_tmp, 
         #                                             natm,
         #                                             self.group,
         #                                             self.distance_matrix, 
@@ -764,7 +764,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         weight = np.sqrt(self.cell.vol / self.coords.shape[0])
         
-        self.aoRg_possible = ISDF_LinearScalingBase.get_aoR(
+        self.aoRg_possible = ISDF_Local_Utils.get_aoR(
             self.cell, self.coords, 
             IP_Atm, 
             first_natm,

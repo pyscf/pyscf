@@ -35,7 +35,6 @@ libpbc = lib.load_library('libpbc')
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto 
 
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
-import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 
 from  pyscf.pbc.df.isdf.isdf_tools_densitymatrix import pack_JK
@@ -978,7 +977,214 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     
     # return DM_RgRg_real # temporary return for debug
 
-
+def _get_k_kSym(mydf, dm):
+ 
+    #### preprocess ####  
+    
+    mydf._allocate_jk_buffer(dm.dtype)
+    t1 = (logger.process_clock(), logger.perf_counter())
+    
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+    
+    nao  = dm.shape[0]
+    cell = mydf.cell    
+    assert cell.nao == nao
+    ngrid = np.prod(cell.mesh)
+    vol = cell.vol
+    
+    W         = mydf.W
+    # aoRg      = mydf.aoRg
+    # aoRg_Prim = mydf.aoRg_Prim
+    # naux      = aoRg.shape[1]
+    naux = mydf.naux
+    
+    Ls = np.array(mydf.Ls, dtype=np.int32)
+    mesh = mydf.mesh
+    meshPrim = np.array(mesh) // np.array(Ls)
+    nGridPrim = mydf.nGridPrim
+    ncell = np.prod(Ls)
+    ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
+    nIP_prim = mydf.nIP_Prim
+    nao_prim = nao // ncell
+    
+    #### allocate buffer ####
+    
+    offset = 0
+    DM_RgRg_complex = np.ndarray((nIP_prim,nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    DM_RgRg_real = np.ndarray((nIP_prim,nIP_prim*ncell), dtype=np.float64, buffer=mydf.jk_buffer, offset=offset)
+    
+    offset += (nIP_prim * nIP_prim * ncell_complex) * DM_RgRg_complex.itemsize
+    DM_complex = np.ndarray((nao_prim,nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    DM_real = np.ndarray((nao_prim,nao), dtype=np.float64, buffer=mydf.jk_buffer, offset=offset)
+    DM_real.ravel()[:] = dm[:nao_prim, :].ravel()[:]
+    offset += (nao_prim * nao_prim * ncell_complex) * DM_complex.itemsize
+    
+    #### get D ####
+    
+    #_get_DM_RgRg_real(mydf, DM_real, DM_complex, DM_RgRg_real, DM_RgRg_complex, offset)
+    
+    fn1 = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+    assert fn1 is not None
+    
+    buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+        
+    fn1(
+        DM_real.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao_prim),
+        ctypes.c_int(nao_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    buf_A = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    offset2 = offset + (nao_prim * nao_prim) * buf_A.itemsize
+    buf_B = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset2)
+    
+    offset3 = offset2 + (nao_prim * nIP_prim) * buf_B.itemsize
+    buf_C = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset3)
+    
+    offset4 = offset3 + (nao_prim * nIP_prim) * buf_C.itemsize
+    buf_D = np.ndarray((nIP_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset4)
+    
+    aoRg_FFT = mydf.aoRg_FFT
+    
+    if isinstance(aoRg_FFT, list): 
+        for i in range(ncell_complex):
+        
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            buf_A[:] = DM_complex[:, k_begin:k_end]
+            # buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+            buf_B = aoRg_FFT[i]
+        
+            lib.dot(buf_A, buf_B, c=buf_C)
+            lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
+        
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
+        
+            DM_RgRg_complex[:, k_begin:k_end] = buf_D
+    else:
+        for i in range(ncell_complex):
+        
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            buf_A[:] = DM_complex[:, k_begin:k_end]
+            buf_B[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim]
+        
+            lib.dot(buf_A, buf_B, c=buf_C)
+            lib.dot(buf_B.T.conj(), buf_C, c=buf_D)
+        
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
+        
+            DM_RgRg_complex[:, k_begin:k_end] = buf_D
+    
+    buf_fft = np.ndarray((nIP_prim, nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    fn2 = getattr(libpbc, "_iFFT_Matrix_Col_InPlace", None)
+    assert fn2 is not None
+    
+    fn2(
+        DM_RgRg_complex.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_prim),
+        ctypes.c_int(nIP_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    # inplace multiplication
+    
+    lib.cwise_mul(mydf.W, DM_RgRg_real, out=DM_RgRg_real)
+    
+    offset = nIP_prim * nIP_prim * ncell_complex * DM_RgRg_complex.itemsize
+    
+    buf_fft = np.ndarray((nIP_prim, nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    fn1(
+        DM_RgRg_real.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nIP_prim),
+        ctypes.c_int(nIP_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    K_complex_buf = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    K_real_buf    = np.ndarray((nao_prim, nao_prim*ncell), dtype=np.float64, buffer=mydf.jk_buffer, offset=offset)
+    offset += (nao_prim * nao_prim * ncell_complex) * K_complex_buf.itemsize
+    offset_now = offset    
+    
+    buf_A = np.ndarray((nIP_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    offset_now += (nIP_prim * nIP_prim) * buf_A.itemsize
+    buf_B = np.ndarray((nao_prim, nIP_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    offset_now += (nao_prim * nIP_prim) * buf_B.itemsize
+    buf_C = np.ndarray((nIP_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    offset_now += (nIP_prim * nao_prim) * buf_C.itemsize
+    buf_D = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
+    
+    if isinstance(aoRg_FFT, list): 
+        
+        for i in range(ncell_complex):
+        
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
+        
+            buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
+            # buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
+            buf_B = aoRg_FFT[i]
+        
+            lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+            lib.dot(buf_B, buf_C, c=buf_D)
+        
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            K_complex_buf[:, k_begin:k_end] = buf_D
+    else:
+        
+        for i in range(ncell_complex):
+        
+            k_begin = i * nIP_prim
+            k_end   = (i + 1) * nIP_prim
+        
+            buf_A.ravel()[:] = DM_RgRg_complex[:, k_begin:k_end].ravel()[:]
+            buf_B.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]
+        
+            lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
+            lib.dot(buf_B, buf_C, c=buf_D)
+        
+            k_begin = i * nao_prim
+            k_end   = (i + 1) * nao_prim
+        
+            K_complex_buf[:, k_begin:k_end] = buf_D
+    
+    buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
+    
+    fn2(
+        K_complex_buf.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao_prim),
+        ctypes.c_int(nao_prim),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        buf_fft.ctypes.data_as(ctypes.c_void_p)
+    )
+    
+    K_real_buf *= (ngrid / vol)
+    
+    K = _pack_JK(K_real_buf, Ls, nao_prim, output=None)
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    _benchmark_time(t1, t2, "_contract_k_dm")
+    
+    return K
+    
+    # return DM_RgRg_real # temporary return for debug
+    
 def get_jk_dm_k_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
                           kpts_band=None, with_j=True, with_k=True, omega=None, 
                           **kwargs):
@@ -1051,7 +1257,6 @@ def get_jk_dm_k_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
             if mydf.with_robust_fitting:
                 vk = _get_k_kSym_robust_fitting_fast(mydf, dm)
             else:
-                from pyscf.pbc.df.isdf.isdf_k import _get_k_kSym
                 vk = _get_k_kSym(mydf, dm)
         # if rank == 0:
         # print("vk = ", vk[0, :16])
