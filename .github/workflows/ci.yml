@@ -72,7 +72,7 @@ jobs:
             echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py && \
             echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py && \
             echo "scf_hf_SCF_mute_chkfile = True" >> .pyscf_conf.py && \
-            ulimit -s 20000 && /opt/python/${{ matrix.pyver }}/bin/pytest pyscf/ --ignore=pyscf/adc --ignore=pyscf/pbc/df --ignore=pyscf/pbc/cc -s -c setup.cfg pyscf'
+            ulimit -s 20000 && /opt/python/${{ matrix.pyver }}/bin/pytest pyscf/ --ignore=pyscf/adc --ignore=pyscf/pbc/df --ignore=pyscf/pbc/cc -s -c pytest.ini pyscf'
 
   macos-build:
     runs-on: macos-latest
