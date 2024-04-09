@@ -220,18 +220,10 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
     blksize = min(blksize, MAX_CHUNKSIZE//naux)
     chunks = (naux, blksize)
 
-    # assert(blksize > 0)
-    # assert(chunks[0] > 0)
-
     print("blksize       = ", blksize)
-    # if hasattr(mydf, 'blksize_aux'):
-    #     blksize = mydf.blksize_aux
-    # else:
-    #     raise ValueError("blksize_aux should be provided")
 
     print("IO_buf_memory = ", IO_buf_memory)
     print("blksize       = ", blksize)
-    # print("chunks        = ", chunks)
 
     A = np.ndarray((naux, naux), dtype=IO_buf.dtype, buffer=IO_buf)
     A = np.asarray(lib.dot(aoRg.T, aoRg, c=A), order='C')  # no memory allocation here!
@@ -298,9 +290,6 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
 
     from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
     df_tmp = MultiGridFFTDF2(mydf.cell)
-    # NumInts = df_tmp._numint
-    # grids   = df_tmp.grids
-    # coords  = np.asarray(grids.coords).reshape(-1,3)
     coords  = mydf.coords
     assert coords is not None
 
@@ -406,54 +395,10 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
     coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1)  # drop the minus frequency part
     nThread    = lib.num_threads()
 
-    # print("mesh = ", mesh)
-    # print(coulG.reshape(*mesh)[1,2,:])
-    # print(coulG_real.reshape(*mesh_complex)[1,2,:])
-
     ### buffer needed ###
 
     ### two to hold for read in aux_basis to construct V, two to hold another aux_basis to construct W ###
     ### one further buffer to hold the buf to construct V, suppose it consists of 5% of the total memory ###
-
-    # suppose that nwork_per_thread , then the memory should be
-    # buf size = nThreads * nwork_per_thread * mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2
-    # suppose  V is of size (nThreads * nwork_per_thread) * mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2
-    # then the memory needed is 5 * nThreads * nwork_per_thread * mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2
-    # we set that the maximal nwork_per_thread is 16
-
-    # print("IO_buf.size = ", IO_buf.size)
-    # memory_thread      = int(THREAD_BUF_PERCENTAGE * IO_buf.size)
-    # bunchsize     = memory_thread // nThread // (mesh_complex[0] * mesh_complex[1] * mesh_complex[2] * 2)
-    # if bunchsize > 16:
-    #     bunchsize = 16
-    # if bunchsize == 0:
-    #     bunchsize = 1
-    # if bunchsize * nThread > naux:
-    #     bunchsize = naux // nThread  # force to use all the aux basis
-    # bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
-    # bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
-    # memory_thread      = bufsize_per_thread * nThread
-    # if memory_thread > IO_buf.size:
-    #     raise ValueError("IO_buf is not large enough, memory_thread = %d, IO_buf.size = %d" %
-    #                      (memory_thread, IO_buf.size))
-    # print("memory_thread = ", memory_thread)
-    # bunch_size_IO = ((IO_buf.size - memory_thread) // 6) // (ncomplex) # ncomplex > ngrids
-    # print("bunch_size_IO = ", bunch_size_IO)
-    # if bunch_size_IO > naux:
-    #     bunch_size_IO = naux
-    # if bunch_size_IO == 0:
-    #     raise ValueError("IO_buf is not large enough, bunch_size_IO = %d, IO_buf.size = %d" %
-    #                      (bunch_size_IO, IO_buf.size))
-    # bunchsize          = bunch_size_IO // nThread
-    # bunch_size_IO      = (bunch_size_IO // (bunchsize * nThread)) * bunchsize * nThread
-    # bunch_size_IO      = min(bunch_size_IO, MAX_CHUNKSIZE//ngrids)
-    # if bunch_size_IO < nThread:
-    #     print("WARNING: bunch_size_IO = %d < nThread = %d" % (bunch_size_IO, nThread))
-    # bunchsize          = bunch_size_IO // nThread
-    # bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
-    # bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
-    # memory_thread      = bufsize_per_thread * nThread
-    # bunch_size_IO      = nThread * bunchsize
 
     bunch_size_IO = ((IO_buf.size) // 7) // (ncomplex)  # ncomplex > ngrids
     if bunch_size_IO > naux:
@@ -467,8 +412,6 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
                             (bunch_size_IO, IO_buf.size))
     bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
     bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
-    # memory_thread      = bufsize_per_thread * nThread
-    # bunch_size_IO      = nThread * bunchsize
 
     if hasattr(mydf, 'nRow_IO_V'):
         bunch_size_IO = mydf.nRow_IO_V
@@ -576,11 +519,6 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
 
                     async_write_auxbasisfft(p0, p1, buf_aux_basis_fft_1)
                     buf_aux_basis_fft_1, buf_aux_basis_fft_2 = buf_aux_basis_fft_2, buf_aux_basis_fft_1
-                    
-                    # if p0 == 0:
-                    #     print("V init  = ", buf_V1[0,  :])
-                    # if p1 == ngrid:
-                    #     print("V final = ", buf_V1[-1, :])
                     
                     if CONSTRUCT_V == 1:
                         async_write(p0, p1, buf_V1)

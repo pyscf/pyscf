@@ -16,9 +16,17 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
+######## sys    module ########
+
 import copy
 from functools import reduce
 import numpy as np
+import ctypes
+from multiprocessing import Pool
+from memory_profiler import profile
+
+######## pyscf  module ########
+
 from pyscf import lib
 import pyscf.pbc.gto as pbcgto
 from pyscf.pbc.gto import Cell
@@ -26,22 +34,18 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 from pyscf.gto.mole import *
+libpbc = lib.load_library('libpbc')
+
+########  isdf  module ########
+
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 import pyscf.pbc.df.isdf.isdf_fast as isdf
 from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 from pyscf.pbc.df.isdf.isdf_k import build_supercell
-
-from pyscf.pbc.df.isdf.isdf_mpi_tools import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch
-
-import ctypes
-from multiprocessing import Pool
-from memory_profiler import profile
-
-libpbc = lib.load_library('libpbc')
+from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
-    
 def test_alltoall(cell:Cell, c):
     mesh = cell.mesh
     nao = cell.nao
@@ -336,26 +340,15 @@ def get_jk_dm_mpi(mydf, dm, hermi=1, kpt=np.zeros(3),
     if with_j:
         if mydf.with_robust_fitting:
             vj = isdf_jk._contract_j_dm_fast(mydf, dm, mydf.with_robust_fitting, True)
-            # vj2 = isdf_jk._contract_j_dm(mydf, dm, mydf.with_robust_fitting, True)
-            # if rank == 0:
-            #     print("vj = ", vj[0,:16] * comm_size)
-            # print("vj2 = ", vj2[0,-10:])
-            # print("vj/vj2 = ", vj[0,-10:] / vj2[0,-10:])
         else:
             vj = isdf_jk._contract_j_dm(mydf, dm, mydf.with_robust_fitting, True)
 
     if with_k:
         vk = isdf_jk._contract_k_dm(mydf, dm, mydf.with_robust_fitting, True)
-        # if rank == 0:
-        #     print("vk = ", vk[0,:16] * comm_size)
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
 
     t1 = log.timer('sr jk', *t1)
-
-    # if rank == 0:
-    #     print("vj = ", vj[0,-10:])
-    #     print("vk = ", vk[0,-10:])
 
     return vj * comm_size , vk * comm_size ### ? 
 

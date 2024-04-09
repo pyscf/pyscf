@@ -16,9 +16,17 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
+############ sys module ############
+
 import copy
 from functools import reduce
 import numpy as np
+import ctypes
+from multiprocessing import Pool
+# from memory_profiler import profile
+
+############ pyscf module ############
+
 from pyscf import lib
 import pyscf.pbc.gto as pbcgto
 from pyscf.pbc.gto import Cell
@@ -26,73 +34,21 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 from pyscf.gto.mole import *
+from pyscf.pbc.dft import multigrid
+libpbc = lib.load_library('libpbc')
+
+############ isdf utils ############
+
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
+from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
+from pyscf.pbc.df.isdf.isdf_tools_mpi import rank
 
-import ctypes
-
-from multiprocessing import Pool
-
-from memory_profiler import profile
-
-libpbc = lib.load_library('libpbc')
+############ global variables ############
 
 BASIS_CUTOFF               = 1e-18  # too small may lead to numerical instability
 CRITERION_CALL_PARALLEL_QR = 256
-
-from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
-
-from pyscf.pbc.dft import multigrid
-
-# python version colpilot_qr() function
-
-def colpivot_qr(A, max_rank=None, cutoff=1e-14):  # python code, benchmark, but not efficient
-    '''
-    we do not need Q
-    '''
-
-    m, n = A.shape
-    Q = np.zeros((m, m))
-    R = np.zeros((m, n))
-    AA = A.T.copy()  # cache friendly
-    pivot = np.arange(n)
-
-    if max_rank is None:
-        max_rank = min(m, n)
-
-    npt_find = 0
-
-    for j in range(min(m, n, max_rank)):
-        # Find the column with the largest norm
-
-        # norms = np.linalg.norm(AA[:, j:], axis=0)
-        norms = np.linalg.norm(AA[j:, :], axis=1)
-        p = np.argmax(norms) + j
-
-        # Swap columns j and p
-
-        # AA[:, [j, p]] = AA[:, [p, j]]
-        AA[[j, p], :] = AA[[p, j], :]
-        R[:, [j, p]] = R[:, [p, j]]
-        pivot[[j, p]] = pivot[[p, j]]
-
-        # perform Shimdt orthogonalization
-
-        # R[j, j] = np.linalg.norm(AA[:, j])
-        R[j, j] = np.linalg.norm(AA[j, :])
-        if R[j, j] < cutoff:
-            break
-        npt_find += 1
-        # Q[:, j] = AA[:, j] / R[j, j]
-        Q[j, :] = AA[j, :] / R[j, j]
-
-        # R[j, j + 1:] = np.dot(Q[:, j].T, AA[:, j + 1:])
-        R[j, j + 1:] = np.dot(AA[j + 1:, :], Q[j, :].T)
-        # AA[:, j + 1:] -= np.outer(Q[:, j], R[j, j + 1:])
-        AA[j + 1:, :] -= np.outer(R[j, j + 1:], Q[j, :])
-
-    return Q.T, R, pivot, npt_find
 
 def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=True, 
                       aoR_cutoff = None,
@@ -266,9 +222,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                             thread_buffer.ctypes.data_as(ctypes.c_void_p),
                             global_buffer.ctypes.data_as(ctypes.c_void_p))
             npt_find = npt_find.value
-            
-            # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
-            
+                        
             cutoff   = abs(R[npt_find-1, npt_find-1])
             print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
             pivot = pivot[:npt_find]
@@ -377,9 +331,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                         thread_buffer.ctypes.data_as(ctypes.c_void_p),
                         global_buffer.ctypes.data_as(ctypes.c_void_p))
         npt_find = npt_find.value
-        
-        # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
-        
+                
         cutoff   = abs(R[npt_find-1, npt_find-1])
         print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (len(results), npt_find, cutoff))
         pivot = pivot[:npt_find]
@@ -449,7 +401,6 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
         h = h[:, where]
     # else:
     #     A = None
-        
         
     if use_mpi:
         # A = bcast(A)

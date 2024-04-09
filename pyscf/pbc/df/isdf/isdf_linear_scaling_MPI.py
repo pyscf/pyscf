@@ -35,7 +35,7 @@ from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 import pyscf.pbc.df.isdf.isdf_fast as ISDF
 import pyscf.pbc.df.isdf.isdf_k as ISDF_K
 
-from pyscf.pbc.df.isdf.isdf_mpi_tools import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
+from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 
 from pyscf.pbc.df.isdf.isdf_fast_mpi import get_jk_dm_mpi
 
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     
     # exit(1)
     
-    from pyscf.pbc.df.isdf.isdf_densitymatrix_tool import init_guess_by_atom
+    from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import init_guess_by_atom
     
     atm_config = {
         'Cu': {'charge': 2, 'occ_config': [6,12,9,0]},
@@ -175,6 +175,6 @@ if __name__ == '__main__':
     
     comm.Barrier()
     
-    from pyscf.pbc.df.isdf.isdf_densitymatrix_tool import analysis_dm, analysis_dm_on_grid
+    from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import analysis_dm, analysis_dm_on_grid
     
     dm = mf.make_rdm1()
