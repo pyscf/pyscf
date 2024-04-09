@@ -3,8 +3,12 @@ import tempfile
 
 from functools import reduce
 import numpy
+import numpy as np
 import scipy.linalg
 import h5py
+import ctypes
+import copy
+
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
@@ -13,13 +17,10 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.data import nist
 from pyscf import __config__
-import copy
 from pyscf.lib import param
 from pyscf.data import elements
 from pyscf.scf import hf, rohf, addons
 
-import numpy as np
-import ctypes
 
 ##### generate more accurate initial guess for the density matrix
 
@@ -146,6 +147,15 @@ def init_guess_by_atom(mol, atm_config=None):
 ##### analysis the density matrix
 
 def analysis_dm(mol, dm, distance_matrix):
+    '''
+    
+    analysis the elements of the density matrix
+    
+    Args: 
+        mol : Mole object
+        dm  : 2D ndarray, density matrix over atomic orbitals
+        distance_matrix : 2D ndarray, distance matrix between atoms (up to lattice translation)
+    '''
     
     natm = mol.natm
     aoslice = mol.aoslice_by_atom()
@@ -159,10 +169,23 @@ def analysis_dm(mol, dm, distance_matrix):
             print("atm %2d atm %2d distance %12.5f dm_max %12.5e" % (i, j, distance_matrix[i,j], np.max(np.abs(dm_ij))))
 
 def analysis_dm_on_grid(mydf, dm, distance_matrix):
+    '''
+    
+    analysis the elements of the density matrix on the grid
+    
+    within this subroutine, density matrix is evaluated on the grid
+    
+    Args:
+
+        mydf : DF object, must be ISDF object
+        dm   : 2D ndarray, density matrix over atomic orbitals
+        distance matrix : 2D ndarray, distance matrix between atoms (up to lattice translation)
+        
+    '''
     
     mol = mydf.cell
     
-    aoRg = mydf.aoRg
+    aoRg = mydf.aoRg # must be aoR holder 
     aoR = mydf.aoR
     
     natm = mol.natm

@@ -32,12 +32,10 @@ import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 
 from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 
-import pyscf.pbc.df.isdf.isdf_outcore as ISDF_outcore
 import pyscf.pbc.df.isdf.isdf_fast as ISDF
-import pyscf.pbc.df.isdf.isdf_split_grid as ISDF_split_grid
 import pyscf.pbc.df.isdf.isdf_k as ISDF_K
 
-from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
+from pyscf.pbc.df.isdf.isdf_mpi_tools import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 
 from pyscf.pbc.df.isdf.isdf_fast_mpi import get_jk_dm_mpi
 

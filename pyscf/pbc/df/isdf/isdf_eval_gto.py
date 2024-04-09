@@ -28,11 +28,9 @@ EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 
 libpbc = _pbcintor.libpbc
 
-from profilehooks import profile
-
+# from profilehooks import profile
 # import memory_profiler
 # from memory_profiler import profile
-
 
 def _estimate_rcut(cell):
     '''Cutoff raidus, above which each shell decays to a value less than the
@@ -95,6 +93,8 @@ def ISDF_eval_gto(cell, eval_name=None, coords=None, comp=None, kpts=numpy.zeros
     Returns:
         A list of 2D (or 3D) arrays to hold the AO values on grids. 
 
+    WARNING : only support gamma point calculation !!!!
+
     '''
 
     if eval_name is None:
@@ -103,13 +103,11 @@ def ISDF_eval_gto(cell, eval_name=None, coords=None, comp=None, kpts=numpy.zeros
         else:
             eval_name = 'GTOval_sph_deriv%d' % 0
 
-    # print("eval_name = ", eval_name)
     if eval_name[:3] == 'PBC':  # PBCGTOval_xxx
         eval_name, comp = _get_intor_and_comp(cell, eval_name[3:], comp)
     else:
         eval_name, comp = _get_intor_and_comp(cell, eval_name, comp)
     eval_name = 'PBC' + eval_name
-    # print("eval_name = ", eval_name)
 
     assert comp == 1
 
@@ -180,22 +178,7 @@ def ISDF_eval_gto(cell, eval_name=None, coords=None, comp=None, kpts=numpy.zeros
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
             env.ctypes.data_as(ctypes.c_void_p))
-
-    # ao_kpts = []
-    # for k, kpt in enumerate(kpts_lst):
-    #     v = out[k]
-    #     if abs(kpt).sum() < 1e-9:
-    #         # v = numpy.asarray(v.real, order='C')
-    #         v = lib.z2d_InPlace(v)
-    #     # v = v.transpose(0,2,1)
-    #     if comp == 1:
-    #         v = v[0]
-    #     ao_kpts.append(v)
-    # if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
-    #     ao_kpts = ao_kpts[0]
-    # # else:
-    # return ao_kpts
-        
+  
     out = out[0]
     out = lib.z2d_InPlace(out)
     return out[0]

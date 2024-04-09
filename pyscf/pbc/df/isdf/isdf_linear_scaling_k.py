@@ -38,7 +38,7 @@ import pyscf.pbc.df.isdf.isdf_k as ISDF_K
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
 import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 from pyscf.pbc.df.isdf.isdf_linear_scaling_k_jk import get_jk_dm_k_quadratic
-from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
+from pyscf.pbc.df.isdf.isdf_mpi_tools import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 
 ##### deal with translation symmetry #####
 

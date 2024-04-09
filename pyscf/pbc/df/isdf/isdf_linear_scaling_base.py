@@ -16,6 +16,8 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
+########## pyscf module ##########
+
 import copy
 from functools import reduce
 import numpy as np
@@ -26,32 +28,25 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 from pyscf.gto.mole import *
+
+########## isdf  module ##########
+
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
-
-from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
-
-import pyscf.pbc.df.isdf.isdf_outcore as ISDF_outcore
 import pyscf.pbc.df.isdf.isdf_fast as ISDF
 import pyscf.pbc.df.isdf.isdf_k as ISDF_K
-
-from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_list
-from pyscf.pbc.df.isdf.isdf_fast import bcast_pickel
-
+from pyscf.pbc.df.isdf.isdf_mpi_tools import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_list, bcast_pickel
 from pyscf.pbc.df.isdf.isdf_fast_mpi import get_jk_dm_mpi
-
-import ctypes, sys
-
-from multiprocessing import Pool
-
-# from memory_profiler import profile
-
-libpbc = lib.load_library('libpbc')
-
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
-from profilehooks import profile
+########## sys   module ##########
+
+import ctypes, sys
+from multiprocessing import Pool
+# from memory_profiler import profile
+# from profilehooks import profile
+libpbc = lib.load_library('libpbc')
 
 ############ build atm connection graph ############
 
@@ -1134,14 +1129,18 @@ if __name__ == '__main__':
     ]
     
     basis = {
-        'Cu1':'ecpccpvdz', 'Cu2':'ecpccpvdz', 'O1': 'ecpccpvdz', 'Ca':'ecpccpvdz'
+        'Cu1':'unc-ecpccpvdz', 'Cu2':'unc-ecpccpvdz', 'O1': 'unc-ecpccpvdz', 'Ca':'unc-ecpccpvdz'
     }
-    
+    # basis  = 'gth-cc-pvdz'
     pseudo = {'Cu1': 'gth-pbe-q19', 'Cu2': 'gth-pbe-q19', 'O1': 'gth-pbe', 'Ca': 'gth-pbe'}
+
+    # basis = 'unc-ccpvdz'
+    # pseudo = None
     
-    ke_cutoff = 256 
+    ke_cutoff = 128
     
-    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
+    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo, verbose=10)
+    # prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=None, verbose=4)
     prim_mesh = prim_cell.mesh
     
     supercell = [2, 2, 1]
@@ -1150,11 +1149,12 @@ if __name__ == '__main__':
     mesh = [supercell[0] * prim_mesh[0], supercell[1] * prim_mesh[1], supercell[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
-    cell = ISDF_K.build_supercell(atm, prim_a, Ls = supercell, ke_cutoff=ke_cutoff, mesh=mesh, basis=basis, pseudo=pseudo)
+    cell = ISDF_K.build_supercell(atm, prim_a, Ls = supercell, ke_cutoff=ke_cutoff, mesh=mesh, basis=basis, pseudo=pseudo, verbose=10)
+    # cell = ISDF_K.build_supercell(atm, prim_a, Ls = supercell, ke_cutoff=ke_cutoff, mesh=mesh, basis=basis, pseudo=None, verbose=4)
     
     print(cell.atom)
     print(cell.basis)
-    exit(1)
+    # exit(1)
     
     from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
 
@@ -1181,9 +1181,9 @@ if __name__ == '__main__':
     # plt.xscale('log')
     # plt.show()
     
-    # print("rcut = ", rcut)
-    # print("precision = ", precision)
-    # print("max_rcut = ", np.max(rcut))
+    print("rcut = ", rcut)
+    print("precision = ", precision)
+    print("max_rcut = ", np.max(rcut))
     # print("nbas = ", cell.nbas)
     # print("number of rcut < 5 = ", np.sum(rcut < 5))
     # print("number of rcut < 15 = ", np.sum(rcut < 15))
@@ -1191,6 +1191,8 @@ if __name__ == '__main__':
     # print("number of atm pair < 5 = ", np.sum(distance_matrix < 5))
     # print("number of atm pair < 15 = ", np.sum(distance_matrix < 15))
     # print("number of atm pair > rcut_max = ", np.sum(distance_matrix > rcut_max))
+    
+    exit(1)
     
     atm_2_bas = _atm_to_bas(cell)
     # print("atm_2_bas = ", atm_2_bas)

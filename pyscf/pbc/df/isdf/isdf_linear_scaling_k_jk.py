@@ -37,7 +37,7 @@ from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 import pyscf.pbc.df.isdf.isdf_k as ISDF_K
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
 import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
-from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
+from pyscf.pbc.df.isdf.isdf_mpi_tools import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 
 def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
     

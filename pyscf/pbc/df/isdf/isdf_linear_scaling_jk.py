@@ -28,7 +28,7 @@ from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 #### MPI SUPPORT ####
 
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
-from pyscf.pbc.df.isdf.isdf_fast import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, scatter
+from pyscf.pbc.df.isdf.isdf_mpi_tools import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, scatter
 import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 
 # from memory_profiler import profile
@@ -1403,20 +1403,16 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     if with_j:
         vj = _contract_j_dm_ls(mydf, dm, use_mpi)  
         # if rank == 0:
-        print("vj = ", vj[0, :16])
-        print("vj = ", vj[0, -16:])
+        # print("vj = ", vj[0, :16])
+        # print("vj = ", vj[0, -16:])
     if with_k:
-        # if mydf.with_robust_fitting:
-        #     vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
-        # else:
-        #     vk = _contract_k_dm_wo_robust_fitting(mydf, dm, mydf.with_robust_fitting, use_mpi)
         if mydf.direct:
             vk = _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=use_mpi)
         else:
             vk = _contract_k_dm_quadratic(mydf, dm, mydf.with_robust_fitting, use_mpi=use_mpi)
         # if rank == 0:
-        print("vk = ", vk[0, :16])
-        print("vk = ", vk[0, -16:])
+        # print("vk = ", vk[0, :16])
+        # print("vk = ", vk[0, -16:])
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
 
