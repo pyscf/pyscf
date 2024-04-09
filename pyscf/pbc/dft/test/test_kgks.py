@@ -22,6 +22,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.pbc import gto as gto
 from pyscf.pbc import dft as dft
+from pyscf.pbc import scf as pbcscf
 from pyscf.pbc.df import rsdf_builder, gdf_builder
 try:
     import mcfun
@@ -188,6 +189,19 @@ class KnownValues(unittest.TestCase):
         mf._numint.spin_samples = 50
         mf.run()
         self.assertAlmostEqual(mf.e_tot, -1.4910121442258883, 6)
+
+    def test_to_hf(self):
+        mf = dft.KGKS(cell).density_fit()
+        mf.with_df._j_only = True
+        a_hf = mf.to_hf()
+        self.assertTrue(a_hf.with_df._j_only)
+        self.assertTrue(isinstance(a_hf, pbcscf.kghf.KGHF))
+
+        mf = dft.KGKS(cell, kpts=cell.make_kpts([2,1,1])).density_fit()
+        mf.with_df._j_only = True
+        a_hf = mf.to_hf()
+        self.assertTrue(not a_hf.with_df._j_only)
+        self.assertTrue(isinstance(a_hf, pbcscf.kghf.KGHF))
 
 
 if __name__ == '__main__':
