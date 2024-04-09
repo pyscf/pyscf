@@ -267,12 +267,118 @@ def analysis_dm_on_grid(mydf, dm, distance_matrix):
     
     for i, data in enumerate(N_elmt_statistics):
         print("nelmt abs > 1e-%d = %d, portion = %.2e" % (i+3, data, float(data) / naux / ngrid))
+
+def symmetrize_dm(dm, Ls):
+    '''
+    
+    generate translation symmetrized density matrix (by average)
+    
+    Args :
+        dm : np.ndarray, density matrix, shape = (nao, nao)
+        Ls : list, supercell dimension, shape = (3,), or kmesh in k-sampling
+
+    Returns :
+        dm_symm : np.ndarray, symmetrized density matrix, shape = (nao, nao)
+    '''
+    
         
+    ncell = np.prod(Ls)
+    nao = dm.shape[0]
+    nao_prim = nao // ncell
+    dm_symm = np.zeros((nao,nao), dtype=dm.dtype)
+        
+    for i in range(Ls[0]):
+        for j in range(Ls[1]):
+            for k in range(Ls[2]):
+                
+                dm_symmized_buf = np.zeros((nao_prim,nao_prim), dtype=dm.dtype)
+                
+                for i_row in range(Ls[0]):
+                    for j_row in range(Ls[1]):
+                        for k_row in range(Ls[2]):
+                            
+                            loc_row = i_row * Ls[1] * Ls[2] + j_row * Ls[2] + k_row
+                            loc_col = ((i + i_row) % Ls[0]) * Ls[1] * Ls[2] + ((j + j_row) % Ls[1]) * Ls[2] + (k + k_row) % Ls[2]
+                            
+                            b_begin = loc_row * nao_prim
+                            b_end   = (loc_row + 1) * nao_prim
+                            
+                            k_begin = loc_col * nao_prim
+                            k_end   = (loc_col + 1) * nao_prim
+                            
+                            dm_symmized_buf += dm[b_begin:b_end, k_begin:k_end]
+        
+                dm_symmized_buf /= ncell
+                
+                for i_row in range(Ls[0]):
+                    for j_row in range(Ls[1]):
+                        for k_row in range(Ls[2]):
+                            
+                            loc_row = i_row * Ls[1] * Ls[2] + j_row * Ls[2] + k_row
+                            loc_col = ((i + i_row) % Ls[0]) * Ls[1] * Ls[2] + ((j + j_row) % Ls[1]) * Ls[2] + (k + k_row) % Ls[2]
+                            
+                            b_begin = loc_row * nao_prim
+                            b_end   = (loc_row + 1) * nao_prim
+                            
+                            k_begin = loc_col * nao_prim
+                            k_end   = (loc_col + 1) * nao_prim
+                            
+                            dm_symm[b_begin:b_end, k_begin:k_end] = dm_symmized_buf        
+        
+    return dm_symm        
+
+def pack_JK(input_mat:np.ndarray, Ls, nao_prim, output=None):
+    
+    assert input_mat.dtype == np.float64    
+    ncell = np.prod(Ls)
+    # print("ncell = ", ncell)
+    # print("Ls = ", Ls)  
+    # print("nao_prim = ", nao_prim)
+    # print("input_mat.shape = ", input_mat.shape)
+    assert input_mat.shape[0] == nao_prim
+    assert input_mat.shape[1] == nao_prim * ncell
+    
+    if output is None:
+        output = np.zeros((ncell*nao_prim, ncell*nao_prim), dtype=np.float64)  
+    else:
+        assert output.shape == (ncell*nao_prim, ncell*nao_prim)  
+    
+    for ix_row in range(Ls[0]):
+        for iy_row in range(Ls[1]):
+            for iz_row in range(Ls[2]):
+                
+                loc_row = ix_row * Ls[1] * Ls[2] + iy_row * Ls[2] + iz_row
+                
+                b_begin = loc_row * nao_prim
+                b_end   = (loc_row + 1) * nao_prim
+                
+                for ix_col in range(Ls[0]):
+                    for iy_col in range(Ls[1]):
+                        for iz_col in range(Ls[2]):
+                            
+                            loc_col = ix_col * Ls[1] * Ls[2] + iy_col * Ls[2] + iz_col
+                            
+                            k_begin = loc_col * nao_prim
+                            k_end   = (loc_col + 1) * nao_prim
+                            
+                            ix = (ix_col - ix_row) % Ls[0]
+                            iy = (iy_col - iy_row) % Ls[1]
+                            iz = (iz_col - iz_row) % Ls[2]
+                            
+                            loc_col2 = ix * Ls[1] * Ls[2] + iy * Ls[2] + iz
+                            
+                            k_begin2 = loc_col2 * nao_prim
+                            k_end2   = (loc_col2 + 1) * nao_prim
+                            
+                            output[b_begin:b_end, k_begin:k_end] = input_mat[:, k_begin2:k_end2]
+                            
+    return output
+ 
 
 if __name__ == '__main__':
 
     from pyscf.lib.parameters import BOHR
-    import pyscf.pbc.df.isdf.isdf_k as ISDF_K
+    from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell
 
     # test get_atm_nrhf 
     
@@ -291,7 +397,7 @@ if __name__ == '__main__':
     }
     pseudo = {'Cu': 'gth-pbe-q19', 'O': 'gth-pbe', 'Ca': 'gth-pbe'}
     ke_cutoff = 128 
-    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
+    prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
     prim_mesh = prim_cell.mesh
     
     cell = prim_cell

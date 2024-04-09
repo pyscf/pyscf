@@ -35,7 +35,6 @@ from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 import pyscf.pbc.df.isdf.isdf_fast as ISDF
-import pyscf.pbc.df.isdf.isdf_k as ISDF_K
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_list, bcast_pickel
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
@@ -738,7 +737,6 @@ def _get_atm_2_grid_segment(atmid_to_gridID, group):
     
     return res
     
-
 def _get_atmid_involved(natm, group, rank, use_mpi=False):
     if use_mpi == False:
         return np.arange(natm, dtype=np.int32)
@@ -771,11 +769,6 @@ def _sync_list(list_data, ngroup):
     for i in range(group_begin, group_end):
         assert list_data[i] is not None
     
-    # list_data_new = []
-    # for i in range(group_begin, group_end):
-    #     list_data_new.append(list_data[i])
-    # list_data = list_data_new
-    
     ### generate groupid_2_root ###
     
     groupid_2_root = [] 
@@ -792,12 +785,9 @@ def _sync_list(list_data, ngroup):
     
     for i in range(ngroup):
         if rank == groupid_2_root[i]:
-            # print("rank %d sync %d" % (rank,i))
             sys.stdout.flush()
         list_data[i] = bcast(list_data[i], root=groupid_2_root[i])
-    
-    # list_data = allgather_list(list_data)
-    
+        
     return list_data
 
 def _sync_list_related_to_partition(list_data, group):
@@ -868,6 +858,7 @@ def _sync_aoR(aoR_holders, natm):
     return aoR_holders
 
 def _build_submol(cell:Cell, atm_invovled):
+    
     import pyscf.pbc.gto as pbcgto
     
     subcell = pbcgto.Cell()
@@ -1109,12 +1100,11 @@ def get_aoR(cell:Cell, coords, partition,
 
 ############ get calculation scheme for V W and rhoG and DMg ############
 
-
-from pyscf.lib.parameters import BOHR
-
-TARGET_PRECISION = 1e-9
-
 if __name__ == '__main__':
+
+    from pyscf.lib.parameters import BOHR
+
+    TARGET_PRECISION = 1e-9
     
     prim_a = np.array(
                     [[14.572056092/2, 0.000000000, 0.000000000],
@@ -1138,8 +1128,10 @@ if __name__ == '__main__':
     
     ke_cutoff = 128
     
-    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo, verbose=10)
-    # prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=None, verbose=4)
+    from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell
+    
+    prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo, verbose=10)
+    # prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=None, verbose=4)
     prim_mesh = prim_cell.mesh
     
     supercell = [2, 2, 1]
@@ -1148,8 +1140,8 @@ if __name__ == '__main__':
     mesh = [supercell[0] * prim_mesh[0], supercell[1] * prim_mesh[1], supercell[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
     
-    cell = ISDF_K.build_supercell(atm, prim_a, Ls = supercell, ke_cutoff=ke_cutoff, mesh=mesh, basis=basis, pseudo=pseudo, verbose=10)
-    # cell = ISDF_K.build_supercell(atm, prim_a, Ls = supercell, ke_cutoff=ke_cutoff, mesh=mesh, basis=basis, pseudo=None, verbose=4)
+    cell = build_supercell(atm, prim_a, Ls = supercell, ke_cutoff=ke_cutoff, mesh=mesh, basis=basis, pseudo=pseudo, verbose=10)
+    # cell = build_supercell(atm, prim_a, Ls = supercell, ke_cutoff=ke_cutoff, mesh=mesh, basis=basis, pseudo=None, verbose=4)
     
     print(cell.atom)
     print(cell.basis)

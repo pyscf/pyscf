@@ -3481,6 +3481,18 @@ def _get_k_kSym_robust_fitting(mydf:ISDF.PBC_ISDF_Info, dm):
 
 # @profile 
 def _symmetrize_dm(dm, Ls):
+    '''
+    
+    generate translation symmetrized density matrix (by average)
+    
+    Args :
+        dm : np.ndarray, density matrix, shape = (nao, nao)
+        Ls : list, supercell dimension, shape = (3,), or kmesh in k-sampling
+
+    Returns :
+        dm_symm : np.ndarray, symmetrized density matrix, shape = (nao, nao)
+    '''
+    
         
     ncell = np.prod(Ls)
     nao = dm.shape[0]

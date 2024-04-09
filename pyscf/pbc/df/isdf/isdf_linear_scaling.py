@@ -33,7 +33,6 @@ import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 
 import pyscf.pbc.df.isdf.isdf_fast as ISDF
-import pyscf.pbc.df.isdf.isdf_k as ISDF_K
 
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 
@@ -46,7 +45,6 @@ from memory_profiler import profile
 libpbc = lib.load_library('libpbc')
 
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
-from pyscf.pbc.df.isdf.isdf_k import build_supercell
 import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 import pyscf.pbc.df.isdf.isdf_linear_scaling_jk as ISDF_LinearScalingJK
 
@@ -1093,7 +1091,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 C = 15
 
 from pyscf.lib.parameters import BOHR
-from pyscf.pbc.df.isdf.isdf_split_grid import build_supercell_with_partition
+from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
 
 if __name__ == '__main__':
     
@@ -1131,7 +1129,7 @@ if __name__ == '__main__':
     }
     pseudo = {'Cu1': 'gth-pbe-q19', 'Cu2': 'gth-pbe-q19', 'O1': 'gth-pbe', 'Ca': 'gth-pbe'}
     ke_cutoff = 128 
-    prim_cell = ISDF_K.build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
+    prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
     prim_mesh = prim_cell.mesh
     
     # KE_CUTOFF = 70

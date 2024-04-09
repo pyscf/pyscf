@@ -345,38 +345,3 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
         _benchmark_time(t0, t1, 'build_auxiliary_Coulomb')
     
     sys.stdout.flush()
-
-from pyscf.pbc.df.isdf.isdf_k import build_supercell
-
-def build_supercell_with_partition(prim_atm, 
-                                   prim_a, 
-                                   mesh=None, 
-                                   Ls = [1,1,1],
-                                   partition = None, 
-                                   basis='gth-dzvp', 
-                                   pseudo='gth-pade', 
-                                   ke_cutoff=70, 
-                                   max_memory=2000, 
-                                   precision=1e-8,
-                                   use_particle_mesh_ewald=True,
-                                   verbose=4):
-
-    cell = build_supercell(prim_atm, prim_a, mesh=mesh, Ls=Ls, basis=basis, pseudo=pseudo, ke_cutoff=ke_cutoff, max_memory=max_memory, precision=precision, use_particle_mesh_ewald=use_particle_mesh_ewald, verbose=verbose)
-
-    natm_prim = len(prim_atm)
-    
-    if partition is None:
-        partition = []
-        for i in range(natm_prim):
-            partition.append([i])
-
-    partition_supercell = []
-
-    for ix in range(Ls[0]):
-        for iy in range(Ls[1]):
-            for iz in range(Ls[2]):
-                cell_id = ix * Ls[1] * Ls[2] + iy * Ls[2] + iz
-                for sub_partition in partition:
-                    partition_supercell.append([x + cell_id * natm_prim for x in sub_partition])
-
-    return cell, partition_supercell

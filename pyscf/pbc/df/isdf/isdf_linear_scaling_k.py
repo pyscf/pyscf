@@ -19,6 +19,11 @@
 import copy
 from functools import reduce
 import numpy as np
+import ctypes
+from multiprocessing import Pool
+from memory_profiler import profile
+
+
 from pyscf import lib
 import pyscf.pbc.gto as pbcgto
 from pyscf.pbc.gto import Cell
@@ -26,19 +31,14 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 from pyscf.gto.mole import *
-from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
-
-import ctypes
-from multiprocessing import Pool
-from memory_profiler import profile
 libpbc = lib.load_library('libpbc')
-from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto 
 
-import pyscf.pbc.df.isdf.isdf_k as ISDF_K
+from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto 
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
 import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 from pyscf.pbc.df.isdf.isdf_linear_scaling_k_jk import get_jk_dm_k_quadratic
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
+from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 
 ##### deal with translation symmetry #####
 
@@ -472,7 +472,8 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         self.with_translation_symmetry = True
         
-        self.primCell = ISDF_K.build_primitive_cell(self.cell, self.kmesh)
+        from pyscf.pbc.df.isdf.isdf_tools_cell import build_primitive_cell
+        self.primCell = build_primitive_cell(self.cell, self.kmesh)
         self.nao_prim = self.nao // np.prod(self.kmesh)
         assert self.nao_prim == self.primCell.nao_nr()
         # self.meshPrim = self.mesh // np.array(self.kmesh)
@@ -1115,8 +1116,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                        
     get_jk = get_jk_dm_k_quadratic
 
-from pyscf.pbc.df.isdf.isdf_k import build_supercell
-from pyscf.pbc.df.isdf.isdf_split_grid import build_supercell_with_partition
+from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
 
 C = 25
 

@@ -1365,8 +1365,12 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         dm = dm[0]
 
     if hasattr(mydf, 'Ls'):
-        from pyscf.pbc.df.isdf.isdf_k import _symmetrize_dm
-        dm = _symmetrize_dm(dm, mydf.Ls)
+        from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
+        dm = symmetrize_dm(dm, mydf.Ls)
+    else:
+        if hasattr(mydf, 'kmesh'):
+            from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
+            dm = symmetrize_dm(dm, mydf.kmesh)
 
     if use_mpi:
         dm = bcast(dm, root=0)

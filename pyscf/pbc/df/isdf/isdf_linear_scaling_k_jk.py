@@ -34,10 +34,11 @@ from memory_profiler import profile
 libpbc = lib.load_library('libpbc')
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto 
 
-import pyscf.pbc.df.isdf.isdf_k as ISDF_K
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
 import pyscf.pbc.df.isdf.isdf_linear_scaling_base as ISDF_LinearScalingBase
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
+
+from  pyscf.pbc.df.isdf.isdf_tools_densitymatrix import pack_JK
 
 def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
     
@@ -335,7 +336,7 @@ def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
     del density_R_tmp
     del aoR_buf1
     
-    J = ISDF_K._pack_JK(J, mydf.kmesh, nao_prim)
+    J = pack_JK(J, mydf.kmesh, nao_prim)
     
     # diff = np.max(np.abs(J - J.T))
     # print("diff = ", diff)    
@@ -653,7 +654,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     
     K_real_buf *= (ngrid / vol)
     
-    K = -ISDF_K._pack_JK(K_real_buf, Ls, nao_prim, output=None) # "-" due to robust fitting
+    K = -pack_JK(K_real_buf, Ls, nao_prim, output=None) # "-" due to robust fitting
     
     # return -K
     
@@ -957,7 +958,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     
     t1 = t2
     
-    K2 = ISDF_K._pack_JK(K_real_buf, Ls, nao_prim, output=None)
+    K2 = pack_JK(K_real_buf, Ls, nao_prim, output=None)
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
@@ -995,8 +996,12 @@ def get_jk_dm_k_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         dm = dm[0]
 
     if hasattr(mydf, 'Ls'):
-        from pyscf.pbc.df.isdf.isdf_k import _symmetrize_dm
-        dm = _symmetrize_dm(dm, mydf.Ls)
+        from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
+        dm = symmetrize_dm(dm, mydf.Ls)
+    else:
+        if hasattr(mydf, 'kmesh'):
+            from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
+            dm = symmetrize_dm(dm, mydf.kmesh)
 
     if use_mpi:
         dm = bcast(dm, root=0)
@@ -1046,7 +1051,8 @@ def get_jk_dm_k_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
             if mydf.with_robust_fitting:
                 vk = _get_k_kSym_robust_fitting_fast(mydf, dm)
             else:
-                vk = ISDF_K._get_k_kSym(mydf, dm)
+                from pyscf.pbc.df.isdf.isdf_k import _get_k_kSym
+                vk = _get_k_kSym(mydf, dm)
         # if rank == 0:
         # print("vk = ", vk[0, :16])
         # print("vk = ", vk[0, -16:])
