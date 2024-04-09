@@ -2789,7 +2789,6 @@ def _get_k_kSym(mydf:ISDF.PBC_ISDF_Info, dm):
     nao_prim = nao // ncell
     
     #### allocate buffer ####
-     
     
     offset = 0
     DM_RgRg_complex = np.ndarray((nIP_prim,nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)

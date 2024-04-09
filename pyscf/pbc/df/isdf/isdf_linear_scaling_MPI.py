@@ -37,8 +37,6 @@ import pyscf.pbc.df.isdf.isdf_k as ISDF_K
 
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 
-from pyscf.pbc.df.isdf.isdf_fast_mpi import get_jk_dm_mpi
-
 import ctypes, sys
 
 from multiprocessing import Pool

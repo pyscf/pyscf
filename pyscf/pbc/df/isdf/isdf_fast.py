@@ -43,7 +43,7 @@ from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
-from pyscf.pbc.df.isdf.isdf_tools_mpi import rank
+from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm_size, comm, allgather, bcast
 
 ############ global variables ############
 

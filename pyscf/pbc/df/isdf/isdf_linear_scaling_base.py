@@ -37,7 +37,6 @@ import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 import pyscf.pbc.df.isdf.isdf_fast as ISDF
 import pyscf.pbc.df.isdf.isdf_k as ISDF_K
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_list, bcast_pickel
-from pyscf.pbc.df.isdf.isdf_fast_mpi import get_jk_dm_mpi
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
 ########## sys   module ##########
