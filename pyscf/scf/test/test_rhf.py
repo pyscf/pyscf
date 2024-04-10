@@ -24,6 +24,17 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.scf import atom_hf
 
+import sys
+try:
+    import dftd3
+except ImportError:
+    pass
+
+try:
+    import dftd4
+except ImportError:
+    pass
+
 def setUpModule():
     global mol, mf, n2sym, n2mf, re_ecp1, re_ecp2
     mol = gto.M(
@@ -344,6 +355,24 @@ class KnownValues(unittest.TestCase):
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
 
+    @unittest.skipIf('dftd3' not in sys.modules, "requires the dftd3 library")
+    def test_scf_d3(self):
+        mf = scf.RHF(mol)
+        mf.disp = 'd3bj'
+        mf.conv_tol = 1e-10
+        mf.chkfile = None
+        e_tot = mf.kernel()
+        self.assertAlmostEqual(e_tot, -76.03127458778653, 9)
+
+    @unittest.skipIf('dftd4' not in sys.modules, "requires the dftd4 library")
+    def test_scf_d4(self):
+        mf = scf.RHF(mol)
+        mf.disp = 'd4'
+        mf.conv_tol = 1e-10
+        mf.chkfile = None
+        e_tot = mf.kernel()
+        self.assertAlmostEqual(e_tot, -76.0277467547733, 9)
+
     def test_scf_negative_spin(self):
         mol = gto.M(atom = '''
         O     0    0        0
@@ -387,11 +416,14 @@ class KnownValues(unittest.TestCase):
     def test_damping(self):
         nao = mol.nao_nr()
         numpy.random.seed(1)
-        s = scf.hf.get_ovlp(mol)
-        d = numpy.random.random((nao,nao))
-        d = d + d.T
-        f = scf.hf.damping(s, d, scf.hf.get_hcore(mol), .5)
-        self.assertAlmostEqual(numpy.linalg.norm(f), 23361.854064083178, 9)
+        f = scf.hf.get_hcore(mol)
+        df  = numpy.random.rand(nao,nao)
+        df += df.T
+        f_prev = f + df
+        damp = 0.3
+        f_damp = scf.hf.get_fock(mf, h1e=0, s1e=0, vhf=f, dm=0, cycle=0,
+                                 diis_start_cycle=2, damp_factor=damp, fock_last=f_prev)
+        self.assertAlmostEqual(abs(f_damp - (f*(1-damp) + f_prev*damp)).max(), 0, 9)
 
     def test_level_shift(self):
         nao = mol.nao_nr()

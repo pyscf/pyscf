@@ -487,11 +487,11 @@ class MP2(lib.StreamObject):
     conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
 
-    _keys = set((
+    _keys = {
         'max_cycle', 'conv_tol', 'conv_tol_normt', 'mol', 'max_memory',
         'frozen', 'level_shift', 'mo_coeff', 'mo_occ', 'e_hf', 'e_corr',
         'e_corr_ss', 'e_corr_os', 't2',
-    ))
+    }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
@@ -649,6 +649,15 @@ class MP2(lib.StreamObject):
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 
+    # to_gpu can be reused only when __init__ still takes mf
+    def to_gpu(self):
+        mf = self._scf.to_gpu()
+        from importlib import import_module
+        mod = import_module(self.__module__.replace('pyscf', 'gpu4pyscf'))
+        cls = getattr(mod, self.__class__.__name__)
+        obj = cls(mf)
+        return obj
+
 RMP2 = MP2
 
 from pyscf import scf
@@ -756,6 +765,8 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
 #   or    => (ij|ol) => (oj|ol) => (oj|ov) => (ov|ov)
 #
 def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
+    from pyscf.scf.hf import RHF
+    assert isinstance(mp._scf, RHF)
     time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
 

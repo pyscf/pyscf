@@ -191,8 +191,8 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             for ir in irrep_ncore:
                 mask[orbsym == ir] = False
             core_rest = orbsym[mask][:ncore_rest]
-            core_rest = dict([(ir, numpy.count_nonzero(core_rest==ir))
-                              for ir in set(core_rest)])
+            core_rest = {ir: numpy.count_nonzero(core_rest==ir)
+                              for ir in set(core_rest)}
             log.info('Given core space %s < casscf core size %d',
                      cas_irrep_ncore, ncore)
             log.info('Add %s to core configuration', core_rest)
@@ -201,12 +201,12 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             raise ValueError('Given core space %s > casscf core size %d'
                              % (cas_irrep_ncore, ncore))
     else:
-        irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
+        irrep_ncore = {ir: sum(orbsym[:ncore]==ir) for ir in irreps}
 
     if not isinstance(cas_irrep_nocc, dict):
         # list => dict
-        cas_irrep_nocc = dict([(ir, n) for ir,n in enumerate(cas_irrep_nocc)
-                               if n > 0])
+        cas_irrep_nocc = {ir: n for ir,n in enumerate(cas_irrep_nocc)
+                               if n > 0}
 
     irrep_ncas = {}
     for k, v in cas_irrep_nocc.items():
@@ -226,8 +226,8 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             mask[idx[:ncore]] = False
 
         cas_rest = orbsym[mask][:ncas_rest]
-        cas_rest = dict([(ir, numpy.count_nonzero(cas_rest==ir))
-                         for ir in set(cas_rest)])
+        cas_rest = {ir: numpy.count_nonzero(cas_rest==ir)
+                         for ir in set(cas_rest)}
         log.info('Given active space %s < casscf active space size %d',
                  cas_irrep_nocc, casscf.ncas)
         log.info('Add %s to active space', cas_rest)
@@ -253,11 +253,11 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
 
     if log.verbose >= logger.INFO:
         log.info('ncore for each irreps %s',
-                 dict([(symm.irrep_id2name(mol.groupname, k), v)
-                       for k,v in irrep_ncore.items()]))
+                 {symm.irrep_id2name(mol.groupname, k): v
+                       for k,v in irrep_ncore.items()})
         log.info('ncas for each irreps %s',
-                 dict([(symm.irrep_id2name(mol.groupname, k), v)
-                       for k,v in irrep_ncas.items()]))
+                 {symm.irrep_id2name(mol.groupname, k): v
+                       for k,v in irrep_ncas.items()})
         log.info('(%d-based) caslst = %s', base, caslst)
     return caslst
 
@@ -1104,6 +1104,14 @@ class StateAverageMCSCF(StateAverageMCSCFSolver):
 
     Gradients = nuc_grad_method
 
+    def nac_method(self):
+        if callable(getattr(self, '_state_average_nac_method', None)):
+            return self._state_average_nac_method()
+        else:
+            raise NotImplementedError("NAC method")
+
+    NACs = nac_method
+
 def state_average_(casscf, weights=(0.5,0.5), wfnsym=None):
     ''' Inplace version of state_average '''
     sacasscf = state_average (casscf, weights, wfnsym)
@@ -1207,7 +1215,7 @@ class StateAverageMixFCISolver_state_args (StateAverageMixFCISolver_solver_args)
 class StateAverageMixFCISolver(StateAverageFCISolver):
     __name_mixin__ = 'StateAverageMix'
 
-    _keys = set (('weights','e_states','fcisolvers'))
+    _keys = {'weights','e_states','fcisolvers'}
 
     _solver_args = StateAverageMixFCISolver_solver_args
     _state_args = StateAverageMixFCISolver_state_args

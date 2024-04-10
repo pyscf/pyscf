@@ -57,7 +57,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
                                        kpt.reshape(1,3), kpts_band,
                                        with_j=True, return_j=False)
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        logger.info(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
         return vxc
 
@@ -86,7 +86,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                                           0, hermi, kpt, max_memory=max_memory)
             exc += enlc
             vxc += vnlc
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        logger.info(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     if not hybrid:
@@ -143,6 +143,8 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
         '''Convert to UHF object.'''
         from pyscf.pbc import scf
         return self._transfer_attrs_(scf.UHF(self.cell, self.kpt))
+
+    to_gpu = lib.to_gpu
 
 
 if __name__ == '__main__':

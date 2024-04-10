@@ -23,13 +23,13 @@ This module exposes some ecp integration functions from the C implementation.
 
 Reference for ecp integral computation
 * Analytical integration
-J. Chem. Phys. 65, 3826
-J. Chem. Phys. 111, 8778
-J. Comput. Phys. 44, 289
+J. Chem. Phys. 65, 3826 (1976); https://doi.org/10.1063/1.432900
+J. Chem. Phys. 111, 8778 (1999); https://doi.org/10.1063/1.480225
+J. Comput. Phys. 44, 289 (1981); https://doi.org/10.1016/0021-9991(81)90053-X
 
 * Numerical integration
-J. Comput. Chem. 27, 1009
-Chem. Phys. Lett. 296, 445
+J. Comput. Chem. 27, 1009 (2006); https://doi.org/10.1002/jcc.20410
+Chem. Phys. Lett. 296, 445 (1998); https://doi.org/10.1016/S0009-2614(98)01077-X
 '''
 
 

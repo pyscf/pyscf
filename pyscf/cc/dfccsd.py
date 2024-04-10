@@ -27,7 +27,7 @@ from pyscf import __config__
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 class RCCSD(ccsd.CCSD):
-    _keys = set(['with_df'])
+    _keys = {'with_df'}
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
@@ -47,6 +47,8 @@ class RCCSD(ccsd.CCSD):
     def _add_vvvv(self, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         assert (not self.direct)
         return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
+
+    to_gpu = lib.to_gpu
 
 
 def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, verbose=None):
@@ -121,6 +123,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, verbose)
 
 def _make_df_eris(cc, mo_coeff=None):
+    assert cc._scf.istype('RHF')
     eris = _ChemistsERIs()
     eris._common_init_(cc, mo_coeff)
     nocc = eris.nocc

@@ -547,7 +547,6 @@ class UCCSD(ccsd.CCSDBase):
 # * A pair of list : First list is the orbital indices to be frozen for alpha
 #       orbitals, second list is for beta orbitals
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        assert isinstance(mf, scf.uhf.UHF)
         ccsd.CCSDBase.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     get_nocc = get_nocc
@@ -759,6 +758,8 @@ class UCCSD(ccsd.CCSDBase):
     def amplitudes_from_rccsd(self, t1, t2):
         return amplitudes_from_rccsd(t1, t2)
 
+    to_gpu = lib.to_gpu
+
 CCSD = UCCSD
 
 
@@ -942,6 +943,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_df_eris_outcore(mycc, mo_coeff=None):
+    assert mycc._scf.istype('UHF')
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
@@ -1059,6 +1061,8 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
+    from pyscf.scf.uhf import UHF
+    assert isinstance(mycc._scf, UHF)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 

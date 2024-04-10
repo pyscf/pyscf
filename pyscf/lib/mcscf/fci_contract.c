@@ -26,8 +26,8 @@
 #include "vhf/fblas.h"
 #include "np_helper/np_helper.h"
 #include "fci.h"
-// for (16e,16o) ~ 11 MB buffer = 120 * 12870 * 8
-#define STRB_BLKSIZE    112
+// optimized for 512 KB L2 cache, (16e,16o)
+#define STRB_BLKSIZE    160
 
 /*
  * CPU timing of single thread can be estimated:
@@ -119,9 +119,8 @@ void FCIprog_b_t1(double *ci0, double *t1,
                         sign = EXTRACT_SIGN(tab[j]);
                         if (sign == 0) {
                                 break;
-                        } else {
-                                t1[ia*bcount+str0] += sign * pci[str1];
                         }
+                        t1[ia*bcount+str0] += sign * pci[str1];
                 }
                 tab += nlinkb;
         }
@@ -176,9 +175,8 @@ void FCIspread_b_t1(double *ci1, double *t1,
                         sign = EXTRACT_SIGN(tab[j]);
                         if (sign == 0) {
                                 break;
-                        } else {
-                                pci[str1] += sign * t1[ia*bcount+str0];
                         }
+                        pci[str1] += sign * t1[ia*bcount+str0];
                 }
                 tab += nlinkb;
         }
@@ -291,7 +289,7 @@ static void spread_bufa_t1(double *ci1, double *t1, int nrow_t1,
  * bcount_for_spread_a is different for spin1 and spin0
  */
 static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1,
-                           double *ci1buf, double *t1buf,
+                           double *ci1buf, double *t1, double *vt1,
                            int bcount_for_spread_a, int ncol_ci1buf,
                            int bcount, int stra_id, int strb_id,
                            int norb, int na, int nb, int nlinka, int nlinkb,
@@ -301,8 +299,6 @@ static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1,
         const double D0 = 0;
         const double D1 = 1;
         const int nnorb = norb * (norb+1)/2;
-        double *t1 = t1buf;
-        double *vt1 = t1buf + nnorb*bcount;
 
         NPdset0(t1, nnorb*bcount);
         FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
@@ -371,7 +367,11 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
 {
         int strk, ib;
         size_t blen;
-        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)+2));
+        int nnorb = norb*(norb+1)/2;
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*nnorb*2+2));
+        double *tmp;
+        double *t1 = t1buf;
+        double *vt1 = t1buf + nnorb*STRB_BLKSIZE;
         double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < na; ib += STRB_BLKSIZE) {
@@ -380,15 +380,16 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
 #pragma omp for schedule(static, 112)
 /* strk starts from MAX(strk0, ib), because [0:ib,0:ib] have been evaluated */
                 for (strk = ib; strk < na; strk++) {
-                        ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1buf,
+                        ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1, vt1,
                                        MIN(STRB_BLKSIZE, strk-ib), blen,
                                        MIN(STRB_BLKSIZE, strk+1-ib),
                                        strk, ib, norb, na, na, nlink, nlink,
                                        clink, clink);
+                        // swap buffer for better cache utilization in next task
+                        tmp = t1;
+                        t1 = vt1;
+                        vt1 = tmp;
                 }
-//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-//#pragma omp master
-//                FCIaxpy2d(ci1+ib, ci1buf, na, na, blen);
 #pragma omp barrier
                 _reduce(ci1+ib, ci1bufs, na, na, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may
@@ -417,7 +418,11 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
 {
         int strk, ib;
         size_t blen;
-        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)+2));
+        int nnorb = norb*(norb+1)/2;
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*nnorb*2+2));
+        double *tmp;
+        double *t1 = t1buf;
+        double *vt1 = t1buf + nnorb*STRB_BLKSIZE;
         double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
@@ -425,14 +430,15 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
                 NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < na; strk++) {
-                        ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1buf,
+                        ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1, vt1,
                                        blen, blen, blen, strk, ib,
                                        norb, na, nb, nlinka, nlinkb,
                                        clinka, clinkb);
+                        // swap buffer for better cache utilization in next task
+                        tmp = t1;
+                        t1 = vt1;
+                        vt1 = tmp;
                 }
-//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-//#pragma omp master
-//                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
 #pragma omp barrier
                 _reduce(ci1+ib, ci1bufs, na, nb, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may

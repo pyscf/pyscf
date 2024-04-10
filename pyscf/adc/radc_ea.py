@@ -966,13 +966,13 @@ class RADCEA(radc.RADC):
             Spectroscopic amplitudes for each EA transition.
     '''
 
-    _keys = set((
+    _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
         'mo_energy', 't1', 'max_space', 't2', 'max_cycle',
         'nmo', 'transform_integrals', 'with_df', 'compute_properties',
         'approx_trans_moments', 'E', 'U', 'P', 'X',
         'evec_print_tol', 'spec_factor_print_tol',
-    ))
+    }
 
     def __init__(self, adc):
         self.mol = adc.mol

@@ -130,8 +130,8 @@ def _break_dm_spin_symm(mol, dm):
             dmb[...,p0:p1,p0:p1] = dma[...,p0:p1,p0:p1]
     return dma, dmb
 
-def get_init_guess(mol, key='minao'):
-    return UHF(mol).get_init_guess(mol, key)
+def get_init_guess(mol, key='minao', **kwargs):
+    return UHF(mol).get_init_guess(mol, key, **kwargs)
 
 def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''One-particle density matrix in AO representation
@@ -148,10 +148,6 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
     mo_b = mo_coeff[1]
     dm_a = numpy.dot(mo_a*mo_occ[0], mo_a.conj().T)
     dm_b = numpy.dot(mo_b*mo_occ[1], mo_b.conj().T)
-# DO NOT make tag_array for DM here because the DM arrays may be modified and
-# passed to functions like get_jk, get_vxc.  These functions may take the tags
-# (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
-# arrays and modifications to DM arrays may be ignored.
     return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ):
@@ -240,7 +236,8 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     return vhf
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
-             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
+             fock_last=None):
     if h1e is None: h1e = mf.get_hcore()
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     f = numpy.asarray(h1e) + vhf
@@ -269,11 +266,11 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
 
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = [dm*.5] * 2
-    if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4:
-        f = (hf.damping(s1e, dm[0], f[0], dampa),
-             hf.damping(s1e, dm[1], f[1], dampb))
+    if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4 and fock_last is not None:
+        f = (hf.damping(f[0], fock_last[0], dampa),
+             hf.damping(f[1], fock_last[1], dampa))
     if diis and cycle >= diis_start_cycle:
-        f = diis.update(s1e, dm, f, mf, h1e, vhf)
+        f = diis.update(s1e, dm, f, mf, h1e, vhf, f_prev=fock_last)
     if abs(shifta)+abs(shiftb) > 1e-4:
         f = (hf.level_shift(s1e, dm[0], f[0], shifta),
              hf.level_shift(s1e, dm[1], f[1], shiftb))
@@ -327,10 +324,8 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     viridxa = ~occidxa
     viridxb = ~occidxb
 
-    ga = reduce(numpy.dot, (mo_coeff[0][:,viridxa].conj().T, fock_ao[0],
-                            mo_coeff[0][:,occidxa]))
-    gb = reduce(numpy.dot, (mo_coeff[1][:,viridxb].conj().T, fock_ao[1],
-                            mo_coeff[1][:,occidxb]))
+    ga = mo_coeff[0][:,viridxa].conj().T.dot(fock_ao[0].dot(mo_coeff[0][:,occidxa]))
+    gb = mo_coeff[1][:,viridxb].conj().T.dot(fock_ao[1].dot(mo_coeff[1][:,occidxb]))
     return numpy.hstack((ga.ravel(), gb.ravel()))
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
@@ -768,7 +763,9 @@ class UHF(hf.SCF):
     S^2 = 0.7570150, 2S+1 = 2.0070027
     '''
 
-    _keys = set(["init_guess_breaksym"])
+    init_guess_breaksym = None
+
+    _keys = {"init_guess_breaksym"}
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
@@ -776,7 +773,6 @@ class UHF(hf.SCF):
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
         self.nelec = None
-        self.init_guess_breaksym = None
 
     @property
     def nelec(self):
@@ -835,8 +831,8 @@ class UHF(hf.SCF):
 
     energy_elec = energy_elec
 
-    def get_init_guess(self, mol=None, key='minao'):
-        dm = hf.SCF.get_init_guess(self, mol, key)
+    def get_init_guess(self, mol=None, key='minao', **kwargs):
+        dm = hf.SCF.get_init_guess(self, mol, key, **kwargs)
         if self.verbose >= logger.DEBUG1:
             s = self.get_ovlp()
             nelec =(numpy.einsum('ij,ji', dm[0], s).real,
@@ -1070,6 +1066,8 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         '''
         from pyscf import dft
         return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
+
+    to_gpu = lib.to_gpu
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

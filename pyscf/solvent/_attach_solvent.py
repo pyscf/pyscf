@@ -51,7 +51,7 @@ class _Solvation:
     pass
 
 class SCFWithSolvent(_Solvation):
-    _keys = set(['with_solvent'])
+    _keys = {'with_solvent'}
 
     def __init__(self, mf, solvent):
         self.__dict__.update(mf.__dict__)
@@ -92,14 +92,15 @@ class SCFWithSolvent(_Solvation):
 
     def get_fock(self, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1,
                  diis=None, diis_start_cycle=None,
-                 level_shift_factor=None, damp_factor=None):
+                 level_shift_factor=None, damp_factor=None, fock_last=None):
         # DIIS was called inside super().get_fock. v_solvent, as a function of
         # dm, should be extrapolated as well. To enable it, v_solvent has to be
         # added to the fock matrix before DIIS was called.
         if getattr(vhf, 'v_solvent', None) is None:
             vhf = self.get_veff(self.mol, dm)
         return super().get_fock(h1e, s1e, vhf+vhf.v_solvent, dm, cycle, diis,
-                                diis_start_cycle, level_shift_factor, damp_factor)
+                                diis_start_cycle, level_shift_factor, damp_factor,
+                                fock_last)
 
     def energy_elec(self, dm=None, h1e=None, vhf=None):
         if dm is None:
@@ -146,6 +147,11 @@ class SCFWithSolvent(_Solvation):
                                equilibrium_solvation=not self.with_solvent.frozen):
             return super().stability(*args, **kwargs)
 
+    def to_gpu(self):
+        obj = self.undo_solvent().to_gpu()
+        obj = _for_scf(obj, self.with_solvent)
+        return lib.to_gpu(self, obj)
+
 def _for_casscf(mc, solvent_obj, dm=None):
     '''Add solvent model to CASSCF method.
 
@@ -166,7 +172,7 @@ def _for_casscf(mc, solvent_obj, dm=None):
     return lib.set_class(sol_cas, (CASSCFWithSolvent, mc.__class__), name)
 
 class CASSCFWithSolvent(_Solvation):
-    _keys = set(['with_solvent'])
+    _keys = {'with_solvent'}
 
     def __init__(self, mc, solvent):
         self.__dict__.update(mc.__dict__)
@@ -283,6 +289,11 @@ MCSCF_DM * V_solvent[d/dX MCSCF_DM] + V_solvent[MCSCF_DM] * d/dX MCSCF_DM
 
     Gradients = nuc_grad_method
 
+    def to_gpu(self):
+        obj = self.undo_solvent().to_gpu()
+        obj = _for_casscf(obj, self.with_solvent)
+        return lib.to_gpu(self, obj)
+
 
 def _for_casci(mc, solvent_obj, dm=None):
     '''Add solvent model to CASCI method.
@@ -304,7 +315,7 @@ def _for_casci(mc, solvent_obj, dm=None):
     return lib.set_class(sol_mc, (CASCIWithSolvent, mc.__class__), name)
 
 class CASCIWithSolvent(_Solvation):
-    _keys = set(['with_solvent'])
+    _keys = {'with_solvent'}
 
     def __init__(self, mc, solvent):
         self.__dict__.update(mc.__dict__)
@@ -383,7 +394,7 @@ class CASCIWithSolvent(_Solvation):
 
                 de = e_tot - e_last
                 if isinstance(e_cas, (float, numpy.number)):
-                    log.info('Sovlent cycle %d  E(CASCI+solvent) = %.15g  '
+                    log.info('Solvent cycle %d  E(CASCI+solvent) = %.15g  '
                              'dE = %g', cycle, e_tot, de)
                 else:
                     for i, e in enumerate(e_tot):
@@ -419,6 +430,11 @@ MCSCF_DM * V_solvent[d/dX MCSCF_DM] + V_solvent[MCSCF_DM] * d/dX MCSCF_DM
         return self.with_solvent.nuc_grad_method(grad_method)
 
     Gradients = nuc_grad_method
+
+    def to_gpu(self):
+        obj = self.undo_solvent().to_gpu()
+        obj = _for_casci(obj, self.with_solvent)
+        return lib.to_gpu(self, obj)
 
 
 def _for_post_scf(method, solvent_obj, dm=None):
@@ -523,7 +539,7 @@ class PostSCFWithSolvent(_Solvation):
             with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
 
             de = e_tot - e_last
-            log.info('Sovlent cycle %d  E_tot = %.15g  dE = %g',
+            log.info('Solvent cycle %d  E_tot = %.15g  dE = %g',
                      cycle, e_tot, de)
 
             if abs(e_tot-e_last).max() < with_solvent.conv_tol:
@@ -550,6 +566,11 @@ DM * V_solvent[d/dX DM] + V_solvent[DM] * d/dX DM
         return self.with_solvent.nuc_grad_method(grad_method)
 
     Gradients = nuc_grad_method
+
+    def to_gpu(self):
+        obj = self.undo_solvent().to_gpu()
+        obj = _for_post_scf(obj, self.with_solvent)
+        return lib.to_gpu(self, obj)
 
 
 def _for_tdscf(method, solvent_obj, dm=None):
@@ -580,9 +601,9 @@ def _for_tdscf(method, solvent_obj, dm=None):
     return lib.set_class(sol_td, (TDSCFWithSolvent, method.__class__), name)
 
 class TDSCFWithSolvent(_Solvation):
-    _keys = set(['with_solvent'])
+    _keys = {'with_solvent'}
 
-    def __init__(self, method, scf_with_solvent):
+    def __init__(self, method, scf_with_solvent=None):
         self.__dict__.update(method.__dict__)
         self._scf = scf_with_solvent
         self.with_solvent = self._scf.with_solvent
@@ -629,3 +650,8 @@ class TDSCFWithSolvent(_Solvation):
     def nuc_grad_method(self):
         grad_method = super().nuc_grad_method()
         return self.with_solvent.nuc_grad_method(grad_method)
+
+    def to_gpu(self):
+        obj = self.undo_solvent().to_gpu()
+        obj = _for_tdscf(obj, self.with_solvent)
+        return lib.to_gpu(self, obj)

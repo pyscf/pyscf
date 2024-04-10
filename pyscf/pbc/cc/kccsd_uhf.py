@@ -639,7 +639,7 @@ class KUCCSD(uccsd.UCCSD):
 
     max_space = getattr(__config__, 'pbc_cc_kccsd_uhf_KUCCSD_max_space', 20)
 
-    _keys = set(['kpts', 'mo_energy', 'khelper', 'max_space', 'direct'])
+    _keys = {'kpts', 'mo_energy', 'khelper', 'max_space', 'direct'}
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
@@ -760,6 +760,8 @@ class KUCCSD(uccsd.UCCSD):
         if nmo is None: nmo = self.nmo
         if nkpts is None: nkpts = self.nkpts
         return vector_to_amplitudes(vec, nmo, nocc, nkpts)
+
+    to_gpu = lib.to_gpu
 
 UCCSD = KUCCSD
 

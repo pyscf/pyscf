@@ -40,7 +40,7 @@ energy_elec = mol_rohf.energy_elec
 dip_moment = pbcuhf.dip_moment
 get_rho = pbcuhf.get_rho
 
-class ROHF(pbchf.RHF, mol_rohf.ROHF):
+class ROHF(pbchf.RHF):
     '''ROHF class for PBCs.
     '''
 
@@ -62,6 +62,7 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
     spin_square = mol_rohf.ROHF.spin_square
     stability = mol_rohf.ROHF.stability
     dip_moment = pbchf.SCF.dip_moment
+    to_gpu = lib.to_gpu
 
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):

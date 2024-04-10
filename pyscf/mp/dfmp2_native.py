@@ -41,8 +41,6 @@ class DFRMP2(lib.StreamObject):
             auxbasis : name of auxiliary basis set, otherwise determined automatically
         '''
 
-        if not isinstance(mf, scf.rhf.RHF):
-            raise TypeError('Class initialization with non-RHF object')
         self.mo_coeff = mf.mo_coeff
         self.mo_energy = mf.mo_energy
         self.nocc = np.count_nonzero(mf.mo_occ)
@@ -204,6 +202,8 @@ class DFRMP2(lib.StreamObject):
         '''
         Calculates the three center integrals for MP2.
         '''
+        if not isinstance(self._scf, scf.rhf.RHF):
+            raise TypeError('Class initialization with non-RHF object')
         Co = self.mo_coeff[:, self.occ_mask]
         Cv = self.mo_coeff[:, self.nocc:]
         logger = lib.logger.new_logger(self)
@@ -235,6 +235,8 @@ class DFRMP2(lib.StreamObject):
 
     def nuc_grad_method(self):
         raise NotImplementedError
+
+    to_gpu = lib.to_gpu
 
 
 MP2 = RMP2 = DFMP2 = DFRMP2

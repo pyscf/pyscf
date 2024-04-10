@@ -340,9 +340,7 @@ def regularize_xt(t, eta):
 
 def make_grids_one_sphere(lebedev_order):
     ngrid_1sph = gen_grid.LEBEDEV_ORDER[lebedev_order]
-    leb_grid = numpy.empty((ngrid_1sph,4))
-    gen_grid.libdft.MakeAngularGrid(leb_grid.ctypes.data_as(ctypes.c_void_p),
-                                    ctypes.c_int(ngrid_1sph))
+    leb_grid = gen_grid.MakeAngularGrid(ngrid_1sph)
     coords_1sph = leb_grid[:,:3]
     # Note the Lebedev angular grids are normalized to 1 in pyscf
     weights_1sph = 4*numpy.pi * leb_grid[:,3]
@@ -619,11 +617,11 @@ def atoms_with_vdw_overlap(atm_id, atom_coords, r_vdw):
     return atoms_nearby
 
 class ddCOSMO(lib.StreamObject):
-    _keys = set((
+    _keys = {
         'mol', 'radii_table', 'atom_radii', 'lebedev_order', 'lmax', 'eta',
         'eps', 'grids', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
         'equilibrium_solvation', 'e', 'v',
-    ))
+    }
 
     def __init__(self, mol):
         self.mol = mol
@@ -870,6 +868,8 @@ class ddCOSMO(lib.StreamObject):
             return _ddcosmo_tdscf_grad.make_grad_object(grad_method)
         else:
             return ddcosmo_grad.make_grad_object(grad_method)
+
+    to_gpu = lib.to_gpu
 
 DDCOSMO = ddCOSMO
 

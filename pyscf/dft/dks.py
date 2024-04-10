@@ -143,6 +143,8 @@ class DKS(KohnShamDFT, dhf.DHF):
         return x2chf
     x2c = x2c1e
 
+    to_gpu = lib.to_gpu
+
 UKS = UDKS = DKS
 
 class RDKS(DKS, dhf.RDHF):

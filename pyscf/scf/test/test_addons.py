@@ -459,6 +459,34 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
         self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
 
+    def test_smearing_mu0(self):
+        def _hubbard_hamilts_pbc(L, U):
+            h1e = numpy.zeros((L, L))
+            g2e = numpy.zeros((L,)*4)
+            for i in range(L):
+                h1e[i, (i+1)%L] = h1e[(i+1)%L, i] = -1
+                g2e[i, i, i, i] = U
+            return h1e, g2e
+
+        L = 10
+        U = 4
+
+        mol = gto.M()
+        mol.nelectron = L
+        mol.nao = L
+        mol.incore_anyway = True
+        mol.build()
+
+        h1e, eri = _hubbard_hamilts_pbc(L, U)
+        mf = scf.UHF(mol)
+        mf.get_hcore = lambda *args: h1e
+        mf._eri = eri
+        mf.get_ovlp = lambda *args: numpy.eye(L)
+        mf_ft = addons.smearing(mf, sigma=.1, mu0=2., fix_spin=True)
+        mf_ft.kernel()
+        self.assertAlmostEqual(mf_ft.e_tot, -2.93405853397115, 5)
+        self.assertAlmostEqual(mf_ft.entropy, 0.11867520273160392, 5)
+
 if __name__ == "__main__":
     print("Full Tests for addons")
     unittest.main()

@@ -116,7 +116,7 @@ class QMMM:
 _QMMM = QMMM
 
 class QMMMSCF(QMMM):
-    _keys = set(['mm_mol'])
+    _keys = {'mm_mol'}
 
     def __init__(self, method, mm_mol=None):
         self.__dict__.update(method.__dict__)
@@ -188,6 +188,11 @@ class QMMMSCF(QMMM):
             nuc += q2*(charges/r).sum()
         return nuc
 
+    def to_gpu(self):
+        obj = self.undo_qmmm().to_gpu()
+        obj = qmmm_for_scf(obj, self.mm_mol)
+        return lib.to_gpu(self, obj)
+
     def nuc_grad_method(self):
         scf_grad = super().nuc_grad_method()
         return qmmm_grad_for_scf(scf_grad)
@@ -206,6 +211,8 @@ class QMMMPostSCF(QMMM):
         obj = lib.view(self, lib.drop_class(self.__class__, QMMM))
         obj._scf = self._scf.undo_qmmm()
         return obj
+
+    to_gpu = QMMMSCF.to_gpu
 
 
 def add_mm_charges_grad(scf_grad, atoms_or_coords, charges, radii=None, unit=None):
@@ -395,6 +402,11 @@ class QMMMGrad:
             r = lib.norm(r1-coords, axis=1)
             g_mm += q1 * numpy.einsum('i,ix,i->ix', charges, r1-coords, 1/r**3)
         return g_mm
+
+    def to_gpu(self):
+        obj = self.undo_qmmm().to_gpu()
+        obj = qmmm_grad_for_scf(obj)
+        return lib.to_gpu(self, obj)
 
 _QMMMGrad = QMMMGrad
 

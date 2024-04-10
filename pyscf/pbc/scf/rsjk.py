@@ -50,12 +50,12 @@ OMEGA_MIN = rsdf_builder.OMEGA_MIN
 INDEX_MIN = rsdf_builder.INDEX_MIN
 
 class RangeSeparatedJKBuilder(lib.StreamObject):
-    _keys = set((
+    _keys = {
         'cell', 'mesh', 'kpts', 'purify', 'omega', 'rs_cell', 'cell_d',
         'bvk_kmesh', 'supmol_sr', 'supmol_ft', 'supmol_d', 'cell0_basis_mask',
         'ke_cutoff', 'direct_scf_tol', 'time_reversal_symmetry',
         'exclude_dd_block', 'allow_drv_nodddd', 'approx_vk_lr_missing_mo',
-    ))
+    }
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
@@ -1160,6 +1160,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         log.timer_debug1('get_lr_k_kpts', *cpu0)
         return vk_kpts
 
+    to_gpu = lib.to_gpu
+
 RangeSeparationJKBuilder = RangeSeparatedJKBuilder
 
 def _purify(mat_kpts, phase):
@@ -1266,9 +1268,16 @@ def _guess_omega(cell, kpts, mesh=None):
     if mesh is None:
         omega_min = OMEGA_MIN
         ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
-        nk = nkpts**(1./3)
+        nk = (cell.nao/25 * nkpts)**(1./3)
         ke_cutoff = 50 / (.7+.25*nk+.05*nk**3)
         ke_cutoff = max(ke_cutoff, ke_min)
+        # avoid large omega since nuermical issues were found in Rys
+        # polynomials when computing SR integrals with nroots > 3
+        exps = [e for l, e in zip(cell._bas[:,gto.ANG_OF], cell.bas_exps()) if l != 0]
+        if exps:
+            omega_max = np.hstack(exps).min()**.5 * 2
+            ke_max = estimate_ke_cutoff_for_omega(cell, omega_max)
+            ke_cutoff = min(ke_cutoff, ke_max)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
         mesh = np.asarray(mesh)

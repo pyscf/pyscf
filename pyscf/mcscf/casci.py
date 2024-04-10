@@ -764,13 +764,13 @@ class CASBase(lib.StreamObject):
     canonicalization = getattr(__config__, 'mcscf_casci_CASCI_canonicalization', True)
     sorting_mo_energy = getattr(__config__, 'mcscf_casci_CASCI_sorting_mo_energy', False)
 
-    _keys = set((
+    _keys = {
         'natorb', 'canonicalization', 'sorting_mo_energy', 'mol', 'max_memory',
         'ncas', 'nelecas', 'ncore', 'fcisolver', 'frozen', 'extrasym',
         'e_tot', 'e_cas', 'ci', 'mo_coeff', 'mo_energy', 'mo_occ', 'converged',
-    ))
+    }
 
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None):
         if isinstance(mf_or_mol, gto.Mole):
             mf = scf.RHF(mf_or_mol)
         else:
@@ -1169,6 +1169,8 @@ class CASCI(CASBase):
     def nuc_grad_method(self):
         from pyscf.grad import casci
         return casci.Gradients(self)
+
+    to_gpu = lib.to_gpu
 
 scf.hf.RHF.CASCI = scf.rohf.ROHF.CASCI = lib.class_as_method(CASCI)
 scf.uhf.UHF.CASCI = None

@@ -243,6 +243,7 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     ecoul = vhf.ecoul.real
     exc = vhf.exc.real
     e2 = ecoul + exc
+
     ks.scf_summary['e1'] = e1
     ks.scf_summary['coul'] = ecoul
     ks.scf_summary['exc'] = exc
@@ -258,7 +259,6 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     libxc = ks._numint.libxc
     ks._numint = libxc.define_xc_(ks._numint, description, xctype, hyb, rsh)
     return ks
-
 
 def _dft_common_init_(mf, xc='LDA,VWN'):
     raise DeprecationWarning
@@ -320,10 +320,12 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = set(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
+    _keys = {'xc', 'nlc', 'grids', 'disp', 'disp_with_3body', 'nlcgrids', 'small_rho_cutoff'}
 
     def __init__(self, xc='LDA,VWN'):
         self.xc = xc
+        self.disp = None
+        self.disp_with_3body = None
         self.nlc = ''
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(
@@ -460,12 +462,11 @@ class KohnShamDFT:
         '''Initialize self.grids the first time call get_veff'''
         if mol is None: mol = self.mol
 
+        ground_state = getattr(dm, 'ndim', 0) == 2
         if self.grids.coords is None:
             t0 = (logger.process_clock(), logger.perf_counter())
             self.grids.build(with_non0tab=True)
-            if (self.small_rho_cutoff > 1e-20 and
-                # dm.ndim == 2 indicates ground state
-                isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            if self.small_rho_cutoff > 1e-20 and ground_state:
                 # Filter grids the first time setup grids
                 self.grids = prune_small_rho_grids_(self, self.mol, dm,
                                                     self.grids)
@@ -475,14 +476,15 @@ class KohnShamDFT:
         if is_nlc and self.nlcgrids.coords is None:
             t0 = (logger.process_clock(), logger.perf_counter())
             self.nlcgrids.build(with_non0tab=True)
-            if (self.small_rho_cutoff > 1e-20 and
-                # dm.ndim == 2 indicates ground state
-                isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            if self.small_rho_cutoff > 1e-20 and ground_state:
                 # Filter grids the first time setup grids
                 self.nlcgrids = prune_small_rho_grids_(self, self.mol, dm,
                                                        self.nlcgrids)
             t0 = logger.timer(self, 'setting up nlc grids', *t0)
         return self
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 # Update the KohnShamDFT label in scf.hf module
 hf.KohnShamDFT = KohnShamDFT
@@ -529,3 +531,5 @@ class RKS(KohnShamDFT, hf.RHF):
     def to_hf(self):
         '''Convert to RHF object.'''
         return self._transfer_attrs_(self.mol.RHF())
+
+    to_gpu = lib.to_gpu

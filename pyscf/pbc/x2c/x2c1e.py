@@ -84,7 +84,7 @@ class X2C1E_GSCF(x2c._X2C_SCF):
 
     __name_mixin__ = 'X2C1e'
 
-    _keys = set(['with_x2c'])
+    _keys = {'with_x2c'}
 
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)

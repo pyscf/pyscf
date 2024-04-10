@@ -120,7 +120,7 @@ if __name__ == '__main__':
     mol.basis = '631g'
     mol.build()
     mf0 = mf = scf.RHF(mol).run(conv_tol=1.)
-    mf = scf.addons.convert_to_ghf(mf)
+    mf = mf.to_ghf()
 
     from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
     from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm

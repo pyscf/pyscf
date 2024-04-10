@@ -22,6 +22,8 @@ Some helper functions
 
 import os
 import sys
+import time
+import platform
 import warnings
 import tempfile
 import functools
@@ -30,6 +32,7 @@ import inspect
 import collections
 import ctypes
 import numpy
+import scipy
 import h5py
 from threading import Thread
 from multiprocessing import Queue, Process
@@ -341,6 +344,16 @@ def prange_split(n_total, n_sections):
     div_points = numpy.array(section_sizes).cumsum()
     return zip(div_points[:-1], div_points[1:])
 
+izip = zip
+
+if sys.version_info > (3, 8):
+    from math import comb
+else:
+    import math
+    def comb(n, k):
+        if k < 0 or k > n:
+            return 0
+        return math.factorial(n) // math.factorial(n-k) // math.factorial(k)
 
 def map_with_prefetch(func, *iterables):
     '''
@@ -560,7 +573,7 @@ class StreamObject:
     verbose = 0
     stdout = sys.stdout
     # Store the keys appeared in the module.  It is used to check misinput attributes
-    _keys = set(['output', 'verbose', 'stdout', 'max_memory'])
+    _keys = {'output', 'verbose', 'stdout', 'max_memory'}
 
     def kernel(self, *args, **kwargs):
         '''
@@ -828,6 +841,10 @@ def invalid_method(name):
     fn.__name__ = name
     return fn
 
+@functools.lru_cache(None)
+def _define_class(name, bases):
+    return type(name, bases, {})
+
 def make_class(bases, name=None, attrs=None):
     '''
     Construct a class
@@ -837,10 +854,13 @@ def make_class(bases, name=None, attrs=None):
     '''
     if name is None:
         name = ''.join(getattr(x, '__name_mixin__', x.__name__) for x in bases)
-    if attrs is None:
-        attrs = {}
-    attrs = {**attrs, '__name_mixin__': name}
-    return type(name, bases, attrs)
+
+    cls = _define_class(name, bases)
+    cls.__name_mixin__ = name
+    if attrs is not None:
+        for key, val in attrs.items():
+            setattr(cls, key, val)
+    return cls
 
 def set_class(obj, bases, name=None, attrs=None):
     '''Change the class of an object'''
@@ -905,13 +925,6 @@ def replace_class(cls, old_cls, new_cls):
 def overwrite_mro(obj, mro):
     '''A hacky function to overwrite the __mro__ attribute'''
     raise DeprecationWarning
-
-def izip(*args):
-    '''python2 izip == python3 zip'''
-    if sys.version_info < (3,):
-        return itertools.izip(*args)
-    else:
-        return zip(*args)
 
 class ProcessWithReturnValue(Process):
     def __init__(self, group=None, target=None, name=None, args=(),
@@ -1105,8 +1118,7 @@ class H5TmpFile(h5py.File):
     Kwargs:
         filename : str or None
             If a string is given, an HDF5 file of the given filename will be
-            created. The temporary file will exist even if the H5TmpFile
-            object is released.  If nothing is specified, the HDF5 temporary
+            created. If filename is not specified, the HDF5 temporary
             file will be deleted when the H5TmpFile object is released.
 
     The return object is an h5py.File object. The file will be automatically
@@ -1120,11 +1132,11 @@ class H5TmpFile(h5py.File):
     '''
     def __init__(self, filename=None, mode='a', *args, **kwargs):
         if filename is None:
-            tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
-            filename = tmpfile.name
-        h5py.File.__init__(self, filename, mode, *args, **kwargs)
-#FIXME: Does GC flush/close the HDF5 file when releasing the resource?
-# To make HDF5 file reusable, file has to be closed or flushed
+            with tempfile.NamedTemporaryFile(dir=param.TMPDIR) as tmpf:
+                h5py.File.__init__(self, tmpf.name, mode, *args, **kwargs)
+        else:
+            h5py.File.__init__(self, filename, mode, *args, **kwargs)
+
     def __del__(self):
         try:
             self.close()
@@ -1294,6 +1306,22 @@ def git_info(repo_path):
         pass
     return orig_head, head, branch
 
+def format_sys_info():
+    '''Format a list of system information for printing.'''
+    import pyscf
+    info = repo_info(os.path.join(__file__, '..', '..'))
+    result = [
+        f'System: {platform.uname()}  Threads {num_threads()}',
+        f'Python {sys.version}',
+        f'numpy {numpy.__version__}  scipy {scipy.__version__}',
+        f'Date: {time.ctime()}',
+        f'PySCF version {pyscf.__version__}',
+        f'PySCF path  {info["path"]}',
+    ]
+    if 'git' in info:
+        result.append(info['git'])
+    return result
+
 
 def isinteger(obj):
     '''
@@ -1331,3 +1359,76 @@ def isintsequence(obj):
         for i in obj:
             are_ints = are_ints and isinteger(i)
         return are_ints
+
+class _OmniObject:
+    '''Class with default attributes. When accessing an attribute that is not
+    initialized, a default value will be returned than raising an AttributeError.
+    '''
+    verbose = 0
+    max_memory = param.MAX_MEMORY
+    stdout = sys.stdout
+
+    def __init__(self, default_factory=None):
+        self._default = default_factory
+
+    def __getattr__(self, key):
+        return self._default
+
+# Many methods requires a mol or mf object in initialization.
+# These objects can be as the default arguments for these methods.
+# Then class can be instantiated easily like cls(omniobj) in the following
+# to_gpu function.
+omniobj = _OmniObject()
+omniobj._built = True
+omniobj.mol = omniobj
+omniobj._scf = omniobj
+omniobj.base = omniobj
+
+def to_gpu(method, out=None):
+    '''Convert a method to its corresponding GPU variant, and recursively
+    converts all attributes of a method to cupy objects or gpu4pyscf objects.
+    '''
+    import cupy
+    from pyscf import gto
+
+    # If a GPU class inherits a CPU code, the "to_gpu" method may be resolved
+    # and available in the GPU class. Skip the conversion in this case.
+    if method.__module__.startswith('gpu4pyscf'):
+        return method
+
+    if out is None:
+        try:
+            import gpu4pyscf
+        except ImportError:
+            print('Library gpu4pyscf not found. You can install this package via\n'
+                  '    pip install gpu4pyscf-cuda11x\n'
+                  'See more installation info at https://github.com/pyscf/gpu4pyscf')
+            raise
+
+        # TODO: Is it necessary to implement scanner in gpu4pyscf?
+        if isinstance(method, (SinglePointScanner, GradScanner)):
+            method = method.undo_scanner()
+
+        from importlib import import_module
+        mod = import_module(method.__module__.replace('pyscf', 'gpu4pyscf'))
+        cls = getattr(mod, method.__class__.__name__)
+        # A temporary GPU instance. This ensures to initialize private
+        # attributes that are only available for GPU code.
+        out = cls(omniobj)
+
+    # Convert only the keys that are defined in the corresponding GPU class
+    cls_keys = [getattr(cls, '_keys', ()) for cls in out.__class__.__mro__[:-1]]
+    out_keys = set(out.__dict__).union(*cls_keys)
+    # Only overwrite the attributes of the same name.
+    keys = set(method.__dict__).intersection(out_keys)
+
+    for key in keys:
+        val = getattr(method, key)
+        if isinstance(val, numpy.ndarray):
+            val = cupy.asarray(val)
+        elif hasattr(val, 'to_gpu'):
+            val = val.to_gpu()
+        setattr(out, key, val)
+    out.reset()
+    return out
+

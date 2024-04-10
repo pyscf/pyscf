@@ -860,12 +860,12 @@ class CISD(lib.StreamObject):
     direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
     async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
 
-    _keys = set((
+    _keys = {
         'conv_tol', 'max_cycle', 'max_space', 'lindep',
         'level_shift', 'direct', 'async_io', 'mol', 'max_memory',
         'nroots', 'frozen', 'chkfile', 'converged', 'mo_coeff', 'mo_occ',
         'e_hf', 'e_corr', 'emp2', 'ci',
-    ))
+    }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import hf
@@ -1130,6 +1130,8 @@ class CISD(lib.StreamObject):
     def nuc_grad_method(self):
         from pyscf.grad import cisd
         return cisd.Gradients(self)
+
+    to_gpu = lib.to_gpu
 
 class RCISD(CISD):
     pass

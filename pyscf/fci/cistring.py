@@ -107,6 +107,8 @@ def gen_occslst(orb_list, nelec):
         return res
     occslst = gen_occs_iter(orb_list, nelec)
     return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
+# Add this symbol for backward compatibility. Should remove in the future.
+_gen_occslst = gen_occslst
 
 def _strs2occslst(strs, norb):
     na = len(strs)
@@ -127,11 +129,7 @@ def _occslst2strs(occslst):
 class OIndexList(numpy.ndarray):
     pass
 
-def num_strings(n, m):
-    if m < 0 or m > n:
-        return 0
-    else:
-        return math.factorial(n) // (math.factorial(n-m)*math.factorial(m))
+num_strings = lib.comb
 
 def gen_linkstr_index_o1(orb_list, nelec, strs=None, tril=False):
     '''Look up table, for the strings relationship in terms of a
@@ -151,7 +149,7 @@ def gen_linkstr_index_o1(orb_list, nelec, strs=None, tril=False):
     norb = len(orb_list)
     assert (numpy.all(numpy.arange(norb) == orb_list))
 
-    strdic = dict((tuple(s), i) for i,s in enumerate(occslst))
+    strdic = {tuple(s): i for i,s in enumerate(occslst)}
     nvir = norb - nelec
     def propgate1e(str0):
         addr0 = strdic[tuple(str0)]
@@ -345,12 +343,31 @@ def parity(string0, string1):
 
 def addr2str(norb, nelec, addr):
     '''Convert CI determinant address to string'''
-    return addrs2str(norb, nelec, [addr])[0]
+    if norb >= 64:
+        raise NotImplementedError('norb >= 64')
+    max_addr = num_strings(norb, nelec)
+    assert max_addr > addr
+
+    if max_addr < 2**31:
+        return addrs2str(norb, nelec, [addr])[0]
+    else:
+        return _addr2str(norb, nelec, addr)
+
+def _addr2str(norb, nelec, addr):
+    if addr == 0 or nelec == norb or nelec == 0:
+        return (1 << nelec) - 1   # ..0011..11
+
+    for i in reversed(range(norb)):
+        addrcum = num_strings(i, nelec)
+        if addrcum <= addr:
+            return (1 << i) | _addr2str(i, nelec-1, addr-addrcum)
 
 def addrs2str(norb, nelec, addrs):
     '''Convert a list of CI determinant address to string'''
     if norb >= 64:
         raise NotImplementedError('norb >= 64')
+    if num_strings(norb, nelec) >= 2**31:
+        raise NotImplementedError('Large address')
 
     addrs = numpy.asarray(addrs, dtype=numpy.int32)
     assert (all(num_strings(norb, nelec) > addrs))
@@ -372,13 +389,29 @@ def str2addr(norb, nelec, string):
         string = int(string, 2)
     else:
         assert (bin(string).count('1') == nelec)
-    libfci.FCIstr2addr.restype = ctypes.c_int
-    return libfci.FCIstr2addr(ctypes.c_int(norb), ctypes.c_int(nelec),
-                              ctypes.c_ulonglong(string))
+
+    if num_strings(norb, nelec) < 2**31:
+        libfci.FCIstr2addr.restype = ctypes.c_int
+        return libfci.FCIstr2addr(ctypes.c_int(norb), ctypes.c_int(nelec),
+                                  ctypes.c_ulonglong(string))
+    return _str2addr(norb, nelec, string)
+
+def _str2addr(norb, nelec, string):
+    if norb <= nelec or nelec == 0:
+        return 0
+    addr = 0
+    for orbital_id in reversed(range(norb)):
+        if (1 << orbital_id) & string:
+            addr += num_strings(orbital_id, nelec)
+            nelec -= 1
+    return addr
+
 def strs2addr(norb, nelec, strings):
     '''Convert a list of string to CI determinant address'''
     if norb >= 64:
         raise NotImplementedError('norb >= 64')
+    if num_strings(norb, nelec) >= 2**31:
+        raise NotImplementedError('Large address')
 
     strings = numpy.asarray(strings, dtype=numpy.int64)
     count = strings.size

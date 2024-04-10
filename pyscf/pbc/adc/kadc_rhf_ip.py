@@ -977,11 +977,11 @@ class RADCIP(kadc_rhf.RADC):
             Spectroscopic amplitudes for each IP transition.
     '''
 
-    _keys = set((
+    _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b',
         't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
         'kpts', 'exxdiv', 'khelper', 'cell', 'nkop_chk', 'kop_npick', 'chnk_size',
-    ))
+    }
 
     def __init__(self, adc):
         self.verbose = adc.verbose

@@ -179,9 +179,9 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
                                       mo_coeff[1], s, False)
     orbsyma = numpy.array(orbsyma)
     orbsymb = numpy.array(orbsymb)
-    irrep_nelec = dict([(mol.irrep_name[k], (int(sum(mo_occ[0][orbsyma==ir])),
-                                             int(sum(mo_occ[1][orbsymb==ir]))))
-                        for k, ir in enumerate(mol.irrep_id)])
+    irrep_nelec = {mol.irrep_name[k]: (int(sum(mo_occ[0][orbsyma==ir])),
+                                             int(sum(mo_occ[1][orbsymb==ir])))
+                        for k, ir in enumerate(mol.irrep_id)}
     return irrep_nelec
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
@@ -309,7 +309,7 @@ class SymAdaptedUHF(uhf.UHF):
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 0), 'B2': (1, 1)}
     '''
 
-    _keys = set(['irrep_nelec'])
+    _keys = {'irrep_nelec'}
 
     def __init__(self, mol):
         uhf.UHF.__init__(self, mol)
@@ -530,7 +530,7 @@ class SymAdaptedUHF(uhf.UHF):
             mo_b = lib.tag_array(self.mo_coeff[1][:,idxb], orbsym=orbsymb,
                                  degen_mapping=degen_b)
         self.mo_coeff = (mo_a, mo_b)
-        self.mo_occ = (self.mo_occ[0][idxa], self.mo_occ[1][idxb])
+        self.mo_occ = numpy.asarray([self.mo_occ[0][idxa], self.mo_occ[1][idxb]])
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile, self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
@@ -564,6 +564,8 @@ class SymAdaptedUHF(uhf.UHF):
     wfnsym = property(get_wfnsym)
 
     canonicalize = canonicalize
+
+    to_gpu = lib.to_gpu
 
 UHF = SymAdaptedUHF
 

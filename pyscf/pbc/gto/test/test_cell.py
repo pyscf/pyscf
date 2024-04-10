@@ -25,6 +25,7 @@ from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.tools import pbc as pbctools
+from pyscf.pbc.gto import ewald_methods
 
 
 def setUpModule():
@@ -84,6 +85,10 @@ class KnownValues(unittest.TestCase):
 
     def test_dumps_loads(self):
         cl1.loads(cl1.dumps())
+        # see issue 2026
+        from pyscf.pbc.tools.pbc import super_cell
+        sc = super_cell(cl1, [1,1,1])
+        sc.dumps()
 
     def test_get_lattice_Ls(self):
         #self.assertEqual(cl1.get_lattice_Ls([0,0,0]).shape, (1  , 3))
@@ -247,6 +252,30 @@ class KnownValues(unittest.TestCase):
 #        cell.build()
 #        eref = cell.to_mol().energy_nuc()
 #        self.assertAlmostEqual(cell.ewald(), eref, 2)
+
+    def test_particle_mesh_ewald(self):
+        cell = pgto.Cell()
+        cell.a = np.diag([10.,]*3)
+        cell.atom = '''
+            O          5.84560        5.21649        5.10372
+            H          6.30941        5.30070        5.92953
+            H          4.91429        5.26674        5.28886
+        '''
+        cell.pseudo = 'gth-pade'
+        cell.verbose = 0
+        cell.build()
+
+        cell1 = cell.copy()
+        cell1.use_particle_mesh_ewald = True
+        cell1.build()
+
+        e0 = cell.ewald()
+        e1 = cell1.ewald()
+        self.assertAlmostEqual(e0, e1, 6)
+
+        g0 = ewald_methods.ewald_nuc_grad(cell)
+        g1 = ewald_methods.ewald_nuc_grad(cell1)
+        self.assertAlmostEqual(abs(g1-g0).max(), 0, 6)
 
     def test_pbc_intor(self):
         numpy.random.seed(12)

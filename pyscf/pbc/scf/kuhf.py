@@ -59,7 +59,8 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     return lib.tag_array(dm, mo_coeff=mo_coeff_kpts, mo_occ=mo_occ_kpts)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
-             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
+             fock_last=None):
     h1e_kpts, s_kpts, vhf_kpts, dm_kpts = h1e, s1e, vhf, dm
     if h1e_kpts is None: h1e_kpts = mf.get_hcore()
     if vhf_kpts is None: vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
@@ -85,15 +86,15 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     else:
         dampa = dampb = damp_factor
 
-    if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4:
+    if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4 and fock_last is not None:
         f_a = []
         f_b = []
-        for k, s1e in enumerate(s_kpts):
-            f_a.append(mol_hf.damping(s1e, dm_kpts[0][k], f_kpts[0][k], dampa))
-            f_b.append(mol_hf.damping(s1e, dm_kpts[1][k], f_kpts[1][k], dampb))
+        for k in range(len(s_kpts)):
+            f_a.append(mol_hf.damping(f_kpts[0][k], fock_last[0][k], dampa))
+            f_b.append(mol_hf.damping(f_kpts[1][k], fock_last[1][k], dampa))
         f_kpts = [f_a, f_b]
     if diis and cycle >= diis_start_cycle:
-        f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
+        f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts, f_prev=fock_last)
     if abs(level_shift_factor) > 1e-4:
         f_kpts =([mol_hf.level_shift(s, dm_kpts[0,k], f_kpts[0,k], shifta)
                   for k, s in enumerate(s_kpts)],
@@ -364,12 +365,12 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
 
 get_rho = khf.get_rho
 
-class KUHF(khf.KSCF, pbcuhf.UHF):
+class KUHF(khf.KSCF):
     '''UHF class with k-point sampling.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
 
-    _keys = set(["init_guess_breaksym"])
+    _keys = {"init_guess_breaksym"}
 
     init_guess_by_1e     = pbcuhf.UHF.init_guess_by_1e
     init_guess_by_minao  = pbcuhf.UHF.init_guess_by_minao
@@ -383,6 +384,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
     get_rho = get_rho
     analyze = khf.analyze
     canonicalize = canonicalize
+    to_gpu = lib.to_gpu
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -415,7 +417,9 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
         dm_kpts = mol_hf.SCF.get_init_guess(self, cell, key)
         assert dm_kpts.shape[0] == 2
         nkpts = len(self.kpts)
@@ -423,7 +427,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
             # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
             dm_kpts = np.repeat(dm_kpts[:,None,:,:], nkpts, axis=1)
 
-        ne = np.einsum('xkij,kji->x', dm_kpts, self.get_ovlp(cell)).real
+        ne = lib.einsum('xkij,kji->x', dm_kpts, s1e).real
         nelec = np.asarray(self.nelec)
         if np.any(abs(ne - nelec) > 0.01*nkpts):
             logger.debug(self, 'Big error detected in the electron number '

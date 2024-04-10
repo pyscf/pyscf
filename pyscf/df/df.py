@@ -79,7 +79,7 @@ class DF(lib.StreamObject):
     _compatible_format = getattr(__config__, 'df_df_DF_compatible_format', False)
     _dataname = 'j3c'
 
-    _keys = set(('mol', 'auxmol'))
+    _keys = {'mol', 'auxmol'}
 
     def __init__(self, mol, auxbasis=None):
         self.mol = mol
@@ -308,6 +308,8 @@ class DF(lib.StreamObject):
             if auxmol_omega is not None:
                 auxmol.omega = auxmol_omega
 
+    to_gpu = lib.to_gpu
+
 GDF = DF
 
 
@@ -353,7 +355,12 @@ class DF4C(DF):
         with self.range_coulomb(omega) as rsh_df:
             return df_jk.r_get_jk(rsh_df, dm, hermi, with_j, with_k)
 
+    def get_eri(self):
+        raise NotImplementedError
+    get_ao_eri = get_eri
+
     def ao2mo(self, mo_coeffs):
         raise NotImplementedError
+    get_mo_eri = ao2mo
 
 GDF4C = DF4C

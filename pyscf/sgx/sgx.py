@@ -94,9 +94,9 @@ class _SGXHF:
 
     __name_mixin__ = 'SGX'
 
-    _keys = set([
+    _keys = {
         'auxbasis', 'with_df', 'direct_scf_sgx', 'rebuild_nsteps'
-    ])
+    }
 
     def __init__(self, mf, df=None, auxbasis=None):
         self.__dict__.update(mf.__dict__)
@@ -214,6 +214,9 @@ class _SGXHF:
         self._last_vj = 0
         self._last_vk = 0
 
+    def to_gpu(self):
+        raise NotImplementedError
+
     def method_not_implemented(self, *args, **kwargs):
         raise NotImplementedError
     nuc_grad_method = Gradients = method_not_implemented
@@ -247,11 +250,11 @@ def _make_opt(mol, pjs=False,
 
 
 class SGX(lib.StreamObject):
-    _keys = set((
+    _keys = {
         'mol', 'grids_thrd', 'grids_level_i', 'grids_level_f',
         'grids_switch_thrd', 'dfj', 'direct_j', 'pjs', 'debug', 'grids',
         'blockdim', 'auxmol',
-    ))
+    }
 
     def __init__(self, mol, auxbasis=None, pjs=False):
         self.mol = mol
@@ -374,3 +377,5 @@ class SGX(lib.StreamObject):
         else:
             vj, vk = sgx_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
         return vj, vk
+
+    to_gpu = lib.to_gpu

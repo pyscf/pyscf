@@ -244,8 +244,15 @@ class KnownValues(unittest.TestCase):
         rho = dft.numint.eval_rho(mol, ao, dm, xctype='MGGA', with_lapl=True)
         rhoa = rho[:,:200]
         def check(xc_code, deriv=3, e_place=9, v_place=8, f_place=6, k_place=4):
-            exc0, vxc0, fxc0, kxc0 = dft.libxc.eval_xc(xc_code, rhoa, 0, deriv=deriv)
-            exc1, vxc1, fxc1, kxc1 = dft.xcfun.eval_xc(xc_code, rhoa, 0, deriv=deriv)
+            xctype = dft.libxc.xc_type(xc_code)
+            if xctype == 'LDA':
+                nv = 1
+            elif xctype == 'GGA':
+                nv = 4
+            else:
+                nv = 6
+            exc0, vxc0, fxc0, kxc0 = dft.libxc.eval_xc(xc_code, rhoa[:nv], 0, deriv=deriv)
+            exc1, vxc1, fxc1, kxc1 = dft.xcfun.eval_xc(xc_code, rhoa[:nv], 0, deriv=deriv)
             self.assertAlmostEqual(abs(exc0-exc1).max(), 0, e_place)
             if deriv > 0:
                 for v0, v1 in zip(vxc0, vxc1):
@@ -338,8 +345,15 @@ class KnownValues(unittest.TestCase):
         rhoa = rho[:,:200]
         rhob = rhoa + rho[:,200:400]
         def check(xc_code, deriv=3, e_place=9, v_place=8, f_place=6, k_place=4):
-            exc0, vxc0, fxc0, kxc0 = dft.libxc.eval_xc(xc_code, (rhoa, rhob), 1, deriv=deriv)
-            exc1, vxc1, fxc1, kxc1 = dft.xcfun.eval_xc(xc_code, (rhoa, rhob), 1, deriv=deriv)
+            xctype = dft.libxc.xc_type(xc_code)
+            if xctype == 'LDA':
+                nv = 1
+            elif xctype == 'GGA':
+                nv = 4
+            else:
+                nv = 6
+            exc0, vxc0, fxc0, kxc0 = dft.libxc.eval_xc(xc_code, (rhoa[:nv], rhob[:nv]), 1, deriv=deriv)
+            exc1, vxc1, fxc1, kxc1 = dft.xcfun.eval_xc(xc_code, (rhoa[:nv], rhob[:nv]), 1, deriv=deriv)
             self.assertAlmostEqual(abs(exc0-exc1).max(), 0, e_place)
             if deriv > 0:
                 for v0, v1 in zip(vxc0, vxc1):

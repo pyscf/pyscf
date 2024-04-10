@@ -125,7 +125,8 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True,
                                  omega, exxdiv=mf.exxdiv)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
-             diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+             diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
+             fock_last=None):
     h1e_kpts, s_kpts, vhf_kpts, dm_kpts = h1e, s1e, vhf, dm
     if h1e_kpts is None: h1e_kpts = mf.get_hcore()
     if vhf_kpts is None: vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
@@ -142,11 +143,10 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if s_kpts is None: s_kpts = mf.get_ovlp()
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
-    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
-        f_kpts = [mol_hf.damping(s1e, dm_kpts[k] * 0.5, f_kpts[k], damp_factor)
-                  for k, s1e in enumerate(s_kpts)]
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4 and fock_last is not None:
+        f_kpts = [mol_hf.damping(f, f_prev, damp_factor) for f,f_prev in zip(f_kpts,fock_last)]
     if diis and cycle >= diis_start_cycle:
-        f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
+        f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts, f_prev=fock_last)
     if abs(level_shift_factor) > 1e-4:
         f_kpts = [mol_hf.level_shift(s, dm_kpts[k], f_kpts[k], level_shift_factor)
                   for k, s in enumerate(s_kpts)]
@@ -419,7 +419,7 @@ class KSCF(pbchf.SCF):
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
 
-    _keys = set(['cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'])
+    _keys = {'cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'}
 
     reset = pbchf.SCF.reset
     mol = pbchf.SCF.mol
@@ -496,7 +496,7 @@ class KSCF(pbchf.SCF):
             self.with_df.dump_flags(verbose)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         raise NotImplementedError
 
     def init_guess_by_1e(self, cell=None):
@@ -524,10 +524,10 @@ class KSCF(pbchf.SCF):
         cpu0 = (logger.process_clock(), logger.perf_counter())
         if self.rsjk:
             vj, vk = self.rsjk.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                      with_j, with_k, omega, self.exxdiv)
+                                      with_j, with_k, omega=omega, exxdiv=self.exxdiv)
         else:
             vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                         with_j, with_k, omega, self.exxdiv)
+                                         with_j, with_k, omega=omega, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
@@ -654,9 +654,6 @@ class KSCF(pbchf.SCF):
         from pyscf.pbc.scf import newton_ah
         return newton_ah.newton(self)
 
-    def remove_soscf(self):
-        raise NotImplementedError
-
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
@@ -687,10 +684,11 @@ class KSCF(pbchf.SCF):
     def convert_from_(self, mf):
         raise NotImplementedError
 
-class KRHF(KSCF, pbchf.RHF):
+class KRHF(KSCF):
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square
+    to_gpu = lib.to_gpu
 
     def check_sanity(self):
         cell = self.cell
@@ -703,7 +701,9 @@ class KRHF(KSCF, pbchf.RHF):
                         'found in KRHF method.', cell.nelec, nkpts)
         return KSCF.check_sanity(self)
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
         dm = mol_hf.SCF.get_init_guess(self, cell, key)
         nkpts = len(self.kpts)
         if dm.ndim == 2:
@@ -711,7 +711,7 @@ class KRHF(KSCF, pbchf.RHF):
             dm = np.repeat(dm[None,:,:], nkpts, axis=0)
         dm_kpts = dm
 
-        ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
+        ne = lib.einsum('kij,kji->', dm_kpts, s1e).real
         # FIXME: consider the fractional num_electron or not? This maybe
         # relate to the charged system.
         nelectron = float(self.cell.tot_electrons(nkpts))

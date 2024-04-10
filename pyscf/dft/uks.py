@@ -24,7 +24,7 @@ Non-relativistic Unrestricted Kohn-Sham
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import uhf
+from pyscf.scf import hf, uhf
 from pyscf.dft import rks
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -196,3 +196,5 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
     def to_hf(self):
         '''Convert to UHF object.'''
         return self._transfer_attrs_(self.mol.UHF())
+
+    to_gpu = lib.to_gpu

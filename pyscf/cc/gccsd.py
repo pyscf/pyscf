@@ -117,7 +117,6 @@ class GCCSD(ccsd.CCSDBase):
     conv_tol_normt = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol_normt', 1e-6)
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        assert (isinstance(mf, scf.ghf.GHF))
         ccsd.CCSDBase.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def init_amps(self, eris=None):
@@ -290,6 +289,8 @@ class GCCSD(ccsd.CCSDBase):
                 orbspin = orbspin[self.get_frozen_mask()]
         return spin2spatial(tx, orbspin)
 
+    to_gpu = lib.to_gpu
+
 CCSD = GCCSD
 
 
@@ -363,6 +364,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
             mo = mo_a + mo_b
             eri = ao2mo.kernel(mycc._scf._eri, mo)
             if eri.size == nmo**4:  # if mycc._scf._eri is a complex array
+                eri = eri.reshape(nmo**2, nmo**2)
                 sym_forbid = (orbspin[:,None] != orbspin).ravel()
             else:  # 4-fold symmetry
                 sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nmo)]
@@ -385,6 +387,8 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
+    from pyscf.scf.ghf import GHF
+    assert isinstance(mycc._scf, GHF)
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
 

@@ -271,41 +271,29 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
     else:
         raise RuntimeError(f'Unknown collinear scheme {ni.collinear}')
 
-    if xctype == 'MGGA':
-        ngrids = rho.shape[2]
-        rhop = np.empty((2, 6, ngrids))
-        rhop[0,:4] = (t[:4] + s[:4]) * .5
-        rhop[1,:4] = (t[:4] - s[:4]) * .5
-        # Padding for laplacian
-        rhop[:,4] = 0
-        rhop[0,5] = (t[4] + s[4]) * .5
-        rhop[1,5] = (t[4] - s[4]) * .5
-    else:
-        rhop = np.stack([(t + s) * .5, (t - s) * .5])
+    rho = np.stack([(t + s) * .5, (t - s) * .5])
+    if xctype == 'MGGA' and rho.shape[1] == 6:
+        rho = np.asarray(rho[:,[0,1,2,3,5],:], order='C')
 
     spin = 1
-    exc, vxc, fxc, kxc = ni.eval_xc(xc_code, rhop, spin, 0, deriv, omega,
-                                    verbose)
 
-    if deriv > 2:
-        kxc = xc_deriv.transform_kxc(rhop, fxc, kxc, xctype, spin)
-    if deriv > 1:
-        fxc = xc_deriv.transform_fxc(rhop, vxc, fxc, xctype, spin)
-    if deriv > 0:
-        vxc = xc_deriv.transform_vxc(rhop, vxc, xctype, spin)
-    return exc, vxc, fxc, kxc
+    out = ni.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
+    evfk = [out[0]]
+    for order in range(1, deriv+1):
+        evfk.append(xc_deriv.transform_xc(rho, out, xctype, spin, order))
+    if deriv < 3:
+        # The return has at least [e, v, f, k] terms
+        evfk.extend([None] * (3 - deriv))
+    return evfk
 
 # * Mcfun requires functional derivatives to total-density and spin-density.
 # * Make it a global function than a closure so as to be callable by multiprocessing
 def __mcfun_fn_eval_xc(ni, xc_code, xctype, rho, deriv):
-    exc, vxc, fxc, kxc = ni.eval_xc_eff(xc_code, rho, deriv=deriv, xctype=xctype)
-    if deriv > 0:
-        vxc = xc_deriv.ud2ts(vxc)
-    if deriv > 1:
-        fxc = xc_deriv.ud2ts(fxc)
-    if deriv > 2:
-        kxc = xc_deriv.ud2ts(kxc)
-    return exc, vxc, fxc, kxc
+    evfk = ni.eval_xc_eff(xc_code, rho, deriv=deriv, xctype=xctype)
+    for order in range(1, deriv+1):
+        if evfk[order] is not None:
+            evfk[order] = xc_deriv.ud2ts(evfk[order])
+    return evfk
 
 def mcfun_eval_xc_adapter(ni, xc_code):
     '''Wrapper to generate the eval_xc function required by mcfun'''
@@ -566,9 +554,9 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             ao_deriv = 0
         n2c = mo_coeff.shape[0]
         nao = n2c // 2
+        with_lapl = numint.MGGA_DENSITY_LAPL
 
         if self.collinear[0] in ('m', 'n'):  # mcol or ncol
-            with_lapl = False
             rho = []
             for ao, mask, weight, coords \
                     in self.block_loop(mol, grids, nao, ao_deriv, max_memory):
@@ -587,7 +575,6 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             dm_a = dm[:nao,:nao].real.copy('C')
             dm_b = dm[nao:,nao:].real.copy('C')
             ni = self._to_numint1c()
-            with_lapl = True
             hermi = 1
             rhoa = []
             rhob = []

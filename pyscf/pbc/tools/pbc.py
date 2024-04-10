@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import warnings
+import ctypes
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -57,6 +58,44 @@ def _ifftn_blas(g, mesh):
     return out.reshape(-1, *mesh)
 
 if FFT_ENGINE == 'FFTW':
+    try:
+        libfft = lib.load_library('libfft')
+    except OSError:
+        raise RuntimeError("Failed to load libfft")
+
+    def _copy_d2z(a):
+        fn = libfft._copy_d2z
+        out = np.empty(a.shape, dtype=np.complex128)
+        fn(out.ctypes.data_as(ctypes.c_void_p),
+           a.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_size_t(a.size))
+        return out
+
+    def _complex_fftn_fftw(f, mesh, func):
+        if f.dtype == np.double and f.flags.c_contiguous:
+            # np.asarray or np.astype is too slow
+            f = _copy_d2z(f)
+        else:
+            f = np.asarray(f, order='C', dtype=np.complex128)
+        mesh = np.asarray(mesh, order='C', dtype=np.int32)
+        rank = len(mesh)
+        out = np.empty_like(f)
+        fn = getattr(libfft, func)
+        for i, fi in enumerate(f):
+            fn(fi.ctypes.data_as(ctypes.c_void_p),
+               out[i].ctypes.data_as(ctypes.c_void_p),
+               mesh.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(rank))
+        return out
+
+    def _fftn_wrapper(a):
+        mesh = a.shape[1:]
+        return _complex_fftn_fftw(a, mesh, 'fft')
+    def _ifftn_wrapper(a):
+        mesh = a.shape[1:]
+        return _complex_fftn_fftw(a, mesh, 'ifft')
+
+elif FFT_ENGINE == 'PYFFTW':
     # pyfftw is slower than np.fft in most cases
     try:
         import pyfftw
@@ -235,8 +274,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     else:
         kG = Gv
 
-    equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
+    equal2boundary = None
     if wrap_around and abs(k).sum() > 1e-9:
+        equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
         # Here we 'wrap around' the high frequency k+G vectors into their lower
         # frequency counterparts.  Important if you want the gamma point and k-point
         # answers to agree
@@ -357,7 +397,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
 
-    coulG[equal2boundary] = 0
+    if equal2boundary is not None:
+        coulG[equal2boundary] = 0
 
     # Scale the coulG kernel for attenuated Coulomb integrals.
     # * omega is used by RangeSeparatedJKBuilder which requires ewald probe charge
@@ -507,7 +548,7 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
 
     a = cell.lattice_vectors()
 
-    scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
+    scaled_atom_coords = cell.get_scaled_atom_coords()
     atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
     atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
     if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
@@ -542,11 +583,12 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
                              np.arange(-bounds[2], bounds[2]+1)))
     Ls = np.dot(Ts[:,:dimension], a[:dimension])
 
-    ovlp_penalty += 1e-200  # avoid /0
-    Ts_scaled = (Ts[:,:dimension] + 1e-200) / ovlp_penalty
-    ovlp_penalty_fac = 1. / abs(Ts_scaled).min(axis=1)
-    Ls_mask = np.linalg.norm(Ls, axis=1) * (1-ovlp_penalty_fac) < rcut
-    Ls = Ls[Ls_mask]
+    if discard:
+        ovlp_penalty += 1e-200  # avoid /0
+        Ts_scaled = (Ts[:,:dimension] + 1e-200) / ovlp_penalty
+        ovlp_penalty_fac = 1. / abs(Ts_scaled).min(axis=1)
+        Ls_mask = np.linalg.norm(Ls, axis=1) * (1-ovlp_penalty_fac) < rcut
+        Ls = Ls[Ls_mask]
     return np.asarray(Ls, order='C')
 
 
@@ -590,8 +632,10 @@ def super_cell(cell, ncopy, wrap_around=False):
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
     mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
     supcell.mesh = (mesh // 2) * 2 + 1
-    supcell.magmom = np.repeat(np.asarray(cell.magmom).reshape(1,-1),
-                               np.prod(ncopy), axis=0).ravel()
+    if isinstance(cell.magmom, np.ndarray):
+        supcell.magmom = cell.magmom.tolist() * np.prod(ncopy)
+    else:
+        supcell.magmom = cell.magmom * np.prod(ncopy)
     return _build_supcell_(supcell, cell, Ls)
 
 

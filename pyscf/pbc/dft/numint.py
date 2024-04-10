@@ -1069,6 +1069,7 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     nr_rks_fxc_st = nr_rks_fxc_st
+    nr_nlc_vxc = nr_nlc_vxc
 
     make_mask = staticmethod(make_mask)
     eval_ao = staticmethod(eval_ao)
@@ -1080,6 +1081,8 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
                   with_lapl=True, cutoff=None, ao_cutoff=None, verbose=None):
         return self.eval_rho(cell, ao, dm, screen_index, xctype, hermi,
                              with_lapl, verbose)
+
+    to_gpu = lib.to_gpu
 
 _NumInt = NumInt
 
@@ -1285,5 +1288,7 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
     cache_xc_kernel  = cache_xc_kernel
     cache_xc_kernel1 = cache_xc_kernel1
     get_rho = get_rho
+
+    to_gpu = lib.to_gpu
 
 _KNumInt = KNumInt

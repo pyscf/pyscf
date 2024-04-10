@@ -91,15 +91,13 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
 
         This is a k-point version of scf.hf.SCF.get_occ
         '''
-        from pyscf.scf import uhf, rohf, ghf
         if (self.sigma == 0) or (not self.sigma) or (not self.smearing_method):
             mo_occ_kpts = super().get_occ(mo_energy_kpts, mo_coeff_kpts)
             return mo_occ_kpts
 
-        is_uhf = isinstance(self, uhf.UHF)
-        is_ghf = isinstance(self, ghf.GHF)
-        is_rhf = (not is_uhf) and (not is_ghf)
-        is_rohf = isinstance(self, rohf.ROHF)
+        is_uhf = self.istype('KUHF')
+        is_rhf = self.istype('KRHF')
+        is_rohf = self.istype('KROHF')
 
         sigma = self.sigma
         if self.smearing_method.lower() == 'fermi':
@@ -123,12 +121,17 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
             if self.mu0 is None:
                 mu_a, occa = mol_addons._smearing_optimize(f_occ, mo_es[0], nocc[0], sigma)
                 mu_b, occb = mol_addons._smearing_optimize(f_occ, mo_es[1], nocc[1], sigma)
-                mu = [mu_a, mu_b]
-                mo_occs = [occa, occb]
             else:
-                mu = self.mu0
-                mo_occs = f_occ(mu[0], mo_es[0], sigma)
-                mo_occs = f_occ(mu[1], mo_es[1], sigma)
+                if numpy.isscalar(self.mu0):
+                    mu_a = mu_b = self.mu0
+                elif len(self.mu0) == 2:
+                    mu_a, mu_b = self.mu0
+                else:
+                    raise TypeError(f'Unsupported mu0: {self.mu0}')
+                occa = f_occ(mu_a, mo_es[0], sigma)
+                occb = f_occ(mu_b, mo_es[1], sigma)
+            mu = [mu_a, mu_b]
+            mo_occs = [occa, occb]
             self.entropy  = self._get_entropy(mo_es[0], mo_occs[0], mu[0])
             self.entropy += self._get_entropy(mo_es[1], mo_occs[1], mu[1])
             self.entropy /= nkpts
@@ -165,6 +168,7 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
             else:
                 # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
                 mu = self.mu0
+                assert numpy.isscalar(mu)
                 mo_occs = f_occ(mu, mo_es, sigma)
             self.entropy = self._get_entropy(mo_es, mo_occs, mu) / nkpts
             if is_rhf:
@@ -196,14 +200,13 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
         return mo_occ_kpts
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
-        from pyscf.scf import uhf
         if (self.sigma == 0) or (not self.sigma) or (not self.smearing_method):
             return super().get_grad(mo_coeff_kpts, mo_occ_kpts, fock)
 
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
             fock = self.get_hcore() + self.get_veff(self.mol, dm1)
-        if isinstance(self, uhf.UHF):
+        if self.istype('KUHF'):
             ga = _get_grad_tril(mo_coeff_kpts[0], mo_occ_kpts[0], fock[0])
             gb = _get_grad_tril(mo_coeff_kpts[1], mo_occ_kpts[1], fock[1])
             return numpy.hstack((ga,gb))
@@ -288,7 +291,7 @@ def convert_to_uhf(mf, out=None):
         if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
             return mf.copy()
         else:
-            if isinstance(mf, scf.kghf.KGHF):
+            if isinstance(mf, (scf.ghf.GHF, scf.kghf.KGHF)):
                 raise NotImplementedError(
                     f'No conversion from {mf.__class__} to uhf object')
 
@@ -339,7 +342,7 @@ def convert_to_rhf(mf, out=None):
             assert (not isinstance(out, scf.khf.KSCF))
         out = mol_addons._update_mf_without_soscf(mf, out, False)
 
-    elif nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF):
+    elif nelec[0] != nelec[1] and isinstance(mf, (scf.rohf.ROHF, scf.krohf.KROHF)):
         if getattr(mf, '_scf', None):
             return mol_addons._update_mf_without_soscf(mf, mf._scf.copy(), False)
         else:
@@ -349,7 +352,7 @@ def convert_to_rhf(mf, out=None):
         if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
             return mf.copy()
         else:
-            if isinstance(mf, scf.kghf.KGHF):
+            if isinstance(mf, (scf.ghf.GHF, scf.kghf.KGHF)):
                 raise NotImplementedError(
                     f'No conversion from {mf.__class__} to rhf object')
 
@@ -397,7 +400,7 @@ def convert_to_ghf(mf, out=None):
         else:
             assert (not isinstance(out, scf.khf.KSCF))
 
-    if isinstance(mf, scf.ghf.GHF):
+    if isinstance(mf, (scf.ghf.GHF, scf.kghf.KGHF)):
         if out is None:
             return mf.copy()
         else:
@@ -416,7 +419,7 @@ def convert_to_ghf(mf, out=None):
                     nkpts = mf.kpts.nkpts_ibz
                 else:
                     nkpts = len(mf.kpts)
-                is_rhf = isinstance(mf, scf.hf.RHF)
+                is_rhf = mf.istype('KRHF')
                 for k in range(nkpts):
                     if is_rhf:
                         mo_a = mo_b = mf.mo_coeff[k]
@@ -472,6 +475,7 @@ def convert_to_kscf(mf, out=None):
     '''
     from pyscf.pbc import scf, dft
     if not isinstance(mf, scf.khf.KSCF):
+        assert isinstance(mf, scf.hf.SCF)
         known_cls = {
             dft.uks.UKS   : dft.kuks.KUKS  ,
             dft.roks.ROKS : dft.kroks.KROKS,
@@ -484,7 +488,7 @@ def convert_to_kscf(mf, out=None):
         }
         mf = mol_addons._object_without_soscf(mf, known_cls, False)
         if mf.mo_energy is not None:
-            if isinstance(mf, scf.uhf.UHF):
+            if mf.istype('UHF'):
                 mf.mo_occ = mf.mo_occ[:,numpy.newaxis]
                 mf.mo_coeff = mf.mo_coeff[:,numpy.newaxis]
                 mf.mo_energy = mf.mo_energy[:,numpy.newaxis]

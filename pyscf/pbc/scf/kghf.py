@@ -183,7 +183,7 @@ def _cast_mol_init_guess(fn):
         'guess DM ' + fn.__doc__)
     return fn_init_guess
 
-class KGHF(khf.KSCF, pbcghf.GHF):
+class KGHF(khf.KSCF):
     '''GHF class for PBCs.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)),
@@ -199,6 +199,8 @@ class KGHF(khf.KSCF, pbcghf.GHF):
     get_occ = get_occ
     analyze = khf.analyze
     convert_from_ = pbcghf.GHF.convert_from_
+
+    to_gpu = lib.to_gpu
 
     def get_hcore(self, cell=None, kpts=None):
         hcore = khf.KSCF.get_hcore(self, cell, kpts)

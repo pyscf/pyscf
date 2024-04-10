@@ -595,16 +595,16 @@ class CASSCF(casci.CASBase):
             Converge threshold.  Default is 1e-7
         conv_tol_grad : float
             Converge threshold for CI gradients and orbital rotation gradients.
-            Default is 1e-4
+            If not specified, it is set to sqrt(conv_tol).
         max_stepsize : float
             The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
-            Default is 0.03.
+            Default is 0.02.
         max_cycle_macro : int
             Max number of macro iterations.  Default is 50.
         max_cycle_micro : int
             Max number of micro iterations in each macro iteration.  Depending on
             systems, increasing this value might reduce the total macro
-            iterations.  Generally, 2 - 5 steps should be enough.  Default is 3.
+            iterations.  Generally, 2 - 5 steps should be enough.  Default is 4.
         small_rot_tol : float
             Threshold for orbital rotation to be considered small. If the largest orbital
             rotation is smaller than this value, the CI solver will restart from the
@@ -620,10 +620,10 @@ class CASSCF(casci.CASBase):
             Linear dependence threshold for AH solver.  Default is 1e-14.
         ah_start_tol : flat, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
-            This value is to control the start point. Default is 0.2.
+            This value is to control the start point. Default is 2.5.
         ah_start_cycle : int, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
-            This value is to control the start point. Default is 2.
+            This value is to control the start point. Default is 3.
 
             ``ah_conv_tol``, ``ah_max_cycle``, ``ah_lindep``, ``ah_start_tol`` and ``ah_start_cycle``
             can affect the accuracy and performance of CASSCF solver.  Lower
@@ -742,7 +742,7 @@ class CASSCF(casci.CASBase):
     extrasym = None
     callback = None
 
-    _keys = set((
+    _keys = {
         'max_stepsize', 'max_cycle_macro', 'max_cycle_micro', 'conv_tol',
         'conv_tol_grad', 'ah_level_shift', 'ah_conv_tol', 'ah_max_cycle',
         'ah_lindep', 'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
@@ -753,9 +753,9 @@ class CASSCF(casci.CASBase):
         'small_rot_tol', 'extrasym', 'callback',
         'frozen', 'chkfile', 'fcisolver', 'e_tot', 'e_cas', 'ci', 'mo_coeff',
         'mo_energy', 'converged',
-    ))
+    }
 
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None, frozen=None):
         casci.CASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 
@@ -1275,6 +1275,10 @@ To enable the solvent model for CASSCF, the following code needs to be called
         from pyscf.grad import sacasscf as sacasscf_grad
         return sacasscf_grad.Gradients (self, state=state)
 
+    def _state_average_nac_method(self):
+        from pyscf.nac import sacasscf as sacasscf_nac
+        return sacasscf_nac.NonAdiabaticCouplings(self)
+
     def newton(self):
         from pyscf.mcscf import newton_casscf
         from pyscf.mcscf.addons import StateAverageMCSCFSolver
@@ -1291,6 +1295,8 @@ To enable the solvent model for CASSCF, the following code needs to be called
     def reset(self, mol=None):
         casci.CASBase.reset(self, mol=mol)
         self._max_stepsize = None
+
+    to_gpu = lib.to_gpu
 
 scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
 scf.uhf.UHF.CASSCF = None

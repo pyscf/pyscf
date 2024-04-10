@@ -453,7 +453,7 @@ def get_init_guess(mol, key='minao'):
 class SCF(hf.SCF):
     '''The full X2C problem (scaler + soc terms) in j-adapted spinor basis'''
 
-    _keys = set(['with_x2c'])
+    _keys = {'with_x2c'}
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
@@ -659,6 +659,8 @@ class UHF(SCF):
         from pyscf.x2c import dft
         return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
 
+    to_gpu = lib.to_gpu
+
 X2C_UHF = UHF
 
 class RHF(SCF):
@@ -679,6 +681,8 @@ class RHF(SCF):
         '''
         from pyscf.x2c import dft
         return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
+
+    to_gpu = lib.to_gpu
 
 X2C_RHF = RHF
 
@@ -733,7 +737,7 @@ class X2C1E_GSCF(_X2C_SCF):
 
     __name_mixin__ = 'X2C1e'
 
-    _keys = set(['with_x2c'])
+    _keys = {'with_x2c'}
 
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)
@@ -798,6 +802,10 @@ class X2C1E_GSCF(_X2C_SCF):
 
     def to_ks(self, xc='HF'):
         raise NotImplementedError
+
+    def to_gpu(self):
+        obj = self.undo_x2c().to_gpu().x2c1e()
+        return lib.to_gpu(self, obj)
 
 
 def _uncontract_mol(mol, xuncontract=None, exp_drop=0.2):

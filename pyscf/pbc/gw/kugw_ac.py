@@ -86,6 +86,9 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
     uhf = scf.KUHF(gw.mol, gw.kpts, exxdiv=exxdiv)
     uhf.with_df = gw.with_df
     uhf.with_df._cderi = gw.with_df._cderi
+    if uhf.with_df._j_only:
+        logger.debug(gw, 'Rebuild CDERI for exchange integrals')
+        uhf.with_df.build(j_only=False)
     vk = uhf.get_veff(gw.mol,dm_kpts=dm)
     vj = uhf.get_j(gw.mol,dm_kpts=dm)
     vk[0] = vk[0] - (vj[0] + vj[1])
@@ -604,12 +607,12 @@ class KUGWAC(lib.StreamObject):
     # Whether applying finite size corrections
     fc = getattr(__config__, 'gw_gw_GW_fc', True)
 
-    _keys = set([
+    _keys = {
         'linearized', 'ac', 'fc', 'frozen', 'mol', 'with_df',
         'kpts', 'nkpts', 'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
-    ])
+    }
 
-    def __init__(self, mf, frozen=0):
+    def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -617,7 +620,7 @@ class KUGWAC(lib.StreamObject):
         self.max_memory = mf.max_memory
 
         #TODO: implement frozen orbs
-        if frozen > 0:
+        if frozen is not None and frozen > 0:
             raise NotImplementedError
         self.frozen = frozen
 
