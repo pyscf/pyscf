@@ -20,7 +20,10 @@
 Some helper functions
 '''
 
-import os, sys
+import os
+import sys
+import time
+import platform
 import warnings
 import tempfile
 import functools
@@ -29,6 +32,7 @@ import inspect
 import collections
 import ctypes
 import numpy
+import scipy
 import h5py
 from threading import Thread
 from multiprocessing import Queue, Process
@@ -37,7 +41,42 @@ try:
 except ImportError:
     ThreadPoolExecutor = None
 
-from pyscf.lib import param
+if sys.platform.startswith('linux'):
+    # Avoid too many threads being created in OMP loops.
+    # See issue https://github.com/pyscf/pyscf/issues/317
+    try:
+        from elftools.elf.elffile import ELFFile
+    except ImportError:
+        pass
+    else:
+        def _ldd(so_file):
+            libs = []
+            with open(so_file, 'rb') as f:
+                elf = ELFFile(f)
+                for seg in elf.iter_segments():
+                    if seg.header.p_type != 'PT_DYNAMIC':
+                        continue
+                    for t in seg.iter_tags():
+                        if t.entry.d_tag == 'DT_NEEDED':
+                            libs.append(t.needed)
+                    break
+            return libs
+
+        so_file = os.path.abspath(os.path.join(__file__, '..', 'libnp_helper.so'))
+        for p in _ldd(so_file):
+            if 'mkl' in p and 'thread' in p:
+                warnings.warn(f'PySCF C exteions are incompatible with {p}. '
+                              'MKL_NUM_THREADS is set to 1')
+                os.environ['MKL_NUM_THREADS'] = '1'
+                break
+            elif 'openblasp' in p or 'openblaso' in p:
+                warnings.warn(f'PySCF C exteions are incompatible with {p}. '
+                              'OPENBLAS_NUM_THREADS is set to 1')
+                os.environ['OPENBLAS_NUM_THREADS'] = '1'
+                break
+        del p, so_file, _ldd
+
+from pyscf.lib import parameters as param
 from pyscf import __config__
 
 CUBLAS = getattr(__config__, 'lib_cublas', False)
@@ -119,7 +158,7 @@ def num_threads(n=None):
         _np_helper.get_omp_threads.restype = ctypes.c_int
         return _np_helper.get_omp_threads()
 
-class with_omp_threads(object):
+class with_omp_threads:
     '''Using this macro to create a temporary context in which the number of
     OpenMP threads are set to the required value. When the program exits the
     context, the number OpenMP threads will be restored.
@@ -150,7 +189,7 @@ class with_omp_threads(object):
         if self.sys_threads is not None:
             num_threads(self.sys_threads)
 
-class with_multiproc_nproc(object):
+class with_multiproc_nproc:
     '''
     Using this macro to create a temporary context in which the number of
     multi-processing processes are set to the required value.
@@ -314,6 +353,16 @@ def prange_split(n_total, n_sections):
     div_points = numpy.array(section_sizes).cumsum()
     return zip(div_points[:-1], div_points[1:])
 
+izip = zip
+
+if sys.version_info > (3, 8):
+    from math import comb
+else:
+    import math
+    def comb(n, k):
+        if k < 0 or k > n:
+            return 0
+        return math.factorial(n) // math.factorial(n-k) // math.factorial(k)
 
 def map_with_prefetch(func, *iterables):
     '''
@@ -431,7 +480,7 @@ def square_mat_in_trilu_indices(n):
     tril2sq[idx[0],idx[1]] = tril2sq[idx[1],idx[0]] = numpy.arange(n*(n+1)//2)
     return tril2sq
 
-class capture_stdout(object):
+class capture_stdout:
     '''redirect all stdout (c printf & python print) into a string
 
     Examples:
@@ -467,7 +516,7 @@ class capture_stdout(object):
             return self.ftmp.file.read()
 ctypes_stdout = capture_stdout
 
-class quite_run(object):
+class quite_run:
     '''capture all stdout (c printf & python print) but output nothing
 
     Examples:
@@ -494,16 +543,22 @@ class quite_run(object):
 # this decorator lets me use methods as both static and instance methods
 # In contrast to classmethod, when obj.function() is called, the first
 # argument is obj in omnimethod rather than obj.__class__ in classmethod
-class omnimethod(object):
+class omnimethod:
     def __init__(self, func):
         self.func = func
 
     def __get__(self, instance, owner):
         return functools.partial(self.func, instance)
 
+def view(obj, cls):
+    '''New view of object with the same attributes.'''
+    new_obj = cls.__new__(cls)
+    new_obj.__dict__.update(obj.__dict__)
+    return new_obj
+
 
 SANITY_CHECK = getattr(__config__, 'SANITY_CHECK', True)
-class StreamObject(object):
+class StreamObject:
     '''For most methods, there are three stream functions to pipe computing stream:
 
     1 ``.set_`` function to update object attributes, eg
@@ -526,7 +581,8 @@ class StreamObject(object):
 
     verbose = 0
     stdout = sys.stdout
-    _keys = set(['verbose', 'stdout'])
+    # Store the keys appeared in the module.  It is used to check misinput attributes
+    _keys = {'output', 'verbose', 'stdout', 'max_memory'}
 
     def kernel(self, *args, **kwargs):
         '''
@@ -574,13 +630,14 @@ class StreamObject(object):
         if args:
             warnings.warn('method set() only supports keyword arguments.\n'
                           'Arguments %s are ignored.' % args)
-        #if getattr(self, '_keys', None):
-        #    for k,v in kwargs.items():
-        #        setattr(self, k, v)
-        #        if k not in self._keys:
-        #            sys.stderr.write('Warning: %s does not have attribute %s\n'
-        #                             % (self.__class__, k))
-        #else:
+        #keys_ref = set(self._keys)
+        #cls_keys = [cls._keys for cls in self.__class__.__mro__[:-1]
+        #            if hasattr(cls, '_keys')]
+        #keys_ref = keys_ref.union(*cls_keys)
+        #unknown_keys = set(kwargs).difference(keys_ref)
+        #if unknown_keys:
+        #    warnings.warn(f'{self.__class__} does not have attributes {unknown_keys}')
+
         for k,v in kwargs.items():
             setattr(self, k, v)
         return self
@@ -608,24 +665,18 @@ class StreamObject(object):
         return value of method set is the object itself.  This allows a series
         of functions/methods to be executed in pipe.
         '''
-        if (SANITY_CHECK and
-            self.verbose > 0 and  # logger.QUIET
-            getattr(self, '_keys', None)):
-            check_sanity(self, self._keys, self.stdout)
+        if SANITY_CHECK and self.verbose > 0:
+            cls_keys = [cls._keys for cls in self.__class__.__mro__[:-1]
+                        if hasattr(cls, '_keys')]
+            keys_ref = set(self._keys).union(*cls_keys)
+            check_sanity(self, keys_ref, self.stdout)
         return self
 
-    def view(self, cls):
-        '''New view of object with the same attributes.'''
-        obj = cls.__new__(cls)
-        obj.__dict__.update(self.__dict__)
-        return obj
+    view = view
 
-    def add_keys(self, **kwargs):
-        '''Add or update attributes of the object and register these attributes in ._keys'''
-        if kwargs:
-            self.__dict__.update(**kwargs)
-            self._keys = self._keys.union(kwargs.keys())
-        return self
+    def copy(self):
+        '''Returns a shallow copy'''
+        return self.view(self.__class__)
 
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
@@ -727,6 +778,12 @@ def module_method(fn, absences=None):
             if a is None: a = self.a
             if b is None: b = self.b
             return fn(a, b)
+
+    This function can be used to replace "staticmethod" when inserting a module
+    method into a class. In a child class, it allows one to call the method of a
+    base class with either "self.__class__.method_name(self, args)" or
+    "self.super().method_name(args)". For method created with "staticmethod",
+    calling "self.super().method_name(args)" is the only option.
     '''
     _locals = {}
     name = fn.__name__
@@ -790,33 +847,93 @@ def invalid_method(name):
     '''
     def fn(obj, *args, **kwargs):
         raise NotImplementedError(f'Method {name} invalid or not implemented')
+    fn.__name__ = name
     return fn
+
+@functools.lru_cache(None)
+def _define_class(name, bases):
+    return type(name, bases, {})
+
+def make_class(bases, name=None, attrs=None):
+    '''
+    Construct a class
+
+    class {name}(*bases):
+        __dict__ = attrs
+    '''
+    if name is None:
+        name = ''.join(getattr(x, '__name_mixin__', x.__name__) for x in bases)
+
+    cls = _define_class(name, bases)
+    cls.__name_mixin__ = name
+    if attrs is not None:
+        for key, val in attrs.items():
+            setattr(cls, key, val)
+    return cls
+
+def set_class(obj, bases, name=None, attrs=None):
+    '''Change the class of an object'''
+    cls = make_class(bases, name, attrs)
+    cls.__module__ = obj.__class__.__module__
+    obj.__class__ = cls
+    return obj
+
+def drop_class(cls, base_cls, name_mixin=None):
+    '''Recursively remove the first matched base_cls from cls MRO
+    '''
+    filter_bases = list(cls.__bases__)
+    force_rebuild = False
+    for i, base in enumerate(cls.__bases__):
+        if base == base_cls:
+            filter_bases[i] = None
+            break
+        elif issubclass(base, base_cls):
+            filter_bases[i] = cls_undressed = drop_class(base, base_cls, name_mixin)
+            force_rebuild = cls_undressed is not None
+            break
+    else:
+        raise RuntimeError(f'class {base_cls} not found in {cls} MRO')
+
+    filter_bases = [x for x in filter_bases if x is not None]
+    if len(filter_bases) < 1:
+        # cls is the singly inherited sub-class of base_cls
+        return None
+    elif not force_rebuild and len(filter_bases) == 1:
+        return filter_bases[0]
+
+    if name_mixin is None:
+        name_mixin = getattr(base_cls, '__name_mixin__', base_cls.__name__)
+    cls_name = cls.__name__.replace(name_mixin, '', 1)
+
+    # rebuild the dynamic_mixin class
+    attrs = {**cls.__dict__, '__name_mixin__': cls_name}
+    cls_undressed = type(cls_name, tuple(filter_bases), attrs)
+    return cls_undressed
+
+def replace_class(cls, old_cls, new_cls):
+    '''Replace the first matched class in MRO
+    '''
+    if cls == old_cls:
+        return new_cls
+
+    bases = list(cls.__bases__)
+    any_match = False
+    for i, base in enumerate(cls.__bases__):
+        if issubclass(base, old_cls):
+            bases[i] = replace_class(base, old_cls, new_cls)
+            any_match = True
+            break
+
+    if not any_match:
+        return cls
+
+    name = cls.__name__.replace(old_cls.__name__, new_cls.__name__)
+    attrs = {**cls.__dict__, '__name_mixin__': name}
+    return type(name, tuple(bases), attrs)
 
 def overwrite_mro(obj, mro):
     '''A hacky function to overwrite the __mro__ attribute'''
-    class HackMRO(type):
-        pass
-# Overwrite type.mro function so that Temp class can use the given mro
-    HackMRO.mro = lambda self: mro
-    #if sys.version_info < (3,):
-    #    class Temp(obj.__class__):
-    #        __metaclass__ = HackMRO
-    #else:
-    #    class Temp(obj.__class__, metaclass=HackMRO):
-    #        pass
-    Temp = HackMRO(obj.__class__.__name__, obj.__class__.__bases__, obj.__dict__)
-    obj = Temp()
-# Delete mro function otherwise all subclass of Temp are not able to
-# resolve the right mro
-    del (HackMRO.mro)
-    return obj
-
-def izip(*args):
-    '''python2 izip == python3 zip'''
-    if sys.version_info < (3,):
-        return itertools.izip(*args)
-    else:
-        return zip(*args)
+    raise DeprecationWarning
 
 class ProcessWithReturnValue(Process):
     def __init__(self, group=None, target=None, name=None, args=(),
@@ -900,7 +1017,7 @@ bg = background = bg_thread = background_thread
 bp = bg_process = background_process
 
 ASYNC_IO = getattr(__config__, 'ASYNC_IO', True)
-class call_in_background(object):
+class call_in_background:
     '''Within this macro, function(s) can be executed asynchronously (the
     given functions are executed in background).
 
@@ -1010,8 +1127,7 @@ class H5TmpFile(h5py.File):
     Kwargs:
         filename : str or None
             If a string is given, an HDF5 file of the given filename will be
-            created. The temporary file will exist even if the H5TmpFile
-            object is released.  If nothing is specified, the HDF5 temporary
+            created. If filename is not specified, the HDF5 temporary
             file will be deleted when the H5TmpFile object is released.
 
     The return object is an h5py.File object. The file will be automatically
@@ -1025,11 +1141,11 @@ class H5TmpFile(h5py.File):
     '''
     def __init__(self, filename=None, mode='a', *args, **kwargs):
         if filename is None:
-            tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
-            filename = tmpfile.name
-        h5py.File.__init__(self, filename, mode, *args, **kwargs)
-#FIXME: Does GC flush/close the HDF5 file when releasing the resource?
-# To make HDF5 file reusable, file has to be closed or flushed
+            with tempfile.NamedTemporaryFile(dir=param.TMPDIR) as tmpf:
+                h5py.File.__init__(self, tmpf.name, mode, *args, **kwargs)
+        else:
+            h5py.File.__init__(self, filename, mode, *args, **kwargs)
+
     def __del__(self):
         try:
             self.close()
@@ -1059,8 +1175,18 @@ def ndpointer(*args, **kwargs):
 
 
 # A tag to label the derived Scanner class
-class SinglePointScanner: pass
+class SinglePointScanner:
+    __name_mixin__ = '_Scanner'
+
+    def undo_scanner(self):
+        return view(self, drop_class(self.__class__, SinglePointScanner))
+
 class GradScanner:
+    __name_mixin__ = '_Scanner'
+
+    def undo_scanner(self):
+        return view(self, drop_class(self.__class__, GradScanner))
+
     def __init__(self, g):
         self.__dict__.update(g.__dict__)
         self.base = g.base.as_scanner()
@@ -1077,7 +1203,7 @@ class GradScanner:
         conv = getattr(self.base, 'converged', True)
         return conv
 
-class temporary_env(object):
+class temporary_env:
     '''Within the context of this macro, the attributes of the object are
     temporarily updated. When the program goes out of the scope of the
     context, the original value of each attribute will be restored.
@@ -1189,6 +1315,22 @@ def git_info(repo_path):
         pass
     return orig_head, head, branch
 
+def format_sys_info():
+    '''Format a list of system information for printing.'''
+    import pyscf
+    info = repo_info(os.path.join(__file__, '..', '..'))
+    result = [
+        f'System: {platform.uname()}  Threads {num_threads()}',
+        f'Python {sys.version}',
+        f'numpy {numpy.__version__}  scipy {scipy.__version__}',
+        f'Date: {time.ctime()}',
+        f'PySCF version {pyscf.__version__}',
+        f'PySCF path  {info["path"]}',
+    ]
+    if 'git' in info:
+        result.append(info['git'])
+    return result
+
 
 def isinteger(obj):
     '''
@@ -1227,71 +1369,75 @@ def isintsequence(obj):
             are_ints = are_ints and isinteger(i)
         return are_ints
 
+class _OmniObject:
+    '''Class with default attributes. When accessing an attribute that is not
+    initialized, a default value will be returned than raising an AttributeError.
+    '''
+    verbose = 0
+    max_memory = param.MAX_MEMORY
+    stdout = sys.stdout
 
-def ndarray_pointer_2d(array):
-    assert array.ndim == 2
-    assert array.flags.c_contiguous
+    def __init__(self, default_factory=None):
+        self._default = default_factory
 
-    ptr = (array.ctypes.data +
-           numpy.arange(array.shape[0])*array.strides[0]).astype(numpy.uintp)
-    ptr = ptr.ctypes.data_as(ctypes.c_void_p)
-    return ptr
+    def __getattr__(self, key):
+        return self._default
 
+# Many methods requires a mol or mf object in initialization.
+# These objects can be as the default arguments for these methods.
+# Then class can be instantiated easily like cls(omniobj) in the following
+# to_gpu function.
+omniobj = _OmniObject()
+omniobj._built = True
+omniobj.mol = omniobj
+omniobj._scf = omniobj
+omniobj.base = omniobj
 
-def get_cublas_dtype(dtype):
-    if CUBLAS_SINGLE_PREC:
-        if dtype == numpy.float64:
-            return numpy.float32
-        elif dtype == numpy.complex128:
-            return numpy.complex64
-        else:
-            return dtype
-    else:
-        return dtype
+def to_gpu(method, out=None):
+    '''Convert a method to its corresponding GPU variant, and recursively
+    converts all attributes of a method to cupy objects or gpu4pyscf objects.
+    '''
+    import cupy
+    from pyscf import gto
 
+    # If a GPU class inherits a CPU code, the "to_gpu" method may be resolved
+    # and available in the GPU class. Skip the conversion in this case.
+    if method.__module__.startswith('gpu4pyscf'):
+        return method
 
-# In the future, we should use something like jax.DeviceArray
-def device_put(a, device=None):
-    '''Put array on device.'''
-    if device is not None:
-        raise NotImplementedError
-    if CUBLAS:
-        if isinstance(a, cupy.ndarray):
-            a_on_device = a
-        else:
-            dtype = get_cublas_dtype(a.dtype)
-            a_on_device = cupy.asarray(a, dtype=dtype)
-    else:
-        a_on_device = a
-    return a_on_device
+    if out is None:
+        try:
+            import gpu4pyscf
+        except ImportError:
+            print('Library gpu4pyscf not found. You can install this package via\n'
+                  '    pip install gpu4pyscf-cuda11x\n'
+                  'See more installation info at https://github.com/pyscf/gpu4pyscf')
+            raise
 
+        # TODO: Is it necessary to implement scanner in gpu4pyscf?
+        if isinstance(method, (SinglePointScanner, GradScanner)):
+            method = method.undo_scanner()
 
-def device_get(a_on_device, dtype=None):
-    '''Get array from device.'''
-    if CUBLAS:
-        if isinstance(a_on_device, cupy.ndarray):
-            a = numpy.asarray(a_on_device.get(), dtype=dtype)
-        else:
-            a = numpy.asarray(a_on_device, dtype=dtype)
-    else:
-        a = numpy.asarray(a_on_device, dtype=dtype)
-    return a
+        from importlib import import_module
+        mod = import_module(method.__module__.replace('pyscf', 'gpu4pyscf'))
+        cls = getattr(mod, method.__class__.__name__)
+        # A temporary GPU instance. This ensures to initialize private
+        # attributes that are only available for GPU code.
+        out = cls(omniobj)
 
-try:
-    from threadpoolctl import ThreadpoolController
-except ImportError:
-    class _ThreadpoolLimiter():
-        def __init__(self, controller, *, limits=None, user_api=None):
-            pass
-        def __enter__(self):
-            return self
-        def __exit__(self, type, value, traceback):
-            pass
+    # Convert only the keys that are defined in the corresponding GPU class
+    cls_keys = [getattr(cls, '_keys', ()) for cls in out.__class__.__mro__[:-1]]
+    out_keys = set(out.__dict__).union(*cls_keys)
+    # Only overwrite the attributes of the same name.
+    keys = set(method.__dict__).intersection(out_keys)
 
-    class ThreadpoolController():
-        def __init__(self):
-            pass
-        def limit(self, *, limits=None, user_api=None):
-            return _ThreadpoolLimiter(self, limits=limits, user_api=user_api)
+    for key in keys:
+        val = getattr(method, key)
+        if isinstance(val, numpy.ndarray):
+            val = cupy.asarray(val)
+        elif hasattr(val, 'to_gpu'):
+            val = val.to_gpu()
+        setattr(out, key, val)
+    out.reset()
+    return out
 
-threadpool_controller = ThreadpoolController()

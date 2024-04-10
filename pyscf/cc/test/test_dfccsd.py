@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import copy
 import numpy
 from functools import reduce
 
@@ -24,7 +23,7 @@ from pyscf import cc
 from pyscf.cc import dfccsd, eom_rccsd
 
 def make_mycc1():
-    mf1 = copy.copy(mf)
+    mf1 = mf.copy()
     no = mol.nelectron // 2
     n = mol.nao_nr()
     nv = n - no
@@ -258,4 +257,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for DFCCSD")
     unittest.main()
-

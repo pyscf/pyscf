@@ -639,6 +639,8 @@ class KUCCSD(uccsd.UCCSD):
 
     max_space = getattr(__config__, 'pbc_cc_kccsd_uhf_KUCCSD_max_space', 20)
 
+    _keys = {'kpts', 'mo_energy', 'khelper', 'max_space', 'direct'}
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         uccsd.UCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
@@ -646,9 +648,6 @@ class KUCCSD(uccsd.UCCSD):
         self.mo_energy = mf.mo_energy
         self.khelper = kpts_helper.KptsHelper(mf.cell, self.kpts)
         self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
-
-        keys = set(['kpts', 'mo_energy', 'khelper', 'max_space', 'direct'])
-        self._keys = self._keys.union(keys)
 
     @property
     def nkpts(self):
@@ -761,6 +760,8 @@ class KUCCSD(uccsd.UCCSD):
         if nmo is None: nmo = self.nmo
         if nkpts is None: nkpts = self.nkpts
         return vector_to_amplitudes(vec, nmo, nocc, nkpts)
+
+    to_gpu = lib.to_gpu
 
 UCCSD = KUCCSD
 
@@ -1113,183 +1114,3 @@ def _make_df_eris(cc, mo_coeff=None):
 
 
 scf.kuhf.KUHF.CCSD = lib.class_as_method(KUCCSD)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    from pyscf import lo
-
-    cell = gto.Cell()
-    cell.atom='''
-    He 0.000000000000   0.000000000000   0.000000000000
-    He 1.685068664391   1.685068664391   1.685068664391
-    '''
-    #cell.basis = [[0, (1., 1.)], [1, (.5, 1.)]]
-    cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
-    cell.a = '''
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000'''
-    cell.unit = 'B'
-    cell.mesh = [13]*3
-    cell.build()
-
-    np.random.seed(2)
-    # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
-    kmf = scf.KUHF(cell, kpts=cell.make_kpts([1,1,3]), exxdiv=None)
-    nmo = cell.nao_nr()
-    kmf.mo_occ = np.zeros((2,3,nmo))
-    kmf.mo_occ[0,:,:3] = 1
-    kmf.mo_occ[1,:,:1] = 1
-    kmf.mo_energy = np.arange(nmo) + np.random.random((2,3,nmo)) * .3
-    kmf.mo_energy[kmf.mo_occ == 0] += 2
-
-    mo = (np.random.random((2,3,nmo,nmo)) +
-          np.random.random((2,3,nmo,nmo))*1j - .5-.5j)
-    s = kmf.get_ovlp()
-    kmf.mo_coeff = np.empty_like(mo)
-    nkpts = len(kmf.kpts)
-    for k in range(nkpts):
-        kmf.mo_coeff[0,k] = lo.orth.vec_lowdin(mo[0,k], s[k])
-        kmf.mo_coeff[1,k] = lo.orth.vec_lowdin(mo[1,k], s[k])
-
-    def rand_t1_t2(mycc):
-        nkpts = mycc.nkpts
-        nocca, noccb = mycc.nocc
-        nmoa, nmob = mycc.nmo
-        nvira, nvirb = nmoa - nocca, nmob - noccb
-        np.random.seed(1)
-        t1a = (np.random.random((nkpts,nocca,nvira)) +
-               np.random.random((nkpts,nocca,nvira))*1j - .5-.5j)
-        t1b = (np.random.random((nkpts,noccb,nvirb)) +
-               np.random.random((nkpts,noccb,nvirb))*1j - .5-.5j)
-        t2aa = (np.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira)) +
-                np.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira))*1j - .5-.5j)
-        kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
-        t2aa = t2aa - t2aa.transpose(1,0,2,4,3,5,6)
-        tmp = t2aa.copy()
-        for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
-            kl = kconserv[ki, kk, kj]
-            t2aa[ki,kj,kk] = t2aa[ki,kj,kk] - tmp[ki,kj,kl].transpose(0,1,3,2)
-        t2ab = (np.random.random((nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb)) +
-                np.random.random((nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb))*1j - .5-.5j)
-        t2bb = (np.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)) +
-                np.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb))*1j - .5-.5j)
-        t2bb = t2bb - t2bb.transpose(1,0,2,4,3,5,6)
-        tmp = t2bb.copy()
-        for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
-            kl = kconserv[ki, kk, kj]
-            t2bb[ki,kj,kk] = t2bb[ki,kj,kk] - tmp[ki,kj,kl].transpose(0,1,3,2)
-
-        t1 = (t1a, t1b)
-        t2 = (t2aa, t2ab, t2bb)
-        return t1, t2
-
-    mycc = KUCCSD(kmf)
-    eris = mycc.ao2mo()
-    t1, t2 = rand_t1_t2(mycc)
-    Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.fp(Ht1[0]) - (2.2677885702176339-2.5150764056992041j))
-    print(lib.fp(Ht1[1]) - (-51.643438947846086+526.58026126100458j))
-    print(lib.fp(Ht2[0]) - (-29.490813482748258-8.7509143690136018j))
-    print(lib.fp(Ht2[1]) - (2256.0440056839416-193.16480896707569j))
-    print(lib.fp(Ht2[2]) - (-250.59447681063182-397.57189085666982j))
-
-    kmf.mo_occ[:] = 0
-    kmf.mo_occ[:,:,:2] = 1
-    mycc = KUCCSD(kmf)
-    eris = mycc.ao2mo()
-    t1, t2 = rand_t1_t2(mycc)
-    Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.fp(Ht1[0]) - (5.4622516572705662+1.990046725028729j))
-    print(lib.fp(Ht1[1]) - (4.8801120611799043-5.9940463787453488j))
-    print(lib.fp(Ht2[0]) - (-192.38864512375193+305.14191018543983j))
-    print(lib.fp(Ht2[1]) - (23085.044505825954-11527.802302550244j))
-    print(lib.fp(Ht2[2]) - (115.57932548288559-40.888597453928604j))
-
-    from pyscf.pbc.cc import kccsd
-    kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
-    kccsd_eris = kccsd._make_eris_incore(kgcc, kgcc._scf.mo_coeff)
-    r1 = kgcc.spatial2spin(t1)
-    r2 = kgcc.spatial2spin(t2)
-    ge = kccsd.energy(kgcc, r1, r2, kccsd_eris)
-    r1, r2 = kgcc.update_amps(r1, r2, kccsd_eris)
-    ue = energy(mycc, t1, t2, eris)
-    print(abs(ge - ue))
-    print(abs(r1 - kgcc.spatial2spin(Ht1)).max())
-    print(abs(r2 - kgcc.spatial2spin(Ht2)).max())
-
-    kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)]])
-    mycc = KUCCSD(kmf)
-    eris = _make_df_eris(mycc, mycc.mo_coeff)
-    t1, t2 = rand_t1_t2(mycc)
-    Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-
-    print(lib.fp(Ht1[0]) - (6.9341372555790013+0.87313546297025901j))
-    print(lib.fp(Ht1[1]) - (6.7538005829391992-0.95702422534126796j))
-    print(lib.fp(Ht2[0]) - (-509.24544842179876+448.00925776269855j))
-    print(lib.fp(Ht2[1]) - (107.5960392010511+40.869216223808067j)  )
-    print(lib.fp(Ht2[2]) - (-196.75910296082139+218.53005038057515j))
-    kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
-    kccsd_eris = kccsd._make_eris_incore(kgcc, kgcc._scf.mo_coeff)
-    r1 = kgcc.spatial2spin(t1)
-    r2 = kgcc.spatial2spin(t2)
-    ge = kccsd.energy(kgcc, r1, r2, kccsd_eris)
-    r1, r2 = kgcc.update_amps(r1, r2, kccsd_eris)
-    print(abs(r1 - kgcc.spatial2spin(Ht1)).max())
-    print(abs(r2 - kgcc.spatial2spin(Ht2)).max())
-
-    print(all([abs(lib.fp(eris.oooo) - (-0.18290712163391809-0.13839081039521306j)  )<1e-8,
-               abs(lib.fp(eris.ooOO) - (-0.084752145202964035-0.28496525042110676j) )<1e-8,
-               #abs(lib.fp(eris.OOoo) - (0.43054922768629345-0.27990237216969871j)   )<1e-8,
-               abs(lib.fp(eris.OOOO) - (-0.2941475969103261-0.047247498899840978j)  )<1e-8,
-               abs(lib.fp(eris.ooov) - (0.23381463349517045-0.11703340936984277j)   )<1e-8,
-               abs(lib.fp(eris.ooOV) - (-0.052655392703214066+0.69533309442418556j) )<1e-8,
-               abs(lib.fp(eris.OOov) - (-0.2111361247200903+0.85087916975274647j)   )<1e-8,
-               abs(lib.fp(eris.OOOV) - (-0.36995992208047412-0.18887278030885621j)  )<1e-8,
-               abs(lib.fp(eris.oovv) - (0.21107397525051516+0.0048714991438174871j) )<1e-8,
-               abs(lib.fp(eris.ooVV) - (-0.076411225687065987+0.11080438166425896j) )<1e-8,
-               abs(lib.fp(eris.OOvv) - (-0.17880337626095003-0.24174716216954206j)  )<1e-8,
-               abs(lib.fp(eris.OOVV) - (0.059186286356424908+0.68433866387500164j)  )<1e-8,
-               abs(lib.fp(eris.ovov) - (0.15402983765151051+0.064359681685222214j)  )<1e-8,
-               abs(lib.fp(eris.ovOV) - (-0.10697649196044598+0.30351249676253234j)  )<1e-8,
-               #abs(lib.fp(eris.OVov) - (-0.17619329728836752-0.56585020976035816j)  )<1e-8,
-               abs(lib.fp(eris.OVOV) - (-0.63963235318492118+0.69863219317718828j)  )<1e-8,
-               abs(lib.fp(eris.voov) - (-0.24137641647339092+0.18676684336011531j)  )<1e-8,
-               abs(lib.fp(eris.voOV) - (0.19257709151227204+0.38929027819406414j)   )<1e-8,
-               #abs(lib.fp(eris.VOov) - (0.07632606729926053-0.70350947950650355j)   )<1e-8,
-               abs(lib.fp(eris.VOOV) - (-0.47970203195500816+0.46735207193861927j)  )<1e-8,
-               abs(lib.fp(eris.vovv) - (-0.1342049915673903-0.23391327821719513j)   )<1e-8,
-               abs(lib.fp(eris.voVV) - (-0.28989635223866056+0.9644368822688475j)   )<1e-8,
-               abs(lib.fp(eris.VOvv) - (-0.32428269235420271+0.0029847254383674748j))<1e-8,
-               abs(lib.fp(eris.VOVV) - (0.45031779746222456-0.36858577475752041j)   )<1e-8]))
-
-    eris = _make_eris_outcore(mycc, mycc.mo_coeff)
-    print(all([abs(lib.fp(eris.oooo) - (-0.18290712163391809-0.13839081039521306j)  )<1e-8,
-               abs(lib.fp(eris.ooOO) - (-0.084752145202964035-0.28496525042110676j) )<1e-8,
-               #abs(lib.fp(eris.OOoo) - (0.43054922768629345-0.27990237216969871j)   )<1e-8,
-               abs(lib.fp(eris.OOOO) - (-0.2941475969103261-0.047247498899840978j)  )<1e-8,
-               abs(lib.fp(eris.ooov) - (0.23381463349517045-0.11703340936984277j)   )<1e-8,
-               abs(lib.fp(eris.ooOV) - (-0.052655392703214066+0.69533309442418556j) )<1e-8,
-               abs(lib.fp(eris.OOov) - (-0.2111361247200903+0.85087916975274647j)   )<1e-8,
-               abs(lib.fp(eris.OOOV) - (-0.36995992208047412-0.18887278030885621j)  )<1e-8,
-               abs(lib.fp(eris.oovv) - (0.21107397525051516+0.0048714991438174871j) )<1e-8,
-               abs(lib.fp(eris.ooVV) - (-0.076411225687065987+0.11080438166425896j) )<1e-8,
-               abs(lib.fp(eris.OOvv) - (-0.17880337626095003-0.24174716216954206j)  )<1e-8,
-               abs(lib.fp(eris.OOVV) - (0.059186286356424908+0.68433866387500164j)  )<1e-8,
-               abs(lib.fp(eris.ovov) - (0.15402983765151051+0.064359681685222214j)  )<1e-8,
-               abs(lib.fp(eris.ovOV) - (-0.10697649196044598+0.30351249676253234j)  )<1e-8,
-               #abs(lib.fp(eris.OVov) - (-0.17619329728836752-0.56585020976035816j)  )<1e-8,
-               abs(lib.fp(eris.OVOV) - (-0.63963235318492118+0.69863219317718828j)  )<1e-8,
-               abs(lib.fp(eris.voov) - (-0.24137641647339092+0.18676684336011531j)  )<1e-8,
-               abs(lib.fp(eris.voOV) - (0.19257709151227204+0.38929027819406414j)   )<1e-8,
-               #abs(lib.fp(eris.VOov) - (0.07632606729926053-0.70350947950650355j)   )<1e-8,
-               abs(lib.fp(eris.VOOV) - (-0.47970203195500816+0.46735207193861927j)  )<1e-8,
-               abs(lib.fp(eris.vovv) - (-0.1342049915673903-0.23391327821719513j)   )<1e-8,
-               abs(lib.fp(eris.voVV) - (-0.28989635223866056+0.9644368822688475j)   )<1e-8,
-               abs(lib.fp(eris.VOvv) - (-0.32428269235420271+0.0029847254383674748j))<1e-8,
-               abs(lib.fp(eris.VOVV) - (0.45031779746222456-0.36858577475752041j)   )<1e-8,
-               abs(lib.fp(eris.vvvv) - (-0.080512851258903173-0.2868384266725581j)  )<1e-8,
-               abs(lib.fp(eris.vvVV) - (-0.5137063762484736+1.1036785801263898j)    )<1e-8,
-               #abs(lib.fp(eris.VVvv) - (0.16468487082491939+0.25730725586992997j)   )<1e-8,
-               abs(lib.fp(eris.VVVV) - (-0.56714875196802295+0.058636785679170501j) )<1e-8]))

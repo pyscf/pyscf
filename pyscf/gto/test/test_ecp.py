@@ -325,6 +325,70 @@ Na F
         mat2 = mol.set_geom_('Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.051').intor('ECPscalar_ipnuc')
         self.assertAlmostEqual(abs(mat0.reshape(3,3,nao,nao)[:,2] - (mat2 - mat1) / 0.002).max(), 0, 5)
 
+    def test_ecp_f_in_core(self):
+        mol = gto.M(atom='Eu1, 0.00, 0.00, 0.00',
+                    basis={'Eu': gto.basis.parse('''
+Eu    S
+    0.749719700E+01   -0.288775043E+00
+    0.617255600E+01    0.708008105E+00
+    0.260816600E+01   -0.136569920E+01
+Eu    S
+    0.530389000E+00    0.100000000E+01
+Eu    S
+    0.254033000E+00    0.100000000E+01
+Eu    S
+    0.522020000E-01    0.100000000E+01
+Eu    S
+    0.221100000E-01    0.100000000E+01
+Eu    P
+    0.399434200E+01    0.110821693E+01
+    0.350361700E+01   -0.152518191E+01
+    0.722399000E+00    0.119866293E+01
+Eu    P
+    0.324354000E+00    0.100000000E+01
+Eu    P
+    0.127842000E+00    0.100000000E+01
+Eu    P
+    0.330280000E-01    0.100000000E+01
+Eu    D
+    0.206170800E+01   -0.127297005E+00
+    0.967971000E+00    0.377785014E+00
+    0.369101000E+00    0.765795028E+00
+Eu    D
+    0.128958000E+00    0.100000000E+01
+Eu    D
+    0.419270000E-01    0.100000000E+01
+                    ''')},
+                    ecp={'Eu': gto.basis.parse_ecp('''
+Eu nelec  53
+Eu ul
+2      1.0000000000        0.0000000000
+Eu S
+2      5.1852000000      172.7978960000
+2      2.5926000000      -10.0922600000
+Eu P
+2      4.3588000000      111.3150270000
+2      2.1794000000       -3.4025580000
+Eu D
+2      2.8902000000       41.8677290000
+2      1.4451000000       -1.2874330000
+Eu F
+2      5.3988000000      -63.6010500000
+                    ''')}, charge=2, verbose=0)
+        mf = scf.RHF(mol)
+        mf.get_init_guess()
+        self.assertEqual(mol.ao_labels()[0], '0 Eu1 5s    ')
+        self.assertAlmostEqual(lib.fp(mf.get_hcore()), 22.59028455662168)
+
+    def test_ecp_f_in_valence(self):
+        mol = gto.M(atom='U, 0.00, 0.00, 0.00',
+                    basis={'U': 'crenbl'}, ecp={'U': 'crenbl'},
+                    charge=3, spin=3, verbose=0)
+        mf = scf.ROHF(mol)
+        mf.get_init_guess()
+        self.assertEqual(mol.ao_labels()[40], '0 U 5f-3  ')
+        self.assertAlmostEqual(lib.fp(mf.get_hcore()), -55.38627201912257)
+
 
 if __name__ == '__main__':
     print("Full Tests for ECP")

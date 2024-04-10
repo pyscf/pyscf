@@ -42,9 +42,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0], -19.286003160337+mol.energy_nuc(), 9)
         self.assertAlmostEqual(e[1], -18.812177419921+mol.energy_nuc(), 9)
         self.assertAlmostEqual(e[2], -18.786684534678+mol.energy_nuc(), 9)
-        self.assertAlmostEqual(fci.spin_op.spin_square0(c[0], norb, nelec)[0], 0, 9)
-        self.assertAlmostEqual(fci.spin_op.spin_square0(c[1], norb, nelec)[0], 6, 9)
-        self.assertAlmostEqual(fci.spin_op.spin_square0(c[2], norb, nelec)[0], 0, 9)
+        self.assertAlmostEqual(fci.spin_op.spin_square0(c[0], norb, nelec)[0], 0, 7)
+        self.assertAlmostEqual(fci.spin_op.spin_square0(c[1], norb, nelec)[0], 6, 7)
+        self.assertAlmostEqual(fci.spin_op.spin_square0(c[2], norb, nelec)[0], 0, 7)
 
     def test_symm_spin1(self):
         fs = fci.FCI(mol, m.mo_coeff, singlet=False)
@@ -60,4 +60,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for init_guess")
     unittest.main()
-

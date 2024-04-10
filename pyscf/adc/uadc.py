@@ -113,6 +113,17 @@ class UADC(lib.StreamObject):
     '''
     incore_complete = getattr(__config__, 'adc_uadc_UADC_incore_complete', False)
 
+    _keys = {
+        'tol_residual','conv_tol', 'e_corr', 'method',
+        'method_type', 'mo_coeff', 'mol', 'mo_energy_b',
+        'scf_energy', 'e_tot', 't1', 'frozen',
+        'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle',
+        'incore_complete', 'mo_energy_a', 'mo_energy_b', 'with_df',
+        'compute_mpn_energy', 'compute_spec', 'compute_properties',
+        'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
+        'E', 'U', 'P', 'X', 'ncvs',
+    }
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf import gto
 
@@ -165,14 +176,6 @@ class UADC(lib.StreamObject):
         self.P = None
         self.X = (None,)
         self.ncvs = None
-
-        keys = set(('tol_residual','conv_tol', 'e_corr', 'method',
-                    'method_type', 'mo_coeff', 'mol', 'mo_energy_b',
-                    'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen',
-                    'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ',
-                    'max_cycle'))
-
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     compute_amplitudes = uadc_amplitudes.compute_amplitudes
     compute_energy = uadc_amplitudes.compute_energy

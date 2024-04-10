@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(dft SHARED 
+add_library(dft SHARED
   CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c
   numint_uniform_grid.c xc_deriv.c nr_numint_sparse.c
-  multigrid.c grid_common.c
-  grid_collocate.c grid_integrate.c grid_hfx.c utils.c
+  multigrid.c grid_common.c grid_collocate.c grid_integrate.c utils.c
 )
 add_dependencies(dft cgto cvhf np_helper pbc)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,15 +21,39 @@ parse CP2K PP format, following parse_nwchem.py
 '''
 
 import sys
+import re
+from pyscf.lib.exceptions import BasisNotFoundError
 import numpy as np
 
-def parse(string):
+def parse(string, symb=None):
     '''Parse the pseudo text *string* which is in CP2K format, return an internal
     basis format which can be assigned to :attr:`Cell.pseudo`
     Lines started with # are ignored.
+
+    Args:
+        string : Blank linke and the lines of "PSEUDOPOTENTIAL" and "END" will be ignored
+
+    Examples:
+
+    >>> cell = gto.Cell()
+    >>> cell.pseudo = {'C': pyscf.gto.basis.pseudo_cp2k.parse("""
+    ... #PSEUDOPOTENTIAL
+    ... C GTH-BLYP-q4
+    ...     2    2
+    ...      0.33806609    2    -9.13626871     1.42925956
+    ...     2
+    ...      0.30232223    1     9.66551228
+    ...      0.28637912    0
+    ... """)}
     '''
-    pseudotxt = [x.strip() for x in string.splitlines()
-                 if x.strip() and 'END' not in x and '#PSEUDOPOTENTIAL' not in x]
+    if symb is not None:
+        raw_data = list(filter(None, re.split('#PSEUDOPOTENTIAL', string)))
+        pseudotxt = _search_gthpp_block(raw_data, symb)
+        if not pseudotxt:
+            raise BasisNotFoundError(f'Pseudopotential not found for {symb}.')
+    else:
+        pseudotxt = [x.strip() for x in string.splitlines()
+                     if x.strip() and 'END' not in x and '#PSEUDOPOTENTIAL' not in x]
     return _parse(pseudotxt)
 
 def load(pseudofile, symb, suffix=None):
@@ -78,7 +102,13 @@ def search_seg(pseudofile, symb, suffix=None):
     fin = open(pseudofile, 'r')
     fdata = fin.read().split('#PSEUDOPOTENTIAL')
     fin.close()
-    for dat in fdata[1:]:
+    dat = _search_gthpp_block(fdata[1:], symb, suffix)
+    if not dat:
+        raise BasisNotFoundError(f'Pseudopotential for {symb} in {pseudofile}')
+    return dat
+
+def _search_gthpp_block(raw_data, symb, suffix=None):
+    for dat in raw_data:
         dat0 = dat.split(None, 1)
         if dat0 and dat0[0] == symb:
             dat = [x.strip() for x in dat.splitlines()
@@ -90,7 +120,7 @@ def search_seg(pseudofile, symb, suffix=None):
             else:
                 if any(suffix == x.split('-')[-1] for x in dat[0].split()):
                     return dat
-    raise RuntimeError('Pseudopotential not found for  %s  in  %s' % (symb, pseudofile))
+    return None
 
 if __name__ == '__main__':
     args = sys.argv[1:]

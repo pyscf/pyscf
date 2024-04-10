@@ -22,30 +22,7 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.gto.pseudo import pp_int
-
-BOHR = 0.529177249
-disp = 0.0001
-
-cell = pbcgto.Cell()
-cell.verbose = 0
-cell.atom = 'H 0 0 0; Na 0 0 0.8'
-cell.a = np.diag([6,6,6])
-cell.basis='gth-szv'
-cell.pseudo='gth-pade'
-cell.ke_cutoff=200
-cell.build()
-
-cellp = cell.copy()
-cellp.atom = 'H 0 0 0; Na 0 0 0.8001'
-cellp.build()
-
-cellm = cell.copy()
-cellm.atom = 'H 0 0 0; Na 0 0 0.7999'
-cellm.build()
-
-def tearDownModule():
-    global cell, cellp, cellm
-    del cell, cellp, cellm
+from pyscf.data.nist import BOHR
 
 def get_pp_loc_part2(cell, kpt=np.zeros(3)):
     coords = gen_grid.gen_uniform_grids(cell)
@@ -206,7 +183,7 @@ He
      0.32235865    2     2.25670239    -0.39677748
                                         0.93894690
                                                  ''')}
-        cell.precision = 1e-9
+        cell.precision = 1e-11
         cell.build()
         np.random.seed(9)
         kpt = np.random.random(3)
@@ -238,7 +215,7 @@ He
         cell.pseudo = {'C':'gth-pade'}
         cell.a = np.eye(3) * 2.5
         cell.mesh = [30] * 3
-        cell.precision = 1e-11
+        cell.precision = 1e-9
         cell.build()
         np.random.seed(1)
         kpt = np.random.random(3)
@@ -267,32 +244,39 @@ He
         v1 = pseudo.get_pp(cell, k)
         self.assertAlmostEqual(abs(v0-v1).max(), 0, 6)
 
-    def test_pp_loc_part2_nuc_grad(self):
-        vpp = pp_int.vpploc_part2_nuc_grad_generator(cell)
-        v_anl = vpp(1)[2]
-        vp = pp_int.get_pp_loc_part2(cellp)
-        vm = pp_int.get_pp_loc_part2(cellm)
-        v_fd = (vp - vm) / (disp * 2 / BOHR)
-        self.assertAlmostEqual(abs(v_anl - v_fd).max(), 0, 7)
+    def test_pp_nuc_grad(self):
+        cell = pbcgto.Cell()
+        cell.atom = 'H 0 0 0; Na 0 0 0.8'
+        cell.a = np.diag([6,6,6])
+        cell.basis='gth-szv'
+        cell.pseudo='gth-pade'
+        cell.ke_cutoff=200
+        cell.build()
+
+        cellp = cell.copy()
+        cellp.atom = 'H 0 0 0; Na 0 0 0.8001'
+        cellp.build()
+
+        cellm = cell.copy()
+        cellm.atom = 'H 0 0 0; Na 0 0 0.7999'
+        cellm.build()
 
         np.random.seed(1)
         dm = np.random.rand(cell.nao, cell.nao)
         dm = (dm + dm.T) / 2
+
+        # local_part2
+        vp = pp_int.get_pp_loc_part2(cellp)
+        vm = pp_int.get_pp_loc_part2(cellm)
+        v_fd = (vp - vm) / (0.0002 / BOHR)
         grad = pp_int.vpploc_part2_nuc_grad(cell, dm)[1,2]
         grad_fd = np.einsum("ij,ij->", v_fd, dm)
         self.assertAlmostEqual(abs(grad - grad_fd), 0, 7)
 
-    def test_pp_nl_nuc_grad(self):
-        vppnl = pp_int.vppnl_nuc_grad_generator(cell)
-        v_anl = vppnl(1)[2]
+        # non-local
         vp = pp_int.get_pp_nl(cellp)
         vm = pp_int.get_pp_nl(cellm)
-        v_fd = (vp - vm) / (disp * 2 / BOHR)
-        self.assertAlmostEqual(abs(v_anl - v_fd).max(), 0, 7)
-
-        np.random.seed(1)
-        dm = np.random.rand(cell.nao, cell.nao)
-        dm = (dm + dm.T) / 2
+        v_fd = (vp - vm) / (0.0002 / BOHR)
         grad = pp_int.vppnl_nuc_grad(cell, dm)[1,2]
         grad_fd = np.einsum("ij,ij->", v_fd, dm)
         self.assertAlmostEqual(abs(grad - grad_fd), 0, 7)

@@ -19,7 +19,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.pbc import gto as pgto
 import pyscf.pbc.dft as pdft
-from pyscf.pbc.df import fft, aft, mdf
+from pyscf.pbc.df import fft, aft, mdf, rsdf_builder, gdf_builder
 
 
 
@@ -29,7 +29,6 @@ from pyscf.pbc.df import fft, aft, mdf
 # port from ao2mo/eris.py
 #
 ##################################################
-from pyscf import lib
 from pyscf.pbc import lib as pbclib
 from pyscf.pbc.dft.gen_grid import gen_uniform_grids
 from pyscf.pbc.dft.numint import eval_ao
@@ -307,11 +306,10 @@ def setUpModule():
     global cell, cell1, kdf0, kpts, kpt0
     cell = pgto.Cell()
     cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
-    cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
-                  'C' :'gth-szv',}
+    cell.basis = {'He': [(0, (1., 1)), (1, (.4, 1))],
+                  'C' :[[0, [1., 1]]],}
     cell.pseudo = {'C':'gth-pade'}
     cell.a = np.eye(3) * 2.5
-    cell.mesh = [21] * 3
     cell.build()
     np.random.seed(1)
     kpts = np.random.random((4,3))
@@ -334,39 +332,45 @@ def tearDownModule():
     del cell, cell1, kdf0
 
 class KnownValues(unittest.TestCase):
-    def test_get_pp_loc_part1_high_cost(self):
-        df = aft.AFTDF(cell)
-        v1 = aft.get_pp_loc_part1(df, kpts[0])
-        self.assertAlmostEqual(lib.fp(v1), (-6.0893491060887159+0.19823828749533859j), 8)
+    def test_aft_get_pp(self):
+        v0 = fft.FFTDF(cell, kpts[0]).get_pp()
+        v1 = aft.AFTDF(cell, kpts[0]).get_pp()
+        v2 = rsdf_builder._RSNucBuilder(cell, kpts[0]).get_pp()
+        v3 = gdf_builder._CCNucBuilder(cell, kpts[0]).get_pp()
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 8)
+        self.assertAlmostEqual(abs(v0 - v2).max(), 0, 8)
+        self.assertAlmostEqual(abs(v0 - v3).max(), 0, 8)
+        self.assertAlmostEqual(lib.fp(v0) - (-1.387194815780133+0.007570691824169233j), 0, 8)
+
+        kpts4 = cell.make_kpts([4,1,1])
+        v0 = fft.FFTDF(cell, kpts4).get_pp()
+        v1 = aft.AFTDF(cell, kpts4).get_pp()
+        v2 = rsdf_builder._RSNucBuilder(cell, kpts4).get_pp()
+        v3 = gdf_builder._CCNucBuilder(cell, kpts4).get_pp()
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 8)
+        self.assertAlmostEqual(abs(v0 - v2).max(), 0, 8)
+        self.assertAlmostEqual(abs(v0 - v3).max(), 0, 8)
+        self.assertAlmostEqual(lib.fp(v0) - (-5.7070290795125445-0.00038722541238732697j), 0, 8)
 
     def test_aft_get_nuc(self):
-        df = aft.AFTDF(cell)
-        v1 = df.get_nuc(kpts[0])
-        self.assertAlmostEqual(lib.fp(v1), (-5.764786312608102+0.19126292955145852j), 8)
+        v0 = fft.FFTDF(cell, kpts[0]).get_nuc()
+        v1 = aft.AFTDF(cell, kpts[0]).get_nuc()
+        v2 = rsdf_builder._RSNucBuilder(cell, kpts[0]).get_nuc()
+        v3 = gdf_builder._CCNucBuilder(cell, kpts[0]).get_nuc()
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 8)
+        self.assertAlmostEqual(abs(v0 - v2).max(), 0, 8)
+        self.assertAlmostEqual(abs(v0 - v3).max(), 0, 8)
+        self.assertAlmostEqual(lib.fp(v0) - (-3.027291421291857+0.027413088538826163j), 0, 8)
 
-    def test_aft_get_pp(self):
-        v0 = pgto.pseudo.get_pp(cell, kpts[0])
-        v1 = aft.AFTDF(cell).get_pp(kpts)
-        self.assertTrue(np.allclose(v0, v1[0], atol=1e-5, rtol=1e-5))
-        self.assertAlmostEqual(lib.fp(v1[0]), (-5.6240305085898807+0.22094834207603817j), 8)
-
-        v0 = pgto.pseudo.get_pp(cell, kpts[1])
-        self.assertTrue(np.allclose(v0, v1[1], atol=1e-5, rtol=1e-5))
-        self.assertAlmostEqual(lib.fp(v1[1]), (-5.53877585793+1.043933371359j) ,8)
-        self.assertAlmostEqual(lib.fp(v1[2]), (-6.05309558678+0.281728966073j), 8)
-        self.assertAlmostEqual(lib.fp(v1[3]), (-5.60115995450+0.275973062529j), 8)
-
-    def test_aft_get_pp_high_cost(self):
-        cell = pgto.Cell()
-        cell.verbose = 0
-        cell.atom = 'C 0 0 0; C 1 1 1'
-        cell.a = numpy.diag([4, 4, 4])
-        cell.basis = 'gth-szv'
-        cell.pseudo = 'gth-pade'
-        cell.mesh = [20]*3
-        cell.build()
-        v1 = aft.AFTDF(cell).get_pp([.25]*3)
-        self.assertAlmostEqual(lib.fp(v1), -0.0533131779366407-0.11895124492447073j, 9)
+        kpts4 = cell.make_kpts([4,1,1])
+        v0 = fft.FFTDF(cell, kpts4).get_nuc()
+        v1 = aft.AFTDF(cell, kpts4).get_nuc()
+        v2 = rsdf_builder._RSNucBuilder(cell, kpts4).get_nuc()
+        v3 = gdf_builder._CCNucBuilder(cell, kpts4).get_nuc()
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 8)
+        self.assertAlmostEqual(abs(v0 - v2).max(), 0, 8)
+        self.assertAlmostEqual(abs(v0 - v3).max(), 0, 8)
+        self.assertAlmostEqual(lib.fp(v0) - (-9.558999451044691-0.0030483827024668946j), 0, 8)
 
     def test_aft_get_ao_eri(self):
         df0 = fft.FFTDF(cell1)
@@ -384,6 +388,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 8)
 
     def test_aft_get_ao_eri_high_cost(self):
+        cell = pgto.Cell()
+        cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
+        cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
+                      'C' :'gth-szv',}
+        cell.pseudo = {'C':'gth-pade'}
+        cell.a = np.eye(3) * 2.5
+        cell.mesh = [21] * 3
+        cell.build()
         df0 = fft.FFTDF(cell)
         df = aft.AFTDF(cell)
         eri0 = df0.get_ao_eri(compact=True)
@@ -403,14 +415,15 @@ class KnownValues(unittest.TestCase):
 
     def test_get_eri_gamma(self):
         odf0 = mdf.MDF(cell1)
+        odf0.mesh = [15]* 3
         odf = aft.AFTDF(cell1)
         ref = odf0.get_eri()
         eri0000 = odf.get_eri(compact=True)
         self.assertTrue(eri0000.dtype == numpy.double)
-        self.assertTrue(np.allclose(eri0000, ref, atol=1e-6, rtol=1e-6))
+        self.assertAlmostEqual(abs(eri0000-ref).max(), 0, 7)
         self.assertAlmostEqual(lib.fp(eri0000), 0.23714016293926865, 8)
 
-    def test_get_eri_gamma(self):
+    def test_get_eri_gamma1(self):
         odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         eri1111 = odf.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))

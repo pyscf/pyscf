@@ -18,40 +18,39 @@
 
 #include <stdint.h>
 
-#if !defined(HAVE_DEFINED_BVKENV_H)
+#ifndef HAVE_DEFINED_BVKENV_H
 #define HAVE_DEFINED_BVKENV_H
-typedef struct
-{
-    // number of primitive cells in bvk-cell
-    int ncells;
-    // number of repeated images associated to cell.rcut
-    int nimgs;
-    int nkpts;
-    int nbands;
-    // nbas of primitive cell
-    int nbasp;
-    int ncomp;
-    // number of grids (or planewaves)
-    int nGv;
-    // length of kpt_ij_idx
-    int kpt_ij_size;
-    // indicates how to map basis in bvk-cell to supmol basis
-    int *sh_loc;
-    int *ao_loc;
-    // Map from supmol._bas to [bvk_cell-id, rs_basis-id, image-id]
-    int *bas_map;
-    int *shls_slice;
-    // index to get a sbuset of nkpts x nkpts output
-    int *kpt_ij_idx;
-    double *expLkR;
-    double *expLkI;
+typedef struct {
+        // number of primitive cells in bvk-cell
+        int ncells;
+        // number of repeated images associated to cell.rcut
+        int nimgs;
+        int nkpts;
+        int nbands;
+        // nbas of primitive cell
+        int nbasp;
+        int ncomp;
+        // number of grids (or planewaves)
+        int nGv;
+        // length of kpt_ij_idx
+        int kpt_ij_size;
+        // indicates how to map basis in bvk-cell to supmol basis
+        int *seg_loc;
+        int *seg2sh;
+        int *ao_loc;
+        int *shls_slice;
+        // index to get a sbuset of nkpts x nkpts output
+        int *kpt_ij_idx;
+        double *expLkR;
+        double *expLkI;
 
-    // Integral mask of SupMole based on s-function overlap
-    int8_t *ovlp_mask;
-    // Integral screening condition
-    double *q_cond;
-    // cutoff for schwarz condtion
-    double cutoff;
+        // Integral mask of SupMole based on s-function overlap
+        int8_t *ovlp_mask;
+        // Integral screening condition ~log((ij|ij))/2
+        int16_t *qindex;
+        // cutoff for schwarz condtion
+        int cutoff;
+        float eta;
 
     // parameters for ft_ao
     double *Gv;
@@ -61,6 +60,11 @@ typedef struct
 
     int (*intor)();
 } BVKEnvs;
+
+// It is preferable to use the float16 type to save log value. fp16 type is
+// platform dependent. Here log value is saved in int16_t instead with an
+// adjustment factor 32 to ensure accuracy.
+#define LOG_ADJUST      32
 #endif
 
 #include "pbc_isdf.h"

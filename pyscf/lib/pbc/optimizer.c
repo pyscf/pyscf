@@ -72,7 +72,7 @@ int PBCrcut_screen(int *shls, PBCOpt *opt, int *atm, int *bas, double *env)
         return (rr < opt->rrcut[ish] || rr < opt->rrcut[jsh]);
 }
 
-int PBCrcut_screen_dist(int *shls, PBCOpt *opt, int *atm, int *bas, double *env)
+int PBCrcut_screen_loose(int *shls, PBCOpt *opt, int *atm, int *bas, double *env)
 {
         if (opt == NULL) {
                 return 1; // no screen
@@ -104,14 +104,14 @@ void PBCset_rcut_cond(PBCOpt *opt, double *rcut,
         }
 }
 
-void PBCset_rcut_cond_dist(PBCOpt *opt, double *rcut,
-                           int *atm, int natm, int *bas, int nbas, double *env)
+void PBCset_rcut_cond_loose(PBCOpt *opt, double *rcut,
+                            int *atm, int natm, int *bas, int nbas, double *env)
 {
         if (opt->rcut != NULL) {
                 free(opt->rcut);
         }
         opt->rcut = (double *)malloc(sizeof(double) * nbas);
-        opt->fprescreen = &PBCrcut_screen_dist;
+        opt->fprescreen = &PBCrcut_screen_loose;
 
         int i;
         for (i = 0; i < nbas; i++) {

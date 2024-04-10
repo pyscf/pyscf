@@ -1,12 +1,10 @@
-from os.path import expanduser
-home_dir = expanduser("~")
-f = open(home_dir+'/.pyscf_conf.py', 'a')
-# use cupy backend for eig and fft
-#f.write('lib_cublas = True')
+#from os.path import expanduser
+#home_dir = expanduser("~")
+#f = open(home_dir+'/.pyscf_conf.py', 'a')
 # use FFTW for fft, this requires to compile the FFTW library
 # cmake -DENABLE_FFTW=ON -DBUILD_FFTW=ON
-f.write('pbc_tools_pbc_fft_engine=\'FFTW\'')
-f.close()
+#f.write('pbc_tools_pbc_fft_engine=\'FFTW\'')
+#f.close()
 
 import numpy
 import pyscf
@@ -215,13 +213,13 @@ H      11.281750       5.653082       9.374494
 H      12.103020       8.841164      10.006916
 H      11.491592       8.576221       8.647557
 """
-cell.basis='gth-tzv2p'
-cell.ke_cutoff=200  # kinetic energy cutoff in a.u.
-cell.max_memory=20000 # 20 Gb
-cell.precision=1e-6 # integral precision
-cell.pseudo='gth-pade'
-cell.verbose=4
-cell.rcut_by_shell_radius=True # integral screening based on shell radii
+cell.basis = 'gth-tzv2p'
+cell.ke_cutoff = 200  # kinetic energy cutoff in a.u.
+cell.max_memory = 8000 # in MB
+cell.precision = 1e-6 # integral precision
+cell.pseudo = 'gth-pade'
+cell.verbose = 4
+cell.use_loose_rcut = True # integral screening based on shell radii
 cell.use_particle_mesh_ewald = True # use particle mesh ewald for nuclear repulsion
 cell.build()
 #cell = pbc.tools.super_cell(cell, [1,2,2]) #build super cell by replicating unit cell
@@ -229,7 +227,7 @@ cell.build()
 mf=pbcdft.RKS(cell)
 #mf.xc = "LDA, VWN"
 mf.xc = "PBE,PBE"
-mf.init_guess='atom' # atom guess is fast
+mf.init_guess = 'atom' # atom guess is fast
 mf.with_df = multigrid.MultiGridFFTDF2(cell)
 mf.with_df.ngrids = 4 # number of sets of grid points
 mf.kernel()

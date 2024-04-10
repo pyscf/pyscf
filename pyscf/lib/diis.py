@@ -36,7 +36,7 @@ BLOCK_SIZE  = getattr(__config__, 'lib_diis_block_size', 20000000)  # ~ 160/320 
 # C2DIIS, IJQC, 45, 31 (1993); DOI:10.1002/qua.560450106
 # SCF-EDIIS, JCP 116, 8255 (2002); DOI:10.1063/1.1470195
 
-class DIIS(object):
+class DIIS:
     '''Direct inversion in the iterative subspace method.
 
     Attributes:
@@ -334,8 +334,9 @@ class DIIS(object):
         self._H[1:nd+1,1:nd+1] = e_mat
         return self
 
+    to_gpu = misc.to_gpu
+
 
 def restore(filename):
     '''Restore/construct diis object based on a diis file'''
     return DIIS().restore(filename)
-

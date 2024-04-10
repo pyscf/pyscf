@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import unittest
+import tempfile
 import numpy
 from pyscf import gto
 from pyscf import lib
@@ -81,7 +82,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(method.scf(), -2.9070540942168002, 9)
 
         m = mol.UKS()
-        m.xc = 'b3lyp'
+        m.xc = 'b3lyp5'
         self.assertAlmostEqual(m.scf(), -2.89992555753, 9)
 
     def test_nr_lda_1e(self):
@@ -190,6 +191,21 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(udhf.to_dks(), dft.dks.DKS))
         self.assertTrue(isinstance(udks.to_dhf(), scf.dhf.DHF))
         self.assertTrue(isinstance(udks.to_dks('pbe'), dft.dks.DKS))
+
+    # issue 1986
+    def test_init_guess_chkfile(self):
+        with tempfile.NamedTemporaryFile() as tmpf:
+            mol = gto.M(atom='He 0 0 0', basis='631g', charge=1, spin=1)
+            mf = dft.RKS(mol)
+            mf.chkfile = tmpf.name
+            e1 = mf.kernel()
+            mf = dft.RKS(mol)
+            mf.init_guess = 'chkfile'
+            mf.chkfile = tmpf.name
+            mf.max_cycle = 1
+            e2 = mf.kernel()
+            self.assertAlmostEqual(e1, e2, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for He")

@@ -73,7 +73,7 @@ class KnownValues(unittest.TestCase):
 
     def test_hybrid_grad(self):
         mf = dft.KUKS(cell, kpts)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf.exxdiv = None
         mf.conv_tol = 1e-10
         mf.conv_tol_grad = 1e-6

@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 import scipy.linalg
 import unittest
@@ -95,6 +94,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm1), 0.6442338252028256, 7)
         dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='huckel')
         self.assertAlmostEqual(lib.fp(dm2), 0.6174062069308063, 7)
+
+    def test_init_guess_mod_huckel(self):
+        dm1 = mf.init_guess_by_mod_huckel(mol, breaksym=False)
+        self.assertAlmostEqual(lib.fp(dm1), 0.575004422279537, 7)
+        dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='mod_huckel')
+        self.assertAlmostEqual(lib.fp(dm2), 0.601086728278398, 7)
 
     def test_1e(self):
         mf = scf.uhf.HF1e(mol)
@@ -312,7 +317,7 @@ class KnownValues(unittest.TestCase):
         (pop, chg), dip = mf.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 3.2031790129016922, 6)
 
-        mf1 = copy.copy(n2mf)
+        mf1 = n2mf.copy()
         (pop, chg), dip = n2mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 4.5467414321488357, 6)
         self.assertAlmostEqual(numpy.linalg.norm(dip), 0, 9)
@@ -394,14 +399,14 @@ H     0    0.757    0.587'''
     def test_damping(self):
         nao = mol.nao_nr()
         numpy.random.seed(1)
-        s = scf.hf.get_ovlp(mol)
-        d = numpy.random.random((nao,nao))
-        d = (d + d.T) * 2
-        vhf = 0
-        f = scf.uhf.get_fock(mf, scf.hf.get_hcore(mol), s, vhf, d, cycle=0,
-                             diis_start_cycle=2, damp_factor=0.5)
-        self.assertAlmostEqual(numpy.linalg.norm(f[0]), 23361.854064083178, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(f[1]), 23361.854064083178, 9)
+        f = numpy.asarray([scf.hf.get_hcore(mol)]*2)
+        df  = numpy.random.rand(2,nao,nao)
+        f_prev = f + df
+        damp = 0.3
+        f_damp = scf.uhf.get_fock(mf, h1e=0, s1e=0, vhf=f, dm=0, cycle=0,
+                                 diis_start_cycle=2, damp_factor=damp, fock_last=f_prev)
+        self.assertAlmostEqual(abs(f_damp[0] - (f[0]*(1-damp) + f_prev[0]*damp)).max(), 0, 9)
+        self.assertAlmostEqual(abs(f_damp[1] - (f[1]*(1-damp) + f_prev[1]*damp)).max(), 0, 9)
 
     def test_get_irrep_nelec(self):
         fock = n2mf.get_fock()

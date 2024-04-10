@@ -84,12 +84,12 @@ def pivoted_cholesky_python(A, tol=-1.0, lower=False):
     N = A.shape[0]
     assert (A.shape == (N, N))
 
-    D = numpy.diag(A).copy()
+    D = numpy.diag(A.real).copy()
     if tol < 0:
         machine_epsilon = numpy.finfo(numpy.double).eps
         tol = N * machine_epsilon * numpy.amax(numpy.diag(A))
 
-    L = numpy.zeros((N, N))
+    L = numpy.zeros_like(A)
     piv = numpy.arange(N)
     rank = 0
     for k in range(N):
@@ -101,10 +101,10 @@ def pivoted_cholesky_python(A, tol=-1.0, lower=False):
             break
         rank += 1
         L[k, k] = numpy.sqrt(D[k])
-        L[k+1:, k] = (A[piv[k+1:], piv[k]] - numpy.dot(L[k+1:, :k], L[k, :k])) / L[k, k]
-        D[k+1:] -= L[k+1:, k] ** 2
+        L[k+1:, k] = (A[piv[k+1:], piv[k]] - numpy.dot(L[k+1:, :k], L[k, :k].conj())) / L[k, k]
+        D[k+1:] -= abs(L[k+1:, k]) ** 2
 
     if lower:
         return L, piv, rank
     else:
-        return L.T, piv, rank
+        return L.conj().T, piv, rank

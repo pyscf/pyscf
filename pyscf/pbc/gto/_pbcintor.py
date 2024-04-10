@@ -21,7 +21,7 @@ libpbc = lib.load_library('libpbc')
 def _fpointer(name):
     return ctypes.addressof(getattr(libpbc, name))
 
-class PBCOpt(object):
+class PBCOpt:
     def __init__(self, cell):
         self._this = ctypes.POINTER(_CPBCOpt)()
         natm = ctypes.c_int(cell._atm.shape[0])
@@ -33,9 +33,9 @@ class PBCOpt(object):
 
     def init_rcut_cond(self, cell, precision=None):
         if precision is None: precision = cell.precision
-        if cell.rcut_by_shell_radius:
+        if cell.use_loose_rcut:
             rcut = cell.rcut_by_shells(precision)
-            fn_set_rcut_cond = getattr(libpbc, 'PBCset_rcut_cond_dist')
+            fn_set_rcut_cond = getattr(libpbc, 'PBCset_rcut_cond_loose')
         else:
             rcut = numpy.array([cell.bas_rcut(ib, precision)
                                 for ib in range(cell.nbas)])

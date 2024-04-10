@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
+# Copyright 2021-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.pbc import tools
-from pyscf.pbc.gto.cell import _cut_mesh_for_ewald
 
 libpbc = lib.load_library('libpbc')
 
@@ -80,10 +79,8 @@ def bspline(u, ng, n=4, deriv=0):
     return M, b, idx
 
 def _get_ewald_direct(cell, ew_eta=None, ew_cut=None):
-    if ew_eta is None:
-        ew_eta = cell.get_ewald_params()[0]
-    if ew_cut is None:
-        ew_cut = cell.get_ewald_params()[1]
+    if ew_eta is None or ew_cut is None:
+        ew_eta, ew_cut = cell.get_ewald_params()
 
     chargs = np.asarray(cell.atom_charges(), order='C', dtype=float)
     coords = np.asarray(cell.atom_coords(), order='C')
@@ -102,10 +99,8 @@ def _get_ewald_direct(cell, ew_eta=None, ew_cut=None):
     return ewovrl[0]
 
 def _get_ewald_direct_nuc_grad(cell, ew_eta=None, ew_cut=None):
-    if ew_eta is None:
-        ew_eta = cell.get_ewald_params()[0]
-    if ew_cut is None:
-        ew_cut = cell.get_ewald_params()[1]
+    if ew_eta is None or ew_cut is None:
+        ew_eta, ew_cut = cell.get_ewald_params()
 
     chargs = np.asarray(cell.atom_charges(), order='C', dtype=float)
     coords = np.asarray(cell.atom_coords(), order='C')
@@ -124,26 +119,26 @@ def _get_ewald_direct_nuc_grad(cell, ew_eta=None, ew_cut=None):
     return grad
 
 
-#XXX The default interpolation order may be too high
+# FIXME The default interpolation order may be too high
 def particle_mesh_ewald(cell, ew_eta=None, ew_cut=None,
                         order=INTERPOLATION_ORDER):
     if cell.dimension != 3:
         raise NotImplementedError("Particle mesh ewald only works for 3D.")
 
-    if ew_eta is None:
-        ew_eta = cell.get_ewald_params()[0]
-    if ew_cut is None:
-        ew_cut = cell.get_ewald_params()[1]
-
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
+    natm = len(coords)
+
+    if ew_eta is None or ew_cut is None:
+        ew_eta, ew_cut = cell.get_ewald_params()
+    log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
+    ke_cutoff = -2*ew_eta**2*log_precision
+    mesh = cell.cutoff_to_mesh(ke_cutoff)
 
     ewovrl = _get_ewald_direct(cell, ew_eta, ew_cut)
     ewself  = -.5 * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
     if cell.dimension == 3:
         ewself += -.5 * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
-
-    mesh = _cut_mesh_for_ewald(cell, cell.mesh)
 
     b = cell.reciprocal_vectors(norm_to=1)
     u = np.dot(coords, b.T) * mesh[None,:]
@@ -155,11 +150,11 @@ def particle_mesh_ewald(cell, ew_eta=None, ew_cut=None,
     idx = np.asarray(idx).T
     idy = np.asarray(idy).T
     idz = np.asarray(idz).T
-    Mx_s = Mx[np.indices(idx.shape)[0], idx]
-    My_s = My[np.indices(idy.shape)[0], idy]
-    Mz_s = Mz[np.indices(idz.shape)[0], idz]
+    Mx_s = Mx[np.arange(natm)[:,None], idx]
+    My_s = My[np.arange(natm)[:,None], idy]
+    Mz_s = Mz[np.arange(natm)[:,None], idz]
 
-    #Q = np.einsum('i,ix,iy,iz->xyz', chargs, Mx, My, Mz)
+    #:Q = np.einsum('i,ix,iy,iz->xyz', chargs, Mx, My, Mz)
     Q = np.zeros([*mesh])
     for ia in range(len(chargs)):
         Q_s = np.einsum('x,y,z->xyz', Mx_s[ia], My_s[ia], Mz_s[ia])
@@ -168,7 +163,7 @@ def particle_mesh_ewald(cell, ew_eta=None, ew_cut=None,
     B = np.einsum('x,y,z->xyz', bx*bx.conj(), by*by.conj(), bz*bz.conj())
 
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = lib.multiply_sum(Gv, Gv, axis=1)
+    absG2 = np.einsum('ix,ix->i', Gv, Gv)
     absG2[absG2==0] = 1e200
     coulG = 4*np.pi / absG2
     C = weights * coulG * np.exp(-absG2/(4*ew_eta**2))
@@ -186,16 +181,16 @@ def particle_mesh_ewald_nuc_grad(cell, ew_eta=None, ew_cut=None,
     if cell.dimension != 3:
         raise NotImplementedError("Particle mesh ewald only works for 3D.")
 
-    if ew_eta is None:
-        ew_eta = cell.get_ewald_params()[0]
-    if ew_cut is None:
-        ew_cut = cell.get_ewald_params()[1]
-
-    grad_dir = _get_ewald_direct_nuc_grad(cell, ew_eta, ew_cut)
-
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
-    mesh = _cut_mesh_for_ewald(cell, cell.mesh)
+
+    if ew_eta is None or ew_cut is None:
+        ew_eta, ew_cut = cell.get_ewald_params()
+    log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
+    ke_cutoff = -2*ew_eta**2*log_precision
+    mesh = cell.cutoff_to_mesh(ke_cutoff)
+
+    grad_dir = _get_ewald_direct_nuc_grad(cell, ew_eta, ew_cut)
 
     b = cell.reciprocal_vectors(norm_to=1)
     u = np.dot(coords, b.T) * mesh[None,:]
@@ -222,7 +217,7 @@ def particle_mesh_ewald_nuc_grad(cell, ew_eta=None, ew_cut=None,
     B = np.einsum('x,y,z->xyz', bx*bx.conj(), by*by.conj(), bz*bz.conj())
 
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = lib.multiply_sum(Gv, Gv, axis=1)
+    absG2 = np.einsum('ix,ix->i', Gv, Gv)
     absG2[absG2==0] = 1e200
     coulG = 4*np.pi / absG2
     C = weights * coulG * np.exp(-absG2/(4*ew_eta**2))
@@ -259,10 +254,14 @@ def particle_mesh_ewald_nuc_grad(cell, ew_eta=None, ew_cut=None,
     return grad
 
 def ewald_nuc_grad(cell, ew_eta=None, ew_cut=None):
-    if ew_eta is None:
-        ew_eta = cell.get_ewald_params()[0]
-    if ew_cut is None:
-        ew_cut = cell.get_ewald_params()[1]
+    chargs = np.asarray(cell.atom_charges(), order='C', dtype=float)
+    coords = np.asarray(cell.atom_coords(), order='C')
+
+    if ew_eta is None or ew_cut is None:
+        ew_eta, ew_cut = cell.get_ewald_params()
+    log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
+    ke_cutoff = -2*ew_eta**2*log_precision
+    mesh = cell.cutoff_to_mesh(ke_cutoff)
 
     if cell.dimension == 3 and cell.use_particle_mesh_ewald:
         return particle_mesh_ewald_nuc_grad(cell, ew_eta=ew_eta, ew_cut=ew_cut)
@@ -270,9 +269,6 @@ def ewald_nuc_grad(cell, ew_eta=None, ew_cut=None):
     grad_dir = _get_ewald_direct_nuc_grad(cell, ew_eta, ew_cut)
     grad_rec = np.zeros_like(grad_dir, order="C")
 
-    chargs = np.asarray(cell.atom_charges(), order='C', dtype=float)
-    coords = np.asarray(cell.atom_coords(), order='C')
-    mesh = _cut_mesh_for_ewald(cell, cell.mesh)
     Gv, _, weights = cell.get_Gv_weights(mesh)
     fn = getattr(libpbc, "ewald_gs_nuc_grad")
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
@@ -281,8 +277,7 @@ def ewald_nuc_grad(cell, ew_eta=None, ew_cut=None):
         if mem_avail <= 0:
             logger.warn(cell, "Not enough memory for computing ewald force.")
         blksize = min(ngrids, max(mesh[2], int(mem_avail*1e6 / ((2+cell.natm*2)*8))))
-        for ig0 in range(0, ngrids, blksize):
-            ig1 = min(ngrids, ig0+blksize)
+        for ig0, ig1 in lib.prange(0, ngrids, blksize):
             ngrid_sub = ig1 - ig0
             Gv_sub = np.asarray(Gv[ig0:ig1], order="C")
             fn(grad_rec.ctypes.data_as(ctypes.c_void_p),
@@ -296,22 +291,3 @@ def ewald_nuc_grad(cell, ew_eta=None, ew_cut=None):
 
     grad = grad_dir + grad_rec
     return grad
-
-
-if __name__ == "__main__":
-    from pyscf.pbc import gto as pbcgto
-    cell = pbcgto.Cell()
-    cell.a = np.diag([12.,]*3)
-    cell.atom = '''
-        O          5.84560        5.21649        5.10372
-        H          6.30941        5.30070        5.92953
-        H          4.91429        5.26674        5.28886
-    '''
-    cell.ke_cutoff = 200
-    cell.pseudo = 'gth-pade'
-    cell.verbose = 5
-    cell.build()
-
-    g0 = ewald_nuc_grad(cell)
-    g1 = particle_mesh_ewald_nuc_grad(cell)
-    print(abs(g1-g0).max())

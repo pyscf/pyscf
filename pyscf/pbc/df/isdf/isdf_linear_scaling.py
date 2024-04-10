@@ -1387,7 +1387,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
-C = 15
+C = 25
 
 from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
@@ -1443,7 +1443,7 @@ if __name__ == '__main__':
     # prim_partition = [[0], [1], [2], [3]]
     prim_partition = [[0, 1, 2, 3]]
     
-    Ls = [2, 1, 1]
+    Ls = [1, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)

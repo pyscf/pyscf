@@ -21,52 +21,11 @@
 #include <math.h>
 #include <complex.h>
 #include "cint.h"
+#include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
-
-//#define ATOM_OF         0
-//#define ANG_OF          1
-#define RADI_POWER      3
-#define SO_TYPE_OF      4
-
-#define ECP_LMAX        5
-//#define PTR_EXP         5
-//#define PTR_COEFF       6
-#define SIM_ZERO        1e-50
-#define EXPCUTOFF       39   // 1e-17
-#define CUTOFF          460  // ~ 1e200
-#define CLOSE_ENOUGH(x, y)      (fabs(x-y) < 1e-12*fabs(y) || fabs(x-y) < 1e-12)
-#define SQUARE(r)       (r[0]*r[0]+r[1]*r[1]+r[2]*r[2])
-#define CART_CUM        (455+1) // upto l = 12
-#define K_TAYLOR_MAX    7
-#define K_TAB_COL       24      // >= (7*2+1+K_TAYLOR_MAX)
-#define K_TAB_ENTRIES   400
-#define K_TAB_INTERVAL  (16./K_TAB_ENTRIES)    // [0,16], interval 0.04
-#define MAX(X,Y)        ((X)>(Y)?(X):(Y))
-#define MALLOC_INSTACK(var, n) \
-                var = (void *)cache; \
-                cache = (void *)(((uintptr_t)(var + (n)) + 7) & (-(uintptr_t)8));
-#define MARK_STACK      cache0 = cache;
-#define RESTORE_STACK   cache = cache0;
-
-// Held in env, to get *ecpbas, necpbas
-#define AS_ECPBAS_OFFSET        18
-#define AS_NECPBAS              19
-
-
-// for radial grids
-#define LEVEL0          5
-//#define LEVEL_MAX       11      // 2047 points
-#define LEVEL_MAX       11
+#include "gto/nr_ecp.h"
 
 double CINTcommon_fac_sp(int);
-
-typedef struct {
-    double *u_ecp;
-} ECPOpt;
-
-typedef int Function_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
-                          int *atm, int natm, int *bas, int nbas, double *env,
-                          ECPOpt *opt, double *cache);
 
 static double _sph_ine_tab[] = { // 400x24
 9.802640211919197e-01, 6.534919212092035e-03, 2.613937811451498e-05, 7.468346329123935e-08, 1.659625812043017e-10, 3.017493035919202e-13, 4.642287455711235e-16, 6.189706898282851e-19, 7.281999097680386e-22, 7.665254523625293e-25, 7.300236357712470e-28, 6.348027199385843e-31, 5.078418750076879e-34, 3.761789744992798e-37, 2.594336600846831e-40, 1.673764894480139e-43, 1.014402615043443e-46, 5.796584581226479e-50, 3.133288094277013e-53, 1.606814005366913e-56, 7.838115320992611e-60, 3.645634279400473e-63, 1.620281595519583e-66, 6.894814102547425e-70,
@@ -5361,7 +5320,7 @@ static int check_3c_overlap(int *shls, int *atm, int *bas, double *env,
                 kprim = ecpbas[csh*BAS_SLOTS+NPRIM_OF];
                 ak = env + ecpbas[csh*BAS_SLOTS+PTR_EXP];
 
-                // Test the last primitive funciton only because the basis
+                // Test the last primitive function only because the basis
                 // functions are sorted so that the last one has the smallest
                 // exponent.
                 aijk = aij + ak[kprim-1];
@@ -5392,7 +5351,6 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const int nfi = (li+1) * (li+2) / 2;
         const int nfj = (lj+1) * (lj+2) / 2;
         const int di = nfi * nci;
-        const int ngctr = nci * ncj * nfi * nfj;
         const double *ri = env + atm[PTR_COORD+bas[ATOM_OF+ish*BAS_SLOTS]*ATM_SLOTS];
         const double *rj = env + atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
         const double D0 = 0;
@@ -5436,8 +5394,6 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         MALLOC_INSTACK(plast, d2);
         int8_t *converged;
         MALLOC_INSTACK(converged, nci*ncj*lilj1);
-
-        for (i = 0; i < ngctr; i++) { gctr[i] = 0; }
 
         for (iloc = 0; iloc < nslots; iloc++) {
                 lc = ecpbas[ANG_OF+ecploc[iloc]*BAS_SLOTS];
@@ -5647,8 +5603,6 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 n = ecpbas[ATOM_OF +i*BAS_SLOTS];
                 ecp_lmax[n] = MAX(ecp_lmax[n], ecpbas[ANG_OF +i*BAS_SLOTS]);
         }
-
-        for (i = 0; i < ngctr*4; i++) { gctr[i] = 0; }
 
         for (iloc = 0; iloc < nslots; iloc++) {
                 if (ecpbas[SO_TYPE_OF+ecploc[iloc]*BAS_SLOTS] != 1) {
@@ -5868,7 +5822,6 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
         const int nfi = (li+1) * (li+2) / 2;
         const int nfj = (lj+1) * (lj+2) / 2;
-        const int ngctr = nci * ncj * nfi * nfj;
         const double *ai = env + bas[PTR_EXP+ish*BAS_SLOTS];
         const double *aj = env + bas[PTR_EXP+jsh*BAS_SLOTS];
         const double *ci = env + bas[PTR_COEFF+ish*BAS_SLOTS];
@@ -5916,7 +5869,6 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         int8_t *converged;
         MALLOC_INSTACK(converged, npi*npj);
 
-        for (i = 0; i < ngctr; i++) { gctr[i] = 0; }
         for (i = 0; i < d3; i++) { rad_all[i] = 0; }
 
         for (iloc = 0; iloc < nslots; iloc++) {
@@ -6033,9 +5985,20 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         } }
                 } }
         } }
-
         }
         return has_value;
+}
+
+int ECPtype_scalar_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
+                        int *atm, int natm, int *bas, int nbas, double *env,
+                        ECPOpt *opt, double *cache)
+{
+        int has_value1, has_value2;
+        has_value1 = ECPtype1_cart(gctr, shls, ecpbas, necpbas,
+                                   atm, natm, bas, nbas, env, opt, cache);
+        has_value2 = ECPtype2_cart(gctr, shls, ecpbas, necpbas,
+                                   atm, natm, bas, nbas, env, opt, cache);
+        return has_value1 | has_value2;
 }
 
 int ECPscalar_cache_size(int comp, int *shls,
@@ -6104,8 +6067,10 @@ int ECPscalar_c2s_factory(Function_cart fcart, double *gctr, int comp, int *shls
         const int nfj = (lj+1) * (lj+2) / 2;
         const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
         const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
+        int ngcart = nfi*nfj*nci*ncj * comp;
 
         if (li < 2 && lj < 2) {
+                NPdset0(gctr, ngcart);
                 return fcart(gctr, shls, ecpbas, necpbas,
                              atm, natm, bas, nbas, env, opt, cache);
         }
@@ -6115,7 +6080,8 @@ int ECPscalar_c2s_factory(Function_cart fcart, double *gctr, int comp, int *shls
         int dji = di * (lj*2+1);
         int nij = (li*2+1) * (lj*2+1) * nci * ncj;
         double *gcart, *gtmp;
-        MALLOC_INSTACK(gcart, nfi*nfj*nci*ncj * comp);
+        MALLOC_INSTACK(gcart, ngcart);
+        NPdset0(gcart, ngcart);
         gtmp = cache;
         int has_value = fcart(gcart, shls, ecpbas, necpbas,
                               atm, natm, bas, nbas, env, opt, cache);
@@ -6152,6 +6118,14 @@ int ECPtype2_sph(double *gctr, int *shls, int *ecpbas, int necpbas,
                  ECPOpt *opt, double *cache)
 {
         return ECPscalar_c2s_factory(ECPtype2_cart, gctr, 1, shls, ecpbas, necpbas,
+                                     atm, natm, bas, nbas, env, opt, cache);
+}
+
+int ECPtype_scalar_sph(double *gctr, int *shls, int *ecpbas, int necpbas,
+                       int *atm, int natm, int *bas, int nbas, double *env,
+                       ECPOpt *opt, double *cache)
+{
+        return ECPscalar_c2s_factory(ECPtype_scalar_cart, gctr, 1, shls, ecpbas, necpbas,
                                      atm, natm, bas, nbas, env, opt, cache);
 }
 
@@ -6229,20 +6203,11 @@ int ECPscalar_sph(double *out, int *dims, int *shls, int *atm, int natm,
 
         int *ecpbas = bas + (int)(env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int necpbas = (int)(env[AS_NECPBAS]);
-        double *buf1, *buf2;
+        double *buf1;
         MALLOC_INSTACK(buf1, dij * comp);
-        MALLOC_INSTACK(buf2, dij * comp);
-        int has_value;
-        has_value = ECPtype1_sph(buf1, shls, ecpbas, necpbas,
-                                 atm, natm, bas, nbas, env, opt, cache);
-        has_value =(ECPtype2_sph(buf2, shls, ecpbas, necpbas,
-                                 atm, natm, bas, nbas, env, opt, cache) | has_value);
-
+        int has_value = ECPtype_scalar_sph(buf1, shls, ecpbas, necpbas,
+                                           atm, natm, bas, nbas, env, opt, cache);
         if (has_value) {
-                int i;
-                for (i = 0; i < dij; i++) {
-                        buf1[i] += buf2[i];
-                }
                 ECPscalar_distribute(out, buf1, dims, 1, di, dj);
         } else {
                 ECPscalar_distribute0(out, dims, 1, di, dj);
@@ -6281,20 +6246,13 @@ int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
 
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int necpbas = (int)env[AS_NECPBAS];
-        double *buf1, *buf2;
-        MALLOC_INSTACK(buf1, dij * comp);
-        MALLOC_INSTACK(buf2, dij * comp);
-        int has_value;
-        has_value = ECPtype1_cart(buf1, shls, ecpbas, necpbas,
-                                  atm, natm, bas, nbas, env, opt, cache);
-        has_value =(ECPtype2_cart(buf2, shls, ecpbas, necpbas,
-                                  atm, natm, bas, nbas, env, opt, cache) | has_value);
-
+        int ngcart = dij * comp;
+        double *buf1;
+        MALLOC_INSTACK(buf1, ngcart);
+        NPdset0(buf1, ngcart);
+        int has_value = ECPtype_scalar_cart(buf1, shls, ecpbas, necpbas,
+                                            atm, natm, bas, nbas, env, opt, cache);
         if (has_value) {
-                int i;
-                for (i = 0; i < dij; i++) {
-                        buf1[i] += buf2[i];
-                }
                 ECPscalar_distribute(out, buf1, dims, 1, di, dj);
         } else {
                 ECPscalar_distribute0(out, dims, 1, di, dj);
@@ -6405,8 +6363,7 @@ void ECPscalar_optimizer(ECPOpt **opt, int *atm, int natm, int *bas, int nbas, d
 
                 for (i = 0; i < (1 << LEVEL_MAX); i++) {
                         r2 = rs_gauss_chebyshev2047[i]*rs_gauss_chebyshev2047[i];
-                        uk[i] = ck[0] * exp(-ak[0]*r2);
-                        s = uk[i];
+                        s = ck[0] * exp(-ak[0]*r2);
                         for (kp = 1; kp < npk; kp++) {
                                 s += ck[kp] * exp(-ak[kp]*r2);
                         }
@@ -6467,8 +6424,10 @@ int ECPso_cart(double *out, int *dims, int *shls, int *atm, int natm,
 
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int necpbas = (int)env[AS_NECPBAS];
+        int ngcart = dij * comp;
         double *buf1;
-        MALLOC_INSTACK(buf1, dij * comp);
+        MALLOC_INSTACK(buf1, ngcart);
+        NPdset0(buf1, ngcart);
         int has_value = ECPtype_so_cart(buf1, shls, ecpbas, necpbas,
                                         atm, natm, bas, nbas, env, opt, cache);
 
@@ -6519,7 +6478,6 @@ int ECPso_sph(double *out, int *dims, int *shls, int *atm, int natm,
         int has_value = ECPscalar_c2s_factory(ECPtype_so_cart, buf1, comp,
                                               shls, ecpbas, necpbas,
                                               atm, natm, bas, nbas, env, opt, cache);
-
         if (has_value) {
                 // comp-1 for x, y, z components only
                 ECPscalar_distribute(out, buf1, dims, comp-1, di, dj);
@@ -6565,8 +6523,10 @@ int ECPso_spinor(double complex *out, int *dims, int *shls, int *atm, int natm,
 
         int *ecpbas = bas + (int)(env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int necpbas = (int)(env[AS_NECPBAS]);
+        int ngcart = ngctr * comp;
         double *buf1;
-        MALLOC_INSTACK(buf1, ngctr * comp);
+        MALLOC_INSTACK(buf1, ngcart);
+        NPdset0(buf1, ngcart);
         int has_value = ECPtype_so_cart(buf1, shls, ecpbas, necpbas,
                                         atm, natm, bas, nbas, env, opt, cache);
         int counts[2] = {di, dj};

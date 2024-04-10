@@ -75,7 +75,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo',
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
@@ -159,7 +159,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
@@ -383,12 +383,12 @@ def half_e1(mol, mo_coeffs, swapfile,
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
         ao2mopt : :class:`AO2MOpt` object
-            Precomputed data to improve perfomance
+            Precomputed data to improve performance
 
     Returns:
         None
@@ -554,7 +554,7 @@ def full_iofree(mol, mo_coeff, intor='int2e', aosym='s4', comp=None,
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
@@ -628,7 +628,7 @@ def general_iofree(mol, mo_coeffs, intor='int2e', aosym='s4', comp=None,
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals

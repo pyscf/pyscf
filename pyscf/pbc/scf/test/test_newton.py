@@ -166,7 +166,7 @@ class KnowValues(unittest.TestCase):
 
     def test_rks_gen_g_hop(self):
         mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         nao = cell.nao_nr()
         numpy.random.seed(1)
         mo = numpy.random.random((2,nao,nao)) + 0j
@@ -181,7 +181,7 @@ class KnowValues(unittest.TestCase):
 
     def test_uks_gen_g_hop(self):
         mf = dft.KUKS(cell, cell.make_kpts([2,1,1]))
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         nao = cell.nao_nr()
         numpy.random.seed(1)
         mo = numpy.random.random((2,2,nao,nao)) + 0j

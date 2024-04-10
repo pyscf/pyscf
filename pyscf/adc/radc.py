@@ -111,6 +111,16 @@ class RADC(lib.StreamObject):
     blkmin = getattr(__config__, 'adc_radc_RADC_blkmin', 4)
     memorymin = getattr(__config__, 'adc_radc_RADC_memorymin', 2000)
 
+    _keys = {
+        'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
+        'mol', 'mo_energy', 'incore_complete',
+        'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile',
+        'max_space', 't2', 'mo_occ', 'max_cycle',
+        'imds', 'method', 'method_type', 'with_df', 'compute_properties',
+        'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
+        'ncvs', 'E', 'U', 'P', 'X',
+    }
+
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         from pyscf import gto
 
@@ -161,13 +171,6 @@ class RADC(lib.StreamObject):
         self.U = None
         self.P = None
         self.X = None
-
-        keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
-                    'mol', 'mo_energy', 'max_memory', 'incore_complete',
-                    'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile',
-                    'max_space', 't2', 'mo_occ', 'max_cycle'))
-
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     compute_amplitudes = radc_amplitudes.compute_amplitudes
     compute_energy = radc_amplitudes.compute_energy

@@ -18,7 +18,7 @@
 
 '''
 A low level interface to libcint library. It's recommended to use the
-Mole.intor method to drive the integral evaluation funcitons.
+Mole.intor method to drive the integral evaluation functions.
 '''
 
 import warnings
@@ -723,6 +723,8 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
         dj = num_cgto_of(shls[1])
         l = bas[shls[2],ANG_OF]
         if intor_name.endswith('_ssc'): # mixed spherical-cartesian
+            dk = (l+1)*(l+2)//2 * bas[shls[2],NCTR_OF]
+        elif intor_name.endswith('_cart'):
             dk = (l+1)*(l+2)//2 * bas[shls[2],NCTR_OF]
         else:
             dk = (l*2+1) * bas[shls[2],NCTR_OF]

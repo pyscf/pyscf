@@ -57,39 +57,47 @@ def make_grad_object(grad_method):
     if grad_method.base.with_solvent.frozen:
         raise RuntimeError('Frozen solvent model is not avialbe for energy gradients')
 
-    grad_method_class = grad_method.__class__
-    class WithSolventGrad(grad_method_class):
-        def __init__(self, grad_method):
-            self.__dict__.update(grad_method.__dict__)
-            self.de_solvent = None
-            self.de_solute = None
-            self._keys = self._keys.union(['de_solvent', 'de_solute'])
+    name = (grad_method.base.with_solvent.__class__.__name__
+            + grad_method.__class__.__name__)
+    return lib.set_class(WithSolventGrad(grad_method),
+                         (WithSolventGrad, grad_method.__class__), name)
 
-        # TODO: if moving to python3, change signature to
-        # def kernel(self, *args, dm=None, atmlst=None, **kwargs):
-        def kernel(self, *args, **kwargs):
-            dm = kwargs.pop('dm', None)
-            if dm is None:
-                dm = self.base.make_rdm1(ao_repr=True)
+class WithSolventGrad:
+    _keys = {'de_solvent', 'de_solute'}
 
-            self.de_solvent = kernel(self.base.with_solvent, dm)
-            self.de_solute = grad_method_class.kernel(self, *args, **kwargs)
-            self.de = self.de_solute + self.de_solvent
+    def __init__(self, grad_method):
+        self.__dict__.update(grad_method.__dict__)
+        self.de_solvent = None
+        self.de_solute = None
 
-            if self.verbose >= logger.NOTE:
-                logger.note(self, '--------------- %s (+%s) gradients ---------------',
-                            self.base.__class__.__name__,
-                            self.base.with_solvent.__class__.__name__)
-                rhf_grad._write(self, self.mol, self.de, self.atmlst)
-                logger.note(self, '----------------------------------------------')
-            return self.de
+    def undo_solvent(self):
+        cls = self.__class__
+        name_mixin = self.base.with_solvent.__class__.__name__
+        obj = lib.view(self, lib.drop_class(cls, WithSolventGrad, name_mixin))
+        del obj.de_solvent
+        del obj.de_solute
+        return obj
 
-        def _finalize(self):
-            # disable _finalize. It is called in grad_method.kernel method
-            # where self.de was not yet initialized.
-            pass
+    def kernel(self, *args, dm=None, **kwargs):
+        if dm is None:
+            dm = self.base.make_rdm1(ao_repr=True)
 
-    return WithSolventGrad(grad_method)
+        self.de_solvent = kernel(self.base.with_solvent, dm)
+        self.de_solute = super().kernel(*args, **kwargs)
+        self.de = self.de_solute + self.de_solvent
+
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s (+%s) gradients ---------------',
+                        self.base.__class__.__name__,
+                        self.base.with_solvent.__class__.__name__)
+            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
+        return self.de
+
+    def _finalize(self):
+        # disable _finalize. It is called in grad_method.kernel method
+        # where self.de was not yet initialized.
+        pass
 
 
 def kernel(pcmobj, dm, verbose=None):
@@ -164,8 +172,8 @@ def make_L1(pcmobj, r_vdw, ylm_1sph, fi):
             vjk = r_vdw[ja] * coords_1sph + atom_coords[ja] - atom_coords[ka]
             rv = lib.norm(vjk, axis=1)
             tjk = rv / r_vdw[ka]
-            wjk0 = pcmobj.regularize_xt(tjk, eta, r_vdw[ka])
-            wjk1 = regularize_xt1(tjk, eta*r_vdw[ka])
+            wjk0 = pcmobj.regularize_xt(tjk, eta)
+            wjk1 = regularize_xt1(tjk, eta)
             sjk = vjk.T / rv
             wjk1 = 1./r_vdw[ka] * wjk1 * sjk
 
@@ -243,7 +251,7 @@ def make_fi1(pcmobj, r_vdw):
             v = r_vdw[ia]*coords_1sph + atom_coords[ia] - atom_coords[ja]
             rv = lib.norm(v, axis=1)
             t = rv / r_vdw[ja]
-            xt1 = regularize_xt1(t, eta*r_vdw[ja])
+            xt1 = regularize_xt1(t, eta)
             s_ij = v.T / rv
             xt1 = 1./r_vdw[ja] * xt1 * s_ij
             fi1[ia,:,ia] += xt1

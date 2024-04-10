@@ -30,7 +30,6 @@ J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import os
-import copy
 import ctypes
 import warnings
 import tempfile
@@ -46,18 +45,19 @@ from pyscf.df import addons
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.gto.cell import _estimate_rcut
 from pyscf.pbc import tools
+from pyscf.pbc.df import incore
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
-from pyscf.pbc.df.aft import estimate_eta, get_nuc
+from pyscf.pbc.df.aft import estimate_eta, _check_kpts
 from pyscf.pbc.df.df_jk import zdotCN
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
-from pyscf.pbc.df.aft import _sub_df_jk_
-from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _guess_eta
-from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
+from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _CCNucBuilder
+from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder
 from pyscf import __config__
 
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
@@ -71,7 +71,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     compensated charge algorithm, they are normalized against
     \int (r^l e^{-ar^2} r^2 dr
     '''
-    auxcell = addons.make_auxmol(cell, auxbasis)
+    auxcell = incore.make_auxcell(cell, auxbasis)
 
 # Note libcint library will multiply the norm of the integration over spheric
 # part sqrt(4pi) to the basis.
@@ -105,7 +105,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
 # half_sph_norm here to normalize the monopole (charge).  This convention can
 # simplify the formulism of \int \bar{\rho}, see function auxbar.
             cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
-            _env[ptr:ptr+np*nc] = cs.T.reshape(-1)
+            _env[ptr:ptr+np*nc] = cs.T.ravel()
 
             steep_shls.append(ib)
 
@@ -128,9 +128,18 @@ make_auxcell = make_modrho_basis
 class GDF(lib.StreamObject, aft.AFTDFMixin):
     '''Gaussian density fitting
     '''
+    blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
+    _dataname = 'j3c'
     # Call _CCGDFBuilder if applicable. _CCGDFBuilder is slower than
     # _RSGDFBuilder but numerically more close to previous versions
     _prefer_ccdf = False
+    # If True, force using denisty matrix-based K-build
+    force_dm_kbuild = False
+
+    _keys = {
+        'blockdim', 'force_dm_kbuild', 'cell', 'kpts', 'kpts_band', 'eta',
+        'mesh', 'exp_to_discard', 'exxdiv', 'auxcell', 'linear_dep_threshold',
+    }
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell
@@ -138,6 +147,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
 
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
@@ -157,7 +168,6 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
-        self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
         self.linear_dep_threshold = LINEAR_DEP_THR
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
@@ -165,7 +175,6 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
 
     @property
     def auxbasis(self):
@@ -182,7 +191,6 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             self.cell = cell
         self.auxcell = None
         self._cderi = None
-        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self._rsh_df = {}
         return self
 
@@ -222,9 +230,6 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             log.debug1('    kpts_band = %s', self.kpts_band)
         return self
 
-    def check_sanity(self):
-        return lib.StreamObject.check_sanity(self)
-
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
         if j_only is not None:
             self._j_only = j_only
@@ -243,7 +248,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis,
                                          self.exp_to_discard)
 
-        if with_j3c:
+        if with_j3c and self._cderi_to_save is not None:
             if isinstance(self._cderi_to_save, str):
                 cderi = self._cderi_to_save
             else:
@@ -284,12 +289,15 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         dfbuilder.mesh = self.mesh
         dfbuilder.linear_dep_threshold = self.linear_dep_threshold
         j_only = self._j_only or len(kpts_union) == 1
-        dfbuilder.make_j3c(cderi_file, j_only=j_only)
+        dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname,
+                           kptij_lst=kptij_lst)
 
-    def cderi_array(self, label='j3c'):
+    def cderi_array(self, label=None):
         '''
         Returns CDERIArray object which provides numpy APIs to access cderi tensor.
         '''
+        if label is None:
+            label = self._dataname
         if self._cderi is None:
             self.build()
         return CDERIArray(self._cderi, label)
@@ -306,7 +314,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                             len(member(kpt, self.kpts_band))>0) for kpt in kpts)
 
     def sr_loop(self, kpti_kptj=numpy.zeros((2,3)), max_memory=2000,
-                compact=True, blksize=None):
+                compact=True, blksize=None, aux_slice=None):
         '''Short range part'''
         if self._cderi is None:
             self.build()
@@ -328,7 +336,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             b0, b1 = aux_slice
             naux = b1 - b0
             if is_real:
-                LpqR = numpy.asarray(j3c[b0:b1])
+                LpqR = numpy.asarray(j3c[b0:b1].real)
                 if compact and LpqR.shape[1] == nao**2:
                     LpqR = lib.pack_tril(LpqR.reshape(naux,nao,nao))
                 elif unpack and LpqR.shape[1] != nao**2:
@@ -347,8 +355,11 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                     LpqI = lib.unpack_tril(LpqI, lib.ANTIHERMI).reshape(naux,nao**2)
             return LpqR, LpqI
 
-        with _load3c(self._cderi, 'j3c', kpti_kptj) as j3c:
-            slices = lib.prange(0, j3c.shape[0], blksize)
+        with _load3c(self._cderi, self._dataname, kpti_kptj) as j3c:
+            if aux_slice is None:
+                slices = lib.prange(0, j3c.shape[0], blksize)
+            else:
+                slices = lib.prange(*aux_slice, blksize)
             for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                 yield LpqR, LpqI, 1
                 LpqR = LpqI = None
@@ -356,15 +367,45 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             # Truncated Coulomb operator is not postive definite. Load the
             # CDERI tensor of negative part.
-            with _load3c(self._cderi, 'j3c-', kpti_kptj, ignore_key_error=True) as j3c:
-                slices = lib.prange(0, j3c.shape[0], blksize)
+            with _load3c(self._cderi, self._dataname+'-', kpti_kptj,
+                         ignore_key_error=True) as j3c:
+                if aux_slice is None:
+                    slices = lib.prange(0, j3c.shape[0], blksize)
+                else:
+                    slices = lib.prange(*aux_slice, blksize)
                 for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                     yield LpqR, LpqI, -1
                     LpqR = LpqI = None
 
-    _int_nuc_vloc = aft._int_nuc_vloc
-    get_nuc = aft.get_nuc  # noqa: F811
-    get_pp = aft.get_pp
+    def get_pp(self, kpts=None):
+        '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+        '''
+        cell = self.cell
+        kpts, is_single_kpt = _check_kpts(self, kpts)
+        if self._prefer_ccdf or cell.omega > 0:
+            # For long-range integrals _CCGDFBuilder is the only option
+            dfbuilder = _CCNucBuilder(cell, kpts).build()
+        else:
+            dfbuilder = _RSNucBuilder(cell, kpts).build()
+        vpp = dfbuilder.get_pp()
+        if is_single_kpt:
+            vpp = vpp[0]
+        return vpp
+
+    def get_nuc(self, kpts=None):
+        '''Get the periodic nuc-el AO matrix, with G=0 removed.
+        '''
+        cell = self.cell
+        kpts, is_single_kpt = _check_kpts(self, kpts)
+        if self._prefer_ccdf or cell.omega > 0:
+            # For long-range integrals _CCGDFBuilder is the only option
+            dfbuilder = _CCNucBuilder(cell, kpts).build()
+        else:
+            dfbuilder = _RSNucBuilder(cell, kpts).build()
+        nuc = dfbuilder.get_nuc()
+        if is_single_kpt:
+            nuc = nuc[0]
+        return nuc
 
     # Note: Special exxdiv by default should not be used for an arbitrary
     # input density matrix. When the df object was used with the molecular
@@ -388,22 +429,16 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
                 ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
-                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+                mydf.mesh = cell.cutoff_to_mesh(ke_cutoff)
             else:
                 mydf = self
-            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
-                               with_j, with_k, omega, exxdiv)
+            with mydf.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                                     omega=None, exxdiv=exxdiv)
 
-        if kpts is None:
-            if numpy.all(self.kpts == 0):
-                # Gamma-point calculation by default
-                kpts = numpy.zeros(3)
-            else:
-                kpts = self.kpts
-        kpts = numpy.asarray(kpts)
-
-        if kpts.shape == (3,):
-            return df_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
+        kpts, is_single_kpt = _check_kpts(self, kpts)
+        if is_single_kpt:
+            return df_jk.get_jk(self, dm, hermi, kpts[0], kpts_band, with_j,
                                 with_k, exxdiv)
 
         vj = vk = None
@@ -418,7 +453,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     ao2mo_7d = df_ao2mo.ao2mo_7d
 
     def update_mp(self):
-        mf = copy.copy(self)
+        mf = self.copy()
         mf.with_df = self
         return mf
 
@@ -457,24 +492,42 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 # object when self._cderi is provided.
         if self._cderi is None:
             self.build()
-        # self._cderi['j3c/k_id/seg_id']
-        with addons.load(self._cderi, 'j3c/0') as feri:
-            if isinstance(feri, h5py.Group):
-                naux = feri['0'].shape[0]
-            else:
-                naux = feri.shape[0]
 
         cell = self.cell
-        if (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum' and
-            not isinstance(self._cderi, numpy.ndarray)):
-            with h5py.File(self._cderi, 'r') as feri:
-                if 'j3c-/0' in feri:
-                    dat = feri['j3c-/0']
-                    if isinstance(dat, h5py.Group):
-                        naux += dat['0'].shape[0]
-                    else:
-                        naux += dat.shape[0]
+        if isinstance(self._cderi, numpy.ndarray):
+            # self._cderi is likely offered by user. Ensure
+            # cderi.shape = (nkpts,naux,nao_pair)
+            nao = cell.nao
+            if self._cderi.shape[-1] == nao:
+                assert self._cderi.ndim == 4
+                naux = self._cderi.shape[1]
+            elif self._cderi.shape[-1] in (nao**2, nao*(nao+1)//2):
+                assert self._cderi.ndim == 3
+                naux = self._cderi.shape[1]
+            else:
+                raise RuntimeError('cderi shape')
+            return naux
+
+        # self._cderi['j3c/k_id/seg_id']
+        with h5py.File(self._cderi, 'r') as feri:
+            key = next(iter(feri[self._dataname].keys()))
+            dat = feri[f'{self._dataname}/{key}']
+            if isinstance(dat, h5py.Group):
+                naux = dat['0'].shape[0]
+            else:
+                naux = dat.shape[0]
+
+            if (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum' and
+                f'{self._dataname}-' in feri):
+                key = next(iter(feri[f'{self._dataname}-'].keys()))
+                dat = feri[f'{self._dataname}-/{key}']
+                if isinstance(dat, h5py.Group):
+                    naux += dat['0'].shape[0]
+                else:
+                    naux += dat.shape[0]
         return naux
+
+    to_gpu = lib.to_gpu
 
 DF = GDF
 
@@ -490,8 +543,18 @@ class CDERIArray:
             data_group = h5py.File(data_group, 'r')
         self.data_group = data_group
         if 'kpts' not in data_group:
-            raise RuntimeError('cderi data not generated or format incompatible')
+            # TODO: Deprecate the v1 data format
+            self._data_version = 'v1'
+            self._cderi = data_group.file.filename
+            self._label = label
+            self._kptij_lst = data_group['j3c-kptij'][()]
+            kpts = unique(self._kptij_lst[:,0])[0]
+            self.nkpts = nkpts = len(kpts)
+            if len(self._kptij_lst) not in (nkpts, nkpts**2, nkpts*(nkpts+1)//2):
+                raise RuntimeError(f'Dimension error for CDERI {self._cderi}')
+            return
 
+        self._data_version = 'v2'
         aosym = data_group['aosym'][()]
         if isinstance(aosym, bytes):
             aosym = aosym.decode()
@@ -499,7 +562,12 @@ class CDERIArray:
         self.j3c = data_group[label]
         self.kpts = data_group['kpts'][:]
         self.nkpts = self.kpts.shape[0]
-        nao_pair = sum(dat.shape[1] for dat in self.j3c['0'].values())
+        self.naux = 0
+        nao_pair = 0
+        for dat in self.j3c.values():
+            nao_pair = sum(x.shape[1] for x in dat.values())
+            self.naux = dat['0'].shape[0]
+            break
         if self.aosym == 's1':
             nao = int(nao_pair ** .5)
             assert nao ** 2 == nao_pair
@@ -508,7 +576,6 @@ class CDERIArray:
             self.nao = int((nao_pair * 2)**.5)
         else:
             raise NotImplementedError
-        self.naux = self.j3c['0/0'].shape[0]
 
     def __del__(self):
         if not self._data_is_h5obj:
@@ -543,6 +610,25 @@ class CDERIArray:
         return out[k_slices]
 
     def _load_one(self, ki, kj, slices):
+        if self._data_version == 'v1':
+            with _load3c(self._cderi, self._label) as fload:
+                if len(self._kptij_lst) == self.nkpts:
+                    # kptij_lst was generated with option j_only, leading to
+                    # only the diagonal terms
+                    kikj = ki
+                    kpti, kptj = self._kptij_lst[kikj]
+                elif len(self._kptij_lst) == self.nkpts**2:
+                    kikj = ki * self.nkpts + kj
+                    kpti, kptj = self._kptij_lst[kikj]
+                elif ki >= kj:
+                    kikj = ki*(ki+1)//2 + kj
+                    kpti, kptj = self._kptij_lst[kikj]
+                else:
+                    kikj = kj*(kj+1)//2 + ki
+                    kptj, kpti = self._kptij_lst[kikj]
+                out = fload(kpti, kptj)
+                return out[slices]
+
         kikj = ki * self.nkpts + kj
         kjki = kj * self.nkpts + ki
         if self.aosym == 's1' or kikj == kjki:
@@ -565,6 +651,10 @@ class CDERIArray:
         return out
 
     def load(self, kpti, kptj):
+        if self._data_version == 'v1':
+            with _load3c(self._cderi, self._label) as fload:
+                return numpy.asarray(fload(kpti, kptj))
+
         ki = member(kpti, self.kpts)
         kj = member(kptj, self.kpts)
         if len(ki) == 0 or len(kj) == 0:
@@ -581,7 +671,7 @@ class _load3c:
     pyscf-2.0 or older, version 2 from pyscf-2.1 or newer). This function
     can read both data formats.
     '''
-    def __init__(self, cderi, label, kpti_kptj=None, kptij_label=None,
+    def __init__(self, cderi, label, kpti_kptj=None, kptij_label='j3c-kptij',
                  ignore_key_error=False):
         self.cderi = cderi
         self.label = label
@@ -615,11 +705,7 @@ class _load3c:
             if self.data_version == 'v2':
                 self._kptij_lst = self.feri['kpts'][()]
             else:
-                if self.kptij_label is None:
-                    kptij_label = self.label + '-kptij'
-                else:
-                    kptij_label = self.kptij_label
-                self._kptij_lst = self.feri[kptij_label][()]
+                self._kptij_lst = self.feri[self.kptij_label][()]
         return self._kptij_lst
 
     @property
@@ -702,7 +788,7 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False,
     dat = _load_and_unpack(h5group[key],hermi)
     return dat
 
-class _load_and_unpack(object):
+class _load_and_unpack:
     '''
     This class returns an array-like object to an hdf5 file that can
     be sliced, to allow for lazy loading

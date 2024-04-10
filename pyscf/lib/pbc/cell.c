@@ -1,3 +1,21 @@
+/* Copyright 2021- The PySCF Developers. All Rights Reserved.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
+ * Author: Xing Zhang <zhangxing.nju@gmail.com>
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -8,42 +26,35 @@
 #include "np_helper/np_helper.h"
 
 #define SQUARE(r) (r[0]*r[0]+r[1]*r[1]+r[2]*r[2])
-#define RCUT_EPS 1e-3
 
-double pgf_rcut(int l, double alpha, double coeff, 
-                double precision, double r0, int max_cycle)
+double pgf_rcut(int l, double alpha, double coeff, double precision, double r0)
 {
-    double rcut;
-    if (l == 0) {
-        if (coeff <= precision) {
-            rcut = 0;
-        }
-        else {
-            rcut = sqrt(log(coeff / precision) / alpha);
-        }
-        return rcut;
-    }
+    l += 2;
 
-    double rmin = sqrt(.5 * l / alpha);
+    double rcut;
+    double rmin = sqrt(.5 * l / alpha) * 2.;
     double gmax = coeff * pow(rmin, l) * exp(-alpha * rmin * rmin);
     if (gmax < precision) {
-        return 0;
+        return rmin;
     }
 
-    int i;
     double eps = MIN(rmin/10, RCUT_EPS);
-    double log_c_by_prec= log(coeff / precision);
-    double rcut_old;
+    double c = log(coeff / precision);
+    double rcut_last;
     rcut = MAX(r0, rmin+eps);
-    for (i = 0; i < max_cycle; i++) {
-        rcut_old = rcut;
-        rcut = sqrt((l*log(rcut) + log_c_by_prec) / alpha);
-        if (fabs(rcut - rcut_old) < eps) {
+
+    int i;
+    for (i = 0; i < RCUT_MAX_CYCLE; i++) {
+        rcut_last = rcut;
+        rcut = sqrt((l*log(rcut) + c) / alpha);
+        if (fabs(rcut - rcut_last) < eps) {
             break;
         }
     }
-    if (i == max_cycle) {
-        printf("pgf_rcut did not converge");
+    if (i == RCUT_MAX_CYCLE) {
+        //printf("r0 = %.6e, l = %d, alpha = %.6e, coeff = %.6e, precision=%.6e\n", r0, l, alpha, coeff, precision);
+        fprintf(stderr, "pgf_rcut did not converge in %d cycles: %.6f > %.6f.\n",
+                RCUT_MAX_CYCLE, fabs(rcut - rcut_last), eps);
     }
     return rcut; 
 }
@@ -52,7 +63,6 @@ void rcut_by_shells(double* shell_radius, double** ptr_pgf_rcut,
                     int* bas, double* env, int nbas, 
                     double r0, double precision)
 {
-    int max_cycle = RCUT_MAX_CYCLE;
 #pragma omp parallel
 {
     int ib, ic, p;
@@ -70,7 +80,7 @@ void rcut_by_shells(double* shell_radius, double** ptr_pgf_rcut,
             for (ic = 0; ic < nctr; ic++) {
                 cmax = MAX(fabs(env[ptr_c+ic*nprim+p]), cmax);
             }
-            rcut = pgf_rcut(l, alpha, cmax, precision, r0, max_cycle);
+            rcut = pgf_rcut(l, alpha, cmax, precision, r0);
             if (ptr_pgf_rcut) {
                 ptr_pgf_rcut[ib][p] = rcut;
             }
@@ -81,30 +91,10 @@ void rcut_by_shells(double* shell_radius, double** ptr_pgf_rcut,
 }
 }
 
-void get_SI(complex double* out, double* coords, double* Gv, int natm, int ngrid)
-{
-#pragma omp parallel
-{
-    int i, ia;
-    double RG;
-    double *pcoords, *pGv;
-    complex double *pout;
-    #pragma omp for schedule(static)
-    for (ia = 0; ia < natm; ia++) {
-        pcoords = coords + ia * 3;
-        pout = out + ((size_t)ia) * ngrid;
-        for (i = 0; i < ngrid; i++) {
-            pGv = Gv + i * 3;
-            RG = pcoords[0] * pGv[0] + pcoords[1] * pGv[1] + pcoords[2] * pGv[2];
-            pout[i] = cos(RG) - _Complex_I * sin(RG);
-        }
-    }
-}
-}
 
-
-void get_SI_real_imag(double* out_real, double* out_imag, double* coords, double* Gv,
-                      int natm, size_t ngrid)
+static void get_SI_real_imag(double* out_real, double* out_imag,
+                             double* coords, double* Gv,
+                             int natm, size_t ngrid)
 {
 #pragma omp parallel
 {

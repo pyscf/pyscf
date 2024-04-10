@@ -27,7 +27,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
-from pyscf.scf import _vhf
+from pyscf.scf import _vhf, hf
 from pyscf.scf import cphf
 
 # import _response_functions to load gen_response methods in SCF class
@@ -62,10 +62,10 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     if isinstance(h1ao, str):
         h1ao = lib.chkfile.load(h1ao, 'scf_f1ao')
-        h1ao = dict([(int(k), h1ao[k]) for k in h1ao])
+        h1ao = {int(k): h1ao[k] for k in h1ao}
     if isinstance(mo1, str):
         mo1 = lib.chkfile.load(mo1, 'scf_mo1')
-        mo1 = dict([(int(k), mo1[k]) for k in mo1])
+        mo1 = {int(k): mo1[k] for k in mo1}
 
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
@@ -182,30 +182,33 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     return e1, ej, ek
 
 def _make_vhfopt(mol, dms, key, vhf_intor):
-    if not hasattr(_vhf.libcvhf, vhf_intor):
+    libcvhf = _vhf.libcvhf
+    if not hasattr(libcvhf, vhf_intor):
         return None
 
-    vhfopt = _vhf.VHFOpt(mol, vhf_intor, 'CVHF'+key+'_prescreen',
-                         'CVHF'+key+'_direct_scf')
-    dms = numpy.asarray(dms, order='C')
-    if dms.ndim == 3:
-        n_dm = dms.shape[0]
-    else:
-        n_dm = 1
+    vhfopt = _vhf._VHFOpt(mol, 'int2e_'+key, 'CVHF'+key+'_prescreen',
+                          dmcondname='CVHFnr_dm_cond1')
     ao_loc = mol.ao_loc_nr()
-    fsetdm = getattr(_vhf.libcvhf, 'CVHF'+key+'_direct_scf_dm')
-    fsetdm(vhfopt._this,
-           dms.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
-           ao_loc.ctypes.data_as(ctypes.c_void_p),
-           mol._atm.ctypes.data_as(ctypes.c_void_p), mol.natm,
-           mol._bas.ctypes.data_as(ctypes.c_void_p), mol.nbas,
-           mol._env.ctypes.data_as(ctypes.c_void_p))
-
-    # Update the vhfopt's attributes intor.  Function direct_mapdm needs
-    # vhfopt._intor and vhfopt._cintopt to compute J/K.
-    if vhf_intor != 'int2e_'+key:
-        vhfopt._intor = mol._add_suffix('int2e_'+key)
-        vhfopt._cintopt = None
+    nbas = mol.nbas
+    q_cond = numpy.empty((2, nbas, nbas))
+    with mol.with_integral_screen(vhfopt.direct_scf_tol**2):
+        if vhf_intor == 'int2e_ip1ip2':
+            fqcond = libcvhf.CVHFnr_int2e_pp_q_cond
+        elif vhf_intor in ('int2e_ipip1ipip2', 'int2e_ipvip1ipvip2'):
+            fqcond = libcvhf.CVHFnr_int2e_pppp_q_cond
+        else:
+            raise NotImplementedError(vhf_intor)
+        fqcond(
+            getattr(libcvhf, mol._add_suffix(vhf_intor)),
+            lib.c_null_ptr(), q_cond[0].ctypes,
+            ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+            mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+        libcvhf.CVHFnr_int2e_q_cond(
+            getattr(libcvhf, mol._add_suffix('int2e')),
+            lib.c_null_ptr(), q_cond[1].ctypes,
+            ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+            mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+    vhfopt.q_cond = q_cond
     return vhfopt
 
 
@@ -293,7 +296,8 @@ def _get_jk(mol, intor, comp, aosym, script_dms,
     return vs
 
 def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
-              fx=None, atmlst=None, max_memory=4000, verbose=None):
+              fx=None, atmlst=None, max_memory=4000, verbose=None,
+              max_cycle=50, level_shift=0):
     '''Solve the first order equation
 
     Kwargs:
@@ -340,7 +344,8 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
 
         h1vo = numpy.vstack(h1vo)
         s1vo = numpy.vstack(s1vo)
-        mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo)
+        mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo,
+                             max_cycle=max_cycle, level_shift=level_shift)
         mo1 = numpy.einsum('pq,xqi->xpi', mo_coeff, mo1).reshape(-1,3,nao,nocc)
         e1 = e1.reshape(-1,3,nocc,nocc)
 
@@ -464,23 +469,35 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     return h_op, hdiag
 
 
-class Hessian(lib.StreamObject):
+class HessianBase(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock hessian'''
+
+    # Max. number of iterations for Krylov solver
+    max_cycle = 50
+    # Shift virtual orbitals to slightly improve the convergence speed of Krylov solver
+    # A small level_shift ~ 0.1 is often helpful to decrease 2 - 3 iterations
+    # while the error of cphf solver may be increased by one magnitude.
+    level_shift = 0
+
+    _keys = {
+        'mol', 'base', 'chkfile', 'atmlst', 'de', 'max_cycle', 'level_shift'
+    }
+
     def __init__(self, scf_method):
         self.verbose = scf_method.verbose
         self.stdout = scf_method.stdout
         self.mol = scf_method.mol
-        self.base = scf_method
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
-
+        self.base = scf_method
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
-        self._keys = set(self.__dict__.keys())
 
-    partial_hess_elec = partial_hess_elec
-    hess_elec = hess_elec
-    make_h1 = make_h1
+    def hess_elec(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def make_h1(self, *args, **kwargs):
+        raise NotImplementedError
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -557,7 +574,8 @@ class Hessian(lib.StreamObject):
     def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
         return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
-                         fx, atmlst, max_memory, verbose)
+                         fx, atmlst, max_memory, verbose,
+                         max_cycle=self.max_cycle, level_shift=self.level_shift)
 
     def hess_nuc(self, mol=None, atmlst=None):
         if mol is None: mol = self.mol
@@ -574,10 +592,27 @@ class Hessian(lib.StreamObject):
 
         de = self.hess_elec(mo_energy, mo_coeff, mo_occ, atmlst=atmlst)
         self.de = de + self.hess_nuc(self.mol, atmlst=atmlst)
+        if self.base.disp is not None:
+            self.de += self.get_dispersion()
         return self.de
     hess = kernel
 
     gen_hop = gen_hop
+
+    # to_gpu can be reused only when __init__ still takes mf
+    def to_gpu(self):
+        mf = self.base.to_gpu()
+        from importlib import import_module
+        mod = import_module(self.__module__.replace('pyscf', 'gpu4pyscf'))
+        cls = getattr(mod, self.__class__.__name__)
+        obj = cls(mf)
+        return obj
+
+class Hessian(HessianBase):
+
+    partial_hess_elec = partial_hess_elec
+    hess_elec = hess_elec
+    make_h1 = make_h1
 
 # Inject to RHF class
 from pyscf import scf

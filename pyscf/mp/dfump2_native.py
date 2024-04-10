@@ -40,9 +40,6 @@ class DFUMP2(DFRMP2):
             auxbasis : name of auxiliary basis set, otherwise determined automatically
         '''
 
-        if not isinstance(mf, scf.uhf.UHF):
-            raise TypeError('Class initialization with non-UHF object')
-
         # UHF quantities are stored as numpy arrays
         self.mo_coeff = np.array(mf.mo_coeff)
         self.mo_energy = np.array(mf.mo_energy)
@@ -205,6 +202,8 @@ class DFUMP2(DFRMP2):
         '''
         Calculates the three center integrals for MP2.
         '''
+        if not isinstance(self._scf, scf.uhf.UHF):
+            raise TypeError('Class initialization with non-UHF object')
         intsfile = []
         logger = lib.logger.new_logger(self)
         logger.info('')
@@ -226,6 +225,8 @@ class DFUMP2(DFRMP2):
 
     def nuc_grad_method(self):
         raise NotImplementedError
+
+    to_gpu = lib.to_gpu
 
 
 MP2 = UMP2 = DFMP2 = DFUMP2

@@ -43,6 +43,7 @@ class KnowValues(unittest.TestCase):
         charges = [1.00]
         mf = itrf.mm_charge(scf.RHF(mol), coords, charges)
         self.assertAlmostEqual(mf.kernel(), 2.0042702433049024, 9)
+        self.assertEqual(mf.undo_qmmm().__class__.__name__, 'RHF')
 
     def test_grad(self):
         coords = [(0.0,0.1,0.0)]

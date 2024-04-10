@@ -389,8 +389,8 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
         # )
         
         t11 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
-            e, h = scipy.linalg.eigh(A)
+        # with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
+        e, h = scipy.linalg.eigh(A)
         t12 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t11, t12, "diag_A")
         print("condition number = ", e[-1]/e[0])
@@ -875,20 +875,16 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         return
 
     def get_pp(self, kpts=None):
-        
         if hasattr(self, "PP") and self.PP is not None:
             return self.PP
         else:
             t0 = (lib.logger.process_clock(), lib.logger.perf_counter())
-            
             df_tmp = multigrid.MultiGridFFTDF2(self.cell)
-            v_pp_loc2_nl = df_tmp.get_pp(max_memory=self.cell.max_memory)
+            v_pp_loc2_nl = df_tmp.get_pp()
             v_pp_loc1_G = df_tmp.vpplocG_part1
             v_pp_loc1 = multigrid.multigrid_pair._get_j_pass2(df_tmp, v_pp_loc1_G)
             self.PP = (v_pp_loc1 + v_pp_loc2_nl)[0]
-            
             t1 = (lib.logger.process_clock(), lib.logger.perf_counter()) 
-            
             if self.verbose:
                 _benchmark_time(t0, t1, "get_pp")
             return self.PP
@@ -903,7 +899,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     get_jk = isdf_jk.get_jk_dm
 
-C = 15
+C = 35
 
 if __name__ == '__main__':
 
@@ -1006,7 +1002,7 @@ if __name__ == '__main__':
 
     mf.kernel()
 
-    exit(1)
+    # exit(1)
 
     # without robust fitting 
     
@@ -1017,9 +1013,9 @@ if __name__ == '__main__':
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 100
     mf.conv_tol = 1e-7
-    mf.kernel()
+    # mf.kernel()
 
     mf = scf.RHF(cell)
     mf.max_cycle = 100
     mf.conv_tol = 1e-8
-    # mf.kernel()
+    mf.kernel()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 from .multigrid import MultiGridFFTDF
 from .multigrid import (
     multigrid_fftdf as multigrid_fftdf,
+    _gen_rhf_response as _gen_rhf_response,
+    _gen_uhf_response as _gen_uhf_response,
     nr_rks as nr_rks_v1,
     nr_rks_fxc as nr_rks_fxc,
     nr_rks_fxc_st as nr_rks_fxc_st,

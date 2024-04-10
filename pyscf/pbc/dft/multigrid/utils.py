@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import numpy
@@ -43,7 +45,7 @@ def _takebak_4d(out, a, indices):
         else:
             idx = numpy.asarray(s, dtype=numpy.int32)
             idx[idx < 0] += out_shape[i]
-        assert(len(idx) == a_shape[i])
+        assert (len(idx) == a_shape[i])
         ranges.append(idx)
     idx = ranges[0][:,None] * out_shape[1] + ranges[1]
     idy = ranges[2][:,None] * out_shape[3] + ranges[3]
@@ -66,4 +68,3 @@ def _takebak_5d(out, a, indices):
     out = out.reshape((out_shape[0]*out_shape[1],) + out_shape[2:])
     indices = (None,) + indices[2:]
     return _takebak_4d(out, a, indices)
-

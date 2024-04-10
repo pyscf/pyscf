@@ -22,6 +22,7 @@
 
 from functools import reduce
 import numpy
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
@@ -126,10 +127,11 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
                                   dmxmy-dmxmy.T))
     vj = vj.reshape(-1,3,nao,nao)
     vk = vk.reshape(-1,3,nao,nao)
+    vhf1 = -vk
     if singlet:
-        vhf1 = vj * 2 - vk
+        vhf1 += vj * 2
     else:
-        vhf1 = numpy.vstack((vj[:2]*2-vk[:2], -vk[2:]))
+        vhf1[:2] += vj[:2]*2
     time1 = log.timer('2e AO integral derivatives', *time1)
 
     if atmlst is None:
@@ -188,42 +190,59 @@ def as_scanner(td_grad, state=1):
     if isinstance(td_grad, lib.GradScanner):
         return td_grad
 
-    logger.info(td_grad, 'Create scanner for %s', td_grad.__class__)
-
-    class TDSCF_GradScanner(td_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-            self._keys = self._keys.union(['e_tot'])
-        def __call__(self, mol_or_geom, state=state, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
-
-            td_scanner = self.base
-            td_scanner(mol)
-            self.mol = mol
-# TODO: Check root flip.  Maybe avoid the initial guess in TDHF otherwise
-# large error may be found in the excited states amplitudes
-            de = self.kernel(state=state, **kwargs)
-            e_tot = self.e_tot[state-1]
-            return e_tot, de
-        @property
-        def converged(self):
-            td_scanner = self.base
-            return all((td_scanner._scf.converged,
-                        td_scanner.converged[self.state]))
-
     if state == 0:
         return td_grad.base._scf.nuc_grad_method().as_scanner()
-    else:
-        return TDSCF_GradScanner(td_grad)
+
+    logger.info(td_grad, 'Create scanner for %s', td_grad.__class__)
+    name = td_grad.__class__.__name__ + TDSCF_GradScanner.__name_mixin__
+    return lib.set_class(TDSCF_GradScanner(td_grad, state),
+                         (TDSCF_GradScanner, td_grad.__class__), name)
+
+class TDSCF_GradScanner(lib.GradScanner):
+    _keys = {'e_tot'}
+
+    def __init__(self, g, state):
+        lib.GradScanner.__init__(self, g)
+        if state is not None:
+            self.state = state
+
+    def __call__(self, mol_or_geom, state=None, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+        self.reset(mol)
+
+        if state is None:
+            state = self.state
+        else:
+            self.state = state
+
+        td_scanner = self.base
+        td_scanner(mol)
+# TODO: Check root flip.  Maybe avoid the initial guess in TDHF otherwise
+# large error may be found in the excited states amplitudes
+        de = self.kernel(state=state, **kwargs)
+        e_tot = self.e_tot[state-1]
+        return e_tot, de
+
+    @property
+    def converged(self):
+        td_scanner = self.base
+        return all((td_scanner._scf.converged,
+                    td_scanner.converged[self.state]))
 
 
-class Gradients(rhf_grad.GradientsMixin):
+class Gradients(rhf_grad.GradientsBase):
 
     cphf_max_cycle = getattr(__config__, 'grad_tdrhf_Gradients_cphf_max_cycle', 20)
     cphf_conv_tol = getattr(__config__, 'grad_tdrhf_Gradients_cphf_conv_tol', 1e-8)
+
+    _keys = {
+        'cphf_max_cycle', 'cphf_conv_tol',
+        'mol', 'base', 'chkfile', 'state', 'atmlst', 'de',
+    }
 
     def __init__(self, td):
         self.verbose = td.verbose
@@ -235,8 +254,6 @@ class Gradients(rhf_grad.GradientsMixin):
         self.state = 1  # of which the gradients to be computed.
         self.atmlst = None
         self.de = None
-        keys = set(('cphf_max_cycle', 'cphf_conv_tol'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -307,6 +324,8 @@ class Gradients(rhf_grad.GradientsMixin):
             logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
+
+    to_gpu = lib.to_gpu
 
 Grad = Gradients
 

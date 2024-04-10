@@ -199,8 +199,8 @@ def _contract(subscripts, *tensors, **kwargs):
         print("Reshaping A as (-1,", inner_shape, ")")
         print("Reshaping B as (", inner_shape, ",-1)")
 
-    shapeCt = list()
-    idxCt = list()
+    shapeCt = []
+    idxCt = []
     for idx in idxAt:
         if idx in shared_idxAB:
             break
@@ -247,14 +247,9 @@ def einsum(subscripts, *tensors, **kwargs):
     elif len(tensors) <= 2:
         out = _contract(subscripts, *tensors, **kwargs)
     else:
-        if '->' in subscripts:
-            indices_in, idx_final = subscripts.split('->')
-            indices_in = indices_in.split(',')
-        else:
-            # idx_final = ''
-            indices_in = subscripts.split('->')[0].split(',')
+        optimize = kwargs.pop('optimize', True)
         tensors = list(tensors)
-        contraction_list = _einsum_path(subscripts, *tensors, optimize=True,
+        contraction_list = _einsum_path(subscripts, *tensors, optimize=optimize,
                                         einsum_call=True)[1]
         for contraction in contraction_list:
             inds, idx_rm, einsum_str, remaining = contraction[:4]
@@ -1008,23 +1003,7 @@ def frompointer(pointer, count, dtype=float):
     a = numpy.ndarray(count, dtype=numpy.int8, buffer=buf)
     return a.view(dtype)
 
-from distutils.version import LooseVersion
-if LooseVersion(numpy.__version__) <= LooseVersion('1.6.0'):
-    def norm(x, ord=None, axis=None):
-        '''numpy.linalg.norm for numpy 1.6.*
-        '''
-        if axis is None or ord is not None:
-            return numpy.linalg.norm(x, ord)
-        else:
-            x = numpy.asarray(x)
-            axes = string.ascii_lowercase[:x.ndim]
-            target = axes.replace(axes[axis], '')
-            descr = '%s,%s->%s' % (axes, axes, target)
-            xx = _numpy_einsum(descr, x.conj(), x)
-            return numpy.sqrt(xx.real)
-else:
-    norm = numpy.linalg.norm
-del (LooseVersion)
+norm = numpy.linalg.norm
 
 def cond(x, p=None):
     '''Compute the condition number'''
@@ -1157,6 +1136,7 @@ def condense(opname, a, loc_x, loc_y=None):
                 j1 = loc_y[j+1]
                 out[i,j] = op(a[i0:i1, j0:j1])
     '''
+    assert a.ndim == 2
     if loc_y is None:
         loc_y = loc_x
     loc_x = numpy.asarray(loc_x, numpy.int32)
@@ -1167,27 +1147,40 @@ def condense(opname, a, loc_x, loc_y=None):
     if opname.startswith('NP_'):
         opname = opname[3:]
 
-    if (a.dtype != numpy.double or
-        opname not in ('sum', 'max', 'min', 'abssum', 'absmax', 'absmin', 'norm')):
-        tmp = numpy.empty((nloc_x, a.shape[1]), dtype=a.dtype)
-        out = numpy.empty((nloc_x, nloc_y), dtype=a.dtype)
-        op = getattr(numpy, opname)
-        for i, (i0, i1) in enumerate(zip(loc_x[:-1], loc_x[1:])):
-            tmp[i] = op(a[i0:i1], axis=0)
-        for j, (j0, j1) in enumerate(zip(loc_y[:-1], loc_y[1:])):
-            out[:,j] = op(tmp[:,j0:j1], axis=1)
+    if (a.dtype == numpy.double and
+        opname in ('sum', 'max', 'min', 'abssum', 'absmax', 'absmin', 'norm')):
+        op = getattr(_np_helper, 'NP_' + opname)
+        if a.flags.f_contiguous:
+            a = transpose(a.T)
+        a = numpy.asarray(a, order='C')
+        out = numpy.zeros((nloc_x, nloc_y))
+        _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
+                              a.ctypes.data_as(ctypes.c_void_p),
+                              loc_x.ctypes.data_as(ctypes.c_void_p),
+                              loc_y.ctypes.data_as(ctypes.c_void_p),
+                              ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
         return out
 
-    op = getattr(_np_helper, 'NP_' + opname)
-    if a.flags.f_contiguous:
-        a = transpose(a.T)
-    a = numpy.asarray(a, order='C')
-    out = numpy.zeros((nloc_x, nloc_y))
-    _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
-                          a.ctypes.data_as(ctypes.c_void_p),
-                          loc_x.ctypes.data_as(ctypes.c_void_p),
-                          loc_y.ctypes.data_as(ctypes.c_void_p),
-                          ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
+    if a.dtype in (bool, numpy.int8) and opname in ('any', 'all'):
+        op = getattr(_np_helper, 'NP_' + opname)
+        if a.flags.f_contiguous:
+            a = transpose(a.T)
+        a = numpy.asarray(a, order='C')
+        out = numpy.zeros((nloc_x, nloc_y), dtype=a.dtype)
+        _np_helper.NPbcondense(op, out.ctypes.data_as(ctypes.c_void_p),
+                               a.ctypes.data_as(ctypes.c_void_p),
+                               loc_x.ctypes.data_as(ctypes.c_void_p),
+                               loc_y.ctypes.data_as(ctypes.c_void_p),
+                               ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
+        return out
+
+    tmp = numpy.empty((nloc_x, a.shape[1]), dtype=a.dtype)
+    out = numpy.empty((nloc_x, nloc_y), dtype=a.dtype)
+    op = getattr(numpy, opname)
+    for i, (i0, i1) in enumerate(zip(loc_x[:-1], loc_x[1:])):
+        tmp[i] = op(a[i0:i1], axis=0)
+    for j, (j0, j1) in enumerate(zip(loc_y[:-1], loc_y[1:])):
+        out[:,j] = op(tmp[:,j0:j1], axis=1)
     return out
 
 def expm(a):
@@ -1851,6 +1844,14 @@ def dslice_offset(a, locs, offset, out=None, axis=1):
        ctypes.c_size_t(offset))
 
     return out
+def ndarray_pointer_2d(array):
+    '''Return an array that contains the addresses of the first element in each
+    row of the input 2d array.
+    '''
+    assert array.ndim == 2
+    assert array.flags.c_contiguous
+    i = numpy.arange(array.shape[0])
+    return array.ctypes.data + (i * array.strides[0]).astype(numpy.uintp)
 
 class NPArrayWithTag(numpy.ndarray):
     # Initialize kwargs in function tag_array

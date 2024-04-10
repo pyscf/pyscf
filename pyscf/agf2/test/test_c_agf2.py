@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 10)
         self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 10)
 
-        
+
 if __name__ == '__main__':
     print('AGF2 C implementations')
     unittest.main()

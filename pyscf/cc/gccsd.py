@@ -111,14 +111,13 @@ def amplitudes_from_rccsd(t1, t2, orbspin=None):
     return spatial2spin(t1, orbspin), spatial2spin(t2, orbspin)
 
 
-class GCCSD(ccsd.CCSD):
+class GCCSD(ccsd.CCSDBase):
 
     conv_tol = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol_normt', 1e-6)
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        assert (isinstance(mf, scf.ghf.GHF))
-        ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
+        ccsd.CCSDBase.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def init_amps(self, eris=None):
         if eris is None:
@@ -160,7 +159,7 @@ class GCCSD(ccsd.CCSD):
             if not np.any(orbspin == -1):
                 self.mo_coeff = lib.tag_array(self.mo_coeff, orbspin=orbspin)
 
-        e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
+        e_corr, self.t1, self.t2 = ccsd.CCSDBase.ccsd(self, t1, t2, eris)
         if getattr(eris, 'orbspin', None) is not None:
             self.t1 = lib.tag_array(self.t1, orbspin=eris.orbspin)
             self.t2 = lib.tag_array(self.t2, orbspin=eris.orbspin)
@@ -290,26 +289,7 @@ class GCCSD(ccsd.CCSD):
                 orbspin = orbspin[self.get_frozen_mask()]
         return spin2spatial(tx, orbspin)
 
-    def density_fit(self):
-        raise NotImplementedError
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
-
-    def get_t1_diagnostic(self, t1=None):
-        if t1 is None: t1 = self.t1
-        raise NotImplementedError
-        #return get_t1_diagnostic(t1)
-
-    def get_d1_diagnostic(self, t1=None):
-        if t1 is None: t1 = self.t1
-        raise NotImplementedError
-        #return get_d1_diagnostic(t1)
-
-    def get_d2_diagnostic(self, t2=None):
-        if t2 is None: t2 = self.t2
-        raise NotImplementedError
-        #return get_d2_diagnostic(self.spin2spatial(t2))
+    to_gpu = lib.to_gpu
 
 CCSD = GCCSD
 
@@ -384,6 +364,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
             mo = mo_a + mo_b
             eri = ao2mo.kernel(mycc._scf._eri, mo)
             if eri.size == nmo**4:  # if mycc._scf._eri is a complex array
+                eri = eri.reshape(nmo**2, nmo**2)
                 sym_forbid = (orbspin[:,None] != orbspin).ravel()
             else:  # 4-fold symmetry
                 sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nmo)]
@@ -406,6 +387,8 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
+    from pyscf.scf.ghf import GHF
+    assert isinstance(mycc._scf, GHF)
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
 
@@ -565,51 +548,3 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         cput0 = log.timer_debug1('transforming vvvv', *cput0)
 
     return eris
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.atom = [['O', (0.,   0., 0.)],
-                ['O', (1.21, 0., 0.)]]
-    mol.basis = 'cc-pvdz'
-    mol.spin = 2
-    mol.build()
-    mf = scf.UHF(mol).run()
-    mf = scf.addons.convert_to_ghf(mf)
-
-    # Freeze 1s electrons
-    frozen = [0,1,2,3]
-    gcc = GCCSD(mf, frozen=frozen)
-    ecc, t1, t2 = gcc.kernel()
-    print(ecc - -0.3486987472235819)
-
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-    mol.basis = 'cc-pvdz'
-    mol.spin = 0
-    mol.build()
-    mf = scf.UHF(mol).run()
-    mf = scf.addons.convert_to_ghf(mf)
-
-    mycc = GCCSD(mf)
-    ecc, t1, t2 = mycc.kernel()
-    print(ecc - -0.2133432712431435)
-    e,v = mycc.ipccsd(nroots=8)
-    print(e[0] - 0.4335604332073799)
-    print(e[2] - 0.5187659896045407)
-    print(e[4] - 0.6782876002229172)
-
-    e,v = mycc.eaccsd(nroots=8)
-    print(e[0] - 0.16737886338859731)
-    print(e[2] - 0.24027613852009164)
-    print(e[4] - 0.51006797826488071)
-
-    e,v = mycc.eeccsd(nroots=4)
-    print(e[0] - 0.2757159395886167)
-    print(e[1] - 0.2757159395886167)
-    print(e[2] - 0.2757159395886167)
-    print(e[3] - 0.3005716731825082)

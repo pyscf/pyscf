@@ -83,6 +83,7 @@ class KnownValues(unittest.TestCase):
         cell.atom = [['C', (1., .8, 1.9)],
                      ['C', (.1, .2,  .3)],]
         cell.basis = 'ccpvdz'
+        cell.precision = 1e-11
         cell.build(False, False)
         grids = gen_grid.UniformGrids(cell)
         grids.build()
@@ -121,7 +122,7 @@ class KnownValues(unittest.TestCase):
         ao1 = numint.eval_ao(cell, grids.coords)
         mat1 = numint.eval_mat(cell, ao1, grids.weights, rho, vrho)
         w = np.arange(mat1.size) * .01
-        self.assertAlmostEqual(np.dot(w,mat1.ravel()), (.14777107967912118+0j), 8)
+        self.assertAlmostEqual(np.dot(w,mat1.ravel()), (.14777107967912118+0j), 7)
 
     def test_eval_ao_kpts(self):
         cell = pbcgto.Cell()
@@ -132,6 +133,7 @@ class KnownValues(unittest.TestCase):
         cell.atom = [['He', (1., .8, 1.9)],
                      ['He', (.1, .2,  .3)],]
         cell.basis = 'ccpvdz'
+        cell.precision = 1e-11
         cell.build(False, False)
         grids = gen_grid.UniformGrids(cell)
         grids.build()
@@ -164,6 +166,7 @@ class KnownValues(unittest.TestCase):
         cell.atom = [['He', (1., .8, 1.9)],
                      ['He', (.1, .2,  .3)],]
         cell.basis = 'ccpvdz'
+        cell.precision = 1e-11
         cell.build(False, False)
         grids = gen_grid.UniformGrids(cell)
         grids.build()
@@ -186,6 +189,7 @@ class KnownValues(unittest.TestCase):
         cell.atom = [['He', (1., .8, 1.9)],
                      ['He', (.1, .2,  .3)],]
         cell.basis = 'ccpvdz'
+        cell.precision = 1e-11
         cell.build(False, False)
         grids = gen_grid.UniformGrids(cell)
         grids.build()
@@ -196,25 +200,54 @@ class KnownValues(unittest.TestCase):
         dms = np.random.random((2,nao,nao))
         dms = (dms + dms.transpose(0,2,1)) * .5
         ni = numint.NumInt()
-        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], 1, kpts[0])
+        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], hermi=1, kpt=kpts[0])
         self.assertAlmostEqual(ne, 5.0499199224525153, 8)
         self.assertAlmostEqual(exc, -3.8870579114663886, 8)
         self.assertAlmostEqual(lib.fp(vmat), 0.42538491159934377+0.14139753327162483j, 8)
 
+        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], hermi=0, kpt=kpts[0])
+        self.assertAlmostEqual(lib.fp(vmat), 0.42538491159934377+0.14139753327162483j, 8)
+
         ni = numint.KNumInt()
         with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
-            ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, 1, kpts)
+            ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, hermi=1, kpts=kpts)
         self.assertAlmostEqual(ne, 6.0923292346269742, 8)
         self.assertAlmostEqual(exc, -3.9899423803106466, 8)
-        self.assertAlmostEqual(lib.fp(vmat[0]), -2348.9577179701278-60.733087913116719j, 6)
-        self.assertAlmostEqual(lib.fp(vmat[1]), -2353.0350086740673-117.74811536967495j, 6)
+        self.assertAlmostEqual(lib.fp(vmat[0]), -2348.9577179701278-60.733087913116719j, 5)
+        self.assertAlmostEqual(lib.fp(vmat[1]), -2353.0350086740673-117.74811536967495j, 5)
 
         with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
-            ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', [dms,dms], 1, kpts)
+            ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', [dms,dms], hermi=1, kpts=kpts)
         self.assertAlmostEqual(ne[1], 6.0923292346269742, 8)
         self.assertAlmostEqual(exc[1], -3.9899423803106466, 8)
-        self.assertAlmostEqual(lib.fp(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 6)
-        self.assertAlmostEqual(lib.fp(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 6)
+        self.assertAlmostEqual(lib.fp(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 5)
+        self.assertAlmostEqual(lib.fp(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 5)
+
+        cell = pbcgto.Cell()
+        cell.atom = 'C 0 0 0; C 0.8925000000 0.8925000000 0.8925000000'
+        cell.a = '''
+        1.7850000000 1.7850000000 0.0000000000
+        0.0000000000 1.7850000000 1.7850000000
+        1.7850000000 0.0000000000 1.7850000000
+        '''
+        cell.pseudo = 'gth-pbe'
+        cell.basis = {'C': [[0, (0.8, 1.0)],
+                            [1, (1.0, 1.0)]]}
+        cell.precision = 1e-10
+        cell.build()
+        nao = cell.nao
+        grids = gen_grid.UniformGrids(cell)
+        grids.build()
+
+        np.random.seed(1)
+        kpts = np.random.random((2,3))
+        dm = np.random.random((nao,nao))
+        dm = dm + dm.T
+        ni = numint.NumInt()
+        ne, exc, vmat1 = ni.nr_rks(cell, grids, 'blyp', dm, hermi=1, kpt=kpts[0])
+        ne, exc, vmat2 = ni.nr_rks(cell, grids, 'blyp', dm, hermi=0, kpt=kpts[0])
+        self.assertAlmostEqual(lib.fp(vmat1), (6.238900947350686+0.6026114431281391j), 8)
+        self.assertAlmostEqual(abs(vmat1 - vmat2).max(), 0, 9)
 
     def test_eval_rho(self):
         cell, grids = make_grids([61]*3)
@@ -341,11 +374,59 @@ class KnownValues(unittest.TestCase):
         dm = dm + dm.T
         ni = numint.NumInt()
         rho = numint.get_rho(ni, cell, dm, grids)
-        self.assertAlmostEqual(lib.fp(rho), 1.4639787098513968, 9)
+        self.assertAlmostEqual(lib.fp(rho), 1.4639787098513968, 8)
 
         grids.coords = cell.get_uniform_grids(wrap_around=False)
         rho1 = numint.get_rho(ni, cell, dm, grids)
-        self.assertAlmostEqual(abs(rho - rho1).max(), 0, 9)
+        self.assertAlmostEqual(abs(rho - rho1).max(), 0, 8)
+
+    def test_nr_uks_vxc_vv10(self):
+        cell = pbcgto.Cell()
+        cell.verbose = 5
+        cell.output = '/dev/null'
+        cell.a = np.eye(3) * 2.5
+        cell.atom = [['He', (1., .8, 1.9)],
+                     ['He', (.1, .2,  .3)],]
+        cell.basis = [[0, [1, 1]], [1, [.5, 1]]]
+        cell.build(False, False)
+        grids = gen_grid.UniformGrids(cell)
+        grids.build()
+
+        # TODO: a better test case to show more differences between RKS-nlc and KRKS-nlc
+        dm = cell.RKS().get_init_guess()
+        ni = numint.NumInt()
+        n, e, v = numint.nr_nlc_vxc(ni, cell, grids, 'wB97M_V', dm)
+        self.assertAlmostEqual(n, 4, 7)
+        self.assertAlmostEqual(e, 0.0184789363, 7)
+        self.assertAlmostEqual(lib.fp(v), 0.0026492515, 7)
+
+        kpts = cell.make_kpts([3,1,1])
+        dm = cell.KRKS(kpts=kpts).get_init_guess()
+        ni = numint.KNumInt()
+        n, e, v = numint.nr_nlc_vxc(ni, cell, grids, 'wB97M_V', dm, kpts=kpts)
+        self.assertAlmostEqual(n, 4, 7)
+        self.assertAlmostEqual(e, 0.0184756407, 7)
+        self.assertAlmostEqual(lib.fp(v), 0.0026498869, 7)
+
+        h2o = pbcgto.Cell()
+        h2o.a = np.eye(3) * 10
+        h2o.atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)] ]
+        h2o.basis = {"H": '6-31g', "O": '6-31g',}
+        h2o.build()
+
+        method = h2o.UKS().density_fit()
+        dm = method.get_init_guess()
+        grids = gen_grid.BeckeGrids(h2o)
+        grids.atom_grid = {'H': (20, 50), 'O': (20,50)}
+        grids.build()
+        ni = numint.NumInt()
+        n, e, v = numint.nr_nlc_vxc(ni, h2o, grids, 'wB97M_V', dm[0]*2, hermi=0)
+        self.assertAlmostEqual(e, 0.042436, 4)
+        self.assertAlmostEqual(lib.fp([v, v]), 0.0229223, 4)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.numint")

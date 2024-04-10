@@ -106,8 +106,10 @@ def multipoles(r, lmax, reorder_dipole=True):
 def sph_pure2real(l, reorder_p=True):
     r'''
     Transformation matrix: from the pure spherical harmonic functions Y_m to
-    the real spherical harmonic functions O_m.
+    the real spherical harmonic functions O_m::
+
           O_m = \sum Y_m' * U(m',m)
+
     Y(-1) = 1/\sqrt(2){-iO(-1) + O(1)}; Y(1) = 1/\sqrt(2){-iO(-1) - O(1)}
     Y(-2) = 1/\sqrt(2){-iO(-2) + O(2)}; Y(2) = 1/\sqrt(2){iO(-2) + O(2)}
     O(-1) = i/\sqrt(2){Y(-1) + Y(1)};   O(1) = 1/\sqrt(2){Y(-1) - Y(1)}

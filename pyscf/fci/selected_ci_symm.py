@@ -27,7 +27,7 @@ from pyscf.fci import direct_spin1_symm
 from pyscf.fci import selected_ci
 from pyscf.fci import addons
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 def reorder4irrep(eri, norb, link_index, orbsym, offdiag=0):
     if orbsym is None:
@@ -38,7 +38,7 @@ def reorder4irrep(eri, norb, link_index, orbsym, offdiag=0):
     orbsym = orbsym % 10
     # irrep of (ij| pair
     trilirrep = (orbsym[:,None] ^ orbsym)[numpy.tril_indices(norb, offdiag)]
-    # and the number of occurence for each irrep
+    # and the number of occurrences for each irrep
     dimirrep = numpy.array(numpy.bincount(trilirrep), dtype=numpy.int32)
     # we sort the irreps of (ij| pair, to group the pairs which have same irreps
     # "order" is irrep-id-sorted index. The (ij| paired is ordered that the
@@ -290,4 +290,3 @@ if __name__ == '__main__':
     myci = direct_spin1_symm.FCISolver().set(orbsym=orbsym)
     e2, c2 = myci.kernel(h1e, eri, norb, nelec)
     print(e1 - e2)
-

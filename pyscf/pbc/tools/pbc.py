@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import warnings
-import copy
 import ctypes
 import numpy as np
 import scipy.linalg
@@ -67,9 +66,18 @@ if FFT_ENGINE == 'FFTW':
     except OSError:
         raise RuntimeError("Failed to load libfft")
 
+    def _copy_d2z(a):
+        fn = libfft._copy_d2z
+        out = np.empty(a.shape, dtype=np.complex128)
+        fn(out.ctypes.data_as(ctypes.c_void_p),
+           a.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_size_t(a.size))
+        return out
+
     def _complex_fftn_fftw(f, mesh, func):
         if f.dtype == np.double and f.flags.c_contiguous:
-            f = lib.copy(f, dtype=np.complex128)
+            # np.asarray or np.astype is too slow
+            f = _copy_d2z(f)
         else:
             f = np.asarray(f, order='C', dtype=np.complex128)
         mesh = np.asarray(mesh, order='C', dtype=np.int32)
@@ -243,14 +251,14 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         k : (3,) ndarray
             k-point
         exx : bool or str
-            Whether this is an exchange matrix element.
+            Whether this is an exchange matrix element
         mf : instance of :class:`SCF`
 
         mesh : (3,) ndarray of ints (= nx,ny,nz)
             The number G-vectors along each direction.
         omega : float
-            Enable Coulomb kernel erf(|omega|*r12)/r12 if omega > 0
-            and erfc(|omega|*r12)/r12 if omega < 0.
+            Enable Coulomb kernel ``erf(|omega|*r12)/r12`` if omega > 0
+            and ``erfc(|omega|*r12)/r12`` if omega < 0.
             Note this parameter is slightly different to setting cell.omega
             for the treatment of exxdiv (at G0).  cell.omega affects Ewald
             probe charge at G0. It is used mostly by RSH functionals for
@@ -493,13 +501,12 @@ def precompute_exx(cell, kpts):
 
 def madelung(cell, kpts):
     Nk = get_monkhorst_pack_size(cell, kpts)
-    ecell = copy.copy(cell)
+    ecell = cell.copy(deep=False)
     ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
     ecell._env = np.append(cell._env, [0., 0., 0.])
     ecell.unit = 'B'
     #ecell.verbose = 0
-    ecell.a = np.einsum('xi,x->xi', cell.lattice_vectors(), Nk)
-    ecell.mesh = np.asarray(cell.mesh) * Nk
+    ecell.a = a = np.einsum('xi,x->xi', cell.lattice_vectors(), Nk)
 
     if cell.omega == 0:
         return -2*ecell.ewald()
@@ -510,10 +517,17 @@ def madelung(cell, kpts):
         # Coulomb operator, the Ewald summation technique is not needed
         # because the Coulomb kernel 4pi/G^2*exp(-G^2/4/omega**2) decays
         # quickly.
-        Gv, Gvbase, weights = ecell.get_Gv_weights(ecell.mesh)
-        coulG = get_coulG(ecell, Gv=Gv)
-        ZSI = np.einsum("i,ij->j", ecell.atom_charges(), ecell.get_SI(Gv))
-        return 2*cell.omega/np.pi**0.5-np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
+        precision = cell.precision
+        omega = cell.omega
+        Ecut = 10.
+        Ecut = np.log(16*np.pi**2/(2*omega**2*(2*Ecut)**.5) / precision + 1.) * 2*omega**2
+        Ecut = np.log(16*np.pi**2/(2*omega**2*(2*Ecut)**.5) / precision + 1.) * 2*omega**2
+        mesh = cutoff_to_mesh(a, Ecut)
+        Gv, Gvbase, weights = ecell.get_Gv_weights(mesh)
+        wcoulG = get_coulG(ecell, Gv=Gv) * weights
+        SI = ecell.get_SI(mesh=mesh)
+        ZSI = SI[0]
+        return 2*omega/np.pi**0.5-np.einsum('i,i,i->', ZSI.conj(), ZSI, wcoulG).real
 
 
 def get_monkhorst_pack_size(cell, kpts, tol=1e-5):
@@ -532,100 +546,81 @@ def get_monkhorst_pack_size(cell, kpts, tol=1e-5):
 
 def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.
-    The translation vectors can be used for the lattice summation.'''
-    a = cell.lattice_vectors()
-    b = cell.reciprocal_vectors(norm_to=1)
-    heights_inv = lib.norm(b, axis=1)
+    The translation vectors can be used for the lattice summation.
 
-    if nimgs is None:
-        if rcut is None:
-            rcut = cell.rcut
-        # For atoms outside the cell, distance between certain basis of nearby
-        # images may be smaller than rcut threshold even the corresponding Ls is
-        # larger than rcut. The boundary penalty ensures that Ls would be able to
-        # cover the basis that sitting out of the cell.
-        # See issue https://github.com/pyscf/pyscf/issues/1017
-        scaled_atom_coords = lib.dot(cell.atom_coords(), b.T)
-        boundary_penalty = np.zeros((3,), dtype=float)
-        neg = scaled_atom_coords.min(axis=0)
-        neg_arg = neg < 0
-        if neg_arg.any():
-            boundary_penalty[neg_arg] = np.maximum(boundary_penalty[neg_arg], abs(neg[neg_arg]))
-        pos = scaled_atom_coords.max(axis=0) - 1
-        pos_arg = pos > 0
-        if pos_arg.any():
-            boundary_penalty[pos_arg] = np.maximum(boundary_penalty[pos_arg], pos[pos_arg])
-        #boundary_penalty = np.max([abs(scaled_atom_coords).max(axis=0),
-        #                           abs(1 - scaled_atom_coords).max(axis=0)], axis=0)
-        nimgs = np.ceil(rcut * heights_inv + boundary_penalty).astype(int)
-    else:
-        rcut = max((np.asarray(nimgs))/heights_inv)
-
+    Kwargs:
+        discard:
+            Drop less important Ls based on AO values on grid
+    '''
     if dimension is None:
-        dimension = cell.dimension
-    if dimension == 0:
-        nimgs = [0, 0, 0]
-    elif dimension == 1:
-        nimgs = [nimgs[0], 0, 0]
-    elif dimension == 2:
-        nimgs = [nimgs[0], nimgs[1], 0]
+        # For atoms near the boundary of the cell, it is necessary (even in low-
+        # dimensional systems) to include lattice translations in all 3 dimensions.
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            dimension = cell.dimension
+        else:
+            dimension = 3
+    if rcut is None:
+        rcut = cell.rcut
 
-    Ts = lib.cartesian_prod((np.arange(-nimgs[0], nimgs[0]+1),
-                             np.arange(-nimgs[1], nimgs[1]+1),
-                             np.arange(-nimgs[2], nimgs[2]+1)))
-    Ls = np.dot(Ts, a)
-    if discard:
-        Ls = _discard_edge_images(cell, Ls, rcut, dimension)
-    return np.asarray(Ls, order='C')
-
-def _discard_edge_images(cell, Ls, rcut, dimension):
-    '''
-    Discard images if no basis in the image would contribute to lattice sum.
-    '''
-    if cell.dimension == 0 or rcut <= 0:
+    if dimension == 0 or rcut <= 0 or cell.natm == 0:
         return np.zeros((1, 3))
 
     a = cell.lattice_vectors()
-    scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
+
+    scaled_atom_coords = cell.get_scaled_atom_coords()
     atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
     atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
-    if (np.any(atom_boundary_max > 2) or np.any(atom_boundary_min < -1)):
-        logger.warn(cell, 'Atoms found very far from the primitive cell. '
-                    'Atom coordinates may be error.')
+    if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
         atom_boundary_max[atom_boundary_max > 1] = 1
         atom_boundary_min[atom_boundary_min <-1] = -1
-    # ovlp_penalty ensures the overlap integrals for atoms in the adjcent
-    # images are converged.
     ovlp_penalty = atom_boundary_max - atom_boundary_min
-    # atom_boundary_min-1 ensures the values of basis at the grids on the edge
-    # of the primitive cell converged
-    boundary_max = np.ceil(np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)).astype(int)
-    boundary_min = np.floor(np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)).astype(int)
-    penalty_x = penalty_y = penalty_z = [0]
-    if dimension == 1:
-        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
-    elif dimension == 2:
-        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
-        penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
+    dR = ovlp_penalty.dot(a[:dimension])
+    dR_basis = np.diag(dR)
+
+    # Search the minimal x,y,z requiring |x*a[0]+y*a[1]+z*a[2]+dR|^2 > rcut^2
+    # Ls boundary should be derived by decomposing (a, Rij) for each atom-pair.
+    # For reasons unclear, the so-obtained Ls boundary seems not large enough.
+    # The upper-bound of the Ls boundary is generated by find_boundary function.
+    def find_boundary(a):
+        aR = np.vstack([a, dR_basis])
+        r = np.linalg.qr(aR.T)[1]
+        ub = (rcut + abs(r[2,3:]).sum()) / abs(r[2,2])
+        return ub
+
+    xb = find_boundary(a[[1,2,0]])
+    if dimension > 1:
+        yb = find_boundary(a[[2,0,1]])
     else:
-        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
-        penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
-        penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
-    shifts = lib.cartesian_prod([penalty_x, penalty_y, penalty_z]).dot(a)
-    Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
-    # cell0 (Ls == 0) should always be included.
-    Ls_mask[len(Ls)//2] = True
-    return Ls[Ls_mask]
+        yb = 0
+    if dimension > 2:
+        zb = find_boundary(a)
+    else:
+        zb = 0
+    bounds = np.ceil([xb, yb, zb]).astype(int)
+    Ts = lib.cartesian_prod((np.arange(-bounds[0], bounds[0]+1),
+                             np.arange(-bounds[1], bounds[1]+1),
+                             np.arange(-bounds[2], bounds[2]+1)))
+    Ls = np.dot(Ts[:,:dimension], a[:dimension])
+
+    if discard:
+        ovlp_penalty += 1e-200  # avoid /0
+        Ts_scaled = (Ts[:,:dimension] + 1e-200) / ovlp_penalty
+        ovlp_penalty_fac = 1. / abs(Ts_scaled).min(axis=1)
+        Ls_mask = np.linalg.norm(Ls, axis=1) * (1-ovlp_penalty_fac) < rcut
+        Ls = Ls[Ls_mask]
+    return np.asarray(Ls, order='C')
 
 
 def super_cell(cell, ncopy, wrap_around=False):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
-    Note this function differs from :fun:`cell_plus_imgs` that cell_plus_imgs
+    Note this function differs from :func:`cell_plus_imgs` that cell_plus_imgs
     creates images in both +/- direction.
 
     Args:
         cell : instance of :class:`Cell`
+
         ncopy : (3,) array
+
         wrap_around : bool
             Put the original cell centered on the super cell. It has the
             effects corresponding to the parameter wrap_around of
@@ -652,15 +647,20 @@ def super_cell(cell, ncopy, wrap_around=False):
         zs[(ncopy[2]+1)//2:] -= ncopy[2]
     Ts = lib.cartesian_prod((xs, ys, zs))
     Ls = np.dot(Ts, a)
-    supcell = copy.copy(cell)
+    supcell = cell.copy(deep=False)
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
-    supcell.mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
+    mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
+    supcell.mesh = (mesh // 2) * 2 + 1
+    if isinstance(cell.magmom, np.ndarray):
+        supcell.magmom = cell.magmom.tolist() * np.prod(ncopy)
+    else:
+        supcell.magmom = cell.magmom * np.prod(ncopy)
     return _build_supcell_(supcell, cell, Ls)
 
 
 def cell_plus_imgs(cell, nimgs):
     '''Create a supercell via nimgs[i] in each +/- direction, as in get_lattice_Ls().
-    Note this function differs from :fun:`super_cell` that super_cell only
+    Note this function differs from :func:`super_cell` that super_cell only
     stacks the images in + direction.
 
     Args:
@@ -675,7 +675,7 @@ def cell_plus_imgs(cell, nimgs):
                              np.arange(-nimgs[1], nimgs[1]+1),
                              np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
-    supcell = copy.copy(cell)
+    supcell = cell.copy(deep=False)
     supcell.a = np.einsum('i,ij->ij', nimgs, a)
     supcell.mesh = np.array([(nimgs[0]*2+1)*cell.mesh[0],
                              (nimgs[1]*2+1)*cell.mesh[1],
@@ -687,10 +687,13 @@ def _build_supcell_(supcell, cell, Ls):
     Construct supcell ._env directly without calling supcell.build() method.
     This reserves the basis contraction coefficients defined in cell
     '''
+    from pyscf.pbc import gto as pbcgto
     nimgs = len(Ls)
     symbs = [atom[0] for atom in cell._atom] * nimgs
     coords = Ls.reshape(-1,1,3) + cell.atom_coords()
-    supcell.atom = supcell._atom = list(zip(symbs, coords.reshape(-1,3).tolist()))
+    coords = coords.reshape(-1,3)
+    x, y, z = coords.T
+    supcell.atom = supcell._atom = list(zip(symbs, zip(x, y, z)))
     supcell.unit = 'B'
 
     # Do not call supcell.build() to initialize supcell since it may normalize
@@ -710,6 +713,9 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._atm = np.asarray(_atm, dtype=np.int32)
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
+
+    if isinstance(supcell, pbcgto.Cell) and getattr(supcell, 'space_group_symmetry', False):
+        supcell.build_lattice_symmetry(not cell._mesh_from_build)
     return supcell
 
 
@@ -729,38 +735,28 @@ def cutoff_to_mesh(a, cutoff):
     Returns:
         mesh : (3,) array
     '''
-    # Let E(mesh_x) = min_{y, z}(|mesh_x*b[0]+y*b[1]+z*b[2]|^2)
-    # Search largest mesh_x requiring E(mesh_x) <= 2*cutoff
+    # Search the minimal x,y,z requiring |x*b[0]+y*b[1]+z*b[2]|^2 > 2 * cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)
-    c = b.dot(b.T)
-    # r is the ratio between G of each direction when E(mesh) reaches minimum
-    r = np.linalg.inv(c) / np.linalg.det(c)
-    r /= r.diagonal()[:,None]
-    Gmax = (2*cutoff / (np.linalg.norm(r.dot(b), axis=1)**2))**.5
-    # off-diagonal r may be > 1, means that the ke_cutoff is limited by the
-    # off-diagonal part
-    # e.g r[:,2] = [1, .5, 1.2], Gx = max(Gx, Gy*.5, Gz*1.2)
-    Gmax = (r * Gmax[:,None]).max(axis=0)
-    mesh = np.ceil(Gmax).astype(int) * 2# + 1
+    rx = np.linalg.qr(b[[1,2,0]].T)[1][2,2]
+    ry = np.linalg.qr(b[[2,0,1]].T)[1][2,2]
+    rz = np.linalg.qr(b.T)[1][2,2]
+
+    Gmax = (2*cutoff)**.5 / np.abs([rx, ry, rz])
+    mesh = np.ceil(Gmax).astype(int) * 2 + 1
     return mesh
 
 def mesh_to_cutoff(a, mesh):
     '''
     Convert #grid points to KE cutoff
     '''
-    # Let E(mesh_x) = min_{y, z}(|mesh_x*b[0]+y*b[1]+z*b[2]|^2)
-    # Search min(E(mesh_x)/2) subject to mesh_x > mesh
+    # Search the minimal x,y,z requiring |x*b[0]+y*b[1]+z*b[2]|^2 > 2 * cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)
-    c = b.dot(b.T)
-    # r is the ratio between G of each direction when E(mesh) reaches minimum
-    r = np.linalg.inv(c) / np.linalg.det(c)
-    r /= r.diagonal()[:,None]
+    rx = np.linalg.qr(b[[1,2,0]].T)[1][2,2]
+    ry = np.linalg.qr(b[[2,0,1]].T)[1][2,2]
+    rz = np.linalg.qr(b.T)[1][2,2]
+
     gs = (np.asarray(mesh) - 1) // 2
-    # off-diagonal r may be > 1, means that the ke_cutoff is limited by the
-    # off-diagonal part
-    # e.g r[2] = [1.2, 1.2, 1], ke_cutoff_z = min(Gx/1.2, Gy/1.2, Gz)
-    gs_eff = (gs / (r + 1e-100)).min(axis=1)
-    Gmax = gs_eff * np.linalg.norm(r.dot(b), axis=1)
+    Gmax = gs * np.array([rx, ry, rz])
     ke_cutoff = Gmax**2 / 2
     return ke_cutoff
 

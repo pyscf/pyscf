@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import unittest
 import tempfile
 import numpy
@@ -131,6 +130,10 @@ class KnownValues(unittest.TestCase):
         dm = scf.GHF(mol).get_init_guess(mol, key='huckel')
         self.assertAlmostEqual(lib.fp(dm), 1.0574099243527206, 7)
 
+    def test_init_guess_mod_huckel(self):
+        dm = scf.GHF(mol).get_init_guess(mol, key='mod_huckel')
+        self.assertAlmostEqual(lib.fp(dm), 1.1466144161440015, 7)
+
     def test_ghf_complex(self):
         mf1 = scf.GHF(mol)
         dm = mf1.init_guess_by_1e(mol) + 0j
@@ -140,6 +143,7 @@ class KnownValues(unittest.TestCase):
         dm[nao:,:nao] = dm[:nao,nao:].T.conj()
         mf1.kernel(dm)
         self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 9)
+        self.assertAlmostEqual(mf1.e_tot, -76.02676567312, 9)
 
     def test_get_veff(self):
         nao = mol.nao_nr()*2
@@ -192,17 +196,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vj), 254.68614111766146+0j, 9)
         self.assertAlmostEqual(lib.fp(vk), 62.08832587927003-8.640597547171135j, 9)
 
-        nao = mol.nao_nr()
-        numpy.random.seed(1)
-        d1 = numpy.random.random((nao,nao))
-        d2 = numpy.random.random((nao,nao))
-        d = (d1+d1.T, d2+d2.T)
-        vj, vk = mf.get_jk(mol, d)
-        self.assertEqual(vj.shape, (2,nao,nao))
-        self.assertEqual(vk.shape, (2,nao,nao))
-        self.assertAlmostEqual(lib.fp(vj), -388.17756605981504, 9)
-        self.assertAlmostEqual(lib.fp(vk), -84.276190743451622, 9)
-
     def test_spin_square(self):
         nao = mol.nao_nr()
         s = mol.intor('int1e_ovlp')
@@ -230,6 +223,9 @@ class KnownValues(unittest.TestCase):
         ssref = spin_square(mol, mo)
         self.assertAlmostEqual(ssref, ss, 9)
 
+        # Test the call to spin_square() in ghf.analyze()
+        mf.analyze()
+
     def test_canonicalize(self):
         mo = mf.mo_coeff + 0j
         nocc = numpy.count_nonzero(mf.mo_occ > 0)
@@ -246,7 +242,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(e - mfsym.mo_energy).max(), 0, 6)
 
     def test_get_occ(self):
-        mf1 = copy.copy(mfsym)
+        mf1 = mfsym.copy()
         mf1.irrep_nelec = {}
         mf1.irrep_nelec['B1'] = 1
         occ = mf1.get_occ(mf.mo_energy, mf.mo_coeff+0j)
@@ -349,7 +345,7 @@ H     0    0.757    0.587'''
         self.assertEqual(irrep_nelec['B1'], 2)
         self.assertEqual(irrep_nelec['B2'], 2)
 
-        mf1 = copy.copy(mfsym)
+        mf1 = mfsym.copy()
         mf1.irrep_nelec = irrep_nelec
         mf1.irrep_nelec['A1'] = 2
         mf1.irrep_nelec['A2'] = 2

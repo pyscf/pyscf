@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
+#include <complex.h>
 #include "config.h"
 #include "cint.h"
 #include "pbc/neighbor_list.h"
@@ -171,7 +172,7 @@ double pgfpair_radius(int la, int lb, double zeta, double zetb, double* ra, doub
     double eps = precision * precision;
 
     if (rab[0] < RZERO && rab[1] < RZERO && rab[2] < RZERO) {
-        radius = pgf_rcut(la+lb, zetp, 1., eps, radius, RCUT_MAX_CYCLE);
+        radius = pgf_rcut(la+lb, zetp, 1., eps, radius);
         return radius;
     }
 
@@ -213,7 +214,7 @@ double pgfpair_radius(int la, int lb, double zeta, double zetb, double* ra, doub
 
     for (i = 0; i <= lmax; i++){
         coef[i] *= prefactor;
-        radius = MAX(radius, pgf_rcut(i, zetp, coef[i], eps, radius, RCUT_MAX_CYCLE));
+        radius = MAX(radius, pgf_rcut(i, zetp, coef[i], eps, radius));
     }
     return radius;
 }
@@ -545,6 +546,32 @@ int get_task_loc(int** task_loc, PGFPair** pgfpairs, int ntasks,
     return n;
 }
 
+
+void gradient_gs(double complex* out, double complex* f_gs, double* Gv,
+                 int n, size_t ng)
+{
+    int i;
+    double complex *outx, *outy, *outz;
+    for (i = 0; i < n; i++) {
+        outx = out;
+        outy = outx + ng;
+        outz = outy + ng;
+        #pragma omp parallel
+        {
+            size_t igrid;
+            double *pGv;
+            #pragma omp for schedule(static)
+            for (igrid = 0; igrid < ng; igrid++) {
+                pGv = Gv + igrid * 3;
+                outx[igrid] = pGv[0] * creal(f_gs[igrid]) * _Complex_I - pGv[0] * cimag(f_gs[igrid]);
+                outy[igrid] = pGv[1] * creal(f_gs[igrid]) * _Complex_I - pGv[1] * cimag(f_gs[igrid]);
+                outz[igrid] = pGv[2] * creal(f_gs[igrid]) * _Complex_I - pGv[2] * cimag(f_gs[igrid]);
+            }
+        }
+        f_gs += ng;
+        out += 3 * ng;
+    }
+}
 
 /*
 int get_task_loc_diff_ish(int** task_loc, PGFPair** pgfpairs, int ntasks,

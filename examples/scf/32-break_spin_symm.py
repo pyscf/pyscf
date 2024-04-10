@@ -29,7 +29,7 @@ mf = scf.UHF(mol)
 # (alpha,beta).  Assigning alpha-DM and beta-DM to different value can break
 # the spin symmetry.
 #
-# In the following example, the funciton get_init_guess returns the
+# In the following example, the function get_init_guess returns the
 # superposition of atomic density matrices in which the alpha and beta
 # components are degenerated.  The degeneracy are destroyed by zeroing out the
 # beta 1s,2s components.

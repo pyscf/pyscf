@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
+# Copyright 2021-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -144,7 +144,7 @@ class AtomSCFPP(atom_hf.AtomSphAverageRHF):
     def get_hcore(self, mol=None):
         if mol is None:
             mol = self.mol
-        h = mol.intor('int1e_kin', comp=1, hermi=1, aosym='s4')
+        h = mol.intor('int1e_kin', hermi=1)
         h += get_pp_nl(mol)
         h += get_pp_loc(mol)
         return h

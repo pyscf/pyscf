@@ -95,6 +95,10 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(df.density_fit(cc.CCSD(scf.RHF(mol))),
                                    dfccsd.RCCSD))
 
+        mf = mol.RHF().density_fit().newton().x2c1e().undo_df()
+        self.assertTrue(not isinstance(mf, df_jk._DFHF))
+        self.assertEqual(mf.__class__.__name__, 'sfX2C1eSecondOrderRHF')
+
     def test_rsh_get_jk(self):
         nao = mol.nao_nr()
         numpy.random.seed(1)
@@ -123,6 +127,18 @@ class KnownValues(unittest.TestCase):
             vj1, vk1 = scf.dhf.get_jk(mol, dm, hermi=0, omega=0.9)
             self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
             self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
+
+    def test_rsh_df_custom_storage(self):
+        mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', verbose=0)
+        mf = mol.RKS().density_fit()
+        mf.xc = 'lda+0.5*SR_HF(0.3)'
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -102.02277148333626, 8)
+
+        with tempfile.NamedTemporaryFile() as ftmp:
+            mf.with_df._cderi_to_save = ftmp.name
+            mf.run()
+        self.assertAlmostEqual(mf.e_tot, -102.02277148333626, 8)
 
 if __name__ == "__main__":
     print("Full Tests for df")

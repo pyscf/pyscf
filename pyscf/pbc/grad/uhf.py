@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
+# Copyright 2021-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@
 import ctypes
 import numpy as np
 from pyscf import __config__
-from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import uhf as mol_uhf
 from pyscf.grad.rhf import _write
 from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.grad import rhf as rhf_grad
+from pyscf.pbc.lib.kpts_helper import gamma_point
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, kpt=np.zeros(3)):
     mf = mf_grad.base
@@ -43,29 +43,32 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
     log.timer('gradients of 2e part', *t0)
 
     dme0 = mf_grad.make_rdm1e(mo_energy, mo_coeff, mo_occ)
-    dm0_sf = lib.add(dm0[0], dm0[1])
-    dme0_sf = lib.add(dme0[0], dme0[1])
+    dm0_sf = dm0[0] + dm0[1]
+    dme0_sf = dme0[0] + dme0[1]
 
     if atmlst is None:
         atmlst = range(mol.natm)
 
     de = 0
-    if np.sum(kpt) < 1e-9:
-        de = mf.with_df.vpploc_part1_nuc_grad(dm0_sf, kpts=kpt.reshape(-1,3))
-        de = lib.add(de, pp_int.vpploc_part2_nuc_grad(mol, dm0_sf), out=de)
-        de = lib.add(de, pp_int.vppnl_nuc_grad(mol, dm0_sf), out=de)
+    if gamma_point(kpt):
+        de  = mf.with_df.vpploc_part1_nuc_grad(dm0_sf, kpts=kpt.reshape(-1,3))
+        de += pp_int.vpploc_part2_nuc_grad(mol, dm0_sf)
+        de += pp_int.vppnl_nuc_grad(mol, dm0_sf)
         h1ao = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
-        if mf.with_df.vpplocG_part1 is None or mf.with_df.pp_with_erf:
+        if getattr(mf.with_df, 'vpplocG_part1', None) is None:
             h1ao += -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
-        de = lib.add(de, rhf_grad._contract_vhf_dm(mf_grad, h1ao, dm0_sf, atmlst=atmlst) * 2)
+        de += rhf_grad._contract_vhf_dm(mf_grad, h1ao, dm0_sf) * 2
         for s in range(2):
-            de = lib.add(de, rhf_grad._contract_vhf_dm(mf_grad, vhf[s], dm0[s], atmlst=atmlst) * 2)
-        de = lib.add(de, rhf_grad._contract_vhf_dm(mf_grad, s1, dme0_sf, atmlst=atmlst) * -2)
-        #TODO extra_force need rewrite
+            de += rhf_grad._contract_vhf_dm(mf_grad, vhf[s], dm0[s]) * 2
+        de += rhf_grad._contract_vhf_dm(mf_grad, s1, dme0_sf) * -2
+        h1ao = s1 = vhf = dm0 = dme0 = dm0_sf = dme0_sf = None
+        de = de[atmlst]
     else:
         raise NotImplementedError
 
-    h1ao = s1 = vhf = dm0 = dme0 = dm0_sf = dme0_sf = None
+    for k, ia in enumerate(atmlst):
+        de[k] += mf_grad.extra_force(ia, locals())
+
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
         _write(log, mol, de, atmlst)
@@ -78,7 +81,7 @@ def get_veff(mf_grad, mol, dm, kpt=np.zeros(3)):
     kpts = kpt.reshape(-1,3)
     return -mydf.get_veff_ip1(dm, xc_code=xc_code, kpts=kpts, spin=1)
 
-class Gradients(rhf_grad.GradientsMixin):
+class Gradients(rhf_grad.GradientsBase):
     '''Non-relativistic Gamma-point restricted Hartree-Fock gradients'''
     def get_veff(self, mol=None, dm=None, kpt=np.zeros(3)):
         if mol is None: mol = self.mol

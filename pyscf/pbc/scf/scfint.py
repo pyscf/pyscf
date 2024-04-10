@@ -68,4 +68,3 @@ def get_ovlp(cell, kpt=None):
 def get_t(cell, kpt=None):
     '''Get the kinetic energy AO matrix.'''
     return cell.pbc_intor('cint1e_kin_sph', hermi=1, kpts=kpt)
-

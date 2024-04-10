@@ -78,6 +78,12 @@ mf.kernel()
 mf = scf.RHF(mol)
 mf.init_guess = 'huckel'
 mf.kernel()
+#
+# Another variant also exists, where an updated GWH rule is used
+#
+mf = scf.RHF(mol)
+mf.init_guess = 'mod_huckel'
+mf.kernel()
 
 #
 # Superposition of atomic potentials can be used as initial guess for DFT

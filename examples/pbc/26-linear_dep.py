@@ -9,12 +9,14 @@ See also pyscf/examples/scf/11-linear_dep.py
 from pyscf import scf as mol_scf
 from pyscf.pbc import gto, dft
 
+aug_basis = [[0, [0.08, 1]], [0, [0.12, 1]]]
+
 cell = gto.Cell()
 cell.atom='''
 C 0.000000000000   0.000000000000   0.000000000000
 C 1.685068664391   1.685068664391   1.685068664391
 '''
-cell.basis = 'gth-qzvp'
+cell.basis = ('gth-dzvp', aug_basis)
 cell.pseudo = 'gth-pade'
 cell.a = '''
 0.000000000, 3.370137329, 3.370137329

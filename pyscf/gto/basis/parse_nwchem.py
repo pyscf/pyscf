@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2023 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,16 +30,13 @@ import numpy as np
 import scipy.linalg
 from pyscf.data.elements import _std_symbol
 from pyscf.lib.exceptions import BasisNotFoundError
+from pyscf.gto.basis.parse_nwchem_ecp import DISABLE_EVAL, MAXL, SPDF, MAPSPDF
+from pyscf.gto.basis.parse_nwchem_ecp import parse as parse_ecp
+from pyscf.gto.basis.parse_nwchem_ecp import load as load_ecp
+from pyscf.gto.basis.parse_nwchem_ecp import convert_ecp_to_nwchem
 from pyscf import __config__
 
-DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
-
-MAXL = 15
-SPDF = 'SPDFGHIKLMNORTU'
-MAPSPDF = {key: l for l, key in enumerate(SPDF)}
-
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n|END\n')
-ECP_DELIMITER = re.compile('\n *ECP *\n')
 
 def parse(string, symb=None, optimize=True):
     '''Parse the basis text which is in NWChem format. Return an internal
@@ -97,6 +94,7 @@ def parse(string, symb=None, optimize=True):
     return _parse(raw_basis, optimize)
 
 def load(basisfile, symb, optimize=True):
+    '''Load basis for atom of symb from file'''
     raw_basis = search_seg(basisfile, symb)
     return _parse(raw_basis, optimize)
 
@@ -108,111 +106,48 @@ def _parse(raw_basis, optimize=True):
         if not dat or dat.startswith('#'):
             continue
         elif dat[0].isalpha():
-            key = dat.split()[1].upper()
+            keys = dat.split()
+            if len(keys) == 1:
+                key = keys[0].upper()
+            else:
+                key = keys[1].upper()
             if key == 'SP':
                 basis_parsed[0].append([0])
                 basis_parsed[1].append([1])
-            else:
+            elif key in MAPSPDF:
                 l = MAPSPDF[key]
                 current_basis = [l]
                 basis_parsed[l].append(current_basis)
+            else:
+                raise BasisNotFoundError('Not basis data')
         else:
             dat = dat.replace('D','e').split()
             try:
                 dat = [float(x) for x in dat]
             except ValueError:
                 if DISABLE_EVAL:
-                    raise ValueError('Failed to parse basis %s' % line)
+                    raise ValueError('Failed to parse %s' % line)
                 else:
                     dat = list(eval(','.join(dat)))
             except Exception as e:
                 raise BasisNotFoundError('\n' + str(e) +
                                          '\nor the required basis file not existed.')
             if key is None:
-                raise RuntimeError('Failed to parse basis')
+                raise BasisNotFoundError('Not basis data')
             elif key == 'SP':
                 basis_parsed[0][-1].append([dat[0], dat[1]])
                 basis_parsed[1][-1].append([dat[0], dat[2]])
             else:
                 current_basis.append(dat)
     basis_sorted = [b for bs in basis_parsed for b in bs]
+    if not basis_sorted:
+        raise BasisNotFoundError('Basis data not found')
 
     if optimize:
         basis_sorted = optimize_contraction(basis_sorted)
 
     basis_sorted = remove_zero(basis_sorted)
     return basis_sorted
-
-def parse_ecp(string, symb=None):
-    if symb is not None:
-        symb = _std_symbol(symb)
-        raw_data = string.splitlines()
-        for i, dat in enumerate(raw_data):
-            dat0 = dat.split(None, 1)
-            if dat0 and dat0[0] == symb:
-                break
-        if i+1 == len(raw_data):
-            raise BasisNotFoundError('ECP not found for  %s' % symb)
-        seg = []
-        for dat in raw_data[i:]:
-            dat = dat.strip()
-            if dat: # remove empty lines
-                if ((dat[0].isalpha() and dat.split(None, 1)[0].upper() != symb.upper())):
-                    break
-                else:
-                    seg.append(dat)
-    else:
-        seg = string.splitlines()
-
-    ecptxt = []
-    for dat in seg:
-        dat = dat.split('#')[0].strip()
-        dat_upper = dat.upper()
-        if (dat and not dat_upper.startswith('END') and not dat_upper.startswith('ECP')):
-            ecptxt.append(dat)
-    return _parse_ecp(ecptxt)
-
-def _parse_ecp(raw_ecp):
-    ecp_add = []
-    nelec = None
-    for line in raw_ecp:
-        dat = line.strip()
-        if not dat or dat.startswith('#'): # comment line
-            continue
-        elif dat[0].isalpha():
-            key = dat.split()[1].upper()
-            if key == 'NELEC':
-                nelec = int(dat.split()[2])
-                continue
-            elif key == 'UL':
-                ecp_add.append([-1])
-            else:
-                ecp_add.append([MAPSPDF[key]])
-            # up to r^6
-            by_ang = [[] for i in range(7)]
-            ecp_add[-1].append(by_ang)
-        else:
-            line = dat.replace('D','e').split()
-            l = int(line[0])
-            try:
-                coef = [float(x) for x in line[1:]]
-            except ValueError:
-                if DISABLE_EVAL:
-                    raise ValueError('Failed to parse ecp %s' % line)
-                else:
-                    coef = list(eval(','.join(line[1:])))
-            by_ang[l].append(coef)
-
-    if nelec is None:
-        return []
-    else:
-        bsort = []
-        for l in range(-1, MAXL):
-            bsort.extend([b for b in ecp_add if b[0] == l])
-        return [nelec, bsort]
-
-def load_ecp(basisfile, symb):
-    return _parse_ecp(search_ecp(basisfile, symb))
 
 def search_seg(basisfile, symb):
     symb = _std_symbol(symb)
@@ -229,29 +164,6 @@ def _search_basis_block(raw_data, symb):
             raw_basis = dat
             break
     return raw_basis
-
-def search_ecp(basisfile, symb):
-    symb = _std_symbol(symb)
-    with open(basisfile, 'r') as fin:
-        fdata = re.split(ECP_DELIMITER, fin.read())
-    if len(fdata) <= 1:
-        return []
-
-    fdata = fdata[1].splitlines()
-    for i, dat in enumerate(fdata):
-        dat0 = dat.split(None, 1)
-        if dat0 and dat0[0] == symb:
-            break
-    seg = []
-    for dat in fdata[i:]:
-        dat = dat.strip()
-        if dat:  # remove empty lines
-            if ((dat[0].isalpha() and dat.split(None, 1)[0].upper() != symb.upper())):
-                return seg
-            else:
-                seg.append(dat)
-    return []
-
 
 def convert_basis_to_nwchem(symb, basis):
     '''Convert the internal basis format to NWChem format string'''
@@ -281,22 +193,6 @@ def convert_basis_to_nwchem(symb, basis):
         res.append('%-2s    %s' % (symb, SPDF[bas[0]]))
         for dat in bas[1:]:
             res.append(' '.join('%15.9f'%x for x in dat))
-    return '\n'.join(res)
-
-def convert_ecp_to_nwchem(symb, ecp):
-    '''Convert the internal ecp format to NWChem format string'''
-    symb = _std_symbol(symb)
-    res = ['%-2s nelec %d' % (symb, ecp[0])]
-
-    for ecp_block in ecp[1]:
-        l = ecp_block[0]
-        if l == -1:
-            res.append('%-2s ul' % symb)
-        else:
-            res.append('%-2s %s' % (symb, SPDF[l].lower()))
-        for r_order, dat in enumerate(ecp_block[1]):
-            for e,c in dat:
-                res.append('%d    %15.9f  %15.9f' % (r_order, e, c))
     return '\n'.join(res)
 
 def optimize_contraction(basis):

@@ -47,6 +47,12 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
     This is a literal duplication of the molecular UKS class with some `mol`
     variables replaced by `cell`.
     '''
+
+    get_vsap = rks.RKS.get_vsap
+    init_guess_by_vsap = rks.RKS.init_guess_by_vsap
+    get_veff = get_veff
+    energy_elec = pyscf.dft.uks.energy_elec
+
     def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         rohf.ROHF.__init__(self, cell, kpt, exxdiv=exxdiv)
@@ -57,13 +63,12 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
-    get_veff = get_veff
-    energy_elec = pyscf.dft.uks.energy_elec
-    get_rho = uks.get_rho
+    def to_hf(self):
+        '''Convert to RHF object.'''
+        from pyscf.pbc import scf
+        return self._transfer_attrs_(scf.ROHF(self.cell, self.kpt))
 
-    density_fit = rks._patch_df_beckegrids(rohf.ROHF.density_fit)
-    rs_density_fit = rks._patch_df_beckegrids(rohf.ROHF.rs_density_fit)
-    mix_density_fit = rks._patch_df_beckegrids(rohf.ROHF.mix_density_fit)
+    to_gpu = lib.to_gpu
 
 
 if __name__ == '__main__':

@@ -57,7 +57,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
         p0, p1 = p1, p1 + qov.shape[0]
         Lov[p0:p1] = qov
 
-    emp2 = 0
+    emp2_ss = emp2_os = 0
 
     for i in range(nocc):
         buf = numpy.dot(Lov[:,i*nvir:(i+1)*nvir].T,
@@ -65,15 +65,24 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
         gi = numpy.array(buf, copy=False)
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
-        emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
-        emp2 -= numpy.einsum('jab,jba', t2i, gi)
+        edi = numpy.einsum('jab,jab', t2i, gi) * 2
+        exi = -numpy.einsum('jab,jba', t2i, gi)
+        emp2_ss += edi*0.5 + exi
+        emp2_os += edi*0.5
         if with_t2:
             t2[i] = t2i
+        buf = gi = t2i = None # free mem
+
+    emp2_ss = emp2_ss.real
+    emp2_os = emp2_os.real
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
 
     return emp2, t2
 
 
 class DFMP2(mp2.MP2):
+    _keys = {'with_df'}
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
         if getattr(mf, 'with_df', None):
@@ -81,7 +90,6 @@ class DFMP2(mp2.MP2):
         else:
             self.with_df = df.DF(mf.mol)
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
-        self._keys.update(['with_df'])
 
     def reset(self, mol=None):
         self.with_df.reset(mol)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
+# Copyright 2021-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,11 +24,13 @@ from pyscf.lib import logger
 from pyscf.grad import rhf as mol_rhf
 from pyscf.grad.rhf import _write
 from pyscf.pbc.gto.pseudo import pp_int
+from pyscf.pbc.lib.kpts_helper import gamma_point
 
 SCREEN_VHF_DM_CONTRA = getattr(__config__, 'pbc_rhf_grad_screen_vhf_dm_contract', True)
 libpbc = lib.load_library('libpbc')
 
-def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, kpt=np.zeros(3)):
+def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None,
+              atmlst=None, kpt=np.zeros(3)):
     mf = mf_grad.base
     mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
@@ -50,37 +52,31 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
         atmlst = range(mol.natm)
 
     de = 0
-    if np.sum(kpt) < 1e-9:
-        de = mf.with_df.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
-        de = lib.add(de, pp_int.vpploc_part2_nuc_grad(mol, dm0), out=de)
-        de = lib.add(de, pp_int.vppnl_nuc_grad(mol, dm0), out=de)
+    if gamma_point(kpt):
+        de  = mf.with_df.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
+        de += pp_int.vpploc_part2_nuc_grad(mol, dm0)
+        de += pp_int.vppnl_nuc_grad(mol, dm0)
         h1ao = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
-        if mf.with_df.vpplocG_part1 is None or mf.with_df.pp_with_erf:
+        if getattr(mf.with_df, 'vpplocG_part1', None) is None:
             h1ao += -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
-        de = lib.add(de, _contract_vhf_dm(mf_grad, lib.add(h1ao, vhf), dm0, atmlst=atmlst) * 2)
-        de = lib.add(de, _contract_vhf_dm(mf_grad, s1, dme0, atmlst=atmlst) * -2)
-        #TODO extra_force need rewrite
+        de += _contract_vhf_dm(mf_grad, np.add(h1ao, vhf), dm0) * 2
+        de += _contract_vhf_dm(mf_grad, s1, dme0) * -2
+        h1ao = s1 = vhf = dm0 = dme0 = None
+        de = de[atmlst]
     else:
-        hcore_deriv = mf_grad.hcore_generator(mol, kpt)
-        aoslices = mol.aoslice_by_atom()
-        for k, ia in enumerate(atmlst):
-            p0, p1 = aoslices [ia,2:]
-            h1ao = hcore_deriv(ia)
-            de[k] += np.einsum('xij,ji->x', h1ao, dm0)
-            de[k] += np.einsum('xij,ij->x', vhf[:,p0:p1], dm0[p0:p1].conj())
-            de[k] += np.einsum('xij,ij->x', vhf[:,p0:p1].conj(), dm0[p0:p1].conj())
-            de[k] -= np.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1].conj())
-            de[k] -= np.einsum('xij,ij->x', s1[:,p0:p1].conj(), dme0[p0:p1].conj())
-            de[k] += mf_grad.extra_force(ia, locals())
+        raise NotImplementedError
 
-    h1ao = s1 = vhf = dm0 = dme0 = None
+    for k, ia in enumerate(atmlst):
+        de[k] += mf_grad.extra_force(ia, locals())
+
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
         _write(log, mol, de, atmlst)
     return de
 
 
-def _contract_vhf_dm(mf_grad, vhf, dm, comp=3, atmlst=None, screen=SCREEN_VHF_DM_CONTRA):
+def _contract_vhf_dm(mf_grad, vhf, dm, comp=3, atmlst=None,
+                     screen=SCREEN_VHF_DM_CONTRA):
     from pyscf.gto.mole import ao_loc_nr, ATOM_OF
     from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
 
@@ -123,30 +119,8 @@ def _contract_vhf_dm(mf_grad, vhf, dm, comp=3, atmlst=None, screen=SCREEN_VHF_DM
     return de
 
 
-def get_ovlp(mol, kpt=np.zeros(3)):
-    return -mol.pbc_intor('int1e_ipovlp', kpt=kpt)
-
-
-def hcore_generator(mf_grad, mol=None, kpt=np.zeros(3)):
-    if mol is None:
-        mol = mf_grad.mol
-    if len(mol._ecpbas) > 0:
-        raise NotImplementedError
-    if not mol.pseudo:
-        raise NotImplementedError
-
-    h1 = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
-
-    mydf = mf_grad.base.with_df
-    aoslices = mol.aoslice_by_atom()
-    kpts = kpt.reshape(-1,3)
-    def hcore_deriv(atm_id):
-        vpp = mydf.get_pp_nuc_grad(kpts=kpts, atm_id=atm_id)
-        shl0, shl1, p0, p1 = aoslices[atm_id]
-        vpp[:,p0:p1] += h1[:,p0:p1]
-        vpp[:,:,p0:p1] += h1[:,p0:p1].transpose(0,2,1).conj()
-        return vpp
-    return hcore_deriv
+def get_ovlp(cell, kpt=np.zeros(3)):
+    return -cell.pbc_intor('int1e_ipovlp', kpt=kpt)
 
 
 def get_veff(mf_grad, mol, dm, kpt=np.zeros(3)):
@@ -170,7 +144,7 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
     return grad
 
 
-class GradientsMixin(mol_rhf.GradientsMixin):
+class GradientsBase(mol_rhf.GradientsBase):
     '''Base class for Gamma-point nuclear gradient'''
     def grad_nuc(self, mol=None, atmlst=None):
         if mol is None: mol = self.mol
@@ -181,10 +155,8 @@ class GradientsMixin(mol_rhf.GradientsMixin):
             mol = self.mol
         return get_ovlp(mol, kpt)
 
-    hcore_generator = hcore_generator
 
-
-class Gradients(GradientsMixin):
+class Gradients(GradientsBase):
     '''Non-relativistic Gamma-point restricted Hartree-Fock gradients'''
     def get_veff(self, mol=None, dm=None, kpt=np.zeros(3)):
         if mol is None: mol = self.mol

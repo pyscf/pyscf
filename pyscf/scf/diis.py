@@ -43,11 +43,16 @@ class CDIIS(lib.diis.DIIS):
         self.rollback = 0
         self.space = 8
         self.Corth = Corth
+        self.damp = 0
 
     def update(self, s, d, f, *args, **kwargs):
         errvec = get_err_vec(s, d, f, self.Corth)
         logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
-        xnew = lib.diis.DIIS.update(self, f, xerr=errvec)
+        f_prev = kwargs.get('f_prev', None)
+        if abs(self.damp) < 1e-6 or f_prev is None:
+            xnew = lib.diis.DIIS.update(self, f, xerr=errvec)
+        else:
+            xnew = lib.diis.DIIS.update(self, f*(1-self.damp) + f_prev*self.damp, xerr=errvec)
         if self.rollback > 0 and len(self._bookkeep) == self.space:
             self._bookkeep = self._bookkeep[-self.rollback:]
         return xnew
@@ -64,9 +69,6 @@ def get_err_vec_orig(s, d, f):
     '''error vector = SDF - FDS'''
     dtype = f.dtype
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
-        s = lib.device_put(s)
-        d = lib.device_put(d)
-        f = lib.device_put(f)
         sdf = reduce(lib.dot, (s,d,f))
         errvec = (sdf.conj().T - sdf).ravel()
         errvec = lib.device_get(errvec, dtype=dtype)
@@ -74,13 +76,8 @@ def get_err_vec_orig(s, d, f):
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
         errvec = []
         for i in range(f.shape[0]):
-            s_i = lib.device_put(s[i])
-            d_i = lib.device_put(d[i])
-            f_i = lib.device_put(f[i])
-            sdf = reduce(lib.dot, (s_i, d_i, f_i))
-            errvec_i = (sdf.conj().T - sdf).ravel()
-            errvec_i = lib.device_get(errvec_i, dtype=dtype)
-            errvec.append(errvec_i)
+            sdf = reduce(lib.dot, (s[i], d[i], f[i]))
+            errvec.append((sdf.conj().T - sdf).ravel())
         errvec = numpy.hstack(errvec)
 
     elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
@@ -93,21 +90,25 @@ def get_err_vec_orig(s, d, f):
 
 def get_err_vec_orth(s, d, f, Corth):
     '''error vector in orthonormal basis = C.T.conj() (SDF - FDS) C'''
+    # Symmetry information to reduce numerical error in DIIS (issue #1524)
+    orbsym = getattr(Corth, 'orbsym', None)
+    if orbsym is not None:
+        sym_forbid = orbsym[:,None] != orbsym
+
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
-        sdf = reduce(lib.dot, (s,d,f))
-        #errvec = Corth.conj().T.dot(sdf.conj().T - sdf).dot(Corth).ravel()
-        errvec = reduce(lib.dot, (Corth.conj().T, (sdf.conj().T - sdf), Corth)).ravel()
+        sdf = reduce(lib.dot, (Corth.conj().T, s, d, f, Corth))
+        if orbsym is not None:
+            sdf[sym_forbid] = 0
+        errvec = (sdf.conj().T - sdf).ravel()
 
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
         errvec = []
         for i in range(f.shape[0]):
-            sdf = reduce(lib.dot, (s[i], d[i], f[i]))
-            #errvec.append(
-            #    Corth[i].conj().T.dot(sdf.conj().T - sdf).dot(Corth[i]).ravel())
-            errvec.append(
-                reduce(lib.dot, (Corth[i].conj().T, (sdf.conj().T - sdf), Corth[i])).ravel()
-            )
-        errvec = numpy.vstack(errvec).ravel()
+            sdf = reduce(lib.dot, (Corth[i].conj().T, s[i], d[i], f[i], Corth[i]))
+            if orbsym is not None:
+                sdf[sym_forbid] = 0
+            errvec.append((sdf.conj().T - sdf).ravel())
+        errvec = numpy.hstack(errvec)
 
     elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
         errvec = numpy.hstack([
@@ -127,7 +128,7 @@ class EDIIS(lib.diis.DIIS):
     '''SCF-EDIIS
     Ref: JCP 116, 8255 (2002); DOI:10.1063/1.1470195
     '''
-    def update(self, s, d, f, mf, h1e, vhf):
+    def update(self, s, d, f, mf, h1e, vhf, *args, **kwargs):
         if self._head >= self.space:
             self._head = 0
         if not self._buffer:
@@ -187,7 +188,7 @@ class ADIIS(lib.diis.DIIS):
     '''
     Ref: JCP 132, 054109 (2010); DOI:10.1063/1.3304922
     '''
-    def update(self, s, d, f, mf, h1e, vhf):
+    def update(self, s, d, f, mf, h1e, vhf, *args, **kwargs):
         if self._head >= self.space:
             self._head = 0
         if not self._buffer:

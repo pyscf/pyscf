@@ -39,7 +39,7 @@ def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
 
     # chkfile is used to pass first orbitals from hessian methods to eph methods
     # TODO: Remove the dependence to chfile and return first orbitals from a function
-    assert ephobj.chkfile is not None, 'chkfile is requred to save first order orbitals'
+    assert ephobj.chkfile is not None, 'chkfile is required to save first order orbitals'
 
     de = ephobj.hess_elec(mo_energy, mo_coeff, mo_occ)
     ephobj.de = de + ephobj.hess_nuc(ephobj.mol)
@@ -145,7 +145,7 @@ def _freq_mass_weighted_vec(vec, omega, mass):
 def get_eph(ephobj, mo1, omega, vec, mo_rep):
     if isinstance(mo1, str):
         mo1 = chkfile.load(mo1, 'scf_mo1')
-        mo1 = dict([(int(k), mo1[k]) for k in mo1])
+        mo1 = {int(k): mo1[k] for k in mo1}
 
     mol = ephobj.mol
     mf = ephobj.base
