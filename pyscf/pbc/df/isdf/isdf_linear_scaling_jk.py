@@ -1605,11 +1605,11 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         assert dm.shape[0] == 1
         dm = dm[0]
 
-    if hasattr(mydf, 'Ls'):
+    if hasattr(mydf, 'Ls') and mydf.Ls is not None:
         from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
         dm = symmetrize_dm(dm, mydf.Ls)
     else:
-        if hasattr(mydf, 'kmesh'):
+        if hasattr(mydf, 'kmesh') and mydf.kmesh is not None:
             from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
             dm = symmetrize_dm(dm, mydf.kmesh)
 
