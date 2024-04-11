@@ -456,7 +456,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     if use_mpi == False or (use_mpi == True and rank == 0):
         len_grid_involved = 0
         for atm_id, x in enumerate(partition_rough):
-            print("atm %d involved %d grids" % (atm_id, len(x)))
+            # print("atm %d involved %d grids" % (atm_id, len(x)))
             len_grid_involved += len(x)
         if with_translation_symmetry:
             assert len_grid_involved == np.prod(mesh) // np.prod(kmesh)
@@ -475,15 +475,15 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     DISTANCE_CUTOFF = 8 # suitable for cuprates ! 
     
     ao_loc = cell.ao_loc_nr()
-    print("nao_intot = ", ao_loc[-1])
+    # print("nao_intot = ", ao_loc[-1])
     
     from copy import deepcopy
     lattice_vector = deepcopy(cell.lattice_vectors())
     
     if with_translation_symmetry:
-        print("lattice_vector = ", lattice_vector)
+        # print("lattice_vector = ", lattice_vector)
         lattice_vector = np.array(lattice_vector) / np.array(kmesh)
-        print("lattice_vector = ", lattice_vector)
+        # print("lattice_vector = ", lattice_vector)
     
     for atm_id in range(natm_tmp):
         
@@ -502,7 +502,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
         atm_involved.sort()
         atm_involved = list(set(atm_involved))
         atm_involved = np.array(atm_involved, dtype=np.int32)
-        print("atm %d involved atm = %s" % (atm_id, atm_involved))
+        # print("atm %d involved atm = %s" % (atm_id, atm_involved))
         
         ## get the involved ao ##
         
@@ -514,7 +514,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
             shl_end = AtmConnectionInfoList[atm_id_other].bas_range[-1]+1
             nao_invovled += ao_loc[shl_end] - ao_loc[shl_begin]
             atm_coords_involved.append(cell.atom_coord(atm_id_other))
-        print("atm %d involved %d ao" % (atm_id, nao_invovled))
+        # print("atm %d involved %d ao" % (atm_id, nao_invovled))
         
         atm_coords_involved = np.array(atm_coords_involved)
         
@@ -586,7 +586,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     if use_mpi == False or (use_mpi == True and rank == 0):
         len_grid_involved = 0
         for atm_id, x in enumerate(partition):
-            print("atm %d involved %d grids" % (atm_id, len(x)))
+            # print("atm %d involved %d grids" % (atm_id, len(x)))
             len_grid_involved += len(x)
         if with_translation_symmetry:
             assert len_grid_involved == np.prod(mesh) // np.prod(kmesh)
@@ -910,9 +910,9 @@ def get_aoR(cell:Cell, coords, partition,
     
     precision = AtmConnectionInfoList[0].precision
     
-    if rank == 0:
-        print("RcutMax   = ", RcutMax)
-        print("precision = ", precision)
+    # if rank == 0:
+    #     print("RcutMax   = ", RcutMax)
+    #     print("precision = ", precision)
         
     aoR_holder = []
     
@@ -929,9 +929,9 @@ def get_aoR(cell:Cell, coords, partition,
     
     atm_2_grid_segment = _get_atm_2_grid_segment(partition, group)
     
-    if rank == 0:
-        print("grid_partition = ", grid_partition)
-        print("atm_2_grid_segment = ", atm_2_grid_segment)
+    # if rank == 0:
+    #     print("grid_partition = ", grid_partition)
+    #     print("atm_2_grid_segment = ", atm_2_grid_segment)
     
     local_gridID_begin = 0
     global_gridID_begin = grid_partition[rank]
@@ -963,7 +963,7 @@ def get_aoR(cell:Cell, coords, partition,
             else:
                 atm_involved = np.arange(cell.natm) # with kmesh ! 
         
-        print("atm %d involved atm = %s" % (atm_id, atm_involved))
+        # print("atm %d involved atm = %s" % (atm_id, atm_involved))
         
         ##### get the involved ao #####
         
@@ -973,8 +973,8 @@ def get_aoR(cell:Cell, coords, partition,
             shl_end = AtmConnectionInfoList[atm_id_other].bas_range[-1]+1
             nao_invovled += ao_loc[shl_end] - ao_loc[shl_begin]
         
-        if use_mpi == False:
-            print("atm %d involved %d ao before prune" % (atm_id, nao_invovled))
+        # if use_mpi == False:
+        #     print("atm %d involved %d ao before prune" % (atm_id, nao_invovled))
         
         # aoR = np.zeros((nao_invovled, len(grid_ID)))
         bas_id = []
@@ -1060,14 +1060,14 @@ def get_aoR(cell:Cell, coords, partition,
         
         max_row = np.max(np.abs(aoR), axis=1)
         where = np.where(max_row > precision)[0]
-        if use_mpi == False:
-            print("atm %d involved %d ao after  prune" % (atm_id, len(where)))
+        # if use_mpi == False:
+        #     print("atm %d involved %d ao after  prune" % (atm_id, len(where)))
         # if len(where) < aoR.shape[0] * 0.85:
         if len(where) < aoR.shape[0]:
             aoR = aoR[where]
             bas_id = np.array(bas_id)[where]
-        if use_mpi == False:
-            print("atm %d involved %d ao after  prune" % (atm_id, aoR.shape[0]))
+        # if use_mpi == False:
+        #     print("atm %d involved %d ao after  prune" % (atm_id, aoR.shape[0]))
         
         global_gridID_begin = atm_2_grid_segment[atm_id][0]
         # print("local_gridID_begin = %d, local_gridID_end = %d" % (local_gridID_begin, local_gridID_begin+len(grid_ID)))

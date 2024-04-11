@@ -58,9 +58,9 @@ def _extract_grid_primitive_cell(cell_a, mesh, Ls, coords):
     # print("Ly = ", Ly)
     # print("Lz = ", Lz)
     
-    print("Length supercell x = %15.6f , primitive cell x = %15.6f" % (cell_a[0, 0], cell_a[0, 0] / Lx))
-    print("Length supercell y = %15.6f , primitive cell y = %15.6f" % (cell_a[1, 1], cell_a[1, 1] / Ly))
-    print("Length supercell z = %15.6f , primitive cell z = %15.6f" % (cell_a[2, 2], cell_a[2, 2] / Lz))
+    # print("Length supercell x = %15.6f , primitive cell x = %15.6f" % (cell_a[0, 0], cell_a[0, 0] / Lx))
+    # print("Length supercell y = %15.6f , primitive cell y = %15.6f" % (cell_a[1, 1], cell_a[1, 1] / Ly))
+    # print("Length supercell z = %15.6f , primitive cell z = %15.6f" % (cell_a[2, 2], cell_a[2, 2] / Lz))
     
     nx, ny, nz = mesh
     
@@ -183,8 +183,8 @@ def _RowCol_FFT_bench(input, Ls, inv=False, TransBra = True, TransKet = True):
     assert A.shape[1] % ncell == 0
     assert A.shape[0] % ncell == 0
     
-    print("A.shape = ", A.shape)
-    print("Ls = ", Ls)
+    # print("A.shape = ", A.shape)
+    # print("Ls = ", Ls)
     
     NPOINT_KET = A.shape[1] // ncell
     
