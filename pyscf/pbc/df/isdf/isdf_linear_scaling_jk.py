@@ -215,7 +215,8 @@ def _half_J(mydf, dm, use_mpi=False):
     del dm_buf, ddot_buf, density_R
     del density_R_tmp
     
-    _benchmark_time(t1, t2, "half_J")
+    if mydf.verbose:
+        _benchmark_time(t1, t2, "half_J")
     
     return J
 
@@ -283,7 +284,7 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
 
     J_Res = np.zeros((nao, nao), dtype=np.float64)
 
-    for aoR_holder in aoR:
+    for atm_id, aoR_holder in enumerate(aoR):
         
         if aoR_holder is None:
             continue
@@ -737,8 +738,8 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm, bra_aoR_holder, res:np.ndarray
     assert ngrid_loc == ngrid_bra
         
     t2 = (logger.process_clock(), logger.perf_counter())
-    if verbose>0:
-        _benchmark_time(t1, t2, "__get_DensityMatrixonRgAO_qradratic")
+    # if verbose>0:
+    #     _benchmark_time(t1, t2, "__get_DensityMatrixonRgAO_qradratic")
     return res
 
 # @profile

@@ -64,8 +64,8 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
     assert isinstance(mydf.aoR, list)
     assert isinstance(mydf.partition, list)
 
-    if mydf.verbose:
-        print("In select_IP, num_threads = ", lib.num_threads())
+    # if mydf.verbose:
+    #     print("In select_IP, num_threads = ", lib.num_threads())
 
     ### determine the largest grids point of one atm ###
 
@@ -210,7 +210,7 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
         # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
             
         cutoff = abs(R[npt_find-1, npt_find-1])
-        print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
+        # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
         pivot = pivot[:npt_find]
         pivot.sort()
         # results.extend(list(grid_ID[pivot]))
@@ -230,8 +230,8 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
     #     # results.sort()
     # # results.sort()
     
-    if mydf.verbose:
-        print("In select_IP, num_threads = ", lib.num_threads())
+    # if mydf.verbose:
+    #     print("In select_IP, num_threads = ", lib.num_threads())
 
     del aoR_atm1
     del aoR_atm2
@@ -263,8 +263,8 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
     if group is None:
         raise ValueError("group must be specified")
 
-    if mydf.verbose:
-        print("In select_IP, num_threads = ", lib.num_threads())
+    #if mydf.verbose:
+    #     print("In select_IP, num_threads = ", lib.num_threads())
         
     nthread = lib.num_threads()
     
@@ -491,14 +491,14 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
             # mydf.aoRg = ISDF_Local_Utils._sync_list_related_to_partition(mydf.aoRg_possible, mydf.group)
             # mydf.aoRg = ISDF_Local_Utils._sync_aoRg(mydf.aoRg_possible, mydf.natm)
             mydf.aoRg = mydf.aoRg_possible
-            if rank == 0:
-                for aoR_holder in mydf.aoRg:
-                    print('aoR-holder begin = ', aoR_holder.global_gridID_begin)
+            # if rank == 0:
+            #     for aoR_holder in mydf.aoRg:
+            #         print('aoR-holder begin = ', aoR_holder.global_gridID_begin)
         else:
             mydf.aoRg = mydf.aoRg_possible
     
-    if rank == 0:
-        print("IP_segment = ", mydf.IP_segment)
+    # if rank == 0:
+    #     print("IP_segment = ", mydf.IP_segment)
     
     memory = ISDF_Local_Utils._get_aoR_holders_memory(mydf.aoRg)
     
@@ -646,9 +646,9 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     
     if use_mpi:
         mydf.aux_basis = ISDF_Local_Utils._sync_list(mydf.aux_basis, ngroup)
-        if rank == 0:
-            for aux_basis in mydf.aux_basis:
-                print("aux_basis.shape = ", aux_basis.shape)
+        # if rank == 0:
+        #     for aux_basis in mydf.aux_basis:
+        #         print("aux_basis.shape = ", aux_basis.shape)
     
     del A 
     A = None
