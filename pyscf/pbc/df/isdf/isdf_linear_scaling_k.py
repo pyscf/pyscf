@@ -268,6 +268,7 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
     #################### build aoR_FFT ####################
 
     if mydf.with_robust_fitting:
+        
         ngrids = coords.shape[0]
         ngrids_prim = ngrids // np.prod(kmesh)
         aoR_tmp = ISDF_eval_gto(mydf.cell, coords=coords[mydf.grid_ID_ordered], shls_slice=(0, nbas_prim)) * weight
