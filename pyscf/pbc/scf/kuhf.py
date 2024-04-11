@@ -222,7 +222,6 @@ def _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s):
 
     kmesh = k2gamma.kpts_to_kmesh(cell, kpts-kpts[0])
     nkpts, nao = dm_ao_kpts[0].shape[:2]
-    Rs = k2gamma.translation_vectors_for_kmesh(cell, kmesh)
     scell, phase = k2gamma.get_phase(cell, kpts, kmesh)
     s_sc = k2gamma.to_supercell_ao_integrals(cell, kpts, s, kmesh=kmesh, force_real=False)
     orth_coeff = orth.orth_ao(scell, 'meta_lowdin', pre_orth_method, s=s_sc)[:,:nao] # cell 0 only
