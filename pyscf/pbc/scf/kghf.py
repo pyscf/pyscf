@@ -136,6 +136,24 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     return mo_occ_kpts
 
+def _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s):
+    from pyscf.lo import orth
+    from pyscf.pbc.tools import k2gamma
+
+    kmesh = k2gamma.kpts_to_kmesh(cell, kpts-kpts[0])
+    nkpts, nso = dm_ao_kpts.shape[:2]
+    nao = nso // 2
+    Rs = k2gamma.translation_vectors_for_kmesh(cell, kmesh)
+    scell, phase = k2gamma.get_phase(cell, kpts, kmesh)
+    s_sc = k2gamma.to_supercell_ao_integrals(cell, kpts, s, kmesh=kmesh, force_real=False)
+    orth_coeff = orth.orth_ao(scell, 'meta_lowdin', pre_orth_method, s=s_sc)[:,:nao] # cell 0 only
+    c_inv = np.dot(orth_coeff.T.conj(), s_sc)
+    c_inv = lib.einsum('aRp,Rk->kap', c_inv.reshape(nao,nkpts,nao), phase)
+    dm_aa = lib.einsum('kap,kpq,kbq->ab', c_inv, dm_ao_kpts[:,:nao,:nao], c_inv.conj())
+    dm_bb = lib.einsum('kap,kpq,kbq->ab', c_inv, dm_ao_kpts[:,nao:,nao:], c_inv.conj())
+
+    return (dm_aa, dm_bb)
+
 def mulliken_meta(cell, dm_ao_kpts, kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
@@ -143,34 +161,16 @@ def mulliken_meta(cell, dm_ao_kpts, kpts, verbose=logger.DEBUG,
     Note this function only computes the Mulliken population for the gamma
     point density matrix.
     '''
-    from pyscf.lo import orth
-    from pyscf.pbc.tools import k2gamma
-
     log = logger.new_logger(cell, verbose)
-    from pyscf.pbc.lib.kpts_helper import KPT_DIFF_TOL
-    if np.all(abs(kpts).sum(axis=1) > KPT_DIFF_TOL):
-        log.error('Current implementation of population analysis does not support '
-                  'shifted k-point mesh.')
-        raise NotImplementedError
 
     if s is None:
         s = khf.get_ovlp(None, cell=cell, kpts=kpts)
     if s is not None:
         if s[0].shape == dm_ao_kpts[0].shape:   # s in SO
             nao = dm_ao_kpts[0].shape[0]//2
-            s = s[:,:nao,:nao]  # keep only one spin sector
+            s = lib.asarray(s[:,:nao,:nao], order='C') # keep only one spin sector
 
-    kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
-    nkpts, nso = dm_ao_kpts.shape[:2]
-    nao = nso // 2
-    Rs = k2gamma.translation_vectors_for_kmesh(cell, kmesh)
-    scell, phase = k2gamma.get_phase(cell, kpts, kmesh)
-    s_sc = k2gamma.to_supercell_ao_integrals(cell, kpts, s)
-    orth_coeff = orth.orth_ao(scell, 'meta_lowdin', pre_orth_method, s=s_sc)[:,:nao] # cell 0 only
-    c_inv = np.dot(orth_coeff.T, s_sc)
-    c_inv = lib.einsum('aRp,Rk->kap', c_inv.reshape(nao,nkpts,nao), phase)
-    dm_aa = lib.einsum('kap,kpq,kbq->ab', c_inv, dm_ao_kpts[:,:nao,:nao], c_inv.conj())
-    dm_bb = lib.einsum('kap,kpq,kbq->ab', c_inv, dm_ao_kpts[:,nao:,nao:], c_inv.conj())
+    dm_aa, dm_bb = _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s)
 
     log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
     return mol_uhf.mulliken_pop(cell, (dm_aa,dm_bb), np.eye(dm_aa.shape[0]), log)

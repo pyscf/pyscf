@@ -278,6 +278,23 @@ def analyze(mf, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
         #return mf.mulliken_pop(mf.cell, dm, s=ovlp_ao, verbose=verbose)
 
 
+def _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s):
+    from pyscf.lo import orth
+    from pyscf.pbc.tools import k2gamma
+
+    kmesh = k2gamma.kpts_to_kmesh(cell, kpts-kpts[0])
+    nkpts, nao = dm_ao_kpts.shape[:2]
+    Rs = k2gamma.translation_vectors_for_kmesh(cell, kmesh)
+    scell, phase = k2gamma.get_phase(cell, kpts, kmesh)
+    s_sc = k2gamma.to_supercell_ao_integrals(cell, kpts, s, kmesh=kmesh, force_real=False)
+    orth_coeff = orth.orth_ao(scell, 'meta_lowdin', pre_orth_method, s=s_sc)[:,:nao] # cell 0 only
+    c_inv = np.dot(orth_coeff.T.conj(), s_sc)
+    c_inv = lib.einsum('aRp,Rk->kap', c_inv.reshape(nao,nkpts,nao), phase)
+    dm = lib.einsum('kap,kpq,kbq->ab', c_inv, dm_ao_kpts, c_inv.conj())
+
+    return dm
+
+
 def mulliken_meta(cell, dm_ao_kpts, kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
@@ -285,28 +302,12 @@ def mulliken_meta(cell, dm_ao_kpts, kpts, verbose=logger.DEBUG,
     Note this function only computes the Mulliken population for the gamma
     point density matrix.
     '''
-    from pyscf.lo import orth
-    from pyscf.pbc.tools import k2gamma
-
     log = logger.new_logger(cell, verbose)
-    from pyscf.pbc.lib.kpts_helper import KPT_DIFF_TOL
-    if np.all(abs(kpts).sum(axis=1) > KPT_DIFF_TOL):
-        log.error('Current implementation of population analysis does not support '
-                  'shifted k-point mesh.')
-        raise NotImplementedError
 
     if s is None:
         s = get_ovlp(None, cell=cell, kpts=kpts)
 
-    kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
-    nkpts, nao = dm_ao_kpts.shape[:2]
-    Rs = k2gamma.translation_vectors_for_kmesh(cell, kmesh)
-    scell, phase = k2gamma.get_phase(cell, kpts, kmesh)
-    s_sc = k2gamma.to_supercell_ao_integrals(cell, kpts, s)
-    orth_coeff = orth.orth_ao(scell, 'meta_lowdin', pre_orth_method, s=s_sc)[:,:nao] # cell 0 only
-    c_inv = np.dot(orth_coeff.T, s_sc)
-    c_inv = lib.einsum('aRp,Rk->kap', c_inv.reshape(nao,nkpts,nao), phase)
-    dm = lib.einsum('kap,kpq,kbq->ab', c_inv, dm_ao_kpts, c_inv.conj())
+    dm = _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s)
 
     log.note(' ** Mulliken pop on meta-lowdin orthogonal AOs **')
     return mol_hf.mulliken_pop(cell, dm, np.eye(dm.shape[0]), log)

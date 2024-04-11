@@ -316,7 +316,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     dmb = dm[nao:,nao:]
     if s is not None:
         assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
-        s = s[:nao,:nao]
+        s = lib.asarray(s[:nao,:nao], order='C')
     return uhf.mulliken_pop(mol, (dma,dmb), s, verbose)
 
 def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
@@ -328,7 +328,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
     dmb = dm_ao[nao:,nao:]
     if s is not None:
         assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
-        s = s[:nao,:nao]
+        s = lib.asarray(s[:nao,:nao], order='C')
     return uhf.mulliken_meta(mol, (dma,dmb), verbose, pre_orth_method, s)
 
 def det_ovlp(mo1, mo2, occ1, occ2, ovlp):

@@ -125,6 +125,7 @@ class UHF(pbchf.SCF):
     analyze = mol_uhf.UHF.analyze
     mulliken_pop = mol_uhf.UHF.mulliken_pop
     mulliken_meta = mol_uhf.UHF.mulliken_meta
+    mulliken_meta_spin = mol_uhf.UHF.mulliken_meta_spin
     canonicalize = mol_uhf.UHF.canonicalize
     spin_square = mol_uhf.UHF.spin_square
     stability = mol_uhf.UHF.stability
