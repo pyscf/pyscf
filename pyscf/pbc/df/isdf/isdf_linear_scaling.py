@@ -1398,51 +1398,51 @@ if __name__ == '__main__':
     if rank != 0:
         verbose = 0
         
-    # cell   = pbcgto.Cell()
-    # boxlen = 3.5668
-    # cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
-    # prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
-    # atm = [
-    #     ['C', (0.     , 0.     , 0.    )],
-    #     ['C', (0.8917 , 0.8917 , 0.8917)],
-    #     ['C', (1.7834 , 1.7834 , 0.    )],
-    #     ['C', (2.6751 , 2.6751 , 0.8917)],
-    #     ['C', (1.7834 , 0.     , 1.7834)],
-    #     ['C', (2.6751 , 0.8917 , 2.6751)],
-    #     ['C', (0.     , 1.7834 , 1.7834)],
-    #     ['C', (0.8917 , 2.6751 , 2.6751)],
-    # ] 
-    
-    prim_a = np.array(
-                    [[14.572056092/2, 0.000000000, 0.000000000],
-                     [0.000000000, 14.572056092/2, 0.000000000],
-                     [0.000000000, 0.000000000,  6.010273939],]) * BOHR
+    cell   = pbcgto.Cell()
+    boxlen = 3.5668
+    cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
+    prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
     atm = [
-['Cu1',	(1.927800,	1.927800,	1.590250)],
-['O1',	(1.927800,	0.000000,	1.590250)],
-['O1',	(0.000000,	1.927800,	1.590250)],
-['Ca',	(0.000000,	0.000000,	0.000000)],
-    ]
-    basis = {
-        'Cu1':'ecpccpvdz', 'Cu2':'ecpccpvdz', 'O1': 'ecpccpvdz', 'Ca':'ecpccpvdz'
-    }
-    pseudo = {'Cu1': 'gth-pbe-q19', 'Cu2': 'gth-pbe-q19', 'O1': 'gth-pbe', 'Ca': 'gth-pbe'}
-    ke_cutoff = 128 
-    prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
+        ['C', (0.     , 0.     , 0.    )],
+        ['C', (0.8917 , 0.8917 , 0.8917)],
+        ['C', (1.7834 , 1.7834 , 0.    )],
+        ['C', (2.6751 , 2.6751 , 0.8917)],
+        ['C', (1.7834 , 0.     , 1.7834)],
+        ['C', (2.6751 , 0.8917 , 2.6751)],
+        ['C', (0.     , 1.7834 , 1.7834)],
+        ['C', (0.8917 , 2.6751 , 2.6751)],
+    ] 
+    KE_CUTOFF = 70
+    basis = 'unc-gth-cc-dzvp'
+    pseudo = "gth-hf"   
+    prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis=basis, pseudo=pseudo)    
+    # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
+    # prim_partition = [[0,1,2,3,4,5,6,7]]
+    prim_partition = [[0,1],[2,3],[4,5],[6,7]]
+
+#     prim_a = np.array(
+#                     [[14.572056092/2, 0.000000000, 0.000000000],
+#                      [0.000000000, 14.572056092/2, 0.000000000],
+#                      [0.000000000, 0.000000000,  6.010273939],]) * BOHR
+#     atm = [
+# ['Cu1',	(1.927800,	1.927800,	1.590250)],
+# ['O1',	(1.927800,	0.000000,	1.590250)],
+# ['O1',	(0.000000,	1.927800,	1.590250)],
+# ['Ca',	(0.000000,	0.000000,	0.000000)],
+#     ]
+#     basis = {
+#         'Cu1':'ecpccpvdz', 'Cu2':'ecpccpvdz', 'O1': 'ecpccpvdz', 'Ca':'ecpccpvdz'
+#     }
+#     pseudo = {'Cu1': 'gth-pbe-q19', 'Cu2': 'gth-pbe-q19', 'O1': 'gth-pbe', 'Ca': 'gth-pbe'}
+#     ke_cutoff = 128 
+#     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
+#     prim_mesh = prim_cell.mesh
+#     KE_CUTOFF = 128
+#     prim_partition = [[0, 1, 2, 3]]
+    
     prim_mesh = prim_cell.mesh
-    
-    # KE_CUTOFF = 70
-    KE_CUTOFF = 128
-        
-    # prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
-    prim_mesh = prim_cell.mesh
-    prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
-    # prim_partition = [[0, 1, 2, 3, 4, 5, 6, 7]]
-    # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
-    
-    # prim_partition = [[0], [1], [2], [3]]
-    prim_partition = [[0, 1, 2, 3]]
-    
+
+    # Ls = [2, 2, 2]
     Ls = [1, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
@@ -1450,39 +1450,48 @@ if __name__ == '__main__':
     
     cell, group_partition = build_supercell_with_partition(atm, prim_a, mesh=mesh, 
                                                      Ls=Ls,
-                                                     basis=basis, pseudo=pseudo,
+                                                     basis=basis, 
+                                                     pseudo=pseudo,
                                                      partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
     print("group_partition = ", group_partition)
+    
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False)
-    # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
-    pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
+    pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
+    # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
+    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    _benchmark_time(t1, t2, "build isdf")
     
-    from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import init_guess_by_atom
-    
-    atm_config = {
-        'Cu': {'charge': 2, 'occ_config': [6,12,9,0]},
-        'O': {'charge': -2, 'occ_config': [4,6,0,0]},
-        'Ca': {'charge': 2, 'occ_config': [6,12,0,0]},
-    }
-    
-    dm = init_guess_by_atom(cell, atm_config) # a better init guess than the default one ! 
+    # from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import init_guess_by_atom
+    # atm_config = {
+    #     'Cu': {'charge': 2, 'occ_config': [6,12,9,0]},
+    #     'O': {'charge': -2, 'occ_config': [4,6,0,0]},
+    #     'Ca': {'charge': 2, 'occ_config': [6,12,0,0]},
+    # }
+    # dm = init_guess_by_atom(cell, atm_config) # a better init guess than the default one ! 
     
     from pyscf.pbc import scf
 
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+
     mf = scf.RHF(cell)
-    mf = scf.addons.smearing_(mf, sigma=0.2, method='fermi')
+    # mf = scf.addons.smearing_(mf, sigma=0.2, method='fermi')
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
-    mf.max_cycle = 32
+    mf.max_cycle = 5
     mf.conv_tol = 1e-7
     
-    mf.kernel(dm)
+    # mf.kernel(dm)
+    mf.kernel()
     
-    from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import analysis_dm, analysis_dm_on_grid
+    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
-    dm = mf.make_rdm1()
+    _benchmark_time(t1, t2, "scf")
+    
+    # from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import analysis_dm, analysis_dm_on_grid
+    # dm = mf.make_rdm1()
     
     # analysis_dm(cell, dm, pbc_isdf_info.distance_matrix)
     # analysis_dm_on_grid(pbc_isdf_info, dm, pbc_isdf_info.distance_matrix)

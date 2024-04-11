@@ -44,8 +44,7 @@ libpbc = lib.load_library('libpbc')
 
 ### ls = linear scaling
 
-# @profile
-def _contract_j_dm_ls(mydf, dm, use_mpi=False):
+def _half_J(mydf, dm, use_mpi=False):
     
     if use_mpi:
         from mpi4py import MPI
@@ -54,7 +53,7 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
         size = comm.Get_size()
         #raise NotImplementedError("MPI is not supported yet.")
         assert mydf.direct == True
-    
+        
     t1 = (logger.process_clock(), logger.perf_counter())
 
     if len(dm.shape) == 3:
@@ -82,10 +81,9 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
     density_R = np.zeros((ngrid,), dtype=np.float64)
     
     dm_buf = np.zeros((max_nao_involved, max_nao_involved), dtype=np.float64)
-    # ddot_buf = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
     max_dim_buf = max(max_ngrid_involved, max_nao_involved)
     ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
-    aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
+    # aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
     
     ##### get the involved C function ##### 
     
@@ -209,21 +207,73 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
             
         J = J_ordered.copy()
             
-    if use_mpi:
-        # grid_segment = mydf.grid_segment
-        # sendbuf = None
-        # if rank == 0:
-        #     sendbuf = []
-        #     for i in range(size):
-        #         p0 = grid_segment[i]
-        #         p1 = grid_segment[i+1]
-        #         sendbuf.append(J[p0:p1])
-        # J = scatter(sendbuf, comm, rank, root=0)
-        # del sendbuf
-        # sendbuf = None 
-        
+    if use_mpi:        
         J = bcast(J, root=0)
     
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    del dm_buf, ddot_buf, density_R
+    del density_R_tmp
+    
+    _benchmark_time(t1, t2, "half_J")
+    
+    return J
+
+# @profile
+def _contract_j_dm_ls(mydf, dm, use_mpi=False):
+    
+    if use_mpi:
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        size = comm.Get_size()
+        #raise NotImplementedError("MPI is not supported yet.")
+        assert mydf.direct == True
+    
+    t1 = (logger.process_clock(), logger.perf_counter())
+
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+        
+    nao  = dm.shape[0]
+    cell = mydf.cell
+    assert cell.nao == nao
+    vol = cell.vol
+    mesh = np.array(cell.mesh, dtype=np.int32)
+    ngrid = np.prod(mesh)
+
+    aoR  = mydf.aoR
+    assert isinstance(aoR, list)
+    naux = mydf.naux
+    
+    #### step 0. allocate buffer 
+    
+    max_nao_involved = np.max([aoR_holder.aoR.shape[0] for aoR_holder in aoR if aoR_holder is not None])
+    max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
+    ngrids_local = np.sum([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
+    
+    density_R = np.zeros((ngrid,), dtype=np.float64)
+    
+    max_dim_buf = max(max_ngrid_involved, max_nao_involved)
+    ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
+    aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
+    
+    ##### get the involved C function ##### 
+    
+    fn_extract_dm = getattr(libpbc, "_extract_dm_involved_ao", None) 
+    assert fn_extract_dm is not None
+    
+    fn_packadd_dm = getattr(libpbc, "_packadd_local_dm", None)
+    assert fn_packadd_dm is not None
+    
+    #### step 1 2. get density value on real space grid and IPs
+    
+    group = mydf.group
+    ngroup = len(group)
+
+    J = _half_J(mydf, dm, use_mpi)
+
     #### step 3. get J 
     
     # J = np.asarray(lib.d_ij_j_ij(aoR, J, out=buffer1), order='C') 
@@ -282,7 +332,198 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
     
     ######### delete the buffer #########
     
-    del dm_buf, ddot_buf, density_R
+    # del dm_buf, 
+    del ddot_buf 
+    # density_R
+    # del density_R_tmp
+    del aoR_buf1
+    
+    return J * ngrid / vol
+
+def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
+    
+    if use_mpi:
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        size = comm.Get_size()
+        #raise NotImplementedError("MPI is not supported yet.")
+        assert mydf.direct == True
+    
+    t1 = (logger.process_clock(), logger.perf_counter())
+
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+        
+    nao  = dm.shape[0]
+    cell = mydf.cell
+    assert cell.nao == nao
+    vol = cell.vol
+    mesh = np.array(cell.mesh, dtype=np.int32)
+    ngrid = np.prod(mesh)
+
+    aoRg  = mydf.aoRg
+    assert isinstance(aoRg, list)
+    naux = mydf.naux
+    W = mydf.W
+    
+    #### step 0. allocate buffer 
+    
+    max_nao_involved = np.max([aoR_holder.aoR.shape[0] for aoR_holder in aoRg if aoR_holder is not None])
+    max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoRg if aoR_holder is not None])
+    ngrids_local = np.sum([aoR_holder.aoR.shape[1] for aoR_holder in aoRg if aoR_holder is not None])
+    
+    # density_R = np.zeros((ngrids_local,), dtype=np.float64)
+    density_Rg = np.zeros((naux,), dtype=np.float64)
+    
+    dm_buf = np.zeros((max_nao_involved, max_nao_involved), dtype=np.float64)
+    # ddot_buf = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
+    max_dim_buf = max(max_ngrid_involved, max_nao_involved)
+    ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
+    aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
+    
+    ##### get the involved C function ##### 
+    
+    fn_extract_dm = getattr(libpbc, "_extract_dm_involved_ao", None) 
+    assert fn_extract_dm is not None
+    
+    fn_packadd_dm = getattr(libpbc, "_packadd_local_dm", None)
+    assert fn_packadd_dm is not None
+    
+    #### step 1. get density value on real space grid and IPs
+    
+    # lib.ddot(dm, aoR, c=buffer1) 
+    # tmp1 = buffer1
+    # density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')
+    
+    group = mydf.group
+    ngroup = len(group)
+    
+    # local_grid_loc = 0
+    density_R_tmp = None
+    
+    for atm_id, aoR_holder in enumerate(aoRg):
+        
+        if aoR_holder is None:
+            continue
+        
+        if use_mpi:
+            if atm_id % comm_size != rank:
+                continue
+            
+        ngrids_now = aoR_holder.aoR.shape[1]
+        nao_involved = aoR_holder.aoR.shape[0]
+        
+        if nao_involved < nao:
+            fn_extract_dm(
+                dm.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao),
+                dm_buf.ctypes.data_as(ctypes.c_void_p),
+                aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_involved),
+            )
+        else:
+            dm_buf.ravel()[:] = dm.ravel()
+        
+        dm_now = np.ndarray((nao_involved, nao_involved), buffer=dm_buf)
+    
+        ddot_res = np.ndarray((nao_involved, ngrids_now), buffer=ddot_buf)
+        
+        lib.ddot(dm_now, aoR_holder.aoR, c=ddot_res)
+        density_R_tmp = lib.multiply_sum_isdf(aoR_holder.aoR, ddot_res)
+        
+        global_gridID_begin = aoR_holder.global_gridID_begin
+        
+        density_Rg[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
+        # local_grid_loc += ngrids_now
+    
+    # assert local_grid_loc == ngrids_local
+    
+    if use_mpi == False:
+        assert ngrids_local == naux
+    
+    if use_mpi:
+        # density_R = np.hstack(gather(density_R, comm, rank, root=0, split_recvbuf=True))
+        density_Rg = reduce(density_Rg, root=0)
+        
+            
+    if use_mpi:
+        # grid_segment = mydf.grid_segment
+        # sendbuf = None
+        # if rank == 0:
+        #     sendbuf = []
+        #     for i in range(size):
+        #         p0 = grid_segment[i]
+        #         p1 = grid_segment[i+1]
+        #         sendbuf.append(J[p0:p1])
+        # J = scatter(sendbuf, comm, rank, root=0)
+        # del sendbuf
+        # sendbuf = None 
+        
+        J = bcast(J, root=0)
+    
+    #### step 3. get J 
+    
+    J = np.asarray(lib.dot(W, density_Rg.reshape(-1,1)), order='C').reshape(-1)
+    
+    # J = np.asarray(lib.d_ij_j_ij(aoR, J, out=buffer1), order='C') 
+    # J = lib.ddot_withbuffer(aoR, J.T, buf=mydf.ddot_buf)
+
+    # local_grid_loc = 0
+
+    J_Res = np.zeros((nao, nao), dtype=np.float64)
+
+    for aoR_holder in aoRg:
+        
+        if aoR_holder is None:
+            continue
+        
+        if use_mpi:
+            if atm_id % comm_size != rank:
+                continue
+        
+        ngrids_now = aoR_holder.aoR.shape[1]
+        nao_involved = aoR_holder.aoR.shape[0]
+        
+        global_gridID_begin = aoR_holder.global_gridID_begin
+        
+        J_tmp = J[global_gridID_begin:global_gridID_begin+ngrids_now] 
+        
+        aoR_J_res = np.ndarray(aoR_holder.aoR.shape, buffer=aoR_buf1)
+        lib.d_ij_j_ij(aoR_holder.aoR, J_tmp, out=aoR_J_res)
+        ddot_res = np.ndarray((nao_involved, nao_involved), buffer=ddot_buf)
+        lib.ddot(aoR_holder.aoR, aoR_J_res.T, c=ddot_res)
+        
+        if nao_involved == nao:
+            J_Res += ddot_res
+        else:
+            fn_packadd_dm(
+                ddot_res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_involved),
+                aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
+                J_Res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao)
+            )        
+
+        # local_grid_loc += ngrids_now
+    
+    # assert local_grid_loc == ngrids_local
+
+    J = J_Res
+
+    if use_mpi:
+        # J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
+        J = reduce(J, root=0)
+    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    if mydf.verbose:
+        _benchmark_time(t1, t2, "_contract_j_dm_fast")
+    
+    ######### delete the buffer #########
+    
+    del dm_buf, ddot_buf, density_Rg
     del density_R_tmp
     del aoR_buf1
     
@@ -1404,7 +1645,10 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
 
     if with_j:
+        from pyscf.pbc.df.isdf.isdf_jk import _contract_j_dm
         vj = _contract_j_dm_ls(mydf, dm, use_mpi)  
+        # vj = _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi)
+        # vj = _contract_j_dm(mydf, dm, use_mpi)
         # if rank == 0:
         # print("vj = ", vj[0, :16])
         # print("vj = ", vj[0, -16:])
@@ -1422,6 +1666,9 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     t1 = log.timer('sr jk', *t1)
 
     return vj, vk
+
+############# occ RI #############
+
 
 
 ############# linear scaling implementation ############# 

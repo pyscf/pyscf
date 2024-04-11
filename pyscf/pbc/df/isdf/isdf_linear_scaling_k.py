@@ -224,6 +224,8 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
 
     ### todo make it a list ! ### 
     
+    ################# construct aoRg_FFT #################
+    
     mydf.aoRg_FFT  = np.zeros((nao_prim, ncell_complex*mydf.nIP_Prim), dtype=np.complex128)
     mydf.aoRg_FFT_real = np.ndarray((nao_prim, np.prod(kmesh)*mydf.nIP_Prim), dtype=np.double, buffer=mydf.aoRg_FFT, offset=0)
     mydf.aoRg_FFT_real.ravel()[:] = aoRg_Tmp.ravel()
@@ -235,6 +237,13 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
         
     fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
     assert fn is not None
+    
+    '''
+    fn = _FFT_Matrix_Col_InPlace transform 
+    
+    (A0 | A1 | A2) --> (A0+A1+A2 | A0+wA1 + w^2 A2 | A0 + w^2 A1+ w A2)
+    
+    '''
         
     print("aoRg_FFT.shape = ", mydf.aoRg_FFT.shape)
     
@@ -253,6 +262,8 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
         aoRg_packed.append(mydf.aoRg_FFT[:, i*nIP_Prim:(i+1)*nIP_Prim].copy())
     del mydf.aoRg_FFT
     mydf.aoRg_FFT = aoRg_packed
+
+    ################# End aoRg_FFT #################
 
     #################### build aoR_FFT ####################
 
