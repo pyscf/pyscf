@@ -1672,6 +1672,8 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
 
 def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False):
 
+    t1 = (logger.process_clock(), logger.perf_counter())
+
     if mydf.with_robust_fitting or mydf.direct:
         raise NotImplementedError("get_jk_occRI does not support robust fitting or direct=True")
 
@@ -1700,18 +1702,24 @@ def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False):
     max_nao_involved = np.max([aoR_holder.aoR.shape[0] for aoR_holder in aoR if aoR_holder is not None])
     max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
     ngrids_local = np.sum([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
+    max_dim_buf = max(max_ngrid_involved, max_nao_involved)
     
     ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
     aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
     
     if hasattr(mydf, "moRg") is False:
-        mydf.moRg = []
-        for aoR_holder in aoR:
-            if aoR_holder is None:
-                mydf.moRg.append(None)
-            else:
-                moRg_buf = np.zeros((nocc, aoR_holder.aoR.shape[1]), dtype=np.float64)
-                mydf.moRg.append(moRg_buf)
+        # mydf.moRg = []
+        # for aoR_holder in aoR:
+        #     if aoR_holder is None:
+        #         mydf.moRg.append(None)
+        #     else:
+        #         moRg_buf = np.zeros((nocc, aoR_holder.aoR.shape[1]), dtype=np.float64)
+        #         mydf.moRg.append(moRg_buf)
+        mydf.moRg = np.zeros((nocc, naux), dtype=np.float64)
+    if hasattr(mydf, "dmRgRg") is False:
+        mydf.dmRgRg = np.zeros((naux, naux), dtype=np.float64)
+    if hasattr(mydf, "K1_packbuf") is False:
+        mydf.K1_packbuf = np.zeros((nocc, max_ngrid_involved), dtype=np.float64)
     
     moR_buf     = np.zeros((nocc, max_ngrid_involved), dtype=np.float64) # which can generated on the fly
     mo_coeff_pack_buf = np.zeros((nao, max_nao_involved), dtype=np.float64)
@@ -1744,17 +1752,17 @@ def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False):
         ngrids_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
         
-        mo_coeff_packed = np.ndarray((nocc, nao_involved), buffer=mo_coeff_pack_buf)
+        mo_coeff_packed = np.ndarray((nao_involved, nocc), buffer=mo_coeff_pack_buf)
         fn_packrow(
             mo_coeff_packed.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(nocc),
             ctypes.c_int(nao_involved),
+            ctypes.c_int(nocc),
             occ_mo.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nao),
             ctypes.c_int(nocc),
             aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
         )
-        moR_now = np.ndarray((nocc, ngrids_now), buffer=moR_buf)
+        moR_now = np.ndarray((nocc, ngrids_now), buffer=moR_buf) ### generated on the fly
         
         lib.ddot(mo_coeff_packed.T, aoR_holder.aoR, c=moR_now)
         
@@ -1768,7 +1776,7 @@ def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False):
         lib.ddot(aoR_J_res, aoR_holder.aoR.T, c=ddot_res)
         
         if nao_involved == nao:
-            J_Res += ddot_res
+            J_Res_occRI += ddot_res
         else:
             # fn_packadd_dm(
             #     ddot_res.ctypes.data_as(ctypes.c_void_p),
@@ -1792,19 +1800,104 @@ def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False):
     
     # assert local_grid_loc == ngrids_local
 
-    J = J_Res
+    J = J_Res_occRI
+
+    t2 = (logger.process_clock(), logger.perf_counter())
+    
+    if mydf.verbose:
+        _benchmark_time(t1, t2, "get_j_occRI")
 
     K = np.zeros((nocc, nao), dtype=np.float64)
 
-    #### step 2 get moRg ####
+    #### step 2 get moRg and DmRgRg ####
     
+    moRg = mydf.moRg
+    for aoR_holder in mydf.aoRg:
+        
+        ngrids_now = aoR_holder.aoR.shape[1]
+        nao_involved = aoR_holder.aoR.shape[0]
+        
+        mo_coeff_packed = np.ndarray((nao_involved, nocc), buffer=mo_coeff_pack_buf)
+        fn_packrow(
+            mo_coeff_packed.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_involved),
+            ctypes.c_int(nocc),
+            occ_mo.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao),
+            ctypes.c_int(nocc),
+            aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+        )
+        moR_now = np.ndarray((nocc, ngrids_now), buffer=moR_buf)
+        
+        lib.ddot(mo_coeff_packed.T, aoR_holder.aoR, c=moR_now)
+                
+        global_gridID_begin = aoR_holder.global_gridID_begin
+        moRg[:, global_gridID_begin:global_gridID_begin+ngrids_now] = moR_now
+            
+    DmRgRg = mydf.dmRgRg
     
-    del J_Res_occRI
+    lib.ddot(moRg.T, moRg, c=DmRgRg)
+    
+    ### step 3. get_K ###
+    
+    lib.cwise_mul(mydf.W, DmRgRg, out=DmRgRg)
+    W2 = DmRgRg
+    K1 = lib.ddot(moRg, W2)
+    
+    K = np.zeros((nocc, nao), dtype=np.float64)
+    K1_packbuf = mydf.K1_packbuf
+    fn_packcol = getattr(libpbc, "_buildK_packcol2", None)
+    assert fn_packcol is not None
+    
+    for aoR_holder in mydf.aoRg:
+        
+        ngrids_now = aoR_holder.aoR.shape[1]
+        nao_involved = aoR_holder.aoR.shape[0]
+        
+        # moR_now = moRg[:, grid_loc_now:grid_loc_now+ngrids_now]
+                
+        K1_pack = np.ndarray((nocc, ngrids_now), buffer=K1_packbuf)
+        
+        grid_loc_now = aoR_holder.global_gridID_begin
+        
+        fn_packcol(
+            K1_pack.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nocc),
+            ctypes.c_int(ngrids_now),
+            K1.ctypes.data_as(ctypes.c_void_p),    
+            ctypes.c_int(nocc),
+            ctypes.c_int(naux),
+            ctypes.c_int(grid_loc_now),
+            ctypes.c_int(grid_loc_now+ngrids_now)
+        )
+        
+        ddot_res = np.ndarray((nocc, nao_involved), buffer=ddot_buf)
+
+        lib.ddot(K1_pack, aoR_holder.aoR.T, c=ddot_res)
+        
+        if nao_involved == nao:
+            K += ddot_res
+        else:
+            fn_packadd_col(
+                K.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(K.shape[0]),
+                ctypes.c_int(K.shape[1]),
+                ddot_res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(ddot_res.shape[0]),
+                ctypes.c_int(ddot_res.shape[1]),
+                aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+            )
+        
+        grid_loc_now += ngrids_now
     
     ### delete buf ###
     
     del ddot_buf, aoR_buf1, moR_buf, mo_coeff_pack_buf
     
+    t3 = (logger.process_clock(), logger.perf_counter())
+    if mydf.verbose:
+        _benchmark_time(t2, t3, "get_k_occRI")
+        _benchmark_time(t1, t3, "get_jk_occRI")
     
     return J * ngrid / vol, K * ngrid / vol
 

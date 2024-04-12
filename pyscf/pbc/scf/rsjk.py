@@ -457,6 +457,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         dm_kpts = np.asarray(dm_kpts)
         dms = _format_dms(dm_kpts, kpts)
 
+        t1 = (logger.process_clock(), logger.perf_counter())
+        
         # compute delta vs if dm is obtained from SCF make_rdm1
         if mo_coeff is not None:
             last_dm, last_vs = self._last_vs
@@ -486,6 +488,9 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             dm_factor = None
         dms = lib.tag_array(dms, dm_factor=dm_factor)
 
+        t2 = (logger.process_clock(), logger.perf_counter())
+        print('get_jk_sr', t2[0]-t1[0], t2[1]-t1[1])
+
         if with_j and with_k:
             vj, vk = vs
         elif with_j:
@@ -498,6 +503,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             phase /= np.sqrt(len(kpts))
         else:
             phase = None
+
+        t1 = (logger.process_clock(), logger.perf_counter())
 
         if with_j:
             if self.has_long_range():
@@ -526,6 +533,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             vk = _format_jks(vk, dm_kpts, kpts_band, kpts)
             if is_zero(kpts) and dm_kpts.dtype == np.double:
                 vk = vk.real.copy()
+
+        t2 = (logger.process_clock(), logger.perf_counter())
+        
+        print('get_jk_lr', t2[0]-t1[0], t2[1]-t1[1])
 
         return vj, vk
 

@@ -564,8 +564,10 @@ class SCF(mol_hf.SCF):
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
 
         kpts = self.kpts
+        # print("kpts = ", kpts)
         if self.rsjk:
-            if not np.all(self.rsjk.kpts == self.kpt):
+            # print("rsjk.kpts = ", self.rsjk.kpts)
+            if not np.all(self.rsjk.kpts == self.kpts):
                 self.rsjk = self.rsjk.__class__(cell, kpts)
 
         # for GDF and MDF

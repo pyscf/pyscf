@@ -1456,7 +1456,7 @@ if __name__ == '__main__':
     print("group_partition = ", group_partition)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=False, aoR_cutoff=1e-8, direct=False)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -1489,6 +1489,23 @@ if __name__ == '__main__':
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
     _benchmark_time(t1, t2, "scf")
+    
+    # dm = mf.make_rdm1()
+    mo_coeff = mf.mo_coeff.copy()
+    nocc = mf.cell.nelectron // 2
+    dm = np.dot(mo_coeff[:,:nocc], mo_coeff[:,:nocc].T)
+    
+    pbc_isdf_info.with_robust_fitting = False
+    vj, vk = ISDF_LinearScalingJK.get_jk_occRI(pbc_isdf_info, mo_coeff, nocc, dm)
+    
+    # vj1, vk1 = pbc_isdf_info.get_jk(dm)
+    # mo_coeff = mf.mo_coeff.copy()
+    # vj_occRI = np.dot(mo_coeff[:,:nocc].T, vj1)
+    # vk_occRI = np.dot(mo_coeff[:,:nocc].T, vk1)
+    # diff  = np.linalg.norm(vj-vj_occRI) / np.sqrt(vj.size)
+    # diff2 = np.linalg.norm(vk-vk_occRI) / np.sqrt(vk.size)
+    # print("diff  = ", diff)
+    # print("diff2 = ", diff2)
     
     # from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import analysis_dm, analysis_dm_on_grid
     # dm = mf.make_rdm1()
