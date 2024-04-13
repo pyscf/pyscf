@@ -26,6 +26,11 @@ from pyscf.dft.rks import KohnShamDFT
 from pyscf.dft import dft_parser
 
 def get_dispersion(hessobj, disp_version=None, with_3body=False):
+    try:
+        from pyscf.dispersion import dftd3, dftd4
+    except ImportError:
+        print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
+        raise
     mf = hessobj.base
     mol = mf.mol
     if isinstance(mf, KohnShamDFT):
@@ -51,7 +56,6 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
         with_3body = mf.disp_with_3body
 
     if mf.disp[:2].upper() == 'D3':
-        from pyscf.lib import dftd3
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5
@@ -74,7 +78,6 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
             return h_disp
 
     elif mf.disp[:2].upper() == 'D4':
-        from pyscf.lib import dftd4
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5

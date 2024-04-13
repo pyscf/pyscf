@@ -18,6 +18,11 @@ import numpy
 from pyscf import gto, dft, lib
 from pyscf.dft import radi
 from pyscf.grad import rks
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dftd3 = dftd4 = None
+
 
 def grids_response(grids):
     # JCP 98, 5612 (1993); DOI:10.1063/1.464906
@@ -224,6 +229,7 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_finite_diff_df_rks_d3_grad(self):
         mf1 = mf.density_fit ()
         mf1.disp = 'd3bj'
@@ -236,6 +242,7 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_finite_diff_df_rks_d4_grad(self):
         mf1 = mf.density_fit ()
         mf1.disp = 'd4'

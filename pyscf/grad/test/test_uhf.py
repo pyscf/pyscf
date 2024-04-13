@@ -17,6 +17,11 @@ import unittest
 import numpy
 from pyscf import gto, scf, lib
 from pyscf import grad
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dftd3 = dftd4 = None
+
 
 def setUpModule():
     global mol, mol1
@@ -104,6 +109,7 @@ H              0.99207379    1.16253558   -0.88226569
 H             -0.43459905    0.65805058   -0.00861418''')
         self.assertAlmostEqual(g[2,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_finite_diff_uhf_d3_grad(self):
         mf = scf.UHF(mol)
         mf.disp = 'd3bj'
@@ -120,6 +126,7 @@ H             -0.43459905    0.65805058   -0.00861418''')
                         1    0.   0.757    0.587''')
         self.assertAlmostEqual(g[1,1], (e2-e1)/2e-3*lib.param.BOHR, 5)
 
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_finite_diff_uhf_d4_grad(self):
         mf = scf.UHF(mol)
         mf.disp = 'd4'
@@ -189,6 +196,7 @@ H              0.99207379    1.16253558   -0.88226569
 H             -0.43459905    0.65805058   -0.00861418''')
         self.assertAlmostEqual(g[2,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
 
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_finite_diff_df_uhf_d4_grad(self):
         mf = scf.UHF(mol).density_fit ()
         mf.conv_tol = 1e-14
@@ -205,6 +213,7 @@ H             -0.43459905    0.65805058   -0.00861418''')
                         1    0.   0.757    0.587''')
         self.assertAlmostEqual(g[1,1], (e2-e1)/2e-3*lib.param.BOHR, 5)
 
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_finite_diff_df_uhf_d4_grad(self):
         mf = scf.UHF(mol).density_fit ()
         mf.conv_tol = 1e-14

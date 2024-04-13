@@ -17,6 +17,10 @@ import unittest
 import numpy
 from pyscf import gto, scf, lib
 from pyscf import grad, hessian
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dftd3 = dftd4 = None
 
 def setUpModule():
     global mol
@@ -87,6 +91,7 @@ class KnownValues(unittest.TestCase):
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 4)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_finite_diff_rhf_d3_hess(self):
         mf = scf.RHF(mol)
         mf.conv_tol = 1e-14
@@ -100,7 +105,8 @@ class KnownValues(unittest.TestCase):
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 4)
 
-    def test_finite_diff_rhf_d4_hess(self):
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
+    def test_finite_diff_rhf_d4_hess_high_cost(self):
         mf = scf.RHF(mol)
         mf.conv_tol = 1e-14
         mf.disp = 'd4'
