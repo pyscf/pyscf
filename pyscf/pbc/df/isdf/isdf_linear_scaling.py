@@ -19,6 +19,7 @@
 import copy
 from functools import reduce
 import numpy as np
+import scipy
 from pyscf import lib
 import pyscf.pbc.gto as pbcgto
 from pyscf.pbc.gto import Cell
@@ -50,6 +51,8 @@ import pyscf.pbc.df.isdf.isdf_linear_scaling_jk as ISDF_LinearScalingJK
 from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
 
 ##### all the involved algorithm in ISDF based on aoR_Holder ##### 
+
+USE_SCIPY_QR = False  ## true for single-thread mode to compare with Kori's code
 
 ############ select IP ############
 
@@ -195,23 +198,30 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
         global_buffer = np.ndarray((1, grid_ID.shape[0]), dtype=np.float64)
 
         # print("thread_buffer.shape = ", thread_buffer.shape)
-        fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.c_int(naux2_now),
-                        ctypes.c_int(grid_ID.shape[0]),
-                        ctypes.c_int(max_rank),
-                        ctypes.c_double(1e-14),
-                        ctypes.c_double(rela_cutoff),
-                        pivot.ctypes.data_as(ctypes.c_void_p),
-                        R.ctypes.data_as(ctypes.c_void_p),
-                        ctypes.byref(npt_find),
-                        thread_buffer.ctypes.data_as(ctypes.c_void_p),
-                        global_buffer.ctypes.data_as(ctypes.c_void_p))
-        npt_find = npt_find.value
+        
+        if USE_SCIPY_QR:
+            R, pivot = scipy.linalg.qr(aoPairBuffer, pivoting=True, mode='r', check_finite=False, overwrite_a=True)
+            npt_find = nao_atm * c + m 
+        else:
+            fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.c_int(naux2_now),
+                            ctypes.c_int(grid_ID.shape[0]),
+                            ctypes.c_int(max_rank),
+                            ctypes.c_double(1e-14),
+                            ctypes.c_double(rela_cutoff),
+                            pivot.ctypes.data_as(ctypes.c_void_p),
+                            R.ctypes.data_as(ctypes.c_void_p),
+                            ctypes.byref(npt_find),
+                            thread_buffer.ctypes.data_as(ctypes.c_void_p),
+                            global_buffer.ctypes.data_as(ctypes.c_void_p))
+            npt_find = npt_find.value
+            cutoff = abs(R[npt_find-1, npt_find-1])
+            # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
             
-        # aoPairBuffer, R, pivot, npt_find = colpivot_qr(aoPairBuffer, max_rank)
-            
-        cutoff = abs(R[npt_find-1, npt_find-1])
-        # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
+        # pivot, rankc = scipy.linalg.lapack.dpstrf(aoPairBuffer)[1:3]
+        # pivot = pivot[:rankc]-1
+        # npt_find = nao_atm * c + m 
+                        
         pivot = pivot[:npt_find]
         pivot.sort()
         # results.extend(list(grid_ID[pivot]))
@@ -362,21 +372,29 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
     thread_buffer = np.ndarray((nthread+1, IP_possible.shape[0]+1), dtype=np.float64)
     global_buffer = np.ndarray((1, IP_possible.shape[0]), dtype=np.float64)
 
-    fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
-                   ctypes.c_int(naux2_now),
-                   ctypes.c_int(IP_possible.shape[0]),
-                   ctypes.c_int(max_rank),
-                   ctypes.c_double(1e-14),
-                   ctypes.c_double(mydf.rela_cutoff_QRCP),
-                   pivot.ctypes.data_as(ctypes.c_void_p),
-                   R.ctypes.data_as(ctypes.c_void_p),
-                   ctypes.byref(npt_find),
-                   thread_buffer.ctypes.data_as(ctypes.c_void_p),
-                   global_buffer.ctypes.data_as(ctypes.c_void_p))
-    npt_find = npt_find.value
 
-    cutoff   = abs(R[npt_find-1, npt_find-1])
-    # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (IP_possible.shape[0], npt_find, cutoff))
+    if USE_SCIPY_QR:
+        fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
+                       ctypes.c_int(naux2_now),
+                       ctypes.c_int(IP_possible.shape[0]),
+                       ctypes.c_int(max_rank),
+                       ctypes.c_double(1e-14),
+                       ctypes.c_double(mydf.rela_cutoff_QRCP),
+                       pivot.ctypes.data_as(ctypes.c_void_p),
+                       R.ctypes.data_as(ctypes.c_void_p),
+                       ctypes.byref(npt_find),
+                       thread_buffer.ctypes.data_as(ctypes.c_void_p),
+                       global_buffer.ctypes.data_as(ctypes.c_void_p))
+        npt_find = npt_find.value
+        cutoff   = abs(R[npt_find-1, npt_find-1])
+        # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (IP_possible.shape[0], npt_find, cutoff))
+    else:
+        # pivot, rankc = scipy.linalg.lapack.dpstrf(aoPairBuffer)[1:3]
+        # pivot = pivot[:rankc]-1
+        # npt_find = nao_group * c 
+        R, pivot = scipy.linalg.qr(aoPairBuffer, pivoting=True, mode='r', check_finite=False, overwrite_a=True)
+        npt_find = nao_group * c 
+    
     pivot = pivot[:npt_find]
     pivot.sort()
     results = list(IP_possible[pivot])
@@ -1422,7 +1440,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
-C = 25
+C = 19
 
 from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
@@ -1447,13 +1465,14 @@ if __name__ == '__main__':
         ['C', (0.     , 1.7834 , 1.7834)],
         ['C', (0.8917 , 2.6751 , 2.6751)],
     ] 
-    KE_CUTOFF = 128
+    KE_CUTOFF = 70
     basis = 'unc-gth-cc-dzvp'
     pseudo = "gth-hf"   
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis=basis, pseudo=pseudo)    
     # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
     # prim_partition = [[0,1,2,3,4,5,6,7]]
     prim_partition = [[0,1],[2,3],[4,5],[6,7]]
+    # prim_partition = [[0,1,2,3],[4,5,6,7]]
 
 #     prim_a = np.array(
 #                     [[14.572056092/2, 0.000000000, 0.000000000],
@@ -1478,10 +1497,11 @@ if __name__ == '__main__':
     prim_mesh = prim_cell.mesh
 
     # Ls = [2, 2, 2]
-    Ls = [1, 1, 1]
+    Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
+    # mesh = None  ### NOTE: magically, use None will be much slower ? 
     
     cell, group_partition = build_supercell_with_partition(atm, prim_a, mesh=mesh, 
                                                      Ls=Ls,
@@ -1491,7 +1511,7 @@ if __name__ == '__main__':
     print("group_partition = ", group_partition)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=False, aoR_cutoff=1e-8, direct=False)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -1511,11 +1531,12 @@ if __name__ == '__main__':
 
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
+    pbc_isdf_info.with_robust_fitting = False
     mf = scf.RHF(cell)
     # mf = scf.addons.smearing_(mf, sigma=0.2, method='fermi')
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
-    mf.max_cycle = 10
+    mf.max_cycle = 6
     mf.conv_tol = 1e-7
     
     # mf.kernel(dm)
@@ -1524,14 +1545,25 @@ if __name__ == '__main__':
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
     _benchmark_time(t1, t2, "scf")
+    sys.stdout.flush()
     
+    
+    mf.mo_coeff = np.random.rand(cell.nao, cell.nao)
     # dm = mf.make_rdm1()
     mo_coeff = mf.mo_coeff.copy()
     nocc = mf.cell.nelectron // 2
     dm = np.dot(mo_coeff[:,:nocc], mo_coeff[:,:nocc].T)
     
-    pbc_isdf_info.with_robust_fitting = False
-    vj, vk = ISDF_LinearScalingJK.get_jk_occRI(pbc_isdf_info, mo_coeff, nocc, dm)
+    for _ in range(7):
+        pbc_isdf_info.with_robust_fitting = False
+        vj, vk = ISDF_LinearScalingJK.get_jk_occRI(pbc_isdf_info, mo_coeff, nocc, dm)
+    
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    aoR = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords)
+    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    _benchmark_time(t1, t2, "eval_gto")
+    
+    exit(1)
     
     # vj1, vk1 = pbc_isdf_info.get_jk(dm)
     # mo_coeff = mf.mo_coeff.copy()
