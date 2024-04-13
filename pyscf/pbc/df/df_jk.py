@@ -1261,12 +1261,12 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         if with_j:
             #:rho_coeff = numpy.einsum('Lpq,xqp->xL', Lpq, dms)
             #:vj += numpy.dot(rho_coeff, Lpq.reshape(-1,nao**2))
-            rhoR  = numpy.einsum('Lpq,xpq->xL', LpqR, dmsR)
+            rhoR  = numpy.einsum('Lpq,xqp->xL', LpqR, dmsR)
             if not j_real:
                 LpqI = LpqI.reshape(-1,nao,nao)
-                rhoR -= numpy.einsum('Lpq,xpq->xL', LpqI, dmsI)
-                rhoI  = numpy.einsum('Lpq,xpq->xL', LpqR, dmsI)
-                rhoI += numpy.einsum('Lpq,xpq->xL', LpqI, dmsR)
+                rhoR -= numpy.einsum('Lpq,xqp->xL', LpqI, dmsI)
+                rhoI  = numpy.einsum('Lpq,xqp->xL', LpqR, dmsI)
+                rhoI += numpy.einsum('Lpq,xqp->xL', LpqI, dmsR)
             vjR += sign * numpy.einsum('xL,Lpq->xpq', rhoR, LpqR)
             if not j_real:
                 vjR -= sign * numpy.einsum('xL,Lpq->xpq', rhoI, LpqI)
