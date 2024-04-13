@@ -187,6 +187,7 @@ def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
         assert(fn_J is not None)
 
         if hasattr(mydf, "coulG_prim") == False:
+            assert mydf.omega is None or mydf.omega == 0.0
             mydf.coulG_prim = tools.get_coulG(mydf.primCell, mesh=mydf.primCell.mesh)
 
         J = np.zeros_like(density_R_prim)

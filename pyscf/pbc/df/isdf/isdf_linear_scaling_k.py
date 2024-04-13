@@ -321,6 +321,7 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
     
     grid_ordering = mydf.grid_ID_ordered
     
+    assert mydf.omega is None or mydf.omega == 0.0
     coulG = tools.get_coulG(cell, mesh=mesh)
     mydf.coulG = coulG.copy()
     coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1).copy()

@@ -864,8 +864,12 @@ class SCF(mol_hf.SCF):
         if 'DF' in J or 'DF' in K:
             if 'DF' in J and 'DF' in K:
                 assert J == K
+                df_method = J if 'DF' in J else K
+                print("df_method = ", df_method)
+                self.with_df = getattr(df, df_method)(self.cell, self.kpts)
             else:
                 df_method = J if 'DF' in J else K
+                print("df_method = ", df_method)
                 self.with_df = getattr(df, df_method)(self.cell, self.kpts)
 
         if 'RS' in J or 'RS' in K:

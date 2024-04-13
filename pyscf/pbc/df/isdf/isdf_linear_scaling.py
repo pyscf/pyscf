@@ -47,6 +47,7 @@ libpbc = lib.load_library('libpbc')
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 import pyscf.pbc.df.isdf.isdf_tools_local as ISDF_Local_Utils
 import pyscf.pbc.df.isdf.isdf_linear_scaling_jk as ISDF_LinearScalingJK
+from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
 
 ##### all the involved algorithm in ISDF based on aoR_Holder ##### 
 
@@ -684,7 +685,10 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
     
     grid_ordering = mydf.grid_ID_ordered 
     
-    coulG = tools.get_coulG(cell, mesh=mesh)
+    if mydf.omega is not None:
+        assert mydf.omega >= 0.0
+    
+    coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
     mydf.coulG = coulG.copy()
     coulG_real         = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1).copy()
     
@@ -887,7 +891,10 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
     
     ########### construct V ###########
 
-    coulG = tools.get_coulG(cell, mesh=mesh)
+    if mydf.omega is not None:
+        assert mydf.omega >= 0.0
+
+    coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
     mydf.coulG = coulG.copy()
     V = construct_V_CCode(mydf.aux_basis, mesh, coulG)
 
@@ -972,7 +979,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                  verbose = 1,
                  rela_cutoff_QRCP = None,
                  aoR_cutoff = 1e-8,
-                 direct=False
+                 direct=False,
+                 omega=None
                  ):
         
         super().__init__(
@@ -1024,6 +1032,33 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
         self.with_translation_symmetry = False
         self.kmesh = None
+
+        ########## supporting Range_separation ########## 
+        
+        self.omega = omega 
+        if omega is not None:
+            self.omega = abs(omega)       ## LR ##
+            self.cell.omega = -abs(omega) ## SR ##
+
+            nk = [1,1,1]
+            kpts = self.cell.make_kpts(nk)
+
+            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            self.rsjk = RangeSeparatedJKBuilder(self.cell, kpts)
+            self.rsjk.build()
+            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            
+            assert self.rsjk.has_long_range() == False
+            
+            ke_cutoff_rsjk = self.rsjk.ke_cutoff
+            
+            if self.cell.ke_cutoff < ke_cutoff_rsjk:
+                print(" WARNING : ke_cutoff = %12.6e is smaller than ke_cutoff_rsjk = %12.6e" % (self.cell.ke_cutoff, ke_cutoff_rsjk))
+            
+            if self.verbose:
+                _benchmark_time(t1, t2, "build_RSJK")
+        else:
+            self.rsjk = None
 
     def _get_first_natm(self):
         if self.kmesh is not None:
@@ -1412,7 +1447,7 @@ if __name__ == '__main__':
         ['C', (0.     , 1.7834 , 1.7834)],
         ['C', (0.8917 , 2.6751 , 2.6751)],
     ] 
-    KE_CUTOFF = 70
+    KE_CUTOFF = 128
     basis = 'unc-gth-cc-dzvp'
     pseudo = "gth-hf"   
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis=basis, pseudo=pseudo)    
@@ -1456,7 +1491,7 @@ if __name__ == '__main__':
     print("group_partition = ", group_partition)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=False, aoR_cutoff=1e-8, direct=False)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -1480,7 +1515,7 @@ if __name__ == '__main__':
     # mf = scf.addons.smearing_(mf, sigma=0.2, method='fermi')
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
-    mf.max_cycle = 5
+    mf.max_cycle = 10
     mf.conv_tol = 1e-7
     
     # mf.kernel(dm)
@@ -1513,14 +1548,23 @@ if __name__ == '__main__':
     # analysis_dm(cell, dm, pbc_isdf_info.distance_matrix)
     # analysis_dm_on_grid(pbc_isdf_info, dm, pbc_isdf_info.distance_matrix)
     
-    # pp = pbc_isdf_info.get_pp()
-    # mf = scf.RHF(cell)
-    # pbc_isdf_info.direct_scf = mf.direct_scf
-    # # mf.with_df = pbc_isdf_info
-    # mf.with_df.get_pp = lambda *args, **kwargs: pp
-    # mf.max_cycle = 1
-    # mf.conv_tol = 1e-7
-    # mf.kernel()
+    ###### AFTDF 
+    
+    pp = pbc_isdf_info.get_pp()
+    mf = scf.RHF(cell)
+    mf.jk_method(J='AFTDF',K='AFTDF') # test AFTDF
+    mf.build()
+    mf.with_df.get_pp = lambda *args, **kwargs: pp
+    mf.max_cycle = 16
+    mf.conv_tol = 1e-7
+    mf.kernel()
+    
+    pp = pbc_isdf_info.get_pp()
+    mf = scf.RHF(cell)
+    mf.with_df.get_pp = lambda *args, **kwargs: pp
+    mf.max_cycle = 16
+    mf.conv_tol = 1e-7
+    mf.kernel()
     
     # dm = mf.make_rdm1()
     # pbc_isdf_info.V_W_cutoff = 13.0 

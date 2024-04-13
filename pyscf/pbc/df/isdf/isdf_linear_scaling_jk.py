@@ -180,7 +180,9 @@ def _half_J(mydf, dm, use_mpi=False):
         assert(fn_J is not None)
 
         if hasattr(mydf, "coulG") == False:
-            mydf.coulG = tools.get_coulG(cell, mesh=mesh)
+            if mydf.omega is not None:
+                assert mydf.omega >= 0.0
+            mydf.coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
 
         J = np.zeros_like(density_R)
 
@@ -1134,7 +1136,9 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     
     grid_ordering = mydf.grid_ID_ordered 
     if hasattr(mydf, "coulG") == False:
-        mydf.coulG = tools.get_coulG(cell, mesh=mesh)
+        if mydf.omega is not None:
+            assert mydf.omega >= 0.0
+        mydf.coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
     coulG = mydf.coulG
     coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1).copy()
     
@@ -1664,6 +1668,13 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
 
+    if mydf.rsjk is not None:
+        vj_sr, vk_sr = mydf.rsjk.get_jk(dm, hermi, kpt, kpts_band, with_j, with_k, omega, exxdiv, **kwargs)
+        if with_j:
+            vj += vj_sr
+        if with_k:
+            vk += vk_sr
+
     t1 = log.timer('sr jk', *t1)
 
     return vj, vk
@@ -1671,6 +1682,8 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
 ############# occ RI #############
 
 def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False):
+
+    assert mydf.omega is None or mydf.omega == 0.0
 
     t1 = (logger.process_clock(), logger.perf_counter())
 

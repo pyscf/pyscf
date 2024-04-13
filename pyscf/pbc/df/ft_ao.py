@@ -266,6 +266,12 @@ class _RangeSeparatedCell(pbcgto.Cell):
     @classmethod
     def from_cell(cls, cell, ke_cut_threshold=None, rcut_threshold=None,
                   in_rsjk=False, verbose=None):
+        
+        print("------ In _RangeSeparatedCell.from_cell ------")
+        
+        print("cell.nao  = ", cell.nao)
+        print("cell.nbas = ", cell.nbas)
+        
         from pyscf.pbc.df import aft
         rs_cell = cls()
         rs_cell.__dict__.update(cell.__dict__)
@@ -341,9 +347,20 @@ class _RangeSeparatedCell(pbcgto.Cell):
             pexp = orig_bas[gto.PTR_EXP]
             pcoeff = orig_bas[gto.PTR_COEFF]
 
+            # print("ib = ", ib)
+            # print("nprim       = ", nprim)
+            # print("steep_mask  = ", steep_mask)
+            # print("local_mask  = ", local_mask)
+            # print("smooth_mask = ", smooth_mask)
+
             c_steep = cs[steep_mask]
             c_local = cs[local_mask]
             c_smooth = cs[smooth_mask]
+            
+            # print("c_steep  = ", c_steep)
+            # print("c_local  = ", c_local)
+            # print("c_smooth = ", c_smooth)
+            
             _env[pcoeff:pcoeff+nprim*nctr] = np.hstack([
                 c_steep.T.ravel(),
                 c_local.T.ravel(),
@@ -383,6 +400,13 @@ class _RangeSeparatedCell(pbcgto.Cell):
         rs_cell.bas_type = np.asarray(bas_type, dtype=np.int32)
         rs_cell.sh_loc = np.asarray(bas_loc, dtype=np.int32)
         rs_cell.ke_cutoff = ke_cut_threshold
+        print('rs_cell.ke_cutoff ', rs_cell.ke_cutoff)
+        print('rs_cell.rcut      ', rcut)
+        print('rs_cell.nbas      ', rs_cell.nbas)
+        print('rs_cell.nao       ', rs_cell.nao)
+        print('rs_cell.bas_map   ', rs_cell.bas_map)
+        print('rs_cell.bas_type  ', rs_cell.bas_type)
+        print('rs_cell.sh_loc    ', rs_cell.sh_loc)
         if log.verbose >= logger.DEBUG:
             bas_type = rs_cell.bas_type
             log.debug('rs_cell.nbas %d nao %d', rs_cell.nbas, rs_cell.nao)
@@ -394,6 +418,7 @@ class _RangeSeparatedCell(pbcgto.Cell):
             assert np.array_equiv(map_bas, bas_loc)
         log.debug2('%s.bas_type %s', cls, rs_cell.bas_type)
         log.debug2('%s.sh_loc %s', cls, rs_cell.sh_loc)
+        print("------ Out _RangeSeparatedCell.from_cell ------")
         return rs_cell
 
     @staticmethod

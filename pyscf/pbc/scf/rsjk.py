@@ -98,6 +98,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
     def has_long_range(self):
         '''Whether to add the long-range part computed with AFT/FFT integrals'''
+        print("self.cell.omega = ", self.cell.omega)
+        print("self.omega      = ", self.omega)
         return self.omega is None or abs(self.cell.omega) < self.omega
 
     def dump_flags(self, verbose=None):
@@ -130,6 +132,9 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         return self
 
     def build(self, omega=None, intor='int2e'):
+        
+        print(" ---------- In  build rsjk builder ---------- ")
+        
         cpu0 = logger.process_clock(), logger.perf_counter()
         log = logger.new_logger(self)
         cell = self.cell
@@ -141,11 +146,19 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         if self.omega is None or self.omega == 0:
             # Search a proper range-separation parameter omega that can balance the
             # computational cost between the real space integrals and moment space
-            # integrals
+            # integrals 
+            print("Guess omega")
+            print("before guess self.mesh      = ", self.mesh)
             self.omega, self.mesh, self.ke_cutoff = _guess_omega(cell, kpts, self.mesh)
+            print("after  guess self.omega     = ", self.omega)
+            print("after  guess self.mesh      = ", self.mesh)
+            print("after  guess self.ke_cutoff = ", self.ke_cutoff)
         else:
             self.ke_cutoff = estimate_ke_cutoff_for_omega(cell, self.omega)
             self.mesh = cell.cutoff_to_mesh(self.ke_cutoff)
+            print("generate ke_cutoff and mesh from omega")
+            print("self.ke_cutoff = ", self.ke_cutoff)
+            print("self.mesh      = ", self.mesh)
 
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             # To ensure trunc-coulG converged for all basis
@@ -162,12 +175,13 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             self.exclude_dd_block = False
 
         # basis with cutoff under ~150 eV are handled by AFTDF
-        ke_cutoff = max(6., self.ke_cutoff)
+        ke_cutoff = max(6., self.ke_cutoff)  # too small ? 
         rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, ke_cutoff, RCUT_THRESHOLD, in_rsjk=True, verbose=log)
         self.rs_cell = rs_cell
 
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        print("self.bvk_kmesh = ", self.bvk_kmesh)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
         exp_min = np.hstack(cell.bas_exps()).min()
@@ -175,6 +189,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         cutoff = cell.precision / lattice_sum_factor * .1
         self.direct_scf_tol = cutoff
         log.debug('Set RangeSeparationJKBuilder.direct_scf_tol to %g', cutoff)
+        
+        print("exp_min = ", exp_min)
+        print("lattice_sum_factor = ", lattice_sum_factor)
+        print("cutoff = ", cutoff)
 
         rcut_sr = estimate_rcut(rs_cell, self.omega,
                                 exclude_dd_block=self.exclude_dd_block)
@@ -230,6 +248,9 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self.qindex = qindex
 
         log.timer('initializing qindex', *cpu0)
+        
+        print(" ---------- end build rsjk builder ---------- ")
+        
         return self
 
     @property
