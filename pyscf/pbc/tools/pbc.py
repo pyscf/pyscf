@@ -676,6 +676,7 @@ def _build_supcell_(supcell, cell, Ls):
     x, y, z = coords.T
     supcell.atom = supcell._atom = list(zip(symbs, zip(x, y, z)))
     supcell.unit = 'B'
+    supcell.enuc = None # reset nuclear energy
 
     # Do not call supcell.build() to initialize supcell since it may normalize
     # the basis contraction coefficients
