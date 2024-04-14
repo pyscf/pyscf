@@ -523,10 +523,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         else:
             vj, vk = None, vs[0]
 
-        # print("vj_sr = ", vj[0,:16])
-        # print("vj_sr = ", vj[-1,-16:])
-        # print("vk_sr = ", vk[0,:16])
-        # print("vk_sr = ", vk[-1,-16:])
+        # print("In rsjk builder get_jk vj_sr = ", vj[0,:16])
+        # print("In rsjk builder get_jk vj_sr = ", vj[-1,-16:])
+        # print("In rsjk builder get_jk vk_sr = ", vk[0,:16])
+        # print("In rsjk builder get_jk vk_sr = ", vk[-1,-16:])
 
         if self.purify and kpts_band is None:
             phase = np.exp(1j*np.dot(self.supmol_sr.bvkmesh_Ls, kpts.T))
@@ -539,7 +539,11 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         if with_j:
             if self.has_long_range():
                 # print("lr is called")
-                vj += self._get_vj_lr(dms, hermi, kpts, kpts_band)
+                vj_lr = self._get_vj_lr(dms, hermi, kpts, kpts_band)
+                # vj += self._get_vj_lr(dms, hermi, kpts, kpts_band)
+                # print("In rsjk builder get_jk vj_lr = ", vj_lr[0,:16])
+                # print("In rsjk builder get_jk vj_lr = ", vj_lr[-1,-16:])
+                vj += vj_lr
             if hermi:
                 vj = (vj + vj.conj().transpose(0,1,3,2)) * .5
             vj = _purify(vj, phase)
@@ -552,8 +556,14 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 # print("lr is called")
                 approx_vk_lr = dm_factor is None and self.approx_vk_lr_missing_mo
                 if not approx_vk_lr:
-                    vk += self._get_vk_lr(dms, hermi, kpts, kpts_band, exxdiv)
+                    # print("exact vk_lr")
+                    vk_lr = self._get_vk_lr(dms, hermi, kpts, kpts_band, exxdiv)
+                    # print("In rsjk builder get_jk vk_lr = ", vk_lr[0,:16])
+                    # print("In rsjk builder get_jk vk_lr = ", vk_lr[-1,-16:])
+                    # vk += self._get_vk_lr(dms, hermi, kpts, kpts_band, exxdiv)
+                    vk += vk_lr
                 else:
+                    # print("approx vk_lr")
                     mesh1 = np.array(self.mesh)//3*2 + 1
                     logger.debug(self, 'Approximate lr_k with mesh %s', mesh1)
                     with lib.temporary_env(self, mesh=mesh1):
@@ -675,6 +685,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             # integrals and LR integrals.
             coulG_LR = coulG - coulG_SR
             # print("coulG_LR   = ", coulG_LR[:16], " with shape = ", coulG_LR.shape)
+            # for loc, x in enumerate(coulG_LR):
+            #     print("coulG_LR[%4d] = %12.6e" % (loc, x))
             buf = np.empty(nkpts*Gblksize*nao**2*2)
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, out=buf)

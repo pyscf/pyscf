@@ -28,9 +28,11 @@ KPTS = [
 
 # basis = 'unc-gth-cc-dzvp'
 # pseudo = "gth-hf"  
-basis='6-31G'
-pseudo=None
-ke_cutoff = 256  
+# basis='6-31G'
+# pseudo=None
+basis = 'gth-dzvp'
+pseudo = "gth-pade"  
+ke_cutoff = 70  
     
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -45,6 +47,15 @@ cell = gto.M(
     basis = '6-31g',
     verbose = 4,
 )
+
+cell = gto.M(
+    a = numpy.eye(3)*3.5668,
+    atom = '''C     0.      0.      0.
+              C     0.8917  0.8917  0.8917''',
+    basis = '6-31g',
+    verbose = 4,
+)
+
 
 boxlen = 3.5668
 prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
@@ -78,16 +89,17 @@ for nk in KPTS:
 
     ######### test rs-isdf #########
     
-    omega = 0.7
+    omega = 0.5
     
     from pyscf.pbc.df.isdf.isdf_linear_scaling import PBC_ISDF_Info_Quad
-    C = 15
+    C = 12
     group_partition = [[0,1],[2,3],[4,5],[6,7]]
+    # group_partition=[[0,1]]
     
     print("supercell.omega = ", supercell.omega)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(supercell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, omega=omega)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(supercell, with_robust_fitting=True, aoR_cutoff=1e-12, direct=False, omega=omega, rela_cutoff_QRCP=1e-4)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -106,6 +118,8 @@ for nk in KPTS:
     mf = scf.RHF(supercell, kpts)
     mf.with_df = pbc_isdf_info
     mf.kernel()
+    
+    exit(1)
     
     dm = mf.get_init_guess(key='atom')
     
@@ -139,7 +153,17 @@ for nk in KPTS:
     print("vj    = ", vj[0,:16])
     print("vj    = ", vj[-1,-16:])
     print("vk    = ", vk[0,:16])
-    print("vk    = ", vk[-1,-16:])
+    print("vk    = ", vk[-1,-16:]) 
+    
+    # rsjk = RangeSeparatedJKBuilder(supercell, kpts)
+    # rsjk.exclude_dd_block = False
+    # rsjk.allow_drv_nodddd = False
+    # rsjk.build(omega=omega*2)
+    # vj, vk = rsjk.get_jk(dm, kpts=kpts)
+    # print("vj    = ", vj[0,:16])
+    # print("vj    = ", vj[-1,-16:])
+    # print("vk    = ", vk[0,:16])
+    # print("vk    = ", vk[-1,-16:])
     
     print("-------------- Test RS-JK only LR  --------------")
     

@@ -1083,7 +1083,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             assert self.rsjk.exclude_dd_block == False
             # assert self.rsjk._sr_without_dddd == False
             
-            self.cell.ke_cutoff = max(2*self.rsjk.ke_cutoff, self.cell.ke_cutoff)
+            # self.cell.ke_cutoff = max(2*self.rsjk.ke_cutoff, self.cell.ke_cutoff)
+            self.cell.ke_cutoff = self.rsjk.ke_cutoff * 3
             self.cell.mesh = None
             self.cell.build()
             mesh_tmp = self.cell.mesh
@@ -1532,6 +1533,9 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             
             idx = np.where(np.abs(coulG_full) > 1e-6)
             
+            # for loc, x in enumerate(self.coulG):
+            #     print("coulG[%4d] = %12.6e" % (loc, x))
+            
             G1 = coulG_full[idx].copy()
             G2 = coulG_bench[idx].copy()
             ratio = G2/G1
@@ -1665,7 +1669,7 @@ if __name__ == '__main__':
     
     prim_mesh = prim_cell.mesh
 
-    Ls = [1, 1, 2]
+    Ls = [1, 1, 1]
     # Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
@@ -1681,7 +1685,7 @@ if __name__ == '__main__':
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False)
-    pbc_isdf_info.use_aft_ao = True  # No problem ! 
+    # pbc_isdf_info.use_aft_ao = True  # No problem ! 
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
