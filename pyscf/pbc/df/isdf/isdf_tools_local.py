@@ -106,13 +106,15 @@ def _HadamardProduct(a:aoR_Holder, b:aoR_Holder, InPlaceB=True):
     return res
 
 def _get_aoR_holders_memory(aoR_holders:list[aoR_Holder]):
-    return sum([_aoR_holder.size() for _aoR_holder in aoR_holders])
+    return sum([_aoR_holder.size() for _aoR_holder in aoR_holders if _aoR_holder is not None])
 
 def _pack_aoR_holder(aoR_holders:list[aoR_Holder], nao):
     has_involved = [False] * nao
     
     nGrid = 0
     for _aoR_holder in aoR_holders:
+        if _aoR_holder is None:
+            continue
         for i in _aoR_holder.ao_involved:
             has_involved[i] = True  
         nGrid += _aoR_holder.aoR.shape[1]
@@ -133,6 +135,8 @@ def _pack_aoR_holder(aoR_holders:list[aoR_Holder], nao):
     
     grid_begin_id = 0
     for _aoR_holder in aoR_holders:
+        if _aoR_holder is None:
+            continue
         loc_packed = np.zeros((_aoR_holder.aoR.shape[0]), dtype=np.int32)
         grid_end_id = grid_begin_id + _aoR_holder.aoR.shape[1]
         for loc, ao_id in enumerate(_aoR_holder.ao_involved):
@@ -456,7 +460,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     if use_mpi == False or (use_mpi == True and rank == 0):
         len_grid_involved = 0
         for atm_id, x in enumerate(partition_rough):
-            # print("atm %d involved %d grids" % (atm_id, len(x)))
+            print("atm %d involved %d grids" % (atm_id, len(x)))
             len_grid_involved += len(x)
         if with_translation_symmetry:
             assert len_grid_involved == np.prod(mesh) // np.prod(kmesh)
@@ -480,6 +484,8 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     from copy import deepcopy
     lattice_vector = deepcopy(cell.lattice_vectors())
     
+    print("lattice_vector = ", lattice_vector)
+    
     if with_translation_symmetry:
         # print("lattice_vector = ", lattice_vector)
         lattice_vector = np.array(lattice_vector) / np.array(kmesh)
@@ -495,6 +501,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
         ## pick up atms with distance < DISTANCE_CUTOFF ##
         
         for atm_id_other, distance in AtmConnectionInfoList[atm_id].atm_connected_info:
+            # print("atm %d distance = %f" % (atm_id_other, distance))
             if distance < DISTANCE_CUTOFF:
                 atm_involved.append(atm_id_other % natm_tmp)
             if len(atm_involved) >= 16: ## up to 16 atms 
@@ -577,9 +584,11 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
             lattice_vector.ctypes.data_as(ctypes.c_void_p)
         )
         argmin_distance = np.argmin(distance, axis=1)
-        #print("distance = ", distance[:5,:])  
-        #print("argmin_distance = ", argmin_distance)
-        #print("natm_tmp = ", natm_tmp)
+        # print("atm_coords_involved = ", atm_coords_involved)
+        # print("coords   = ", coords_now[:5,:])
+        # print("distance = ", distance[:5,:])  
+        # print("argmin_distance = ", argmin_distance)
+        # print("natm_tmp = ", natm_tmp)
         for grid_id, _atm_id_ in zip(grid_ID, argmin_distance):
             partition[atm_involved[_atm_id_]%natm_tmp].append(grid_id)
     
@@ -947,6 +956,10 @@ def get_aoR(cell:Cell, coords, partition,
     for atm_id in range(atm_begin, atm_end):
         
         grid_ID = partition[atm_id]
+        
+        if len(grid_ID) == 0:
+            aoR_holder[atm_id] = None
+            continue
         
         ##### find the involved atms within RcutMax #####
         

@@ -80,7 +80,7 @@ for nk in KPTS:
 
     ######### test rs-isdf #########
     
-    omega = 0.8
+    omega = 5
     
     from pyscf.pbc.df.isdf.isdf_linear_scaling import PBC_ISDF_Info_Quad
     C = 10
@@ -89,7 +89,7 @@ for nk in KPTS:
     print("supercell.omega = ", supercell.omega)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(supercell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, omega=omega)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(supercell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, omega=omega, rela_cutoff_QRCP=1e-3)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -98,13 +98,15 @@ for nk in KPTS:
     print("mesh = ", pbc_isdf_info.mesh)
     _benchmark_time(t1, t2, "build isdf")
 
-    Gv  = supercell.get_Gv() 
-    aoR = ISDF_eval_gto(supercell, coords=pbc_isdf_info.coords) 
-    aoR = aoR.reshape(-1, *supercell.mesh)
+    Gv  = pbc_isdf_info.cell.get_Gv() 
+    print("Gv.shape = ", Gv.shape)
+    aoR = ISDF_eval_gto(pbc_isdf_info.cell, coords=pbc_isdf_info.coords) 
+    aoR = aoR.reshape(-1, *pbc_isdf_info.cell.mesh)
+    print("aoR.shape = ", aoR.shape)
     
-    weight   = supercell.vol/np.prod(supercell.mesh)
-    aoG_test = numpy.fft.fftn(aoR, axes=(1,2,3)).reshape(-1, np.prod(supercell.mesh)) * weight
-    aoG      = ft_ao.ft_ao(supercell, Gv).T
+    weight   = pbc_isdf_info.cell.vol/np.prod(pbc_isdf_info.cell.mesh)
+    aoG_test = numpy.fft.fftn(aoR, axes=(1,2,3)).reshape(-1, np.prod(pbc_isdf_info.cell.mesh)) * weight
+    aoG      = ft_ao.ft_ao(pbc_isdf_info.cell, Gv).T
     
     # print(aoG.shape)
     # print(aoG_test/aoG)
@@ -115,7 +117,10 @@ for nk in KPTS:
     diff = np.linalg.norm(aoG_test-aoG)
     print("diff = ", diff/np.sqrt(np.prod(aoG.shape)))
     
-    aoR_test = numpy.fft.ifftn(aoG.reshape(-1, *supercell.mesh), axes=(1,2,3)).real / (weight)
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    aoR_test = numpy.fft.ifftn(aoG.reshape(-1, *pbc_isdf_info.cell.mesh), axes=(1,2,3)).real / (weight)
+    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    print('time = ', t2[1]-t1[1], 's', 'time = ', t2[0]-t1[0], 's')
     
     diff = np.linalg.norm(aoR_test-aoR)
     print("diff = ", diff/np.sqrt(np.prod(aoR.shape)))  ### this can be extremely large for systems with core orbitals ! 

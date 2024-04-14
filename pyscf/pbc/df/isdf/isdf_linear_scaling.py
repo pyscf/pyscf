@@ -353,6 +353,8 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
 
     IP_possible = []
     for atm_id in group:
+        if atm_2_IP_possible[atm_id] is None:
+            continue
         IP_possible.extend(atm_2_IP_possible[atm_id])
     IP_possible = np.array(IP_possible, dtype=np.int32)
 
@@ -1084,7 +1086,24 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             self.cell.ke_cutoff = self.rsjk.ke_cutoff
             self.cell.mesh = None
             self.cell.build()
+            mesh_tmp = self.cell.mesh
+            if mesh_tmp[0] % 2 != 0:
+                mesh_tmp[0] += 1
+            if mesh_tmp[1] % 2 != 0:
+                mesh_tmp[1] += 1
+            if mesh_tmp[2] % 2 != 0:
+                mesh_tmp[2] += 1
+            self.cell.build(mesh=mesh_tmp)
             self.mesh = self.cell.mesh
+            
+            ######## rebuild self.coords ######## 
+            
+            from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
+
+            df_tmp = MultiGridFFTDF2(self.cell)
+            self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
+            self.ngrids = self.coords.shape[0]
+            
             
             ke_cutoff_rsjk = self.rsjk.ke_cutoff
             
@@ -1174,6 +1193,11 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         ## deal with translation symmetry ##
         first_natm = self._get_first_natm()
         ####################################
+        
+        # print("self.partition = ", self.partition) 
+        
+        for x in range(self.natm):
+            print("len of partition[%d] = %d" % (x, len(self.partition[x])))
         
         self.aoR = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
                                                   None,
@@ -1331,8 +1355,11 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         for atm_id in atm_ordering:
             aoR_holder = self.aoR[atm_id]
             if aoR_holder is None:
-                IP_ID_NOW += len(IP_group[atm_id])
-                continue
+                if IP_group[atm_id] is None:
+                    continue
+                else:
+                    IP_ID_NOW += len(IP_group[atm_id])
+                    continue
             nIP = len(IP_group[atm_id])
             
             idx = np.searchsorted(self.partition[atm_id], IP_group[atm_id])
