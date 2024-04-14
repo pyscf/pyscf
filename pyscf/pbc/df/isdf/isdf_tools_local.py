@@ -28,6 +28,7 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 from pyscf.gto.mole import *
+import pyscf.pbc.df.ft_ao as ft_ao
 
 ########## isdf  module ##########
 
@@ -894,7 +895,9 @@ def _build_submol(cell:Cell, atm_invovled):
 # @profile
 def get_aoR(cell:Cell, coords, partition, 
             first_npartition = None,
-            first_natm=None, group=None, distance_matrix=None, AtmConnectionInfoList:list[AtmConnectionInfo]=None, distributed = False, use_mpi=False, sync_res = False):
+            first_natm=None, group=None, 
+            distance_matrix=None, AtmConnectionInfoList:list[AtmConnectionInfo]=None, 
+            distributed = False, use_mpi=False, sync_res = False):
     
     if first_natm is None:
         first_natm = cell.natm
@@ -1105,6 +1108,117 @@ def get_aoR(cell:Cell, coords, partition,
     if rank == 0:
         print("************* end get_aoR *************")
     
+    return aoR_holder
+
+def get_aoR_analytic(cell:Cell, coords, partition, 
+                     first_npartition = None,
+                     first_natm=None, group=None, 
+                     distance_matrix=None, AtmConnectionInfoList:list[AtmConnectionInfo]=None, 
+                     distributed = False, use_mpi=False, sync_res = False):
+    
+    assert use_mpi == False
+    assert first_natm is None or first_natm == cell.natm
+    
+    if group is None:
+        group = []
+        for i in range(cell.natm):
+            group.append([i])
+    
+    precision = AtmConnectionInfoList[0].precision
+    mesh = cell.mesh
+    ngrids = np.prod(mesh)
+    weight = cell.vol/ngrids
+    weight2 = np.sqrt(cell.vol / ngrids)
+    
+    blksize = 2e9//16
+    nao_max_bunch = int(blksize // ngrids)
+
+    Gv = cell.get_Gv() 
+
+    ######## pack info ########
+    
+    aoR_unpacked = []
+    ao_invovled_unpacked = []
+    atm_ordering = []
+    for group_idx in group:
+        group_idx.sort()
+        atm_ordering.extend(group_idx)
+    grid_begin_unpacked = []
+    grid_end_unpacked = []
+    grid_ID_now = 0
+    for atm_id in atm_ordering:
+        grid_ID = partition[atm_id]
+        grid_begin_unpacked.append(grid_ID_now)
+        grid_end_unpacked.append(grid_ID_now + len(grid_ID))
+        grid_ID_now += len(grid_ID)
+        aoR_unpacked.append([])
+        ao_invovled_unpacked.append([])
+    
+
+
+    ao_loc = cell.ao_loc_nr()
+    
+    task_sl_loc = [0] 
+    ao_loc_now = 0
+    for i in range(cell.nbas):
+        ao_loc_end = ao_loc[i+1]
+        if ao_loc_end - ao_loc_now > nao_max_bunch:
+            task_sl_loc.append(i)
+            ao_loc_now = ao_loc[i]
+    task_sl_loc.append(cell.nbas)
+    print("task_sl_loc = ", task_sl_loc)
+    nTask = len(task_sl_loc) - 1
+    print("nTask       = ", nTask)
+    
+    for task_id in range(nTask):
+        
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        
+        shloc    = (task_sl_loc[task_id], task_sl_loc[task_id+1])
+        aoG      = ft_ao.ft_ao(cell, Gv, shls_slice=shloc).T
+        aoR_test = numpy.fft.ifftn(aoG.reshape(-1, *mesh), axes=(1,2,3)).real / (weight)
+        aoR = aoR_test.reshape(-1, ngrids) * weight2
+        
+        bas_id = np.arange(ao_loc[shloc[0]], ao_loc[shloc[1]])
+        
+        for atm_id, atm_partition in enumerate(partition):
+            aoR_tmp = aoR[:, atm_partition].copy()
+            ### prune the aoR ### 
+            where = np.where(np.max(np.abs(aoR_tmp), axis=1) > precision)[0]
+            aoR_tmp = aoR_tmp[where].copy()
+            bas_id_tmp = bas_id[where].copy()
+            aoR_unpacked[atm_id].append(aoR_tmp)
+            ao_invovled_unpacked[atm_id].append(bas_id_tmp)
+
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        
+        if rank == 0:
+            _benchmark_time(t1, t2, "get_aoR_analytic: task %d" % task_id)
+
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    
+    aoR_holder = []
+    
+    for atm_id in range(len(aoR_unpacked)):
+        aoR_holder_tmp = np.concatenate(aoR_unpacked[atm_id], axis=0)
+        bas_id =         np.concatenate(ao_invovled_unpacked[atm_id], axis=0) 
+        aoR_holder.append(aoR_Holder(aoR_holder_tmp, bas_id, grid_begin_unpacked[atm_id], grid_end_unpacked[atm_id], grid_begin_unpacked[atm_id], grid_end_unpacked[atm_id]))
+    
+    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    
+    del aoR_unpacked
+    del ao_invovled_unpacked
+    del aoR_tmp
+    del aoR_holder_tmp
+    del bas_id
+    del aoR_test
+    del aoR
+    del aoG
+    
+    
+    if rank == 0:
+        _benchmark_time(t1, t2, "get_aoR_analytic: merge")
+
     return aoR_holder
 
 ############ get estimate on the strcuture of Density Matrix ############

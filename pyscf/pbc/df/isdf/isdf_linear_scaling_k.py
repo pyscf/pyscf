@@ -652,6 +652,8 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
     
     def build_IP_local(self, c=5, m=5, first_natm=None, group=None, Ls = None, debug=True):
         
+        assert self.use_aft_ao == False
+        
         first_natm = self._get_first_natm() 
         if group is None:
             group = []

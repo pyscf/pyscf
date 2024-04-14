@@ -30,7 +30,7 @@ KPTS = [
 # pseudo = "gth-hf"  
 basis='6-31G'
 pseudo=None
-ke_cutoff = 128  
+ke_cutoff = 256  
     
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -78,10 +78,10 @@ for nk in KPTS:
 
     ######### test rs-isdf #########
     
-    omega = 0.8
+    omega = 0.7
     
     from pyscf.pbc.df.isdf.isdf_linear_scaling import PBC_ISDF_Info_Quad
-    C = 10
+    C = 15
     group_partition = [[0,1],[2,3],[4,5],[6,7]]
     
     print("supercell.omega = ", supercell.omega)
@@ -105,7 +105,8 @@ for nk in KPTS:
     #
     mf = scf.RHF(supercell, kpts)
     mf.with_df = pbc_isdf_info
-    # mf.kernel()
+    mf.kernel()
+    
     dm = mf.get_init_guess(key='atom')
     
     '''

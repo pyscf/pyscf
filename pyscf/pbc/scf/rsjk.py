@@ -335,6 +335,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 supmol.seg_loc, np.arange(supmol.seg_loc.size-1))
             seg_loc = np.append(seg_loc, supmol.seg_loc[-1]).astype(np.int32)
         else:
+            print("In _get_jk_sr : dddd is not excluded!")
             drv = libpbc.PBCVHF_direct_drv
             nbasp = cell.nbas  # The number of shells in the primitive cell
             cell0_ao_loc = cell.ao_loc

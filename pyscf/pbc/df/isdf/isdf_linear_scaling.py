@@ -1083,7 +1083,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             assert self.rsjk.exclude_dd_block == False
             # assert self.rsjk._sr_without_dddd == False
             
-            self.cell.ke_cutoff = self.rsjk.ke_cutoff
+            self.cell.ke_cutoff = max(2*self.rsjk.ke_cutoff, self.cell.ke_cutoff)
             self.cell.mesh = None
             self.cell.build()
             mesh_tmp = self.cell.mesh
@@ -1199,13 +1199,22 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         for x in range(self.natm):
             print("len of partition[%d] = %d" % (x, len(self.partition[x])))
         
-        self.aoR = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
-                                                  None,
-                                                  first_natm,
-                                                  self.group,
-                                                  self.distance_matrix, 
-                                                  self.AtmConnectionInfo, 
-                                                  self.use_mpi, self.use_mpi, sync_aoR)
+        if self.use_aft_ao:
+            self.aoR = ISDF_Local_Utils.get_aoR_analytic(self.cell, self.coords, self.partition,
+                                                         None,
+                                                         first_natm,
+                                                         self.group,
+                                                         self.distance_matrix, 
+                                                         self.AtmConnectionInfo, 
+                                                         self.use_mpi, self.use_mpi, sync_aoR)
+        else:
+            self.aoR = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
+                                                      None,
+                                                      first_natm,
+                                                      self.group,
+                                                      self.distance_matrix, 
+                                                      self.AtmConnectionInfo, 
+                                                      self.use_mpi, self.use_mpi, sync_aoR)
     
         memory = ISDF_Local_Utils._get_aoR_holders_memory(self.aoR)
         # for i in range(comm_size):
@@ -1672,6 +1681,7 @@ if __name__ == '__main__':
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False)
+    pbc_isdf_info.use_aft_ao = True  # No problem ! 
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls

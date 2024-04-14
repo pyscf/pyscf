@@ -65,6 +65,8 @@ class PBC_ISDF_Info_Quad_MPI(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         super().__init__(mol, True, Ls, verbose, rela_cutoff_QRCP, aoR_cutoff, True)
         self.use_mpi = True
+        
+        assert self.use_aft_ao == False
 
 C = 15
 
