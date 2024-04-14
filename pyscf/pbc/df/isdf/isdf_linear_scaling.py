@@ -1063,6 +1063,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         ########## supporting Range_separation ########## 
 
         self.use_aft_ao = False
+        self.ke_cutoff_pp = self.cell.ke_cutoff
         
         self.omega = omega 
         if omega is not None:

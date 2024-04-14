@@ -882,6 +882,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             t0 = (lib.logger.process_clock(), lib.logger.perf_counter())
             cell = self.cell.copy()
             cell.omega = 0.0
+            if hasattr(self, "ke_cutoff_pp"):
+                cell.ke_cutoff = self.ke_cutoff_pp
             cell.build()
             df_tmp = multigrid.MultiGridFFTDF2(cell)
             v_pp_loc2_nl = df_tmp.get_pp()
