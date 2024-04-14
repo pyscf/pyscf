@@ -478,7 +478,10 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
     
     for i in range(natm):
         partition_IP[i] = np.array(partition_IP[i], dtype=np.int32)
+        partition_IP[i].sort()  
     
+    mydf.partition_IP = partition_IP
+
     ### build ### 
     
     if len(group) < natm:
@@ -492,16 +495,17 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
         # mydf.aoRg = ISDF_eval_gto(mydf.cell, coords=coords[mydf.IP_flat]) * weight
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        mydf.aoRg = ISDF_Local_Utils.get_aoR(mydf.cell, mydf.coords, 
-                                                   partition_IP, 
-                                                   None,
-                                                   mydf._get_first_natm(),
-                                                   mydf.group,
-                                                   mydf.distance_matrix,
-                                                   mydf.AtmConnectionInfo, 
-                                                   False, 
-                                                   mydf.use_mpi,
-                                                   True)
+        # mydf.aoRg = ISDF_Local_Utils.get_aoR(mydf.cell, mydf.coords, 
+        #                                            partition_IP, 
+        #                                            None,
+        #                                            mydf._get_first_natm(),
+        #                                            mydf.group,
+        #                                            mydf.distance_matrix,
+        #                                            mydf.AtmConnectionInfo, 
+        #                                            False, 
+        #                                            mydf.use_mpi,
+        #                                            True)
+        mydf.aoRg = mydf._construct_build_aoRg(partition_IP, group)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t1, t2, "build_aoRg")
     
@@ -1055,6 +1059,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         self.kmesh = None
 
         ########## supporting Range_separation ########## 
+
+        self.use_aft_ao = False
         
         self.omega = omega 
         if omega is not None:
@@ -1075,10 +1081,10 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             assert self.rsjk.exclude_dd_block == False
             # assert self.rsjk._sr_without_dddd == False
             
-            # self.cell.ke_cutoff = self.rsjk.ke_cutoff
-            # self.cell.mesh = None
-            # self.cell.build()
-            # self.mesh = self.cell.mesh
+            self.cell.ke_cutoff = self.rsjk.ke_cutoff
+            self.cell.mesh = None
+            self.cell.build()
+            self.mesh = self.cell.mesh
             
             ke_cutoff_rsjk = self.rsjk.ke_cutoff
             
@@ -1094,6 +1100,12 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             cell_gdf = mol.copy()
             from pyscf.pbc.df import GDF
             self.gdf = GDF(cell_gdf, kpts)
+            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            
+            if self.verbose:
+                _benchmark_time(t1, t2, "build_GDF")
+            
+            self.use_aft_ao = True
             
         else:
             self.rsjk = None
@@ -1293,6 +1305,46 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                 # print("build_k_buf shape = ", self.build_k_buf.shape)
             
     
+    def _construct_build_aoRg(self, IP_group, group=None):
+        if group is None:
+            group = []
+            for i in range(self.natm):
+                group.append([i])
+        for i in range(len(group)):
+            group[i] = np.array(group[i], dtype=np.int32)
+            group[i].sort()
+        assert self.natm == len(IP_group) 
+        
+        aoR_holders_res = []
+        for i in range(self.natm):
+            aoR_holders_res.append(None)
+
+        assert hasattr(self, "partition")
+        assert hasattr(self, "aoR")
+        
+        atm_ordering = []
+        for i in range(len(group)):
+            atm_ordering.extend(group[i]) 
+        
+        IP_ID_NOW = 0 
+        
+        for atm_id in atm_ordering:
+            aoR_holder = self.aoR[atm_id]
+            if aoR_holder is None:
+                IP_ID_NOW += len(IP_group[atm_id])
+                continue
+            nIP = len(IP_group[atm_id])
+            
+            idx = np.searchsorted(self.partition[atm_id], IP_group[atm_id])
+            
+            ao_involved = aoR_holder.ao_involved.copy()
+            aoR = aoR_holder.aoR[:, idx].copy()
+            aoR_holders_res[atm_id] = ISDF_Local_Utils.aoR_Holder(aoR, ao_involved, IP_ID_NOW, IP_ID_NOW+nIP, IP_ID_NOW, IP_ID_NOW+nIP)
+            IP_ID_NOW+= nIP
+        
+        return aoR_holders_res
+            
+    
     def build_IP_local(self, c=5, m=5, first_natm=None, group=None, Ls = None, debug=True):
         
         if first_natm is None:
@@ -1373,13 +1425,16 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         # if rank == 0:
         #     print("IP_Atm = ", IP_Atm)
         
-        self.aoRg_possible = ISDF_Local_Utils.get_aoR(self.cell, self.coords, 
-                                                            IP_Atm,
-                                                            None,
-                                                            self._get_first_natm(), 
-                                                            self.group,
-                                                            self.distance_matrix, 
-                                                            self.AtmConnectionInfo, self.use_mpi, self.use_mpi, True)
+        # self.aoRg_possible = ISDF_Local_Utils.get_aoR(self.cell, self.coords, 
+        #                                                     IP_Atm,
+        #                                                     None,
+        #                                                     self._get_first_natm(), 
+        #                                                     self.group,
+        #                                                     self.distance_matrix, 
+        #                                                     self.AtmConnectionInfo, self.use_mpi, self.use_mpi, True)
+        
+        self.aoRg_possible = self._construct_build_aoRg(IP_Atm, None)
+        
         
         t4 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if self.verbose and debug:
@@ -1516,7 +1571,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
-C = 19
+C = 25
 
 from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
@@ -1542,12 +1597,14 @@ if __name__ == '__main__':
         ['C', (0.8917 , 2.6751 , 2.6751)],
     ] 
     KE_CUTOFF = 70
-    basis = 'unc-gth-cc-dzvp'
-    pseudo = "gth-hf"   
+    # basis = 'unc-gth-cc-dzvp'
+    # pseudo = "gth-hf"  
+    basis = 'gth-dzvp'
+    pseudo = "gth-pade"   
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis=basis, pseudo=pseudo)    
     # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
-    # prim_partition = [[0,1,2,3,4,5,6,7]]
-    prim_partition = [[0,1],[2,3],[4,5],[6,7]]
+    prim_partition = [[0,1,2,3,4,5,6,7]]
+    # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     # prim_partition = [[0,1,2,3],[4,5,6,7]]
 
 #     prim_a = np.array(
@@ -1572,7 +1629,7 @@ if __name__ == '__main__':
     
     prim_mesh = prim_cell.mesh
 
-    Ls = [1, 1, 1]
+    Ls = [1, 1, 2]
     # Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
@@ -1587,7 +1644,7 @@ if __name__ == '__main__':
     print("group_partition = ", group_partition)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=False, aoR_cutoff=1e-8, direct=False)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -1607,7 +1664,7 @@ if __name__ == '__main__':
 
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
-    pbc_isdf_info.with_robust_fitting = False
+    # pbc_isdf_info.with_robust_fitting = False
     mf = scf.RHF(cell)
     # mf = scf.addons.smearing_(mf, sigma=0.2, method='fermi')
     pbc_isdf_info.direct_scf = mf.direct_scf
@@ -1628,7 +1685,7 @@ if __name__ == '__main__':
     # dm = mf.make_rdm1()
     mo_coeff = mf.mo_coeff.copy()
     nocc = mf.cell.nelectron // 2
-    dm = np.dot(mo_coeff[:,:nocc], mo_coeff[:,:nocc].T)
+    dm   = np.dot(mo_coeff[:,:nocc], mo_coeff[:,:nocc].T)
     
     for _ in range(7):
         pbc_isdf_info.with_robust_fitting = False
