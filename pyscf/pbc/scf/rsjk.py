@@ -310,6 +310,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             self.cell_d.nbas > 0 and
             self.has_long_range() and
             (cell.dimension == 3 or cell.low_dim_ft_type != 'inf_vacuum'))
+        
+        # print("self._sr_without_dddd = ", self._sr_without_dddd)
 
         if self._sr_without_dddd:
             # To exclude (dd|dd) block, diffused shell needs to be independent
@@ -455,6 +457,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         cell = self.cell
         if omega is not None:  # J/K for RSH functionals
             if omega > 0:  # Long-range part only, call AFTDF
+                print("omega > 0, lr is called, call AFTDF")
                 dfobj = aft.AFTDF(cell, self.kpts)
                 ke_cutoff = estimate_ke_cutoff_for_omega(cell, omega)
                 dfobj.mesh = cell.cutoff_to_mesh(ke_cutoff)
@@ -519,6 +522,11 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         else:
             vj, vk = None, vs[0]
 
+        # print("vj_sr = ", vj[0,:16])
+        # print("vj_sr = ", vj[-1,-16:])
+        # print("vk_sr = ", vk[0,:16])
+        # print("vk_sr = ", vk[-1,-16:])
+
         if self.purify and kpts_band is None:
             phase = np.exp(1j*np.dot(self.supmol_sr.bvkmesh_Ls, kpts.T))
             phase /= np.sqrt(len(kpts))
@@ -529,6 +537,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         if with_j:
             if self.has_long_range():
+                # print("lr is called")
                 vj += self._get_vj_lr(dms, hermi, kpts, kpts_band)
             if hermi:
                 vj = (vj + vj.conj().transpose(0,1,3,2)) * .5
@@ -539,6 +548,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         if with_k:
             if self.has_long_range():
+                # print("lr is called")
                 approx_vk_lr = dm_factor is None and self.approx_vk_lr_missing_mo
                 if not approx_vk_lr:
                     vk += self._get_vk_lr(dms, hermi, kpts, kpts_band, exxdiv)
@@ -641,6 +651,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             coulG_SR = self.weighted_coulG_SR(kpt_allow, False, mesh)
             coulG_SR_at_G0 = None
 
+        # print("coulG_SR   = ", coulG_SR[:16], " with shape = ", coulG_SR.shape)
+        # print("coulG_full = ", coulG[:16], " with shape = ", coulG.shape)
+        # print("mesh = ", mesh)
+
         if naod > 0:
             smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
             smooth_bas_idx = rs_cell.bas_map[smooth_bas_mask]
@@ -659,6 +673,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             # coulG(cell.omega) - coulG(self.omega) . It can support both regular
             # integrals and LR integrals.
             coulG_LR = coulG - coulG_SR
+            # print("coulG_LR   = ", coulG_LR[:16], " with shape = ", coulG_LR.shape)
             buf = np.empty(nkpts*Gblksize*nao**2*2)
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, out=buf)

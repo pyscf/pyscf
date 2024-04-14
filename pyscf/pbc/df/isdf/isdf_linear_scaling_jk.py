@@ -182,7 +182,9 @@ def _half_J(mydf, dm, use_mpi=False):
         if hasattr(mydf, "coulG") == False:
             if mydf.omega is not None:
                 assert mydf.omega >= 0.0
-            mydf.coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
+            print("mydf.omega = ", mydf.omega)
+            # mydf.coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
+            raise ValueError("mydf.coulG is not found.")
 
         J = np.zeros_like(density_R)
 
@@ -1138,7 +1140,8 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     if hasattr(mydf, "coulG") == False:
         if mydf.omega is not None:
             assert mydf.omega >= 0.0
-        mydf.coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
+        # mydf.coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
+        raise NotImplementedError("coulG is not implemented yet.")
     coulG = mydf.coulG
     coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1).copy()
     
@@ -1627,6 +1630,7 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     if "exxdiv" in kwargs:
         exxdiv = kwargs["exxdiv"]
+        kwargs.pop("exxdiv")
     else:
         exxdiv = None
 
@@ -1656,7 +1660,7 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         # vj = _contract_j_dm(mydf, dm, use_mpi)
         # if rank == 0:
         # print("vj = ", vj[0, :16])
-        # print("vj = ", vj[0, -16:])
+        # print("vj = ", vj[-1, -16:])
     if with_k:
         if mydf.direct:
             vk = _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=use_mpi)
@@ -1664,12 +1668,24 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
             vk = _contract_k_dm_quadratic(mydf, dm, mydf.with_robust_fitting, use_mpi=use_mpi)
         # if rank == 0:
         # print("vk = ", vk[0, :16])
-        # print("vk = ", vk[0, -16:])
+        # print("vk = ", vk[-1, -16:])
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
 
     if mydf.rsjk is not None:
-        vj_sr, vk_sr = mydf.rsjk.get_jk(dm, hermi, kpt, kpts_band, with_j, with_k, omega, exxdiv, **kwargs)
+        vj_sr, vk_sr = mydf.rsjk.get_jk(
+            dm, 
+            hermi, 
+            kpt, 
+            kpts_band, 
+            with_j, 
+            with_k, 
+            omega, 
+            exxdiv, **kwargs)
+        # print("vj = ", vj_sr[0,:16])
+        # print("vj = ", vj_sr[-1,-16:])
+        # print("vk = ", vk_sr[0,:16])
+        # print("vk = ", vk_sr[-1,-16:])
         if with_j:
             vj += vj_sr
         if with_k:

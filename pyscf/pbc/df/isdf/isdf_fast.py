@@ -504,6 +504,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
 
         df_tmp = MultiGridFFTDF2(mol)
+        print("mol.ke_cutoff = ", mol.ke_cutoff)
         if aoR is None:
             # df_tmp = MultiGridFFTDF2(mol)
             self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
@@ -888,7 +889,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             if self.verbose:
                 _benchmark_time(t0, t1, "get_pp")
             return self.PP
-    
+        
     ##### functions defined in isdf_ao2mo.py #####
 
     get_eri = get_ao_eri = isdf_ao2mo.get_eri

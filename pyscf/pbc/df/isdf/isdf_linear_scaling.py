@@ -706,8 +706,9 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
     if mydf.omega is not None:
         assert mydf.omega >= 0.0
     
-    coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
-    mydf.coulG = coulG.copy()
+    # coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
+    # mydf.coulG = coulG.copy()
+    coulG = mydf.coulG.copy()
     coulG_real         = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1).copy()
     
     def construct_V(aux_basis:np.ndarray, buf, V, grid_ID, grid_ordering):
@@ -911,9 +912,10 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
 
     if mydf.omega is not None:
         assert mydf.omega >= 0.0
-
-    coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
-    mydf.coulG = coulG.copy()
+    # print("mydf.omega = ", mydf.omega)
+    # coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
+    # mydf.coulG = coulG.copy()
+    coulG = mydf.coulG.copy()
     V = construct_V_CCode(mydf.aux_basis, mesh, coulG)
 
     if use_mpi:
@@ -1010,8 +1012,9 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             verbose=verbose
         )
         
+        self.cell = mol.copy()
         cell = self.cell
-        
+
         #### get other info #### 
         
         shl_atm = []
@@ -1063,20 +1066,41 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
             t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
             self.rsjk = RangeSeparatedJKBuilder(self.cell, kpts)
-            self.rsjk.build()
+            self.rsjk.exclude_dd_block = False
+            self.rsjk.allow_drv_nodddd = False
+            self.rsjk.build(omega=abs(omega))
             t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
             
             assert self.rsjk.has_long_range() == False
+            assert self.rsjk.exclude_dd_block == False
+            # assert self.rsjk._sr_without_dddd == False
+            
+            # self.cell.ke_cutoff = self.rsjk.ke_cutoff
+            # self.cell.mesh = None
+            # self.cell.build()
+            # self.mesh = self.cell.mesh
             
             ke_cutoff_rsjk = self.rsjk.ke_cutoff
             
             if self.cell.ke_cutoff < ke_cutoff_rsjk:
                 print(" WARNING : ke_cutoff = %12.6e is smaller than ke_cutoff_rsjk = %12.6e" % (self.cell.ke_cutoff, ke_cutoff_rsjk))
             
+            print("ke_cutoff = %12.6e, ke_cutoff_rsjk = %12.6e" % (self.cell.ke_cutoff, ke_cutoff_rsjk))
+            
             if self.verbose:
-                _benchmark_time(t1, t2, "build_RSJK")
+                _benchmark_time(t1, t2, "build_RSJK") 
+                
+            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            cell_gdf = mol.copy()
+            from pyscf.pbc.df import GDF
+            self.gdf = GDF(cell_gdf, kpts)
+            
         else:
             self.rsjk = None
+        
+        ########## coul kernel ##########
+        
+        self.get_coulG()
 
     def _get_first_natm(self):
         if self.kmesh is not None:
@@ -1379,6 +1403,58 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
         sys.stdout.flush()
         
+        # if hasattr(self, "gdf"):
+        #     self.gdf.reset()
+
+    def get_nuc(self, kpts=None):
+        if hasattr(self, "gdf"):
+            return self.gdf.get_nuc(kpts)
+        else:
+            super().get_nuc(kpts)   
+
+    def get_coulG(self):
+        if hasattr(self, "rsjk") and self.rsjk is not None:
+            # raise NotImplementedError("get_coulG is not supported when omega is not None")
+
+            ##### construct coulG_LR , copy from rsjk.py #####
+    
+            if self.rsjk.cell.dimension!=3:
+                raise NotImplementedError('3D only')
+
+            # print(" -------- In getting coulG -------- ")
+            
+            # print("self.mesh = ", self.mesh)
+
+            _, _, kws = self.rsjk.cell.get_Gv_weights(self.mesh)
+            coulG_SR_at_G0 = np.pi/self.rsjk.omega**2 * kws
+            kpt = np.zeros(3)
+            with lib.temporary_env(self.rsjk.cell, dimension=3):
+                coulG_SR = self.rsjk.weighted_coulG_SR(kpt, False, self.mesh)
+            G0_idx = 0
+            coulG_SR[G0_idx] += coulG_SR_at_G0
+            coulG_full = self.rsjk.weighted_coulG(kpt, None, self.mesh, omega=0.0)
+            self.coulG = coulG_full - coulG_SR
+            
+            coulG_bench = tools.get_coulG(self.cell, mesh=self.cell.mesh, omega=0.0)
+            
+            ### find coulG_full with values larger than 1e-6 ###
+            
+            idx = np.where(np.abs(coulG_full) > 1e-6)
+            
+            G1 = coulG_full[idx].copy()
+            G2 = coulG_bench[idx].copy()
+            ratio = G2/G1
+            fac = ratio[0]
+            assert np.allclose(ratio, fac)
+            self.coulG *= fac
+            
+            # print("coulG_bench = ", coulG_bench[:16], " with shape = ", coulG_bench.shape)
+            # print("coulG_LR    = ", self.coulG[:16], " with shape = ", self.coulG.shape)
+            # print("coulG_SR    = ", coulG_SR[:16], " with shape = ", coulG_SR.shape)
+            # print("coulG_full  = ", coulG_full[:16], " with shape = ", coulG_full.shape)
+        else:
+            self.coulG = tools.get_coulG(self.cell, mesh=self.cell.mesh)
+            
 
     def build_auxiliary_Coulomb(self, debug=True):
         
@@ -1496,8 +1572,8 @@ if __name__ == '__main__':
     
     prim_mesh = prim_cell.mesh
 
+    Ls = [1, 1, 1]
     # Ls = [2, 2, 2]
-    Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
