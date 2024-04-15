@@ -115,7 +115,8 @@ class SCFWithSolvent(_Solvation):
         e_tot += e_solvent
         self.scf_summary['e_solvent'] = vhf.e_solvent.real
 
-        if self.with_solvent.method.upper() == 'SMD':
+        if (hasattr(self.with_solvent, 'method') and
+            self.with_solvent.method.upper() == 'SMD'):
             if self.with_solvent.e_cds is None:
                 e_cds = self.with_solvent.get_cds()
                 self.with_solvent.e_cds = e_cds

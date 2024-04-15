@@ -389,8 +389,6 @@ class PCM(lib.StreamObject):
         '''
         mol = self.mol
         nao = dms.shape[-1]
-        atom_coords = mol.atom_coords(unit='B')
-        atom_charges = mol.atom_charges()
         grid_coords = self.surface['grid_coords']
         exponents   = self.surface['charge_exp']
         ngrids = grid_coords.shape[0]
