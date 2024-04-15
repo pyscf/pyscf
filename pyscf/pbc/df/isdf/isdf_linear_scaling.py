@@ -1064,17 +1064,21 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
         self.use_aft_ao = False
         self.ke_cutoff_pp = self.cell.ke_cutoff
+        self.ke_cutoff_ft_ao = self.cell.ke_cutoff
+        self.ft_ao_mesh = self.mesh.copy()
         
         self.omega = omega 
         if omega is not None:
             self.omega = abs(omega)       ## LR ##
-            self.cell.omega = -abs(omega) ## SR ##
+            # self.cell.omega = -abs(omega) ## SR ##
+            self.cell_rsjk = self.cell.copy()
+            self.cell_rsjk.omega = -abs(omega)
 
             nk = [1,1,1]
-            kpts = self.cell.make_kpts(nk)
+            kpts = self.cell_rsjk.make_kpts(nk)
 
             t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-            self.rsjk = RangeSeparatedJKBuilder(self.cell, kpts)
+            self.rsjk = RangeSeparatedJKBuilder(self.cell_rsjk, kpts)
             self.rsjk.exclude_dd_block = False
             self.rsjk.allow_drv_nodddd = False
             self.rsjk.build(omega=abs(omega))
@@ -1085,34 +1089,38 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             # assert self.rsjk._sr_without_dddd == False
             
             # self.cell.ke_cutoff = max(2*self.rsjk.ke_cutoff, self.cell.ke_cutoff)
-            self.cell.ke_cutoff = self.rsjk.ke_cutoff * 3
-            self.cell.mesh = None
-            self.cell.build()
-            mesh_tmp = self.cell.mesh
+            self.cell_rsjk.ke_cutoff = self.rsjk.ke_cutoff
+            self.cell_rsjk.mesh = None
+            self.cell_rsjk.build()
+            mesh_tmp = self.cell_rsjk.mesh
             if mesh_tmp[0] % 2 != 0:
                 mesh_tmp[0] += 1
             if mesh_tmp[1] % 2 != 0:
                 mesh_tmp[1] += 1
             if mesh_tmp[2] % 2 != 0:
                 mesh_tmp[2] += 1
+            self.cell_rsjk.build(mesh=mesh_tmp)
+            self.mesh = self.cell_rsjk.mesh
             self.cell.build(mesh=mesh_tmp)
-            self.mesh = self.cell.mesh
+            
+            self.ft_ao_mesh[0] = ((self.ft_ao_mesh[0] + self.mesh[0]-1) // self.mesh[0]) * self.mesh[0]
+            self.ft_ao_mesh[1] = ((self.ft_ao_mesh[1] + self.mesh[1]-1) // self.mesh[1]) * self.mesh[1]
+            self.ft_ao_mesh[2] = ((self.ft_ao_mesh[2] + self.mesh[2]-1) // self.mesh[2]) * self.mesh[2]
             
             ######## rebuild self.coords ######## 
             
             from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
 
-            df_tmp = MultiGridFFTDF2(self.cell)
+            df_tmp = MultiGridFFTDF2(self.cell_rsjk)
             self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
             self.ngrids = self.coords.shape[0]
             
-            
             ke_cutoff_rsjk = self.rsjk.ke_cutoff
             
-            if self.cell.ke_cutoff < ke_cutoff_rsjk:
-                print(" WARNING : ke_cutoff = %12.6e is smaller than ke_cutoff_rsjk = %12.6e" % (self.cell.ke_cutoff, ke_cutoff_rsjk))
+            if self.cell_rsjk.ke_cutoff < ke_cutoff_rsjk:
+                print(" WARNING : ke_cutoff = %12.6e is smaller than ke_cutoff_rsjk = %12.6e" % (self.cell_rsjk.ke_cutoff, ke_cutoff_rsjk))
             
-            print("ke_cutoff = %12.6e, ke_cutoff_rsjk = %12.6e" % (self.cell.ke_cutoff, ke_cutoff_rsjk))
+            print("ke_cutoff = %12.6e, ke_cutoff_rsjk = %12.6e" % (self.cell_rsjk.ke_cutoff, ke_cutoff_rsjk))
             
             if self.verbose:
                 _benchmark_time(t1, t2, "build_RSJK") 
@@ -1130,6 +1138,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             
         else:
             self.rsjk = None
+            self.cell_rsjk = None
         
         ########## coul kernel ##########
         
@@ -1171,11 +1180,18 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             Ls = [int(lattice_x/3)+1, int(lattice_y/3)+1, int(lattice_z/3)+1]
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        self.partition = ISDF_Local_Utils.get_partition(self.cell, self.coords, self.AtmConnectionInfo, 
-                                                              Ls, 
-                                                              self.with_translation_symmetry,
-                                                              self.kmesh,
-                                                              self.use_mpi)
+        if self.rsjk is not None and self.cell_rsjk is not None:
+            self.partition = ISDF_Local_Utils.get_partition(self.cell_rsjk, self.coords, self.AtmConnectionInfo, 
+                                                                  Ls, 
+                                                                  self.with_translation_symmetry,
+                                                                  self.kmesh,
+                                                                  self.use_mpi)
+        else:
+            self.partition = ISDF_Local_Utils.get_partition(self.cell, self.coords, self.AtmConnectionInfo, 
+                                                                  Ls, 
+                                                                  self.with_translation_symmetry,
+                                                                  self.kmesh,
+                                                                  self.use_mpi)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if rank == 0:
@@ -1202,14 +1218,33 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             print("len of partition[%d] = %d" % (x, len(self.partition[x])))
         
         if self.use_aft_ao:
-            self.aoR = ISDF_Local_Utils.get_aoR_analytic(self.cell, self.coords, self.partition,
-                                                         None,
-                                                         first_natm,
-                                                         self.group,
-                                                         self.distance_matrix, 
-                                                         self.AtmConnectionInfo, 
-                                                         self.use_mpi, self.use_mpi, sync_aoR)
+            if self.rsjk is None:
+                # NOTE: useless 
+                self.aoR = ISDF_Local_Utils.get_aoR_analytic(self.cell, self.coords, self.partition,
+                                                             None,
+                                                             first_natm,
+                                                             self.group,
+                                                             self.distance_matrix, 
+                                                             self.AtmConnectionInfo, 
+                                                             self.use_mpi, self.use_mpi, sync_aoR)
+            else:
+                mesh_dense = self.ft_ao_mesh
+                mesh_sparse = self.mesh 
+                print("mesh_dense  = ", mesh_dense)
+                print("mesh_sparse = ", mesh_sparse)
+                self.aoR = ISDF_Local_Utils.get_aoR_exact(self.cell, 
+                                                          mesh_sparse,
+                                                          mesh_dense,
+                                                          self.partition,
+                                                          None,
+                                                          first_natm,
+                                                          self.group,
+                                                          self.distance_matrix,
+                                                          self.AtmConnectionInfo,
+                                                          self.use_mpi, self.use_mpi, sync_aoR)
+                                                          
         else:
+            assert self.rsjk is None and self.cell_rsjk is None
             self.aoR = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
                                                       None,
                                                       first_natm,
@@ -1528,7 +1563,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             coulG_full = self.rsjk.weighted_coulG(kpt, None, self.mesh, omega=0.0)
             self.coulG = coulG_full - coulG_SR
             
-            coulG_bench = tools.get_coulG(self.cell, mesh=self.cell.mesh, omega=0.0)
+            coulG_bench = tools.get_coulG(self.cell_rsjk, mesh=self.cell_rsjk.mesh, omega=0.0)
             
             ### find coulG_full with values larger than 1e-6 ###
             
@@ -1541,6 +1576,10 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             G2 = coulG_bench[idx].copy()
             ratio = G2/G1
             fac = ratio[0]
+            print("fac = ", fac)
+            # print("ratio = ", ratio)    
+            print("kws = ", kws)
+            assert fac == 1.0/kws 
             assert np.allclose(ratio, fac)
             self.coulG *= fac
             

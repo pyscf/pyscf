@@ -32,7 +32,7 @@ KPTS = [
 # pseudo=None
 basis = 'gth-dzvp'
 pseudo = "gth-pade"  
-ke_cutoff = 70  
+ke_cutoff = 128  
     
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -48,13 +48,13 @@ cell = gto.M(
     verbose = 4,
 )
 
-cell = gto.M(
-    a = numpy.eye(3)*3.5668,
-    atom = '''C     0.      0.      0.
-              C     0.8917  0.8917  0.8917''',
-    basis = '6-31g',
-    verbose = 4,
-)
+# cell = gto.M(
+#     a = numpy.eye(3)*3.5668,
+#     atom = '''C     0.      0.      0.
+#               C     0.8917  0.8917  0.8917''',
+#     basis = '6-31g',
+#     verbose = 4,
+# )
 
 
 boxlen = 3.5668
@@ -89,10 +89,10 @@ for nk in KPTS:
 
     ######### test rs-isdf #########
     
-    omega = 0.5
+    omega = 1.2
     
     from pyscf.pbc.df.isdf.isdf_linear_scaling import PBC_ISDF_Info_Quad
-    C = 12
+    C = 18
     group_partition = [[0,1],[2,3],[4,5],[6,7]]
     # group_partition=[[0,1]]
     
@@ -117,14 +117,14 @@ for nk in KPTS:
     #
     mf = scf.RHF(supercell, kpts)
     mf.with_df = pbc_isdf_info
-    mf.kernel()
+    # mf.kernel()
     
-    exit(1)
+    # exit(1)
     
     dm = mf.get_init_guess(key='atom')
     
     '''
-    ref =  -302.721144613077
+    ref =  -302.721144613077,  Full Electron 6-31G
     '''
 
     # continue
