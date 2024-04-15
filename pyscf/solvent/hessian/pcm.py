@@ -129,8 +129,7 @@ def fd_grad_vmat(pcmobj, dm, mo_coeff, mo_occ, atmlst=None, verbose=None):
     mol = pmol.copy()
     if atmlst is None:
         atmlst = range(mol.natm)
-    nao, nmo = mo_coeff.shape
-    mocc = mo_coeff[:,mo_occ>0]
+    nao = mo_coeff.shape[0]
     coords = mol.atom_coords(unit='Bohr')
     def pcm_vmat_scanner(mol):
         pcmobj.reset(mol)
