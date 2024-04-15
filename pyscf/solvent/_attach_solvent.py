@@ -107,10 +107,27 @@ class SCFWithSolvent(_Solvation):
             dm = self.make_rdm1()
         if getattr(vhf, 'e_solvent', None) is None:
             vhf = self.get_veff(self.mol, dm)
+
         e_tot, e_coul = super().energy_elec(dm, h1e, vhf)
-        e_tot += vhf.e_solvent
+        e_solvent = vhf.e_solvent
+        if isinstance(e_solvent, numpy.ndarray):
+            e_solvent = e_solvent[0]
+        e_tot += e_solvent
         self.scf_summary['e_solvent'] = vhf.e_solvent.real
-        logger.debug(self, 'Solvent Energy = %.15g', vhf.e_solvent)
+
+        if self.with_solvent.method.upper() == 'SMD':
+            if self.with_solvent.e_cds is None:
+                e_cds = self.with_solvent.get_cds()
+                self.with_solvent.e_cds = e_cds
+            else:
+                e_cds = self.with_solvent.e_cds
+
+            if isinstance(e_cds, numpy.ndarray):
+                e_cds = e_cds[0]
+            e_tot += e_cds
+            self.scf_summary['e_cds'] = e_cds
+            logger.info(self, f'CDS correction = {e_cds:.15f}')
+        logger.info(self, 'Solvent Energy = %.15g', vhf.e_solvent)
         return e_tot, e_coul
 
     def nuc_grad_method(self):
@@ -118,6 +135,10 @@ class SCFWithSolvent(_Solvation):
         return self.with_solvent.nuc_grad_method(grad_method)
 
     Gradients = nuc_grad_method
+
+    def Hessian(self):
+        hess_method = super().Hessian()
+        return self.with_solvent.Hessian(hess_method)
 
     def gen_response(self, *args, **kwargs):
         vind = super().gen_response(*args, **kwargs)

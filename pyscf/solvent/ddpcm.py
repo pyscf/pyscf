@@ -199,6 +199,7 @@ def make_A(pcmobj, r_vdw, ylm_1sph, ui):
 class ddPCM(ddcosmo.DDCOSMO):
     def __init__(self, mol):
         ddcosmo.DDCOSMO.__init__(self, mol)
+        self.method = 'ddPCM'
 
     def dump_flags(self, verbose=None):
         logger.info(self, '******** %s (In testing) ********', self.__class__)
