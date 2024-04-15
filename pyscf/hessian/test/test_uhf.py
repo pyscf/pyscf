@@ -17,6 +17,10 @@ import unittest
 import numpy
 from pyscf import gto, scf, lib
 from pyscf import grad, hessian
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dftd3 = dftd4 = None
 
 def setUpModule():
     global mol
@@ -33,6 +37,7 @@ def setUpModule():
 
 def tearDownModule():
     global mol
+    mol.stdout.close()
     del mol
 
 class KnownValues(unittest.TestCase):
@@ -45,7 +50,7 @@ class KnownValues(unittest.TestCase):
         hess = hobj.kernel()
         self.assertAlmostEqual(lib.fp(hess), -0.20243405976628576, 5)
 
-    def test_finite_diff_rhf_hess(self):
+    def test_finite_diff_uhf_hess(self):
         mf = scf.UHF(mol)
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
@@ -58,6 +63,33 @@ class KnownValues(unittest.TestCase):
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 4)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_finite_diff_uhf_d3_hess(self):
+        mf = scf.UHF(mol)
+        mf.conv_tol = 1e-14
+        mf.disp = 'd3bj'
+        e0 = mf.kernel()
+        hess = mf.Hessian().kernel()
+
+        g_scanner = mf.nuc_grad_method().as_scanner()
+        pmol = mol.copy()
+        e1 = g_scanner(pmol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 4)
+
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
+    def test_finite_diff_uhf_d4_hess(self):
+        mf = scf.UHF(mol)
+        mf.conv_tol = 1e-14
+        mf.disp = 'd4'
+        e0 = mf.kernel()
+        hess = mf.Hessian().kernel()
+
+        g_scanner = mf.nuc_grad_method().as_scanner()
+        pmol = mol.copy()
+        e1 = g_scanner(pmol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 4)
 
 if __name__ == "__main__":
     print("Full Tests for UHF Hessian")
