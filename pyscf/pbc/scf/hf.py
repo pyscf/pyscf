@@ -686,11 +686,21 @@ class SCF(mol_hf.SCF):
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
         elif self.rsjk:
-            vj, vk = self.rsjk.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
+            ## NOTE: changed by Ning to support occ-RI-K
+            dm_shape_init = dm.shape      
+            dm = dm.reshape(-1, nao, nao)
+            dm = lib.tag_array(dm, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ)
+            vj, vk = self.rsjk.get_jk(dm, hermi, kpt, kpts_band,
                                       with_j, with_k, omega, exxdiv=self.exxdiv)
+            dm = dm.reshape(dm_shape_init)
         else:
-            vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
+            ## NOTE: changed by Ning to support occ-RI-K
+            dm_shape_init = dm.shape
+            dm = dm.reshape(-1, nao, nao)
+            dm = lib.tag_array(dm, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ)
+            vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpts_band,
                                          with_j, with_k, omega, exxdiv=self.exxdiv)
+            dm = dm.reshape(dm_shape_init)
 
         if with_j:
             vj = _format_jks(vj, dm, kpts_band)

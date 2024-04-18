@@ -1692,15 +1692,16 @@ if __name__ == '__main__':
     sys.stdout.flush()
     
     
-    mf.mo_coeff = np.random.rand(cell.nao, cell.nao)
+    # mf.mo_coeff = np.random.rand(cell.nao, cell.nao)
     # dm = mf.make_rdm1()
-    mo_coeff = mf.mo_coeff.copy()
-    nocc = mf.cell.nelectron // 2
-    dm   = np.dot(mo_coeff[:,:nocc], mo_coeff[:,:nocc].T)
+    # mo_coeff = mf.mo_coeff.copy()
+    # nocc = mf.cell.nelectron // 2
+    # dm   = np.dot(mo_coeff[:,:nocc], mo_coeff[:,:nocc].T)
+    dm = mf.make_rdm1()
     
     for _ in range(7):
         pbc_isdf_info.with_robust_fitting = False
-        vj, vk = ISDF_LinearScalingJK.get_jk_occRI(pbc_isdf_info, mo_coeff, nocc, dm)
+        vj, vk = ISDF_LinearScalingJK.get_jk_occRI(pbc_isdf_info, dm)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     aoR = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords)

@@ -1602,6 +1602,35 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     
     '''JK for given k-point'''
     
+    ############ deal with occ-RI-K ############
+    
+    use_occ_RI_K = False
+    
+    if getattr(mydf, "occ_RI_K", None) is not None:
+        use_occ_RI_K = mydf.occ_RI_K
+    
+    if getattr(dm, '__dict__', None) is not None:
+        # print(dm.__dict__.keys())
+        mo_coeff = dm.__dict__['mo_coeff']
+        mo_occ   = dm.__dict__['mo_occ']
+        if mo_coeff is not None:
+            assert mo_occ is not None
+            assert mo_coeff.shape[1] == mo_occ.shape[0]
+            assert mo_coeff.ndim == 2
+            assert mo_occ.ndim == 1
+        if use_occ_RI_K and mo_coeff is None:
+            use_occ_RI_K = False
+    else:
+        mo_coeff = None
+        mo_occ = None
+        use_occ_RI_K = False
+    
+    if use_occ_RI_K:
+        if mydf.direct == True:
+            raise ValueError("ISDF does not support direct=True for occ-RI-K")
+    
+    ############ end deal with occ-RI-K ############
+    
     direct = mydf.direct
     use_mpi = mydf.use_mpi
     
@@ -1623,10 +1652,11 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     if use_mpi:
         dm = bcast(dm, root=0)
 
-    #### perform the calculation ####
+    dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
-    # if mydf.jk_buffer is None:  # allocate the buffer for get jk, NOTE: do not need anymore
-    #     mydf._allocate_jk_buffer(dm.dtype)
+    ############ end deal with dm with tags ############
+
+    #### perform the calculation ####
 
     if "exxdiv" in kwargs:
         exxdiv = kwargs["exxdiv"]
@@ -1697,9 +1727,10 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
 
 ############# occ RI #############
 
-def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False, with_j=False):
+def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
 
     assert mydf.omega is None or mydf.omega == 0.0
+    # assert with_j_occRI is False
 
     t1 = (logger.process_clock(), logger.perf_counter())
 
@@ -1709,11 +1740,19 @@ def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False, with_j=False):
     if use_mpi:
         raise NotImplementedError("get_jk_occRI does not support use_mpi=True")
 
+    print("dm.shape = ", dm.shape)
+
+    if getattr(dm, 'mo_coeff', None) is not None:
+        mo_coeff = dm.mo_coeff
+        mo_occ   = dm.mo_occ
+    else:
+        raise NotImplementedError("mo_coeff is not provided yet")
+
     if len(dm.shape) == 3:
         assert dm.shape[0] == 1
         dm = dm[0]
 
-    occ_mo = mo_coeff[:, :nocc].copy()
+    ##### fetch the basic info 
 
     nao  = dm.shape[0]
     cell = mydf.cell
@@ -1726,6 +1765,10 @@ def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False, with_j=False):
     assert isinstance(aoR, list)
     naux = mydf.naux
 
+    ####### determine whether to construct moR #######
+    
+    construct_moR = with_j or (with_k and mydf.with_robust_fitting is True)
+
     #### step 0. allocate buffer 
 
     max_nao_involved = np.max([aoR_holder.aoR.shape[0] for aoR_holder in aoR if aoR_holder is not None])
@@ -1737,13 +1780,6 @@ def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False, with_j=False):
     aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
     
     if hasattr(mydf, "moRg") is False:
-        # mydf.moRg = []
-        # for aoR_holder in aoR:
-        #     if aoR_holder is None:
-        #         mydf.moRg.append(None)
-        #     else:
-        #         moRg_buf = np.zeros((nocc, aoR_holder.aoR.shape[1]), dtype=np.float64)
-        #         mydf.moRg.append(moRg_buf)
         mydf.moRg = np.zeros((nocc, naux), dtype=np.float64)
     if hasattr(mydf, "dmRgRg") is False:
         mydf.dmRgRg = np.zeros((naux, naux), dtype=np.float64)
