@@ -998,15 +998,13 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
     # Quad stands for quadratic scaling
     
     def __init__(self, mol:Cell, 
-                 # aoR: np.ndarray = None,
                  with_robust_fitting=True,
                  Ls=None,
-                 # get_partition=True,
                  verbose = 1,
                  rela_cutoff_QRCP = None,
                  aoR_cutoff = 1e-8,
                  direct=False,
-                 omega=None
+                 # omega=None
                  ):
         
         super().__init__(
@@ -1059,87 +1057,18 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
         self.with_translation_symmetry = False
         self.kmesh = None
-
-        ########## supporting Range_separation ########## 
-
-        self.use_aft_ao = False
-        self.ke_cutoff_pp = self.cell.ke_cutoff
+        
+        ######### default setting for range separation #########
+        # WARNING: not a good design pattern to write this code here! 
+        
+        self.omega           = None
+        self.use_aft_ao      = False
+        self.ke_cutoff_pp    = self.cell.ke_cutoff
         self.ke_cutoff_ft_ao = self.cell.ke_cutoff
-        self.ft_ao_mesh = self.mesh.copy()
-        
-        self.omega = omega 
-        if omega is not None:
-            self.omega = abs(omega)       ## LR ##
-            # self.cell.omega = -abs(omega) ## SR ##
-            self.cell_rsjk = self.cell.copy()
-            self.cell_rsjk.omega = -abs(omega)
-
-            nk = [1,1,1]
-            kpts = self.cell_rsjk.make_kpts(nk)
-
-            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-            self.rsjk = RangeSeparatedJKBuilder(self.cell_rsjk, kpts)
-            self.rsjk.exclude_dd_block = False
-            self.rsjk.allow_drv_nodddd = False
-            self.rsjk.build(omega=abs(omega))
-            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        self.ft_ao_mesh      = self.mesh.copy()
+        self.rsjk            = None
+        self.cell_rsjk       = None
             
-            assert self.rsjk.has_long_range() == False
-            assert self.rsjk.exclude_dd_block == False
-            # assert self.rsjk._sr_without_dddd == False
-            
-            # self.cell.ke_cutoff = max(2*self.rsjk.ke_cutoff, self.cell.ke_cutoff)
-            self.cell_rsjk.ke_cutoff = self.rsjk.ke_cutoff
-            self.cell_rsjk.mesh = None
-            self.cell_rsjk.build()
-            mesh_tmp = self.cell_rsjk.mesh
-            # if mesh_tmp[0] % 2 != 0:
-            #     mesh_tmp[0] += 1
-            # if mesh_tmp[1] % 2 != 0:
-            #     mesh_tmp[1] += 1
-            # if mesh_tmp[2] % 2 != 0:
-            #     mesh_tmp[2] += 1
-            self.cell_rsjk.build(mesh=mesh_tmp)
-            self.mesh = self.cell_rsjk.mesh
-            self.cell.build(mesh=mesh_tmp)
-            
-            self.ft_ao_mesh[0] = ((self.ft_ao_mesh[0] + self.mesh[0]-1) // self.mesh[0]) * self.mesh[0]
-            self.ft_ao_mesh[1] = ((self.ft_ao_mesh[1] + self.mesh[1]-1) // self.mesh[1]) * self.mesh[1]
-            self.ft_ao_mesh[2] = ((self.ft_ao_mesh[2] + self.mesh[2]-1) // self.mesh[2]) * self.mesh[2]
-            
-            ######## rebuild self.coords ######## 
-            
-            from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
-
-            df_tmp = MultiGridFFTDF2(self.cell_rsjk)
-            self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
-            self.ngrids = self.coords.shape[0]
-            
-            ke_cutoff_rsjk = self.rsjk.ke_cutoff
-            
-            if self.cell_rsjk.ke_cutoff < ke_cutoff_rsjk:
-                print(" WARNING : ke_cutoff = %12.6e is smaller than ke_cutoff_rsjk = %12.6e" % (self.cell_rsjk.ke_cutoff, ke_cutoff_rsjk))
-            
-            print("ke_cutoff = %12.6e, ke_cutoff_rsjk = %12.6e" % (self.cell_rsjk.ke_cutoff, ke_cutoff_rsjk))
-            
-            if self.verbose:
-                _benchmark_time(t1, t2, "build_RSJK") 
-                
-            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-            cell_gdf = mol.copy()
-            from pyscf.pbc.df import GDF
-            self.gdf = GDF(cell_gdf, kpts)
-            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-            
-            if self.verbose:
-                _benchmark_time(t1, t2, "build_GDF")
-            
-            self.use_aft_ao = True
-            
-        else:
-            self.rsjk = None
-            self.cell_rsjk = None
-        
         ########## coul kernel ##########
         
         self.get_coulG()
@@ -1709,7 +1638,8 @@ if __name__ == '__main__':
     
     prim_mesh = prim_cell.mesh
 
-    Ls = [2, 2, 2]
+    # Ls = [2, 2, 2]
+    Ls = [1, 1, 1]
     # Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
