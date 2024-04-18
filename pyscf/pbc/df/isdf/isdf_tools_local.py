@@ -1176,8 +1176,17 @@ def get_aoR_analytic(cell:Cell, coords, partition,
         
         shloc    = (task_sl_loc[task_id], task_sl_loc[task_id+1])
         aoG      = ft_ao.ft_ao(cell, Gv, shls_slice=shloc).T
-        aoR_test = numpy.fft.ifftn(aoG.reshape(-1, *mesh), axes=(1,2,3)).real / (weight)
-        aoR = aoR_test.reshape(-1, ngrids) * weight2
+        
+        ### implementation 1 ###
+        # aoR_test = numpy.fft.ifftn(aoG.reshape(-1, *mesh), axes=(1,2,3)).real / (weight)
+        # aoR = aoR_test.reshape(-1, ngrids) * weight2
+        
+        ### implementation 2 ###
+        aoR_test = None
+        aoG = aoG.conj() * np.sqrt(1/cell.vol)
+        aoG = aoG.reshape(-1, *mesh)
+        aoR = numpy.fft.fftn(aoG, axes=(1,2,3)).real * np.sqrt(1/float(ngrids))
+        aoR = aoR.reshape(-1, ngrids)
         
         bas_id = np.arange(ao_loc[shloc[0]], ao_loc[shloc[1]])
         

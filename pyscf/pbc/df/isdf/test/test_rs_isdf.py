@@ -32,7 +32,7 @@ KPTS = [
 # pseudo=None
 basis = 'gth-dzvp'
 pseudo = "gth-pade"  
-ke_cutoff = 128  
+ke_cutoff = 70  
     
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -48,13 +48,13 @@ cell = gto.M(
     verbose = 4,
 )
 
-# cell = gto.M(
-#     a = numpy.eye(3)*3.5668,
-#     atom = '''C     0.      0.      0.
-#               C     0.8917  0.8917  0.8917''',
-#     basis = '6-31g',
-#     verbose = 4,
-# )
+cell = gto.M(
+    a = numpy.eye(3)*3.5668,
+    atom = '''C     0.      0.      0.
+              C     0.8917  0.8917  0.8917''',
+    basis = '6-31g',
+    verbose = 4,
+)
 
 
 boxlen = 3.5668
@@ -62,12 +62,12 @@ prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
 atm = [
         ['C', (0.     , 0.     , 0.    )],
         ['C', (0.8917 , 0.8917 , 0.8917)],
-        ['C', (1.7834 , 1.7834 , 0.    )],
-        ['C', (2.6751 , 2.6751 , 0.8917)],
-        ['C', (1.7834 , 0.     , 1.7834)],
-        ['C', (2.6751 , 0.8917 , 2.6751)],
-        ['C', (0.     , 1.7834 , 1.7834)],
-        ['C', (0.8917 , 2.6751 , 2.6751)],
+        # ['C', (1.7834 , 1.7834 , 0.    )],
+        # ['C', (2.6751 , 2.6751 , 0.8917)],
+        # ['C', (1.7834 , 0.     , 1.7834)],
+        # ['C', (2.6751 , 0.8917 , 2.6751)],
+        # ['C', (0.     , 1.7834 , 1.7834)],
+        # ['C', (0.8917 , 2.6751 , 2.6751)],
     ]
 
 for nk in KPTS:
@@ -89,17 +89,17 @@ for nk in KPTS:
 
     ######### test rs-isdf #########
     
-    omega = 1.2
+    omega = 0.8
     
     from pyscf.pbc.df.isdf.isdf_linear_scaling import PBC_ISDF_Info_Quad
-    C = 18
-    group_partition = [[0,1],[2,3],[4,5],[6,7]]
-    # group_partition=[[0,1]]
+    C = 12
+    # group_partition = [[0,1],[2,3],[4,5],[6,7]]
+    group_partition=[[0,1]]
     
     print("supercell.omega = ", supercell.omega)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(supercell, with_robust_fitting=True, aoR_cutoff=1e-12, direct=False, omega=omega, rela_cutoff_QRCP=1e-4)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(supercell, with_robust_fitting=True, aoR_cutoff=1e-12, direct=True, omega=omega, rela_cutoff_QRCP=1e-5)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -137,6 +137,8 @@ for nk in KPTS:
     print("vj    = ", vj[-1,-16:])
     print("vk    = ", vk[0,:16])
     print("vk    = ", vk[-1,-16:])
+    
+    exit(1)
     
     print("-------------- Test RS-JK   --------------")
     

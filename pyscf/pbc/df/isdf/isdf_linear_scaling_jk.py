@@ -1697,7 +1697,7 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
 
 ############# occ RI #############
 
-def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False):
+def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False, with_j=False):
 
     assert mydf.omega is None or mydf.omega == 0.0
 
@@ -1763,13 +1763,17 @@ def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False):
 
     #### step 0 get_half_J ####
 
-    J = _half_J(mydf, dm, use_mpi=use_mpi)
+    if with_j:
+        J = _half_J(mydf, dm, use_mpi=use_mpi)
 
     J_Res_occRI = np.zeros((nocc, nao), dtype=np.float64)
 
     #### step 1 get_J ####
 
     for aoR_holder in aoR:
+        
+        if with_j is False:
+            continue
         
         if aoR_holder is None:
             continue
@@ -1833,7 +1837,7 @@ def get_jk_occRI(mydf, mo_coeff, nocc, dm, use_mpi=False):
 
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    if mydf.verbose:
+    if mydf.verbose and with_j:
         _benchmark_time(t1, t2, "get_j_occRI")
 
     K = np.zeros((nocc, nao), dtype=np.float64)
