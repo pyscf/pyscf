@@ -174,6 +174,19 @@ class WithSolventHess:
         self.de_solvent = None
         self.de_solute = None
 
+    def undo_solvent(self):
+        cls = self.__class__
+        name_mixin = self.base.with_solvent.__class__.__name__
+        obj = lib.view(self, lib.drop_class(cls, WithSolventHess, name_mixin))
+        del obj.de_solvent
+        del obj.de_solute
+        return obj
+
+    def to_gpu(self):
+        from gpu4pyscf.solvent.hessian import pcm
+        hess_method = self.undo_solvent().to_gpu()
+        return pcm.make_hess_object(hess_method)
+
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
         dm = kwargs.pop('dm', None)
         if dm is None:

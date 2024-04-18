@@ -142,6 +142,8 @@ def grad_nuc(pcmobj, dm):
     mol = pcmobj.mol
     log = logger.new_logger(mol, mol.verbose)
     t1 = (logger.process_clock(), logger.perf_counter())
+    if not pcmobj._intermediates:
+        pcmobj.build()
     dm_cache = pcmobj._intermediates.get('dm', None)
     if dm_cache is not None and numpy.linalg.norm(dm_cache - dm) < 1e-10:
         pass
@@ -179,6 +181,8 @@ def grad_qv(pcmobj, dm):
     '''
     contributions due to integrals
     '''
+    if not pcmobj._intermediates:
+        pcmobj.build()
     dm_cache = pcmobj._intermediates.get('dm', None)
     if dm_cache is not None and numpy.linalg.norm(dm_cache - dm) < 1e-10:
         pass
@@ -228,6 +232,8 @@ def grad_solver(pcmobj, dm):
     mol = pcmobj.mol
     log = logger.new_logger(mol, mol.verbose)
     t1 = (logger.process_clock(), logger.perf_counter())
+    if not pcmobj._intermediates:
+        pcmobj.build()
     dm_cache = pcmobj._intermediates.get('dm', None)
     if dm_cache is not None and numpy.linalg.norm(dm_cache - dm) < 1e-10:
         pass
@@ -353,6 +359,11 @@ class WithSolventGrad:
         del obj.de_solvent
         del obj.de_solute
         return obj
+
+    def to_gpu(self):
+        from gpu4pyscf.solvent.grad import pcm
+        grad_method = self.undo_solvent().to_gpu()
+        return pcm.make_grad_object(grad_method)
 
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
         dm = kwargs.pop('dm', None)

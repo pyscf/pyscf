@@ -543,8 +543,6 @@ class SMD(pcm.PCM):
         logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'lebedev_order = %s (%d grids per sphere)',
                     self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
-        logger.info(self, 'lmax = %s'         , self.lmax)
-        logger.info(self, 'eta = %s'          , self.eta)
         logger.info(self, 'eps = %s'          , self.eps)
         logger.info(self, 'frozen = %s'       , self.frozen)
         logger.info(self, '---------- SMD solvent descriptors -------')
@@ -559,27 +557,26 @@ class SMD(pcm.PCM):
         logger.info(self, 'radii_table %s', self.radii_table*radii.BOHR)
         if self.atom_radii:
             logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
-        self.grids.dump_flags(verbose)
         return self
 
     def get_cds(self):
         return get_cds(self)
 
     def nuc_grad_method(self, grad_method):
-        from gpu4pyscf.solvent.grad import smd as smd_grad
+        from pyscf.solvent.grad import smd as smd_grad
         if self.frozen:
             raise RuntimeError('Frozen solvent model is not supported')
-        from gpu4pyscf import scf
+        from pyscf import scf
         if isinstance(grad_method.base, (scf.hf.RHF, scf.uhf.UHF)):
             return smd_grad.make_grad_object(grad_method)
         else:
             raise RuntimeError('Only SCF gradient is supported')
 
     def Hessian(self, hess_method):
-        from gpu4pyscf.solvent.hessian import smd as smd_hess
+        from pyscf.solvent.hessian import smd as smd_hess
         if self.frozen:
             raise RuntimeError('Frozen solvent model is not supported')
-        from gpu4pyscf import scf
+        from pyscf import scf
         if isinstance(hess_method.base, (scf.hf.RHF, scf.uhf.UHF)):
             return smd_hess.make_hess_object(hess_method)
         else:

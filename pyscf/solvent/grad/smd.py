@@ -245,6 +245,11 @@ class WithSolventGrad:
         del obj.de_solute
         return obj
 
+    def to_gpu(self):
+        from gpu4pyscf.solvent.grad import smd
+        grad_method = self.undo_solvent().to_gpu()
+        return smd.make_grad_object(grad_method)
+
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
         dm = kwargs.pop('dm', None)
         if dm is None:

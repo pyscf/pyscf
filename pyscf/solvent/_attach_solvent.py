@@ -170,9 +170,10 @@ class SCFWithSolvent(_Solvation):
             return super().stability(*args, **kwargs)
 
     def to_gpu(self):
-        obj = self.undo_solvent().to_gpu()
-        obj = _for_scf(obj, self.with_solvent)
-        return lib.to_gpu(self, obj)
+        from gpu4pyscf.solvent import _attach_solvent
+        solvent_obj = self.with_solvent.to_gpu()
+        obj = _attach_solvent._for_scf(self.undo_solvent().to_gpu(), solvent_obj)
+        return obj
 
 def _for_casscf(mc, solvent_obj, dm=None):
     '''Add solvent model to CASSCF method.
