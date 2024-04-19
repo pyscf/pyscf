@@ -56,7 +56,6 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
         with_3body = mf.disp_with_3body
 
     if mf.disp[:2].upper() == 'D3':
-        import pyscf.lib as dftd3
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5
@@ -79,7 +78,6 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
             return h_disp
 
     elif mf.disp[:2].upper() == 'D4':
-        import pyscf.lib as dftd4
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5

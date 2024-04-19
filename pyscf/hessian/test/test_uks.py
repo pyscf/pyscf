@@ -125,7 +125,8 @@ class KnownValues(unittest.TestCase):
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
 
-    def test_finite_diff_b3lyp_d3_hess(self):
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_finite_diff_b3lyp_d3_hess_high_cost(self):
         mf = dft.UKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'b3lyp'
@@ -140,7 +141,8 @@ class KnownValues(unittest.TestCase):
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
 
-    def test_finite_diff_b3lyp_d4_hess(self):
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
+    def test_finite_diff_b3lyp_d4_hess_high_cost(self):
         mf = dft.UKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'b3lyp'
