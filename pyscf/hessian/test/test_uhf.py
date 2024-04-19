@@ -51,7 +51,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(hess), -0.20243405976628576, 5)
 
     def test_finite_diff_uhf_hess(self):
-    def test_finite_diff_uhf_hess(self):
         mf = scf.UHF(mol)
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
