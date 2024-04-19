@@ -54,14 +54,13 @@ def get_dispersion(mf_grad, disp_version=None, with_3body=False):
         with_3body = mf.disp_with_3body
 
     if disp_version[:2].upper() == 'D3':
-        import pyscf.lib as dftd3
         d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
-        res = d3_model.kernel(grad=True)
+        res = d3_model.get_dispersion(grad=True)
         g_d3 = res.get('gradient')
         return g_d3
     elif disp_version[:2].upper() == 'D4':
         d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
-        res = d4_model.kernel(grad=True)
+        res = d4_model.get_dispersion(grad=True)
         g_d4 = res.get('gradient')
         return g_d4
     else:
