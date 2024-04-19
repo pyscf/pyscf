@@ -1072,6 +1072,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         ########## coul kernel ##########
         
         self.get_coulG()
+        self.ovlp = self.cell.pbc_intor('int1e_ovlp')
+        self.occ_tol = 1e-9
 
     def _get_first_natm(self):
         if self.kmesh is not None:
@@ -1217,6 +1219,14 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             maxsize_group_naux = max(maxsize_group_naux, naux_tmp)
         return maxsize_group_naux
     
+    def deallocate_k_buffer(self):
+        if hasattr(self, "build_k_buf") and self.build_k_buf is not None:
+            del self.build_k_buf
+            self.build_k_buf = None
+        if hasattr(self, "build_VW_in_k_buf") and self.build_VW_in_k_buf is not None:
+            del self.build_VW_in_k_buf
+            self.build_VW_in_k_buf = None
+    
     def allocate_k_buffer(self): 
         ### TODO: split grid again to reduce the size of buf when robust fitting is true! 
         # TODO: try to calculate the size when direct is true
@@ -1326,6 +1336,9 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             atm_ordering.extend(group[i]) 
         
         IP_ID_NOW = 0 
+        GRID_ID_NOW = 0
+        
+        IP_loc_in_ordered_grids = []
         
         for atm_id in atm_ordering:
             aoR_holder = self.aoR[atm_id]
@@ -1342,7 +1355,16 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             ao_involved = aoR_holder.ao_involved.copy()
             aoR = aoR_holder.aoR[:, idx].copy()
             aoR_holders_res[atm_id] = ISDF_Local_Utils.aoR_Holder(aoR, ao_involved, IP_ID_NOW, IP_ID_NOW+nIP, IP_ID_NOW, IP_ID_NOW+nIP)
-            IP_ID_NOW+= nIP
+            
+            IP_loc_in_ordered_grids.extend(idx+GRID_ID_NOW)
+
+            IP_ID_NOW += nIP
+            GRID_ID_NOW += len(self.partition[atm_id])
+            
+        
+        # if hasattr(self, "IP_loc_in_ordered_grids") is False:
+        self.IP_loc_in_ordered_grids = np.array(IP_loc_in_ordered_grids, dtype=np.int32)
+        assert self.IP_loc_in_ordered_grids.ndim == 1
         
         return aoR_holders_res
             
@@ -1519,6 +1541,18 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         else:
             self.coulG = tools.get_coulG(self.cell, mesh=self.cell.mesh)
             
+    def diag_dm(self, dm):
+        '''Solver for generalized eigenvalue problem
+
+        .. math:: HC = SCE
+        '''
+        print("ovlp = ", self.ovlp)
+        mo_occ, mo_coeff = scipy.linalg.eigh(dm)
+        idx = numpy.argmax(abs(mo_coeff.real), axis=0)
+        mo_coeff[:,mo_coeff[idx,numpy.arange(len(mo_occ))].real<0] *= -1
+        mo_occ = mo_occ[::-1]
+        mo_coeff = mo_coeff[:,::-1]
+        return mo_occ, mo_coeff
 
     def build_auxiliary_Coulomb(self, debug=True):
         
@@ -1580,7 +1614,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
-C = 17
+C = 12
 
 from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
@@ -1606,7 +1640,7 @@ if __name__ == '__main__':
         ['C', (0.8917 , 2.6751 , 2.6751)],
     ] 
     KE_CUTOFF = 70
-    basis = 'unc-gth-cc-dzvp'
+    basis = 'unc-gth-cc-tzvp'
     pseudo = "gth-hf"  
     # basis = 'gth-dzvp'
     # pseudo = "gth-pade"   
@@ -1654,7 +1688,7 @@ if __name__ == '__main__':
     print("group_partition = ", group_partition)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=False, aoR_cutoff=1e-8, direct=False)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False)
     # pbc_isdf_info.use_aft_ao = True  # No problem ! 
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
@@ -1691,6 +1725,7 @@ if __name__ == '__main__':
     _benchmark_time(t1, t2, "scf")
     sys.stdout.flush()
     
+    print("E = ", mf.mo_energy)
     
     # mf.mo_coeff = np.random.rand(cell.nao, cell.nao)
     # dm = mf.make_rdm1()
@@ -1698,10 +1733,65 @@ if __name__ == '__main__':
     # nocc = mf.cell.nelectron // 2
     # dm   = np.dot(mo_coeff[:,:nocc], mo_coeff[:,:nocc].T)
     dm = mf.make_rdm1()
+
+    # mo_occ, mo_coeff = pbc_isdf_info.diag_dm(dm)
+    # print("mo_occ = ", mo_occ[mo_occ>1e-10])
+    # ovlp_mo = np.dot(mo_coeff.T, pbc_isdf_info.ovlp).dot(mo_coeff)
+    # print("ovlp_mo = ", ovlp_mo)
+    # ovlp_mf = mf.get_ovlp()
+    # assert np.allclose(ovlp_mf, pbc_isdf_info.ovlp)
     
     for _ in range(7):
-        pbc_isdf_info.with_robust_fitting = False
+        pbc_isdf_info.with_robust_fitting = True
         vj, vk = ISDF_LinearScalingJK.get_jk_occRI(pbc_isdf_info, dm)
+    
+    ###### benchmark J ######
+    
+    dm = mf.make_rdm1()
+    vj_benchmark, vk_benchmark = pbc_isdf_info.get_jk(dm)
+    # print("vj = ", vj[0,:16])
+    # print("vj_benchmark = ", vj_benchmark[0,:16])
+    diff_vj = np.linalg.norm(vj - vj_benchmark) / np.sqrt(vj.size)
+    print("diff_vj = ", diff_vj)
+    
+    ###### benchmark vk_iv ###### 
+
+    nocc = mf.cell.nelectron // 2
+    mo_coeff_occ = mf.mo_coeff[:,:nocc].copy()
+    mo_coeff = mf.mo_coeff.copy()
+    
+    # K_benchmark = np.dot(mo_coeff_occ.T, vk_benchmark)
+    # diff = np.linalg.norm(K_benchmark - vk_iv) / np.sqrt(K_benchmark.size)
+    # print("diff vk_iv = ", diff)
+    
+    ###### benchmark K with occRI ###### 
+
+    Kij = np.dot(mo_coeff.T, vk_benchmark).dot(mo_coeff)
+    Kij[nocc:, nocc:] = 0.0
+    mo_2_ao = np.linalg.inv(mo_coeff)
+    K_benchmark = np.dot(mo_2_ao.T, Kij).dot(mo_2_ao)
+    diff_vk = np.linalg.norm(vk - K_benchmark) / np.sqrt(vk.size)
+    print("vk = ", vk[0,:32])
+    print("K_benchmark = ", K_benchmark[0,:32])
+    print("diff_vk = ", diff_vk)
+    print("nocc = ", nocc)  
+    vk_mo = np.dot(mo_coeff.T, vk).dot(mo_coeff)
+    # print("vk_mo = ", vk_mo[0,:32])
+    # print("Kij = ", Kij[0,:32])
+    # print(vk_mo[nocc:, nocc:])
+    diff_occ_part = np.linalg.norm(vk_mo[:nocc, :] - Kij[:nocc, :]) / np.sqrt(vk_mo[:nocc, :].size)
+    print("diff_occ_part = ", diff_occ_part)
+    
+    norm_vir_vir = np.linalg.norm(vk_mo[nocc:, nocc:]) / np.sqrt(vk_mo[nocc:, nocc:].size)
+    print("norm_vir_vir = ", norm_vir_vir)
+    
+    assert norm_vir_vir < 1e-6
+    
+    diff_vkT = np.linalg.norm(vk - vk.T) / np.sqrt(vk.size)
+    print("diff_vkT = ", diff_vkT)
+    assert np.allclose(vk, vk.T)
+    diff_vk2 = np.linalg.norm(vk_mo - Kij) / np.sqrt(vk_mo.size)
+    print("diff_vk2 = ", diff_vk2)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     aoR = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords)

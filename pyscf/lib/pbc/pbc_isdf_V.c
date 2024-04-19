@@ -872,6 +872,38 @@ void _buildK_copy(double *target, double *source, const size_t size)
     memcpy(target, source, sizeof(double) * size);
 }
 
+////////// used in moR to density //////////
+
+void moR_to_Density(
+    const int ngrids,
+    const int nMO,
+    const double *moR,
+    double *rhoR)
+{
+    int nThread = get_omp_threads();
+
+    int ngrid_per_thread = (ngrids + nThread - 1) / nThread;
+
+    memset(rhoR, 0, sizeof(double) * ngrids);
+
+#pragma omp parallel num_threads(nThread)
+    {
+        int thread_id = omp_get_thread_num();
+        int grid_start = thread_id * ngrid_per_thread;
+        grid_start = grid_start < ngrids ? grid_start : ngrids;
+        int grid_end = (thread_id + 1) * ngrid_per_thread;
+        grid_end = grid_end < ngrids ? grid_end : ngrids;
+
+        for (int i = 0; i < nMO; i++)
+        {
+            for (int j = grid_start; j < grid_end; j++)
+            {
+                rhoR[j] += moR[i * ngrids + j] * moR[i * ngrids + j];
+            }
+        }
+    }
+}
+
 ////////// in determing partition //////////
 
 double _distance_translation(double *pa, double *pb, double *a)
