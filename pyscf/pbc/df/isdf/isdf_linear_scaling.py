@@ -1004,6 +1004,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                  rela_cutoff_QRCP = None,
                  aoR_cutoff = 1e-8,
                  direct=False,
+                 use_occ_RI_K = True,
                  # omega=None
                  ):
         
@@ -1074,6 +1075,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         self.get_coulG()
         self.ovlp = self.cell.pbc_intor('int1e_ovlp')
         self.occ_tol = 1e-9
+        self.occ_RI_K  = use_occ_RI_K
 
     def _get_first_natm(self):
         if self.kmesh is not None:
@@ -1541,18 +1543,41 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         else:
             self.coulG = tools.get_coulG(self.cell, mesh=self.cell.mesh)
             
-    def diag_dm(self, dm):
+    def diag_dm(self, dm, linear_dep_threshold=1e-16):
         '''Solver for generalized eigenvalue problem
 
         .. math:: HC = SCE
         '''
-        print("ovlp = ", self.ovlp)
-        mo_occ, mo_coeff = scipy.linalg.eigh(dm)
-        idx = numpy.argmax(abs(mo_coeff.real), axis=0)
-        mo_coeff[:,mo_coeff[idx,numpy.arange(len(mo_occ))].real<0] *= -1
-        mo_occ = mo_occ[::-1]
-        mo_coeff = mo_coeff[:,::-1]
-        return mo_occ, mo_coeff
+        # print("ovlp = ", self.ovlp)
+        
+        # diagonalize overlap matrix
+        e, v = scipy.linalg.eigh(self.ovlp)
+        
+        mask = e > linear_dep_threshold * e[-1]
+        e = e[mask]
+        v = v[:,mask]
+        v*= np.sqrt(e)
+        
+        dm_new_basis = np.dot(v.T, np.dot(dm, v))
+        
+        mo_occ, mo_coeff = scipy.linalg.eigh(dm_new_basis)
+        
+        mo_coeff = np.dot(v, mo_coeff) # SC = mocoeff
+        
+        v /= np.sqrt(e) 
+        
+        mo_coeff = np.dot(v.T, mo_coeff)
+        mo_coeff = (1.0/e).reshape(-1,1) * mo_coeff
+        mo_coeff = np.dot(v, mo_coeff)
+        
+        return mo_occ[::-1], mo_coeff[:,::-1]
+        
+        # mo_occ, mo_coeff = scipy.linalg.eigh(dm, self.ovlp)
+        # idx = numpy.argmax(abs(mo_coeff.real), axis=0)
+        # mo_coeff[:,mo_coeff[idx,numpy.arange(len(mo_occ))].real<0] *= -1
+        # mo_occ = mo_occ[::-1]
+        # mo_coeff = mo_coeff[:,::-1]
+        # return mo_occ, mo_coeff
 
     def build_auxiliary_Coulomb(self, debug=True):
         
@@ -1614,7 +1639,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
-C = 12
+C = 15
 
 from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
@@ -1673,7 +1698,7 @@ if __name__ == '__main__':
     prim_mesh = prim_cell.mesh
 
     # Ls = [2, 2, 2]
-    Ls = [1, 1, 1]
+    Ls = [1, 1, 2]
     # Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
@@ -1688,7 +1713,7 @@ if __name__ == '__main__':
     print("group_partition = ", group_partition)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=False, aoR_cutoff=1e-8, direct=False)
     # pbc_isdf_info.use_aft_ao = True  # No problem ! 
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
@@ -1725,36 +1750,42 @@ if __name__ == '__main__':
     _benchmark_time(t1, t2, "scf")
     sys.stdout.flush()
     
-    print("E = ", mf.mo_energy)
+    ### compare without occ-RI-K ###
     
-    # mf.mo_coeff = np.random.rand(cell.nao, cell.nao)
-    # dm = mf.make_rdm1()
-    # mo_coeff = mf.mo_coeff.copy()
-    # nocc = mf.cell.nelectron // 2
-    # dm   = np.dot(mo_coeff[:,:nocc], mo_coeff[:,:nocc].T)
+    pbc_isdf_info.occ_RI_K = False
+    
+    mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    mf.with_df = pbc_isdf_info
+    mf.max_cycle = 8
+    mf.conv_tol = 1e-7
+    mf.kernel()
+    
+    # print("E = ", mf.mo_energy)
+    
+    ###### diag dm ######
+    
     dm = mf.make_rdm1()
-
-    # mo_occ, mo_coeff = pbc_isdf_info.diag_dm(dm)
-    # print("mo_occ = ", mo_occ[mo_occ>1e-10])
-    # ovlp_mo = np.dot(mo_coeff.T, pbc_isdf_info.ovlp).dot(mo_coeff)
-    # print("ovlp_mo = ", ovlp_mo)
-    # ovlp_mf = mf.get_ovlp()
-    # assert np.allclose(ovlp_mf, pbc_isdf_info.ovlp)
+    mo_occ, mo_coeff = pbc_isdf_info.diag_dm(dm)
+    print("mo_occ = ", mo_occ[mo_occ>1e-10])
+    
+    
+    dm2 = np.dot(mo_coeff[:,mo_occ>1e-10], mo_coeff[:,mo_occ>1e-10].T)
+    diff = np.linalg.norm(dm - 2*dm2) / np.sqrt(dm.size)
+    print("diff dm = ", diff)
     
     for _ in range(7):
-        pbc_isdf_info.with_robust_fitting = True
+        # pbc_isdf_info.with_robust_fitting = True
         vj, vk = ISDF_LinearScalingJK.get_jk_occRI(pbc_isdf_info, dm)
     
     ###### benchmark J ######
     
     dm = mf.make_rdm1()
     vj_benchmark, vk_benchmark = pbc_isdf_info.get_jk(dm)
-    # print("vj = ", vj[0,:16])
-    # print("vj_benchmark = ", vj_benchmark[0,:16])
     diff_vj = np.linalg.norm(vj - vj_benchmark) / np.sqrt(vj.size)
     print("diff_vj = ", diff_vj)
     
-    ###### benchmark vk_iv ###### 
+    ###### benchmark vk_iv (abandon) ###### 
 
     nocc = mf.cell.nelectron // 2
     mo_coeff_occ = mf.mo_coeff[:,:nocc].copy()
@@ -1771,8 +1802,8 @@ if __name__ == '__main__':
     mo_2_ao = np.linalg.inv(mo_coeff)
     K_benchmark = np.dot(mo_2_ao.T, Kij).dot(mo_2_ao)
     diff_vk = np.linalg.norm(vk - K_benchmark) / np.sqrt(vk.size)
-    print("vk = ", vk[0,:32])
-    print("K_benchmark = ", K_benchmark[0,:32])
+    # print("vk = ", vk[0,:32])
+    # print("K_benchmark = ", K_benchmark[0,:32])
     print("diff_vk = ", diff_vk)
     print("nocc = ", nocc)  
     vk_mo = np.dot(mo_coeff.T, vk).dot(mo_coeff)
@@ -1792,6 +1823,8 @@ if __name__ == '__main__':
     assert np.allclose(vk, vk.T)
     diff_vk2 = np.linalg.norm(vk_mo - Kij) / np.sqrt(vk_mo.size)
     print("diff_vk2 = ", diff_vk2)
+    
+    exit(1)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     aoR = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords)

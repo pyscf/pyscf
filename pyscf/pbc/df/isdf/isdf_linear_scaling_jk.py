@@ -1598,143 +1598,6 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     
     return K * ngrid / vol
 
-def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
-                        kpts_band=None, with_j=True, with_k=True, omega=None, 
-                        **kwargs):
-    
-    '''JK for given k-point'''
-    
-    ############ deal with occ-RI-K ############
-    
-    use_occ_RI_K = False
-    
-    if getattr(mydf, "occ_RI_K", None) is not None:
-        use_occ_RI_K = mydf.occ_RI_K
-    
-    if getattr(dm, '__dict__', None) is not None:
-        # print(dm.__dict__.keys())
-        mo_coeff = dm.__dict__['mo_coeff']
-        mo_occ   = dm.__dict__['mo_occ']
-        if mo_coeff is not None:
-            assert mo_occ is not None
-            assert mo_coeff.shape[1] == mo_occ.shape[0]
-            assert mo_coeff.ndim == 2
-            assert mo_occ.ndim == 1
-        if use_occ_RI_K and mo_coeff is None:
-            use_occ_RI_K = False
-    else:
-        # mo_coeff = None
-        # mo_occ = None
-        # use_occ_RI_K = False
-        dm = np.asarray(dm)
-        if use_occ_RI_K:
-            # ovlp = mydf.ovlp
-            mo_occ, mo_coeff = mydf.diag_dm(dm)
-            dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
-        else:
-            mo_occ = None
-            mo_coeff = None
-    
-    if use_occ_RI_K:
-        if mydf.direct == True:
-            raise ValueError("ISDF does not support direct=True for occ-RI-K")
-    
-    ############ end deal with occ-RI-K ############
-    
-    direct = mydf.direct
-    use_mpi = mydf.use_mpi
-    
-    if use_mpi and direct == False:
-        raise NotImplementedError("ISDF does not support use_mpi and direct=False")
-    
-    if len(dm.shape) == 3:
-        assert dm.shape[0] == 1
-        dm = dm[0]
-
-    if hasattr(mydf, 'Ls') and mydf.Ls is not None:
-        from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
-        dm = symmetrize_dm(dm, mydf.Ls)
-    else:
-        if hasattr(mydf, 'kmesh') and mydf.kmesh is not None:
-            from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
-            dm = symmetrize_dm(dm, mydf.kmesh)
-
-    if use_mpi:
-        dm = bcast(dm, root=0)
-
-    dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
-
-    ############ end deal with dm with tags ############
-
-    #### perform the calculation ####
-
-    if "exxdiv" in kwargs:
-        exxdiv = kwargs["exxdiv"]
-        kwargs.pop("exxdiv")
-    else:
-        exxdiv = None
-
-    vj = vk = None
-
-    if kpts_band is not None and abs(kpt-kpts_band).sum() > 1e-9:
-        raise NotImplementedError("ISDF does not support kpts_band != kpt")
-
-    log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (logger.process_clock(), logger.perf_counter())
-
-    j_real = gamma_point(kpt)
-    k_real = gamma_point(kpt) and not np.iscomplexobj(dm)
-
-    assert j_real
-    assert k_real
-
-    mem_now = lib.current_memory()[0]
-    max_memory = max(2000, (mydf.max_memory - mem_now))
-
-    log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
-
-    if with_j:
-        from pyscf.pbc.df.isdf.isdf_jk import _contract_j_dm
-        vj = _contract_j_dm_ls(mydf, dm, use_mpi)  
-        # vj = _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi)
-        # vj = _contract_j_dm(mydf, dm, use_mpi)
-        # if rank == 0:
-        # print("In isdf get_jk vj = ", vj[0, :16])
-        # print("In isdf get_jk vj = ", vj[-1, -16:])
-    if with_k:
-        if mydf.direct:
-            vk = _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=use_mpi)
-        else:
-            vk = _contract_k_dm_quadratic(mydf, dm, mydf.with_robust_fitting, use_mpi=use_mpi)
-        # if rank == 0:
-        # print("In isdf get_jk vk = ", vk[0, :16])
-        # print("In isdf get_jk vk = ", vk[-1, -16:])
-        if exxdiv == 'ewald':
-            print("WARNING: ISDF does not support ewald")
-
-    if mydf.rsjk is not None:
-        vj_sr, vk_sr = mydf.rsjk.get_jk(
-            dm, 
-            hermi, 
-            kpt, 
-            kpts_band, 
-            with_j, 
-            with_k, 
-            omega, 
-            exxdiv, **kwargs)
-        # print("In isdf get_jk  vj_sr = ", vj_sr[0,:16])
-        # print("In isdf get_jk  vj_sr = ", vj_sr[-1,-16:])
-        # print("In isdf get_jk  vk_sr = ", vk_sr[0,:16])
-        # print("In isdf get_jk  vk_sr = ", vk_sr[-1,-16:])
-        if with_j:
-            vj += vj_sr
-        if with_k:
-            vk += vk_sr
-
-    t1 = log.timer('sr jk', *t1)
-
-    return vj, vk
-
 ############# occ RI #############
 
 def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
@@ -1792,8 +1655,8 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
     assert mo_coeff.shape[1] == nocc
     assert mo_coeff.shape[0] == nao
     
-    dm2 = np.dot(mo_coeff, mo_coeff.T)
-    assert np.allclose(dm, dm2)
+    # dm2 = np.dot(mo_coeff, mo_coeff.T)
+    # assert np.allclose(dm, dm2)
 
     # print("mo_coeff_original = ", mo_coeff_original[:,0])
     # print("mo_coeff          = ", mo_coeff[:,0])
@@ -1813,13 +1676,26 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
     max_nIP_involved   = np.max([aoRg_holder.aoR.shape[1] for aoRg_holder in aoRg if aoRg_holder is not None])
         
     mydf.deallocate_k_buffer()
+    
     if hasattr(mydf, "moRg") is False:
         mydf.moRg = np.zeros((nocc, naux), dtype=np.float64)
+    else:
+        if nocc != mydf.moRg.shape[0]:
+            mydf.moRg = np.zeros((nocc, naux), dtype=np.float64)
+            
     if hasattr(mydf, "K1_packbuf") is False:
         mydf.K1_packbuf = np.zeros((nocc, max_ngrid_involved), dtype=np.float64)
+    else:
+        if nocc != mydf.K1_packbuf.shape[0]:
+            mydf.K1_packbuf = np.zeros((nocc, max_ngrid_involved), dtype=np.float64)
+    
     if construct_moR:
         if hasattr(mydf, "moR") is False:
             mydf.moR = np.zeros((nocc, ngrid), dtype=np.float64)
+        else:
+            if nocc != mydf.moR.shape[0]:
+                mydf.moR = np.zeros((nocc, ngrid), dtype=np.float64)
+            
     if construct_dmRgR:
         if hasattr(mydf, "dmRgR") is False:
             mydf.dmRgR = np.zeros((naux, ngrid), dtype=np.float64)
@@ -2268,5 +2144,159 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
     del K1, K2, K3
     
     return J * ngrid / vol, K * ngrid / vol
+
+
+def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
+                        kpts_band=None, with_j=True, with_k=True, omega=None, 
+                        **kwargs):
+    
+    '''JK for given k-point'''
+    
+    ############ deal with occ-RI-K ############
+    
+    use_occ_RI_K = False
+    
+    if getattr(mydf, "occ_RI_K", None) is not None:
+        use_occ_RI_K = mydf.occ_RI_K
+    
+    if getattr(dm, '__dict__', None) is not None:
+        # print(dm.__dict__.keys())
+        mo_coeff = dm.__dict__['mo_coeff']
+        mo_occ   = dm.__dict__['mo_occ']
+        if mo_coeff is not None:
+            assert mo_occ is not None
+            assert mo_coeff.shape[1] == mo_occ.shape[0]
+            assert mo_coeff.ndim == 2
+            assert mo_occ.ndim == 1
+        if use_occ_RI_K and mo_coeff is None:
+            # use_occ_RI_K = False 
+            dm = np.asarray(dm)
+            if len(dm.shape) == 3:
+                assert dm.shape[0] == 1
+                dm = dm[0]
+            mo_occ, mo_coeff = mydf.diag_dm(dm)
+            dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
+            print("Dm without mo_coeff and mo_occ is provided, but use_occ_RI_K is True, so mo_coeff and mo_occ are generated from dm")
+            print("mo_occ = ", mo_occ[mo_occ>1e-10])
+    else:
+        # mo_coeff = None
+        # mo_occ = None
+        # use_occ_RI_K = False
+        dm = np.asarray(dm)
+        if len(dm.shape) == 3:
+            assert dm.shape[0] == 1
+            dm = dm[0]
+        if use_occ_RI_K:
+            # ovlp = mydf.ovlp
+            mo_occ, mo_coeff = mydf.diag_dm(dm)
+            dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
+            print("Dm without mo_coeff and mo_occ is provided, but use_occ_RI_K is True, so mo_coeff and mo_occ are generated from dm")
+            print("mo_occ = ", mo_occ[mo_occ>1e-10])
+        else:
+            mo_occ = None
+            mo_coeff = None
+    
+    if use_occ_RI_K:
+        if mydf.direct == True:
+            raise ValueError("ISDF does not support direct=True for occ-RI-K")
+    
+    ############ end deal with occ-RI-K ############
+    
+    direct = mydf.direct
+    use_mpi = mydf.use_mpi
+    
+    if use_mpi and direct == False:
+        raise NotImplementedError("ISDF does not support use_mpi and direct=False")
+    
+    if len(dm.shape) == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+
+    if hasattr(mydf, 'Ls') and mydf.Ls is not None:
+        from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
+        dm = symmetrize_dm(dm, mydf.Ls)
+    else:
+        if hasattr(mydf, 'kmesh') and mydf.kmesh is not None:
+            from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
+            dm = symmetrize_dm(dm, mydf.kmesh)
+
+    if use_mpi:
+        dm = bcast(dm, root=0)
+
+    dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
+
+    ############ end deal with dm with tags ############
+
+    #### perform the calculation ####
+
+    if "exxdiv" in kwargs:
+        exxdiv = kwargs["exxdiv"]
+        kwargs.pop("exxdiv")
+    else:
+        exxdiv = None
+
+    vj = vk = None
+
+    if kpts_band is not None and abs(kpt-kpts_band).sum() > 1e-9:
+        raise NotImplementedError("ISDF does not support kpts_band != kpt")
+
+    log = logger.Logger(mydf.stdout, mydf.verbose)
+    t1 = (logger.process_clock(), logger.perf_counter())
+
+    j_real = gamma_point(kpt)
+    k_real = gamma_point(kpt) and not np.iscomplexobj(dm)
+
+    assert j_real
+    assert k_real
+
+    mem_now = lib.current_memory()[0]
+    max_memory = max(2000, (mydf.max_memory - mem_now))
+
+    log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
+
+    if use_occ_RI_K:
+        vj, vk = get_jk_occRI(mydf, dm, use_mpi, with_j, with_k)
+    else:
+        if with_j:
+            from pyscf.pbc.df.isdf.isdf_jk import _contract_j_dm
+            vj = _contract_j_dm_ls(mydf, dm, use_mpi)  
+            # vj = _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi)
+            # vj = _contract_j_dm(mydf, dm, use_mpi)
+            # if rank == 0:
+            # print("In isdf get_jk vj = ", vj[0, :16])
+            # print("In isdf get_jk vj = ", vj[-1, -16:])
+        if with_k:
+            if mydf.direct:
+                vk = _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=use_mpi)
+            else:
+                vk = _contract_k_dm_quadratic(mydf, dm, mydf.with_robust_fitting, use_mpi=use_mpi)
+            # if rank == 0:
+            # print("In isdf get_jk vk = ", vk[0, :16])
+            # print("In isdf get_jk vk = ", vk[-1, -16:])
+            if exxdiv == 'ewald':
+                print("WARNING: ISDF does not support ewald")
+
+    if mydf.rsjk is not None:
+        vj_sr, vk_sr = mydf.rsjk.get_jk(
+            dm, 
+            hermi, 
+            kpt, 
+            kpts_band, 
+            with_j, 
+            with_k, 
+            omega, 
+            exxdiv, **kwargs)
+        # print("In isdf get_jk  vj_sr = ", vj_sr[0,:16])
+        # print("In isdf get_jk  vj_sr = ", vj_sr[-1,-16:])
+        # print("In isdf get_jk  vk_sr = ", vk_sr[0,:16])
+        # print("In isdf get_jk  vk_sr = ", vk_sr[-1,-16:])
+        if with_j:
+            vj += vj_sr
+        if with_k:
+            vk += vk_sr
+
+    t1 = log.timer('sr jk', *t1)
+
+    return vj, vk
 
 ############# linear scaling implementation ############# 
