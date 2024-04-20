@@ -1785,6 +1785,14 @@ if __name__ == '__main__':
     diff_vj = np.linalg.norm(vj - vj_benchmark) / np.sqrt(vj.size)
     print("diff_vj = ", diff_vj)
     
+    ######## Xing's multigrid J ########
+    
+    dm = mf.make_rdm1()
+    # vj_multigrid = ISDF_LinearScalingJK._contract_j_multigrid(pbc_isdf_info, dm) ### does not work currently ! 
+    # diff_vj = np.linalg.norm(vj_multigrid - vj_multigrid) / np.sqrt(vj_multigrid.size)
+    # print("diff_vj_multigrid = ", diff_vj)
+    # exit(1)
+    
     ###### benchmark vk_iv (abandon) ###### 
 
     nocc = mf.cell.nelectron // 2
