@@ -77,10 +77,28 @@ class aoR_Holder:
         
         self.aoR = aoR
         self.ao_involved = np.array(ao_involved, dtype=np.int32)
+        self.nao_invovled = len(ao_involved)
         self.local_gridID_begin = local_gridID_begin
         self.local_gridID_end = local_gridID_end
         self.global_gridID_begin = global_gridID_begin
         self.global_gridID_end = global_gridID_end
+        self.nCompact = self.nao_invovled  ## by default all orbitals are compact
+    
+    def RangeSeparation(self, IsCompact:np.ndarray):
+        ordering_C = []
+        ordering_D = []
+        nao_involved = len(self.ao_involved)
+        for i in range(nao_involved):
+            if IsCompact[i]:
+                ordering_C.append(i)
+            else:
+                ordering_D.append(i)
+        ordering = ordering_C
+        ordering.extend(ordering_D)
+        ordering = np.array(ordering, dtype=np.int32)
+        self.aoR = self.aoR[ordering]
+        self.ao_involved = self.ao_involved[ordering]
+        self.nCompact = len(ordering_C)
     
     def size(self):
         return self.aoR.nbytes + self.ao_involved.nbytes

@@ -205,6 +205,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         if self.has_long_range():
             rcut = rsdf_builder.estimate_ft_rcut(
                 rs_cell, exclude_dd_block=self.exclude_dd_block)
+            # print("rcut = ", rcut, "of size = ", rcut.size)
             supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(
                 rs_cell, kmesh, rcut.max(), log)
             supmol_ft.exclude_dd_block = self.exclude_dd_block

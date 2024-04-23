@@ -690,6 +690,27 @@ void _extract_dm_involved_ao(
     }
 }
 
+void _extract_dm_involved_ao_RS(
+    double *dm,
+    const int nao,
+    double *res_buf,
+    const int *bra_ao_involved,
+    const int bra_nao_involved,
+    const int *ket_ao_involved,
+    const int ket_nao_involved)
+{
+    int nThread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < bra_nao_involved; ++i)
+    {
+        for (size_t j = 0; j < ket_nao_involved; ++j)
+        {
+            res_buf[i * ket_nao_involved + j] = dm[bra_ao_involved[i] * nao + ket_ao_involved[j]];
+        }
+    }
+}
+
 void _packadd_local_dm(
     double *local_dm,
     const int nao_involved,
@@ -705,6 +726,28 @@ void _packadd_local_dm(
         for (size_t j = 0; j < nao_involved; ++j)
         {
             dm[ao_involved[i] * nao + ao_involved[j]] += local_dm[i * nao_involved + j];
+        }
+    }
+}
+
+void _packadd_local_RS(
+    double *local_dm,
+    const int bra_nao_involved,
+    const int *bra_ao_involved,
+    const int ket_nao_involved,
+    const int *ket_ao_involved,
+    double *dm,
+    const int nao)
+{
+    int nThread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < bra_nao_involved; ++i)
+    {
+        for (size_t j = 0; j < ket_nao_involved; ++j)
+        {
+            dm[bra_ao_involved[i] * nao + ket_ao_involved[j]] += local_dm[i * ket_nao_involved + j];
+            dm[ket_ao_involved[j] * nao + bra_ao_involved[i]] += local_dm[i * ket_nao_involved + j];
         }
     }
 }

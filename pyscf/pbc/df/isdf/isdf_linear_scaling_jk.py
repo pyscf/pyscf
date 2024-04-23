@@ -44,7 +44,8 @@ libpbc = lib.load_library('libpbc')
 
 ### ls = linear scaling
 
-def _half_J(mydf, dm, use_mpi=False):
+def _half_J(mydf, dm, use_mpi=False,
+            first_pass = None):
     
     if use_mpi:
         from mpi4py import MPI
@@ -53,6 +54,18 @@ def _half_J(mydf, dm, use_mpi=False):
         size = comm.Get_size()
         #raise NotImplementedError("MPI is not supported yet.")
         assert mydf.direct == True
+        
+    ######### prepare the parameter #########
+    
+    assert first_pass in [None, "only_dd", "only_cc", "exclude_cc", "all"]
+    
+    if first_pass is None:
+        first_pass = "all"
+    
+    first_pass_all = first_pass == "all"
+    first_pass_has_dd = first_pass in ["all", "only_dd"]
+    first_pass_has_cc = first_pass in ["all", "only_cc"]
+    first_pass_has_cd = first_pass in ["all", "exclude_cc"]
         
     t1 = (logger.process_clock(), logger.perf_counter())
 
@@ -77,33 +90,75 @@ def _half_J(mydf, dm, use_mpi=False):
     max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
     ngrids_local = np.sum([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
     
-    # density_R = np.zeros((ngrids_local,), dtype=np.float64)
     density_R = np.zeros((ngrid,), dtype=np.float64)
     
     dm_buf = np.zeros((max_nao_involved, max_nao_involved), dtype=np.float64)
     max_dim_buf = max(max_ngrid_involved, max_nao_involved)
     ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
-    # aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
     
     ##### get the involved C function ##### 
     
     fn_extract_dm = getattr(libpbc, "_extract_dm_involved_ao", None) 
     assert fn_extract_dm is not None
     
+    fn_extract_dm2 = getattr(libpbc, "_extract_dm_involved_ao_RS", None)
+    assert fn_extract_dm is not None
+    
     fn_packadd_dm = getattr(libpbc, "_packadd_local_dm", None)
-    assert fn_packadd_dm is not None
+    assert fn_packadd_dm is not None 
+    
+    # fn_packadd_dm2 = getattr(libpbc, "_packadd_local_RS", None)
+    # assert fn_packadd_dm2 is not None
     
     #### step 1. get density value on real space grid and IPs
-    
-    # lib.ddot(dm, aoR, c=buffer1) 
-    # tmp1 = buffer1
-    # density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')
     
     group = mydf.group
     ngroup = len(group)
     
-    # local_grid_loc = 0
     density_R_tmp = None
+    
+    def _get_rhoR(
+        bra_aoR, 
+        bra_ao_involved,
+        ket_aoR, 
+        ket_ao_involved,
+        bra_type,
+        ket_type
+    ):
+        
+        nbra_ao = bra_aoR.shape[0]
+        nket_ao = ket_aoR.shape[0]
+        if bra_type == ket_type:
+            dm_now = np.ndarray((nbra_ao, nbra_ao), buffer=dm_buf)
+            if nbra_ao < nao:
+                fn_extract_dm(
+                    dm.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nao),
+                    dm_now.ctypes.data_as(ctypes.c_void_p),
+                    bra_ao_involved.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nbra_ao),
+                )
+            else:
+                dm_now.ravel()[:] = dm.ravel()
+            ddot_res = np.ndarray((nbra_ao, ket_aoR.shape[1]), buffer=ddot_buf)
+            lib.ddot(dm_now, ket_aoR, c=ddot_res)
+            density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
+            return density_R_tmp
+        else:
+            dm_now = np.ndarray((nbra_ao, nket_ao), buffer=dm_buf)
+            fn_extract_dm2(
+                dm.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao),
+                dm_now.ctypes.data_as(ctypes.c_void_p),
+                bra_ao_involved.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(bra_ao_involved.shape[0]),
+                ket_ao_involved.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(ket_ao_involved.shape[0]),
+            )
+            ddot_res = np.ndarray((nbra_ao, nket_ao), buffer=ddot_buf)
+            lib.ddot(dm_now, ket_aoR, c=ddot_res)
+            density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
+            return density_R_tmp * 2.0
     
     for atm_id, aoR_holder in enumerate(aoR):
         
@@ -116,38 +171,63 @@ def _half_J(mydf, dm, use_mpi=False):
             
         ngrids_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
-        
-        if nao_involved < nao:
-            fn_extract_dm(
-                dm.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nao),
-                dm_buf.ctypes.data_as(ctypes.c_void_p),
-                aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nao_involved),
-            )
-        else:
-            dm_buf.ravel()[:] = dm.ravel()
-        
-        dm_now = np.ndarray((nao_involved, nao_involved), buffer=dm_buf)
-    
-        ddot_res = np.ndarray((nao_involved, ngrids_now), buffer=ddot_buf)
-        
-        lib.ddot(dm_now, aoR_holder.aoR, c=ddot_res)
-        density_R_tmp = lib.multiply_sum_isdf(aoR_holder.aoR, ddot_res)
-        
         global_gridID_begin = aoR_holder.global_gridID_begin
         
-        density_R[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
-        # local_grid_loc += ngrids_now
+        if first_pass_all:        
+            density_R_tmp = _get_rhoR(
+                aoR_holder.aoR, 
+                aoR_holder.ao_involved, 
+                aoR_holder.aoR, 
+                aoR_holder.ao_involved,
+                "all",
+                "all"
+            )
+        
+            density_R[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
+        else: 
+            
+            if first_pass_has_cc:
+                density_R_tmp = _get_rhoR(
+                    aoR_holder.aoR[:nao_involved,:], 
+                    aoR_holder.ao_involved[:nao_involved], 
+                    aoR_holder.aoR[:nao_involved,:], 
+                    aoR_holder.ao_involved[:nao_involved],
+                    "compact",
+                    "compact"
+                )
+                
+                density_R[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
+            
+            if first_pass_has_dd:
+                density_R_tmp = _get_rhoR(
+                    aoR_holder.aoR[nao_involved:,:], 
+                    aoR_holder.ao_involved[nao_involved:], 
+                    aoR_holder.aoR[nao_involved:,:], 
+                    aoR_holder.ao_involved[nao_involved:],
+                    "diffuse",
+                    "diffuse"
+                )
+                
+                density_R[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
+            
+            if first_pass_has_cd:
+                density_R_tmp = _get_rhoR(
+                    aoR_holder.aoR[:nao_involved,:], 
+                    aoR_holder.ao_involved[:nao_involved], 
+                    aoR_holder.aoR[nao_involved:,:], 
+                    aoR_holder.ao_involved[nao_involved:],
+                    "compact",
+                    "diffuse"
+                )
+                
+                density_R[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
     
     # assert local_grid_loc == ngrids_local
     
-    if use_mpi == False:
-        assert ngrids_local == np.prod(mesh)
-    
     if use_mpi:
-        # density_R = np.hstack(gather(density_R, comm, rank, root=0, split_recvbuf=True))
         density_R = reduce(density_R, root=0)
+    else:
+        assert ngrids_local == np.prod(mesh)
         
     # if hasattr(mydf, "grid_ID_ordered"):
     
@@ -227,7 +307,10 @@ def _half_J(mydf, dm, use_mpi=False):
     return J
 
 # @profile
-def _contract_j_dm_ls(mydf, dm, use_mpi=False):
+def _contract_j_dm_ls(mydf, dm, use_mpi=False, 
+                      first_pass = None, 
+                      second_pass = None
+                      ):
     
     if use_mpi:
         from mpi4py import MPI
@@ -236,6 +319,24 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
         size = comm.Get_size()
         #raise NotImplementedError("MPI is not supported yet.")
         assert mydf.direct == True
+    
+    ###### Prepocess parameter for RS ######
+    
+    assert first_pass  in [None, "only_dd", "only_cc", "exclude_cc", "all"]
+    assert second_pass in [None, "only_dd", "only_cc", "exclude_cc", "all"]
+    
+    if first_pass is None:
+        first_pass = "all"
+    if second_pass is None:
+        second_pass = "all"
+    
+    second_pass_all = first_pass == "all"
+    second_pass_has_dd = first_pass in ["all", "only_dd"]
+    second_pass_has_cc = first_pass in ["all", "only_cc"]
+    second_pass_has_cd = first_pass in ["all", "exclude_cc"]
+    
+    
+    ####### Start the calculation ########
     
     t1 = (logger.process_clock(), logger.perf_counter())
 
@@ -268,11 +369,11 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
     
     ##### get the involved C function ##### 
     
-    fn_extract_dm = getattr(libpbc, "_extract_dm_involved_ao", None) 
-    assert fn_extract_dm is not None
-    
     fn_packadd_dm = getattr(libpbc, "_packadd_local_dm", None)
     assert fn_packadd_dm is not None
+    
+    fn_packadd_dm2 = getattr(libpbc, "_packadd_local_RS", None)
+    assert fn_packadd_dm2 is not None
     
     #### step 1 2. get density value on real space grid and IPs
     
@@ -290,6 +391,54 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
 
     J_Res = np.zeros((nao, nao), dtype=np.float64)
 
+    def _get_j_pass2_ls(aoR_bra, 
+                        ao_involved_bra, 
+                        aoR_ket,
+                        ao_involved_ket,
+                        bra_type,
+                        ket_type,
+                        potential,
+                        Res):
+        
+        nao_bra = aoR_bra.shape[0]
+        nao_ket = aoR_ket.shape[0]
+        
+        if bra_type == ket_type:
+            
+            aoR_J_res = np.ndarray(aoR_ket.shape, buffer=aoR_buf1)
+            lib.d_ij_j_ij(aoR_ket, potential, out=aoR_J_res)
+            ddot_res = np.ndarray((nao_ket, nao_ket), buffer=ddot_buf)
+            lib.ddot(aoR_ket, aoR_J_res.T, c=ddot_res)
+            
+            if nao_ket == nao:
+                Res += ddot_res
+            else:
+                fn_packadd_dm(
+                    ddot_res.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nao_ket),
+                    ao_involved_ket.ctypes.data_as(ctypes.c_void_p),
+                    Res.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(Res.shape[0])
+                )
+        else:
+            ### J_Res = ddot_res + ddot_res.T
+            
+            aoR_J_res = np.ndarray(aoR_ket.shape, buffer=aoR_buf1)
+            lib.d_ij_j_ij(aoR_ket, potential, out=aoR_J_res)
+            ddot_res = np.ndarray((nao_bra, nao_ket), buffer=ddot_buf)
+            lib.ddot(aoR_bra, aoR_J_res.T, c=ddot_res)
+            
+            fn_packadd_dm2(
+                ddot_res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_bra),
+                ao_involved_bra.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_ket),
+                ao_involved_ket.ctypes.data_as(ctypes.c_void_p),
+                Res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(Res.shape[0])
+            )
+
+
     for atm_id, aoR_holder in enumerate(aoR):
         
         if aoR_holder is None:
@@ -300,27 +449,67 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False):
                 continue
         
         ngrids_now = aoR_holder.aoR.shape[1]
-        nao_involved = aoR_holder.aoR.shape[0]
+        nao_involved = aoR_holder.nao_invovled
+        nao_compact  = aoR_holder.nCompact
+        nao_diffuse  = nao_involved - nao_compact
         
         global_gridID_begin = aoR_holder.global_gridID_begin
         
         J_tmp = J[global_gridID_begin:global_gridID_begin+ngrids_now] 
         
-        aoR_J_res = np.ndarray(aoR_holder.aoR.shape, buffer=aoR_buf1)
-        lib.d_ij_j_ij(aoR_holder.aoR, J_tmp, out=aoR_J_res)
-        ddot_res = np.ndarray((nao_involved, nao_involved), buffer=ddot_buf)
-        lib.ddot(aoR_holder.aoR, aoR_J_res.T, c=ddot_res)
+        if second_pass_all:  ### with RS case ###
+              
+            _get_j_pass2_ls(
+                aoR_holder.aoR, 
+                aoR_holder.ao_involved, 
+                aoR_holder.aoR,
+                aoR_holder.ao_involved,
+                "all",
+                "all",
+                J_tmp,
+                J_Res
+            )   
         
-        if nao_involved == nao:
-            J_Res += ddot_res
         else:
-            fn_packadd_dm(
-                ddot_res.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nao_involved),
-                aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p),
-                J_Res.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nao)
-            )        
+            
+            if second_pass_has_cc:
+                
+                _get_j_pass2_ls(
+                    aoR_holder.aoR[:nao_compact,:], 
+                    aoR_holder.ao_involved[:nao_compact], 
+                    aoR_holder.aoR[:nao_compact,:],
+                    aoR_holder.ao_involved[:nao_compact,:],
+                    "compact",
+                    "compact",
+                    J_tmp,
+                    J_Res
+                )
+                
+            if second_pass_has_dd:
+                
+                _get_j_pass2_ls(
+                    aoR_holder.aoR[nao_compact:,:], 
+                    aoR_holder.ao_involved[nao_compact:], 
+                    aoR_holder.aoR[nao_compact:,:],
+                    aoR_holder.ao_involved[nao_compact:],
+                    "diffuse",
+                    "diffuse",
+                    J_tmp,
+                    J_Res
+                )
+                
+            if second_pass_has_cd:
+                
+                _get_j_pass2_ls(
+                    aoR_holder.aoR[:nao_compact,:], 
+                    aoR_holder.ao_involved[:nao_compact], 
+                    aoR_holder.aoR[nao_compact:,:],
+                    aoR_holder.ao_involved[nao_compact:],
+                    "compact",
+                    "diffuse",
+                    J_tmp,
+                    J_Res
+                )
 
         # local_grid_loc += ngrids_now
     

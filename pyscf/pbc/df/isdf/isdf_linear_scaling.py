@@ -1639,7 +1639,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
-C = 15
+C = 10
 
 from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
@@ -1665,10 +1665,10 @@ if __name__ == '__main__':
         ['C', (0.8917 , 2.6751 , 2.6751)],
     ] 
     KE_CUTOFF = 70
-    basis = 'unc-gth-cc-tzvp'
-    pseudo = "gth-hf"  
-    # basis = 'gth-dzvp'
-    # pseudo = "gth-pade"   
+    # basis = 'unc-gth-cc-tzvp'
+    # pseudo = "gth-hf"  
+    basis = 'gth-dzvp'
+    pseudo = "gth-pade"   
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis=basis, pseudo=pseudo)    
     # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
     # prim_partition = [[0,1,2,3,4,5,6,7]]
@@ -1698,7 +1698,7 @@ if __name__ == '__main__':
     prim_mesh = prim_cell.mesh
 
     # Ls = [2, 2, 2]
-    Ls = [1, 1, 2]
+    Ls = [1, 1, 1]
     # Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
@@ -1713,7 +1713,7 @@ if __name__ == '__main__':
     print("group_partition = ", group_partition)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=False, aoR_cutoff=1e-8, direct=False)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
     # pbc_isdf_info.use_aft_ao = True  # No problem ! 
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
@@ -1752,7 +1752,7 @@ if __name__ == '__main__':
     
     ### compare without occ-RI-K ###
     
-    pbc_isdf_info.occ_RI_K = False
+    pbc_isdf_info.occ_RI_K = True
     
     mf = scf.RHF(cell)
     pbc_isdf_info.direct_scf = mf.direct_scf
