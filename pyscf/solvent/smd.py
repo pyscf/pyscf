@@ -495,6 +495,49 @@ def get_cds(smdobj):
     atm_cds = np.sum(SASA * atm_tension) / 1000 # in kcal/mol
     return (mol_cds + atm_cds)/hartree2kcal # hartree
 
+import ctypes
+from pyscf.lib import load_library
+libsolvent = load_library('libsolvent')
+def get_cds_legacy(smdobj):
+    mol = smdobj.mol
+    natm = mol.natm
+    soln, _, sola, solb, solg, _, solc, solh = smdobj.solvent_descriptors
+    #symbols = [mol.atom_s(ia) for ia in range(mol.natm)]
+    charges = np.asarray(mol.atom_charges(), dtype=np.int32, order='F')
+    coords = np.asarray(mol.atom_coords(unit='B'), dtype=np.float64, order='C')
+    icds = 1 if smdobj.solvent.upper() == 'WATER' else 2
+    dcds = np.empty([natm,3])
+    mnsol_interface =  libsolvent.mnsol_interface_
+
+    double_ndptr = np.ctypeslib.ndpointer(dtype=np.float64)
+    int_ndptr = np.ctypeslib.ndpointer(dtype=np.int32)
+    double_ptr = ctypes.POINTER(ctypes.c_double)
+    int_ptr = ctypes.POINTER(ctypes.c_int)
+
+    mnsol_interface.argtypes = [
+        double_ndptr, int_ndptr,
+        int_ptr,
+        double_ptr, double_ptr, double_ptr, double_ptr, double_ptr, double_ptr,
+        int_ptr,
+        double_ptr, double_ptr, double_ndptr]
+    natm = ctypes.byref(ctypes.c_int(natm))
+    icds = ctypes.byref(ctypes.c_int(icds))
+    soln = ctypes.byref(ctypes.c_double(soln))
+    sola = ctypes.byref(ctypes.c_double(sola))
+    solb = ctypes.byref(ctypes.c_double(solb))
+    solg = ctypes.byref(ctypes.c_double(solg))
+    solc = ctypes.byref(ctypes.c_double(solc))
+    solh = ctypes.byref(ctypes.c_double(solh))
+    gcds = ctypes.c_double()
+    areacds = ctypes.c_double()
+
+    mnsol_interface(coords, charges,
+                    natm,
+                    sola, solb, solc, solg, solh, soln,
+                    icds,
+                    ctypes.byref(gcds), ctypes.byref(areacds), dcds)
+    return gcds.value / 627.509451, dcds
+
 class SMD(pcm.PCM):
     _keys = {
         'intopt', 'method', 'e_cds', 'solvent_descriptors', 'r_probe', 'sasa_ng'
@@ -560,7 +603,7 @@ class SMD(pcm.PCM):
         return self
 
     def get_cds(self):
-        return get_cds(self)
+        return get_cds_legacy(self)[0]
 
     def nuc_grad_method(self, grad_method):
         from pyscf.solvent.grad import smd as smd_grad

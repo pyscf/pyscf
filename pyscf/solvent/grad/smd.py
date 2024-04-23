@@ -260,7 +260,8 @@ class WithSolventGrad:
         self.de_solvent = pcm_grad.grad_qv(self.base.with_solvent, dm)
         self.de_solvent+= pcm_grad.grad_solver(self.base.with_solvent, dm)
         self.de_solvent+= pcm_grad.grad_nuc(self.base.with_solvent, dm)
-        self.de_cds     = get_cds(self.base.with_solvent)
+        #self.de_cds     = get_cds(self.base.with_solvent)
+        self.de_cds     = smd.get_cds_legacy(self.base.with_solvent)[1]
         self.de = self.de_solute + self.de_solvent + self.de_cds
 
         if self.verbose >= logger.NOTE:

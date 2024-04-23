@@ -43,15 +43,13 @@ def _check_smd(atom, e_ref, solvent='water'):
     mol.basis = 'def2-tzvpp'
     mol.output = '/dev/null'
     mol.build()
-    mf = dft.RKS(mol, xc='b3lyp')
-    mf.grids.atom_grid = (99,590)
-    mf = mf.SMD()
-    mf.with_solvent.solvent = solvent
-    mf.with_solvent.sasa_ng = 590
-    mf.with_solvent.lebedev_order = 29
-    e_tot = mf.kernel()
+    smdobj = smd.SMD(mol)
+    smdobj.solvent = solvent
+    smdobj.sasa_ng = 590
+    smdobj.lebedev_order = 29
+    e_cds = smdobj.get_cds() * 627.509 # in kcal/mol
     mol.stdout.close()
-    assert numpy.abs(e_tot - e_ref) < 2e-4
+    assert numpy.abs(e_cds - e_ref) < 1e-3
 
 class KnownValues(unittest.TestCase):
     def test_cds_solvent(self):
@@ -59,14 +57,14 @@ class KnownValues(unittest.TestCase):
         smdobj.sasa_ng = 590
         smdobj.solvent = 'toluene'
         e_cds = smdobj.get_cds()
-        assert numpy.abs(e_cds - -0.0013476016530476354) < 1e-8
+        assert numpy.abs(e_cds - -0.0013479524949097355) < 1e-8
 
     def test_cds_water(self):
         smdobj = smd.SMD(mol)
         smdobj.sasa_ng = 590
         smdobj.solvent = 'water'
         e_cds = smdobj.get_cds()
-        assert numpy.abs(e_cds - 0.0022903044356530726) < 1e-8
+        assert numpy.abs(e_cds - 0.002298448590009083) < 1e-8
 
     def test_smd_solvent(self):
         mf = scf.RHF(mol)
@@ -132,8 +130,8 @@ H       0.000000     1.000000    -0.500000
 H       0.866025    -0.500000    -0.500000
 H      -0.866025    -0.500000    -0.500000
     '''
-        _check_smd(atom, -94.5217942244, solvent='water')
-        _check_smd(atom, -94.5097992584, solvent='toluene')
+        _check_smd(atom,-2.9126, solvent='water')
+        _check_smd(atom, 1.351, solvent='toluene')
 
     def test_CC(self):
         atom = '''
@@ -144,16 +142,16 @@ H -0.507 -0.927 0.000
 H 1.846 0.927 0.000
 H 1.846 -0.927 0.000
     '''
-        _check_smd(atom, -78.6195929420, solvent='water')
-        _check_smd(atom, -78.6230127778, solvent='toluene')
+        _check_smd(atom, 3.2504, solvent='water')
+        _check_smd(atom, 0.085, solvent='toluene')
 
     def test_OO(self):
         atom = '''
 O 0.000 0.000 0.000
 O 1.207 0.000 0.000
     '''
-        _check_smd(atom, -150.3307930136, solvent='water')
-        _check_smd(atom, -150.3315984436, solvent='toluene')
+        _check_smd(atom, 0.0000, solvent='water')
+        _check_smd(atom, -2.0842, solvent='toluene')
 
     def test_ON(self):
         atom = '''
@@ -161,8 +159,8 @@ N 0.000 0.000 0.000
 O 1.159 0.000 0.000
 H -0.360 0.000 0.000
     '''
-        _check_smd(atom, -128.09860348646, solvent='water')
-        _check_smd(atom, -128.0978095537, solvent='toluene')
+        _check_smd(atom, 2.2838, solvent='water')
+        _check_smd(atom, 1.4294, solvent='toluene')
 
     def test_OP(self):
         atom = '''
@@ -172,8 +170,8 @@ H -0.932 0.932 0.000
 H -0.932 -0.932 0.000
 H 0.368 0.000 0.933
     '''
-        _check_smd(atom, -418.19037901326, solvent='water')
-        _check_smd(atom, -418.1826326096, solvent='toluene')
+        _check_smd(atom, 3.0384, solvent='water')
+        _check_smd(atom,-0.0337, solvent='toluene')
 
     def test_OC(self):
         atom = '''
@@ -182,8 +180,8 @@ O 1.208 0.000 0.000
 H -0.603 0.928 0.000
 H -0.603 -0.928 0.000
     '''
-        _check_smd(atom, -114.5575636055, solvent='water')
-        _check_smd(atom, -114.5568841686, solvent='toluene')
+        _check_smd(atom, 4.0974, solvent='water')
+        _check_smd(atom, 0.4919, solvent='toluene')
 
     def test_F(self):
         atom = '''
@@ -193,8 +191,8 @@ H -0.520 0.920 -0.400
 H -0.520 -0.920 -0.400
 H -0.520 0.000 1.000
     '''
-        _check_smd(atom, -139.7924297763, solvent='water')
-        _check_smd(atom, -139.7938239480, solvent='toluene')
+        _check_smd(atom, 3.0212, solvent='water')
+        _check_smd(atom, 0.6014, solvent='toluene')
 
     def test_Si(self):
         atom = '''
@@ -204,8 +202,8 @@ H -0.875 -0.875 0.875
 H 0.875 -0.875 -0.875
 H -0.875 0.875 -0.875
     '''
-        _check_smd(atom, -291.9122596802, solvent='water')
-        _check_smd(atom, -291.9160295051, solvent='toluene')
+        _check_smd(atom, 2.2328, solvent='water')
+        _check_smd(atom, -0.2248, solvent='toluene')
 
     def test_S(self):
         atom = '''
@@ -213,8 +211,8 @@ S 0.000 0.000 0.000
 H 0.962 0.280 0.000
 H -0.962 0.280 0.000
     '''
-        _check_smd(atom, -399.1569728016, solvent='water')
-        _check_smd(atom, -399.1585972304, solvent='toluene')
+        _check_smd(atom, 0.5306, solvent='water')
+        _check_smd(atom, -1.5374, solvent='toluene')
 
     def test_Cl(self):
         atom = '''
@@ -224,8 +222,9 @@ H -0.595 0.952 0.000
 H -0.595 -0.476 0.824
 H -0.595 -0.476 -0.824
     '''
-        _check_smd(atom, -500.1341946429, solvent='water')
-        _check_smd(atom, -500.1369954008, solvent='toluene')
+        _check_smd(atom, 2.1279, solvent='water')
+        _check_smd(atom, -0.9778, solvent='toluene')
+
 if __name__ == "__main__":
     print("Full Tests for SMDs")
     unittest.main()

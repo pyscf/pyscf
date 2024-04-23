@@ -70,7 +70,7 @@ def _check_grad(atom, solvent='water'):
 
     smdobj = smd.SMD(mol)
     smdobj.solvent = solvent
-    grad_cds = smd_grad.get_cds(smdobj)
+    grad_cds = smd.get_cds_legacy(smdobj)[1]
     mol.stdout.close()
     assert numpy.linalg.norm(fd_cds - grad_cds) < 1e-8
 
