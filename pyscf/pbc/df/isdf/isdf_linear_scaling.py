@@ -1639,6 +1639,25 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
     get_jk = ISDF_LinearScalingJK.get_jk_dm_quadratic
         
+    def aoR_RangeSeparation(self, CompactAO):
+        
+        self.CompactAOList = np.array(CompactAO, dtype=np.int32)
+        DiffuseAO = []
+        for i in range(self.nao):
+            if i not in CompactAO:
+                DiffuseAO.append(i)
+        self.DiffuseAOList = np.array(DiffuseAO, dtype=np.int32)
+        
+        IsCompact = np.zeros((self.nao), dtype=bool)
+        IsCompact[CompactAO] = True
+        IsCompact[DiffuseAO] = False
+        self.IsCompact = IsCompact
+        
+        for aoR in self.aoR:
+            aoR.RangeSeparation(IsCompact)
+        for aoRg in self.aoRg:
+            aoRg.RangeSeparation(IsCompact)
+        
 C = 10
 
 from pyscf.lib.parameters import BOHR

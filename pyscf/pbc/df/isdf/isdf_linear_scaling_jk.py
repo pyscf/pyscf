@@ -45,7 +45,8 @@ libpbc = lib.load_library('libpbc')
 ### ls = linear scaling
 
 def _half_J(mydf, dm, use_mpi=False,
-            first_pass = None):
+            first_pass = None,
+            short_range = False):
     
     if use_mpi:
         from mpi4py import MPI
@@ -63,10 +64,10 @@ def _half_J(mydf, dm, use_mpi=False,
         first_pass = "all"
     
     first_pass_all = first_pass == "all"
-    first_pass_has_dd = first_pass in ["all", "only_dd"]
+    first_pass_has_dd = first_pass in ["all", "only_dd", "exclude_cc"]
     first_pass_has_cc = first_pass in ["all", "only_cc"]
     first_pass_has_cd = first_pass in ["all", "exclude_cc"]
-        
+    
     t1 = (logger.process_clock(), logger.perf_counter())
 
     if len(dm.shape) == 3:
@@ -155,7 +156,7 @@ def _half_J(mydf, dm, use_mpi=False,
                 ket_ao_involved.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(ket_ao_involved.shape[0]),
             )
-            ddot_res = np.ndarray((nbra_ao, nket_ao), buffer=ddot_buf)
+            ddot_res = np.ndarray((nbra_ao, ket_aoR.shape[1]), buffer=ddot_buf)
             lib.ddot(dm_now, ket_aoR, c=ddot_res)
             density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
             return density_R_tmp * 2.0
@@ -261,19 +262,17 @@ def _half_J(mydf, dm, use_mpi=False,
         fn_J = getattr(libpbc, "_construct_J", None)
         assert(fn_J is not None)
 
-        if hasattr(mydf, "coulG") == False:
-            if mydf.omega is not None:
-                assert mydf.omega >= 0.0
-            print("mydf.omega = ", mydf.omega)
-            # mydf.coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
-            raise ValueError("mydf.coulG is not found.")
-
         J = np.zeros_like(density_R)
+
+        if short_range:
+            coulG = mydf.coulG_SR
+        else:
+            coulG = mydf.coulG
 
         fn_J(
             mesh.ctypes.data_as(ctypes.c_void_p),
             density_R.ctypes.data_as(ctypes.c_void_p),
-            mydf.coulG.ctypes.data_as(ctypes.c_void_p),
+            coulG.ctypes.data_as(ctypes.c_void_p),
             J.ctypes.data_as(ctypes.c_void_p),
         )
         
@@ -309,8 +308,8 @@ def _half_J(mydf, dm, use_mpi=False,
 # @profile
 def _contract_j_dm_ls(mydf, dm, use_mpi=False, 
                       first_pass = None, 
-                      second_pass = None
-                      ):
+                      second_pass = None,
+                      short_range = False):
     
     if use_mpi:
         from mpi4py import MPI
@@ -325,16 +324,19 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
     assert first_pass  in [None, "only_dd", "only_cc", "exclude_cc", "all"]
     assert second_pass in [None, "only_dd", "only_cc", "exclude_cc", "all"]
     
+    if short_range:
+        assert first_pass is "only_dd"
+        assert second_pass is "only_dd"
+    
     if first_pass is None:
         first_pass = "all"
     if second_pass is None:
         second_pass = "all"
     
-    second_pass_all = first_pass == "all"
-    second_pass_has_dd = first_pass in ["all", "only_dd"]
-    second_pass_has_cc = first_pass in ["all", "only_cc"]
-    second_pass_has_cd = first_pass in ["all", "exclude_cc"]
-    
+    second_pass_all    = second_pass == "all"
+    second_pass_has_dd = second_pass in ["all", "only_dd", "exclude_cc"]
+    second_pass_has_cc = second_pass in ["all", "only_cc"]
+    second_pass_has_cd = second_pass in ["all", "exclude_cc"]
     
     ####### Start the calculation ########
     
@@ -380,7 +382,7 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
     group = mydf.group
     ngroup = len(group)
 
-    J = _half_J(mydf, dm, use_mpi)
+    J = _half_J(mydf, dm, use_mpi, first_pass, short_range)
 
     #### step 3. get J 
     
@@ -478,7 +480,7 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
                     aoR_holder.aoR[:nao_compact,:], 
                     aoR_holder.ao_involved[:nao_compact], 
                     aoR_holder.aoR[:nao_compact,:],
-                    aoR_holder.ao_involved[:nao_compact,:],
+                    aoR_holder.ao_involved[:nao_compact],
                     "compact",
                     "compact",
                     J_tmp,
@@ -985,7 +987,15 @@ def __get_DensityMatrixonGrid_qradratic(mydf, dm, bra_aoR_holder, ket_aoR_holder
         _benchmark_time(t1, t2, "__get_DensityMatrixonGrid_qradratic")
     return res
 
-def __get_DensityMatrixonRgAO_qradratic(mydf, dm, bra_aoR_holder, res:np.ndarray=None, verbose = 1):
+def __get_DensityMatrixonRgAO_qradratic(mydf, dm, 
+                                        bra_aoR_holder, 
+                                        bra_type       = None,
+                                        res:np.ndarray = None, 
+                                        verbose        = 1):
+    
+    assert bra_type in [None, "all", "compact", "diffuse"]
+    
+    # print("bra_type = ", bra_type)
     
     t1 = (logger.process_clock(), logger.perf_counter())
     
@@ -1039,28 +1049,38 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm, bra_aoR_holder, res:np.ndarray
         
         ngrid_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
+        nao_compact  = aoR_holder.nCompact
         
-        if nao_involved == nao:
+        ao_begin_indx = 0
+        ao_end_indx   = nao_involved
+        if bra_type == "compact":
+            ao_end_indx = nao_compact
+        elif bra_type == "diffuse":
+            ao_begin_indx = nao_compact 
+        
+        nao_at_work = ao_end_indx - ao_begin_indx
+        
+        if (nao_at_work) == nao:
             dm_packed = dm
         else:
-            dm_packed = np.ndarray((nao_involved, nao), buffer=dm_pack_buf)
+            dm_packed = np.ndarray((nao_at_work, nao), buffer=dm_pack_buf)
             fn_packrow(
                 dm_packed.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nao_involved),
+                ctypes.c_int(nao_at_work),
                 ctypes.c_int(nao),
                 dm.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nao),
                 ctypes.c_int(nao),
-                aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+                aoR_holder.ao_involved[ao_begin_indx:ao_end_indx].ctypes.data_as(ctypes.c_void_p)
             )
         
         ddot_res = np.ndarray((ngrid_now, nao), buffer=ddot_buf)
-        lib.ddot(aoR_holder.aoR.T, dm_packed, c=ddot_res)
-        res[ngrid_loc:ngrid_loc+ngrid_now, :] = ddot_res
+        lib.ddot(aoR_holder.aoR[ao_begin_indx:ao_end_indx,:].T, dm_packed, c=ddot_res)
+        grid_loc_begin = aoR_holder.global_gridID_begin
+        res[grid_loc_begin:grid_loc_begin+ngrid_now, :] = ddot_res
         
-        ngrid_loc += ngrid_now
-        
-    assert ngrid_loc == ngrid_bra
+        # ngrid_loc += ngrid_now   
+    #assert ngrid_loc == ngrid_bra
         
     t2 = (logger.process_clock(), logger.perf_counter())
     # if verbose>0:
@@ -1123,7 +1143,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     #### step 1. get density matrix value on real space grid and IPs
     
-    Density_RgAO = __get_DensityMatrixonRgAO_qradratic(mydf, dm, aoRg, mydf.Density_RgAO_buf, use_mpi)
+    Density_RgAO = __get_DensityMatrixonRgAO_qradratic(mydf, dm, aoRg, "all", mydf.Density_RgAO_buf, use_mpi)
     
     # print("Density_RgAO = ", Density_RgAO[0, :16])
     
@@ -1401,10 +1421,6 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     ######### finally delete the buffer #########
     
-    # del Density_RgRg
-    # del Density_RgR
-    # del ddot_res_buf
-    
     del K1
     
     t2 = (logger.process_clock(), logger.perf_counter())
@@ -1578,7 +1594,7 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
         offset_density_RgAO_buf = Density_RgAO_tmp.size * Density_RgAO_buf.dtype.itemsize
         
         Density_RgAO_tmp.ravel()[:] = 0.0
-        Density_RgAO_tmp = __get_DensityMatrixonRgAO_qradratic(mydf, dm, aoRg_holders, Density_RgAO_tmp, verbose=mydf.verbose)
+        Density_RgAO_tmp = __get_DensityMatrixonRgAO_qradratic(mydf, dm, aoRg_holders, "all", Density_RgAO_tmp, verbose=mydf.verbose)
         
         #### 2. build the V matrix #### 
         
