@@ -80,7 +80,7 @@ class AtomSphAverageRHF(hf.RHF):
         hf.SCF.__init__(self, mol)
 
         # The default initial guess minao does not have super-heavy elements
-        if mol.atom_charge(0) > 96:
+        if gto.charge(mol.atom_symbol(0)) > 96:
             self.init_guess = '1e'
 
         self = self.apply(addons.remove_linear_dep_)
