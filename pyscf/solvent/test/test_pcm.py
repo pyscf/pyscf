@@ -46,7 +46,12 @@ class KnownValues(unittest.TestCase):
         cm.method = 'C-PCM'
         mf = scf.RHF(mol).PCM(cm)
         e_tot = mf.kernel()
-        print(f"Energy error in C-PCM: {numpy.abs(e_tot - -74.9690902442)}")
+        print(f"Energy error in RHF C-PCM: {numpy.abs(e_tot - -74.9690902442)}")
+        assert numpy.abs(e_tot - -74.9690902442) < 1e-9
+
+        mf = scf.UHF(mol).PCM(cm)
+        e_tot = mf.kernel()
+        print(f"Energy error in UHF C-PCM: {numpy.abs(e_tot - -74.9690902442)}")
         assert numpy.abs(e_tot - -74.9690902442) < 1e-9
 
     def test_COSMO(self):

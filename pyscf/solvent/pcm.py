@@ -331,6 +331,10 @@ class PCM(ddcosmo.DDCOSMO):
         if not self._intermediates or self.grids.coords is None:
             self.build()
 
+        if not (isinstance(dms, numpy.ndarray) and dms.ndim == 2):
+            # spin-traced DM for UHF or ROHF
+            dms = dms[0] + dms[1]
+
         nao = dms.shape[-1]
         dms = dms.reshape(-1,nao,nao)
 
@@ -402,4 +406,3 @@ class PCM(ddcosmo.DDCOSMO):
             v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
             vmat += -numpy.einsum('ijL,L->ij', v_nj, q[p0:p1])
         return vmat
-
