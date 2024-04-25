@@ -334,6 +334,8 @@ class DIIS:
         self._H[1:nd+1,1:nd+1] = e_mat
         return self
 
+    to_gpu = misc.to_gpu
+
 
 def restore(filename):
     '''Restore/construct diis object based on a diis file'''

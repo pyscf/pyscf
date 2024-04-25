@@ -1082,6 +1082,8 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
         return self.eval_rho(cell, ao, dm, screen_index, xctype, hermi,
                              with_lapl, verbose)
 
+    to_gpu = lib.to_gpu
+
 _NumInt = NumInt
 
 
@@ -1286,5 +1288,7 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
     cache_xc_kernel  = cache_xc_kernel
     cache_xc_kernel1 = cache_xc_kernel1
     get_rho = get_rho
+
+    to_gpu = lib.to_gpu
 
 _KNumInt = KNumInt

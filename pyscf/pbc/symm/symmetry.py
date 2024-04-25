@@ -219,7 +219,7 @@ class Symmetry():
 
 def _get_phase(cell, op, kpt_scaled, ignore_phase=False, tol=SYMPREC):
     kpt_scaled = op.a2b(cell).dot_rot(kpt_scaled)
-    coords_scaled = cell.get_scaled_positions().reshape(-1,3)
+    coords_scaled = cell.get_scaled_atom_coords().reshape(-1,3)
     natm = coords_scaled.shape[0]
     phase = np.ones((natm,), dtype=np.complex128)
     atm_map = np.arange(natm)

@@ -565,8 +565,7 @@ class SymAdaptedUHF(uhf.UHF):
 
     canonicalize = canonicalize
 
-    def to_gpu(self):
-        raise NotImplementedError
+    to_gpu = lib.to_gpu
 
 UHF = SymAdaptedUHF
 

@@ -63,7 +63,8 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert (fcivec.size == na*nb)
+    assert fcivec.size == na*nb
+    assert fcivec.dtype == f1e.dtype == numpy.float64
     f1e_tril = lib.pack_tril(f1e)
     ci1 = numpy.zeros_like(fcivec)
     libfci.FCIcontract_a_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
@@ -123,11 +124,12 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     See also :func:`direct_spin1.absorb_h1e`
     '''
     fcivec = numpy.asarray(fcivec, order='C')
-    eri = ao2mo.restore(4, eri, norb)
+    eri = numpy.asarray(ao2mo.restore(4, eri, norb), order='C')
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert (fcivec.size == na*nb)
+    assert fcivec.size == na*nb
+    assert fcivec.dtype == eri.dtype == numpy.float64
     ci1 = numpy.empty_like(fcivec)
 
     libfci.FCIcontract_2e_spin1(eri.ctypes.data_as(ctypes.c_void_p),
@@ -146,12 +148,12 @@ def make_hdiag(h1e, eri, norb, nelec, compress=False):
     Kwargs:
         compress (bool) : whether to remove symmetry forbidden elements
     '''
-    if h1e.dtype == numpy.complex128 or eri.dtype == numpy.complex128:
+    if not (h1e.dtype == eri.dtype == numpy.float64):
         raise NotImplementedError('Complex Hamiltonian')
 
     neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.asarray(h1e, order='C')
-    eri = ao2mo.restore(1, eri, norb)
+    eri = numpy.asarray(ao2mo.restore(1, eri, norb), order='C')
     occslsta = occslstb = cistring.gen_occslst(range(norb), neleca)
     if neleca != nelecb:
         occslstb = cistring.gen_occslst(range(norb), nelecb)
@@ -942,6 +944,8 @@ class FCISolver(FCIBase):
     def transform_ci_for_orbital_rotation(self, fcivec, norb, nelec, u):
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.transform_ci_for_orbital_rotation(fcivec, norb, nelec, u)
+
+    to_gpu = lib.to_gpu
 
 FCI = FCISolver
 

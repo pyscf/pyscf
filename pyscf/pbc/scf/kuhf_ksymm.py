@@ -155,7 +155,9 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
         dm_kpts = mol_hf.SCF.get_init_guess(self, cell, key)
         assert dm_kpts.shape[0]==2
         if dm_kpts.ndim != 4:
@@ -165,7 +167,7 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
         elif dm_kpts.shape[1] != self.kpts.nkpts_ibz:
             dm_kpts = dm_kpts[:,self.kpts.ibz2bz]
 
-        ne = np.einsum('k,xkij,kji->x', self.kpts.weights_ibz, dm_kpts, self.get_ovlp(cell)).real
+        ne = lib.einsum('k,xkij,kji->x', self.kpts.weights_ibz, dm_kpts, s1e).real
         nkpts = self.kpts.nkpts
         ne *= nkpts
         nelec = np.asarray(self.nelec)

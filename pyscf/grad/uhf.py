@@ -106,9 +106,6 @@ class Gradients(rhf_grad.GradientsBase):
 
     grad_elec = grad_elec
 
-    def to_gpu(self):
-        raise NotImplementedError
-
 Grad = Gradients
 
 from pyscf import scf

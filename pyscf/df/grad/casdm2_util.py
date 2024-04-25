@@ -476,7 +476,7 @@ def grad_elec_dferi (mc_grad, mo_cas=None, ci=None, dfcasdm2=None, casdm2=None, 
 
     aoslices = mol.aoslice_by_atom ()
     dE = np.array ([dE[:,p0:p1].sum (axis=1) for p0, p1 in aoslices[:,2:]]).transpose (1,0,2)
-    return np.ascontiguousarray (dE)
+    return np.ascontiguousarray (dE)[:,atmlst,:]
 
 if __name__ == '__main__':
     from pyscf.tools import molden

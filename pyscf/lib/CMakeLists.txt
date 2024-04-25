@@ -136,6 +136,9 @@ else ()
   set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib:\$ORIGIN/deps/lib64")
 endif ()
 
+option(ENABLE_FFTW "Using fftw3" OFF)
+option(BUILD_FFTW "Building fftw3" OFF)
+
 add_subdirectory(np_helper)
 add_subdirectory(gto)
 add_subdirectory(vhf)
@@ -165,7 +168,7 @@ if(BUILD_LIBCINT)
     set(LIBCINT_GIT https://github.com/sunqm/qcint.git) # qcint is an optimized implementation for x86-64 architecture
     set(LIBCINT_VERSION v6.1.2)
     if(NOT BUILD_MARCH_NATIVE)
-      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")    
+      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")
     endif()
   endif()
 
@@ -197,6 +200,12 @@ option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
 option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
+
+option(ENABLE_LIBXSMM "Using libxsmm" OFF)
+option(BUILD_LIBXSMM "Building libxsmm" OFF)
+if(APPLE)
+    set(ENABLE_LIBXSMM OFF)
+endif()
 
 if(NOT DISABLE_DFT)
 add_subdirectory(dft)
@@ -237,7 +246,38 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
   add_dependencies(xcfun_itrf libxcfun)
   add_dependencies(dft libxcfun)
 endif() # ENABLE_XCFUN
+
+if(ENABLE_LIBXSMM AND BUILD_LIBXSMM)
+  if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/libxsmm.h")
+    ExternalProject_Add(libxsmm
+      GIT_REPOSITORY https://github.com/hfp/libxsmm.git
+      GIT_TAG 1.17
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      CONFIGURE_COMMAND ""
+      BUILD_IN_SOURCE True
+      BUILD_COMMAND make -j4 PREFIX=<INSTALL_DIR> CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} STATIC=0 MALLOC=0 INTRINSICS=2 install
+      INSTALL_COMMAND ""
+    )
+    add_dependencies(dft libxsmm)
+  endif()
+endif()
 endif() # DISABLE_DFT
+
+if(ENABLE_FFTW AND BUILD_FFTW)
+#  if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/fftw3.h")
+    ExternalProject_Add(libfftw3
+      URL https://www.fftw.org/fftw-3.3.10.tar.gz
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      BUILD_IN_SOURCE True
+      CONFIGURE_COMMAND ./configure --enable-static=no --enable-shared=yes --enable-threads CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} prefix=<INSTALL_DIR>
+      BUILD_COMMAND make -j4 install
+    )
+    add_dependencies(fft libfftw3)
+    add_dependencies(pbc libfftw3)
+#  endif()
+endif()
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.user.inc")
   include("${PROJECT_SOURCE_DIR}/cmake.user.inc")

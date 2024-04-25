@@ -115,8 +115,10 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         logger.info(mf, 'Set gradient conv threshold to %g', conv_tol_grad)
 
     mol = mf.mol
+    s1e = mf.get_ovlp(mol)
+
     if dm0 is None:
-        dm = mf.get_init_guess(mol, mf.init_guess)
+        dm = mf.get_init_guess(mol, mf.init_guess, s1e=s1e)
     else:
         dm = dm0
 
@@ -127,13 +129,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     scf_conv = False
     mo_energy = mo_coeff = mo_occ = None
-
-    s1e = mf.get_ovlp(mol)
-    cond = lib.cond(s1e)
-    logger.debug(mf, 'cond(S) = %s', cond)
-    if numpy.max(cond)*1e-17 > conv_tol:
-        logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
-                    'SCF may be inaccurate and hard to converge.', numpy.max(cond))
 
     # Skip SCF iterations. Compute only the total energy of the initial density
     if mf.max_cycle <= 0:
@@ -234,12 +229,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         if dump_chk:
             mf.dump_chk(locals())
 
-    #FIX DISP!!
-    if mf.disp is not None:
-        e_disp = mf.get_dispersion()
-        mf.scf_summary['dispersion'] = e_disp
-        e_tot += e_disp
-
     logger.timer(mf, 'scf_cycle', *cput0)
     # A post-processing hook before return
     mf.post_kernel(locals())
@@ -303,7 +292,16 @@ def energy_tot(mf, dm=None, h1e=None, vhf=None):
     '''
     nuc = mf.energy_nuc()
     e_tot = mf.energy_elec(dm, h1e, vhf)[0] + nuc
+    if mf.disp is not None:
+        if 'dispersion' in mf.scf_summary:
+            e_tot += mf.scf_summary['dispersion']
+        else:
+            e_disp = mf.get_dispersion()
+            mf.scf_summary['dispersion'] = e_disp
+            e_tot += e_disp
+
     mf.scf_summary['nuc'] = nuc.real
+
     return e_tot
 
 
@@ -722,14 +720,14 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     return dm
 
 
-def get_init_guess(mol, key='minao'):
+def get_init_guess(mol, key='minao', **kwargs):
     '''Generate density matrix for initial guess
 
     Kwargs:
         key : str
             One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
     '''
-    return RHF(mol).get_init_guess(mol, key)
+    return RHF(mol).get_init_guess(mol, key, **kwargs)
 
 
 # eigenvalue of d is 1
@@ -752,7 +750,7 @@ def level_shift(s, d, f, factor):
     Returns:
         New Fock matrix, 2D ndarray
     '''
-    dm_vir = s - reduce(numpy.dot, (s, d, s))
+    dm_vir = s - reduce(lib.dot, (s, d, s))
     return f + dm_vir * factor
 
 
@@ -1509,6 +1507,7 @@ class SCF(lib.StreamObject):
     conv_tol_grad = getattr(__config__, 'scf_hf_SCF_conv_tol_grad', None)
     max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
     init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
+    disp = None  # for DFT-D3 and DFT-D4
 
     # To avoid diis pollution from previous run, self.diis should not be
     # initialized as DIIS instance here
@@ -1535,7 +1534,7 @@ class SCF(lib.StreamObject):
         'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
         'direct_scf', 'direct_scf_tol', 'conv_check', 'callback',
         'mol', 'chkfile', 'mo_energy', 'mo_coeff', 'mo_occ',
-        'e_tot', 'converged', 'scf_summary', 'opt', 'disp',
+        'e_tot', 'converged', 'scf_summary', 'opt', 'disp', 'disp_with_3body',
     }
 
     def __init__(self, mol):
@@ -1547,7 +1546,6 @@ class SCF(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
-        self.disp = None
 
         # If chkfile is muted, SCF intermediates will not be dumped anywhere.
         if MUTE_CHKFILE:
@@ -1569,6 +1567,15 @@ class SCF(lib.StreamObject):
 
         self._opt = {None: None}
         self._eri = None # Note: self._eri requires large amount of memory
+
+    def check_sanity(self):
+        s1e = self.get_ovlp()
+        cond = lib.cond(s1e)
+        logger.debug(self, 'cond(S) = %s', cond)
+        if numpy.max(cond)*1e-17 > self.conv_tol:
+            logger.warn(self, 'Singularity detected in overlap matrix (condition number = %4.3g). '
+                        'SCF may be inaccurate and hard to converge.', numpy.max(cond))
+        return super().check_sanity()
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
@@ -1704,7 +1711,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return self.init_guess_by_chkfile(chkfile, project)
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
 
-    def get_init_guess(self, mol=None, key='minao'):
+    def get_init_guess(self, mol=None, key='minao', **kwargs):
         if not isinstance(key, str):
             return key
 
@@ -1742,7 +1749,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     energy_tot = energy_tot
 
     def energy_nuc(self):
-        return self.mol.energy_nuc()
+        return self.mol.enuc
 
     # A hook for overloading convergence criteria in SCF iterations. Assigning
     # a function
@@ -2058,8 +2065,12 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         '''This helper function transfers attributes from one SCF object to
         another SCF object. It is invoked by to_ks and to_hf methods.
         '''
+        # Search for all tracked attributes, including those in base classes
+        cls_keys = [getattr(cls, '_keys', ()) for cls in dst.__class__.__mro__[:-1]]
+        dst_keys = set(dst.__dict__).union(*cls_keys)
+
         loc_dic = self.__dict__
-        keys = dst.__dict__.keys() & loc_dic.keys()
+        keys = set(loc_dic).intersection(dst_keys)
         dst.__dict__.update({k: loc_dic[k] for k in keys})
         dst.converged = False
         return dst
@@ -2103,8 +2114,8 @@ class RHF(SCF):
                         mol.nelectron)
         return SCF.check_sanity(self)
 
-    def get_init_guess(self, mol=None, key='minao'):
-        dm = SCF.get_init_guess(self, mol, key)
+    def get_init_guess(self, mol=None, key='minao', **kwargs):
+        dm = SCF.get_init_guess(self, mol, key, **kwargs)
         if self.verbose >= logger.DEBUG1:
             s = self.get_ovlp()
             nelec = numpy.einsum('ij,ji', dm, s).real
@@ -2193,11 +2204,8 @@ class RHF(SCF):
         from pyscf import dft
         return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
 
-    def to_gpu(self):
-        # FIXME: consider the density_fit, x2c and soscf decoration
-        from gpu4pyscf.scf import RHF
-        obj = SCF.reset(self.view(RHF))
-        return lib.to_gpu(obj)
+    # FIXME: consider the density_fit, x2c and soscf decoration
+    to_gpu = lib.to_gpu
 
 def _hf1e_scf(mf, *args):
     logger.info(mf, '\n')

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -53,23 +53,24 @@ def get_ovlp(cell, kpt=np.zeros(3)):
         # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
         s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
                            pbcopt=lib.c_null_ptr())
-    s = lib.asarray(s)
+    s = np.asarray(s)
     hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
     if hermi_error > cell.precision and hermi_error > 1e-12:
         logger.warn(cell, '%.4g error found in overlap integrals. '
                     'cell.precision  or  cell.rcut  can be adjusted to '
                     'improve accuracy.', hermi_error)
 
-    cond = np.max(lib.cond(s))
-    if cond * precision > 1e2:
-        prec = 1e7 / cond
-        rmin = gto.estimate_rcut(cell, prec*1e-5)
-        logger.warn(cell, 'Singularity detected in overlap matrix.  '
-                    'Integral accuracy may be not enough.\n      '
-                    'You can adjust  cell.precision  or  cell.rcut  to '
-                    'improve accuracy.  Recommended settings are\n      '
-                    'cell.precision < %.2g\n      '
-                    'cell.rcut > %.4g', prec, rmin)
+    if cell.verbose >= logger.DEBUG:
+        cond = np.max(lib.cond(s))
+        if cond * precision > 1e2:
+            prec = 1e7 / cond
+            rmin = gto.estimate_rcut(cell, prec*1e-5)
+            logger.warn(cell, 'Singularity detected in overlap matrix.  '
+                        'Integral accuracy may be not enough.\n      '
+                        'You can adjust  cell.precision  or  cell.rcut  to '
+                        'improve accuracy.  Recommended settings are\n      '
+                        'cell.precision < %.2g\n      '
+                        'cell.rcut > %.4g', prec, rmin)
     return s
 
 
@@ -615,11 +616,18 @@ class SCF(mol_hf.SCF):
         return self
 
     def check_sanity(self):
-        mol_hf.SCF.check_sanity(self)
+        lib.StreamObject.check_sanity(self)
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
                         self.exxdiv)
+
+        if self.verbose >= logger.DEBUG:
+            s = self.get_ovlp()
+            cond = np.max(lib.cond(s))
+            if cond * 1e-17 > self.conv_tol:
+                logger.warn(self, 'Singularity detected in overlap matrix (condition number = %4.3g). '
+                            'SCF may be inaccurate and hard to converge.', cond)
         return self
 
     def get_hcore(self, cell=None, kpt=None):
@@ -738,7 +746,7 @@ class SCF(mol_hf.SCF):
         return self.get_jk(cell, dm, hermi, kpt)
 
     def energy_nuc(self):
-        return self.cell.energy_nuc()
+        return self.cell.enuc
 
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
@@ -758,10 +766,10 @@ class SCF(mol_hf.SCF):
             makov_payne_correction(self)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None: cell = self.cell
         dm = mol_hf.SCF.get_init_guess(self, cell, key)
-        dm = normalize_dm_(self, dm)
+        dm = normalize_dm_(self, dm, s1e)
         return dm
 
     def init_guess_by_1e(self, cell=None):
@@ -889,6 +897,7 @@ class RHF(SCF):
     analyze = mol_hf.RHF.analyze
     spin_square = mol_hf.RHF.spin_square
     stability = mol_hf.RHF.stability
+    to_gpu = lib.to_gpu
 
     def nuc_grad_method(self):
         raise NotImplementedError
@@ -914,12 +923,14 @@ def _format_jks(vj, dm, kpts_band):
         vj = vj[0]
     return vj
 
-def normalize_dm_(mf, dm):
+def normalize_dm_(mf, dm, s1e=None):
     '''
     Scale density matrix to make it produce the correct number of electrons.
     '''
     cell = mf.cell
-    ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
+    if s1e is None:
+        s1e = mf.get_ovlp(cell)
+    ne = lib.einsum('ij,ji->', dm, s1e).real
     if abs(ne - cell.nelectron) > 0.01:
         logger.debug(mf, 'Big error detected in the electron number '
                      'of initial guess density matrix (Ne/cell = %g)!\n'

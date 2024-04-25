@@ -22,6 +22,8 @@ Some helper functions
 
 import os
 import sys
+import time
+import platform
 import warnings
 import tempfile
 import functools
@@ -30,6 +32,7 @@ import inspect
 import collections
 import ctypes
 import numpy
+import scipy
 import h5py
 from threading import Thread
 from multiprocessing import Queue, Process
@@ -1303,6 +1306,22 @@ def git_info(repo_path):
         pass
     return orig_head, head, branch
 
+def format_sys_info():
+    '''Format a list of system information for printing.'''
+    import pyscf
+    info = repo_info(os.path.join(__file__, '..', '..'))
+    result = [
+        f'System: {platform.uname()}  Threads {num_threads()}',
+        f'Python {sys.version}',
+        f'numpy {numpy.__version__}  scipy {scipy.__version__}',
+        f'Date: {time.ctime()}',
+        f'PySCF version {pyscf.__version__}',
+        f'PySCF path  {info["path"]}',
+    ]
+    if 'git' in info:
+        result.append(info['git'])
+    return result
+
 
 def isinteger(obj):
     '''
@@ -1341,17 +1360,75 @@ def isintsequence(obj):
             are_ints = are_ints and isinteger(i)
         return are_ints
 
-def to_gpu(method):
-    '''Recursively converts all attributes of a method to cupy objects or
-    gpu4pyscf objects.
+class _OmniObject:
+    '''Class with default attributes. When accessing an attribute that is not
+    initialized, a default value will be returned than raising an AttributeError.
+    '''
+    verbose = 0
+    max_memory = param.MAX_MEMORY
+    stdout = sys.stdout
+
+    def __init__(self, default_factory=None):
+        self._default = default_factory
+
+    def __getattr__(self, key):
+        return self._default
+
+# Many methods requires a mol or mf object in initialization.
+# These objects can be as the default arguments for these methods.
+# Then class can be instantiated easily like cls(omniobj) in the following
+# to_gpu function.
+omniobj = _OmniObject()
+omniobj._built = True
+omniobj.mol = omniobj
+omniobj._scf = omniobj
+omniobj.base = omniobj
+
+def to_gpu(method, out=None):
+    '''Convert a method to its corresponding GPU variant, and recursively
+    converts all attributes of a method to cupy objects or gpu4pyscf objects.
     '''
     import cupy
     from pyscf import gto
-    for key, val in method.__dict__.items():
-        if isinstance(val, gto.MoleBase):
-            continue
+
+    # If a GPU class inherits a CPU code, the "to_gpu" method may be resolved
+    # and available in the GPU class. Skip the conversion in this case.
+    if method.__module__.startswith('gpu4pyscf'):
+        return method
+
+    if out is None:
+        try:
+            import gpu4pyscf
+        except ImportError:
+            print('Library gpu4pyscf not found. You can install this package via\n'
+                  '    pip install gpu4pyscf-cuda11x\n'
+                  'See more installation info at https://github.com/pyscf/gpu4pyscf')
+            raise
+
+        # TODO: Is it necessary to implement scanner in gpu4pyscf?
+        if isinstance(method, (SinglePointScanner, GradScanner)):
+            method = method.undo_scanner()
+
+        from importlib import import_module
+        mod = import_module(method.__module__.replace('pyscf', 'gpu4pyscf'))
+        cls = getattr(mod, method.__class__.__name__)
+        # A temporary GPU instance. This ensures to initialize private
+        # attributes that are only available for GPU code.
+        out = cls(omniobj)
+
+    # Convert only the keys that are defined in the corresponding GPU class
+    cls_keys = [getattr(cls, '_keys', ()) for cls in out.__class__.__mro__[:-1]]
+    out_keys = set(out.__dict__).union(*cls_keys)
+    # Only overwrite the attributes of the same name.
+    keys = set(method.__dict__).intersection(out_keys)
+
+    for key in keys:
+        val = getattr(method, key)
         if isinstance(val, numpy.ndarray):
-            setattr(method, key, cupy.asarray(val))
+            val = cupy.asarray(val)
         elif hasattr(val, 'to_gpu'):
-            setattr(method, key, val.to_gpu())
-    return method
+            val = val.to_gpu()
+        setattr(out, key, val)
+    out.reset()
+    return out
+

@@ -285,14 +285,14 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     return dm
 
 
-def get_init_guess(mol, key='minao'):
+def get_init_guess(mol, key='minao', **kwargs):
     '''Generate density matrix for initial guess
 
     Kwargs:
         key : str
             One of 'minao', 'atom', 'huckel', 'mod_huckel', 'hcore', '1e', 'chkfile'.
     '''
-    return UHF(mol).get_init_guess(mol, key)
+    return UHF(mol).get_init_guess(mol, key, **kwargs)
 
 def time_reversal_matrix(mol, mat):
     ''' T(A_ij) = A[T(i),T(j)]^*
@@ -454,12 +454,11 @@ class DHF(hf.SCF):
     ssss_approx = getattr(__config__, 'scf_dhf_SCF_ssss_approx', 'Visscher')
 
     _keys = {'conv_tol', 'with_ssss', 'with_gaunt',
-                 'with_breit', 'ssss_approx', 'opt'}
+                 'with_breit', 'ssss_approx'}
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self._coulomb_level = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
-        self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
 
     def dump_flags(self, verbose=None):
         hf.SCF.dump_flags(self, verbose)
@@ -518,8 +517,6 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        if self.direct_scf:
-            self.opt = self.init_direct_scf(mol)
         return self
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
@@ -686,7 +683,6 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
             self.mol = mol
         self._coulomb_level = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self._opt = {None: None}
-        self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         return self
 
     def stability(self, internal=None, external=None, verbose=None, return_status=False):
@@ -748,6 +744,8 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return mf
 
     to_ks = to_dks
+
+    to_gpu = lib.to_gpu
 
 UHF = UDHF = DHF
 

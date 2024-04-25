@@ -30,6 +30,7 @@ from pyscf.pbc.lib.kpts_helper import is_zero, unique
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf import __config__
+from pyscf.pbc.gto import _pbcintor
 
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.5)
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
@@ -471,3 +472,246 @@ def _conc_locs(ao_loc1, ao_loc2):
     basis accordingly.'''
     comp_loc = np.append(ao_loc1[:-1], ao_loc1[-1] + ao_loc2)
     return np.asarray(comp_loc, dtype=np.int32)
+
+# The following functions use pre-constructed shell pair list
+def aux_e2_sum_auxbas(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', comp=None,
+                      kptij_lst=np.zeros((1,2,3)), shls_slice=None, **kwargs):
+    r'''Compute :math:`\sum_{L} (ij|L)` on the fly.
+
+    Returns:
+        out : (nao_pair,) array
+    '''
+    if isinstance(auxcell_or_auxbasis, gto.MoleBase):
+        auxcell = auxcell_or_auxbasis
+    else:
+        assert isinstance(auxcell_or_auxbasis, str)
+        auxcell = make_auxcell(cell, auxcell_or_auxbasis)
+
+    int3c = wrap_int3c_sum_auxbas(cell, auxcell, intor, aosym, comp, kptij_lst, **kwargs)
+    out = int3c(shls_slice)
+    return out
+
+def wrap_int3c_sum_auxbas(cell, auxcell, intor='int3c2e', aosym='s1', comp=None,
+                          kptij_lst=np.zeros((1,2,3)), cintopt=None, pbcopt=None,
+                          neighbor_list=None):
+    if neighbor_list is None:
+        raise KeyError('Neighbor list is not initialized.')
+
+    log = logger.new_logger(cell)
+
+    nkptij = len(kptij_lst)
+    kpti = kptij_lst[:,0]
+    kptj = kptij_lst[:,1]
+    j_only = is_zero(kpti - kptj)
+    if j_only:
+        kpts = kpti
+        nkpts = len(kpts)
+        kptij_idx = np.arange(nkpts, dtype=np.int32)
+    else:
+        raise NotImplementedError
+
+    intor = cell._add_suffix(intor)
+    intor, comp = gto.moleintor._get_intor_and_comp(intor, comp)
+
+    pcell = cell.copy()
+    pcell._atm, pcell._bas, pcell._env = \
+            atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
+                                         cell._atm, cell._bas, cell._env)
+    ao_loc = gto.moleintor.make_loc(bas, intor)
+    aux_loc = auxcell.ao_loc_nr()
+    ao_loc = np.asarray(np.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
+                        dtype=np.int32)
+    atm, bas, env = gto.conc_env(atm, bas, env,
+                                 auxcell._atm, auxcell._bas, auxcell._env)
+
+    Ls = cell.get_lattice_Ls()
+    nimgs = len(Ls)
+    nbas = cell.nbas
+
+    gamma_point_only = is_zero(kpts)
+    if gamma_point_only:
+        assert nkpts == 1
+        kk_type = 'g'
+        expkL = np.ones(1, dtype=np.complex128)
+        out_dtype = np.double
+    else:
+        raise NotImplementedError
+
+    fill = 'PBCnr3c_screened_sum_auxbas_fill_%s%s' % (kk_type, aosym[:2])
+    drv = libpbc.PBCnr3c_screened_sum_auxbas_drv
+
+    if cintopt is None:
+        if nbas > 0:
+            env[gto.PTR_EXPCUTOFF] = abs(np.log(cell.precision))
+            cintopt = _vhf.make_cintopt(atm, bas, env, intor)
+        else:
+            cintopt = lib.c_null_ptr()
+        if intor[:3] != 'ECP':
+            libpbc.CINTdel_pairdata_optimizer(cintopt)
+    if pbcopt is None:
+        pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell)
+    if isinstance(pbcopt, _pbcintor.PBCOpt):
+        cpbcopt = pbcopt._this
+    else:
+        cpbcopt = lib.c_null_ptr()
+
+    def int3c(shls_slice=None, out=None):
+        t0 = (logger.process_clock(), logger.perf_counter())
+        if shls_slice is None:
+            shls_slice = (0, nbas, 0, nbas, 0, auxcell.nbas)
+        shls_slice = (shls_slice[0], shls_slice[1],
+                      nbas+shls_slice[2], nbas+shls_slice[3],
+                      nbas*2+shls_slice[4], nbas*2+shls_slice[5])
+        ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
+        nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+
+        if aosym[:2] == 's2':
+            assert ni == nj
+            nao_pair = (ao_loc[shls_slice[1]]*(ao_loc[shls_slice[1]]+1)//2 -
+                        ao_loc[shls_slice[0]]*(ao_loc[shls_slice[0]]+1)//2)
+        else:
+            nao_pair = ni * nj
+
+        if out is None:
+            out = np.empty((nkptij,comp,nao_pair), dtype=out_dtype)
+
+        drv(getattr(libpbc, intor), getattr(libpbc, fill),
+            out.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nkptij), ctypes.c_int(nkpts),
+            ctypes.c_int(comp), ctypes.c_int(nimgs),
+            Ls.ctypes.data_as(ctypes.c_void_p),
+            expkL.ctypes.data_as(ctypes.c_void_p),
+            kptij_idx.ctypes.data_as(ctypes.c_void_p),
+            (ctypes.c_int*6)(*shls_slice),
+            ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
+            bas.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCnr3c_drv
+            env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size),
+            ctypes.byref(neighbor_list))
+
+        log.timer_debug1(f'pbc integral {intor}', *t0)
+
+        if comp == 1:
+            out = out[:,0]
+        if nkptij == 1:
+            out = out[0]
+        return out
+
+    return int3c
+
+def int3c1e_nuc_grad(cell, auxcell, dm, intor='int3c1e', aosym='s1', comp=3,
+                     kptij_lst=np.zeros((1,2,3)), shls_slice=None, **kwargs):
+    '''Compute the nuclear gradient contribution
+    to the 2nd local part of PP on the fly.
+    See `pbc.gto.pseudo.pp_int.vpploc_part2_nuc_grad`.
+
+    Returns:
+        out : (natm,comp) array
+    '''
+    if comp != 3:
+        raise NotImplementedError
+    if aosym != 's1':
+        raise NotImplementedError
+
+    int3c = wrap_int3c1e_nuc_grad(cell, auxcell, dm, intor, aosym, comp, kptij_lst, **kwargs)
+    out = int3c(shls_slice)
+    return out
+
+def wrap_int3c1e_nuc_grad(cell, auxcell, dm, intor='int3c1e', aosym='s1', comp=3,
+                          kptij_lst=np.zeros((1,2,3)), cintopt=None, pbcopt=None,
+                          neighbor_list=None):
+    if neighbor_list is None:
+        raise KeyError('Neighbor list is not initialized.')
+
+    log = logger.new_logger(cell)
+
+    nkptij = len(kptij_lst)
+    kpti = kptij_lst[:,0]
+    kptj = kptij_lst[:,1]
+    j_only = is_zero(kpti - kptj)
+    if j_only:
+        kpts = kpti
+        nkpts = len(kpts)
+        kptij_idx = np.arange(nkpts, dtype=np.int32)
+    else:
+        raise NotImplementedError
+
+    intor = cell._add_suffix(intor)
+    intor, comp = gto.moleintor._get_intor_and_comp(intor, comp)
+
+    pcell = cell.copy()
+    pcell._atm, pcell._bas, pcell._env = \
+            atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
+                                         cell._atm, cell._bas, cell._env)
+    ao_loc = gto.moleintor.make_loc(bas, intor)
+    aux_loc = auxcell.ao_loc_nr()
+    ao_loc = np.asarray(np.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
+                        dtype=np.int32)
+    atm, bas, env = gto.conc_env(atm, bas, env,
+                                 auxcell._atm, auxcell._bas, auxcell._env)
+
+    Ls = cell.get_lattice_Ls()
+    nimgs = len(Ls)
+    nbas = cell.nbas
+
+    gamma_point_only = is_zero(kpts)
+    if gamma_point_only:
+        assert nkpts == 1
+        kk_type = 'g'
+        expkL = np.ones(1, dtype=np.complex128)
+        dm = np.asarray(dm, order="C", dtype=np.double)
+    else:
+        raise NotImplementedError
+
+    fill = 'PBCnr3c1e_screened_nuc_grad_fill_%s%s' % (kk_type, aosym[:2])
+    drv = libpbc.PBCnr3c1e_screened_nuc_grad_drv
+
+    if cintopt is None:
+        if nbas > 0:
+            env[gto.PTR_EXPCUTOFF] = abs(np.log(cell.precision))
+            cintopt = _vhf.make_cintopt(atm, bas, env, intor)
+        else:
+            cintopt = lib.c_null_ptr()
+        if intor[:3] != 'ECP':
+            libpbc.CINTdel_pairdata_optimizer(cintopt)
+    if pbcopt is None:
+        pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell)
+    if isinstance(pbcopt, _pbcintor.PBCOpt):
+        cpbcopt = pbcopt._this
+    else:
+        cpbcopt = lib.c_null_ptr()
+
+    def int3c(shls_slice=None, out=None):
+        t0 = (logger.process_clock(), logger.perf_counter())
+        if shls_slice is None:
+            shls_slice = (0, nbas, 0, nbas, 0, auxcell.nbas)
+        shls_slice = (shls_slice[0], shls_slice[1],
+                      nbas+shls_slice[2], nbas+shls_slice[3],
+                      nbas*2+shls_slice[4], nbas*2+shls_slice[5])
+
+        if out is None:
+            out = np.zeros((nkptij,cell.natm,comp), dtype=np.double)
+
+        drv(getattr(libpbc, intor), getattr(libpbc, fill),
+            out.ctypes.data_as(ctypes.c_void_p),
+            dm.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nkptij), ctypes.c_int(nkpts),
+            ctypes.c_int(comp), ctypes.c_int(nimgs),
+            Ls.ctypes.data_as(ctypes.c_void_p),
+            expkL.ctypes.data_as(ctypes.c_void_p),
+            kptij_idx.ctypes.data_as(ctypes.c_void_p),
+            (ctypes.c_int*6)(*shls_slice),
+            ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+            env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size),
+            ctypes.c_int(cell.nao), ctypes.byref(neighbor_list))
+
+        log.timer_debug1(f'pbc integral {intor}', *t0)
+
+        if nkptij == 1:
+            out = out[0]
+        return out
+
+    return int3c

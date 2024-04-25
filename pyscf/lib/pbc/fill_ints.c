@@ -1260,9 +1260,9 @@ static void shift_bas(double *env_loc, double *env, double *Ls, int ptr, int iL)
         env_loc[ptr+2] = env[ptr+2] + Ls[iL*3+2];
 }
 
-static void sort2c_ks1(double complex *out, double *bufr, double *bufi,
-                       int *shls_slice, int *ao_loc, int nkpts, int comp,
-                       int jsh, int msh0, int msh1)
+void sort2c_ks1(double complex *out, double *bufr, double *bufi,
+                int *shls_slice, int *ao_loc, int nkpts, int comp,
+                int jsh, int msh0, int msh1)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];

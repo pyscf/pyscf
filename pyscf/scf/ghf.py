@@ -382,15 +382,13 @@ class GHF(hf.SCF):
         mo_coeff[nao:nao*2] are the coefficients of AO with beta spin.
     '''
 
+    with_soc = None
+
     _keys = {'with_soc'}
 
     get_init_guess = hf.RHF.get_init_guess
     get_occ = get_occ
     _finalize = uhf.UHF._finalize
-
-    def __init__(self, mol):
-        hf.SCF.__init__(self, mol)
-        self.with_soc = None
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -541,9 +539,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         from pyscf import dft
         return self._transfer_attrs_(dft.GKS(self.mol, xc=xc))
 
-    def to_gpu(self):
-        from gpu4pyscf.scf import GHF
-        return lib.to_gpu(hf.SCF.reset(self.view(GHF)))
+    to_gpu = lib.to_gpu
 
 def _from_rhf_init_dm(dm, breaksym=True):
     dma = dm * .5

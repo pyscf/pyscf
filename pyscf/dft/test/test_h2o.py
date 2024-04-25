@@ -18,18 +18,10 @@ import numpy
 from pyscf import gto
 from pyscf import lib
 from pyscf import dft
-
-
-import sys
 try:
-    import dftd3
+    from pyscf.dispersion import dftd3, dftd4
 except ImportError:
-    pass
-
-try:
-    import dftd4
-except ImportError:
-    pass
+    dftd3 = dftd4 = None
 
 def setUpModule():
     global h2o, h2osym, h2o_cation, h2osym_cation
@@ -501,6 +493,41 @@ class KnownValues(unittest.TestCase):
         method.nlcgrids.atom_grid = {"H": (40, 110), "O": (40, 110),}
         self.assertAlmostEqual(method.scf(), -76.352381513158718, 8)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_dft_parser(self):
+        from pyscf.scf import dispersion
+        method = dft.RKS(h2o, xc='wb97m-d3bj')
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0007551366628786623, 9)
+        assert method._numint.libxc.is_nlc(method.xc) == False
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 531
+
+        method = dft.RKS(h2o, xc='wb97x-d3bj')
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0005697890844546384, 9)
+        assert method._numint.libxc.is_nlc(method.xc) == False
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 466
+
+        method = dft.RKS(h2o, xc='b3lyp-d3bj')
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0005738788210828446, 9)
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 402
+
+        method = dft.RKS(h2o, xc='b3lyp-d3bjm2b')
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0006949127588605776, 9)
+
+        method = dft.RKS(h2o, xc='b3lyp-d3bjmatm')
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
+
+        method = dft.UKS(h2o, xc='b3lyp-d3bjmatm')
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
+
     def test_camb3lyp_rsh_omega(self):
         mf = dft.RKS(h2o)
         mf.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
@@ -518,13 +545,13 @@ class KnownValues(unittest.TestCase):
         mf2.kernel()
         self.assertAlmostEqual(mf1.e_tot, -76.36649222362115, 9)
 
-    @unittest.skipIf('dftd3' not in sys.modules, "requires the dftd3 library")
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_dispersion(self):
         mf = dft.RKS(h2o)
         mf.xc = 'B3LYP'
         mf.disp = 'd3bj'
         mf.run(xc='B3LYP')
-        self.assertAlmostEqual(mf.e_tot, -76.38945547396322, 9)
+        self.assertAlmostEqual(mf.e_tot, -76.38552043811778, 9)
 
     def test_reset(self):
         mf = dft.RKS(h2o).newton()

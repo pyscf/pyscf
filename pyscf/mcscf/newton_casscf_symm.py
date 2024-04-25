@@ -27,7 +27,7 @@ from pyscf import fci
 
 class CASSCF(newton_casscf.CASSCF):
     __doc__ = newton_casscf.CASSCF.__doc__
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None, frozen=None):
         newton_casscf.CASSCF.__init__(self, mf_or_mol, ncas, nelecas, ncore, frozen)
         assert (self.mol.symmetry)
         self.fcisolver = fci.solver(self.mol, False, True)

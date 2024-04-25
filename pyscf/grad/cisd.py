@@ -203,6 +203,8 @@ class Gradients(rhf_grad.GradientsBase):
 
     as_scanner = as_scanner
 
+    to_gpu = lib.to_gpu
+
 Grad = Gradients
 
 cisd.CISD.Gradients = lib.class_as_method(Gradients)

@@ -19,7 +19,10 @@
 '''
 Analytical nuclear gradients for PBC
 '''
-
+from pyscf.pbc.grad import rhf
+from pyscf.pbc.grad import rks
+from pyscf.pbc.grad import uhf
+from pyscf.pbc.grad import uks
 from pyscf.pbc.grad import krhf
 from pyscf.pbc.grad import kuhf
 from pyscf.pbc.grad import krks
@@ -30,4 +33,4 @@ from pyscf.pbc.grad.kuhf import Gradients as KUHF
 from pyscf.pbc.grad.krks import Gradients as KRKS
 from pyscf.pbc.grad.kuks import Gradients as KUKS
 
-grad_nuc = krhf.grad_nuc
+grad_nuc = rhf.grad_nuc

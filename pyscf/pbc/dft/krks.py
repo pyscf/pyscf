@@ -69,7 +69,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
                                        kpts, kpts_band,
                                        with_j=True, return_j=False)
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        logger.info(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
         return vxc
 
@@ -84,7 +84,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm, 0, hermi,
                                 kpts, kpts_band, max_memory=max_memory)
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        logger.info(ks, 'nelec by numeric integration = %s', n)
         if ks.nlc or ni.libxc.is_nlc(ks.xc):
             if ni.libxc.is_nlc(ks.xc):
                 xc = ks.xc
@@ -95,7 +95,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                                           max_memory=max_memory)
             exc += enlc
             vxc += vnlc
-            logger.debug(ks, 'nelec with nlc grids = %s', n)
+            logger.info(ks, 'nelec with nlc grids = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     nkpts = len(kpts)
@@ -181,23 +181,13 @@ class KRKS(rks.KohnShamDFT, khf.KRHF):
 
     def to_hf(self):
         '''Convert to KRHF object.'''
-        from pyscf.pbc import scf
-        return self._transfer_attrs_(scf.KRHF(self.cell, self.kpts))
+        from pyscf.pbc import scf, df
+        out = self._transfer_attrs_(scf.KRHF(self.cell, self.kpts))
+        # Pure functionals only construct J-type integrals. Enable all integrals for KHF.
+        if (not self._numint.libxc.is_hybrid_xc(self.xc) and
+            len(self.kpts) > 1 and getattr(self.with_df, '_j_only', False)):
+            out.with_df._j_only = False
+            out.with_df.reset()
+        return out
 
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.unit = 'A'
-    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-    cell.a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    '''
-
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.verbose = 7
-    cell.output = '/dev/null'
-    cell.build()
-    mf = KRKS(cell, cell.make_kpts([2,1,1]))
-    print(mf.kernel())
+    to_gpu = lib.to_gpu

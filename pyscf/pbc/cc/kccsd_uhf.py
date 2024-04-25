@@ -761,6 +761,8 @@ class KUCCSD(uccsd.UCCSD):
         if nkpts is None: nkpts = self.nkpts
         return vector_to_amplitudes(vec, nmo, nocc, nkpts)
 
+    to_gpu = lib.to_gpu
+
 UCCSD = KUCCSD
 
 

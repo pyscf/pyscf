@@ -59,7 +59,7 @@ jobs:
         run: |
             docker run --rm -v ${{ github.workspace }}:/src/pyscf:rw --workdir=/src/pyscf ${{ env.img }} \
             bash -exc '/opt/python/${{ matrix.pyver }}/bin/pip install --upgrade pip setuptools && \
-            /opt/python/${{ matrix.pyver }}/bin/pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py pytest pytest-cov pytest-timer pyberny geometric && \
+            /opt/python/${{ matrix.pyver }}/bin/pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py==3.10 pytest pytest-cov pytest-timer pyberny geometric && \
             yum install -y epel-release && \
             yum-config-manager --enable epel && \
             yum install -y openblas-devel gcc cmake curl && \
@@ -72,7 +72,7 @@ jobs:
             echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py && \
             echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py && \
             echo "scf_hf_SCF_mute_chkfile = True" >> .pyscf_conf.py && \
-            ulimit -s 20000 && /opt/python/${{ matrix.pyver }}/bin/pytest pyscf/ --ignore=pyscf/adc --ignore=pyscf/pbc/df --ignore=pyscf/pbc/cc -s -c setup.cfg pyscf'
+            ulimit -s 20000 && /opt/python/${{ matrix.pyver }}/bin/pytest pyscf/ --ignore=pyscf/adc --ignore=pyscf/pbc/df --ignore=pyscf/pbc/cc -s -c pytest.ini pyscf'
 
   macos-build:
     runs-on: macos-latest

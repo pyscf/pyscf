@@ -53,6 +53,7 @@ from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.aft import estimate_eta, _check_kpts
 from pyscf.pbc.df.df_jk import zdotCN
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
 from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _CCNucBuilder
@@ -146,6 +147,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
 
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
@@ -523,6 +526,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 else:
                     naux += dat.shape[0]
         return naux
+
+    to_gpu = lib.to_gpu
 
 DF = GDF
 

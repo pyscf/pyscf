@@ -649,6 +649,15 @@ class MP2(lib.StreamObject):
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 
+    # to_gpu can be reused only when __init__ still takes mf
+    def to_gpu(self):
+        mf = self._scf.to_gpu()
+        from importlib import import_module
+        mod = import_module(self.__module__.replace('pyscf', 'gpu4pyscf'))
+        cls = getattr(mod, self.__class__.__name__)
+        obj = cls(mf)
+        return obj
+
 RMP2 = MP2
 
 from pyscf import scf

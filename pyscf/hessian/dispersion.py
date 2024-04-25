@@ -22,24 +22,40 @@ Hessian of dispersion correction for HF and DFT
 
 
 import numpy
-from pyscf.scf.hf import KohnShamDFT
+from pyscf.dft.rks import KohnShamDFT
+from pyscf.dft import dft_parser
 
-def get_dispersion(hessobj, disp_version=None):
-    if disp_version is None:
-        disp_version = hessobj.base.disp
-    mol = hessobj.base.mol
-    natm = mol.natm
+def get_dispersion(hessobj, disp_version=None, with_3body=False):
+    try:
+        from pyscf.dispersion import dftd3, dftd4
+    except ImportError:
+        print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
+        raise
     mf = hessobj.base
+    mol = mf.mol
+    if isinstance(mf, KohnShamDFT):
+        method = mf.xc
+    else:
+        method = 'hf'
+    method, disp, with_3body = dft_parser.parse_dft(method)[2]
+
+    # priority: args > mf.disp > dft_parser
+    if disp_version is None:
+        disp_version = disp
+        # dispersion version can be customized via mf.disp
+        if hasattr(mf, 'disp') and mf.disp is not None:
+            disp_version = mf.disp
+
+    natm = mol.natm
     h_disp = numpy.zeros([natm,natm,3,3])
     if disp_version is None:
         return h_disp
-    if isinstance(hessobj.base, KohnShamDFT):
-        method = hessobj.base.xc
-    else:
-        method = 'hf'
+
+    # 3-body contribution can be disabled with mf.disp_with_3body
+    if hasattr(mf, 'disp_with_3body') and mf.disp_with_3body is not None:
+        with_3body = mf.disp_with_3body
 
     if mf.disp[:2].upper() == 'D3':
-        import dftd3.pyscf as disp
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5
@@ -47,40 +63,37 @@ def get_dispersion(hessobj, disp_version=None):
             for j in range(3):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')
-                d3 = disp.DFTD3Dispersion(mol, xc=method, version=mf.disp)
-                _, g1 = d3.kernel()
+                d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
+                res = d3_model.get_dispersion(grad=True)
+                g1 = res.get('gradient')
 
                 coords[i,j] -= 2.0*eps
                 mol.set_geom_(coords, unit='Bohr')
-                d3 = disp.DFTD3Dispersion(mol, xc=method, version=mf.disp)
-                _, g2 = d3.kernel()
+                d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
+                res = d3_model.get_dispersion(grad=True)
+                g2 = res.get('gradient')
 
                 coords[i,j] += eps
                 h_disp[i,:,j,:] = (g1 - g2)/(2.0*eps)
             return h_disp
 
     elif mf.disp[:2].upper() == 'D4':
-        from pyscf.data.elements import charge
-        atoms = numpy.array([ charge(a[0]) for a in mol._atom])
-        coords = mol.atom_coords()
-        natm = mol.natm
-        from dftd4.interface import DampingParam, DispersionModel
-        params = DampingParam(method=method)
+        coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5
         for i in range(natm):
             for j in range(3):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')
-                model = DispersionModel(atoms, coords)
-                res = model.get_dispersion(params, grad=True)
-                g1 = res.get("gradient")
+                d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+                res = d4_model.get_dispersion(grad=True)
+                g1 = res.get('gradient')
 
                 coords[i,j] -= 2.0*eps
                 mol.set_geom_(coords, unit='Bohr')
-                model = DispersionModel(atoms, coords)
-                res = model.get_dispersion(params, grad=True)
-                g2 = res.get("gradient")
+                d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+                res = d4_model.get_dispersion(grad=True)
+                g2 = res.get('gradient')
 
                 coords[i,j] += eps
                 h_disp[i,:,j,:] = (g1 - g2)/(2.0*eps)

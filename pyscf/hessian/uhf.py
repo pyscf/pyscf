@@ -454,9 +454,6 @@ class Hessian(rhf_hess.HessianBase):
                          fx, atmlst, max_memory, verbose,
                          max_cycle=self.max_cycle, level_shift=self.level_shift)
 
-    def to_gpu(self):
-        raise NotImplementedError
-
 from pyscf import scf
 scf.uhf.UHF.Hessian = lib.class_as_method(Hessian)
 

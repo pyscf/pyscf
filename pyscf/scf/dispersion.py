@@ -20,56 +20,48 @@
 dispersion correction for HF and DFT
 '''
 
-
-import numpy
-from pyscf.scf.hf import KohnShamDFT
+from pyscf.dft.rks import KohnShamDFT
+from pyscf.dft import dft_parser
 
 def get_dispersion(mf, disp_version=None):
-    if disp_version is None:
-        disp_version = mf.disp
+    try:
+        from pyscf.dispersion import dftd3, dftd4
+    except ImportError:
+        print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
+        raise
     mol = mf.mol
-    if disp_version is None:
-        return 0.0
     if isinstance(mf, KohnShamDFT):
         method = mf.xc
     else:
         method = 'hf'
+    method, disp, with_3body = dft_parser.parse_dft(method)[2]
+
+    # priority: args > mf.disp > dft_parser
+    if disp_version is None:
+        disp_version = disp
+        # dispersion version can be customized via mf.disp
+        if hasattr(mf, 'disp') and mf.disp is not None:
+            disp_version = mf.disp
+    if disp_version is None:
+        return 0.0
+
+    # 3-body contribution can be disabled with mf.disp_with_3body
+    if hasattr(mf, 'disp_with_3body') and mf.disp_with_3body is not None:
+        with_3body = mf.disp_with_3body
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':
-        try:
-            import dftd3.pyscf as disp
-        except ImportError:
-            raise ImportError("\n \
-cannot find dftd3 in the current environment.\n \
-please install dftd3 via \n \
-**************************************\n\
-        pip3 install dftd3 \n \
-**************************************")
-
-        d3 = disp.DFTD3Dispersion(mol, xc=method, version=disp_version)
-        e_d3, _ = d3.kernel()
+        d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
+        res = d3_model.get_dispersion()
+        e_d3 = res.get('energy')
         mf.scf_summary['dispersion'] = e_d3
         return e_d3
 
     # for dftd4
     elif disp_version[:2].upper() == 'D4':
-        from pyscf.data.elements import charge
-        atoms = numpy.array([ charge(a[0]) for a in mol._atom])
-        coords = mol.atom_coords()
-        try:
-            from dftd4.interface import DampingParam, DispersionModel
-        except ImportError:
-            raise ImportError("\n \
-cannot find dftd4 in the current environment. \n \
-please install dftd4 via \n \
-***************************************\n \
-        pip3 install dftd4 \n \
-***************************************")
-
-        model = DispersionModel(atoms, coords)
-        res = model.get_dispersion(DampingParam(method=method), grad=False)
-        e_d4 = res.get("energy")
+        d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+        res = d4_model.get_dispersion()
+        e_d4 = res.get('energy')
         mf.scf_summary['dispersion'] = e_d4
         return e_d4
     else:

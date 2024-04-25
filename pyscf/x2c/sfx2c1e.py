@@ -128,8 +128,9 @@ class SFX2C1E_SCF(x2c._X2C_SCF):
             if picture_change:
                 xmol = self.with_x2c.get_xmol()[0]
                 nao = xmol.nao
-                prp = xmol.intor_symmetric('int1e_sprsp').reshape(3,4,nao,nao)[:,0]
-                ao_dip = self.with_x2c.picture_change(('int1e_r', prp))
+                prp = xmol.intor_symmetric('int1e_sprsp').reshape(3,4,nao,nao)[:,3]
+                c1 = 0.5/lib.param.LIGHT_SPEED
+                ao_dip = self.with_x2c.picture_change(('int1e_r', prp*c1**2))
             else:
                 ao_dip = mol.intor_symmetric('int1e_r')
 
@@ -153,6 +154,10 @@ class SFX2C1E_SCF(x2c._X2C_SCF):
                         'an X2C object. Convert dst to X2C object.')
             dst = dst.sfx2c()
         return hf.SCF._transfer_attrs_(self, dst)
+
+    def to_gpu(self):
+        obj = self.undo_x2c().to_gpu().sfx2c1e()
+        return lib.to_gpu(self, obj)
 
 
 class SpinFreeX2CHelper(x2c.X2CHelperBase):

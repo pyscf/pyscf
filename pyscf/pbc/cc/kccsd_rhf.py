@@ -653,6 +653,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 
+    to_gpu = lib.to_gpu
+
 #####################################
 # Wrapper functions for IP/EA-EOM
 #####################################

@@ -496,7 +496,7 @@ class KSCF(pbchf.SCF):
             self.with_df.dump_flags(verbose)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         raise NotImplementedError
 
     def init_guess_by_1e(self, cell=None):
@@ -524,10 +524,10 @@ class KSCF(pbchf.SCF):
         cpu0 = (logger.process_clock(), logger.perf_counter())
         if self.rsjk:
             vj, vk = self.rsjk.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                      with_j, with_k, omega, self.exxdiv)
+                                      with_j, with_k, omega=omega, exxdiv=self.exxdiv)
         else:
             vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                         with_j, with_k, omega, self.exxdiv)
+                                         with_j, with_k, omega=omega, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
@@ -688,6 +688,7 @@ class KRHF(KSCF):
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square
+    to_gpu = lib.to_gpu
 
     def check_sanity(self):
         cell = self.cell
@@ -700,7 +701,9 @@ class KRHF(KSCF):
                         'found in KRHF method.', cell.nelec, nkpts)
         return KSCF.check_sanity(self)
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
         dm = mol_hf.SCF.get_init_guess(self, cell, key)
         nkpts = len(self.kpts)
         if dm.ndim == 2:
@@ -708,7 +711,7 @@ class KRHF(KSCF):
             dm = np.repeat(dm[None,:,:], nkpts, axis=0)
         dm_kpts = dm
 
-        ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
+        ne = lib.einsum('kij,kji->', dm_kpts, s1e).real
         # FIXME: consider the fractional num_electron or not? This maybe
         # relate to the charged system.
         nelectron = float(self.cell.tot_electrons(nkpts))

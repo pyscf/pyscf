@@ -690,6 +690,8 @@ class TDA(TDBase):
         self._finalize()
         return self.e, self.xy
 
+    to_gpu = lib.to_gpu
+
 CIS = TDA
 
 
@@ -857,6 +859,8 @@ class TDHF(TDA):
         log.timer('TDDFT', *cpu0)
         self._finalize()
         return self.e, self.xy
+
+    to_gpu = lib.to_gpu
 
 RPA = TDUHF = TDHF
 
