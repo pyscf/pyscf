@@ -629,7 +629,6 @@ class ddCOSMO(lib.StreamObject):
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
-        self.method = 'ddCOSMO'
 
         #self.radii_table = radii.VDW
         self.radii_table = radii.UFF*1.1

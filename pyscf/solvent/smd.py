@@ -22,14 +22,15 @@ import scipy
 from pyscf import lib
 from pyscf.data import radii
 from pyscf.dft import gen_grid
-from pyscf.solvent import pcm, _attach_solvent
+from pyscf.solvent import pcm
+from pyscf.solvent._attach_solvent import _for_scf
 from pyscf.lib import logger
 
-@lib.with_doc(_attach_solvent._for_scf.__doc__)
+@lib.with_doc(_for_scf.__doc__)
 def smd_for_scf(mf, solvent_obj=None, dm=None):
     if solvent_obj is None:
         solvent_obj = SMD(mf.mol)
-    return _attach_solvent._for_scf(mf, solvent_obj, dm)
+    return _for_scf(mf, solvent_obj, dm)
 
 # Inject PCM to SCF, TODO: add it to other methods later
 from pyscf import scf

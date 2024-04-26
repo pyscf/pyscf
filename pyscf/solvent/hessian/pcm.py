@@ -107,11 +107,9 @@ def hess_elec(pcmobj, dm, verbose=None):
             dv = numpy.zeros_like(coords)
             dv[ia,ix] = eps
             mol.set_geom_(coords + dv, unit='Bohr')
-            mol.build()
             g0 = pcm_grad_scanner(mol)
 
             mol.set_geom_(coords - dv, unit='Bohr')
-            mol.build()
             g1 = pcm_grad_scanner(mol)
             de[ia,:,ix] = (g0 - g1)/2.0/eps
     t1 = log.timer_debug1('solvent energy', *t1)
@@ -144,11 +142,9 @@ def fd_grad_vmat(pcmobj, dm, mo_coeff, mo_occ, atmlst=None, verbose=None):
             dv = numpy.zeros_like(coords)
             dv[ia,ix] = eps
             mol.set_geom_(coords + dv, unit='Bohr')
-            mol.build()
             vmat0 = pcm_vmat_scanner(mol)
 
             mol.set_geom_(coords - dv, unit='Bohr')
-            mol.build()
             vmat1 = pcm_vmat_scanner(mol)
 
             grad_vmat = (vmat0 - vmat1)/2.0/eps

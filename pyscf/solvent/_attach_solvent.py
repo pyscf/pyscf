@@ -110,8 +110,6 @@ class SCFWithSolvent(_Solvation):
 
         e_tot, e_coul = super().energy_elec(dm, h1e, vhf)
         e_solvent = vhf.e_solvent
-        if isinstance(e_solvent, numpy.ndarray):
-            e_solvent = e_solvent[0]
         e_tot += e_solvent
         self.scf_summary['e_solvent'] = vhf.e_solvent.real
 
