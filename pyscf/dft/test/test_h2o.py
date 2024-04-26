@@ -368,6 +368,10 @@ class KnownValues(unittest.TestCase):
         vxc = method.get_veff(h2o, dm, dm, vxc)
         self.assertAlmostEqual(lib.fp(vxc), 23.067046560473408, 8)
 
+        method.nlc = False
+        vxc = method.get_veff(h2o, dm, dm, vxc)
+        self.assertAlmostEqual(lib.fp(vxc), 23.05881308880983, 8)
+
     def test_nr_rks_nlc_small_memory_high_cost(self):
         method = dft.RKS(h2o)
         dm = method.get_init_guess()
@@ -497,34 +501,46 @@ class KnownValues(unittest.TestCase):
     def test_dft_parser(self):
         from pyscf.scf import dispersion
         method = dft.RKS(h2o, xc='wb97m-d3bj')
+        assert method.nlc == False
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0007551366628786623, 9)
-        assert method._numint.libxc.is_nlc(method.xc) == False
         fn_facs = method._numint.libxc.parse_xc(method.xc)
         assert fn_facs[1][0][0] == 531
 
         method = dft.RKS(h2o, xc='wb97x-d3bj')
         e_disp = dispersion.get_dispersion(method)
+        assert method.nlc == False
         self.assertAlmostEqual(e_disp, -0.0005697890844546384, 9)
-        assert method._numint.libxc.is_nlc(method.xc) == False
         fn_facs = method._numint.libxc.parse_xc(method.xc)
         assert fn_facs[1][0][0] == 466
 
         method = dft.RKS(h2o, xc='b3lyp-d3bj')
+        assert method.xc == 'b3lyp'
+        assert method.disp == 'd3bj,b3lyp'
+        assert method.disp_with_3body == False
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0005738788210828446, 9)
         fn_facs = method._numint.libxc.parse_xc(method.xc)
         assert fn_facs[1][0][0] == 402
 
         method = dft.RKS(h2o, xc='b3lyp-d3bjm2b')
+        assert method.xc == 'b3lyp'
+        assert method.disp == 'd3bjm,b3lyp'
+        assert method.disp_with_3body == False
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0006949127588605776, 9)
 
         method = dft.RKS(h2o, xc='b3lyp-d3bjmatm')
+        assert method.xc == 'b3lyp'
+        assert method.disp == 'd3bjm,b3lyp'
+        assert method.disp_with_3body == True
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
 
         method = dft.UKS(h2o, xc='b3lyp-d3bjmatm')
+        assert method.xc == 'b3lyp'
+        assert method.disp == 'd3bjm,b3lyp'
+        assert method.disp_with_3body == True
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
 

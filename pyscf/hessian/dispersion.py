@@ -23,7 +23,6 @@ Hessian of dispersion correction for HF and DFT
 
 import numpy
 from pyscf.dft.rks import KohnShamDFT
-from pyscf.dft import dft_parser
 
 def get_dispersion(hessobj, disp_version=None, with_3body=False):
     try:
@@ -33,33 +32,41 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
         raise
     mf = hessobj.base
     mol = mf.mol
+
+    # priority: args > mf.disp
+    if disp_version is None:
+        if hasattr(mf, 'disp'): disp_version = mf.disp
+
+    natm = mol.natm
+    h_disp = numpy.zeros([mol.natm,mol.natm,3,3])
+    if disp_version is None:
+        return h_disp
+
     if isinstance(mf, KohnShamDFT):
         method = mf.xc
     else:
         method = 'hf'
-    method, disp, with_3body = dft_parser.parse_dft(method)[2]
 
-    # priority: args > mf.disp > dft_parser
-    if disp_version is None:
-        disp_version = disp
-        # dispersion version can be customized via mf.disp
-        if hasattr(mf, 'disp') and mf.disp is not None:
-            disp_version = mf.disp
+    # overwrite method if method exists in disp_version
+    if ',' in disp_version:
+        disp_version, method = disp_version.split(',')
 
-    natm = mol.natm
-    h_disp = numpy.zeros([natm,natm,3,3])
-    if disp_version is None:
-        return h_disp
+    if with_3body is None:
+        # 3-body contribution can be disabled with mf.disp_with_3body
+        if hasattr(mf, 'disp_with_3body'):
+            with_3body = mf.disp_with_3body
+        else:
+            with_3body = False
 
-    # 3-body contribution can be disabled with mf.disp_with_3body
-    if hasattr(mf, 'disp_with_3body') and mf.disp_with_3body is not None:
-        with_3body = mf.disp_with_3body
+    if hasattr(mf, 'nlc') and mf.nlc not in [False, '']:
+        import warnings
+        warnings.warn('NLC is incompatiable with dispersion correction.')
 
     if mf.disp[:2].upper() == 'D3':
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5
-        for i in range(natm):
+        for i in range(mol.natm):
             for j in range(3):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')

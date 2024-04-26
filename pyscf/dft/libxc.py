@@ -30,7 +30,7 @@ import numpy
 from functools import lru_cache
 from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
-from pyscf.dft import xc_deriv, dft_parser
+from pyscf.dft import xc_deriv
 from pyscf import __config__
 
 _itrf = lib.load_library('libxc_itrf')
@@ -922,9 +922,6 @@ def is_gga(xc_code):
 
 @lru_cache(100)
 def is_nlc(xc_code):
-    enable_nlc = dft_parser.parse_dft(xc_code)[1]
-    if enable_nlc is False:
-        return False
     # identify nlc by xc_code itself if enable_nlc is None
     if isinstance(xc_code, str):
         if xc_code.isdigit():
@@ -1109,8 +1106,6 @@ def parse_xc(description):
                       'and the same as the B3LYP functional in Gaussian. '
                       'To restore the VWN5 definition, you can put the setting '
                       '"B3LYP_WITH_VWN5 = True" in pyscf_conf.py')
-
-    description = dft_parser.parse_dft(description)[0]
 
     def assign_omega(omega, hyb_or_sr, lr=0):
         if hyb[2] == omega or omega == 0:

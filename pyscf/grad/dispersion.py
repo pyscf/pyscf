@@ -22,7 +22,6 @@ gradient of dispersion correction for HF and DFT
 
 import numpy
 from pyscf.dft.rks import KohnShamDFT
-from pyscf.dft import dft_parser
 
 def get_dispersion(mf_grad, disp_version=None, with_3body=False):
     '''gradient of dispersion correction for RHF/RKS'''
@@ -33,25 +32,32 @@ def get_dispersion(mf_grad, disp_version=None, with_3body=False):
         raise
     mf = mf_grad.base
     mol = mf.mol
-    if isinstance(mf, KohnShamDFT):
-        method = mf.xc
-    else:
-        method = 'hf'
-    method, disp, with_3body = dft_parser.parse_dft(method)[2]
-
-    # priority: args > mf.disp > dft_parser
+    # priority: args > mf.disp
     if disp_version is None:
-        disp_version = disp
-        # dispersion version can be customized via mf.disp
-        if hasattr(mf, 'disp') and mf.disp is not None:
-            disp_version = mf.disp
+        if hasattr(mf, 'disp'): disp_version = mf.disp
 
     if disp_version is None:
         return numpy.zeros([mol.natm,3])
 
-    # 3-body contribution can be disabled with mf.disp_with_3body
-    if hasattr(mf, 'disp_with_3body') and mf.disp_with_3body is not None:
-        with_3body = mf.disp_with_3body
+    if isinstance(mf, KohnShamDFT):
+        method = mf.xc
+    else:
+        method = 'hf'
+
+    # overwrite method if method exists in disp_version
+    if ',' in disp_version:
+        disp_version, method = disp_version.split(',')
+
+    if with_3body is None:
+        # 3-body contribution can be disabled with mf.disp_with_3body
+        if hasattr(mf, 'disp_with_3body'):
+            with_3body = mf.disp_with_3body
+        else:
+            with_3body = False
+
+    if hasattr(mf, 'nlc') and mf.nlc not in [False, '']:
+        import warnings
+        warnings.warn('NLC is incompatiable with dispersion correction.')
 
     if disp_version[:2].upper() == 'D3':
         d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
