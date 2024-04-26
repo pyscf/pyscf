@@ -1189,8 +1189,8 @@ def parse_xc(description):
                     else:
                         # Some libxc functionals may not be listed in the
                         # XC_CODES table. Query libxc directly
-                        func_id = _itrf.xc_functional_get_number(ctypes.c_char_p(key.encode()))
-                        if func_id == -1:
+                        x_id = _itrf.xc_functional_get_number(ctypes.c_char_p(key.encode()))
+                        if x_id == -1:
                             raise KeyError(f"LibXCFunctional: name '{key}' not found.")
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
