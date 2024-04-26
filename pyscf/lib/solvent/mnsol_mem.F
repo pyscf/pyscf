@@ -1,8 +1,9 @@
+c copied from https://github.com/nwchemgit/nwchem/blob/master/src/solvation/mnsol_mem.F
 c
 c     memory for the x array used in mnsol code
 c
       subroutine mnsol_xmem(nat,ineed)
-c                       
+c
       implicit none
 c
       integer nat
@@ -12,7 +13,7 @@ c
       integer LAREA
       integer LDATAR
       integer LSTS
-      integer LCOT 
+      integer LCOT
       integer LDSTS
       integer LDCOTDR
       integer LNC
@@ -45,13 +46,13 @@ c
       integer LDCTETR
       integer LDSTETR
       integer LDCOSNR
-      integer LEND 
+      integer LEND
       integer INEED
 c
 c     calculate memory
 c
       LRAD = 1
-      LCDSA = LRAD + NAT 
+      LCDSA = LRAD + NAT
       LAREA = LCDSA + NAT
       LDATAR = LAREA + NAT
       LSTS = LDATAR + 3 * NAT * NAT
@@ -59,7 +60,7 @@ c
       LDSTS = LCOT + NAT * (NAT + 1) / 2
       LDCOTDR = LDSTS + 3 * NAT * NAT
       LNC = LDCOTDR + NAT * (NAT + 1) / 2
-      LDAREA = LNC + NAT + 1       
+      LDAREA = LNC + NAT + 1
       LRLIO = LDAREA + 3 * (NAT + 1)
       LURLIO = LRLIO + NAT * (NAT + 1) / 2
       LLAB = LURLIO + 3 * NAT * NAT

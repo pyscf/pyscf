@@ -1,6 +1,7 @@
+c copied from https://github.com/nwchemgit/nwchem/blob/master/src/solvation/mnsol.F
 c MN solvation models -->
 C
-C THIS IS A PROGRAM TO CALCULATE THE CDS TERM FOR MINNESOTA SOLVATION MODEL SMD (MARENICH, CRAMER, TRUHLAR) 
+C THIS IS A PROGRAM TO CALCULATE THE CDS TERM FOR MINNESOTA SOLVATION MODEL SMD (MARENICH, CRAMER, TRUHLAR)
 C JUN-14-2010
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
@@ -8,54 +9,54 @@ C
 C
 C    |__________________:__ CDSSET
 C    |                  :     |
-C    |                  :     |______ CDSCALC   
+C    |                  :     |______ CDSCALC
 C    |                  :                |
 C    |                  :                |______ SMD_CDS_AQ
 C    |                  :                |
 C    |                  :                |______ SMD_CDS_NAQ
 C    |                  :                |
-C    |                  :                |______ VDWRAD     
+C    |                  :                |______ VDWRAD
 C    |                  :                |
 C    |                  :                |______ CDS_EG
 C    |                  :                          |_____ SMXCDS
-C    |                  :                          |         |_____ IJ0   
+C    |                  :                          |         |_____ IJ0
 C    |                  :                          |
-C    |                  :                          |_____ DAREAL 
+C    |                  :                          |_____ DAREAL
 C    |                  :                                    |_____ SCOPYMN
-C    |                  :                                    |_____ IJ0   
-C    |                  :                                    |_____ DSCALMN               
+C    |                  :                                    |_____ IJ0
+C    |                  :                                    |_____ DSCALMN
 C    |                  :                                    |_____ DOTMN
-C    |                  :                                    |        |_____ DDOTMN               
+C    |                  :                                    |        |_____ DDOTMN
 C    |                  :                                    |
-C    |                  :                                    |_____ DSWAPMN                
+C    |                  :                                    |_____ DSWAPMN
 C    |                  :
 C    |                  :
 C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
-C  * CDSSET 
+C  * CDSSET
 C CDS TERMS FOR MINNESOTA SOLVATION MODELS
        SUBROUTINE CDSSET(ICDS,GCDS,AREACDS,NAT,C,IAN,DCDS,X,
      &   SOLA,SOLB,SOLC,SOLG,SOLH,SOLN)
 C
 C     USE THE FOLLOWING VALUES OF ICDS:
-C     ICDS=1 FOR WATER 
+C     ICDS=1 FOR WATER
 C     ICDS=2 FOR ANY NONAQUEOUS SOLVENT
-C     IF ICDS=2 YOU NEED TO PROVIDE THE FOLLOWING SOLVENT DESCRIPTORS (see http://comp.chem.umn.edu/solvation/mnsddb.pdf): 
-C       SOLA (Abraham's hydrogen-bond acidity paramerer), 
+C     IF ICDS=2 YOU NEED TO PROVIDE THE FOLLOWING SOLVENT DESCRIPTORS (see http://comp.chem.umn.edu/solvation/mnsddb.pdf):
+C       SOLA (Abraham's hydrogen-bond acidity paramerer),
 C       SOLB (Abraham's hydrogen-bond basicity paramerer),
 C       SOLC (carbon aromaticity),
-C       SOLG (macroscopic surface tension in cal/(mol A^2), 
+C       SOLG (macroscopic surface tension in cal/(mol A^2),
 C       SOLH (electronegative halogenicity),
 C       SOLN (refractive index)
-C               
+C
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
 C
 C     CAVITY DISPERSION SOLVENT STRUCTURE (CDS) DRIVER
       CALL CDSCALC(C,DCDS,IAN,ICDS,NAT,GCDS,AREACDS,X,
      &  SOLA,SOLB,SOLC,SOLG,SOLH,SOLN)
-C       
+C
       RETURN
       END
 C
@@ -64,7 +65,7 @@ C  * CDSCALC
      &  SOLA,SOLB,SOLC,SOLG,SOLH,SOLN)
 C
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
-      LOGICAL LGR    
+      LOGICAL LGR
 C
       DIMENSION C(3,*),DCDS(3,*),IAN(*),X(*)
       DIMENSION SIGMA(150),HSIGMA(150)
@@ -91,12 +92,12 @@ C
 C
 C MEMORY ALLOCATION
 
-C     
+C
 C     CALL SOME EXTERNAL FUNCTION HERE TO DEFINE THE BEGINNING OF X(*) AS LXMEM !!!!
-C                       
+C
       LXMEM = 0 ! set LXMEM = 0 for now XXX FIX ME XXXX
       LRAD = LXMEM + 1
-      LCDSA = LRAD + NAT 
+      LCDSA = LRAD + NAT
       LAREA = LCDSA + NAT
       LDATAR = LAREA + NAT
       LSTS = LDATAR + 3 * NAT * NAT
@@ -104,7 +105,7 @@ C
       LDSTS = LCOT + NAT * (NAT + 1) / 2
       LDCOTDR = LDSTS + 3 * NAT * NAT
       LNC = LDCOTDR + NAT * (NAT + 1) / 2
-      LDAREA = LNC + NAT + 1       
+      LDAREA = LNC + NAT + 1
       LRLIO = LDAREA + 3 * (NAT + 1)
       LURLIO = LRLIO + NAT * (NAT + 1) / 2
       LLAB = LURLIO + 3 * NAT * NAT
@@ -139,7 +140,7 @@ C
 C     YOU NEED TO CHECK IF YOU HAVE INEED WORDS OF MEMORY BY CALLING SOME EXTERNAL FUNCTION
 C
 C
-C VAN DER WAALS RADII FOR SASA: Bondi's radii + 0.4Angs 
+C VAN DER WAALS RADII FOR SASA: Bondi's radii + 0.4Angs
 C
       SOLVRD=0.4D0
       CALL VDWRAD(X(LRAD),IAN,NAT,SOLVRD)
@@ -158,7 +159,7 @@ C
      $X(LDCTETR),X(LDSTETR),X(LDCOSNR))
 C
 C MEMORY RELEASE
-C     CALL SOME EXTERNAL FUNCTION TO RELEASE INEED WORDS OF MEMORY USED FOR X(*) 
+C     CALL SOME EXTERNAL FUNCTION TO RELEASE INEED WORDS OF MEMORY USED FOR X(*)
 C
       GCDS=CDST
       AREACDS=TAREA
@@ -172,7 +173,7 @@ C
 C  * SMD_CDS_AQ
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C    SMD_CDS_AQ CALCULATES SURFACE TENSION COEFFICIENTS
-C    FOR AQUEOUS SOLUTION FOR SMD   
+C    FOR AQUEOUS SOLUTION FOR SMD
 C    ATOMIC SURFACE TENSION COEFFICIENTS ARE OF 3 TYPES:
 C      1.) Zero order surface tension coefficients,
 C        SIGMA(I): atomic surface tension of atom with nuclear number I<101
@@ -244,8 +245,8 @@ C
       CSSIGM=0.D0
 C
       DO I=1,150
-      SIGMA(I)=SIGMA_DATA(I)     
-      HSIGMA(I)=HSIGMA_DATA(I)     
+      SIGMA(I)=SIGMA_DATA(I)
+      HSIGMA(I)=HSIGMA_DATA(I)
       ENDDO
 C
       RETURN
@@ -254,7 +255,7 @@ C
 C  * SMD_CDS_NAQ
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C    SMD_CDS_NAQ CALCULATES SURFACE TENSION COEFFICIENTS
-C    FOR NONAQUEOUS SOLUTION FOR SMD  
+C    FOR NONAQUEOUS SOLUTION FOR SMD
 C    ATOMIC SURFACE TENSION COEFFICIENTS ARE OF 3 TYPES:
 C      1.) Zero order surface tension coefficients,
 C        SIGMA_x(I): atomic surface tension of atom with nuclear number I<101
@@ -312,8 +313,8 @@ C       SOLG (macroscopic surface tension in cal/(mol A^2),
 C       SOLH (electronegative halogenicity),
 C       SOLN (refractive index)
       DIMENSION SIGMA(150),HSIGMA(150)
-      DIMENSION SIGMA_N(150),SIGMA_A(150),SIGMA_B(150)         
-      DIMENSION HSIGMA_N(150),HSIGMA_A(150),HSIGMA_B(150)         
+      DIMENSION SIGMA_N(150),SIGMA_A(150),SIGMA_B(150)
+      DIMENSION HSIGMA_N(150),HSIGMA_A(150),HSIGMA_B(150)
       DIMENSION SIGMA_MOL(4)
       DATA SIGMA_N/
      .     0.00,     0.00,     0.00,     0.00,     0.00,
@@ -423,14 +424,14 @@ C
       SIGMA(I)=SIGMA_N(I)*SOLN+SIGMA_A(I)*SOLA+SIGMA_B(I)*SOLB
       HSIGMA(I)=HSIGMA_N(I)*SOLN+HSIGMA_A(I)*SOLA+HSIGMA_B(I)*SOLB
       END DO
-C      
+C
       CSSIGM=SIGMA_MOL(1)*SOLG+SIGMA_MOL(2)*SOLB*SOLB+
      $ SIGMA_MOL(3)*SOLC*SOLC+SIGMA_MOL(4)*SOLH*SOLH
 C
       RETURN
       END
 C
-C  * VDWRAD 
+C  * VDWRAD
 C  VAN DER WAALS RADII FOR CDS TERM
       SUBROUTINE VDWRAD(RAD,IAN,NAT,SOLVRD)
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
@@ -562,7 +563,7 @@ C
       RETURN
       END
 C
-C   * CDS_EG 
+C   * CDS_EG
       SUBROUTINE CDS_EG(CSSIGM,CDST,TAREA,NAT,LGR,
      $C,DCDS,IAN,SIGMA,HSIGMA,RAD,
      $CDSA,AREA,DATAR,STS,COT,DSTS,DCOTDR,
@@ -577,11 +578,11 @@ C   * CDS_EG
       DIMENSION C(3,*),DCDS(3,*),IAN(*)
       DIMENSION SIGMA(150),HSIGMA(150)
 C
-      DIMENSION CDSA(*),AREA(*)  
-      DIMENSION DATAR(3,NAT,*)  
+      DIMENSION CDSA(*),AREA(*)
+      DIMENSION DATAR(3,NAT,*)
 C
       DIMENSION STS(*),COT(*)
-      DIMENSION DSTS(3,NAT,*),DCOTDR(*) 
+      DIMENSION DSTS(3,NAT,*),DCOTDR(*)
 C
       DIMENSION RAD(*),NC(0:*),DAREA(3,0:*)
       DIMENSION RLIO(*),URLIO(3,NAT,*)
@@ -599,7 +600,7 @@ C
      8               ,DCTETR(*),DSTETR(*)
      9               ,DCOSNR(3,NAT,*)
 C
-      DO I=1,NAT  
+      DO I=1,NAT
       CDSA(I)=0.D0
       AREA(I)=0.D0
       STS(I)=0.D0
@@ -613,7 +614,7 @@ C
 C MATRIX OF INTERATOMIC DISTANCES IN ANGSTROMS
 C
       K12=0
-      DO K1=1,NAT  
+      DO K1=1,NAT
       DO K2=1,K1
       K12=K12+1
       IF (K1.EQ.K2) THEN
@@ -654,18 +655,18 @@ C
      $DCSIT,DJCOSN,COSN,DSTETA,DCTETA,DCOSN,WORK,DIWORK,DJWORK,
      $DKWORK,D0WORK,DWORKR,DCAODD,DSITR,DCAPLY,DICOSN,DCASLC,
      $DCTETR,DSTETR,DCOSNR)
-       RAS2=RAD(K)*RAD(K)     
+       RAS2=RAD(K)*RAD(K)
        AREA(K)=AREA0*RAS2
        CDST=CDST+AREA(K)*(STS(K)+CSSIGM)*0.001D0
        TAREA=TAREA+AREA(K)
        CDSA(K)=AREA(K)*(STS(K)+CSSIGM)*0.001D0
-       IF (LGR) THEN                                                   
-        DO L=0,NCROSS                                             
-        DATAR(1,NC(L),K)=DAREA(1,L)*RAS2                          
-        DATAR(2,NC(L),K)=DAREA(2,L)*RAS2                          
-        DATAR(3,NC(L),K)=DAREA(3,L)*RAS2                          
+       IF (LGR) THEN
+        DO L=0,NCROSS
+        DATAR(1,NC(L),K)=DAREA(1,L)*RAS2
+        DATAR(2,NC(L),K)=DAREA(2,L)*RAS2
+        DATAR(3,NC(L),K)=DAREA(3,L)*RAS2
         ENDDO
-       ENDIF                                                           
+       ENDIF
       ENDDO
 C     ----- COMPUTATION OF CDS GRADIENTS -----
 C
@@ -688,9 +689,9 @@ C
        DCDSX=DCDSX/TOKCAL*TOANGS
        DCDSY=DCDSY/TOKCAL*TOANGS
        DCDSZ=DCDSZ/TOKCAL*TOANGS
-       DCDS(1,IAT)=DCDSX     
-       DCDS(2,IAT)=DCDSY     
-       DCDS(3,IAT)=DCDSZ     
+       DCDS(1,IAT)=DCDSX
+       DCDS(2,IAT)=DCDSY
+       DCDS(3,IAT)=DCDSZ
       ENDDO
       ENDIF
 C
@@ -705,14 +706,14 @@ C   * SMXCDS
       LOGICAL LGR
       DIMENSION IAN(*)
       DIMENSION SIGMA(150),HSIGMA(150)
-      DIMENSION NATCNV(100),RKKVAL(15,15)           
+      DIMENSION NATCNV(100),RKKVAL(15,15)
       DIMENSION STS(*),COT(*)
       DIMENSION DSTS(3,NAT,*),DCOTDR(*),
      $RLIO(*),URLIO(3,NAT,*)
-C                 H     C N O F     Si P S Cl     Br     I              
-      DATA NATCNV/1,4*0,2,3,4,5,4*0,11,9,6,7,17*0,8,17*0,10,47*0/       
+C                 H     C N O F     Si P S Cl     Br     I
+      DATA NATCNV/1,4*0,2,3,4,5,4*0,11,9,6,7,17*0,8,17*0,10,47*0/
 C
-C --- RKKVAL EXPANDED TO 15 X 15 DATA ARRAY ---                         
+C --- RKKVAL EXPANDED TO 15 X 15 DATA ARRAY ---
 C
 C ---  TYPE X REFERS TO :                   ---
 C
@@ -755,7 +756,7 @@ C  Set for type 5
      .            0.00D0, 0.00D0, 0.00D0, 0.00D0, 0.00D0,
      .            0.00D0, 0.00D0, 0.00D0, 0.00D0, 0.00D0,
 C  Set for type 6
-     .            2.14D0, 2.20D0, 0.00D0, 1.71D0, 0.00D0,  
+     .            2.14D0, 2.20D0, 0.00D0, 1.71D0, 0.00D0,
      .            2.75D0, 0.00D0, 0.00D0, 2.50D0, 0.00D0,
      .            0.00D0, 0.00D0, 0.00D0, 0.00D0, 0.00D0,
 C  Set for type 7
@@ -794,7 +795,7 @@ C  Set for type 15
      .            0.00D0, 0.00D0, 0.00D0, 0.00D0, 0.00D0,
      .            0.00D0, 0.00D0, 0.00D0, 0.00D0, 0.00D0,
      .            0.00D0, 0.00D0, 0.00D0, 0.00D0, 0.00D0/
-C     
+C
       ISTS=6
 C
        DO I=1, NAT*(NAT+1)/2
@@ -834,31 +835,31 @@ C
               RHLD=1.330D0
             END IF
             IF (ISTS.EQ.6) THEN
-              IF(II.EQ.8.and.JJ.EQ.8) THEN                              
-                DELTAR=0.30D0                                           
-                RHLD=1.80D0                                             
-              END IF                                                    
+              IF(II.EQ.8.and.JJ.EQ.8) THEN
+                DELTAR=0.30D0
+                RHLD=1.80D0
+              END IF
             END IF
             CUTOF1=RHLD+DELTAR
             IF(RLIO(IJ0(I,J)).LT.CUTOF1) THEN
              EXPONT=DELTAR/(RLIO(IJ0(I,J))-CUTOF1)
              COT(IJ0(I,J))=DEXP(EXPONT)
-C  
-              if (LGR) 
+C
+              if (LGR)
      $DCOTDR(IJ0(I,J))=-COT(IJ0(I,J))*EXPONT/(RLIO(IJ0(I,J))-CUTOF1)
-            END IF 
+            END IF
           END IF
         ENDIF
  100    CONTINUE
 C
-C-----CDS SIGMAS CAN BE ANY OF THESE FORMS: a, a-b, a-b(2), a-b(3) (a AND b - ARE ELEMENTS) 
+C-----CDS SIGMAS CAN BE ANY OF THESE FORMS: a, a-b, a-b(2), a-b(3) (a AND b - ARE ELEMENTS)
 C-----SOME OF THE EXPRESSIONS BELOW ARE NOT USED BY THE SMD MODEL BUT KEPT HERE FOR DEBUGGING PURPOSES
 C
       DO 950 I=1,NAT
 C
-C-----ADD CDS FOR SIGMA a   
+C-----ADD CDS FOR SIGMA a
         STS(I)=SIGMA(IAN(I))
-C                                       
+C
         IF (IAN(I).EQ.1) THEN
 C
 C-----ADD CDS FOR SIGMA H-a (USED BY SMD ONLY FOR H-C, H-O)
@@ -866,14 +867,14 @@ C-----ADD CDS FOR SIGMA H-a (USED BY SMD ONLY FOR H-C, H-O)
             NTP=IAN(J)
             STS(I)=STS(I)+COT(IJ0(I,J))*HSIGMA(NTP)
 C-----ADD DCDS FOR SIGMA H-a
-            if (LGR) then                                         
-              do L=1,3                                                  
-                DSTS(L,I,I)=DSTS(L,I,I)                                 
-     .              +HSIGMA(NTP)*DCOTDR(ij0(I,J))*URLIO(L,J,I)          
-                DSTS(L,J,I)=DSTS(L,J,I)                                 
-     .              -HSIGMA(NTP)*DCOTDR(ij0(I,J))*URLIO(L,J,I)          
-              end do                                                    
-            end if  
+            if (LGR) then
+              do L=1,3
+                DSTS(L,I,I)=DSTS(L,I,I)
+     .              +HSIGMA(NTP)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                DSTS(L,J,I)=DSTS(L,J,I)
+     .              -HSIGMA(NTP)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+              end do
+            end if
 C
 C-----ADD CDS FOR SIGMA H-N(2); FOR H-N-N BOND (NOT USED BY SMD)
             IF (NTP.EQ.7) THEN
@@ -882,21 +883,21 @@ C-----ADD CDS FOR SIGMA H-N(2); FOR H-N-N BOND (NOT USED BY SMD)
                 IF (J.NE.K.AND.KTP.EQ.7) THEN
                  STS(I)=STS(I)+COT(IJ0(I,J))*COT(IJ0(J,K))*SIGMA(112)
 C-----ADD DCDS FOR SIGMA H-N(2); FOR H-N-N BOND (NOT USED BY SMD)
-                  if (LGR) then                                   
-                    do L=1,3                                            
-                      DSTS(L,I,I)=DSTS(L,I,I)                           
-     .                           +SIGMA(112)*COT(ij0(J,K))             
-     .                           *DCOTDR(ij0(I,J))*URLIO(L,J,I)         
-                      DSTS(L,J,I)=DSTS(L,J,I)                           
-     .                           -SIGMA(112)*COT(ij0(J,K))             
-     .                           *DCOTDR(ij0(I,J))*URLIO(L,J,I)         
-     .                           +SIGMA(112)*COT(ij0(I,J))             
-     .                           *DCOTDR(ij0(J,K))*URLIO(L,K,J)         
-                      DSTS(L,K,I)=DSTS(L,K,I)                           
-     .                           -SIGMA(112)*COT(ij0(I,J))             
-     .                           *DCOTDR(ij0(J,K))*URLIO(L,K,J)         
-                    end do                                              
-                  end if                                                
+                  if (LGR) then
+                    do L=1,3
+                      DSTS(L,I,I)=DSTS(L,I,I)
+     .                           +SIGMA(112)*COT(ij0(J,K))
+     .                           *DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                      DSTS(L,J,I)=DSTS(L,J,I)
+     .                           -SIGMA(112)*COT(ij0(J,K))
+     .                           *DCOTDR(ij0(I,J))*URLIO(L,J,I)
+     .                           +SIGMA(112)*COT(ij0(I,J))
+     .                           *DCOTDR(ij0(J,K))*URLIO(L,K,J)
+                      DSTS(L,K,I)=DSTS(L,K,I)
+     .                           -SIGMA(112)*COT(ij0(I,J))
+     .                           *DCOTDR(ij0(J,K))*URLIO(L,K,J)
+                    end do
+                  end if
                 ENDIF
  262          CONTINUE
 C
@@ -907,21 +908,21 @@ C-----ADD CDS FOR SIGMA H-O(2); FOR H-O-H BOND (NOT USED BY SMD)
                 IF (I.NE.K.AND.KTP.EQ.1) THEN
                   STS(I)=STS(I)+COT(IJ0(I,J))*COT(IJ0(J,K))*SIGMA(113)
 C-----ADD DCDS FOR SIGMA H-O(2); FOR H-O-H BOND (NOT USED BY SMD)
-                  if (LGR) then                                   
-                    do L=1,3                                            
-                      DSTS(L,I,I)=DSTS(L,I,I)                           
-     .                           +SIGMA(113)*COT(ij0(J,K))             
-     .                           *DCOTDR(ij0(I,J))*URLIO(L,J,I)         
-                      DSTS(L,J,I)=DSTS(L,J,I)                           
-     .                           -SIGMA(113)*COT(ij0(J,K))             
-     .                           *DCOTDR(ij0(I,J))*URLIO(L,J,I)         
-     .                           +SIGMA(113)*COT(ij0(I,J))             
-     .                           *DCOTDR(ij0(J,K))*URLIO(L,K,J)         
-                      DSTS(L,K,I)=DSTS(L,K,I)                           
-     .                           -SIGMA(113)*COT(ij0(I,J))             
-     .                           *DCOTDR(ij0(J,K))*URLIO(L,K,J)         
-                    end do                                              
-                  end if                                                
+                  if (LGR) then
+                    do L=1,3
+                      DSTS(L,I,I)=DSTS(L,I,I)
+     .                           +SIGMA(113)*COT(ij0(J,K))
+     .                           *DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                      DSTS(L,J,I)=DSTS(L,J,I)
+     .                           -SIGMA(113)*COT(ij0(J,K))
+     .                           *DCOTDR(ij0(I,J))*URLIO(L,J,I)
+     .                           +SIGMA(113)*COT(ij0(I,J))
+     .                           *DCOTDR(ij0(J,K))*URLIO(L,K,J)
+                      DSTS(L,K,I)=DSTS(L,K,I)
+     .                           -SIGMA(113)*COT(ij0(I,J))
+     .                           *DCOTDR(ij0(J,K))*URLIO(L,K,J)
+                    end do
+                  end if
                 ENDIF
  263          CONTINUE
             ENDIF
@@ -938,39 +939,39 @@ C-----ADD CDS FOR SIGMA O-C
             IF(NTP.EQ.6)THEN
               STS(I)=STS(I)+COT(IJ0(I,J))*SIGMA(103)
 C-----ADD DCDS FOR SIGMA O-C
-              if (LGR) then                                       
-                do L=1,3                                                
-                  DSTS(L,I,I)=DSTS(L,I,I)                               
-     .                +SIGMA(103)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                  DSTS(L,J,I)=DSTS(L,J,I)                               
-     .                -SIGMA(103)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                end do                                                  
-              end if                                                    
+              if (LGR) then
+                do L=1,3
+                  DSTS(L,I,I)=DSTS(L,I,I)
+     .                +SIGMA(103)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                  DSTS(L,J,I)=DSTS(L,J,I)
+     .                -SIGMA(103)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                end do
+              end if
 C
-C-----ADD CDS FOR SIGMA O-N 
+C-----ADD CDS FOR SIGMA O-N
             ELSE IF(NTP.EQ.7) THEN
               STS(I)=STS(I)+COT(IJ0(I,J))*SIGMA(106)
 C-----ADD DCDS FOR SIGMA O-N
-              if (LGR) then                                       
-                do L=1,3                                                
-                  DSTS(L,I,I)=DSTS(L,I,I)                               
-     .                +SIGMA(106)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                  DSTS(L,J,I)=DSTS(L,J,I)                               
-     .                -SIGMA(106)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                end do                                                  
+              if (LGR) then
+                do L=1,3
+                  DSTS(L,I,I)=DSTS(L,I,I)
+     .                +SIGMA(106)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                  DSTS(L,J,I)=DSTS(L,J,I)
+     .                -SIGMA(106)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                end do
               end if
-C                                                    
+C
 C-----ADD CDS FOR SIGMA O-S (NOT USED BY SMD)
-            ELSE IF(NTP.EQ.16) THEN                 
+            ELSE IF(NTP.EQ.16) THEN
               STS(I)=STS(I)+COT(IJ0(I,J))*SIGMA(118)
 C-----ADD DCDS FOR SIGMA O-S (NOT USED BY SMD)
-              if (LGR) then                                       
-                do L=1,3                                                
-                  DSTS(L,I,I)=DSTS(L,I,I)                               
-     .                +SIGMA(118)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                  DSTS(L,J,I)=DSTS(L,J,I)                               
-     .                -SIGMA(118)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                end do                                                  
+              if (LGR) then
+                do L=1,3
+                  DSTS(L,I,I)=DSTS(L,I,I)
+     .                +SIGMA(118)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                  DSTS(L,J,I)=DSTS(L,J,I)
+     .                -SIGMA(118)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                end do
               end if
 C
 C-----ADD CDS FOR SIGMA O-SI (NOT USED BY SMD)
@@ -985,24 +986,24 @@ C-----ADD DCDS FOR SIGMA O-SI (NOT USED BY SMD)
      &                -SIGMA(117)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
                  End Do
               End If
-C            
+C
 C-----ADD CDS FOR SIGMA O-P
             ELSE IF (NTP.EQ.15) THEN
               STS(I)=STS(I)+COT(IJ0(I,J))*SIGMA(114)
 C-----ADD DCDS FOR SIGMA O-P
-              if (LGR) then                                       
-                do L=1,3                                                
-                  DSTS(L,I,I)=DSTS(L,I,I)                               
-     .                +SIGMA(114)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                  DSTS(L,J,I)=DSTS(L,J,I)                               
-     .                -SIGMA(114)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                end do                                                  
-              end if                                                    
+              if (LGR) then
+                do L=1,3
+                  DSTS(L,I,I)=DSTS(L,I,I)
+     .                +SIGMA(114)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                  DSTS(L,J,I)=DSTS(L,J,I)
+     .                -SIGMA(114)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                end do
+              end if
 C
 C-----ADD CDS FOR SIGMA O-O (SM6 FORM ONLY)
             ELSE IF(NTP.EQ.8.AND.I.NE.J) THEN
-              If (ISTS.eq.6) then                                       
-                STS(I)=STS(I)+COT(IJ0(I,J))*SIGMA(104) 
+              If (ISTS.eq.6) then
+                STS(I)=STS(I)+COT(IJ0(I,J))*SIGMA(104)
 C-----ADD DCDS FOR SIGMA O-O (SM6 FORM ONLY)
                 if (LGR) then
                   do L=1,3
@@ -1049,87 +1050,87 @@ C-----ADD CDS FOR SIGMA N-C FOR -N-C- BOND AND N-C(2) FOR N-C=O BOND; N-C(2) IS 
           STS(I)=STS(I)+DHOLDER*SIGMA(105)
           STS(I)=STS(I)+RTKKS2*SIGMA(111)
 C-----ADD DCDS FOR SIGMA N-C FOR -N-C- BOND AND N-C(2) FOR N-C=O BOND; N-C(2) IS NOT USED BY SMD
-          if (LGR) then                                           
-            do J=1,NAT                                               
-              NTP=IAN(J)                                                
-              if (NTP.EQ.6) then                                        
-                SCOTC=0.0D0                                             
-                SCOTO=0.0D0                                             
-                do K=1,NAT                                           
-                  if ((K.ne.I).and.(K.ne.J)) then                       
-                    KTP=IAN(K)                                          
-                    COTJK=0.0D0                                         
-                    DCOTJK=0.0D0                                        
-                    NKTPC=NATCNV(IAN(K))                                
-                    NTPC =NATCNV(IAN(J))                                
-                    RHLD2=RKKVAL(NKTPC,NTPC)                            
-                    CUTOF2=RHLD2+0.30                                   
-                    if (RLIO(ij0(J,K)).lt.CUTOF2) then                  
-                      COTJK=exp(1.0D0-(BCCC/(1.0D0                      
-     .                     -((RLIO(ij0(J,K))-RHLD2)/0.30))))/(EXPVAL)   
-                     DCOTJK=-COTJK*0.3/(RLIO(ij0(J,K))-CUTOF2)**2      
-                    end if                                              
-                    if (KTP.eq.8) then                                  
-                      SCOTO=SCOTO+COTJK                                 
-                      do L=1,3                                          
-                        DSTS(L,I,I)=DSTS(L,I,I)                         
-     .                             +SIGMA(111)*COTJK                   
-     .                             *DCOTDR(ij0(I,J))*URLIO(L,J,I)       
-                        DSTS(L,J,I)=DSTS(L,J,I)                         
-     .                             -SIGMA(111)*COTJK                   
-     .                             *DCOTDR(ij0(I,J))*URLIO(L,J,I)       
-     .                             +SIGMA(111)*COT(ij0(I,J))           
-     .                             *DCOTJK          *URLIO(L,K,J)       
-                        DSTS(L,K,I)=DSTS(L,K,I)                         
-     .                             -SIGMA(111)*COT(ij0(I,J))           
-     .                             *DCOTJK          *URLIO(L,K,J)       
-                      end do                                            
-                    end if                                              
-                    SCOTC=SCOTC+COTJK                                   
-                  end if                                                
-                end do                                                  
-C                                                                       
-                do L=1,3                                                
-                  DSTS(L,I,I)=DSTS(L,I,I)                               
-     .                +SIGMA(105)*RTKKS**0.3D0*1.3D0                   
-     .                *SCOTC**2*DCOTDR(ij0(I,J))*URLIO(L,J,I)           
-                  DSTS(L,J,I)=DSTS(L,J,I)                               
-     .                -SIGMA(105)*RTKKS**0.3D0*1.3D0                   
-     .                *SCOTC**2*DCOTDR(ij0(I,J))*URLIO(L,J,I)           
-                end do                                                  
-C                                                                       
-                do K=1,NAT                                           
-                  if ((K.ne.I).and.(K.ne.J)) then                       
-                    KTP=IAN(K)                                          
-                    COTJK=0.0D0                                         
-                    DCOTJK=0.0D0                                        
-                    NKTPC=NATCNV(IAN(K))                                
-                    NTPC =NATCNV(IAN(J))                                
-                    RHLD2=RKKVAL(NKTPC,NTPC)                            
-                    CUTOF2=RHLD2+0.30                                   
-                    if (RLIO(ij0(J,K)).lt.CUTOF2) then                  
-                      COTJK=exp(1.0D0-(1.0D0/(1.0D0                     
-     .                     -((RLIO(ij0(J,K))-RHLD2)/0.30))))/(EXPVAL)   
-                      DCOTJK=-COTJK*0.3/(RLIO(ij0(J,K))-CUTOF2)**2      
-                    end if                                              
-                    do L=1,3                                            
-                      DSTS(L,J,I)=DSTS(L,J,I)+SIGMA(105)               
-     .                           *RTKKS**0.3D0*1.3D0                    
-     .                           *2.0D0*SCOTC*COT(ij0(I,J))             
-     .                           *DCOTJK          *URLIO(L,K,J)         
-                      DSTS(L,K,I)=DSTS(L,K,I)-SIGMA(105)               
-     .                           *RTKKS**0.3D0*1.3D0                    
-     .                           *2.0D0*SCOTC*COT(ij0(I,J))             
-     .                           *DCOTJK          *URLIO(L,K,J)         
-                    end do                                              
-                  end if                                                
-                end do                                                  
-              end if                                                    
-            end do                                                      
-          end if                                                        
+          if (LGR) then
+            do J=1,NAT
+              NTP=IAN(J)
+              if (NTP.EQ.6) then
+                SCOTC=0.0D0
+                SCOTO=0.0D0
+                do K=1,NAT
+                  if ((K.ne.I).and.(K.ne.J)) then
+                    KTP=IAN(K)
+                    COTJK=0.0D0
+                    DCOTJK=0.0D0
+                    NKTPC=NATCNV(IAN(K))
+                    NTPC =NATCNV(IAN(J))
+                    RHLD2=RKKVAL(NKTPC,NTPC)
+                    CUTOF2=RHLD2+0.30
+                    if (RLIO(ij0(J,K)).lt.CUTOF2) then
+                      COTJK=exp(1.0D0-(BCCC/(1.0D0
+     .                     -((RLIO(ij0(J,K))-RHLD2)/0.30))))/(EXPVAL)
+                     DCOTJK=-COTJK*0.3/(RLIO(ij0(J,K))-CUTOF2)**2
+                    end if
+                    if (KTP.eq.8) then
+                      SCOTO=SCOTO+COTJK
+                      do L=1,3
+                        DSTS(L,I,I)=DSTS(L,I,I)
+     .                             +SIGMA(111)*COTJK
+     .                             *DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                        DSTS(L,J,I)=DSTS(L,J,I)
+     .                             -SIGMA(111)*COTJK
+     .                             *DCOTDR(ij0(I,J))*URLIO(L,J,I)
+     .                             +SIGMA(111)*COT(ij0(I,J))
+     .                             *DCOTJK          *URLIO(L,K,J)
+                        DSTS(L,K,I)=DSTS(L,K,I)
+     .                             -SIGMA(111)*COT(ij0(I,J))
+     .                             *DCOTJK          *URLIO(L,K,J)
+                      end do
+                    end if
+                    SCOTC=SCOTC+COTJK
+                  end if
+                end do
+C
+                do L=1,3
+                  DSTS(L,I,I)=DSTS(L,I,I)
+     .                +SIGMA(105)*RTKKS**0.3D0*1.3D0
+     .                *SCOTC**2*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                  DSTS(L,J,I)=DSTS(L,J,I)
+     .                -SIGMA(105)*RTKKS**0.3D0*1.3D0
+     .                *SCOTC**2*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                end do
+C
+                do K=1,NAT
+                  if ((K.ne.I).and.(K.ne.J)) then
+                    KTP=IAN(K)
+                    COTJK=0.0D0
+                    DCOTJK=0.0D0
+                    NKTPC=NATCNV(IAN(K))
+                    NTPC =NATCNV(IAN(J))
+                    RHLD2=RKKVAL(NKTPC,NTPC)
+                    CUTOF2=RHLD2+0.30
+                    if (RLIO(ij0(J,K)).lt.CUTOF2) then
+                      COTJK=exp(1.0D0-(1.0D0/(1.0D0
+     .                     -((RLIO(ij0(J,K))-RHLD2)/0.30))))/(EXPVAL)
+                      DCOTJK=-COTJK*0.3/(RLIO(ij0(J,K))-CUTOF2)**2
+                    end if
+                    do L=1,3
+                      DSTS(L,J,I)=DSTS(L,J,I)+SIGMA(105)
+     .                           *RTKKS**0.3D0*1.3D0
+     .                           *2.0D0*SCOTC*COT(ij0(I,J))
+     .                           *DCOTJK          *URLIO(L,K,J)
+                      DSTS(L,K,I)=DSTS(L,K,I)-SIGMA(105)
+     .                           *RTKKS**0.3D0*1.3D0
+     .                           *2.0D0*SCOTC*COT(ij0(I,J))
+     .                           *DCOTJK          *URLIO(L,K,J)
+                    end do
+                  end if
+                end do
+              end if
+            end do
+          end if
 C
 C-----ADD CDS FOR SIGMA N-C(3) FOR THE N-C TRIPLE BOND
-          DRTKKU=0.D0                                                   
+          DRTKKU=0.D0
           RTKK=0.0D0
           DELTAR=0.065D0
           DO 461 J=1,NAT
@@ -1143,16 +1144,16 @@ C-----ADD CDS FOR SIGMA N-C(3) FOR THE N-C TRIPLE BOND
                 RTKK=RTKK+DEXP(1.0D0-(BCCC/(1.0D0-((RLIO(IJ0(I,J))-
      .               RHLD)/DELTAR))))/(EXPVAL)
 C-----ADD DCDS FOR SIGMA N-C(3) FOR THE N-C TRIPLE BOND
-                if (LGR) then                                     
-                  EXPONT=DELTAR/(RLIO(ij0(I,J))-CUTOF1)                 
-                  DRTKK=-DEXP(EXPONT)*EXPONT/(RLIO(ij0(I,J))-CUTOF1)    
-                  do L=1,3                                              
-                    DSTS(L,I,I)=DSTS(L,I,I)                             
-     .                         +SIGMA(116)*DRTKK*URLIO(L,J,I)          
-                    DSTS(L,J,I)=DSTS(L,J,I)                             
-     .                         -SIGMA(116)*DRTKK*URLIO(L,J,I)          
-                   end do                                               
-                 end if                                                 
+                if (LGR) then
+                  EXPONT=DELTAR/(RLIO(ij0(I,J))-CUTOF1)
+                  DRTKK=-DEXP(EXPONT)*EXPONT/(RLIO(ij0(I,J))-CUTOF1)
+                  do L=1,3
+                    DSTS(L,I,I)=DSTS(L,I,I)
+     .                         +SIGMA(116)*DRTKK*URLIO(L,J,I)
+                    DSTS(L,J,I)=DSTS(L,J,I)
+     .                         -SIGMA(116)*DRTKK*URLIO(L,J,I)
+                   end do
+                 end if
               END IF
             END IF
  461      CONTINUE
@@ -1181,25 +1182,25 @@ C-----ADD CDS FOR SIGMA C-C AND C-C(2); C-C(2) IS NOT USED BY SMD
                   RTKK=RTKK+DEXP(1.0D0-(BCCC/(1.0D0-((RLIO(IJ0(I,J))-
      .                 RHLD)/DELTAR))))/(EXPVAL)
 C-----ADD DCDS FOR SIGMA C-C AND C-C(2); C-C(2) IS NOT USED BY SMD
-                  if (LGR) then                                   
-                    EXPONT=DELTAR/(RLIO(ij0(I,J))-CUTOF1)               
-                    DRTKK=-DEXP(EXPONT)*EXPONT/(RLIO(ij0(I,J))-CUTOF1)  
-                    if(KCCC.EQ.1)then                                   
-                      do L=1,3                                          
-                        DSTS(L,I,I)=DSTS(L,I,I)                         
-     .                             +SIGMA(101)*DRTKK*URLIO(L,J,I)      
-                        DSTS(L,J,I)=DSTS(L,J,I)                         
-     .                             -SIGMA(101)*DRTKK*URLIO(L,J,I)      
-                      end do                                            
-                    else if (KCCC.EQ.2) then                            
-                      do L=1,3                                          
-                        DSTS(L,I,I)=DSTS(L,I,I)                         
-     .                             +SIGMA(102)*DRTKK*URLIO(L,J,I)      
-                        DSTS(L,J,I)=DSTS(L,J,I)                         
-     .                             -SIGMA(102)*DRTKK*URLIO(L,J,I)      
-                      end do                                            
-                    end if                                              
-                  end if                                                
+                  if (LGR) then
+                    EXPONT=DELTAR/(RLIO(ij0(I,J))-CUTOF1)
+                    DRTKK=-DEXP(EXPONT)*EXPONT/(RLIO(ij0(I,J))-CUTOF1)
+                    if(KCCC.EQ.1)then
+                      do L=1,3
+                        DSTS(L,I,I)=DSTS(L,I,I)
+     .                             +SIGMA(101)*DRTKK*URLIO(L,J,I)
+                        DSTS(L,J,I)=DSTS(L,J,I)
+     .                             -SIGMA(101)*DRTKK*URLIO(L,J,I)
+                      end do
+                    else if (KCCC.EQ.2) then
+                      do L=1,3
+                        DSTS(L,I,I)=DSTS(L,I,I)
+     .                             +SIGMA(102)*DRTKK*URLIO(L,J,I)
+                        DSTS(L,J,I)=DSTS(L,J,I)
+     .                             -SIGMA(102)*DRTKK*URLIO(L,J,I)
+                      end do
+                    end if
+                  end if
                 ENDIF
               ENDIF
  450        CONTINUE
@@ -1210,7 +1211,7 @@ C-----ADD DCDS FOR SIGMA C-C AND C-C(2); C-C(2) IS NOT USED BY SMD
             ENDIF
  500      CONTINUE
 C
-C-----ADD CDS FOR SIGMA C-N FOR ANY C-N BOND 
+C-----ADD CDS FOR SIGMA C-N FOR ANY C-N BOND
           RTKK=0.0D0
           DO 460 J=1,NAT
             NTP=IAN(J)
@@ -1220,60 +1221,60 @@ C-----ADD CDS FOR SIGMA C-N FOR ANY C-N BOND
  460      CONTINUE
           HOLDRK=RTKK*RTKK
           STS(I)=STS(I)+HOLDRK*SIGMA(110)
-C-----ADD DCDS FOR SIGMA C-N FOR ANY C-N BOND 
-          if (LGR) then                                           
-            do J=1,NAT                                               
-              NTP=IAN(J)                                                
-              if (NTP.eq.7) then                                        
-                do L=1,3                                                
-                  DSTS(L,I,I)=DSTS(L,I,I)                               
-     .                +SIGMA(110)*2.0D0                                
-     .                *RTKK*DCOTDR(ij0(I,J))*URLIO(L,J,I)               
-                  DSTS(L,J,I)=DSTS(L,J,I)                               
-     .                -SIGMA(110)*2.0D0                                
-     .                *RTKK*DCOTDR(ij0(I,J))*URLIO(L,J,I)               
-                end do                                                  
-              end if                                                    
-            end do                                                      
-          end if                                                        
+C-----ADD DCDS FOR SIGMA C-N FOR ANY C-N BOND
+          if (LGR) then
+            do J=1,NAT
+              NTP=IAN(J)
+              if (NTP.eq.7) then
+                do L=1,3
+                  DSTS(L,I,I)=DSTS(L,I,I)
+     .                +SIGMA(110)*2.0D0
+     .                *RTKK*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                  DSTS(L,J,I)=DSTS(L,J,I)
+     .                -SIGMA(110)*2.0D0
+     .                *RTKK*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                end do
+              end if
+            end do
+          end if
 C
         ENDIF
 C
-C-----ADD CDS FOR SIGMA S-S FOR S-S BOND (NOT USED BY SMD) 
+C-----ADD CDS FOR SIGMA S-S FOR S-S BOND (NOT USED BY SMD)
         IF (IAN(I).EQ.16) THEN
           DO 550 J=1,NAT
             NTP=IAN(J)
             IF(NTP.EQ.16.AND.J.NE.I) THEN
               STS(I)=STS(I)+COT(IJ0(I,J))*SIGMA(107)
-C-----ADD DCDS FOR SIGMA S-S FOR S-S BOND (NOT USED BY SMD) 
-              if (LGR) then                                       
-                do L=1,3                                                
-                  DSTS(L,I,I)=DSTS(L,I,I)                               
-     .                +SIGMA(107)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                  DSTS(L,J,I)=DSTS(L,J,I)                               
-     .                -SIGMA(107)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                end do                                                  
-              end if                                                    
+C-----ADD DCDS FOR SIGMA S-S FOR S-S BOND (NOT USED BY SMD)
+              if (LGR) then
+                do L=1,3
+                  DSTS(L,I,I)=DSTS(L,I,I)
+     .                +SIGMA(107)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                  DSTS(L,J,I)=DSTS(L,J,I)
+     .                -SIGMA(107)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                end do
+              end if
 C
             ENDIF
  550      CONTINUE
         ENDIF
 C
-C-----ADD CDS FOR SIGMA S-P FOR S-P BOND (NOT USED BY SMD) 
+C-----ADD CDS FOR SIGMA S-P FOR S-P BOND (NOT USED BY SMD)
         IF (IAN(I).EQ.16) THEN
           DO 220 J=1,NAT
             NTP=IAN(J)
             IF(NTP.EQ.15)THEN
               STS(I)=STS(I)+COT(IJ0(I,J))*SIGMA(115)
-C-----ADD DCDS FOR SIGMA S-P FOR S-P BOND (NOT USED BY SMD) 
-              if (LGR) then                                       
-                do L=1,3                                                
-                  DSTS(L,I,I)=DSTS(L,I,I)                               
-     .                +SIGMA(115)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                  DSTS(L,J,I)=DSTS(L,J,I)                               
-     .                -SIGMA(115)*DCOTDR(ij0(I,J))*URLIO(L,J,I)        
-                end do                                                  
-              end if                                                    
+C-----ADD DCDS FOR SIGMA S-P FOR S-P BOND (NOT USED BY SMD)
+              if (LGR) then
+                do L=1,3
+                  DSTS(L,I,I)=DSTS(L,I,I)
+     .                +SIGMA(115)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                  DSTS(L,J,I)=DSTS(L,J,I)
+     .                -SIGMA(115)*DCOTDR(ij0(I,J))*URLIO(L,J,I)
+                end do
+              end if
 C
             ENDIF
  220      CONTINUE
@@ -1282,7 +1283,7 @@ C
       RETURN
       END
 C
-C   * IJ0    
+C   * IJ0
       FUNCTION IJ0(I,J)
       IMPLICIT DOUBLE PRECISION(A-H,O-Z)
       IF(I.GT.J) THEN
@@ -1294,7 +1295,7 @@ C   * IJ0
       END
 C
 C   * DAREAL
-C  ********************  DAREAL SUBROUTINE  ********************** 
+C  ********************  DAREAL SUBROUTINE  **********************
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C     ACCESSIBLE SOLID ANGLE OF SPHERES (RADIANS). ANALYTICAL.
@@ -1362,9 +1363,9 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       DATA EPSI /1.D-11/
 C
       MXSS=2*NAT+1
-C 
-      PCMIN=1000   
-      JPCNT=0 
+C
+      PCMIN=1000
+      JPCNT=0
 C
       LGRR=.FALSE.
 C
@@ -1559,7 +1560,7 @@ C     SUM THE CONTRIBUTIONS FROM ISOLATED SS.
 C     ---------------------------------------
 C
       ASLICE=0D0
-      IF (LGRX) CALL SCOPYMN(3*(NCROSS+1),0D0,0,DCASLC(1,0),1)  
+      IF (LGRX) CALL SCOPYMN(3*(NCROSS+1),0D0,0,DCASLC(1,0),1)
       IF (LGRR) DASLIR=0D0
       NCLUST=0
       DO 60 I=1,NCROSS
@@ -2166,7 +2167,7 @@ C
       RETURN
       END
 C
-C  ************** LIBRARIES FOR DAREAL SUBROUTINE **************      
+C  ************** LIBRARIES FOR DAREAL SUBROUTINE **************
 C
 C   * SCOPYMN
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
@@ -2323,7 +2324,7 @@ c     uses unrolled loops for increments equal one.
 c     jack dongarra, linpack, 3/11/78.
 c     modified 12/3/93, array(1) declarations changed to array(*)
 c
-      DIMENSION        dx(*),dy(*)      
+      DIMENSION        dx(*),dy(*)
 c
       if(n.le.0)return
       if(incx.eq.1.and.incy.eq.1)go to 20
@@ -2371,5 +2372,5 @@ c
    50 continue
       return
       end
-c <-- MN solvation models 
+c <-- MN solvation models
 c $Id$
