@@ -278,15 +278,6 @@ def grad_solver(pcmobj, dm):
         dS = dS.transpose([2,0,1])
         dSii = dSii.transpose([2,0,1])
         dA = dA.transpose([2,0,1])
-        def contract_bra(a, B, c):
-            ''' i,xij,j->jx '''
-            tmp = numpy.einsum('i,xij->xj', a, B)
-            return (tmp * c).T
-
-        def contract_ket(a, B, c):
-            ''' i,xij,j->ix '''
-            tmp = B.dot(c)
-            return (a*tmp).T
 
         # IEF-PCM and SS(V)PE formally are the same in gradient calculation
         # dR = f_eps/(2*pi) * (dD*A + D*dA),
@@ -296,23 +287,23 @@ def grad_solver(pcmobj, dm):
 
         Av = A*v_grids
         de_dR  = 0.5*fac * contract_ket(vK_1, dD, Av)
-        de_dR -= 0.5*fac * contract_bra(vK_1, dD, Av)
+        de_dR -= 0.5*fac * numpy.einsum('i,xij,j->jx', vK_1, dD, Av)
         de_dR  = numpy.asarray([numpy.sum(de_dR[p0:p1], axis=0) for p0,p1 in gridslice])
 
         vK_1_D = vK_1.dot(D)
         vK_1_Dv = vK_1_D * v_grids
         de_dR += 0.5*fac * numpy.einsum('j,xjn->nx', vK_1_Dv, dA)
 
-        de_dS0  = 0.5*contract_ket(vK_1, dS, q)
-        de_dS0 -= 0.5*contract_bra(vK_1, dS, q)
+        de_dS0  = 0.5*numpy.einsum('i,xij,j->ix', vK_1, dS, q)
+        de_dS0 -= 0.5*numpy.einsum('i,xij,j->jx', vK_1, dS, q)
         de_dS0  = numpy.asarray([numpy.sum(de_dS0[p0:p1], axis=0) for p0,p1 in gridslice])
 
         vK_1_q = vK_1 * q
         de_dS0 += 0.5*numpy.einsum('i,xin->nx', vK_1_q, dSii)
 
         vK_1_DA = numpy.dot(vK_1, DA)
-        de_dS1  = 0.5*contract_ket(vK_1_DA, dS, q)
-        de_dS1 -= 0.5*contract_bra(vK_1_DA, dS, q)
+        de_dS1  = 0.5*numpy.einsum('i,xij,j->ix', vK_1_DA, dS, q)
+        de_dS1 -= 0.5*numpy.einsum('i,xij,j->jx', vK_1_DA, dS, q)
         de_dS1  = numpy.asarray([numpy.sum(de_dS1[p0:p1], axis=0) for p0,p1 in gridslice])
 
         vK_1_DAq = vK_1_DA*q
@@ -320,8 +311,8 @@ def grad_solver(pcmobj, dm):
 
         Sq = numpy.dot(S,q)
         ASq = A*Sq
-        de_dD  = 0.5*contract_ket(vK_1, dD, ASq)
-        de_dD -= 0.5*contract_bra(vK_1, dD, ASq)
+        de_dD  = 0.5*numpy.einsum('i,xij,j->ix', vK_1, dD, ASq)
+        de_dD -= 0.5*numpy.einsum('i,xij,j->jx', vK_1, dD, ASq)
         de_dD  = numpy.asarray([numpy.sum(de_dD[p0:p1], axis=0) for p0,p1 in gridslice])
 
         vK_1_D = numpy.dot(vK_1, D)
@@ -361,7 +352,7 @@ class WithSolventGrad:
         return obj
 
     def to_gpu(self):
-        from gpu4pyscf.solvent.grad import pcm
+        from gpu4pyscf.solvent.grad import pcm    # type: ignore
         grad_method = self.undo_solvent().to_gpu()
         return pcm.make_grad_object(grad_method)
 

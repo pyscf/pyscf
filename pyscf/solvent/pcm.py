@@ -335,7 +335,7 @@ class PCM(lib.StreamObject):
             f_epsilon = (epsilon - 1.0)/(epsilon + 1.0/2.0)
             K = S
             R = -f_epsilon * numpy.eye(K.shape[0])
-        elif self.method.upper() in ['IEF-PCM', 'IEFPCM', 'SMD']:
+        elif self.method.upper() in ['IEF-PCM', 'IEFPCM']:
             f_epsilon = (epsilon - 1.0)/(epsilon + 1.0)
             DA = D*A
             DAS = numpy.dot(DA, S)

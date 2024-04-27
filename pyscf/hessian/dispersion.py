@@ -25,7 +25,7 @@ import numpy
 from pyscf.dft.rks import KohnShamDFT
 from pyscf.dft import dft_parser
 
-def get_dispersion(hessobj, disp_version=None, with_3body=False):
+def get_dispersion(hessobj, disp_version=None, with_3body=None):
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:

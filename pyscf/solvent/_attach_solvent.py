@@ -168,7 +168,7 @@ class SCFWithSolvent(_Solvation):
             return super().stability(*args, **kwargs)
 
     def to_gpu(self):
-        from gpu4pyscf.solvent import _attach_solvent
+        from gpu4pyscf.solvent import _attach_solvent # type: ignore
         solvent_obj = self.with_solvent.to_gpu()
         obj = _attach_solvent._for_scf(self.undo_solvent().to_gpu(), solvent_obj)
         return obj

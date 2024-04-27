@@ -24,7 +24,7 @@ import numpy
 from pyscf.dft.rks import KohnShamDFT
 from pyscf.dft import dft_parser
 
-def get_dispersion(mf_grad, disp_version=None, with_3body=False):
+def get_dispersion(mf_grad, disp_version=None, with_3body=None):
     '''gradient of dispersion correction for RHF/RKS'''
     try:
         from pyscf.dispersion import dftd3, dftd4

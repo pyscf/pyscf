@@ -179,7 +179,7 @@ class WithSolventHess:
         return obj
 
     def to_gpu(self):
-        from gpu4pyscf.solvent.hessian import pcm
+        from gpu4pyscf.solvent.hessian import pcm    # type: ignore
         hess_method = self.undo_solvent().to_gpu()
         return pcm.make_hess_object(hess_method)
 

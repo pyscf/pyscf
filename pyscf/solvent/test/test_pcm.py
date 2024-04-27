@@ -108,13 +108,13 @@ class KnownValues(unittest.TestCase):
     def test_casci(self):
         mf = scf.RHF(mol0).PCM().run()
         mc = solvent.PCM(mcscf.CASCI(mf,2,2)).run()
-        assert numpy.abs(mc.e_tot - -74.97040819700919) < 1e-4
+        assert numpy.abs(mc.e_tot - -74.97040819700919) < 1e-8
 
     def test_casscf(self):
         mf = scf.RHF(mol0).run()
         mc1 = solvent.PCM(mcscf.CASSCF(mf, 2, 2)).run(conv_tol=1e-9)
         e1 = mc1.e_tot
-        assert numpy.abs(e1 - -74.9709884530835) < 1e-4
+        assert numpy.abs(e1 - -74.9709884530835) < 1e-8
 
     def test_ccsd(self):
         mf = scf.RHF(mol0).PCM()
@@ -122,7 +122,7 @@ class KnownValues(unittest.TestCase):
         mf.kernel()
         mycc = cc.CCSD(mf).PCM()
         mycc.kernel()
-        assert numpy.abs(mycc.e_tot - -75.0172322934944) < 1e-4
+        assert numpy.abs(mycc.e_tot - -75.0172322934944) < 1e-8
 
 if __name__ == "__main__":
     print("Full Tests for PCMs")
