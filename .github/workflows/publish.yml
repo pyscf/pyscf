@@ -105,6 +105,10 @@ jobs:
     name: Build wheels for macos
     runs-on: macos-12
     steps:
+      - uses: fortran-lang/setup-fortran@v1
+        with:
+          compiler: gcc
+          version: 11
       - uses: actions/checkout@v3
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.14.1
@@ -168,7 +172,6 @@ jobs:
       - name: Publish to conda
         run: |
           export CMAKE_BUILD_PARALLEL_LEVEL=4
-          export CMAKE_CONFIGURE_ARGS="-DENABLE_SMD=ON"
           export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_TOKEN }}
           conda install -y anaconda-client conda-build
           conda config --set anaconda_upload yes
