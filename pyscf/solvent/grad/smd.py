@@ -52,7 +52,7 @@ def grad_solver(pcmobj, dm):
 
     vK_1 = np.linalg.solve(K.T, v_grids)
 
-    dF, dA = pcm_grad.get_dD_dSt_dF_dA(pcmobj.surface)
+    dF, dA = pcm_grad.get_dF_dA(pcmobj.surface)
     dD, dS, dSii = pcm_grad.get_dD_dS(pcmobj.surface, dF, with_D=True, with_S=True)
     DA = D*A
 
@@ -71,7 +71,7 @@ def grad_solver(pcmobj, dm):
     # dR = f_eps/(2*pi) * (dD*A + D*dA),
     # dK = dS - f_eps/(2*pi) * (dD*A*S + D*dA*S + D*A*dS)
     f_epsilon = (epsilon - 1.0)/(epsilon + 1.0)
-    fac = f_epsilon/(2.0*PI)
+    fac = f_epsilon/(2.0*np.pi)
 
     Av = A*v_grids
     de_dR  = 0.5*fac * np.einsum('i,xij,j->ix', vK_1, dD, Av)
