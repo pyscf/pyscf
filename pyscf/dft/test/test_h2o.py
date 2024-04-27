@@ -544,6 +544,20 @@ class KnownValues(unittest.TestCase):
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
 
+    def test_d3_warning_msg(self):
+        mf = dft.RKS(h2o)
+        mf.xc = 'wb97m-d3'
+        with self.assertRaisesRegex(KeyError, "mf.xc = 'wb97m'; mf.nlc = False; mf.disp = 'd3'"):
+            mf.run()
+
+        mf.xc = 'wb97m'
+        mf.nlc = True
+        mf.disp = 'd3'
+        with self.assertWarnsRegex(
+            RuntimeWarning,
+            'nlc and d3 are both configured. This may lead to double counting'):
+            mf.build()
+
     def test_camb3lyp_rsh_omega(self):
         mf = dft.RKS(h2o)
         mf.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
