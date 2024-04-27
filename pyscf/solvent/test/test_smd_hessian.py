@@ -67,6 +67,10 @@ def _check_hess(atom, solvent='water'):
     assert(numpy.linalg.norm(hess_cds[0,:,0,:] - h_fd) < 1e-3)
 
 class KnownValues(unittest.TestCase):
+    def setUp(self):
+        if smd.libsolvent is None:
+            raise self.SkipTest('SMD Fortran library not compiled')
+
     def test_h2o(self):
         h2o = gto.Mole()
         h2o.atom = '''

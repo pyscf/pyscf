@@ -75,6 +75,10 @@ def _check_grad(atom, solvent='water'):
     assert numpy.linalg.norm(fd_cds - grad_cds) < 1e-8
 
 class KnownValues(unittest.TestCase):
+    def setUp(self):
+        if smd.libsolvent is None:
+            raise self.SkipTest('SMD Fortran library not compiled')
+
     def test_grad_water(self):
         mf = dft.rks.RKS(mol, xc='b3lyp').SMD()
         mf.grids.atom_grid = (99,590)

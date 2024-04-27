@@ -252,7 +252,12 @@ def smd_radii(alpha):
 
 import ctypes
 from pyscf.lib import load_library
-libsolvent = load_library('libsolvent')
+try:
+    libsolvent = load_library('libsolvent')
+except NameError:
+    # SMD module was not compiled
+    libsolvent = None
+
 def get_cds_legacy(smdobj):
     mol = smdobj.mol
     natm = mol.natm

@@ -52,6 +52,10 @@ def _check_smd(atom, e_ref, solvent='water'):
     assert numpy.abs(e_cds - e_ref) < 1e-3
 
 class KnownValues(unittest.TestCase):
+    def setUp(self):
+        if smd.libsolvent is None:
+            raise self.SkipTest('SMD Fortran library not compiled')
+
     def test_cds_solvent(self):
         smdobj = smd.SMD(mol)
         smdobj.sasa_ng = 590

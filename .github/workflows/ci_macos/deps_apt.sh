@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-brew reinstall gcc
+#brew reinstall gcc
