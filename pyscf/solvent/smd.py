@@ -18,8 +18,7 @@ SMD solvent model, copied from GPU4PYSCF with modification for CPU
 '''
 
 import numpy as np
-import scipy
-from pyscf import lib
+from pyscf import lib, gto
 from pyscf.data import radii
 from pyscf.dft import gen_grid
 from pyscf.solvent import pcm
@@ -349,7 +348,7 @@ class SMD(pcm.PCM):
         fakemol = gto.fakemol_for_charges(grid_coords, expnt=charge_exp**2)
         fakemol_nuc = gto.fakemol_for_charges(atom_coords)
         v_ng = gto.mole.intor_cross(int2c2e, fakemol_nuc, fakemol)
-        self.v_grids_n = numpy.dot(atom_charges, v_ng)
+        self.v_grids_n = np.dot(atom_charges, v_ng)
 
     @property
     def solvent(self):

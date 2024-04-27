@@ -252,10 +252,10 @@ def grad_solver(pcmobj, dm):
 
     dF, dA = get_dF_dA(pcmobj.surface)
 
-    with_D = pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM', 'SS(V)PE', 'SMD']
+    with_D = pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM', 'SS(V)PE']
     dD, dS, dSii = get_dD_dS(pcmobj.surface, dF, with_D=with_D, with_S=True)
 
-    if pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM', 'SS(V)PE', 'SMD']:
+    if pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM', 'SS(V)PE']:
         DA = D*A
 
     epsilon = pcmobj.eps
@@ -273,7 +273,7 @@ def grad_solver(pcmobj, dm):
         de -= numpy.asarray([numpy.sum(de_dS[p0:p1], axis=0) for p0,p1, in gridslice])
         de -= 0.5*numpy.einsum('i,xij->jx', vK_1*q, dSii) # 0.5*cupy.einsum('i,xij,i->jx', vK_1, dSii, q)
 
-    elif pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM', 'SS(V)PE', 'SMD']:
+    elif pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM', 'SS(V)PE']:
         dD = dD.transpose([2,0,1])
         dS = dS.transpose([2,0,1])
         dSii = dSii.transpose([2,0,1])
@@ -286,7 +286,7 @@ def grad_solver(pcmobj, dm):
         fac = f_epsilon/(2.0*PI)
 
         Av = A*v_grids
-        de_dR  = 0.5*fac * contract_ket(vK_1, dD, Av)
+        de_dR  = 0.5*fac * numpy.einsum('i,xij,j->ix', vK_1, dD, Av)
         de_dR -= 0.5*fac * numpy.einsum('i,xij,j->jx', vK_1, dD, Av)
         de_dR  = numpy.asarray([numpy.sum(de_dR[p0:p1], axis=0) for p0,p1 in gridslice])
 

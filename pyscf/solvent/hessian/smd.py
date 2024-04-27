@@ -22,8 +22,46 @@ import numpy as np
 from pyscf import scf, lib
 from pyscf.solvent import smd
 from pyscf.solvent.grad import smd as smd_grad
+from pyscf.solvent.grad import pcm as pcm_grad
 from pyscf.solvent.hessian import pcm as pcm_hess
 from pyscf.lib import logger
+
+def hess_elec(smdobj, dm, verbose=None):
+    '''
+    slow version with finite difference
+    TODO: use analytical hess_nuc
+    '''
+    log = logger.new_logger(smdobj, verbose)
+    t1 = (logger.process_clock(), logger.perf_counter())
+    pmol = smdobj.mol.copy()
+    mol = pmol.copy()
+    coords = mol.atom_coords(unit='Bohr')
+
+    def smd_grad_scanner(mol):
+        # TODO: use more analytical forms
+        smdobj.reset(mol)
+        smdobj._get_vind(dm)
+        grad = pcm_grad.grad_nuc(smdobj, dm)
+        grad+= smd_grad.grad_solver(smdobj, dm)
+        grad+= pcm_grad.grad_qv(smdobj, dm)
+        return grad
+
+    mol.verbose = 0
+    de = np.zeros([mol.natm, mol.natm, 3, 3])
+    eps = 1e-3
+    for ia in range(mol.natm):
+        for ix in range(3):
+            dv = np.zeros_like(coords)
+            dv[ia,ix] = eps
+            mol.set_geom_(coords + dv, unit='Bohr')
+            g0 = smd_grad_scanner(mol)
+
+            mol.set_geom_(coords - dv, unit='Bohr')
+            g1 = smd_grad_scanner(mol)
+            de[ia,:,ix] = (g0 - g1)/2.0/eps
+    t1 = log.timer_debug1('solvent energy', *t1)
+    smdobj.reset(pmol)
+    return de
 
 def get_cds(smdobj):
     mol = smdobj.mol
@@ -97,8 +135,7 @@ class WithSolventHess:
             dm = dm[0] + dm[1]
         is_equilibrium = self.base.with_solvent.equilibrium_solvation
         self.base.with_solvent.equilibrium_solvation = True
-        self.de_solvent = pcm_hess.hess_elec(self.base.with_solvent, dm, verbose=self.verbose)
-        #self.de_solvent+= hess_nuc(self.base.with_solvent)
+        self.de_solvent = hess_elec(self.base.with_solvent, dm, verbose=self.verbose)
         self.de_solute = super().kernel(*args, **kwargs)
         self.de_cds = get_cds(self.base.with_solvent)
         self.de = self.de_solute + self.de_solvent + self.de_cds
