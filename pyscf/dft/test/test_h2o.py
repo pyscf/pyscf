@@ -517,7 +517,6 @@ class KnownValues(unittest.TestCase):
         method = dft.RKS(h2o, xc='b3lyp-d3bj')
         assert method.xc == 'b3lyp'
         assert method.disp == 'd3bj,b3lyp'
-        assert method.disp_with_3body == False
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0005738788210828446, 9)
         fn_facs = method._numint.libxc.parse_xc(method.xc)
@@ -525,37 +524,34 @@ class KnownValues(unittest.TestCase):
 
         method = dft.RKS(h2o, xc='b3lyp-d3bjm2b')
         assert method.xc == 'b3lyp'
-        assert method.disp == 'd3bjm,b3lyp'
-        assert method.disp_with_3body == False
+        assert method.disp == 'd3bjm2b,b3lyp'
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0006949127588605776, 9)
 
         method = dft.RKS(h2o, xc='b3lyp-d3bjmatm')
         assert method.xc == 'b3lyp'
-        assert method.disp == 'd3bjm,b3lyp'
-        assert method.disp_with_3body == True
+        assert method.disp == 'd3bjmatm,b3lyp'
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
 
         method = dft.UKS(h2o, xc='b3lyp-d3bjmatm')
         assert method.xc == 'b3lyp'
-        assert method.disp == 'd3bjm,b3lyp'
-        assert method.disp_with_3body == True
+        assert method.disp == 'd3bjmatm,b3lyp'
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
 
     def test_d3_warning_msg(self):
         mf = dft.RKS(h2o)
-        mf.xc = 'wb97m-d3'
-        with self.assertRaisesRegex(KeyError, "mf.xc = 'wb97m'; mf.nlc = False; mf.disp = 'd3'"):
+        mf.xc = 'wb97m-d3bj'
+        with self.assertRaisesRegex(ValueError, "Dispersion correction found in xc."):
             mf.run()
 
-        mf.xc = 'wb97m'
+        mf.xc = 'wb97m-v'
         mf.nlc = True
-        mf.disp = 'd3'
+        mf.disp = 'd3bj'
         with self.assertWarnsRegex(
             RuntimeWarning,
-            'nlc and d3 are both configured. This may lead to double counting'):
+            'nlc and disp are both configured. This may lead to double counting.'):
             mf.build()
 
     def test_camb3lyp_rsh_omega(self):

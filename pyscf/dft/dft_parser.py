@@ -24,64 +24,47 @@ unified dft parser for coordinating dft protocols with
 from functools import lru_cache
 import warnings
 
-# supported dispersion corrections
-DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
+# special cases:
+# - wb97x-d is not supported yet
+# - wb97*-d3bj is wb97*-v with d3bj
+# - wb97x-d3 is not supported yet
+# - 3c method is not supported yet
+
+# These xc functionals need special treatments
+white_list = {
+    'wb97m-d3bj': ('wb97m-v', False, 'd3bj,wb97m'),
+    'b97m-d3bj': ('b97m-v', False, 'd3bj,b97m'),
+    'wb97x-d3bj': ('wb97x-v', False, 'd3bj,wb97x'),
+}
+
+# These xc functionals are not supported yet
+black_list = {
+    'wb97x-d', 'wb97x-d3',
+    'wb97m-d3bj2b', 'wb97m-d3bjatm',
+    'b97m-d3bj2b', 'b97m-d3bjatm',
+}
 
 @lru_cache(128)
 def parse_dft(dft_method):
-    ''' conventional dft method ->
-    (xc, enable nlc, (xc for dftd3, dispersion version, with 3-body dispersion))
+    ''' conventional dft method -> (xc, nlc, disp)
     '''
     if not isinstance(dft_method, str):
-        return dft_method, None, (dft_method, None, False)
+        return dft_method, '', None
     method_lower = dft_method.lower()
 
-    # special cases:
-    # - wb97x-d is not supported yet
-    # - wb97*-d3bj is wb97*-v with d3bj
-    # - wb97x-d3 is not supported yet
-    # - 3c method is not supported yet
+    if method_lower in black_list:
+        raise NotImplementedError(f'{method_lower} is not supported yet.')
 
-    if method_lower == 'wb97x-d':
-        raise NotImplementedError('wb97x-d is not supported yet.')
-
-    if method_lower == 'wb97m-d3bj':
-        return 'wb97m-v', False, ('wb97m', 'd3bj', False)
-    if method_lower == 'b97m-d3bj':
-        return 'b97m-v', False, ('b97m', 'd3bj', False)
-    if method_lower == 'wb97x-d3bj':
-        return 'wb97x-v', False, ('wb97x', 'd3bj', False)
-
-    # J. Chem. Theory Comput. 2013, 9, 1, 263-272
-    if method_lower in ['wb97x-d3']:
-        raise NotImplementedError('wb97x-d3 is not supported yet.')
+    if method_lower in white_list:
+        return white_list[method_lower]
 
     if method_lower.endswith('-3c'):
         raise NotImplementedError('*-3c methods are not supported yet.')
 
-    xc = dft_method
-    disp = None
-    for d in DISP_VERSIONS:
-        if method_lower.endswith(d):
-            disp = d
-            with_3body = False
-            xc = method_lower.replace(f'-{d}','')
-        elif method_lower.endswith(d+'2b'):
-            disp = d
-            with_3body = False
-            xc = method_lower.replace(f'-{d}2b', '')
-        elif method_lower.endswith(d+'atm'):
-            disp = d
-            with_3body = True
-            xc = method_lower.replace(f'-{d}atm', '')
+    if '-d3' in method_lower or '-d4' in method_lower:
+        xc, disp = method_lower.split('-')
+        disp = disp + ',' + xc
+    else:
+        xc, disp = method_lower, None
 
-        if disp is not None:
-            if xc in ('b97m', 'wb97m'):
-                warnings.warn(
-                    f'{dft_method} is not a well-defined functional. '
-                    'The XC part is changed to {xc}-v')
-                return xc+'-v', False, (xc, disp, with_3body)
-            else:
-                return xc, None, (xc, disp, with_3body)
-
-    return xc, None, (xc, None, False)
+    return xc, '', disp

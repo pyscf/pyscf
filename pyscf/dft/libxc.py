@@ -1097,6 +1097,9 @@ def parse_xc(description):
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
+    if '-D3' in description.upper() or '-D4' in description.upper():
+        raise ValueError('Dispersion correction found in xc.')
+
     if (description.upper() in ('B3P86', 'B3LYP', 'X3LYP') and
         not getattr(parse_xc, 'b3lyp5_warned', False) and
         not hasattr(__config__, 'B3LYP_WITH_VWN5')):

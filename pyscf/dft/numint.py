@@ -2867,7 +2867,7 @@ class NumInt(lib.StreamObject, LibXCMixin):
 
     def to_gpu(self):
         try:
-            from gpu4pyscf.dft import numint
+            from gpu4pyscf.dft import numint # type :ignore
             return numint.NumInt()
         except ImportError:
             raise ImportError('Cannot find GPU4PySCF')

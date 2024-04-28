@@ -22,9 +22,10 @@ gradient of dispersion correction for HF and DFT
 
 import numpy
 from pyscf.dft.rks import KohnShamDFT
+from pyscf.scf.dispersion import parse_disp, DISP_VERSIONS
 
-def get_dispersion(mf_grad, disp_version=None, with_3body=False):
-    '''gradient of dispersion correction for RHF/RKS'''
+def get_dispersion(mf_grad, disp_version=None, with_3body=None):
+    '''gradient of DFTD3/DFTD4 dispersion correction'''
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
@@ -48,16 +49,13 @@ def get_dispersion(mf_grad, disp_version=None, with_3body=False):
     if ',' in disp_version:
         disp_version, method = disp_version.split(',')
 
-    if with_3body is None:
-        # 3-body contribution can be disabled with mf.disp_with_3body
-        if hasattr(mf, 'disp_with_3body'):
-            with_3body = mf.disp_with_3body
-        else:
-            with_3body = False
+    disp_version, disp_with_3body = parse_disp(disp_version)
 
-    if hasattr(mf, 'nlc') and mf.nlc not in [False, '']:
-        import warnings
-        warnings.warn('NLC is incompatiable with dispersion correction.')
+    if disp_version not in DISP_VERSIONS:
+        raise NotImplementedError
+
+    if with_3body is None:
+        with_3body = disp_with_3body
 
     if disp_version[:2].upper() == 'D3':
         d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)

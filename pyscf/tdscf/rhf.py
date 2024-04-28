@@ -145,7 +145,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.nlc is not False and (mf.nlc or ni.libxc.is_nlc(mf.xc)):
+        if mf.do_nlc():
             logger.warn(mf, 'NLC functional found in DFT object.  Its second '
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')

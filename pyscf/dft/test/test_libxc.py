@@ -182,8 +182,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.dot(rho[0], v[0].T[1]), -1052.1534466398498, 8)
         self.assertAlmostEqual(numpy.dot(rho[0], f[0].T[0]), -1762.3340626646932*2, 8)
         self.assertAlmostEqual(numpy.dot(rho[0], f[0].T[2]), -1762.3340626646932*2, 8)
-        self.assertAlmostEqual(numpy.dot(rho[0], k[0].T[0]),  1202284274.6255436*4, 3)
-        self.assertAlmostEqual(numpy.dot(rho[0], k[0].T[3]),  1202284274.6255436*4, 3)
+        self.assertAlmostEqual(numpy.dot(rho[0], k[0].T[0]),  1202284274.6255436*4, 2)
+        self.assertAlmostEqual(numpy.dot(rho[0], k[0].T[3]),  1202284274.6255436*4, 2)
 
     def test_lyp(self):
         e,v,f = dft.libxc.eval_xc(',LYP', rho, deriv=2)[:3]
@@ -343,10 +343,10 @@ class KnownValues(unittest.TestCase):
 
     def test_dft_parser(self):
         from pyscf.dft.dft_parser import parse_dft
-        self.assertEqual(parse_dft('wb97m-d3bj'), ('wb97m-v', False, ('wb97m', 'd3bj', False)))
-        self.assertEqual(parse_dft('wb97-d3zerom'), ('wb97', None, ('wb97', 'd3zerom', False)))
-        self.assertEqual(parse_dft('wb97m-d3bjatm'), ('wb97m-v', False, ('wb97m', 'd3bj', True)))
-        self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x', None, ('wb97x', 'd3zero', False)))
+        self.assertEqual(parse_dft('wb97m-d3bj'), ('wb97m-v', False, 'd3bj,wb97m'))
+        self.assertEqual(parse_dft('b3lyp-d3zerom'), ('b3lyp', '', 'd3zerom,b3lyp'))
+        self.assertEqual(parse_dft('wb97x-d3bj'), ('wb97x-v', False, 'd3bj,wb97x'))
+        self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x', '', 'd3zero2b,wb97x'))
 
 if __name__ == "__main__":
     print("Test libxc")

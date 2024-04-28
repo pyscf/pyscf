@@ -22,7 +22,20 @@ dispersion correction for HF and DFT
 
 from pyscf.dft.rks import KohnShamDFT
 
-def get_dispersion(mf, disp_version=None, with_3body=False):
+# supported dispersion corrections
+DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
+
+def parse_disp(disp):
+    ''' *2b -> *, True'''
+    disp_lower = disp.lower()
+    if disp_lower.endswith('2b'):
+        return disp_lower.replace('2b', ''), False
+    elif disp_lower.endswith('atm'):
+        return disp_lower.replace('atm', ''), True
+    else:
+        return disp_lower, False
+
+def get_dispersion(mf, disp_version=None, with_3body=None):
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
@@ -46,18 +59,13 @@ def get_dispersion(mf, disp_version=None, with_3body=False):
     if ',' in disp_version:
         disp_version, method = disp_version.split(',')
 
-    if with_3body is None:
-        # 3-body contribution can be disabled with mf.disp_with_3body
-        if hasattr(mf, 'disp_with_3body'):
-            with_3body = mf.disp_with_3body
-        else:
-            with_3body = False
+    disp_version, disp_with_3body = parse_disp(disp_version)
 
-    if hasattr(mf, 'nlc') and mf.nlc not in [False, '']:
-        import warnings
-        warnings.warn('NLC is incompatiable with dispersion correction.')
-        import traceback
-        traceback.print_stack()
+    if disp_version not in DISP_VERSIONS:
+        raise NotImplementedError
+
+    if with_3body is None:
+        with_3body = disp_with_3body
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':

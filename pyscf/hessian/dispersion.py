@@ -23,8 +23,9 @@ Hessian of dispersion correction for HF and DFT
 
 import numpy
 from pyscf.dft.rks import KohnShamDFT
+from pyscf.scf.dispersion import parse_disp, DISP_VERSIONS
 
-def get_dispersion(hessobj, disp_version=None, with_3body=False):
+def get_dispersion(hessobj, disp_version=None, with_3body=None):
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
@@ -51,16 +52,13 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
     if ',' in disp_version:
         disp_version, method = disp_version.split(',')
 
-    if with_3body is None:
-        # 3-body contribution can be disabled with mf.disp_with_3body
-        if hasattr(mf, 'disp_with_3body'):
-            with_3body = mf.disp_with_3body
-        else:
-            with_3body = False
+    disp_version, disp_with_3body = parse_disp(disp_version)
 
-    if hasattr(mf, 'nlc') and mf.nlc not in [False, '']:
-        import warnings
-        warnings.warn('NLC is incompatiable with dispersion correction.')
+    if disp_version not in DISP_VERSIONS:
+        raise NotImplementedError
+
+    if with_3body is None:
+        with_3body = disp_with_3body
 
     if mf.disp[:2].upper() == 'D3':
         coords = hessobj.mol.atom_coords()
