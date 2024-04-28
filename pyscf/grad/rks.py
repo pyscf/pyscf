@@ -92,7 +92,6 @@ def get_veff(ks_grad, mol=None, dm=None):
 
 def _initialize_grids(ks_grad):
     mf = ks_grad.base
-    ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids
     else:

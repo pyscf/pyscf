@@ -379,7 +379,7 @@ class KohnShamDFT:
         if self.nlc == 'vv10', do nlc
         if self.nlc == '', turn the ball to libxc
         '''
-        if self.nlc == False:
+        if self.nlc == 0: # if self.nlc is false
             return False
         xc_has_nlc = self._numint.libxc.is_nlc(self.xc)
         return self.nlc or xc_has_nlc
