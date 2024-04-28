@@ -546,3 +546,94 @@ void _get_permutation(
         _permutation(meshPrim[0], meshPrim[1], meshPrim[2], 1, 1, 1, &res[7 * nGridPrim]);
     }
 }
+
+int _get_loc(
+    const int freq,
+    const int mesh)
+{
+    int max_freq = mesh / 2;
+    int min_freq = -mesh / 2;
+
+    if (mesh % 2 == 0)
+    {
+        max_freq = mesh / 2 - 1;
+        min_freq = -mesh / 2;
+    }
+
+    if (freq > max_freq || freq < min_freq)
+    {
+        return -1;
+    }
+
+    if (freq >= 0)
+    {
+        return freq;
+    }
+    else
+    {
+        int shift = mesh / 2;
+        if (mesh % 2 == 1)
+        {
+            shift += 1;
+        }
+        return (freq - min_freq) + shift;
+    }
+}
+
+int _get_freq(
+    const int loc,
+    const int mesh)
+{
+    int mid_loc = mesh / 2;
+    if (mesh % 2 == 1)
+    {
+        mid_loc += 1;
+    }
+
+    if ((loc < 0) || (loc >= mesh))
+    {
+        printf("loc: %d, mesh: %d\n", loc, mesh);
+        exit(1);
+    }
+
+    if (loc < mid_loc)
+    {
+        return loc;
+    }
+    else
+    {
+        return loc - mesh;
+    }
+}
+
+void map_fftfreq(int *mesh_source, int *mesh_target, int *res)
+{
+    int nGrid = mesh_source[0] * mesh_source[1] * mesh_source[2];
+
+#pragma omp parallel for
+    for (int i = 0; i < nGrid; i++)
+    {
+        int ix_loc = i / (mesh_source[1] * mesh_source[2]);
+        int iy_loc = (i % (mesh_source[1] * mesh_source[2])) / mesh_source[2];
+        int iz_loc = i % mesh_source[2];
+
+        int ix_freq = _get_freq(ix_loc, mesh_source[0]);
+        int iy_freq = _get_freq(iy_loc, mesh_source[1]);
+        int iz_freq = _get_freq(iz_loc, mesh_source[2]);
+
+        int ix_target = _get_loc(ix_freq, mesh_target[0]);
+        int iy_target = _get_loc(iy_freq, mesh_target[1]);
+        int iz_target = _get_loc(iz_freq, mesh_target[2]);
+
+        if (ix_target == -1 || iy_target == -1 || iz_target == -1)
+        {
+            res[i] = -1;
+        }
+        else
+        {
+            res[i] = ix_target * mesh_target[1] * mesh_target[2] + iy_target * mesh_target[2] + iz_target;
+        }
+
+        res[i] = ix_target * mesh_target[1] * mesh_target[2] + iy_target * mesh_target[2] + iz_target;
+    }
+}
