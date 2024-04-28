@@ -21,6 +21,7 @@
 import copy
 from functools import reduce
 import numpy as np
+import pyscf
 from pyscf import lib
 import pyscf.pbc.gto as pbcgto
 from pyscf.pbc.gto import Cell
@@ -29,6 +30,7 @@ from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 from pyscf.gto.mole import *
 import pyscf.pbc.df.ft_ao as ft_ao
+from pyscf.pbc.df import aft, rsdf_builder, aft_jk
 
 ########## isdf  module ##########
 
@@ -107,6 +109,29 @@ class aoR_Holder:
         aoR = np.zeros((nao, self.aoR.shape[1]))
         aoR[self.ao_involved] = self.aoR
         return aoR
+
+class aoPairR_Holder:
+    
+    def __init__(self, aoPairR, ao_involved, grid_involved):
+        assert aoPairR.shape[1] == len(ao_involved)
+        assert aoPairR.shape[2] == len(grid_involved) 
+        
+        self.aoPairR = aoPairR
+        self.ao_involved = np.array(ao_involved, dtype=np.int32)
+        self.grid_involved = np.array(grid_involved, dtype=np.int32)
+        self.nao_given_atm = aoPairR.shape[0]
+        self.nao_invovled  = len(ao_involved)
+        self.nGrid_involved = len(grid_involved)
+
+    def size(self):
+        return self.aoPairR.nbytes + self.ao_involved.nbytes + self.grid_involved.nbytes
+    
+    def todense(self, nao, nGrid):
+        aoPairR = np.zeros((self.nao_given_atm, self.nao_invovled, nGrid))
+        aoPairR[:,:, self.grid_involved] = self.aoPairR
+        res = np.zeros((self.nao_given_atm, nao, nGrid))
+        res[:, self.ao_involved,:] = aoPairR
+        return res
 
 def _HadamardProduct(a:aoR_Holder, b:aoR_Holder, InPlaceB=True):
     if InPlaceB:
@@ -1394,6 +1419,34 @@ def get_aoR_exact(cell:Cell,
         _benchmark_time(t1, t2, "get_aoR_analytic: merge")
 
     return aoR_holder
+
+def get_aoPairR_analytic(cell_c_input:Cell, 
+                         ke_cutoff_in_rsjk,
+                         mesh, 
+                         distance_matrix=None, AtmConnectionInfoList:list[AtmConnectionInfo]=None, 
+                         use_mpi=False,
+                         compressed=False
+                         ):
+    
+    if use_mpi:
+        raise NotImplementedError("not implemented yet")
+    
+    cell_c = pyscf.pbc.df.ft_ao._RangeSeparatedCell.from_cell(cell_c_input, rsjk.ke_cutoff, in_rsjk=True)
+    
+    precision = AtmConnectionInfoList[0].precision
+    rcut = _estimate_rcut(cell_c, np.prod(mesh), precision)
+    supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(cell_c, [1,1,1], rcut.max())
+    supmol_ft = supmol_ft.strip_basis(rcut)
+    
+    ngrids = np.prod(mesh)
+    
+    Gv, Gvbase, kws = cell_c.get_Gv_weights(mesh)
+    gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
+    
+    ## TODO: consider the weight ## 
+    
+    ### loop over all atm ###
+    
 
 ############ get estimate on the strcuture of Density Matrix ############
 

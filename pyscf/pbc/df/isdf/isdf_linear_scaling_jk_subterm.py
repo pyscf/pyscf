@@ -398,10 +398,11 @@ if __name__ == "__main__":
     pbc_isdf_info.with_robust_fitting = True
     vj_benchmark_robust, vk_benchmark_robust = pbc_isdf_info.get_jk(dm)
     
-    J1 = ISDF_JK._contract_j_dm_ls(pbc_isdf_info, dm, use_mpi=False, first_pass="exclude_cc", second_pass="exclude_cc")  # used in RS
+    J1 = ISDF_JK._contract_j_dm_ls(pbc_isdf_info, dm, use_mpi=False, first_pass="exclude_cc", second_pass="exclude_cc")  # used in RS LR 
     J2 = ISDF_JK._contract_j_dm_ls(pbc_isdf_info, dm, use_mpi=False, first_pass="only_cc",    second_pass="exclude_cc")
     J3 = ISDF_JK._contract_j_dm_ls(pbc_isdf_info, dm, use_mpi=False, first_pass="only_cc",    second_pass="only_cc")
-    J4 = ISDF_JK._contract_j_dm_ls(pbc_isdf_info, dm, use_mpi=False, first_pass="exclude_cc", second_pass="only_cc")
+    J4 = ISDF_JK._contract_j_dm_ls(pbc_isdf_info, dm, use_mpi=False, first_pass="exclude_cc", second_pass="only_cc")     
+    # J5 = ISDF_JK._contract_j_dm_ls(pbc_isdf_info, dm, use_mpi=False, first_pass="only_dd", second_pass="only_dd")        # used in RS SR (DD|DD)^{SR}     
     
     assert np.allclose(J1, J1.T)
     assert np.allclose(J2, J2.T)
@@ -417,18 +418,18 @@ if __name__ == "__main__":
     
     ## find the symmetry for all the involved case ##  
     
-    K_W_DD_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="diffuse", use_mpi=False)
-    K_W_DD_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="compact", use_mpi=False)
+    K_W_DD_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="diffuse", use_mpi=False) # IN RS LR
+    K_W_DD_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="compact", use_mpi=False) # IN RS LR
     assert np.allclose(K_W_DD_CD, K_W_DD_DC.T)
-    K_W_DD_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False)
+    K_W_DD_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False) # IN RS LR
     assert np.allclose(K_W_DD_DD, K_W_DD_DD.T)
-    K_W_DD_CC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="compact", use_mpi=False)
+    K_W_DD_CC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="compact", use_mpi=False) # IN RS LR
     assert np.allclose(K_W_DD_CC, K_W_DD_CC.T)
     
     K_W_CC_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="compact", dm_ket_type="compact", K_bra_type="compact", K_ket_type="diffuse", use_mpi=False)
     K_W_CC_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="compact", dm_ket_type="compact", K_bra_type="diffuse", K_ket_type="compact", use_mpi=False)
     assert np.allclose(K_W_CC_CD, K_W_CC_DC.T)
-    K_W_CC_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="compact", dm_ket_type="compact", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False)
+    K_W_CC_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="compact", dm_ket_type="compact", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False) # IN RS LR
     print("diff = ", diff/np.sqrt(K_W_CC_DD.size))
     assert np.allclose(K_W_CC_DD, K_W_CC_DD.T)
     K_W_CC_CC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="compact", dm_ket_type="compact", K_bra_type="compact", K_ket_type="compact", use_mpi=False)
@@ -440,33 +441,33 @@ if __name__ == "__main__":
     K_W_CD_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="diffuse", use_mpi=False)
     K_W_DC_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="diffuse", K_ket_type="compact", use_mpi=False)
     assert np.allclose(K_W_CD_CD, K_W_DC_DC.T) 
-    K_W_CD_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="compact", use_mpi=False)
-    K_W_DC_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="compact", K_ket_type="compact", use_mpi=False)
+    K_W_CD_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="compact", use_mpi=False) # IN RS LR
+    K_W_DC_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="compact", K_ket_type="compact", use_mpi=False) # IN RS LR
     assert np.allclose(K_W_CD_CC, K_W_DC_CC.T)
-    K_W_CD_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="compact", use_mpi=False)
-    K_W_DC_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="compact", K_ket_type="compact", use_mpi=False)
+    K_W_CD_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="compact", use_mpi=False) # IN RS LR
+    K_W_DC_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=True, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="compact", K_ket_type="compact", use_mpi=False) # IN RS LR
     assert np.allclose(K_W_CD_CC, K_W_DC_CC.T)
     
     K_W = K_W_DD_CD + K_W_DD_DC + K_W_DD_DD + K_W_DD_CC + K_W_CC_CD + K_W_CC_DC + K_W_CC_DD + K_W_CC_CC + K_W_CD_CC + K_W_DC_CC + K_W_CD_CD + K_W_DC_DC + K_W_CD_DC + K_W_DC_CD + K_W_CD_DD + K_W_DC_DD
     assert np.allclose(K_W, vk_benchmark)
     
-    K_V_DD_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="diffuse", use_mpi=False)
-    K_V_DD_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="compact", use_mpi=False)
+    K_V_DD_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="diffuse", use_mpi=False) # IN RS LR
+    K_V_DD_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="compact", use_mpi=False) # IN RS LR
     assert np.allclose(K_V_DD_CD, K_V_DD_DC.T)
-    K_V_DD_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False)
-    K_V_DD_CC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="compact", use_mpi=False)
+    K_V_DD_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False) # IN RS LR
+    K_V_DD_CC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="compact", use_mpi=False) # IN RS LR
     
     K_V_CC_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="compact", K_bra_type="compact", K_ket_type="diffuse", use_mpi=False)
     K_V_CC_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="compact", K_bra_type="diffuse", K_ket_type="compact", use_mpi=False)
     assert np.allclose(K_V_CC_CD, K_V_CC_DC.T)
-    K_V_CC_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="compact", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False)
+    K_V_CC_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="compact", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False) # IN RS LR
     K_V_CC_CC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="compact", K_bra_type="compact", K_ket_type="compact", use_mpi=False) 
     
     K_V   = 2*(K_V_DD_CD+K_V_DD_DC) + K_V_DD_CC + K_V_DD_CC.T + K_V_DD_CC + K_V_DD_CC.T
     K_V  += 2*(K_V_CC_CD+K_V_CC_DC) + K_V_CC_DD + K_V_CC_DD.T + K_V_CC_CC + K_V_CC_CC.T
     
-    K_V_CD_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False)
-    K_V_DC_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False)
+    K_V_CD_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False) # IN RS LR
+    K_V_DC_DD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="diffuse", K_ket_type="diffuse", use_mpi=False) # IN RS LR
     assert np.allclose(K_V_CD_DD, K_V_DC_DD.T)
     K_V_CD_CC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="compact", use_mpi=False)
     K_V_DC_CC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="compact", K_ket_type="compact", use_mpi=False)
@@ -474,8 +475,8 @@ if __name__ == "__main__":
     K_V_CD_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="compact", K_ket_type="diffuse", use_mpi=False)
     K_V_DC_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="diffuse", K_ket_type="compact", use_mpi=False)
     assert np.allclose(K_V_CD_CD, K_V_DC_DC.T)
-    K_V_CD_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="compact", use_mpi=False)
-    K_V_DC_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="compact", K_ket_type="diffuse", use_mpi=False)
+    K_V_CD_DC = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="compact", dm_ket_type="diffuse", K_bra_type="diffuse", K_ket_type="compact", use_mpi=False) # IN RS LR
+    K_V_DC_CD = _contract_k_dm_quadratic_subterm(pbc_isdf_info, dm, use_W=False, dm_bra_type="diffuse", dm_ket_type="compact", K_bra_type="compact", K_ket_type="diffuse", use_mpi=False) # IN RS LR
     assert np.allclose(K_V_CD_DC, K_V_DC_CD.T)
     
     K_V += (K_V_CD_DD + K_V_DC_DD + K_V_CD_CC + K_V_DC_CC + K_V_CD_CD + K_V_DC_DC + K_V_CD_DC + K_V_DC_CD) * 2
