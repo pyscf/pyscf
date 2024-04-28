@@ -7,10 +7,10 @@ dst=${GITHUB_WORKSPACE:-/src/pyscf}/linux-wheels
 mkdir -p /root/wheelhouse $src/linux-wheels
 
 if [ "$#" -gt 0 ]; then
-  export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF -DBUILD_LIBCINT=OFF"
+  export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF -DBUILD_LIBCINT=OFF -DENABLE_SMD=ON"
   curl -L $1 | tar -C $src/pyscf/lib -xzf -
 else
-  export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF"
+  export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF -DENABLE_SMD=ON"
 fi
 
 # In certain versions of auditwheel, some .so files was excluded.

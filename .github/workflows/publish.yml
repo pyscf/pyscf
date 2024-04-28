@@ -17,7 +17,7 @@ jobs:
       - name: Build wheels
         run: |
             docker run --rm -v ${{ github.workspace }}:/src/pyscf \
-            -e CMAKE_BUILD_PARALLEL_LEVEL=4 -e CMAKE_CONFIGURE_ARGS="-DENABLE_SMD=ON" \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=4 \
             pyscf/pyscf-pypa-env:latest \
             bash /src/pyscf/docker/pypa-env/build-wheels.sh
       - name: List available wheels
