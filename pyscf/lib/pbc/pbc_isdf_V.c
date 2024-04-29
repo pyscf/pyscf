@@ -214,6 +214,9 @@ void _construct_V(int *mesh,
                   const int buffersize // must be a multiple of 16 to ensure memory alignment
 )
 {
+    // printf("naux      = %d\n", naux);
+    // printf("BunchSize = %d\n", BunchSize);
+
     // print all the input info
 
     static const int SMALL_SIZE = 8;
@@ -221,6 +224,9 @@ void _construct_V(int *mesh,
     const int nThread = get_omp_threads();
     const int nBunch = ((naux / BunchSize) / nThread) * nThread; // dispatch evenly
     const int nLeft = naux - nBunch * BunchSize;
+
+    // printf("nBunch = %d\n", nBunch);
+    // printf("nLeft  = %d\n", nLeft);
 
     // print the dispatch info
 
@@ -730,6 +736,28 @@ void _packadd_local_dm(
     }
 }
 
+void _packadd_local_dm2_add_transpose(
+    double *local_dm,
+    const int bra_nao_involved,
+    const int *bra_ao_involved,
+    const int ket_nao_involved,
+    const int *ket_ao_involved,
+    double *dm,
+    const int nao)
+{
+    int nThread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < bra_nao_involved; ++i)
+    {
+        for (size_t j = 0; j < ket_nao_involved; ++j)
+        {
+            dm[bra_ao_involved[i] * nao + ket_ao_involved[j]] += local_dm[i * ket_nao_involved + j];
+            dm[ket_ao_involved[j] * nao + bra_ao_involved[i]] += local_dm[i * ket_nao_involved + j];
+        }
+    }
+}
+
 void _packadd_local_RS(
     double *local_dm,
     const int bra_nao_involved,
@@ -944,6 +972,123 @@ void moR_to_Density(
                 rhoR[j] += moR[i * ngrids + j] * moR[i * ngrids + j];
             }
         }
+    }
+}
+
+////////// transpose 012 -> 021 //////////
+
+void transpose_012_to_021(
+    double *target,
+    double *source,
+    const int n1,
+    const int n2,
+    const int n3)
+{
+    int nThread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < n1; i++)
+    {
+        size_t shift = i * n2 * n3;
+        double *ptr_target = target + shift;
+        double *ptr_source = source + shift;
+        for (size_t j = 0; j < n2; j++)
+        {
+            for (size_t k = 0; k < n3; k++)
+            {
+                ptr_target[k * n2 + j] = ptr_source[j * n3 + k];
+            }
+        }
+    }
+}
+
+void transpose_012_to_021_InPlace(
+    double *target,
+    const int n1,
+    const int n2,
+    const int n3,
+    double *buf)
+{
+    int nThread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < n1; i++)
+    {
+        size_t shift = i * n2 * n3;
+        double *ptr_buf = buf + shift;
+        double *ptr_source = target + shift;
+        for (size_t j = 0; j < n2; j++)
+        {
+            for (size_t k = 0; k < n3; k++)
+            {
+                ptr_buf[k * n2 + j] = ptr_source[j * n3 + k];
+            }
+        }
+    }
+
+    memcpy(target, buf, sizeof(double) * n1 * n2 * n3);
+}
+
+////////// used in CCCC for LR part in RS-ISDF //////////
+
+void _unpack_aoPairR(
+    double *target,
+    const int n1,
+    const int n2,
+    const int n3,
+    double *source,
+    const int m1,
+    const int m2,
+    const int m3,
+    const int m2_begin,
+    const int m2_end,
+    const int *grid_involved)
+{
+    int nThread = get_omp_threads();
+
+    int ntask = n1 * (m2_end - m2_begin);
+
+    memset(target, 0, sizeof(double) * n1 * n2 * n3);
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < ntask; i++)
+    {
+        size_t i1 = i / (m2_end - m2_begin);
+        size_t i2 = i % (m2_end - m2_begin);
+
+        size_t shift_target = i1 * n2 * n3 + i2 * n3;
+        size_t shift_source = i1 * m2 * m3 + (i2 + m2_begin) * m3;
+
+        for (size_t j = 0; j < m3; ++j)
+        {
+            target[shift_target + grid_involved[j]] = source[shift_source + j];
+        }
+    }
+}
+
+void _pack_aoPairR_index1(
+    double *target,
+    const int n1,
+    const int n2,
+    const int n3,
+    double *source,
+    const int m1,
+    const int m2,
+    const int m3,
+    const int m2_begin,
+    const int m2_end)
+{
+    int nThread = get_omp_threads();
+
+    // memset(target, 0, sizeof(double) * n1 * n2 * n3);
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < n1; i++)
+    {
+        size_t shift_target = i * n2 * n3;
+        size_t shift_source = i * m2 * m3 + m2_begin * m3;
+
+        memcpy(target + shift_target, source + shift_source, sizeof(double) * n2 * m3);
     }
 }
 

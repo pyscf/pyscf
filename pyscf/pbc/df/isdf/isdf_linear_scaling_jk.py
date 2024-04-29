@@ -63,7 +63,7 @@ def _half_J(mydf, dm, use_mpi=False,
     if first_pass is None:
         first_pass = "all"
     
-    first_pass_all = first_pass == "all"
+    first_pass_all    = first_pass == "all"
     first_pass_has_dd = first_pass in ["all", "only_dd", "exclude_cc"]
     first_pass_has_cc = first_pass in ["all", "only_cc"]
     first_pass_has_cd = first_pass in ["all", "exclude_cc"]
@@ -131,20 +131,23 @@ def _half_J(mydf, dm, use_mpi=False,
         nket_ao = ket_aoR.shape[0]
         if bra_type == ket_type:
             dm_now = np.ndarray((nbra_ao, nbra_ao), buffer=dm_buf)
-            if nbra_ao < nao:
-                fn_extract_dm(
-                    dm.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(nao),
-                    dm_now.ctypes.data_as(ctypes.c_void_p),
-                    bra_ao_involved.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(nbra_ao),
-                )
-            else:
-                dm_now.ravel()[:] = dm.ravel()
+            # if nbra_ao < nao:
+            fn_extract_dm(
+                dm.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao),
+                dm_now.ctypes.data_as(ctypes.c_void_p),
+                bra_ao_involved.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nbra_ao),
+            )
+                # dm_benchmark = dm[bra_ao_involved]
+                # dm_benchmark = dm_benchmark[:,bra_ao_involved]
+                # assert np.allclose(dm_benchmark, dm_now)
+            # else:
+            #     dm_now.ravel()[:] = dm.ravel()
             ddot_res = np.ndarray((nbra_ao, ket_aoR.shape[1]), buffer=ddot_buf)
             lib.ddot(dm_now, ket_aoR, c=ddot_res)
-            density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
-            return density_R_tmp
+            _density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
+            return _density_R_tmp
         else:
             dm_now = np.ndarray((nbra_ao, nket_ao), buffer=dm_buf)
             fn_extract_dm2(
@@ -156,10 +159,15 @@ def _half_J(mydf, dm, use_mpi=False,
                 ket_ao_involved.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(ket_ao_involved.shape[0]),
             )
+            
+            # dm_benchmark = dm[bra_ao_involved]
+            # dm_benchmark = dm_benchmark[:,ket_ao_involved]
+            # assert np.allclose(dm_benchmark, dm_now)
+            
             ddot_res = np.ndarray((nbra_ao, ket_aoR.shape[1]), buffer=ddot_buf)
             lib.ddot(dm_now, ket_aoR, c=ddot_res)
-            density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
-            return density_R_tmp * 2.0
+            _density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
+            return _density_R_tmp * 2.0
     
     for atm_id, aoR_holder in enumerate(aoR):
         
@@ -173,6 +181,7 @@ def _half_J(mydf, dm, use_mpi=False,
         ngrids_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
         global_gridID_begin = aoR_holder.global_gridID_begin
+        nCompact = aoR_holder.nCompact
         
         if first_pass_all:        
             density_R_tmp = _get_rhoR(
@@ -189,39 +198,48 @@ def _half_J(mydf, dm, use_mpi=False,
             
             if first_pass_has_cc:
                 density_R_tmp = _get_rhoR(
-                    aoR_holder.aoR[:nao_involved,:], 
-                    aoR_holder.ao_involved[:nao_involved], 
-                    aoR_holder.aoR[:nao_involved,:], 
-                    aoR_holder.ao_involved[:nao_involved],
+                    aoR_holder.aoR[:nCompact,:], 
+                    aoR_holder.ao_involved[:nCompact], 
+                    aoR_holder.aoR[:nCompact,:], 
+                    aoR_holder.ao_involved[:nCompact],
                     "compact",
                     "compact"
                 )
                 
-                density_R[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
+                density_R[global_gridID_begin:global_gridID_begin+ngrids_now] += density_R_tmp
             
             if first_pass_has_dd:
                 density_R_tmp = _get_rhoR(
-                    aoR_holder.aoR[nao_involved:,:], 
-                    aoR_holder.ao_involved[nao_involved:], 
-                    aoR_holder.aoR[nao_involved:,:], 
-                    aoR_holder.ao_involved[nao_involved:],
+                    aoR_holder.aoR[nCompact:,:], 
+                    aoR_holder.ao_involved[nCompact:], 
+                    aoR_holder.aoR[nCompact:,:], 
+                    aoR_holder.ao_involved[nCompact:],
                     "diffuse",
                     "diffuse"
                 )
                 
-                density_R[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
+                density_R[global_gridID_begin:global_gridID_begin+ngrids_now] += density_R_tmp
             
             if first_pass_has_cd:
                 density_R_tmp = _get_rhoR(
-                    aoR_holder.aoR[:nao_involved,:], 
-                    aoR_holder.ao_involved[:nao_involved], 
-                    aoR_holder.aoR[nao_involved:,:], 
-                    aoR_holder.ao_involved[nao_involved:],
+                    aoR_holder.aoR[:nCompact,:], 
+                    aoR_holder.ao_involved[:nCompact], 
+                    aoR_holder.aoR[nCompact:,:], 
+                    aoR_holder.ao_involved[nCompact:],
                     "compact",
                     "diffuse"
                 )
                 
-                density_R[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
+                # density_R_tmp2 = _get_rhoR(
+                #     aoR_holder.aoR[nCompact:,:], 
+                #     aoR_holder.ao_involved[nCompact:],
+                #     aoR_holder.aoR[:nCompact,:], 
+                #     aoR_holder.ao_involved[:nCompact], 
+                #     "diffuse",
+                #     "compact"
+                # )
+                
+                density_R[global_gridID_begin:global_gridID_begin+ngrids_now] += density_R_tmp
     
     # assert local_grid_loc == ngrids_local
     
@@ -384,6 +402,8 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
 
     J = _half_J(mydf, dm, use_mpi, first_pass, short_range)
 
+    # print("J = ", J[:16])
+
     #### step 3. get J 
     
     # J = np.asarray(lib.d_ij_j_ij(aoR, J, out=buffer1), order='C') 
@@ -393,51 +413,52 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
 
     J_Res = np.zeros((nao, nao), dtype=np.float64)
 
-    def _get_j_pass2_ls(aoR_bra, 
-                        ao_involved_bra, 
-                        aoR_ket,
-                        ao_involved_ket,
-                        bra_type,
-                        ket_type,
-                        potential,
-                        Res):
+    def _get_j_pass2_ls(_aoR_bra, 
+                        _ao_involved_bra, 
+                        _aoR_ket,
+                        _ao_involved_ket,
+                        _bra_type,
+                        _ket_type,
+                        _potential,
+                        _Res):
         
-        nao_bra = aoR_bra.shape[0]
-        nao_ket = aoR_ket.shape[0]
-        
-        if bra_type == ket_type:
+        nao_bra = _aoR_bra.shape[0]
+        nao_ket = _aoR_ket.shape[0]
+                
+        if _bra_type == _ket_type:
             
-            aoR_J_res = np.ndarray(aoR_ket.shape, buffer=aoR_buf1)
-            lib.d_ij_j_ij(aoR_ket, potential, out=aoR_J_res)
+            aoR_J_res = np.ndarray(_aoR_ket.shape, buffer=aoR_buf1)
+            lib.d_ij_j_ij(_aoR_ket, _potential, out=aoR_J_res)
             ddot_res = np.ndarray((nao_ket, nao_ket), buffer=ddot_buf)
-            lib.ddot(aoR_ket, aoR_J_res.T, c=ddot_res)
+            lib.ddot(_aoR_ket, aoR_J_res.T, c=ddot_res)
             
-            if nao_ket == nao:
-                Res += ddot_res
+            if nao_ket == nao and np.allclose(_ao_involved_ket, np.arange(nao)):
+                _Res += ddot_res
             else:
                 fn_packadd_dm(
                     ddot_res.ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(nao_ket),
-                    ao_involved_ket.ctypes.data_as(ctypes.c_void_p),
-                    Res.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(Res.shape[0])
+                    _ao_involved_ket.ctypes.data_as(ctypes.c_void_p),
+                    _Res.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(_Res.shape[0])
                 )
         else:
+            
             ### J_Res = ddot_res + ddot_res.T
             
-            aoR_J_res = np.ndarray(aoR_ket.shape, buffer=aoR_buf1)
-            lib.d_ij_j_ij(aoR_ket, potential, out=aoR_J_res)
+            aoR_J_res = np.ndarray(_aoR_ket.shape, buffer=aoR_buf1)
+            lib.d_ij_j_ij(_aoR_ket, _potential, out=aoR_J_res)
             ddot_res = np.ndarray((nao_bra, nao_ket), buffer=ddot_buf)
-            lib.ddot(aoR_bra, aoR_J_res.T, c=ddot_res)
+            lib.ddot(_aoR_bra, aoR_J_res.T, c=ddot_res)
             
             fn_packadd_dm2(
                 ddot_res.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nao_bra),
-                ao_involved_bra.ctypes.data_as(ctypes.c_void_p),
+                _ao_involved_bra.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nao_ket),
-                ao_involved_ket.ctypes.data_as(ctypes.c_void_p),
-                Res.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(Res.shape[0])
+                _ao_involved_ket.ctypes.data_as(ctypes.c_void_p),
+                _Res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(_Res.shape[0])
             )
 
 
@@ -455,9 +476,14 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
         nao_compact  = aoR_holder.nCompact
         nao_diffuse  = nao_involved - nao_compact
         
+        # print("nao_involved = ", nao_involved)
+        # print("nao_compact  = ", nao_compact)
+        
         global_gridID_begin = aoR_holder.global_gridID_begin
         
         J_tmp = J[global_gridID_begin:global_gridID_begin+ngrids_now] 
+        
+        # print("J_tmp = ", J_tmp[:16])
         
         if second_pass_all:  ### with RS case ###
               
@@ -475,7 +501,7 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
         else:
             
             if second_pass_has_cc:
-                
+                # print("second_pass_has_cc")
                 _get_j_pass2_ls(
                     aoR_holder.aoR[:nao_compact,:], 
                     aoR_holder.ao_involved[:nao_compact], 
@@ -488,7 +514,7 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
                 )
                 
             if second_pass_has_dd:
-                
+                # print("second_pass_has_dd")
                 _get_j_pass2_ls(
                     aoR_holder.aoR[nao_compact:,:], 
                     aoR_holder.ao_involved[nao_compact:], 
@@ -501,7 +527,7 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
                 )
                 
             if second_pass_has_cd:
-                
+                # print("second_pass_has_cd")
                 _get_j_pass2_ls(
                     aoR_holder.aoR[:nao_compact,:], 
                     aoR_holder.ao_involved[:nao_compact], 

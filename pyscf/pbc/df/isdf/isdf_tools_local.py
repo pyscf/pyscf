@@ -91,16 +91,20 @@ class aoR_Holder:
         ordering_D = []
         nao_involved = len(self.ao_involved)
         for i in range(nao_involved):
-            if IsCompact[i]:
+            if IsCompact[self.ao_involved[i]]:
                 ordering_C.append(i)
             else:
                 ordering_D.append(i)
+        self.nCompact = len(ordering_C)
         ordering = ordering_C
         ordering.extend(ordering_D)
         ordering = np.array(ordering, dtype=np.int32)
-        self.aoR = self.aoR[ordering]
-        self.ao_involved = self.ao_involved[ordering]
-        self.nCompact = len(ordering_C)
+        self.aoR = self.aoR[ordering].copy()
+        self.ao_involved = self.ao_involved[ordering].copy()
+        # print("ordering = ", ordering)
+        # print("nCompact = ", self.nCompact)
+        for i in range(self.nCompact):
+            assert IsCompact[self.ao_involved[i]]
     
     def size(self):
         return self.aoR.nbytes + self.ao_involved.nbytes

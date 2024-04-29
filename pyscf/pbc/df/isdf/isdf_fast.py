@@ -537,7 +537,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         # print("ao2atomID = ", ao2atomID)
 
         self.ao2atomID = ao2atomID
-        self.ao2atomID = ao2atomID
+        # self.ao2atomID = ao2atomID
 
         # given aoG, determine at given grid point, which ao has the maximal abs value
 

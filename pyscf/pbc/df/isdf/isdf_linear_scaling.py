@@ -1653,12 +1653,16 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         IsCompact[DiffuseAO] = False
         self.IsCompact = IsCompact
         
+        # print("CompactAO = ", CompactAO)
+        # print("DiffuseAO = ", DiffuseAO)
+        # print("IsCompact = ", IsCompact)
+        
         for aoR in self.aoR:
             aoR.RangeSeparation(IsCompact)
         for aoRg in self.aoRg:
             aoRg.RangeSeparation(IsCompact)
         
-C = 10
+C = 15
 
 from pyscf.lib.parameters import BOHR
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
@@ -1690,8 +1694,8 @@ if __name__ == '__main__':
     pseudo = "gth-pade"   
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis=basis, pseudo=pseudo)    
     # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
-    # prim_partition = [[0,1,2,3,4,5,6,7]]
-    prim_partition = [[0,1],[2,3],[4,5],[6,7]]
+    prim_partition = [[0,1,2,3,4,5,6,7]]
+    # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     # prim_partition = [[0,1,2,3],[4,5,6,7]]
 
 #     prim_a = np.array(
