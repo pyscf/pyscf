@@ -469,11 +469,15 @@ class KohnShamDFT:
         return self
 
     def check_sanity(self):
-        hf.SCF.check_sanity(self)
-        if hasattr(self, 'nlc'):
-            if self.nlc not in [False, ''] and self.disp is not None:
+        out = super(self.__class__, self).check_sanity()
+        if self.do_nlc() and not self.disp:
+            allow_nlc = dft_parser.parse_dft(xc)[1]
+            if not allow_nlc:
                 import warnings
-                warnings.warn(RuntimeWarning('nlc and disp are both configured. This may lead to double counting.'))
+                warnings.warn(
+                    f'nlc and disp {self.disp} are both configured. '
+                    'This may lead to double counting.')
+        return out
 
     def initialize_grids(self, mol=None, dm=None):
         '''Initialize self.grids the first time call get_veff'''
