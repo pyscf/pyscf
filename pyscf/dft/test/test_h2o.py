@@ -543,15 +543,13 @@ class KnownValues(unittest.TestCase):
     def test_d3_warning_msg(self):
         mf = dft.RKS(h2o)
         mf.xc = 'wb97m-d3bj'
-        with self.assertRaisesRegex(ValueError, "Dispersion correction found in xc."):
+        with self.assertRaisesRegex(ValueError, 'dispersion correction'):
             mf.run()
 
         mf.xc = 'wb97m-v'
         mf.nlc = True
         mf.disp = 'd3bj'
-        with self.assertWarnsRegex(
-            RuntimeWarning,
-            'nlc and disp are both configured. This may lead to double counting.'):
+        with self.assertWarnsRegex(UserWarning, 'double counting'):
             mf.build()
 
     def test_camb3lyp_rsh_omega(self):

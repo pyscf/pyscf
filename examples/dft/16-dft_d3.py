@@ -4,7 +4,20 @@ import pyscf
 from pyscf.dft import KS
 
 '''
-D3 and D4 Dispersion
+D3 and D4 Dispersion.
+
+This is a simplified dispersion interface to
+d3 (https://github.com/dftd3/simple-dftd3) and
+d4 (https://github.com/dftd4/dftd4) libraries.
+This interface can automatically configure the necessary settings including
+dispersion, xc, and nlc attributes of PySCF mean-field objects. However,
+advanced features of d3 and d4 program are not available.
+
+If you need to access more features d3 and d4 libraries, such as overwriting the
+dispersion parameters, you can use the wrapper provided by the simple-dftd3 and
+dftd4 libraries. When using these libraries, please disable the .disp attribute
+of the underlying mean-field object, and properly set the .xc and .nlc attributes
+following this example.
 '''
 
 mol = pyscf.M(
@@ -43,13 +56,13 @@ mf.kernel()
 # Alternatively, you can configure the dispersion correction manually, through
 # the xc, nlc, disp attributes.
 mf = mol.KS()
-mf.xc = 'wb97x'
+mf.xc = 'wb97x-v'
 mf.nlc = False  # this will disable NLC correction.
 mf.disp = 'd4'
 mf.kernel()
 
-# To disable the dispersion correction, you can simply set disp = None or disp = False
-mf.disp = False
+# To disable the dispersion correction, you can simply set disp = None
+mf.disp = None
 mf.kernel()
 
 # DFTD3 and DFTD4 libraries require two parameters to control the dispersion
@@ -74,7 +87,7 @@ mf.disp = 'd3bj' # == 'd3bj,wb97x'
 # You can combine DFT calculation with any kinds of dispersion corrections via the
 # disp attribute.
 mf = mol.KS()
-mf.xc = 'wb97x'
+mf.xc = 'wb97x-v'
 mf.nlc = False
 mf.disp = 'd3bj,b3lyp'
 mf.kernel()

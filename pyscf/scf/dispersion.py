@@ -20,12 +20,10 @@
 dispersion correction for HF and DFT
 '''
 
-from pyscf.dft.rks import KohnShamDFT
-
 # supported dispersion corrections
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
 
-def parse_disp(disp):
+def _decode_3body(disp):
     ''' *2b -> *, True'''
     disp_lower = disp.lower()
     if disp_lower.endswith('2b'):
@@ -50,16 +48,14 @@ def get_dispersion(mf, disp_version=None, with_3body=None):
     if disp_version is None:
         return 0.0
 
-    if isinstance(mf, KohnShamDFT):
-        method = mf.xc
-    else:
-        method = 'hf'
+    # The disp method for both HF and MCSCF is set to 'hf'
+    method = getattr(mf, 'xc', 'hf')
 
     # overwrite method if method exists in disp_version
     if ',' in disp_version:
         disp_version, method = disp_version.split(',')
 
-    disp_version, disp_with_3body = parse_disp(disp_version)
+    disp_version, disp_with_3body = _decode_3body(disp_version)
 
     if disp_version not in DISP_VERSIONS:
         raise NotImplementedError
