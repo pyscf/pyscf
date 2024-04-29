@@ -469,7 +469,7 @@ class KohnShamDFT:
         return self
 
     def check_sanity(self):
-        out = super(self.__class__, self).check_sanity()
+        out = super().check_sanity()
         if self.do_nlc() and not self.disp and self._numint.libxc.is_nlc(self.xc):
             import warnings
             warnings.warn(
