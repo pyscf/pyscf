@@ -23,8 +23,8 @@ dispersion correction for HF and DFT
 # supported dispersion corrections
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
 
-def _decode_3body(disp):
-    ''' *2b -> *, True'''
+def parse_disp(disp):
+    '''Decode the disp parameter for 3-body correction'''
     disp_lower = disp.lower()
     if disp_lower.endswith('2b'):
         return disp_lower.replace('2b', ''), False
@@ -55,7 +55,7 @@ def get_dispersion(mf, disp_version=None, with_3body=None):
     if ',' in disp_version:
         disp_version, method = disp_version.split(',')
 
-    disp_version, disp_with_3body = _decode_3body(disp_version)
+    disp_version, disp_with_3body = parse_disp(disp_version)
 
     if disp_version not in DISP_VERSIONS:
         raise NotImplementedError
