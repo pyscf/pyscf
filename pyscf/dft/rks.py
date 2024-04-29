@@ -470,13 +470,11 @@ class KohnShamDFT:
 
     def check_sanity(self):
         out = super(self.__class__, self).check_sanity()
-        if self.do_nlc() and not self.disp:
-            allow_nlc = dft_parser.parse_dft(xc)[1]
-            if not allow_nlc:
-                import warnings
-                warnings.warn(
-                    f'nlc and disp {self.disp} are both configured. '
-                    'This may lead to double counting.')
+        if self.do_nlc() and not self.disp and self._numint.libxc.is_nlc(self.xc):
+            import warnings
+            warnings.warn(
+                f'nlc-type xc {self.xc} and disp {self.disp} may lead to'
+                'double counting in NLC.')
         return out
 
     def initialize_grids(self, mol=None, dm=None):

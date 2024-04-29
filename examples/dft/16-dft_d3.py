@@ -68,7 +68,7 @@ mf.kernel()
 # DFTD3 and DFTD4 libraries require two parameters to control the dispersion
 # computation, including which dispersion version to use (like d3, d4, d3bj,
 # d3zero), and which XC type of dispersion to target at (like b3lyp, wb97, hf).
-# The two parameters can be configured in the disp attribute, separated by ","
+# The two parameters can be configured in the disp attribute, separated by ",".
 # If the combination of XC and dispersion version is not found, DFTD3 and DFTD4
 # will employ the default parameters of dispersion corrections. Please refer the
 # the database of DFTD3 and DFTD4 for the proper xc names
@@ -79,11 +79,13 @@ mf.disp = 'd3,b3lyp'
 mf.disp = 'd4,wb97m'
 mf.disp = 'd3bj,hf'
 
-# If the xc-type is not specified in the disp, the DFT code will automatically
+# If the xc parameter is not specified in the disp, the DFT code will automatically
 # employ the .xc attribute as the xc-type parameter.
-mf.xc = 'wb97x'
-mf.disp = 'd3bj' # == 'd3bj,wb97x'
+mf.xc = 'b3lyp'
+mf.disp = 'd3bj' # == 'd3bj,b3lyp'
 
+# Please note that the second parameter of mf.disp can be different to mf.xc.
+# This parameter is meant to be used by dftd3 and dftd4 program only.
 # You can combine DFT calculation with any kinds of dispersion corrections via the
 # disp attribute.
 mf = mol.KS()
