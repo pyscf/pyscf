@@ -56,3 +56,11 @@ mf.kernel()
 mc = solvent.PCM(mcscf.CASCI(mf,2,2))
 de = mc.nuc_grad_method().as_scanner()(mol)
 
+# excited states
+mf = mol.RHF().PCM().run()
+td = mf.TDA().PCM()
+td.with_solvent.equilibrium_solvation = True
+td.kernel()
+
+mf = mol.RHF().PCM().run()
+td = mf.TDA().run()
