@@ -69,7 +69,7 @@ def _check_hess(atom, solvent='water'):
 class KnownValues(unittest.TestCase):
     def setUp(self):
         if smd.libsolvent is None:
-            raise self.SkipTest('SMD Fortran library not compiled')
+            raise self.skipTest('SMD Fortran library not compiled')
 
     def test_h2o(self):
         h2o = gto.Mole()

@@ -54,7 +54,7 @@ def _check_smd(atom, e_ref, solvent='water'):
 class KnownValues(unittest.TestCase):
     def setUp(self):
         if smd.libsolvent is None:
-            raise self.SkipTest('SMD Fortran library not compiled')
+            raise self.skipTest('SMD Fortran library not compiled')
 
     def test_cds_solvent(self):
         smdobj = smd.SMD(mol)
