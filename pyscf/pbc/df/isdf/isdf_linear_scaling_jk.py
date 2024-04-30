@@ -356,6 +356,9 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
     second_pass_has_cc = second_pass in ["all", "only_cc"]
     second_pass_has_cd = second_pass in ["all", "exclude_cc"]
     
+    #print("first_pass  = ", first_pass)
+    #print("second_pass = ", second_pass)
+    
     ####### Start the calculation ########
     
     t1 = (logger.process_clock(), logger.perf_counter())
@@ -413,6 +416,8 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
 
     J_Res = np.zeros((nao, nao), dtype=np.float64)
 
+    ordered_ao_ind = np.arange(nao)
+
     def _get_j_pass2_ls(_aoR_bra, 
                         _ao_involved_bra, 
                         _aoR_ket,
@@ -432,7 +437,10 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
             ddot_res = np.ndarray((nao_ket, nao_ket), buffer=ddot_buf)
             lib.ddot(_aoR_ket, aoR_J_res.T, c=ddot_res)
             
-            if nao_ket == nao and np.allclose(_ao_involved_ket, np.arange(nao)):
+            # print("nao_ket = ", nao_ket)
+            # print("nao     = ", nao)
+            
+            if nao_ket == nao and np.allclose(_ao_involved_ket, ordered_ao_ind):
                 _Res += ddot_res
             else:
                 fn_packadd_dm(
@@ -626,6 +634,7 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
     
     # local_grid_loc = 0
     density_R_tmp = None
+    ordered_ao_ind = np.arange(nao)
     
     for atm_id, aoR_holder in enumerate(aoRg):
         
@@ -639,7 +648,7 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
         ngrids_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
         
-        if nao_involved < nao:
+        if nao_involved < nao or (nao_involved == nao and not np.allclose(aoR_holder.ao_involved, ordered_ao_ind)):
             fn_extract_dm(
                 dm.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nao),
@@ -719,7 +728,7 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
         ddot_res = np.ndarray((nao_involved, nao_involved), buffer=ddot_buf)
         lib.ddot(aoR_holder.aoR, aoR_J_res.T, c=ddot_res)
         
-        if nao_involved == nao:
+        if nao_involved == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
             J_Res += ddot_res
         else:
             fn_packadd_dm(
@@ -939,6 +948,8 @@ def __get_DensityMatrixonGrid_qradratic(mydf, dm, bra_aoR_holder, ket_aoR_holder
     fn_packcol = getattr(libpbc, "_buildK_packcol", None)
     assert fn_packcol is not None
     
+    ordered_ao_ind = np.arange(nao)
+    
     ### perform aoR_bra.T * dm
     
     ngrid_loc = 0
@@ -950,7 +961,7 @@ def __get_DensityMatrixonGrid_qradratic(mydf, dm, bra_aoR_holder, ket_aoR_holder
         ngrid_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
         
-        if nao_involved == nao:
+        if nao_involved == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
             dm_packed = dm
         else:
             # dm_packed = dm[aoR_holder.ao_involved, :]
@@ -985,7 +996,7 @@ def __get_DensityMatrixonGrid_qradratic(mydf, dm, bra_aoR_holder, ket_aoR_holder
         ngrid_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
         
-        if nao_involved == nao:
+        if nao_involved == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
             tmp1_packed = tmp1
         else:
             # tmp1_packed = tmp1[:, aoR_holder.ao_involved]
@@ -1067,6 +1078,8 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm,
     
     ### perform aoR_bra.T * dm
     
+    ordered_ao_ind = np.arange(nao)
+    
     ngrid_loc = 0
     for aoR_holder in bra_aoR_holder:
         
@@ -1086,7 +1099,7 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm,
         
         nao_at_work = ao_end_indx - ao_begin_indx
         
-        if (nao_at_work) == nao:
+        if (nao_at_work) == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
             dm_packed = dm
         else:
             dm_packed = np.ndarray((nao_at_work, nao), buffer=dm_pack_buf)
@@ -1195,6 +1208,8 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     offset+= pack_buf.size * pack_buf.dtype.itemsize
     ddot_buf2 = np.ndarray((naux, max(max_nIP_involved, max_nao_involved)), buffer=ddot_res_buf, offset=offset, dtype=np.float64)
     
+    ordered_ao_ind = np.arange(nao)
+    
     ### TODO: consider MPI 
     
     nIP_loc = 0
@@ -1208,7 +1223,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         
         #### pack the density matrix ####
         
-        if nao_invovled == nao:
+        if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
             Density_RgAO_packed = Density_RgAO
         else:
             # Density_RgAO_packed = Density_RgAO[:, aoRg_holder.ao_involved]
@@ -1247,7 +1262,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_buf2)
         lib.ddot(W_tmp, aoRg_holder.aoR.T, c=ddot_res)
         
-        if nao_invovled == nao:
+        if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
             K1 += ddot_res
         else:
             # K1[: , aoRg_holder.ao_involved] += ddot_res
@@ -1281,7 +1296,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         ddot_res = np.ndarray((nao_invovled, nao), buffer=ddot_res_buf)
         lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
         
-        if nao_invovled == nao:
+        if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
             K += ddot_res
         else:
             # K[aoRg_holder.ao_involved, :] += ddot_res 
@@ -1338,7 +1353,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             
             #### pack the density matrix ####
             
-            if nao_invovled == nao:
+            if nao_invovled == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
                 Density_RgAO_packed = Density_RgAO_packed
             else:
                 # Density_RgAO_packed = Density_RgAO[:, aoR_holder.ao_involved]
@@ -1388,7 +1403,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_buf1)
             lib.ddot(V_tmp, aoR_holder.aoR.T, c=ddot_res)
             
-            if nao_invovled == nao:
+            if nao_invovled == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
                 K2 += ddot_res
             else:
                 # K2[: , aoR_holder.ao_involved] += ddot_res 
@@ -1423,7 +1438,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             ddot_res = np.ndarray((nao_invovled, nao), buffer=ddot_res_buf)
             lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
             
-            if nao == nao_invovled:
+            if nao == nao_invovled and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
                 K_add += ddot_res
             else:
                 # K_add[aoRg_holder.ao_involved, :] += ddot_res 
@@ -1593,6 +1608,8 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     fn_packadd_row = getattr(libpbc, "_buildK_packaddrow", None)
     assert fn_packadd_row is not None
 
+    ordered_ao_ind = np.arange(nao)
+
     ######### begin work #########
     
     K1 = np.zeros((nao, nao), dtype=np.float64) # contribution from V matrix
@@ -1716,7 +1733,7 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
             lib.ddot(V_packed, aoR_holder.aoR.T, c=ddot_res)
             # K1_tmp1[:, ngrid_loc:ngrid_loc+ngrid_now] = ddot_res
                 
-            if nao_invovled == nao:
+            if nao_invovled == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
                 K1_tmp1 += ddot_res
             else:
                 # K1_tmp1[: , aoR_holder.ao_involved] += ddot_res
@@ -1761,7 +1778,7 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
             
             lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
             
-            if nao_invovled == nao:
+            if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
                 K1 += ddot_res
             else:
                 # K1[aoRg_holder.ao_involved, :] += ddot_res
@@ -1811,7 +1828,7 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
             nIP_now = aoRg_holder.aoR.shape[1]
             nao_invovled = aoRg_holder.aoR.shape[0]
                 
-            if nao_invovled == nao:
+            if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
                 Density_RgAO_packed = Density_RgAO_tmp
             else:
                 # Density_RgAO_packed = Density_RgAO[:, aoRg_holder.ao_involved]
@@ -1875,7 +1892,7 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
             lib.ddot(W_packed, aoRg_holder.aoR.T, c=ddot_res)
             # K2_tmp1[:, nIP_loc:nIP_loc+nIP_now] = ddot_res
                 
-            if nao_invovled == nao:
+            if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
                 K2_tmp1 += ddot_res
             else:
                 # K2_tmp1[: , aoRg_holder.ao_involved] += ddot_res
@@ -1909,7 +1926,7 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
             
             lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
             
-            if nao_invovled == nao:
+            if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
                 K2 += ddot_res
             else:
                 # K2[aoRg_holder.ao_involved, :] += ddot_res
@@ -2259,6 +2276,8 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
 
     J_Res = np.zeros((nao, nao), dtype=np.float64)
 
+    ordered_ao_ind = np.arange(nao, dtype=np.int32)
+
     #### step 1 get_J ####
 
     t1 = (logger.process_clock(), logger.perf_counter())
@@ -2286,7 +2305,7 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
         ddot_res = np.ndarray((nao_involved, nao_involved), buffer=ddot_buf)
         lib.ddot(aoR_rhoR_res, aoR_holder.aoR.T, c=ddot_res)
         
-        if nao_involved == nao:
+        if nao_involved == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
             J_Res += ddot_res
         else:
             fn_packadd_dm(
@@ -2377,7 +2396,7 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
 
         lib.ddot(K1_pack, aoR_holder.aoR.T, c=ddot_res)
         
-        if nao_involved == nao:
+        if nao_involved == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
             K1_res += ddot_res
         else:
             fn_packadd_col(
@@ -2396,7 +2415,7 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
             K3_pack = K3[grid_loc_now:grid_loc_now+ngrids_now, :]
             ddot_res = np.ndarray((nao_involved, nocc), buffer=ddot_buf)
             lib.ddot(aoR_holder.aoR, K3_pack, c=ddot_res)
-            if nao_involved == nao:
+            if nao_involved == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
                 K3_res += ddot_res
             else:
                 fn_packadd_row(
@@ -2440,7 +2459,7 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
             
             lib.ddot(K2_pack, aoR_holder.aoR.T, c=ddot_res)
             
-            if nao_involved == nao:
+            if nao_involved == nao and np.allclose(aoR_holder.ao_involved, ordered_ao_ind):
                 K2_res += ddot_res
             else:
                 fn_packadd_col(

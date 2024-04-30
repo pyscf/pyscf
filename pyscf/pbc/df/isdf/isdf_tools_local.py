@@ -1126,7 +1126,7 @@ def get_aoR(cell:Cell, coords, partition,
         # if use_mpi == False:
         #     print("atm %d involved %d ao after  prune" % (atm_id, len(where)))
         # if len(where) < aoR.shape[0] * 0.85:
-        if len(where) < aoR.shape[0]:
+        if len(where) < aoR.shape[0] * 0.9:
             aoR = aoR[where]
             bas_id = np.array(bas_id)[where]
         # if use_mpi == False:
