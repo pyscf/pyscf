@@ -253,7 +253,7 @@ class PCM(lib.StreamObject):
         'method', 'vdw_scale', 'surface', 'r_probe', 'intopt',
         'mol', 'radii_table', 'atom_radii', 'lebedev_order', 'lmax', 'eta',
         'eps', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
-        'equilibrium_solvation', 'e', 'v',
+        'equilibrium_solvation', 'e', 'v', 'v_grids_n',
     }
 
     kernel = ddcosmo.DDCOSMO.kernel
