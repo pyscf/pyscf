@@ -21,41 +21,33 @@ dispersion correction for HF and DFT
 '''
 
 from pyscf.dft.rks import KohnShamDFT
+from pyscf.dft import dft_parser
 
-def get_dispersion(mf, disp_version=None, with_3body=None):
+def get_dispersion(mf, disp_version=None):
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
         print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
         raise
     mol = mf.mol
-
-    # priority: args > mf.disp
-    if disp_version is None:
-        if hasattr(mf, 'disp'): disp_version = mf.disp
-
-    if disp_version is None:
-        return 0.0
-
     if isinstance(mf, KohnShamDFT):
         method = mf.xc
     else:
         method = 'hf'
+    method, disp, with_3body = dft_parser.parse_dft(method)[2]
 
-    # overwrite method if method exists in disp_version
-    if ',' in disp_version:
-        disp_version, method = disp_version.split(',')
+    # priority: args > mf.disp > dft_parser
+    if disp_version is None:
+        disp_version = disp
+        # dispersion version can be customized via mf.disp
+        if hasattr(mf, 'disp') and mf.disp is not None:
+            disp_version = mf.disp
+    if disp_version is None:
+        return 0.0
 
-    if with_3body is None:
-        # 3-body contribution can be disabled with mf.disp_with_3body
-        if hasattr(mf, 'disp_with_3body'):
-            with_3body = mf.disp_with_3body
-        else:
-            with_3body = False
-
-    if hasattr(mf, 'nlc') and mf.nlc not in [False, '']:
-        import warnings
-        warnings.warn('NLC is incompatiable with dispersion correction.')
+    # 3-body contribution can be disabled with mf.disp_with_3body
+    if hasattr(mf, 'disp_with_3body') and mf.disp_with_3body is not None:
+        with_3body = mf.disp_with_3body
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':
