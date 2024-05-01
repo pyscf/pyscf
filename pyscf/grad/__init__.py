@@ -32,7 +32,6 @@ from . import rhf
 from . import dhf
 from . import uhf
 from . import rohf
-from . import dispersion
 from .rhf import Gradients as RHF
 from .dhf import Gradients as DHF
 from .uhf import Gradients as UHF
@@ -63,6 +62,7 @@ try:
     from .rks import Gradients as RKS
     from .uks import Gradients as UKS
     from .roks import Gradients as ROKS
+    from . import dispersion
 
 except (ImportError, OSError):
     pass
