@@ -42,12 +42,11 @@ libpbc = lib.load_library('libpbc')
 ############### sub terms for get K , design for RS ################
 
 def _contract_k_dm_quadratic_subterm(mydf, dm, 
-                                     # with_robust_fitting=True, 
                                      use_W = True,
                                      dm_bra_type = None, 
                                      dm_ket_type = None,
-                                     K_bra_type = None,
-                                     K_ket_type = None,
+                                     K_bra_type  = None,
+                                     K_ket_type  = None,
                                      use_mpi=False):
     
     if use_mpi:
@@ -512,15 +511,62 @@ def _get_AOMOPairR_holder(mydf,
     
     return Res
 
-def _contract_k_mo_quadratic_subterm_CC(
+def _contract_k_mo_quadratic_subterm_CC( # evaluate exactly ! exploring the locality ! 
     mydf, 
     atm_2_compactAO: np.ndarray,
-    AOMOPairR_holder: list[ISDF_LOCAL_TOOL.aoPairR_Holder],
-    moR: np.ndarray,
-    
+    aoPairR_holders: list[ISDF_LOCAL_TOOL.aoPairR_Holder],
+    dm_ket_type = None,
     K_ket_type = None,
+    ### calculate interaction between different mesh ###
+    mesh_bra = None,
+    mesh_ket = None,
+    map_bra_2_ket = None,
 ):
-    pass
+    ######## preprocess ########
+    
+    assert mesh_bra is not None
+    assert mesh_ket is not None
+    assert map_bra_2_ket is not None
+    
+    assert dm_ket_type in ["compact", "diffuse", "all"]
+    assert K_ket_type in ["compact", "diffuse", "all"]
+    if dm_ket_type is None:
+        dm_ket_type = "all"
+    if K_ket_type is None:
+        K_ket_type = "all"
+        
+    nCompactAO = len(mydf.CompactAOList)
+    nao = mydf.cell.nao 
+    nDiffuseAO = nao - nCompactAO
+    
+    nao_atm_max = 0
+    nao_involved_max = 0
+    ngrid_max = 0
+    for aoPairR_holder in aoPairR_holders:
+        if aoPairR_holder is None:
+            continue
+        nao_atm_max = max(nao_atm_max, aoPairR_holder.aoPairR.shape[0])
+        ngrid_max = max(ngrid_max, aoPairR_holder.aoPairR.shape[2])
+        nao_involved_max = max(nao_involved_max, aoPairR_holder.aoPairR.shape[1])
+    
+    nthread = lib.num_threads() 
+    natm = len(aoPairR_holders)
+    K = np.zeros((nao, nao), dtype=np.float64)
+    ngrid_bra = np.prod(mesh_bra)
+    ngrid_ket = np.prod(mesh_ket)
+    ngrid_bra_complex = mesh_bra[0] * mesh_bra[1] * (mesh_bra[2]//2+1)*2
+    ngrid_ket_complex = mesh_ket[0] * mesh_ket[1] * (mesh_ket[2]//2+1)*2
+    vol = mydf.cell.vol
+    
+    if np.allclose(mesh_bra, mesh_ket):
+        map_bra_2_ket = np.arange(ngrid_bra, dtype=np.int32)
+    
+    
+    ### allocate buffer ### 
+    
+    # NOTE: we do not optimize the storage need for the buffer, just allocate the maximum space needed
+    
+    
 
 # def _contract_k_mo_quadratic_subterm_CCCC_bruteforce(
 #     mydf, 
@@ -594,23 +640,23 @@ def _contract_k_mo_quadratic_subterm_CCCC(
     
     ### allocate buffer ### 
     
-    if hasattr(mydf, "CCCC_pack_buf1"):
-        if mydf.CCCC_pack_buf1 is None or mydf.CCCC_pack_buf1.size < nao_atm_max * nthread * ngrid:
-            mydf.CCCC_pack_buf1 = np.zeros(nao_atm_max * nthread * ngrid)
+    if hasattr(mydf, "CC_pack_buf1"):
+        if mydf.CC_pack_buf1 is None or mydf.CC_pack_buf1.size < nao_atm_max * nthread * ngrid:
+            mydf.CC_pack_buf1 = np.zeros(nao_atm_max * nthread * ngrid)
     else:
-        mydf.CCCC_pack_buf1 = np.zeros(nao_atm_max * nthread * ngrid)
+        mydf.CC_pack_buf1 = np.zeros(nao_atm_max * nthread * ngrid)
     
-    if hasattr(mydf, "CCCC_pack_buf2"):
-        if mydf.CCCC_pack_buf2 is None or mydf.CCCC_pack_buf2.size < nao_atm_max * nthread * ngrid_max:
-            mydf.CCCC_pack_buf2 = np.zeros(nao_atm_max * nthread * ngrid_max)
+    if hasattr(mydf, "CC_pack_buf2"):
+        if mydf.CC_pack_buf2 is None or mydf.CC_pack_buf2.size < nao_atm_max * nthread * ngrid_max:
+            mydf.CC_pack_buf2 = np.zeros(nao_atm_max * nthread * ngrid_max)
     else:
-        mydf.CCCC_pack_buf2 = np.zeros(nao_atm_max * nthread * ngrid_max)
+        mydf.CC_pack_buf2 = np.zeros(nao_atm_max * nthread * ngrid_max)
     
-    if hasattr(mydf, "CCCC_fft_buf"):
-        if mydf.CCCC_fft_buf is None or mydf.CCCC_fft_buf.size < nao_atm_max * nthread * ngrid:
-            mydf.CCCC_fft_buf = np.zeros(nao_atm_max * nthread * ngrid)
+    if hasattr(mydf, "CC_fft_buf"):
+        if mydf.CC_fft_buf is None or mydf.CC_fft_buf.size < nao_atm_max * nthread * ngrid:
+            mydf.CC_fft_buf = np.zeros(nao_atm_max * nthread * ngrid)
     else:
-        mydf.CCCC_fft_buf = np.zeros(nao_atm_max * nthread * ngrid)
+        mydf.CC_fft_buf = np.zeros(nao_atm_max * nthread * ngrid)
     
     if hasattr(mydf, "thread_buf"):
         if mydf.thread_buf is None or mydf.thread_buf.size < nao_atm_max * nthread * ngrid_complex:
@@ -648,8 +694,8 @@ def _contract_k_mo_quadratic_subterm_CCCC(
         
         for p0, p1 in lib.prange(0, nocc, nthread):
             
-            pack_buf1  = np.ndarray((nao_atm, p1-p0, ngrid), buffer=mydf.CCCC_pack_buf1)
-            V_tmp      = np.ndarray((nao_atm, p1-p0, ngrid), buffer=mydf.CCCC_fft_buf)
+            pack_buf1  = np.ndarray((nao_atm, p1-p0, ngrid), buffer=mydf.CC_pack_buf1)
+            V_tmp      = np.ndarray((nao_atm, p1-p0, ngrid), buffer=mydf.CC_fft_buf)
             thread_buf = np.ndarray((nao_atm, p1-p0, ngrid_complex), buffer=mydf.thread_buf)
             
             fn_unpack_aoPair(
@@ -713,7 +759,7 @@ def _contract_k_mo_quadratic_subterm_CCCC(
                 nao_atm_ket = aomoPairR_holder_ket.aoPairR.shape[0]
                 ngrid_involved_ket = aomoPairR_holder_ket.aoPairR.shape[2] 
                 
-                pack_buf1 = np.ndarray((nao_atm, p1-p0, ngrid_involved_ket), buffer=mydf.CCCC_pack_buf1)
+                pack_buf1 = np.ndarray((nao_atm, p1-p0, ngrid_involved_ket), buffer=mydf.CC_pack_buf1)
                 
                 fn_packcol1(
                     pack_buf1.ctypes.data_as(ctypes.c_void_p),
@@ -727,7 +773,7 @@ def _contract_k_mo_quadratic_subterm_CCCC(
                 
                 pack_buf1 = pack_buf1.reshape(nao_atm, (p1-p0)*ngrid_involved_ket)
     
-                pack_buf2 = np.ndarray((nao_atm_ket, p1-p0, ngrid_involved_ket), buffer=mydf.CCCC_pack_buf2)
+                pack_buf2 = np.ndarray((nao_atm_ket, p1-p0, ngrid_involved_ket), buffer=mydf.CC_pack_buf2)
                 
                 fn_pack_aoPair_ind1(
                     pack_buf2.ctypes.data_as(ctypes.c_void_p),

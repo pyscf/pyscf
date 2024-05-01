@@ -580,6 +580,22 @@ int _get_loc(
     }
 }
 
+int _get_loc2(
+    const int freq,
+    const int mesh) // for real signal, the freq and loc must always be non-negative !
+{
+    int max_freq = (mesh / 2) + 1;
+
+    if (freq >= 0 && freq < max_freq)
+    {
+        return freq;
+    }
+    else
+    {
+        return -1;
+    }
+}
+
 int _get_freq(
     const int loc,
     const int mesh)
@@ -603,6 +619,22 @@ int _get_freq(
     else
     {
         return loc - mesh;
+    }
+}
+
+int _get_freq2(
+    const int loc,
+    const int mesh)
+{
+    int loc_max = mesh / 2 + 1;
+
+    if (loc >= 0 && loc < loc_max)
+    {
+        return loc;
+    }
+    else
+    {
+        return -1;
     }
 }
 
@@ -635,5 +667,41 @@ void map_fftfreq(int *mesh_source, int *mesh_target, int *res)
         }
 
         res[i] = ix_target * mesh_target[1] * mesh_target[2] + iy_target * mesh_target[2] + iz_target;
+    }
+}
+
+void map_rfftfreq(int *mesh_source, int *mesh_target, int *res)
+{
+    int nGrid = mesh_source[0] * mesh_source[1] * (mesh_source[2] / 2 + 1);
+
+#pragma omp parallel for
+    for (int i = 0; i < nGrid; i++)
+    {
+        int ix_loc = i / (mesh_source[1] * (mesh_source[2] / 2 + 1));
+        int iy_loc = (i % (mesh_source[1] * (mesh_source[2] / 2 + 1))) / (mesh_source[2] / 2 + 1);
+        int iz_loc = i % (mesh_source[2] / 2 + 1);
+
+        int ix_freq = _get_freq(ix_loc, mesh_source[0]);
+        int iy_freq = _get_freq(iy_loc, mesh_source[1]);
+        int iz_freq = _get_freq2(iz_loc, mesh_source[2]);
+
+        if (iz_freq == -1)
+        {
+            printf("iz_loc: %d, mesh_source[2]: %d\n", iz_loc, mesh_source[2]);
+            exit(1);
+        }
+
+        int ix_target = _get_loc(ix_freq, mesh_target[0]);
+        int iy_target = _get_loc(iy_freq, mesh_target[1]);
+        int iz_target = _get_loc2(iz_freq, mesh_target[2]);
+
+        if (ix_target == -1 || iy_target == -1 || iz_target == -1)
+        {
+            res[i] = -1;
+        }
+        else
+        {
+            res[i] = ix_target * mesh_target[1] * (mesh_target[2] / 2 + 1) + iy_target * (mesh_target[2] / 2 + 1) + iz_target;
+        }
     }
 }

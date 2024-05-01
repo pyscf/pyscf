@@ -48,7 +48,7 @@ if __name__ == "__main__":
     
     Ls = [1, 1, 1]
     
-    mesh1 = [30,30,30]
+    mesh1 = [31,31,31]
     mesh1 = np.array(mesh1, dtype=np.int32) 
     cell1, group_partition = build_supercell_with_partition(atm, prim_a, mesh=mesh1, 
                                                      Ls=Ls,
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     aoR1_fft = np.fft.ifftn(aoR1, axes=(1,2,3)) * np.sqrt(cell1.vol)
     aoR1_fft = aoR1_fft.reshape(-1, np.prod(mesh1))
     
-    mesh2 = [35,35,35]
+    mesh2 = [37,37,37]
     mesh2 = np.array(mesh2, dtype=np.int32) 
     cell2, group_partition = build_supercell_with_partition(atm, prim_a, mesh=mesh2, 
                                                      Ls=Ls,
@@ -109,3 +109,30 @@ if __name__ == "__main__":
     diff1 = np.linalg.norm(aoR1_fft - aoR1_fft2) / np.sqrt(aoR1_fft.size)
     print("diff1 = ", diff1)
     print("max = ", np.max(np.abs(aoR1_fft - aoR1_fft2)))
+    
+    
+    fn_map_rfftfreq = getattr(libpbc, "map_rfftfreq", None)
+    assert fn_map_rfftfreq is not None
+    size1 = mesh1[0] * mesh1[1] * (mesh1[2]//2+1)
+    map2 = np.zeros(size1, dtype=np.int32)
+    
+    fn_map_rfftfreq(mesh1.ctypes.data_as(ctypes.c_void_p), mesh2.ctypes.data_as(ctypes.c_void_p), map2.ctypes.data_as(ctypes.c_void_p)) 
+    
+    print(map2)
+    
+    aoR1_rfft = np.fft.rfftn(aoR1, axes=(1,2,3)) * np.sqrt(cell1.vol) / np.prod(mesh1)
+    aoR1_rfft = aoR1_rfft.reshape(-1, size1)
+    size2 = mesh2[0] * mesh2[1] * (mesh2[2]//2+1)
+    aoR2_rfft = np.fft.rfftn(aoR2, axes=(1,2,3)) * np.sqrt(cell2.vol) / np.prod(mesh2)
+    aoR2_rfft = aoR2_rfft.reshape(-1, size2)
+    
+    aoR1_rfft2 = aoR2_rfft[:,map2]
+    
+    print(aoR1_rfft[0,:10])
+    print(aoR1_rfft2[0,:10])
+    print(aoR1_rfft[0,:10]/aoR1_rfft2[0,:10])
+    
+    diff2 = np.linalg.norm(aoR1_rfft - aoR1_rfft2) / np.sqrt(aoR1_rfft.size)
+    print("diff2 = ", diff2)
+    print("max = ", np.max(np.abs(aoR1_rfft - aoR1_rfft2)))
+    
