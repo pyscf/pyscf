@@ -511,8 +511,10 @@ def _get_AOMOPairR_holder(mydf,
     
     return Res
 
-def _contract_k_mo_quadratic_subterm_CC( # evaluate exactly ! exploring the locality ! 
+def _contract_k_mo_quadratic_subterm_CC( 
+    # evaluate exactly ! exploring the locality ! #
     mydf, 
+    dm,
     atm_2_compactAO: np.ndarray,
     aoPairR_holders: list[ISDF_LOCAL_TOOL.aoPairR_Holder],
     dm_ket_type = None,
@@ -521,12 +523,19 @@ def _contract_k_mo_quadratic_subterm_CC( # evaluate exactly ! exploring the loca
     mesh_bra = None,
     mesh_ket = None,
     map_bra_2_ket = None,
+    coulG = None
 ):
     ######## preprocess ########
     
     assert mesh_bra is not None
     assert mesh_ket is not None
-    assert map_bra_2_ket is not None
+    
+    if np.allclose(mesh_bra, mesh_ket):
+        ngrid_bra = np.prod(mesh_bra)
+        map_bra_2_ket = np.arange(ngrid_bra, dtype=np.int32)
+    else:
+        assert map_bra_2_ket is not None
+        assert map_bra_2_ket.size == np.prod(mesh_bra)
     
     assert dm_ket_type in ["compact", "diffuse", "all"]
     assert K_ket_type in ["compact", "diffuse", "all"]
@@ -558,15 +567,284 @@ def _contract_k_mo_quadratic_subterm_CC( # evaluate exactly ! exploring the loca
     ngrid_ket_complex = mesh_ket[0] * mesh_ket[1] * (mesh_ket[2]//2+1)*2
     vol = mydf.cell.vol
     
-    if np.allclose(mesh_bra, mesh_ket):
-        map_bra_2_ket = np.arange(ngrid_bra, dtype=np.int32)
+    coulG_real     = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1).copy()
     
+    aoR = mydf.aoR
+    partition = mydf.partition
+    
+    nao_involved_aoR_max = 0
+    ngrid_involved_aoR_max = np.max([len(x) for x in partition])
+    for aoR_holder in aoR:
+        if aoR_holder is None:
+            continue
+        nao_involved_aoR_max = max(nao_involved_aoR_max, aoR_holder.ao_involved.size)
     
     ### allocate buffer ### 
     
     # NOTE: we do not optimize the storage need for the buffer, just allocate the maximum space needed
     
+    size_pack1 = nao_atm_max * nao_involved_max * max(ngrid_bra,ngrid_ket)
+    size_pack2 = nao_atm_max * nao_involved_aoR_max * ngrid_involved_aoR_max
+    size_pack1 = max(size_pack1, size_pack2)
+    if hasattr(mydf, "CC_pack_buf1"):
+        if mydf.CC_pack_buf1 is None or mydf.CC_pack_buf1.size < size_pack1:
+            mydf.CC_pack_buf1 = np.zeros(size_pack1)
+    else:
+        mydf.CC_pack_buf1 = np.zeros(size_pack1)
     
+    if hasattr(mydf, "CC_pack_buf2"):
+        if mydf.CC_pack_buf2 is None or mydf.CC_pack_buf2.size < size_pack1:
+            mydf.CC_pack_buf2 = np.zeros(size_pack1)
+    else:
+        mydf.CC_pack_buf2 = np.zeros(size_pack1)
+    
+    size_fft_buf = nao_atm_max * nao_involved_max * ngrid_ket
+    if hasattr(mydf, "CC_fft_buf"):
+        if mydf.CC_fft_buf is None or mydf.CC_fft_buf.size < size_fft_buf:
+            mydf.CC_fft_buf = np.zeros(size_fft_buf)
+    else:
+        mydf.CC_fft_buf = np.zeros(size_fft_buf)
+    
+    size_thread_buf = nao_atm_max * nthread * (ngrid_bra_complex+ngrid_ket_complex+32)
+    if hasattr(mydf, "thread_buf"):
+        if mydf.thread_buf is None or mydf.thread_buf.size < size_thread_buf:
+            mydf.thread_buf = np.zeros(size_thread_buf)
+    else:
+        mydf.thread_buf = np.zeros(size_thread_buf)
+
+    #### involved C function ####
+
+    fn_fft = getattr(libpbc, "_construct_V_kernel", None) 
+    assert fn_fft is not None
+    
+    fn_packcol1 = getattr(libpbc, "_buildK_packcol", None)
+    assert fn_packcol1 is not None
+    
+    fn_unpackcol1 = getattr(libpbc, "_buildK_unpackcol", None)
+    assert fn_unpackcol1 is not None
+    
+    fn_012_to_021 = getattr(libpbc, "transpose_012_to_021", None)
+    assert fn_012_to_021 is not None
+    
+    fn_012_to_021_inplace = getattr(libpbc, "transpose_012_to_021_InPlace", None)
+    assert fn_012_to_021_inplace is not None
+    
+    fn_contract_ipk_pk_to_ik = getattr(libpbc, "contract_ipk_pk_to_ik", None)
+    assert fn_contract_ipk_pk_to_ik is not None
+    
+    fn_pack_add_K2 = getattr(libpbc, "_packadd_local_dm2", None)
+    assert fn_pack_add_K2 is not None
+    
+    #### loop over all involved atoms ####
+    
+    intermediate1_buf  = np.zeros((nao_atm_max, ngrid_ket), dtype=np.float64)
+    final_ddot_res_buf = np.zeros((nao_atm_max, nao), dtype=np.float64)
+    
+    for i in range(natm):
+        
+        aoPairR_holder = aoPairR_holders[i]
+        
+        if aoPairR_holder is None:
+            continue    
+    
+        nao_atm = aoPairR_holder.aoPairR.shape[0]
+        nao_involved = aoPairR_holder.aoPairR.shape[1]
+        ngrid_invovled = aoPairR_holder.aoPairR.shape[2]
+        
+        # print("nao_atm %d" % nao_atm)
+        # print("nao_involved %d" % nao_involved)
+        # print("ngrid_invovled %d %d " % (ngrid_invovled, aoPairR_holder.grid_involved.size))
+        # print("ngrid_bra %d" % ngrid_bra)
+        
+        #### perform fft ####
+        
+        V_tmp = np.ndarray((nao_atm * nao_involved, ngrid_ket), buffer=mydf.CC_fft_buf)
+
+        bunchsize = min(nao_atm, nao_atm * nao_involved // nthread)
+        bunchsize = max(bunchsize, 1)
+        # bunchsize = 1
+        thread_buf = np.ndarray((bunchsize, nthread, ngrid_bra_complex+ngrid_ket_complex+32), buffer=mydf.thread_buf)
+        buffersize = bunchsize * (ngrid_bra_complex+ngrid_ket_complex+32)
+        pack_buf1 = np.ndarray((nao_atm * nao_involved, ngrid_bra), buffer=mydf.CC_pack_buf1)
+        
+        # print("pack_buf1 = ", pack_buf1.shape)
+        # print("aoPairR_holder.aoPairR = ", aoPairR_holder.aoPairR.shape)
+        # print("atm %d" % i)
+        
+        # continue
+        
+        fn_unpackcol1(
+            pack_buf1.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_atm * nao_involved),
+            ctypes.c_int(ngrid_bra),
+            aoPairR_holder.aoPairR.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_atm * nao_involved),
+            ctypes.c_int(ngrid_invovled),
+            aoPairR_holder.grid_involved.ctypes.data_as(ctypes.c_void_p)
+        )
+        
+        # pack_buf1_benchmark = np.zeros_like(pack_buf1).reshape(nao_atm, nao_involved, ngrid_bra)
+        # pack_buf1_benchmark[:, :, aoPairR_holder.grid_involved] = aoPairR_holder.aoPairR[:, :, :]
+        # diff = np.linalg.norm(pack_buf1.ravel() - pack_buf1_benchmark.ravel())
+        # print("diff = ", diff/np.sqrt(np.prod(pack_buf1.shape)))
+        # assert np.allclose(pack_buf1.ravel(), pack_buf1_benchmark.ravel())
+        
+        # print("atm %d" % i)
+        # continue
+        
+        fn_fft(
+            mesh_bra.ctypes.data_as(ctypes.c_void_p),
+            mesh_ket.ctypes.data_as(ctypes.c_void_p),
+            map_bra_2_ket.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_atm*nao_involved),
+            pack_buf1.ctypes.data_as(ctypes.c_void_p),
+            coulG_real.ctypes.data_as(ctypes.c_void_p),
+            V_tmp.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(bunchsize),
+            thread_buf.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(buffersize)
+        )
+        
+        # print("map_bra_2_ket = ", map_bra_2_ket)
+        
+        # V_benchmark = pack_buf1.reshape(nao_atm, nao_involved, *mesh_bra).copy()
+        # V_benchmark = np.fft.fftn(V_benchmark, axes=(2, 3, 4)).reshape(nao_atm * nao_involved, ngrid_bra)
+        # V_benchmark = V_benchmark * coulG
+        # V_benchmark = np.fft.ifftn(V_benchmark.reshape(nao_atm, nao_involved, *mesh_bra), axes=(2, 3, 4)).reshape(nao_atm * nao_involved, ngrid_bra)
+        # V_real = V_benchmark.real.copy()
+        # V_imag = V_benchmark.imag.copy()
+        # diff = np.linalg.norm(V_real - V_tmp)
+        # print("diff = ", diff/np.sqrt(np.prod(V_real.shape)))
+        # assert np.allclose(V_imag, 0)
+        # assert np.allclose(V_real, V_tmp)
+
+        # continue
+                
+        #### pack dm #### 
+        
+        dm_packed = dm[aoPairR_holder.ao_involved, :].copy()  
+        
+        # print("dm_packed = ", dm_packed)
+        
+        for j in range(natm):
+            
+            # continue
+            # print("atm %d %d" % (i, j)) 
+            # continue
+            
+            aoR_holder = aoR[j] 
+            ket_grid_involved = partition[j]
+            nket_grid_involved = ket_grid_involved.size
+            
+            #### deal with type #### 
+            
+            ket_ao_involved = aoR_holder.ao_involved
+            ket_ao_begin = 0
+            ket_ao_end = ket_ao_involved.size
+            if dm_ket_type == "compact":
+                ket_ao_end = aoR_holder.nCompact
+            else:
+                if dm_ket_type == "diffuse":
+                    ket_ao_begin = aoR_holder.nCompact
+            ket_nao_involved = ket_ao_end - ket_ao_begin
+            
+            # print("ket_ao_involved = ", ket_ao_involved)
+            # print("ket_ao_begin    = ", ket_ao_begin)
+            # print("ket_ao_end      = ", ket_ao_end)
+            
+            #### pack involved aoPairR and dm ####
+            
+            dm_involved = dm_packed[:, ket_ao_involved[ket_ao_begin:ket_ao_end]].copy() 
+            
+            # print("dm_involved = ", dm_involved)
+            
+            pack_buf1 = np.ndarray((nao_atm * nao_involved, nket_grid_involved), buffer=mydf.CC_pack_buf1)
+            
+            pack_buf2 = np.ndarray((nao_atm, nket_grid_involved, nao_involved), buffer=mydf.CC_pack_buf2)
+            
+            # pack_buf1[:, :, :] = V_tmp[:, :, ket_grid_involved]
+            fn_packcol1(
+                pack_buf1.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_atm * nao_involved),
+                ctypes.c_int(nket_grid_involved),
+                V_tmp.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_atm * nao_involved),
+                ctypes.c_int(ngrid_ket), 
+                ket_grid_involved.ctypes.data_as(ctypes.c_void_p)
+            )
+            # pack_buf1_bench = np.zeros_like(pack_buf1).reshape(nao_atm, nao_involved, nket_grid_involved)
+            # pack_buf1_bench[:, :, :] = V_tmp.reshape(nao_atm,nao_involved,-1)[:, :, ket_grid_involved]
+            # assert np.allclose(pack_buf1.ravel(), pack_buf1_bench.ravel())
+            #### pack_buf2 = np.transpose(pack_buf1, (0, 2, 1))
+            fn_012_to_021(
+                pack_buf2.ctypes.data_as(ctypes.c_void_p),
+                pack_buf1.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_atm),
+                ctypes.c_int(nao_involved),
+                ctypes.c_int(nket_grid_involved)
+            )
+            pack_buf2 = pack_buf2.reshape(nao_atm * nket_grid_involved, nao_involved)
+            # pack_buf2_bench = np.transpose(pack_buf1_bench, (0, 2, 1)).copy()
+            # assert np.allclose(pack_buf2.ravel(), pack_buf2_bench.ravel())
+            #### pack_buf1 = pack_buf2 * dm 
+            pack_buf1 = np.ndarray((nao_atm * nket_grid_involved,   ket_nao_involved), buffer=mydf.CC_pack_buf1)
+            lib.ddot(pack_buf2, dm_involved, c=pack_buf1)
+            pack_buf1 = pack_buf1.reshape(nao_atm, nket_grid_involved, ket_nao_involved)
+            #### pack_buf2 = np.transpose(pack_buf1, (0, 2, 1))
+            pack_buf2 = np.ndarray((nao_atm, ket_nao_involved, nket_grid_involved), buffer=mydf.CC_pack_buf2)
+            fn_012_to_021(
+                pack_buf2.ctypes.data_as(ctypes.c_void_p),
+                pack_buf1.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_atm),
+                ctypes.c_int(nket_grid_involved),
+                ctypes.c_int(ket_nao_involved)
+            )
+            # pack_buf2_bench = np.transpose(pack_buf1.reshape(nao_atm, nket_grid_involved, -1), (0, 2, 1)).copy()
+            # assert np.allclose(pack_buf2.ravel(), pack_buf2_bench.ravel())
+            #### ipk,pk->ik
+            intermediate1 = np.ndarray((nao_atm, nket_grid_involved), buffer=intermediate1_buf)
+            fn_contract_ipk_pk_to_ik(
+                pack_buf2.ctypes.data_as(ctypes.c_void_p),
+                aoR_holder.aoR[ket_ao_begin:ket_ao_end,:].ctypes.data_as(ctypes.c_void_p),
+                intermediate1.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_atm),
+                ctypes.c_int(ket_nao_involved),
+                ctypes.c_int(nket_grid_involved)
+            )
+            # print("pack_buf2.shape = ", pack_buf2.shape)
+            # print("aoR_holder.aoR.shape = ", aoR_holder.aoR.shape)
+            # benchmark = np.einsum("ipk,pk->ik", pack_buf2, aoR_holder.aoR[ket_ao_begin:ket_ao_end,:])
+            # assert np.allclose(intermediate1, benchmark)
+            # finall ddot
+            #### deal with type #### 
+            ket_ao_begin = 0
+            ket_ao_end = ket_ao_involved.size
+            if K_ket_type == "compact":
+                ket_ao_end = aoR_holder.nCompact
+            else:
+                if K_ket_type == "diffuse":
+                    ket_ao_begin = aoR_holder.nCompact
+            ket_nao_involved = ket_ao_end - ket_ao_begin
+            ddot_res = np.ndarray((nao_atm, ket_nao_involved), buffer=final_ddot_res_buf)
+            lib.ddot(intermediate1, aoR_holder.aoR[ket_ao_begin:ket_ao_end, :].T, c=ddot_res)
+            #### pack the result #### 
+            # print("ddot_res = ", ddot_res)
+            # print(atm_2_compactAO[i])
+            # print(ket_ao_involved[ket_ao_begin:ket_ao_end])
+            # print("nao_atm          = ", nao_atm)
+            # print("ket_nao_involved = ", ket_nao_involved)
+            # print("nao              = ", nao)
+            fn_pack_add_K2(
+                ddot_res.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_atm),
+                atm_2_compactAO[i].ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(ket_nao_involved),
+                ket_ao_involved[ket_ao_begin:ket_ao_end].ctypes.data_as(ctypes.c_void_p),
+                K.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao)
+            )
+    # print("K = ", K, np.allclose(K, 0.0))
+    return K * np.sqrt(ngrid_bra*ngrid_ket / vol**2)
 
 # def _contract_k_mo_quadratic_subterm_CCCC_bruteforce(
 #     mydf, 
@@ -756,6 +1034,9 @@ def _contract_k_mo_quadratic_subterm_CCCC(
                 
                 aomoPairR_holder_ket = AOMOPairR_holder[j] 
                 
+                if aomoPairR_holder_ket is None:
+                    continue
+                
                 nao_atm_ket = aomoPairR_holder_ket.aoPairR.shape[0]
                 ngrid_involved_ket = aomoPairR_holder_ket.aoPairR.shape[2] 
                 
@@ -881,7 +1162,7 @@ if __name__ == "__main__":
     # prim_partition = [[0,1], [2,3]]
     prim_mesh = prim_cell.mesh
     
-    Ls = [1, 1, 2]
+    Ls = [1, 1, 1]
     # Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
@@ -940,6 +1221,8 @@ if __name__ == "__main__":
     mo_coeff = mo_coeff * occ_weight
     mo_coeff = mo_coeff.copy()
     dm = np.einsum("pi, qi -> pq", mo_coeff, mo_coeff)
+    
+    dm_backup = dm.copy()
     
     ###### benchmark J ######
     
@@ -1173,4 +1456,91 @@ if __name__ == "__main__":
     # print("max_diff = ", max_diff)
     # assert np.allclose(K3, K2)
     
-    # assert np.allclose(K1, K2) this assertion is not always true, because the K1 is exact while K2 is not
+    # assert np.allclose(K1, K2) this assertion is not always true, because the K1 is exact while K2 is not 
+    
+    
+    ############ test the get_K CCCD CCDD CCDC ############
+    
+    dm = dm_backup.copy()
+    
+    mesh = np.array(mesh, dtype=np.int32)
+    
+    K_CC_CD = _contract_k_mo_quadratic_subterm_CC(
+        pbc_isdf_info, 
+        dm,
+        atm_2_compactAO, 
+        aoPairR_holders, 
+        dm_ket_type="compact", K_ket_type="diffuse",
+        mesh_bra=mesh,
+        mesh_ket=mesh,
+        coulG=pbc_isdf_info.coulG
+    )
+    
+    K_benchmark = K_V_CC_CD + K_V_CC_DC.T - K_W_CC_CD 
+    # K_benchmark = K_W_CC_CD
+    
+    # diff = K_benchmark - K_benchmark.T
+    # print("diff = ", np.linalg.norm(diff)/np.sqrt(K_benchmark.size))
+    
+    # print("K_CC_CD = ", K_CC_CD[CompactAO[0],:])
+    # print("K_benchmark = ", K_benchmark[CompactAO[0],:])
+    # print("ratio = ", K_CC_CD[CompactAO[0],:]/K_benchmark[CompactAO[0],:])
+    diff = np.linalg.norm(K_CC_CD - K_benchmark)
+    print("diff = ", diff/np.sqrt(K_benchmark.size))
+    
+    # assert np.allclose(K_CC_CD, K_benchmark)  ### cannot be exacly the same as K_CC_CD is exact ! 
+    
+    K_CC_CC = _contract_k_mo_quadratic_subterm_CC(
+        pbc_isdf_info, 
+        dm,
+        atm_2_compactAO, 
+        aoPairR_holders, 
+        dm_ket_type="compact", K_ket_type="compact",
+        mesh_bra=mesh,
+        mesh_ket=mesh,
+        coulG=pbc_isdf_info.coulG
+    )
+    
+    K_benchmark = K_V_CC_CC + K_V_CC_CC.T - K_W_CC_CC
+    diff = np.linalg.norm(K_CC_CC - K_benchmark)
+    print("diff = ", diff/np.sqrt(K_benchmark.size))
+    
+    K_CD_CC = _contract_k_mo_quadratic_subterm_CC(
+        pbc_isdf_info, 
+        dm,
+        atm_2_compactAO, 
+        aoPairR_holders, 
+        dm_ket_type="diffuse", K_ket_type="compact",
+        mesh_bra=mesh,
+        mesh_ket=mesh,
+        coulG=pbc_isdf_info.coulG
+    )
+    
+    K_benchmark = K_V_CD_CC + K_V_DC_CC.T - K_W_CD_CC
+    
+    assert np.allclose(K_CD_CC[DiffuseAO,:], 0.0)
+    assert np.allclose(K_CD_CC[:,DiffuseAO], 0.0)
+    assert np.allclose(K_benchmark[DiffuseAO,:], 0.0)
+    assert np.allclose(K_benchmark[:,DiffuseAO], 0.0)
+    
+    # print("K_CD_CC = ", K_CD_CC[CompactAO[0],CompactAO])
+    # print("K_benchmark = ", K_benchmark[CompactAO[0],CompactAO])
+    
+    diff = np.linalg.norm(K_CD_CC - K_benchmark)
+    print("diff = ", diff/np.sqrt(K_benchmark.size)) 
+    
+    K_CD_CD = _contract_k_mo_quadratic_subterm_CC(
+        pbc_isdf_info, 
+        dm,
+        atm_2_compactAO, 
+        aoPairR_holders, 
+        dm_ket_type="diffuse", K_ket_type="diffuse",
+        mesh_bra=mesh,
+        mesh_ket=mesh,
+        coulG=pbc_isdf_info.coulG
+    )
+    
+    K_benchmark = K_V_CD_CD + K_V_DC_DC.T - K_W_CD_CD
+    
+    diff = np.linalg.norm(K_CD_CD - K_benchmark)
+    print("diff = ", diff/np.sqrt(K_benchmark.size))

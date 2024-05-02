@@ -204,14 +204,16 @@ void _construct_V_local_bas(
     fftw_destroy_plan(p_backward);
 }
 
-void _construct_V(int *mesh,
-                  int naux,
-                  double *auxBasis,
-                  double *CoulG,
-                  double *V,
-                  const int BunchSize,
-                  double *buf,         // use the ptr of the ptr to ensure that the memory for each thread is aligned
-                  const int buffersize // must be a multiple of 16 to ensure memory alignment
+void _construct_V_kernel(int *mesh_bra,
+                         int *mesh_ket,
+                         int *map_bra_2_ket,
+                         int naux,
+                         double *auxBasis,
+                         double *CoulG, // bra
+                         double *V,
+                         const int BunchSize,
+                         double *buf,         // use the ptr of the ptr to ensure that the memory for each thread is aligned
+                         const int buffersize // must be a multiple of 16 to ensure memory alignment
 )
 {
     // printf("naux      = %d\n", naux);
@@ -219,6 +221,7 @@ void _construct_V(int *mesh,
 
     // print all the input info
 
+    static const int INC1 = 1;
     static const int SMALL_SIZE = 8;
 
     const int nThread = get_omp_threads();
@@ -230,18 +233,29 @@ void _construct_V(int *mesh,
 
     // print the dispatch info
 
-    int mesh_complex[3] = {mesh[0], mesh[1], mesh[2] / 2 + 1};
+    int mesh_bra_complex[3] = {mesh_bra[0], mesh_bra[1], mesh_bra[2] / 2 + 1};
+    int mesh_ket_complex[3] = {mesh_ket[0], mesh_ket[1], mesh_ket[2] / 2 + 1};
 
-    const int n_real = mesh[0] * mesh[1] * mesh[2];
-    const int n_complex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
-    const double fac = 1. / (double)n_real;
+    const int n_real_bra = mesh_bra[0] * mesh_bra[1] * mesh_bra[2];
+    const int n_complex_bra = mesh_bra_complex[0] * mesh_bra_complex[1] * mesh_bra_complex[2];
+    const int n_real_ket = mesh_ket[0] * mesh_ket[1] * mesh_ket[2];
+    const int n_complex_ket = mesh_ket_complex[0] * mesh_ket_complex[1] * mesh_ket_complex[2];
+
+    if (n_real_bra > n_real_ket)
+    {
+        printf("n_real_bra > n_real_ket\n");
+        exit(1);
+    }
+
+    const double fac = 1. / sqrtl((double)n_real_bra * (double)n_real_ket);
 
     // create plan for fft
 
     fftw_plan p_forward = fftw_plan_many_dft_r2c(
-        3, mesh, BunchSize, auxBasis, mesh, 1, n_real, (fftw_complex *)buf, mesh_complex, 1, n_complex, FFTW_ESTIMATE);
+        3, mesh_bra, BunchSize, auxBasis, mesh_bra, 1, n_real_bra, (fftw_complex *)buf, mesh_bra_complex, 1, n_complex_bra, FFTW_ESTIMATE);
+
     fftw_plan p_backward = fftw_plan_many_dft_c2r(
-        3, mesh, BunchSize, (fftw_complex *)buf, mesh_complex, 1, n_complex, V, mesh, 1, n_real, FFTW_ESTIMATE);
+        3, mesh_ket, BunchSize, (fftw_complex *)buf, mesh_ket_complex, 1, n_complex_ket, V, mesh_ket, 1, n_real_ket, FFTW_ESTIMATE);
 
     // execute parallelly sharing the same plan
 
@@ -261,7 +275,7 @@ void _construct_V(int *mesh,
 
             // forward transform
 
-            fftw_execute_dft_r2c(p_forward, auxBasis + (size_t)bunch_start * (size_t)n_real, (fftw_complex *)buf_thread);
+            fftw_execute_dft_r2c(p_forward, auxBasis + (size_t)bunch_start * (size_t)n_real_bra, (fftw_complex *)buf_thread);
 
             // multiply CoulG
 
@@ -269,28 +283,52 @@ void _construct_V(int *mesh,
 
             for (j = bunch_start; j < bunch_end; ++j)
             {
-                for (k = 0; k < n_complex; ++k)
+                for (k = 0; k < n_complex_bra; ++k)
                 {
                     *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
                     *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
                 }
+            }
+
+            if (map_bra_2_ket != NULL)
+            {
+                ptr = buf_thread + n_complex_bra * 2 * BunchSize;
+                memset(ptr, 0, sizeof(double) * n_complex_ket * 2 * BunchSize);
+                for (j = bunch_start; j < bunch_end; ++j)
+                {
+                    size_t shift = (j - bunch_start) * n_complex_bra * 2;
+                    for (k = 0; k < n_complex_bra; ++k)
+                    {
+                        ptr[2 * map_bra_2_ket[k]] = buf_thread[shift + 2 * k];
+                        ptr[2 * map_bra_2_ket[k] + 1] = buf_thread[shift + 2 * k + 1];
+                    }
+                    ptr += n_complex_ket * 2;
+                }
+                ptr = buf_thread + n_complex_bra * 2 * BunchSize;
+            }
+            else
+            {
+                ptr = buf_thread;
             }
 
             // backward transform
 
-            fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + (size_t)bunch_start * (size_t)n_real);
+            // fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + (size_t)bunch_start * (size_t)n_real);
+            fftw_execute_dft_c2r(p_backward, (fftw_complex *)ptr, V + (size_t)bunch_start * (size_t)n_real_ket);
 
             // scale
 
-            ptr = V + (size_t)bunch_start * (size_t)n_real;
+            ptr = V + (size_t)bunch_start * (size_t)n_real_ket;
+            int _size_ = n_real_ket * BunchSize;
+            dscal_(&_size_, &fac, ptr, &INC1);
 
-            for (j = bunch_start; j < bunch_end; ++j)
-            {
-                for (k = 0; k < n_real; ++k)
-                {
-                    *ptr++ *= fac; /// TODO: use ISPC to accelerate
-                }
-            }
+            // for (j = bunch_start; j < bunch_end; ++j)
+            // {
+            //     for (k = 0; k < n_real_ket; ++k)
+            //     {
+            //         *ptr++ *= fac; /// TODO: use ISPC to accelerate
+            //     }
+            // }
         }
     }
 
@@ -299,11 +337,16 @@ void _construct_V(int *mesh,
     fftw_destroy_plan(p_forward);
     fftw_destroy_plan(p_backward);
 
+    // printf("finish bulk nLeft = %d\n", nLeft);
+    // fflush(stdout);
+
     if (nLeft > 0)
     {
         if ((nLeft <= SMALL_SIZE) && (nLeft <= BunchSize))
-        // if (1)
         {
+            // printf("nLeft <= SMALL_SIZE or nLeft <= BunchSize\n");
+            // fflush(stdout);
+
             // use single thread to handle the left
 
             int bunch_start = nBunch * BunchSize;
@@ -312,13 +355,17 @@ void _construct_V(int *mesh,
             // create plan
 
             fftw_plan p_forward = fftw_plan_many_dft_r2c(
-                3, mesh, nLeft, auxBasis + bunch_start * n_real, mesh, 1, n_real, (fftw_complex *)buf, mesh_complex, 1, n_complex, FFTW_ESTIMATE);
+                // 3, mesh, nLeft, auxBasis + bunch_start * n_real, mesh, 1, n_real, (fftw_complex *)buf, mesh_complex, 1, n_complex, FFTW_ESTIMATE);
+                3, mesh_bra, nLeft, auxBasis + bunch_start * n_real_bra, mesh_bra, 1, n_real_bra, (fftw_complex *)buf, mesh_bra_complex, 1, n_complex_bra, FFTW_ESTIMATE);
+
             fftw_plan p_backward = fftw_plan_many_dft_c2r(
-                3, mesh, nLeft, (fftw_complex *)buf, mesh_complex, 1, n_complex, V + bunch_start * n_real, mesh, 1, n_real, FFTW_ESTIMATE);
+                // 3, mesh, nLeft, (fftw_complex *)buf, mesh_complex, 1, n_complex, V + bunch_start * n_real, mesh, 1, n_real, FFTW_ESTIMATE);
+                3, mesh_ket, nLeft, (fftw_complex *)buf, mesh_ket_complex, 1, n_complex_ket, V + bunch_start * n_real_ket, mesh_ket, 1, n_real_ket, FFTW_ESTIMATE);
 
             // forward transform
 
-            fftw_execute_dft_r2c(p_forward, auxBasis + (size_t)bunch_start * (size_t)n_real, (fftw_complex *)buf);
+            // fftw_execute_dft_r2c(p_forward, auxBasis + (size_t)bunch_start * (size_t)n_real, (fftw_complex *)buf);
+            fftw_execute_dft_r2c(p_forward, auxBasis + (size_t)bunch_start * (size_t)n_real_bra, (fftw_complex *)buf);
 
             // multiply CoulG
 
@@ -326,28 +373,54 @@ void _construct_V(int *mesh,
 
             for (int j = bunch_start; j < bunch_end; ++j)
             {
-                for (int k = 0; k < n_complex; ++k)
+                // for (int k = 0; k < n_complex; ++k)
+                for (int k = 0; k < n_complex_bra; ++k)
                 {
-                    *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
-                    *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
+                    *ptr++ *= CoulG[k]; ///
+                    *ptr++ *= CoulG[k]; ///
                 }
+            }
+
+            if (map_bra_2_ket != NULL)
+            {
+                ptr = buf + n_complex_bra * 2 * nLeft;
+                memset(ptr, 0, sizeof(double) * n_complex_ket * 2 * nLeft);
+                for (int j = bunch_start; j < bunch_end; ++j)
+                {
+                    size_t shift = (j - bunch_start) * n_complex_bra * 2;
+                    for (int k = 0; k < n_complex_bra; ++k)
+                    {
+                        ptr[2 * map_bra_2_ket[k]] = buf[shift + 2 * k];
+                        ptr[2 * map_bra_2_ket[k] + 1] = buf[shift + 2 * k + 1];
+                    }
+                    ptr += n_complex_ket * 2;
+                }
+                ptr = buf + n_complex_bra * 2 * nLeft;
+            }
+            else
+            {
+                ptr = buf;
             }
 
             // backward transform
 
-            fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf, V + (size_t)bunch_start * (size_t)n_real);
+            // fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf, V + (size_t)bunch_start * (size_t)n_real);
+            fftw_execute_dft_c2r(p_backward, (fftw_complex *)ptr, V + (size_t)bunch_start * (size_t)n_real_ket);
 
             // scale
 
-            ptr = V + (size_t)bunch_start * (size_t)n_real;
+            // ptr = V + (size_t)bunch_start * (size_t)n_real;
+            ptr = V + (size_t)bunch_start * (size_t)n_real_ket;
+            int _size_ = n_real_ket * nLeft;
+            dscal_(&_size_, &fac, ptr, &INC1);
 
-            for (int j = bunch_start; j < bunch_end; ++j)
-            {
-                for (int k = 0; k < n_real; ++k)
-                {
-                    *ptr++ *= fac; /// TODO: use ISPC to accelerate
-                }
-            }
+            // for (int j = bunch_start; j < bunch_end; ++j)
+            // {
+            //     for (int k = 0; k < n_real; ++k)
+            //     {
+            //         *ptr++ *= fac; ///
+            //     }
+            // }
 
             // destroy plan
 
@@ -356,6 +429,7 @@ void _construct_V(int *mesh,
         }
         else
         {
+            // printf("nLeft > SMALL_SIZE or nLeft > BunchSize\n");
 
             // use parallel thread to handle the left, assume the nTransform is 1
 
@@ -364,10 +438,21 @@ void _construct_V(int *mesh,
 
             // create plan
 
-            fftw_plan p_forward = fftw_plan_dft_r2c(3, mesh, auxBasis + bunch_start * n_real, (fftw_complex *)buf, FFTW_ESTIMATE);
-            fftw_plan p_backward = fftw_plan_dft_c2r(3, mesh, (fftw_complex *)buf, V + bunch_start * n_real, FFTW_ESTIMATE);
+            // fftw_plan p_forward = fftw_plan_dft_r2c(3, mesh, auxBasis + bunch_start * n_real, (fftw_complex *)buf, FFTW_ESTIMATE);
+            fftw_plan p_forward = fftw_plan_dft_r2c(3,
+                                                    // mesh, auxBasis + bunch_start * n_real, (fftw_complex *)buf, FFTW_ESTIMATE);
+                                                    mesh_bra, auxBasis + bunch_start * n_real_bra, (fftw_complex *)buf, FFTW_ESTIMATE);
 
-            size_t nbuf_per_thread = ((n_complex * 2 + 15) / 16) * 16; // make sure the memory is aligned
+            fftw_plan p_backward = fftw_plan_dft_c2r(3,
+                                                     // mesh, (fftw_complex *)buf, V + bunch_start * n_real, FFTW_ESTIMATE);
+                                                     mesh_ket, (fftw_complex *)buf, V + bunch_start * n_real_ket, FFTW_ESTIMATE);
+
+            // size_t nbuf_per_thread = ((n_complex * 2 + 15) / 16) * 16; // make sure the memory is aligned
+            size_t nbuf_per_thread = ((n_complex_bra * 2 + 15) / 16) * 16; // make sure the memory is aligned
+            if (map_bra_2_ket != NULL)
+            {
+                nbuf_per_thread += ((n_complex_ket * 2 + 15) / 16) * 16;
+            }
 
 #pragma omp parallel num_threads(nThread)
             {
@@ -382,30 +467,52 @@ void _construct_V(int *mesh,
 
                     // forward transform
 
-                    fftw_execute_dft_r2c(p_forward, auxBasis + j * (size_t)n_real, (fftw_complex *)buf_thread);
+                    // fftw_execute_dft_r2c(p_forward, auxBasis + j * (size_t)n_real, (fftw_complex *)buf_thread);
+                    fftw_execute_dft_r2c(p_forward, auxBasis + j * (size_t)n_real_bra, (fftw_complex *)buf_thread);
 
                     // multiply CoulG
 
                     ptr = buf_thread;
 
-                    for (k = 0; k < n_complex; ++k)
+                    // for (k = 0; k < n_complex; ++k)
+                    for (k = 0; k < n_complex_bra; ++k)
                     {
-                        *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
-                        *ptr++ *= CoulG[k]; /// TODO: use ISPC to accelerate
+                        *ptr++ *= CoulG[k];
+                        *ptr++ *= CoulG[k];
+                    }
+
+                    if (map_bra_2_ket != NULL)
+                    {
+                        ptr = buf_thread + n_complex_bra * 2;
+                        memset(ptr, 0, sizeof(double) * n_complex_ket * 2);
+                        for (k = 0; k < n_complex_bra; ++k)
+                        {
+                            ptr[2 * map_bra_2_ket[k]] = buf_thread[2 * k];
+                            ptr[2 * map_bra_2_ket[k] + 1] = buf_thread[2 * k + 1];
+                        }
+                        ptr = buf_thread + n_complex_bra * 2;
+                    }
+                    else
+                    {
+                        ptr = buf_thread;
                     }
 
                     // backward transform
 
-                    fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + j * (size_t)n_real);
+                    // fftw_execute_dft_c2r(p_backward, (fftw_complex *)buf_thread, V + j * (size_t)n_real);
+                    fftw_execute_dft_c2r(p_backward, (fftw_complex *)ptr, V + j * (size_t)n_real_ket);
 
                     // scale
 
-                    ptr = V + j * (size_t)n_real;
+                    // ptr = V + j * (size_t)n_real;
+                    ptr = V + j * (size_t)n_real_ket;
+                    int _size_ = n_real_ket;
+                    dscal_(&_size_, &fac, ptr, &INC1);
 
-                    for (k = 0; k < n_real; ++k)
-                    {
-                        *ptr++ *= fac; /// TODO: use ISPC to accelerate
-                    }
+                    // for (k = 0; k < n_real; ++k)
+                    // {
+                    //     *ptr++ *= fac;
+                    // }
                 }
             }
 
@@ -415,6 +522,19 @@ void _construct_V(int *mesh,
             fftw_destroy_plan(p_backward);
         }
     }
+}
+
+void _construct_V(int *mesh,
+                  int naux,
+                  double *auxBasis,
+                  double *CoulG,
+                  double *V,
+                  const int BunchSize,
+                  double *buf,         // use the ptr of the ptr to ensure that the memory for each thread is aligned
+                  const int buffersize // must be a multiple of 16 to ensure memory alignment
+)
+{
+    _construct_V_kernel(mesh, mesh, NULL, naux, auxBasis, CoulG, V, BunchSize, buf, buffersize);
 }
 
 void _construct_V2(int *mesh,
@@ -758,6 +878,27 @@ void _packadd_local_dm2_add_transpose(
     }
 }
 
+void _packadd_local_dm2(
+    double *local_dm,
+    const int bra_nao_involved,
+    const int *bra_ao_involved,
+    const int ket_nao_involved,
+    const int *ket_ao_involved,
+    double *dm,
+    const int nao)
+{
+    int nThread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < bra_nao_involved; ++i)
+    {
+        for (size_t j = 0; j < ket_nao_involved; ++j)
+        {
+            dm[bra_ao_involved[i] * nao + ket_ao_involved[j]] += local_dm[i * ket_nao_involved + j];
+        }
+    }
+}
+
 void _packadd_local_RS(
     double *local_dm,
     const int bra_nao_involved,
@@ -890,6 +1031,32 @@ void _buildK_packcol(
         for (size_t j = 0; j < ncol_target; ++j)
         {
             target[i * ncol_target + j] = source[i * ncol_source + ao_involved[j]];
+        }
+    }
+}
+
+void _buildK_unpackcol(
+    double *target,
+    const int nrow_target,
+    const int ncol_target,
+    double *source,
+    const int nrow_source,
+    const int ncol_source,
+    const int *source_ind)
+{
+    int nThread = get_omp_threads();
+
+    // static const int INC = 1;
+    // static const double ONE = 1.0;
+
+    memset(target, 0, sizeof(double) * nrow_target * ncol_target);
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < nrow_source; ++i)
+    {
+        for (size_t j = 0; j < ncol_source; ++j)
+        {
+            target[i * ncol_target + source_ind[j]] = source[i * ncol_source + j];
         }
     }
 }
@@ -1027,6 +1194,34 @@ void transpose_012_to_021_InPlace(
     }
 
     memcpy(target, buf, sizeof(double) * n1 * n2 * n3);
+}
+
+void contract_ipk_pk_to_ik(
+    double *A,
+    double *B,
+    double *C,
+    const int n1,
+    const int n2,
+    const int n3)
+{
+    int nThread = get_omp_threads();
+
+    memset(C, 0, sizeof(double) * n1 * n3);
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < n1; i++)
+    {
+        double *ptr_A = A + i * n2 * n3;
+        double *ptr_B = B;
+        for (size_t j = 0; j < n2; j++)
+        {
+            double *ptr_res = C + i * n3;
+            for (size_t k = 0; k < n3; k++)
+            {
+                *ptr_res++ += *ptr_A++ * *ptr_B++;
+            }
+        }
+    }
 }
 
 ////////// used in CCCC for LR part in RS-ISDF //////////
