@@ -78,9 +78,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
     @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
-    def test_fnite_diff_uks_d3_grad(self):
+    def test_finite_diff_uks_d3_grad(self):
         mol1 = mol.copy()
-        mf = dft.UKS(mol)
+        mf = dft.UKS(mol, xc='b3lyp')
         mf.disp = 'd3bj'
         mf.conv_tol = 1e-14
         mf.kernel()
@@ -92,9 +92,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
     @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
-    def test_fnite_diff_uks_d4_grad(self):
+    def test_finite_diff_uks_d4_grad(self):
         mol1 = mol.copy()
-        mf = dft.UKS(mol)
+        mf = dft.UKS(mol, xc='b3lyp')
         mf.disp = 'd4'
         mf.conv_tol = 1e-14
         mf.kernel()
