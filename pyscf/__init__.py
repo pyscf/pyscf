@@ -98,7 +98,6 @@ from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
-from pyscf import hessian
 
 # Whether to enable debug mode. When this flag is set, some modules may run
 # extra debug code.
