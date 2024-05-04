@@ -482,10 +482,11 @@ class Gradients(rhf_grad.Gradients):
     _keys = {'with_df', 'auxbasis_response'}
 
     def __init__(self, mf):
-        # Whether to include the response of DF auxiliary basis when computing
-        # nuclear gradients of J/K matrices
-        self.auxbasis_response = True
         rhf_grad.Gradients.__init__(self, mf)
+
+    # Whether to include the response of DF auxiliary basis when computing
+    # nuclear gradients of J/K matrices
+    auxbasis_response = True
 
     def check_sanity(self):
         assert isinstance(self.base, df.df_jk._DFHF)
