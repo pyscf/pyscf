@@ -1505,7 +1505,7 @@ class SCF(lib.StreamObject):
     '''
     conv_tol = getattr(__config__, 'scf_hf_SCF_conv_tol', 1e-9)
     conv_tol_grad = getattr(__config__, 'scf_hf_SCF_conv_tol_grad', None)
-    conv_tol_cpscf = getattr(__config__, 'scf_hf_SCF_conv_tol_cpscf', 1e-3)
+    conv_tol_cpscf = getattr(__config__, 'scf_hf_SCF_conv_tol_cpscf', 1e-8)
     max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
     init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
     disp = None  # for DFT-D3 and DFT-D4
