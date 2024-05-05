@@ -93,6 +93,11 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
         ti0 = log.timer('step 2 [%d/%d], [%d:%d], row = %d'%
                         (istep+1, totstep, row0, row1, nrow), *ti0)
 
+    # A bug in NFS / HDF5 may cause .close() not to
+    # flush properly, hanging the calculation. Flush manually
+    fswap.flush()
+    feri.flush()
+
     fswap.close()
     feri.close()
     log.timer('cholesky_eri', *time0)
@@ -173,8 +178,11 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
             return lib.dot(low, b)
 
         if b.flags.c_contiguous:
-            b = lib.transpose(b).T
-        return scipy.linalg.solve_triangular(low, b, lower=True,
+            trsm, = scipy.linalg.get_blas_funcs(('trsm',), (low, b))
+            return trsm(1.0, low, b.T, lower=True, trans_a = 1, side = 1,
+                     overwrite_b=True).T
+        else:
+            return scipy.linalg.solve_triangular(low, b, lower=True,
                                              overwrite_b=True, check_finite=False)
 
     def process(sh_range):
@@ -189,7 +197,11 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
         return dat
 
     feri = _create_h5file(erifile, dataname)
-    for istep, dat in enumerate(lib.map_with_prefetch(process, shranges)):
+
+    # Cannot use lib.map_with_prefetch with trsm because
+    # it doesn't make a copy and may sometimes actually
+    # overwrite the integral buffer as it's being written to disk
+    for istep, dat in enumerate(map(process, shranges)):
         sh_range = shranges[istep]
         label = '%s/%d'%(dataname,istep)
         if comp == 1:
@@ -204,6 +216,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
                   istep+1, len(shranges), *sh_range)
         time1 = log.timer('gen CD eri [%d/%d]' % (istep+1,len(shranges)), *time1)
     bufs1 = None
+    feri.flush()
     feri.close()
     return erifile
 
