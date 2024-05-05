@@ -289,7 +289,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
         for eri1 in dfobj.loop(blksize):
             naux, nao_pair = eri1.shape
             assert (nao_pair == nao*(nao+1)//2)
-            if with_j:               
+            if with_j:
                 vj += numpy.matmul(numpy.matmul(dmtril, eri1.T), eri1)
 
             for k in range(nset):
