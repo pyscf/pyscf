@@ -38,8 +38,9 @@ from functools import reduce
 from itertools import product
 from pyscf.ao2mo import _ao2mo
 from pyscf.df import df_jk
+from pyscf.df.incore import LINEAR_DEP_THR
 
-LINEAR_DEP_THRESHOLD = 1e-9
+LINEAR_DEP_THRESHOLD = LINEAR_DEP_THR
 
 def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
            decompose_j2c='CD', lindep=LINEAR_DEP_THRESHOLD):
