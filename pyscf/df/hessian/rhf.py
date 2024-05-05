@@ -44,7 +44,7 @@ from pyscf.df.grad.rhf import (_int3c_wrapper, _gen_metric_solver,
                                LINEAR_DEP_THRESHOLD)
 
 def _pinv(a, lindep=LINEAR_DEP_THRESHOLD):
-    ''''''
+    '''Similar to pinv (v1.7.0) with atol=lindep and rtol=0'''
     w, v = scipy.linalg.eigh(a)
     mask = w > lindep
     v1 = v[:, mask]
