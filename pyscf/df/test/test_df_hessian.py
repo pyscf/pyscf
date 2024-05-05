@@ -46,7 +46,6 @@ class KnownValues(unittest.TestCase):
     def test_rhf_hess(self):
         href = scf.RHF(mol).run().Hessian().kernel()
         h1 = scf.RHF(mol).density_fit().run().Hessian().kernel()
-        print(abs(href - h1).max())
         self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
 
     def test_rks_lda_hess(self):
@@ -54,7 +53,6 @@ class KnownValues(unittest.TestCase):
         df_h = mol.RKS.density_fit().run(xc='lda,vwn').Hessian()
         df_h.auxbasis_response = 2
         h1 = df_h.kernel()
-        print(abs(href - h1).max())
         self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
     def test_rks_gga_hess(self):
@@ -62,7 +60,6 @@ class KnownValues(unittest.TestCase):
         df_h = mol.RKS.density_fit().run(xc='b3lyp').Hessian()
         df_h.auxbasis_response = 2
         h1 = df_h.kernel()
-        print(abs(href - h1).max())
         self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
     def test_rks_mgga_hess(self):
@@ -70,7 +67,6 @@ class KnownValues(unittest.TestCase):
         df_h = mol.RKS.density_fit().run(xc='m06').Hessian()
         df_h.auxbasis_response = 2
         h1 = df_h.kernel()
-        print(abs(href - h1).max())
         self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
     def test_rks_rsh_hess(self):
@@ -78,7 +74,6 @@ class KnownValues(unittest.TestCase):
         df_h = mol.RKS.density_fit().run(xc='camb3lyp').Hessian()
         df_h.auxbasis_response = 2
         h1 = df_h.kernel()
-        print(abs(href - h1).max())
         self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
     def test_uhf_hess(self):
@@ -86,7 +81,6 @@ class KnownValues(unittest.TestCase):
         df_h = scf.UHF(mol).density_fit().run().Hessian()
         df_h.auxbasis_response = 2
         h1 = df_h.kernel()
-        print(abs(href - h1).max())
         self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
     def test_uks_hess(self):
@@ -94,7 +88,6 @@ class KnownValues(unittest.TestCase):
         df_h = mol.UKS.density_fit().run(xc='camb3lyp').Hessian()
         df_h.auxbasis_response = 2
         h1 = df_h.kernel()
-        print(abs(href - h1).max())
         self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
 if __name__ == "__main__":
