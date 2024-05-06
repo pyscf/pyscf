@@ -99,6 +99,7 @@ def hess_elec(pcmobj, dm, verbose=None):
         pcm_grad+= grad_qv(pcmobj, dm)
         return pcm_grad
 
+    log.warn("Using finite difference scheme for electrostatic contribution")
     mol.verbose = 0
     de = numpy.zeros([mol.natm, mol.natm, 3, 3])
     eps = 1e-3

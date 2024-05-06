@@ -73,7 +73,7 @@ def get_cds(smdobj):
 
     log = logger.new_logger(mol, mol.verbose)
     t1 = (logger.process_clock(), logger.perf_counter())
-
+    log.warn("Using finite difference scheme for CDS contribution.")
     eps = 1e-4
     natm = mol.natm
     hess_cds = np.zeros([natm,natm,3,3])
