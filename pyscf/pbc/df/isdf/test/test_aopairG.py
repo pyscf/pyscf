@@ -80,20 +80,20 @@ boxlen = 3.5668
 prim_a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
 atm = [
         ['C', (0.     , 0.     , 0.    )],
-        ['C', (0.8917 , 0.8917 , 0.8917)],
-        ['C', (1.7834 , 1.7834 , 0.    )],
-        ['C', (2.6751 , 2.6751 , 0.8917)],
-        ['C', (1.7834 , 0.     , 1.7834)],
-        ['C', (2.6751 , 0.8917 , 2.6751)],
-        ['C', (0.     , 1.7834 , 1.7834)],
-        ['C', (0.8917 , 2.6751 , 2.6751)],
+        # ['C', (0.8917 , 0.8917 , 0.8917)],
+        # ['C', (1.7834 , 1.7834 , 0.    )],
+        # ['C', (2.6751 , 2.6751 , 0.8917)],
+        # ['C', (1.7834 , 0.     , 1.7834)],
+        # ['C', (2.6751 , 0.8917 , 2.6751)],
+        # ['C', (0.     , 1.7834 , 1.7834)],
+        # ['C', (0.8917 , 2.6751 , 2.6751)],
     ] 
 
-basis = 'unc-gth-dzvp'
+basis = 'gth-dzvp'
 
 for nk in KPTS:
 
-    ke_cutoff = 32
+    ke_cutoff = 256
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, verbose=4, pseudo=None)
     prim_mesh = prim_cell.mesh
     mesh = [nk[0] * prim_mesh[0], nk[1] * prim_mesh[1], nk[2] * prim_mesh[2]]
@@ -103,14 +103,12 @@ for nk in KPTS:
 
     ### aftdf ###
     
-    mesh = [5,5,5]
+    mesh = supercell.mesh
     mesh = np.array(mesh, dtype=np.int32)
-    # aftdf2 = aft.AFTDF(supercell)
     Gv, Gvbase, kws = supercell.get_Gv_weights(mesh)
     aoPair_G = ft_ao.ft_aopair_kpts(supercell, Gv=Gv)
     print("aoPair_G.shape = ", aoPair_G.shape)
     aoPair_G = aoPair_G[0] 
-    # print(aoPair_G[:, 10, 11])
 
     for i in range(aoPair_G.shape[1]):
         for j in range(aoPair_G.shape[2]):
@@ -123,17 +121,37 @@ for nk in KPTS:
 
     aoPair_G = np.transpose(aoPair_G, axes=(1, 2, 0))
     aoPair_G = aoPair_G.reshape(aoPair_G.shape[0], aoPair_G.shape[1], *mesh)
-    aoPair_R = np.fft.ifftn(aoPair_G, axes=(2, 3, 4))
+    aoPair_R = np.fft.ifftn(aoPair_G, axes=(2, 3, 4)) ### this is the benchmark!
     
     aoPair_R_imag = aoPair_R.imag
-    aoPair_R = aoPair_R.real
+    aoPair_R      = aoPair_R.real
+    aoPair_R = aoPair_R.reshape(aoPair_R.shape[0], aoPair_R.shape[1], -1)
 
     print("max of imag = ", np.max(aoPair_R_imag))
     print("norm of imag = ", np.linalg.norm(aoPair_R_imag))
     
-    aoPair_R2 = np.fft.fftn(aoPair_G, axes=(2, 3, 4))
-    aoPair_R2 = aoPair_R2.real
-    aoPair_R2_imag = aoPair_R2.imag
-    print("max of imag = ", np.max(aoPair_R2_imag))
+    ##### check aoPair_R #####
     
-    exit(1)
+    from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
+
+    df_tmp = MultiGridFFTDF2(supercell)
+    grids  = df_tmp.grids
+    coords = np.asarray(grids.coords).reshape(-1,3)
+    mesh   = grids.mesh
+    ngrids = np.prod(mesh)
+    assert ngrids == coords.shape[0]
+
+    aoR   = df_tmp._numint.eval_ao(supercell, coords)[0].T  # the T is important
+    aoR  *= np.sqrt(supercell.vol / ngrids)
+
+    aoPair_benchmark = np.einsum('ik,jk->ijk', aoR, aoR)
+    
+    print("aoPair_R.shape = ", aoPair_R.shape)
+    print(aoPair_benchmark[0,0,:10])
+    print(aoPair_R[0,0,:10])
+    print(aoPair_benchmark[0,0,:10]/(aoPair_R[0,0,:10]))
+    
+    diff = np.linalg.norm(aoPair_R - aoPair_benchmark) 
+    print("diff = ", diff/np.sqrt(aoPair_R.size)) # numerical they are the same, as kecutoff is large enough, the diff should decrease
+    
+    
