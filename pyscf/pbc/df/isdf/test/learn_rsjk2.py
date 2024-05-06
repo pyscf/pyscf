@@ -38,25 +38,26 @@ prim_a = np.array(
                      [0.000000000, 0.000000000,  6.010273939],]) * BOHR
 atm = [
 ['Cu1',	(1.927800,	1.927800,	1.590250)],
-['Cu1',	(5.783400,	5.783400,	1.590250)],
-['Cu2',	(1.927800,	5.783400,	1.590250)],
-['Cu2',	(5.783400,	1.927800,	1.590250)],
+# ['Cu1',	(5.783400,	5.783400,	1.590250)],
+# ['Cu2',	(1.927800,	5.783400,	1.590250)],
+# ['Cu2',	(5.783400,	1.927800,	1.590250)],
 ['O1',	(1.927800,	3.855600,	1.590250)],
 ['O1',	(1.927800,	0.000000,	1.590250)],
-['O1',	(3.855600,	5.783400,	1.590250)],
-['O1',	(5.783400,	3.855600,	1.590250)],
-['O1',	(3.855600,	1.927800,	1.590250)],
-['O1',	(0.000000,	1.927800,	1.590250)],
-['O1',	(1.927800,	7.711200,	1.590250)],
-['O1',	(7.711200,	5.783400,	1.590250)],
-['O1',	(5.783400,	0.000000,	1.590250)],
-['Ca',	(0.000000,	0.000000,	0.000000)],
-['Ca',	(3.855600,	3.855600,	0.000000)],
+# ['O1',	(3.855600,	5.783400,	1.590250)],
+# ['O1',	(5.783400,	3.855600,	1.590250)],
+# ['O1',	(3.855600,	1.927800,	1.590250)],
+# ['O1',	(0.000000,	1.927800,	1.590250)],
+# ['O1',	(1.927800,	7.711200,	1.590250)],
+# ['O1',	(7.711200,	5.783400,	1.590250)],
+# ['O1',	(5.783400,	0.000000,	1.590250)],
+# ['Ca',	(0.000000,	0.000000,	0.000000)],
+# ['Ca',	(3.855600,	3.855600,	0.000000)],
 ['Ca',	(7.711200,	3.855600,	0.000000)],
-['Ca',	(3.855600,	7.711200,	0.000000)],
+# ['Ca',	(3.855600,	7.711200,	0.000000)],
 ]
 
 basis = 'unc-ecpccpvdz'
+# basis = 'ecpccpvdz'
 
 for nk in KPTS:
 
@@ -69,6 +70,27 @@ for nk in KPTS:
     mesh = np.array(mesh, dtype=np.int32)
     
     supercell = build_supercell(atm, prim_a, Ls = nk, ke_cutoff=None, basis=basis, verbose=4, pseudo=None, mesh=mesh)
+
+
+    ### aftdf ###
+    
+    
+    # aftdf2 = aft.AFTDF(supercell)
+    Gv, Gvbase, kws = supercell.get_Gv_weights([2,2,2])
+    aoPair_G = ft_ao.ft_aopair_kpts(supercell, Gv=Gv)
+    print("aoPair_G.shape = ", aoPair_G.shape)
+    aoPair_G = aoPair_G[0] 
+    print(aoPair_G[:, 0, 0])
+
+    # print(aoPair_G[:, 0, 1])
+    # print(aoPair_G[:, 1, 0])
+
+    for i in range(aoPair_G.shape[1]):
+        for j in range(aoPair_G.shape[2]):
+            assert np.allclose(aoPair_G[:, i, j], aoPair_G[:, j, i])
+
+    exit(1)
+
 
     nk_supercell = [1,1,1]
     kpts = supercell.make_kpts(nk_supercell)
@@ -97,27 +119,45 @@ for nk in KPTS:
     print("cell_d        bas info")
     print_bas_info(rsjk.cell_d)
     
+    # exit(1)
+    
     # print("supmol_ft     bas info")
     # print_bas_info(rsjk.supmol_ft)
     
     cell_c = rsjk.rs_cell.compact_basis_cell()
     print("cell_c        bas info")
     print_bas_info(cell_c)
+    print("cell_c.bas_map = ", cell_c.bas_map)
+    print("cell_c.sh_loc  = ", cell_c.sh_loc)
+    print("cell.ao_loc    = ", supercell.ao_loc)
     print("rcut = ", cell_c.rcut)
     rcut = _estimate_rcut(cell_c, np.prod(cell_c.mesh), 1e-8)
     print("rcut for ovlp = ", rcut)
-    cell_c = pyscf.pbc.df.ft_ao._RangeSeparatedCell.from_cell(cell_c, rsjk.ke_cutoff, in_rsjk=True)
+    # cell_c = pyscf.pbc.df.ft_ao._RangeSeparatedCell.from_cell(cell_c, rsjk.ke_cutoff, in_rsjk=True) 
+    print("cell_c.bas_map = ", cell_c.bas_map)
+    
+    # exit(1)
     
     # rcut = rsdf_builder.estimate_ft_rcut(rs_cell, exclude_dd_block=self.exclude_dd_block)
-    supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(cell_c, [1,1,1], rcut.max())
-    supmol_ft = supmol_ft.strip_basis(rcut)
+    # supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(cell_c, [1,1,1], rcut.max())
+    supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(cell_c, [1,1,1])
+    print("supmol_ft.nao_nr() = ", supmol_ft.nao_nr())
+    print("supmol_ft.nbas     = ", supmol_ft.nbas)
+    print("supmol_ft.rs_cell.nao_nr() = ", supmol_ft.rs_cell.nao_nr())
+    print("supmol_ft.rs_cell.nbas     = ", supmol_ft.rs_cell.nbas)
+    supmol_ft = supmol_ft.strip_basis(rcut*3)
+    print("supmol_ft.nao_nr() = ", supmol_ft.nao_nr())
+    print("supmol_ft.nbas     = ", supmol_ft.nbas)
+    print("supmol_ft.rs_cell.nao_nr() = ", supmol_ft.rs_cell.nao_nr())
+    print("supmol_ft.rs_cell.nbas     = ", supmol_ft.rs_cell.nbas)
     
-    print_bas_info(supmol_ft)
+    # print_bas_info(supmol_ft)
     
     mesh = [2, 2, 2]
-    cell_c.build(mesh=mesh)
+    # cell_c.build(mesh=mesh)
     aosym   = 's1'
-    ft_kern = supmol_ft.gen_ft_kernel(aosym, return_complex=True, kpts=kpts)
+    # aosym = 's1hermi'
+    ft_kern = supmol_ft.gen_ft_kernel(aosym, return_complex=False, kpts=kpts)
     
     ngrids = np.prod(mesh)
     Gv, Gvbase, kws = cell_c.get_Gv_weights(mesh)
@@ -129,12 +169,20 @@ for nk in KPTS:
     print("supmol_ft nao = ", supmol_ft.nao_nr())
     print("cell_c    nao = ", cell_c.nao_nr())
     kpt_allow = np.zeros(3)
-    kpts = np.zeros((1,3))
+    # kpts = np.zeros((1,3))
+    kpts = None
     # Gblksize = 16
     Gblksize = ngrids
     for p0, p1 in lib.prange(0, ngrids, Gblksize):
         Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts, None)
         print("Gpq.shape = ", Gpq.shape)
+    
+    Gpq = Gpq[:, 0, :, :, :]
+    Gpq = np.transpose(Gpq, (2,3,0,1))
+    Gpq_test = Gpq[0,0]
+    print("Gpq_test = ", Gpq_test)
+    
+    exit(1)
     
     Gpq = Gpq[0]
     print("Gpq.shape = ", Gpq.shape)
@@ -153,6 +201,11 @@ for nk in KPTS:
     print("Gpq_test[1,0,1] = ", Gpq_test[1,0,1])
     print("Gpq_test[1,1,0] = ", Gpq_test[1,1,0])
     print("Gpq_test[1,1,1] = ", Gpq_test[1,1,1])
+    
+    print("Gpq[0,1] = ", Gpq[0,1])
+    print("Gpq[0,2] = ", Gpq[0,2])
+    
+    exit(1)
     
     Gpq2 = ft_ao.ft_aopair(supercell, Gv=Gv)
     Gpq2 = np.transpose(Gpq2, (1,2,0))
