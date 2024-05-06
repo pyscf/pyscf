@@ -18,6 +18,10 @@ import numpy
 from pyscf import gto, dft, lib
 from pyscf.dft import radi
 from pyscf.grad import uks
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dftd3 = dftd4 = None
 
 
 def setUpModule():
@@ -69,6 +73,34 @@ class KnownValues(unittest.TestCase):
 
         mol1 = mol.copy()
         mf_scanner = mf1.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_finite_diff_uks_d3_grad(self):
+        mol1 = mol.copy()
+        mf = dft.UKS(mol, xc='b3lyp')
+        mf.disp = 'd3bj'
+        mf.conv_tol = 1e-14
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
+    def test_finite_diff_uks_d4_grad(self):
+        mol1 = mol.copy()
+        mf = dft.UKS(mol, xc='b3lyp')
+        mf.disp = 'd4'
+        mf.conv_tol = 1e-14
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)

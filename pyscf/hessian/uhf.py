@@ -454,8 +454,6 @@ class Hessian(rhf_hess.HessianBase):
                          fx, atmlst, max_memory, verbose,
                          max_cycle=self.max_cycle, level_shift=self.level_shift)
 
-    to_gpu = lib.to_gpu
-
 from pyscf import scf
 scf.uhf.UHF.Hessian = lib.class_as_method(Hessian)
 

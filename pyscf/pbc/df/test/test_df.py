@@ -20,7 +20,7 @@ import pyscf.pbc
 from pyscf import ao2mo, gto
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
-from pyscf.pbc.df import df, aug_etb, FFTDF
+from pyscf.pbc.df import df, aug_etb, FFTDF, mdf
 from pyscf.pbc.df import gdf_builder
 #from mpi4pyscf.pbc.df import df
 pyscf.pbc.DEBUG = False
@@ -250,6 +250,21 @@ Li  P
         eri1 = df.GDF(cell).set(auxbasis=aug_etb(cell)).get_eri()
         self.assertAlmostEqual(abs(eri1-eri0).max(), 0, 2)
 
+    def test_kpoints_input(sef):
+        cell.space_group_symmetry = True
+        cell.build()
+        kpts = cell.make_kpts([2,2,2],
+                              space_group_symmetry=True,
+                              time_reversal_symmetry=True)
+
+        mydf = df.GDF(cell, kpts=kpts)
+        assert mydf.kpts.shape == (8,3)
+
+        mydf = FFTDF(cell, kpts=kpts)
+        assert mydf.kpts.shape == (8,3)
+
+        mydf = mdf.MDF(cell, kpts=kpts)
+        assert mydf.kpts.shape == (8,3)
 
 if __name__ == '__main__':
     print("Full Tests for df")

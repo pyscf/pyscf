@@ -599,16 +599,20 @@ class HessianBase(lib.StreamObject):
 
     gen_hop = gen_hop
 
+    # to_gpu can be reused only when __init__ still takes mf
     def to_gpu(self):
-        raise NotImplementedError
-
+        mf = self.base.to_gpu()
+        from importlib import import_module
+        mod = import_module(self.__module__.replace('pyscf', 'gpu4pyscf'))
+        cls = getattr(mod, self.__class__.__name__)
+        obj = cls(mf)
+        return obj
 
 class Hessian(HessianBase):
 
     partial_hess_elec = partial_hess_elec
     hess_elec = hess_elec
     make_h1 = make_h1
-    to_gpu = lib.to_gpu
 
 # Inject to RHF class
 from pyscf import scf

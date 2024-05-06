@@ -119,6 +119,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ej1, 12.233546641482697, 8)
         self.assertAlmostEqual(ek1, 43.946958026023722, 7)
 
+    def test_jk_complex_dm(self):
+        scaled_center = [0.3728,0.5524,0.7672]
+        kpt = cell.make_kpts([1,1,1], scaled_center=scaled_center)[0]
+        mf = scf.RHF(cell, kpt=kpt)
+        dm = mf.init_guess_by_1e()
+
+        mydf = aft.AFTDF(cell, kpts=[kpt])
+        vj1, vk1 = mydf.get_jk(dm, kpts=kpt, exxdiv='ewald')
+        vjs, vks = mydf.get_jk([dm], kpts=[kpt], exxdiv='ewald')
+        vj , vk  = vjs[0], vks[0]
+
+        ej1 = numpy.einsum('ij,ji->', vj1, dm)
+        ek1 = numpy.einsum('ij,ji->', vk1, dm)
+        ej  = numpy.einsum('ij,ji->', vj , dm)
+        ek  = numpy.einsum('ij,ji->', vk , dm)
+
+        # kpts and single kpt AFTDF must match exactly
+        self.assertAlmostEqual(ej1, ej, 10)
+        self.assertAlmostEqual(ek1, ek, 10)
+
     def test_aft_j(self):
         numpy.random.seed(1)
         nao = cell.nao_nr()

@@ -17,5 +17,5 @@ export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF -DBLA_VENDOR=Intel10_64lp_seq"
 
 # env PYTHON not defined in certain conda-build version
 # $PYTHON -m pip install . -vv
-export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF"
-pip install -v --prefix=$PREFIX .
+MAKEFLAGS="-j4" pip install -v --prefix=$PREFIX .
+>>>>>>> 940e4ac16f02eeef3fc944eae190d7f0609a60e7
