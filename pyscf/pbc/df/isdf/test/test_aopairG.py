@@ -100,7 +100,6 @@ for nk in KPTS:
     mesh = np.array(mesh, dtype=np.int32)
     supercell = build_supercell(atm, prim_a, Ls = nk, ke_cutoff=None, basis=basis, verbose=4, pseudo=None, mesh=mesh)
 
-
     ### aftdf ###
     
     mesh = supercell.mesh
