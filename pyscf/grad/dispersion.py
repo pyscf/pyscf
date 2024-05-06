@@ -21,10 +21,10 @@ gradient of dispersion correction for HF and DFT
 '''
 
 import numpy
-from pyscf.dft.rks import KohnShamDFT
+from pyscf.lib import logger
 from pyscf.scf.dispersion import parse_disp, DISP_VERSIONS
 
-def get_dispersion(mf_grad, disp_version=None, with_3body=None):
+def get_dispersion(mf_grad, disp_version=None, with_3body=None, verbose=None):
     '''gradient of DFTD3/DFTD4 dispersion correction'''
     try:
         from pyscf.dispersion import dftd3, dftd4
@@ -40,10 +40,7 @@ def get_dispersion(mf_grad, disp_version=None, with_3body=None):
     if disp_version is None:
         return numpy.zeros([mol.natm,3])
 
-    if isinstance(mf, KohnShamDFT):
-        method = mf.xc
-    else:
-        method = 'hf'
+    method = getattr(mf, 'xc', 'hf')
 
     # overwrite method if method exists in disp_version
     if ',' in disp_version:
@@ -58,11 +55,15 @@ def get_dispersion(mf_grad, disp_version=None, with_3body=None):
         with_3body = disp_with_3body
 
     if disp_version[:2].upper() == 'D3':
+        logger.info(mf, "Calc dispersion correction with DFTD3.")
+        logger.info(mf, f"Parameters: xc={method}, version={disp_version}, atm={with_3body}")
         d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
         res = d3_model.get_dispersion(grad=True)
         g_d3 = res.get('gradient')
         return g_d3
     elif disp_version[:2].upper() == 'D4':
+        logger.info(mf, "Calc dispersion correction with DFTD4.")
+        logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
         d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
         res = d4_model.get_dispersion(grad=True)
         g_d4 = res.get('gradient')

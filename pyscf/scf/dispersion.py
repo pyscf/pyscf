@@ -20,6 +20,8 @@
 dispersion correction for HF and DFT
 '''
 
+from pyscf.lib import logger
+
 # supported dispersion corrections
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
 
@@ -33,7 +35,7 @@ def parse_disp(disp):
     else:
         return disp_lower, False
 
-def get_dispersion(mf, disp_version=None, with_3body=None):
+def get_dispersion(mf, disp_version=None, with_3body=None, verbose=None):
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
@@ -65,6 +67,8 @@ def get_dispersion(mf, disp_version=None, with_3body=None):
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':
+        logger.info(mf, "Calc dispersion correction with DFTD3.")
+        logger.info(mf, f"Parameters: xc={method}, version={disp_version}, atm={with_3body}")
         d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
         res = d3_model.get_dispersion()
         e_d3 = res.get('energy')
@@ -73,6 +77,8 @@ def get_dispersion(mf, disp_version=None, with_3body=None):
 
     # for dftd4
     elif disp_version[:2].upper() == 'D4':
+        logger.info(mf, "Calc dispersion correction with DFTD4.")
+        logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
         d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
         res = d4_model.get_dispersion()
         e_d4 = res.get('energy')
