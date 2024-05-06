@@ -21,26 +21,26 @@ class M3SOSCF:
         mf: Instance of SCF class
             SCF Object that is to be converged.
         agents: int > 0
-            Number of theoretically parallel agents that is to be used. 
+            Number of theoretically parallel agents that is to be used.
             Generally increases speed
         purge_solvers: float, optional
-            Partition of solvers that is to be purged and each iteration. 
+            Partition of solvers that is to be purged and each iteration.
             Between 0 and 1
         convergence: int
             Convergence Threshold for Trust is 10**-convergence
         init_scattering: float
-            Initial statistical distribution of subconverger guesses. The 
-            original initial guess (e.g. minao, huckel, 1e, ...) is always 
-            conserved as the 0th guess, the rest is scattered around with 
-            uniform radius distribution and uniform angular distribution on 
+            Initial statistical distribution of subconverger guesses. The
+            original initial guess (e.g. minao, huckel, 1e, ...) is always
+            conserved as the 0th guess, the rest is scattered around with
+            uniform radius distribution and uniform angular distribution on
             a box
         trust_scale_range: float[3]
-            Scaling array used for adaptive scaling of trust values. The 3 
-            floats correspond to minimum, maximum and power of the 
+            Scaling array used for adaptive scaling of trust values. The 3
+            floats correspond to minimum, maximum and power of the
             scaling calculation.
         init_guess: String or ndarray
-            Initial Guess for the SCF iteration. Either one of the string 
-            aliases supported by pyscf.scf.SCF or an appropriately sized 
+            Initial Guess for the SCF iteration. Either one of the string
+            aliases supported by pyscf.scf.SCF or an appropriately sized
             custom matrix can be used.
         stepSize: float
             Step size of the NR algorithm.
@@ -146,7 +146,7 @@ class M3SOSCF:
 
     def init_dm_with_roothaan_step(self, idm=None):
         '''
-        Initialises the M3SOSCF-Solver with a given density matrix. One 
+        Initialises the M3SOSCF-Solver with a given density matrix. One
         Rothaan step is performed afterwards to ensure DM properties.
 
         Arguments:
@@ -167,7 +167,7 @@ class M3SOSCF:
             idm = mf.make_rdm1(mo_coeff, mo_occ)
         self.mo_basis_coeff = mo_coeff
 
-    def set(self, purge_solvers=-1, convergence=-1, init_scattering=-1, trust_scale_range=None, 
+    def set(self, purge_solvers=-1, convergence=-1, init_scattering=-1, trust_scale_range=None,
             mo_coeffs=None, stepsize=-1):
         if purge_solvers >= 0:
             self.purge_subconvergers = purge_solvers
@@ -203,7 +203,7 @@ class M3SOSCF:
 
         Returns:
             scf_conv: boolean
-                Whether the SCF managed to converge within the set amount of 
+                Whether the SCF managed to converge within the set amount of
                 cycles to the given precision.
             final_energy: float
                 Total SCF energy of the converged solution.
@@ -469,7 +469,7 @@ class M3SOSCF:
                            ['uhf', 'uks'] else numpy.where(self.mf.mo_occ > 0.5)[0]
         no_occs = numpy.where(self.mf.mo_occ[0, :] < 0.5)[0] if self.method in \
                            ['uhf', 'uks'] else numpy.where(self.mf.mo_occ < 0.5)[0]
-       
+
         homo_index = (0, occs[numpy.argmax(self.mf.mo_energy[0, occs])]) if self.method in \
                       ['uhf', 'uks'] else occs[numpy.argmax(self.mf.mo_energy[occs])]
         lumo_index = (0, no_occs[numpy.argmin(self.mf.mo_energy[0, no_occs])]) if self.method in \
@@ -604,8 +604,8 @@ class Subconverger:
 
     def get_local_sol_and_trust(self):
         '''
-        This method is directly invoked by the master M3SOSCF. It solves the local NR step from 
-        the previously assigned base MO coefficients and returns the solution as well as a trust 
+        This method is directly invoked by the master M3SOSCF. It solves the local NR step from
+        the previously assigned base MO coefficients and returns the solution as well as a trust
         and the gradient.
 
         Arguments:
@@ -619,10 +619,10 @@ class Subconverger:
                 local solution as an anti-hermitian MO rotation matrix.
             egrad: ndarray
                 local gradient calculated at the base MO coefficients and used in the NR step as a
-                compressed vector that can be expanded to an anti-hermitian matrix via contraction 
+                compressed vector that can be expanded to an anti-hermitian matrix via contraction
                 with the canonical basis.
             trust: float
-                Trust value of the local solution, always between 0 and 1. 0 indicates that the 
+                Trust value of the local solution, always between 0 and 1. 0 indicates that the
                 solution is infinitely far away and 1 indicates perfect convergence.
         '''
 
@@ -639,7 +639,7 @@ class Subconverger:
     def solve_for_local_sol(self):
         '''
         This method indirectly solves the NR step. In the current implementation, this solution is
-        exported to the xCIAH module intrinsic to PySCF. This is done by executing one SCF step 
+        exported to the xCIAH module intrinsic to PySCF. This is done by executing one SCF step
         with the CIAH module.
 
         Returns:
@@ -653,7 +653,7 @@ class Subconverger:
 
     def get_trust(self, dm0, dm1):
         '''
-        Calculates the trust of a given solution from the old and new density matrix as well as 
+        Calculates the trust of a given solution from the old and new density matrix as well as
         the energy difference.
 
         Arguments:
@@ -725,18 +725,18 @@ class SubconvergerReassigmentManager:
 
     def gen_new_shifts(self, trusts, sols, total, log):
         '''
-        This method is directly invoked by the master M3SOSCF class at the start of each SCF 
+        This method is directly invoked by the master M3SOSCF class at the start of each SCF
         iteration to generate new, useful positions for the reassigned subconvergers.
 
         Arguments:
             trusts: ndarray
-                Array of trusts of each subconverger. trusts[i] belongs to the same subconverger 
+                Array of trusts of each subconverger. trusts[i] belongs to the same subconverger
                 as sols[i]
             sols: ndarray
-                Array of the current MO coefficents of each subconverger. sols[i] belongs to the 
+                Array of the current MO coefficents of each subconverger. sols[i] belongs to the
                 same subconverger as trusts[i]
             total: int
-                Total number of subconvergers to be reassigned, therefore total number of new 
+                Total number of subconvergers to be reassigned, therefore total number of new
                 shifts that need to be generated
             cursor: int
                 Current position of the cursor in the solution buffer
@@ -745,7 +745,7 @@ class SubconvergerReassigmentManager:
 
         Returns:
             shifts: ndarray
-                Array of new MO coefficient for each subconverger that is to be reassigned. The 
+                Array of new MO coefficient for each subconverger that is to be reassigned. The
                 shape of shifts is ( total, n, n )
 
         '''
@@ -773,10 +773,10 @@ class SubconvergerReassigmentManager:
         # generate Points in each trust region
 
         if self.m3.method in ('uhf', 'uks'):
-            shifts = numpy.zeros((total, 2, len(self.m3.mo_basis_coeff[0]), 
+            shifts = numpy.zeros((total, 2, len(self.m3.mo_basis_coeff[0]),
                                   len(self.m3.mo_basis_coeff[0])))
         else:
-            shifts = numpy.zeros((total, len(self.m3.mo_basis_coeff[0]), 
+            shifts = numpy.zeros((total, len(self.m3.mo_basis_coeff[0]),
                                   len(self.m3.mo_basis_coeff[0])))
 
         for i, si in enumerate(selected_indices):
@@ -793,7 +793,7 @@ class SubconvergerReassigmentManager:
 
     def gen_sphere_point(self):
         '''
-        This method generates a single point on any dimensional sphere. See gen_sphere_points for 
+        This method generates a single point on any dimensional sphere. See gen_sphere_points for
         more details.
 
         Returns:
@@ -805,8 +805,8 @@ class SubconvergerReassigmentManager:
 
     def gen_sphere_points(self, num):
         '''
-        Generate multiple random points on any dimensional sphere. This method utilises the 
-        spherical symmetry of the normal distribution by generating a point whose cartesian 
+        Generate multiple random points on any dimensional sphere. This method utilises the
+        spherical symmetry of the normal distribution by generating a point whose cartesian
         coordinates are normally distributed and subsequently normalising said point.
 
         Arguments:
