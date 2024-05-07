@@ -343,8 +343,8 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
     assert second_pass in [None, "only_dd", "only_cc", "exclude_cc", "all"]
     
     if short_range:
-        assert first_pass is "only_dd"
-        assert second_pass is "only_dd"
+        assert first_pass == "only_dd"
+        assert second_pass == "only_dd"
     
     if first_pass is None:
         first_pass = "all"

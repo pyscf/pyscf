@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyscf.pbc.df.isdf import ISDF
+# from pyscf.pbc.df.isdf import ISDF
+
+from pyscf.pbc.df.isdf import isdf_linear_scaling
 
 import numpy as np
 from pyscf import ao2mo
@@ -21,6 +23,7 @@ import pyscf.pbc.gto as pbcgto
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc import tools
 from pyscf.pbc import df
+
 
 def _check_eri(eri, eri_bench, tol=1e-6):
     assert eri.shape == eri_bench.shape
@@ -41,12 +44,14 @@ def _check_eri(eri, eri_bench, tol=1e-6):
                             print("eri[{}, {}, {}, {}] = {} != {}".format(i,j,k,l,eri_bench[i,j,k,l], eri[i,j,k,l]),
                                   "ration = ", eri_bench[i,j,k,l]/eri[i,j,k,l])
 
+from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
+
 if __name__ == '__main__':
 
-    for c in [3, 5, 10, 15]:
-    # for c in [10]:
-        for N in [1, 2]:
-        # for N in [1]:
+    # for c in [3, 5, 10, 15]:
+    for c in [20]:
+        # for N in [1, 2]:
+        for N in [2]:
 
             print("Testing c = ", c, "N = ", N, "...")
 
@@ -61,45 +66,81 @@ if __name__ == '__main__':
             #                C     0.8917  2.6751  2.6751
             #             '''
 
-            cell.atom = '''
-                           C     0.      0.      0.
-                           C     0.8917  0.8917  0.8917
-                           C     1.7834  1.7834  0.
-                           C     2.6751  2.6751  0.8917
-                           C     1.7834  0.      1.7834
-                           C     2.6751  0.8917  2.6751
-                           C     0.      1.7834  1.7834
-                           C     0.8917  2.6751  2.6751
-                        '''
+            # cell.atom = '''
+            #                C     0.      0.      0.
+            #                C     0.8917  0.8917  0.8917
+            #                C     1.7834  1.7834  0.
+            #                C     2.6751  2.6751  0.8917
+            #                C     1.7834  0.      1.7834
+            #                C     2.6751  0.8917  2.6751
+            #                C     0.      1.7834  1.7834
+            #                C     0.8917  2.6751  2.6751
+            #             '''
+            
+            cell.atom = [
+                ['C', (0.     , 0.     , 0.    )],
+                ['C', (0.8917 , 0.8917 , 0.8917)],
+                ['C', (1.7834 , 1.7834 , 0.    )],
+                ['C', (2.6751 , 2.6751 , 0.8917)],
+                ['C', (1.7834 , 0.     , 1.7834)],
+                ['C', (2.6751 , 0.8917 , 2.6751)],
+                ['C', (0.     , 1.7834 , 1.7834)],
+                ['C', (0.8917 , 2.6751 , 2.6751)],
+            ] 
 
             cell.basis   = 'gth-szv'
             cell.pseudo  = 'gth-pade'
             cell.verbose = 4
-
-            # cell.ke_cutoff  = 100   # kinetic energy cutoff in a.u.
             cell.ke_cutoff = 128
             cell.max_memory = 800  # 800 Mb
             cell.precision  = 1e-8  # integral precision
             cell.use_particle_mesh_ewald = True
+            # cell.build()
+            
+            verbose = 4
+            
+            prim_cell = build_supercell(cell.atom, cell.a, Ls = [1,1,1], ke_cutoff=cell.ke_cutoff, basis=cell.basis, pseudo=cell.pseudo)   
+            # prim_partition = [[0,1,2,3,4,5,6,7]]
+            # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
+            prim_partition = [[0,1,2,3],[4,5,6,7]]
+            prim_mesh = prim_cell.mesh
+            
+            Ls = [1, 1, N]
+            Ls = np.array(Ls, dtype=np.int32)
+            mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
+            mesh = np.array(mesh, dtype=np.int32)
+            
+            # cell = tools.super_cell(cell, [1, 1, N])
+            
+            cell, group_partition = build_supercell_with_partition(
+                                    cell.atom, cell.a, mesh=mesh, 
+                                    Ls=Ls,
+                                    basis=cell.basis, 
+                                    pseudo=cell.pseudo,
+                                    partition=prim_partition, ke_cutoff=cell.ke_cutoff, verbose=verbose)
 
-            cell.build()
-
-            cell = tools.super_cell(cell, [1, 1, N])
-
-            myisdf = ISDF(cell=cell)
-            myisdf.build(c=c)
+            # myisdf = ISDF(cell=cell)
+            # myisdf.build(c=c)
+            
+            myisdf = isdf_linear_scaling.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
+            myisdf.build_IP_local(c=c, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
+            # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
+            # pbc_isdf_info.Ls = Ls
+            myisdf.build_auxiliary_Coulomb(debug=True)
 
             ######## ao eri benchmark ########
 
             mydf_eri = df.FFTDF(cell)
 
-            eri = mydf_eri.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
-            eri_isdf = myisdf.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
-            _check_eri(eri, eri_isdf)
-
             eri = mydf_eri.get_eri(compact=True)
             eri_isdf = myisdf.get_eri(compact=True)
             _check_eri(eri, eri_isdf)
+            
+            eri = mydf_eri.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
+            eri_isdf = myisdf.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
+            _check_eri(eri, eri_isdf)
+                        
+            continue
 
             #### mo eri benchmark ########
 
