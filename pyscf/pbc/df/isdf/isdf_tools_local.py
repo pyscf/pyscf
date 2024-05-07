@@ -37,7 +37,7 @@ from pyscf.pbc.df import aft, rsdf_builder, aft_jk
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
-import pyscf.pbc.df.isdf.isdf_fast as ISDF
+# import pyscf.pbc.df.isdf.isdf_fast as ISDF
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_list, bcast_pickel
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 

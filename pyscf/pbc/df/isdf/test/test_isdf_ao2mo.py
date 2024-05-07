@@ -25,7 +25,7 @@ from pyscf.pbc import tools
 from pyscf.pbc import df
 
 
-def _check_eri(eri, eri_bench, tol=1e-6):
+def _check_eri(eri, eri_bench, tol=1e-7):
     assert eri.shape == eri_bench.shape
 
     if len(eri.shape) == 2:
@@ -49,9 +49,10 @@ from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_w
 if __name__ == '__main__':
 
     # for c in [3, 5, 10, 15]:
-    for c in [20]:
+    for c in [25]:
         # for N in [1, 2]:
-        for N in [2]:
+        # for N in [2]:
+        for N in [1]:
 
             print("Testing c = ", c, "N = ", N, "...")
 
@@ -128,6 +129,14 @@ if __name__ == '__main__':
             # pbc_isdf_info.Ls = Ls
             myisdf.build_auxiliary_Coulomb(debug=True)
 
+            from pyscf.pbc import scf
+            mf = scf.RHF(cell)
+            myisdf.direct_scf = mf.direct_scf
+            mf.with_df = myisdf
+            mf.max_cycle = 8
+            mf.conv_tol = 1e-7
+            mf.kernel()
+
             ######## ao eri benchmark ########
 
             mydf_eri = df.FFTDF(cell)
@@ -140,11 +149,13 @@ if __name__ == '__main__':
             eri_isdf = myisdf.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
             _check_eri(eri, eri_isdf)
                         
-            continue
+            # continue
 
             #### mo eri benchmark ########
 
-            mo_coeff = np.random.random((cell.nao,cell.nao))
+            # mo_coeff = np.random.random((cell.nao,cell.nao))
+
+            mo_coeff = mf.mo_coeff
 
             ######## compact = False ########
 

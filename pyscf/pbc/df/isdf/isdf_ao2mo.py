@@ -29,6 +29,8 @@ from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv, _contract_compact
 import numpy as np
 import ctypes
 
+from pyscf.pbc.df.isdf.isdf_tools_local import aoR_Holder
+
 libpbc = lib.load_library('libpbc')
 
 def isdf_eri_robust_fit(mydf, W, aoRg, aoR, V_r, verbose=None):
@@ -86,7 +88,9 @@ def isdf_eri_robust_fit(mydf, W, aoRg, aoR, V_r, verbose=None):
     return eri * ngrid / vol
 
 
-def isdf_eri(mydf, verbose=None):
+def isdf_eri(mydf, 
+             mo_coeff = None,
+             verbose=None):
     
     """
     locality if explored! 
@@ -104,18 +108,65 @@ def isdf_eri(mydf, verbose=None):
     vol   = mydf.cell.vol
     ngrid = np.prod(mydf.cell.mesh)
     natm  = mydf.cell.natm
-    # eri  = numpy.zeros((nao, nao, nao, nao))
-    size = nao * (nao + 1) // 2
-    eri  = numpy.zeros((size, size))
+    
+    if mo_coeff is not None:
+        assert mo_coeff.shape[0] == nao
+        nmo = mo_coeff.shape[1]
+    else:
+        nmo = nao
+    
+    size  = nmo * (nmo + 1) // 2
+    eri   = numpy.zeros((size, size))
     
     aoR  = mydf.aoR
     aoRg = mydf.aoRg
     assert isinstance(aoR, list)
     assert isinstance(aoRg, list)
     
-    max_nao_involved   = np.max([aoR_holder.aoR.shape[0] for aoR_holder in aoR  if aoR_holder is not None])
-    max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoR  if aoR_holder is not None])
-    max_nIP_involved   = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoRg if aoR_holder is not None])
+    if mo_coeff is not None:
+        
+        moR  = []
+        moRg = []
+        
+        for i in range(natm):
+            
+            if with_robust_fitting:
+                ao_involved     = aoR[i].ao_involved
+                mo_coeff_packed = mo_coeff[ao_involved,:].copy()
+                _moR            = lib.ddot(mo_coeff_packed.T, aoR[i].aoR)
+                mo_involved     = np.arange(nmo)
+                moR.append(
+                    aoR_Holder(
+                        aoR = _moR,
+                        ao_involved = mo_involved,
+                        local_gridID_begin  = aoR[i].local_gridID_begin,
+                        local_gridID_end    = aoR[i].local_gridID_end,
+                        global_gridID_begin = aoR[i].global_gridID_begin,
+                        global_gridID_end   = aoR[i].global_gridID_end)
+                )
+            else:
+                moR.append(None)
+            
+            ao_involved     = aoRg[i].ao_involved
+            mo_coeff_packed = mo_coeff[ao_involved,:].copy()
+            _moRg           = lib.ddot(mo_coeff_packed.T, aoRg[i].aoR)
+            mo_involved     = np.arange(nmo)
+            moRg.append(
+                aoR_Holder(
+                    aoR = _moRg,
+                    ao_involved = mo_involved,
+                    local_gridID_begin  = aoRg[i].local_gridID_begin,
+                    local_gridID_end    = aoRg[i].local_gridID_end,
+                    global_gridID_begin = aoRg[i].global_gridID_begin,
+                    global_gridID_end   = aoRg[i].global_gridID_end)
+            )
+    else:
+        moR = aoR
+        moRg = aoRg
+    
+    max_nao_involved   = np.max([aoR_holder.aoR.shape[0] for aoR_holder in moR  if aoR_holder is not None])
+    max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in moR  if aoR_holder is not None])
+    max_nIP_involved   = np.max([aoR_holder.aoR.shape[1] for aoR_holder in moRg if aoR_holder is not None])
     
     ###### loop over basic info to allocate the buf ######
     
@@ -154,7 +205,7 @@ def isdf_eri(mydf, verbose=None):
         
         for partition_i in range(natm):
             
-            aoRg_i            = aoRg[partition_i]
+            aoRg_i            = moRg[partition_i]
             ao_involved_i     = aoRg_i.ao_involved
             nao_i             = aoRg_i.aoR.shape[0]
             global_IP_begin_i = aoRg_i.global_gridID_begin
@@ -169,14 +220,9 @@ def isdf_eri(mydf, verbose=None):
                 ctypes.c_int(nIP_i)
             )
             
-            # benchmark = np.einsum('ix,jx->ijx', aoRg_i.aoR, aoRg_i.aoR)
-            # for i in range(nao_i):
-            #     for j in range(i+1):
-            #         assert np.allclose(benchmark[i,j], aoPair_i[i*(i+1)//2+j])
-            
             for partition_j in range(natm):
                 
-                aoR_j             = aoR[partition_j]
+                aoR_j             = moR[partition_j]
                 ao_involved_j     = aoR_j.ao_involved
                 nao_j             = aoR_j.aoR.shape[0]
                 global_IP_begin_j = aoR_j.global_gridID_begin
@@ -209,13 +255,6 @@ def isdf_eri(mydf, verbose=None):
                 sub_eri  = np.ndarray((nPair_i, nPair_j), dtype=np.float64, buffer=suberi_buf)
                 lib.ddot(aoPair_i, ddot_res, c=sub_eri)
                 
-                # print("nao_i = ", nao_i, "nao_j = ", nao_j)
-                # print("global_IP_begin_i = ", global_IP_begin_i, "global_IP_begin_j = ", global_IP_begin_j)
-                # print("ngrid_i = ", nIP_i, "ngrid_j = ", ngrid_j)
-                # print("nPair_i = ", nPair_i, "nPair_j = ", nPair_j)
-                # eri += sub_eri
-                # eri += sub_eri.T
-                
                 fn_unpack_suberi_to_eri(
                     eri.ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(nao),
@@ -236,16 +275,13 @@ def isdf_eri(mydf, verbose=None):
                     ao_involved_i.ctypes.data_as(ctypes.c_void_p)
                 )
     
-    # diff = eri - eri.T
-    # print("max diff = ", np.max(np.abs(diff)))
-    
     ### W   term ### 
     
     W = mydf.W
     
     for partition_i in range(natm):
         
-        aoRg_i            = aoRg[partition_i]
+        aoRg_i            = moRg[partition_i]
         ao_involved_i     = aoRg_i.ao_involved
         nao_i             = aoRg_i.aoR.shape[0]
         global_IP_begin_i = aoRg_i.global_gridID_begin
@@ -262,7 +298,7 @@ def isdf_eri(mydf, verbose=None):
         
         for partition_j in range(partition_i+1):
             
-            aoRg_j            = aoRg[partition_j]
+            aoRg_j            = moRg[partition_j]
             ao_involved_j     = aoRg_j.ao_involved
             nao_j             = aoRg_j.aoR.shape[0]
             global_IP_begin_j = aoRg_j.global_gridID_begin
@@ -329,11 +365,7 @@ def isdf_eri(mydf, verbose=None):
     del aoPairRg_buf
     del aoPairRg_buf2
     del aoPairR_buf
-    
-    # diff = eri - eri.T
-    # print("max diff = ", np.max(np.abs(diff)))
-    # assert np.allclose(eri, eri.T)
-    
+        
     return eri * ngrid / vol
     
     
@@ -409,15 +441,19 @@ def general(mydf, mo_coeffs, kpts=None,
              iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
              iden_coeffs(mo_coeffs[0], mo_coeffs[3]))):
             
-            moRg = numpy.asarray(lib.dot(mo_coeffs[0].T, mydf.aoRg), order='C')
-            moR  = numpy.asarray(lib.dot(mo_coeffs[0].T, mydf.aoR), order='C')
+            # moRg = numpy.asarray(lib.dot(mo_coeffs[0].T, mydf.aoRg), order='C')
+            # moR  = numpy.asarray(lib.dot(mo_coeffs[0].T, mydf.aoR), order='C')
 
-            eri = isdf_eri_robust_fit(mydf, mydf.W, moRg, moR, mydf.V_R, verbose=mydf.cell.verbose)
+            # eri = isdf_eri_robust_fit(mydf, mydf.W, moRg, moR, mydf.V_R, verbose=mydf.cell.verbose)
+            
+            eri = isdf_eri(mydf, mo_coeffs[0], verbose=mydf.cell.verbose)
         
             if compact:
-                return ao2mo.restore(4, eri, nao)
+                # return ao2mo.restore(4, eri, nao)
+                return eri
             else:
-                return eri.reshape(nao**2, nao**2)
+                # return eri.reshape(nao**2, nao**2)
+                return ao2mo.restore(1, eri, nao)
         else:
             
             raise NotImplementedError
