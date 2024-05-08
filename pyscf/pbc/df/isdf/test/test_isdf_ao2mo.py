@@ -103,7 +103,7 @@ if __name__ == '__main__':
             prim_cell = build_supercell(cell.atom, cell.a, Ls = [1,1,1], ke_cutoff=cell.ke_cutoff, basis=cell.basis, pseudo=cell.pseudo)   
             # prim_partition = [[0,1,2,3,4,5,6,7]]
             # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
-            prim_partition = [[0,1,2,3],[4,5,6,7]]
+            prim_partition = [[0,1,2,3], [4,5,6,7]]
             prim_mesh = prim_cell.mesh
             
             Ls = [1, 1, N]
@@ -156,15 +156,33 @@ if __name__ == '__main__':
             # mo_coeff = np.random.random((cell.nao,cell.nao))
 
             mo_coeff = mf.mo_coeff
+            nocc     = cell.nelectron // 2
+            
+            mo_coeff_o = mo_coeff[:, :nocc].copy()
+            mo_coeff_v = mo_coeff[:, nocc:].copy()
 
             ######## compact = False ########
 
             mo_eri = mydf_eri.ao2mo(mo_coeff, compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
             mo_eri_isdf = myisdf.ao2mo(mo_coeff, compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
             _check_eri(mo_eri, mo_eri_isdf)
+            
+            mo_eri_4_fold = mo_eri.copy()
 
             ######## compact = True ########
 
             mo_eri = mydf_eri.ao2mo(mo_coeff, compact=True)
             mo_eri_isdf = myisdf.ao2mo(mo_coeff, compact=True)
             _check_eri(mo_eri, mo_eri_isdf)
+
+            ######## test ovov ######## 
+            
+            mo_eri_ovov = mydf_eri.ao2mo((mo_coeff_o,mo_coeff_v,mo_coeff_o,mo_coeff_v), compact=False).reshape(nocc, cell.nao-nocc, nocc, cell.nao-nocc) # why it is not correct ? 
+            
+            mo_eri_benchmark = mo_eri_4_fold[:nocc, nocc:, :nocc, nocc:].copy()
+            diff = np.linalg.norm(mo_eri_ovov - mo_eri_benchmark)
+            print("diff = ", diff)
+            # assert np.allclose(mo_eri_ovov, mo_eri_benchmark)
+            
+            mo_eri_ovov_isdf = myisdf.ao2mo((mo_coeff_o,mo_coeff_v,mo_coeff_o,mo_coeff_v), compact=False).reshape(nocc, cell.nao-nocc, nocc, cell.nao-nocc)
+            _check_eri(mo_eri_ovov_isdf, mo_eri_benchmark)

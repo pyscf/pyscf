@@ -60,16 +60,13 @@ void _unpack_suberi_to_eri(
     const int nao_bra,
     const int *ao_loc_bra,
     const int nao_ket,
-    const int *ao_loc_ket)
+    const int *ao_loc_ket,
+    const int add_transpose)
 {
     int nPair = nao * (nao + 1) / 2;
 
     int nPair_ket = nao_ket * (nao_ket + 1) / 2;
-
-    // printf("nao_bra  : %d\n", nao_bra);
-    // printf("nao_ket  : %d\n", nao_ket);
-    // printf("nPair    : %d\n", nPair);
-    // printf("nPair_ket: %d\n", nPair_ket);
+    // int nPair_bra = nao_bra * (nao_bra + 1) / 2;
 
 #pragma omp parallel for schedule(static)
     for (int i1 = 0; i1 < nao_bra; ++i1)
@@ -92,6 +89,57 @@ void _unpack_suberi_to_eri(
                     eri[ij * nPair + kl] += suberi[i1j1 * nPair_ket + k1l1];
                 }
             }
+        }
+    }
+
+    if (add_transpose)
+    {
+#pragma omp parallel for schedule(static)
+        for (int i1 = 0; i1 < nao_bra; ++i1)
+        {
+            for (int j1 = 0; j1 <= i1; ++j1)
+            {
+                int i = ao_loc_bra[i1];
+                int j = ao_loc_bra[j1];
+                int ij = COMBINE2(i, j);
+                int i1j1 = COMBINE2(i1, j1);
+                for (int k1 = 0; k1 < nao_ket; ++k1)
+                {
+                    for (int l1 = 0; l1 <= k1; ++l1)
+                    {
+                        int k = ao_loc_ket[k1];
+                        int l = ao_loc_ket[l1];
+                        int kl = COMBINE2(k, l);
+                        int k1l1 = COMBINE2(k1, l1);
+                        eri[kl * nPair + ij] += suberi[i1j1 * nPair_ket + k1l1];
+                    }
+                }
+            }
+        }
+    }
+}
+
+void _unpack_suberi_to_eri_ovov(
+    double *eri,
+    double *suberi,
+    const int nPair,
+    const int add_transpose)
+{
+    static const double ALPHA = 1.0;
+    static const int INCX = 1;
+
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < nPair; i++)
+    {
+        daxpy_(&nPair, &ALPHA, suberi + i * nPair, &INCX, eri + i * nPair, &INCX);
+    }
+
+    if (add_transpose)
+    {
+#pragma omp parallel for schedule(static)
+        for (int i = 0; i < nPair; i++)
+        {
+            daxpy_(&nPair, &ALPHA, suberi + i * nPair, &INCX, eri + i, &nPair);
         }
     }
 }
