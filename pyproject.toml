@@ -48,16 +48,17 @@ Documentation = "http://www.pyscf.org"
 
 [project.optional-dependencies]
 
+forge = ["pyscf-forge"]
 geomopt = ["pyberny>=0.6.2", "geometric>=0.9.7.2", "pyscf-qsdopt"]
 doci = ["pyscf-doci"]
 properties = ["pyscf-properties"]
 semiempirical = ['pyscf-semiempirical']
 cppe = ["cppe"]
 pyqmc = ["pyqmc"]
-mcfun = ["mcfun>=0.2.1"]
 bse = ["basis-set-exchange"]
+dispersion = ["pyscf-dispersion"]
 
-all = ["pyscf[geomopt,doci,properties,semiempirical,cppe,pyqmc,mcfun,bse]"]
+all = ["pyscf[forge,geomopt,doci,properties,semiempirical,cppe,pyqmc,bse,dispersion]"]
 
 # extras which should not be installed by "all" components
 cornell_shci = ["pyscf-cornell-shci"]
