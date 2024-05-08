@@ -772,6 +772,3 @@ def general(mydf, mo_coeffs, kpts=None,
 
 def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     raise NotImplementedError
-
-
-################ fitting Z matrix, used in THC approximation ################

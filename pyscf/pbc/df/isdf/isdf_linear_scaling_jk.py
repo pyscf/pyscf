@@ -24,6 +24,8 @@ from pyscf.lib import logger, zdotNN, zdotCN, zdotNC
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
+from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
+from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 
 #### MPI SUPPORT ####
 
@@ -2615,6 +2617,8 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     else:
         exxdiv = None
 
+    assert exxdiv in ["ewald", None]
+
     vj = vk = None
 
     if kpts_band is not None and abs(kpt-kpts_band).sum() > 1e-9:
@@ -2674,6 +2678,33 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
             vj += vj_sr
         if with_k:
             vk += vk_sr
+
+    ##### the following code is added to deal with _ewald_exxdiv_for_G0 #####
+    
+    kpts = kpt.reshape(1,3)
+    kpts = np.asarray(kpts)
+    dm_kpts = dm.reshape(-1, dm.shape[0], dm.shape[1]).copy()
+    dm_kpts = lib.asarray(dm_kpts, order='C')
+    dms = _format_dms(dm_kpts, kpts)
+    nset, nkpts, nao = dms.shape[:3]
+    assert nset == 1
+    assert nkpts == 1
+    
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+    nband = len(kpts_band)
+    assert nband == 1
+
+    if is_zero(kpts_band) and is_zero(kpts):
+        vk = vk.reshape(nset,nband,nao,nao)
+    else:
+        raise NotImplementedError("ISDF does not support kpts_band != 0")
+
+    if exxdiv == 'ewald':
+        _ewald_exxdiv_for_G0(mydf.cell, kpts, dms, vk, kpts_band=kpts_band)
+    
+    vk = vk[0,0]
+
+    ##### end of dealing with _ewald_exxdiv_for_G0 #####
 
     t1 = log.timer('sr jk', *t1)
 
