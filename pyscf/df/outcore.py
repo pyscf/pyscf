@@ -168,6 +168,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
     #    cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
     cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
     bufs1 = numpy.empty((comp*max([x[2] for x in shranges]),naoaux))
+    bufs2 = numpy.empty_like(bufs1)
 
     def transform(b):
         if b.ndim == 3 and b.flags.f_contiguous:
@@ -186,6 +187,8 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
                                              overwrite_b=True, check_finite=False)
 
     def process(sh_range):
+        nonlocal bufs1, bufs2
+        bufs2, bufs1 = bufs1, bufs2
         bstart, bend, nrow = sh_range
         shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
         ints = gto.moleintor.getints3c(int3c, atm, bas, env, shls_slice, comp,
@@ -198,10 +201,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
 
     feri = _create_h5file(erifile, dataname)
 
-    # Cannot use lib.map_with_prefetch with trsm because
-    # it doesn't make a copy and may sometimes actually
-    # overwrite the integral buffer as it's being written to disk
-    for istep, dat in enumerate(map(process, shranges)):
+    for istep, dat in enumerate(lib.map_with_prefetch(process, shranges)):
         sh_range = shranges[istep]
         label = '%s/%d'%(dataname,istep)
         if comp == 1:
@@ -216,6 +216,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
                   istep+1, len(shranges), *sh_range)
         time1 = log.timer('gen CD eri [%d/%d]' % (istep+1,len(shranges)), *time1)
     bufs1 = None
+    bufs2 = None
     feri.flush()
     feri.close()
     return erifile

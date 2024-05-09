@@ -304,7 +304,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
                          ctypes.c_int(naux), ctypes.c_int(nao),
                          (ctypes.c_int*4)(0, nocc, 0, nao),
                          null, ctypes.c_int(0))
-                    vk[k] += numpy.matmul(buf1.T, buf1)
+                    vk[k] += lib.dot(buf1.T, buf1)
             t1 = log.timer_debug1('jk', *t1)
     else:
         #:vk = numpy.einsum('pij,jk->pki', cderi, dm)
@@ -331,7 +331,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
                      ctypes.c_int(naux), *rargs)
 
                 buf2 = lib.unpack_tril(eri1, out=buf[1])
-                vk[k] += numpy.matmul(buf1.reshape(-1,nao).T, buf2.reshape(-1,nao))
+                vk[k] += lib.dot(buf1.reshape(-1,nao).T, buf2.reshape(-1,nao))
             t1 = log.timer_debug1('jk', *t1)
 
     if with_j: vj = lib.unpack_tril(vj, 1).reshape(dm_shape)
