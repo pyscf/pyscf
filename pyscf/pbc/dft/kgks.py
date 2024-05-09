@@ -146,7 +146,14 @@ class KGKS(rks.KohnShamDFT, kghf.KGHF):
 
     def to_hf(self):
         '''Convert to KGHF object.'''
-        from pyscf.pbc import scf
-        return self._transfer_attrs_(scf.KGHF(self.cell, self.kpts))
+        from pyscf.pbc import scf, df
+        out = self._transfer_attrs_(scf.KGHF(self.cell, self.kpts))
+
+        # Pure functionals only construct J-type integrals. Enable all integrals for KHF.
+        if (not self._numint.libxc.is_hybrid_xc(self.xc) and
+            len(self.kpts) > 1 and getattr(self.with_df, '_j_only', False)):
+            out.with_df._j_only = False
+            out.with_df.reset()
+        return out
 
     to_gpu = lib.to_gpu

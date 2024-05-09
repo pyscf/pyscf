@@ -18,6 +18,11 @@ import numpy
 from pyscf import gto, dft, lib
 from pyscf.dft import radi
 from pyscf.grad import rks
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dftd3 = dftd4 = None
+
 
 def grids_response(grids):
     # JCP 98, 5612 (1993); DOI:10.1063/1.464906
@@ -189,10 +194,62 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_finite_diff_rks_d3_grad(self):
+        mol1 = mol.copy()
+        mf = dft.RKS(mol, xc='b3lyp')
+        mf.conv_tol = 1e-14
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
+    def test_finite_diff_rks_d4_grad(self):
+        mol1 = mol.copy()
+        mf = dft.RKS(mol, xc='b3lyp')
+        mf.conv_tol = 1e-14
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
     def test_finite_diff_df_rks_grad(self):
         mf1 = mf.density_fit ().run ()
         g = mf1.nuc_grad_method ().set (grid_response=True).kernel ()
         self.assertAlmostEqual(lib.fp(g), -0.04990623577718451, 6)
+
+        mol1 = mol.copy()
+        mf_scanner = mf1.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_finite_diff_df_rks_d3_grad(self):
+        mf1 = dft.RKS(mol, xc='b3lyp').density_fit ()
+        mf1.disp = 'd3bj'
+        mf1.kernel()
+        g = mf1.nuc_grad_method ().set (grid_response=True).kernel ()
+
+        mol1 = mol.copy()
+        mf_scanner = mf1.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
+    def test_finite_diff_df_rks_d4_grad(self):
+        mf1 = dft.RKS(mol, xc='b3lyp').density_fit ()
+        mf1.disp = 'd4'
+        mf1.kernel()
+        g = mf1.nuc_grad_method ().set (grid_response=True).kernel ()
 
         mol1 = mol.copy()
         mf_scanner = mf1.as_scanner()

@@ -18,16 +18,10 @@ import numpy
 from pyscf import gto, scf, lib
 from pyscf import grad
 
-import sys
 try:
-    import dftd3
+    from pyscf.dispersion import dftd3, dftd4
 except ImportError:
-    pass
-
-try:
-    import dftd4
-except ImportError:
-    pass
+    dftd3 = dftd4 = None
 
 def setUpModule():
     global mol
@@ -82,7 +76,7 @@ class KnownValues(unittest.TestCase):
         e2 = mfs('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
         self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 5)
 
-    @unittest.skipIf('dftd3' not in sys.modules, "requires the dftd3 library")
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_rhf_d3_grad(self):
         mf = scf.RHF(mol)
         mf.disp = 'd3bj'
@@ -94,7 +88,7 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scan('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
         self.assertAlmostEqual((e2-e1)/0.002*lib.param.BOHR, g[0,2], 5)
 
-    @unittest.skipIf('dftd4' not in sys.modules, "requires the dftd4 library")
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_rhf_d4_grad(self):
         mf = scf.RHF(mol)
         mf.disp = 'd4'
