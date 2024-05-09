@@ -145,18 +145,18 @@ class CasidaTDDFT(TDA_SF):
             x0 = self.init_guess(self._scf, self.nstates)
             
         def pickeig(w, v, nroots, envs):
-            idx = numpy.where(w > 1e-3)[0]
+            idx = numpy.where(w > -1e-3)[0]
             return w[idx], v[:,idx], idx
         
         # Because the degeneracy has been dealt with by init_guess_sf function.
         nstates_new = x0.shape[0]
         converged, w, x1 = \
-            lib.davidson2(vind, x0, precond,
-                          tol=self.conv_tol,
-                          nroots=nstates_new,
-                          max_cycle=self.max_cycle,
-                          max_space=self.max_space,
-                          verbose=log)
+                lib.davidson1(vind, x0, precond,
+                              tol=self.conv_tol,
+                              nroots=nstates_new, lindep=self.lindep,
+                              max_cycle=self.max_cycle,
+                              max_space=self.max_space, pick=pickeig,
+                              verbose=log)
 
         mo_occ = self._scf.mo_occ
         occidxa = numpy.where(mo_occ[0]>0)[0]
