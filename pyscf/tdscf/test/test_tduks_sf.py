@@ -169,8 +169,8 @@ class KnownValues(unittest.TestCase):
         td.extype = 1
         td.collinear_samples = 200
         es = td.kernel(nstates=5)[0]
-        self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -0.6432887108850486, 4)
-        ref = [0.00054127, 0.02671484, 0.09279362, 0.09346453, 0.24262985]
+        self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -8.204597466952373, 4)
+        ref = [-0.29068840, 0.00054127, 0.02671484, 0.09279362, 0.09346453]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
         
     def test_tda_bp86(self):
@@ -186,8 +186,8 @@ class KnownValues(unittest.TestCase):
         td.extype = 1
         td.collinear_samples = 200
         es = td.kernel(nstates=5)[0]
-        self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -0.6430950096838526, 4)
-        ref = [4.15172344e-04, 1.92481652e-02, 8.27791805e-02, 9.40247282e-02, 4.74210269e-01]
+        self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -8.455349669985411, 4)
+        ref = [-0.30294247, 4.15172344e-04, 1.92481652e-02, 8.27791805e-02, 9.40247282e-02]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
         
     def test_tda_b3lyp(self):
@@ -202,9 +202,9 @@ class KnownValues(unittest.TestCase):
         td = tdscf.TDA_SF(mf_b3lyp).set(conv_tol=1e-12)
         td.extype = 1
         td.collinear_samples = 200
-        es = td.kernel(nstates=4)[0] 
-        self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -0.6637971023605909, 4)
-        ref = [0.000670008, 0.019562623, 0.085627994, 0.090479791]
+        es = td.kernel(nstates=5)[0] 
+        self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -8.274149852325259, 4)
+        ref = [-0.29629033, 0.000670008, 0.019562623, 0.085627994, 0.09047979]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
 
     def test_tda_tpss(self):
@@ -220,8 +220,8 @@ class KnownValues(unittest.TestCase):
         td.extype = 1
         td.collinear_samples = 200
         es = td.kernel(nstates=5)[0]
-        self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -0.6411392658997148, 4)
-        ref = [0.00063663, 0.02329287, 0.08839006, 0.10966013, 0.25380749]
+        self.assertAlmostEqual(lib.fp(es[:3]* 27.2114), -8.064056763982508, 4)
+        ref = [-0.28699919, 0.00063663, 0.02329287, 0.08839006, 0.10966013]
         self.assertAlmostEqual(abs(es[:4] - ref[:4]).max(), 0, 4)
 
     def test_a_lda(self):

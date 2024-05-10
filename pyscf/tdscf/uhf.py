@@ -1183,10 +1183,6 @@ class TDA_SF(TDBase):
         vind, hdiag = self.gen_vind(self._scf,extype=extype)
         precond = hdiag
         
-        def pickeig(w, v, nroots, envs):
-            idx = numpy.where(w > -1e-3)[0]
-            return w[idx], v[:,idx], idx
-        
         if x0 is None:
             x0 = self.init_guess0(self._scf, self.nstates,extype=extype)
 
@@ -1196,7 +1192,7 @@ class TDA_SF(TDBase):
                               tol=self.conv_tol,
                               nroots=nstates_new, lindep=self.lindep,
                               max_cycle=self.max_cycle,
-                              max_space=self.max_space, pick=pickeig,
+                              max_space=self.max_space,
                               verbose=log)
                 
         nmo = self._scf.mo_occ[0].size
