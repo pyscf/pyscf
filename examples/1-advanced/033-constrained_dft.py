@@ -311,10 +311,11 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
 
                 V = V_0 + deltaV * stp
                 g_norm = np.linalg.norm(jacob)
+                V_step_size = np.linalg.norm(V-V_0)
                 if verbose > 3:
-                    print("  loop %4s : W: %.5e    V_c: %s     Nele: %s      g_norm: %.3e    "
-                          % (it,W_new, V_0, N_cur, g_norm))
-                if g_norm < tol and np.linalg.norm(V-V_0) < constraints_tol:
+                    print("  loop %4s : W: %.5e    V_c: %s     Nele: %s      g_norm: %.3e    V_step_size: %.3e"
+                          % (it,W_new, V_0, N_cur, g_norm, V_step_size))
+                if g_norm < tol and V_step_size < constraints_tol:
                     cdft_conv_flag = True
                     break
                 V_0 = V
