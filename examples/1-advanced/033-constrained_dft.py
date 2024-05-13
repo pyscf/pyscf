@@ -480,7 +480,7 @@ def get_newton_step_aug_hess(jac,hess):
 
     eigval, eigvec = la.eigh(ah)
     idx = None
-    for i in xrange(len(eigvec)):
+    for i in range(len(eigvec)):
         if abs(eigvec[0,i]) > 0.1 and eigval[i] > 0.0:
             idx = i
             break
