@@ -186,7 +186,7 @@ def W_cdft(mf, constraints, V_c, orb_pop):
     sites_a, sites_b = constraints.unique_sites()
     N_cur = pop_a[sites_a], pop_b[sites_b]
     N_cur_sum = constraints.separated2sum(N_cur)[1]
-    return np.einsum('i,i', V_c, N_cur_sum - N_c)
+    return np.inner(V_c, N_cur_sum - N_c)
 
 # get gradient of W, as well as return the current population of selected orbitals
 def jac_cdft(mf, constraints, V_c, orb_pop):
@@ -197,7 +197,7 @@ def jac_cdft(mf, constraints, V_c, orb_pop):
 
     N_c = constraints.nelec_required
     sites_a, sites_b = constraints.unique_sites()
-    N_cur = np.array([pop_a[sites_a],pop_b[sites_b]]).real
+    N_cur = pop_a[sites_a].real, pop_b[sites_b].real
     N_cur_sum = constraints.separated2sum(N_cur)[1]
     return N_cur_sum - N_c, N_cur_sum
 
@@ -507,7 +507,7 @@ if __name__ == '__main__':
     h  -2.172991468538160 -1.254577209307266  0.000000000000000
     c   0.000000000000000 -1.406124906933854  0.000000000000000
     h   0.000000000000000 -2.509154418614532  0.000000000000000
-    '''
+    ''' # benzene
     mol.basis = '631g'
     mol.spin=0
     mol.build()
@@ -521,7 +521,7 @@ if __name__ == '__main__':
     mf.run()
 
     idx = mol.search_ao_label('C 2pz') # find all idx for carbon
-    # there are 4 constraints:
+    # there are 3 constraints:
     # 1. N_alpha_C0 + N_beta_C0 + N_beta_C1 = 1.5
     # 2. N_alpha_C2 = 0.5
     # 3. N_beta_C2 = 0.5
