@@ -258,7 +258,7 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
     cdft_diis = lib.diis.DIIS()
     cdft_diis.space = 8
 
-    def get_fock(h1e, s1e, vhf, dm, cycle=0, mf_diis=None):
+    def get_fock(h1e, s1e, vhf, dm, cycle=0, mf_diis=None, fock_last=None):
         fock_0 = old_get_fock(h1e, s1e, vhf, dm, cycle, None)
         V_0 = constraints._final_V
         if mf_diis is None:
@@ -300,7 +300,6 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
                 W_new = W_cdft(mf, constraints, V_0, orb_pop)
                 jacob, N_cur = jac_cdft(mf, constraints, V_0, orb_pop)
                 hess = hess_cdft(mf, constraints, V_0, mo_on_loc_ao)
-
                 deltaV = get_newton_step_aug_hess(jacob,hess)
                 #deltaV = np.linalg.solve (hess, -jacob)
 
