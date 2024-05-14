@@ -37,8 +37,6 @@ natural atomic orbitals.
 
 import numpy as np
 import scipy.linalg as la
-import copy
-from functools import reduce
 from pyscf import gto, scf, lo, dft, lib
 from pyscf.pbc.scf import khf
 
@@ -48,7 +46,6 @@ def get_localized_orbitals(mf, lo_method, mo=None):
         mo = mf.mo_coeff
 
     if not isinstance(mf, khf.KSCF):
-        mol = mf.mol
         s1e = mf.get_ovlp()
 
         if lo_method.lower() == 'lowdin' or lo_method.lower() == 'meta_lowdin':
@@ -96,12 +93,10 @@ def get_localized_orbitals(mf, lo_method, mo=None):
         return C_inv_spin, mo_lo
 
     else:
-        cell = mf.cell
         s1e = mf.get_ovlp()
 
         if lo_method.lower() == 'lowdin' or lo_method.lower() == 'meta_lowdin':
             nkpt = len(mf.kpts)
-            C_arr = []
             C_inv_arr = []
             for i in range(nkpt):
                 C_curr = lo.orth_ao(mf, 'meta_lowdin',s=s1e[i])
@@ -202,8 +197,8 @@ def jac_cdft(mf, constraints, V_c, orb_pop):
     N_cur_sum = constraints.separated2sum(N_cur)[1]
     return N_cur_sum - N_c, N_cur_sum
 
-# get the hessian of W, w.r.t. V_lagr
-def hess_cdft(mf, constraints, V_c, mo_on_loc_ao):
+def hess_cdft(mf, constraints, mo_on_loc_ao):
+    '''get the hessian of W, w.r.t. V_lagr'''
     mo_occ = mf.mo_occ
     mo_energy = mf.mo_energy
     de_ov_a = mo_energy[0][mo_occ[0]>0][:,None] - mo_energy[0][mo_occ[0]==0]
@@ -301,7 +296,7 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
                 orb_pop = pop_analysis(mf, mo_on_loc_ao, disp=False)
                 W_new = W_cdft(mf, constraints, V_0, orb_pop)
                 jacob, N_cur = jac_cdft(mf, constraints, V_0, orb_pop)
-                hess = hess_cdft(mf, constraints, V_0, mo_on_loc_ao)
+                hess = hess_cdft(mf, constraints, mo_on_loc_ao)
                 deltaV = get_newton_step_aug_hess(jacob,hess)
                 #deltaV = np.linalg.solve (hess, -jacob)
 
