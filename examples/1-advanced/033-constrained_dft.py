@@ -142,9 +142,10 @@ def pop_analysis(mf, mo_on_loc_ao, disp=True, full_dm=False):
         return np.einsum('...ii->...i', dm_lo)
 
 
-# get the matrix which should be added to the fock matrix, due to the lagrange multiplier V_lagr (in separate format)
 def get_fock_add_cdft(constraints, V, C_ao2lo_inv):
     '''
+    Get the matrix which should be added to the fock matrix, due to the lagrange multiplier V_lagr (in separate format)
+    
     mf is a pre-converged mf object, with NO constraints.
 
     F_ao_new=F_ao_old + C^{-1}.T * V_diag_lo * C^{-1}
@@ -188,8 +189,8 @@ def W_cdft(mf, constraints, V_c, orb_pop):
     N_cur_sum = constraints.separated2sum(N_cur)[1]
     return np.inner(V_c, N_cur_sum - N_c)
 
-# get gradient of W, as well as return the current population of selected orbitals
 def jac_cdft(mf, constraints, V_c, orb_pop):
+    '''Get gradient of W, as well as return the current population of selected orbitals'''
     if isinstance(mf, scf.hf.RHF):
         pop_a = pop_b = orb_pop * .5
     else:
@@ -232,17 +233,19 @@ def hess_cdft(mf, constraints, V_c, mo_on_loc_ao):
     return hess_arr
 
 
-# main function for cdft
-# mf : pre-converged mf object
-# V_0 : initial guess of lagrange multipliers
-# orb_idx: orbital index for orbital to be constrained
-# alpha : newton step
-# lo_method: localization method, one of 'lowdin', 'meta-lowdin', 'iao', 'nao'
-# diis_pos: 3 choices: post, pre, both
-# diis_type: 3 choices: use gradient of error vectors, use subsequent diff as error vector, no DIIS
 def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
          constraints_tol=1e-3, maxiter=200, C_inv=None, verbose=4,
          diis_pos='post', diis_type=1):
+    '''
+    main function for cdft
+    mf : pre-converged mf object
+    V_0 : initial guess of lagrange multipliers
+    orb_idx: orbital index for orbital to be constrained
+    alpha : newton step
+    lo_method: localization method, one of 'lowdin', 'meta-lowdin', 'iao', 'nao'
+    diis_pos: 3 choices: post, pre, both
+    diis_type: 3 choices: use gradient of error vectors, use subsequent diff as error vector, no DIIS
+    '''
 
     mf.verbose = verbose
     mf.max_cycle = maxiter
