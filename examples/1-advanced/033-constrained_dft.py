@@ -310,8 +310,8 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
                     stp = alpha
 
                 V = V_0 + deltaV * stp
-                g_norm = np.linalg.norm(jacob)
                 V_step_size = np.linalg.norm(V-V_0)
+                g_norm = np.linalg.norm(jacob)
                 if verbose > 3:
                     print("  loop %4s : W: %.5e    V_c: %s     Nele: %s      g_norm: %.3e    V_step_size: %.3e"
                           % (it,W_new, V_0, N_cur, g_norm, V_step_size))
@@ -355,8 +355,9 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
                 W_new = W_cdft(mf, constraints, V_0, orb_pop)
                 jacob, N_cur = jac_cdft(mf, constraints, V_0, orb_pop)
                 hess = hess_cdft(mf, constraints, V_0, mo_on_loc_ao)
-                deltaV = np.linalg.solve (hess, -jacob)
+                #deltaV = np.linalg.solve (hess, -jacob)
 
+                deltaV = get_newton_step_aug_hess(jacob,hess)
                 if it < 5 :
                     stp = min(0.05, alpha*0.1)
                 else:
@@ -364,10 +365,11 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
 
                 V = V_0 + deltaV * stp
                 g_norm = np.linalg.norm(jacob)
+                V_step_size = np.linalg.norm(V-V_0)
                 if verbose > 3:
-                    print("  loop %4s : W: %.5e    V_c: %s     Nele: %s      g_norm: %.3e    "
-                          % (it,W_new, V_0, N_cur, g_norm))
-                if g_norm < tol and np.linalg.norm(V-V_0) < constraints_tol:
+                    print("  loop %4s : W: %.5e    V_c: %s     Nele: %s      g_norm: %.3e    V_step_size: %.3e"
+                          % (it,W_new, V_0, N_cur, g_norm, V_step_size))
+                if g_norm < tol and V_step_size < constraints_tol:
                     cdft_conv_flag = True
                     break
                 V_0 = V
@@ -385,7 +387,7 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
 
     mo_on_loc_ao = get_localized_orbitals(mf, lo_method, mf.mo_coeff)[1]
     orb_pop = pop_analysis(mf, mo_on_loc_ao, disp=True)
-    
+
     #print(f'Vc: {constraints._final_V}')
     return mf, orb_pop
 
@@ -533,4 +535,5 @@ if __name__ == '__main__':
     nelec_required = [1.5, .5, .5]
     constraints = Constraints(orbital_indices, spin_labels, nelec_required)
     mf, dm_pop = cdft(mf, constraints, lo_method='lowdin', verbose=4)
+
     #expected Vc: [-0.00142391 -0.00021137 -0.00270322]
