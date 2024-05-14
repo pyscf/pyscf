@@ -281,11 +281,10 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
         fock_add = get_fock_add_cdft(constraints, V_0, C_inv)
         fock = fock_0 + fock_add #ZHC
 
-        if diis_pos == 'pre' or diis_pos == 'both':
+        def inner_loop(fock_0, V_0, C_inv, cdft_conv_flag):
             for it in range(inner_max_cycle): # TO BE MODIFIED
                 fock_add = get_fock_add_cdft(constraints, V_0, C_inv)
                 fock = fock_0 + fock_add #ZHC
-
                 mo_energy, mo_coeff = mf.eig(fock, s1e)
                 mo_occ = mf.get_occ(mo_energy, mo_coeff)
 
@@ -312,15 +311,23 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
                     stp = alpha
 
                 V = V_0 + deltaV * stp
-                V_step_size = np.linalg.norm(V-V_0)
                 g_norm = np.linalg.norm(jacob)
+                V_step_size = np.linalg.norm(V-V_0)
+
                 if verbose > 3:
                     print("  loop %4s : W: %.5e    V_c: %s     Nele: %s      g_norm: %.3e    V_step_size: %.3e"
-                          % (it,W_new, V_0, N_cur, g_norm, V_step_size))
+                            % (it,W_new, V_0, N_cur, g_norm, V_step_size))
+                    
                 if g_norm < tol and V_step_size < constraints_tol:
                     cdft_conv_flag = True
                     break
-                V_0 = V
+                else:
+                    V_0 = V
+
+            return fock, W_new, g_norm, cdft_conv_flag, V_0
+
+        if diis_pos == 'pre' or diis_pos == 'both':
+            fock, W_new, g_norm, cdft_conv_flag, V_0 = inner_loop(fock_0, V_0, C_inv, cdft_conv_flag)
 
         if cycle > 1:
             if diis_type == 1:
@@ -335,46 +342,8 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
 
         if diis_pos == 'post' or diis_pos == 'both':
             cdft_conv_flag = False
-            fock_0 = fock - fock_add
-            for it in range(inner_max_cycle): # TO BE MODIFIED
-                fock_add = get_fock_add_cdft(constraints, V_0, C_inv)
-                fock = fock_0 + fock_add #ZHC
-
-                mo_energy, mo_coeff = mf.eig(fock, s1e)
-                mo_occ = mf.get_occ(mo_energy, mo_coeff)
-
-                # Required by hess_cdft function
-                mf.mo_energy = mo_energy
-                mf.mo_coeff = mo_coeff
-                mf.mo_occ = mo_occ
-
-                if lo_method.lower() == 'iao':
-                    mo_on_loc_ao = get_localized_orbitals(mf, lo_method, mo_coeff)[1]
-                else:
-                    mo_on_loc_ao = np.einsum('...jk,...kl->...jl', C_inv, mo_coeff)
-
-                orb_pop = pop_analysis(mf, mo_on_loc_ao, disp=False)
-                W_new = W_cdft(mf, constraints, V_0, orb_pop)
-                jacob, N_cur = jac_cdft(mf, constraints, V_0, orb_pop)
-                hess = hess_cdft(mf, constraints, V_0, mo_on_loc_ao)
-                #deltaV = np.linalg.solve (hess, -jacob)
-
-                deltaV = get_newton_step_aug_hess(jacob,hess)
-                if it < 5 :
-                    stp = min(0.05, alpha*0.1)
-                else:
-                    stp = alpha
-
-                V = V_0 + deltaV * stp
-                g_norm = np.linalg.norm(jacob)
-                V_step_size = np.linalg.norm(V-V_0)
-                if verbose > 3:
-                    print("  loop %4s : W: %.5e    V_c: %s     Nele: %s      g_norm: %.3e    V_step_size: %.3e"
-                          % (it,W_new, V_0, N_cur, g_norm, V_step_size))
-                if g_norm < tol and V_step_size < constraints_tol:
-                    cdft_conv_flag = True
-                    break
-                V_0 = V
+            fock_0 = fock - fock_add            
+            fock, W_new, g_norm, cdft_conv_flag, V_0 = inner_loop(fock_0, V_0, C_inv, cdft_conv_flag)
 
         if verbose > 0:
             print("CDFT W: %.5e   g_norm: %.3e    "%(W_new, g_norm))
@@ -382,7 +351,7 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
         constraints._converged = cdft_conv_flag
         constraints._final_V = V_0
         return fock
-
+        
     dm0 = mf.make_rdm1()
     mf.get_fock = get_fock
     mf.kernel(dm0)
