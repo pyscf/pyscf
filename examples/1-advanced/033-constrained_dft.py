@@ -237,7 +237,7 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
     V_0 : initial guess of lagrange multipliers
     orb_idx: orbital index for orbital to be constrained
     alpha : newton step
-    lo_method: localization method, one of 'lowdin', 'meta-lowdin', 'iao', 'nao'
+    lo_method: localization method, one of 'lowdin', 'meta_lowdin', 'iao', 'nao'
     diis_pos: 3 choices: post, pre, both
     diis_type: 3 choices: use gradient of error vectors, use subsequent diff as error vector, no DIIS
     '''
@@ -377,8 +377,8 @@ class Constraints(object):
         constraints.nelec_required = [1.5 , 0.5]
 
         correspond to two constraints:
-        1. N_{alpha-MO_2} + N_{beta-MO_2} = 1.5
-        2. N_{beta-MO_3} = 0.5
+        1. N_{alpha-AO_2} + N_{beta-AO_2} = 1.5
+        2. N_{beta-AO_3} = 0.5
     '''
     def __init__(self, orbital_indices, spin_labels, nelec_required):
         self.orbital_indices = orbital_indices
