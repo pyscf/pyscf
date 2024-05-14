@@ -385,6 +385,8 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
 
     mo_on_loc_ao = get_localized_orbitals(mf, lo_method, mf.mo_coeff)[1]
     orb_pop = pop_analysis(mf, mo_on_loc_ao, disp=True)
+    
+    #print(f'Vc: {constraints._final_V}')
     return mf, orb_pop
 
 
@@ -531,3 +533,4 @@ if __name__ == '__main__':
     nelec_required = [1.5, .5, .5]
     constraints = Constraints(orbital_indices, spin_labels, nelec_required)
     mf, dm_pop = cdft(mf, constraints, lo_method='lowdin', verbose=4)
+    #expected Vc: [-0.00142391 -0.00021137 -0.00270322]
