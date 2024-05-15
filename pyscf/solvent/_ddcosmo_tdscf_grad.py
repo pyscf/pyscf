@@ -37,7 +37,7 @@ from pyscf import dft
 from pyscf import df
 from pyscf.dft import numint
 from pyscf.solvent import ddcosmo
-from pyscf.solvent import ddcosmo_grad
+from pyscf.solvent.grad import ddcosmo_grad
 from pyscf.solvent._attach_solvent import _Solvation
 from pyscf.grad import rks as rks_grad
 from pyscf.grad import tdrks as tdrks_grad

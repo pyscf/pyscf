@@ -1,4 +1,5 @@
 {% set data = load_setup_py_data() %}
+{% set project_data = load_file_data('pyproject.toml')['project'] %}
 
 
 package:
@@ -19,6 +20,7 @@ requirements:
     - mkl
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
+    - {{ compiler('fortran') }}
   host:
     - python
   run:
@@ -33,6 +35,6 @@ test:
     - pyscf.lib
 
 about:
-  home: "{{ data['url'] }}"
-  license: "{{ data['license'] }}"
-  summary: "{{ data['description'] }}"
+  home: "{{ project_data['urls']['Homepage'] }}"
+  license: "{{ project_data['license'] }}"
+  summary: "{{ project_data['description'] }}"
