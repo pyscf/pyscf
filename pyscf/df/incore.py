@@ -28,7 +28,7 @@ from pyscf import __config__
 
 
 MAX_MEMORY = getattr(__config__, 'df_outcore_max_memory', 2000)  # 2GB
-LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
+LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-9)
 
 
 # This function is aliased for backward compatibility.
