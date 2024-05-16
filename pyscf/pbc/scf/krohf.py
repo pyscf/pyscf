@@ -214,9 +214,6 @@ get_rho = kuhf.get_rho
 def mulliken_meta(cell, dm_ao_kpts, kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
-
-    Note this function only computes the Mulliken population for the gamma
-    point density matrix.
     '''
     dm = dm_ao_kpts[0] + dm_ao_kpts[1]
     return khf.mulliken_meta(cell, dm, kpts, verbose, pre_orth_method, s)
