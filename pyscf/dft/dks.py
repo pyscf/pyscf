@@ -84,6 +84,13 @@ class KohnShamDFT(rks.KohnShamDFT):
     def collinear(self, val):
         self._numint.collinear = val
 
+    @property
+    def spin_samples(self):
+        return self._numint.spin_samples
+    @spin_samples.setter
+    def spin_samples(self, val):
+        self._numint.spin_samples = val
+
     def to_rhf(self):
         raise RuntimeError
 
