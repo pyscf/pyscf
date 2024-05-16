@@ -30,7 +30,7 @@ from pyscf.scf import cphf
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
 from pyscf.solvent import ddcosmo
-from pyscf.solvent import ddcosmo_grad
+from pyscf.solvent.grad import ddcosmo_grad
 from pyscf.solvent import _ddcosmo_tdscf_grad
 from pyscf.symm import sph
 

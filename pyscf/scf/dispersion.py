@@ -24,6 +24,11 @@ from pyscf.dft.rks import KohnShamDFT
 from pyscf.dft import dft_parser
 
 def get_dispersion(mf, disp_version=None):
+    try:
+        from pyscf.dispersion import dftd3, dftd4
+    except ImportError:
+        print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
+        raise
     mol = mf.mol
     if isinstance(mf, KohnShamDFT):
         method = mf.xc
@@ -46,35 +51,17 @@ def get_dispersion(mf, disp_version=None):
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':
-        try:
-            import dftd3.pyscf as disp
-        except ImportError:
-            raise ImportError("\n \
-cannot find dftd3 in the current environment.\n \
-please install dftd3 via \n \
-**************************************\n\
-        pip3 install dftd3 \n \
-**************************************")
-
-        d3 = disp.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
-        e_d3, _ = d3.kernel()
+        d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
+        res = d3_model.get_dispersion()
+        e_d3 = res.get('energy')
         mf.scf_summary['dispersion'] = e_d3
         return e_d3
 
     # for dftd4
     elif disp_version[:2].upper() == 'D4':
-        try:
-            import dftd4.pyscf as disp
-        except ImportError:
-            raise ImportError("\n \
-cannot find dftd4 in the current environment. \n \
-please install dftd4 via \n \
-***************************************\n \
-        pip3 install dftd4 \n \
-***************************************")
-
-        d4 = disp.DFTD4Dispersion(mol, xc=method, atm=with_3body)
-        e_d4, _ = d4.kernel()
+        d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+        res = d4_model.get_dispersion()
+        e_d4 = res.get('energy')
         mf.scf_summary['dispersion'] = e_d4
         return e_d4
     else:

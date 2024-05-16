@@ -43,6 +43,13 @@ from pyscf.hessian import rhf as rhf_hess
 from pyscf.df.grad.rhf import (_int3c_wrapper, _gen_metric_solver,
                                LINEAR_DEP_THRESHOLD)
 
+def _pinv(a, lindep=LINEAR_DEP_THRESHOLD):
+    '''Similar to pinv (v1.7.0) with atol=lindep and rtol=0'''
+    w, v = scipy.linalg.eigh(a)
+    mask = w > lindep
+    v1 = v[:, mask]
+    return lib.dot(v1/w[mask], v1.conj().T)
+
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None):
     e1, ej, ek = _partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
@@ -174,7 +181,7 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         get_int3c_ipip2 = _int3c_wrapper(mol, auxmol, 'int3c2e_ipip2', 's1')
         rhok0_P__ = lib.einsum('plj,li->pij', rhok0_Pl_, mocc_2)
         rho2c_0 = lib.einsum('pij,qji->pq', rhok0_P__, rhok0_P__)
-        int2c_inv = numpy.linalg.pinv(int2c, rcond=LINEAR_DEP_THRESHOLD)
+        int2c_inv = _pinv(int2c, lindep=LINEAR_DEP_THRESHOLD)
         int2c_ipip1 = auxmol.intor('int2c2e_ipip1', aosym='s1')
         int2c_ip_ip  = lib.einsum('xpq,qr,ysr->xyps', int2c_ip1, int2c_inv, int2c_ip1)
         int2c_ip_ip -= auxmol.intor('int2c2e_ip1ip2', aosym='s1').reshape(3,3,naux,naux)
@@ -475,9 +482,9 @@ def _load_dim0(dat, p0, p1):
 class Hessian(rhf_hess.Hessian):
     '''Non-relativistic restricted Hartree-Fock hessian'''
     def __init__(self, mf):
-        self.auxbasis_response = 1
         rhf_hess.Hessian.__init__(self, mf)
 
+    auxbasis_response = 1
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
 

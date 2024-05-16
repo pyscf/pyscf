@@ -144,9 +144,13 @@ C  15.16687337 15.16687337 15.16687337
                        mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
-        cl2 = tools.super_cell(cl1, [2,3,4])
+        _ = cl1.enuc
+        ncopy = [2,3,4]
+        ncell = ncopy[0]*ncopy[1]*ncopy[2]
+        cl2 = tools.super_cell(cl1, ncopy)
         self.assertAlmostEqual(lib.fp(cl2.atom_coords()), -18.946080642714836, 9)
         self.assertAlmostEqual(lib.fp(cl2._bas[:,gto.ATOM_OF]), 16.515144238434807, 9)
+        self.assertAlmostEqual(cl1.enuc, cl2.enuc / ncell, 9)
 
     def test_super_cell_with_symm(self):
         cl1 = pbcgto.M(a = 1.4 * numpy.eye(3),

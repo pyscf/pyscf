@@ -1505,6 +1505,7 @@ class SCF(lib.StreamObject):
     '''
     conv_tol = getattr(__config__, 'scf_hf_SCF_conv_tol', 1e-9)
     conv_tol_grad = getattr(__config__, 'scf_hf_SCF_conv_tol_grad', None)
+    conv_tol_cpscf = getattr(__config__, 'scf_hf_SCF_conv_tol_cpscf', 1e-8)
     max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
     init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
     disp = None  # for DFT-D3 and DFT-D4
@@ -1529,7 +1530,7 @@ class SCF(lib.StreamObject):
     callback = None
 
     _keys = {
-        'conv_tol', 'conv_tol_grad', 'max_cycle', 'init_guess',
+        'conv_tol', 'conv_tol_grad', 'conv_tol_cpscf', 'max_cycle', 'init_guess',
         'DIIS', 'diis', 'diis_space', 'diis_damp', 'diis_start_cycle',
         'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
         'direct_scf', 'direct_scf_tol', 'conv_check', 'callback',

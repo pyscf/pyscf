@@ -150,6 +150,11 @@ add_subdirectory(ri)
 add_subdirectory(pbc)
 add_subdirectory(agf2)
 
+option(ENABLE_SMD "Compiling SMD Fortran code" OFF)
+if(ENABLE_SMD)
+  add_subdirectory(solvent)
+endif(ENABLE_SMD)
+
 # Overwrite CMAKE_C_CREATE_SHARED_LIBRARY in Modules/CMakeCInformation.cmake
 # to remove the SONAME flag in the so file. The soname information causes
 # dynamic link error when importing libcint library.
@@ -168,7 +173,7 @@ if(BUILD_LIBCINT)
     set(LIBCINT_GIT https://github.com/sunqm/qcint.git) # qcint is an optimized implementation for x86-64 architecture
     set(LIBCINT_VERSION v6.1.2)
     if(NOT BUILD_MARCH_NATIVE)
-      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")    
+      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")
     endif()
   endif()
 

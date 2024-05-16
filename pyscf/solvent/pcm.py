@@ -22,7 +22,6 @@ PCM family solvent models
 
 import numpy
 import scipy
-import ctypes
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto, df
@@ -122,8 +121,8 @@ XI = {
     5810: 4.90792902522,
 }
 
-Bondi = radii.VDW
-Bondi[1] = 1.1/radii.BOHR      # modified version
+modified_Bondi = radii.VDW.copy()
+modified_Bondi[1] = 1.1/radii.BOHR      # modified version
 PI = numpy.pi
 
 def switch_h(x):
@@ -137,13 +136,13 @@ def switch_h(x):
     y[x>1] = 1.0
     return y
 
-def gen_surface(mol, ng=302, vdw_scale=1.2):
+def gen_surface(mol, ng=302, rad=modified_Bondi, vdw_scale=1.2):
     '''J. Phys. Chem. A 1999, 103, 11060-11079'''
     unit_sphere = gen_grid.MakeAngularGrid(ng)
     atom_coords = mol.atom_coords(unit='B')
     charges = mol.atom_charges()
     N_J = ng * numpy.ones(mol.natm)
-    R_J = numpy.asarray([vdw_scale*Bondi[chg] for chg in charges])
+    R_J = numpy.asarray([rad[chg] for chg in charges])
     R_sw_J = R_J * (14.0 / N_J)**0.5
     alpha_J = 1.0/2.0 + R_J/R_sw_J - ((R_J/R_sw_J)**2 - 1.0/28)**0.5
     R_in_J = R_J - alpha_J * R_sw_J
@@ -160,7 +159,7 @@ def gen_surface(mol, ng=302, vdw_scale=1.2):
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         chg = gto.charge(symb)
-        r_vdw = vdw_scale*Bondi[chg]
+        r_vdw = rad[chg]
 
         atom_grid = r_vdw * unit_sphere[:,:3] + atom_coords[ia,:]
         riJ = scipy.spatial.distance.cdist(atom_grid[:,:3], atom_coords)
@@ -249,14 +248,42 @@ def get_D_S(surface, with_S=True, with_D=False):
     return D, S
 
 
-class PCM(ddcosmo.DDCOSMO):
+class PCM(lib.StreamObject):
+    _keys = {
+        'method', 'vdw_scale', 'surface', 'r_probe', 'intopt',
+        'mol', 'radii_table', 'atom_radii', 'lebedev_order', 'lmax', 'eta',
+        'eps', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
+        'equilibrium_solvation', 'e', 'v', 'v_grids_n',
+    }
+
+    kernel = ddcosmo.DDCOSMO.kernel
+
     def __init__(self, mol):
-        ddcosmo.DDCOSMO.__init__(self, mol)
+        self.mol = mol
+        self.stdout = mol.stdout
+        self.verbose = mol.verbose
+        self.max_memory = mol.max_memory
         self.method = 'C-PCM'
+
         self.vdw_scale = 1.2 # default value in qchem
         self.surface = {}
+        self.r_probe = 0.0
+        self.radii_table = None
+        self.atom_radii = None
         self.lebedev_order = 29
         self._intermediates = {}
+        self.eps = 78.3553
+
+        self.max_cycle = 20
+        self.conv_tol = 1e-7
+        self.state_id = 0
+
+        self.frozen = False
+        self.equilibrium_solvation = False
+
+        self.e = None
+        self.v = None
+        self._dm = None
 
     def dump_flags(self, verbose=None):
         logger.info(self, '******** %s (In testing) ********', self.__class__)
@@ -265,36 +292,42 @@ class PCM(ddcosmo.DDCOSMO):
                     'in the future.')
         logger.info(self, 'lebedev_order = %s (%d grids per sphere)',
                     self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
-        logger.info(self, 'lmax = %s'         , self.lmax)
-        logger.info(self, 'eta = %s'          , self.eta)
         logger.info(self, 'eps = %s'          , self.eps)
         logger.info(self, 'frozen = %s'       , self.frozen)
         logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
         logger.debug2(self, 'radii_table %s', self.radii_table)
         if self.atom_radii:
             logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
-        self.grids.dump_flags(verbose)
         return self
 
+    def to_gpu(self):
+        from pyscf.lib import to_gpu
+        obj = to_gpu(self)
+        return obj.reset()
+
     def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._intermediates = None
         self.surface = None
-        super().reset(mol)
+        self.intopt = None
         return self
 
     def build(self, ng=None):
-        vdw_scale = self.vdw_scale
-        self.radii_table = vdw_scale * Bondi
+        if self.radii_table is None:
+            vdw_scale = self.vdw_scale
+            self.radii_table = vdw_scale * modified_Bondi + self.r_probe
         mol = self.mol
         if ng is None:
             ng = gen_grid.LEBEDEV_ORDER[self.lebedev_order]
 
-        self.surface = gen_surface(mol, ng=ng, vdw_scale=vdw_scale)
+        self.surface = gen_surface(mol, rad=self.radii_table, ng=ng)
         self._intermediates = {}
         F, A = get_F_A(self.surface)
         D, S = get_D_S(self.surface, with_S=True, with_D=True)
 
         epsilon = self.eps
-        if self.method.upper() == 'C-PCM':
+        if self.method.upper() in ['C-PCM', 'CPCM']:
             f_epsilon = (epsilon-1.)/epsilon
             K = S
             R = -f_epsilon * numpy.eye(K.shape[0])
@@ -302,7 +335,7 @@ class PCM(ddcosmo.DDCOSMO):
             f_epsilon = (epsilon - 1.0)/(epsilon + 1.0/2.0)
             K = S
             R = -f_epsilon * numpy.eye(K.shape[0])
-        elif self.method.upper() == 'IEF-PCM':
+        elif self.method.upper() in ['IEF-PCM', 'IEFPCM']:
             f_epsilon = (epsilon - 1.0)/(epsilon + 1.0)
             DA = D*A
             DAS = numpy.dot(DA, S)
@@ -327,79 +360,129 @@ class PCM(ddcosmo.DDCOSMO):
         }
         self._intermediates.update(intermediates)
 
+        charge_exp  = self.surface['charge_exp']
+        grid_coords = self.surface['grid_coords']
+        atom_coords = mol.atom_coords(unit='B')
+        atom_charges = mol.atom_charges()
+
+        int2c2e = mol._add_suffix('int2c2e')
+        fakemol = gto.fakemol_for_charges(grid_coords, expnt=charge_exp**2)
+        fakemol_nuc = gto.fakemol_for_charges(atom_coords)
+        v_ng = gto.mole.intor_cross(int2c2e, fakemol_nuc, fakemol)
+        self.v_grids_n = numpy.dot(atom_charges, v_ng)
+
     def _get_vind(self, dms):
-        if not self._intermediates or self.grids.coords is None:
+        if not self._intermediates:
             self.build()
 
         nao = dms.shape[-1]
         dms = dms.reshape(-1,nao,nao)
+        if dms.shape[0] == 2:
+            dms = (dms[0] + dms[1]).reshape(-1,nao,nao)
 
         K = self._intermediates['K']
         R = self._intermediates['R']
-        v_grids = self._get_v(self.surface, dms)
-        b = numpy.dot(R, v_grids)
-        q = numpy.linalg.solve(K, b)
+        v_grids_e = self._get_v(dms)
+        v_grids = self.v_grids_n - v_grids_e
 
-        vK_1 = numpy.linalg.solve(K.T, v_grids)
-        q_sym = (q + numpy.dot(R.T, vK_1))/2.0
+        b = numpy.dot(R, v_grids.T)
+        q = numpy.linalg.solve(K, b).T
+
+        vK_1 = numpy.linalg.solve(K.T, v_grids.T)
+        qt = numpy.dot(R.T, vK_1).T
+        q_sym = (q + qt)/2.0
 
         vmat = self._get_vmat(q_sym)
-        epcm = 0.5 * numpy.dot(q_sym, v_grids)
+        epcm = 0.5 * numpy.dot(q_sym[0], v_grids[0])
 
-        self._intermediates['K'] = K
-        self._intermediates['R'] = R
-        self._intermediates['q'] = q
-        self._intermediates['q_sym'] = q_sym
-        self._intermediates['v_grids'] = v_grids
+        self._intermediates['q'] = q[0]
+        self._intermediates['q_sym'] = q_sym[0]
+        self._intermediates['v_grids'] = v_grids[0]
+        self._intermediates['dm'] = dms
+        return epcm, vmat[0]
 
-        return epcm, vmat
-
-    def _get_v(self, surface, dms):
+    def _get_v(self, dms):
         '''
         return electrostatic potential on surface
         '''
         mol = self.mol
         nao = dms.shape[-1]
-        atom_coords = mol.atom_coords(unit='B')
-        atom_charges = mol.atom_charges()
-        grid_coords = surface['grid_coords']
-        exponents   = surface['charge_exp']
-
+        grid_coords = self.surface['grid_coords']
+        exponents   = self.surface['charge_exp']
+        ngrids = grid_coords.shape[0]
+        nset = dms.shape[0]
+        v_grids_e = numpy.empty([nset, ngrids])
         max_memory = self.max_memory - lib.current_memory()[0]
         blksize = int(max(max_memory*.9e6/8/nao**2, 400))
-        ngrids = grid_coords.shape[0]
         int3c2e = mol._add_suffix('int3c2e')
         cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e)
-        v_grids_e = numpy.empty(ngrids)
         for p0, p1 in lib.prange(0, ngrids, blksize):
             fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents[p0:p1]**2)
             v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
-            v_grids_e[p0:p1] = numpy.einsum('ijL,ij->L',v_nj, dms[0])
+            for i in range(nset):
+                v_grids_e[i,p0:p1] = numpy.einsum('ijL,ij->L',v_nj, dms[i])
 
-        int2c2e = mol._add_suffix('int2c2e')
-
-        fakemol_nuc = gto.fakemol_for_charges(atom_coords)
-        v_ng = gto.mole.intor_cross(int2c2e, fakemol_nuc, fakemol)
-        v_grids_n = numpy.dot(atom_charges, v_ng)
-
-        v_grids = v_grids_n - v_grids_e
-        return v_grids
+        return v_grids_e
 
     def _get_vmat(self, q):
         mol = self.mol
         nao = mol.nao
         grid_coords = self.surface['grid_coords']
         exponents   = self.surface['charge_exp']
-
+        ngrids = grid_coords.shape[0]
+        q = q.reshape([-1,ngrids])
+        nset = q.shape[0]
+        vmat = numpy.zeros([nset,nao,nao])
         max_memory = self.max_memory - lib.current_memory()[0]
         blksize = int(max(max_memory*.9e6/8/nao**2, 400))
-        ngrids = grid_coords.shape[0]
+
         int3c2e = mol._add_suffix('int3c2e')
         cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e)
-        vmat = numpy.zeros([nao,nao])
         for p0, p1 in lib.prange(0, ngrids, blksize):
-            fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents**2)
+            fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents[p0:p1]**2)
             v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
-            vmat += -numpy.einsum('ijL,L->ij', v_nj, q[p0:p1])
+            for i in range(nset):
+                vmat[i] += -numpy.einsum('ijL,L->ij', v_nj, q[i,p0:p1])
         return vmat
 
+    def nuc_grad_method(self, grad_method):
+        from pyscf.solvent.grad import pcm as pcm_grad
+        if self.frozen:
+            raise RuntimeError('Frozen solvent model is not supported')
+        from pyscf import scf
+        from pyscf.solvent import _ddcosmo_tdscf_grad
+        if isinstance(grad_method.base, tdscf.rhf.TDBase):
+            return _ddcosmo_tdscf_grad.make_grad_object(grad_method)
+        else:
+            return pcm_grad.make_grad_object(grad_method)
+
+    def Hessian(self, hess_method):
+        from pyscf.solvent.hessian import pcm as pcm_hess
+        if self.frozen:
+            raise RuntimeError('Frozen solvent model is not supported')
+        from pyscf import scf
+        if isinstance(hess_method.base, (scf.hf.RHF, scf.uhf.UHF)):
+            return pcm_hess.make_hess_object(hess_method)
+        else:
+            raise RuntimeError('Only SCF gradient is supported')
+
+    def _B_dot_x(self, dms):
+        if not self._intermediates:
+            self.build()
+        out_shape = dms.shape
+        nao = dms.shape[-1]
+        dms = dms.reshape(-1,nao,nao)
+
+        K = self._intermediates['K']
+        R = self._intermediates['R']
+        v_grids = -self._get_v(dms)
+
+        b = numpy.dot(R, v_grids.T)
+        q = numpy.linalg.solve(K, b).T
+
+        vK_1 = numpy.linalg.solve(K.T, v_grids.T)
+        qt = numpy.dot(R.T, vK_1).T
+        q_sym = (q + qt)/2.0
+
+        vmat = self._get_vmat(q_sym)
+        return vmat.reshape(out_shape)

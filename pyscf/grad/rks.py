@@ -591,9 +591,6 @@ class Gradients(rhf_grad.Gradients):
         rhf_grad.Gradients.__init__(self, mf)
         self.grids = None
         self.nlcgrids = None
-        # This parameter has no effects for HF gradients. Add this attribute so that
-        # the kernel function can be reused in the DFT gradients code.
-        self.grid_response = False
 
     def dump_flags(self, verbose=None):
         rhf_grad.Gradients.dump_flags(self, verbose)
