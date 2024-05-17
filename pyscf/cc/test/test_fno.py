@@ -51,16 +51,16 @@ class Water(unittest.TestCase):
         et = CCSD_T(mcc, eris=eris)
         return mcc.e_corr, et
 
-    @unittest.skip('fail due to updates of pp_int?')
     def test_fno_by_thresh(self):
         threshs = [1e-2,1e-3,1e-4]
         refs = [
-            [-0.1180210293, -0.0001530894],
-            [-0.1903456906, -0.0006322229],
-            [-0.2130000748, -0.0030061317],
+            [-0.1200179470,-0.0001506723],
+            [-0.1925851371,-0.0006428496],
+            [-0.2149635715,-0.0030270215],
         ]
         for thresh,ref in zip(threshs,refs):
             eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh)
+            # print('[%s],' % (','.join([f'{x:.10f}' for x in [eccsd,et]])))
             self.assertAlmostEqual(eccsd, ref[0], 6)
             self.assertAlmostEqual(et, ref[1], 6)
 
@@ -69,16 +69,16 @@ class Water(unittest.TestCase):
         self.assertAlmostEqual(eccsd, eccsd0, 6)
         self.assertAlmostEqual(et, et0, 6)
 
-    @unittest.skip('fail due to updates of pp_int?')
     def test_fno_by_thresh_frozen(self):
         threshs = [1e-2,1e-3,1e-4]
         refs = [
-            [-0.1173030018, -0.0001459448],
-            [-0.1889586685, -0.0006157799],
-            [-0.2109365568, -0.0029841323],
+            [-0.0777291294,-0.0000381574],
+            [-0.1409238993,-0.0004851219],
+            [-0.1500184791,-0.0021645217],
         ]
         for thresh,ref in zip(threshs,refs):
             eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=1)
+            # print('[%s],' % (','.join([f'{x:.10f}' for x in [eccsd,et]])))
             self.assertAlmostEqual(eccsd, ref[0], 6)
             self.assertAlmostEqual(et, ref[1], 6)
 
@@ -118,16 +118,16 @@ class Water_density_fitting(unittest.TestCase):
         et = CCSD_T(mcc, eris=eris)
         return mcc.e_corr, et
 
-    @unittest.skip('fail due to updates of pp_int?')
     def test_fno_by_thresh(self):
         threshs = [1e-2,1e-3,1e-4]
         refs = [
-            [-0.1180086745, -0.0001528637],
-            [-0.1903723005, -0.0006323478],
-            [-0.2130687280, -0.0030086849],
+            [-0.1200039667,-0.0001504459],
+            [-0.1926097163,-0.0006429844],
+            [-0.2150297885,-0.0030295410],
         ]
         for thresh,ref in zip(threshs,refs):
             eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh)
+            # print('[%s],' % (','.join([f'{x:.10f}' for x in [eccsd,et]])))
             self.assertAlmostEqual(eccsd, ref[0], 6)
             self.assertAlmostEqual(et, ref[1], 6)
 
@@ -136,16 +136,16 @@ class Water_density_fitting(unittest.TestCase):
         self.assertAlmostEqual(eccsd, eccsd0, 6)
         self.assertAlmostEqual(et, et0, 6)
 
-    @unittest.skip('fail due to updates of pp_int?')
     def test_fno_by_thresh_frozen(self):
         threshs = [1e-2,1e-3,1e-4]
         refs = [
-            [-0.1172906846, -0.0001457165],
-            [-0.1889855085, -0.0006158811],
-            [-0.2110052374, -0.0029866440],
+            [-0.0777156383,-0.0000380971],
+            [-0.1409426400,-0.0004850786],
+            [-0.1500564421,-0.0021661544],
         ]
         for thresh,ref in zip(threshs,refs):
             eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=1)
+            # print('[%s],' % (','.join([f'{x:.10f}' for x in [eccsd,et]])))
             self.assertAlmostEqual(eccsd, ref[0], 6)
             self.assertAlmostEqual(et, ref[1], 6)
 

@@ -194,15 +194,9 @@ def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None, frozen=None):
             Number of virtual NOs to keep. Default is None. If present, overrides `thresh` and `pct_occ`.
     """
     import numpy
-    if frozen is None:
-        frozenocc = 0
-    else:
-        assert(isinstance(frozen, (int,numpy.int64)))
-        frozenocc = frozen
     from pyscf import mp
-    pt = mp.MP2(mf).set(verbose=0).run()
+    pt = mp.MP2(mf, frozen=frozen).set(verbose=0).run()
     frozen, no_coeff = pt.make_fno(thresh=thresh, pct_occ=pct_occ, nvir_act=nvir_act)
-    frozen = numpy.hstack([numpy.arange(frozenocc),frozen])
     if len(frozen) == 0: frozen = None
     pt_no = mp.MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run()
     mycc = CCSD(mf, frozen=frozen, mo_coeff=no_coeff)
