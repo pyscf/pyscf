@@ -207,8 +207,8 @@ def _mo_splitter(mp):
     maskact = mp.get_frozen_mask()
     maskocc = mp.mo_occ>1e-6
     masks = [
-         maskocc & ~maskact,    # frz occ
-         maskocc &  maskact,    # act occ
+        maskocc  & ~maskact,    # frz occ
+        maskocc  &  maskact,    # act occ
         ~maskocc &  maskact,    # act vir
         ~maskocc & ~maskact,    # frz vir
     ]
@@ -253,7 +253,7 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
         nvir_keep = min(nvir, nvir_act)
 
     masks = _mo_splitter(mp)
-    moeoccfrz0, moeocc, moevir, moevirfrz0 = [mf.mo_energy[m]  for m in masks]
+    moeoccfrz0, moeocc, moevir, moevirfrz0 = [mf.mo_energy[m] for m in masks]
     orboccfrz0, orbocc, orbvir, orbvirfrz0 = [mf.mo_coeff[:,m] for m in masks]
 
     fvv = numpy.diag(moevir)
