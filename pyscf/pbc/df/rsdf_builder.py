@@ -384,10 +384,9 @@ class _RSGDFBuilder(Int3cBuilder):
         # separated temporary file can avoid this issue.  The DF intermediates may
         # be terribly huge. The temporary file should be placed in the same disk
         # as cderi_file.
-        swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
-        fswap = lib.H5TmpFile(swapfile.name)
+        fswap = lib.H5TmpFile(dir=os.path.dirname(cderi_file), prefix='.outcore_auxe2_swap')
         # Unlink swapfile to avoid trash files
-        swapfile = None
+        os.unlink(fswap.filename)
 
         log = logger.new_logger(self)
         cell = self.cell
@@ -926,7 +925,7 @@ class _RSGDFBuilder(Int3cBuilder):
                                    'j3c', shls_slice, kk_idx=kk_idx)
         cpu1 = log.timer('pass1: real space int3c2e', *cpu0)
 
-        feri = h5py.File(cderi_file, 'w')
+        feri = lib.H5FileWrap(cderi_file, 'w')
         feri['kpts'] = kpts
         feri['aosym'] = aosym
 

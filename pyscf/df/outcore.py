@@ -303,11 +303,11 @@ def _create_h5file(erifile, dataname):
         erifile = erifile.name
 
     if h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile, 'a')
+        feri = lib.H5FileWrap(erifile, 'a')
         if dataname in feri:
             del (feri[dataname])
     else:
-        feri = h5py.File(erifile, 'w')
+        feri = lib.H5FileWrap(erifile, 'w')
     return feri
 
 del (MAX_MEMORY)

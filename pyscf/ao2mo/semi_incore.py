@@ -140,11 +140,11 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
 
     if isinstance(erifile, str):
         if h5py.is_hdf5(erifile):
-            feri = h5py.File(erifile, 'a')
+            feri = lib.H5FileWrap(erifile, 'a')
             if dataname in feri:
                 del (feri[dataname])
         else:
-            feri = h5py.File(erifile,'w',libver='latest')
+            feri = lib.H5FileWrap(erifile,'w', libver='latest')
     else:
         assert (isinstance(erifile, h5py.Group))
         feri = erifile

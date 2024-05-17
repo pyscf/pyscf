@@ -20,6 +20,7 @@
 #
 
 import h5py
+from pyscf.lib import H5FileWrap
 from pyscf.lib.chkfile import load
 from pyscf.lib.chkfile import dump, save
 from pyscf.lib.chkfile import load_mol, save_mol
@@ -45,11 +46,11 @@ def dump_mcscf(mc, chkfile=None, key='mcscf',
     #if ci_vector is None: ci_vector = mc.ci
 
     if h5py.is_hdf5(chkfile):
-        fh5 = h5py.File(chkfile, 'a')
+        fh5 = H5FileWrap(chkfile, 'a')
         if key in fh5:
             del (fh5[key])
     else:
-        fh5 = h5py.File(chkfile, 'w')
+        fh5 = H5FileWrap(chkfile, 'w')
 
     if 'mol' not in fh5:
         fh5['mol'] = mc.mol.dumps()

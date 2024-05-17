@@ -1052,9 +1052,9 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     if isinstance(erifile, h5py.Group):
         feri = erifile
     elif h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile, 'a')
+        feri = lib.H5FileWrap(erifile, 'a')
     else:
-        feri = h5py.File(erifile, 'w')
+        feri = lib.H5FileWrap(erifile, 'w')
     if dataname in feri:
         del (feri[dataname])
     if dataname+'-kptij' in feri:
