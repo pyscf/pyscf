@@ -58,7 +58,7 @@ jobs:
             yum install -y openblas-devel gcc && \
             export src=${GITHUB_WORKSPACE:-/src/pyscf} && \
             export dst=${GITHUB_WORKSPACE:-/src/pyscf}/linux-wheels && \
-            export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF" && \
+            export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF -DENABLE_SMD=ON" && \
             export CMAKE_BUILD_PARALLEL_LEVEL=4 && \
             mkdir -p /root/wheelhouse $src/linux-wheels && \
             sed -i "/            if basename(fn) not in needed_libs:/s/basename.*libs/1/" /opt/_internal/pipx/venvs/auditwheel/lib/python*/site-packages/auditwheel/wheel_abi.py && \
@@ -105,13 +105,17 @@ jobs:
     name: Build wheels for macos
     runs-on: macos-12
     steps:
+      - uses: fortran-lang/setup-fortran@v1
+        with:
+          compiler: gcc
+          version: 11
       - uses: actions/checkout@v3
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.14.1
         env:
           CIBW_BUILD: cp311-macosx_x86_64
           CIBW_BUILD_VERBOSITY: "1"
-          CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF"
+          CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF -DENABLE_SMD=ON"
           CMAKE_BUILD_PARALLEL_LEVEL: "4"
         with:
           output-dir: mac-wheels
@@ -137,7 +141,7 @@ jobs:
           CIBW_BUILD_VERBOSITY: "1"
           # Cross-platform build for arm64 wheels on x86 platform
           CIBW_ARCHS_MACOS: "x86_64 universal2 arm64"
-          CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF"
+          CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF -DENABLE_SMD=OFF"
           CMAKE_BUILD_PARALLEL_LEVEL: "4"
           CMAKE_OSX_ARCHITECTURES: arm64
         with:

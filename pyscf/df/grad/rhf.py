@@ -38,8 +38,9 @@ from functools import reduce
 from itertools import product
 from pyscf.ao2mo import _ao2mo
 from pyscf.df import df_jk
+from pyscf.df.incore import LINEAR_DEP_THR
 
-LINEAR_DEP_THRESHOLD = 1e-9
+LINEAR_DEP_THRESHOLD = LINEAR_DEP_THR
 
 def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
            decompose_j2c='CD', lindep=LINEAR_DEP_THRESHOLD):
@@ -482,10 +483,11 @@ class Gradients(rhf_grad.Gradients):
     _keys = {'with_df', 'auxbasis_response'}
 
     def __init__(self, mf):
-        # Whether to include the response of DF auxiliary basis when computing
-        # nuclear gradients of J/K matrices
-        self.auxbasis_response = True
         rhf_grad.Gradients.__init__(self, mf)
+
+    # Whether to include the response of DF auxiliary basis when computing
+    # nuclear gradients of J/K matrices
+    auxbasis_response = True
 
     def check_sanity(self):
         assert isinstance(self.base, df.df_jk._DFHF)

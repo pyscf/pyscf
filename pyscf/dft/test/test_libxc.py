@@ -123,6 +123,9 @@ class KnownValues(unittest.TestCase):
 
         self.assertEqual(dft.libxc.parse_xc('Xpbe,')[1], ((123,1),))
         self.assertEqual(dft.libxc.parse_xc('pbe,' )[1], ((101,1),))
+        self.assertEqual(dft.libxc.parse_xc('gga_x_pbe_gaussian' )[1], ((321,1),))
+
+
         hyb, fn_facs = dft.libxc.parse_xc('PBE*.4+LDA')
         self.assertEqual(fn_facs, ((101, 0.4), (130, 0.4), (1, 1)))
         self.assertRaises(KeyError, dft.libxc.parse_xc, 'PBE+VWN')

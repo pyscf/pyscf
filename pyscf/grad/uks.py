@@ -250,7 +250,6 @@ class Gradients(uhf_grad.Gradients):
         uhf_grad.Gradients.__init__(self, mf)
         self.grids = None
         self.nlcgrids = None
-        self.grid_response = False
 
     def dump_flags(self, verbose=None):
         uhf_grad.Gradients.dump_flags(self, verbose)

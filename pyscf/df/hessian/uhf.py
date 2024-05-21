@@ -35,7 +35,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.hessian import uhf as uhf_hess
-from pyscf.df.hessian.rhf import _load_dim0
+from pyscf.df.hessian.rhf import _load_dim0, _pinv
 from pyscf.df.grad.rhf import (_int3c_wrapper, _gen_metric_solver,
                                LINEAR_DEP_THRESHOLD)
 
@@ -197,7 +197,7 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         rhok0b_P__ = lib.einsum('plj,li->pij', rhok0b_Pl_, moccb)
         rho2c_0  = lib.einsum('pij,qij->pq', rhok0a_P__, rhok0a_P__)
         rho2c_0 += lib.einsum('pij,qij->pq', rhok0b_P__, rhok0b_P__)
-        int2c_inv = numpy.linalg.pinv(int2c, rcond=LINEAR_DEP_THRESHOLD)
+        int2c_inv = _pinv(int2c, lindep=LINEAR_DEP_THRESHOLD)
         int2c_ipip1 = auxmol.intor('int2c2e_ipip1', aosym='s1')
         int2c_ip_ip  = lib.einsum('xpq,qr,ysr->xyps', int2c_ip1, int2c_inv, int2c_ip1)
         int2c_ip_ip -= auxmol.intor('int2c2e_ip1ip2', aosym='s1').reshape(3,3,naux,naux)
@@ -526,9 +526,9 @@ def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
 class Hessian(uhf_hess.Hessian):
     '''Non-relativistic UHF hessian'''
     def __init__(self, mf):
-        self.auxbasis_response = 1
         uhf_hess.Hessian.__init__(self, mf)
 
+    auxbasis_response = 1
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
 

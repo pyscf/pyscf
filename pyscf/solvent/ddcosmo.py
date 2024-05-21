@@ -237,6 +237,7 @@ from pyscf import gto
 from pyscf import df
 from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
+from pyscf.solvent.grad import ddcosmo_grad
 from pyscf.symm import sph
 
 from pyscf.solvent import _attach_solvent
@@ -860,7 +861,7 @@ class ddCOSMO(lib.StreamObject):
         '''For grad_method in vacuum, add nuclear gradients of solvent
         '''
         from pyscf import tdscf
-        from pyscf.solvent import ddcosmo_grad, _ddcosmo_tdscf_grad
+        from pyscf.solvent import _ddcosmo_tdscf_grad
         if self.frozen:
             raise RuntimeError('Frozen solvent model is not supported for '
                                'energy gradients')

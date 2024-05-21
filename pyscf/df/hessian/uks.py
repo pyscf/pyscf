@@ -134,9 +134,9 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
 class Hessian(uks_hess.Hessian):
     '''Non-relativistic RKS hessian'''
     def __init__(self, mf):
-        self.auxbasis_response = 1
         uks_hess.Hessian.__init__(self, mf)
 
+    auxbasis_response = 1
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
 
