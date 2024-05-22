@@ -375,17 +375,27 @@ class KohnShamDFT:
     define_xc_ = define_xc_
 
     def do_nlc(self):
-        '''Determine if the object needs to do nlc calculations
+        '''Check if the object needs to do nlc calculations
 
         if self.nlc == False, nlc is disabled
         if self.nlc == 'vv10', do nlc
-        if self.nlc == '', turn the ball to libxc
+        if self.nlc == '', turn the ball to dft_parser and libxc
         '''
         xc, nlc, _ = dft_parser.parse_dft(self.xc)
-        if self.nlc == 0 or nlc == 0: # if self.nlc is false
+
+        # If nlc is disabled via self.nlc
+        if self.nlc == 0:
+            if self.nlc != nlc:
+                raise RuntimeError('A conflict is found between dispersion and xc.')
+            else:
+                return False
+
+        # If nlc is disabled via self.xc
+        if nlc == 0:
             return False
+
         xc_has_nlc = self._numint.libxc.is_nlc(xc)
-        return self.nlc or xc_has_nlc
+        return xc_has_nlc
 
     def to_rhf(self):
         '''Convert the input mean-field object to a RHF/ROHF object.
