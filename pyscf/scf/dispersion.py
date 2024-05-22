@@ -45,7 +45,7 @@ def parse_disp(dft_method):
     xc, nlc, disp = dft_parser.parse_dft(dft_lower)
     if dft_lower in XC_MAP:
         xc = XC_MAP[dft_lower]
-    print(dft_lower, xc)
+
     if disp is None:
         return xc, None, False
     disp_lower = disp.lower()
