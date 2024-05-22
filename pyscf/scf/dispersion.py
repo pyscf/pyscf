@@ -78,7 +78,7 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
         disp_version = disp
     if with_3body is not None:
         with_3body = disp_with_3body
-    print(method, disp_version, disp_with_3body)
+
     if disp_version is None:
         return 0.0
 

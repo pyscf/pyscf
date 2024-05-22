@@ -46,7 +46,7 @@ def get_dispersion(hessobj, disp=None, with_3body=None):
         if mf.disp != disp_version:
             raise RuntimeError('disp is conflict with xc')
     if mf.disp is not None:
-        disp_version
+        disp_version = mf.disp
     if disp is not None:
         disp_version = disp
     if with_3body is not None:
