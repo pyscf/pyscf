@@ -25,7 +25,7 @@ import numpy
 from pyscf.lib import logger
 from pyscf.scf.dispersion import parse_disp, DISP_VERSIONS
 
-def get_dispersion(hessobj, disp_version=None, with_3body=None):
+def get_dispersion(hessobj, disp=None, with_3body=None):
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
@@ -34,28 +34,29 @@ def get_dispersion(hessobj, disp_version=None, with_3body=None):
     mf = hessobj.base
     mol = mf.mol
 
-    # priority: args > mf.disp
-    if disp_version is None:
-        if hasattr(mf, 'disp'): disp_version = mf.disp
-
     natm = mol.natm
     h_disp = numpy.zeros([mol.natm,mol.natm,3,3])
-    if disp_version is None:
-        return h_disp
 
+    # The disp method for both HF and MCSCF is set to 'hf'
     method = getattr(mf, 'xc', 'hf')
+    method, disp_version, disp_with_3body = parse_disp(method)
 
-    # overwrite method if method exists in disp_version
-    if ',' in disp_version:
-        disp_version, method = disp_version.split(',')
+    # priority: args > mf.disp
+    if disp is None:
+        disp_version = disp
 
-    disp_version, disp_with_3body = parse_disp(disp_version)
+    if with_3body is None:
+        with_3body = disp_with_3body
+
+    if disp_version is None:
+        return 0.0
 
     if disp_version not in DISP_VERSIONS:
         raise NotImplementedError
 
-    if with_3body is None:
-        with_3body = disp_with_3body
+    if disp_version is None:
+        return h_disp
+
 
     if mf.disp[:2].upper() == 'D3':
         logger.info(mf, "Calc dispersion correction with DFTD3.")

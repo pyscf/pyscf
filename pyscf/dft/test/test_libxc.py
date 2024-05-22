@@ -346,10 +346,10 @@ class KnownValues(unittest.TestCase):
 
     def test_dft_parser(self):
         from pyscf.dft.dft_parser import parse_dft
-        self.assertEqual(parse_dft('wb97m-d3bj'), ('wb97m-v', False, 'd3bj,wb97m'))
-        self.assertEqual(parse_dft('b3lyp-d3zerom'), ('b3lyp', '', 'd3zerom,b3lyp'))
-        self.assertEqual(parse_dft('wb97x-d3bj'), ('wb97x-v', False, 'd3bj,wb97x'))
-        self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x', '', 'd3zero2b,wb97x'))
+        self.assertEqual(parse_dft('wb97m-d3bj'), ('wb97m-v', False, 'd3bj'))
+        self.assertEqual(parse_dft('b3lyp-d3zerom'), ('b3lyp', '', 'd3zerom'))
+        self.assertEqual(parse_dft('wb97x-d3bj'), ('wb97x-v', False, 'd3bj'))
+        self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x', '', 'd3zero2b'))
 
 if __name__ == "__main__":
     print("Test libxc")

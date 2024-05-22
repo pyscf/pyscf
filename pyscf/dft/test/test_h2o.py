@@ -515,37 +515,29 @@ class KnownValues(unittest.TestCase):
         assert fn_facs[1][0][0] == 466
 
         method = dft.RKS(h2o, xc='b3lyp-d3bj')
-        assert method.xc == 'b3lyp'
-        assert method.disp == 'd3bj,b3lyp'
+        assert method.xc == 'b3lyp-d3bj'
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0005738788210828446, 9)
         fn_facs = method._numint.libxc.parse_xc(method.xc)
         assert fn_facs[1][0][0] == 402
 
         method = dft.RKS(h2o, xc='b3lyp-d3bjm2b')
-        assert method.xc == 'b3lyp'
-        assert method.disp == 'd3bjm2b,b3lyp'
+        assert method.xc == 'b3lyp-d3bjm2b'
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0006949127588605776, 9)
 
         method = dft.RKS(h2o, xc='b3lyp-d3bjmatm')
-        assert method.xc == 'b3lyp'
-        assert method.disp == 'd3bjmatm,b3lyp'
+        assert method.xc == 'b3lyp-d3bjmatm'
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
 
         method = dft.UKS(h2o, xc='b3lyp-d3bjmatm')
-        assert method.xc == 'b3lyp'
-        assert method.disp == 'd3bjmatm,b3lyp'
+        assert method.xc == 'b3lyp-d3bjmatm'
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
 
     def test_d3_warning_msg(self):
         mf = dft.RKS(h2o)
-        mf.xc = 'wb97m-d3bj'
-        with self.assertRaisesRegex(ValueError, 'dispersion correction'):
-            mf.run()
-
         mf.xc = 'wb97m-v'
         mf.nlc = True
         mf.disp = 'd3bj'

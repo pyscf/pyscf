@@ -1100,11 +1100,7 @@ def parse_xc(description):
     description = description.upper()
     if '-D3' in description or '-D4' in description:
         from pyscf.dft.dft_parser import parse_dft
-        xc, nlc, disp = parse_dft(description)
-        raise ValueError(
-            'xc code should not include dispersion correction.\n'
-            'It is recommded to assign the dispersion using DFT class '
-            f'instantiation methods, e.g. mol.RKS(xc={description}).\n')
+        description, _, _ = parse_dft(description)
 
     if (description in ('B3P86', 'B3LYP', 'X3LYP') and
         not getattr(parse_xc, 'b3lyp5_warned', False) and

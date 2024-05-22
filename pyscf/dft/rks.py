@@ -324,7 +324,9 @@ class KohnShamDFT:
 
     def __init__(self, xc='LDA,VWN'):
         # By default, self.nlc = '' and self.disp = None
-        self.xc, self.nlc, self.disp = dft_parser.parse_dft(xc)
+        self.xc = xc
+        self.nlc = ''
+        self.disp = None
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(
             __config__, 'dft_rks_RKS_grids_level', self.grids.level)
@@ -379,9 +381,10 @@ class KohnShamDFT:
         if self.nlc == 'vv10', do nlc
         if self.nlc == '', turn the ball to libxc
         '''
-        if self.nlc == 0: # if self.nlc is false
+        xc, nlc, _ = dft_parser.parse_dft(self.xc)
+        if self.nlc == 0 or nlc == 0: # if self.nlc is false
             return False
-        xc_has_nlc = self._numint.libxc.is_nlc(self.xc)
+        xc_has_nlc = self._numint.libxc.is_nlc(xc)
         return self.nlc or xc_has_nlc
 
     def to_rhf(self):

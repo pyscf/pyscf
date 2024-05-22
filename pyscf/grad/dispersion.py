@@ -24,7 +24,7 @@ import numpy
 from pyscf.lib import logger
 from pyscf.scf.dispersion import parse_disp, DISP_VERSIONS
 
-def get_dispersion(mf_grad, disp_version=None, with_3body=None, verbose=None):
+def get_dispersion(mf_grad, disp=None, with_3body=None, verbose=None):
     '''gradient of DFTD3/DFTD4 dispersion correction'''
     try:
         from pyscf.dispersion import dftd3, dftd4
@@ -33,26 +33,23 @@ def get_dispersion(mf_grad, disp_version=None, with_3body=None, verbose=None):
         raise
     mf = mf_grad.base
     mol = mf.mol
-    # priority: args > mf.disp
-    if disp_version is None:
-        if hasattr(mf, 'disp'): disp_version = mf.disp
 
-    if disp_version is None:
-        return numpy.zeros([mol.natm,3])
-
+    # The disp method for both HF and MCSCF is set to 'hf'
     method = getattr(mf, 'xc', 'hf')
+    method, disp_version, disp_with_3body = parse_disp(method)
 
-    # overwrite method if method exists in disp_version
-    if ',' in disp_version:
-        disp_version, method = disp_version.split(',')
-
-    disp_version, disp_with_3body = parse_disp(disp_version)
-
-    if disp_version not in DISP_VERSIONS:
-        raise NotImplementedError
+    # priority: args > mf.disp
+    if disp is None:
+        disp_version = disp
 
     if with_3body is None:
         with_3body = disp_with_3body
+
+    if disp_version is None:
+        return 0.0
+
+    if disp_version not in DISP_VERSIONS:
+        raise NotImplementedError
 
     if disp_version[:2].upper() == 'D3':
         logger.info(mf, "Calc dispersion correction with DFTD3.")

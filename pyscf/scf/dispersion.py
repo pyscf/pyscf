@@ -21,21 +21,36 @@ dispersion correction for HF and DFT
 '''
 
 from pyscf.lib import logger
+from pyscf.dft import dft_parser
 
 # supported dispersion corrections
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
+XC_MAP = {'wb97m-d3bj': 'wb97m',
+          'b97m-d3bj': 'b97m',
+          'wb97x-d3bj': 'wb97x'}
 
-def parse_disp(disp):
-    '''Decode the disp parameter for 3-body correction'''
+def parse_disp(dft_method):
+    '''Decode the disp parameter for 3-body correction
+        Example: b3lyp-d3bj2b -> (b3lyp, d3bj, False)
+                 wb97x-d3bj   -> (wb97x, d3bj, False)
+    '''
+    if dft_method == 'hf':
+        return 'hf', None, False
+
+    dft_lower = dft_method.lower()
+    xc, nlc, disp = dft_parser.parse_dft(dft_lower)
+    if dft_lower in XC_MAP:
+        xc = XC_MAP[dft_lower]
+
     disp_lower = disp.lower()
     if disp_lower.endswith('2b'):
         return disp_lower.replace('2b', ''), False
     elif disp_lower.endswith('atm'):
         return disp_lower.replace('atm', ''), True
     else:
-        return disp_lower, False
+        return xc, disp_lower, False
 
-def get_dispersion(mf, disp_version=None, with_3body=None, verbose=None):
+def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
@@ -43,27 +58,22 @@ def get_dispersion(mf, disp_version=None, with_3body=None, verbose=None):
         raise
     mol = mf.mol
 
+    # The disp method for both HF and MCSCF is set to 'hf'
+    method = getattr(mf, 'xc', 'hf')
+    method, disp_version, disp_with_3body = parse_disp(method)
+
     # priority: args > mf.disp
-    if disp_version is None:
-        if hasattr(mf, 'disp'): disp_version = mf.disp
+    if disp is None:
+        disp_version = disp
+
+    if with_3body is None:
+        with_3body = disp_with_3body
 
     if disp_version is None:
         return 0.0
 
-    # The disp method for both HF and MCSCF is set to 'hf'
-    method = getattr(mf, 'xc', 'hf')
-
-    # overwrite method if method exists in disp_version
-    if ',' in disp_version:
-        disp_version, method = disp_version.split(',')
-
-    disp_version, disp_with_3body = parse_disp(disp_version)
-
     if disp_version not in DISP_VERSIONS:
         raise NotImplementedError
-
-    if with_3body is None:
-        with_3body = disp_with_3body
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':

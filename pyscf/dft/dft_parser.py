@@ -32,9 +32,9 @@ import warnings
 
 # These xc functionals need special treatments
 white_list = {
-    'wb97m-d3bj': ('wb97m-v', False, 'd3bj,wb97m'),
-    'b97m-d3bj': ('b97m-v', False, 'd3bj,b97m'),
-    'wb97x-d3bj': ('wb97x-v', False, 'd3bj,wb97x'),
+    'wb97m-d3bj': ('wb97m-v', False, 'd3bj'),
+    'b97m-d3bj': ('b97m-v', False, 'd3bj'),
+    'wb97x-d3bj': ('wb97x-v', False, 'd3bj'),
 }
 
 # These xc functionals are not supported yet
@@ -63,7 +63,6 @@ def parse_dft(dft_method):
 
     if '-d3' in method_lower or '-d4' in method_lower:
         xc, disp = method_lower.split('-')
-        disp = disp + ',' + xc
     else:
         xc, disp = method_lower, None
 
