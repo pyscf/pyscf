@@ -501,7 +501,15 @@ class KnownValues(unittest.TestCase):
     def test_dft_parser(self):
         from pyscf.scf import dispersion
         method = dft.RKS(h2o, xc='wb97m-d3bj')
-        assert method.nlc == False
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0007551366628786623, 9)
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 531
+
+        method = dft.RKS(h2o, xc='wb97m-d3bj')
+        method.xc = 'wb97m-v'
+        method.nlc = False
+        method.disp = 'd3bj'
         e_disp = dispersion.get_dispersion(method)
         self.assertAlmostEqual(e_disp, -0.0007551366628786623, 9)
         fn_facs = method._numint.libxc.parse_xc(method.xc)
@@ -509,7 +517,6 @@ class KnownValues(unittest.TestCase):
 
         method = dft.RKS(h2o, xc='wb97x-d3bj')
         e_disp = dispersion.get_dispersion(method)
-        assert method.nlc == False
         self.assertAlmostEqual(e_disp, -0.0005697890844546384, 9)
         fn_facs = method._numint.libxc.parse_xc(method.xc)
         assert fn_facs[1][0][0] == 466

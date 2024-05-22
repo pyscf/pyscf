@@ -47,10 +47,9 @@ mf = KS(xc='wb97x-d3bj')
 mf.kernel()
 
 #
-# Assigning the D3, D4 keywords directly to the xc attribute will lead to an
-# error in XC functional parser.
+# We can assign D3, D4 keywords directly to the xc attribute
 #
-mf.xc = 'wb97x-d3'
+mf.xc = 'wb97x-d3bj'
 mf.kernel()
 
 # Alternatively, you can configure the dispersion correction manually, through
@@ -68,32 +67,19 @@ mf.kernel()
 # DFTD3 and DFTD4 libraries require two parameters to control the dispersion
 # computation, including which dispersion version to use (like d3, d4, d3bj,
 # d3zero), and which XC type of dispersion to target at (like b3lyp, wb97, hf).
-# The two parameters can be configured in the disp attribute, separated by ",".
-# If the combination of XC and dispersion version is not found, DFTD3 and DFTD4
-# will employ the default parameters of dispersion corrections. Please refer the
-# the database of DFTD3 and DFTD4 for the proper xc names
-# DFTD3: https://github.com/dftd3/simple-dftd3/blob/main/assets/parameters.toml
-# DFTD4: https://github.com/dftd4/dftd4/blob/main/assets/parameters.toml
-
-mf.disp = 'd3,b3lyp'
-mf.disp = 'd4,wb97m'
-mf.disp = 'd3bj,hf'
-
-# If the xc parameter is not specified in the disp, the DFT code will automatically
-# employ the .xc attribute as the xc-type parameter.
+# DFT code will automatically employ the .xc attribute as the xc-type parameter.
+#
 mf.xc = 'b3lyp'
-mf.disp = 'd3bj' # == 'd3bj,b3lyp'
+mf.disp = 'd3bj'
 
-# Please note that the second parameter of mf.disp can be different to mf.xc.
-# This parameter is meant to be used by dftd3 and dftd4 program only.
 # You can combine DFT calculation with any kinds of dispersion corrections via the
 # disp attribute.
 mf = mol.KS()
 mf.xc = 'wb97x-v'
 mf.nlc = False
-mf.disp = 'd3bj,b3lyp'
+mf.disp = 'd3bj'
 mf.kernel()
 
 mf = mol.HF()
-mf.disp = 'd3bj,b3lyp'
+mf.disp = 'd3bj'
 mf.kernel()

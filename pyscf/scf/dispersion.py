@@ -27,7 +27,11 @@ from pyscf.dft import dft_parser
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
 XC_MAP = {'wb97m-d3bj': 'wb97m',
           'b97m-d3bj': 'b97m',
-          'wb97x-d3bj': 'wb97x'}
+          'wb97x-d3bj': 'wb97x',
+          'wb97m-v': 'wb97m',
+          'b97m-v': 'b97m',
+          'wb97x-v': 'wb97x'
+          }
 
 def parse_disp(dft_method):
     '''Decode the disp parameter for 3-body correction
@@ -41,12 +45,14 @@ def parse_disp(dft_method):
     xc, nlc, disp = dft_parser.parse_dft(dft_lower)
     if dft_lower in XC_MAP:
         xc = XC_MAP[dft_lower]
-
+    print(dft_lower, xc)
+    if disp is None:
+        return xc, None, False
     disp_lower = disp.lower()
     if disp_lower.endswith('2b'):
-        return disp_lower.replace('2b', ''), False
+        return xc, disp_lower.replace('2b', ''), False
     elif disp_lower.endswith('atm'):
-        return disp_lower.replace('atm', ''), True
+        return xc, disp_lower.replace('atm', ''), True
     else:
         return xc, disp_lower, False
 
@@ -62,13 +68,17 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     method = getattr(mf, 'xc', 'hf')
     method, disp_version, disp_with_3body = parse_disp(method)
 
-    # priority: args > mf.disp
-    if disp is None:
+    # Check conflicts
+    if mf.disp is not None and disp_version is not None:
+        if mf.disp != disp_version:
+            raise RuntimeError('disp is conflict with xc')
+    if mf.disp is not None:
+        disp_version = mf.disp
+    if disp is not None:
         disp_version = disp
-
-    if with_3body is None:
+    if with_3body is not None:
         with_3body = disp_with_3body
-
+    print(method, disp_version, disp_with_3body)
     if disp_version is None:
         return 0.0
 

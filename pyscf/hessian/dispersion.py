@@ -41,11 +41,15 @@ def get_dispersion(hessobj, disp=None, with_3body=None):
     method = getattr(mf, 'xc', 'hf')
     method, disp_version, disp_with_3body = parse_disp(method)
 
-    # priority: args > mf.disp
-    if disp is None:
+    # Check conflicts
+    if mf.disp is not None and disp_version is not None:
+        if mf.disp != disp_version:
+            raise RuntimeError('disp is conflict with xc')
+    if mf.disp is not None:
+        disp_version
+    if disp is not None:
         disp_version = disp
-
-    if with_3body is None:
+    if with_3body is not None:
         with_3body = disp_with_3body
 
     if disp_version is None:
