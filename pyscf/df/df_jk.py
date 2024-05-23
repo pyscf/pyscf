@@ -260,8 +260,9 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
 
     if not with_k:
         for eri1 in dfobj.loop():
-            rho = numpy.einsum('ix,px->ip', dmtril, eri1)
-            vj += numpy.einsum('ip,px->ix', rho, eri1)
+            # uses numpy.matmul
+            vj += (dmtril @ eri1.T) @ eri1
+
 
     elif getattr(dm, 'mo_coeff', None) is not None:
         #TODO: test whether dm.mo_coeff matching dm
@@ -290,9 +291,8 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
             naux, nao_pair = eri1.shape
             assert (nao_pair == nao*(nao+1)//2)
             if with_j:
-                rho = numpy.einsum('ix,px->ip', dmtril, eri1)
-                vj += numpy.einsum('ip,px->ix', rho, eri1)
-
+                # uses numpy.matmul
+                vj += (dmtril @ eri1.T) @ eri1
             for k in range(nset):
                 nocc = orbo[k].shape[1]
                 if nocc > 0:
@@ -318,8 +318,9 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
         for eri1 in dfobj.loop(blksize):
             naux, nao_pair = eri1.shape
             if with_j:
-                rho = numpy.einsum('ix,px->ip', dmtril, eri1)
-                vj += numpy.einsum('ip,px->ix', rho, eri1)
+                # uses numpy.matmul
+                vj += (dmtril @ eri1.T) @ eri1
+
 
             for k in range(nset):
                 buf1 = buf[0,:naux]
