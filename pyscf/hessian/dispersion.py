@@ -40,8 +40,8 @@ def get_dispersion(hessobj, disp=None, with_3body=None):
         print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
         raise
 
+    method = getattr(mf, 'xc', 'hf')
     if with_3body is not None:
-        method = getattr(mf, 'xc', 'hf')
         with_3body = parse_disp(method)[2]
 
     if mf.disp[:2].upper() == 'D3':

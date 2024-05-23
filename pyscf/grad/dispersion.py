@@ -38,8 +38,8 @@ def get_dispersion(mf_grad, disp=None, with_3body=None, verbose=None):
         print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
         raise
 
+    method = getattr(mf, 'xc', 'hf')
     if with_3body is not None:
-        method = getattr(mf, 'xc', 'hf')
         with_3body = parse_disp(method)[2]
 
     if disp_version[:2].upper() == 'D3':

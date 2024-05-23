@@ -142,9 +142,9 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
         raise
 
     mol = mf.mol
+    method = getattr(mf, 'xc', 'hf')
 
     if with_3body is not None:
-        method = getattr(mf, 'xc', 'hf')
         with_3body = parse_disp(method)[2]
 
     # for dftd3
