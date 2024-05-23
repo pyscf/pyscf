@@ -382,16 +382,15 @@ class KohnShamDFT:
         if self.nlc == '', turn the ball to dft_parser and libxc
         '''
         xc, nlc, _ = dft_parser.parse_dft(self.xc)
+        # If nlc is disabled via self.xc
+        if nlc == 0:
+            if self.nlc == '' or self.nlc == 0:
+                return False
+            else:
+                raise RuntimeError('Conflict found between dispersion and xc.')
 
         # If nlc is disabled via self.nlc
         if self.nlc == 0:
-            if self.nlc != nlc:
-                raise RuntimeError('A conflict is found between dispersion and xc.')
-            else:
-                return False
-
-        # If nlc is disabled via self.xc
-        if nlc == 0:
             return False
 
         xc_has_nlc = self._numint.libxc.is_nlc(xc)
