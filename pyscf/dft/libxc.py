@@ -1101,6 +1101,7 @@ def parse_xc(description):
     if '-D3' in description or '-D4' in description:
         from pyscf.scf.dispersion import parse_dft
         description, _, _ = parse_dft(description)
+        description = description.upper()
 
     if (description in ('B3P86', 'B3LYP', 'X3LYP') and
         not getattr(parse_xc, 'b3lyp5_warned', False) and

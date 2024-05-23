@@ -424,6 +424,7 @@ def parse_xc(description):
     if '-D3' in description or '-D4' in description:
         from pyscf.scf.dispersion import parse_dft
         description, _, _ = parse_dft(description)
+        description = description.upper()
 
     def assign_omega(omega, hyb_or_sr, lr=0):
         if hyb[2] == omega or omega == 0:
