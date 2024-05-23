@@ -20,40 +20,27 @@
 gradient of dispersion correction for HF and DFT
 '''
 
-import numpy
+import numpy as np
 from pyscf.lib import logger
-from pyscf.scf.dispersion import parse_disp, DISP_VERSIONS
+from pyscf.scf.dispersion import check_disp, parse_disp
 
 def get_dispersion(mf_grad, disp=None, with_3body=None, verbose=None):
     '''gradient of DFTD3/DFTD4 dispersion correction'''
+    mf = mf_grad.base
+    mol = mf.mol
+    disp_version = check_disp(mf, disp)
+    if not disp_version:
+        return np.zeros([mol.natm,3])
+
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
         print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
         raise
-    mf = mf_grad.base
-    mol = mf.mol
 
-    # The disp method for both HF and MCSCF is set to 'hf'
-    method = getattr(mf, 'xc', 'hf')
-    method, disp_version, disp_with_3body = parse_disp(method)
-
-    # Check conflicts
-    if mf.disp is not None and disp_version is not None:
-        if mf.disp != disp_version:
-            raise RuntimeError('disp is conflict with xc')
-    if mf.disp is not None:
-        disp_version = mf.disp
-    if disp is not None:
-        disp_version = disp
     if with_3body is not None:
-        with_3body = disp_with_3body
-
-    if disp_version is None:
-        return 0.0
-
-    if disp_version not in DISP_VERSIONS:
-        raise NotImplementedError
+        method = getattr(mf, 'xc', 'hf')
+        with_3body = parse_disp(method)[2]
 
     if disp_version[:2].upper() == 'D3':
         logger.info(mf, "Calc dispersion correction with DFTD3.")

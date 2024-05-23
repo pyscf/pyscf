@@ -21,46 +21,28 @@ Hessian of dispersion correction for HF and DFT
 '''
 
 
-import numpy
+import numpy as np
 from pyscf.lib import logger
-from pyscf.scf.dispersion import parse_disp, DISP_VERSIONS
+from pyscf.scf.dispersion import check_disp, parse_disp
 
 def get_dispersion(hessobj, disp=None, with_3body=None):
+    mf = hessobj.base
+    mol = mf.mol
+    natm = mol.natm
+    h_disp = np.zeros([natm,natm,3,3])
+    disp_version = check_disp(mf, disp)
+    if not disp_version:
+        return h_disp
+
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
         print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
         raise
-    mf = hessobj.base
-    mol = mf.mol
 
-    natm = mol.natm
-    h_disp = numpy.zeros([mol.natm,mol.natm,3,3])
-
-    # The disp method for both HF and MCSCF is set to 'hf'
-    method = getattr(mf, 'xc', 'hf')
-    method, disp_version, disp_with_3body = parse_disp(method)
-
-    # Check conflicts
-    if mf.disp is not None and disp_version is not None:
-        if mf.disp != disp_version:
-            raise RuntimeError('disp is conflict with xc')
-    if mf.disp is not None:
-        disp_version = mf.disp
-    if disp is not None:
-        disp_version = disp
     if with_3body is not None:
-        with_3body = disp_with_3body
-
-    if disp_version is None:
-        return 0.0
-
-    if disp_version not in DISP_VERSIONS:
-        raise NotImplementedError
-
-    if disp_version is None:
-        return h_disp
-
+        method = getattr(mf, 'xc', 'hf')
+        with_3body = parse_disp(method)[2]
 
     if mf.disp[:2].upper() == 'D3':
         logger.info(mf, "Calc dispersion correction with DFTD3.")
@@ -69,7 +51,7 @@ def get_dispersion(hessobj, disp=None, with_3body=None):
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5
-        for i in range(mol.natm):
+        for i in range(natm):
             for j in range(3):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')

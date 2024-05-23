@@ -377,9 +377,9 @@ class KohnShamDFT:
     def do_nlc(self):
         '''Check if the object needs to do nlc calculations
 
-        if self.nlc == False, nlc is disabled
-        if self.nlc == 'vv10', do nlc
-        if self.nlc == '', turn the ball to dft_parser and libxc
+        if self.nlc == False (or 0), nlc is disabled regardless the value of self.xc
+        if self.nlc == 'vv10', do nlc (vv10) regardless the value of self.xc
+        if self.nlc == '', determined by self.xc, certain xc allows the nlc part
         '''
         xc, nlc, _ = dft_parser.parse_dft(self.xc)
         # If nlc is disabled via self.xc
@@ -394,7 +394,7 @@ class KohnShamDFT:
             return False
 
         xc_has_nlc = self._numint.libxc.is_nlc(xc)
-        return xc_has_nlc
+        return self.nlc == 'vv10' or xc_has_nlc
 
     def to_rhf(self):
         '''Convert the input mean-field object to a RHF/ROHF object.
@@ -482,7 +482,7 @@ class KohnShamDFT:
 
     def check_sanity(self):
         out = super().check_sanity()
-        if self.do_nlc() and self.disp and self._numint.libxc.is_nlc(self.xc):
+        if self.do_nlc() and self.do_disp() and self._numint.libxc.is_nlc(self.xc):
             import warnings
             warnings.warn(
                 f'nlc-type xc {self.xc} and disp {self.disp} may lead to'

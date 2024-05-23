@@ -20,8 +20,9 @@
 dispersion correction for HF and DFT
 '''
 
+import warnings
+from functools import lru_cache
 from pyscf.lib import logger
-from pyscf.dft import dft_parser
 
 # supported dispersion corrections
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
@@ -33,16 +34,70 @@ XC_MAP = {'wb97m-d3bj': 'wb97m',
           'wb97x-v': 'wb97x'
           }
 
+# special cases:
+# - wb97x-d is not supported yet
+# - wb97*-d3bj is wb97*-v with d3bj
+# - wb97x-d3 is not supported yet
+# - 3c method is not supported yet
+
+# These xc functionals need special treatments
+_white_list = {
+    'wb97m-d3bj': ('wb97m-v', False, 'd3bj'),
+    'b97m-d3bj': ('b97m-v', False, 'd3bj'),
+    'wb97x-d3bj': ('wb97x-v', False, 'd3bj'),
+}
+
+# These xc functionals are not supported yet
+_black_list = {
+    'wb97x-d', 'wb97x-d3',
+    'wb97m-d3bj2b', 'wb97m-d3bjatm',
+    'b97m-d3bj2b', 'b97m-d3bjatm',
+}
+
+@lru_cache(128)
+def parse_dft(xc_code):
+    '''
+    unified dft parser for coordinating dft protocols with
+    1. xc functionals
+    2. dispersion corrections / nonlocal correction
+    3. GTO basis (TODO)
+    4. geometrical counterpoise (gCP) correction (TODO)
+
+    Extract (xc, nlc, disp) from xc_code
+    '''
+    if not isinstance(xc_code, str):
+        return xc_code, '', None
+    method_lower = xc_code.lower()
+
+    if method_lower in _black_list:
+        raise NotImplementedError(f'{method_lower} is not supported yet.')
+
+    if method_lower in _white_list:
+        return _white_list[method_lower]
+
+    if method_lower.endswith('-3c'):
+        raise NotImplementedError('*-3c methods are not supported yet.')
+
+    if '-d3' in method_lower or '-d4' in method_lower:
+        xc, disp = method_lower.split('-')
+    else:
+        xc, disp = method_lower, None
+
+    return xc, '', disp
+
+@lru_cache(128)
 def parse_disp(dft_method):
-    '''Decode the disp parameter for 3-body correction
-        Example: b3lyp-d3bj2b -> (b3lyp, d3bj, False)
-                 wb97x-d3bj   -> (wb97x, d3bj, False)
+    '''Decode the disp parameters based on the xc code.
+    Returns xc_code_for_dftd3, disp_version, with_3body
+
+    Example: b3lyp-d3bj2b -> (b3lyp, d3bj, False)
+             wb97x-d3bj   -> (wb97x, d3bj, False)
     '''
     if dft_method == 'hf':
         return 'hf', None, False
 
     dft_lower = dft_method.lower()
-    xc, nlc, disp = dft_parser.parse_dft(dft_lower)
+    xc, nlc, disp = parse_dft(dft_lower)
     if dft_lower in XC_MAP:
         xc = XC_MAP[dft_lower]
 
@@ -56,34 +111,47 @@ def parse_disp(dft_method):
     else:
         return xc, disp_lower, False
 
+def check_disp(mf, disp=None):
+    '''Check whether to apply dispersion correction based on the xc attribute.
+    If dispersion is allowed, return the DFTD3 disp version, such as d3, d4, d3bj.
+    '''
+    if disp is None:
+        disp = mf.disp
+    if disp == 0: # disp = False
+        return False
+
+    # The disp method for both HF and MCSCF is set to 'hf'
+    method = getattr(mf, 'xc', 'hf')
+    disp_version = parse_disp(method)[1]
+
+    if disp is None: # Using the disp version decoded from the mf.xc attribute
+        if disp_version is None:
+            return False
+    elif disp_version is None: # Using the version specified by mf.disp
+        disp_version = disp
+    elif disp != disp_version:
+        raise RuntimeError(f'mf.disp {disp} conflicts with mf.xc {method}')
+
+    if disp_version not in DISP_VERSIONS:
+        raise NotImplementedError
+    return disp_version
+
 def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
+    disp_version = check_disp(mf, disp)
+    if not disp_version:
+        return 0.
+
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
         print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
         raise
+
     mol = mf.mol
 
-    # The disp method for both HF and MCSCF is set to 'hf'
-    method = getattr(mf, 'xc', 'hf')
-    method, disp_version, disp_with_3body = parse_disp(method)
-
-    # Check conflicts
-    if mf.disp is not None and disp_version is not None:
-        if mf.disp != disp_version:
-            raise RuntimeError('disp is conflict with xc')
-    if mf.disp is not None:
-        disp_version = mf.disp
-    if disp is not None:
-        disp_version = disp
     if with_3body is not None:
-        with_3body = disp_with_3body
-
-    if disp_version is None:
-        return 0.0
-
-    if disp_version not in DISP_VERSIONS:
-        raise NotImplementedError
+        method = getattr(mf, 'xc', 'hf')
+        with_3body = parse_disp(method)[2]
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':
@@ -109,4 +177,5 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
 
 # Inject to SCF class
 from pyscf import scf
+scf.hf.SCF.do_disp = check_disp
 scf.hf.SCF.get_dispersion = get_dispersion

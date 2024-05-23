@@ -291,16 +291,16 @@ def energy_tot(mf, dm=None, h1e=None, vhf=None):
 
     '''
     nuc = mf.energy_nuc()
+    mf.scf_summary['nuc'] = nuc.real
+
     e_tot = mf.energy_elec(dm, h1e, vhf)[0] + nuc
-    if mf.disp is not None:
+    if mf.do_disp():
         if 'dispersion' in mf.scf_summary:
             e_tot += mf.scf_summary['dispersion']
         else:
             e_disp = mf.get_dispersion()
             mf.scf_summary['dispersion'] = e_disp
             e_tot += e_disp
-
-    mf.scf_summary['nuc'] = nuc.real
 
     return e_tot
 

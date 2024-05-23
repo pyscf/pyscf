@@ -30,8 +30,8 @@ mf.xc = 'wb97m_v'
 mf.run()
 
 # To disable NLC even if the .xc requires a NLC correction, you can explicitly
-# set nlc to False. This configuration might be commonly required when D3 and D4
+# set nlc to False (or 0). This configuration might be commonly required when D3 and D4
 # corrections are applied to the DFT calcuation.
 mf.xc = 'wb97m_v'
-mf.nlc = False
+mf.nlc = 0
 mf.kernel()

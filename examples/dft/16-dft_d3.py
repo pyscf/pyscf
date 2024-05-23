@@ -53,14 +53,16 @@ mf.xc = 'wb97x-d3bj'
 mf.kernel()
 
 # Alternatively, you can configure the dispersion correction manually, through
-# the xc, nlc, disp attributes.
+# the xc, nlc, disp attributes. The previous xc keyword 'wb97x-d3bj' is
+# equivalent to the following settings
 mf = mol.KS()
 mf.xc = 'wb97x-v'
-mf.nlc = False  # this will disable NLC correction.
-mf.disp = 'd4'
+mf.nlc = 0  # this will disable NLC correction.
+mf.disp = 'd3bj'
 mf.kernel()
 
-# To disable the dispersion correction, you can simply set disp = None
+# To disable the dispersion correction, you can simply reset disp
+# This will 
 mf.disp = None
 mf.kernel()
 
@@ -83,3 +85,39 @@ mf.kernel()
 mf = mol.HF()
 mf.disp = 'd3bj'
 mf.kernel()
+
+# The combination of (xc, nlc, disp) typically falls into the following categories:
+# 1. mf.xc, mf.nlc, mf.disp = 'xc-keyword-d3', '', None
+#   nlc and disp are default values. NLC as well as dispersion computation is
+#   based on the 'xc-keyword-d3'
+mf = mol.KS()
+mf.xc = 'wb97x-d3bj'
+mf.kernel()
+
+# 2. mf.xc, mf.nlc, mf.disp = 'xc-keyword', 0, 'd3'
+#   Manually control the dispersion calculations, where nlc is muted, and disp
+#   is set to a particular version of DFT-D3.
+mf = mol.KS()
+mf.xc = 'wb97x-v'
+mf.nlc = 0  # this will disable NLC correction.
+mf.disp = 'd3'
+mf.kernel() # equivalent to mol.KS(xc='wb97x-d3')
+
+# 3. mf.xc, mf.nlc, mf.disp = 'xc-keyword', '', 'd3bj'
+#   nlc is the default value. NLC computation is based on the xc value 'xc-keyword-d3'.
+#   disp is computed with the specified version (d3bj)
+mf = mol.KS()
+mf.xc = 'wb97x-v'
+mf.disp = 'd3bj'
+mf.kernel() # Do both NLC and disp d3bj. You will receive a warning for the double counting of NLC.
+
+# 4. mf.xc, mf.nlc, mf.disp = 'xc-keyword-d3', '', 'd3bj'
+#   nlc is the default value. NLC computation is based on the xc value.
+#   disp is computed with the specified version (d3bj). However, the specified
+#   disp version is conflicted with the xc setting. You will receive
+#   an error due to this conflict.
+mf = mol.KS()
+mf.xc = 'wb97x-d3'
+mf.disp = 'd3bj'
+mf.kernel() # Crash
+
