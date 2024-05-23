@@ -62,7 +62,6 @@ mf.disp = 'd3bj'
 mf.kernel()
 
 # To disable the dispersion correction, you can simply reset disp
-# This will 
 mf.disp = None
 mf.kernel()
 

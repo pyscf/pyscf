@@ -29,10 +29,10 @@ from pyscf import scf
 from pyscf.scf import hf
 from pyscf.scf import _vhf
 from pyscf.scf import jk
+from pyscf.scf.dispersion import parse_dft
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 from pyscf import __config__
-from pyscf.dft import dft_parser
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional
@@ -381,7 +381,7 @@ class KohnShamDFT:
         if self.nlc == 'vv10', do nlc (vv10) regardless the value of self.xc
         if self.nlc == '', determined by self.xc, certain xc allows the nlc part
         '''
-        xc, nlc, _ = dft_parser.parse_dft(self.xc)
+        xc, nlc, _ = parse_dft(self.xc)
         # If nlc is disabled via self.xc
         if nlc == 0:
             if self.nlc == '' or self.nlc == 0:

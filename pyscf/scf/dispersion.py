@@ -57,12 +57,6 @@ _black_list = {
 @lru_cache(128)
 def parse_dft(xc_code):
     '''
-    unified dft parser for coordinating dft protocols with
-    1. xc functionals
-    2. dispersion corrections / nonlocal correction
-    3. GTO basis (TODO)
-    4. geometrical counterpoise (gCP) correction (TODO)
-
     Extract (xc, nlc, disp) from xc_code
     '''
     if not isinstance(xc_code, str):

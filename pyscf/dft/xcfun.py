@@ -28,7 +28,7 @@ import math
 import numpy
 from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
-from pyscf.dft import xc_deriv, dft_parser
+from pyscf.dft import xc_deriv
 from pyscf import __config__
 
 _itrf = lib.load_library('libxcfun_itrf')
@@ -318,9 +318,6 @@ XC_CODES.update([(key, 5000+i) for i, key in enumerate(VV10_XC)])
 VV10_XC.update([(5000+i, VV10_XC[key]) for i, key in enumerate(VV10_XC)])
 
 def is_nlc(xc_code):
-    enable_nlc = dft_parser.parse_dft(xc_code)[1]
-    if enable_nlc is False:
-        return False
     fn_facs = parse_xc(xc_code)[1]
     return any(xid >= 5000 for xid, c in fn_facs)
 
@@ -423,7 +420,10 @@ def parse_xc(description):
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
-    description = dft_parser.parse_dft(description)[0]
+    description = description.upper()
+    if '-D3' in description or '-D4' in description:
+        from pyscf.scf.dispersion import parse_dft
+        description, _, _ = parse_dft(description)
 
     def assign_omega(omega, hyb_or_sr, lr=0):
         if hyb[2] == omega or omega == 0:
