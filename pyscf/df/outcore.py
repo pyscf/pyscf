@@ -93,6 +93,11 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
         ti0 = log.timer('step 2 [%d/%d], [%d:%d], row = %d'%
                         (istep+1, totstep, row0, row1, nrow), *ti0)
 
+    # A bug in NFS / HDF5 may cause .close() not to
+    # flush properly, hanging the calculation. Flush manually
+    fswap.flush()
+    feri.flush()
+
     fswap.close()
     feri.close()
     log.timer('cholesky_eri', *time0)
@@ -163,6 +168,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
     #    cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
     cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
     bufs1 = numpy.empty((comp*max([x[2] for x in shranges]),naoaux))
+    bufs2 = numpy.empty_like(bufs1)
 
     def transform(b):
         if b.ndim == 3 and b.flags.f_contiguous:
@@ -173,11 +179,16 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
             return lib.dot(low, b)
 
         if b.flags.c_contiguous:
-            b = lib.transpose(b).T
-        return scipy.linalg.solve_triangular(low, b, lower=True,
+            trsm, = scipy.linalg.get_blas_funcs(('trsm',), (low, b))
+            return trsm(1.0, low, b.T, lower=True, trans_a = 1, side = 1,
+                     overwrite_b=True).T
+        else:
+            return scipy.linalg.solve_triangular(low, b, lower=True,
                                              overwrite_b=True, check_finite=False)
 
     def process(sh_range):
+        nonlocal bufs1, bufs2
+        bufs2, bufs1 = bufs1, bufs2
         bstart, bend, nrow = sh_range
         shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
         ints = gto.moleintor.getints3c(int3c, atm, bas, env, shls_slice, comp,
@@ -189,6 +200,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
         return dat
 
     feri = _create_h5file(erifile, dataname)
+
     for istep, dat in enumerate(lib.map_with_prefetch(process, shranges)):
         sh_range = shranges[istep]
         label = '%s/%d'%(dataname,istep)
@@ -204,6 +216,8 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
                   istep+1, len(shranges), *sh_range)
         time1 = log.timer('gen CD eri [%d/%d]' % (istep+1,len(shranges)), *time1)
     bufs1 = None
+    bufs2 = None
+    feri.flush()
     feri.close()
     return erifile
 
