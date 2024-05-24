@@ -125,4 +125,5 @@ def X2C(mol, *args):
         return dft.RKS(mol, *args)
     else:
         return dft.UKS(mol, *args)
+X2C_KS = X2C
 gto.Mole.X2C_KS = property(X2C)
