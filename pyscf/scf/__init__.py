@@ -200,6 +200,7 @@ def X2C(mol, *args):
         return x2c.RHF(mol, *args)
     else:
         return x2c.UHF(mol, *args)
+X2C_HF = X2C
 gto.Mole.X2C = gto.Mole.X2C_HF = property(X2C)
 
 def sfx2c1e(mf):
