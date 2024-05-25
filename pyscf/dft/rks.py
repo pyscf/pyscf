@@ -29,10 +29,10 @@ from pyscf import scf
 from pyscf.scf import hf
 from pyscf.scf import _vhf
 from pyscf.scf import jk
+from pyscf.scf.dispersion import parse_dft
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 from pyscf import __config__
-
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional
@@ -79,7 +79,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_rks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
-        if ks.nlc or ni.libxc.is_nlc(ks.xc):
+        if ks.do_nlc():
             if ni.libxc.is_nlc(ks.xc):
                 xc = ks.xc
             else:
@@ -320,13 +320,13 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = {'xc', 'nlc', 'grids', 'disp', 'disp_with_3body', 'nlcgrids', 'small_rho_cutoff'}
+    _keys = {'xc', 'nlc', 'grids', 'disp', 'nlcgrids', 'small_rho_cutoff'}
 
     def __init__(self, xc='LDA,VWN'):
+        # By default, self.nlc = '' and self.disp = None
         self.xc = xc
-        self.disp = None
-        self.disp_with_3body = None
         self.nlc = ''
+        self.disp = None
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(
             __config__, 'dft_rks_RKS_grids_level', self.grids.level)
@@ -361,7 +361,7 @@ class KohnShamDFT:
 
         self.grids.dump_flags(verbose)
 
-        if self.nlc or self._numint.libxc.is_nlc(self.xc):
+        if self.do_nlc():
             log.info('** Following is NLC and NLC Grids **')
             if self.nlc:
                 log.info('NLC functional = %s', self.nlc)
@@ -373,6 +373,28 @@ class KohnShamDFT:
         return self
 
     define_xc_ = define_xc_
+
+    def do_nlc(self):
+        '''Check if the object needs to do nlc calculations
+
+        if self.nlc == False (or 0), nlc is disabled regardless the value of self.xc
+        if self.nlc == 'vv10', do nlc (vv10) regardless the value of self.xc
+        if self.nlc == '', determined by self.xc, certain xc allows the nlc part
+        '''
+        xc, nlc, _ = parse_dft(self.xc)
+        # If nlc is disabled via self.xc
+        if nlc == 0:
+            if self.nlc == '' or self.nlc == 0:
+                return False
+            else:
+                raise RuntimeError('Conflict found between dispersion and xc.')
+
+        # If nlc is disabled via self.nlc
+        if self.nlc == 0:
+            return False
+
+        xc_has_nlc = self._numint.libxc.is_nlc(xc)
+        return self.nlc == 'vv10' or xc_has_nlc
 
     def to_rhf(self):
         '''Convert the input mean-field object to a RHF/ROHF object.
@@ -458,6 +480,15 @@ class KohnShamDFT:
         self.nlcgrids.reset(mol)
         return self
 
+    def check_sanity(self):
+        out = super().check_sanity()
+        if self.do_nlc() and self.do_disp() and self._numint.libxc.is_nlc(self.xc):
+            import warnings
+            warnings.warn(
+                f'nlc-type xc {self.xc} and disp {self.disp} may lead to'
+                'double counting in NLC.')
+        return out
+
     def initialize_grids(self, mol=None, dm=None):
         '''Initialize self.grids the first time call get_veff'''
         if mol is None: mol = self.mol
@@ -471,8 +502,7 @@ class KohnShamDFT:
                 self.grids = prune_small_rho_grids_(self, self.mol, dm,
                                                     self.grids)
             t0 = logger.timer(self, 'setting up grids', *t0)
-
-        is_nlc = self.nlc or self._numint.libxc.is_nlc(self.xc)
+        is_nlc = self.do_nlc()
         if is_nlc and self.nlcgrids.coords is None:
             t0 = (logger.process_clock(), logger.perf_counter())
             self.nlcgrids.build(with_non0tab=True)

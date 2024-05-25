@@ -34,13 +34,3 @@ mf.kernel()
 
 # Orbital energies, Mulliken population etc.
 mf.analyze()
-
-# shorten dft names
-mf = mol.KS(xc='b3lyp-d3bj')
-#mf = mol.KS(xc='b3lyp-d3zero')
-#mf = mol.KS(xc='b3lyp-d3bj2b')
-#mf = mol.KS(xc='b3lyp-d3bjatm')
-#mf = mol.KS(xc='b3lyp-d4')
-#mf = mol.KS(xc='wb97x-v')
-#mf = mol.KS(xc='wb97m-d3bj)
-#mf = mol.KS(xc='wb97x-d3)

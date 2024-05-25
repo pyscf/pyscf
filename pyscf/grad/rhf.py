@@ -416,7 +416,7 @@ class GradientsBase(lib.StreamObject):
         self.de = de + self.grad_nuc(atmlst=atmlst)
         if self.mol.symmetry:
             self.de = self.symmetrize(self.de, atmlst)
-        if self.base.disp is not None:
+        if self.base.do_disp():
             self.de += self.get_dispersion()
         logger.timer(self, 'SCF gradients', *cput0)
         self._finalize()

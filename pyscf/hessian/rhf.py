@@ -593,7 +593,7 @@ class HessianBase(lib.StreamObject):
 
         de = self.hess_elec(mo_energy, mo_coeff, mo_occ, atmlst=atmlst)
         self.de = de + self.hess_nuc(self.mol, atmlst=atmlst)
-        if self.base.disp is not None:
+        if self.base.do_disp():
             self.de += self.get_dispersion()
         return self.de
     hess = kernel

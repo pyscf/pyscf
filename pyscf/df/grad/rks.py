@@ -46,7 +46,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = rks_grad.get_vxc_full_response(
             ni, mol, grids, mf.xc, dm,
             max_memory=max_memory, verbose=ks_grad.verbose)
-        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        if mf.do_nlc():
             if ni.libxc.is_nlc(mf.xc):
                 xc = mf.xc
             else:
@@ -61,7 +61,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = rks_grad.get_vxc(
             ni, mol, grids, mf.xc, dm,
             max_memory=max_memory, verbose=ks_grad.verbose)
-        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        if mf.do_nlc():
             if ni.libxc.is_nlc(mf.xc):
                 xc = mf.xc
             else:
