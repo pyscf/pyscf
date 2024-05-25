@@ -107,7 +107,8 @@ def parse_disp(dft_method):
 
 def check_disp(mf, disp=None):
     '''Check whether to apply dispersion correction based on the xc attribute.
-    If dispersion is allowed, return the DFTD3 disp version, such as d3, d4, d3bj.
+    If dispersion is allowed, return the DFTD3 disp version, such as d3bj,
+    d3zero, d4.
     '''
     if disp is None:
         disp = mf.disp
