@@ -25,7 +25,6 @@ import os
 import sys
 import types
 import re
-import gc
 
 import json
 import ctypes
@@ -990,10 +989,10 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
 
         if isinstance(b[1], int):
             kappa = b[1]
-            b_coeff = numpy.array(sorted(list(b[2:]), reverse=True))
+            b_coeff = numpy.array(sorted(b[2:], reverse=True))
         else:
             kappa = 0
-            b_coeff = numpy.array(sorted(list(b[1:]), reverse=True))
+            b_coeff = numpy.array(sorted(b[1:], reverse=True))
         es = b_coeff[:,0]
         cs = b_coeff[:,1:]
         nprim, nctr = cs.shape
