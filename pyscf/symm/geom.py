@@ -49,10 +49,6 @@ from pyscf import __config__
 
 TOLERANCE = getattr(__config__, 'symm_geom_tol', 1e-5)
 
-# For code compatibility in python-2 and python-3
-if sys.version_info >= (3,):
-    unicode = str
-
 
 def parallel_vectors(v1, v2, tol=TOLERANCE):
     if numpy.allclose(v1, 0, atol=tol) or numpy.allclose(v2, 0, atol=tol):
@@ -402,7 +398,7 @@ def as_subgroup(topgroup, axes, subgroup=None):
 
     groupname, axes = get_subgroup(topgroup, axes)
 
-    if isinstance(subgroup, (str, unicode)):
+    if isinstance(subgroup, str):
         subgroup = std_symb(subgroup)
         if groupname == 'C2v' and subgroup == 'Cs':
             axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[1], numpy.pi/2), axes)
@@ -467,7 +463,7 @@ def symm_identical_atoms(gpname, atoms):
         dup_atom_ids = numpy.sort((idx0,idx1), axis=0).T
         uniq_idx = numpy.unique(dup_atom_ids[:,0], return_index=True)[1]
         eql_atom_ids = dup_atom_ids[uniq_idx]
-        eql_atom_ids = [list(sorted(set(i))) for i in eql_atom_ids]
+        eql_atom_ids = [sorted(set(i)) for i in eql_atom_ids]
         return eql_atom_ids
     elif gpname == 'Coov':
         eql_atom_ids = [[i] for i,a in enumerate(atoms)]
@@ -496,7 +492,7 @@ def symm_identical_atoms(gpname, atoms):
     dup_atom_ids = numpy.sort(dup_atom_ids, axis=0).T
     uniq_idx = numpy.unique(dup_atom_ids[:,0], return_index=True)[1]
     eql_atom_ids = dup_atom_ids[uniq_idx]
-    eql_atom_ids = [list(sorted(set(i))) for i in eql_atom_ids]
+    eql_atom_ids = [sorted(set(i)) for i in eql_atom_ids]
     return eql_atom_ids
 
 def check_symm(gpname, atoms, basis=None):
