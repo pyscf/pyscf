@@ -24,7 +24,6 @@ See also
 https://cms.mpi.univie.ac.at/vasp/vasp/CHGCAR_file.html
 '''
 
-import sys
 import collections
 import time
 import numpy
@@ -33,9 +32,6 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.pbc import gto as pbcgto
 from pyscf.tools import cubegen
-
-if sys.version_info >= (3,):
-    unicode = str
 
 RESOLUTION = cubegen.RESOLUTION
 BOX_MARGIN = cubegen.BOX_MARGIN
@@ -169,7 +165,7 @@ class CHGCAR(cubegen.Cube):
                             self.box, (nx,ny,nz))
             self.mol = cell
             cell = cell.view(pbcgto.Cell)
-            if (isinstance(cell.unit, (str, unicode)) and
+            if (isinstance(cell.unit, str) and
                 cell.unit.startswith(('B','b','au','AU'))):
                 cell.a = self.box
             else:
