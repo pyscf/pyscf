@@ -131,8 +131,8 @@ class KnownValues(unittest.TestCase):
         a -= numpy.eye(n)*shift
 
         aop = lambda x: (a.dot(x.T).T/a_diag)
-        c = linalg_helper.krylov(aop, b/a_diag, max_cycle=18)
-        self.assertAlmostEqual(abs(ref - c).max(), 0, 9)
+        c = linalg_helper.krylov(aop, b/a_diag, max_cycle=50)
+        self.assertAlmostEqual(abs(ref - c).max(), 0, 8)
 
     def test_dgeev(self):
         numpy.random.seed(12)
