@@ -894,3 +894,144 @@ def LS_THC_eri(Z:np.ndarray, R:np.ndarray):
     path_info = np.einsum_path(einsum_str, R,R,Z,R,R, optimize='optimal')
     
     return np.einsum(einsum_str, R,R,Z,R,R, optimize=path_info[0])
+
+##### Laplace holder and builder ##### 
+
+import bisect
+
+def _find_laplace(laplace_holder:dict, R, error):
+    
+    # find key via binary search
+        
+    keys = list(laplace_holder.keys())
+    keys.sort()
+        
+    index = bisect.bisect_left(keys, R)
+    if index == len(keys):
+        return None
+    else:
+        key = keys[index]
+        items = laplace_holder[key]
+        items.sort(key=lambda x: x['error'], reverse=True)
+        for item in items:
+            if item['error'] <= error:
+                return item
+        return None
+
+def _build_laplace_holder(r_min, r_max, rel_error, verbose=True):
+    
+    import os, pickle
+    
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    file_path  = os.path.join(script_dir, 'laplace.pkl')
+    with open(file_path, 'rb') as f:
+        laplace_holder = pickle.load(f) 
+    
+    item_found = _find_laplace(laplace_holder, r_max/r_min, rel_error)
+    
+    if item_found is None:
+        raise NotImplementedError("No laplace holder found")
+    
+    if verbose:
+        print("Laplace holder found")
+        print("R_min  = ", r_min)
+        print("R_max  = ", r_max)
+        print("R      = ", r_max/r_min)
+        print("Error  = ", rel_error)
+        print("degree = ", item_found['degree'])
+        print("a_values = ", item_found['a_values'])
+        print("b_values = ", item_found['b_values'])
+        print("error    = ", item_found['error'])
+    
+    return {
+        "a_values":np.array(item_found['a_values'])/r_min,
+        "b_values":np.array(item_found['b_values'])/r_min,
+        "degree"  :item_found['degree'],
+        "error"   :item_found['error']
+    }
+
+class laplace_holder:
+    def __init__(self, 
+                 # r_min, 
+                 # r_max,
+                 mo_ene, 
+                 nocc, 
+                 order=2,
+                 rel_error=1e-6, 
+                 verbose=True):
+        
+        occ_ene = mo_ene[:nocc]
+        vir_ene = mo_ene[nocc:]
+        
+        max_occ = np.max(occ_ene)
+        min_occ = np.min(occ_ene)
+        min_vir = np.min(vir_ene)
+        max_vir = np.max(vir_ene)
+        
+        if max_occ > min_vir+1e-8:
+            print("Warning: max_occ > min_vir")
+            raise NotImplementedError
+
+        r_min = (min_vir - max_occ) * order
+        r_max = (max_vir - min_occ) * order
+        
+        self.mo_ene = mo_ene
+        self.nocc   = nocc
+        self.order  = order
+        self.holder = _build_laplace_holder(r_min, r_max, rel_error, verbose=verbose)
+        self.a_values = self.holder['a_values']
+        self.b_values = self.holder['b_values']
+        self._degree   = self.holder['degree']
+        self._error    = self.holder['error']
+        
+        # print("a_values = ", self.a_values)
+        # print("b_values = ", self.b_values)
+        
+        self.laplace_occ = self._build_laplace_occ(occ_ene, order=order)
+        self.laplace_vir = self._build_laplace_vir(vir_ene, order=order)
+    
+    @property
+    def degree(self):
+        return self._degree
+    
+    @property
+    def error(self):
+        return self._error
+
+    @property
+    def delta_full(self):
+        if self.order != 2:
+            raise NotImplementedError
+        else:
+            return np.einsum("iP,jP,aP,bP->ijab", self.laplace_occ, self.laplace_occ, self.laplace_vir, self.laplace_vir)
+
+    def _build_laplace_occ(self, occ_ene, order=2):
+        
+        nocc   = len(occ_ene)
+        degree = self.degree
+        res    = np.zeros((nocc, degree))
+        order2 = 2 * order
+        
+        for icol, (a, b) in enumerate(zip(self.a_values, self.b_values)):
+            res[:, icol] = (a**((1.0/(float(order2)))))*np.exp(b*occ_ene)
+
+        return res
+    
+    def _build_laplace_vir(self, vir_ene, order=2):
+        
+        nvir   = len(vir_ene)
+        degree = self.degree
+        res    = np.zeros((nvir, degree))
+        order2 = 2 * order
+        
+        print("vir_ene = ", vir_ene)
+        
+        for icol, (a, b) in enumerate(zip(self.a_values, self.b_values)):
+            # print("a = ", a)
+            # print((a**((1.0/(float(order2))))))
+            # print("b = ", b)
+            res[:, icol] = (a**((1.0/(float(order2)))))*np.exp(-b*vir_ene)
+        
+        # print("res = ", res)
+        
+        return res

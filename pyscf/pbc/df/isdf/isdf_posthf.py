@@ -36,7 +36,7 @@ libpbc = lib.load_library('libpbc')
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
-from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC, LS_THC_eri
+from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC, LS_THC_eri, laplace_holder
 
 ##### deal with CC #####
 
@@ -169,19 +169,43 @@ if __name__ == '__main__':
             
             _myisdf = ISDF.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
             _myisdf.build_IP_local(c=15, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
-            R = _myisdf.aoRg_full()
-            
-            Z = LS_THC(myisdf, R)
-            
+            R          = _myisdf.aoRg_full()
+            Z          = LS_THC(myisdf, R)
             eri_LS_THC = LS_THC_eri(Z, R) 
-            
             print("eri_LS_THC = ", eri_LS_THC[0,0,0,0])
-            
             eri_benchmark = myisdf.get_eri(compact=False)
-            
             print("eri_benchmark = ", eri_benchmark[0,0,0,0])
-            
-            diff = np.linalg.norm(eri_LS_THC - eri_benchmark)
-            
+            diff          = np.linalg.norm(eri_LS_THC - eri_benchmark)
             print("diff = ", diff/np.sqrt(eri_benchmark.size))
+            
+            ####### LAPLACE #######
+            
+            mo_ene = mf_isdf.mo_energy
+            nocc   = mf_isdf.mol.nelectron // 2
+            nvir   = mf_isdf.mol.nao - nocc
+            
+            print("mo_ene = ", mo_ene)
+            print("nocc   = ", nocc)
+            
+            laplace = laplace_holder(mo_ene, nocc)
+            
+            occ_ene = mo_ene[:nocc]
+            vir_ene = mo_ene[nocc:]
+            
+            delta_full = laplace.delta_full
+            
+            delta_full_benchmark = np.zeros((nocc, nocc, nvir, nvir))
+            
+            for a in range(nvir):
+                for b in range(nvir):
+                    for i in range(nocc):
+                        for j in range(nocc):
+                            delta_full_benchmark[i,j,a,b] = 1.0/(vir_ene[a] + vir_ene[b] - occ_ene[i] - occ_ene[j])
+            
+            diff = delta_full - delta_full_benchmark
+            rela_diff = diff/delta_full_benchmark
+            print("max rela_diff = ", np.max(np.abs(rela_diff)))
+            
+            print("delta_full = ", delta_full[0,0,0,:])
+            print("delta_full_benchmark = ", delta_full_benchmark[0,0,0,:])
             
