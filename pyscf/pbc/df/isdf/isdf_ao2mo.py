@@ -16,7 +16,7 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
-import numpy
+import numpy, scipy
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo.incore import iden_coeffs
@@ -772,3 +772,125 @@ def general(mydf, mo_coeffs, kpts=None,
 
 def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     raise NotImplementedError
+
+def LS_THC(mydf, R:np.ndarray):
+    '''
+    given R matrix, get Z matrix such that eri = R R Z R R
+    '''
+    
+    nGrid_R = R.shape[1]
+    nao     = R.shape[0]
+    
+    assert nao == mydf.cell.nao
+    
+    ngrid   = np.prod(mydf.cell.mesh)
+    nIP     = mydf.naux
+    naux    = mydf.naux
+    vol     = mydf.cell.vol
+    natm    = mydf.cell.natm
+    
+    Z = np.zeros((nGrid_R, nGrid_R))
+    
+    #### step 1 construct ####
+    
+    RR = lib.ddot(R.T, R)
+    lib.square_inPlace(RR)
+    
+    # diag RR #
+    
+    D_RR, U_RR = scipy.linalg.eigh(RR)
+    
+    print('dimension = ', D_RR.shape[0])
+    
+    D_RR_inv = (1.0/D_RR).copy()
+    
+    ## for debug ##
+    
+    print("max D_RR", np.max(D_RR))
+    print("min D_RR", np.min(D_RR))
+    print("condition number = ", np.max(D_RR)/np.min(D_RR))
+    
+    #### step 2 construct R R ERI R R with O(N^3) cost #### 
+    
+    # build (RX)^{PA} = \sum_mu R_mu^P X_\mu^A with X = aoRg # 
+    
+    RX = np.zeros((nGrid_R, nIP))
+    
+    aoRg = mydf.aoRg
+    
+    for partition_i in range(natm):
+        
+        aoRg_i            = aoRg[partition_i]
+        ao_involved_i     = aoRg_i.ao_involved
+        nao_i             = aoRg_i.aoR.shape[0]
+        global_IP_begin_i = aoRg_i.global_gridID_begin
+        nIP_i             = aoRg_i.aoR.shape[1]
+        
+        R_packed = R[ao_involved_i,:].copy() 
+        RX_tmp   = lib.ddot(R_packed.T, aoRg_i.aoR)
+        
+        RX[:,global_IP_begin_i:global_IP_begin_i+nIP_i] = RX_tmp 
+    
+    RX = lib.square_inPlace(RX)
+        
+    # build (RY)^{PB} = \sum_mu R_mu^P Y_\mu^B with Y = aoR # 
+    
+    if mydf.with_robust_fitting:
+        aoR = mydf.aoR
+        RY = np.zeros((nGrid_R, ngrid))
+        for partition_i in range(natm):
+            
+            aoR_i            = aoR[partition_i]
+            ao_involved_i    = aoR_i.ao_involved
+            nao_i            = aoR_i.aoR.shape[0]
+            global_gridID_i  = aoR_i.global_gridID_begin
+            ngrid_i          = aoR_i.aoR.shape[1]
+            
+            R_packed = R[ao_involved_i,:].copy()
+            RY_tmp   = lib.ddot(R_packed.T, aoR_i.aoR)
+            
+            RY[:,global_gridID_i:global_gridID_i+ngrid_i] = RY_tmp
+    
+        RY = lib.square_inPlace(RY)
+    else:
+        RY = None
+    
+    # V term #
+    
+    with_robust_fitting = mydf.with_robust_fitting
+    
+    if with_robust_fitting:
+        V_R = mydf.V_R
+        Z_tmp1 = lib.ddot(V_R, RY.T)
+        lib.ddot(RX, Z_tmp1, c=Z)
+        Z += Z.T
+        del Z_tmp1
+        
+    # W term # 
+    
+    W = mydf.W
+    Z_tmp2 = lib.ddot(W, RX.T)
+    if with_robust_fitting:
+        lib.ddot(RX, Z_tmp2, c=Z, alpha=-1, beta=1)
+    else:
+        lib.ddot(RX, Z_tmp2, c=Z)
+    del Z_tmp2
+    
+    Z1 = lib.ddot(U_RR.T, Z)
+    Z2 = lib.ddot(Z1, U_RR, c=Z)
+    Z  = Z2 
+    
+    lib.d_i_ij_ij(D_RR_inv, Z, out=Z)
+    lib.d_ij_j_ij(Z, D_RR_inv, out=Z)
+    lib.ddot(U_RR, Z, c=Z1)
+    lib.ddot(Z1, U_RR.T, c=Z)
+    
+    return Z * ngrid / vol
+
+def LS_THC_eri(Z:np.ndarray, R:np.ndarray):
+    
+    einsum_str = "iP,jP,PQ,kQ,lQ->ijkl"
+    
+    path_info = np.einsum_path(einsum_str, R,R,Z,R,R, optimize='optimal')
+    
+    return np.einsum(einsum_str, R,R,Z,R,R, optimize=path_info[0])

@@ -36,6 +36,7 @@ libpbc = lib.load_library('libpbc')
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
+from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC, LS_THC_eri
 
 ##### deal with CC #####
 
@@ -130,10 +131,10 @@ if __name__ == '__main__':
             from pyscf.pbc import gto, scf, mp
 
             mf = scf.RHF(cell)
-            mf.kernel()
+            # mf.kernel()
             
             mypt = mp.RMP2(mf)
-            mypt.kernel()
+            # mypt.kernel()
             
             ####### isdf MP2 can perform directly! ####### 
             
@@ -148,7 +149,7 @@ if __name__ == '__main__':
             mf_isdf.conv_tol = 1e-8
             mf_isdf.kernel()
             
-            print("mo_energy = ", mf.mo_energy)
+            # print("mo_energy = ", mf.mo_energy)
             print("mo_energy = ", mf_isdf.mo_energy)
             
             isdf_pt = mp.RMP2(mf_isdf)
@@ -156,14 +157,31 @@ if __name__ == '__main__':
             
             ######################## CCSD ########################
             
-            ## benchmakr ##
+            ## benchmark ##
             
             mycc = pyscf.cc.CCSD(mf)
-            mycc.kernel()
-            
-            # mycc_isdf = RCCSD(mf_isdf)
-            # eris_ccsd = _make_isdf_eris_incore(mycc_isdf, myisdf, mo_coeff=mf_isdf.mo_coeff)
-            # mycc_isdf.kernel(eris=eris_ccsd)
+            # mycc.kernel()
             
             mycc_isdf, eris_ccsd = RCCSD_isdf(mf_isdf, run=False)
             mycc_isdf.kernel(eris=eris_ccsd)
+            
+            ####### THC-DF ####### 
+            
+            _myisdf = ISDF.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
+            _myisdf.build_IP_local(c=15, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
+            R = _myisdf.aoRg_full()
+            
+            Z = LS_THC(myisdf, R)
+            
+            eri_LS_THC = LS_THC_eri(Z, R) 
+            
+            print("eri_LS_THC = ", eri_LS_THC[0,0,0,0])
+            
+            eri_benchmark = myisdf.get_eri(compact=False)
+            
+            print("eri_benchmark = ", eri_benchmark[0,0,0,0])
+            
+            diff = np.linalg.norm(eri_LS_THC - eri_benchmark)
+            
+            print("diff = ", diff/np.sqrt(eri_benchmark.size))
+            

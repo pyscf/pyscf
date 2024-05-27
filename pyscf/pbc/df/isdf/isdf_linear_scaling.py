@@ -1661,6 +1661,35 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             aoR.RangeSeparation(IsCompact)
         for aoRg in self.aoRg:
             aoRg.RangeSeparation(IsCompact)
+    
+    def aoRg_full(self):
+        
+        fn_pack = getattr(libpbc, "_Pack_Matrix_SparseRow_DenseCol", None)
+        assert fn_pack is not None
+    
+        res = np.zeros((self.nao, self.naux), dtype=np.float64)
+        for i in range(self.natm):
+            aoRg_i            = self.aoRg[i]
+            ao_involved_i     = aoRg_i.ao_involved
+            nao_i             = aoRg_i.aoR.shape[0]
+            global_IP_begin_i = aoRg_i.global_gridID_begin
+            nIP_i             = aoRg_i.aoR.shape[1]
+        
+            # res[ao_involved_i, global_IP_begin_i:global_IP_begin_i+nIP_i] = aoRg_i.aoR 
+            
+            fn_pack(
+                res.ctypes.data_as(ctypes.c_void_p), 
+                ctypes.c_int(res.shape[0]),
+                ctypes.c_int(res.shape[1]),
+                aoRg_i.aoR.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_i),
+                ctypes.c_int(nIP_i),
+                ao_involved_i.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(global_IP_begin_i),
+                ctypes.c_int(global_IP_begin_i+nIP_i)
+            )
+            
+        return res
         
 C = 15
 
