@@ -431,7 +431,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     if isinstance(swapfile, h5py.Group):
         fswap = swapfile
     else:
-        fswap = lib.H5FileWrap(swapfile)
+        fswap = lib.H5FileWrap(swapfile, 'a')
     for icomp in range(comp):
         fswap.create_group(str(icomp)) # for h5py old version
 
