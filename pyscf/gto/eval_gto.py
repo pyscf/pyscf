@@ -82,8 +82,14 @@ def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
             If provided, results are written into this array.
 
     Returns:
-        2D array of shape (N,nao) Or 3D array of shape (\*,N,nao) to store AO
-        values on grids.
+        An 2D to 4D array for AO values on grids.
+        If eval_name is scalar functions, such as GTOval and GTOval_ip_cart,
+        the shape of the return is (N,nao) for GTOval, and (*,N,nao) for other
+        functions.
+        If eval_name is spinor functions, such as GTOval_spinor and GTOval_sp_spinor,
+        the shape of the return is (2,N,nao) for GTOval_spinor, and (2,*,N,nao)
+        for other functions. The leading dimension 2 represents the spin-up and
+        spin-down components of the spinor basis.
 
     Examples:
 
@@ -95,6 +101,9 @@ def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
     >>> ao_value = mol.eval_gto("GTOval_ig_sph", coords)
     >>> print(ao_value.shape)
     (3, 100, 24)
+    >>> ao_a, ao_b = mol.eval_gto("GTOval_spinor", coords)
+    >>> print(ao_a.shape)
+    (100, 24)
     '''
     eval_name, comp = _get_intor_and_comp(mol, eval_name, comp)
 
