@@ -18,21 +18,25 @@ Python-based Simulations of Chemistry Framework
 
 # Installation
 
-* Install stable release
+* Install stable release:
 
         pip install pyscf
 
-* (Optionally) Extensions projects geomopt, dmrgscf, doci, fciqmc, icmpspt,
-  properties, semiempirical, shciscf ... (more on https://github.com/pyscf) can
-  be installed using pip
+* New features developed in recent years are available in the pyscf-forge package:
+
+        pip install pyscf-forge
+
+* Certain modules are maintained as extensions of PySCF, such as dispersion,
+  dmrgscf, fciqmc, icmpspt, properties, semiempirical, shciscf ... (more on
+  https://github.com/pyscf) can be installed using pip:
 
         pip install pyscf[all]
 
-  Install an individual extension
+  An individual extension can be installed:
 
-        pip install pyscf[geomopt]
+        pip install pyscf[dispersion]
 
-* More details of custom install can be found in
+* More details of custom installation can be found in
   [installation manual](http://pyscf.org/install.html#compiling-from-source-code)
 
 

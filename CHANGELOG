@@ -18,7 +18,9 @@ PySCF 2.6.0 (2024-06-01)
   - Dipole moment in SFX2C.
   - High-order XC derivatives.
   - Integer overflow in FCI large address.
+  - Multi-collinear XC higher order derivatives.
   - Smearing with predefined chemical potential.
+  - Fix frozen attribute for MP2 density matrices.
 
 
 PySCF 2.5.0 (2024-02-03)
