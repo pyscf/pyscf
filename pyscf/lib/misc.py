@@ -1313,7 +1313,8 @@ def format_sys_info():
     result = [
         f'System: {platform.uname()}  Threads {num_threads()}',
         f'Python {sys.version}',
-        f'numpy {numpy.__version__}  scipy {scipy.__version__}',
+        f'numpy {numpy.__version__}  scipy {scipy.__version__}  '
+        f'h5py {h5py.__version__}',
         f'Date: {time.ctime()}',
         f'PySCF version {pyscf.__version__}',
         f'PySCF path  {info["path"]}',

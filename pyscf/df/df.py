@@ -284,7 +284,7 @@ class DF(lib.StreamObject):
         else:
             rsh_df = self._rsh_df[key] = self.copy().reset()
             if hasattr(self, '_dataname'):
-                rsh_df._dataname = f'{self._dataname}/lr/{key}'
+                rsh_df._dataname = f'{self._dataname}-lr/{key}'
             logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
 
         mol = self.mol
