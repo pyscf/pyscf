@@ -274,7 +274,7 @@ def _gamma1_intermediates(mp, t2):
     return ((dooa, doob), (dvva, dvvb))
 
 
-def make_fno(mp, thresh=1e-6, pct_occ=None, t2=None, eris=None):
+def make_fno(mp, thresh=1e-6, pct_occ=None, pvir_act=None, nvir_act=None, t2=None, eris=None):
     r'''
     Frozen natural orbitals
 
@@ -282,36 +282,75 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, t2=None, eris=None):
         frozen : list or ndarray
             Length-2 list of orbitals to freeze
         no_coeff : ndarray
-            Length-2 list of semicanonical NO coefficients in the AO basis
+            Length-2 list of semicanonical NO coefficients in the AO basis, each in the order
+            [occ-frz, occ-act, vir-act, vir-frz]
     '''
+    log = logger.new_logger(mp)
+
     mf = mp._scf
     dmab = mp.make_rdm1(t2=t2)
+
+    if nvir_act is None:
+        nvir_act_list = [None, None]
+    elif isinstance(nvir_act, int):
+        nvir_act_list = [nvir_act, nvir_act]
+    else:
+        nvir_act_list = nvir_act
 
     frozen = []
     no_coeff = []
     for s,dm in enumerate(dmab):
         nocc = mp.nocc[s]
         nmo = mp.nmo[s]
+        frozen_mask = mp.get_frozen_mask()[s]
+        nvir_act = nvir_act_list[s]
+        dm = dm[numpy.ix_(frozen_mask,frozen_mask)]
         n,v = numpy.linalg.eigh(dm[nocc:,nocc:])
         idx = numpy.argsort(n)[::-1]
         n,v = n[idx], v[:,idx]
+        pct_occ_sum = numpy.cumsum(n/numpy.sum(n))
+        numpy.set_printoptions(threshold=nmo)
+        log.debug1('make_fno: noon = %s', n)
+        log.debug1('make_fno: pctsum(noon) = %s', pct_occ_sum)
+        numpy.set_printoptions(threshold=1000)
 
-        if pct_occ is None:
-            nvir_act = numpy.count_nonzero(n>thresh)
-        else:
-            print(numpy.cumsum(n/numpy.sum(n)))
-            nvir_act = numpy.count_nonzero(numpy.cumsum(n/numpy.sum(n))<pct_occ)
+        if nvir_act is None:
+            if pvir_act is None:
+                if pct_occ is None:
+                    nvir_act = numpy.count_nonzero(n>thresh)
+                else:
+                    nvir_act = numpy.count_nonzero(pct_occ_sum<pct_occ)
+            else:
+                nvir_act = min(int(numpy.ceil(pvir_act*(nmo-nocc))), nmo-nocc)
 
-        fvv = numpy.diag(mf.mo_energy[s][nocc:])
+        if nvir_act == 0:
+            log.warn('make_fno: nvir_act = 0')
+
+        occ_mask = mf.mo_occ[s] > 1e-10
+        orboccfrz = mf.mo_coeff[s][:, occ_mask &~frozen_mask]
+        orboccact = mf.mo_coeff[s][:, occ_mask & frozen_mask]
+        orbviract = mf.mo_coeff[s][:,~occ_mask & frozen_mask]
+        orbvirfrz = mf.mo_coeff[s][:,~occ_mask &~frozen_mask]
+        moeviract = mf.mo_energy[s][ ~occ_mask & frozen_mask]
+
+        fvv = numpy.diag(moeviract)
         fvv_no = numpy.dot(v.T, numpy.dot(fvv, v))
         _, v_canon = numpy.linalg.eigh(fvv_no[:nvir_act,:nvir_act])
 
-        no_coeff_1 = numpy.dot(mf.mo_coeff[s][:,nocc:], numpy.dot(v[:,:nvir_act], v_canon))
-        no_coeff_2 = numpy.dot(mf.mo_coeff[s][:,nocc:], v[:,nvir_act:])
-        no_coeff_s = numpy.concatenate((mf.mo_coeff[s][:,:nocc], no_coeff_1, no_coeff_2), axis=1)
-
-        frozen.append(numpy.arange(nocc+nvir_act,nmo))
+        no_coeff_1 = numpy.dot(orbviract, numpy.dot(v[:,:nvir_act], v_canon))
+        no_coeff_2 = numpy.dot(orbviract, v[:,nvir_act:])
+        no_coeff_s = numpy.hstack((orboccfrz, orboccact, no_coeff_1, no_coeff_2, orbvirfrz))
         no_coeff.append(no_coeff_s)
+
+        noccfrz = orboccfrz.shape[1]
+        nviract = no_coeff_1.shape[1]
+        nocctot = numpy.count_nonzero(occ_mask)
+        nmotot = occ_mask.size
+        frozen_s = numpy.hstack((numpy.arange(noccfrz),
+                                 numpy.arange(nocctot+nviract, nmotot))).astype(int)
+        frozen.append(frozen_s)
+
+        log.debug('make_fno: keeping %d/%d/%d vir NOs', nviract, nmo-nocc, nmotot-nocctot)
 
     return frozen, no_coeff
 
