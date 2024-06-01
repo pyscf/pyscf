@@ -148,7 +148,7 @@ def update_amps(mp, t2, eris):
     return t2new
 
 
-def make_rdm1(mp, t2=None, eris=None, ao_repr=False):
+def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True):
     r'''Spin-traced one-particle density matrix.
     The occupied-virtual orbital response is not included.
 
@@ -169,7 +169,7 @@ def make_rdm1(mp, t2=None, eris=None, ao_repr=False):
     nvir = dvv.shape[0]
     dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
     dvo = dov.T
-    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True,
+    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=with_frozen,
                                ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2=None, eris=None):
@@ -203,6 +203,17 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
     return -dm1occ, dm1vir
 
 
+def _mo_splitter(mp):
+    maskact = mp.get_frozen_mask()
+    maskocc = mp.mo_occ>1e-6
+    masks = [
+        maskocc  & ~maskact,    # frz occ
+        maskocc  &  maskact,    # act occ
+        ~maskocc &  maskact,    # act vir
+        ~maskocc & ~maskact,    # frz vir
+    ]
+    return masks
+
 def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
     r'''
     Frozen natural orbitals
@@ -222,30 +233,42 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
             Semicanonical NO coefficients in the AO basis
     '''
     mf = mp._scf
-    dm = mp.make_rdm1(t2=t2)
+    dm = mp.make_rdm1(t2=t2, with_frozen=False)
 
     nmo = mp.nmo
     nocc = mp.nocc
+    nvir = nmo - nocc
     n,v = numpy.linalg.eigh(dm[nocc:,nocc:])
     idx = numpy.argsort(n)[::-1]
     n,v = n[idx], v[:,idx]
 
     if nvir_act is None:
         if pct_occ is None:
-            nvir_act = numpy.count_nonzero(n>thresh)
+            nvir_keep = numpy.count_nonzero(n>thresh)
         else:
-            print(numpy.cumsum(n/numpy.sum(n)))
-            nvir_act = numpy.count_nonzero(numpy.cumsum(n/numpy.sum(n))<pct_occ)
+            cumsum = numpy.cumsum(n/numpy.sum(n))
+            logger.debug(mp, 'Sum(pct_occ): %s', cumsum)
+            nvir_keep = numpy.count_nonzero(cumsum<pct_occ)
+    else:
+        nvir_keep = min(nvir, nvir_act)
 
-    fvv = numpy.diag(mf.mo_energy[nocc:])
+    masks = _mo_splitter(mp)
+    moeoccfrz0, moeocc, moevir, moevirfrz0 = [mf.mo_energy[m] for m in masks]
+    orboccfrz0, orbocc, orbvir, orbvirfrz0 = [mf.mo_coeff[:,m] for m in masks]
+
+    fvv = numpy.diag(moevir)
     fvv_no = numpy.dot(v.T, numpy.dot(fvv, v))
-    _, v_canon = numpy.linalg.eigh(fvv_no[:nvir_act,:nvir_act])
+    _, v_canon = numpy.linalg.eigh(fvv_no[:nvir_keep,:nvir_keep])
 
-    no_coeff_1 = numpy.dot(mf.mo_coeff[:,nocc:], numpy.dot(v[:,:nvir_act], v_canon))
-    no_coeff_2 = numpy.dot(mf.mo_coeff[:,nocc:], v[:,nvir_act:])
-    no_coeff = numpy.concatenate((mf.mo_coeff[:,:nocc], no_coeff_1, no_coeff_2), axis=1)
+    orbviract = numpy.dot(orbvir, numpy.dot(v[:,:nvir_keep], v_canon))
+    orbvirfrz = numpy.dot(orbvir, v[:,nvir_keep:])
+    no_comp = (orboccfrz0, orbocc, orbviract, orbvirfrz, orbvirfrz0)
+    no_coeff = numpy.hstack(no_comp)
+    nocc_loc = numpy.cumsum([0]+[x.shape[1] for x in no_comp]).astype(int)
+    no_frozen = numpy.hstack((numpy.arange(nocc_loc[0], nocc_loc[1]),
+                              numpy.arange(nocc_loc[3], nocc_loc[5]))).astype(int)
 
-    return numpy.arange(nocc+nvir_act,nmo), no_coeff
+    return no_frozen, no_coeff
 
 
 def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
