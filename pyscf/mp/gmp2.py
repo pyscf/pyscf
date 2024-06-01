@@ -88,7 +88,7 @@ def update_amps(mp, t2, eris):
     return t2new
 
 
-def make_rdm1(mp, t2=None, ao_repr=False):
+def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
     r'''
     One-particle density matrix in the molecular spin-orbital representation
     (the occupied-virtual blocks from the orbital response contribution are
@@ -106,7 +106,7 @@ def make_rdm1(mp, t2=None, ao_repr=False):
     nocc, nvir = t2.shape[1:3]
     dov = numpy.zeros((nocc,nvir))
     d1 = doo, dov, dov.T, dvv
-    return gccsd_rdm._make_rdm1(mp, d1, with_frozen=True, ao_repr=ao_repr)
+    return gccsd_rdm._make_rdm1(mp, d1, with_frozen=with_frozen, ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2):
     doo = lib.einsum('imef,jmef->ij', t2.conj(), t2) *-.5

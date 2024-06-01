@@ -18,7 +18,7 @@ import unittest
 import numpy as np
 from pyscf import __config__
 from pyscf import gto, scf, cc
-from pyscf.cc.ccsd_t import kernel as CCSD_T
+from pyscf.cc.uccsd_t import kernel as CCSD_T
 
 
 class Water(unittest.TestCase):
@@ -36,7 +36,7 @@ class Water(unittest.TestCase):
         mol.basis = 'cc-pvdz'
         mol.precision = 1e-10
         mol.build()
-        mf = scf.RHF(mol).run()
+        mf = scf.UHF(mol).run()
         cls.mol = mol
         cls.mf = mf
     @classmethod
@@ -82,74 +82,7 @@ class Water(unittest.TestCase):
             self.assertAlmostEqual(eccsd, ref[0], 6)
             self.assertAlmostEqual(et, ref[1], 6)
 
-        eccsd0, et0 = self.kernel(cc.CCSD, frozen=1)
-        eccsd, et = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=1)
-        self.assertAlmostEqual(eccsd, eccsd0, 6)
-        self.assertAlmostEqual(et, et0, 6)
-
-
-class Water_density_fitting(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        mol = gto.Mole()
-        mol.verbose = 4
-        mol.output = '/dev/null'
-        mol.atom = '''
-        O          0.00000        0.00000        0.11779
-        H          0.00000        0.75545       -0.47116
-        H          0.00000       -0.75545       -0.47116
-        '''
-        mol.pseudo = 'gth-hf-rev'
-        mol.basis = 'cc-pvdz'
-        mol.precision = 1e-10
-        mol.build()
-        mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
-        cls.mol = mol
-        cls.mf = mf
-    @classmethod
-    def tearDownClass(cls):
-        cls.mol.stdout.close()
-        del cls.mol, cls.mf
-
-    def kernel(self, CC, **kwargs):
-        mcc = CC(self.mf, **kwargs)
-        eris = mcc.ao2mo()
-        mcc.kernel(eris=eris)
-        et = CCSD_T(mcc, eris=eris)
-        return mcc.e_corr, et
-
-    def test_fno_by_thresh(self):
-        threshs = [1e-2,1e-3,1e-4]
-        refs = [
-            [-0.1200039667,-0.0001504459],
-            [-0.1926097163,-0.0006429844],
-            [-0.2150297885,-0.0030295410],
-        ]
-        for thresh,ref in zip(threshs,refs):
-            eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh)
-            # print('[%s],' % (','.join([f'{x:.10f}' for x in [eccsd,et]])))
-            self.assertAlmostEqual(eccsd, ref[0], 6)
-            self.assertAlmostEqual(et, ref[1], 6)
-
-        eccsd0, et0 = self.kernel(cc.CCSD)
-        eccsd, et = self.kernel(cc.FNOCCSD, thresh=1e-100)
-        self.assertAlmostEqual(eccsd, eccsd0, 6)
-        self.assertAlmostEqual(et, et0, 6)
-
-    def test_fno_by_thresh_frozen(self):
-        threshs = [1e-2,1e-3,1e-4]
-        refs = [
-            [-0.0777156383,-0.0000380971],
-            [-0.1409426400,-0.0004850786],
-            [-0.1500564421,-0.0021661544],
-        ]
-        for thresh,ref in zip(threshs,refs):
-            eccsd, et = self.kernel(cc.FNOCCSD, thresh=thresh, frozen=1)
-            # print('[%s],' % (','.join([f'{x:.10f}' for x in [eccsd,et]])))
-            self.assertAlmostEqual(eccsd, ref[0], 6)
-            self.assertAlmostEqual(et, ref[1], 6)
-
-        eccsd0, et0 = self.kernel(cc.CCSD, frozen=1)
+        eccsd0, et0 = self.kernel(cc.UCCSD, frozen=1)
         eccsd, et = self.kernel(cc.FNOCCSD, thresh=1e-100, frozen=1)
         self.assertAlmostEqual(eccsd, eccsd0, 6)
         self.assertAlmostEqual(et, et0, 6)

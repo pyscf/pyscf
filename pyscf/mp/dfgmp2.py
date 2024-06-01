@@ -150,11 +150,11 @@ class DFGMP2(dfmp2.DFMP2):
         eris._common_init_(self, mo_coeff)
         return eris
 
-    def make_rdm1(self, t2=None, ao_repr=False):
+    def make_rdm1(self, t2=None, ao_repr=False, with_frozen=True):
         if t2 is None:
             t2 = self.t2
         assert t2 is not None
-        return make_rdm1(self, t2, ao_repr=ao_repr)
+        return make_rdm1(self, t2, ao_repr=ao_repr, with_frozen=with_frozen)
 
     def make_rdm2(self, t2=None, ao_repr=False):
         if t2 is None:
