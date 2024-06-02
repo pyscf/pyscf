@@ -46,7 +46,7 @@ def get_dispersion(hessobj, disp=None, with_3body=None):
     if with_3body is not None:
         with_3body = disp_with_3body
 
-    if mf.disp[:2].upper() == 'D3':
+    if disp_version[:2].upper() == 'D3':
         logger.info(mf, "Calc dispersion correction with DFTD3.")
         logger.info(mf, f"Parameters: xc={method}, version={disp_version}, atm={with_3body}")
         logger.warn(mf, "DFTD3 does not support analytical Hessian, using finite difference")
@@ -71,7 +71,7 @@ def get_dispersion(hessobj, disp=None, with_3body=None):
                 h_disp[i,:,j,:] = (g1 - g2)/(2.0*eps)
         return h_disp
 
-    elif mf.disp[:2].upper() == 'D4':
+    elif disp_version[:2].upper() == 'D4':
         logger.info(mf, "Calc dispersion correction with DFTD4.")
         logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
         logger.warn(mf, "DFTD4 does not support analytical Hessian, using finite difference.")
