@@ -69,7 +69,7 @@ def get_dispersion(hessobj, disp=None, with_3body=None):
 
                 coords[i,j] += eps
                 h_disp[i,:,j,:] = (g1 - g2)/(2.0*eps)
-            return h_disp
+        return h_disp
 
     elif mf.disp[:2].upper() == 'D4':
         logger.info(mf, "Calc dispersion correction with DFTD4.")
