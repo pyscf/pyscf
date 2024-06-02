@@ -37,8 +37,6 @@ jobs:
   release-pypi-aarch64:
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        pyver: [cp39-cp39]
       fail-fast: false
     env:
       img: quay.io/pypa/manylinux2014_aarch64:2023-03-12-25fd859
@@ -52,7 +50,7 @@ jobs:
       run: |
             docker run --rm -v ${{ github.workspace }}:/src/pyscf:rw --workdir=/src/pyscf \
             ${{ env.img }} \
-            bash -exc '/opt/python/${{ matrix.pyver }}/bin/pip install --upgrade pip setuptools && \
+            bash -exc '/opt/python/cp39-cp39/bin/pip install --upgrade pip setuptools && \
             yum install -y epel-release && \
             yum-config-manager --enable epel && \
             yum install -y openblas-devel gcc && \
@@ -62,7 +60,7 @@ jobs:
             export CMAKE_BUILD_PARALLEL_LEVEL=4 && \
             mkdir -p /root/wheelhouse $src/linux-wheels && \
             sed -i "/            if basename(fn) not in needed_libs:/s/basename.*libs/1/" /opt/_internal/pipx/venvs/auditwheel/lib/python*/site-packages/auditwheel/wheel_abi.py && \
-            /opt/python/${{ matrix.pyver }}/bin/pip wheel -v --no-deps --no-clean -w /root/wheelhouse $src && \
+            /opt/python/cp39-cp39/bin/pip wheel -v --no-deps --no-clean -w /root/wheelhouse $src && \
             export whl=`ls /root/wheelhouse/pyscf-*-linux_*.whl` && \
             auditwheel -v repair "$whl" --lib-sdir /lib -w $dst'
     - name: List available wheels
@@ -180,28 +178,6 @@ jobs:
           conda install -y anaconda-client conda-build
           conda config --set anaconda_upload yes
           conda build --output-folder . conda
-
-  # Disable macos conda release for Error during compling:
-  # MACOSX_DEPLOYMENT_TARGET mismatch: now "10.9" but "10.15" during configure
-  #release-conda-macos:
-  #  runs-on: macos-latest
-  #  strategy:
-  #    matrix:
-  #      python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
-  #    fail-fast: false
-  #  steps:
-  #    - uses: actions/checkout@v4
-  #    - name: Setup conda
-  #      uses: actions/setup-python@v4
-  #      with:
-  #        python-version: ${{ matrix.python-version }}
-  #    - name: Publish to conda
-  #      run: |
-  #        $CONDA/bin/conda install -y anaconda-client conda-build
-  #        $CONDA/bin/conda build --output-folder . conda
-  #        export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_TOKEN }}
-  #        $CONDA/bin/conda config --set anaconda_upload yes
-  #        $CONDA/bin/anaconda upload linux-64/*.tar.bz2
 
   release-docker:
     runs-on: ubuntu-latest
