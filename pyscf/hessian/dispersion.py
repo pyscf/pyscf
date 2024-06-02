@@ -57,13 +57,13 @@ def get_dispersion(hessobj, disp=None, with_3body=None):
             for j in range(3):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')
-                d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
+                d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
                 res = d3_model.get_dispersion(grad=True)
                 g1 = res.get('gradient')
 
                 coords[i,j] -= 2.0*eps
                 mol.set_geom_(coords, unit='Bohr')
-                d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
+                d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
                 res = d3_model.get_dispersion(grad=True)
                 g2 = res.get('gradient')
 

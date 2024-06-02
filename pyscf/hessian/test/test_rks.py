@@ -138,6 +138,22 @@ class KnownValues(unittest.TestCase):
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_consistency_b3lyp_d3_hess(self):
+        mf1 = dft.RKS(mol)
+        mf1.conv_tol = 1e-14
+        mf1.xc = 'b3lyp'
+        mf1.disp = 'd3bj'
+        mf1.kernel()
+        hess1 = mf1.Hessian().kernel()
+
+        mf2 = dft.RKS(mol)
+        mf2.conv_tol = 1e-14
+        mf2.xc = 'b3lyp-d3bj'
+        mf2.kernel()
+        hess2 = mf2.Hessian().kernel()
+        self.assertAlmostEqual(lib.fp(hess1), lib.fp(hess2), 4)
+
     @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_finite_diff_b3lyp_d4_hess(self):
         mf = dft.RKS(mol)
