@@ -574,11 +574,16 @@ class KnownValues(unittest.TestCase):
 
     @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_dispersion(self):
-        mf = dft.RKS(h2o)
-        mf.xc = 'B3LYP'
-        mf.disp = 'd3bj'
-        mf.run(xc='B3LYP')
-        self.assertAlmostEqual(mf.e_tot, -76.38552043811778, 9)
+        mf1 = dft.RKS(h2o)
+        mf1.xc = 'B3LYP'
+        mf1.disp = 'd3bj'
+        mf1.run(xc='B3LYP')
+        self.assertAlmostEqual(mf1.e_tot, -76.38552043811778, 9)
+
+        mf2 = dft.RKS(h2o)
+        mf2.xc = 'B3LYP-d3bj'
+        mf2.run(xc='B3LYP-d3bj')
+        self.assertAlmostEqual(mf1.e_tot, mf2.e_tot, 8)
 
     def test_reset(self):
         mf = dft.RKS(h2o).newton()
