@@ -8,7 +8,6 @@ fashion without any issues related to the Davidson procedure.
 This is a helper module defining basic interfaces.
 """
 
-import sys
 from pyscf.lib import logger
 
 from pyscf.pbc.tools import get_kconserv
@@ -18,8 +17,6 @@ from scipy.linalg import solve
 
 from itertools import count, groupby
 
-if sys.version_info >= (3,):
-    unicode = str
 
 def msize(m):
     """
@@ -162,7 +159,7 @@ class TDMatrixBlocks:
             raise ValueError("The value returned by `tdhf_primary_form` is not a tuple")
         if len(m) < 1:
             raise ValueError("Empty tuple returned by `tdhf_primary_form`")
-        if not isinstance(m[0], (str, unicode)):
+        if not isinstance(m[0], str):
             raise ValueError("The first item returned by `tdhf_primary_form` must be a string")
         forms = {"ab": 3, "mk": 3, "full": 2}
         if m[0] in forms:

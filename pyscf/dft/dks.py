@@ -32,7 +32,7 @@ from pyscf.dft import r_numint
 
 @lib.with_doc(gks.get_veff.__doc__)
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-    if ks.nlc or ks._numint.libxc.is_nlc(ks.xc):
+    if ks.do_nlc():
         raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
     return gks.get_veff(ks, mol, dm, dm_last, vhf_last, hermi)
 
@@ -83,6 +83,13 @@ class KohnShamDFT(rks.KohnShamDFT):
     @collinear.setter
     def collinear(self, val):
         self._numint.collinear = val
+
+    @property
+    def spin_samples(self):
+        return self._numint.spin_samples
+    @spin_samples.setter
+    def spin_samples(self, val):
+        self._numint.spin_samples = val
 
     def to_rhf(self):
         raise RuntimeError

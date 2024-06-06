@@ -1,3 +1,28 @@
+PySCF 2.6.0 (2024-06-01)
+------------------------
+* Added
+  - SMD and PCM solvent model
+  - Nuclear Hessian for SMD and PCM solvent models
+* Improved
+  - DFT-D3 and DFT-D4 interfaces. Supporting assigning the acronym such as
+    WB97M-D3BJ, WB97M-D4 to the xc attribute.
+  - Optimized density fitting performance.
+  - Memory usage for RPA.
+  - FCI coefficients transformation for more than 64 orbitals.
+  - Multi-grid DFT performance greatly optimized.
+* Fixes
+  - CASCI/CASSCF calculations when mixing C1 symmetry and symmetry=False .
+  - "atom" initial guess for ECP with super-heavy atoms.
+  - Complex conjugation issues in single k-point JK-build in PBC DF.
+  - CCSD(T) for complex orbitals.
+  - Dipole moment in SFX2C.
+  - High-order XC derivatives.
+  - Integer overflow in FCI large address.
+  - Multi-collinear XC higher order derivatives.
+  - Smearing with predefined chemical potential.
+  - Fix frozen attribute for MP2 density matrices.
+
+
 PySCF 2.5.0 (2024-02-03)
 ------------------------
 * Added

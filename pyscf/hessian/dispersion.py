@@ -21,41 +21,35 @@ Hessian of dispersion correction for HF and DFT
 '''
 
 
-import numpy
-from pyscf.dft.rks import KohnShamDFT
-from pyscf.dft import dft_parser
+import numpy as np
+from pyscf.lib import logger
+from pyscf.scf.dispersion import check_disp, parse_disp
 
-def get_dispersion(hessobj, disp_version=None, with_3body=False):
+def get_dispersion(hessobj, disp=None, with_3body=None):
+    mf = hessobj.base
+    mol = mf.mol
+    natm = mol.natm
+    h_disp = np.zeros([natm,natm,3,3])
+    disp_version = check_disp(mf, disp)
+    if not disp_version:
+        return h_disp
+
     try:
         from pyscf.dispersion import dftd3, dftd4
     except ImportError:
         print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
         raise
-    mf = hessobj.base
-    mol = mf.mol
-    if isinstance(mf, KohnShamDFT):
-        method = mf.xc
-    else:
-        method = 'hf'
-    method, disp, with_3body = dft_parser.parse_dft(method)[2]
 
-    # priority: args > mf.disp > dft_parser
-    if disp_version is None:
-        disp_version = disp
-        # dispersion version can be customized via mf.disp
-        if hasattr(mf, 'disp') and mf.disp is not None:
-            disp_version = mf.disp
+    method = getattr(mf, 'xc', 'hf')
+    method, _, disp_with_3body = parse_disp(method)
 
-    natm = mol.natm
-    h_disp = numpy.zeros([natm,natm,3,3])
-    if disp_version is None:
-        return h_disp
+    if with_3body is not None:
+        with_3body = disp_with_3body
 
-    # 3-body contribution can be disabled with mf.disp_with_3body
-    if hasattr(mf, 'disp_with_3body') and mf.disp_with_3body is not None:
-        with_3body = mf.disp_with_3body
-
-    if mf.disp[:2].upper() == 'D3':
+    if disp_version[:2].upper() == 'D3':
+        logger.info(mf, "Calc dispersion correction with DFTD3.")
+        logger.info(mf, f"Parameters: xc={method}, version={disp_version}, atm={with_3body}")
+        logger.warn(mf, "DFTD3 does not support analytical Hessian, using finite difference")
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5
@@ -63,21 +57,24 @@ def get_dispersion(hessobj, disp_version=None, with_3body=False):
             for j in range(3):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')
-                d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
+                d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
                 res = d3_model.get_dispersion(grad=True)
                 g1 = res.get('gradient')
 
                 coords[i,j] -= 2.0*eps
                 mol.set_geom_(coords, unit='Bohr')
-                d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=mf.disp, atm=with_3body)
+                d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
                 res = d3_model.get_dispersion(grad=True)
                 g2 = res.get('gradient')
 
                 coords[i,j] += eps
                 h_disp[i,:,j,:] = (g1 - g2)/(2.0*eps)
-            return h_disp
+        return h_disp
 
-    elif mf.disp[:2].upper() == 'D4':
+    elif disp_version[:2].upper() == 'D4':
+        logger.info(mf, "Calc dispersion correction with DFTD4.")
+        logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
+        logger.warn(mf, "DFTD4 does not support analytical Hessian, using finite difference.")
         coords = hessobj.mol.atom_coords()
         mol = mol.copy()
         eps = 1e-5

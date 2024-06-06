@@ -244,6 +244,18 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_consistency_df_rks_d3_grad(self):
+        mf1 = dft.RKS(mol, xc='b3lyp').density_fit ()
+        mf1.disp = 'd3bj'
+        mf1.kernel()
+        g1 = mf1.nuc_grad_method ().set (grid_response=True).kernel ()
+
+        mf2 = dft.RKS(mol, xc='b3lyp-d3bj').density_fit ()
+        mf2.kernel()
+        g2 = mf2.nuc_grad_method ().set (grid_response=True).kernel ()
+        self.assertAlmostEqual(lib.fp(g1), lib.fp(g2), 5)
+
     @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_finite_diff_df_rks_d4_grad(self):
         mf1 = dft.RKS(mol, xc='b3lyp').density_fit ()
@@ -322,6 +334,16 @@ class KnownValues(unittest.TestCase):
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-3*lib.param.BOHR, 5)
+
+        mf.set(xc='wb97m-v', nlc='', conv_tol=1e-12)
+        mf.kernel()
+        g = mf.nuc_grad_method().set().kernel()
+        self.assertAlmostEqual(lib.fp(g), -0.032453247110454116, 6)
+
+        mf.set(xc='wb97m-v', nlc=False, conv_tol=1e-12)
+        mf.kernel()
+        g = mf.nuc_grad_method().set().kernel()
+        self.assertAlmostEqual(lib.fp(g), -0.03202508099735074, 6)
 
     def test_finite_diff_rks_grad_mgga(self):
         mf = mol.RKS().run(xc='m06l', conv_tol=1e-12)
