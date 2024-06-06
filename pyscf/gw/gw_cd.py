@@ -207,7 +207,7 @@ def get_sigmaR_diag(gw, omega, orbp, ef, Lpq):
         idx = np.where((mo_energy>omega) & (mo_energy<ef))[0]
 
     sigmaR = 0j
-    if len(idx) > 0:
+    if idx:
         for m in idx:
             em = mo_energy[m] - omega
             Pi = get_rho_response_R(gw, abs(em), Lpq[:,:nocc,nocc:])

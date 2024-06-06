@@ -1223,7 +1223,7 @@ def locs_to_indices(locs, segement_list):
     array([0, 1, 5, 6, 7, 8])
     '''
     segement_list = numpy.asarray(segement_list)
-    if segement_list.dtype == bool:
+    if segement_list.dtype is bool:
         segement_list = numpy.where(segement_list)[0]
     nsegs = segement_list.size
     if nsegs == 0:

@@ -115,7 +115,7 @@ def _int_vnl(cell, fakecell, hl_blocks):
     intopt = lib.c_null_ptr()
 
     def int_ket(_bas, intor):
-        if len(_bas) == 0:
+        if not _bas:
             return []
         intor = cell._add_suffix(intor)
         atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,

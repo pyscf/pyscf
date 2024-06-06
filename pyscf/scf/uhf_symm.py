@@ -438,13 +438,13 @@ class SymAdaptedUHF(uhf.UHF):
         nelecb_float = nelec[1] - nelecb_fix
         assert (neleca_float >= 0)
         assert (nelecb_float >= 0)
-        if len(idx_ea_left) > 0:
+        if idx_ea_left:
             idx_ea_left = numpy.hstack(idx_ea_left)
             ea_left = mo_energy[0][idx_ea_left]
             ea_sort = numpy.argsort(ea_left.round(9), kind='stable')
             occ_idx = idx_ea_left[ea_sort][:neleca_float]
             mo_occ[0][occ_idx] = 1
-        if len(idx_eb_left) > 0:
+        if idx_eb_left:
             idx_eb_left = numpy.hstack(idx_eb_left)
             eb_left = mo_energy[1][idx_eb_left]
             eb_sort = numpy.argsort(eb_left.round(9), kind='stable')

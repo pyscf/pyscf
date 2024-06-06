@@ -130,7 +130,7 @@ def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     so = []
     irrep_ids = []
     for ir, c in enumerate(sodic):
-        if len(c) > 0:
+        if c:
             irrep_ids.append(ir)
             c_ir = numpy.vstack(c).T
             nso = c_ir.shape[1]

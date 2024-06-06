@@ -473,7 +473,7 @@ def format_frozen_k(frozen, nmo, nk):
     elif isinstance(frozen, int):
         space[:, :frozen] = False
     elif isinstance(frozen, (tuple, list, numpy.ndarray)):
-        if len(frozen) > 0:
+        if frozen:
             if isinstance(frozen[0], int):
                 space[:, frozen] = False
             else:
@@ -791,9 +791,9 @@ def format_mask(x):
         A readable string with the mask.
     """
     x = numpy.asanyarray(x)
-    if len(x) == 0:
+    if not x:
         return "(empty)"
-    if x.dtype == bool:
+    if x.dtype is bool:
         x = numpy.argwhere(x)[:, 0]
     grps = tuple(list(g) for _, g in groupby(x, lambda n, c=count(): n-next(c)))
     return ",".join("{:d}-{:d}".format(i[0], i[-1]) if len(i) > 1 else "{:d}".format(i[0]) for i in grps)

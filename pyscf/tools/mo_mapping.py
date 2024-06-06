@@ -106,7 +106,7 @@ def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False,
         lao = lo.orth.orth_ao(mol, orth_method, s=s)
 
         idx = gto.mole._aolabels2baslst(mol, aolabels_or_baslst)
-        if len(idx) == 0:
+        if not idx:
             logger.warn(mol, 'Required orbitals are not found')
         mo1 = reduce(numpy.dot, (lao[:,idx].T, s, mo_coeff))
         s1 = numpy.einsum('ki,ki->i', mo1, mo1)

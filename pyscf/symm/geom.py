@@ -712,7 +712,7 @@ class SymmSys:
                         else:
                             maybe_c2x.append(r2-r1)
 
-                if len(maybe_c2x) > 0:
+                if maybe_c2x:
                     idx = norm(maybe_c2x, axis=1) > TOLERANCE
                     maybe_c2x = _normalize(maybe_c2x)[idx]
                     maybe_c2x = _remove_dupvec(maybe_c2x)
@@ -793,7 +793,7 @@ def _search_ot_group(rawsys):
     c4_axes = [c4 for c4, n in possible_cn
                if n == 4 and rawsys.has_rotation(c4, 4)]
 
-    if len(c4_axes) > 0:  # T group
+    if c4_axes:  # T group
         assert (len(c4_axes) > 1)
         if rawsys.has_icenter():
             gpname = 'Oh'

@@ -324,9 +324,9 @@ def get_hcore(mol):
         from pyscf.gto import pp_int
         h += pp_int.get_gth_pp(mol)
     else:
-        h+= mol.intor_symmetric('int1e_nuc')
+        h += mol.intor_symmetric('int1e_nuc')
 
-    if len(mol._ecpbas) > 0:
+    if mol._ecpbas:
         h += mol.intor_symmetric('ECPscalar')
     return h
 

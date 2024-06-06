@@ -277,7 +277,7 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
         logger.info(mol, 'Freeze %d electrons in irreps %s',
                     fix_ne, list(irrep_nelec.keys()))
 
-    if len(set(float_irname)) == 0 and fix_ne != mol.nelectron:
+    if not set(float_irname) and fix_ne != mol.nelectron:
         msg =('Num electrons defined by irrep_nelec != total num electrons. '
               'mol.nelectron = %d  irrep_nelec = %s' %
               (mol.nelectron, irrep_nelec))
@@ -702,7 +702,7 @@ class SymAdaptedROHF(rohf.ROHF):
 
         nelec_float = mol.nelectron - neleca_fix - nelecb_fix
         assert (nelec_float >= 0)
-        if len(rest_idx) > 0:
+        if rest_idx:
             rest_idx = numpy.where(rest_idx)[0]
             nopen = abs(mol.spin - (neleca_fix - nelecb_fix))
             ncore = (nelec_float - nopen)//2

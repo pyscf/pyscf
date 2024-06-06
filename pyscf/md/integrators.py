@@ -265,7 +265,7 @@ class _Integrator(lib.StreamObject):
             for m in self.mol.atom_charges()])
 
         # avoid opening data_output file twice
-        if type(self.data_output) is str:
+        if isinstance(self.data_output, str):
             if self.verbose > logger.QUIET:
                 if os.path.isfile(self.data_output):
                     print('overwrite data output file: %s' %
@@ -284,7 +284,7 @@ class _Integrator(lib.StreamObject):
                 )
 
         # avoid opening trajectory_output file twice
-        if type(self.trajectory_output) is str:
+        if isinstance(self.trajectory_output, str):
             if self.verbose > logger.QUIET:
                 if os.path.isfile(self.trajectory_output):
                     print('overwrite energy output file: %s' %
