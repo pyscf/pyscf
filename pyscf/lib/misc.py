@@ -1319,7 +1319,7 @@ class h5filewrite_options(temporary_env):
     Examples:
 
     >>> with h5filewrite_options(alignment_interval=4096, alignment_threshold=4096):
-    ...     f = h5py.File('mydata.h5', 'w')
+    ...     f = lib.H5FileWrap('mydata.h5', 'w')
     >>> print(h5py.h5p.PropFAID.get_alignment(f.id.get_access_plist()))
     (4096, 4096)
     '''
