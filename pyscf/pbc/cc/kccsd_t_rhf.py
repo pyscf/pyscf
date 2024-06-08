@@ -357,7 +357,7 @@ def check_read_success(filename, **kwargs):
         mode = kwargs.get('mode', 'r')
         if not os.path.isfile(filename):
             return False
-        f = h5py.File(filename, mode=mode, **kwargs)
+        f = lib.H5FileWrap(filename, mode=mode, **kwargs)
         return f.attrs.get('completed', False)
     write_complete = check_write_complete(filename, **kwargs)
     return False and write_complete

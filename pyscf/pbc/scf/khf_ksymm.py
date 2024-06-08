@@ -245,7 +245,7 @@ class KsymAdaptedKSCF(khf.KSCF):
     def dump_chk(self, envs):
         if self.chkfile:
             mol_hf.SCF.dump_chk(self, envs)
-            with h5py.File(self.chkfile, 'a') as fh5:
+            with lib.H5FileWrap(self.chkfile, 'a') as fh5:
                 fh5['scf/kpts'] = self.kpts.kpts_ibz #FIXME Shall we rebuild kpts? If so, more info is needed.
         return self
 

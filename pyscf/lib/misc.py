@@ -23,6 +23,7 @@ Some helper functions
 import os
 import sys
 import time
+import random
 import platform
 import warnings
 import tempfile
@@ -1111,8 +1112,52 @@ class call_in_background:
         if self.executor is not None:
             self.executor.shutdown(wait=True)
 
+class H5FileWrap(h5py.File):
+    '''
+    A wrapper for h5py.File that allows global options to be set by
+    the user via lib.param.H5F_WRITE_KWARGS, which is imported
+    upon startup from the user's configuration file.
 
-class H5TmpFile(h5py.File):
+    These options are, as the name suggests, not used when the
+    HDF5 file is opened in read-only mode.
+
+    Example:
+
+    >>> with temporary_env(lib.param, H5F_WRITE_KWARGS={'driver': 'core'}):
+    ...     with lib.H5TmpFile() as f:
+    ...         print(f.driver)
+    core
+    '''
+    def __init__(self, filename, mode, *args, **kwargs):
+        if mode != 'r':
+            options = param.H5F_WRITE_KWARGS.copy()
+            options.update(kwargs)
+        else:
+            options = kwargs
+        super().__init__(filename, mode, *args, **options)
+
+    def _finished(self):
+        '''
+        Close the file and flush it if it is open.
+        Flushing explicitly should not be necessary:
+        this is intended to avoid a bug that unpredictably
+        causes outcore DF to hang on an NFS filesystem.
+        '''
+        try:
+            if super().id:
+                super().flush()
+            super().close()
+        except AttributeError:  # close not defined in old h5py
+            pass
+        except ValueError:  # if close() is called twice
+            pass
+        except ImportError:  # exit program before de-referring the object
+            pass
+
+    def __del__(self):
+        self._finished()
+
+class H5TmpFile(H5FileWrap):
     '''Create and return an HDF5 temporary file.
 
     Kwargs:
@@ -1130,22 +1175,40 @@ class H5TmpFile(h5py.File):
     >>> from pyscf import lib
     >>> ftmp = lib.H5TmpFile()
     '''
-    def __init__(self, filename=None, mode='a', *args, **kwargs):
+    def __init__(self, filename=None, mode='a', prefix='', suffix='',
+                 dir=param.TMPDIR, *args, **kwargs):
+        self.delete_on_close = False
         if filename is None:
-            with tempfile.NamedTemporaryFile(dir=param.TMPDIR) as tmpf:
-                h5py.File.__init__(self, tmpf.name, mode, *args, **kwargs)
-        else:
-            h5py.File.__init__(self, filename, mode, *args, **kwargs)
+            filename = H5TmpFile._gen_unique_name(dir, pre=prefix, suf=suffix)
+            self.delete_on_close = True
+        super().__init__(filename, mode, *args, **kwargs)
 
-    def __del__(self):
-        try:
-            self.close()
-        except AttributeError:  # close not defined in old h5py
-            pass
-        except ValueError:  # if close() is called twice
-            pass
-        except ImportError:  # exit program before de-referring the object
-            pass
+    # Python 3 stdlib does not have a way to just generate
+    # temporary file names.
+    @staticmethod
+    def _gen_unique_name(directory, pre='', suf=''):
+        absdir = os.path.abspath(directory)
+        random.seed()
+        for seq in range(10000):
+            name = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=8))
+            filename = os.path.join(absdir, pre + name + suf)
+            try:
+                f = open(filename, 'x')
+            except FileExistsError:
+                continue    # try again
+            f.close()
+            return filename
+        raise FileExistsError("No usable temporary file name found")
+
+    def close(self):
+        filename = self.filename
+        self._finished()
+        if self.delete_on_close:
+            if os.path.exists(filename):
+                os.remove(filename)
+    def __exit__(self, type, value, traceback):
+        self.close()
+
 
 def fingerprint(a):
     '''Fingerprint of numpy array'''
@@ -1248,6 +1311,20 @@ class light_speed(temporary_env):
     def __enter__(self):
         temporary_env.__enter__(self)
         return self.c
+
+class h5filewrite_options(temporary_env):
+    '''Within the context of this macro, extra keyword arguments are
+    passed to h5py.File() whenever an HDF5 file is opened for writing.
+
+    Examples:
+
+    >>> with h5filewrite_options(alignment_interval=4096, alignment_threshold=4096):
+    ...     f = lib.H5FileWrap('mydata.h5', 'w')
+    >>> print(h5py.h5p.PropFAID.get_alignment(f.id.get_access_plist()))
+    (4096, 4096)
+    '''
+    def __init__(self, **kwargs):
+        super().__init__(param, H5F_WRITE_KWARGS=kwargs)
 
 def repo_info(repo_path):
     '''
