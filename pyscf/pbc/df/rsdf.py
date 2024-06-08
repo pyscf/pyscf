@@ -47,6 +47,7 @@ import numpy as np
 
 from pyscf import lib
 from pyscf.lib import logger, zdotCN
+from pyscf.lib import parameters as param
 from pyscf.pbc.df.df import GDF
 from pyscf.pbc.df import aft, aft_jk
 from pyscf.pbc.df import ft_ao
@@ -421,9 +422,11 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
                       kptij_lst=None, j_only=False, dataname='j3c-junk',
                       shls_slice=None):
-        swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
-        fswap = lib.H5TmpFile(swapfile.name)
-        swapfile = None
+        # Deadlock on NFS if you open an already-opened tmpfile in H5PY
+        # swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
+        fswap = lib.H5TmpFile(dir=os.path.dirname(cderi_file), prefix='.outcore_auxe2_swap')
+        # avoid trash files
+        os.unlink(fswap.filename)
 
         cell = self.cell
         if self.use_bvk and self.kpts_band is None:
@@ -573,7 +576,7 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
         # Add (1) short-range G=0 (i.e., charge) part and (2) long-range part
         tspans = np.zeros((3,2))    # lr, j2c_inv, j2c_cntr
         tspannames = ["ftaop+pw", "j2c_inv", "j2c_cntr"]
-        feri = h5py.File(cderi_file, 'w')
+        feri = lib.H5FileWrap(cderi_file, 'w')
 
         # TODO: Store rs_density_fit cderi tensor in v1 format for the moment.
         # It should be changed to 'v2' format in the future.
