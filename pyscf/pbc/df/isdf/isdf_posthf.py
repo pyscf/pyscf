@@ -77,6 +77,57 @@ def RCCSD_isdf(mf, frozen=0, mo_coeff=None, mo_occ=None, run=True):
         mycc_isdf.kernel(eris=eris_ccsd)
     return mycc, eris_ccsd
 
+class _restricted_THC_posthf_holder:
+    def __init__(self, my_isdf, my_mf, X,
+                 laplace_rela_err = 1e-7,
+                 laplace_order    = 2):
+        
+        print("THC posthf holder is initialized!")
+        
+        self.my_isdf = my_isdf
+        self.my_mf   = my_mf
+        self.X       = X
+        
+        self.mo_coeff = my_mf.mo_coeff
+        self.mo_occ   = my_mf.mo_occ
+        self.mo_energy = my_mf.mo_energy
+        
+        self.nocc = my_mf.mol.nelectron // 2
+        self.nvir = my_mf.mol.nao - self.nocc
+        
+        self.occ_ene = self.mo_energy[:self.nocc]
+        self.vir_ene = self.mo_energy[self.nocc:]
+        
+        #### construct Z matrix for XXZXX #### 
+        
+        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        Z = LS_THC(my_isdf, X)
+        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        _benchmark_time(t1, t2, "Z matrix construction for THC eri = XXZXX")
+
+        #### construct laplace ####
+        
+        self._laplace = laplace_holder(self.mo_energy, self.nocc,
+                                       rel_error = laplace_rela_err,
+                                       order = laplace_order)
+
+        self.X_o = lib.ddot(self.mo_coeff[:, :self.nocc].T, X)
+        self.X_v = lib.ddot(self.mo_coeff[:, self.nocc:].T, X)
+        self.Z = Z
+        self.tau_o = self._laplace.laplace_occ
+        self.tau_v = self._laplace.laplace_vir
+        
+        self.n_laplace = self.tau_o.shape[1]
+        self.nthc_int = self.Z.shape[1]
+        
+        print("n_laplace = ", self.n_laplace)
+        print("nthc_int  = ", self.nthc_int)
+        print("nocc      = ", self.nocc)
+        print("nvir      = ", self.nvir)
+        
+        print("THC posthf holder initialization is finished!")
+        
+
 if __name__ == '__main__':
 
     for c in [25]:
@@ -209,3 +260,6 @@ if __name__ == '__main__':
             print("delta_full = ", delta_full[0,0,0,:])
             print("delta_full_benchmark = ", delta_full_benchmark[0,0,0,:])
             
+            ##### thc holder ##### 
+            
+            thc_holder = _restricted_THC_posthf_holder(myisdf, mf_isdf, R)
