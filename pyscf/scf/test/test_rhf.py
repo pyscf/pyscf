@@ -668,7 +668,7 @@ H     0    0.757    0.587'''
     def test_rhf_dip_moment(self):
         dip = mf.dip_moment(unit='au')
         self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985]))
-    
+
     def test_rhf_quad_moment(self):
         quad = n2mf.quad_moment(unit='au')
         answer = numpy.array([[ 0.65040837,  0.        ,  0.        ],

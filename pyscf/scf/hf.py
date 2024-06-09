@@ -1331,8 +1331,10 @@ def quad_moment(mol, dm, unit='DebyeAngstrom', with_origin=None,
 
     .. math::
 
-        Q_{ij} &= - \frac{1}{2} \sum_{\mu \nu} P_{\mu \nu} \left[ 3 (\nu | r_i r_j | \mu) - \delta_{ij} (\nu | r^2 | \mu) \right] \\
-               &+ \frac{1}{2} \sum_A Q_A \left( R_{iA} R_{jA} - \delta_{ij} \|\mathbf{R}_A\|^2  \right).
+        Q_{ij} &= - \frac{1}{2} \sum_{\mu \nu} P_{\mu \nu}
+                \left[ 3 (\nu | r_i r_j | \mu) - \delta_{ij} (\nu | r^2 | \mu) \right] \\
+               &+ \frac{1}{2} \sum_A Q_A
+               \left( R_{iA} R_{jA} - \delta_{ij} \|\mathbf{R}_A\|^2  \right).
 
     If the molecule has a dipole, the quadrupole moment depends on the location
     of the origin. By default, the origin is taken to be the centroid of the
