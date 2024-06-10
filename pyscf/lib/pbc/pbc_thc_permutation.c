@@ -515,12 +515,13 @@ void fn_permutation_0123_1320(
         size_t j = ij % n1;
         size_t ind_A = ij * n2 * n3;
         size_t ind_B = j * n3 * n2 * n0 + i;
-        for (size_t k = 0; k < n2; k++)
+        for (size_t l = 0; l < n3; l++, ind_B += n2 * n0, ind_A ++)
         {
-            for (size_t l = 0; l < n3; l++, ind_A++)
-            {
-                buffer[ind_B + (l * n2 + k) * n0] = tensor_A[ind_A];
-            }
+            dcopy_(&n2, tensor_A + ind_A, &n3, buffer + ind_B, &n0);
+            // for (size_t l = 0; l < n3; l++, ind_A++)
+            // {
+            //     buffer[ind_B + (l * n2 + k) * n0] = tensor_A[ind_A];
+            // }
         }
     }
 

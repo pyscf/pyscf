@@ -703,9 +703,7 @@ def RMP2_J_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_8_reshaped.T, _M7_reshaped.T, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M8.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M8.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 2")
     # step 2 bQ,bT->QTb 
@@ -745,9 +743,7 @@ def RMP2_J_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_9_reshaped.T, _M5_reshaped.T, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M6.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M6.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 4")
     # step 4 SQT,SQT->SQT 
@@ -786,9 +782,7 @@ def RMP2_J_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_5_reshaped, _M9_reshaped, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M11.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M11.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 6")
     # step 6 RQT->QRT 
@@ -842,9 +836,7 @@ def RMP2_J_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_6_reshaped.T, _M2_reshaped.T, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M3.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M3.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 9")
     # step 9 aP,aT->PTa 
@@ -884,9 +876,7 @@ def RMP2_J_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_7_reshaped.T, _M0_reshaped.T, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M1.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M1.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 11")
     # step 11 RPT,RPT->RPT 
@@ -940,9 +930,7 @@ def RMP2_J_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_0_reshaped.T, _M4_perm_reshaped.T, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M10.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M10.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 14")
     # step 14 QRT,QRT-> 
@@ -1632,9 +1620,7 @@ def RMP2_K_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_0_reshaped.T, _M0_reshaped.T, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M1.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M1.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 2")
     # step 2 aS,aT->STa 
@@ -1676,9 +1662,7 @@ def RMP2_K_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_M1_reshaped, _M4_reshaped.T, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M5.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M5.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 4")
     # step 4 iT,QiST->QSiT 
@@ -1736,9 +1720,7 @@ def RMP2_K_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_8_reshaped.T, _M7_reshaped.T, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M8.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M8.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 7")
     # step 7 QSiT,SQT->iQST 
@@ -1811,9 +1793,7 @@ def RMP2_K_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_5_reshaped.T, _M2_reshaped.T, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M3.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M3.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 11")
     # step 11 Sib,QTSi->bQT 
@@ -1837,9 +1817,7 @@ def RMP2_K_opt_mem(Z           : np.ndarray,
     buffer_ddot_reshaped = buffer_ddot.reshape(_size_dim_1,-1)
     lib.ddot(_M3_reshaped.T, _M9_perm_reshaped.T, c=buffer_ddot_reshaped)
     buffer_ddot      = buffer_ddot_reshaped.reshape(*shape_backup)
-    fn_copy(ctypes.c_void_p(buffer_ddot.ctypes.data),
-            ctypes.c_void_p(_M10.ctypes.data),
-            ctypes.c_int(buffer_ddot.size))
+    _M10.ravel()[:] = buffer_ddot.ravel()[:]
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 12")
     # step 12 bQ,bQT->bT 
