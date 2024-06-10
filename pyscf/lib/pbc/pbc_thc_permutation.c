@@ -21,14 +21,17 @@ void fn_permutation_01_10(
     const int n1,
     double *buffer)
 {
+    static const int INCX = 1;
     int nthread = get_omp_threads();
 #pragma omp parallel for num_threads(nthread) schedule(static)
     for (size_t i = 0; i < n0; i++)
     {
-        for (size_t j = 0; j < n1; j++)
-        {
-            buffer[j * n0 + i] = tensor_A[i * n1 + j];
-        }
+        size_t ind_A = i * n1;
+        // for (size_t j = 0; j < n1; j++, ind_A++)
+        // {
+        //     buffer[j * n0 + i] = tensor_A[ind_A];
+        // }
+        dcopy_(&n1, tensor_A + ind_A, &INCX, buffer + i, &n0);
     }
 
     memcpy(tensor_B, buffer, sizeof(double) * n0 * n1);
