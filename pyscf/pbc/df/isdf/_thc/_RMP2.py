@@ -173,17 +173,15 @@ def RMP2_J(Z           : np.ndarray,
     assert fn_clean is not None
     # step 0 jQ,jT->QTj 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
-    assert fn_contraction_01_02_120 is not None
-    _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NOCC), dtype=np.float64)
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
     _M7              = np.ndarray((NTHC_INT, N_LAPLACE, NOCC), dtype=np.float64)
-    fn_contraction_01_02_120(ctypes.c_void_p(_INPUT_3.ctypes.data),
-                             ctypes.c_void_p(_INPUT_11.ctypes.data),
-                             ctypes.c_void_p(_M7.ctypes.data),
-                             ctypes.c_int(_INPUT_3.shape[0]),
-                             ctypes.c_int(_INPUT_3.shape[1]),
-                             ctypes.c_int(_INPUT_11.shape[1]),
-                             ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_01_02_120_wob(ctypes.c_void_p(_INPUT_3.ctypes.data),
+                                 ctypes.c_void_p(_INPUT_11.ctypes.data),
+                                 ctypes.c_void_p(_M7.ctypes.data),
+                                 ctypes.c_int(_INPUT_3.shape[0]),
+                                 ctypes.c_int(_INPUT_3.shape[1]),
+                                 ctypes.c_int(_INPUT_11.shape[1]))
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 1")
     # step 1 jS,QTj->SQT 
@@ -208,17 +206,15 @@ def RMP2_J(Z           : np.ndarray,
     _benchmark_time(t1, t2, "step 2")
     # step 2 bQ,bT->QTb 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
-    assert fn_contraction_01_02_120 is not None
-    _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NVIR), dtype=np.float64)
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
     _M5              = np.ndarray((NTHC_INT, N_LAPLACE, NVIR), dtype=np.float64)
-    fn_contraction_01_02_120(ctypes.c_void_p(_INPUT_4.ctypes.data),
-                             ctypes.c_void_p(_INPUT_13.ctypes.data),
-                             ctypes.c_void_p(_M5.ctypes.data),
-                             ctypes.c_int(_INPUT_4.shape[0]),
-                             ctypes.c_int(_INPUT_4.shape[1]),
-                             ctypes.c_int(_INPUT_13.shape[1]),
-                             ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_01_02_120_wob(ctypes.c_void_p(_INPUT_4.ctypes.data),
+                                 ctypes.c_void_p(_INPUT_13.ctypes.data),
+                                 ctypes.c_void_p(_M5.ctypes.data),
+                                 ctypes.c_int(_INPUT_4.shape[0]),
+                                 ctypes.c_int(_INPUT_4.shape[1]),
+                                 ctypes.c_int(_INPUT_13.shape[1]))
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 3")
     # step 3 bS,QTb->SQT 
@@ -243,17 +239,15 @@ def RMP2_J(Z           : np.ndarray,
     _benchmark_time(t1, t2, "step 4")
     # step 4 SQT,SQT->SQT 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_012_012_012 = getattr(libpbc, "fn_contraction_012_012_012", None)
-    assert fn_contraction_012_012_012 is not None
-    _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
+    fn_contraction_012_012_012_wob = getattr(libpbc, "fn_contraction_012_012_012_wob", None)
+    assert fn_contraction_012_012_012_wob is not None
     _M9              = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
-    fn_contraction_012_012_012(ctypes.c_void_p(_M6.ctypes.data),
-                               ctypes.c_void_p(_M8.ctypes.data),
-                               ctypes.c_void_p(_M9.ctypes.data),
-                               ctypes.c_int(_M6.shape[0]),
-                               ctypes.c_int(_M6.shape[1]),
-                               ctypes.c_int(_M6.shape[2]),
-                               ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_012_012_012_wob(ctypes.c_void_p(_M6.ctypes.data),
+                                   ctypes.c_void_p(_M8.ctypes.data),
+                                   ctypes.c_void_p(_M9.ctypes.data),
+                                   ctypes.c_int(_M6.shape[0]),
+                                   ctypes.c_int(_M6.shape[1]),
+                                   ctypes.c_int(_M6.shape[2]))
     del _M6         
     del _M8         
     t2 = (logger.process_clock(), logger.perf_counter())
@@ -278,32 +272,28 @@ def RMP2_J(Z           : np.ndarray,
     _benchmark_time(t1, t2, "step 6")
     # step 6 RQT->QRT 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_permutation_012_102 = getattr(libpbc, "fn_permutation_012_102", None)
-    assert fn_permutation_012_102 is not None
-    _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
+    fn_permutation_012_102_wob = getattr(libpbc, "fn_permutation_012_102_wob", None)
+    assert fn_permutation_012_102_wob is not None
     _M11_perm        = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
-    fn_permutation_012_102(ctypes.c_void_p(_M11.ctypes.data),
-                           ctypes.c_void_p(_M11_perm.ctypes.data),
-                           ctypes.c_int(_M11.shape[0]),
-                           ctypes.c_int(_M11.shape[1]),
-                           ctypes.c_int(_M11.shape[2]),
-                           ctypes.c_void_p(_buffer.ctypes.data))
+    fn_permutation_012_102_wob(ctypes.c_void_p(_M11.ctypes.data),
+                               ctypes.c_void_p(_M11_perm.ctypes.data),
+                               ctypes.c_int(_M11.shape[0]),
+                               ctypes.c_int(_M11.shape[1]),
+                               ctypes.c_int(_M11.shape[2]))
     del _M11        
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 7")
     # step 7 iP,iT->PTi 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
-    assert fn_contraction_01_02_120 is not None
-    _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NOCC), dtype=np.float64)
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
     _M2              = np.ndarray((NTHC_INT, N_LAPLACE, NOCC), dtype=np.float64)
-    fn_contraction_01_02_120(ctypes.c_void_p(_INPUT_1.ctypes.data),
-                             ctypes.c_void_p(_INPUT_10.ctypes.data),
-                             ctypes.c_void_p(_M2.ctypes.data),
-                             ctypes.c_int(_INPUT_1.shape[0]),
-                             ctypes.c_int(_INPUT_1.shape[1]),
-                             ctypes.c_int(_INPUT_10.shape[1]),
-                             ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_01_02_120_wob(ctypes.c_void_p(_INPUT_1.ctypes.data),
+                                 ctypes.c_void_p(_INPUT_10.ctypes.data),
+                                 ctypes.c_void_p(_M2.ctypes.data),
+                                 ctypes.c_int(_INPUT_1.shape[0]),
+                                 ctypes.c_int(_INPUT_1.shape[1]),
+                                 ctypes.c_int(_INPUT_10.shape[1]))
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 8")
     # step 8 iR,PTi->RPT 
@@ -328,17 +318,15 @@ def RMP2_J(Z           : np.ndarray,
     _benchmark_time(t1, t2, "step 9")
     # step 9 aP,aT->PTa 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
-    assert fn_contraction_01_02_120 is not None
-    _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NVIR), dtype=np.float64)
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
     _M0              = np.ndarray((NTHC_INT, N_LAPLACE, NVIR), dtype=np.float64)
-    fn_contraction_01_02_120(ctypes.c_void_p(_INPUT_2.ctypes.data),
-                             ctypes.c_void_p(_INPUT_12.ctypes.data),
-                             ctypes.c_void_p(_M0.ctypes.data),
-                             ctypes.c_int(_INPUT_2.shape[0]),
-                             ctypes.c_int(_INPUT_2.shape[1]),
-                             ctypes.c_int(_INPUT_12.shape[1]),
-                             ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_01_02_120_wob(ctypes.c_void_p(_INPUT_2.ctypes.data),
+                                 ctypes.c_void_p(_INPUT_12.ctypes.data),
+                                 ctypes.c_void_p(_M0.ctypes.data),
+                                 ctypes.c_int(_INPUT_2.shape[0]),
+                                 ctypes.c_int(_INPUT_2.shape[1]),
+                                 ctypes.c_int(_INPUT_12.shape[1]))
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 10")
     # step 10 aR,PTa->RPT 
@@ -363,33 +351,29 @@ def RMP2_J(Z           : np.ndarray,
     _benchmark_time(t1, t2, "step 11")
     # step 11 RPT,RPT->RPT 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_012_012_012 = getattr(libpbc, "fn_contraction_012_012_012", None)
-    assert fn_contraction_012_012_012 is not None
-    _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
+    fn_contraction_012_012_012_wob = getattr(libpbc, "fn_contraction_012_012_012_wob", None)
+    assert fn_contraction_012_012_012_wob is not None
     _M4              = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
-    fn_contraction_012_012_012(ctypes.c_void_p(_M1.ctypes.data),
-                               ctypes.c_void_p(_M3.ctypes.data),
-                               ctypes.c_void_p(_M4.ctypes.data),
-                               ctypes.c_int(_M1.shape[0]),
-                               ctypes.c_int(_M1.shape[1]),
-                               ctypes.c_int(_M1.shape[2]),
-                               ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_012_012_012_wob(ctypes.c_void_p(_M1.ctypes.data),
+                                   ctypes.c_void_p(_M3.ctypes.data),
+                                   ctypes.c_void_p(_M4.ctypes.data),
+                                   ctypes.c_int(_M1.shape[0]),
+                                   ctypes.c_int(_M1.shape[1]),
+                                   ctypes.c_int(_M1.shape[2]))
     del _M1         
     del _M3         
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 12")
     # step 12 RPT->RTP 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_permutation_012_021 = getattr(libpbc, "fn_permutation_012_021", None)
-    assert fn_permutation_012_021 is not None
-    _buffer          = np.ndarray((nthreads, NTHC_INT, N_LAPLACE), dtype=np.float64)
+    fn_permutation_012_021_wob = getattr(libpbc, "fn_permutation_012_021_wob", None)
+    assert fn_permutation_012_021_wob is not None
     _M4_perm         = np.ndarray((NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
-    fn_permutation_012_021(ctypes.c_void_p(_M4.ctypes.data),
-                           ctypes.c_void_p(_M4_perm.ctypes.data),
-                           ctypes.c_int(_M4.shape[0]),
-                           ctypes.c_int(_M4.shape[1]),
-                           ctypes.c_int(_M4.shape[2]),
-                           ctypes.c_void_p(_buffer.ctypes.data))
+    fn_permutation_012_021_wob(ctypes.c_void_p(_M4.ctypes.data),
+                               ctypes.c_void_p(_M4_perm.ctypes.data),
+                               ctypes.c_int(_M4.shape[0]),
+                               ctypes.c_int(_M4.shape[1]),
+                               ctypes.c_int(_M4.shape[2]))
     del _M4         
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 13")
@@ -1108,17 +1092,15 @@ def RMP2_K(Z           : np.ndarray,
     assert fn_clean is not None
     # step 0 iP,aP->iaP 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_01_21_021 = getattr(libpbc, "fn_contraction_01_21_021", None)
-    assert fn_contraction_01_21_021 is not None
-    _buffer          = np.ndarray((NOCC, NVIR, NTHC_INT), dtype=np.float64)
+    fn_contraction_01_21_021_wob = getattr(libpbc, "fn_contraction_01_21_021_wob", None)
+    assert fn_contraction_01_21_021_wob is not None
     _M0              = np.ndarray((NOCC, NVIR, NTHC_INT), dtype=np.float64)
-    fn_contraction_01_21_021(ctypes.c_void_p(_INPUT_1.ctypes.data),
-                             ctypes.c_void_p(_INPUT_2.ctypes.data),
-                             ctypes.c_void_p(_M0.ctypes.data),
-                             ctypes.c_int(_INPUT_1.shape[0]),
-                             ctypes.c_int(_INPUT_1.shape[1]),
-                             ctypes.c_int(_INPUT_2.shape[0]),
-                             ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_01_21_021_wob(ctypes.c_void_p(_INPUT_1.ctypes.data),
+                                 ctypes.c_void_p(_INPUT_2.ctypes.data),
+                                 ctypes.c_void_p(_M0.ctypes.data),
+                                 ctypes.c_int(_INPUT_1.shape[0]),
+                                 ctypes.c_int(_INPUT_1.shape[1]),
+                                 ctypes.c_int(_INPUT_2.shape[0]))
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 1")
     # step 1 PQ,iaP->Qia 
@@ -1143,17 +1125,15 @@ def RMP2_K(Z           : np.ndarray,
     _benchmark_time(t1, t2, "step 2")
     # step 2 aS,aT->STa 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
-    assert fn_contraction_01_02_120 is not None
-    _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NVIR), dtype=np.float64)
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
     _M4              = np.ndarray((NTHC_INT, N_LAPLACE, NVIR), dtype=np.float64)
-    fn_contraction_01_02_120(ctypes.c_void_p(_INPUT_9.ctypes.data),
-                             ctypes.c_void_p(_INPUT_12.ctypes.data),
-                             ctypes.c_void_p(_M4.ctypes.data),
-                             ctypes.c_int(_INPUT_9.shape[0]),
-                             ctypes.c_int(_INPUT_9.shape[1]),
-                             ctypes.c_int(_INPUT_12.shape[1]),
-                             ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_01_02_120_wob(ctypes.c_void_p(_INPUT_9.ctypes.data),
+                                 ctypes.c_void_p(_INPUT_12.ctypes.data),
+                                 ctypes.c_void_p(_M4.ctypes.data),
+                                 ctypes.c_int(_INPUT_9.shape[0]),
+                                 ctypes.c_int(_INPUT_9.shape[1]),
+                                 ctypes.c_int(_INPUT_12.shape[1]))
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 3")
     # step 3 Qia,STa->QiST 
@@ -1181,34 +1161,30 @@ def RMP2_K(Z           : np.ndarray,
     _benchmark_time(t1, t2, "step 4")
     # step 4 iT,QiST->QSiT 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_01_2031_2301 = getattr(libpbc, "fn_contraction_01_2031_2301", None)
-    assert fn_contraction_01_2031_2301 is not None
-    _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NOCC, N_LAPLACE), dtype=np.float64)
+    fn_contraction_01_2031_2301_wob = getattr(libpbc, "fn_contraction_01_2031_2301_wob", None)
+    assert fn_contraction_01_2031_2301_wob is not None
     _M6              = np.ndarray((NTHC_INT, NTHC_INT, NOCC, N_LAPLACE), dtype=np.float64)
-    fn_contraction_01_2031_2301(ctypes.c_void_p(_INPUT_10.ctypes.data),
-                                ctypes.c_void_p(_M5.ctypes.data),
-                                ctypes.c_void_p(_M6.ctypes.data),
-                                ctypes.c_int(_INPUT_10.shape[0]),
-                                ctypes.c_int(_INPUT_10.shape[1]),
-                                ctypes.c_int(_M5.shape[0]),
-                                ctypes.c_int(_M5.shape[2]),
-                                ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_01_2031_2301_wob(ctypes.c_void_p(_INPUT_10.ctypes.data),
+                                    ctypes.c_void_p(_M5.ctypes.data),
+                                    ctypes.c_void_p(_M6.ctypes.data),
+                                    ctypes.c_int(_INPUT_10.shape[0]),
+                                    ctypes.c_int(_INPUT_10.shape[1]),
+                                    ctypes.c_int(_M5.shape[0]),
+                                    ctypes.c_int(_M5.shape[2]))
     del _M5         
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 5")
     # step 5 jQ,jT->QTj 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
-    assert fn_contraction_01_02_120 is not None
-    _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NOCC), dtype=np.float64)
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
     _M7              = np.ndarray((NTHC_INT, N_LAPLACE, NOCC), dtype=np.float64)
-    fn_contraction_01_02_120(ctypes.c_void_p(_INPUT_3.ctypes.data),
-                             ctypes.c_void_p(_INPUT_11.ctypes.data),
-                             ctypes.c_void_p(_M7.ctypes.data),
-                             ctypes.c_int(_INPUT_3.shape[0]),
-                             ctypes.c_int(_INPUT_3.shape[1]),
-                             ctypes.c_int(_INPUT_11.shape[1]),
-                             ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_01_02_120_wob(ctypes.c_void_p(_INPUT_3.ctypes.data),
+                                 ctypes.c_void_p(_INPUT_11.ctypes.data),
+                                 ctypes.c_void_p(_M7.ctypes.data),
+                                 ctypes.c_int(_INPUT_3.shape[0]),
+                                 ctypes.c_int(_INPUT_3.shape[1]),
+                                 ctypes.c_int(_INPUT_11.shape[1]))
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 6")
     # step 6 jS,QTj->SQT 
@@ -1233,51 +1209,45 @@ def RMP2_K(Z           : np.ndarray,
     _benchmark_time(t1, t2, "step 7")
     # step 7 QSiT,SQT->iQST 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_0123_103_2013 = getattr(libpbc, "fn_contraction_0123_103_2013", None)
-    assert fn_contraction_0123_103_2013 is not None
-    _buffer          = np.ndarray((NOCC, NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
+    fn_contraction_0123_103_2013_wob = getattr(libpbc, "fn_contraction_0123_103_2013_wob", None)
+    assert fn_contraction_0123_103_2013_wob is not None
     _M9              = np.ndarray((NOCC, NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
-    fn_contraction_0123_103_2013(ctypes.c_void_p(_M6.ctypes.data),
-                                 ctypes.c_void_p(_M8.ctypes.data),
-                                 ctypes.c_void_p(_M9.ctypes.data),
-                                 ctypes.c_int(_M6.shape[0]),
-                                 ctypes.c_int(_M6.shape[1]),
-                                 ctypes.c_int(_M6.shape[2]),
-                                 ctypes.c_int(_M6.shape[3]),
-                                 ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_0123_103_2013_wob(ctypes.c_void_p(_M6.ctypes.data),
+                                     ctypes.c_void_p(_M8.ctypes.data),
+                                     ctypes.c_void_p(_M9.ctypes.data),
+                                     ctypes.c_int(_M6.shape[0]),
+                                     ctypes.c_int(_M6.shape[1]),
+                                     ctypes.c_int(_M6.shape[2]),
+                                     ctypes.c_int(_M6.shape[3]))
     del _M6         
     del _M8         
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 8")
     # step 8 iQST->QTSi 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_permutation_0123_1320 = getattr(libpbc, "fn_permutation_0123_1320", None)
-    assert fn_permutation_0123_1320 is not None
-    _buffer          = np.ndarray((NOCC, NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
+    fn_permutation_0123_1320_wob = getattr(libpbc, "fn_permutation_0123_1320_wob", None)
+    assert fn_permutation_0123_1320_wob is not None
     _M9_perm         = np.ndarray((NTHC_INT, N_LAPLACE, NTHC_INT, NOCC), dtype=np.float64)
-    fn_permutation_0123_1320(ctypes.c_void_p(_M9.ctypes.data),
-                             ctypes.c_void_p(_M9_perm.ctypes.data),
-                             ctypes.c_int(_M9.shape[0]),
-                             ctypes.c_int(_M9.shape[1]),
-                             ctypes.c_int(_M9.shape[2]),
-                             ctypes.c_int(_M9.shape[3]),
-                             ctypes.c_void_p(_buffer.ctypes.data))
+    fn_permutation_0123_1320_wob(ctypes.c_void_p(_M9.ctypes.data),
+                                 ctypes.c_void_p(_M9_perm.ctypes.data),
+                                 ctypes.c_int(_M9.shape[0]),
+                                 ctypes.c_int(_M9.shape[1]),
+                                 ctypes.c_int(_M9.shape[2]),
+                                 ctypes.c_int(_M9.shape[3]))
     del _M9         
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 9")
     # step 9 iR,bR->ibR 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_01_21_021 = getattr(libpbc, "fn_contraction_01_21_021", None)
-    assert fn_contraction_01_21_021 is not None
-    _buffer          = np.ndarray((NOCC, NVIR, NTHC_INT), dtype=np.float64)
+    fn_contraction_01_21_021_wob = getattr(libpbc, "fn_contraction_01_21_021_wob", None)
+    assert fn_contraction_01_21_021_wob is not None
     _M2              = np.ndarray((NOCC, NVIR, NTHC_INT), dtype=np.float64)
-    fn_contraction_01_21_021(ctypes.c_void_p(_INPUT_6.ctypes.data),
-                             ctypes.c_void_p(_INPUT_7.ctypes.data),
-                             ctypes.c_void_p(_M2.ctypes.data),
-                             ctypes.c_int(_INPUT_6.shape[0]),
-                             ctypes.c_int(_INPUT_6.shape[1]),
-                             ctypes.c_int(_INPUT_7.shape[0]),
-                             ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_01_21_021_wob(ctypes.c_void_p(_INPUT_6.ctypes.data),
+                                 ctypes.c_void_p(_INPUT_7.ctypes.data),
+                                 ctypes.c_void_p(_M2.ctypes.data),
+                                 ctypes.c_int(_INPUT_6.shape[0]),
+                                 ctypes.c_int(_INPUT_6.shape[1]),
+                                 ctypes.c_int(_INPUT_7.shape[0]))
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 10")
     # step 10 RS,ibR->Sib 
@@ -1325,17 +1295,15 @@ def RMP2_K(Z           : np.ndarray,
     _benchmark_time(t1, t2, "step 12")
     # step 12 bQ,bQT->bT 
     t1 = (logger.process_clock(), logger.perf_counter())
-    fn_contraction_01_012_02 = getattr(libpbc, "fn_contraction_01_012_02", None)
-    assert fn_contraction_01_012_02 is not None
-    _buffer          = np.ndarray((NVIR, N_LAPLACE), dtype=np.float64)
+    fn_contraction_01_012_02_wob = getattr(libpbc, "fn_contraction_01_012_02_wob", None)
+    assert fn_contraction_01_012_02_wob is not None
     _M11             = np.ndarray((NVIR, N_LAPLACE), dtype=np.float64)
-    fn_contraction_01_012_02(ctypes.c_void_p(_INPUT_4.ctypes.data),
-                             ctypes.c_void_p(_M10.ctypes.data),
-                             ctypes.c_void_p(_M11.ctypes.data),
-                             ctypes.c_int(_INPUT_4.shape[0]),
-                             ctypes.c_int(_INPUT_4.shape[1]),
-                             ctypes.c_int(_M10.shape[2]),
-                             ctypes.c_void_p(_buffer.ctypes.data))
+    fn_contraction_01_012_02_wob(ctypes.c_void_p(_INPUT_4.ctypes.data),
+                                 ctypes.c_void_p(_M10.ctypes.data),
+                                 ctypes.c_void_p(_M11.ctypes.data),
+                                 ctypes.c_int(_INPUT_4.shape[0]),
+                                 ctypes.c_int(_INPUT_4.shape[1]),
+                                 ctypes.c_int(_M10.shape[2]))
     del _M10        
     t2 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t1, t2, "step 13")

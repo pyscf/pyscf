@@ -59,6 +59,17 @@ void fn_contraction_012_012_012(
     fn_contraction_0_0_0(tensor_A, tensor_B, tensor_C, n0 * n1 * n2, buffer);
 }
 
+void fn_contraction_012_012_012_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2)
+{
+    fn_contraction_012_012_012(tensor_A, tensor_B, tensor_C, n0, n1, n2, NULL);
+}
+
 void fn_contraction_0123_0123_0123(
     const double *tensor_A,
     const double *tensor_B,
@@ -263,6 +274,26 @@ void fn_contraction_01_02_012(
     memcpy(tensor_C, buffer, sizeof(double) * n0 * n1 * n2);
 }
 
+void fn_contraction_01_02_012_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2)
+{
+    memset(tensor_C, 0, sizeof(double) * n0 * n1 * n2);
+
+    const double ALPHA = 1.0;
+    const int INCX = 1;
+
+#pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < n0; i++)
+    {
+        dger_(&n2, &n1, &ALPHA, tensor_B + i * n2, &INCX, tensor_A + i * n1, &INCX, tensor_C + i * n1 * n2, &n2);
+    }
+}
+
 void fn_contraction_01_02_120(
     const double *tensor_A,
     const double *tensor_B,
@@ -274,6 +305,19 @@ void fn_contraction_01_02_120(
 {
     fn_contraction_01_02_012(tensor_A, tensor_B, tensor_C, n0, n1, n2, buffer);
     fn_permutation_01_10(tensor_C, tensor_C, n0, n1 * n2, buffer);
+}
+
+void fn_contraction_01_02_120_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2)
+{
+    double *buffer = (double *)malloc(sizeof(double) * n0 * n1 * n2);
+    fn_contraction_01_02_120(tensor_A, tensor_B, tensor_C, n0, n1, n2, buffer);
+    free(buffer);
 }
 
 void fn_contraction_01_023_1230(const double *tensor_A,
@@ -440,6 +484,34 @@ void fn_contraction_01_2031_2301(
         }
     }
     memcpy(tensor_C, buffer, sizeof(double) * n0 * n1 * n2 * n3);
+}
+
+void fn_contraction_01_2031_2301_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3)
+{
+#pragma omp parallel for schedule(static)
+    for (size_t kl = 0; kl < n2 * n3; kl++)
+    {
+        size_t k = kl / n3;
+        size_t l = kl % n3;
+        size_t ind_B = ((k * n0 * n3) + l) * n1;
+        size_t ind_C = kl * n0 * n1;
+        size_t ind_A = 0;
+        for (size_t i = 0; i < n0; i++)
+        {
+            size_t ind_B2 = ind_B + i * n3 * n1;
+            for (size_t j = 0; j < n1; j++, ind_A++, ind_C++, ind_B2++)
+            {
+                tensor_C[ind_C] = tensor_A[ind_A] * tensor_B[ind_B2];
+            }
+        }
+    }
 }
 
 void fn_contraction_01_230_1230(
@@ -935,6 +1007,39 @@ void fn_contraction_01_012_02(
     memcpy(tensor_C, buffer, sizeof(double) * n0 * n2);
 }
 
+void fn_contraction_01_012_02_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2)
+{
+    size_t nik = n0 * n2;
+
+    int nthread = get_omp_threads();
+
+    if (nthread > nik)
+    {
+        nthread = nik;
+    }
+
+    static const int INCX = 1;
+    const int INCY = n2;
+
+#pragma omp parallel for num_threads(nthread) schedule(static)
+    for (size_t ik = 0; ik < nik; ik++)
+    {
+        size_t i = ik / n2;
+        size_t k = ik % n2;
+
+        for (size_t j = 0; j < n1; j++)
+        {
+            tensor_C[ik] = ddot_(&n1, tensor_A + i * n1, &INCX, tensor_B + i * n1 * n2 + k, &INCY);
+        }
+    }
+}
+
 void fn_contraction_01234_0154_01235(
     const double *tensor_A,
     const double *tensor_B,
@@ -1255,6 +1360,19 @@ void fn_contraction_0123_203_1023(
     }
 
     memcpy(tensor_C, buffer, sizeof(double) * n0 * n1 * n2 * n3);
+}
+
+void fn_contraction_01_21_021_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2)
+{
+    double *buffer = (double *)malloc(sizeof(double) * n0 * n1 * n2);
+    fn_contraction_01_21_021(tensor_A, tensor_B, tensor_C, n0, n1, n2, buffer);
+    free(buffer);
 }
 
 void fn_contraction_01_231_0231(
@@ -1833,6 +1951,37 @@ void fn_contraction_0123_103_2013(
         }
     }
     memcpy(tensor_C, buffer, sizeof(double) * n0 * n1 * n2 * n3);
+}
+
+void fn_contraction_0123_103_2013_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3)
+{
+#pragma omp parallel for schedule(static)
+    for (size_t ij = 0; ij < n0 * n1; ij++)
+    {
+        size_t i = ij / n1;
+        size_t j = ij % n1;
+
+        size_t ind_A = ij * n2 * n3;
+        size_t ind_B = (j * n0 + i) * n3;
+        size_t ind_C = ij * n3;
+
+        for (size_t k = 0; k < n2; k++, ind_C += n0 * n1 * n3)
+        {
+            size_t ind_B2 = ind_B;
+            size_t ind_C2 = ind_C;
+            for (size_t l = 0; l < n3; l++, ind_A++, ind_B2++, ind_C2++)
+            {
+                tensor_C[ind_C2] = tensor_A[ind_A] * tensor_B[ind_B2];
+            }
+        }
+    }
 }
 
 void fn_contraction_012_102_012(
@@ -3733,7 +3882,7 @@ void fn_contraction_012_031_2301(
     const int n3,
     double *buffer)
 {
-    
+
     fn_contraction_012_031_0123(tensor_A, tensor_B, tensor_C, n0, n1, n2, n3, buffer);
     fn_permutation_01_10(tensor_C, tensor_C, n0 * n1, n2 * n3, buffer);
 }

@@ -27,10 +27,6 @@ void fn_permutation_01_10(
     for (size_t i = 0; i < n0; i++)
     {
         size_t ind_A = i * n1;
-        // for (size_t j = 0; j < n1; j++, ind_A++)
-        // {
-        //     buffer[j * n0 + i] = tensor_A[ind_A];
-        // }
         dcopy_(&n1, tensor_A + ind_A, &INCX, buffer + i, &n0);
     }
 
@@ -206,14 +202,36 @@ void fn_permutation_012_021(
 #pragma omp for schedule(static)
         for (size_t i = 0; i < n0; i++)
         {
+            size_t ind_A = i * n1 * n2;
             for (size_t j = 0; j < n1; j++)
             {
-                for (size_t k = 0; k < n2; k++)
+                for (size_t k = 0; k < n2; k++, ind_A++)
                 {
-                    local_buffer[k * n1 + j] = tensor_A[i * n1 * n2 + j * n2 + k];
+                    local_buffer[k * n1 + j] = tensor_A[ind_A];
                 }
             }
             memcpy(tensor_B + i * n1 * n2, local_buffer, sizeof(double) * n1 * n2);
+        }
+    }
+}
+
+void fn_permutation_012_021_wob(
+    const double *tensor_A,
+    double *tensor_B,
+    const int n0,
+    const int n1,
+    const int n2)
+{
+    static const int INCX = 1;
+
+#pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < n0; i++)
+    {
+        size_t ind_A = i * n1 * n2;
+        size_t ind_B = i * n1 * n2;
+        for (size_t j = 0; j < n1; j++, ind_B++, ind_A += n2)
+        {
+            dcopy_(&n2, tensor_A + ind_A, &INCX, tensor_B + ind_B, &n1);
         }
     }
 }
@@ -289,40 +307,33 @@ void fn_permutation_012_102(
     const int n2,
     double *buffer)
 {
-    int nthread = get_omp_threads();
-
-    if (nthread > n0)
+#pragma omp parallel for schedule(static)
+    for (size_t ij = 0; ij < n0 * n1; ij++)
     {
-        nthread = n2;
+        size_t i = ij / n1;
+        size_t j = ij % n1;
+
+        size_t ind_B = (j * n0 + i) * n2;
+        memcpy(buffer + ind_B, tensor_A + ij * n2, sizeof(double) * n2);
     }
+    memcpy(tensor_B, buffer, sizeof(double) * n0 * n1 * n2);
+}
 
-#pragma omp parallel num_threads(nthread)
+void fn_permutation_012_102_wob(
+    const double *tensor_A,
+    double *tensor_B,
+    const int n0,
+    const int n1,
+    const int n2)
+{
+#pragma omp parallel for schedule(static)
+    for (size_t ij = 0; ij < n0 * n1; ij++)
     {
-        int thread_id = omp_get_thread_num();
+        size_t i = ij / n1;
+        size_t j = ij % n1;
 
-        double *local_buffer = buffer + thread_id * n0 * n1;
-
-#pragma omp for schedule(static)
-        for (size_t k = 0; k < n2; k++)
-        {
-            for (size_t i = 0; i < n0; i++)
-            {
-                for (size_t j = 0; j < n1; j++)
-                {
-                    local_buffer[j * n0 + i] = tensor_A[i * n1 * n2 + j * n2 + k];
-                }
-            }
-
-            size_t idx = 0;
-            for (size_t j = 0; j < n1; j++)
-            {
-                for (size_t i = 0; i < n0; i++)
-                {
-                    tensor_B[idx * n2 + k] = local_buffer[idx];
-                    idx += 1;
-                }
-            }
-        }
+        size_t ind_B = (j * n0 + i) * n2;
+        memcpy(tensor_B + ind_B, tensor_A + ij * n2, sizeof(double) * n2);
     }
 }
 
@@ -515,7 +526,7 @@ void fn_permutation_0123_1320(
         size_t j = ij % n1;
         size_t ind_A = ij * n2 * n3;
         size_t ind_B = j * n3 * n2 * n0 + i;
-        for (size_t l = 0; l < n3; l++, ind_B += n2 * n0, ind_A ++)
+        for (size_t l = 0; l < n3; l++, ind_B += n2 * n0, ind_A++)
         {
             dcopy_(&n2, tensor_A + ind_A, &n3, buffer + ind_B, &n0);
             // for (size_t l = 0; l < n3; l++, ind_A++)
@@ -526,6 +537,30 @@ void fn_permutation_0123_1320(
     }
 
     memcpy(tensor_B, buffer, sizeof(double) * n0 * n1 * n2 * n3);
+}
+
+void fn_permutation_0123_1320_wob(
+    const double *tensor_A,
+    double *tensor_B,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3)
+{
+    int nthread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nthread) schedule(static)
+    for (size_t ij = 0; ij < n0 * n1; ij++)
+    {
+        size_t i = ij / n1;
+        size_t j = ij % n1;
+        size_t ind_A = ij * n2 * n3;
+        size_t ind_B = j * n3 * n2 * n0 + i;
+        for (size_t l = 0; l < n3; l++, ind_B += n2 * n0, ind_A++)
+        {
+            dcopy_(&n2, tensor_A + ind_A, &n3, tensor_B + ind_B, &n0);
+        }
+    }
 }
 
 void fn_permutation_0123_1302(
