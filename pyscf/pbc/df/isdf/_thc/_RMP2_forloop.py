@@ -2,8 +2,10 @@ import numpy
 import numpy as np
 import ctypes
 import copy
+from pyscf.lib import logger
 from pyscf import lib
 libpbc = lib.load_library('libpbc')
+from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 
 def RMP2_K_forloop_P_R_determine_buf_head_size_forloop(NVIR        : int,
                                                        NOCC        : int,
@@ -97,27 +99,27 @@ def RMP2_K_forloop_P_R_determine_buf_size_intermediates_forloop(NVIR        : in
                                                                 T_bunchsize = 1):
     # init
     output           = 0               
-    _M5_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
-    _M10_size        = (NTHC_INT * (NTHC_INT * N_LAPLACE))
-    _M3_size         = (NTHC_INT * (N_LAPLACE * NVIR))
-    _M1_size         = (T_bunchsize * (P_bunchsize * R_bunchsize))
-    _INPUT_11_sliced_size = (NOCC * T_bunchsize)
-    _M4_size         = (NTHC_INT * (N_LAPLACE * NVIR))
-    _INPUT_6_sliced_size = (NOCC * R_bunchsize)
-    _M8_size         = (P_bunchsize * (R_bunchsize * (NOCC * T_bunchsize)))
-    _M10_packed_size = (NTHC_INT * (P_bunchsize * T_bunchsize))
-    _M11_size        = (NTHC_INT * (NTHC_INT * N_LAPLACE))
-    _INPUT_5_size    = (NTHC_INT * NTHC_INT)
-    _M0_size         = (P_bunchsize * (R_bunchsize * NOCC))
     _M7_size         = (NOCC * (P_bunchsize * (T_bunchsize * R_bunchsize)))
-    _M2_size         = (NTHC_INT * (T_bunchsize * (R_bunchsize * P_bunchsize)))
-    _M5_sliced_size  = (NTHC_INT * (R_bunchsize * T_bunchsize))
-    _INPUT_5_sliced_size = (R_bunchsize * NTHC_INT)
-    _M6_size         = (P_bunchsize * (NTHC_INT * (T_bunchsize * R_bunchsize)))
-    _M9_size         = (NTHC_INT * (P_bunchsize * (R_bunchsize * T_bunchsize)))
+    _M0_size         = (P_bunchsize * (R_bunchsize * NOCC))
     _INPUT_1_sliced_size = (NOCC * P_bunchsize)
-    _INPUT_0_sliced_size = (P_bunchsize * NTHC_INT)
+    _M10_size        = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _M8_size         = (P_bunchsize * (R_bunchsize * (NOCC * T_bunchsize)))
+    _INPUT_5_size    = (NTHC_INT * NTHC_INT)
+    _INPUT_6_sliced_size = (NOCC * R_bunchsize)
+    _M5_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _M11_size        = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _INPUT_11_sliced_size = (NOCC * T_bunchsize)
+    _M3_size         = (NTHC_INT * (N_LAPLACE * NVIR))
+    _M6_size         = (P_bunchsize * (NTHC_INT * (T_bunchsize * R_bunchsize)))
+    _M1_size         = (T_bunchsize * (P_bunchsize * R_bunchsize))
+    _M10_packed_size = (NTHC_INT * (P_bunchsize * T_bunchsize))
+    _M5_sliced_size  = (NTHC_INT * (R_bunchsize * T_bunchsize))
     _INPUT_10_sliced_size = (NOCC * T_bunchsize)
+    _INPUT_5_sliced_size = (R_bunchsize * NTHC_INT)
+    _INPUT_0_sliced_size = (P_bunchsize * NTHC_INT)
+    _M2_size         = (NTHC_INT * (T_bunchsize * (R_bunchsize * P_bunchsize)))
+    _M9_size         = (NTHC_INT * (P_bunchsize * (R_bunchsize * T_bunchsize)))
+    _M4_size         = (NTHC_INT * (N_LAPLACE * NVIR))
     # cmpr _INPUT_5_size + _M3_size
     size_now         = 0               
     size_now         = (size_now + _INPUT_5_size)
@@ -255,39 +257,96 @@ def RMP2_K_forloop_P_R_naive(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
+    t1 = (logger.process_clock(), logger.perf_counter())
     _INPUT_5_perm    = np.transpose(_INPUT_5        , (1, 0)          )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 1")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M3              = np.einsum("aP,aT->PTa"    , _INPUT_2        , _INPUT_12       )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 2")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M11             = np.einsum("aS,PTa->SPT"   , _INPUT_9        , _M3             )
     del _M3         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 3")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M4              = np.einsum("bR,bT->RTb"    , _INPUT_7        , _INPUT_13       )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 4")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M5              = np.einsum("bQ,RTb->QRT"   , _INPUT_4        , _M4             )
     del _M4         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 5")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M0              = np.einsum("iP,iR->PRi"    , _INPUT_1        , _INPUT_6        )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 6")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M1              = np.einsum("iT,PRi->TPR"   , _INPUT_10       , _M0             )
     del _M0         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 7")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M2              = np.einsum("PQ,TPR->QTRP"  , _INPUT_0        , _M1             )
     del _M1         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 8")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M6              = np.einsum("QTRP,QRT->PQTR", _M2             , _M5             )
     del _M2         
     del _M5         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 9")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M6_perm         = np.transpose(_M6             , (0, 2, 3, 1)    )
     del _M6         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 10")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M7              = np.einsum("jQ,PTRQ->jPTR" , _INPUT_3        , _M6_perm        )
     del _M6_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 11")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M8              = np.einsum("jT,jPTR->PRjT" , _INPUT_11       , _M7             )
     del _M7         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 12")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M8_perm         = np.transpose(_M8             , (0, 1, 3, 2)    )
     del _M8         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 13")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M9              = np.einsum("jS,PRTj->SPRT" , _INPUT_8        , _M8_perm        )
     del _M8_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 14")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M9_perm         = np.transpose(_M9             , (0, 1, 3, 2)    )
     del _M9         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 15")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M10             = np.einsum("SR,SPTR->SPT"  , _INPUT_5_perm   , _M9_perm        )
     del _INPUT_5_perm
     del _M9_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 16")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M12             = np.einsum("SPT,SPT->"     , _M10            , _M11            )
     del _M10        
     del _M11        
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 17")
     return _M12
 
 def RMP2_K_forloop_P_R(Z           : np.ndarray,
@@ -328,7 +387,14 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
     # step 0 RS->SR 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_01_10 = getattr(libpbc, "fn_permutation_01_10", None)
     assert fn_permutation_01_10 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT), dtype=np.float64)
@@ -338,7 +404,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                          ctypes.c_int(_INPUT_5.shape[0]),
                          ctypes.c_int(_INPUT_5.shape[1]),
                          ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 1")
     # step 1 aP,aT->PTa 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NVIR), dtype=np.float64)
@@ -350,7 +419,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_2.shape[1]),
                              ctypes.c_int(_INPUT_12.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 2")
     # step 2 aS,PTa->SPT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M11             = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_9.shape[0]
@@ -367,7 +439,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
     _M11         = _M11_reshaped.reshape(*shape_backup)
     del _M3         
     del _M3_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 3")
     # step 3 bR,bT->RTb 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NVIR), dtype=np.float64)
@@ -379,7 +454,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_7.shape[1]),
                              ctypes.c_int(_INPUT_13.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 4")
     # step 4 bQ,RTb->QRT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M5              = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_4.shape[0]
@@ -396,7 +474,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
     _M5          = _M5_reshaped.reshape(*shape_backup)
     del _M4         
     del _M4_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 5")
     # step 5 iP,iR->PRi 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NOCC), dtype=np.float64)
@@ -408,7 +489,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_1.shape[1]),
                              ctypes.c_int(_INPUT_6.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 6")
     # step 6 iT,PRi->TPR 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M1              = np.ndarray((N_LAPLACE, NTHC_INT, NTHC_INT), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_10.shape[0]
@@ -425,7 +509,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
     _M1          = _M1_reshaped.reshape(*shape_backup)
     del _M0         
     del _M0_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 7")
     # step 7 PQ,TPR->QTRP 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_203_1230 = getattr(libpbc, "fn_contraction_01_203_1230", None)
     assert fn_contraction_01_203_1230 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NTHC_INT, NTHC_INT), dtype=np.float64)
@@ -439,7 +526,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                                ctypes.c_int(_M1.shape[2]),
                                ctypes.c_void_p(_buffer.ctypes.data))
     del _M1         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 8")
     # step 8 QTRP,QRT->PQTR 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_0123_021_3012 = getattr(libpbc, "fn_contraction_0123_021_3012", None)
     assert fn_contraction_0123_021_3012 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
@@ -454,7 +544,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                                  ctypes.c_void_p(_buffer.ctypes.data))
     del _M2         
     del _M5         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 9")
     # step 9 PQTR->PTRQ 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
     assert fn_permutation_0123_0231 is not None
     _buffer          = np.ndarray((nthreads, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
@@ -467,7 +560,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                              ctypes.c_int(_M6.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M6         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 10")
     # step 10 jQ,PTRQ->jPTR 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M7              = np.ndarray((NOCC, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_3.shape[0]
@@ -485,7 +581,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
     _M7          = _M7_reshaped.reshape(*shape_backup)
     del _M6_perm    
     del _M6_perm_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 11")
     # step 11 jT,jPTR->PRjT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_0213_2301 = getattr(libpbc, "fn_contraction_01_0213_2301", None)
     assert fn_contraction_01_0213_2301 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NOCC, N_LAPLACE), dtype=np.float64)
@@ -499,7 +598,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                                 ctypes.c_int(_M7.shape[3]),
                                 ctypes.c_void_p(_buffer.ctypes.data))
     del _M7         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 12")
     # step 12 PRjT->PRTj 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
     assert fn_permutation_0123_0132 is not None
     _buffer          = np.ndarray((nthreads, NOCC, N_LAPLACE), dtype=np.float64)
@@ -512,7 +614,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                              ctypes.c_int(_M8.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M8         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 13")
     # step 13 jS,PRTj->SPRT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M9              = np.ndarray((NTHC_INT, NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_8.shape[0]
@@ -530,7 +635,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
     _M9          = _M9_reshaped.reshape(*shape_backup)
     del _M8_perm    
     del _M8_perm_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 14")
     # step 14 SPRT->SPTR 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
     assert fn_permutation_0123_0132 is not None
     _buffer          = np.ndarray((nthreads, NTHC_INT, N_LAPLACE), dtype=np.float64)
@@ -543,7 +651,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                              ctypes.c_int(_M9.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M9         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 15")
     # step 15 SR,SPTR->SPT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_0231_023 = getattr(libpbc, "fn_contraction_01_0231_023", None)
     assert fn_contraction_01_0231_023 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
@@ -557,7 +668,10 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
                                ctypes.c_int(_M9_perm.shape[2]),
                                ctypes.c_void_p(_buffer.ctypes.data))
     del _M9_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 16")
     # step 16 SPT,SPT-> 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_dot       = getattr(libpbc, "fn_dot", None)
     assert fn_dot is not None
     _M12             = ctypes.c_double(0.0)
@@ -568,6 +682,8 @@ def RMP2_K_forloop_P_R(Z           : np.ndarray,
     _M12 = _M12.value
     del _M10        
     del _M11        
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 17")
     return _M12
 
 def RMP2_K_forloop_P_R_forloop_P_R(Z           : np.ndarray,
@@ -612,33 +728,39 @@ def RMP2_K_forloop_P_R_forloop_P_R(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
     # fetch function pointers
-    fn_contraction_01_203_1230 = getattr(libpbc, "fn_contraction_01_203_1230", None)
-    assert fn_contraction_01_203_1230 is not None
-    fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
-    assert fn_permutation_0123_0132 is not None
     fn_permutation_01_10 = getattr(libpbc, "fn_permutation_01_10", None)
     assert fn_permutation_01_10 is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
+    fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
+    assert fn_slice_2_0 is not None
     fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
     assert fn_slice_2_1 is not None
     fn_contraction_0123_021_3012 = getattr(libpbc, "fn_contraction_0123_021_3012", None)
     assert fn_contraction_0123_021_3012 is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
-    assert fn_permutation_0123_0231 is not None
     fn_contraction_01_0231_023 = getattr(libpbc, "fn_contraction_01_0231_023", None)
     assert fn_contraction_01_0231_023 is not None
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
+    fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
+    assert fn_permutation_0123_0231 is not None
     fn_packadd_3_1_2 = getattr(libpbc, "fn_packadd_3_1_2", None)
     assert fn_packadd_3_1_2 is not None
-    fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
-    assert fn_slice_2_0 is not None
+    fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
+    assert fn_permutation_0123_0132 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
+    fn_contraction_01_203_1230 = getattr(libpbc, "fn_contraction_01_203_1230", None)
+    assert fn_contraction_01_203_1230 is not None
     fn_contraction_01_0213_2301 = getattr(libpbc, "fn_contraction_01_0213_2301", None)
     assert fn_contraction_01_0213_2301 is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
     # preallocate buffer
     bufsize1         = RMP2_K_forloop_P_R_determine_buf_head_size_forloop(NVIR = NVIR,
                                                                           NOCC = NOCC,
@@ -708,13 +830,16 @@ def RMP2_K_forloop_P_R_forloop_P_R(Z           : np.ndarray,
     ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_9_reshaped.T, _M3_reshaped.T, c=ddot_buffer_reshaped)
     ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-    _M11.ravel()[:] = ddot_buffer.ravel()[:]
+    fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+            ctypes.c_void_p(_M11.ctypes.data),
+            ctypes.c_int(ddot_buffer.size))
     # step   4 allocate   _M10
     _M10             = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), buffer = buffer, offset = offset_now)
     tmp_itemsize     = (NTHC_INT * (NTHC_INT * (N_LAPLACE * _itemsize)))
     _M10_offset      = offset_now      
     offset_now       = (offset_now + tmp_itemsize)
-    _M10.ravel()[:] = 0.0
+    fn_clean(ctypes.c_void_p(_M10.ctypes.data),
+             ctypes.c_int(_M10.size))
     # step   5 bR,bT->RTb
     _M4_offset       = offset_now      
     tmp_itemsize     = (NTHC_INT * (N_LAPLACE * (NVIR * _itemsize)))
@@ -748,7 +873,9 @@ def RMP2_K_forloop_P_R_forloop_P_R(Z           : np.ndarray,
     ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_4_reshaped.T, _M4_reshaped.T, c=ddot_buffer_reshaped)
     ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-    _M5.ravel()[:] = ddot_buffer.ravel()[:]
+    fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+            ctypes.c_void_p(_M5.ctypes.data),
+            ctypes.c_int(ddot_buffer.size))
     # step   7 start for loop with indices ('P',)
     for P_0, P_1 in lib.prange(0,NTHC_INT,P_bunchsize):
         if offset_P == None:
@@ -836,7 +963,9 @@ def RMP2_K_forloop_P_R_forloop_P_R(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_10_sliced_reshaped.T, _M0_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M1.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M1.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  15 slice _INPUT_0 with indices ['P']
                 _INPUT_0_sliced_offset = offset_now      
                 _INPUT_0_sliced  = np.ndarray(((P_1-P_0), NTHC_INT), buffer = buffer, offset = _INPUT_0_sliced_offset)
@@ -926,7 +1055,9 @@ def RMP2_K_forloop_P_R_forloop_P_R(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_3_reshaped, _M6_perm_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M7.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M7.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  21 slice _INPUT_11 with indices ['T']
                 _INPUT_11_sliced_offset = offset_now      
                 _INPUT_11_sliced = np.ndarray((NOCC, (T_1-T_0)), buffer = buffer, offset = _INPUT_11_sliced_offset)
@@ -986,7 +1117,9 @@ def RMP2_K_forloop_P_R_forloop_P_R(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_8_reshaped.T, _M8_perm_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M9.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M9.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  25 SPRT->SPTR
                 _M9_perm_offset  = _M9_offset      
                 _M9_perm         = np.ndarray((NTHC_INT, (P_1-P_0), (T_1-T_0), (R_1-R_0)), buffer = buffer, offset = _M9_perm_offset)
@@ -1142,26 +1275,26 @@ def RMP2_K_forloop_P_S_determine_buf_size_intermediates_forloop(NVIR        : in
                                                                 T_bunchsize = 1):
     # init
     output           = 0               
-    _INPUT_13_sliced_size = (NVIR * T_bunchsize)
-    _INPUT_12_sliced_size = (NVIR * T_bunchsize)
-    _M5_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
-    _M10_size        = (S_bunchsize * (P_bunchsize * (T_bunchsize * NTHC_INT)))
-    _M3_size         = (NTHC_INT * (T_bunchsize * (S_bunchsize * P_bunchsize)))
-    _M1_size         = (P_bunchsize * (S_bunchsize * NVIR))
-    _INPUT_2_sliced_size = (NVIR * P_bunchsize)
-    _M4_size         = (NTHC_INT * (N_LAPLACE * NOCC))
-    _M8_size         = (P_bunchsize * (S_bunchsize * (NVIR * T_bunchsize)))
-    _M11_size        = (NTHC_INT * (P_bunchsize * (S_bunchsize * T_bunchsize)))
-    _INPUT_9_sliced_size = (NVIR * S_bunchsize)
-    _M0_size         = (NTHC_INT * (N_LAPLACE * NOCC))
     _M7_size         = (NVIR * (P_bunchsize * (T_bunchsize * S_bunchsize)))
-    _M2_size         = (T_bunchsize * (P_bunchsize * S_bunchsize))
+    _M0_size         = (NTHC_INT * (N_LAPLACE * NOCC))
+    _INPUT_9_sliced_size = (NVIR * S_bunchsize)
+    _INPUT_13_sliced_size = (NVIR * T_bunchsize)
+    _M9_sliced_size  = (NTHC_INT * (P_bunchsize * T_bunchsize))
+    _M10_size        = (S_bunchsize * (P_bunchsize * (T_bunchsize * NTHC_INT)))
+    _M8_size         = (P_bunchsize * (S_bunchsize * (NVIR * T_bunchsize)))
+    _M5_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _M11_size        = (NTHC_INT * (P_bunchsize * (S_bunchsize * T_bunchsize)))
+    _M3_size         = (NTHC_INT * (T_bunchsize * (S_bunchsize * P_bunchsize)))
+    _M6_size         = (P_bunchsize * (NTHC_INT * (T_bunchsize * S_bunchsize)))
+    _INPUT_2_sliced_size = (NVIR * P_bunchsize)
+    _M1_size         = (P_bunchsize * (S_bunchsize * NVIR))
+    _INPUT_12_sliced_size = (NVIR * T_bunchsize)
     _M5_sliced_size  = (NTHC_INT * (S_bunchsize * T_bunchsize))
     _INPUT_5_sliced_size = (NTHC_INT * S_bunchsize)
-    _M6_size         = (P_bunchsize * (NTHC_INT * (T_bunchsize * S_bunchsize)))
-    _M9_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _M2_size         = (T_bunchsize * (P_bunchsize * S_bunchsize))
     _INPUT_0_sliced_size = (P_bunchsize * NTHC_INT)
-    _M9_sliced_size  = (NTHC_INT * (P_bunchsize * T_bunchsize))
+    _M9_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _M4_size         = (NTHC_INT * (N_LAPLACE * NOCC))
     # cmpr _M4_size
     size_now         = 0               
     size_now         = (size_now + _M4_size)
@@ -1280,37 +1413,91 @@ def RMP2_K_forloop_P_S_naive(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M4              = np.einsum("jS,jT->STj"    , _INPUT_8        , _INPUT_11       )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 1")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M5              = np.einsum("jQ,STj->QST"   , _INPUT_3        , _M4             )
     del _M4         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 2")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M0              = np.einsum("iP,iT->PTi"    , _INPUT_1        , _INPUT_10       )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 3")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M9              = np.einsum("iR,PTi->RPT"   , _INPUT_6        , _M0             )
     del _M0         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 4")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M1              = np.einsum("aP,aS->PSa"    , _INPUT_2        , _INPUT_9        )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 5")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M2              = np.einsum("aT,PSa->TPS"   , _INPUT_12       , _M1             )
     del _M1         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 6")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M3              = np.einsum("PQ,TPS->QTSP"  , _INPUT_0        , _M2             )
     del _M2         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 7")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M6              = np.einsum("QTSP,QST->PQTS", _M3             , _M5             )
     del _M3         
     del _M5         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 8")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M6_perm         = np.transpose(_M6             , (0, 2, 3, 1)    )
     del _M6         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 9")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M7              = np.einsum("bQ,PTSQ->bPTS" , _INPUT_4        , _M6_perm        )
     del _M6_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 10")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M8              = np.einsum("bT,bPTS->PSbT" , _INPUT_13       , _M7             )
     del _M7         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 11")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M8_perm         = np.transpose(_M8             , (0, 1, 3, 2)    )
     del _M8         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 12")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M11             = np.einsum("bR,PSTb->RPST" , _INPUT_7        , _M8_perm        )
     del _M8_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 13")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M11_perm        = np.transpose(_M11            , (2, 1, 3, 0)    )
     del _M11        
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 14")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M10             = np.einsum("RS,RPT->SPTR"  , _INPUT_5        , _M9             )
     del _M9         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 15")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M12             = np.einsum("SPTR,SPTR->"   , _M10            , _M11_perm       )
     del _M10        
     del _M11_perm   
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 16")
     return _M12
 
 def RMP2_K_forloop_P_S(Z           : np.ndarray,
@@ -1351,7 +1538,14 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
     # step 0 jS,jT->STj 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NOCC), dtype=np.float64)
@@ -1363,7 +1557,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_8.shape[1]),
                              ctypes.c_int(_INPUT_11.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 1")
     # step 1 jQ,STj->QST 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M5              = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_3.shape[0]
@@ -1380,7 +1577,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
     _M5          = _M5_reshaped.reshape(*shape_backup)
     del _M4         
     del _M4_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 2")
     # step 2 iP,iT->PTi 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NOCC), dtype=np.float64)
@@ -1392,7 +1592,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_1.shape[1]),
                              ctypes.c_int(_INPUT_10.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 3")
     # step 3 iR,PTi->RPT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M9              = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_6.shape[0]
@@ -1409,7 +1612,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
     _M9          = _M9_reshaped.reshape(*shape_backup)
     del _M0         
     del _M0_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 4")
     # step 4 aP,aS->PSa 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NVIR), dtype=np.float64)
@@ -1421,7 +1627,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_2.shape[1]),
                              ctypes.c_int(_INPUT_9.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 5")
     # step 5 aT,PSa->TPS 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M2              = np.ndarray((N_LAPLACE, NTHC_INT, NTHC_INT), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_12.shape[0]
@@ -1438,7 +1647,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
     _M2          = _M2_reshaped.reshape(*shape_backup)
     del _M1         
     del _M1_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 6")
     # step 6 PQ,TPS->QTSP 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_203_1230 = getattr(libpbc, "fn_contraction_01_203_1230", None)
     assert fn_contraction_01_203_1230 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NTHC_INT, NTHC_INT), dtype=np.float64)
@@ -1452,7 +1664,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
                                ctypes.c_int(_M2.shape[2]),
                                ctypes.c_void_p(_buffer.ctypes.data))
     del _M2         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 7")
     # step 7 QTSP,QST->PQTS 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_0123_021_3012 = getattr(libpbc, "fn_contraction_0123_021_3012", None)
     assert fn_contraction_0123_021_3012 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
@@ -1467,7 +1682,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
                                  ctypes.c_void_p(_buffer.ctypes.data))
     del _M3         
     del _M5         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 8")
     # step 8 PQTS->PTSQ 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
     assert fn_permutation_0123_0231 is not None
     _buffer          = np.ndarray((nthreads, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
@@ -1480,7 +1698,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
                              ctypes.c_int(_M6.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M6         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 9")
     # step 9 bQ,PTSQ->bPTS 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M7              = np.ndarray((NVIR, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_4.shape[0]
@@ -1498,7 +1719,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
     _M7          = _M7_reshaped.reshape(*shape_backup)
     del _M6_perm    
     del _M6_perm_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 10")
     # step 10 bT,bPTS->PSbT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_0213_2301 = getattr(libpbc, "fn_contraction_01_0213_2301", None)
     assert fn_contraction_01_0213_2301 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NVIR, N_LAPLACE), dtype=np.float64)
@@ -1512,7 +1736,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
                                 ctypes.c_int(_M7.shape[3]),
                                 ctypes.c_void_p(_buffer.ctypes.data))
     del _M7         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 11")
     # step 11 PSbT->PSTb 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
     assert fn_permutation_0123_0132 is not None
     _buffer          = np.ndarray((nthreads, NVIR, N_LAPLACE), dtype=np.float64)
@@ -1525,7 +1752,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
                              ctypes.c_int(_M8.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M8         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 12")
     # step 12 bR,PSTb->RPST 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M11             = np.ndarray((NTHC_INT, NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_7.shape[0]
@@ -1543,7 +1773,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
     _M11         = _M11_reshaped.reshape(*shape_backup)
     del _M8_perm    
     del _M8_perm_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 13")
     # step 13 RPST->SPTR 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_2130 = getattr(libpbc, "fn_permutation_0123_2130", None)
     assert fn_permutation_0123_2130 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
@@ -1556,7 +1789,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
                              ctypes.c_int(_M11.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M11        
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 14")
     # step 14 RS,RPT->SPTR 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_023_1230 = getattr(libpbc, "fn_contraction_01_023_1230", None)
     assert fn_contraction_01_023_1230 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
@@ -1570,7 +1806,10 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
                                ctypes.c_int(_M9.shape[2]),
                                ctypes.c_void_p(_buffer.ctypes.data))
     del _M9         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 15")
     # step 15 SPTR,SPTR-> 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_dot       = getattr(libpbc, "fn_dot", None)
     assert fn_dot is not None
     _M12             = ctypes.c_double(0.0)
@@ -1581,6 +1820,8 @@ def RMP2_K_forloop_P_S(Z           : np.ndarray,
     _M12 = _M12.value
     del _M10        
     del _M11_perm   
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 16")
     return _M12
 
 def RMP2_K_forloop_P_S_forloop_P_S(Z           : np.ndarray,
@@ -1625,31 +1866,37 @@ def RMP2_K_forloop_P_S_forloop_P_S(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
     # fetch function pointers
-    fn_contraction_01_203_1230 = getattr(libpbc, "fn_contraction_01_203_1230", None)
-    assert fn_contraction_01_203_1230 is not None
+    fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
+    assert fn_slice_2_0 is not None
+    fn_contraction_0123_021_3012 = getattr(libpbc, "fn_contraction_0123_021_3012", None)
+    assert fn_contraction_0123_021_3012 is not None
+    fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
+    assert fn_slice_2_1 is not None
+    fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
+    assert fn_contraction_01_02_120 is not None
+    fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
+    assert fn_permutation_0123_0231 is not None
     fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
     assert fn_permutation_0123_0132 is not None
     fn_dot       = getattr(libpbc, "fn_dot", None)
     assert fn_dot is not None
-    fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
-    assert fn_slice_2_1 is not None
-    fn_contraction_0123_021_3012 = getattr(libpbc, "fn_contraction_0123_021_3012", None)
-    assert fn_contraction_0123_021_3012 is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
-    assert fn_permutation_0123_0231 is not None
-    fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
-    assert fn_contraction_01_02_120 is not None
+    fn_contraction_01_203_1230 = getattr(libpbc, "fn_contraction_01_203_1230", None)
+    assert fn_contraction_01_203_1230 is not None
     fn_permutation_0123_2130 = getattr(libpbc, "fn_permutation_0123_2130", None)
     assert fn_permutation_0123_2130 is not None
     fn_contraction_01_023_1230 = getattr(libpbc, "fn_contraction_01_023_1230", None)
     assert fn_contraction_01_023_1230 is not None
-    fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
-    assert fn_slice_2_0 is not None
     fn_contraction_01_0213_2301 = getattr(libpbc, "fn_contraction_01_0213_2301", None)
     assert fn_contraction_01_0213_2301 is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
     # preallocate buffer
     bufsize1         = RMP2_K_forloop_P_S_determine_buf_head_size_forloop(NVIR = NVIR,
                                                                           NOCC = NOCC,
@@ -1712,7 +1959,9 @@ def RMP2_K_forloop_P_S_forloop_P_S(Z           : np.ndarray,
     ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_3_reshaped.T, _M4_reshaped.T, c=ddot_buffer_reshaped)
     ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-    _M5.ravel()[:] = ddot_buffer.ravel()[:]
+    fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+            ctypes.c_void_p(_M5.ctypes.data),
+            ctypes.c_int(ddot_buffer.size))
     # step   4 iP,iT->PTi
     _M0_offset       = offset_now      
     tmp_itemsize     = (NTHC_INT * (N_LAPLACE * (NOCC * _itemsize)))
@@ -1746,7 +1995,9 @@ def RMP2_K_forloop_P_S_forloop_P_S(Z           : np.ndarray,
     ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_6_reshaped.T, _M0_reshaped.T, c=ddot_buffer_reshaped)
     ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-    _M9.ravel()[:] = ddot_buffer.ravel()[:]
+    fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+            ctypes.c_void_p(_M9.ctypes.data),
+            ctypes.c_int(ddot_buffer.size))
     # step   6 start for loop with indices ('P',)
     for P_0, P_1 in lib.prange(0,NTHC_INT,P_bunchsize):
         if offset_P == None:
@@ -1834,7 +2085,9 @@ def RMP2_K_forloop_P_S_forloop_P_S(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_12_sliced_reshaped.T, _M1_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M2.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M2.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  14 slice _INPUT_0 with indices ['P']
                 _INPUT_0_sliced_offset = offset_now      
                 _INPUT_0_sliced  = np.ndarray(((P_1-P_0), NTHC_INT), buffer = buffer, offset = _INPUT_0_sliced_offset)
@@ -1924,7 +2177,9 @@ def RMP2_K_forloop_P_S_forloop_P_S(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_4_reshaped, _M6_perm_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M7.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M7.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  20 slice _INPUT_13 with indices ['T']
                 _INPUT_13_sliced_offset = offset_now      
                 _INPUT_13_sliced = np.ndarray((NVIR, (T_1-T_0)), buffer = buffer, offset = _INPUT_13_sliced_offset)
@@ -1984,7 +2239,9 @@ def RMP2_K_forloop_P_S_forloop_P_S(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_7_reshaped.T, _M8_perm_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M11.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M11.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  24 RPST->SPTR
                 _M11_perm_offset = _M11_offset     
                 _M11_perm        = np.ndarray(((S_1-S_0), (P_1-P_0), (T_1-T_0), NTHC_INT), buffer = buffer, offset = _M11_perm_offset)
@@ -2139,26 +2396,26 @@ def RMP2_K_forloop_Q_R_determine_buf_size_intermediates_forloop(NVIR        : in
                                                                 T_bunchsize = 1):
     # init
     output           = 0               
-    _INPUT_4_sliced_size = (NVIR * Q_bunchsize)
-    _INPUT_13_sliced_size = (NVIR * T_bunchsize)
-    _INPUT_12_sliced_size = (NVIR * T_bunchsize)
-    _M5_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
-    _M10_size        = (R_bunchsize * (Q_bunchsize * (T_bunchsize * NTHC_INT)))
-    _M3_size         = (NTHC_INT * (T_bunchsize * (R_bunchsize * Q_bunchsize)))
-    _M1_size         = (Q_bunchsize * (R_bunchsize * NVIR))
-    _M4_size         = (NTHC_INT * (N_LAPLACE * NOCC))
-    _M8_size         = (Q_bunchsize * (R_bunchsize * (NVIR * T_bunchsize)))
-    _M11_size        = (NTHC_INT * (Q_bunchsize * (R_bunchsize * T_bunchsize)))
-    _M0_size         = (NTHC_INT * (N_LAPLACE * NOCC))
     _M7_size         = (NVIR * (Q_bunchsize * (T_bunchsize * R_bunchsize)))
-    _M2_size         = (T_bunchsize * (Q_bunchsize * R_bunchsize))
+    _M0_size         = (NTHC_INT * (N_LAPLACE * NOCC))
+    _INPUT_13_sliced_size = (NVIR * T_bunchsize)
+    _M9_sliced_size  = (NTHC_INT * (Q_bunchsize * T_bunchsize))
+    _M10_size        = (R_bunchsize * (Q_bunchsize * (T_bunchsize * NTHC_INT)))
+    _M8_size         = (Q_bunchsize * (R_bunchsize * (NVIR * T_bunchsize)))
+    _M5_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _INPUT_7_sliced_size = (NVIR * R_bunchsize)
+    _M11_size        = (NTHC_INT * (Q_bunchsize * (R_bunchsize * T_bunchsize)))
+    _M3_size         = (NTHC_INT * (T_bunchsize * (R_bunchsize * Q_bunchsize)))
+    _M6_size         = (Q_bunchsize * (NTHC_INT * (T_bunchsize * R_bunchsize)))
+    _M1_size         = (Q_bunchsize * (R_bunchsize * NVIR))
+    _INPUT_12_sliced_size = (NVIR * T_bunchsize)
     _M5_sliced_size  = (NTHC_INT * (R_bunchsize * T_bunchsize))
     _INPUT_5_sliced_size = (R_bunchsize * NTHC_INT)
-    _M6_size         = (Q_bunchsize * (NTHC_INT * (T_bunchsize * R_bunchsize)))
-    _M9_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
-    _INPUT_7_sliced_size = (NVIR * R_bunchsize)
+    _INPUT_4_sliced_size = (NVIR * Q_bunchsize)
+    _M2_size         = (T_bunchsize * (Q_bunchsize * R_bunchsize))
     _INPUT_0_sliced_size = (NTHC_INT * Q_bunchsize)
-    _M9_sliced_size  = (NTHC_INT * (Q_bunchsize * T_bunchsize))
+    _M9_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _M4_size         = (NTHC_INT * (N_LAPLACE * NOCC))
     # cmpr _M4_size
     size_now         = 0               
     size_now         = (size_now + _M4_size)
@@ -2277,37 +2534,91 @@ def RMP2_K_forloop_Q_R_naive(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M4              = np.einsum("iR,iT->RTi"    , _INPUT_6        , _INPUT_10       )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 1")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M5              = np.einsum("iP,RTi->PRT"   , _INPUT_1        , _M4             )
     del _M4         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 2")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M0              = np.einsum("jQ,jT->QTj"    , _INPUT_3        , _INPUT_11       )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 3")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M9              = np.einsum("jS,QTj->SQT"   , _INPUT_8        , _M0             )
     del _M0         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 4")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M1              = np.einsum("bQ,bR->QRb"    , _INPUT_4        , _INPUT_7        )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 5")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M2              = np.einsum("bT,QRb->TQR"   , _INPUT_13       , _M1             )
     del _M1         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 6")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M3              = np.einsum("PQ,TQR->PTRQ"  , _INPUT_0        , _M2             )
     del _M2         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 7")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M6              = np.einsum("PTRQ,PRT->QPTR", _M3             , _M5             )
     del _M3         
     del _M5         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 8")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M6_perm         = np.transpose(_M6             , (0, 2, 3, 1)    )
     del _M6         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 9")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M7              = np.einsum("aP,QTRP->aQTR" , _INPUT_2        , _M6_perm        )
     del _M6_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 10")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M8              = np.einsum("aT,aQTR->QRaT" , _INPUT_12       , _M7             )
     del _M7         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 11")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M8_perm         = np.transpose(_M8             , (0, 1, 3, 2)    )
     del _M8         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 12")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M11             = np.einsum("aS,QRTa->SQRT" , _INPUT_9        , _M8_perm        )
     del _M8_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 13")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M11_perm        = np.transpose(_M11            , (2, 1, 3, 0)    )
     del _M11        
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 14")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M10             = np.einsum("RS,SQT->RQTS"  , _INPUT_5        , _M9             )
     del _M9         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 15")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M12             = np.einsum("RQTS,RQTS->"   , _M10            , _M11_perm       )
     del _M10        
     del _M11_perm   
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 16")
     return _M12
 
 def RMP2_K_forloop_Q_R(Z           : np.ndarray,
@@ -2348,7 +2659,14 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
     # step 0 iR,iT->RTi 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NOCC), dtype=np.float64)
@@ -2360,7 +2678,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_6.shape[1]),
                              ctypes.c_int(_INPUT_10.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 1")
     # step 1 iP,RTi->PRT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M5              = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_1.shape[0]
@@ -2377,7 +2698,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
     _M5          = _M5_reshaped.reshape(*shape_backup)
     del _M4         
     del _M4_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 2")
     # step 2 jQ,jT->QTj 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NOCC), dtype=np.float64)
@@ -2389,7 +2713,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_3.shape[1]),
                              ctypes.c_int(_INPUT_11.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 3")
     # step 3 jS,QTj->SQT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M9              = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_8.shape[0]
@@ -2406,7 +2733,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
     _M9          = _M9_reshaped.reshape(*shape_backup)
     del _M0         
     del _M0_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 4")
     # step 4 bQ,bR->QRb 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NVIR), dtype=np.float64)
@@ -2418,7 +2748,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_4.shape[1]),
                              ctypes.c_int(_INPUT_7.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 5")
     # step 5 bT,QRb->TQR 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M2              = np.ndarray((N_LAPLACE, NTHC_INT, NTHC_INT), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_13.shape[0]
@@ -2435,7 +2768,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
     _M2          = _M2_reshaped.reshape(*shape_backup)
     del _M1         
     del _M1_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 6")
     # step 6 PQ,TQR->PTRQ 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_213_0231 = getattr(libpbc, "fn_contraction_01_213_0231", None)
     assert fn_contraction_01_213_0231 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NTHC_INT, NTHC_INT), dtype=np.float64)
@@ -2449,7 +2785,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
                                ctypes.c_int(_M2.shape[2]),
                                ctypes.c_void_p(_buffer.ctypes.data))
     del _M2         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 7")
     # step 7 PTRQ,PRT->QPTR 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_0123_021_3012 = getattr(libpbc, "fn_contraction_0123_021_3012", None)
     assert fn_contraction_0123_021_3012 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
@@ -2464,7 +2803,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
                                  ctypes.c_void_p(_buffer.ctypes.data))
     del _M3         
     del _M5         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 8")
     # step 8 QPTR->QTRP 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
     assert fn_permutation_0123_0231 is not None
     _buffer          = np.ndarray((nthreads, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
@@ -2477,7 +2819,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
                              ctypes.c_int(_M6.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M6         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 9")
     # step 9 aP,QTRP->aQTR 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M7              = np.ndarray((NVIR, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_2.shape[0]
@@ -2495,7 +2840,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
     _M7          = _M7_reshaped.reshape(*shape_backup)
     del _M6_perm    
     del _M6_perm_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 10")
     # step 10 aT,aQTR->QRaT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_0213_2301 = getattr(libpbc, "fn_contraction_01_0213_2301", None)
     assert fn_contraction_01_0213_2301 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NVIR, N_LAPLACE), dtype=np.float64)
@@ -2509,7 +2857,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
                                 ctypes.c_int(_M7.shape[3]),
                                 ctypes.c_void_p(_buffer.ctypes.data))
     del _M7         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 11")
     # step 11 QRaT->QRTa 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
     assert fn_permutation_0123_0132 is not None
     _buffer          = np.ndarray((nthreads, NVIR, N_LAPLACE), dtype=np.float64)
@@ -2522,7 +2873,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
                              ctypes.c_int(_M8.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M8         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 12")
     # step 12 aS,QRTa->SQRT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M11             = np.ndarray((NTHC_INT, NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_9.shape[0]
@@ -2540,7 +2894,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
     _M11         = _M11_reshaped.reshape(*shape_backup)
     del _M8_perm    
     del _M8_perm_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 13")
     # step 13 SQRT->RQTS 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_2130 = getattr(libpbc, "fn_permutation_0123_2130", None)
     assert fn_permutation_0123_2130 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
@@ -2553,7 +2910,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
                              ctypes.c_int(_M11.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M11        
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 14")
     # step 14 RS,SQT->RQTS 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_123_0231 = getattr(libpbc, "fn_contraction_01_123_0231", None)
     assert fn_contraction_01_123_0231 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
@@ -2567,7 +2927,10 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
                                ctypes.c_int(_M9.shape[2]),
                                ctypes.c_void_p(_buffer.ctypes.data))
     del _M9         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 15")
     # step 15 RQTS,RQTS-> 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_dot       = getattr(libpbc, "fn_dot", None)
     assert fn_dot is not None
     _M12             = ctypes.c_double(0.0)
@@ -2578,6 +2941,8 @@ def RMP2_K_forloop_Q_R(Z           : np.ndarray,
     _M12 = _M12.value
     del _M10        
     del _M11_perm   
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 16")
     return _M12
 
 def RMP2_K_forloop_Q_R_forloop_Q_R(Z           : np.ndarray,
@@ -2622,31 +2987,37 @@ def RMP2_K_forloop_Q_R_forloop_Q_R(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
     # fetch function pointers
-    fn_contraction_01_213_0231 = getattr(libpbc, "fn_contraction_01_213_0231", None)
-    assert fn_contraction_01_213_0231 is not None
-    fn_contraction_01_123_0231 = getattr(libpbc, "fn_contraction_01_123_0231", None)
-    assert fn_contraction_01_123_0231 is not None
-    fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
-    assert fn_slice_2_1 is not None
-    fn_contraction_0123_021_3012 = getattr(libpbc, "fn_contraction_0123_021_3012", None)
-    assert fn_contraction_0123_021_3012 is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
-    assert fn_permutation_0123_0231 is not None
     fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
     assert fn_slice_2_0 is not None
+    fn_contraction_0123_021_3012 = getattr(libpbc, "fn_contraction_0123_021_3012", None)
+    assert fn_contraction_0123_021_3012 is not None
+    fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
+    assert fn_slice_2_1 is not None
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
-    fn_permutation_0123_2130 = getattr(libpbc, "fn_permutation_0123_2130", None)
-    assert fn_permutation_0123_2130 is not None
+    fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
+    assert fn_permutation_0123_0231 is not None
+    fn_contraction_01_123_0231 = getattr(libpbc, "fn_contraction_01_123_0231", None)
+    assert fn_contraction_01_123_0231 is not None
     fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
     assert fn_permutation_0123_0132 is not None
+    fn_contraction_01_213_0231 = getattr(libpbc, "fn_contraction_01_213_0231", None)
+    assert fn_contraction_01_213_0231 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
+    fn_permutation_0123_2130 = getattr(libpbc, "fn_permutation_0123_2130", None)
+    assert fn_permutation_0123_2130 is not None
     fn_contraction_01_0213_2301 = getattr(libpbc, "fn_contraction_01_0213_2301", None)
     assert fn_contraction_01_0213_2301 is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
     # preallocate buffer
     bufsize1         = RMP2_K_forloop_Q_R_determine_buf_head_size_forloop(NVIR = NVIR,
                                                                           NOCC = NOCC,
@@ -2709,7 +3080,9 @@ def RMP2_K_forloop_Q_R_forloop_Q_R(Z           : np.ndarray,
     ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_1_reshaped.T, _M4_reshaped.T, c=ddot_buffer_reshaped)
     ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-    _M5.ravel()[:] = ddot_buffer.ravel()[:]
+    fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+            ctypes.c_void_p(_M5.ctypes.data),
+            ctypes.c_int(ddot_buffer.size))
     # step   4 jQ,jT->QTj
     _M0_offset       = offset_now      
     tmp_itemsize     = (NTHC_INT * (N_LAPLACE * (NOCC * _itemsize)))
@@ -2743,7 +3116,9 @@ def RMP2_K_forloop_Q_R_forloop_Q_R(Z           : np.ndarray,
     ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_8_reshaped.T, _M0_reshaped.T, c=ddot_buffer_reshaped)
     ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-    _M9.ravel()[:] = ddot_buffer.ravel()[:]
+    fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+            ctypes.c_void_p(_M9.ctypes.data),
+            ctypes.c_int(ddot_buffer.size))
     # step   6 start for loop with indices ('Q',)
     for Q_0, Q_1 in lib.prange(0,NTHC_INT,Q_bunchsize):
         if offset_Q == None:
@@ -2831,7 +3206,9 @@ def RMP2_K_forloop_Q_R_forloop_Q_R(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_13_sliced_reshaped.T, _M1_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M2.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M2.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  14 slice _INPUT_0 with indices ['Q']
                 _INPUT_0_sliced_offset = offset_now      
                 _INPUT_0_sliced  = np.ndarray((NTHC_INT, (Q_1-Q_0)), buffer = buffer, offset = _INPUT_0_sliced_offset)
@@ -2921,7 +3298,9 @@ def RMP2_K_forloop_Q_R_forloop_Q_R(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_2_reshaped, _M6_perm_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M7.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M7.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  20 slice _INPUT_12 with indices ['T']
                 _INPUT_12_sliced_offset = offset_now      
                 _INPUT_12_sliced = np.ndarray((NVIR, (T_1-T_0)), buffer = buffer, offset = _INPUT_12_sliced_offset)
@@ -2981,7 +3360,9 @@ def RMP2_K_forloop_Q_R_forloop_Q_R(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_9_reshaped.T, _M8_perm_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M11.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M11.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  24 SQRT->RQTS
                 _M11_perm_offset = _M11_offset     
                 _M11_perm        = np.ndarray(((R_1-R_0), (Q_1-Q_0), (T_1-T_0), NTHC_INT), buffer = buffer, offset = _M11_perm_offset)
@@ -3136,26 +3517,26 @@ def RMP2_K_forloop_Q_S_determine_buf_size_intermediates_forloop(NVIR        : in
                                                                 T_bunchsize = 1):
     # init
     output           = 0               
-    _INPUT_3_sliced_size = (NOCC * Q_bunchsize)
-    _M5_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
-    _M10_size        = (NTHC_INT * (NTHC_INT * N_LAPLACE))
-    _M3_size         = (NTHC_INT * (N_LAPLACE * NVIR))
-    _M1_size         = (T_bunchsize * (Q_bunchsize * S_bunchsize))
-    _INPUT_11_sliced_size = (NOCC * T_bunchsize)
-    _M4_size         = (NTHC_INT * (N_LAPLACE * NVIR))
-    _INPUT_8_sliced_size = (NOCC * S_bunchsize)
-    _M8_size         = (Q_bunchsize * (S_bunchsize * (NOCC * T_bunchsize)))
-    _M10_packed_size = (NTHC_INT * (Q_bunchsize * T_bunchsize))
-    _M11_size        = (NTHC_INT * (NTHC_INT * N_LAPLACE))
-    _M0_size         = (Q_bunchsize * (S_bunchsize * NOCC))
     _M7_size         = (NOCC * (Q_bunchsize * (T_bunchsize * S_bunchsize)))
-    _M2_size         = (NTHC_INT * (T_bunchsize * (S_bunchsize * Q_bunchsize)))
-    _M5_sliced_size  = (NTHC_INT * (S_bunchsize * T_bunchsize))
-    _INPUT_5_sliced_size = (NTHC_INT * S_bunchsize)
+    _M0_size         = (Q_bunchsize * (S_bunchsize * NOCC))
+    _M10_size        = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _M8_size         = (Q_bunchsize * (S_bunchsize * (NOCC * T_bunchsize)))
+    _M5_size         = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _M11_size        = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _INPUT_11_sliced_size = (NOCC * T_bunchsize)
+    _M3_size         = (NTHC_INT * (N_LAPLACE * NVIR))
     _M6_size         = (Q_bunchsize * (NTHC_INT * (T_bunchsize * S_bunchsize)))
-    _M9_size         = (NTHC_INT * (Q_bunchsize * (S_bunchsize * T_bunchsize)))
-    _INPUT_0_sliced_size = (NTHC_INT * Q_bunchsize)
+    _INPUT_3_sliced_size = (NOCC * Q_bunchsize)
+    _M1_size         = (T_bunchsize * (Q_bunchsize * S_bunchsize))
+    _M10_packed_size = (NTHC_INT * (Q_bunchsize * T_bunchsize))
+    _M5_sliced_size  = (NTHC_INT * (S_bunchsize * T_bunchsize))
     _INPUT_10_sliced_size = (NOCC * T_bunchsize)
+    _INPUT_5_sliced_size = (NTHC_INT * S_bunchsize)
+    _INPUT_8_sliced_size = (NOCC * S_bunchsize)
+    _INPUT_0_sliced_size = (NTHC_INT * Q_bunchsize)
+    _M2_size         = (NTHC_INT * (T_bunchsize * (S_bunchsize * Q_bunchsize)))
+    _M9_size         = (NTHC_INT * (Q_bunchsize * (S_bunchsize * T_bunchsize)))
+    _M4_size         = (NTHC_INT * (N_LAPLACE * NVIR))
     # cmpr _M3_size
     size_now         = 0               
     size_now         = (size_now + _M3_size)
@@ -3282,37 +3663,91 @@ def RMP2_K_forloop_Q_S_naive(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M3              = np.einsum("bQ,bT->QTb"    , _INPUT_4        , _INPUT_13       )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 1")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M11             = np.einsum("bR,QTb->RQT"   , _INPUT_7        , _M3             )
     del _M3         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 2")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M4              = np.einsum("aS,aT->STa"    , _INPUT_9        , _INPUT_12       )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 3")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M5              = np.einsum("aP,STa->PST"   , _INPUT_2        , _M4             )
     del _M4         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 4")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M0              = np.einsum("jQ,jS->QSj"    , _INPUT_3        , _INPUT_8        )
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 5")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M1              = np.einsum("jT,QSj->TQS"   , _INPUT_11       , _M0             )
     del _M0         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 6")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M2              = np.einsum("PQ,TQS->PTSQ"  , _INPUT_0        , _M1             )
     del _M1         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 7")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M6              = np.einsum("PTSQ,PST->QPTS", _M2             , _M5             )
     del _M2         
     del _M5         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 8")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M6_perm         = np.transpose(_M6             , (0, 2, 3, 1)    )
     del _M6         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 9")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M7              = np.einsum("iP,QTSP->iQTS" , _INPUT_1        , _M6_perm        )
     del _M6_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 10")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M8              = np.einsum("iT,iQTS->QSiT" , _INPUT_10       , _M7             )
     del _M7         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 11")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M8_perm         = np.transpose(_M8             , (0, 1, 3, 2)    )
     del _M8         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 12")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M9              = np.einsum("iR,QSTi->RQST" , _INPUT_6        , _M8_perm        )
     del _M8_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 13")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M9_perm         = np.transpose(_M9             , (0, 1, 3, 2)    )
     del _M9         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 14")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M10             = np.einsum("RS,RQTS->RQT"  , _INPUT_5        , _M9_perm        )
     del _M9_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 15")
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M12             = np.einsum("RQT,RQT->"     , _M10            , _M11            )
     del _M10        
     del _M11        
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 16")
     return _M12
 
 def RMP2_K_forloop_Q_S(Z           : np.ndarray,
@@ -3353,7 +3788,14 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
     # step 0 bQ,bT->QTb 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NVIR), dtype=np.float64)
@@ -3365,7 +3807,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_4.shape[1]),
                              ctypes.c_int(_INPUT_13.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 1")
     # step 1 bR,QTb->RQT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M11             = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_7.shape[0]
@@ -3382,7 +3827,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
     _M11         = _M11_reshaped.reshape(*shape_backup)
     del _M3         
     del _M3_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 2")
     # step 2 aS,aT->STa 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NVIR), dtype=np.float64)
@@ -3394,7 +3842,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_9.shape[1]),
                              ctypes.c_int(_INPUT_12.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 3")
     # step 3 aP,STa->PST 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M5              = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_2.shape[0]
@@ -3411,7 +3862,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
     _M5          = _M5_reshaped.reshape(*shape_backup)
     del _M4         
     del _M4_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 4")
     # step 4 jQ,jS->QSj 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NOCC), dtype=np.float64)
@@ -3423,7 +3877,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
                              ctypes.c_int(_INPUT_3.shape[1]),
                              ctypes.c_int(_INPUT_8.shape[1]),
                              ctypes.c_void_p(_buffer.ctypes.data))
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 5")
     # step 5 jT,QSj->TQS 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M1              = np.ndarray((N_LAPLACE, NTHC_INT, NTHC_INT), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_11.shape[0]
@@ -3440,7 +3897,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
     _M1          = _M1_reshaped.reshape(*shape_backup)
     del _M0         
     del _M0_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 6")
     # step 6 PQ,TQS->PTSQ 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_213_0231 = getattr(libpbc, "fn_contraction_01_213_0231", None)
     assert fn_contraction_01_213_0231 is not None
     _buffer          = np.ndarray((NTHC_INT, N_LAPLACE, NTHC_INT, NTHC_INT), dtype=np.float64)
@@ -3454,7 +3914,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
                                ctypes.c_int(_M1.shape[2]),
                                ctypes.c_void_p(_buffer.ctypes.data))
     del _M1         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 7")
     # step 7 PTSQ,PST->QPTS 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_0123_021_3012 = getattr(libpbc, "fn_contraction_0123_021_3012", None)
     assert fn_contraction_0123_021_3012 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
@@ -3469,7 +3932,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
                                  ctypes.c_void_p(_buffer.ctypes.data))
     del _M2         
     del _M5         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 8")
     # step 8 QPTS->QTSP 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
     assert fn_permutation_0123_0231 is not None
     _buffer          = np.ndarray((nthreads, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
@@ -3482,7 +3948,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
                              ctypes.c_int(_M6.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M6         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 9")
     # step 9 iP,QTSP->iQTS 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M7              = np.ndarray((NOCC, NTHC_INT, N_LAPLACE, NTHC_INT), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_1.shape[0]
@@ -3500,7 +3969,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
     _M7          = _M7_reshaped.reshape(*shape_backup)
     del _M6_perm    
     del _M6_perm_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 10")
     # step 10 iT,iQTS->QSiT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_0213_2301 = getattr(libpbc, "fn_contraction_01_0213_2301", None)
     assert fn_contraction_01_0213_2301 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, NOCC, N_LAPLACE), dtype=np.float64)
@@ -3514,7 +3986,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
                                 ctypes.c_int(_M7.shape[3]),
                                 ctypes.c_void_p(_buffer.ctypes.data))
     del _M7         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 11")
     # step 11 QSiT->QSTi 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
     assert fn_permutation_0123_0132 is not None
     _buffer          = np.ndarray((nthreads, NOCC, N_LAPLACE), dtype=np.float64)
@@ -3527,7 +4002,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
                              ctypes.c_int(_M8.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M8         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 12")
     # step 12 iR,QSTi->RQST 
+    t1 = (logger.process_clock(), logger.perf_counter())
     _M9              = np.ndarray((NTHC_INT, NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
     _size_dim_1      = 1               
     _size_dim_1      = _size_dim_1 * _INPUT_6.shape[0]
@@ -3545,7 +4023,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
     _M9          = _M9_reshaped.reshape(*shape_backup)
     del _M8_perm    
     del _M8_perm_reshaped
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 13")
     # step 13 RQST->RQTS 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
     assert fn_permutation_0123_0132 is not None
     _buffer          = np.ndarray((nthreads, NTHC_INT, N_LAPLACE), dtype=np.float64)
@@ -3558,7 +4039,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
                              ctypes.c_int(_M9.shape[3]),
                              ctypes.c_void_p(_buffer.ctypes.data))
     del _M9         
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 14")
     # step 14 RS,RQTS->RQT 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_contraction_01_0231_023 = getattr(libpbc, "fn_contraction_01_0231_023", None)
     assert fn_contraction_01_0231_023 is not None
     _buffer          = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), dtype=np.float64)
@@ -3572,7 +4056,10 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
                                ctypes.c_int(_M9_perm.shape[2]),
                                ctypes.c_void_p(_buffer.ctypes.data))
     del _M9_perm    
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 15")
     # step 15 RQT,RQT-> 
+    t1 = (logger.process_clock(), logger.perf_counter())
     fn_dot       = getattr(libpbc, "fn_dot", None)
     assert fn_dot is not None
     _M12             = ctypes.c_double(0.0)
@@ -3583,6 +4070,8 @@ def RMP2_K_forloop_Q_S(Z           : np.ndarray,
     _M12 = _M12.value
     del _M10        
     del _M11        
+    t2 = (logger.process_clock(), logger.perf_counter())
+    _benchmark_time(t1, t2, "step 16")
     return _M12
 
 def RMP2_K_forloop_Q_S_forloop_Q_S(Z           : np.ndarray,
@@ -3627,29 +4116,35 @@ def RMP2_K_forloop_Q_S_forloop_Q_S(Z           : np.ndarray,
     _INPUT_13        = tau_v           
     nthreads         = lib.num_threads()
     _M12             = 0.0             
+    fn_copy      = getattr(libpbc, "fn_copy", None)
+    assert fn_copy is not None
+    fn_add       = getattr(libpbc, "fn_add", None)
+    assert fn_add is not None
+    fn_clean     = getattr(libpbc, "fn_clean", None)
+    assert fn_clean is not None
     # fetch function pointers
-    fn_contraction_01_213_0231 = getattr(libpbc, "fn_contraction_01_213_0231", None)
-    assert fn_contraction_01_213_0231 is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
-    fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
-    assert fn_slice_2_1 is not None
     fn_contraction_0123_021_3012 = getattr(libpbc, "fn_contraction_0123_021_3012", None)
     assert fn_contraction_0123_021_3012 is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
-    assert fn_permutation_0123_0231 is not None
+    fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
+    assert fn_slice_2_1 is not None
     fn_contraction_01_0231_023 = getattr(libpbc, "fn_contraction_01_0231_023", None)
     assert fn_contraction_01_0231_023 is not None
     fn_contraction_01_02_120 = getattr(libpbc, "fn_contraction_01_02_120", None)
     assert fn_contraction_01_02_120 is not None
+    fn_permutation_0123_0231 = getattr(libpbc, "fn_permutation_0123_0231", None)
+    assert fn_permutation_0123_0231 is not None
     fn_packadd_3_1_2 = getattr(libpbc, "fn_packadd_3_1_2", None)
     assert fn_packadd_3_1_2 is not None
     fn_permutation_0123_0132 = getattr(libpbc, "fn_permutation_0123_0132", None)
     assert fn_permutation_0123_0132 is not None
+    fn_contraction_01_213_0231 = getattr(libpbc, "fn_contraction_01_213_0231", None)
+    assert fn_contraction_01_213_0231 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
     fn_contraction_01_0213_2301 = getattr(libpbc, "fn_contraction_01_0213_2301", None)
     assert fn_contraction_01_0213_2301 is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
     # preallocate buffer
     bufsize1         = RMP2_K_forloop_Q_S_determine_buf_head_size_forloop(NVIR = NVIR,
                                                                           NOCC = NOCC,
@@ -3710,13 +4205,16 @@ def RMP2_K_forloop_Q_S_forloop_Q_S(Z           : np.ndarray,
     ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_7_reshaped.T, _M3_reshaped.T, c=ddot_buffer_reshaped)
     ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-    _M11.ravel()[:] = ddot_buffer.ravel()[:]
+    fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+            ctypes.c_void_p(_M11.ctypes.data),
+            ctypes.c_int(ddot_buffer.size))
     # step   3 allocate   _M10
     _M10             = np.ndarray((NTHC_INT, NTHC_INT, N_LAPLACE), buffer = buffer, offset = offset_now)
     tmp_itemsize     = (NTHC_INT * (NTHC_INT * (N_LAPLACE * _itemsize)))
     _M10_offset      = offset_now      
     offset_now       = (offset_now + tmp_itemsize)
-    _M10.ravel()[:] = 0.0
+    fn_clean(ctypes.c_void_p(_M10.ctypes.data),
+             ctypes.c_int(_M10.size))
     # step   4 aS,aT->STa
     _M4_offset       = offset_now      
     tmp_itemsize     = (NTHC_INT * (N_LAPLACE * (NVIR * _itemsize)))
@@ -3750,7 +4248,9 @@ def RMP2_K_forloop_Q_S_forloop_Q_S(Z           : np.ndarray,
     ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
     lib.ddot(_INPUT_2_reshaped.T, _M4_reshaped.T, c=ddot_buffer_reshaped)
     ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-    _M5.ravel()[:] = ddot_buffer.ravel()[:]
+    fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+            ctypes.c_void_p(_M5.ctypes.data),
+            ctypes.c_int(ddot_buffer.size))
     # step   6 start for loop with indices ('Q',)
     for Q_0, Q_1 in lib.prange(0,NTHC_INT,Q_bunchsize):
         if offset_Q == None:
@@ -3838,7 +4338,9 @@ def RMP2_K_forloop_Q_S_forloop_Q_S(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_11_sliced_reshaped.T, _M0_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M1.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M1.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  14 slice _INPUT_0 with indices ['Q']
                 _INPUT_0_sliced_offset = offset_now      
                 _INPUT_0_sliced  = np.ndarray((NTHC_INT, (Q_1-Q_0)), buffer = buffer, offset = _INPUT_0_sliced_offset)
@@ -3928,7 +4430,9 @@ def RMP2_K_forloop_Q_S_forloop_Q_S(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_1_reshaped, _M6_perm_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M7.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M7.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  20 slice _INPUT_10 with indices ['T']
                 _INPUT_10_sliced_offset = offset_now      
                 _INPUT_10_sliced = np.ndarray((NOCC, (T_1-T_0)), buffer = buffer, offset = _INPUT_10_sliced_offset)
@@ -3988,7 +4492,9 @@ def RMP2_K_forloop_Q_S_forloop_Q_S(Z           : np.ndarray,
                 ddot_buffer_reshaped = ddot_buffer.reshape(_size_dim_1,-1)
                 lib.ddot(_INPUT_6_reshaped.T, _M8_perm_reshaped.T, c=ddot_buffer_reshaped)
                 ddot_buffer      = ddot_buffer_reshaped.reshape(*shape_backup)
-                _M9.ravel()[:] = ddot_buffer.ravel()[:]
+                fn_copy(ctypes.c_void_p(ddot_buffer.ctypes.data),
+                        ctypes.c_void_p(_M9.ctypes.data),
+                        ctypes.c_int(ddot_buffer.size))
                 # step  24 RQST->RQTS
                 _M9_perm_offset  = _M9_offset      
                 _M9_perm         = np.ndarray((NTHC_INT, (Q_1-Q_0), (T_1-T_0), (S_1-S_0)), buffer = buffer, offset = _M9_perm_offset)

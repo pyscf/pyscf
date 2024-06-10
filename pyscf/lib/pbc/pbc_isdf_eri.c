@@ -385,3 +385,54 @@ void fn_packadd_3_1(
         }
     }
 }
+
+void fn_copy(
+    const double *tensor_A,
+    double *tensor_B,
+    const int size)
+{
+    if (tensor_A != tensor_B)
+    {
+        memcpy(tensor_B, tensor_A, sizeof(double) * size);
+    }
+}
+
+void fn_add(
+    const double *tensor_A,
+    double *tensor_B,
+    const int size)
+{
+    static const int INCX = 1;
+    static const double ALPHA = 1;
+
+    const int nthread = get_omp_threads();
+    const int bunch_size = size / nthread + 1;
+
+    if (size < 1024)
+    {
+        daxpy_(&size, &ALPHA, tensor_A, &INCX, tensor_B, &INCX);
+        return;
+    }
+
+#pragma omp parallel
+    {
+        const int ithread = omp_get_thread_num();
+        int start = ithread * bunch_size;
+        int end = start + bunch_size;
+        start = start > size ? size : start;
+        end = end > size ? size : end;
+        const int n = end - start;
+
+        if (n > 0)
+        {
+            daxpy_(&n, &ALPHA, tensor_A + start, &INCX, tensor_B + start, &INCX);
+        }
+    }
+}
+
+void fn_clean(
+    double *tensor_A,
+    const int size)
+{
+    memset(tensor_A, 0, sizeof(double) * size);
+}

@@ -510,11 +510,13 @@ void fn_permutation_0123_1320(
     {
         size_t i = ij / n1;
         size_t j = ij % n1;
+        size_t ind_A = ij * n2 * n3;
+        size_t ind_B = j * n3 * n2 * n0 + i;
         for (size_t k = 0; k < n2; k++)
         {
-            for (size_t l = 0; l < n3; l++)
+            for (size_t l = 0; l < n3; l++, ind_A++)
             {
-                buffer[j * n0 * n3 * n2 + l * n2 * n0 + k * n0 + i] = tensor_A[ij * n2 * n3 + k * n3 + l];
+                buffer[ind_B + (l * n2 + k) * n0] = tensor_A[ind_A];
             }
         }
     }
