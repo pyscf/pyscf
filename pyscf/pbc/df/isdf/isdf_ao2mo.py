@@ -30,6 +30,7 @@ import numpy as np
 import ctypes
 
 from pyscf.pbc.df.isdf.isdf_tools_local import aoR_Holder
+from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 
 libpbc = lib.load_library('libpbc')
 
@@ -743,7 +744,10 @@ def general(mydf, mo_coeffs, kpts=None,
              iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
              iden_coeffs(mo_coeffs[0], mo_coeffs[3]))):
             
+            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
             eri = isdf_eri(mydf, mo_coeffs[0].copy(), verbose=mydf.cell.verbose)
+            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            _benchmark_time(t1, t2, 'isdf_eri')
         
             if compact:
                 return eri
@@ -754,7 +758,10 @@ def general(mydf, mo_coeffs, kpts=None,
             if ((iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
                  iden_coeffs(mo_coeffs[1], mo_coeffs[3]))):
                 
+                t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
                 eri = isdf_eri_ovov(mydf, mo_coeffs[0].copy(), mo_coeffs[1].copy(), verbose=mydf.cell.verbose)
+                t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+                _benchmark_time(t1, t2, 'isdf_eri_ovov')
             
                 if compact:
                     print("compact is not supported in general with ov ov mode")
