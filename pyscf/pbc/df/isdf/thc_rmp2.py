@@ -214,6 +214,9 @@ class THC_RMP2(_restricted_THC_posthf_holder):
 
     def _kernel_forloop(self):
         
+        if self.buffer is None:
+            self.buffer = np.zeros((self.memory//8))
+        
         ##### for MP2 J currently we do not use forloop ##### 
         
         buf1 = RMP2_J_determine_buf_head_size(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
