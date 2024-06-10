@@ -80,7 +80,7 @@ def _bunchsize_determination_driver(
     buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, _nthc_int, _nvir, _n_laplace)
     
     if (buf1+buf2) * dtype_size < memory:
-        return _nthc_int, _nthc_int, _n_laplace
+        return _nthc_int, _nvir, _n_laplace
     
     ## (3) memory is neither too limited nor too large ##
     
