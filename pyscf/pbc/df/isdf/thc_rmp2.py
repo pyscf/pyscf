@@ -47,6 +47,79 @@ SCHEDULE_TYPE_C       = 1
 SCHEDULE_TYPE_OPT_MEM = 2
 SCHEDULE_TYPE_FORLOOP = 3
 
+### function to determine the bunchsize ### 
+
+def _print_memory(prefix, memory):
+    return prefix + " = %12.2f MB" % (memory/1e6)
+
+def _bunchsize_determination_driver(
+    _fn_head,
+    _fn_intermediates, 
+    _task_name,
+    _nocc, 
+    _nvir,
+    _n_laplace,
+    _nthc_int,
+    memory,
+    dtype_size = 8
+):
+    ## (1) check whether memory is too limited ## 
+    
+    buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, 1, 1, 1)
+    buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, 1, 1, 1)
+    
+    if (buf1+buf2) * dtype_size > memory:
+        print(_print_memory("memory needed %s" % (_task_name), (buf1+buf2)*dtype_size))
+        raise ValueError("memory is too limited")
+    
+    ## (2) check whether memory is too large ## 
+    
+    buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, _nthc_int, _nthc_int, _n_laplace)
+    buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, _nthc_int, _nthc_int, _n_laplace)
+    
+    if (buf1+buf2) * dtype_size < memory:
+        return _nthc_int, _nthc_int, _n_laplace
+    
+    ## (3) memory is neither too limited nor too large ##
+    
+    bunchsize = 8
+    
+    n_laplace_size = _n_laplace
+    niter_laplace = 1
+    
+    while True:
+        buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+        buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+        
+        if (buf1+buf2) * dtype_size > memory:
+            niter_laplace *= 2
+            n_laplace_size = (_n_laplace // niter_laplace) + 1
+            if n_laplace_size == 1:
+                break
+        else:
+            break
+
+    buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+    buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+    
+    if (buf1+buf2) * dtype_size > memory:
+        bunchsize = 1
+        buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+        buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+    
+    while True:
+        
+        if (buf1+buf2) * dtype_size < memory:
+            bunchsize *= 2
+        else:
+            bunchsize //= 2
+            break
+        
+        buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+        buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+        
+    return bunchsize, bunchsize, n_laplace_size
+        
 
 class THC_RMP2(_restricted_THC_posthf_holder):
     
@@ -109,6 +182,16 @@ class THC_RMP2(_restricted_THC_posthf_holder):
         if self.buffer is None:
             self.buffer = np.zeros((self.memory//8))
         
+        ### first fetch the size of required memory ### 
+        
+        buf1 = RMP2_J_determine_buf_head_size(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
+        buf2 = RMP2_J_determine_buf_size_intermediates(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
+        print("memory needed for RMP2_J = %12.2f MB" % ((buf1+buf2)*8/1e6))
+        
+        buf1 = RMP2_K_determine_buf_head_size(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
+        buf2 = RMP2_K_determine_buf_size_intermediates(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
+        print("memory needed for RMP2_K = %12.2f MB" % ((buf1+buf2)*8/1e6))
+        
         t1 = (logger.process_clock(), logger.perf_counter())
         mp2_J = RMP2_J_opt_mem(self.Z,
                                self.X_o,
@@ -129,6 +212,64 @@ class THC_RMP2(_restricted_THC_posthf_holder):
         print("E_corr(RMP2) = " + str(-2*mp2_J + mp2_K))
         return -2*mp2_J + mp2_K
 
+    def _kernel_forloop(self):
+        
+        ##### for MP2 J currently we do not use forloop ##### 
+        
+        buf1 = RMP2_J_determine_buf_head_size(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
+        buf2 = RMP2_J_determine_buf_size_intermediates(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
+        if (buf1+buf2) * 8 > self.memory:
+            print(_print_memory("memory needed for RMP2_J", (buf1+buf2)*8))
+            print("Warning memory is no enough but we do it anyway!")
+            # raise ValueError("memory is too limited")
+        t1 = (logger.process_clock(), logger.perf_counter())
+        mp2_J = RMP2_J_opt_mem(
+            self.Z,
+            self.X_o,
+            self.X_v,
+            self.tau_o,
+            self.tau_v,
+            self.buffer
+        )
+        t2 = (logger.process_clock(), logger.perf_counter())
+        _benchmark_time(t1, t2, "RMP2_J_opt_mem")
+        
+        ##### first determine the bunchsize ##### 
+        
+        bunchsize1, bunchsize2, n_laplace_size = _bunchsize_determination_driver(
+            RMP2_K_forloop_P_R_determine_buf_head_size_forloop,
+            RMP2_K_forloop_P_R_determine_buf_size_intermediates_forloop,
+            "RMP2_K",
+            self.nocc,
+            self.nvir,
+            self.n_laplace,
+            self.nthc_int,
+            self.memory
+        )
+        print("bunchsize1 = %d, bunchsize2 = %d, n_laplace_size = %d" % (bunchsize1, bunchsize2, n_laplace_size))
+        buf1 = RMP2_K_forloop_P_R_determine_buf_head_size_forloop(
+            self.nvir, self.nocc, self.n_laplace, self.nthc_int, bunchsize1, bunchsize2, n_laplace_size
+        )
+        buf2 = RMP2_K_forloop_P_R_determine_buf_size_intermediates_forloop(
+            self.nvir, self.nocc, self.n_laplace, self.nthc_int, bunchsize1, bunchsize2, n_laplace_size
+        )
+        print("memory needed for RMP2_K = %12.2f MB" % ((buf1+buf2)*8/1e6))
+        mp2_K = RMP2_K_forloop_P_R_forloop_P_R(
+            self.Z,
+            self.X_o,
+            self.X_v,
+            self.tau_o,
+            self.tau_v,
+            self.buffer,
+            bunchsize1,
+            bunchsize2,
+            n_laplace_size
+        )
+        t3 = (logger.process_clock(), logger.perf_counter())
+        _benchmark_time(t2, t3, "RMP2_K_forloop")
+        print("E_corr(RMP2) = " + str(-2*mp2_J + mp2_K))
+        return -2*mp2_J + mp2_K
+
     #### driver #### 
     
     def kernel(self, schedule=SCHEDULE_TYPE_FORLOOP):
@@ -138,8 +279,8 @@ class THC_RMP2(_restricted_THC_posthf_holder):
             return self._kernel_C()
         elif schedule == SCHEDULE_TYPE_OPT_MEM:
             return self._kernel_opt_mem()
-        else:
-            raise ValueError("schedule type not supported")
+        elif schedule == SCHEDULE_TYPE_FORLOOP:
+            return self._kernel_forloop()
 
 
 
@@ -213,7 +354,8 @@ if __name__ == "__main__":
     _myisdf = ISDF.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
     _myisdf.build_IP_local(c=12, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     X          = _myisdf.aoRg_full() 
-    thc_rmp2 = THC_RMP2(myisdf, mf_isdf, X)
+    thc_rmp2 = THC_RMP2(myisdf, mf_isdf, X, memory=800*1000*1000)
     thc_rmp2.kernel(SCHEDULE_TYPE_NAIVE)
     thc_rmp2.kernel(SCHEDULE_TYPE_C)
     thc_rmp2.kernel(SCHEDULE_TYPE_OPT_MEM)
+    thc_rmp2.kernel(SCHEDULE_TYPE_FORLOOP)
