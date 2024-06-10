@@ -3658,3 +3658,82 @@ void fn_contraction_01234_04321_01234(
 
     memcpy(tensor_C, buffer, sizeof(double) * n0 * n1 * n2 * n3 * n4);
 }
+
+void fn_contraction_012_0132_013(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    double *buffer)
+{
+    fn_contraction_01_021_02(tensor_A, tensor_B, tensor_C, n0 * n1, n2, n3, buffer);
+}
+
+void fn_contraction_012_02_102(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    double *buffer)
+{
+#pragma omp parallel for schedule(static)
+    for (size_t ij = 0; ij < n0 * n1; ij++)
+    {
+        size_t i = ij / n1;
+        size_t j = ij % n1;
+        size_t ind_A = ij * n2;
+        size_t ind_B = i * n2;
+        size_t ind_C = (j * n0 + i) * n2;
+        for (size_t k = 0; k < n2; k++, ind_A++, ind_B++, ind_C++)
+        {
+            buffer[ind_C] = tensor_A[ind_A] * tensor_B[ind_B];
+        }
+    }
+    memcpy(tensor_C, buffer, sizeof(double) * n0 * n1 * n2);
+}
+
+void fn_contraction_0123_023_1023(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    double *buffer)
+{
+    fn_contraction_012_02_102(tensor_A, tensor_B, tensor_C, n0, n1, n2 * n3, buffer);
+}
+
+void fn_contraction_01_0231_023_plus(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    double *buffer)
+{
+    fn_contraction_01_021_02_plus(tensor_A, tensor_B, tensor_C, n0, n1, n2 * n3, buffer);
+}
+
+void fn_contraction_012_031_2301(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    double *buffer)
+{
+    
+    fn_contraction_012_031_0123(tensor_A, tensor_B, tensor_C, n0, n1, n2, n3, buffer);
+    fn_permutation_01_10(tensor_C, tensor_C, n0 * n1, n2 * n3, buffer);
+}

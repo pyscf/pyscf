@@ -63,6 +63,8 @@ def _bunchsize_determination_driver(
     memory,
     dtype_size = 8
 ):
+    ##### assume parallel over one THC and one vir block #####
+    
     ## (1) check whether memory is too limited ## 
     
     buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, 1, 1, 1)
@@ -74,22 +76,23 @@ def _bunchsize_determination_driver(
     
     ## (2) check whether memory is too large ## 
     
-    buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, _nthc_int, _nthc_int, _n_laplace)
-    buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, _nthc_int, _nthc_int, _n_laplace)
+    buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, _nthc_int, _nvir, _n_laplace)
+    buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, _nthc_int, _nvir, _n_laplace)
     
     if (buf1+buf2) * dtype_size < memory:
         return _nthc_int, _nthc_int, _n_laplace
     
     ## (3) memory is neither too limited nor too large ##
     
-    bunchsize = 8
+    vir_bunchsize = 8
+    thc_bunchsize = 8
     
     n_laplace_size = _n_laplace
     niter_laplace = 1
     
     while True:
-        buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
-        buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+        buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize, vir_bunchsize, n_laplace_size)
+        buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize, vir_bunchsize, n_laplace_size)
         
         if (buf1+buf2) * dtype_size > memory:
             niter_laplace *= 2
@@ -99,26 +102,43 @@ def _bunchsize_determination_driver(
         else:
             break
 
-    buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
-    buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+    buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize, vir_bunchsize, n_laplace_size)
+    buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize, vir_bunchsize, n_laplace_size)
     
     if (buf1+buf2) * dtype_size > memory:
-        bunchsize = 1
-        buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
-        buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
+        vir_bunchsize = 1
+        thc_bunchsize = 1
+        buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize, vir_bunchsize, n_laplace_size)
+        buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize, vir_bunchsize, n_laplace_size)
+    
+    thc_bunchsize_0 = thc_bunchsize
+    vir_bunchsize_0 = vir_bunchsize
+    thc_bunchsize_1 = thc_bunchsize
+    vir_bunchsize_1 = vir_bunchsize
+    
+    reach_maximal_memory = False
     
     while True:
         
         if (buf1+buf2) * dtype_size < memory:
-            bunchsize *= 2
+            thc_bunchsize_0 = thc_bunchsize_1
+            vir_bunchsize_0 = vir_bunchsize_1
+            thc_bunchsize_1 *= 2
+            vir_bunchsize_1 *= 2
+            thc_bunchsize_1 = min(thc_bunchsize_1, _nthc_int)
+            vir_bunchsize_1 = min(vir_bunchsize_1, _nvir)
         else:
-            bunchsize //= 2
+            reach_maximal_memory = True
+            thc_bunchsize_1 = (thc_bunchsize_0 + thc_bunchsize_1) // 2
+            vir_bunchsize_1 = (vir_bunchsize_0 + vir_bunchsize_1) // 2
+        
+        buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize_1, vir_bunchsize_1, n_laplace_size)
+        buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize_1, vir_bunchsize_1, n_laplace_size)
+        
+        if (buf1+buf2)*dtype_size < memory and reach_maximal_memory and (thc_bunchsize_1)<thc_bunchsize_0+4 and (vir_bunchsize_1)<vir_bunchsize_0+4:
             break
         
-        buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
-        buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, bunchsize, bunchsize, n_laplace_size)
-        
-    return bunchsize, bunchsize, n_laplace_size
+    return thc_bunchsize_1, vir_bunchsize_1, n_laplace_size
         
 
 class THC_RMP2(_restricted_THC_posthf_holder):
@@ -240,8 +260,8 @@ class THC_RMP2(_restricted_THC_posthf_holder):
         ##### first determine the bunchsize ##### 
         
         bunchsize1, bunchsize2, n_laplace_size = _bunchsize_determination_driver(
-            RMP2_K_forloop_P_R_determine_buf_head_size_forloop,
-            RMP2_K_forloop_P_R_determine_buf_size_intermediates_forloop,
+            RMP2_K_forloop_P_b_determine_buf_head_size_forloop,
+            RMP2_K_forloop_P_b_determine_buf_size_intermediates_forloop,
             "RMP2_K",
             self.nocc,
             self.nvir,
@@ -250,14 +270,14 @@ class THC_RMP2(_restricted_THC_posthf_holder):
             self.memory
         )
         print("bunchsize1 = %d, bunchsize2 = %d, n_laplace_size = %d" % (bunchsize1, bunchsize2, n_laplace_size))
-        buf1 = RMP2_K_forloop_P_R_determine_buf_head_size_forloop(
+        buf1 = RMP2_K_forloop_P_b_determine_buf_head_size_forloop(
             self.nvir, self.nocc, self.n_laplace, self.nthc_int, bunchsize1, bunchsize2, n_laplace_size
         )
-        buf2 = RMP2_K_forloop_P_R_determine_buf_size_intermediates_forloop(
+        buf2 = RMP2_K_forloop_P_b_determine_buf_size_intermediates_forloop(
             self.nvir, self.nocc, self.n_laplace, self.nthc_int, bunchsize1, bunchsize2, n_laplace_size
         )
         print("memory needed for RMP2_K = %12.2f MB" % ((buf1+buf2)*8/1e6))
-        mp2_K = RMP2_K_forloop_P_R_forloop_P_R(
+        mp2_K = RMP2_K_forloop_P_b_forloop_P_b(
             self.Z,
             self.X_o,
             self.X_v,
