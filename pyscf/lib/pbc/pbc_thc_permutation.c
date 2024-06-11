@@ -237,7 +237,7 @@ void fn_permutation_012_210(
 {
     int nthread = get_omp_threads();
 
-    int nkj = n2 * n1;
+    size_t nkj = n2 * n1;
 
     if (nthread > nkj)
     {
@@ -270,7 +270,7 @@ void fn_permutation_012_210_wob(
 {
     int nthread = get_omp_threads();
 
-    int nkj = n2 * n1;
+    size_t nkj = n2 * n1;
 
     if (nthread > nkj)
     {
@@ -300,7 +300,7 @@ void _fn_permutation_012_210_st(
     const int n2,
     double *buffer)
 {
-    int nkj = n2 * n1;
+    size_t nkj = n2 * n1;
     for (size_t kj = 0; kj < nkj; kj++)
     {
         size_t k = kj / n1;
@@ -323,7 +323,7 @@ void _fn_permutation_012_210_wob_st(
     const int n1,
     const int n2)
 {
-    int nkj = n2 * n1;
+    size_t nkj = n2 * n1;
     for (size_t kj = 0; kj < nkj; kj++)
     {
         size_t k = kj / n1;
@@ -879,7 +879,7 @@ void fn_permutation_01234_02143(
     const int n4,
     double *buffer)
 {
-    for (int i = 0; i < n0; ++i)
+    for (size_t i = 0; i < n0; ++i)
     {
         fn_permutation_0123_1032(tensor_A + i * n1 * n2 * n3 * n4, tensor_B + i * n1 * n2 * n3 * n4, n1, n2, n3, n4, buffer);
     }
@@ -895,7 +895,7 @@ void fn_permutation_01234_02143_wob(
     const int n4)
 {
 #pragma omp parallel for schedule(static)
-    for (int i = 0; i < n0; ++i)
+    for (size_t i = 0; i < n0; ++i)
     {
         _fn_permutation_0123_1032_wob_st(tensor_A + i * n1 * n2 * n3 * n4, tensor_B + i * n1 * n2 * n3 * n4, n1, n2, n3, n4);
     }
@@ -1921,18 +1921,18 @@ void fn_permutation_01234_24031(
     double *buffer)
 {
 #pragma omp parallel for schedule(static)
-    for (int ij = 0; ij < n0 * n1; ij++)
+    for (size_t ij = 0; ij < n0 * n1; ij++)
     {
-        int i = ij / n1;
-        int j = ij % n1;
-        int64_t ind_A = ij * n2 * n3 * n4;
-        for (int k = 0; k < n2; k++)
+        size_t i = ij / n1;
+        size_t j = ij % n1;
+        size_t ind_A = ij * n2 * n3 * n4;
+        for (size_t k = 0; k < n2; k++)
         {
-            for (int l = 0; l < n3; l++)
+            for (size_t l = 0; l < n3; l++)
             {
-                for (int m = 0; m < n4; m++, ind_A++)
+                for (size_t m = 0; m < n4; m++, ind_A++)
                 {
-                    int64_t ind_B = k * n4 * n0 * n1 * n3 + m * n0 * n1 * n3 + i * n1 * n3 + l * n1 + j;
+                    size_t ind_B = k * n4 * n0 * n1 * n3 + m * n0 * n1 * n3 + i * n1 * n3 + l * n1 + j;
                     buffer[ind_B] = tensor_A[ind_A];
                 }
             }
@@ -1952,18 +1952,18 @@ void fn_permutation_01234_24031_wob(
     const int n4)
 {
 #pragma omp parallel for schedule(static)
-    for (int ij = 0; ij < n0 * n1; ij++)
+    for (size_t ij = 0; ij < n0 * n1; ij++)
     {
-        int i = ij / n1;
-        int j = ij % n1;
+        size_t i = ij / n1;
+        size_t j = ij % n1;
         size_t ind_A = ij * n2 * n3 * n4;
-        for (int k = 0; k < n2; k++)
+        for (size_t k = 0; k < n2; k++)
         {
-            for (int l = 0; l < n3; l++)
+            for (size_t l = 0; l < n3; l++)
             {
-                for (int m = 0; m < n4; m++, ind_A++)
+                for (size_t m = 0; m < n4; m++, ind_A++)
                 {
-                    int ind_B = k * n4 * n0 * n1 * n3 + m * n0 * n1 * n3 + i * n1 * n3 + l * n1 + j;
+                    size_t ind_B = k * n4 * n0 * n1 * n3 + m * n0 * n1 * n3 + i * n1 * n3 + l * n1 + j;
                     tensor_B[ind_B] = tensor_A[ind_A];
                 }
             }
@@ -1982,19 +1982,19 @@ void fn_permutation_01234_03241(
     double *buffer)
 {
 #pragma omp parallel for schedule(static)
-    for (int ij = 0; ij < n0 * n1; ij++)
+    for (size_t ij = 0; ij < n0 * n1; ij++)
     {
-        int i = ij / n1;
-        int j = ij % n1;
+        size_t i = ij / n1;
+        size_t j = ij % n1;
         size_t ind_A = ij * n2 * n3 * n4;
         size_t ind_B = i * n1 * n2 * n3 * n4 + j;
-        for (int k = 0; k < n2; k++)
+        for (size_t k = 0; k < n2; k++)
         {
-            for (int l = 0; l < n3; l++)
+            for (size_t l = 0; l < n3; l++)
             {
-                for (int m = 0; m < n4; m++, ind_A++)
+                for (size_t m = 0; m < n4; m++, ind_A++)
                 {
-                    int ind_B2 = ind_B + ((l * n2 + k) * n4 + m) * n1;
+                    size_t ind_B2 = ind_B + ((l * n2 + k) * n4 + m) * n1;
                     buffer[ind_B2] = tensor_A[ind_A];
                 }
             }
