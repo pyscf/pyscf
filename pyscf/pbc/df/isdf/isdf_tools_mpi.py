@@ -14,7 +14,8 @@ comm_size = comm.Get_size()
 
 INT_MAX = 2147483647
 # INT_MAX = 65536
-BLKSIZE = INT_MAX // 32 + 1
+# BLKSIZE = INT_MAX // 32 + 1
+BLKSIZE = INT_MAX // 64 + 1
 
 def _comm_bunch(size_of_comm, force_even=False):
     if size_of_comm % comm_size == 0:

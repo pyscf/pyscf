@@ -74,7 +74,7 @@ def RCCSD_isdf(mf, frozen=0, mo_coeff=None, mo_occ=None, run=True):
     eris_ccsd = _make_isdf_eris_incore(mycc, mf.with_df, mo_coeff=mo_coeff)
     # mycc.eris = eris
     if run:
-        mycc_isdf.kernel(eris=eris_ccsd)
+        mycc.kernel(eris=eris_ccsd)
     return mycc, eris_ccsd
 
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast
@@ -174,6 +174,8 @@ class _restricted_THC_posthf_holder:
             self.tau_v = bcast(self.tau_v, 0)
             self.n_laplace = bcast(self.n_laplace, 0)
             self.nthc_int = bcast(self.nthc_int, 0)
+
+            comm.barrier()
 
 
 if __name__ == '__main__':
