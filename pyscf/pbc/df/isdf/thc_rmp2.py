@@ -139,7 +139,6 @@ def _bunchsize_determination_driver(
         
         buf1 = _fn_bufsize(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize_1, vir_bunchsize_1, n_laplace_size)
         buf1 = np.sum(buf1)
-        #buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize_1, vir_bunchsize_1, n_laplace_size)
         
         if (buf1+buf2)*dtype_size < memory and reach_maximal_memory and (thc_bunchsize_1)<thc_bunchsize_0+4 and (vir_bunchsize_1)<vir_bunchsize_0+4:
             break
@@ -157,7 +156,6 @@ def _bunchsize_determination_driver(
             
             buf1 = _fn_bufsize(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize_1, vir_bunchsize_1, n_laplace_size)
             buf1 = np.sum(buf1)
-            #buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize_1, vir_bunchsize_1, n_laplace_size)
 
             reach_maximal_memory = False
         
@@ -311,7 +309,6 @@ class THC_RMP2(_restricted_THC_posthf_holder):
         if rank == 0:
             bunchsize1, bunchsize2, n_laplace_size = _bunchsize_determination_driver(
                 RMP2_K_forloop_P_b_determine_bucket_size_forloop,
-                # RMP2_K_forloop_P_b_determine_buf_size_intermediates_forloop,
                 "RMP2_K",
                 self.nocc,
                 self.nvir,
@@ -325,9 +322,6 @@ class THC_RMP2(_restricted_THC_posthf_holder):
             )
             buf1 = np.sum(buf1)
             buf2 = 0
-            # buf2 = RMP2_K_forloop_P_b_determine_buf_size_intermediates_forloop(
-            #     self.nvir, self.nocc, self.n_laplace, self.nthc_int, bunchsize1, bunchsize2, n_laplace_size
-            # )
             print("memory needed for RMP2_K = %12.2f MB" % ((buf1+buf2)*8/1e6))
         else:
             bunchsize1 = None
@@ -371,7 +365,7 @@ class THC_RMP2(_restricted_THC_posthf_holder):
 
 if __name__ == "__main__":
     
-    c = 25 
+    c = 15 
     N = 2
     
     if rank == 0:
@@ -382,12 +376,12 @@ if __name__ == "__main__":
         cell.atom = [
                     ['C', (0.     , 0.     , 0.    )],
                     ['C', (0.8917 , 0.8917 , 0.8917)],
-                    ['C', (1.7834 , 1.7834 , 0.    )],
-                    ['C', (2.6751 , 2.6751 , 0.8917)],
-                    ['C', (1.7834 , 0.     , 1.7834)],
-                    ['C', (2.6751 , 0.8917 , 2.6751)],
-                    ['C', (0.     , 1.7834 , 1.7834)],
-                    ['C', (0.8917 , 2.6751 , 2.6751)],
+                    #['C', (1.7834 , 1.7834 , 0.    )],
+                    #['C', (2.6751 , 2.6751 , 0.8917)],
+                    #['C', (1.7834 , 0.     , 1.7834)],
+                    #['C', (2.6751 , 0.8917 , 2.6751)],
+                    #['C', (0.     , 1.7834 , 1.7834)],
+                    #['C', (0.8917 , 2.6751 , 2.6751)],
                 ] 
 
         cell.basis   = 'gth-szv'
@@ -401,7 +395,8 @@ if __name__ == "__main__":
         verbose = 4
     
         prim_cell = build_supercell(cell.atom, cell.a, Ls = [1,1,1], ke_cutoff=cell.ke_cutoff, basis=cell.basis, pseudo=cell.pseudo)   
-        prim_partition = [[0,1,2,3], [4,5,6,7]]
+        #prim_partition = [[0,1,2,3], [4,5,6,7]]
+        prim_partition=  [[0,1]]
         prim_mesh = prim_cell.mesh
     
         Ls = [1, 1, N]
@@ -444,7 +439,7 @@ if __name__ == "__main__":
     
     if rank == 0:
         _myisdf = ISDF.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
-        _myisdf.build_IP_local(c=12, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
+        _myisdf.build_IP_local(c=6, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
         X          = _myisdf.aoRg_full() 
     else:
         X = None
