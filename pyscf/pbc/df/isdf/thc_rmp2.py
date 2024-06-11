@@ -46,6 +46,7 @@ SCHEDULE_TYPE_NAIVE   = 0
 SCHEDULE_TYPE_C       = 1
 SCHEDULE_TYPE_OPT_MEM = 2
 SCHEDULE_TYPE_FORLOOP = 3
+SCHEDULE_TYPE_FORLOOP_ENOUGH_MEMORY = 4
 
 ### function to determine the bunchsize ### 
 
@@ -117,6 +118,7 @@ def _bunchsize_determination_driver(
     vir_bunchsize_1 = vir_bunchsize
     
     reach_maximal_memory = False
+    vir_bunchsize_fixed  = False
     
     while True:
         
@@ -124,19 +126,38 @@ def _bunchsize_determination_driver(
             thc_bunchsize_0 = thc_bunchsize_1
             vir_bunchsize_0 = vir_bunchsize_1
             thc_bunchsize_1 *= 2
-            vir_bunchsize_1 *= 2
+            if not vir_bunchsize_fixed:
+                vir_bunchsize_1 *= 2
+                vir_bunchsize_1 = min(vir_bunchsize_1, _nvir)
             thc_bunchsize_1 = min(thc_bunchsize_1, _nthc_int)
-            vir_bunchsize_1 = min(vir_bunchsize_1, _nvir)
         else:
             reach_maximal_memory = True
             thc_bunchsize_1 = (thc_bunchsize_0 + thc_bunchsize_1) // 2
-            vir_bunchsize_1 = (vir_bunchsize_0 + vir_bunchsize_1) // 2
+            if not vir_bunchsize_fixed:
+                vir_bunchsize_1 = (vir_bunchsize_0 + vir_bunchsize_1) // 2
         
         buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize_1, vir_bunchsize_1, n_laplace_size)
         buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize_1, vir_bunchsize_1, n_laplace_size)
         
         if (buf1+buf2)*dtype_size < memory and reach_maximal_memory and (thc_bunchsize_1)<thc_bunchsize_0+4 and (vir_bunchsize_1)<vir_bunchsize_0+4:
             break
+        
+        if (vir_bunchsize_1)<vir_bunchsize_0+4:
+            vir_bunchsize_fixed = True
+            if vir_bunchsize_1 != _nvir:
+                if vir_bunchsize_0 > _nvir // 2:
+                    vir_bunchsize_0 = _nvir // 2 + 1
+                elif vir_bunchsize_0 > _nvir // 3:
+                    vir_bunchsize_0 = _nvir // 3 + 1
+                elif vir_bunchsize_0 > _nvir // 4:
+                    vir_bunchsize_0 = _nvir // 4 + 1
+                vir_bunchsize_1 = vir_bunchsize_0
+            
+            buf1 = _fn_head(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize_1, vir_bunchsize_1, n_laplace_size)
+            buf2 = _fn_intermediates(_nvir, _nocc, _n_laplace, _nthc_int, thc_bunchsize_1, vir_bunchsize_1, n_laplace_size)
+
+            reach_maximal_memory = False
+        
         
     return thc_bunchsize_1, vir_bunchsize_1, n_laplace_size
         
@@ -204,13 +225,13 @@ class THC_RMP2(_restricted_THC_posthf_holder):
         
         ### first fetch the size of required memory ### 
         
-        buf1 = RMP2_J_determine_buf_head_size(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
-        buf2 = RMP2_J_determine_buf_size_intermediates(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
-        print("memory needed for RMP2_J = %12.2f MB" % ((buf1+buf2)*8/1e6))
+        buf = RMP2_J_determine_bucket_size(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
+        bufsize = np.sum(buf)
+        print("memory needed for RMP2_J = %12.2f MB" % ((bufsize)*8/1e6))
         
-        buf1 = RMP2_K_determine_buf_head_size(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
-        buf2 = RMP2_K_determine_buf_size_intermediates(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
-        print("memory needed for RMP2_K = %12.2f MB" % ((buf1+buf2)*8/1e6))
+        buf = RMP2_K_determine_bucket_size(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
+        bufsize = np.sum(buf)
+        print("memory needed for RMP2_K = %12.2f MB" % ((bufsize)*8/1e6))
         
         t1 = (logger.process_clock(), logger.perf_counter())
         mp2_J = RMP2_J_opt_mem(self.Z,
@@ -232,6 +253,31 @@ class THC_RMP2(_restricted_THC_posthf_holder):
         print("E_corr(RMP2) = " + str(-2*mp2_J + mp2_K))
         return -2*mp2_J + mp2_K
 
+    def _kernel_forloop_enough_memory(self):
+        
+        # if self.buffer is None:
+        #     self.buffer = np.zeros((self.memory//8))
+        
+        ### first fetch the size of required memory ### 
+        
+        t1 = (logger.process_clock(), logger.perf_counter())
+        mp2_J = RMP2_J(self.Z,
+                       self.X_o,
+                       self.X_v,
+                       self.tau_o,
+                       self.tau_v)
+        t2 = (logger.process_clock(), logger.perf_counter())
+        _benchmark_time(t1, t2, "RMP2_J")
+        mp2_K = RMP2_K_forloop_P_b(self.Z,
+                                   self.X_o,
+                                   self.X_v,
+                                   self.tau_o,
+                                   self.tau_v)
+        t3 = (logger.process_clock(), logger.perf_counter())
+        _benchmark_time(t2, t3, "RMP2_K_forloop_P_b_enough_memory")
+        print("E_corr(RMP2) = " + str(-2*mp2_J + mp2_K))
+        return -2*mp2_J + mp2_K
+
     def _kernel_forloop(self):
         
         if self.buffer is None:
@@ -239,10 +285,11 @@ class THC_RMP2(_restricted_THC_posthf_holder):
         
         ##### for MP2 J currently we do not use forloop ##### 
         
-        buf1 = RMP2_J_determine_buf_head_size(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
-        buf2 = RMP2_J_determine_buf_size_intermediates(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
-        if (buf1+buf2) * 8 > self.memory:
-            print(_print_memory("memory needed for RMP2_J", (buf1+buf2)*8))
+        buf = RMP2_J_determine_bucket_size(self.nvir, self.nocc, self.n_laplace, self.nthc_int)
+        bufsize = np.sum(buf)
+        # print("memory needed for RMP2_J = %12.2f MB" % ((bufsize)*8/1e6))
+        if bufsize * 8 > self.memory:
+            print(_print_memory("memory needed for RMP2_J", bufsize*8))
             print("Warning memory is no enough but we do it anyway!")
             # raise ValueError("memory is too limited")
         t1 = (logger.process_clock(), logger.perf_counter())
@@ -382,3 +429,4 @@ if __name__ == "__main__":
     thc_rmp2.kernel(SCHEDULE_TYPE_C)
     thc_rmp2.kernel(SCHEDULE_TYPE_OPT_MEM)
     thc_rmp2.kernel(SCHEDULE_TYPE_FORLOOP)
+    thc_rmp2.kernel(SCHEDULE_TYPE_FORLOOP_ENOUGH_MEMORY)
