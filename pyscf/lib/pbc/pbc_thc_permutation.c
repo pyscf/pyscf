@@ -438,6 +438,18 @@ fn_permutation_01234_01342(
     fn_permutation_012_021(tensor_A, tensor_B, n0 * n1, n2, n3 * n4, buffer);
 }
 
+fn_permutation_01234_01342_wob(
+    const double *tensor_A,
+    double *tensor_B,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    const int n4)
+{
+    fn_permutation_012_021_wob(tensor_A, tensor_B, n0 * n1, n2, n3 * n4);
+}
+
 void fn_permutation_01234_01243(
     const double *tensor_A,
     double *tensor_B,
@@ -540,6 +552,18 @@ void fn_permutation_01234_20134(
     fn_permutation_012_102(tensor_A, tensor_B, n0 * n1, n2, n3 * n4, buffer);
 }
 
+void fn_permutation_01234_20134_wob(
+    const double *tensor_A,
+    double *tensor_B,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    const int n4)
+{
+    fn_permutation_012_102_wob(tensor_A, tensor_B, n0 * n1, n2, n3 * n4);
+}
+
 void fn_permutation_01234_23014(
     const double *tensor_A,
     double *tensor_B,
@@ -599,6 +623,18 @@ void fn_permutation_01234_02341(
     double *buffer)
 {
     fn_permutation_012_021(tensor_A, tensor_B, n0, n1, n2 * n3 * n4, buffer);
+}
+
+void fn_permutation_01234_02341_wob(
+    const double *tensor_A,
+    double *tensor_B,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    const int n4)
+{
+    fn_permutation_012_021_wob(tensor_A, tensor_B, n0, n1, n2 * n3 * n4);
 }
 
 void fn_permutation_01234_12340(
@@ -956,6 +992,31 @@ void fn_permutation_0123_3210(
     }
 
     memcpy(tensor_B, buffer, sizeof(double) * n0 * n1 * n2 * n3);
+}
+
+void fn_permutation_0123_3210_wob(
+    const double *tensor_A,
+    double *tensor_B,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3)
+{
+    int nthread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nthread) schedule(static)
+    for (size_t ij = 0; ij < n0 * n1; ij++)
+    {
+        size_t i = ij / n1;
+        size_t j = ij % n1;
+        for (size_t k = 0; k < n2; k++)
+        {
+            for (size_t l = 0; l < n3; l++)
+            {
+                tensor_B[l * n0 * n1 * n2 + k * n0 * n1 + j * n0 + i] = tensor_A[ij * n2 * n3 + k * n3 + l];
+            }
+        }
+    }
 }
 
 void fn_permutation_0123_3021(

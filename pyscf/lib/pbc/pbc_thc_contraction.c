@@ -338,9 +338,19 @@ void fn_contraction_01_02_120_wob(
     const int n1,
     const int n2)
 {
-    double *buffer = (double *)malloc(sizeof(double) * n0 * n1 * n2);
-    fn_contraction_01_02_120(tensor_A, tensor_B, tensor_C, n0, n1, n2, buffer);
-    free(buffer);
+#pragma omp parallel for schedule(static)
+    for (size_t jk = 0; jk < n1 * n2; jk++)
+    {
+        size_t j = jk / n2;
+        size_t k = jk % n2;
+        size_t ind_A = j;
+        size_t ind_B = k;
+        size_t ind_C = jk * n0;
+        for (size_t i = 0; i < n0; i++, ind_A += n1, ind_B += n2, ind_C++)
+        {
+            tensor_C[ind_C] = tensor_A[ind_A] * tensor_B[ind_B];
+        }
+    }
 }
 
 void fn_contraction_01_023_1230(const double *tensor_A,
@@ -418,6 +428,28 @@ void fn_contraction_01_12_021(const double *tensor_A,
     memcpy(tensor_C, buffer, sizeof(double) * n0 * n1 * n2);
 }
 
+void fn_contraction_01_12_021_wob(const double *tensor_A,
+                                  const double *tensor_B,
+                                  double *tensor_C,
+                                  const int n0,
+                                  const int n1,
+                                  const int n2)
+{
+
+    int nthread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nthread) schedule(static)
+    for (int jk = 0; jk < n1 * n2; jk++)
+    {
+        int j = jk / n2;
+        int k = jk % n2;
+        for (int i = 0; i < n0; i++)
+        {
+            tensor_C[i * n1 * n2 + k * n1 + j] = tensor_A[i * n1 + j] * tensor_B[jk];
+        }
+    }
+}
+
 void fn_contraction_01_123_0231(
     const double *tensor_A,
     const double *tensor_B,
@@ -429,6 +461,18 @@ void fn_contraction_01_123_0231(
     double *buffer)
 {
     fn_contraction_01_12_021(tensor_A, tensor_B, tensor_C, n0, n1, n2 * n3, buffer);
+}
+
+void fn_contraction_01_123_0231_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3)
+{
+    fn_contraction_01_12_021_wob(tensor_A, tensor_B, tensor_C, n0, n1, n2 * n3);
 }
 
 void fn_contraction_01_0234_12340(
@@ -443,6 +487,19 @@ void fn_contraction_01_0234_12340(
     double *buffer)
 {
     fn_contraction_01_02_120(tensor_A, tensor_B, tensor_C, n0, n1, n2 * n3 * n4, buffer);
+}
+
+void fn_contraction_01_0234_12340_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    const int n4)
+{
+    fn_contraction_01_02_120_wob(tensor_A, tensor_B, tensor_C, n0, n1, n2 * n3 * n4);
 }
 
 void _fn_contraction_01_2031_0123(
@@ -559,6 +616,18 @@ void fn_contraction_01_230_1230(
     double *buffer)
 {
     fn_contraction_01_20_120(tensor_A, tensor_B, tensor_C, n0, n1, n2 * n3, buffer);
+}
+
+void fn_contraction_01_230_1230_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3)
+{
+    fn_contraction_01_20_120_wob(tensor_A, tensor_B, tensor_C, n0, n1, n2 * n3);
 }
 
 void fn_contraction_01_01_0(
@@ -891,6 +960,34 @@ void fn_contraction_01_021_02_plus(
     }
 }
 
+void fn_contraction_01_021_02_plus_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2)
+{
+    static const int INCX = 1;
+    static const double ALPHA = 1.0;
+
+    int nthread = get_omp_threads();
+    int benchsize = n0 * n2 / nthread + 1;
+
+#pragma omp parallel num_threads(nthread)
+    {
+#pragma omp for schedule(static)
+        for (size_t ik = 0; ik < n0 * n2; ik++)
+        {
+            size_t i = ik / n2;
+            // for (size_t j = 0; j < n1; j++)
+            // {
+            tensor_C[ik] += ddot_(&n1, tensor_A + i * n1, &INCX, tensor_B + ik * n1, &INCX);
+            // }
+        }
+    }
+}
+
 void fn_contraction_012_01342_0134(
     const double *tensor_A,
     const double *tensor_B,
@@ -903,6 +1000,19 @@ void fn_contraction_012_01342_0134(
     double *buffer)
 {
     fn_contraction_01_021_02(tensor_A, tensor_B, tensor_C, n0 * n1, n2, n3 * n4, buffer);
+}
+
+void fn_contraction_012_01342_0134_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    const int n4)
+{
+    fn_contraction_01_021_02_wob(tensor_A, tensor_B, tensor_C, n0 * n1, n2, n3 * n4);
 }
 
 void fn_contraction_012_01342_0134_plus(
@@ -1808,6 +1918,19 @@ void fn_contraction_012_02134_34012(
     fn_contraction_012_0213_3012(tensor_A, tensor_B, tensor_C, n0, n1, n2, n3 * n4, buffer);
 }
 
+void fn_contraction_012_02134_34012_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    const int n4)
+{
+    fn_contraction_012_0213_3012_wob(tensor_A, tensor_B, tensor_C, n0, n1, n2, n3 * n4);
+}
+
 void fn_contraction_0123_02143_40123(
     const double *tensor_A,
     const double *tensor_B,
@@ -1846,6 +1969,43 @@ void fn_contraction_0123_02143_40123(
     }
 
     memcpy(tensor_C, buffer, sizeof(double) * n0 * n1 * n2 * n3 * n4);
+}
+
+void fn_contraction_0123_02143_40123_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    const int n4)
+{
+    size_t nij = n0 * n1;
+
+    int nthread = get_omp_threads();
+
+#pragma omp parallel for num_threads(nthread) schedule(static)
+    for (size_t ij = 0; ij < nij; ij++)
+    {
+        size_t i = ij / n1;
+        size_t j = ij % n1;
+
+        size_t ind_tmp = ij * n2 * n3;
+
+        for (size_t k = 0; k < n2; k++)
+        {
+            for (size_t l = 0; l < n3; l++, ind_tmp++)
+            {
+                double tmp = tensor_A[ij * n2 * n3 + k * n3 + l];
+                size_t ind_tmp2 = i * n1 * n2 * n3 * n4 + k * n1 * n4 * n3 + j * n4 * n3 + l;
+                for (size_t m = 0; m < n4; m++)
+                {
+                    tensor_C[m * n0 * n1 * n2 * n3 + ind_tmp] = tmp * tensor_B[ind_tmp2 + m * n3];
+                }
+            }
+        }
+    }
 }
 
 void fn_contraction_0123_021_3012(
@@ -4109,6 +4269,18 @@ void fn_contraction_01_0231_023_plus(
     double *buffer)
 {
     fn_contraction_01_021_02_plus(tensor_A, tensor_B, tensor_C, n0, n1, n2 * n3, buffer);
+}
+
+void fn_contraction_01_0231_023_plus_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3)
+{
+    fn_contraction_01_021_02_plus_wob(tensor_A, tensor_B, tensor_C, n0, n1, n2 * n3);
 }
 
 void fn_contraction_012_031_2301(
