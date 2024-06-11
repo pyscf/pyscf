@@ -1925,14 +1925,14 @@ void fn_permutation_01234_24031(
     {
         int i = ij / n1;
         int j = ij % n1;
-        size_t ind_A = ij * n2 * n3 * n4;
+        int64_t ind_A = ij * n2 * n3 * n4;
         for (int k = 0; k < n2; k++)
         {
             for (int l = 0; l < n3; l++)
             {
                 for (int m = 0; m < n4; m++, ind_A++)
                 {
-                    int ind_B = k * n4 * n0 * n1 * n3 + m * n0 * n1 * n3 + i * n1 * n3 + l * n1 + j;
+                    int64_t ind_B = k * n4 * n0 * n1 * n3 + m * n0 * n1 * n3 + i * n1 * n3 + l * n1 + j;
                     buffer[ind_B] = tensor_A[ind_A];
                 }
             }

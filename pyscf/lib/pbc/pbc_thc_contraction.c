@@ -5473,9 +5473,9 @@ void fn_contraction_01234_031_24013(
             {
                 for (int m = 0; m < n4; m++)
                 {
-                    int ind_A = i * n1 * n2 * n3 * n4 + j * n2 * n3 * n4 + k * n3 * n4 + l * n4 + m;
-                    int ind_B = i * n3 * n1 + l * n1 + j;
-                    int ind_C = k * n4 * n0 * n1 * n3 + m * n0 * n1 * n3 + i * n1 * n3 + j * n3 + l;
+                    size_t ind_A = i * n1 * n2 * n3 * n4 + j * n2 * n3 * n4 + k * n3 * n4 + l * n4 + m;
+                    size_t ind_B = i * n3 * n1 + l * n1 + j;
+                    size_t ind_C = k * n4 * n0 * n1 * n3 + m * n0 * n1 * n3 + i * n1 * n3 + j * n3 + l;
                     buffer[ind_C] = tensor_A[ind_A] * tensor_B[ind_B];
                 }
             }
@@ -5503,13 +5503,13 @@ void fn_contraction_012_02314_34012(
         int j = ij % n1;
         for (int k = 0; k < n2; k++)
         {
-            int ind_A = i * n1 * n2 + j * n2 + k;
+            size_t ind_A = i * n1 * n2 + j * n2 + k;
             for (int l = 0; l < n3; l++)
             {
                 for (int m = 0; m < n4; m++)
                 {
-                    int ind_B = i * n2 * n3 * n1 * n4 + k * n3 * n1 * n4 + l * n1 * n4 + j * n4 + m;
-                    int ind_C = l * n4 * n0 * n1 * n2 + m * n0 * n1 * n2 + i * n1 * n2 + j * n2 + k;
+                    size_t ind_B = i * n2 * n3 * n1 * n4 + k * n3 * n1 * n4 + l * n1 * n4 + j * n4 + m;
+                    size_t ind_C = l * n4 * n0 * n1 * n2 + m * n0 * n1 * n2 + i * n1 * n2 + j * n2 + k;
                     buffer[ind_C] = tensor_A[ind_A] * tensor_B[ind_B];
                 }
             }
@@ -5536,13 +5536,13 @@ void fn_contraction_012_02314_34012_wob(
         int j = ij % n1;
         for (int k = 0; k < n2; k++)
         {
-            int ind_A = i * n1 * n2 + j * n2 + k;
+            size_t ind_A = i * n1 * n2 + j * n2 + k;
             for (int l = 0; l < n3; l++)
             {
                 for (int m = 0; m < n4; m++)
                 {
-                    int ind_B = i * n2 * n3 * n1 * n4 + k * n3 * n1 * n4 + l * n1 * n4 + j * n4 + m;
-                    int ind_C = l * n4 * n0 * n1 * n2 + m * n0 * n1 * n2 + i * n1 * n2 + j * n2 + k;
+                    size_t ind_B = i * n2 * n3 * n1 * n4 + k * n3 * n1 * n4 + l * n1 * n4 + j * n4 + m;
+                    size_t ind_C = l * n4 * n0 * n1 * n2 + m * n0 * n1 * n2 + i * n1 * n2 + j * n2 + k;
                     tensor_C[ind_C] = tensor_A[ind_A] * tensor_B[ind_B];
                 }
             }
@@ -5647,8 +5647,8 @@ void fn_contraction_01234_032_10234(
         size_t ind_B = i * n3 * n2 + l * n2;
         for (int k = 0; k < n2; k++, ind_B++)
         {
-            int ind_A = ((i * n1 * n2 + k) * n3 + l) * n4;
-            int ind_C = ((i * n2 + k) * n3 + l) * n4;
+            size_t ind_A = ((i * n1 * n2 + k) * n3 + l) * n4;
+            size_t ind_C = ((i * n2 + k) * n3 + l) * n4;
             for (int j = 0; j < n1; ++j, ind_A += n2 * n3 * n4, ind_C += n0 * n2 * n3 * n4)
             {
                 daxpy_(&n4, tensor_B + ind_B, tensor_A + ind_A, &INCX, buffer + ind_C, &INCX);
@@ -5815,8 +5815,8 @@ void fn_contraction_01234_04132_01234(
             {
                 for (int l = 0; l < n3; l++)
                 {
-                    int ind_A = i * n1 * n2 * n3 * n4 + j * n2 * n3 * n4 + k * n3 * n4 + l * n4 + m;
-                    int ind_B = i * n4 * n1 * n2 * n3 + m * n1 * n3 * n2 + j * n2 * n3 + l * n2 + k;
+                    size_t ind_A = i * n1 * n2 * n3 * n4 + j * n2 * n3 * n4 + k * n3 * n4 + l * n4 + m;
+                    size_t ind_B = i * n4 * n1 * n2 * n3 + m * n1 * n3 * n2 + j * n2 * n3 + l * n2 + k;
                     buffer[ind_A] = tensor_A[ind_A] * tensor_B[ind_B];
                 }
             }
@@ -5835,25 +5835,33 @@ void fn_contraction_01234_04132_01234_wob(
     const int n3,
     const int n4)
 {
-#pragma omp parallel for schedule(static)
-    for (int im = 0; im < n0 * n4; im++)
-    {
-        int i = im / n4;
-        int m = im % n4;
+    printf("In fn_contraction_01234_04132_01234_wob\n");
+    printf("size of size_t = %d", sizeof(size_t));
+    // printf("%d %d %d %d %d \n", n0, n1, n2, n3, n4);
 
-        for (int j = 0; j < n1; j++)
+#pragma omp parallel for schedule(static)
+    for (size_t im = 0; im < n0 * n4; im++)
+    {
+        size_t i = im / n4;
+        size_t m = im % n4;
+
+        // printf("im = %d i = %d m = %d\n", im,i,m);
+
+        for (size_t j = 0; j < n1; j++)
         {
-            for (int k = 0; k < n2; k++)
+            for (size_t k = 0; k < n2; k++)
             {
-                for (int l = 0; l < n3; l++)
+                for (size_t l = 0; l < n3; l++)
                 {
-                    int ind_A = i * n1 * n2 * n3 * n4 + j * n2 * n3 * n4 + k * n3 * n4 + l * n4 + m;
-                    int ind_B = i * n4 * n1 * n2 * n3 + m * n1 * n3 * n2 + j * n2 * n3 + l * n2 + k;
+                    size_t ind_A = i * n1 * n2 * n3 * n4 + j * n2 * n3 * n4 + k * n3 * n4 + l * n4 + m;
+                    size_t ind_B = i * n4 * n1 * n2 * n3 + m * n1 * n3 * n2 + j * n2 * n3 + l * n2 + k;
                     tensor_C[ind_A] = tensor_A[ind_A] * tensor_B[ind_B];
                 }
             }
         }
     }
+
+    // printf("finish!");
 }
 
 void fn_contraction_01234_04321_01234(
