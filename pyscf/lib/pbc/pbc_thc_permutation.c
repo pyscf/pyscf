@@ -476,6 +476,18 @@ void fn_permutation_01234_01423(
     fn_permutation_012_021(tensor_A, tensor_B, n0 * n1, n2 * n3, n4, buffer);
 }
 
+void fn_permutation_01234_01423_wob(
+    const double *tensor_A,
+    double *tensor_B,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3,
+    const int n4)
+{
+    fn_permutation_012_021_wob(tensor_A, tensor_B, n0 * n1, n2 * n3, n4);
+}
+
 void fn_permutation_012_102(
     const double *tensor_A,
     double *tensor_B,

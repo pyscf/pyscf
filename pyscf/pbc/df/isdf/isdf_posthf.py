@@ -77,56 +77,104 @@ def RCCSD_isdf(mf, frozen=0, mo_coeff=None, mo_occ=None, run=True):
         mycc_isdf.kernel(eris=eris_ccsd)
     return mycc, eris_ccsd
 
+from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast
+
 class _restricted_THC_posthf_holder:
     def __init__(self, my_isdf, my_mf, X,
                  laplace_rela_err = 1e-7,
                  laplace_order    = 2):
         
-        print("THC posthf holder is initialized!")
+        if rank == 0:
         
-        self.my_isdf = my_isdf
-        self.my_mf   = my_mf
-        self.X       = X
+            print("THC posthf holder is initialized!")
         
-        self.mo_coeff = my_mf.mo_coeff
-        self.mo_occ   = my_mf.mo_occ
-        self.mo_energy = my_mf.mo_energy
+            self.my_isdf = my_isdf
+            self.my_mf   = my_mf
+            self.X       = X
         
-        self.nocc = my_mf.mol.nelectron // 2
-        self.nvir = my_mf.mol.nao - self.nocc
+            self.mo_coeff = my_mf.mo_coeff
+            self.mo_occ   = my_mf.mo_occ
+            self.mo_energy = my_mf.mo_energy
         
-        self.occ_ene = self.mo_energy[:self.nocc]
-        self.vir_ene = self.mo_energy[self.nocc:]
+            self.nocc = my_mf.mol.nelectron // 2
+            self.nvir = my_mf.mol.nao - self.nocc
         
-        #### construct Z matrix for XXZXX #### 
+            self.occ_ene = self.mo_energy[:self.nocc]
+            self.vir_ene = self.mo_energy[self.nocc:]
         
-        t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        Z = LS_THC(my_isdf, X)
-        t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _benchmark_time(t1, t2, "Z matrix construction for THC eri = XXZXX")
+            #### construct Z matrix for XXZXX #### 
+        
+            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            Z = LS_THC(my_isdf, X)
+            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            _benchmark_time(t1, t2, "Z matrix construction for THC eri = XXZXX")
 
-        #### construct laplace ####
+            #### construct laplace ####
         
-        self._laplace = laplace_holder(self.mo_energy, self.nocc,
-                                       rel_error = laplace_rela_err,
-                                       order = laplace_order)
+            self._laplace = laplace_holder(self.mo_energy, self.nocc,
+                                           rel_error = laplace_rela_err,
+                                           order = laplace_order)
 
-        self.X_o = lib.ddot(self.mo_coeff[:, :self.nocc].T, X)
-        self.X_v = lib.ddot(self.mo_coeff[:, self.nocc:].T, X)
-        self.Z = Z
-        self.tau_o = self._laplace.laplace_occ
-        self.tau_v = self._laplace.laplace_vir
+            self.X_o = lib.ddot(self.mo_coeff[:, :self.nocc].T, X)
+            self.X_v = lib.ddot(self.mo_coeff[:, self.nocc:].T, X)
+            self.Z = Z
+            self.tau_o = self._laplace.laplace_occ
+            self.tau_v = self._laplace.laplace_vir
         
-        self.n_laplace = self.tau_o.shape[1]
-        self.nthc_int = self.Z.shape[1]
+            self.n_laplace = self.tau_o.shape[1]
+            self.nthc_int = self.Z.shape[1]
         
-        print("n_laplace = ", self.n_laplace)
-        print("nthc_int  = ", self.nthc_int)
-        print("nocc      = ", self.nocc)
-        print("nvir      = ", self.nvir)
+            print("n_laplace = ", self.n_laplace)
+            print("nthc_int  = ", self.nthc_int)
+            print("nocc      = ", self.nocc)
+            print("nvir      = ", self.nvir)
         
-        print("THC posthf holder initialization is finished!")
+            print("THC posthf holder initialization is finished!")
         
+        else:
+            
+            self.my_isdf  = None
+            self.my_mf    = None
+            self.X        = None
+            self.mo_coeff = None
+            self.mo_occ   = None
+            self.mo_energy = None
+            self.nocc = None
+            self.nvir = None
+            self.occ_ene = None
+            self.vir_ene = None
+            self._laplace = None
+            self.X_o = None
+            self.X_v = None
+            self.Z = None
+            self.tau_o = None
+            self.tau_v = None
+            self.n_laplace = None
+            self.nthc_int = None
+        
+        #### sync ####
+        
+        if comm_size > 1:
+            
+            #self.my_isdf  = bcast(self.my_isdf, 0)
+            #self.my_mf    = bcast(self.my_mf, 0)
+            self.X        = bcast(self.X, 0)
+            self.mo_coeff = bcast(self.mo_coeff, 0)
+            self.mo_occ   = bcast(self.mo_occ, 0)
+            self.mo_energy = bcast(self.mo_energy, 0)
+            self.nocc = bcast(self.nocc, 0)
+            self.nvir = bcast(self.nvir, 0)
+            self.occ_ene = bcast(self.occ_ene, 0)
+            self.vir_ene = bcast(self.vir_ene, 0)
+            # self._laplace = bcast(self._laplace, 0)
+            self.X_o = bcast(self.X_o, 0)
+            self.X_v = bcast(self.X_v, 0)
+            self.Z = bcast(self.Z, 0)
+            self.tau_o = bcast(self.tau_o, 0)
+            self.tau_v = bcast(self.tau_v, 0)
+            self.n_laplace = bcast(self.n_laplace, 0)
+            self.nthc_int = bcast(self.nthc_int, 0)
+
 
 if __name__ == '__main__':
 

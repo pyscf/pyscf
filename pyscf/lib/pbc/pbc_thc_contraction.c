@@ -83,6 +83,18 @@ void fn_contraction_0123_0123_0123(
     fn_contraction_0_0_0(tensor_A, tensor_B, tensor_C, n0 * n1 * n2 * n3, buffer);
 }
 
+void fn_contraction_0123_0123_0123_wob(
+    const double *tensor_A,
+    const double *tensor_B,
+    double *tensor_C,
+    const int n0,
+    const int n1,
+    const int n2,
+    const int n3)
+{
+    fn_contraction_0_0_0(tensor_A, tensor_B, tensor_C, n0 * n1 * n2 * n3, NULL);
+}
+
 void fn_contraction_01_21_021(
     const double *tensor_A,
     const double *tensor_B,

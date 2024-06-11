@@ -7,6 +7,7 @@ from pyscf import lib
 libpbc = lib.load_library('libpbc')
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 
+from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 def RMP2_K_forloop_P_b_determine_bucket_size_forloop(NVIR        : int,
                                                      NOCC        : int,
                                                      N_LAPLACE   : int,
@@ -46,7 +47,7 @@ def RMP2_K_forloop_P_b_determine_bucket_size_forloop(NVIR        : int,
     _M6_sliced_size  = (NTHC_INT * (P_bunchsize * T_bunchsize))
     _M8_size         = (NTHC_INT * (b_bunchsize * (P_bunchsize * T_bunchsize)))
     _M7_size         = (b_bunchsize * (P_bunchsize * (NTHC_INT * T_bunchsize)))
-    _M10_packed_size = (NTHC_INT * (NTHC_INT * N_LAPLACE))
+    _M10_packed_size = (NTHC_INT * (P_bunchsize * T_bunchsize))
     # determine the size of each bucket
     # bucket 0
     bucked_0_size    = max(bucked_0_size, _M2_size)
@@ -526,7 +527,8 @@ def RMP2_K_forloop_P_b_forloop_P_b(Z           : np.ndarray,
                                    buffer      : np.ndarray,
                                    P_bunchsize = 8,
                                    b_bunchsize = 8,
-                                   T_bunchsize = 1):
+                                   T_bunchsize = 1,
+                                   use_mpi = False):
     # assign the size of the indices
     NVIR             = X_v.shape[0]    
     NOCC             = X_o.shape[0]    
@@ -567,32 +569,41 @@ def RMP2_K_forloop_P_b_forloop_P_b(Z           : np.ndarray,
     fn_clean     = getattr(libpbc, "fn_clean", None)
     assert fn_clean is not None
     # fetch function pointers
-    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
-    assert fn_contraction_012_031_2301_wob is not None
-    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
-    assert fn_permutation_0123_0132_wob is not None
-    fn_contraction_01_023_1230_wob = getattr(libpbc, "fn_contraction_01_023_1230_wob", None)
-    assert fn_contraction_01_023_1230_wob is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
     fn_contraction_0123_0123_012_wob = getattr(libpbc, "fn_contraction_0123_0123_012_wob", None)
     assert fn_contraction_0123_0123_012_wob is not None
-    fn_packadd_3_1_2 = getattr(libpbc, "fn_packadd_3_1_2", None)
-    assert fn_packadd_3_1_2 is not None
-    fn_permutation_0123_0213_wob = getattr(libpbc, "fn_permutation_0123_0213_wob", None)
-    assert fn_permutation_0123_0213_wob is not None
-    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
-    assert fn_contraction_01_02_120_wob is not None
     fn_permutation_0123_0231_wob = getattr(libpbc, "fn_permutation_0123_0231_wob", None)
     assert fn_permutation_0123_0231_wob is not None
-    fn_contraction_01_21_021_wob = getattr(libpbc, "fn_contraction_01_21_021_wob", None)
-    assert fn_contraction_01_21_021_wob is not None
+    fn_permutation_0123_0213_wob = getattr(libpbc, "fn_permutation_0123_0213_wob", None)
+    assert fn_permutation_0123_0213_wob is not None
     fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
     assert fn_slice_2_1 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
+    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
+    assert fn_contraction_012_031_2301_wob is not None
+    fn_packadd_3_1_2 = getattr(libpbc, "fn_packadd_3_1_2", None)
+    assert fn_packadd_3_1_2 is not None
+    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
+    assert fn_permutation_0123_0132_wob is not None
+    fn_contraction_01_21_021_wob = getattr(libpbc, "fn_contraction_01_21_021_wob", None)
+    assert fn_contraction_01_21_021_wob is not None
     fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
     assert fn_slice_2_0 is not None
+    fn_contraction_01_023_1230_wob = getattr(libpbc, "fn_contraction_01_023_1230_wob", None)
+    assert fn_contraction_01_023_1230_wob is not None
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
+    if use_mpi:
+        bunchsize = NTHC_INT//comm_size + 1
+        P_begin = rank*bunchsize
+        P_end = (rank+1)*bunchsize
+        P_begin          = min(P_begin, NTHC_INT)
+        P_end            = min(P_end, NTHC_INT)
+    else:
+        P_begin          = 0               
+        P_end            = NTHC_INT        
     # preallocate buffer
     bucket_size      = RMP2_K_forloop_P_b_determine_bucket_size_forloop(NVIR = NVIR,
                                                                         NOCC = NOCC,
@@ -696,7 +707,7 @@ def RMP2_K_forloop_P_b_forloop_P_b(Z           : np.ndarray,
                                  ctypes.c_int(_INPUT_7.shape[1]),
                                  ctypes.c_int(_INPUT_13.shape[1]))
     # step   7 start for loop with indices ('P',)
-    for P_0, P_1 in lib.prange(0,NTHC_INT,P_bunchsize):
+    for P_0, P_1 in lib.prange(P_begin,P_end,P_bunchsize):
         # step   8 start for loop with indices ('P', 'b')
         for b_0, b_1 in lib.prange(0,NVIR,b_bunchsize):
             # step   9 slice _INPUT_0 with indices ['P']
@@ -898,6 +909,10 @@ def RMP2_K_forloop_P_b_forloop_P_b(Z           : np.ndarray,
            ctypes.pointer(output_tmp))
     _M12 = output_tmp.value
     # clean the final forloop
+    # MPI finalize
+    if use_mpi:
+        _M12 = reduce(_M12, root=0)
+        _M12 = bcast(_M12, root=0)
     return _M12
 
 def RMP2_K_forloop_P_j_determine_bucket_size_forloop(NVIR        : int,
@@ -938,7 +953,7 @@ def RMP2_K_forloop_P_j_determine_bucket_size_forloop(NVIR        : int,
     _M9_size         = (NTHC_INT * (j_bunchsize * (P_bunchsize * T_bunchsize)))
     _M3_sliced_size  = (NTHC_INT * (T_bunchsize * j_bunchsize))
     _M8_size         = (j_bunchsize * (NTHC_INT * (P_bunchsize * T_bunchsize)))
-    _M10_packed_size = (NTHC_INT * (N_LAPLACE * NTHC_INT))
+    _M10_packed_size = (NTHC_INT * (T_bunchsize * P_bunchsize))
     # determine the size of each bucket
     # bucket 0
     bucked_0_size    = max(bucked_0_size, _M2_size)
@@ -1415,7 +1430,8 @@ def RMP2_K_forloop_P_j_forloop_P_j(Z           : np.ndarray,
                                    buffer      : np.ndarray,
                                    P_bunchsize = 8,
                                    j_bunchsize = 8,
-                                   T_bunchsize = 1):
+                                   T_bunchsize = 1,
+                                   use_mpi = False):
     # assign the size of the indices
     NVIR             = X_v.shape[0]    
     NOCC             = X_o.shape[0]    
@@ -1456,32 +1472,41 @@ def RMP2_K_forloop_P_j_forloop_P_j(Z           : np.ndarray,
     fn_clean     = getattr(libpbc, "fn_clean", None)
     assert fn_clean is not None
     # fetch function pointers
-    fn_contraction_012_0132_013_wob = getattr(libpbc, "fn_contraction_012_0132_013_wob", None)
-    assert fn_contraction_012_0132_013_wob is not None
     fn_permutation_012_021_wob = getattr(libpbc, "fn_permutation_012_021_wob", None)
     assert fn_permutation_012_021_wob is not None
-    fn_contraction_01_023_1230_wob = getattr(libpbc, "fn_contraction_01_023_1230_wob", None)
-    assert fn_contraction_01_023_1230_wob is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_contraction_012_0213_3012_wob = getattr(libpbc, "fn_contraction_012_0213_3012_wob", None)
-    assert fn_contraction_012_0213_3012_wob is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
-    fn_packadd_3_1_2 = getattr(libpbc, "fn_packadd_3_1_2", None)
-    assert fn_packadd_3_1_2 is not None
-    fn_permutation_0123_0321_wob = getattr(libpbc, "fn_permutation_0123_0321_wob", None)
-    assert fn_permutation_0123_0321_wob is not None
-    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
-    assert fn_contraction_01_02_120_wob is not None
     fn_permutation_0123_0231_wob = getattr(libpbc, "fn_permutation_0123_0231_wob", None)
     assert fn_permutation_0123_0231_wob is not None
-    fn_contraction_01_21_021_wob = getattr(libpbc, "fn_contraction_01_21_021_wob", None)
-    assert fn_contraction_01_21_021_wob is not None
+    fn_permutation_0123_0321_wob = getattr(libpbc, "fn_permutation_0123_0321_wob", None)
+    assert fn_permutation_0123_0321_wob is not None
     fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
     assert fn_slice_2_1 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
+    fn_packadd_3_1_2 = getattr(libpbc, "fn_packadd_3_1_2", None)
+    assert fn_packadd_3_1_2 is not None
+    fn_contraction_012_0213_3012_wob = getattr(libpbc, "fn_contraction_012_0213_3012_wob", None)
+    assert fn_contraction_012_0213_3012_wob is not None
+    fn_contraction_01_21_021_wob = getattr(libpbc, "fn_contraction_01_21_021_wob", None)
+    assert fn_contraction_01_21_021_wob is not None
     fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
     assert fn_slice_2_0 is not None
+    fn_contraction_01_023_1230_wob = getattr(libpbc, "fn_contraction_01_023_1230_wob", None)
+    assert fn_contraction_01_023_1230_wob is not None
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
+    fn_contraction_012_0132_013_wob = getattr(libpbc, "fn_contraction_012_0132_013_wob", None)
+    assert fn_contraction_012_0132_013_wob is not None
+    if use_mpi:
+        bunchsize = NTHC_INT//comm_size + 1
+        P_begin = rank*bunchsize
+        P_end = (rank+1)*bunchsize
+        P_begin          = min(P_begin, NTHC_INT)
+        P_end            = min(P_end, NTHC_INT)
+    else:
+        P_begin          = 0               
+        P_end            = NTHC_INT        
     # preallocate buffer
     bucket_size      = RMP2_K_forloop_P_j_determine_bucket_size_forloop(NVIR = NVIR,
                                                                         NOCC = NOCC,
@@ -1591,7 +1616,7 @@ def RMP2_K_forloop_P_j_forloop_P_j(Z           : np.ndarray,
     lib.ddot(_INPUT_6_reshaped.T, _M1_reshaped.T, c=_M6_reshaped)
     _M6              = _M6_reshaped.reshape(*shape_backup)
     # step   8 start for loop with indices ('P',)
-    for P_0, P_1 in lib.prange(0,NTHC_INT,P_bunchsize):
+    for P_0, P_1 in lib.prange(P_begin,P_end,P_bunchsize):
         # step   9 start for loop with indices ('P', 'j')
         for j_0, j_1 in lib.prange(0,NOCC,j_bunchsize):
             # step  10 slice _INPUT_0 with indices ['P']
@@ -1784,6 +1809,10 @@ def RMP2_K_forloop_P_j_forloop_P_j(Z           : np.ndarray,
            ctypes.pointer(output_tmp))
     _M12 = output_tmp.value
     # clean the final forloop
+    # MPI finalize
+    if use_mpi:
+        _M12 = reduce(_M12, root=0)
+        _M12 = bcast(_M12, root=0)
     return _M12
 
 def RMP2_K_forloop_Q_a_determine_bucket_size_forloop(NVIR        : int,
@@ -1824,7 +1853,7 @@ def RMP2_K_forloop_Q_a_determine_bucket_size_forloop(NVIR        : int,
     _M9_size         = (NTHC_INT * (a_bunchsize * (T_bunchsize * Q_bunchsize)))
     _M3_sliced_size  = (NTHC_INT * (T_bunchsize * a_bunchsize))
     _M8_size         = (a_bunchsize * (NTHC_INT * (T_bunchsize * Q_bunchsize)))
-    _M10_packed_size = (NTHC_INT * (N_LAPLACE * NTHC_INT))
+    _M10_packed_size = (NTHC_INT * (T_bunchsize * Q_bunchsize))
     # determine the size of each bucket
     # bucket 0
     bucked_0_size    = max(bucked_0_size, _M1_size)
@@ -2301,7 +2330,8 @@ def RMP2_K_forloop_Q_a_forloop_Q_a(Z           : np.ndarray,
                                    buffer      : np.ndarray,
                                    Q_bunchsize = 8,
                                    a_bunchsize = 8,
-                                   T_bunchsize = 1):
+                                   T_bunchsize = 1,
+                                   use_mpi = False):
     # assign the size of the indices
     NVIR             = X_v.shape[0]    
     NOCC             = X_o.shape[0]    
@@ -2342,30 +2372,39 @@ def RMP2_K_forloop_Q_a_forloop_Q_a(Z           : np.ndarray,
     fn_clean     = getattr(libpbc, "fn_clean", None)
     assert fn_clean is not None
     # fetch function pointers
-    fn_contraction_012_0132_013_wob = getattr(libpbc, "fn_contraction_012_0132_013_wob", None)
-    assert fn_contraction_012_0132_013_wob is not None
     fn_permutation_012_021_wob = getattr(libpbc, "fn_permutation_012_021_wob", None)
     assert fn_permutation_012_021_wob is not None
-    fn_contraction_01_023_1230_wob = getattr(libpbc, "fn_contraction_01_023_1230_wob", None)
-    assert fn_contraction_01_023_1230_wob is not None
-    fn_contraction_01_20_120_wob = getattr(libpbc, "fn_contraction_01_20_120_wob", None)
-    assert fn_contraction_01_20_120_wob is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
-    fn_contraction_0123_021_3012_wob = getattr(libpbc, "fn_contraction_0123_021_3012_wob", None)
-    assert fn_contraction_0123_021_3012_wob is not None
-    fn_packadd_3_1_2 = getattr(libpbc, "fn_packadd_3_1_2", None)
-    assert fn_packadd_3_1_2 is not None
-    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
-    assert fn_contraction_01_02_120_wob is not None
     fn_permutation_0123_0231_wob = getattr(libpbc, "fn_permutation_0123_0231_wob", None)
     assert fn_permutation_0123_0231_wob is not None
     fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
     assert fn_slice_2_1 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
+    fn_packadd_3_1_2 = getattr(libpbc, "fn_packadd_3_1_2", None)
+    assert fn_packadd_3_1_2 is not None
+    fn_contraction_0123_021_3012_wob = getattr(libpbc, "fn_contraction_0123_021_3012_wob", None)
+    assert fn_contraction_0123_021_3012_wob is not None
     fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
     assert fn_slice_2_0 is not None
+    fn_contraction_01_023_1230_wob = getattr(libpbc, "fn_contraction_01_023_1230_wob", None)
+    assert fn_contraction_01_023_1230_wob is not None
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
+    fn_contraction_01_20_120_wob = getattr(libpbc, "fn_contraction_01_20_120_wob", None)
+    assert fn_contraction_01_20_120_wob is not None
+    fn_contraction_012_0132_013_wob = getattr(libpbc, "fn_contraction_012_0132_013_wob", None)
+    assert fn_contraction_012_0132_013_wob is not None
+    if use_mpi:
+        bunchsize = NTHC_INT//comm_size + 1
+        Q_begin = rank*bunchsize
+        Q_end = (rank+1)*bunchsize
+        Q_begin          = min(Q_begin, NTHC_INT)
+        Q_end            = min(Q_end, NTHC_INT)
+    else:
+        Q_begin          = 0               
+        Q_end            = NTHC_INT        
     # preallocate buffer
     bucket_size      = RMP2_K_forloop_Q_a_determine_bucket_size_forloop(NVIR = NVIR,
                                                                         NOCC = NOCC,
@@ -2475,7 +2514,7 @@ def RMP2_K_forloop_Q_a_forloop_Q_a(Z           : np.ndarray,
     lib.ddot(_INPUT_7_reshaped.T, _M2_reshaped.T, c=_M7_reshaped)
     _M7              = _M7_reshaped.reshape(*shape_backup)
     # step   8 start for loop with indices ('Q',)
-    for Q_0, Q_1 in lib.prange(0,NTHC_INT,Q_bunchsize):
+    for Q_0, Q_1 in lib.prange(Q_begin,Q_end,Q_bunchsize):
         # step   9 start for loop with indices ('Q', 'a')
         for a_0, a_1 in lib.prange(0,NVIR,a_bunchsize):
             # step  10 slice _INPUT_0 with indices ['Q']
@@ -2668,6 +2707,10 @@ def RMP2_K_forloop_Q_a_forloop_Q_a(Z           : np.ndarray,
            ctypes.pointer(output_tmp))
     _M12 = output_tmp.value
     # clean the final forloop
+    # MPI finalize
+    if use_mpi:
+        _M12 = reduce(_M12, root=0)
+        _M12 = bcast(_M12, root=0)
     return _M12
 
 def RMP2_K_forloop_Q_i_determine_bucket_size_forloop(NVIR        : int,
@@ -3162,7 +3205,8 @@ def RMP2_K_forloop_Q_i_forloop_Q_i(Z           : np.ndarray,
                                    buffer      : np.ndarray,
                                    Q_bunchsize = 8,
                                    i_bunchsize = 8,
-                                   T_bunchsize = 1):
+                                   T_bunchsize = 1,
+                                   use_mpi = False):
     # assign the size of the indices
     NVIR             = X_v.shape[0]    
     NOCC             = X_o.shape[0]    
@@ -3203,28 +3247,37 @@ def RMP2_K_forloop_Q_i_forloop_Q_i(Z           : np.ndarray,
     fn_clean     = getattr(libpbc, "fn_clean", None)
     assert fn_clean is not None
     # fetch function pointers
-    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
-    assert fn_permutation_0123_0132_wob is not None
-    fn_contraction_01_023_1230_wob = getattr(libpbc, "fn_contraction_01_023_1230_wob", None)
-    assert fn_contraction_01_023_1230_wob is not None
-    fn_contraction_01_20_120_wob = getattr(libpbc, "fn_contraction_01_20_120_wob", None)
-    assert fn_contraction_01_20_120_wob is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
-    fn_contraction_0123_023_1023_wob = getattr(libpbc, "fn_contraction_0123_023_1023_wob", None)
-    assert fn_contraction_0123_023_1023_wob is not None
-    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
-    assert fn_contraction_01_02_120_wob is not None
-    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
-    assert fn_contraction_012_031_2301_wob is not None
     fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
     assert fn_slice_2_1 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
+    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
+    assert fn_contraction_012_031_2301_wob is not None
     fn_permutation_0123_3021_wob = getattr(libpbc, "fn_permutation_0123_3021_wob", None)
     assert fn_permutation_0123_3021_wob is not None
+    fn_contraction_0123_023_1023_wob = getattr(libpbc, "fn_contraction_0123_023_1023_wob", None)
+    assert fn_contraction_0123_023_1023_wob is not None
+    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
+    assert fn_permutation_0123_0132_wob is not None
     fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
     assert fn_slice_2_0 is not None
+    fn_contraction_01_023_1230_wob = getattr(libpbc, "fn_contraction_01_023_1230_wob", None)
+    assert fn_contraction_01_023_1230_wob is not None
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
+    fn_contraction_01_20_120_wob = getattr(libpbc, "fn_contraction_01_20_120_wob", None)
+    assert fn_contraction_01_20_120_wob is not None
+    if use_mpi:
+        bunchsize = NTHC_INT//comm_size + 1
+        Q_begin = rank*bunchsize
+        Q_end = (rank+1)*bunchsize
+        Q_begin          = min(Q_begin, NTHC_INT)
+        Q_end            = min(Q_end, NTHC_INT)
+    else:
+        Q_begin          = 0               
+        Q_end            = NTHC_INT        
     # preallocate buffer
     bucket_size      = RMP2_K_forloop_Q_i_determine_bucket_size_forloop(NVIR = NVIR,
                                                                         NOCC = NOCC,
@@ -3321,7 +3374,7 @@ def RMP2_K_forloop_Q_i_forloop_Q_i(Z           : np.ndarray,
                                  ctypes.c_int(_INPUT_6.shape[1]),
                                  ctypes.c_int(_INPUT_10.shape[1]))
     # step   7 start for loop with indices ('Q',)
-    for Q_0, Q_1 in lib.prange(0,NTHC_INT,Q_bunchsize):
+    for Q_0, Q_1 in lib.prange(Q_begin,Q_end,Q_bunchsize):
         # step   8 start for loop with indices ('Q', 'i')
         for i_0, i_1 in lib.prange(0,NOCC,i_bunchsize):
             # step   9 slice _INPUT_0 with indices ['Q']
@@ -3515,6 +3568,10 @@ def RMP2_K_forloop_Q_i_forloop_Q_i(Z           : np.ndarray,
         # step  27 end   for loop with indices ('Q', 'i')
     # step  28 end   for loop with indices ('Q',)
     # clean the final forloop
+    # MPI finalize
+    if use_mpi:
+        _M12 = reduce(_M12, root=0)
+        _M12 = bcast(_M12, root=0)
     return _M12
 
 def RMP2_K_forloop_R_a_determine_bucket_size_forloop(NVIR        : int,
@@ -4032,7 +4089,8 @@ def RMP2_K_forloop_R_a_forloop_R_a(Z           : np.ndarray,
                                    buffer      : np.ndarray,
                                    R_bunchsize = 8,
                                    a_bunchsize = 8,
-                                   T_bunchsize = 1):
+                                   T_bunchsize = 1,
+                                   use_mpi = False):
     # assign the size of the indices
     NVIR             = X_v.shape[0]    
     NOCC             = X_o.shape[0]    
@@ -4073,30 +4131,39 @@ def RMP2_K_forloop_R_a_forloop_R_a(Z           : np.ndarray,
     fn_clean     = getattr(libpbc, "fn_clean", None)
     assert fn_clean is not None
     # fetch function pointers
-    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
-    assert fn_contraction_012_031_2301_wob is not None
-    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
-    assert fn_permutation_0123_0132_wob is not None
     fn_permutation_012_021_wob = getattr(libpbc, "fn_permutation_012_021_wob", None)
     assert fn_permutation_012_021_wob is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
-    fn_contraction_0123_023_1023_wob = getattr(libpbc, "fn_contraction_0123_023_1023_wob", None)
-    assert fn_contraction_0123_023_1023_wob is not None
-    fn_contraction_01_0231_023_plus_wob = getattr(libpbc, "fn_contraction_01_0231_023_plus_wob", None)
-    assert fn_contraction_01_0231_023_plus_wob is not None
-    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
-    assert fn_contraction_01_02_120_wob is not None
     fn_permutation_0123_0231_wob = getattr(libpbc, "fn_permutation_0123_0231_wob", None)
     assert fn_permutation_0123_0231_wob is not None
-    fn_contraction_01_21_021_wob = getattr(libpbc, "fn_contraction_01_21_021_wob", None)
-    assert fn_contraction_01_21_021_wob is not None
     fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
     assert fn_slice_2_1 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
+    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
+    assert fn_contraction_012_031_2301_wob is not None
+    fn_contraction_01_0231_023_plus_wob = getattr(libpbc, "fn_contraction_01_0231_023_plus_wob", None)
+    assert fn_contraction_01_0231_023_plus_wob is not None
+    fn_contraction_0123_023_1023_wob = getattr(libpbc, "fn_contraction_0123_023_1023_wob", None)
+    assert fn_contraction_0123_023_1023_wob is not None
+    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
+    assert fn_permutation_0123_0132_wob is not None
+    fn_contraction_01_21_021_wob = getattr(libpbc, "fn_contraction_01_21_021_wob", None)
+    assert fn_contraction_01_21_021_wob is not None
     fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
     assert fn_slice_2_0 is not None
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
+    if use_mpi:
+        bunchsize = NTHC_INT//comm_size + 1
+        R_begin = rank*bunchsize
+        R_end = (rank+1)*bunchsize
+        R_begin          = min(R_begin, NTHC_INT)
+        R_end            = min(R_end, NTHC_INT)
+    else:
+        R_begin          = 0               
+        R_end            = NTHC_INT        
     # preallocate buffer
     bucket_size      = RMP2_K_forloop_R_a_determine_bucket_size_forloop(NVIR = NVIR,
                                                                         NOCC = NOCC,
@@ -4195,7 +4262,7 @@ def RMP2_K_forloop_R_a_forloop_R_a(Z           : np.ndarray,
                                  ctypes.c_int(_INPUT_2.shape[1]),
                                  ctypes.c_int(_INPUT_12.shape[1]))
     # step   7 start for loop with indices ('R',)
-    for R_0, R_1 in lib.prange(0,NTHC_INT,R_bunchsize):
+    for R_0, R_1 in lib.prange(R_begin,R_end,R_bunchsize):
         # step   8 start for loop with indices ('R', 'a')
         for a_0, a_1 in lib.prange(0,NVIR,a_bunchsize):
             # step   9 slice _INPUT_5 with indices ['R']
@@ -4400,6 +4467,10 @@ def RMP2_K_forloop_R_a_forloop_R_a(Z           : np.ndarray,
         # step  29 end   for loop with indices ('R', 'a')
     # step  30 end   for loop with indices ('R',)
     # clean the final forloop
+    # MPI finalize
+    if use_mpi:
+        _M12 = reduce(_M12, root=0)
+        _M12 = bcast(_M12, root=0)
     return _M12
 
 def RMP2_K_forloop_R_j_determine_bucket_size_forloop(NVIR        : int,
@@ -4917,7 +4988,8 @@ def RMP2_K_forloop_R_j_forloop_R_j(Z           : np.ndarray,
                                    buffer      : np.ndarray,
                                    R_bunchsize = 8,
                                    j_bunchsize = 8,
-                                   T_bunchsize = 1):
+                                   T_bunchsize = 1,
+                                   use_mpi = False):
     # assign the size of the indices
     NVIR             = X_v.shape[0]    
     NOCC             = X_o.shape[0]    
@@ -4958,30 +5030,39 @@ def RMP2_K_forloop_R_j_forloop_R_j(Z           : np.ndarray,
     fn_clean     = getattr(libpbc, "fn_clean", None)
     assert fn_clean is not None
     # fetch function pointers
-    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
-    assert fn_contraction_012_031_2301_wob is not None
-    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
-    assert fn_permutation_0123_0132_wob is not None
     fn_permutation_012_021_wob = getattr(libpbc, "fn_permutation_012_021_wob", None)
     assert fn_permutation_012_021_wob is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
-    fn_contraction_01_0231_023_plus_wob = getattr(libpbc, "fn_contraction_01_0231_023_plus_wob", None)
-    assert fn_contraction_01_0231_023_plus_wob is not None
-    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
-    assert fn_contraction_01_02_120_wob is not None
-    fn_contraction_012_0312_3012_wob = getattr(libpbc, "fn_contraction_012_0312_3012_wob", None)
-    assert fn_contraction_012_0312_3012_wob is not None
     fn_permutation_0123_0231_wob = getattr(libpbc, "fn_permutation_0123_0231_wob", None)
     assert fn_permutation_0123_0231_wob is not None
-    fn_contraction_01_21_021_wob = getattr(libpbc, "fn_contraction_01_21_021_wob", None)
-    assert fn_contraction_01_21_021_wob is not None
     fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
     assert fn_slice_2_1 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
+    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
+    assert fn_contraction_012_031_2301_wob is not None
+    fn_contraction_012_0312_3012_wob = getattr(libpbc, "fn_contraction_012_0312_3012_wob", None)
+    assert fn_contraction_012_0312_3012_wob is not None
+    fn_contraction_01_0231_023_plus_wob = getattr(libpbc, "fn_contraction_01_0231_023_plus_wob", None)
+    assert fn_contraction_01_0231_023_plus_wob is not None
+    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
+    assert fn_permutation_0123_0132_wob is not None
+    fn_contraction_01_21_021_wob = getattr(libpbc, "fn_contraction_01_21_021_wob", None)
+    assert fn_contraction_01_21_021_wob is not None
     fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
     assert fn_slice_2_0 is not None
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
+    if use_mpi:
+        bunchsize = NTHC_INT//comm_size + 1
+        R_begin = rank*bunchsize
+        R_end = (rank+1)*bunchsize
+        R_begin          = min(R_begin, NTHC_INT)
+        R_end            = min(R_end, NTHC_INT)
+    else:
+        R_begin          = 0               
+        R_end            = NTHC_INT        
     # preallocate buffer
     bucket_size      = RMP2_K_forloop_R_j_determine_bucket_size_forloop(NVIR = NVIR,
                                                                         NOCC = NOCC,
@@ -5080,7 +5161,7 @@ def RMP2_K_forloop_R_j_forloop_R_j(Z           : np.ndarray,
                                  ctypes.c_int(_INPUT_3.shape[1]),
                                  ctypes.c_int(_INPUT_11.shape[1]))
     # step   7 start for loop with indices ('R',)
-    for R_0, R_1 in lib.prange(0,NTHC_INT,R_bunchsize):
+    for R_0, R_1 in lib.prange(R_begin,R_end,R_bunchsize):
         # step   8 start for loop with indices ('R', 'j')
         for j_0, j_1 in lib.prange(0,NOCC,j_bunchsize):
             # step   9 slice _INPUT_5 with indices ['R']
@@ -5285,6 +5366,10 @@ def RMP2_K_forloop_R_j_forloop_R_j(Z           : np.ndarray,
         # step  29 end   for loop with indices ('R', 'j')
     # step  30 end   for loop with indices ('R',)
     # clean the final forloop
+    # MPI finalize
+    if use_mpi:
+        _M12 = reduce(_M12, root=0)
+        _M12 = bcast(_M12, root=0)
     return _M12
 
 def RMP2_K_forloop_S_b_determine_bucket_size_forloop(NVIR        : int,
@@ -5802,7 +5887,8 @@ def RMP2_K_forloop_S_b_forloop_S_b(Z           : np.ndarray,
                                    buffer      : np.ndarray,
                                    S_bunchsize = 8,
                                    b_bunchsize = 8,
-                                   T_bunchsize = 1):
+                                   T_bunchsize = 1,
+                                   use_mpi = False):
     # assign the size of the indices
     NVIR             = X_v.shape[0]    
     NOCC             = X_o.shape[0]    
@@ -5843,30 +5929,39 @@ def RMP2_K_forloop_S_b_forloop_S_b(Z           : np.ndarray,
     fn_clean     = getattr(libpbc, "fn_clean", None)
     assert fn_clean is not None
     # fetch function pointers
-    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
-    assert fn_permutation_0123_0132_wob is not None
     fn_permutation_012_021_wob = getattr(libpbc, "fn_permutation_012_021_wob", None)
     assert fn_permutation_012_021_wob is not None
-    fn_contraction_01_20_120_wob = getattr(libpbc, "fn_contraction_01_20_120_wob", None)
-    assert fn_contraction_01_20_120_wob is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
-    fn_contraction_01_0231_023_plus_wob = getattr(libpbc, "fn_contraction_01_0231_023_plus_wob", None)
-    assert fn_contraction_01_0231_023_plus_wob is not None
-    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
-    assert fn_contraction_01_02_120_wob is not None
-    fn_contraction_012_0312_3012_wob = getattr(libpbc, "fn_contraction_012_0312_3012_wob", None)
-    assert fn_contraction_012_0312_3012_wob is not None
     fn_permutation_0123_0231_wob = getattr(libpbc, "fn_permutation_0123_0231_wob", None)
     assert fn_permutation_0123_0231_wob is not None
-    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
-    assert fn_contraction_012_031_2301_wob is not None
     fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
     assert fn_slice_2_1 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
+    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
+    assert fn_contraction_012_031_2301_wob is not None
+    fn_contraction_012_0312_3012_wob = getattr(libpbc, "fn_contraction_012_0312_3012_wob", None)
+    assert fn_contraction_012_0312_3012_wob is not None
+    fn_contraction_01_0231_023_plus_wob = getattr(libpbc, "fn_contraction_01_0231_023_plus_wob", None)
+    assert fn_contraction_01_0231_023_plus_wob is not None
+    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
+    assert fn_permutation_0123_0132_wob is not None
     fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
     assert fn_slice_2_0 is not None
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
+    fn_contraction_01_20_120_wob = getattr(libpbc, "fn_contraction_01_20_120_wob", None)
+    assert fn_contraction_01_20_120_wob is not None
+    if use_mpi:
+        bunchsize = NTHC_INT//comm_size + 1
+        S_begin = rank*bunchsize
+        S_end = (rank+1)*bunchsize
+        S_begin          = min(S_begin, NTHC_INT)
+        S_end            = min(S_end, NTHC_INT)
+    else:
+        S_begin          = 0               
+        S_end            = NTHC_INT        
     # preallocate buffer
     bucket_size      = RMP2_K_forloop_S_b_determine_bucket_size_forloop(NVIR = NVIR,
                                                                         NOCC = NOCC,
@@ -5965,7 +6060,7 @@ def RMP2_K_forloop_S_b_forloop_S_b(Z           : np.ndarray,
                                  ctypes.c_int(_INPUT_4.shape[1]),
                                  ctypes.c_int(_INPUT_13.shape[1]))
     # step   7 start for loop with indices ('S',)
-    for S_0, S_1 in lib.prange(0,NTHC_INT,S_bunchsize):
+    for S_0, S_1 in lib.prange(S_begin,S_end,S_bunchsize):
         # step   8 start for loop with indices ('S', 'b')
         for b_0, b_1 in lib.prange(0,NVIR,b_bunchsize):
             # step   9 slice _INPUT_5 with indices ['S']
@@ -6170,6 +6265,10 @@ def RMP2_K_forloop_S_b_forloop_S_b(Z           : np.ndarray,
         # step  29 end   for loop with indices ('S', 'b')
     # step  30 end   for loop with indices ('S',)
     # clean the final forloop
+    # MPI finalize
+    if use_mpi:
+        _M12 = reduce(_M12, root=0)
+        _M12 = bcast(_M12, root=0)
     return _M12
 
 def RMP2_K_forloop_S_i_determine_bucket_size_forloop(NVIR        : int,
@@ -6687,7 +6786,8 @@ def RMP2_K_forloop_S_i_forloop_S_i(Z           : np.ndarray,
                                    buffer      : np.ndarray,
                                    S_bunchsize = 8,
                                    i_bunchsize = 8,
-                                   T_bunchsize = 1):
+                                   T_bunchsize = 1,
+                                   use_mpi = False):
     # assign the size of the indices
     NVIR             = X_v.shape[0]    
     NOCC             = X_o.shape[0]    
@@ -6728,30 +6828,39 @@ def RMP2_K_forloop_S_i_forloop_S_i(Z           : np.ndarray,
     fn_clean     = getattr(libpbc, "fn_clean", None)
     assert fn_clean is not None
     # fetch function pointers
-    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
-    assert fn_permutation_0123_0132_wob is not None
     fn_permutation_012_021_wob = getattr(libpbc, "fn_permutation_012_021_wob", None)
     assert fn_permutation_012_021_wob is not None
-    fn_contraction_01_20_120_wob = getattr(libpbc, "fn_contraction_01_20_120_wob", None)
-    assert fn_contraction_01_20_120_wob is not None
-    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
-    assert fn_slice_3_1_2 is not None
-    fn_dot       = getattr(libpbc, "fn_dot", None)
-    assert fn_dot is not None
-    fn_contraction_0123_023_1023_wob = getattr(libpbc, "fn_contraction_0123_023_1023_wob", None)
-    assert fn_contraction_0123_023_1023_wob is not None
-    fn_contraction_01_0231_023_plus_wob = getattr(libpbc, "fn_contraction_01_0231_023_plus_wob", None)
-    assert fn_contraction_01_0231_023_plus_wob is not None
-    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
-    assert fn_contraction_01_02_120_wob is not None
     fn_permutation_0123_0231_wob = getattr(libpbc, "fn_permutation_0123_0231_wob", None)
     assert fn_permutation_0123_0231_wob is not None
-    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
-    assert fn_contraction_012_031_2301_wob is not None
     fn_slice_2_1 = getattr(libpbc, "fn_slice_2_1", None)
     assert fn_slice_2_1 is not None
+    fn_dot       = getattr(libpbc, "fn_dot", None)
+    assert fn_dot is not None
+    fn_slice_3_1_2 = getattr(libpbc, "fn_slice_3_1_2", None)
+    assert fn_slice_3_1_2 is not None
+    fn_contraction_012_031_2301_wob = getattr(libpbc, "fn_contraction_012_031_2301_wob", None)
+    assert fn_contraction_012_031_2301_wob is not None
+    fn_contraction_01_0231_023_plus_wob = getattr(libpbc, "fn_contraction_01_0231_023_plus_wob", None)
+    assert fn_contraction_01_0231_023_plus_wob is not None
+    fn_contraction_0123_023_1023_wob = getattr(libpbc, "fn_contraction_0123_023_1023_wob", None)
+    assert fn_contraction_0123_023_1023_wob is not None
+    fn_permutation_0123_0132_wob = getattr(libpbc, "fn_permutation_0123_0132_wob", None)
+    assert fn_permutation_0123_0132_wob is not None
     fn_slice_2_0 = getattr(libpbc, "fn_slice_2_0", None)
     assert fn_slice_2_0 is not None
+    fn_contraction_01_02_120_wob = getattr(libpbc, "fn_contraction_01_02_120_wob", None)
+    assert fn_contraction_01_02_120_wob is not None
+    fn_contraction_01_20_120_wob = getattr(libpbc, "fn_contraction_01_20_120_wob", None)
+    assert fn_contraction_01_20_120_wob is not None
+    if use_mpi:
+        bunchsize = NTHC_INT//comm_size + 1
+        S_begin = rank*bunchsize
+        S_end = (rank+1)*bunchsize
+        S_begin          = min(S_begin, NTHC_INT)
+        S_end            = min(S_end, NTHC_INT)
+    else:
+        S_begin          = 0               
+        S_end            = NTHC_INT        
     # preallocate buffer
     bucket_size      = RMP2_K_forloop_S_i_determine_bucket_size_forloop(NVIR = NVIR,
                                                                         NOCC = NOCC,
@@ -6850,7 +6959,7 @@ def RMP2_K_forloop_S_i_forloop_S_i(Z           : np.ndarray,
                                  ctypes.c_int(_INPUT_1.shape[1]),
                                  ctypes.c_int(_INPUT_10.shape[1]))
     # step   7 start for loop with indices ('S',)
-    for S_0, S_1 in lib.prange(0,NTHC_INT,S_bunchsize):
+    for S_0, S_1 in lib.prange(S_begin,S_end,S_bunchsize):
         # step   8 start for loop with indices ('S', 'i')
         for i_0, i_1 in lib.prange(0,NOCC,i_bunchsize):
             # step   9 slice _INPUT_5 with indices ['S']
@@ -7055,6 +7164,10 @@ def RMP2_K_forloop_S_i_forloop_S_i(Z           : np.ndarray,
         # step  29 end   for loop with indices ('S', 'i')
     # step  30 end   for loop with indices ('S',)
     # clean the final forloop
+    # MPI finalize
+    if use_mpi:
+        _M12 = reduce(_M12, root=0)
+        _M12 = bcast(_M12, root=0)
     return _M12
 
 if __name__ == "__main__":
