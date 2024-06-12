@@ -254,6 +254,41 @@ class KnownValues(unittest.TestCase):
         addr = lib.ndarray_pointer_2d(a)
         self.assertTrue(all(addr == a.ctypes.data + numpy.array([0, 24, 48])))
 
+    def test_omatcopy(self):
+        a = numpy.random.random((5,5))
+        b = numpy.empty_like(a)
+        lib.omatcopy(a, out=b)
+        self.assertTrue(numpy.all(a == b))
+        a = numpy.random.random((403,410)).T
+        b = numpy.empty_like(a)
+        lib.omatcopy(a, out=b)
+        self.assertTrue(numpy.all(a == b))
+
+    def test_entrywise_mul(self):
+        a = numpy.random.random((101,100))
+        b = numpy.random.random((101,100))
+        bcopy = b.copy()
+        lib.entrywise_mul(a, b)
+        self.assertTrue(numpy.allclose(b, a*bcopy))
+        a = numpy.random.random((101,100))
+        b = numpy.random.random((101,100))
+        a = a + a*1j
+        b = b + b*1j
+        bcopy = b.copy()
+        lib.entrywise_mul(a, b)
+        self.assertTrue(numpy.allclose(b, a*bcopy))
+
+    def test_zeros(self):
+        a = lib.zeros((100,100), dtype=numpy.double)
+        self.assertTrue(numpy.all(a == 0))
+        self.assertTrue(a.dtype == numpy.double)
+        a = lib.zeros((100,100), dtype=numpy.complex128)
+        self.assertTrue(numpy.all(a == 0))
+        self.assertTrue(a.dtype == numpy.complex128)
+        a = lib.zeros((100,100), dtype=numpy.int32)
+        self.assertTrue(numpy.all(a == 0))
+        self.assertTrue(a.dtype == numpy.int32)
+
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")
     unittest.main()
