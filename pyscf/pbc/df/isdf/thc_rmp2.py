@@ -171,11 +171,13 @@ class THC_RMP2(_restricted_THC_posthf_holder):
                  laplace_rela_err = 1e-7,
                  laplace_order    = 2,
                  memory           = 128 * 1000 * 1000,
-                 with_mpi=False):
+                 with_mpi         = False,
+                 no_LS_THC        = False):
         
         super().__init__(my_isdf, my_mf, X,
                             laplace_rela_err = laplace_rela_err,
-                            laplace_order    = laplace_order)
+                            laplace_order    = laplace_order,
+                            no_LS_THC        = no_LS_THC)
         
         self.memory = memory
         self.buffer = None
@@ -440,7 +442,7 @@ if __name__ == "__main__":
     if rank == 0:
         _myisdf = ISDF.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
         _myisdf.build_IP_local(c=6, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
-        X          = _myisdf.aoRg_full() 
+        X       = _myisdf.aoRg_full() 
     else:
         X = None
     
@@ -450,3 +452,22 @@ if __name__ == "__main__":
     # thc_rmp2.kernel(SCHEDULE_TYPE_OPT_MEM)
     thc_rmp2.kernel(SCHEDULE_TYPE_FORLOOP)
     # thc_rmp2.kernel(SCHEDULE_TYPE_FORLOOP_ENOUGH_MEMORY)
+    
+    ######## another test for ISDF w.o robust fitting ####### 
+    
+    if rank == 0:
+        myisdf = ISDF.PBC_ISDF_Info_Quad(cell, with_robust_fitting=False, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
+        myisdf.build_IP_local(c=c, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
+        myisdf.build_auxiliary_Coulomb(debug=True)
+
+        mf_isdf = scf.RHF(cell)
+        myisdf.direct_scf = mf_isdf.direct_scf
+        mf_isdf.with_df = myisdf
+        mf_isdf.max_cycle = 8
+        mf_isdf.conv_tol = 1e-8
+        mf_isdf.kernel()
+        
+        X = None
+        thc_rmp2 = THC_RMP2(myisdf, mf_isdf, X, memory=800*1000*1000, with_mpi=False, no_LS_THC=True)
+        thc_rmp2.kernel(SCHEDULE_TYPE_C)
+    

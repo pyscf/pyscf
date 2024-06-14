@@ -82,7 +82,8 @@ from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast
 class _restricted_THC_posthf_holder:
     def __init__(self, my_isdf, my_mf, X,
                  laplace_rela_err = 1e-7,
-                 laplace_order    = 2):
+                 laplace_order    = 2,
+                 no_LS_THC = False):
         
         if rank == 0:
         
@@ -103,11 +104,20 @@ class _restricted_THC_posthf_holder:
             self.vir_ene = self.mo_energy[self.nocc:]
         
             #### construct Z matrix for XXZXX #### 
-        
-            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-            Z = LS_THC(my_isdf, X)
-            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-            _benchmark_time(t1, t2, "Z matrix construction for THC eri = XXZXX")
+
+            if no_LS_THC:
+                ngrid = np.prod(my_isdf.cell.mesh)
+                vol   = my_isdf.cell.vol
+                assert my_isdf.with_robust_fitting == False
+                if X is not None:
+                    print("Warning: X is not None, but no_LS_THC is True so the input X is abandoned!")
+                Z = my_isdf.W * ngrid / vol
+                X = my_isdf.aoRg_full()
+            else:
+                t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+                Z = LS_THC(my_isdf, X)
+                t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+                _benchmark_time(t1, t2, "Z matrix construction for THC eri = XXZXX")
 
             #### construct laplace ####
         
