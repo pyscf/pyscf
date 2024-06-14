@@ -1276,7 +1276,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             mo_e[idx] = e
     return mo_e, mo
 
-def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
+def dip_moment(mol, dm, unit='Debye', with_origin=None, verbose=logger.NOTE, **kwargs):
     r''' Dipole moment calculation
 
     .. math::
@@ -1291,6 +1291,8 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     Args:
          mol: an instance of :class:`Mole`
          dm : a 2D ndarrays density matrices
+         with_origin : optional; length 3 list, tuple, or 1D array
+            Location of the origin. By default, the center of nuclear charge is used.
 
     Return:
         A list: the dipole moment on x, y and z component
@@ -1307,13 +1309,23 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
         # UHF density matrices
         dm = dm[0] + dm[1]
 
-    with mol.with_common_orig((0,0,0)):
-        ao_dip = mol.intor_symmetric('int1e_r', comp=3)
-    el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
-
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
-    nucl_dip = numpy.einsum('i,ix->x', charges, coords)
+
+    if with_origin is None:
+        origin = coords.T @ charges / charges.sum()
+    else:
+        origin = numpy.asarray(with_origin, dtype=numpy.float64)
+    assert origin.shape == (3,)
+
+    if mol.charge != 0:
+        log.warn(f"System has nonzero charge {mol.charge}; the dipole moment is origin-dependent.\n"
+                 f"Location of origin: {origin}")
+
+    with mol.with_common_orig(origin):
+        ao_dip = mol.intor_symmetric('int1e_r', comp=3)
+    el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
+    nucl_dip = numpy.einsum('i,ix->x', charges, coords - origin[None, :])
     mol_dip = nucl_dip - el_dip
 
     if unit.upper() == 'DEBYE':
@@ -1345,7 +1357,7 @@ def quad_moment(mol, dm, unit='DebyeAngstrom', with_origin=None,
          mol: an instance of :class:`Mole`
          dm : a 2D ndarrays density matrices
          with_origin : optional; length 3 list, tuple, or 1D array
-            Location of the origin.
+            Location of the origin. By default, the center of nuclear charge is used.
 
     Return:
         Traceless quadrupole tensor, 2D ndarray.
