@@ -509,7 +509,7 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
         #                                            True)
         mydf.aoRg = mydf._construct_build_aoRg(partition_IP, group)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _benchmark_time(t1, t2, "build_aoRg")
+        _benchmark_time(t1, t2, "build_aoRg", mydf)
     
     else:
         if use_mpi:
@@ -826,7 +826,7 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
     if mydf.verbose > 0:
-        _benchmark_time(t0, t1, 'build_auxiliary_Coulomb')
+        _benchmark_time(t0, t1, 'build_auxiliary_Coulomb', mydf)
 
 def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
     
@@ -988,7 +988,7 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
     if mydf.verbose > 0:
-        _benchmark_time(t0, t1, 'build_auxiliary_Coulomb')
+        _benchmark_time(t0, t1, 'build_auxiliary_Coulomb', mydf)
     
     sys.stdout.flush()
 
@@ -1012,7 +1012,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             mol=mol,
             aoR=None,
             with_robust_fitting=with_robust_fitting,
-            Ls=Ls,
+            kmesh=Ls,
             get_partition=False,
             verbose=verbose
         )
@@ -1128,7 +1128,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if rank == 0:
-            _benchmark_time(t1, t2, "build_partition")
+            _benchmark_time(t1, t2, "build_partition", self)
         
         for i in range(self.natm):
             self.partition[i] = np.array(self.partition[i], dtype=np.int32)
@@ -1194,7 +1194,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if rank == 0:
-            _benchmark_time(t1, t2, "build_aoR")
+            _benchmark_time(t1, t2, "build_aoR", self)
     
         ### check aoR ###
         
@@ -1432,7 +1432,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if self.verbose and debug:
-            _benchmark_time(t1, t2, "build_partition_aoR")
+            _benchmark_time(t1, t2, "build_partition_aoR", self)
         
         t1 = t2
         
@@ -1464,14 +1464,14 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
         t4 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if self.verbose and debug:
-            _benchmark_time(t3, t4, "build_aoRg_possible")
+            _benchmark_time(t3, t4, "build_aoRg_possible", self)
         
         select_IP_local_ls_drive(self, c, m, IP_Atm, group, use_mpi=self.use_mpi)
         
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if self.verbose and debug:
-            _benchmark_time(t1, t2, "select_IP")
+            _benchmark_time(t1, t2, "select_IP", self)
         
         t1 = t2
         
@@ -1480,7 +1480,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if self.verbose and debug:
-            _benchmark_time(t1, t2, "build_aux_basis")
+            _benchmark_time(t1, t2, "build_aux_basis", self)
         
         sys.stdout.flush()
         
@@ -1772,7 +1772,7 @@ if __name__ == '__main__':
     pbc_isdf_info.Ls = Ls
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    _benchmark_time(t1, t2, "build isdf")
+    _benchmark_time(t1, t2, "build isdf", pbc_isdf_info)
     
     # from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import init_guess_by_atom
     # atm_config = {
@@ -1799,7 +1799,7 @@ if __name__ == '__main__':
     
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
-    _benchmark_time(t1, t2, "scf")
+    _benchmark_time(t1, t2, "scf", pbc_isdf_info)
     sys.stdout.flush()
     
     ### compare without occ-RI-K ###
@@ -1889,7 +1889,7 @@ if __name__ == '__main__':
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     aoR = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords)
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    _benchmark_time(t1, t2, "eval_gto")
+    _benchmark_time(t1, t2, "eval_gto", pbc_isdf_info)
     
     exit(1)
     

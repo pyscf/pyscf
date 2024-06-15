@@ -28,6 +28,7 @@ from multiprocessing import Pool
 ############ pyscf module ############
 
 from pyscf import lib
+from pyscf.lib import logger
 import pyscf.pbc.gto as pbcgto
 from pyscf.pbc.gto import Cell
 from pyscf.pbc import tools
@@ -392,7 +393,7 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
         # with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
         e, h = scipy.linalg.eigh(A)
         t12 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _benchmark_time(t11, t12, "diag_A")
+        _benchmark_time(t11, t12, "diag_A", mydf)
         print("condition number = ", e[-1]/e[0])
         where = np.where(e > e[-1]*1e-16)[0]
         # for id, val in enumerate(e):
@@ -455,7 +456,7 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
 
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     if debug and mydf.verbose:
-        _benchmark_time(t1, t2, "build_auxiliary_basis")
+        _benchmark_time(t1, t2, "build_auxiliary_basis", mydf)
 
     mydf.naux = naux
     mydf.aoRg = aoRg
@@ -468,18 +469,25 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                  # cutoff_aoValue: float = 1e-12,
                  # cutoff_QR: float = 1e-8
                  with_robust_fitting=True,
-                 Ls=None,
+                 kmesh=None,
                  get_partition=True,
-                 verbose = 1
+                 verbose = None
                  ):
 
+        '''
+        WARNING: for k-point calculation mol must be supercell currently, this is not consistent with pyscf's convention
+        TODO: change it ! 
+        '''
+
         super().__init__(cell=mol)
+
+        if verbose is not None:
+            self.verbose = verbose
 
         ## the following variables are used in build_sandeep
 
         self.with_robust_fitting = with_robust_fitting
 
-        self.verbose   = verbose
         self.IP_ID     = None
         self.aux_basis = None
         self.c         = None
@@ -499,12 +507,14 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.partition = None
 
         self.natm = mol.natm
-        self.nao = mol.nao_nr()
+        self.nao  = mol.nao_nr()
 
         from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2
 
+        logger.info(self, "PBC_ISDF_Info: mol.ke_cutoff = %f", mol.ke_cutoff)
+
         df_tmp = MultiGridFFTDF2(mol)
-        print("mol.ke_cutoff = ", mol.ke_cutoff)
+        
         if aoR is None:
             # df_tmp = MultiGridFFTDF2(mol)
             self.coords = np.asarray(df_tmp.grids.coords).reshape(-1,3)
@@ -534,20 +544,14 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             ao2atomID[ao_loc:ao_loc+nao_now] = atm_id
             ao_loc += nao_now
 
-        # print("ao2atomID = ", ao2atomID)
-
         self.ao2atomID = ao2atomID
-        # self.ao2atomID = ao2atomID
 
         # given aoG, determine at given grid point, which ao has the maximal abs value
 
         if aoR is not None:
             self.partition = np.argmax(np.abs(aoR), axis=0)
-            # print("partition = ", self.partition.shape)
             # map aoID to atomID
             self.partition = np.asarray([ao2atomID[x] for x in self.partition])
-            # self.coords    = None
-            # self._numints  = None
             grids   = df_tmp.grids
             self.coords  = np.asarray(grids.coords).reshape(-1,3)
             self._numints = df_tmp._numint
@@ -558,12 +562,11 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             coords_now = coords
             
-            if Ls is not None:
+            if kmesh is not None:
                 
-                mesh = mol.mesh
-                meshPrim = np.array(mesh, dtype=np.int32) // Ls
-                # print("meshPrim = ", meshPrim)
-                coords_now = coords_now.reshape(Ls[0], meshPrim[0], Ls[1], meshPrim[1], Ls[2], meshPrim[2], 3)
+                mesh       = mol.mesh
+                meshPrim   = np.array(mesh, dtype=np.int32) // kmesh
+                coords_now = coords_now.reshape(kmesh[0], meshPrim[0], kmesh[1], meshPrim[1], kmesh[2], meshPrim[2], 3)
                 coords_now = coords_now.transpose(0, 2, 4, 1, 3, 5, 6).reshape(-1, 3)
                 coords_now = coords_now[:np.prod(meshPrim), :]
 
@@ -572,18 +575,15 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
             if hasattr(self, "IO_buf"):
-                if verbose:
-                    print("IO_buf is already allocated")
+                logger.debug4(self, "PBC_ISDF_Info: IO_buf is already allocated")
             else:
-                if verbose:
-                    print("IO_buf is not allocated")
-                MAX_MEMORY = 2 * 1e9  # 2 GB
-                self.IO_buf = np.zeros((int(MAX_MEMORY//8),), dtype=np.double)
+                logger.debug4(self, "PBC_ISDF_Info: IO_buf is not allocated")
+                max_memory = max(2000, self.max_memory-lib.current_memory()[0])
+                self.IO_buf = np.zeros((int(max_memory*1e6//8),), dtype=np.double)
 
-            if verbose:
-                print("IO_buf.size = ", self.IO_buf.size)
-                print("coords.shape[0] = ", coords_now.shape[0])
-                print("self.nao = ", self.nao)
+            logger.debug4(self, "PBC_ISDF_Info: IO_buf.size     = %d", self.IO_buf.size)
+            logger.debug4(self, "PBC_ISDF_Info: coords.shape[0] = %d", coords_now.shape[0])
+            logger.debug4(self, "PBC_ISDF_Info: self.nao        = %d", self.nao)
 
             bufsize = min(self.IO_buf.size, 4*1e9/8) // 2
             bunchsize = int(bufsize / (self.nao))
@@ -594,12 +594,9 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             
             if get_partition and aoR is None:
                 for p0, p1 in lib.prange(0, coords_now.shape[0], bunchsize):
-                    # print("p0 = %d p1 = %d" % (p0, p1))
                     AoR_Buf = np.ndarray((self.nao, p1-p0), dtype=np.complex128, buffer=self.IO_buf, offset=0)
-                    # res = NumInts.eval_ao(mol, coords[p0:p1], deriv=0, out=self.IO_buf[:bufsize])[0].T
                     AoR_Buf = ISDF_eval_gto(self.cell, coords=coords_now[p0:p1], out=AoR_Buf)
-                    res = np.argmax(np.abs(AoR_Buf), axis=0)
-                    # print("res = ", res)
+                    res     = np.argmax(np.abs(AoR_Buf), axis=0)
                     self.partition[p0:p1] = np.asarray([ao2atomID[x] for x in res])
                     AoR_Buf = None
             else:
@@ -610,7 +607,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             self.coords = coords
             self._numints = NumInts
 
-    # @profile
     def _allocate_jk_buffer(self, datatype):
 
         if self.jk_buffer is None:
@@ -619,7 +615,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             ngrids = self.ngrids
             naux   = self.naux
 
-            print("nao = %d, ngrids = %d, naux = %d" % (nao, ngrids, naux)) 
+            logger.debug4(self, "_allocate_jk_buffer: nao = %d, ngrids = %d, naux = %d", nao, ngrids, naux) 
             buffersize_k = nao * ngrids + naux * ngrids + naux * naux + nao * nao           
             buffersize_j = nao * ngrids + ngrids + nao * naux + naux + naux + nao * nao
 
@@ -640,8 +636,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             else:
 
                 self.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
-                self.ddot_buf = np.zeros((nThreadsOMP, max((nao*nao)+2, ngrids)), dtype=datatype)
-
+                self.ddot_buf  = np.zeros((nThreadsOMP, max((nao*nao)+2, ngrids)), dtype=datatype)
 
         else:
             assert self.jk_buffer.dtype == datatype
@@ -649,11 +644,9 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     def build(self):
         raise NotImplementedError
-        # print("warning: not implemented yet")
 
     def build_only_partition(self):
         raise NotImplementedError
-        # print("warning: not implemented yet")
 
     def get_buffer_size_in_IP_selection(self, c, m=5):
         natm = self.cell.natm
@@ -703,9 +696,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         return max(buf_size, 2*self.nao*ngrids_now)
     
-    # @profile
-
-
     def get_A_B(self):
 
         aoR   = self.aoR
@@ -739,32 +729,25 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         natm = self.natm
         nao  = self.nao
 
-        # nao_per_atm = np.zeros(natm, dtype=np.int32)
-        # for i in range(self.nao):
-        #     atm_id = ao2atomID[i]
-        #     nao_per_atm[atm_id] += 1
-
         # for each atm
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
         if IP_ID is None:
-            IP_ID = _select_IP_direct(self, c, m, global_IP_selection=global_IP_selection)
+            IP_ID  = _select_IP_direct(self, c, m, global_IP_selection=global_IP_selection)
             IP_ID.sort()
-            IP_ID = np.array(IP_ID, dtype=np.int32)
+            IP_ID  = np.array(IP_ID, dtype=np.int32)
         self.IP_ID = np.array(IP_ID, dtype=np.int32)
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if debug and rank == 0:
-            _benchmark_time(t1, t2, "build_IP")
+            _benchmark_time(t1, t2, "build_IP", self)
         t1 = t2
 
         # build the auxiliary basis
 
-        self.c    = c
-
+        self.c = c
         build_aux_basis(self)
-        # t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
     # @profile
     def build_auxiliary_Coulomb(self, cell:Cell = None, mesh=None, debug=True):
@@ -821,30 +804,18 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         V_R = constrcuct_V_CCode(self.aux_basis, mesh, coulG)
 
-        # del task
-        # coulG = None
-
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if debug:
-            _benchmark_time(t1, t2, "build_auxiliary_Coulomb_V_R")
+            _benchmark_time(t1, t2, "build_auxiliary_Coulomb_V_R", self)
         t1 = t2
 
-        # W = np.zeros((naux,naux))
-        # lib.ddot_withbuffer(a=self.aux_basis, b=V_R.T, buf=self.ddot_buf, c=W, beta=1.0) # allocate, just allocate!
         W = lib.ddot(a=self.aux_basis, b=V_R.T)
 
-        # coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1]
-        # if mesh[2] % 2 == 0:
-        #     coulG_real[:,:,1:-1] *= 2
-        # else:
-        #     coulG_real[:,:,1:] *= 2
-        # coulG_real = coulG_real.reshape(-1) 
-        
         self.coulG = coulG.copy()
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if debug:
-            _benchmark_time(t1, t2, "build_auxiliary_Coulomb_W")
+            _benchmark_time(t1, t2, "build_auxiliary_Coulomb_W", self)
 
         self.V_R  = V_R
         self.W    = W
@@ -859,7 +830,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         aoRg = aoR[:, self.IP_ID]
         nao = self.nao
 
-        print("In check_AOPairError")
+        logger.debug4(self, "check_AOPairError")
 
         for i in range(nao):
             coeff = numpy.einsum('k,jk->jk', aoRg[i, :], aoRg).reshape(-1, self.IP_ID.shape[0])
@@ -870,7 +841,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             diff_pair_abs_max = np.max(np.abs(diff), axis=1)
 
             for j in range(diff_pair_abs_max.shape[0]):
-                print("(%5d, %5d, %15.8e)" % (i, j, diff_pair_abs_max[j]))
+                logger.debug4(self, "(%5d, %5d, %15.8e)", i, j, diff_pair_abs_max[j])
 
     def __del__(self):
         return
@@ -892,7 +863,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             self.PP = (v_pp_loc1 + v_pp_loc2_nl)[0]
             t1 = (lib.logger.process_clock(), lib.logger.perf_counter()) 
             if self.verbose:
-                _benchmark_time(t0, t1, "get_pp")
+                _benchmark_time(t0, t1, "get_pp", self)
             return self.PP
         
     ##### functions defined in isdf_ao2mo.py #####
@@ -939,7 +910,7 @@ if __name__ == '__main__':
     cell.basis   = 'gth-dzvp'
     # cell.basis   = 'gth-tzvp'
     cell.pseudo  = 'gth-pade'
-    cell.verbose = 4
+    cell.verbose = 10
 
     # cell.ke_cutoff  = 128   # kinetic energy cutoff in a.u.
     cell.ke_cutoff = 70
@@ -957,11 +928,7 @@ if __name__ == '__main__':
 
     grids  = df_tmp.grids
     coords = np.asarray(grids.coords).reshape(-1,3)
-    nx = grids.mesh[0]
-
-    # for i in range(coords.shape[0]):
-    #     print(coords[i])
-    # exit(1)
+    nx     = grids.mesh[0]
 
     mesh   = grids.mesh
     ngrids = np.prod(mesh)
@@ -970,29 +937,9 @@ if __name__ == '__main__':
     aoR   = df_tmp._numint.eval_ao(cell, coords)[0].T  # the T is important
     aoR  *= np.sqrt(cell.vol / ngrids)
 
-    print("aoR.shape = ", aoR.shape)
-
     pbc_isdf_info = PBC_ISDF_Info(cell, aoR)
     pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=C, global_IP_selection=False)
     pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
-    # pbc_isdf_info.check_AOPairError()
-
-    # exit(1)
-
-    ### check eri ###
-
-    # mydf_eri = df.FFTDF(cell)
-    # eri = mydf_eri.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
-    # print("eri.shape  = ", eri.shape)
-    # eri_isdf = pbc_isdf_info.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)
-    # print("eri_isdf.shape  = ", eri_isdf.shape)
-    # for i in range(cell.nao):
-    #     for j in range(cell.nao):
-    #         for k in range(cell.nao):
-    #             for l in range(cell.nao):
-    #                 if abs(eri[i,j,k,l] - eri_isdf[i,j,k,l]) > 1e-6:
-    #                     print("eri[{}, {}, {}, {}] = {} != {}".format(i,j,k,l,eri[i,j,k,l], eri_isdf[i,j,k,l]),
-    #                           "ration = ", eri[i,j,k,l]/eri_isdf[i,j,k,l])
 
     ### perform scf ###
 
@@ -1024,4 +971,4 @@ if __name__ == '__main__':
     mf = scf.RHF(cell)
     mf.max_cycle = 100
     mf.conv_tol = 1e-8
-    mf.kernel()
+    #mf.kernel()

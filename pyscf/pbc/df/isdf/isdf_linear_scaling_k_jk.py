@@ -327,8 +327,8 @@ def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_j_dm_k_ls")
+    # if mydf.verbose:
+    _benchmark_time(t1, t2, "_contract_j_dm_k_ls", mydf)
     
     ######### delete the buffer #########
     
@@ -427,7 +427,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     )
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "_fft1")
+    _benchmark_time(t3, t4, "_fft1", mydf)
     
     buf_A = np.ndarray((nao_prim, nao_prim), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     
@@ -510,7 +510,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
             DM_RgRg_complex[:, k_begin:k_end] = buf_D
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "DM_RgRg_complex")
+    _benchmark_time(t3, t4, "DM_RgRg_complex", mydf)
     
     t3 = t4
     
@@ -528,7 +528,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     )
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "DM_RgRg_complex 2")
+    _benchmark_time(t3, t4, "DM_RgRg_complex 2", mydf)
     t3 = t4
     
     # inplace multiplication
@@ -536,7 +536,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     lib.cwise_mul(mydf.W, DM_RgRg_real, out=DM_RgRg_real)
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "lib.cwise_mul 2")
+    _benchmark_time(t3, t4, "lib.cwise_mul 2", mydf)
     t3 = t4
     
     offset = offset_after_DM
@@ -552,7 +552,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     )
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "DM_RgRg_real")
+    _benchmark_time(t3, t4, "DM_RgRg_real", mydf)
     t3 = t4
     
     K_complex_buf = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
@@ -635,7 +635,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
             K_complex_buf[:, k_begin:k_end] = buf_D
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "K_complex_buf")
+    _benchmark_time(t3, t4, "K_complex_buf", mydf)
     t3 = t4
     
     buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
@@ -649,7 +649,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     )
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "K_real_buf")
+    _benchmark_time(t3, t4, "K_real_buf", mydf)
     t3 = t4
     
     K_real_buf *= (ngrid / vol)
@@ -754,7 +754,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
             DM_RgR_complex[:, k_begin:k_end] = buf_D
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "DM_RgR_complex")
+    _benchmark_time(t3, t4, "DM_RgR_complex", mydf)
     t3 = t4
     
     # DM_RgRg1 = DM_RgR_complex[:, mydf.IP_ID]
@@ -785,7 +785,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     )
         
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "DM_RgR_real")
+    _benchmark_time(t3, t4, "DM_RgR_real", mydf)
     t3 = t4
         
     # inplace multiplication
@@ -796,7 +796,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     lib.cwise_mul(mydf.V_R, DM_RgR_real, out=DM_RgR_real)
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "cwise_mul")
+    _benchmark_time(t3, t4, "cwise_mul", mydf)
     t3 = t4
     
     # buf_fft = np.ndarray((nIP_prim, nGridPrim*ncell_complex), dtype=np.complex128)
@@ -810,7 +810,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     )
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "DM_RgR_complex 2")
+    _benchmark_time(t3, t4, "DM_RgR_complex 2", mydf)
     t3 = t4
     
     # print("DM_RgR_complex = ", DM_RgR_complex[:5,:5])
@@ -921,7 +921,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
             K_complex_buf[:, k_begin:k_end] = buf_D
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "K_complex_buf 1")
+    _benchmark_time(t3, t4, "K_complex_buf 1", mydf)
     t3 = t4
     
     buf_A = None
@@ -945,7 +945,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     )
     
     t4 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t3, t4, "K_complex_buf 2")
+    _benchmark_time(t3, t4, "K_complex_buf 2", mydf)
     t3 = t4
     
     buf_fft = None
@@ -954,7 +954,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    _benchmark_time(t1, t2, "_contract_k_dm")
+    _benchmark_time(t1, t2, "_contract_k_dm", mydf)
     
     t1 = t2
     
@@ -962,7 +962,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    _benchmark_time(t1, t2, "_pack_JK")
+    _benchmark_time(t1, t2, "_pack_JK", mydf)
     
     # print("K2 = ", K2[:5,:5])
     # print("K = ", -K[:5,:5])
@@ -1180,7 +1180,7 @@ def _get_k_kSym(mydf, dm):
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    _benchmark_time(t1, t2, "_contract_k_dm")
+    _benchmark_time(t1, t2, "_contract_k_dm", mydf)
     
     return K
     

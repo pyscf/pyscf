@@ -45,8 +45,9 @@ libpbc = lib.load_library('libpbc')
 
 ######### tools #########
 
-def _benchmark_time(t1, t2, label):
-    print("%20s wall time: %12.6f CPU time: %12.6f" % (label, t2[1] - t1[1], t2[0] - t1[0]))
+def _benchmark_time(t1, t2, label, rec):
+    #print("%20s wall time: %12.6f CPU time: %12.6f" % (label, t2[1] - t1[1], t2[0] - t1[0]))
+    lib.logger.debug4(rec, "%20s wall time: %12.6f CPU time: %12.6f" % (label, t2[1] - t1[1], t2[0] - t1[0]))
 
 # @profile
 def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
@@ -173,7 +174,7 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
     t2 = (logger.process_clock(), logger.perf_counter())
     
     if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_j_dm")
+        _benchmark_time(t1, t2, "_contract_j_dm", mydf)
 
     return J * ngrid / vol
 
@@ -285,7 +286,7 @@ def _contract_j_dm_fast(mydf, dm, with_robust_fitting=True, use_mpi=False):
     t2 = (logger.process_clock(), logger.perf_counter())
     
     if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_j_dm_fast")
+        _benchmark_time(t1, t2, "_contract_j_dm_fast", mydf)
     
     return J * ngrid / vol
 
@@ -335,7 +336,7 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mp
     t2 = (logger.process_clock(), logger.perf_counter())
 
     if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_j_dm_wo_robust_fitting")
+        _benchmark_time(t1, t2, "_contract_j_dm_wo_robust_fitting", mydf)
     
     return J * ngrid / vol
 
@@ -457,7 +458,7 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
     t2 = (logger.process_clock(), logger.perf_counter())
     
     if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_k_dm")
+        _benchmark_time(t1, t2, "_contract_k_dm", mydf)
 
     if K is None:
         K = np.zeros((nao, nao))
@@ -501,7 +502,7 @@ def _contract_k_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mp
     t2 = (logger.process_clock(), logger.perf_counter())
     
     if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_k_dm_wo_robust_fitting")
+        _benchmark_time(t1, t2, "_contract_k_dm_wo_robust_fitting", mydf)
     
     del tmp
     tmp = None

@@ -705,8 +705,8 @@ def ddot(a, b, alpha=1, c=None, beta=0):
         a = numpy.asarray(a, order='C')
         trans_a = 'N'
         #raise ValueError('a.flags: %s' % str(a.flags))
-        print('Warning: possible copy of a, may introduce performance issue')
-
+        #print('Warning: possible copy of a, may introduce performance issue') ## warning of performance
+ 
     assert (k == b.shape[0])
     if b.flags.c_contiguous:
         trans_b = 'N'
@@ -717,7 +717,7 @@ def ddot(a, b, alpha=1, c=None, beta=0):
         b = numpy.asarray(b, order='C')
         trans_b = 'N'
         #raise ValueError('b.flags: %s' % str(b.flags))
-        print('Warning: possible copy of b, may introduce performance issue')
+        #print('Warning: possible copy of b, may introduce performance issue') ## warning of performance
 
     if c is None:
         c = numpy.empty((m,n))

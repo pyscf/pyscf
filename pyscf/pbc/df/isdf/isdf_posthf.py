@@ -80,6 +80,7 @@ def RCCSD_isdf(mf, frozen=0, mo_coeff=None, mo_occ=None, run=True):
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast
 
 class _restricted_THC_posthf_holder:
+    
     def __init__(self, my_isdf, my_mf, X,
                  laplace_rela_err = 1e-7,
                  laplace_order    = 2,
@@ -127,7 +128,7 @@ class _restricted_THC_posthf_holder:
 
             self.X_o = lib.ddot(self.mo_coeff[:, :self.nocc].T, X)
             self.X_v = lib.ddot(self.mo_coeff[:, self.nocc:].T, X)
-            self.Z = Z
+            self.Z   = Z
             self.tau_o = self._laplace.laplace_occ
             self.tau_v = self._laplace.laplace_vir
         
@@ -260,8 +261,7 @@ if __name__ == '__main__':
             mf_isdf.conv_tol = 1e-8
             mf_isdf.kernel()
             
-            # print("mo_energy = ", mf.mo_energy)
-            print("mo_energy = ", mf_isdf.mo_energy)
+            # print("mo_energy = ", mf_isdf.mo_energy)
             
             isdf_pt = mp.RMP2(mf_isdf)
             isdf_pt.kernel()

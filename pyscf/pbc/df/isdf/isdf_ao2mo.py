@@ -54,18 +54,7 @@ def isdf_eri_robust_fit(mydf, W, aoRg, aoR, V_r, verbose=None):
 
     ### step 1, term1
 
-    path = np.einsum_path('ijx,xy,kly->ijkl', pair_Rg, V_r, pair_R, optimize='optimal')
-
-    if verbose is not None and verbose > 0:
-        # print("aoRg.shape     = ", aoRg.shape)
-        # print("aoR.shape      = ", aoR.shape)
-        # print("V_r.shape      = ", V_r.shape)
-        print("path for term1 is ", path[0])
-        print("opt            is ", path[1])
-
-    # exit(1)
-
-    path    = path[0]
+    path    = np.einsum_path('ijx,xy,kly->ijkl', pair_Rg, V_r, pair_R, optimize='optimal')[0]
     eri_tmp = np.einsum('ijx,xy,kly->ijkl', pair_Rg, V_r, pair_R, optimize=path)
 
     ### step 2, term2
@@ -74,17 +63,8 @@ def isdf_eri_robust_fit(mydf, W, aoRg, aoR, V_r, verbose=None):
 
     ### step 3, term3
 
-    path = np.einsum_path('ijx,xy,kly->ijkl', pair_Rg, W, pair_Rg, optimize='optimal')
-
-    if verbose is not None and verbose > 0:
-        print("path for term3 is ", path[0])
-        print("opt            is ", path[1])
-
-    path    = path[0]
-    eri    -= np.einsum('ijx,xy,kly->ijkl', pair_Rg, W, pair_Rg, optimize=path)
-    # eri     = np.einsum('ijx,xy,kly->ijkl', pair_Rg, W, pair_Rg, optimize=path)
-
-    # print("ngrids = ", np.prod(cell.mesh))
+    path = np.einsum_path('ijx,xy,kly->ijkl', pair_Rg, W, pair_Rg, optimize='optimal')[0]
+    eri -= np.einsum('ijx,xy,kly->ijkl', pair_Rg, W, pair_Rg, optimize=path)
 
     return eri * ngrid / vol
 
@@ -460,7 +440,6 @@ def isdf_eri_ovov(mydf,
     
     ########################################################
     
-    # max_nao_involved   = np.max([aoR_holder.aoR.shape[0] for aoR_holder in moR  if aoR_holder is not None])
     max_nao_involved = max(nao_o, nao_v)
     max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in moR_o  if aoR_holder is not None])
     max_nIP_involved   = np.max([aoR_holder.aoR.shape[1] for aoR_holder in moRg_o if aoR_holder is not None])
@@ -691,6 +670,7 @@ def get_eri(mydf, kpts=None,
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
+
     if gamma_point(kptijkl):
 
         #:ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact=compact)
@@ -785,16 +765,18 @@ def LS_THC(mydf, R:np.ndarray):
     given R matrix, get Z matrix such that eri = R R Z R R
     '''
     
+    log = lib.logger.Logger(mydf.stdout, mydf.verbose)
+    
     nGrid_R = R.shape[1]
     nao     = R.shape[0]
     
     assert nao == mydf.cell.nao
     
-    ngrid   = np.prod(mydf.cell.mesh)
-    nIP     = mydf.naux
-    naux    = mydf.naux
-    vol     = mydf.cell.vol
-    natm    = mydf.cell.natm
+    ngrid = np.prod(mydf.cell.mesh)
+    nIP   = mydf.naux
+    naux  = mydf.naux
+    vol   = mydf.cell.vol
+    natm  = mydf.cell.natm
     
     Z = np.zeros((nGrid_R, nGrid_R))
     
@@ -813,9 +795,10 @@ def LS_THC(mydf, R:np.ndarray):
     
     ## for debug ##
     
-    print("max D_RR", np.max(D_RR))
-    print("min D_RR", np.min(D_RR))
-    print("condition number = ", np.max(D_RR)/np.min(D_RR))
+    log.debug4("***** LS_THC ***** ")
+    log.debug4("max D_RR         = %f", np.max(D_RR))
+    log.debug4("min D_RR         = %f", np.min(D_RR))
+    log.debug4("condition number = %f", np.max(D_RR)/np.min(D_RR))
     
     #### step 2 construct R R ERI R R with O(N^3) cost #### 
     
@@ -925,7 +908,9 @@ def _find_laplace(laplace_holder:dict, R, error):
                 return item
         return None
 
-def _build_laplace_holder(r_min, r_max, rel_error, verbose=True):
+def _build_laplace_holder(r_min, r_max, rel_error, 
+                          #verbose=True
+                          ):
     
     import os, pickle
     
@@ -939,16 +924,16 @@ def _build_laplace_holder(r_min, r_max, rel_error, verbose=True):
     if item_found is None:
         raise NotImplementedError("No laplace holder found")
     
-    if verbose:
-        print("Laplace holder found")
-        print("R_min  = ", r_min)
-        print("R_max  = ", r_max)
-        print("R      = ", r_max/r_min)
-        print("Error  = ", rel_error)
-        print("degree = ", item_found['degree'])
-        print("a_values = ", item_found['a_values'])
-        print("b_values = ", item_found['b_values'])
-        print("error    = ", item_found['error'])
+    # if verbose:
+    #     print("Laplace holder found")
+    #     print("R_min  = ", r_min)
+    #     print("R_max  = ", r_max)
+    #     print("R      = ", r_max/r_min)
+    #     print("Error  = ", rel_error)
+    #     print("degree = ", item_found['degree'])
+    #     print("a_values = ", item_found['a_values'])
+    #     print("b_values = ", item_found['b_values'])
+    #     print("error    = ", item_found['error'])
     
     return {
         "a_values":np.array(item_found['a_values'])/r_min,
@@ -959,8 +944,6 @@ def _build_laplace_holder(r_min, r_max, rel_error, verbose=True):
 
 class laplace_holder:
     def __init__(self, 
-                 # r_min, 
-                 # r_max,
                  mo_ene, 
                  nocc, 
                  order=2,
@@ -985,9 +968,9 @@ class laplace_holder:
         self.mo_ene = mo_ene
         self.nocc   = nocc
         self.order  = order
-        self.holder = _build_laplace_holder(r_min, r_max, rel_error, verbose=verbose)
-        self.a_values = self.holder['a_values']
-        self.b_values = self.holder['b_values']
+        self.holder = _build_laplace_holder(r_min, r_max, rel_error)
+        self.a_values  = self.holder['a_values']
+        self.b_values  = self.holder['b_values']
         self._degree   = self.holder['degree']
         self._error    = self.holder['error']
         
@@ -1034,11 +1017,6 @@ class laplace_holder:
         print("vir_ene = ", vir_ene)
         
         for icol, (a, b) in enumerate(zip(self.a_values, self.b_values)):
-            # print("a = ", a)
-            # print((a**((1.0/(float(order2))))))
-            # print("b = ", b)
             res[:, icol] = (a**((1.0/(float(order2)))))*np.exp(-b*vir_ene)
-        
-        # print("res = ", res)
-        
+                
         return res

@@ -320,8 +320,8 @@ def _half_J(mydf, dm, use_mpi=False,
     del dm_buf, ddot_buf, density_R
     del density_R_tmp
     
-    if mydf.verbose:
-        _benchmark_time(t1, t2, "half_J")
+    # if mydf.verbose:
+    _benchmark_time(t1, t2, "half_J", mydf)
     
     return J
 
@@ -561,8 +561,8 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_j_dm_fast")
+    # if mydf.verbose:
+    _benchmark_time(t1, t2, "_contract_j_dm_fast", mydf)
     
     ######### delete the buffer #########
     
@@ -753,8 +753,8 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_j_dm_fast")
+    # if mydf.verbose:
+    _benchmark_time(t1, t2, "_contract_j_dm_fast", mydf)
     
     ######### delete the buffer #########
     
@@ -1022,8 +1022,8 @@ def __get_DensityMatrixonGrid_qradratic(mydf, dm, bra_aoR_holder, ket_aoR_holder
     assert ngrid_loc == ngrid_ket
     
     t2 = (logger.process_clock(), logger.perf_counter())
-    if verbose>0:
-        _benchmark_time(t1, t2, "__get_DensityMatrixonGrid_qradratic")
+    # if verbose>0:
+    _benchmark_time(t1, t2, "__get_DensityMatrixonGrid_qradratic", mydf)
     return res
 
 def __get_DensityMatrixonRgAO_qradratic(mydf, dm, 
@@ -1125,7 +1125,7 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm,
         
     t2 = (logger.process_clock(), logger.perf_counter())
     # if verbose>0:
-    #     _benchmark_time(t1, t2, "__get_DensityMatrixonRgAO_qradratic")
+    #     _benchmark_time(t1, t2, "__get_DensityMatrixonRgAO_qradratic", mydf)
     return res
 
 # @profile
@@ -1468,8 +1468,8 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_k_dm_quadratic")
+    # if mydf.verbose:
+    _benchmark_time(t1, t2, "_contract_k_dm_quadratic", mydf)
     
     return K * ngrid / vol
 
@@ -1973,8 +1973,8 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_k_dm_quadratic_direct")
+    #if mydf.verbose:
+    _benchmark_time(t1, t2, "_contract_k_dm_quadratic_direct", mydf)
     
     return K * ngrid / vol
 
@@ -2177,9 +2177,9 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
 
     t4 = (logger.process_clock(), logger.perf_counter())
     
-    if mydf.verbose:
-        _benchmark_time(t3, t4, "get_mo over grids")
-        sys.stdout.flush()
+    #if mydf.verbose:
+    _benchmark_time(t3, t4, "get_mo over grids", mydf)
+        #sys.stdout.flush()
 
     t3 = (logger.process_clock(), logger.perf_counter())
     
@@ -2203,8 +2203,8 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
     
     t4 = (logger.process_clock(), logger.perf_counter())
     
-    if mydf.verbose:
-        _benchmark_time(t3, t4, "get_dm over grids")
+    #if mydf.verbose:
+    _benchmark_time(t3, t4, "get_dm over grids", mydf)
         
     #### step 0 get_half_J ####
 
@@ -2325,8 +2325,8 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
 
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    if mydf.verbose and with_j:
-        _benchmark_time(t1, t2, "get_j")
+    if with_j:
+        _benchmark_time(t1, t2, "get_j", mydf)
 
     t1 = (logger.process_clock(), logger.perf_counter())
 
@@ -2488,8 +2488,8 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
     del ddot_buf, aoR_buf1, moR_buf, mo_coeff_pack_buf
     
     t2 = (logger.process_clock(), logger.perf_counter())
-    if mydf.verbose:
-        _benchmark_time(t1, t2, "get_k_occRI")
+
+    _benchmark_time(t1, t2, "get_k_occRI", mydf)
     
     # Kiv = K.copy() # for debug
     
@@ -2519,9 +2519,9 @@ def get_jk_occRI(mydf, dm, use_mpi=False, with_j=True, with_k=True):
         
     t2 = (logger.process_clock(), logger.perf_counter())
     t00 = t2
-    if mydf.verbose:
-        _benchmark_time(t1, t2, "get_k_iv_2_uv")
-        _benchmark_time(t0, t00, "get_jk_occ-RI-K")
+    
+    _benchmark_time(t1, t2, "get_k_iv_2_uv", mydf)
+    _benchmark_time(t0, t00, "get_jk_occ-RI-K", mydf)
     
     del K1, K2, K3
     

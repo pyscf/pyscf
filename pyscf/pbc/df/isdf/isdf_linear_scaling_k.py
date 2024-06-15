@@ -269,10 +269,10 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
 
     if mydf.with_robust_fitting:
         
-        ngrids = coords.shape[0]
-        ngrids_prim = ngrids // np.prod(kmesh)
-        aoR_tmp = ISDF_eval_gto(mydf.cell, coords=coords[mydf.grid_ID_ordered], shls_slice=(0, nbas_prim)) * weight
-        mydf.aoR_FFT  = np.zeros((nao_prim, ncell_complex*ngrids_prim), dtype=np.complex128)
+        ngrids            = coords.shape[0]
+        ngrids_prim       = ngrids // np.prod(kmesh)
+        aoR_tmp           = ISDF_eval_gto(mydf.cell, coords=coords[mydf.grid_ID_ordered], shls_slice=(0, nbas_prim)) * weight
+        mydf.aoR_FFT      = np.zeros((nao_prim, ncell_complex*ngrids_prim), dtype=np.complex128)
         mydf.aoR_FFT_real = np.ndarray((nao_prim, np.prod(kmesh)*ngrids_prim), dtype=np.double, buffer=mydf.aoR_FFT, offset=0)
         mydf.aoR_FFT_real.ravel()[:] = aoR_tmp.ravel()
         
@@ -546,7 +546,6 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         assert len(self.partition_prim) == self.natmPrim ## the grid id is the global grid id 
         
         self.partition = _expand_partition_prim(self.partition_prim, self.kmesh, self.mesh)
-        # print("partition = ", self.partition)
         
         assert len(self.partition) == self.natm
         
@@ -555,7 +554,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         #### 
         
         if self.verbose:
-            _benchmark_time(t1, t2, "build_partition")
+            _benchmark_time(t1, t2, "build_partition", self)
         
         
         #### build aoR #### 
@@ -569,6 +568,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         ## deal with translation symmetry ##
         first_natm = self._get_first_natm()
         natm = self.cell.natm
+        
         #################################### 
         
         sync_aoR = False
@@ -648,7 +648,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if self.verbose:
-            _benchmark_time(t1, t2, "build_aoR")
+            _benchmark_time(t1, t2, "build_aoR", self)
     
     def build_IP_local(self, c=5, m=5, first_natm=None, group=None, Ls = None, debug=True):
         
@@ -756,7 +756,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if self.verbose and debug:
-            _benchmark_time(t1, t2, "build_partition_aoR")
+            _benchmark_time(t1, t2, "build_partition_aoR", self)
         
         t1 = t2 
         
@@ -794,7 +794,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         t4 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if self.verbose and debug:
-            _benchmark_time(t3, t4, "build_aoRg_possible")
+            _benchmark_time(t3, t4, "build_aoRg_possible", self)
         
         select_IP_local_ls_k_drive(
             self, c, m, IP_Atm, group, use_mpi=self.use_mpi
@@ -803,7 +803,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if self.verbose and debug:
-            _benchmark_time(t1, t2, "select_IP")
+            _benchmark_time(t1, t2, "select_IP", self)
         
         t1 = t2 
         
@@ -814,7 +814,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if self.verbose and debug:
-            _benchmark_time(t1, t2, "build_aux_basis")
+            _benchmark_time(t1, t2, "build_aux_basis", self)
     
         t1 = t2
         
