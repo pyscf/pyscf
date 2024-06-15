@@ -1096,7 +1096,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
-            **kwargs):
+            with_origin=None, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Diople moment.
     '''
@@ -1128,10 +1128,10 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
         return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
-                mf.dip_moment(mf.mol, dm, verbose=log))
+                mf.dip_moment(mf.mol, dm, with_origin=with_origin, verbose=log))
     else:
         return (mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log),
-                mf.dip_moment(mf.mol, dm, verbose=log))
+                mf.dip_moment(mf.mol, dm, with_origin=with_origin, verbose=log))
 
 def dump_scf_summary(mf, verbose=logger.DEBUG):
     if not mf.scf_summary:
@@ -1978,11 +1978,11 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     canonicalize = canonicalize
 
     @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    def dip_moment(self, mol=None, dm=None, unit='Debye', with_origin=None, verbose=logger.NOTE,
                    **kwargs):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()
-        return dip_moment(mol, dm, unit, verbose=verbose, **kwargs)
+        return dip_moment(mol, dm, unit, with_origin=with_origin, verbose=verbose, **kwargs)
 
     @lib.with_doc(quad_moment.__doc__)
     def quad_moment(self, mol=None, dm=None, unit='DebyeAngstrom', with_origin=None,
