@@ -327,7 +327,7 @@ def _half_J(mydf, dm, use_mpi=False,
 
 # @profile
 def _contract_j_dm_ls(mydf, dm, use_mpi=False, 
-                      first_pass = None, 
+                      first_pass  = None, 
                       second_pass = None,
                       short_range = False):
     
@@ -358,8 +358,19 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
     second_pass_has_cc = second_pass in ["all", "only_cc"]
     second_pass_has_cd = second_pass in ["all", "exclude_cc"]
     
-    #print("first_pass  = ", first_pass)
-    #print("second_pass = ", second_pass)
+    ####### judge whether to call the original one #######
+    
+    if isinstance(mydf.aoRg, np.ndarray):
+        has_aoR = False
+        if hasattr(mydf, "aoR") and mydf.aoR is not None:
+            assert isinstance(mydf.aoR, np.ndarray)
+            has_aoR = True
+        ### call the original get_j ###
+        from pyscf.pbc.df.isdf.isdf_jk import _contract_j_dm_fast, _contract_j_dm_wo_robust_fitting
+        if has_aoR:
+            return _contract_j_dm_fast(mydf, dm, use_mpi=use_mpi)
+        else:
+            return _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=use_mpi)
     
     ####### Start the calculation ########
     
@@ -584,6 +595,14 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
         #raise NotImplementedError("MPI is not supported yet.")
         assert mydf.direct == True
     
+    ####### judge whether to call the original one #######
+    
+    if isinstance(mydf.aoRg, np.ndarray):
+        from pyscf.pbc.df.isdf.isdf_jk import _contract_j_dm_wo_robust_fitting
+        _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=use_mpi)
+    
+    ######## start the calculation ########
+    
     t1 = (logger.process_clock(), logger.perf_counter())
 
     if len(dm.shape) == 3:
@@ -765,6 +784,8 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
     return J * ngrid / vol
 
 ############# Xing's multigrid get_j function #############
+
+### WARNING: not work now ! 
 
 from pyscf.pbc.df.df_jk import (
     _format_dms,
@@ -1138,6 +1159,17 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         size = comm.Get_size()
         raise NotImplementedError("MPI is not supported yet.")
     
+    ####### judge whether to call the original one #######
+    
+    if isinstance(mydf.aoRg, np.ndarray):
+        from pyscf.pbc.df.isdf.isdf_jk import _contract_k_dm, _contract_k_dm_wo_robust_fitting
+        if mydf.aoR is None:
+            return _contract_k_dm_wo_robust_fitting(mydf, dm, False, use_mpi=use_mpi)
+        else:
+            return _contract_k_dm(mydf, dm, with_robust_fitting, use_mpi=use_mpi)
+    
+    ######## start the calculation ########
+    
     t1 = (logger.process_clock(), logger.perf_counter())
     
     if len(dm.shape) == 3:
@@ -1185,13 +1217,6 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     #### step 1. get density matrix value on real space grid and IPs
     
     Density_RgAO = __get_DensityMatrixonRgAO_qradratic(mydf, dm, aoRg, "all", mydf.Density_RgAO_buf, use_mpi)
-    
-    # print("Density_RgAO = ", Density_RgAO[0, :16])
-    
-    # if with_robust_fitting:
-    #     Density_RgR  = __get_DensityMatrixonGrid_qradratic(mydf, dm, aoRg, aoR, mydf.Density_RgR_buf, use_mpi)
-    # else:
-    #     Density_RgR = None
     
     #### step 2. get K, those part which W is involved 
     
@@ -1337,14 +1362,15 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
         # assert fn_packcol is not None
 
         ddot_buf1 = np.ndarray((naux, max_nao_involved), buffer=ddot_res_buf)
-        offset = naux * max_nao_involved * ddot_res_buf.dtype.itemsize
+        offset    = naux * max_nao_involved * ddot_res_buf.dtype.itemsize
         V_tmp_buf = np.ndarray((naux, max_ngrid_involved), buffer=ddot_res_buf, offset=offset)
-        offset += V_tmp_buf.size * V_tmp_buf.dtype.itemsize
-        pack_buf = np.ndarray((naux, max_nao_involved), buffer=ddot_res_buf, offset=offset)
-        offset += pack_buf.size * pack_buf.dtype.itemsize
+        offset   += V_tmp_buf.size * V_tmp_buf.dtype.itemsize
+        pack_buf  = np.ndarray((naux, max_nao_involved), buffer=ddot_res_buf, offset=offset)
+        offset   += pack_buf.size * pack_buf.dtype.itemsize
         ddot_buf2 = np.ndarray((naux, max_ngrid_involved), buffer=ddot_res_buf, offset=offset)
     
         ngrid_loc = 0
+        
         for aoR_holder in aoR:
             
             if aoR_holder is None:
@@ -1388,20 +1414,7 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
             )
             lib.cwise_mul(V_packed, Density_RgR, out=Density_RgR)
             V_tmp = Density_RgR
-            
-            # V_tmp = Density_RgR[:, ngrid_loc:ngrid_loc+ngrid_now]
-            # V_tmp = np.ndarray((naux, ngrid_now), buffer=V_tmp_buf)
-            # fn_packcol2(
-            #     V_tmp.ctypes.data_as(ctypes.c_void_p),
-            #     ctypes.c_int(naux),
-            #     ctypes.c_int(ngrid_now),
-            #     Density_RgR.ctypes.data_as(ctypes.c_void_p),
-            #     ctypes.c_int(naux),
-            #     ctypes.c_int(ngrid),
-            #     ctypes.c_int(ngrid_loc),
-            #     ctypes.c_int(ngrid_loc+ngrid_now)
-            # )
-            
+                        
             ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_buf1)
             lib.ddot(V_tmp, aoR_holder.aoR.T, c=ddot_res)
             

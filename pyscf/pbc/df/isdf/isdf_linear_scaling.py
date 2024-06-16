@@ -1690,6 +1690,22 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             )
             
         return res
+      
+    ### LS_THC fit ###
+    
+    def LS_THC_recompression(self, X:np.ndarray): 
+        
+        from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC 
+        
+        self.with_robust_fitting = False
+        
+        self.W    = LS_THC(self, X) / (self.ngrids/self.cell.vol)
+        self.aoRg = X
+        self.aoR  = None
+        
+        self.V_R  = None
+      
+########### TESTING BLOCK ###########
         
 C = 15
 
@@ -1814,6 +1830,24 @@ if __name__ == '__main__':
     mf.kernel()
     
     # print("E = ", mf.mo_energy)
+    
+    ###### test LS_THC ######
+    
+    _myisdf = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
+    _myisdf.build_IP_local(c=13, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
+    X       = _myisdf.aoRg_full() 
+    pbc_isdf_info.LS_THC_recompression(X)
+    
+    pbc_isdf_info.occ_RI_K = False
+    
+    mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    mf.with_df   = pbc_isdf_info
+    mf.max_cycle = 8
+    mf.conv_tol  = 1e-7
+    mf.kernel()
+    
+    exit(1)
     
     ###### diag dm ######
     

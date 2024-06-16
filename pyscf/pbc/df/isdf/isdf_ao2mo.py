@@ -440,7 +440,7 @@ def isdf_eri_ovov(mydf,
     
     ########################################################
     
-    max_nao_involved = max(nao_o, nao_v)
+    max_nao_involved   = max(nao_o, nao_v)
     max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in moR_o  if aoR_holder is not None])
     max_nIP_involved   = np.max([aoR_holder.aoR.shape[1] for aoR_holder in moRg_o if aoR_holder is not None])
     
@@ -787,11 +787,8 @@ def LS_THC(mydf, R:np.ndarray):
     
     # diag RR #
     
-    D_RR, U_RR = scipy.linalg.eigh(RR)
-    
-    print('dimension = ', D_RR.shape[0])
-    
-    D_RR_inv = (1.0/D_RR).copy()
+    D_RR, U_RR = scipy.linalg.eigh(RR)    
+    D_RR_inv   = (1.0/D_RR).copy()
     
     ## for debug ##
     
@@ -808,38 +805,55 @@ def LS_THC(mydf, R:np.ndarray):
     
     aoRg = mydf.aoRg
     
-    for partition_i in range(natm):
+    if isinstance(aoRg, np.ndarray):
         
-        aoRg_i            = aoRg[partition_i]
-        ao_involved_i     = aoRg_i.ao_involved
-        nao_i             = aoRg_i.aoR.shape[0]
-        global_IP_begin_i = aoRg_i.global_gridID_begin
-        nIP_i             = aoRg_i.aoR.shape[1]
+        RX = lib.ddot(R.T, aoRg)
+
+    else:
         
-        R_packed = R[ao_involved_i,:].copy() 
-        RX_tmp   = lib.ddot(R_packed.T, aoRg_i.aoR)
+        assert isinstance(aoRg, list)
         
-        RX[:,global_IP_begin_i:global_IP_begin_i+nIP_i] = RX_tmp 
+        for partition_i in range(natm):
+        
+            aoRg_i            = aoRg[partition_i]
+            ao_involved_i     = aoRg_i.ao_involved
+            nao_i             = aoRg_i.aoR.shape[0]
+            global_IP_begin_i = aoRg_i.global_gridID_begin
+            nIP_i             = aoRg_i.aoR.shape[1]
+        
+            R_packed = R[ao_involved_i,:].copy() 
+            RX_tmp   = lib.ddot(R_packed.T, aoRg_i.aoR)
+        
+            RX[:,global_IP_begin_i:global_IP_begin_i+nIP_i] = RX_tmp 
     
     RX = lib.square_inPlace(RX)
         
     # build (RY)^{PB} = \sum_mu R_mu^P Y_\mu^B with Y = aoR # 
     
     if mydf.with_robust_fitting:
-        aoR = mydf.aoR
-        RY = np.zeros((nGrid_R, ngrid))
-        for partition_i in range(natm):
+        
+        if isinstance(mydf.aoR, np.ndarray):
             
-            aoR_i            = aoR[partition_i]
-            ao_involved_i    = aoR_i.ao_involved
-            nao_i            = aoR_i.aoR.shape[0]
-            global_gridID_i  = aoR_i.global_gridID_begin
-            ngrid_i          = aoR_i.aoR.shape[1]
+            RY = lib.ddot(R.T, mydf.aoR)
             
-            R_packed = R[ao_involved_i,:].copy()
-            RY_tmp   = lib.ddot(R_packed.T, aoR_i.aoR)
+        else:
             
-            RY[:,global_gridID_i:global_gridID_i+ngrid_i] = RY_tmp
+            assert isinstance(mydf.aoR, list)
+            
+            aoR = mydf.aoR
+            RY = np.zeros((nGrid_R, ngrid))
+            for partition_i in range(natm):
+            
+                aoR_i            = aoR[partition_i]
+                ao_involved_i    = aoR_i.ao_involved
+                nao_i            = aoR_i.aoR.shape[0]
+                global_gridID_i  = aoR_i.global_gridID_begin
+                ngrid_i          = aoR_i.aoR.shape[1]
+            
+                R_packed = R[ao_involved_i,:].copy()
+                RY_tmp   = lib.ddot(R_packed.T, aoR_i.aoR)
+            
+                RY[:,global_gridID_i:global_gridID_i+ngrid_i] = RY_tmp
     
         RY = lib.square_inPlace(RY)
     else:
@@ -973,9 +987,6 @@ class laplace_holder:
         self.b_values  = self.holder['b_values']
         self._degree   = self.holder['degree']
         self._error    = self.holder['error']
-        
-        # print("a_values = ", self.a_values)
-        # print("b_values = ", self.b_values)
         
         self.laplace_occ = self._build_laplace_occ(occ_ene, order=order)
         self.laplace_vir = self._build_laplace_vir(vir_ene, order=order)

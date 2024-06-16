@@ -57,10 +57,8 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                       no_retriction_on_nIP = False,
                       use_mpi=False):
 
-    # bunchsize = lib.num_threads()
-
-    if mydf.verbose:
-        print("In select_IP, num_threads = ", lib.num_threads())
+    if rank == 0:
+        logger.debug4(mydf, "_select_IP_direct: num_threads = %d", lib.num_threads())
 
     ### determine the largest grids point of one atm ###
 
@@ -80,21 +78,15 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
 
     buf_size_per_thread = mydf.get_buffer_size_in_IP_selection(c, m)
     buf_size            = buf_size_per_thread
-
-    # print("nthread        = ", nthread)
-    # print("buf_size       = ", buf_size)
-    # print("buf_per_thread = ", buf_size_per_thread)
-
+    
     if hasattr(mydf, "IO_buf"):
         buf = mydf.IO_buf
     else:
         buf = np.zeros((buf_size), dtype=np.float64)
         mydf.IO_buf = buf
-
+        
     if buf.size < buf_size:
-        # reallocate
         mydf.IO_buf = np.zeros((buf_size), dtype=np.float64)
-        # print("reallocate buf of size = ", buf_size)
         buf = mydf.IO_buf
     buf_tmp = np.ndarray((buf_size), dtype=np.float64, buffer=buf)
 
@@ -109,7 +101,6 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
 
     results = []
 
-    # fn_colpivot_qr = getattr(libpbc, "ColPivotQR", None)
     fn_colpivot_qr = getattr(libpbc, "ColPivotQRRelaCut", None)
     assert(fn_colpivot_qr is not None)
     fn_ik_jk_ijk = getattr(libpbc, "NP_d_ik_jk_ijk", None)
@@ -143,12 +134,10 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
             nao_tmp = nao
             
             if aoR_cutoff is not None:
-                print("aoR_cutoff = ", aoR_cutoff)
+                logger.debug4(mydf, "_select_IP_direct: aoR_cutoff = %12.6e", aoR_cutoff)
                 max_row = np.max(np.abs(aoR_atm), axis=1)
                 where = np.where(max_row > mydf.aoR_cutoff)[0]
-                print("before cutoff aoR_atm.shape = ", aoR_atm.shape)
                 aoR_atm = aoR_atm[where]
-                print("after  cutoff aoR_atm.shape = ", aoR_atm.shape)
                 nao_tmp = aoR_atm.shape[0]
 
             # create buffer for this atm
@@ -161,7 +150,6 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
             naux_now = int(np.sqrt(c*nao_atm)) + m
             naux2_now = naux_now * naux_now
 
-            # R = np.ndarray((naux2_now, grid_ID.shape[0]), dtype=np.float64, buffer=buf_tmp, offset=offset)
             R = np.ndarray((naux2_now, grid_ID.shape[0]), dtype=np.float64)
             offset += naux2_now*grid_ID.shape[0] * dtypesize
 
@@ -201,16 +189,14 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                     max_rank = min(naux2_now, grid_ID.shape[0])
                 else:
                     max_rank  = min(naux2_now, grid_ID.shape[0], nao_atm * c)
+                    
             npt_find      = ctypes.c_int(0)
             pivot         = np.arange(grid_ID.shape[0], dtype=np.int32)
             thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64, buffer=buf_tmp, offset=offset)
-            # thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64)
             offset       += (nthread+1)*(grid_ID.shape[0]+1) * dtypesize
             global_buffer = np.ndarray((1, grid_ID.shape[0]), dtype=np.float64, buffer=buf_tmp, offset=offset)
-            # global_buffer = np.ndarray((1, grid_ID.shape[0]), dtype=np.float64)
             offset       += grid_ID.shape[0] * dtypesize
 
-            # print("thread_buffer.shape = ", thread_buffer.shape)
             fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(naux2_now),
                             ctypes.c_int(grid_ID.shape[0]),
@@ -222,24 +208,21 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
                             ctypes.byref(npt_find),
                             thread_buffer.ctypes.data_as(ctypes.c_void_p),
                             global_buffer.ctypes.data_as(ctypes.c_void_p))
+            
             npt_find = npt_find.value
                         
             cutoff   = abs(R[npt_find-1, npt_find-1])
-            print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
             pivot = pivot[:npt_find]
             pivot.sort()
             results.extend(list(grid_ID[pivot]))
-
-    # print("results = ", results)
+            
+            logger.debug4(mydf, "_select_IP_direct: ngrid = %d, npt_find = %d, cutoff = %12.6e", grid_ID.shape[0], npt_find, cutoff)
 
     if use_mpi:
         comm.Barrier()
         results = allgather(results)
-        # results.sort()
     results.sort()
     
-    # print("results = ", results)
-
     ### global IP selection, we can use this step to avoid numerical issue ###
 
     if global_IP_selection and rank == 0:
@@ -268,17 +251,13 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         naux_now  = int(np.sqrt(c*nao)) + m
         naux2_now = naux_now * naux_now
 
-        # print("naux_now = ", naux_now)
-        # print("naux2_now = ", naux2_now)
-
-        # R = np.ndarray((naux2_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
-        R = np.ndarray((naux2_now, len(results)), dtype=np.float64)
+        R       = np.ndarray((naux2_now, len(results)), dtype=np.float64)
         offset += naux2_now*len(results) * dtypesize
 
-        aoRg1 = np.ndarray((naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        aoRg1   = np.ndarray((naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
         offset += naux_now*len(results) * dtypesize
 
-        aoRg2 = np.ndarray((naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
+        aoRg2   = np.ndarray((naux_now, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
         offset += naux_now*len(results) * dtypesize
 
         aoPairBuffer = np.ndarray(
@@ -309,15 +288,11 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         else:
             max_rank  = min(naux2_now, len(results), nao_first * c)
 
-        # print("max_rank = ", max_rank)
-
         npt_find      = ctypes.c_int(0)
         pivot         = np.arange(len(results), dtype=np.int32)
         thread_buffer = np.ndarray((nthread+1, len(results)+1), dtype=np.float64, buffer=buf_tmp, offset=offset)
-        # thread_buffer = np.ndarray((nthread+1, len(results)+1), dtype=np.float64)
         offset       += (nthread+1)*(len(results)+1) * dtypesize
         global_buffer = np.ndarray((1, len(results)), dtype=np.float64, buffer=buf_tmp, offset=offset)
-        # global_buffer = np.ndarray((1, len(results)), dtype=np.float64)
         offset       += len(results) * dtypesize
 
         fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
@@ -334,20 +309,17 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         npt_find = npt_find.value
                 
         cutoff   = abs(R[npt_find-1, npt_find-1])
-        print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (len(results), npt_find, cutoff))
         pivot = pivot[:npt_find]
-        # print("pivot = ", pivot)
 
         pivot.sort()
 
         results = np.array(results, dtype=np.int32)
         results = list(results[pivot])
+    
+        logger.debug4(mydf, "_select_IP_direct: ngrid = %d, npt_find = %d, cutoff = %12.6e", len(results), npt_find, cutoff)
 
     if global_IP_selection and use_mpi:
         results = bcast(results)
-
-    if mydf.verbose:
-        print("In select_IP, num_threads = ", lib.num_threads())
 
     return results
 
@@ -371,10 +343,7 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
         lib.dslice(aoR, IP_ID, out=aoRg)
     else:
         aoRg = mydf.aoRg
-    
-    # print("aoR = ", aoR)
-    
-    # A = None
+        
     e = None
     h = None
     
@@ -382,37 +351,25 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
         A = np.asarray(lib.ddot(aoRg.T, aoRg, c=buffer1), order='C')  # buffer 1 size = naux * naux
         lib.square_inPlace(A)
         
-        # fn_cholesky = getattr(libpbc, "Cholesky", None)
-        # assert(fn_cholesky is not None)
-        # fn_cholesky(
-        #     A.ctypes.data_as(ctypes.c_void_p),
-        #     ctypes.c_int(naux),
-        # )
-        
         t11 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        # with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
         e, h = scipy.linalg.eigh(A)
         t12 = (lib.logger.process_clock(), lib.logger.perf_counter())
+        
         _benchmark_time(t11, t12, "diag_A", mydf)
-        print("condition number = ", e[-1]/e[0])
+        
+        logger.debug4(mydf, "build_aux_basis: condition number = %12.6e", e[-1]/e[0])
+        
         where = np.where(e > e[-1]*1e-16)[0]
-        # for id, val in enumerate(e):
-        #     print("e[%5d] = %15.8e" % (id, val))
         e = e[where]
         h = h[:, where]
-    # else:
-    #     A = None
         
     if use_mpi:
-        # A = bcast(A)
         e = bcast(e)
         h = bcast(h)
     
     mydf.aux_basis = np.asarray(lib.ddot(aoRg.T, aoR), order='C')   # buffer 2 size = naux * ngrids
     lib.square_inPlace(mydf.aux_basis)
     
-    # print("mydf.aux_basis = ", mydf.aux_basis)
-
     fn_build_aux = getattr(libpbc, "Solve_LLTEqualB_Parallel", None)
     assert(fn_build_aux is not None)
 
@@ -420,34 +377,9 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
     nGrids  = aoR.shape[1]
     Bunchsize = nGrids // nThread
     
-    # fn_build_aux(
-    #     ctypes.c_int(naux),
-    #     A.ctypes.data_as(ctypes.c_void_p),
-    #     mydf.aux_basis.ctypes.data_as(ctypes.c_void_p),
-    #     ctypes.c_int(nGrids),
-    #     ctypes.c_int(Bunchsize)
-    # )
-
-    # use diagonalization instead, but too slow for large system
-    # e, h = np.linalg.eigh(A)  # single thread, but should not be slow, it should not be the bottleneck
-    # print("e[-1] = ", e[-1])
-    # print("e[0]  = ", e[0])
-    # print("condition number = ", e[-1]/e[0])
-    # for id, val in enumerate(e):
-    #     print("e[%5d] = %15.8e" % (id, val))
-    # # remove those eigenvalues that are too small
-    # where = np.where(abs(e) > BASIS_CUTOFF)[0]
-    # e = e[where]
-    # h = h[:, where]
-    # print("e.shape = ", e.shape)
-    # # self.aux_basis = h @ np.diag(1/e) @ h.T @ B
-    # # self.aux_basis = np.asarray(lib.dot(h.T, B), order='C')  # maximal size = naux * ngrids
-    
     buffer2 = np.ndarray((e.shape[0] , mydf.aux_basis.shape[1]), dtype=np.double, buffer=mydf.jk_buffer,
              offset=mydf.naux * mydf.naux * mydf.jk_buffer.dtype.itemsize)
     B = np.asarray(lib.ddot(h.T, mydf.aux_basis, c=buffer2), order='C')
-    # self.aux_basis = (1.0/e).reshape(-1, 1) * self.aux_basis
-    # B = (1.0/e).reshape(-1, 1) * B
     lib.d_i_ij_ij(1.0/e, B, out=B)
     np.asarray(lib.ddot(h, B, c=mydf.aux_basis), order='C')
 
@@ -455,8 +387,8 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
         comm.Barrier()
 
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    if debug and mydf.verbose:
-        _benchmark_time(t1, t2, "build_auxiliary_basis", mydf)
+    
+    _benchmark_time(t1, t2, "build_auxiliary_basis", mydf)
 
     mydf.naux = naux
     mydf.aoRg = aoRg
@@ -587,8 +519,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             bufsize = min(self.IO_buf.size, 4*1e9/8) // 2
             bunchsize = int(bufsize / (self.nao))
-
-            # print("bunchsize = ", bunchsize)
 
             assert bunchsize > 0
             
@@ -740,7 +670,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.IP_ID = np.array(IP_ID, dtype=np.int32)
 
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        if debug and rank == 0:
+        if rank == 0:
             _benchmark_time(t1, t2, "build_IP", self)
         t1 = t2
 
@@ -822,6 +752,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.mesh = mesh
 
     def check_AOPairError(self):
+        
         assert(self.aoR is not None)
         assert(self.IP_ID is not None)
         assert(self.aux_basis is not None)
@@ -833,6 +764,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         logger.debug4(self, "check_AOPairError")
 
         for i in range(nao):
+            
             coeff = numpy.einsum('k,jk->jk', aoRg[i, :], aoRg).reshape(-1, self.IP_ID.shape[0])
             aoPair = numpy.einsum('k,jk->jk', aoR[i, :], aoR).reshape(-1, aoR.shape[1])
             aoPair_approx = coeff @ self.aux_basis
@@ -866,6 +798,20 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 _benchmark_time(t0, t1, "get_pp", self)
             return self.PP
         
+    def LS_THC_recompression(self, X:np.ndarray):
+        
+        from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC 
+        
+        self.with_robust_fitting = False
+        
+        self.W    = LS_THC(self, X) / (self.ngrids/self.cell.vol)
+        self.aoRg = X
+        
+        self.V_R  = None
+    
+    def aoRg_full(self):
+        return self.aoRg
+        
     ##### functions defined in isdf_ao2mo.py #####
 
     get_eri = get_ao_eri = isdf_ao2mo.get_eri
@@ -876,7 +822,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     get_jk = isdf_jk.get_jk_dm
 
-C = 35
+C = 15
 
 if __name__ == '__main__':
 
@@ -966,9 +912,23 @@ if __name__ == '__main__':
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 100
     mf.conv_tol = 1e-7
-    # mf.kernel()
+    mf.kernel()
 
     mf = scf.RHF(cell)
     mf.max_cycle = 100
     mf.conv_tol = 1e-8
     #mf.kernel()
+
+    ##### test the LS_THC_recompression ##### 
+    
+    _pbc_isdf_info = PBC_ISDF_Info(cell, aoR)
+    _pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=12, global_IP_selection=False)
+
+    pbc_isdf_info.LS_THC_recompression(_pbc_isdf_info.aoRg)
+    
+    mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    mf.with_df = pbc_isdf_info
+    mf.max_cycle = 10
+    mf.conv_tol = 1e-7
+    mf.kernel()

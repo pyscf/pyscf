@@ -156,7 +156,6 @@ def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
     # do not need allocate memory, use buffer 2
 
-
     tmp = np.asarray(lib.dot(W, density_Rg.reshape(-1,1), c=buffer8.reshape(-1,1)), order='C').reshape(-1)
     
     # do not need allocate memory, use buffer 1 but viewed as buffer 7
@@ -316,7 +315,6 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mp
     aoRg = mydf.aoRg
     
     naux = aoRg.shape[1]
-    # IP_ID = mydf.IP_ID
     
     tmp1 = lib.ddot(dm, aoRg)  
     density_Rg = np.asarray(lib.multiply_sum_isdf(aoRg, tmp1),
@@ -335,8 +333,7 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mp
 
     t2 = (logger.process_clock(), logger.perf_counter())
 
-    if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_j_dm_wo_robust_fitting", mydf)
+    _benchmark_time(t1, t2, "_contract_j_dm_wo_robust_fitting", mydf)
     
     return J * ngrid / vol
 
@@ -497,12 +494,15 @@ def _contract_k_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mp
     lib.cwise_mul(W, density_RgRg, out=density_RgRg)
     tmp = density_RgRg
     tmp = np.asarray(lib.dot(tmp, aoRg.T), order='C')
-    K = lib.ddot_withbuffer(aoRg, tmp, buf=mydf.ddot_buf)
+    if hasattr(mydf, "ddot_buf") and mydf.ddot_buf is not None:
+        K = lib.ddot_withbuffer(aoRg, tmp, buf=mydf.ddot_buf)
+    else:
+        K = lib.ddot(aoRg, tmp)
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_k_dm_wo_robust_fitting", mydf)
+    # if mydf.verbose:
+    _benchmark_time(t1, t2, "_contract_k_dm_wo_robust_fitting", mydf)
     
     del tmp
     tmp = None

@@ -433,7 +433,7 @@ if __name__ == "__main__":
         isdf_pt = mp.RMP2(mf_isdf)
         isdf_pt.kernel()
     else:
-        myisdf = None
+        myisdf  = None
         mf_isdf = None
         isdf_pt = None
     
