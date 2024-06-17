@@ -184,10 +184,8 @@ if __name__ == "__main__":
     
     ####### thc rmp2 #######
     
-    X = myisdf.aoRg_full()
-    
+    X        = myisdf.aoRg_full()
     thc_rmp3 = THC_RMP3(myisdf, mf_isdf, X=X)
-    
     e_mp3, _ = thc_rmp3.kernel()
     
     print("ISDF MP3 energy", e_mp3)

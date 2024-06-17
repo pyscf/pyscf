@@ -365,18 +365,15 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     ngrid = np.prod(cell.mesh)
     vol = cell.vol
     
-    W         = mydf.W
-    # aoRg      = mydf.aoRg
-    # aoRg_Prim = mydf.aoRg_Prim
-    # naux      = aoRg.shape[1]
+    W    = mydf.W
     naux = mydf.naux
     
-    Ls = np.array(mydf.Ls, dtype=np.int32)
+    kmesh = np.array(mydf.kmesh, dtype=np.int32)
     mesh = mydf.mesh
-    meshPrim = np.array(mesh) // np.array(Ls)
+    meshPrim = np.array(mesh) // np.array(kmesh)
     nGridPrim = mydf.nGridPrim
-    ncell = np.prod(Ls)
-    ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
+    ncell = np.prod(kmesh)
+    ncell_complex = kmesh[0] * kmesh[1] * (kmesh[2]//2+1)
     nIP_prim = mydf.nIP_Prim
     nao_prim = nao // ncell
     
@@ -422,7 +419,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
         DM_real.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nao_prim),
         ctypes.c_int(nao_prim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
@@ -523,7 +520,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
         DM_RgRg_complex.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nIP_prim),
         ctypes.c_int(nIP_prim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
@@ -547,7 +544,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
         DM_RgRg_real.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nIP_prim),
         ctypes.c_int(nIP_prim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
@@ -644,7 +641,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
         K_complex_buf.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nao_prim),
         ctypes.c_int(nao_prim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
@@ -654,7 +651,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     
     K_real_buf *= (ngrid / vol)
     
-    K = -pack_JK(K_real_buf, Ls, nao_prim, output=None) # "-" due to robust fitting
+    K = -pack_JK(K_real_buf, kmesh, nao_prim, output=None) # "-" due to robust fitting
     
     # return -K
     
@@ -780,7 +777,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
         DM_RgR_complex.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nIP_prim),
         ctypes.c_int(nGridPrim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
         
@@ -805,7 +802,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
         DM_RgR_real.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nIP_prim),
         ctypes.c_int(nGridPrim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
@@ -940,7 +937,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
         K_complex_buf.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nao_prim),
         ctypes.c_int(nao_prim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
@@ -958,7 +955,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     
     t1 = t2
     
-    K2 = pack_JK(K_real_buf, Ls, nao_prim, output=None)
+    K2 = pack_JK(K_real_buf, kmesh, nao_prim, output=None)
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
@@ -1001,12 +998,12 @@ def _get_k_kSym(mydf, dm):
     # naux      = aoRg.shape[1]
     naux = mydf.naux
     
-    Ls = np.array(mydf.Ls, dtype=np.int32)
+    kmesh = np.array(mydf.kmesh, dtype=np.int32)
     mesh = mydf.mesh
-    meshPrim = np.array(mesh) // np.array(Ls)
+    meshPrim = np.array(mesh) // np.array(kmesh)
     nGridPrim = mydf.nGridPrim
-    ncell = np.prod(Ls)
-    ncell_complex = Ls[0] * Ls[1] * (Ls[2]//2+1)
+    ncell = np.prod(kmesh)
+    ncell_complex = kmesh[0] * kmesh[1] * (kmesh[2]//2+1)
     nIP_prim = mydf.nIP_Prim
     nao_prim = nao // ncell
     
@@ -1035,7 +1032,7 @@ def _get_k_kSym(mydf, dm):
         DM_real.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nao_prim),
         ctypes.c_int(nao_prim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
@@ -1095,7 +1092,7 @@ def _get_k_kSym(mydf, dm):
         DM_RgRg_complex.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nIP_prim),
         ctypes.c_int(nIP_prim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
@@ -1111,7 +1108,7 @@ def _get_k_kSym(mydf, dm):
         DM_RgRg_real.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nIP_prim),
         ctypes.c_int(nIP_prim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
@@ -1170,13 +1167,13 @@ def _get_k_kSym(mydf, dm):
         K_complex_buf.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nao_prim),
         ctypes.c_int(nao_prim),
-        Ls.ctypes.data_as(ctypes.c_void_p),
+        kmesh.ctypes.data_as(ctypes.c_void_p),
         buf_fft.ctypes.data_as(ctypes.c_void_p)
     )
     
     K_real_buf *= (ngrid / vol)
     
-    K = _pack_JK(K_real_buf, Ls, nao_prim, output=None)
+    K = _pack_JK(K_real_buf, kmesh, nao_prim, output=None)
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
@@ -1202,9 +1199,9 @@ def get_jk_dm_k_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         assert dm.shape[0] == 1
         dm = dm[0]
 
-    if hasattr(mydf, 'Ls') and mydf.Ls is not None:
+    if hasattr(mydf, 'kmesh') and mydf.kmesh is not None:
         from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
-        dm = symmetrize_dm(dm, mydf.Ls)
+        dm = symmetrize_dm(dm, mydf.kmesh)
     else:
         if hasattr(mydf, 'kmesh') and mydf.kmesh is not None:
             from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
@@ -1214,9 +1211,6 @@ def get_jk_dm_k_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         dm = bcast(dm, root=0)
 
     #### perform the calculation ####
-
-    # if mydf.jk_buffer is None:  # allocate the buffer for get jk, NOTE: do not need anymore
-    #     mydf._allocate_jk_buffer(dm.dtype)
 
     if "exxdiv" in kwargs:
         exxdiv = kwargs["exxdiv"]
@@ -1244,26 +1238,38 @@ def get_jk_dm_k_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     if with_j:
         vj = _contract_j_dm_k_ls(mydf, dm, use_mpi)  
-        # if rank == 0:
-        # print("vj = ", vj[0, :16])
-        # print("vj = ", vj[0, -16:])
         sys.stdout.flush()
     if with_k:
         if mydf.direct:
-            # vk = _contract_k_dm_k_quadratic_direct(mydf, dm, use_mpi=use_mpi)
             raise NotImplementedError
         else:
-            # vk = _contract_k_dm_quadratic(mydf, dm, mydf.with_robust_fitting, use_mpi=use_mpi)
-            # raise NotImplementedError
             if mydf.with_robust_fitting:
                 vk = _get_k_kSym_robust_fitting_fast(mydf, dm)
             else:
                 vk = _get_k_kSym(mydf, dm)
-        # if rank == 0:
-        # print("vk = ", vk[0, :16])
-        # print("vk = ", vk[0, -16:])
         if exxdiv == 'ewald':
             print("WARNING: ISDF does not support ewald")
+
+    if exxdiv == 'ewald':
+        if np.allclose(kpt, np.zeros(3)):
+            from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
+            kpts = kpt.reshape(1,3)
+            kpts = np.asarray(kpts)
+            dm_kpts = dm.reshape(-1, dm.shape[0], dm.shape[1]).copy()
+            dm_kpts = lib.asarray(dm_kpts, order='C')
+            dms     = _format_dms(dm_kpts, kpts)
+            nset, nkpts, nao = dms.shape[:3]
+            kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+            nband = len(kpts_band)
+            assert nband == 1
+            if is_zero(kpts_band) and is_zero(kpts):
+                vk = vk.reshape(nset,nband,nao,nao)
+            else:
+                raise NotImplementedError("ISDF does not support kpts_band != 0")
+            _ewald_exxdiv_for_G0(mydf.cell, kpts, dms, vk, kpts_band=kpts_band)
+            vk = vk[0,0]
+        else:
+            logger.warn(mydf, 'get_jk_dm_k_quadratic: Exxdiv for k-point is not supported')
 
     t1 = log.timer('sr jk', *t1)
 

@@ -45,6 +45,7 @@ import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm_size, comm, allgather, bcast
+from pyscf.pbc.df.isdf.isdf_tools_kSampling import _kmesh_to_Kpoints
 
 ############ global variables ############
 
@@ -411,7 +412,10 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         TODO: change it ! 
         '''
 
-        super().__init__(cell=mol)
+        if kmesh == None:
+            kmesh = numpy.asarray([1,1,1], dtype=numpy.int32)
+        KPoints = _kmesh_to_Kpoints(mol, kmesh)
+        super().__init__(cell=mol, kpts=KPoints)
 
         if verbose is not None:
             self.verbose = verbose

@@ -246,3 +246,20 @@ def _RowCol_FFT_ColFull_bench(input, Ls, mesh):
     A = A.reshape(-1, A.shape[2])
     print("finish transform bra")
     return A
+
+def _kmesh_to_Kpoints(cell, mesh):
+    
+    from pyscf.pbc.lib.kpts import KPoints 
+    
+    kpts = []
+    
+    for i in range(mesh[0]):
+        for j in range(mesh[1]):
+            for k in range(mesh[2]):
+                kpts.append([1.0/float(mesh[0]) * float(i), 
+                             1.0/float(mesh[1]) * float(j), 
+                             1.0/float(mesh[2]) * float(k)])
+    
+    kpts = np.array(kpts)
+    
+    return KPoints(cell, kpts) 

@@ -458,10 +458,8 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
     # Quad stands for quadratic scaling
     
     def __init__(self, mol:Cell, 
-                 # aoR: np.ndarray = None,
                  with_robust_fitting=True,
-                 Ls=None,
-                 # get_partition=True,
+                 kmesh=None,
                  verbose = 1,
                  rela_cutoff_QRCP = None,
                  aoR_cutoff = 1e-8,
@@ -470,18 +468,18 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         super().__init__(mol, with_robust_fitting, None, verbose, rela_cutoff_QRCP, aoR_cutoff, direct)
         
-        self.Ls    = Ls
-        self.kmesh = Ls
+        #self.Ls    = kmesh
+        self.kmesh = kmesh
         
-        assert self.mesh[0] % Ls[0] == 0
-        assert self.mesh[1] % Ls[1] == 0
-        assert self.mesh[2] % Ls[2] == 0
+        assert self.mesh[0] % kmesh[0] == 0
+        assert self.mesh[1] % kmesh[1] == 0
+        assert self.mesh[2] % kmesh[2] == 0
         
         #### information relating primitive cell and supercell
         
-        self.meshPrim = np.array(self.mesh) // np.array(self.Ls)
+        self.meshPrim = np.array(self.mesh) // np.array(self.kmesh)
         self.natm     = self.cell.natm
-        self.natmPrim = self.cell.natm // np.prod(self.Ls)
+        self.natmPrim = self.cell.natm // np.prod(self.kmesh)
         
         self.with_translation_symmetry = True
         
@@ -489,9 +487,6 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         self.primCell = build_primitive_cell(self.cell, self.kmesh)
         self.nao_prim = self.nao // np.prod(self.kmesh)
         assert self.nao_prim == self.primCell.nao_nr()
-        # self.meshPrim = self.mesh // np.array(self.kmesh)
-        
-        # self.primCell.print()
     
     def build_partition_aoR(self, Ls=None):
         
@@ -630,21 +625,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             if partition_activated[i]:
                 self.partition_activated_id.append(i)
         self.partition_activated_id = np.array(self.partition_activated_id, dtype=np.int32)
-        
-        # partition_tmp = []
-        # for i in range(len(partition_activated)):
-        #     if partition_activated[i]:
-        #         partition_tmp.append(self.partition[i])
-        #     else:
-        #         partition_tmp.append([])
-        
-        # self.aoR2 = ISDF_Local_Utils.get_aoR2(self.cell, self.coords, partition_tmp, 
-        #                                             natm,
-        #                                             self.group,
-        #                                             self.distance_matrix, 
-        #                                             self.AtmConnectionInfo, 
-        #                                             self.use_mpi, self.use_mpi, sync_aoR)
-    
+            
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         if self.verbose:
@@ -845,7 +826,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             naux       = self.naux
             nao        = self.nao
             nIP_Prim   = self.nIP_Prim
-            nao_prim   = self.nao // np.prod(self.Ls)
+            nao_prim   = self.nao // np.prod(self.kmesh)
             
             size_buf3  = nao * naux + naux + naux + nao * nao
             size_buf4  = nao * nIP_Prim
@@ -868,8 +849,8 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             naux     = self.naux
             nao      = self.nao
             nIP_Prim = self.nIP_Prim
-            nao_prim = self.nao // np.prod(self.Ls)
-            ncell_complex = self.Ls[0] * self.Ls[1] * (self.Ls[2]//2+1)
+            nao_prim = self.nao // np.prod(self.kmesh)
+            ncell_complex = self.kmesh[0] * self.kmesh[1] * (self.kmesh[2]//2+1)
             
             #### size of density matrix ####
             
@@ -898,8 +879,8 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             nao      = self.nao
             nIP_Prim = self.nIP_Prim
             nGrid_Prim = self.nGridPrim
-            nao_prim = self.nao // np.prod(self.Ls)
-            ncell_complex = self.Ls[0] * self.Ls[1] * (self.Ls[2]//2+1)
+            nao_prim = self.nao // np.prod(self.kmesh)
+            ncell_complex = self.kmesh[0] * self.kmesh[1] * (self.kmesh[2]//2+1)
             
             #### size of density matrix ####
             
@@ -946,6 +927,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         if self.outcore is False:
             
             ### in build aux basis ###
+            
             size_buf1 = nIP_Prim * ncell_complex*nIP_Prim * 2
             size_buf1+= nIP_Prim * ncell_complex*nGridPrim * 2 * 2
             size_buf1+= num_threads * nGridPrim * 2
@@ -1082,10 +1064,6 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
     def get_aoR_Row(self, box_x, box_y, box_z):
         loc = box_x * self.kmesh[1] * self.kmesh[2] + box_y * self.kmesh[2] + box_z
         return self.aoR_Full[loc]
-
-    # def get_aoRg_Row(self, box_x, box_y, box_z):
-    #     loc = box_x * self.kmesh[1] * self.kmesh[2] + box_y * self.kmesh[2] + box_z
-    #     return self.aoRg_FUll[loc]
     
     def _get_aoR_Row(self, box_x, box_y, box_z):
         
@@ -1109,6 +1087,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             return Res
     
     def _get_aoRg_Row(self, box_x, box_y, box_z):
+        
         assert box_x < self.kmesh[0]
         assert box_y < self.kmesh[1]
         assert box_z < self.kmesh[2]
@@ -1163,7 +1142,7 @@ if __name__ == "__main__":
     # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
     prim_partition = [[0,1,2,3,4,5,6,7]]
     
-    Ls = [1, 2, 2]
+    Ls = [1, 1, 1]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -1173,13 +1152,12 @@ if __name__ == "__main__":
                                                      #basis=basis, pseudo=pseudo,
                                                      partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
     
-    pbc_isdf_info = PBC_ISDF_Info_Quad_K(cell, Ls=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=3e-3)
+    pbc_isdf_info = PBC_ISDF_Info_Quad_K(cell, kmesh=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=3e-3)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=prim_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     
     # exit(1)
     
-    print("grid_segment = ", pbc_isdf_info.grid_segment)
-    
+    print("grid_segment         = ", pbc_isdf_info.grid_segment)
     print("len of grid_ordering = ", len(pbc_isdf_info.grid_ID_ordered))
     
     aoR_unpacked = []
@@ -1203,13 +1181,8 @@ if __name__ == "__main__":
                 aoR_unpacked = np.concatenate(aoR_unpacked, axis=1)
                 aoR_benchmark_now = aoR_benchmark[loc*nao_prim:(loc+1)*nao_prim,:]
                 loc += 1
-    # aoR_benchmark = aoR_benchmark[:prim_cell.nao_nr(),:]
                 diff = aoR_benchmark_now - aoR_unpacked
                 where = np.where(np.abs(diff) > 1e-4)
-                # print(aoR_benchmark_now[78,:])
-                # print(aoR_unpacked[78,:])
-                # print("where = ", where)    
-                # print(aoR_benchmark_now[0,0], aoR_unpacked[0,0])
                 print("diff = ", np.linalg.norm(diff)/np.sqrt(aoR_unpacked.size))
     
     print("prim_mesh = ", prim_mesh)

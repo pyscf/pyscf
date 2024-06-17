@@ -313,7 +313,7 @@ def _contract_k_dm_quadratic_subterm(mydf, dm,
     t2 = (logger.process_clock(), logger.perf_counter())
     
     if mydf.verbose:
-        _benchmark_time(t1, t2, "_contract_k_dm_quadratic")
+        _benchmark_time(t1, t2, "_contract_k_dm_quadratic", mydf)
     
     return K * ngrid / vol
 
@@ -1404,7 +1404,7 @@ if __name__ == "__main__":
     # pbc_isdf_info.Ls = Ls
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    _benchmark_time(t1, t2, "build isdf")
+    _benchmark_time(t1, t2, "build isdf", pbc_isdf_info)
     
     coords = pbc_isdf_info.coords
     ao2atmID = pbc_isdf_info.ao2atomID

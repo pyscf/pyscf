@@ -999,20 +999,19 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
     
     def __init__(self, mol:Cell, 
                  with_robust_fitting=True,
-                 Ls=None,
-                 verbose = 1,
-                 rela_cutoff_QRCP = None,
-                 aoR_cutoff = 1e-8,
-                 direct=False,
-                 use_occ_RI_K = True,
-                 # omega=None
+                 kmesh              =None,
+                 verbose            =1,
+                 rela_cutoff_QRCP   =None,
+                 aoR_cutoff         =1e-8,
+                 direct             =False,
+                 use_occ_RI_K       =True,
                  ):
         
         super().__init__(
             mol=mol,
             aoR=None,
             with_robust_fitting=with_robust_fitting,
-            kmesh=Ls,
+            kmesh=kmesh,
             get_partition=False,
             verbose=verbose
         )
@@ -1060,6 +1059,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         self.kmesh = None
         
         ######### default setting for range separation #########
+        
         # WARNING: not a good design pattern to write this code here! 
         
         self.omega           = None
@@ -1088,7 +1088,6 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         if self.aoR is not None and self.partition is not None:
             return
             
-        
         ##### build cutoff info #####   
         
         self.distance_matrix = ISDF_Local_Utils.get_cell_distance_matrix(self.cell)
@@ -1142,13 +1141,14 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             sync_aoR = True
             
         ## deal with translation symmetry ##
+        
         first_natm = self._get_first_natm()
+        
         ####################################
         
-        # print("self.partition = ", self.partition) 
-        
         for x in range(self.natm):
-            print("len of partition[%d] = %d" % (x, len(self.partition[x])))
+            # print("len of partition[%d] = %d" % (x, len(self.partition[x])))
+            logger.debug4(self, "len of partition[%d] = %d" % (x, len(self.partition[x])))
         
         if self.use_aft_ao:
             # if self.rsjk is None:
@@ -1317,6 +1317,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             
     
     def _construct_build_aoRg(self, IP_group, group=None):
+        
         if group is None:
             group = []
             for i in range(self.natm):
@@ -1360,11 +1361,9 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             
             IP_loc_in_ordered_grids.extend(idx+GRID_ID_NOW)
 
-            IP_ID_NOW += nIP
+            IP_ID_NOW   += nIP
             GRID_ID_NOW += len(self.partition[atm_id])
             
-        
-        # if hasattr(self, "IP_loc_in_ordered_grids") is False:
         self.IP_loc_in_ordered_grids = np.array(IP_loc_in_ordered_grids, dtype=np.int32)
         assert self.IP_loc_in_ordered_grids.ndim == 1
         
@@ -1461,7 +1460,6 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
         self.aoRg_possible = self._construct_build_aoRg(IP_Atm, None)
         
-        
         t4 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if self.verbose and debug:
             _benchmark_time(t3, t4, "build_aoRg_possible", self)
@@ -1483,9 +1481,6 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             _benchmark_time(t1, t2, "build_aux_basis", self)
         
         sys.stdout.flush()
-        
-        # if hasattr(self, "gdf"):
-        #     self.gdf.reset()
 
     def get_nuc(self, kpts=None):
         if hasattr(self, "gdf"):
@@ -1495,16 +1490,13 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
 
     def get_coulG(self):
         if hasattr(self, "rsjk") and self.rsjk is not None:
+            
             # raise NotImplementedError("get_coulG is not supported when omega is not None")
 
             ##### construct coulG_LR , copy from rsjk.py #####
     
             if self.rsjk.cell.dimension!=3:
                 raise NotImplementedError('3D only')
-
-            # print(" -------- In getting coulG -------- ")
-            
-            # print("self.mesh = ", self.mesh)
 
             _, _, kws = self.rsjk.cell.get_Gv_weights(self.mesh)
             coulG_SR_at_G0 = np.pi/self.rsjk.omega**2 * kws
@@ -1522,24 +1514,17 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             
             idx = np.where(np.abs(coulG_full) > 1e-6)
             
-            # for loc, x in enumerate(self.coulG):
-            #     print("coulG[%4d] = %12.6e" % (loc, x))
-            
             G1 = coulG_full[idx].copy()
             G2 = coulG_bench[idx].copy()
             ratio = G2/G1
             fac = ratio[0]
-            print("fac = ", fac)
+            # print("fac = ", fac)
             # print("ratio = ", ratio)    
-            print("kws = ", kws)
+            # print("kws = ", kws)
             assert fac == 1.0/kws 
             assert np.allclose(ratio, fac)
             self.coulG *= fac
             
-            # print("coulG_bench = ", coulG_bench[:16], " with shape = ", coulG_bench.shape)
-            # print("coulG_LR    = ", self.coulG[:16], " with shape = ", self.coulG.shape)
-            # print("coulG_SR    = ", coulG_SR[:16], " with shape = ", coulG_SR.shape)
-            # print("coulG_full  = ", coulG_full[:16], " with shape = ", coulG_full.shape)
         else:
             self.coulG = tools.get_coulG(self.cell, mesh=self.cell.mesh)
             
@@ -1571,13 +1556,6 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         mo_coeff = np.dot(v, mo_coeff)
         
         return mo_occ[::-1], mo_coeff[:,::-1]
-        
-        # mo_occ, mo_coeff = scipy.linalg.eigh(dm, self.ovlp)
-        # idx = numpy.argmax(abs(mo_coeff.real), axis=0)
-        # mo_coeff[:,mo_coeff[idx,numpy.arange(len(mo_occ))].real<0] *= -1
-        # mo_occ = mo_occ[::-1]
-        # mo_coeff = mo_coeff[:,::-1]
-        # return mo_occ, mo_coeff
 
     def build_auxiliary_Coulomb(self, debug=True):
         
@@ -1588,19 +1566,17 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
         distance_max = np.max(self.distance_matrix)
         if self.V_W_cutoff is not None and self.V_W_cutoff > distance_max:
-            print("WARNING : V_W_cutoff is larger than the maximum distance in the cell")
+            logger.warn(self, "WARNING : V_W_cutoff is larger than the maximum distance in the cell")
             self.V_W_cutoff = None # no cutoff indeed 
         if self.V_W_cutoff is not None:
-            print("V_W_cutoff   = ", self.V_W_cutoff)
-            print("distance_max = ", distance_max)
+            logger.debug4(self, "PBC_ISDF_Info_Quad:->build_auxiliary_Coulomb: V_W_cutoff   = %12.6e" % self.V_W_cutoff)
+            logger.debug4(self, "PBC_ISDF_Info_Quad:->build_auxiliary_Coulomb: distance_max = %12.6e" % distance_max)
         
         if self.with_robust_fitting:
             build_auxiliary_Coulomb_local_bas(self, debug=debug, use_mpi=self.use_mpi)
         else:
             build_auxiliary_Coulomb_local_bas_wo_robust_fitting(self, debug=debug, use_mpi=self.use_mpi)
-        
-        print("self.V_W_cutoff = ", self.V_W_cutoff)
-        
+                
         if self.V_W_cutoff is not None:
             
             if hasattr(self, "V_R"):
@@ -1612,9 +1588,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                     ket_loc = 0
                     for atm_j, aoR_holder in enumerate(self.aoR):
                         nket = aoR_holder.aoR.shape[1]
-                        # print("distance between %d and %d is %12.6e" % (atm_i, atm_j, self.distance_matrix[atm_i, atm_j]))
                         if self.distance_matrix[atm_i, atm_j] > self.V_W_cutoff:
-                            # print("cutoff V_R between %d and %d" % (atm_i, atm_j))
                             V[bra_loc:bra_loc+nbra, ket_loc:ket_loc+nket] = 0.0
                         ket_loc += nket
                     bra_loc += nbra
@@ -1630,7 +1604,6 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                 for atm_j, aoRg_holder_ket in enumerate(self.aoRg):
                     nket = aoRg_holder.aoR.shape[1]
                     if self.distance_matrix[atm_i, atm_j] > self.V_W_cutoff:
-                        # print("cutoff W between %d and %d" % (atm_i, atm_j))
                         W[bra_loc:bra_loc+nbra, ket_loc:ket_loc+nket] = 0.0
                     ket_loc += nket
                 bra_loc += nbra
@@ -1653,10 +1626,6 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         IsCompact[DiffuseAO] = False
         self.IsCompact = IsCompact
         
-        # print("CompactAO = ", CompactAO)
-        # print("DiffuseAO = ", DiffuseAO)
-        # print("IsCompact = ", IsCompact)
-        
         for aoR in self.aoR:
             aoR.RangeSeparation(IsCompact)
         for aoRg in self.aoRg:
@@ -1674,9 +1643,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             nao_i             = aoRg_i.aoR.shape[0]
             global_IP_begin_i = aoRg_i.global_gridID_begin
             nIP_i             = aoRg_i.aoR.shape[1]
-        
-            # res[ao_involved_i, global_IP_begin_i:global_IP_begin_i+nIP_i] = aoRg_i.aoR 
-            
+                    
             fn_pack(
                 res.ctypes.data_as(ctypes.c_void_p), 
                 ctypes.c_int(res.shape[0]),
