@@ -611,9 +611,21 @@ class KSCF(pbchf.SCF):
     def from_chk(self, chk=None, project=None, kpts=None):
         return self.init_guess_by_chkfile(chk, project, kpts)
 
-    def dump_chk(self, envs):
-        if self.chkfile:
-            mol_hf.SCF.dump_chk(self, envs)
+    def dump_chk(self, envs_or_file):
+        '''Serialize the SCF object and save it to the specified chkfile.
+
+        Args:
+            envs_or_file:
+                If this argument is a file path, the serialized SCF object is
+                saved to the file specified by this argument.
+                If this attribute is a dict (created by locals()), the necessary
+                variables are saved to the file specified by the attribute mf.chkfile.
+        '''
+        mol_hf.SCF.dump_chk(self, envs_or_file)
+        if isinstance(envs_or_file, str):
+            with lib.H5FileWrap(envs_or_file, 'a') as fh5:
+                fh5['scf/kpts'] = self.kpts
+        elif self.chkfile:
             with lib.H5FileWrap(self.chkfile, 'a') as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self

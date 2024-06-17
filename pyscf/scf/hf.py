@@ -192,7 +192,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         elif abs(e_tot-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad:
             scf_conv = True
 
-        if dump_chk:
+        if dump_chk and mf.chkfile:
             mf.dump_chk(locals())
 
         if callable(callback):
@@ -226,7 +226,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
             scf_conv = True
         logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
-        if dump_chk:
+        if dump_chk and mf.chkfile:
             mf.dump_chk(locals())
 
     logger.timer(mf, 'scf_cycle', *cput0)
@@ -1663,8 +1663,20 @@ class SCF(lib.StreamObject):
             fock = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
         return get_grad(mo_coeff, mo_occ, fock)
 
-    def dump_chk(self, envs):
-        if self.chkfile:
+    def dump_chk(self, envs_or_file):
+        '''Serialize the SCF object and save it to the specified chkfile.
+
+        Args:
+            envs_or_file:
+                If this argument is a file path, the serialized SCF object is
+                saved to the file specified by this argument.
+                If this attribute is a dict (created by locals()), the necessary
+                variables are saved to the file specified by the attribute mf.chkfile.
+        '''
+        if isinstance(envs_or_file, str):
+            chkfile.dump_scf(self.mol, envs_or_file, self.e_tot, self.mo_energy,
+                             self.mo_coeff, self.mo_occ)
+        elif self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile,
                              envs['e_tot'], envs['mo_energy'],
                              envs['mo_coeff'], envs['mo_occ'],
