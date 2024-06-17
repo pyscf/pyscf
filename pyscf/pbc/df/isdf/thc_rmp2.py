@@ -65,10 +65,6 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
                                                 no_LS_THC        = no_LS_THC)
 
         MP2.__init__(self, my_mf, frozen, mo_coeff, mo_occ)
-        
-        #self.memory = memory
-        #self.buffer = None
-        #self.with_mpi = with_mpi
     
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, use_cotengra=True):
         '''
@@ -90,9 +86,9 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
             backend = None
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        mp2_J  = thc_einsum("iajb,iajb,ijab->", THC_ERI, THC_ERI, LAPLACE, backend="cotengra")
+        mp2_J  = thc_einsum("iajb,iajb,ijab->", THC_ERI, THC_ERI, LAPLACE, backend=backend)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        mp2_K  = thc_einsum("iajb,ibja,ijab->", THC_ERI, THC_ERI, LAPLACE, backend="cotengra")
+        mp2_K  = thc_einsum("iajb,ibja,ijab->", THC_ERI, THC_ERI, LAPLACE, backend=backend)
         t3 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         _benchmark_time(t1, t2, 'THC_RMP2: mp2-J ', self._scf)
