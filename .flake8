@@ -12,8 +12,8 @@ ignore =
         # Imports:
         E401, E402,
         # Other:
-        E701, E731, E741, E275,
-        F401, C901, W391, W503, W504
+        E701, E713, E721, E731, E741, E275,
+        F401, F403, C901, W391, W503, W504
 
 exclude = test, .git, __pycache__, build, dist, __init__.py, .eggs, *.egg
 max-line-length = 120

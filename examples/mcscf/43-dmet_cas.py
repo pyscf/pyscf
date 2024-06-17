@@ -6,6 +6,7 @@ import scipy.linalg
 from pyscf import scf
 from pyscf import gto
 from pyscf import mcscf, fci
+from pyscf.mcscf import dmet_cas
 
 '''
 Triplet and quintet energy gap of Iron-Porphyrin molecule
@@ -115,7 +116,7 @@ mf = scf.ROHF(mol)
 mf = scf.fast_newton(mf)
 idx3d4d = mol.search_ao_label(['Fe 3d', 'Fe 4d'])
 ncas, nelecas, mo = dmet_cas.guess_cas(mf, mf.make_rdm1(), idx3d)
-mc = mcscf.approx_hessian(mcscf.CASSCF(mf, ncas, nelecas)
+mc = mcscf.approx_hessian(mcscf.CASSCF(mf, ncas, nelecas))
 mc.kernel(mo)
 e_t = mc.e_tot  # -2244.81493852189
 
