@@ -618,6 +618,7 @@ class Hessian(HessianBase):
 # Inject to RHF class
 from pyscf import scf
 scf.hf.RHF.Hessian = lib.class_as_method(Hessian)
+scf.rohf.ROHF.Hessian = lib.invalid_method('Hessian')
 
 
 if __name__ == '__main__':

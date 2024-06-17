@@ -593,3 +593,4 @@ class Hessian(rhf_hess.HessianBase):
 
 from pyscf import dft
 dft.rks.RKS.Hessian = dft.rks_symm.RKS.Hessian = lib.class_as_method(Hessian)
+dft.roks.ROKS.Hessian = dft.rks_symm.ROKS.Hessian = lib.invalid_method('Hessian')
