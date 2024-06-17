@@ -727,7 +727,7 @@ def general(mydf, mo_coeffs, kpts=None,
             t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
             eri = isdf_eri(mydf, mo_coeffs[0].copy(), verbose=mydf.cell.verbose)
             t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-            _benchmark_time(t1, t2, 'isdf_eri')
+            _benchmark_time(t1, t2, 'isdf_eri', mydf)
         
             if compact:
                 return eri
@@ -741,7 +741,7 @@ def general(mydf, mo_coeffs, kpts=None,
                 t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
                 eri = isdf_eri_ovov(mydf, mo_coeffs[0].copy(), mo_coeffs[1].copy(), verbose=mydf.cell.verbose)
                 t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-                _benchmark_time(t1, t2, 'isdf_eri_ovov')
+                _benchmark_time(t1, t2, 'isdf_eri_ovov', mydf)
             
                 if compact:
                     print("compact is not supported in general with ov ov mode")

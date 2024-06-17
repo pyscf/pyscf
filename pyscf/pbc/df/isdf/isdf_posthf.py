@@ -62,7 +62,7 @@ def _make_isdf_eris_incore(mycc, my_isdf:ISDF.PBC_ISDF_Info_Quad, mo_coeff=None)
     
     cput1 = (logger.process_clock(), logger.perf_counter())
     
-    _benchmark_time(cput0, cput1, "CCSD integral transformation")
+    _benchmark_time(cput0, cput1, "CCSD integral transformation", my_isdf)
     
     return eris
 
@@ -118,7 +118,7 @@ class _restricted_THC_posthf_holder:
                 t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
                 Z = LS_THC(my_isdf, X)
                 t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-                _benchmark_time(t1, t2, "Z matrix construction for THC eri = XXZXX")
+                _benchmark_time(t1, t2, "Z matrix construction for THC eri = XXZXX", my_isdf)
 
             #### construct laplace ####
         

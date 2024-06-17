@@ -597,7 +597,7 @@ class MP2(lib.StreamObject):
         if eris is None:
             eris = self.ao2mo(mo_coeff)
 
-        if self._scf.converged:
+        if self._scf.converged: # ?? 
             self.e_corr, self.t2 = self.init_amps(mo_energy, mo_coeff, eris, with_t2)
         else:
             self.converged, self.e_corr, self.t2 = _iterative_kernel(self, eris)
