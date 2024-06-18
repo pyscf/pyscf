@@ -414,7 +414,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         if kmesh == None:
             kmesh = numpy.asarray([1,1,1], dtype=numpy.int32)
-        KPoints = _kmesh_to_Kpoints(mol, kmesh)
+            #kpts  = kpts = mol.make_kpts(nk)
+        KPoints = _kmesh_to_Kpoints(mol, kmesh)   ### WARNING: this subroutine is not correct ! 
         super().__init__(cell=mol, kpts=KPoints)
 
         if verbose is not None:
@@ -800,6 +801,47 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             t1 = (lib.logger.process_clock(), lib.logger.perf_counter()) 
             if self.verbose:
                 _benchmark_time(t0, t1, "get_pp", self)
+                
+            #### kpts #### 
+            
+            if kpts is not None:
+                nkpts = kpts.shape[0]
+                if self.kmesh == None:
+                    self.kmesh = np.asarray([1,1,1], dtype=np.int32)
+                kmesh = np.asarray(self.kmesh, dtype=np.int32)
+                print("self.kmesh = ", self.kmesh)
+                print("kpts.shape = ", kpts.shape)
+                assert kpts.shape[0] == np.prod(self.kmesh, dtype=np.int32)
+                nao_prim = self.cell.nao_nr() // nkpts 
+                assert self.cell.nao_nr() % nkpts == 0
+                self.PP = self.PP[:nao_prim, :].copy()
+                
+                n_complex = self.kmesh[0] * self.kmesh[1] * (self.kmesh[2]//2+1)
+                n_cell    = np.prod(self.kmesh)
+                print("n_complex = ", n_complex)
+                print("n_cell    = ", n_cell)
+                
+                PP_complex = np.zeros((nao_prim, n_complex * nao_prim), dtype=np.complex128)
+                PP_real    = np.ndarray((nao_prim, n_cell * nao_prim), dtype=np.double, buffer=PP_complex)
+                PP_real.ravel()[:] = self.PP.ravel()
+                buf_fft    = np.zeros((nao_prim, n_complex, nao_prim), dtype=np.complex128)
+                
+                fn1 = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+                assert fn1 is not None 
+                
+                fn1(
+                    PP_real.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nao_prim),
+                    ctypes.c_int(nao_prim),
+                    kmesh.ctypes.data_as(ctypes.c_void_p),
+                    buf_fft.ctypes.data_as(ctypes.c_void_p)
+                )
+                del buf_fft 
+                
+                from  pyscf.pbc.df.isdf.isdf_tools_densitymatrix import pack_JK_in_FFT_space
+                
+                self.PP = pack_JK_in_FFT_space(PP_complex, kmesh, nao_prim)
+                
             return self.PP
         
     def LS_THC_recompression(self, X:np.ndarray):
@@ -825,6 +867,10 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     ##### functions defined in isdf_jk.py #####
 
     get_jk = isdf_jk.get_jk_dm
+
+################################################################################
+# With this function to mimic the molecular DF.loop function, the pbc gamma
+# point DF object can be used in the molecular code
 
 C = 15
 

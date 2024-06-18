@@ -128,10 +128,10 @@ void _iFFT_Matrix_Col_InPlace(double __complex__ *matrix, // the size of matrix 
     int64_t nReal = mesh[0] * mesh[1] * mesh[2];
     const int64_t nThread = get_omp_threads();
 
-    const int64_t m = nRow;
-    const int64_t n = nCol * mesh[0] * mesh[1] * mesh[2];
-    const int64_t n_Complex = nCol * mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
-    const int64_t nMesh = mesh[0] * mesh[1] * mesh[2];
+    const int64_t m            = nRow;
+    const int64_t n            = nCol * mesh[0] * mesh[1] * mesh[2];
+    const int64_t n_Complex    = nCol * mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
+    const int64_t nMesh        = mesh[0] * mesh[1] * mesh[2];
     const int64_t nMeshComplex = mesh_complex[0] * mesh_complex[1] * mesh_complex[2];
     const double factor = 1.0 / (double)(nMesh);
 

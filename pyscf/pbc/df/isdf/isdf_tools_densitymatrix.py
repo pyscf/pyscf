@@ -329,6 +329,10 @@ def symmetrize_dm(dm, Ls):
 
 def pack_JK(input_mat:np.ndarray, Ls, nao_prim, output=None):
     
+    '''
+    pack matrix in real space
+    '''
+    
     assert input_mat.dtype == np.float64    
     ncell = np.prod(Ls)
     # print("ncell = ", ncell)
@@ -374,6 +378,42 @@ def pack_JK(input_mat:np.ndarray, Ls, nao_prim, output=None):
                             
     return output
  
+
+def pack_JK_in_FFT_space(input_mat:np.ndarray, kmesh, nao_prim, output=None):
+    
+    '''
+    pack matrix in k-space
+    '''
+    ncomplex = kmesh[0] * kmesh[1] * (kmesh[2] // 2 + 1)
+    assert input_mat.dtype == np.complex128
+    assert input_mat.shape[0] == nao_prim
+    #print("input_mat.shape = ", input_mat.shape)
+    #print("nao_prim = ", nao_prim)
+    #print("ncomplex = ", ncomplex)
+    assert input_mat.shape[1] == nao_prim * ncomplex
+    
+    nkpts = np.prod(kmesh)
+    
+    if output is None:
+        output = np.zeros((nao_prim, nao_prim*nkpts), dtype=np.complex128)
+    else:
+        assert output.shape == (nao_prim, nao_prim*nkpts) or output.shape == (nkpts, nao_prim, nao_prim)
+    
+    output = output.reshape(nkpts, nao_prim, nao_prim)
+    
+    loc = 0
+    
+    for ix in range(kmesh[0]):
+        for iy in range(kmesh[1]):
+            for iz in range(kmesh[2] // 2 + 1):
+                loc1 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + iz
+                loc2 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + (kmesh[2] - iz) % kmesh[2]
+                output[loc1] = input_mat[:, loc*nao_prim:(loc+1)*nao_prim]
+                output[loc2] = input_mat[:, loc*nao_prim:(loc+1)*nao_prim].conj()
+                loc += 1
+                
+    return output
+
 
 if __name__ == '__main__':
 

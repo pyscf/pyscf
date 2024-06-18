@@ -36,9 +36,11 @@ libpbc = lib.load_library('libpbc')
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto 
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
 import pyscf.pbc.df.isdf.isdf_tools_local as ISDF_Local_Utils
-from pyscf.pbc.df.isdf.isdf_linear_scaling_k_jk import get_jk_dm_k_quadratic
+from pyscf.pbc.df.isdf.isdf_linear_scaling_k_jk import get_jk_dm_translation_symmetry
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
+
+from pyscf.lib.parameters import BOHR
 
 ##### deal with translation symmetry #####
 
@@ -361,15 +363,15 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
             
             aux_basis_now = aux_basis[i]
             grid_ID = mydf.partition_group_to_gridID[i]
-            assert aux_basis_now.shape[1] == grid_ID.size 
             # ngrid_now += grid_ID.size
-            # print("i = ", i)
-            # print("shift_row = ", shift_row) 
-            # print("aux_bas_now = ", aux_basis_now.shape)
-            # print("ngrid_now = ", ngrid_now)
+            print("i           = ", i)
+            print("shift_row   = ", shift_row) 
+            print("aux_bas_now = ", aux_basis_now.shape)
+            print("ngrid_now   = ", grid_ID.size)
             # print("buf = ", buf.shape)
             # print("ngrid_ordering = ", grid_ordering.size)
             # sys.stdout.flush()
+            assert aux_basis_now.shape[1] == grid_ID.size 
         
             fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(aux_basis_now.shape[0]),
@@ -387,11 +389,11 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
 
         return V
 
+    
+    V = construct_V_CCode(mydf.aux_basis, V=None, shift_row=None)
+    
     if mydf.with_robust_fitting:
-        V = construct_V_CCode(mydf.aux_basis, V=None, shift_row=None)
-    else:
-        V = None
-    mydf.V_R = V
+        mydf.V_R = V
     
     ########### construct W ###########
     
@@ -416,8 +418,8 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
         grid_shift = 0
         naux_bra = mydf.aux_basis[i].shape[0]
         
-        if mydf.with_robust_fitting == False:
-            V = construct_V_CCode([mydf.aux_basis[i]], V=None, shift_row=None)
+        #if mydf.with_robust_fitting == False:
+        #    V = construct_V_CCode([mydf.aux_basis[i]], V=None, shift_row=None)
             
         for ix in range(kmesh[0]):
             for iy in range(kmesh[1]):
@@ -426,16 +428,16 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
                         aux_basis_ket = mydf.aux_basis[j]
                         ngrid_now = aux_basis_ket.shape[1]
                         naux_ket = aux_basis_ket.shape[0]
-                        if mydf.with_robust_fitting:
-                            mydf.W[aux_bra_shift:aux_bra_shift+naux_bra, aux_ket_shift:aux_ket_shift+naux_ket] = lib.ddot(
-                               V[aux_bra_shift:aux_bra_shift+naux_bra, grid_shift:grid_shift+ngrid_now],
-                               aux_basis_ket.T
-                            )
-                        else:
-                            mydf.W[aux_bra_shift:aux_bra_shift+naux_bra, aux_ket_shift:aux_ket_shift+naux_ket] = lib.ddot(
-                               V[:, grid_shift:grid_shift+ngrid_now],
-                               aux_basis_ket.T
-                            )
+                        #if mydf.with_robust_fitting:
+                        mydf.W[aux_bra_shift:aux_bra_shift+naux_bra, aux_ket_shift:aux_ket_shift+naux_ket] = lib.ddot(
+                           V[aux_bra_shift:aux_bra_shift+naux_bra, grid_shift:grid_shift+ngrid_now],
+                           aux_basis_ket.T
+                        )
+                        # else:
+                        #     mydf.W[aux_bra_shift:aux_bra_shift+naux_bra, aux_ket_shift:aux_ket_shift+naux_ket] = lib.ddot(
+                        #        V[:, grid_shift:grid_shift+ngrid_now],
+                        #        aux_basis_ket.T
+                        #     )
                         aux_ket_shift += naux_ket
                         grid_shift += ngrid_now                 
                      
@@ -451,13 +453,17 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
     assert mydf.W.shape[0] == mydf.naux // np.prod(mydf.kmesh)
     assert mydf.W.shape[1] == mydf.naux
     
+    if mydf.with_robust_fitting == False:
+        del V
+    
 ##### get_jk #####
     
 class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
     
     # Quad stands for quadratic scaling
     
-    def __init__(self, mol:Cell, 
+    def __init__(self, 
+                 mol:Cell,  # means the primitive cell 
                  with_robust_fitting=True,
                  kmesh=None,
                  verbose = 1,
@@ -466,14 +472,53 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                  direct=False
                  ):
         
-        super().__init__(mol, with_robust_fitting, None, verbose, rela_cutoff_QRCP, aoR_cutoff, direct)
+        ### extract the info from the primitive cell ###
         
-        #self.Ls    = kmesh
+        atm = []
+        
+        assert mol.a[0][1] == 0.0
+        assert mol.a[0][2] == 0.0
+        assert mol.a[1][0] == 0.0
+        assert mol.a[1][2] == 0.0
+        assert mol.a[2][0] == 0.0
+        assert mol.a[2][1] == 0.0
+        
+        for i in range(mol.natm):
+            coords = mol.atom_coord(i)
+            coords = np.array(coords) * BOHR
+            atm.append([mol.atom_symbol(i), tuple(coords)])
+        
+        prim_mesh = mol.mesh
+        mesh = np.array(prim_mesh) * np.array(kmesh)
+        
+        supercell = build_supercell(
+            atm, 
+            mol.a,
+            mesh=mesh,
+            Ls=kmesh,
+            basis=mol.basis,
+            pseudo=mol.pseudo,
+            ke_cutoff=mol.ke_cutoff,
+            max_memory=mol.max_memory,
+            verbose=mol.verbose
+        )
+                
+        self.prim_cell = mol
+        
+        # print("supercell.mesh = ", supercell.mesh)
+        
+        super().__init__(supercell, with_robust_fitting, None, verbose, rela_cutoff_QRCP, aoR_cutoff, direct)
+        
         self.kmesh = kmesh
+        
+        self.kpts = self.prim_cell.make_kpts(kmesh)
         
         assert self.mesh[0] % kmesh[0] == 0
         assert self.mesh[1] % kmesh[1] == 0
         assert self.mesh[2] % kmesh[2] == 0
+        
+        # print("self.mesh = ", self.mesh)
+        # exit(1)
         
         #### information relating primitive cell and supercell
         
@@ -487,6 +532,8 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         self.primCell = build_primitive_cell(self.cell, self.kmesh)
         self.nao_prim = self.nao // np.prod(self.kmesh)
         assert self.nao_prim == self.primCell.nao_nr()
+    
+        ##### rename everthing with pre_fix  _supercell ####
     
     def build_partition_aoR(self, Ls=None):
         
@@ -1108,7 +1155,66 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             return Res
 
                        
-    get_jk = get_jk_dm_k_quadratic
+    # get_jk = get_jk_dm_translation_symmetry
+
+    #### subroutine to deal with _ewald_exxdiv_for_G0
+
+    def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
+               with_j=True, with_k=True, omega=None, exxdiv=None):
+        
+        if omega is not None:  # J/K for RSH functionals
+            raise NotImplementedError
+            # with self.range_coulomb(omega) as rsh_df:
+            #     return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+            #                          omega=None, exxdiv=exxdiv)
+        
+        from pyscf.pbc.df.aft import _check_kpts
+        
+        kpts, is_single_kpt = _check_kpts(self, kpts)
+        if is_single_kpt:
+            assert np.allclose(kpts[0], np.zeros(3))
+            vj, vk = get_jk_dm_translation_symmetry(self, dm, hermi, kpts[0], kpts_band,
+                                                    with_j, with_k, exxdiv=exxdiv)
+        else:
+            
+            ### first construct J and K ### 
+            
+            from pyscf.pbc.df.isdf.isdf_linear_scaling_k_jk import _contract_j_dm_k_ls, _get_k_kSym_robust_fitting_fast, _get_k_kSym
+            from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
+            
+            vj = _contract_j_dm_k_ls(self, dm)
+            if self.with_robust_fitting:
+                vk = _get_k_kSym_robust_fitting_fast(self, dm)
+            else:
+                vk = _get_k_kSym(self, dm)
+            
+            ### post process J and K ###
+            
+            kpts = np.asarray(kpts)
+            dm_kpts = lib.asarray(dm, order='C')
+            assert dm_kpts.ndim == 3
+            assert dm_kpts.shape[0] == len(kpts)
+            assert dm_kpts.shape[1] == dm_kpts.shape[2]
+            dms = _format_dms(dm_kpts, kpts)
+            nset, nkpts, nao = dms.shape[:3]
+            assert nset == 1
+            
+            kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+            nband = len(kpts_band)
+            assert nband == nkpts
+            
+            vk_kpts = vk.reshape(nset, nband, nao, nao)
+            
+            cell = self.prim_cell
+            
+            if exxdiv == 'ewald':
+                _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band=kpts_band)
+            
+            vk = _format_jks(vk_kpts, dm_kpts, input_band, kpts)
+            vj_kpts = vj.reshape(nset, nband, nao, nao)
+            vj = _format_jks(vj_kpts, dm_kpts, input_band, kpts)
+            
+        return vj, vk
 
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
 
@@ -1142,7 +1248,7 @@ if __name__ == "__main__":
     # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
     prim_partition = [[0,1,2,3,4,5,6,7]]
     
-    Ls = [1, 1, 1]
+    Ls = [1, 1, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -1152,7 +1258,8 @@ if __name__ == "__main__":
                                                      #basis=basis, pseudo=pseudo,
                                                      partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
     
-    pbc_isdf_info = PBC_ISDF_Info_Quad_K(cell, kmesh=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=3e-3)
+    # pbc_isdf_info = PBC_ISDF_Info_Quad_K(cell, kmesh=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=3e-3)
+    pbc_isdf_info = PBC_ISDF_Info_Quad_K(prim_cell, kmesh=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=3e-3)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=prim_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     
     # exit(1)

@@ -37,9 +37,97 @@ from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 
-from  pyscf.pbc.df.isdf.isdf_tools_densitymatrix import pack_JK
+from  pyscf.pbc.df.isdf.isdf_tools_densitymatrix import pack_JK, pack_JK_in_FFT_space
 
-def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
+from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
+
+def _preprocess_dm(mydf, dm):
+
+    in_real_space = True
+
+    kmesh = np.asarray(mydf.kmesh, dtype=np.int32)
+    ncell_complex = kmesh[0] * kmesh[1] * (kmesh[2]//2+1)
+    
+    if len(dm.shape) == 3:
+        if dm.shape[0] == 1:
+            dm = dm[0].real
+        else:  
+            
+            in_real_space = False 
+                        
+            if dm.dtype == np.float64:
+                assert kmesh[0] in [1, 2]
+                assert kmesh[1] in [1, 2]
+                assert kmesh[2] in [1, 2]
+
+                dm = np.asarray(dm, dtype=np.complex128)
+            
+            assert dm.dtype    == np.complex128
+            assert dm.shape[1] == dm.shape[2]
+            assert dm.shape[0] == np.prod(kmesh)
+            
+            nao_prim   = dm.shape[1]
+            nkpts      = dm.shape[0]
+            
+            #dm_complex = np.transpose(dm, axes=(1, 0, 2)).copy()
+            #dm_complex = dm_complex.reshape(nao_prim, -1)
+            
+            ### check the symmetry ###
+            
+            for ix in range(kmesh[0]):
+                for iy in range(kmesh[1]):
+                    for iz in range(kmesh[2]):
+                        loc1 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + iz
+                        loc2 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + (kmesh[2] - iz) % kmesh[2]
+                        #print("loc1     = ", loc1, "loc2 = ", loc2)
+                        #print("dm[loc1] = ", dm[loc1])
+                        #print("dm[loc2] = ", dm[loc2])
+                        diff = np.linalg.norm(dm[loc1] - dm[loc2].conj())
+                        #print("diff = ", diff)
+                        # assert np.allclose(dm[loc1], dm[loc2].conj())
+            dm_complex = np.zeros((ncell_complex, nao_prim, nao_prim), dtype=np.complex128)
+            loc = 0
+            for ix in range(kmesh[0]):
+                for iy in range(kmesh[1]):
+                    for iz in range(kmesh[2]//2+1):
+                        loc1 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + iz
+                        dm_complex[loc].ravel()[:] = dm[loc1].ravel()[:]
+                        loc += 1
+            
+            dm_complex = np.transpose(dm_complex, axes=(1, 0, 2)).copy()
+            
+            #print("dm_complex = ", dm_complex)
+            #print("dm_complex = ", dm_complex[:, 0, :])
+            #print("dm_complex = ", dm_complex[:, 1, :])
+            
+            ### do the FFT ### 
+            
+            dm_real = np.ndarray((nao_prim, nkpts * nao_prim), dtype=np.float64, buffer=dm_complex)
+            buf_fft = np.zeros((nao_prim, ncell_complex, nao_prim), dtype=np.complex128)
+            
+            fn2 = getattr(libpbc, "_iFFT_Matrix_Col_InPlace", None)
+            assert fn2 is not None
+
+            fn2(
+                dm_complex.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_prim),
+                ctypes.c_int(nao_prim),
+                kmesh.ctypes.data_as(ctypes.c_void_p),
+                buf_fft.ctypes.data_as(ctypes.c_void_p)
+            )
+            
+            #print("dm_real    = ", dm_real)
+            #print("dm_complex = ", dm_complex)
+            
+            dm = pack_JK(dm_real, kmesh, nao_prim)
+
+    return dm, in_real_space
+    
+def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
+    
+    dm, in_real_space = _preprocess_dm(mydf, _dm)
+    
+    #print("dm = ", dm)
     
     if use_mpi:
         from mpi4py import MPI
@@ -68,6 +156,10 @@ def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
     naux = mydf.naux
     aoR1 = mydf.aoR1
     assert isinstance(aoR1, list)
+    
+    kmesh = np.array(mydf.kmesh, dtype=np.int32)
+    ncell = np.prod(kmesh)
+    ncell_complex = kmesh[0] * kmesh[1] * (kmesh[2]//2+1)
     
     #### step 0. allocate buffer 
     
@@ -247,7 +339,9 @@ def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
 
     partition_activated_ID = mydf.partition_activated_id
     
-    kmesh = mydf.kmesh
+    #print("partition_activated_ID = ", partition_activated_ID)
+    
+    kmesh     = np.asarray(mydf.kmesh, dtype=np.int32)
     natm_prim = mydf.natmPrim
     
     # grid_segment = [0]
@@ -293,8 +387,6 @@ def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
         
         assert aoR_holder_ket.aoR.shape[1] == J_tmp.size
         
-        
-        
         aoR_J_res = np.ndarray(aoR_holder_bra.aoR.shape, buffer=aoR_buf1)
         lib.d_ij_j_ij(aoR_holder_bra.aoR, J_tmp, out=aoR_J_res)
         
@@ -336,21 +428,46 @@ def _contract_j_dm_k_ls(mydf, dm, use_mpi=False):
     del density_R_tmp
     del aoR_buf1
     
-    J = pack_JK(J, mydf.kmesh, nao_prim)
+    J *= ngrid / vol
     
-    # diff = np.max(np.abs(J - J.T))
-    # print("diff = ", diff)    
-    # assert np.allclose(J, J.T)
+    #print("J = ", J.reshape(nao_prim, ncell, nao_prim))
     
-    return J * ngrid / vol
+    if in_real_space:
+        J = pack_JK(J, mydf.kmesh, nao_prim)
+    else:
+        ## transform J back to FFT space ##
+        fn1 = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+        assert fn1 is not None
+        J_complex = np.ndarray((nao_prim,nao_prim*ncell_complex), dtype=np.complex128)
+        fft_buf   = np.ndarray((nao_prim,nao_prim*ncell_complex), dtype=np.complex128)
+        J_real    = np.ndarray((nao_prim,nao_prim*ncell),         dtype=np.float64,    buffer=J_complex)
+        J_real.ravel()[:]    = J.ravel()[:]
+        #print("J_real = ", J_real.reshape(nao_prim, ncell, nao_prim))
+        fn1(
+            J_real.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_prim),
+            ctypes.c_int(nao_prim),
+            kmesh.ctypes.data_as(ctypes.c_void_p),
+            fft_buf.ctypes.data_as(ctypes.c_void_p)
+        )
+        del fft_buf
+        #print("J_complex = ", J_complex.reshape(nao_prim, ncell_complex, nao_prim))
+        #J_complex = J_complex.reshape(nao_prim, ncell_complex, nao_prim)
+        #J_complex = np.transpose(J_complex, axes=(1, 0, 2)).copy()
+        ## pack J in FFT space ##
+        J = pack_JK_in_FFT_space(J_complex, mydf.kmesh, nao_prim)
+    
+    return J
 
-def _get_k_kSym_robust_fitting_fast(mydf, dm):
+def _get_k_kSym_robust_fitting_fast(mydf, _dm):
     
     '''
     this is a slow version, abandon ! 
     '''
  
     #### preprocess ####  
+    
+    dm, in_real_space = _preprocess_dm(mydf, _dm)
     
     mydf._allocate_jk_buffer(dm.dtype)
     t1 = (logger.process_clock(), logger.perf_counter())
@@ -635,6 +752,8 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     _benchmark_time(t3, t4, "K_complex_buf", mydf)
     t3 = t4
     
+    #if in_real_space:
+    
     buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     
     fn2(
@@ -653,7 +772,8 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     
     K = -pack_JK(K_real_buf, kmesh, nao_prim, output=None) # "-" due to robust fitting
     
-    # return -K
+    #else:
+    #    K = -pack_JK_in_FFT_space(K_complex_buf, kmesh, nao_prim) / np.prod(kmesh)
     
     ########### do the same thing on V ###########
     
@@ -754,15 +874,6 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     _benchmark_time(t3, t4, "DM_RgR_complex", mydf)
     t3 = t4
     
-    # DM_RgRg1 = DM_RgR_complex[:, mydf.IP_ID]
-    # DM_RgRg2 = DM_RgRg_complex2[:, :nIP_prim]
-    # diff = np.linalg.norm(DM_RgRg1 - DM_RgRg2)
-    # print("diff = ", diff)
-    # for i in range(10):
-    #     for j in range(10):
-    #         print(DM_RgRg1[i,j], DM_RgRg2[i,j])
-    # assert np.allclose(DM_RgRg1, DM_RgRg2)
-    
     buf_A = None
     buf_B = None
     buf_B2 = None
@@ -787,17 +898,12 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
         
     # inplace multiplication
     
-    # print("DM_RgR_complex = ", DM_RgR_complex[:5,:5])
-    # print("mydf.V_R       = ", mydf.V_R[:5,:5])
-    
     lib.cwise_mul(mydf.V_R, DM_RgR_real, out=DM_RgR_real)
     
     t4 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t3, t4, "cwise_mul", mydf)
     t3 = t4
-    
-    # buf_fft = np.ndarray((nIP_prim, nGridPrim*ncell_complex), dtype=np.complex128)
-    
+        
     fn1(
         DM_RgR_real.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nIP_prim),
@@ -809,9 +915,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     t4 = (logger.process_clock(), logger.perf_counter())
     _benchmark_time(t3, t4, "DM_RgR_complex 2", mydf)
     t3 = t4
-    
-    # print("DM_RgR_complex = ", DM_RgR_complex[:5,:5])
-    
+        
     buf_fft = None
     
     offset_K = offset_now
@@ -851,12 +955,6 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
                 ctypes.c_int(2*k_end)
             )
             
-            # print("buf_A = ", buf_A[:5,:5])
-            # buf_B.ravel()[:] = aoR_FFT[:, i*nGridPrim:(i+1)*nGridPrim].ravel()[:]
-            # print("buf_B = ", buf_B[:5,:5])
-            # buf_B2.ravel()[:] = aoRg_FFT[:, i*nIP_prim:(i+1)*nIP_prim].ravel()[:]  
-            # print("buf_B2 = ", buf_B2[:5,:5]) 
-            
             # buf_B.ravel()[:] = aoR_FFT[i].ravel()[:]
             # buf_B2.ravel()[:] = aoRg_FFT[i].ravel()[:]
             fn_copy(
@@ -873,9 +971,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
         
             lib.dot(buf_A, buf_B.T.conj(), c=buf_C)
             lib.dot(buf_B2, buf_C, c=buf_D)
-        
-            # print("buf_D = ", buf_D[:5,:5])
-        
+                
             k_begin = i * nao_prim
             k_end   = (i + 1) * nao_prim
         
@@ -930,9 +1026,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     offset_now = offset_after_K
     
     buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset_now)
-    
-   #  print("K_complex_buf = ", K_complex_buf[:5,:5])
-    
+        
     fn2(
         K_complex_buf.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nao_prim),
@@ -961,13 +1055,33 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     
     _benchmark_time(t1, t2, "_pack_JK", mydf)
     
-    # print("K2 = ", K2[:5,:5])
-    # print("K = ", -K[:5,:5])
-    
     K += K2 + K2.T
     
-    # print("K = ", K[:5,:5])
-    
+    if in_real_space == False:
+    #    K += K2 + K2.T
+    #else:
+    #    K2 = K2 + K2.T
+    #    K2 = K2[:nao_prim,:]
+        
+        K = K[:nao_prim,:].copy()
+
+        K_complex = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128)
+        K_real    = np.ndarray((nao_prim, nao_prim*ncell), dtype=np.float64, buffer=K_complex)
+        K_real.ravel()[:]    = K.ravel()[:]
+        buf_fft    = np.zeros_like(K_complex)
+        
+        fn1(
+            K_real.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_prim),
+            ctypes.c_int(nao_prim),
+            kmesh.ctypes.data_as(ctypes.c_void_p),
+            buf_fft.ctypes.data_as(ctypes.c_void_p)
+        )
+        
+        K_complex = pack_JK_in_FFT_space(K_complex, kmesh, nao_prim)
+        K = K_complex 
+        
+        
     DM_RgR_complex = None
     DM_RgR_real = None
     
@@ -975,9 +1089,11 @@ def _get_k_kSym_robust_fitting_fast(mydf, dm):
     
     # return DM_RgRg_real # temporary return for debug
 
-def _get_k_kSym(mydf, dm):
+def _get_k_kSym(mydf, _dm):
  
     #### preprocess ####  
+    
+    dm, in_real_space = _preprocess_dm(mydf, _dm)
     
     mydf._allocate_jk_buffer(dm.dtype)
     t1 = (logger.process_clock(), logger.perf_counter())
@@ -1009,9 +1125,9 @@ def _get_k_kSym(mydf, dm):
     
     #### allocate buffer ####
     
-    offset = 0
+    offset          = 0
     DM_RgRg_complex = np.ndarray((nIP_prim,nIP_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
-    DM_RgRg_real = np.ndarray((nIP_prim,nIP_prim*ncell), dtype=np.float64, buffer=mydf.jk_buffer, offset=offset)
+    DM_RgRg_real    = np.ndarray((nIP_prim,nIP_prim*ncell),         dtype=np.float64,    buffer=mydf.jk_buffer, offset=offset)
     
     offset += (nIP_prim * nIP_prim * ncell_complex) * DM_RgRg_complex.itemsize
     DM_complex = np.ndarray((nao_prim,nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
@@ -1163,17 +1279,25 @@ def _get_k_kSym(mydf, dm):
     
     buf_fft = np.ndarray((nao_prim, nao_prim*ncell_complex), dtype=np.complex128, buffer=mydf.jk_buffer, offset=offset)
     
-    fn2(
-        K_complex_buf.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(nao_prim),
-        ctypes.c_int(nao_prim),
-        kmesh.ctypes.data_as(ctypes.c_void_p),
-        buf_fft.ctypes.data_as(ctypes.c_void_p)
-    )
+    K_complex_buf *= (ngrid / vol)
     
-    K_real_buf *= (ngrid / vol)
+    #print("K_complex_buf = ", K_complex_buf)
     
-    K = _pack_JK(K_real_buf, kmesh, nao_prim, output=None)
+    if in_real_space:
+        
+        fn2(
+            K_complex_buf.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_prim),
+            ctypes.c_int(nao_prim),
+            kmesh.ctypes.data_as(ctypes.c_void_p),
+            buf_fft.ctypes.data_as(ctypes.c_void_p)
+        )
+    
+        K = pack_JK(K_real_buf, kmesh, nao_prim, output=None)
+    
+    else:
+        
+        K = pack_JK_in_FFT_space(K_complex_buf, kmesh, nao_prim, output=None)
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
@@ -1181,11 +1305,9 @@ def _get_k_kSym(mydf, dm):
     
     return K
     
-    # return DM_RgRg_real # temporary return for debug
-    
-def get_jk_dm_k_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
-                          kpts_band=None, with_j=True, with_k=True, omega=None, 
-                          **kwargs):
+def get_jk_dm_translation_symmetry(mydf, dm, hermi=1, kpt=np.zeros(3),
+                                    kpts_band=None, with_j=True, with_k=True, omega=None, 
+                                   **kwargs):
     
     '''JK for given k-point'''
     
@@ -1252,7 +1374,7 @@ def get_jk_dm_k_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     if exxdiv == 'ewald':
         if np.allclose(kpt, np.zeros(3)):
-            from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
+            # from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
             kpts = kpt.reshape(1,3)
             kpts = np.asarray(kpts)
             dm_kpts = dm.reshape(-1, dm.shape[0], dm.shape[1]).copy()
