@@ -79,7 +79,7 @@ class energy_denomimator:
         
         assert len(subscript) == 4
         assert len(laplace_index) == 1
-        assert isinstance(subscript, str)
+        assert isinstance(subscript,     str)
         assert isinstance(laplace_index, str)
         
         res_tensor = []
@@ -187,8 +187,6 @@ def thc_einsum(subscripts, *tensors, **kwargs):
             
             inputs, output = ctg.utils.eq_to_inputs_output(subscripts_2)
             size_dict      = _size_dict_cotengra(inputs, *tensors_2)
-            
-            # print(size_dict)
             
             # find a tree sliced to memory, (e.g. 2**28 (~8GB) unit?)
             

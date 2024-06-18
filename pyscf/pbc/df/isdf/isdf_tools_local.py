@@ -255,7 +255,6 @@ def _distance_translation(pa:np.ndarray, pb:np.ndarray, a):
     '''
     calculate the distance between pa pb, but taken the periodic boundary condition into account
     '''
-    # print("a = ", a)
     
     dx = pa[0] - pb[0]
     dx1 = dx - a[0][0]
@@ -344,16 +343,18 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     else:
         mesh_box[2] = mesh[2] // Ls[2]
         nbox[2] = mesh[2] // mesh_box[2]
+        
+    Ls_box = [lattice_vector[0] / mesh[0] * mesh_box[0], lattice_vector[1] / mesh[1] * mesh_box[1], lattice_vector[2] / mesh[2] * mesh_box[2]]
+    
+    assert Ls_box[0][0] < 3.0
+    assert Ls_box[1][1] < 3.0
+    assert Ls_box[2][2] < 3.0 # the box cannot be too large
     
     # print("mesh = ", mesh)
     # print("mesh_box = ", mesh_box)
     # print("nbox = ", nbox)
     # print("lattice_vector = ", lattice_vector)
-    Ls_box = [lattice_vector[0] / mesh[0] * mesh_box[0], lattice_vector[1] / mesh[1] * mesh_box[1], lattice_vector[2] / mesh[2] * mesh_box[2]]
     # print("Ls_box = ", Ls_box)
-    assert Ls_box[0][0] < 3.0
-    assert Ls_box[1][1] < 3.0
-    assert Ls_box[2][2] < 3.0 # the box cannot be too large
     
     ##### helper functions ##### 
     

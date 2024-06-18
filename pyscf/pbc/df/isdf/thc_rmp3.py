@@ -67,7 +67,7 @@ class THC_RMP3(THC_RMP2):
                                        laplace_order=laplace_order, 
                                        no_LS_THC=no_LS_THC)
     
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, use_cotengra=True):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, use_cotengra=True, memory=2**28):
         '''
         Args:
             with_t2 : bool
@@ -87,24 +87,24 @@ class THC_RMP3(THC_RMP2):
             backend = None
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        mp3_CC = thc_einsum("iajb,jbkc,iakc,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
+        mp3_CC = thc_einsum("iajb,jbkc,iakc,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t1, t2, 'THC_RMP3: mp3-CC ', self._scf)
         
-        mp3_CX1 = thc_einsum("iajb,jkbc,iakc,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
-        mp3_CX2 = thc_einsum("ibja,jbkc,iakc,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
-        mp3_CX3 = thc_einsum("iajb,jbkc,kaic,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
+        mp3_CX1 = thc_einsum("iajb,jkbc,iakc,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
+        mp3_CX2 = thc_einsum("ibja,jbkc,iakc,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
+        mp3_CX3 = thc_einsum("iajb,jbkc,kaic,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
         t3 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t2, t3, 'THC_RMP3: mp3-CX ', self._scf)
         
-        mp3_XX1 = thc_einsum("ibja,jkbc,iakc,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
-        mp3_XX2 = thc_einsum("ibja,jbkc,kaic,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
-        mp3_XX3 = thc_einsum("iajb,acbd,icjd,ijab,ijcd->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
-        mp3_XX4 = thc_einsum("ibja,acbd,icjd,ijab,ijcd->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
-        mp3_XX5 = thc_einsum("iajb,ikjl,kalb,ijab,klab->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
-        mp3_XX6 = thc_einsum("ibja,ikjl,kalb,ijab,klab->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
-        mp3_XX7 = thc_einsum("iajb,jkac,kbic,ijab,ikbc->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
-        mp3_XX8 = thc_einsum("ibja,jkac,kbic,ijab,ikbc->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend)
+        mp3_XX1 = thc_einsum("ibja,jkbc,iakc,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
+        mp3_XX2 = thc_einsum("ibja,jbkc,kaic,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
+        mp3_XX3 = thc_einsum("iajb,acbd,icjd,ijab,ijcd->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
+        mp3_XX4 = thc_einsum("ibja,acbd,icjd,ijab,ijcd->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
+        mp3_XX5 = thc_einsum("iajb,ikjl,kalb,ijab,klab->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
+        mp3_XX6 = thc_einsum("ibja,ikjl,kalb,ijab,klab->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
+        mp3_XX7 = thc_einsum("iajb,jkac,kbic,ijab,ikbc->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
+        mp3_XX8 = thc_einsum("ibja,jkac,kbic,ijab,ikbc->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
         t4 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _benchmark_time(t3, t4, 'THC_RMP3: mp3-XX ', self._scf)
         
