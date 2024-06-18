@@ -68,7 +68,7 @@ mc.kernel(mc_mo)
 # Be careful with the gauge origin of the dipole integrals
 #
 charges = mol.atom_charges()
-coords = mol.atom_coords()
+coords = mol.atom_coords()  # in a.u.
 nuc_charge_center = numpy.einsum('z,zx->x', charges, coords) / charges.sum()
 mol.set_common_orig_(nuc_charge_center)
 dip_ints = mol.intor('cint1e_r_sph', comp=3)
