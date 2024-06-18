@@ -1,1 +1,0 @@
-../dmrg/32-dmrg_casscf_nevpt2_for_FeS.py

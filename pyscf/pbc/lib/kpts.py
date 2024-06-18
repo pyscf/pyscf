@@ -410,7 +410,7 @@ def symmetrize_wavefunction(kpts, psiR_k, mesh):
     '''
     raise RuntimeError('need verification')
     psiR_k = np.asarray(psiR_k, order='C')
-    is_complex = psiR_k.dtype == np.complex
+    is_complex = np.iscomplexobj(psiR_k.dtype)
     nao = psiR_k.shape[1]
     nG = psiR_k.shape[2]
     psiR = np.zeros([kpts.nkpts,nao,nG], dtype = psiR_k.dtype, order='C')

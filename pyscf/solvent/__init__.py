@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyscf.solvent import ddcosmo, pcm
+from pyscf.solvent import ddcosmo
 
 def ddCOSMO(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize ddCOSMO model.

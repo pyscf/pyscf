@@ -96,11 +96,11 @@ egcc, t1, t2 = mycc.kernel()
 
 # Molecular EOM-GCCSD
 myeomee = mol_eom_gccsd.EOMEE(mycc)
-eee_mol, vee_mol = myeomee.kernel(nroots=nroots_test*np.product(nmp))
+eee_mol, vee_mol = myeomee.kernel(nroots=nroots_test*np.prod(nmp))
 
 print("PBC KRHF Energy:", ekrhf)
 print("PBC RHF Energy :", erhf)
 print("PBC KGCCSD Energy        :", ekgcc)
-print("Mol GCCSD Energy per cell:", egcc / np.product(nmp))
+print("Mol GCCSD Energy per cell:", egcc / np.prod(nmp))
 print("PBC EOMEE roots:", eee)
 print("Mol EOMEE roots:", eee_mol)
