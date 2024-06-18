@@ -1677,6 +1677,7 @@ class SCF(lib.StreamObject):
             chkfile.dump_scf(self.mol, envs_or_file, self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ)
         elif self.chkfile:
+            envs = envs_or_file
             chkfile.dump_scf(self.mol, self.chkfile,
                              envs['e_tot'], envs['mo_energy'],
                              envs['mo_coeff'], envs['mo_occ'],
