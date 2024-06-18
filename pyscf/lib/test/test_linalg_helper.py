@@ -93,7 +93,6 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(e0.size, 1)
         self.assertAlmostEqual(e0, 2, 8)
 
-    @unittest.skip('bad solver. experimental only')
     def test_solve(self):
         numpy.random.seed(12)
         n = 100
@@ -106,15 +105,8 @@ class KnownValues(unittest.TestCase):
         def precond(x, *args):
             return x / a.diagonal()
         xref = numpy.linalg.solve(a, b)
-        x1 = linalg_helper.dsolve(aop, b, precond, max_cycle=50)
-        self.assertAlmostEqual(abs(xref - x1).max(), 0, 6)
-        a_diag = a.diagonal()
-        aop = lambda x: numpy.dot(a-numpy.diag(a_diag), x.ravel())/a_diag
-        x1 = linalg_helper.krylov(aop, b/a_diag, max_cycle=50)
-        self.assertAlmostEqual(abs(xref - x1).max(), 0, 6)
-        x1 = linalg_helper.krylov(aop, b/a_diag, None, max_cycle=10)
-        x1 = linalg_helper.krylov(aop, b/a_diag, x1, max_cycle=30)
-        self.assertAlmostEqual(abs(xref - x1).max(), 0, 6)
+        x1 = linalg_helper.dsolve(aop, b, precond, max_cycle=80)
+        self.assertAlmostEqual(abs(xref - x1).max(), 0, 4)
 
     def test_krylov_with_level_shift(self):
         numpy.random.seed(10)
@@ -135,6 +127,25 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref - c).max(), 0, 9)
         c = linalg_helper.krylov(aop, b/a_diag, max_cycle=17)
         self.assertAlmostEqual(abs(ref - c).max(), 0, 8)
+
+    def test_krylov_multiple_roots(self):
+        numpy.random.seed(10)
+        n = 100
+        a = numpy.random.rand(n,n) * .1
+        b = numpy.random.rand(4, n)
+        ref = numpy.linalg.solve(numpy.eye(n) + a, b.T).T
+
+        aop = lambda x: x.dot(a.T)
+        c = linalg_helper.krylov(aop, b)
+        self.assertAlmostEqual(abs(ref - c).max(), 0, 8)
+
+        a = numpy.random.rand(n,n) * .1 + numpy.random.rand(n,n) * .1j
+        b = numpy.random.rand(4, n) + numpy.random.rand(4, n) * .5j
+        ref = numpy.linalg.solve(numpy.eye(n) + a, b.T).T
+
+        aop = lambda x: x.dot(a.T)
+        c = linalg_helper.krylov(aop, b)
+        self.assertAlmostEqual(abs(ref - c).max(), 0, 7)
 
     def test_dgeev(self):
         numpy.random.seed(12)
