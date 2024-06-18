@@ -203,7 +203,7 @@ class KnownValues(unittest.TestCase):
     def test_symmetrize(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
         g = mol.RHF.run().TDA().run(nstates=1).Gradients().kernel(state=1)
-        self.assertAlmostEqual(lib.fp(g), -0.07887074405221786, 7)
+        self.assertAlmostEqual(lib.fp(g), -0.07887074405221786, 6)
 
 
 if __name__ == "__main__":

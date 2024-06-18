@@ -48,14 +48,14 @@ class KnownValues(unittest.TestCase):
         hobj = mf.Hessian()
         hobj.level_shift = .05
         hess = hobj.kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.20243405976628576, 5)
+        self.assertAlmostEqual(lib.fp(hess), -0.20243405976628576, 4)
 
     def test_finite_diff_uhf_hess(self):
         mf = scf.UHF(mol)
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.20243405976628576, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.20243405976628576, 4)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()

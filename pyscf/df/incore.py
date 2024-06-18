@@ -28,7 +28,9 @@ from pyscf import __config__
 
 
 MAX_MEMORY = getattr(__config__, 'df_outcore_max_memory', 2000)  # 2GB
-LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-9)
+# LINEAR_DEP_THR cannot be below 1e-7,
+# see qchem default setting in https://manual.q-chem.com/5.4/sec_Basis_Customization.html
+LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-7)
 
 
 # This function is aliased for backward compatibility.

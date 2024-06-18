@@ -27,12 +27,11 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.outcore import _load_from_h5g
-from pyscf.df.incore import _eig_decompose
+from pyscf.df.incore import _eig_decompose, LINEAR_DEP_THR
 from pyscf.df.addons import make_auxmol
 from pyscf import __config__
 
 MAX_MEMORY = getattr(__config__, 'df_outcore_max_memory', 2000)  # 2GB
-LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
 
 #
 # for auxe1 (P|ij)

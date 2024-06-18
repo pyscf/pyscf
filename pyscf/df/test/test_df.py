@@ -121,8 +121,8 @@ class KnownValues(unittest.TestCase):
             dm[1] += scf.dhf.time_reversal_matrix(mol, dm[1])
             dfobj = df.DF4C(mol)
             vj, vk = dfobj.get_jk(dm, hermi=0, omega=0.9)
-            self.assertAlmostEqual(lib.fp(vj), 1364.9808427400467+215.73363292535137j, 4)
-            self.assertAlmostEqual(lib.fp(vk), 159.036202745021+687.903428296142j , 4)
+            self.assertAlmostEqual(lib.fp(vj), 1364.9812117487595+215.73320482400422j, 3)
+            self.assertAlmostEqual(lib.fp(vk), 159.036202745021+687.903428296142j , 3)
 
             vj1, vk1 = scf.dhf.get_jk(mol, dm, hermi=0, omega=0.9)
             self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
@@ -135,12 +135,12 @@ class KnownValues(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as ftmp:
             mf.with_df._cderi_to_save = ftmp.name
             mf.run()
-        self.assertAlmostEqual(mf.e_tot, -103.4965622991, 8)
+        self.assertAlmostEqual(mf.e_tot, -103.4965622991, 7)
 
         mol.max_memory = 4000
         mf = mol.RKS(xc='lda+0.5*SR_HF(0.3)').density_fit()
         mf.run()
-        self.assertAlmostEqual(mf.e_tot, -103.4965622991, 8)
+        self.assertAlmostEqual(mf.e_tot, -103.4965622991, 7)
 
 if __name__ == "__main__":
     print("Full Tests for df")
