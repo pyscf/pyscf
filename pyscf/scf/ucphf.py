@@ -91,7 +91,7 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
 
 # h1 shape is (:,nvir+nocc,nocc)
 def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
-                 max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN,
+                 max_cycle=50, tol=1e-9, hermi=False, verbose=logger.WARN,
                  level_shift=0):
     '''For field dependent basis. First order overlap matrix is non-zero.
     The first order orbitals are set to
