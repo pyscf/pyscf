@@ -783,10 +783,15 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     def __del__(self):
         return
 
+    @property
+    def kpt(self):
+        return np.zeros(3)
+
     def get_pp(self, kpts=None):
         if hasattr(self, "PP") and self.PP is not None:
             return self.PP
         else:
+            
             t0 = (lib.logger.process_clock(), lib.logger.perf_counter())
             cell = self.cell.copy()
             cell.omega = 0.0
@@ -806,20 +811,21 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             
             if kpts is not None:
                 nkpts = kpts.shape[0]
-                if self.kmesh == None:
+                if self.kmesh is None:
                     self.kmesh = np.asarray([1,1,1], dtype=np.int32)
                 kmesh = np.asarray(self.kmesh, dtype=np.int32)
-                print("self.kmesh = ", self.kmesh)
-                print("kpts.shape = ", kpts.shape)
-                assert kpts.shape[0] == np.prod(self.kmesh, dtype=np.int32)
+                #print("kmesh = ", kmesh)
+                #print("kpts.shape = ", kpts.shape)
+                assert kpts.shape[0] == np.prod(self.kmesh, dtype=np.int32) or kpts.shape[0] == 1 or kpts.ndim == 1
+                is_single_kpt = kpts.shape[0] == 1 or kpts.ndim == 1
+                if is_single_kpt:
+                    return self.PP
                 nao_prim = self.cell.nao_nr() // nkpts 
                 assert self.cell.nao_nr() % nkpts == 0
                 self.PP = self.PP[:nao_prim, :].copy()
                 
                 n_complex = self.kmesh[0] * self.kmesh[1] * (self.kmesh[2]//2+1)
                 n_cell    = np.prod(self.kmesh)
-                print("n_complex = ", n_complex)
-                print("n_cell    = ", n_cell)
                 
                 PP_complex = np.zeros((nao_prim, n_complex * nao_prim), dtype=np.complex128)
                 PP_real    = np.ndarray((nao_prim, n_cell * nao_prim), dtype=np.double, buffer=PP_complex)
@@ -840,6 +846,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 
                 from  pyscf.pbc.df.isdf.isdf_tools_densitymatrix import pack_JK_in_FFT_space
                 
+                PP_complex = PP_complex.conj().copy()
                 self.PP = pack_JK_in_FFT_space(PP_complex, kmesh, nao_prim)
                 
             return self.PP

@@ -1170,7 +1170,10 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         from pyscf.pbc.df.aft import _check_kpts
         
+        #print("kpts = ", kpts)
         kpts, is_single_kpt = _check_kpts(self, kpts)
+        #print("kpts = ", kpts)
+        #print("is_single_kpt = ", is_single_kpt)
         if is_single_kpt:
             assert np.allclose(kpts[0], np.zeros(3))
             vj, vk = get_jk_dm_translation_symmetry(self, dm, hermi, kpts[0], kpts_band,
@@ -1340,6 +1343,7 @@ if __name__ == "__main__":
     from pyscf.pbc import scf
 
     mf = scf.RHF(cell)
+    pbc_isdf_info.kpts = np.array([[0,0,0]])  
     # mf = scf.addons.smearing_(mf, sigma=0.2, method='fermi')
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info

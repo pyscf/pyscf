@@ -53,13 +53,16 @@ def _preprocess_dm(mydf, dm):
             dm = dm[0].real
         else:  
             
+            #print("dm.shape = ", dm.shape)
+            #print("dm = ", dm)
+            #print("dtype = ", dm.dtype)
+            
             in_real_space = False 
                         
             if dm.dtype == np.float64:
-                assert kmesh[0] in [1, 2]
-                assert kmesh[1] in [1, 2]
-                assert kmesh[2] in [1, 2]
-
+                #assert kmesh[0] in [1, 2]
+                #assert kmesh[1] in [1, 2]
+                #assert kmesh[2] in [1, 2]
                 dm = np.asarray(dm, dtype=np.complex128)
             
             assert dm.dtype    == np.complex128
@@ -78,13 +81,13 @@ def _preprocess_dm(mydf, dm):
                 for iy in range(kmesh[1]):
                     for iz in range(kmesh[2]):
                         loc1 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + iz
-                        loc2 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + (kmesh[2] - iz) % kmesh[2]
+                        loc2 = (kmesh[0] - ix) % kmesh[0] * kmesh[1] * kmesh[2] + (kmesh[1] - iy) % kmesh[1] * kmesh[2] + (kmesh[2] - iz) % kmesh[2]
                         #print("loc1     = ", loc1, "loc2 = ", loc2)
                         #print("dm[loc1] = ", dm[loc1])
                         #print("dm[loc2] = ", dm[loc2])
-                        diff = np.linalg.norm(dm[loc1] - dm[loc2].conj())
-                        #print("diff = ", diff)
-                        # assert np.allclose(dm[loc1], dm[loc2].conj())
+                        diff = np.linalg.norm(dm[loc1] - dm[loc2].conj()) / np.sqrt(dm.size)
+                        #print("diff = ", diff) ## NOTE: should be very small
+                        assert diff < 1e-7
             dm_complex = np.zeros((ncell_complex, nao_prim, nao_prim), dtype=np.complex128)
             loc = 0
             for ix in range(kmesh[0]):
@@ -95,8 +98,9 @@ def _preprocess_dm(mydf, dm):
                         loc += 1
             
             dm_complex = np.transpose(dm_complex, axes=(1, 0, 2)).copy()
+            dm_complex = dm_complex.conj().copy()
             
-            #print("dm_complex = ", dm_complex)
+            #print("dm_complex.shape = ", dm_complex.shape)
             #print("dm_complex = ", dm_complex[:, 0, :])
             #print("dm_complex = ", dm_complex[:, 1, :])
             
@@ -120,6 +124,8 @@ def _preprocess_dm(mydf, dm):
             #print("dm_complex = ", dm_complex)
             
             dm = pack_JK(dm_real, kmesh, nao_prim)
+            
+            #print("dm.shape = ", dm.shape)
 
     return dm, in_real_space
     
@@ -128,6 +134,7 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
     dm, in_real_space = _preprocess_dm(mydf, _dm)
     
     #print("dm = ", dm)
+    #print("dm = ", dm[0,:])
     
     if use_mpi:
         from mpi4py import MPI
@@ -428,9 +435,12 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
     del density_R_tmp
     del aoR_buf1
     
+    #print("J = ", J)
+    
     J *= ngrid / vol
     
     #print("J = ", J.reshape(nao_prim, ncell, nao_prim))
+    #print("J = ", J.reshape(nao_prim, ncell, nao_prim)[0, :, 0])
     
     if in_real_space:
         J = pack_JK(J, mydf.kmesh, nao_prim)
@@ -455,6 +465,7 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
         #J_complex = J_complex.reshape(nao_prim, ncell_complex, nao_prim)
         #J_complex = np.transpose(J_complex, axes=(1, 0, 2)).copy()
         ## pack J in FFT space ##
+        J_complex = J_complex.conj().copy()
         J = pack_JK_in_FFT_space(J_complex, mydf.kmesh, nao_prim)
     
     return J
@@ -1078,6 +1089,7 @@ def _get_k_kSym_robust_fitting_fast(mydf, _dm):
             buf_fft.ctypes.data_as(ctypes.c_void_p)
         )
         
+        K_complex = K_complex.conj().copy()
         K_complex = pack_JK_in_FFT_space(K_complex, kmesh, nao_prim)
         K = K_complex 
         
@@ -1296,7 +1308,8 @@ def _get_k_kSym(mydf, _dm):
         K = pack_JK(K_real_buf, kmesh, nao_prim, output=None)
     
     else:
-        
+    
+        K_complex_buf = K_complex_buf.conj().copy()  ### NOTE: convention problem   
         K = pack_JK_in_FFT_space(K_complex_buf, kmesh, nao_prim, output=None)
     
     t2 = (logger.process_clock(), logger.perf_counter())

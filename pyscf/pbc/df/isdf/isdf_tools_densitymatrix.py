@@ -407,9 +407,16 @@ def pack_JK_in_FFT_space(input_mat:np.ndarray, kmesh, nao_prim, output=None):
         for iy in range(kmesh[1]):
             for iz in range(kmesh[2] // 2 + 1):
                 loc1 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + iz
-                loc2 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + (kmesh[2] - iz) % kmesh[2]
-                output[loc1] = input_mat[:, loc*nao_prim:(loc+1)*nao_prim]
-                output[loc2] = input_mat[:, loc*nao_prim:(loc+1)*nao_prim].conj()
+                #loc2 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + (kmesh[2] - iz) % kmesh[2]
+                loc2 = (kmesh[0] - ix) % kmesh[0] * kmesh[1] * kmesh[2] + (kmesh[1] - iy) % kmesh[1] * kmesh[2] + (kmesh[2] - iz) % kmesh[2]
+                if loc1 == loc2:
+                    output[loc1] = input_mat[:, loc*nao_prim:(loc+1)*nao_prim]
+                    imag_part = np.imag(output[loc1])
+                    if np.max(np.abs(imag_part)) > 1e-8:
+                        print("Warning: max abs of imag_part = ", np.max(np.abs(imag_part)))
+                else:
+                    output[loc1] = input_mat[:, loc*nao_prim:(loc+1)*nao_prim]
+                    output[loc2] = input_mat[:, loc*nao_prim:(loc+1)*nao_prim].conj()
                 loc += 1
                 
     return output

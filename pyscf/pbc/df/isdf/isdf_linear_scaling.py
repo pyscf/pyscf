@@ -1733,7 +1733,7 @@ if __name__ == '__main__':
     prim_mesh = prim_cell.mesh
 
     # Ls = [2, 2, 2]
-    Ls = [1, 1, 1]
+    Ls = [1, 1, 2]
     # Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
