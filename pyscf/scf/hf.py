@@ -1569,6 +1569,12 @@ class SCF(lib.StreamObject):
         self._opt = {None: None}
         self._eri = None # Note: self._eri requires large amount of memory
 
+    def __getattr__(self, key):
+        '''Accessing methods post-HF methods or mean-field properties'''
+        # Import all available modules, then retry accessing the attribute
+        from pyscf import __all__  # noqa
+        return object.__getattribute__(self, key)
+
     def check_sanity(self):
         s1e = self.get_ovlp()
         cond = lib.cond(s1e)
