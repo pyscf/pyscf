@@ -88,7 +88,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         mf.scf()
         n3 = mol.natm * 3
-        hobj = Hessian(mf)
+        hobj = mf.Hessian()
         e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
 
         def grad_full(ia, inc):

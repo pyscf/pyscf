@@ -80,14 +80,13 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
                      tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
     log.timer('krylov solver in CPHF', *t0)
 
+    mo1 = mo1.reshape(mo1base.shape)
+    mo1_a = mo1[:,:nvira*nocca].reshape(-1,nvira,nocca)
+    mo1_b = mo1[:,nvira*nocca:].reshape(-1,nvirb,noccb)
     if isinstance(h1[0], numpy.ndarray) and h1[0].ndim == 2:
-        mo1 = (mo1[:nocca*nvira].reshape(nvira,nocca),
-               mo1[nocca*nvira:].reshape(nvirb,noccb))
+        mo1 = (mo1_a[0], mo1_b[0])
     else:
         assert h1[0].ndim == 3
-        mo1 = mo1.reshape(mo1base.shape)
-        mo1_a = mo1[:,:nvira*nocca].reshape(-1,nvira,nocca)
-        mo1_b = mo1[:,nvira*nocca:].reshape(-1,nvirb,noccb)
         mo1 = (mo1_a, mo1_b)
     return mo1, None
 

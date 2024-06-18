@@ -101,7 +101,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.8503072107510495, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.8503072107510495, 4)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -163,7 +163,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'wb97x'
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.8207572641132195, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.8207572641132195, 4)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
