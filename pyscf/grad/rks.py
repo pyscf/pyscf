@@ -622,3 +622,4 @@ Grad = Gradients
 
 from pyscf import dft
 dft.rks.RKS.Gradients = dft.rks_symm.RKS.Gradients = lib.class_as_method(Gradients)
+dft.roks.ROKS.Gradients = lib.invalid_method('Gradients')
