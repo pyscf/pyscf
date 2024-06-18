@@ -137,7 +137,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'pbe'
         mf.collinear = 'col'
         mf.run()
-        self.assertAlmostEqual(mf.e_tot, -1.5775787238220018, 7)
+        self.assertAlmostEqual(mf.e_tot, -1.6373456924395708, 7)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_kgks_gga(self):

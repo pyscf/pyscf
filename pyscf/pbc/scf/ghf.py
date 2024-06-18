@@ -100,6 +100,7 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
 class GHF(pbchf.SCF):
     '''GHF class for PBCs.
     '''
+    _keys = {'with_soc'}
 
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):

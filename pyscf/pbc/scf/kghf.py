@@ -186,6 +186,8 @@ def _cast_mol_init_guess(fn):
 class KGHF(khf.KSCF):
     '''GHF class for PBCs.
     '''
+    _keys = {'with_soc'}
+
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
