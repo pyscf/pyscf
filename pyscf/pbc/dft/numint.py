@@ -1264,7 +1264,7 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
             if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
                 mo_coeff = [mo_coeff]
                 mo_occ = [mo_occ]
-            nao = cell.nao_nr()
+            nao = dms[0].shape[-1]
             ndms = len(mo_occ)
             def make_rho(idm, ao, non0tab, xctype):
                 return self.eval_rho2(cell, ao, mo_coeff[idm], mo_occ[idm],

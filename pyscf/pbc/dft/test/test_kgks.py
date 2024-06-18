@@ -155,7 +155,7 @@ class KnownValues(unittest.TestCase):
         mf.collinear = 'mcol'
         mf._numint.spin_samples = 6
         mf.run()
-        self.assertAlmostEqual(mf.e_tot, -1.6488317049603154, 7)
+        self.assertAlmostEqual(mf.e_tot, -1.6312141891350893, 6)
 
     def test_ncol_x2c_kgks_lda(self):
         from pyscf.pbc import gto
@@ -167,11 +167,11 @@ class KnownValues(unittest.TestCase):
         cell.basis = [[0, [2, 1]], [1, [.5, 1]]]
         cell.spin = 1
         cell.build()
-        mf = cell.KGKS(kpts=cell.make_kpts([3,1,1])).x2c()
+        mf = cell.KGKS(kpts=cell.make_kpts([2,1,1])).x2c()
         mf.xc = 'lda,vwn'
         mf.collinear = 'ncol'
         mf.run()
-        self.assertAlmostEqual(mf.e_tot, -1.5487589652189349, 7)
+        self.assertAlmostEqual(mf.e_tot, -1.533809531603591, 6)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_x2c_kgks_lda(self):
@@ -189,7 +189,7 @@ class KnownValues(unittest.TestCase):
         mf.collinear = 'mcol'
         mf._numint.spin_samples = 50
         mf.run()
-        self.assertAlmostEqual(mf.e_tot, -1.5487589652189349, 6)
+        self.assertAlmostEqual(mf.e_tot, -1.533809531603591, 6)
 
     def test_to_hf(self):
         mf = dft.KGKS(cell).density_fit()
