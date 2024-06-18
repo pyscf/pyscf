@@ -200,6 +200,8 @@ class _DFHF:
                 return uks.Hessian(self)
             else:
                 return uhf.Hessian(self)
+        elif isinstance(self, scf.rohf.ROHF):
+            raise NotImplementedError
         elif isinstance(self, scf.rhf.RHF):
             if isinstance(self, scf.hf.KohnShamDFT):
                 return rks.Hessian(self)

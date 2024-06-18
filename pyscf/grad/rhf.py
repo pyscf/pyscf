@@ -474,3 +474,4 @@ Grad = Gradients
 from pyscf import scf
 # Inject to RHF class
 scf.hf.RHF.Gradients = lib.class_as_method(Gradients)
+scf.rohf.ROHF.Gradients = lib.invalid_method('Gradients')
