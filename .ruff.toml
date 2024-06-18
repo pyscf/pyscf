@@ -1,35 +1,9 @@
 exclude = [
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".git-rewrite",
-    ".hg",
-    ".ipynb_checkpoints",
-    ".mypy_cache",
-    ".nox",
-    ".pants.d",
-    ".pyenv",
-    ".pytest_cache",
-    ".pytype",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    ".vscode",
-    "__pypackages__",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "node_modules",
-    "site-packages",
-    "venv",
     "test",
 ]
 
+respect-gitignore = true
 line-length = 120
-indent-width = 4
 
 [lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
@@ -48,12 +22,11 @@ ignore = [
 "F401", "F403", "C901", "W391"
 ]
 
-# Allow unused variables when underscore-prefixed.
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
-
 [format]
 # Like Black, indent with spaces, rather than tabs.
 indent-style = "space"
 
 # Like Black, automatically detect the appropriate line ending.
 line-ending = "auto"
+
+quote-style = "single"
