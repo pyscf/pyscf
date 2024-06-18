@@ -3840,7 +3840,7 @@ def _parse_nuc_mod(str_or_int_or_fn):
 def _update_from_cmdargs_(mol):
     try:
         # Detect whether in Ipython shell
-        __IPYTHON__  # noqa:
+        __IPYTHON__  # noqa: F821
         return
     except Exception:
         pass

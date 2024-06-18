@@ -76,15 +76,15 @@ myadc = mol_adc.RADC(mf)
 # Molecular IP-ADC
 myadc.method_type = 'ip'
 myadc.method = 'adc(3)'
-mol_e_ip,mol_v_ip,mol_p_ip,mol_x_ip = myadc.kernel(nroots=nroots_test*np.product(nmp))
+mol_e_ip,mol_v_ip,mol_p_ip,mol_x_ip = myadc.kernel(nroots=nroots_test*np.prod(nmp))
 
 # Molecular EA-ADC
 myadc.method_type = 'ea'
 myadc.method = 'adc(3)'
-mol_e_ea,mol_v_ea,mol_p_ea,mol_x_ea = myadc.kernel(nroots=nroots_test*np.product(nmp))
+mol_e_ea,mol_v_ea,mol_p_ea,mol_x_ea = myadc.kernel(nroots=nroots_test*np.prod(nmp))
 
 print("PBC KRHF Energy:", ekrhf)
-print("PBC RHF Energy :", erhf / np.product(nmp))
+print("PBC RHF Energy :", erhf / np.prod(nmp))
 print("PBC IP-ADC(3) roots:", k_e_ip)
 print("Mol IP-ADC(3) roots:", mol_e_ip)
 print("PBC EA-ADC(3) roots:", k_e_ea)

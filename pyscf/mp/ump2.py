@@ -303,7 +303,7 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None, eris=None):
     masks = _mo_splitter(mp)
 
     if nvir_act is not None:
-        if isinstance(nvir_act, (int,numpy.int)):
+        if isinstance(nvir_act, (int, numpy.integer)):
             nvir_act = [nvir_act]*2
 
     no_frozen = []

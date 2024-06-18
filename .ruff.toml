@@ -1,0 +1,32 @@
+exclude = [
+    "test",
+]
+
+respect-gitignore = true
+line-length = 120
+
+[lint]
+# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
+#select = ["E4", "E7", "E9", "F"]
+ignore = [
+# Whitespaces:
+"E201", "E202", "E203", "E211", "E221", "E222", "E225", "E226", "E228", "E231", "E241", "E251",
+# Comments:
+"E261", "E262", "E265", "E266",
+# Blank lines:
+"E301", "E302", "E303", "E305", "E306",
+# Imports:
+"E401", "E402",
+# Other:
+"E701", "E713", "E721", "E731", "E741", "E275",
+"F401", "F403", "C901", "W391"
+]
+
+[format]
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+quote-style = "single"

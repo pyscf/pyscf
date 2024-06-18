@@ -335,6 +335,7 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
     collinear_samples = numint2c.NumInt2C.collinear_samples
 
     make_mask = lib.invalid_method('make_mask')
+    eval_ao = staticmethod(pnumint.eval_ao_kpts)
 
     def eval_rho(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA',
                  hermi=0, with_lapl=True, verbose=None):

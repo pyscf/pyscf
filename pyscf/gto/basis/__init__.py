@@ -531,7 +531,6 @@ def _convert_contraction(contr_string):
 def _truncate(basis, contr_scheme, symb, split_name):
     # keep only first n_keep contractions for each l
     contr_b = []
-    b_index = 0
     for l, n_keep in enumerate(contr_scheme):
         n_saved = 0
         if n_keep > 0:
