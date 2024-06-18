@@ -1361,10 +1361,9 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
             x1, rmat = _qr(x1, dot)
             x1 *= rmat.diagonal()[:,None]
             innerprod1 = rmat.diagonal().real ** 2
-            max_innerprod = innerprod1.max()
         else:
-            max_innerprod = dot(x1[0].conj(), x1[0]).real
-            innerprod1 = [max_innerprod]
+            innerprod1 = [dot(x1[0].conj(), x1[0]).real]
+        max_innerprod = max(innerprod1, default=0.)
 
         log.debug('krylov cycle %d  r = %g', cycle, max_innerprod**.5)
         if max_innerprod < lindep or max_innerprod < tol**2:

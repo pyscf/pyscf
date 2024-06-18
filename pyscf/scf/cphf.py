@@ -68,15 +68,16 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
     e_i = mo_energy[mo_occ>0]
     e_ai = 1 / (e_a[:,None] + level_shift - e_i)
     mo1base = h1 * -e_ai
+    nvir, nocc = e_ai.shape
 
     def vind_vo(mo1):
-        mo1 = mo1.reshape(h1.shape)
-        v = fvind(mo1).reshape(h1.shape)
+        mo1 = mo1.reshape(-1, nvir, nocc)
+        v = fvind(mo1).reshape(-1, nvir, nocc)
         if level_shift != 0:
             v -= mo1 * level_shift
         v *= e_ai
-        return v.ravel()
-    mo1 = lib.krylov(vind_vo, mo1base.ravel(),
+        return v.reshape(-1, nvir*nocc)
+    mo1 = lib.krylov(vind_vo, mo1base.reshape(-1, nvir*nocc),
                      tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
     log.timer('krylov solver in CPHF', *t0)
     return mo1.reshape(h1.shape), None
@@ -119,20 +120,20 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
     mo1base[:,occidx] = -s1[:,occidx] * .5
 
     def vind_vo(mo1):
-        mo1 = mo1.reshape(mo1base.shape)
-        v = fvind(mo1).reshape(mo1base.shape)
+        mo1 = mo1.reshape(-1, nmo, nocc)
+        v = fvind(mo1).reshape(-1, nmo, nocc)
         if level_shift != 0:
             v -= mo1 * level_shift
         v[:,viridx,:] *= e_ai
         v[:,occidx,:] = 0
-        return v.ravel()
-    mo1 = lib.krylov(vind_vo, mo1base.ravel(),
+        return v.reshape(-1, nmo*nocc)
+    mo1 = lib.krylov(vind_vo, mo1base.reshape(-1, nmo*nocc),
                      tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
-    mo1 = mo1.reshape(mo1base.shape)
+    mo1 = mo1.reshape(-1, nmo, nocc)
     mo1[:,occidx] = mo1base[:,occidx]
     log.timer('krylov solver in CPHF', *t0)
 
-    hs += fvind(mo1).reshape(mo1base.shape)
+    hs += fvind(mo1).reshape(-1, nmo, nocc)
     mo1[:,viridx] = hs[:,viridx] / (e_i - e_a[:,None])
 
     # mo_e1 has the same symmetry as the first order Fock matrix (hermitian or
@@ -143,4 +144,5 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
     if h1.ndim == 3:
         return mo1, mo_e1
     else:
-        return mo1.reshape(h1.shape), mo_e1.reshape(nocc,nocc)
+        assert h1.ndim == 2
+        return mo1[0], mo_e1[0]

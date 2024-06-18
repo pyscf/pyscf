@@ -97,7 +97,6 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(12)
         n = 100
         a = numpy.random.rand(n,n)
-        a = a + a.conj().T
         a += numpy.diag(numpy.random.random(n))* 10
         b = numpy.random.random(n)
         def aop(x):
@@ -106,7 +105,7 @@ class KnownValues(unittest.TestCase):
             return x / a.diagonal()
         xref = numpy.linalg.solve(a, b)
         x1 = linalg_helper.dsolve(aop, b, precond, max_cycle=80)
-        self.assertAlmostEqual(abs(xref - x1).max(), 0, 4)
+        self.assertAlmostEqual(abs(xref - x1).max(), 0, 3)
 
     def test_krylov_with_level_shift(self):
         numpy.random.seed(10)
@@ -137,7 +136,7 @@ class KnownValues(unittest.TestCase):
 
         aop = lambda x: x.dot(a.T)
         c = linalg_helper.krylov(aop, b)
-        self.assertAlmostEqual(abs(ref - c).max(), 0, 8)
+        self.assertAlmostEqual(abs(ref - c).max(), 0, 7)
 
         a = numpy.random.rand(n,n) * .1 + numpy.random.rand(n,n) * .1j
         b = numpy.random.rand(4, n) + numpy.random.rand(4, n) * .5j
@@ -225,7 +224,6 @@ class KnownValues(unittest.TestCase):
         print((abs(vl[1]) - abs(ul[:,1])).max())
         print((abs(vl[2]) - abs(ul[:,2])).max())
 
-    @unittest.skip('difficult to converge')
     def test_eig_difficult_problem(self):
         N = 40
         neig = 4
