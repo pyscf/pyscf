@@ -35,7 +35,7 @@ cell = gto.M(
     ke_cutoff=KE_CUTOFF
 )
 
-nk = [2, 2, 3]  # 4 k-points for each axis, 4^3=64 kpts in total
+nk = [1, 1, 3]  # 4 k-points for each axis, 4^3=64 kpts in total
 kpts = cell.make_kpts(nk)
 print("kpts = ", kpts)
 

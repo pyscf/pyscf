@@ -491,9 +491,12 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         prim_mesh = mol.mesh
         mesh = np.array(prim_mesh) * np.array(kmesh)
         
+        nelectron = np.sum(mol.nelectron)
+        
         supercell = build_supercell(
             atm, 
             mol.a,
+            spin=nelectron*np.prod(kmesh) % 2,
             mesh=mesh,
             Ls=kmesh,
             basis=mol.basis,
@@ -1185,23 +1188,40 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             from pyscf.pbc.df.isdf.isdf_linear_scaling_k_jk import _contract_j_dm_k_ls, _get_k_kSym_robust_fitting_fast, _get_k_kSym
             from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
             
-            vj = _contract_j_dm_k_ls(self, dm)
-            if self.with_robust_fitting:
-                vk = _get_k_kSym_robust_fitting_fast(self, dm)
-            else:
-                vk = _get_k_kSym(self, dm)
+            ### preprocess dm ### 
+            
+            if dm.ndim == 3:
+                dm = dm.reshape(1, *dm.shape)
+            nset = dm.shape[0]
+            #print("nset = ", nset)
+            #print("dm.shape = ", dm.shape)
+            vj = np.zeros_like(dm, dtype=np.complex128)
+            vk = np.zeros_like(dm, dtype=np.complex128)
+            
+            for iset in range(nset):
+                #assert np.allclose(dm[iset][1], dm[iset][2].conj())
+                vj[iset] = _contract_j_dm_k_ls(self, dm[iset])
+                if self.with_robust_fitting:
+                    vk[iset] = _get_k_kSym_robust_fitting_fast(self, dm[iset])
+                else:
+                    vk[iset] = _get_k_kSym(self, dm[iset])
+            
+            #assert np.allclose(vj[0][1], vj[0][2].conj())
+            #assert np.allclose(vj[1][1], vj[1][2].conj())
+            #assert np.allclose(vk[0][1], vk[0][2].conj())
+            #assert np.allclose(vk[1][1], vk[1][2].conj())
             
             ### post process J and K ###
             
             kpts = np.asarray(kpts)
             dm_kpts = lib.asarray(dm, order='C')
-            assert dm_kpts.ndim == 3
-            assert dm_kpts.shape[0] == len(kpts)
-            assert dm_kpts.shape[1] == dm_kpts.shape[2]
+            assert dm_kpts.ndim == 4
+            assert dm_kpts.shape[1] == len(kpts)
+            assert dm_kpts.shape[2] == dm_kpts.shape[3]
             dms = _format_dms(dm_kpts, kpts)
             nset, nkpts, nao = dms.shape[:3]
-            assert nset == 1
-            
+            assert nset <= 2
+                        
             kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
             nband = len(kpts_band)
             assert nband == nkpts
@@ -1216,6 +1236,10 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             vk = _format_jks(vk_kpts, dm_kpts, input_band, kpts)
             vj_kpts = vj.reshape(nset, nband, nao, nao)
             vj = _format_jks(vj_kpts, dm_kpts, input_band, kpts)
+            
+            if nset == 1:
+                vj = vj[0]
+                vk = vk[0]
             
         return vj, vk
 

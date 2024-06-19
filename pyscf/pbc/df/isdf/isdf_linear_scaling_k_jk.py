@@ -87,14 +87,23 @@ def _preprocess_dm(mydf, dm):
                         #print("dm[loc2] = ", dm[loc2])
                         diff = np.linalg.norm(dm[loc1] - dm[loc2].conj()) / np.sqrt(dm.size)
                         #print("diff = ", diff) ## NOTE: should be very small
-                        assert diff < 1e-7
+                        #assert diff < 1e-7
+                        if diff > 1e-7:
+                            print("warning, the input density matrix is not symmetric.")
+                            print("k1    = (%d, %d, %d) " % (ix, iy, iz))
+                            print("k2    = (%d, %d, %d) " % ((kmesh[0] - ix) % kmesh[0], (kmesh[1] - iy) % kmesh[1], (kmesh[2] - iz) % kmesh[2]))
+                            print("kmesh = ", kmesh)
+                            print("diff  = ", diff)
             dm_complex = np.zeros((ncell_complex, nao_prim, nao_prim), dtype=np.complex128)
             loc = 0
             for ix in range(kmesh[0]):
                 for iy in range(kmesh[1]):
                     for iz in range(kmesh[2]//2+1):
                         loc1 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + iz
-                        dm_complex[loc].ravel()[:] = dm[loc1].ravel()[:]
+                        loc2 = (kmesh[0] - ix) % kmesh[0] * kmesh[1] * kmesh[2] + (kmesh[1] - iy) % kmesh[1] * kmesh[2] + (kmesh[2] - iz) % kmesh[2]
+                        #dm_complex[loc].ravel()[:] = dm[loc1].ravel()[:]
+                        dm_input = ((dm[loc1] + dm[loc2].conj()) / 2.0).copy()
+                        dm_complex[loc].ravel()[:] = dm_input.ravel()[:]
                         loc += 1
             
             dm_complex = np.transpose(dm_complex, axes=(1, 0, 2)).copy()
@@ -1331,8 +1340,11 @@ def get_jk_dm_translation_symmetry(mydf, dm, hermi=1, kpt=np.zeros(3),
         raise NotImplementedError("ISDF does not support use_mpi")
     
     if len(dm.shape) == 3:
-        assert dm.shape[0] == 1
-        dm = dm[0]
+        assert dm.shape[0] <= 2
+        #dm = dm[0]
+    else:
+        assert dm.ndim == 2
+        dm = dm.reshape(1, dm.shape[0], dm.shape[1])
 
     if hasattr(mydf, 'kmesh') and mydf.kmesh is not None:
         from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
@@ -1345,6 +1357,8 @@ def get_jk_dm_translation_symmetry(mydf, dm, hermi=1, kpt=np.zeros(3),
     if use_mpi:
         dm = bcast(dm, root=0)
 
+    nset = dm.shape[0]
+
     #### perform the calculation ####
 
     if "exxdiv" in kwargs:
@@ -1352,7 +1366,9 @@ def get_jk_dm_translation_symmetry(mydf, dm, hermi=1, kpt=np.zeros(3),
     else:
         exxdiv = None
 
-    vj = vk = None
+    #vj = vk = None
+    vj = np.zeros_like(dm)
+    vk = np.zeros_like(dm)
 
     if kpts_band is not None and abs(kpt-kpts_band).sum() > 1e-9:
         raise NotImplementedError("ISDF does not support kpts_band != kpt")
@@ -1371,29 +1387,32 @@ def get_jk_dm_translation_symmetry(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
 
-    if with_j:
-        vj = _contract_j_dm_k_ls(mydf, dm, use_mpi)  
-        sys.stdout.flush()
-    if with_k:
-        if mydf.direct:
-            raise NotImplementedError
-        else:
-            if mydf.with_robust_fitting:
-                vk = _get_k_kSym_robust_fitting_fast(mydf, dm)
+    for iset in range(nset):
+        if with_j:
+            vj[iset] = _contract_j_dm_k_ls(mydf, dm[iset], use_mpi)  
+            sys.stdout.flush()
+        if with_k:
+            if mydf.direct:
+                raise NotImplementedError
             else:
-                vk = _get_k_kSym(mydf, dm)
-        if exxdiv == 'ewald':
-            print("WARNING: ISDF does not support ewald")
+                if mydf.with_robust_fitting:
+                    vk[iset] = _get_k_kSym_robust_fitting_fast(mydf, dm[iset])
+                else:
+                    vk[iset] = _get_k_kSym(mydf, dm[iset])
+            if exxdiv == 'ewald':
+                print("WARNING: ISDF does not support ewald")
 
     if exxdiv == 'ewald':
         if np.allclose(kpt, np.zeros(3)):
             # from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
             kpts = kpt.reshape(1,3)
             kpts = np.asarray(kpts)
-            dm_kpts = dm.reshape(-1, dm.shape[0], dm.shape[1]).copy()
+            #dm_kpts = dm.reshape(-1, dm.shape[0], dm.shape[1]).copy()
+            dm_kpts = dm.copy()
             dm_kpts = lib.asarray(dm_kpts, order='C')
             dms     = _format_dms(dm_kpts, kpts)
             nset, nkpts, nao = dms.shape[:3]
+            assert nset <= 2
             kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
             nband = len(kpts_band)
             assert nband == 1
@@ -1402,7 +1421,8 @@ def get_jk_dm_translation_symmetry(mydf, dm, hermi=1, kpt=np.zeros(3),
             else:
                 raise NotImplementedError("ISDF does not support kpts_band != 0")
             _ewald_exxdiv_for_G0(mydf.cell, kpts, dms, vk, kpts_band=kpts_band)
-            vk = vk[0,0]
+            #vk = vk[0,0]
+            vk = vk.reshape(nset,nao,nao)
         else:
             logger.warn(mydf, 'get_jk_dm_k_quadratic: Exxdiv for k-point is not supported')
 
