@@ -299,7 +299,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
             else:
                 # make a copy because the dm may be overwritten in the
                 # NUMINT_rho_drv inplace
-                dmR = numpy.asarray(dm_i, order='C')
+                dmR = numpy.array(dm_i, order='C', copy=True)
 
         elif kpts is None or gamma_point(kpts):
             if ignore_imag:
