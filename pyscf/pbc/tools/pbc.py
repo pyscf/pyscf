@@ -68,10 +68,10 @@ def _ifftn_blas(g, mesh):
 
 nproc = lib.num_threads()
 
-def _fftn_wrapper(a):
+def _fftn_wrapper(a):  # noqa: F841
     return scipy.fft.fftn(a, axes=(1,2,3), workers=nproc)
 
-def _ifftn_wrapper(a):
+def _ifftn_wrapper(a):  # noqa: F841
     return scipy.fft.ifftn(a, axes=(1,2,3), workers=nproc)
 
 if FFT_ENGINE == 'FFTW':
