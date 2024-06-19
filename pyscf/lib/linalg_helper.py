@@ -1477,15 +1477,12 @@ def _qr(xs, dot, lindep=1e-14):
     xs = (r.T).dot(qs)
     '''
     nvec = len(xs)
-    dtype = xs[0].dtype
-    qs = numpy.empty((nvec,xs[0].size), dtype=dtype)
-    rmat = numpy.empty((nvec,nvec), order='F', dtype=dtype)
+    xs = qs = numpy.array(xs, copy=True)
+    rmat = numpy.eye(nvec, order='F', dtype=xs.dtype)
 
     nv = 0
     for i in range(nvec):
-        xi = numpy.array(xs[i], copy=True)
-        rmat[:,nv] = 0
-        rmat[nv,nv] = 1
+        xi = xs[i]
         for j in range(nv):
             prod = dot(qs[j].conj(), xi)
             xi -= qs[j] * prod

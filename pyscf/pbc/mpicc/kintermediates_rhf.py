@@ -187,7 +187,7 @@ def cc_Woooo(cc,t1,t2,eris,feri2=None):
             for iterkl, kl in enumerate(ranges1):
                 for iterki, ki in enumerate(ranges2):
                     kj = kconserv[kk,ki,kl]
-                    oooo_tmp[iterkk,iterkl,iterki] = np.array(eris.oooo[kk,kl,ki],copy=True)
+                    oooo_tmp[iterkk,iterkl,iterki] = np.array(eris.oooo[kk,kl,ki], copy=True)
                     oooo_tmp[iterkk,iterkl,iterki] += einsum('klic,jc->klij',eris.ooov[kk,kl,ki],t1[kj])
                     oooo_tmp[iterkk,iterkl,iterki] += einsum('klcj,ic->klij',eris.ooov[kl,kk,kj].transpose(1,0,3,2),t1[ki])
 
@@ -233,7 +233,7 @@ def cc_Wvvvv(cc,t1,t2,eris,feri2=None):
             for kc in ranges1:
                 for kb in range(ka+1):
                     kd = kconserv[ka,kc,kb]
-                    vvvv_tmp = np.array(eris.vvvv[ka,kb,kc],copy=True)
+                    vvvv_tmp = np.array(eris.vvvv[ka,kb,kc], copy=True)
                     vvvv_tmp += einsum('akcd,kb->abcd',eris.ovvv[kb,ka,kd].transpose(1,0,3,2),-t1[kb])
                     vvvv_tmp += einsum('kbcd,ka->abcd',eris.ovvv[ka,kb,kc],-t1[ka])
                     Wvvvv[ka,kb,kc] = vvvv_tmp
@@ -336,7 +336,7 @@ def cc_Wvovo(cc,t1,t2,eris,feri2=None):
             for iterkk, kk in enumerate(ranges1):
                 for iterkc, kc in enumerate(ranges2):
                     ki = kconserv[ka,kc,kk]
-                    vovo_tmp[iterka,iterkk,iterkc] = np.array(eris.ovov[kk,ka,ki]).transpose(1,0,3,2)
+                    vovo_tmp[iterka,iterkk,iterkc] = np.asarray(eris.ovov[kk,ka,ki]).transpose(1,0,3,2)
                     vovo_tmp[iterka,iterkk,iterkc] -= einsum('lkci,la->akci',eris.ooov[kk,ka,ki].transpose(1,0,3,2),t1[ka])
                     vovo_tmp[iterka,iterkk,iterkc] += einsum('akcd,id->akci',eris.ovvv[kk,ka,ki].transpose(1,0,3,2),t1[ki])
                     # Beginning of change
@@ -391,7 +391,7 @@ def cc_Wovov(cc,t1,t2,eris,feri2=None):
             for iterka, ka in enumerate(ranges1):
                 for iterki, ki in enumerate(ranges2):
                     kc = kconserv[kk,ki,ka]
-                    ovov_tmp[iterkk,iterka,iterki] = np.array(eris.ovov[kk,ka,ki],copy=True)
+                    ovov_tmp[iterkk,iterka,iterki] = np.asarray(eris.ovov[kk,ka,ki])
                     ovov_tmp[iterkk,iterka,iterki] -= einsum('lkci,la->kaic',eris.ooov[kk,ka,ki].transpose(1,0,3,2),t1[ka])
                     ovov_tmp[iterkk,iterka,iterki] += einsum('akcd,id->kaic',eris.ovvv[kk,ka,ki].transpose(1,0,3,2),t1[ki])
                     # Beginning of change
@@ -1308,7 +1308,7 @@ def Wovoo(cc,t1,t2,eris,fint=None):
                 for iterki,ki in enumerate(ranges2):
                     kj = kconserv[kk,ki,kb]
 
-                    ovoo_tmp[iterkk,iterkb,iterki] = np.array(eris.ovoo[kk,kb,ki],copy=True)
+                    ovoo_tmp[iterkk,iterkb,iterki] = np.asarray(eris.ovoo[kk,kb,ki])
                     ovoo_tmp[iterkk,iterkb,iterki] += einsum('kbid,jd->kbij',WW1ovov_kbi[iterkk,iterkb,iterki], t1[kj])
                     ovoo_tmp[iterkk,iterkb,iterki] += einsum('klij,lb->kbij', WWoooo_kbi[iterkk,iterkb,iterki],-t1[kb])
                     #ovoo_tmp[iterkk,iterkb,iterki] += einsum('kbcj,ic->kbij',WW1ovvo_kbi[iterkk,iterkb,iterki],t1[ki])
@@ -1550,4 +1550,4 @@ def WvoovR1(cc,t1,t2,eris,fint=None):
     return Wkaci
 
 def _cp(a):
-    return np.array(a, copy=False, order='C')
+    return np.array(a, order='C')

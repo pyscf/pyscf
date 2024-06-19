@@ -62,7 +62,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
     for i in range(nocc):
         buf = numpy.dot(Lov[:,i*nvir:(i+1)*nvir].T,
                         Lov).reshape(nvir,nocc,nvir)
-        gi = numpy.array(buf, copy=False)
+        gi = numpy.asarray(buf)
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
         edi = numpy.einsum('jab,jab', t2i, gi) * 2
