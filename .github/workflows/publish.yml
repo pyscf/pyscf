@@ -168,7 +168,7 @@ jobs:
         uses: s-weigand/setup-conda@v1
         with:
           update-conda: true
-          conda-channels: anaconda, conda-forge
+          conda-channels: conda-forge
       - run: conda --version
       - run: which python
       - name: Publish to conda
