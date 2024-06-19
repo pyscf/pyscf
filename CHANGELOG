@@ -1,3 +1,9 @@
+PySCF 2.6.2 (2024-06-19)
+------------------------
+* Fixes
+  - Compatibility issues due for NumPy 2.0 release.
+
+
 PySCF 2.6.1 (2024-06-17)
 ------------------------
 * Improved
