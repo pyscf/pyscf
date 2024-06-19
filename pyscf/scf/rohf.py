@@ -270,7 +270,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 get_veff = uhf.get_veff
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
-            **kwargs):
+            origin=None, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis
     '''
@@ -312,7 +312,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         pop_and_charge = mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
     else:
         pop_and_charge = mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log)
-    dip = mf.dip_moment(mf.mol, dm, verbose=log)
+    dip = mf.dip_moment(mf.mol, dm, origin=origin, verbose=log)
     return pop_and_charge, dip
 
 mulliken_pop = hf.mulliken_pop

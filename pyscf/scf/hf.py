@@ -1096,7 +1096,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
-            with_origin=None, **kwargs):
+            origin=None, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Diople moment.
     '''
@@ -1128,10 +1128,10 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
         return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
-                mf.dip_moment(mf.mol, dm, with_origin=with_origin, verbose=log))
+                mf.dip_moment(mf.mol, dm, origin=origin, verbose=log))
     else:
         return (mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log),
-                mf.dip_moment(mf.mol, dm, with_origin=with_origin, verbose=log))
+                mf.dip_moment(mf.mol, dm, origin=origin, verbose=log))
 
 def dump_scf_summary(mf, verbose=logger.DEBUG):
     if not mf.scf_summary:
@@ -1276,7 +1276,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             mo_e[idx] = e
     return mo_e, mo
 
-def dip_moment(mol, dm, unit='Debye', with_origin=None, verbose=logger.NOTE, **kwargs):
+def dip_moment(mol, dm, unit='Debye', origin=None, verbose=logger.NOTE, **kwargs):
     r''' Dipole moment calculation
 
     .. math::
@@ -1291,8 +1291,8 @@ def dip_moment(mol, dm, unit='Debye', with_origin=None, verbose=logger.NOTE, **k
     Args:
          mol: an instance of :class:`Mole`
          dm : a 2D ndarrays density matrices
-         with_origin : optional; length 3 list, tuple, or 1D array
-            Location of the origin. By default, the center of nuclear charge is used.
+         origin : optional; length 3 list, tuple, or 1D array
+            Location of the origin. By default, the point (0, 0, 0) is used.
 
     Return:
         A list: the dipole moment on x, y and z component
@@ -1312,10 +1312,10 @@ def dip_moment(mol, dm, unit='Debye', with_origin=None, verbose=logger.NOTE, **k
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
 
-    if with_origin is None:
-        origin = coords.T @ charges / charges.sum()
+    if origin is None:
+        origin = numpy.zeros(3)
     else:
-        origin = numpy.asarray(with_origin, dtype=numpy.float64)
+        origin = numpy.asarray(origin, dtype=numpy.float64)
     assert origin.shape == (3,)
 
     if mol.charge != 0:
@@ -1335,7 +1335,7 @@ def dip_moment(mol, dm, unit='Debye', with_origin=None, verbose=logger.NOTE, **k
         log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
     return mol_dip
 
-def quad_moment(mol, dm, unit='DebyeAngstrom', with_origin=None,
+def quad_moment(mol, dm, unit='DebyeAngstrom', origin=None,
                 verbose=logger.NOTE, **kwargs):
     r''' Calculates traceless quadrupole moment tensor.
 
@@ -1349,15 +1349,14 @@ def quad_moment(mol, dm, unit='DebyeAngstrom', with_origin=None,
                \left( R_{iA} R_{jA} - \delta_{ij} \|\mathbf{R}_A\|^2  \right).
 
     If the molecule has a dipole, the quadrupole moment depends on the location
-    of the origin. By default, the origin is taken to be the centroid of the
-    nuclear charge distribution. It can be set manually via the keyword argument
-    `with_origin`.
+    of the origin. By default, the origin is taken to be (0, 0, 0), but it can
+    be set manually via the keyword argument `origin`.
 
     Args:
          mol: an instance of :class:`Mole`
          dm : a 2D ndarrays density matrices
-         with_origin : optional; length 3 list, tuple, or 1D array
-            Location of the origin. By default, the center of nuclear charge is used.
+         origin : optional; length 3 list, tuple, or 1D array
+            Location of the origin. By default, it is (0, 0, 0).
 
     Return:
         Traceless quadrupole tensor, 2D ndarray.
@@ -1377,10 +1376,10 @@ def quad_moment(mol, dm, unit='DebyeAngstrom', with_origin=None,
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
 
-    if with_origin is None:
-        origin = coords.T @ charges / charges.sum()
+    if origin is None:
+        origin = numpy.zeros(3)
     else:
-        origin = numpy.asarray(with_origin, dtype=numpy.float64)
+        origin = numpy.asarray(origin, dtype=numpy.float64)
     assert origin.shape == (3,)
 
     with mol.with_common_orig(origin):
@@ -1978,18 +1977,18 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     canonicalize = canonicalize
 
     @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit='Debye', with_origin=None, verbose=logger.NOTE,
+    def dip_moment(self, mol=None, dm=None, unit='Debye', origin=None, verbose=logger.NOTE,
                    **kwargs):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()
-        return dip_moment(mol, dm, unit, with_origin=with_origin, verbose=verbose, **kwargs)
+        return dip_moment(mol, dm, unit, origin=origin, verbose=verbose, **kwargs)
 
     @lib.with_doc(quad_moment.__doc__)
-    def quad_moment(self, mol=None, dm=None, unit='DebyeAngstrom', with_origin=None,
+    def quad_moment(self, mol=None, dm=None, unit='DebyeAngstrom', origin=None,
                 verbose=logger.NOTE, **kwargs):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()
-        return quad_moment(mol, dm, unit=unit, with_origin=with_origin,
+        return quad_moment(mol, dm, unit=unit, origin=origin,
                 verbose=verbose, **kwargs)
 
     def _is_mem_enough(self):
