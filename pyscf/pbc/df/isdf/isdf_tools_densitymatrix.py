@@ -268,7 +268,7 @@ def analysis_dm_on_grid(mydf, dm, distance_matrix):
     for i, data in enumerate(N_elmt_statistics):
         print("nelmt abs > 1e-%d = %d, portion = %.2e" % (i+3, data, float(data) / naux / ngrid))
 
-def symmetrize_dm(dm, Ls):
+def symmetrize_dm(dm:np.ndarray, Ls):
     '''
     
     generate translation symmetrized density matrix (by average)
@@ -281,17 +281,23 @@ def symmetrize_dm(dm, Ls):
         dm_symm : np.ndarray, symmetrized density matrix, shape = (nao, nao)
     '''
     
+    is_single_dm = False
+    
+    if dm.ndim == 2:
+        is_single_dm = True
+        dm = dm.reshape(1, dm.shape[0], dm.shape[1])
         
     ncell = np.prod(Ls)
-    nao = dm.shape[0]
+    nao   = dm.shape[1]
+    nset  = dm.shape[0]
     nao_prim = nao // ncell
-    dm_symm = np.zeros((nao,nao), dtype=dm.dtype)
+    dm_symm = np.zeros((nset,nao,nao), dtype=dm.dtype)
         
     for i in range(Ls[0]):
         for j in range(Ls[1]):
             for k in range(Ls[2]):
                 
-                dm_symmized_buf = np.zeros((nao_prim,nao_prim), dtype=dm.dtype)
+                dm_symmized_buf = np.zeros((nset,nao_prim,nao_prim), dtype=dm.dtype)
                 
                 for i_row in range(Ls[0]):
                     for j_row in range(Ls[1]):
@@ -306,7 +312,7 @@ def symmetrize_dm(dm, Ls):
                             k_begin = loc_col * nao_prim
                             k_end   = (loc_col + 1) * nao_prim
                             
-                            dm_symmized_buf += dm[b_begin:b_end, k_begin:k_end]
+                            dm_symmized_buf += dm[:,b_begin:b_end, k_begin:k_end]
         
                 dm_symmized_buf /= ncell
                 
@@ -323,9 +329,12 @@ def symmetrize_dm(dm, Ls):
                             k_begin = loc_col * nao_prim
                             k_end   = (loc_col + 1) * nao_prim
                             
-                            dm_symm[b_begin:b_end, k_begin:k_end] = dm_symmized_buf        
-        
-    return dm_symm        
+                            dm_symm[:,b_begin:b_end, k_begin:k_end] = dm_symmized_buf        
+    
+    if is_single_dm:
+        return dm_symm[0]
+    else:
+        return dm_symm        
 
 def pack_JK(input_mat:np.ndarray, Ls, nao_prim, output=None):
     

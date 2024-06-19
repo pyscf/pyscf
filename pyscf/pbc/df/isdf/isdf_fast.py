@@ -811,7 +811,10 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             
             if kpts is not None:
                 nkpts = kpts.shape[0]
-                if self.kmesh is None:
+                
+                if hasattr(self, "kmesh") and self.kmesh is not None:
+                    pass
+                else:
                     self.kmesh = np.asarray([1,1,1], dtype=np.int32)
                 kmesh = np.asarray(self.kmesh, dtype=np.int32)
                 #print("kmesh = ", kmesh)

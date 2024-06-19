@@ -25,6 +25,7 @@ import pyscf.pbc.gto as pbcgto
 
 def build_supercell(prim_atm, 
                     prim_a, 
+                    spin=0,
                     mesh=None, 
                     Ls = [1,1,1], 
                     basis='gth-dzvp', 
@@ -65,6 +66,7 @@ def build_supercell(prim_atm,
     Cell.use_particle_mesh_ewald = use_particle_mesh_ewald
     Cell.verbose = verbose
     Cell.unit = 'angstorm'
+    Cell.spin = spin
     
     Cell.build(mesh=mesh)
     

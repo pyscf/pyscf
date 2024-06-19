@@ -514,11 +514,17 @@ def _contract_k_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mp
 def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
            kpts_band=None, with_j=True, with_k=True, omega=None, 
            use_mpi = False, **kwargs):
+    
     '''JK for given k-point'''
     
     if len(dm.shape) == 3:
-        assert dm.shape[0] == 1
-        dm = dm[0]
+        assert dm.shape[0] == 1 or dm.shape[0] == 2
+        #dm = dm[0]
+    else:
+        assert dm.ndim == 2
+        dm = dm.reshape(1, dm.shape[0], dm.shape[1])
+        
+    nset = dm.shape[0]
 
     if hasattr(mydf, 'Ls'):
         from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
@@ -538,7 +544,9 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
     else:
         exxdiv = None
 
-    vj = vk = None
+    #vj = vk = None
+    vj = np.zeros_like(dm)
+    vk = np.zeros_like(dm)
 
     if kpts_band is not None and abs(kpt-kpts_band).sum() > 1e-9:
         raise NotImplementedError("ISDF does not support kpts_band != kpt")
@@ -557,18 +565,48 @@ def get_jk_dm(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
 
-    if with_j:
-        if mydf.with_robust_fitting:
-            vj = _contract_j_dm_fast(mydf, dm, mydf.with_robust_fitting, use_mpi)
-        else:
-            vj = _contract_j_dm_wo_robust_fitting(mydf, dm, mydf.with_robust_fitting, use_mpi)   
-    if with_k:
-        if mydf.with_robust_fitting:
-            vk = _contract_k_dm(mydf, dm, mydf.with_robust_fitting, use_mpi)
-        else:
-            vk = _contract_k_dm_wo_robust_fitting(mydf, dm, mydf.with_robust_fitting, use_mpi)
-        if exxdiv == 'ewald':
-            print("WARNING: ISDF does not support ewald")
+    for iset in range(nset):
+
+        if with_j:
+            if mydf.with_robust_fitting:
+                vj[iset] = _contract_j_dm_fast(mydf, dm[iset], mydf.with_robust_fitting, use_mpi)
+            else:
+                vj[iset] = _contract_j_dm_wo_robust_fitting(mydf, dm[iset], mydf.with_robust_fitting, use_mpi)   
+        if with_k:
+            if mydf.with_robust_fitting:
+                vk[iset] = _contract_k_dm(mydf, dm[iset], mydf.with_robust_fitting, use_mpi)
+            else:
+                vk[iset] = _contract_k_dm_wo_robust_fitting(mydf, dm[iset], mydf.with_robust_fitting, use_mpi)
+            if exxdiv == 'ewald':
+                print("WARNING: ISDF does not support ewald")
+
+    ##### the following code is added to deal with _ewald_exxdiv_for_G0 #####
+    
+    from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks, _ewald_exxdiv_for_G0
+    
+    kpts = kpt.reshape(1,3)
+    kpts = np.asarray(kpts)
+    dm_kpts = dm.copy()
+    dm_kpts = lib.asarray(dm_kpts, order='C')
+    dms = _format_dms(dm_kpts, kpts)
+    nset, nkpts, nao = dms.shape[:3]
+    if nset > 2:
+        logger.warn(mydf, 'nset > 2, please confirm what you are doing, for RHF nset == 1, for UHF nset == 2')
+    assert nkpts == 1
+    
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+    nband = len(kpts_band)
+    assert nband == 1
+
+    if is_zero(kpts_band) and is_zero(kpts):
+        vk = vk.reshape(nset,nband,nao,nao)
+    else:
+        raise NotImplementedError("ISDF does not support kpts_band != 0")
+
+    if exxdiv == 'ewald':
+        _ewald_exxdiv_for_G0(mydf.cell, kpts, dms, vk, kpts_band=kpts_band)
+    
+    vk = vk.reshape(nset,nao,nao)
 
     t1 = log.timer('sr jk', *t1)
 
