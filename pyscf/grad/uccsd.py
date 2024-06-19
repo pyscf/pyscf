@@ -485,7 +485,7 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
         return fsave
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
+    return numpy.asarray(a, order='C')
 
 class Gradients(ccsd_grad.Gradients):
     grad_elec = grad_elec

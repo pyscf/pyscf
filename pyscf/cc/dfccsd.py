@@ -191,7 +191,7 @@ def _make_df_eris(cc, mo_coeff=None):
     return eris
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
+    return numpy.asarray(a, order='C')
 
 if __name__ == '__main__':
     from pyscf import gto

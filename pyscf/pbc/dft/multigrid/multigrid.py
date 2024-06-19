@@ -294,8 +294,8 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
                 dm_i = dm_i.real
             has_imag = dm_i.dtype == numpy.complex128
             if has_imag:
-                dmR = numpy.array(dm_i.real, order='C')
-                dmI = numpy.array(dm_i.imag, order='C')
+                dmR = numpy.asarray(dm_i.real, order='C')
+                dmI = numpy.asarray(dm_i.imag, order='C')
             else:
                 # make a copy because the dm may be overwritten in the
                 # NUMINT_rho_drv inplace

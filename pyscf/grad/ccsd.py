@@ -416,7 +416,7 @@ def _load_block_tril(h5dat, row0, row1, nao, out=None):
     return out
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
+    return numpy.asarray(a, order='C')
 
 class Gradients(rhf_grad.GradientsBase):
 
