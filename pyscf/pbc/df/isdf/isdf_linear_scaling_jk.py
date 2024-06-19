@@ -1078,6 +1078,9 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm,
     #     size = comm.Get_size()
     #     raise NotImplementedError("MPI is not supported yet.")
 
+    #print("nao       = ", nao)
+    #print("ngrid_bra = ", ngrid_bra)
+
     if res is None:
         res = np.zeros((ngrid_bra, nao), dtype=np.float64)
     else:
@@ -1102,8 +1105,9 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm,
     ### perform aoR_bra.T * dm
     
     ordered_ao_ind = np.arange(nao)
-    
+    grid_shift = None
     ngrid_loc = 0
+    
     for aoR_holder in bra_aoR_holder:
         
         if aoR_holder is None:
@@ -1112,6 +1116,9 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm,
         ngrid_now = aoR_holder.aoR.shape[1]
         nao_involved = aoR_holder.aoR.shape[0]
         nao_compact  = aoR_holder.nCompact
+        
+        #print("ngrid_now    = ", ngrid_now)
+        #print("nao_involved = ", nao_involved)
         
         ao_begin_indx = 0
         ao_end_indx   = nao_involved
@@ -1139,7 +1146,14 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm,
         ddot_res = np.ndarray((ngrid_now, nao), buffer=ddot_buf)
         lib.ddot(aoR_holder.aoR[ao_begin_indx:ao_end_indx,:].T, dm_packed, c=ddot_res)
         grid_loc_begin = aoR_holder.global_gridID_begin
-        res[grid_loc_begin:grid_loc_begin+ngrid_now, :] = ddot_res
+        #print("grid_loc_begin = ", grid_loc_begin)
+    
+        if grid_shift is None:
+            grid_shift = grid_loc_begin
+        else:
+            assert grid_loc_begin>=grid_shift
+        
+        res[grid_loc_begin-grid_shift:grid_loc_begin-grid_shift+ngrid_now, :] = ddot_res
         
         # ngrid_loc += ngrid_now   
     #assert ngrid_loc == ngrid_bra
@@ -1642,6 +1656,9 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
             naux_tmp += aoRg[atm_id].aoR.shape[1]
             aoRg_holders.append(aoRg[atm_id])
         assert naux_tmp == aux_basis[group_id].shape[0]
+        
+        #print("-----------------------------")
+        #print("naux_tmp = ", naux_tmp)
         
         aux_basis_tmp = aux_basis[group_id]
         
@@ -2555,38 +2572,40 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         use_occ_RI_K = mydf.occ_RI_K
     
     if getattr(dm, '__dict__', None) is not None:
-        # print(dm.__dict__.keys())
         mo_coeff = dm.__dict__['mo_coeff']
         mo_occ   = dm.__dict__['mo_occ']
         if mo_coeff is not None:
             assert mo_occ is not None
-            assert mo_coeff.shape[1] == mo_occ.shape[0]
-            assert mo_coeff.ndim == 2
-            assert mo_occ.ndim == 1
+            if mo_coeff.ndim == 3:
+                assert mo_coeff.shape[2] == mo_occ.shape[1]
+                assert mo_occ.ndim == 2
+            else:
+                assert mo_coeff.shape[1] == mo_occ.shape[0]
+                assert mo_coeff.ndim == 2
+                assert mo_occ.ndim == 1
         if use_occ_RI_K and mo_coeff is None:
-            # use_occ_RI_K = False 
             dm = np.asarray(dm)
             if len(dm.shape) == 3:
                 assert dm.shape[0] == 1
                 dm = dm[0]
             mo_occ, mo_coeff = mydf.diag_dm(dm)
+            dm = dm.reshape(1, dm.shape[0], dm.shape[1])
             dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
-            print("Dm without mo_coeff and mo_occ is provided, but use_occ_RI_K is True, so mo_coeff and mo_occ are generated from dm")
-            print("mo_occ = ", mo_occ[mo_occ>1e-10])
+            #print("Dm without mo_coeff and mo_occ is provided, but use_occ_RI_K is True, so mo_coeff and mo_occ are generated from dm")
+            #print("mo_occ = ", mo_occ[mo_occ>1e-10])
     else:
-        # mo_coeff = None
-        # mo_occ = None
-        # use_occ_RI_K = False
         dm = np.asarray(dm)
         if len(dm.shape) == 3:
+            assert dm.shape[0] <= 2
+            #dm = dm[0]
+        if use_occ_RI_K:
             assert dm.shape[0] == 1
             dm = dm[0]
-        if use_occ_RI_K:
-            # ovlp = mydf.ovlp
             mo_occ, mo_coeff = mydf.diag_dm(dm)
+            dm = dm.reshape(1, dm.shape[0], dm.shape[1])
             dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
-            print("Dm without mo_coeff and mo_occ is provided, but use_occ_RI_K is True, so mo_coeff and mo_occ are generated from dm")
-            print("mo_occ = ", mo_occ[mo_occ>1e-10])
+            #print("Dm without mo_coeff and mo_occ is provided, but use_occ_RI_K is True, so mo_coeff and mo_occ are generated from dm")
+            #print("mo_occ = ", mo_occ[mo_occ>1e-10])
         else:
             mo_occ = None
             mo_coeff = None
@@ -2595,17 +2614,19 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         if mydf.direct == True:
             raise ValueError("ISDF does not support direct=True for occ-RI-K")
     
+    assert dm.ndim == 3
+    
     ############ end deal with occ-RI-K ############
     
-    direct = mydf.direct
+    direct  = mydf.direct
     use_mpi = mydf.use_mpi
     
     if use_mpi and direct == False:
         raise NotImplementedError("ISDF does not support use_mpi and direct=False")
     
     if len(dm.shape) == 3:
-        assert dm.shape[0] == 1
-        dm = dm[0]
+        assert dm.shape[0] <= 2
+        #dm = dm[0]
 
     if hasattr(mydf, 'Ls') and mydf.Ls is not None:
         from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import symmetrize_dm
@@ -2619,6 +2640,8 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
         dm = bcast(dm, root=0)
 
     dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
+
+    nset, nao = dm.shape[:2]
 
     ############ end deal with dm with tags ############
 
@@ -2654,26 +2677,25 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     if use_occ_RI_K:
         vj, vk = get_jk_occRI(mydf, dm, use_mpi, with_j, with_k)
     else:
-        if with_j:
-            from pyscf.pbc.df.isdf.isdf_jk import _contract_j_dm
-            vj = _contract_j_dm_ls(mydf, dm, use_mpi)  
-            # vj = _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi)
-            # vj = _contract_j_dm(mydf, dm, use_mpi)
-            # if rank == 0:
-            # print("In isdf get_jk vj = ", vj[0, :16])
-            # print("In isdf get_jk vj = ", vj[-1, -16:])
-        if with_k:
-            if mydf.direct:
-                vk = _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=use_mpi)
-            else:
-                vk = _contract_k_dm_quadratic(mydf, dm, mydf.with_robust_fitting, use_mpi=use_mpi)
-            # if rank == 0:
-            # print("In isdf get_jk vk = ", vk[0, :16])
-            # print("In isdf get_jk vk = ", vk[-1, -16:])
-            if exxdiv == 'ewald':
-                print("WARNING: ISDF does not support ewald")
+        vj = np.zeros_like(dm)
+        vk = np.zeros_like(dm)
+        for iset in range(nset):
+            if with_j:
+                from pyscf.pbc.df.isdf.isdf_jk import _contract_j_dm
+                vj[iset] = _contract_j_dm_ls(mydf, dm[iset], use_mpi)  
+            if with_k:
+                if mydf.direct:
+                    vk[iset] = _contract_k_dm_quadratic_direct(mydf, dm[iset], use_mpi=use_mpi)
+                    if iset >= 1:
+                        logger.warn(mydf, "Current implementation with nset >= 2 is not efficient.")
+                else:
+                    vk[iset] = _contract_k_dm_quadratic(mydf, dm[iset], mydf.with_robust_fitting, use_mpi=use_mpi)
+                #if exxdiv == 'ewald':
+                #    print("WARNING: ISDF does not support ewald")
 
     if mydf.rsjk is not None:
+        assert dm.shape[0] == 1
+        dm = dm[0]
         vj_sr, vk_sr = mydf.rsjk.get_jk(
             dm, 
             hermi, 
@@ -2683,14 +2705,11 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
             with_k, 
             omega, 
             exxdiv, **kwargs)
-        # print("In isdf get_jk  vj_sr = ", vj_sr[0,:16])
-        # print("In isdf get_jk  vj_sr = ", vj_sr[-1,-16:])
-        # print("In isdf get_jk  vk_sr = ", vk_sr[0,:16])
-        # print("In isdf get_jk  vk_sr = ", vk_sr[-1,-16:])
         if with_j:
             vj += vj_sr
         if with_k:
             vk += vk_sr
+        dm = dm.reshape(1, dm.shape[0], dm.shape[1])
 
     ##### the following code is added to deal with _ewald_exxdiv_for_G0 #####
     
@@ -2700,7 +2719,7 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    assert nset == 1
+    assert nset <= 2
     assert nkpts == 1
     
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
@@ -2715,7 +2734,8 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
     if exxdiv == 'ewald':
         _ewald_exxdiv_for_G0(mydf.cell, kpts, dms, vk, kpts_band=kpts_band)
     
-    vk = vk[0,0]
+    #vk = vk[0,0]
+    vk = vk[:,0,:,:]
 
     ##### end of dealing with _ewald_exxdiv_for_G0 #####
 

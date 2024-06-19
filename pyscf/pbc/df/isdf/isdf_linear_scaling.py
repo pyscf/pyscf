@@ -1706,8 +1706,8 @@ if __name__ == '__main__':
     pseudo = "gth-pade"   
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF, basis=basis, pseudo=pseudo)    
     # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
-    prim_partition = [[0,1,2,3,4,5,6,7]]
-    # prim_partition = [[0,1],[2,3],[4,5],[6,7]]
+    # prim_partition = [[0,1,2,3,4,5,6,7]]
+    prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     # prim_partition = [[0,1,2,3],[4,5,6,7]]
 
 #     prim_a = np.array(

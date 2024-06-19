@@ -56,6 +56,10 @@ def _contract_k_dm_quadratic_subterm(mydf, dm,
         size = comm.Get_size()
         raise NotImplementedError("MPI is not supported yet.")
     
+    if dm.ndim == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
+    
     ####### preprocess ######## 
     
     assert dm_bra_type in ["compact", "diffuse", "all"]
@@ -529,6 +533,10 @@ def _contract_k_dm_quadratic_subterm_CC(
     
     assert mesh_bra is not None
     assert mesh_ket is not None
+    
+    if dm.ndim == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
     
     if np.allclose(mesh_bra, mesh_ket):
         ngrid_bra = np.prod(mesh_bra)
@@ -1133,6 +1141,10 @@ def _contract_k_dm_quadratic_subterm_CCCC(
     mesh: np.ndarray,
     coulG: np.ndarray,
 ):
+    
+    if dm.ndim == 3:
+        assert dm.shape[0] == 1
+        dm = dm[0]
     
     nCompactAO = len(mydf.CompactAOList)
     nao        = mydf.cell.nao
