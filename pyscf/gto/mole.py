@@ -1244,12 +1244,12 @@ def unpack(moldic):
 def dumps(mol):
     '''Serialize Mole object to a JSON formatted str.
     '''
-    exclude_keys = {'output', 'stdout', '_keys',
-                        # Constructing in function loads
-                        'symm_orb', 'irrep_id', 'irrep_name'}
+    exclude_keys = {'output', 'stdout', '_keys', '_ctx_lock',
+                    # Constructing in function loads
+                    'symm_orb', 'irrep_id', 'irrep_name'}
     # FIXME: nparray and kpts for cell objects may need to be excluded
     nparray_keys = {'_atm', '_bas', '_env', '_ecpbas',
-                        '_symm_orig', '_symm_axes'}
+                    '_symm_orig', '_symm_axes'}
 
     moldic = dict(mol.__dict__)
     for k in exclude_keys:

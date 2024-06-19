@@ -96,6 +96,11 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self._last_vs = (0, 0)
         self._qindex = None
 
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('rs_cell', 'cell_d', 'supmol_sr', 'supmol_ft', 'supmol_d',
+                      '_sr_without_dddd', '_last_vs', '_qindex'),
+            reset_state=True)
+
     def has_long_range(self):
         '''Whether to add the long-range part computed with AFT/FFT integrals'''
         return self.omega is None or abs(self.cell.omega) < self.omega
@@ -123,8 +128,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self.supmol_sr = None
         self.supmol_ft = None
         self.supmol_d = None
-        self.exclude_dd_block = True
-        self.approx_vk_lr_missing_mo = False
+        self._sr_without_dddd = None
         self._last_vs = (0, 0)
         self._qindex = None
         return self

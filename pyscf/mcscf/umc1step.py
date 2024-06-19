@@ -27,6 +27,7 @@ from functools import reduce
 import numpy
 import pyscf.gto
 import pyscf.scf
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import ucasci
 from pyscf.mcscf.mc1step import expmat, rotate_orb_cc, max_stepsize_scheduler, as_scanner
@@ -398,6 +399,9 @@ class UCASSCF(ucasci.UCASBase):
         self.mo_coeff = self._scf.mo_coeff
         self.converged = False
         self._max_stepsize = None
+
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('chkfile', 'callback'))
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

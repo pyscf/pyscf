@@ -758,8 +758,6 @@ class CASSCF(casci.CASBase):
     def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None, frozen=None):
         casci.CASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
-
-        self.callback = None
         self.chkfile = self._scf.chkfile
 
         self.fcisolver.max_cycle = getattr(__config__,
@@ -776,6 +774,9 @@ class CASSCF(casci.CASBase):
         self.mo_energy = self._scf.mo_energy
         self.converged = False
         self._max_stepsize = None
+
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('chkfile', 'callback'))
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

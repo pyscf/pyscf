@@ -98,6 +98,10 @@ class DF(lib.StreamObject):
         self._vjopt = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
 
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('_cderi_to_save', '_cderi', '_vjopt', '_rsh_df'),
+            reset_state=True)
+
     @property
     def auxbasis(self):
         return self._auxbasis
