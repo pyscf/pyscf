@@ -364,8 +364,11 @@ def arg_group_grids(mol, coords, box_size=GROUP_BOX_SIZE):
     box_ids[box_ids[:,0] > boxes[0], 0] = boxes[0]
     box_ids[box_ids[:,1] > boxes[1], 1] = boxes[1]
     box_ids[box_ids[:,2] > boxes[2], 2] = boxes[2]
-    rev_idx, counts = numpy.unique(box_ids, axis=0, return_inverse=True,
-                                   return_counts=True)[1:3]
+    # Change in NumPy 2.0.0
+    # https://github.com/numpy/numpy/issues/26738
+    _, rev_idx, counts = numpy.unique(box_ids, axis=0, return_inverse=True,
+                                   return_counts=True)
+    rev_idx = rev_idx.reshape(-1)
     return rev_idx.argsort(kind='stable')
 
 def _load_conf(mod, name, default):
