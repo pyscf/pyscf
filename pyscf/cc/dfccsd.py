@@ -191,7 +191,9 @@ def _make_df_eris(cc, mo_coeff=None):
     return eris
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
+    # NumPy 2.0 changes:
+    # https://numpy.org/doc/stable/release/2.0.0-notes.html#copy-keyword-changes-2-0
+    return numpy.asarray(a, order='C')
 
 if __name__ == '__main__':
     from pyscf import gto
