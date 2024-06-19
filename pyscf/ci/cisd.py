@@ -1141,7 +1141,9 @@ scf.hf.RHF.CISD = lib.class_as_method(RCISD)
 scf.rohf.ROHF.CISD = None
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
+    # NumPy 2.0 changes:
+    # https://numpy.org/doc/stable/release/2.0.0-notes.html#copy-keyword-changes-2-0
+    return numpy.asarray(a, order='C')
 
 
 if __name__ == '__main__':

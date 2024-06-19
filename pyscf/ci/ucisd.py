@@ -976,4 +976,6 @@ from pyscf import scf
 scf.uhf.UHF.CISD = lib.class_as_method(CISD)
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
+    # NumPy 2.0 changes:
+    # https://numpy.org/doc/stable/release/2.0.0-notes.html#copy-keyword-changes-2-0
+    return numpy.asarray(a, order='C')
