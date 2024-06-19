@@ -69,7 +69,7 @@ def make_intermediates(mycc, t1, t2, eris):
     oooo = np.asarray(eris.oooo)
     woooo  = lib.einsum('icjl,kc->ikjl', ovoo, t1)
     woooo += lib.einsum('jcil,kc->iljk', ovoo, t1)
-    woooo += oooo.copy()
+    woooo += oooo
     woooo += lib.einsum('icjd,klcd->ikjl', ovov, tau)
 
     theta = t2*2 - t2.transpose(0,1,3,2)

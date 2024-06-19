@@ -997,8 +997,8 @@ def Wooov(cc, t1, t2, eris, kconserv):
     t1a, t1b = t1
 
     Wooov = eris.ooov - np.asarray(eris.ooov).transpose(2,1,0,5,4,3,6)
-    WooOV = np.asarray(eris.ooOV)
-    WOOov = np.asarray(eris.OOov)
+    WooOV = np.array(eris.ooOV, copy=True)
+    WOOov = np.array(eris.OOov, copy=True)
     WOOOV = eris.OOOV - np.asarray(eris.OOOV).transpose(2,1,0,5,4,3,6)
 
     Wooov += einsum('yif,xyzmfne->xyzmine', t1a, eris.ovov) - einsum('yif, zyxnfme->xyzmine', t1a, eris.ovov)
