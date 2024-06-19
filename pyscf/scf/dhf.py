@@ -624,9 +624,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
-            ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
+            ddm = numpy.array(dm) - numpy.array(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
-            return numpy.array(vhf_last, copy=False) + vj - vk
+            return numpy.array(vhf_last) + vj - vk
         else:
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk

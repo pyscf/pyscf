@@ -195,10 +195,10 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
     if u is None:
         u = get_umat_from_t1(mycc.t1)
 
-    mo_coeff_new = np.array(mycc.mo_coeff, copy=True)
+    mo_coeff_new = np.asarray(mycc.mo_coeff)
 
     if u.ndim == 2:
-        mo_coeff_ref = np.array(mycc.mo_coeff[:, frozen_mask], copy=True)
+        mo_coeff_ref = np.asarray(mycc.mo_coeff[:, frozen_mask])
         u_tot = np.eye(u.shape[-1], dtype=mo_coeff_ref.dtype)
     else:
         mo_coeff_ref = np.array((mycc.mo_coeff[0][:, frozen_mask[0]],

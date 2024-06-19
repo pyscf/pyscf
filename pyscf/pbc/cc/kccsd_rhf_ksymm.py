@@ -326,6 +326,7 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
         get_Wvvvv = lambda ka, kb, kc: _Wvvvv[ka, kb, kc]
 
     kakb, igroup = np.unique(kqrts.kqrts_ibz[:,2:], axis=0, return_inverse=True)
+    igroup = igroup.ravel()
     for i in range(np.amax(igroup) + 1):
         ka, kb = kakb[i]
         idx = np.where(igroup==i)[0]

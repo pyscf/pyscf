@@ -1483,7 +1483,7 @@ def _qr(xs, dot, lindep=1e-14):
 
     nv = 0
     for i in range(nvec):
-        xi = numpy.array(xs[i], copy=True)
+        xi = numpy.asarray(xs[i])
         rmat[:,nv] = 0
         rmat[nv,nv] = 1
         for j in range(nv):

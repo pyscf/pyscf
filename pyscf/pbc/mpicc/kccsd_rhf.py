@@ -3276,4 +3276,4 @@ class _IMDS:
         self.WvvvoR1  = self.fint2['WvvvoR1' ]
 
 def _cp(a):
-    return np.array(a, copy=False, order='C')
+    return np.array(a, order='C')
