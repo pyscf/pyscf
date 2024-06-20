@@ -157,8 +157,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 eri_mo = ao2mo.general(mol, [orbo,mo,mo,mo], compact=False)
                 eri_mo = eri_mo.reshape(nocc,nmo,nmo,nmo)
                 k_fac = alpha - hyb
-                a -= np.einsum('ijba->iajb', eri_mo[:nocc,:nocc,nocc:,nocc:]) * k_fac
-                b -= np.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * k_fac
+                a -= numpy.einsum('ijba->iajb', eri_mo[:nocc,:nocc,nocc:,nocc:]) * k_fac
+                b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * k_fac
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
