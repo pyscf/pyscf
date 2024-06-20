@@ -810,6 +810,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             #### kpts #### 
             
             if kpts is not None:
+                
                 nkpts = kpts.shape[0]
                 
                 if hasattr(self, "kmesh") and self.kmesh is not None:
@@ -823,6 +824,12 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 is_single_kpt = kpts.shape[0] == 1 or kpts.ndim == 1
                 if is_single_kpt:
                     return self.PP
+                
+                #### the following is used to test #### 
+                
+                self.PP = super().get_pp(kpts)
+                return self.PP
+                
                 nao_prim = self.cell.nao_nr() // nkpts 
                 assert self.cell.nao_nr() % nkpts == 0
                 self.PP = self.PP[:nao_prim, :].copy()
