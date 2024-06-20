@@ -93,13 +93,16 @@ def initialize_with_default_plat_name(self):
 bdist_wheel.initialize_options = initialize_with_default_plat_name
 
 # For setuptools>=70
-from setuptools.command.bdist_wheel import bdist_wheel
-initialize_options_2 = bdist_wheel.initialize_options
-def initialize_with_default_plat_name(self):
-    initialize_options_2(self)
-    self.plat_name = get_platform()
-    self.plat_name_supplied = True
-bdist_wheel.initialize_options = initialize_with_default_plat_name
+try:
+    from setuptools.command.bdist_wheel import bdist_wheel
+    initialize_options_2 = bdist_wheel.initialize_options
+    def initialize_with_default_plat_name(self):
+        initialize_options_2(self)
+        self.plat_name = get_platform()
+        self.plat_name_supplied = True
+    bdist_wheel.initialize_options = initialize_with_default_plat_name
+except ImportError:
+    pass
 
 # scipy bugs
 # https://github.com/scipy/scipy/issues/12533
