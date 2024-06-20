@@ -1566,7 +1566,7 @@ def compute_dyson_mo(myadc):
 
     return dyson_mo
 
-def make_rdm1(adc):
+def _make_rdm1_excited(adc):
 
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
@@ -1898,7 +1898,7 @@ class UADCIP(uadc.UADC):
     analyze_eigenvector = analyze_eigenvector
     analyze = analyze
     compute_dyson_mo = compute_dyson_mo
-    make_rdm1 = make_rdm1
+    _make_rdm1_excited = _make_rdm1_excited
 
     def get_init_guess(self, nroots=1, diag=None, ascending=True):
         if diag is None :

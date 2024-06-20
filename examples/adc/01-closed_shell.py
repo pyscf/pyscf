@@ -24,6 +24,9 @@ myadc = adc.ADC(mf)
 myadc.verbose = 6
 eip,vip,pip,xip = myadc.kernel()
 
+#IP-RADC excited states 1-RDMs. radc_rdm1 shape is nroots x num_MOs x num_MOs
+radc_rdm1 = myadc.make_rdm1_excited()
+
 #EA-RADC(2)-x for 1 root
 myadc.method = "adc(2)-x"
 myadc.method_type = "ea"

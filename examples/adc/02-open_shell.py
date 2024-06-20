@@ -28,6 +28,10 @@ myadc = adc.ADC(mf)
 myadc.verbose = 4
 eip,vip,pip,xip = myadc.kernel(nroots=4)
 
+#IP-RADC excited states 1-RDMs. Returns a tuple (1-RDM_alpha, 1-RDM_beta)
+#1-RDMs shape is nroots x num_MOs x num_MOs
+uadc_rdm1 = myadc.make_rdm1_excited()
+
 #IP-UADC(2)-x for 4 roots
 myadc.method = "adc(2)-x"
 myadc.method_type = "ip"
@@ -40,3 +44,4 @@ eea,vea,pea,xea = myadc.kernel(nroots=4)
 
 #Compute EA-UADC(3) properties
 myadc.analyze()
+
