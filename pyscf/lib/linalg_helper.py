@@ -33,13 +33,8 @@ from pyscf import __config__
 
 SAFE_EIGH_LINDEP = getattr(__config__, 'lib_linalg_helper_safe_eigh_lindep', 1e-15)
 DAVIDSON_LINDEP = getattr(__config__, 'lib_linalg_helper_davidson_lindep', 1e-14)
-<<<<<<< HEAD
 DSOLVE_LINDEP = getattr(__config__, 'lib_linalg_helper_dsolve_lindep', 1e-13)
-MAX_MEMORY = getattr(__config__, 'lib_linalg_helper_davidson_max_memory', 2000)  # 2GB
-=======
-DSOLVE_LINDEP = getattr(__config__, 'lib_linalg_helper_dsolve_lindep', 1e-15)
 MAX_MEMORY = getattr(__config__, 'lib_linalg_helper_davidson_max_memory', 4000)  # 4GB
->>>>>>> Update krylov solver
 
 # sort by similarity has problem which flips the ordering of eigenvalues when
 # the initial guess is closed to excited state.  In this situation, function
