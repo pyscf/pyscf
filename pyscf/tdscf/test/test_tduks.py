@@ -479,6 +479,4 @@ class KnownValues(unittest.TestCase):
 
 if __name__ == "__main__":
     print("Full Tests for TD-UKS")
-    #unittest.main()
-
-    if 1:
+    unittest.main()
