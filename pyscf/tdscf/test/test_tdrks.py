@@ -107,6 +107,15 @@ class KnownValues(unittest.TestCase):
         ref = diagonalize(a, b, nroots=5) * 27.2114
         self.assertAlmostEqual(abs(es - ref).max(), 0, 7)
 
+    def test_tddft_camb3lyp(self):
+        mf = mol.RKS(xc='camb3lyp').run()
+        td = mf.TDDFT()
+        es = td.kernel(nstates=4)[0]
+        a,b = td.get_ab()
+        e_ref = diagonalize(a, b, 5)
+        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
+        self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 9.0054057603534, 4)
+
     def test_tda_b3lypg(self):
         mf = dft.RKS(mol)
         mf.xc = 'b3lypg'
