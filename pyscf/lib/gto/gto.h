@@ -14,5 +14,5 @@
  */
 
 int GTOmax_shell_dim(const int *ao_loc, const int *shls, int ncenter);
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
+size_t GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
+                         int *atm, int natm, int *bas, int nbas, double *env);
