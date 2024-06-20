@@ -162,6 +162,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             raise NotImplementedError
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
+        assert omega == 0.
 
         a, b = add_hf_(a, b, hyb)
 
