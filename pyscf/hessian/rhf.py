@@ -450,7 +450,7 @@ class HessianBase(lib.StreamObject):
     level_shift = 0
 
     _keys = {
-        'mol', 'base', 'chkfile', 'atmlst', 'de', 'max_cycle', 'level_shift'
+        'mol', 'base', 'atmlst', 'de', 'max_cycle', 'level_shift'
     }
 
     def __init__(self, scf_method):
@@ -459,7 +459,6 @@ class HessianBase(lib.StreamObject):
         self.mol = scf_method.mol
         self.base = scf_method
         self.max_memory = self.mol.max_memory
-        self.base = scf_method
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)
 
