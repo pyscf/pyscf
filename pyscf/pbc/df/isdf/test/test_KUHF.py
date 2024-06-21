@@ -35,17 +35,22 @@ prim_mesh = prim_cell.mesh
 KE_CUTOFF = 70
 prim_partition = [[0, 1, 2, 3]]
 
-nk = [1, 1, 3]  # 4 k-points for each axis, 4^3=64 kpts in total
+nk = [1, 1, 4]  # 4 k-points for each axis, 4^3=64 kpts in total
 kpts = prim_cell.make_kpts(nk)
 
 mf = scf.KUHF(prim_cell, kpts)
 mf.max_cycle = 4
-mf.kernel()
-print(mf.mo_occ)
-exit(1)
+#mf.kernel()
+#print(mf.mo_occ)
+
+
+print(mf.istype("UHF"))   ## FALSE
+print(mf.istype("KUHF"))  ## TRUE
+#exit(1)
 
 ###### test isdf ######
 
+from pyscf.pbc.scf.addons import pbc_frac_occ
 
 ###### test isdf ######
 
@@ -61,18 +66,20 @@ pbc_isdf_info = isdf_linear_scaling_k.PBC_ISDF_Info_Quad_K(
                                                     #use_occ_RI_K=False,
                                                     kmesh=nk,
                                                     rela_cutoff_QRCP=2e-4)
-C=15
+C=25
 pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
 pbc_isdf_info.build_auxiliary_Coulomb(debug=True) 
 
 #mf = scf.UHF(prim_cell)
 prim_cell.spin = 0
 mf = scf.KUHF(prim_cell, kpts)
+#mf = pbc_frac_occ(mf,tol=2e-4)
+mf = scf.addons.smearing_(mf, 0.01)
 pbc_isdf_info.direct_scf = mf.direct_scf
 mf.with_df = pbc_isdf_info
 mf.max_cycle = 100
 mf.conv_tol = 1e-7
-mf.max_cycle = 6
+mf.max_cycle = 32
 mf.kernel()
 
 print(mf.mo_occ)

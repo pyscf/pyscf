@@ -538,3 +538,330 @@ def mo_energy_with_exxdiv_none(mf, mo_coeff=None):
     else:
         log.error(f'Unknown SCF type {mf.__class__.__name__}')
         raise NotImplementedError
+
+######## ADDED by Ning to deal with occupation number in KUHF ########
+
+def _time_reversal_pairs(cell, kpts:numpy.ndarray):
+    
+    assert kpts.ndim <= 2 
+    
+    kpts = kpts.reshape(-1, 3)  
+    kmesh = k2gamma.kpts_to_kmesh(cell, kpts) 
+    
+    assert numpy.prod(kmesh) == kpts.shape[0]
+    
+    nkpts = kpts.shape[0]
+    
+    time_reversal_pairs = [None] * nkpts
+    
+    for ix in range(kmesh[0]):
+        for iy in range(kmesh[1]):
+            for iz in range(kmesh[2]):
+                loc1 = ix * kmesh[1] * kmesh[2] + iy * kmesh[2] + iz
+                loc2 = ((kmesh[0]-ix) % kmesh[0]) * kmesh[1] * kmesh[2] + ((kmesh[1]-iy) % kmesh[1]) * kmesh[2] + ((kmesh[2]-iz) % kmesh[2])
+                if time_reversal_pairs[loc1] is not None:
+                    assert time_reversal_pairs[loc1] == loc2
+                else:
+                    time_reversal_pairs[loc1] = loc2
+                if time_reversal_pairs[loc2] is not None:
+                    assert time_reversal_pairs[loc2] == loc1
+                else:
+                    time_reversal_pairs[loc2] = loc1
+    
+    return numpy.array(time_reversal_pairs, dtype=numpy.int32).reshape(nkpts)
+
+def _get_k_occ(mo_energy_kpts:numpy.ndarray, fermi:float):
+    '''
+    given fermi energy, get the number of occupied orbitals within each k-point sector
+    '''
+    
+    nkpts = len(mo_energy_kpts)
+    res = numpy.zeros(nkpts, dtype=numpy.int32)
+
+    for k in range(nkpts):
+        res[k] = numpy.sum(mo_energy_kpts[k] <= fermi)
+
+    return res
+
+def _get_k_occ_preserve_time_reversal_symmetry(mo_energy_kpts, nocc, time_reversal_pairing, tol=1e-4):
+
+    
+    mo_energy = numpy.sort(numpy.hstack(mo_energy_kpts))
+    fermi     = mo_energy[nocc-1]
+    print("Fermi energy = ", fermi)
+    print("nocc         = ", nocc)
+    nkpts     = len(mo_energy_kpts)
+    k_mo_occ  = _get_k_occ(mo_energy_kpts, fermi)
+    print("k_mo_occ = ", k_mo_occ)
+    
+    ##### check whether the current
+    
+    tr_preserved = True
+    
+    for k, k_occ in enumerate(k_mo_occ):
+        k2 = time_reversal_pairing[k]
+        if k_occ != k_mo_occ[k2]:
+            tr_preserved = False
+            break
+    
+    if tr_preserved:  ### nothing to be done 
+        
+        #mo_occ_kpts = numpy.zeros_like(mo_energy_kpts, dtype=numpy.float64)
+        mo_occ_kpts = []
+        for ikpt in range(nkpts):
+            mo_occ_kpts.append(numpy.zeros_like(mo_energy_kpts[ikpt], dtype=numpy.float64))
+            mo_occ_kpts[ikpt][:k_mo_occ[ikpt]] = 1.0
+        return mo_occ_kpts
+
+    print("Time reversal symmetry is not preserved, trying to fix it ...")
+
+    ###### find the fermi energy/nocc that preserves time reversal symmetry ######
+    
+    nocc_tr_preserved = None
+    kocc_tr_preserved = None
+    
+    for nocc_now in range(nocc - 1, -1, -1):
+        fermi = mo_energy[nocc_now-1]
+        k_occ_tmp = _get_k_occ(mo_energy_kpts, fermi)
+        if numpy.sum(k_occ_tmp) != nocc_now:
+            continue
+        
+        tr_preserved = True
+        
+        for k, k_occ in enumerate(k_occ_tmp):
+            k2 = time_reversal_pairing[k]
+            if k_occ != k_occ_tmp[k2]:
+                tr_preserved = False
+                break
+        
+        if tr_preserved:
+            nocc_tr_preserved = nocc_now
+            kocc_tr_preserved = k_occ_tmp
+            break
+    
+    assert nocc_tr_preserved is not None
+    
+    print("Time reversal symmetry is preserved at nocc = ", nocc_tr_preserved)
+    
+    k_mo_occ = kocc_tr_preserved
+    print("kocc_tr_preserved = ", kocc_tr_preserved)
+    
+    #mo_occ_kpts = numpy.zeros_like(mo_energy_kpts, dtype=numpy.float64)
+    mo_occ_kpts = []
+    for ikpt in range(nkpts):
+        mo_occ_kpts.append(numpy.zeros_like(mo_energy_kpts[ikpt], dtype=numpy.float64))
+        mo_occ_kpts[ikpt][:k_mo_occ[ikpt]] = 1.0
+        #mo_occ_kpts[:k_mo_occ[ikpt]] = 1.0
+        
+    k_mo_occ = numpy.asarray(kocc_tr_preserved, dtype=numpy.int32)
+
+    #print("mo_occ_kpts = ", mo_occ_kpts)
+
+    nocc_left = nocc - nocc_tr_preserved
+    nocc_now  = nocc_tr_preserved
+
+    while True:
+        
+        ##### find the set of degenerated orbitals #####
+        
+        ndegenerate = 1
+        
+        for i in range(nocc_now+1, len(mo_energy)):
+            if abs(mo_energy[i] - mo_energy[nocc_now]) < tol:
+                ndegenerate += 1
+            else:
+                break
+        
+        ##### assign fractional occupation to the degenerated orbitals #####
+        
+        if ndegenerate == 1:
+            kpt_id = None
+            for ikpt in range(nkpts):
+                if abs(mo_energy_kpts[ikpt][k_mo_occ[ikpt]] - mo_energy[nocc_now]) < 1e-8:
+                    kpt_id = ikpt
+                    break
+            assert kpt_id is not None
+            if time_reversal_pairing[kpt_id] != kpt_id:
+                print("kpt_id = ", kpt_id, " time_reversal_pairing = ", time_reversal_pairing[kpt_id])
+                print("force TR symmetry by setting ndegenerate = 2")
+                ndegenerate = 2
+
+        occ_assigned = min(nocc_left, ndegenerate) / ndegenerate
+        print("Assigning ", occ_assigned, " to ", ndegenerate, " degenerated orbitals")
+        print("nocc_left = ", nocc_left, " nocc_now = ", nocc_now, " ndegenerate = ", ndegenerate)
+        print("mo_energy = ", mo_energy[nocc_now:nocc_now+ndegenerate])
+        
+        # find the k-point to assgin via loop over all k-points
+        
+        k_added = numpy.zeros(nkpts, dtype=numpy.int32)
+        
+        for _id_ in range(ndegenerate):
+            for ikpt in range(nkpts):
+                if abs(mo_energy_kpts[ikpt][k_mo_occ[ikpt]] - mo_energy[nocc_now+_id_]) < 1e-8:
+                    mo_occ_kpts[ikpt][k_mo_occ[ikpt]] = occ_assigned
+                    k_mo_occ[ikpt] += 1
+                    k_added[ikpt]  += 1
+                    break
+        
+        for ikpt in range(nkpts):
+            assert k_added[ikpt] == k_added[time_reversal_pairing[ikpt]]
+        
+        print("k_added = ", k_added)
+        
+        # update info #
+         
+        nocc_left -= min(nocc_left, ndegenerate)
+        nocc_now  += ndegenerate
+        
+        if nocc_left == 0:
+            break    
+
+    return mo_occ_kpts
+
+######## forcing time reversal symmetries ########
+
+def pbc_frac_occ_(mf, tol=1e-3):
+    '''
+    Addons for SCF methods to assign fractional occupancy for degenerated
+    occupied HOMOs.
+
+    Examples::
+
+        >>> mf = gto.M(atom='O 0 0 0; O 0 0 1', verbose=4).RHF()
+        >>> mf = scf.addons.frac_occ(mf)
+        >>> mf.run()
+    '''
+
+    #### if not SCF with k-point, then call the original one ####
+
+    from pyscf.scf.addons import frac_occ_
+
+    if mf.istype("UHF"):
+        return frac_occ_(mf, tol)
+    elif mf.istype("ROHF"):
+        return frac_occ_(mf, tol)
+    elif mf.istype("RHF"):
+        return frac_occ_(mf, tol)
+    
+    ########### deal with k-point symmetry case ###########
+    
+    time_reversal_pairing = _time_reversal_pairs(mf.cell, mf.kpts)
+    
+    old_get_occ = mf.get_occ
+    cell        = mf.cell
+    
+    if mf.istype("KUHF"):
+        
+        print("fix occ problem")
+        
+        def get_occ(mo_energy_kpts=None, mo_coeff_kpts=None):
+            '''Label the occupancies for each orbital for sampled k-points.
+
+            This is a k-point version of scf.hf.SCF.get_occ
+            '''
+
+            if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
+
+            nocc_a, nocc_b = mf.nelec
+            print("nocc_a = ", nocc_a, " nocc_b = ", nocc_b)
+            mo_energy = numpy.sort(numpy.hstack(mo_energy_kpts[0]))
+            fermi_a = mo_energy[nocc_a-1]
+            mo_occ_kpts = [[], []]
+            
+            # for mo_e in mo_energy_kpts[0]:
+            #     mo_occ_kpts[0].append((mo_e <= fermi_a).astype(numpy.double))
+            # if nocc_a < len(mo_energy):
+            #     logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])
+            # else:
+            #     logger.info(mf, 'alpha HOMO = %.12g  (no LUMO because of small basis) ', fermi_a) 
+            
+            mo_occ_kpts[0] = _get_k_occ_preserve_time_reversal_symmetry(mo_energy_kpts[0], nocc_a, time_reversal_pairing, tol=tol)
+
+            if nocc_b > 0:
+                #mo_energy = numpy.sort(numpy.hstack(mo_energy_kpts[1]))
+                #fermi_b = mo_energy[nocc_b-1]
+                #for mo_e in mo_energy_kpts[1]:
+                #    mo_occ_kpts[1].append((mo_e <= fermi_b).astype(numpy.double))
+                #if nocc_b < len(mo_energy):
+                #    logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])
+                #else:
+                #    logger.info(mf, 'beta HOMO = %.12g  (no LUMO because of small basis) ', fermi_b)
+                mo_occ_kpts[1] = _get_k_occ_preserve_time_reversal_symmetry(mo_energy_kpts[1], nocc_b, time_reversal_pairing, tol=tol)
+            else:
+                for mo_e in mo_energy_kpts[1]:
+                    mo_occ_kpts[1].append(numpy.zeros_like(mo_e))
+
+            if mf.verbose >= logger.DEBUG:
+                numpy.set_printoptions(threshold=len(mo_energy))
+                logger.debug(mf, '     k-point                  alpha mo_energy')
+                for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
+                    if (numpy.count_nonzero(mo_occ_kpts[0][k]) > 0 and
+                        numpy.count_nonzero(mo_occ_kpts[0][k] == 0) > 0):
+                        logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
+                                     k, kpt[0], kpt[1], kpt[2],
+                                     mo_energy_kpts[0][k][mo_occ_kpts[0][k]> 0],
+                                     mo_energy_kpts[0][k][mo_occ_kpts[0][k]==0])
+                    else:
+                        logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
+                                     k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[0][k])
+                logger.debug(mf, '     k-point                  beta  mo_energy')
+                for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
+                    if (numpy.count_nonzero(mo_occ_kpts[1][k]) > 0 and
+                        numpy.count_nonzero(mo_occ_kpts[1][k] == 0) > 0):
+                        logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
+                                     k, kpt[0], kpt[1], kpt[2],
+                                     mo_energy_kpts[1][k][mo_occ_kpts[1][k]> 0],
+                                     mo_energy_kpts[1][k][mo_occ_kpts[1][k]==0])
+                    else:
+                        logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
+                                     k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[1][k])
+                numpy.set_printoptions(threshold=1000)
+
+            print("mo_occ_kpts = ", mo_occ_kpts)
+            #print("mo_occ_kpts.shape = ", mo_occ_kpts[0].shape, mo_occ_kpts[1].shape)
+            
+            return mo_occ_kpts
+        
+    elif mf.istype("KRHF"):
+        
+        def get_occ(mo_energy_kpts=None, mo_coeff_kpts=None):
+            '''Label the occupancies for each orbital for sampled k-points.
+            This is a k-point version of scf.hf.SCF.get_occ
+            '''
+            if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
+
+            nkpts = len(mo_energy_kpts)
+            nocc = cell.tot_electrons(nkpts) // 2
+
+            mo_occ_kpts = _get_k_occ_preserve_time_reversal_symmetry(mo_energy_kpts, nocc, time_reversal_pairing, tol)
+            mo_occ_kpts*= 2.0
+
+            if nocc < mo_energy.size:
+                logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
+                            mo_energy[nocc-1], mo_energy[nocc])
+                if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
+                    logger.warn(mf, 'HOMO %.12g == LUMO %.12g',
+                                mo_energy[nocc-1], mo_energy[nocc])
+            else:
+                logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+
+            if mf.verbose >= logger.DEBUG:
+                numpy.set_printoptions(threshold=len(mo_energy))
+                logger.debug(mf, '     k-point                  mo_energy')
+                for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
+                    logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
+                                 k, kpt[0], kpt[1], kpt[2],
+                                 numpy.sort(mo_energy_kpts[k][mo_occ_kpts[k]> 0]),
+                                 numpy.sort(mo_energy_kpts[k][mo_occ_kpts[k]==0]))
+                numpy.set_printoptions(threshold=1000)
+
+            return mo_occ_kpts
+
+    else:
+        raise NotImplementedError("pbc_frac_occ for %s is not implemented"%(mf.__class__))
+    
+    mf.get_occ = get_occ
+
+    return mf
+
+pbc_frac_occ = pbc_frac_occ_
