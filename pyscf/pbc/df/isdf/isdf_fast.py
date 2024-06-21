@@ -822,13 +822,37 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 #print("kpts.shape = ", kpts.shape)
                 assert kpts.shape[0] == np.prod(self.kmesh, dtype=np.int32) or kpts.shape[0] == 1 or kpts.ndim == 1
                 is_single_kpt = kpts.shape[0] == 1 or kpts.ndim == 1
+                
                 if is_single_kpt:
+                    #### use the original version, Xing's code is not the same as FFTDF's result ####
+                    self.PP = super().get_pp(kpts=np.zeros(3))
                     return self.PP
                 
-                #### the following is used to test #### 
+                #### the following is used to test KRHF #### 
                 
-                self.PP = super().get_pp(kpts)
+                ### info used in super().get_pp() ###
+                
+                assert hasattr(self, "prim_cell")
+                
+                super_cell = self.cell
+                super_mesh = self.cell.mesh
+                
+                self.cell = self.prim_cell
+                self.mesh = self.cell.mesh
+                from pyscf.pbc.dft import gen_grid
+                self.grids = gen_grid.UniformGrids(self.cell)
+                
+                self.PP = super().get_pp(kpts=kpts)
+                
+                self.cell = super_cell
+                self.mesh = super_mesh
+                
                 return self.PP
+                
+                # self.PP = super().get_pp(kpts=np.zeros((3)))
+                # self.PP
+                
+                
                 
                 nao_prim = self.cell.nao_nr() // nkpts 
                 assert self.cell.nao_nr() % nkpts == 0
