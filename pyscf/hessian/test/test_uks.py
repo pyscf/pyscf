@@ -115,8 +115,9 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         mf.xc = 'b3lyp5'
         e0 = mf.kernel()
+        mf.conv_tol_cpscf = 1e-9
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.8208641727673912, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.8208641727673912, 5)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()

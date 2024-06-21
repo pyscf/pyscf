@@ -135,7 +135,7 @@ class KnownValues(unittest.TestCase):
         ref = numpy.linalg.solve(numpy.eye(n) + a, b.T).T
 
         aop = lambda x: x.dot(a.T)
-        c = linalg_helper.krylov(aop, b)
+        c = linalg_helper.krylov(aop, b, lindep=1e-14)
         self.assertAlmostEqual(abs(ref - c).max(), 0, 7)
 
         a = numpy.random.rand(n,n) * .1 + numpy.random.rand(n,n) * .1j
@@ -143,7 +143,7 @@ class KnownValues(unittest.TestCase):
         ref = numpy.linalg.solve(numpy.eye(n) + a, b.T).T
 
         aop = lambda x: x.dot(a.T)
-        c = linalg_helper.krylov(aop, b)
+        c = linalg_helper.krylov(aop, b, lindep=1e-14)
         self.assertAlmostEqual(abs(ref - c).max(), 0, 7)
 
     def test_dgeev(self):
