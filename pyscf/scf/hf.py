@@ -1096,7 +1096,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
-            **kwargs):
+            origin=None, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Diople moment.
     '''
@@ -1128,10 +1128,10 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
         return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
-                mf.dip_moment(mf.mol, dm, verbose=log))
+                mf.dip_moment(mf.mol, dm, origin=origin, verbose=log))
     else:
         return (mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log),
-                mf.dip_moment(mf.mol, dm, verbose=log))
+                mf.dip_moment(mf.mol, dm, origin=origin, verbose=log))
 
 def dump_scf_summary(mf, verbose=logger.DEBUG):
     if not mf.scf_summary:
@@ -1276,7 +1276,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             mo_e[idx] = e
     return mo_e, mo
 
-def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
+def dip_moment(mol, dm, unit='Debye', origin=None, verbose=logger.NOTE, **kwargs):
     r''' Dipole moment calculation
 
     .. math::
@@ -1291,6 +1291,8 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     Args:
          mol: an instance of :class:`Mole`
          dm : a 2D ndarrays density matrices
+         origin : optional; length 3 list, tuple, or 1D array
+            Location of the origin. By default, the point (0, 0, 0) is used.
 
     Return:
         A list: the dipole moment on x, y and z component
@@ -1307,13 +1309,23 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
         # UHF density matrices
         dm = dm[0] + dm[1]
 
-    with mol.with_common_orig((0,0,0)):
-        ao_dip = mol.intor_symmetric('int1e_r', comp=3)
-    el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
-
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
-    nucl_dip = numpy.einsum('i,ix->x', charges, coords)
+
+    if origin is None:
+        origin = numpy.zeros(3)
+    else:
+        origin = numpy.asarray(origin, dtype=numpy.float64)
+    assert origin.shape == (3,)
+
+    if mol.charge != 0:
+        log.warn(f"System has nonzero charge {mol.charge}; the dipole moment is origin-dependent.\n"
+                 f"Location of origin: {origin}")
+
+    with mol.with_common_orig(origin):
+        ao_dip = mol.intor_symmetric('int1e_r', comp=3)
+    el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
+    nucl_dip = numpy.einsum('i,ix->x', charges, coords - origin[None, :])
     mol_dip = nucl_dip - el_dip
 
     if unit.upper() == 'DEBYE':
@@ -1323,6 +1335,71 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
         log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
     return mol_dip
 
+def quad_moment(mol, dm, unit='DebyeAngstrom', origin=None,
+                verbose=logger.NOTE, **kwargs):
+    r''' Calculates traceless quadrupole moment tensor.
+
+    The traceless quadrupole tensor is given by
+
+    .. math::
+
+        Q_{ij} &= - \frac{1}{2} \sum_{\mu \nu} P_{\mu \nu}
+                \left[ 3 (\nu | r_i r_j | \mu) - \delta_{ij} (\nu | r^2 | \mu) \right] \\
+               &+ \frac{1}{2} \sum_A Q_A
+               \left( R_{iA} R_{jA} - \delta_{ij} \|\mathbf{R}_A\|^2  \right).
+
+    If the molecule has a dipole, the quadrupole moment depends on the location
+    of the origin. By default, the origin is taken to be (0, 0, 0), but it can
+    be set manually via the keyword argument `origin`.
+
+    Args:
+         mol: an instance of :class:`Mole`
+         dm : a 2D ndarrays density matrices
+         origin : optional; length 3 list, tuple, or 1D array
+            Location of the origin. By default, it is (0, 0, 0).
+
+    Return:
+        Traceless quadrupole tensor, 2D ndarray.
+    '''
+
+    log = logger.new_logger(mol, verbose)
+
+    if 'unit_symbol' in kwargs:  # pragma: no cover
+        log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
+                 'unit since PySCF-1.5.')
+        unit = kwargs['unit_symbol']
+
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        # UHF density matrices
+        dm = dm[0] + dm[1]
+
+    charges = mol.atom_charges()
+    coords  = mol.atom_coords()
+
+    if origin is None:
+        origin = numpy.zeros(3)
+    else:
+        origin = numpy.asarray(origin, dtype=numpy.float64)
+    assert origin.shape == (3,)
+
+    with mol.with_common_orig(origin):
+        quad_ints = mol.intor_symmetric("int1e_rr", comp=9).reshape((3, 3, -1))
+    r_nuc = coords - origin[None, :]
+    elec_q = (quad_ints @ dm.ravel()).real
+    nuc_q = numpy.einsum("g,gx,gy->xy", charges, r_nuc, r_nuc)
+    tot_q = (nuc_q - elec_q) / 2
+    tot_q_traceless = 3 * tot_q - numpy.eye(3) * numpy.trace(tot_q)
+
+    if unit.upper() in ('DEBYEANGSTROM', 'DEBYEANG', 'DEBYEA'):
+        tot_q_traceless *= nist.AU2DEBYE * nist.BOHR
+        log.note('Traceless quadrupole moment (Debye*A):')
+    else:
+        log.note('Traceless quadrupole moment (AU):')
+
+    with numpy.printoptions(precision=5, floatmode='fixed'):
+        log.note(str())
+
+    return tot_q_traceless
 
 def uniq_var_indices(mo_occ):
     '''
@@ -1906,11 +1983,19 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     canonicalize = canonicalize
 
     @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    def dip_moment(self, mol=None, dm=None, unit='Debye', origin=None, verbose=logger.NOTE,
                    **kwargs):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()
-        return dip_moment(mol, dm, unit, verbose=verbose, **kwargs)
+        return dip_moment(mol, dm, unit, origin=origin, verbose=verbose, **kwargs)
+
+    @lib.with_doc(quad_moment.__doc__)
+    def quad_moment(self, mol=None, dm=None, unit='DebyeAngstrom', origin=None,
+                verbose=logger.NOTE, **kwargs):
+        if mol is None: mol = self.mol
+        if dm is None: dm =self.make_rdm1()
+        return quad_moment(mol, dm, unit=unit, origin=origin,
+                verbose=verbose, **kwargs)
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
