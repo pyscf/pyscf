@@ -114,6 +114,20 @@ class KnownValues(unittest.TestCase):
         #rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
         #self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1499, 3))
 
+    def test_fractional_coordinates(self):
+        cell = pgto.M(atom = '''
+        C 0 0 0
+        C .25 .25 .25''',
+        unit='B', basis = 'gth-dzvp', pseudo = 'gth-pade',
+        fractional=True,
+        a = '''
+        0.000000000  3.370137329  3.370137329
+        3.370137329  0.000000000  3.370137329
+        3.370137329  3.370137329  0.000000000''')
+        #[[0.         0.         0.        ]
+        #  [1.68506866 1.68506866 1.68506866]]
+        self.assertAlmostEqual(lib.fp(cell.atom_coords()), -2.2916494573514545, 14)
+
     def test_ewald(self):
         cell = pgto.Cell()
         cell.unit = 'B'
