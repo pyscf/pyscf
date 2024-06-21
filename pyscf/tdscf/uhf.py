@@ -188,6 +188,19 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         add_hf_(a, b, hyb)
+        if omega != 0:  # For RSH
+            with mol.with_range_coulomb(omega):
+                eri_aa = ao2mo.general(mol, [orbo_a,mo_a,mo_a,mo_a], compact=False)
+                eri_bb = ao2mo.general(mol, [orbo_b,mo_b,mo_b,mo_b], compact=False)
+                eri_aa = eri_aa.reshape(nocc_a,nmo_a,nmo_a,nmo_a)
+                eri_bb = eri_bb.reshape(nocc_b,nmo_b,nmo_b,nmo_b)
+                a_aa, a_ab, a_bb = a
+                b_aa, b_ab, b_bb = b
+                k_fac = alpha - hyb
+                a_aa -= numpy.einsum('ijba->iajb', eri_aa[:nocc_a,:nocc_a,nocc_a:,nocc_a:]) * k_fac
+                b_aa -= numpy.einsum('jaib->iajb', eri_aa[:nocc_a,nocc_a:,:nocc_a,nocc_a:]) * k_fac
+                a_bb -= numpy.einsum('ijba->iajb', eri_bb[:nocc_b,:nocc_b,nocc_b:,nocc_b:]) * k_fac
+                b_bb -= numpy.einsum('jaib->iajb', eri_bb[:nocc_b,nocc_b:,:nocc_b,nocc_b:]) * k_fac
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
