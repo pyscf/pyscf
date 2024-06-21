@@ -278,31 +278,35 @@ def analyze(mf, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
         #return mf.mulliken_pop(mf.cell, dm, s=ovlp_ao, verbose=verbose)
 
 
-def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
+def _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s):
+    from pyscf.lo import orth
+    from pyscf.pbc.tools import k2gamma
+
+    kmesh = k2gamma.kpts_to_kmesh(cell, kpts-kpts[0])
+    nkpts, nao = dm_ao_kpts.shape[:2]
+    scell, phase = k2gamma.get_phase(cell, kpts, kmesh)
+    s_sc = k2gamma.to_supercell_ao_integrals(cell, kpts, s, kmesh=kmesh, force_real=False)
+    orth_coeff = orth.orth_ao(scell, 'meta_lowdin', pre_orth_method, s=s_sc)[:,:nao] # cell 0 only
+    c_inv = np.dot(orth_coeff.T.conj(), s_sc)
+    c_inv = lib.einsum('aRp,Rk->kap', c_inv.reshape(nao,nkpts,nao), phase)
+    dm = lib.einsum('kap,kpq,kbq->ab', c_inv, dm_ao_kpts, c_inv.conj())
+
+    return dm
+
+
+def mulliken_meta(cell, dm_ao_kpts, kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
-
-    Note this function only computes the Mulliken population for the gamma
-    point density matrix.
     '''
-    from pyscf.lo import orth
-    if s is None:
-        s = get_ovlp(cell)
     log = logger.new_logger(cell, verbose)
-    log.note('Analyze output for *gamma point*')
-    log.info('    To include the contributions from k-points, transform to a '
-             'supercell then run the population analysis on the supercell\n'
-             '        from pyscf.pbc.tools import k2gamma\n'
-             '        k2gamma.k2gamma(mf).mulliken_meta()')
-    log.note("KRHF mulliken_meta")
-    dm_ao_gamma = dm_ao_kpts[0,:,:].real
-    s_gamma = s[0,:,:].real
-    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_method, s=s_gamma)
-    c_inv = np.dot(orth_coeff.T, s_gamma)
-    dm = reduce(np.dot, (c_inv, dm_ao_gamma, c_inv.T.conj()))
+
+    if s is None:
+        s = get_ovlp(None, cell=cell, kpts=kpts)
+
+    dm = _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s)
 
     log.note(' ** Mulliken pop on meta-lowdin orthogonal AOs **')
-    return mol_hf.mulliken_pop(cell, dm, np.eye(orth_coeff.shape[0]), log)
+    return mol_hf.mulliken_pop(cell, dm, np.eye(dm.shape[0]), log)
 
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -621,7 +625,7 @@ class KSCF(pbchf.SCF):
     def analyze(mf, verbose=None, with_meta_lowdin=WITH_META_LOWDIN, **kwargs):
         raise NotImplementedError
 
-    def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
+    def mulliken_meta(self, cell=None, dm=None, kpts=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         raise NotImplementedError
 
@@ -726,12 +730,13 @@ class KRHF(KSCF):
         return dm_kpts
 
     @lib.with_doc(mulliken_meta.__doc__)
-    def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
+    def mulliken_meta(self, cell=None, dm=None, kpts=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
+        if kpts is None: kpts = self.kpts
         if s is None: s = self.get_ovlp(cell)
-        return mulliken_meta(cell, dm, s=s, verbose=verbose,
+        return mulliken_meta(cell, dm, kpts, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
     def nuc_grad_method(self):
