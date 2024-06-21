@@ -34,7 +34,7 @@ from pyscf import __config__
 SAFE_EIGH_LINDEP = getattr(__config__, 'lib_linalg_helper_safe_eigh_lindep', 1e-15)
 DAVIDSON_LINDEP = getattr(__config__, 'lib_linalg_helper_davidson_lindep', 1e-14)
 DSOLVE_LINDEP = getattr(__config__, 'lib_linalg_helper_dsolve_lindep', 1e-13)
-MAX_MEMORY = getattr(__config__, 'lib_linalg_helper_davidson_max_memory', 2000)  # 2GB
+MAX_MEMORY = getattr(__config__, 'lib_linalg_helper_davidson_max_memory', 4000)  # 4GB
 
 # sort by similarity has problem which flips the ordering of eigenvalues when
 # the initial guess is closed to excited state.  In this situation, function
@@ -1298,33 +1298,28 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     if isinstance(aop, numpy.ndarray) and aop.ndim == 2:
         return numpy.linalg.solve(aop+numpy.eye(aop.shape[0]), b)
 
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    log = logger.new_logger(verbose=verbose)
 
     if not (isinstance(b, numpy.ndarray) and b.ndim == 1):
         b = numpy.asarray(b)
 
-    if x0 is None:
-        x1 = b
-    else:
+    if x0 is not None:
         b = b - (x0 + aop(x0))
-        x1 = b
+    x1 = b
     if x1.ndim == 1:
         x1 = x1.reshape(1, x1.size)
     nroots, ndim = x1.shape
 
-    # Not exactly QR, vectors are orthogonal but not normalized
-    x1, rmat = _qr(x1, dot, lindep)
-    for i in range(len(x1)):
-        x1[i] *= rmat[i,i]
-
-    innerprod = [dot(xi.conj(), xi).real for xi in x1]
-    if innerprod:
+    if nroots > 1:
+        # Not exactly QR, vectors are orthogonal but not normalized
+        x1, rmat = _qr(x1, dot)
+        x1 *= rmat.diagonal()[:,None]
+        innerprod = (rmat.diagonal().real ** 2).tolist()
         max_innerprod = max(innerprod)
     else:
-        max_innerprod = 0
+        max_innerprod = dot(x1[0].conj(), x1[0]).real
+        innerprod = [max_innerprod]
+
     if max_innerprod < lindep or max_innerprod < tol**2:
         if x0 is None:
             return numpy.zeros_like(b)
@@ -1353,27 +1348,34 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         x1 = axt.copy()
         for i in range(len(xs)):
             xsi = numpy.asarray(xs[i])
-            for j, axj in enumerate(axt):
-                x1[j] -= xsi * (dot(xsi.conj(), axj) / innerprod[i])
+            w = dot(axt, xsi.conj()) / innerprod[i]
+            x1 -= xsi * w[:,None]
         axt = None
 
-        max_innerprod = 0
-        idx = []
-        for i, xi in enumerate(x1):
-            innerprod1 = dot(xi.conj(), xi).real
-            max_innerprod = max(max_innerprod, innerprod1)
-            if innerprod1 > lindep and innerprod1 > tol**2:
-                idx.append(i)
-                innerprod.append(innerprod1)
+        if nroots > 1:
+            x1, rmat = _qr(x1, dot)
+            x1 *= rmat.diagonal()[:,None]
+            innerprod1 = rmat.diagonal().real ** 2
+        else:
+            innerprod1 = [dot(x1[0].conj(), x1[0]).real]
+        max_innerprod = max(innerprod1, default=0.)
+
         log.debug('krylov cycle %d  r = %g', cycle, max_innerprod**.5)
         if max_innerprod < lindep or max_innerprod < tol**2:
             break
 
-        x1 = x1[idx]
+        if nroots > 1:
+            mask = (innerprod1 > lindep) & (innerprod1 > tol**2)
+            x1 = x1[mask]
+            innerprod.extend(innerprod1[mask])
+        else:
+            innerprod.append(innerprod1[0])
 
-    nd = cycle + 1
+    else:
+        raise RuntimeError("Krylov solver failed to converge.")
+
+    nd = len(xs)
     h = numpy.empty((nd,nd), dtype=x1.dtype)
-
     for i in range(nd):
         xi = numpy.asarray(xs[i])
         if hermi:
@@ -1384,72 +1386,37 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
             for j in range(nd):
                 h[i,j] = dot(xi.conj(), ax[j])
         xi = None
-
     # Add the contribution of I in (1+a)
     for i in range(nd):
         h[i,i] += innerprod[i]
 
     g = numpy.zeros((nd,nroots), dtype=x1.dtype)
-    if b.ndim == 1:
-        g[0] = innerprod[0]
-    else:
-        # Restore the first nroots vectors, which are array b or b-(1+a)x0
-        for i in range(min(nd, nroots)):
-            xsi = numpy.asarray(xs[i])
-            for j in range(nroots):
-                g[i,j] = dot(xsi.conj(), b[j])
+    for i in range(nd):
+        g[i] = dot(b, numpy.asarray(xs[i]).conj())
 
     c = numpy.linalg.solve(h, g)
     x = _gen_x0(c, xs)
     if b.ndim == 1:
         x = x[0]
 
+    # Restore the first nroots vectors, which are array b or b-(1+a)x0
     if x0 is not None:
         x += x0
     return x
 
 
-def solve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
+def solve(aop, b, precond=None, tol=1e-12, max_cycle=60, dot=numpy.dot,
           lindep=DSOLVE_LINDEP, verbose=0, tol_residual=None):
-    '''Davidson iteration to solve linear equation.
+    '''Solve linear equation using the scipy.sparse module
     '''
-    msg = ('linalg_helper.solve is a bad solver for linear equations. '
-           'You should not use this solver in product.')
-    warnings.warn(msg)
-    if tol_residual is None:
-        toloose = numpy.sqrt(tol)
-    else:
-        toloose = tol_residual
-
-    assert callable(precond)
-
-    xs = [precond(b)]
-    ax = [aop(xs[-1])]
-
-    dtype = numpy.result_type(ax[0], xs[0])
-    aeff = numpy.zeros((max_cycle,max_cycle), dtype=dtype)
-    beff = numpy.zeros((max_cycle), dtype=dtype)
-    for istep in range(max_cycle):
-        beff[istep] = dot(xs[istep].conj(), b)
-        for i in range(istep+1):
-            aeff[istep,i] = dot(xs[istep].conj(), ax[i])
-            aeff[i,istep] = dot(xs[i].conj(), ax[istep])
-
-        v = scipy.linalg.solve(aeff[:istep+1,:istep+1], beff[:istep+1])
-        xtrial = _outprod_to_subspace(v, xs)
-        dx = b - _outprod_to_subspace(v, ax)
-        rr = numpy_helper.norm(dx)
-        if verbose:
-            print('davidson', istep, rr)
-        if rr < toloose:
-            break
-        xs.append(precond(dx))
-        ax.append(aop(xs[-1]))
-
-    if verbose:
-        print(istep)
-
-    return xtrial
+    from scipy.sparse.linalg import gmres, LinearOperator
+    assert b.ndim == 1
+    n = b.size
+    c, info = gmres(LinearOperator((n,n), matvec=aop), b, maxiter=max_cycle,
+                    atol=max(lindep, tol)**.5)
+    if info != 0:
+        raise RuntimeError(f'scipy.sparse fails to solve linear equation info={info}')
+    return c
 
 dsolve = solve
 
@@ -1470,7 +1437,6 @@ def cho_solve(a, b, strict_sym_pos=True):
             warnings.warn('%s:%s: matrix a is not strictly postive definite' %
                           (fname, lineno))
             return scipy.linalg.solve(a, b)
-
 
 def _qr(xs, dot, lindep=1e-14):
     '''QR decomposition for a list of vectors (for linearly independent vectors only).

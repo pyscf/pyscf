@@ -124,13 +124,6 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     return vmata, vmatb
 
 def get_eph(ephobj, mo1, omega, vec, mo_rep):
-    if isinstance(mo1, str):
-        mo1 = lib.chkfile.load(mo1, 'scf_mo1')
-        mo1a = mo1['0']
-        mo1b = mo1['1']
-        mo1a = {int(k): mo1a[k] for k in mo1a}
-        mo1b = {int(k): mo1b[k] for k in mo1b}
-
     mol = ephobj.mol
     mf = ephobj.base
     ni = mf._numint
@@ -141,6 +134,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     vnuc_deriv = ephobj.vnuc_generator(mol)
     aoslices = mol.aoslice_by_atom()
 
+    mo1a, mo1b = mo1
     mo_coeff, mo_occ = mf.mo_coeff, mf.mo_occ
     vind = uhf_deriv_generator(mf, mf.mo_coeff, mf.mo_occ)
     mem_now = lib.current_memory()[0]

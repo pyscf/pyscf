@@ -100,10 +100,6 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     return vmat
 
 def get_eph(ephobj, mo1, omega, vec, mo_rep):
-    if isinstance(mo1, str):
-        mo1 = lib.chkfile.load(mo1, 'scf_mo1')
-        mo1 = {int(k): mo1[k] for k in mo1}
-
     mol = ephobj.mol
     mf = ephobj.base
     ni = mf._numint
