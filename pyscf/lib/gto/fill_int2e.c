@@ -39,24 +39,26 @@ int GTOmax_shell_dim(const int *ao_loc, const int *shls_slice, int ncenter)
         }
         return di;
 }
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env)
+size_t GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
+                         int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int i, n;
+        int i;
         int i0 = shls_slice[0];
         int i1 = shls_slice[1];
         for (i = 1; i < ncenter; i++) {
                 i0 = MIN(i0, shls_slice[i*2  ]);
                 i1 = MAX(i1, shls_slice[i*2+1]);
         }
+        size_t (*f)() = (size_t (*)())intor;
+        size_t cache_size = 0;
+        size_t n;
         int shls[4];
-        int cache_size = 0;
         for (i = i0; i < i1; i++) {
                 shls[0] = i;
                 shls[1] = i;
                 shls[2] = i;
                 shls[3] = i;
-                n = (*intor)(NULL, NULL, shls, atm, natm, bas, nbas, env, NULL, NULL);
+                n = (*f)(NULL, NULL, shls, atm, natm, bas, nbas, env, NULL, NULL);
                 cache_size = MAX(cache_size, n);
         }
         return cache_size;
