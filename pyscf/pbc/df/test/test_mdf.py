@@ -145,8 +145,8 @@ class KnownValues(unittest.TestCase):
         odf.mesh = [11]*3
         eri0000 = odf.get_eri()
         self.assertTrue(eri0000.dtype == numpy.double)
-        self.assertAlmostEqual(eri0000.real.sum(), 27.27275005755319, 7)
-        self.assertAlmostEqual(lib.fp(eri0000), 1.0613327424886785, 8)
+        self.assertAlmostEqual(eri0000.real.sum(), 27.27280884567336, 7)
+        self.assertAlmostEqual(lib.fp(eri0000), 1.0613205275015447, 8)
 
         eri1111 = kmdf1.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         self.assertTrue(eri1111.dtype == numpy.double)

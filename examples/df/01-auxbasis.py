@@ -65,3 +65,8 @@ mf = scf.RHF(mol).density_fit()
 mf.with_df.auxbasis = df.aug_etb(mol, beta=1.7)
 mf.kernel()
 
+# Generating auxiliary basis using the AutoAux algorithms proposed by Stoychev
+# (JCTC, 13, 554)
+mf = scf.RHF(mol).density_fit()
+mf.with_df.auxbasis = df.auto_aux(mol)
+mf.kernel()

@@ -24,14 +24,12 @@ from pyscf import gto
 from pyscf import ao2mo
 from pyscf.data import elements
 from pyscf.lib.exceptions import BasisNotFoundError
+from pyscf.df.autoaux import auto_aux
 from pyscf import __config__
 
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
 ETB_BETA = getattr(__config__, 'df_addons_aug_dfbasis', 2.0)
 FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'
-
-LVAL_SCHEME = 'PySCF'  # or 'Gaussian', 'ORCA'
-L_INC = 1
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
@@ -77,36 +75,11 @@ class load(ao2mo.load):
         ao2mo.load.__init__(self, eri, dataname)
 
 def _aug_etb_element(nuc_charge, basis, beta):
-    # lval
-    if LVAL_SCHEME == 'Gaussian':
-        # Yang, JCP, 127, 074102
-        # 0: H - Be, 1: B - Ca, 2: Sc - Ba, 3: La -
-        if nuc_charge <= 2:
-            max_shells = 0
-        elif nuc_charge <= 18:
-            max_shells = 1
-        elif nuc_charge <= 54:
-            max_shells = 2
-        else:
-            max_shells = 3
-    elif LVAL_SCHEME == 'ORCA':
-        # Stoychev, JCTC, 13, 554
-        # 0: H - Be, 1: B - Ca, 2: Sc - Ba, 3: La -
-        conf = elements.NRSRHFS_CONFIGURATION[nuc_charge]
-        max_shells = max(3 - conf.count(0), 0)
-    else:
-        # PySCF original settings
-        # 1: H - Be, 2: B - Ca, 3: Sc - La, 4: Ce -
-        conf = elements.CONFIGURATION[nuc_charge]
-        max_shells = 4 - conf.count(0)
-
-    emin_by_l = [1e99] * 8
-    emax_by_l = [0] * 8
-    l_max = 0
+    l_max = max(b[0] for b in basis)
+    emin_by_l = [1e99] * (l_max+1)
+    emax_by_l = [0] * (l_max+1)
     for b in basis:
         l = b[0]
-        l_max = max(l_max, l)
-
         if isinstance(b[1], int):
             e_c = numpy.array(b[2:])
         else:
@@ -117,21 +90,35 @@ def _aug_etb_element(nuc_charge, basis, beta):
         emax_by_l[l] = max(es.max(), emax_by_l[l])
         emin_by_l[l] = min(es.min(), emin_by_l[l])
 
-    l_max1 = l_max + 1
-    emin_by_l = numpy.array(emin_by_l[:l_max1])
-    emax_by_l = numpy.array(emax_by_l[:l_max1])
+    conf = elements.CONFIGURATION[nuc_charge]
+    # 1: H - Be, 2: B - Ca, 3: Sc - La, 4: Ce -
+    max_shells = 4 - conf.count(0)
 
-    # Estimate the exponents ranges by geometric average
-    emax = numpy.sqrt(numpy.einsum('i,j->ij', emax_by_l, emax_by_l))
-    emin = numpy.sqrt(numpy.einsum('i,j->ij', emin_by_l, emin_by_l))
+    if 0:
+        # This is the method that PySCF-2.6 (and older versions) generates
+        # auxiliary basis. It estimates the exponents ranges by geometric average.
+        # This method is not recommended because it tends to generate diffused
+        # functions. Important compact functions might be improperly excluded.
+        l_max = min(l_max, max_shells)
+        l_max_aux = l_max * 2
+        l_max1 = l_max + 1
+        emin_by_l = numpy.array(emin_by_l[:l_max1])
+        emax_by_l = numpy.array(emax_by_l[:l_max1])
+        emax = (emax_by_l[:,None] * emax_by_l) ** .5 * 2
+        emin = (emin_by_l[:,None] * emin_by_l) ** .5 * 2
+    else:
+        # Using normal average, more auxiliary functions, especially compact
+        # functions, will be generated.
+        l_max_aux = min(l_max, max_shells) * 2
+        l_max1 = l_max + 1
+        emin_by_l = numpy.array(emin_by_l)
+        emax_by_l = numpy.array(emax_by_l)
+        emax = emax_by_l[:,None] + emax_by_l
+        emin = emin_by_l[:,None] + emin_by_l
+
     liljsum = numpy.arange(l_max1)[:,None] + numpy.arange(l_max1)
-    # Setting l_max_aux as JCTC, 13, 554
-    l_max_aux = max(max_shells*2, l_max + L_INC)
-    emax_by_l = [emax[liljsum==ll].max() for ll in range(l_max_aux+1)]
-    emin_by_l = [emin[liljsum==ll].min() for ll in range(l_max_aux+1)]
-    # Tune emin and emax
-    emin_by_l = numpy.array(emin_by_l) * 2
-    emax_by_l = numpy.array(emax_by_l) * 2
+    emax_by_l = numpy.array([emax[liljsum==ll].max() for ll in range(l_max_aux+1)])
+    emin_by_l = numpy.array([emin[liljsum==ll].min() for ll in range(l_max_aux+1)])
 
     ns = numpy.log((emax_by_l+emin_by_l)/emin_by_l) / numpy.log(beta)
     etb = []
@@ -236,18 +223,11 @@ def make_auxmol(mol, auxbasis=None):
 
     if auxbasis is None:
         auxbasis = make_auxbasis(mol)
-    elif auxbasis == 'etb':
-        auxbasis = aug_etb_for_dfbasis(mol, start_at=0)
-    elif '+etb' in auxbasis:
-        dfbasis = auxbasis[:-4]
-        auxbasis = aug_etb_for_dfbasis(mol, dfbasis)
     pmol.basis = auxbasis
 
     if isinstance(auxbasis, (str, list, tuple)):
         uniq_atoms = {a[0] for a in mol._atom}
         _basis = {a: auxbasis for a in uniq_atoms}
-        uniq_atoms = set([a[0] for a in mol._atom])
-        _basis = dict([(a, auxbasis) for a in uniq_atoms])
     else:
         assert isinstance(auxbasis, dict)
         if 'default' in auxbasis:
@@ -257,11 +237,6 @@ def make_auxmol(mol, auxbasis=None):
             del (_basis['default'])
         else:
             _basis = auxbasis
-        if 'etb' in _basis.values():
-            etb_abs = aug_etb_for_dfbasis(mol, start_at=0)
-            for elem, bas in _basis.items():
-                if bas == 'etb':
-                    _basis[elem] = etb_abs[elem]
 
     pmol._basis = pmol.format_basis(_basis)
 

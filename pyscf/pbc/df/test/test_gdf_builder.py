@@ -19,7 +19,7 @@ import scipy.linalg
 from pyscf import lib
 import pyscf.pbc
 from pyscf.pbc import gto as pgto
-from pyscf.pbc.df import df, aug_etb, FFTDF
+from pyscf.pbc.df import df, FFTDF
 from pyscf.pbc.df import gdf_builder
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.tools import pbc as pbctools

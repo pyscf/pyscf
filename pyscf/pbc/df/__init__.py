@@ -23,7 +23,7 @@ from .rsdf import RSDF, RSGDF
 from .mdf import MDF
 from .aft import AFTDF
 from .fft import FFTDF
-from pyscf.df.addons import aug_etb
+from pyscf.df.addons import aug_etb, auto_aux
 from .incore import make_auxcell
 
 # For backward compatibility

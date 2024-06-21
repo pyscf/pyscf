@@ -33,7 +33,13 @@ class KnownValues(unittest.TestCase):
                       1     0    0.757    0.587''',
             basis = 'cc-pvdz',
         )
-        df.addons.aug_etb(mol)
+        auxbasis = df.addons.aug_etb(mol)
+        self.assertEqual(len(auxbasis['O']), 42)
+        self.assertEqual(len(auxbasis['H']), 13)
+
+        auxbasis = df.addons.auto_aux(mol)
+        self.assertEqual(len(auxbasis['O']), 54)
+        self.assertEqual(len(auxbasis['H']), 13)
 
         mol = gto.M(
             verbose = 0,
@@ -43,8 +49,12 @@ class KnownValues(unittest.TestCase):
             basis = ('cc-pvdz', [[4, (1., 1.)]])
         )
         auxbasis = df.addons.aug_etb(mol)
-        self.assertEqual(len(auxbasis['O']), 36)
-        self.assertEqual(len(auxbasis['H']), 12)
+        self.assertEqual(len(auxbasis['O']), 59)
+        self.assertEqual(len(auxbasis['H']), 16)
+
+        auxbasis = df.addons.auto_aux(mol)
+        self.assertEqual(len(auxbasis['O']), 58)
+        self.assertEqual(len(auxbasis['H']), 16)
 
     def test_make_auxbasis(self):
         mol = gto.M(
@@ -69,7 +79,7 @@ class KnownValues(unittest.TestCase):
                      'O': ('631g', [[0, 0, (1., 1.)]])}
         )
         auxbasis = df.addons.make_auxbasis(mol)
-        self.assertEqual(len(auxbasis['O']), 32)
+        self.assertEqual(len(auxbasis['O']), 35)
         self.assertEqual(len(auxbasis['H']), 3)
 
     def test_default_auxbasis(self):
