@@ -30,6 +30,9 @@ DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
 ETB_BETA = getattr(__config__, 'df_addons_aug_dfbasis', 2.0)
 FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'
 
+LVAL_SCHEME = 'PySCF'  # or 'Gaussian', 'ORCA'
+L_INC = 1
+
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
     # AO basis       JK-fit                     MP2-fit
@@ -73,6 +76,69 @@ class load(ao2mo.load):
     def __init__(self, eri, dataname='j3c'):
         ao2mo.load.__init__(self, eri, dataname)
 
+def _aug_etb_element(nuc_charge, basis, beta):
+    # lval
+    if LVAL_SCHEME == 'Gaussian':
+        # Yang, JCP, 127, 074102
+        # 0: H - Be, 1: B - Ca, 2: Sc - Ba, 3: La -
+        if nuc_charge <= 2:
+            max_shells = 0
+        elif nuc_charge <= 18:
+            max_shells = 1
+        elif nuc_charge <= 54:
+            max_shells = 2
+        else:
+            max_shells = 3
+    elif LVAL_SCHEME == 'ORCA':
+        # Stoychev, JCTC, 13, 554
+        # 0: H - Be, 1: B - Ca, 2: Sc - Ba, 3: La -
+        conf = elements.NRSRHFS_CONFIGURATION[nuc_charge]
+        max_shells = max(3 - conf.count(0), 0)
+    else:
+        # PySCF original settings
+        # 1: H - Be, 2: B - Ca, 3: Sc - La, 4: Ce -
+        conf = elements.CONFIGURATION[nuc_charge]
+        max_shells = 4 - conf.count(0)
+
+    emin_by_l = [1e99] * 8
+    emax_by_l = [0] * 8
+    l_max = 0
+    for b in basis:
+        l = b[0]
+        l_max = max(l_max, l)
+
+        if isinstance(b[1], int):
+            e_c = numpy.array(b[2:])
+        else:
+            e_c = numpy.array(b[1:])
+        es = e_c[:,0]
+        cs = e_c[:,1:]
+        es = es[abs(cs).max(axis=1) > 1e-3]
+        emax_by_l[l] = max(es.max(), emax_by_l[l])
+        emin_by_l[l] = min(es.min(), emin_by_l[l])
+
+    l_max1 = l_max + 1
+    emin_by_l = numpy.array(emin_by_l[:l_max1])
+    emax_by_l = numpy.array(emax_by_l[:l_max1])
+
+    # Estimate the exponents ranges by geometric average
+    emax = numpy.sqrt(numpy.einsum('i,j->ij', emax_by_l, emax_by_l))
+    emin = numpy.sqrt(numpy.einsum('i,j->ij', emin_by_l, emin_by_l))
+    liljsum = numpy.arange(l_max1)[:,None] + numpy.arange(l_max1)
+    # Setting l_max_aux as JCTC, 13, 554
+    l_max_aux = max(max_shells*2, l_max + L_INC)
+    emax_by_l = [emax[liljsum==ll].max() for ll in range(l_max_aux+1)]
+    emin_by_l = [emin[liljsum==ll].min() for ll in range(l_max_aux+1)]
+    # Tune emin and emax
+    emin_by_l = numpy.array(emin_by_l) * 2
+    emax_by_l = numpy.array(emax_by_l) * 2
+
+    ns = numpy.log((emax_by_l+emin_by_l)/emin_by_l) / numpy.log(beta)
+    etb = []
+    for l, n in enumerate(numpy.ceil(ns).astype(int)):
+        if n > 0:
+            etb.append((l, n, emin_by_l[l], beta))
+    return etb
 
 def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
                         start_at=FIRST_ETB_ELEMENT):
@@ -88,46 +154,8 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
         if nuc_charge < nuc_start:
             newbasis[symb] = dfbasis
         else:
-            conf = elements.CONFIGURATION[nuc_charge]
-            max_shells = 4 - conf.count(0)
-            emin_by_l = [1e99] * 8
-            emax_by_l = [0] * 8
-            l_max = 0
-            for b in mol._basis[symb]:
-                l = b[0]
-                l_max = max(l_max, l)
-                if l >= max_shells+1:
-                    continue
-
-                if isinstance(b[1], int):
-                    e_c = numpy.array(b[2:])
-                else:
-                    e_c = numpy.array(b[1:])
-                es = e_c[:,0]
-                cs = e_c[:,1:]
-                es = es[abs(cs).max(axis=1) > 1e-3]
-                emax_by_l[l] = max(es.max(), emax_by_l[l])
-                emin_by_l[l] = min(es.min(), emin_by_l[l])
-
-            l_max1 = l_max + 1
-            emin_by_l = numpy.array(emin_by_l[:l_max1])
-            emax_by_l = numpy.array(emax_by_l[:l_max1])
-
-# Estimate the exponents ranges by geometric average
-            emax = numpy.sqrt(numpy.einsum('i,j->ij', emax_by_l, emax_by_l))
-            emin = numpy.sqrt(numpy.einsum('i,j->ij', emin_by_l, emin_by_l))
-            liljsum = numpy.arange(l_max1)[:,None] + numpy.arange(l_max1)
-            emax_by_l = [emax[liljsum==ll].max() for ll in range(l_max1*2-1)]
-            emin_by_l = [emin[liljsum==ll].min() for ll in range(l_max1*2-1)]
-            # Tune emin and emax
-            emin_by_l = numpy.array(emin_by_l) * 2
-            emax_by_l = numpy.array(emax_by_l) * 2
-
-            ns = numpy.log((emax_by_l+emin_by_l)/emin_by_l) / numpy.log(beta)
-            etb = []
-            for l, n in enumerate(numpy.ceil(ns).astype(int)):
-                if n > 0:
-                    etb.append((l, n, emin_by_l[l], beta))
+            basis = mol._basis[symb]
+            etb = _aug_etb_element(nuc_charge, basis, beta)
             if etb:
                 newbasis[symb] = gto.expand_etbs(etb)
             else:
@@ -233,7 +261,7 @@ def make_auxmol(mol, auxbasis=None):
             etb_abs = aug_etb_for_dfbasis(mol, start_at=0)
             for elem, bas in _basis.items():
                 if bas == 'etb':
-                    _basis[elem] = auxbasis_etb[elem]
+                    _basis[elem] = etb_abs[elem]
 
     pmol._basis = pmol.format_basis(_basis)
 
