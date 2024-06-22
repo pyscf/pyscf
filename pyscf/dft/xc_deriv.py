@@ -26,6 +26,7 @@ import ctypes
 import numpy as np
 from pyscf import lib
 
+libpbc = lib.load_library('libpbc')
 libdft = lib.load_library('libdft')
 
 
