@@ -1757,13 +1757,14 @@ class Cell(mole.MoleBase):
         '''Return a Mole object using the same atoms and basis functions as
         the Cell object.
         '''
-        #FIXME: should cell be converted to mole object?  If cell is converted
-        # and a mole object is returned, many attributes (e.g. the GTH basis,
-        # gth-PP) will not be recognized by mole.build function.
         mol = self.view(mole.Mole)
-        del (mol.a, mol.fractional, mol.precision, mol.ke_cutoff,
-             mol.exp_to_discard, mol._mesh, mol._rcut, mol.dimension,
-             mol.low_dim_ft_type)
+        del mol.a
+        mol.__dict__.pop('fractional', None)
+        mol.__dict__.pop('ke_cutoff', None)
+        mol.__dict__.pop('_mesh', None)
+        mol.__dict__.pop('_rcut', None)
+        mol.__dict__.pop('dimension', None)
+        mol.__dict__.pop('low_dim_ft_type', None)
         mol.enuc = None #reset nuclear energy
         if mol.symmetry:
             mol._build_symmetry()
