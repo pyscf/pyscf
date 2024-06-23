@@ -238,7 +238,10 @@ def thc_einsum(subscripts, *tensors, **kwargs):
         else:
             assert backend == "opt_einsum"
             if return_path_only:
-                return oe.contract_path(subscripts_2, *tensors_2, optimize=optimize, memory_limit=memory)
+                if isinstance(optimize, bool):
+                    return oe.contract_path(subscripts_2, *tensors_2, memory_limit=memory)
+                else:
+                    return oe.contract_path(subscripts_2, *tensors_2, optimize=optimize, memory_limit=memory)
             else:
                 out = oe.contract(subscripts_2, *tensors_2, optimize=optimize, memory_limit=memory)
     

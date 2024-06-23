@@ -66,7 +66,7 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
 
         MP2.__init__(self, my_mf, frozen, mo_coeff, mo_occ)
     
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, backend="opt_einsum", memory=2**28):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, backend="opt_einsum", memory=2**28, return_path_only=False):
         '''
         Args:
             with_t2 : bool
@@ -86,15 +86,24 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
         #    backend = None
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        mp2_J  = thc_einsum("iajb,iajb,ijab->", THC_ERI, THC_ERI, LAPLACE, backend=backend, memory=memory)
+        mp2_J  = thc_einsum("iajb,iajb,ijab->", THC_ERI, THC_ERI, LAPLACE, backend=backend, memory=memory, return_path_only=return_path_only)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        mp2_K  = thc_einsum("iajb,ibja,ijab->", THC_ERI, THC_ERI, LAPLACE, backend=backend, memory=memory)
+        mp2_K  = thc_einsum("iajb,ibja,ijab->", THC_ERI, THC_ERI, LAPLACE, backend=backend, memory=memory, return_path_only=return_path_only)
         t3 = (lib.logger.process_clock(), lib.logger.perf_counter())
         
         _benchmark_time(t1, t2, 'THC_RMP2: mp2-J ', self._scf)
         _benchmark_time(t2, t3, 'THC_RMP2: mp2-K ', self._scf)
         
-        self.e_corr = -2*mp2_J+mp2_K
+        if return_path_only:
+            self.e_corr = None
+            if backend == "opt_einsum":
+                print("RMP2_J, path = ")
+                print(mp2_J[1])
+                print("RMP2_K, path = ")
+                print(mp2_K[1])
+            return mp2_J, mp2_K
+        else:
+            self.e_corr = -2*mp2_J+mp2_K
         
         return self.e_corr, None
             
