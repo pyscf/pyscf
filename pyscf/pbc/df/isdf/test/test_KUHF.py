@@ -74,7 +74,7 @@ pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
 prim_cell.spin = 0
 mf = scf.KUHF(prim_cell, kpts)
 #mf = pbc_frac_occ(mf,tol=2e-4)
-mf = scf.addons.smearing_(mf, 0.01)
+mf = scf.addons.smearing_(mf, 0.01) # the solution to the breakdown of TR symmetry 
 pbc_isdf_info.direct_scf = mf.direct_scf
 mf.with_df = pbc_isdf_info
 mf.max_cycle = 100

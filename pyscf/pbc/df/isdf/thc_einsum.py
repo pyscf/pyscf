@@ -18,15 +18,17 @@
 
 import numpy
 import numpy as np
+import opt_einsum as oe
 
 ### function to determine the bunchsize ### 
 
 _numpy_einsum = np.einsum
 _einsum_path  = numpy.einsum_path
 
-OCC_INDICES      = ["i", "j", "k", "l", "m", "n"]
-VIR_INDICES      = ["a", "b", "c", "d", "e", "f", "g", "h"]
-THC_INDICES_LIST = ["P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
+OCC_INDICES = ["i", "j", "k", "l", "m", "n"]
+VIR_INDICES = ["a", "b", "c", "d", "e", "f", "g", "h"]
+THC_INDICES = ["P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "A", "B", "C", "D", "E", "F"]
+K_INDICES   = ["K", "L", "M", "N"]
    
 class thc_holder:
     
@@ -38,8 +40,12 @@ class thc_holder:
         assert self.X_o.shape[1] == self.Z.shape[0]
         assert self.X_o.shape[1] == self.Z.shape[1]
         assert self.X_o.shape[1] == self.X_v.shape[1]
+    
+    @property
+    def n_extra_indices(self):
+        return 2
 
-    def get_eri(self, eri_subscript:str, thc_subscript:str):
+    def update_einsum(self, eri_subscript:str, thc_subscript:str):
         
         assert len(eri_subscript) == 4
         assert len(thc_subscript) == 2
@@ -75,7 +81,11 @@ class energy_denomimator:
 
         assert self.tau_o.shape[1] == self.tau_v.shape[1]
 
-    def get_energy_denominator(self, subscript, laplace_index):
+    @property
+    def n_extra_indices(self):
+        return 1
+
+    def update_einsum(self, subscript, laplace_index):
         
         assert len(subscript) == 4
         assert len(laplace_index) == 1
@@ -127,11 +137,14 @@ def thc_einsum(subscripts, *tensors, **kwargs):
         backend = backend.lower()
     else:
         assert backend is None
+        backend = "opt_einsum"
     
-    use_cotengra = False
+    #use_cotengra = False
     if backend == "cotengra":
         import cotengra as ctg
-        use_cotengra = True
+        #use_cotengra = True
+    else:
+        assert backend == "opt_einsum" or backend == "numpy"
     
     if len(tensors) <= 1 or '...' in subscripts:
         #out = _numpy_einsum(subscripts, *tensors, **kwargs)
@@ -147,7 +160,7 @@ def thc_einsum(subscripts, *tensors, **kwargs):
         subscripts = subscripts.split('->')
         lhs        = subscripts[0]
         rhs        = subscripts[1]
-        assert len(rhs)<=0  ## currently only support energy expression
+        #assert len(rhs)<=0  ## currently only support energy expression
 
         tensors = list(tensors)
         tensors_scripts = lhs.split(",")
@@ -158,22 +171,26 @@ def thc_einsum(subscripts, *tensors, **kwargs):
         n_THC_laplace_indices = 0
         
         for _tensor_, _script_ in zip(tensors, tensors_scripts):
-            if isinstance(_tensor_, thc_holder):
-                if n_THC_laplace_indices + 2 > len(THC_INDICES_LIST):
+            if hasattr(_tensor_, "n_extra_indices") and hasattr(_tensor_, "update_einsum"):
+                if n_THC_laplace_indices + _tensor_.n_extra_indices > len(THC_INDICES):
                     raise ValueError("number of thc and laplace indices exhausted")
-                thc_indices                 = THC_INDICES_LIST[n_THC_laplace_indices] + THC_INDICES_LIST[n_THC_laplace_indices+1]
-                n_THC_laplace_indices      += 2
-                tmp_tensors, tmp_subscripts = _tensor_.get_eri(_script_, thc_indices)
+                #thc_indices                 = THC_INDICES[n_THC_laplace_indices] + THC_INDICES[n_THC_laplace_indices+1]
+                #n_THC_laplace_indices      += 2
+                thc_indices = ""
+                for _ in range(_tensor_.n_extra_indices):
+                    thc_indices += THC_INDICES[n_THC_laplace_indices]
+                    n_THC_laplace_indices += 1
+                tmp_tensors, tmp_subscripts = _tensor_.update_einsum(_script_, thc_indices)
                 tensors_2.extend(tmp_tensors)
                 tensors_scripts_2 += tmp_subscripts
-            elif isinstance(_tensor_, energy_denomimator):
-                if n_THC_laplace_indices + 1 > len(THC_INDICES_LIST):
-                    raise ValueError("number of thc and laplace indices exhausted")
-                laplace_index               = THC_INDICES_LIST[n_THC_laplace_indices]
-                n_THC_laplace_indices      += 1
-                tmp_tensors, tmp_subscripts = _tensor_.get_energy_denominator(_script_, laplace_index)
-                tensors_2.extend(tmp_tensors)
-                tensors_scripts_2 += tmp_subscripts
+            #elif isinstance(_tensor_, energy_denomimator):
+            #    if n_THC_laplace_indices + 1 > len(THC_INDICES):
+            #        raise ValueError("number of thc and laplace indices exhausted")
+            #    laplace_index               = THC_INDICES[n_THC_laplace_indices]
+            #    n_THC_laplace_indices      += 1
+            #    tmp_tensors, tmp_subscripts = _tensor_.get_energy_denominator(_script_, laplace_index)
+            #    tensors_2.extend(tmp_tensors)
+            #    tensors_scripts_2 += tmp_subscripts
             else: ### normal tensor ###
                 tensors_2.append(_tensor_)
                 tensors_scripts_2 += _script_ + ","
@@ -183,7 +200,7 @@ def thc_einsum(subscripts, *tensors, **kwargs):
         
         ##### code deal with different backend 
         
-        if use_cotengra:
+        if backend == "cotengra":
             
             inputs, output = ctg.utils.eq_to_inputs_output(subscripts_2)
             size_dict      = _size_dict_cotengra(inputs, *tensors_2)
@@ -203,7 +220,7 @@ def thc_einsum(subscripts, *tensors, **kwargs):
             else:
                 return tree.contract(tensors_2)
         
-        else:
+        elif backend == "numpy":
             contraction_list = _einsum_path(subscripts_2, *tensors_2, optimize=optimize,
                                             einsum_call=True)[1]
         
@@ -218,6 +235,12 @@ def thc_einsum(subscripts, *tensors, **kwargs):
                 else:
                     out = contract(einsum_str, *tmp_operands)
                 tensors_2.append(out)
+        else:
+            assert backend == "opt_einsum"
+            if return_path_only:
+                return oe.contract_path(subscripts_2, *tensors_2, optimize=optimize, memory_limit=memory)
+            else:
+                out = oe.contract(subscripts_2, *tensors_2, optimize=optimize, memory_limit=memory)
     
     return out
 
@@ -244,6 +267,11 @@ if __name__ == "__main__":
     # mp2_J2 = thc_einsum("iajb,iajb,ijab->", eri, eri, ene_deno, optimize='greedy')
     # mp2_K  = thc_einsum("iajb,ibja,ijab->", eri, eri, ene_deno, optimize='greedy')
     # assert np.allclose(mp2_J, mp2_J2)
+    
+    print(-2*mp2_J+mp2_K)
+    
+    mp2_J  = thc_einsum("iajb,iajb,ijab->", eri, eri, ene_deno, backend="opt_einsum")
+    mp2_K  = thc_einsum("iajb,ibja,ijab->", eri, eri, ene_deno, backend="opt_einsum")
     
     print(-2*mp2_J+mp2_K)
     
