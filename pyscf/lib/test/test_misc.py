@@ -87,6 +87,13 @@ class KnownValues(unittest.TestCase):
     def test_prange_split(self):
         self.assertEqual(list(lib.prange_split(10, 3)), [(0, 4), (4, 7), (7, 10)])
 
+    def test_pickle(self):
+        import pickle
+        from pyscf import gto
+        mol = gto.M()
+        mf = mol.GKS(xc='pbe')
+        pickle.loads(pickle.dumps(mf))
+
 
 if __name__ == "__main__":
     unittest.main()

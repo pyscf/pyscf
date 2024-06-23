@@ -453,8 +453,7 @@ class DHF(hf.SCF):
     # corrections for small component when with_ssss is set to False
     ssss_approx = getattr(__config__, 'scf_dhf_SCF_ssss_approx', 'Visscher')
 
-    _keys = {'conv_tol', 'with_ssss', 'with_gaunt',
-                 'with_breit', 'ssss_approx'}
+    _keys = {'conv_tol', 'with_ssss', 'with_gaunt', 'with_breit', 'ssss_approx'}
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)

@@ -971,6 +971,9 @@ class CCSDBase(lib.StreamObject):
         self._nmo = None
         self.chkfile = mf.chkfile
 
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('chkfile', 'callback'))
+
     @property
     def ecc(self):
         return self.e_corr

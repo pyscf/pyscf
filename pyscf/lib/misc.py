@@ -31,6 +31,7 @@ import functools
 import itertools
 import inspect
 import collections
+import pickle
 import ctypes
 import numpy
 import scipy
@@ -548,6 +549,29 @@ def view(obj, cls):
     new_obj.__dict__.update(obj.__dict__)
     return new_obj
 
+def generate_pickle_methods(excludes=(), reset_state=False):
+    '''Generate methods for pickle, e.g.:
+
+    class A:
+        __getstate__, __setstate__ = generate_pickle_methods(excludes=('a', 'b', 'c'))
+    '''
+    def getstate(obj):
+        dic = {**obj.__dict__}
+        dic.pop('stdout', None)
+        for key in excludes:
+            dic.pop(key, None)
+        return dic
+
+    def setstate(obj, state):
+        obj.stdout = sys.stdout
+        obj.__dict__.update(state)
+        for key in excludes:
+            setattr(obj, key, None)
+        if reset_state and hasattr(obj, 'reset'):
+            obj.reset()
+
+    return getstate, setstate
+
 
 SANITY_CHECK = getattr(__config__, 'SANITY_CHECK', True)
 class StreamObject:
@@ -669,6 +693,9 @@ class StreamObject:
     def copy(self):
         '''Returns a shallow copy'''
         return self.view(self.__class__)
+
+    __getstate__, __setstate__ = generate_pickle_methods()
+
 
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
@@ -1509,4 +1536,3 @@ def to_gpu(method, out=None):
         setattr(out, key, val)
     out.reset()
     return out
-

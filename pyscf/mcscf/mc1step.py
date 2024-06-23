@@ -464,7 +464,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 (max_offdiag_u < casscf.small_rot_tol or casscf.small_rot_tol == 0)):
             conv = True
 
-        if dump_chk:
+        if dump_chk and casscf.chkfile:
             casscf.dump_chk(locals())
 
         if callable(callback):
@@ -496,7 +496,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                      'call to mc.cas_natorb_() is required')
         mo_energy = None
 
-    if dump_chk:
+    if dump_chk and casscf.chkfile:
         casscf.dump_chk(locals())
 
     log.timer('1-step CASSCF', *cput0)
@@ -758,8 +758,6 @@ class CASSCF(casci.CASBase):
     def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None, frozen=None):
         casci.CASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
-
-        self.callback = None
         self.chkfile = self._scf.chkfile
 
         self.fcisolver.max_cycle = getattr(__config__,
@@ -776,6 +774,9 @@ class CASSCF(casci.CASBase):
         self.mo_energy = self._scf.mo_energy
         self.converged = False
         self._max_stepsize = None
+
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('chkfile', 'callback'))
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -1171,38 +1172,55 @@ To enable the solvent model for CASSCF, the following code needs to be called
         paaa = lib.transpose(buf.reshape(ncas*ncas,-1), out=out)
         return paaa.reshape(nmo,ncas,ncas,ncas)
 
-    def dump_chk(self, envs):
-        if not self.chkfile:
-            return self
+    def dump_chk(self, envs_or_file):
+        '''Serialize the MCSCF object and save it to the specified chkfile.
 
-        if getattr(self.fcisolver, 'nevpt_intermediate', None):
-            civec = None
-        elif self.chk_ci:
-            civec = envs['fcivec']
+        Args:
+            envs_or_file:
+                If this argument is a file path, the serialized MCSCF object is
+                saved to the file specified by this argument.
+                If this attribute is a dict (created by locals()), the necessary
+                variables are saved to the file specified by the attribute .chkfile.
+        '''
+        if isinstance(envs_or_file, str):
+            envs = None
+            chk_file = envs_or_file
         else:
-            civec = None
+            envs = envs_or_file
+            chk_file = self.chkfile
+            if not chk_file:
+                return self
+
+        e_tot = mo_coeff = mo_occ = mo_energy = e_cas = civec = casdm1 = None
         ncore = self.ncore
         nocc = ncore + self.ncas
-        if 'mo' in envs:
-            mo_coeff = envs['mo']
-        else:
-            mo_coeff = envs['mo_coeff']
-        mo_occ = numpy.zeros(mo_coeff.shape[1])
-        mo_occ[:ncore] = 2
-        if self.natorb:
-            occ = self._eig(-envs['casdm1'], ncore, nocc)[0]
-            mo_occ[ncore:nocc] = -occ
-        else:
-            mo_occ[ncore:nocc] = envs['casdm1'].diagonal()
-# Note: mo_energy in active space =/= F_{ii}  (F is general Fock)
-        if 'mo_energy' in envs:
-            mo_energy = envs['mo_energy']
-        else:
-            mo_energy = 'None'
-        chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
+
+        if envs is not None:
+            if self.chk_ci:
+                civec = envs.get('fcivec', None)
+
+            e_tot = envs['e_tot']
+            e_cas = envs['e_cas']
+            casdm1 = envs['casdm1']
+            if 'mo' in envs:
+                mo_coeff = envs['mo']
+            else:
+                mo_coeff = envs['mo_coeff']
+            mo_occ = numpy.zeros(mo_coeff.shape[1])
+            mo_occ[:ncore] = 2
+            if self.natorb:
+                occ = self._eig(-casdm1, ncore, nocc)[0]
+                mo_occ[ncore:nocc] = -occ
+            else:
+                mo_occ[ncore:nocc] = casdm1.diagonal()
+            # Note: mo_energy in active space =/= F_{ii}  (F is general Fock)
+            if 'mo_energy' in envs:
+                mo_energy = envs['mo_energy']
+
+        chkfile.dump_mcscf(self, chk_file, 'mcscf', e_tot,
                            mo_coeff, ncore, self.ncas, mo_occ,
-                           mo_energy, envs['e_cas'], civec, envs['casdm1'],
-                           overwrite_mol=False)
+                           mo_energy, e_cas, civec, casdm1,
+                           overwrite_mol=(envs is None))
         return self
 
     def update_from_chk(self, chkfile=None):
