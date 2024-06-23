@@ -66,7 +66,7 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
 
         MP2.__init__(self, my_mf, frozen, mo_coeff, mo_occ)
     
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, use_cotengra=True, memory=2**28):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, backend="opt_einsum", memory=2**28):
         '''
         Args:
             with_t2 : bool
@@ -80,10 +80,10 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
         THC_ERI = thc_holder(self.X_o, self.X_v, self.Z)
         LAPLACE = energy_denomimator(self.tau_o, self.tau_v)
         
-        if use_cotengra:
-            backend = 'cotengra'
-        else:
-            backend = None
+        #if use_cotengra:
+        #    backend = 'cotengra'
+        #else:
+        #    backend = None
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         mp2_J  = thc_einsum("iajb,iajb,ijab->", THC_ERI, THC_ERI, LAPLACE, backend=backend, memory=memory)
@@ -173,7 +173,11 @@ if __name__ == "__main__":
     
     thc_rmp2 = THC_RMP2(myisdf, mf_isdf, X=X)
     
-    e_mp2, _ = thc_rmp2.kernel()
+    e_mp2, _ = thc_rmp2.kernel(backend='cotengra')
+    
+    print("ISDF MP2 energy", e_mp2)
+    
+    e_mp2, _ = thc_rmp2.kernel(backend="opt_einsum")
     
     print("ISDF MP2 energy", e_mp2)
     

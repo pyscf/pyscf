@@ -67,7 +67,7 @@ class THC_RMP3(THC_RMP2):
                                        laplace_order=laplace_order, 
                                        no_LS_THC=no_LS_THC)
     
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, use_cotengra=True, memory=2**28):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, backend="opt_einsum", memory=2**28):
         '''
         Args:
             with_t2 : bool
@@ -81,10 +81,10 @@ class THC_RMP3(THC_RMP2):
         THC_ERI = thc_holder(self.X_o, self.X_v, self.Z)
         LAPLACE = energy_denomimator(self.tau_o, self.tau_v)
         
-        if use_cotengra:
-            backend = 'cotengra'
-        else:
-            backend = None
+        #if use_cotengra:
+        #    backend = 'cotengra'
+        #else:
+        #    backend = None
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         mp3_CC = thc_einsum("iajb,jbkc,iakc,ijab,ikac->", THC_ERI, THC_ERI, THC_ERI, LAPLACE, LAPLACE, backend=backend, memory=memory)
@@ -182,12 +182,13 @@ if __name__ == "__main__":
     isdf_pt = mp.RMP2(mf_isdf)
     isdf_pt.kernel()
     
-    ####### thc rmp2 #######
+    ####### thc rmp3 #######
     
     X        = myisdf.aoRg_full()
     thc_rmp3 = THC_RMP3(myisdf, mf_isdf, X=X)
-    e_mp3, _ = thc_rmp3.kernel()
-    
+    e_mp3, _ = thc_rmp3.kernel(backend="cotengra")
+    print("ISDF MP3 energy", e_mp3)
+    e_mp3, _ = thc_rmp3.kernel(backend="opt_einsum")
     print("ISDF MP3 energy", e_mp3)
     
     
