@@ -417,11 +417,14 @@ def header(mol, fout, ignore_h=IGNORE_H):
     fout.write('[Molden Format]\n')
     fout.write('made by pyscf v[%s]\n' % pyscf.__version__)
     fout.write('[Atoms] (AU)\n')
+    mass = mol.atom_mass_list()
+    coords = mol.atom_coords()
+    com = numpy.einsum('i,ij->j', mass, coords) / mass.sum()
     for ia in range(mol.natm):
         symb = mol.atom_pure_symbol(ia)
         chg = mol.atom_charge(ia)
         fout.write('%s   %d   %d   ' % (symb, ia+1, chg))
-        coord = mol.atom_coord(ia)
+        coord = mol.atom_coord(ia) - com
         fout.write('%18.14f   %18.14f   %18.14f\n' % tuple(coord))
 
     fout.write('[GTO]\n')
