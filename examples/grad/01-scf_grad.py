@@ -21,7 +21,13 @@ mol = gto.M(
 mf = scf.RHF(mol)
 mf.kernel()
 g = mf.nuc_grad_method()
-g.kernel()
+grad = g.kernel()
+
+# Use atmlst to specify the atoms to calculate the gradients
+atmlst = [0, 1]
+g.verbose = 0
+err = abs(grad[atmlst] - g.kernel(atmlst=atmlst)).max()
+assert err < 1e-6
 
 mf = scf.UHF(mol).x2c()
 mf.kernel()

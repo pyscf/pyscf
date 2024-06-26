@@ -96,6 +96,17 @@ def finite_partial_diff(mf):
     return e2ref
 
 class KnownValues(unittest.TestCase):
+    def test_uks_hess_atmlst(self):
+        mf = dft.UKS(mol)
+        mf.xc = 'pbe0'
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+
+        atmlst = [0, 1]
+        hess_1 = mf.Hessian().kernel()[atmlst][:, atmlst]
+        hess_2 = mf.Hessian().kernel(atmlst=atmlst)
+        self.assertAlmostEqual(abs(hess_1-hess_2).max(), 0.0, 4)
+
     def test_finite_diff_lda_hess(self):
         mf = dft.UKS(mol)
         mf.conv_tol = 1e-14

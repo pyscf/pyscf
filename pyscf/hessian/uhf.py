@@ -159,9 +159,12 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     ip1ip2_opt = _make_vhfopt(mol, dm0, 'ip1ip2', 'int2e_ip1ip2')
     ipvip1_opt = _make_vhfopt(mol, dm0, 'ipvip1', 'int2e_ipvip1ipvip2')
     aoslices = mol.aoslice_by_atom()
-    e1 = numpy.zeros((mol.natm,mol.natm,3,3))  # (A,B,dR_A,dR_B)
-    ej = numpy.zeros((mol.natm,mol.natm,3,3))
-    ek = numpy.zeros((mol.natm,mol.natm,3,3))
+
+    natm = len(atmlst)
+    e1 = numpy.zeros((natm, natm, 3, 3))  # (A,B,dR_A,dR_B)
+    ej = numpy.zeros((natm, natm, 3, 3))
+    ek = numpy.zeros((natm, natm, 3, 3))
+
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
