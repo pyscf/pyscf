@@ -49,7 +49,7 @@ class KnownValues(unittest.TestCase):
         hobj.level_shift = .05
         hess = hobj.kernel()
         self.assertAlmostEqual(lib.fp(hess), -0.20243405976628576, 4)
-    
+
     def test_uhf_hess_atmlst(self):
         mf = scf.UHF(mol)
         mf.conv_tol = 1e-14

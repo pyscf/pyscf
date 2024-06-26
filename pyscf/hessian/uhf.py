@@ -164,7 +164,7 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     e1 = numpy.zeros((natm, natm, 3, 3))  # (A,B,dR_A,dR_B)
     ej = numpy.zeros((natm, natm, 3, 3))
     ek = numpy.zeros((natm, natm, 3, 3))
-    
+
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
