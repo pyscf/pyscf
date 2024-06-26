@@ -52,6 +52,15 @@ class KnownValues(unittest.TestCase):
         hess = hobj.kernel()
         self.assertAlmostEqual(lib.fp(hess), -0.7816352153153946, 4)
 
+    def test_rhf_hess_atmlst(self):
+        mf = scf.RHF(mol)
+        e0 = mf.kernel()
+
+        atmlst = [0, 1]
+        hess_1 = mf.Hessian().kernel()[atmlst][:, atmlst]
+        hess_2 = mf.Hessian().kernel(atmlst=atmlst)
+        self.assertAlmostEqual(abs(hess_1-hess_2).max(), 0.0, 4)
+
     def test_finite_diff_x2c_rhf_hess(self):
         mf = scf.RHF(mol).x2c()
         mf.conv_tol = 1e-14
