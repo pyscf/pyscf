@@ -355,11 +355,13 @@ class _einsum_term:
             path = oe.contract_path(self.einsum_str, *tensors, memory_limit=memory, optimize=optimize)
         
         #print(path[1])
-        
         self._contract_fn = partial(oe.contract,
                                     #subscripts   = self.einsum_str,
                                     optimize     = path[0],
                                     memory_limit = memory)
+        #print("term %s path is finished" % self.name)
+        #assert self._contract_fn is not None
+        
         
     @classmethod
     def _size_dict_cotengra(cls, inputs, *tensors):
@@ -400,6 +402,10 @@ class _einsum_term:
     
     def _contract_path(self, scheduler, backend, **kwargs):
         
+        #print("term %s path is building" % self.name)
+        #print("backend = ", backend)
+        #print("kwargs  = ", kwargs)
+        
         if self.is_skeleton:
             self._contract_fn = None
             return None  ### no need to build path for skeleton
@@ -418,15 +424,19 @@ class _einsum_term:
         else:
             assert backend == "cotengra"
             self._build_path_cotengra(scheduler, **kwargs)
+        
+        return self
 
     def _contract(self, scheduler):
         
         if self._contract_fn is None:
             #raise ValueError("Contract path not built.")
+            #print("evaluate skeleton term: ", self.name) 
             assert self.is_skeleton
             res = scheduler.get_tensor(self.args[0]) * self.factor
         
         else:
+            #print("evaluate term: ", self.name)
             tensors    = [scheduler.get_tensor(arg) for arg in self.args]
         
             if self._backend == "cotengra":
@@ -503,6 +513,8 @@ class _expr_fov(_einsum_term):
         super().__init__("fov", "ia", args=["fov"])
 
 ##### expression holder, can express + relation #####
+
+### used in multiprocessing ### 
 
 class _expr_holder:
     
@@ -720,6 +732,10 @@ class _expr_holder:
     
     #### constrauct path ####
     
+    def process_term(self, term, scheduler, backend, **kwargs):
+        term._contract_path(scheduler, backend, **kwargs)
+        return term
+        
     def build_contraction_path(self, scheduler, backend, **kwargs):
         
         if scheduler is None:
@@ -727,9 +743,22 @@ class _expr_holder:
         else:
             self.set_scheduler(scheduler)
         
-        for term in self.terms:
-            term._contract_path(self._scheduler, backend, **kwargs)
-    
+        if backend != "cotengra":
+        
+            from multiprocessing import Pool
+            process_term_with_fixed_args = partial(self.process_term, scheduler=scheduler, backend=backend, **kwargs)
+            terms = None
+            with Pool() as pool:
+                #pool.map(self.process_term, [(term, scheduler, backend, kwargs) for term in self.terms])
+                terms = pool.map(process_term_with_fixed_args, self.terms)
+                #print("terms = ", terms)
+            self.terms = terms
+        
+        else:
+            
+            for term in self.terms:
+                term._contract_path(scheduler, backend, **kwargs)            
+
     #### contraction ####
     
     def contract(self, scheduler):
@@ -1158,6 +1187,7 @@ class THC_scheduler:
         
         for _id_ in range(len(self._expr_intermediates)):
             self._expr_intermediates[_id_], dep = _parse_expression(self._expr_intermediates[_id_], self)
+            self._expr_intermediates[_id_].rename_subterms()
             self._dependency[self._expr_intermediates[_id_].name] = dep
         
         for name, expression in self.expr.items():
@@ -1206,8 +1236,9 @@ class THC_scheduler:
                 else:
                     assert name in self.expr
                     self.expr[name].build_contraction_path(self, backend, **kwargs)
-            if i < (NLAYER-1):
-                self._evaluate(name)
+                if i < (NLAYER-1):
+                    #print("name %s is finished" % name)
+                    self._evaluate(name)
     
     def _evaluate(self, expr_name):
         
@@ -1393,7 +1424,7 @@ if __name__ == "__main__":
     t1new +=   thc_einsum_sybolic('likc,lc,ka->ia', eris_ooov, t1, t1, cached=True)
     
     scheduler_test.register_expr("T1_NEW", t1new)
-    
+
     scheduler_test._build_expression()
     
     print(scheduler_test)

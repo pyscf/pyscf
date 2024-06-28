@@ -300,7 +300,7 @@ if __name__ == "__main__":
     
     scheduler._build_expression()
     print(scheduler)
-    scheduler._build_contraction(backend="opt_einsum")
+    scheduler._build_contraction(backend="opt_einsum", optimize=True)
     #scheduler._build_contraction(backend="cotengra")
     
     res = scheduler.evaluate_t1_t2(T1, THC_T2)
