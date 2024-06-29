@@ -1246,8 +1246,6 @@ class THC_scheduler:
                 #print("Evaluate intermediate: ", name)
                 res = self._expr_intermediates[self._registered_intermediates_name.index(name)].contract(self)
                 self._cached_intermediates[self._registered_intermediates_name.index(name)] = res
-            if name == "FVV":
-                print("FVV = ", res)
             return res
         else:
             if name in self._expr_cached and self._expr_cached[name] is not None:

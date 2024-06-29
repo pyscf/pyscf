@@ -48,8 +48,8 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
     fock = eris.fock
     mo_e_o = eris.mo_energy[:nocc].copy()
     mo_e_o = np.diag(mo_e_o)
-    #mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
-    mo_e_v = eris.mo_energy[nocc:].copy()
+    mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
+    #mo_e_v = eris.mo_energy[nocc:].copy()
     mo_e_v = np.diag(mo_e_v)
 
     fov = fock[:nocc,nocc:].copy()
@@ -87,7 +87,6 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
 
     # T1 equation
     t1new = einsum_holder.to_expr_holder(fov.conj(), cached=True)
-    #print("t1_new = ", t1new)
     t1new  +=-2*einsum('kc,ka,ic->ia', fov, t1, t1)
     t1new +=   einsum('ac,ic->ia', Fvv, t1)
     t1new +=  -einsum('ki,ka->ia', Foo, t1)
@@ -155,8 +154,6 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
     else:
         Loo = imd.Loo(t1, t2, eris)
         Lvv = imd.Lvv(t1, t2, eris)
-        #Loo[np.diag_indices(nocc)] -= mo_e_o
-        #Lvv[np.diag_indices(nvir)] -= mo_e_v
         Loo -= mo_e_o
         Lvv -= mo_e_v
         
@@ -184,8 +181,8 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
         t2new -= (tmp + tmp.transpose((1,0,3,2)))
 
     mo_e_o = eris.mo_energy[:nocc].copy()
-    #mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
-    mo_e_v = eris.mo_energy[nocc:].copy()
+    mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
+    #mo_e_v = eris.mo_energy[nocc:].copy()
     eia = mo_e_o[:,None] - mo_e_v
     eia = 1.0 / eia
     #print("eia = ", eia)
@@ -253,6 +250,7 @@ class _fake_eris_full:
     def __init__(self, fock, Xo, Xv, THC_INT):
         
         self.fock = fock
+        self.mo_energy = np.diag(fock)
         self.ovvo = np.einsum("iP,aP,PQ,jQ,bQ->iabj", Xo, Xv, THC_INT, Xo, Xv, optimize=True)
         self.oovv = np.einsum("iP,jP,PQ,aQ,bQ->ijab", Xo, Xo, THC_INT, Xv, Xv, optimize=True)
         self.ovov = np.einsum("iP,aP,PQ,jQ,bQ->iajb", Xo, Xv, THC_INT, Xo, Xv, optimize=True)
@@ -281,10 +279,10 @@ if __name__ == "__main__":
     
     ### generate random input ### 
     
-    nocc = 2
-    nvir = 3
-    nthc = 4
-    nlaplace = 1
+    nocc = 4
+    nvir = 5
+    nthc = 17
+    nlaplace = 7
     
     Xo    = np.random.rand(nocc, nthc) * 0.1
     Xv    = np.random.rand(nvir, nthc) * 0.1
@@ -295,7 +293,7 @@ if __name__ == "__main__":
     Xo_T2 = np.random.rand(nocc, nthc) * 0.1
     Xv_T2 = np.random.rand(nvir, nthc) * 0.1
     PROJ  = np.random.rand(nthc, nthc) * 0.1
-
+    PROJ += PROJ.T
         
     THC_T2  = np.random.rand(nthc, nthc) * 0.1
     THC_T2 += THC_T2.T
@@ -342,6 +340,7 @@ if __name__ == "__main__":
     #### bench mark #### 
     
     import pyscf.cc.rccsd_slow as rccsd_slow
+    import pyscf.cc.rccsd as rccsd
     import pyscf.cc.rintermediates as r_imd
     
     ene_benchmark = rccsd_slow.energy(cc, t1, t2_full, eris_full)
@@ -381,8 +380,8 @@ if __name__ == "__main__":
     ########## bench mark Fvv ##########
     
     Fvv_bench = r_imd.cc_Fvv(t1, t2_full, eris_full)
-    #mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
-    mo_e_v = eris.mo_energy[nocc:].copy()
+    mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
+    #mo_e_v = eris.mo_energy[nocc:].copy()
     Fvv_bench -= np.diag(mo_e_v)
     
     Fvv = scheduler._evaluate("FVV")
@@ -394,7 +393,7 @@ if __name__ == "__main__":
     
     ########## bench t1 t2 ########## 
     
-    t1_new, t2_new = rccsd_slow.update_amps(cc, t1, t2_full, eris_full)
+    t1_new, t2_new = rccsd.update_amps(cc, t1, t2_full, eris_full)
     
     ene, t1_new_2, thc_t2_new = scheduler.evaluate_t1_t2(T1, THC_T2)
     print("ene = ", ene)
@@ -405,3 +404,18 @@ if __name__ == "__main__":
     
     print("diff_t1 = ", diff_t1)
     assert np.allclose(t1_new, t1_new_2)
+    
+    eia = mo_e_o[:,None] - mo_e_v
+    eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
+    #print("eijab = ", eijab)
+    t2_new *= eijab
+    eijab_new = np.einsum("iP,jP,aP,bP->ijab", Tau_o, Tau_o, Tau_v, Tau_v, optimize=True)
+    #print("eijab_new = ", eijab_new)
+    t2_new *= eijab_new
+    
+    t2_new_projected = np.einsum("AP,iP,aP,ijab,jQ,bQ,QB->AB", PROJ, Xo_T2, Xv_T2, t2_new, Xo_T2, Xv_T2, PROJ, optimize=True) 
+    diff = np.linalg.norm(thc_t2_new - t2_new_projected)
+    print(thc_t2_new)
+    print(t2_new_projected)
+    print(thc_t2_new-t2_new_projected)
+    print("diff_t2 = ", diff)
