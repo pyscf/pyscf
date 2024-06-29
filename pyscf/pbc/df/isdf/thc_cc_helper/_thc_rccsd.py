@@ -47,11 +47,15 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
     nvir = eris.nvir
     fock = eris.fock
     mo_e_o = eris.mo_energy[:nocc].copy()
-    mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
+    mo_e_o = np.diag(mo_e_o)
+    #mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
+    mo_e_v = eris.mo_energy[nocc:].copy()
+    mo_e_v = np.diag(mo_e_v)
 
     fov = fock[:nocc,nocc:].copy()
     foo = fock[:nocc,:nocc].copy()
     fvv = fock[nocc:,nocc:].copy()
+    #print("fov = ", fov)
     thc_scheduler.add_input("fov", fov)
     thc_scheduler.add_input("foo", foo)
     thc_scheduler.add_input("fvv", fvv)
@@ -82,13 +86,14 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
     thc_scheduler.register_intermediates("FOV", Fov)
 
     # T1 equation
-    t1new  =-2*einsum('kc,ka,ic->ia', fov, t1, t1)
+    t1new = einsum_holder.to_expr_holder(fov.conj(), cached=True)
+    #print("t1_new = ", t1new)
+    t1new  +=-2*einsum('kc,ka,ic->ia', fov, t1, t1)
     t1new +=   einsum('ac,ic->ia', Fvv, t1)
     t1new +=  -einsum('ki,ka->ia', Foo, t1)
     t1new += 2*einsum('kc,kica->ia', Fov, t2)
     t1new +=  -einsum('kc,ikca->ia', Fov, t2)
     t1new +=   einsum('kc,ic,ka->ia', Fov, t1, t1)
-    t1new += fov.conj()
     eris_ovvo = einsum_holder._thc_eri_ovvo()
     eris_oovv = einsum_holder._thc_eri_oovv()
     t1new += 2*einsum('kcai,kc->ia', eris_ovvo, t1)
@@ -179,9 +184,11 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
         t2new -= (tmp + tmp.transpose((1,0,3,2)))
 
     mo_e_o = eris.mo_energy[:nocc].copy()
-    mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
+    #mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
+    mo_e_v = eris.mo_energy[nocc:].copy()
     eia = mo_e_o[:,None] - mo_e_v
     eia = 1.0 / eia
+    #print("eia = ", eia)
     thc_scheduler.add_input("eia", eia)
     eia = einsum_holder._einsum_term("eia", "ia", 1.0, args=["eia"])
     t1new = einsum('ia,ia->ia', t1new, eia, cached=True)
@@ -242,6 +249,25 @@ class _fake_eris:
         #self.fock
         np.fill_diagonal(self.fock, self.mo_energy)
 
+class _fake_eris_full:
+    def __init__(self, fock, Xo, Xv, THC_INT):
+        
+        self.fock = fock
+        self.ovvo = np.einsum("iP,aP,PQ,jQ,bQ->iabj", Xo, Xv, THC_INT, Xo, Xv, optimize=True)
+        self.oovv = np.einsum("iP,jP,PQ,aQ,bQ->ijab", Xo, Xo, THC_INT, Xv, Xv, optimize=True)
+        self.ovov = np.einsum("iP,aP,PQ,jQ,bQ->iajb", Xo, Xv, THC_INT, Xo, Xv, optimize=True)
+        self.ovoo = np.einsum("iP,aP,PQ,jQ,kQ->iajk", Xo, Xv, THC_INT, Xo, Xo, optimize=True)
+        self.ovvv = np.einsum("iP,aP,PQ,bQ,cQ->iabc", Xo, Xv, THC_INT, Xv, Xv, optimize=True)
+        self.ooov = np.einsum("iP,jP,PQ,kQ,aQ->ijka", Xo, Xo, THC_INT, Xo, Xv, optimize=True)
+        self.oooo = np.einsum("iP,jP,PQ,kQ,lQ->ijkl", Xo, Xo, THC_INT, Xo, Xo, optimize=True)
+        self.vvvv = np.einsum("aP,bP,PQ,cQ,dQ->abcd", Xv, Xv, THC_INT, Xv, Xv, optimize=True)
+        self.nocc = Xo.shape[0]
+        self.nvir = Xv.shape[0]
+        self.nthc = THC_INT.shape[0]
+    
+    def get_ovvv(self):
+        return self.ovvv
+
 class _fake_cc:
     def __init__(self, nocc, nvir, cc2=False):
         self.nocc = nocc
@@ -255,25 +281,25 @@ if __name__ == "__main__":
     
     ### generate random input ### 
     
-    nocc = 8
-    nvir = 12
-    nthc = 80
-    nlaplace = 9
+    nocc = 2
+    nvir = 3
+    nthc = 4
+    nlaplace = 1
     
-    Xo    = np.random.rand(nocc, nthc)
-    Xv    = np.random.rand(nvir, nthc)
-    Tau_o = np.random.rand(nocc, nlaplace)
-    Tau_v = np.random.rand(nvir, nlaplace)
-    THC_INT = np.random.rand(nthc, nthc)
+    Xo    = np.random.rand(nocc, nthc) * 0.1
+    Xv    = np.random.rand(nvir, nthc) * 0.1
+    Tau_o = np.random.rand(nocc, nlaplace) * 0.1
+    Tau_v = np.random.rand(nvir, nlaplace) * 0.1
+    THC_INT = np.random.rand(nthc, nthc) * 0.1
     THC_INT+= THC_INT.T
-    Xo_T2 = np.random.rand(nocc, nthc)
-    Xv_T2 = np.random.rand(nvir, nthc)
-    PROJ  = np.random.rand(nthc, nthc)
+    Xo_T2 = np.random.rand(nocc, nthc) * 0.1
+    Xv_T2 = np.random.rand(nvir, nthc) * 0.1
+    PROJ  = np.random.rand(nthc, nthc) * 0.1
 
         
-    THC_T2  = np.random.rand(nthc, nthc)
+    THC_T2  = np.random.rand(nthc, nthc) * 0.1
     THC_T2 += THC_T2.T
-    T1      = np.random.rand(nocc, nvir)
+    T1      = np.random.rand(nocc, nvir) * 0.1
     
     scheduler = einsum_holder.THC_scheduler(
         X_O=Xo,
@@ -304,6 +330,78 @@ if __name__ == "__main__":
     #scheduler._build_contraction(backend="cotengra")
     
     res = scheduler.evaluate_t1_t2(T1, THC_T2)
-    print('ene = ', res[0])
-    print('t1  = ', res[1])
-    print('t2  = ', res[2])
+    #print('ene = ', res[0])
+    #print('t1  = ', res[1])
+    #print('t2  = ', res[2])
+    
+    t1 = T1
+    t2_full = np.einsum("iP,aP,PQ,jQ,bQ->ijab", Xo_T2, Xv_T2, THC_T2, Xo_T2, Xv_T2, optimize=True)
+    
+    eris_full = _fake_eris_full(eris.fock, Xo, Xv, THC_INT)
+    
+    #### bench mark #### 
+    
+    import pyscf.cc.rccsd_slow as rccsd_slow
+    import pyscf.cc.rintermediates as r_imd
+    
+    ene_benchmark = rccsd_slow.energy(cc, t1, t2_full, eris_full)
+    print("ene_benchmark = ", ene_benchmark)
+
+    scheduler.update_t1(T1)
+    scheduler.update_t2(THC_T2)
+    
+    ene = scheduler._evaluate(einsum_holder.THC_scheduler.ccsd_energy_name)
+    print("ene           = ", ene)
+    
+    assert np.allclose(ene, ene_benchmark)
+    
+    ########## bench mark Foo ##########
+    
+    Foo_bench = r_imd.cc_Foo(t1, t2_full, eris_full)
+    mo_e_o = eris.mo_energy[:nocc].copy()
+    Foo_bench -= np.diag(mo_e_o)
+    
+    Foo = scheduler._evaluate("FOO")
+    
+    diff = np.linalg.norm(Foo - Foo_bench)
+    print("diff = ", diff)
+    
+    assert np.allclose(Foo, Foo_bench)
+    
+    ########## bench mark Fov ########## 
+    
+    Fov_bench = r_imd.cc_Fov(t1, t2_full, eris_full)
+    Fov = scheduler._evaluate("FOV")
+    
+    diff = np.linalg.norm(Fov - Fov_bench)
+    print("diff = ", diff)
+    
+    assert np.allclose(Fov, Fov_bench)
+    
+    ########## bench mark Fvv ##########
+    
+    Fvv_bench = r_imd.cc_Fvv(t1, t2_full, eris_full)
+    #mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
+    mo_e_v = eris.mo_energy[nocc:].copy()
+    Fvv_bench -= np.diag(mo_e_v)
+    
+    Fvv = scheduler._evaluate("FVV")
+    
+    diff = np.linalg.norm(Fvv - Fvv_bench)
+    print("diff = ", diff)
+    
+    assert np.allclose(Fvv, Fvv_bench)
+    
+    ########## bench t1 t2 ########## 
+    
+    t1_new, t2_new = rccsd_slow.update_amps(cc, t1, t2_full, eris_full)
+    
+    ene, t1_new_2, thc_t2_new = scheduler.evaluate_t1_t2(T1, THC_T2)
+    print("ene = ", ene)
+    diff_t1 = np.linalg.norm(t1_new - t1_new_2)
+    
+    print("t1_new   = ", t1_new)
+    print("t1_new_2 = ", t1_new_2)
+    
+    print("diff_t1 = ", diff_t1)
+    assert np.allclose(t1_new, t1_new_2)

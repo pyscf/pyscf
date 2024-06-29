@@ -436,8 +436,12 @@ class _einsum_term:
             res = scheduler.get_tensor(self.args[0]) * self.factor
         
         else:
-            #print("evaluate term: ", self.name)
+            #print("evaluate term: ", self.name, " with factor ", self.factor)
+            #print("args = ", self.args)
             tensors    = [scheduler.get_tensor(arg) for arg in self.args]
+
+            #for tensor, name in zip(tensors, self.args):
+            #    print("arg %10s = " % name, tensor)
         
             if self._backend == "cotengra":
                 res = self._contract_fn(tensors) * self.factor
@@ -775,6 +779,7 @@ class _expr_holder:
                 res = term._contract(scheduler)
             else:
                 res += term._contract(scheduler)
+            #print("after term %s, res = " % term.name, res)
         
         if self._remove_dg:
             res -= np.diag(np.diag(res))
@@ -862,7 +867,7 @@ def _parse_einsum_term(einsum_term:_einsum_term, scheduler):
     terms_now    = [einsum_term]
     terms_parsed = []
 
-    FACTOR = einsum_term.factor
+    #FACTOR = einsum_term.factor
 
     n_term_parsed = 0
 
@@ -872,6 +877,13 @@ def _parse_einsum_term(einsum_term:_einsum_term, scheduler):
         terms_parsed   = []
         
         for term in terms_now:
+            
+            #print("---- Parsing term: ----\n", term)
+            
+            assert isinstance(term, _einsum_term)
+            
+            FACTOR_TERM = term.factor
+            factor_absorbed = False
             
             if term.is_parsed:
                 terms_parsed.append(term)
@@ -897,6 +909,8 @@ def _parse_einsum_term(einsum_term:_einsum_term, scheduler):
                 indices_forbidden+= RHS
                 indices_forbidden = set(list(indices_forbidden))
                 
+                assert len(term.args) == len(subscripts)
+                
                 for tr_script, arg in zip(subscripts, term.args): 
                     
                     if term_parse_found:
@@ -905,6 +919,10 @@ def _parse_einsum_term(einsum_term:_einsum_term, scheduler):
                             arg_to_add = copy.deepcopy(arg)
                             if not isinstance(arg, str):
                                 arg_to_add._map_indices(list(tr_script))
+                            else:
+                                if not factor_absorbed:
+                                    factor_absorbed = True
+                                    arg_to_add *= FACTOR_TERM
                             args_2[_id_].append(arg_to_add)
                     else:
                         if isinstance(arg, str):
@@ -923,7 +941,13 @@ def _parse_einsum_term(einsum_term:_einsum_term, scheduler):
                                     args.append(sub_arg)
                                 tensor_scripts_2.append(tensor_scripts)
                                 args2.append(args)
-                                factor_2.append(arg_to_add.factor)
+                                if factor_absorbed:
+                                    #print("add factor = ", arg_to_add.factor)
+                                    factor_2.append(arg_to_add.factor)
+                                else:   
+                                    #print("add factor = ", arg_to_add.factor * FACTOR_TERM)
+                                    factor_2.append(arg_to_add.factor * FACTOR_TERM)
+                                    factor_absorbed = True
                             else:
                                 if arg.is_cached:
                                     arg_to_add = copy.deepcopy(arg)
@@ -937,12 +961,39 @@ def _parse_einsum_term(einsum_term:_einsum_term, scheduler):
                                 else:
                                     #### looping over the terms ####
                                     
+                                    # arg_to_add = copy.deepcopy(arg)
+                                    # arg_to_add._map_indices(list(tr_script))
+                                    # for sub_term in arg_to_add.terms:
+                                    #     sub_term_to_add = copy.deepcopy(sub_term)
+                                    #     #sub_term_to_add._map_indices(list(tr_script))
+                                    #     sub_term_to_add._relabel_dummy_indices(indices_forbidden)
+                                    #     arg_LHS = sub_term_to_add.einsum_str.split("->")[0].split(",")
+                                    #     args_to_add = copy.deepcopy(args)
+                                    #     tensor_scripts_to_add = tensor_scripts
+                                    #     for sub_tr_script, sub_arg in zip(arg_LHS, sub_term_to_add.args):
+                                    #         tensor_scripts_to_add += sub_tr_script + ","
+                                    #         args_to_add.append(sub_arg)
+                                    #     tensor_scripts_2.append(tensor_scripts_to_add)
+                                    #     args_2.append(args_to_add)
+                                    #     factor_2.append(sub_term_to_add.factor) 
+                                    
+                                    ### first parse the term ### 
+                                    
                                     arg_to_add = copy.deepcopy(arg)
                                     arg_to_add._map_indices(list(tr_script))
                                     
-                                    for sub_term in arg_to_add.terms:
+                                    #print("arg_to_add: \n", arg_to_add)
+                                    
+                                    parsed_arg_to_add, _ = _parse_expression(arg_to_add, scheduler)
+                                    
+                                    if not factor_absorbed:
+                                        parsed_arg_to_add *= FACTOR_TERM
+                                        factor_absorbed = True
+                                    
+                                    #print("parsed_arg_to_add: \n", parsed_arg_to_add)
+                                    
+                                    for sub_term in parsed_arg_to_add.terms:
                                         sub_term_to_add = copy.deepcopy(sub_term)
-                                        #sub_term_to_add._map_indices(list(tr_script))
                                         sub_term_to_add._relabel_dummy_indices(indices_forbidden)
                                         arg_LHS = sub_term_to_add.einsum_str.split("->")[0].split(",")
                                         args_to_add = copy.deepcopy(args)
@@ -952,39 +1003,60 @@ def _parse_einsum_term(einsum_term:_einsum_term, scheduler):
                                             args_to_add.append(sub_arg)
                                         tensor_scripts_2.append(tensor_scripts_to_add)
                                         args_2.append(args_to_add)
+                                        #print("add factor = ", sub_term_to_add.factor)
                                         factor_2.append(sub_term_to_add.factor)
 
                 assert term_parse_found
         
+                #print("tensor_scripts_2: ", tensor_scripts_2)
+                #print("factor_2        : ", factor_2)
+        
                 for _id_ in range(len(tensor_scripts_2)):
                     tensor_scripts_2[_id_] = tensor_scripts_2[_id_][:-1]
                     einsum_str = tensor_scripts_2[_id_] + "->" + RHS
-                    new_expr = _einsum_term(name      = NAME_FORMAT % n_term_parsed, 
-                                            einsum_str= einsum_str, 
-                                            factor    = factor_2[_id_], 
-                                            args      = args_2[_id_])
+                    factor = factor_2[_id_]
+                    if not factor_absorbed:
+                        factor *= FACTOR_TERM
+                    if factor == 0.0:
+                        continue
+                    new_expr = _einsum_term(name       = NAME_FORMAT % n_term_parsed, 
+                                            einsum_str = einsum_str, 
+                                            factor     = factor, 
+                                            args       = args_2[_id_])
+                    #print("new_expr: \n", new_expr)
                     n_term_parsed += 1
                     terms_parsed.append(new_expr)
         
-        terms_now = terms_parsed
+        terms_now = copy.deepcopy(terms_parsed)
 
-    for _id_ in range(len(terms_parsed)):
-        terms_parsed[_id_] *= FACTOR
+    #for _id_ in range(len(terms_parsed)):
+        #terms_parsed[_id_] *= FACTOR
+        #print("factor = ", terms_parsed[_id_].factor)
+        #print("term = \n", terms_parsed[_id_])
 
     return terms_parsed
 
 def _parse_expression(expression_holder:_expr_holder, scheduler):
+    
+    #print("Parsing expression: ", expression_holder.name)
     
     expr_name = expression_holder.name
 
     terms_parsed = []
 
     for term in expression_holder.terms:
-        #print(term)
-        res = _parse_einsum_term(term, scheduler)
+        #print("********************")
+        #print("parse \n", term)
+        #print("********************")
+        #res = _parse_einsum_term(term, scheduler)
         #print(res)
         terms_parsed.extend(_parse_einsum_term(term, scheduler))
         #print("Parsed term: ", terms_parsed)
+    
+    #print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    #for term in terms_parsed:
+    #    print("Parsed term: \n", term)
+    #print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     
     dependence = []
     for term in terms_parsed:
@@ -1116,6 +1188,9 @@ class THC_scheduler:
         self.thc_t2 = thc_t2
 
     def register_intermediates(self, name, expression):
+        #print("Register intermediate: ", name)
+        if name in self._input_tensor_name:
+            return
         if name not in self._registered_intermediates_name:
             expression.name = name
             self._registered_intermediates_name.append(name)
@@ -1168,13 +1243,17 @@ class THC_scheduler:
         elif name in self._registered_intermediates_name:
             res =  self._cached_intermediates[self._registered_intermediates_name.index(name)]
             if res is None:
+                #print("Evaluate intermediate: ", name)
                 res = self._expr_intermediates[self._registered_intermediates_name.index(name)].contract(self)
                 self._cached_intermediates[self._registered_intermediates_name.index(name)] = res
+            if name == "FVV":
+                print("FVV = ", res)
             return res
         else:
             if name in self._expr_cached and self._expr_cached[name] is not None:
                 return self._expr_cached[name]
             else:
+                #print("Evaluate expression: ", name)
                 res = self.expr[name].contract(self)
                 self._expr_cached[name] = res
                 return res
@@ -1200,7 +1279,9 @@ class THC_scheduler:
         self._intermediates_hierarchy = []
         
         all_intermediates = list(self.expr.keys())
+        #print("all_intermediates: ", all_intermediates)
         all_intermediates.extend(self._registered_intermediates_name)
+        #print("all_intermediates: ", all_intermediates)
         
         removed_intermediates = copy.deepcopy(self._input_tensor_name)
         
@@ -1209,6 +1290,8 @@ class THC_scheduler:
         while True:
             intermediates_this_layer = []
             for name in all_intermediates:
+                #print("name: ", name)
+                #print("removed_intermediates: ", removed_intermediates)
                 if all([dep in removed_intermediates for dep in self._dependency[name]]):
                     intermediates_this_layer.append(name)
             self._intermediates_hierarchy.append(intermediates_this_layer)
