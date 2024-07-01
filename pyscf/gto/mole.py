@@ -2750,7 +2750,7 @@ class MoleBase(lib.StreamObject):
                           '          X                Y                Z       unit  Magmom\n')
         for ia,atom in enumerate(self._atom):
             coorda = tuple([x * param.BOHR for x in atom[1]])
-            coordb = tuple([x for x in atom[1]])
+            coordb = tuple(atom[1])
             magmom = self.magmom[ia]
             self.stdout.write('[INPUT]%3d %-4s %16.12f %16.12f %16.12f AA  '
                               '%16.12f %16.12f %16.12f Bohr  %4.1f\n'
@@ -3070,7 +3070,7 @@ class MoleBase(lib.StreamObject):
             logger.info(mol, 'New geometry')
             for ia, atom in enumerate(mol._atom):
                 coorda = tuple([x * param.BOHR for x in atom[1]])
-                coordb = tuple([x for x in atom[1]])
+                coordb = tuple(atom[1])
                 coords = coorda + coordb
                 logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f AA  '
                             '%16.12f %16.12f %16.12f Bohr\n',

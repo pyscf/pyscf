@@ -582,7 +582,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
         tril2sq = lib.square_mat_in_trilu_indices(nvira)
         loadbuf = numpy.empty((blksize,blksize,nvirb,nvirb))
 
-        slices = [(i0, i1) for i0, i1 in lib.prange(0, nvira, blksize)]
+        slices = list(lib.prange(0, nvira, blksize))
         for istep, wwbuf in enumerate(fmap(load, lib.prange(0, nvira, blksize))):
             i0, i1 = slices[istep]
             off0 = i0*(i0+1)//2

@@ -99,7 +99,7 @@ def PipekMezey_stability_jacobi(mlo, mo_coeff=None, conv_tol=None):
     rows = np.floor(((1+8*mo_pair_indices)**0.5-1)*0.5).astype(int)
     cols = mo_pair_indices - rows*(rows+1) // 2
     rows += 1
-    pairs = [(row,col) for row,col in zip(rows,cols)]
+    pairs = list(zip(rows,cols))
 
     if len(pairs) > 0:
         log.info('Jacobi sweep for %d mo pairs: %s', len(pairs), pairs)

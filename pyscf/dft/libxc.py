@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -1657,7 +1656,7 @@ def _eval_xc(xc_code, rho, spin=0, deriv=1, omega=None):
         warnings.warn('Libxc functionals %s may have discrepancy to xcfun '
                       'library.\n' % problem_xc)
 
-    if any([needs_laplacian(fid) for fid in fn_ids]):
+    if any(needs_laplacian(fid) for fid in fn_ids):
         raise NotImplementedError('laplacian in meta-GGA method')
 
     nvar, xlen = xc_deriv._XC_NVAR[xctype, spin]

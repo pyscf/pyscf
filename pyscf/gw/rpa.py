@@ -26,7 +26,8 @@ Method:
     X. Ren et al., New J. Phys. 14, 053020 (2012)
 """
 
-import numpy as np, scipy
+import numpy as np
+import scipy
 
 from pyscf import lib
 from pyscf.lib import logger

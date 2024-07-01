@@ -579,7 +579,7 @@ def _get_epqr(pindices,qindices,rindices,fac=[1.0,1.0,1.0],large_num=LARGE_DENOM
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert (all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all(len(x) == 5 for x in [pindices,qindices]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     r0,r1,kr,mo_e_r,nonzero_r = rindices

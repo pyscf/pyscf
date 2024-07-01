@@ -343,7 +343,7 @@ class CASSCF_GradScanner(lib.GradScanner):
         #if isinstance (e_tot, (list, tuple, np.ndarray)): e_tot = e_tot[self.state]
         if hasattr (mc_scanner, 'e_states'): e_tot = mc_scanner.e_states[self.state]
         self.mol = mol
-        if not ('state' in kwargs):
+        if 'state' not in kwargs:
             kwargs['state'] = self.state
         de = self.kernel(**kwargs)
         return e_tot, de

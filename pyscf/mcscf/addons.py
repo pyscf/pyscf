@@ -1364,7 +1364,7 @@ class StateAverageMixFCISolver(StateAverageFCISolver):
         ci0 = _state_args (ci0)
         link_index = _solver_args (link_index)
         nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
-        return [dm for dm in self._collect ('make_rdm1', ci0, norb, nelec, link_index=link_index, **kwargs)]
+        return list(self._collect ('make_rdm1', ci0, norb, nelec, link_index=link_index, **kwargs))
 
     def make_rdm1(self, ci0, norb, nelec, link_index=None, **kwargs):
         dm1 = self.states_make_rdm1 (ci0, norb, nelec, link_index=link_index, **kwargs)
