@@ -49,13 +49,12 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
     mo_e_o = eris.mo_energy[:nocc].copy()
     mo_e_o = np.diag(mo_e_o)
     mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
-    #mo_e_v = eris.mo_energy[nocc:].copy()
     mo_e_v = np.diag(mo_e_v)
 
     fov = fock[:nocc,nocc:].copy()
     foo = fock[:nocc,:nocc].copy()
     fvv = fock[nocc:,nocc:].copy()
-    #print("fov = ", fov)
+
     thc_scheduler.add_input("fov", fov)
     thc_scheduler.add_input("foo", foo)
     thc_scheduler.add_input("fvv", fvv)
@@ -84,6 +83,24 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
     thc_scheduler.register_intermediates("FOO", Foo)
     thc_scheduler.register_intermediates("FVV", Fvv)
     thc_scheduler.register_intermediates("FOV", Fov)
+    
+    if eris is None:
+        eris_ovvo = einsum_holder._thc_eri_ovvo()
+        eris_oovv = einsum_holder._thc_eri_oovv()
+        eris_ovvv = einsum_holder._thc_eri_ovvv()
+        eris_ovoo = einsum_holder._thc_eri_ovoo()
+        eris_ovov = einsum_holder._thc_eri_ovov()
+        eris_oooo = einsum_holder._thc_eri_oooo()
+        eris_vvvv = einsum_holder._thc_eri_vvvv()
+    else:
+        eris_ovvo = eris.ovvo
+        eris_oovv = eris.oovv
+        eris_ovvv = eris.ovvv
+        eris_ovoo = eris.ovoo
+        eris_ovov = eris.ovov
+        eris_oooo = eris.oooo
+        eris_vvvv = eris.vvvv
+           
 
     # T1 equation
     t1new = einsum_holder.to_expr_holder(fov.conj(), cached=True)
@@ -93,16 +110,12 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
     t1new += 2*einsum('kc,kica->ia', Fov, t2)
     t1new +=  -einsum('kc,ikca->ia', Fov, t2)
     t1new +=   einsum('kc,ic,ka->ia', Fov, t1, t1)
-    eris_ovvo = einsum_holder._thc_eri_ovvo()
-    eris_oovv = einsum_holder._thc_eri_oovv()
     t1new += 2*einsum('kcai,kc->ia', eris_ovvo, t1)
     t1new +=  -einsum('kiac,kc->ia', eris_oovv, t1)
-    eris_ovvv = einsum_holder._thc_eri_ovvv()
     t1new += 2*einsum('kdac,ikcd->ia', eris_ovvv, t2)
     t1new +=  -einsum('kcad,ikcd->ia', eris_ovvv, t2)
     t1new += 2*einsum('kdac,kd,ic->ia', eris_ovvv, t1, t1)
     t1new +=  -einsum('kcad,kd,ic->ia', eris_ovvv, t1, t1)
-    eris_ovoo = einsum_holder._thc_eri_ovoo()
     t1new +=-2*einsum('lcki,klac->ia', eris_ovoo, t2)
     t1new +=   einsum('kcli,klac->ia', eris_ovoo, t2)
     t1new +=-2*einsum('lcki,lc,ka->ia', eris_ovoo, t1, t1)
@@ -118,11 +131,9 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
     tmp2 += eris_ovoo.transpose((1,3,0,2)).conj()
     tmp   = einsum('akij,kb->ijab', tmp2, t1)
     t2new -= tmp + tmp.transpose((1,0,3,2))
-    eris_ovov = einsum_holder._thc_eri_ovov()
     t2new += eris_ovov.conj().transpose((0,2,1,3))
     
     if cc.cc2:
-        eris_oooo = einsum_holder._thc_eri_oooo()
         Woooo2  = eris_oooo.transpose((0,2,1,3))
         Woooo2 += einsum('lcki,jc->klij', eris_ovoo, t1)
         Woooo2 += einsum('kclj,ic->klij', eris_ovoo, t1)
@@ -130,7 +141,6 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
         t2new  += einsum('klij,ka,lb->ijab', Woooo2, t1, t1)
         Wvvvv  = einsum('kcbd,ka->abcd', eris_ovvv, -t1)
         Wvvvv  = Wvvvv + Wvvvv.transpose(1,0,3,2)
-        eris_vvvv = einsum_holder._thc_eri_vvvv()
         Wvvvv += eris_vvvv.transpose((0,2,1,3))
         t2new += einsum('abcd,ic,jd->ijab', Wvvvv, t1, t1)
         Lvv2   = fvv - np.einsum('kc,ka->ac', fov, t1)
@@ -217,6 +227,7 @@ def energy(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eri
     #nocc, nvir = t1.shape
     
     fock = eris.fock
+    nocc = eris.nocc    
     fov = fock[:nocc,nocc:].copy()
     thc_scheduler.add_input("fov", fov)  ## "fov" must be this name here!
     fov_expr = einsum_holder._expr_fov()
@@ -245,6 +256,15 @@ class _fake_eris:
         self.mo_energy = np.sort(self.mo_energy)
         #self.fock
         np.fill_diagonal(self.fock, self.mo_energy)
+        #eri exprs
+        self.ovvo = einsum_holder._thc_eri_ovvo()
+        self.oovv = einsum_holder._thc_eri_oovv()
+        self.ovov = einsum_holder._thc_eri_ovov()
+        self.ovoo = einsum_holder._thc_eri_ovoo()
+        self.ovvv = einsum_holder._thc_eri_ovvv()
+        self.oooo = einsum_holder._thc_eri_oooo()
+        self.vvvv = einsum_holder._thc_eri_vvvv()
+        
 
 class _fake_eris_full:
     def __init__(self, fock, Xo, Xv, THC_INT):
