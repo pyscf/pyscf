@@ -212,7 +212,7 @@ def optimize_contraction(basis):
             key = tuple(b[:1])
             ec = numpy.array(b[1:]).T
         es = ec[0]
-        cs = [c for c in ec[1:]]
+        cs = list(ec[1:])
 
         if key not in basdic:
             basdic[key] = []

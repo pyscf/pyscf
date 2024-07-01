@@ -673,7 +673,7 @@ class FCISolver(direct_spin1.FCISolver):
             hdiag, hdiag0 = numpy.empty(na*nb), hdiag.ravel()
             hdiag[:] = 1e9
             hdiag[s_idx] = hdiag0
-        elif not getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov'):
+        elif getattr(self.mol, 'groupname', None) not in ('Dooh', 'Coov'):
             # Screen symmetry forbidden elements
             hdiag, hdiag0 = numpy.empty(na*nb), hdiag.ravel()
             hdiag[:] = 1e9

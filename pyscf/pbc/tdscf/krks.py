@@ -43,7 +43,7 @@ RPA = KTDDFT = TDDFT
 def _rebuild_df(td):
     log = lib.logger.new_logger(td)
     mf = td._scf
-    if any([k != 0 for k in td.kshift_lst]):
+    if any(k != 0 for k in td.kshift_lst):
         if isinstance(mf.with_df, df.df.DF):
             if mf.with_df._j_only:
                 log.warn(f'Non-zero kshift is requested for {td.__class__.__name__}, '

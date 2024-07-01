@@ -446,7 +446,7 @@ def combine(*auxspcs):
     '''
 
     nphys = [auxspc.nphys for auxspc in auxspcs]
-    if not all([x == nphys[0] for x in nphys]):
+    if not all(x == nphys[0] for x in nphys):
         raise ValueError('Size of physical space must be the same to '
                          'combine AuxiliarySpace objects.')
     nphys = nphys[0]

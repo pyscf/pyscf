@@ -205,7 +205,7 @@ class PolEmbed(lib.StreamObject):
                 element_row = _get_element_row(p.element)
                 ecp_label, _ = _pe_ecps[element_row]
                 ecpatoms.append([ecp_label, p.x, p.y, p.z])
-            self.ecpmol = gto.M(atom=ecpatoms, ecp={l: k for (l, k) in _pe_ecps},
+            self.ecpmol = gto.M(atom=ecpatoms, ecp=dict(_pe_ecps),
                                 basis={}, unit="Bohr")
             # add the normal mol to compute integrals
             self.ecpmol += self.mol

@@ -67,7 +67,7 @@ INQUIRY = 50050
 TASK = 50051
 def work_share_partition(tasks, interval=.02, loadmin=1):
     loadmin = max(loadmin, len(tasks)//50//pool.size)
-    rest_tasks = [x for x in tasks[loadmin*pool.size:]]
+    rest_tasks = list(tasks[loadmin*pool.size:])
     tasks = tasks[loadmin*rank:loadmin*rank+loadmin]
     def distribute_task():
         while True:

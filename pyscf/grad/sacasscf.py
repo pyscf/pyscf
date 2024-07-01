@@ -386,7 +386,7 @@ class CASSCF_GradScanner(lib.GradScanner):
         if hasattr (mc_scanner, 'e_mcscf'): self.e_mcscf = mc_scanner.e_mcscf
         if hasattr (mc_scanner, 'e_states') and self.state is not None:
             e_tot = mc_scanner.e_states[self.state]
-        if not ('state' in kwargs):
+        if 'state' not in kwargs:
             kwargs['state'] = self.state
         de = self.kernel(**kwargs)
         return e_tot, de
@@ -876,7 +876,7 @@ class SACASLagPrec (lagrange.LagPrec):
                 except Exception as e:
                     print (i, j, desort_spin)
                     raise (e)
-        assert (all ([i is not None for i in Mxci]))
+        assert (all (i is not None for i in Mxci))
         return Mxci
 
 mcscf.addons.StateAverageMCSCFSolver.Gradients = lib.class_as_method(Gradients)
