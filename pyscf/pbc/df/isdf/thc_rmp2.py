@@ -49,9 +49,9 @@ WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 class THC_RMP2(_restricted_THC_posthf_holder, MP2):
     
     def __init__(self, 
-                 my_isdf, 
-                 my_mf, 
+                 my_mf=None, 
                  frozen=None, mo_coeff=None, mo_occ=None,
+                 my_isdf=None, 
                  X=None, ## used in XXZXX
                  laplace_rela_err = 1e-7,
                  laplace_order    = 2,
@@ -59,6 +59,10 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
                  #with_mpi         = False,
                  no_LS_THC        = False):
         
+        if my_isdf is None:
+            assert my_mf is not None
+            my_isdf = my_mf.with_df
+
         _restricted_THC_posthf_holder.__init__(self, my_isdf, my_mf, X,
                                                 laplace_rela_err = laplace_rela_err,
                                                 laplace_order    = laplace_order,
@@ -185,7 +189,7 @@ if __name__ == "__main__":
     
     X = myisdf.aoRg_full()
     
-    thc_rmp2 = THC_RMP2(myisdf, mf_isdf, X=X)
+    thc_rmp2 = THC_RMP2(my_mf=mf_isdf, X=X)
     
     e_mp2, _ = thc_rmp2.kernel(backend='cotengra')
     

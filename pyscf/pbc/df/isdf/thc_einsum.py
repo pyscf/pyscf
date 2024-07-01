@@ -149,13 +149,15 @@ def thc_einsum(subscripts, *tensors, **kwargs):
     if len(tensors) <= 1 or '...' in subscripts:
         #out = _numpy_einsum(subscripts, *tensors, **kwargs)
         raise NotImplementedError
-    elif len(tensors) <= 2:
-        #out = _contract(subscripts, *tensors, **kwargs)
-        raise NotImplementedError
+    #elif len(tensors) <= 2:
+    #    #out = _contract(subscripts, *tensors, **kwargs)
+    #    raise NotImplementedError
     else:
         optimize = kwargs.pop('optimize', True)
         
         ### split subscripts ### 
+        
+        forbidden_indices = list(set(list(subscripts)))
         
         subscripts = subscripts.split('->')
         lhs        = subscripts[0]
@@ -177,9 +179,17 @@ def thc_einsum(subscripts, *tensors, **kwargs):
                 #thc_indices                 = THC_INDICES[n_THC_laplace_indices] + THC_INDICES[n_THC_laplace_indices+1]
                 #n_THC_laplace_indices      += 2
                 thc_indices = ""
-                for _ in range(_tensor_.n_extra_indices):
-                    thc_indices += THC_INDICES[n_THC_laplace_indices]
-                    n_THC_laplace_indices += 1
+                #for _ in range(_tensor_.n_extra_indices):
+                #    if THC_INDICES[n_THC_laplace_indices] in forbidden_indices:
+                #        continue
+                #    thc_indices += THC_INDICES[n_THC_laplace_indices]
+                #    n_THC_laplace_indices += 1
+                while len(thc_indices) < _tensor_.n_extra_indices:
+                    if THC_INDICES[n_THC_laplace_indices] in forbidden_indices:
+                        n_THC_laplace_indices += 1
+                    else:
+                        thc_indices += THC_INDICES[n_THC_laplace_indices]
+                        n_THC_laplace_indices += 1
                 tmp_tensors, tmp_subscripts = _tensor_.update_einsum(_script_, thc_indices)
                 tensors_2.extend(tmp_tensors)
                 tensors_scripts_2 += tmp_subscripts
