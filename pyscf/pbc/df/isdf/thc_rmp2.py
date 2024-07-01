@@ -101,6 +101,11 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
                 print(mp2_J[1])
                 print("RMP2_K, path = ")
                 print(mp2_K[1])
+            elif backend == "cotengra":
+                print("RMP2_J, path = ")
+                mp2_J.print_contractions()
+                print("RMP2_K, path = ")
+                mp2_K.print_contractions()
             return mp2_J, mp2_K
         else:
             self.e_corr = -2*mp2_J+mp2_K
