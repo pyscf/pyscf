@@ -82,6 +82,10 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         self._backend = backend
         self._memory  = memory
         
+        self.nthc = self.X_o.shape[1]
+        
+        #self.diis = False ## should scaled to the same scale as t1 
+        
         #### init projector ####
         
         self._thc_eris = self.ao2mo(self.mo_coeff)
@@ -93,6 +97,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         time0 = logger.process_clock(), logger.perf_counter()
         _, t1, thc_t2 = self.init_amps(self._thc_eris)
         logger.timer(self, 'init_amps', *time0)
+        
+        self.t1, self.t2 = t1, thc_t2
         
         #### init scheduler #### 
         
@@ -126,36 +132,25 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         time1 = logger.process_clock(), logger.perf_counter()
         PROJ_INV = np.einsum('iP,aP,iQ,aQ->PQ', self.X_o, self.X_v, self.X_o, self.X_v, optimize=True)
         import scipy
-        #PROJ_2 = scipy.linalg.inv(PROJ_INV, overwrite_a=False)
         D_RR, U_RR = scipy.linalg.eigh(PROJ_INV)
-        #print("D_RR = ", D_RR)
-        print("condition number = ", D_RR[-1]/D_RR[0])    
         kept = D_RR > D_RR[-1]*1e-14
+        
+        print("condition number = ", D_RR[-1]/D_RR[0])    
         print("nkept = ", np.sum(kept))
-        D_RR = D_RR[kept]
-        U_RR = U_RR[:,kept]
-        D_RR_inv   = (1.0/D_RR).copy()
-        PROJ = U_RR @ np.diag(D_RR_inv) @ U_RR.T
-        #PROJ = np.einsum('PQ,Q,QR->PR', U_RR, D_RR_inv, U_RR.T, optimize=True)
+        
+        D_RR     = D_RR[kept]
+        U_RR     = U_RR[:,kept]
+        D_RR_inv = (1.0/D_RR).copy()
+        PROJ     = U_RR @ np.diag(D_RR_inv) @ U_RR.T
         logger.timer(self, 'build projector', *time1)
         
-        #diff = np.linalg.norm(PROJ - PROJ_2)
-        #print("diff = ", diff)
-        #diff2 = np.linalg.norm(PROJ_2 - PROJ_2.T)
-        #print("diff2 = ", diff2)
-        #diff3 = np.linalg.norm(PROJ - PROJ.T)
-        #print("diff3 = ", diff3)
-        #PROJ = 0.5 * (PROJ + PROJ.T)
-        #assert np.allclose(PROJ, PROJ_2)
-        
-        #print("id = ?", PROJ @ PROJ_INV)
-        #diff = np.linalg.norm(PROJ @ PROJ_INV - np.identity(PROJ.shape[0]))
-        #print("diff = ", diff)
-        #diff = PROJ@PROJ_INV - np.identity(PROJ.shape[0])
-        #print("diff = ", diff)
-        #assert np.allclose(np.identity(PROJ.shape[0]), PROJ @ PROJ_INV)
-        
         self.projector = PROJ
+        
+        D_RR_sqrt     = np.sqrt(D_RR)
+        D_RR_inv_sqrt = 1.0/D_RR_sqrt
+        
+        self.projector_sqrt     = U_RR @ np.diag(D_RR_inv_sqrt) @ U_RR.T
+        self.projector_inv_sqrt = U_RR @ np.diag(D_RR_sqrt) @ U_RR.T
         
         return PROJ
 
@@ -210,7 +205,7 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         #                    )
         #print(t2_thc_path[1])
         
-        t2_thc = thc_einsum('AP,iP,aP,iajb,ijab,jQ,bQ,QB->AB', self.projector, self.X_o, self.X_v, thc_eri, 
+        t2_thc = -thc_einsum('AP,iP,aP,iajb,ijab,jQ,bQ,QB->AB', self.projector, self.X_o, self.X_v, thc_eri, 
                             ene_deno, self.X_o, self.X_v, self.projector, optimize=True, backend=self._backend, memory=self._memory
                             #, return_path_only=True
                             )
@@ -228,8 +223,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         t2_holder = thc_holder(self.X_o, self.X_v, t2_thc)
         
         emp2  = 0
-        emp2 -= 2 * thc_einsum('iajb,iajb->', t2_holder, thc_eri, optimize=True, backend=self._backend, memory=self._memory)
-        emp2 +=     thc_einsum('iajb,ibja->', t2_holder, thc_eri, optimize=True, backend=self._backend, memory=self._memory)
+        emp2 += 2 * thc_einsum('iajb,iajb->', t2_holder, thc_eri, optimize=True, backend=self._backend, memory=self._memory)
+        emp2 -=     thc_einsum('iajb,ibja->', t2_holder, thc_eri, optimize=True, backend=self._backend, memory=self._memory)
         
         self.emp2 = emp2.real
 
@@ -238,6 +233,85 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         logger.timer(self, 'init mp2', *time0)
         
         return self.emp2, t1, t2_thc
+
+    def amplitudes_to_vector(self, t1, t2, out=None):
+        nocc, nvir = t1.shape
+        nov = nocc * nvir
+        nthc = self.nthc
+        size = nov + nthc * (nthc+1) // 2
+        vector = numpy.ndarray(size, t1.dtype, buffer=out)
+        vector[:nov] = t1.ravel()
+        from functools import reduce
+        t2_scaled = reduce(numpy.dot, (self.projector_inv_sqrt, t2, self.projector_inv_sqrt.T))
+        lib.pack_tril(t2_scaled.reshape(nthc,nthc), out=vector[nov:])
+        return vector
+    
+    def vector_to_amplitudes(self, vec, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nvir = nmo - nocc
+        nov  = nocc * nvir
+        nthc = self.nthc
+        t1 = vec[:nov].copy().reshape((nocc,nvir))
+        t2 = lib.unpack_tril(vec[nov:], filltriu=lib.SYMMETRIC)
+        from functools import reduce
+        t2 = reduce(numpy.dot, (self.projector_sqrt.T, t2, self.projector_sqrt))
+        return t1, numpy.asarray(t2, order='C')
+
+    def vector_size(self, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nvir = nmo - nocc
+        nov = nocc * nvir
+        nthc = self.nthc
+        return nov + nthc * (nthc+1) // 2
+
+    ### rewrite energy and update_amps ###
+    
+    def energy(self, t1=None, t2=None, eris=None):
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        #return _thc_rccsd_ind.energy(self, t1, t2, self._thc_eris, self._thc_scheduler)
+        return self._thc_scheduler.energy(t1, t2)
+
+    def update_amps(self, t1, t2, eris):
+        
+        if self.cc2:
+            raise NotImplementedError
+
+        #print("t1", t1[0,:])
+        #print("t2", t2[0,:])
+
+        _, t1_new, t2_new = self._thc_scheduler.evaluate_t1_t2(t1, t2, evaluate_ene=False)
+        
+        #print("t1_new", t1_new[0,:])
+        #print("t2_new", t2_new[0,:])
+        
+        return t1_new, t2_new
+
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
+        if mbpt2 == False:
+            raise NotImplementedError
+        return self.ccsd(t1, t2, eris, mbpt2)
+    
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
+        '''Ground-state CCSD.
+
+        Kwargs:
+            mbpt2 : bool
+                Use one-shot MBPT2 approximation to CCSD.
+        '''
+        if mbpt2:
+            #pt = mp2.MP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+            #self.e_corr, self.t2 = pt.kernel(eris=eris)
+            #nocc, nvir = self.t2.shape[1:3]
+            #self.t1 = np.zeros((nocc,nvir))
+            #return self.e_corr, self.t1, self.t2
+            raise NotImplementedError
+
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
+        return ccsd.CCSDBase.ccsd(self, t1, t2, eris)
 
 ################## ERIS ##################
 
@@ -271,8 +345,8 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
 
 if __name__ == "__main__":
     
-    c = 15
-    N = 2
+    c = 10
+    N = 1
     
     #if rank == 0:
     cell   = pbcgto.Cell()
@@ -290,10 +364,11 @@ if __name__ == "__main__":
                 ['C', (0.8917 , 2.6751 , 2.6751)],
             ] 
 
-    cell.basis   = 'gth-szv'
+    #cell.basis   = 'gth-szv'
+    cell.basis = 'gth-cc-dzvp'
     cell.pseudo  = 'gth-pade'
     cell.verbose = 10
-    cell.ke_cutoff = 128
+    cell.ke_cutoff = 70
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
     cell.use_particle_mesh_ewald = True 
@@ -337,7 +412,9 @@ if __name__ == "__main__":
     
     X = myisdf.aoRg_full()
     
-    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, memory=2**30)
+    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, memory=2**31)
+    
+    thc_ccsd.ccsd()
     
     #thc_rmp2 = THC_RMP2(my_mf=mf_isdf, X=X)
     #e_mp2, _ = thc_rmp2.kernel(backend='cotengra')

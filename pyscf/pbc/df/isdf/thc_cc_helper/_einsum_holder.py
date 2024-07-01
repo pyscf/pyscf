@@ -1333,7 +1333,9 @@ class THC_scheduler:
             self._expr_cached[expr_name] = None
             return self.get_tensor(expr_name)
         
-    def evaluate_t1_t2(self, t1, thc_t2, evaluate_ene=True):
+    def evaluate_t1_t2(self, t1, thc_t2, evaluate_ene=True, only_ene=False):
+        
+        NAME = [THC_scheduler.t1_new_name, THC_scheduler.t2_new_name, THC_scheduler.ccsd_energy_name]
         
         self.update_t1(t1)
         self.update_t2(thc_t2)
@@ -1345,16 +1347,28 @@ class THC_scheduler:
         for i in range(NLAYER):
             for name in self._intermediates_hierarchy[i]:
                 if name != THC_scheduler.ccsd_energy_name:
-                    self._evaluate(name)
+                    if only_ene:
+                        if name not in NAME:
+                            self._evaluate(name)
+                    else:
+                        self._evaluate(name)
 
         #### evaluate energy ####
         
         if evaluate_ene:
             self._evaluate(THC_scheduler.ccsd_energy_name)
-            return self._expr_cached[THC_scheduler.ccsd_energy_name], self._expr_cached[THC_scheduler.t1_new_name], self._expr_cached[THC_scheduler.t2_new_name]
+            if only_ene:
+                return self._expr_cached[THC_scheduler.ccsd_energy_name]
+            else:
+                return self._expr_cached[THC_scheduler.ccsd_energy_name], self._expr_cached[THC_scheduler.t1_new_name], self._expr_cached[THC_scheduler.t2_new_name]
         else:
-            return None, self._expr_cached[THC_scheduler.t1_new_name], self._expr_cached[THC_scheduler.t2_new_name]
-        
+            if only_ene:
+                return None, None, None
+            else:
+                return None, self._expr_cached[THC_scheduler.t1_new_name], self._expr_cached[THC_scheduler.t2_new_name]
+    
+    def energy(self, t1, thc_t2):
+        return self.evaluate_t1_t2(t1, thc_t2, evaluate_ene=True, only_ene=True)
 
 ####### deal with thc einsum with expressions #######
 

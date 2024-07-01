@@ -207,6 +207,8 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
         t2new = t2new.transpose((0,2,1,3))
     ene_denominator = einsum_holder._energy_denominator()
     t2new = einsum('ijab,ijab->ijab', t2new, ene_denominator)
+    t2new = -t2new # the sign is due to the fact that ene_denominator is positive defniete
+                   # but in pyscf the var eijab = (ei-ea+ej-eb) which is negative definite
 
     #return t1new, t2new
 
