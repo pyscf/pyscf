@@ -21,6 +21,7 @@
 import copy
 import numpy as np
 from functools import partial
+from pyscf.lib import logger
 
 SUPPORTED_INPUT_NAME = [
     "T1", "XO", "XV", "TAUO", "TAUV", "THC_INT", "THC_T2" ## NOTE: only these terms are involved in THC!
@@ -362,6 +363,8 @@ class _einsum_term:
         #print("term %s path is finished" % self.name)
         #assert self._contract_fn is not None
         
+        print("the contraction path of term %s is " % (self.name))
+        print(path[1])
         
     @classmethod
     def _size_dict_cotengra(cls, inputs, *tensors):
@@ -399,6 +402,9 @@ class _einsum_term:
         
         self._cotengra_tree = opt.search(inputs, output, size_dict)
         self._contract_fn   = self._cotengra_tree.contract
+        
+        print("the contraction path of term %s is " % (self.name))
+        print(self._cotengra_tree.print_contractions())
     
     def _contract_path(self, scheduler, backend, **kwargs):
         
@@ -742,6 +748,8 @@ class _expr_holder:
         
     def build_contraction_path(self, scheduler, backend, **kwargs):
         
+        t1 = (logger.process_clock(), logger.perf_counter())
+        
         if scheduler is None:
             scheduler = self._scheduler
         else:
@@ -763,6 +771,10 @@ class _expr_holder:
             for term in self.terms:
                 term._contract_path(scheduler, backend, **kwargs)            
 
+        t2 = (logger.process_clock(), logger.perf_counter())
+        
+        print("build contraction %s with time %.2f %.2f " % (self.name, t2[0]-t1[0], t2[1]-t1[1]))
+
     #### contraction ####
     
     def contract(self, scheduler):
@@ -775,11 +787,18 @@ class _expr_holder:
         res = None
         
         for term in self.terms:
+            
+            t1 = (logger.process_clock(), logger.perf_counter())
+            
             if res is None:
                 res = term._contract(scheduler)
             else:
                 res += term._contract(scheduler)
             #print("after term %s, res = " % term.name, res)
+            
+            t2 = (logger.process_clock(), logger.perf_counter())
+            
+            print("contraction %s with time %.2f %.2f " % (term.name, t2[0]-t1[0], t2[1]-t1[1]))
         
         if self._remove_dg:
             res -= np.diag(np.diag(res))
@@ -1258,6 +1277,8 @@ class THC_scheduler:
 
     def _build_expression(self):
         
+        t1 = (logger.process_clock(), logger.perf_counter())
+        
         self._dependency = {}
         
         assert len(self._registered_intermediates_name) == len(self._expr_intermediates)
@@ -1301,6 +1322,10 @@ class THC_scheduler:
                 break
                 
         self._cached_intermediates = [None] * len(self._registered_intermediates_name)
+        
+        t2 = (logger.process_clock(), logger.perf_counter())
+
+        print("_build_expression time %.2f %.2f" % (t2[0]-t1[0],t2[1]-t1[1]))
     
     def _build_contraction(self, backend, **kwargs):
         
@@ -1309,6 +1334,8 @@ class THC_scheduler:
         assert len(self._cached_intermediates) == len(self._registered_intermediates_name)
 
         NLAYER = len(self._intermediates_hierarchy)
+        
+        t1 = (logger.process_clock(), logger.perf_counter())
         
         for i in range(NLAYER):
             for name in self._intermediates_hierarchy[i]:
@@ -1320,6 +1347,10 @@ class THC_scheduler:
                 if i < (NLAYER-1):
                     #print("name %s is finished" % name)
                     self._evaluate(name)
+
+        t2 = (logger.process_clock(), logger.perf_counter())
+    
+        print("_build_contraction time %.2f %.2f" % (t2[0]-t1[0],t2[1]-t1[1]))
     
     def _evaluate(self, expr_name):
         

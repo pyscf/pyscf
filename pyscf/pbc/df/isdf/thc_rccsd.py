@@ -412,7 +412,7 @@ if __name__ == "__main__":
     
     X = myisdf.aoRg_full()
     
-    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, memory=2**31)
+    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, memory=2**31, backend="cotengra")
     
     thc_ccsd.ccsd()
     
