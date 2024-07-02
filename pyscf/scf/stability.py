@@ -265,7 +265,7 @@ def dhf_stability(mf, verbose=None, return_status=False,
     x0[g!=0] = 1. / hdiag[g!=0]
     x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
-    log.info('ghf_stability: lowest eigs of H = %s', e)
+    log.info('dhf_stability: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
     stable = not (e < -1e-5)
