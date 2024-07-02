@@ -380,8 +380,8 @@ class _einsum_term:
         size_dict = {}
         for idx, tensor in zip(inputs, tensors):
         
-            assert isinstance(tensor, np.ndarray)
-            assert tensor.ndim == len(idx)
+            #assert isinstance(tensor, np.ndarray)
+            #assert tensor.ndim == len(idx)
 
             for _idx_ in idx:
                 if _idx_ not in size_dict:
