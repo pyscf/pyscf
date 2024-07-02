@@ -31,13 +31,22 @@ SUPPORTED_INPUT_NAME = [
 OCC_INDICES = ["i", "j", "k", "l", "m", "n"]
 VIR_INDICES = ["a", "b", "c", "d", "e", "f"]
 
+####### TORCH BACKEND #######
+
 FOUND_TORCH = False
+GPU_SUPPORTED = False
 
 try:
     import torch
     FOUND_TORCH = True
 except ImportError:
     pass
+
+if FOUND_TORCH:
+    if torch.cuda.is_available():
+        GPU_SUPPORTED = True
+
+##############################
 
 def _is_same_type(ind_a, ind_b):
     
@@ -764,16 +773,19 @@ class _expr_holder:
             self.set_scheduler(scheduler)
         
         if backend != "cotengra":
-        
-            from multiprocessing import Pool
-            process_term_with_fixed_args = partial(self.process_term, scheduler=scheduler, backend=backend, **kwargs)
-            terms = None
-            with Pool() as pool:
-                #pool.map(self.process_term, [(term, scheduler, backend, kwargs) for term in self.terms])
-                terms = pool.map(process_term_with_fixed_args, self.terms)
-                #print("terms = ", terms)
-            self.terms = terms
-        
+            
+            if scheduler.with_gpu is False:
+                from multiprocessing import Pool
+                process_term_with_fixed_args = partial(self.process_term, scheduler=scheduler, backend=backend, **kwargs)
+                terms = None
+                with Pool() as pool:
+                    #pool.map(self.process_term, [(term, scheduler, backend, kwargs) for term in self.terms])
+                    terms = pool.map(process_term_with_fixed_args, self.terms)
+                    #print("terms = ", terms)
+                self.terms = terms
+            else:
+                for term in self.terms:
+                    term._contract_path(scheduler, backend, **kwargs)
         else:
             
             for term in self.terms:
@@ -1100,6 +1112,16 @@ def _parse_expression(expression_holder:_expr_holder, scheduler):
 
 ##### TODO: write the parse function for THC-CCSD #####
 
+def _to_torch_tensor(arg):
+    try:
+        import torch
+        if isinstance(arg, np.ndarray):
+            return torch.from_numpy(arg).detach()
+        else:
+            return arg
+    except Exception as e:
+        return arg
+    
 class THC_scheduler:
     
     t1_new_name = "T1_NEW"
@@ -1117,7 +1139,9 @@ class THC_scheduler:
                  TAU_O:np.ndarray,
                  TAU_V:np.ndarray,
                  PROJECTOR:np.ndarray,
-                 use_torch=False):
+                 use_torch=False,
+                 with_gpu =False,
+                 verbose=4):
         
         ###### holder the tensors ###### 
         
@@ -1133,18 +1157,43 @@ class THC_scheduler:
         self.t1     = T1
         self.thc_t2 = THC_T2
         
+        self.verbose = verbose
+        
         self.use_torch = use_torch
+        if with_gpu:
+            assert use_torch
+            if GPU_SUPPORTED is False:
+                logger.warn(self, "GPU is not supported, use CPU instead.")
+                with_gpu = False
+        self.with_gpu = with_gpu
         
         if use_torch:
             assert FOUND_TORCH
-            self._xo = torch.from_numpy(self._xo).detach()
-            self._xv = torch.from_numpy(self._xv).detach()
-            self._thc_int = torch.from_numpy(self._thc_int).detach()
-            self._tau_o = torch.from_numpy(self._tau_o).detach()
-            self._tau_v = torch.from_numpy(self._tau_v).detach()
-            self._xo_t2 = torch.from_numpy(self._xo_t2).detach()
-            self._xv_t2 = torch.from_numpy(self._xv_t2).detach()
-            self._proj  = torch.from_numpy(self._proj).detach()
+            #self._xo = torch.from_numpy(self._xo).detach()
+            #self._xv = torch.from_numpy(self._xv).detach()
+            #self._thc_int = torch.from_numpy(self._thc_int).detach()
+            #self._tau_o = torch.from_numpy(self._tau_o).detach()
+            #self._tau_v = torch.from_numpy(self._tau_v).detach()
+            #self._xo_t2 = torch.from_numpy(self._xo_t2).detach()
+            #self._xv_t2 = torch.from_numpy(self._xv_t2).detach()
+            #self._proj  = torch.from_numpy(self._proj).detach()
+            self._xo = _to_torch_tensor(self._xo)
+            self._xv = _to_torch_tensor(self._xv)
+            self._thc_int = _to_torch_tensor(self._thc_int)
+            self._tau_o = _to_torch_tensor(self._tau_o)
+            self._tau_v = _to_torch_tensor(self._tau_v)
+            self._xo_t2 = _to_torch_tensor(self._xo_t2)
+            self._xv_t2 = _to_torch_tensor(self._xv_t2)
+            self._proj  = _to_torch_tensor(self._proj)
+            if self.with_gpu:
+                self._xo = self._xo.to('cuda')
+                self._xv = self._xv.to('cuda')
+                self._thc_int = self._thc_int.to('cuda')
+                self._tau_o = self._tau_o.to('cuda')
+                self._tau_v = self._tau_v.to('cuda')
+                self._xo_t2 = self._xo_t2.to('cuda')
+                self._xv_t2 = self._xv_t2.to('cuda')
+                self._proj  = self._proj.to('cuda')
         
         ###### holder the expressions and intermediates ######
         
@@ -1223,6 +1272,8 @@ class THC_scheduler:
         if self.use_torch:
             #tensor = torch.tensor(tensor)
             tensor = torch.from_numpy(tensor).detach()
+            if self.with_gpu:
+                tensor = tensor.to('cuda')
         setattr(self, self.tensor_name_to_attr_name[name], tensor)
     
     def update_t1(self, t1):
@@ -1230,12 +1281,16 @@ class THC_scheduler:
         if self.use_torch and isinstance(self.t1, np.ndarray):
             #self.t1 = torch.tensor(self.t1)
             self.t1 = torch.from_numpy(self.t1).detach()
+            if self.with_gpu:
+                self.t1 = self.t1.to('cuda')
     
     def update_t2(self, thc_t2):
         self.thc_t2 = thc_t2
         if self.use_torch and isinstance(self.thc_t2, np.ndarray):
             #self.thc_t2 = torch.tensor(self.thc_t2)
             self.thc_t2 = torch.from_numpy(self.thc_t2).detach()
+            if self.with_gpu:
+                self.thc_t2 = self.thc_t2.to('cuda')
 
     def register_intermediates(self, name, expression):
         #print("Register intermediate: ", name)
@@ -1374,6 +1429,8 @@ class THC_scheduler:
                 #setattr(self, self.tensor_name_to_attr_name[name], torch.tensor(getattr(self, self.tensor_name_to_attr_name[name])))
                 if isinstance(getattr(self, self.tensor_name_to_attr_name[name]), np.ndarray):
                     setattr(self, self.tensor_name_to_attr_name[name], torch.from_numpy(getattr(self, self.tensor_name_to_attr_name[name])).detach())
+                    if self.with_gpu:
+                        setattr(self, self.tensor_name_to_attr_name[name], getattr(self, self.tensor_name_to_attr_name[name]).to('cuda'))
         
         for i in range(NLAYER):
             for name in self._intermediates_hierarchy[i]:

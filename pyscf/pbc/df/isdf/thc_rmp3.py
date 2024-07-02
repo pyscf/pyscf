@@ -47,6 +47,23 @@ from pyscf.pbc.df.isdf.thc_rmp2 import THC_RMP2
 
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
+####### TORCH BACKEND #######
+
+FOUND_TORCH = False
+GPU_SUPPORTED = False
+
+try:
+    import torch
+    FOUND_TORCH = True
+except ImportError:
+    pass
+
+if FOUND_TORCH:
+    if torch.cuda.is_available():
+        GPU_SUPPORTED = True
+
+##############################
+
 class THC_RMP3(THC_RMP2):
     
     def __init__(self, 
@@ -56,16 +73,22 @@ class THC_RMP3(THC_RMP2):
                  X=None, ## used in XXZXX
                  laplace_rela_err = 1e-7,
                  laplace_order    = 2,
-                 no_LS_THC        = False):
+                 no_LS_THC        = False,
+                 use_torch=False,
+                 with_gpu =False):
         
-        super(THC_RMP3, self).__init__(my_isdf, my_mf, 
+        super(THC_RMP3, self).__init__(
+            #my_isdf, 
+                                       my_mf, 
                                        frozen=frozen, 
                                        mo_coeff=mo_coeff, 
                                        mo_occ=mo_occ, 
                                        X=X, 
                                        laplace_rela_err=laplace_rela_err, 
                                        laplace_order=laplace_order, 
-                                       no_LS_THC=no_LS_THC)
+                                       no_LS_THC=no_LS_THC,
+                                       use_torch=use_torch,
+                                       with_gpu=with_gpu)
     
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, backend="opt_einsum", memory=2**28, return_path_only=False):
         '''
@@ -147,6 +170,9 @@ class THC_RMP3(THC_RMP2):
             self.e_corr  = 8 * mp3_CC - 4 * (mp3_CX1 + mp3_CX2 + mp3_CX3)
             self.e_corr += 2 * (mp3_XX1 + mp3_XX2 + mp3_XX3) - mp3_XX4 + 2 * mp3_XX5 - mp3_XX6 - 4 * mp3_XX7 + 2 * mp3_XX8  
         
+        if self._use_torch:
+            self.e_corr = self.e_corr.cpu().detach().item()
+            
         return self.e_corr, None
             
 
@@ -221,7 +247,7 @@ if __name__ == "__main__":
     ####### thc rmp3 #######
     
     X        = myisdf.aoRg_full()
-    thc_rmp3 = THC_RMP3(myisdf, mf_isdf, X=X)
+    thc_rmp3 = THC_RMP3(myisdf, mf_isdf, X=X, use_torch=True, with_gpu=False)
     e_mp3, _ = thc_rmp3.kernel(backend="cotengra")
     print("ISDF MP3 energy", e_mp3)
     e_mp3, _ = thc_rmp3.kernel(backend="opt_einsum")

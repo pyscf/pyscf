@@ -79,12 +79,31 @@ def RCCSD_isdf(mf, frozen=0, mo_coeff=None, mo_occ=None, run=True):
 
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast
 
+####### TORCH BACKEND #######
+
+FOUND_TORCH = False
+GPU_SUPPORTED = False
+
+try:
+    import torch
+    FOUND_TORCH = True
+except ImportError:
+    pass
+
+if FOUND_TORCH:
+    if torch.cuda.is_available():
+        GPU_SUPPORTED = True
+
+##############################
+
 class _restricted_THC_posthf_holder:
     
     def __init__(self, my_isdf, my_mf, X,
                  laplace_rela_err = 1e-7,
                  laplace_order    = 2,
-                 no_LS_THC = False):
+                 no_LS_THC = False,
+                 use_torch = False,
+                 with_gpu = False):
         
         if rank == 0:
         
@@ -187,7 +206,38 @@ class _restricted_THC_posthf_holder:
             self.nthc_int = bcast(self.nthc_int, 0)
 
             comm.barrier()
+        
+        #### deal with torch GPU #### 
+        
+        if use_torch:
+            assert FOUND_TORCH
+            if with_gpu:
+                if GPU_SUPPORTED is False:
+                    print("Warning: GPU is not supported!")
+                    with_gpu=False
+        
+        if use_torch:
+            self.X = torch.from_numpy(self.X).detach()
+            self.Z = torch.from_numpy(self.Z).detach()
+            self.tau_o = torch.from_numpy(self.tau_o).detach()
+            self.tau_v = torch.from_numpy(self.tau_v).detach()
+            self.X_o = torch.from_numpy(self.X_o).detach()
+            self.X_v = torch.from_numpy(self.X_v).detach()
+            self.occ_ene = torch.from_numpy(self.occ_ene).detach()
+            self.vir_ene = torch.from_numpy(self.vir_ene).detach()
+            
+            if with_gpu:
+                self.X = self.X.to('cuda')
+                self.Z = self.Z.to('cuda')
+                self.tau_o = self.tau_o.to('cuda')
+                self.tau_v = self.tau_v.to('cuda')
+                self.X_o = self.X_o.to('cuda')
+                self.X_v = self.X_v.to('cuda')
+                self.occ_ene = self.occ_ene.to('cuda')
+                self.vir_ene = self.vir_ene.to('cuda')
 
+        self._with_gpu  = with_gpu
+        self._use_torch = use_torch
 
 if __name__ == '__main__':
 

@@ -46,6 +46,23 @@ from pyscf.mp.mp2                     import MP2
 
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
+####### TORCH BACKEND #######
+
+FOUND_TORCH = False
+GPU_SUPPORTED = False
+
+try:
+    import torch
+    FOUND_TORCH = True
+except ImportError:
+    pass
+
+if FOUND_TORCH:
+    if torch.cuda.is_available():
+        GPU_SUPPORTED = True
+
+##############################
+
 class THC_RMP2(_restricted_THC_posthf_holder, MP2):
     
     def __init__(self, 
@@ -57,7 +74,9 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
                  laplace_order    = 2,
                  #memory           = 128 * 1000 * 1000,
                  #with_mpi         = False,
-                 no_LS_THC        = False):
+                 no_LS_THC        = False,
+                 use_torch=False,
+                 with_gpu =False):
         
         if my_isdf is None:
             assert my_mf is not None
@@ -66,7 +85,9 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
         _restricted_THC_posthf_holder.__init__(self, my_isdf, my_mf, X,
                                                 laplace_rela_err = laplace_rela_err,
                                                 laplace_order    = laplace_order,
-                                                no_LS_THC        = no_LS_THC)
+                                                no_LS_THC        = no_LS_THC,
+                                                use_torch        = use_torch,
+                                                with_gpu         = with_gpu)
 
         MP2.__init__(self, my_mf, frozen, mo_coeff, mo_occ)
     
@@ -113,6 +134,9 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
             return mp2_J, mp2_K
         else:
             self.e_corr = -2*mp2_J+mp2_K
+        
+        if self._use_torch:
+            self.e_corr = self.e_corr.cpu().detach().item()
         
         return self.e_corr, None
             
@@ -189,7 +213,7 @@ if __name__ == "__main__":
     
     X = myisdf.aoRg_full()
     
-    thc_rmp2 = THC_RMP2(my_mf=mf_isdf, X=X)
+    thc_rmp2 = THC_RMP2(my_mf=mf_isdf, X=X, use_torch=True, with_gpu=False)
     
     e_mp2, _ = thc_rmp2.kernel(backend='cotengra')
     
