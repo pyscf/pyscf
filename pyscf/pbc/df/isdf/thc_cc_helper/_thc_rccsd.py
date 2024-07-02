@@ -331,7 +331,8 @@ if __name__ == "__main__":
         THC_T2=THC_T2,
         XO_T2=Xo_T2,
         XV_T2=Xv_T2,
-        PROJECTOR=PROJ
+        PROJECTOR=PROJ,
+        use_torch=True
     )
 
     eris = _fake_eris(nocc, nvir)
@@ -416,9 +417,14 @@ if __name__ == "__main__":
     ########## bench t1 t2 ########## 
     
     t1_new, t2_new = rccsd.update_amps(cc, t1, t2_full, eris_full)
+    t2_new = -t2_new
     
     ene, t1_new_2, thc_t2_new = scheduler.evaluate_t1_t2(T1, THC_T2)
     print("ene = ", ene)
+    if not isinstance(t1_new_2, np.ndarray):
+        t1_new_2 = np.asarray(t1_new_2)
+    if not isinstance(thc_t2_new, np.ndarray):
+        thc_t2_new = np.asarray(thc_t2_new)
     diff_t1 = np.linalg.norm(t1_new - t1_new_2)
     
     print("t1_new   = ", t1_new)

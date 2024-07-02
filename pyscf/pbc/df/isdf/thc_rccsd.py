@@ -61,7 +61,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
                  laplace_order    = 2,
                  no_LS_THC        = False,
                  backend = "opt_einsum",
-                 memory=2**28):
+                 memory=2**28,
+                 use_torch=False):
         
         #### initialization ####
         
@@ -109,8 +110,10 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
             T1=t1, 
             XO_T2=self.X_o, XV_T2=self.X_v, THC_T2=thc_t2,
             TAU_O=self.tau_o, TAU_V=self.tau_v,
-            PROJECTOR=proj
+            PROJECTOR=proj,
+            use_torch=use_torch
         )
+        self._use_torch = use_torch
         
         ### build exprs ###
         
@@ -235,6 +238,10 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         return self.emp2, t1, t2_thc
 
     def amplitudes_to_vector(self, t1, t2, out=None):
+        if not isinstance(t1, numpy.ndarray):
+            t1 = np.asarray(t1)
+        if not isinstance(t2, numpy.ndarray):
+            t2 = np.asarray(t2)
         nocc, nvir = t1.shape
         nov = nocc * nvir
         nthc = self.nthc
@@ -257,6 +264,7 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         from functools import reduce
         t2 = reduce(numpy.dot, (self.projector_sqrt.T, t2, self.projector_sqrt))
         return t1, numpy.asarray(t2, order='C')
+            
 
     def vector_size(self, nmo=None, nocc=None):
         if nocc is None: nocc = self.nocc
@@ -364,8 +372,8 @@ if __name__ == "__main__":
                 ['C', (0.8917 , 2.6751 , 2.6751)],
             ] 
 
-    #cell.basis   = 'gth-szv'
-    cell.basis = 'gth-cc-dzvp'
+    cell.basis   = 'gth-szv'
+    #cell.basis = 'gth-cc-dzvp'
     cell.pseudo  = 'gth-pade'
     cell.verbose = 10
     cell.ke_cutoff = 70
@@ -412,7 +420,7 @@ if __name__ == "__main__":
     
     X = myisdf.aoRg_full()
     
-    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, memory=2**31, backend="cotengra")
+    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, memory=2**31, backend="opt_einsum", use_torch=True)
     
     thc_ccsd.ccsd()
     

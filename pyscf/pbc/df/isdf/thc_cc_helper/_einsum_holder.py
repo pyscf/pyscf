@@ -31,6 +31,14 @@ SUPPORTED_INPUT_NAME = [
 OCC_INDICES = ["i", "j", "k", "l", "m", "n"]
 VIR_INDICES = ["a", "b", "c", "d", "e", "f"]
 
+FOUND_TORCH = False
+
+try:
+    import torch
+    FOUND_TORCH = True
+except ImportError:
+    pass
+
 def _is_same_type(ind_a, ind_b):
     
     is_a_occ = ind_a in OCC_INDICES
@@ -1108,7 +1116,8 @@ class THC_scheduler:
                  THC_T2:np.ndarray,
                  TAU_O:np.ndarray,
                  TAU_V:np.ndarray,
-                 PROJECTOR:np.ndarray):
+                 PROJECTOR:np.ndarray,
+                 use_torch=False):
         
         ###### holder the tensors ###### 
         
@@ -1123,6 +1132,19 @@ class THC_scheduler:
         
         self.t1     = T1
         self.thc_t2 = THC_T2
+        
+        self.use_torch = use_torch
+        
+        if use_torch:
+            assert FOUND_TORCH
+            self._xo = torch.from_numpy(self._xo).detach()
+            self._xv = torch.from_numpy(self._xv).detach()
+            self._thc_int = torch.from_numpy(self._thc_int).detach()
+            self._tau_o = torch.from_numpy(self._tau_o).detach()
+            self._tau_v = torch.from_numpy(self._tau_v).detach()
+            self._xo_t2 = torch.from_numpy(self._xo_t2).detach()
+            self._xv_t2 = torch.from_numpy(self._xv_t2).detach()
+            self._proj  = torch.from_numpy(self._proj).detach()
         
         ###### holder the expressions and intermediates ######
         
@@ -1198,13 +1220,22 @@ class THC_scheduler:
 
     def update_input(self, name, tensor):
         assert name in self._input_tensor_name
+        if self.use_torch:
+            #tensor = torch.tensor(tensor)
+            tensor = torch.from_numpy(tensor).detach()
         setattr(self, self.tensor_name_to_attr_name[name], tensor)
     
     def update_t1(self, t1):
         self.t1 = t1
+        if self.use_torch and isinstance(self.t1, np.ndarray):
+            #self.t1 = torch.tensor(self.t1)
+            self.t1 = torch.from_numpy(self.t1).detach()
     
     def update_t2(self, thc_t2):
         self.thc_t2 = thc_t2
+        if self.use_torch and isinstance(self.thc_t2, np.ndarray):
+            #self.thc_t2 = torch.tensor(self.thc_t2)
+            self.thc_t2 = torch.from_numpy(self.thc_t2).detach()
 
     def register_intermediates(self, name, expression):
         #print("Register intermediate: ", name)
@@ -1337,6 +1368,13 @@ class THC_scheduler:
         
         t1 = (logger.process_clock(), logger.perf_counter())
         
+        if self.use_torch:
+            import torch
+            for name in self._input_tensor_name:
+                #setattr(self, self.tensor_name_to_attr_name[name], torch.tensor(getattr(self, self.tensor_name_to_attr_name[name])))
+                if isinstance(getattr(self, self.tensor_name_to_attr_name[name]), np.ndarray):
+                    setattr(self, self.tensor_name_to_attr_name[name], torch.from_numpy(getattr(self, self.tensor_name_to_attr_name[name])).detach())
+        
         for i in range(NLAYER):
             for name in self._intermediates_hierarchy[i]:
                 if name in self._registered_intermediates_name:
@@ -1382,12 +1420,15 @@ class THC_scheduler:
                         if name not in NAME:
                             self._evaluate(name)
                     else:
+                        print("Evaluate: ", name)
                         self._evaluate(name)
 
         #### evaluate energy ####
         
         if evaluate_ene:
             self._evaluate(THC_scheduler.ccsd_energy_name)
+            if self.use_torch:
+                self._expr_cached[THC_scheduler.ccsd_energy_name] = self._expr_cached[THC_scheduler.ccsd_energy_name].item()
             if only_ene:
                 return self._expr_cached[THC_scheduler.ccsd_energy_name]
             else:
