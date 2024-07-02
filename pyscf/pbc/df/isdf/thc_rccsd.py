@@ -50,6 +50,23 @@ from pyscf import __config__
 import pyscf.pbc.df.isdf.thc_cc_helper._thc_rccsd as _thc_rccsd_ind
 import pyscf.pbc.df.isdf.thc_cc_helper._einsum_holder as einsum_holder
 
+####### TORCH BACKEND #######
+
+FOUND_TORCH = False
+GPU_SUPPORTED = False
+
+try:
+    import torch
+    FOUND_TORCH = True
+except ImportError:
+    pass
+
+if FOUND_TORCH:
+    if torch.cuda.is_available():
+        GPU_SUPPORTED = True
+
+##############################
+
 class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
     
     def __init__(self, 
@@ -74,7 +91,9 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         _restricted_THC_posthf_holder.__init__(self, my_isdf, my_mf, X,
                                                 laplace_rela_err = laplace_rela_err,
                                                 laplace_order    = laplace_order,
-                                                no_LS_THC        = no_LS_THC)
+                                                no_LS_THC        = no_LS_THC,
+                                                use_torch        = use_torch,
+                                                with_gpu         = with_gpu)
     
         ccsd.CCSD.__init__(self, my_mf, frozen, mo_coeff, mo_occ)
         
@@ -87,6 +106,9 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         self.nthc = self.X_o.shape[1]
         
         #self.diis = False ## should scaled to the same scale as t1 
+        
+        #self._use_torch = use_torch
+        #self._with_gpu  = with_gpu
         
         #### init projector ####
         
@@ -115,8 +137,6 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
             use_torch=use_torch,
             with_gpu=with_gpu
         )
-        self._use_torch = use_torch
-        self._with_gpu  = with_gpu
         
         ### build exprs ###
         
@@ -136,7 +156,9 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
     def init_projector(self):
         
         time1 = logger.process_clock(), logger.perf_counter()
-        PROJ_INV = np.einsum('iP,aP,iQ,aQ->PQ', self.X_o, self.X_v, self.X_o, self.X_v, optimize=True)
+        X_o = _thc_rccsd_ind._tensor_to_cpu(self.X_o)
+        X_v = _thc_rccsd_ind._tensor_to_cpu(self.X_v)
+        PROJ_INV = np.einsum('iP,aP,iQ,aQ->PQ', X_o, X_v, X_o, X_v, optimize=True)
         import scipy
         D_RR, U_RR = scipy.linalg.eigh(PROJ_INV)
         kept = D_RR > D_RR[-1]*1e-14
@@ -210,6 +232,9 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         #                    , return_path_only=True
         #                    )
         #print(t2_thc_path[1])
+        
+        if self._with_gpu:
+            self.projector = einsum_holder._to_torch_tensor(self.projector).to("cuda")
         
         t2_thc = -thc_einsum('AP,iP,aP,iajb,ijab,jQ,bQ,QB->AB', self.projector, self.X_o, self.X_v, thc_eri, 
                             ene_deno, self.X_o, self.X_v, self.projector, optimize=True, backend=self._backend, memory=self._memory

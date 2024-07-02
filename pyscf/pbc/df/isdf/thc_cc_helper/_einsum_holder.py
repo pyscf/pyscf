@@ -31,6 +31,8 @@ SUPPORTED_INPUT_NAME = [
 OCC_INDICES = ["i", "j", "k", "l", "m", "n"]
 VIR_INDICES = ["a", "b", "c", "d", "e", "f"]
 
+####### TORCH BACKEND #######
+
 FOUND_TORCH = False
 GPU_SUPPORTED = False
 
@@ -43,6 +45,8 @@ except ImportError:
 if FOUND_TORCH:
     if torch.cuda.is_available():
         GPU_SUPPORTED = True
+
+##############################
 
 def _is_same_type(ind_a, ind_b):
     
@@ -1108,6 +1112,16 @@ def _parse_expression(expression_holder:_expr_holder, scheduler):
 
 ##### TODO: write the parse function for THC-CCSD #####
 
+def _to_torch_tensor(arg):
+    try:
+        import torch
+        if isinstance(arg, np.ndarray):
+            return torch.from_numpy(arg).detach()
+        else:
+            return arg
+    except Exception as e:
+        return arg
+    
 class THC_scheduler:
     
     t1_new_name = "T1_NEW"
@@ -1155,14 +1169,22 @@ class THC_scheduler:
         
         if use_torch:
             assert FOUND_TORCH
-            self._xo = torch.from_numpy(self._xo).detach()
-            self._xv = torch.from_numpy(self._xv).detach()
-            self._thc_int = torch.from_numpy(self._thc_int).detach()
-            self._tau_o = torch.from_numpy(self._tau_o).detach()
-            self._tau_v = torch.from_numpy(self._tau_v).detach()
-            self._xo_t2 = torch.from_numpy(self._xo_t2).detach()
-            self._xv_t2 = torch.from_numpy(self._xv_t2).detach()
-            self._proj  = torch.from_numpy(self._proj).detach()
+            #self._xo = torch.from_numpy(self._xo).detach()
+            #self._xv = torch.from_numpy(self._xv).detach()
+            #self._thc_int = torch.from_numpy(self._thc_int).detach()
+            #self._tau_o = torch.from_numpy(self._tau_o).detach()
+            #self._tau_v = torch.from_numpy(self._tau_v).detach()
+            #self._xo_t2 = torch.from_numpy(self._xo_t2).detach()
+            #self._xv_t2 = torch.from_numpy(self._xv_t2).detach()
+            #self._proj  = torch.from_numpy(self._proj).detach()
+            self._xo = _to_torch_tensor(self._xo)
+            self._xv = _to_torch_tensor(self._xv)
+            self._thc_int = _to_torch_tensor(self._thc_int)
+            self._tau_o = _to_torch_tensor(self._tau_o)
+            self._tau_v = _to_torch_tensor(self._tau_v)
+            self._xo_t2 = _to_torch_tensor(self._xo_t2)
+            self._xv_t2 = _to_torch_tensor(self._xv_t2)
+            self._proj  = _to_torch_tensor(self._proj)
             if self.with_gpu:
                 self._xo = self._xo.to('cuda')
                 self._xv = self._xv.to('cuda')
