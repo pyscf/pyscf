@@ -297,6 +297,16 @@ class _fake_cc:
 
 ###########################################################
 
+def _tensor_to_cpu(arg):
+    try:
+        import torch    
+        if isinstance(arg, torch.Tensor):
+            return arg.cpu().numpy()
+        else:
+            return arg
+    except Exception as e:
+        return arg
+
 if __name__ == "__main__":
     
     ### generate random input ### 
@@ -332,7 +342,8 @@ if __name__ == "__main__":
         XO_T2=Xo_T2,
         XV_T2=Xv_T2,
         PROJECTOR=PROJ,
-        use_torch=True
+        use_torch=True,
+        with_gpu=True
     )
 
     eris = _fake_eris(nocc, nvir)
@@ -375,7 +386,11 @@ if __name__ == "__main__":
     ene = scheduler._evaluate(einsum_holder.THC_scheduler.ccsd_energy_name)
     print("ene           = ", ene)
     
-    assert np.allclose(ene, ene_benchmark)
+    try:
+        assert np.allclose(ene, ene_benchmark)
+    except Exception as e:
+        ene = ene.cpu()
+        assert np.allclose(ene, ene_benchmark)
     
     ########## bench mark Foo ##########
     
@@ -384,6 +399,7 @@ if __name__ == "__main__":
     Foo_bench -= np.diag(mo_e_o)
     
     Foo = scheduler._evaluate("FOO")
+    Foo = _tensor_to_cpu(Foo)
     
     diff = np.linalg.norm(Foo - Foo_bench)
     print("diff = ", diff)
@@ -394,6 +410,7 @@ if __name__ == "__main__":
     
     Fov_bench = r_imd.cc_Fov(t1, t2_full, eris_full)
     Fov = scheduler._evaluate("FOV")
+    Fov = _tensor_to_cpu(Fov)
     
     diff = np.linalg.norm(Fov - Fov_bench)
     print("diff = ", diff)
@@ -408,6 +425,7 @@ if __name__ == "__main__":
     Fvv_bench -= np.diag(mo_e_v)
     
     Fvv = scheduler._evaluate("FVV")
+    Fvv = _tensor_to_cpu(Fvv)
     
     diff = np.linalg.norm(Fvv - Fvv_bench)
     print("diff = ", diff)
@@ -421,10 +439,8 @@ if __name__ == "__main__":
     
     ene, t1_new_2, thc_t2_new = scheduler.evaluate_t1_t2(T1, THC_T2)
     print("ene = ", ene)
-    if not isinstance(t1_new_2, np.ndarray):
-        t1_new_2 = np.asarray(t1_new_2)
-    if not isinstance(thc_t2_new, np.ndarray):
-        thc_t2_new = np.asarray(thc_t2_new)
+    t1_new_2 = _tensor_to_cpu(t1_new_2)
+    thc_t2_new = _tensor_to_cpu(thc_t2_new)
     diff_t1 = np.linalg.norm(t1_new - t1_new_2)
     
     print("t1_new   = ", t1_new)

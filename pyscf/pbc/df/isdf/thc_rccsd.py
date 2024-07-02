@@ -62,7 +62,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
                  no_LS_THC        = False,
                  backend = "opt_einsum",
                  memory=2**28,
-                 use_torch=False):
+                 use_torch=False,
+                 with_gpu =False):
         
         #### initialization ####
         
@@ -111,9 +112,11 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
             XO_T2=self.X_o, XV_T2=self.X_v, THC_T2=thc_t2,
             TAU_O=self.tau_o, TAU_V=self.tau_v,
             PROJECTOR=proj,
-            use_torch=use_torch
+            use_torch=use_torch,
+            with_gpu=with_gpu
         )
         self._use_torch = use_torch
+        self._with_gpu  = with_gpu
         
         ### build exprs ###
         
@@ -238,10 +241,13 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         return self.emp2, t1, t2_thc
 
     def amplitudes_to_vector(self, t1, t2, out=None):
-        if not isinstance(t1, numpy.ndarray):
-            t1 = np.asarray(t1)
-        if not isinstance(t2, numpy.ndarray):
-            t2 = np.asarray(t2)
+        #if not isinstance(t1, numpy.ndarray):
+        #    t1 = np.asarray(t1)
+        #if not isinstance(t2, numpy.ndarray):
+        #    t2 = np.asarray(t2)
+        assert t1 is not None and t2 is not None
+        t1 = _thc_rccsd_ind._tensor_to_cpu(t1)
+        t2 = _thc_rccsd_ind._tensor_to_cpu(t2)
         nocc, nvir = t1.shape
         nov = nocc * nvir
         nthc = self.nthc
@@ -420,7 +426,7 @@ if __name__ == "__main__":
     
     X = myisdf.aoRg_full()
     
-    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, memory=2**31, backend="opt_einsum", use_torch=True)
+    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True)
     
     thc_ccsd.ccsd()
     
