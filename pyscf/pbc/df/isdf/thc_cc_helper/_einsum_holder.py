@@ -1139,10 +1139,11 @@ class THC_scheduler:
     t1_new_name       = "T1_NEW"
     t2_new_name       = "T2_NEW"
     ccsd_energy_name  = "CCSD_ENERGY"
-    projector_allowed = ["thc", "thc_robust", "mp2"]
+    projector_allowed = ["thc", "thc_robust", "mp2", "thc_laplace"]
     thc_proj_name = "thc"
     thc_robust_proj_name = "thc_robust"
     mp2_proj_name = "mp2"
+    thc_laplace_proj_name = "thc_laplace"
     
     def __init__(self, 
                  X_O:np.ndarray,
@@ -1156,9 +1157,11 @@ class THC_scheduler:
                  TAU_V:np.ndarray,
                  # PROJECTOR:np.ndarray,
                  proj_type="thc",
+                 grid_partition = None,
                  use_torch=False,
                  with_gpu =False,
-                 verbose=4):
+                 verbose=4,
+                 **kwargs):
         
         ###### holder the tensors ###### 
         
@@ -1172,6 +1175,7 @@ class THC_scheduler:
         # self._proj  = PROJECTOR
         
         self.proj_type = proj_type
+        self.grid_partition = grid_partition
         
         ##### init projector ##### 
         
@@ -1205,6 +1209,20 @@ class THC_scheduler:
             
         if self.proj_type in [THC_scheduler.thc_proj_name, THC_scheduler.thc_robust_proj_name]:
             self.init_projector()
+        elif self.proj_type == THC_scheduler.thc_laplace_proj_name:
+            qr = kwargs.pop("qr_rela_cutoff", 1e-2)
+            print("qr_rela_cutoff = ", qr)
+            #self.init_laplace_projector()
+            from pyscf.pbc.df.isdf.thc_cc_helper._thc_proj import _thc_proj_2
+            XoT2, XvT2 = _thc_proj_2(
+                THC_scheduler._tensor_to_cpu(self._xo),
+                THC_scheduler._tensor_to_cpu(self._xv),
+                THC_scheduler._tensor_to_cpu(self._tau_o),
+                THC_scheduler._tensor_to_cpu(self._tau_v),
+                partition=THC_scheduler._tensor_to_cpu(self.grid_partition),
+                qr_cutoff=qr
+            )
+            self.init_projector(XoT2, XvT2)
         else:
             raise NotImplementedError("Projector type %s not implemented." % self.proj_type)
         
@@ -1310,12 +1328,28 @@ class THC_scheduler:
         except Exception as e:
             return arg
     
-    def init_projector(self):
+    def init_projector(self, X_o = None, X_v = None):
         
         time0 = logger.process_clock(), logger.perf_counter()
-        X_o = THC_scheduler._tensor_to_cpu(self._xo)
-        X_v = THC_scheduler._tensor_to_cpu(self._xv)
+        
+        if X_o is None:
+            X_o = THC_scheduler._tensor_to_cpu(self._xo_t2)
+        else:
+            X_o = THC_scheduler._tensor_to_cpu(X_o)
+            self._xo_t2 = X_o
+            if self.use_torch:
+                self._xo_t2 = _to_torch_tensor(self._xo_t2, self.with_gpu)
+        
+        if X_v is None:
+            X_v = THC_scheduler._tensor_to_cpu(self._xv_t2)
+        else:
+            X_v = THC_scheduler._tensor_to_cpu(X_v)
+            self._xv_t2 = X_v
+            if self.use_torch:
+                self._xv_t2 = _to_torch_tensor(self._xv_t2, self.with_gpu)
+        
         PROJ_INV = np.einsum('iP,aP,iQ,aQ->PQ', X_o, X_v, X_o, X_v, optimize=True)
+        print("PROJ_INV shape = ", PROJ_INV.shape)
         import scipy
         D_RR, U_RR = scipy.linalg.eigh(PROJ_INV)
         kept = D_RR > D_RR[-1]*1e-14
@@ -1361,6 +1395,14 @@ class THC_scheduler:
             self._proj_robust = self.projector_sqrt
             self._proj_mp2 = None
         
+        #from pyscf.pbc.df.isdf.thc_cc_helper._thc_proj import _thc_proj_2
+        #_thc_proj_2(
+        #    X_o,X_v,
+        #    THC_scheduler._tensor_to_cpu(self._tau_o),
+        #    THC_scheduler._tensor_to_cpu(self._tau_v),
+        #    partition=THC_scheduler._tensor_to_cpu(self.grid_partition)
+        #)
+                
         return PROJ
 
     def init_mp2_projector(self, mp2_cutoff=1e-3, df_obj=None):
@@ -1513,7 +1555,7 @@ class THC_scheduler:
             ## apply the projector ##
             _xo_expr = _einsum_term("XO_T2", "iP", 1.0, ["XO_T2"])
             _xv_expr = _einsum_term("XV_T2", "aP", 1.0, ["XV_T2"])
-            if self.proj_type == "thc":
+            if self.proj_type == "thc" or self.proj_type == "thc_laplace":
                 _proj_expr = _einsum_term("PROJ", "PQ", 1.0, ["PROJ"])
             else:
                 assert self.proj_type == "thc_robust"

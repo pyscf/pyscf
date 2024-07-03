@@ -72,6 +72,7 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
     thc_proj_name = "thc"
     thc_robust_proj_name = "thc_robust"
     mp2_proj_name = "mp2"
+    thc_laplace_proj_name = "thc_laplace"
     
     def __init__(self, 
                  my_mf=None, 
@@ -86,7 +87,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
                  memory=2**28,
                  projector_t="thc",
                  use_torch=False,
-                 with_gpu =False):
+                 with_gpu =False,
+                 **kwargs):
         
         #### initialization ####
         
@@ -130,12 +132,14 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
             T1=None, 
             XO_T2=self.X_o, XV_T2=self.X_v, THC_T2=None,
             TAU_O=self.tau_o, TAU_V=self.tau_v,
+            grid_partition=self.grid_partition,
             proj_type=projector_t,
             use_torch=use_torch,
-            with_gpu=with_gpu
+            with_gpu=with_gpu,
+            **kwargs
         )
         
-        if self.proj_type == THC_RCCSD.thc_proj_name:
+        if self.proj_type == THC_RCCSD.thc_proj_name or self.proj_type == THC_RCCSD.thc_laplace_proj_name:
             self.projector = self._thc_scheduler._proj
             self.projector_inv_sqrt = _thc_rccsd_ind._tensor_to_cpu(self._thc_scheduler.projector_inv_sqrt).copy()
             self.projector_sqrt = _thc_rccsd_ind._tensor_to_cpu(self._thc_scheduler.projector_sqrt).copy()
@@ -146,6 +150,9 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
                 t2_expr = einsum_holder._expr_t2_thc_robust()
             else:
                 raise NotImplementedError
+        
+        self.Xo_T2 = self._thc_scheduler._xo_t2
+        self.Xv_T2 = self._thc_scheduler._xv_t2
         
         #### init amps #### 
         
@@ -229,8 +236,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         if self._with_gpu:
             self.projector = einsum_holder._to_torch_tensor(self.projector, True)
         
-        t2_thc = -thc_einsum('AP,iP,aP,iajb,ijab,jQ,bQ,QB->AB', self.projector, self.X_o, self.X_v, thc_eri, 
-                            ene_deno, self.X_o, self.X_v, self.projector, optimize=True, backend=self._backend, memory=self._memory
+        t2_thc = -thc_einsum('AP,iP,aP,iajb,ijab,jQ,bQ,QB->AB', self.projector, self.Xo_T2, self.Xv_T2, thc_eri, 
+                            ene_deno, self.Xo_T2, self.Xv_T2, self.projector, optimize=True, backend=self._backend, memory=self._memory
                             #, return_path_only=True
                             )
         
@@ -244,11 +251,11 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         #print(t2_thc_path)
         #exit(1)
         
-        if self.proj_type == THC_RCCSD.thc_proj_name:
-            t2_holder = thc_holder(self.X_o, self.X_v, t2_thc)
+        if self.proj_type == THC_RCCSD.thc_proj_name or self.proj_type == THC_RCCSD.thc_laplace_proj_name:
+            t2_holder = thc_holder(self.Xo_T2, self.Xv_T2, t2_thc)
         else:
             assert self.proj_type == THC_RCCSD.thc_robust_proj_name
-            t2_holder = t2_thc_robust_proj_holder(self.X_o, self.X_v, t2_thc, self.projector)
+            t2_holder = t2_thc_robust_proj_holder(self.Xo_T2, self.Xv_T2, t2_thc, self.projector)
         
         emp2  = 0
         emp2 += 2 * thc_einsum('iajb,iajb->', t2_holder, thc_eri, optimize=True, backend=self._backend, memory=self._memory)
@@ -272,12 +279,13 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         t2 = _thc_rccsd_ind._tensor_to_cpu(t2)
         nocc, nvir = t1.shape
         nov = nocc * nvir
-        nthc = self.nthc
+        #nthc = self.nthc
+        nthc = t2.shape[0]
         size = nov + nthc * (nthc+1) // 2
         vector = numpy.ndarray(size, t1.dtype, buffer=out)
         vector[:nov] = t1.ravel()
         from functools import reduce
-        if self.proj_type == THC_RCCSD.thc_proj_name:
+        if self.proj_type == THC_RCCSD.thc_proj_name or self.proj_type == THC_RCCSD.thc_laplace_proj_name:
             t2_scaled = reduce(numpy.dot, (self.projector_inv_sqrt, t2, self.projector_inv_sqrt.T))
         else:
             t2_scaled = t2
@@ -293,7 +301,7 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         t1 = vec[:nov].copy().reshape((nocc,nvir))
         t2 = lib.unpack_tril(vec[nov:], filltriu=lib.SYMMETRIC)
         from functools import reduce
-        if self.proj_type == THC_RCCSD.thc_proj_name:
+        if self.proj_type == THC_RCCSD.thc_proj_name or self.proj_type == THC_RCCSD.thc_laplace_proj_name:
             t2 = reduce(numpy.dot, (self.projector_sqrt.T, t2, self.projector_sqrt))
         return t1, numpy.asarray(t2, order='C')
             
@@ -319,13 +327,13 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         if self.cc2:
             raise NotImplementedError
 
-        print("t1", t1[0,:])
-        print("t2", t2[0,:])
+        #print("t1", t1[0,:])
+        #print("t2", t2[0,:])
 
         _, t1_new, t2_new = self._thc_scheduler.evaluate_t1_t2(t1, t2, evaluate_ene=False)
         
-        print("t1_new", t1_new[0,:])
-        print("t2_new", t2_new[0,:])
+        #print("t1_new", t1_new[0,:])
+        #print("t2_new", t2_new[0,:])
         
         return t1_new, t2_new
 
@@ -452,7 +460,7 @@ if __name__ == "__main__":
     
     X, partition = myisdf.aoRg_full()
     
-    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True, projector_t="thc_robust")
+    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=False, projector_t="thc_laplace", qr_rela_cutoff=1e-1)
     #thc_ccsd.max_cycle = 2
     thc_ccsd.ccsd()
     
