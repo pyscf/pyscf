@@ -67,7 +67,7 @@ if FOUND_TORCH:
 class THC_RMP3(THC_RMP2):
     
     def __init__(self, 
-                 my_isdf, 
+                 #my_isdf, 
                  my_mf, 
                  frozen=None, mo_coeff=None, mo_occ=None,
                  X=None, ## used in XXZXX

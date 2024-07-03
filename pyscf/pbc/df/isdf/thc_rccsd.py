@@ -116,6 +116,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         
         proj = self.init_projector()
         
+        #self.init_mp2_projector()
+        
         #### init amps #### 
         
         time0 = logger.process_clock(), logger.perf_counter()
@@ -153,9 +155,9 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
     def ao2mo(self, mo_coeff=None):
         return _make_eris_incore(self, mo_coeff)
 
-    def init_projector(self):
+    def init_projector(self): ### THC projector
         
-        time1 = logger.process_clock(), logger.perf_counter()
+        time0 = logger.process_clock(), logger.perf_counter()
         X_o = _thc_rccsd_ind._tensor_to_cpu(self.X_o)
         X_v = _thc_rccsd_ind._tensor_to_cpu(self.X_v)
         PROJ_INV = np.einsum('iP,aP,iQ,aQ->PQ', X_o, X_v, X_o, X_v, optimize=True)
@@ -170,7 +172,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         U_RR     = U_RR[:,kept]
         D_RR_inv = (1.0/D_RR).copy()
         PROJ     = U_RR @ np.diag(D_RR_inv) @ U_RR.T
-        logger.timer(self, 'build projector', *time1)
+        
+        #logger.timer(self, 'build projector', *time1)
         
         self.projector = PROJ
         
@@ -180,7 +183,83 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         self.projector_sqrt     = U_RR @ np.diag(D_RR_inv_sqrt) @ U_RR.T
         self.projector_inv_sqrt = U_RR @ np.diag(D_RR_sqrt) @ U_RR.T
         
+        logger.timer(self, 'build thc projector', *time0)
+        
         return PROJ
+
+    def init_mp2_projector(self, mp2_cutoff=1e-3, df_obj=None):
+        
+        time0 = logger.process_clock(), logger.perf_counter()
+        
+        #X_o = _thc_rccsd_ind._tensor_to_cpu(self.X_o)
+        #X_v = _thc_rccsd_ind._tensor_to_cpu(self.X_v)
+        tau_o = _thc_rccsd_ind._tensor_to_cpu(self.tau_o)
+        tau_v = _thc_rccsd_ind._tensor_to_cpu(self.tau_v)
+        
+        ### not positive definite, abandon this scheme ! 
+        # Z   = _thc_rccsd_ind._tensor_to_cpu(self.Z)
+        # D_Z, U_Z = np.linalg.eigh(Z)
+        # print(D_Z)
+        # kept = D_Z > D_Z[-1]*1e-14  ## check whether it is positive definite
+        # U_Z = U_Z[:, kept]
+        # D_Z = D_Z[kept]
+        
+        # build L_ia^C 
+        
+        if df_obj is None:
+            if hasattr(self, "df_obj"):
+                df_obj = self.df_obj
+            else:
+                ### build one with default settings ###
+                
+                from pyscf.pbc import scf
+                
+                time1 = logger.process_clock(), logger.perf_counter()
+                _mf = scf.RHF(self.mol).density_fit()
+                _mf.with_df.build() # build 
+                df_obj = _mf.with_df
+                logger.timer(self, 'build df obj', *time1)
+        
+        naux = df_obj.get_naoaux()
+        nmo  = self.mo_coeff.shape[1]
+        nocc = self.nocc
+        nvir = nmo - nocc
+        nlaplace = self.n_laplace
+        mo = numpy.asarray(self.mo_coeff, order='F')
+        
+        print("naux ", naux)
+        print("nmo  ", nmo)
+        print("nocc ", nocc)
+        print("nvir ", nvir)
+        
+        L_cW_ia = np.zeros((naux, nlaplace, nocc, nvir))
+        
+        ijslice = (0, nmo, 0, nmo)
+        p1 = 0
+        Lpq = None
+        for k, eri1 in enumerate(df_obj.loop()):
+            from pyscf.ao2mo import _ao2mo
+            Lpq = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', mosym='s1', out=Lpq)
+            p0, p1 = p1, p1 + Lpq.shape[0]
+            Lpq = Lpq.reshape(p1-p0,nmo,nmo)
+            #Loo[p0:p1] = Lpq[:,:nocc,:nocc]
+            Lov = Lpq[:,:nocc,nocc:]
+            #Lvv = lib.pack_tril(Lpq[:,nocc:,nocc:])
+            #eris.vvL[:,p0:p1] = Lvv.T
+            L_cW_ia[p0:p1,:,:,:] = np.einsum("iW,aW,Cia->CWia", tau_o, tau_v, Lov, optimize=True)
+        
+        M_cW_cW = np.einsum("CWia,DXia->CWDX", L_cW_ia, L_cW_ia, optimize=True)
+        M_cW_cW = M_cW_cW.reshape(nlaplace*naux, nlaplace*naux)
+        TAU_V, V_CW_V = np.linalg.eigh(M_cW_cW)
+        kept = TAU_V > TAU_V[-1]*mp2_cutoff
+        print("condition number = ", TAU_V[-1]/TAU_V[0])
+        print("nkept = ", np.sum(kept))
+        #print("TAU_V = ", TAU_V)
+        exit(1)
+        
+        logger.timer(self, 'build mp2 projector', *time0)
+
+        #exit(1)
 
     def init_amps(self, eris=None):
         
@@ -384,7 +463,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
 
 if __name__ == "__main__":
     
-    c = 10
+    c = 15
     N = 1
     
     #if rank == 0:
