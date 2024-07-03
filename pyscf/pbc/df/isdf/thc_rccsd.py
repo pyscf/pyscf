@@ -153,6 +153,36 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
     def ao2mo(self, mo_coeff=None):
         return _make_eris_incore(self, mo_coeff)
 
+    def _evaluate_UDUT_mutliscale(self,U,D):
+        # D is addusmed to ascending
+        
+        # print("D = ", D)
+        
+        res = None
+        
+        SCALE = [1e-14, 1e-12, 1e-10, 1e-8, 1e-6, 1e-4, 1e-2, 1.01]
+
+        for i in range(len(SCALE)-1):
+            #where1 = D >= D[-1] * SCALE[i] 
+            #where2 = D < D[-1] * SCALE[i+1]
+            where = np.where((D>=D[0]*SCALE[i])&(D<D[0]*SCALE[i+1]))[0]
+            #print("where = ", where)
+            if len(where) == 0:
+                continue
+            #where  = [x and y for x,y in zip(where1,where2)]
+            
+            U_Tmp = U[:,where]
+            D_Tmp = D[where]
+            #print(D_Tmp)
+            #print(U_Tmp)
+            TMP = U_Tmp @ np.diag(D_Tmp) @ U_Tmp.T
+            if res is None:
+                res = TMP
+            else:
+                res += TMP
+        
+        return res
+
     def init_projector(self):
         
         time1 = logger.process_clock(), logger.perf_counter()
@@ -167,9 +197,10 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         print("nkept = ", np.sum(kept))
         
         D_RR     = D_RR[kept]
-        U_RR     = U_RR[:,kept]
+        U_RR     = U_RR[:,kept].copy()
         D_RR_inv = (1.0/D_RR).copy()
-        PROJ     = U_RR @ np.diag(D_RR_inv) @ U_RR.T
+        #PROJ     = U_RR @ np.diag(D_RR_inv) @ U_RR.T
+        PROJ     = self._evaluate_UDUT_mutliscale(U_RR, D_RR_inv)
         logger.timer(self, 'build projector', *time1)
         
         self.projector = PROJ
@@ -179,6 +210,25 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         
         self.projector_sqrt     = U_RR @ np.diag(D_RR_inv_sqrt) @ U_RR.T
         self.projector_inv_sqrt = U_RR @ np.diag(D_RR_sqrt) @ U_RR.T
+        
+        ### check tranpose ### 
+        
+        diff1 = np.linalg.norm(PROJ-PROJ.T) # numerical problem
+        diff2 = np.linalg.norm(self.projector_sqrt-self.projector_sqrt.T)
+        diff3 = np.linalg.norm(self.projector_inv_sqrt-self.projector_inv_sqrt.T)
+        
+        self.projector = (PROJ + PROJ.T) / 2.0
+        self.projector_sqrt = (self.projector_sqrt + self.projector_sqrt.T) / 2.0
+        self.projector_inv_sqrt = (self.projector_inv_sqrt + self.projector_inv_sqrt.T) / 2.0
+        
+        print("diff1 = ", diff1)
+        print("diff2 = ", diff2)
+        print("diff3 = ", diff3)
+        
+        #exit(1)
+        
+        if self._use_torch:
+            self.projector = torch.from_numpy(self.projector).detach()
         
         return PROJ
 

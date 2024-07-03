@@ -979,7 +979,7 @@ def _parse_einsum_term(einsum_term:_einsum_term, scheduler):
                                     tensor_scripts += sub_arg + ","
                                     args.append(sub_arg)
                                 tensor_scripts_2.append(tensor_scripts)
-                                args2.append(args)
+                                args_2.append(args)
                                 if factor_absorbed:
                                     #print("add factor = ", arg_to_add.factor)
                                     factor_2.append(arg_to_add.factor)
@@ -1163,7 +1163,10 @@ class THC_scheduler:
         if with_gpu:
             assert use_torch
             if GPU_SUPPORTED is False:
-                logger.warn(self, "GPU is not supported, use CPU instead.")
+                #import sys
+                #self.stdout = sys.stdout 
+                #logger.warn(self, "GPU is not supported, use CPU instead.")
+                print("GPU is not supported, use CPU instead.")
                 with_gpu = False
         self.with_gpu = with_gpu
         
