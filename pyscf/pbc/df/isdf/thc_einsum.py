@@ -70,7 +70,49 @@ class thc_holder:
                 res_subscript += eri_subscript[i]+thc_subscript[1]+","
         
         return res_tensor, res_subscript
+
+class t2_thc_robust_proj_holder:
+    
+    def __init__(self, X_o, X_v, Z, PROJ):
+        self.X_o  = X_o
+        self.Z    = Z
+        self.X_v  = X_v
+        self.PROJ = PROJ
+        
+        assert self.X_o.shape[1]  == self.Z.shape[0]
+        assert self.X_o.shape[1]  == self.Z.shape[1]
+        assert self.X_o.shape[1]  == self.X_v.shape[1]
+        assert self.X_o.shape[1]  == self.PROJ.shape[1]
+        assert self.PROJ.shape[0] == self.PROJ.shape[1]
+    
+    @property
+    def n_extra_indices(self):
+        return 4
+
+    def update_einsum(self, eri_subscript:str, thc_subscript:str):
+        
+        assert len(eri_subscript) == 4
+        assert len(thc_subscript) == 4
+        assert isinstance(eri_subscript, str)
+        assert isinstance(thc_subscript, str)
+        
+        res_tensor = [self.PROJ, self.Z, self.PROJ]
+        res_subscript = thc_subscript[0]+thc_subscript[1]+","+thc_subscript[1]+thc_subscript[2]+","+thc_subscript[2]+thc_subscript[3]+","
+        
+        for i in range(4):
+            if eri_subscript[i] in OCC_INDICES:
+                res_tensor.append(self.X_o)
+            elif eri_subscript[i] in VIR_INDICES:
+                res_tensor.append(self.X_v)
+            else:
+                raise ValueError
             
+            if i<2:
+                res_subscript += eri_subscript[i]+thc_subscript[0]+","
+            else:
+                res_subscript += eri_subscript[i]+thc_subscript[-1]+","
+        
+        return res_tensor, res_subscript        
 
 class energy_denomimator:
     
@@ -253,6 +295,7 @@ def thc_einsum(subscripts, *tensors, **kwargs):
                 else:
                     return oe.contract_path(subscripts_2, *tensors_2, optimize=optimize, memory_limit=memory)
             else:
+                #print(subscripts_2)
                 out = oe.contract(subscripts_2, *tensors_2, optimize=optimize, memory_limit=memory)
     
     return out

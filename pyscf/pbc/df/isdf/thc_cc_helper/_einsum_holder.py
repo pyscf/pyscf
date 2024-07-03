@@ -24,8 +24,9 @@ from functools import partial
 from pyscf.lib import logger
 
 SUPPORTED_INPUT_NAME = [
-    "T1", "XO", "XV", "TAUO", "TAUV", "THC_INT", "THC_T2" ## NOTE: only these terms are involved in THC!
-    "XO_T2", "XV_T2", "PROJ"                              ## used in THC-CCSD
+    "T1", "XO", "XV", "TAUO", "TAUV", "THC_INT", "THC_T2",  ## NOTE: only these terms are involved in THC!
+    "XO_T2", "XV_T2", "PROJ",                               ## used in THC-CCSD, "PROJ" stands for PROJ_THC
+    "PROJ_ROBUST", "PROJ_MP2", "PROJ_MP3"
 ]
 
 OCC_INDICES = ["i", "j", "k", "l", "m", "n"]
@@ -389,8 +390,8 @@ class _einsum_term:
         size_dict = {}
         for idx, tensor in zip(inputs, tensors):
         
-            assert isinstance(tensor, np.ndarray)
-            assert tensor.ndim == len(idx)
+            #assert isinstance(tensor, np.ndarray)
+            #assert tensor.ndim == len(idx)
 
             for _idx_ in idx:
                 if _idx_ not in size_dict:
@@ -526,6 +527,10 @@ class _expr_t1(_einsum_term):
 class _expr_t2(_einsum_term):
     def __init__(self):
         super().__init__("T2", "iP,aP,PQ,jQ,bQ->iajb", args=["XO_T2", "XV_T2", "THC_T2", "XO_T2", "XV_T2"])
+
+class _expr_t2_thc_robust(_einsum_term):
+    def __init__(self):
+        super().__init__("T2", "iP,aP,PA,AB,BQ,jQ,bQ->iajb", args=["XO_T2", "XV_T2", "PROJ_ROBUST", "THC_T2", "PROJ_ROBUST", "XO_T2", "XV_T2"])
 
 class _expr_foo(_einsum_term):
     def __init__(self):
@@ -979,7 +984,7 @@ def _parse_einsum_term(einsum_term:_einsum_term, scheduler):
                                     tensor_scripts += sub_arg + ","
                                     args.append(sub_arg)
                                 tensor_scripts_2.append(tensor_scripts)
-                                args2.append(args)
+                                args_2.append(args)
                                 if factor_absorbed:
                                     #print("add factor = ", arg_to_add.factor)
                                     factor_2.append(arg_to_add.factor)
@@ -1112,21 +1117,32 @@ def _parse_expression(expression_holder:_expr_holder, scheduler):
 
 ##### TODO: write the parse function for THC-CCSD #####
 
-def _to_torch_tensor(arg):
+def _to_torch_tensor(arg, use_gpu=False):
     try:
         import torch
         if isinstance(arg, np.ndarray):
-            return torch.from_numpy(arg).detach()
+            if use_gpu:
+                return torch.from_numpy(arg).detach().to('cuda')
+            else:
+                return torch.from_numpy(arg).detach()
         else:
-            return arg
+            if use_gpu:
+                return arg.detach().to('cuda')
+            else:
+                return arg.detach()
     except Exception as e:
+        assert use_gpu == False
         return arg
     
 class THC_scheduler:
     
-    t1_new_name = "T1_NEW"
-    t2_new_name = "T2_NEW"
-    ccsd_energy_name = "CCSD_ENERGY"
+    t1_new_name       = "T1_NEW"
+    t2_new_name       = "T2_NEW"
+    ccsd_energy_name  = "CCSD_ENERGY"
+    projector_allowed = ["thc", "thc_robust", "mp2"]
+    thc_proj_name = "thc"
+    thc_robust_proj_name = "thc_robust"
+    mp2_proj_name = "mp2"
     
     def __init__(self, 
                  X_O:np.ndarray,
@@ -1138,7 +1154,8 @@ class THC_scheduler:
                  THC_T2:np.ndarray,
                  TAU_O:np.ndarray,
                  TAU_V:np.ndarray,
-                 PROJECTOR:np.ndarray,
+                 # PROJECTOR:np.ndarray,
+                 proj_type="thc",
                  use_torch=False,
                  with_gpu =False,
                  verbose=4):
@@ -1152,7 +1169,13 @@ class THC_scheduler:
         self._tau_v = TAU_V
         self._xo_t2 = XO_T2
         self._xv_t2 = XV_T2
-        self._proj  = PROJECTOR
+        # self._proj  = PROJECTOR
+        
+        self.proj_type = proj_type
+        
+        ##### init projector ##### 
+        
+        assert proj_type in THC_scheduler.projector_allowed
         
         self.t1     = T1
         self.thc_t2 = THC_T2
@@ -1163,41 +1186,31 @@ class THC_scheduler:
         if with_gpu:
             assert use_torch
             if GPU_SUPPORTED is False:
-                logger.warn(self, "GPU is not supported, use CPU instead.")
+                #import sys
+                #self.stdout = sys.stdout 
+                #logger.warn(self, "GPU is not supported, use CPU instead.")
+                print("GPU is not supported, use CPU instead.")
                 with_gpu = False
         self.with_gpu = with_gpu
         
         if use_torch:
             assert FOUND_TORCH
-            #self._xo = torch.from_numpy(self._xo).detach()
-            #self._xv = torch.from_numpy(self._xv).detach()
-            #self._thc_int = torch.from_numpy(self._thc_int).detach()
-            #self._tau_o = torch.from_numpy(self._tau_o).detach()
-            #self._tau_v = torch.from_numpy(self._tau_v).detach()
-            #self._xo_t2 = torch.from_numpy(self._xo_t2).detach()
-            #self._xv_t2 = torch.from_numpy(self._xv_t2).detach()
-            #self._proj  = torch.from_numpy(self._proj).detach()
-            self._xo = _to_torch_tensor(self._xo)
-            self._xv = _to_torch_tensor(self._xv)
-            self._thc_int = _to_torch_tensor(self._thc_int)
-            self._tau_o = _to_torch_tensor(self._tau_o)
-            self._tau_v = _to_torch_tensor(self._tau_v)
-            self._xo_t2 = _to_torch_tensor(self._xo_t2)
-            self._xv_t2 = _to_torch_tensor(self._xv_t2)
-            self._proj  = _to_torch_tensor(self._proj)
-            if self.with_gpu:
-                self._xo = self._xo.to('cuda')
-                self._xv = self._xv.to('cuda')
-                self._thc_int = self._thc_int.to('cuda')
-                self._tau_o = self._tau_o.to('cuda')
-                self._tau_v = self._tau_v.to('cuda')
-                self._xo_t2 = self._xo_t2.to('cuda')
-                self._xv_t2 = self._xv_t2.to('cuda')
-                self._proj  = self._proj.to('cuda')
+            self._xo = _to_torch_tensor(self._xo, self.with_gpu)
+            self._xv = _to_torch_tensor(self._xv, self.with_gpu)
+            self._thc_int = _to_torch_tensor(self._thc_int, self.with_gpu)
+            self._tau_o = _to_torch_tensor(self._tau_o, self.with_gpu)
+            self._tau_v = _to_torch_tensor(self._tau_v, self.with_gpu)
+            self._xo_t2 = _to_torch_tensor(self._xo_t2, self.with_gpu)
+            self._xv_t2 = _to_torch_tensor(self._xv_t2, self.with_gpu)
+            
+        if self.proj_type in [THC_scheduler.thc_proj_name, THC_scheduler.thc_robust_proj_name]:
+            self.init_projector()
+        else:
+            raise NotImplementedError("Projector type %s not implemented." % self.proj_type)
         
         ###### holder the expressions and intermediates ######
         
-        self._input_tensor_name = ["XO", "XV", "THC_INT", "TAUO", "TAUV", "XO_T2", "XV_T2", "PROJ", "T1", "THC_T2"]
+        self._input_tensor_name = ["XO", "XV", "THC_INT", "TAUO", "TAUV", "XO_T2", "XV_T2", "PROJ", "PROJ_ROBUST", "PROJ_MP2", "T1", "THC_T2"]
         self.tensor_name_to_attr_name = {
             "XO"    : "_xo",
             "XV"    : "_xv",
@@ -1207,6 +1220,8 @@ class THC_scheduler:
             "XO_T2" : "_xo_t2",
             "XV_T2" : "_xv_t2",
             "PROJ"  : "_proj",
+            "PROJ_ROBUST": "_proj_robust",
+            "PROJ_MP2"   : "_proj_mp2",
             "T1"    : "t1",
             "THC_T2": "thc_t2"
         }
@@ -1257,7 +1272,173 @@ class THC_scheduler:
         
         return res
     
-    ###############################################
+    #############################################################################################################################################
+    
+    # initialization of different projector # 
+    
+    @classmethod
+    def _evaluate_UDUT_mutliscale(cls,U,D):
+        
+        # D is addusmed to ascending
+        
+        res = None
+        
+        SCALE = [1e-14, 1e-12, 1e-10, 1e-8, 1e-6, 1e-4, 1e-2, 1.01]
+
+        for i in range(len(SCALE)-1):
+            where = np.where((D>=D[0]*SCALE[i])&(D<D[0]*SCALE[i+1]))[0]
+            if len(where) == 0:
+                continue            
+            U_Tmp = U[:,where]
+            D_Tmp = D[where]
+            TMP = U_Tmp @ np.diag(D_Tmp) @ U_Tmp.T
+            if res is None:
+                res = TMP
+            else:
+                res += TMP
+        
+        return res
+    
+    @classmethod
+    def _tensor_to_cpu(cls, arg):
+        try:
+            import torch    
+            if isinstance(arg, torch.Tensor):
+                return arg.cpu().numpy()
+            else:
+                return arg
+        except Exception as e:
+            return arg
+    
+    def init_projector(self):
+        
+        time0 = logger.process_clock(), logger.perf_counter()
+        X_o = THC_scheduler._tensor_to_cpu(self._xo)
+        X_v = THC_scheduler._tensor_to_cpu(self._xv)
+        PROJ_INV = np.einsum('iP,aP,iQ,aQ->PQ', X_o, X_v, X_o, X_v, optimize=True)
+        import scipy
+        D_RR, U_RR = scipy.linalg.eigh(PROJ_INV)
+        kept = D_RR > D_RR[-1]*1e-14
+        
+        print("condition number = ", D_RR[-1]/D_RR[0])    
+        print("nkept = ", np.sum(kept))
+        
+        D_RR     = D_RR[kept]
+        U_RR     = U_RR[:,kept].copy()
+        D_RR_inv = (1.0/D_RR).copy()
+        PROJ     = THC_scheduler._evaluate_UDUT_mutliscale(U_RR, D_RR_inv)  # have serious numerical problem, but still cannot be fixed by this subroutine
+        #logger.timer(self, 'build projector', *time1)
+        
+        self.projector = PROJ
+        
+        D_RR_sqrt     = np.sqrt(D_RR)
+        D_RR_inv_sqrt = 1.0/D_RR_sqrt
+        
+        self.projector_sqrt     = U_RR @ np.diag(D_RR_inv_sqrt) @ U_RR.T
+        self.projector_inv_sqrt = U_RR @ np.diag(D_RR_sqrt) @ U_RR.T
+        
+        logger.timer(self, 'build thc projector', *time0)
+        
+        ### check tranpose ### 
+        
+        diff1 = np.linalg.norm(PROJ-PROJ.T) # numerical problem
+        diff2 = np.linalg.norm(self.projector_sqrt-self.projector_sqrt.T)
+        diff3 = np.linalg.norm(self.projector_inv_sqrt-self.projector_inv_sqrt.T)
+        
+        self.projector = (PROJ + PROJ.T) / 2.0
+        self.projector_sqrt = (self.projector_sqrt + self.projector_sqrt.T) / 2.0
+        self.projector_inv_sqrt = (self.projector_inv_sqrt + self.projector_inv_sqrt.T) / 2.0
+        
+        print("diff1 = ", diff1)
+        print("diff2 = ", diff2)
+        print("diff3 = ", diff3)
+        
+        if self.use_torch:
+            self.projector = _to_torch_tensor(self.projector, self.with_gpu)
+            self.projector_sqrt = _to_torch_tensor(self.projector_sqrt, self.with_gpu)
+            self.projector_inv_sqrt = _to_torch_tensor(self.projector_inv_sqrt, self.with_gpu)
+            self._proj = self.projector
+            self._proj_robust = self.projector_sqrt
+            self._proj_mp2 = None
+        
+        return PROJ
+
+    def init_mp2_projector(self, mp2_cutoff=1e-3, df_obj=None):
+        
+        time0 = logger.process_clock(), logger.perf_counter()
+        
+        #X_o = _thc_rccsd_ind._tensor_to_cpu(self.X_o)
+        #X_v = _thc_rccsd_ind._tensor_to_cpu(self.X_v)
+        tau_o = _thc_rccsd_ind._tensor_to_cpu(self.tau_o)
+        tau_v = _thc_rccsd_ind._tensor_to_cpu(self.tau_v)
+        
+        ### not positive definite, abandon this scheme ! 
+        
+        # Z   = _thc_rccsd_ind._tensor_to_cpu(self.Z)
+        # D_Z, U_Z = np.linalg.eigh(Z)
+        # print(D_Z)
+        # kept = D_Z > D_Z[-1]*1e-14  ## check whether it is positive definite
+        # U_Z = U_Z[:, kept]
+        # D_Z = D_Z[kept]
+        
+        # build L_ia^C 
+        
+        if df_obj is None:
+            if hasattr(self, "df_obj"):
+                df_obj = self.df_obj
+            else:
+                ### build one with default settings ###
+                
+                from pyscf.pbc import scf
+                
+                time1 = logger.process_clock(), logger.perf_counter()
+                _mf = scf.RHF(self.mol).density_fit()
+                _mf.with_df.build() # build 
+                df_obj = _mf.with_df
+                logger.timer(self, 'build df obj', *time1)
+        
+        naux = df_obj.get_naoaux()
+        nmo  = self.mo_coeff.shape[1]
+        nocc = self.nocc
+        nvir = nmo - nocc
+        nlaplace = self.n_laplace
+        mo = numpy.asarray(self.mo_coeff, order='F')
+        
+        print("naux ", naux)
+        print("nmo  ", nmo)
+        print("nocc ", nocc)
+        print("nvir ", nvir)
+        
+        L_cW_ia = np.zeros((naux, nlaplace, nocc, nvir))
+        
+        ijslice = (0, nmo, 0, nmo)
+        p1 = 0
+        Lpq = None
+        for k, eri1 in enumerate(df_obj.loop()):
+            from pyscf.ao2mo import _ao2mo
+            Lpq = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', mosym='s1', out=Lpq)
+            p0, p1 = p1, p1 + Lpq.shape[0]
+            Lpq = Lpq.reshape(p1-p0,nmo,nmo)
+            #Loo[p0:p1] = Lpq[:,:nocc,:nocc]
+            Lov = Lpq[:,:nocc,nocc:]
+            #Lvv = lib.pack_tril(Lpq[:,nocc:,nocc:])
+            #eris.vvL[:,p0:p1] = Lvv.T
+            L_cW_ia[p0:p1,:,:,:] = np.einsum("iW,aW,Cia->CWia", tau_o, tau_v, Lov, optimize=True)
+        
+        M_cW_cW = np.einsum("CWia,DXia->CWDX", L_cW_ia, L_cW_ia, optimize=True)
+        M_cW_cW = M_cW_cW.reshape(nlaplace*naux, nlaplace*naux)
+        TAU_V, V_CW_V = np.linalg.eigh(M_cW_cW)
+        kept = TAU_V > TAU_V[-1]*mp2_cutoff
+        print("condition number = ", TAU_V[-1]/TAU_V[0])
+        print("nkept = ", np.sum(kept))
+        #print("TAU_V = ", TAU_V)
+        exit(1)
+        
+        logger.timer(self, 'build mp2 projector', *time0)
+
+        #exit(1)
+        
+    #############################################################################################################################################
 
     def add_input(self, name, tensor):
         if name in self._input_tensor_name:
@@ -1292,6 +1473,8 @@ class THC_scheduler:
             if self.with_gpu:
                 self.thc_t2 = self.thc_t2.to('cuda')
 
+    #############################################################################################################################################
+    
     def register_intermediates(self, name, expression):
         #print("Register intermediate: ", name)
         if name in self._input_tensor_name:
@@ -1314,7 +1497,9 @@ class THC_scheduler:
         ### special treatment for t2 equations as we have to apply proj on this equation ###
         
         if name == THC_scheduler.t2_new_name: 
+            
             ## first check the equation ## 
+            
             assert expression.nocc == 2 and expression.nvir == 2
             occvir_str = expression.occvir_str
             indices_str = None
@@ -1328,16 +1513,22 @@ class THC_scheduler:
             ## apply the projector ##
             _xo_expr = _einsum_term("XO_T2", "iP", 1.0, ["XO_T2"])
             _xv_expr = _einsum_term("XV_T2", "aP", 1.0, ["XV_T2"])
-            _proj_expr = _einsum_term("PROJ", "PQ", 1.0, ["PROJ"])
+            if self.proj_type == "thc":
+                _proj_expr = _einsum_term("PROJ", "PQ", 1.0, ["PROJ"])
+            else:
+                assert self.proj_type == "thc_robust"
+                _proj_expr = _einsum_term("PROJ_ROBUST", "PQ", 1.0, ["PROJ_ROBUST"])
             expression_new = thc_einsum_sybolic("AP,iP,aP,%s,jQ,bQ,QB->AB" % indices_str, 
-                                                _proj_expr, 
-                                                _xo_expr, _xv_expr, 
-                                                expression, 
-                                                _xo_expr, _xv_expr, 
-                                                _proj_expr,
-                                                cached=True)
+                                                    _proj_expr, 
+                                                    _xo_expr, _xv_expr, 
+                                                    expression, 
+                                                    _xo_expr, _xv_expr, 
+                                                    _proj_expr,
+                                                    cached=True)
             expression_new.name = name
             self.expr[name] = expression_new
+
+    #############################################################################################################################################
 
     def get_tensor(self, name):
         
@@ -1446,6 +1637,8 @@ class THC_scheduler:
         t2 = (logger.process_clock(), logger.perf_counter())
     
         print("_build_contraction time %.2f %.2f" % (t2[0]-t1[0],t2[1]-t1[1]))
+    
+    #############################################################################################################################################
     
     def _evaluate(self, expr_name):
         
