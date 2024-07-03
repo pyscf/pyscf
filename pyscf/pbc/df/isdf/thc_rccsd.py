@@ -78,6 +78,7 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
                  frozen=None, mo_coeff=None, mo_occ=None,
                  my_isdf=None, 
                  X=None, ## used in XXZXX
+                 partition=None,
                  laplace_rela_err = 1e-7,
                  laplace_order    = 2,
                  no_LS_THC        = False,
@@ -93,7 +94,7 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
             assert my_mf is not None
             my_isdf = my_mf.with_df
         
-        _restricted_THC_posthf_holder.__init__(self, my_isdf, my_mf, X,
+        _restricted_THC_posthf_holder.__init__(self, my_isdf, my_mf, X, partition,
                                                 laplace_rela_err = laplace_rela_err,
                                                 laplace_order    = laplace_order,
                                                 no_LS_THC        = no_LS_THC,
@@ -449,9 +450,9 @@ if __name__ == "__main__":
     
     ####### thc rmp2 #######
     
-    X = myisdf.aoRg_full()
+    X, partition = myisdf.aoRg_full()
     
-    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True, projector_t="thc_robust")
+    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True, projector_t="thc_robust")
     #thc_ccsd.max_cycle = 2
     thc_ccsd.ccsd()
     

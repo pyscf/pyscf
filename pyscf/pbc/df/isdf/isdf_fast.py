@@ -897,7 +897,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.V_R  = None
     
     def aoRg_full(self):
-        return self.aoRg
+        return self.aoRg, None
         
     ##### functions defined in isdf_ao2mo.py #####
 
@@ -992,7 +992,13 @@ if __name__ == '__main__':
 
     mf.kernel()
 
-    # exit(1)
+    print("mf.with_df.IP_ID = ", mf.with_df.IP_ID)
+    print("mf.with_df.partition = ", mf.with_df.partition)
+    
+    for i in range(cell.natm):
+        print("i = ", i, "partition = ", mf.with_df.partition[mf.with_df.partition == i].shape[0])
+
+    exit(1)
 
     # without robust fitting 
     

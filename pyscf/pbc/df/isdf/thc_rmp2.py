@@ -211,7 +211,7 @@ if __name__ == "__main__":
     
     ####### thc rmp2 #######
     
-    X = myisdf.aoRg_full()
+    X,_ = myisdf.aoRg_full()
     
     thc_rmp2 = THC_RMP2(my_mf=mf_isdf, X=X, use_torch=True, with_gpu=False)
     

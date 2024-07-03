@@ -21,14 +21,37 @@ from functools import reduce
 import numpy as np
 
 from pyscf.lib import logger
+from pyscf import lib
+libpbc = lib.load_library('libpbc')
 
 def _thc_proj_2(Xo:np.ndarray,
                 Xv:np.ndarray,
                 tauo:np.ndarray,
-                tauv:np.ndarray):
+                tauv:np.ndarray,
+                qr_cutoff = 1e-3):
     
     t1 = (logger.process_clock(), logger.perf_counter())
     
     proj_full = np.einsum("iP,aP,iW,aW->iaPW", Xo, Xv, tauo, tauv)
     
-    t2 = (logger.process_clock(), logger.perf_counter())
+    nocc = Xo.shape[0]
+    nvir = Xv.shape[0]
+    nthc = Xo.shape[1]
+    nlaplace = tauo.shape[1]
+    
+    nrow = nocc * nvir 
+    ncol = nthc * nlaplace
+    
+    ##### prepare to perform the qr decomposition ##### 
+    
+    npt_find      = ctypes.c_int(0)
+    pivot         = np.arange(grid_ID.shape[0], dtype=np.int32)
+    nthread       = lib.num_threads()
+    thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64)
+    global_buffer = np.ndarray((1, grid_ID.shape[0]), dtype=np.float64)
+    R = np.ndarray((nrow, ncol), dtype=np.float64)
+    
+    
+    t2 = (logger.process_clock(), logger.perf_counter()) 
+    
+    

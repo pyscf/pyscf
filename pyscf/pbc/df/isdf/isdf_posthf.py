@@ -98,7 +98,8 @@ if FOUND_TORCH:
 
 class _restricted_THC_posthf_holder:
     
-    def __init__(self, my_isdf, my_mf, X,
+    def __init__(self, my_isdf, my_mf, 
+                 X=None, partition=None,
                  laplace_rela_err = 1e-7,
                  laplace_order    = 2,
                  no_LS_THC = False,
@@ -111,7 +112,11 @@ class _restricted_THC_posthf_holder:
         
             self.my_isdf = my_isdf
             self.my_mf   = my_mf
-            self.X       = X
+            
+            if X is None:
+                X, partition = my_isdf.aoRg_full()
+            #else:
+                #assert partition is not None
         
             self.mo_coeff = my_mf.mo_coeff
             self.mo_occ   = my_mf.mo_occ
@@ -132,7 +137,7 @@ class _restricted_THC_posthf_holder:
                 if X is not None:
                     print("Warning: X is not None, but no_LS_THC is True so the input X is abandoned!")
                 Z = my_isdf.W * ngrid / vol
-                X = my_isdf.aoRg_full()
+                X, partition = my_isdf.aoRg_full()
             else:
                 t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
                 Z = LS_THC(my_isdf, X)
@@ -140,11 +145,15 @@ class _restricted_THC_posthf_holder:
                 _benchmark_time(t1, t2, "Z matrix construction for THC eri = XXZXX", my_isdf)
 
             #### construct laplace ####
+
+            self.X       = X
+            self.grid_partition = partition
         
             self._laplace = laplace_holder(self.mo_energy, self.nocc,
                                            rel_error = laplace_rela_err,
                                            order = laplace_order)
 
+            #self.grid_partition = partition
             self.X_o = lib.ddot(self.mo_coeff[:, :self.nocc].T, X)
             self.X_v = lib.ddot(self.mo_coeff[:, self.nocc:].T, X)
             self.Z   = Z
@@ -166,6 +175,7 @@ class _restricted_THC_posthf_holder:
             self.my_isdf  = None
             self.my_mf    = None
             self.X        = None
+            self.grid_partition = None
             self.mo_coeff = None
             self.mo_occ   = None
             self.mo_energy = None
@@ -189,6 +199,7 @@ class _restricted_THC_posthf_holder:
             #self.my_isdf  = bcast(self.my_isdf, 0)
             #self.my_mf    = bcast(self.my_mf, 0)
             self.X        = bcast(self.X, 0)
+            self.grid_partition = bcast(self.grid_partition, 0)
             self.mo_coeff = bcast(self.mo_coeff, 0)
             self.mo_occ   = bcast(self.mo_occ, 0)
             self.mo_energy = bcast(self.mo_energy, 0)
@@ -216,8 +227,13 @@ class _restricted_THC_posthf_holder:
                     print("Warning: GPU is not supported!")
                     with_gpu=False
         
+        if self.grid_partition is not None:
+            self.grid_partition = np.asarray(self.grid_partition, dtype=np.int32)
+        
         if use_torch:
             self.X = torch.from_numpy(self.X).detach()
+            if self.grid_partition is not None:
+                self.grid_partition = torch.from_numpy(self.grid_partition).detach()
             self.Z = torch.from_numpy(self.Z).detach()
             self.tau_o = torch.from_numpy(self.tau_o).detach()
             self.tau_v = torch.from_numpy(self.tau_v).detach()
@@ -228,6 +244,8 @@ class _restricted_THC_posthf_holder:
             
             if with_gpu:
                 self.X = self.X.to('cuda')
+                if self.grid_partition is not None:
+                    self.grid_partition = self.grid_partition.to('cuda')
                 self.Z = self.Z.to('cuda')
                 self.tau_o = self.tau_o.to('cuda')
                 self.tau_v = self.tau_v.to('cuda')

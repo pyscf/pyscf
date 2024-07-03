@@ -1635,6 +1635,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
         fn_pack = getattr(libpbc, "_Pack_Matrix_SparseRow_DenseCol", None)
         assert fn_pack is not None
+
+        partition = []
     
         res = np.zeros((self.nao, self.naux), dtype=np.float64)
         for i in range(self.natm):
@@ -1656,7 +1658,9 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                 ctypes.c_int(global_IP_begin_i+nIP_i)
             )
             
-        return res
+            partition.append([global_IP_begin_i, global_IP_begin_i+nIP_i])
+            
+        return res, partition
       
     ### LS_THC fit ###
     
@@ -1802,7 +1806,9 @@ if __name__ == '__main__':
     
     _myisdf = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
     _myisdf.build_IP_local(c=13, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
-    X       = _myisdf.aoRg_full() 
+    X,partition = _myisdf.aoRg_full() 
+    print("X = ", X.shape)
+    print("partition = ", partition)
     pbc_isdf_info.LS_THC_recompression(X)
     
     pbc_isdf_info.occ_RI_K = False

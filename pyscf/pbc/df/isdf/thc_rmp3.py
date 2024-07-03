@@ -246,8 +246,8 @@ if __name__ == "__main__":
     
     ####### thc rmp3 #######
     
-    X        = myisdf.aoRg_full()
-    thc_rmp3 = THC_RMP3(myisdf, mf_isdf, X=X, use_torch=True, with_gpu=False)
+    X,_        = myisdf.aoRg_full()
+    thc_rmp3 = THC_RMP3(mf_isdf, X=X, use_torch=True, with_gpu=False)
     e_mp3, _ = thc_rmp3.kernel(backend="cotengra")
     print("ISDF MP3 energy", e_mp3)
     e_mp3, _ = thc_rmp3.kernel(backend="opt_einsum")
