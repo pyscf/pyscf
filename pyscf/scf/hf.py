@@ -719,6 +719,31 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         dm = lib.tag_array(dm, mo_coeff=mo_coeff[:,::-1], mo_occ=mo_occ)
     return dm
 
+def init_guess_by_vsap(mol, sapgrasp='small'):
+    '''Generate initial guess density matrix using the superposition of
+    atomic potentials (SAP) guess, doi:10.1021/acs.jctc.8b01089
+
+    Args:
+        mol : MoleBase object
+            the molecule object for which the initial guess is evaluated
+        sapgrasp : str (small | large)
+            whether to use small or large coefficient set
+
+    Returns:
+        dm0 : ndarray
+            SAP initial guess density matrix
+    '''
+    Vsap = make_vsap(mol, sapgrasp=sapgrasp)
+
+    hcore = get_hcore(mol)
+    s = get_ovlp(mol)
+    e, coeff = eig(hcore + Vsap, s)
+
+    mf = RHF(mol)
+    occ = get_occ(mf, e, coeff)
+
+    dm = make_rdm1(coeff, occ)
+    return dm
 
 def get_init_guess(mol, key='minao', **kwargs):
     '''Generate density matrix for initial guess
@@ -757,6 +782,56 @@ def level_shift(s, d, f, factor):
 def damping(f, f_prev, factor):
     return f*(1-factor) + f_prev*factor
 
+def make_vsap(mol, sapgrasp='small'):
+    '''Superposition of atomic potentials (SAP) potential matrix
+
+    Args:
+        mol : MoleBase object
+            molecule for which SAP is computed
+        sapgrasp : str (small | large)
+            which coefficient basis to use
+
+    Returns:
+        Vsap : ndarray
+            SAP potential matrix
+    '''
+    from pyscf.gto.basis import load, SAP_ALIAS
+    from pyscf.gto.mole import fakemol_for_charges
+
+    atom_coords = numpy.asarray([coord[1] for coord in mol._atom])
+    atoms = numpy.asarray([coord[0] for coord in mol._atom])
+
+    if sapgrasp not in ['small', 'large']:
+        raise RuntimeError("sapgrasp must be either 'small' or 'large'!")
+
+    sapbas = {
+        atom: numpy.asarray(
+                load(('sap_grasp_' + sapgrasp), atom)[0][1:]
+            ) for atom in set(atoms)
+    }
+
+    # charge sumcheck
+    Z_eff = sum([numpy.sum(sapbas[a][:,1]) for a in atoms])
+    if numpy.abs(Z_eff + mol.nelectron) > 1e-3:
+        raise RuntimeError(
+            '\n'.join([f'SAP basis coefficients must be equal or close to total electronic charge: {Z_eff} !≃ {mol.nelectron}',
+            f'Check fails with value {numpy.abs(Z_eff + mol.nelectron)})']))
+
+    V = numpy.zeros((mol.nao_nr(), mol.nao_nr()))
+    cmol = mol.copy()
+    nbas = cmol.nbas
+    for i, atom in enumerate(atoms):
+        expnt = sapbas[atom][:,0]
+        coeff = sapbas[atom][:,1]
+        nucleon_fakemol = fakemol_for_charges(numpy.asarray([atom_coords[i]]), expnt, coeff)
+
+        cmol += nucleon_fakemol
+
+    shls_slice = (0, nbas, 0, nbas, nbas, cmol.nbas)
+    int3c2e = cmol.intor('int3c2e', comp=1, shls_slice=shls_slice)
+    V = -numpy.einsum('pqk->pq', int3c2e)
+
+    return V
 
 # full density matrix for RHF
 def make_rdm1(mo_coeff, mo_occ, **kwargs):
@@ -1444,7 +1519,7 @@ class SCF(lib.StreamObject):
             be skipped and the kernel function will compute only the total
             energy based on the initial guess. Default value is 50.
         init_guess : str
-            initial guess method.  It can be one of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
+            initial guess method.  It can be one of 'minao', 'atom', 'huckel', 'hcore', '1e', 'vsap', 'chkfile'.
             Default is 'minao'
         DIIS : DIIS class
             The class to generate diis object.  It can be one of
@@ -1710,6 +1785,13 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
+    @lib.with_doc(init_guess_by_vsap.__doc__)
+    def init_guess_by_vsap(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, '''Initial guess from superposition of atomic potentials,
+using procedure laid out by S. Lehtola at doi:10.1021/acs.jctc.8b01089.''')
+        return init_guess_by_vsap(mol)
+
     @lib.with_doc(init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
@@ -1737,7 +1819,6 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         elif key == 'atom':
             dm = self.init_guess_by_atom(mol)
         elif key == 'vsap' and hasattr(self, 'init_guess_by_vsap'):
-            # Only available for DFT objects
             dm = self.init_guess_by_vsap(mol)
         elif key[:3] == 'chk':
             try:
