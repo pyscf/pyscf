@@ -79,22 +79,7 @@ def RCCSD_isdf(mf, frozen=0, mo_coeff=None, mo_occ=None, run=True):
 
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast
 
-####### TORCH BACKEND #######
-
-FOUND_TORCH = False
-GPU_SUPPORTED = False
-
-try:
-    import torch
-    FOUND_TORCH = True
-except ImportError:
-    pass
-
-if FOUND_TORCH:
-    if torch.cuda.is_available():
-        GPU_SUPPORTED = True
-
-##############################
+from pyscf.pbc.df.isdf.thc_backend import *
 
 class _restricted_THC_posthf_holder:
     
@@ -229,30 +214,18 @@ class _restricted_THC_posthf_holder:
         
         if self.grid_partition is not None:
             self.grid_partition = np.asarray(self.grid_partition, dtype=np.int32)
-        
+                
         if use_torch:
-            self.X = torch.from_numpy(self.X).detach()
+            self.X = to_torch(self.X, with_gpu)
             if self.grid_partition is not None:
-                self.grid_partition = torch.from_numpy(self.grid_partition).detach()
-            self.Z = torch.from_numpy(self.Z).detach()
-            self.tau_o = torch.from_numpy(self.tau_o).detach()
-            self.tau_v = torch.from_numpy(self.tau_v).detach()
-            self.X_o = torch.from_numpy(self.X_o).detach()
-            self.X_v = torch.from_numpy(self.X_v).detach()
-            self.occ_ene = torch.from_numpy(self.occ_ene).detach()
-            self.vir_ene = torch.from_numpy(self.vir_ene).detach()
-            
-            if with_gpu:
-                self.X = self.X.to('cuda')
-                if self.grid_partition is not None:
-                    self.grid_partition = self.grid_partition.to('cuda')
-                self.Z = self.Z.to('cuda')
-                self.tau_o = self.tau_o.to('cuda')
-                self.tau_v = self.tau_v.to('cuda')
-                self.X_o = self.X_o.to('cuda')
-                self.X_v = self.X_v.to('cuda')
-                self.occ_ene = self.occ_ene.to('cuda')
-                self.vir_ene = self.vir_ene.to('cuda')
+                self.grid_partition = to_torch(self.grid_partition, False)
+            self.Z = to_torch(self.Z, with_gpu)
+            self.tau_o = to_torch(self.tau_o, with_gpu)
+            self.tau_v = to_torch(self.tau_v, with_gpu)
+            self.X_o = to_torch(self.X_o, with_gpu)
+            self.X_v = to_torch(self.X_v, with_gpu)
+            self.occ_ene = to_torch(self.occ_ene, with_gpu)
+            self.vir_ene = to_torch(self.vir_ene, with_gpu)
 
         self._with_gpu  = with_gpu
         self._use_torch = use_torch

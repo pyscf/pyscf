@@ -47,22 +47,7 @@ from pyscf.pbc.df.isdf.thc_rmp2 import THC_RMP2
 
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
-####### TORCH BACKEND #######
-
-FOUND_TORCH = False
-GPU_SUPPORTED = False
-
-try:
-    import torch
-    FOUND_TORCH = True
-except ImportError:
-    pass
-
-if FOUND_TORCH:
-    if torch.cuda.is_available():
-        GPU_SUPPORTED = True
-
-##############################
+from pyscf.pbc.df.isdf.thc_backend import *
 
 class THC_RMP3(THC_RMP2):
     
@@ -170,8 +155,9 @@ class THC_RMP3(THC_RMP2):
             self.e_corr  = 8 * mp3_CC - 4 * (mp3_CX1 + mp3_CX2 + mp3_CX3)
             self.e_corr += 2 * (mp3_XX1 + mp3_XX2 + mp3_XX3) - mp3_XX4 + 2 * mp3_XX5 - mp3_XX6 - 4 * mp3_XX7 + 2 * mp3_XX8  
         
-        if self._use_torch:
-            self.e_corr = self.e_corr.cpu().detach().item()
+        #if self._use_torch:
+        #    self.e_corr = self.e_corr.cpu().detach().item()
+        self.e_corr = to_scalar(self.e_corr)
             
         return self.e_corr, None
             
@@ -247,7 +233,7 @@ if __name__ == "__main__":
     ####### thc rmp3 #######
     
     X,_        = myisdf.aoRg_full()
-    thc_rmp3 = THC_RMP3(mf_isdf, X=X, use_torch=True, with_gpu=False)
+    thc_rmp3 = THC_RMP3(mf_isdf, X=X, use_torch=True, with_gpu=True)
     e_mp3, _ = thc_rmp3.kernel(backend="cotengra")
     print("ISDF MP3 energy", e_mp3)
     e_mp3, _ = thc_rmp3.kernel(backend="opt_einsum")

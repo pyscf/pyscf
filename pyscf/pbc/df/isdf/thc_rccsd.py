@@ -50,22 +50,7 @@ from pyscf import __config__
 import pyscf.pbc.df.isdf.thc_cc_helper._thc_rccsd as _thc_rccsd_ind
 import pyscf.pbc.df.isdf.thc_cc_helper._einsum_holder as einsum_holder
 
-####### TORCH BACKEND #######
-
-FOUND_TORCH = False
-GPU_SUPPORTED = False
-
-try:
-    import torch
-    FOUND_TORCH = True
-except ImportError:
-    pass
-
-if FOUND_TORCH:
-    if torch.cuda.is_available():
-        GPU_SUPPORTED = True
-
-##############################
+from pyscf.pbc.df.isdf.thc_backend import *
 
 class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
     
@@ -141,8 +126,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         
         if self.proj_type == THC_RCCSD.thc_proj_name or self.proj_type == THC_RCCSD.thc_laplace_proj_name:
             self.projector = self._thc_scheduler._proj
-            self.projector_inv_sqrt = _thc_rccsd_ind._tensor_to_cpu(self._thc_scheduler.projector_inv_sqrt).copy()
-            self.projector_sqrt = _thc_rccsd_ind._tensor_to_cpu(self._thc_scheduler.projector_sqrt).copy()
+            self.projector_inv_sqrt = to_numpy_cpu(self._thc_scheduler.projector_inv_sqrt).copy()
+            self.projector_sqrt     = to_numpy_cpu(self._thc_scheduler.projector_sqrt).copy()
             t2_expr = einsum_holder._expr_t2()
         else:
             if self.proj_type == THC_RCCSD.thc_robust_proj_name:
@@ -234,7 +219,7 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         #print(t2_thc_path[1])
         
         if self._with_gpu:
-            self.projector = einsum_holder._to_torch_tensor(self.projector, True)
+            self.projector = to_torch(self.projector, True)
         
         t2_thc = -thc_einsum('AP,iP,aP,iajb,ijab,jQ,bQ,QB->AB', self.projector, self.Xo_T2, self.Xv_T2, thc_eri, 
                             ene_deno, self.Xo_T2, self.Xv_T2, self.projector, optimize=True, backend=self._backend, memory=self._memory
@@ -275,8 +260,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         #if not isinstance(t2, numpy.ndarray):
         #    t2 = np.asarray(t2)
         assert t1 is not None and t2 is not None
-        t1 = _thc_rccsd_ind._tensor_to_cpu(t1)
-        t2 = _thc_rccsd_ind._tensor_to_cpu(t2)
+        t1 = to_numpy_cpu(t1)
+        t2 = to_numpy_cpu(t2)
         nocc, nvir = t1.shape
         nov = nocc * nvir
         #nthc = self.nthc
@@ -460,7 +445,7 @@ if __name__ == "__main__":
     
     X, partition = myisdf.aoRg_full()
     
-    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=False, projector_t="thc_laplace", qr_rela_cutoff=1e-1)
+    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True, projector_t="thc_laplace", qr_rela_cutoff=1e-1)
     #thc_ccsd.max_cycle = 2
     thc_ccsd.ccsd()
     

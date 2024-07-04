@@ -1116,23 +1116,10 @@ def _parse_expression(expression_holder:_expr_holder, scheduler):
 ### expressions ###
 
 ##### TODO: write the parse function for THC-CCSD #####
+    
+from pyscf.pbc.df.isdf.thc_backend import *
 
-def _to_torch_tensor(arg, use_gpu=False):
-    try:
-        import torch
-        if isinstance(arg, np.ndarray):
-            if use_gpu:
-                return torch.from_numpy(arg).detach().to('cuda')
-            else:
-                return torch.from_numpy(arg).detach()
-        else:
-            if use_gpu:
-                return arg.detach().to('cuda')
-            else:
-                return arg.detach()
-    except Exception as e:
-        assert use_gpu == False
-        return arg
+_to_torch_tensor = to_torch
     
 class THC_scheduler:
     
@@ -1395,22 +1382,12 @@ class THC_scheduler:
             self._proj_robust = self.projector_sqrt
             self._proj_mp2 = None
         
-        #from pyscf.pbc.df.isdf.thc_cc_helper._thc_proj import _thc_proj_2
-        #_thc_proj_2(
-        #    X_o,X_v,
-        #    THC_scheduler._tensor_to_cpu(self._tau_o),
-        #    THC_scheduler._tensor_to_cpu(self._tau_v),
-        #    partition=THC_scheduler._tensor_to_cpu(self.grid_partition)
-        #)
-                
         return PROJ
 
     def init_mp2_projector(self, mp2_cutoff=1e-3, df_obj=None):
         
         time0 = logger.process_clock(), logger.perf_counter()
         
-        #X_o = _thc_rccsd_ind._tensor_to_cpu(self.X_o)
-        #X_v = _thc_rccsd_ind._tensor_to_cpu(self.X_v)
         tau_o = _thc_rccsd_ind._tensor_to_cpu(self.tau_o)
         tau_v = _thc_rccsd_ind._tensor_to_cpu(self.tau_v)
         
@@ -1493,27 +1470,18 @@ class THC_scheduler:
     def update_input(self, name, tensor):
         assert name in self._input_tensor_name
         if self.use_torch:
-            #tensor = torch.tensor(tensor)
-            tensor = torch.from_numpy(tensor).detach()
-            if self.with_gpu:
-                tensor = tensor.to('cuda')
+            tensor = _to_torch_tensor(tensor, self.with_gpu)
         setattr(self, self.tensor_name_to_attr_name[name], tensor)
     
     def update_t1(self, t1):
         self.t1 = t1
         if self.use_torch and isinstance(self.t1, np.ndarray):
-            #self.t1 = torch.tensor(self.t1)
-            self.t1 = torch.from_numpy(self.t1).detach()
-            if self.with_gpu:
-                self.t1 = self.t1.to('cuda')
+            self.t1 = _to_torch_tensor(self.t1, self.with_gpu)
     
     def update_t2(self, thc_t2):
         self.thc_t2 = thc_t2
         if self.use_torch and isinstance(self.thc_t2, np.ndarray):
-            #self.thc_t2 = torch.tensor(self.thc_t2)
-            self.thc_t2 = torch.from_numpy(self.thc_t2).detach()
-            if self.with_gpu:
-                self.thc_t2 = self.thc_t2.to('cuda')
+            self.thc_t2 = _to_torch_tensor(self.thc_t2, self.with_gpu)
 
     #############################################################################################################################################
     
@@ -1659,11 +1627,8 @@ class THC_scheduler:
         if self.use_torch:
             import torch
             for name in self._input_tensor_name:
-                #setattr(self, self.tensor_name_to_attr_name[name], torch.tensor(getattr(self, self.tensor_name_to_attr_name[name])))
                 if isinstance(getattr(self, self.tensor_name_to_attr_name[name]), np.ndarray):
-                    setattr(self, self.tensor_name_to_attr_name[name], torch.from_numpy(getattr(self, self.tensor_name_to_attr_name[name])).detach())
-                    if self.with_gpu:
-                        setattr(self, self.tensor_name_to_attr_name[name], getattr(self, self.tensor_name_to_attr_name[name]).to('cuda'))
+                    setattr(self, self.tensor_name_to_attr_name[name], _to_torch_tensor(getattr(self, self.tensor_name_to_attr_name[name]), self.with_gpu))
         
         for i in range(NLAYER):
             for name in self._intermediates_hierarchy[i]:

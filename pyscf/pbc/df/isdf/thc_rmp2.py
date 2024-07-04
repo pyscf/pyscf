@@ -46,22 +46,7 @@ from pyscf.mp.mp2                     import MP2
 
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
-####### TORCH BACKEND #######
-
-FOUND_TORCH = False
-GPU_SUPPORTED = False
-
-try:
-    import torch
-    FOUND_TORCH = True
-except ImportError:
-    pass
-
-if FOUND_TORCH:
-    if torch.cuda.is_available():
-        GPU_SUPPORTED = True
-
-##############################
+from pyscf.pbc.df.isdf.thc_backend import *
 
 class THC_RMP2(_restricted_THC_posthf_holder, MP2):
     
@@ -135,8 +120,9 @@ class THC_RMP2(_restricted_THC_posthf_holder, MP2):
         else:
             self.e_corr = -2*mp2_J+mp2_K
         
-        if self._use_torch:
-            self.e_corr = self.e_corr.cpu().detach().item()
+        #if self._use_torch:
+        #    self.e_corr = self.e_corr.cpu().detach().item()
+        self.e_corr = to_scalar(self.e_corr)
         
         return self.e_corr, None
             
@@ -213,7 +199,7 @@ if __name__ == "__main__":
     
     X,_ = myisdf.aoRg_full()
     
-    thc_rmp2 = THC_RMP2(my_mf=mf_isdf, X=X, use_torch=True, with_gpu=False)
+    thc_rmp2 = THC_RMP2(my_mf=mf_isdf, X=X, use_torch=True, with_gpu=True)
     
     e_mp2, _ = thc_rmp2.kernel(backend='cotengra')
     
