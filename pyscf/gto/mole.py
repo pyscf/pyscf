@@ -4055,7 +4055,7 @@ def fakemol_for_charges(coords, expnt=1e16, contr_coeff=1):
         # approximate point charge with gaussian distribution exp(-1e16*r^2)
         fakebas[:,PTR_EXP] = ptr
         fakebas[:,PTR_COEFF] = ptr+1
-        fakeenv.append([expnt, 1 / (2*numpy.sqrt(np.pi)*gaussian_int(2,expnt))])
+        fakeenv.append([expnt, 1 / (2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
         ptr += 2
     else:
         assert expnt.size == nbas or expnt.size == contr_coeff.size

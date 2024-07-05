@@ -426,7 +426,7 @@ def _is_pople_basis(basis):
 _BASIS_DIR = os.path.dirname(__file__)
 _GTH_BASIS_DIR = os.path.abspath(f'{pyscf.__file__}/../pbc/gto/basis')
 _GTH_PP_DIR = os.path.abspath(f'{_GTH_BASIS_DIR}/../pseudo')
-_SAP_BASIS_DIR = os.path.abspath(f'{_BASIS_DIR}/sap')
+_SAP_BASIS_DIR = os.path.abspath(f'{_BASIS_DIR}/')
 
 def _parse_pople_basis(basis, symb):
     if '(' in basis:
