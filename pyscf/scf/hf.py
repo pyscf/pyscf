@@ -721,7 +721,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         dm = lib.tag_array(dm, mo_coeff=mo_coeff[:,::-1], mo_occ=mo_occ)
     return dm
 
-def init_guess_by_vsap(mol, sap_basis='sapgraspsmall', **kwargs):
+def init_guess_by_sap(mol, sap_basis='sapgraspsmall', **kwargs):
     '''Generate initial guess density matrix using the superposition of
     atomic potentials (SAP) guess, doi:10.1063/5.0004046
 
@@ -735,7 +735,7 @@ def init_guess_by_vsap(mol, sap_basis='sapgraspsmall', **kwargs):
         dm0 : ndarray
             SAP initial guess density matrix
     '''
-    Vsap = make_vsap(mol, sap_basis=sap_basis)
+    Vsap = make_sap(mol, sap_basis=sap_basis)
 
     hcore = get_hcore(mol)
     if 's1e' in kwargs:
@@ -755,7 +755,7 @@ def get_init_guess(mol, key='minao', **kwargs):
 
     Kwargs:
         key : str
-            One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'vsap', 'chkfile'.
+            One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'sap', 'chkfile'.
     '''
     return RHF(mol).get_init_guess(mol, key, **kwargs)
 
@@ -787,7 +787,7 @@ def level_shift(s, d, f, factor):
 def damping(f, f_prev, factor):
     return f*(1-factor) + f_prev*factor
 
-def make_vsap(mol, sap_basis='sapgraspsmall'):
+def make_sap(mol, sap_basis='sapgraspsmall'):
     '''Superposition of atomic potentials (SAP) potential matrix
 
     Args:
@@ -1790,14 +1790,14 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
-    @lib.with_doc(init_guess_by_vsap.__doc__)
-    def init_guess_by_vsap(self, mol=None, sap_basis='sapgraspsmall', **kwargs):
+    @lib.with_doc(init_guess_by_sap.__doc__)
+    def init_guess_by_sap(self, mol=None, sap_basis='sapgraspsmall', **kwargs):
         if mol is None: mol = self.mol
         logger.info(self, '''Initial guess from superposition of atomic potentials,
 using procedure laid out by S. Lehtola at 
 doi:10.1021/acs.jctc.8b01089 and
 doi:10.1063/5.0004046.''')
-        return init_guess_by_vsap(mol, sap_basis=sap_basis, **kwargs)
+        return init_guess_by_sap(mol, sap_basis=sap_basis, **kwargs)
 
     @lib.with_doc(init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
@@ -1826,12 +1826,9 @@ doi:10.1063/5.0004046.''')
         elif key == 'atom':
             dm = self.init_guess_by_atom(mol)
         elif key == 'vsap' and hasattr(self, 'init_guess_by_vsap'):
-            # Check whether object is DFT or HF SCF object by testing
-            # if it has xc functional attribute
-            if hasattr(self, 'xc'):
-                dm = self.init_guess_by_vsap(mol)
-            else:
-                dm = self.init_guess_by_vsap(mol, **kwargs)
+            dm = self.init_guess_by_vsap(mol)
+        elif key == 'sap' and hasattr(self, 'init_guess_by_sap'):
+            dm = self.init_guess_by_sap(mol, **kwargs)
         elif key[:3] == 'chk':
             try:
                 dm = self.init_guess_by_chkfile()
