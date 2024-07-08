@@ -722,8 +722,9 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     return dm
 
 def init_guess_by_sap(mol, sap_basis='sapgraspsmall', **kwargs):
-    '''Generate initial guess density matrix using the superposition of
-    atomic potentials (SAP) guess, doi:10.1063/5.0004046
+    '''Generate initial guess density matrix from a superposition of
+    atomic potentials (SAP), doi:10.1021/acs.jctc.8b01089.
+    This is the Gaussian fit implementation, see doi:10.1063/5.0004046.
 
     Args:
         mol : MoleBase object
@@ -1797,10 +1798,8 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     @lib.with_doc(init_guess_by_sap.__doc__)
     def init_guess_by_sap(self, mol=None, sap_basis='sapgraspsmall', **kwargs):
         if mol is None: mol = self.mol
-        logger.info(self, '''Initial guess from superposition of atomic potentials,
-using procedure laid out by S. Lehtola at 
-doi:10.1021/acs.jctc.8b01089 and
-doi:10.1063/5.0004046.''')
+        logger.info(self, '''Initial guess from superposition of atomic potentials (doi:10.1021/acs.jctc.8b01089)
+This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         return init_guess_by_sap(mol, sap_basis=sap_basis, **kwargs)
 
     @lib.with_doc(init_guess_by_chkfile.__doc__)

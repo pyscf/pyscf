@@ -4072,10 +4072,10 @@ def fakemol_for_charges(coords, expnt=1e16):
     return fakemol
 
 def fakemol_for_cgtf_charge(coord, expnt=1e16, contr_coeff=1):
-    '''Construct a fake Mole object that holds the charge on the given
-    coordinate (coord).  The shape of the charge can be a linear
-    combination of gaussian type functions with exponents expnt and
-    contraction coefficients contr_coeff.
+    '''Constructs a "fake" Mole object that has a Gaussian charge
+    distribution at the specified coordinate (coord).  The charge 
+    can be given as a linear combination of Gaussians with 
+    exponents expnt and contraction coefficients contr_coeff.
     '''
     nbas = coord.shape[0]
     expnt = numpy.asarray(expnt).ravel()
@@ -4100,7 +4100,7 @@ def fakemol_for_cgtf_charge(coord, expnt=1e16, contr_coeff=1):
         fakeenv.append([expnt, 1 / (2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
         ptr += 2
     else:
-        assert expnt.size == nbas or expnt.size == contr_coeff.size
+        assert expnt.size == contr_coeff.size
         fakebas[:,PTR_EXP] = ptr + numpy.arange(nbas) * 2
         fakebas[:,PTR_COEFF] = ptr + numpy.arange(nbas) * 2 + contr_coeff.size
         coeff = contr_coeff / (2 * numpy.sqrt(numpy.pi) * gaussian_int(2, expnt))
