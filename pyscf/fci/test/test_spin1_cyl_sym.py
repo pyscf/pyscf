@@ -221,6 +221,22 @@ class KnownValues(unittest.TestCase):
         with self.assertRaises(lib.exceptions.PointGroupSymmetryError):
             sol.kernel(h1, h2, no, ne, orbsym=orbsym)
 
+    # issue 2291
+    def test_triplet_degeneracy(self):
+        mol = gto.M(atom='O; O 1 1.2', basis='631g', spin=2, symmetry=1)
+        mf = mol.RHF().run()
+
+        def casci(nelec):
+            norb = 4
+            mc = mcscf.CASCI(mf, norb, nelec)
+            mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+            mc.fcisolver.wfnsym = 'A2g'
+            mc.kernel()
+            return mc.e_tot
+        self.assertAlmostEqual(casci((4, 2)), -149.56827649707, 9)
+        self.assertAlmostEqual(casci((3, 3)), -149.56827649707, 9)
+        self.assertAlmostEqual(casci((2, 4)), -149.56827649707, 9)
+
 if __name__ == "__main__":
     print("Full Tests for spin1-symm")
     unittest.main()

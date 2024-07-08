@@ -310,6 +310,13 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             addra1, sign_a = _sv_associated_det(strsa[addra], degen_mapping)
             addrb1, sign_b = _sv_associated_det(strsb[addrb], degen_mapping)
             if wfnsym in (1, 4) and addra == addra1 and addrb == addrb1:
+                # Remove the A1 repr from initial guess.
+                # The product of two E reprs can produce A1, A2 and another E repr.
+                # addra == addra1 and addrb == addrb1  can be found in the A1 repr.
+                # However, this may also incorrectly remove the A2 repr, see the
+                # explanation in issue #2291.
+                # In this case, the direct_spin1_cyl_sym solver can be used to
+                # solve A2. See example mcscf/18-o2_spatial_spin_symmetry.py
                 continue
             x = ca[:,None] * cb
 
