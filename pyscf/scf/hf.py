@@ -1528,7 +1528,7 @@ class SCF(lib.StreamObject):
             be skipped and the kernel function will compute only the total
             energy based on the initial guess. Default value is 50.
         init_guess : str
-            initial guess method.  It can be one of 'minao', 'atom', 'huckel', 'hcore', '1e', 'vsap', 'chkfile'.
+            initial guess method.  It can be one of 'minao', 'atom', 'huckel', 'hcore', '1e', 'sap', 'chkfile'.
             Default is 'minao'
         DIIS : DIIS class
             The class to generate diis object.  It can be one of
