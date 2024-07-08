@@ -54,6 +54,9 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
     fov = fock[:nocc,nocc:].copy()
     foo = fock[:nocc,:nocc].copy()
     fvv = fock[nocc:,nocc:].copy()
+    
+    fvv_val = fvv.copy()
+    foo_val = foo.copy()
 
     thc_scheduler.add_input("fov", fov)
     thc_scheduler.add_input("foo", foo)
@@ -140,27 +143,29 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
         Woooo2 += einsum('kcld,ic,jd->klij', eris_ovov, t1, t1)
         t2new  += einsum('klij,ka,lb->ijab', Woooo2, t1, t1)
         Wvvvv  = einsum('kcbd,ka->abcd', eris_ovvv, -t1)
-        Wvvvv  = Wvvvv + Wvvvv.transpose(1,0,3,2)
+        Wvvvv  = Wvvvv + Wvvvv.transpose((1,0,3,2))
         Wvvvv += eris_vvvv.transpose((0,2,1,3))
         t2new += einsum('abcd,ic,jd->ijab', Wvvvv, t1, t1)
-        Lvv2   = fvv - np.einsum('kc,ka->ac', fov, t1)
-        fvv_diag = np.diag(np.diag(fvv))
+        Lvv2   = einsum_holder.to_expr_holder(fvv) - einsum('kc,ka->ac', fov, t1)
+        fvv_diag = np.diag(np.diag(fvv_val))
         thc_scheduler.add_input("fvv_diag", fvv_diag)
         fvv_diag = einsum_holder._einsum_term("fvv_diag", "ac", 1.0, args=["fvv_diag"])
         #Lvv2  -= np.diag(np.diag(fvv))
         Lvv2  -= fvv_diag
+        Lvv2.cached = True
         thc_scheduler.register_intermediates("Lvv2", Lvv2)
         tmp = einsum('ac,ijcb->ijab', Lvv2, t2)
-        t2new += (tmp + tmp.transpose(1,0,3,2))
+        t2new += (tmp + tmp.transpose((1,0,3,2)))
         Loo2 = foo + einsum('kc,ic->ki', fov, t1)
         #Loo2 -= np.diag(np.diag(foo))
-        foo_diag = np.diag(np.diag(foo))
+        foo_diag = np.diag(np.diag(foo_val))
         thc_scheduler.add_input("foo_diag", foo_diag)
         foo_diag = einsum_holder._einsum_term("foo_diag", "ki", 1.0, args=["foo_diag"])
         Loo2 -= foo_diag
+        Loo2.cached = True
         thc_scheduler.register_intermediates("Loo2", Loo2)
         tmp = einsum('ki,kjab->ijab', Loo2, t2)
-        t2new -= (tmp + tmp.transpose(1,0,3,2))
+        t2new -= (tmp + tmp.transpose((1,0,3,2)))
     else:
         Loo = imd.Loo(t1, t2, eris)
         Lvv = imd.Lvv(t1, t2, eris)

@@ -73,6 +73,7 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
                  projector_t="thc",
                  use_torch=False,
                  with_gpu =False,
+                 cc2=False,
                  **kwargs):
         
         #### initialization ####
@@ -92,6 +93,10 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         
         if hasattr(self, "level_shift"):
             assert self.level_shift == 0.0 or self.level_shift is None
+        
+        self.cc2 = cc2
+        if self.cc2:
+            print("CC2 approximation is invoked")
         
         self._backend = backend
         self._memory  = memory
@@ -309,8 +314,8 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
 
     def update_amps(self, t1, t2, eris):
         
-        if self.cc2:
-            raise NotImplementedError
+        #if self.cc2:
+        #    raise NotImplementedError
 
         #print("t1", t1[0,:])
         #print("t2", t2[0,:])
@@ -445,7 +450,8 @@ if __name__ == "__main__":
     
     X, partition = myisdf.aoRg_full()
     
-    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True, projector_t="thc_laplace", qr_rela_cutoff=1e-1)
+    #thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True, projector_t="thc_laplace", qr_rela_cutoff=1e-1)
+    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True, projector_t="thc", cc2=False)
     #thc_ccsd.max_cycle = 2
     thc_ccsd.ccsd()
     

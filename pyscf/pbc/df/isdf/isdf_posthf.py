@@ -66,8 +66,9 @@ def _make_isdf_eris_incore(mycc, my_isdf:ISDF.PBC_ISDF_Info_Quad, mo_coeff=None)
     
     return eris
 
-def RCCSD_isdf(mf, frozen=0, mo_coeff=None, mo_occ=None, run=True):
+def RCCSD_isdf(mf, frozen=0, mo_coeff=None, mo_occ=None, run=True, cc2=False):
     mycc = RCCSD(mf, frozen=frozen, mo_coeff=mo_coeff, mo_occ=mo_occ)
+    mycc.cc2 = cc2
     # eris = mycc.ao2mo(mo_coeff)
     if mo_coeff is None:
         mo_coeff = mf.mo_coeff
@@ -314,8 +315,10 @@ if __name__ == '__main__':
             mycc = pyscf.cc.CCSD(mf)
             # mycc.kernel()
             
-            mycc_isdf, eris_ccsd = RCCSD_isdf(mf_isdf, run=False)
+            mycc_isdf, eris_ccsd = RCCSD_isdf(mf_isdf, run=False, cc2=True)
             mycc_isdf.kernel(eris=eris_ccsd)
+            
+            exit(1)
             
             ####### THC-DF ####### 
             
