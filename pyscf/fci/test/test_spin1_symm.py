@@ -208,6 +208,20 @@ Li    P
         with self.assertRaises(lib.exceptions.PointGroupSymmetryError):
             sol.kernel(h1, h2, no, ne, orbsym=orbsym)
 
+    def test_many_roots(self):
+        norb = 4
+        nelec = (2, 2)
+        nroots = 36
+        h1 = numpy.eye(norb) * -.5
+        h2 = numpy.zeros((norb, norb, norb, norb))
+        orbsym = numpy.array([0, 5, 3, 2])
+        for i in range(norb):
+            h2[i,i,i,i] = .1
+        obj = direct_spin1_symm.FCI()
+        e, fcivec = obj.kernel(h1, h2, norb, nelec, nroots=nroots,
+                               davidson_only=True, orbsym=orbsym)
+        self.assertAlmostEqual(e[0], -1.8, 9)
+
 if __name__ == "__main__":
     print("Full Tests for spin1-symm")
     unittest.main()
