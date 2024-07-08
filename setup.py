@@ -83,12 +83,37 @@ class CMakeBuildPy(build_py):
 
 # build_py will produce plat_name = 'any'. Patch the bdist_wheel to change the
 # platform tag because the C extensions are platform dependent.
+# For setuptools<70
 from wheel.bdist_wheel import bdist_wheel
-initialize_options = bdist_wheel.initialize_options
+initialize_options_1 = bdist_wheel.initialize_options
 def initialize_with_default_plat_name(self):
-    initialize_options(self)
+    initialize_options_1(self)
     self.plat_name = get_platform()
+    self.plat_name_supplied = True
 bdist_wheel.initialize_options = initialize_with_default_plat_name
+
+# For setuptools>=70
+try:
+    from setuptools.command.bdist_wheel import bdist_wheel
+    initialize_options_2 = bdist_wheel.initialize_options
+    def initialize_with_default_plat_name(self):
+        initialize_options_2(self)
+        self.plat_name = get_platform()
+        self.plat_name_supplied = True
+    bdist_wheel.initialize_options = initialize_with_default_plat_name
+except ImportError:
+    pass
+
+# scipy bugs
+# https://github.com/scipy/scipy/issues/12533
+_scipy_version = 'scipy!=1.5.0,!=1.5.1'
+if sys.platform == 'darwin':
+    if sys.version_info < (3, 8):
+        _scipy_version = 'scipy<=1.1.0'
+    else:
+        print('scipy>1.1.0 may crash when calling scipy.linalg.eigh. '
+              '(Issues https://github.com/scipy/scipy/issues/15362 '
+              'https://github.com/scipy/scipy/issues/16151)')
 
 setup(
     version=VERSION,
