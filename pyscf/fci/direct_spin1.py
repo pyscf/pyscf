@@ -440,8 +440,11 @@ def _get_init_guess(na, nb, nroots, hdiag, nelec):
     ci0 = []
     neleca, nelecb = _unpack_nelec(nelec)
     if neleca == nelecb and na == nb:
-        hdiag = hdiag.reshape(na, na)
-        addrs = numpy.argpartition(lib.pack_tril(hdiag), nroots-1)[:nroots]
+        hdiag = lib.pack_tril(hdiag.reshape(na, na))
+        if hdiag.size <= nroots:
+            addrs = numpy.arange(hdiag.size)
+        else:
+            addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
         for addr in addrs:
             addra = (int)((2*addr+.25)**.5 - .5 + 1e-7)
             addrb = addr - addra*(addra+1)//2
@@ -449,7 +452,10 @@ def _get_init_guess(na, nb, nroots, hdiag, nelec):
             x[addra,addrb] = 1
             ci0.append(x.ravel().view(FCIvector))
     else:
-        addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
+        if hdiag.size <= nroots:
+            addrs = numpy.arange(hdiag.size)
+        else:
+            addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
         for addr in addrs:
             x = numpy.zeros((na*nb))
             x[addr] = 1
