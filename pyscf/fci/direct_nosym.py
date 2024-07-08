@@ -125,7 +125,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     outI += contract_2e(eriI, ciR, norb, nelec, link_index=link_index)
     out = outR.astype(numpy.complex128)
     out.imag = outI
-    return outR
+    return out
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
