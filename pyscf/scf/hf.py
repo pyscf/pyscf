@@ -816,7 +816,7 @@ def make_sap(mol, sap_basis='sapgraspsmall'):
 
     # charge sumcheck
     Z_eff = sum([numpy.sum(sapbas[a][:,1]) for a in atoms])
-    if numpy.abs(Z_eff + mol.nelectron) > 1e-3:
+    if numpy.abs(Z_eff + mol.nelectron) > 1e-6:
         logger.warn(
             mol,
             '\n'.join([f'SAP basis coefficients must be equal or close to total electronic charge: {Z_eff} !≃ {mol.nelectron}',
