@@ -685,7 +685,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         self._opt = {None: None}
         return self
 
-    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+    def stability(self, internal=None, external=None, verbose=None, return_status=False, **kwargs):
         '''
         DHF/DKS stability analysis.
 
@@ -707,7 +707,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
             and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import dhf_stability
-        return dhf_stability(self, verbose, return_status)
+        return dhf_stability(self, verbose, return_status, **kwargs)
 
     def to_rhf(self):
         raise RuntimeError
