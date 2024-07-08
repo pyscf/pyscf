@@ -194,6 +194,7 @@ class LagPrec :
 
 if scipy.__version__.split('.')[1] >= '14': # scipy 1.14
     def _cg(A, b, x0=None, *, tol=1e-05, atol=0.0, maxiter=None, M=None, callback=None):
-        return sparse_linalg.cg(A, b, x0, rtol=tol, atol=atol, maxiter=maxiter, M=M,
+        return sparse_linalg.cg(A, b, x0, rtol=tol, atol=atol, maxiter=maxiter,
+                                M=M, callback=callback)
 else:
     _cg = sparse_linalg.cg
