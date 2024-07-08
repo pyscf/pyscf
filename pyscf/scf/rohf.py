@@ -480,7 +480,8 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
                   internal=getattr(__config__, 'scf_stability_internal', True),
                   external=getattr(__config__, 'scf_stability_external', False),
                   verbose=None,
-                  return_status=False):
+                  return_status=False,
+                  **kwargs):
         '''
         ROHF/ROKS stability analysis.
 
@@ -506,7 +507,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
             and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import rohf_stability
-        return rohf_stability(self, internal, external, verbose, return_status)
+        return rohf_stability(self, internal, external, verbose, return_status, **kwargs)
 
     def nuc_grad_method(self):
         from pyscf.grad import rohf
