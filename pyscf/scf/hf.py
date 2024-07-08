@@ -1831,7 +1831,7 @@ doi:10.1063/5.0004046.''')
             dm = self.init_guess_by_atom(mol)
         elif key == 'vsap' and hasattr(self, 'init_guess_by_vsap'):
             dm = self.init_guess_by_vsap(mol)
-        elif key == 'sap' and hasattr(self, 'init_guess_by_sap'):
+        elif key == 'sap':
             dm = self.init_guess_by_sap(mol, **kwargs)
         elif key[:3] == 'chk':
             try:
