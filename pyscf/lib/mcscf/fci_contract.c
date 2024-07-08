@@ -1003,7 +1003,7 @@ void FCIcontract_2e_cyl_sym(double *eris, double *ci0, double *ci1,
                                         strb_ir = IRREP_OF(strb_l, strb_g);
                                         mb = nbs[strb_ir];
                                 }
-                                if (nas[intera_ir] > 0 && nas[interb_ir] > 0 &&
+                                if (nas[intera_ir] > 0 && nbs[interb_ir] > 0 &&
                                     (ma > 0 || mb > 0)) {
 // clinka for intera*ai -> stra.
 pick_link_by_irrep(clinka, linka+linka_loc[intera_ir], nas[intera_ir], nlinka, ai_ir);
