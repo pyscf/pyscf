@@ -127,7 +127,7 @@ class Gradients (rhf_grad.GradientsBase):
                                                  dtype=bvec.dtype)
         x0_guess = self.get_init_guess (bvec, Adiag, Aop, precond)
         Lvec, info_int = sparse_linalg.cg(Aop_obj, -bvec, x0=x0_guess,
-                                          tol=self.conv_rtol, atol=self.conv_atol,
+                                          atol=self.conv_atol,
                                           maxiter=self.max_cycle, callback=my_call, M=prec_obj)
         logger.info (self, ('Lagrange multiplier determination {} after {} iterations\n'
                             '   |geff| = {}, |Lvec| = {}').format (
