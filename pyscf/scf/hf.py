@@ -801,7 +801,7 @@ def make_sap(mol, sap_basis='sapgraspsmall'):
             SAP potential matrix
     '''
     from pyscf.gto.basis import load, SAP_ALIAS
-    from pyscf.gto.mole import fakemol_for_charges
+    from pyscf.gto.mole import fakemol_for_cgtf_charge
 
     atom_coords = numpy.asarray([coord[1] for coord in mol._atom])
     atoms = numpy.asarray([coord[0] for coord in mol._atom])
@@ -825,10 +825,14 @@ def make_sap(mol, sap_basis='sapgraspsmall'):
     V = numpy.zeros((mol.nao_nr(), mol.nao_nr()))
     cmol = mol.copy()
     nbas = cmol.nbas
+
     for i, atom in enumerate(atoms):
         expnt = sapbas[atom][:,0]
         coeff = sapbas[atom][:,1]
-        nucleon_fakemol = fakemol_for_charges(numpy.asarray([atom_coords[i]]), expnt, coeff)
+        nucleon_fakemol = fakemol_for_cgtf_charge(
+            numpy.asarray([atom_coords[i]]),
+            expnt,
+            coeff)
 
         cmol += nucleon_fakemol
 

@@ -4031,14 +4031,13 @@ def filatov_nuc_mod(nuc_charge, nucprop={}):
     zeta = 1 / (r**2)
     return zeta
 
-def fakemol_for_charges(coords, expnt=1e16, contr_coeff=1):
+def fakemol_for_charges(coords, expnt=1e16):
     '''Construct a fake Mole object that holds the charges on the given
     coordinates (coords).  The shape of the charge can be a normal
     distribution with the Gaussian exponent (expnt).
     '''
     nbas = coords.shape[0]
     expnt = numpy.asarray(expnt).ravel()
-    contr_coeff = numpy.asarray(contr_coeff).ravel()
 
     fakeatm = numpy.zeros((nbas,ATM_SLOTS), dtype=numpy.int32)
     fakebas = numpy.zeros((nbas,BAS_SLOTS), dtype=numpy.int32)
@@ -4048,7 +4047,7 @@ def fakemol_for_charges(coords, expnt=1e16, contr_coeff=1):
     fakeenv.append(coords.ravel())
     ptr += nbas*3
     fakebas[:,ATOM_OF] = numpy.arange(nbas)
-    fakebas[:,NPRIM_OF] = contr_coeff.size
+    fakebas[:,NPRIM_OF] = 1
     fakebas[:,NCTR_OF] = 1
     if expnt.size == 1:
         expnt = expnt[0]
@@ -4058,8 +4057,50 @@ def fakemol_for_charges(coords, expnt=1e16, contr_coeff=1):
         fakeenv.append([expnt, 1 / (2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
         ptr += 2
     else:
-        assert expnt.size == nbas or expnt.size == contr_coeff.size
+        assert expnt.size == nbas
         # approximate point charge with gaussian distribution exp(-expnt*r^2)
+        fakebas[:,PTR_EXP] = ptr + numpy.arange(nbas) * 2
+        fakebas[:,PTR_COEFF] = ptr + numpy.arange(nbas) * 2 + 1
+        coeff = 1 / (2 * numpy.sqrt(numpy.pi) * gaussian_int(2, expnt))
+        fakeenv.append(numpy.vstack((expnt, coeff)).T.ravel())
+
+    fakemol = Mole()
+    fakemol._atm = fakeatm
+    fakemol._bas = fakebas
+    fakemol._env = numpy.hstack(fakeenv)
+    fakemol._built = True
+    return fakemol
+
+def fakemol_for_cgtf_charge(coord, expnt=1e16, contr_coeff=1):
+    '''Construct a fake Mole object that holds the charge on the given
+    coordinate (coord).  The shape of the charge can be a linear
+    combination of gaussian type functions with exponents expnt and
+    contraction coefficients contr_coeff.
+    '''
+    nbas = coord.shape[0]
+    expnt = numpy.asarray(expnt).ravel()
+    contr_coeff = numpy.asarray(contr_coeff).ravel()
+    
+    fakeatm = numpy.zeros((nbas,ATM_SLOTS), dtype=numpy.int32)
+    fakebas = numpy.zeros((nbas,BAS_SLOTS), dtype=numpy.int32)
+    fakeenv = [0] * PTR_ENV_START
+    ptr = PTR_ENV_START
+    fakeatm[:,PTR_COORD] = numpy.arange(ptr, ptr+nbas*3, 3)
+    fakeenv.append(coord.ravel())
+    ptr += nbas*3
+    fakebas[:,ATOM_OF] = numpy.arange(nbas)
+    fakebas[:,NPRIM_OF] = contr_coeff.size
+    fakebas[:,NCTR_OF] = 1
+    if expnt.size == 1:
+        expnt = expnt[0]
+        # approximate point charge with gaussian distribution
+        # contr_coeff*exp(-expnt*r^2)
+        fakebas[:,PTR_EXP] = ptr
+        fakebas[:,PTR_COEFF] = ptr+1
+        fakeenv.append([expnt, 1 / (2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
+        ptr += 2
+    else:
+        assert expnt.size == nbas or expnt.size == contr_coeff.size
         fakebas[:,PTR_EXP] = ptr + numpy.arange(nbas) * 2
         fakebas[:,PTR_COEFF] = ptr + numpy.arange(nbas) * 2 + contr_coeff.size
         coeff = contr_coeff / (2 * numpy.sqrt(numpy.pi) * gaussian_int(2, expnt))
