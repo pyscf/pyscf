@@ -197,6 +197,6 @@ def _thc_proj_2(Xo:np.ndarray,
     
     print("Time for THC PROJ: ", t2[1] - t1[1], "s", t2[0] - t1[0], "s")
     
-    return Xo_T2, Xv_T2, 
+    return Xo_T2, Xv_T2
     
     

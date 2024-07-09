@@ -197,7 +197,6 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
 
     mo_e_o = eris.mo_energy[:nocc].copy()
     mo_e_v = eris.mo_energy[nocc:].copy() + cc.level_shift
-    #mo_e_v = eris.mo_energy[nocc:].copy()
     eia = mo_e_o[:,None] - mo_e_v
     eia = 1.0 / eia
     #print("eia = ", eia)

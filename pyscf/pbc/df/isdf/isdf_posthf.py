@@ -253,17 +253,18 @@ if __name__ == '__main__':
                 ['C', (0.8917 , 2.6751 , 2.6751)],
             ] 
 
-            cell.basis   = 'gth-szv'
+            #cell.basis   = 'gth-szv'
+            cell.basis = 'gth-dzvp'
             cell.pseudo  = 'gth-pade'
-            cell.verbose = 4
+            cell.verbose = 10
             cell.ke_cutoff = 128
             cell.max_memory = 800  # 800 Mb
             cell.precision  = 1e-8  # integral precision
             cell.use_particle_mesh_ewald = True
             
-            verbose = 4
+            verbose = 10
             
-            prim_cell = build_supercell(cell.atom, cell.a, Ls = [1,1,1], ke_cutoff=cell.ke_cutoff, basis=cell.basis, pseudo=cell.pseudo)   
+            prim_cell = build_supercell(cell.atom, cell.a, Ls = [1,1,1], ke_cutoff=cell.ke_cutoff, basis=cell.basis, pseudo=cell.pseudo, verbose=10)   
             prim_partition = [[0,1,2,3], [4,5,6,7]]
             prim_mesh = prim_cell.mesh
             
@@ -315,9 +316,17 @@ if __name__ == '__main__':
             mycc = pyscf.cc.CCSD(mf)
             # mycc.kernel()
             
-            mycc_isdf, eris_ccsd = RCCSD_isdf(mf_isdf, run=False, cc2=True)
+            mycc_isdf, eris_ccsd = RCCSD_isdf(mf_isdf, run=False, cc2=False)
             mycc_isdf.kernel(eris=eris_ccsd)
             
+            eip,cip = mycc_isdf.ipccsd(nroots=2, eris=eris_ccsd)
+            eea,cea = mycc_isdf.eaccsd(nroots=2, eris=eris_ccsd)
+
+            print("eip = ", eip)
+            #print("cip = ", cip)
+            print("eea = ", eea)
+            #print("cea = ", cea)
+        
             exit(1)
             
             ####### THC-DF ####### 

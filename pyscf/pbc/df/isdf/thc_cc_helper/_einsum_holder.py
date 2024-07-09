@@ -26,7 +26,8 @@ from pyscf.lib import logger
 SUPPORTED_INPUT_NAME = [
     "T1", "XO", "XV", "TAUO", "TAUV", "THC_INT", "THC_T2",  ## NOTE: only these terms are involved in THC!
     "XO_T2", "XV_T2", "PROJ",                               ## used in THC-CCSD, "PROJ" stands for PROJ_THC
-    "PROJ_ROBUST", "PROJ_MP2", "PROJ_MP3"
+    "PROJ_ROBUST", "PROJ_MP2", "PROJ_MP3",
+    "R1", "R2"
 ]
 
 OCC_INDICES = ["i", "j", "k", "l", "m", "n"]
@@ -520,6 +521,10 @@ class _energy_denominator(_einsum_term):
     def __init__(self):
         super().__init__("ene_deno", "iT,jT,aT,bT->ijab", args=["TAUO", "TAUO", "TAUV", "TAUV"])
 
+class _expr_mp2_t2(_einsum_term):
+    def __init__(self):
+        super().__init__("MP2_T2", "iP,aP,PQ,jQ,bQ,iT,jT,aT,bT->iajb", args=["XO", "XV", "THC_INT", "XO", "XV", "TAUO", "TAUO", "TAUV", "TAUV"])
+
 class _expr_t1(_einsum_term):
     def __init__(self):
         super().__init__("T1", "ia", args=["T1"])
@@ -531,6 +536,22 @@ class _expr_t2(_einsum_term):
 class _expr_t2_thc_robust(_einsum_term):
     def __init__(self):
         super().__init__("T2", "iP,aP,PA,AB,BQ,jQ,bQ->iajb", args=["XO_T2", "XV_T2", "PROJ_ROBUST", "THC_T2", "PROJ_ROBUST", "XO_T2", "XV_T2"])
+
+class _expr_r1_ip(_einsum_term):
+    def __init__(self):
+        super().__init__("R1", "i", args=["R1"])
+
+class _expr_r2_ip(_einsum_term):
+    def __init__(self):
+        super().__init__("R2", "ija", args=["R2"])
+
+class _expr_ea_ip(_einsum_term):
+    def __init__(self):
+        super().__init__("R1", "a", args=["R1"])
+    
+class _expr_ea_ip(_einsum_term):
+    def __init__(self):
+        super().__init__("R2", "iab", args=["R2"])
 
 class _expr_foo(_einsum_term):
     def __init__(self):
@@ -1123,9 +1144,22 @@ _to_torch_tensor = to_torch
     
 class THC_scheduler:
     
+    ### static member name ### 
+    
     t1_new_name       = "T1_NEW"
     t2_new_name       = "T2_NEW"
     ccsd_energy_name  = "CCSD_ENERGY"
+    ip_hr1_r_name       = "IP_HR1_R"
+    ip_hr2_r_name       = "IP_HR2_R"
+    ea_hr1_r_name       = "EA_HR1_R"
+    ea_hr2_r_name       = "EA_HR2_R"
+    ip_hr1_l_name       = "IP_HR1_L"
+    ip_hr2_l_name       = "IP_HR2_L"
+    ea_hr1_l_name       = "EA_HR1_L"
+    ea_hr2_l_name       = "EA_HR2_L"
+    
+    ### projector ###
+    
     projector_allowed = ["thc", "thc_robust", "mp2", "thc_laplace"]
     thc_proj_name = "thc"
     thc_robust_proj_name = "thc_robust"
@@ -1215,7 +1249,11 @@ class THC_scheduler:
         
         ###### holder the expressions and intermediates ######
         
-        self._input_tensor_name = ["XO", "XV", "THC_INT", "TAUO", "TAUV", "XO_T2", "XV_T2", "PROJ", "PROJ_ROBUST", "PROJ_MP2", "T1", "THC_T2"]
+        self._input_tensor_name = ["XO", "XV", "THC_INT", "TAUO", "TAUV", "XO_T2", "XV_T2", # integrals and laplace 
+                                   "PROJ", "PROJ_ROBUST", "PROJ_MP2",                       # projector 
+                                   "T1", "THC_T2",                                          # t1, t2, CC 
+                                   "R1", "R2"                                               # R1, R2, EOM
+                                   ]
         self.tensor_name_to_attr_name = {
             "XO"    : "_xo",
             "XV"    : "_xv",
@@ -1228,7 +1266,9 @@ class THC_scheduler:
             "PROJ_ROBUST": "_proj_robust",
             "PROJ_MP2"   : "_proj_mp2",
             "T1"    : "t1",
-            "THC_T2": "thc_t2"
+            "THC_T2": "thc_t2",
+            "R1"    : "r1",
+            "R2"    : "r2"
         }
         self._registered_intermediates_name = []
         self._expr_intermediates            = []
@@ -1483,6 +1523,16 @@ class THC_scheduler:
         if self.use_torch and isinstance(self.thc_t2, np.ndarray):
             self.thc_t2 = _to_torch_tensor(self.thc_t2, self.with_gpu)
 
+    def update_r1(self, r1):
+        self.r1 = r1
+        if self.use_torch and isinstance(self.r1, np.ndarray):
+            self.r1 = _to_torch_tensor(self.r1, self.with_gpu)
+    
+    def update_r2(self, r2):
+        self.r2 = r2
+        if self.use_torch and isinstance(self.r2, np.ndarray):
+            self.r2 = _to_torch_tensor(self.r2, self.with_gpu)
+
     #############################################################################################################################################
     
     def register_intermediates(self, name, expression):
@@ -1627,6 +1677,8 @@ class THC_scheduler:
         if self.use_torch:
             import torch
             for name in self._input_tensor_name:
+                if not hasattr(self, self.tensor_name_to_attr_name[name]):
+                    setattr(self, self.tensor_name_to_attr_name[name], None)
                 if isinstance(getattr(self, self.tensor_name_to_attr_name[name]), np.ndarray):
                     setattr(self, self.tensor_name_to_attr_name[name], _to_torch_tensor(getattr(self, self.tensor_name_to_attr_name[name]), self.with_gpu))
         
