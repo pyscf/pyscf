@@ -232,7 +232,7 @@ def init_guess_by_mod_huckel(mol):
     dm = hf.init_guess_by_mod_huckel(mol)
     return _proj_dmll(mol, dm, mol)
 
-def init_guess_by_sap(mol, sap_basis):
+def init_guess_by_sap(mol, mf):
     '''Generate initial guess density matrix from a superposition of
     atomic potentials (SAP), doi:10.1021/acs.jctc.8b01089.
     This is the Gaussian fit implementation, see doi:10.1063/5.0004046.
@@ -247,7 +247,7 @@ def init_guess_by_sap(mol, sap_basis):
         dm0 : ndarray
             SAP initial guess density matrix
     '''
-    dm = hf.init_guess_by_sap(mol, sap_basis)
+    dm = hf.SCF.init_guess_by_sap(mf, mol)
     return _proj_dmll(mol, dm, mol)
 
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
@@ -530,27 +530,8 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     @lib.with_doc(hf.SCF.init_guess_by_sap.__doc__)
     def init_guess_by_sap(self, mol=None, **kwargs):
-        from pyscf.gto.basis import load
         if mol is None: mol = self.mol
-        sap_basis = self.sap_basis
-        logger.info(self, '''Initial guess from superposition of atomic potentials (doi:10.1021/acs.jctc.8b01089)
-This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
-        if isinstance(sap_basis, str):
-            atoms = [coord[0] for coord in mol._atom]
-            sapbas = dict()
-            for atom in set(atoms):
-                single_element_bs = load(sap_basis, atom)
-                if isinstance(single_element_bs, dict):
-                    sapbas[atom] = numpy.asarray(single_element_bs[atom][0][1:], dtype=float)
-                else:
-                    sapbas[atom] = numpy.asarray(single_element_bs[0][1:], dtype=float)
-            logger.note(self, f'Found SAP basis!\nUsing {sap_basis.split("/")[-1]}')
-        elif isinstance(sap_basis, dict):
-            sapbas = sap_basis
-        else:
-            logger.error(self, 'sap_basis is wrong datatype.')
-
-        return init_guess_by_sap(mol, sapbas)
+        return init_guess_by_sap(mol, self)
 
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile

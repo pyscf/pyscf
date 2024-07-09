@@ -1804,7 +1804,9 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
                     sapbas[atom] = numpy.asarray(single_element_bs[0][1:], dtype=float)
             logger.note(self, f'Found SAP basis!\nUsing {sap_basis.split("/")[-1]}')
         elif isinstance(sap_basis, dict):
-            sapbas = sap_basis
+            sapbas = dict()
+            for key in sap_basis:
+                sapbas[key] = numpy.asarray(sap_basis[key][0][1:], dtype=float)
         else:
             logger.error(self, 'sap_basis is of wrong datatype.')
         return init_guess_by_sap(mol, sap_basis=sapbas, **kwargs)

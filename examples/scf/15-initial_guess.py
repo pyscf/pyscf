@@ -86,7 +86,7 @@ mf.init_guess = 'mod_huckel'
 mf.kernel()
 
 #
-# Superposition of atomic potentials can be used as initial guess for DFT
+# Superposition of atomic potentials (SAP) can be used as initial guess for DFT
 # methods.
 #
 mf = mol.RKS().set(xc='b3lyp')
@@ -94,21 +94,26 @@ mf.init_guess = 'vsap'
 mf.kernel()
 
 #
-# Gaussian fit superposition of atomic potentials (SAP) can be used with
-# HF-SCF methods.
+# Gaussian fitted version of SAP can be used with
+# any method.
 #
 mf = scf.RHF(mol)
 mf.init_guess = 'sap'
 mf.kernel()
 #
-# The SAP fit basis can be changed using the kwarg sap_basis.
-# The argument accepts either python dictionary (basis set in internal
+# The SAP fit basis can be changed using the SCF object attribute sap_basis.
+# sap_basis accepts either python dictionary (basis set in internal
 # format) or filename/pathname. If BSE API is installed with pip, 
 # the implementation will also look through the BSE catalog for basis sets.
 #
-mf.kernel(sap_basis='sapgraspsmall') # Will use PySCF SAP_ALIAS and find it
+mf.sap_basis = 'sapgraspsmall'
+mf.kernel() # Will use PySCF SAP_ALIAS and find it
 # in the local files
-mf.kernel(sap_basis='sap_helfem_large') # Will be found from BSE if installed
+mf.sap_basis = 'sap_helfem_large'
+mf.kernel() # Will be found from BSE if installed
+mf.sap_basis = gto.basis.load('sap_helfem_large', 'Ne')
+mf.kernel() # Will load basis from BSE and input it as a dictionary
+
 
 #
 # Initial guess can be read and projected from another chkfile.
