@@ -72,6 +72,7 @@ class THC_EOM_RCCSD(eom_rccsd.EOM):
         self._memory  = memory
         self.nthc = self.X_o.shape[1]
         self.eris = self.cc._thc_eris
+        self._t2_with_denominator = self.cc._t2_with_denominator
         self._imds = None
         self._imds = self.make_imds()
         
@@ -107,7 +108,7 @@ class THC_EOM_RCCSD(eom_rccsd.EOM):
                 return self._imds
         if eris is None:
             eris = self.eris
-        imds = _thc_eom_rccsd_ind._IMDS_symbolic(self._cc, eris=eris)
+        imds = _thc_eom_rccsd_ind._IMDS_symbolic(self._cc, eris=eris, MRPT2=self._cc.mbpt2)
         imds.make_ip(self.partition)
         return imds
     

@@ -39,6 +39,8 @@ def cc_Foo(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=No
         Fki += 2*einsum('kcld,ic,ld->ki', eris_ovov, t1, t1, cached=True)
         Fki -=   einsum('kdlc,ic,ld->ki', eris_ovov, t1, t1, cached=True)
     Fki += foo
+    Fki.name = "FOO"
+    Fki.cached = True
     return Fki
 
 def cc_Fvv(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=None):
@@ -53,6 +55,8 @@ def cc_Fvv(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=No
         Fac -= 2*einsum('kcld,ka,ld->ac', eris_ovov, t1, t1, cached=True)
         Fac +=   einsum('kdlc,ka,ld->ac', eris_ovov, t1, t1, cached=True)
     Fac += fvv
+    Fac.name = "FVV"
+    Fac.cached = True
     return Fac
 
 def cc_Fov(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=None):
@@ -65,6 +69,8 @@ def cc_Fov(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=No
     if t1 is not None: 
         Fkc += 2*einsum('kcld,ld->kc', eris_ovov, t1, cached=True)
         Fkc -=   einsum('kdlc,ld->kc', eris_ovov, t1, cached=True)
+    Fkc = einsum_holder.to_expr_holder(Fkc)
+    Fkc.name = "FOV"
     Fkc.cached = True
     return Fkc
 
@@ -83,6 +89,8 @@ def Loo(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=None)
     if t1 is not None:
         Lki += 2*einsum('lcki,lc->ki', eris_ovoo, t1, cached=True)
         Lki -=   einsum('kcli,lc->ki', eris_ovoo, t1, cached=True)
+    Lki.name = "LOO"
+    Lki.cached = True
     return Lki
 
 def Lvv(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=None):
@@ -97,6 +105,8 @@ def Lvv(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=None)
         Lac -=   einsum('kcad,kd->ac', eris_ovvv, t1, cached=True)
     else:
         Lac = cc_Fvv(t1, t2, eris)
+    Lac.name = "LVV"
+    Lac.cached = True
     return Lac
 
 ### Eqs. (42)-(45) "chi"
@@ -216,7 +226,7 @@ def W2ovvo(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=No
     if eris is None:
         eris_ovvv = einsum_holder._thc_eri_ovvv()
     else:
-        eris_ovvv = eris.get_ovvv()
+        eris_ovvv = eris.ovvv
     Wkaci = einsum('la,lkic->kaci',-t1, Wooov(t1, t2, eris))
     Wkaci += einsum('kcad,id->kaci', eris_ovvv, t1)
     return Wkaci
@@ -245,7 +255,7 @@ def W2ovov(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=No
     if eris is None:
         eris_ovvv = einsum_holder._thc_eri_ovvv()
     else:
-        eris_ovvv = eris.get_ovvv()
+        eris_ovvv = eris.ovvv
     Wkbid = einsum('klid,lb->kbid', Wooov(t1, t2, eris),-t1)
     Wkbid += einsum('kcbd,ic->kbid', eris_ovvv, t1)
     return Wkbid
@@ -286,7 +296,7 @@ def Wvvvv(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=Non
         Wabcd += einsum('kcld,ka,lb->abcd', eris_ovov, t1, t1)
         Wabcd -= einsum('ldac,lb->abcd', eris_ovvv, t1)
         Wabcd -= einsum('kcbd,ka->abcd', eris_ovvv, t1)
-    Wabcd += eris_vvvv.transpose(0,2,1,3)
+    Wabcd += eris_vvvv.transpose((0,2,1,3))
     return Wabcd
 
 def Wvvvo(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=None, _Wvvvv=None):
@@ -312,7 +322,7 @@ def Wvvvo(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=Non
         Wabcj +=   einsum('kclj,lb,ka->abcj', eris_ovoo, t1, t1)
         Wabcj +=   einsum('abcd,jd->abcj', Wvvvv(t1, t2, eris), t1)
         
-    Wabcj += eris_ovvv.transpose(3,1,2,0).conj()
+    Wabcj += eris_ovvv.transpose((3,1,2,0)).conj()
     
     return Wabcj
 
@@ -329,8 +339,8 @@ def Wovoo(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=Non
     Wkbij +=  -einsum('kdli,ljdb->kbij', eris_ovoo, t2)
     Wkbij +=   einsum('kcbd,jidc->kbij', eris_ovvv, t2)
     Wkbij +=   eris_ovoo.transpose((3,1,2,0)).conj()
-    Wkbij +=  -lib.einsum('kclj,libc->kbij', eris_ovoo, t2)
-    Wkbij +=   lib.einsum('kc,ijcb->kbij', cc_Fov(t1, t2, eris), t2)    
+    Wkbij +=  -einsum('kclj,libc->kbij', eris_ovoo, t2)
+    Wkbij +=   einsum('kc,ijcb->kbij', cc_Fov(t1, t2, eris), t2)    
     
     if t1 is not None:
         Wkbij +=   einsum('kbid,jd->kbij', W1ovov(t1, t2, eris), t1)

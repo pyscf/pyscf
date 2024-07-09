@@ -457,10 +457,8 @@ if __name__ == "__main__":
     
     eia = mo_e_o[:,None] - mo_e_v
     eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
-    #print("eijab = ", eijab)
     t2_new *= eijab
     eijab_new = np.einsum("iP,jP,aP,bP->ijab", Tau_o, Tau_o, Tau_v, Tau_v, optimize=True)
-    #print("eijab_new = ", eijab_new)
     t2_new *= eijab_new
     
     t2_new_projected = np.einsum("AP,iP,aP,ijab,jQ,bQ,QB->AB", PROJ, Xo_T2, Xv_T2, t2_new, Xo_T2, Xv_T2, PROJ, optimize=True) 

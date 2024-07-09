@@ -30,8 +30,8 @@ SUPPORTED_INPUT_NAME = [
     "R1", "R2"
 ]
 
-OCC_INDICES = ["i", "j", "k", "l", "m", "n"]
-VIR_INDICES = ["a", "b", "c", "d", "e", "f"]
+OCC_INDICES = ["i", "j", "k", "l", "m", "n", "o"]
+VIR_INDICES = ["a", "b", "c", "d", "e", "f", "g"]
 
 ####### TORCH BACKEND #######
 
@@ -72,7 +72,7 @@ def _is_same_type(ind_a, ind_b):
 
 class _einsum_term:
     
-    POSSIBLE_NEW_DUMMY_INDICES = "ghopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    POSSIBLE_NEW_DUMMY_INDICES = "hqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     
     def __init__(self, name=None, einsum_str:str=None, factor=1.0, args=None):
         
@@ -138,7 +138,7 @@ class _einsum_term:
             self._output_indices = list(self.einsum_str)
             nocc_indices = len([i for i in self._output_indices if i in OCC_INDICES])
             nvir_indices = len([i for i in self._output_indices if i in VIR_INDICES])
-            assert nocc_indices + nvir_indices <= 2
+            assert nocc_indices + nvir_indices <= 4 # only support 4 indices for skeleton
             self._dummy_indices = []
             #if self._contract_fn is not None:
             self._contract_fn = None
@@ -241,10 +241,23 @@ class _einsum_term:
         indices_map_real = dict(zip(keys, values)) 
         dummy_indices_affected = [k for k in self._dummy_indices if k in values]
         for d_k in dummy_indices_affected:
-            for _id_ in _einsum_term.POSSIBLE_NEW_DUMMY_INDICES:
-                if _id_ not in indices_map_real.values() and _id_ != d_k and _id_ not in self._dummy_indices:
-                    indices_map_real[d_k] = _id_
-                    break
+            if d_k in OCC_INDICES:
+                for _id_ in OCC_INDICES:
+                    if _id_ not in indices_map_real.values() and _id_ != d_k and _id_ not in self._dummy_indices:
+                        indices_map_real[d_k] = _id_
+                        break
+            elif d_k in VIR_INDICES:
+                for _id_ in VIR_INDICES:
+                    if _id_ not in indices_map_real.values() and _id_ != d_k and _id_ not in self._dummy_indices:
+                        indices_map_real[d_k] = _id_
+                        break
+            else:
+                for _id_ in _einsum_term.POSSIBLE_NEW_DUMMY_INDICES:
+                    if _id_ not in indices_map_real.values() and _id_ != d_k and _id_ not in self._dummy_indices:
+                        indices_map_real[d_k] = _id_
+                        break
+        #print("dummy_indices = ", self._dummy_indices)
+        #print("dummy_indices_affected = ", dummy_indices_affected)
         #print("indices_map_real: ", indices_map_real)
         # check the sanity of indices_map #
         for key in indices_map_real:
@@ -539,7 +552,7 @@ class _expr_t2(_einsum_term):
 
 class _expr_ccsd_t2(_einsum_term):
     def __init__(self):
-        super().__init__("MP2_T2", "iP,aP,PQ,jQ,bQ,iT,jT,aT,bT->iajb", args=["XO", "XV", "THC_T2", "XO", "XV", "TAUO", "TAUO", "TAUV", "TAUV"])
+        super().__init__("MP2_T2", "iP,aP,PQ,jQ,bQ,iT,jT,aT,bT->iajb", args=["XO_T2", "XV_T2", "THC_T2", "XO_T2", "XV_T2", "TAUO", "TAUO", "TAUV", "TAUV"])
         
 class _expr_t2_thc_robust(_einsum_term):
     def __init__(self):
@@ -888,6 +901,8 @@ def thc_einsum_sybolic(subscripts, *tensors, **kwargs):
     
     assert "->" in subscripts ## do not support implicit
     
+    #print("subscripts = ", subscripts)
+    
     subscripts = subscripts.replace(" ", "")
     
     cached = kwargs.pop("cached", False)
@@ -917,6 +932,7 @@ def thc_einsum_sybolic(subscripts, *tensors, **kwargs):
         tensor_now = copy.deepcopy(tensor)
         tensor_now = to_expr_holder(tensor_now)
         assert tensor_now.n_index == len(indices)
+        #print("indices = ", indices)
         ind_lst    = list(indices)        # lst the indices
         tensor_now._map_indices(ind_lst)  # change the indices
         tensors_indx_aligned.append(tensor_now)
