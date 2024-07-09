@@ -438,6 +438,28 @@ class GHF(hf.SCF):
 employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return _from_rhf_init_dm(hf.init_guess_by_mod_huckel(mol))
 
+    @lib.with_doc(hf.SCF.init_guess_by_sap.__doc__)
+    def init_guess_by_sap(self, mol=None, sap_basis='sapgraspsmall', **kwargs):
+        from pyscf.gto.basis import load
+        if mol is None: mol = self.mol
+        logger.info(self, '''Initial guess from superposition of atomic potentials (doi:10.1021/acs.jctc.8b01089)
+This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
+        if isinstance(sap_basis, str):
+            atoms = [coord[0] for coord in mol._atom]
+            sapbas = dict()
+            for atom in set(atoms):
+                single_element_bs = load(sap_basis, atom)
+                if isinstance(single_element_bs, dict):
+                    sapbas[atom] = numpy.asarray(single_element_bs[atom][0][1:], dtype=float)
+                else:
+                    sapbas[atom] = numpy.asarray(single_element_bs[0][1:], dtype=float)
+            logger.note(self, f'Found SAP basis!\nUsing {sap_basis.split("/")[-1]}')
+        elif isinstance(sap_basis, dict):
+            sapbas = sap_basis
+        else:
+            logger.error(self, 'sap_basis is wrong datatype.')
+        return _from_rhf_init_dm(hf.init_guess_by_sap(mol, sap_basis=sapbas, **kwargs))
+
     @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
