@@ -533,6 +533,10 @@ class _expr_t2(_einsum_term):
     def __init__(self):
         super().__init__("T2", "iP,aP,PQ,jQ,bQ->iajb", args=["XO_T2", "XV_T2", "THC_T2", "XO_T2", "XV_T2"])
 
+class _expr_ccsd_t2(_einsum_term):
+    def __init__(self):
+        super().__init__("MP2_T2", "iP,aP,PQ,jQ,bQ,iT,jT,aT,bT->iajb", args=["XO", "XV", "THC_T2", "XO", "XV", "TAUO", "TAUO", "TAUV", "TAUV"])
+        
 class _expr_t2_thc_robust(_einsum_term):
     def __init__(self):
         super().__init__("T2", "iP,aP,PA,AB,BQ,jQ,bQ->iajb", args=["XO_T2", "XV_T2", "PROJ_ROBUST", "THC_T2", "PROJ_ROBUST", "XO_T2", "XV_T2"])

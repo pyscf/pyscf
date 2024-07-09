@@ -39,7 +39,8 @@ import pyscf.pbc.df.isdf.thc_cc_helper._einsum_holder as einsum_holder
 
 einsum = einsum_holder.thc_einsum_sybolic
 
-def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris, thc_scheduler:einsum_holder.THC_scheduler):
+def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris, thc_scheduler:einsum_holder.THC_scheduler=None, 
+                t2_with_denominator=True):
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
     #assert (isinstance(eris, ccsd._ChemistsERIs))
     #nocc, nvir = t1.shape
@@ -209,8 +210,9 @@ def update_amps(cc, t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder
     t2_occ_vir_str = t2new.occvir_str
     if t2_occ_vir_str == "ovov":
         t2new = t2new.transpose((0,2,1,3))
-    ene_denominator = einsum_holder._energy_denominator()
-    t2new = einsum('ijab,ijab->ijab', t2new, ene_denominator)
+    if t2_with_denominator:
+        ene_denominator = einsum_holder._energy_denominator()
+        t2new = einsum('ijab,ijab->ijab', t2new, ene_denominator)
     t2new = -t2new # the sign is due to the fact that ene_denominator is positive defniete
                    # but in pyscf the var eijab = (ei-ea+ej-eb) which is negative definite
 

@@ -41,7 +41,7 @@ from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC, LS_THC_eri, laplace_holder
 from pyscf.pbc.df.isdf.isdf_posthf import _restricted_THC_posthf_holder 
 
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast
-from pyscf.pbc.df.isdf.thc_einsum     import thc_einsum, energy_denomimator, thc_holder, t2_thc_robust_proj_holder
+from pyscf.pbc.df.isdf.thc_einsum     import thc_einsum, energy_denomimator, thc_holder, t2_thc_robust_proj_holder, ccsd_t2_holder
 from pyscf.mp.mp2                     import MP2
 
 
@@ -74,6 +74,7 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
                  use_torch=False,
                  with_gpu =False,
                  cc2=False,
+                 t2_with_denominator=True,
                  **kwargs):
         
         #### initialization ####
@@ -110,9 +111,6 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         self._thc_eris = self.ao2mo(self.mo_coeff)
         self.proj_type = projector_t
         
-        # proj = self.init_projector()
-        # self.init_mp2_projector()
-        
         #### init scheduler #### 
         
         time0 = logger.process_clock(), logger.perf_counter()
@@ -129,17 +127,28 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
             **kwargs
         )
         
+        self._t2_with_denominator = t2_with_denominator
         if self.proj_type == THC_RCCSD.thc_proj_name or self.proj_type == THC_RCCSD.thc_laplace_proj_name:
             self.projector = self._thc_scheduler._proj
             self.projector_inv_sqrt = to_numpy_cpu(self._thc_scheduler.projector_inv_sqrt).copy()
             self.projector_sqrt     = to_numpy_cpu(self._thc_scheduler.projector_sqrt).copy()
-            t2_expr = einsum_holder._expr_t2()
+            if t2_with_denominator:
+                t2_expr = einsum_holder._expr_t2()
+            else:
+                t2_expr = einsum_holder._expr_ccsd_t2()
+
         else:
             if self.proj_type == THC_RCCSD.thc_robust_proj_name:
+                assert t2_with_denominator == True
                 self.projector = self._thc_scheduler._proj_robust
                 t2_expr = einsum_holder._expr_t2_thc_robust()
             else:
                 raise NotImplementedError
+        t1_expr = einsum_holder._expr_t1()
+        t2_expr = t2_expr.transpose((0,2,1,3))
+        
+        self._t1_expr = t1_expr
+        self._t2_expr = t2_expr
         
         self.Xo_T2 = self._thc_scheduler._xo_t2
         self.Xv_T2 = self._thc_scheduler._xv_t2
@@ -157,15 +166,10 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         
         ### build exprs ###
         
-        t1_expr = einsum_holder._expr_t1()
-        t2_expr = t2_expr.transpose((0,2,1,3))
-        _thc_rccsd_ind.update_amps(self, t1_expr, t2_expr, self._thc_eris, self._thc_scheduler)
+        _thc_rccsd_ind.update_amps(self, t1_expr, t2_expr, self._thc_eris, self._thc_scheduler, t2_with_denominator=t2_with_denominator)
         _thc_rccsd_ind.energy(self, t1_expr, t2_expr, self._thc_eris, self._thc_scheduler)
         self._thc_scheduler._build_expression()
         self._thc_scheduler._build_contraction(backend=backend, optimize=True)
-        
-        #print(self._thc_scheduler)
-        #exit(1)
         
         logger.timer(self, 'build thc ccsd scheduler', *time0)
         
@@ -182,67 +186,29 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         mo_e = eris.mo_energy
         nocc = self.nocc
         nvir = mo_e.size - nocc
-        eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+        eia  = mo_e[:nocc,None] - mo_e[None,nocc:]
 
-        t1 = eris.fock[:nocc,nocc:] / eia
-        
-        #t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
-        #max_memory = self.max_memory - lib.current_memory()[0]
-        #blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir+1))))
-        #emp2 = 0
-        #for p0, p1 in lib.prange(0, nvir, blksize):
-        #    eris_ovov = eris.ovov[:,p0:p1]
-        #    t2[:,:,p0:p1] = (eris_ovov.transpose(0,2,1,3).conj()
-        #                     / lib.direct_sum('ia,jb->ijab', eia[:,p0:p1], eia))
-        #    emp2 += 2 * numpy.einsum('ijab,iajb', t2[:,:,p0:p1], eris_ovov)
-        #    emp2 -=     numpy.einsum('jiab,iajb', t2[:,:,p0:p1], eris_ovov)
-        
-        #t2_thc = np.einsum('AP,iP,aP,iR,aR,RS,jS,bS,jQ,bQ,QB,iT,jT,aT,bT->AB', 
-        #                   self.projector, self.X_o, self.X_v, 
-        #                   self.X_o, self.X_v, self.Z, self.X_o, self.X_v, 
-        #                   self.X_o, self.X_v, self.projector,
-        #                   self.tau_o, self.tau_o, self.tau_v, self.tau_v,
-        #                   optimize=True)
+        t1 = eris.fock[:nocc,nocc:] / eia  # zero for canonical HF
         
         thc_eri  = thc_holder(self.X_o, self.X_v, self.Z)
         ene_deno = energy_denomimator(self.tau_o, self.tau_v)
         
-        #ene_full = np.einsum("iT,jT,aT,bT->ijab", self.tau_o, self.tau_o, self.tau_v, self.tau_v, optimize=True)
-        #eri_full = np.einsum("iP,aP,PQ,jQ,bQ->iajb", self.X_o, self.X_v, self.Z, self.X_o, self.X_v, optimize=True)
-        #print("eri_full", eri_full[0,0,0,:])
-        #print("ene_full", ene_full[0,0,0,:])
-        #print("self.projector", self.projector)
-        #e_mp2_benchmark = 0
-        #e_mp2_benchmark -= 2 * np.einsum("iajb,iajb,ijab->", eri_full, eri_full, ene_full, optimize=True)
-        #e_mp2_benchmark += np.einsum("iajb,ibja,ijab->", eri_full, eri_full, ene_full, optimize=True)
-        #print("e_mp2_benchmark", e_mp2_benchmark)
-        
-        #t2_thc_path = thc_einsum('AP,iP,aP,iajb,ijab,jQ,bQ,QB->AB', self.projector, self.X_o, self.X_v, thc_eri, 
-        #                    ene_deno, self.X_o, self.X_v, self.projector, optimize=True, backend=self._backend, memory=self._memory
-        #                    , return_path_only=True
-        #                    )
-        #print(t2_thc_path[1])
-        
         if self._with_gpu:
             self.projector = to_torch(self.projector, True)
         
-        t2_thc = -thc_einsum('AP,iP,aP,iajb,ijab,jQ,bQ,QB->AB', self.projector, self.Xo_T2, self.Xv_T2, thc_eri, 
-                            ene_deno, self.Xo_T2, self.Xv_T2, self.projector, optimize=True, backend=self._backend, memory=self._memory
-                            #, return_path_only=True
-                            )
-        
-        #t2_thc_benchmark = np.einsum('AP,iP,aP,iajb,ijab,jQ,bQ,QB->AB', self.projector, self.X_o, self.X_v, eri_full,
-        #                                ene_full, self.X_o, self.X_v, self.projector, optimize=True)
-        #print("t2_thc_benchmark", t2_thc_benchmark[0,:])
-        #print("t2_thc", t2_thc[0,:])
-        #diff = np.linalg.norm(t2_thc - t2_thc_benchmark)
-        #print("diff = ", diff)
-        #assert np.allclose(t2_thc, t2_thc_benchmark)
-        #print(t2_thc_path)
-        #exit(1)
-        
+        if self._t2_with_denominator:
+            t2_thc = -thc_einsum('AP,iP,aP,iajb,ijab,jQ,bQ,QB->AB', self.projector, self.Xo_T2, self.Xv_T2, thc_eri, 
+                                ene_deno, self.Xo_T2, self.Xv_T2, self.projector, optimize=True, backend=self._backend, memory=self._memory)
+        else:
+            t2_thc = -to_numpy_cpu(self.Z).copy()
+            if self._use_torch:
+                t2_thc = to_torch(t2_thc, self._with_gpu)
+                
         if self.proj_type == THC_RCCSD.thc_proj_name or self.proj_type == THC_RCCSD.thc_laplace_proj_name:
-            t2_holder = thc_holder(self.Xo_T2, self.Xv_T2, t2_thc)
+            if self._t2_with_denominator:
+                t2_holder = thc_holder(self.Xo_T2, self.Xv_T2, t2_thc)
+            else:
+                t2_holder = ccsd_t2_holder(self.Xo_T2, self.Xv_T2, t2_thc, self.tau_o, self.tau_v)
         else:
             assert self.proj_type == THC_RCCSD.thc_robust_proj_name
             t2_holder = t2_thc_robust_proj_holder(self.Xo_T2, self.Xv_T2, t2_thc, self.projector)
@@ -256,7 +222,7 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
         logger.info(self, 'Init t2, MP2 energy = %.15g  E_corr(MP2) %.15g',
                     e_hf + self.emp2, self.emp2)
         logger.timer(self, 'init mp2', *time0)
-        
+                
         return self.emp2, t1, t2_thc
 
     def amplitudes_to_vector(self, t1, t2, out=None):
@@ -309,22 +275,10 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
     def energy(self, t1=None, t2=None, eris=None):
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        #return _thc_rccsd_ind.energy(self, t1, t2, self._thc_eris, self._thc_scheduler)
         return self._thc_scheduler.energy(t1, t2)
 
     def update_amps(self, t1, t2, eris):
-        
-        #if self.cc2:
-        #    raise NotImplementedError
-
-        #print("t1", t1[0,:])
-        #print("t2", t2[0,:])
-
-        _, t1_new, t2_new = self._thc_scheduler.evaluate_t1_t2(t1, t2, evaluate_ene=False)
-        
-        #print("t1_new", t1_new[0,:])
-        #print("t2_new", t2_new[0,:])
-        
+        _, t1_new, t2_new = self._thc_scheduler.evaluate_t1_t2(t1, t2, evaluate_ene=False)        
         return t1_new, t2_new
 
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
@@ -383,7 +337,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
 
 if __name__ == "__main__":
     
-    c = 15
+    c = 12
     N = 1
     
     #if rank == 0:
@@ -451,7 +405,7 @@ if __name__ == "__main__":
     X, partition = myisdf.aoRg_full()
     
     #thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True, projector_t="thc_laplace", qr_rela_cutoff=1e-1)
-    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True, projector_t="thc", cc2=False)
+    thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, backend="opt_einsum", use_torch=True, with_gpu=True, projector_t="thc", cc2=False, t2_with_denominator=False)
     #thc_ccsd.max_cycle = 2
     thc_ccsd.ccsd()
     

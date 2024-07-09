@@ -71,6 +71,64 @@ class thc_holder:
         
         return res_tensor, res_subscript
 
+class ccsd_t2_holder:
+    
+    def __init__(self, X_o, X_v, Z, Tau_o, Tau_v):
+        '''
+        "PQ,iP,aP,jQ,bQ,iT,jT,aT,bT->iajb"
+        '''
+        self.X_o = X_o
+        self.Z   = Z
+        self.X_v = X_v
+        self.Tau_o = Tau_o
+        self.Tau_v = Tau_v
+        
+        assert self.X_o.shape[1] == self.Z.shape[0]
+        assert self.X_o.shape[1] == self.Z.shape[1]
+        assert self.X_o.shape[1] == self.X_v.shape[1]
+        assert self.Tau_o.shape[1] == self.Tau_v.shape[1]
+        assert self.Tau_o.shape[0] == self.X_o.shape[0]
+        assert self.Tau_v.shape[0] == self.X_v.shape[0]
+    
+    @property
+    def n_extra_indices(self):
+        return 3
+
+    def update_einsum(self, eri_subscript:str, thc_subscript:str):
+        
+        assert len(eri_subscript) == 4
+        assert len(thc_subscript) == 3
+        assert isinstance(eri_subscript, str)
+        assert isinstance(thc_subscript, str)
+        
+        res_tensor = []
+        res_tensor.append(self.Z)
+        res_subscript = thc_subscript[:2]+","
+        
+        for i in range(4):
+            if eri_subscript[i] in OCC_INDICES:
+                res_tensor.append(self.X_o)
+            elif eri_subscript[i] in VIR_INDICES:
+                res_tensor.append(self.X_v)
+            else:
+                raise ValueError
+            
+            if i<2:
+                res_subscript += eri_subscript[i]+thc_subscript[0]+","
+            else:
+                res_subscript += eri_subscript[i]+thc_subscript[1]+","
+        
+        for i in range(4):
+            if eri_subscript[i] in OCC_INDICES:
+                res_tensor.append(self.Tau_o)
+            elif eri_subscript[i] in VIR_INDICES:
+                res_tensor.append(self.Tau_v)
+            else:
+                raise ValueError
+            res_subscript += eri_subscript[i]+thc_subscript[2]+","
+        
+        return res_tensor, res_subscript
+    
 class t2_thc_robust_proj_holder:
     
     def __init__(self, X_o, X_v, Z, PROJ):
