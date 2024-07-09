@@ -291,6 +291,9 @@ class _fake_eom_ip:
         self.eris = eris
         nocc = eris.nocc
         nvir = eris.nvir
+        self.nocc = nocc
+        self.nvir = nvir
+        self.nmo = nocc + nvir
         import numpy as np
         if nroots == 1:
             self.r1 = np.random.rand(nocc) * 0.5
@@ -299,8 +302,18 @@ class _fake_eom_ip:
             self.r1 = np.random.rand(nroots, nocc) * 0.5
             self.r2 = np.random.rand(nroots, nocc, nocc, nvir) * 0.5
     
+    from pyscf.cc.eom_rccsd import vector_to_amplitudes_ip, amplitudes_to_vector_ip
+    from pyscf.lib import logger, module_method
+    amplitudes_to_vector = staticmethod(amplitudes_to_vector_ip)
+    vector_to_amplitudes = module_method(vector_to_amplitudes_ip,
+                                         absences=['nmo', 'nocc'])
+    
     def make_imds(self):
         return _IMDS_symbolic(self.cc, eris=self.eris, MRPT2=False)
+
+class _fake_eom_imds:
+    def __init__(self):
+        pass
 
 if __name__ == "__main__":
     
@@ -423,3 +436,51 @@ if __name__ == "__main__":
     Wovoo_test = scheduler.get_tensor("Wovoo_test")
     print("diff Wovoo = ", np.linalg.norm(Wovoo_bench - Wovoo_test))
     assert np.allclose(Wovoo_bench, Wovoo_test)
+    
+    
+    eom_imds = _fake_eom_imds()
+    
+    Loo = rind.Loo(t1, t2_full, eris_full)
+    Loo_test = scheduler.get_tensor("LOO")
+    print("diff Loo = ", np.linalg.norm(Loo - Loo_test))
+    assert np.allclose(Loo, Loo_test)
+    
+    Fov = rind.cc_Fov(t1, t2_full, eris_full)
+    Fov_test = scheduler.get_tensor("FOV")
+    print("diff Fov = ", np.linalg.norm(Fov - Fov_test))
+    assert np.allclose(Fov, Fov_test)
+    
+    Lvv = rind.Lvv(t1, t2_full, eris_full)
+    Lvv_test = scheduler.get_tensor("LVV")
+    print("diff Lvv = ", np.linalg.norm(Lvv - Lvv_test))
+    assert np.allclose(Lvv, Lvv_test)
+    
+    eom_imds.Fov = Fov
+    eom_imds.Loo = Loo
+    eom_imds.Lvv = Lvv
+    eom_imds.Wooov = Wooov_test
+    eom_imds.Wvovv = Wvovv_test
+    eom_imds.Wovvo = Wovvo_test
+    eom_imds.Wovov = Wovov_test
+    eom_imds.Woooo = Woooo_test
+    eom_imds.Wvvvv = Wvvvv_test
+    eom_imds.Wvvvo = Wvvvo_test
+    eom_imds.Wovoo = Wovoo_test
+    eom_imds.Woovv = eris_full.ovov.transpose((0,2,1,3))
+    eom_imds.t2    = t2_full
+    
+    from pyscf.cc.eom_rccsd import vector_to_amplitudes_ip, amplitudes_to_vector_ip
+    import pyscf.cc.eom_rccsd as eom_rccsd
+    
+    vector = amplitudes_to_vector_ip(eom.r1, eom.r2)
+    
+    vector_hr = eom_rccsd.ipccsd_matvec(eom, vector, eom_imds)
+    
+    r1_test = scheduler.get_tensor(einsum_holder.THC_scheduler.ip_hr1_r_name)
+    r2_test = scheduler.get_tensor(einsum_holder.THC_scheduler.ip_hr2_r_name)
+    
+    vector_hr_test = amplitudes_to_vector_ip(r1_test, r2_test)
+    
+    print("diff vector_hr = ", np.linalg.norm(vector_hr - vector_hr_test))
+    assert np.allclose(vector_hr, vector_hr_test)
+    
