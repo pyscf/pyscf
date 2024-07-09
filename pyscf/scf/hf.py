@@ -1518,6 +1518,9 @@ class SCF(lib.StreamObject):
         init_guess : str
             initial guess method.  It can be one of 'minao', 'atom', 'huckel', 'hcore', '1e', 'sap', 'chkfile'.
             Default is 'minao'
+        sap_basis : str or dict
+            basis for SAP initial guess, either filename or path as str or
+            internal format dictionary.
         DIIS : DIIS class
             The class to generate diis object.  It can be one of
             diis.SCF_DIIS, diis.ADIIS, diis.EDIIS.
@@ -1580,6 +1583,7 @@ class SCF(lib.StreamObject):
     conv_tol_cpscf = getattr(__config__, 'scf_hf_SCF_conv_tol_cpscf', 1e-8)
     max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
     init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
+    sap_basis = 'sapgrasplarge' # Basis for SAP initial guess
     disp = None  # for DFT-D3 and DFT-D4
 
     # To avoid diis pollution from previous run, self.diis should not be
@@ -1603,7 +1607,7 @@ class SCF(lib.StreamObject):
 
     _keys = {
         'conv_tol', 'conv_tol_grad', 'conv_tol_cpscf', 'max_cycle', 'init_guess',
-        'DIIS', 'diis', 'diis_space', 'diis_damp', 'diis_start_cycle',
+        'sap_basis', 'DIIS', 'diis', 'diis_space', 'diis_damp', 'diis_start_cycle',
         'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
         'direct_scf', 'direct_scf_tol', 'conv_check', 'callback',
         'mol', 'chkfile', 'mo_energy', 'mo_coeff', 'mo_occ',
@@ -1783,9 +1787,10 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return self.make_rdm1(mo_coeff, mo_occ)
 
     @lib.with_doc(init_guess_by_sap.__doc__)
-    def init_guess_by_sap(self, mol=None, sap_basis='sapgrasplarge', **kwargs):
+    def init_guess_by_sap(self, mol=None, **kwargs):
         from pyscf.gto.basis import load
         if mol is None: mol = self.mol
+        sap_basis = self.sap_basis
         logger.info(self, '''Initial guess from superposition of atomic potentials (doi:10.1021/acs.jctc.8b01089)
 This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         if isinstance(sap_basis, str):
@@ -1801,7 +1806,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         elif isinstance(sap_basis, dict):
             sapbas = sap_basis
         else:
-            logger.error(self, 'sap_basis is wrong datatype.')
+            logger.error(self, 'sap_basis is of wrong datatype.')
         return init_guess_by_sap(mol, sap_basis=sapbas, **kwargs)
 
     @lib.with_doc(init_guess_by_chkfile.__doc__)

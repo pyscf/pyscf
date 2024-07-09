@@ -439,9 +439,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return _from_rhf_init_dm(hf.init_guess_by_mod_huckel(mol))
 
     @lib.with_doc(hf.SCF.init_guess_by_sap.__doc__)
-    def init_guess_by_sap(self, mol=None, sap_basis='sapgrasplarge', **kwargs):
+    def init_guess_by_sap(self, mol=None, **kwargs):
         return _from_rhf_init_dm(
-            hf.SCF.init_guess_by_sap(self, mol, sap_basis=sap_basis, **kwargs)
+            hf.SCF.init_guess_by_sap(self, mol, **kwargs)
             )
 
     @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
