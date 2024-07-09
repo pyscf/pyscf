@@ -737,12 +737,8 @@ def init_guess_by_sap(mol, sap_basis, **kwargs):
             SAP initial guess density matrix
     '''
     Vsap = make_sap(mol, sap_basis=sap_basis)
-
     hcore = get_hcore(mol)
-    if 's1e' in kwargs:
-        s = kwargs['s1e']
-    else:
-        s = get_ovlp(mol)
+    s = get_ovlp(mol)
     e, coeff = eig(hcore + Vsap, s)
 
     mf = RHF(mol)
@@ -801,7 +797,6 @@ def make_sap(mol, sap_basis):
         Vsap : ndarray
             SAP potential matrix
     '''
-    from pyscf.gto.basis import load, SAP_ALIAS
     from pyscf.gto.mole import fakemol_for_cgtf_charge
 
     atom_coords = numpy.asarray([coord[1] for coord in mol._atom], dtype=float)
@@ -1788,7 +1783,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return self.make_rdm1(mo_coeff, mo_occ)
 
     @lib.with_doc(init_guess_by_sap.__doc__)
-    def init_guess_by_sap(self, mol=None, sap_basis='sapgraspsmall', **kwargs):
+    def init_guess_by_sap(self, mol=None, sap_basis='sapgrasplarge', **kwargs):
         from pyscf.gto.basis import load
         if mol is None: mol = self.mol
         logger.info(self, '''Initial guess from superposition of atomic potentials (doi:10.1021/acs.jctc.8b01089)
