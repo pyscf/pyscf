@@ -721,7 +721,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         dm = lib.tag_array(dm, mo_coeff=mo_coeff[:,::-1], mo_occ=mo_occ)
     return dm
 
-def init_guess_by_sap(mol, sap_basis='sapgraspsmall', **kwargs):
+def init_guess_by_sap(mol, sap_basis, **kwargs):
     '''Generate initial guess density matrix from a superposition of
     atomic potentials (SAP), doi:10.1021/acs.jctc.8b01089.
     This is the Gaussian fit implementation, see doi:10.1063/5.0004046.
@@ -729,8 +729,8 @@ def init_guess_by_sap(mol, sap_basis='sapgraspsmall', **kwargs):
     Args:
         mol : MoleBase object
             the molecule object for which the initial guess is evaluated
-        sap_basis : str
-            Used SAP basis
+        sap_basis : dict
+            SAP basis in internal format (python dictionary)
 
     Returns:
         dm0 : ndarray
@@ -788,14 +788,14 @@ def level_shift(s, d, f, factor):
 def damping(f, f_prev, factor):
     return f*(1-factor) + f_prev*factor
 
-def make_sap(mol, sap_basis='sapgraspsmall'):
+def make_sap(mol, sap_basis):
     '''Superposition of atomic potentials (SAP) potential matrix
 
     Args:
         mol : MoleBase object
             molecule for which SAP is computed
-        sap_basis : str
-            SAP basis name
+        sap_basis : dict
+            SAP basis
 
     Returns:
         Vsap : ndarray
@@ -804,19 +804,11 @@ def make_sap(mol, sap_basis='sapgraspsmall'):
     from pyscf.gto.basis import load, SAP_ALIAS
     from pyscf.gto.mole import fakemol_for_cgtf_charge
 
-    atom_coords = numpy.asarray([coord[1] for coord in mol._atom])
-    atoms = numpy.asarray([coord[0] for coord in mol._atom])
-
-    sapbas = {
-        atom: numpy.asarray(
-                load((sap_basis), atom)[0][1:]
-            ) for atom in set(atoms)
-    }
-
-    logger.note(mol, f'Found SAP basis! Using {sap_basis.split("/")[-1]}')
+    atom_coords = numpy.asarray([coord[1] for coord in mol._atom], dtype=float)
+    atoms = [coord[0] for coord in mol._atom]
 
     # charge sumcheck
-    Z_eff = sum([numpy.sum(sapbas[a][:,1]) for a in atoms])
+    Z_eff = sum([numpy.sum(sap_basis[a][:,1]) for a in atoms])
     if numpy.abs(Z_eff + mol.nelectron) > 1e-6:
         logger.warn(
             mol,
@@ -828,10 +820,10 @@ def make_sap(mol, sap_basis='sapgraspsmall'):
     nbas = cmol.nbas
 
     for i, atom in enumerate(atoms):
-        expnt = sapbas[atom][:,0]
-        coeff = sapbas[atom][:,1]
+        expnt = sap_basis[atom][:,0]
+        coeff = sap_basis[atom][:,1]
         nucleon_fakemol = fakemol_for_cgtf_charge(
-            numpy.asarray([atom_coords[i]]),
+            numpy.asarray([atom_coords[i]], dtype=float),
             expnt,
             coeff)
 
@@ -1797,10 +1789,25 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     @lib.with_doc(init_guess_by_sap.__doc__)
     def init_guess_by_sap(self, mol=None, sap_basis='sapgraspsmall', **kwargs):
+        from pyscf.gto.basis import load
         if mol is None: mol = self.mol
         logger.info(self, '''Initial guess from superposition of atomic potentials (doi:10.1021/acs.jctc.8b01089)
 This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
-        return init_guess_by_sap(mol, sap_basis=sap_basis, **kwargs)
+        if isinstance(sap_basis, str):
+            atoms = [coord[0] for coord in mol._atom]
+            sapbas = dict()
+            for atom in set(atoms):
+                single_element_bs = load(sap_basis, atom)
+                if isinstance(single_element_bs, dict):
+                    sapbas[atom] = numpy.asarray(single_element_bs[atom][0][1:], dtype=float)
+                else:
+                    sapbas[atom] = numpy.asarray(single_element_bs[0][1:], dtype=float)
+            logger.note(self, f'Found SAP basis!\nUsing {sap_basis.split("/")[-1]}')
+        elif isinstance(sap_basis, dict):
+            sapbas = sap_basis
+        else:
+            logger.error(self, 'sap_basis is wrong datatype.')
+        return init_guess_by_sap(mol, sap_basis=sapbas, **kwargs)
 
     @lib.with_doc(init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
