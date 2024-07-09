@@ -39,6 +39,8 @@ class _IMDS_symbolic:
             self.MRPT2_approx = False
         self.eris = eris
         self._made_shared_2e = False
+        self.t1_val = cc.t1
+        self.t2_val = cc.t2
     
     def _make_shared_1e(self):
         cput0 = (logger.process_clock(), logger.perf_counter())
@@ -124,8 +126,10 @@ def ipccsd_matvec(eom, imds=None, diag=None, thc_scheduler:einsum_holder.THC_sch
     #nmo = eom.nmo
     #r1, r2 = eom.vector_to_amplitudes(vector, nmo, nocc)
     
-    r1 = einsum_holder._expr_r1_ip()
-    r2 = einsum_holder._expr_r2_ip()
+    multiroots = eom._nroots > 1
+    
+    r1 = einsum_holder._expr_r1_ip(multiroots)
+    r2 = einsum_holder._expr_r2_ip(multiroots)
 
     ###### register foo, fvv ######
     fock = imds.eris.fock
@@ -177,9 +181,6 @@ def ipccsd_matvec(eom, imds=None, diag=None, thc_scheduler:einsum_holder.THC_sch
         tmp = 2*einsum('lkdc,kld->c', imds.Woovv, r2)
         tmp += -einsum('kldc,kld->c', imds.Woovv, r2)
         Hr2 += -einsum('c,ijcb->ijb', tmp, imds.t2)
-
-    #vector = eom.amplitudes_to_vector(Hr1, Hr2)
-    #return vector
     
     thc_scheduler.register_expr(einsum_holder.THC_scheduler.ip_hr1_r_name, Hr1)
     thc_scheduler.register_expr(einsum_holder.THC_scheduler.ip_hr2_r_name, Hr2)
@@ -245,9 +246,8 @@ def lipccsd_matvec(eom, imds=None, diag=None, thc_scheduler:einsum_holder.THC_sc
         Hr2 += -einsum('kbid,ilb->kld', imds.Wovov, r2)
         tmp =   einsum('ijcb,ijb->c', imds.t2, r2)
         Hr2 += -einsum('lkdc,c->kld', 2.*imds.Woovv-imds.Woovv.transpose((1,0,2,3)), tmp)
-
-    #vector = eom.amplitudes_to_vector(Hr1, Hr2)
-    #return vector
     
     thc_scheduler.register_expr(einsum_holder.THC_scheduler.ip_hr1_l_name, Hr1)
     thc_scheduler.register_expr(einsum_holder.THC_scheduler.ip_hr2_l_name, Hr2)
+
+

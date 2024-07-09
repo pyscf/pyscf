@@ -40,7 +40,6 @@ from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC, LS_THC_eri, laplace_holder
 
 from pyscf.pbc.df.isdf.isdf_posthf import _restricted_THC_posthf_holder 
 
-from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast
 from pyscf.pbc.df.isdf.thc_einsum     import thc_einsum, energy_denomimator, thc_holder, t2_thc_robust_proj_holder, ccsd_t2_holder
 from pyscf.mp.mp2                     import MP2
 
@@ -293,13 +292,15 @@ class THC_RCCSD(ccsd.CCSD, _restricted_THC_posthf_holder):
             mbpt2 : bool
                 Use one-shot MBPT2 approximation to CCSD.
         '''
+        self.mbpt2 = False
         if mbpt2:
+            self.mbpt2 = True
             #pt = mp2.MP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             #self.e_corr, self.t2 = pt.kernel(eris=eris)
             #nocc, nvir = self.t2.shape[1:3]
             #self.t1 = np.zeros((nocc,nvir))
-            #return self.e_corr, self.t1, self.t2
-            raise NotImplementedError
+            self.e_corr = self._thc_scheduler.energy(self.t1, self.t2)
+            return self.e_corr, self.t1, self.t2
 
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)

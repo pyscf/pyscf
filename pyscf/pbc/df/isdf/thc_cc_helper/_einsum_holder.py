@@ -434,6 +434,10 @@ class _einsum_term:
         if self.is_skeleton:
             self._contract_fn = None
             return None  ### no need to build path for skeleton
+    
+        if hasattr(self, "_contract_fn"):     ### no need to rebuild
+            if self._contract_fn is not None:
+                return self
         
         #assert self._is_skeleton == False
         assert all([isinstance(arg, str) for arg in self.args])
@@ -542,20 +546,32 @@ class _expr_t2_thc_robust(_einsum_term):
         super().__init__("T2", "iP,aP,PA,AB,BQ,jQ,bQ->iajb", args=["XO_T2", "XV_T2", "PROJ_ROBUST", "THC_T2", "PROJ_ROBUST", "XO_T2", "XV_T2"])
 
 class _expr_r1_ip(_einsum_term):
-    def __init__(self):
-        super().__init__("R1", "i", args=["R1"])
+    def __init__(self, multiroots=False):
+        if not multiroots:
+            super().__init__("R1", "i", args=["R1"])
+        else:
+            super().__init__("R1", "pi", args=["R1"])
 
 class _expr_r2_ip(_einsum_term):
-    def __init__(self):
-        super().__init__("R2", "ija", args=["R2"])
+    def __init__(self, multiroots=False):
+        if not multiroots:
+            super().__init__("R2", "ija", args=["R2"])
+        else:
+            super().__init__("R2", "pija", args=["R2"])
 
 class _expr_ea_ip(_einsum_term):
-    def __init__(self):
-        super().__init__("R1", "a", args=["R1"])
+    def __init__(self, multiroots=False):
+        if not multiroots:
+            super().__init__("R1", "a", args=["R1"])
+        else:
+            super().__init__("R1", "pa", args=["R1"])
     
 class _expr_ea_ip(_einsum_term):
-    def __init__(self):
-        super().__init__("R2", "iab", args=["R2"])
+    def __init__(self, multiroots=False):
+        if not multiroots:
+            super().__init__("R2", "iab", args=["R2"])
+        else:
+            super().__init__("R2", "piab", args=["R2"])
 
 class _expr_foo(_einsum_term):
     def __init__(self):
@@ -1715,6 +1731,23 @@ class THC_scheduler:
             self._expr_cached[expr_name] = None
             return self.get_tensor(expr_name)
         
+    def evaluate_all(self):
+        NLAYER = len(self._intermediates_hierarchy)
+        for i in range(NLAYER):
+            for name in self._intermediates_hierarchy[i]:
+                self._evaluate(name)
+    
+    def evaluate_all_intermediates(self):
+        NLAYER = len(self._intermediates_hierarchy)
+        for i in range(NLAYER):
+            for name in self._intermediates_hierarchy[i]:
+                if name in self._registered_intermediates_name:
+                    self._cached_intermediates[self._registered_intermediates_name.index(name)] = None
+                    self._evaluate(name)
+                else:
+                    assert name in self.expr
+                    self._expr_cached[name] = None
+
     def evaluate_t1_t2(self, t1, thc_t2, evaluate_ene=True, only_ene=False):
         
         NAME = [THC_scheduler.t1_new_name, THC_scheduler.t2_new_name, THC_scheduler.ccsd_energy_name]

@@ -310,7 +310,7 @@ def Wvvvo(t1:einsum_holder._expr_holder, t2:einsum_holder._expr_holder, eris=Non
         Wabcj +=  -einsum('alcj,lb->abcj', W1ovov(t1, t2, eris).transpose((1,0,3,2)), t1)
         Wabcj +=  -einsum('kbcj,ka->abcj', W1ovvo(t1, t2, eris), t1)
         Wabcj +=   einsum('kclj,lb,ka->abcj', eris_ovoo, t1, t1)
-        Wabcj +=   einsum('abcd,jd->abcj', eris_vvvv, t1)
+        Wabcj +=   einsum('abcd,jd->abcj', Wvvvv(t1, t2, eris), t1)
         
     Wabcj += eris_ovvv.transpose(3,1,2,0).conj()
     
