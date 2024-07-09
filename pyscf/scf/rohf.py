@@ -47,6 +47,13 @@ def init_guess_by_atom(mol):
         dm = lib.tag_array(dm, mo_coeff=dm.mo_coeff, mo_occ=dm.mo_occ)
     return dm
 
+def init_guess_by_sap(mol, sap_basis, **kwargs):
+    dm = hf.init_guess_by_sap(mol, sap_basis, **kwargs)
+    dm = numpy.array((dm*.5, dm*.5))
+    if hasattr(dm, 'mo_coeff'):
+        dm = lib.tag_array(dm, mo_coeff=dm.mo_coeff, mo_occ=dm.mo_occ)
+    return dm
+
 init_guess_by_huckel = uhf.init_guess_by_huckel
 init_guess_by_mod_huckel = uhf.init_guess_by_mod_huckel
 
