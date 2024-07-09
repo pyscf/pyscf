@@ -94,6 +94,23 @@ mf.init_guess = 'vsap'
 mf.kernel()
 
 #
+# Gaussian fit superposition of atomic potentials (SAP) can be used with
+# HF-SCF methods.
+#
+mf = scf.RHF(mol)
+mf.init_guess = 'sap'
+mf.kernel()
+#
+# The SAP fit basis can be changed using the kwarg sap_basis.
+# The argument accepts either python dictionary (basis set in internal
+# format) or filename/pathname. If BSE API is installed with pip, 
+# the implementation will also look through the BSE catalog for basis sets.
+#
+mf.kernel(sap_basis='sapgraspsmall') # Will use PySCF SAP_ALIAS and find it
+# in the local files
+mf.kernel(sap_basis='sap_helfem_large') # Will be found from BSE if installed
+
+#
 # Initial guess can be read and projected from another chkfile.
 # In this initial guess method, mf.chkfile attribute needs to be specified.
 # It is allowed to use the chkfile of different molecule because the density
