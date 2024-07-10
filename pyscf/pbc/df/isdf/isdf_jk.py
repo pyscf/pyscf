@@ -25,14 +25,11 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 
-# from pyscf.pbc.df.isdf.isdf_tools_mpi import reduce as mpi
-
 from mpi4py import MPI
 import numpy
 INT_MAX = 2147483647
 BLKSIZE = INT_MAX // 32 + 1
 
-from memory_profiler import profile
 import ctypes
 
 libpbc = lib.load_library('libpbc')
@@ -46,10 +43,8 @@ libpbc = lib.load_library('libpbc')
 ######### tools #########
 
 def _benchmark_time(t1, t2, label, rec):
-    #print("%20s wall time: %12.6f CPU time: %12.6f" % (label, t2[1] - t1[1], t2[0] - t1[0]))
     lib.logger.debug4(rec, "%20s wall time: %12.6f CPU time: %12.6f" % (label, t2[1] - t1[1], t2[0] - t1[0]))
 
-# @profile
 def _contract_j_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
     '''
 
@@ -337,7 +332,6 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, with_robust_fitting=False, use_mp
     
     return J * ngrid / vol
 
-# @profile
 def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
     '''
 
@@ -349,8 +343,6 @@ def _contract_k_dm(mydf, dm, with_robust_fitting=True, use_mpi=False):
 
     assert use_mpi == False
     
-    # return numpy.zeros_like(dm)
-
     t1 = (logger.process_clock(), logger.perf_counter())
 
     if len(dm.shape) == 3:

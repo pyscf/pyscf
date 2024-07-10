@@ -387,7 +387,6 @@ def pack_JK(input_mat:np.ndarray, Ls, nao_prim, output=None):
                             
     return output
  
-
 def pack_JK_in_FFT_space(input_mat:np.ndarray, kmesh, nao_prim, output=None):
     
     '''
@@ -469,6 +468,3 @@ if __name__ == '__main__':
     init_guess = init_guess_by_atom(cell, atm_config)
     
     print("init_guess = ", init_guess)
-    
-    # print(res)
-    # print(cell.aoslice_by_atom())

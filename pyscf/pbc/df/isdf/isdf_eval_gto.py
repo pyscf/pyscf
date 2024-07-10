@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Qiming Sun <osirpt.sun@gmail.com>
+# Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
 import ctypes
@@ -27,10 +27,6 @@ from pyscf import __config__
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 
 libpbc = _pbcintor.libpbc
-
-# from profilehooks import profile
-# import memory_profiler
-# from memory_profiler import profile
 
 def _estimate_rcut(cell):
     '''Cutoff raidus, above which each shell decays to a value less than the
@@ -48,7 +44,6 @@ def _estimate_rcut(cell):
         rcut.append(r.max())
     return numpy.array(rcut)
 
-# @profile
 def ISDF_eval_gto(cell, eval_name=None, coords=None, comp=None, kpts=numpy.zeros((1,3)), kpt=None,
              shls_slice=None, non0tab=None, ao_loc=None, cutoff=None,
              out=None, Ls=None, rcut=None):
@@ -182,7 +177,5 @@ def ISDF_eval_gto(cell, eval_name=None, coords=None, comp=None, kpts=numpy.zeros
     out = out[0]
     out = lib.z2d_InPlace(out)
     return out[0]
-
-# pbc_eval_gto = eval_gto
 
 

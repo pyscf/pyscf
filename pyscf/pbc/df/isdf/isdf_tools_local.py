@@ -45,8 +45,6 @@ from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
 import ctypes, sys
 from multiprocessing import Pool
-# from memory_profiler import profile
-# from profilehooks import profile
 libpbc = lib.load_library('libpbc')
 
 ############ build atm connection graph ############
@@ -297,7 +295,6 @@ def get_cell_distance_matrix(cell:Cell):
 
 ############ algorithm based on the distance graph and AtmConnectionInfo ############
 
-# @profile
 def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInfo], 
                   Ls=[3,3,3], 
                   with_translation_symmetry=False,
@@ -940,7 +937,6 @@ def _build_submol(cell:Cell, atm_invovled):
     
     return subcell
 
-# @profile
 def get_aoR(cell:Cell, coords, partition, 
             first_npartition = None,
             first_natm=None, group=None, 

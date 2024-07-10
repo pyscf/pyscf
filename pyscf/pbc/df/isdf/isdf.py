@@ -44,7 +44,8 @@ import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 
 def _get_rhoR(mydf, dm_kpts, hermi=1):
-    ''' get the electron density in real space (on grids)
+    ''' 
+    get the electron density in real space (on grids)
 
     '''
 
@@ -291,18 +292,6 @@ class ISDF(df.fft.FFTDF):
         self.W, self.aoRg, self.aoR, self.V_R, _, aux_basis = isdf(
             df_tmp, dm, naux=naux, c=c, max_iter=max_iter, verbose=self.cell.verbose)
 
-        ## check the error
-
-        # nao = self.cell.nao
-        # for i in range(nao):
-        #     coeff = numpy.einsum('k,jk->jk', self.aoRg[i, :], self.aoRg).reshape(-1, self.aoRg.shape[1])
-        #     aoPair = numpy.einsum('k,jk->jk', self.aoR[i, :], self.aoR).reshape(-1, self.aoR.shape[1])
-        #     aoPair_approx = coeff @ aux_basis
-        #     diff = aoPair - aoPair_approx
-        #     diff_pair_abs_max = np.max(np.abs(diff), axis=1)
-        #     for j in range(diff_pair_abs_max.shape[0]):
-        #         print("(%5d, %5d, %15.8e)" % (i, j, diff_pair_abs_max[j]))
-
         ## WARNING: self.aoRG, self.aoR is scaled by a factor of sqrt(cell.vol / ngrids)
 
         self.naux = self.W.shape[0]
@@ -327,32 +316,22 @@ if __name__ == "__main__":
 
     cell   = pbcgto.Cell()
     boxlen = 3.5668
-    # boxlen = 3
     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
 
-    # cell.atom = '''
-    #                C     0.      0.      0.
-    #                C     0.8917  0.8917  0.8917
-    #                C     1.7834  1.7834  0.
-    #                C     2.6751  2.6751  0.8917
-    #                C     1.7834  0.      1.7834
-    #                C     2.6751  0.8917  2.6751
-    #                C     0.      1.7834  1.7834
-    #                C     0.8917  2.6751  2.6751
-    #             '''
-
     cell.atom = '''
+                   C     0.      0.      0.
                    C     0.8917  0.8917  0.8917
+                   C     1.7834  1.7834  0.
                    C     2.6751  2.6751  0.8917
+                   C     1.7834  0.      1.7834
                    C     2.6751  0.8917  2.6751
+                   C     0.      1.7834  1.7834
                    C     0.8917  2.6751  2.6751
                 '''
-
     cell.basis   = 'gth-szv'
     cell.pseudo  = 'gth-pade'
     cell.verbose = 4
 
-    # cell.ke_cutoff  = 100   # kinetic energy cutoff in a.u.
     cell.ke_cutoff  = 128
     cell.max_memory = 800  # 800 Mb
     cell.precision  = 1e-8  # integral precision
@@ -383,10 +362,7 @@ if __name__ == "__main__":
     mf.xc         = "PBE,PBE"
     mf.init_guess = 'atom'  # atom guess is fast
     mf.with_df    = multigrid.MultiGridFFTDF2(cell)
-
-    # mf.with_df.ngrids = 4  # number of sets of grid points ? ? ?
-    # mf.kernel()
-
+    
     dm1 = mf.get_init_guess(cell, 'atom')
     mydf = MultiGridFFTDF2(cell)
 
@@ -416,8 +392,6 @@ if __name__ == "__main__":
     print(np.sum(aoR[0, :] ** 2))
     ovlp = cell.pbc_intor('cint1e_ovlp_sph')
     print(ovlp[0, 0])
-
-    # exit(1)
 
     mydf_eri = df.FFTDF(cell)
     eri = mydf_eri.get_eri(compact=False).reshape(cell.nao, cell.nao, cell.nao, cell.nao)

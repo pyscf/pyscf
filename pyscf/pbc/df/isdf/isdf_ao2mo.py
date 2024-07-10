@@ -35,9 +35,24 @@ from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 libpbc = lib.load_library('libpbc')
 
 def isdf_eri_robust_fit(mydf, W, aoRg, aoR, V_r, verbose=None):
-    '''
+    r'''
+    
+    Get (AO) electron repulsion integrals (ERI) from ISDF with robust fitting. 
+    Illurstrate the idea of iSDF with robust fitting in a human-readable way.
+    
+    Args:
+        mydf : ISDF objects 
+        W    : W matrix in Sandeep2022 eq 13
+        aoR  : AO values on grids (typically uniform mesh)
+        aoRg : Atomic orbitals' values on interpolation ponts. 
+        V_r  : V matrix in Sandeep2022 eq 13
+
+    Return: ERI with s1 symmetry
+    
     NOTE: it is an abandoned func
+    
     Ref:
+    
     (1) Sandeep2022 https://pubs.acs.org/doi/10.1021/acs.jctc.2c00720
 
     '''
@@ -69,12 +84,19 @@ def isdf_eri_robust_fit(mydf, W, aoRg, aoR, V_r, verbose=None):
     return eri * ngrid / vol
 
 
-def isdf_eri(mydf, 
-             mo_coeff = None,
-             verbose=None):
+def isdf_eri(mydf, mo_coeff = None, verbose=None):
     
     """
-    locality if explored! 
+    Perform AO2MO transformation from ISDF with robust fitting with s4 symmetry
+    Locality is supported if explored!
+    
+    Args:
+        mydf      :
+        mo_coeff  : Molecular orbital coefficients.
+    
+    Returns:
+        eri       : MO-ERI with s4 symmetry.
+    
     """
     
     #### basic info #### 
@@ -336,13 +358,20 @@ def isdf_eri(mydf,
     return eri * ngrid / vol
     
 
-def isdf_eri_ovov(mydf, 
-                  mo_coeff_o: np.ndarray = None,
-                  mo_coeff_v: np.ndarray = None,
-                  verbose=None):
+def isdf_eri_ovov(mydf, mo_coeff_o: np.ndarray = None, mo_coeff_v: np.ndarray = None, verbose=None):
     
     """
-    locality if explored! 
+    Perform AO2MO transformation from ISDF for specific orbital types (ovov), for MP2 calculation
+    Locality is supported if explored!
+    
+    Args:
+        mydf       : ISDF objects.
+        mo_coeff_o : Molecular orbital coefficients for occupied orbitals
+        mo_coeff_v : Molecular orbital coefficients for virtual  orbitals
+        
+    Return:
+        eri : ovov part of MO-ERI
+        
     """
     
     #### basic info #### 
@@ -669,27 +698,21 @@ def get_eri(mydf, kpts=None,
     # max_memory = mydf.max_memory - lib.current_memory()[0]
 
 ####################
+
 # gamma point, the integral is real and with s4 symmetry
 
     if gamma_point(kptijkl):
 
-        #:ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact=compact)
-        #:ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
-        #:eri = lib.dot(ao_pairs_G.T, ao_pairs_G, cell.vol/ngrids**2)
-        # ao = mydf._numint.eval_ao(cell, coords, kpti)[0]
-        # ao = numpy.asarray(ao.T, order='C')
-        # eri = _contract_compact(mydf, (ao,ao), coulG, max_memory=max_memory)
-        
-        #eri = isdf_eri_robust_fit(mydf, mydf.W, mydf.aoRg, mydf.aoR, mydf.V_R, verbose=mydf.cell.verbose)
-        
         eri = isdf_eri(mydf, verbose=mydf.cell.verbose)
         
         if compact:
-            # return ao2mo.restore(4, eri, nao)
             return eri
         else:
-            # return eri.reshape(nao**2,nao**2)
             return ao2mo.restore(1, eri, nao)
+
+####################
+# aosym = s1, complex integrals
+
     else:
         raise NotImplementedError
 
@@ -724,6 +747,8 @@ def general(mydf, mo_coeffs, kpts=None,
              iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
              iden_coeffs(mo_coeffs[0], mo_coeffs[3]))):
             
+            #### Full MO-ERI ####
+            
             t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
             eri = isdf_eri(mydf, mo_coeffs[0].copy(), verbose=mydf.cell.verbose)
             t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -734,6 +759,8 @@ def general(mydf, mo_coeffs, kpts=None,
             else:
                 return ao2mo.restore(1, eri, nao)
         else:
+            
+            #### ovov MO-ERI ####
             
             if ((iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
                  iden_coeffs(mo_coeffs[1], mo_coeffs[3]))):
@@ -762,7 +789,20 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
 
 def LS_THC(mydf, R:np.ndarray):
     '''
-    given R matrix, get Z matrix such that eri = R R Z R R
+    Least-Square Tensorhypercontraction decomposition of ERI.
+    Given an R matrix, compute the Z matrix such that the electron repulsion integral (ERI) can be expressed as eri ~ R R Z R R.
+    Supports both ISDF w./w.o. robust fitting.
+    
+    Args:
+        mydf : ISDF objects. 
+        R    : A matrix used in the computation of the ERI.
+
+    Returns:
+        Z    :  eri = R R Z R R.
+
+    Ref:
+        (1) Martinez2012: Parrish, Hohenstein, Martinez and Sherill. J. Chem. Phys. 137, 224106 (2012), DOI: https://doi.org/10.1063/1.4768233
+
     '''
     
     log = lib.logger.Logger(mydf.stdout, mydf.verbose)
@@ -859,7 +899,7 @@ def LS_THC(mydf, R:np.ndarray):
     else:
         RY = None
     
-    # V term #
+    #### V term ####
     
     with_robust_fitting = mydf.with_robust_fitting
     
@@ -870,7 +910,7 @@ def LS_THC(mydf, R:np.ndarray):
         Z += Z.T
         del Z_tmp1
         
-    # W term # 
+    #### W term #### 
     
     W = mydf.W
     Z_tmp2 = lib.ddot(W, RX.T)
@@ -899,13 +939,27 @@ def LS_THC_eri(Z:np.ndarray, R:np.ndarray):
     
     return np.einsum(einsum_str, R,R,Z,R,R, optimize=path_info[0])
 
-##### Laplace holder and builder ##### 
+################################### Laplace holder and builder ################################### 
 
 import bisect
 
 def _find_laplace(laplace_holder:dict, R, error):
+    '''
+    find the laplace holder with the smallest error that is larger than the given error
     
-    # find key via binary search
+    Args:
+        laplace_holder: dict
+            a dictionary that contains all the laplace holder
+        R: float
+            1/x is fitted as summation of exponential functions on interval [1,R]
+        error: float
+            the relative error threshold
+    
+    Return:
+
+    '''
+    
+    ### find key via binary search ###
         
     keys = list(laplace_holder.keys())
     keys.sort()
@@ -922,9 +976,9 @@ def _find_laplace(laplace_holder:dict, R, error):
                 return item
         return None
 
-def _build_laplace_holder(r_min, r_max, rel_error, 
-                          #verbose=True
-                          ):
+def _build_laplace_holder(r_min, r_max, rel_error):
+    '''
+    '''
     
     import os, pickle
     
@@ -938,17 +992,6 @@ def _build_laplace_holder(r_min, r_max, rel_error,
     if item_found is None:
         raise NotImplementedError("No laplace holder found")
     
-    # if verbose:
-    #     print("Laplace holder found")
-    #     print("R_min  = ", r_min)
-    #     print("R_max  = ", r_max)
-    #     print("R      = ", r_max/r_min)
-    #     print("Error  = ", rel_error)
-    #     print("degree = ", item_found['degree'])
-    #     print("a_values = ", item_found['a_values'])
-    #     print("b_values = ", item_found['b_values'])
-    #     print("error    = ", item_found['error'])
-    
     return {
         "a_values":np.array(item_found['a_values'])/r_min,
         "b_values":np.array(item_found['b_values'])/r_min,
@@ -957,12 +1000,24 @@ def _build_laplace_holder(r_min, r_max, rel_error,
     }
 
 class laplace_holder:
+    r''' laplace transformation of energy denominator 
+    For order 2, 1/(ea+eb-ei-ej) ~ \sum_T (tao_v)_a^T (tao_v)_b^T (tao_o)_i^T (tao_o)_j^T 
+    
+    Ref:
+        (1) Almlof1992   : J. Chem. Phys. 96, 489-494 (1992) https://doi.org/10.1063/1.462485
+        (2) Hackbusch2008: J. Chem. Phys. 129, 044112 (2008) https://doi.org/10.1063/1.2958921
+        (3) https://gitlab.mis.mpg.de/scicomp/EXP_SUM
+    
+    '''
+    
+    _keys = {
+        'mo_ene', 'nocc', 'order', 'holder', 'a_values', 'b_values',
+        '_degree', '_error', 'laplace_occ', 'laplace_vir'
+    }
+    
     def __init__(self, 
-                 mo_ene, 
-                 nocc, 
-                 order=2,
-                 rel_error=1e-6, 
-                 verbose=True):
+                 mo_ene, nocc, 
+                 order=2, rel_error=1e-6, verbose=True):
         
         occ_ene = mo_ene[:nocc]
         vir_ene = mo_ene[nocc:]

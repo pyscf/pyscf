@@ -132,9 +132,3 @@ if __name__ == "__main__":
     
     scheduler._build_expression()
     print(scheduler)
-
-
-    
-    
-    
-    

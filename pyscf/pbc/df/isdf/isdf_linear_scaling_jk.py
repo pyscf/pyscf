@@ -32,9 +32,7 @@ from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, scatter
 
-# from memory_profiler import profile
 import ctypes
-from profilehooks import profile
 
 libpbc = lib.load_library('libpbc')
 
@@ -325,7 +323,6 @@ def _half_J(mydf, dm, use_mpi=False,
     
     return J
 
-# @profile
 def _contract_j_dm_ls(mydf, dm, use_mpi=False, 
                       first_pass  = None, 
                       second_pass = None,
@@ -918,7 +915,6 @@ def _contract_j_multigrid(mydf,
 
 ############# quadratic scaling (not cubic!) #############
 
-# @profile
 def __get_DensityMatrixonGrid_qradratic(mydf, dm, bra_aoR_holder, ket_aoR_holder, res:np.ndarray=None, verbose = 1, use_mpi=False):
     
     t1 = (logger.process_clock(), logger.perf_counter())
@@ -1163,7 +1159,6 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm,
     #     _benchmark_time(t1, t2, "__get_DensityMatrixonRgAO_qradratic", mydf)
     return res
 
-# @profile
 def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     if use_mpi:

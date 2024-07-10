@@ -23,7 +23,6 @@ from functools import reduce
 import numpy as np
 import ctypes
 from multiprocessing import Pool
-# from memory_profiler import profile
 
 ############ pyscf module ############
 
@@ -684,7 +683,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         self.c = c
         build_aux_basis(self)
 
-    # @profile
     def build_auxiliary_Coulomb(self, cell:Cell = None, mesh=None, debug=True):
 
         self._allocate_jk_buffer(datatype=np.double)
