@@ -48,7 +48,7 @@ typedef struct {
         int8_t *ovlp_mask;
         // Integral screening condition ~log((ij|ij))/2
         int16_t *qindex;
-        // cutoff for schwarz condtion
+        // cutoff for schwarz condition
         int cutoff;
         float eta;
 

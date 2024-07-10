@@ -380,7 +380,7 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
 
     Args:
         frozen (array_like of int): The orbital indices that will be frozen.
-        mo_occ (:obj:`ndarray` of int): The occupuation number for each orbital
+        mo_occ (:obj:`ndarray` of int): The occupation number for each orbital
             resulting from a mean-field-like calculation.
         kpt_idx (int): The k-point that `mo_occ` and `frozen` belong to.
 

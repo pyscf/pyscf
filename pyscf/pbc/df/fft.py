@@ -334,7 +334,7 @@ class FFTDF(lib.StreamObject):
     def loop(self, blksize=None):
         if self.cell.dimension < 3:
             raise RuntimeError('ERIs of 1D and 2D systems are not positive '
-                               'definite. Current API only supports postive '
+                               'definite. Current API only supports positive '
                                'definite ERIs.')
 
         if blksize is None:

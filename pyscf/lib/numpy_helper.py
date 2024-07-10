@@ -1375,7 +1375,7 @@ def isin_1d(v, vs, return_index=False):
         v : array like
             The target vector. `v` is flattened.
         vs : array like
-            A list of vectors. The last dimenstion of `vs`
+            A list of vectors. The last dimension of `vs`
             should be the same as the size of `v`.
         return_index : bool
             Index of `v` in `vs`.

@@ -459,7 +459,7 @@ def format_basis(basis_tab, sort_basis=True):
         if len(_basis) == 0:
             raise BasisNotFoundError('Basis not found for  %s' % symb)
 
-        # Sort basis accroding to angular momentum. This is important for method
+        # Sort basis according to angular momentum. This is important for method
         # decontract_basis, which assumes that basis functions with the same
         # angular momentum are grouped together. Related to issue #1620 #1770
         if sort_basis:
@@ -2457,7 +2457,7 @@ class MoleBase(lib.StreamObject):
               atom=None, basis=None, unit=None, nucmod=None, ecp=None, pseudo=None,
               charge=None, spin=0, symmetry=None, symmetry_subgroup=None,
               cart=None, magmom=None):
-        '''Setup moleclue and initialize some control parameters.  Whenever you
+        '''Setup molecule and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
 
@@ -3800,7 +3800,7 @@ class Mole(MoleBase):
         return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
     def to_cell(self, a, dimension=3):
-        '''Put a molecule in a cell with periodic boundary condictions
+        '''Put a molecule in a cell with periodic boundary conditions
 
         Args:
             a : (3,3) ndarray

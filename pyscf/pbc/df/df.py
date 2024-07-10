@@ -365,7 +365,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 LpqR = LpqI = None
 
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
-            # Truncated Coulomb operator is not postive definite. Load the
+            # Truncated Coulomb operator is not positive definite. Load the
             # CDERI tensor of negative part.
             with _load3c(self._cderi, self._dataname+'-', kpti_kptj,
                          ignore_key_error=True) as j3c:

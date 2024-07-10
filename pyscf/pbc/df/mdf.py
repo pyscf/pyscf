@@ -214,7 +214,7 @@ class _RSMDFBuilder(_RSGDFBuilder):
 
         # For MDF, large difference may be found in results between the CD/ED
         # treatments. In some systems, small integral errors can lead to a
-        # differnece in the total energy/orbital energy around 4th decimal
+        # difference in the total energy/orbital energy around 4th decimal
         # place. Abandon CD treatment for better numerical stability
         self.j2c_eig_always = True
 
@@ -326,7 +326,7 @@ class _CCMDFBuilder(_CCGDFBuilder):
 
         # For MDF, large difference may be found in results between the CD/ED
         # treatments. In some systems, small integral errors can lead to a
-        # differnece in the total energy/orbital energy around 4th decimal
+        # difference in the total energy/orbital energy around 4th decimal
         # place. Abandon CD treatment for better numerical stability
         self.j2c_eig_always = True
 

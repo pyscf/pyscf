@@ -1597,11 +1597,11 @@ def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     return Ecut.max()
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
-    '''The minimal omega in attenuated Coulombl given energy cutoff
+    '''The minimal omega in attenuated Coulomb given energy cutoff
     '''
     if precision is None:
         precision = cell.precision
-    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+    # estimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
     # enough to converge the 2-electron integrals. A penalty term here is to
     # reduce the error in integrals
     precision *= 1e-2

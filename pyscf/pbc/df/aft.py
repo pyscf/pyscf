@@ -703,7 +703,7 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
         cell = self.cell
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             raise RuntimeError('ERIs of PBC-2D systems are not positive '
-                               'definite. Current API only supports postive '
+                               'definite. Current API only supports positive '
                                'definite ERIs.')
 
         if blksize is None:

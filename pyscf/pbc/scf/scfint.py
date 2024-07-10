@@ -31,7 +31,7 @@ import numpy as np
 import pyscf.pbc.scf
 from pyscf.pbc import gto as pgto
 
-print('This module is deporacted and will be removed in future release.  '
+print('This module is deprecated and will be removed in future release.  '
       'Please use cell.pbc_intor and pbc.hf.get_hcore.')
 
 def get_hcore(cell, kpt=None):

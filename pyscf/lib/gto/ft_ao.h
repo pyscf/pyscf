@@ -32,7 +32,7 @@ typedef struct {
 
         int i_l;
         int j_l;
-        int nfi;  // number of cartesion components
+        int nfi;  // number of cartesian components
         int nfj;
         int nf;  // = nfi*nfj
         int ngrids;  // number of grids or planewaves

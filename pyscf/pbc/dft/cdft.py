@@ -73,8 +73,8 @@ def cdft(mf,cell,offset,orbital,basis=None):
 
 def fast_iao_mullikan_pop(mf,cell,a=None):
     '''
-    Input: mf -- a preconverged mean fild object
-    Returns: mullikan populaion analysis in the basisIAO a
+    Input: mf -- a preconverged mean field object
+    Returns: mullikan population analysis in the basisIAO a
     '''
 
     #
