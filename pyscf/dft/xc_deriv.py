@@ -455,7 +455,7 @@ def _stack_fggg(fggg, axis=0, rho=None):
 @lru_cache(100)
 def _product_uniq_indices(nvars, order):
     '''
-    Indexing the symmetry unique elements in cartensian product
+    Indexing the symmetry unique elements in cartesian product
     '''
     # n = 0
     # for i range(nvars):

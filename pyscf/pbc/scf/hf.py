@@ -246,7 +246,7 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     # With the optimal origin of the unti cell, the net dipole in the unit
     # cell should be strictly zero. However, the integral grids are often not
     # enough to produce the zero dipole. Errors are caused by the sub-optimal
-    # origin and the numerial integration.
+    # origin and the numerical integration.
     if origin is None:
         origin = _search_dipole_gauge_origin(cell, grids, rho, log)
 
@@ -680,7 +680,7 @@ class SCF(mol_hf.SCF):
 
             if with_k and self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
-                # G=0 is not inculded in the ._eri integrals
+                # G=0 is not included in the ._eri integrals
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
         elif self.rsjk:

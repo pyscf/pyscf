@@ -381,7 +381,7 @@ class ROHF(hf.RHF):
 
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
-        logger.info(self, 'Initial guess from the superposition of atomic densties.')
+        logger.info(self, 'Initial guess from the superposition of atomic densities.')
         return init_guess_by_atom(mol)
 
     def init_guess_by_huckel(self, mol=None):

@@ -1294,7 +1294,7 @@ class temporary_env:
                 setattr(self.obj, k, v)
 
 class light_speed(temporary_env):
-    '''Within the context of this macro, the environment varialbe LIGHT_SPEED
+    '''Within the context of this macro, the environment variable LIGHT_SPEED
     can be customized.
 
     Examples:

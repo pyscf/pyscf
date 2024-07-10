@@ -88,7 +88,7 @@ def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
             minao=MINAO, verbose=logger.NOTE):
     '''Intrinsic Bonding Orbitals. [Ref. JCTC, 9, 4834]
 
-    This implementation follows Knizia's implementation execept that the
+    This implementation follows Knizia's implementation except that the
     resultant IBOs are symmetrically orthogonalized.  Note the IBOs of this
     implementation do not strictly maximize the IAO Mulliken charges.
 
@@ -221,7 +221,7 @@ def PipekMezey(mol, orbocc, iaos, s, exponent, minao=MINAO):
     Orbitals are projected to IAO basis first and the Mulliken pop is
     calculated based on IAO basis (in function atomic_pops).  A series of
     unitary matrices are generated and applied on the input orbitals.  The
-    intemdiate orbitals in the optimization and the finally localized orbitals
+    intermediate orbitals in the optimization and the finally localized orbitals
     are all orthogonormal.
 
     Examples:

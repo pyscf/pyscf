@@ -680,7 +680,7 @@ def project_init_guess_old(casscf, init_mo, prev_mol=None):
 
 # on AO representation
 def make_rdm1(casscf, mo_coeff=None, ci=None, **kwargs):
-    '''One-particle densit matrix in AO representation
+    '''One-particle density matrix in AO representation
 
     Args:
         casscf : an :class:`CASSCF` or :class:`CASCI` object
@@ -709,7 +709,7 @@ def make_rdm1(casscf, mo_coeff=None, ci=None, **kwargs):
 
 # make both alpha and beta density matrices
 def make_rdm1s(casscf, mo_coeff=None, ci=None, **kwargs):
-    '''Alpha and beta one-particle densit matrices in AO representation
+    '''Alpha and beta one-particle density matrices in AO representation
     '''
     return casscf.make_rdm1s(mo_coeff, ci, **kwargs)
 

@@ -133,7 +133,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     # Call _CCGDFBuilder if applicable. _CCGDFBuilder is slower than
     # _RSGDFBuilder but numerically more close to previous versions
     _prefer_ccdf = False
-    # If True, force using denisty matrix-based K-build
+    # If True, force using density matrix-based K-build
     force_dm_kbuild = False
 
     _keys = {

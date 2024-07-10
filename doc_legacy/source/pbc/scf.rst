@@ -8,7 +8,7 @@ mean-filed calculation with periodic boundary condition.
 Gamma point and single k-point calculation
 ==========================================
 The usage of gamma point Hartree-Fock program is very close to that of the
-molecular program.  In the PBC gamma point calculation, one needs intialize
+molecular program.  In the PBC gamma point calculation, one needs initialize
 :class:`Cell` object and the corresponding :class:`pyscf.pbc.scf.hf.RHF` class::
 
     from pyscf.pbc import gto, scf

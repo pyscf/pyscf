@@ -117,7 +117,7 @@ class SFX2C1E_SCF(x2c._X2C_SCF):
         log = logger.new_logger(mol, verbose)
 
         if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-            # UHF denisty matrices
+            # UHF density matrices
             dm = dm[0] + dm[1]
 
         if isinstance(self, ghf.GHF):

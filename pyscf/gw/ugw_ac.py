@@ -277,7 +277,7 @@ def _get_scaled_legendre_roots(nw):
 
 def _get_clenshaw_curtis_roots(nw):
     """
-    Clenshaw-Curtis qaudrature on [0,inf)
+    Clenshaw-Curtis quadrature on [0,inf)
     Ref: J. Chem. Phys. 132, 234114 (2010)
     Returns:
         freqs : 1D ndarray

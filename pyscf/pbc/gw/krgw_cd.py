@@ -237,7 +237,7 @@ def get_WmnI_diag(gw, orbs, kptlist, freqs, max_memory=8000):
                     for LpqR, LpqI, sign \
                             in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
                         Lpq.append(LpqR+LpqI*1.0j)
-                    # support uneqaul naux on different k points
+                    # support unequal naux on different k points
                     Lpq = np.vstack(Lpq).reshape(-1,nmo**2)
                     tao = []
                     ao_loc = None
@@ -338,7 +338,7 @@ def get_rho_response_R(gw, omega, mo_energy, Lpq, kL, kidx):
 
 def get_sigmaR_diag(gw, omega, kn, orbp, ef, freqs, qij, q_abs):
     '''
-    Compute self-energy for poles inside coutour
+    Compute self-energy for poles inside contour
     (more and more expensive away from Fermi surface)
     '''
     mo_energy = np.array(gw._scf.mo_energy)
@@ -394,7 +394,7 @@ def get_sigmaR_diag(gw, omega, kn, orbp, ef, freqs, qij, q_abs):
                         for LpqR, LpqI, sign \
                                 in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
                             Lpq.append(LpqR+LpqI*1.0j)
-                        # support uneqaul naux on different k points
+                        # support unequal naux on different k points
                         Lpq = np.vstack(Lpq).reshape(-1,nmo**2)
                         tao = []
                         ao_loc = None
@@ -577,7 +577,7 @@ def _get_scaled_legendre_roots(nw):
 
 def _get_clenshaw_curtis_roots(nw):
     """
-    Clenshaw-Curtis qaudrature on [0,inf)
+    Clenshaw-Curtis quadrature on [0,inf)
     Ref: J. Chem. Phys. 132, 234114 (2010)
     Returns:
         freqs : 1D ndarray

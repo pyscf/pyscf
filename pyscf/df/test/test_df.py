@@ -87,7 +87,7 @@ class KnownValues(unittest.TestCase):
         eri1 = dfobj.get_eri()
         self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
 
-    def test_init_denisty_fit(self):
+    def test_init_density_fit(self):
         from pyscf.df import df_jk
         from pyscf import cc
         from pyscf.cc import dfccsd

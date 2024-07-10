@@ -133,7 +133,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     # When symmetry is enabled, the molecule may be shifted or rotated to make
     # the z-axis be the main axis. The transformation can cause inconsistency
     # between the optimization steps. The transformation is muted by setting
-    # an explict point group to the keyword mol.symmetry (see symmetry
+    # an explicit point group to the keyword mol.symmetry (see symmetry
     # detection code in Mole.build function).
 
     # geomeTRIC library on pypi requires to provide config file log.ini.

@@ -192,7 +192,7 @@ def get_rho_response_R(gw, omega, Lpq):
 
 def get_sigmaR_diag(gw, omega, orbp, ef, Lpq):
     '''
-    Compute self-energy for poles inside coutour
+    Compute self-energy for poles inside contour
     (more and more expensive away from Fermi surface)
     '''
     mo_energy = gw._scf.mo_energy
@@ -234,7 +234,7 @@ def _get_scaled_legendre_roots(nw):
 
 def _get_clenshaw_curtis_roots(nw):
     """
-    Clenshaw-Curtis qaudrature on [0,inf)
+    Clenshaw-Curtis quadrature on [0,inf)
     Ref: J. Chem. Phys. 132, 234114 (2010)
     Returns:
         freqs : 1D ndarray

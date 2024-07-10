@@ -24,7 +24,7 @@ mf = scf.RHF(mol).density_fit()
 mf.kernel()
 
 #
-# After calling denisty fitting method for SCF, MCSCF methods etc, the density
+# After calling density fitting method for SCF, MCSCF methods etc, the density
 # fitting integral (3-index) tensor can be accessed from  mf.with_df._cderi
 # _cderi is short for cholesky decomposed (CD) electron repulsion integral.
 # _cderi tensor can be either numpy.ndarray or HDF5 file (key is 'j3c').

@@ -45,7 +45,7 @@ import h5py
 import tempfile
 
 
-# Note : All interals are in Chemist's notation except for vvvv
+# Note : All integrals are in Chemist's notation except for vvvv
 #        Eg.of momentum conservation :
 #        Chemist's  oovv(ijab) : ki - kj + ka - kb
 #        Amplitudes t2(ijab)  : ki + kj - ka - kba
@@ -281,7 +281,7 @@ def compute_amplitudes(myadc, eris):
         cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
         if (myadc.method == "adc(3)" and myadc.approx_trans_moments is False):
-            raise NotImplementedError('3rd order singles amplitues not implemented')
+            raise NotImplementedError('3rd order singles amplitudes not implemented')
 
     t1 = (t1_2, t1_3)
     t2 = (t2_1, t2_2)

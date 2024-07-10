@@ -17,8 +17,8 @@
 #
 
 '''
-Auxiliary second-order Green's function perturbation therory
-============================================================
+Auxiliary second-order Green's function perturbation theory
+===========================================================
 
 The AGF2 method permits the computation of quasiparticle excitations and 
 ground-state properties at the AGF2(None,0) level. 

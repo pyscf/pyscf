@@ -178,7 +178,7 @@ class SelectedCI(selected_ci.SelectedCI):
                 wfnsym = [addons._guess_wfnsym(c, strsa, strsb, orbsym)
                           for c in fcivec]
                 if any(wfnsym[0] != x for x in wfnsym):
-                    warnings.warn('Different wfnsym %s found in different CI vecotrs' % wfnsym)
+                    warnings.warn('Different wfnsym %s found in different CI vectors' % wfnsym)
                 wfnsym = wfnsym[0]
 
         else:
