@@ -111,8 +111,22 @@ mf.kernel() # Will use PySCF SAP_ALIAS and find it
 # in the local files
 mf.sap_basis = 'sap_helfem_large'
 mf.kernel() # Will be found from BSE if installed
-mf.sap_basis = gto.basis.load('sap_helfem_large', 'Ne')
-mf.kernel() # Will load basis from BSE and input it as a dictionary
+mf.sap_basis = {
+    'C': [[0,
+  [70.00376965910681, -1.461395066555269],
+  [35.71620900974838, 2.081985464785248],
+  [18.22255561721856, -3.934427793137729],
+  [9.297222253682943, 2.482153296237811],
+  [4.743480741674971, -2.270305056357756],
+  [2.420143235548455, -1.625287881586701],
+  [1.234766956912478, -2.814362858422101],
+  [0.6299831412818762, -0.9315848803380504],
+  [0.3214199700417737, -0.2828736323863268],
+  [0.163989780633558, -0.4608879213337786],
+  [0.08366825542528468, -0.4659958068514243],
+  [0.04268788542106363, -0.3170178640539234]]]
+}
+mf.kernel() # Will use the above basis for C atoms
 
 
 #
