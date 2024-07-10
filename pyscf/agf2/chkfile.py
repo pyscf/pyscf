@@ -111,7 +111,7 @@ def load_agf2(chkfile):
 def dump_agf2(agf2, chkfile=None, key='agf2',
               gf=None, se=None, frozen=None, nmom=None,
               mo_energy=None, mo_coeff=None, mo_occ=None):
-    ''' Save the AGF2 calculatuion to a chkfile.
+    ''' Save the AGF2 calculation to a chkfile.
     '''
 
     if mpi_helper.rank != 0:

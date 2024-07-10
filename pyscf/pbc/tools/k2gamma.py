@@ -321,7 +321,7 @@ if __name__ == '__main__':
     mf = k2gamma(kmf, kmesh)
     c_g_ao = mf.mo_coeff
 
-    # The following is to check whether the MO is correctly coverted:
+    # The following is to check whether the MO is correctly converted:
 
     print("Supercell gamma MO in AO basis from conversion:")
     scell = tools.super_cell(cell, kmesh)

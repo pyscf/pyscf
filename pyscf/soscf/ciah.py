@@ -163,7 +163,7 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
 
                 elif (ikf > 2 and # avoid frequent keyframe
                       (ikf >= max(iah.kf_interval, iah.kf_interval-numpy.log(norm_dr+1e-9)) or
-                       # Insert keyframe if the keyframe and the esitimated g_orb are too different
+                       # Insert keyframe if the keyframe and the estimated g_orb are too different
                        norm_gorb < norm_gkf/kf_trust_region)):
                     ikf = 0
                     ukf = iah.extract_rotation(dr, ukf)

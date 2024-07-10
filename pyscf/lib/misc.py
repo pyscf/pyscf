@@ -103,7 +103,7 @@ def load_library(libname):
                         return numpy.ctypeslib.load_library(libname, libpath)
         raise
 
-#Fixme, the standard resouce module gives wrong number when objects are released
+#Fixme, the standard resource module gives wrong number when objects are released
 # http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
 #or use slow functions as memory_profiler._get_memory did
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK")

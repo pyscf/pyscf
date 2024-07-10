@@ -384,7 +384,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
                 weights = 1 + Gp*Rc * scipy.special.j1(Gp*Rc) * scipy.special.k0(Gx*Rc)
                 weights -= Gx*Rc * scipy.special.j0(Gp*Rc) * scipy.special.k1(Gx*Rc)
                 coulG = 4*np.pi/absG2 * weights
-                # TODO: numerical integation
+                # TODO: numerical integration
                 # coulG[Gx==0] = -4*np.pi * (dr * r * scipy.special.j0(Gp*r) * np.log(r)).sum()
             if len(G0_idx) > 0:
                 coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)

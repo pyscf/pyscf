@@ -166,7 +166,7 @@ class DF(lib.StreamObject):
                                      max_memory=max_memory, verbose=log)
             else:
                 # Store DF tensor in blocks. This is to reduce the
-                # initiailzation overhead
+                # initialization overhead
                 outcore.cholesky_eri_b(mol, cderi, dataname=self._dataname,
                                        int3c=int3c, int2c=int2c, auxmol=auxmol,
                                        max_memory=max_memory, verbose=log)
