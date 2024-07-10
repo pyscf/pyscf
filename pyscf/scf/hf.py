@@ -284,7 +284,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 
 
 def energy_tot(mf, dm=None, h1e=None, vhf=None):
-    r'''Total Hartree-Fock energy, electronic part plus nuclear repulstion
+    r'''Total Hartree-Fock energy, electronic part plus nuclear repulsion
     See :func:`scf.hf.energy_elec` for the electron part
 
     Note this function has side effects which cause mf.scf_summary updated.
@@ -885,9 +885,9 @@ def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True, omega=None):
             Whether to compute K matrices
 
         omega : float
-            Parameter of range-seperated Coulomb operator: erf( omega * r12 ) / r12.
+            Parameter of range-separated Coulomb operator: erf( omega * r12 ) / r12.
             If specified, integration are evaluated based on the long-range
-            part of the range-seperated Coulomb operator.
+            part of the range-separated Coulomb operator.
 
     Returns:
         Depending on the given dm, the function returns one J and one K matrix,

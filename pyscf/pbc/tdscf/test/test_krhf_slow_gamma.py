@@ -58,7 +58,7 @@ class DiamondTest(unittest.TestCase):
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (ktd.PhysERI, ktd.PhysERI4, ktd.PhysERI8):
-            # Note that specific combintation of k-points results in real orbitals and allows testing PhysERI8
+            # Note that specific combination of k-points results in real orbitals and allows testing PhysERI8
             try:
                 e = eri(self.model_krhf)
                 m = e.tdhf_full_form()

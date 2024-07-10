@@ -59,7 +59,7 @@ def rhf_internal(mf, verbose=None):
     # The results of hop(x) corresponds to a displacement that reduces
     # gradients g.  It is the vir-occ block of the matrix vector product
     # (Hessian*x). The occ-vir block equals to x2.T.conj(). The overall
-    # Hessian for internal reotation is x2 + x2.T.conj(). This is
+    # Hessian for internal rotation is x2 + x2.T.conj(). This is
     # the reason we apply (.real * 2) below
     def hessian_x(x):
         return hop(x).real * 2

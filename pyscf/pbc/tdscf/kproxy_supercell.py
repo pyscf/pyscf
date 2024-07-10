@@ -495,7 +495,7 @@ def orb2ov(space, nocc, nmo):
     """
     Converts orbital active space specification into ov-pairs space spec.
     Args:
-        space (ndarray): the obital space. Basis order: [k, orb=o+v];
+        space (ndarray): the orbital space. Basis order: [k, orb=o+v];
         nocc (Iterable): the numbers of occupied orbitals per k-point;
         nmo (Iterable): the total numbers of orbitals per k-point;
 

@@ -73,7 +73,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
     else:
         batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
                                   sgx._opt, sgx.pjs)
-    t1 = logger.timer_debug1(mol, "sgX initialziation", *t0)
+    t1 = logger.timer_debug1(mol, "sgX initialization", *t0)
 
     sn = numpy.zeros((nao,nao))
     vj = numpy.zeros_like(dms)
@@ -180,7 +180,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
     proj = scipy.linalg.solve(sn, ovlp)
     proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
 
-    t1 = logger.timer_debug1(mol, "sgX initialziation", *t0)
+    t1 = logger.timer_debug1(mol, "sgX initialization", *t0)
     vj = numpy.zeros_like(dms)
     vk = numpy.zeros_like(dms)
     tnuc = 0, 0

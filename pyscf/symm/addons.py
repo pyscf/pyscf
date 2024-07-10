@@ -281,7 +281,7 @@ def symmetrize_space(mol, mo, s=None,
             orb_irrep = numpy.dot(orb_irrep, orth.lowdin(moso))
             max_non_orth = abs(numpy.dot(orb_irrep.T.conj(), numpy.dot(s, orb_irrep))
                                - numpy.eye(orb_irrep.shape[1])).max()
-            logger.debug(mol, 'Non-orthogonality in irrep %3d after symmetrization and orthogonalizastion: %8.2e',
+            logger.debug(mol, 'Non-orthogonality in irrep %3d after symmetrization and orthogonalization: %8.2e',
                          i, max_non_orth)
         mo1.append(orb_irrep)
     mo1 = numpy.hstack(mo1)

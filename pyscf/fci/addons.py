@@ -224,7 +224,7 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
                     ci_1[addr_x_a,addr_y_b] = numpy.sqrt(.5)
                     ci_1[addr_y_a,addr_x_b] =-numpy.sqrt(.5)
             else:
-                # TODO: Other direct-product to direct-sum transofromation
+                # TODO: Other direct-product to direct-sum transformation
                 # which involves CG coefficients.
                 ci_1[addra,addrb] = 1
             ci0.append(ci_1.ravel())

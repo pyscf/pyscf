@@ -158,7 +158,7 @@ def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
         # loop over the occupied orbitals pairs i,j
         for i in range(numOccOrbitals):
             for j in range(i):
-                # I eperimented with exponentially falling off random noise
+                # I experimented with exponentially falling off random noise
                 Aij  = 0.0 #numpy.random.random() * numpy.exp(-1*it)
                 Bij  = 0.0 #numpy.random.random() * numpy.exp(-1*it)
                 for k in range(nAtoms):

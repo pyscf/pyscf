@@ -175,7 +175,7 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
         mf.scf_summary['dispersion'] = e_d4
         return e_d4
     else:
-        raise RuntimeError(f'dipersion correction: {disp_version} is not supported.')
+        raise RuntimeError(f'dispersion correction: {disp_version} is not supported.')
 
 # Inject to SCF class
 scf.hf.SCF.do_disp = check_disp

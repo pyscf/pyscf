@@ -47,7 +47,7 @@ There are some parameters to control the CASSCF/CASCI method.
     nelecas : tuple of int
         Active (nelec_alpha, nelec_beta)
     ncore : int or tuple of int
-        Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
+        Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core electron numbers.
     natorb : bool
         Whether to restore the natural orbital during CASSCF optimization. Default is not.
     canonicalization : bool

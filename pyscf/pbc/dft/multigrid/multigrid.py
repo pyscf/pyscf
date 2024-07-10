@@ -1823,8 +1823,8 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
     return tasks
 
 def _primitive_gto_cutoff(cell, precision=None):
-    '''Cutoff raidus, above which each shell decays to a value less than the
-    required precsion'''
+    '''Cutoff radius, above which each shell decays to a value less than the
+    required precision'''
     if precision is None:
         precision = cell.precision
     vol = cell.vol

@@ -84,7 +84,7 @@ def orb2ov(space, nocc):
     Converts orbital active space specification into ov-pairs space spec.
 
     Args:
-        space (ndarray): the obital space;
+        space (ndarray): the orbital space;
         nocc (int): the number of occupied orbitals;
 
     Returns:

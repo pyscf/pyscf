@@ -595,10 +595,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         if (cell.dimension == 3 or
             (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum')):
-            G0_idx = 0  # due to np.fft.fftfreq convension
+            G0_idx = 0  # due to np.fft.fftfreq convention
             # G=0 associated to 2e integrals in real-space
             coulG_SR_at_G0 = np.pi/self.omega**2
-            # For cell.dimension = 2, coulG is computed with truncated coulomb
+            # For cell.dimension = 2, coulG is computed with truncated Coulomb
             # interactions. The 3d coulG_SR below is to remove the analytical
             # SR from get_jk_sr (which was computed with full Coulomb) then to
             # add truncated Coulomb for AFT part.
@@ -1084,7 +1084,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         if self._sr_without_dddd and naod > 0:
             # (DD|DD) with full coulG, rest terms with coulG_LR
-            log.debug1('ft_aopair dd-blcok for dddd-block ERI')
+            log.debug1('ft_aopair dd-block for dddd-block ERI')
             if cell.dimension < 2:
                 raise NotImplementedError
             if cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum':
@@ -1299,11 +1299,11 @@ def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     return Ecut
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
-    '''The minimal omega in attenuated Coulombl given energy cutoff
+    '''The minimal omega in attenuated Coulomb given energy cutoff
     '''
     if precision is None:
         precision = cell.precision
-#    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+#    # estimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
 #    # enough to converge the 2-electron integrals. A penalty term here is to
 #    # reduce the error in integrals
 #    precision *= 1e-2

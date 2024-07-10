@@ -403,7 +403,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
                 vk_kpts[:,i,k1] -= weight * np.einsum('aig,jg->aij', vR_dm[:,i], ao1T[0])
         t1 = logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
 
-    # Ewald correction has no contribution to nuclear gradient unless range separted Coulomb is used
+    # Ewald correction has no contribution to nuclear gradient unless range separated Coulomb is used
     # The gradient correction part is not added in the vk matrix
     if exxdiv == 'ewald' and cell.omega!=0:
         raise NotImplementedError("Range Separated Coulomb")
