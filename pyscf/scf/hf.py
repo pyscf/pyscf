@@ -1864,7 +1864,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        # Be carefule with the effects of :attr:`SCF.direct_scf` on this function
+        # Be careful with the effects of :attr:`SCF.direct_scf` on this function
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self.direct_scf:

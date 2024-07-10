@@ -433,7 +433,7 @@ class KnownValues(unittest.TestCase):
         kmf.mo_occ = kmf.get_occ()
 
         # Run CC calculations
-        # FIXME: IP from differnt initial guess not matching
+        # FIXME: IP from different initial guess not matching
         self._test_cu_metallic_nonequal_occ(kmf, cell, -0.96676526820520137)
 
     def test_ccsd_t_non_hf_high_cost(self):

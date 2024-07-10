@@ -220,7 +220,7 @@ cell.dimension=3 with large vacuum.""")
             # Use the thus determined mesh_compact only if not p[rovided
             if self.mesh_compact is None:
                 self.mesh_compact = mesh_compact
-        # If omega is provded but mesh_compact is not
+        # If omega is provided but mesh_compact is not
         elif self.mesh_compact is None:
             self.ke_cutoff, self.mesh_compact = \
                                 rsdf_helper.estimate_mesh_for_omega(

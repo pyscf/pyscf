@@ -56,7 +56,7 @@ if PYSCF_EXT_PATH:
                     __path__.append(os.path.join(p, f, 'pyscf'))
                 del f
         elif os.path.exists(p):
-            # Load all moduels defined inside the file PYSCF_EXT_PATH
+            # Load all modules defined inside the file PYSCF_EXT_PATH
             with open(p, 'r') as f:
                 __path__.extend(f.read().splitlines())
             del f

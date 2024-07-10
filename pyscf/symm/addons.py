@@ -108,7 +108,7 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None,
     :func:`symmetrize_space` symmetrizes the entire space by mixing different
     orbitals.
 
-    Note this function might return non-orthorgonal orbitals.
+    Note this function might return non-orthogonal orbitals.
     Call :func:`symmetrize_space` to find the symmetrized orbitals that are
     close to the given orbitals.
 

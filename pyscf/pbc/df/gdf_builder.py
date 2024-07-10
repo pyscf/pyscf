@@ -608,7 +608,7 @@ class _CCNucBuilder(_CCGDFBuilder):
             logger.debug2(self, 'G=0 part for %s', intor)
 
             # Note only need to remove the G=0 for mod_cell. when fakenuc is
-            # constructed for pseudo potentail, don't remove its G=0 contribution
+            # constructed for pseudo potential, don't remove its G=0 contribution
             charge = -cell.atom_charges()
             nucbar = (charge / np.hstack(mod_cell.bas_exps())).sum()
             nucbar *= np.pi/cell.vol

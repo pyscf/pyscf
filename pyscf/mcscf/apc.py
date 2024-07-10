@@ -35,7 +35,7 @@ class Chooser():
             If int, interpreted as max # of orbitals
 
     Returns:
-        active-space-size, #-active-electrons, orbital-initial-guess, chosen-active-orbital-indeces
+        active-space-size, #-active-electrons, orbital-initial-guess, chosen-active-orbital-indices
 
     Example:
 

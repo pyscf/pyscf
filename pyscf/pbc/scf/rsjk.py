@@ -1271,7 +1271,7 @@ def _guess_omega(cell, kpts, mesh=None):
         nk = (cell.nao/25 * nkpts)**(1./3)
         ke_cutoff = 50 / (.7+.25*nk+.05*nk**3)
         ke_cutoff = max(ke_cutoff, ke_min)
-        # avoid large omega since nuermical issues were found in Rys
+        # avoid large omega since numerical issues were found in Rys
         # polynomials when computing SR integrals with nroots > 3
         exps = [e for l, e in zip(cell._bas[:,gto.ANG_OF], cell.bas_exps()) if l != 0]
         if exps:
