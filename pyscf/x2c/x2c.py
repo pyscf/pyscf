@@ -577,7 +577,7 @@ class SCF(hf.SCF):
         log = logger.new_logger(mol, verbose)
 
         if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-            # UHF denisty matrices
+            # UHF density matrices
             dm = dm[0] + dm[1]
 
         with mol.with_common_orig((0,0,0)):

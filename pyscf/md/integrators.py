@@ -128,7 +128,7 @@ class _Integrator(lib.StreamObject):
         method : lib.GradScanner, rhf.GradientsBase instance, or
         has nuc_grad_method method.
             Method by which to compute the energy gradients and energies
-            in order to propogate the equations of motion. Realistically,
+            in order to propagate the equations of motion. Realistically,
             it can be any callable object such that it returns the energy
             and potential energy gradient when given a mol.
 

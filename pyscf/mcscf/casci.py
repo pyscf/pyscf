@@ -448,7 +448,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             orbitals in each symmetry sector. sort=True will reorder all
             orbitals over all symmetry sectors in each subspace and the
             symmetry labels may be changed.
-        cas_natorb (bool): Whether to transform active orbitals to natual
+        cas_natorb (bool): Whether to transform active orbitals to natural
             orbitals. If enabled, the output orbitals in active space are
             transformed to natural orbitals and CI coefficients are updated
             accordingly.
@@ -742,7 +742,7 @@ class CASBase(lib.StreamObject):
             of MCSCF 1-particle density matrix) diagonalized within each
             subspace (core, active, external).  If natorb (natural orbitals in
             active space) is specified, the active segment of the mo_coeff is
-            natural orbitls.
+            natural orbitals.
         mo_energy : ndarray
             Diagonal elements of general Fock matrix (in mo_coeff
             representation).

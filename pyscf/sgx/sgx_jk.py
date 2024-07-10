@@ -18,10 +18,10 @@
 #
 
 '''
-semi-grid Coulomb and eXchange without differencial density matrix
+semi-grid Coulomb and eXchange without differential density matrix
 
 To lower the scaling of coulomb and exchange matrix construction for large system, one
-coordinate is analitical and the other is grid. The traditional two electron
+coordinate is analytical and the other is grid. The traditional two electron
 integrals turn to analytical one electron integrals and numerical integration
 based on grid.(see Friesner, R. A. Chem. Phys. Lett. 1985, 116, 39)
 

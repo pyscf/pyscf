@@ -1,6 +1,6 @@
 .. _pbc_df:
 
-pbc.df --- PBC denisty fitting
+pbc.df --- PBC density fitting
 ******************************
 
 .. module:: pbc.df

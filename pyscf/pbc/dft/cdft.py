@@ -123,7 +123,7 @@ if __name__ == '__main__':
     cell.build()
     cell.rcut*=2
 
-    print("running intial DFT calc to generate IAOs")
+    print("running initial DFT calc to generate IAOs")
     mf = dft.RKS(cell)
     mf.chkfile = 'graphene.chk'
     mf.init_guess = 'chkfile'

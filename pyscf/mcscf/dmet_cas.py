@@ -50,7 +50,7 @@ def kernel(mf, dm, aolabels_or_baslst, threshold=THRESHOLD,
         threshold : float
             Entanglement threshold of DMET bath.  If the occupancy of an
             orbital is less than threshold, the orbital is considered as bath
-            orbtial.  If occ is greater than (1-threshold), the orbitals are
+            orbital.  If occ is greater than (1-threshold), the orbitals are
             taken for core determinant.
         base : int
             0-based (C-style) or 1-based (Fortran-style) for baslst if baslst

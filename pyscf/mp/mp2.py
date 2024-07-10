@@ -160,7 +160,7 @@ def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True):
 
     Kwargs:
         ao_repr : boolean
-            Whether to transfrom 1-particle density matrix to AO
+            Whether to transform 1-particle density matrix to AO
             representation.
     '''
     from pyscf.cc import ccsd_rdm

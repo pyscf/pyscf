@@ -14,7 +14,7 @@
 # limitations under the License.
 
 '''
-UMP2 with spatial integals
+UMP2 with spatial integrals
 '''
 
 
