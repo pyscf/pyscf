@@ -1357,11 +1357,10 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
 
     get_jk = get_jk_dm_outcore
 
-C = 5
-
-from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
-
 if __name__ == '__main__':
+
+    C = 5
+    from pyscf.pbc.df.isdf.isdf_fast import PBC_ISDF_Info
 
     cell   = pbcgto.Cell()
     boxlen = 3.5668

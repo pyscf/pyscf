@@ -506,7 +506,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     from copy import deepcopy
     lattice_vector = deepcopy(cell.lattice_vectors())
     
-    print("lattice_vector = ", lattice_vector)
+    # print("lattice_vector = ", lattice_vector)
     
     if with_translation_symmetry:
         # print("lattice_vector = ", lattice_vector)
@@ -592,6 +592,7 @@ def _range_partition(ngroup, rank, comm_size, use_mpi=False):
     if use_mpi == False:
         return 0, ngroup
     else:
+        from pyscf.pbc.df.isdf.isdf_tools_mpi import comm_size
         if ngroup % comm_size == 0:
             ngroup_local = ngroup // comm_size
             return rank * ngroup_local, (rank+1) * ngroup_local
@@ -613,6 +614,7 @@ def _range_partition_array(ngroup, comm_size, use_mpi=False):
     if use_mpi == False:
         return np.array([0, ngroup], dtype=np.int32)
     else:
+        from pyscf.pbc.df.isdf.isdf_tools_mpi import comm_size
         if ngroup % comm_size == 0:
             ngroup_local = ngroup // comm_size
             for i in range(comm_size):
@@ -655,6 +657,10 @@ def _get_grid_ordering(atmid_to_gridID, group, use_mpi=False):
     return np.array(grid_ordering, dtype=np.int32)
 
 def _get_grid_partition(atmid_to_gridID, group, use_mpi=False):
+    
+    if use_mpi:
+        from pyscf.pbc.df.isdf.isdf_tools_mpi import comm_size
+    
     ngrid = np.sum([len(x) for x in atmid_to_gridID])
     
     if use_mpi == False:
@@ -709,6 +715,9 @@ def _get_atmid_involved(natm, group, rank, use_mpi=False):
         return np.array(atmid_involved, dtype=np.int32)
 
 def _sync_list(list_data, ngroup):
+
+    # if use_mpi:
+    from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm_size, bcast
 
     ### check data ### 
     

@@ -1173,10 +1173,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         from pyscf.pbc.df.aft import _check_kpts
         
-        #print("kpts = ", kpts)
         kpts, is_single_kpt = _check_kpts(self, kpts)
-        #print("kpts = ", kpts)
-        #print("is_single_kpt = ", is_single_kpt)
         if is_single_kpt:
             assert np.allclose(kpts[0], np.zeros(3))
             vj, vk = get_jk_dm_translation_symmetry(self, dm, hermi, kpts[0], kpts_band,
@@ -1193,23 +1190,15 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             if dm.ndim == 3:
                 dm = dm.reshape(1, *dm.shape)
             nset = dm.shape[0]
-            #print("nset = ", nset)
-            #print("dm.shape = ", dm.shape)
             vj = np.zeros_like(dm, dtype=np.complex128)
             vk = np.zeros_like(dm, dtype=np.complex128)
             
             for iset in range(nset):
-                #assert np.allclose(dm[iset][1], dm[iset][2].conj())
                 vj[iset] = _contract_j_dm_k_ls(self, dm[iset])
                 if self.with_robust_fitting:
                     vk[iset] = _get_k_kSym_robust_fitting_fast(self, dm[iset])
                 else:
                     vk[iset] = _get_k_kSym(self, dm[iset])
-            
-            #assert np.allclose(vj[0][1], vj[0][2].conj())
-            #assert np.allclose(vj[1][1], vj[1][2].conj())
-            #assert np.allclose(vk[0][1], vk[0][2].conj())
-            #assert np.allclose(vk[1][1], vk[1][2].conj())
             
             ### post process J and K ###
             
@@ -1243,11 +1232,10 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             
         return vj, vk
 
-from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
-
-C = 25
-
 if __name__ == "__main__":
+
+    from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
+    C = 25
     
     verbose = 4
     if rank != 0:

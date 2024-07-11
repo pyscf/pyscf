@@ -991,10 +991,12 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
     get_jk = isdf_jk.get_jk_dm
 
-C = 15
+
 
 if __name__ == '__main__':
 
+    C = 15
+    
     cell   = pbcgto.Cell()
     boxlen = 3.5668
     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
