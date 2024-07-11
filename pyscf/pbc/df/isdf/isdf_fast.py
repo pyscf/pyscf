@@ -463,9 +463,26 @@ from pyscf.pbc import df
 
 class PBC_ISDF_Info(df.fft.FFTDF):
     ''' Interpolative separable density fitting (ISDF) for periodic systems.
+    Not recommended as the locality is not explored! 
+    
+    Examples:
+
+    >>> #### code to construct aoR ommited ###
+    >>> aoR  *= np.sqrt(cell.vol / ngrids)
+    >>> pbc_isdf = PBC_ISDF_Info(cell, aoR=aoR)
+    >>> pbc_isdf.build_IP_Sandeep(build_global_basis=True, c=C, global_IP_selection=False)
+    >>> pbc_isdf.build_auxiliary_Coulomb()
+    >>> from pyscf.pbc import scf
+    >>> mf = scf.RHF(cell)
+    >>> pbc_isdf.direct_scf = mf.direct_scf
+    >>> mf.with_df = pbc_isdf
+    >>> mf.verbose = 0
+    >>> mf.kernel()
+    
     '''
 
-    def __init__(self, mol:Cell, aoR: np.ndarray = None,
+    def __init__(self, mol:Cell, 
+                 aoR: np.ndarray = None,  ## convention: aoR is scaled by np.sqrt(mol.vol / ngrids)
                  with_robust_fitting=True,
                  kmesh=None,
                  get_partition=True,
@@ -773,6 +790,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
             mesh = self.cell.mesh
 
         def constrcuct_V_CCode(aux_basis:np.ndarray, mesh, coul_G):
+            
             coulG_real         = coul_G.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1)
             nThread            = lib.num_threads()
             bunchsize          = naux // (2*nThread)
@@ -802,7 +820,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         if cell is None:
             cell = self.cell
-            print("cell.__class__ = ", cell.__class__)
+            #print("cell.__class__ = ", cell.__class__)
 
         coulG = tools.get_coulG(cell, mesh=mesh)
 
@@ -1034,9 +1052,9 @@ if __name__ == '__main__':
     aoR   = df_tmp._numint.eval_ao(cell, coords)[0].T  # the T is important
     aoR  *= np.sqrt(cell.vol / ngrids)
 
-    pbc_isdf_info = PBC_ISDF_Info(cell, aoR)
+    pbc_isdf_info = PBC_ISDF_Info(cell, aoR=aoR)
     pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=C, global_IP_selection=False)
-    pbc_isdf_info.build_auxiliary_Coulomb(cell, mesh)
+    pbc_isdf_info.build_auxiliary_Coulomb()
 
     ### perform scf ###
 

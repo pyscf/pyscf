@@ -39,7 +39,7 @@ from profilehooks import profile
 
 libpbc = lib.load_library('libpbc')
 
-############### sub terms for get K , design for RS ################
+############### sub terms for get K , design for range separation ################
 
 def _contract_k_dm_quadratic_subterm(mydf, dm, 
                                      use_W = True,
@@ -187,10 +187,6 @@ def _contract_k_dm_quadratic_subterm(mydf, dm,
         
         nao_invovled = ao_end_indx - ao_begin_indx
         
-        # print("ao_begin_indx = ", ao_begin_indx)
-        # print("ao_end_indx   = ", ao_end_indx)
-        # print("nao_invovled  = ", nao_invovled)
-        
         #### pack the density matrix ####
         
         if nao_invovled == nao and np.allclose(ordered_ao_ind, aoR_holder.ao_involved):
@@ -238,10 +234,6 @@ def _contract_k_dm_quadratic_subterm(mydf, dm,
             ao_begin_indx = nao_compact
         nao_invovled = ao_end_indx - ao_begin_indx 
         
-        # print("ao_begin_indx = ", ao_begin_indx)
-        # print("ao_end_indx   = ", ao_end_indx)
-        # print("nao_invovled  = ", nao_invovled)
-        
         ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_buf2)
         lib.ddot(CoulombMat_tmp, aoR_holder.aoR[ao_begin_indx:ao_end_indx, :].T, c=ddot_res)
         
@@ -258,10 +250,6 @@ def _contract_k_dm_quadratic_subterm(mydf, dm,
                 ctypes.c_int(ddot_res.shape[1]),
                 aoR_holder.ao_involved[ao_begin_indx:ao_end_indx].ctypes.data_as(ctypes.c_void_p)
             )
-
-        # nIP_loc += ngrid_now
-    # del W_tmp
-    # assert nIP_loc == naux
         
     K = np.zeros((nao, nao), dtype=np.float64) 
     
@@ -283,10 +271,6 @@ def _contract_k_dm_quadratic_subterm(mydf, dm,
             ao_begin_indx = nao_compact
         nao_invovled = ao_end_indx - ao_begin_indx
         
-        # print("ao_begin_indx = ", ao_begin_indx)
-        # print("ao_end_indx   = ", ao_end_indx)
-        # print("nao_invovled  = ", nao_invovled)
-        
         K_tmp = K1[grid_loc_now:grid_loc_now+ngrid_now, :]
         
         ddot_res = np.ndarray((nao_invovled, nao), buffer=ddot_res_buf)
@@ -305,10 +289,6 @@ def _contract_k_dm_quadratic_subterm(mydf, dm,
                 ctypes.c_int(ddot_res.shape[1]),
                 aoR_holder.ao_involved[ao_begin_indx:ao_end_indx].ctypes.data_as(ctypes.c_void_p)
             )
-        
-        # nIP_loc += ngrid_now
-    # del K_tmp
-    # assert nIP_loc == naux
     
     ######### finally delete the buffer #########
     
@@ -998,13 +978,6 @@ def _contract_k_mo_quadratic_subterm_CCCC(
                 aomoPairR_holder.grid_involved.ctypes.data_as(ctypes.c_void_p)
             )
             
-            # pack_bench_res = np.zeros((nao_atm, p1-p0, ngrid), dtype=np.float64)
-            # pack_bench_res[:, :, aomoPairR_holder.grid_involved] = aomoPairR_holder.aoPairR[:, p0:p1, :]
-            # assert np.allclose(pack_buf1, pack_bench_res)
-            # pack_buf1 = pack_bench_res
-            # print("atm %d, p0 %d, p1 %d, nao_atm %d, ngrid %d" % (i, p0, p1, nao_atm, ngrid))
-            # continue
-        
             fn_fft(
                 mesh.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nao_atm*(p1-p0)),
@@ -1015,25 +988,6 @@ def _contract_k_mo_quadratic_subterm_CCCC(
                 thread_buf.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nao_atm*ngrid_complex)
             ) ### cubic scaling !!!, in the final version, this function should be called only once !!
-
-            # V_benchmark = pack_buf1.reshape(nao_atm, p1-p0, *mesh).copy()
-            # V_benchmark = np.fft.fftn(V_benchmark, axes=(2, 3, 4)).reshape(nao_atm, p1-p0, ngrid)
-            # V_benchmark = V_benchmark * coulG
-            # V_benchmark = V_benchmark.reshape(nao_atm, p1-p0, *mesh)
-            # V_benchmark = np.fft.ifftn(V_benchmark, axes=(2, 3, 4))
-            # V_benchmark = V_benchmark.reshape(nao_atm, p1-p0, ngrid)
-            # V_real = V_benchmark.real
-            # V_imag = V_benchmark.imag
-            # print("V_real = ", V_real[0,0,:10])  
-            # print("V_tmp  = ", V_imag[0,0,:10])
-            # assert np.allclose(V_imag, 0.0)
-            # assert np.allclose(V_real, V_tmp)
-            # print("atm %d, p0 %d, p1 %d, nao_atm %d, ngrid %d 2" % (i, p0, p1, nao_atm, ngrid))
-            # continue
-            # print("V_real.shape = ", V_real.shape)
-            # print("V_tmp.shape  = ", V_tmp.shape)
-            # V_tmp = V_real.copy()
-            
 
             ### loop over all the ket ### 
             
@@ -1079,29 +1033,8 @@ def _contract_k_mo_quadratic_subterm_CCCC(
     
                 pack_buf2 = pack_buf2.reshape(nao_atm_ket, (p1-p0)*ngrid_involved_ket) 
                 
-                # pack_bench_res1 = np.zeros((nao_atm, p1-p0, ngrid_involved_ket), dtype=np.float64)
-                # pack_bench_res1 = V_tmp[:,:,aomoPairR_holder_ket.grid_involved].copy()
-                # print("aomoPairR_holder_ket.grid_involved = ", aomoPairR_holder_ket.grid_involved[:10])
-                # print("V_tmp           = ", V_tmp[0,0,aomoPairR_holder_ket.grid_involved[:10]])
-                # print("pack_bench_res1 = ", pack_bench_res1[0,0,:10])
-                # print("pack_buf1       = ", pack_buf1[0,0,:10]) 
-                # diff = np.linalg.norm(pack_buf1-pack_bench_res1)
-                # print("diff = ", diff)
-                # assert np.allclose(pack_buf1.ravel(), pack_bench_res1.ravel())
-                # pack_buf1 = pack_bench_res1
-                
-                # pack_bench_res2 = np.zeros((nao_atm_ket, p1-p0, ngrid_involved_ket), dtype=np.float64)
-                # pack_bench_res2 = aomoPairR_holder_ket.aoPairR[:, p0:p1, :]
-                # assert np.allclose(pack_buf2.ravel(), pack_bench_res2.ravel())
-                # pack_buf2 = pack_bench_res2
-                
-                # ddot_res_benchmaark = np.einsum("pjk,qjk->pq", pack_bench_res1.reshape(nao_atm, p1-p0, ngrid_involved_ket), pack_bench_res2.reshape(nao_atm_ket, p1-p0, ngrid_involved_ket))
-                
                 ddot_res = np.ndarray((nao_atm, nao_atm_ket), buffer=final_ddot_res)
                 lib.ddot(pack_buf1, pack_buf2.T, c=ddot_res) 
-                # ddot_res = ddot_res_benchmaark
-                            
-                # assert np.allclose(ddot_res, ddot_res_benchmaark)
                                 
                 if i == j:
                     # assert atm_2_compactAO[i].size == nao_atm
@@ -1161,10 +1094,6 @@ def _contract_k_dm_quadratic_subterm_CCCC(
         nao_atm_max = max(nao_atm_max, aoPairR_holder.aoPairR.shape[0])
         ngrid_max = max(ngrid_max, aoPairR_holder.aoPairR.shape[2])
         nao_involved_max = max(nao_involved_max, aoPairR_holder.aoPairR.shape[1])
-
-    # print("nao_atm_max = ", nao_atm_max)
-    # print("nocc        = ", nocc)
-    # print("ngrid_max   = ", ngrid_max)
 
     nthread = lib.num_threads()
     natm    = len(aoPairR_holders)

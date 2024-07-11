@@ -102,12 +102,6 @@ def _determine_bunchsize(nao, naux, mesh, buf_size, with_robust_fitting=True):
     grid_bunchsize = min(grid_bunchsize, ngrids)
     grid_bunchsize = min(grid_bunchsize, MAX_BUNCHSIZE)
 
-    # print("bunch_size_IO   = ", bunch_size_IO)
-    # print("blksize_aux     = ", blksize_aux)
-    # print("bunchsize_readV = ", bunchsize_readV)
-    # print("grid_bunchsize  = ", grid_bunchsize)
-    # print("blksize_W       = ", blksize_W)
-
     chunk_col = min(bunchsize_readV, grid_bunchsize, blksize_W, blksize_aux)
 
     if chunk_row * chunk_col * 8 < CHUNK_MINIMAL:  # at least 16MB
@@ -141,13 +135,6 @@ def _determine_bunchsize(nao, naux, mesh, buf_size, with_robust_fitting=True):
 
 
     blksize_aux     = (blksize_aux // nThread) * nThread
-
-    #print("blksize_aux = ", blksize_aux)
-    #print("bunchsize_readV = ", bunchsize_readV)
-    #print("grid_bunchsize = ", grid_bunchsize)
-    #print("blksize_W = ", blksize_W)
-    #print("chunk_row = ", chunk_row)
-    #print("chunk_col = ", chunk_col)
 
     return (chunk_row, chunk_col), bunch_size_IO, blksize_aux, bunchsize_readV, grid_bunchsize, blksize_W, use_large_chunk
 
@@ -1025,43 +1012,38 @@ def _get_jk_dm_outcore(mydf, dm):
 
 def _allocate_jk_buffer_outcore(mydf:isdf_fast.PBC_ISDF_Info, datatype):
 
-        if mydf.jk_buffer is None:
+    if mydf.jk_buffer is None:
 
-            nao    = mydf.nao
-            ngrids = mydf.ngrids
-            naux   = mydf.naux
+        nao    = mydf.nao
+        ngrids = mydf.ngrids
+        naux   = mydf.naux
 
-            buffersize_k = 2 * nao * naux + naux * naux
-            buffersize_j = nao * naux + naux + naux + nao * nao
+        buffersize_k = 2 * nao * naux + naux * naux
+        buffersize_j = nao * naux + naux + naux + nao * nao
 
-            nThreadsOMP   = lib.num_threads()
-            size_ddot_buf = max((naux*naux)+2, ngrids) * nThreadsOMP
+        nThreadsOMP   = lib.num_threads()
+        size_ddot_buf = max((naux*naux)+2, ngrids) * nThreadsOMP
 
-            if hasattr(mydf, "IO_buf"):
+        if hasattr(mydf, "IO_buf"):
+            if mydf.IO_buf.size < (max(buffersize_k, buffersize_j) + size_ddot_buf):
+                mydf.IO_buf = np.zeros((max(buffersize_k, buffersize_j) + size_ddot_buf,), dtype=datatype)
 
-                if mydf.IO_buf.size < (max(buffersize_k, buffersize_j) + size_ddot_buf):
-                    mydf.IO_buf = np.zeros((max(buffersize_k, buffersize_j) + size_ddot_buf,), dtype=datatype)
-
-                mydf.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),),
-                                            dtype=datatype, buffer=mydf.IO_buf, offset=0)
-                offset         = max(buffersize_k, buffersize_j) * mydf.jk_buffer.dtype.itemsize
-                mydf.ddot_buf  = np.ndarray((nThreadsOMP, max((naux*naux)+2, ngrids)),
-                                            dtype=datatype, buffer=mydf.IO_buf, offset=offset)
-
-            else:
-
-                mydf.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
-                mydf.ddot_buf = np.zeros((nThreadsOMP, max((naux*naux)+2, ngrids)), dtype=datatype)
-
-
+            mydf.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),),
+                                        dtype=datatype, buffer=mydf.IO_buf, offset=0)
+            offset         = max(buffersize_k, buffersize_j) * mydf.jk_buffer.dtype.itemsize
+            mydf.ddot_buf  = np.ndarray((nThreadsOMP, max((naux*naux)+2, ngrids)),
+                                        dtype=datatype, buffer=mydf.IO_buf, offset=offset)
         else:
-            assert mydf.jk_buffer.dtype == datatype
-            assert mydf.ddot_buf.dtype == datatype
+            mydf.jk_buffer = np.ndarray((max(buffersize_k, buffersize_j),), dtype=datatype)
+            mydf.ddot_buf = np.zeros((nThreadsOMP, max((naux*naux)+2, ngrids)), dtype=datatype)
+
+
+    else:
+        assert mydf.jk_buffer.dtype == datatype
+        assert mydf.ddot_buf.dtype == datatype
             
 def _get_j_dm_wo_robust_fitting(mydf:isdf_fast.PBC_ISDF_Info, dm):
-    
-    # mydf._allocate_jk_buffer(mydf, dm.dtype)
-    
+        
     mydf._allocate_jk_buffer(dm.dtype)
     
     t1 = (logger.process_clock(), logger.perf_counter())
@@ -1208,6 +1190,24 @@ def get_jk_dm_outcore(mydf, dm, hermi=1, kpt=np.zeros(3),
     return vj, vk
 
 class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
+    ''' Interpolative separable density fitting (ISDF) for periodic systems.
+    Not recommended as the locality is not explored! 
+    V, W, aux_basis is written on disk 
+    
+    Examples:
+
+    >>> pbc_isdf = PBC_ISDF_Info_outcore(cell, max_buf_memory=max_memory)
+    >>> pbc_isdf.build_IP_Sandeep_outcore(c=C)
+    >>> pbc_isdf.build_auxiliary_Coulomb_outcore()
+    >>> from pyscf.pbc import scf
+    >>> mf = scf.RHF(cell)
+    >>> pbc_isdf.direct_scf = mf.direct_scf
+    >>> mf.with_df = pbc_isdf
+    >>> mf.verbose = 0
+    >>> mf.kernel()
+    
+    '''
+    
     def __init__(self, mol:Cell, max_buf_memory:int, outcore=True, with_robust_fitting=True, aoR=None, kmesh=None):
 
         self.max_buf_memory = max_buf_memory
@@ -1336,7 +1336,10 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
 
         self.IO_FILE = IO_File
 
-    def build_auxiliary_Coulomb_outcore(self, mesh):
+    def build_auxiliary_Coulomb_outcore(self, mesh=None):
+
+        if mesh is None:
+            mesh = self.cell.mesh
 
         mesh = np.asarray(mesh, dtype=np.int32)
         self.mesh = np.asarray(self.mesh, dtype=np.int32)
@@ -1459,7 +1462,7 @@ H  2.1   2.1   2.1
     
     pbc_isdf_info = PBC_ISDF_Info_outcore(cell, max_buf_memory=max_memory, outcore=True, with_robust_fitting=True)
     pbc_isdf_info.build_IP_Sandeep_outcore(c=C, IP_ID=IP_ID)
-    pbc_isdf_info.build_auxiliary_Coulomb_outcore(mesh=mesh)
+    pbc_isdf_info.build_auxiliary_Coulomb_outcore()
     
     f_aux_basis = h5py.File(pbc_isdf_info.IO_FILE, 'r')
     V_R_IO      = f_aux_basis[V_DATASET]
