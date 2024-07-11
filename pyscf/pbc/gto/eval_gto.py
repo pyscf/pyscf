@@ -28,10 +28,6 @@ EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 
 libpbc = _pbcintor.libpbc
 
-import memory_profiler
-from memory_profiler import profile
-
-# @profile
 def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
              shls_slice=None, non0tab=None, ao_loc=None, cutoff=None,
              out=None, Ls=None, rcut=None):

@@ -22,7 +22,6 @@
 import os
 import sys
 import numpy as np
-from sklearn.cluster import KMeans
 import numpy
 import scipy
 
@@ -169,6 +168,7 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
     ### TODO: implement QRCP as an option
 
     cput1 = log.timer('eval_rhoR', *cput1)
+    from sklearn.cluster import KMeans
     # from cuml.cluster import KMeans
     # from scikit-learn.cluster import KMeans
     from sklearn.cluster import KMeans

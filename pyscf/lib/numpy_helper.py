@@ -688,8 +688,6 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
 # NOTE: NOT assume array a, b to be C-contiguous, since a and b are two
 # pointers we want to pass in.
 # numpy.dot might not call optimized blas
-from memory_profiler import profile
-# @profile
 def ddot(a, b, alpha=1, c=None, beta=0):
     '''Matrix-matrix multiplication for double precision arrays
     '''
@@ -727,7 +725,6 @@ def ddot(a, b, alpha=1, c=None, beta=0):
 
     return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
 
-# @profile
 def ddot_withbuffer(a, b, buf, alpha=1, c=None, beta=0):
     '''Matrix-matrix multiplication for double precision arrays
     '''
@@ -898,7 +895,6 @@ def dot(a, b, alpha=1, c=None, beta=0):
         return c
 
 # a, b, c in C-order
-# @profile
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
            offseta=0, offsetb=0, offsetc=0):
     if a.size == 0 or b.size == 0:
@@ -924,7 +920,7 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        c.ctypes.data_as(ctypes.c_void_p),
                        ctypes.c_double(alpha), ctypes.c_double(beta))
     return c
-# @profile
+
 def _dgemm_withbuffer(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                       offseta=0, offsetb=0, offsetc=0, buf=None):
     if a.size == 0 or b.size == 0:
