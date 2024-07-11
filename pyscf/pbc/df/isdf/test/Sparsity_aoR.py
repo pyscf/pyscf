@@ -73,7 +73,7 @@ if __name__ == '__main__':
                     aoR   = df_tmp._numint.eval_ao(cell, coords)[0].T  # the T is important
                     aoR  *= np.sqrt(cell.vol / ngrids)
                     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-                    print(_benchmark_time(t1, t2, 'eval_ao'))
+                    print(_benchmark_time(t1, t2, 'eval_ao', cell))
 
                     print("aoR.shape = ", aoR.shape)
 
@@ -92,7 +92,7 @@ if __name__ == '__main__':
                             n_nonzero += non_zero_i
                     print("n_nonzero = ", n_nonzero)
                     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-                    print(_benchmark_time(t1, t2, 'count nonzero elements'))
+                    print(_benchmark_time(t1, t2, 'count nonzero elements', cell))
 
 
                     # pair cutoff 

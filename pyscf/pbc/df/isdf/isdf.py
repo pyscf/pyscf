@@ -183,7 +183,7 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
     cput1 = log.timer('kmeans', *cput1)
 
     t2 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t1, t2, "kmeans")
+    _benchmark_time(t1, t2, "kmeans", mydf)
     t1 = t2
 
     ### step 4, get the auxiliary basis
@@ -220,7 +220,7 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
     cput1 = log.timer('least squre fit', *cput1)
 
     t2 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t1, t2, "Construct Xg")
+    _benchmark_time(t1, t2, "Construct Xg", mydf)
     t1 = t2
 
     ### step 5, get the ISDF potential, V(R_g, R')
@@ -241,7 +241,7 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
     cput1 = log.timer('fft', *cput1)
 
     t2 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t1, t2, "Construct VR")
+    _benchmark_time(t1, t2, "Construct VR", mydf)
     t1 = t2
 
     W = np.zeros((naux,naux))
@@ -255,7 +255,7 @@ def isdf(mydf, dm_kpts, hermi=1, naux=None, c=5, max_iter=100, kpts=np.zeros((1,
     cput1 = log.timer('get W', *cput1)
 
     t2 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(t1, t2, "Construct WR")
+    _benchmark_time(t1, t2, "Construct WR", mydf)
 
     return W, aoRg.T, aoR.T, V_R, idx, X
 

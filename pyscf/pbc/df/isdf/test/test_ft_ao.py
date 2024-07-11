@@ -1,16 +1,5 @@
 #!/usr/bin/env python
 
-'''
-Hartree-Fock/DFT with k-points sampling for all-electron calculations
-
-GDF (Gaussian density fitting), MDF (mixed density fitting), RSGDF
-(range-separated Gaussian density fitting), or RS-JK builder
-can be used in all electron calculations. They are more efficient than the
-default SCF JK builder.
-'''
-
-
-
 import numpy 
 import numpy as np
 from pyscf.pbc import gto, scf, dft
@@ -80,16 +69,16 @@ for nk in KPTS:
 
     ######### test rs-isdf #########
     
-    omega = 5
+    #omega = 5
     
     from pyscf.pbc.df.isdf.isdf_linear_scaling import PBC_ISDF_Info_Quad
     C = 10
     group_partition = [[0,1],[2,3],[4,5],[6,7]]
     
-    print("supercell.omega = ", supercell.omega)
+    #print("supercell.omega = ", supercell.omega)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(supercell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, omega=omega, rela_cutoff_QRCP=1e-3)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(supercell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=1e-3)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -107,13 +96,7 @@ for nk in KPTS:
     weight   = pbc_isdf_info.cell.vol/np.prod(pbc_isdf_info.cell.mesh)
     aoG_test = numpy.fft.fftn(aoR, axes=(1,2,3)).reshape(-1, np.prod(pbc_isdf_info.cell.mesh)) * weight
     aoG      = ft_ao.ft_ao(pbc_isdf_info.cell, Gv).T
-    
-    # print(aoG.shape)
-    # print(aoG_test/aoG)
-    # print(aoG[0,:16])
-    # print(aoG_test[0,:16])
-    # print(aoG_test[0,:16]/aoG[0,:16])
-    
+        
     diff = np.linalg.norm(aoG_test-aoG)
     print("diff = ", diff/np.sqrt(np.prod(aoG.shape)))
     

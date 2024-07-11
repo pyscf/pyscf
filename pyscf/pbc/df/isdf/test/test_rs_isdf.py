@@ -1,16 +1,5 @@
 #!/usr/bin/env python
 
-'''
-Hartree-Fock/DFT with k-points sampling for all-electron calculations
-
-GDF (Gaussian density fitting), MDF (mixed density fitting), RSGDF
-(range-separated Gaussian density fitting), or RS-JK builder
-can be used in all electron calculations. They are more efficient than the
-default SCF JK builder.
-'''
-
-
-
 import numpy 
 import numpy as np
 from pyscf.pbc import gto, scf, dft

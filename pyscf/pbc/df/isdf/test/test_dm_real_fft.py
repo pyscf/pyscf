@@ -1,12 +1,5 @@
 #!/usr/bin/env python
 
-'''
-Mean field with k-points sampling
-
-The 2-electron integrals are computed using Poisson solver with FFT by default.
-In most scenario, it should be used with pseudo potential.
-'''
-
 from pyscf.pbc import gto, scf, dft
 import numpy
 
