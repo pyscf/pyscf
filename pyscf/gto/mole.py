@@ -4093,8 +4093,6 @@ def fakemol_for_cgtf_charge(coord, expnt=1e16, contr_coeff=1):
     fakebas[:,NCTR_OF] = 1
     if expnt.size == 1:
         expnt = expnt[0]
-        # approximate point charge with gaussian distribution
-        # contr_coeff*exp(-expnt*r^2)
         fakebas[:,PTR_EXP] = ptr
         fakebas[:,PTR_COEFF] = ptr+1
         fakeenv.append([expnt, 1 / (2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
