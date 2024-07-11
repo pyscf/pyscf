@@ -35,8 +35,7 @@ class PBC_ISDF_Info_Quad_MPI(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
     k-point sampling is not currently supported!
     
     '''
-    
-    
+
     # Quad stands for quadratic scaling
     
     def __init__(self, mol:Cell, 

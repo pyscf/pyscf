@@ -19,10 +19,8 @@
 ############ sys module ############
 
 import copy
-from functools import reduce
 import numpy as np
 import ctypes
-from multiprocessing import Pool
 
 ############ pyscf module ############
 
@@ -50,7 +48,7 @@ from pyscf.pbc.df.isdf.isdf_tools_kSampling import _kmesh_to_Kpoints
 BASIS_CUTOFF               = 1e-18  # too small may lead to numerical instability
 CRITERION_CALL_PARALLEL_QR = 256
 
-############ subroutines ############
+############ subroutines --- select IP and build aux basis ############
 
 def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=True, 
                       aoR_cutoff = None,

@@ -16,28 +16,25 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
-import copy, sys
-from functools import reduce
-import numpy as np
-from pyscf import lib
-from pyscf.lib import logger, zdotNN, zdotCN, zdotNC
-from pyscf.pbc import tools
-from pyscf.pbc.lib.kpts import KPoints
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
+############ sys module ############
 
-#### MPI SUPPORT ####
+import copy
+import ctypes
+import numpy as np
+
+############ pyscf module ############
+
+from pyscf import lib
+from pyscf.lib import logger
+from pyscf.pbc import tools
+libpbc = lib.load_library('libpbc')
+
+############ isdf utils ############
 
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
-from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, scatter
 from pyscf.pbc.df.isdf.isdf_linear_scaling_jk import __get_DensityMatrixonRgAO_qradratic
 import pyscf.pbc.df.isdf.isdf_tools_local as ISDF_LOCAL_TOOL
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
-
-# from memory_profiler import profile
-import ctypes
-from profilehooks import profile
-
-libpbc = lib.load_library('libpbc')
 
 ############### sub terms for get K , design for range separation ################
 

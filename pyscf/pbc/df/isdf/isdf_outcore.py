@@ -1,30 +1,46 @@
+#!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Ning Zhang <ningzhang1024@gmail.com>
+#
+
+############ sys module ############
 
 import copy
-from functools import reduce
 import numpy as np
+import ctypes
+
+############ pyscf module ############
+
 from pyscf import lib
 import pyscf.pbc.gto as pbcgto
 from pyscf.pbc.gto import Cell
 from pyscf.pbc import tools
-from pyscf.pbc.lib.kpts import KPoints
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.gto.mole import *
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
-import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
+libfft = lib.load_library('libfft')
+libpbc = lib.load_library('libpbc')
+
+############ isdf utils ############
 
 import pyscf.pbc.df.isdf.isdf_fast as isdf_fast
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
 
-import ctypes
-from multiprocessing import Pool
-
-import memory_profiler
-
-from memory_profiler import profile
-
-libfft = lib.load_library('libfft')
-libpbc = lib.load_library('libpbc')
+############ global variables ############
 
 AUX_BASIS_DATASET     = 'aux_basis'  # NOTE: indeed can be over written
 AUX_BASIS_FFT_DATASET = 'aux_basis_fft'
@@ -36,6 +52,8 @@ THREAD_BUF_PERCENTAGE = 0.15
 CHUNK_COL_LIMITED     = 8192
 CHUNK_ROW_LIMITED     = 1024
 CHUNK_MINIMAL         = 16000000  # 16MB
+
+############ subroutines --- aux basis V W ############
 
 def _determine_bunchsize(nao, naux, mesh, buf_size, with_robust_fitting=True):
 
@@ -632,7 +650,7 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
     factor = 1.0 / np.prod(mesh)
     mydf.W *= factor
 
-##################################### get_jk #####################################
+############ subroutines --- get_jk ############
 
 def _get_jk_dm_outcore(mydf, dm):
     '''

@@ -17,21 +17,14 @@
 #
 
 import copy
-from functools import reduce
 import numpy as np
-from pyscf import lib
-from pyscf.lib import logger, zdotNN, zdotCN, zdotNC
-from pyscf.pbc import tools
-from pyscf.pbc.lib.kpts import KPoints
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
-
-from mpi4py import MPI
 import numpy
-INT_MAX = 2147483647
-BLKSIZE = INT_MAX // 32 + 1
-
 import ctypes
 
+from pyscf import lib
+from pyscf.lib import logger
+from pyscf.pbc import tools
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 libpbc = lib.load_library('libpbc')
 
 ##################################################

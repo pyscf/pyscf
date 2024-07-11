@@ -16,30 +16,25 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
+############ sys module ############
+
 import copy
-from functools import reduce
 import numpy as np
+import ctypes
+
+############ pyscf module ############
+
 from pyscf import lib
-import pyscf.pbc.gto as pbcgto
-from pyscf.pbc.gto import Cell
 from pyscf.pbc import tools
-from pyscf.pbc.lib.kpts import KPoints
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf.gto.mole import *
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
-
-import ctypes
-from multiprocessing import Pool
-from memory_profiler import profile
+from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
 libpbc = lib.load_library('libpbc')
-from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto 
-
-import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
-from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 
 from  pyscf.pbc.df.isdf.isdf_tools_densitymatrix import pack_JK, pack_JK_in_FFT_space
 
-from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
+############ subroutines ############
 
 def _preprocess_dm(mydf, dm):
 
@@ -142,16 +137,11 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
     
     dm, in_real_space = _preprocess_dm(mydf, _dm)
     
-    #print("dm = ", dm)
-    #print("dm = ", dm[0,:])
-    
     if use_mpi:
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
-        size = comm.Get_size()
-        # raise NotImplementedError("MPI is not supported yet.")
         assert mydf.direct == True
+        from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast, reduce
+        size = comm_size
+        raise NotImplementedError("MPI is not supported yet.")
     
     t1 = (logger.process_clock(), logger.perf_counter())
 
@@ -185,14 +175,10 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
     max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
     max_ngrid_involved1 = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoR1 if aoR_holder is not None])
     max_ngrid_involved = max(max_ngrid_involved, max_ngrid_involved1)
-    # ngrids_local = np.sum([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
-    
-    # density_R = np.zeros((ngrids_local,), dtype=np.float64)
-    # density_R = np.zeros((ngrid,), dtype=np.float64)
+
     density_R_prim = np.zeros((ngrid_prim,), dtype=np.float64)
     
     dm_buf = np.zeros((max_nao_involved, max_nao_involved), dtype=np.float64)
-    # ddot_buf = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
     max_dim_buf = max(max_ngrid_involved, max_nao_involved)
     ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
     aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
@@ -206,10 +192,6 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
     assert fn_packadd_dm is not None
     
     #### step 1. get density value on real space grid and IPs
-    
-    # lib.ddot(dm, aoR, c=buffer1) 
-    # tmp1 = buffer1
-    # density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')
     
     density_R_tmp = None
     
@@ -246,27 +228,11 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
         global_gridID_begin = aoR_holder.global_gridID_begin
         
         density_R_prim[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
-        # local_grid_loc += ngrids_now
-    
-    # assert local_grid_loc == ngrids_local
-    
-    # print("density_R = ", density_R_prim[:64])
-    # sys.stdout.flush()
-    
-    # if use_mpi == False:
-    #     assert ngrids_local == np.prod(mesh)
     
     if use_mpi:
-        # density_R = np.hstack(gather(density_R, comm, rank, root=0, split_recvbuf=True))
         density_R_prim = reduce(density_R_prim, root=0)
-        
-    # if hasattr(mydf, "grid_ID_ordered"):
-    
+            
     grid_ID_ordered = mydf.grid_ID_ordered_prim
-    
-    # print("grid_ID_ordered = ", grid_ID_ordered[:64])
-    # print("grid_ID_ordered.shape = ", grid_ID_ordered.shape)
-    # sys.stdout.flush()
     
     if (use_mpi and rank == 0) or (use_mpi == False):
         
@@ -283,9 +249,6 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
         )
 
         density_R_prim = density_R_original.copy()
-    
-    # print("density_R = ", density_R_prim[:64])
-    # sys.stdout.flush()
     
     J = None
     
@@ -308,9 +271,7 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
             mydf.coulG_prim.ctypes.data_as(ctypes.c_void_p),
             J.ctypes.data_as(ctypes.c_void_p),
         )
-        
-        # if hasattr(mydf, "grid_ID_ordered"):
-            
+                    
         J_ordered = np.zeros_like(J)
 
         fn_order = getattr(libpbc, "_Original_Grid_to_Reorder_Grid", None)
@@ -325,50 +286,20 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
             
         J = J_ordered.copy()
             
-    # print("J = ", J[:64])
-    # sys.stdout.flush()
-            
     if use_mpi:
-        # grid_segment = mydf.grid_segment
-        # sendbuf = None
-        # if rank == 0:
-        #     sendbuf = []
-        #     for i in range(size):
-        #         p0 = grid_segment[i]
-        #         p1 = grid_segment[i+1]
-        #         sendbuf.append(J[p0:p1])
-        # J = scatter(sendbuf, comm, rank, root=0)
-        # del sendbuf
-        # sendbuf = None 
-        
         J = bcast(J, root=0)
     
-    #### step 3. get J , using translation symmetry
-    
-    # J = np.asarray(lib.d_ij_j_ij(aoR, J, out=buffer1), order='C') 
-    # J = lib.ddot_withbuffer(aoR, J.T, buf=mydf.ddot_buf)
-
-    # local_grid_loc = 0
+    #### step 3. get J , using translation symmetry ###
 
     nao_prim = mydf.nao_prim
     J_Res = np.zeros((nao_prim, nao), dtype=np.float64)
 
     partition_activated_ID = mydf.partition_activated_id
-    
-    #print("partition_activated_ID = ", partition_activated_ID)
-    
+        
     kmesh     = np.asarray(mydf.kmesh, dtype=np.int32)
     natm_prim = mydf.natmPrim
     
-    # grid_segment = [0]
-    # grid_tot = 0
-    # for i in range(natm_prim):
-    #     grid_now = mydf.aoR1[i].aoR.shape[1]
-    #     grid_segment.append(grid_segment[-1] + grid_now)
-    #     grid_tot += grid_now
-    
     grid_segment = mydf.grid_segment
-    # print("grid_segment = ", grid_segment)  
     
     fn_packadd_J = getattr(libpbc, "_buildJ_k_packaddrow", None)
     assert fn_packadd_J is not None
@@ -394,13 +325,6 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
         
         J_tmp = J[grid_segment[box_loc2]:grid_segment[box_loc2+1]]
         
-        # print("box_id   = ", box_id)
-        # print("box_loc1 = ", box_loc1)
-        # print("box_loc2 = ", box_loc2)
-        # print("J_tmp.size = ", J_tmp.size)
-        # print("aoR_holder_ket.aoR.shape = ", aoR_holder_ket.aoR.shape)
-        # print("grid_segment = ", grid_segment)
-        
         assert aoR_holder_ket.aoR.shape[1] == J_tmp.size
         
         aoR_J_res = np.ndarray(aoR_holder_bra.aoR.shape, buffer=aoR_buf1)
@@ -425,17 +349,12 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
             permutation.ctypes.data_as(ctypes.c_void_p),
         )
     
-    # assert local_grid_loc == ngrids_local
-
     J = J_Res
-
     if use_mpi:
-        # J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
         J = reduce(J, root=0)
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    # if mydf.verbose:
     _benchmark_time(t1, t2, "_contract_j_dm_k_ls", mydf)
     
     ######### delete the buffer #########
@@ -444,12 +363,7 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
     del density_R_tmp
     del aoR_buf1
     
-    #print("J = ", J)
-    
     J *= ngrid / vol
-    
-    #print("J = ", J.reshape(nao_prim, ncell, nao_prim))
-    #print("J = ", J.reshape(nao_prim, ncell, nao_prim)[0, :, 0])
     
     if in_real_space:
         J = pack_JK(J, mydf.kmesh, nao_prim)
@@ -461,7 +375,6 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
         fft_buf   = np.ndarray((nao_prim,nao_prim*ncell_complex), dtype=np.complex128)
         J_real    = np.ndarray((nao_prim,nao_prim*ncell),         dtype=np.float64,    buffer=J_complex)
         J_real.ravel()[:]    = J.ravel()[:]
-        #print("J_real = ", J_real.reshape(nao_prim, ncell, nao_prim))
         fn1(
             J_real.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nao_prim),
@@ -470,9 +383,6 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
             fft_buf.ctypes.data_as(ctypes.c_void_p)
         )
         del fft_buf
-        #print("J_complex = ", J_complex.reshape(nao_prim, ncell_complex, nao_prim))
-        #J_complex = J_complex.reshape(nao_prim, ncell_complex, nao_prim)
-        #J_complex = np.transpose(J_complex, axes=(1, 0, 2)).copy()
         ## pack J in FFT space ##
         J_complex = J_complex.conj().copy()
         J = pack_JK_in_FFT_space(J_complex, mydf.kmesh, nao_prim)

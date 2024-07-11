@@ -16,25 +16,25 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
+############ sys module ############
+
 import copy, sys
-from functools import reduce
+import ctypes
 import numpy as np
+
+############ pyscf module ############
+
 from pyscf import lib
-from pyscf.lib import logger, zdotNN, zdotCN, zdotNC
+from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.lib.kpts import KPoints
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
+libpbc = lib.load_library('libpbc')
 
-#### MPI SUPPORT ####
+############ isdf utils ############
 
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
-from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, scatter
-
-import ctypes
-
-libpbc = lib.load_library('libpbc')
 
 ##################################################
 #
@@ -49,12 +49,9 @@ def _half_J(mydf, dm, use_mpi=False,
             short_range = False):
     
     if use_mpi:
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
-        size = comm.Get_size()
-        #raise NotImplementedError("MPI is not supported yet.")
         assert mydf.direct == True
+        from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast, reduce
+        size = comm.Get_size()
         
     ######### prepare the parameter #########
     
@@ -329,12 +326,9 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
                       short_range = False):
     
     if use_mpi:
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
-        size = comm.Get_size()
-        #raise NotImplementedError("MPI is not supported yet.")
         assert mydf.direct == True
+        from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast, reduce
+        size = comm.Get_size()
     
     ###### Prepocess parameter for RS ######
     
@@ -414,15 +408,8 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
     ngroup = len(group)
 
     J = _half_J(mydf, dm, use_mpi, first_pass, short_range)
-
-    # print("J = ", J[:16])
-
-    #### step 3. get J 
     
-    # J = np.asarray(lib.d_ij_j_ij(aoR, J, out=buffer1), order='C') 
-    # J = lib.ddot_withbuffer(aoR, J.T, buf=mydf.ddot_buf)
-
-    # local_grid_loc = 0
+    #### step 3. get J 
 
     J_Res = np.zeros((nao, nao), dtype=np.float64)
 
@@ -494,15 +481,10 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
         nao_compact  = aoR_holder.nCompact
         nao_diffuse  = nao_involved - nao_compact
         
-        # print("nao_involved = ", nao_involved)
-        # print("nao_compact  = ", nao_compact)
-        
         global_gridID_begin = aoR_holder.global_gridID_begin
         
         J_tmp = J[global_gridID_begin:global_gridID_begin+ngrids_now] 
-        
-        # print("J_tmp = ", J_tmp[:16])
-        
+                
         if second_pass_all:  ### with RS case ###
               
             _get_j_pass2_ls(
@@ -519,7 +501,6 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
         else:
             
             if second_pass_has_cc:
-                # print("second_pass_has_cc")
                 _get_j_pass2_ls(
                     aoR_holder.aoR[:nao_compact,:], 
                     aoR_holder.ao_involved[:nao_compact], 
@@ -532,7 +513,6 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
                 )
                 
             if second_pass_has_dd:
-                # print("second_pass_has_dd")
                 _get_j_pass2_ls(
                     aoR_holder.aoR[nao_compact:,:], 
                     aoR_holder.ao_involved[nao_compact:], 
@@ -545,7 +525,6 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
                 )
                 
             if second_pass_has_cd:
-                # print("second_pass_has_cd")
                 _get_j_pass2_ls(
                     aoR_holder.aoR[:nao_compact,:], 
                     aoR_holder.ao_involved[:nao_compact], 
@@ -557,27 +536,18 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
                     J_Res
                 )
 
-        # local_grid_loc += ngrids_now
-    
-    # assert local_grid_loc == ngrids_local
-
     J = J_Res
 
     if use_mpi:
-        # J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
         J = reduce(J, root=0)
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    # if mydf.verbose:
     _benchmark_time(t1, t2, "_contract_j_dm_fast", mydf)
     
     ######### delete the buffer #########
-    
-    # del dm_buf, 
+
     del ddot_buf 
-    # density_R
-    # del density_R_tmp
     del aoR_buf1
     
     return J * ngrid / vol
@@ -589,7 +559,6 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
         size = comm.Get_size()
-        #raise NotImplementedError("MPI is not supported yet.")
         assert mydf.direct == True
     
     ####### judge whether to call the original one #######
@@ -624,11 +593,9 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
     max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoRg if aoR_holder is not None])
     ngrids_local = np.sum([aoR_holder.aoR.shape[1] for aoR_holder in aoRg if aoR_holder is not None])
     
-    # density_R = np.zeros((ngrids_local,), dtype=np.float64)
     density_Rg = np.zeros((naux,), dtype=np.float64)
     
     dm_buf = np.zeros((max_nao_involved, max_nao_involved), dtype=np.float64)
-    # ddot_buf = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
     max_dim_buf = max(max_ngrid_involved, max_nao_involved)
     ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
     aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
@@ -642,15 +609,10 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
     assert fn_packadd_dm is not None
     
     #### step 1. get density value on real space grid and IPs
-    
-    # lib.ddot(dm, aoR, c=buffer1) 
-    # tmp1 = buffer1
-    # density_R = np.asarray(lib.multiply_sum_isdf(aoR, tmp1, out=buffer2), order='C')
-    
+
     group = mydf.group
     ngroup = len(group)
     
-    # local_grid_loc = 0
     density_R_tmp = None
     ordered_ao_ind = np.arange(nao)
     
@@ -687,42 +649,18 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
         global_gridID_begin = aoR_holder.global_gridID_begin
         
         density_Rg[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
-        # local_grid_loc += ngrids_now
-    
-    # assert local_grid_loc == ngrids_local
-    
+        
     if use_mpi == False:
         assert ngrids_local == naux
     
     if use_mpi:
-        # density_R = np.hstack(gather(density_R, comm, rank, root=0, split_recvbuf=True))
         density_Rg = reduce(density_Rg, root=0)
-        
-            
-    if use_mpi:
-        # grid_segment = mydf.grid_segment
-        # sendbuf = None
-        # if rank == 0:
-        #     sendbuf = []
-        #     for i in range(size):
-        #         p0 = grid_segment[i]
-        #         p1 = grid_segment[i+1]
-        #         sendbuf.append(J[p0:p1])
-        # J = scatter(sendbuf, comm, rank, root=0)
-        # del sendbuf
-        # sendbuf = None 
-        
         J = bcast(J, root=0)
     
     #### step 3. get J 
     
     J = np.asarray(lib.dot(W, density_Rg.reshape(-1,1)), order='C').reshape(-1)
     
-    # J = np.asarray(lib.d_ij_j_ij(aoR, J, out=buffer1), order='C') 
-    # J = lib.ddot_withbuffer(aoR, J.T, buf=mydf.ddot_buf)
-
-    # local_grid_loc = 0
-
     J_Res = np.zeros((nao, nao), dtype=np.float64)
 
     for aoR_holder in aoRg:
@@ -757,19 +695,13 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
                 ctypes.c_int(nao)
             )        
 
-        # local_grid_loc += ngrids_now
-    
-    # assert local_grid_loc == ngrids_local
-
     J = J_Res
 
     if use_mpi:
-        # J = mpi_reduce(J, comm, rank, op=MPI.SUM, root=0)
         J = reduce(J, root=0)
     
     t2 = (logger.process_clock(), logger.perf_counter())
     
-    # if mydf.verbose:
     _benchmark_time(t1, t2, "_contract_j_dm_fast", mydf)
     
     ######### delete the buffer #########
@@ -779,139 +711,6 @@ def _contract_j_dm_wo_robust_fitting(mydf, dm, use_mpi=False):
     del aoR_buf1
     
     return J * ngrid / vol
-
-############# Xing's multigrid get_j function #############
-
-### WARNING: not work now ! 
-
-from pyscf.pbc.df.df_jk import (
-    _format_dms,
-    _format_kpts_band,
-    _format_jks,
-)
-from pyscf.pbc.dft.multigrid.multigrid import _eval_rhoG, _get_j_pass2
-
-def _contract_j_multigrid(mydf, 
-           # xc_code, 
-           dm_kpts, hermi=1, kpts=None,
-           kpts_band=None, 
-           with_j=True, 
-           return_j=True, 
-           verbose=None):
-    '''Compute the XC energy and RKS XC matrix at sampled k-points.
-    multigrid version of function pbc.dft.numint.nr_rks.
-
-    Args:
-        dm_kpts : (nkpts, nao, nao) ndarray or a list of (nkpts,nao,nao) ndarray
-            Density matrix at each k-point.
-        kpts : (nkpts, 3) ndarray
-
-    Kwargs:
-        kpts_band : (3,) ndarray or (*,3) ndarray
-            A list of arbitrary "band" k-points at which to evalute the matrix.
-
-    Returns:
-        exc : XC energy
-        nelec : number of electrons obtained from the numerical integration
-        veff : (nkpts, nao, nao) ndarray
-            or list of veff if the input dm_kpts is a list of DMs
-        vj : (nkpts, nao, nao) ndarray
-            or list of vj if the input dm_kpts is a list of DMs
-    '''
-    if kpts is None: kpts = mydf.kpts
-    log = logger.new_logger(mydf, verbose)
-    cell = mydf.cell
-    dm_kpts = lib.asarray(dm_kpts, order='C')
-    dms = _format_dms(dm_kpts, kpts)
-    nset, nkpts, nao = dms.shape[:3]
-    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
-
-    ni = mydf._numint
-    deriv = 0
-    # xctype = ni._xc_type(xc_code)
-    # if xctype == 'LDA':
-    #     deriv = 0
-    # elif xctype == 'GGA':
-    #     deriv = 1
-    # elif xctype == 'MGGA':
-    #     deriv = 2 if MGGA_DENSITY_LAPL else 1
-    #     raise NotImplementedError
-    rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
-
-    mesh = mydf.mesh
-    ngrids = numpy.prod(mesh)
-    coulG = tools.get_coulG(cell, mesh=mesh)
-    vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG)
-
-    if getattr(mydf, "vpplocG_part1", None) is not None and not mydf.pp_with_erf:
-        # for i in range(nset):
-        #     vG[i] += mydf.vpplocG_part1 * 2
-        raise NotImplementedError("vpplocG_part1 is not supported yet.")
-
-    ecoul = .5 * numpy.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
-    ecoul+= .5 * numpy.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
-    ecoul /= cell.vol
-    log.debug('Multigrid Coulomb energy %s', ecoul)
-
-    if getattr(mydf, "vpplocG_part1", None) is not None and not mydf.pp_with_erf:
-        #for i in range(nset):
-        #    vG[i] -= mydf.vpplocG_part1
-        raise NotImplementedError("vpplocG_part1 is not supported yet.")
-
-    weight = cell.vol / ngrids
-    # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
-    # computing rhoR with IFFT, the weight factor is not needed.
-    rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
-    rhoR = rhoR.reshape(nset,-1,ngrids)
-    nelec = rhoR[:,0].sum(axis=1) * weight
-
-    # wv_freq = []
-    # excsum = numpy.zeros(nset)
-    # for i in range(nset):
-    #     if xctype == 'LDA':
-    #         exc, vxc = ni.eval_xc_eff(xc_code, rhoR[i,0], deriv=1, xctype=xctype)[:2]
-    #     else:
-    #         exc, vxc = ni.eval_xc_eff(xc_code, rhoR[i], deriv=1, xctype=xctype)[:2]
-    #     excsum[i] += (rhoR[i,0]*exc).sum() * weight
-    #     wv = weight * vxc
-    #     wv_freq.append(tools.fft(wv, mesh))
-    # wv_freq = numpy.asarray(wv_freq).reshape(nset,-1,*mesh)
-    rhoR = rhoG = None
-
-    if nset == 1:
-        ecoul = ecoul[0]
-        nelec = nelec[0]
-        # excsum = excsum[0]
-    # log.debug('Multigrid exc %s  nelec %s', excsum, nelec)
-    log.debug('Multigrid nelec %s', nelec)
-
-    # kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
-    # if xctype == 'LDA':
-    #     if with_j:
-    #         wv_freq[:,0] += vG.reshape(nset,*mesh)
-    #     veff = _get_j_pass2(mydf, wv_freq, hermi, kpts_band, verbose=log)
-    # elif xctype == 'GGA':
-    #     if with_j:
-    #         wv_freq[:,0] += vG.reshape(nset,*mesh)
-    #     # *.5 because v+v.T is always called in _get_gga_pass2
-    #     wv_freq[:,0] *= .5
-    #     veff = _get_gga_pass2(mydf, wv_freq, hermi, kpts_band, verbose=log)
-    # veff = _format_jks(veff, dm_kpts, input_band, kpts)
-
-    if return_j:
-        vj = _get_j_pass2(mydf, vG, hermi, kpts_band, verbose=log)
-        vj = _format_jks(vj, dm_kpts, input_band, kpts)
-    else:
-        vj = None
-
-    # shape = list(dm_kpts.shape)
-    # if len(shape) == 3 and shape[0] != kpts_band.shape[0]:
-    #     shape[0] = kpts_band.shape[0]
-    # veff = veff.reshape(shape)
-    # veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
-    
-    # return nelec, excsum, veff 
-    return vj
 
 ############# quadratic scaling (not cubic!) #############
 
@@ -1162,10 +961,6 @@ def __get_DensityMatrixonRgAO_qradratic(mydf, dm,
 def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     if use_mpi:
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
-        size = comm.Get_size()
         raise NotImplementedError("MPI is not supported yet.")
     
     ####### judge whether to call the original one #######
@@ -1495,13 +1290,11 @@ def _contract_k_dm_quadratic(mydf, dm, with_robust_fitting=True, use_mpi=False):
     
     return K * ngrid / vol
 
-
 def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     
     if use_mpi:
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
+        assert mydf.direct == True
+        from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast, reduce
         size = comm.Get_size()
     
     t1 = (logger.process_clock(), logger.perf_counter())
@@ -2557,7 +2350,7 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
                         kpts_band=None, with_j=True, with_k=True, omega=None, 
                         **kwargs):
     
-    '''JK for given k-point'''
+    '''JK'''
     
     ############ deal with occ-RI-K ############
     
@@ -2586,21 +2379,16 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
             mo_occ, mo_coeff = mydf.diag_dm(dm)
             dm = dm.reshape(1, dm.shape[0], dm.shape[1])
             dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
-            #print("Dm without mo_coeff and mo_occ is provided, but use_occ_RI_K is True, so mo_coeff and mo_occ are generated from dm")
-            #print("mo_occ = ", mo_occ[mo_occ>1e-10])
     else:
         dm = np.asarray(dm)
         if len(dm.shape) == 3:
             assert dm.shape[0] <= 2
-            #dm = dm[0]
         if use_occ_RI_K:
             assert dm.shape[0] == 1
             dm = dm[0]
             mo_occ, mo_coeff = mydf.diag_dm(dm)
             dm = dm.reshape(1, dm.shape[0], dm.shape[1])
             dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
-            #print("Dm without mo_coeff and mo_occ is provided, but use_occ_RI_K is True, so mo_coeff and mo_occ are generated from dm")
-            #print("mo_occ = ", mo_occ[mo_occ>1e-10])
         else:
             mo_occ = None
             mo_coeff = None
@@ -2632,6 +2420,7 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
             dm = symmetrize_dm(dm, mydf.kmesh)
 
     if use_mpi:
+        from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast, reduce
         dm = bcast(dm, root=0)
 
     dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
@@ -2685,10 +2474,9 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
                         logger.warn(mydf, "Current implementation with nset >= 2 is not efficient.")
                 else:
                     vk[iset] = _contract_k_dm_quadratic(mydf, dm[iset], mydf.with_robust_fitting, use_mpi=use_mpi)
-                #if exxdiv == 'ewald':
-                #    print("WARNING: ISDF does not support ewald")
 
     if mydf.rsjk is not None:
+        assert use_mpi == False
         assert dm.shape[0] == 1
         dm = dm[0]
         vj_sr, vk_sr = mydf.rsjk.get_jk(
@@ -2708,29 +2496,33 @@ def get_jk_dm_quadratic(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     ##### the following code is added to deal with _ewald_exxdiv_for_G0 #####
     
-    kpts = kpt.reshape(1,3)
-    kpts = np.asarray(kpts)
-    dm_kpts = dm.reshape(-1, dm.shape[0], dm.shape[1]).copy()
-    dm_kpts = lib.asarray(dm_kpts, order='C')
-    dms = _format_dms(dm_kpts, kpts)
-    nset, nkpts, nao = dms.shape[:3]
-    assert nset <= 2
-    assert nkpts == 1
+    if not use_mpi or (use_mpi and rank==0):
     
-    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
-    nband = len(kpts_band)
-    assert nband == 1
-
-    if is_zero(kpts_band) and is_zero(kpts):
-        vk = vk.reshape(nset,nband,nao,nao)
-    else:
-        raise NotImplementedError("ISDF does not support kpts_band != 0")
-
-    if exxdiv == 'ewald':
-        _ewald_exxdiv_for_G0(mydf.cell, kpts, dms, vk, kpts_band=kpts_band)
+        kpts = kpt.reshape(1,3)
+        kpts = np.asarray(kpts)
+        dm_kpts = dm.reshape(-1, dm.shape[0], dm.shape[1]).copy()
+        dm_kpts = lib.asarray(dm_kpts, order='C')
+        dms = _format_dms(dm_kpts, kpts)
+        nset, nkpts, nao = dms.shape[:3]
+        assert nset <= 2
+        assert nkpts == 1
     
-    #vk = vk[0,0]
-    vk = vk[:,0,:,:]
+        kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+        nband = len(kpts_band)
+        assert nband == 1
+
+        if is_zero(kpts_band) and is_zero(kpts):
+            vk = vk.reshape(nset,nband,nao,nao)
+        else:
+            raise NotImplementedError("ISDF does not support kpts_band != 0")
+
+        if exxdiv == 'ewald':
+            _ewald_exxdiv_for_G0(mydf.cell, kpts, dms, vk, kpts_band=kpts_band)
+    
+        vk = vk[:,0,:,:]
+    
+    if use_mpi:
+        vk = bcast(vk, root=0)
 
     ##### end of dealing with _ewald_exxdiv_for_G0 #####
 

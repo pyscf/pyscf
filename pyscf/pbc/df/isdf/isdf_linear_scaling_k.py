@@ -16,33 +16,29 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
+############ sys module ############
+
 import copy
-from functools import reduce
 import numpy as np
 import ctypes
-from multiprocessing import Pool
-from memory_profiler import profile
 
+############ pyscf module ############
 
 from pyscf import lib
-import pyscf.pbc.gto as pbcgto
 from pyscf.pbc.gto import Cell
 from pyscf.pbc import tools
-from pyscf.pbc.lib.kpts import KPoints
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 from pyscf.gto.mole import *
 libpbc = lib.load_library('libpbc')
+
+############ isdf utils ############
 
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto 
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF_LinearScaling
 import pyscf.pbc.df.isdf.isdf_tools_local as ISDF_Local_Utils
 from pyscf.pbc.df.isdf.isdf_linear_scaling_k_jk import get_jk_dm_translation_symmetry
-from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, allgather, bcast, reduce, gather, alltoall, _comm_bunch, allgather_pickle
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 
-from pyscf.lib.parameters import BOHR
-
-##### deal with translation symmetry #####
+############ subroutines --- deal with translation symmetry ############
 
 def _expand_partition_prim(partition_prim, kmesh, mesh):
 
@@ -84,6 +80,8 @@ def _get_grid_ordering_k(input, kmesh, mesh):
         raise NotImplementedError
 
 def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
+    
+    assert use_mpi == False
     
     IP_group  = []
     aoRg_possible = mydf.aoRg_possible
@@ -247,7 +245,7 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
     
     '''
         
-    print("aoRg_FFT.shape = ", mydf.aoRg_FFT.shape)
+    # print("aoRg_FFT.shape = ", mydf.aoRg_FFT.shape)
     
     kmesh = np.array(kmesh, dtype=np.int32)
     
@@ -285,7 +283,7 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
         # fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
         # assert fn is not None
 
-        print("self.aoR_FFT.shape = ", mydf.aoR_FFT.shape)
+        # print("self.aoR_FFT.shape = ", mydf.aoR_FFT.shape)
         
         fn(
             mydf.aoR_FFT_real.ctypes.data_as(ctypes.c_void_p),
@@ -303,9 +301,9 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
 
     del buffer
         
-    if rank == 0:
-        print("IP_segment = ", mydf.IP_segment)
-        print("aoRg memory: ", ISDF_Local_Utils._get_aoR_holders_memory(mydf.aoRg))          
+    # if rank == 0:
+    #     print("IP_segment = ", mydf.IP_segment)
+    #     print("aoRg memory: ", ISDF_Local_Utils._get_aoR_holders_memory(mydf.aoRg))          
 
 def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
     
@@ -349,9 +347,7 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
         if V is None:
             assert shift_row is None
             V = np.zeros((nAux, ngrids), dtype=np.double)
-            
-        # V                  = np.zeros((nAux, ngrids), dtype=np.double)
-        
+                    
         fn = getattr(libpbc, "_construct_V_local_bas", None)
         assert(fn is not None)
 
@@ -364,10 +360,10 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
             aux_basis_now = aux_basis[i]
             grid_ID = mydf.partition_group_to_gridID[i]
             # ngrid_now += grid_ID.size
-            print("i           = ", i)
-            print("shift_row   = ", shift_row) 
-            print("aux_bas_now = ", aux_basis_now.shape)
-            print("ngrid_now   = ", grid_ID.size)
+            # print("i           = ", i)
+            # print("shift_row   = ", shift_row) 
+            # print("aux_bas_now = ", aux_basis_now.shape)
+            # print("ngrid_now   = ", grid_ID.size)
             # print("buf = ", buf.shape)
             # print("ngrid_ordering = ", grid_ordering.size)
             # sys.stdout.flush()
@@ -418,9 +414,6 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
         grid_shift = 0
         naux_bra = mydf.aux_basis[i].shape[0]
         
-        #if mydf.with_robust_fitting == False:
-        #    V = construct_V_CCode([mydf.aux_basis[i]], V=None, shift_row=None)
-            
         for ix in range(kmesh[0]):
             for iy in range(kmesh[1]):
                 for iz in range(kmesh[2]):
@@ -428,16 +421,10 @@ def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
                         aux_basis_ket = mydf.aux_basis[j]
                         ngrid_now = aux_basis_ket.shape[1]
                         naux_ket = aux_basis_ket.shape[0]
-                        #if mydf.with_robust_fitting:
                         mydf.W[aux_bra_shift:aux_bra_shift+naux_bra, aux_ket_shift:aux_ket_shift+naux_ket] = lib.ddot(
                            V[aux_bra_shift:aux_bra_shift+naux_bra, grid_shift:grid_shift+ngrid_now],
                            aux_basis_ket.T
                         )
-                        # else:
-                        #     mydf.W[aux_bra_shift:aux_bra_shift+naux_bra, aux_ket_shift:aux_ket_shift+naux_ket] = lib.ddot(
-                        #        V[:, grid_shift:grid_shift+ngrid_now],
-                        #        aux_basis_ket.T
-                        #     )
                         aux_ket_shift += naux_ket
                         grid_shift += ngrid_now                 
                      
@@ -482,6 +469,8 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         assert mol.a[1][2] == 0.0
         assert mol.a[2][0] == 0.0
         assert mol.a[2][1] == 0.0
+        
+        from pyscf.lib.parameters import BOHR
         
         for i in range(mol.natm):
             coords = mol.atom_coord(i)
@@ -558,17 +547,9 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             self.AtmConnectionInfo.append(tmp)
     
         #### information dealing grids , build parition ####
-        
-        # if Ls is None:
-        #     lattice_x = self.cell.lattice_vectors()[0][0]
-        #     lattice_y = self.cell.lattice_vectors()[1][1]
-        #     lattice_z = self.cell.lattice_vectors()[2][2]
-        #     Ls = [int(lattice_x/3)+1, int(lattice_y/3)+1, int(lattice_z/3)+1]
-        
+                
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        
-        # print("self.coords = ", self.coords) 
-        
+                
         if Ls is None:
             Ls = [
                 int(self.cell.lattice_vectors()[0][0]/2)+1,
@@ -639,8 +620,8 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         assert len(self.aoR) == first_natm
         
-        if rank == 0:
-            print("aoR memory: ", memory) 
+        #if rank == 0:
+        #    print("aoR memory: ", memory) 
         
         weight = np.sqrt(self.cell.vol / self.coords.shape[0])
         
@@ -655,6 +636,9 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         assert len(self.aoR1) == natm
         
         partition_activated = None
+        
+        if not self.use_mpi:
+            rank = 0
         
         if rank == 0:
             partition_activated = []
@@ -722,7 +706,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                         self.atm_ordering.extend(data + shift)
                     shift += self.natmPrim
         self.atm_ordering = np.array(self.atm_ordering, dtype=np.int32)
-        print("atm_ordering = ", self.atm_ordering)
+        # print("atm_ordering = ", self.atm_ordering)
                 
         self.atm_id_2_group = np.zeros((self.cell.natm), dtype=np.int32)
         for i in range(len(self.group_global)):
@@ -738,7 +722,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             self.grid_segment.append(loc_now)
             # self.grid_segment.append(self.grid_segment[-1] + len(self.partition[atm_id]))
         self.grid_segment = np.array(self.grid_segment, dtype=np.int32)
-        print("grid_segment = ", self.grid_segment)
+        #print("grid_segment = ", self.grid_segment)
         
         ao2atomID = self.ao2atomID
         partition = self.partition
@@ -1238,9 +1222,8 @@ if __name__ == "__main__":
     C = 25
     
     verbose = 4
-    if rank != 0:
-        verbose = 0
-        
+    import pyscf.pbc.gto as pbcgto
+    
     cell   = pbcgto.Cell()
     boxlen = 3.5668
     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]])
@@ -1279,8 +1262,8 @@ if __name__ == "__main__":
     
     # exit(1)
     
-    print("grid_segment         = ", pbc_isdf_info.grid_segment)
-    print("len of grid_ordering = ", len(pbc_isdf_info.grid_ID_ordered))
+    #print("grid_segment         = ", pbc_isdf_info.grid_segment)
+    #print("len of grid_ordering = ", len(pbc_isdf_info.grid_ID_ordered))
     
     aoR_unpacked = []
     for aoR_holder in pbc_isdf_info.aoR1:
@@ -1350,7 +1333,7 @@ if __name__ == "__main__":
     
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
     
-    print("grid_segment = ", pbc_isdf_info.grid_segment)
+    # print("grid_segment = ", pbc_isdf_info.grid_segment)
     
     from pyscf.pbc import scf
 
