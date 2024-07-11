@@ -33,12 +33,12 @@ void Solve_LLTEqualB_Parallel(
     int nBunch = (nrhs / BunchSize);
     int nLeft = nrhs - nBunch * BunchSize;
 
-    printf("nThread  : %d\n", nThread);
-    printf("nBunch   : %d\n", nBunch);
-    printf("nLeft    : %d\n", nLeft);
-    printf("BunchSize: %d\n", BunchSize);
-    printf("n        : %d\n", n);
-    printf("nrhs     : %d\n", nrhs);
+    // printf("nThread  : %d\n", nThread);
+    // printf("nBunch   : %d\n", nBunch);
+    // printf("nLeft    : %d\n", nLeft);
+    // printf("BunchSize: %d\n", BunchSize);
+    // printf("n        : %d\n", n);
+    // printf("nrhs     : %d\n", nrhs);
 
 #pragma omp parallel num_threads(nThread)
     {

@@ -102,16 +102,16 @@ def _determine_bunchsize(nao, naux, mesh, buf_size, with_robust_fitting=True):
     grid_bunchsize = min(grid_bunchsize, ngrids)
     grid_bunchsize = min(grid_bunchsize, MAX_BUNCHSIZE)
 
-    print("bunch_size_IO   = ", bunch_size_IO)
-    print("blksize_aux     = ", blksize_aux)
-    print("bunchsize_readV = ", bunchsize_readV)
-    print("grid_bunchsize  = ", grid_bunchsize)
-    print("blksize_W       = ", blksize_W)
+    # print("bunch_size_IO   = ", bunch_size_IO)
+    # print("blksize_aux     = ", blksize_aux)
+    # print("bunchsize_readV = ", bunchsize_readV)
+    # print("grid_bunchsize  = ", grid_bunchsize)
+    # print("blksize_W       = ", blksize_W)
 
     chunk_col = min(bunchsize_readV, grid_bunchsize, blksize_W, blksize_aux)
 
     if chunk_row * chunk_col * 8 < CHUNK_MINIMAL:  # at least 16MB
-        print("too small chunk, change the chunk col")
+        #print("too small chunk, change the chunk col")
 
         chunk_col_new =  CHUNK_MINIMAL // (chunk_row * 8)
         chunk_col_new = (chunk_col_new // chunk_col + 1) * chunk_col
@@ -124,7 +124,7 @@ def _determine_bunchsize(nao, naux, mesh, buf_size, with_robust_fitting=True):
         chunk_row = min(chunk_row, CHUNK_ROW_LIMITED)
 
     if chunk_row * chunk_col * 8 < CHUNK_MINIMAL:  # at least 16MB
-        print("too small chunk, change the chunk row")
+        #print("too small chunk, change the chunk row")
         chunk_row_new = CHUNK_MINIMAL // (chunk_col * 8)
         chunk_row_new = (chunk_row_new // chunk_row + 1) * chunk_row
         chunk_row = chunk_row_new
@@ -142,12 +142,12 @@ def _determine_bunchsize(nao, naux, mesh, buf_size, with_robust_fitting=True):
 
     blksize_aux     = (blksize_aux // nThread) * nThread
 
-    print("blksize_aux = ", blksize_aux)
-    print("bunchsize_readV = ", bunchsize_readV)
-    print("grid_bunchsize = ", grid_bunchsize)
-    print("blksize_W = ", blksize_W)
-    print("chunk_row = ", chunk_row)
-    print("chunk_col = ", chunk_col)
+    #print("blksize_aux = ", blksize_aux)
+    #print("bunchsize_readV = ", bunchsize_readV)
+    #print("grid_bunchsize = ", grid_bunchsize)
+    #print("blksize_W = ", blksize_W)
+    #print("chunk_row = ", chunk_row)
+    #print("chunk_col = ", chunk_col)
 
     return (chunk_row, chunk_col), bunch_size_IO, blksize_aux, bunchsize_readV, grid_bunchsize, blksize_W, use_large_chunk
 
@@ -220,10 +220,9 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
     blksize = min(blksize, MAX_CHUNKSIZE//naux)
     chunks = (naux, blksize)
 
-    print("blksize       = ", blksize)
-
-    print("IO_buf_memory = ", IO_buf_memory)
-    print("blksize       = ", blksize)
+    #print("blksize       = ", blksize)
+    #print("IO_buf_memory = ", IO_buf_memory)
+    #print("blksize       = ", blksize)
 
     A = np.ndarray((naux, naux), dtype=IO_buf.dtype, buffer=IO_buf)
     A = np.asarray(lib.dot(aoRg.T, aoRg, c=A), order='C')  # no memory allocation here!
@@ -237,7 +236,7 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
         ctypes.c_int(naux),
     )
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    _benchmark_time(t1,t2,"_aux_basis_IO.Cholesky")
+    _benchmark_time(t1,t2,"_aux_basis_IO.Cholesky", mydf)
 
     chunks1 = (naux, ngrids)
     chunks2 = (nao, ngrids)
@@ -245,11 +244,9 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
     if hasattr(mydf, 'chunk_size'):
         chunks1 = mydf.chunk_size
         chunks2 = (min(mydf.chunk_size[0], nao), mydf.chunk_size[1])
-    # else:
-    #     raise ValueError("chunk_size should be provided")
 
-    print("chunks1        = ", chunks1)
-    print("chunks2        = ", chunks2)
+    #print("chunks1        = ", chunks1)
+    #print("chunks2        = ", chunks2)
 
     h5d_aux_basis = f_aux_basis.create_dataset(AUX_BASIS_DATASET, (naux, ngrids), 'f8', chunks=chunks1)
 
@@ -354,7 +351,7 @@ def _construct_aux_basis_IO(mydf:isdf_fast.PBC_ISDF_Info, IO_File:str, IO_buf:np
         f_aux_basis.close()
 
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    _benchmark_time(t1,t2,"_aux_basis_IO.build")
+    _benchmark_time(t1,t2,"_aux_basis_IO.build", mydf)
 
 def _copy_b_to_a(a:np.ndarray, b:np.ndarray, size:int):
     assert(a.shape == b.shape)
@@ -419,8 +416,8 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
         bufsize_per_thread = bunchsize * coulG_real.shape[0] * 2
         bufsize_per_thread = (bufsize_per_thread + 15) // 16 * 16
 
-    print("bunchsize = ", bunchsize)
-    print("bunch_size_IO = ", bunch_size_IO)
+    #print("bunchsize = ", bunchsize)
+    #print("bunch_size_IO = ", bunch_size_IO)
 
     ### allocate buffer ###
 
@@ -488,6 +485,8 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
     else:
         CONSTRUCT_V = 0
 
+    log = lib.logger.Logger(mydf.stdout, mydf.verbose)
+
     with lib.call_in_background(load_aux_basis_async) as prefetch:
         with lib.call_in_background(save_V) as async_write:
             with lib.call_in_background(save_auxbasisfft) as async_write_auxbasisfft:
@@ -526,9 +525,11 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
 
                     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
-                    print("construct V[%5d:%5d] wall time: %12.6f CPU time: %12.6f" %
-                        (p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
+                    #print("construct V[%5d:%5d] wall time: %12.6f CPU time: %12.6f" %
+                    #    (p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
 
+                    log.debug('construct V[%5d:%5d] wall time: %12.6f CPU time: %12.6f' %
+                              (p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
 
     #### another loop to construct W ####
 
@@ -638,7 +639,8 @@ def _construct_V_W_IO2(mydf:isdf_fast.PBC_ISDF_Info, mesh, IO_File:str, IO_buf:n
 
             t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
-            print("construct W[%5d:%5d] wall time: %12.6f CPU time: %12.6f" % (p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
+            #print("construct W[%5d:%5d] wall time: %12.6f CPU time: %12.6f" % (p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
+            log.debug('construct W[%5d:%5d] wall time: %12.6f CPU time: %12.6f' % (p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
 
     factor = 1.0 / np.prod(mesh)
     mydf.W *= factor
@@ -691,6 +693,8 @@ def _get_jk_dm_outcore(mydf, dm):
 
     '''
 
+    log = logger.Logger(mydf.stdout, mydf.verbose)
+
     all_t1 = (logger.process_clock(), logger.perf_counter())
 
     if len(dm.shape) == 3:
@@ -699,11 +703,6 @@ def _get_jk_dm_outcore(mydf, dm):
 
     J = np.zeros((dm.shape[0], dm.shape[1]), dtype=np.float64)
     K = np.zeros((dm.shape[0], dm.shape[1]), dtype=np.float64)
-
-    # for i in range(dm.shape[0]):
-    #     for j in range(dm.shape[1]):
-    #         if abs(dm[i,j]) > 1e-6:
-    #             print("dm[%d,%d] = %12.6f" % (i,j,dm[i,j]))
 
     nao   = dm.shape[0]
 
@@ -724,7 +723,7 @@ def _get_jk_dm_outcore(mydf, dm):
     buf = mydf.IO_buf
     buf_size = buf.size
 
-    print("buf_size = ", buf_size)
+    #print("buf_size = ", buf_size)
 
     weight = np.sqrt(vol / ngrid)
 
@@ -788,7 +787,7 @@ def _get_jk_dm_outcore(mydf, dm):
     # D5 = np.zeros((naux,naux), dtype=np.float64)
     offset   += naux * naux * buf.dtype.itemsize
 
-    print("offset_D5 = ", offset_D5//8)
+    #print("offset_D5 = ", offset_D5//8)
 
     if (buf_size - offset//8) < naux * nao:
         print("buf is not sufficient since (%d - %d) < %d * %d" % (buf_size, offset, naux, nao))
@@ -808,7 +807,7 @@ def _get_jk_dm_outcore(mydf, dm):
     if hasattr(mydf, 'bunchsize_readV'):
         bunchsize_readV = mydf.bunchsize_readV
 
-    print("bunchsize_readV = ", bunchsize_readV)
+    #print("bunchsize_readV = ", bunchsize_readV)
 
     offset_V1 = offset
     V1  = np.ndarray((naux, bunchsize_readV), dtype=np.float64, buffer=buf, offset=offset)
@@ -828,7 +827,7 @@ def _get_jk_dm_outcore(mydf, dm):
 
     if hasattr(mydf, 'grid_bunchsize'):
         grid_bunchsize = mydf.grid_bunchsize
-    print("grid_bunchsize = ", grid_bunchsize)
+    #print("grid_bunchsize = ", grid_bunchsize)
 
     offset_AoR1 = offset
     offset_AoR2 = offset + nao * grid_bunchsize * buf.dtype.itemsize
@@ -865,11 +864,9 @@ def _get_jk_dm_outcore(mydf, dm):
                 offset_AoR1, offset_AoR2 = offset_AoR2, offset_AoR1
 
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    _benchmark_time(t1, t2, "construct D2")
+    _benchmark_time(t1, t2, "construct D2", mydf)
 
     lib.dslice(D2, IP_ID, D3)
-    # print("D3 = ", D3)
-    # print("D2 = ", D2[naux:])
 
     ### STEP 2 Read V_R ###
 
@@ -989,19 +986,17 @@ def _get_jk_dm_outcore(mydf, dm):
                 offset_aoR2, offset_aoR1 = offset_aoR1, offset_aoR2
 
                 t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-                print("ibunch %3d construct J[%8d:%8d] wall time: %12.6f CPU time: %12.6f" %
-                      (ibunch, p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
+                #print("ibunch %3d construct J[%8d:%8d] wall time: %12.6f CPU time: %12.6f" %
+                #      (ibunch, p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
+                log.debug("ibunch %3d construct J[%8d:%8d] wall time: %12.6f CPU time: %12.6f" %
+                            (ibunch, p0, p1, t2[1] - t1[1], t2[0] - t1[0]))
 
     t2_ReadV = (lib.logger.process_clock(), lib.logger.perf_counter())
-    _benchmark_time(t1_ReadV, t2_ReadV, "ReadV")
+    _benchmark_time(t1_ReadV, t2_ReadV, "ReadV", mydf)
 
     #### 2.3 construct K's W matrix ####
 
-    # print("D5 = ", D5[0,:]) 
-
     K += K.T
-
-    # print("K = ", K[0,:])
 
     lib.cwise_mul(W, D5, out=D5)
     lib.ddot(D5, aoRg.T, c=K2)
@@ -1012,8 +1007,6 @@ def _get_jk_dm_outcore(mydf, dm):
     J2 = np.ndarray((nao,naux), dtype=np.float64, buffer=buf, offset=offset_D5)
     lib.d_ij_j_ij(aoRg, J1, out=J2)
     lib.ddot_withbuffer(aoRg, J2.T, c=J, beta=1, buf=mydf.ddot_buf)
-
-    # print("J = ", J[0,:])
 
     #### 2.5 construct J's W matrix ####
 
@@ -1026,10 +1019,7 @@ def _get_jk_dm_outcore(mydf, dm):
     lib.ddot_withbuffer(aoRg, -J_W_tmp2.T, c=J, beta=1, buf=mydf.ddot_buf)
 
     all_t2 = (logger.process_clock(), logger.perf_counter())
-    _benchmark_time(all_t1, all_t2, "get_jk")
-
-    # print("J = ", J[0,:])
-    # print("K = ", K[0,:])
+    _benchmark_time(all_t1, all_t2, "get_jk", mydf)
 
     return J * ngrid / vol, K * ngrid / vol
 
@@ -1217,15 +1207,13 @@ def get_jk_dm_outcore(mydf, dm, hermi=1, kpt=np.zeros(3),
 
     return vj, vk
 
-import pyscf.pbc.df.isdf.test.test_isdf_IO as test_IO
-
 class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
-    def __init__(self, mol:Cell, max_buf_memory:int, outcore=True, with_robust_fitting=True, aoR=None, Ls=None):
+    def __init__(self, mol:Cell, max_buf_memory:int, outcore=True, with_robust_fitting=True, aoR=None, kmesh=None):
 
         self.max_buf_memory = max_buf_memory
         self.IO_buf         = np.zeros((max_buf_memory//8), dtype=np.float64)
 
-        super().__init__(mol=mol,aoR=aoR,with_robust_fitting=with_robust_fitting, Ls=Ls)
+        super().__init__(mol=mol,aoR=aoR,with_robust_fitting=with_robust_fitting, kmesh=kmesh)
 
         self.IO_FILE        = None
 
@@ -1234,7 +1222,7 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
 
         self.mesh = mol.mesh
 
-        print("self.mesh = ", self.mesh)
+        #print("self.mesh = ", self.mesh)
 
         self.saveAoR = True
         assert self.saveAoR  # we do not support saveAoR = False
@@ -1300,9 +1288,9 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
             self.IP_ID = np.asarray(self.IP_ID, dtype=np.int32)
         else:
             self.IP_ID = IP_ID
-        print("IP_ID = ", self.IP_ID)
+        #print("IP_ID = ", self.IP_ID)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _benchmark_time(t1, t2, "select IP")
+        _benchmark_time(t1, t2, "select IP", self)
 
         if IO_File is None:
             # generate a random file name start with tmp_
@@ -1310,7 +1298,7 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
             import string
             IO_File = "tmp_" + ''.join(random.choices(string.ascii_lowercase + string.digits, k=8)) + ".hdf5"
 
-        print("IO_File = ", IO_File)
+        #print("IO_File = ", IO_File)
 
         # construct aoR
 
@@ -1324,12 +1312,12 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
         weight    = np.sqrt(self.cell.vol / self.ngrids)
         self.aoRg = self._numint.eval_ao(self.cell, coords_IP)[0].T * weight  # the T is important
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _benchmark_time(t1, t2, "construct aoR")
+        _benchmark_time(t1, t2, "construct aoR", self)
 
         self.naux = self.aoRg.shape[1]
         self.c    = c
 
-        print("naux = ", self.naux)
+        #print("naux = ", self.naux)
 
         self.chunk_size, self.nRow_IO_V, self.blksize_aux, self.bunchsize_readV, self.grid_bunchsize, self.blksize_W, self.use_large_chunk_W  = _determine_bunchsize(
             self.nao, self.naux, self.mesh, self.IO_buf.size, self.saveAoR)
@@ -1338,13 +1326,13 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if self.outcore:
-            print("construct aux basis in outcore mode")
+            #print("construct aux basis in outcore mode")
             _construct_aux_basis_IO(self, IO_File, self.IO_buf)
         else:
-            print("construct aux basis in incore mode")
+            #print("construct aux basis in incore mode")
             _construct_aux_basis(self)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _benchmark_time(t1, t2, "construct aux basis")
+        _benchmark_time(t1, t2, "construct aux basis", self)
 
         self.IO_FILE = IO_File
 
@@ -1352,9 +1340,6 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
 
         mesh = np.asarray(mesh, dtype=np.int32)
         self.mesh = np.asarray(self.mesh, dtype=np.int32)
-
-        print("mesh      = ", mesh)
-        print("self.mesh = ", self.mesh)
 
         if mesh[0] != self.mesh[0] or mesh[1] != self.mesh[1] or mesh[2] != self.mesh[2]:
             print("warning: mesh is not consistent with the previous one")
@@ -1365,10 +1350,9 @@ class PBC_ISDF_Info_outcore(isdf_fast.PBC_ISDF_Info):
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         _construct_V_W_IO2(self, mesh, self.IO_FILE, self.IO_buf)
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        _benchmark_time(t1, t2, "construct V and W")
+        _benchmark_time(t1, t2, "construct V and W", self)
 
     get_jk = get_jk_dm_outcore
-    # get_jk = test_IO.get_jk_dm_IO
 
 C = 5
 
@@ -1449,12 +1433,6 @@ H  2.1   2.1   2.1
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 100
     mf.conv_tol = 1e-7
-
-    print("mf.direct_scf = ", mf.direct_scf)
-
-    # mf.kernel()
-
-    # without robust fitting 
     
     pbc_isdf_info.with_robust_fitting = False
 
@@ -1463,7 +1441,6 @@ H  2.1   2.1   2.1
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 100
     mf.conv_tol = 1e-7
-    # mf.kernel()
     
     ### outcore ###
 
@@ -1478,15 +1455,11 @@ H  2.1   2.1   2.1
     aoR = pbc_isdf_info1.aoR
     W = pbc_isdf_info1.W
     
-    # print(pbc_isdf_info1.aux_basis[:10,:10])
-    # print(pbc_isdf_info1.W[:10,:10])
-    
     IP_ID = pbc_isdf_info1.IP_ID
     
     pbc_isdf_info = PBC_ISDF_Info_outcore(cell, max_buf_memory=max_memory, outcore=True, with_robust_fitting=True)
     pbc_isdf_info.build_IP_Sandeep_outcore(c=C, IP_ID=IP_ID)
     pbc_isdf_info.build_auxiliary_Coulomb_outcore(mesh=mesh)
-    # print(pbc_isdf_info.W[:10,:10])
     
     f_aux_basis = h5py.File(pbc_isdf_info.IO_FILE, 'r')
     V_R_IO      = f_aux_basis[V_DATASET]
@@ -1507,13 +1480,6 @@ H  2.1   2.1   2.1
     diff = np.linalg.norm(W - W2)
     print("diff = ", diff)
     
-    # pbc_isdf_info.V_R = V_R_IO[:]
-    # pbc_isdf_info.aux_basis = aux_basis_IO[:]
-    # pbc_isdf_info.aoR = aoR_IO[:]
-    # pbc_isdf_info.outcore = False
-    
-    # exit(1) 
-    
     mf = scf.RHF(cell)
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df   = pbc_isdf_info
@@ -1527,14 +1493,4 @@ H  2.1   2.1   2.1
     mf.max_cycle = 100
     mf.conv_tol  = 1e-7
     mf.kernel()
-    
-    # W1 = pbc_isdf_info.W
-    # W2 = pbc_isdf_info1.W
-    
-    ## compare W1 and W2 
-    
-    # for i in range(W1.shape[0]):
-    #     for j in range(W1.shape[1]):
-    #         if abs((W1[i,j] - W2[i,j])/W2[i,j]) > 1e-6:
-    #             print("i = %6d j = %6d W1 = %20.10e W2 = %20.10e RelaErr = %6.2e" % (i,j,W1[i,j],W2[i,j], (W1[i,j] - W2[i,j])/W2[i,j]))
     

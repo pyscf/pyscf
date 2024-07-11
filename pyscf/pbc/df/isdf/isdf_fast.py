@@ -116,6 +116,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
         if rank == 0:
             logger.debug4(mydf, "_select_IP_direct: num_threads = %d", lib.num_threads())
     else:
+        rank = 0
         logger.debug4(mydf, "_select_IP_direct: num_threads = %d", lib.num_threads())
 
     ### determine the largest grids point of one atm ###
@@ -282,12 +283,13 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
     results.sort()
     
     ### global IP selection, we can use this step to avoid numerical issue ###
+    
     ### but this step is not necessary if locality is explored ###
 
     if global_IP_selection and rank == 0:
 
-        if mydf.verbose:
-            print("global IP selection")
+        #if mydf.verbose:
+        #    print("global IP selection")
 
         bufsize = mydf.get_buffer_size_in_global_IP_selection(len(results), c, m)
 
@@ -730,10 +732,14 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
         # for each atm
 
+        if not hasattr(self, "use_mpi"):
+            self.use_mpi = False
+            rank = 0
+
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
         if IP_ID is None:
-            IP_ID  = _select_IP_direct(self, c, m, global_IP_selection=global_IP_selection)
+            IP_ID  = _select_IP_direct(self, c, m, global_IP_selection=global_IP_selection, use_mpi=self.use_mpi)
             IP_ID.sort()
             IP_ID  = np.array(IP_ID, dtype=np.int32)
         self.IP_ID = np.array(IP_ID, dtype=np.int32)
