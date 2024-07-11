@@ -16,7 +16,14 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
+############ sys module ############
+
 import numpy, scipy
+import numpy as np
+import ctypes
+
+############ pyscf module ############
+
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo.incore import iden_coeffs
@@ -25,14 +32,14 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf import __config__
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv, _contract_compact
+libpbc = lib.load_library('libpbc')
 
-import numpy as np
-import ctypes
+############ isdf utils ############
 
 from pyscf.pbc.df.isdf.isdf_tools_local import aoR_Holder
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 
-libpbc = lib.load_library('libpbc')
+############ subroutines ---- AO2MO ############
 
 def isdf_eri_robust_fit(mydf, W, aoRg, aoR, V_r, verbose=None):
     r'''
@@ -787,6 +794,8 @@ def general(mydf, mo_coeffs, kpts=None,
 def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     raise NotImplementedError
 
+############ subroutines ---- LS-THC ############
+
 def LS_THC(mydf, R:np.ndarray):
     '''
     Least-Square Tensorhypercontraction decomposition of ERI.
@@ -939,7 +948,7 @@ def LS_THC_eri(Z:np.ndarray, R:np.ndarray):
     
     return np.einsum(einsum_str, R,R,Z,R,R, optimize=path_info[0])
 
-################################### Laplace holder and builder ################################### 
+############ Laplace transformation ############ 
 
 import bisect
 

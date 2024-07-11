@@ -143,14 +143,12 @@ if __name__ == '__main__':
     
     # exit(1)
     
-    from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import init_guess_by_atom
-    
-    atm_config = {
-        'Cu': {'charge': 2, 'occ_config': [6,12,9,0]},
-        'O': {'charge': -2, 'occ_config': [4,6,0,0]},
-        'Ca': {'charge': 2, 'occ_config': [6,12,0,0]},
-    }
-    
+    # from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import init_guess_by_atom
+    # atm_config = {
+    #     'Cu': {'charge': 2, 'occ_config': [6,12,9,0]},
+    #     'O': {'charge': -2, 'occ_config': [4,6,0,0]},
+    #     'Ca': {'charge': 2, 'occ_config': [6,12,0,0]},
+    # }
     dm = init_guess_by_atom(cell, atm_config) # a better init guess than the default one ! 
     
     if comm_size > 1:
@@ -171,7 +169,3 @@ if __name__ == '__main__':
     mf.kernel(dm)
     
     comm.Barrier()
-    
-    from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import analysis_dm, analysis_dm_on_grid
-    
-    dm = mf.make_rdm1()

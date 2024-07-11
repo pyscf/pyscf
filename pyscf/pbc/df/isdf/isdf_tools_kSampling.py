@@ -16,19 +16,11 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
-import copy
-from functools import reduce
 import numpy as np
 from pyscf import lib
-import pyscf.pbc.gto as pbcgto
-from pyscf.pbc.gto import Cell
-from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 from pyscf.gto.mole import *
 
-import ctypes
-from multiprocessing import Pool
 
 
 def _extract_grid_primitive_cell(cell_a, mesh, Ls, coords):

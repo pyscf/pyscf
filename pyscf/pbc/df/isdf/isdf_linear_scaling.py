@@ -1713,30 +1713,9 @@ if __name__ == '__main__':
     # prim_partition = [[0,1,2,3,4,5,6,7]]
     prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     # prim_partition = [[0,1,2,3],[4,5,6,7]]
-
-#     prim_a = np.array(
-#                     [[14.572056092/2, 0.000000000, 0.000000000],
-#                      [0.000000000, 14.572056092/2, 0.000000000],
-#                      [0.000000000, 0.000000000,  6.010273939],]) * BOHR
-#     atm = [
-# ['Cu1',	(1.927800,	1.927800,	1.590250)],
-# ['O1',	(1.927800,	0.000000,	1.590250)],
-# ['O1',	(0.000000,	1.927800,	1.590250)],
-# ['Ca',	(0.000000,	0.000000,	0.000000)],
-#     ]
-#     basis = {
-#         'Cu1':'ecpccpvdz', 'Cu2':'ecpccpvdz', 'O1': 'ecpccpvdz', 'Ca':'ecpccpvdz'
-#     }
-#     pseudo = {'Cu1': 'gth-pbe-q19', 'Cu2': 'gth-pbe-q19', 'O1': 'gth-pbe', 'Ca': 'gth-pbe'}
-#     ke_cutoff = 128 
-#     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=ke_cutoff, basis=basis, pseudo=pseudo)
-#     prim_mesh = prim_cell.mesh
-#     KE_CUTOFF = 128
-#     prim_partition = [[0, 1, 2, 3]]
     
     prim_mesh = prim_cell.mesh
 
-    # Ls = [2, 2, 2]
     Ls = [1, 1, 2]
     # Ls = [2, 2, 2]
     Ls = np.array(Ls, dtype=np.int32)
@@ -1753,21 +1732,11 @@ if __name__ == '__main__':
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
-    # pbc_isdf_info.use_aft_ao = True  # No problem ! 
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
-    # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
     pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     _benchmark_time(t1, t2, "build isdf", pbc_isdf_info)
-    
-    # from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import init_guess_by_atom
-    # atm_config = {
-    #     'Cu': {'charge': 2, 'occ_config': [6,12,9,0]},
-    #     'O': {'charge': -2, 'occ_config': [4,6,0,0]},
-    #     'Ca': {'charge': 2, 'occ_config': [6,12,0,0]},
-    # }
-    # dm = init_guess_by_atom(cell, atm_config) # a better init guess than the default one ! 
     
     from pyscf.pbc import scf
 
@@ -1775,13 +1744,11 @@ if __name__ == '__main__':
 
     # pbc_isdf_info.with_robust_fitting = False
     mf = scf.RHF(cell)
-    # mf = scf.addons.smearing_(mf, sigma=0.2, method='fermi')
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
     mf.max_cycle = 6
     mf.conv_tol = 1e-7
     
-    # mf.kernel(dm)
     mf.kernel()
     
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -1819,127 +1786,3 @@ if __name__ == '__main__':
     mf.max_cycle = 8
     mf.conv_tol  = 1e-7
     mf.kernel()
-    
-    exit(1)
-    
-    ###### diag dm ######
-    
-    dm = mf.make_rdm1()
-    mo_occ, mo_coeff = pbc_isdf_info.diag_dm(dm)
-    print("mo_occ = ", mo_occ[mo_occ>1e-10])
-    
-    
-    dm2 = np.dot(mo_coeff[:,mo_occ>1e-10], mo_coeff[:,mo_occ>1e-10].T)
-    diff = np.linalg.norm(dm - 2*dm2) / np.sqrt(dm.size)
-    print("diff dm = ", diff)
-    
-    for _ in range(7):
-        # pbc_isdf_info.with_robust_fitting = True
-        vj, vk = ISDF_LinearScalingJK.get_jk_occRI(pbc_isdf_info, dm)
-    
-    ###### benchmark J ######
-    
-    dm = mf.make_rdm1()
-    vj_benchmark, vk_benchmark = pbc_isdf_info.get_jk(dm)
-    diff_vj = np.linalg.norm(vj - vj_benchmark) / np.sqrt(vj.size)
-    print("diff_vj = ", diff_vj)
-    
-    ######## Xing's multigrid J ########
-    
-    dm = mf.make_rdm1()
-    # vj_multigrid = ISDF_LinearScalingJK._contract_j_multigrid(pbc_isdf_info, dm) ### does not work currently ! 
-    # diff_vj = np.linalg.norm(vj_multigrid - vj_multigrid) / np.sqrt(vj_multigrid.size)
-    # print("diff_vj_multigrid = ", diff_vj)
-    # exit(1)
-    
-    ###### benchmark vk_iv (abandon) ###### 
-
-    nocc = mf.cell.nelectron // 2
-    mo_coeff_occ = mf.mo_coeff[:,:nocc].copy()
-    mo_coeff = mf.mo_coeff.copy()
-    
-    # K_benchmark = np.dot(mo_coeff_occ.T, vk_benchmark)
-    # diff = np.linalg.norm(K_benchmark - vk_iv) / np.sqrt(K_benchmark.size)
-    # print("diff vk_iv = ", diff)
-    
-    ###### benchmark K with occRI ###### 
-
-    Kij = np.dot(mo_coeff.T, vk_benchmark).dot(mo_coeff)
-    Kij[nocc:, nocc:] = 0.0
-    mo_2_ao = np.linalg.inv(mo_coeff)
-    K_benchmark = np.dot(mo_2_ao.T, Kij).dot(mo_2_ao)
-    diff_vk = np.linalg.norm(vk - K_benchmark) / np.sqrt(vk.size)
-    # print("vk = ", vk[0,:32])
-    # print("K_benchmark = ", K_benchmark[0,:32])
-    print("diff_vk = ", diff_vk)
-    print("nocc = ", nocc)  
-    vk_mo = np.dot(mo_coeff.T, vk).dot(mo_coeff)
-    # print("vk_mo = ", vk_mo[0,:32])
-    # print("Kij = ", Kij[0,:32])
-    # print(vk_mo[nocc:, nocc:])
-    diff_occ_part = np.linalg.norm(vk_mo[:nocc, :] - Kij[:nocc, :]) / np.sqrt(vk_mo[:nocc, :].size)
-    print("diff_occ_part = ", diff_occ_part)
-    
-    norm_vir_vir = np.linalg.norm(vk_mo[nocc:, nocc:]) / np.sqrt(vk_mo[nocc:, nocc:].size)
-    print("norm_vir_vir = ", norm_vir_vir)
-    
-    assert norm_vir_vir < 1e-6
-    
-    diff_vkT = np.linalg.norm(vk - vk.T) / np.sqrt(vk.size)
-    print("diff_vkT = ", diff_vkT)
-    assert np.allclose(vk, vk.T)
-    diff_vk2 = np.linalg.norm(vk_mo - Kij) / np.sqrt(vk_mo.size)
-    print("diff_vk2 = ", diff_vk2)
-    
-    exit(1)
-    
-    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    aoR = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords)
-    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    _benchmark_time(t1, t2, "eval_gto", pbc_isdf_info)
-    
-    exit(1)
-    
-    # vj1, vk1 = pbc_isdf_info.get_jk(dm)
-    # mo_coeff = mf.mo_coeff.copy()
-    # vj_occRI = np.dot(mo_coeff[:,:nocc].T, vj1)
-    # vk_occRI = np.dot(mo_coeff[:,:nocc].T, vk1)
-    # diff  = np.linalg.norm(vj-vj_occRI) / np.sqrt(vj.size)
-    # diff2 = np.linalg.norm(vk-vk_occRI) / np.sqrt(vk.size)
-    # print("diff  = ", diff)
-    # print("diff2 = ", diff2)
-    
-    # from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import analysis_dm, analysis_dm_on_grid
-    # dm = mf.make_rdm1()
-    
-    # analysis_dm(cell, dm, pbc_isdf_info.distance_matrix)
-    # analysis_dm_on_grid(pbc_isdf_info, dm, pbc_isdf_info.distance_matrix)
-    
-    ###### AFTDF 
-    
-    pp = pbc_isdf_info.get_pp()
-    mf = scf.RHF(cell)
-    mf.jk_method(J='AFTDF',K='AFTDF') # test AFTDF
-    mf.build()
-    mf.with_df.get_pp = lambda *args, **kwargs: pp
-    mf.max_cycle = 16
-    mf.conv_tol = 1e-7
-    mf.kernel()
-    
-    pp = pbc_isdf_info.get_pp()
-    mf = scf.RHF(cell)
-    mf.with_df.get_pp = lambda *args, **kwargs: pp
-    mf.max_cycle = 16
-    mf.conv_tol = 1e-7
-    mf.kernel()
-    
-    # dm = mf.make_rdm1()
-    # pbc_isdf_info.V_W_cutoff = 13.0 
-    # pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
-    # mf = scf.RHF(cell)
-    # pbc_isdf_info.direct_scf = mf.direct_scf
-    # mf.with_df = pbc_isdf_info
-    # mf.max_cycle = 12
-    # mf.conv_tol = 1e-7
-    # mf.kernel(dm)
-    

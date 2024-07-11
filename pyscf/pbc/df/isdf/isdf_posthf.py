@@ -16,7 +16,14 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
+############ sys module ############
+
 import numpy
+import numpy as np
+import ctypes
+
+############ pyscf module ############
+
 import pyscf
 from pyscf import lib
 from pyscf import ao2mo
@@ -28,19 +35,23 @@ from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf import __config__
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv, _contract_compact
 import pyscf.pbc.gto as pbcgto
-
-import numpy as np
-import ctypes
+from pyscf.cc.rccsd import _ChemistsERIs, RCCSD 
 libpbc = lib.load_library('libpbc')
+
+############ isdf utils ############
 
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_linear_scaling as ISDF
 from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
 from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC, LS_THC_eri, laplace_holder
 
-##### deal with CC #####
+####################################
 
-from pyscf.cc.rccsd import _ChemistsERIs, RCCSD 
+### post-HF with ISDF ERIs (NOT THC-POSTHF!)
+
+####################################
+
+############ subroutines ---- deal with CC ############
 
 def _make_isdf_eris_incore(mycc, my_isdf:ISDF.PBC_ISDF_Info_Quad, mo_coeff=None):
     
@@ -78,9 +89,15 @@ def RCCSD_isdf(mf, frozen=0, mo_coeff=None, mo_occ=None, run=True, cc2=False):
         mycc.kernel(eris=eris_ccsd)
     return mycc, eris_ccsd
 
-from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast
-
 from pyscf.pbc.df.isdf.thc_backend import *
+
+####################################
+
+### Tensorhypercontraction holder for ERI and the laplace transformation for energy denominator ###
+
+# used in THC-postHF methods
+
+####################################
 
 class _restricted_THC_posthf_holder:
     
@@ -90,9 +107,14 @@ class _restricted_THC_posthf_holder:
                  laplace_order    = 2,
                  no_LS_THC = False,
                  use_torch = False,
-                 with_gpu = False):
+                 with_gpu = False,
+                 use_mpi  = False):
         
-        if rank == 0:
+        if use_mpi:
+            from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size, bcast
+        
+        
+        if not use_mpi or (use_mpi and rank == 0):
         
             print("THC posthf holder is initialized!")
         
@@ -180,7 +202,7 @@ class _restricted_THC_posthf_holder:
         
         #### sync ####
         
-        if comm_size > 1:
+        if use_mpi and comm_size > 1:
             
             #self.my_isdf  = bcast(self.my_isdf, 0)
             #self.my_mf    = bcast(self.my_mf, 0)

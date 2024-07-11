@@ -43,7 +43,6 @@ from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
-from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm_size, comm, allgather, bcast
 from pyscf.pbc.df.isdf.isdf_tools_kSampling import _kmesh_to_Kpoints
 
 ############ global variables ############
@@ -51,13 +50,72 @@ from pyscf.pbc.df.isdf.isdf_tools_kSampling import _kmesh_to_Kpoints
 BASIS_CUTOFF               = 1e-18  # too small may lead to numerical instability
 CRITERION_CALL_PARALLEL_QR = 256
 
+############ subroutines ############
+
 def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=True, 
                       aoR_cutoff = None,
                       rela_cutoff = 0.0, 
                       no_retriction_on_nIP = False,
                       use_mpi=False):
+    r''' Select the interpolation points (IP) based on the given criteria.
+    
+    Args:
+        mydf : object
+            The interpolative separable density fitting (ISDF) object.
+            
+        c : int
+            if rela_cutoff is None or 0.0, control the number of IPs selected with c * nao at most.
+            
+            
+        rela_cutoff : float
+            The relative cutoff value for IP selection.
+            IPs with values smaller than rela_cutoff * max_QR_value will not be selected.
+            Default is 0.0. (no control via QR values)
 
-    if rank == 0:
+
+    Kwargs:
+        first_natm : int
+            The number of atoms to be considered for IP selection.
+            If not given, all atoms will be considered.
+            If set,       it *should* be used in ISDF with k-sampling class, first_natm is the number of atoms in the first cell.
+            
+        global_IP_selection : bool
+            Whether to perform global IP selection.
+            If True, IPs will be re-selected after the individual selection of each atom.
+            Default is True.
+            
+        aoR_cutoff : float
+            The cutoff value for AO values.
+            Points with max AO values smaller than this cutoff will not be considered for IP selection.
+            Default is None.
+            
+        no_retriction_on_nIP : bool
+            Whether to remove the restriction on the number of IPs.
+            If True, there will be no limit on the number of selected IPs.
+            Default is False.
+            
+        use_mpi : bool
+            Whether to use MPI for parallel computation.
+            Default is False.
+            
+        m : int 
+            Control the number of 
+
+        Returns:
+            selected_IP : list
+                The list of selected interpolation points.
+        
+        Ref:
+        
+        (1) Sandeep2022 https://pubs.acs.org/doi/10.1021/acs.jctc.2c00720
+        
+    '''
+    
+    if use_mpi:
+        from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm_size, comm, allgather, bcast
+        if rank == 0:
+            logger.debug4(mydf, "_select_IP_direct: num_threads = %d", lib.num_threads())
+    else:
         logger.debug4(mydf, "_select_IP_direct: num_threads = %d", lib.num_threads())
 
     ### determine the largest grids point of one atm ###
@@ -224,6 +282,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
     results.sort()
     
     ### global IP selection, we can use this step to avoid numerical issue ###
+    ### but this step is not necessary if locality is explored ###
 
     if global_IP_selection and rank == 0:
 
@@ -324,6 +383,11 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
     return results
 
 def build_aux_basis(mydf, debug=True, use_mpi=False):
+    '''build the auxiliary basis for ISDF given IP_ID and aoR.
+    '''
+    
+    if use_mpi:
+        from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, bcast, comm
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
@@ -396,25 +460,20 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
 from pyscf.pbc import df
 
 class PBC_ISDF_Info(df.fft.FFTDF):
+    ''' Interpolative separable density fitting (ISDF) for periodic systems.
+    '''
 
     def __init__(self, mol:Cell, aoR: np.ndarray = None,
-                 # cutoff_aoValue: float = 1e-12,
-                 # cutoff_QR: float = 1e-8
                  with_robust_fitting=True,
                  kmesh=None,
                  get_partition=True,
                  verbose = None
                  ):
 
-        '''
-        WARNING: for k-point calculation mol must be supercell currently, this is not consistent with pyscf's convention
-        TODO: change it ! 
-        '''
-
         if kmesh == None:
             kmesh = numpy.asarray([1,1,1], dtype=numpy.int32)
-            #kpts  = kpts = mol.make_kpts(nk)
         KPoints = _kmesh_to_Kpoints(mol, kmesh)   ### WARNING: this subroutine is not correct ! 
+        
         super().__init__(cell=mol, kpts=KPoints)
 
         if verbose is not None:
@@ -631,6 +690,8 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         return max(buf_size, 2*self.nao*ngrids_now)
     
     def get_A_B(self):
+        '''aux basis is contructed via solving AX=B
+        '''
 
         aoR   = self.aoR
         IP_ID = self.IP_ID
@@ -649,6 +710,10 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                          build_global_basis=True,
                          IP_ID=None,
                          debug=True):
+        ''' select the interpolation points (IP) based on the given criteria using Sandeep's method.
+        Ref:
+        (1) Sandeep2022 https://pubs.acs.org/doi/10.1021/acs.jctc.2c00720
+        '''
 
         # build partition
 
@@ -684,6 +749,11 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         build_aux_basis(self)
 
     def build_auxiliary_Coulomb(self, cell:Cell = None, mesh=None, debug=True):
+        ''' build V and W matrix see eq(13) of Sandeep2022.
+        
+        Ref:
+        (1) Sandeep2022 https://pubs.acs.org/doi/10.1021/acs.jctc.2c00720
+        '''
 
         self._allocate_jk_buffer(datatype=np.double)
 
@@ -710,11 +780,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             fn = getattr(libpbc, "_construct_V", None)
             assert(fn is not None)
-
-            # print("V.shape = ", V.shape)
-            # print("aux_basis.shape = ", aux_basis.shape)
-            # print("self.jk_buffer.size    = ", self.jk_buffer.size)
-            # print("self.jk_buffer.shape   = ", self.jk_buffer.shape)
 
             fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(nAux),
@@ -847,11 +912,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 
                 return self.PP
                 
-                # self.PP = super().get_pp(kpts=np.zeros((3)))
-                # self.PP
-                
-                
-                
                 nao_prim = self.cell.nao_nr() // nkpts 
                 assert self.cell.nao_nr() % nkpts == 0
                 self.PP = self.PP[:nao_prim, :].copy()
@@ -906,10 +966,6 @@ class PBC_ISDF_Info(df.fft.FFTDF):
     ##### functions defined in isdf_jk.py #####
 
     get_jk = isdf_jk.get_jk_dm
-
-################################################################################
-# With this function to mimic the molecular DF.loop function, the pbc gamma
-# point DF object can be used in the molecular code
 
 C = 15
 

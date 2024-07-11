@@ -17,10 +17,17 @@
 #         Xing Zhang
 #
 
+############ sys module ############
 
 import os
 import sys
 import numpy as np
+from sklearn.cluster import KMeans
+import numpy
+import scipy
+
+############ pyscf module ############
+
 import pyscf
 from pyscf import lib
 from pyscf.lib import logger
@@ -34,14 +41,11 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import multigrid
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band
 from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridFFTDF2, _eval_rhoG
-
-from sklearn.cluster import KMeans
-import numpy
-import scipy
-
 import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
 import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
 from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
+
+############ subroutines ############
 
 def _get_rhoR(mydf, dm_kpts, hermi=1):
     ''' 
