@@ -1838,6 +1838,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         elif key == 'atom':
             dm = self.init_guess_by_atom(mol)
         elif key == 'vsap' and hasattr(self, 'init_guess_by_vsap'):
+            # Only available for DFT objects
             dm = self.init_guess_by_vsap(mol)
         elif key == 'sap':
             dm = self.init_guess_by_sap(mol, **kwargs)
