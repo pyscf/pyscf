@@ -27,6 +27,7 @@ import pyscf.pbc.df.isdf.thc_cc_helper.thc_rintermediates as imd
 
 class _IMDS_symbolic:
     def __init__(self, cc, eris=None, MRPT2=True):
+        #print("IMDS is constructed")
         self.verbose = cc.verbose
         self.stdout = cc.stdout
         if MRPT2: # J. Chem. Phys. 102 (4), 22 January 1995
@@ -83,6 +84,8 @@ class _IMDS_symbolic:
 
         t1, t2, eris = self.t1, self.t2, self.eris
 
+        #print("ip_partition = ", ip_partition)
+
         # 0 or 1 virtuals
         if ip_partition != 'mp':
             self.Woooo = imd.Woooo(t1, t2, eris)
@@ -123,14 +126,15 @@ class _IMDS_symbolic:
 
 ################## MVP for IP/EA ##################
 
-def ipccsd_matvec(eom, imds=None, diag=None, thc_scheduler:einsum_holder.THC_scheduler=None):
+def ipccsd_matvec(eom, imds=None, support_multi_root=False, diag=None, thc_scheduler:einsum_holder.THC_scheduler=None):
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
     if imds is None: imds = eom.make_imds()
-    #nocc = eom.nocc
+    nocc = eom.nocc
     #nmo = eom.nmo
     #r1, r2 = eom.vector_to_amplitudes(vector, nmo, nocc)
     
-    multiroots = eom._nroots > 1
+    multiroots = eom._nroots > 1 and support_multi_root
+    #print("multiroots = ", multiroots)
     
     r1 = einsum_holder._expr_r1_ip(multiroots)
     r2 = einsum_holder._expr_r2_ip(multiroots)
@@ -233,18 +237,18 @@ def ipccsd_matvec(eom, imds=None, diag=None, thc_scheduler:einsum_holder.THC_sch
     thc_scheduler.register_expr(einsum_holder.THC_scheduler.ip_hr1_r_name, Hr1)
     thc_scheduler.register_expr(einsum_holder.THC_scheduler.ip_hr2_r_name, Hr2)
 
-def lipccsd_matvec(eom, imds=None, diag=None, thc_scheduler:einsum_holder.THC_scheduler=None):
+def lipccsd_matvec(eom, imds=None, support_multi_root=False, diag=None, thc_scheduler:einsum_holder.THC_scheduler=None):
     '''For left eigenvector'''
     # Note this is not the same left EA equations used by Nooijen and Bartlett.
     # Small changes were made so that the same type L2 basis was used for both the
     # left EA and left IP equations.  You will note more similarity for these
     # equations to the left IP equations than for the left EA equations by Nooijen.
     if imds is None: imds = eom.make_imds()
-    #nocc = eom.nocc
+    nocc = eom.nocc
     #nmo = eom.nmo
     #r1, r2 = eom.vector_to_amplitudes(vector, nmo, nocc)
 
-    multiroots = eom._nroots > 1
+    multiroots = eom._nroots > 1 and support_multi_root
     
     r1 = einsum_holder._expr_r1_ip(multiroots)
     r2 = einsum_holder._expr_r2_ip(multiroots)
@@ -362,15 +366,15 @@ def lipccsd_matvec(eom, imds=None, diag=None, thc_scheduler:einsum_holder.THC_sc
     thc_scheduler.register_expr(einsum_holder.THC_scheduler.ip_hr1_l_name, Hr1)
     thc_scheduler.register_expr(einsum_holder.THC_scheduler.ip_hr2_l_name, Hr2)
 
-def eaccsd_matvec(eom, imds=None, diag=None, thc_scheduler:einsum_holder.THC_scheduler=None):
+def eaccsd_matvec(eom, imds=None, support_multi_root=False, diag=None, thc_scheduler:einsum_holder.THC_scheduler=None):
     # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1995) Eqs.(30)-(31)
     if imds is None: imds = eom.make_imds()
-    #nocc = eom.nocc
+    nocc = eom.nocc
     #nmo = eom.nmo
     #nvir = nmo - nocc
     #r1, r2 = eom.vector_to_amplitudes(vector, nmo, nocc)
 
-    multiroots = eom._nroots > 1
+    multiroots = eom._nroots > 1 and support_multi_root
     
     r1 = einsum_holder._expr_r1_ea(multiroots)
     r2 = einsum_holder._expr_r2_ea(multiroots)
@@ -490,18 +494,18 @@ def eaccsd_matvec(eom, imds=None, diag=None, thc_scheduler:einsum_holder.THC_sch
     thc_scheduler.register_expr(einsum_holder.THC_scheduler.ea_hr1_r_name, Hr1)
     thc_scheduler.register_expr(einsum_holder.THC_scheduler.ea_hr2_r_name, Hr2)
 
-def leaccsd_matvec(eom, imds=None, diag=None, thc_scheduler:einsum_holder.THC_scheduler=None):
+def leaccsd_matvec(eom, imds=None, support_multi_root=False, diag=None, thc_scheduler:einsum_holder.THC_scheduler=None):
     # Note this is not the same left EA equations used by Nooijen and Bartlett.
     # Small changes were made so that the same type L2 basis was used for both the
     # left EA and left IP equations.  You will note more similarity for these
     # equations to the left IP equations than for the left EA equations by Nooijen.
     if imds is None: imds = eom.make_imds()
-    #nocc = eom.nocc
+    nocc = eom.nocc
     #nmo = eom.nmo
     #nvir = nmo - nocc
     #r1, r2 = eom.vector_to_amplitudes(vector, nmo, nocc)
 
-    multiroots = eom._nroots > 1
+    multiroots = eom._nroots > 1 and support_multi_root
     
     r1 = einsum_holder._expr_r1_ea(multiroots)
     r2 = einsum_holder._expr_r2_ea(multiroots)

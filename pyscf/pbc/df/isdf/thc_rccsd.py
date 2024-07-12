@@ -341,7 +341,6 @@ if __name__ == "__main__":
     c = 12
     N = 1
     
-    #if rank == 0:
     cell   = pbcgto.Cell()
     boxlen = 3.5668
     cell.a = np.array([[boxlen,0.0,0.0],[0.0,boxlen,0.0],[0.0,0.0,boxlen]]) 
@@ -384,9 +383,7 @@ if __name__ == "__main__":
                                     basis=cell.basis, 
                                     pseudo=cell.pseudo,
                                     partition=prim_partition, ke_cutoff=cell.ke_cutoff, verbose=verbose) 
-    
-    ####### isdf MP2 can perform directly! ####### 
-    
+        
     import numpy
     from pyscf.pbc import gto, scf, mp    
     

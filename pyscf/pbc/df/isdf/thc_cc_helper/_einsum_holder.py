@@ -913,8 +913,8 @@ def thc_einsum_sybolic(subscripts, *tensors, **kwargs):
     
     if len(tensors) == 0:
         raise ValueError("No tensors provided.")
-    if len(tensors) == 1:
-        return tensors[0]
+    #if len(tensors) == 1:
+    #    return tensors[0]
     
     # check sanity and aligned indices #
     
