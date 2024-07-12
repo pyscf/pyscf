@@ -572,14 +572,14 @@ class _expr_r2_ip(_einsum_term):
         else:
             super().__init__("R2", "pija", args=["R2"])
 
-class _expr_ea_ip(_einsum_term):
+class _expr_r1_ea(_einsum_term):
     def __init__(self, multiroots=False):
         if not multiroots:
             super().__init__("R1", "a", args=["R1"])
         else:
             super().__init__("R1", "pa", args=["R1"])
     
-class _expr_ea_ip(_einsum_term):
+class _expr_r2_ea(_einsum_term):
     def __init__(self, multiroots=False):
         if not multiroots:
             super().__init__("R2", "iab", args=["R2"])
