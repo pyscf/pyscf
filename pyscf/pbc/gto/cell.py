@@ -17,7 +17,6 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import sys
 import json
 import ctypes
 import warnings
@@ -1337,10 +1336,13 @@ class Cell(mole.MoleBase):
         exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
         if self.exp_to_discard is None:
             if np.any(exp_min < 0.1):
-                sys.stderr.write('''WARNING!
-  Very diffused basis functions are found in the basis set. They may lead to severe
-  linear dependence and numerical instability.  You can set  cell.exp_to_discard=0.1
-  to remove the diffused Gaussians whose exponents are less than 0.1.\n\n''')
+                logger.warn(self, 'Very diffused basis functions are found '
+                                  'in the basis set. They may lead to severe '
+                                  'linear dependence and numerical '
+                                  'instability.  You can set '
+                                  'cell.exp_to_discard=0.1 to remove the '
+                                  'diffused Gaussians whose exponents are '
+                                  'less than 0.1.')
         elif np.any(exp_min < self.exp_to_discard):
             # Discard functions of small exponents in basis
             _basis = {}
@@ -1420,18 +1422,20 @@ class Cell(mole.MoleBase):
 
         _a = self.lattice_vectors()
         if np.linalg.det(_a) < 0:
-            sys.stderr.write('''WARNING!
-  Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
-  It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
+            logger.warn(self, "Lattice are not in right-handed coordinate "
+                              "system. This can cause wrong value for some "
+                              "integrals.  It's recommended to resort the "
+                              "lattice vectors to a = %s" % _a[[0,2,1]])
 
         if self.dimension == 2 and self.low_dim_ft_type != 'inf_vacuum':
             # check vacuum size. See Fig 1 of PRB, 73, 2015119
             #Lz_guess = self.rcut*(1+np.sqrt(2))
             Lz_guess = self.rcut * 2
             if np.linalg.norm(_a[2]) < 0.7 * Lz_guess:
-                sys.stderr.write('''WARNING!
-  Size of vacuum may not be enough. The recommended vacuum size is %s AA (%s Bohr)\n\n'''
-                                 % (Lz_guess*param.BOHR, Lz_guess))
+                logger.warn(self, 'Size of vacuum may not be enough. The '
+                                  'recommended vacuum size is '
+                                  '%s AA (%s Bohr)'
+                                  % (Lz_guess*param.BOHR, Lz_guess))
 
         if self.mesh is None or self._mesh_from_build:
             if self.ke_cutoff is None:

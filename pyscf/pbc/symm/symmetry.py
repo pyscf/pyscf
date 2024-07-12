@@ -16,7 +16,6 @@
 # Authors: Xing Zhang <zhangxing.nju@gmail.com>
 #
 
-import sys
 import copy
 from functools import reduce
 import numpy as np
@@ -172,15 +171,17 @@ class Symmetry():
             self.ops = [space_group.SPGElement(),]
         else:
             if not cell._built:
-                sys.stderr.write('Warning: %s must be initialized before calling Symmetry.\n'
-                                 'Initialize %s in %s\n' % (cell, cell, self))
+                logger.warn(self, '%s must be initialized before calling '
+                                  'Symmetry. Initialize %s in %s'
+                                  % (cell, cell, self))
                 cell.build()
 
             self.spacegroup = space_group.SpaceGroup(cell).build(dump_info=False)
             self.symmorphic = symmorphic
             if cell.dimension < 3:
                 if not self.symmorphic:
-                    sys.stderr.write('Warning: setting symmorphic=True for low-dimensional system.\n')
+                    logger.warn(self, 'setting symmorphic=True for '
+                                      'low-dimensional system.')
                     self.symmorphic = True
 
             ops = self.spacegroup.ops
