@@ -185,6 +185,8 @@ class THC_EOM_IP_RCCSD(eom_rccsd.EOM):
         
         if imds is None: imds = self.make_imds()
         t1, t2 = self.t1, self.t2
+        t1 = to_numpy_cpu(t1)
+        t2 = to_numpy_cpu(t2)
         dtype = np.result_type(t1, t2)
         nocc, nvir = t1.shape
         fock = imds.eris.fock
@@ -544,6 +546,8 @@ class THC_EOM_EA_RCCSD(eom_rccsd.EOM):
         
         if imds is None: imds = self.make_imds()
         t1, t2 = self.t1, self.t2
+        t1 = to_numpy_cpu(t1)
+        t2 = to_numpy_cpu(t2)
         dtype = np.result_type(t1, t2)
         nocc, nvir = t1.shape
         fock = imds.eris.fock
@@ -832,10 +836,13 @@ if __name__ == "__main__":
 
     ########## TEST EOM-EA/IP diag ##########
 
+    NROOTS = 1
+    MBPT2 = False
+
     from pyscf.pbc.df.isdf.isdf_posthf import RCCSD_isdf
     
     mycc_isdf, eris_ccsd = RCCSD_isdf(mf_isdf, run=False, cc2=False)
-    mycc_isdf.kernel(eris=eris_ccsd)
+    mycc_isdf.kernel(eris=eris_ccsd, mbpt2=MBPT2)
     
     from pyscf.cc import eom_rccsd
     
@@ -856,7 +863,7 @@ if __name__ == "__main__":
                          backend="opt_einsum", 
                          use_torch=True, with_gpu=True, 
                          projector_t="thc", cc2=False, t2_with_denominator=False)
-    thc_ccsd.ccsd()
+    thc_ccsd.ccsd(mbpt2=MBPT2)
 
     thc_eom_ip = THC_EOM_IP_RCCSD(thc_ccsd)
     IP_diag_test = thc_eom_ip.get_diag()
@@ -882,8 +889,6 @@ if __name__ == "__main__":
     diff_var_EA = np.var(np.abs(EA_diag_test - EA_diag))
     print(diff_IP, diff_mean_IP, diff_var_IP)
     print(diff_EA, diff_mean_EA, diff_var_EA)
-    
-    NROOTS = 1
     
     thc_eom_ip.kernel(nroots=NROOTS)
     eom_IP.kernel(nroots=NROOTS, eris=eris_ccsd)
