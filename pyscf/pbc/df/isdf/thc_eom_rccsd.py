@@ -554,7 +554,7 @@ class THC_EOM_EA_RCCSD(eom_rccsd.EOM):
         foo = fock[:nocc,:nocc].copy()
         fvv = fock[nocc:,nocc:].copy()
         
-        Hr1 = np.zeros((nocc), dtype)
+        Hr1 = np.zeros((nvir), dtype)
         Hr2 = np.zeros((nocc,nvir,nvir), dtype)
         
         if self._use_torch:
