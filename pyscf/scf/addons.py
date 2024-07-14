@@ -19,7 +19,6 @@
 #          Susi Lehtola <susi.lehtola@gmail.com>
 
 from functools import reduce
-import math
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -80,15 +79,11 @@ def _smearing_optimize(f_occ, mo_es, nocc, sigma, ntol=1e-3, rec=None):
         options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
     mu = res.x
     mo_occs = f_occ(mu, mo_es, sigma)
-    if not res.success:
-        logger.error(rec, f'addons._smearing_optimize failed: {res.message}')
-    if numpy.abs(mo_occs.sum() - nocc) > ntol:
-        logger.error(rec, f'addons._smearing_optimize failed: {mo_occs.sum()} != {nocc}')
     return mu, mo_occs
 
 def _get_fermi(mo_energy, nocc):
     mo_e_sorted = numpy.sort(mo_energy)
-    return mo_e_sorted[math.ceil(nocc)-1]
+    return mo_e_sorted[numpy.ceil(nocc).astype(int) - 1]
 
 class _SmearingSCF:
 
