@@ -511,8 +511,8 @@ class THC_EOM_EA_RCCSD(eom_rccsd.EOM):
         if nocc is None:
             nocc = self.nocc
         nvir = nmo - nocc
-        r1 = vector[:nocc].copy()
-        r2 = vector[nocc:].copy().reshape(nocc,nvir,nvir)
+        r1 = vector[:nvir].copy()
+        r2 = vector[nvir:].copy().reshape(nocc,nvir,nvir)
         #if self._use_torch:
         #    r1 = to_torch(r1, self._with_gpu)
         #    r2 = to_torch(r2, self._with_gpu)
@@ -734,8 +734,8 @@ class THC_EOM_EA_RCCSD(eom_rccsd.EOM):
         diag = self.get_diag(imds)
         
         #if self._nroots == 1:
-        r1_zeros = np.zeros(self.nocc)
-        r2_zeros = np.zeros((self.nocc, self.nocc, self.nvir))
+        r1_zeros = np.zeros(self.nvir)
+        r2_zeros = np.zeros((self.nocc, self.nvir, self.nvir))
         #else:
         #    r1_zeros = np.zeros((self._nroots, self.nocc))
         #    r2_zeros = np.zeros((self._nroots, self.nocc, self.nocc, self.nvir))
@@ -795,6 +795,7 @@ if __name__ == "__main__":
             ] 
 
     cell.basis   = 'gth-szv'
+    #cell.basis   = 'gth-dzvp'
     cell.pseudo  = 'gth-pade'
     cell.verbose = 10
     cell.ke_cutoff = 70
@@ -819,6 +820,8 @@ if __name__ == "__main__":
                                     basis=cell.basis, 
                                     pseudo=cell.pseudo,
                                     partition=prim_partition, ke_cutoff=cell.ke_cutoff, verbose=verbose) 
+    cell.charge = 2
+    cell.build()
         
     import numpy
     from pyscf.pbc import gto, scf, mp    
