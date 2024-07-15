@@ -4077,18 +4077,19 @@ def fakemol_for_cgtf_charge(coord, expnt=1e16, contr_coeff=1):
     can be given as a linear combination of Gaussians with 
     exponents expnt and contraction coefficients contr_coeff.
     '''
+    assert coord.shape[0] == 1
     nbas = coord.shape[0]
     expnt = numpy.asarray(expnt).ravel()
     contr_coeff = numpy.asarray(contr_coeff).ravel()
     
-    fakeatm = numpy.zeros((nbas,ATM_SLOTS), dtype=numpy.int32)
-    fakebas = numpy.zeros((nbas,BAS_SLOTS), dtype=numpy.int32)
+    fakeatm = numpy.zeros((1,ATM_SLOTS), dtype=numpy.int32)
+    fakebas = numpy.zeros((1,BAS_SLOTS), dtype=numpy.int32)
     fakeenv = [0] * PTR_ENV_START
     ptr = PTR_ENV_START
-    fakeatm[:,PTR_COORD] = numpy.arange(ptr, ptr+nbas*3, 3)
+    fakeatm[:,PTR_COORD] = numpy.arange(ptr, ptr+3, 3)
     fakeenv.append(coord.ravel())
-    ptr += nbas*3
-    fakebas[:,ATOM_OF] = numpy.arange(nbas)
+    ptr += 3
+    fakebas[:,ATOM_OF] = 0#numpy.arange(nbas)
     fakebas[:,NPRIM_OF] = contr_coeff.size
     fakebas[:,NCTR_OF] = 1
     if expnt.size == 1:
@@ -4099,8 +4100,8 @@ def fakemol_for_cgtf_charge(coord, expnt=1e16, contr_coeff=1):
         ptr += 2
     else:
         assert expnt.size == contr_coeff.size
-        fakebas[:,PTR_EXP] = ptr + numpy.arange(nbas) * 2
-        fakebas[:,PTR_COEFF] = ptr + numpy.arange(nbas) * 2 + contr_coeff.size
+        fakebas[:,PTR_EXP] = ptr
+        fakebas[:,PTR_COEFF] = ptr + contr_coeff.size
         coeff = contr_coeff / (2 * numpy.sqrt(numpy.pi) * gaussian_int(2, expnt))
         fakeenv.append(numpy.vstack((expnt, coeff)).ravel())
 
