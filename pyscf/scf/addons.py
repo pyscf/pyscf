@@ -68,7 +68,7 @@ def _gaussian_smearing_occ(mu, mo_energy, sigma):
     '''Gaussian smearing'''
     return 0.5 * scipy.special.erfc((mo_energy - mu) / sigma)
 
-def _smearing_optimize(f_occ, mo_es, nocc, sigma, ntol=1e-3, rec=None):
+def _smearing_optimize(f_occ, mo_es, nocc, sigma):
     def nelec_cost_fn(m, mo_es, nocc):
         mo_occ = f_occ(m, mo_es, sigma)
         return (mo_occ.sum() - nocc)**2
@@ -138,8 +138,8 @@ class _SmearingSCF:
                 mo_es = mo_energy
             nocc = self.nelec
             if self.mu0 is None:
-                mu_a, occa = _smearing_optimize(f_occ, mo_es[0], nocc[0], sigma, rec=self)
-                mu_b, occb = _smearing_optimize(f_occ, mo_es[1], nocc[1], sigma, rec=self)
+                mu_a, occa = _smearing_optimize(f_occ, mo_es[0], nocc[0], sigma)
+                mu_b, occb = _smearing_optimize(f_occ, mo_es[1], nocc[1], sigma)
             else:
                 if numpy.isscalar(self.mu0):
                     mu_a = mu_b = self.mu0
@@ -177,7 +177,7 @@ class _SmearingSCF:
                 nocc = nelectron / 2
 
             if self.mu0 is None:
-                mu, mo_occs = _smearing_optimize(f_occ, mo_es, nocc, sigma, rec=self)
+                mu, mo_occs = _smearing_optimize(f_occ, mo_es, nocc, sigma)
             else:
                 # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
                 mu = self.mu0
