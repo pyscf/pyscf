@@ -126,7 +126,7 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
     return evals, evecs
 
 def cis_matvec_singlet(cis, vector, kshift, eris=None):
-    """Compute matrix-vector product of the Hamiltonion matrix and a CIS c
+    """Compute matrix-vector product of the Hamiltonian matrix and a CIS c
     oefficient vector, in the space of single excitation.
 
     Arguments:
@@ -143,7 +143,7 @@ def cis_matvec_singlet(cis, vector, kshift, eris=None):
             electron repulsion integrals (default: {None})
 
     Returns:
-        1D array -- matrix-vector product of the Hamiltonion matrix and the
+        1D array -- matrix-vector product of the Hamiltonian matrix and the
             input vector.
     """
     if eris is None:

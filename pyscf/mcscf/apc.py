@@ -28,7 +28,7 @@ class Chooser():
         occ: 1D Numpy Array
             Orbital occupations for orbs (2,1,0); nactel will be set to the number of electrons in the selected orbitals
         entropies: 1D Numpy Array
-            Importance measurment used to rank the orbitals
+            Importance measurement used to rank the orbitals
         max_size: Int or Tuple
             Active space size constraint.
             If tuple, interpreted as (nelecas,ncas)

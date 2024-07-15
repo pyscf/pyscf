@@ -197,7 +197,7 @@ def symmetrize_space(mol, mo, s=None,
     '''Symmetrize the given orbital space.
 
     This function is different to the :func:`symmetrize_orb`:  In this function,
-    the given orbitals are mixed to reveal the symmtery; :func:`symmetrize_orb`
+    the given orbitals are mixed to reveal the symmetry; :func:`symmetrize_orb`
     projects out non-symmetric components for each orbital.
 
     Args:
@@ -489,7 +489,7 @@ def irrep_id2name(gpname, irrep_id):
             See IRREP_ID_TABLE in pyscf/symm/param.py
 
     Returns:
-        Irrep sybmol, str
+        Irrep symbol, str
     '''
     gpname = std_symb(gpname)
     if gpname == 'SO3':
