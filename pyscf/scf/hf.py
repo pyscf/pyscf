@@ -807,7 +807,8 @@ def make_sap(mol, sap_basis):
     if numpy.abs(Z_eff + mol.nelectron) > 1e-6:
         logger.warn(
             mol,
-            '\n'.join([f'SAP basis coefficients must be equal or close to total electronic charge: {Z_eff} !≃ {mol.nelectron}',
+            '\n'.join([f'SAP basis coefficients must be equal or close'
+            + f'to total electronic charge: {Z_eff} !≃ {mol.nelectron}',
             f'Check fails with value {numpy.abs(Z_eff + mol.nelectron)})']))
 
     V = numpy.zeros((mol.nao_nr(), mol.nao_nr()))
