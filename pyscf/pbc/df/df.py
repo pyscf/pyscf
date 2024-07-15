@@ -66,7 +66,7 @@ LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     r'''Generate a cell object using the density fitting auxbasis as
-    the basis set. The normalization coeffcients of the auxiliary cell are
+    the basis set. The normalization coefficients of the auxiliary cell are
     different to the regular (square-norm) convention. To simplify the
     compensated charge algorithm, they are normalized against
     \int (r^l e^{-ar^2} r^2 dr
@@ -378,7 +378,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                     LpqR = LpqI = None
 
     def get_pp(self, kpts=None):
-        '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+        '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
         '''
         cell = self.cell
         kpts, is_single_kpt = _check_kpts(self, kpts)

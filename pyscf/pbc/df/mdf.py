@@ -98,7 +98,7 @@ class MDF(df.GDF):
         df.GDF.build(self, j_only, with_j3c, kpts_band)
         cell = self.cell
         if any(x % 2 == 0 for x in self.mesh[:cell.dimension]):
-            # Even number in mesh can produce planewaves without couterparts
+            # Even number in mesh can produce planewaves without counterparts
             # (see np.fft.fftfreq). MDF mesh is typically not enough to capture
             # all basis. The singular planewaves can break the symmetry in
             # potential (leads to non-real density) and thereby break the

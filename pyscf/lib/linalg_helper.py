@@ -453,7 +453,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             except IndexError:
                 raise LinearDependenceError('No linearly independent basis found '
                                             'by the diagonalization solver.')
-        if heff is None:  # Lazy initilize heff to determine the dtype
+        if heff is None:  # Lazy initialize heff to determine the dtype
             heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:
             heff = numpy.asarray(heff, dtype=dtype)
@@ -826,7 +826,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
                 dtype = numpy.result_type(axt[0], xt[0])
             except IndexError:
                 dtype = numpy.result_type(ax[0].dtype, xs[0].dtype)
-        if heff is None:  # Lazy initilize heff to determine the dtype
+        if heff is None:  # Lazy initialize heff to determine the dtype
             heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:
             heff = numpy.asarray(heff, dtype=dtype)

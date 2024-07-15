@@ -2197,7 +2197,7 @@ class MoleBase(lib.StreamObject):
             subgroup
 
         atom : list or str
-            To define molecluar structure.  The internal format is
+            To define molecular structure.  The internal format is
 
             | atom = [[atom1, (x, y, z)],
             |         [atom2, (x, y, z)],
@@ -2473,7 +2473,7 @@ class MoleBase(lib.StreamObject):
             max_memory : int, float
                 Allowd memory in MB.  If given, overwrite :attr:`Mole.max_memory`
             atom : list or str
-                To define molecluar structure.
+                To define molecular structure.
             basis : dict or str
                 To define basis set.
             nucmod : dict or str
@@ -3748,7 +3748,7 @@ class Mole(MoleBase):
     def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
               **kwargs):
         '''Integral transformation for arbitrary orbitals and arbitrary
-        integrals.  See more detalied documentation in func:`ao2mo.kernel`.
+        integrals.  See more detailed documentation in func:`ao2mo.kernel`.
 
         Args:
             mo_coeffs (an np array or a list of arrays) : A matrix of orbital

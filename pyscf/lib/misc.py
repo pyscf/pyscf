@@ -727,7 +727,7 @@ def alias(fn, alias_name=None):
 
     Using alias function instead of fn1 = fn because some methods may be
     overloaded in the child class. Using "alias" can make sure that the
-    overloaded mehods were called when calling the aliased method.
+    overloaded methods were called when calling the aliased method.
     '''
     name = fn.__name__
     if alias_name is None:
@@ -1015,7 +1015,7 @@ class call_in_background:
 
     Attributes:
         sync (bool): Whether to run in synchronized mode.  The default value
-            is False (asynchoronized mode).
+            is False (asynchronized mode).
 
     Examples:
 
@@ -1064,7 +1064,7 @@ class call_in_background:
                 # import lock) bug in the threading module.  See also
                 # https://github.com/paramiko/paramiko/issues/104
                 # https://docs.python.org/2/library/threading.html#importing-in-threaded-code
-                # Disable the asynchoronous mode for safe importing
+                # Disable the asynchronous mode for safe importing
                 def def_async_fn(i):
                     return fns[i]
 

@@ -173,7 +173,7 @@ def _update_task_list(mydf, hermi=0, ngrids=None, ke_ratio=None, rel_cutoff=None
         hermi_orig = task_list.contents.hermi
         nlevels = task_list.contents.nlevels
         rel_cutoff_orig = task_list.contents.gridlevel_info.contents.rel_cutoff
-        #TODO also need to check kenetic energy cutoff change
+        #TODO also need to check kinetic energy cutoff change
         if (hermi_orig > hermi or
                 nlevels != ngrids or
                 abs(rel_cutoff_orig-rel_cutoff) > 1e-12):

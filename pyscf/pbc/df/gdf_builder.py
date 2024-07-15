@@ -750,7 +750,7 @@ def auxbar(fused_cell):
             if es.size == 1:
                 vbar[aux_loc[i]] = -1/es[0]
             else:
-                # Remove the normalization to get the primitive contraction coeffcients
+                # Remove the normalization to get the primitive contraction coefficients
                 norms = half_sph_norm/gto.gaussian_int(2, es)
                 cs = np.einsum('i,ij->ij', 1/norms, fused_cell._libcint_ctr_coeff(i))
                 vbar[aux_loc[i]:aux_loc[i+1]] = np.einsum('in,i->n', cs, -1/es)

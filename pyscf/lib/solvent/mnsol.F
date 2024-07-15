@@ -44,8 +44,8 @@ C     USE THE FOLLOWING VALUES OF ICDS:
 C     ICDS=1 FOR WATER
 C     ICDS=2 FOR ANY NONAQUEOUS SOLVENT
 C     IF ICDS=2 YOU NEED TO PROVIDE THE FOLLOWING SOLVENT DESCRIPTORS (see http://comp.chem.umn.edu/solvation/mnsddb.pdf):
-C       SOLA (Abraham's hydrogen-bond acidity paramerer),
-C       SOLB (Abraham's hydrogen-bond basicity paramerer),
+C       SOLA (Abraham's hydrogen-bond acidity parameter),
+C       SOLB (Abraham's hydrogen-bond basicity parameter),
 C       SOLC (carbon aromaticity),
 C       SOLG (macroscopic surface tension in cal/(mol A^2),
 C       SOLH (electronegative halogenicity),
@@ -306,8 +306,8 @@ C
       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
 C
 C     YOU NEED TO PROVIDE THE FOLLOWING SOLVENT DESCRIPTORS (see http://comp.chem.umn.edu/solvation/mnsddb.pdf):
-C       SOLA (Abraham's hydrogen-bond acidity paramerer),
-C       SOLB (Abraham's hydrogen-bond basicity paramerer),
+C       SOLA (Abraham's hydrogen-bond acidity parameter),
+C       SOLB (Abraham's hydrogen-bond basicity parameter),
 C       SOLC (carbon aromaticity),
 C       SOLG (macroscopic surface tension in cal/(mol A^2),
 C       SOLH (electronegative halogenicity),

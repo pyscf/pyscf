@@ -46,7 +46,7 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
         ks : an instance of DFT class
 
         dm : 2D ndarray
-            one-partical density matrix
+            one-particle density matrix
         h1e : 2D ndarray
             Core hamiltonian
 
