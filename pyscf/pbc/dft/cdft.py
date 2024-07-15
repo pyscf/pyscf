@@ -56,8 +56,8 @@ def cdft(mf,cell,offset,orbital,basis=None):
     #
 
     iaoi = a.T[orbital,:]
-    ##gonna try nomrlaizing to see if that makes life better
-    ##iaoi = iaoi / numpy.linalg.norm(iaoi)
+    # gonna try normalizing to see if that makes life better
+    # iaoi = iaoi / numpy.linalg.norm(iaoi)
     mf.shift_hamiltonian= numpy.diag(iaoi) * offset
     mf.constrained_dft = True
 

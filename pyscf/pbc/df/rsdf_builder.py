@@ -1014,7 +1014,7 @@ def get_nuc(nuc_builder):
     return nuc
 
 def get_pp(nuc_builder):
-    '''get the periodic pseudotential nuc-el ao matrix, with g=0 removed.
+    '''get the periodic pseudopotential nuc-el ao matrix, with g=0 removed.
 
     kwargs:
         mesh: custom mesh grids. by default mesh is determined by the
@@ -1401,7 +1401,7 @@ def _round_off_to_odd_mesh(mesh):
     # the conjugation symmetry between the k-points k and -k.
     # When building the DF integral tensor in function _make_j3c, the symmetry
     # between k and -k is used (function conj_j2c) to overcome the error
-    # caused by auxiliary basis linear dependency. More detalis of this
+    # caused by auxiliary basis linear dependency. More details of this
     # problem can be found in function _make_j3c.
     if isinstance(mesh, (int, np.integer)):
         return (mesh // 2) * 2 + 1

@@ -59,7 +59,7 @@
  */
 
 /* 
- * For given stra_id, spread alpah-strings (which can propagate to stra_id)
+ * For given stra_id, spread alpha-strings (which can propagate to stra_id)
  * into t1[:nstrb,nnorb] 
  *    str1-of-alpha -> create/annihilate -> str0-of-alpha
  * ci0[:nstra,:nstrb] is contiguous in beta-strings

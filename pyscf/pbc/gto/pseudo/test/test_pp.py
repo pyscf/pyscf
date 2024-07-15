@@ -117,7 +117,7 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
 
 
 def get_pp(cell, kpt=np.zeros(3)):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
     '''
     coords = gen_grid.gen_uniform_grids(cell)
     aoR = numint.eval_ao(cell, coords, kpt)

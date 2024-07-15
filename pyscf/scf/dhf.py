@@ -93,7 +93,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 
     Kwargs:
         dm : 2D ndarray
-            one-partical density matrix
+            one-particle density matrix
         h1e : 2D ndarray
             Core hamiltonian
         vhf : 2D ndarray

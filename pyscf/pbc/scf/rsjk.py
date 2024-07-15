@@ -422,7 +422,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             subset_only = intersection(kpts, kpts_band).size == len(kpts_band)
             if not subset_only:
                 log.warn('Approximate J/K matrices at kpts_band '
-                         'with the bvk-cell dervied from kpts')
+                         'with the bvk-cell derived from kpts')
                 expLk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts_band.T))
         vs = lib.einsum('snpRq,Rk->snkpq', vs, expLk)
         vs = np.asarray(vs, order='C')

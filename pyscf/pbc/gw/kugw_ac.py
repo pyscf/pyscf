@@ -18,7 +18,7 @@
 
 '''
 PBC spin-unrestricted G0W0-AC QP eigenvalues with k-point sampling
-GW-AC is recommended for valence states only, and is inaccuarate for core states.
+GW-AC is recommended for valence states only, and is inaccurate for core states.
 
 Method:
     See T. Zhu and G.K.-L. Chan, arxiv:2007.03148 (2020) for details

@@ -204,11 +204,11 @@ class FCISolver(direct_spin1.FCISolver):
             return scipy.linalg.eigh(op)
 
         # TODO: check the hermitian of Hamiltonian then determine whether to
-        # call the non-hermitian diagonlization solver davidson_nosym1
+        # call the non-hermitian diagonalization solver davidson_nosym1
 
         warnings.warn('direct_nosym.kernel is not able to diagonalize '
                       'non-Hermitian Hamiltonian. If h1e and h2e is not '
-                      'hermtian, calling symmetric diagonlization in eig '
+                      'hermtian, calling symmetric diagonalization in eig '
                       'can lead to wrong results.')
 
         self.converged, e, ci = \

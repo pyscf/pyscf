@@ -2633,7 +2633,7 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
 class LibXCMixin:
     libxc = libxc
 
-    omega = None  # RSH paramter
+    omega = None  # RSH parameter
 
 ####################
 # Overwrite following functions to use custom XC functional

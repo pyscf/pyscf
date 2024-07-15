@@ -25,7 +25,7 @@
 ;;;         (bra-ops ... p* |op| ket-ops)
 ;;; the p* in the bra (| will be evaluated with |op| or |ket-ops) (if they
 ;;; have cross or dot operators). Using the sticker symbol for p/nabla
-;;; to prevent p/nabla operators comutating with the next p/nabla operators
+;;; to prevent p/nabla operators commutating with the next p/nabla operators
 
 ;;; rscalar?
 (defparameter *intvar* '(p ip nabla px py pz

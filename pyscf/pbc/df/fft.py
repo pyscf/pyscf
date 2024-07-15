@@ -63,7 +63,7 @@ def get_nuc(mydf, kpts=None):
     return numpy.asarray(vne)
 
 def get_pp(mydf, kpts=None):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
     '''
     from pyscf.pbc.dft import gen_grid
     kpts, is_single_kpt = _check_kpts(mydf, kpts)

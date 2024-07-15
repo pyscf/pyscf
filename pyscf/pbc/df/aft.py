@@ -180,7 +180,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
     raise DeprecationWarning
 
 def get_pp(mydf, kpts=None):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
 
     Kwargs:
         mesh: custom mesh grids. By default mesh is determined by the

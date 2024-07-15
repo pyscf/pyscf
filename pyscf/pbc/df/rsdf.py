@@ -32,7 +32,7 @@ ref.:
 In RSGDF, the two-center and three-center Coulomb integrals are calculated in two pars:
     j2c = j2c_SR(omega) + j2c_LR(omega)
     j3c = j3c_SR(omega) + j3c_LR(omega)
-where the SR and LR integrals correpond to using the following potentials
+where the SR and LR integrals correspond to using the following potentials
     g_SR(r_12;omega) = erfc(omega * r_12) / r_12
     g_LR(r_12;omega) = erf(omega * r_12) / r_12
 The SR integrals are evaluated in real space using a lattice summation, while
