@@ -107,6 +107,8 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
     thread_buffer = None
     global_buffer = None
     
+    print("-------------------------------------------")
+    
     for atm_id in range(group_begin, group_end):
         
         aoR = mydf.aoR[atm_id]
@@ -150,12 +152,19 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
                      ctypes.c_int(grid_ID.shape[0]))
         if no_retriction_on_nIP:
             max_rank = min(naux2_now, grid_ID.shape[0])
+            print("In select_IP_atm_ls, no_retriction_on_nIP")
         else:
             max_rank  = min(naux2_now, grid_ID.shape[0], nao_atm * c + m)
+            print("In select_IP_atm_ls, retriction_on_nIP")
         npt_find      = ctypes.c_int(0)
         pivot         = np.arange(grid_ID.shape[0], dtype=np.int32)
         thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64)
         global_buffer = np.ndarray((1, grid_ID.shape[0]), dtype=np.float64)
+        
+        print("In select_IP_atm_ls, max_rank      = ", max_rank)
+        print("In select_IP_atm_ls, naux2_now     = ", naux2_now)
+        print("In select_IP_atm_ls, grid_ID.shape = ", grid_ID.shape)
+        print("In select_IP_atm_ls, rela_cutoff   = ", rela_cutoff)
         
         if USE_SCIPY_QR:
             R, pivot = scipy.linalg.qr(aoPairBuffer, pivoting=True, mode='r', check_finite=False, overwrite_a=True)
@@ -183,6 +192,9 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
         atm_IP = np.array(atm_IP, dtype=np.int32)
         atm_IP.sort()
         results[atm_id] = atm_IP
+        
+        print("In select_IP_atm_ls, npt_find      = ", npt_find)
+        print("-------------------------------------------")
 
     del aoR_atm1
     del aoR_atm2
@@ -250,10 +262,11 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
     
     nao = aoRg_packed.shape[0]
 
-    # print("nao_group = ", nao_group)
-    # print("nao = ", nao)    
-    # print("c = %d, m = %d" % (c, m))
-
+    print("In select_IP_group_ls, nao_group   = ", nao_group)
+    print("In select_IP_group_ls, nao         = ", nao)    
+    print("In select_IP_group_ls, c           = %d, m = %d" % (c, m))
+    print("In select_IP_group_ls, rela_cutoff = ", mydf.rela_cutoff_QRCP)
+    
     # naux_now = int(np.sqrt(c*nao)) + m # seems to be too large
     naux_now = int(np.sqrt(c*nao_group)) + m
     G1 = np.random.rand(nao, naux_now)
@@ -297,13 +310,16 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
 
     if mydf.no_restriction_on_nIP:
         max_rank = min(naux2_now, IP_possible.shape[0])
+        print("In select_IP_group_ls, no_restriction_on_nIP")
     else:
         max_rank  = min(naux2_now, IP_possible.shape[0], nao_group * c)  
-    # print("naux2_now = %d, max_rank = %d" % (naux2_now, max_rank))
-    # print("IP_possible.shape = ", IP_possible.shape)
-    # print("nao_group = ", nao_group)
-    # print("c = ", c)
-    # print("nao_group * c = ", nao_group * c)
+        print("In select_IP_group_ls, restriction_on_nIP")
+        
+    print("In select_IP_group_ls, naux2_now = %d, max_rank = %d" % (naux2_now, max_rank))
+    print("In select_IP_group_ls, IP_possible.shape = ", IP_possible.shape)
+    print("In select_IP_group_ls, nao_group = ", nao_group)
+    print("In select_IP_group_ls, c = ", c)
+    print("In select_IP_group_ls, nao_group * c = ", nao_group * c)
     
     npt_find = ctypes.c_int(0)
     pivot    = np.arange(IP_possible.shape[0], dtype=np.int32)
@@ -312,7 +328,7 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
     global_buffer = np.ndarray((1, IP_possible.shape[0]), dtype=np.float64)
 
 
-    if USE_SCIPY_QR:
+    if not USE_SCIPY_QR:
         fn_colpivot_qr(aoPairBuffer.ctypes.data_as(ctypes.c_void_p),
                        ctypes.c_int(naux2_now),
                        ctypes.c_int(IP_possible.shape[0]),
@@ -333,6 +349,8 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
         # npt_find = nao_group * c 
         R, pivot = scipy.linalg.qr(aoPairBuffer, pivoting=True, mode='r', check_finite=False, overwrite_a=True)
         npt_find = nao_group * c 
+    
+    print("In select_IP_group_ls, npt_find = ", npt_find)
     
     pivot = pivot[:npt_find]
     pivot.sort()
@@ -1574,7 +1592,8 @@ if __name__ == '__main__':
     print("group_partition = ", group_partition)
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
+    # pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False, rela_cutoff_QRCP=3e-3)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition)
     pbc_isdf_info.build_auxiliary_Coulomb()
     

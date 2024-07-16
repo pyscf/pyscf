@@ -840,11 +840,12 @@ if __name__ == "__main__":
     ########## TEST EOM-EA/IP diag ##########
 
     NROOTS = 1
-    MBPT2 = False
+    MBPT2  = False
+    CC2    = True
 
     from pyscf.pbc.df.isdf.isdf_posthf import RCCSD_isdf
     
-    mycc_isdf, eris_ccsd = RCCSD_isdf(mf_isdf, run=False, cc2=False)
+    mycc_isdf, eris_ccsd = RCCSD_isdf(mf_isdf, run=False, cc2=CC2)
     mycc_isdf.kernel(eris=eris_ccsd, mbpt2=MBPT2)
     
     from pyscf.cc import eom_rccsd
@@ -865,7 +866,7 @@ if __name__ == "__main__":
     thc_ccsd = THC_RCCSD(my_mf=mf_isdf, X=X, partition=partition, memory=2**31, 
                          backend="opt_einsum", 
                          use_torch=True, with_gpu=True, 
-                         projector_t="thc", cc2=False, t2_with_denominator=False)
+                         projector_t="thc", cc2=CC2, t2_with_denominator=False)
     thc_ccsd.ccsd(mbpt2=MBPT2)
 
     thc_eom_ip = THC_EOM_IP_RCCSD(thc_ccsd)
