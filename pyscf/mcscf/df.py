@@ -389,7 +389,11 @@ class _ERIS:
         dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
         vj, vk = casscf.get_jk(mol, dm_core)
         self.vhf_c = reduce(numpy.dot, (mo.T, vj*2-vk, mo))
+        fxpp.close()
         t0 = log.timer('density fitting ao2mo', *t0)
+    def __del__(self):
+        if self.feri is not None:
+            self.feri.close()
 
 def _mem_usage(ncore, ncas, nmo):
     outcore = basic = ncas**2*nmo**2*2 * 8/1e6
