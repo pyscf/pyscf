@@ -104,6 +104,9 @@ def isdf_eri(mydf, mo_coeff = None, verbose=None):
     Returns:
         eri       : MO-ERI with s4 symmetry.
     
+    TODO:
+    when eri is very small, use DGEMM!
+    
     """
     
     #### basic info #### 
@@ -364,6 +367,204 @@ def isdf_eri(mydf, mo_coeff = None, verbose=None):
         
     return eri * ngrid / vol
     
+def isdf_eri_2(mydf, mo_coeff = None, verbose=None):
+    
+    """
+    Perform AO2MO transformation from ISDF with robust fitting with s4 symmetry
+    Locality is supported if explored!
+    
+    Args:
+        mydf      :
+        mo_coeff  : Molecular orbital coefficients.
+    
+    Returns:
+        eri       : MO-ERI with s4 symmetry.
+    
+    NOTE: 
+    
+    For small eri case 
+    
+    """
+    
+    #### basic info #### 
+    
+    assert mo_coeff is not None
+    
+    direct = mydf.direct
+    if direct is True:
+        raise NotImplementedError("direct is not supported in isdf_eri_robust")
+    with_robust_fitting = mydf.with_robust_fitting
+    
+    nao   = mydf.cell.nao
+    naux  = mydf.naux
+    vol   = mydf.cell.vol
+    ngrid = np.prod(mydf.cell.mesh)
+    natm  = mydf.cell.natm
+    
+    if mo_coeff is not None:
+        assert mo_coeff.shape[0] == nao
+        nmo = mo_coeff.shape[1]
+    else:
+        nmo = nao
+    
+    size  = nmo * (nmo + 1) // 2
+    eri   = numpy.zeros((size, size))
+    
+    aoR  = mydf.aoR
+    aoRg = mydf.aoRg
+    assert isinstance(aoR, list)
+    assert isinstance(aoRg, list)
+    
+    if mo_coeff is not None:
+        
+        moR  = []
+        moRg = []
+        
+        for i in range(natm):
+            
+            if with_robust_fitting:
+                ao_involved     = aoR[i].ao_involved
+                mo_coeff_packed = mo_coeff[ao_involved,:].copy()
+                _moR            = lib.ddot(mo_coeff_packed.T, aoR[i].aoR)
+                mo_involved     = np.arange(nmo)
+                moR.append(
+                    aoR_Holder(
+                        aoR = _moR,
+                        ao_involved = mo_involved,
+                        local_gridID_begin  = aoR[i].local_gridID_begin,
+                        local_gridID_end    = aoR[i].local_gridID_end,
+                        global_gridID_begin = aoR[i].global_gridID_begin,
+                        global_gridID_end   = aoR[i].global_gridID_end)
+                )
+            else:
+                moR.append(None)
+            
+            ao_involved     = aoRg[i].ao_involved
+            mo_coeff_packed = mo_coeff[ao_involved,:].copy()
+            _moRg           = lib.ddot(mo_coeff_packed.T, aoRg[i].aoR)
+            mo_involved     = np.arange(nmo)
+            moRg.append(
+                aoR_Holder(
+                    aoR = _moRg,
+                    ao_involved = mo_involved,
+                    local_gridID_begin  = aoRg[i].local_gridID_begin,
+                    local_gridID_end    = aoRg[i].local_gridID_end,
+                    global_gridID_begin = aoRg[i].global_gridID_begin,
+                    global_gridID_end   = aoRg[i].global_gridID_end)
+            )
+    else:
+        moR = aoR
+        moRg = aoRg
+    
+    max_nao_involved   = np.max([aoR_holder.aoR.shape[0] for aoR_holder in moR  if aoR_holder is not None])
+    max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in moR  if aoR_holder is not None])
+    max_nIP_involved   = np.max([aoR_holder.aoR.shape[1] for aoR_holder in moRg if aoR_holder is not None])
+    
+    ###### loop over basic info to allocate the buf ######
+    
+    #max_npair    = (max_nao_involved * (max_nao_involved + 1)) // 2
+    #ddot_res_buf = np.zeros((max_nIP_involved, max_npair)) 
+    max_npair = nmo * (nmo + 1) // 2
+    npair = max_npair
+    suberi       = np.zeros((npair, npair))
+    ddot_res_buf = np.zeros((naux, npair)) 
+
+    aoPairRg_buf  = np.zeros((nmo, nmo, max_nIP_involved))
+    #aoPairRg_buf2 = np.zeros((max_nao_involved, max_nao_involved, max_nIP_involved))
+    aoPairRg = np.zeros((npair, naux))
+    
+    if with_robust_fitting:
+        aoPairR_buf = np.zeros((nmo, nmo, max_ngrid_involved))
+        aoPairR = np.zeros((npair, ngrid))
+    else:
+        aoPairR_buf = None
+    
+    #### involved function #### 
+    
+    fn_packcol = getattr(libpbc, "_buildK_packcol2", None)
+    assert fn_packcol is not None
+    
+    fn_unpack_suberi_to_eri = getattr(libpbc, "_unpack_suberi_to_eri", None)
+    assert fn_unpack_suberi_to_eri is not None
+    
+    fn_pack_aoR_to_aoPairR = getattr(libpbc, "_pack_aoR_to_aoPairR_same", None)
+    assert fn_pack_aoR_to_aoPairR is not None
+    
+    ### construct aoPairRg, aoPairR ###
+    
+    for partition_i in range(natm):
+            
+        aoRg_i            = moRg[partition_i]
+        ao_involved_i     = aoRg_i.ao_involved
+        nao_i             = aoRg_i.aoR.shape[0]
+        global_IP_begin_i = aoRg_i.global_gridID_begin
+        nIP_i             = aoRg_i.aoR.shape[1]
+        nPair_i           = (nao_i * (nao_i + 1)) // 2
+        assert nPair_i   == npair
+        aoPair_i          = np.ndarray((nPair_i, nIP_i), dtype=np.float64, buffer=aoPairRg_buf)
+
+        fn_pack_aoR_to_aoPairR(
+            aoRg_i.aoR.ctypes.data_as(ctypes.c_void_p),
+            aoPair_i.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_i),
+            ctypes.c_int(nIP_i)
+        )
+        
+        aoPairRg[:, global_IP_begin_i:global_IP_begin_i+nIP_i] = aoPair_i
+        
+        if with_robust_fitting:
+            
+            aoR_i             = moR[partition_i]
+            ao_involved_i     = aoR_i.ao_involved
+            nao_i             = aoR_i.aoR.shape[0]
+            global_IP_begin_i = aoR_i.global_gridID_begin
+            ngrid_i           = aoR_i.aoR.shape[1]
+            nPair_i           = (nao_i * (nao_i + 1)) // 2
+            assert nPair_i   == npair
+            aoPair_i          = np.ndarray((nPair_i, ngrid_i), dtype=np.float64, buffer=aoPairR_buf)
+            
+            fn_pack_aoR_to_aoPairR(
+                aoR_i.aoR.ctypes.data_as(ctypes.c_void_p),
+                aoPair_i.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nao_i),
+                ctypes.c_int(ngrid_i)
+            )
+            
+            aoPairR[:, global_IP_begin_i:global_IP_begin_i+ngrid_i] = aoPair_i
+    
+    ### V_R term ###
+
+    V_R = mydf.V_R
+    
+    if with_robust_fitting:
+        
+        lib.ddot(V_R, aoPairR.T, c=ddot_res_buf)
+        lib.ddot(aoPairRg, ddot_res_buf, c=suberi)
+        eri += suberi
+        eri += suberi.T
+            
+    ### W   term ### 
+    
+    W = mydf.W
+    
+    lib.ddot(W, aoPairRg.T, c=ddot_res_buf)
+    lib.ddot(aoPairRg, ddot_res_buf, c=suberi)
+    if with_robust_fitting:
+        eri -= suberi
+    else:
+        eri += suberi
+        
+    ### del buf ###
+    
+    # assert np.allclose(eri, eri.T)
+    
+    del aoPairRg_buf
+    #del aoPairRg_buf2
+    del aoPairR_buf
+    del aoPairRg
+    del aoPairR
+        
+    return eri * ngrid / vol
 
 def isdf_eri_ovov(mydf, mo_coeff_o: np.ndarray = None, mo_coeff_v: np.ndarray = None, verbose=None):
     
@@ -756,9 +957,10 @@ def general(mydf, mo_coeffs, kpts=None,
             
             #### Full MO-ERI ####
             
-            t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
-            eri = isdf_eri(mydf, mo_coeffs[0].copy(), verbose=mydf.cell.verbose)
-            t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+            t1  = (lib.logger.process_clock(), lib.logger.perf_counter())
+            # eri = isdf_eri(mydf, mo_coeffs[0].copy(), verbose=mydf.cell.verbose)
+            eri = isdf_eri_2(mydf, mo_coeffs[0].copy(), verbose=mydf.cell.verbose)
+            t2  = (lib.logger.process_clock(), lib.logger.perf_counter())
             _benchmark_time(t1, t2, 'isdf_eri', mydf)
         
             if compact:
