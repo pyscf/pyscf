@@ -887,7 +887,6 @@ def isdf_eri_ovov(mydf, mo_coeff_o: np.ndarray = None, mo_coeff_v: np.ndarray = 
         
     return eri.reshape(nao_o, nao_v, nao_o, nao_v) * ngrid / vol
   
-    
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
 
@@ -949,7 +948,47 @@ def general(mydf, mo_coeffs, kpts=None,
     # coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
+    if hasattr(mydf, "W2") or (hasattr(mydf, "force_LS_THC") and mydf.force_LS_THC == True):          # NOTE: this means that LS_THC_recompression is called, we do not perform ao2mo with robust fitting, as it is very expensive!
+        #print("use_LS_THC_anyway")
+        use_LS_THC_anyway = True
+    else:
+        #print("no_use_LS_THC_anyway")
+        use_LS_THC_anyway = False
+
+    IsMOERI = (iden_coeffs(mo_coeffs[0], mo_coeffs[1]) and
+               iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
+               iden_coeffs(mo_coeffs[0], mo_coeffs[3]))
+    if not IsMOERI:
+        IsOVOV = False
+        IsGeneral = False
+    else:
+        IsOVOV = (iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
+                 iden_coeffs(mo_coeffs[1], mo_coeffs[3]))
+        if IsOVOV:
+            IsGeneral = False
+        else:
+            IsGeneral = True
+
     if gamma_point(kptijkl) and allreal:
+
+        ##### check whether LS-THC anyway #####
+        
+        if use_LS_THC_anyway:
+            
+            vol   = mydf.cell.vol
+            ngrid = np.prod(mydf.cell.mesh)
+            
+            if hasattr(mydf, "W2"):
+                eri = LS_THC_moeri(mydf, mydf.W2, mydf.aoRg2, mo_coeffs) * ngrid / vol
+            else:
+                eri = LS_THC_moeri(mydf, mydf.W, mydf.aoRg, mo_coeffs) * ngrid / vol
+            if compact:
+                if IsMOERI:
+                    return ao2mo.restore(4, eri, nao)
+                else:
+                    return eri
+            else:
+                return eri
 
         if ((iden_coeffs(mo_coeffs[0], mo_coeffs[1]) and
              iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
@@ -958,8 +997,8 @@ def general(mydf, mo_coeffs, kpts=None,
             #### Full MO-ERI ####
             
             t1  = (lib.logger.process_clock(), lib.logger.perf_counter())
-            # eri = isdf_eri(mydf, mo_coeffs[0].copy(), verbose=mydf.cell.verbose)
-            eri = isdf_eri_2(mydf, mo_coeffs[0].copy(), verbose=mydf.cell.verbose)
+            eri = isdf_eri(mydf, mo_coeffs[0].copy(), verbose=mydf.cell.verbose)
+            # eri = isdf_eri_2(mydf, mo_coeffs[0].copy(), verbose=mydf.cell.verbose) # requires aoPairR, which is very expensive
             t2  = (lib.logger.process_clock(), lib.logger.perf_counter())
             _benchmark_time(t1, t2, 'isdf_eri', mydf)
         
@@ -1017,6 +1056,8 @@ def LS_THC(mydf, R:np.ndarray):
     '''
     
     log = lib.logger.Logger(mydf.stdout, mydf.verbose)
+    
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
     nGrid_R = R.shape[1]
     nao     = R.shape[0]
@@ -1140,6 +1181,10 @@ def LS_THC(mydf, R:np.ndarray):
     lib.ddot(U_RR, Z, c=Z1)
     lib.ddot(Z1, U_RR.T, c=Z)
     
+    t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    
+    log.timer('LS_THC fitting', *t1)
+    
     return Z * ngrid / vol
 
 def LS_THC_eri(Z:np.ndarray, R:np.ndarray):
@@ -1148,8 +1193,20 @@ def LS_THC_eri(Z:np.ndarray, R:np.ndarray):
     
     path_info = np.einsum_path(einsum_str, R,R,Z,R,R, optimize='optimal')
     
-    return np.einsum(einsum_str, R,R,Z,R,R, optimize=path_info[0])
+    return np.einsum(einsum_str,R,R,Z,R,R,optimize=path_info[0])
 
+def LS_THC_moeri(mydf, Z:np.ndarray, R:np.ndarray, mo_coeff:np.ndarray):
+    
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
+    assert len(mo_coeff) == 4
+    moRg       = [lib.ddot(x.T, R) for x in mo_coeff]
+    einsum_str = "iP,jP,PQ,kQ,lQ->ijkl"
+    path_info  = np.einsum_path(einsum_str, moRg[0], moRg[1], Z, moRg[2], moRg[3], optimize='optimal')
+    res = np.einsum(einsum_str, moRg[0], moRg[1], Z, moRg[2], moRg[3], optimize=path_info[0])
+    log = lib.logger.Logger(mydf.stdout, mydf.verbose)
+    log.timer('LS_THC MOERI', *t1)
+    return res
+    
 ############ Laplace transformation ############ 
 
 import bisect

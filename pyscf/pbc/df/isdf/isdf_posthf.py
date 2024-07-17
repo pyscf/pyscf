@@ -255,7 +255,7 @@ class _restricted_THC_posthf_holder:
 
 if __name__ == '__main__':
 
-    for c in [25]:
+    for c in [15]:
         for N in [1]:
 
             print("Testing c = ", c, "N = ", N, "...")
@@ -316,6 +316,7 @@ if __name__ == '__main__':
             ####### isdf MP2 can perform directly! ####### 
             
             myisdf = ISDF.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
+            myisdf.verbose = 10
             myisdf.build_IP_local(c=c, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
             myisdf.build_auxiliary_Coulomb(debug=True)
             
@@ -330,6 +331,12 @@ if __name__ == '__main__':
             
             isdf_pt = mp.RMP2(mf_isdf)
             isdf_pt.kernel()
+            
+            mf_isdf.with_df.LS_THC_recompression(mf_isdf.with_df.aoRg_full()[0], force_LS_THC=False)
+            isdf_pt = mp.RMP2(mf_isdf)
+            isdf_pt.kernel()
+            
+            exit(1)
             
             ######################## CCSD ########################
             

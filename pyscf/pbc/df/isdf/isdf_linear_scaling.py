@@ -1530,15 +1530,21 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
       
     ### LS_THC fit ###
     
-    def LS_THC_recompression(self, X:np.ndarray): 
+    def LS_THC_recompression(self, X:np.ndarray, force_LS_THC=True): 
         
         from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC 
         
-        self.with_robust_fitting = False
-        self.W    = LS_THC(self, X) / (self.ngrids/self.cell.vol)
-        self.aoRg = X
-        self.aoR  = None
-        self.V_R  = None
+        if force_LS_THC:
+            self.with_robust_fitting = False
+            self.force_LS_THC        = True
+            self.W    = LS_THC(self, X) / (self.ngrids/self.cell.vol)
+            self.aoRg = X
+            self.aoR  = None
+            self.V_R  = None
+        else:
+            self.force_LS_THC        = False
+            self.W2    = LS_THC(self, X) / (self.ngrids/self.cell.vol)
+            self.aoRg2 = X
 
 
 if __name__ == '__main__':

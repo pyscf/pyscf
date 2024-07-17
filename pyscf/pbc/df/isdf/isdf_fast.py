@@ -965,16 +965,20 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 
             return self.PP
         
-    def LS_THC_recompression(self, X:np.ndarray):
+    def LS_THC_recompression(self, X:np.ndarray, force_LS_THC=True):
         
         from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC 
         
-        self.with_robust_fitting = False
-        
-        self.W    = LS_THC(self, X) / (self.ngrids/self.cell.vol)
-        self.aoRg = X
-        
-        self.V_R  = None
+        if force_LS_THC:
+            self.with_robust_fitting = False
+            self.force_LS_THC        = True
+            self.W    = LS_THC(self, X) / (self.ngrids/self.cell.vol)
+            self.aoRg = X
+            self.V_R  = None
+        else:
+            self.force_LS_THC        = False
+            self.W2    = LS_THC(self, X) / (self.ngrids/self.cell.vol)
+            self.aoRg2 = X
     
     def aoRg_full(self):
         return self.aoRg, None
@@ -1076,7 +1080,7 @@ if __name__ == '__main__':
     for i in range(cell.natm):
         print("i = ", i, "partition = ", mf.with_df.partition[mf.with_df.partition == i].shape[0])
 
-    exit(1)
+    #exit(1)
 
     # without robust fitting 
     
@@ -1093,12 +1097,22 @@ if __name__ == '__main__':
     mf.max_cycle = 100
     mf.conv_tol = 1e-8
     #mf.kernel()
+    pbc_isdf_info.with_robust_fitting = True
 
     ##### test the LS_THC_recompression ##### 
     
     _pbc_isdf_info = PBC_ISDF_Info(cell, aoR)
     _pbc_isdf_info.build_IP_Sandeep(build_global_basis=True, c=12, global_IP_selection=False)
 
+    pbc_isdf_info.LS_THC_recompression(_pbc_isdf_info.aoRg, force_LS_THC=False)
+    
+    mf = scf.RHF(cell)
+    pbc_isdf_info.direct_scf = mf.direct_scf
+    mf.with_df = pbc_isdf_info
+    mf.max_cycle = 10
+    mf.conv_tol = 1e-7
+    mf.kernel()
+    
     pbc_isdf_info.LS_THC_recompression(_pbc_isdf_info.aoRg)
     
     mf = scf.RHF(cell)
