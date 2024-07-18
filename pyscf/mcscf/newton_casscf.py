@@ -366,8 +366,8 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
             # part4, part5, part6
             # Due to x1_rs [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
             #    == -x1_sr [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
-            # x2[:,:ncore] += H * x1[:,:ncore] => (becuase x1=-x1.T) =>
-            # x2[:,:ncore] += -H' * x1[:ncore] => (becuase x2-x2.T) =>
+            # x2[:,:ncore] += H * x1[:,:ncore] => (because x1=-x1.T) =>
+            # x2[:,:ncore] += -H' * x1[:ncore] => (because x2-x2.T) =>
             # x2[:ncore] += H' * x1[:ncore]
             va, vc = casscf.update_jk_in_ah(mo, x1, casdm1, eris)
             x2[ncore:nocc] += va

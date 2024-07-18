@@ -319,7 +319,7 @@ def format_atom(atoms, origin=0, axes=None,
     coordinates to AU, rotate and shift the molecule.
     If the :attr:`~Mole.atom` is a string, it takes ";" and "\\n"
     for the mark to separate atoms;  "," and arbitrary length of blank space
-    to spearate the individual terms for an atom.  Blank line will be ignored.
+    to separate the individual terms for an atom.  Blank line will be ignored.
 
     Args:
         atoms : list or str
@@ -1961,7 +1961,7 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
 is_same_mol = same_mol
 
 def chiral_mol(mol1, mol2=None):
-    '''Detect whether the given molelcule is chiral molecule or two molecules
+    '''Detect whether the given molecule is chiral molecule or two molecules
     are chiral isomers.
     '''
     if mol2 is None:

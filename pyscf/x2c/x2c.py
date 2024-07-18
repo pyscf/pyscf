@@ -953,7 +953,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 
     w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
     idx = w > 1e-14
-    # Adopt (2) here becuase X is not appeared in Eq (2).
+    # Adopt (2) here because X is not appeared in Eq (2).
     # R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
     r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
                            cl.T.conj(), s))

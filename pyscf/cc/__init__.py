@@ -23,7 +23,7 @@ Simple usage::
     >>> mf = scf.RHF(mol).run()
     >>> cc.CCSD(mf).run()
 
-:func:`cc.CCSD` returns an instance of CCSD class.  Followings are parameters
+:func:`cc.CCSD` returns an instance of CCSD class.  Following are parameters
 to control CCSD calculation.
 
     verbose : int
