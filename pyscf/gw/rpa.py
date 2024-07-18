@@ -21,7 +21,7 @@ Spin-restricted random phase approximation (direct RPA/dRPA in chemistry)
 with N^4 scaling
 
 Method:
-    Main routines are based on GW-AC method descirbed in:
+    Main routines are based on GW-AC method described in:
     T. Zhu and G.K.-L. Chan, J. Chem. Theory. Comput. 17, 727-741 (2021)
     X. Ren et al., New J. Phys. 14, 053020 (2012)
 """

@@ -1225,7 +1225,7 @@ void AO2MOnr_e1_drv(int (*intor)(), void (*fill)(), void (*ftrans)(), int (*fmmm
         int nao = ao_loc[nbas];
         double *eri_ao = malloc(sizeof(double) * nao*nao*nkl*ncomp);
         if (eri_ao == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in AO2MOnr_e1_drv\n",
+                fprintf(stderr, "malloc(%zu) failed in AO2MOnr_e1_drv\n",
                         sizeof(double) * nao*nao*nkl*ncomp);
                 exit(1);
         }

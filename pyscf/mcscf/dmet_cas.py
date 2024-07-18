@@ -58,7 +58,7 @@ def kernel(mf, dm, aolabels_or_baslst, threshold=THRESHOLD,
         orth_method : str
             It can be one of 'lowdin' and 'meta_lowdin'
         s : 2D array
-            AO overlap matrix.  This option is mainly used for custom Hamilatonian.
+            AO overlap matrix.  This option is mainly used for custom Hamiltonian.
         canonicalize : bool
             Orbitals defined in AVAS method are local orbitals.  Symmetrizing
             the core, active and virtual space.

@@ -354,7 +354,7 @@ void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         }
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*ngrids);
         if (opt->dm_cond == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in SGXsetnr_direct_scf_dm\n",
+                fprintf(stderr, "malloc(%zu) failed in SGXsetnr_direct_scf_dm\n",
                         sizeof(double) * nbas*ngrids);
                 exit(1);
         }

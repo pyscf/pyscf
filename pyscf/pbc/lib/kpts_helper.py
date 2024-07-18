@@ -261,7 +261,7 @@ def get_kconserv(cell, kpts):
     r'''Get the momentum conservation array for a set of k-points.
 
     Given k-point indices (k, l, m) the array kconserv[k,l,m] returns
-    the index n that satifies momentum conservation,
+    the index n that satisfies momentum conservation,
 
         (k(k) - k(l) + k(m) - k(n)) \dot a = 2n\pi
 
@@ -287,7 +287,7 @@ def get_kconserv_ria(cell, kpts):
     for a set of k-points with appropriate k-shift.
 
     Given k-point indices m the array kconserv[kshift,m] returns the index n that
-    satifies a shifted momentum conservation,
+    satisfies a shifted momentum conservation,
 
         (k(m) - k(n) - k(kshift)) \dot a = 2n\pi
 

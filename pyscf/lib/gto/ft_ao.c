@@ -803,7 +803,7 @@ int GTO_ft_aopair_drv(double *outR, double *outI, int *dims,
                 size_t cache_size = ft_aopair_cache_size(envs) * (size_t)block_size;
                 stack = malloc(sizeof(double)*cache_size);
                 if (stack == NULL) {
-                        fprintf(stderr, "gctr = malloc(%zu) falied in GTO_ft_aopair_drv\n",
+                        fprintf(stderr, "gctr = malloc(%zu) failed in GTO_ft_aopair_drv\n",
                                 sizeof(double) * cache_size);
                         return 0;
                 }

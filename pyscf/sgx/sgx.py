@@ -237,7 +237,7 @@ mcscf.casci.CASBase.COSX = sgx_fit
 
 def _make_opt(mol, pjs=False,
               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)):
-    '''Optimizer to genrate 3-center 2-electron integrals'''
+    '''Optimizer to generate 3-center 2-electron integrals'''
     if pjs:
         vhfopt = _vhf.SGXOpt(mol, 'int1e_grids', 'SGXnr_ovlp_prescreen',
                              dmcondname='SGXnr_dm_cond',

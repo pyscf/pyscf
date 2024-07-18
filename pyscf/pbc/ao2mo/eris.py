@@ -17,7 +17,7 @@
 #
 
 '''
-This ao2mo module is kept for backward compatiblity.  It's recommended to use
+This ao2mo module is kept for backward compatibility.  It's recommended to use
 pyscf.pbc.df module to get 2e MO integrals
 '''
 

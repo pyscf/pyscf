@@ -354,7 +354,7 @@ def symmetrize_multidim(mol, mo, s=None,
             if (max_non_orth_lowdin - max_non_orth) > tol/100:
                 mo = mo_lowdin
                 s_mo = numpy.dot(s, mo)
-                logger.info(mol, 'Use Lowdin-orthogonalizied input orbitals')
+                logger.info(mol, 'Use Lowdin-orthogonalized input orbitals')
             else:
                 logger.info(mol, 'Use original input orbitals')
     irreps_mdim = []

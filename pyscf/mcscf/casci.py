@@ -42,7 +42,7 @@ else:
 
 
 def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
-    '''CAS sapce one-electron hamiltonian
+    '''CAS space one-electron hamiltonian
 
     Args:
         casci : a CASSCF/CASCI object or RHF object
