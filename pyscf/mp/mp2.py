@@ -54,7 +54,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     emp2_ss = emp2_os = 0
     for i in range(nocc):
         if isinstance(eris.ovov, numpy.ndarray) and eris.ovov.ndim == 4:
-            # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
+            # When mf._eri is a custom integrals with the shape (n,n,n,n), the
             # ovov integrals might be in a 4-index tensor.
             gi = eris.ovov[i]
         else:
@@ -478,7 +478,7 @@ class MP2(lib.StreamObject):
             For non-canonical MP2, DIIS space size in MP2
             iterations.  Default is 6.
         level_shift : float
-            A shift on virtual orbital energies to stablize the MP2 iterations.
+            A shift on virtual orbital energies to stabilize the MP2 iterations.
         frozen : int or list
             If integer is given, the inner-most orbitals are excluded from MP2
             amplitudes.  Given the orbital indices (0-based) in a list, both

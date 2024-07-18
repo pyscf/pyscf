@@ -738,7 +738,7 @@ def auxbar(fused_cell):
     aux_loc = fused_cell.ao_loc_nr()
     naux = aux_loc[-1]
     vbar = np.zeros(naux)
-    # SR ERI should not have contributions from backgound charge
+    # SR ERI should not have contributions from background charge
     if fused_cell.dimension < 2 or fused_cell.omega < 0:
         return vbar
 

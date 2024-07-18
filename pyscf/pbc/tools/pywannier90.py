@@ -325,7 +325,7 @@ def get_wigner_seitz_supercell(w90, ws_search_size=[2,2,2], ws_distance_tol=1e-6
     '''
     Return a grid that contains all the lattice within the Wigner-Seitz supercell
 
-    Ref: the hamiltonian_wigner_seitz(count_pts) in wannier90/src/hamittonian.F90
+    Ref: the hamiltonian_wigner_seitz(count_pts) in wannier90/src/hamiltonian.F90
     '''
 
     real_metric = w90.real_lattice_loc.T.dot(w90.real_lattice_loc)

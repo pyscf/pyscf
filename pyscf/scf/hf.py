@@ -460,7 +460,7 @@ def init_guess_by_minao(mol):
     #: dm = addons.project_dm_nr2nr(pmol, numpy.diag(occ), mol)
     mo = addons.project_mo_nr2nr(pmol, numpy.eye(pmol.nao), mol)
     dm = lib.dot(mo*occ, mo.conj().T)
-# normalize eletron number
+# normalize electron number
 #    s = mol.intor_symmetric('int1e_ovlp')
 #    dm *= mol.nelectron / (dm*s).sum()
     return lib.tag_array(dm, mo_coeff=mo, mo_occ=occ)

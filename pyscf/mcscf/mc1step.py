@@ -188,8 +188,8 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
         if ncore > 0:
             # Due to x1_rs [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
             #    == -x1_sr [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
-            # x2[:,:ncore] += H * x1[:,:ncore] => (becuase x1=-x1.T) =>
-            # x2[:,:ncore] += -H' * x1[:ncore] => (becuase x2-x2.T) =>
+            # x2[:,:ncore] += H * x1[:,:ncore] => (because x1=-x1.T) =>
+            # x2[:,:ncore] += -H' * x1[:ncore] => (because x2-x2.T) =>
             # x2[:ncore] += H' * x1[:ncore]
             va, vc = casscf.update_jk_in_ah(mo, x1, casdm1, eris)
             x2[ncore:nocc] += va
@@ -583,8 +583,8 @@ def max_stepsize_scheduler(casscf, envs):
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
 # object or a module to CASSCF.fcisolver.  The fcisolver object or module
 # should at least have three member functions "kernel" (wfn for given
-# hamiltonain), "make_rdm12" (1- and 2-pdm), "absorb_h1e" (effective
-# 2e-hamiltonain) in 1-step CASSCF solver, and two member functions "kernel"
+# hamiltonian), "make_rdm12" (1- and 2-pdm), "absorb_h1e" (effective
+# 2e-hamiltonian) in 1-step CASSCF solver, and two member functions "kernel"
 # and "make_rdm12" in 2-step CASSCF solver
 class CASSCF(casci.CASBase):
     __doc__ = casci.CASBase.__doc__ + '''

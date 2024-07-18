@@ -306,7 +306,7 @@ def prange(start, end, step):
             yield i, min(i+step, end)
 
 def prange_tril(start, stop, blocksize):
-    '''Similar to :func:`prange`, yeilds start (p0) and end (p1) with the
+    '''Similar to :func:`prange`, yields start (p0) and end (p1) with the
     restriction p1*(p1+1)/2-p0*(p0+1)/2 < blocksize
 
     Examples:
@@ -557,7 +557,7 @@ class StreamObject:
     ``mf = scf.RHF(mol).set(conv_tol=1e-5)`` is identical to proceed in two steps
     ``mf = scf.RHF(mol); mf.conv_tol=1e-5``
 
-    2 ``.run`` function to execute the kenerl function (the function arguments
+    2 ``.run`` function to execute the kernel function (the function arguments
     are passed to kernel function).  If keyword arguments is given, it will first
     call ``.set`` function to update object attributes then execute the kernel
     function.  Eg

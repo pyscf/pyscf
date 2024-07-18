@@ -870,7 +870,7 @@ class CCSDBase(lib.StreamObject):
         incore_complete : bool
             Avoid all I/O (also for DIIS). Default is False.
         level_shift : float
-            A shift on virtual orbital energies to stablize the CCSD iteration
+            A shift on virtual orbital energies to stabilize the CCSD iteration
         frozen : int or list
             If integer is given, the inner-most orbitals are frozen from CC
             amplitudes.  Given the orbital indices (0-based) in a list, both
