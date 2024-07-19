@@ -45,6 +45,10 @@ import ctypes, sys
 from multiprocessing import Pool
 libpbc = lib.load_library('libpbc')
 
+########## global parameter ##########
+
+DISTANCE_CUTOFF = 16 # suitable for cuprates ! 
+
 ############ build atm connection graph ############
 
 class AtmConnectionInfo:
@@ -495,10 +499,9 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
     natm_tmp = cell.natm
     if with_translation_symmetry:
         natm_tmp = cell.natm // np.prod(kmesh)
+        assert cell.natm % np.prod(kmesh) == 0
     for i in range(natm_tmp):
         partition.append([])
-    
-    DISTANCE_CUTOFF = 8 # suitable for cuprates ! 
     
     ao_loc = cell.ao_loc_nr()
     # print("nao_intot = ", ao_loc[-1])

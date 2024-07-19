@@ -482,6 +482,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         nelectron = np.sum(mol.nelectron)
         
+        from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell
         supercell = build_supercell(
             atm, 
             mol.a,
