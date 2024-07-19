@@ -3,7 +3,7 @@ export OMP_NUM_THREADS=1
 export PYTHONPATH=$(pwd):$PYTHONPATH 
 ulimit -s 20000
 
-mkdir pyscftmpdir
+mkdir -p pyscftmpdir
 echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py
 echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py
 echo "scf_hf_SCF_mute_chkfile = True" >> .pyscf_conf.py
@@ -18,5 +18,13 @@ else
   pytest pyscf/ -s -c pytest.ini pyscf
 fi
 
-echo "There are $(ls pyscftmpdir | wc -l) leftover temporary files"
+pytest_status=$?
+
+num_tmpfiles="$(ls -1 pyscftmpdir | wc -l)"
+echo "There are "$num_tmpfiles" leftover temporary files"
 rm -rf pyscftmpdir
+
+# Test fails if pytest failed or if temporary files were left over.
+if test "$num_tmpfiles" -gt 0 || test "$pytest_status" -ne 0; then
+  exit 1
+fi
