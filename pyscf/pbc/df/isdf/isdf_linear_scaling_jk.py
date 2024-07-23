@@ -91,8 +91,13 @@ def _half_J(mydf, dm, use_mpi=False,
     density_R = np.zeros((ngrid,), dtype=np.float64)
     
     dm_buf = np.zeros((max_nao_involved, max_nao_involved), dtype=np.float64)
-    max_dim_buf = max(max_ngrid_involved, max_nao_involved)
-    ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
+    #max_dim_buf = max(max_ngrid_involved, max_nao_involved)
+    max_col_buf = min(max_ngrid_involved, 8192)
+    #ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
+    ddot_buf = np.zeros((max_nao_involved, max_col_buf), dtype=np.float64)
+    
+    fn_multiplysum = getattr(libpbc, "_fn_J_dmultiplysum", None)
+    assert fn_multiplysum is not None
     
     ##### get the involved C function ##### 
     
@@ -128,7 +133,6 @@ def _half_J(mydf, dm, use_mpi=False,
         nket_ao = ket_aoR.shape[0]
         if bra_type == ket_type:
             dm_now = np.ndarray((nbra_ao, nbra_ao), buffer=dm_buf)
-            # if nbra_ao < nao:
             fn_extract_dm(
                 dm.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nao),
@@ -136,14 +140,35 @@ def _half_J(mydf, dm, use_mpi=False,
                 bra_ao_involved.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nbra_ao),
             )
-                # dm_benchmark = dm[bra_ao_involved]
-                # dm_benchmark = dm_benchmark[:,bra_ao_involved]
-                # assert np.allclose(dm_benchmark, dm_now)
-            # else:
-            #     dm_now.ravel()[:] = dm.ravel()
-            ddot_res = np.ndarray((nbra_ao, ket_aoR.shape[1]), buffer=ddot_buf)
-            lib.ddot(dm_now, ket_aoR, c=ddot_res)
-            _density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
+            
+            _density_R_tmp = np.zeros((ket_aoR.shape[1],), dtype=np.float64)
+           
+            for p0, p1 in lib.prange(0, ket_aoR.shape[1], 8192):
+                ddot_res = np.ndarray((nbra_ao, p1-p0), buffer=ddot_buf)
+                lib.ddot(dm_now, ket_aoR[:,p0:p1], c=ddot_res)
+                #_density_R_tmp[p0:p1] = lib.multiply_sum_isdf(bra_aoR, ddot_res)
+                _res_tmp = np.ndarray((p1-p0,), 
+                                      dtype =_density_R_tmp.dtype, 
+                                      buffer=_density_R_tmp, 
+                                      offset=p0*_density_R_tmp.dtype.itemsize)
+                fn_multiplysum(
+                    _res_tmp.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nbra_ao),
+                    ctypes.c_int(p1-p0),
+                    bra_aoR.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(bra_aoR.shape[0]),
+                    ctypes.c_int(bra_aoR.shape[1]),
+                    ctypes.c_int(0),
+                    ctypes.c_int(p0),
+                    ddot_res.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nbra_ao),
+                    ctypes.c_int(p1-p0),
+                    ctypes.c_int(0),
+                    ctypes.c_int(0))
+                
+            # ddot_res = np.ndarray((nbra_ao, ket_aoR.shape[1]), buffer=ddot_buf)
+            # lib.ddot(dm_now, ket_aoR, c=ddot_res)
+            # _density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
             return _density_R_tmp
         else:
             dm_now = np.ndarray((nbra_ao, nket_ao), buffer=dm_buf)
@@ -161,9 +186,35 @@ def _half_J(mydf, dm, use_mpi=False,
             # dm_benchmark = dm_benchmark[:,ket_ao_involved]
             # assert np.allclose(dm_benchmark, dm_now)
             
-            ddot_res = np.ndarray((nbra_ao, ket_aoR.shape[1]), buffer=ddot_buf)
-            lib.ddot(dm_now, ket_aoR, c=ddot_res)
-            _density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
+            # ddot_res = np.ndarray((nbra_ao, ket_aoR.shape[1]), buffer=ddot_buf)
+            # lib.ddot(dm_now, ket_aoR, c=ddot_res)
+            # _density_R_tmp = lib.multiply_sum_isdf(bra_aoR, ddot_res)
+            
+            _density_R_tmp = np.zeros((ket_aoR.shape[1],), dtype=np.float64)
+            
+            for p0, p1 in lib.prange(0, ket_aoR.shape[1], 8192):
+                ddot_res = np.ndarray((nbra_ao, p1-p0), buffer=ddot_buf)
+                lib.ddot(dm_now, ket_aoR[:,p0:p1], c=ddot_res)
+                #_density_R_tmp[p0:p1] = lib.multiply_sum_isdf(bra_aoR, ddot_res)
+                _res_tmp = np.ndarray((p1-p0,), 
+                                      dtype =_density_R_tmp.dtype, 
+                                      buffer=_density_R_tmp, 
+                                      offset=p0*_density_R_tmp.dtype.itemsize)
+                fn_multiplysum(
+                    _res_tmp.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nbra_ao),
+                    ctypes.c_int(p1-p0),
+                    bra_aoR.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(bra_aoR.shape[0]),
+                    ctypes.c_int(bra_aoR.shape[1]),
+                    ctypes.c_int(0),
+                    ctypes.c_int(p0),
+                    ddot_res.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nbra_ao),
+                    ctypes.c_int(p1-p0),
+                    ctypes.c_int(0),
+                    ctypes.c_int(0))
+            
             return _density_R_tmp * 2.0
     
     for atm_id, aoR_holder in enumerate(aoR):

@@ -64,6 +64,53 @@ void _construct_J(
     fftw_free(J_complex);
 }
 
+void _fn_J_dmultiplysum(double *out,
+                        const int nrow, const int ncol,
+                        const double *a,
+                        const int nrow_a, const int ncol_a,
+                        const int row_a_shift,
+                        const int col_a_shift,
+                        const double *b,
+                        const int nrow_b, const int ncol_b,
+                        const int row_b_shift,
+                        const int col_b_shift)
+{
+    static const int BUNCHSIZE = 512;
+
+    const double *pa = a + row_a_shift * ncol_a + col_a_shift;
+    const double *pb = b + row_b_shift * ncol_b + col_b_shift;
+
+    memset(out, 0, sizeof(double) * ncol);
+
+    const int nThread = get_omp_threads();
+    const int nBunch = ncol / BUNCHSIZE + 1;
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (int i = 0; i < nBunch; i++)
+    {
+        int bunch_start = i * BUNCHSIZE;
+        int bunch_end = (i + 1) * BUNCHSIZE;
+        if (bunch_end > ncol)
+        {
+            bunch_end = ncol;
+        }
+        if (bunch_end > ncol)
+        {
+            bunch_end = ncol;
+        }
+
+        for (int j = 0; j < nrow; j++)
+        {
+            const double *ppa = pa + j * ncol_a;
+            const double *ppb = pb + j * ncol_b;
+            for (int k = bunch_start; k < bunch_end; k++)
+            {
+                out[k] += ppa[k] * ppb[k];
+            }
+        }
+    }
+}
+
 void _Pack_Matrix_SparseRow_DenseCol(
     double *target,
     const int nrow_target,
