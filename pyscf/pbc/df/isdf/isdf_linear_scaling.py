@@ -1037,7 +1037,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             lattice_y = self.cell.lattice_vectors()[1][1]
             lattice_z = self.cell.lattice_vectors()[2][2]
             
-            Ls = [int(lattice_x/3)+3, int(lattice_y/3)+3, int(lattice_z/3)+3]
+            Ls = [int(lattice_x)/3+6, int(lattice_y)/3+6, int(lattice_z)/3+6]
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if self.rsjk is not None and self.cell_rsjk is not None:
