@@ -77,8 +77,12 @@ class aoR_Holder:
         '''
         
         assert aoR.shape[0] == len(ao_involved)
-        assert aoR.shape[1] == local_gridID_end - local_gridID_begin
-        assert aoR.shape[1] == global_gridID_end - global_gridID_begin
+        assert (local_gridID_end - local_gridID_begin) == (global_gridID_end - global_gridID_begin)
+        assert aoR.shape[1] <= (global_gridID_end - global_gridID_begin)
+        # assert aoR.shape[1] == local_gridID_end - local_gridID_begin
+        # assert aoR.shape[1] == global_gridID_end - global_gridID_begin
+        # if aoR.shape[1] != (global_gridID_end - global_gridID_begin):
+        self.ngrid_kept = aoR.shape[1]
         
         self.aoR = aoR
         self.ao_involved = np.array(ao_involved, dtype=np.int32)
@@ -98,7 +102,6 @@ class aoR_Holder:
         diff            = np.diff(self.ao_involved)
         segment_indices = np.where(diff > 1)[0] + 1
         segments        = np.split(self.ao_involved, segment_indices)
-        # print("segments = ", segments)
         
         self.segments = []
         if len(segments) == 1 and len(segments[0]) == 0:
@@ -112,7 +115,6 @@ class aoR_Holder:
                 loc_begin += len(segment)
             self.segments.append(loc_begin)
             self.segments = np.array(self.segments, dtype=np.int32)
-        # print("segments = ", self.segments)
 
         segments = None
     
@@ -137,7 +139,7 @@ class aoR_Holder:
             assert IsCompact[self.ao_involved[i]]
     
     def size(self):
-        return self.aoR.nbytes + self.ao_involved.nbytes
+        return self.aoR.nbytes + self.ao_involved.nbytes + self.segments.nbytes
 
     def todense(self, nao):
         aoR = np.zeros((nao, self.aoR.shape[1]))

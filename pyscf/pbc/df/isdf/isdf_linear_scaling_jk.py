@@ -441,7 +441,8 @@ def _contract_j_dm_ls(mydf, dm, use_mpi=False,
     
     density_R = np.zeros((ngrid,), dtype=np.float64)
     
-    max_dim_buf = max(max_ngrid_involved, max_nao_involved)
+    # max_dim_buf = max(max_ngrid_involved, max_nao_involved)
+    max_dim_buf = max_nao_involved
     ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
     aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
     
