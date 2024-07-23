@@ -92,7 +92,7 @@ def _half_J(mydf, dm, use_mpi=False,
     
     dm_buf = np.zeros((max_nao_involved, max_nao_involved), dtype=np.float64)
     max_dim_buf = max(max_ngrid_involved, max_nao_involved)
-    ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
+    ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64) ## WARNING: can be problematic ! 
     
     ##### get the involved C function ##### 
     

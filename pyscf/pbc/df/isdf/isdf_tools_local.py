@@ -380,6 +380,11 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
         nbox[2] = mesh[2] // mesh_box[2]
         
     Ls_box = [lattice_vector[0] / mesh[0] * mesh_box[0], lattice_vector[1] / mesh[1] * mesh_box[1], lattice_vector[2] / mesh[2] * mesh_box[2]]
+    
+    print("Ls       = ", Ls)
+    print("mesh     = ", mesh)
+    print("mesh_box = ", mesh_box)
+    print("Ls_box   = ", Ls_box)
         
     assert Ls_box[0][0] < 3.0
     assert Ls_box[1][1] < 3.0
