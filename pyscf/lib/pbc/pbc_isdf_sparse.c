@@ -373,3 +373,47 @@ void _V_Dm_product_SpMM2(
         }
     }
 }
+
+//////// BASIC OPERATION USED IN GET_JK for k_ISDF ////////
+
+void dcwisemul_dense_sparse_kernel(
+    double *out,
+    const double *global,
+    const int nrow_global,
+    const int ncol_global,
+    const int row_shift,
+    const int col_shift,
+    const double *local,
+    const int *ao_invovled,
+    const int row_local,
+    const int col_local,
+    const int row_begin,
+    const int row_end,
+    const int col_begin,
+    const int col_end)
+{
+    const int nrow = row_end - row_begin;
+    const int ncol = col_end - col_begin;
+    memset(out, 0, sizeof(double) * nrow * ncol);
+
+    int nthread = get_omp_threads();
+
+    const double *global_head = global + row_shift * ncol_global + col_shift;
+
+#pragma omp parallel for num_threads(nthread) schedule(static)
+    for (int i = 0; i < row_local; i++)
+    {
+        const int irow = ao_invovled[i];
+        if (irow < row_begin || irow >= row_end)
+        {
+            continue;
+        }
+        double *p_global = global_head + (irow - row_begin) * ncol_global;
+        double *p_local = local + i * col_local;
+        double *p_out = out + i * ncol;
+        for (int j = 0; j < ncol; j++)
+        {
+            p_out[j] = p_global[j] * p_local[j];
+        }
+    }
+}

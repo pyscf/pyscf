@@ -88,6 +88,33 @@ class aoR_Holder:
         self.global_gridID_begin = global_gridID_begin
         self.global_gridID_end = global_gridID_end
         self.nCompact = self.nao_invovled  ## by default all orbitals are compact
+        
+        ## build ao_involved segment ## 
+        
+        self.ao_involved_sorted = np.sort(self.ao_involved)
+        self.aoR         = self.aoR[np.argsort(self.ao_involved)]
+        self.ao_involved = self.ao_involved_sorted 
+        
+        diff            = np.diff(self.ao_involved)
+        segment_indices = np.where(diff > 1)[0] + 1
+        segments        = np.split(self.ao_involved, segment_indices)
+        # print("segments = ", segments)
+        
+        self.segments = []
+        if len(segments) == 1 and len(segments[0]) == 0:
+            self.segments.append(0)
+        else:
+            loc_begin = 0
+            for segment in segments:
+                self.segments.append(loc_begin)
+                self.segments.append(segment[0])
+                self.segments.append(segment[-1]+1)
+                loc_begin += len(segment)
+            self.segments.append(loc_begin)
+            self.segments = np.array(self.segments, dtype=np.int32)
+        # print("segments = ", self.segments)
+
+        segments = None
     
     def RangeSeparation(self, IsCompact:np.ndarray):
         ordering_C = []
@@ -353,7 +380,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
         nbox[2] = mesh[2] // mesh_box[2]
         
     Ls_box = [lattice_vector[0] / mesh[0] * mesh_box[0], lattice_vector[1] / mesh[1] * mesh_box[1], lattice_vector[2] / mesh[2] * mesh_box[2]]
-    
+        
     assert Ls_box[0][0] < 3.0
     assert Ls_box[1][1] < 3.0
     assert Ls_box[2][2] < 3.0 # the box cannot be too large

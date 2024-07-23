@@ -40,6 +40,8 @@ from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 
 ############ subroutines --- deal with translation symmetry ############
 
+### WARNING: the unit cell must be put in the first cell !! ###
+
 def _expand_partition_prim(partition_prim, kmesh, mesh):
 
     meshPrim = np.array(mesh) // np.array(kmesh) 
@@ -79,7 +81,9 @@ def _get_grid_ordering_k(input, kmesh, mesh):
     else:
         raise NotImplementedError
 
-def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
+def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, 
+                               build_aoR_FFT=True,
+                               use_mpi=False):
     
     assert use_mpi == False
     
@@ -226,48 +230,53 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
     
     ################# construct aoRg_FFT #################
     
-    mydf.aoRg_FFT  = np.zeros((nao_prim, ncell_complex*mydf.nIP_Prim), dtype=np.complex128)
-    mydf.aoRg_FFT_real = np.ndarray((nao_prim, np.prod(kmesh)*mydf.nIP_Prim), dtype=np.double, buffer=mydf.aoRg_FFT, offset=0)
-    mydf.aoRg_FFT_real.ravel()[:] = aoRg_Tmp.ravel()
-    
-    del aoRg_Tmp
+    if build_aoR_FFT:
         
-    nthread        = lib.num_threads()
-    buffer         = np.zeros((nao_prim, ncell_complex*mydf.nIP_Prim), dtype=np.complex128)
+        mydf.aoRg_FFT  = np.zeros((nao_prim, ncell_complex*mydf.nIP_Prim), dtype=np.complex128)
+        mydf.aoRg_FFT_real = np.ndarray((nao_prim, np.prod(kmesh)*mydf.nIP_Prim), dtype=np.double, buffer=mydf.aoRg_FFT, offset=0)
+        mydf.aoRg_FFT_real.ravel()[:] = aoRg_Tmp.ravel()
+    
+        del aoRg_Tmp
         
-    fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
-    assert fn is not None
-    
-    '''
-    fn = _FFT_Matrix_Col_InPlace transform 
-    
-    (A0 | A1 | A2) --> (A0+A1+A2 | A0+wA1 + w^2 A2 | A0 + w^2 A1+ w A2)
-    
-    '''
+        nthread        = lib.num_threads()
+        buffer         = np.zeros((nao_prim, ncell_complex*mydf.nIP_Prim), dtype=np.complex128)
         
-    # print("aoRg_FFT.shape = ", mydf.aoRg_FFT.shape)
+        fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
+        assert fn is not None
     
-    kmesh = np.array(kmesh, dtype=np.int32)
-    
-    fn(
-        mydf.aoRg_FFT_real.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(nao_prim),
-        ctypes.c_int(nIP_Prim),
-        kmesh.ctypes.data_as(ctypes.c_void_p),
-        buffer.ctypes.data_as(ctypes.c_void_p)
-    ) # no normalization factor ! 
+        '''
+        fn = _FFT_Matrix_Col_InPlace transform 
 
-    aoRg_packed = []
-    for i in range(ncell_complex):
-        aoRg_packed.append(mydf.aoRg_FFT[:, i*nIP_Prim:(i+1)*nIP_Prim].copy())
-    del mydf.aoRg_FFT
-    mydf.aoRg_FFT = aoRg_packed
+        (A0 | A1 | A2) --> (A0+A1+A2 | A0+wA1 + w^2 A2 | A0 + w^2 A1+ w A2)
+
+        '''
+        
+        # print("aoRg_FFT.shape = ", mydf.aoRg_FFT.shape)
+    
+        kmesh = np.array(kmesh, dtype=np.int32)
+    
+        fn(
+            mydf.aoRg_FFT_real.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao_prim),
+            ctypes.c_int(nIP_Prim),
+            kmesh.ctypes.data_as(ctypes.c_void_p),
+            buffer.ctypes.data_as(ctypes.c_void_p)
+        ) # no normalization factor ! 
+
+        aoRg_packed = []
+        for i in range(ncell_complex):
+            aoRg_packed.append(mydf.aoRg_FFT[:, i*nIP_Prim:(i+1)*nIP_Prim].copy())
+        del mydf.aoRg_FFT
+        mydf.aoRg_FFT = aoRg_packed
+    else:
+        mydf.aoRg_FFT = None
+        # build aoRg #
 
     ################# End aoRg_FFT #################
 
     #################### build aoR_FFT ####################
 
-    if mydf.with_robust_fitting:
+    if mydf.with_robust_fitting and build_aoR_FFT:
         
         ngrids            = coords.shape[0]
         ngrids_prim       = ngrids // np.prod(kmesh)
@@ -298,6 +307,10 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False
             aoR_packed.append(mydf.aoR_FFT[:, i*ngrids_prim:(i+1)*ngrids_prim].copy())
         del mydf.aoR_FFT
         mydf.aoR_FFT = aoR_packed
+        # mydf.aoR     = None
+    else:
+        mydf.aoR_FFT = None
+        # build aoR #
 
     del buffer
         
@@ -453,7 +466,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                  mol:Cell,  # means the primitive cell 
                  with_robust_fitting=True,
                  kmesh=None,
-                 verbose = 1,
+                 verbose = None,
                  rela_cutoff_QRCP = None,
                  aoR_cutoff = 1e-8,
                  direct=False
@@ -529,9 +542,20 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         ##### rename everthing with pre_fix  _supercell ####
     
     def build_partition_aoR(self, Ls=None):
+        '''
+        
+        build partition of grid points and AO values on grids 
+        
+        partition of grids is the assignment of each grids to the atom
+        
+        partition is hence a list of list of grids
+        
+        '''
         
         if self.aoR is not None and self.partition is not None:
             return
+        
+        log = lib.logger.Logger(self.stdout, self.verbose)
         
         ##### build cutoff info #####   
         
@@ -565,7 +589,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             self.with_translation_symmetry, 
             self.kmesh,
             self.use_mpi
-        )
+        ) ## the id of grid points of self.partition_prim is w.r.t the supercell ##
         
         for i in range(len(self.partition_prim)):
             self.partition_prim[i] = np.array(self.partition_prim[i], dtype=np.int32)
@@ -583,7 +607,6 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         if self.verbose:
             _benchmark_time(t1, t2, "build_partition", self)
         
-        
         #### build aoR #### 
         
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -593,6 +616,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             sync_aoR = True
         
         ## deal with translation symmetry ##
+        
         first_natm = self._get_first_natm()
         natm = self.cell.natm
         
@@ -617,9 +641,10 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                                                   self.use_mpi, self.use_mpi, sync_aoR)
         
     
-        memory = ISDF_Local_Utils._get_aoR_holders_memory(self.aoR)
-        
+        memory = ISDF_Local_Utils._get_aoR_holders_memory(self.aoR) ### full col
         assert len(self.aoR) == first_natm
+        # print("In ISDF-K build_partition_aoR aoR memory: %d " % (memory))
+        log.info("In ISDF-K build_partition_aoR aoR memory: %d " % (memory))
         
         #if rank == 0:
         #    print("aoR memory: ", memory) 
@@ -634,7 +659,9 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                                                    self.AtmConnectionInfo, 
                                                    self.use_mpi, self.use_mpi, sync_aoR)
         
+        memory = ISDF_Local_Utils._get_aoR_holders_memory(self.aoR1)  ### full row 
         assert len(self.aoR1) == natm
+        log.info("In ISDF-K build_partition_aoR aoR1 memory: %s", memory)
         
         partition_activated = None
         
@@ -835,13 +862,13 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         t1 = t2
         
         self.aoR_Full = []
-        # self.aoRg_FUll = []
+        #self.aoRg_FUll = []
         
         for i in range(self.kmesh[0]):
             for j in range(self.kmesh[1]):
                 for k in range(self.kmesh[2]):
-                    self.aoR_Full.append(self._get_aoR_Row(i, j, k))
-                    # self.aoRg_FUll.append(self._get_aoRg_Row(i, j, k))
+                    self.aoR_Full.append(self._get_aoR_Row(i, j, k))   # different row -> different box -> a column permutation of the first box
+                    #self.aoRg_FUll.append(self._get_aoRg_Row(i, j, k))
         
         
         sys.stdout.flush()
@@ -1222,7 +1249,7 @@ if __name__ == "__main__":
     from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
     C = 25
     
-    verbose = 4
+    verbose = 10
     import pyscf.pbc.gto as pbcgto
     
     cell   = pbcgto.Cell()
@@ -1247,7 +1274,7 @@ if __name__ == "__main__":
     # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
     prim_partition = [[0,1,2,3,4,5,6,7]]
     
-    Ls = [1, 1, 2]
+    Ls = [1, 1, 8]
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -1260,6 +1287,7 @@ if __name__ == "__main__":
     # pbc_isdf_info = PBC_ISDF_Info_Quad_K(cell, kmesh=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=3e-3)
     pbc_isdf_info = PBC_ISDF_Info_Quad_K(prim_cell, kmesh=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=3e-3)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=prim_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
+    pbc_isdf_info.verbose = 10
     
     # exit(1)
     
@@ -1293,7 +1321,7 @@ if __name__ == "__main__":
     
     print("prim_mesh = ", prim_mesh)
     
-    # exit(1)
+    exit(1)
     
     naux_prim = 0
     for data in pbc_isdf_info.aoRg:

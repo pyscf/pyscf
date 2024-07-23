@@ -1037,7 +1037,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             lattice_y = self.cell.lattice_vectors()[1][1]
             lattice_z = self.cell.lattice_vectors()[2][2]
             
-            Ls = [int(lattice_x/3)+1, int(lattice_y/3)+1, int(lattice_z/3)+1]
+            Ls = [int(lattice_x/3)+3, int(lattice_y/3)+3, int(lattice_z/3)+3]
 
         t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if self.rsjk is not None and self.cell_rsjk is not None:
@@ -1262,7 +1262,28 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         return aoR_holders_res
             
     
-    def build_IP_local(self, c=5, m=5, first_natm=None, group=None, Ls = None, debug=True):
+    def _determine_c(self):
+        
+        DEFAULT = 15
+        SEGMENT = [1e-2, 1e-3, 1e-4, 1e-5]
+        C       = [10, 20, 30, 35, 40]
+        
+        
+        if self.rela_cutoff_QRCP is None:
+            return DEFAULT
+        else:
+            if self.rela_cutoff_QRCP > SEGMENT[0]:
+                return C[0]
+            else:
+                for i in range(1, len(SEGMENT)):
+                    if self.rela_cutoff_QRCP > SEGMENT[i]:
+                        return C[i]
+                return C[-1]
+        
+    def build_IP_local(self, c=None, m=5, first_natm=None, group=None, Ls = None, debug=True):
+        
+        if c is None:
+            c = self._determine_c()
         
         if first_natm is None:
             first_natm = self.natm
