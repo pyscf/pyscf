@@ -127,9 +127,9 @@ void _Pack_Matrix_SparseRow_DenseCol(
         return;
     }
 
-    if (ColEnd != (ColBegin + ncol_source))
+    if (ColEnd < (ColBegin + ncol_source))
     {
-        printf("ColEnd!=ColBegin+ncol_source\n");
+        printf("ColEnd<ColBegin+ncol_source\n");
         exit(1);
     }
 

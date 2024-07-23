@@ -45,7 +45,7 @@ USE_SCIPY_QR = False  ## true for single-thread mode to compare with Kori's code
 
 ############ subroutines --- select IP ############
 
-# ls stands for linear scaling
+############ ls refers to linear scaling ############
 
 def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None, 
                      rela_cutoff = 0.0, 
@@ -63,6 +63,8 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
     assert isinstance(mydf.partition, list)
     
     ### determine the largest grids point of one atm ###
+
+    log = lib.logger.Logger(mydf.cell.stdout, mydf.cell.verbose)
 
     natm      = mydf.cell.natm
     nao       = mydf.nao
@@ -107,7 +109,7 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
     thread_buffer = None
     global_buffer = None
     
-    print("-------------------------------------------")
+    log.debug4("-------------------------------------------")
     
     for atm_id in range(group_begin, group_end):
         
@@ -152,19 +154,19 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
                      ctypes.c_int(grid_ID.shape[0]))
         if no_retriction_on_nIP:
             max_rank = min(naux2_now, grid_ID.shape[0])
-            print("In select_IP_atm_ls, no_retriction_on_nIP")
+            log.debug4("In select_IP_atm_ls, no_retriction_on_nIP")
         else:
             max_rank  = min(naux2_now, grid_ID.shape[0], nao_atm * c + m)
-            print("In select_IP_atm_ls, retriction_on_nIP")
+            log.debug4("In select_IP_atm_ls, retriction_on_nIP")
         npt_find      = ctypes.c_int(0)
         pivot         = np.arange(grid_ID.shape[0], dtype=np.int32)
         thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64)
         global_buffer = np.ndarray((1, grid_ID.shape[0]), dtype=np.float64)
         
-        print("In select_IP_atm_ls, max_rank      = ", max_rank)
-        print("In select_IP_atm_ls, naux2_now     = ", naux2_now)
-        print("In select_IP_atm_ls, grid_ID.shape = ", grid_ID.shape)
-        print("In select_IP_atm_ls, rela_cutoff   = ", rela_cutoff)
+        log.debug4("In select_IP_atm_ls, max_rank      = ", max_rank)
+        log.debug4("In select_IP_atm_ls, naux2_now     = ", naux2_now)
+        log.debug4("In select_IP_atm_ls, grid_ID.shape = ", grid_ID.shape)
+        log.debug4("In select_IP_atm_ls, rela_cutoff   = ", rela_cutoff)
         
         if USE_SCIPY_QR:
             R, pivot = scipy.linalg.qr(aoPairBuffer, pivoting=True, mode='r', check_finite=False, overwrite_a=True)
@@ -183,7 +185,7 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
                             global_buffer.ctypes.data_as(ctypes.c_void_p))
             npt_find = npt_find.value
             cutoff = abs(R[npt_find-1, npt_find-1])
-            # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
+            log.debug4("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (grid_ID.shape[0], npt_find, cutoff))
                         
         pivot = pivot[:npt_find]
         pivot.sort()
@@ -193,8 +195,8 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
         atm_IP.sort()
         results[atm_id] = atm_IP
         
-        print("In select_IP_atm_ls, npt_find      = ", npt_find)
-        print("-------------------------------------------")
+        log.debug4("In select_IP_atm_ls, npt_find      = ", npt_find)
+        log.debug4("-------------------------------------------")
 
     del aoR_atm1
     del aoR_atm2
@@ -219,6 +221,7 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
     assert len(aoRg_possible) == len(atm_2_IP_possible)
     # assert len(aoRg_possible) == mydf.natm
     
+    log = lib.logger.Logger(mydf.cell.stdout, mydf.cell.verbose)
     
     if group is None:
         raise ValueError("group must be specified")
@@ -262,10 +265,10 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
     
     nao = aoRg_packed.shape[0]
 
-    print("In select_IP_group_ls, nao_group   = ", nao_group)
-    print("In select_IP_group_ls, nao         = ", nao)    
-    print("In select_IP_group_ls, c           = %d, m = %d" % (c, m))
-    print("In select_IP_group_ls, rela_cutoff = ", mydf.rela_cutoff_QRCP)
+    log.debug4("In select_IP_group_ls, nao_group   = ", nao_group)
+    log.debug4("In select_IP_group_ls, nao         = ", nao)    
+    log.debug4("In select_IP_group_ls, c           = %d, m = %d" % (c, m))
+    log.debug4("In select_IP_group_ls, rela_cutoff = ", mydf.rela_cutoff_QRCP)
     
     # naux_now = int(np.sqrt(c*nao)) + m # seems to be too large
     naux_now = int(np.sqrt(c*nao_group)) + m
@@ -310,16 +313,16 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
 
     if mydf.no_restriction_on_nIP:
         max_rank = min(naux2_now, IP_possible.shape[0])
-        print("In select_IP_group_ls, no_restriction_on_nIP")
+        log.debug4("In select_IP_group_ls, no_restriction_on_nIP")
     else:
         max_rank  = min(naux2_now, IP_possible.shape[0], nao_group * c)  
-        print("In select_IP_group_ls, restriction_on_nIP")
+        log.debug4("In select_IP_group_ls, restriction_on_nIP")
         
-    print("In select_IP_group_ls, naux2_now = %d, max_rank = %d" % (naux2_now, max_rank))
-    print("In select_IP_group_ls, IP_possible.shape = ", IP_possible.shape)
-    print("In select_IP_group_ls, nao_group = ", nao_group)
-    print("In select_IP_group_ls, c = ", c)
-    print("In select_IP_group_ls, nao_group * c = ", nao_group * c)
+    log.debug4("In select_IP_group_ls, naux2_now = %d, max_rank = %d" % (naux2_now, max_rank))
+    log.debug4("In select_IP_group_ls, IP_possible.shape = ", IP_possible.shape)
+    log.debug4("In select_IP_group_ls, nao_group = ", nao_group)
+    log.debug4("In select_IP_group_ls, c = ", c)
+    log.debug4("In select_IP_group_ls, nao_group * c = ", nao_group * c)
     
     npt_find = ctypes.c_int(0)
     pivot    = np.arange(IP_possible.shape[0], dtype=np.int32)
@@ -342,7 +345,7 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
                        global_buffer.ctypes.data_as(ctypes.c_void_p))
         npt_find = npt_find.value
         cutoff   = abs(R[npt_find-1, npt_find-1])
-        # print("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (IP_possible.shape[0], npt_find, cutoff))
+        log.debug4("ngrid = %d, npt_find = %d, cutoff = %12.6e" % (IP_possible.shape[0], npt_find, cutoff))
     else:
         # pivot, rankc = scipy.linalg.lapack.dpstrf(aoPairBuffer)[1:3]
         # pivot = pivot[:rankc]-1
@@ -350,7 +353,7 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
         R, pivot = scipy.linalg.qr(aoPairBuffer, pivoting=True, mode='r', check_finite=False, overwrite_a=True)
         npt_find = nao_group * c 
     
-    print("In select_IP_group_ls, npt_find = ", npt_find)
+    log.debug4("In select_IP_group_ls, npt_find = ", npt_find)
     
     pivot = pivot[:npt_find]
     pivot.sort()
@@ -462,10 +465,10 @@ def select_IP_local_ls_drive(mydf, c, m, IP_possible_atm, group, use_mpi=False):
         else:
             mydf.aoRg = mydf.aoRg_possible
     
-    memory = ISDF_Local_Utils._get_aoR_holders_memory(mydf.aoRg)
-    
     if rank == 0:
-        print("memory to store aoRg is ", memory)
+        memory = ISDF_Local_Utils._get_aoR_holders_memory(mydf.aoRg)
+        log    = lib.logger.Logger(mydf.cell.stdout, mydf.cell.verbose)
+        log.info("memory to store aoRg is %d " %(memory))
         
     return IP_group
 
@@ -490,6 +493,9 @@ def find_common_elements_positions(arr1, arr2):
 
 def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
 
+
+    log = lib.logger.Logger(mydf.cell.stdout, mydf.cell.verbose)
+
     if use_mpi:
         from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm, comm_size
     else:
@@ -508,7 +514,7 @@ def build_aux_basis_ls(mydf, group, IP_group, debug=True, use_mpi=False):
     ngroup_local = group_end - group_begin
     
     if ngroup_local == 0:
-        print(" WARNING : rank = %d, ngroup_local = 0" % rank)
+        log.warn(" WARNING : rank = %d, ngroup_local = 0" % rank)
     
     mydf.group_begin = group_begin
     mydf.group_end = group_end
@@ -602,8 +608,6 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
     cell = mydf.cell
     mesh = cell.mesh
     mesh_int32         = np.array(mesh, dtype=np.int32)
-    # mydf._allocate_jk_buffer(mydf.aoRg.dtype, mydf.ngrids_local)
-    # mydf._allocate_jk_buffer(mydf.aoRg.dtype, mydf.ngrids_local)
     
     naux = mydf.naux
     
@@ -618,8 +622,6 @@ def build_auxiliary_Coulomb_local_bas_wo_robust_fitting(mydf, debug=True, use_mp
     if mydf.omega is not None:
         assert mydf.omega >= 0.0
     
-    # coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
-    # mydf.coulG = coulG.copy()
     coulG = mydf.coulG.copy()
     coulG_real         = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1).copy()
     
@@ -739,13 +741,13 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
     if hasattr(mydf, "grid_pnt_near_atm") and len(mydf.grid_pnt_near_atm) != 0 :
         raise NotImplementedError("grid_pnt_near_atm is not supported")
     
+    log = lib.logger.Logger(mydf.cell.stdout, mydf.cell.verbose)
+    
     t0 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
     cell = mydf.cell
     mesh = cell.mesh
-    
-    # mydf._allocate_jk_buffer(mydf.aoR.dtype, mydf.ngrids_local)
-    
+        
     naux = mydf.naux
     
     ncomplex = mesh[0] * mesh[1] * (mesh[2] // 2 + 1) * 2 
@@ -772,18 +774,10 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
         
         ngrids             = mesh[0] * mesh[1] * mesh[2]
         mesh_int32         = np.array(mesh, dtype=np.int32)
-
         V                  = np.zeros((nAux, ngrids), dtype=np.double)
         
         fn = getattr(libpbc, "_construct_V_local_bas", None)
         assert(fn is not None)
-
-        # print("V.shape = ", V.shape)
-        # # print("aux_basis.shape = ", aux_basis.shape)
-        # print("self.jk_buffer.size    = ", mydf.jk_buffer.size)
-        # print("self.jk_buffer.shape   = ", mydf.jk_buffer.shape)
-        # sys.stdout.flush()
-        # print("len(aux_bas) = ", len(aux_basis))
         
         shift_row = 0
         ngrid_now = 0
@@ -793,13 +787,6 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
             grid_ID = mydf.partition_group_to_gridID[group_begin+i]
             assert aux_basis_now.shape[1] == grid_ID.size 
             ngrid_now += grid_ID.size
-            # print("i = ", i)
-            # print("shift_row = ", shift_row) 
-            # print("aux_bas_now = ", aux_basis_now.shape)
-            # print("ngrid_now = ", ngrid_now)
-            # print("buf = ", buf.shape)
-            # print("ngrid_ordering = ", grid_ordering.size)
-            # sys.stdout.flush()
         
             fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(aux_basis_now.shape[0]),
@@ -824,9 +811,6 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
 
     if mydf.omega is not None:
         assert mydf.omega >= 0.0
-    # print("mydf.omega = ", mydf.omega)
-    # coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
-    # mydf.coulG = coulG.copy()
     coulG = mydf.coulG.copy()
     V = construct_V_CCode(mydf.aux_basis, mesh, coulG)
 
@@ -853,11 +837,10 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
         mydf.V_R = V_fullrow
     
         t1_comm = (lib.logger.process_clock(), lib.logger.perf_counter()) 
-    
         t_comm = t1_comm[1] - t0_comm[1]
     
         if mydf.verbose > 0:
-            print("rank = %d, t_comm = %12.6e" % (rank, t_comm))
+            log.info("rank = %d, t_comm = %12.6e" % (rank, t_comm))
     else:
         t_comm = 0.0
         mydf.V_R = V
@@ -878,19 +861,13 @@ def build_auxiliary_Coulomb_local_bas(mydf, debug=True, use_mpi=False):
         aux_begin = aux_group_shift[i]
         aux_end   = aux_group_shift[i+1]
         ngrid_now = mydf.partition_group_to_gridID[i].size
-        # print("aux_begin = %d, aux_end = %d, ngrid_now = %d" % (aux_begin, aux_end, ngrid_now))
-        # print("grid_shift = %d" % grid_shift)
-        # print("shape 1 = ", mydf.V_R[:,grid_shift:grid_shift+ngrid_now].shape)
-        # print("shape 2 = ", mydf.aux_basis[i-group_begin].T.shape)
         sys.stdout.flush()
         mydf.W[:, aux_begin:aux_end] = lib.ddot(mydf.V_R[:, grid_shift:grid_shift+ngrid_now], mydf.aux_basis[i-group_begin].T)
         grid_shift += ngrid_now
     
     if use_mpi:
         comm.Barrier()
-    
-    # print("W = ", mydf.W[:5,:5])
-    
+        
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
     if mydf.verbose > 0:
@@ -928,12 +905,17 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
     def __init__(self, mol:Cell, 
                  with_robust_fitting=True,
                  kmesh              =None,
-                 verbose            =1,
+                 verbose            =None,
                  rela_cutoff_QRCP   =None,
                  aoR_cutoff         =1e-8,
                  direct             =False,
                  use_occ_RI_K       =True,
+                 limited_memory     =False,
+                 build_K_bunchsize  =None,
                  ):
+        
+        if verbose is None:
+            verbose = mol.verbose
         
         super().__init__(
             mol=mol,
@@ -1004,6 +986,17 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         self.ovlp = self.cell.pbc_intor('int1e_ovlp')
         self.occ_tol = 1e-9
         self.occ_RI_K  = use_occ_RI_K
+
+        ########## limited memory ##########
+        
+        self._limited_memory    = limited_memory
+        self._build_K_bunchsize = build_K_bunchsize
+        if build_K_bunchsize is None:
+            if limited_memory:
+                from pyscf.pbc.df.isdf._isdf_local_K_direct import K_DIRECT_NAUX_BUNCHSIZE
+                self._build_K_bunchsize = K_DIRECT_NAUX_BUNCHSIZE
+            else:
+                self._build_K_bunchsize = 10000 * 10000 # infinite in practice
 
     def _get_first_natm(self):
         if self.kmesh is not None:
@@ -1110,10 +1103,13 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
     
     def _get_max_nao_involved(self):
         return np.max([aoR_holder.aoR.shape[0] for aoR_holder in self.aoR if aoR_holder is not None])
+    
     def _get_max_ngrid_involved(self):
         return np.max([aoR_holder.aoR.shape[1] for aoR_holder in self.aoR if aoR_holder is not None])
+    
     def _get_max_nIP_involved(self):
         return np.max([aoR_holder.aoR.shape[1] for aoR_holder in self.aoRg if aoR_holder is not None])
+    
     def _get_maxsize_group_naux(self):
         maxsize_group_naux = 0
         for group_id, atm_ids in enumerate(self.group):
@@ -1132,12 +1128,15 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             self.build_VW_in_k_buf = None
     
     def allocate_k_buffer(self): 
+        
+        log = lib.logger.Logger(self.cell.stdout, self.cell.verbose)
+        
         ### TODO: split grid again to reduce the size of buf when robust fitting is true! 
         # TODO: try to calculate the size when direct is true
         
-        max_nao_involved = self._get_max_nao_involved()
+        max_nao_involved   = self._get_max_nao_involved()
         max_ngrid_involved = self._get_max_ngrid_involved()
-        max_nIP_involved = self._get_max_nIP_involved()
+        max_nIP_involved   = self._get_max_nIP_involved()
         maxsize_group_naux = self._get_maxsize_group_naux()
         
         allocated = False
@@ -1149,39 +1148,57 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         else:
             if hasattr(self, "build_k_buf") and self.build_k_buf is not None:
                 allocated = True
-        
-        
+    
         if allocated:
             pass
         else:
             
             if self.direct:
                 
+                if self._limited_memory:
+                    build_K_bunchsize = min(maxsize_group_naux, self._build_K_bunchsize)
+                else:
+                    build_K_bunchsize = maxsize_group_naux
+                
+                #### compare build_K_bunchsize with those buf used for W matrix ####
+                
                 size1 = maxsize_group_naux * self.nao
                 size2 = maxsize_group_naux * max_nao_involved
                 self.Density_RgAO_buf = np.zeros((size1+size2,), dtype=np.float64)
 
-                #### allocate build_VW_in_k_buf ####                
+                #### allocate build_VW_in_k_buf ####      
+                          
                 mesh = self.cell.mesh
+                ngrid= np.prod(mesh)
                 ncomplex = mesh[0] * mesh[1] * (mesh[2]//2+1)
                 nthread = lib.num_threads()
+                
+                build_K_bunchsize = max(maxsize_group_naux * self.naux//ngrid+2, build_K_bunchsize)
+                build_K_bunchsize = max(maxsize_group_naux * max_nIP_involved//max_ngrid_involved+2, build_K_bunchsize)
+                self._build_K_bunchsize = build_K_bunchsize
+                
                 size0 = (np.prod(self.cell.mesh) + 2 * ncomplex) * nthread
-                size1 = maxsize_group_naux * np.prod(self.cell.mesh) 
+                size1 = build_K_bunchsize * np.prod(self.cell.mesh) 
                 size2 = maxsize_group_naux * self.naux
                 self.build_VW_in_k_buf = np.zeros((size0+size1+size2,), dtype=np.float64)
                 
                 #### allocate build_k_buf ####
                 
-                size1 = maxsize_group_naux * np.prod(self.cell.mesh)
-                size2 = maxsize_group_naux * max_ngrid_involved
-                size3 = maxsize_group_naux * self.nao
-                size4 = max_ngrid_involved * max_nao_involved
-                size5 = max_ngrid_involved * max_ngrid_involved
-                size6 = max_nao_involved * self.nao
+                size1 = build_K_bunchsize * np.prod(self.cell.mesh) # density RgR 
+                size2 = build_K_bunchsize * max_ngrid_involved      # ddot_res_RgR
+                size3 = maxsize_group_naux * self.nao               # K1_tmp1
+                size4 = max_ngrid_involved * max_nao_involved       # K1_tmp1_ddot_res
+                #size5 = max_ngrid_involved * max_ngrid_involved
+                size5 = 0
+                size6 = max_nao_involved * self.nao                 # K1_final_ddot
                 
                 size = size1 + size2 + size3 + size4 + size5 + size6
                 
                 self.build_k_buf = np.zeros((size,), dtype=np.float64)
+                
+                log.info("In allocate_k_buffer, Density_RgAO_buf  memory = %d"%(self.Density_RgAO_buf.nbytes))
+                log.info("In allocate_k_buffer, build_VW_in_k_buf memory = %d"%(self.build_VW_in_k_buf.nbytes))
+                log.info("In allocate_k_buffer, build_k_buf       memory = %d"%(self.build_k_buf.nbytes))
                 
             else:
                             
@@ -1207,7 +1224,6 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                     size2 += self.naux * max_ngrid_involved
                 self.build_k_buf = np.zeros((max(size0, size1, size2)), dtype=np.float64)
             
-    
     def _construct_build_aoRg(self, IP_group, group=None):
         
         if group is None:
@@ -1261,13 +1277,15 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         
         return aoR_holders_res
             
-    
     def _determine_c(self):
+        '''
+        called in build_IP_local when c is not set
+        empirical rule to determine c
+        '''
         
         DEFAULT = 15
         SEGMENT = [1e-2, 1e-3, 1e-4, 1e-5]
         C       = [10, 20, 30, 35, 40]
-        
         
         if self.rela_cutoff_QRCP is None:
             return DEFAULT
@@ -1419,6 +1437,9 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         '''Solver for generalized eigenvalue problem
 
         .. math:: HC = SCE
+        
+            used only for occ-RI-K, better not merge into PySCF first!
+        
         '''
         # print("ovlp = ", self.ovlp)
         
@@ -1620,14 +1641,12 @@ if __name__ == '__main__':
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     # pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False)
-    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, use_occ_RI_K=False, rela_cutoff_QRCP=3e-3)
+    pbc_isdf_info = PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, 
+                                       aoR_cutoff=1e-8, 
+                                       direct=True, limited_memory=True, build_K_bunchsize=32,
+                                       use_occ_RI_K=False, rela_cutoff_QRCP=3e-3)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition)
-    pbc_isdf_info.build_auxiliary_Coulomb()
-    
-    #pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
-    #pbc_isdf_info.Ls = Ls
-    #pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
-    
+    pbc_isdf_info.build_auxiliary_Coulomb()    
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     _benchmark_time(t1, t2, "build isdf", pbc_isdf_info)
     
@@ -1635,7 +1654,6 @@ if __name__ == '__main__':
 
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
-    # pbc_isdf_info.with_robust_fitting = False
     mf = scf.RHF(cell)
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
@@ -1648,8 +1666,11 @@ if __name__ == '__main__':
     
     _benchmark_time(t1, t2, "scf", pbc_isdf_info)
     sys.stdout.flush()
-    
+        
     ### compare without occ-RI-K ###
+    
+    pbc_isdf_info.direct = False
+    pbc_isdf_info.build_auxiliary_Coulomb()    
     
     pbc_isdf_info.occ_RI_K = True
     

@@ -82,6 +82,7 @@ class aoR_Holder:
         # assert aoR.shape[1] == local_gridID_end - local_gridID_begin
         # assert aoR.shape[1] == global_gridID_end - global_gridID_begin
         # if aoR.shape[1] != (global_gridID_end - global_gridID_begin):
+        self.ngrid_tot  = global_gridID_end - global_gridID_begin
         self.ngrid_kept = aoR.shape[1]
         
         self.aoR = aoR
@@ -114,7 +115,8 @@ class aoR_Holder:
                 self.segments.append(segment[-1]+1)
                 loc_begin += len(segment)
             self.segments.append(loc_begin)
-            self.segments = np.array(self.segments, dtype=np.int32)
+        
+        self.segments = np.array(self.segments, dtype=np.int32)
 
         segments = None
     
@@ -197,7 +199,8 @@ def _pack_aoR_holder(aoR_holders:list[aoR_Holder], nao):
             continue
         for i in _aoR_holder.ao_involved:
             has_involved[i] = True  
-        nGrid += _aoR_holder.aoR.shape[1]
+        # nGrid += _aoR_holder.aoR.shape[1]
+        nGrid += _aoR_holder.ngrid_tot
     
     ao2loc = [-1] * nao 
     loc_now = 0
@@ -218,11 +221,10 @@ def _pack_aoR_holder(aoR_holders:list[aoR_Holder], nao):
         if _aoR_holder is None:
             continue
         loc_packed = np.zeros((_aoR_holder.aoR.shape[0]), dtype=np.int32)
-        grid_end_id = grid_begin_id + _aoR_holder.aoR.shape[1]
+        # grid_end_id = grid_begin_id + _aoR_holder.aoR.shape[1]
+        grid_end_id = grid_begin_id + _aoR_holder.ngrid_tot
         for loc, ao_id in enumerate(_aoR_holder.ao_involved):
             loc_packed[loc] = ao2loc[ao_id]
-        # print("loc_packed = ", loc_packed)
-        # print("grid_begin_id = %d, grid_end_id = %d" % (grid_begin_id, grid_end_id))
         # aoR_packed[loc_packed, grid_begin_id:grid_end_id] = _aoR_holder.aoR
         fn_pack(
             aoR_packed.ctypes.data_as(ctypes.c_void_p), 
@@ -336,6 +338,7 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
                   use_mpi=False): # by default split the cell into 4x4x4 supercell
     
     ##### this step is super fast #####
+    
     ##### we simply perform it on root and broadcast it to all other processes #####
     
     if use_mpi:
@@ -950,7 +953,6 @@ def get_aoR(cell:Cell, coords, partition,
             atm_involved = np.arange(first_natm) # with kmesh ! 
         else:
             if first_npartition == len(partition):
-                
                 atm_involved = []
                 for atm_id_other, distance in AtmConnectionInfoList[atm_id].atm_connected_info:
                     if distance < RcutMax and atm_id_other < first_natm:

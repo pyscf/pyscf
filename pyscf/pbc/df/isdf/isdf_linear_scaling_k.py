@@ -289,11 +289,6 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group,
         
         buffer         = np.zeros((nao_prim, ncell_complex*ngrids_prim), dtype=np.complex128)
         
-        # fn = getattr(libpbc, "_FFT_Matrix_Col_InPlace", None)
-        # assert fn is not None
-
-        # print("self.aoR_FFT.shape = ", mydf.aoR_FFT.shape)
-        
         fn(
             mydf.aoR_FFT_real.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nao_prim),
@@ -312,11 +307,7 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group,
         mydf.aoR_FFT = None
         # build aoR #
 
-    del buffer
-        
-    # if rank == 0:
-    #     print("IP_segment = ", mydf.IP_segment)
-    #     print("aoRg memory: ", ISDF_Local_Utils._get_aoR_holders_memory(mydf.aoRg))          
+    del buffer         
 
 def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
     
@@ -650,7 +641,6 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         #    print("aoR memory: ", memory) 
         
         weight = np.sqrt(self.cell.vol / self.coords.shape[0])
-        
         self.aoR1 = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
                                                    None,
                                                    first_natm,
@@ -662,34 +652,28 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         memory = ISDF_Local_Utils._get_aoR_holders_memory(self.aoR1)  ### full row 
         assert len(self.aoR1) == natm
         log.info("In ISDF-K build_partition_aoR aoR1 memory: %s", memory)
-        
         partition_activated = None
         
-        if not self.use_mpi:
-            rank = 0
+        # if not self.use_mpi:
+        #     rank = 0
+        # if rank == 0:
+        #     partition_activated = []
+        #     for _id_, aoR_holder in enumerate(self.aoR1):
+        #         if aoR_holder.ao_involved.size == 0:
+        #             partition_activated.append(False)
+        #         else:
+        #             partition_activated.append(True)
+        #     partition_activated = np.array(partition_activated, dtype=bool)
+        # if self.use_mpi:
+        #     partition_activated = bcast(partition_activated)
+        # self.partition_activated = partition_activated
+        # self.partition_activated_id = []
+        # for i in range(len(partition_activated)):
+        #     if partition_activated[i]:
+        #         self.partition_activated_id.append(i)
+        # self.partition_activated_id = np.array(self.partition_activated_id, dtype=np.int32)
         
-        if rank == 0:
-            partition_activated = []
-            for _id_, aoR_holder in enumerate(self.aoR1):
-                if aoR_holder.ao_involved.size == 0:
-                    partition_activated.append(False)
-                else:
-                    partition_activated.append(True)
-            partition_activated = np.array(partition_activated, dtype=bool)
-        
-        if self.use_mpi:
-            partition_activated = bcast(partition_activated)
-        
-        self.partition_activated = partition_activated
-        
-        self.partition_activated_id = []
-        for i in range(len(partition_activated)):
-            if partition_activated[i]:
-                self.partition_activated_id.append(i)
-        self.partition_activated_id = np.array(self.partition_activated_id, dtype=np.int32)
-            
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
-        
         if self.verbose:
             _benchmark_time(t1, t2, "build_aoR", self)
     
@@ -862,7 +846,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         t1 = t2
         
         self.aoR_Full = []
-        #self.aoRg_FUll = []
+        ##self.aoRg_FUll = []
         
         for i in range(self.kmesh[0]):
             for j in range(self.kmesh[1]):
@@ -1294,11 +1278,11 @@ if __name__ == "__main__":
     #print("grid_segment         = ", pbc_isdf_info.grid_segment)
     #print("len of grid_ordering = ", len(pbc_isdf_info.grid_ID_ordered))
     
-    aoR_unpacked = []
-    for aoR_holder in pbc_isdf_info.aoR1:
-        aoR_unpacked.append(aoR_holder.todense(prim_cell.nao_nr()))
-    aoR_unpacked = np.concatenate(aoR_unpacked, axis=1)
-    print("aoR_unpacked shape = ", aoR_unpacked.shape)
+    #aoR_unpacked = []
+    #for aoR_holder in pbc_isdf_info.aoR1:
+    #    aoR_unpacked.append(aoR_holder.todense(prim_cell.nao_nr()))
+    #aoR_unpacked = np.concatenate(aoR_unpacked, axis=1)
+    #print("aoR_unpacked shape = ", aoR_unpacked.shape)
     
     weight = np.sqrt(cell.vol / pbc_isdf_info.coords.shape[0])
     aoR_benchmark = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords[pbc_isdf_info.grid_ID_ordered]) * weight
