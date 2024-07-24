@@ -1014,6 +1014,48 @@ void _buildK_packaddrow(
     }
 }
 
+void _buildK_packaddrow_shift_col(
+    double *target,
+    const int nrow_target,
+    const int ncol_target,
+    double *source,
+    const int nrow_source,
+    const int ncol_source,
+    const int *ao_involved,
+    const int kmesh,
+    const int nao_prim,
+    const int *box_permutation)
+{
+    int nThread = get_omp_threads();
+
+    static const int INC = 1;
+    static const double ONE = 1.0;
+
+    if (ncol_target != (kmesh * nao_prim))
+    {
+        printf("Error: ncol_target!=(kmesh *nao_prim)\n");
+        exit(1);
+    }
+
+    if (ncol_source != ncol_target)
+    {
+        printf("Error: ncol_source!=ncol_target\n");
+        exit(1);
+    }
+
+#pragma omp parallel for num_threads(nThread) schedule(static)
+    for (size_t i = 0; i < nrow_source; ++i)
+    {
+        size_t row_loc = ao_involved[i];
+        // memcpy(target + row_loc * ncol_target, source + i * ncol_source, sizeof(double) * ncol_source);
+        // daxpy_(&ncol_source, &ONE, source + i * ncol_source, &INC, target + row_loc * ncol_target, &INC);
+        for (size_t j = 0; j < kmesh; ++j)
+        {
+            daxpy_(&nao_prim, &ONE, source + i * ncol_source + j * nao_prim, &INC, target + row_loc * ncol_target + box_permutation[j] * nao_prim, &INC);
+        }
+    }
+}
+
 void _buildK_packaddcol(
     double *target,
     const int nrow_target,

@@ -55,6 +55,28 @@ def _add_kpnt_info(mydf):
     mydf.nao_prim = mydf.nao
     mydf.nIP_Prim = mydf.naux
 
+def _permutation_box(mydf, kmesh):
+    permutation = []
+    for kx in range(kmesh[0]):
+        for ky in range(kmesh[1]):
+            for kz in range(kmesh[2]):
+                
+                tmp = []
+                
+                for ix in range(kmesh[0]):
+                    for iy in range(kmesh[1]):
+                        for iz in range(kmesh[2]):
+                            ix_ = (ix + kx) % kmesh[0]
+                            iy_ = (iy + ky) % kmesh[1]
+                            iz_ = (iz + kz) % kmesh[2]
+                            tmp.append(ix_*kmesh[1]*kmesh[2] + iy_*kmesh[2] + iz_)
+                            
+                tmp = np.array(tmp, dtype=np.int32)
+                permutation.append(tmp)
+    mydf._permutation_box = permutation
+    return permutation
+                
+
 def construct_V(aux_basis:np.ndarray, 
                 buf, 
                 V, 
@@ -134,9 +156,13 @@ def _isdf_get_K_direct_kernel_1(
         kmesh = [1,1,1]
     else:
         kmesh = mydf.kmesh
+        
+    nkpts = np.prod(kmesh)
     
     if not hasattr(mydf, "nao_prim"):
         _add_kpnt_info(mydf)
+    natm_prim = mydf.natmPrim
+    nao_prim  = mydf.nao_prim
     
     ngrid_prim = np.prod(mesh) // np.prod(kmesh)
     
@@ -144,6 +170,11 @@ def _isdf_get_K_direct_kernel_1(
     assert mesh[0] % kmesh[0] == 0
     assert mesh[1] % kmesh[1] == 0
     assert mesh[2] % kmesh[2] == 0
+    
+    if hasattr(mydf, "_permutation_box"):
+        permutation = mydf._permutation_box
+    else:
+        permutation = _permutation_box(mydf, kmesh)
     
     ######### fetch ao values on grids or IPs #########
     
@@ -184,11 +215,18 @@ def _isdf_get_K_direct_kernel_1(
     ### the number of aux basis involved ###
     
     naux_tmp = 0
-    aoRg_holders = []
-    for atm_id in group[group_id]:
-        naux_tmp += aoRg1[atm_id].aoR.shape[1]
-        aoRg_holders.append(aoRg1[atm_id])
-    assert naux_tmp == aux_basis[group_id].shape[0]
+    aoRg_packed = []
+    ILOC = 0
+    for kx in range(kmesh[0]):
+        for ky in range(kmesh[1]):
+            for kz in range(kmesh[2]):
+                aoRg_holders = []
+                for atm_id in group[group_id]:
+                    naux_tmp += aoRg1[atm_id+ILOC*natm_prim].aoR.shape[1]
+                    aoRg_holders.append(aoRg1[atm_id])
+                aoRg_packed.append(_pack_aoR_holder(aoRg_holders, nao))
+                assert naux_tmp == aux_basis[group_id].shape[0]
+                ILOC += 1
     
     # grid ID involved for the given group
     
@@ -196,14 +234,14 @@ def _isdf_get_K_direct_kernel_1(
     
     # pack aoRg for loop over Rg #
     
-    aoRg_packed = _pack_aoR_holder(aoRg_holders, nao)
-    memory      = _get_aoR_holders_memory(aoRg_holders)
+    # aoRg_packed = _pack_aoR_holder(aoRg_holders, nao)
+    # memory      = _get_aoR_holders_memory(aoRg_holders)
     
     # log.debug4('In _isdf_get_K_direct_kernel1 group_id = %d, naux = %d' % (group_id, naux_tmp))
     # log.debug4('In _isdf_get_K_direct_kernel1 aoRg_holders Memory = %d Bytes' % (memory))
     # log.debug4('In _isdf_get_K_direct_kernel1 naux_bunchsize      = %d' % (naux_bunchsize))
     
-    assert aoRg_packed.ngrid_tot == naux_tmp
+    # assert aoRg_packed.ngrid_tot == naux_tmp
     
     ######### get involved C function #########
     
@@ -213,8 +251,10 @@ def _isdf_get_K_direct_kernel_1(
     assert fn_packcol2 is not None
     fn_packadd_col = getattr(libpbc, "_buildK_packaddcol", None)
     assert fn_packadd_col is not None
-    fn_packadd_row = getattr(libpbc, "_buildK_packaddrow", None)
-    assert fn_packadd_row is not None
+    #fn_packadd_row = getattr(libpbc, "_buildK_packaddrow", None)
+    #assert fn_packadd_row is not None
+    fn_packadd_row_k = getattr(libpbc, "_buildK_packaddrow_shift_col", None)
+    assert fn_packadd_row_k is not None
     
     # determine bunchsize #
     
@@ -401,18 +441,39 @@ def _isdf_get_K_direct_kernel_1(
 
         #### 3.4 K1_or_2 += aoRg * K1_tmp1
         
-        nao_invovled = aoRg_packed.nao_invovled
-        ddot_res = np.ndarray((nao_invovled, nao), buffer=K1_final_ddot_buf)
-        lib.ddot(aoRg_packed.aoR[:,p0:p1], K1_tmp1, c=ddot_res)
-        fn_packadd_row(
-            K1_or_2.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(K1_or_2.shape[0]),
-            ctypes.c_int(K1_or_2.shape[1]),
-            ddot_res.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(ddot_res.shape[0]),
-            ctypes.c_int(ddot_res.shape[1]),
-            aoRg_packed.ao_involved.ctypes.data_as(ctypes.c_void_p)
-        )
+        ILOC = 0
+        for kx in range(kmesh[0]):
+            for ky in range(kmesh[1]):
+                for kz in range(kmesh[2]):
+                    
+                    box_permutation = permutation[ILOC]
+                    
+                    nao_invovled = aoRg_packed[ILOC].nao_invovled
+                    ddot_res = np.ndarray((nao_invovled, nao), buffer=K1_final_ddot_buf)
+                    lib.ddot(aoRg_packed[ILOC].aoR[:,p0:p1], K1_tmp1, c=ddot_res)
+                    # fn_packadd_row(
+                    #     K1_or_2.ctypes.data_as(ctypes.c_void_p),
+                    #     ctypes.c_int(K1_or_2.shape[0]),
+                    #     ctypes.c_int(K1_or_2.shape[1]),
+                    #     ddot_res.ctypes.data_as(ctypes.c_void_p),
+                    #     ctypes.c_int(ddot_res.shape[0]),
+                    #     ctypes.c_int(ddot_res.shape[1]),
+                    #     aoRg_packed[ILOC].ao_involved.ctypes.data_as(ctypes.c_void_p)
+                    # )
+                    fn_packadd_row_k(
+                        K1_or_2.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(K1_or_2.shape[0]),
+                        ctypes.c_int(K1_or_2.shape[1]),
+                        ddot_res.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(ddot_res.shape[0]),
+                        ctypes.c_int(ddot_res.shape[1]),
+                        aoRg_packed[ILOC].ao_involved.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(nkpts),
+                        ctypes.c_int(nao_prim),
+                        box_permutation.ctypes.data_as(ctypes.c_void_p)
+                    )
+                    
+                    ILOC += 1
         
         #### 4. build the W matrix ####
         
