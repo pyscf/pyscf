@@ -809,7 +809,7 @@ def make_sap(mol, sap_basis):
             mol,
             '\n'.join(['SAP basis coefficients must be equal or close'
             + f'to total electronic charge: {Z_eff} !≃ {mol.nelectron}',
-            f'Check fails with value {numpy.abs(Z_eff + mol.nelectron)})']))
+            f'Check fails with value {numpy.abs(Z_eff + mol.nelectron)}']))
 
     V = numpy.zeros((mol.nao_nr(), mol.nao_nr()))
     cmol = mol.copy()
