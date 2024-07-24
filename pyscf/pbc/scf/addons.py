@@ -498,7 +498,7 @@ def convert_to_kscf(mf, out=None):
                 mf.mo_energy = mf.mo_energy[numpy.newaxis]
 
         if hasattr(mf, '_numint'):
-            kpts = mf.kpts.kpts if isinstance(mf.kpts, KPoints) else mf.kpts
+            kpts = getattr(mf.kpts, 'kpts', mf.kpts)
             mf._numint = dft.numint.KNumInt(kpts)
 
     if out is None:
