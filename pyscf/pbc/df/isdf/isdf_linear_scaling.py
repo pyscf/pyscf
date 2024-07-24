@@ -998,7 +998,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             else:
                 self._build_K_bunchsize = 10000 * 10000 # infinite in practice
 
-    def _get_first_natm(self):
+    @property
+    def first_natm(self):
         if self.kmesh is not None:
             return self.cell.natm // np.prod(self.kmesh)
         else:
@@ -1066,7 +1067,7 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             
         ## deal with translation symmetry ##
         
-        first_natm = self._get_first_natm()
+        first_natm = self.first_natm
         
         ####################################
         
@@ -1101,16 +1102,20 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
     def _allocate_jk_buffer(self, datatype, ngrids_local):
         pass
     
-    def _get_max_nao_involved(self):
+    @property
+    def max_nao_involved(self):
         return np.max([aoR_holder.aoR.shape[0] for aoR_holder in self.aoR if aoR_holder is not None])
     
-    def _get_max_ngrid_involved(self):
+    @property
+    def max_ngrid_involved(self):
         return np.max([aoR_holder.aoR.shape[1] for aoR_holder in self.aoR if aoR_holder is not None])
     
-    def _get_max_nIP_involved(self):
+    @property
+    def max_nIP_involved(self):
         return np.max([aoR_holder.aoR.shape[1] for aoR_holder in self.aoRg if aoR_holder is not None])
     
-    def _get_maxsize_group_naux(self):
+    @property
+    def maxsize_group_naux(self):
         maxsize_group_naux = 0
         for group_id, atm_ids in enumerate(self.group):
             naux_tmp = 0
@@ -1134,10 +1139,10 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
         ### TODO: split grid again to reduce the size of buf when robust fitting is true! 
         # TODO: try to calculate the size when direct is true
         
-        max_nao_involved   = self._get_max_nao_involved()
-        max_ngrid_involved = self._get_max_ngrid_involved()
-        max_nIP_involved   = self._get_max_nIP_involved()
-        maxsize_group_naux = self._get_maxsize_group_naux()
+        max_nao_involved   = self.max_nao_involved
+        max_ngrid_involved = self.max_ngrid_involved
+        max_nIP_involved   = self.max_nIP_involved
+        maxsize_group_naux = self.maxsize_group_naux
         
         allocated = False
         

@@ -16,6 +16,8 @@
 # Author: Ning Zhang <ningzhang1024@gmail.com>
 #
 
+######## a unified driver for getting K directly for both ISDF with/without k-points
+
 ############ sys module ############
 
 import copy, sys
@@ -40,6 +42,18 @@ from pyscf.pbc.df.isdf.isdf_tools_local import _pack_aoR_holder, _get_aoR_holder
 ############ GLOBAL PARAMETER ############
 
 K_DIRECT_NAUX_BUNCHSIZE = 256
+
+############ subroutines to keep ISDF w./w.o k-points consistent ############
+
+def _add_kpnt_info(mydf):
+    if hasattr(mydf, "kmesh"):
+        assert mydf.kmesh is None or (mydf.kmesh[0] == 1 and mydf.kmesh[1] == 1 and mydf.kmesh[2] == 1)
+
+    mydf.meshPrim = np.array(mydf.mesh)
+    mydf.natmPrim = mydf.cell.natm
+    mydf.primCell = mydf.cell
+    mydf.nao_prim = mydf.nao
+    mydf.nIP_Prim = mydf.naux
 
 def construct_V(aux_basis:np.ndarray, 
                 buf, 
@@ -74,6 +88,8 @@ def _isdf_get_K_direct_kernel_1(
     ##### input ####
     group_id,  ## the contribution of K from which group 
     dm_RgAO,
+    V_or_W_tmp,
+    construct_K1,
     ##### buffer #####, 
     buf_build_V_thread,
     build_VW_buf,
@@ -90,14 +106,17 @@ def _isdf_get_K_direct_kernel_1(
     ##### other info #####
     use_mpi=False,
     ##### out #####
-    K1 = None
+    K1_or_2 = None
 ):
     
     log = logger.Logger(mydf.stdout, mydf.verbose)
     
     ######### info #########
     
-    assert K1 is not None
+    assert K1_or_2 is not None
+    
+    if construct_K1 == False:
+        assert V_or_W_tmp is not None
     
     if use_mpi:
         size = comm.Get_size()
@@ -109,12 +128,45 @@ def _isdf_get_K_direct_kernel_1(
     ngrid = np.prod(mesh)
     naux  = mydf.naux
     
+    ######### to be compatible with kmesh #########
+    
+    if mydf.kmesh is None:
+        kmesh = [1,1,1]
+    else:
+        kmesh = mydf.kmesh
+    
+    if not hasattr(mydf, "nao_prim"):
+        _add_kpnt_info(mydf)
+    
+    ngrid_prim = np.prod(mesh) // np.prod(kmesh)
+    
+    assert np.prod(mesh) % np.prod(kmesh) == 0
+    assert mesh[0] % kmesh[0] == 0
+    assert mesh[1] % kmesh[1] == 0
+    assert mesh[2] % kmesh[2] == 0
+    
+    ######### fetch ao values on grids or IPs #########
+    
     aoRg = mydf.aoRg
     assert isinstance(aoRg, list)
     aoR = mydf.aoR
     assert isinstance(aoR, list)
+    
+    if hasattr(mydf, "aoR1"):
+        aoR1 = mydf.aoR1
+    else:
+        aoR  = aoR
+    
+    if hasattr(mydf, "aoRg1"):
+        aoRg1 = mydf.aoRg1
+    else:
+        aoRg1 = aoRg
         
-    # fetch the atm_ordering #
+    ######### fetch the atm_ordering #########
+    
+    group     = mydf.group
+    
+    ngroup_prim = len(group)
     
     if hasattr(mydf, "atm_ordering"):
         atm_ordering = mydf.atm_ordering
@@ -126,7 +178,6 @@ def _isdf_get_K_direct_kernel_1(
         atm_ordering = np.array(atm_ordering, dtype=np.int32)
         mydf.atm_ordering = atm_ordering
         
-    group     = mydf.group
     aux_basis = mydf.aux_basis
     assert len(group) == len(aux_basis)
     
@@ -135,8 +186,8 @@ def _isdf_get_K_direct_kernel_1(
     naux_tmp = 0
     aoRg_holders = []
     for atm_id in group[group_id]:
-        naux_tmp += aoRg[atm_id].aoR.shape[1]
-        aoRg_holders.append(aoRg[atm_id])
+        naux_tmp += aoRg1[atm_id].aoR.shape[1]
+        aoRg_holders.append(aoRg1[atm_id])
     assert naux_tmp == aux_basis[group_id].shape[0]
     
     # grid ID involved for the given group
@@ -146,7 +197,7 @@ def _isdf_get_K_direct_kernel_1(
     # pack aoRg for loop over Rg #
     
     aoRg_packed = _pack_aoR_holder(aoRg_holders, nao)
-    memory = _get_aoR_holders_memory(aoRg_holders)
+    memory      = _get_aoR_holders_memory(aoRg_holders)
     
     # log.debug4('In _isdf_get_K_direct_kernel1 group_id = %d, naux = %d' % (group_id, naux_tmp))
     # log.debug4('In _isdf_get_K_direct_kernel1 aoRg_holders Memory = %d Bytes' % (memory))
@@ -169,83 +220,123 @@ def _isdf_get_K_direct_kernel_1(
     
     bunchsize = min(naux_bunchsize, naux_tmp)
     
-    ### allocate buf ###
+    if construct_K1:
     
-    V_tmp = np.ndarray((bunchsize, ngrid), 
-                       buffer=build_VW_buf, 
-                       offset=offset_V_tmp, 
-                       dtype =np.float64)
-    offset_after_V_tmp = offset_V_tmp + V_tmp.size * V_tmp.dtype.itemsize
+        ### allocate buf ###
     
-    # buffer for W_tmp # 
+        V_tmp = np.ndarray((bunchsize, ngrid), 
+                           buffer=build_VW_buf, 
+                           offset=offset_V_tmp, 
+                           dtype =np.float64)
+        offset_after_V_tmp = offset_V_tmp + V_tmp.size * V_tmp.dtype.itemsize
     
-    W_tmp = np.ndarray((naux_tmp, naux), 
-                       buffer=build_VW_buf, 
-                       offset=offset_after_V_tmp, 
-                       dtype =np.float64)
+        # buffer for W_tmp # 
+    
+        W_tmp = np.ndarray((naux_tmp, naux), 
+                           buffer=build_VW_buf, 
+                           offset=offset_after_V_tmp, 
+                           dtype =np.float64)
+    
+    else:
+        offset_after_V_tmp = offset_V_tmp
+        W_tmp = None
 
     #### loop over Rg ####
     
     for p0, p1 in lib.prange(0, naux_tmp, bunchsize):
         
-        #### 2. build the V matrix ####
+        #### 2. build the V matrix if constructK1 ####
         
-        V_tmp = np.ndarray((p1 - p0, ngrid), 
-                            buffer=build_VW_buf, 
-                            offset=offset_V_tmp, 
-                            dtype =np.float64)
+        if construct_K1:
+            
+            V_tmp = np.ndarray((p1 - p0, ngrid), 
+                                buffer=build_VW_buf, 
+                                offset=offset_V_tmp, 
+                                dtype =np.float64)
         
-        construct_V(aux_basis[group_id][p0:p1, :], 
-                    buf_build_V_thread,
-                    V_tmp,
-                    aux_basis_grip_ID,
-                    mydf.grid_ID_ordered,
-                    mesh,
-                    coulG_real)
+            construct_V(aux_basis[group_id][p0:p1, :], 
+                        buf_build_V_thread,
+                        V_tmp,
+                        aux_basis_grip_ID,
+                        mydf.grid_ID_ordered,
+                        mesh,
+                        coulG_real)
         
-        #### 3. build the K1 matrix ####
+        else:
+            
+            V_tmp = V_or_W_tmp[p0:p1, :]   # W_tmp in fact
+        
+        #### 3. build the K1_or_2 matrix ####
         
         ###### 3.1 build density RgR
         
-        Density_RgR_tmp = np.ndarray((p1 - p0, ngrid), 
-                                     buffer=Density_RgR_buf, 
-                                     offset=0, 
-                                     dtype =np.float64)
-    
-        for atm_id in atm_ordering:
-            
-            aoR_holder = aoR[atm_id]
-            
-            if aoR_holder is None:
-                raise ValueError("aoR_holder is None")
+        if construct_K1:
+            Density_RgR_tmp = np.ndarray((p1 - p0, ngrid), 
+                                         buffer=Density_RgR_buf, 
+                                         offset=0, 
+                                         dtype =np.float64)
+        else:
+            Density_RgR_tmp = np.ndarray((p1 - p0, naux), 
+                                         buffer=Density_RgR_buf, 
+                                         offset=0, 
+                                         dtype =np.float64)
 
-            ngrid_now    = aoR_holder.aoR.shape[1]
-            nao_involved = aoR_holder.aoR.shape[0]
+        ILOC = 0
+        for kx in range(kmesh[0]):
+            for ky in range(kmesh[1]):
+                for kz in range(kmesh[2]):
+                    
+                    if kx!=0 or ky!=0 or kz!=0:
+                        if construct_K1:
+                            col_permutation = mydf._get_permutation_column_aoR(kx, ky, kz)
+                        else:
+                            col_permutation = mydf._get_permutation_column_aoRg(kx, ky, kz)
+    
+                    for atm_id in atm_ordering:
             
-            ##### packed involved DgAO #####
+                        if construct_K1:
+                            aoR_holder = aoR[atm_id]
+                        else:
+                            aoR_holder = aoRg[atm_id]
             
-            if nao_involved == nao:
-                Density_RgAO_packed = dm_RgAO[p0:p1, :]
-            else:
-                Density_RgAO_packed = np.ndarray((p1-p0, nao_involved), 
-                                                 buffer=dm_RgAO_buf, 
-                                                 offset=dm_RgAO_packed_offset, 
-                                                 dtype =np.float64)
+                        if aoR_holder is None:
+                            raise ValueError("aoR_holder is None")
+
+                        ngrid_now    = aoR_holder.aoR.shape[1]
+                        nao_involved = aoR_holder.aoR.shape[0]
+            
+                        ##### packed involved DgAO #####
+            
+                        if kx ==0 and ky == 0 and kz == 0:
+                            ao_permutation = aoR_holder.ao_involved
+                        else:
+                            ao_permutation = col_permutation[atm_id]
+            
+                        if nao_involved == nao:
+                            Density_RgAO_packed = dm_RgAO[p0:p1, :]
+                        else:
+                            Density_RgAO_packed = np.ndarray((p1-p0, nao_involved), 
+                                                             buffer=dm_RgAO_buf, 
+                                                             offset=dm_RgAO_packed_offset, 
+                                                             dtype =np.float64)
                 
-                fn_packcol1(
-                    Density_RgAO_packed.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(p1-p0),
-                    ctypes.c_int(nao_involved),
-                    dm_RgAO[p0:p1, :].ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(p1-p0),
-                    ctypes.c_int(nao),
-                    aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
-                )
+                            fn_packcol1(
+                                Density_RgAO_packed.ctypes.data_as(ctypes.c_void_p),
+                                ctypes.c_int(p1-p0),
+                                ctypes.c_int(nao_involved),
+                                dm_RgAO[p0:p1, :].ctypes.data_as(ctypes.c_void_p),
+                                ctypes.c_int(p1-p0),
+                                ctypes.c_int(nao),
+                                # aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+                                ao_permutation.ctypes.data_as(ctypes.c_void_p)
+                            )
             
-            grid_begin   = aoR_holder.global_gridID_begin
-            ddot_res_RgR = np.ndarray((p1-p0, ngrid_now), buffer=ddot_res_RgR_buf)
-            lib.ddot(Density_RgAO_packed, aoR_holder.aoR, c=ddot_res_RgR)
-            Density_RgR_tmp[:, grid_begin:grid_begin+ngrid_now] = ddot_res_RgR
+                        grid_begin   = aoR_holder.global_gridID_begin + ILOC*ngrid_prim
+                        ddot_res_RgR = np.ndarray((p1-p0, ngrid_now), buffer=ddot_res_RgR_buf)
+                        lib.ddot(Density_RgAO_packed, aoR_holder.aoR, c=ddot_res_RgR)
+                        Density_RgR_tmp[:, grid_begin:grid_begin+ngrid_now] = ddot_res_RgR
+        
+                    ILOC += 1
         
         Density_RgR = Density_RgR_tmp
         
@@ -259,40 +350,64 @@ def _isdf_get_K_direct_kernel_1(
         K1_tmp1 = np.ndarray((p1-p0, nao), buffer=K1_tmp1_buf)
         K1_tmp1.ravel()[:] = 0.0
         
-        for atm_id in atm_ordering:
-            aoR_holder = aoR[atm_id]
+        ILOC = 0
+        for kx in range(kmesh[0]):
+            for ky in range(kmesh[1]):
+                for kz in range(kmesh[2]):
+                    
+                    if kx!=0 or ky!=0 or kz!=0:
+                        if construct_K1:
+                            col_permutation = mydf._get_permutation_column_aoR(kx, ky, kz)
+                        else:
+                            col_permutation = mydf._get_permutation_column_aoRg(kx, ky, kz)
+                        
+                    for atm_id in atm_ordering:
             
-            ngrid_now      = aoR_holder.aoR.shape[1]
-            nao_invovled   = aoR_holder.aoR.shape[0]
-            ddot_res       = np.ndarray((p1-p0, nao_invovled), buffer=K1_final_ddot_buf)
-            grid_loc_begin = aoR_holder.global_gridID_begin
+                        if construct_K1:
+                            aoR_holder = aoR[atm_id]
+                        else:
+                            aoR_holder = aoRg[atm_id]
             
-            lib.ddot(V2_tmp[:, grid_loc_begin:grid_loc_begin+ngrid_now],
-                     aoR_holder.aoR.T, 
-                     c=ddot_res)
+                        ngrid_now      = aoR_holder.aoR.shape[1]
+                        nao_invovled   = aoR_holder.aoR.shape[0]
+                        ddot_res       = np.ndarray((p1-p0, nao_invovled), buffer=K1_tmp1_ddot_res_buf)
+                        grid_loc_begin = aoR_holder.global_gridID_begin + ILOC*ngrid_prim
             
-            if nao_involved == nao:
-                K1_tmp1 += ddot_res
-            else:
-                fn_packadd_col(
-                    K1_tmp1.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(K1_tmp1.shape[0]),
-                    ctypes.c_int(K1_tmp1.shape[1]),
-                    ddot_res.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(ddot_res.shape[0]),
-                    ctypes.c_int(ddot_res.shape[1]),
-                    aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
-                )
-        
-        #### 3.4 K1 += aoRg * K1_tmp1
+                        lib.ddot(V2_tmp[:, grid_loc_begin:grid_loc_begin+ngrid_now],
+                                 aoR_holder.aoR.T, 
+                                 c=ddot_res)
+            
+                        if kx ==0 and ky == 0 and kz == 0:
+                            ao_permutation = aoR_holder.ao_involved
+                        else:
+                            ao_permutation = col_permutation[atm_id]
+                            assert col_permutation[atm_id].shape[0] == nao_invovled
+            
+                        if nao_involved == nao:
+                            K1_tmp1 += ddot_res
+                        else:
+                            fn_packadd_col(
+                                K1_tmp1.ctypes.data_as(ctypes.c_void_p),
+                                ctypes.c_int(K1_tmp1.shape[0]),
+                                ctypes.c_int(K1_tmp1.shape[1]),
+                                ddot_res.ctypes.data_as(ctypes.c_void_p),
+                                ctypes.c_int(ddot_res.shape[0]),
+                                ctypes.c_int(ddot_res.shape[1]),
+                                # aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+                                ao_permutation.ctypes.data_as(ctypes.c_void_p)
+                            )
+
+                    ILOC += 1
+
+        #### 3.4 K1_or_2 += aoRg * K1_tmp1
         
         nao_invovled = aoRg_packed.nao_invovled
-        ddot_res = np.ndarray((nao_invovled, nao), buffer=K1_tmp1_ddot_res_buf)
+        ddot_res = np.ndarray((nao_invovled, nao), buffer=K1_final_ddot_buf)
         lib.ddot(aoRg_packed.aoR[:,p0:p1], K1_tmp1, c=ddot_res)
         fn_packadd_row(
-            K1.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(K1.shape[0]),
-            ctypes.c_int(K1.shape[1]),
+            K1_or_2.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(K1_or_2.shape[0]),
+            ctypes.c_int(K1_or_2.shape[1]),
             ddot_res.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(ddot_res.shape[0]),
             ctypes.c_int(ddot_res.shape[1]),
@@ -301,18 +416,35 @@ def _isdf_get_K_direct_kernel_1(
         
         #### 4. build the W matrix ####
         
-        grid_shift  = 0
-        aux_col_loc = 0
-        for j in range(len(group)):
-            grid_ID_now = mydf.partition_group_to_gridID[j]
-            aux_bas_ket = aux_basis[j]
-            naux_ket    = aux_bas_ket.shape[0]
-            ngrid_now   = grid_ID_now.size
-            W_tmp[p0:p1, aux_col_loc:aux_col_loc+naux_ket] = lib.ddot(V_tmp[:, grid_shift:grid_shift+ngrid_now], aux_bas_ket.T)
-            grid_shift += ngrid_now
-            aux_col_loc+= naux_ket
+        if construct_K1:
+            
+            # grid_shift  = 0
+            # aux_col_loc = 0
+            # for j in range(len(group)):
+            #     grid_ID_now = mydf.partition_group_to_gridID[j]
+            #     aux_bas_ket = aux_basis[j]
+            #     naux_ket    = aux_bas_ket.shape[0]
+            #     ngrid_now   = grid_ID_now.size
+            #     W_tmp[p0:p1, aux_col_loc:aux_col_loc+naux_ket] = lib.ddot(V_tmp[:, grid_shift:grid_shift+ngrid_now], aux_bas_ket.T)
+            #     grid_shift += ngrid_now
+            #     aux_col_loc+= naux_ket
+            
+            aux_ket_shift = 0
+            grid_shift = 0
         
-        assert grid_shift == ngrid
+            for ix in range(kmesh[0]):
+                for iy in range(kmesh[1]):
+                    for iz in range(kmesh[2]):
+                       for j in range(len(group)):
+                            aux_basis_ket = mydf.aux_basis[j]
+                            ngrid_now = aux_basis_ket.shape[1]
+                            naux_ket = aux_basis_ket.shape[0]
+                            W_tmp[p0:p1, aux_ket_shift:aux_ket_shift+naux_ket] = lib.ddot(
+                               V_tmp[:, grid_shift:grid_shift+ngrid_now], aux_basis_ket.T)
+                            aux_ket_shift += naux_ket
+                            grid_shift += ngrid_now 
+            
+            assert grid_shift == ngrid
         
     return W_tmp
     

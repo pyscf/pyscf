@@ -1317,11 +1317,15 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     aoR = mydf.aoR
     aoRg = mydf.aoRg    
     
-    max_nao_involved = np.max([aoR_holder.aoR.shape[0] for aoR_holder in aoR if aoR_holder is not None])
-    max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
-    max_nIP_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoRg if aoR_holder is not None])
+    #max_nao_involved   = np.max([aoR_holder.aoR.shape[0] for aoR_holder in aoR if aoR_holder is not None])
+    #max_ngrid_involved = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoR if aoR_holder is not None])
+    #max_nIP_involved   = np.max([aoR_holder.aoR.shape[1] for aoR_holder in aoRg if aoR_holder is not None])
     
-    maxsize_group_naux = mydf._get_maxsize_group_naux()
+    max_nao_involved   = mydf.max_nao_involved
+    max_ngrid_involved = mydf.max_ngrid_involved
+    max_nIP_involved   = mydf.max_nIP_involved
+    
+    maxsize_group_naux = mydf.maxsize_group_naux
         
     ####### preparing the data #######
         
@@ -1343,11 +1347,13 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     aux_basis = mydf.aux_basis
     
     grid_ordering = mydf.grid_ID_ordered 
+    
     if hasattr(mydf, "coulG") == False:
         if mydf.omega is not None:
             assert mydf.omega >= 0.0
         # mydf.coulG = tools.get_coulG(cell, mesh=mesh, omega=mydf.omega)
         raise NotImplementedError("coulG is not implemented yet.")
+    
     coulG = mydf.coulG
     coulG_real = coulG.reshape(*mesh)[:, :, :mesh[2]//2+1].reshape(-1).copy()
     
@@ -1358,77 +1364,69 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     group = mydf.group
     assert len(group) == len(aux_basis)
     
-    if hasattr(mydf, "atm_ordering"):
-        atm_ordering = mydf.atm_ordering
-    else:
-        atm_ordering = []
-        for group_idx, atm_idx in enumerate(group):
-            atm_idx.sort()
-            atm_ordering.extend(atm_idx)
-        atm_ordering = np.array(atm_ordering, dtype=np.int32)
-        mydf.atm_ordering = atm_ordering
+    # if hasattr(mydf, "atm_ordering"):
+    #     atm_ordering = mydf.atm_ordering
+    # else:
+    #     atm_ordering = []
+    #     for group_idx, atm_idx in enumerate(group):
+    #         atm_idx.sort()
+    #         atm_ordering.extend(atm_idx)
+    #     atm_ordering = np.array(atm_ordering, dtype=np.int32)
+    #     mydf.atm_ordering = atm_ordering
     
-    def construct_V(aux_basis:np.ndarray, buf, V, grid_ID, grid_ordering):
-        fn = getattr(libpbc, "_construct_V_local_bas", None)
-        assert(fn is not None)
-        
-        nThread = buf.shape[0]
-        bufsize_per_thread = buf.shape[1]
-        nrow = aux_basis.shape[0]
-        ncol = aux_basis.shape[1]
-        shift_row = 0
-        
-        fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nrow),
-                ctypes.c_int(ncol),
-                grid_ID.ctypes.data_as(ctypes.c_void_p),
-                aux_basis.ctypes.data_as(ctypes.c_void_p),
-                coulG_real.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(shift_row),
-                V.ctypes.data_as(ctypes.c_void_p),
-                grid_ordering.ctypes.data_as(ctypes.c_void_p),
-                buf.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(bufsize_per_thread))
+    # def construct_V(aux_basis:np.ndarray, buf, V, grid_ID, grid_ordering):
+    #     fn = getattr(libpbc, "_construct_V_local_bas", None)
+    #     assert(fn is not None)
+    #     nThread = buf.shape[0]
+    #     bufsize_per_thread = buf.shape[1]
+    #     nrow = aux_basis.shape[0]
+    #     ncol = aux_basis.shape[1]
+    #     shift_row = 0
+    #     fn(mesh_int32.ctypes.data_as(ctypes.c_void_p),
+    #             ctypes.c_int(nrow),
+    #             ctypes.c_int(ncol),
+    #             grid_ID.ctypes.data_as(ctypes.c_void_p),
+    #             aux_basis.ctypes.data_as(ctypes.c_void_p),
+    #             coulG_real.ctypes.data_as(ctypes.c_void_p),
+    #             ctypes.c_int(shift_row),
+    #             V.ctypes.data_as(ctypes.c_void_p),
+    #             grid_ordering.ctypes.data_as(ctypes.c_void_p),
+    #             buf.ctypes.data_as(ctypes.c_void_p),
+    #             ctypes.c_int(bufsize_per_thread))
     
     ######### allocate buffer ######### 
         
     Density_RgAO_buf = mydf.Density_RgAO_buf
     # print(Density_RgAO_buf.shape)
     
-    nThread = lib.num_threads()
+    nThread            = lib.num_threads()
     bufsize_per_thread = (coulG_real.shape[0] * 2 + np.prod(mesh))
-    buf_build_V = np.ndarray((nThread, bufsize_per_thread), dtype=np.float64, buffer=build_VW_buf) 
+    buf_build_V        = np.ndarray((nThread, bufsize_per_thread), dtype=np.float64, buffer=build_VW_buf) 
     
     offset_now = buf_build_V.size * buf_build_V.dtype.itemsize
     
     build_K_bunchsize = min(maxsize_group_naux, mydf._build_K_bunchsize)
-    #build_K_bunchsize = maxsize_group_naux
     
-    offset_build_now = 0
+    offset_build_now       = 0
     offset_Density_RgR_buf = 0
     Density_RgR_buf = np.ndarray((build_K_bunchsize, ngrid), buffer=build_k_buf, offset=offset_build_now)
     
-    offset_build_now += Density_RgR_buf.size * Density_RgR_buf.dtype.itemsize
+    offset_build_now       += Density_RgR_buf.size * Density_RgR_buf.dtype.itemsize
     offset_ddot_res_RgR_buf = offset_build_now
-    ddot_res_RgR_buf = np.ndarray((build_K_bunchsize, max_ngrid_involved), buffer=build_k_buf, offset=offset_ddot_res_RgR_buf)
+    ddot_res_RgR_buf        = np.ndarray((build_K_bunchsize, max_ngrid_involved), buffer=build_k_buf, offset=offset_ddot_res_RgR_buf)
     
-    offset_build_now += ddot_res_RgR_buf.size * ddot_res_RgR_buf.dtype.itemsize
+    offset_build_now  += ddot_res_RgR_buf.size * ddot_res_RgR_buf.dtype.itemsize
     offset_K1_tmp1_buf = offset_build_now
-    K1_tmp1_buf = np.ndarray((maxsize_group_naux, nao), buffer=build_k_buf, offset=offset_K1_tmp1_buf)
+    K1_tmp1_buf        = np.ndarray((maxsize_group_naux, nao), buffer=build_k_buf, offset=offset_K1_tmp1_buf)
     
-    offset_build_now += K1_tmp1_buf.size * K1_tmp1_buf.dtype.itemsize
+    offset_build_now           += K1_tmp1_buf.size * K1_tmp1_buf.dtype.itemsize
     offset_K1_tmp1_ddot_res_buf = offset_build_now
-    # K1_tmp1_ddot_res_buf = np.ndarray((maxsize_group_naux, max_nao_involved), buffer=build_k_buf, offset=offset_K1_tmp1_ddot_res_buf)
-    K1_tmp1_ddot_res_buf = np.ndarray((maxsize_group_naux, nao), buffer=build_k_buf, offset=offset_K1_tmp1_ddot_res_buf)
+    K1_tmp1_ddot_res_buf        = np.ndarray((maxsize_group_naux, nao), buffer=build_k_buf, offset=offset_K1_tmp1_ddot_res_buf)
     
     offset_build_now += K1_tmp1_ddot_res_buf.size * K1_tmp1_ddot_res_buf.dtype.itemsize
-    
-    #offset_V_pack_buf = offset_build_now
-    #V_pack_buf = np.ndarray((build_K_bunchsize, max_ngrid_involved), buffer=build_k_buf, offset=offset_V_pack_buf)
-    #offset_build_now += V_pack_buf.size * V_pack_buf.dtype.itemsize
-    
+
     offset_K1_final_ddot_buf = offset_build_now
-    K1_final_ddot_buf = np.ndarray((max_nao_involved, nao), buffer=build_k_buf, offset=offset_K1_final_ddot_buf)
+    K1_final_ddot_buf        = np.ndarray((max_nao_involved, nao), buffer=build_k_buf, offset=offset_K1_final_ddot_buf)
     
     ########### get involved C function ###########
     
@@ -1461,9 +1459,6 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
             aoRg_holders.append(aoRg[atm_id])
         assert naux_tmp == aux_basis[group_id].shape[0]
         
-        #print("-----------------------------")
-        #print("naux_tmp = ", naux_tmp)
-        
         aux_basis_tmp = aux_basis[group_id]
         
         #### 1. build the involved DM_RgR #### 
@@ -1478,6 +1473,7 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
         W_tmp = _isdf_get_K_direct_kernel_1(
             mydf, coulG_real,
             group_id, Density_RgAO_tmp,
+            None, True,
             ##### buffer #####
             buf_build_V,
             build_VW_buf,
@@ -1495,7 +1491,7 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
             ##### other info #####
             use_mpi=use_mpi,
             ##### out #####
-            K1=K1)
+            K1_or_2=K1)
         
         # V_tmp              = np.ndarray((naux_tmp, ngrid), buffer=build_VW_buf, offset=offset_now, dtype=np.float64)
         # offset_after_V_tmp = offset_now + V_tmp.size * V_tmp.dtype.itemsize
@@ -1627,121 +1623,134 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
         #     aux_col_loc += naux_ket
         # assert grid_shift == ngrid
         
+        _isdf_get_K_direct_kernel_1(
+            mydf, coulG_real,
+            group_id, Density_RgAO_tmp,
+            W_tmp, False,
+            ##### buffer #####
+            buf_build_V,
+            build_VW_buf,
+            offset_now,
+            Density_RgR_buf,
+            Density_RgAO_buf,
+            offset_density_RgAO_buf,
+            ddot_res_RgR_buf,
+            K1_tmp1_buf,
+            K1_tmp1_ddot_res_buf,
+            K1_final_ddot_buf,
+            ##### bunchsize #####
+            #maxsize_group_naux,
+            build_K_bunchsize,
+            ##### other info #####
+            use_mpi=use_mpi,
+            ##### out #####
+            K1_or_2=K2)
+        
         #### 5. build the K2 matrix ####
         
         ###### 5.1 build density RgRg
         
-        Density_RgRg_tmp = np.ndarray((naux_tmp, naux), buffer=Density_RgR_buf)
-        
-        nIP_loc = 0
-        for atm_id in atm_ordering:
-            aoRg_holder = aoRg[atm_id]
-                
-            if aoRg_holder is None:
-                raise ValueError("aoRg_holder is None")
-                
-            nIP_now = aoRg_holder.aoR.shape[1]
-            nao_invovled = aoRg_holder.aoR.shape[0]
-                
-            if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
-                Density_RgAO_packed = Density_RgAO_tmp
-            else:
-                # Density_RgAO_packed = Density_RgAO[:, aoRg_holder.ao_involved]
-                Density_RgAO_packed = np.ndarray((naux_tmp, nao_invovled), buffer=Density_RgAO_buf, offset=offset_density_RgAO_buf)
-                fn_packcol1(
-                    Density_RgAO_packed.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(naux_tmp),
-                    ctypes.c_int(nao_invovled),
-                    Density_RgAO_tmp.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(naux_tmp),
-                    ctypes.c_int(nao),
-                    aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
-                )
-            
-            assert nIP_loc == aoRg_holder.global_gridID_begin
-            
-            ddot_res_RgRg = np.ndarray((naux_tmp, nIP_now), buffer=ddot_res_RgR_buf)
-            lib.ddot(Density_RgAO_packed, aoRg_holder.aoR, c=ddot_res_RgRg)
-            Density_RgRg_tmp[:, nIP_loc:nIP_loc+nIP_now] = ddot_res_RgRg
-                
-            nIP_loc += nIP_now
-        
-        assert nIP_loc == naux 
-        
-        Density_RgRg = Density_RgRg_tmp
+        # Density_RgRg_tmp = np.ndarray((naux_tmp, naux), buffer=Density_RgR_buf)
+        # nIP_loc = 0
+        # for atm_id in atm_ordering:
+        #     aoRg_holder = aoRg[atm_id]
+        #     if aoRg_holder is None:
+        #         raise ValueError("aoRg_holder is None")
+        #     nIP_now = aoRg_holder.aoR.shape[1]
+        #     nao_invovled = aoRg_holder.aoR.shape[0]
+        #     if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
+        #         Density_RgAO_packed = Density_RgAO_tmp
+        #     else:
+        #         # Density_RgAO_packed = Density_RgAO[:, aoRg_holder.ao_involved]
+        #         Density_RgAO_packed = np.ndarray((naux_tmp, nao_invovled), buffer=Density_RgAO_buf, offset=offset_density_RgAO_buf)
+        #         fn_packcol1(
+        #             Density_RgAO_packed.ctypes.data_as(ctypes.c_void_p),
+        #             ctypes.c_int(naux_tmp),
+        #             ctypes.c_int(nao_invovled),
+        #             Density_RgAO_tmp.ctypes.data_as(ctypes.c_void_p),
+        #             ctypes.c_int(naux_tmp),
+        #             ctypes.c_int(nao),
+        #             aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+        #         )
+        #     assert nIP_loc == aoRg_holder.global_gridID_begin
+        #     ddot_res_RgRg = np.ndarray((naux_tmp, nIP_now), buffer=ddot_res_RgR_buf)
+        #     lib.ddot(Density_RgAO_packed, aoRg_holder.aoR, c=ddot_res_RgRg)
+        #     Density_RgRg_tmp[:, nIP_loc:nIP_loc+nIP_now] = ddot_res_RgRg
+        #     nIP_loc += nIP_now
+        # assert nIP_loc == naux 
+        # Density_RgRg = Density_RgRg_tmp
         
         #### 5.2 W_tmp = Density_RgRg * W
         
-        lib.cwise_mul(W_tmp, Density_RgRg, out=Density_RgRg)
-        W2_tmp = Density_RgRg
+        # lib.cwise_mul(W_tmp, Density_RgRg, out=Density_RgRg)
+        # W2_tmp = Density_RgRg
         
         #### 5.3 K2_tmp1 = W2_tmp * aoRg.T
         
-        K2_tmp1 = np.ndarray((naux_tmp, nao), buffer=K1_tmp1_buf)
-        K2_tmp1.ravel()[:] = 0.0
-        
-        nIP_loc = 0
-        for atm_id in atm_ordering:
-            aoRg_holder = aoRg[atm_id]
-            if aoRg_holder is None:
-                raise ValueError("aoRg_holder is None")
-            nIP_now = aoRg_holder.aoR.shape[1]
-            nao_invovled = aoRg_holder.aoR.shape[0]
-            ddot_res = np.ndarray((naux_tmp, nao_invovled), buffer=K1_tmp1_ddot_res_buf)
-            # W_packed = np.ndarray((naux_tmp, nIP_now), buffer=V_pack_buf)
-            # fn_packcol2(
-            #     W_packed.ctypes.data_as(ctypes.c_void_p),
-            #     ctypes.c_int(naux_tmp),
-            #     ctypes.c_int(nIP_now),
-            #     W2_tmp.ctypes.data_as(ctypes.c_void_p),
-            #     ctypes.c_int(naux_tmp),
-            #     ctypes.c_int(naux),
-            #     ctypes.c_int(nIP_loc),
-            #     ctypes.c_int(nIP_loc+nIP_now)
-            # )
-            # lib.ddot(W_packed, aoRg_holder.aoR.T, c=ddot_res)
-            lib.ddot(W2_tmp[:, nIP_loc:nIP_loc+nIP_now], aoRg_holder.aoR.T, c=ddot_res)
-            if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
-                K2_tmp1 += ddot_res
-            else:
-                fn_packadd_col(
-                    K2_tmp1.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(K2_tmp1.shape[0]),
-                    ctypes.c_int(K2_tmp1.shape[1]),
-                    ddot_res.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(ddot_res.shape[0]),
-                    ctypes.c_int(ddot_res.shape[1]),
-                    aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
-                )
-            nIP_loc += nIP_now
+        # K2_tmp1 = np.ndarray((naux_tmp, nao), buffer=K1_tmp1_buf)
+        # K2_tmp1.ravel()[:] = 0.0
+        # nIP_loc = 0
+        # for atm_id in atm_ordering:
+        #     aoRg_holder = aoRg[atm_id]
+        #     if aoRg_holder is None:
+        #         raise ValueError("aoRg_holder is None")
+        #     nIP_now = aoRg_holder.aoR.shape[1]
+        #     nao_invovled = aoRg_holder.aoR.shape[0]
+        #     ddot_res = np.ndarray((naux_tmp, nao_invovled), buffer=K1_tmp1_ddot_res_buf)
+        #     # W_packed = np.ndarray((naux_tmp, nIP_now), buffer=V_pack_buf)
+        #     # fn_packcol2(
+        #     #     W_packed.ctypes.data_as(ctypes.c_void_p),
+        #     #     ctypes.c_int(naux_tmp),
+        #     #     ctypes.c_int(nIP_now),
+        #     #     W2_tmp.ctypes.data_as(ctypes.c_void_p),
+        #     #     ctypes.c_int(naux_tmp),
+        #     #     ctypes.c_int(naux),
+        #     #     ctypes.c_int(nIP_loc),
+        #     #     ctypes.c_int(nIP_loc+nIP_now)
+        #     # )
+        #     # lib.ddot(W_packed, aoRg_holder.aoR.T, c=ddot_res)
+        #     lib.ddot(W2_tmp[:, nIP_loc:nIP_loc+nIP_now], aoRg_holder.aoR.T, c=ddot_res)
+        #     if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
+        #         K2_tmp1 += ddot_res
+        #     else:
+        #         fn_packadd_col(
+        #             K2_tmp1.ctypes.data_as(ctypes.c_void_p),
+        #             ctypes.c_int(K2_tmp1.shape[0]),
+        #             ctypes.c_int(K2_tmp1.shape[1]),
+        #             ddot_res.ctypes.data_as(ctypes.c_void_p),
+        #             ctypes.c_int(ddot_res.shape[0]),
+        #             ctypes.c_int(ddot_res.shape[1]),
+        #             aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+        #         )
+        #     nIP_loc += nIP_now
         
         #### 5.4 K2 += aoRg * K2_tmp1
         
-        nIP_loc = 0
-        for atm_id in atm_ids:
-            aoRg_holder = aoRg[atm_id]
-            if aoRg_holder is None:
-                raise ValueError("aoRg_holder is None")
-            nIP_now = aoRg_holder.aoR.shape[1]
-            nao_invovled = aoRg_holder.aoR.shape[0]
-            K_tmp = K2_tmp1[nIP_loc:nIP_loc+nIP_now, :]
-            ddot_res = np.ndarray((nao_invovled, nao), buffer=K1_final_ddot_buf)
-            lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
-            if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
-                K2 += ddot_res
-            else:
-                # K2[aoRg_holder.ao_involved, :] += ddot_res
-                fn_packadd_row(
-                    K2.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(K2.shape[0]),
-                    ctypes.c_int(K2.shape[1]),
-                    ddot_res.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(ddot_res.shape[0]),
-                    ctypes.c_int(ddot_res.shape[1]),
-                    aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
-                )
-            nIP_loc += nIP_now
-        assert nIP_loc == naux_tmp
+        # nIP_loc = 0
+        # for atm_id in atm_ids:
+        #     aoRg_holder = aoRg[atm_id]
+        #     if aoRg_holder is None:
+        #         raise ValueError("aoRg_holder is None")
+        #     nIP_now = aoRg_holder.aoR.shape[1]
+        #     nao_invovled = aoRg_holder.aoR.shape[0]
+        #     K_tmp = K2_tmp1[nIP_loc:nIP_loc+nIP_now, :]
+        #     ddot_res = np.ndarray((nao_invovled, nao), buffer=K1_final_ddot_buf)
+        #     lib.ddot(aoRg_holder.aoR, K_tmp, c=ddot_res)
+        #     if nao_invovled == nao and np.allclose(aoRg_holder.ao_involved, ordered_ao_ind):
+        #         K2 += ddot_res
+        #     else:
+        #         # K2[aoRg_holder.ao_involved, :] += ddot_res
+        #         fn_packadd_row(
+        #             K2.ctypes.data_as(ctypes.c_void_p),
+        #             ctypes.c_int(K2.shape[0]),
+        #             ctypes.c_int(K2.shape[1]),
+        #             ddot_res.ctypes.data_as(ctypes.c_void_p),
+        #             ctypes.c_int(ddot_res.shape[0]),
+        #             ctypes.c_int(ddot_res.shape[1]),
+        #             aoRg_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
+        #         )
+        #     nIP_loc += nIP_now
+        # assert nIP_loc == naux_tmp
         
     ######### finally delete the buffer #########
     

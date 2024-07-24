@@ -90,11 +90,11 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group,
     IP_group  = []
     aoRg_possible = mydf.aoRg_possible
     
-    assert len(IP_possible_atm) == mydf._get_first_natm()
+    assert len(IP_possible_atm) == mydf.first_natm
     
     #### do the work ####
     
-    first_natm = mydf._get_first_natm()
+    first_natm = mydf.first_natm
     
     for i in range(len(group)):
         IP_group.append(None)
@@ -550,12 +550,12 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         ##### build cutoff info #####   
         
-        self.distance_matrix = ISDF_Local_Utils.get_cell_distance_matrix(self.cell)
-        weight = np.sqrt(self.cell.vol / self.coords.shape[0])
-        precision = self.aoR_cutoff
-        rcut = ISDF_Local_Utils._estimate_rcut(self.cell, self.coords.shape[0], precision)
-        rcut_max = np.max(rcut)
-        atm2_bas = ISDF_Local_Utils._atm_to_bas(self.cell)
+        self.distance_matrix   = ISDF_Local_Utils.get_cell_distance_matrix(self.cell)
+        weight                 = np.sqrt(self.cell.vol / self.coords.shape[0])
+        precision              = self.aoR_cutoff
+        rcut                   = ISDF_Local_Utils._estimate_rcut(self.cell, self.coords.shape[0], precision)
+        rcut_max               = np.max(rcut)
+        atm2_bas               = ISDF_Local_Utils._atm_to_bas(self.cell)
         self.AtmConnectionInfo = []
         
         for i in range(self.cell.natm):
@@ -608,8 +608,8 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         ## deal with translation symmetry ##
         
-        first_natm = self._get_first_natm()
-        natm = self.cell.natm
+        first_natm = self.first_natm
+        natm       = self.cell.natm
         
         #################################### 
         
@@ -637,22 +637,22 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         # print("In ISDF-K build_partition_aoR aoR memory: %d " % (memory))
         log.info("In ISDF-K build_partition_aoR aoR memory: %d " % (memory))
         
-        #if rank == 0:
-        #    print("aoR memory: ", memory) 
+        # if rank == 0:
+        #     print("aoR memory: ", memory) 
         
-        weight = np.sqrt(self.cell.vol / self.coords.shape[0])
-        self.aoR1 = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
-                                                   None,
-                                                   first_natm,
-                                                   self.group_global,
-                                                   self.distance_matrix, 
-                                                   self.AtmConnectionInfo, 
-                                                   self.use_mpi, self.use_mpi, sync_aoR)
-        
-        memory = ISDF_Local_Utils._get_aoR_holders_memory(self.aoR1)  ### full row 
-        assert len(self.aoR1) == natm
-        log.info("In ISDF-K build_partition_aoR aoR1 memory: %s", memory)
-        partition_activated = None
+        # weight = np.sqrt(self.cell.vol / self.coords.shape[0])
+        # self.aoR1 = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
+        #                                            None,
+        #                                            first_natm,
+        #                                            self.group_global,
+        #                                            self.distance_matrix, 
+        #                                            self.AtmConnectionInfo, 
+        #                                            self.use_mpi, self.use_mpi, sync_aoR)
+        # 
+        # memory = ISDF_Local_Utils._get_aoR_holders_memory(self.aoR1)  ### full row 
+        # assert len(self.aoR1) == natm
+        # log.info("In ISDF-K build_partition_aoR aoR1 memory: %s", memory)
+        # partition_activated = None
         
         # if not self.use_mpi:
         #     rank = 0
@@ -681,7 +681,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         assert self.use_aft_ao == False
         
-        first_natm = self._get_first_natm() 
+        first_natm = self.first_natm 
         if group is None:
             group = []
             for i in range(first_natm):
@@ -718,7 +718,6 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
                         self.atm_ordering.extend(data + shift)
                     shift += self.natmPrim
         self.atm_ordering = np.array(self.atm_ordering, dtype=np.int32)
-        # print("atm_ordering = ", self.atm_ordering)
                 
         self.atm_id_2_group = np.zeros((self.cell.natm), dtype=np.int32)
         for i in range(len(self.group_global)):
@@ -1107,30 +1106,27 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         else:
             return self.aoRg_col_permutation[loc]
     
-    def get_aoR_Row(self, box_x, box_y, box_z):
-        loc = box_x * self.kmesh[1] * self.kmesh[2] + box_y * self.kmesh[2] + box_z
-        return self.aoR_Full[loc]
-    
-    def _get_aoR_Row(self, box_x, box_y, box_z):
-        
-        assert box_x < self.kmesh[0]
-        assert box_y < self.kmesh[1]
-        assert box_z < self.kmesh[2]
-        
-        if box_x == 0 and box_y == 0 and box_z == 0:
-            return self.aoR1
-        else:
-            Res = []
-            for ix in range(self.kmesh[0]):
-                for iy in range(self.kmesh[1]):
-                    for iz in range(self.kmesh[2]):
-                        ix_ = (ix - box_x + self.kmesh[0]) % self.kmesh[0]
-                        iy_ = (iy - box_y + self.kmesh[1]) % self.kmesh[1]
-                        iz_ = (iz - box_z + self.kmesh[2]) % self.kmesh[2]
-                        loc_ = ix_ * self.kmesh[1] * self.kmesh[2] + iy_ * self.kmesh[2] + iz_
-                        for i in range(loc_*self.natmPrim, (loc_+1)*self.natmPrim):
-                            Res.append(self.aoR1[i])
-            return Res
+    # def get_aoR_Row(self, box_x, box_y, box_z):
+    #     loc = box_x * self.kmesh[1] * self.kmesh[2] + box_y * self.kmesh[2] + box_z
+    #     return self.aoR_Full[loc]
+    # def _get_aoR_Row(self, box_x, box_y, box_z):
+    #     assert box_x < self.kmesh[0]
+    #     assert box_y < self.kmesh[1]
+    #     assert box_z < self.kmesh[2]
+    #     if box_x == 0 and box_y == 0 and box_z == 0:
+    #         return self.aoR1
+    #     else:
+    #         Res = []
+    #         for ix in range(self.kmesh[0]):
+    #             for iy in range(self.kmesh[1]):
+    #                 for iz in range(self.kmesh[2]):
+    #                     ix_ = (ix - box_x + self.kmesh[0]) % self.kmesh[0]
+    #                     iy_ = (iy - box_y + self.kmesh[1]) % self.kmesh[1]
+    #                     iz_ = (iz - box_z + self.kmesh[2]) % self.kmesh[2]
+    #                     loc_ = ix_ * self.kmesh[1] * self.kmesh[2] + iy_ * self.kmesh[2] + iz_
+    #                     for i in range(loc_*self.natmPrim, (loc_+1)*self.natmPrim):
+    #                         Res.append(self.aoR1[i])
+    #         return Res
     
     def _get_aoRg_Row(self, box_x, box_y, box_z):
         
