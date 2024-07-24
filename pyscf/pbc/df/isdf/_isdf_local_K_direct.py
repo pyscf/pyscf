@@ -264,7 +264,7 @@ def _isdf_get_K_direct_kernel_1(
             
             ngrid_now      = aoR_holder.aoR.shape[1]
             nao_invovled   = aoR_holder.aoR.shape[0]
-            ddot_res       = np.ndarray((p1-p0, nao_invovled), buffer=K1_tmp1_ddot_res_buf)
+            ddot_res       = np.ndarray((p1-p0, nao_invovled), buffer=K1_final_ddot_buf)
             grid_loc_begin = aoR_holder.global_gridID_begin
             
             lib.ddot(V2_tmp[:, grid_loc_begin:grid_loc_begin+ngrid_now],
