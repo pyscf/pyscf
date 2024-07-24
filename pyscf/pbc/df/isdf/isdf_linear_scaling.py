@@ -163,10 +163,10 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
         thread_buffer = np.ndarray((nthread+1, grid_ID.shape[0]+1), dtype=np.float64)
         global_buffer = np.ndarray((1, grid_ID.shape[0]), dtype=np.float64)
         
-        log.debug4("In select_IP_atm_ls, max_rank      = ", max_rank)
-        log.debug4("In select_IP_atm_ls, naux2_now     = ", naux2_now)
-        log.debug4("In select_IP_atm_ls, grid_ID.shape = ", grid_ID.shape)
-        log.debug4("In select_IP_atm_ls, rela_cutoff   = ", rela_cutoff)
+        log.debug4("In select_IP_atm_ls, max_rank      = %d" % (max_rank))
+        log.debug4("In select_IP_atm_ls, naux2_now     = %d" % (naux2_now))
+        log.debug4("In select_IP_atm_ls, grid_ID.shape = %s" % (grid_ID.shape))
+        log.debug4("In select_IP_atm_ls, rela_cutoff   = %e" % (rela_cutoff))
         
         if USE_SCIPY_QR:
             R, pivot = scipy.linalg.qr(aoPairBuffer, pivoting=True, mode='r', check_finite=False, overwrite_a=True)
@@ -195,7 +195,7 @@ def select_IP_atm_ls(mydf, c:int, m:int, first_natm=None,
         atm_IP.sort()
         results[atm_id] = atm_IP
         
-        log.debug4("In select_IP_atm_ls, npt_find      = ", npt_find)
+        log.debug4("In select_IP_atm_ls, npt_find      = %d" %(npt_find))
         log.debug4("-------------------------------------------")
 
     del aoR_atm1
@@ -265,10 +265,10 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
     
     nao = aoRg_packed.shape[0]
 
-    log.debug4("In select_IP_group_ls, nao_group   = ", nao_group)
-    log.debug4("In select_IP_group_ls, nao         = ", nao)    
+    log.debug4("In select_IP_group_ls, nao_group   = %d" % (nao_group))
+    log.debug4("In select_IP_group_ls, nao         = %d" % (nao))    
     log.debug4("In select_IP_group_ls, c           = %d, m = %d" % (c, m))
-    log.debug4("In select_IP_group_ls, rela_cutoff = ", mydf.rela_cutoff_QRCP)
+    log.debug4("In select_IP_group_ls, rela_cutoff = %e" % (mydf.rela_cutoff_QRCP))
     
     # naux_now = int(np.sqrt(c*nao)) + m # seems to be too large
     naux_now = int(np.sqrt(c*nao_group)) + m
@@ -318,11 +318,11 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
         max_rank  = min(naux2_now, IP_possible.shape[0], nao_group * c)  
         log.debug4("In select_IP_group_ls, restriction_on_nIP")
         
-    log.debug4("In select_IP_group_ls, naux2_now = %d, max_rank = %d" % (naux2_now, max_rank))
-    log.debug4("In select_IP_group_ls, IP_possible.shape = ", IP_possible.shape)
-    log.debug4("In select_IP_group_ls, nao_group = ", nao_group)
-    log.debug4("In select_IP_group_ls, c = ", c)
-    log.debug4("In select_IP_group_ls, nao_group * c = ", nao_group * c)
+    log.debug4("In select_IP_group_ls, naux2_now         = %d, max_rank = %d" % (naux2_now, max_rank))
+    log.debug4("In select_IP_group_ls, IP_possible.shape = %s" % (IP_possible.shape))
+    log.debug4("In select_IP_group_ls, nao_group         = %d" % (nao_group))
+    log.debug4("In select_IP_group_ls, c = %d" % (c))
+    log.debug4("In select_IP_group_ls, nao_group * c = %d" % (nao_group * c))
     
     npt_find = ctypes.c_int(0)
     pivot    = np.arange(IP_possible.shape[0], dtype=np.int32)
@@ -353,7 +353,7 @@ def select_IP_group_ls(mydf, aoRg_possible, c:int, m:int, group=None, atm_2_IP_p
         R, pivot = scipy.linalg.qr(aoPairBuffer, pivoting=True, mode='r', check_finite=False, overwrite_a=True)
         npt_find = nao_group * c 
     
-    log.debug4("In select_IP_group_ls, npt_find = ", npt_find)
+    log.debug4("In select_IP_group_ls, npt_find = %d" % (npt_find))
     
     pivot = pivot[:npt_find]
     pivot.sort()
@@ -1187,7 +1187,8 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                 size1 = build_K_bunchsize * np.prod(self.cell.mesh) # density RgR 
                 size2 = build_K_bunchsize * max_ngrid_involved      # ddot_res_RgR
                 size3 = maxsize_group_naux * self.nao               # K1_tmp1
-                size4 = max_ngrid_involved * max_nao_involved       # K1_tmp1_ddot_res
+                #size4 = max_ngrid_involved * max_nao_involved       # K1_tmp1_ddot_res
+                size4 = maxsize_group_naux * self.nao  
                 #size5 = max_ngrid_involved * max_ngrid_involved
                 size5 = 0
                 size6 = max_nao_involved * self.nao                 # K1_final_ddot

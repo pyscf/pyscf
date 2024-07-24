@@ -235,7 +235,7 @@ def _isdf_get_K_direct_kernel_1(
                 fn_packcol1(
                     Density_RgAO_packed.ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(p1-p0),
-                    ctypes.c_int(nao_invovled),
+                    ctypes.c_int(nao_involved),
                     dm_RgAO[p0:p1, :].ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(p1-p0),
                     ctypes.c_int(nao),

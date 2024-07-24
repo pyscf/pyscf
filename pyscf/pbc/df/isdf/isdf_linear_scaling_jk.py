@@ -1418,7 +1418,8 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     
     offset_build_now += K1_tmp1_buf.size * K1_tmp1_buf.dtype.itemsize
     offset_K1_tmp1_ddot_res_buf = offset_build_now
-    K1_tmp1_ddot_res_buf = np.ndarray((maxsize_group_naux, max_nao_involved), buffer=build_k_buf, offset=offset_K1_tmp1_ddot_res_buf)
+    # K1_tmp1_ddot_res_buf = np.ndarray((maxsize_group_naux, max_nao_involved), buffer=build_k_buf, offset=offset_K1_tmp1_ddot_res_buf)
+    K1_tmp1_ddot_res_buf = np.ndarray((maxsize_group_naux, nao), buffer=build_k_buf, offset=offset_K1_tmp1_ddot_res_buf)
     
     offset_build_now += K1_tmp1_ddot_res_buf.size * K1_tmp1_ddot_res_buf.dtype.itemsize
     
