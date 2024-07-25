@@ -913,7 +913,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                     if hasattr(self, "_use_super_pp"):
                         if self._use_super_pp:
                             print("super pp is used!")
-                        self.PP = super().get_pp(kpts=np.zeros(3))
+                            self.PP = super().get_pp(kpts=np.zeros(3))
                     #### use the calculated one by default ####
                     print("single kpt case!")
                     return self.PP
