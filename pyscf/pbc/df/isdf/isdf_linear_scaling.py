@@ -1192,11 +1192,11 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
                 size1 = build_K_bunchsize * np.prod(self.cell.mesh) # density RgR 
                 size2 = build_K_bunchsize * max_ngrid_involved      # ddot_res_RgR
                 size3 = maxsize_group_naux * self.nao               # K1_tmp1
-                #size4 = max_ngrid_involved * max_nao_involved       # K1_tmp1_ddot_res
+                #size4 = max_ngrid_involved * max_nao_involved      # K1_tmp1_ddot_res
                 size4 = maxsize_group_naux * self.nao  
                 #size5 = max_ngrid_involved * max_ngrid_involved
                 size5 = 0
-                size6 = max_nao_involved * self.nao                 # K1_final_ddot
+                size6 = self.nao * self.nao               # K1_final_ddot
                 
                 size = size1 + size2 + size3 + size4 + size5 + size6
                 

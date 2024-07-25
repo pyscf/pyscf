@@ -120,6 +120,8 @@ def _half_J(mydf, dm, use_mpi=False,
     
     density_R_tmp = None
     
+    density_R_tmp_buf = np.zeros((max_ngrid_involved,), dtype=np.float64)
+    
     def _get_rhoR(
         bra_aoR, 
         bra_ao_involved,
@@ -141,7 +143,8 @@ def _half_J(mydf, dm, use_mpi=False,
                 ctypes.c_int(nbra_ao),
             )
             
-            _density_R_tmp = np.zeros((ket_aoR.shape[1],), dtype=np.float64)
+            # _density_R_tmp = np.zeros((ket_aoR.shape[1],), dtype=np.float64)
+            _density_R_tmp = np.ndarray((ket_aoR.shape[1],), buffer=density_R_tmp_buf)
            
             for p0, p1 in lib.prange(0, ket_aoR.shape[1], J_MAX_GRID_BUNCHSIZE):
                 ddot_res = np.ndarray((nbra_ao, p1-p0), buffer=ddot_buf)
@@ -176,7 +179,8 @@ def _half_J(mydf, dm, use_mpi=False,
                 ket_ao_involved.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(ket_ao_involved.shape[0]),
             )            
-            _density_R_tmp = np.zeros((ket_aoR.shape[1],), dtype=np.float64)
+            # _density_R_tmp = np.zeros((ket_aoR.shape[1],), dtype=np.float64)
+            _density_R_tmp = np.ndarray((ket_aoR.shape[1],), buffer=density_R_tmp_buf)
             
             for p0, p1 in lib.prange(0, ket_aoR.shape[1], J_MAX_GRID_BUNCHSIZE):
                 ddot_res = np.ndarray((nbra_ao, p1-p0), buffer=ddot_buf)
@@ -211,10 +215,10 @@ def _half_J(mydf, dm, use_mpi=False,
             if atm_id % comm_size != rank:
                 continue
             
-        ngrids_now = aoR_holder.aoR.shape[1]
-        nao_involved = aoR_holder.aoR.shape[0]
+        ngrids_now          = aoR_holder.aoR.shape[1]
+        nao_involved        = aoR_holder.aoR.shape[0]
         global_gridID_begin = aoR_holder.global_gridID_begin
-        nCompact = aoR_holder.nCompact
+        nCompact            = aoR_holder.nCompact
         
         if first_pass_all:        
             density_R_tmp = _get_rhoR(
@@ -335,7 +339,8 @@ def _half_J(mydf, dm, use_mpi=False,
     
     return J
 
-def _contract_j_dm_ls(mydf, dm, use_mpi=False, 
+def _contract_j_dm_ls(mydf, dm, 
+                      use_mpi     = False, 
                       first_pass  = None, 
                       second_pass = None,
                       short_range = False):
@@ -1426,7 +1431,7 @@ def _contract_k_dm_quadratic_direct(mydf, dm, use_mpi=False):
     offset_build_now += K1_tmp1_ddot_res_buf.size * K1_tmp1_ddot_res_buf.dtype.itemsize
 
     offset_K1_final_ddot_buf = offset_build_now
-    K1_final_ddot_buf        = np.ndarray((max_nao_involved, nao), buffer=build_k_buf, offset=offset_K1_final_ddot_buf)
+    K1_final_ddot_buf        = np.ndarray((nao, nao), buffer=build_k_buf, offset=offset_K1_final_ddot_buf)
     
     ########### get involved C function ###########
     

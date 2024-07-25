@@ -181,16 +181,16 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group,
     
     assert len(mydf.aoRg) == first_natm
     
-    # mydf.aoRg1 = ISDF_Local_Utils.get_aoR(
-    #     mydf.cell, coords, partition_IP,
-    #     mydf.cell.natm,
-    #     first_natm,
-    #     mydf.group_global,
-    #     mydf.distance_matrix,
-    #     mydf.AtmConnectionInfo,
-    #     False,
-    #     mydf.use_mpi,
-    #     True)
+    mydf.aoRg1 = ISDF_Local_Utils.get_aoR(
+        mydf.cell, coords, partition_IP,
+        mydf.cell.natm,
+        first_natm,
+        mydf.group_global,
+        mydf.distance_matrix,
+        mydf.AtmConnectionInfo,
+        False,
+        mydf.use_mpi,
+        True)
     
     # assert len(mydf.aoRg1) == mydf.cell.natm
     
@@ -640,38 +640,40 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         # if rank == 0:
         #     print("aoR memory: ", memory) 
         
-        # weight = np.sqrt(self.cell.vol / self.coords.shape[0])
-        # self.aoR1 = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
-        #                                            None,
-        #                                            first_natm,
-        #                                            self.group_global,
-        #                                            self.distance_matrix, 
-        #                                            self.AtmConnectionInfo, 
-        #                                            self.use_mpi, self.use_mpi, sync_aoR)
-        # 
-        # memory = ISDF_Local_Utils._get_aoR_holders_memory(self.aoR1)  ### full row 
-        # assert len(self.aoR1) == natm
-        # log.info("In ISDF-K build_partition_aoR aoR1 memory: %s", memory)
-        # partition_activated = None
+        weight = np.sqrt(self.cell.vol / self.coords.shape[0])
+        self.aoR1 = ISDF_Local_Utils.get_aoR(self.cell, self.coords, self.partition, 
+                                                   None,
+                                                   first_natm,
+                                                   self.group_global,
+                                                   self.distance_matrix, 
+                                                   self.AtmConnectionInfo, 
+                                                   self.use_mpi, self.use_mpi, sync_aoR)
         
-        # if not self.use_mpi:
-        #     rank = 0
-        # if rank == 0:
-        #     partition_activated = []
-        #     for _id_, aoR_holder in enumerate(self.aoR1):
-        #         if aoR_holder.ao_involved.size == 0:
-        #             partition_activated.append(False)
-        #         else:
-        #             partition_activated.append(True)
-        #     partition_activated = np.array(partition_activated, dtype=bool)
-        # if self.use_mpi:
-        #     partition_activated = bcast(partition_activated)
-        # self.partition_activated = partition_activated
-        # self.partition_activated_id = []
-        # for i in range(len(partition_activated)):
-        #     if partition_activated[i]:
-        #         self.partition_activated_id.append(i)
-        # self.partition_activated_id = np.array(self.partition_activated_id, dtype=np.int32)
+        memory = ISDF_Local_Utils._get_aoR_holders_memory(self.aoR1)  ### full row 
+        assert len(self.aoR1) == natm
+        log.info("In ISDF-K build_partition_aoR aoR1 memory: %s", memory)
+        partition_activated = None
+        
+        ##### the following info is used in get_J ##### 
+        
+        if not self.use_mpi:
+            rank = 0
+        if rank == 0:
+            partition_activated = []
+            for _id_, aoR_holder in enumerate(self.aoR1):
+                if aoR_holder.ao_involved.size == 0:
+                    partition_activated.append(False)
+                else:
+                    partition_activated.append(True)
+            partition_activated = np.array(partition_activated, dtype=bool)
+        if self.use_mpi:
+            partition_activated = bcast(partition_activated)
+        self.partition_activated = partition_activated
+        self.partition_activated_id = []
+        for i in range(len(partition_activated)):
+            if partition_activated[i]:
+                self.partition_activated_id.append(i)
+        self.partition_activated_id = np.array(self.partition_activated_id, dtype=np.int32)
         
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
         if self.verbose:
@@ -822,8 +824,12 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         if self.verbose and debug:
             _benchmark_time(t3, t4, "build_aoRg_possible", self)
         
+        build_aoR_FFT = (self.direct == False)
+        
         select_IP_local_ls_k_drive(
-            self, c, m, IP_Atm, group, use_mpi=self.use_mpi
+            self, c, m, IP_Atm, group, 
+            build_aoR_FFT=build_aoR_FFT,
+            use_mpi=self.use_mpi
         )
         
         t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
@@ -844,14 +850,14 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
     
         t1 = t2
         
-        self.aoR_Full = []
+        #self.aoR_Full = []
         ##self.aoRg_FUll = []
         
-        for i in range(self.kmesh[0]):
-            for j in range(self.kmesh[1]):
-                for k in range(self.kmesh[2]):
-                    self.aoR_Full.append(self._get_aoR_Row(i, j, k))   # different row -> different box -> a column permutation of the first box
-                    #self.aoRg_FUll.append(self._get_aoRg_Row(i, j, k))
+        #for i in range(self.kmesh[0]):
+        #    for j in range(self.kmesh[1]):
+        #        for k in range(self.kmesh[2]):
+        #            self.aoR_Full.append(self._get_aoR_Row(i, j, k))   # different row -> different box -> a column permutation of the first box
+        #            #self.aoRg_FUll.append(self._get_aoRg_Row(i, j, k))
         
         
         sys.stdout.flush()
@@ -1109,6 +1115,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
     # def get_aoR_Row(self, box_x, box_y, box_z):
     #     loc = box_x * self.kmesh[1] * self.kmesh[2] + box_y * self.kmesh[2] + box_z
     #     return self.aoR_Full[loc]
+    
     # def _get_aoR_Row(self, box_x, box_y, box_z):
     #     assert box_x < self.kmesh[0]
     #     assert box_y < self.kmesh[1]
@@ -1252,9 +1259,11 @@ if __name__ == "__main__":
     prim_cell = build_supercell(atm, prim_a, Ls = [1,1,1], ke_cutoff=KE_CUTOFF)
     prim_mesh = prim_cell.mesh
     # prim_partition = [[0], [1], [2], [3], [4], [5], [6], [7]]
-    prim_partition = [[0,1,2,3,4,5,6,7]]
+    # prim_partition = [[0,1,2,3,4,5,6,7]]
+    prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     
-    Ls = [1, 1, 8]
+    Ls = [1, 1, 3]
+    kpts = prim_cell.make_kpts(Ls)
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
     mesh = np.array(mesh, dtype=np.int32)
@@ -1282,26 +1291,26 @@ if __name__ == "__main__":
     
     weight = np.sqrt(cell.vol / pbc_isdf_info.coords.shape[0])
     aoR_benchmark = ISDF_eval_gto(cell, coords=pbc_isdf_info.coords[pbc_isdf_info.grid_ID_ordered]) * weight
-    loc = 0
-    nao_prim = prim_cell.nao_nr()
-    for ix in range(Ls[0]):
-        for iy in range(Ls[1]):
-            for iz in range(Ls[2]):
-                aoR_unpacked = []
-                aoR_holder = pbc_isdf_info.get_aoR_Row(ix, iy, iz)
-                for data in aoR_holder:
-                    # print("data = ", data.aoR.shape)
-                    aoR_unpacked.append(data.todense(nao_prim))
-                aoR_unpacked = np.concatenate(aoR_unpacked, axis=1)
-                aoR_benchmark_now = aoR_benchmark[loc*nao_prim:(loc+1)*nao_prim,:]
-                loc += 1
-                diff = aoR_benchmark_now - aoR_unpacked
-                where = np.where(np.abs(diff) > 1e-4)
-                print("diff = ", np.linalg.norm(diff)/np.sqrt(aoR_unpacked.size))
     
-    print("prim_mesh = ", prim_mesh)
+    # loc = 0
+    # nao_prim = prim_cell.nao_nr()
+    # for ix in range(Ls[0]):
+    #     for iy in range(Ls[1]):
+    #         for iz in range(Ls[2]):
+    #             aoR_unpacked = []
+    #             aoR_holder = pbc_isdf_info.get_aoR_Row(ix, iy, iz)
+    #             for data in aoR_holder:
+    #                 # print("data = ", data.aoR.shape)
+    #                 aoR_unpacked.append(data.todense(nao_prim))
+    #             aoR_unpacked = np.concatenate(aoR_unpacked, axis=1)
+    #             aoR_benchmark_now = aoR_benchmark[loc*nao_prim:(loc+1)*nao_prim,:]
+    #             loc += 1
+    #             diff = aoR_benchmark_now - aoR_unpacked
+    #             where = np.where(np.abs(diff) > 1e-4)
+    #             print("diff = ", np.linalg.norm(diff)/np.sqrt(aoR_unpacked.size))
+    # print("prim_mesh = ", prim_mesh)
     
-    exit(1)
+    # exit(1)
     
     naux_prim = 0
     for data in pbc_isdf_info.aoRg:
@@ -1346,8 +1355,8 @@ if __name__ == "__main__":
     
     from pyscf.pbc import scf
 
-    mf = scf.RHF(cell)
-    pbc_isdf_info.kpts = np.array([[0,0,0]])  
+    mf = scf.KRHF(prim_cell, kpts)
+    # pbc_isdf_info.kpts = np.array([[0,0,0]])  
     # mf = scf.addons.smearing_(mf, sigma=0.2, method='fermi')
     pbc_isdf_info.direct_scf = mf.direct_scf
     mf.with_df = pbc_isdf_info
@@ -1356,11 +1365,11 @@ if __name__ == "__main__":
     
     mf.kernel()
     
-    exit(1)
+    # exit(1)
     
     ######### bench mark #########
     
-    pbc_isdf_info = ISDF_LinearScaling.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=True, rela_cutoff_QRCP=1e-3)
+    pbc_isdf_info = ISDF_LinearScaling.PBC_ISDF_Info_Quad(cell, with_robust_fitting=True, aoR_cutoff=1e-8, direct=True, rela_cutoff_QRCP=1e-3, use_occ_RI_K=False)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     # pbc_isdf_info.build_IP_local(c=C, m=5, group=group_partition, Ls=[Ls[0]*3, Ls[1]*3, Ls[2]*3])
     pbc_isdf_info.Ls = Ls
@@ -1383,11 +1392,10 @@ if __name__ == "__main__":
     mf.conv_tol = 1e-7
     mf.kernel()
     
-    pp = mf.with_df.get_pp()
-    
-    mf = scf.RHF(cell)
-    pbc_isdf_info.direct_scf = mf.direct_scf
-    mf.with_df.get_pp = lambda *args, **kwargs: pp
-    mf.max_cycle = 16
-    mf.conv_tol = 1e-7
-    mf.kernel()
+    # pp = mf.with_df.get_pp()
+    # mf = scf.RHF(cell)
+    # pbc_isdf_info.direct_scf = mf.direct_scf
+    # mf.with_df.get_pp = lambda *args, **kwargs: pp
+    # mf.max_cycle = 16
+    # mf.conv_tol = 1e-7
+    # mf.kernel()

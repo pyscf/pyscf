@@ -32,7 +32,8 @@ from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
 libpbc = lib.load_library('libpbc')
 
-from  pyscf.pbc.df.isdf.isdf_tools_densitymatrix import pack_JK, pack_JK_in_FFT_space
+from pyscf.pbc.df.isdf.isdf_tools_densitymatrix import pack_JK, pack_JK_in_FFT_space
+from pyscf.pbc.df.isdf.isdf_linear_scaling_jk   import J_MAX_GRID_BUNCHSIZE
 
 ############ subroutines ############
 
@@ -178,10 +179,11 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
 
     density_R_prim = np.zeros((ngrid_prim,), dtype=np.float64)
     
-    dm_buf = np.zeros((max_nao_involved, max_nao_involved), dtype=np.float64)
-    max_dim_buf = max(max_ngrid_involved, max_nao_involved)
-    ddot_buf = np.zeros((max_dim_buf, max_dim_buf), dtype=np.float64)
-    aoR_buf1 = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
+    dm_buf      = np.zeros((max_nao_involved, max_nao_involved), dtype=np.float64)
+    # max_dim_buf = max(max_ngrid_involved, max_nao_involved)
+    max_dim_buf = max_nao_involved
+    max_col_buf = min(max_ngrid_involved, J_MAX_GRID_BUNCHSIZE)
+    aoR_buf1    = np.zeros((max_nao_involved, max_ngrid_involved), dtype=np.float64)
     
     ##### get the involved C function ##### 
     
@@ -191,9 +193,14 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
     fn_packadd_dm = getattr(libpbc, "_packadd_local_dm", None)
     assert fn_packadd_dm is not None
     
+    fn_multiplysum = getattr(libpbc, "_fn_J_dmultiplysum", None)
+    assert fn_multiplysum is not None
+    
     #### step 1. get density value on real space grid and IPs
     
     density_R_tmp = None
+    
+    ddot_buf    = np.zeros((max_nao_involved, max_col_buf), dtype=np.float64)
     
     for atm_id, aoR_holder in enumerate(aoR):
         
@@ -219,15 +226,35 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
             dm_buf.ravel()[:] = dm.ravel()
         
         dm_now = np.ndarray((nao_involved, nao_involved), buffer=dm_buf)
-    
-        ddot_res = np.ndarray((nao_involved, ngrids_now), buffer=ddot_buf)
-        
-        lib.ddot(dm_now, aoR_holder.aoR, c=ddot_res)
-        density_R_tmp = lib.multiply_sum_isdf(aoR_holder.aoR, ddot_res)
-        
         global_gridID_begin = aoR_holder.global_gridID_begin
         
-        density_R_prim[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
+        for p0, p1 in lib.prange(0, ngrids_now, J_MAX_GRID_BUNCHSIZE):
+            ddot_res = np.ndarray((nao_involved, p1-p0), buffer=ddot_buf)
+            lib.ddot(dm_now, aoR_holder.aoR[:,p0:p1], c=ddot_res)
+            #density_R_tmp = lib.multiply_sum_isdf(aoR_holder.aoR[:,p0:p1], ddot_res)
+            _res_tmp = np.ndarray((p1-p0,),
+                                dtype =density_R_prim.dtype, 
+                                buffer=density_R_prim, 
+                                offset=(global_gridID_begin+p0)*density_R_prim.dtype.itemsize)
+            # density_R_prim[global_gridID_begin+p0:global_gridID_begin+p1] = density_R_tmp
+            fn_multiplysum(
+                    _res_tmp.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nao_involved),
+                    ctypes.c_int(p1-p0),
+                    aoR_holder.aoR.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(aoR_holder.aoR.shape[0]),
+                    ctypes.c_int(aoR_holder.aoR.shape[1]),
+                    ctypes.c_int(0),
+                    ctypes.c_int(p0),
+                    ddot_res.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nao_involved),
+                    ctypes.c_int(p1-p0),
+                    ctypes.c_int(0),
+                    ctypes.c_int(0))
+        #ddot_res = np.ndarray((nao_involved, ngrids_now), buffer=ddot_buf)
+        #lib.ddot(dm_now, aoR_holder.aoR, c=ddot_res)
+        #density_R_tmp = lib.multiply_sum_isdf(aoR_holder.aoR, ddot_res)
+        #density_R_prim[global_gridID_begin:global_gridID_begin+ngrids_now] = density_R_tmp
     
     if use_mpi:
         density_R_prim = reduce(density_R_prim, root=0)
@@ -251,6 +278,8 @@ def _contract_j_dm_k_ls(mydf, _dm, use_mpi=False):
         density_R_prim = density_R_original.copy()
     
     J = None
+    
+    ddot_buf    = np.zeros((max_nao_involved, max_nao_involved), dtype=np.float64)
     
     if (use_mpi and rank == 0) or (use_mpi == False):
     
@@ -1236,7 +1265,7 @@ def _get_k_kSym(mydf, _dm):
     _benchmark_time(t1, t2, "_contract_k_dm", mydf)
     
     return K
-    
+   
 def get_jk_dm_translation_symmetry(mydf, dm, hermi=1, kpt=np.zeros(3),
                                     kpts_band=None, with_j=True, with_k=True, omega=None, 
                                    **kwargs):

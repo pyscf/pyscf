@@ -448,7 +448,10 @@ def _isdf_get_K_direct_kernel_1(
                     
                     box_permutation = permutation[ILOC]
                     
+                    #print("nao = ", nao)
+                    #print("K1_final_ddot_buf.shape=",K1_final_ddot_buf.shape)
                     nao_invovled = aoRg_packed[ILOC].nao_invovled
+                    #print("nao_involved = ", nao_invovled)
                     ddot_res = np.ndarray((nao_invovled, nao), buffer=K1_final_ddot_buf)
                     lib.ddot(aoRg_packed[ILOC].aoR[:,p0:p1], K1_tmp1, c=ddot_res)
                     # fn_packadd_row(
