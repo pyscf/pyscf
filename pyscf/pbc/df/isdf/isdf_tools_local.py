@@ -87,12 +87,12 @@ class aoR_Holder:
         
         self.aoR = aoR
         self.ao_involved = np.array(ao_involved, dtype=np.int32)
-        self.nao_invovled = len(ao_involved)
+        self.nao_involved = len(ao_involved)
         self.local_gridID_begin = local_gridID_begin
         self.local_gridID_end = local_gridID_end
         self.global_gridID_begin = global_gridID_begin
         self.global_gridID_end = global_gridID_end
-        self.nCompact = self.nao_invovled  ## by default all orbitals are compact
+        self.nCompact = self.nao_involved  ## by default all orbitals are compact
         
         ## build ao_involved segment ## 
         
@@ -158,14 +158,14 @@ class aoPairR_Holder:
         self.ao_involved = np.array(ao_involved, dtype=np.int32)
         self.grid_involved = np.array(grid_involved, dtype=np.int32)
         self.nao_given_atm = aoPairR.shape[0]
-        self.nao_invovled  = len(ao_involved)
+        self.nao_involved  = len(ao_involved)
         self.nGrid_involved = len(grid_involved)
 
     def size(self):
         return self.aoPairR.nbytes + self.ao_involved.nbytes + self.grid_involved.nbytes
     
     def todense(self, nao, nGrid):
-        aoPairR = np.zeros((self.nao_given_atm, self.nao_invovled, nGrid))
+        aoPairR = np.zeros((self.nao_given_atm, self.nao_involved, nGrid))
         aoPairR[:,:, self.grid_involved] = self.aoPairR
         res = np.zeros((self.nao_given_atm, nao, nGrid))
         res[:, self.ao_involved,:] = aoPairR
@@ -577,11 +577,11 @@ def get_partition(cell:Cell, coords, AtmConnectionInfoList:list[AtmConnectionInf
         
         atm_coords_involved = []
         
-        nao_invovled = 0
+        nao_involved = 0
         for atm_id_other in atm_involved:
             shl_begin = AtmConnectionInfoList[atm_id_other].bas_range[0]
             shl_end = AtmConnectionInfoList[atm_id_other].bas_range[-1]+1
-            nao_invovled += ao_loc[shl_end] - ao_loc[shl_begin]
+            nao_involved += ao_loc[shl_end] - ao_loc[shl_begin]
             atm_coords_involved.append(cell.atom_coord(atm_id_other))
         
         atm_coords_involved = np.array(atm_coords_involved)
@@ -963,11 +963,11 @@ def get_aoR(cell:Cell, coords, partition,
                 
         ##### get the involved ao #####
         
-        nao_invovled = 0
+        nao_involved = 0
         for atm_id_other in atm_involved:
             shl_begin = AtmConnectionInfoList[atm_id_other].bas_range[0]
             shl_end = AtmConnectionInfoList[atm_id_other].bas_range[-1]+1
-            nao_invovled += ao_loc[shl_end] - ao_loc[shl_begin]
+            nao_involved += ao_loc[shl_end] - ao_loc[shl_begin]
         
         bas_id = []
 

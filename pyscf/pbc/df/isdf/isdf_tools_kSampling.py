@@ -21,8 +21,6 @@ from pyscf import lib
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.gto.mole import *
 
-
-
 def _extract_grid_primitive_cell(cell_a, mesh, Ls, coords):
     """
     Extract the primitive cell grid information from the supercell grid information
@@ -172,8 +170,10 @@ def _RowCol_FFT_bench(input, Ls, inv=False, TransBra = True, TransKet = True):
     A = input
     ncell = np.prod(Ls)
     
-    assert A.shape[1] % ncell == 0
-    assert A.shape[0] % ncell == 0
+    if TransKet:
+        assert A.shape[1] % ncell == 0
+    if TransBra:
+        assert A.shape[0] % ncell == 0
     
     # print("A.shape = ", A.shape)
     # print("Ls = ", Ls)

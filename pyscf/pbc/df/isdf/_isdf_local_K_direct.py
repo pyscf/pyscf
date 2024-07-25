@@ -165,6 +165,7 @@ def _isdf_get_K_direct_kernel_1(
     nao_prim  = mydf.nao_prim
     
     ngrid_prim = np.prod(mesh) // np.prod(kmesh)
+    nIP_prim   = mydf.nIP_Prim
     
     assert np.prod(mesh) % np.prod(kmesh) == 0
     assert mesh[0] % kmesh[0] == 0
@@ -221,10 +222,14 @@ def _isdf_get_K_direct_kernel_1(
         for ky in range(kmesh[1]):
             for kz in range(kmesh[2]):
                 aoRg_holders = []
+                naux_tmp = 0
                 for atm_id in group[group_id]:
+                    # print("atm_id = ", atm_id, "ILOC = ", ILOC, "shape = ", aoRg1[atm_id+ILOC*natm_prim].aoR.shape)
                     naux_tmp += aoRg1[atm_id+ILOC*natm_prim].aoR.shape[1]
-                    aoRg_holders.append(aoRg1[atm_id])
+                    aoRg_holders.append(aoRg1[atm_id+ILOC*natm_prim])
                 aoRg_packed.append(_pack_aoR_holder(aoRg_holders, nao))
+                # print("naux_tmp = ", naux_tmp)
+                # print("aux_basis[group_id].shape[0] = ", aux_basis[group_id].shape[0])
                 assert naux_tmp == aux_basis[group_id].shape[0]
                 ILOC += 1
     
@@ -321,6 +326,8 @@ def _isdf_get_K_direct_kernel_1(
                                          offset=0, 
                                          dtype =np.float64)
 
+        # print("Density_RgR_tmp.shape = ", Density_RgR_tmp.shape)
+
         ILOC = 0
         for kx in range(kmesh[0]):
             for ky in range(kmesh[1]):
@@ -331,8 +338,10 @@ def _isdf_get_K_direct_kernel_1(
                             col_permutation = mydf._get_permutation_column_aoR(kx, ky, kz)
                         else:
                             col_permutation = mydf._get_permutation_column_aoRg(kx, ky, kz)
-    
-                    for atm_id in atm_ordering:
+                        # print("col_permutation = ", col_permutation)
+
+                    # print("atm_ordering = ", atm_ordering)
+                    for atm_id in atm_ordering[:natm_prim]:
             
                         if construct_K1:
                             aoR_holder = aoR[atm_id]
@@ -341,9 +350,11 @@ def _isdf_get_K_direct_kernel_1(
             
                         if aoR_holder is None:
                             raise ValueError("aoR_holder is None")
-
+                        
                         ngrid_now    = aoR_holder.aoR.shape[1]
                         nao_involved = aoR_holder.aoR.shape[0]
+                        
+                        # print("atm_id = ", atm_id, "ILOC = ", ILOC, "shape = ", aoR_holder.aoR.shape)
             
                         ##### packed involved DgAO #####
             
@@ -352,7 +363,7 @@ def _isdf_get_K_direct_kernel_1(
                         else:
                             ao_permutation = col_permutation[atm_id]
             
-                        if nao_involved == nao:
+                        if (nao_involved == nao) and (kx == 0 and ky == 0 and kz == 0):
                             Density_RgAO_packed = dm_RgAO[p0:p1, :]
                         else:
                             Density_RgAO_packed = np.ndarray((p1-p0, nao_involved), 
@@ -370,8 +381,13 @@ def _isdf_get_K_direct_kernel_1(
                                 # aoR_holder.ao_involved.ctypes.data_as(ctypes.c_void_p)
                                 ao_permutation.ctypes.data_as(ctypes.c_void_p)
                             )
-            
-                        grid_begin   = aoR_holder.global_gridID_begin + ILOC*ngrid_prim
+
+                        if construct_K1:
+                            grid_begin   = aoR_holder.global_gridID_begin + ILOC*ngrid_prim
+                        else:
+                            grid_begin   = aoR_holder.global_gridID_begin + ILOC*nIP_prim
+                        
+                        # print("grid_begin = ", grid_begin)
                         ddot_res_RgR = np.ndarray((p1-p0, ngrid_now), buffer=ddot_res_RgR_buf)
                         lib.ddot(Density_RgAO_packed, aoR_holder.aoR, c=ddot_res_RgR)
                         Density_RgR_tmp[:, grid_begin:grid_begin+ngrid_now] = ddot_res_RgR
@@ -401,7 +417,7 @@ def _isdf_get_K_direct_kernel_1(
                         else:
                             col_permutation = mydf._get_permutation_column_aoRg(kx, ky, kz)
                         
-                    for atm_id in atm_ordering:
+                    for atm_id in atm_ordering[:natm_prim]:
             
                         if construct_K1:
                             aoR_holder = aoR[atm_id]
@@ -409,9 +425,14 @@ def _isdf_get_K_direct_kernel_1(
                             aoR_holder = aoRg[atm_id]
             
                         ngrid_now      = aoR_holder.aoR.shape[1]
-                        nao_invovled   = aoR_holder.aoR.shape[0]
-                        ddot_res       = np.ndarray((p1-p0, nao_invovled), buffer=K1_tmp1_ddot_res_buf)
-                        grid_loc_begin = aoR_holder.global_gridID_begin + ILOC*ngrid_prim
+                        nao_involved   = aoR_holder.aoR.shape[0]
+                        ddot_res       = np.ndarray((p1-p0, nao_involved), buffer=K1_tmp1_ddot_res_buf)
+                        
+                        #grid_loc_begin = aoR_holder.global_gridID_begin + ILOC*ngrid_prim
+                        if construct_K1:
+                            grid_loc_begin = aoR_holder.global_gridID_begin + ILOC*ngrid_prim
+                        else:
+                            grid_loc_begin = aoR_holder.global_gridID_begin + ILOC*nIP_prim
             
                         lib.ddot(V2_tmp[:, grid_loc_begin:grid_loc_begin+ngrid_now],
                                  aoR_holder.aoR.T, 
@@ -421,9 +442,14 @@ def _isdf_get_K_direct_kernel_1(
                             ao_permutation = aoR_holder.ao_involved
                         else:
                             ao_permutation = col_permutation[atm_id]
-                            assert col_permutation[atm_id].shape[0] == nao_invovled
+                            assert col_permutation[atm_id].shape[0] == nao_involved
+
+                        #print("nao_involved = ", nao_involved)
+                        #print("nao = ", nao)
             
-                        if nao_involved == nao:
+                        if (nao_involved == nao) and (kx == 0 and ky == 0 and kz == 0):
+                            #print("K1_tmp1.shape  = ", K1_tmp1.shape)
+                            #print("ddot_res.shape = ", ddot_res.shape)
                             K1_tmp1 += ddot_res
                         else:
                             fn_packadd_col(
@@ -450,9 +476,9 @@ def _isdf_get_K_direct_kernel_1(
                     
                     #print("nao = ", nao)
                     #print("K1_final_ddot_buf.shape=",K1_final_ddot_buf.shape)
-                    nao_invovled = aoRg_packed[ILOC].nao_invovled
-                    #print("nao_involved = ", nao_invovled)
-                    ddot_res = np.ndarray((nao_invovled, nao), buffer=K1_final_ddot_buf)
+                    nao_involved = aoRg_packed[ILOC].nao_involved
+                    #print("nao_involved = ", nao_involved)
+                    ddot_res = np.ndarray((nao_involved, nao), buffer=K1_final_ddot_buf)
                     lib.ddot(aoRg_packed[ILOC].aoR[:,p0:p1], K1_tmp1, c=ddot_res)
                     # fn_packadd_row(
                     #     K1_or_2.ctypes.data_as(ctypes.c_void_p),

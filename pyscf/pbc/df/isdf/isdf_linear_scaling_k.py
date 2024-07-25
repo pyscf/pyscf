@@ -303,11 +303,10 @@ def select_IP_local_ls_k_drive(mydf, c, m, IP_possible_atm, group,
         del mydf.aoR_FFT
         mydf.aoR_FFT = aoR_packed
         # mydf.aoR     = None
+        del buffer         
     else:
         mydf.aoR_FFT = None
         # build aoR #
-
-    del buffer         
 
 def build_auxiliary_Coulomb_local_bas_k(mydf, debug=True, use_mpi=False):
     
@@ -456,11 +455,13 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
     def __init__(self, 
                  mol:Cell,  # means the primitive cell 
                  with_robust_fitting=True,
-                 kmesh=None,
-                 verbose = None,
-                 rela_cutoff_QRCP = None,
-                 aoR_cutoff = 1e-8,
-                 direct=False
+                 kmesh              =None,
+                 verbose            =None,
+                 rela_cutoff_QRCP   =None,
+                 aoR_cutoff         =1e-8,
+                 direct             =False,
+                 limited_memory     =False,
+                 build_K_bunchsize  =None,
                  ):
         
         ### extract the info from the primitive cell ###
@@ -504,7 +505,8 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
         
         # print("supercell.mesh = ", supercell.mesh)
         
-        super().__init__(supercell, with_robust_fitting, None, verbose, rela_cutoff_QRCP, aoR_cutoff, direct)
+        super().__init__(supercell, with_robust_fitting, None, verbose, rela_cutoff_QRCP, aoR_cutoff, direct, use_occ_RI_K=False, 
+                         limited_memory=limited_memory, build_K_bunchsize=build_K_bunchsize)
         
         self.kmesh = kmesh
         
@@ -1181,7 +1183,7 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             
             ### first construct J and K ### 
             
-            from pyscf.pbc.df.isdf.isdf_linear_scaling_k_jk import _contract_j_dm_k_ls, _get_k_kSym_robust_fitting_fast, _get_k_kSym
+            from pyscf.pbc.df.isdf.isdf_linear_scaling_k_jk import _contract_j_dm_k_ls, _get_k_kSym_robust_fitting_fast, _get_k_kSym, _get_k_kSym_direct
             from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0, _format_dms, _format_kpts_band, _format_jks
             
             ### preprocess dm ### 
@@ -1195,7 +1197,10 @@ class PBC_ISDF_Info_Quad_K(ISDF_LinearScaling.PBC_ISDF_Info_Quad):
             for iset in range(nset):
                 vj[iset] = _contract_j_dm_k_ls(self, dm[iset])
                 if self.with_robust_fitting:
-                    vk[iset] = _get_k_kSym_robust_fitting_fast(self, dm[iset])
+                    if self.direct:
+                        vk[iset] = _get_k_kSym_direct(self, dm[iset])
+                    else:
+                        vk[iset] = _get_k_kSym_robust_fitting_fast(self, dm[iset])
                 else:
                     vk[iset] = _get_k_kSym(self, dm[iset])
             
@@ -1262,7 +1267,7 @@ if __name__ == "__main__":
     # prim_partition = [[0,1,2,3,4,5,6,7]]
     prim_partition = [[0,1],[2,3],[4,5],[6,7]]
     
-    Ls = [1, 1, 3]
+    Ls = [2, 2, 2]
     kpts = prim_cell.make_kpts(Ls)
     Ls = np.array(Ls, dtype=np.int32)
     mesh = [Ls[0] * prim_mesh[0], Ls[1] * prim_mesh[1], Ls[2] * prim_mesh[2]]
@@ -1274,7 +1279,8 @@ if __name__ == "__main__":
                                                      partition=prim_partition, ke_cutoff=KE_CUTOFF, verbose=verbose)
     
     # pbc_isdf_info = PBC_ISDF_Info_Quad_K(cell, kmesh=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=3e-3)
-    pbc_isdf_info = PBC_ISDF_Info_Quad_K(prim_cell, kmesh=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=False, rela_cutoff_QRCP=3e-3)
+    pbc_isdf_info = PBC_ISDF_Info_Quad_K(prim_cell, kmesh=Ls, with_robust_fitting=True, aoR_cutoff=1e-8, direct=True, rela_cutoff_QRCP=3e-3,
+                                         limited_memory=True, build_K_bunchsize=32)
     pbc_isdf_info.build_IP_local(c=C, m=5, group=prim_partition, Ls=[Ls[0]*10, Ls[1]*10, Ls[2]*10])
     pbc_isdf_info.verbose = 10
     
@@ -1349,7 +1355,7 @@ if __name__ == "__main__":
     
     # exit(1)
     
-    pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
+    # pbc_isdf_info.build_auxiliary_Coulomb(debug=True)
     
     # print("grid_segment = ", pbc_isdf_info.grid_segment)
     

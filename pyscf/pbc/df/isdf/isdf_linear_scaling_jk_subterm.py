@@ -172,29 +172,29 @@ def _contract_k_dm_quadratic_subterm(mydf, dm,
     
         ngrid_now    = aoR_holder.aoR.shape[1]
         grid_loc_now = aoR_holder.global_gridID_begin
-        nao_invovled = aoR_holder.aoR.shape[0]
+        nao_involved = aoR_holder.aoR.shape[0]
         nao_compact  = aoR_holder.nCompact
         
         ao_begin_indx = 0 
-        ao_end_indx = nao_invovled
+        ao_end_indx = nao_involved
         if dm_ket_type == "compact":
             ao_end_indx   = nao_compact
         else:
             ao_begin_indx = nao_compact
         
-        nao_invovled = ao_end_indx - ao_begin_indx
+        nao_involved = ao_end_indx - ao_begin_indx
         
         #### pack the density matrix ####
         
-        if nao_invovled == nao and np.allclose(ordered_ao_ind, aoR_holder.ao_involved):
+        if nao_involved == nao and np.allclose(ordered_ao_ind, aoR_holder.ao_involved):
             Density_RgAO_packed = Density_RgAO
         else:
             # Density_RgAO_packed = Density_RgAO[:, aoR_holder.ao_involved]
-            Density_RgAO_packed = np.ndarray((naux, nao_invovled), buffer=pack_buf)
+            Density_RgAO_packed = np.ndarray((naux, nao_involved), buffer=pack_buf)
             fn_packcol1(
                 Density_RgAO_packed.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(naux),
-                ctypes.c_int(nao_invovled),
+                ctypes.c_int(nao_involved),
                 Density_RgAO.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(naux),
                 ctypes.c_int(nao),
@@ -222,19 +222,19 @@ def _contract_k_dm_quadratic_subterm(mydf, dm,
 
         # ddot
         
-        nao_invovled  = aoR_holder.aoR.shape[0]
+        nao_involved  = aoR_holder.aoR.shape[0]
         ao_begin_indx = 0
-        ao_end_indx   = nao_invovled
+        ao_end_indx   = nao_involved
         if K_ket_type == "compact":
             ao_end_indx = nao_compact
         else:
             ao_begin_indx = nao_compact
-        nao_invovled = ao_end_indx - ao_begin_indx 
+        nao_involved = ao_end_indx - ao_begin_indx 
         
-        ddot_res = np.ndarray((naux, nao_invovled), buffer=ddot_buf2)
+        ddot_res = np.ndarray((naux, nao_involved), buffer=ddot_buf2)
         lib.ddot(CoulombMat_tmp, aoR_holder.aoR[ao_begin_indx:ao_end_indx, :].T, c=ddot_res)
         
-        if nao_invovled == nao and np.allclose(ordered_ao_ind, aoR_holder.ao_involved):
+        if nao_involved == nao and np.allclose(ordered_ao_ind, aoR_holder.ao_involved):
             K1 += ddot_res
         else:
             # K1[: , aoR_holder.ao_involved] += ddot_res
@@ -258,22 +258,22 @@ def _contract_k_dm_quadratic_subterm(mydf, dm,
     
         grid_loc_now = aoR_holder.global_gridID_begin
         ngrid_now = aoR_holder.aoR.shape[1]
-        nao_invovled = aoR_holder.aoR.shape[0]
+        nao_involved = aoR_holder.aoR.shape[0]
         
         ao_begin_indx = 0
-        ao_end_indx = nao_invovled
+        ao_end_indx = nao_involved
         if K_bra_type == "compact":
             ao_end_indx = nao_compact
         else:
             ao_begin_indx = nao_compact
-        nao_invovled = ao_end_indx - ao_begin_indx
+        nao_involved = ao_end_indx - ao_begin_indx
         
         K_tmp = K1[grid_loc_now:grid_loc_now+ngrid_now, :]
         
-        ddot_res = np.ndarray((nao_invovled, nao), buffer=ddot_res_buf)
+        ddot_res = np.ndarray((nao_involved, nao), buffer=ddot_res_buf)
         lib.ddot(aoR_holder.aoR[ao_begin_indx:ao_end_indx, :], K_tmp, c=ddot_res)
         
-        if nao_invovled == nao and np.allclose(ordered_ao_ind, aoR_holder.ao_involved):
+        if nao_involved == nao and np.allclose(ordered_ao_ind, aoR_holder.ao_involved):
             K += ddot_res
         else:
             # K[aoR_holder.ao_involved, :] += ddot_res 
