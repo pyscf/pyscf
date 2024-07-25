@@ -1602,7 +1602,7 @@ if __name__ == '__main__':
     from pyscf.pbc.df.isdf.isdf_tools_cell import build_supercell, build_supercell_with_partition
     import pyscf.pbc.gto as pbcgto
     
-    verbose = 4
+    verbose = 10
         
     cell   = pbcgto.Cell()
     boxlen = 3.5668
