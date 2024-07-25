@@ -1594,6 +1594,15 @@ class PBC_ISDF_Info_Quad(ISDF.PBC_ISDF_Info):
             self.W2    = LS_THC(self, X) / (self.ngrids/self.cell.vol)
             self.aoRg2 = X
 
+    ### check aoR value ###
+    
+    def check_aoR(self):
+        for aoR_holder in self.aoR:
+            max_abs_index = np.unravel_index(np.argmax(np.abs(aoR_holder.aoR)), aoR_holder.aoR.shape)
+            value = aoR_holder.aoR[max_abs_index[0]][max_abs_index[1]]
+            ao_indx = aoR_holder.ao_involved[max_abs_index[0]]
+            print("max_abs_value = ", value, " with indx = ", ao_indx, max_abs_index[1]+aoR_holder.global_gridID_begin)
+            
 
 if __name__ == '__main__':
     
@@ -1655,6 +1664,9 @@ if __name__ == '__main__':
     pbc_isdf_info.build_auxiliary_Coulomb()    
     t2 = (lib.logger.process_clock(), lib.logger.perf_counter())
     _benchmark_time(t1, t2, "build isdf", pbc_isdf_info)
+    
+    # pbc_isdf_info.check_aoR()
+    # exit(1)
     
     from pyscf.pbc import scf
 
