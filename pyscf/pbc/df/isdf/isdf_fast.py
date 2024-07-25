@@ -910,8 +910,11 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 
                 if is_single_kpt:
                     #### xxx use the original version, Xing's code is not the same as FFTDF's result xxx ####
-                    # self.PP = super().get_pp(kpts=np.zeros(3))
+                    if hasattr(self, "_use_super_pp"):
+                        print("super pp is used!")
+                        self.PP = super().get_pp(kpts=np.zeros(3))
                     #### use the calculated one by default ####
+                    print("single kpt case!")
                     return self.PP
                 
                 #### the following is used to test KRHF #### 
