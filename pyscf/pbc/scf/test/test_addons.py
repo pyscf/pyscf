@@ -312,6 +312,11 @@ class KnownValues(unittest.TestCase):
         mf1 = pscf.ROHF(cell)
         self.assertTrue(isinstance(pscf.addons.convert_to_khf(mf1), pscf.krohf.KROHF))
 
+        from pyscf.pbc import dft
+        mf1 = dft.RKS(cell)
+        self.assertTrue(isinstance(mf1._numint, dft.numint.NumInt))
+        self.assertTrue(isinstance(pscf.addons.convert_to_kscf(mf1)._numint, dft.numint.KNumInt))
+
     def test_canonical_occ(self):
         kpts = numpy.random.rand(2,3)
         mf1 = pscf.kuhf.KUHF(cell, kpts)
