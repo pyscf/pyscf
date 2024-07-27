@@ -232,6 +232,24 @@ def init_guess_by_mod_huckel(mol):
     dm = hf.init_guess_by_mod_huckel(mol)
     return _proj_dmll(mol, dm, mol)
 
+def init_guess_by_sap(mol, mf):
+    '''Generate initial guess density matrix from a superposition of
+    atomic potentials (SAP), doi:10.1021/acs.jctc.8b01089.
+    This is the Gaussian fit implementation, see doi:10.1063/5.0004046.
+
+    Args:
+        mol : MoleBase object
+            the molecule object for which the initial guess is evaluated
+        sap_basis : dict
+            SAP basis in internal format (python dictionary)
+
+    Returns:
+        dm0 : ndarray
+            SAP initial guess density matrix
+    '''
+    dm = hf.SCF.init_guess_by_sap(mf, mol)
+    return _proj_dmll(mol, dm, mol)
+
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for 4C-DHF initial guess.
 
@@ -290,7 +308,7 @@ def get_init_guess(mol, key='minao', **kwargs):
 
     Kwargs:
         key : str
-            One of 'minao', 'atom', 'huckel', 'mod_huckel', 'hcore', '1e', 'chkfile'.
+            One of 'minao', 'atom', 'huckel', 'mod_huckel', 'hcore', '1e', 'sap', 'chkfile'.
     '''
     return UHF(mol).get_init_guess(mol, key, **kwargs)
 
@@ -509,6 +527,11 @@ class DHF(hf.SCF):
         logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
 employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return init_guess_by_mod_huckel(mol)
+
+    @lib.with_doc(hf.SCF.init_guess_by_sap.__doc__)
+    def init_guess_by_sap(self, mol=None, **kwargs):
+        if mol is None: mol = self.mol
+        return init_guess_by_sap(mol, self)
 
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile

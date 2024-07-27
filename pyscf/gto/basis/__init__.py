@@ -413,6 +413,11 @@ PP_ALIAS = {
     'gthhfrev'   : 'gth-hf-rev.dat' ,
 }
 
+SAP_ALIAS = {
+    'sapgraspsmall'   : 'sap_grasp_small.dat',
+    'sapgrasplarge'   : 'sap_grasp_large.dat',
+}
+
 def _is_pople_basis(basis):
     return (basis.startswith('631') or
             basis.startswith('321') or
@@ -603,6 +608,8 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         basis_dir = _GTH_BASIS_DIR
     elif _is_pople_basis(name):
         basmod = _parse_pople_basis(name, symb)
+    elif name in SAP_ALIAS:
+        basmod = SAP_ALIAS[name]
     else:
         try:
             return parse_nwchem.parse(filename_or_basisname, symb,
