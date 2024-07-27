@@ -248,7 +248,8 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
         else:
             cumsum = numpy.cumsum(n/numpy.sum(n))
             logger.debug(mp, 'Sum(pct_occ): %s', cumsum)
-            nvir_keep = numpy.count_nonzero(cumsum<pct_occ)
+            nvir_keep = numpy.count_nonzero(
+                [c <= pct_occ or numpy.isclose(c, pct_occ) for c in cumsum])
     else:
         nvir_keep = min(nvir, nvir_act)
 
