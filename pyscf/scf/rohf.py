@@ -410,7 +410,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
-    
+
     def init_guess_by_sap(self, mol=None, **kwargs):
         from pyscf.gto.basis import load
         if mol is None: mol = self.mol
