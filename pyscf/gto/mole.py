@@ -4054,7 +4054,7 @@ def fakemol_for_charges(coords, expnt=1e16):
         # approximate point charge with gaussian distribution exp(-1e16*r^2)
         fakebas[:,PTR_EXP] = ptr
         fakebas[:,PTR_COEFF] = ptr+1
-        fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
+        fakeenv.append([expnt, 1 / (2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
         ptr += 2
     else:
         assert expnt.size == nbas
@@ -4063,6 +4063,46 @@ def fakemol_for_charges(coords, expnt=1e16):
         fakebas[:,PTR_COEFF] = ptr + numpy.arange(nbas) * 2 + 1
         coeff = 1 / (2 * numpy.sqrt(numpy.pi) * gaussian_int(2, expnt))
         fakeenv.append(numpy.vstack((expnt, coeff)).T.ravel())
+
+    fakemol = Mole()
+    fakemol._atm = fakeatm
+    fakemol._bas = fakebas
+    fakemol._env = numpy.hstack(fakeenv)
+    fakemol._built = True
+    return fakemol
+
+def fakemol_for_cgtf_charge(coord, expnt=1e16, contr_coeff=1):
+    '''Constructs a "fake" Mole object that has a Gaussian charge
+    distribution at the specified coordinate (coord).  The charge
+    can be given as a linear combination of Gaussians with
+    exponents expnt and contraction coefficients contr_coeff.
+    '''
+    assert coord.shape[0] == 1
+    expnt = numpy.asarray(expnt).ravel()
+    contr_coeff = numpy.asarray(contr_coeff).ravel()
+
+    fakeatm = numpy.zeros((1,ATM_SLOTS), dtype=numpy.int32)
+    fakebas = numpy.zeros((1,BAS_SLOTS), dtype=numpy.int32)
+    fakeenv = [0] * PTR_ENV_START
+    ptr = PTR_ENV_START
+    fakeatm[:,PTR_COORD] = numpy.arange(ptr, ptr+3, 3)
+    fakeenv.append(coord.ravel())
+    ptr += 3
+    fakebas[:,ATOM_OF] = 0#numpy.arange(nbas)
+    fakebas[:,NPRIM_OF] = contr_coeff.size
+    fakebas[:,NCTR_OF] = 1
+    if expnt.size == 1:
+        expnt = expnt[0]
+        fakebas[:,PTR_EXP] = ptr
+        fakebas[:,PTR_COEFF] = ptr+1
+        fakeenv.append([expnt, 1 / (2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
+        ptr += 2
+    else:
+        assert expnt.size == contr_coeff.size
+        fakebas[:,PTR_EXP] = ptr
+        fakebas[:,PTR_COEFF] = ptr + contr_coeff.size
+        coeff = contr_coeff / (2 * numpy.sqrt(numpy.pi) * gaussian_int(2, expnt))
+        fakeenv.append(numpy.vstack((expnt, coeff)).ravel())
 
     fakemol = Mole()
     fakemol._atm = fakeatm

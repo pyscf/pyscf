@@ -256,6 +256,22 @@ class KnownValues(unittest.TestCase):
         dm = scf.ROHF(mol).init_guess_by_mod_huckel()
         self.assertAlmostEqual(lib.fp(dm[0]), 3.233072986208057/2, 5)
 
+    def test_init_guess_sap(self):
+        mol = gto.M(
+            verbose = 7,
+            output = '/dev/null',
+            atom = '''
+        O     0    0        0
+        H1    0    -0.757   0.587
+        H2    0    0.757    0.587''',
+            basis = 'ccpvdz',
+        )
+        dm = scf.hf.RHF(mol).get_init_guess(mol, key='sap')
+        self.assertAlmostEqual(lib.fp(dm), 4.2267871571567195, 5)
+
+        dm = scf.ROHF(mol).get_init_guess(mol, key='sap')
+        self.assertAlmostEqual(lib.fp(dm[0]), 4.2267871571567195/2, 7)
+
     def test_1e(self):
         mf = scf.rohf.HF1e(mol)
         self.assertAlmostEqual(mf.scf(), -23.867818585778764, 9)
