@@ -1145,7 +1145,7 @@ class H5FileWrap(h5py.File):
         causes outcore DF to hang on an NFS filesystem.
         '''
         try:
-            if super().id:
+            if super().id and super().id.valid:
                 super().flush()
             super().close()
         except AttributeError:  # close not defined in old h5py
