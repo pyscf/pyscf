@@ -283,9 +283,6 @@ class RADC(lib.StreamObject):
         if (self.method_type == "ea"):
             e_exc, v_exc, spec_fac, x, OPDM, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
-        elif (self.method_type == "ee"):
-            e_exc, v_exc, spec_fac, x, adc_es = self.ee_adc(nroots=nroots, guess=guess, eris=eris)
-
         elif(self.method_type == "ip"):
             if not isinstance(self.ncvs, type(None)) and self.ncvs > 0:
                 e_exc, v_exc, spec_fac, x, adc_es = self.ip_cvs_adc(
