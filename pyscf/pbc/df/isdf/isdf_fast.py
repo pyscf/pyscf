@@ -37,11 +37,11 @@ libpbc = lib.load_library('libpbc')
 
 ############ isdf utils ############
 
-from pyscf.pbc.df.isdf.isdf_jk import _benchmark_time
-import pyscf.pbc.df.isdf.isdf_ao2mo as isdf_ao2mo
-import pyscf.pbc.df.isdf.isdf_jk as isdf_jk
-from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
-from pyscf.pbc.df.isdf.isdf_tools_kSampling import _kmesh_to_Kpoints
+from isdf_jk import _benchmark_time
+import isdf_ao2mo as isdf_ao2mo
+import isdf_jk as isdf_jk
+from isdf_eval_gto import ISDF_eval_gto
+from isdf_tools_kSampling import _kmesh_to_Kpoints
 
 ############ global variables ############
 
@@ -110,7 +110,7 @@ def _select_IP_direct(mydf, c:int, m:int, first_natm=None, global_IP_selection=T
     '''
     
     if use_mpi:
-        from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, comm_size, comm, allgather, bcast
+        from isdf_tools_mpi import rank, comm_size, comm, allgather, bcast
         if rank == 0:
             logger.debug4(mydf, "_select_IP_direct: num_threads = %d", lib.num_threads())
     else:
@@ -387,7 +387,7 @@ def build_aux_basis(mydf, debug=True, use_mpi=False):
     '''
     
     if use_mpi:
-        from pyscf.pbc.df.isdf.isdf_tools_mpi import rank, bcast, comm
+        from isdf_tools_mpi import rank, bcast, comm
     
     t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     
@@ -584,7 +584,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
 
             self.partition = np.zeros(coords_now.shape[0], dtype=np.int32)
 
-            from pyscf.pbc.df.isdf.isdf_eval_gto import ISDF_eval_gto
+            from isdf_eval_gto import ISDF_eval_gto
 
             if hasattr(self, "IO_buf"):
                 logger.debug4(self, "PBC_ISDF_Info: IO_buf is already allocated")
@@ -959,7 +959,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
                 )
                 del buf_fft 
                 
-                from  pyscf.pbc.df.isdf.isdf_tools_densitymatrix import pack_JK_in_FFT_space
+                from  isdf_tools_densitymatrix import pack_JK_in_FFT_space
                 
                 PP_complex = PP_complex.conj().copy()
                 self.PP = pack_JK_in_FFT_space(PP_complex, kmesh, nao_prim)
@@ -968,7 +968,7 @@ class PBC_ISDF_Info(df.fft.FFTDF):
         
     def LS_THC_recompression(self, X:np.ndarray, force_LS_THC=True):
         
-        from pyscf.pbc.df.isdf.isdf_ao2mo import LS_THC 
+        from isdf_ao2mo import LS_THC 
         
         if force_LS_THC:
             self.with_robust_fitting = False
