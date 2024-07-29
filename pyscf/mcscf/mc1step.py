@@ -853,6 +853,9 @@ To enable the solvent model for CASSCF, the following code needs to be called
             self.mo_coeff = mo_coeff
         if callback is None: callback = self.callback
 
+        if ci0 is None:
+            ci0 = self.ci
+
         self.check_sanity()
         self.dump_flags()
 
