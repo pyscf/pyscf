@@ -33,6 +33,13 @@ def transform_integrals_incore(myadc):
     vir_a = myadc.mo_coeff[0][:,myadc._nocc[0]:]
     vir_b = myadc.mo_coeff[1][:,myadc._nocc[1]:]
 
+
+    alpha = myadc.mo_coeff[0]
+    beta = myadc.mo_coeff[1]
+
+
+
+
     nocc_a = occ_a.shape[1]
     nocc_b = occ_b.shape[1]
     nvir_a = vir_a.shape[1]
@@ -41,31 +48,47 @@ def transform_integrals_incore(myadc):
     ind_VV_g = np.tril_indices(nvir_b, k=-1)
 
     eris = lambda: None
-
+    
     eris.oooo = ao2mo.general(myadc._scf._eri, (occ_a, occ_a, occ_a, occ_a), compact=False).reshape(nocc_a, nocc_a, nocc_a, nocc_a).copy()  # noqa: E501
     eris.ovoo = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, occ_a, occ_a), compact=False).reshape(nocc_a, nvir_a, nocc_a, nocc_a).copy()  # noqa: E501
     eris.ovvo = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, vir_a, occ_a), compact=False).reshape(nocc_a, nvir_a, nvir_a, nocc_a).copy()  # noqa: E501
     eris.oovv = ao2mo.general(myadc._scf._eri, (occ_a, occ_a, vir_a, vir_a), compact=False).reshape(nocc_a, nocc_a, nvir_a, nvir_a).copy()  # noqa: E501
     eris.ovvv = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, vir_a, vir_a), compact=True).reshape(nocc_a, nvir_a, -1).copy()  # noqa: E501
-
+    
     eris.OOOO = ao2mo.general(myadc._scf._eri, (occ_b, occ_b, occ_b, occ_b), compact=False).reshape(nocc_b, nocc_b, nocc_b, nocc_b).copy()  # noqa: E501
     eris.OVOO = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, occ_b, occ_b), compact=False).reshape(nocc_b, nvir_b, nocc_b, nocc_b).copy()  # noqa: E501
     eris.OOVV = ao2mo.general(myadc._scf._eri, (occ_b, occ_b, vir_b, vir_b), compact=False).reshape(nocc_b, nocc_b, nvir_b, nvir_b).copy()  # noqa: E501
     eris.OVVO = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_b, occ_b), compact=False).reshape(nocc_b, nvir_b, nvir_b, nocc_b).copy()  # noqa: E501
     eris.OVVV = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_b, vir_b), compact=True).reshape(nocc_b, nvir_b, -1).copy()  # noqa: E501
-
+    
     eris.ooOO = ao2mo.general(myadc._scf._eri, (occ_a, occ_a, occ_b, occ_b), compact=False).reshape(nocc_a, nocc_a, nocc_b, nocc_b).copy()  # noqa: E501
     eris.ovOO = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, occ_b, occ_b), compact=False).reshape(nocc_a, nvir_a, nocc_b, nocc_b).copy()  # noqa: E501
     eris.ooVV = ao2mo.general(myadc._scf._eri, (occ_a, occ_a, vir_b, vir_b), compact=False).reshape(nocc_a, nocc_a, nvir_b, nvir_b).copy()  # noqa: E501
     eris.ovVO = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, vir_b, occ_b), compact=False).reshape(nocc_a, nvir_a, nvir_b, nocc_b).copy()  # noqa: E501
     eris.ovVV = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, vir_b, vir_b), compact=True).reshape(nocc_a, nvir_a, -1).copy()  # noqa: E501
-
+    
     eris.OVoo = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, occ_a, occ_a), compact=False).reshape(nocc_b, nvir_b, nocc_a, nocc_a).copy()  # noqa: E501
     eris.OOvv = ao2mo.general(myadc._scf._eri, (occ_b, occ_b, vir_a, vir_a), compact=False).reshape(nocc_b, nocc_b, nvir_a, nvir_a).copy()  # noqa: E501
     eris.OVvo = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, occ_a), compact=False).reshape(nocc_b, nvir_b, nvir_a, nocc_a).copy()  # noqa: E501
     eris.OVvv = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, vir_a), compact=True).reshape(nocc_b, nvir_b, -1).copy()  # noqa: E501
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
+    dip_ints = -myadc.mol.intor('int1e_r',comp=3)
+    myadc.dm_a = np.zeros_like((dip_ints))
+    myadc.dm_b = np.zeros_like((dip_ints))
+
+    charges = myadc.mol.atom_charges()
+    coords  = myadc.mol.atom_coords()
+    myadc.nucl_dip = lib.einsum('i,ix->x', charges, coords)
+    
+    for i in range(dip_ints.shape[0]):
+        dip = dip_ints[i,:,:]
+        myadc.dm_a[i,:,:] = np.dot(alpha.T,np.dot(dip,alpha))
+        myadc.dm_b[i,:,:] = np.dot(beta.T,np.dot(dip,beta))
+    
+
+
+    if (myadc.method == "adc(2)-x" ) or (myadc.method == "adc(2)") or (myadc.method == "adc(3)"):
+#and myadc.approx_trans_moments == False
 
         eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a),
                                     compact=False).reshape(nvir_a, nvir_a, nvir_a, nvir_a)
@@ -109,6 +132,23 @@ def transform_integrals_outcore(myadc):
     nocc_b = occ_b.shape[1]
     nvir_a = vir_a.shape[1]
     nvir_b = vir_b.shape[1]
+
+    alpha = myadc.mo_coeff[0]
+    beta = myadc.mo_coeff[1]
+
+    dip_ints = -myadc.mol.intor('int1e_r',comp=3)
+    myadc.dm_a = np.zeros_like((dip_ints))
+    myadc.dm_b = np.zeros_like((dip_ints))
+    
+    charges = myadc.mol.atom_charges()
+    coords  = myadc.mol.atom_coords()
+    myadc.nucl_dip = lib.einsum('i,ix->x', charges, coords)
+
+    for i in range(dip_ints.shape[0]):
+        dip = dip_ints[i,:,:]
+        myadc.dm_a[i,:,:] = np.dot(alpha.T,np.dot(dip,alpha))
+        myadc.dm_b[i,:,:] = np.dot(beta.T,np.dot(dip,beta))
+
 
     nvpair_a = nvir_a * (nvir_a+1) // 2
     nvpair_b = nvir_b * (nvir_b+1) // 2
@@ -199,14 +239,14 @@ def transform_integrals_outcore(myadc):
             eris.OOvv[i] = buf[:nocc_b,nocc_a:,nocc_a:]
             eris.OVvo[i] = buf[nocc_b:,nocc_a:,:nocc_a]
             eris.OVvv[i] = lib.pack_tril(buf[nocc_b:,nocc_a:,nocc_a:])
-        del (tmpf['ba'])
+        del(tmpf['ba'])
 
     buf = None
     cput1 = logger.timer_debug1(myadc, 'transforming oopq, ovpq', *cput1)
 
     ############### forming eris_vvvv ########################################
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments == False) or (myadc.method == "adc(2)") or (myadc.method == "adc(3)"):
 
         cput2 = logger.process_clock(), logger.perf_counter()
 
@@ -329,6 +369,22 @@ def transform_integrals_df(myadc):
     nocc_b = occ_b.shape[1]
     nvir_a = vir_a.shape[1]
     nvir_b = vir_b.shape[1]
+
+    alpha = myadc.mo_coeff[0]
+    beta = myadc.mo_coeff[1]
+
+    dip_ints = -myadc.mol.intor('int1e_r',comp=3)
+    myadc.dm_a = np.zeros_like((dip_ints))
+    myadc.dm_b = np.zeros_like((dip_ints))
+    
+    charges = myadc.mol.atom_charges()
+    coords  = myadc.mol.atom_coords()
+    myadc.nucl_dip = lib.einsum('i,ix->x', charges, coords)
+
+    for i in range(dip_ints.shape[0]):
+        dip = dip_ints[i,:,:]
+        myadc.dm_a[i,:,:] = np.dot(alpha.T,np.dot(dip,alpha))
+        myadc.dm_b[i,:,:] = np.dot(beta.T,np.dot(dip,beta))
 
     eris = lambda:None
     eris.vvvv = None
@@ -465,16 +521,34 @@ def transform_integrals_df(myadc):
     eris.Lvv = eris.Lvv.reshape(naux,nvir_a,nvir_a)
     eris.LVV = eris.LVV.reshape(naux,nvir_b,nvir_b)
 
-    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
-        ncvs = myadc.ncvs
-        eris.Lce = eris.Lce.reshape(naux,ncvs,nvir_a)
-        eris.Lee = eris.Lvv
-        eris.LCE = eris.LCE.reshape(naux,ncvs,nvir_b)
-        eris.LEE = eris.LVV
-
     log.timer('DF-ADC integral transformation', *cput0)
 
     return eris
+
+def unpack_eri_1(eri, norb):
+
+    n_oo = norb * (norb + 1) // 2
+    ind_oo = np.tril_indices(norb)
+
+    eri_ = None
+
+    if len(eri.shape) == 3:
+        if (eri.shape[0] == n_oo):
+            eri_ = np.zeros((norb, norb, eri.shape[1], eri.shape[2]))
+            eri_[ind_oo[0], ind_oo[1]] = eri
+            eri_[ind_oo[1], ind_oo[0]] = eri
+
+        elif (eri.shape[2] == n_oo):
+            eri_ = np.zeros((eri.shape[0], eri.shape[1], norb, norb))
+            eri_[:, :, ind_oo[0], ind_oo[1]] = eri
+            eri_[:, :, ind_oo[1], ind_oo[0]] = eri
+        else:
+            raise TypeError("ERI dimensions don't match")
+
+    else:
+        raise RuntimeError("ERI does not have a correct dimension")
+
+    return eri_
 
 def calculate_chunk_size(myadc):
 

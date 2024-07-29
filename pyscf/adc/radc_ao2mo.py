@@ -43,7 +43,7 @@ def transform_integrals_incore(myadc):
     eris.ovvo = ao2mo.general(myadc._scf._eri, (occ, vir, vir, occ), compact=False).reshape(nocc, nvir, nvir, nocc).copy()  # noqa: E501
     eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()  # noqa: E501
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(2)") or (myadc.method == "adc(3)"):
         eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir),
                                   compact=False).reshape(nvir, nvir, nvir, nvir)
         eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3))
@@ -149,7 +149,7 @@ def transform_integrals_outcore(myadc):
 
     ############### forming eris_vvvv ########################################
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)") or (myadc.method == "adc(2)"):
         eris.vvvv = []
 
         cput3 = logger.process_clock(), logger.perf_counter()
@@ -262,6 +262,13 @@ def calculate_chunk_size(myadc):
         chnk_size = 1
 
     return chnk_size
+
+
+def write_dataset(data):
+    _, fname = tempfile.mkstemp()
+    f = h5py.File(fname, mode='w')
+    return f.create_dataset('data', data=data)
+
 
 
 def unpack_eri_1(eri, norb):

@@ -82,7 +82,7 @@ def compute_amplitudes(myadc, eris):
 
     t1_2 = None
 
-    if myadc.approx_trans_moments is False or myadc.method == "adc(3)":
+    if myadc.approx_trans_moments is False or myadc.method == "adc(3)" or myadc.method == "adc(2)" or myadc.method == "adc(2)-x":
         # Compute second-order singles t1 (tij)
         t1_2 = np.zeros((nocc,nvir))
 
@@ -121,7 +121,7 @@ def compute_amplitudes(myadc, eris):
     t1_3 = None
     t2_1_vvvv = None
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)") or (myadc.method == "adc(2)"):
 
         # Compute second-order doubles t2 (tijab)
 
