@@ -341,6 +341,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if callback is None:
         callback = casscf.callback
 
+    if ci0 is None:
+        ci0 = casscf.ci
+
     mo = mo_coeff
     nmo = mo_coeff.shape[1]
     ncore = casscf.ncore
