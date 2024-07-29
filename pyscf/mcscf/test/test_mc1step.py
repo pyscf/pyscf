@@ -25,7 +25,6 @@ from pyscf import fci
 from pyscf import mcscf
 
 def setUpModule():
-    global mols
     global mol, molsym, m, msym, mc0
     b = 1.4
     mol = gto.M(
