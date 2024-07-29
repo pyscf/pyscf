@@ -31,6 +31,7 @@ import functools
 import itertools
 import inspect
 import collections
+import weakref
 import ctypes
 import numpy
 import scipy
@@ -1144,7 +1145,7 @@ class H5FileWrap(h5py.File):
         causes outcore DF to hang on an NFS filesystem.
         '''
         try:
-            if super().id:
+            if super().id and super().id.valid:
                 super().flush()
             super().close()
         except AttributeError:  # close not defined in old h5py
@@ -1181,6 +1182,14 @@ class H5TmpFile(H5FileWrap):
         if filename is None:
             filename = H5TmpFile._gen_unique_name(dir, pre=prefix, suf=suffix)
             self.delete_on_close = True
+
+        def _delete_with_check(fname, should_delete):
+            if should_delete and os.path.exists(fname):
+                os.remove(fname)
+
+        self._finalizer = weakref.finalize(self, _delete_with_check,
+                                           filename, self.delete_on_close)
+
         super().__init__(filename, mode, *args, **kwargs)
 
     # Python 3 stdlib does not have a way to just generate
@@ -1201,11 +1210,9 @@ class H5TmpFile(H5FileWrap):
         raise FileExistsError("No usable temporary file name found")
 
     def close(self):
-        filename = self.filename
         self._finished()
-        if self.delete_on_close:
-            if os.path.exists(filename):
-                os.remove(filename)
+        self._finalizer()
+
     def __exit__(self, type, value, traceback):
         self.close()
 
