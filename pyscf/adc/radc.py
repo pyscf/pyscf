@@ -173,7 +173,7 @@ class RADC(lib.StreamObject):
     compute_amplitudes = radc_amplitudes.compute_amplitudes
     compute_energy = radc_amplitudes.compute_energy
     transform_integrals = radc_ao2mo.transform_integrals_incore
-    make_ref_rdm1 = make_ref_rdm1
+    #make_ref_rdm1 = make_ref_rdm1
 
     def dump_flags(self, verbose=None):
         logger.info(self, '')

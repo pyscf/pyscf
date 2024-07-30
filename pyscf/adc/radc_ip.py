@@ -779,7 +779,6 @@ def compute_dyson_mo(myadc):
     return dyson_mo
 
 def make_rdm1(adc):
-
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
 
@@ -803,7 +802,7 @@ def make_rdm1_eigenvectors(adc, L, R):
     t2_ce = adc.t1[0][:]
     t1_ccee = adc.t2[0][:]
 
-    einsum = lib.einsum
+    einsum = np.einsum
 
     nocc = adc._nocc
     nvir = adc._nvir
@@ -841,14 +840,14 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1[:nocc,:nocc] += einsum('eti,ejt->ij',L2,R2,optimize=True)
     rdm1[:nocc,:nocc] -= 2*einsum('eit,ejt->ij',L2,R2,optimize=True)
 
-    rdm1[:nocc,:nocc] -= 2*einsum('g,g,hjcd,hicd->ij', L1,R1,t2_ce,t2_ce,optimize=True)
-    rdm1[:nocc,:nocc] += 2*einsum('g,g,jhcd,hicd->ij', L1,R1,t2_ce,t2_ce,optimize=True)
-    rdm1[:nocc,:nocc] -= 2*einsum('g,g,jhcd,ihcd->ij', L1,R1,t2_ce,t2_ce,optimize=True)
-    rdm1[:nocc,:nocc] += 2*einsum('g,h,jgcd,ihcd->ij', L1,R1,t2_ce,t2_ce,optimize=True)
-    rdm1[:nocc,:nocc] -= einsum('g,h,gjcd,ihcd->ij', L1,R1,t2_ce,t2_ce,optimize=True)
-    temp_ij = einsum('g,j,ghcd,ihcd->ij',L1,R1,t2_ce,t2_ce,optimize=True)
-    temp_ij -= 0.25*einsum('g,j,hgcd,ihcd->ij',L1,R1,t2_ce,t2_ce,optimize=True)
-    temp_ij -= 0.25*einsum('g,j,ghcd,hicd->ij',L1,R1,t2_ce,t2_ce,optimize=True)
+    rdm1[:nocc,:nocc] -= 2*einsum('g,g,hjcd,hicd->ij', L1,R1,t1_ccee,t1_ccee,optimize=True)
+    rdm1[:nocc,:nocc] += 2*einsum('g,g,jhcd,hicd->ij', L1,R1,t1_ccee,t1_ccee,optimize=True)
+    rdm1[:nocc,:nocc] -= 2*einsum('g,g,jhcd,ihcd->ij', L1,R1,t1_ccee,t1_ccee,optimize=True)
+    rdm1[:nocc,:nocc] += 2*einsum('g,h,jgcd,ihcd->ij', L1,R1,t1_ccee,t1_ccee,optimize=True)
+    rdm1[:nocc,:nocc] -= einsum('g,h,gjcd,ihcd->ij', L1,R1,t1_ccee,t1_ccee,optimize=True)
+    temp_ij = einsum('g,j,ghcd,ihcd->ij',L1,R1,t1_ccee,t1_ccee,optimize=True)
+    temp_ij -= 0.25*einsum('g,j,hgcd,ihcd->ij',L1,R1,t1_ccee,t1_ccee,optimize=True)
+    temp_ij -= 0.25*einsum('g,j,ghcd,hicd->ij',L1,R1,t1_ccee,t1_ccee,optimize=True)
     rdm1[:nocc,:nocc] += temp_ij
     rdm1[:nocc,:nocc] += temp_ij.T
 
@@ -858,31 +857,31 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1[nocc:,nocc:] -= 0.5*einsum('atu,but->ab', L2,R2,optimize=True)
     rdm1[nocc:,nocc:] += einsum('atu,btu->ab', L2,R2,optimize=True)
 
-    rdm1[nocc:,nocc:] += 4*einsum('g,g,hmbc,hmac->ab', L1,R1,t2_ce,t2_ce,optimize=True)
-    rdm1[nocc:,nocc:] -= einsum('g,g,mhbc,hmac->ab', L1,R1,t2_ce,t2_ce,optimize=True)
-    rdm1[nocc:,nocc:] -= einsum('g,g,hmbc,mhac->ab', L1,R1,t2_ce,t2_ce,optimize=True)
+    rdm1[nocc:,nocc:] += 4*einsum('g,g,hmbc,hmac->ab', L1,R1,t1_ccee,t1_ccee,optimize=True)
+    rdm1[nocc:,nocc:] -= einsum('g,g,mhbc,hmac->ab', L1,R1,t1_ccee,t1_ccee,optimize=True)
+    rdm1[nocc:,nocc:] -= einsum('g,g,hmbc,mhac->ab', L1,R1,t1_ccee,t1_ccee,optimize=True)
 
-    rdm1[nocc:,nocc:] -= 2 * einsum('g,h,hmbc,gmac->ab', L1,R1,t2_ce,t2_ce,optimize=True)
-    rdm1[nocc:,nocc:] -= 2 * einsum('g,h,mhbc,mgac->ab', L1,R1,t2_ce,t2_ce,optimize=True)
+    rdm1[nocc:,nocc:] -= 2 * einsum('g,h,hmbc,gmac->ab', L1,R1,t1_ccee,t1_ccee,optimize=True)
+    rdm1[nocc:,nocc:] -= 2 * einsum('g,h,mhbc,mgac->ab', L1,R1,t1_ccee,t1_ccee,optimize=True)
 
-    rdm1[nocc:,nocc:] += einsum('g,h,mhbc,gmac->ab', L1,R1,t2_ce,t2_ce,optimize=True)
-    rdm1[nocc:,nocc:] += einsum('g,h,hmbc,mgac->ab', L1,R1,t2_ce,t2_ce,optimize=True)
+    rdm1[nocc:,nocc:] += einsum('g,h,mhbc,gmac->ab', L1,R1,t1_ccee,t1_ccee,optimize=True)
+    rdm1[nocc:,nocc:] += einsum('g,h,hmbc,mgac->ab', L1,R1,t1_ccee,t1_ccee,optimize=True)
 
 
 ############ block- ia
     rdm1[:nocc,nocc:] = -einsum('n,ani->ia', R1,L2,optimize=True)
     rdm1[:nocc,nocc:] += 2*einsum('n,ain->ia', R1,L2,optimize=True)
-    rdm1[:nocc,nocc:] -= 2*einsum('g,cgh,ihac->ia', L1,R2,t2_ce,optimize=True)
-    rdm1[:nocc,nocc:] += 4*einsum('g,chg,ihac->ia', L1,R2,t2_ce,optimize=True)
-    rdm1[:nocc,nocc:] += einsum('g,cgh,hiac->ia', L1,R2,t2_ce,optimize=True)
-    rdm1[:nocc,nocc:] -= 2*einsum('g,chg,hiac->ia', L1,R2,t2_ce,optimize=True)
+    rdm1[:nocc,nocc:] -= 2*einsum('g,cgh,ihac->ia', L1,R2,t1_ccee,optimize=True)
+    rdm1[:nocc,nocc:] += 4*einsum('g,chg,ihac->ia', L1,R2,t1_ccee,optimize=True)
+    rdm1[:nocc,nocc:] += einsum('g,cgh,hiac->ia', L1,R2,t1_ccee,optimize=True)
+    rdm1[:nocc,nocc:] -= 2*einsum('g,chg,hiac->ia', L1,R2,t1_ccee,optimize=True)
 
-    rdm1[:nocc,nocc:] += einsum('i,cgh,ghac->ia', L1,R2,t2_ce,optimize=True)
-    rdm1[:nocc,nocc:] -= 2*einsum('i,chg,ghac->ia', L1,R2,t2_ce,optimize=True)
+    rdm1[:nocc,nocc:] += einsum('i,cgh,ghac->ia', L1,R2,t1_ccee,optimize=True)
+    rdm1[:nocc,nocc:] -= 2*einsum('i,chg,ghac->ia', L1,R2,t1_ccee,optimize=True)
 
-    rdm1[:nocc,nocc:] += einsum('g,g,ia->ia', L1,R1,t1_ccee,optimize=True)
-    rdm1[:nocc,nocc:] += einsum('g,g,ia->ia', L1,R1,t1_ccee,optimize=True)
-    rdm1[:nocc,nocc:] -= einsum('g,i,ga->ia', R1,L1,t1_ccee,optimize=True)
+    rdm1[:nocc,nocc:] += einsum('g,g,ia->ia', L1,R1,t2_ce,optimize=True)
+    rdm1[:nocc,nocc:] += einsum('g,g,ia->ia', L1,R1,t2_ce,optimize=True)
+    rdm1[:nocc,nocc:] -= einsum('g,i,ga->ia', R1,L1,t2_ce,optimize=True)
 
 ############# block- ai
     rdm1[nocc:,:nocc] = rdm1[:nocc,nocc:].T
