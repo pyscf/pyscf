@@ -778,6 +778,7 @@ def compute_dyson_mo(myadc):
 
     return dyson_mo
 
+
 def make_rdm1(adc):
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
@@ -794,6 +795,7 @@ def make_rdm1(adc):
     cput0 = log.timer_debug1("completed OPDM calculation", *cput0)
     return list_rdm1
 
+
 def make_rdm1_eigenvectors(adc, L, R):
 
     L = np.array(L).ravel()
@@ -802,7 +804,7 @@ def make_rdm1_eigenvectors(adc, L, R):
     t2_ce = adc.t1[0][:]
     t1_ccee = adc.t2[0][:]
 
-    einsum = np.einsum
+    einsum = lib.einsum
 
     nocc = adc._nocc
     nvir = adc._nvir

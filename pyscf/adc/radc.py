@@ -80,6 +80,70 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     return adc.E, adc.U, adc.P, adc.X
 
 
+def make_ref_rdm1(adc):
+
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
+
+    t1 = adc.t1
+    t2 = adc.t2
+    t2_ce = t1[0][:]
+    t1_ccee = t2[0][:]
+
+    ######################
+    einsum_type = True
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    nmo = nocc + nvir
+
+    OPDM = np.zeros((nmo,nmo))
+
+    ####### ADC(2) SPIN ADAPTED REF OPDM with SQA ################
+    ### OCC-OCC ###
+    OPDM[:nocc, :nocc] += lib.einsum('IJ->IJ', np.identity(nocc), optimize = einsum_type).copy()
+    OPDM[:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ', t1_ccee, t1_ccee, optimize = einsum_type)
+    OPDM[:nocc, :nocc] += lib.einsum('Iiab,Jiba->IJ', t1_ccee, t1_ccee, optimize = einsum_type)
+
+    ### OCC-VIR ###
+    OPDM[:nocc, nocc:] += lib.einsum('IA->IA', t2_ce, optimize = einsum_type).copy()
+
+    ### VIR-OCC ###
+    OPDM[nocc:, :nocc] += lib.einsum('IA->AI', t2_ce, optimize = einsum_type).copy()
+
+    ### VIR-VIR ###
+    OPDM[nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB', t1_ccee, t1_ccee, optimize = einsum_type)
+    OPDM[nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee, t1_ccee, optimize = einsum_type)
+
+    ####### ADC(3) SPIN ADAPTED REF OPDM WITH SQA ################
+    if adc.method == "adc(3)":
+        t3_ce = adc.t1[1][:]
+        t2_ccee = t2[1][:]
+
+        #### OCC-OCC ###
+        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[:nocc, :nocc] += lib.einsum('Iiab,Jiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Jiab,Iiab->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[:nocc, :nocc] += lib.einsum('Jiab,Iiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type) 
+
+        ##### OCC-VIR ### #### 
+        OPDM[:nocc, nocc:]  += lib.einsum('IA->IA', t3_ce, optimize = einsum_type).copy()
+        OPDM[:nocc, nocc:] +=  lib.einsum('IiAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
+        OPDM[:nocc, nocc:] -= 1/2 * lib.einsum('iIAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
+        ###### VIR-OCC ###
+        OPDM[nocc:, :nocc]  += lib.einsum('IA->AI', t3_ce, optimize = einsum_type).copy()
+        OPDM[nocc:, :nocc]  += lib.einsum('IiAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type)
+        OPDM[nocc:, :nocc]  -= 1/2 * lib.einsum('iIAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type) 
+
+        ##### VIR=VIR ###
+        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijBa,ijAa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[nocc:, nocc:] -= lib.einsum('ijBa,jiAa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+
+    return 2 * OPDM
+
+
 class RADC(lib.StreamObject):
     '''Ground state calculations
 
@@ -173,7 +237,7 @@ class RADC(lib.StreamObject):
     compute_amplitudes = radc_amplitudes.compute_amplitudes
     compute_energy = radc_amplitudes.compute_energy
     transform_integrals = radc_ao2mo.transform_integrals_incore
-    #make_ref_rdm1 = make_ref_rdm1
+    make_ref_rdm1 = make_ref_rdm1
 
     def dump_flags(self, verbose=None):
         logger.info(self, '')
@@ -335,70 +399,6 @@ class RADC(lib.StreamObject):
 
     def make_rdm1(self):
         return self._adc_es.make_rdm1()
-
-
-def make_ref_rdm1(adc):
-
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
-        raise NotImplementedError(adc.method)
-
-    t1 = adc.t1
-    t2 = adc.t2
-    t2_ce = t1[0][:]
-    t1_ccee = t2[0][:]
-
-    ######################
-    einsum_type = True
-    nocc = adc._nocc
-    nvir = adc._nvir
-
-    nmo = nocc + nvir
-
-    OPDM = np.zeros((nmo,nmo))
-
-    ####### ADC(2) SPIN ADAPTED REF OPDM with SQA ################
-    ### OCC-OCC ###
-    OPDM[:nocc, :nocc] += lib.einsum('IJ->IJ', np.identity(nocc), optimize = einsum_type).copy()
-    OPDM[:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ', t1_ccee, t1_ccee, optimize = einsum_type)
-    OPDM[:nocc, :nocc] += lib.einsum('Iiab,Jiba->IJ', t1_ccee, t1_ccee, optimize = einsum_type)
-
-    ### OCC-VIR ###
-    OPDM[:nocc, nocc:] += lib.einsum('IA->IA', t2_ce, optimize = einsum_type).copy()
-
-    ### VIR-OCC ###
-    OPDM[nocc:, :nocc] += lib.einsum('IA->AI', t2_ce, optimize = einsum_type).copy()
-
-    ### VIR-VIR ###
-    OPDM[nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB', t1_ccee, t1_ccee, optimize = einsum_type)
-    OPDM[nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee, t1_ccee, optimize = einsum_type)
-
-    ####### ADC(3) SPIN ADAPTED REF OPDM WITH SQA ################
-    if adc.method == "adc(3)":
-        t3_ce = adc.t1[1][:]
-        t2_ccee = t2[1][:]
-
-        #### OCC-OCC ###
-        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[:nocc, :nocc] += lib.einsum('Iiab,Jiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Jiab,Iiab->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[:nocc, :nocc] += lib.einsum('Jiab,Iiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type) 
-
-        ##### OCC-VIR ### #### 
-        OPDM[:nocc, nocc:]  += lib.einsum('IA->IA', t3_ce, optimize = einsum_type).copy()
-        OPDM[:nocc, nocc:] +=  lib.einsum('IiAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
-        OPDM[:nocc, nocc:] -= 1/2 * lib.einsum('iIAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
-        ###### VIR-OCC ###
-        OPDM[nocc:, :nocc]  += lib.einsum('IA->AI', t3_ce, optimize = einsum_type).copy()
-        OPDM[nocc:, :nocc]  += lib.einsum('IiAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type)
-        OPDM[nocc:, :nocc]  -= 1/2 * lib.einsum('iIAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type) 
-
-        ##### VIR=VIR ###
-        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijBa,ijAa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[nocc:, nocc:] -= lib.einsum('ijBa,jiAa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
-
-    return 2 * OPDM
 
 
 if __name__ == '__main__':
