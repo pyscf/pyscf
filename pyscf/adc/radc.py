@@ -60,11 +60,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     adc.U = np.array(U).T.copy()
 
     if adc.compute_properties:
-        adc.P,adc.X, adc.density = adc.get_properties(nroots)
-    else:
-        adc.density = None
-
-    nfalse = np.shape(conv)[0] - np.sum(conv)
+        adc.P,adc.X = adc.get_properties(nroots)
 
     header = ("\n*************************************************************"
               "\n            ADC calculation summary"
@@ -81,7 +77,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     log.timer('ADC', *cput0)
 
-    return adc.E, adc.U, adc.P, adc.X, adc.density
+    return adc.E, adc.U, adc.P, adc.X
 
 
 class RADC(lib.StreamObject):
@@ -174,12 +170,10 @@ class RADC(lib.StreamObject):
         self.P = None
         self.X = None
 
-        self.opdm = False
-        self.ref_opdm = False
-
     compute_amplitudes = radc_amplitudes.compute_amplitudes
     compute_energy = radc_amplitudes.compute_energy
     transform_integrals = radc_ao2mo.transform_integrals_incore
+    make_ref_rdm1 = make_ref_rdm1
 
     def dump_flags(self, verbose=None):
         logger.info(self, '')
@@ -281,19 +275,19 @@ class RADC(lib.StreamObject):
 
         self.method_type = self.method_type.lower()
         if (self.method_type == "ea"):
-            e_exc, v_exc, spec_fac, x, OPDM, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):
             if not isinstance(self.ncvs, type(None)) and self.ncvs > 0:
                 e_exc, v_exc, spec_fac, x, adc_es = self.ip_cvs_adc(
                     nroots=nroots, guess=guess, eris=eris)
             else:
-                e_exc, v_exc, spec_fac, x, OPDM, adc_es = self.ip_adc(
+                e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(
                     nroots=nroots, guess=guess, eris=eris)
         else:
             raise NotImplementedError(self.method_type)
         self._adc_es = adc_es
-        return e_exc, v_exc, spec_fac, x, OPDM
+        return e_exc, v_exc, spec_fac, x
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
@@ -304,14 +298,14 @@ class RADC(lib.StreamObject):
     def ea_adc(self, nroots=1, guess=None, eris=None):
         from pyscf.adc import radc_ea
         adc_es = radc_ea.RADCEA(self)
-        e_exc, v_exc, spec_fac, x, OPDM = adc_es.kernel(nroots, guess, eris)
-        return e_exc, v_exc, spec_fac, x, OPDM, adc_es
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
    
     def ip_adc(self, nroots=1, guess=None, eris=None):
         from pyscf.adc import radc_ip
         adc_es = radc_ip.RADCIP(self)
-        e_exc, v_exc, spec_fac, x, OPDM = adc_es.kernel(nroots, guess, eris)
-        return e_exc, v_exc, spec_fac, x, OPDM, adc_es
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
 
     def ip_cvs_adc(self, nroots=1, guess=None, eris=None):
         from pyscf.adc import radc_ip_cvs
@@ -341,6 +335,71 @@ class RADC(lib.StreamObject):
 
     def make_rdm1(self):
         return self._adc_es.make_rdm1()
+
+
+def make_ref_rdm1(adc):
+
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
+
+    t1 = adc.t1
+    t2 = adc.t2
+    t2_ce = t1[0][:]
+    t1_ccee = t2[0][:]
+
+    ######################
+    einsum_type = True
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    nmo = nocc + nvir
+
+    OPDM = np.zeros((nmo,nmo))
+
+    ####### ADC(2) SPIN ADAPTED REF OPDM with SQA ################
+    ### OCC-OCC ###
+    OPDM[:nocc, :nocc] += lib.einsum('IJ->IJ', np.identity(nocc), optimize = einsum_type).copy()
+    OPDM[:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ', t1_ccee, t1_ccee, optimize = einsum_type)
+    OPDM[:nocc, :nocc] += lib.einsum('Iiab,Jiba->IJ', t1_ccee, t1_ccee, optimize = einsum_type)
+
+    ### OCC-VIR ###
+    OPDM[:nocc, nocc:] += lib.einsum('IA->IA', t2_ce, optimize = einsum_type).copy()
+
+    ### VIR-OCC ###
+    OPDM[nocc:, :nocc] += lib.einsum('IA->AI', t2_ce, optimize = einsum_type).copy()
+
+    ### VIR-VIR ###
+    OPDM[nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB', t1_ccee, t1_ccee, optimize = einsum_type)
+    OPDM[nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee, t1_ccee, optimize = einsum_type)
+
+    ####### ADC(3) SPIN ADAPTED REF OPDM WITH SQA ################
+    if adc.method == "adc(3)":
+        t3_ce = adc.t1[1][:]
+        t2_ccee = t2[1][:]
+
+        #### OCC-OCC ###
+        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[:nocc, :nocc] += lib.einsum('Iiab,Jiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Jiab,Iiab->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[:nocc, :nocc] += lib.einsum('Jiab,Iiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type) 
+
+        ##### OCC-VIR ### #### 
+        OPDM[:nocc, nocc:]  += lib.einsum('IA->IA', t3_ce, optimize = einsum_type).copy()
+        OPDM[:nocc, nocc:] +=  lib.einsum('IiAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
+        OPDM[:nocc, nocc:] -= 1/2 * lib.einsum('iIAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
+        ###### VIR-OCC ###
+        OPDM[nocc:, :nocc]  += lib.einsum('IA->AI', t3_ce, optimize = einsum_type).copy()
+        OPDM[nocc:, :nocc]  += lib.einsum('IiAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type)
+        OPDM[nocc:, :nocc]  -= 1/2 * lib.einsum('iIAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type) 
+
+        ##### VIR=VIR ###
+        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijBa,ijAa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[nocc:, nocc:] -= lib.einsum('ijBa,jiAa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+
+    return 2 * OPDM
+
 
 if __name__ == '__main__':
     from pyscf import scf

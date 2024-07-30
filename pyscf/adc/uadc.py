@@ -209,7 +209,6 @@ class UADC(lib.StreamObject):
             self.mo_energy_b = mo_energy_b.copy()
             self.chkfile = mf.chkfile
             self.method = "adc(2)"
-            self.opdm = False
             self.spin_c = True
             self.method_type = "ip"
             self.with_df = None
@@ -238,7 +237,6 @@ class UADC(lib.StreamObject):
             self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_res', 1e-6)
     
             self.ncvs = 0
-            self.opdm = False
             self.spin_c = True
             self.scf_energy = mf.e_tot
             self.frozen = frozen
@@ -252,7 +250,6 @@ class UADC(lib.StreamObject):
             self.dm_a = None
             self.dm_b = None
             self.imds = lambda:None
-            self.ref_opdm = False
             self._nocc = mf.nelec
             self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
             self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
