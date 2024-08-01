@@ -274,7 +274,6 @@ class UADC(lib.StreamObject):
     compute_energy = uadc_amplitudes.compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore
 
-  #  @profile
     def semi_canonicalize_orbitals(self, f, nocc, C): 
  
          # Diagonalize occ-occ block
@@ -297,7 +296,6 @@ class UADC(lib.StreamObject):
  
          return C, evals, f_ov, transform_f
 
- #   @profile
     def dump_flags(self, verbose=None):
         logger.info(self, '')
         logger.info(self, '******** %s ********', self.__class__)
@@ -309,15 +307,13 @@ class UADC(lib.StreamObject):
                     self.max_memory, lib.current_memory()[0])
         return self
 
-#    @profile
     def dump_flags_gs(self, verbose=None):
         logger.info(self, '')
         logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'max_memory %d MB (current use %d MB)',
                     self.max_memory, lib.current_memory()[0])
         return self
-#
-    #@profile
+
     def kernel_gs(self):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)

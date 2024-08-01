@@ -59,8 +59,7 @@ def get_ovvv_spin_df(myadc, Lov, Lvv, p, chnk_size):
     return ovvv
 
 
-#@profile
-def get_vvvv_df(myadc, Lvv, p, chnk_size, pack_34 = False):
+def get_vvvv_df(myadc, Lvv, p, chnk_size):
 
     ''' Returns approximate vvvv integrals used in restricted implementation'''
 
@@ -80,10 +79,7 @@ def get_vvvv_df(myadc, Lvv, p, chnk_size, pack_34 = False):
     vvvv = vvvv.reshape(-1, nvir, nvir, nvir)
 ###    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
     vvvv = vvvv.transpose(0,2,1,3).reshape(-1, nvir, nvir, nvir)
-    if pack_34:
-        vvvv = np.ascontiguousarray(vvvv[:, :, ind_vv_g[0], ind_vv_g[1]])
-    else:
-        vvvv = np.ascontiguousarray(vvvv)
+    vvvv = np.ascontiguousarray(vvvv)
 
     return vvvv
 
@@ -105,6 +101,7 @@ def get_vvvv_antisym_df(myadc, Lvv, p, chnk_size, pack = True):
     vvvv = vvvv.reshape(-1, nvir, nvir, nvir)
     vvvv = vvvv.transpose(0,2,1,3)
     vvvv -= vvvv.transpose(0,1,3,2)
+
     if pack:
         vvvv = np.ascontiguousarray(vvvv[:, :, ind_vv_g[0], ind_vv_g[1]])
     else:

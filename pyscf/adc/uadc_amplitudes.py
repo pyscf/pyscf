@@ -301,21 +301,20 @@ def compute_amplitudes(myadc, eris):
         if isinstance(eris.vvvv_p, np.ndarray):
             eris_vvvv = eris.vvvv_p
             temp = np.ascontiguousarray(t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]]).reshape(nocc_a*nocc_a,-1)
-            t2_1_vvvv_a = np.dot(temp,eris_vvvv.T).reshape(nocc_a, nocc_a, -1)
+            temp = np.dot(temp,eris_vvvv.T).reshape(nocc_a, nocc_a, -1)
+            t2_1_vvvv_a = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))
+            t2_1_vvvv_a[:,:,ab_ind_a[0],ab_ind_a[1]] = temp
+            t2_1_vvvv_a[:,:,ab_ind_a[1],ab_ind_a[0]] = -temp
             del eris_vvvv
         elif isinstance(eris.vvvv_p, list):
-            t2_1_vvvv_a = contract_ladder_antisym(myadc,t2_1_a[:], eris.vvvv_p)
+            t2_1_vvvv_a = contract_ladder_antisym(myadc,t2_1_a[:], eris.vvvv_p, pack = False)
         else:
             t2_1_vvvv_a = contract_ladder(myadc, t2_1_a[:], (eris.Lvv, eris.Lvv))
 
         if not isinstance(eris.oooo, np.ndarray):
             t2_1_vvvv_a = radc_ao2mo.write_dataset(t2_1_vvvv_a)
-        if isinstance(eris.vvvv_p, np.ndarray) or isinstance(eris.vvvv_p, list):
-            t2_2_a = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))
-            t2_2_a[:,:,ab_ind_a[0],ab_ind_a[1]] = t2_1_vvvv_a[:]
-            t2_2_a[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2_1_vvvv_a[:]
-        else:
-            t2_2_a = t2_1_vvvv_a
+
+        t2_2_a = t2_1_vvvv_a[:].copy()
 
         t2_2_a += 0.5*lib.einsum('kilj,klab->ijab', eris_oooo, t2_1_a[:],optimize=True)
         t2_2_a -= 0.5*lib.einsum('kjli,klab->ijab', eris_oooo, t2_1_a[:],optimize=True)
@@ -368,25 +367,20 @@ def compute_amplitudes(myadc, eris):
         if isinstance(eris.VVVV_p, np.ndarray):
             eris_VVVV = eris.VVVV_p
             temp = np.ascontiguousarray(t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]]).reshape(nocc_b*nocc_b,-1)
-            t2_1_vvvv_b = np.dot(temp,eris_VVVV.T).reshape(nocc_b, nocc_b, -1)
+            temp = np.dot(temp,eris_VVVV.T).reshape(nocc_b, nocc_b, -1)
+            t2_1_vvvv_b = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))
+            t2_1_vvvv_b[:,:,ab_ind_b[0],ab_ind_b[1]] = temp
+            t2_1_vvvv_b[:,:,ab_ind_b[1],ab_ind_b[0]] = -temp
             del eris_VVVV
         elif isinstance(eris.VVVV_p, list) :
-            t2_1_vvvv_b = contract_ladder_antisym(myadc,t2_1_b[:],eris.VVVV_p)
+            t2_1_vvvv_b = contract_ladder_antisym(myadc,t2_1_b[:],eris.VVVV_p, pack = False)
         else:
-            t2_1_vvvv_b = contract_ladder(myadc,t2_1_b[:],(eris.LVV,eris.LVV))
+            t2_1_vvvv_b = contract_ladder(myadc, t2_1_b[:], (eris.LVV, eris.LVV))
 
         if not isinstance(eris.oooo, np.ndarray):
             t2_1_vvvv_b = radc_ao2mo.write_dataset(t2_1_vvvv_b)
 
-        if isinstance(eris.VVVV_p, np.ndarray) or isinstance(eris.VVVV_p, list):
-            t2_2_b = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))
-            t2_2_b[:,:,ab_ind_b[0],ab_ind_b[1]] = t2_1_vvvv_b[:]
-            t2_2_b[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2_1_vvvv_b[:]
-        else:
-            t2_2_b = t2_1_vvvv_b
-#        t2_2_b = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))
-#        t2_2_b[:,:,ab_ind_b[0],ab_ind_b[1]] = t2_1_vvvv_b[:]
-#        t2_2_b[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2_1_vvvv_b[:]
+        t2_2_b = t2_1_vvvv_b[:].copy()
 
         t2_2_b += 0.5*lib.einsum('kilj,klab->ijab', eris_OOOO, t2_1_b[:],optimize=True)
         t2_2_b -= 0.5*lib.einsum('kjli,klab->ijab', eris_OOOO, t2_1_b[:],optimize=True)
@@ -952,8 +946,7 @@ def contract_ladder(myadc,t_amp,vvvv_p, prefactor = 1.0, pack = False):
     return t
 
 
-#@profile
-def contract_ladder_antisym(myadc,t_amp,vvvv_d):
+def contract_ladder_antisym(myadc,t_amp,vvvv_d, pack = True):
 
     nocc = t_amp.shape[0]
     nvir = t_amp.shape[2]
@@ -986,6 +979,8 @@ def contract_ladder_antisym(myadc,t_amp,vvvv_d):
         raise Exception("Unknown vvvv type")
 
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
-    t = t[:, :, tril_idx[0], tril_idx[1]]
+    
+    if pack:
+        t = t[:, :, tril_idx[0], tril_idx[1]]
 
     return t

@@ -287,22 +287,10 @@ def get_imds(adc, eris=None):
             M_ab_a += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
             del eris_vvvv
 
-            temp = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))
-            temp[:,:,ab_ind_a[0],ab_ind_a[1]] =  adc.imds.t2_1_vvvv[0]
-            temp[:,:,ab_ind_a[1],ab_ind_a[0]] = -adc.imds.t2_1_vvvv[0]
-
-            M_ab_a -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_a, temp, optimize=True)
-            del temp
-
+            M_ab_a -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_a, adc.imds.t2_1_vvvv[0], optimize=True)
         else:
-
-            temp_t2a_vvvv = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))
-            temp_t2a_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = adc.imds.t2_1_vvvv[0][:]
-            temp_t2a_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -adc.imds.t2_1_vvvv[0][:]
-
-            M_ab_a -= 2*0.5*0.25*lib.einsum('mlad,mlbd->ab',  temp_t2a_vvvv, t2_1_a, optimize=True)
-            M_ab_a -= 2*0.5*0.25*lib.einsum('mlaf,mlbf->ab', t2_1_a, temp_t2a_vvvv, optimize=True)
-            del temp_t2a_vvvv
+            M_ab_a -= 2*0.5*0.25*lib.einsum('mlad,mlbd->ab',  adc.imds.t2_1_vvvv[0], t2_1_a, optimize=True)
+            M_ab_a -= 2*0.5*0.25*lib.einsum('mlaf,mlbf->ab', t2_1_a, adc.imds.t2_1_vvvv[0], optimize=True)
 
         if isinstance(eris.vvvv_p, list):
 
@@ -387,18 +375,16 @@ def get_imds(adc, eris=None):
             M_ab_b += lib.einsum('mlfd,mled,eafb->ab',t2_1_ab, t2_1_ab,   eris_vVvV, optimize=True)
 
             eris_vVvV = eris_vVvV.reshape(nvir_a*nvir_b,nvir_a*nvir_b)
-            temp = adc.imds.t2_1_vvvv[1]
-            M_ab_a -= 0.5*lib.einsum('mlaf,mlbf->ab',t2_1_ab, temp, optimize=True)
-            M_ab_b -= 0.5*lib.einsum('mlfa,mlfb->ab',t2_1_ab, temp, optimize=True)
-            del temp
-        else:
-            t2_vVvV = adc.imds.t2_1_vvvv[1][:]
 
-            M_ab_a -= 0.5 * lib.einsum('mlad,mlbd->ab', t2_vVvV, t2_1_ab, optimize=True)
-            M_ab_b -= 0.5 * lib.einsum('mlda,mldb->ab', t2_vVvV, t2_1_ab, optimize=True)
-            M_ab_a -= 0.5 * lib.einsum('mlaf,mlbf->ab',t2_1_ab, t2_vVvV, optimize=True)
-            M_ab_b -= 0.5 * lib.einsum('mlfa,mlfb->ab',t2_1_ab, t2_vVvV, optimize=True)
-            del t2_vVvV
+            M_ab_a -= 0.5*lib.einsum('mlaf,mlbf->ab',t2_1_ab, adc.imds.t2_1_vvvv[1], optimize=True)
+            M_ab_b -= 0.5*lib.einsum('mlfa,mlfb->ab',t2_1_ab, adc.imds.t2_1_vvvv[1], optimize=True)
+
+        else:
+            M_ab_a -= 0.5 * lib.einsum('mlad,mlbd->ab', adc.imds.t2_1_vvvv[1], t2_1_ab, optimize=True)
+            M_ab_b -= 0.5 * lib.einsum('mlda,mldb->ab', adc.imds.t2_1_vvvv[1], t2_1_ab, optimize=True)
+            M_ab_a -= 0.5 * lib.einsum('mlaf,mlbf->ab', t2_1_ab, adc.imds.t2_1_vvvv[1], optimize=True)
+            M_ab_b -= 0.5 * lib.einsum('mlfa,mlfb->ab', t2_1_ab, adc.imds.t2_1_vvvv[1], optimize=True)
+
         del t2_1_a
 
         if isinstance(eris.VVVV_p,np.ndarray):
@@ -409,22 +395,10 @@ def get_imds(adc, eris=None):
             M_ab_b += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
             del eris_VVVV
 
-            temp = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))
-            temp[:,:,ab_ind_b[0],ab_ind_b[1]] =  adc.imds.t2_1_vvvv[2]
-            temp[:,:,ab_ind_b[1],ab_ind_b[0]] = -adc.imds.t2_1_vvvv[2]
-            M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_b, temp, optimize=True)
-            del temp
+            M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_b, adc.imds.t2_1_vvvv[2], optimize=True)
         else:
-
-            temp_t2b_VVVV = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))
-            temp_t2b_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = adc.imds.t2_1_vvvv[2][:]
-            temp_t2b_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -adc.imds.t2_1_vvvv[2][:]
-
-            M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlad,mlbd->ab',
-                                                temp_t2b_VVVV, t2_1_b, optimize=True)
-            M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',
-                                                t2_1_b, temp_t2b_VVVV, optimize=True)
-            del temp_t2b_VVVV
+            M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlad,mlbd->ab', adc.imds.t2_1_vvvv[2], t2_1_b, optimize=True)
+            M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab', t2_1_b, adc.imds.t2_1_vvvv[2], optimize=True)
 
         if isinstance(eris.vvvv_p, list):
 
