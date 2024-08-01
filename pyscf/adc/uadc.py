@@ -130,11 +130,13 @@ class UADC(lib.StreamObject):
         if 'dft' in str(mf.__module__):
             raise NotImplementedError('DFT reference for UADC')
 
-        if mo_coeff is None: mo_coeff = mf.mo_coeff
-        if mo_occ is None: mo_occ = mf.mo_occ
+        if mo_coeff is None:
+            mo_coeff = mf.mo_coeff
+        if mo_occ is None:
+            mo_occ = mf.mo_occ
         
         if isinstance(mf, scf.rohf.ROHF):
-            print ("ROHF reference detected")
+            logger.info(self, "ROHF reference detected")
             
             mo_a = mo_coeff.copy()
             self.nmo = mo_a.shape[1]
@@ -158,7 +160,7 @@ class UADC(lib.StreamObject):
             fock_a = np.dot(mo_a.T,np.dot(fock_a, mo_a))
             fock_b = np.dot(mo_a.T,np.dot(fock_b, mo_a))
 
-#            # Semicanonicalize Ca using fock_a, nocc_a -> Ca, mo_energy_a, U_a, f_ov_a
+            # Semicanonicalize Ca using fock_a, nocc_a -> Ca, mo_energy_a, U_a, f_ov_a
             C_a, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(fock_a, self.ndocc + self.nsocc, mo_a)
 
             # Semicanonicalize Cb using fock_b, nocc_b -> Cb, mo_energy_b, U_b, f_ov_b
@@ -173,99 +175,58 @@ class UADC(lib.StreamObject):
 
             f_ov = (f_ov_a, f_ov_b)
 
-            self.mol = mf.mol
-            self._scf = mf
             self.f_ov = f_ov
-            self.verbose = self.mol.verbose
-            self.stdout = self.mol.stdout
-            self.max_memory = mf.max_memory
-    
-            self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 12)
-            self.max_cycle = getattr(__config__, 'adc_uadc_UADC_max_cycle', 50)
-            self.conv_tol = getattr(__config__, 'adc_uadc_UADC_conv_tol', 1e-12)
-            self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_res', 1e-6)
-    
-            self.scf_energy = mf.e_tot
-            self.frozen = frozen
-            self.incore_complete = self.incore_complete or self.mol.incore_anyway
-    
-            self.mo_coeff = mo_coeff
-            self.ncvs = 0
-            self.mo_occ = mo_occ
-            self.e_corr = None
-            self.t1 = None
-            self.t2 = None
-            self.dm_a = None
-            self.dm_b = None
-            self.imds = lambda:None
-            self._nocc = mf.nelec
-            self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
-            self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
+            self.spin_c = True
             self.mo_energy_a = mo_energy_a.copy()
             self.mo_energy_b = mo_energy_b.copy()
-            self.chkfile = mf.chkfile
-            self.method = "adc(2)"
-            self.spin_c = True
-            self.method_type = "ip"
-            self.with_df = None
-            self.compute_mpn_energy = True
-            self.compute_spec = True
-            self.compute_properties = True
-            self.approx_trans_moments = False
-            self.evec_print_tol = 0.1
-            self.spec_factor_print_tol = 0.1
-            self.E = None
-            self.U = None
-            self.P = None
-            self.X = (None,)
- 
-        else:
 
-            self.mol = mf.mol
-            self._scf = mf
-            self.verbose = self.mol.verbose
-            self.stdout = self.mol.stdout
-            self.max_memory = mf.max_memory
-    
-            self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 12)
-            self.max_cycle = getattr(__config__, 'adc_uadc_UADC_max_cycle', 50)
-            self.conv_tol = getattr(__config__, 'adc_uadc_UADC_conv_tol', 1e-12)
-            self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_res', 1e-6)
-    
-            self.ncvs = 0
-            self.spin_c = True
-            self.scf_energy = mf.e_tot
-            self.frozen = frozen
-            self.incore_complete = self.incore_complete or self.mol.incore_anyway
-            self.mo_coeff = mo_coeff
-            self.mo_occ = mo_occ
-            self.e_corr = None
-            self.f_ov = None
-            self.t1 = None
-            self.t2 = None
-            self.dm_a = None
-            self.dm_b = None
-            self.imds = lambda:None
-            self._nocc = mf.nelec
-            self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
-            self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
+        else:
             self.mo_energy_a = mf.mo_energy[0]
             self.mo_energy_b = mf.mo_energy[1]
-            self.chkfile = mf.chkfile
-            self.method = "adc(2)"
-            self.method_type = "ip"
-            self.with_df = None
-            self.compute_mpn_energy = True
-            self.compute_spec = True
-            self.compute_properties = True
-            self.approx_trans_moments = False
-            self.evec_print_tol = 0.1
-            self.spec_factor_print_tol = 0.1
-            self.E = None
-            self.U = None
-            self.P = None
-            self.X = (None,)
 
+        self.mol = mf.mol
+        self._scf = mf
+        self.verbose = self.mol.verbose
+        self.stdout = self.mol.stdout
+        self.max_memory = mf.max_memory
+        self.ncvs = None
+    
+        self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 12)
+        self.max_cycle = getattr(__config__, 'adc_uadc_UADC_max_cycle', 50)
+        self.conv_tol = getattr(__config__, 'adc_uadc_UADC_conv_tol', 1e-12)
+        self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_res', 1e-6)
+        self.scf_energy = mf.e_tot
+
+        self.frozen = frozen
+        self.incore_complete = self.incore_complete or self.mol.incore_anyway
+
+        self.mo_coeff = mo_coeff
+        self.mo_occ = mo_occ
+        self.e_corr = None
+        self.t1 = None
+        self.t2 = None
+        self.dm_a = None
+        self.dm_b = None
+        self.imds = lambda:None
+        self._nocc = mf.nelec
+        self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
+        self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
+        self.chkfile = mf.chkfile
+        self.method = "adc(2)"
+        self.method_type = "ip"
+        self.with_df = None
+        self.compute_mpn_energy = True
+        self.compute_spec = True
+        self.compute_properties = True
+        self.approx_trans_moments = False
+        self.evec_print_tol = 0.1
+        self.spec_factor_print_tol = 0.1
+        self.E = None
+        self.U = None
+        self.P = None
+        self.X = (None,)
+        self.spin_c = False
+ 
     compute_amplitudes = uadc_amplitudes.compute_amplitudes
     compute_energy = uadc_amplitudes.compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore
