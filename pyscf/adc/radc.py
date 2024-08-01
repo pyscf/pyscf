@@ -191,8 +191,10 @@ class RADC(lib.StreamObject):
         if 'dft' in str(mf.__module__):
             raise NotImplementedError('DFT reference for UADC')
 
-        if mo_coeff is None: mo_coeff = mf.mo_coeff
-        if mo_occ is None: mo_occ = mf.mo_occ
+        if mo_coeff is None:
+            mo_coeff = mf.mo_coeff
+        if mo_occ is None:
+            mo_occ = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf

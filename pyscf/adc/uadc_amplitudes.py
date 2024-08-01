@@ -312,7 +312,7 @@ def compute_amplitudes(myadc, eris):
             t2_1_vvvv_a = contract_ladder(myadc, t2_1_a[:], (eris.Lvv, eris.Lvv))
 
         if not isinstance(eris.oooo, np.ndarray):
-            t2_1_vvvv_a = radc_ao2mo.write_dataset(t2_1_vvvv_a)
+            t2_1_vvvv_a = h5cache_t2.create_dataset('t2_1_vvvv_a', data=t2_1_vvvv_a)
 
         t2_2_a = t2_1_vvvv_a[:].copy()
 
@@ -378,7 +378,7 @@ def compute_amplitudes(myadc, eris):
             t2_1_vvvv_b = contract_ladder(myadc, t2_1_b[:], (eris.LVV, eris.LVV))
 
         if not isinstance(eris.oooo, np.ndarray):
-            t2_1_vvvv_b = radc_ao2mo.write_dataset(t2_1_vvvv_b)
+            t2_1_vvvv_b = h5cache_t2.create_dataset('t2_1_vvvv_b', data=t2_1_vvvv_b)
 
         t2_2_b = t2_1_vvvv_b[:].copy()
 
@@ -484,21 +484,21 @@ def compute_amplitudes(myadc, eris):
         D2_a = D2_a.reshape((nocc_a,nocc_a,nvir_a,nvir_a))
         t2_2_a = t2_2_a/D2_a
         if not isinstance(eris.oooo, np.ndarray):
-            t2_2_a = radc_ao2mo.write_dataset(t2_2_a)
+            t2_2_a = h5cache_t2.create_dataset('t2_2_a', data=t2_2_a)
         del D2_a
 
         D2_b = d_ij_b.reshape(-1,1) - d_ab_b.reshape(-1)
         D2_b = D2_b.reshape((nocc_b,nocc_b,nvir_b,nvir_b))
         t2_2_b = t2_2_b/D2_b
         if not isinstance(eris.oooo, np.ndarray):
-            t2_2_b = radc_ao2mo.write_dataset(t2_2_b)
+            t2_2_b = h5cache_t2.create_dataset('t2_2_b', data=t2_2_b)
         del D2_b
 
         D2_ab = d_ij_ab.reshape(-1,1) - d_ab_ab.reshape(-1)
         D2_ab = D2_ab.reshape((nocc_a,nocc_b,nvir_a,nvir_b))
         t2_2_ab = t2_2_ab/D2_ab
         if not isinstance(eris.oooo, np.ndarray):
-            t2_2_ab = radc_ao2mo.write_dataset(t2_2_ab)
+            t2_2_ab = h5cache_t2.create_dataset('t2_2_ab', data=t2_2_ab)
         del D2_ab
 
         cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)

@@ -264,13 +264,6 @@ def calculate_chunk_size(myadc):
     return chnk_size
 
 
-def write_dataset(data):
-    _, fname = tempfile.mkstemp()
-    f = h5py.File(fname, mode='w')
-    return f.create_dataset('data', data=data)
-
-
-
 def unpack_eri_1(eri, norb):
 
     n_oo = norb * (norb + 1) // 2

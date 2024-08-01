@@ -65,7 +65,6 @@ def get_vvvv_df(myadc, Lvv, p, chnk_size):
 
     nvir = myadc._nvir
     naux = myadc.with_df.get_naoaux()
-    ind_vv_g = np.tril_indices(nvir, k=-1)
 
     Lvv = Lvv.reshape(naux,nvir,nvir)
 
@@ -77,11 +76,11 @@ def get_vvvv_df(myadc, Lvv, p, chnk_size):
     Lvv = Lvv.reshape(naux,nvir*nvir)
     vvvv = np.dot(Lvv_temp, Lvv)
     vvvv = vvvv.reshape(-1, nvir, nvir, nvir)
-###    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
     vvvv = vvvv.transpose(0,2,1,3).reshape(-1, nvir, nvir, nvir)
     vvvv = np.ascontiguousarray(vvvv)
 
     return vvvv
+
 
 def get_vvvv_antisym_df(myadc, Lvv, p, chnk_size, pack = True):
 
@@ -107,8 +106,8 @@ def get_vvvv_antisym_df(myadc, Lvv, p, chnk_size, pack = True):
     else:
         vvvv = np.ascontiguousarray(vvvv)
 
-
     return vvvv
+
 
 def get_vVvV_df(myadc, Lvv, LVV, p, chnk_size):
 
