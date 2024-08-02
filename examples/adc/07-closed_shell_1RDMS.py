@@ -95,12 +95,12 @@ myadc.verbose = 0
 myadc.kernel(nroots = 3)
 get_dip_moments(myadc)
 
-#IP-RADC(2)-x for 1 roots
+#IP-RADC(2)-x for 1 root
 myadc.method = "adc(2)-x"
 myadc.kernel(nroots = 1)
 get_dip_moments(myadc)
 
-#IP-RADC(3) for 1 roots
+#IP-RADC(3) for 1 root
 myadc.method = "adc(3)"
 myadc.kernel(nroots = 1)
 get_dip_moments(myadc)
@@ -112,13 +112,13 @@ myadc.method_type = "ea"
 myadc.kernel(nroots = 3)
 get_dip_moments(myadc)
 
-#EA-RADC(2)-x for 1 roots
+#EA-RADC(2)-x for 1 root
 myadc.method = "adc(2)-x"
 myadc.method_type = "ea"
 myadc.kernel(nroots = 1)
 get_dip_moments(myadc)
 
-#EA-RADC(3) for 1 roots
+#EA-RADC(3) for 1 root
 myadc.method = "adc(3)"
 myadc.method_type = "ea"
 myadc.kernel(nroots = 1)
