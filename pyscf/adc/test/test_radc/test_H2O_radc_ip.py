@@ -22,7 +22,6 @@ import math
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
-from pyscf import ao2mo
 
 def setUpModule():
     global mol, mf, myadc
@@ -61,7 +60,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
         dm1_gs = myadc.make_ref_rdm1()
-
         r2_gs = rdms_test(dm1_gs)
         self.assertAlmostEqual(r2_gs, 19.073700043115412, 6)
 
@@ -87,7 +85,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
         dm1_gs = myadc.make_ref_rdm1()
-
         r2_gs = rdms_test(dm1_gs)
         self.assertAlmostEqual(r2_gs, 19.073700043115412, 6)
 
@@ -114,7 +111,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.2107769014592799, 6)
 
         dm1_gs = myadc.make_ref_rdm1()
-
         r2_gs = rdms_test(dm1_gs)
         self.assertAlmostEqual(r2_gs, 19.043496230938608, 6)
 
