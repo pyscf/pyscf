@@ -184,7 +184,7 @@ class KnownValues(unittest.TestCase):
         mc = mc.state_specific_(2)
         emc = mc.kernel()[0]
         self.assertAlmostEqual(emc, -75.59353002290788, 8)
-    
+
     def test_chkfile_mixed(self):
         fcisolvers = [
             fci.solver(mol, singlet=not (bool(i)), symm=False) for i in range(2)
