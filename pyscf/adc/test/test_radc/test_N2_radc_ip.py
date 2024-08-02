@@ -17,7 +17,7 @@
 #
 
 import unittest
-import numpy
+import numpy as np
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
@@ -41,12 +41,22 @@ def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
 
+def rdms_test(dm):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao) 
+    return r2
+
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
 
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
+
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 39.23226380360857, 6)
 
         e,v,p,x,es = myadc.ip_adc(nroots=3)
         es.analyze()
@@ -88,6 +98,11 @@ class KnownValues(unittest.TestCase):
 
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
+
+        myadc.kernel_gs()
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 39.4764479057645, 6)
 
         e,v,p,x = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
