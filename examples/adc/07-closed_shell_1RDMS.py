@@ -58,7 +58,7 @@ def get_dip_moments(adc_var):
     rdm1_ref = myadc.make_ref_rdm1()
 
     #Calculate EXCITED STATE 1RDM
-    print('Calculating Reference 1RDM...')
+    print('Calculating Excited State 1RDM...')
     rdm1_exc = myadc.make_rdm1()
 
     #REF 1RDM CONT
