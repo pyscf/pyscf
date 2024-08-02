@@ -69,16 +69,16 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
               "\n*************************************************************")
     logger.info(adc, header)
 
-    if nfalse >= 1:
-        logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
-
     for n in range(nroots):
         print_string = ('%s root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' %
                         (adc.method, n, adc.E[n], adc.E[n]*27.2114))
         if adc.compute_properties:
-                print_string += ("|  Spec Factors = %10.8f  " % adc.P[n])
+            print_string += ("|  Spec. factor = %10.8f  " % adc.P[n])
         print_string += ("|  conv = %s" % conv[n])
         logger.info(adc, print_string)
+
+    if nfalse >= 1:
+        logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) did not converge!!!")
 
     log.timer('ADC', *cput0)
 
@@ -134,10 +134,10 @@ class UADC(lib.StreamObject):
             mo_coeff = mf.mo_coeff
         if mo_occ is None:
             mo_occ = mf.mo_occ
-        
+
         if isinstance(mf, scf.rohf.ROHF):
-            logger.info(self, "ROHF reference detected")
-            
+            logger.info(mf, "ROHF reference detected")
+
             mo_a = mo_coeff.copy()
             self.nmo = mo_a.shape[1]
             nalpha = mf.mol.nelec[0]
@@ -373,8 +373,8 @@ class UADC(lib.StreamObject):
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
-        logger.note(self, 'E_corr = %.8f',
-                    self.e_corr)
+        logger.note(self, 'MP%s correlation energy of reference state (a.u.) = %.8f',
+                    self.method[4], self.e_corr)
         return self
 
     def ea_adc(self, nroots=1, guess=None, eris=None):

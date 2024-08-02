@@ -84,11 +84,8 @@ def transform_integrals_incore(myadc):
         dip = dip_ints[i,:,:]
         myadc.dm_a[i,:,:] = np.dot(alpha.T,np.dot(dip,alpha))
         myadc.dm_b[i,:,:] = np.dot(beta.T,np.dot(dip,beta))
-    
 
-
-    if (myadc.method == "adc(2)-x" ) or (myadc.method == "adc(2)") or (myadc.method == "adc(3)"):
-#and myadc.approx_trans_moments == False
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
 
         eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a),
                                     compact=False).reshape(nvir_a, nvir_a, nvir_a, nvir_a)
@@ -246,7 +243,7 @@ def transform_integrals_outcore(myadc):
 
     ############### forming eris_vvvv ########################################
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments == False) or (myadc.method == "adc(2)") or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
 
         cput2 = logger.process_clock(), logger.perf_counter()
 

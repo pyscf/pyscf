@@ -143,8 +143,7 @@ def compute_amplitudes(myadc, eris):
 
 
     t1_2 = (None,)
-    if myadc.method == "adc(3)" or  myadc.method == "adc(2)-x" or myadc.method == "adc(2)":
-    #myadc.approx_trans_moments == False or myadc.method == "adc(3)":
+    if myadc.approx_trans_moments == False or myadc.method == "adc(3)":
         # Compute second-order singles t1 (tij)
 
         t1_2_a = np.zeros((nocc_a,nvir_a))
@@ -286,7 +285,7 @@ def compute_amplitudes(myadc, eris):
     t1_3 = (None,)
     t2_1_vvvv = (None,)
 
-    if (myadc.approx_trans_moments == False) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
 
         # Compute second-order doubles t2 (tijab)
 
@@ -503,7 +502,7 @@ def compute_amplitudes(myadc, eris):
 
         cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
-    if (myadc.method == "adc(3)" and myadc.approx_trans_moments == False):
+    if (myadc.method == "adc(3)" and myadc.approx_trans_moments is False):
         # Compute third-order singles (tij)
 
         eris_ovoo = eris.ovoo
@@ -853,8 +852,7 @@ def compute_amplitudes(myadc, eris):
 
     t2_1 = (t2_1_a , t2_1_ab, t2_1_b)
 
-    if (myadc.method == "adc(2)-x") or (myadc.method == "adc(2)") or (myadc.method == "adc(3)"):
-            #myadc.approx_trans_moments == False) 
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
         t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
         t2_1_vvvv = (t2_1_vvvv_a, t2_1_vvvv_ab, t2_1_vvvv_b)
 

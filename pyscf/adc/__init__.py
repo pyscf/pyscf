@@ -57,8 +57,7 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
-    mf = mf.remove_soscf()
-    if not mf.istype('UHF'):
+    if not (mf.istype('UHF') or mf.istype('ROHF')):
         mf = mf.to_uhf()
 
     return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
