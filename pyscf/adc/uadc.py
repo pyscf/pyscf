@@ -121,7 +121,8 @@ class UADC(lib.StreamObject):
         'incore_complete', 'mo_energy_a', 'mo_energy_b', 'with_df',
         'compute_mpn_energy', 'compute_spec', 'compute_properties',
         'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
-        'E', 'U', 'P', 'X', 'ncvs',
+        'E', 'U', 'P', 'X', 'ncvs', 'nmo', 'ndocc',
+        'spin_c', 'imds', 'dm_a', 'dm_b', 'nucl_dip', 'f_ov', 'nsocc'
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -135,13 +136,14 @@ class UADC(lib.StreamObject):
         if mo_occ is None:
             mo_occ = mf.mo_occ
 
+        self.f_ov = None
+
         if isinstance(mf, scf.rohf.ROHF):
             logger.info(mf, "ROHF reference detected")
 
             mo_a = mo_coeff.copy()
             self.nmo = mo_a.shape[1]
             nalpha = mf.mol.nelec[0]
-            nbeta = mf.mol.nelec[1]
 
             h1e = mf.get_hcore()
             dm = mf.make_rdm1()
@@ -161,19 +163,14 @@ class UADC(lib.StreamObject):
             fock_b = np.dot(mo_a.T,np.dot(fock_b, mo_a))
 
             # Semicanonicalize Ca using fock_a, nocc_a -> Ca, mo_energy_a, U_a, f_ov_a
-            C_a, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(fock_a, self.ndocc + self.nsocc, mo_a)
+            mo_a, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(fock_a, self.ndocc + self.nsocc, mo_a)
 
             # Semicanonicalize Cb using fock_b, nocc_b -> Cb, mo_energy_b, U_b, f_ov_b
-            C_b, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, self.ndocc, mo_a)
+            mo_b, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, self.ndocc, mo_a)
 
-            mo_a = C_a.copy()
-            mo_b = C_b.copy()
+            mo_coeff = [mo_a, mo_b]
 
-            mo_coeff = np.zeros((2, mo_a.shape[0], mo_a.shape[1]))
-            mo_coeff[0, :, :] = mo_a.copy()
-            mo_coeff[1, :, :] = mo_b.copy()
-
-            f_ov = (f_ov_a, f_ov_b)
+            f_ov = [f_ov_a, f_ov_b]
 
             self.f_ov = f_ov
             self.spin_c = True

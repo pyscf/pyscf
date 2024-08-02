@@ -23,8 +23,6 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import adc
 
-import so_adc.so_adc_init as omp_adc
-
 def setUpModule():
     global mol, mf, myadc
     mol = gto.Mole()
