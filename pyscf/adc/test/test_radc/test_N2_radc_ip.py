@@ -35,6 +35,7 @@ def setUpModule():
     mf = scf.RHF(mol)
     mf.conv_tol = 1e-12
     mf.kernel()
+
     myadc = adc.ADC(mf)
 
 def tearDownModule():
@@ -85,6 +86,7 @@ class KnownValues(unittest.TestCase):
     def test_ip_adc2x(self):
 
         myadc.method = "adc(2)-x"
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
 
         myadcip = adc.radc_ip.RADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
