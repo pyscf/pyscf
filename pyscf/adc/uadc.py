@@ -119,8 +119,7 @@ class UADC(lib.StreamObject):
         'scf_energy', 'e_tot', 't1', 'frozen',
         'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle',
         'incore_complete', 'mo_energy_a', 'mo_energy_b', 'with_df',
-        'compute_mpn_energy', 'compute_spec', 'compute_properties',
-        'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
+        'compute_properties', 'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
         'E', 'U', 'P', 'X', 'ncvs', 'nmo', 'ndocc',
         'spin_c', 'imds', 'dm_a', 'dm_b', 'nucl_dip', 'f_ov', 'nsocc'
     }
@@ -136,10 +135,26 @@ class UADC(lib.StreamObject):
         if mo_occ is None:
             mo_occ = mf.mo_occ
 
+        self.mol = mf.mol
+        self._scf = mf
+        self.verbose = self.mol.verbose
+        self.stdout = self.mol.stdout
+        self.max_memory = mf.max_memory
+
+        self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 12)
+        self.max_cycle = getattr(__config__, 'adc_uadc_UADC_max_cycle', 50)
+        self.conv_tol = getattr(__config__, 'adc_uadc_UADC_conv_tol', 1e-12)
+        self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_residual', 1e-6)
+        self.scf_energy = mf.e_tot
+
+        self.frozen = frozen
+        self.incore_complete = self.incore_complete or self.mol.incore_anyway
+
         self.f_ov = None
 
         if isinstance(mf, scf.rohf.ROHF):
-            logger.info(mf, "ROHF reference detected")
+
+            logger.info(mf, "ROHF reference detected, semicanonicalizing the orbitals...")
 
             mo_a = mo_coeff.copy()
             self.nmo = mo_a.shape[1]
@@ -181,29 +196,11 @@ class UADC(lib.StreamObject):
             self.mo_energy_a = mf.mo_energy[0]
             self.mo_energy_b = mf.mo_energy[1]
 
-        self.mol = mf.mol
-        self._scf = mf
-        self.verbose = self.mol.verbose
-        self.stdout = self.mol.stdout
-        self.max_memory = mf.max_memory
-        self.ncvs = None
-    
-        self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 12)
-        self.max_cycle = getattr(__config__, 'adc_uadc_UADC_max_cycle', 50)
-        self.conv_tol = getattr(__config__, 'adc_uadc_UADC_conv_tol', 1e-12)
-        self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_res', 1e-6)
-        self.scf_energy = mf.e_tot
-
-        self.frozen = frozen
-        self.incore_complete = self.incore_complete or self.mol.incore_anyway
-
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self.e_corr = None
         self.t1 = None
         self.t2 = None
-        self.dm_a = None
-        self.dm_b = None
         self.imds = lambda:None
         self._nocc = mf.nelec
         self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
@@ -213,17 +210,20 @@ class UADC(lib.StreamObject):
         self.method_type = "ip"
         self.with_df = None
         self.compute_mpn_energy = True
-        self.compute_spec = True
-        self.compute_properties = True
         self.approx_trans_moments = False
         self.evec_print_tol = 0.1
         self.spec_factor_print_tol = 0.1
+        self.ncvs = None
+
         self.E = None
         self.U = None
         self.P = None
         self.X = (None,)
+
         self.spin_c = False
- 
+        self.dm_a = None
+        self.dm_b = None
+
     compute_amplitudes = uadc_amplitudes.compute_amplitudes
     compute_energy = uadc_amplitudes.compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore

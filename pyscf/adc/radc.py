@@ -209,7 +209,7 @@ class RADC(lib.StreamObject):
         self.max_space = getattr(__config__, 'adc_radc_RADC_max_space', 12)
         self.max_cycle = getattr(__config__, 'adc_radc_RADC_max_cycle', 50)
         self.conv_tol = getattr(__config__, 'adc_radc_RADC_conv_tol', 1e-12)
-        self.tol_residual = getattr(__config__, 'adc_radc_RADC_tol_res', 1e-6)
+        self.tol_residual = getattr(__config__, 'adc_radc_RADC_tol_residual', 1e-6)
         self.scf_energy = mf.e_tot
 
         self.frozen = frozen
