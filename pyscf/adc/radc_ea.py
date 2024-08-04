@@ -1336,23 +1336,26 @@ class RADCEA(radc.RADC):
         self.with_df = adc.with_df
         self.compute_properties = adc.compute_properties
         self.approx_trans_moments = adc.approx_trans_moments
-        self.E = None
-        self.U = None
-        self.P = None
-        self.X = None
+
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
+
+        self.E = adc.E
+        self.U = adc.U
+        self.P = adc.P
+        self.X = adc.X
 
     kernel = radc.kernel
     get_imds = get_imds
     matvec = matvec
     get_diag = get_diag
     get_trans_moments = get_trans_moments
-    renormalize_eigenvectors = renormalize_eigenvectors
     get_properties = get_properties
+
+    renormalize_eigenvectors = renormalize_eigenvectors
+    analyze = analyze
     analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector
-    analyze = analyze
     compute_dyson_mo = compute_dyson_mo
     make_rdm1 = make_rdm1
 

@@ -1945,6 +1945,7 @@ class UADCEA(uadc.UADC):
     }
 
     def __init__(self, adc):
+        self.mol = adc.mol
         self.verbose = adc.verbose
         self.stdout = adc.stdout
         self.max_memory = adc.max_memory
@@ -1961,6 +1962,7 @@ class UADCEA(uadc.UADC):
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
+        self._nmo = adc._nmo
         self.nocc_a = adc._nocc[0]
         self.nocc_b = adc._nocc[1]
         self.nvir_a = adc._nvir[0]
@@ -1970,14 +1972,14 @@ class UADCEA(uadc.UADC):
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
         self.nmo_b = adc._nmo[1]
-        self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
+        self.compute_properties = adc.compute_properties
+        self.approx_trans_moments = adc.approx_trans_moments
+
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.evec_print_tol = adc.evec_print_tol
 
-        self.compute_properties = adc.compute_properties
-        self.approx_trans_moments = adc.approx_trans_moments
         self.E = adc.E
         self.U = adc.U
         self.P = adc.P
@@ -1988,11 +1990,12 @@ class UADCEA(uadc.UADC):
     matvec = matvec
     get_diag = get_diag
     get_trans_moments = get_trans_moments
-    analyze_spec_factor = analyze_spec_factor
     get_properties = get_properties
+
     analyze = analyze
-    compute_dyson_mo = compute_dyson_mo
+    analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector
+    compute_dyson_mo = compute_dyson_mo
 
     def get_init_guess(self, nroots=1, diag=None, ascending=True):
         if diag is None :
