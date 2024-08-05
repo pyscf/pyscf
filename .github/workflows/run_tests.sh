@@ -4,7 +4,7 @@ export PYTHONPATH=$(pwd):$PYTHONPATH
 ulimit -s 20000
 
 mkdir -p pyscftmpdir
-echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py
+echo 'pbc_tools_pbc_fft_engine = "NUMPY+BLAS"' > .pyscf_conf.py
 echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py
 echo "scf_hf_SCF_mute_chkfile = True" >> .pyscf_conf.py
 echo 'TMPDIR = "./pyscftmpdir"' >> .pyscf_conf.py
