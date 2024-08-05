@@ -128,24 +128,30 @@ def make_ref_rdm1(adc):
         t2_ccee = t2[1][:]
 
         #### OCC-OCC ###
-        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ',
+                                             t1_ccee, t2_ccee, optimize = einsum_type)
         OPDM[:nocc, :nocc] += lib.einsum('Iiab,Jiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Jiab,Iiab->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[:nocc, :nocc] += lib.einsum('Jiab,Iiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type) 
+        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Jiab,Iiab->IJ',
+                                             t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[:nocc, :nocc] += lib.einsum('Jiab,Iiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
 
-        ##### OCC-VIR ### #### 
+        ##### OCC-VIR ### ####
         OPDM[:nocc, nocc:]  += lib.einsum('IA->IA', t3_ce, optimize = einsum_type).copy()
         OPDM[:nocc, nocc:] +=  lib.einsum('IiAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
-        OPDM[:nocc, nocc:] -= 1/2 * lib.einsum('iIAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
+        OPDM[:nocc, nocc:] -= 1/2 * \
+            lib.einsum('iIAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
         ###### VIR-OCC ###
         OPDM[nocc:, :nocc]  += lib.einsum('IA->AI', t3_ce, optimize = einsum_type).copy()
         OPDM[nocc:, :nocc]  += lib.einsum('IiAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type)
-        OPDM[nocc:, :nocc]  -= 1/2 * lib.einsum('iIAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type) 
+        OPDM[nocc:, :nocc]  -= 1/2 * \
+            lib.einsum('iIAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type)
 
         ##### VIR=VIR ###
-        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB',
+                                             t1_ccee, t2_ccee, optimize = einsum_type)
         OPDM[nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijBa,ijAa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijBa,ijAa->AB',
+                                             t1_ccee, t2_ccee, optimize = einsum_type)
         OPDM[nocc:, nocc:] -= lib.einsum('ijBa,jiAa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
 
     return 2 * OPDM
@@ -244,7 +250,7 @@ class RADC(lib.StreamObject):
 
         dip_ints = -self.mol.intor('int1e_r',comp=3)
         dip_mom = np.zeros((dip_ints.shape[0], self._nmo, self._nmo))
-        
+
         for i in range(dip_ints.shape[0]):
             dip = dip_ints[i,:,:]
             dip_mom[i,:,:] = np.dot(mo_coeff.T, np.dot(dip, mo_coeff))
@@ -313,7 +319,8 @@ class RADC(lib.StreamObject):
 
         eris = self.transform_integrals()
 
-        self.e_corr, self.t1, self.t2 = radc_amplitudes.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2 = radc_amplitudes.compute_amplitudes_energy(
+            self, eris=eris, verbose=self.verbose)
         self._finalize()
 
         return self.e_corr, self.t1, self.t2
@@ -385,7 +392,7 @@ class RADC(lib.StreamObject):
         adc_es = radc_ea.RADCEA(self)
         e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
         return e_exc, v_exc, spec_fac, x, adc_es
-   
+
     def ip_adc(self, nroots=1, guess=None, eris=None):
         from pyscf.adc import radc_ip
         adc_es = radc_ip.RADCIP(self)

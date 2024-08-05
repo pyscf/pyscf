@@ -48,7 +48,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     adc.dump_flags()
 
     if isinstance(adc._scf, scf.rohf.ROHF) and (adc.method_type == "ip" or adc.method_type == "ea"):
-        logger.warn(adc, "EA/IP-ADC with the ROHF reference do not incorporate contributions from occ-vir Fock matrix elements...")
+        logger.warn(
+            adc, "EA/IP-ADC with the ROHF reference do not incorporate contributions from occ-vir Fock matrix elements...")
 
     if eris is None:
         eris = adc.transform_integrals()
@@ -122,7 +123,7 @@ class UADC(lib.StreamObject):
         'tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff',
         'mol', 'mo_energy_a', 'mo_energy_b', 'incore_complete',
         'scf_energy', 'e_tot', 't1', 't2', 'frozen', 'chkfile',
-        'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties', 
+        'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties',
         'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
         'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc',
         'spin_c', 'f_ov'
@@ -166,7 +167,7 @@ class UADC(lib.StreamObject):
 
             h1e = mf.get_hcore()
             dm = mf.make_rdm1()
-            vhf = mf.get_veff(mf.mol, dm) 
+            vhf = mf.get_veff(mf.mol, dm)
 
             fock_a = h1e + vhf[0]
             fock_b = h1e + vhf[1]
@@ -182,7 +183,8 @@ class UADC(lib.StreamObject):
             fock_b = np.dot(mo_a.T,np.dot(fock_b, mo_a))
 
             # Semicanonicalize Ca using fock_a, nocc_a -> Ca, mo_energy_a, U_a, f_ov_a
-            mo_a, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(fock_a, ndocc + nsocc, mo_a)
+            mo_a, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(
+                fock_a, ndocc + nsocc, mo_a)
 
             # Semicanonicalize Cb using fock_b, nocc_b -> Cb, mo_energy_b, U_b, f_ov_b
             mo_b, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, ndocc, mo_a)
@@ -229,7 +231,7 @@ class UADC(lib.StreamObject):
         dip_ints = -self.mol.intor('int1e_r',comp=3)
         dip_mom_a = np.zeros((dip_ints.shape[0], self._nmo[0], self._nmo[0]))
         dip_mom_b = np.zeros((dip_ints.shape[0], self._nmo[1], self._nmo[1]))
-        
+
         for i in range(dip_ints.shape[0]):
             dip = dip_ints[i,:,:]
             dip_mom_a[i,:,:] = np.dot(mo_coeff[0].T, np.dot(dip, mo_coeff[0]))
@@ -247,27 +249,27 @@ class UADC(lib.StreamObject):
     compute_energy = uadc_amplitudes.compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore
 
-    def semi_canonicalize_orbitals(self, f, nocc, C): 
- 
-         # Diagonalize occ-occ block
-         evals_oo, evecs_oo = np.linalg.eigh(f[:nocc, :nocc])
- 
-         # Diagonalize virt-virt block
-         evals_vv, evecs_vv = np.linalg.eigh(f[nocc:, nocc:])
- 
-         evals = np.hstack((evals_oo, evals_vv))
- 
-         U = np.zeros_like(f)
- 
-         U[:nocc, :nocc] = evecs_oo
-         U[nocc:, nocc:] = evecs_vv
- 
-         C = np.dot(C, U)
- 
-         transform_f = np.dot(U.T, np.dot(f, U)) 
-         f_ov = transform_f[:nocc, nocc:].copy()
- 
-         return C, evals, f_ov, transform_f
+    def semi_canonicalize_orbitals(self, f, nocc, C):
+
+        # Diagonalize occ-occ block
+        evals_oo, evecs_oo = np.linalg.eigh(f[:nocc, :nocc])
+
+        # Diagonalize virt-virt block
+        evals_vv, evecs_vv = np.linalg.eigh(f[nocc:, nocc:])
+
+        evals = np.hstack((evals_oo, evals_vv))
+
+        U = np.zeros_like(f)
+
+        U[:nocc, :nocc] = evecs_oo
+        U[nocc:, nocc:] = evecs_vv
+
+        C = np.dot(C, U)
+
+        transform_f = np.dot(U.T, np.dot(f, U))
+        f_ov = transform_f[:nocc, nocc:].copy()
+
+        return C, evals, f_ov, transform_f
 
     def dump_flags(self, verbose=None):
         logger.info(self, '')

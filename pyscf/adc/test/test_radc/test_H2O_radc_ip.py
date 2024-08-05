@@ -50,7 +50,7 @@ def tearDownModule():
 def rdms_test(dm):
     r2_int = mol.intor('int1e_r2')
     dm_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
-    r2 = np.einsum('pq,pq->',r2_int,dm_ao) 
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
     return r2
 
 class KnownValues(unittest.TestCase):
