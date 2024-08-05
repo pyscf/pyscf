@@ -685,10 +685,25 @@ H     0    0.757    0.587'''
         dip = mf.dip_moment(unit='au')
         self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985]))
 
+    def test_rhf_quad_moment(self):
+        quad = n2mf.quad_moment(unit='au')
+        answer = numpy.array([[ 0.65040837,  0.        ,  0.        ],
+                              [ 0.        ,  0.65040837,  0.        ],
+                              [ 0.        ,  0.        , -1.30081674]])
+        self.assertTrue(numpy.allclose(quad, answer))
+
     def test_rohf_dip_moment(self):
         mf = scf.ROHF(mol).run()
         dip = mf.dip_moment(unit='au')
         self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985]))
+
+    def test_rohf_quad_moment(self):
+        mf = scf.ROHF(n2sym).run()
+        quad = mf.quad_moment(unit='au')
+        answer = numpy.array([[ 0.65040837,  0.        ,  0.        ],
+                              [ 0.        ,  0.65040837,  0.        ],
+                              [ 0.        ,  0.        , -1.30081674]])
+        self.assertTrue(numpy.allclose(quad, answer))
 
     def test_get_wfnsym(self):
         self.assertEqual(n2mf.wfnsym, 0)
