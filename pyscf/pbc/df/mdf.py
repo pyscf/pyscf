@@ -94,6 +94,9 @@ class MDF(df.GDF):
         self._cderi = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
 
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('_cderi_to_save', '_cderi', '_rsh_df'), reset_state=True)
+
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
         df.GDF.build(self, j_only, with_j3c, kpts_band)
         cell = self.cell
