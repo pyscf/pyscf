@@ -143,7 +143,7 @@ def compute_amplitudes(myadc, eris):
 
 
     t1_2 = (None,)
-    if myadc.approx_trans_moments == False or myadc.method == "adc(3)":
+    if myadc.approx_trans_moments is False or myadc.method == "adc(3)":
         # Compute second-order singles t1 (tij)
 
         t1_2_a = np.zeros((nocc_a,nvir_a))
@@ -324,16 +324,9 @@ def compute_amplitudes(myadc, eris):
 
         t2_2_a += temp - temp.transpose(1,0,2,3) - temp.transpose(0,1,3,2) + temp.transpose(1,0,3,2)
         t2_2_a += temp_1 - temp_1.transpose(1,0,2,3) - temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
-        
 
         del temp
         del temp_1
-##############################################################################################  
-#       k t2_2 += np.einsum('la,jilb->ijab',t1_1,v2e_so_ooov, optimize = True) - \
-#       k          np.einsum('lb,jila->ijab',t1_1,v2e_so_ooov, optimize = True) + \
-#       k          np.einsum('id,bajd->ijab',t1_1,v2e_so_vvov, optimize = True) - \
-#       k          np.einsum('jd,baid->ijab',t1_1,v2e_so_vvov, optimize = True)
-##########################################################################################
 
         if isinstance(myadc._scf, scf.rohf.ROHF):
             t2_2_a += lib.einsum('la,ibjl->ijab',t1_1_a,eris.ovoo, optimize = True)

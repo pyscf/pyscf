@@ -114,14 +114,13 @@ class UADC(lib.StreamObject):
     incore_complete = getattr(__config__, 'adc_uadc_UADC_incore_complete', False)
 
     _keys = {
-        'tol_residual','conv_tol', 'e_corr', 'method',
-        'method_type', 'mo_coeff', 'mol', 'mo_energy_b',
-        'scf_energy', 'e_tot', 't1', 'frozen',
-        'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle',
-        'incore_complete', 'mo_energy_a', 'mo_energy_b', 'with_df',
-        'compute_properties', 'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
-        'E', 'U', 'P', 'X', 'ncvs', 'nmo', 'ndocc',
-        'spin_c', 'imds', 'dm_a', 'dm_b', 'nucl_dip', 'f_ov', 'nsocc'
+        'tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff',
+        'mol', 'mo_energy_a', 'mo_energy_b', 'incore_complete',
+        'scf_energy', 'e_tot', 't1', 't2', 'frozen', 'chkfile',
+        'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties', 
+        'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
+        'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc',
+        'spin_c', 'f_ov'
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -157,7 +156,6 @@ class UADC(lib.StreamObject):
             logger.info(mf, "ROHF reference detected, semicanonicalizing the orbitals...")
 
             mo_a = mo_coeff.copy()
-            self.nmo = mo_a.shape[1]
             nalpha = mf.mol.nelec[0]
             nbeta = mf.mol.nelec[1]
 
@@ -169,20 +167,20 @@ class UADC(lib.StreamObject):
             fock_b = h1e + vhf[1]
 
             if nalpha > nbeta:
-                self.ndocc = nbeta
-                self.nsocc = nalpha - nbeta
+                ndocc = nbeta
+                nsocc = nalpha - nbeta
             else:
-                self.ndocc = nalpha
-                self.nsocc = nbeta - nalpha
+                ndocc = nalpha
+                nsocc = nbeta - nalpha
 
             fock_a = np.dot(mo_a.T,np.dot(fock_a, mo_a))
             fock_b = np.dot(mo_a.T,np.dot(fock_b, mo_a))
 
             # Semicanonicalize Ca using fock_a, nocc_a -> Ca, mo_energy_a, U_a, f_ov_a
-            mo_a, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(fock_a, self.ndocc + self.nsocc, mo_a)
+            mo_a, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(fock_a, ndocc + nsocc, mo_a)
 
             # Semicanonicalize Cb using fock_b, nocc_b -> Cb, mo_energy_b, U_b, f_ov_b
-            mo_b, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, self.ndocc, mo_a)
+            mo_b, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, ndocc, mo_a)
 
             mo_coeff = [mo_a, mo_b]
 
@@ -222,8 +220,23 @@ class UADC(lib.StreamObject):
         self.X = (None,)
 
         self.spin_c = False
-        self.dm_a = None
-        self.dm_b = None
+
+        dip_ints = -self.mol.intor('int1e_r',comp=3)
+        dip_mom_a = np.zeros((dip_ints.shape[0], self._nmo[0], self._nmo[0]))
+        dip_mom_b = np.zeros((dip_ints.shape[0], self._nmo[1], self._nmo[1]))
+        
+        for i in range(dip_ints.shape[0]):
+            dip = dip_ints[i,:,:]
+            dip_mom_a[i,:,:] = np.dot(mo_coeff[0].T, np.dot(dip, mo_coeff[0]))
+            dip_mom_b[i,:,:] = np.dot(mo_coeff[1].T, np.dot(dip, mo_coeff[1]))
+
+        self.dip_mom = []
+        self.dip_mom.append(dip_mom_a)
+        self.dip_mom.append(dip_mom_b)
+
+        charges = self.mol.atom_charges()
+        coords  = self.mol.atom_coords()
+        self.dip_mom_nuc = lib.einsum('i,ix->x', charges, coords)
 
     compute_amplitudes = uadc_amplitudes.compute_amplitudes
     compute_energy = uadc_amplitudes.compute_energy

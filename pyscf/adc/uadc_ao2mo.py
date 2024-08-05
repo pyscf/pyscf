@@ -72,19 +72,6 @@ def transform_integrals_incore(myadc):
     eris.OVvo = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, occ_a), compact=False).reshape(nocc_b, nvir_b, nvir_a, nocc_a).copy()  # noqa: E501
     eris.OVvv = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, vir_a), compact=True).reshape(nocc_b, nvir_b, -1).copy()  # noqa: E501
 
-    dip_ints = -myadc.mol.intor('int1e_r',comp=3)
-    myadc.dm_a = np.zeros_like((dip_ints))
-    myadc.dm_b = np.zeros_like((dip_ints))
-
-    charges = myadc.mol.atom_charges()
-    coords  = myadc.mol.atom_coords()
-    myadc.nucl_dip = lib.einsum('i,ix->x', charges, coords)
-    
-    for i in range(dip_ints.shape[0]):
-        dip = dip_ints[i,:,:]
-        myadc.dm_a[i,:,:] = np.dot(alpha.T,np.dot(dip,alpha))
-        myadc.dm_b[i,:,:] = np.dot(beta.T,np.dot(dip,beta))
-
     if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
 
         eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a),
@@ -132,20 +119,6 @@ def transform_integrals_outcore(myadc):
 
     alpha = myadc.mo_coeff[0]
     beta = myadc.mo_coeff[1]
-
-    dip_ints = -myadc.mol.intor('int1e_r',comp=3)
-    myadc.dm_a = np.zeros_like((dip_ints))
-    myadc.dm_b = np.zeros_like((dip_ints))
-    
-    charges = myadc.mol.atom_charges()
-    coords  = myadc.mol.atom_coords()
-    myadc.nucl_dip = lib.einsum('i,ix->x', charges, coords)
-
-    for i in range(dip_ints.shape[0]):
-        dip = dip_ints[i,:,:]
-        myadc.dm_a[i,:,:] = np.dot(alpha.T,np.dot(dip,alpha))
-        myadc.dm_b[i,:,:] = np.dot(beta.T,np.dot(dip,beta))
-
 
     nvpair_a = nvir_a * (nvir_a+1) // 2
     nvpair_b = nvir_b * (nvir_b+1) // 2
@@ -366,22 +339,6 @@ def transform_integrals_df(myadc):
     nocc_b = occ_b.shape[1]
     nvir_a = vir_a.shape[1]
     nvir_b = vir_b.shape[1]
-
-    alpha = myadc.mo_coeff[0]
-    beta = myadc.mo_coeff[1]
-
-    dip_ints = -myadc.mol.intor('int1e_r',comp=3)
-    myadc.dm_a = np.zeros_like((dip_ints))
-    myadc.dm_b = np.zeros_like((dip_ints))
-    
-    charges = myadc.mol.atom_charges()
-    coords  = myadc.mol.atom_coords()
-    myadc.nucl_dip = lib.einsum('i,ix->x', charges, coords)
-
-    for i in range(dip_ints.shape[0]):
-        dip = dip_ints[i,:,:]
-        myadc.dm_a[i,:,:] = np.dot(alpha.T,np.dot(dip,alpha))
-        myadc.dm_b[i,:,:] = np.dot(beta.T,np.dot(dip,beta))
 
     eris = lambda:None
     eris.vvvv = None

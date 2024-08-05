@@ -180,13 +180,12 @@ class RADC(lib.StreamObject):
     memorymin = getattr(__config__, 'adc_radc_RADC_memorymin', 2000)
 
     _keys = {
-        'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
+        'tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff',
         'mol', 'mo_energy', 'incore_complete',
-        'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile',
-        'max_space', 't2', 'mo_occ', 'max_cycle',
-        'imds', 'method', 'method_type', 'with_df', 'compute_properties',
+        'scf_energy', 'e_tot', 't1', 't2', 'frozen', 'chkfile',
+        'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties',
         'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
-        'ncvs', 'E', 'U', 'P', 'X',
+        'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc'
     }
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -239,6 +238,19 @@ class RADC(lib.StreamObject):
         self.U = None
         self.P = None
         self.X = None
+
+        dip_ints = -self.mol.intor('int1e_r',comp=3)
+        dip_mom = np.zeros((dip_ints.shape[0], self._nmo, self._nmo))
+        
+        for i in range(dip_ints.shape[0]):
+            dip = dip_ints[i,:,:]
+            dip_mom[i,:,:] = np.dot(mo_coeff.T, np.dot(dip, mo_coeff))
+
+        self.dip_mom = dip_mom
+
+        charges = self.mol.atom_charges()
+        coords  = self.mol.atom_coords()
+        self.dip_mom_nuc = lib.einsum('i,ix->x', charges, coords)
 
     compute_amplitudes = radc_amplitudes.compute_amplitudes
     compute_energy = radc_amplitudes.compute_energy
