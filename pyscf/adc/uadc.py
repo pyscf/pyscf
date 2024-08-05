@@ -49,7 +49,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     if isinstance(adc._scf, scf.rohf.ROHF) and (adc.method_type == "ip" or adc.method_type == "ea"):
         logger.warn(
-            adc, "EA/IP-ADC with the ROHF reference do not incorporate contributions from occ-vir Fock matrix elements...")
+            adc, "EA/IP-ADC with the ROHF reference do not incorporate the occ-vir Fock matrix elements...")
 
     if eris is None:
         eris = adc.transform_integrals()
@@ -437,7 +437,6 @@ class UADC(lib.StreamObject):
         return self._adc_es.make_rdm1()
 
 if __name__ == '__main__':
-    from pyscf import scf
     from pyscf import gto
     from pyscf import adc
 

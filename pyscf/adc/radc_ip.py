@@ -1309,9 +1309,6 @@ def make_rdm1_eigenvectors(adc, L, R):
         rdm1[nocc:, :nocc] += 1/2 * einsum('aij,k,jiab,IkAb->AI',
                                            L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
 
-        ##################################################################################################################
-        ### END OF ADC(3) 1RDM ###
-        ###
     return rdm1
 
 
