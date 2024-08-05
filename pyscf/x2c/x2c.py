@@ -810,8 +810,7 @@ class X2C1E_GSCF(_X2C_SCF):
 
 def _uncontract_mol(mol, xuncontract=None, exp_drop=0.2):
     '''mol._basis + uncontracted steep functions'''
-    pmol, contr_coeff = mol.decontract_basis(atoms=xuncontract)
-    contr_coeff = scipy.linalg.block_diag(*contr_coeff)
+    pmol, contr_coeff = mol.decontract_basis(atoms=xuncontract, aggregate=True)
     return pmol, contr_coeff
 
 

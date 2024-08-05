@@ -1037,12 +1037,25 @@ H    P
         mol._bas = mol._bas[:5]
         pmol, c = mol.decontract_basis()
         self.assertEqual(pmol.nbas, 14)
+        self.assertEqual(len(c), 5)
 
         mol = gto.M(atom='He',
                     basis=('ccpvdz', [[0, [5, 1]], [1, [3, 1]]]))
         pmol, contr_coeff = mol.decontract_basis()
+        self.assertEqual(len(contr_coeff), 5)
         contr_coeff = scipy.linalg.block_diag(*contr_coeff)
         s = contr_coeff.T.dot(pmol.intor('int1e_ovlp')).dot(contr_coeff)
+        self.assertAlmostEqual(abs(s - mol.intor('int1e_ovlp')).max(), 0, 12)
+
+        mol = gto.M(atom='H 0 0 0; F 0 0 1', basis=[[0, (2, .5), (1, .5)],
+                                                    [0, (2, .1), (1, .9)],
+                                                    [0, (4., 1)]])
+        with self.assertRaises(RuntimeError):
+            mol.decontract_basis(aggregate=False)
+        pmol, c = mol.decontract_basis(aggregate=True)
+        self.assertEqual(pmol.nbas, 6)
+        self.assertEqual(c.shape, (6, 6))
+        s = c.T.dot(pmol.intor('int1e_ovlp')).dot(c)
         self.assertAlmostEqual(abs(s - mol.intor('int1e_ovlp')).max(), 0, 12)
 
     def test_ao_rotation_matrix(self):
