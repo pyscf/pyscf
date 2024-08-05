@@ -341,6 +341,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if callback is None:
         callback = casscf.callback
 
+    if ci0 is None:
+        ci0 = casscf.ci
+
     mo = mo_coeff
     nmo = mo_coeff.shape[1]
     ncore = casscf.ncore
@@ -852,6 +855,9 @@ To enable the solvent model for CASSCF, the following code needs to be called
         else: # overwrite self.mo_coeff because it is needed in many methods of this class
             self.mo_coeff = mo_coeff
         if callback is None: callback = self.callback
+
+        if ci0 is None:
+            ci0 = self.ci
 
         self.check_sanity()
         self.dump_flags()
