@@ -308,7 +308,7 @@ void CCuccsd_t_aaa(double complex *e_tot,
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in CCuccsd_t_aaa\n",
+                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_aaa\n",
                         sizeof(double) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -557,7 +557,7 @@ void CCuccsd_t_baa(double complex *e_tot,
         double *cache1 = malloc(sizeof(double) * (noccb*nocca*nocca*5+1 +
                                                   nocca*2+noccb*2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in CCuccsd_t_baa\n",
+                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_baa\n",
                         sizeof(double) * noccb*nocca*nocca*5);
                 exit(1);
         }
@@ -715,7 +715,7 @@ void CCuccsd_t_zaaa(double complex *e_tot,
         double complex *cache1 = malloc(sizeof(double complex) *
                                         (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in CCuccsd_t_zaaa\n",
+                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_zaaa\n",
                         sizeof(double complex) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -924,7 +924,7 @@ void CCuccsd_t_zbaa(double complex *e_tot,
                                         (noccb*nocca*nocca*5+1 +
                                          nocca*2+noccb*2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in CCuccsd_t_zbaa\n",
+                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_zbaa\n",
                         sizeof(double complex) * noccb*nocca*nocca*5);
                 exit(1);
         }

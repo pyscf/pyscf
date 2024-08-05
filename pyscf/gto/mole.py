@@ -319,7 +319,7 @@ def format_atom(atoms, origin=0, axes=None,
     coordinates to AU, rotate and shift the molecule.
     If the :attr:`~Mole.atom` is a string, it takes ";" and "\\n"
     for the mark to separate atoms;  "," and arbitrary length of blank space
-    to spearate the individual terms for an atom.  Blank line will be ignored.
+    to separate the individual terms for an atom.  Blank line will be ignored.
 
     Args:
         atoms : list or str
@@ -459,7 +459,7 @@ def format_basis(basis_tab, sort_basis=True):
         if len(_basis) == 0:
             raise BasisNotFoundError('Basis not found for  %s' % symb)
 
-        # Sort basis accroding to angular momentum. This is important for method
+        # Sort basis according to angular momentum. This is important for method
         # decontract_basis, which assumes that basis functions with the same
         # angular momentum are grouped together. Related to issue #1620 #1770
         if sort_basis:
@@ -1961,7 +1961,7 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
 is_same_mol = same_mol
 
 def chiral_mol(mol1, mol2=None):
-    '''Detect whether the given molelcule is chiral molecule or two molecules
+    '''Detect whether the given molecule is chiral molecule or two molecules
     are chiral isomers.
     '''
     if mol2 is None:
@@ -2197,7 +2197,7 @@ class MoleBase(lib.StreamObject):
             subgroup
 
         atom : list or str
-            To define molecluar structure.  The internal format is
+            To define molecular structure.  The internal format is
 
             | atom = [[atom1, (x, y, z)],
             |         [atom2, (x, y, z)],
@@ -2457,7 +2457,7 @@ class MoleBase(lib.StreamObject):
               atom=None, basis=None, unit=None, nucmod=None, ecp=None, pseudo=None,
               charge=None, spin=0, symmetry=None, symmetry_subgroup=None,
               cart=None, magmom=None):
-        '''Setup moleclue and initialize some control parameters.  Whenever you
+        '''Setup molecule and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
 
@@ -2473,7 +2473,7 @@ class MoleBase(lib.StreamObject):
             max_memory : int, float
                 Allowd memory in MB.  If given, overwrite :attr:`Mole.max_memory`
             atom : list or str
-                To define molecluar structure.
+                To define molecular structure.
             basis : dict or str
                 To define basis set.
             nucmod : dict or str
@@ -3748,7 +3748,7 @@ class Mole(MoleBase):
     def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
               **kwargs):
         '''Integral transformation for arbitrary orbitals and arbitrary
-        integrals.  See more detalied documentation in func:`ao2mo.kernel`.
+        integrals.  See more detailed documentation in func:`ao2mo.kernel`.
 
         Args:
             mo_coeffs (an np array or a list of arrays) : A matrix of orbital
@@ -3800,7 +3800,7 @@ class Mole(MoleBase):
         return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
     def to_cell(self, a, dimension=3):
-        '''Put a molecule in a cell with periodic boundary condictions
+        '''Put a molecule in a cell with periodic boundary conditions
 
         Args:
             a : (3,3) ndarray
@@ -4054,7 +4054,7 @@ def fakemol_for_charges(coords, expnt=1e16):
         # approximate point charge with gaussian distribution exp(-1e16*r^2)
         fakebas[:,PTR_EXP] = ptr
         fakebas[:,PTR_COEFF] = ptr+1
-        fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
+        fakeenv.append([expnt, 1 / (2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
         ptr += 2
     else:
         assert expnt.size == nbas
@@ -4063,6 +4063,46 @@ def fakemol_for_charges(coords, expnt=1e16):
         fakebas[:,PTR_COEFF] = ptr + numpy.arange(nbas) * 2 + 1
         coeff = 1 / (2 * numpy.sqrt(numpy.pi) * gaussian_int(2, expnt))
         fakeenv.append(numpy.vstack((expnt, coeff)).T.ravel())
+
+    fakemol = Mole()
+    fakemol._atm = fakeatm
+    fakemol._bas = fakebas
+    fakemol._env = numpy.hstack(fakeenv)
+    fakemol._built = True
+    return fakemol
+
+def fakemol_for_cgtf_charge(coord, expnt=1e16, contr_coeff=1):
+    '''Constructs a "fake" Mole object that has a Gaussian charge
+    distribution at the specified coordinate (coord).  The charge
+    can be given as a linear combination of Gaussians with
+    exponents expnt and contraction coefficients contr_coeff.
+    '''
+    assert coord.shape[0] == 1
+    expnt = numpy.asarray(expnt).ravel()
+    contr_coeff = numpy.asarray(contr_coeff).ravel()
+
+    fakeatm = numpy.zeros((1,ATM_SLOTS), dtype=numpy.int32)
+    fakebas = numpy.zeros((1,BAS_SLOTS), dtype=numpy.int32)
+    fakeenv = [0] * PTR_ENV_START
+    ptr = PTR_ENV_START
+    fakeatm[:,PTR_COORD] = numpy.arange(ptr, ptr+3, 3)
+    fakeenv.append(coord.ravel())
+    ptr += 3
+    fakebas[:,ATOM_OF] = 0#numpy.arange(nbas)
+    fakebas[:,NPRIM_OF] = contr_coeff.size
+    fakebas[:,NCTR_OF] = 1
+    if expnt.size == 1:
+        expnt = expnt[0]
+        fakebas[:,PTR_EXP] = ptr
+        fakebas[:,PTR_COEFF] = ptr+1
+        fakeenv.append([expnt, 1 / (2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
+        ptr += 2
+    else:
+        assert expnt.size == contr_coeff.size
+        fakebas[:,PTR_EXP] = ptr
+        fakebas[:,PTR_COEFF] = ptr + contr_coeff.size
+        coeff = contr_coeff / (2 * numpy.sqrt(numpy.pi) * gaussian_int(2, expnt))
+        fakeenv.append(numpy.vstack((expnt, coeff)).ravel())
 
     fakemol = Mole()
     fakemol._atm = fakeatm

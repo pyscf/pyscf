@@ -833,7 +833,7 @@ XC_D0000003 = 119
 
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
     r'''Interface to call xcfun library to evaluate XC functional, potential
-    and functional derivatives. Return deriviates following libxc convention.
+    and functional derivatives. Return derivatives following libxc convention.
 
     See also :func:`pyscf.dft.libxc.eval_xc`
     '''

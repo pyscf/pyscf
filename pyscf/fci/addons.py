@@ -224,7 +224,7 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
                     ci_1[addr_x_a,addr_y_b] = numpy.sqrt(.5)
                     ci_1[addr_y_a,addr_x_b] =-numpy.sqrt(.5)
             else:
-                # TODO: Other direct-product to direct-sum transofromation
+                # TODO: Other direct-product to direct-sum transformation
                 # which involves CG coefficients.
                 ci_1[addra,addrb] = 1
             ci0.append(ci_1.ravel())
@@ -316,7 +316,7 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
     else:
         wfnsym = [_guess_wfnsym(c, strsa, strsb, orbsym) for c in ci]
         if any(wfnsym[0] != x for x in wfnsym):
-            warnings.warn('Different wfnsym %s found in different CI vecotrs' % wfnsym)
+            warnings.warn('Different wfnsym %s found in different CI vectors' % wfnsym)
         wfnsym = wfnsym[0]
     return wfnsym
 

@@ -440,8 +440,11 @@ def _get_init_guess(na, nb, nroots, hdiag, nelec):
     ci0 = []
     neleca, nelecb = _unpack_nelec(nelec)
     if neleca == nelecb and na == nb:
-        hdiag = hdiag.reshape(na, na)
-        addrs = numpy.argpartition(lib.pack_tril(hdiag), nroots-1)[:nroots]
+        hdiag = lib.pack_tril(hdiag.reshape(na, na))
+        if hdiag.size <= nroots:
+            addrs = numpy.arange(hdiag.size)
+        else:
+            addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
         for addr in addrs:
             addra = (int)((2*addr+.25)**.5 - .5 + 1e-7)
             addrb = addr - addra*(addra+1)//2
@@ -449,7 +452,10 @@ def _get_init_guess(na, nb, nroots, hdiag, nelec):
             x[addra,addrb] = 1
             ci0.append(x.ravel().view(FCIvector))
     else:
-        addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
+        if hdiag.size <= nroots:
+            addrs = numpy.arange(hdiag.size)
+        else:
+            addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
         for addr in addrs:
             x = numpy.zeros((na*nb))
             x[addr] = 1
@@ -505,8 +511,8 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
         nroots: int
             Number of states to solve
         davidson_only: bool
-            Whether to call subspace diagonlization (davidson solver) or do a
-            full diagonlization (lapack eigh) for small systems
+            Whether to call subspace diagonalization (davidson solver) or do a
+            full diagonalization (lapack eigh) for small systems
         pspace_size: int
             Number of determinants as the threshold of "small systems",
         hop: function(c) => array_like_c
@@ -663,7 +669,7 @@ class FCIBase(lib.StreamObject):
             problems being solved by Davidson subspace algorithm.  This flag
             should be enabled when initial guess is given or particular spin
             symmetry or point-group symmetry is required because the initial
-            guess or symmetry are completely ignored in the direct diagonlization.
+            guess or symmetry are completely ignored in the direct diagonalization.
         pspace_size : int
             The dimension of Hamiltonian matrix over which Davidson iteration
             algorithm will be used for the eigenvalue problem.  Default is 400.
@@ -710,8 +716,8 @@ class FCIBase(lib.StreamObject):
     # dependence basis in davidson diagonalization solver
     level_shift = getattr(__config__, 'fci_direct_spin1_FCI_level_shift', 1e-3)
 
-    # force the diagonlization use davidson iteration.  When the CI space
-    # is small, the solver exactly diagonlizes the Hamiltonian.  But this
+    # force the diagonalization use davidson iteration.  When the CI space
+    # is small, the solver exactly diagonalizes the Hamiltonian.  But this
     # solution will ignore the initial guess.  Setting davidson_only can
     # enforce the solution on the initial guess state
     davidson_only = getattr(__config__, 'fci_direct_spin1_FCI_davidson_only', False)

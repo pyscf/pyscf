@@ -43,7 +43,7 @@ kmf.kernel()
 
 #
 # The mean-field object with k-point symmetry can be converted back to
-# the correponding non-symmetric mean-field object
+# the corresponding non-symmetric mean-field object
 #
 
 kmf = kmf.to_khf()
@@ -64,7 +64,7 @@ kumf.kernel()
 
 #
 # The mean-field object with k-point symmetry can be converted back to
-# the correponding non-symmetric mean-field object
+# the corresponding non-symmetric mean-field object
 #
 kumf = kumf.to_khf()
 kumf.kernel(kumf.make_rdm1())

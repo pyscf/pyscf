@@ -101,7 +101,7 @@ def kernel(mf, disp=1e-4, mo_rep=False, cutoff_frequency=CUTOFF_FREQUENCY, keep_
     omega, vec = get_mode(mf, cutoff_frequency, keep_imag_frequency)
     mass = mol.atom_mass_list() * MP_ME
     vec = rhf_eph._freq_mass_weighted_vec(vec, omega, mass)
-    mols_a, mols_b = gen_moles(mol, disp/2.0) # generate a bunch of molecules with disp/2 on each cartesion coord
+    mols_a, mols_b = gen_moles(mol, disp/2.0) # generate a bunch of molecules with disp/2 on each cartesian coord
     mfset = run_mfs(mf, mols_a, mols_b) # run mean field calculations on all these molecules
     vmat = get_vmat(mf, mfset, disp) # extracting <p|dV|q>/dR
     if mo_rep:

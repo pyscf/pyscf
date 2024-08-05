@@ -217,15 +217,20 @@ def _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym=0):
     neleca, nelecb = _unpack_nelec(nelec)
     na = len(airreps)
     nb = len(birreps)
-    hdiag = hdiag.reshape(na,nb)
     sym_allowed = airreps[:,None] == wfnsym ^ birreps
     if neleca == nelecb and na == nb:
         idx = np.arange(na)
         sym_allowed[idx[:,None] < idx] = False
     idx_a, idx_b = np.where(sym_allowed)
 
+    hdiag = hdiag.reshape(na,nb)[idx_a,idx_b]
+    if hdiag.size <= nroots:
+        hdiag_indices = np.arange(hdiag.size)
+    else:
+        hdiag_indices = np.argpartition(hdiag, nroots-1)[:nroots]
+
     ci0 = []
-    for k in np.argpartition(hdiag[idx_a,idx_b], nroots-1)[:nroots]:
+    for k in hdiag_indices:
         addra, addrb = idx_a[k], idx_b[k]
         x = np.zeros((na, nb))
         x[addra,addrb] = 1
@@ -248,7 +253,11 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         return _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym)
 
     ci0 = []
-    for k in np.argpartition(hdiag, nroots-1)[:nroots]:
+    if hdiag.size <= nroots:
+        hdiag_indices = np.arange(hdiag.size)
+    else:
+        hdiag_indices = np.argpartition(hdiag, nroots-1)[:nroots]
+    for k in hdiag_indices:
         x = np.zeros_like(hdiag)
         x[k] = 1.
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
@@ -301,6 +310,13 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             addra1, sign_a = _sv_associated_det(strsa[addra], degen_mapping)
             addrb1, sign_b = _sv_associated_det(strsb[addrb], degen_mapping)
             if wfnsym in (1, 4) and addra == addra1 and addrb == addrb1:
+                # Remove the A1 repr from initial guess.
+                # The product of two E reprs can produce A1, A2 and another E repr.
+                # addra == addra1 and addrb == addrb1  can be found in the A1 repr.
+                # However, this may also incorrectly remove the A2 repr, see the
+                # explanation in issue #2291.
+                # In this case, the direct_spin1_cyl_sym solver can be used to
+                # solve A2. See example mcscf/18-o2_spatial_spin_symmetry.py
                 continue
             x = ca[:,None] * cb
 

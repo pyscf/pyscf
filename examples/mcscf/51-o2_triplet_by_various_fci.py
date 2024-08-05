@@ -7,7 +7,7 @@ import numpy
 from pyscf import gto, scf, mcscf, fci
 
 '''
-Use differnt FCI solver for CASSCF
+Use different FCI solver for CASSCF
 '''
 
 mol = gto.Mole()

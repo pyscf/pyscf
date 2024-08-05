@@ -1014,7 +1014,7 @@ def get_nuc(nuc_builder):
     return nuc
 
 def get_pp(nuc_builder):
-    '''get the periodic pseudotential nuc-el ao matrix, with g=0 removed.
+    '''get the periodic pseudopotential nuc-el ao matrix, with g=0 removed.
 
     kwargs:
         mesh: custom mesh grids. by default mesh is determined by the
@@ -1338,7 +1338,7 @@ def _guess_omega(cell, kpts, mesh=None):
         nkpts = len(kpts)
         ke_cutoff = 20. * (cell.nao/25 * nkpts)**(-1./3)
         ke_cutoff = max(ke_cutoff, ke_min)
-        # avoid large omega since nuermical issues were found in Rys
+        # avoid large omega since numerical issues were found in Rys
         # polynomials when computing SR integrals with nroots > 3
         exps = [e for l, e in zip(cell._bas[:,gto.ANG_OF], cell.bas_exps()) if l != 0]
         if exps:
@@ -1401,7 +1401,7 @@ def _round_off_to_odd_mesh(mesh):
     # the conjugation symmetry between the k-points k and -k.
     # When building the DF integral tensor in function _make_j3c, the symmetry
     # between k and -k is used (function conj_j2c) to overcome the error
-    # caused by auxiliary basis linear dependency. More detalis of this
+    # caused by auxiliary basis linear dependency. More details of this
     # problem can be found in function _make_j3c.
     if isinstance(mesh, (int, np.integer)):
         return (mesh // 2) * 2 + 1
@@ -1597,11 +1597,11 @@ def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     return Ecut.max()
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
-    '''The minimal omega in attenuated Coulombl given energy cutoff
+    '''The minimal omega in attenuated Coulomb given energy cutoff
     '''
     if precision is None:
         precision = cell.precision
-    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+    # estimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
     # enough to converge the 2-electron integrals. A penalty term here is to
     # reduce the error in integrals
     precision *= 1e-2

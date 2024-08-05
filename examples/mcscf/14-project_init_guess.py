@@ -10,7 +10,7 @@ import numpy
 Use project_init_guess function to format the CASSCF initial guess orbitals
 
 CASSCF solver can use any orbital as initial guess, no matter how and where
-you get the orbital coeffcients.  It can even be the orbitals of different
+you get the orbital coefficients.  It can even be the orbitals of different
 molecule.
 '''
 

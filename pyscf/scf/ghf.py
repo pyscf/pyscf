@@ -287,7 +287,7 @@ def spin_square(mo, s=1):
     return ss, s*2+1
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
-            **kwargs):
+            origin=None, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -301,7 +301,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         log.note('MO #%-3d energy= %-18.15g occ= %g', i+MO_BASE, mo_energy[i], c)
     ovlp_ao = mf.get_ovlp()
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    dip = mf.dip_moment(mf.mol, dm, verbose=log)
+    dip = mf.dip_moment(mf.mol, dm, origin=origin, verbose=log)
     if with_meta_lowdin:
         pop_and_chg = mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
     else:
@@ -349,11 +349,11 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
     x = numpy.dot(u/s, vt)
     return numpy.prod(s), x
 
-def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
+def dip_moment(mol, dm, unit_symbol='Debye', origin=None, verbose=logger.NOTE):
     nao = mol.nao_nr()
     dma = dm[:nao,:nao]
     dmb = dm[nao:,nao:]
-    return hf.dip_moment(mol, dma+dmb, unit_symbol, verbose)
+    return hf.dip_moment(mol, dma+dmb, unit=unit_symbol, verbose=verbose, origin=origin)
 
 canonicalize = hf.canonicalize
 
@@ -438,6 +438,12 @@ class GHF(hf.SCF):
 employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return _from_rhf_init_dm(hf.init_guess_by_mod_huckel(mol))
 
+    @lib.with_doc(hf.SCF.init_guess_by_sap.__doc__)
+    def init_guess_by_sap(self, mol=None, **kwargs):
+        return _from_rhf_init_dm(
+            hf.SCF.init_guess_by_sap(self, mol, **kwargs)
+        )
+
     @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
@@ -504,10 +510,10 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, mol=None, dm=None, unit_symbol='Debye',
-                   verbose=logger.NOTE):
+                   origin=None, verbose=logger.NOTE):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
+        return dip_moment(mol, dm, unit_symbol, origin=origin, verbose=verbose)
 
     def convert_from_(self, mf):
         '''Create GHF object based on the RHF/UHF object'''
@@ -515,9 +521,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         self.__dict__.update(tgt.__dict__)
         return self
 
-    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+    def stability(self, internal=None, external=None, verbose=None, return_status=False, **kwargs):
         from pyscf.scf.stability import ghf_stability
-        return ghf_stability(self, verbose, return_status)
+        return ghf_stability(self, verbose, return_status, **kwargs)
 
     def nuc_grad_method(self):
         raise NotImplementedError

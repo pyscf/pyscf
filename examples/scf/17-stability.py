@@ -85,3 +85,18 @@ mol = gto.M(atom='C 0 0 0; C 0 0 2.0', basis='631g*')
 mf2 = scf.UHF(mol).run()
 mf2 = stable_opt_internal(mf2)
 
+#
+# Some cases need tight tolerance to give the stability correctly
+#
+from pyscf.scf.stability import uhf_internal
+mol = gto.M(atom='''
+O         -0.23497692        0.90193619       -0.06868800
+H          1.10502308        0.90193619       -0.06868800
+H         -0.68227811        2.16507579       -0.06868800''', 
+basis = 'def2svp', spin=0)
+mf = mol.UHF().run()
+uhf_internal(mf, verbose=4) # wrong
+uhf_internal(mf, verbose=4, tol=1e-6) # correct
+
+# the tolerance and nroots are both adjustable in the stability analysis
+mf.stability(verbose=4, tol=1e-6, nroots=5)

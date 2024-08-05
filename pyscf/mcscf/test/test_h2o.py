@@ -14,11 +14,13 @@
 # limitations under the License.
 
 import unittest
+import tempfile
 import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import fci
+from pyscf import lib
 
 def setUpModule():
     global mol, molsym, m, msym, mc_ref
@@ -182,6 +184,39 @@ class KnownValues(unittest.TestCase):
         mc = mc.state_specific_(2)
         emc = mc.kernel()[0]
         self.assertAlmostEqual(emc, -75.59353002290788, 8)
+
+    def test_chkfile_mixed(self):
+        fcisolvers = [
+            fci.solver(mol, singlet=not (bool(i)), symm=False) for i in range(2)
+        ]
+        fcisolvers[0].nroots = fcisolvers[1].nroots = 2
+        fcisolvers[1].spin = 2
+        mc = mcscf.addons.state_average_mix(
+            mcscf.CASSCF(m, 4, 4),
+            fcisolvers,
+            [
+                0.25,
+            ]
+            * 4,
+        )
+        mo = mc.sort_mo([4, 5, 6, 10], base=1)
+        mc.chkfile = tempfile.NamedTemporaryFile().name
+        mc.chk_ci = True
+        mc.kernel(mo)
+        self.assertAlmostEqual(mc.e_tot, mc_ref.e_tot, 8)
+        for e1, e0 in zip(numpy.sort(mc.e_states), mc_ref.e_states):
+            self.assertAlmostEqual(e1, e0, 5)
+
+        for state, (cref, c) in enumerate(
+            zip(mc.ci, lib.chkfile.load(mc.chkfile, "mcscf/ci"))
+        ):
+            with self.subTest(state=state):
+                self.assertEqual(lib.fp(cref), lib.fp(c))
+
+        self.assertEqual(
+            lib.fp(mc.mo_coeff), lib.fp(lib.chkfile.load(mc.chkfile, "mcscf/mo_coeff"))
+        )
+
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

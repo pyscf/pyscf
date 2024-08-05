@@ -20,7 +20,7 @@
 PBC spin-restricted G0W0-AC QP eigenvalues with k-point sampling
 This implementation has N^4 scaling, and is faster than GW-CD (N^4)
 and analytic GW (N^6) methods.
-GW-AC is recommended for valence states only, and is inaccuarate for core states.
+GW-AC is recommended for valence states only, and is inaccurate for core states.
 
 Method:
     See T. Zhu and G.K.-L. Chan, arxiv:2007.03148 (2020) for details
@@ -277,7 +277,7 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
                     for LpqR, LpqI, sign \
                             in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
                         Lpq.append(LpqR+LpqI*1.0j)
-                    # support uneqaul naux on different k points
+                    # support unequal naux on different k points
                     Lpq = np.vstack(Lpq).reshape(-1,nmo**2)
                     tao = []
                     ao_loc = None
@@ -389,7 +389,7 @@ def get_rho_response_wing(gw, omega, mo_energy, Lpq, qij):
 def get_qij(gw, q, mo_coeff, uniform_grids=False):
     '''
     Compute qij = 1/Omega * |< psi_{ik} | e^{iqr} | psi_{ak-q} >|^2 at q: (nkpts, nocc, nvir)
-    through kp perturbtation theory
+    through kp perturbation theory
     Ref: Phys. Rev. B 83, 245122 (2011)
     '''
     nocc = gw.nocc
@@ -442,7 +442,7 @@ def _get_scaled_legendre_roots(nw):
 
 def _get_clenshaw_curtis_roots(nw):
     """
-    Clenshaw-Curtis qaudrature on [0,inf)
+    Clenshaw-Curtis quadrature on [0,inf)
     Ref: J. Chem. Phys. 132, 234114 (2010)
     Returns:
         freqs : 1D ndarray

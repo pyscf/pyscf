@@ -680,7 +680,7 @@ class ddCOSMO(lib.StreamObject):
     @dm.setter
     def dm(self, dm):
         '''Set dm to enable/disable the frozen ddCOSMO solvent potential.
-        Setting dm to None will disable the frozen potental, i.e. the
+        Setting dm to None will disable the frozen potential, i.e. the
         potential will respond to the change of the density during SCF
         iterations.
         '''

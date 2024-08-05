@@ -17,7 +17,7 @@
 #
 
 '''
-Restricted coupled pertubed Hartree-Fock solver
+Restricted coupled perturbed Hartree-Fock solver
 Modified from pyscf.scf.cphf
 '''
 

@@ -394,7 +394,7 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         nbas = opt->nbas;
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
         if (opt->q_cond == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in CVHFsetnr_direct_scf\n",
+                fprintf(stderr, "malloc(%zu) failed in CVHFsetnr_direct_scf\n",
                         sizeof(double) * nbas*nbas);
                 exit(1);
         }
@@ -528,7 +528,7 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         nbas = opt->nbas;
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
         if (opt->dm_cond == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in CVHFsetnr_direct_scf_dm\n",
+                fprintf(stderr, "malloc(%zu) failed in CVHFsetnr_direct_scf_dm\n",
                         sizeof(double) * nbas*nbas);
                 exit(1);
         }

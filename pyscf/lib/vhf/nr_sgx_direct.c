@@ -52,24 +52,26 @@ typedef struct {
 #define BLKSIZE         312
 
 // for grids integrals only
-int _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
-                        int *atm, int natm, int *bas, int nbas, double *env)
+size_t _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
+                           int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int i, n;
+        int i;
         int i0 = shls_slice[0];
         int i1 = shls_slice[1];
         for (i = 1; i < ncenter; i++) {
                 i0 = MIN(i0, shls_slice[i*2  ]);
                 i1 = MAX(i1, shls_slice[i*2+1]);
         }
+        size_t (*f)() = (size_t (*)())intor;
+        size_t cache_size = 0;
+        size_t n;
         int shls[4];
-        int cache_size = 0;
         for (i = i0; i < i1; i++) {
                 shls[0] = i;
                 shls[1] = i;
                 shls[2] = 0;
                 shls[3] = BLKSIZE;
-                n = (*intor)(NULL, NULL, shls, atm, natm, bas, nbas, env, NULL, NULL);
+                n = (*f)(NULL, NULL, shls, atm, natm, bas, nbas, env, NULL, NULL);
                 cache_size = MAX(cache_size, n);
         }
         return cache_size;
@@ -352,7 +354,7 @@ void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         }
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*ngrids);
         if (opt->dm_cond == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in SGXsetnr_direct_scf_dm\n",
+                fprintf(stderr, "malloc(%zu) failed in SGXsetnr_direct_scf_dm\n",
                         sizeof(double) * nbas*ngrids);
                 exit(1);
         }

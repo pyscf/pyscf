@@ -303,7 +303,7 @@ if __name__ == '__main__':
     mf = KGHF(cell, kpts=kpts)
     mf.kernel()
 
-    # x2c1e decoractor to KGHF class.
+    # x2c1e decorator to KGHF class.
     #mf = KGHF(cell, kpts=kpts).x2c1e()
     # or
     #mf = KGHF(cell, kpts=kpts).sfx2c1e()

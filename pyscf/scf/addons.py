@@ -83,7 +83,7 @@ def _smearing_optimize(f_occ, mo_es, nocc, sigma):
 
 def _get_fermi(mo_energy, nocc):
     mo_e_sorted = numpy.sort(mo_energy)
-    return mo_e_sorted[nocc-1]
+    return mo_e_sorted[numpy.ceil(nocc).astype(int) - 1]
 
 class _SmearingSCF:
 
@@ -174,7 +174,7 @@ class _SmearingSCF:
             else:
                 mo_es = mo_energy
             if is_rhf:
-                nocc = (nelectron + 1) // 2
+                nocc = nelectron / 2
 
             if self.mu0 is None:
                 mu, mo_occs = _smearing_optimize(f_occ, mo_es, nocc, sigma)

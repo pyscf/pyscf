@@ -14,7 +14,7 @@
 # limitations under the License.
 
 '''
-UMP2 with spatial integals
+UMP2 with spatial integrals
 '''
 
 
@@ -63,7 +63,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     emp2_ss = emp2_os = 0.0
     for i in range(nocca):
         if isinstance(eris.ovov, numpy.ndarray) and eris.ovov.ndim == 4:
-            # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
+            # When mf._eri is a custom integrals with the shape (n,n,n,n), the
             # ovov integrals might be in a 4-index tensor.
             eris_ovov = eris.ovov[i]
         else:
@@ -77,7 +77,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
             t2aa[i] = t2i - t2i.transpose(0,2,1)
 
         if isinstance(eris.ovOV, numpy.ndarray) and eris.ovOV.ndim == 4:
-            # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
+            # When mf._eri is a custom integrals with the shape (n,n,n,n), the
             # ovov integrals might be in a 4-index tensor.
             eris_ovov = eris.ovOV[i]
         else:
@@ -90,7 +90,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
     for i in range(noccb):
         if isinstance(eris.OVOV, numpy.ndarray) and eris.OVOV.ndim == 4:
-            # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
+            # When mf._eri is a custom integrals with the shape (n,n,n,n), the
             # ovov integrals might be in a 4-index tensor.
             eris_ovov = eris.OVOV[i]
         else:
@@ -217,7 +217,7 @@ def get_frozen_mask(mp):
     '''Get boolean mask for the unrestricted reference orbitals.
 
     In the returned boolean (mask) array of frozen orbital indices, the
-    element is False if it corresonds to the frozen orbital.
+    element is False if it corresponds to the frozen orbital.
     '''
     moidxa = numpy.ones(mp.mo_occ[0].size, dtype=bool)
     moidxb = numpy.ones(mp.mo_occ[1].size, dtype=bool)
@@ -323,7 +323,8 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None, eris=None):
             else:
                 cumsum = numpy.cumsum(n/numpy.sum(n))
                 logger.debug(mp, 'Sum(pct_occ): %s', cumsum)
-                nvir_keep = numpy.count_nonzero(cumsum<pct_occ)
+                nvir_keep = numpy.count_nonzero(
+                    [c <= pct_occ or numpy.isclose(c, pct_occ) for c in cumsum])
         else:
             nvir_keep = min(nvir, nvir_act[s])
 
