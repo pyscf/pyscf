@@ -601,16 +601,16 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
             dms_ht = numpy.asarray(dms[:,:,idx_h[:,None],idx_t], order='C')
             dms_lh = numpy.asarray(dms[:,:,idx_l[:,None],idx_h], order='C')
 
-            t_cell = h_cell + grids_sparse.cell
+            l_cell = grids_sparse.cell
+            h_pcell, h_coeff = h_cell.decontract_basis(to_cart=True, aggregate=True)
+            l_pcell, l_coeff = l_cell.decontract_basis(to_cart=True, aggregate=True)
+            t_cell = h_pcell + l_pcell
+            t_coeff = scipy.linalg.block_diag(h_coeff, l_coeff)
+
             nshells_h = _pgto_shells(h_cell)
             nshells_t = _pgto_shells(t_cell)
-            t_cell, t_coeff = t_cell.to_uncontracted_cartesian_basis()
 
             if deriv == 0:
-                h_coeff = scipy.linalg.block_diag(*t_coeff[:h_cell.nbas])
-                l_coeff = scipy.linalg.block_diag(*t_coeff[h_cell.nbas:])
-                t_coeff = scipy.linalg.block_diag(*t_coeff)
-
                 if hermi == 1:
                     naol, naoh = dms_lh.shape[2:]
                     dms_ht[:,:,:,naoh:] += dms_lh.transpose(0,1,3,2)
@@ -635,10 +635,6 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
                                          'LDA', kpts, grids_dense, ignore_imag, log)
 
             elif deriv == 1:
-                h_coeff = scipy.linalg.block_diag(*t_coeff[:h_cell.nbas])
-                l_coeff = scipy.linalg.block_diag(*t_coeff[h_cell.nbas:])
-                t_coeff = scipy.linalg.block_diag(*t_coeff)
-
                 pgto_dms = lib.einsum('nkij,pi,qj->nkpq', dms_ht, h_coeff, t_coeff)
                 shls_slice = (0, nshells_h, 0, nshells_t)
                 #:rho = eval_rho(t_cell, pgto_dms, shls_slice, 0, 'GGA', kpts,
@@ -895,13 +891,13 @@ def _get_j_pass2(mydf, vG, hermi=1, kpts=numpy.zeros((1,3)), verbose=None):
 
             h_cell = grids_dense.cell
             l_cell = grids_sparse.cell
-            t_cell = h_cell + l_cell
-            t_cell, coeff = t_cell.to_uncontracted_cartesian_basis()
+            h_pcell, h_coeff = h_cell.decontract_basis(to_cart=True, aggregate=True)
+            l_pcell, l_coeff = l_cell.decontract_basis(to_cart=True, aggregate=True)
+            t_cell = h_pcell + l_pcell
+            t_coeff = scipy.linalg.block_diag(h_coeff, l_coeff)
+
             nshells_h = _pgto_shells(h_cell)
             nshells_t = _pgto_shells(t_cell)
-
-            h_coeff = scipy.linalg.block_diag(*coeff[:h_cell.nbas])
-            t_coeff = scipy.linalg.block_diag(*coeff)
             shls_slice = (0, nshells_h, 0, nshells_t)
             vp = eval_mat(t_cell, vR, shls_slice, 1, 0, 'LDA', kpts)
             # Imaginary part may contribute
@@ -919,7 +915,6 @@ def _get_j_pass2(mydf, vG, hermi=1, kpts=numpy.zeros((1,3)), verbose=None):
                 vj_kpts[:,:,idx_l[:,None],idx_h] += \
                         vp[:,:,:,naoh:].transpose(0,1,3,2).conj()
             else:
-                l_coeff = scipy.linalg.block_diag(*coeff[h_cell.nbas:])
                 shls_slice = (nshells_h, nshells_t, 0, nshells_h)
                 vp = eval_mat(t_cell, vR, shls_slice, 1, 0, 'LDA', kpts)
                 # Imaginary part may contribute
@@ -996,15 +991,13 @@ def _get_gga_pass2(mydf, vG, hermi=1, kpts=numpy.zeros((1,3)), verbose=None):
 
             h_cell = grids_dense.cell
             l_cell = grids_sparse.cell
-            t_cell = h_cell + l_cell
-            t_cell, coeff = t_cell.to_uncontracted_cartesian_basis()
+            h_pcell, h_coeff = h_cell.decontract_basis(to_cart=True, aggregate=True)
+            l_pcell, l_coeff = l_cell.decontract_basis(to_cart=True, aggregate=True)
+            t_cell = h_pcell + l_pcell
+            t_coeff = scipy.linalg.block_diag(h_coeff, l_coeff)
+
             nshells_h = _pgto_shells(h_cell)
             nshells_t = _pgto_shells(t_cell)
-
-            h_coeff = scipy.linalg.block_diag(*coeff[:h_cell.nbas])
-            l_coeff = scipy.linalg.block_diag(*coeff[h_cell.nbas:])
-            t_coeff = scipy.linalg.block_diag(*coeff)
-
             shls_slice = (0, nshells_h, 0, nshells_t)
             vpR = eval_mat(t_cell, vR, shls_slice, 1, 0, 'GGA', kpts)
             vp = vpR = lib.einsum('nkpq,pi,qj->nkij', vpR, h_coeff, t_coeff)

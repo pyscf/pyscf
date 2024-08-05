@@ -572,7 +572,7 @@ def to_uncontracted_cartesian_basis(mol):
     '''
     return decontract_basis(mol, to_cart=True)
 
-def decontract_basis(mol, atoms=None, to_cart=False):
+def decontract_basis(mol, atoms=None, to_cart=False, aggregate=False):
     '''Decontract the basis of a Mole or a Cell.  Returns a Mole (Cell) object
     with the uncontracted basis environment and a list of coefficients that
     transform the uncontracted basis to the original basis. Each element in
@@ -584,6 +584,9 @@ def decontract_basis(mol, atoms=None, to_cart=False):
             are decontracted
         to_cart: bool
             Decontract basis and transfer to Cartesian basis
+        aggregate: bool
+            Whether to aggregate the transformation coefficients into a giant
+            transformation matrix
 
     Examples:
 
@@ -602,17 +605,27 @@ def decontract_basis(mol, atoms=None, to_cart=False):
     bas_exps = mol.bas_exps()
     def _to_full_contraction(mol, bas_idx):
         es = numpy.hstack([bas_exps[i] for i in bas_idx])
-        cs = scipy.linalg.block_diag(*[mol._libcint_ctr_coeff(ib) for ib in bas_idx])
-
-        es, e_idx, rev_idx = numpy.unique(es.round(9), True, True)
-        cs_new = numpy.zeros((es.size, cs.shape[1]))
-        for i, j in enumerate(rev_idx):
-            cs_new[j] += cs[i]
-        return es[::-1], cs_new[::-1]
+        _, e_idx, rev_idx = numpy.unique(es.round(9), True, True)
+        if aggregate:
+            cs = scipy.linalg.block_diag(
+                *[mol._libcint_ctr_coeff(i) for i in bas_idx])
+            if len(es) != len(e_idx):
+                cs_new = numpy.zeros((e_idx.size, cs.shape[1]))
+                for i, j in enumerate(rev_idx):
+                    cs_new[j] += cs[i]
+                es = es[e_idx][::-1]
+                cs = cs_new[::-1]
+            yield es, cs
+        else:
+            if len(es) != len(e_idx):
+                raise RuntimeError('Duplicated pGTOs across shells')
+            for i in bas_idx:
+                yield bas_exps[i], mol._libcint_ctr_coeff(i)
 
     _bas = []
-    _env = mol._env.copy()
+    env = [mol._env.copy()]
     contr_coeff = []
+    pexp = env[0].size
 
     lmax = mol._bas[:,ANG_OF].max()
     if mol.cart:
@@ -648,7 +661,7 @@ def decontract_basis(mol, atoms=None, to_cart=False):
                 continue
 
         lmax = mol._bas[ib0:ib1,ANG_OF].max()
-        pexp = mol._bas[ib0,PTR_EXP]
+
         for l in range(lmax+1):
             bas_idx = ib0 + numpy.where(mol._bas[ib0:ib1,ANG_OF] == l)[0]
             if len(bas_idx) == 0:
@@ -656,30 +669,27 @@ def decontract_basis(mol, atoms=None, to_cart=False):
             if bas_idx[0] + len(bas_idx) != bas_idx[-1] + 1:
                 raise NotImplementedError('Discontinuous bases of same angular momentum')
 
-            mol_exps, b_coeff = _to_full_contraction(mol, bas_idx)
-            nprim, nc = b_coeff.shape
-            bs = numpy.zeros((nprim, BAS_SLOTS), dtype=numpy.int32)
-            bs[:,ATOM_OF] = ia
-            bs[:,ANG_OF ] = l
-            bs[:,NCTR_OF] = bs[:,NPRIM_OF] = 1
-            norm = gto_norm(l, mol_exps)
-            if atoms is None:
+            for mol_exps, b_coeff in _to_full_contraction(mol, bas_idx):
+                nprim, nc = b_coeff.shape
+                bs = numpy.zeros((nprim, BAS_SLOTS), dtype=numpy.int32)
+                bs[:,ATOM_OF] = ia
+                bs[:,ANG_OF ] = l
+                bs[:,NCTR_OF] = bs[:,NPRIM_OF] = 1
                 bs[:,PTR_EXP] = pexp + numpy.arange(nprim)
                 bs[:,PTR_COEFF] = pexp + numpy.arange(nprim, nprim*2)
-                _env[pexp:pexp+nprim] = mol_exps
-                _env[pexp+nprim:pexp+nprim*2] = norm
+                norm = gto_norm(l, mol_exps)
+                env.append(mol_exps)
+                env.append(norm)
                 pexp += nprim * 2
-            else:
-                bs[:,PTR_EXP] = _env.size + numpy.arange(nprim)
-                bs[:,PTR_COEFF] = _env.size + numpy.arange(nprim, nprim*2)
-                _env = np.hstack([_env, mol_exps, norm])
-            _bas.append(bs)
+                _bas.append(bs)
 
-            c = numpy.einsum('pi,p,xm->pxim', b_coeff, 1./norm, c2s[l])
-            contr_coeff.append(c.reshape(nprim * c2s[l].shape[0], -1))
+                c = numpy.einsum('pi,p,xm->pxim', b_coeff, 1./norm, c2s[l])
+                contr_coeff.append(c.reshape(nprim * c2s[l].shape[0], -1))
 
     pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
-    pmol._env = _env
+    pmol._env = numpy.hstack(env)
+    if aggregate:
+        contr_coeff = scipy.linalg.block_diag(*contr_coeff)
     return pmol, contr_coeff
 
 def format_ecp(ecp_tab):

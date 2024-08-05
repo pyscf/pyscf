@@ -526,8 +526,9 @@ class _RangeSeparatedCell(pbcgto.Cell):
         assign(SMOOTH_BASIS)
         return ao_type
 
-    def decontract_basis(self, to_cart=True):
-        pcell, ctr_coeff = self.ref_cell.decontract_basis(to_cart=to_cart)
+    def decontract_basis(self, to_cart=True, aggregate=False):
+        pcell, ctr_coeff = self.ref_cell.decontract_basis(to_cart=to_cart,
+                                                          aggregate=aggregate)
         pcell = pcell.view(self.__class__)
         pcell.ref_cell = None
 
