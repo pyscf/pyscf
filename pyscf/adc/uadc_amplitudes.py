@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Abdelrahman Ahmed <>
+#         Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         James Serna <jamcar456@gmail.com>
+#         Terrence Stahl <>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -193,10 +196,6 @@ def compute_amplitudes(myadc, eris):
             t1_2_a -= lib.einsum('ld,liad->ia',t1_1_a,eris.oovv, optimize = True)
             t1_2_a += lib.einsum('ld,iadl->ia',t1_1_b,eris.ovVO, optimize = True)
 
-
-
-
-
         if isinstance(eris.OVvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             a = 0
@@ -252,7 +251,6 @@ def compute_amplitudes(myadc, eris):
             t1_2_b += lib.einsum('ld,iadl->ia',t1_1_b,eris.OVVO, optimize = True)
             t1_2_b -= lib.einsum('ld,liad->ia',t1_1_b,eris.OOVV, optimize = True)
             t1_2_b += lib.einsum('ld,ldai->ia',t1_1_a,eris.ovVO, optimize = True)
-
 
         if isinstance(eris.OVVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)

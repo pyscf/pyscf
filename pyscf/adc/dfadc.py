@@ -12,6 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Author: Abdelrahman Ahmed <>
+#         Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         James Serna <jamcar456@gmail.com>
+#         Terrence Stahl <>
+#         Alexander Sokolov <alexander.y.sokolov@gmail.com>
+#
 
 import numpy as np
 

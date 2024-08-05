@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Abdelrahman Ahmed <>
+#         Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         James Serna <jamcar456@gmail.com>
+#         Terrence Stahl <>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
-#
 
 '''
 Unrestricted algebraic diagrammatic construction
@@ -44,6 +46,9 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     if adc.verbose >= logger.WARN:
         adc.check_sanity()
     adc.dump_flags()
+
+    if isinstance(adc._scf, scf.rohf.ROHF) and (adc.method_type == "ip" or adc.method_type == "ea"):
+        logger.warn(adc, "EA/IP-ADC with the ROHF reference do not incorporate contributions from occ-vir Fock matrix elements...")
 
     if eris is None:
         eris = adc.transform_integrals()
@@ -153,7 +158,7 @@ class UADC(lib.StreamObject):
 
         if isinstance(mf, scf.rohf.ROHF):
 
-            logger.info(mf, "ROHF reference detected, semicanonicalizing the orbitals...")
+            logger.info(mf, "\nROHF reference detected in ADC, semicanonicalizing the orbitals...")
 
             mo_a = mo_coeff.copy()
             nalpha = mf.mol.nelec[0]
