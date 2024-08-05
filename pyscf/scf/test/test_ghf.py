@@ -134,6 +134,12 @@ class KnownValues(unittest.TestCase):
         dm = scf.GHF(mol).get_init_guess(mol, key='mod_huckel')
         self.assertAlmostEqual(lib.fp(dm), 1.1466144161440015, 7)
 
+    def test_init_guess_sap(self):
+        dm = mf.get_init_guess(mol, key='sap')
+        self.assertEqual(dm.shape, (48,48))
+        self.assertAlmostEqual(lib.fp(dm[:24,:24])*2, 4.2267871571567195, 7)
+        self.assertAlmostEqual(lib.fp(dm[24:,24:])*2, 4.2267871571567195, 7)
+
     def test_ghf_complex(self):
         mf1 = scf.GHF(mol)
         dm = mf1.init_guess_by_1e(mol) + 0j

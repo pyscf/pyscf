@@ -364,7 +364,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
     return l1new, l2new
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
+    return numpy.asarray(a, order='C')
 
 
 if __name__ == '__main__':

@@ -65,7 +65,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_KGKS(self):
-        # In the absence of off diagonal blcoks in the spin space, dft.KGKS should reprocduce the dft.KRKS results
+        # In the absence of off diagonal blocks in the spin space, dft.KGKS should reproduce the dft.KRKS results
         # Reference from dft.KRKS
         # mf = dft.KRKS(cell, kpts)
         # mf.xc = 'lda'

@@ -835,7 +835,7 @@ void AO2MOr_e1_drv(int (*intor)(), void (*fill)(),
         double complex *eri_ao = malloc(sizeof(double complex)
                                         * nao*nao*nkl*ncomp);
         if (eri_ao == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in AO2MOr_e1_drv\n",
+                fprintf(stderr, "malloc(%zu) failed in AO2MOr_e1_drv\n",
                         sizeof(double complex) * nao*nao*nkl*ncomp);
                 exit(1);
         }

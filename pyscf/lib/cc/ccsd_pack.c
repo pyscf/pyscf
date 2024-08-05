@@ -106,7 +106,7 @@ void CCmake_021(double *out, double *v1, double *v2, int count, int m,
 /*
  * if matrix B is symmetric for the contraction A_ij B_ij,
  * Tr(AB) ~ A_ii B_ii + (A_ij + A_ji) B_ij where i > j
- * This function extract the A_ii and the lower triangluar part of A_ij + A_ji
+ * This function extract the A_ii and the lower triangular part of A_ij + A_ji
  */
 void CCprecontract(double *out, double *in, int count, int m, double diagfac)
 {

@@ -366,7 +366,7 @@ def arg_group_grids(mol, coords, box_size=GROUP_BOX_SIZE):
     box_ids[box_ids[:,2] > boxes[2], 2] = boxes[2]
     rev_idx, counts = numpy.unique(box_ids, axis=0, return_inverse=True,
                                    return_counts=True)[1:3]
-    return rev_idx.argsort(kind='stable')
+    return rev_idx.ravel().argsort(kind='stable')
 
 def _load_conf(mod, name, default):
     var = getattr(__config__, name, None)

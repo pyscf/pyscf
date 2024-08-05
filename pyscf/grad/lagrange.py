@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import numpy as np
+import scipy
 from scipy import linalg, optimize
 from scipy.sparse import linalg as sparse_linalg
 from pyscf import lib, __config__
@@ -126,9 +127,9 @@ class Gradients (rhf_grad.GradientsBase):
         prec_obj = sparse_linalg.LinearOperator ((self.nlag,self.nlag), matvec=precond,
                                                  dtype=bvec.dtype)
         x0_guess = self.get_init_guess (bvec, Adiag, Aop, precond)
-        Lvec, info_int = sparse_linalg.cg(Aop_obj, -bvec, x0=x0_guess,
-                                          tol=self.conv_rtol, atol=self.conv_atol,
-                                          maxiter=self.max_cycle, callback=my_call, M=prec_obj)
+        Lvec, info_int = _cg(Aop_obj, -bvec, x0=x0_guess,
+                             tol=self.conv_rtol, atol=self.conv_atol,
+                             maxiter=self.max_cycle, callback=my_call, M=prec_obj)
         logger.info (self, ('Lagrange multiplier determination {} after {} iterations\n'
                             '   |geff| = {}, |Lvec| = {}').format (
                                 'converged' if info_int == 0 else 'not converged',
@@ -190,3 +191,10 @@ class LagPrec :
         Adiagd[abs(Adiagd)<1e-8] = 1e-8
         x /= Adiagd
         return x
+
+if int (scipy.__version__.split('.')[1]) >= 14: # scipy 1.14
+    def _cg(A, b, x0=None, *, tol=1e-05, atol=0.0, maxiter=None, M=None, callback=None):
+        return sparse_linalg.cg(A, b, x0, rtol=tol, atol=atol, maxiter=maxiter,
+                                M=M, callback=callback)
+else:
+    _cg = sparse_linalg.cg

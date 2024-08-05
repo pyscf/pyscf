@@ -294,8 +294,8 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
                 dm_i = dm_i.real
             has_imag = dm_i.dtype == numpy.complex128
             if has_imag:
-                dmR = numpy.array(dm_i.real, order='C')
-                dmI = numpy.array(dm_i.imag, order='C')
+                dmR = numpy.asarray(dm_i.real, order='C')
+                dmI = numpy.asarray(dm_i.imag, order='C')
             else:
                 # make a copy because the dm may be overwritten in the
                 # NUMINT_rho_drv inplace
@@ -378,7 +378,7 @@ def get_nuc(mydf, kpts=None):
     return numpy.asarray(vne)
 
 def get_pp(mydf, kpts=None, max_memory=4000):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
     '''
     from pyscf import gto
     kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
@@ -1823,8 +1823,8 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
     return tasks
 
 def _primitive_gto_cutoff(cell, precision=None):
-    '''Cutoff raidus, above which each shell decays to a value less than the
-    required precsion'''
+    '''Cutoff radius, above which each shell decays to a value less than the
+    required precision'''
     if precision is None:
         precision = cell.precision
     vol = cell.vol

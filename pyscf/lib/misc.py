@@ -32,6 +32,7 @@ import itertools
 import inspect
 import collections
 import pickle
+import weakref
 import ctypes
 import numpy
 import scipy
@@ -104,7 +105,7 @@ def load_library(libname):
                         return numpy.ctypeslib.load_library(libname, libpath)
         raise
 
-#Fixme, the standard resouce module gives wrong number when objects are released
+#Fixme, the standard resource module gives wrong number when objects are released
 # http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
 #or use slow functions as memory_profiler._get_memory did
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
@@ -307,7 +308,7 @@ def prange(start, end, step):
             yield i, min(i+step, end)
 
 def prange_tril(start, stop, blocksize):
-    '''Similar to :func:`prange`, yeilds start (p0) and end (p1) with the
+    '''Similar to :func:`prange`, yields start (p0) and end (p1) with the
     restriction p1*(p1+1)/2-p0*(p0+1)/2 < blocksize
 
     Examples:
@@ -581,7 +582,7 @@ class StreamObject:
     ``mf = scf.RHF(mol).set(conv_tol=1e-5)`` is identical to proceed in two steps
     ``mf = scf.RHF(mol); mf.conv_tol=1e-5``
 
-    2 ``.run`` function to execute the kenerl function (the function arguments
+    2 ``.run`` function to execute the kernel function (the function arguments
     are passed to kernel function).  If keyword arguments is given, it will first
     call ``.set`` function to update object attributes then execute the kernel
     function.  Eg
@@ -754,7 +755,7 @@ def alias(fn, alias_name=None):
 
     Using alias function instead of fn1 = fn because some methods may be
     overloaded in the child class. Using "alias" can make sure that the
-    overloaded mehods were called when calling the aliased method.
+    overloaded methods were called when calling the aliased method.
     '''
     name = fn.__name__
     if alias_name is None:
@@ -1042,7 +1043,7 @@ class call_in_background:
 
     Attributes:
         sync (bool): Whether to run in synchronized mode.  The default value
-            is False (asynchoronized mode).
+            is False (asynchronized mode).
 
     Examples:
 
@@ -1091,7 +1092,7 @@ class call_in_background:
                 # import lock) bug in the threading module.  See also
                 # https://github.com/paramiko/paramiko/issues/104
                 # https://docs.python.org/2/library/threading.html#importing-in-threaded-code
-                # Disable the asynchoronous mode for safe importing
+                # Disable the asynchronous mode for safe importing
                 def def_async_fn(i):
                     return fns[i]
 
@@ -1171,7 +1172,7 @@ class H5FileWrap(h5py.File):
         causes outcore DF to hang on an NFS filesystem.
         '''
         try:
-            if super().id:
+            if super().id and super().id.valid:
                 super().flush()
             super().close()
         except AttributeError:  # close not defined in old h5py
@@ -1208,6 +1209,14 @@ class H5TmpFile(H5FileWrap):
         if filename is None:
             filename = H5TmpFile._gen_unique_name(dir, pre=prefix, suf=suffix)
             self.delete_on_close = True
+
+        def _delete_with_check(fname, should_delete):
+            if should_delete and os.path.exists(fname):
+                os.remove(fname)
+
+        self._finalizer = weakref.finalize(self, _delete_with_check,
+                                           filename, self.delete_on_close)
+
         super().__init__(filename, mode, *args, **kwargs)
 
     # Python 3 stdlib does not have a way to just generate
@@ -1228,11 +1237,9 @@ class H5TmpFile(H5FileWrap):
         raise FileExistsError("No usable temporary file name found")
 
     def close(self):
-        filename = self.filename
         self._finished()
-        if self.delete_on_close:
-            if os.path.exists(filename):
-                os.remove(filename)
+        self._finalizer()
+
     def __exit__(self, type, value, traceback):
         self.close()
 
@@ -1321,7 +1328,7 @@ class temporary_env:
                 setattr(self.obj, k, v)
 
 class light_speed(temporary_env):
-    '''Within the context of this macro, the environment varialbe LIGHT_SPEED
+    '''Within the context of this macro, the environment variable LIGHT_SPEED
     can be customized.
 
     Examples:

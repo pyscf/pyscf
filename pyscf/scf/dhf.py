@@ -93,7 +93,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 
     Kwargs:
         dm : 2D ndarray
-            one-partical density matrix
+            one-particle density matrix
         h1e : 2D ndarray
             Core hamiltonian
         vhf : 2D ndarray
@@ -232,6 +232,24 @@ def init_guess_by_mod_huckel(mol):
     dm = hf.init_guess_by_mod_huckel(mol)
     return _proj_dmll(mol, dm, mol)
 
+def init_guess_by_sap(mol, mf):
+    '''Generate initial guess density matrix from a superposition of
+    atomic potentials (SAP), doi:10.1021/acs.jctc.8b01089.
+    This is the Gaussian fit implementation, see doi:10.1063/5.0004046.
+
+    Args:
+        mol : MoleBase object
+            the molecule object for which the initial guess is evaluated
+        sap_basis : dict
+            SAP basis in internal format (python dictionary)
+
+    Returns:
+        dm0 : ndarray
+            SAP initial guess density matrix
+    '''
+    dm = hf.SCF.init_guess_by_sap(mf, mol)
+    return _proj_dmll(mol, dm, mol)
+
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for 4C-DHF initial guess.
 
@@ -290,7 +308,7 @@ def get_init_guess(mol, key='minao', **kwargs):
 
     Kwargs:
         key : str
-            One of 'minao', 'atom', 'huckel', 'mod_huckel', 'hcore', '1e', 'chkfile'.
+            One of 'minao', 'atom', 'huckel', 'mod_huckel', 'hcore', '1e', 'sap', 'chkfile'.
     '''
     return UHF(mol).get_init_guess(mol, key, **kwargs)
 
@@ -509,6 +527,11 @@ class DHF(hf.SCF):
 employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return init_guess_by_mod_huckel(mol)
 
+    @lib.with_doc(hf.SCF.init_guess_by_sap.__doc__)
+    def init_guess_by_sap(self, mol=None, **kwargs):
+        if mol is None: mol = self.mol
+        return init_guess_by_sap(mol, self)
+
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
@@ -623,9 +646,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
-            ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
+            ddm = numpy.array(dm) - numpy.array(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
-            return numpy.array(vhf_last, copy=False) + vj - vk
+            return numpy.array(vhf_last) + vj - vk
         else:
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk
@@ -684,7 +707,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         self._opt = {None: None}
         return self
 
-    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+    def stability(self, internal=None, external=None, verbose=None, return_status=False, **kwargs):
         '''
         DHF/DKS stability analysis.
 
@@ -706,7 +729,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
             and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import dhf_stability
-        return dhf_stability(self, verbose, return_status)
+        return dhf_stability(self, verbose, return_status, **kwargs)
 
     def to_rhf(self):
         raise RuntimeError

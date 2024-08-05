@@ -438,6 +438,12 @@ class GHF(hf.SCF):
 employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return _from_rhf_init_dm(hf.init_guess_by_mod_huckel(mol))
 
+    @lib.with_doc(hf.SCF.init_guess_by_sap.__doc__)
+    def init_guess_by_sap(self, mol=None, **kwargs):
+        return _from_rhf_init_dm(
+            hf.SCF.init_guess_by_sap(self, mol, **kwargs)
+        )
+
     @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
@@ -515,9 +521,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         self.__dict__.update(tgt.__dict__)
         return self
 
-    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+    def stability(self, internal=None, external=None, verbose=None, return_status=False, **kwargs):
         from pyscf.scf.stability import ghf_stability
-        return ghf_stability(self, verbose, return_status)
+        return ghf_stability(self, verbose, return_status, **kwargs)
 
     def nuc_grad_method(self):
         raise NotImplementedError

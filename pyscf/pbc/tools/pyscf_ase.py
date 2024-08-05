@@ -24,7 +24,6 @@ ASE package interface
 import numpy as np
 from ase.calculators.calculator import Calculator
 import ase.dft.kpoints
-from ase.lattice import bulk
 
 def pyscf_to_ase_atoms(cell):
     '''

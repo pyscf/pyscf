@@ -101,7 +101,7 @@ class MDF(df.GDF):
         df.GDF.build(self, j_only, with_j3c, kpts_band)
         cell = self.cell
         if any(x % 2 == 0 for x in self.mesh[:cell.dimension]):
-            # Even number in mesh can produce planewaves without couterparts
+            # Even number in mesh can produce planewaves without counterparts
             # (see np.fft.fftfreq). MDF mesh is typically not enough to capture
             # all basis. The singular planewaves can break the symmetry in
             # potential (leads to non-real density) and thereby break the
@@ -217,7 +217,7 @@ class _RSMDFBuilder(_RSGDFBuilder):
 
         # For MDF, large difference may be found in results between the CD/ED
         # treatments. In some systems, small integral errors can lead to a
-        # differnece in the total energy/orbital energy around 4th decimal
+        # difference in the total energy/orbital energy around 4th decimal
         # place. Abandon CD treatment for better numerical stability
         self.j2c_eig_always = True
 
@@ -329,7 +329,7 @@ class _CCMDFBuilder(_CCGDFBuilder):
 
         # For MDF, large difference may be found in results between the CD/ED
         # treatments. In some systems, small integral errors can lead to a
-        # differnece in the total energy/orbital energy around 4th decimal
+        # difference in the total energy/orbital energy around 4th decimal
         # place. Abandon CD treatment for better numerical stability
         self.j2c_eig_always = True
 

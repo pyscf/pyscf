@@ -1,10 +1,16 @@
+PySCF 2.6.2 (2024-06-19)
+------------------------
+* Fixes
+  - Compatibility issues for NumPy 2.0 release.
+
+
 PySCF 2.6.1 (2024-06-17)
 ------------------------
 * Improved
   - Allow for custom options for opening h5py file.
   - Linear dependency threshold for density fitting auxiliary basis.
 * Fixes
-  - Compatibility issues due for NumPy 2.0 release.
+  - Compatibility issues due to NumPy 2.0 release.
 
 
 PySCF 2.6.0 (2024-06-01)

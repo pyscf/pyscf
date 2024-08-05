@@ -54,7 +54,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     emp2_ss = emp2_os = 0
     for i in range(nocc):
         if isinstance(eris.ovov, numpy.ndarray) and eris.ovov.ndim == 4:
-            # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
+            # When mf._eri is a custom integrals with the shape (n,n,n,n), the
             # ovov integrals might be in a 4-index tensor.
             gi = eris.ovov[i]
         else:
@@ -160,7 +160,7 @@ def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True):
 
     Kwargs:
         ao_repr : boolean
-            Whether to transfrom 1-particle density matrix to AO
+            Whether to transform 1-particle density matrix to AO
             representation.
     '''
     from pyscf.cc import ccsd_rdm
@@ -248,7 +248,8 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
         else:
             cumsum = numpy.cumsum(n/numpy.sum(n))
             logger.debug(mp, 'Sum(pct_occ): %s', cumsum)
-            nvir_keep = numpy.count_nonzero(cumsum<pct_occ)
+            nvir_keep = numpy.count_nonzero(
+                [c <= pct_occ or numpy.isclose(c, pct_occ) for c in cumsum])
     else:
         nvir_keep = min(nvir, nvir_act)
 
@@ -383,7 +384,7 @@ def get_frozen_mask(mp):
     '''Get boolean mask for the restricted reference orbitals.
 
     In the returned boolean (mask) array of frozen orbital indices, the
-    element is False if it corresonds to the frozen orbital.
+    element is False if it corresponds to the frozen orbital.
     '''
     moidx = numpy.ones(mp.mo_occ.size, dtype=bool)
     if mp._nmo is not None:
@@ -478,7 +479,7 @@ class MP2(lib.StreamObject):
             For non-canonical MP2, DIIS space size in MP2
             iterations.  Default is 6.
         level_shift : float
-            A shift on virtual orbital energies to stablize the MP2 iterations.
+            A shift on virtual orbital energies to stabilize the MP2 iterations.
         frozen : int or list
             If integer is given, the inner-most orbitals are excluded from MP2
             amplitudes.  Given the orbital indices (0-based) in a list, both

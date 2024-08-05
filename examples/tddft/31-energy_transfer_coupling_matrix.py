@@ -31,7 +31,7 @@ o_B = moB[:,mfB.mo_occ!=0]
 v_B = moB[:,mfB.mo_occ==0]
 tdB = mfB.TDA().run()
 
-# CIS coeffcients
+# CIS coefficients
 state_id = 2  # The third excited state
 t1_A = tdA.xy[state_id][0]
 t1_B = tdB.xy[state_id][0]

@@ -117,7 +117,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     def get_w(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
         '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts
 
-        Uses tranposed eris for fast data access.'''
+        Uses transposed eris for fast data access.'''
         km = kconserv[kc, kk, kb]
         kf = kconserv[kk, kc, kj]
         out = einsum('cfjk,abif->abcijk', t2T[kc,kf,kj,c0:c1,:,:,:], eris_vvop[ka,kb,ki,a0:a1,b0:b1,:,nocc:])

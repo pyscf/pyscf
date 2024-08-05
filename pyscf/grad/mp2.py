@@ -42,7 +42,7 @@ def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     doo, dvv = d1
     time1 = log.timer_debug1('rdm1 intermediates', *time0)
 
-# Set nocc, nvir for half-transformation of 2pdm.  Frozen orbitals are exculded.
+# Set nocc, nvir for half-transformation of 2pdm.  Frozen orbitals are excluded.
 # nocc, nvir should be updated to include the frozen orbitals when proceeding
 # the 1-particle quantities later.
     mol = mp_grad.mol

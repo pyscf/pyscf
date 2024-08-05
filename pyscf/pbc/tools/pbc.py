@@ -384,7 +384,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
                 weights = 1 + Gp*Rc * scipy.special.j1(Gp*Rc) * scipy.special.k0(Gx*Rc)
                 weights -= Gx*Rc * scipy.special.j0(Gp*Rc) * scipy.special.k1(Gx*Rc)
                 coulG = 4*np.pi/absG2 * weights
-                # TODO: numerical integation
+                # TODO: numerical integration
                 # coulG[Gx==0] = -4*np.pi * (dr * r * scipy.special.j0(Gp*r) * np.log(r)).sum()
             if len(G0_idx) > 0:
                 coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)
@@ -685,7 +685,7 @@ def _build_supcell_(supcell, cell, Ls):
     _env = np.append(cell._env, coords.ravel())
     _atm = np.repeat(cell._atm[None,:,:], nimgs, axis=0)
     _atm = _atm.reshape(-1, ATM_SLOTS)
-    # Point to the corrdinates appended to _env
+    # Point to the coordinates appended to _env
     _atm[:,PTR_COORD] = cell._env.size + np.arange(nimgs * cell.natm) * 3
 
     _bas = np.repeat(cell._bas[None,:,:], nimgs, axis=0)

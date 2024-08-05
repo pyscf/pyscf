@@ -94,7 +94,7 @@ class PhysERI(PeriodicMFMixin, TDERIMatrixBlocks):
         """
         Retrieves the merged diagonal block with specified or all possible k-index pairs.
         Args:
-            pairs (Iterable): pairs of k-points to assmble;
+            pairs (Iterable): pairs of k-points to assemble;
 
         Returns:
             The diagonal block.

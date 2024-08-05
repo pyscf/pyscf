@@ -67,7 +67,7 @@ def make_rho_core(cell, mesh=None, precision=None, atm_id=None):
 
 
 def _get_pp_without_erf(mydf, kpts=None):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
     '''
     cell = mydf.cell
     if kpts is None:

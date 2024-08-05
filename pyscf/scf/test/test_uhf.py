@@ -110,6 +110,12 @@ class KnownValues(unittest.TestCase):
         mf = scf.UHF(gto.M(atom='H', spin=1, symmetry=1))
         self.assertAlmostEqual(mf.kernel(), -0.46658184955727555, 9)
 
+    def test_init_guess_sap(self):
+        dm1 = mf.init_guess_by_sap(mol, breaksym=False)
+        self.assertAlmostEqual(lib.fp(dm1), 0.9867930552338582, 7)
+        dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='sap')
+        self.assertAlmostEqual(lib.fp(dm2), 0.6440359527450615, 7)
+
     def test_get_grad(self):
         g = mf2.get_grad(mf2.mo_coeff, mf2.mo_occ)
         self.assertAlmostEqual(abs(g).max(), 0, 6)

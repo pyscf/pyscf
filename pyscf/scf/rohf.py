@@ -47,6 +47,13 @@ def init_guess_by_atom(mol):
         dm = lib.tag_array(dm, mo_coeff=dm.mo_coeff, mo_occ=dm.mo_occ)
     return dm
 
+def init_guess_by_sap(mol, sap_basis, **kwargs):
+    dm = hf.init_guess_by_sap(mol, sap_basis, **kwargs)
+    dm = numpy.array((dm*.5, dm*.5))
+    if hasattr(dm, 'mo_coeff'):
+        dm = lib.tag_array(dm, mo_coeff=dm.mo_coeff, mo_occ=dm.mo_occ)
+    return dm
+
 init_guess_by_huckel = uhf.init_guess_by_huckel
 init_guess_by_mod_huckel = uhf.init_guess_by_mod_huckel
 
@@ -381,7 +388,7 @@ class ROHF(hf.RHF):
 
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
-        logger.info(self, 'Initial guess from the superpostion of atomic densties.')
+        logger.info(self, 'Initial guess from the superposition of atomic densities.')
         return init_guess_by_atom(mol)
 
     def init_guess_by_huckel(self, mol=None):
@@ -403,6 +410,30 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
+
+    def init_guess_by_sap(self, mol=None, **kwargs):
+        from pyscf.gto.basis import load
+        if mol is None: mol = self.mol
+        sap_basis = self.sap_basis
+        logger.info(self, '''Initial guess from superposition of atomic potentials (doi:10.1021/acs.jctc.8b01089)
+This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
+        if isinstance(sap_basis, str):
+            atoms = [coord[0] for coord in mol._atom]
+            sapbas = dict()
+            for atom in set(atoms):
+                single_element_bs = load(sap_basis, atom)
+                if isinstance(single_element_bs, dict):
+                    sapbas[atom] = numpy.asarray(single_element_bs[atom][0][1:], dtype=float)
+                else:
+                    sapbas[atom] = numpy.asarray(single_element_bs[0][1:], dtype=float)
+            logger.note(self, f'Found SAP basis {sap_basis.split("/")[-1]}')
+        elif isinstance(sap_basis, dict):
+            sapbas = dict()
+            for key in sap_basis:
+                sapbas[key] = numpy.asarray(sap_basis[key][0][1:], dtype=float)
+        else:
+            logger.error(self, 'sap_basis is of an unexpected datatype.')
+        return init_guess_by_sap(mol, sap_basis=sapbas, **kwargs)
 
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
@@ -480,7 +511,8 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
                   internal=getattr(__config__, 'scf_stability_internal', True),
                   external=getattr(__config__, 'scf_stability_external', False),
                   verbose=None,
-                  return_status=False):
+                  return_status=False,
+                  **kwargs):
         '''
         ROHF/ROKS stability analysis.
 
@@ -506,7 +538,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
             and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import rohf_stability
-        return rohf_stability(self, internal, external, verbose, return_status)
+        return rohf_stability(self, internal, external, verbose, return_status, **kwargs)
 
     def nuc_grad_method(self):
         from pyscf.grad import rohf

@@ -23,6 +23,7 @@ dispersion correction for HF and DFT
 import warnings
 from functools import lru_cache
 from pyscf.lib import logger
+from pyscf import scf
 
 # supported dispersion corrections
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
@@ -115,8 +116,13 @@ def check_disp(mf, disp=None):
     if disp == 0: # disp = False
         return False
 
-    # The disp method for both HF and MCSCF is set to 'hf'
-    method = getattr(mf, 'xc', 'hf')
+    # To prevent mf.do_disp() triggering the SCF.__getattr__ method, do not use
+    # method = getattr(mf, 'xc', 'hf').
+    if isinstance(mf, scf.hf.KohnShamDFT):
+        method = mf.xc
+    else:
+        # Set the disp method for both HF and MCSCF to 'hf'
+        method = 'hf'
     disp_version = parse_disp(method)[1]
 
     if disp is None: # Using the disp version decoded from the mf.xc attribute
@@ -169,9 +175,8 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
         mf.scf_summary['dispersion'] = e_d4
         return e_d4
     else:
-        raise RuntimeError(f'dipersion correction: {disp_version} is not supported.')
+        raise RuntimeError(f'dispersion correction: {disp_version} is not supported.')
 
 # Inject to SCF class
-from pyscf import scf
 scf.hf.SCF.do_disp = check_disp
 scf.hf.SCF.get_dispersion = get_dispersion

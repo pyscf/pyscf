@@ -54,6 +54,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
 
     kijab, weight, k4_bz2ibz = kd.make_k4_ibz(sym='s2')
     _, igroup = np.unique(kijab[:,:2], axis=0, return_index=True)
+    igroup = igroup.ravel()
     igroup = list(igroup) + [len(kijab)]
 
     emp2_ss = emp2_os = 0.

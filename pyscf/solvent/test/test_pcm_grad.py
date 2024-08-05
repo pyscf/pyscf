@@ -111,7 +111,7 @@ class KnownValues(unittest.TestCase):
                 assert numpy.linalg.norm(dF0 - dF[:,ia,j]) < 1e-8
                 assert numpy.linalg.norm(dA0 - dA[:,ia,j]) < 1e-8
 
-                # the diagonal entries are calcualted separately
+                # the diagonal entries are calculated separately
                 assert numpy.linalg.norm(dSii[:,ia,j] - numpy.diag(dS0)) < 1e-8
                 numpy.fill_diagonal(dS0, 0)
 

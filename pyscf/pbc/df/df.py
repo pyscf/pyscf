@@ -66,7 +66,7 @@ LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     r'''Generate a cell object using the density fitting auxbasis as
-    the basis set. The normalization coeffcients of the auxiliary cell are
+    the basis set. The normalization coefficients of the auxiliary cell are
     different to the regular (square-norm) convention. To simplify the
     compensated charge algorithm, they are normalized against
     \int (r^l e^{-ar^2} r^2 dr
@@ -133,7 +133,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     # Call _CCGDFBuilder if applicable. _CCGDFBuilder is slower than
     # _RSGDFBuilder but numerically more close to previous versions
     _prefer_ccdf = False
-    # If True, force using denisty matrix-based K-build
+    # If True, force using density matrix-based K-build
     force_dm_kbuild = False
 
     _keys = {
@@ -368,7 +368,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 LpqR = LpqI = None
 
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
-            # Truncated Coulomb operator is not postive definite. Load the
+            # Truncated Coulomb operator is not positive definite. Load the
             # CDERI tensor of negative part.
             with _load3c(self._cderi, self._dataname+'-', kpti_kptj,
                          ignore_key_error=True) as j3c:
@@ -381,7 +381,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                     LpqR = LpqI = None
 
     def get_pp(self, kpts=None):
-        '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+        '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
         '''
         cell = self.cell
         kpts, is_single_kpt = _check_kpts(self, kpts)

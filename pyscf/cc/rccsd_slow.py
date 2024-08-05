@@ -1047,7 +1047,7 @@ class _IMDS:
         raise NotImplementedError
 
 def _cp(a):
-    return np.array(a, copy=False, order='C')
+    return np.asarray(a, order='C')
 
 
 if __name__ == '__main__':

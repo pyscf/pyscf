@@ -146,7 +146,7 @@ class Symmetry():
         nop : int
             Length of `ops`.
         Dmats : list of 2d arrays
-            Wigner D-matries
+            Wigner D-matrices
         l_max : int
             Maximum angular momentum considered in `Dmats`
     '''

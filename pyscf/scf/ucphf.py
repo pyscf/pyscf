@@ -17,7 +17,7 @@
 #
 
 '''
-Unrestricted coupled pertubed Hartree-Fock solver
+Unrestricted coupled perturbed Hartree-Fock solver
 '''
 
 
