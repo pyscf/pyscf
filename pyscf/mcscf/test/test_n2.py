@@ -17,6 +17,7 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import scf
+from pyscf import lib
 from pyscf import mcscf
 
 def setUpModule():
@@ -165,8 +166,10 @@ class KnownValues(unittest.TestCase):
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.74508322877787, 7)
 
-        mc = mcscf.CASSCF(msym, 4, (3,1))
         mc.wfnsym = 'A2u'
+        with self.assertRaises(lib.exceptions.WfnSymmetryError):
+            mc.mc1step()
+        mc.ci = None
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.69019443475308, 7)
 
