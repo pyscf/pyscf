@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Abdelrahman Ahmed <>
+#         Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         James Serna <jamcar456@gmail.com>
+#         Terrence Stahl <>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -199,7 +202,7 @@ def transform_integrals_outcore(myadc):
             eris.OOvv[i] = buf[:nocc_b,nocc_a:,nocc_a:]
             eris.OVvo[i] = buf[nocc_b:,nocc_a:,:nocc_a]
             eris.OVvv[i] = lib.pack_tril(buf[nocc_b:,nocc_a:,nocc_a:])
-        del (tmpf['ba'])
+        del(tmpf['ba'])
 
     buf = None
     cput1 = logger.timer_debug1(myadc, 'transforming oopq, ovpq', *cput1)
@@ -465,16 +468,34 @@ def transform_integrals_df(myadc):
     eris.Lvv = eris.Lvv.reshape(naux,nvir_a,nvir_a)
     eris.LVV = eris.LVV.reshape(naux,nvir_b,nvir_b)
 
-    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
-        ncvs = myadc.ncvs
-        eris.Lce = eris.Lce.reshape(naux,ncvs,nvir_a)
-        eris.Lee = eris.Lvv
-        eris.LCE = eris.LCE.reshape(naux,ncvs,nvir_b)
-        eris.LEE = eris.LVV
-
     log.timer('DF-ADC integral transformation', *cput0)
 
     return eris
+
+def unpack_eri_1(eri, norb):
+
+    n_oo = norb * (norb + 1) // 2
+    ind_oo = np.tril_indices(norb)
+
+    eri_ = None
+
+    if len(eri.shape) == 3:
+        if (eri.shape[0] == n_oo):
+            eri_ = np.zeros((norb, norb, eri.shape[1], eri.shape[2]))
+            eri_[ind_oo[0], ind_oo[1]] = eri
+            eri_[ind_oo[1], ind_oo[0]] = eri
+
+        elif (eri.shape[2] == n_oo):
+            eri_ = np.zeros((eri.shape[0], eri.shape[1], norb, norb))
+            eri_[:, :, ind_oo[0], ind_oo[1]] = eri
+            eri_[:, :, ind_oo[1], ind_oo[0]] = eri
+        else:
+            raise TypeError("ERI dimensions don't match")
+
+    else:
+        raise RuntimeError("ERI does not have a correct dimension")
+
+    return eri_
 
 def calculate_chunk_size(myadc):
 
