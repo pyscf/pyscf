@@ -583,6 +583,8 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
             and "envs" pop in kernel function
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
+    if ci0 is None: ci0 = casci.ci
+
     log = logger.new_logger(casci, verbose)
     t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start CASCI')
