@@ -900,12 +900,31 @@ def compute_energy(myadc, t1, t2, eris):
     e_mp -= 0.25 * lib.einsum('ijab,ibaj', t2_b, eris_OVVO)
     del t2_b
 
+    logger.info(myadc, "Reference correlation energy (doubles): %.8f", e_mp)
+
+    if isinstance(myadc._scf, scf.rohf.ROHF):
+        f_ov_a = myadc.f_ov[0]
+        f_ov_b = myadc.f_ov[1]
+        t1_1_a = t1[2][0].copy()
+        t1_1_b = t1[2][1].copy()
+
+        if (myadc.method == "adc(3)"):
+            t1_1_a += t1[0][0]
+            t1_1_b += t1[0][1]
+
+        singles = lib.einsum('ia,ia', f_ov_a, t1_1_a)
+        singles += lib.einsum('ia,ia', f_ov_b, t1_1_b)
+
+        e_mp += singles
+
+        logger.info(myadc, "Reference correlation energy (singles): %.8f", singles)
+
     cput0 = log.timer_debug1("Completed energy calculation", *cput0)
 
     return e_mp
 
-def contract_ladder(myadc,t_amp,vvvv_p, prefactor = 1.0, pack = False):
 
+def contract_ladder(myadc,t_amp,vvvv_p, prefactor = 1.0, pack = False):
 
     nocc_a = t_amp.shape[0]
     nocc_b = t_amp.shape[1]

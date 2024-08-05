@@ -159,6 +159,7 @@ class UADC(lib.StreamObject):
             mo_a = mo_coeff.copy()
             self.nmo = mo_a.shape[1]
             nalpha = mf.mol.nelec[0]
+            nbeta = mf.mol.nelec[1]
 
             h1e = mf.get_hcore()
             dm = mf.make_rdm1()
@@ -209,7 +210,7 @@ class UADC(lib.StreamObject):
         self.method = "adc(2)"
         self.method_type = "ip"
         self.with_df = None
-        self.compute_mpn_energy = True
+        self.compute_properties = True
         self.approx_trans_moments = False
         self.evec_print_tol = 0.1
         self.spec_factor_print_tol = 0.1
