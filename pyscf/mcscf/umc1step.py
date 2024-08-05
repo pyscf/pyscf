@@ -27,6 +27,7 @@ from functools import reduce
 import numpy
 import pyscf.gto
 import pyscf.scf
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import ucasci
 from pyscf.mcscf.mc1step import expmat, rotate_orb_cc, max_stepsize_scheduler, as_scanner
@@ -399,6 +400,9 @@ class UCASSCF(ucasci.UCASBase):
         self.converged = False
         self._max_stepsize = None
 
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('chkfile', 'callback'))
+
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('')
@@ -732,39 +736,54 @@ class UCASSCF(ucasci.UCASBase):
                 ci1 += xs[i] * v[i,0]
         return ci1, g
 
-    def dump_chk(self, envs):
-        if not self.chkfile:
-            return self
+    def dump_chk(self, envs_or_file):
+        '''Serialize the MCSCF object and save it to the specified chkfile.
 
-        if self.chk_ci:
-            civec = envs['fcivec']
+        Args:
+            envs_or_file:
+                If this argument is a file path, the serialized MCSCF object is
+                saved to the file specified by this argument.
+                If this attribute is a dict (created by locals()), the necessary
+                variables are saved to the file specified by the attribute .chkfile.
+        '''
+        if isinstance(envs_or_file, str):
+            envs = None
+            chk_file = envs_or_file
         else:
-            civec = None
+            envs = envs_or_file
+            chk_file = self.chkfile
+            if not chk_file:
+                return self
+
+        e_tot = mo_coeff = mo_occ = mo_energy = e_cas = civec = casdm1 = None
         ncore = self.ncore
         ncas = self.ncas
         nocca = ncore[0] + ncas
         noccb = ncore[1] + ncas
-        if 'mo' in envs:
-            mo_coeff = envs['mo']
-        else:
-            mo_coeff = envs['mo']
-        mo_occ = numpy.zeros((2,envs['mo'][0].shape[1]))
-        mo_occ[0,:ncore[0]] = 1
-        mo_occ[1,:ncore[1]] = 1
-        if self.natorb:
-            occa, ucas = self._eig(-envs['casdm1'][0], ncore[0], nocca)
-            occb, ucas = self._eig(-envs['casdm1'][1], ncore[1], noccb)
-            mo_occ[0,ncore[0]:nocca] = -occa
-            mo_occ[1,ncore[1]:noccb] = -occb
-        else:
-            mo_occ[0,ncore[0]:nocca] = envs['casdm1'][0].diagonal()
-            mo_occ[1,ncore[1]:noccb] = envs['casdm1'][1].diagonal()
-        mo_energy = 'None'
 
-        chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
+        if envs is not None:
+            if self.chk_ci:
+                civec = envs['fcivec']
+            if 'mo' in envs:
+                mo_coeff = envs['mo']
+            else:
+                mo_coeff = envs['mo_coeff']
+            mo_occ = numpy.zeros((2,envs['mo'][0].shape[1]))
+            mo_occ[0,:ncore[0]] = 1
+            mo_occ[1,:ncore[1]] = 1
+            if self.natorb:
+                occa, ucas = self._eig(-casdm1[0], ncore[0], nocca)
+                occb, ucas = self._eig(-casdm1[1], ncore[1], noccb)
+                mo_occ[0,ncore[0]:nocca] = -occa
+                mo_occ[1,ncore[1]:noccb] = -occb
+            else:
+                mo_occ[0,ncore[0]:nocca] = casdm1[0].diagonal()
+                mo_occ[1,ncore[1]:noccb] = casdm1[1].diagonal()
+
+        chkfile.dump_mcscf(self, self.chkfile, 'mcscf', e_tot,
                            mo_coeff, ncore, ncas, mo_occ,
-                           mo_energy, envs['e_cas'], civec, envs['casdm1'],
-                           overwrite_mol=False)
+                           mo_energy, e_cas, civec, casdm1,
+                           overwrite_mol=(envs is None))
         return self
 
     def rotate_mo(self, mo, u, log=None):

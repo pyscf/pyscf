@@ -97,7 +97,8 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
@@ -146,7 +147,8 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             break
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 

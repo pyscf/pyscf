@@ -237,7 +237,8 @@ def _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym=0):
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
@@ -263,7 +264,8 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def _validate_degen_mapping(mapping, norb):
@@ -355,7 +357,8 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             break
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def _cyl_sym_csf2civec(strs, addr, orbsym, degen_mapping):
@@ -598,8 +601,9 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
                 fcivec = fcivec[0]
             wfnsym1 = _guess_wfnsym_cyl_sym(fcivec, strsa, strsb, orbsym)
             if wfnsym1 != _id_wfnsym(solver, norb, nelec, orbsym, wfnsym):
-                raise RuntimeError(f'Input wfnsym {wfnsym} is not consistent with '
-                                   f'fcivec symmetry {wfnsym1}')
+                raise lib.exceptions.WfnSymmetryError(
+                    f'Input wfnsym {wfnsym} is not consistent with '
+                    f'fcivec symmetry {wfnsym1}')
             wfnsym = wfnsym1
         else:
             na, nb = strsa.size, strsb.size
@@ -617,8 +621,8 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
             if isinstance(fcivec, np.ndarray) and fcivec.ndim <= 2:
                 fcivec = [fcivec]
             if all(abs(c.reshape(na, nb)[mask]).max() < 1e-5 for c in fcivec):
-                raise RuntimeError('Input wfnsym {wfnsym} is not consistent with '
-                                   'fcivec coefficients')
+                raise lib.exceptions.WfnSymmetryError(
+                    'Input wfnsym {wfnsym} is not consistent with fcivec coefficients')
     return wfnsym
 
 def sym_allowed_indices(nelec, orbsym, wfnsym):
@@ -787,7 +791,7 @@ class FCISolver(direct_spin1.FCISolver):
         logger.debug(self, 'Num symmetry allowed elements %d',
                      sum([x.size for x in self.sym_allowed_idx]))
         if s_idx.size == 0:
-            raise RuntimeError(
+            raise lib.exceptions.WfnSymmetryError(
                 f'Symmetry allowed determinants not found for wfnsym {wfnsym}')
 
         if wfnsym_ir > 7:

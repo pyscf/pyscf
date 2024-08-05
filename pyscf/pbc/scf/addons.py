@@ -489,9 +489,9 @@ def convert_to_kscf(mf, out=None):
         mf = mol_addons._object_without_soscf(mf, known_cls, False)
         if mf.mo_energy is not None:
             if isinstance(mf, scf.kuhf.KUHF):
-                mf.mo_occ = mf.mo_occ[numpy.newaxis]
-                mf.mo_coeff = mf.mo_coeff[numpy.newaxis]
-                mf.mo_energy = mf.mo_energy[numpy.newaxis]
+                mf.mo_occ = mf.mo_occ[:, numpy.newaxis]
+                mf.mo_coeff = mf.mo_coeff[:, numpy.newaxis]
+                mf.mo_energy = mf.mo_energy[:, numpy.newaxis]
             else:
                 mf.mo_occ = mf.mo_occ[numpy.newaxis]
                 mf.mo_coeff = mf.mo_coeff[numpy.newaxis]
