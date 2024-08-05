@@ -156,6 +156,7 @@ def _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s):
 def mulliken_meta(cell, dm_ao_kpts, kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
+    The results are equivalent to the corresponding supercell calculation.
     '''
     log = logger.new_logger(cell, verbose)
 
