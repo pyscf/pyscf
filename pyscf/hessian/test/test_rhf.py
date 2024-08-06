@@ -100,6 +100,68 @@ class KnownValues(unittest.TestCase):
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 4)
 
+    def test_finite_diff_rhf_hess1(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.output = None
+        mol.atom = [
+            [1 , (1. ,  0.     , 0.000)],
+            [1 , (0. ,  1.     , 0.000)],
+            [1 , (0. , -1.517  , 1.177)],
+            [1 , (0. ,  1.517  , 1.177)] ]
+        mol.basis = '631g'
+        mol.unit = 'B'
+        mol.build()
+        mf = scf.RHF(mol)
+        mf.conv_tol = 1e-14
+        mf.scf()
+        n3 = mol.natm * 3
+        hobj = mf.Hessian()
+        e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
+        self.assertAlmostEqual(lib.fp(e2), -0.50693144355876429, 6)
+        #from hessian import rhf_o0
+        #e2ref = rhf_o0.Hessian(mf).kernel().transpose(0,2,1,3).reshape(n3,n3)
+        #print numpy.linalg.norm(e2-e2ref)
+        #print numpy.allclose(e2,e2ref)
+
+        def grad_full(ia, inc):
+            coord = mol.atom_coord(ia).copy()
+            ptr = mol._atm[ia,gto.PTR_COORD]
+            de = []
+            for i in range(3):
+                mol._env[ptr+i] = coord[i] + inc
+                mf = scf.RHF(mol).run(conv_tol=1e-14)
+                e1a = mf.nuc_grad_method().kernel()
+                mol._env[ptr+i] = coord[i] - inc
+                mf = scf.RHF(mol).run(conv_tol=1e-14)
+                e1b = mf.nuc_grad_method().kernel()
+                mol._env[ptr+i] = coord[i]
+                de.append((e1a-e1b)/(2*inc))
+            return de
+        e2ref = [grad_full(ia, .5e-4) for ia in range(mol.natm)]
+        e2ref = numpy.asarray(e2ref).reshape(n3,n3)
+        self.assertAlmostEqual(abs(e2-e2ref).max(), 0, 6)
+
+    # \partial^2 E / \partial R \partial R'
+        e2 = hobj.partial_hess_elec(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
+        e2 += hobj.hess_nuc(mol)
+        e2 = e2.transpose(0,2,1,3).reshape(n3,n3)
+        def grad_partial_R(ia, inc):
+            coord = mol.atom_coord(ia).copy()
+            ptr = mol._atm[ia,gto.PTR_COORD]
+            de = []
+            for i in range(3):
+                mol._env[ptr+i] = coord[i] + inc
+                e1a = mf.nuc_grad_method().kernel()
+                mol._env[ptr+i] = coord[i] - inc
+                e1b = mf.nuc_grad_method().kernel()
+                mol._env[ptr+i] = coord[i]
+                de.append((e1a-e1b)/(2*inc))
+            return de
+        e2ref = [grad_partial_R(ia, .5e-4) for ia in range(mol.natm)]
+        e2ref = numpy.asarray(e2ref).reshape(n3,n3)
+        self.assertAlmostEqual(abs(e2-e2ref).max(), 0, 8)
+
     @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_finite_diff_rhf_d3_hess(self):
         mf = scf.RHF(mol)

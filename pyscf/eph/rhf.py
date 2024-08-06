@@ -23,7 +23,7 @@ Analytical electron-phonon matrix for restricted hartree fock
 import numpy as np
 import scipy.linalg
 from pyscf.hessian import rhf
-from pyscf.lib import logger, chkfile
+from pyscf.lib import logger
 from pyscf.scf._response_functions import _gen_rhf_response
 from pyscf import __config__
 from pyscf.data.nist import HARTREE2WAVENUMBER, MP_ME
@@ -37,16 +37,16 @@ def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
     if mo_coeff is None: mo_coeff = ephobj.base.mo_coeff
     if mo_occ is None: mo_occ = ephobj.base.mo_occ
 
-    # chkfile is used to pass first orbitals from hessian methods to eph methods
-    # TODO: Remove the dependence to chfile and return first orbitals from a function
-    assert ephobj.chkfile is not None, 'chkfile is required to save first order orbitals'
+    h1ao = ephobj.make_h1(mo_coeff, mo_occ)
+    mo1, mo_e1 = ephobj.solve_mo1(mo_energy, mo_coeff, mo_occ, h1ao)
 
-    de = ephobj.hess_elec(mo_energy, mo_coeff, mo_occ)
+    de = ephobj.hess_elec(mo_energy, mo_coeff, mo_occ,
+                          mo1=mo1, mo_e1=mo_e1, h1ao=h1ao)
     ephobj.de = de + ephobj.hess_nuc(ephobj.mol)
 
     omega, vec = ephobj.get_mode(ephobj.mol, ephobj.de)
     ephobj.omega, ephobj.vec = omega, vec
-    ephobj.eph = ephobj.get_eph(ephobj.chkfile, omega, vec, mo_rep)
+    ephobj.eph = ephobj.get_eph(mo1, omega, vec, mo_rep)
     return ephobj.eph, ephobj.omega
 
 def solve_hmat(mol, hmat, cutoff_frequency=CUTOFF_FREQUENCY,
@@ -143,10 +143,6 @@ def _freq_mass_weighted_vec(vec, omega, mass):
     return vec
 
 def get_eph(ephobj, mo1, omega, vec, mo_rep):
-    if isinstance(mo1, str):
-        mo1 = chkfile.load(mo1, 'scf_mo1')
-        mo1 = {int(k): mo1[k] for k in mo1}
-
     mol = ephobj.mol
     mf = ephobj.base
     vnuc_deriv = ephobj.vnuc_generator(mol)
@@ -209,29 +205,3 @@ class EPH(rhf.Hessian):
     get_eph = get_eph
     vnuc_generator = vnuc_generator
     kernel = kernel
-
-if __name__ == '__main__':
-    from pyscf import gto, scf
-
-    mol = gto.M()
-    mol.atom = [['O', [0.000000000000,  -0.000000000775,   0.923671924285]],
-                ['H', [-0.000000000000,  -1.432564848017,   2.125164039823]],
-                ['H', [0.000000000000,   1.432564848792,   2.125164035930]]]
-    mol.unit = 'Bohr'
-    mol.basis = 'sto3g'
-    mol.verbose=4
-    mol.build() # this is a pre-computed relaxed geometry
-
-    mf = scf.RHF(mol)
-    mf.conv_tol = 1e-16
-    mf.conv_tol_grad = 1e-10
-    mf.kernel()
-
-    myeph = EPH(mf)
-
-    grad = mf.nuc_grad_method().kernel()
-    print("Force on the atoms/au:")
-    print(grad)
-
-    eph, omega = myeph.kernel(mo_rep=True)
-    print(np.amax(eph))

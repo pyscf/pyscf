@@ -192,14 +192,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
         h1aoa[ia] += h1 + veffa + veffa.transpose(0,2,1)
         h1aob[ia] += h1 + veffb + veffb.transpose(0,2,1)
 
-    if chkfile is None:
-        return h1aoa, h1aob
-    else:
-        for ia in atmlst:
-            lib.chkfile.save(chkfile, 'scf_f1ao/0/%d'%ia, h1aoa[ia])
-            lib.chkfile.save(chkfile, 'scf_f1ao/1/%d'%ia, h1aob[ia])
-        return chkfile
-
+    return h1aoa, h1aob
 
 XX, XY, XZ = 4, 5, 6
 YX, YY, YZ = 5, 7, 8
