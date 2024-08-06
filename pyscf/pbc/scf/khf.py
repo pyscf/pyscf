@@ -25,8 +25,6 @@ See Also:
     hf.py : Hartree-Fock for periodic systems at a single k-point
 '''
 
-import sys
-
 from functools import reduce
 import numpy as np
 import scipy.linalg
@@ -443,7 +441,7 @@ class KSCF(pbchf.SCF):
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
-            sys.stderr.write('Warning: cell.build() is not called in input\n')
+            logger.warn(self, 'cell.build() is not called in input')
             cell.build()
         mol_hf.SCF.__init__(self, cell)
 
