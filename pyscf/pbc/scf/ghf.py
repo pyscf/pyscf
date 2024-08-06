@@ -117,7 +117,7 @@ class GHF(pbchf.SCF):
     _finalize = mol_ghf.GHF._finalize
     analyze = lib.invalid_method('analyze')
     mulliken_pop = lib.invalid_method('mulliken_pop')
-    mulliken_meta = lib.invalid_method('mulliken_meta')
+    mulliken_meta = mol_ghf.GHF.mulliken_meta
     spin_square = mol_ghf.GHF.spin_square
     stability = mol_ghf.GHF.stability
 

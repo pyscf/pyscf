@@ -136,38 +136,41 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     return mo_occ_kpts
 
-def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
+def _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s):
+    from pyscf.lo import orth
+    from pyscf.pbc.tools import k2gamma
+
+    kmesh = k2gamma.kpts_to_kmesh(cell, kpts-kpts[0])
+    nkpts, nso = dm_ao_kpts.shape[:2]
+    nao = nso // 2
+    scell, phase = k2gamma.get_phase(cell, kpts, kmesh)
+    s_sc = k2gamma.to_supercell_ao_integrals(cell, kpts, s, kmesh=kmesh, force_real=False)
+    orth_coeff = orth.orth_ao(scell, 'meta_lowdin', pre_orth_method, s=s_sc)[:,:nao] # cell 0 only
+    c_inv = np.dot(orth_coeff.T.conj(), s_sc)
+    c_inv = lib.einsum('aRp,Rk->kap', c_inv.reshape(nao,nkpts,nao), phase)
+    dm_aa = lib.einsum('kap,kpq,kbq->ab', c_inv, dm_ao_kpts[:,:nao,:nao], c_inv.conj())
+    dm_bb = lib.einsum('kap,kpq,kbq->ab', c_inv, dm_ao_kpts[:,nao:,nao:], c_inv.conj())
+
+    return (dm_aa, dm_bb)
+
+def mulliken_meta(cell, dm_ao_kpts, kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
-
-    Note this function only computes the Mulliken population for the gamma
-    point density matrix.
+    The results are equivalent to the corresponding supercell calculation.
     '''
-    from pyscf.lo import orth
-    if s is None:
-        s = khf.get_ovlp(cell)
     log = logger.new_logger(cell, verbose)
-    log.note('Analyze output for *gamma point*.')
-    log.info('    To include the contributions from k-points, transform to a '
-             'supercell then run the population analysis on the supercell\n'
-             '        from pyscf.pbc.tools import k2gamma\n'
-             '        k2gamma.k2gamma(mf).mulliken_meta()')
-    log.note("KGHF mulliken_meta")
-    dm_ao_gamma = dm_ao_kpts[0,:,:]
-    nso = dm_ao_gamma.shape[-1]
-    nao = nso // 2
 
-    dm_ao_gamma_aa = dm_ao_gamma[:nao,:nao]
-    dm_ao_gamma_bb = dm_ao_gamma[nao:,nao:]
-    s_gamma = s[0,:,:].real
-    s_gamma_aa = s_gamma[:nao,:nao]
-    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_method, s=s_gamma_aa)
-    c_inv = np.dot(orth_coeff.T, s_gamma_aa)
-    dm_aa = reduce(np.dot, (c_inv, dm_ao_gamma_aa, c_inv.T.conj()))
-    dm_bb = reduce(np.dot, (c_inv, dm_ao_gamma_bb, c_inv.T.conj()))
+    if s is None:
+        s = khf.get_ovlp(None, cell=cell, kpts=kpts)
+    if s is not None:
+        if s[0].shape == dm_ao_kpts[0].shape:   # s in SO
+            nao = dm_ao_kpts[0].shape[0]//2
+            s = lib.asarray(s[:,:nao,:nao], order='C') # keep only one spin sector
+
+    dm_aa, dm_bb = _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s)
 
     log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
-    return mol_uhf.mulliken_pop(cell, (dm_aa,dm_bb), np.eye(orth_coeff.shape[0]), log)
+    return mol_uhf.mulliken_pop(cell, (dm_aa,dm_bb), np.eye(dm_aa.shape[0]), log)
 
 def _cast_mol_init_guess(fn):
     def fn_init_guess(mf, cell=None, kpts=None):
@@ -259,12 +262,13 @@ class KGHF(khf.KSCF):
         raise NotImplementedError
 
     @lib.with_doc(mulliken_meta.__doc__)
-    def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
+    def mulliken_meta(self, cell=None, dm=None, kpts=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
-        if s is None: s = self.get_ovlp(cell)
-        return mulliken_meta(cell, dm, s=s, verbose=verbose,
+        if kpts is None: kpts = self.kpts
+        if s is None: s = khf.get_ovlp(self, cell, kpts)
+        return mulliken_meta(cell, dm, kpts, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
     def mulliken_pop(self):
