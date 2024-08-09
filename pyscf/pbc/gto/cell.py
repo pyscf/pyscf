@@ -1331,7 +1331,6 @@ class Cell(mole.MoleBase):
         if symmorphic is not None:
             self.symmorphic = symmorphic
 
-        dump_input = dump_input and not self._built and self.verbose > logger.NOTE
         mole.MoleBase.build(self, dump_input, parse_arg, *args, **kwargs)
 
         exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
