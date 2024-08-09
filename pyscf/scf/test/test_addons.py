@@ -490,14 +490,37 @@ class KnownValues(unittest.TestCase):
         mol.charge = +1
         mol.spin = 1
         mol.build()
-        mf = scf.RHF(mol)
+        mf = scf.hf.RHF(mol)
         mf = addons.frac_occ(mf)
         e_frac = mf.kernel()
 
         mf_smear = scf.RHF(mol)
-        mf_smear = addons.smearing(mf_smear, sigma=1e-5, method='fermi')
+        # a small sigma amplifies the errors in orbital energies, breaking the
+        # orbital degeneracy.
+        mf_smear = addons.smearing(mf_smear, sigma=1e-3, method='fermi')
         e_smear = mf_smear.kernel()
-        self.assertAlmostEqual(mf.mo_occ.sum(), mf_smear.mo_occ.sum(), 5)
+        self.assertAlmostEqual(abs(mf.mo_occ - mf_smear.mo_occ).max(), 0, 4)
+        self.assertAlmostEqual(e_frac, e_smear, 9)
+
+        mol = gto.Mole()
+        mol.verbose = 5
+        mol.output = '/dev/null'
+        mol.atom = '''
+            7      0.   0  -0.7
+            7      0.   0   0.7'''
+        mol.basis = 'cc-pvdz'
+        mol.charge = +1
+        mol.spin = 1
+        mol.symmetry = 1
+        mol.build()
+        mf = scf.hf.RHF(mol)
+        mf = addons.frac_occ(mf)
+        e_frac = mf.kernel()
+
+        mf_smear = scf.RHF(mol)
+        mf_smear = addons.smearing(mf_smear, sigma=1e-6, method='fermi')
+        e_smear = mf_smear.kernel()
+        self.assertAlmostEqual(abs(mf.mo_occ - mf_smear.mo_occ).max(), 0, 5)
         self.assertAlmostEqual(e_frac, e_smear, 9)
 
     def test_smearing_mu0(self):
