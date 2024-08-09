@@ -205,10 +205,10 @@ class TDHF(TDA):
                 for k in range(nkpts):
                     dmx = reduce(numpy.dot, (orboa[k], xa[k]  , orbva[k].conj().T))
                     dmy = reduce(numpy.dot, (orbva[k], ya[k].T, orboa[k].conj().T))
-                    dmov[0,i,k] = dmx + dmy  # AX + BY
+                    dmov[0,i,k] = dmx + dmy
                     dmx = reduce(numpy.dot, (orbob[k], xb[k]  , orbvb[k].conj().T))
                     dmy = reduce(numpy.dot, (orbvb[k], yb[k].T, orbob[k].conj().T))
-                    dmov[1,i,k] = dmx + dmy  # AX + BY
+                    dmov[1,i,k] = dmx + dmy
 
             with lib.temporary_env(mf, exxdiv=None):
                 dmov = dmov.reshape(2,nz,nkpts,nao,nao)
@@ -230,8 +230,8 @@ class TDHF(TDA):
                     v1yb = reduce(numpy.dot, (orbvb[k].conj().T, v1ao[1,i,k], orbob[k])).T
                     v1xa+= e_ia_a[k] * xa[k]
                     v1xb+= e_ia_b[k] * xb[k]
-                    v1ya+= e_ia_a[k] * ya[k]
-                    v1yb+= e_ia_b[k] * yb[k]
+                    v1ya+= e_ia_a[k].conj() * ya[k]
+                    v1yb+= e_ia_b[k].conj() * yb[k]
                     v1xsa.append(v1xa.ravel())
                     v1xsb.append(v1xb.ravel())
                     v1ysa.append(-v1ya.ravel())
