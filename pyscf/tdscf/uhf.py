@@ -198,9 +198,9 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 b_aa, b_ab, b_bb = b
                 k_fac = alpha - hyb
                 a_aa -= numpy.einsum('ijba->iajb', eri_aa[:nocc_a,:nocc_a,nocc_a:,nocc_a:]) * k_fac
-                b_aa -= numpy.einsum('ibja->iajb', eri_aa[:nocc_a,nocc_a:,:nocc_a,nocc_a:]) * k_fac
+                b_aa -= numpy.einsum('jaib->iajb', eri_aa[:nocc_a,nocc_a:,:nocc_a,nocc_a:]) * k_fac
                 a_bb -= numpy.einsum('ijba->iajb', eri_bb[:nocc_b,:nocc_b,nocc_b:,nocc_b:]) * k_fac
-                b_bb -= numpy.einsum('ibja->iajb', eri_bb[:nocc_b,nocc_b:,:nocc_b,nocc_b:]) * k_fac
+                b_bb -= numpy.einsum('jaib->iajb', eri_bb[:nocc_b,nocc_b:,:nocc_b,nocc_b:]) * k_fac
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)

@@ -160,7 +160,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 eri_mo = eri_mo.reshape(nocc,nmo,nmo,nmo)
                 k_fac = alpha - hyb
                 a -= numpy.einsum('ijba->iajb', eri_mo[:nocc,:nocc,nocc:,nocc:]) * k_fac
-                b -= numpy.einsum('ibja->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * k_fac
+                b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * k_fac
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
@@ -940,7 +940,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         # (B*)X + (A*)Y
         # = <ab||ij> Xjb + <aj||ib> Yjb
         # = (<mb||nj> Xjb + <mj||nb> Yjb) Cma* Cni
-        v1vo = lib.einsum('xpq,qo,pv->xov', v1ao.conj(), orbo, orbv.conj())
+        v1vo = lib.einsum('xpq,qo,pv->xov', v1ao, orbo, orbv.conj())
         v1ov += numpy.einsum('xia,ia->xia', xs, e_ia)  # AX
         v1vo += numpy.einsum('xia,ia->xia', ys, e_ia.conj())  # (A*)Y
 

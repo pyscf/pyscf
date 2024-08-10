@@ -46,6 +46,7 @@ class Diamond(unittest.TestCase):
 
         cls.nstates = 5 # make sure first `nstates_test` states are converged
         cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -98,6 +99,7 @@ class DiamondShifted(unittest.TestCase):
 
         cls.nstates = 5 # make sure first `nstates_test` states are converged
         cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
