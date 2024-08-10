@@ -638,6 +638,7 @@ class SCF(mol_hf.SCF):
         else:
             nuc = self.with_df.get_nuc(kpt)
         if len(cell._ecpbas) > 0:
+            from pyscf.pbc.gto import ecp
             nuc += ecp.ecp_int(cell, kpt)
         return nuc + cell.pbc_intor('int1e_kin', 1, 1, kpt)
 

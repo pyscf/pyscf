@@ -114,7 +114,6 @@ def estimate_rcut(cell, precision=None):
         aij = ai + aj
         lij = li + lj
         l3 = lij + lk
-        theta = 1./(1./aij + 1./ak)
         theta1 = 1./(1./aj + 1./ak)
         norm_ang = ((2*li+1)*(2*lj+1))**.5/(4*np.pi)
         c1 = ci * cj * abs(ck) * norm_ang
