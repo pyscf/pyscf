@@ -813,7 +813,8 @@ def fuse_auxcell(auxcell, eta):
 
     aux_loc = auxcell.ao_loc_nr()
     naux = aux_loc[-1]
-    modchg_offset = -np.ones((chgcell.natm,8), dtype=int)
+    lmax = auxcell._bas[:,gto.ANG_OF].max()
+    modchg_offset = -np.ones((chgcell.natm,lmax+1), dtype=int)
     smooth_loc = chgcell.ao_loc_nr()
     for i in range(chgcell.nbas):
         ia = chgcell.bas_atom(i)
