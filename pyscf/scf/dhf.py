@@ -426,6 +426,8 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     dip = numpy.einsum('xij,ji->x', ll_dip, dm[:n2c,:n2c]).real
     dip+= numpy.einsum('xij,ji->x', ss_dip, dm[n2c:,n2c:]).real * (.5/c)**2
 
+    dip *= -1.
+
     if unit.upper() == 'DEBYE':
         dip *= nist.AU2DEBYE
         log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *dip)
