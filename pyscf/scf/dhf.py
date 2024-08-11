@@ -416,7 +416,7 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
 
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
-    charge_center = numpy.einsum('i,ix->x', charges, coords)
+    charge_center = numpy.einsum('i,ix->x', charges, coords) / sum(charges)
     with mol.with_common_orig(charge_center):
         ll_dip = mol.intor_symmetric('int1e_r_spinor', comp=3)
         ss_dip = mol.intor_symmetric('int1e_sprsp_spinor', comp=3)
@@ -424,7 +424,7 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     n2c = mol.nao_2c()
     c = lib.param.LIGHT_SPEED
     dip = numpy.einsum('xij,ji->x', ll_dip, dm[:n2c,:n2c]).real
-    dip+= numpy.einsum('xij,ji->x', ss_dip, dm[n2c:,n2c:]).real * (.5/c**2)
+    dip+= numpy.einsum('xij,ji->x', ss_dip, dm[n2c:,n2c:]).real * (.5/c)**2
 
     if unit.upper() == 'DEBYE':
         dip *= nist.AU2DEBYE
