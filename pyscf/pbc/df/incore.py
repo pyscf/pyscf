@@ -191,10 +191,8 @@ class Int3cBuilder(lib.StreamObject):
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
 
-        # Please note this rcut is estimated based on the 1/r12 operator.
-        # It may not be sufficent for ECP integrals.
+        # TODO: strip supmol basis based on the intor type.
         rcut = estimate_rcut(cell, self.auxcell)
-        # TODO: create and strip supmol basis based on the intor type.
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut.max(), log)
         self.supmol = supmol.strip_basis(rcut)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
@@ -243,6 +241,7 @@ class Int3cBuilder(lib.StreamObject):
                        omega, theta, cutoff)
         else:
             cutoff = self.direct_scf_tol
+        log_cutoff = int(np.log(cutoff) * LOG_ADJUST)
 
         atm, bas, env = gto.conc_env(supmol._atm, supmol._bas, supmol._env,
                                      rs_auxcell._atm, rs_auxcell._bas, rs_auxcell._env)
@@ -263,7 +262,6 @@ class Int3cBuilder(lib.StreamObject):
             log_cutoff = int(np.log(cutoff*1e-2) * LOG_ADJUST)
         else:
             cintopt = _vhf.make_cintopt(supmol._atm, supmol._bas, supmol._env, intor)
-            log_cutoff = int(np.log(cutoff) * LOG_ADJUST)
 
         sindex = self.get_q_cond(supmol)
         ovlp_mask = sindex > log_cutoff
@@ -456,21 +454,16 @@ def estimate_rcut(cell, auxcell, precision=None):
     lij = li + lj
     l3 = lij + lk
     theta = 1./(1./aij + 1./ak)
-    theta1 = 1./(1./aj + 1./ak)
     norm_ang = ((2*li+1)*(2*lj+1))**.5/(4*np.pi)
     c1 = ci * cj * ck * norm_ang
+    sfac = aij*aj/(aij*aj + ai*theta)
     fl = 2
-    fac = 2**(li+1)*np.pi**3.5*c1 * theta**1.5
-    fac /= aij**(li+1.5) * ak**(lk+1.5) * aj**lj * theta1
-    fac *= fl / precision
+    fac = 2**(li+1)*np.pi**3.5*c1 * theta**(l3-1.5) / aij**(lij+1.5) / ak**(lk+1.5)
+    fac *= (1 + ai/aj)**lj * fl / precision
 
     r0 = cell.rcut
-    r0 = (np.log(fac * r0 * (theta1*r0)**(l3-2) + 1.) / theta1)**.5
-    r0 = (np.log(fac * r0 * (theta1*r0)**(l3-2) + 1.) / theta1)**.5
-    # Maybe adjust to:
-    #r0 = cell.rcut
-    #r0 = (np.log(fac * r0**(l3-1) + 1.) / theta1)**.5
-    #r0 = (np.log(fac * r0**(l3-1) + 1.) / theta1)**.5
+    r0 = (np.log(fac * r0 * (sfac*r0)**(l3-2) + 1.) / (sfac*theta))**.5
+    r0 = (np.log(fac * r0 * (sfac*r0)**(l3-2) + 1.) / (sfac*theta))**.5
     return r0
 
 def _conc_locs(ao_loc1, ao_loc2):
