@@ -760,7 +760,6 @@ def civec_spinless_repr_generator(ci0_r, norb, nelec_r):
         ndet_sp[ne] = tuple((ndeta,ndetb))
     strs = strsa = strsb = None
     ndet = cistring.num_strings(2*norb, nelec)
-    nstates = len(nelec_r)
     def ss2spinless(ci0, ne, buf=None):
         if buf is None:
             ci1 = numpy.empty(ndet, dtype=ci0.dtype)

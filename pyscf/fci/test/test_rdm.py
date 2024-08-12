@@ -20,6 +20,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
+from pyscf import mcscf
 
 def setUpModule():
     global ci0, rdm1, rdm2, norb, nelec
@@ -62,6 +63,45 @@ class KnownValues(unittest.TestCase):
         dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf', ci1, ci1, norb, (5,3))[2]
         self.assertTrue(numpy.allclose(dm3ref, dm3))
 
+    def test_rdm3s(self):
+        (dm1a, dm1b), (dm2aa, dm2ab, dm2bb), (dm3aaa, dm3aab, dm3abb, dm3bbb) = \
+        fci.direct_spin1.make_rdm123s(ci0, norb, (nelec//2,nelec//2))
+
+        (rdm1a, rdm1b), (rdm2aa, rdm2ab, rdm2bb) = \
+        fci.direct_spin1.make_rdm12s(ci0, norb, (nelec//2,nelec//2))
+
+        self.assertTrue(numpy.allclose(rdm1a, dm1a))
+        self.assertTrue(numpy.allclose(rdm1b, dm1b))
+
+        fac = 1. / (nelec//2-1)
+        self.assertTrue(numpy.allclose(rdm1a, numpy.einsum('ijmm->ij',dm2aa)*fac))
+        self.assertTrue(numpy.allclose(rdm1a, numpy.einsum('mmij->ij',dm2aa)*fac))
+        self.assertTrue(numpy.allclose(rdm1b, numpy.einsum('ijmm->ij',dm2bb)*fac))
+        self.assertTrue(numpy.allclose(rdm1b, numpy.einsum('mmij->ij',dm2bb)*fac))
+
+        fac = 1. / (nelec//2) # dm2ab has a prefactor N * N instead of N(N-1)
+        self.assertTrue(numpy.allclose(rdm1a, numpy.einsum('ijmm->ij',dm2ab)*fac))
+        self.assertTrue(numpy.allclose(rdm1b, numpy.einsum('mmij->ij',dm2ab)*fac))
+
+        fac = 1. / (nelec//2-2)
+        self.assertTrue(numpy.allclose(rdm2aa, numpy.einsum('ijklmm->ijkl',dm3aaa)*fac))
+        self.assertTrue(numpy.allclose(rdm2aa, numpy.einsum('ijmmkl->ijkl',dm3aaa)*fac))
+        self.assertTrue(numpy.allclose(rdm2aa, numpy.einsum('mmijkl->ijkl',dm3aaa)*fac))
+
+        self.assertTrue(numpy.allclose(rdm2bb, numpy.einsum('ijklmm->ijkl',dm3bbb)*fac))
+        self.assertTrue(numpy.allclose(rdm2bb, numpy.einsum('ijmmkl->ijkl',dm3bbb)*fac))
+        self.assertTrue(numpy.allclose(rdm2bb, numpy.einsum('mmijkl->ijkl',dm3bbb)*fac))
+
+        fac = 1. / (nelec//2) # dm3aab/abb has a prefactor N * N * (N-1) instead of N(N-1)(N-2)
+        self.assertTrue(numpy.allclose(rdm2aa, numpy.einsum('ijklmm->ijkl',dm3aab)*fac))
+        self.assertTrue(numpy.allclose(rdm2bb, numpy.einsum('mmijkl->ijkl',dm3abb)*fac))
+
+        fac = 1. / (nelec//2-1)
+        self.assertTrue(numpy.allclose(rdm2ab, numpy.einsum('ijmmkl->ijkl',dm3aab)*fac))
+        self.assertTrue(numpy.allclose(rdm2ab, numpy.einsum('mmijkl->ijkl',dm3aab)*fac))
+        self.assertTrue(numpy.allclose(rdm2ab, numpy.einsum('ijklmm->ijkl',dm3abb)*fac))
+        self.assertTrue(numpy.allclose(rdm2ab, numpy.einsum('ijmmkl->ijkl',dm3abb)*fac))
+        
     def test_dm4(self):
         dm4ref = make_dm4_o0(ci0, norb, nelec)
         dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', ci0, ci0, norb, nelec)[3]
