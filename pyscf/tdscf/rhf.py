@@ -70,16 +70,13 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         sym_forbid = (orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym
 
     if fock_ao is None:
-        #dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        #fock_ao = mf.get_hcore() + mf.get_veff(mol, dm0)
-        foo = numpy.diag(mo_energy[occidx])
-        fvv = numpy.diag(mo_energy[viridx])
+        e_ia = hdiag = mo_energy[viridx] - mo_energy[occidx,None]
     else:
         fock = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao, mo_coeff))
         foo = fock[occidx[:,None],occidx]
         fvv = fock[viridx[:,None],viridx]
+        hdiag = fvv.diagonal() - foo.diagonal()[:,None]
 
-    hdiag = fvv.diagonal() - foo.diagonal()[:,None]
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
     hdiag = hdiag.ravel()
@@ -97,8 +94,11 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         dmov = lib.einsum('xov,qv,po->xpq', zs*2, orbv.conj(), orbo)
         v1ao = vresp(dmov)
         v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
-        v1ov += lib.einsum('xqs,sp->xqp', zs, fvv)
-        v1ov -= lib.einsum('xpr,sp->xsr', zs, foo)
+        if fock_ao is None:
+            v1ov += numpy.einsum('xia,ia->xia', zs, e_ia)
+        else:
+            v1ov += lib.einsum('xqs,sp->xqp', zs, fvv)
+            v1ov -= lib.einsum('xpr,sp->xsr', zs, foo)
         if wfnsym is not None and mol.symmetry:
             v1ov[:,sym_forbid] = 0
         return v1ov.reshape(v1ov.shape[0],-1)
@@ -111,6 +111,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
 
     A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ia||bj)
     B[i,a,j,b] = (ia||jb)
+
+    Ref: Chem Phys Lett, 256, 454
     '''
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -884,8 +886,8 @@ CIS = TDA
 def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''Generate function to compute
 
-    [ A  B][X]
-    [-B -A][Y]
+    [ A   B ][X]
+    [-B* -A*][Y]
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
@@ -908,15 +910,9 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
         sym_forbid = (orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym
 
-    #dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    #fock_ao = mf.get_hcore() + mf.get_veff(mol, dm0)
-    #fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
-    #foo = fock[occidx[:,None],occidx]
-    #fvv = fock[viridx[:,None],viridx]
-    foo = numpy.diag(mo_energy[occidx])
-    fvv = numpy.diag(mo_energy[viridx])
+    assert fock_ao is None
 
-    hdiag = fvv.diagonal() - foo.diagonal()[:,None]
+    e_ia = hdiag = mo_energy[viridx] - mo_energy[occidx,None]
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
     hdiag = numpy.hstack((hdiag.ravel(), -hdiag.ravel()))
@@ -932,18 +928,21 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
             xys[:,:,sym_forbid] = 0
 
         xs, ys = xys.transpose(1,0,2,3)
-        # dms = AX + BY
         # *2 for double occupancy
         dms  = lib.einsum('xov,qv,po->xpq', xs*2, orbv.conj(), orbo)
         dms += lib.einsum('xov,pv,qo->xpq', ys*2, orbv, orbo.conj())
-
-        v1ao = vresp(dms)
+        v1ao = vresp(dms) # = <mb||nj> Xjb + <mj||nb> Yjb
+        # A ~= <ib||aj>, B = <ij||ab>
+        # AX + BY
+        # = <ib||aj> Xjb + <ij||ab> Yjb
+        # = (<mb||nj> Xjb + <mj||nb> Yjb) Cmi* Cna
         v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
+        # (B*)X + (A*)Y
+        # = <ab||ij> Xjb + <aj||ib> Yjb
+        # = (<mb||nj> Xjb + <mj||nb> Yjb) Cma* Cni
         v1vo = lib.einsum('xpq,qo,pv->xov', v1ao, orbo, orbv.conj())
-        v1ov += lib.einsum('xqs,sp->xqp', xs, fvv)  # AX
-        v1ov -= lib.einsum('xpr,sp->xsr', xs, foo)  # AX
-        v1vo += lib.einsum('xqs,sp->xqp', ys, fvv)  # AY
-        v1vo -= lib.einsum('xpr,sp->xsr', ys, foo)  # AY
+        v1ov += numpy.einsum('xia,ia->xia', xs, e_ia)  # AX
+        v1vo += numpy.einsum('xia,ia->xia', ys, e_ia.conj())  # (A*)Y
 
         if wfnsym is not None and mol.symmetry:
             v1ov[:,sym_forbid] = 0

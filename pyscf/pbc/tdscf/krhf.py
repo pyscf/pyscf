@@ -263,7 +263,7 @@ class TDHF(TDA):
                     dmov[i,k]+= reduce(numpy.dot, (orbv[k], dmy.T, orbo[k].T.conj()))
 
             with lib.temporary_env(mf, exxdiv=None):
-                v1ao = vresp(dmov, kshift)
+                v1ao = vresp(dmov, kshift) # = <mb||nj> Xjb + <mj||nb> Yjb
             v1s = []
             for i in range(nz):
                 dmx = z1xs[i]
@@ -271,10 +271,16 @@ class TDHF(TDA):
                 v1xs = []
                 v1ys = []
                 for k in range(nkpts):
+                    # AX + BY
+                    # = <ib||aj> Xjb + <ij||ab> Yjb
+                    # = (<mb||nj> Xjb + <mj||nb> Yjb) Cmi* Cna
                     v1x = reduce(numpy.dot, (orbo[k].T.conj(), v1ao[i,k], orbv[k]))
+                    # (B*)X + (A*)Y
+                    # = <ab||ij> Xjb + <aj||ib> Yjb
+                    # = (<mb||nj> Xjb + <mj||nb> Yjb) Cma* Cni
                     v1y = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[k])).T
                     v1x+= e_ia[k] * dmx[k]
-                    v1y+= e_ia[k] * dmy[k]
+                    v1y+= e_ia[k].conj() * dmy[k]
                     v1xs.append(v1x.ravel())
                     v1ys.append(-v1y.ravel())
                 # v1s += v1xs + v1ys

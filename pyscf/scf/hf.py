@@ -33,6 +33,7 @@ from pyscf.lib import logger
 from pyscf.scf import diis
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
+from pyscf.scf import dispersion
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -1874,6 +1875,9 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
     make_rdm2 = lib.module_method(make_rdm2, absences=['mo_coeff', 'mo_occ'])
     energy_elec = energy_elec
     energy_tot = energy_tot
+
+    do_disp = dispersion.check_disp
+    get_dispersion = dispersion.get_dispersion
 
     def energy_nuc(self):
         return self.mol.enuc
