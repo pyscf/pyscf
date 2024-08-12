@@ -2654,7 +2654,7 @@ class LibXCMixin:
         return self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv,
                                   omega, verbose)
 
-    def eval_xc1(xc_code, rho, spin=0, deriv=1, omega=None):
+    def eval_xc1(self, xc_code, rho, spin=0, deriv=1, omega=None):
         if omega is None: omega = self.omega
         return self.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
 
