@@ -26,5 +26,5 @@ eri = ao2mo.kernel(mol, c)
 solver = direct_spin1_cyl_sym.FCI(mol)
 for sym in ['A1g', 'A1u', 'E1ux', 'E1uy', 'E1gx', 'E1gy', 'E2ux', 'E2uy', 'E2gx', 'E2gy', 'E3ux', 'E3uy', 'E3gx', 'E3gy']:
     e, v = solver.kernel(h1e, eri, c.shape[1], mol.nelec, orbsym=orbsym,
-                         wfnsym=sym, nroots=5, verbose=0)
+                         wfnsym=sym, nroots=5, ecore=mol.energy_nuc(), verbose=0)
     print(f'{sym}: {e}')
