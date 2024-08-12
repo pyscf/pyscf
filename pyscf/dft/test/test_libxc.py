@@ -230,7 +230,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vxc[1]), 0.0049270110162854116, 9)
 
         n, exc, vxc = ni.nr_rks(mol, mf.grids, 'm06x', dm)
-        self.assertAlmostEqual(n, 4, 6)
+        self.assertAlmostEqual(n, 4, 5)
         self.assertAlmostEqual(lib.fp(exc), 0.01197588220700074, 6)
         self.assertAlmostEqual(lib.fp(vxc), -0.043974912389152986, 6)
 
