@@ -79,10 +79,10 @@ class VHFOpt:
 
     @property
     def direct_scf_tol(self):
-        return self._this.contents.direct_scf_cutoff
+        return self._this.contents.direct_scf_tol
     @direct_scf_tol.setter
     def direct_scf_tol(self, v):
-        self._this.contents.direct_scf_cutoff = v
+        self._this.contents.direct_scf_tol = v
 
     @property
     def prescreen(self):
@@ -162,7 +162,7 @@ class _VHFOpt:
         self.mol = mol
         self._this = cvhfopt = _CVHFOpt()
         cvhfopt.nbas = mol.nbas
-        cvhfopt.direct_scf_cutoff = direct_scf_tol
+        cvhfopt.direct_scf_tol = direct_scf_tol
         cvhfopt.fprescreen = _fpointer(prescreen)
         cvhfopt.r_vkscreen = _fpointer('CVHFr_vknoscreen')
         self._q_cond = None
@@ -207,10 +207,10 @@ class _VHFOpt:
 
     @property
     def direct_scf_tol(self):
-        return self._this.direct_scf_cutoff
+        return self._this.direct_scf_tol
     @direct_scf_tol.setter
     def direct_scf_tol(self, v):
-        self._this.direct_scf_cutoff = v
+        self._this.direct_scf_tol = v
 
     @property
     def prescreen(self):
@@ -265,9 +265,9 @@ class _VHFOpt:
 
 class SGXOpt(_VHFOpt):
     def __init__(self, mol, intor=None, prescreen='CVHFnoscreen',
-                 qcondname=None, dmcondname=None, direct_scf_cutoff=1e-14):
+                 qcondname=None, dmcondname=None, direct_scf_tol=1e-14):
         _VHFOpt.__init__(self, mol, intor, prescreen, qcondname, dmcondname,
-                         direct_scf_cutoff)
+                         direct_scf_tol)
         self.ngrids = None
 
     def set_dm(self, dm, atm, bas, env):
@@ -287,18 +287,22 @@ class SGXOpt(_VHFOpt):
             if self._dmcondname != 'SGXnr_dm_cond':
                 raise ValueError('SGXOpt only supports SGXnr_dm_cond')
             fdmcond = getattr(libcvhf, self._dmcondname)
-        dm_cond = numpy.empty((mol.nbas, self.ngrids))
+        if self.ngrids is None:
+            ngrids = int(env[gto.NGRIDS])
+        else:
+            ngrids = self.ngrids
+        dm_cond = numpy.empty((mol.nbas, ngrids))
         fdmcond(dm_cond.ctypes, dm.ctypes, ctypes.c_int(n_dm),
                 ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
                 mol._bas.ctypes, ctypes.c_int(mol.nbas), mol._env.ctypes,
-                ctypes.c_int(self.ngrids))
+                ctypes.c_int(ngrids))
         self.dm_cond = dm_cond
 
 
 class _CVHFOpt(ctypes.Structure):
     _fields_ = [('nbas', ctypes.c_int),
                 ('ngrids', ctypes.c_int),
-                ('direct_scf_cutoff', ctypes.c_double),
+                ('direct_scf_tol', ctypes.c_double),
                 ('q_cond', ctypes.c_void_p),
                 ('dm_cond', ctypes.c_void_p),
                 ('fprescreen', ctypes.c_void_p),
