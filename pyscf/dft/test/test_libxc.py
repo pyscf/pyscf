@@ -108,6 +108,9 @@ class KnownValues(unittest.TestCase):
         #hyb, fn_facs = dft.libxc.parse_xc('TF,')
         #self.assertEqual(fn_facs, [(50, 1)])
 
+        hyb, fn_facs = dft.libxc.parse_xc("9.999e-5*HF,")
+        self.assertEqual(hyb, (9.999e-5, 0, 0))
+
         ref = ((1, 1), (7, 1))
         self.assertEqual(dft.libxc.parse_xc_name('LDA,VWN'), (1,7))
         self.assertEqual(dft.libxc.parse_xc(('LDA','VWN'))[1], ref)
