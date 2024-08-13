@@ -449,7 +449,7 @@ def parse_xc(description):
                 fac, key = token.split('*')
                 if fac[0].isalpha():
                     fac, key = key, fac
-                fac = sign * float(fac.replace('_', '-'))
+                fac = sign * float(fac.replace('E_', 'E-'))
             else:
                 fac, key = sign, token
 
