@@ -554,6 +554,9 @@ class _RSGDFBuilder(Int3cBuilder):
         log = logger.new_logger(self)
         cell = self.cell
         cell_d = self.rs_cell.smooth_basis_cell()
+        assert cell_d.low_dim_ft_type != 'inf_vacuum'
+        assert cell_d.dimension > 1
+
         auxcell = self.auxcell
         nao = cell_d.nao
         naux = auxcell.nao
@@ -1042,6 +1045,9 @@ def _int_dd_block(dfbuilder, fakenuc, intor='int3c2e', comp=None):
     t0 = (logger.process_clock(), logger.perf_counter())
     cell = dfbuilder.cell
     cell_d = dfbuilder.rs_cell.smooth_basis_cell()
+    assert cell_d.low_dim_ft_type != 'inf_vacuum'
+    assert cell_d.dimension > 1
+
     nao = cell_d.nao
     kpts = dfbuilder.kpts
     nkpts = kpts.shape[0]
@@ -1089,7 +1095,6 @@ def _int_dd_block(dfbuilder, fakenuc, intor='int3c2e', comp=None):
 
 class _RSNucBuilder(_RSGDFBuilder):
 
-    exclude_dd_block = True
     exclude_d_aux = False
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
