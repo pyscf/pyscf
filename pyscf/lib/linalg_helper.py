@@ -476,8 +476,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             e = w[:nroots]
             v = v[:,:nroots]
             conv = numpy.zeros(nroots, dtype=bool)
-            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
-                                           fresh_start, log)
+            if not fresh_start:
+                elast, conv_last = _sort_elast(elast, conv_last, vlast, v, log)
 
         if elast is None:
             de = e
@@ -570,8 +570,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         # can be generated.
         # 2. The initial guess sits in the subspace which is smaller than the
         # required number of roots.
-        msg = 'Not enough eigenvectors (len(x0)=%d, nroots=%d)' % (len(x0), nroots)
-        warnings.warn(msg)
+        log.warn(f'Not enough eigenvectors (len(x0)={len(x0)}, nroots={nroots})')
 
     return numpy.asarray(conv), e, x0
 
@@ -822,10 +821,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
         head, space = space, space+rnow
 
         if dtype is None:
-            try:
-                dtype = numpy.result_type(axt[0], xt[0])
-            except IndexError:
-                dtype = numpy.result_type(ax[0].dtype, xs[0].dtype)
+            dtype = numpy.result_type(*axt, *xt)
         if heff is None:  # Lazy initialize heff to determine the dtype
             heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:
@@ -850,8 +846,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
             e = w[:nroots]
             v = v[:,:nroots]
             conv = numpy.zeros(nroots, dtype=bool)
-            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
-                                           fresh_start, log)
+            if not fresh_start:
+                elast, conv_last = _sort_elast(elast, conv_last, vlast, v, log)
 
         if elast is None:
             de = e
@@ -879,7 +875,6 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
                 if conv[k] and not conv_last[k]:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                               k, dx_norm[k], ek, de[k])
-                    conv[k] = True
         ax0 = None
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
@@ -904,7 +899,6 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
         for k, ek in enumerate(e):
             if (not conv[k]) and dx_norm[k]**2 > lindep:
                 xt[k] = precond(xt[k], e[0]-level_shift, x0[k])
-                xt[k] *= dot(xt[k].conj(), xt[k]).real ** -.5
             elif not conv[k]:
                 # Remove linearly dependent vector
                 xt[k] = None
@@ -1529,14 +1523,12 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
     c = v[:,sorted_idx]
     return e, c
 
-def _sort_elast(elast, conv_last, vlast, v, fresh_start, log):
+def _sort_elast(elast, conv_last, vlast, v, log):
     '''
     Eigenstates may be flipped during the Davidson iterations.  Reorder the
     eigenvalues of last iteration to make them comparable to the eigenvalues
     of the current iterations.
     '''
-    if fresh_start:
-        return elast, conv_last
     head, nroots = vlast.shape
     ovlp = abs(numpy.dot(v[:head].conj().T, vlast))
     idx = numpy.argmax(ovlp, axis=1)
@@ -1556,16 +1548,15 @@ def _project_xt_(xt, xs, e, threshold, dot, precond):
     ill_precond = False
     for i, xsi in enumerate(xs):
         xsi = numpy.asarray(xsi)
+        norm1 = dot(xsi.conj(), xsi).real ** .5
         for k, xi in enumerate(xt):
             if xi is None:
                 continue
+            norm2 = dot(xi.conj(), xi).real ** .5
             ovlp = dot(xsi.conj(), xi)
-            # xs[i] == xt[k]
-            if abs(1 - ovlp)**2 < threshold:
+            if (norm1*norm2 - ovlp)**2 < threshold:
                 ill_precond = True
-                # rebuild xt[k] to remove correlation between xt[k] and xs[i]
-                xi[:] = precond(xi, e[k], xi)
-                ovlp = dot(xsi.conj(), xi)
+                xt[k] = None
             xi -= xsi * ovlp
         xsi = None
     return xt, ill_precond
@@ -1626,5 +1617,3 @@ class _Xlist(list):
     def pop(self, index):
         key = self.index.pop(index)
         del (self.scr_h5[str(key)])
-
-del (SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)

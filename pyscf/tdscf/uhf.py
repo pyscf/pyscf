@@ -23,10 +23,11 @@ from pyscf import scf
 from pyscf import symm
 from pyscf import ao2mo
 from pyscf.lib import logger
-from pyscf.tdscf import rhf
 from pyscf.scf import uhf_symm
 from pyscf.scf import _response_functions
 from pyscf.data import nist
+from pyscf.tdscf import rhf
+from pyscf.tdscf._lr_eig import lr_eig
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
@@ -806,7 +807,9 @@ class TDHF(TDA):
     def init_guess(self, mf, nstates=None, wfnsym=None):
         x0 = TDA.init_guess(self, mf, nstates, wfnsym)
         y0 = numpy.zeros_like(x0)
-        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
+        return numpy.hstack([x0, y0])
+
+    get_precond = rhf.TDHF.get_precond
 
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -824,23 +827,27 @@ class TDHF(TDA):
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
+        # handle single kpt PBC SCF
+        if getattr(self._scf, 'kpt', None) is not None:
+            from pyscf.pbc.lib.kpts_helper import gamma_point
+            real_system = (gamma_point(self._scf.kpt) and
+                           self._scf.mo_coeff[0].dtype == numpy.double)
+        else:
+            real_system = True
+
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > self.positive_eig_threshold))[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
-                                                      real_eigenvectors=True)
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
-        self.converged, w, x1 = \
-                lib.davidson_nosym1(vind, x0, precond,
-                                    tol=self.conv_tol,
-                                    nroots=nstates, lindep=self.lindep,
-                                    max_cycle=self.max_cycle,
-                                    max_space=self.max_space, pick=pickeig,
-                                    verbose=log)
+        self.converged, w, x1 = lr_eig(
+            vind, x0, precond, tol=self.conv_tol,
+            nroots=nstates, lindep=self.lindep, max_cycle=self.max_cycle,
+            max_space=self.max_space, pick=pickeig, verbose=log)
 
         nmo = self._scf.mo_occ[0].size
         nocca = (self._scf.mo_occ[0]>0).sum()
