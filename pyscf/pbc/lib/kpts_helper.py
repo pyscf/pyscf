@@ -91,6 +91,7 @@ def unique(kpts):
             kpts.round(digits), return_index=True, return_inverse=True, axis=0)[1:3]
         idx = uniq_index.argsort()
         rank = idx.argsort()
+        uniq_inverse = uniq_inverse.ravel()
         return kpts[uniq_index[idx]], uniq_index[idx], rank[uniq_inverse]
     except TypeError:
         # Old numpy does not support unique of 2D array
