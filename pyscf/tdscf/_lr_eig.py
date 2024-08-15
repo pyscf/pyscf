@@ -58,7 +58,6 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     max_space = max_space + (nroots-1) * 6
     dtype = None
     heff = None
-    seff = None
     e = None
     v = None
     conv = np.zeros(nroots, dtype=bool)
@@ -75,7 +74,7 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             ax = []
             row1 = 0
             xt = x0
-        xt = _qr(xt, np.dot, lindep)[0]
+        xt = _symmetric_orth(xt)
         axt = aop(xt)
         for k, xi in enumerate(xt):
             xs.append(xt[k])
@@ -86,49 +85,29 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if heff is None:
             dtype = np.result_type(*axt, *xt)
             heff = np.empty((max_space*2,max_space*2), dtype=dtype)
-            seff = np.empty((max_space*2,max_space*2), dtype=dtype)
 
         elast = e
         vlast = v
         conv_last = conv
 
         for i in range(row1):
-            xi1, xi2 = xs[i][:half_size], xs[i][half_size:]
-            ui1, ui2 = ax[i][:half_size], ax[i][half_size:]
             for jp, j in enumerate(range(row0, row1)):
-                xj1, xj2 = xt[jp][:half_size], xt[jp][half_size:]
-                uj1, uj2 = axt[jp][:half_size], axt[jp][half_size:]
-                s11 = dot(xi1.conj(), xj1) - dot(xi2.conj(), xj2)
-                s21 = dot(xi2, xj1) - dot(xi1, xj2)
-                seff[i*2  ,j*2  ] = s11
-                seff[i*2+1,j*2  ] = s21
-                seff[i*2  ,j*2+1] = -s21.conj()
-                seff[i*2+1,j*2+1] = -s11.conj()
-
-                h11 = dot(xi1.conj(), uj1) - dot(xi2.conj(), uj2)
-                h21 = dot(xi2, uj1) - dot(xi1, uj2)
+                h11 = xs[i].conj().dot(axt[jp])
+                h21 = _conj_dot(xs[i], axt[jp])
                 heff[i*2  ,j*2  ] = h11
                 heff[i*2+1,j*2  ] = h21
-                heff[i*2  ,j*2+1] = h21.conj()
-                heff[i*2+1,j*2+1] = h11.conj()
+                heff[i*2  ,j*2+1] = -h21.conj()
+                heff[i*2+1,j*2+1] = -h11.conj()
 
                 if i < row0:
-                    s11 = dot(xj1.conj(), xi1) - dot(xj2.conj(), xi2)
-                    s21 = dot(xj2, xi1) - dot(xj1, xi2)
-                    seff[j*2  ,i*2  ] = s11
-                    seff[j*2+1,i*2  ] = s21
-                    seff[j*2  ,i*2+1] = -s21.conj()
-                    seff[j*2+1,i*2+1] = -s11.conj()
-
-                    h11 = dot(xj1.conj(), ui1) - dot(xj2.conj(), ui2)
-                    h21 = dot(xj2, ui1) - dot(xj1, ui2)
+                    h11 = xt[jp].conj().dot(ax[i])
+                    h21 = _conj_dot(xt[jp], ax[i])
                     heff[j*2  ,i*2  ] = h11
                     heff[j*2+1,i*2  ] = h21
-                    heff[j*2  ,i*2+1] = h21.conj()
-                    heff[j*2+1,i*2+1] = h11.conj()
+                    heff[j*2  ,i*2+1] = -h21.conj()
+                    heff[j*2+1,i*2+1] = -h11.conj()
 
-        xt = axt = None
-        w, v = scipy.linalg.eig(heff[:row1*2,:row1*2], seff[:row1*2,:row1*2])
+        w, v = scipy.linalg.eig(heff[:row1*2,:row1*2])
         w, v, idx = pick(w, v, nroots, locals())
         if len(w) == 0:
             raise RuntimeError('Not enough eigenvalues')
@@ -161,7 +140,6 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 if conv[k] and not conv_last[k]:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                               k, dx_norm[k], ek, de[k])
-
         max_dx_norm = max(dx_norm)
         ide = np.argmax(abs(de))
         if all(conv):
@@ -176,14 +154,20 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 xk = precond(xt[k], e[0]-level_shift, x0[k])
                 for xi in xs:
                     xk -= xi * dot(xi.conj(), xk)
+                    c = _conj_dot(xi, xk)
+                    xk[:half_size] -= xi[half_size:].conj() * c
+                    xk[half_size:] -= xi[:half_size].conj() * c
                 norm = np.linalg.norm(xk)
                 if norm**2 > lindep:
                     norm_min = min(norm_min, norm)
                     xk /= norm
                     if norm < tol_residual:
-                        # To reduce errors in basis orthogonalization
+                        # To reduce numerical errors in basis orthogonalization
                         for xi in xs:
                             xk -= xi * dot(xi.conj(), xk)
+                            c = _conj_dot(xi, xk)
+                            xk[:half_size] -= xi[half_size:].conj() * c
+                            xk[half_size:] -= xi[:half_size].conj() * c
                     norm = np.linalg.norm(xk)
                     xk /= norm
                     xt[k] = xk
@@ -226,3 +210,39 @@ def _gen_ax0(v, xs):
     out[:,:n] -= out_conj[:,n:].conj()
     out[:,n:] -= out_conj[:,:n].conj()
     return out
+
+def _conj_dot(xi, xj):
+    '''Dot product between the conjugated basis of xi and xj.
+    The conjugated basis of xi is np.hstack([xi[half:], xi[:half]]).conj()
+    '''
+    assert xi.ndim == 1
+    n = xi.size // 2
+    return xi[n:].dot(xj[:n]) + xi[:n].dot(xj[n:])
+
+def _symmetric_orth(xt, lindep=1e-6):
+    xt = np.asarray(xt)
+    n, m = xt.shape
+    if n == 0:
+        raise RuntimeError('Linear dependency in trial bases')
+    m = m // 2
+    # The conjugated basis np.hstack([b2, b1]).conj()
+    b1 = xt[:,:m]
+    b2 = xt[:,m:]
+    yt = np.hstack((b2.conj(), b1.conj()))
+    v = np.vstack([xt, yt])
+    s0 = v.conj().dot(v.T)
+    s11 = xt.conj().dot(xt.T)
+    s21 = b2.dot(b1.T)
+    s21 += b1.dot(b2.T)
+    s = np.block([[s11, s21.conj().T],
+                  [s21, s11.conj()  ]])
+    e, c = scipy.linalg.eigh(s)
+    if e[0] < lindep:
+        return _symmetric_orth(xt[:-1], lindep)
+
+    c_orth = (c * e**-.5).dot(c[:n].conj().T)
+    x_orth = c_orth[:n].T.dot(xt)
+    # Contribution from the conjugated basis
+    x_orth[:,:m] += c_orth[n:].T.dot(b2.conj())
+    x_orth[:,m:] += c_orth[n:].T.dot(b1.conj())
+    return x_orth

@@ -990,14 +990,19 @@ class TDHF(TDA):
         return numpy.hstack([x0, y0])
 
     def get_precond(self, hdiag):
-        n = hdiag.size // 2
-        def precond(x, e, x0):
-            diagd = hdiag.copy()
-            diagd[:n] -= (e-self.level_shift)
-            diagd[n:] += (e-self.level_shift)
-            diagd[abs(diagd)<1e-8] = 1e-8
-            return x / diagd
-        return precond
+        mf = self._scf
+        if (not isinstance(mf, scf.hf.KohnShamDFT) or
+            mf._numint.libxc.is_hybrid_xc(mf.xc)):
+            n = hdiag.size // 2
+            def precond(x, e, x0):
+                diagd = hdiag.copy()
+                diagd[:n] -= (e-self.level_shift)
+                diagd[n:] += (e-self.level_shift)
+                diagd[abs(diagd)<1e-8] = 1e-8
+                return x / diagd
+            return precond
+        else:
+            return TDBase.get_precond(self, hdiag)
 
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver

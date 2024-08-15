@@ -21,7 +21,7 @@ import numpy
 from pyscf import symm
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.tdscf import uhf
+from pyscf.tdscf import rks, uhf
 from pyscf.scf import uhf_symm
 from pyscf.data import nist
 from pyscf.dft.rks import KohnShamDFT
