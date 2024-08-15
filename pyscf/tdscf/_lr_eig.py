@@ -15,15 +15,14 @@
 #
 
 import sys
-import numpy
+import numpy as np
 import scipy.linalg
 from pyscf.lib import logger
 from pyscf.lib.linalg_helper import (
-    FOLLOW_STATE, DAVIDSON_LINDEP,
-    _sort_elast, _outprod_to_subspace, _project_xt_, _normalize_xt_)
+    FOLLOW_STATE, _sort_elast, _outprod_to_subspace, _normalize_xt_, _qr)
 
 def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-           lindep=DAVIDSON_LINDEP, nroots=1, pick=None, verbose=logger.WARN,
+           lindep=1e-12, nroots=1, pick=None, verbose=logger.WARN,
            follow_state=FOLLOW_STATE, tol_residual=None, metric=None):
     '''
     Solver for linear response eigenvalues
@@ -47,26 +46,27 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         log = logger.Logger(sys.stdout, verbose)
 
     if tol_residual is None:
-        tol_residual = numpy.sqrt(tol)
+        tol_residual = tol**.5
     log.debug1('tol %g  tol_residual %g', tol, tol_residual)
 
     if callable(x0):
         x0 = x0()
-    if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
+    if isinstance(x0, np.ndarray) and x0.ndim == 1:
         x0 = x0[None,:]
+    x0 = np.asarray(x0)
 
-    max_space = max_space + (nroots-1) * 3
+    max_space = max_space + (nroots-1) * 6
     dtype = None
     heff = None
     seff = None
     e = None
     v = None
-    conv = numpy.zeros(nroots, dtype=bool)
+    conv = np.zeros(nroots, dtype=bool)
     emin = None
     level_shift = 0
 
-    dot = numpy.dot
-    n = x0[0].size // 2
+    dot = np.dot
+    half_size = x0[0].size // 2
     fresh_start = True
 
     for icyc in range(max_cycle):
@@ -75,8 +75,7 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             ax = []
             row1 = 0
             xt = x0
-            max_dx_last = 1e9
-
+        xt = _qr(xt, np.dot, lindep)[0]
         axt = aop(xt)
         for k, xi in enumerate(xt):
             xs.append(xt[k])
@@ -85,19 +84,20 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         space = row1
 
         if heff is None:
-            dtype = numpy.result_type(*axt, *xt)
-            heff = numpy.empty((max_space*2,max_space*2), dtype=dtype)
-            seff = numpy.empty((max_space*2,max_space*2), dtype=dtype)
+            dtype = np.result_type(*axt, *xt)
+            heff = np.empty((max_space*2,max_space*2), dtype=dtype)
+            seff = np.empty((max_space*2,max_space*2), dtype=dtype)
 
         elast = e
         vlast = v
         conv_last = conv
+
         for i in range(row1):
-            xi1, xi2 = xs[i][:n], xs[i][n:]
-            ui1, ui2 = ax[i][:n], ax[i][n:]
+            xi1, xi2 = xs[i][:half_size], xs[i][half_size:]
+            ui1, ui2 = ax[i][:half_size], ax[i][half_size:]
             for jp, j in enumerate(range(row0, row1)):
-                xj1, xj2 = xt[jp][:n], xt[jp][n:]
-                uj1, uj2 = axt[jp][:n], axt[jp][n:]
+                xj1, xj2 = xt[jp][:half_size], xt[jp][half_size:]
+                uj1, uj2 = axt[jp][:half_size], axt[jp][half_size:]
                 s11 = dot(xi1.conj(), xj1) - dot(xi2.conj(), xj2)
                 s21 = dot(xi2, xj1) - dot(xi1, xj2)
                 seff[i*2  ,j*2  ] = s11
@@ -131,11 +131,11 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         w, v = scipy.linalg.eig(heff[:row1*2,:row1*2], seff[:row1*2,:row1*2])
         w, v, idx = pick(w, v, nroots, locals())
         if len(w) == 0:
-            raise RuntimeError(f'Not enough eigenvalues found by {pick}')
+            raise RuntimeError('Not enough eigenvalues')
 
         e = w[:nroots]
         v = v[:,:nroots]
-        conv = numpy.zeros(nroots, dtype=bool)
+        conv = np.zeros(nroots, dtype=bool)
         if not fresh_start:
             elast, conv_last = _sort_elast(elast, conv_last, vlast, v, log)
 
@@ -151,61 +151,56 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         x0 = _gen_x0(v, xs)
         ax0 = _gen_ax0(v, ax)
 
-        dx_norm = numpy.zeros(nroots)
+        dx_norm = np.zeros(nroots)
         xt = [None] * nroots
         for k, ek in enumerate(e):
             if not conv[k]:
                 xt[k] = ax0[k] - ek * x0[k]
-                dx_norm[k] = numpy.linalg.norm(xt[k])
+                dx_norm[k] = np.linalg.norm(xt[k])
                 conv[k] = abs(de[k]) < tol and dx_norm[k] < tol_residual
                 if conv[k] and not conv_last[k]:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                               k, dx_norm[k], ek, de[k])
 
         max_dx_norm = max(dx_norm)
-        ide = numpy.argmax(abs(de))
+        ide = np.argmax(abs(de))
         if all(conv):
             log.debug('converged %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide])
             break
-        elif (follow_state and max_dx_norm > 1 and
-              max_dx_norm/max_dx_last > 3 and space > nroots+4):
-            log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
-                      icyc, space, max_dx_norm, e, de[ide])
-            log.debug('Large |r| detected, restore to previous x0')
-            x0 = _gen_x0(vlast, xs)
-            fresh_start = True
-            continue
 
         # remove subspace linear dependency
+        norm_min = 1
         for k, ek in enumerate(e):
-            if (not conv[k]) and dx_norm[k]**2 > lindep:
-                xt[k] = precond(xt[k], e[0]-level_shift, x0[k])
-            elif not conv[k]:
-                # Remove linearly dependent vector
-                xt[k] = None
-                log.debug1('Drop eigenvector %d, norm=%4.3g', k, dx_norm[k])
+            if not conv[k]:
+                xk = precond(xt[k], e[0]-level_shift, x0[k])
+                for xi in xs:
+                    xk -= xi * dot(xi.conj(), xk)
+                norm = np.linalg.norm(xk)
+                if norm**2 > lindep:
+                    norm_min = min(norm_min, norm)
+                    xk /= norm
+                    if norm < tol_residual:
+                        # To reduce errors in basis orthogonalization
+                        for xi in xs:
+                            xk -= xi * dot(xi.conj(), xk)
+                    norm = np.linalg.norm(xk)
+                    xk /= norm
+                    xt[k] = xk
+                else:
+                    xt[k] = None
+                    log.debug1('Drop eigenvector %d, norm=%4.3g', k, dx_norm[k])
             else:
                 xt[k] = None
 
-        xt, ill_precond = _project_xt_(xt, xs, e, lindep, dot, precond)
-        if ill_precond:
-            # Manually adjust the precond because precond function may not be
-            # able to generate linearly dependent basis vectors. e.g. issue 1362
-            log.warn('Matrix may be already a diagonal matrix. '
-                     'level_shift is applied to precond')
-            level_shift = 0.1
-
-        xt, norm_min = _normalize_xt_(xt, lindep, dot)
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
+        xt = [x for x in xt if x is not None]
         if len(xt) == 0:
-            log.debug('Linear dependency in trial subspace. |r| for each state %s',
-                      dx_norm)
+            log.debug(f'Linear dependency in trial subspace. |r| for each state {dx_norm}')
             conv = conv & (dx_norm < tol_residual)
             break
 
-        max_dx_last = max_dx_norm
         fresh_start = space+nroots > max_space
 
     # Check whether the solver finds enough eigenvectors.
@@ -213,19 +208,20 @@ def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     if len(x0) < min(h_dim, nroots):
         log.warn(f'Not enough eigenvectors (len(x0)={len(x0)}, nroots={nroots})')
 
-    return numpy.asarray(conv), e, x0
+    return np.asarray(conv), e, x0
 
 def _gen_x0(v, xs):
     out = _outprod_to_subspace(v[::2], xs)
-    out_conj = _outprod_to_subspace(v[1::2], xs)
+    out_conj = _outprod_to_subspace(v[1::2].conj(), xs)
     n = out.shape[1] // 2
+    # v[1::2] * xs.conj() = (v[1::2].conj() * xs).conj()
     out[:,:n] += out_conj[:,n:].conj()
     out[:,n:] += out_conj[:,:n].conj()
     return out
 
 def _gen_ax0(v, xs):
     out = _outprod_to_subspace(v[::2], xs)
-    out_conj = _outprod_to_subspace(v[1::2], xs)
+    out_conj = _outprod_to_subspace(v[1::2].conj(), xs)
     n = out.shape[1] // 2
     out[:,:n] -= out_conj[:,n:].conj()
     out[:,n:] -= out_conj[:,:n].conj()

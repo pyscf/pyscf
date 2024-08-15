@@ -1036,8 +1036,8 @@ class TDHF(TDA):
             x0 = self.init_guess(self._scf, self.nstates)
 
         self.converged, w, x1 = lr_eig(
-            vind, x0, precond, tol=self.conv_tol,
-            nroots=nstates, lindep=self.lindep, max_cycle=self.max_cycle,
+            vind, x0, precond, tol=self.conv_tol, nroots=nstates,
+            lindep=self.lindep, max_cycle=self.max_cycle,
             max_space=self.max_space, pick=pickeig, verbose=log)
 
         nocc = (self._scf.mo_occ>0).sum()

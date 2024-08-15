@@ -25,9 +25,9 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.scf import uhf_symm
 from pyscf.scf import _response_functions
-from pyscf.data import nist
 from pyscf.tdscf import rhf
 from pyscf.tdscf._lr_eig import lr_eig
+from pyscf.data import nist
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)

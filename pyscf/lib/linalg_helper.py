@@ -1548,13 +1548,11 @@ def _project_xt_(xt, xs, e, threshold, dot, precond):
     ill_precond = False
     for i, xsi in enumerate(xs):
         xsi = numpy.asarray(xsi)
-        norm1 = dot(xsi.conj(), xsi).real ** .5
         for k, xi in enumerate(xt):
             if xi is None:
                 continue
-            norm2 = dot(xi.conj(), xi).real ** .5
             ovlp = dot(xsi.conj(), xi)
-            if (norm1*norm2 - ovlp)**2 < threshold:
+            if (1 - ovlp)**2 < threshold:
                 ill_precond = True
                 xt[k] = None
             xi -= xsi * ovlp

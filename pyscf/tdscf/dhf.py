@@ -27,6 +27,7 @@ from pyscf import dft
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
+from pyscf.tdscf._lr_eig import lr_eig
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -534,7 +535,9 @@ class TDHF(TDBase):
     def init_guess(self, mf, nstates=None, wfnsym=None):
         x0 = TDA.init_guess(self, mf, nstates, wfnsym)
         y0 = numpy.zeros_like(x0)
-        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
+        return numpy.hstack([x0, y0])
+
+    get_precond = rhf.TDHF.get_precond
 
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -562,13 +565,10 @@ class TDHF(TDBase):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
-        self.converged, w, x1 = \
-                lib.davidson_nosym1(vind, x0, precond,
-                                    tol=self.conv_tol,
-                                    nroots=nstates, lindep=self.lindep,
-                                    max_cycle=self.max_cycle,
-                                    max_space=self.max_space, pick=pickeig,
-                                    verbose=log)
+        self.converged, w, x1 = lr_eig(
+            vind, x0, precond, tol=self.conv_tol, nroots=nstates,
+            lindep=self.lindep, max_cycle=self.max_cycle,
+            max_space=self.max_space, pick=pickeig, verbose=log)
 
         nocc = (self._scf.mo_occ>0).sum()
         nmo = self._scf.mo_occ.size
