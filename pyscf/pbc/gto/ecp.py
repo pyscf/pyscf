@@ -25,8 +25,7 @@ import numpy as np
 from pyscf import lib
 from pyscf import gto
 from pyscf.pbc.gto.cell import _split_basis
-from pyscf.pbc.df import incore, ft_ao
-from pyscf.pbc.tools import k2gamma
+from pyscf.pbc.df import incore
 
 
 def ecp_int(cell, kpts=None):
