@@ -64,8 +64,15 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(dm3ref, dm3))
 
     def test_rdm3s(self):
+        dm1, dm2, dm3 = fci.direct_spin1.make_rdm123(ci0, norb, (nelec//2,nelec//2))
+
         (dm1a, dm1b), (dm2aa, dm2ab, dm2bb), (dm3aaa, dm3aab, dm3abb, dm3bbb) = \
         fci.direct_spin1.make_rdm123s(ci0, norb, (nelec//2,nelec//2))
+
+        self.assertTrue(numpy.allclose(dm1a+dm1b, dm1))
+        self.assertTrue(numpy.allclose(dm2aa+dm2bb+dm2ab+dm2ab.transpose(2,3,0,1), dm2))
+        self.assertTrue(numpy.allclose(dm3aaa+dm3bbb+dm3aab+dm3aab.transpose(0,1,4,5,2,3)+\
+        dm3aab.transpose(4,5,0,1,2,3)+dm3abb+dm3abb.transpose(2,3,0,1,4,5)+dm3abb.transpose(2,3,4,5,0,1), dm3))
 
         (rdm1a, rdm1b), (rdm2aa, rdm2ab, rdm2bb) = \
         fci.direct_spin1.make_rdm12s(ci0, norb, (nelec//2,nelec//2))
@@ -101,7 +108,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(rdm2ab, numpy.einsum('mmijkl->ijkl',dm3aab)*fac))
         self.assertTrue(numpy.allclose(rdm2ab, numpy.einsum('ijklmm->ijkl',dm3abb)*fac))
         self.assertTrue(numpy.allclose(rdm2ab, numpy.einsum('ijmmkl->ijkl',dm3abb)*fac))
-        
+
     def test_dm4(self):
         dm4ref = make_dm4_o0(ci0, norb, nelec)
         dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', ci0, ci0, norb, nelec)[3]
