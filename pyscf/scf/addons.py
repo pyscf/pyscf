@@ -131,6 +131,7 @@ class _SmearingSCF:
     def get_occ(self, mo_energy=None, mo_coeff=None):
         '''Label the occupancies for each orbital
         '''
+        from pyscf import scf
         from pyscf.pbc.tools import print_mo_energy_occ
         if (self.sigma == 0) or (not self.sigma) or (not self.smearing_method):
             mo_occ = super().get_occ(mo_energy, mo_coeff)
@@ -138,7 +139,10 @@ class _SmearingSCF:
 
         is_uhf = self.istype('UHF')
         is_rhf = self.istype('RHF')
-        is_rohf = is_rhf and self.mol.spin != 0
+        if isinstance(self, scf.rohf.ROHF):
+            # ROHF leads to two Fock matrices. It's not clear how to define the
+            # Roothaan effective Fock matrix from the two.
+            raise NotImplementedError('Smearing-ROHF')
 
         sigma = self.sigma
         if self.smearing_method.lower() == 'fermi':
@@ -146,17 +150,9 @@ class _SmearingSCF:
         else:
             f_occ = _gaussian_smearing_occ
 
-        if self.fix_spin and (is_uhf or is_rohf): # spin separated fermi level
-            if is_rohf: # treat rohf as uhf
-                mo_es = (mo_energy, mo_energy)
-                nocc = self.mol.nelec
-                # ROHF with different occs for alpha and beta electrons lead to
-                # two Fock matrices, it's not clear how to define a single
-                # Fock matrix from the two Fock.
-                raise RuntimeError('Ill defined smearing-ROHF with fix_spin=True')
-            else:
-                mo_es = mo_energy
-                nocc = self.nelec
+        if self.fix_spin and is_uhf: # spin separated fermi level
+            mo_es = mo_energy
+            nocc = self.nelec
             if self.mu0 is None:
                 mu_a, occa = _smearing_optimize(f_occ, mo_es[0], nocc[0], sigma)
                 mu_b, occb = _smearing_optimize(f_occ, mo_es[1], nocc[1], sigma)
@@ -185,8 +181,6 @@ class _SmearingSCF:
                         sigma, mu[1], self.entropy)
             if self.verbose >= logger.DEBUG:
                 print_mo_energy_occ(self, mo_energy, mo_occs, True)
-            if is_rohf:
-                mo_occs = mo_occs[0] + mo_occs[1]
         else: # all orbitals treated with the same fermi level
             nelectron = self.mol.nelectron
             if is_uhf:
