@@ -22,7 +22,7 @@ from pyscf import dft
 from pyscf import lib
 
 def setUpModule():
-    global mol, mf, ao, rho
+    global mol, mf, ao, rho, dm
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
@@ -209,7 +209,7 @@ class KnownValues(unittest.TestCase):
     #    e, v = dft.libxc.eval_xc('tpss,', (rho_a, rho_b), spin=1, deriv=1)[:2]
 
     def test_define_xc(self):
-        def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
+        def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
             # A fictitious XC functional to demonstrate the usage
             rho0, dx, dy, dz = rho[:4]
             gamma = (dx**2 + dy**2 + dz**2)
@@ -231,6 +231,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(exc), 0.0012441814416833327, 9)
         self.assertAlmostEqual(lib.fp(vxc[0]), 0.0065565189784811129, 9)
         self.assertAlmostEqual(lib.fp(vxc[1]), 0.0049270110162854116, 9)
+
+        n, exc, vxc = ni.nr_rks(mol, mf.grids, 'm06x', dm)
+        self.assertAlmostEqual(n, 4, 5)
+        self.assertAlmostEqual(lib.fp(exc), 0.01197588220700074, 6)
+        self.assertAlmostEqual(lib.fp(vxc), -0.043974912389152986, 6)
 
         mf = mf.define_xc_('0.5*B3LYP+0.5*B3LYP')
         exc0, vxc0 = mf._numint.eval_xc(None, rho, 0, deriv=1)[:2]

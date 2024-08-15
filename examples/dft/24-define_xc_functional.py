@@ -50,11 +50,11 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
     kxc = None  # 3rd order functional derivative
 
     # Mix with existing functionals
-    pbe_xc = dft.libxc.eval_xc('pbe,pbe', rho, spin, relativity, deriv,
-                               verbose)
+    pbe_xc = dft.libxc.eval_xc('pbe,pbe', rho, spin, relativity, deriv, verbose)
     exc += pbe_xc[0] * 0.5
     vrho += pbe_xc[1][0] * 0.5
     vgamma += pbe_xc[1][1] * 0.5
+    # The output follows the libxc.eval_xc API convention
     return exc, vxc, fxc, kxc
 
 mf = dft.RKS(mol)
@@ -70,4 +70,3 @@ mf = dft.RKS(mol)
 mf = mf.define_xc_(eval_xc, 'GGA', rsh=rsh_coeff)
 mf.verbose = 4
 mf.kernel()
-
