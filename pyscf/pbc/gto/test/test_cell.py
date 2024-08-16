@@ -327,6 +327,24 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(v0 - v1).max(), 0, 5)
         self.assertAlmostEqual(lib.fp(v1), -1.225444628445373, 8)
 
+        cell = pgto.M(a = '''0     2.445 2.445
+                     2.445 0     2.445
+                     2.445 2.445 0 ''',
+                     atom = 'U 0.0 0.0 0.0',
+                     basis = [[0, [.3, 1]], [2, [.2, 1]]],
+                     ecp = {'U': '''U nelec 60
+                            U S
+                            2   16.414038690   536.516627780
+                            U P
+                            2   9.060556060   169.544924650
+                            '''},
+                     precision = 1e-7,
+        )
+        nk = [4] * 3
+        kpts = cell.make_kpts(nk)
+        h1 = ecp.ecp_int(cell, kpts)
+        self.assertAlmostEqual(lib.fp(h1), 4.160881841456467, 7)
+
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(
             a = np.eye(3)*5,

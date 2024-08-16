@@ -35,7 +35,6 @@ from pyscf.lib import logger
 from pyscf.data import nist
 from pyscf.pbc import gto
 from pyscf.pbc import tools
-from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import addons
 from pyscf.pbc import df
@@ -83,6 +82,7 @@ def get_hcore(cell, kpt=np.zeros(3)):
     else:
         hcore += get_nuc(cell, kpt)
     if len(cell._ecpbas) > 0:
+        from pyscf.pbc.gto import ecp
         hcore += ecp.ecp_int(cell, kpt)
     return hcore
 
@@ -638,6 +638,7 @@ class SCF(mol_hf.SCF):
         else:
             nuc = self.with_df.get_nuc(kpt)
         if len(cell._ecpbas) > 0:
+            from pyscf.pbc.gto import ecp
             nuc += ecp.ecp_int(cell, kpt)
         return nuc + cell.pbc_intor('int1e_kin', 1, 1, kpt)
 

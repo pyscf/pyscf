@@ -35,7 +35,6 @@ from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
 from pyscf.scf import hf as mol_hf
 from pyscf.lib import logger
-from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
@@ -79,6 +78,7 @@ def get_hcore(mf, cell=None, kpts=None):
     else:
         nuc = lib.asarray(mf.with_df.get_nuc(kpts))
     if len(cell._ecpbas) > 0:
+        from pyscf.pbc.gto import ecp
         nuc += lib.asarray(ecp.ecp_int(cell, kpts))
     t = lib.asarray(cell.pbc_intor('int1e_kin', 1, 1, kpts))
     return nuc + t
