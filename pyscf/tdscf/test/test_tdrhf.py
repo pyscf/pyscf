@@ -41,6 +41,8 @@ class KnownValues(unittest.TestCase):
         e = td.kernel()[0]
         ref = [11.90276464, 11.90276464, 16.86036434]
         self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
+        dip = td.transition_dipole()
+        self.assertAlmostEqual(lib.fp(dip), -0.77898657, 5)
 
     def test_tda_triplet(self):
         td = mf.TDA().set(nstates=nstates)
@@ -48,12 +50,16 @@ class KnownValues(unittest.TestCase):
         e = td.kernel()[0]
         ref = [11.01747918, 11.01747918, 13.16955056]
         self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
+        dip = td.transition_dipole()
+        self.assertAlmostEqual(lib.fp(dip), 0, 9)
 
     def test_tdhf_singlet(self):
         td = mf.TDHF().set(nstates=nstates)
         e = td.kernel()[0]
         ref = [11.83487199, 11.83487199, 16.66309285]
         self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
+        dip = td.transition_dipole()
+        self.assertAlmostEqual(lib.fp(dip), -0.70297882, 5)
 
     def test_tdhf_triplet(self):
         td = mf.TDHF().set(nstates=nstates)
@@ -61,6 +67,8 @@ class KnownValues(unittest.TestCase):
         e = td.kernel()[0]
         ref = [10.8919234, 10.8919234, 12.63440705]
         self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
+        dip = td.transition_dipole()
+        self.assertAlmostEqual(lib.fp(dip), 0, 9)
 
 
 if __name__ == "__main__":

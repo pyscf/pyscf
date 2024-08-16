@@ -530,15 +530,19 @@ def _charge_center(mol):
     return numpy.einsum('z,zr->r', charges, coords)/charges.sum()
 
 def _contract_multipole(tdobj, ints, hermi=True, xy=None):
+    '''ints is the integral tensor of a spin-independent operator'''
     if xy is None: xy = tdobj.xy
+    nstates = len(xy)
+    pol_shape = ints.shape[:-2]
+    nao = ints.shape[-1]
+
+    if not tdobj.singlet:
+        return numpy.zeros((nstates,) + pol_shape)
+
     mo_coeff = tdobj._scf.mo_coeff
     mo_occ = tdobj._scf.mo_occ
     orbo = mo_coeff[:,mo_occ==2]
     orbv = mo_coeff[:,mo_occ==0]
-
-    nstates = len(xy)
-    pol_shape = ints.shape[:-2]
-    nao = ints.shape[-1]
 
     #Incompatible to old numpy version
     #ints = numpy.einsum('...pq,pi,qj->...ij', ints, orbo.conj(), orbv)
