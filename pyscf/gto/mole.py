@@ -3441,6 +3441,11 @@ class MoleBase(lib.StreamObject):
                 | 1 : hermitian
                 | 2 : anti-hermitian
 
+            shls_slice : 4-element, 6-element or 8-element tuple
+                Label the start-stop shells for each index in the integral.
+                For example, the 8-element tuple for the 2-electron integral
+                tensor (ij|kl) = intor('int2e') are specified as
+                (ish_start, ish_end, jsh_start, jsh_end, ksh_start, ksh_end, lsh_start, lsh_end)
             grids : ndarray
                 Coordinates of grids for the int1e_grids integrals
 
