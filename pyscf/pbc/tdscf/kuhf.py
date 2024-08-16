@@ -21,9 +21,10 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.tdscf import uhf
+from pyscf.tdscf._lr_eig import lr_eig
 from pyscf.pbc import scf
-from pyscf.pbc.tdscf.krhf import KTDBase, _get_e_ia, purify_krlyov_heff
-from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.tdscf.krhf import KTDBase, _get_e_ia
+from pyscf.pbc.lib.kpts_helper import is_gamma_point
 from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf import __config__
 
@@ -151,7 +152,6 @@ class TDA(KTDBase):
                                   nroots=self.nstates,
                                   lindep=self.lindep,
                                   max_space=self.max_space, pick=pickeig,
-                                  fill_heff=purify_krlyov_heff(precision, hermi, log),
                                   verbose=self.verbose)
             self.converged.append( converged )
             self.e.append( e )
@@ -244,7 +244,9 @@ class TDHF(TDA):
     def init_guess(self, mf, kshift, nstates=None, wfnsym=None):
         x0 = TDA.init_guess(self, mf, kshift, nstates)
         y0 = numpy.zeros_like(x0)
-        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
+        return numpy.hstack([x0, y0])
+
+    get_precond = uhf.TDHF.get_precond
 
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -258,7 +260,7 @@ class TDHF(TDA):
         mf = self._scf
         mo_occ = mf.mo_occ
 
-        real_system = (gamma_point(self._scf.kpts) and
+        real_system = (is_gamma_point(self._scf.kpts) and
                        self._scf.mo_coeff[0][0].dtype == numpy.double)
 
         # We only need positive eigenvalues
@@ -284,15 +286,10 @@ class TDHF(TDA):
             else:
                 x0k = x0[i]
 
-            converged, w, x1 = \
-                    lib.davidson_nosym1(vind, x0k, precond,
-                                        tol=self.conv_tol,
-                                        max_cycle=self.max_cycle,
-                                        nroots=self.nstates,
-                                        lindep=self.lindep,
-                                        max_space=self.max_space, pick=pickeig,
-                                        fill_heff=purify_krlyov_heff(precision, 0, log),
-                                        verbose=self.verbose)
+            converged, w, x1 = lr_eig(
+                vind, x0k, precond, tol=self.conv_tol, max_cycle=self.max_cycle,
+                nroots=self.nstates, lindep=self.lindep,
+                max_space=self.max_space, pick=pickeig, verbose=self.verbose)
             self.converged.append( converged )
 
             e = []
@@ -336,55 +333,3 @@ def _unpack(vo, mo_occ, kconserv):
 
 scf.kuhf.KUHF.TDA  = lib.class_as_method(KTDA)
 scf.kuhf.KUHF.TDHF = lib.class_as_method(KTDHF)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    from pyscf.pbc import scf
-    from pyscf.pbc import df
-    cell = gto.Cell()
-    cell.unit = 'B'
-    cell.atom = '''
-    C  0.          0.          0.
-    C  1.68506879  1.68506879  1.68506879
-    '''
-    cell.a = '''
-    0.          3.37013758  3.37013758
-    3.37013758  0.          3.37013758
-    3.37013758  3.37013758  0.
-    '''
-
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.mesh = [37]*3
-    cell.build()
-    mf = scf.KUHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None)
-#    mf.with_df = df.DF(cell, cell.make_kpts([2,1,1]))
-#    mf.with_df.auxbasis = 'weigend'
-#    mf.with_df._cderi = 'eri3d-df.h5'
-#    mf.with_df.build(with_j3c=False)
-    mf.run()
-
-    td = TDA(mf)
-    td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0][0] * 27.2114)
-
-    td = TDHF(mf)
-    td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0][0] * 27.2114)
-
-    cell.spin = 2
-    mf = scf.KUHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None)
-    mf.run()
-
-    td = TDA(mf)
-    td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0][0] * 27.2114)
-
-    td = TDHF(mf)
-    td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0][0] * 27.2114)

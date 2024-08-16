@@ -52,10 +52,10 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     mesh = mydf.mesh
 
     ni = mydf._numint
-    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm_kpts, hermi)
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
+    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
 
     coulG = tools.get_coulG(cell, mesh=mesh)
     ngrids = len(coulG)
@@ -116,10 +116,10 @@ def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
     mesh = mydf.mesh
 
     ni = mydf._numint
-    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm_kpts, hermi=1)
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
+    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi=1)
 
     coulG = tools.get_coulG(cell, mesh=mesh)
     ngrids = len(coulG)

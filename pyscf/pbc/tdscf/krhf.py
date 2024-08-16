@@ -26,10 +26,11 @@ from pyscf import lib
 from pyscf.lib import linalg_helper
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
+from pyscf.tdscf._lr_eig import lr_eig
 from pyscf.pbc import scf
 from pyscf.pbc.tdscf.rhf import TDBase
 from pyscf.pbc.scf import _response_functions  # noqa
-from pyscf.pbc.lib.kpts_helper import gamma_point, get_kconserv_ria
+from pyscf.pbc.lib.kpts_helper import is_gamma_point, get_kconserv_ria
 from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 from pyscf.pbc import df as pbcdf
 from pyscf.data import nist
@@ -210,7 +211,6 @@ class TDA(KTDBase):
                                   max_cycle=self.max_cycle,
                                   nroots=self.nstates, lindep=self.lindep,
                                   max_space=self.max_space, pick=pickeig,
-                                  fill_heff=purify_krlyov_heff(precision, 0, log),
                                   verbose=self.verbose)
             self.converged.append( converged )
             self.e.append( e )
@@ -291,7 +291,9 @@ class TDHF(TDA):
     def init_guess(self, mf, kshift, nstates=None):
         x0 = TDA.init_guess(self, mf, kshift, nstates)
         y0 = numpy.zeros_like(x0)
-        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
+        return numpy.hstack([x0, y0])
+
+    get_precond = rhf.TDHF.get_precond
 
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -305,7 +307,7 @@ class TDHF(TDA):
         mf = self._scf
         mo_occ = mf.mo_occ
 
-        real_system = (gamma_point(self._scf.kpts) and
+        real_system = (is_gamma_point(self._scf.kpts) and
                        self._scf.mo_coeff[0].dtype == numpy.double)
 
         # We only need positive eigenvalues
@@ -340,15 +342,10 @@ class TDHF(TDA):
             else:
                 x0k = x0[i]
 
-            converged, e, x1 = \
-                    lib.davidson_nosym1(vind, x0k, precond,
-                                        tol=self.conv_tol,
-                                        max_cycle=self.max_cycle,
-                                        nroots=self.nstates,
-                                        lindep=self.lindep,
-                                        max_space=self.max_space, pick=pickeig,
-                                        fill_heff=purify_krlyov_heff(precision, hermi, log),
-                                        verbose=self.verbose)
+            converged, e, x1 = lr_eig(
+                vind, x0k, precond, tol=self.conv_tol, max_cycle=self.max_cycle,
+                nroots=self.nstates, lindep=self.lindep,
+                max_space=self.max_space, pick=pickeig, verbose=self.verbose)
             self.converged.append( converged )
             self.e.append( e )
             self.xy.append( [norm_xy(z, kconserv) for z in x1] )
@@ -380,79 +377,8 @@ def _unpack(vo, mo_occ, kconserv):
         z.append(vo[p0:p1].reshape(no,nv))
     return z
 
-def purify_krlyov_heff(precision, hermi, log):
-    def fill_heff(heff, xs, ax, xt, axt, dot):
-        if hermi == 1:
-            heff = linalg_helper._fill_heff_hermitian(heff, xs, ax, xt, axt, dot)
-        else:
-            heff = linalg_helper._fill_heff(heff, xs, ax, xt, axt, dot)
-        space = len(axt)
-        # TODO: PBC integrals has larger errors than molecule systems.
-        # purify the effective Hamiltonian with symmetry and other
-        # possible conditions.
-        if abs(heff[:space,:space].imag).max() < precision:
-            log.debug('Remove imaginary part of the Krylov space effective Hamiltonian')
-            heff[:space,:space].imag = 0
-        return heff
-    return fill_heff
-
 
 scf.khf.KRHF.TDA  = lib.class_as_method(KTDA)
 scf.khf.KRHF.TDHF = lib.class_as_method(KTDHF)
 scf.krohf.KROHF.TDA  = None
 scf.krohf.KROHF.TDHF = None
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    from pyscf.pbc import scf
-    from pyscf.pbc import df
-    cell = gto.Cell()
-    cell.unit = 'B'
-    cell.atom = '''
-    C  0.          0.          0.
-    C  1.68506879  1.68506879  1.68506879
-    '''
-    cell.a = '''
-    0.          3.37013758  3.37013758
-    3.37013758  0.          3.37013758
-    3.37013758  3.37013758  0.
-    '''
-
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.mesh = [25]*3
-    cell.build()
-    mf = scf.KRHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None)
-    #mf.with_df = df.MDF(cell, cell.make_kpts([2,1,1]))
-    #mf.with_df.auxbasis = 'weigend'
-    #mf.with_df._cderi = 'eri3d-mdf.h5'
-    #mf.with_df.build(with_j3c=False)
-    mf.run()
-    #mesh=9  -8.65192427146353
-    #mesh=12 -8.65192352289817
-    #mesh=15 -8.6519235231529
-    #MDF mesh=5 -8.6519301815144
-
-    td = TDA(mf)
-    td.verbose = 5
-    print(td.kernel()[0][0] * 27.2114)
-    #mesh=9  [ 6.0073749   6.09315355  6.3479901 ]
-    #mesh=12 [ 6.00253282  6.09317929  6.34799109]
-    #mesh=15 [ 6.00253396  6.09317949  6.34799109]
-    #MDF mesh=5 [ 6.09317489  6.09318265  6.34798637]
-
-    #from pyscf.pbc import tools
-    #scell = tools.super_cell(cell, [2,1,1])
-    #mf = scf.RHF(scell).run()
-    #td = rhf.TDA(mf)
-    #td.verbose = 5
-    #print(td.kernel()[0] * 27.2114)
-
-    td = TDHF(mf)
-    td.verbose = 5
-    print(td.kernel()[0][0] * 27.2114)
-    #mesh=9  [ 6.03860914  6.21664545  8.20305225]
-    #mesh=12 [ 6.03868259  6.03860343  6.2167623 ]
-    #mesh=15 [ 6.03861321  6.03861324  6.21675868]
-    #MDF mesh=5 [ 6.03861693  6.03861775  6.21675694]
