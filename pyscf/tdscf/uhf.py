@@ -26,7 +26,7 @@ from pyscf.lib import logger
 from pyscf.scf import uhf_symm
 from pyscf.scf import _response_functions
 from pyscf.tdscf import rhf
-from pyscf.tdscf._lr_eig import lr_eig
+from pyscf.tdscf._lr_eig import eig as lr_eig
 from pyscf.data import nist
 from pyscf import __config__
 

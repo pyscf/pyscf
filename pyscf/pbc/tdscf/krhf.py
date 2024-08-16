@@ -26,7 +26,7 @@ from pyscf import lib
 from pyscf.lib import linalg_helper
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
-from pyscf.tdscf._lr_eig import lr_eig
+from pyscf.tdscf._lr_eig import eig as lr_eig
 from pyscf.pbc import scf
 from pyscf.pbc.tdscf.rhf import TDBase
 from pyscf.pbc.scf import _response_functions  # noqa

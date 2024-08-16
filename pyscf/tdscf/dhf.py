@@ -27,7 +27,7 @@ from pyscf import dft
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
-from pyscf.tdscf._lr_eig import lr_eig
+from pyscf.tdscf._lr_eig import eig as lr_eig
 from pyscf.data import nist
 from pyscf import __config__
 

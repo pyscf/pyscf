@@ -21,9 +21,9 @@ from pyscf.lib import logger
 from pyscf.lib.linalg_helper import (
     FOLLOW_STATE, _sort_elast, _outprod_to_subspace, _normalize_xt_, _qr)
 
-def lr_eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-           lindep=1e-12, nroots=1, pick=None, verbose=logger.WARN,
-           follow_state=FOLLOW_STATE, tol_residual=None, metric=None):
+def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
+        lindep=1e-12, nroots=1, pick=None, verbose=logger.WARN,
+        follow_state=FOLLOW_STATE, tol_residual=None, metric=None):
     '''
     Solver for linear response eigenvalues
     [ A    B] [X] = w [X]

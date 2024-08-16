@@ -21,7 +21,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.tdscf import uhf
-from pyscf.tdscf._lr_eig import lr_eig
+from pyscf.tdscf._lr_eig import eig as lr_eig
 from pyscf.pbc import scf
 from pyscf.pbc.tdscf.krhf import KTDBase, _get_e_ia
 from pyscf.pbc.lib.kpts_helper import is_gamma_point
