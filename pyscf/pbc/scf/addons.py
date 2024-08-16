@@ -91,13 +91,17 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
 
         This is a k-point version of scf.hf.SCF.get_occ
         '''
+        from pyscf.pbc import scf
         if (self.sigma == 0) or (not self.sigma) or (not self.smearing_method):
             mo_occ_kpts = super().get_occ(mo_energy_kpts, mo_coeff_kpts)
             return mo_occ_kpts
 
         is_uhf = self.istype('KUHF')
         is_rhf = self.istype('KRHF')
-        is_rohf = self.istype('KROHF')
+        if isinstance(self, scf.krohf.KROHF):
+            # ROHF leads to two Fock matrices. It's not clear how to define the
+            # Roothaan effective Fock matrix from the two.
+            raise NotImplementedError('Smearing-ROHF')
 
         sigma = self.sigma
         if self.smearing_method.lower() == 'fermi':
@@ -112,9 +116,7 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
         else:
             nkpts = len(kpts)
 
-        if self.fix_spin and (is_uhf or is_rohf): # spin separated fermi level
-            if is_rohf: # treat rohf as uhf
-                mo_energy_kpts = (mo_energy_kpts, mo_energy_kpts)
+        if self.fix_spin and is_uhf: # spin separated fermi level
             mo_es = [numpy.hstack(mo_energy_kpts[0]),
                      numpy.hstack(mo_energy_kpts[1])]
             nocc = self.nelec
@@ -150,8 +152,6 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
             mo_occ_kpts =(_partition_occ(mo_occs[0], mo_energy_kpts[0]),
                           _partition_occ(mo_occs[1], mo_energy_kpts[1]))
             tools.print_mo_energy_occ_kpts(self, mo_energy_kpts, mo_occ_kpts, True)
-            if is_rohf:
-                mo_occ_kpts = numpy.array(mo_occ_kpts, dtype=numpy.float64).sum(axis=0)
         else:
             nocc = nelectron = self.mol.tot_electrons(nkpts)
             if is_uhf:

@@ -44,6 +44,18 @@ def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
         return mf
 
     assert not mf.istype('KSCF')
+    if mf.istype('ROHF'):
+        # Roothaan Fock matrix does not make much sense for smearing.
+        # Restore the conventional RHF treatment.
+        from pyscf import scf
+        from pyscf import dft
+        known_class = {
+            dft.rks_symm.ROKS: dft.rks_symm.RKS,
+            dft.roks.ROKS    : dft.rks.RKS     ,
+            scf.hf_symm.ROHF : scf.hf_symm.RHF ,
+            scf.rohf.ROHF    : scf.hf.RHF      ,
+        }
+        mf = _object_without_soscf(mf, known_class)
     return lib.set_class(_SmearingSCF(mf, sigma, method, mu0, fix_spin),
                          (_SmearingSCF, mf.__class__))
 
@@ -69,13 +81,13 @@ def _gaussian_smearing_occ(mu, mo_energy, sigma):
     return 0.5 * scipy.special.erfc((mo_energy - mu) / sigma)
 
 def _smearing_optimize(f_occ, mo_es, nocc, sigma):
-    def nelec_cost_fn(m, mo_es, nocc):
+    def nelec_cost_fn(m):
         mo_occ = f_occ(m, mo_es, sigma)
         return (mo_occ.sum() - nocc)**2
 
     fermi = _get_fermi(mo_es, nocc)
     res = scipy.optimize.minimize(
-        nelec_cost_fn, fermi, args=(mo_es, nocc), method='Powell',
+        nelec_cost_fn, fermi, method='Powell',
         options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
     mu = res.x
     mo_occs = f_occ(mu, mo_es, sigma)
@@ -83,7 +95,10 @@ def _smearing_optimize(f_occ, mo_es, nocc, sigma):
 
 def _get_fermi(mo_energy, nocc):
     mo_e_sorted = numpy.sort(mo_energy)
-    return mo_e_sorted[numpy.ceil(nocc).astype(int) - 1]
+    if isinstance(nocc, int):
+        return mo_e_sorted[nocc-1]
+    else: # nocc = ?.5 or nocc = ?.0
+        return mo_e_sorted[numpy.ceil(nocc).astype(int) - 1]
 
 class _SmearingSCF:
 
@@ -116,6 +131,7 @@ class _SmearingSCF:
     def get_occ(self, mo_energy=None, mo_coeff=None):
         '''Label the occupancies for each orbital
         '''
+        from pyscf import scf
         from pyscf.pbc.tools import print_mo_energy_occ
         if (self.sigma == 0) or (not self.sigma) or (not self.smearing_method):
             mo_occ = super().get_occ(mo_energy, mo_coeff)
@@ -123,7 +139,10 @@ class _SmearingSCF:
 
         is_uhf = self.istype('UHF')
         is_rhf = self.istype('RHF')
-        is_rohf = self.istype('ROHF')
+        if isinstance(self, scf.rohf.ROHF):
+            # ROHF leads to two Fock matrices. It's not clear how to define the
+            # Roothaan effective Fock matrix from the two.
+            raise NotImplementedError('Smearing-ROHF')
 
         sigma = self.sigma
         if self.smearing_method.lower() == 'fermi':
@@ -131,11 +150,8 @@ class _SmearingSCF:
         else:
             f_occ = _gaussian_smearing_occ
 
-        if self.fix_spin and (is_uhf or is_rohf): # spin separated fermi level
-            if is_rohf: # treat rohf as uhf
-                mo_es = (mo_energy, mo_energy)
-            else:
-                mo_es = mo_energy
+        if self.fix_spin and is_uhf: # spin separated fermi level
+            mo_es = mo_energy
             nocc = self.nelec
             if self.mu0 is None:
                 mu_a, occa = _smearing_optimize(f_occ, mo_es[0], nocc[0], sigma)
@@ -165,19 +181,17 @@ class _SmearingSCF:
                         sigma, mu[1], self.entropy)
             if self.verbose >= logger.DEBUG:
                 print_mo_energy_occ(self, mo_energy, mo_occs, True)
-            if is_rohf:
-                mo_occs = mo_occs[0] + mo_occs[1]
         else: # all orbitals treated with the same fermi level
-            nocc = nelectron = self.mol.nelectron
+            nelectron = self.mol.nelectron
             if is_uhf:
                 mo_es = numpy.hstack(mo_energy)
             else:
                 mo_es = mo_energy
             if is_rhf:
-                nocc = nelectron / 2
+                nelectron = nelectron / 2
 
             if self.mu0 is None:
-                mu, mo_occs = _smearing_optimize(f_occ, mo_es, nocc, sigma)
+                mu, mo_occs = _smearing_optimize(f_occ, mo_es, nelectron, sigma)
             else:
                 # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
                 mu = self.mu0
@@ -188,7 +202,7 @@ class _SmearingSCF:
                 mo_occs *= 2
                 self.entropy *= 2
 
-            fermi = _get_fermi(mo_es, nocc)
+            fermi = _get_fermi(mo_es, nelectron)
             logger.debug(self, '    Fermi level %g  Sum mo_occ = %s  should equal nelec = %s',
                          fermi, mo_occs.sum(), nelectron)
             logger.info(self, '    sigma = %g  Optimized mu = %.12g  entropy = %.12g',
