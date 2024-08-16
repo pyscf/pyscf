@@ -56,7 +56,6 @@ class Diamond(unittest.TestCase):
         td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)),
                              nstates=self.nstates, **kwargs).run()
         for kshift,e in enumerate(td.e):
-            print((e*unitev).tolist())
             self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev - ref[kshift]).max(), 0, 4)
 
     def test_tda_singlet_eomccs(self):

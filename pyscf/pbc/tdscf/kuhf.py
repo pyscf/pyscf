@@ -128,8 +128,6 @@ class TDA(KTDBase):
             return w[idx], v[:,idx], idx
 
         log = logger.Logger(self.stdout, self.verbose)
-        precision = self.cell.precision * 1e-2
-        hermi = 1
 
         self.converged = []
         self.e = []
@@ -270,7 +268,6 @@ class TDHF(TDA):
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         log = logger.Logger(self.stdout, self.verbose)
-        precision = self.cell.precision * 1e-2
 
         self.converged = []
         self.e = []

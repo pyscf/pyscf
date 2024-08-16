@@ -228,9 +228,6 @@ def _symmetric_orth(xt, lindep=1e-6):
     # The conjugated basis np.hstack([b2, b1]).conj()
     b1 = xt[:,:m]
     b2 = xt[:,m:]
-    yt = np.hstack((b2.conj(), b1.conj()))
-    v = np.vstack([xt, yt])
-    s0 = v.conj().dot(v.T)
     s11 = xt.conj().dot(xt.T)
     s21 = b2.dot(b1.T)
     s21 += b1.dot(b2.T)
