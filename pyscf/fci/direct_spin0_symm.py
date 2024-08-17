@@ -103,48 +103,18 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
 
 def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
-    strsa = cistring.gen_strings4orblist(range(norb), neleca)
-    airreps_d2h = direct_spin1_symm._gen_strs_irrep(strsa, orbsym)
-    a_ls = direct_spin1_symm._strs_angular_momentum(strsa, orbsym)
-
-    wfnsym_in_d2h = wfnsym % 10
-    wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
-    na = len(strsa)
-    hdiag = hdiag.reshape(na,na)
-    degen = orbsym.degen_mapping
+    na = cistring.num_strings(norb, neleca)
+    ci0_guess = direct_spin1_symm.get_init_guess_cyl_sym(
+            norb, nelec, nroots, hdiag, orbsym, wfnsym)
     ci0 = []
-    iroot = 0
-    wfn_ungerade = wfnsym_in_d2h >= 4
-    a_ungerade = airreps_d2h >= 4
-    sym_allowed = a_ungerade[:,None] == a_ungerade ^ wfn_ungerade
-    # total angular momentum == wfn_momentum
-    sym_allowed &= a_ls[:,None] == wfn_momentum - a_ls
-    idx = numpy.arange(na)
-    sym_allowed[idx[:,None] < idx] = False
-
-    idx_a, idx_b = numpy.where(sym_allowed)
-    for k in hdiag[idx_a,idx_b].argsort():
-        addra, addrb = idx_a[k], idx_b[k]
-        ca = direct_spin1_symm._cyl_sym_csf2civec(strsa, addra, orbsym, degen)
-        cb = direct_spin1_symm._cyl_sym_csf2civec(strsa, addrb, orbsym, degen)
-        if wfn_momentum > 0 or wfnsym in (0, 5):
-            x = ca.real[:,None] * cb.real
-            x-= ca.imag[:,None] * cb.imag
-        else:
-            x = ca.imag[:,None] * cb.real
-            x+= ca.real[:,None] * cb.imag
-        if addra == addrb:
-            norm = numpy.linalg.norm(x)
-        else:
-            x = x + x.T
-            norm = numpy.linalg.norm(x)
-            if norm < 1e-3:
-                continue
+    for x in ci0_guess:
+        x = x.reshape(na, na)
+        x = x + x.T
+        norm = numpy.linalg.norm(x)
+        if norm < 1e-3:
+            continue
         x *= 1./norm
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
-        iroot += 1
-        if iroot >= nroots:
-            break
 
     if len(ci0) == 0:
         raise lib.exceptions.WfnSymmetryError(
@@ -153,6 +123,8 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
 
 
 class FCISolver(direct_spin0.FCISolver):
+
+    _keys = {'wfnsym', 'sym_allowed_idx'}
 
     davidson_only = getattr(__config__, 'fci_direct_spin1_symm_FCI_davidson_only', True)
     pspace_size = getattr(__config__, 'fci_direct_spin1_symm_FCI_pspace_size', 400)
