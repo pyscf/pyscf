@@ -39,3 +39,9 @@ print('E = %.12f, ref = -75.439160951099' % energy)
 mf.with_x2c = False
 energy = mf.kernel()
 print('E = %.12f, ref = %.12f' % (energy, scf.UKS(mol).kernel()))
+
+# Note, applying the x2c method for GHF/GKS classes results in a calculation
+# with the two-component relativistic Hamiltonian (including the spin-orbit
+# coupling effects). Although solving in spherical GTO bases, the results in
+# theory are equivalent to the X2C methods computed in the spinor bases.
+# See relevant examples in examples/x2c/03-x2c_ghf.py
