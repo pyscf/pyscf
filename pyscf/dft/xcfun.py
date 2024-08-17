@@ -53,14 +53,13 @@ def print_XC_CODES():
     lda_ids = []
     gga_ids = []
     mgga_ids = []
-    mlgga_ids = []
     xc_codes = {}
 
     print('XC = XC_CODES = {')
     for i in range(78):
-        name = libdft.xcfun_enumerate_parameters(ctypes.c_int(i))
-        sdescr = libdft.xcfun_describe_short(name)
-        #ldescr = libdft.xcfun_describe_long(ctypes.c_int(i))
+        name = _itrf.xcfun_enumerate_parameters(ctypes.c_int(i))
+        sdescr = _itrf.xcfun_describe_short(name)
+        #ldescr = _itrf.xcfun_describe_long(ctypes.c_int(i))
         if sdescr is not None:
             name = name.decode('UTF-8')
             key = f"'{name}'"
@@ -68,7 +67,7 @@ def print_XC_CODES():
             print(f'{key:<16s}: {i:2d},  #{sdescr}')
             xc_codes[name] = i
 
-        fntype = libdft.XCFUN_xc_type(ctypes.c_int(i))
+        fntype = _itrf.XCFUN_xc_type(ctypes.c_int(i))
         if fntype == 0:
             lda_ids.append(i)
         elif fntype == 1:
