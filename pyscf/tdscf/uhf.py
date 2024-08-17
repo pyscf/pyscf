@@ -844,9 +844,10 @@ class TDHF(TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
+        tol_residual = self.conv_tol ** .5
         self.converged, w, x1 = lr_eig(
-            vind, x0, precond, tol=self.conv_tol,
-            nroots=nstates, lindep=self.lindep, max_cycle=self.max_cycle,
+            vind, x0, precond, tol_residual=tol_residual, nroots=nstates,
+            lindep=self.lindep, max_cycle=self.max_cycle,
             max_space=self.max_space, pick=pickeig, verbose=log)
 
         nmo = self._scf.mo_occ[0].size

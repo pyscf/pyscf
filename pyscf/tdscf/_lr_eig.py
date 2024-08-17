@@ -18,12 +18,11 @@ import sys
 import numpy as np
 import scipy.linalg
 from pyscf.lib import logger
-from pyscf.lib.linalg_helper import (
-    FOLLOW_STATE, _sort_elast, _outprod_to_subspace, _normalize_xt_, _qr)
+from pyscf.lib.linalg_helper import _sort_elast, _outprod_to_subspace
 
-def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-        lindep=1e-12, nroots=1, pick=None, verbose=logger.WARN,
-        follow_state=FOLLOW_STATE, tol_residual=None, metric=None):
+def eig(aop, x0, precond, tol=1e-5, max_cycle=50, max_space=12,
+        lindep=1e-12, nroots=1, pick=None, tol_residual=1e-4,
+        verbose=logger.WARN):
     '''
     Solver for linear response eigenvalues
     [ A    B] [X] = w [X]
@@ -36,7 +35,6 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
       DOI: 10.1016/0021-9991(88)90081-2
     '''
 
-    assert metric is None
     assert callable(pick)
     assert callable(precond)
 
@@ -45,10 +43,6 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    if tol_residual is None:
-        tol_residual = tol**.5
-    log.debug1('tol %g  tol_residual %g', tol, tol_residual)
-
     if callable(x0):
         x0 = x0()
     if isinstance(x0, np.ndarray) and x0.ndim == 1:
@@ -56,13 +50,10 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     x0 = np.asarray(x0)
 
     max_space = max_space + (nroots-1) * 6
-    dtype = None
     heff = None
     e = None
     v = None
     conv = np.zeros(nroots, dtype=bool)
-    emin = None
-    level_shift = 0
 
     dot = np.dot
     half_size = x0[0].size // 2
@@ -136,7 +127,7 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             if not conv[k]:
                 xt[k] = ax0[k] - ek * x0[k]
                 dx_norm[k] = np.linalg.norm(xt[k])
-                conv[k] = abs(de[k]) < tol and dx_norm[k] < tol_residual
+                conv[k] = dx_norm[k] < tol_residual
                 if conv[k] and not conv_last[k]:
                     log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
                               k, dx_norm[k], ek, de[k])
@@ -151,14 +142,15 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         norm_min = 1
         for k, ek in enumerate(e):
             if not conv[k]:
-                xk = precond(xt[k], e[0]-level_shift, x0[k])
+                xk = precond(xt[k], e[0], x0[k])
+                norm_xk = np.linalg.norm(xk)
                 for xi in xs:
                     xk -= xi * dot(xi.conj(), xk)
                     c = _conj_dot(xi, xk)
                     xk[:half_size] -= xi[half_size:].conj() * c
                     xk[half_size:] -= xi[:half_size].conj() * c
                 norm = np.linalg.norm(xk)
-                if norm**2 > lindep:
+                if (norm/norm_xk)**2 > lindep and norm/norm_xk > tol_residual:
                     norm_min = min(norm_min, norm)
                     xk /= norm
                     if norm < tol_residual:
@@ -168,8 +160,7 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                             c = _conj_dot(xi, xk)
                             xk[:half_size] -= xi[half_size:].conj() * c
                             xk[half_size:] -= xi[:half_size].conj() * c
-                    norm = np.linalg.norm(xk)
-                    xk /= norm
+                        xk /= np.linalg.norm(xk)
                     xt[k] = xk
                 else:
                     xt[k] = None
@@ -182,7 +173,7 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         xt = [x for x in xt if x is not None]
         if len(xt) == 0:
             log.debug(f'Linear dependency in trial subspace. |r| for each state {dx_norm}')
-            conv = conv & (dx_norm < tol_residual)
+            conv = dx_norm < tol_residual
             break
 
         fresh_start = space+nroots > max_space

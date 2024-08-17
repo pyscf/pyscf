@@ -402,7 +402,6 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     v = None
     conv = numpy.zeros(nroots, dtype=bool)
     emin = None
-    level_shift = 0
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -528,7 +527,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         # remove subspace linear dependency
         for k, ek in enumerate(e):
             if (not conv[k]) and dx_norm[k]**2 > lindep:
-                xt[k] = precond(xt[k], e[0]-level_shift, x0[k])
+                xt[k] = precond(xt[k], e[0], x0[k])
                 xt[k] *= dot(xt[k].conj(), xt[k]).real ** -.5
             elif not conv[k]:
                 # Remove linearly dependent vector
@@ -537,15 +536,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             else:
                 xt[k] = None
 
-        xt, ill_precond = _project_xt_(xt, xs, e, lindep, dot, precond)
-        if ill_precond:
-            # Manually adjust the precond because precond function may not be
-            # able to generate linearly dependent basis vectors. e.g. issue 1362
-            log.warn('Matrix may be already a diagonal matrix. '
-                     'level_shift is applied to precond')
-            level_shift = 0.1
-
-        xt, norm_min = _normalize_xt_(xt, lindep, dot)
+        xt, norm_min = _normalize_xt_(xt, xs, lindep, dot)
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
@@ -575,11 +566,11 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     return numpy.asarray(conv), e, x0
 
 
-def make_diag_precond(diag, level_shift=0):
+def make_diag_precond(diag, level_shift=1e-3):
     '''Generate the preconditioner function with the diagonal function.'''
     # For diagonal matrix A, precond (Ax-x*e)/(diag(A)-e) is not able to
-    # generate linearly independent basis. Use level_shift to break the
-    # correlation between Ax-x*e and diag(A)-e.
+    # generate linearly independent basis (see issue 1362). Use level_shift to
+    # break the correlation between Ax-x*e and diag(A)-e.
     def precond(dx, e, *args):
         diagd = diag - (e - level_shift)
         diagd[abs(diagd)<1e-8] = 1e-8
@@ -786,7 +777,6 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
     v = None
     conv = numpy.zeros(nroots, dtype=bool)
     emin = None
-    level_shift = 0
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -898,7 +888,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
         # remove subspace linear dependency
         for k, ek in enumerate(e):
             if (not conv[k]) and dx_norm[k]**2 > lindep:
-                xt[k] = precond(xt[k], e[0]-level_shift, x0[k])
+                xt[k] = precond(xt[k], e[0], x0[k])
                 xt[k] *= dot(xt[k].conj(), xt[k]).real ** -.5
             elif not conv[k]:
                 # Remove linearly dependent vector
@@ -907,15 +897,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
             else:
                 xt[k] = None
 
-        xt, ill_precond = _project_xt_(xt, xs, e, lindep, dot, precond)
-        if ill_precond:
-            # Manually adjust the precond because precond function may not be
-            # able to generate linearly dependent basis vectors. e.g. issue 1362
-            log.warn('Matrix may be already a diagonal matrix. '
-                     'level_shift is applied to precond')
-            level_shift = 0.1
-
-        xt, norm_min = _normalize_xt_(xt, lindep, dot)
+        xt, norm_min = _normalize_xt_(xt, xs, lindep, dot)
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
@@ -1098,7 +1080,6 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     seff = numpy.empty((max_space,max_space), dtype=x0[0].dtype)
     fresh_start = True
     conv = False
-    level_shift = 0
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -1207,21 +1188,13 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         # remove subspace linear dependency
         for k, ek in enumerate(e):
             if dx_norm[k]**2 > lindep:
-                xt[k] = precond(xt[k], e[0]-level_shift, x0[k])
+                xt[k] = precond(xt[k], e[0], x0[k])
                 xt[k] *= dot(xt[k].conj(), xt[k]).real ** -.5
             else:
                 log.debug1('Drop eigenvector %d, norm=%4.3g', k, dx_norm[k])
                 xt[k] = None
 
-        xt, ill_precond = _project_xt_(xt, xs, e, lindep, dot, precond)
-        if ill_precond:
-            # Manually adjust the precond because precond function may not be
-            # able to generate linearly dependent basis vectors. e.g. issue 1362
-            log.warn('Matrix may be already a diagonal matrix. '
-                     'level_shift is applied to precond')
-            level_shift = 0.1
-
-        xt, norm_min = _normalize_xt_(xt, lindep, dot)
+        xt, norm_min = _normalize_xt_(xt, xs, lindep, dot)
         log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, space, max(dx_norm), e, de[ide], norm_min)
         if len(xt) == 0:
@@ -1543,35 +1516,22 @@ def _sort_elast(elast, conv_last, vlast, v, log):
 
     return elast[idx], conv_last[idx]
 
-def _project_xt_(xt, xs, e, threshold, dot, precond):
+def _normalize_xt_(xt, xs, threshold, dot):
     '''Projects out existing basis vectors xs. Also checks whether the precond
     function is ill-conditioned'''
-    ill_precond = False
-    for i, xsi in enumerate(xs):
+    xt = [x for x in xt if x is not None]
+    for xsi in xs:
         xsi = numpy.asarray(xsi)
-        for k, xi in enumerate(xt):
-            if xi is None:
-                continue
-            ovlp = dot(xsi.conj(), xi)
-            if (1 - ovlp)**2 < threshold:
-                ill_precond = True
-                xt[k] = None
-            xi -= xsi * ovlp
-        xsi = None
-    return xt, ill_precond
+        for xi in xt:
+            xi -= xsi * dot(xsi.conj(), xi)
 
-def _normalize_xt_(xt, threshold, dot):
     norm_min = 1
-    out = []
-    for i, xi in enumerate(xt):
-        if xi is None:
-            continue
-        norm = dot(xi.conj(), xi).real ** .5
+    for xi in xt:
+        norm = dot(xi.conj(), xi).real**.5
         if norm**2 > threshold:
-            xt[i] *= 1/norm
+            xi *= 1/norm
             norm_min = min(norm_min, norm)
-            out.append(xt[i])
-    return out, norm_min
+    return xt, norm_min
 
 
 class LinearDependenceError(RuntimeError):
@@ -1616,3 +1576,15 @@ class _Xlist(list):
     def pop(self, index):
         key = self.index.pop(index)
         del (self.scr_h5[str(key)])
+
+if __name__ == '__main__':
+    numpy.random.seed(12)
+    n = 5
+    a = numpy.diag(numpy.random.random(n))
+    eref = numpy.sort(a.diagonal())
+
+    def aop(x):
+        return numpy.dot(a, x)
+    x0 = numpy.random.rand(1,n)
+    e0, x0 = dsyev(aop, x0, a.diagonal(), nroots=3, verbose=6)
+    print(e0, eref[:3])

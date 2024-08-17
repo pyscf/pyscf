@@ -284,8 +284,8 @@ class TDHF(TDA):
                 x0k = x0[i]
 
             converged, w, x1 = lr_eig(
-                vind, x0k, precond, tol=self.conv_tol, max_cycle=self.max_cycle,
-                nroots=self.nstates, lindep=self.lindep,
+                vind, x0k, precond, tol_residual=tol_residual, nroots=self.nstates,
+                lindep=self.lindep, max_cycle=self.max_cycle,
                 max_space=self.max_space, pick=pickeig, verbose=self.verbose)
             self.converged.append( converged )
 
