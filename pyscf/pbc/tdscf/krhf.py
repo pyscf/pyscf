@@ -30,13 +30,60 @@ from pyscf.tdscf._lr_eig import eig as lr_eig
 from pyscf.pbc import scf
 from pyscf.pbc.tdscf.rhf import TDBase
 from pyscf.pbc.scf import _response_functions  # noqa
-from pyscf.pbc.lib.kpts_helper import is_gamma_point, get_kconserv_ria
+from pyscf.pbc.lib.kpts_helper import is_gamma_point, get_kconserv_ria, get_kconserv
 from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 from pyscf.pbc import df as pbcdf
 from pyscf.data import nist
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
+
+def get_ab(mf, kshift=0):
+    r'''A and B matrices for TDDFT response function.
+
+    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ia||bj)
+    B[i,a,j,b] = (ia||jb)
+
+    Ref: Chem Phys Lett, 256, 454
+    '''
+    cell = mf.cell
+    mo_energy = scf.addons.mo_energy_with_exxdiv_none(mf)
+    mo = numpy.asarray(mf.mo_coeff)
+    mo_occ = numpy.asarray(mf.mo_occ)
+    kpts = mf.kpts
+    nkpts, nao, nmo = mo.shape
+    noccs = numpy.count_nonzero(mo_occ==2, axis=1)
+    nocc = noccs[0]
+    nvir = nmo - nocc
+    assert all(noccs == nocc)
+    orbo = mo[:,:,:nocc]
+
+    kconserv = get_kconserv_ria(cell, kpts)[kshift]
+    kconserv2 = get_kconserv(cell, kpts)
+    e_ia = numpy.asarray(_get_e_ia(mo_energy, mo_occ, kconserv)).astype(mo.dtype)
+    a = numpy.diag(e_ia.ravel()).reshape(nkpts,nocc,nvir,nkpts,nocc,nvir)
+    b = numpy.zeros_like(a)
+    weight = 1./nkpts
+
+    def add_hf_(a, b, hyb=1):
+        eri = mf.with_df.ao2mo_7d([orbo,mo,mo,mo], kpts)
+        eri *= weight
+        eri = eri.reshape(nkpts,nkpts,nkpts,nocc,nmo,nmo,nmo)
+        for ki, ka in enumerate(kconserv):
+            for kj, kb in enumerate(kconserv):
+                a[ki,:,:,kj] += numpy.einsum('iabj->iajb', eri[ki,ka,kb,:nocc,nocc:,nocc:,:nocc]) * 2
+                a[ki,:,:,kj] -= numpy.einsum('ijba->iajb', eri[ki,kj,kb,:nocc,:nocc,nocc:,nocc:]) * hyb
+
+            for kb, kj in enumerate(kconserv):
+                b[ki,:,:,kj] += numpy.einsum('iajb->iajb', eri[ki,ka,kj,:nocc,nocc:,:nocc,nocc:]) * 2
+                b[ki,:,:,kj] -= numpy.einsum('ibja->iajb', eri[ki,kb,kj,:nocc,nocc:,:nocc,nocc:]) * hyb
+
+    if isinstance(mf, scf.hf.KohnShamDFT):
+        raise NotImplementedError
+    else:
+        add_hf_(a, b)
+
+    return a, b
 
 class KTDBase(TDBase):
     _keys = {'kconserv', 'kshift_lst'}
@@ -101,6 +148,11 @@ class KTDBase(TDBase):
 class TDA(KTDBase):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
+    @lib.with_doc(get_ab.__doc__)
+    def get_ab(self, mf=None, kshift=0):
+        if mf is None: mf = self._scf
+        return get_ab(mf, kshift)
+
     def gen_vind(self, mf, kshift):
         # exxdiv corrections are kept in hdiag while excluding them when calling
         # the contractions between two-electron integrals and X/Y amplitudes.
@@ -115,7 +167,7 @@ class TDA(KTDBase):
         occidx = [numpy.where(mo_occ[k]==2)[0] for k in range(nkpts)]
         viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
-        orbv = [mo_coeff[kconserv[k]][:,viridx[kconserv[k]]] for k in range(nkpts)]
+        orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
         e_ia = _get_e_ia(scf.addons.mo_energy_with_exxdiv_none(mf), mo_occ, kconserv)
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
 
@@ -128,10 +180,10 @@ class TDA(KTDBase):
             z1s = [_unpack(z, mo_occ, kconserv) for z in zs]
             dmov = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
-                for k in range(nkpts):
+                for k, kp in enumerate(kconserv):
                     # *2 for double occupancy
                     dm1 = z1s[i][k] * 2
-                    dmov[i,k] = reduce(numpy.dot, (orbo[k], dm1, orbv[k].conj().T))
+                    dmov[i,k] = reduce(numpy.dot, (orbo[k], dm1, orbv[kp].conj().T))
 
             with lib.temporary_env(mf, exxdiv=None):
                 v1ao = vresp(dmov, kshift)
@@ -139,8 +191,8 @@ class TDA(KTDBase):
             for i in range(nz):
                 dm1 = z1s[i]
                 v1 = []
-                for k in range(nkpts):
-                    v1vo = reduce(numpy.dot, (orbo[k].conj().T, v1ao[i,k], orbv[k]))
+                for k, kp in enumerate(kconserv):
+                    v1vo = reduce(numpy.dot, (orbo[k].conj().T, v1ao[i,k], orbv[kp]))
                     v1vo += e_ia[k] * dm1[k]
                     v1.append(v1vo.ravel())
                 v1s.append( numpy.concatenate(v1) )
@@ -222,7 +274,15 @@ class TDA(KTDBase):
 CIS = KTDA = TDA
 
 
-class TDHF(TDA):
+class TDHF(KTDBase):
+
+    conv_tol = 1e-5
+
+    @lib.with_doc(get_ab.__doc__)
+    def get_ab(self, mf=None, kshift=0):
+        if mf is None: mf = self._scf
+        return get_ab(mf, kshift)
+
     def gen_vind(self, mf, kshift):
         '''
         [ A   B ][X]
@@ -238,7 +298,7 @@ class TDHF(TDA):
         occidx = [numpy.where(mo_occ[k]==2)[0] for k in range(nkpts)]
         viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
-        orbv = [mo_coeff[kconserv[k]][:,viridx[kconserv[k]]] for k in range(nkpts)]
+        orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
         e_ia = _get_e_ia(scf.addons.mo_energy_with_exxdiv_none(mf), mo_occ, kconserv)
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
         tot_x = hdiag.size
@@ -254,12 +314,13 @@ class TDHF(TDA):
             z1ys = [_unpack(xy[tot_x:], mo_occ, kconserv) for xy in xys]
             dmov = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
-                for k in range(nkpts):
+                for k, kp in enumerate(kconserv):
                     # *2 for double occupancy
-                    dmx = z1xs[i][k] * 2
-                    dmy = z1ys[i][k] * 2
-                    dmov[i,k] = reduce(numpy.dot, (orbo[k], dmx, orbv[k].T.conj()))
-                    dmov[i,k]+= reduce(numpy.dot, (orbv[k], dmy.T, orbo[k].T.conj()))
+                    dmx = z1xs[i][k ] * 2
+                    dmy = z1ys[i][kp] * 2
+                    dmov[i,k] = reduce(numpy.dot, (orbo[k], dmx, orbv[kp].T.conj()))
+                    #FIXME: orbv[trev[kp]] * dmy * orbo[trev[k]].conj()
+                    dmov[i,k]+= reduce(numpy.dot, (orbv[k], dmy.T, orbo[kp].T.conj()))
 
             with lib.temporary_env(mf, exxdiv=None):
                 v1ao = vresp(dmov, kshift) # = <mb||nj> Xjb + <mj||nb> Yjb
@@ -267,22 +328,21 @@ class TDHF(TDA):
             for i in range(nz):
                 dmx = z1xs[i]
                 dmy = z1ys[i]
-                v1xs = []
-                v1ys = []
-                for k in range(nkpts):
+                v1xs = [0] * nkpts
+                v1ys = [0] * nkpts
+                for k, kp in enumerate(kconserv):
                     # AX + BY
                     # = <ib||aj> Xjb + <ij||ab> Yjb
                     # = (<mb||nj> Xjb + <mj||nb> Yjb) Cmi* Cna
-                    v1x = reduce(numpy.dot, (orbo[k].T.conj(), v1ao[i,k], orbv[k]))
+                    v1x = reduce(numpy.dot, (orbo[k].T.conj(), v1ao[i,k], orbv[kp]))
                     # (B*)X + (A*)Y
                     # = <ab||ij> Xjb + <aj||ib> Yjb
                     # = (<mb||nj> Xjb + <mj||nb> Yjb) Cma* Cni
-                    v1y = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[k])).T
-                    v1x+= e_ia[k] * dmx[k]
-                    v1y+= e_ia[k].conj() * dmy[k]
-                    v1xs.append(v1x.ravel())
-                    v1ys.append(-v1y.ravel())
-                # v1s += v1xs + v1ys
+                    v1y = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[kp])).T
+                    v1x += e_ia[k] * dmx[k]
+                    v1y += e_ia[kp].conj() * dmy[kp]
+                    v1xs[k ] += v1x.ravel()
+                    v1ys[kp] -= v1y.ravel()
                 v1s.append( numpy.concatenate(v1xs + v1ys) )
             return lib.asarray(v1s).reshape(nz,-1)
         return vind, hdiag
@@ -339,9 +399,8 @@ class TDHF(TDA):
             else:
                 x0k = x0[i]
 
-            tol_residual = self.conv_tol ** .5
             converged, e, x1 = lr_eig(
-                vind, x0k, precond, tol_residual=tol_residual, nroots=self.nstates,
+                vind, x0k, precond, tol_residual=self.conv_tol, nroots=self.nstates,
                 lindep=self.lindep, max_cycle=self.max_cycle,
                 max_space=self.max_space, pick=pickeig, verbose=self.verbose)
             self.converged.append( converged )

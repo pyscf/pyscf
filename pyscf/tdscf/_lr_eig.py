@@ -20,9 +20,8 @@ import scipy.linalg
 from pyscf.lib import logger
 from pyscf.lib.linalg_helper import _sort_elast, _outprod_to_subspace
 
-def eig(aop, x0, precond, tol=1e-5, max_cycle=50, max_space=12,
-        lindep=1e-12, nroots=1, pick=None, tol_residual=1e-4,
-        verbose=logger.WARN):
+def eig(aop, x0, precond, tol_residual=1e-5, max_cycle=50, max_space=12,
+        lindep=1e-12, nroots=1, pick=None, verbose=logger.WARN):
     '''
     Solver for linear response eigenvalues
     [ A    B] [X] = w [X]
@@ -124,13 +123,12 @@ def eig(aop, x0, precond, tol=1e-5, max_cycle=50, max_space=12,
         dx_norm = np.zeros(nroots)
         xt = [None] * nroots
         for k, ek in enumerate(e):
-            if not conv[k]:
-                xt[k] = ax0[k] - ek * x0[k]
-                dx_norm[k] = np.linalg.norm(xt[k])
-                conv[k] = dx_norm[k] < tol_residual
-                if conv[k] and not conv_last[k]:
-                    log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
-                              k, dx_norm[k], ek, de[k])
+            xt[k] = ax0[k] - ek * x0[k]
+            dx_norm[k] = np.linalg.norm(xt[k])
+            conv[k] = dx_norm[k] < tol_residual
+            if conv[k] and not conv_last[k]:
+                log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
+                          k, dx_norm[k], ek, de[k])
         max_dx_norm = max(dx_norm)
         ide = np.argmax(abs(de))
         if all(conv):

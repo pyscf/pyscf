@@ -68,7 +68,7 @@ class Diamond(unittest.TestCase):
     def test_tdhf(self):
         # same as lowest roots in Diamond->test_tdhf_singlet/triplet in test_krhf.py
         ref = [[5.9794378466, 5.9794378466],
-               [6.1703909932, 6.1703909932]]
+               [6.1558130396, 6.1558130396]]
         self.kernel(tdscf.KTDHF, ref)
 
 

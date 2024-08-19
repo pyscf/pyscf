@@ -794,8 +794,9 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     return vind, hdiag
 
 
-class TDHF(TDA):
+class TDHF(TDBase):
 
+    conv_tol = 1e-5
     singlet = None
 
     @lib.with_doc(gen_tdhf_operation.__doc__)
@@ -844,9 +845,8 @@ class TDHF(TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
-        tol_residual = self.conv_tol ** .5
         self.converged, w, x1 = lr_eig(
-            vind, x0, precond, tol_residual=tol_residual, nroots=nstates,
+            vind, x0, precond, tol_residual=self.conv_tol, nroots=nstates,
             lindep=self.lindep, max_cycle=self.max_cycle,
             max_space=self.max_space, pick=pickeig, verbose=log)
 

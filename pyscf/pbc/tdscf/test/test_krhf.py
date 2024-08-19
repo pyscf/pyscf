@@ -22,12 +22,22 @@ from pyscf import gto as molgto, scf as molscf, tdscf as moltdscf
 from pyscf.pbc.cc.eom_kccsd_rhf import EOMEESinglet
 from pyscf.data.nist import HARTREE2EV as unitev
 
+def diagonalize(a, b, nroots=4):
+    nkpts, nocc, nvir = a.shape[:3]
+    a = a.reshape(nkpts*nocc*nvir, -1)
+    b = b.reshape(nkpts*nocc*nvir, -1)
+    h = np.block([[a        , b       ],
+                  [-b.conj(),-a.conj()]])
+    e = np.linalg.eigvals(np.asarray(h))
+    lowest_e = np.sort(e[e.real > 0].real)[:nroots]
+    lowest_e = lowest_e[lowest_e > 1e-3]
+    return lowest_e
 
 class Diamond(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cell = gto.Cell()
-        cell.verbose = 4
+        cell.verbose = 5
         cell.output = '/dev/null'
         cell.atom = 'C 0 0 0; C 0.8925000000 0.8925000000 0.8925000000'
         cell.a = '''
@@ -56,7 +66,9 @@ class Diamond(unittest.TestCase):
         td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)),
                              nstates=self.nstates, **kwargs).run()
         for kshift,e in enumerate(td.e):
-            self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev - ref[kshift]).max(), 0, 4)
+            n = len(ref[kshift])
+            self.assertAlmostEqual(abs(e[:n] * unitev - ref[kshift]).max(), 0, 4)
+        return td
 
     def test_tda_singlet_eomccs(self):
         ''' Brute-force solution to the KTDA equation. Compared to the brute-force
@@ -80,7 +92,23 @@ class Diamond(unittest.TestCase):
     def test_tda_singlet(self):
         ref = [[10.9573977036],
                [11.0418311085]]
-        self.kernel(tdscf.KTDA, ref)
+        td = self.kernel(tdscf.KTDA, ref)
+        a0, _ = td.get_ab(kshift=0)
+        nk, no, nv = a0.shape[:3]
+        a0 = a0.reshape(nk*no*nv,-1)
+        eref0 = np.linalg.eigvalsh(a0)[:4]
+        a1, _ = td.get_ab(kshift=1)
+        nk, no, nv = a1.shape[:3]
+        a1 = a1.reshape(nk*no*nv,-1)
+        eref1 = np.linalg.eigvalsh(a1)[:4]
+        self.assertAlmostEqual(abs(td.e[0][:2] - eref0[:2]).max(), 0, 5)
+        self.assertAlmostEqual(abs(td.e[1][:2] - eref1[:2]).max(), 0, 5)
+
+        vind, hdiag = td.gen_vind(td._scf, kshift=0)
+        z = a0[:1]
+        self.assertAlmostEqual(abs(vind(z) - a0.dot(z[0])).max(), 0, 10)
+        vind, hdiag = td.gen_vind(td._scf, kshift=1)
+        self.assertAlmostEqual(abs(vind(z) - a1.dot(z[0])).max(), 0, 10)
 
     def test_tda_triplet(self):
         ref = [[6.4440137833],
@@ -88,11 +116,33 @@ class Diamond(unittest.TestCase):
         self.kernel(tdscf.KTDA, ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        #ref = [[10.7665673889], # the second excited state
-        #       [10.8544075582]]
-        ref = [[10.607619003],
-               [10.852686596]]
-        self.kernel(tdscf.KTDHF, ref)
+        ref = [[10.60761946, 10.76654619],
+               [10.85804218, 10.85804218]]
+        td = self.kernel(tdscf.KTDHF, ref, conv_tol=1e-7)
+        a0, b0 = td.get_ab(kshift=0)
+        eref0 = diagonalize(a0, b0)
+        a1, b1 = td.get_ab(kshift=1)
+        eref1 = diagonalize(a1, b1)
+        self.assertAlmostEqual(abs(td.e[0][:2] - eref0[:2]).max(), 0, 5)
+        self.assertAlmostEqual(abs(td.e[1][:2] - eref1[:2]).max(), 0, 5)
+
+        nk, no, nv = a0.shape[:3]
+        nkov = nk * no * nv
+        a0 = a0.reshape(nkov,-1)
+        b0 = b0.reshape(nkov,-1)
+        a1 = a1.reshape(nkov,-1)
+        b1 = b1.reshape(nkov,-1)
+        z = np.hstack([a0[:1], a0[1:2]])
+
+        h = np.block([[ a0       , b0       ],
+                      [-b0.conj(),-a0.conj()]])
+        vind, hdiag = td.gen_vind(td._scf, kshift=0)
+        self.assertAlmostEqual(abs(vind(z) - h.dot(z[0])).max(), 0, 10)
+
+        h = np.block([[ a1       , b1       ],
+                      [-b1.conj(),-a1.conj()]])
+        vind, hdiag = td.gen_vind(td._scf, kshift=1)
+        self.assertAlmostEqual(abs(vind(z) - h.dot(z[0])).max(), 0, 10)
 
     def test_tdhf_triplet(self):
         ref = [[5.9794378466],

@@ -129,7 +129,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     nvir = orbv.shape[1]
     nocc = orbo.shape[1]
     mo = numpy.hstack((orbo,orbv))
-    nmo = nocc + nvir
 
     e_ia = lib.direct_sum('a-i->ia', mo_energy[viridx], mo_energy[occidx])
     a = numpy.diag(e_ia.ravel()).reshape(nocc,nvir,nocc,nvir)
@@ -145,7 +144,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
 
     if isinstance(mf, scf.hf.KohnShamDFT):
-        from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if mf.do_nlc():
@@ -957,7 +955,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     return vind, hdiag
 
 
-class TDHF(TDA):
+class TDHF(TDBase):
     '''Time-dependent Hartree-Fock
 
     Attributes:
@@ -978,6 +976,8 @@ class TDHF(TDA):
             excited state.  (X,Y) are normalized to 1/2 in RHF/RKS methods and
             normalized to 1 for UHF/UKS methods. In the TDA calculation, Y = 0.
     '''
+    conv_tol = 1e-5
+
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
         if mf is None:
@@ -1040,9 +1040,8 @@ class TDHF(TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
-        tol_residual = self.conv_tol ** .5
         self.converged, w, x1 = lr_eig(
-            vind, x0, precond, tol_residual=tol_residual, nroots=nstates,
+            vind, x0, precond, tol_residual=self.conv_tol, nroots=nstates,
             lindep=self.lindep, max_cycle=self.max_cycle,
             max_space=self.max_space, pick=pickeig, verbose=log)
 

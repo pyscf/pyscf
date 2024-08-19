@@ -31,7 +31,10 @@ from pyscf import __config__
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)
 
 class TDA(KTDBase):
-    conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
+    conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-7)
+
+    def get_ab(self, mf=None, kshift=0):
+        raise NotImplementedError
 
     def gen_vind(self, mf, kshift):
         '''Compute Ax'''
@@ -163,7 +166,13 @@ class TDA(KTDBase):
 CIS = KTDA = TDA
 
 
-class TDHF(TDA):
+class TDHF(KTDBase):
+
+    conv_tol = 1e-5
+
+    def get_ab(self, mf=None, kshift=0):
+        raise NotImplementedError
+
     def gen_vind(self, mf, kshift):
         kconserv = self.kconserv[kshift]
         mo_coeff = mf.mo_coeff
@@ -176,8 +185,8 @@ class TDHF(TDA):
         viridxb = [numpy.where(mo_occ[1][k]==0)[0] for k in range(nkpts)]
         orboa = [mo_coeff[0][k][:,occidxa[k]] for k in range(nkpts)]
         orbob = [mo_coeff[1][k][:,occidxb[k]] for k in range(nkpts)]
-        orbva = [mo_coeff[0][kconserv[k]][:,viridxa[kconserv[k]]] for k in range(nkpts)]
-        orbvb = [mo_coeff[1][kconserv[k]][:,viridxb[kconserv[k]]] for k in range(nkpts)]
+        orbva = [mo_coeff[0][k][:,viridxa[k]] for k in range(nkpts)]
+        orbvb = [mo_coeff[1][k][:,viridxb[k]] for k in range(nkpts)]
 
         moe = scf.addons.mo_energy_with_exxdiv_none(mf)
         e_ia_a = _get_e_ia(moe[0], mo_occ[0], kconserv)
@@ -200,12 +209,12 @@ class TDHF(TDA):
             for i in range(nz):
                 xa, xb = x1s[i]
                 ya, yb = y1s[i]
-                for k in range(nkpts):
-                    dmx = reduce(numpy.dot, (orboa[k], xa[k]  , orbva[k].conj().T))
-                    dmy = reduce(numpy.dot, (orbva[k], ya[k].T, orboa[k].conj().T))
+                for k, kp in enumerate(kconserv):
+                    dmx = reduce(numpy.dot, (orboa[k], xa[k ]  , orbva[kp].conj().T))
+                    dmy = reduce(numpy.dot, (orbva[k], ya[kp].T, orboa[kp].conj().T))
                     dmov[0,i,k] = dmx + dmy
-                    dmx = reduce(numpy.dot, (orbob[k], xb[k]  , orbvb[k].conj().T))
-                    dmy = reduce(numpy.dot, (orbvb[k], yb[k].T, orbob[k].conj().T))
+                    dmx = reduce(numpy.dot, (orbob[k], xb[k ]  , orbvb[kp].conj().T))
+                    dmy = reduce(numpy.dot, (orbvb[k], yb[kp].T, orbob[kp].conj().T))
                     dmov[1,i,k] = dmx + dmy
 
             with lib.temporary_env(mf, exxdiv=None):
@@ -217,23 +226,23 @@ class TDHF(TDA):
             for i in range(nz):
                 xa, xb = x1s[i]
                 ya, yb = y1s[i]
-                v1xsa = []
-                v1xsb = []
-                v1ysa = []
-                v1ysb = []
-                for k in range(nkpts):
-                    v1xa = reduce(numpy.dot, (orboa[k].conj().T, v1ao[0,i,k], orbva[k]))
-                    v1xb = reduce(numpy.dot, (orbob[k].conj().T, v1ao[1,i,k], orbvb[k]))
-                    v1ya = reduce(numpy.dot, (orbva[k].conj().T, v1ao[0,i,k], orboa[k])).T
-                    v1yb = reduce(numpy.dot, (orbvb[k].conj().T, v1ao[1,i,k], orbob[k])).T
-                    v1xa+= e_ia_a[k] * xa[k]
-                    v1xb+= e_ia_b[k] * xb[k]
-                    v1ya+= e_ia_a[k].conj() * ya[k]
-                    v1yb+= e_ia_b[k].conj() * yb[k]
-                    v1xsa.append(v1xa.ravel())
-                    v1xsb.append(v1xb.ravel())
-                    v1ysa.append(-v1ya.ravel())
-                    v1ysb.append(-v1yb.ravel())
+                v1xsa = [0] * nkpts
+                v1xsb = [0] * nkpts
+                v1ysa = [0] * nkpts
+                v1ysb = [0] * nkpts
+                for k, kp in enumerate(kconserv):
+                    v1xa = reduce(numpy.dot, (orboa[k].conj().T, v1ao[0,i,k], orbva[kp]))
+                    v1xb = reduce(numpy.dot, (orbob[k].conj().T, v1ao[1,i,k], orbvb[kp]))
+                    v1ya = reduce(numpy.dot, (orbva[k].conj().T, v1ao[0,i,k], orboa[kp])).T
+                    v1yb = reduce(numpy.dot, (orbvb[k].conj().T, v1ao[1,i,k], orbob[kp])).T
+                    v1xa += e_ia_a[k] * xa[k]
+                    v1xb += e_ia_b[k] * xb[k]
+                    v1ya += e_ia_a[kp].conj() * ya[kp]
+                    v1yb += e_ia_b[kp].conj() * yb[kp]
+                    v1xsa[k] += v1xa.ravel()
+                    v1xsb[k] += v1xb.ravel()
+                    v1ysa[kp] += -v1ya.ravel()
+                    v1ysb[kp] += -v1yb.ravel()
                 v1s.append( numpy.concatenate(v1xsa + v1xsb + v1ysa + v1ysb) )
             return numpy.hstack(v1s).reshape(nz,-1)
 
@@ -284,7 +293,7 @@ class TDHF(TDA):
                 x0k = x0[i]
 
             converged, w, x1 = lr_eig(
-                vind, x0k, precond, tol_residual=tol_residual, nroots=self.nstates,
+                vind, x0k, precond, tol_residual=self.conv_tol, nroots=self.nstates,
                 lindep=self.lindep, max_cycle=self.max_cycle,
                 max_space=self.max_space, pick=pickeig, verbose=self.verbose)
             self.converged.append( converged )

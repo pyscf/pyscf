@@ -193,7 +193,8 @@ def get_j_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), k
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
-    j_real = gamma_point(kpts_band) and not numpy.iscomplexobj(dms)
+    j_real = (gamma_point(kpts_band) and gamma_point(kpts[kshift]) and
+              not numpy.iscomplexobj(dms))
 
     kconserv = get_kconserv_ria(mydf.cell, kpts)[kshift]
 
