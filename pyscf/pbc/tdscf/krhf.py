@@ -30,7 +30,7 @@ from pyscf.tdscf._lr_eig import eig as lr_eig
 from pyscf.pbc import scf
 from pyscf.pbc.tdscf.rhf import TDBase
 from pyscf.pbc.scf import _response_functions  # noqa
-from pyscf.pbc.lib.kpts_helper import is_gamma_point, get_kconserv_ria, get_kconserv
+from pyscf.pbc.lib.kpts_helper import is_gamma_point, get_kconserv_ria
 from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 from pyscf.pbc import df as pbcdf
 from pyscf.data import nist
@@ -59,7 +59,6 @@ def get_ab(mf, kshift=0):
     orbo = mo[:,:,:nocc]
 
     kconserv = get_kconserv_ria(cell, kpts)[kshift]
-    kconserv2 = get_kconserv(cell, kpts)
     e_ia = numpy.asarray(_get_e_ia(mo_energy, mo_occ, kconserv)).astype(mo.dtype)
     a = numpy.diag(e_ia.ravel()).reshape(nkpts,nocc,nvir,nkpts,nocc,nvir)
     b = numpy.zeros_like(a)
@@ -283,13 +282,14 @@ class TDHF(KTDBase):
         if mf is None: mf = self._scf
         return get_ab(mf, kshift)
 
-    def gen_vind(self, mf, kshift):
+    def gen_vind(self, mf, kshift=0):
         '''
         [ A   B ][X]
         [-B* -A*][Y]
         '''
+        assert kshift == 0
+
         singlet = self.singlet
-        kconserv = self.kconserv[kshift]
 
         mo_coeff = mf.mo_coeff
         mo_occ = mf.mo_occ
@@ -299,6 +299,8 @@ class TDHF(KTDBase):
         viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
+
+        kconserv = numpy.arange(nkpts)
         e_ia = _get_e_ia(scf.addons.mo_energy_with_exxdiv_none(mf), mo_occ, kconserv)
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
         tot_x = hdiag.size
@@ -312,15 +314,14 @@ class TDHF(KTDBase):
             nz = len(xys)
             z1xs = [_unpack(xy[:tot_x], mo_occ, kconserv) for xy in xys]
             z1ys = [_unpack(xy[tot_x:], mo_occ, kconserv) for xy in xys]
-            dmov = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
+            dmov = numpy.zeros((nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
-                for k, kp in enumerate(kconserv):
+                for k in range(nkpts):
                     # *2 for double occupancy
-                    dmx = z1xs[i][k ] * 2
-                    dmy = z1ys[i][kp] * 2
-                    dmov[i,k] = reduce(numpy.dot, (orbo[k], dmx, orbv[kp].T.conj()))
-                    #FIXME: orbv[trev[kp]] * dmy * orbo[trev[k]].conj()
-                    dmov[i,k]+= reduce(numpy.dot, (orbv[k], dmy.T, orbo[kp].T.conj()))
+                    dmx = z1xs[i][k] * 2
+                    dmy = z1ys[i][k] * 2
+                    dmov[i,k] += reduce(numpy.dot, (orbo[k], dmx  , orbv[k].T.conj()))
+                    dmov[i,k] += reduce(numpy.dot, (orbv[k], dmy.T, orbo[k].T.conj()))
 
             with lib.temporary_env(mf, exxdiv=None):
                 v1ao = vresp(dmov, kshift) # = <mb||nj> Xjb + <mj||nb> Yjb
@@ -330,19 +331,19 @@ class TDHF(KTDBase):
                 dmy = z1ys[i]
                 v1xs = [0] * nkpts
                 v1ys = [0] * nkpts
-                for k, kp in enumerate(kconserv):
+                for k in range(nkpts):
                     # AX + BY
                     # = <ib||aj> Xjb + <ij||ab> Yjb
                     # = (<mb||nj> Xjb + <mj||nb> Yjb) Cmi* Cna
-                    v1x = reduce(numpy.dot, (orbo[k].T.conj(), v1ao[i,k], orbv[kp]))
+                    v1x = reduce(numpy.dot, (orbo[k].T.conj(), v1ao[i,k], orbv[k]))
                     # (B*)X + (A*)Y
                     # = <ab||ij> Xjb + <aj||ib> Yjb
                     # = (<mb||nj> Xjb + <mj||nb> Yjb) Cma* Cni
-                    v1y = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[kp])).T
+                    v1y = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[k])).T
                     v1x += e_ia[k] * dmx[k]
-                    v1y += e_ia[kp].conj() * dmy[kp]
-                    v1xs[k ] += v1x.ravel()
-                    v1ys[kp] -= v1y.ravel()
+                    v1y += e_ia[k].conj() * dmy[k]
+                    v1xs[k] += v1x.ravel()
+                    v1ys[k] -= v1y.ravel()
                 v1s.append( numpy.concatenate(v1xs + v1ys) )
             return lib.asarray(v1s).reshape(nz,-1)
         return vind, hdiag
@@ -368,6 +369,18 @@ class TDHF(KTDBase):
 
         real_system = (is_gamma_point(self._scf.kpts) and
                        self._scf.mo_coeff[0].dtype == numpy.double)
+
+        if any(k != 0 for k in self.kshift_lst):
+            # It's not clear how to define the Y matrix for kshift!=0 .
+            # When the A tensor is constructed against the X(kshift) matrix,
+            # the diagonal terms e_ia are calculated as e_i[k] - e_k[k+kshift].
+            # Given the k-conserve relation in the A tensor, the j-b indices in
+            # the A tensor should follow j[k'], b[k'+kshift]. This leads to the
+            # j-b indices in the B tensor being defined as (j[k'+shift], b[k']).
+            # To form the square A-B-B-A matrix, the diagonal terms for the
+            # -A* part need to be constructed as e_i[k+kshift] - e_a[k], which
+            # conflict to the diagonal terms of the A tensor.
+            raise RuntimeError('kshift != 0 for TDHF')
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
@@ -402,7 +415,7 @@ class TDHF(KTDBase):
             converged, e, x1 = lr_eig(
                 vind, x0k, precond, tol_residual=self.conv_tol, nroots=self.nstates,
                 lindep=self.lindep, max_cycle=self.max_cycle,
-                max_space=self.max_space, pick=pickeig, verbose=self.verbose)
+                max_space=self.max_space, pick=pickeig, verbose=log)
             self.converged.append( converged )
             self.e.append( e )
             self.xy.append( [norm_xy(z, kconserv) for z in x1] )
@@ -426,10 +439,10 @@ def _get_e_ia(mo_energy, mo_occ, kconserv=None):
 def _unpack(vo, mo_occ, kconserv):
     z = []
     p1 = 0
-    for k, occ in enumerate(mo_occ):
-        no = numpy.count_nonzero(occ > 0)
-        no1 = numpy.count_nonzero(mo_occ[kconserv[k]] > 0)
-        nv = occ.size - no1
+    no_kpts = [numpy.count_nonzero(occ) for occ in mo_occ]
+    for k, no in enumerate(no_kpts):
+        kp = kconserv[k]
+        nv = mo_occ[kp].size - no_kpts[kp]
         p0, p1 = p1, p1 + no * nv
         z.append(vo[p0:p1].reshape(no,nv))
     return z

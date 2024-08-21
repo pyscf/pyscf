@@ -1506,6 +1506,7 @@ def _sort_elast(elast, conv_last, vlast, v, log):
     head, nroots = vlast.shape
     ovlp = abs(numpy.dot(v[:head].conj().T, vlast))
     idx = numpy.argmax(ovlp, axis=1)
+    idx = idx[numpy.any(ovlp > .5, axis=1)]
 
     if log.verbose >= logger.DEBUG:
         ordering_diff = (idx != numpy.arange(len(idx)))
@@ -1514,7 +1515,11 @@ def _sort_elast(elast, conv_last, vlast, v, log):
             for i in numpy.where(ordering_diff)[0]:
                 log.debug('  %3d     ->   %3d ', idx[i], i)
 
-    return elast[idx], conv_last[idx]
+    e = elast.copy()
+    conv = numpy.zeros_like(conv_last)
+    conv[:len(idx)] = conv_last[idx]
+    e[:len(idx)] = elast[idx]
+    return e, conv
 
 def _normalize_xt_(xt, xs, threshold, dot):
     '''Projects out existing basis vectors xs. Also checks whether the precond

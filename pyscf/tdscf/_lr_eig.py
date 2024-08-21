@@ -224,6 +224,8 @@ def _symmetric_orth(xt, lindep=1e-6):
                   [s21, s11.conj()  ]])
     e, c = scipy.linalg.eigh(s)
     if e[0] < lindep:
+        if n == 1:
+            return xt
         return _symmetric_orth(xt[:-1], lindep)
 
     c_orth = (c * e**-.5).dot(c[:n].conj().T)

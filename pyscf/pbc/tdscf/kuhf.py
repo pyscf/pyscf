@@ -173,8 +173,9 @@ class TDHF(KTDBase):
     def get_ab(self, mf=None, kshift=0):
         raise NotImplementedError
 
-    def gen_vind(self, mf, kshift):
-        kconserv = self.kconserv[kshift]
+    def gen_vind(self, mf, kshift=0):
+        assert kshift == 0
+
         mo_coeff = mf.mo_coeff
         mo_occ = mf.mo_occ
         nkpts = len(mo_occ[0])
@@ -188,6 +189,7 @@ class TDHF(KTDBase):
         orbva = [mo_coeff[0][k][:,viridxa[k]] for k in range(nkpts)]
         orbvb = [mo_coeff[1][k][:,viridxb[k]] for k in range(nkpts)]
 
+        kconserv = numpy.arange(nkpts)
         moe = scf.addons.mo_energy_with_exxdiv_none(mf)
         e_ia_a = _get_e_ia(moe[0], mo_occ[0], kconserv)
         e_ia_b = _get_e_ia(moe[1], mo_occ[1], kconserv)
@@ -209,12 +211,12 @@ class TDHF(KTDBase):
             for i in range(nz):
                 xa, xb = x1s[i]
                 ya, yb = y1s[i]
-                for k, kp in enumerate(kconserv):
-                    dmx = reduce(numpy.dot, (orboa[k], xa[k ]  , orbva[kp].conj().T))
-                    dmy = reduce(numpy.dot, (orbva[k], ya[kp].T, orboa[kp].conj().T))
+                for k in range(nkpts):
+                    dmx = reduce(numpy.dot, (orboa[k], xa[k]  , orbva[k].conj().T))
+                    dmy = reduce(numpy.dot, (orbva[k], ya[k].T, orboa[k].conj().T))
                     dmov[0,i,k] = dmx + dmy
-                    dmx = reduce(numpy.dot, (orbob[k], xb[k ]  , orbvb[kp].conj().T))
-                    dmy = reduce(numpy.dot, (orbvb[k], yb[kp].T, orbob[kp].conj().T))
+                    dmx = reduce(numpy.dot, (orbob[k], xb[k]  , orbvb[k].conj().T))
+                    dmy = reduce(numpy.dot, (orbvb[k], yb[k].T, orbob[k].conj().T))
                     dmov[1,i,k] = dmx + dmy
 
             with lib.temporary_env(mf, exxdiv=None):
@@ -230,19 +232,19 @@ class TDHF(KTDBase):
                 v1xsb = [0] * nkpts
                 v1ysa = [0] * nkpts
                 v1ysb = [0] * nkpts
-                for k, kp in enumerate(kconserv):
-                    v1xa = reduce(numpy.dot, (orboa[k].conj().T, v1ao[0,i,k], orbva[kp]))
-                    v1xb = reduce(numpy.dot, (orbob[k].conj().T, v1ao[1,i,k], orbvb[kp]))
-                    v1ya = reduce(numpy.dot, (orbva[k].conj().T, v1ao[0,i,k], orboa[kp])).T
-                    v1yb = reduce(numpy.dot, (orbvb[k].conj().T, v1ao[1,i,k], orbob[kp])).T
+                for k in range(nkpts):
+                    v1xa = reduce(numpy.dot, (orboa[k].conj().T, v1ao[0,i,k], orbva[k]))
+                    v1xb = reduce(numpy.dot, (orbob[k].conj().T, v1ao[1,i,k], orbvb[k]))
+                    v1ya = reduce(numpy.dot, (orbva[k].conj().T, v1ao[0,i,k], orboa[k])).T
+                    v1yb = reduce(numpy.dot, (orbvb[k].conj().T, v1ao[1,i,k], orbob[k])).T
                     v1xa += e_ia_a[k] * xa[k]
                     v1xb += e_ia_b[k] * xb[k]
-                    v1ya += e_ia_a[kp].conj() * ya[kp]
-                    v1yb += e_ia_b[kp].conj() * yb[kp]
+                    v1ya += e_ia_a[k].conj() * ya[k]
+                    v1yb += e_ia_b[k].conj() * yb[k]
                     v1xsa[k] += v1xa.ravel()
                     v1xsb[k] += v1xb.ravel()
-                    v1ysa[kp] += -v1ya.ravel()
-                    v1ysb[kp] += -v1yb.ravel()
+                    v1ysa[k] += -v1ya.ravel()
+                    v1ysb[k] += -v1yb.ravel()
                 v1s.append( numpy.concatenate(v1xsa + v1xsb + v1ysa + v1ysb) )
             return numpy.hstack(v1s).reshape(nz,-1)
 
@@ -270,13 +272,14 @@ class TDHF(KTDBase):
         real_system = (is_gamma_point(self._scf.kpts) and
                        self._scf.mo_coeff[0][0].dtype == numpy.double)
 
+        if any(k != 0 for k in self.kshift_lst):
+            raise RuntimeError('kshift != 0 for TDHF')
+
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > self.positive_eig_threshold))[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
-
-        log = logger.Logger(self.stdout, self.verbose)
 
         self.converged = []
         self.e = []
@@ -295,7 +298,7 @@ class TDHF(KTDBase):
             converged, w, x1 = lr_eig(
                 vind, x0k, precond, tol_residual=self.conv_tol, nroots=self.nstates,
                 lindep=self.lindep, max_cycle=self.max_cycle,
-                max_space=self.max_space, pick=pickeig, verbose=self.verbose)
+                max_space=self.max_space, pick=pickeig, verbose=log)
             self.converged.append( converged )
 
             e = []

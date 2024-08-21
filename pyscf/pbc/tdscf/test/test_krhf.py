@@ -62,8 +62,8 @@ class Diamond(unittest.TestCase):
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
-    def kernel(self, TD, ref, **kwargs):
-        td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)),
+    def kernel(self, TD, ref, kshift_lst, **kwargs):
+        td = TD(self.mf).set(kshift_lst=kshift_lst,
                              nstates=self.nstates, **kwargs).run()
         for kshift,e in enumerate(td.e):
             n = len(ref[kshift])
@@ -92,7 +92,7 @@ class Diamond(unittest.TestCase):
     def test_tda_singlet(self):
         ref = [[10.9573977036],
                [11.0418311085]]
-        td = self.kernel(tdscf.KTDA, ref)
+        td = self.kernel(tdscf.KTDA, ref, np.arange(2))
         a0, _ = td.get_ab(kshift=0)
         nk, no, nv = a0.shape[:3]
         a0 = a0.reshape(nk*no*nv,-1)
@@ -113,25 +113,19 @@ class Diamond(unittest.TestCase):
     def test_tda_triplet(self):
         ref = [[6.4440137833],
                [7.4264899075]]
-        self.kernel(tdscf.KTDA, ref, singlet=False)
+        self.kernel(tdscf.KTDA, ref, np.arange(2), singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [[10.60761946, 10.76654619],
-               [10.85804218, 10.85804218]]
-        td = self.kernel(tdscf.KTDHF, ref, conv_tol=1e-7)
+        ref = [[10.60761946, 10.76654619]]
+        td = self.kernel(tdscf.KTDHF, ref, [0], conv_tol=1e-7)
         a0, b0 = td.get_ab(kshift=0)
         eref0 = diagonalize(a0, b0)
-        a1, b1 = td.get_ab(kshift=1)
-        eref1 = diagonalize(a1, b1)
         self.assertAlmostEqual(abs(td.e[0][:2] - eref0[:2]).max(), 0, 5)
-        self.assertAlmostEqual(abs(td.e[1][:2] - eref1[:2]).max(), 0, 5)
 
         nk, no, nv = a0.shape[:3]
         nkov = nk * no * nv
         a0 = a0.reshape(nkov,-1)
         b0 = b0.reshape(nkov,-1)
-        a1 = a1.reshape(nkov,-1)
-        b1 = b1.reshape(nkov,-1)
         z = np.hstack([a0[:1], a0[1:2]])
 
         h = np.block([[ a0       , b0       ],
@@ -139,15 +133,9 @@ class Diamond(unittest.TestCase):
         vind, hdiag = td.gen_vind(td._scf, kshift=0)
         self.assertAlmostEqual(abs(vind(z) - h.dot(z[0])).max(), 0, 10)
 
-        h = np.block([[ a1       , b1       ],
-                      [-b1.conj(),-a1.conj()]])
-        vind, hdiag = td.gen_vind(td._scf, kshift=1)
-        self.assertAlmostEqual(abs(vind(z) - h.dot(z[0])).max(), 0, 10)
-
     def test_tdhf_triplet(self):
-        ref = [[5.9794378466],
-               [6.1660750740]]
-        self.kernel(tdscf.KTDHF, ref, singlet=False)
+        ref = [[5.9794378466]]
+        self.kernel(tdscf.KTDHF, ref, [0], singlet=False)
 
 
 class WaterBigBox(unittest.TestCase):
