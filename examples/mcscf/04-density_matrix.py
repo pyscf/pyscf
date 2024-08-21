@@ -31,4 +31,3 @@ dm1 = mycas.make_rdm1()
 dm1_alpha, dm1_beta = mycas.make_rdm1s()
 
 print(numpy.allclose(dm1, dm1_alpha+dm1_beta))
-

@@ -50,7 +50,7 @@ from pyscf.fci import rdm
 from pyscf.fci import spin_op
 from pyscf.fci import addons
 from pyscf.fci.spin_op import contract_ss
-from pyscf.fci.addons import _unpack_nelec
+from pyscf.fci.addons import _unpack_nelec, civec_spinless_repr
 from pyscf import __config__
 
 libfci = cistring.libfci
@@ -370,6 +370,46 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     if reorder:
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, inplace=True)
     return dm1, dm2
+
+def make_rdm123(fcivec, norb, nelec, link_index=None, reorder=True):
+    '''Spin traced 1-, 2-, and 3-particle density matrices.'''
+    dm1, dm2, dm3 = rdm.make_dm123('FCI3pdm_kern_sf', fcivec, fcivec, norb, nelec)
+    if reorder:
+        dm1, dm2, dm3 = rdm.reorder_dm123(dm1, dm2, dm3, inplace=True)
+    return dm1, dm2, dm3
+
+def make_rdm123s(fcivec, norb, nelec, link_index=None, reorder=True):
+    r'''Spin separated 1-, 2-, and 3-particle density matrices.
+
+    1pdm[p,q] = :math:`\langle q_\alpha^\dagger p_\alpha \rangle +
+                       \langle q_\beta^\dagger  p_\beta \rangle`;
+    2pdm[p,q,r,s] = :math:`\langle p_\alpha^\dagger r_\alpha^\dagger s_\alpha q_\alpha\rangle +
+                           \langle p_\beta^\dagger  r_\alpha^\dagger s_\alpha q_\beta\rangle +
+                           \langle p_\alpha^\dagger r_\beta^\dagger  s_\beta  q_\alpha\rangle +
+                           \langle p_\beta^\dagger  r_\beta^\dagger  s_\beta  q_\beta\rangle`.
+    '''
+    if (not reorder):
+        raise NotImplementedError('reorder=False not currently supported')
+    ci_spinless = civec_spinless_repr([fcivec,], norb, [nelec,])
+    rdm1, rdm2, rdm3 = make_rdm123(ci_spinless, norb*2, (nelec[0]+nelec[1],0))
+
+    rdm1a = rdm1[:norb,:norb]
+    rdm1b = rdm1[norb:,norb:]
+    # assert np.allclose(rdm1a+rdm1b, rdm1)
+
+    rdm2aa = rdm2[:norb,:norb,:norb,:norb]
+    rdm2ab = rdm2[:norb,:norb,norb:,norb:]
+    rdm2bb = rdm2[norb:,norb:,norb:,norb:]
+    # assert np.allclose(rdm2aa+rdm2bb+rdm2ab+rdm2ab.transpose(2,3,0,1), rdm2)
+
+    rdm3aaa = rdm3[:norb,:norb,:norb,:norb,:norb,:norb]
+    rdm3aab = rdm3[:norb,:norb,:norb,:norb,norb:,norb:]
+    rdm3abb = rdm3[:norb,:norb,norb:,norb:,norb:,norb:]
+    rdm3bbb = rdm3[norb:,norb:,norb:,norb:,norb:,norb:]
+    # assert np.allclose(rdm3aaa+rdm3bbb+rdm3aab+rdm3aab.transpose(0,1,4,5,2,3)+\
+    # rdm3aab.transpose(4,5,0,1,2,3)+rdm3abb+rdm3abb.transpose(2,3,0,1,4,5)+rdm3abb.transpose(2,3,4,5,0,1), rdm3)
+    return (rdm1a, rdm1b), (rdm2aa, rdm2ab, rdm2bb), (rdm3aaa, rdm3aab, rdm3abb, rdm3bbb)
+
 
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     r'''Spin separated transition 1-particle density matrices.
@@ -889,6 +929,16 @@ class FCIBase(lib.StreamObject):
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
         nelec = _unpack_nelec(nelec, self.spin)
         return make_rdm12(fcivec, norb, nelec, link_index, reorder)
+
+    @lib.with_doc(make_rdm123s.__doc__)
+    def make_rdm123s(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        nelec = _unpack_nelec(nelec, self.spin)
+        return make_rdm123s(fcivec, norb, nelec, link_index, reorder)
+
+    @lib.with_doc(make_rdm123.__doc__)
+    def make_rdm123(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        nelec = _unpack_nelec(nelec, self.spin)
+        return make_rdm123(fcivec, norb, nelec, link_index, reorder)
 
     def make_rdm2(self, fcivec, norb, nelec, link_index=None, reorder=True):
         r'''Spin traced 2-particle density matrice
