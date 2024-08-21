@@ -78,8 +78,10 @@ aoL_value = mol.eval_gto('GTOval_spinor', coords)
 # Small components
 aoS_value = 1/(2*lib.param.LIGHT_SPEED) * mol.eval_gto('GTOval_sp_spinor', coords)
 # mL, mS are the spin-magentic moment at each point
-rhoL, mL = r_numint.eval_rho(mol, aoL_value, dmLL)
-rhoS, mS = r_numint.eval_rho(mol, aoS_value, dmSS)
+rhoL, *mL = r_numint.eval_rho(mol, aoL_value, dmLL)
+rhoS, *mS = r_numint.eval_rho(mol, aoS_value, dmSS)
+mL = np.array(mL)
+mS = np.array(mS)
 rho = rhoL + rhoS
 mx, my, mz = mL + mS
 
