@@ -79,9 +79,11 @@ def run_example(progress, nexamples, example, failed_examples, common_prefix):
     idx, lock = progress
 
     status = Status.OK
+    directory = os.path.dirname(example)
     try:
         subprocess.run(
-            ["python3", example],
+            ["python3", os.path.basename(example)],
+            cwd=directory,
             capture_output=False,
             stderr=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
@@ -106,6 +108,9 @@ def run_examples(example_path, num_threads):
     examples = [
         y for x in os.walk(example_path) for y in glob(os.path.join(x[0], "*.py"))
     ]
+    # remove symlinks? 
+    # examples = list(set([os.path.realpath(e) for e in examples]))
+
     examples = sorted(examples, key=lambda e: e.split("/"))
 
     results = ExampleResults()
