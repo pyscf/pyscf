@@ -757,7 +757,7 @@ def civec_spinless_repr_generator(ci0_r, norb, nelec_r):
         strsb = cistring.addrs2str(norb, nelecb, list(range(ndetb)))
         strs = numpy.add.outer(strsa, numpy.left_shift(strsb, norb)).ravel()
         addrs[ne] = cistring.strs2addr(2*norb, nelec, strs)
-        ndet_sp[ne] = tuple((ndeta,ndetb))
+        ndet_sp[ne] = (ndeta,ndetb)
     strs = strsa = strsb = None
     ndet = cistring.num_strings(2*norb, nelec)
     def ss2spinless(ci0, ne, buf=None):

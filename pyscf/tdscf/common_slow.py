@@ -621,7 +621,7 @@ class VindTracker:
 
     @property
     def elements_calc(self):
-        return sum(map(lambda i: i[0] * i[1] if i is not None else 0, self.results))
+        return sum((i[0] * i[1] if i is not None else 0 for i in self.results))
 
     @property
     def ratio(self):
