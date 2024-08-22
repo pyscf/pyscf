@@ -876,7 +876,7 @@ class SACASLagPrec (lagrange.LagPrec):
                 except Exception as e:
                     print (i, j, desort_spin)
                     raise (e)
-        assert (all ([i is not None for i in Mxci]))
+        assert (all (i is not None for i in Mxci))
         return Mxci
 
 mcscf.addons.StateAverageMCSCFSolver.Gradients = lib.class_as_method(Gradients)

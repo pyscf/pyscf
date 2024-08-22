@@ -395,7 +395,7 @@ def _get_schwartz_data(bas_lst, omega, dijs_lst=None, keep1ctr=True, safe=True):
                 imin = es.argmin()
                 jmax = abs(ecs[imin,1:]).argmax()
                 cs = ecs[:,jmax+1]
-                bas_new = [bas[0]] + [(e,c) for e,c in zip(es,cs)]
+                bas_new = [bas[0]] + list(zip(es,cs))
             bas_lst_new.append(bas_new)
         return bas_lst_new
     if keep1ctr:

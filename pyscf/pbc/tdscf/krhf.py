@@ -79,7 +79,7 @@ class KTDBase(TDBase):
     def check_sanity(self):
         TDBase.check_sanity(self)
         mf = self._scf
-        if any([k != 0 for k in self.kshift_lst]):
+        if any(k != 0 for k in self.kshift_lst):
             if mf.rsjk is not None or not isinstance(mf.with_df, pbcdf.df.DF):
                 logger.error(self, 'Solutions with non-zero kshift for %s are '
                              'only supported by GDF/RSDF')
