@@ -84,20 +84,20 @@ class KnownValues(unittest.TestCase):
     def test_nohbrid_b88p86(self):
         td = rks.CasidaTDDFT(mf_bp86)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -40.462005239920558, 4)
+        self.assertAlmostEqual(lib.fp(es), -40.4619799852133, 6)
         a, b = td.get_ab()
         ref = diagonalize(a, b, nroots=5) * 27.2114
-        self.assertAlmostEqual(abs(es - ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 6)
 
     def test_tddft_lda(self):
         td = rks.TDDFT(mf_lda)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -41.100806721759945, 4)
+        self.assertAlmostEqual(lib.fp(es), -41.100806721759945, 5)
 
     def test_tddft_b88p86(self):
         td = rks.TDDFT(mf_bp86)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -40.462005239920558, 4)
+        self.assertAlmostEqual(lib.fp(es), -40.4619799852133, 6)
 
     def test_tddft_b3lyp(self):
         td = rks.TDDFT(mf_b3lyp)

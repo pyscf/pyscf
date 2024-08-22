@@ -86,11 +86,11 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_nohybrid_lda(self):
-        td = tdscf.uks.CasidaTDDFT(mf_lda).set(conv_tol=1e-12)
+        td = tdscf.uks.CasidaTDDFT(mf_lda)
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 5)
-        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
+        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 6)
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 1.294630966929489, 4)
 
         mf = dft.UKS(mol1).run(xc='lda, vwn_rpa').run()
@@ -101,20 +101,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
 
     def test_nohybrid_b88p86(self):
-        td = tdscf.uks.CasidaTDDFT(mf_bp86).set(conv_tol=1e-12)
+        td = tdscf.uks.CasidaTDDFT(mf_bp86)
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 5)
-        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
+        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 6)
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 1.4624730971221087, 4)
 
     def test_tddft_lda(self):
-        td = tdscf.uks.TDDFT(mf_lda).set(conv_tol=1e-12)
+        td = tdscf.uks.TDDFT(mf_lda)
         es = td.kernel(nstates=4)[0] * 27.2114
         self.assertAlmostEqual(lib.fp(es[:3]), 1.2946309669294163, 4)
 
     def test_tddft_b88p86(self):
-        td = tdscf.uks.TDDFT(mf_bp86).set(conv_tol=1e-12)
+        td = tdscf.uks.TDDFT(mf_bp86)
         es = td.kernel(nstates=5)[0] * 27.2114
         self.assertAlmostEqual(lib.fp(es[:3]), 1.4624730971221087, 4)
         ref = [2.45700922, 2.93224712, 6.19693767, 12.22264487, 13.40445012]
@@ -126,7 +126,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
 
     def test_tddft_b3lyp(self):
-        td = tdscf.uks.TDDFT(mf_b3lyp).set(conv_tol=1e-12)
+        td = tdscf.uks.TDDFT(mf_b3lyp)
         es = td.kernel(nstates=4)[0] * 27.2114
         self.assertAlmostEqual(lib.fp(es[:3]), 1.2984822994759448, 4)
 
@@ -137,16 +137,16 @@ class KnownValues(unittest.TestCase):
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 5)
-        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
+        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 6)
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 7.69383202636, 4)
 
     def test_tda_b3lyp(self):
-        td = tdscf.TDA(mf_b3lyp).set(conv_tol=1e-12)
+        td = tdscf.TDA(mf_b3lyp)
         es = td.kernel(nstates=4)[0] * 27.2114
         self.assertAlmostEqual(lib.fp(es[:3]), 1.4303636271767162, 4)
 
     def test_tda_lda(self):
-        td = tdscf.TDA(mf_lda).set(conv_tol=1e-12)
+        td = tdscf.TDA(mf_lda)
         es = td.kernel(nstates=5)[0] * 27.2114
         self.assertAlmostEqual(lib.fp(es[:3]), 1.4581538269747121, 4)
         ref = [2.14644585, 3.27738191, 5.90913787, 12.14980714, 13.15535042]

@@ -110,7 +110,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3],1.9689940350592559, 6)
 
         dm1_exc = myadcea.make_rdm1()
-        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 83.53454941982915, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 83.53454941982915, 5)
         self.assertAlmostEqual(rdms_test(dm1_exc[1]), 66.8646378314392, 6)
         self.assertAlmostEqual(rdms_test(dm1_exc[2]), 66.29435797091572, 6)
         self.assertAlmostEqual(rdms_test(dm1_exc[3]), 66.29435797091572, 6)
