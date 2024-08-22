@@ -1005,15 +1005,6 @@ class TDHF(TDBase):
 #            # linear dependency issue in _lr_eig.
 #            return TDBase.get_precond(self, hdiag)
 
-        n = hdiag.size // 2
-        def precond(x, e, x0):
-            diagd = hdiag.copy()
-            diagd[:n] -= (e-self.level_shift)
-            diagd[n:] += (e-self.level_shift)
-            diagd[abs(diagd)<1e-8] = 1e-8
-            return x / diagd
-        return precond
-
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
