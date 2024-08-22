@@ -109,7 +109,7 @@ def _parse_ecp(raw_ecp):
                     coef = list(eval(','.join(line[1:])))
             except Exception:
                 raise BasisNotFoundError('Not basis data')
-            if all(x != 0 for x in coef[1:]):
+            if any(x != 0 for x in coef[1:]):
                 by_ang[l].append(coef)
 
     if nelec is None:
