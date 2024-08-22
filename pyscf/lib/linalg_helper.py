@@ -474,7 +474,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         else:
             e = w[:nroots]
             v = v[:,:nroots]
-            conv = numpy.zeros(nroots, dtype=bool)
+            conv = numpy.zeros(e.size, dtype=bool)
             if not fresh_start:
                 elast, conv_last = _sort_elast(elast, conv_last, vlast, v, log)
 
@@ -494,16 +494,15 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         else:
             ax0 = _gen_x0(v, ax)
 
-        dx_norm = numpy.zeros(nroots)
+        dx_norm = numpy.zeros(e.size)
         xt = [None] * nroots
         for k, ek in enumerate(e):
-            if not conv[k]:
-                xt[k] = ax0[k] - ek * x0[k]
-                dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
-                conv[k] = abs(de[k]) < tol and dx_norm[k] < toloose
-                if conv[k] and not conv_last[k]:
-                    log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
-                              k, dx_norm[k], ek, de[k])
+            xt[k] = ax0[k] - ek * x0[k]
+            dx_norm[k] = numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
+            conv[k] = abs(de[k]) < tol and dx_norm[k] < toloose
+            if conv[k] and not conv_last[k]:
+                log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
+                          k, dx_norm[k], ek, de[k])
         ax0 = None
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
@@ -542,7 +541,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
                       dx_norm)
-            conv[dx_norm < toloose] = True
+            conv = dx_norm < toloose
             break
 
         max_dx_last = max_dx_norm
@@ -835,7 +834,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
         else:
             e = w[:nroots]
             v = v[:,:nroots]
-            conv = numpy.zeros(nroots, dtype=bool)
+            conv = numpy.zeros(e.size, dtype=bool)
             if not fresh_start:
                 elast, conv_last = _sort_elast(elast, conv_last, vlast, v, log)
 
@@ -855,7 +854,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
         else:
             ax0 = _gen_x0(v, ax)
 
-        dx_norm = numpy.zeros(nroots)
+        dx_norm = numpy.zeros(e.size)
         xt = [None] * nroots
         for k, ek in enumerate(e):
             if not conv[k]:
@@ -903,7 +902,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
                       dx_norm)
-            conv = [conv[k] or (norm < toloose) for k,norm in enumerate(dx_norm)]
+            conv = dx_norm < toloose
             break
 
         max_dx_last = max_dx_norm
@@ -1169,7 +1168,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
             conv = True
             break
 
-        dx_norm = numpy.zeros(nroots)
+        dx_norm = numpy.zeros(e.size)
         xt = [None] * nroots
         for k, ek in enumerate(e):
             if type == 1:
@@ -1200,7 +1199,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
                       dx_norm)
-            conv = all(norm < toloose for norm in dx_norm)
+            conv = all(dx_norm < toloose)
             break
 
         fresh_start = fresh_start or (space+len(xt) > max_space)
@@ -1505,20 +1504,20 @@ def _sort_elast(elast, conv_last, vlast, v, log):
     '''
     head, nroots = vlast.shape
     ovlp = abs(numpy.dot(v[:head].conj().T, vlast))
-    idx = numpy.argmax(ovlp, axis=1)
-    idx = idx[numpy.any(ovlp > .5, axis=1)]
+    mapping = numpy.argmax(ovlp, axis=1)
+    found = numpy.any(ovlp > .5, axis=1)
 
     if log.verbose >= logger.DEBUG:
-        ordering_diff = (idx != numpy.arange(len(idx)))
-        if numpy.any(ordering_diff):
+        ordering_diff = (mapping != numpy.arange(len(mapping)))
+        if any(ordering_diff & found):
             log.debug('Old state -> New state')
             for i in numpy.where(ordering_diff)[0]:
-                log.debug('  %3d     ->   %3d ', idx[i], i)
+                log.debug('  %3d     ->   %3d ', mapping[i], i)
 
-    e = elast.copy()
-    conv = numpy.zeros_like(conv_last)
-    conv[:len(idx)] = conv_last[idx]
-    e[:len(idx)] = elast[idx]
+    conv = conv_last[mapping]
+    e = elast[mapping]
+    conv[~found] = False
+    e[~found] = 0.
     return e, conv
 
 def _normalize_xt_(xt, xs, threshold, dot):
@@ -1531,12 +1530,14 @@ def _normalize_xt_(xt, xs, threshold, dot):
             xi -= xsi * dot(xsi.conj(), xi)
 
     norm_min = 1
+    out = []
     for xi in xt:
         norm = dot(xi.conj(), xi).real**.5
         if norm**2 > threshold:
             xi *= 1/norm
+            out.append(xi)
             norm_min = min(norm_min, norm)
-    return xt, norm_min
+    return out, norm_min
 
 
 class LinearDependenceError(RuntimeError):
@@ -1581,15 +1582,3 @@ class _Xlist(list):
     def pop(self, index):
         key = self.index.pop(index)
         del (self.scr_h5[str(key)])
-
-if __name__ == '__main__':
-    numpy.random.seed(12)
-    n = 5
-    a = numpy.diag(numpy.random.random(n))
-    eref = numpy.sort(a.diagonal())
-
-    def aop(x):
-        return numpy.dot(a, x)
-    x0 = numpy.random.rand(1,n)
-    e0, x0 = dsyev(aop, x0, a.diagonal(), nroots=3, verbose=6)
-    print(e0, eref[:3])

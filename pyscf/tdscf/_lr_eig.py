@@ -104,7 +104,7 @@ def eig(aop, x0, precond, tol_residual=1e-5, max_cycle=50, max_space=12,
 
         e = w[:nroots]
         v = v[:,:nroots]
-        conv = np.zeros(nroots, dtype=bool)
+        conv = np.zeros(e.size, dtype=bool)
         if not fresh_start:
             elast, conv_last = _sort_elast(elast, conv_last, vlast, v, log)
 
@@ -120,7 +120,7 @@ def eig(aop, x0, precond, tol_residual=1e-5, max_cycle=50, max_space=12,
         x0 = _gen_x0(v, xs)
         ax0 = _gen_ax0(v, ax)
 
-        dx_norm = np.zeros(nroots)
+        dx_norm = np.zeros(e.size)
         xt = [None] * nroots
         for k, ek in enumerate(e):
             xt[k] = ax0[k] - ek * x0[k]

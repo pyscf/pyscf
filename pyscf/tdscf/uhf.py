@@ -84,13 +84,14 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
     vresp = mf.gen_response(hermi=0, max_memory=max_memory)
 
     def vind(zs):
+        nz = len(zs)
         zs = numpy.asarray(zs)
         if wfnsym is not None and mol.symmetry:
             zs = numpy.copy(zs)
             zs[:,sym_forbid] = 0
 
-        za = zs[:,:nocca*nvira].reshape(-1,nocca,nvira)
-        zb = zs[:,nocca*nvira:].reshape(-1,noccb,nvirb)
+        za = zs[:,:nocca*nvira].reshape(nz,nocca,nvira)
+        zb = zs[:,nocca*nvira:].reshape(nz,noccb,nvirb)
         dmova = lib.einsum('xov,qv,po->xpq', za, orbva.conj(), orboa)
         dmovb = lib.einsum('xov,qv,po->xpq', zb, orbvb.conj(), orbob)
 
@@ -101,7 +102,6 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
         v1a += numpy.einsum('xia,ia->xia', za, e_ia_a)
         v1b += numpy.einsum('xia,ia->xia', zb, e_ia_b)
 
-        nz = zs.shape[0]
         hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))
         if wfnsym is not None and mol.symmetry:
             hx[:,sym_forbid] = 0
@@ -717,7 +717,6 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    assert (mo_coeff[0].dtype == numpy.double)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff[0].shape

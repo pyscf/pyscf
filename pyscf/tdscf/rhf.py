@@ -989,7 +989,22 @@ class TDHF(TDBase):
         y0 = numpy.zeros_like(x0)
         return numpy.hstack([x0, y0])
 
-    def get_precond(self, hdiag):
+#    def get_precond(self, hdiag):
+#        if (not isinstance(mf, scf.hf.KohnShamDFT) or
+#            mf._numint.libxc.is_hybrid_xc(mf.xc)):
+#            n = hdiag.size // 2
+#            def precond(x, e, x0):
+#                diagd = hdiag.copy()
+#                diagd[:n] -= (e-self.level_shift)
+#                diagd[n:] += (e-self.level_shift)
+#                diagd[abs(diagd)<1e-8] = 1e-8
+#                return x / diagd
+#            return precond
+#        else:
+#            # Apply different precond to X and Y. This can help reduce the
+#            # linear dependency issue in _lr_eig.
+#            return TDBase.get_precond(self, hdiag)
+
         n = hdiag.size // 2
         def precond(x, e, x0):
             diagd = hdiag.copy()

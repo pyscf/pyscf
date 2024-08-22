@@ -30,7 +30,7 @@ from pyscf.tdscf._lr_eig import eig as lr_eig
 from pyscf.pbc import scf
 from pyscf.pbc.tdscf.rhf import TDBase
 from pyscf.pbc.scf import _response_functions  # noqa
-from pyscf.pbc.lib.kpts_helper import is_gamma_point, get_kconserv_ria
+from pyscf.pbc.lib.kpts_helper import is_gamma_point, get_kconserv_ria, conj_mapping
 from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 from pyscf.pbc import df as pbcdf
 from pyscf.data import nist
@@ -57,6 +57,7 @@ def get_ab(mf, kshift=0):
     nvir = nmo - nocc
     assert all(noccs == nocc)
     orbo = mo[:,:,:nocc]
+    orbv = mo[:,:,nocc:]
 
     kconserv = get_kconserv_ria(cell, kpts)[kshift]
     e_ia = numpy.asarray(_get_e_ia(mo_energy, mo_occ, kconserv)).astype(mo.dtype)
@@ -78,7 +79,76 @@ def get_ab(mf, kshift=0):
                 b[ki,:,:,kj] -= numpy.einsum('ibja->iajb', eri[ki,kb,kj,:nocc,nocc:,:nocc,nocc:]) * hyb
 
     if isinstance(mf, scf.hf.KohnShamDFT):
-        raise NotImplementedError
+        assert kshift == 0
+        ni = mf._numint
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, cell.spin)
+
+        add_hf_(a, b, hyb)
+        if omega != 0:  # For RSH
+            raise NotImplementedError
+
+        xctype = ni._xc_type(mf.xc)
+        dm0 = mf.make_rdm1(mo, mo_occ)
+        make_rho = ni._gen_rho_evaluator(cell, dm0, hermi=1, with_lapl=False)[0]
+        mem_now = lib.current_memory()[0]
+        max_memory = max(2000, mf.max_memory*.8-mem_now)
+        cmap = conj_mapping(cell, kpts)
+
+        if xctype == 'LDA':
+            ao_deriv = 0
+            for ao, _, mask, weight, coords \
+                    in ni.block_loop(cell, mf.grids, nao, ao_deriv, kpts, None, max_memory):
+                rho = make_rho(0, ao, mask, xctype)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
+                wfxc = fxc[0,0] * weight
+
+                rho_o = lib.einsum('krp,kpi->kri', ao, orbo)
+                rho_v = lib.einsum('krp,kpi->kri', ao, orbv)
+                rho_ov = numpy.einsum('kri,kra->kria', rho_o, rho_v)
+                w_ov = numpy.einsum('kria,r->kria', rho_ov, wfxc) * (2/nkpts)
+                rho_vo = rho_ov.conj()[cmap]
+                a += lib.einsum('kria,lrjb->kialjb', w_ov, rho_vo)
+                b += lib.einsum('kria,lrjb->kialjb', w_ov, rho_ov)
+
+        elif xctype == 'GGA':
+            ao_deriv = 1
+            for ao, _, mask, weight, coords \
+                    in ni.block_loop(cell, mf.grids, nao, ao_deriv, kpts, None, max_memory):
+                rho = make_rho(0, ao, mask, xctype)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
+                wfxc = fxc * weight
+                rho_o = lib.einsum('kxrp,kpi->kxri', ao, orbo)
+                rho_v = lib.einsum('kxrp,kpi->kxri', ao, orbv)
+                rho_ov = numpy.einsum('kxri,kra->kxria', rho_o, rho_v[:,0])
+                rho_ov[:,1:4] += numpy.einsum('kri,kxra->kxria', rho_o[:,0], rho_v[:,1:4])
+                w_ov = numpy.einsum('xyr,kxria->kyria', wfxc, rho_ov) * (2/nkpts)
+                rho_vo = rho_ov.conj()[cmap]
+                a += lib.einsum('kxria,lxrjb->kialjb', w_ov, rho_vo)
+                b += lib.einsum('kxria,lxrjb->kialjb', w_ov, rho_ov)
+
+        elif xctype == 'HF':
+            pass
+
+        elif xctype == 'NLC':
+            raise NotImplementedError('NLC')
+
+        elif xctype == 'MGGA':
+            ao_deriv = 1
+            for ao, _, mask, weight, coords \
+                    in ni.block_loop(cell, mf.grids, nao, ao_deriv, kpts, None, max_memory):
+                rho = make_rho(0, ao, mask, xctype)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
+                wfxc = fxc * weight
+                rho_o = lib.einsum('kxrp,kpi->kxri', ao, orbo)
+                rho_v = lib.einsum('kxrp,kpi->kxri', ao, orbv)
+                rho_ov = numpy.einsum('kxri,kra->kxria', rho_o, rho_v[:,0])
+                rho_ov[:,1:4] += numpy.einsum('kri,kxra->kxria', rho_o[:,0], rho_v[:,1:4])
+                tau_ov = numpy.einsum('kxri,kxra->kria', rho_o[:,1:4], rho_v[:,1:4]) * .5
+                rho_ov = numpy.concatenate([rho_ov, tau_ov[:,numpy.newaxis]], axis=1)
+                w_ov = numpy.einsum('xyr,kxria->kyria', wfxc, rho_ov) * (2/nkpts)
+                rho_vo = rho_ov.conj()[cmap]
+                a += lib.einsum('kxria,lxrjb->kialjb', w_ov, rho_vo)
+                b += lib.einsum('kxria,lxrjb->kialjb', w_ov, rho_ov)
     else:
         add_hf_(a, b)
 

@@ -29,8 +29,8 @@ def diagonalize(a, b, nroots=4):
     h = np.block([[a        , b       ],
                   [-b.conj(),-a.conj()]])
     e = np.linalg.eigvals(np.asarray(h))
-    lowest_e = np.sort(e[e.real > 0].real)[:nroots]
-    lowest_e = lowest_e[lowest_e > 1e-3]
+    lowest_e = np.sort(e[e.real > 0].real)
+    lowest_e = lowest_e[lowest_e > 1e-3][:nroots]
     return lowest_e
 
 class Diamond(unittest.TestCase):
