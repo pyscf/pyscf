@@ -70,10 +70,14 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_init_guess_minao(self):
+        mf = scf.UHF(mol)
         dm1 = mf.init_guess_by_minao(mol, breaksym=False)
         self.assertAlmostEqual(abs(dm1).sum(), 13.649710173723337, 9)
         dm2 = scf.uhf.get_init_guess(mol, key='minao')
         self.assertAlmostEqual(abs(dm2).sum(), 12.913908927027279, 9)
+        mf.init_guess_breaksym = 2
+        dm1 = mf.init_guess_by_minao(mol)
+        self.assertAlmostEqual(abs(dm1).sum(), 13.649710173723337, 9)
 
     def test_init_guess_1e(self):
         dm1 = scf.uhf.init_guess_by_1e(mol, breaksym=False)

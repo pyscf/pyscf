@@ -369,6 +369,7 @@ class KUHF(khf.KSCF):
     '''UHF class with k-point sampling.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
+    init_guess_breaksym = getattr(__config__, 'scf_uhf_init_guess_breaksym', 1)
 
     _keys = {"init_guess_breaksym"}
 
@@ -390,7 +391,6 @@ class KUHF(khf.KSCF):
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
         self.nelec = None
-        self.init_guess_breaksym = None
 
     @property
     def nelec(self):
