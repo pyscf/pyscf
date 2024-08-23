@@ -36,40 +36,24 @@ def init_guess_by_minao(mol, breaksym=None):
     Returns:
         Density matrices, a list of 2D ndarrays for alpha and beta spins
     '''
-    dm = hf.init_guess_by_minao(mol)
-    dma = dmb = dm*.5
-    if mol.spin == 0 and breaksym:
-        dma, dmb = _break_dm_spin_symm(mol, (dma, dmb), breaksym)
-    return numpy.array((dma,dmb))
+    return UHF(mol).init_guess_by_minao(mol, breaksym)
 
 def init_guess_by_1e(mol, breaksym=None):
     return UHF(mol).init_guess_by_1e(mol, breaksym)
 
 def init_guess_by_atom(mol, breaksym=None):
-    dm = hf.init_guess_by_atom(mol)
-    dma = dmb = dm*.5
-    if mol.spin == 0 and breaksym:
-        if breaksym == 1:
-            #Add off-diagonal part for alpha DM
-            dma = mol.intor_symmetric('int1e_ovlp') * 1e-2
-            for b0, b1, p0, p1 in mol.aoslice_by_atom():
-                dma[p0:p1,p0:p1] = dmb[p0:p1,p0:p1]
-        else:
-            dma, dmb = _break_dm_spin_symm(mol, (dma, dmb), breaksym)
-    return numpy.array((dma,dmb))
+    return UHF(mol).init_guess_by_atom(mol, breaksym)
 
 def init_guess_by_huckel(mol, breaksym=None):
     return UHF(mol).init_guess_by_huckel(mol, breaksym)
 
-def init_guess_by_mod_huckel(mol, breaksym=BREAKSYM):
+def init_guess_by_mod_huckel(mol, breaksym=None):
     return UHF(mol).init_guess_by_mod_huckel(mol, breaksym)
 
-def init_guess_by_sap(mol, sap_basis, breaksym=BREAKSYM, **kwargs):
-    dm = hf.init_guess_by_sap(mol, sap_basis)
-    dma = dmb = dm*.5
-    if breaksym:
-        dma, dmb = _break_dm_spin_symm(mol, (dma, dmb))
-    return numpy.array((dma,dmb))
+def init_guess_by_sap(mol, sap_basis, breaksym=None, **kwargs):
+    mf = UHF(mol)
+    mf.sap_basis = sap_basis
+    return mf.init_guess_by_sap(mol, breaksym)
 
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for UHF initial guess.
@@ -129,7 +113,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         dm = make_rdm1([fproj(mo[0]),fproj(mo[1])], mo_occ)
     return dm
 
-def _break_dm_spin_symm(mol, dm, breaksym==1):
+def _break_dm_spin_symm(mol, dm, breaksym=1):
     dma, dmb = dm
     # For spin polarized system, no need to manually break spin symmetry
     if breaksym and mol.spin == 0 and abs(dma - dmb).max() < 1e-2:
@@ -868,12 +852,25 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         if breaksym is None: breaksym = self.init_guess_breaksym
         # For spin polarized system, no need to manually break spin symmetry
-        return init_guess_by_minao(mol, breaksym)
+        dm = hf.init_guess_by_minao(mol)
+        dma = dmb = dm*.5
+        dma, dmb = _break_dm_spin_symm(mol, (dma, dmb), breaksym)
+        return numpy.array((dma, dmb))
 
     def init_guess_by_atom(self, mol=None, breaksym=None):
         if mol is None: mol = self.mol
         if breaksym is None: breaksym = self.init_guess_breaksym
-        return init_guess_by_atom(mol, breaksym)
+        dm = hf.init_guess_by_atom(mol)
+        dma = dmb = dm*.5
+        if mol.spin == 0 and breaksym:
+            if breaksym == 1:
+                #Add off-diagonal part for alpha DM
+                dma = mol.intor_symmetric('int1e_ovlp') * 1e-2
+                for b0, b1, p0, p1 in mol.aoslice_by_atom():
+                    dma[p0:p1,p0:p1] = dmb[p0:p1,p0:p1]
+            else:
+                dma, dmb = _break_dm_spin_symm(mol, (dma, dmb), breaksym)
+        return numpy.array((dma,dmb))
 
     def init_guess_by_huckel(self, mol=None, breaksym=None):
         if mol is None: mol = self.mol
@@ -888,11 +885,9 @@ class UHF(hf.SCF):
             dma, dmb = _break_dm_spin_symm(mol, (dma, dmb))
         return numpy.array((dma,dmb))
 
-    def init_guess_by_mod_huckel(self, mol=None, breaksym=BREAKSYM):
+    def init_guess_by_mod_huckel(self, mol=None, breaksym=None):
         if mol is None: mol = self.mol
-        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
-        if user_set_breaksym is not None:
-            breaksym = user_set_breaksym
+        if breaksym is None: breaksym = self.init_guess_breaksym
         logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
 employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol, updated_rule = True)
@@ -920,9 +915,10 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
             dma, dmb = _break_dm_spin_symm(mol, (dma, dmb), breaksym)
         return numpy.array((dma,dmb))
 
-    def init_guess_by_sap(self, mol=None, breaksym=BREAKSYM, **kwargs):
+    def init_guess_by_sap(self, mol=None, breaksym=None, **kwargs):
         from pyscf.gto.basis import load
         if mol is None: mol = self.mol
+        if breaksym is None: breaksym = self.init_guess_breaksym
         sap_basis = self.sap_basis
         logger.info(self, '''Initial guess from superposition of atomic potentials (doi:10.1021/acs.jctc.8b01089)
 This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
@@ -941,11 +937,11 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
             for key in sap_basis:
                 sapbas[key] = numpy.asarray(sap_basis[key][0][1:], dtype=float)
         else:
-            logger.error(self, 'sap_basis is of an unexpected datatype.')
-        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
-        if user_set_breaksym is not None:
-            breaksym = user_set_breaksym
-        return init_guess_by_sap(mol, sap_basis=sapbas, breaksym=breaksym)
+            raise RuntimeError('sap_basis is of an unexpected datatype.')
+        dm = hf.init_guess_by_sap(mol, sapbas)
+        dma = dmb = dm*.5
+        dma, dmb = _break_dm_spin_symm(mol, (dma, dmb), breaksym)
+        return numpy.array((dma,dmb))
 
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile

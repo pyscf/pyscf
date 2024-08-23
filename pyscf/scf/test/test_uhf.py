@@ -76,7 +76,7 @@ class KnownValues(unittest.TestCase):
         dm2 = scf.uhf.get_init_guess(mol, key='minao')
         self.assertAlmostEqual(abs(dm2).sum(), 12.913908927027279, 9)
         mf.init_guess_breaksym = 2
-        dm1 = mf.init_guess_by_minao(mol, breaksym=True)
+        dm1 = mf.init_guess_by_minao(mol)
         self.assertAlmostEqual(abs(dm1).sum(), 13.649710173723337, 9)
 
     def test_init_guess_1e(self):
