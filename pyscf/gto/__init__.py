@@ -24,5 +24,4 @@ from pyscf.gto.moleintor import getints, getints_by_shell
 from pyscf.gto.eval_gto import eval_gto
 from pyscf.gto import ecp
 
-parse = basis.parse
 #import pyscf.gto.mole.cmd_args

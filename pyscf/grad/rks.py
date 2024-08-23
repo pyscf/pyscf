@@ -52,7 +52,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = get_vxc_full_response(ni, mol, grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
-        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        if mf.do_nlc():
             if ni.libxc.is_nlc(mf.xc):
                 xc = mf.xc
             else:
@@ -66,7 +66,7 @@ def get_veff(ks_grad, mol=None, dm=None):
     else:
         exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
-        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        if mf.do_nlc():
             if ni.libxc.is_nlc(mf.xc):
                 xc = mf.xc
             else:
@@ -92,7 +92,6 @@ def get_veff(ks_grad, mol=None, dm=None):
 
 def _initialize_grids(ks_grad):
     mf = ks_grad.base
-    ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids
     else:
@@ -101,7 +100,7 @@ def _initialize_grids(ks_grad):
         grids.build(with_non0tab=True)
 
     nlcgrids = None
-    if mf.nlc or ni.libxc.is_nlc(mf.xc):
+    if mf.do_nlc():
         if ks_grad.nlcgrids is not None:
             nlcgrids = ks_grad.nlcgrids
         else:
@@ -585,14 +584,12 @@ class Gradients(rhf_grad.Gradients):
     # the kernel function can be reused in the DFT gradients code.
     grid_response = getattr(__config__, 'grad_rks_Gradients_grid_response', False)
 
+    _keys = {'grid_response', 'grids', 'nlcgrids'}
+
     def __init__(self, mf):
         rhf_grad.Gradients.__init__(self, mf)
         self.grids = None
         self.nlcgrids = None
-        # This parameter has no effects for HF gradients. Add this attribute so that
-        # the kernel function can be reused in the DFT gradients code.
-        self.grid_response = False
-        self._keys = self._keys.union(['grid_response', 'grids', 'nlcgrids'])
 
     def dump_flags(self, verbose=None):
         rhf_grad.Gradients.dump_flags(self, verbose)
@@ -625,3 +622,4 @@ Grad = Gradients
 
 from pyscf import dft
 dft.rks.RKS.Gradients = dft.rks_symm.RKS.Gradients = lib.class_as_method(Gradients)
+dft.roks.ROKS.Gradients = lib.invalid_method('Gradients')

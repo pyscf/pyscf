@@ -34,7 +34,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     r'''Evaluate PBC-AO function value on the given grids,
 
     Args:
-        eval_name : str
+        eval_name : str::
 
             ==========================  =======================
             Function                    Expression
@@ -167,8 +167,8 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
 pbc_eval_gto = eval_gto
 
 def _estimate_rcut(cell):
-    '''Cutoff raidus, above which each shell decays to a value less than the
-    required precsion'''
+    '''Cutoff radius, above which each shell decays to a value less than the
+    required precision'''
     vol = cell.vol
     weight_penalty = vol # ~ V[r] * (vol/ngrids) * ngrids
     precision = cell.precision / max(weight_penalty, 1)

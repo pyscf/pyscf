@@ -21,7 +21,6 @@ Analytical Fourier transformation AO-pair product for PBC
 '''
 
 import ctypes
-import copy
 import numpy as np
 from pyscf import lib
 from pyscf import gto
@@ -34,7 +33,7 @@ from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
-# kecut=10 can rougly converge GTO with alpha=0.5
+# kecut=10 can roughly converge GTO with alpha=0.5
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
 
 STEEP_BASIS = 0
@@ -426,7 +425,7 @@ class _RangeSeparatedCell(pbcgto.Cell):
 
     def compact_basis_cell(self):
         '''Construct a cell with only the smooth part of the AO basis'''
-        cell_c = copy.copy(self)
+        cell_c = self.copy(deep=False)
         mask = self.bas_type != SMOOTH_BASIS
         cell_c._bas = self._bas[mask]
         cell_c.bas_map = cell_c.bas_map[mask]
@@ -527,8 +526,9 @@ class _RangeSeparatedCell(pbcgto.Cell):
         assign(SMOOTH_BASIS)
         return ao_type
 
-    def decontract_basis(self, to_cart=True):
-        pcell, ctr_coeff = self.ref_cell.decontract_basis(to_cart=to_cart)
+    def decontract_basis(self, to_cart=True, aggregate=False):
+        pcell, ctr_coeff = self.ref_cell.decontract_basis(to_cart=to_cart,
+                                                          aggregate=aggregate)
         pcell = pcell.view(self.__class__)
         pcell.ref_cell = None
 
@@ -633,21 +633,23 @@ class ExtendedMole(gto.Mole):
         dim = rs_cell.dimension
         if dim == 0:
             return self
-        supmol_bas_coords = self.atom_coords()[self._bas[:,gto.ATOM_OF]]
-        rb = np.linalg.norm(supmol_bas_coords[:,:dim], axis=1)
-        a = rs_cell.lattice_vectors()
+
+        # Search the shortest distance to the reference cell for each atom in the supercell.
+        atom_coords = self.atom_coords()
+        d = np.linalg.norm(atom_coords[:,None] - rs_cell.atom_coords(), axis=2)
+        shortest_dist = np.min(d, axis=1)
+        bas_dist = shortest_dist[self._bas[:,gto.ATOM_OF]]
 
         # filter _bas
         nbas0 = self._bas.shape[0]
-        if rb.size == self.bas_mask.size:
-            dr = rb - np.linalg.norm(a[:dim])
-            dr = dr.reshape(self.bas_mask.shape)
-            self.bas_mask = bas_mask = dr < rcut[:,None]
+        if bas_dist.size == self.bas_mask.size:
+            bas_dist = bas_dist.reshape(self.bas_mask.shape)
+            self.bas_mask = bas_mask = bas_dist < rcut[:,None]
             self._bas = self._bas[bas_mask.ravel()]
         else:
             dr = np.empty(self.bas_mask.shape)
             dr[:] = 1e9
-            dr[self.bas_mask] = rb - np.linalg.norm(a[:dim])
+            dr[self.bas_mask] = bas_dist
             bas_mask = dr < rcut[:,None]
             self._bas = self._bas[bas_mask[self.bas_mask]]
             self.bas_mask = bas_mask
@@ -744,7 +746,13 @@ def estimate_rcut(cell, precision=None):
     Q_ij ~ S_ij * (sqrt(2aij/pi) * aij**(lij*2) * (4*lij-1)!!)**.5
     '''
     if precision is None:
-        precision = cell.precision
+        # The rcut estimated with this function is sufficient to converge
+        # the integrals to the required precision. Errors around the required
+        # precision is found when checking hermitian symmetry of the integrals.
+        # The discrepancy in hermitian symmetry may cause issues in post-HF
+        # methods which assume the hermitian symmetry in MO integrals.
+        # Therefore precision is adjusted to ensure hermitian symmetry.
+        precision = cell.precision * 1e-2
 
     if cell.nbas == 0:
         return np.zeros(1)

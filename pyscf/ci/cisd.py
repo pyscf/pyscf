@@ -23,6 +23,7 @@ Solve CISD equation  H C = C e  where e = E_HF + E_CORR
 
 from functools import reduce
 import numpy
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import ccsd
@@ -776,32 +777,34 @@ def as_scanner(ci):
         return ci
 
     logger.info(ci, 'Set %s as a scanner', ci.__class__)
+    name = ci.__class__.__name__ + CISD_Scanner.__name_mixin__
+    return lib.set_class(CISD_Scanner(ci), (CISD_Scanner, ci.__class__), name)
 
-    class CISD_Scanner(ci.__class__, lib.SinglePointScanner):
-        def __init__(self, ci):
-            self.__dict__.update(ci.__dict__)
-            self._scf = ci._scf.as_scanner()
-        def __call__(self, mol_or_geom, ci0=None, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class CISD_Scanner(lib.SinglePointScanner):
+    def __init__(self, ci):
+        self.__dict__.update(ci.__dict__)
+        self._scf = ci._scf.as_scanner()
 
-            self.reset(mol)
+    def __call__(self, mol_or_geom, ci0=None, **kwargs):
+        if isinstance(mol_or_geom, gto.Mole):
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            mf_scanner = self._scf
-            mf_scanner(mol)
-            self.mo_coeff = mf_scanner.mo_coeff
-            self.mo_occ = mf_scanner.mo_occ
-            if getattr(self.ci, 'size', 0) != self.vector_size():
-                self.ci = None
-            if ci0 is None:
-                # FIXME: Whether to use the initial guess from last step?
-                # If root flips, large errors may be found in the solutions
-                ci0 = self.ci
-            self.kernel(ci0, **kwargs)[0]
-            return self.e_tot
-    return CISD_Scanner(ci)
+        self.reset(mol)
+
+        mf_scanner = self._scf
+        mf_scanner(mol)
+        self.mo_coeff = mf_scanner.mo_coeff
+        self.mo_occ = mf_scanner.mo_occ
+        if getattr(self.ci, 'size', 0) != self.vector_size():
+            self.ci = None
+        if ci0 is None:
+            # FIXME: Whether to use the initial guess from last step?
+            # If root flips, large errors may be found in the solutions
+            ci0 = self.ci
+        self.kernel(ci0, **kwargs)[0]
+        return self.e_tot
 
 
 class CISD(lib.StreamObject):
@@ -857,17 +860,20 @@ class CISD(lib.StreamObject):
     direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
     async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
 
+    _keys = {
+        'conv_tol', 'max_cycle', 'max_space', 'lindep',
+        'level_shift', 'direct', 'async_io', 'mol', 'max_memory',
+        'nroots', 'frozen', 'chkfile', 'converged', 'mo_coeff', 'mo_occ',
+        'e_hf', 'e_corr', 'emp2', 'ci',
+    }
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import hf
         if isinstance(mf, hf.KohnShamDFT):
-            raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
-                               'CISD calculation should be initialized with HF object.\n'
-                               'DFT object can be converted to HF object with '
-                               'the code below:\n'
-                               '    mf_hf = scf.RHF(mol)\n'
-                               '    if getattr(mf_dft, "with_x2c", False):\n'
-                               '        mf_hf = mf_hf.x2c()\n'
-                               '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
+            raise RuntimeError(
+                'CISD Warning: The first argument mf is a DFT object. '
+                'CISD calculation should be initialized with HF object.\n'
+                'DFT can be converted to HF object with the mf.to_hf() method\n')
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
         if mo_occ is None: mo_occ   = mf.mo_occ
@@ -893,10 +899,6 @@ class CISD(lib.StreamObject):
         self.ci = None
         self._nocc = None
         self._nmo = None
-
-        keys = set(('conv_tol', 'max_cycle', 'max_space', 'lindep',
-                    'level_shift', 'direct'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -1129,6 +1131,8 @@ class CISD(lib.StreamObject):
         from pyscf.grad import cisd
         return cisd.Gradients(self)
 
+    to_gpu = lib.to_gpu
+
 class RCISD(CISD):
     pass
 
@@ -1137,11 +1141,10 @@ scf.hf.RHF.CISD = lib.class_as_method(RCISD)
 scf.rohf.ROHF.CISD = None
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
+    return numpy.asarray(a, order='C')
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import ao2mo
 
     mol = gto.Mole()
@@ -1170,4 +1173,3 @@ if __name__ == '__main__':
     print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
 
     print(abs(rdm1 - numpy.einsum('ijkk->ji', rdm2)/(mol.nelectron-1)).sum())
-

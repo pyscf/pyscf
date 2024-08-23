@@ -19,6 +19,7 @@
 '''Hartree-Fock for periodic systems
 '''
 
+from pyscf.pbc import gto
 from pyscf.pbc.scf import hf
 rhf = hf
 from pyscf.pbc.scf import uhf
@@ -36,9 +37,9 @@ from pyscf.pbc.scf import newton_ah
 from pyscf.pbc.scf import addons
 from pyscf.pbc.lib import kpts as libkpts
 
+GHF = ghf.GHF
 UHF = uhf.UHF
 ROHF = rohf.ROHF
-GHF = ghf.GHF
 
 def RHF(cell, *args, **kwargs):
     if cell.spin == 0:
@@ -57,7 +58,6 @@ def KRHF(cell, *args, **kwargs):
             return khf_ksymm.KRHF(cell, *args, **kwargs)
     return krhf.KRHF(cell, *args, **kwargs)
 
-#KUHF = kuhf.KUHF
 def KUHF(cell, *args, **kwargs):
     for arg in args:
         if isinstance(arg, libkpts.KPoints):
@@ -125,4 +125,3 @@ def KROKS(cell, *args, **kwargs):
 def KUKS(cell, *args, **kwargs):
     from pyscf.pbc import dft
     return dft.KUKS(cell, *args, **kwargs)
-

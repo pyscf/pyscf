@@ -59,7 +59,8 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
         # Handle computability. link_index should be (nparray, nparray)
         link_index = link_index[0]
     na, nlink = link_index.shape[:2]
-    assert (fcivec.size == na**2)
+    assert fcivec.size == na**2
+    assert fcivec.dtype == f1e.dtype == numpy.float64
     ci1 = numpy.empty_like(fcivec)
     f1e_tril = lib.pack_tril(f1e)
     libfci.FCIcontract_1e_spin0(f1e_tril.ctypes.data_as(ctypes.c_void_p),
@@ -92,7 +93,8 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
         # Handle computability. link_index should be (nparray, nparray)
         link_index = link_index[0]
     na, nlink = link_index.shape[:2]
-    assert (fcivec.size == na**2)
+    assert fcivec.size == na**2
+    assert fcivec.dtype == eri.dtype == numpy.float64
     ci1 = numpy.empty((na,na))
 
     libfci.FCIcontract_2e_spin0(eri.ctypes.data_as(ctypes.c_void_p),
@@ -459,4 +461,3 @@ if __name__ == '__main__':
     e, c = cis.kernel(h1e, eri, norb, nelec)
     print(e - -15.9977886375)
     print('t',logger.process_clock())
-

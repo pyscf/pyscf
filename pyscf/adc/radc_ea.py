@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Abdelrahman Ahmed <>
+#         Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         James Serna <jamcar456@gmail.com>
+#         Terrence Stahl <>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
-#
 
 '''
 Restricted algebraic diagrammatic construction
@@ -912,6 +914,516 @@ def analyze(myadc):
 
         myadc.analyze_spec_factor()
 
+def make_rdm1(adc):
+
+    cput0 = (logger.process_clock(), logger.perf_counter())
+    log = logger.Logger(adc.stdout, adc.verbose)
+
+    nroots = adc.U.shape[1]
+    U = adc.renormalize_eigenvectors(nroots)
+
+    list_rdm1 = []
+
+    for i in range(U.shape[1]):
+        rdm1 = make_rdm1_eigenvectors(adc, U[:,i], U[:,i])
+        list_rdm1.append(rdm1)
+
+    cput0 = log.timer_debug1("completed OPDM calculation", *cput0)
+    return list_rdm1
+
+def make_rdm1_eigenvectors(adc, L, R):
+    # Using SQA EA
+    L = np.array(L).ravel()
+    R = np.array(R).ravel()
+
+    t1_ccee = adc.t2[0][:]
+    t2_ce = adc.t1[0][:]
+
+    nocc = adc._nocc
+    nvir = adc._nvir
+    nmo = nocc + nvir
+    n_singles = nvir
+    n_doubles = nvir * nvir * nocc
+
+    s1 = 0
+    f1 = n_singles
+    s2 = f1
+    f2 = s2 + n_doubles
+
+    rdm1  = np.zeros((nmo,nmo))
+    kd_oc = np.identity(nocc)
+
+    L1 = L[s1:f1]
+    L2 = L[s2:f2]
+    R1 = R[s1:f1]
+    R2 = R[s2:f2]
+
+    L2 = L2.reshape(nocc,nvir,nvir)
+    R2 = R2.reshape(nocc,nvir,nvir)
+
+    einsum = lib.einsum
+    einsum_type = True
+
+############# block- ij
+    ### 000 ###
+    rdm1[:nocc, :nocc] += 2 * einsum('a,a,IJ->IJ', L1, R1, kd_oc, optimize = einsum_type)
+
+    ### 101 ###
+    rdm1[:nocc, :nocc] -= 2 * einsum('Jab,Iab->IJ', L2, R2, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 1 * einsum('Jab,Iba->IJ', L2, R2, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 4 * einsum('iab,iab,IJ->IJ', L2, R2, kd_oc, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 2 * einsum('iab,iba,IJ->IJ', L2, R2, kd_oc, optimize = einsum_type)
+
+    ### 020 ###
+    rdm1[:nocc, :nocc] -= 2 * einsum('a,a,Iibc,Jibc->IJ', L1, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += einsum('a,a,Iibc,Jicb->IJ', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 2 * einsum('a,b,Iiac,Jibc->IJ', L1, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= einsum('a,b,Iiac,Jicb->IJ', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= einsum('a,b,Iica,Jibc->IJ', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += einsum('a,b,Iica,Jicb->IJ', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 2 * einsum('a,a,Iibc,Jibc->IJ', L1, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += einsum('a,a,Iibc,Jicb->IJ', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += einsum('a,b,Iica,Jicb->IJ', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+
+############# block- ab
+    ### 000 ###
+    rdm1[nocc:, nocc:] += einsum('B,A->AB', L1, R1, optimize = einsum_type)
+
+    ### 020 ###
+    rdm1[nocc:, nocc:] -= einsum('A,a,ijab,ijBb->AB', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 1/2 * einsum('A,a,ijab,jiBb->AB', L1,
+                                       R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('a,B,ijab,ijAb->AB', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 1/2 * einsum('a,B,ijab,jiAb->AB', L1,
+                                       R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 2 * einsum('a,a,ijAb,ijBb->AB', L1, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('a,a,ijAb,jiBb->AB', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('a,b,ijBa,ijAb->AB', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += einsum('a,b,ijBa,jiAb->AB', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 2 * einsum('a,a,ijAb,ijBb->AB', L1, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('a,a,ijAb,jiBb->AB', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('a,b,ijBa,ijAb->AB', L1, R1, t1_ccee,
+                                 t1_ccee, optimize = einsum_type)
+
+    ### 101 ###
+    rdm1[nocc:, nocc:] += 2 * einsum('iAa,iBa->AB', R2, R2, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('iAa,iaB->AB', R2, R2, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('iaA,iBa->AB', L2, R2, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 2 * einsum('iaA,iaB->AB', L2, R2, optimize = einsum_type)
+
+############# block- ai
+    # 020 #
+    rdm1[nocc:, :nocc] -= einsum('a,A,Ia->AI', L1, R1, t2_ce, optimize = einsum_type)
+    rdm1[nocc:, :nocc] += 2 * einsum('a,a,IA->AI', L1, R1, t2_ce, optimize = einsum_type)
+
+    # 011 #
+    rdm1[nocc:, :nocc] -= 2 * einsum('A,iab,Iiab->AI', L1, R2, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, :nocc] += einsum('A,iab,Iiba->AI', L1, R2, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, :nocc] += 2 * einsum('a,iab,IiAb->AI', L1, R2, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, :nocc] -= einsum('a,iab,iIAb->AI', L1, R2, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, :nocc] -= 2 * einsum('a,iba,IiAb->AI', L1, R2, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, :nocc] += einsum('a,iba,iIAb->AI', L1, R2, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, :nocc] += 2 * einsum('a,iab,IiAb->AI', L1, R2, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, :nocc] -= einsum('a,iab,iIAb->AI', L1, R2, t1_ccee, optimize = einsum_type)
+
+    # 110 #
+    rdm1[nocc:, :nocc] -= einsum('IAa,a->AI',L2, R1, optimize = einsum_type)
+    rdm1[nocc:, :nocc] += 2 * einsum('IaA,a->AI',L2, R1, optimize = einsum_type)
+
+############# block- ia
+    rdm1[:nocc, nocc:] = rdm1[nocc:, :nocc].T
+
+    ####### ADC(3) SPIN ADAPTED EXCITED STATE OPDM WITH SQA ################
+    if adc.method == "adc(3)":
+        ### Redudant Variables used for names from SQA
+        einsum_type = True
+        t3_ce = adc.t1[1][:]
+        t2_ccee = adc.t2[1][:]
+
+############# block- ij
+        # 120 #
+        rdm1[:nocc, :nocc] -= 2 * einsum('Jab,a,Ib->IJ', L2, R1, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, :nocc] += einsum('Jab,b,Ia->IJ', L2, R1, t2_ce, optimize = einsum_type)
+
+        # 021 #
+        rdm1[:nocc, :nocc] -= 2 * einsum('a,Iab,Jb->IJ', L1, R2, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, :nocc] += einsum('a,Iba,Jb->IJ', L1, R2, t2_ce, optimize = einsum_type)
+
+        # 030 #
+        rdm1[:nocc, :nocc] -= 4 * einsum('a,a,Iibc,Jibc->IJ', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] += 2 * einsum('a,a,Iibc,Jicb->IJ', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] -= 4 * einsum('a,a,Jibc,Iibc->IJ', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] += 2 * einsum('a,a,Jibc,Iicb->IJ', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] += 2 * einsum('a,b,Iibc,Jiac->IJ', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] -= einsum('a,b,Iibc,Jica->IJ', L1, R1,
+                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] -= einsum('a,b,Iicb,Jiac->IJ', L1, R1,
+                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] += 2 * einsum('a,b,Iicb,Jica->IJ', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] += 2 * einsum('a,b,Jiac,Iibc->IJ', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] -= einsum('a,b,Jiac,Iicb->IJ', L1, R1,
+                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] -= einsum('a,b,Jica,Iibc->IJ', L1, R1,
+                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] += 2 * einsum('a,b,Jica,Iicb->IJ', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+
+############# block- ab
+        # 120 #
+        rdm1[nocc:, nocc:] -= einsum('iAa,a,iB->AB', L2, R1, t2_ce, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += 2 * einsum('iaA,a,iB->AB', L2, R1, t2_ce, optimize = einsum_type)
+
+        # 021 #
+        rdm1[nocc:, nocc:] += 2 * einsum('a,iaB,iA->AB', L1, R2, t2_ce, optimize = einsum_type)
+        rdm1[nocc:, nocc:] -= einsum('a,iBa,iA->AB', L1, R2, t2_ce, optimize = einsum_type)
+
+        # 030 #
+        rdm1[nocc:, nocc:] -= einsum('B,a,ijAb,ijab->AB', L1, R1,
+                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += 1/2 * einsum('B,a,ijAb,jiab->AB',
+                                           L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] -= einsum('B,a,ijab,ijAb->AB', L1, R1,
+                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += 1/2 * einsum('B,a,ijab,jiAb->AB',
+                                           L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] -= einsum('a,A,ijBb,ijab->AB', L1, R1,
+                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += 1/2 * einsum('a,A,ijBb,jiab->AB',
+                                           L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] -= einsum('a,A,ijab,ijBb->AB', L1, R1,
+                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += 1/2 * einsum('a,A,ijab,jiBb->AB',
+                                           L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += 4 * einsum('a,a,ijAb,ijBb->AB', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] -= 2 * einsum('a,a,ijAb,jiBb->AB', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += 4 * einsum('a,a,ijBb,ijAb->AB', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] -= 2 * einsum('a,a,ijBb,jiAb->AB', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] -= 2 * einsum('a,b,ijAa,ijBb->AB', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += einsum('a,b,ijAa,jiBb->AB', L1, R1,
+                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] -= 2 * einsum('a,b,ijBb,ijAa->AB', L1,
+                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += einsum('a,b,ijBb,jiAa->AB', L1, R1,
+                                     t1_ccee, t2_ccee, optimize = einsum_type)
+
+############# block- ia
+        # 120 #
+        rdm1[:nocc, nocc:] -= 2 * einsum('iab,A,Iiab->IA', L2, R1, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('iab,A,Iiba->IA', L2, R1, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 4 * einsum('iab,a,IiAb->IA', L2, R1, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 2 * einsum('iab,a,iIAb->IA', L2, R1, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 2 * einsum('iab,b,IiAa->IA', L2, R1, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('iab,b,iIAa->IA', L2, R1, t2_ccee, optimize = einsum_type)
+
+        # 021 #
+        rdm1[:nocc, nocc:] -= einsum('a,Iab,ijbc,ijAc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,Iab,ijbc,jiAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,Ibc,ijAa,jibc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('a,iaA,ijbc,Ijbc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iaA,ijbc,Ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('a,iab,ijbc,IjAc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iab,ijbc,jIAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iab,ijcb,IjAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iab,ijcb,jIAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,ibA,Ijca,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,ibc,IjAa,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+
+        rdm1[:nocc, nocc:] -= einsum('a,Iab,ijbc,ijAc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,Iab,ijbc,jiAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('a,Iba,ijbc,ijAc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,Iba,ijbc,jiAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,Ibc,ijAa,ijbc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,Ibc,ijAa,jibc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('a,iAa,ijbc,Ijbc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iAa,ijbc,Ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('a,iAb,Ijac,ijbc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iAb,Ijac,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iAb,Ijca,ijbc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iAb,Ijca,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('a,iaA,ijbc,Ijbc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iaA,ijbc,Ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('a,iab,ijbc,IjAc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iab,ijbc,jIAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iab,ijcb,IjAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iab,ijcb,jIAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('a,ibA,Ijac,ijbc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,ibA,Ijac,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,ibA,Ijca,ijbc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,ibA,Ijca,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('a,iba,ijbc,IjAc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iba,ijbc,jIAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iba,ijcb,IjAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iba,ijcb,jIAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,ibc,IjAa,ijbc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,ibc,IjAa,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,ibc,jIAa,ijbc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,ibc,jIAa,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+
+        rdm1[:nocc, nocc:] += einsum('a,iab,ijbc,IjAc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iab,ijbc,jIAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iab,ijcb,IjAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('a,iba,ijbc,IjAc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iba,ijbc,jIAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iba,ijcb,IjAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,ibc,IjAa,ijbc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,ibc,IjAa,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+
+        rdm1[:nocc, nocc:] -= einsum('a,iAb,Ijac,ijbc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iAb,Ijac,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,iAb,Ijca,ijbc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('a,iab,ijbc,IjAc->IA', L1, R2,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iab,ijbc,jIAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,iab,ijcb,IjAc->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('a,ibc,IjAa,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,ibc,jIAa,ijcb->IA',
+                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+
+        # 030 #
+        rdm1[:nocc, nocc:] -= einsum('A,a,Ia->IA', L1, R1, t3_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 2 * einsum('a,a,IA->IA', L1, R1, t3_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('A,a,Iiab,ib->IA', L1, R1, t1_ccee,
+                                     t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('A,a,Iiba,ib->IA', L1,
+                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 2 * einsum('a,a,IiAb,ib->IA', L1, R1,
+                                         t1_ccee, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('a,a,iIAb,ib->IA', L1, R1, t1_ccee,
+                                     t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('a,b,IiAb,ia->IA', L1, R1, t1_ccee,
+                                     t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('a,b,iIAb,ia->IA', L1,
+                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
+
+############# block- ai
+        # 120 #
+        rdm1[nocc:, :nocc] -= einsum('Iab,a,ijbc,ijAc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('Iab,a,ijbc,jiAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('Iab,c,ijab,jiAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= einsum('iaA,a,ijbc,Ijbc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iaA,a,ijbc,Ijcb->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iaA,b,ijca,Ijcb->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += einsum('iab,a,ijbc,IjAc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,a,ijbc,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,a,ijcb,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iab,a,ijcb,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,c,ijba,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+
+        rdm1[nocc:, :nocc] -= einsum('Iab,a,ijbc,ijAc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('Iab,a,ijbc,jiAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += einsum('Iab,b,ijac,ijAc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('Iab,b,ijac,jiAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('Iab,c,ijab,ijAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('Iab,c,ijab,jiAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += einsum('iAa,a,ijbc,Ijbc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iAa,a,ijbc,Ijcb->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= einsum('iAa,b,ijac,Ijbc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iAa,b,ijac,Ijcb->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iAa,b,ijca,Ijbc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iAa,b,ijca,Ijcb->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= einsum('iaA,a,ijbc,Ijbc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iaA,a,ijbc,Ijcb->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += einsum('iaA,b,ijac,Ijbc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iaA,b,ijac,Ijcb->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iaA,b,ijca,Ijbc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iaA,b,ijca,Ijcb->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += einsum('iab,a,ijbc,IjAc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,a,ijbc,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,a,ijcb,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iab,a,ijcb,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= einsum('iab,b,ijac,IjAc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iab,b,ijac,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iab,b,ijca,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,b,ijca,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iab,c,ijab,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,c,ijab,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,c,ijba,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iab,c,ijba,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+
+        rdm1[nocc:, :nocc] += einsum('iab,a,ijbc,IjAc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,a,ijbc,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,a,ijcb,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= einsum('iab,b,ijac,IjAc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iab,b,ijac,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iab,b,ijca,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iab,c,ijab,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,c,ijba,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+
+        rdm1[nocc:, :nocc] -= einsum('iAa,b,ijac,Ijbc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iAa,b,ijac,Ijcb->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iAa,b,ijca,Ijbc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += einsum('iab,a,ijbc,IjAc->AI', L2, R1,
+                                     t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,a,ijbc,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,a,ijcb,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 1/2 * einsum('iab,c,ijba,IjAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('iab,c,ijba,jIAc->AI',
+                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+
+        # 021 #
+        rdm1[nocc:, :nocc] -= 2 * einsum('A,iab,Iiab->AI', L1, R2, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += einsum('A,iab,Iiba->AI', L1, R2, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 4 * einsum('a,iab,IiAb->AI', L1, R2, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 2 * einsum('a,iab,iIAb->AI', L1, R2, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= 2 * einsum('a,iba,IiAb->AI', L1, R2, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += einsum('a,iba,iIAb->AI', L1, R2, t2_ccee, optimize = einsum_type)
+
+        # 030 #
+        rdm1[nocc:, :nocc] -= einsum('a,A,Ia->AI', L1, R1, t3_ce, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 2 * einsum('a,a,IA->AI', L1, R1, t3_ce, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= einsum('a,A,Iiab,ib->AI', L1, R1, t1_ccee,
+                                     t2_ce, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('a,A,Iiba,ib->AI', L1,
+                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 2 * einsum('a,a,IiAb,ib->AI', L1, R1,
+                                         t1_ccee, t2_ce, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= einsum('a,a,iIAb,ib->AI', L1, R1, t1_ccee,
+                                     t2_ce, optimize = einsum_type)
+        rdm1[nocc:, :nocc] -= einsum('a,b,IiAa,ib->AI', L1, R1, t1_ccee,
+                                     t2_ce, optimize = einsum_type)
+        rdm1[nocc:, :nocc] += 1/2 * einsum('a,b,iIAa,ib->AI', L1,
+                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
+    return rdm1
+
 
 def compute_dyson_mo(myadc):
 
@@ -966,6 +1478,14 @@ class RADCEA(radc.RADC):
             Spectroscopic amplitudes for each EA transition.
     '''
 
+    _keys = {
+        'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
+        'mo_energy', 't1', 'max_space', 't2', 'max_cycle',
+        'nmo', 'transform_integrals', 'with_df', 'compute_properties',
+        'approx_trans_moments', 'E', 'U', 'P', 'X',
+        'evec_print_tol', 'spec_factor_print_tol',
+    }
+
     def __init__(self, adc):
         self.mol = adc.mol
         self.verbose = adc.verbose
@@ -992,30 +1512,28 @@ class RADCEA(radc.RADC):
         self.with_df = adc.with_df
         self.compute_properties = adc.compute_properties
         self.approx_trans_moments = adc.approx_trans_moments
-        self.E = None
-        self.U = None
-        self.P = None
-        self.X = None
+
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
 
-        keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
-                    'mo_energy', 'max_memory', 't1', 'max_space', 't2',
-                    'max_cycle'))
-
-        self._keys = set(self.__dict__.keys()).union(keys)
+        self.E = adc.E
+        self.U = adc.U
+        self.P = adc.P
+        self.X = adc.X
 
     kernel = radc.kernel
     get_imds = get_imds
     matvec = matvec
     get_diag = get_diag
     get_trans_moments = get_trans_moments
-    renormalize_eigenvectors = renormalize_eigenvectors
     get_properties = get_properties
+
+    renormalize_eigenvectors = renormalize_eigenvectors
+    analyze = analyze
     analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector
-    analyze = analyze
     compute_dyson_mo = compute_dyson_mo
+    make_rdm1 = make_rdm1
 
     def get_init_guess(self, nroots=1, diag=None, ascending=True):
         if diag is None :

@@ -115,7 +115,7 @@ def select_strs(myci, eri, eri_pq_max, civec_max, strs, norb, nelec):
     strs = numpy.asarray(strs, dtype=numpy.int64)
     nstrs = len(strs)
     nvir = norb - nelec
-    strs_add = numpy.empty((nstrs*(nelec*nvir)**2//4), dtype=numpy.int64)
+    strs_add = numpy.empty((nstrs*((nelec+1)*(nvir+1))**2//4), dtype=numpy.int64)
     libfci.SCIselect_strs.restype = ctypes.c_int
     nadd = libfci.SCIselect_strs(strs_add.ctypes.data_as(ctypes.c_void_p),
                                  strs.ctypes.data_as(ctypes.c_void_p),
@@ -731,6 +731,11 @@ class SelectedCI(direct_spin1.FCISolver):
     start_tol = getattr(__config__, 'fci_selected_ci_SCI_start_tol', 3e-4)
     tol_decay_rate = getattr(__config__, 'fci_selected_ci_SCI_tol_decay_rate', 0.3)
 
+    _keys = {
+        'ci_coeff_cutoff', 'select_cutoff', 'conv_tol', 'start_tol',
+        'tol_decay_rate',
+    }
+
     def __init__(self, mol=None):
         direct_spin1.FCISolver.__init__(self, mol)
 
@@ -739,9 +744,6 @@ class SelectedCI(direct_spin1.FCISolver):
         #self.converged = False
         #self.ci = None
         self._strs = None
-        keys = set(('ci_coeff_cutoff', 'select_cutoff', 'conv_tol',
-                    'start_tol', 'tol_decay_rate'))
-        self._keys = self._keys.union(keys)
 
     def dump_flags(self, verbose=None):
         direct_spin1.FCISolver.dump_flags(self, verbose)
@@ -900,7 +902,7 @@ def _all_linkstr_index(ci_strs, norb, nelec):
     dd_indexb = des_des_linkstr_tril(ci_strs[1], norb, nelec[1])
     return cd_indexa, dd_indexa, cd_indexb, dd_indexb
 
-# numpy.ndarray does not allow to attach attribtues.  Overwrite the
+# numpy.ndarray does not allow to attach attributes.  Overwrite the
 # numpy.ndarray class to tag the ._strs attribute
 class SCIvector(numpy.ndarray):
     '''An 2D np array for selected CI coefficients'''

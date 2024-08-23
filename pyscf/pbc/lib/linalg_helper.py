@@ -294,7 +294,7 @@ def diagonalize_asymm(H):
     return E,C
 
 
-class Arnoldi(object):
+class Arnoldi:
     def __init__(self,matr_multiply,xStart,inPreCon,nroots=1,tol=1e-10):
         self.matrMultiply = matr_multiply
         self.size = xStart.shape[0]
@@ -557,7 +557,7 @@ class Arnoldi(object):
             self.constructSubspace()
 
 
-class DavidsonZL(object):
+class DavidsonZL:
     def __init__(self):
         self.maxcycle = 200
         self.crit_e = 1.e-7
@@ -649,7 +649,7 @@ class DavidsonZL(object):
                 if tmp <= self.crit_e: nconv1+=1
             if VERBOSE: print(' No. of converged eigval:',nconv1)
             if nconv1 == neig:
-                if VERBOSE: print(' Cong: all eignvalues converged ! ')
+                if VERBOSE: print(' Cong: all eigenvalues converged ! ')
             eigs = teig.copy()
 
             # Full Residuals: Res[i]=Res'[i]-w[i]*X[i]

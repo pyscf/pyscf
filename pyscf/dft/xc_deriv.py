@@ -19,6 +19,9 @@
 Transform XC functional derivatives between different representations
 '''
 
+import math
+import itertools
+from functools import lru_cache
 import ctypes
 import numpy as np
 from pyscf import lib
@@ -449,100 +452,202 @@ def _stack_fggg(fggg, axis=0, rho=None):
     fggg = _stack_fg(fggg, axis=axis+1, rho=rho)
     return _stack_fg(fggg, axis=axis, rho=rho)
 
-def compress(vp, spin=0):
-    if spin != 0:  # spin polarized
-        shape = vp.shape
-        comp_shape = [shape[i*2]*shape[i*2+1] for i in range(0, vp.ndim-1, 2)]
-        vp = vp.reshape(comp_shape + [shape[-1]])
+@lru_cache(100)
+def _product_uniq_indices(nvars, order):
+    '''
+    Indexing the symmetry unique elements in cartesian product
+    '''
+    # n = 0
+    # for i range(nvars):
+    #    for j in range(i, nvars):
+    #        for k in range(k, nvars):
+    #            ...
+    #            prod[(i,j,k,...)] = n
+    #            n += 1
+    prod = np.ones([nvars] * order, dtype=int)
+    uniq_idx = list(itertools.combinations_with_replacement(range(nvars), order))
+    prod[tuple(np.array(uniq_idx).T)] = np.arange(len(uniq_idx))
 
-    order = vp.ndim - 1
-    if order < 2:
-        pass
-    elif order == 2:  # 2nd derivatives
-        vp = vp[np.tril_indices(vp.shape[0])]
-    elif order == 3:  # 2nd derivatives
-        nd = vp.shape[0]
-        vp = np.vstack([vp[i][np.tril_indices(i+1)] for i in range(nd)])
+    idx = np.where(prod)
+    sidx = np.sort(idx, axis=0)
+    prod[idx] = prod[tuple(sidx)]
+    return prod
+
+def _pair_combinations(lst):
+    n = len(lst)
+    if n <= 2:
+        return [[tuple(lst)]]
+    a = lst[0]
+    results = []
+    for i in range(1, n):
+        pair = (a, lst[i])
+        rests = _pair_combinations(lst[1:i]+lst[i+1:])
+        for rest in rests:
+            rest.append(pair)
+        results.extend(rests)
+    return results
+
+def _unfold_gga(rho, xc_val, spin, order, nvar, xlen, reserve=0):
+    assert nvar >= 4
+    ngrids = rho.shape[-1]
+    n_transform = order - reserve
+
+    if spin == 0:
+        nvar2 = nvar
+        drv = libdft.VXCunfold_sigma_spin0
     else:
-        raise NotImplementedError('High order derivatives')
-    return vp
+        nvar2 = nvar * 2
+        drv = libdft.VXCunfold_sigma_spin1
 
-def decompress(vp, spin=0):
-    order = vp.ndim - 1
-    ngrids = vp.shape[-1]
-    if order < 2:
-        out = vp
-    elif order == 2:  # 2nd derivatives
-        nd = vp.shape[0]
-        out = np.empty((nd, nd, ngrids))
-        idx, idy = np.tril_indices(nd)
-        out[idx,idy] = vp
-        out[idy,idx] = vp
-    elif order == 3:  # 2nd derivatives
-        nd = vp.shape[0]
-        out = np.empty((nd, nd, nd, ngrids))
-        p1 = 0
-        for i in range(nd):
-            idx, idy = np.tril_indices(i+1)
-            p0, p1 = p1, p1+idx.size
-            out[i,idx,idy] = vp[p0:p1]
-            out[i,idy,idx] = vp[p0:p1]
-            out[idx,i,idy] = vp[p0:p1]
-            out[idy,i,idx] = vp[p0:p1]
-            out[idx,idy,i] = vp[p0:p1]
-            out[idy,idx,i] = vp[p0:p1]
+    # xc_val[idx] expands unique xc elements to n-order tensors
+    idx = _product_uniq_indices(xlen, order)
+    xc_tensor = np.empty((xlen**reserve * nvar2**n_transform, ngrids))
+    xc_tensor[:idx.size] = xc_val[idx.ravel()]
+    buf = np.empty_like(xc_tensor)
+    for i in range(n_transform):
+        xc_tensor, buf = buf, xc_tensor
+        ncounts = xlen**(order-1-i) * nvar2**i
+        drv(xc_tensor.ctypes, buf.ctypes, rho.ctypes,
+            ctypes.c_int(ncounts), ctypes.c_int(nvar), ctypes.c_int(ngrids))
+    if spin == 0:
+        xc_tensor = xc_tensor.reshape([xlen]*reserve + [nvar]*n_transform + [ngrids])
     else:
-        raise NotImplementedError('High order derivatives')
+        xc_tensor = xc_tensor.reshape([xlen]*reserve + [2,nvar]*n_transform + [ngrids])
+    return xc_tensor
 
-    if spin != 0:  # spin polarized
-        shape = out.shape
-        nvar = shape[0] // 2
-        decomp_shape = [(2, nvar)] * order + [ngrids]
-        # reshape to (2,n,2,n,...,ngrids)
-        out = out.reshape(np.hstack(decomp_shape))
-    return out
+def _diagonal_indices(idx, order):
+    assert order > 0
+    n = len(idx)
+    diag_idx = [np.asarray(idx)]
+    for i in range(1, order):
+        last_dim = diag_idx[-1]
+        diag_idx = [np.repeat(idx, n) for x in diag_idx]
+        diag_idx.append(np.tile(last_dim, n))
+    # repeat(diag_idx, 2)
+    return tuple(x for x in diag_idx for i in range(2))
+
+_XC_NVAR = {
+    ('HF', 0): (1, 1),
+    ('HF', 1): (1, 2),
+    ('LDA', 0): (1, 1),
+    ('LDA', 1): (1, 2),
+    ('GGA', 0): (4, 2),
+    ('GGA', 1): (4, 5),
+    ('MGGA', 0): (5, 3),
+    ('MGGA', 1): (5, 7),
+}
+
+def transform_xc(rho, xc_val, xctype, spin, order):
+    '''General transformation to construct XC derivative tensor'''
+    xc_val = np.asarray(xc_val, order='C')
+    if order == 0:
+        return xc_val[0]
+
+    nvar, xlen = _XC_NVAR[xctype, spin]
+    ngrids = xc_val.shape[-1]
+    offsets = [0] + [count_combinations(xlen, o) for o in range(order+1)]
+    p0, p1 = offsets[order:order+2]
+    if xctype == 'LDA' or xctype == 'HF':
+        xc_out = xc_val[p0:p1]
+        if spin == 0:
+            return xc_out.reshape([1]*order + [ngrids])
+        else:
+            idx = _product_uniq_indices(xlen, order)
+            return xc_out[idx].reshape([2,1]*order + [ngrids])
+
+    rho = np.asarray(rho, order='C')
+    assert rho.size == (spin+1) * nvar * ngrids
+    xc_tensor = _unfold_gga(rho, xc_val[p0:p1], spin, order, nvar, xlen)
+    nabla_idx = np.arange(1, 4)
+    if spin == 0:
+        for n_pairs in range(1, order//2+1):
+            p0, p1 = offsets[order-n_pairs:order-n_pairs+2]
+            xc_sub = _unfold_gga(rho, xc_val[p0:p1], spin, order-n_pairs,
+                                 nvar, xlen, n_pairs)
+            # Just the sigma components
+            xc_sub = xc_sub[(1,)*n_pairs] * 2**n_pairs
+
+            # low_sigmas indicates the index for the extra sigma terms
+            low_sigmas = itertools.combinations(range(order), n_pairs*2)
+            pair_combs = [list(itertools.chain(*p[::-1]))
+                          for p in _pair_combinations(list(range(n_pairs*2)))]
+            diag_idx = _diagonal_indices(nabla_idx, n_pairs)
+
+            for dim_lst in low_sigmas:
+                rest_dims = [i for i in range(xc_tensor.ndim) if i not in dim_lst]
+                for pair_comb in pair_combs:
+                    xc_tensor_1 = xc_tensor.transpose(
+                        [dim_lst[i] for i in pair_comb] + rest_dims)
+                    xc_tensor_1[diag_idx] += xc_sub
+    else:
+        i3to2x2 = _product_uniq_indices(2, 2)
+        for n_pairs in range(1, order//2+1):
+            p0, p1 = offsets[order-n_pairs:order-n_pairs+2]
+            xc_sub = _unfold_gga(rho, xc_val[p0:p1], spin, order-n_pairs,
+                                 nvar, xlen, n_pairs)
+            # Just the sigma components
+            xc_sub = xc_sub[(slice(2,5),) * n_pairs]
+            for i in range(n_pairs):
+                xc_sub[(slice(None),)*i+(0,)] *= 2
+                xc_sub[(slice(None),)*i+(2,)] *= 2
+            sigma_idx = (i3to2x2[(slice(None),)*2 + (np.newaxis,)*(i*2)]
+                         for i in reversed(range(n_pairs)))
+            xc_sub = xc_sub[tuple(sigma_idx)]
+
+            low_sigmas = itertools.combinations(range(order), n_pairs*2)
+            pair_combs = [list(itertools.chain(*p[::-1]))
+                          for p in _pair_combinations(list(range(n_pairs*2)))]
+            diag_idx = _diagonal_indices(nabla_idx, n_pairs)
+
+            for dim_lst in low_sigmas:
+                dim_lst2 = np.array(dim_lst)*2 + np.array([1, 0])[:,None]
+                rest_dims = [i for i in range(xc_tensor.ndim) if i not in dim_lst2]
+                for pair_comb in pair_combs:
+                    leading_dims = list(dim_lst2[:,pair_comb].ravel())
+                    xc_tensor_1 = xc_tensor.transpose(leading_dims + rest_dims)
+                    xc_tensor_1[diag_idx] += xc_sub
+    return xc_tensor
+
+def count_combinations(nvar, order):
+    '''sum(len(combinations_with_replacement(range(nvar), o) for o in range(order))'''
+    return lib.comb(nvar+order, order)
 
 def ud2ts(v_ud):
     '''XC derivatives spin-up/spin-down representations to
     total-density/spin-density representations'''
     v_ud = np.asarray(v_ud, order='C')
-    nvar, ngrids = v_ud.shape[-2:]
-    #:c = np.array([[.5,  .5],    # vrho = (va + vb) / 2
-    #:              [.5, -.5]])   # vs   = (va - vb) / 2
-    if v_ud.ndim == 3:  # vxc
-        #:v_ts = np.einsum('ra,axg->rxg', c, v_ud)
-        drv = libdft.VXCud2ts_deriv1
-    elif v_ud.ndim == 5:  # fxc
-        #:v_ts = np.einsum('ra,axbyg->rxbyg', c, v_ud)
-        #:v_ts = np.einsum('sb,rxbyg->rxsyg', c, v_ts)
-        drv = libdft.VXCud2ts_deriv2
-    elif v_ud.ndim == 7:  # kxc
-        #:v_ts = np.einsum('ra,axbyczg->rxbyczg', c, v_ud)
-        #:v_ts = np.einsum('sb,rxbyczg->rxsyczg', c, v_ts)
-        #:v_ts = np.einsum('tc,rxsyczg->rxsytzg', c, v_ts)
-        drv = libdft.VXCud2ts_deriv3
-    else:
-        raise NotImplementedError(f'Shape {v_ud.shape} not supported')
     v_ts = np.empty_like(v_ud)
-    drv(v_ts.ctypes.data_as(ctypes.c_void_p),
-        v_ud.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(nvar), ctypes.c_int(ngrids))
+    nvar, ngrids = v_ts.shape[-2:]
+    nvar2 = nvar * 2
+    order = v_ud.ndim // 2
+    drv = libdft.VXCud2ts
+    v_ts, v_ud = v_ud, v_ts
+    for i in range(order):
+        v_ts, v_ud = v_ud, v_ts
+        n = nvar2**i
+        nvg = nvar * nvar2**(order-1-i) * ngrids
+        #:c = np.array([[.5,  .5],    # vrho = (va + vb) / 2
+        #:              [.5, -.5]])   # vs   = (va - vb) / 2
+        #:v_ts = np.einsum('ra,...ax...g->...rx...g', c, v_ud)
+        drv(v_ts.ctypes, v_ud.ctypes, ctypes.c_int(n), ctypes.c_int(nvg))
     return v_ts
 
 def ts2ud(v_ts):
     '''XC derivatives total-density/spin-density representations to
     spin-up/spin-down representations'''
-    c = np.array([[1,  1],    # va = vrho + vs
-                  [1, -1]])   # vb = vrho - vs
-    if v_ts.ndim == 3:  # vxc
-        v_ud = np.einsum('ra,axg->rxg', c, v_ts)
-    elif v_ts.ndim == 5:  # fxc
-        v_ud = np.einsum('ra,axbyg->rxbyg', c, v_ts)
-        v_ud = np.einsum('sb,rxbyg->rxsyg', c, v_ud)
-    elif v_ts.ndim == 7:  # kxc
-        v_ud = np.einsum('ra,axbyczg->rxbyczg', c, v_ts)
-        v_ud = np.einsum('sb,rxbyczg->rxsyczg', c, v_ud)
-        v_ud = np.einsum('tc,rxsyczg->rxsytzg', c, v_ud)
-    else:
-        raise NotImplementedError(f'Shape {v_ts.shape} not supported')
+    v_ts = np.asarray(v_ts, order='C')
+    v_ud = np.empty_like(v_ts)
+    nvar, ngrids = v_ts.shape[-2:]
+    nvar2 = nvar * 2
+    order = v_ud.ndim // 2
+    drv = libdft.VXCts2ud
+    v_ts, v_ud = v_ud, v_ts
+    for i in range(order):
+        v_ts, v_ud = v_ud, v_ts
+        n = nvar2**i
+        nvg = nvar * nvar2**(order-1-i) * ngrids
+        #:c = np.array([[1,  1],    # va = vrho + vs
+        #:              [1, -1]])   # vb = vrho - vs
+        #:v_ud = np.einsum('ra,...ax...g->...rx...g', c, v_ts)
+        drv(v_ud.ctypes, v_ts.ctypes, ctypes.c_int(n), ctypes.c_int(nvg))
     return v_ud

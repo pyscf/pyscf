@@ -5,6 +5,7 @@ Conversion from the Basis Set Exchange format to PySCF format
 '''
 
 try:
+    import basis_set_exchange
     from basis_set_exchange import lut, manip, sort
 except ImportError:
     basis_set_exchange = None

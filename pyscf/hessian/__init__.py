@@ -25,5 +25,6 @@ from pyscf.hessian.rhf import hess_nuc
 try:
     from . import rks
     from . import uks
+    from . import dispersion
 except (ImportError, IOError):
     pass

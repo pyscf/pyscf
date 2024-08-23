@@ -206,7 +206,7 @@ class KnownValues(unittest.TestCase):
         t = num // (3**9)
         degit = 12**2
         for i in range(3):
-            trans[i] = ( float( ( t % ( degit * 12 ) ) // degit ) ) / 12.;
+            trans[i] = ( float( ( t % ( degit * 12 ) ) // degit ) ) / 12.
             degit = degit // 12
         op = spg.SPGElement(rot, trans)
         self.assertTrue(hash(op) == num)

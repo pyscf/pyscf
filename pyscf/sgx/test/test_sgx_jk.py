@@ -41,6 +41,7 @@ class KnownValues(unittest.TestCase):
         #dm = dm + dm.T
         mf = scf.UHF(mol)
         dm = mf.get_init_guess()
+        vjref, vkref = scf.hf.get_jk(mol, dm)
 
         sgxobj = sgx.SGX(mol)
         sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-10)
@@ -53,6 +54,8 @@ class KnownValues(unittest.TestCase):
             vj1, vk1 = sgx_jk.get_jk_favork(sgxobj, dm)
         self.assertAlmostEqual(abs(vj1-vj).max(), 0, 9)
         self.assertAlmostEqual(abs(vk1-vk).max(), 0, 9)
+        self.assertAlmostEqual(abs(vjref-vj).max(), 0, 2)
+        self.assertAlmostEqual(abs(vkref-vk).max(), 0, 2)
 
         with lib.temporary_env(sgxobj, debug=False):
             vj, vk = sgx_jk.get_jk_favorj(sgxobj, dm)
@@ -62,6 +65,8 @@ class KnownValues(unittest.TestCase):
             vj1, vk1 = sgx_jk.get_jk_favorj(sgxobj, dm)
         self.assertAlmostEqual(abs(vj1-vj).max(), 0, 9)
         self.assertAlmostEqual(abs(vk1-vk).max(), 0, 9)
+        self.assertAlmostEqual(abs(vjref-vj).max(), 0, 2)
+        self.assertAlmostEqual(abs(vkref-vk).max(), 0, 2)
 
     def test_dfj(self):
         mol = gto.Mole()
@@ -136,4 +141,3 @@ class PJunctionScreening(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for sgx_jk")
     unittest.main()
-

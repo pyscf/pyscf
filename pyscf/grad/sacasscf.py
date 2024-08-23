@@ -14,11 +14,12 @@
 # limitations under the License.
 #
 
-import copy, gc
+import gc
 import numpy as np
 from functools import reduce
 from itertools import product
 from scipy import linalg
+from pyscf import gto
 from pyscf.grad import lagrange
 from pyscf.mcscf.addons import StateAverageMCSCFSolver, StateAverageFCISolver
 from pyscf.mcscf.addons import StateAverageMixFCISolver, state_average_mix_
@@ -352,7 +353,6 @@ def as_scanner(mcscf_grad, state=None):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf import gto
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
 
@@ -360,35 +360,53 @@ def as_scanner(mcscf_grad, state=None):
     #    return casscf_grad.as_scanner (mcscf_grad)
 
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
+    name = mcscf_grad.__class__.__name__ + CASSCF_GradScanner.__name_mixin__
+    return lib.set_class(CASSCF_GradScanner(mcscf_grad, state),
+                         (CASSCF_GradScanner, mcscf_grad.__class__), name)
 
-    class CASSCF_GradScanner(mcscf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-            if state is None:
-                self.state = g.state
-            else:
-                self.state = state
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
-            self.reset(mol)
-            if 'state' in kwargs: self.state = kwargs['state']
-            mc_scanner = self.base
-            e_tot = mc_scanner(mol)
-            if hasattr (mc_scanner, 'e_mcscf'): self.e_mcscf = mc_scanner.e_mcscf
-            if hasattr (mc_scanner, 'e_states') and self.state is not None:
-                e_tot = mc_scanner.e_states[self.state]
-            if not ('state' in kwargs):
-                kwargs['state'] = self.state
-            de = self.kernel(**kwargs)
-            return e_tot, de
+class CASSCF_GradScanner(lib.GradScanner):
+    def __init__(self, g, state):
+        lib.GradScanner.__init__(self, g)
+        if state is None:
+            self.state = g.state
+        else:
+            self.state = state
+        self._converged = False
 
-    return CASSCF_GradScanner(mcscf_grad)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+        self.reset(mol)
+        if 'state' in kwargs: self.state = kwargs['state']
+        mc_scanner = self.base
+        e_tot = mc_scanner(mol)
+        if hasattr (mc_scanner, 'e_mcscf'): self.e_mcscf = mc_scanner.e_mcscf
+        if hasattr (mc_scanner, 'e_states') and self.state is not None:
+            e_tot = mc_scanner.e_states[self.state]
+        if not ('state' in kwargs):
+            kwargs['state'] = self.state
+        de = self.kernel(**kwargs)
+        return e_tot, de
+
+    @property
+    def converged(self):
+        return self._converged
+    @converged.setter
+    def converged(self, x):
+        self._converged = x
 
 
 class Gradients (lagrange.Gradients):
+
+    _keys = {
+        'ngorb', 'nroots', 'spin_states', 'na_states', 'nb_states', 'nroots',
+        'nci', 'state', 'eris', 'weights', 'e_states', 'max_cycle', 'ncas',
+        'e_cas', 'nelecas', 'mo_occ', 'mo_energy', 'mo_coeff', 'callback',
+        'chkfile', 'nlag', 'frozen', 'level_shift', 'extrasym', 'fcisolver',
+    }
 
     def __init__(self, mc, state=None):
         self.__dict__.update (mc.__dict__)
@@ -488,14 +506,12 @@ class Gradients (lagrange.Gradients):
             else:
                 solver_class = self.base.fcisolver._base_class
                 solver_obj = self.base.fcisolver
-            fcasscf.fcisolver = solver_class (self.base.mol)
-            fcasscf.fcisolver.__dict__.update (solver_obj.__dict__)
+            fcasscf.fcisolver = solver_obj.view(solver_class)
             fcasscf.fcisolver.nroots = 1
         # Spin penalty method is inapplicable to response calc'ns
         # It must be deactivated for Lagrange multipliers to converge
         if isinstance (fcasscf.fcisolver, SpinPenaltyFCISolver):
-            fcasscf.fcisolver = copy.copy (fcasscf.fcisolver)
-            fcasscf.fcisolver.ss_penalty = 0
+            fcasscf.fcisolver = fcasscf.fcisolver.undo_fix_spin()
         fcasscf.__dict__.update (casscf_attr)
         fcasscf.nelecas = nelecas
         fcasscf.fcisolver.__dict__.update (fcisolver_attr)
@@ -525,8 +541,7 @@ class Gradients (lagrange.Gradients):
         fcasscf.__dict__.update (self.base.__dict__)
         if isinstance (self.base, StateAverageMCSCFSolver):
             if isinstance (self.base.fcisolver, StateAverageMixFCISolver):
-                fcisolvers = [copy.copy (f) for f in
-                              self.base.fcisolver.fcisolvers]
+                fcisolvers = [f.copy() for f in self.base.fcisolver.fcisolvers]
                 # Spin penalty method is inapplicable to response calc'ns
                 # It must be deactivated for Lagrange multipliers to converge
                 for i in range (len (fcisolvers)):
@@ -539,7 +554,7 @@ class Gradients (lagrange.Gradients):
         # Spin penalty method is inapplicable to response calc'ns
         # It must be deactivated for Lagrange multipliers to converge
         if isinstance (fcasscf.fcisolver, SpinPenaltyFCISolver):
-            fcasscf.fcisolver = copy.copy (fcasscf.fcisolver)
+            fcasscf.fcisolver = fcasscf.fcisolver.copy()
             fcasscf.fcisolver.ss_penalty = 0
         fcasscf.__dict__.update (casscf_attr)
         fcasscf.fcisolver.__dict__.update (fcisolver_attr)
@@ -556,7 +571,6 @@ class Gradients (lagrange.Gradients):
             eris = self.eris = self.base.ao2mo (mo)
         if mf_grad is None: mf_grad = self.base._scf.nuc_grad_method ()
         if state is None:
-            self.converged = True
             return casscf_grad.Gradients (self.base).kernel (
                 mo_coeff=mo, ci=ci, atmlst=atmlst, verbose=verbose)
         if e_states is None:
@@ -768,6 +782,11 @@ class SACASLagPrec (lagrange.LagPrec):
         Make the operand's matrix element with <K|Rci(I) before taking the dot product!
 '''
 
+    _keys = {
+        'level_shift', 'nroots', 'nlag', 'ngorb', 'spin_states', 'na_states',
+        'nb_states', 'grad_method', 'Rorb', 'ci', 'Rci', 'Rci_sa',
+    }
+
     # TODO: fix me (subclass me? wrap me?) for state_average_mix
     def __init__(self, Adiag=None, level_shift=None, ci=None, grad_method=None):
         self.level_shift = level_shift
@@ -857,7 +876,7 @@ class SACASLagPrec (lagrange.LagPrec):
                 except Exception as e:
                     print (i, j, desort_spin)
                     raise (e)
-        assert (all ([i is not None for i in Mxci]))
+        assert (all (i is not None for i in Mxci))
         return Mxci
 
 mcscf.addons.StateAverageMCSCFSolver.Gradients = lib.class_as_method(Gradients)

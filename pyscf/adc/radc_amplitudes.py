@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Abdelrahman Ahmed <>
+#         Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         James Serna <jamcar456@gmail.com>
+#         Terrence Stahl <>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -526,7 +529,10 @@ def compute_energy(myadc, t2, eris):
     e_mp = 2 * lib.einsum('ijab,iabj', t2_new, eris_ovvo,optimize=True)
     e_mp -= lib.einsum('ijab,ibaj', t2_new, eris_ovvo,optimize=True)
 
+    logger.info(myadc, "Reference correlation energy (doubles): %.8f", e_mp)
+
     del t2_new
+
     return e_mp
 
 
@@ -570,4 +576,3 @@ def _create_t2_h5cache():
     '''
     tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     return h5py.File(tmpfile.name, 'w')
-

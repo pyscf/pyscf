@@ -43,16 +43,14 @@ References:
   https://doi.org/10.1016/B978-0-12-386013-2.00003-6
 '''
 
-import sys
 import numpy
-from pkg_resources import parse_version
 
-try:
-    import cppe
-except ModuleNotFoundError:
-    sys.stderr.write('cppe library was not found\n')
-    sys.stderr.write(__doc__)
-    raise
+import cppe
+from packaging.version import parse as _parse_version
+min_version = '0.3.1'
+if _parse_version(cppe.__version__) < _parse_version(min_version):
+    raise ModuleNotFoundError("cppe version {} is required at least. "
+                              "Version {} was found.".format(min_version, cppe.__version__))
 
 from pyscf import lib
 from pyscf.lib import logger
@@ -154,6 +152,12 @@ def _get_element_row(symbol):
 
 
 class PolEmbed(lib.StreamObject):
+    _keys = {
+        'mol', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
+        'equilibrium_solvation', 'options', 'do_ecp', 'eef', 'cppe_state',
+        'potentials', 'V_es', 'ecpmol', 'e', 'v',
+    }
+
     def __init__(self, mol, options_or_potfile):
         self.mol = mol
         self.stdout = mol.stdout
@@ -178,13 +182,6 @@ class PolEmbed(lib.StreamObject):
         else:
             options = options_or_potfile
 
-        min_version = "0.3.1"
-        if parse_version(cppe.__version__) < parse_version(min_version):
-            raise ModuleNotFoundError("cppe version {} is required at least. "
-                                      "Version {}"
-                                      " was found.".format(min_version,
-                                                           cppe.__version__))
-
         if not isinstance(options, dict):
             raise TypeError("Options should be a dictionary.")
 
@@ -208,7 +205,7 @@ class PolEmbed(lib.StreamObject):
                 element_row = _get_element_row(p.element)
                 ecp_label, _ = _pe_ecps[element_row]
                 ecpatoms.append([ecp_label, p.x, p.y, p.z])
-            self.ecpmol = gto.M(atom=ecpatoms, ecp={l: k for (l, k) in _pe_ecps},
+            self.ecpmol = gto.M(atom=ecpatoms, ecp=dict(_pe_ecps),
                                 basis={}, unit="Bohr")
             # add the normal mol to compute integrals
             self.ecpmol += self.mol
@@ -219,8 +216,6 @@ class PolEmbed(lib.StreamObject):
         self.e = None
         self.v = None
         self._dm = None
-
-        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         logger.info(self, '******** %s flags ********', self.__class__)
@@ -391,7 +386,7 @@ class PolEmbed(lib.StreamObject):
                                       implemented for order > 2.""")
 
         op = 0
-        for p0, p1 in lib.prange_split(all_sites.size, n_chunks):
+        for p0, p1 in lib.prange_split(all_sites.shape[0], n_chunks):
             sites = all_sites[p0:p1]
             orders = all_orders[p0:p1]
             moments = all_moments[p0:p1]

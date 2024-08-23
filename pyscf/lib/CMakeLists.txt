@@ -29,6 +29,7 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   endif()
 endif()
 set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")
+set(CMAKE_C_STANDARD 99)
 
 option(BUILD_MARCH_NATIVE "gcc flag -march=native" off)
 if (BUILD_MARCH_NATIVE)
@@ -100,6 +101,10 @@ if(ENABLE_OPENMP)
   endif()
 endif()
 
+if(NOT XCFUN_MAX_ORDER)
+  set(XCFUN_MAX_ORDER 3)
+endif()
+
 #find_package(PythonInterp REQUIRED)
 #find_package(PythonLibs REQUIRED)
 #execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
@@ -131,6 +136,9 @@ else ()
   set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib:\$ORIGIN/deps/lib64")
 endif ()
 
+option(ENABLE_FFTW "Using fftw3" OFF)
+option(BUILD_FFTW "Building fftw3" OFF)
+
 add_subdirectory(np_helper)
 add_subdirectory(gto)
 add_subdirectory(vhf)
@@ -141,6 +149,11 @@ add_subdirectory(ri)
 #add_subdirectory(localizer)
 add_subdirectory(pbc)
 add_subdirectory(agf2)
+
+option(ENABLE_SMD "Compiling SMD Fortran code" OFF)
+if(ENABLE_SMD)
+  add_subdirectory(solvent)
+endif(ENABLE_SMD)
 
 # Overwrite CMAKE_C_CREATE_SHARED_LIBRARY in Modules/CMakeCInformation.cmake
 # to remove the SONAME flag in the so file. The soname information causes
@@ -155,16 +168,18 @@ option(USE_QCINT "Using the qcint library (optimized for x86-64) for gaussian in
 
 if(BUILD_LIBCINT)
   set(LIBCINT_GIT https://github.com/sunqm/libcint.git) # libcint is a portable, cross-platform implementation
+  set(LIBCINT_VERSION v6.1.1)
   if (USE_QCINT)
     set(LIBCINT_GIT https://github.com/sunqm/qcint.git) # qcint is an optimized implementation for x86-64 architecture
+    set(LIBCINT_VERSION v6.1.2)
     if(NOT BUILD_MARCH_NATIVE)
-      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")    
+      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")
     endif()
   endif()
 
   ExternalProject_Add(libcint
     GIT_REPOSITORY ${LIBCINT_GIT}
-    GIT_TAG v5.4.0
+    GIT_TAG ${LIBCINT_VERSION}
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE
@@ -191,6 +206,12 @@ option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
 option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
+option(ENABLE_LIBXSMM "Using libxsmm" OFF)
+option(BUILD_LIBXSMM "Building libxsmm" OFF)
+if(APPLE)
+    set(ENABLE_LIBXSMM OFF)
+endif()
+
 if(NOT DISABLE_DFT)
 add_subdirectory(dft)
 
@@ -215,17 +236,14 @@ endif() # ENABLE_LIBXC
 
 if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
-    #GIT_REPOSITORY https://github.com/sunqm/xcfun.git
-    GIT_REPOSITORY https://github.com/fishjojo/xcfun.git
-    # copy of v2.1.1, downgrade to cmake 3.5
-    GIT_TAG cmake-3.5
-    # Range seperated parameters can be set in the python code. This patch to
-    # RSH omega is not needed anymore.
-    #PATCH_COMMAND patch -p1 < ${PROJECT_SOURCE_DIR}/libxcfun.patch
+    GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
+    GIT_TAG a89b783
+    # This patch adds the xcfun derivative order up to 5
+    PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || true
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
-            -DXCFUN_MAX_ORDER=3 -DENABLE_TESTALL=0
+            -DXCFUN_MAX_ORDER=${XCFUN_MAX_ORDER} -DENABLE_TESTALL=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_CXX_CREATE_SHARED_LIBRARY=${CXX_LINK_TEMPLATE}
             -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
@@ -233,7 +251,38 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
   add_dependencies(xcfun_itrf libxcfun)
   add_dependencies(dft libxcfun)
 endif() # ENABLE_XCFUN
+
+if(ENABLE_LIBXSMM AND BUILD_LIBXSMM)
+  if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/libxsmm.h")
+    ExternalProject_Add(libxsmm
+      GIT_REPOSITORY https://github.com/hfp/libxsmm.git
+      GIT_TAG 1.17
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      CONFIGURE_COMMAND ""
+      BUILD_IN_SOURCE True
+      BUILD_COMMAND make -j4 PREFIX=<INSTALL_DIR> CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} STATIC=0 MALLOC=0 INTRINSICS=2 install
+      INSTALL_COMMAND ""
+    )
+    add_dependencies(dft libxsmm)
+  endif()
+endif()
 endif() # DISABLE_DFT
+
+if(ENABLE_FFTW AND BUILD_FFTW)
+#  if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/fftw3.h")
+    ExternalProject_Add(libfftw3
+      URL https://www.fftw.org/fftw-3.3.10.tar.gz
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      BUILD_IN_SOURCE True
+      CONFIGURE_COMMAND ./configure --enable-static=no --enable-shared=yes --enable-threads CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} prefix=<INSTALL_DIR>
+      BUILD_COMMAND make -j4 install
+    )
+    add_dependencies(fft libfftw3)
+    add_dependencies(pbc libfftw3)
+#  endif()
+endif()
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.user.inc")
   include("${PROJECT_SOURCE_DIR}/cmake.user.inc")

@@ -28,7 +28,6 @@ Ref:
 '''
 
 import os
-import copy
 import ctypes
 import warnings
 import tempfile
@@ -39,7 +38,6 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger, zdotCN
 from pyscf.df.outcore import _guess_shell_ranges
-from pyscf.gto import ANG_OF
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.tools import pbc as pbctools
@@ -75,6 +73,10 @@ class _RSGDFBuilder(Int3cBuilder):
     # first, and ED is called only if CD fails.
     j2c_eig_always = False
     linear_dep_threshold = LINEAR_DEP_THR
+
+    _keys = {
+        'mesh', 'omega', 'rs_auxcell', 'supmol_ft'
+    }
 
     def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
         self.mesh = None
@@ -169,9 +171,9 @@ class _RSGDFBuilder(Int3cBuilder):
         self.rs_auxcell = rs_auxcell = ft_ao._RangeSeparatedCell.from_cell(
             auxcell, self.ke_cutoff, verbose=log)
 
-        rcut_sr = estimate_rcut(rs_cell, rs_auxcell, self.omega, rs_cell.precision,
-                                self.exclude_dd_block,
-                                self.exclude_d_aux and cell.dimension > 0)
+        rcut_sr = estimate_rcut(rs_cell, rs_auxcell, self.omega,
+                                exclude_dd_block=self.exclude_dd_block,
+                                exclude_d_aux=self.exclude_d_aux and cell.dimension > 0)
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_sr.max(), log)
         supmol.omega = -self.omega
         self.supmol = supmol.strip_basis(rcut_sr)
@@ -179,7 +181,7 @@ class _RSGDFBuilder(Int3cBuilder):
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
         if self.has_long_range():
-            rcut = estimate_ft_rcut(rs_cell, cell.precision, self.exclude_dd_block)
+            rcut = estimate_ft_rcut(rs_cell, exclude_dd_block=self.exclude_dd_block)
             supmol_ft = _ExtendedMoleFT.from_cell(rs_cell, kmesh, rcut.max(), log)
             supmol_ft.exclude_dd_block = self.exclude_dd_block
             self.supmol_ft = supmol_ft.strip_basis(rcut)
@@ -382,10 +384,9 @@ class _RSGDFBuilder(Int3cBuilder):
         # separated temporary file can avoid this issue.  The DF intermediates may
         # be terribly huge. The temporary file should be placed in the same disk
         # as cderi_file.
-        swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
-        fswap = lib.H5TmpFile(swapfile.name)
+        fswap = lib.H5TmpFile(dir=os.path.dirname(cderi_file), prefix='.outcore_auxe2_swap')
         # Unlink swapfile to avoid trash files
-        swapfile = None
+        os.unlink(fswap.filename)
 
         log = logger.new_logger(self)
         cell = self.cell
@@ -553,6 +554,9 @@ class _RSGDFBuilder(Int3cBuilder):
         log = logger.new_logger(self)
         cell = self.cell
         cell_d = self.rs_cell.smooth_basis_cell()
+        assert cell_d.low_dim_ft_type != 'inf_vacuum'
+        assert cell_d.dimension > 1
+
         auxcell = self.auxcell
         nao = cell_d.nao
         naux = auxcell.nao
@@ -924,7 +928,7 @@ class _RSGDFBuilder(Int3cBuilder):
                                    'j3c', shls_slice, kk_idx=kk_idx)
         cpu1 = log.timer('pass1: real space int3c2e', *cpu0)
 
-        feri = h5py.File(cderi_file, 'w')
+        feri = lib.H5FileWrap(cderi_file, 'w')
         feri['kpts'] = kpts
         feri['aosym'] = aosym
 
@@ -1013,7 +1017,7 @@ def get_nuc(nuc_builder):
     return nuc
 
 def get_pp(nuc_builder):
-    '''get the periodic pseudotential nuc-el ao matrix, with g=0 removed.
+    '''get the periodic pseudopotential nuc-el ao matrix, with g=0 removed.
 
     kwargs:
         mesh: custom mesh grids. by default mesh is determined by the
@@ -1041,6 +1045,9 @@ def _int_dd_block(dfbuilder, fakenuc, intor='int3c2e', comp=None):
     t0 = (logger.process_clock(), logger.perf_counter())
     cell = dfbuilder.cell
     cell_d = dfbuilder.rs_cell.smooth_basis_cell()
+    assert cell_d.low_dim_ft_type != 'inf_vacuum'
+    assert cell_d.dimension > 1
+
     nao = cell_d.nao
     kpts = dfbuilder.kpts
     nkpts = kpts.shape[0]
@@ -1088,7 +1095,6 @@ def _int_dd_block(dfbuilder, fakenuc, intor='int3c2e', comp=None):
 
 class _RSNucBuilder(_RSGDFBuilder):
 
-    exclude_dd_block = True
     exclude_d_aux = False
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
@@ -1137,14 +1143,14 @@ class _RSNucBuilder(_RSGDFBuilder):
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
         rcut_sr = estimate_rcut(rs_cell, fakenuc, self.omega,
-                                rs_cell.precision, self.exclude_dd_block)
+                                exclude_dd_block=self.exclude_dd_block)
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_sr.max(), log)
         supmol.omega = -self.omega
         self.supmol = supmol.strip_basis(rcut_sr)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
-        rcut = estimate_ft_rcut(rs_cell, cell.precision, self.exclude_dd_block)
+        rcut = estimate_ft_rcut(rs_cell, exclude_dd_block=self.exclude_dd_block)
         supmol_ft = _ExtendedMoleFT.from_cell(rs_cell, kmesh, rcut.max(), log)
         supmol_ft.exclude_dd_block = self.exclude_dd_block
         self.supmol_ft = supmol_ft.strip_basis(rcut)
@@ -1330,13 +1336,20 @@ def _guess_omega(cell, kpts, mesh=None):
     # enough to truncate the interaction.
     # omega_min = estimate_omega_min(cell, cell.precision*1e-2)
     omega_min = OMEGA_MIN
-    ke_min = estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
+    ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
     a = cell.lattice_vectors()
 
     if mesh is None:
         nkpts = len(kpts)
-        ke_cutoff = 20. * nkpts**(-1./3)
+        ke_cutoff = 20. * (cell.nao/25 * nkpts)**(-1./3)
         ke_cutoff = max(ke_cutoff, ke_min)
+        # avoid large omega since numerical issues were found in Rys
+        # polynomials when computing SR integrals with nroots > 3
+        exps = [e for l, e in zip(cell._bas[:,gto.ANG_OF], cell.bas_exps()) if l != 0]
+        if exps:
+            omega_max = np.hstack(exps).min()**.5 * 2
+            ke_max = estimate_ke_cutoff_for_omega(cell, omega_max)
+            ke_cutoff = min(ke_cutoff, ke_max)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
         mesh = np.asarray(mesh)
@@ -1393,7 +1406,7 @@ def _round_off_to_odd_mesh(mesh):
     # the conjugation symmetry between the k-points k and -k.
     # When building the DF integral tensor in function _make_j3c, the symmetry
     # between k and -k is used (function conj_j2c) to overcome the error
-    # caused by auxiliary basis linear dependency. More detalis of this
+    # caused by auxiliary basis linear dependency. More details of this
     # problem can be found in function _make_j3c.
     if isinstance(mesh, (int, np.integer)):
         return (mesh // 2) * 2 + 1
@@ -1404,7 +1417,8 @@ def estimate_rcut(rs_cell, rs_auxcell, omega, precision=None,
                   exclude_dd_block=False, exclude_d_aux=False):
     '''Estimate rcut for 3c2e SR-integrals'''
     if precision is None:
-        precision = rs_cell.precision
+        # Adjust precision a little bit as errors are found slightly larger than cell.precision.
+        precision = rs_cell.precision * 1e-1
 
     if rs_cell.nbas == 0 or rs_auxcell.nbas == 0:
         return np.zeros(1)
@@ -1492,7 +1506,9 @@ def estimate_ft_rcut(rs_cell, precision=None, exclude_dd_block=False):
     Q_ij ~ S_ij * (sqrt(2aij/pi) * aij**(lij*2) * (4*lij-1)!!)**.5
     '''
     if precision is None:
-        precision = rs_cell.precision
+        # Similar to ft_ao.estimate_rcut, adjusts precision to improve hermitian
+        # symmetry of MO integrals for post-HF.
+        precision = rs_cell.precision * 1e-2
 
     # consider only the most diffused component of a basis
     exps, cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')
@@ -1586,11 +1602,11 @@ def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     return Ecut.max()
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
-    '''The minimal omega in attenuated Coulombl given energy cutoff
+    '''The minimal omega in attenuated Coulomb given energy cutoff
     '''
     if precision is None:
         precision = cell.precision
-    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+    # estimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
     # enough to converge the 2-electron integrals. A penalty term here is to
     # reduce the error in integrals
     precision *= 1e-2

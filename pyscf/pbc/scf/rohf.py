@@ -40,11 +40,29 @@ energy_elec = mol_rohf.energy_elec
 dip_moment = pbcuhf.dip_moment
 get_rho = pbcuhf.get_rho
 
-class ROHF(pbchf.RHF, mol_rohf.ROHF):
+class ROHF(pbchf.RHF):
     '''ROHF class for PBCs.
     '''
 
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    get_init_guess = pbcuhf.UHF.get_init_guess
+    init_guess_by_chkfile = pbcuhf.UHF.init_guess_by_chkfile
+    init_guess_by_minao  = mol_rohf.ROHF.init_guess_by_minao
+    init_guess_by_atom   = mol_rohf.ROHF.init_guess_by_atom
+    init_guess_by_huckel = mol_rohf.ROHF.init_guess_by_huckel
+    init_guess_by_mod_huckel = mol_rohf.ROHF.init_guess_by_mod_huckel
+    eig = mol_rohf.ROHF.eig
+    get_fock = mol_rohf.ROHF.get_fock
+    get_occ = mol_rohf.ROHF.get_occ
+    get_grad = mol_rohf.ROHF.get_grad
+    get_rho = get_rho
+    make_rdm1 = mol_rohf.ROHF.make_rdm1
+    energy_elec = mol_rohf.ROHF.energy_elec
+    analyze = mol_rohf.ROHF.analyze
+    canonicalize = mol_rohf.ROHF.canonicalize
+    spin_square = mol_rohf.ROHF.spin_square
+    stability = mol_rohf.ROHF.stability
+    dip_moment = pbchf.SCF.dip_moment
+    to_gpu = lib.to_gpu
 
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -75,16 +93,6 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    get_rho = get_rho
-
-    eig = mol_rohf.ROHF.eig
-
-    get_fock = mol_rohf.ROHF.get_fock
-    get_occ = mol_rohf.ROHF.get_occ
-    get_grad = mol_rohf.ROHF.get_grad
-    make_rdm1 = mol_rohf.ROHF.make_rdm1
-    energy_elec = mol_rohf.ROHF.energy_elec
-
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
         if cell is None: cell = self.cell
@@ -113,10 +121,6 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
         '''
         raise NotImplementedError
 
-    dip_moment = pbchf.SCF.dip_moment
-
-    get_init_guess = pbchf.RHF.get_init_guess
-
     def init_guess_by_1e(self, cell=None):
         if cell is None: cell = self.cell
         if cell.dimension < 3:
@@ -124,19 +128,8 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
                         'the SCF of low-dimensional systems.')
         return mol_rohf.ROHF.init_guess_by_1e(self, cell)
 
-    init_guess_by_chkfile = pbcuhf.UHF.init_guess_by_chkfile
-    init_guess_by_minao  = mol_rohf.ROHF.init_guess_by_minao
-    init_guess_by_atom   = mol_rohf.ROHF.init_guess_by_atom
-    init_guess_by_huckel = mol_rohf.ROHF.init_guess_by_huckel
-
-    analyze = mol_rohf.ROHF.analyze
-    canonicalize = mol_rohf.ROHF.canonicalize
-    spin_square = mol_rohf.ROHF.spin_square
-    stability = mol_rohf.ROHF.stability
-
-    def convert_from_(self, mf):
-        '''Convert given mean-field object to RHF/ROHF'''
-        from pyscf.pbc.scf import addons
-        addons.convert_to_rhf(mf, self)
-        return self
-
+    def to_ks(self, xc='HF'):
+        '''Convert to RKS object.
+        '''
+        from pyscf.pbc import dft
+        return self._transfer_attrs_(dft.ROKS(self.cell, self.kpt, xc=xc))

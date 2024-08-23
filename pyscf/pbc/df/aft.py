@@ -19,7 +19,6 @@
 '''Density expansion on plane waves'''
 
 
-import copy
 import contextlib
 import numpy as np
 from pyscf import lib
@@ -181,7 +180,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
     raise DeprecationWarning
 
 def get_pp(mydf, kpts=None):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
 
     Kwargs:
         mesh: custom mesh grids. By default mesh is determined by the
@@ -231,7 +230,7 @@ def weighted_coulG(mydf, kpt=np.zeros(3), exx=False, mesh=None, omega=None):
 def _fake_nuc(cell, with_pseudo=True):
     '''A fake cell with steep gaussians to mimic nuclear density
     '''
-    fakenuc = copy.copy(cell)
+    fakenuc = cell.copy(deep=False)
     fakenuc._atm = cell._atm.copy()
     fakenuc._atm[:,gto.PTR_COORD] = np.arange(gto.PTR_ENV_START,
                                               gto.PTR_ENV_START+cell.natm*3,3)
@@ -335,7 +334,7 @@ class _IntPPBuilder(Int3cBuilder):
 
         rcut = self._estimate_rcut_3c1e(rs_cell, fake_cells)
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut.max(), log)
-        self.supmol = supmol.strip_basis(rcut)
+        self.supmol = supmol.strip_basis(rcut+1.)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
@@ -513,6 +512,7 @@ class AFTDFMixin:
         #TODO:
         # ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh)
         # rs_cell = ft_ao._RangeSeparatedCell.from_cell(cell, ke_cutoff, ft_ao.RCUT_THRESHOLD)
+
         rcut = ft_ao.estimate_rcut(cell)
         supmol = ft_ao.ExtendedMole.from_cell(cell, bvk_kmesh, rcut.max())
         supmol = supmol.strip_basis(rcut)
@@ -536,9 +536,9 @@ class AFTDFMixin:
         if key in self._rsh_df:
             rsh_df = self._rsh_df[key]
         else:
-            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            rsh_df = self._rsh_df[key] = self.copy().reset()
             if hasattr(self, '_dataname'):
-                rsh_df._dataname = f'{self._dataname}/lr/{key}'
+                rsh_df._dataname = f'{self._dataname}-lr/{key}'
             logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
 
         cell = self.cell
@@ -566,6 +566,11 @@ class AFTDFMixin:
 class AFTDF(lib.StreamObject, AFTDFMixin):
     '''Density expansion on plane waves
     '''
+
+    _keys = {
+        'cell', 'mesh', 'kpts', 'time_reversal_symmetry', 'blockdim',
+    }
+
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
@@ -580,7 +585,6 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
 
         # The following attributes are not input options.
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         logger.info(self, '\n')
@@ -682,7 +686,7 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
     get_mo_pairs_G = get_mo_pairs = aft_ao2mo.get_mo_pairs_G
 
     def update_mf(self, mf):
-        mf = copy.copy(mf)
+        mf = mf.copy()
         mf.with_df = self
         return mf
 
@@ -699,7 +703,7 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
         cell = self.cell
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             raise RuntimeError('ERIs of PBC-2D systems are not positive '
-                               'definite. Current API only supports postive '
+                               'definite. Current API only supports positive '
                                'definite ERIs.')
 
         if blksize is None:

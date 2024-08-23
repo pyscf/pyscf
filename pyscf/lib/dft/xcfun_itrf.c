@@ -25,12 +25,17 @@
 #include <XCFun/xcfun.h>
 #include "config.h"
 
+int XCFUN_max_deriv_order = XCFUN_MAX_DERIV_ORDER;
+
 static int eval_xc(xcfun_t* fun, int deriv, xcfun_vars vars,
-                   int np, int ncol, double *rho, double *output)
+                   int np, int ncol, int outlen, double *rho, double *output)
 {
-        xcfun_eval_setup(fun, vars, XC_PARTIAL_DERIVATIVES, deriv);
+        int err = xcfun_eval_setup(fun, vars, XC_PARTIAL_DERIVATIVES, deriv);
+        if (err != 0) {
+                fprintf(stderr, "Failed to initialize xcfun %d\n", err);
+                return err;
+        }
         assert(ncol == xcfun_input_length(fun));
-        int outlen = xcfun_output_length(fun);
 
         //xcfun_eval_vec(fun, np, rho, ncol, output, outlen);
 #pragma omp parallel default(none) \
@@ -42,14 +47,15 @@ static int eval_xc(xcfun_t* fun, int deriv, xcfun_vars vars,
                 xcfun_eval(fun, rho+i*ncol, output+i*outlen);
         }
 }
-        return outlen;
+        return 0;
 }
 
-void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
-                   int spin, int deriv, int np,
-                   double *rho_u, double *rho_d, double *output)
+int XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
+                  int spin, int deriv, int nvar, int np, int outlen,
+                  double *rho_u, double *output)
 {
-        int i, outlen;
+        int i, err;
+        double *rho_d = rho_u + np * nvar;
         double *rho;
         double *gxu, *gyu, *gzu, *gxd, *gyd, *gzd, *tau_u, *tau_d;
         const char *name;
@@ -73,13 +79,13 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                         gxu = rho_u + np;
                         gyu = rho_u + np * 2;
                         gzu = rho_u + np * 3;
-                        tau_u = rho_u + np * 5;
+                        tau_u = rho_u + np * 4;
                         for (i = 0; i < np; i++) {
                                 rho[i*3+0] = rho_u[i];
                                 rho[i*3+1] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
                                 rho[i*3+2] = tau_u[i];
                         }
-                        outlen = eval_xc(fun, deriv, XC_N_GNN_TAUN, np, 3, rho, output);
+                        err = eval_xc(fun, deriv, XC_N_GNN_TAUN, np, 3, outlen, rho, output);
                         free(rho);
                 } else if (xcfun_is_gga(fun)) {
                         rho = malloc(sizeof(double) * np*2);
@@ -90,13 +96,13 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                                 rho[i*2+0] = rho_u[i];
                                 rho[i*2+1] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
                         }
-                        outlen = eval_xc(fun, deriv, XC_N_GNN, np, 2, rho, output);
+                        err = eval_xc(fun, deriv, XC_N_GNN, np, 2, outlen, rho, output);
                         free(rho);
                 } else { // LDA
                         rho = rho_u;
-                        outlen = eval_xc(fun, deriv, XC_N, np, 1, rho, output);
+                        err = eval_xc(fun, deriv, XC_N, np, 1, outlen, rho, output);
                 }
-// xcfun computed rho*Exc[rho] for zeroth order deriviative instead of Exc[rho]
+// xcfun computed rho*Exc[rho] for zeroth order derivative instead of Exc[rho]
                 for (i = 0; i < np; i++) {
                         output[i*outlen] /= rho_u[i] + 1e-150;
                 }
@@ -109,8 +115,8 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                         gxd = rho_d + np;
                         gyd = rho_d + np * 2;
                         gzd = rho_d + np * 3;
-                        tau_u = rho_u + np * 5;
-                        tau_d = rho_d + np * 5;
+                        tau_u = rho_u + np * 4;
+                        tau_d = rho_d + np * 4;
                         for (i = 0; i < np; i++) {
                                 rho[i*7+0] = rho_u[i];
                                 rho[i*7+1] = rho_d[i];
@@ -120,7 +126,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                                 rho[i*7+5] = tau_u[i];
                                 rho[i*7+6] = tau_d[i];
                         }
-                        outlen = eval_xc(fun, deriv, XC_A_B_GAA_GAB_GBB_TAUA_TAUB, np, 7, rho, output);
+                        err = eval_xc(fun, deriv, XC_A_B_GAA_GAB_GBB_TAUA_TAUB, np, 7, outlen, rho, output);
                         free(rho);
                 } else if (xcfun_is_gga(fun)) {
                         rho = malloc(sizeof(double) * np*5);
@@ -137,7 +143,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                                 rho[i*5+3] = gxu[i]*gxd[i] + gyu[i]*gyd[i] + gzu[i]*gzd[i];
                                 rho[i*5+4] = gxd[i]*gxd[i] + gyd[i]*gyd[i] + gzd[i]*gzd[i];
                         }
-                        outlen = eval_xc(fun, deriv, XC_A_B_GAA_GAB_GBB, np, 5, rho, output);
+                        err = eval_xc(fun, deriv, XC_A_B_GAA_GAB_GBB, np, 5, outlen, rho, output);
                         free(rho);
                 } else { // LDA
                         rho = malloc(sizeof(double) * np*2);
@@ -145,7 +151,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                                 rho[i*2+0] = rho_u[i];
                                 rho[i*2+1] = rho_d[i];
                         }
-                        outlen = eval_xc(fun, deriv, XC_A_B, np, 2, rho, output);
+                        err = eval_xc(fun, deriv, XC_A_B, np, 2, outlen, rho, output);
                         free(rho);
                 }
                 for (i = 0; i < np; i++) {
@@ -153,6 +159,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                 }
         }
         xcfun_delete(fun);
+        return err;
 }
 
 /*

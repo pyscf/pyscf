@@ -273,7 +273,7 @@ def make_k4_ibz(kpts, sym='s1', return_ops=False):
             idx = np.lexsort(k4_s2.T[::-1,:])
             bz2ibz_s2 = np.arange(len(bz2ibz))
             for i in range(len(bz2ibz)):
-                bz2ibz_s2[i] = np.where(idx == ibz_s22ibz_s2_refine[ibz2ibz_s2[bz2ibz[i]]])[0]
+                bz2ibz_s2[i] = np.where(idx == ibz_s22ibz_s2_refine[ibz2ibz_s2[bz2ibz[i]]])[0][0]
             return k4_s2[idx], weight_s2[idx], bz2ibz_s2
         else:
             k4_s4 = []
@@ -410,7 +410,7 @@ def symmetrize_wavefunction(kpts, psiR_k, mesh):
     '''
     raise RuntimeError('need verification')
     psiR_k = np.asarray(psiR_k, order='C')
-    is_complex = psiR_k.dtype == np.complex
+    is_complex = np.iscomplexobj(psiR_k.dtype)
     nao = psiR_k.shape[1]
     nG = psiR_k.shape[2]
     psiR = np.zeros([kpts.nkpts,nao,nG], dtype = psiR_k.dtype, order='C')
@@ -453,35 +453,28 @@ def transform_mo_coeff(kpts, mo_coeff_ibz):
         mo_coeff_bz : ([2,] nkpts, nao, nmo) ndarray
             MO coefficients for k-points in full BZ.
     """
-    mos = []
-    is_uhf = False
-    if isinstance(mo_coeff_ibz[0][0], np.ndarray) and mo_coeff_ibz[0][0].ndim == 2:
-        is_uhf = True
-        mos = [[],[]]
-    for k in range(kpts.nkpts):
+    def _transform(kpts, mo_coeff_ibz, k):
         ibz_k_idx = kpts.bz2ibz[k]
         ibz_k_scaled = kpts.kpts_scaled_ibz[ibz_k_idx]
         iop = kpts.stars_ops_bz[k]
         op = kpts.ops[iop]
         time_reversal = kpts.time_reversal_symm_bz[k]
 
-        def _transform(mo_ibz, iop, op):
-            if op.is_eye:
-                mo_bz = mo_ibz
-            else:
-                mo_bz = symm.transform_mo_coeff(kpts.cell, ibz_k_scaled, mo_ibz, op, kpts.Dmats[iop])
-            if time_reversal:
-                mo_bz = mo_bz.conj()
-            return mo_bz
-
-        if is_uhf:
-            mo_coeff_a = mo_coeff_ibz[0][ibz_k_idx]
-            mos[0].append(_transform(mo_coeff_a, iop, op))
-            mo_coeff_b = mo_coeff_ibz[1][ibz_k_idx]
-            mos[1].append(_transform(mo_coeff_b, iop, op))
+        mo_ibz = mo_coeff_ibz[ibz_k_idx]
+        if op.is_eye:
+            mo_bz = mo_ibz
         else:
-            mo_coeff = mo_coeff_ibz[ibz_k_idx]
-            mos.append(_transform(mo_coeff, iop, op))
+            mo_bz = symm.transform_mo_coeff(kpts.cell, ibz_k_scaled, mo_ibz, op, kpts.Dmats[iop])
+        if time_reversal:
+            mo_bz = mo_bz.conj()
+        return mo_bz
+
+    if isinstance(mo_coeff_ibz[0][0], np.ndarray) and mo_coeff_ibz[0][0].ndim == 2:
+        # KUHF
+        mos = [[_transform(kpts, mo_coeff_ibz[0], k) for k in range(kpts.nkpts)],
+               [_transform(kpts, mo_coeff_ibz[1], k) for k in range(kpts.nkpts)]]
+    else:
+        mos = [_transform(kpts, mo_coeff_ibz, k) for k in range(kpts.nkpts)]
     return mos
 
 def transform_mo_coeff_k(kpts, mo_coeff_ibz, k):
@@ -1136,6 +1129,7 @@ class KQuartets:
     The class holding the symmetry relations between k-quartets.
     '''
     def __init__(self, kpts):
+        assert isinstance(kpts, KPoints)
         self.kpts = kpts
         self.kqrts_ibz = None
         self.weights_ibz = None
@@ -1179,5 +1173,4 @@ class KQuartets:
     def loop_stabilizer(self, index):
         if self._kqrts_stab is None or self._ops_stab is None:
             self.cache_stabilizer()
-        for klcd, iop in zip(self._kqrts_stab[index], self._ops_stab[index]):
-            yield klcd, iop
+        yield from zip(self._kqrts_stab[index], self._ops_stab[index])

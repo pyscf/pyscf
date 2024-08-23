@@ -24,7 +24,7 @@ from pyscf import scf
 from pyscf import df
 from pyscf import mcscf
 from pyscf.ao2mo import _ao2mo
-from pyscf.grad.rhf import GradientsMixin
+from pyscf.grad.rhf import GradientsBase
 from pyscf.df.grad.rhf import _int3c_wrapper
 from pyscf.ao2mo.outcore import balance_partition
 from pyscf.ao2mo.incore import _conc_mos
@@ -107,7 +107,7 @@ def solve_df_rdm2 (mc_or_mc_grad, mo_cas=None, ci=None, casdm2=None):
 
     # Initialize mol and auxmol
     mol = mc_or_mc_grad.mol
-    if isinstance (mc_or_mc_grad, GradientsMixin):
+    if isinstance (mc_or_mc_grad, GradientsBase):
         mc = mc_or_mc_grad.base
     else:
         mc = mc_or_mc_grad
@@ -157,7 +157,7 @@ def solve_df_eri (mc_or_mc_grad, mo_cas=None, compact=True):
 
     # Initialize mol and auxmol
     mol = mc_or_mc_grad.mol
-    if isinstance (mc_or_mc_grad, GradientsMixin):
+    if isinstance (mc_or_mc_grad, GradientsBase):
         mc = mc_or_mc_grad.base
     else:
         mc = mc_or_mc_grad
@@ -213,7 +213,7 @@ def energy_elec_dferi (mc, mo_cas=None, ci=None, dfcasdm2=None, casdm2=None):
             List of energies corresponding to the dfcasdm2s,
             E = (P|ij) d_Pij / 2 = (P|ij) (P|Q)^-1 (Q|kl) d_ijkl / 2
     '''
-    if isinstance (mc, GradientsMixin): mc = mc.base
+    if isinstance (mc, GradientsBase): mc = mc.base
     if mo_cas is None:
         ncore = mc.ncore
         nocc = ncore + mc.ncas
@@ -273,7 +273,7 @@ def gfock_dferi (mc, mo_cas=None, ci=None, dfcasdm2=None, casdm2=None, max_memor
         gfock: ndarray of shape (nset, nmo[0], nmo[1]) or (nset, nao, nao)
 
     '''
-    if isinstance (mc, GradientsMixin): mc = mc.base
+    if isinstance (mc, GradientsBase): mc = mc.base
     if mo_cas is None:
         ncore = mc.ncore
         nocc = ncore + mc.ncas
@@ -328,7 +328,7 @@ def grad_elec_auxresponse_dferi (mc_grad, mo_cas=None, ci=None, dfcasdm2=None, c
     Returns:
         dE: list of ndarray of shape (len (atmlst), 3) '''
 
-    if isinstance (mc_grad, GradientsMixin):
+    if isinstance (mc_grad, GradientsBase):
         mc = mc_grad.base
     else:
         mc = mc_grad
@@ -427,7 +427,7 @@ def grad_elec_dferi (mc_grad, mo_cas=None, ci=None, dfcasdm2=None, casdm2=None, 
 
     Returns:
         dE: ndarray of shape (len (dfcasdm2), len (atmlst), 3) '''
-    if isinstance (mc_grad, GradientsMixin):
+    if isinstance (mc_grad, GradientsBase):
         mc = mc_grad.base
     else:
         mc = mc_grad
@@ -476,7 +476,7 @@ def grad_elec_dferi (mc_grad, mo_cas=None, ci=None, dfcasdm2=None, casdm2=None, 
 
     aoslices = mol.aoslice_by_atom ()
     dE = np.array ([dE[:,p0:p1].sum (axis=1) for p0, p1 in aoslices[:,2:]]).transpose (1,0,2)
-    return np.ascontiguousarray (dE)
+    return np.ascontiguousarray (dE)[:,atmlst,:]
 
 if __name__ == '__main__':
     from pyscf.tools import molden
@@ -572,5 +572,3 @@ if __name__ == '__main__':
     print ('Analytical CASSCF gradient:\n', dE_conv)
     #print ('DF-CASSCF analytical-numerical disagreement:\n', dE-dE_num)
     print ('Analytical DF-CASSCF - CASSCF disagreement:\n', dE-dE_conv)
-
-

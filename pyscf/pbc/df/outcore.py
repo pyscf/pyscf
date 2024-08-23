@@ -38,7 +38,7 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
         kptij_lst : (*,2,3) array
             A list of (kpti, kptj)
     '''
-    if isinstance(auxcell_or_auxbasis, gto.Mole):
+    if isinstance(auxcell_or_auxbasis, gto.MoleBase):
         auxcell = auxcell_or_auxbasis
     else:
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
@@ -48,9 +48,9 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
     if isinstance(erifile, h5py.Group):
         feri = erifile
     elif h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile, 'a')
+        feri = lib.H5FileWrap(erifile, 'a')
     else:
-        feri = h5py.File(erifile, 'w')
+        feri = lib.H5FileWrap(erifile, 'w')
     if dataname in feri:
         del (feri[dataname])
     if dataname+'-kptij' in feri:
@@ -159,7 +159,7 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
         kptij_lst : (*,2,3) array
             A list of (kpti, kptj)
     '''
-    if isinstance(auxcell_or_auxbasis, gto.Mole):
+    if isinstance(auxcell_or_auxbasis, gto.MoleBase):
         auxcell = auxcell_or_auxbasis
     else:
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
@@ -169,9 +169,9 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
     if isinstance(erifile, h5py.Group):
         feri = erifile
     elif h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile, 'a')
+        feri = lib.H5FileWrap(erifile, 'a')
     else:
-        feri = h5py.File(erifile, 'w')
+        feri = lib.H5FileWrap(erifile, 'w')
     if dataname in feri:
         del (feri[dataname])
     if dataname+'-kptij' in feri:

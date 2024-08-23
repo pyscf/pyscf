@@ -38,6 +38,7 @@ from pyscf.pbc.df.aft import _check_kpts
 from pyscf.pbc.df.gdf_builder import _CCGDFBuilder
 from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
 from pyscf.pbc.df.incore import libpbc, make_auxcell
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, member, unique
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
@@ -48,12 +49,15 @@ from pyscf import __config__
 class MDF(df.GDF):
     '''Gaussian and planewaves mixed density fitting
     '''
+
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
 
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
@@ -89,13 +93,15 @@ class MDF(df.GDF):
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
+
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('_cderi_to_save', '_cderi', '_rsh_df'), reset_state=True)
 
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
         df.GDF.build(self, j_only, with_j3c, kpts_band)
         cell = self.cell
         if any(x % 2 == 0 for x in self.mesh[:cell.dimension]):
-            # Even number in mesh can produce planewaves without couterparts
+            # Even number in mesh can produce planewaves without counterparts
             # (see np.fft.fftfreq). MDF mesh is typically not enough to capture
             # all basis. The singular planewaves can break the symmetry in
             # potential (leads to non-real density) and thereby break the
@@ -211,7 +217,7 @@ class _RSMDFBuilder(_RSGDFBuilder):
 
         # For MDF, large difference may be found in results between the CD/ED
         # treatments. In some systems, small integral errors can lead to a
-        # differnece in the total energy/orbital energy around 4th decimal
+        # difference in the total energy/orbital energy around 4th decimal
         # place. Abandon CD treatment for better numerical stability
         self.j2c_eig_always = True
 
@@ -323,7 +329,7 @@ class _CCMDFBuilder(_CCGDFBuilder):
 
         # For MDF, large difference may be found in results between the CD/ED
         # treatments. In some systems, small integral errors can lead to a
-        # differnece in the total energy/orbital energy around 4th decimal
+        # difference in the total energy/orbital energy around 4th decimal
         # place. Abandon CD treatment for better numerical stability
         self.j2c_eig_always = True
 

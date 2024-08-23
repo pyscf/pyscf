@@ -22,6 +22,7 @@ import numpy as np
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
+from pyscf.pbc import scf as pbcscf
 
 
 def build_cell(mesh):
@@ -141,7 +142,32 @@ class KnownValues(unittest.TestCase):
         mf.omega = .15
         mf.conv_tol = 1e-8
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 5)
+
+    def test_to_hf(self):
+        mf = pbcdft.KRKS(cell).density_fit()
+        mf.with_df._j_only = True
+        a_hf = mf.to_hf()
+        self.assertTrue(a_hf.with_df._j_only)
+        self.assertTrue(isinstance(a_hf, pbcscf.khf.KRHF))
+
+        mf = pbcdft.KRKS(cell, kpts=cell.make_kpts([2,1,1])).density_fit()
+        mf.with_df._j_only = True
+        a_hf = mf.to_hf()
+        self.assertTrue(not a_hf.with_df._j_only)
+        self.assertTrue(isinstance(a_hf, pbcscf.khf.KRHF))
+
+        mf = pbcdft.KROKS(cell).density_fit()
+        mf.with_df._j_only = True
+        a_hf = mf.to_hf()
+        self.assertTrue(a_hf.with_df._j_only)
+        self.assertTrue(isinstance(a_hf, pbcscf.krohf.KROHF))
+
+        mf = pbcdft.KROKS(cell, kpts=cell.make_kpts([2,1,1])).density_fit()
+        mf.with_df._j_only = True
+        a_hf = mf.to_hf()
+        self.assertTrue(not a_hf.with_df._j_only)
+        self.assertTrue(isinstance(a_hf, pbcscf.krohf.KROHF))
 
 # TODO: test the reset method of pbcdft.KRKS, pbcdft.RKS whether the reset
 # methods of all subsequent objects are called

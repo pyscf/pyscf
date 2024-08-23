@@ -88,13 +88,13 @@ class PhysERI(PeriodicMFMixin, TDERIMatrixBlocks):
             The diagonal block.
         """
         # Everything is already implemented in molecular code
-        return super(PhysERI, self).tdhf_diag(k1, k2)
+        return super().tdhf_diag(k1, k2)
 
     def tdhf_diag(self, pairs=None):
         """
         Retrieves the merged diagonal block with specified or all possible k-index pairs.
         Args:
-            pairs (Iterable): pairs of k-points to assmble;
+            pairs (Iterable): pairs of k-points to assemble;
 
         Returns:
             The diagonal block.
@@ -127,7 +127,7 @@ class PhysERI(PeriodicMFMixin, TDERIMatrixBlocks):
             The corresponding block of ERI (phys notation).
         """
         # Everything is already implemented in molecular code
-        return super(PhysERI, self).eri_mknj(item, k)
+        return super().eri_mknj(item, k)
 
     def eri_mknj(self, item, pairs_row=None, pairs_column=None):
         """
@@ -214,7 +214,7 @@ class PhysERI8(PhysERI4):
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
             k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(PhysERI8, self).__init__(model, frozen=frozen)
+        super().__init__(model, frozen=frozen)
 
 
 def vector_to_amplitudes(vectors, nocc, nmo):

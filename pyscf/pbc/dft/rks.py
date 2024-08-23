@@ -65,46 +65,47 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (logger.process_clock(), logger.perf_counter())
 
     ni = ks._numint
-    if ks.nlc or ni.libxc.is_nlc(ks.xc):
-        raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
-
     hybrid = ni.libxc.is_hybrid_xc(ks.xc)
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        if ks.do_nlc():
+            raise NotImplementedError(f'MultiGrid for NLC functional {ks.xc} + {ks.nlc}')
         n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
                                        kpt.reshape(1,3), kpts_band,
                                        with_j=True, return_j=False)
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        logger.info(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
         return vxc
 
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2
                     and kpts_band is None)
-
-# Use grids.non0tab to detect whether grids are initialized.  For
-# UniformGrids, grids.coords as a property cannot indicate whehter grids are
-# initialized.
-    if ks.grids.non0tab is None:
-        ks.grids.build(with_non0tab=True)
-        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
-            ks.small_rho_cutoff > 1e-20 and ground_state):
-            ks.grids = prune_small_rho_grids_(ks, cell, dm, ks.grids, kpt)
-        t0 = logger.timer(ks, 'setting up grids', *t0)
+    ks.initialize_grids(cell, dm, kpt, ground_state)
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, hermi,
-                                        kpt, kpts_band, max_memory=max_memory)
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm, 0, hermi,
+                                kpt, kpts_band, max_memory=max_memory)
+        logger.info(ks, 'nelec by numeric integration = %s', n)
+        if ks.do_nlc():
+            if ni.libxc.is_nlc(ks.xc):
+                xc = ks.xc
+            else:
+                assert ni.libxc.is_nlc(ks.nlc)
+                xc = ks.nlc
+            n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm, 0, hermi, kpt,
+                                          max_memory=max_memory)
+            exc += enlc
+            vxc += vnlc
+            logger.info(ks, 'nelec with nlc grids = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     if not hybrid:
         vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj
     else:
-        omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
         vk *= hyb
         if omega != 0:
@@ -129,8 +130,11 @@ def _patch_df_beckegrids(density_fit):
         mf = density_fit(self, auxbasis, with_df, *args, **kwargs)
         mf.with_df._j_only = not self._numint.libxc.is_hybrid_xc(self.xc)
         mf.grids = gen_grid.BeckeGrids(self.cell)
-        mf.grids.level = getattr(__config__, 'pbc_dft_rks_RKS_grids_level',
+        mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
                                  mf.grids.level)
+        mf.nlcgrids = gen_grid.BeckeGrids(self.cell)
+        mf.nlcgrids.level = getattr(__config__, 'dft_rks_RKS_nlcgrids_level',
+                                    mf.grids.level)
         return mf
     return new_df
 
@@ -153,6 +157,8 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     if dm is None: dm = mf.make_rdm1()
     if grids is None: grids = mf.grids
     if kpt is None: kpt = mf.kpt
+    if dm[0].ndim == 2:  # the UKS density matrix
+        dm = dm[0] + dm[1]
     if isinstance(mf.with_df, multigrid.MultiGridFFTDF):
         rho = mf.with_df.get_rho(dm, kpt)
     else:
@@ -163,14 +169,22 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
 class KohnShamDFT(mol_ks.KohnShamDFT):
     '''PBC-KS'''
 
+    _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
+
+    get_rho = get_rho
+
+    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
+    rs_density_fit = _patch_df_beckegrids(pbchf.RHF.rs_density_fit)
+    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
+
     def __init__(self, xc='LDA,VWN'):
         self.xc = xc
         self.grids = gen_grid.UniformGrids(self.cell)
         self.nlc = ''
-        self.nlcgrids = None
+        self.nlcgrids = gen_grid.UniformGrids(self.cell)
         # Use rho to filter grids
         self.small_rho_cutoff = getattr(
-            __config__, 'pbc_dft_rks_RKS_small_rho_cutoff', 1e-7)
+            __config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
         # Note Do not refer to .with_df._numint because mesh/coords may be different
@@ -181,7 +195,6 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
                 self._numint = numint.KNumInt(self.kpts)
         else:
             self._numint = numint.NumInt()
-        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
     def dump_flags(self, verbose=None):
         logger.info(self, 'XC functionals = %s', self.xc)
@@ -189,19 +202,44 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         self.grids.dump_flags(verbose)
         return self
 
-    def reset(self, mol=None):
-        pbchf.SCF.reset(self, mol)
-        self.grids.reset(mol)
+    def reset(self, cell=None):
+        pbchf.SCF.reset(self, cell)
+        self.grids.reset(cell)
+        self.nlcgrids.reset(cell)
         return self
 
+    def build(self, cell=None):
+        # To handle the attribute kpt or kpts loaded from chkfile
+        if 'kpts' in self.__dict__:
+            self.kpts = self.__dict__.pop('kpts')
+        elif 'kpt' in self.__dict__:
+            self.kpt = self.__dict__.pop('kpt')
+
+        kpts = self.kpts
+        if self.rsjk:
+            if not numpy.all(self.rsjk.kpts == self.kpt):
+                self.rsjk = self.rsjk.__class__(cell, kpts)
+
+        # for GDF and MDF
+        with_df = self.with_df
+        if (self._numint.libxc.is_hybrid_xc(self.xc) and
+            len(kpts) > 1 and getattr(with_df, '_j_only', False)):
+            logger.warn(self, 'df.j_only cannot be used with hybrid functional')
+            self.with_df._j_only = False
+            self.with_df.reset()
+
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return self
+
+    @lib.with_doc(pbchf.SCF.jk_method.__doc__)
     def jk_method(self, J='FFTDF', K=None):
         if K is None:
             K = J
         if (('RS' in J or 'RS' in K) and
             not isinstance(self.grids, gen_grid.BeckeGrids)):
             self.grids = gen_grid.BeckeGrids(self.cell)
-        super().jk_method(J, K)
-        return self
+        return pbchf.SCF.jk_method(self, J, K)
 
     def to_rks(self, xc=None):
         '''Convert the input mean-field object to a RKS/ROKS object.
@@ -213,8 +251,7 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         mf = addons.convert_to_rhf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc or not isinstance(self, RKS):
-            mf.converged = False
+        mf.converged = xc == self.xc and isinstance(self, RKS)
         return mf
 
     def to_uks(self, xc=None):
@@ -227,8 +264,7 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         mf = addons.convert_to_uhf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc:
-            mf.converged = False
+        mf.converged = xc == self.xc
         return mf
 
     def to_gks(self, xc=None):
@@ -238,12 +274,45 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
+        from pyscf.pbc.dft.numint2c import NumInt2C, KNumInt2C
         mf = addons.convert_to_ghf(self)
         if xc is not None:
             mf.xc = xc
-        if xc != self.xc:
-            mf.converged = False
+        mf.converged = xc == self.xc
+        if isinstance(mf, khf.KSCF):
+            if not isinstance(mf._numint, KNumInt2C):
+                mf._numint = KNumInt2C(mf._numint.kpts)
+        else:
+            if not isinstance(mf._numint, NumInt2C):
+                mf._numint = NumInt2C()
         return mf
+
+    def to_hf(self):
+        raise NotImplementedError
+
+    def initialize_grids(self, cell, dm, kpts, ground_state=True):
+        '''Initialize self.grids the first time call get_veff'''
+        if self.grids.coords is None:
+            t0 = (logger.process_clock(), logger.perf_counter())
+            self.grids.build(with_non0tab=True)
+            if (isinstance(self.grids, gen_grid.BeckeGrids) and
+                self.small_rho_cutoff > 1e-20 and ground_state):
+                self.grids = prune_small_rho_grids_(
+                    self, self.cell, dm, self.grids, kpts)
+            t0 = logger.timer(self, 'setting up grids', *t0)
+        is_nlc = self.do_nlc()
+        if is_nlc and self.nlcgrids.coords is None:
+            t0 = (logger.process_clock(), logger.perf_counter())
+            self.nlcgrids.build(with_non0tab=True)
+            if (isinstance(self.grids, gen_grid.BeckeGrids) and
+                self.small_rho_cutoff > 1e-20 and ground_state):
+                self.nlcgrids = prune_small_rho_grids_(
+                    self, self.cell, dm, self.nlcgrids, kpts)
+            t0 = logger.timer(self, 'setting up nlc grids', *t0)
+        return self
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 # Update the KohnShamDFT label in pbc.scf.hf module
 pbchf.KohnShamDFT = KohnShamDFT
@@ -255,6 +324,12 @@ class RKS(KohnShamDFT, pbchf.RHF):
     This is a literal duplication of the molecular RKS class with some `mol`
     variables replaced by `cell`.
     '''
+
+    get_vsap = mol_ks.get_vsap
+    init_guess_by_vsap = mol_ks.init_guess_by_vsap
+    get_veff = get_veff
+    energy_elec = mol_ks.energy_elec
+
     def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.RHF.__init__(self, cell, kpt, exxdiv=exxdiv)
@@ -265,16 +340,12 @@ class RKS(KohnShamDFT, pbchf.RHF):
         KohnShamDFT.dump_flags(self, verbose)
         return self
 
-    get_vsap = mol_ks.get_vsap
-    init_guess_by_vsap = mol_ks.init_guess_by_vsap
+    def to_hf(self):
+        '''Convert to RHF object.'''
+        from pyscf.pbc import scf
+        return self._transfer_attrs_(scf.RHF(self.cell, self.kpt))
 
-    get_veff = get_veff
-    energy_elec = pyscf.dft.rks.energy_elec
-    get_rho = get_rho
-
-    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
-    rs_density_fit = _patch_df_beckegrids(pbchf.RHF.rs_density_fit)
-    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
+    to_gpu = lib.to_gpu
 
 
 if __name__ == '__main__':

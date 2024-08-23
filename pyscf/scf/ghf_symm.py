@@ -87,7 +87,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     else:
         raise NotImplementedError
 
-class GHF(ghf.GHF):
+class SymAdaptedGHF(ghf.GHF):
     __doc__ = ghf.GHF.__doc__ + '''
     Attributes for symmetry allowed GHF:
         irrep_nelec : dict
@@ -96,11 +96,13 @@ class GHF(ghf.GHF):
             For the irreps not listed in these dicts, the program will choose the
             occupancy based on the orbital energies.
     '''
+
+    _keys = {'irrep_nelec'}
+
     def __init__(self, mol):
         ghf.GHF.__init__(self, mol)
         # number of electrons for each irreps
         self.irrep_nelec = {}
-        self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self, verbose=None):
         ghf.GHF.dump_flags(self, verbose)
@@ -278,6 +280,10 @@ class GHF(ghf.GHF):
             s = self.get_ovlp()
         return numpy.asarray(get_orbsym(self.mol, mo_coeff, s))
     orbsym = property(get_orbsym)
+
+    to_gpu = lib.to_gpu
+
+GHF = SymAdaptedGHF
 
 
 class HF1e(GHF):

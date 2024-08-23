@@ -20,7 +20,6 @@
 electron-phonon matrix from finite difference
 '''
 
-import copy
 import numpy as np
 from pyscf import scf, dft, gto, hessian
 from pyscf.eph import rhf as rhf_eph
@@ -35,9 +34,9 @@ def run_mfs(mf, mols_a, mols_b):
     dm0 = mf.make_rdm1()
     mflist = []
     for i in range(nconfigs):
-        mf1 = copy.copy(mf)
+        mf1 = mf.copy()
         mf1.reset(mols_a[i])
-        mf2 = copy.copy(mf)
+        mf2 = mf.copy()
         mf2.reset(mols_b[i])
         mf1.kernel(dm0=dm0)
         mf2.kernel(dm0=dm0)
@@ -102,7 +101,7 @@ def kernel(mf, disp=1e-4, mo_rep=False, cutoff_frequency=CUTOFF_FREQUENCY, keep_
     omega, vec = get_mode(mf, cutoff_frequency, keep_imag_frequency)
     mass = mol.atom_mass_list() * MP_ME
     vec = rhf_eph._freq_mass_weighted_vec(vec, omega, mass)
-    mols_a, mols_b = gen_moles(mol, disp/2.0) # generate a bunch of molecules with disp/2 on each cartesion coord
+    mols_a, mols_b = gen_moles(mol, disp/2.0) # generate a bunch of molecules with disp/2 on each cartesian coord
     mfset = run_mfs(mf, mols_a, mols_b) # run mean field calculations on all these molecules
     vmat = get_vmat(mf, mfset, disp) # extracting <p|dV|q>/dR
     if mo_rep:

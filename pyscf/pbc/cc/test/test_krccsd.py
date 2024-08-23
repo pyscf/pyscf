@@ -17,7 +17,6 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import copy
 import unittest
 import numpy as np
 
@@ -434,7 +433,7 @@ class KnownValues(unittest.TestCase):
         kmf.mo_occ = kmf.get_occ()
 
         # Run CC calculations
-        # FIXME: IP from differnt initial guess not matching
+        # FIXME: IP from different initial guess not matching
         self._test_cu_metallic_nonequal_occ(kmf, cell, -0.96676526820520137)
 
     def test_ccsd_t_non_hf_high_cost(self):
@@ -713,7 +712,7 @@ class KnownValues(unittest.TestCase):
     def test_rccsd_t_vs_gccsd_t(self):
         '''Test rccsd(t) vs gccsd(t) with k-points.'''
         from pyscf.pbc.scf.addons import convert_to_ghf
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -747,7 +746,7 @@ class KnownValues(unittest.TestCase):
 
     def test_rand_ccsd(self):
         '''Single (eom-)ccsd iteration with random t1/t2.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -779,7 +778,7 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen0(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and lowest lying orbital
         at multiple k-points frozen.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -820,7 +819,7 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen1(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and single frozen occupied
         orbital.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -863,7 +862,7 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen2(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and full occupied frozen
         at a single k-point.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -906,7 +905,7 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen3(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and single frozen virtual
         orbital.'''
-        kmf = copy.copy(rand_kmf)
+        kmf = rand_kmf.copy()
         mat_veff = kmf.get_veff().round(4)
         mat_hcore = kmf.get_hcore().round(4)
         kmf.get_veff = lambda *x: mat_veff
@@ -922,13 +921,13 @@ class KnownValues(unittest.TestCase):
         # Manually zero'ing out the frozen elements of the t1/t2
         t1[2, :, 0] = 0.0
         for ki in range(rand_cc.nkpts):
-          for kj in range(rand_cc.nkpts):
-            for ka in range(rand_cc.nkpts):
-              kb = kconserv[ki, ka, kj]
-              if ka == 2:
-                  t2[ki, kj, ka, :, :, 0] = 0.0
-              if kb == 2:
-                  t2[ki, kj, ka, :, :, :, 0] = 0.0
+            for kj in range(rand_cc.nkpts):
+                for ka in range(rand_cc.nkpts):
+                    kb = kconserv[ki, ka, kj]
+                    if ka == 2:
+                        t2[ki, kj, ka, :, :, 0] = 0.0
+                    if kb == 2:
+                        t2[ki, kj, ka, :, :, :, 0] = 0.0
 
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
         self.assertAlmostEqual(lib.fp(Ht1), (5.3320153970710118-7.9402122992688602j), 6)
@@ -941,10 +940,10 @@ class KnownValues(unittest.TestCase):
         r1, r2 = rand_r1_r2_ip(kmf, rand_cc)
         r1[0] = 0.0
         for ki in range(rand_cc.nkpts):
-          for kj in range(rand_cc.nkpts):
-            ka = kconserv[ki, kshift, kj]
-            if ka == 2:
-                r2[ki, kj, :, :, 0] = 0.0
+            for kj in range(rand_cc.nkpts):
+                ka = kconserv[ki, kshift, kj]
+                if ka == 2:
+                    r2[ki, kj, :, :, 0] = 0.0
 
         Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
         self.assertAlmostEqual(lib.fp(Hr1), (0.4067595510145880 +  0.0770280877446436j), 6)
@@ -953,12 +952,12 @@ class KnownValues(unittest.TestCase):
         r1, r2 = rand_r1_r2_ea(kmf, rand_cc)
         r1[0] = 0.0
         for kj in range(rand_cc.nkpts):
-          for ka in range(rand_cc.nkpts):
-            kb = kconserv[kshift, ka, kj]
-            if ka == 2:
-                r2[kj, ka, :, 0, :] = 0.0
-            if kb == 2:
-                r2[kj, ka, :, :, 0] = 0.0
+            for ka in range(rand_cc.nkpts):
+                kb = kconserv[kshift, ka, kj]
+                if ka == 2:
+                    r2[kj, ka, :, 0, :] = 0.0
+                if kb == 2:
+                    r2[kj, ka, :, :, 0] = 0.0
 
         Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
         self.assertAlmostEqual(lib.fp(Hr1), (0.0070404498167285 + -0.1646809321907418j), 6)

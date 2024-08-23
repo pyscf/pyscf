@@ -30,7 +30,6 @@ J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import os
-import copy
 import ctypes
 import warnings
 import tempfile
@@ -54,6 +53,7 @@ from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.aft import estimate_eta, _check_kpts
 from pyscf.pbc.df.df_jk import zdotCN
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
 from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _CCNucBuilder
@@ -66,7 +66,7 @@ LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     r'''Generate a cell object using the density fitting auxbasis as
-    the basis set. The normalization coeffcients of the auxiliary cell are
+    the basis set. The normalization coefficients of the auxiliary cell are
     different to the regular (square-norm) convention. To simplify the
     compensated charge algorithm, they are normalized against
     \int (r^l e^{-ar^2} r^2 dr
@@ -133,8 +133,13 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     # Call _CCGDFBuilder if applicable. _CCGDFBuilder is slower than
     # _RSGDFBuilder but numerically more close to previous versions
     _prefer_ccdf = False
-    # If True, force using denisty matrix-based K-build
+    # If True, force using density matrix-based K-build
     force_dm_kbuild = False
+
+    _keys = {
+        'blockdim', 'force_dm_kbuild', 'cell', 'kpts', 'kpts_band', 'eta',
+        'mesh', 'exp_to_discard', 'exxdiv', 'auxcell', 'linear_dep_threshold',
+    }
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell
@@ -142,6 +147,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
 
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
@@ -168,7 +175,9 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
+
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('_cderi_to_save', '_cderi', '_rsh_df'), reset_state=True)
 
     @property
     def auxbasis(self):
@@ -308,7 +317,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                             len(member(kpt, self.kpts_band))>0) for kpt in kpts)
 
     def sr_loop(self, kpti_kptj=numpy.zeros((2,3)), max_memory=2000,
-                compact=True, blksize=None):
+                compact=True, blksize=None, aux_slice=None):
         '''Short range part'''
         if self._cderi is None:
             self.build()
@@ -350,23 +359,29 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             return LpqR, LpqI
 
         with _load3c(self._cderi, self._dataname, kpti_kptj) as j3c:
-            slices = lib.prange(0, j3c.shape[0], blksize)
+            if aux_slice is None:
+                slices = lib.prange(0, j3c.shape[0], blksize)
+            else:
+                slices = lib.prange(*aux_slice, blksize)
             for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                 yield LpqR, LpqI, 1
                 LpqR = LpqI = None
 
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
-            # Truncated Coulomb operator is not postive definite. Load the
+            # Truncated Coulomb operator is not positive definite. Load the
             # CDERI tensor of negative part.
             with _load3c(self._cderi, self._dataname+'-', kpti_kptj,
                          ignore_key_error=True) as j3c:
-                slices = lib.prange(0, j3c.shape[0], blksize)
+                if aux_slice is None:
+                    slices = lib.prange(0, j3c.shape[0], blksize)
+                else:
+                    slices = lib.prange(*aux_slice, blksize)
                 for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                     yield LpqR, LpqI, -1
                     LpqR = LpqI = None
 
     def get_pp(self, kpts=None):
-        '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+        '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
         '''
         cell = self.cell
         kpts, is_single_kpt = _check_kpts(self, kpts)
@@ -441,7 +456,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     ao2mo_7d = df_ao2mo.ao2mo_7d
 
     def update_mp(self):
-        mf = copy.copy(self)
+        mf = self.copy()
         mf.with_df = self
         return mf
 
@@ -514,6 +529,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 else:
                     naux += dat.shape[0]
         return naux
+
+    to_gpu = lib.to_gpu
 
 DF = GDF
 
@@ -774,7 +791,7 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False,
     dat = _load_and_unpack(h5group[key],hermi)
     return dat
 
-class _load_and_unpack(object):
+class _load_and_unpack:
     '''
     This class returns an array-like object to an hdf5 file that can
     be sliced, to allow for lazy loading

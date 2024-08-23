@@ -17,7 +17,6 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import copy
 from functools import reduce
 
 import numpy
@@ -987,7 +986,7 @@ def energy_tril(cc, t1, t2, eris):
 
 def _update_procs_mf(mf):
     '''Update mean-field objects to be the same on all processors'''
-    mf1 = copy.copy(mf)
+    mf1 = mf.copy()
 
     mo_coeff  = comm.bcast(mf.mo_coeff, root=0)
     mo_energy = comm.bcast(mf.mo_energy, root=0)
@@ -3277,5 +3276,4 @@ class _IMDS:
         self.WvvvoR1  = self.fint2['WvvvoR1' ]
 
 def _cp(a):
-    return np.array(a, copy=False, order='C')
-
+    return np.array(a, order='C')

@@ -24,7 +24,6 @@ Ref:
     Q. Sun, arXiv:2302.11307
 '''
 
-import copy
 import ctypes
 import numpy as np
 import scipy.linalg
@@ -51,6 +50,13 @@ OMEGA_MIN = rsdf_builder.OMEGA_MIN
 INDEX_MIN = rsdf_builder.INDEX_MIN
 
 class RangeSeparatedJKBuilder(lib.StreamObject):
+    _keys = {
+        'cell', 'mesh', 'kpts', 'purify', 'omega', 'rs_cell', 'cell_d',
+        'bvk_kmesh', 'supmol_sr', 'supmol_ft', 'supmol_d', 'cell0_basis_mask',
+        'ke_cutoff', 'direct_scf_tol', 'time_reversal_symmetry',
+        'exclude_dd_block', 'allow_drv_nodddd', 'approx_vk_lr_missing_mo',
+    }
+
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
@@ -90,7 +96,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self._last_vs = (0, 0)
         self._qindex = None
 
-        self._keys = set(self.__dict__.keys())
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('rs_cell', 'cell_d', 'supmol_sr', 'supmol_ft', 'supmol_d',
+                      '_sr_without_dddd', '_last_vs', '_qindex'),
+            reset_state=True)
 
     def has_long_range(self):
         '''Whether to add the long-range part computed with AFT/FFT integrals'''
@@ -119,8 +128,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         self.supmol_sr = None
         self.supmol_ft = None
         self.supmol_d = None
-        self.exclude_dd_block = True
-        self.approx_vk_lr_missing_mo = False
+        self._sr_without_dddd = None
         self._last_vs = (0, 0)
         self._qindex = None
         return self
@@ -205,14 +213,14 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         qindex = np.empty((3,nbas,nbas), dtype=np.int16)
         ao_loc = supmol_sr.ao_loc
         with supmol_sr.with_integral_screen(self.direct_scf_tol**2):
-            libpbc.PBCVHFsetnr_direct_scf(
+            libpbc.PBCVHFnr_int2e_q_cond(
                 libpbc.int2e_sph, self._cintopt,
                 qindex.ctypes.data_as(ctypes.c_void_p),
                 ao_loc.ctypes.data_as(ctypes.c_void_p),
                 supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
                 supmol_sr._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.nbas),
                 supmol_sr._env.ctypes.data_as(ctypes.c_void_p))
-        libpbc.PBCVHFsetnr_sindex(
+        libpbc.PBCVHFnr_sindex(
             qindex[2:].ctypes.data_as(ctypes.c_void_p),
             supmol_sr._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.natm),
             supmol_sr._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol_sr.nbas),
@@ -418,7 +426,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             subset_only = intersection(kpts, kpts_band).size == len(kpts_band)
             if not subset_only:
                 log.warn('Approximate J/K matrices at kpts_band '
-                         'with the bvk-cell dervied from kpts')
+                         'with the bvk-cell derived from kpts')
                 expLk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts_band.T))
         vs = lib.einsum('snpRq,Rk->snkpq', vs, expLk)
         vs = np.asarray(vs, order='C')
@@ -591,10 +599,10 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         if (cell.dimension == 3 or
             (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum')):
-            G0_idx = 0  # due to np.fft.fftfreq convension
+            G0_idx = 0  # due to np.fft.fftfreq convention
             # G=0 associated to 2e integrals in real-space
             coulG_SR_at_G0 = np.pi/self.omega**2
-            # For cell.dimension = 2, coulG is computed with truncated coulomb
+            # For cell.dimension = 2, coulG is computed with truncated Coulomb
             # interactions. The 3d coulG_SR below is to remove the analytical
             # SR from get_jk_sr (which was computed with full Coulomb) then to
             # add truncated Coulomb for AFT part.
@@ -1080,7 +1088,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         if self._sr_without_dddd and naod > 0:
             # (DD|DD) with full coulG, rest terms with coulG_LR
-            log.debug1('ft_aopair dd-blcok for dddd-block ERI')
+            log.debug1('ft_aopair dd-block for dddd-block ERI')
             if cell.dimension < 2:
                 raise NotImplementedError
             if cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum':
@@ -1156,6 +1164,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         log.timer_debug1('get_lr_k_kpts', *cpu0)
         return vk_kpts
 
+    to_gpu = lib.to_gpu
+
 RangeSeparationJKBuilder = RangeSeparatedJKBuilder
 
 def _purify(mat_kpts, phase):
@@ -1172,7 +1182,8 @@ def estimate_rcut(rs_cell, omega, precision=None,
                   exclude_dd_block=True):
     '''Estimate rcut for 2e SR-integrals'''
     if precision is None:
-        precision = rs_cell.precision
+        # Adjust precision a little bit as errors are found slightly larger than cell.precision.
+        precision = rs_cell.precision * 1e-1
 
     rs_cell = rs_cell
     exps, cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')
@@ -1261,9 +1272,16 @@ def _guess_omega(cell, kpts, mesh=None):
     if mesh is None:
         omega_min = OMEGA_MIN
         ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
-        nk = nkpts**(1./3)
+        nk = (cell.nao/25 * nkpts)**(1./3)
         ke_cutoff = 50 / (.7+.25*nk+.05*nk**3)
         ke_cutoff = max(ke_cutoff, ke_min)
+        # avoid large omega since numerical issues were found in Rys
+        # polynomials when computing SR integrals with nroots > 3
+        exps = [e for l, e in zip(cell._bas[:,gto.ANG_OF], cell.bas_exps()) if l != 0]
+        if exps:
+            omega_max = np.hstack(exps).min()**.5 * 2
+            ke_max = estimate_ke_cutoff_for_omega(cell, omega_max)
+            ke_cutoff = min(ke_cutoff, ke_max)
         mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
         mesh = np.asarray(mesh)
@@ -1285,11 +1303,11 @@ def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     return Ecut
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
-    '''The minimal omega in attenuated Coulombl given energy cutoff
+    '''The minimal omega in attenuated Coulomb given energy cutoff
     '''
     if precision is None:
         precision = cell.precision
-#    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+#    # estimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
 #    # enough to converge the 2-electron integrals. A penalty term here is to
 #    # reduce the error in integrals
 #    precision *= 1e-2

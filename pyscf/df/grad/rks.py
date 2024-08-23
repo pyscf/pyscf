@@ -46,7 +46,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = rks_grad.get_vxc_full_response(
             ni, mol, grids, mf.xc, dm,
             max_memory=max_memory, verbose=ks_grad.verbose)
-        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        if mf.do_nlc():
             if ni.libxc.is_nlc(mf.xc):
                 xc = mf.xc
             else:
@@ -61,7 +61,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = rks_grad.get_vxc(
             ni, mol, grids, mf.xc, dm,
             max_memory=max_memory, verbose=ks_grad.verbose)
-        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        if mf.do_nlc():
             if ni.libxc.is_nlc(mf.xc):
                 xc = mf.xc
             else:
@@ -103,11 +103,15 @@ def get_veff(ks_grad, mol=None, dm=None):
 
 
 class Gradients(rks_grad.Gradients):
+
+    _keys = {'with_df', 'auxbasis_response'}
+
     def __init__(self, mf):
-        # Whether to include the response of DF auxiliary basis when computing
-        # nuclear gradients of J/K matrices
-        self.auxbasis_response = True
         rks_grad.Gradients.__init__(self, mf)
+
+    # Whether to include the response of DF auxiliary basis when computing
+    # nuclear gradients of J/K matrices
+    auxbasis_response = True
 
     get_jk = df_rhf_grad.Gradients.get_jk
     get_j = df_rhf_grad.Gradients.get_j

@@ -26,7 +26,6 @@ Additional information can be found in [1] and references therein.
 
 
 from functools import reduce
-import copy
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -39,7 +38,7 @@ from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import gdf_builder
-from pyscf.pbc.scf import ghf
+from pyscf.pbc.scf import ghf, khf, kghf
 from pyscf.pbc.x2c import sfx2c1e
 from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
@@ -63,7 +62,7 @@ def x2c1e_gscf(mf):
     '''
 
     # Check if mf is a generalized SCF object
-    assert isinstance(mf, ghf.GHF)
+    assert isinstance(mf, (ghf.GHF, kghf.KGHF))
 
     if isinstance(mf, x2c._X2C_SCF):
         if mf.with_x2c is None:
@@ -75,42 +74,38 @@ def x2c1e_gscf(mf):
         else:
             return mf
 
-    mf_class = mf.__class__
-    if mf_class.__doc__ is None:
-        doc = ''
-    else:
-        doc = mf_class.__doc__
+    return lib.set_class(X2C1E_GSCF(mf), (X2C1E_GSCF, mf.__class__))
 
-    class X2C1E_GSCF(mf_class, x2c._X2C_SCF):
-        __doc__ = doc + '''
-        Attributes for spin-orbital X2C1E for PBC.
-            with_x2c : X2C object
-        '''
-        def __init__(self, mf):
-            self.__dict__.update(mf.__dict__)
-            self.with_x2c = SpinOrbitalX2C1EHelper(mf.cell)
-            self._keys = self._keys.union(['with_x2c'])
+class X2C1E_GSCF(x2c._X2C_SCF):
+    '''
+    Attributes for spin-orbital X2C1E for PBC.
+        with_x2c : X2C object
+    '''
 
-        def get_hcore(self, cell=None, kpts=None):
-            if cell is None:
-                cell = self.cell
-            if kpts is None:
+    __name_mixin__ = 'X2C1e'
+
+    _keys = {'with_x2c'}
+
+    def __init__(self, mf):
+        self.__dict__.update(mf.__dict__)
+        self.with_x2c = SpinOrbitalX2C1EHelper(mf.cell)
+
+    def get_hcore(self, cell=None, kpts=None, kpt=None):
+        if cell is None:
+            cell = self.cell
+        if kpts is None:
+            if isinstance(self, khf.KSCF):
                 kpts = self.kpts
-
-            if self.with_x2c is not None:
-                hcore = self.with_x2c.get_hcore(cell, kpts)
-                return hcore
+            elif kpt is None:
+                kpts = self.kpt
             else:
-                return mf_class.get_hcore(self, cell, kpts)
+                kpts = kpt
 
-        def dump_flags(self, verbose=None):
-            mf_class.dump_flags(self, verbose)
-            if self.with_x2c:
-                self.with_x2c.dump_flags(verbose)
-            return self
-
-    with_x2c = SpinOrbitalX2C1EHelper(mf.mol)
-    return mf.view(X2C1E_GSCF).add_keys(with_x2c=with_x2c)
+        if self.with_x2c is not None:
+            hcore = self.with_x2c.get_hcore(cell, kpts)
+            return hcore
+        else:
+            return super(x2c._X2C_SCF).get_hcore(cell, kpts)
 
 class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
     def get_hcore(self, cell=None, kpts=None):

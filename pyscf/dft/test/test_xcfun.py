@@ -203,31 +203,31 @@ class KnownValues(unittest.TestCase):
         test_ref = numpy.array([-1.57876583, -2.12127045,-2.11264351,-0.00315462,
                                  0.00000000, -0.00444560, 3.45640232, 4.4349756])
         exc, vxc, fxc, kxc = dft.xcfun.eval_xc('m05,', rho, 1, deriv=3)
-        self.assertAlmostEqual(float(exc)*1.8, test_ref[0], 5)
+        self.assertAlmostEqual(float(exc[0])*1.8, test_ref[0], 5)
         self.assertAlmostEqual(abs(vxc[0]-test_ref[1:3]).max(), 0, 6)
         self.assertAlmostEqual(abs(vxc[1]-test_ref[3:6]).max(), 0, 6)
         self.assertAlmostEqual(abs(vxc[3]-test_ref[6:8]).max(), 0, 5)
 
         exc, vxc, fxc, kxc = dft.xcfun.eval_xc('m05,', rho[0], 0, deriv=3)
-        self.assertAlmostEqual(float(exc), -0.5746231988116002, 5)
-        self.assertAlmostEqual(float(vxc[0]), -0.8806121005703862, 6)
-        self.assertAlmostEqual(float(vxc[1]), -0.0032300155406846756, 7)
-        self.assertAlmostEqual(float(vxc[3]), 0.4474953100487698, 5)
+        self.assertAlmostEqual(float(exc[0]), -0.5746231988116002, 5)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.8806121005703862, 6)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.0032300155406846756, 7)
+        self.assertAlmostEqual(float(vxc[3][0]), 0.4474953100487698, 5)
 
     def test_camb3lyp(self):
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.xcfun.eval_xc('camb3lyp', rho, 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.5752559666317147, 5)
-        self.assertAlmostEqual(float(vxc[0]), -0.7709812578936763, 5)
-        self.assertAlmostEqual(float(vxc[1]), -0.0029862221286189846, 7)
+        self.assertAlmostEqual(float(exc[0]), -0.5752559666317147, 5)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.7709812578936763, 5)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.0029862221286189846, 7)
 
         self.assertEqual(dft.xcfun.rsh_coeff('camb3lyp'), (0.33, 0.65, -0.46))
 
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.xcfun.eval_xc('RSH(0.65;-0.46;0.5) + BECKECAMX', rho, 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.48916154057161476, 9)
-        self.assertAlmostEqual(float(vxc[0]), -0.6761177630311709, 9)
-        self.assertAlmostEqual(float(vxc[1]), -0.002949151742087167, 9)
+        self.assertAlmostEqual(float(exc[0]), -0.48916154057161476, 9)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.6761177630311709, 9)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.002949151742087167, 9)
 
     def test_define_xc(self):
         def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
@@ -244,8 +244,15 @@ class KnownValues(unittest.TestCase):
         rho = dft.numint.eval_rho(mol, ao, dm, xctype='MGGA', with_lapl=True)
         rhoa = rho[:,:200]
         def check(xc_code, deriv=3, e_place=9, v_place=8, f_place=6, k_place=4):
-            exc0, vxc0, fxc0, kxc0 = dft.libxc.eval_xc(xc_code, rhoa, 0, deriv=deriv)
-            exc1, vxc1, fxc1, kxc1 = dft.xcfun.eval_xc(xc_code, rhoa, 0, deriv=deriv)
+            xctype = dft.libxc.xc_type(xc_code)
+            if xctype == 'LDA':
+                nv = 1
+            elif xctype == 'GGA':
+                nv = 4
+            else:
+                nv = 6
+            exc0, vxc0, fxc0, kxc0 = dft.libxc.eval_xc(xc_code, rhoa[:nv], 0, deriv=deriv)
+            exc1, vxc1, fxc1, kxc1 = dft.xcfun.eval_xc(xc_code, rhoa[:nv], 0, deriv=deriv)
             self.assertAlmostEqual(abs(exc0-exc1).max(), 0, e_place)
             if deriv > 0:
                 for v0, v1 in zip(vxc0, vxc1):
@@ -338,8 +345,15 @@ class KnownValues(unittest.TestCase):
         rhoa = rho[:,:200]
         rhob = rhoa + rho[:,200:400]
         def check(xc_code, deriv=3, e_place=9, v_place=8, f_place=6, k_place=4):
-            exc0, vxc0, fxc0, kxc0 = dft.libxc.eval_xc(xc_code, (rhoa, rhob), 1, deriv=deriv)
-            exc1, vxc1, fxc1, kxc1 = dft.xcfun.eval_xc(xc_code, (rhoa, rhob), 1, deriv=deriv)
+            xctype = dft.libxc.xc_type(xc_code)
+            if xctype == 'LDA':
+                nv = 1
+            elif xctype == 'GGA':
+                nv = 4
+            else:
+                nv = 6
+            exc0, vxc0, fxc0, kxc0 = dft.libxc.eval_xc(xc_code, (rhoa[:nv], rhob[:nv]), 1, deriv=deriv)
+            exc1, vxc1, fxc1, kxc1 = dft.xcfun.eval_xc(xc_code, (rhoa[:nv], rhob[:nv]), 1, deriv=deriv)
             self.assertAlmostEqual(abs(exc0-exc1).max(), 0, e_place)
             if deriv > 0:
                 for v0, v1 in zip(vxc0, vxc1):

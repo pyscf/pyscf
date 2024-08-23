@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 from functools import reduce
-import numpy, scipy
+import numpy
+import scipy
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -117,7 +117,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, 44.2658681077, 7)
         self.assertAlmostEqual(lib.fp(mo_e), 4.1206025804989173, 4)
 
-        mcr1 = copy.copy(mcr)
+        mcr1 = mcr.copy()
         mcr1.frozen = 2
         mo, ci, mo_e = mcr1.canonicalize(mo1)
         self.assertAlmostEqual(lib.fp(mo_e), 6.6030999409178577, 5)
@@ -275,7 +275,9 @@ class KnownValues(unittest.TestCase):
         dm1 = mc.analyze()
         self.assertAlmostEqual(lib.fp(dm1[0]), 0.52396929381500434, 4)
 
-        self.assertRaises(TypeError, mc.state_average_, (.64,.36))
+        mc = mc.state_average((.64,.36)).run()
+        self.assertAlmostEqual(mc.e_tot, -108.83342083775061, 7)
+        self.assertAlmostEqual(mc.e_average, -108.83342083775061, 7)
 
     def test_state_average_fci_dmrg(self):
         fcisolver1 = fci.direct_spin1_symm.FCISolver(mol)

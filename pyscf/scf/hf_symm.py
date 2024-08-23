@@ -140,8 +140,8 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     {'A1': 6, 'A2': 0, 'B1': 2, 'B2': 2}
     '''
     orbsym = get_orbsym(mol, mo_coeff, s, False)
-    irrep_nelec = dict([(mol.irrep_name[k], int(sum(mo_occ[orbsym==ir])))
-                        for k, ir in enumerate(mol.irrep_id)])
+    irrep_nelec = {mol.irrep_name[k]: int(sum(mo_occ[orbsym==ir]))
+                        for k, ir in enumerate(mol.irrep_id)}
     return irrep_nelec
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
@@ -434,11 +434,13 @@ class SymAdaptedRHF(hf.RHF):
     >>> mf.get_irrep_nelec()
     {'A1': 6, 'A2': 2, 'B1': 2, 'B2': 0}
     '''
+
+    _keys = {'irrep_nelec'}
+
     def __init__(self, mol):
         hf.RHF.__init__(self, mol)
         # number of electrons for each irreps
         self.irrep_nelec = {} # {'ir_name':int,...}
-        self._keys = self._keys.union(['irrep_nelec'])
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
@@ -570,6 +572,9 @@ class SymAdaptedRHF(hf.RHF):
     wfnsym = property(get_wfnsym)
 
     canonicalize = canonicalize
+
+    to_gpu = lib.to_gpu
+
 RHF = SymAdaptedRHF
 
 
@@ -596,6 +601,9 @@ class SymAdaptedROHF(rohf.ROHF):
     >>> mf.get_irrep_nelec()
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 0), 'B2': (1, 1)}
     '''
+
+    _keys = {'irrep_nelec'}
+
     def __init__(self, mol):
         rohf.ROHF.__init__(self, mol)
         self.irrep_nelec = {}
@@ -603,7 +611,6 @@ class SymAdaptedROHF(rohf.ROHF):
 # do not overwrite them
         self._irrep_doccs = []
         self._irrep_soccs = []
-        self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self, verbose=None):
         rohf.ROHF.dump_flags(self, verbose)
@@ -925,6 +932,8 @@ class SymAdaptedROHF(rohf.ROHF):
 
     get_wfnsym = get_wfnsym
     wfnsym = property(get_wfnsym)
+
+    to_gpu = lib.to_gpu
 
 ROHF = SymAdaptedROHF
 

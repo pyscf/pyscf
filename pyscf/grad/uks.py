@@ -50,7 +50,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = get_vxc_full_response(ni, mol, grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
-        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        if mf.do_nlc():
             if ni.libxc.is_nlc(mf.xc):
                 xc = mf.xc
             else:
@@ -64,7 +64,7 @@ def get_veff(ks_grad, mol=None, dm=None):
     else:
         exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
-        if mf.nlc or ni.libxc.is_nlc(mf.xc):
+        if mf.do_nlc():
             if ni.libxc.is_nlc(mf.xc):
                 xc = mf.xc
             else:
@@ -244,12 +244,12 @@ class Gradients(uhf_grad.Gradients):
 
     grid_response = getattr(__config__, 'grad_uks_Gradients_grid_response', False)
 
+    _keys = {'grid_response', 'grids', 'nlcgrids'}
+
     def __init__(self, mf):
         uhf_grad.Gradients.__init__(self, mf)
         self.grids = None
         self.nlcgrids = None
-        self.grid_response = False
-        self._keys = self._keys.union(['grid_response', 'grids', 'nlcgrids'])
 
     def dump_flags(self, verbose=None):
         uhf_grad.Gradients.dump_flags(self, verbose)

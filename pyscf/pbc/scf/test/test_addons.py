@@ -81,6 +81,29 @@ class KnownValues(unittest.TestCase):
         occ = mf.get_occ(mo_energy_kpts)
         self.assertAlmostEqual(mf.entropy, 0.9554526863670467/2, 9)
 
+    def test_kuhf_smearing1(self):
+        cell = pbcgto.Cell()
+        cell.atom = '''
+        He 0 0 1
+        He 1 0 1
+        '''
+        cell.basis = 'ccpvdz'
+        cell.a = numpy.eye(3) * 4
+        cell.precision = 1e-6
+        cell.verbose = 3
+        cell.build()
+        nks = [2,1,1]
+        mf = pscf.KUHF(cell, cell.make_kpts(nks)).density_fit()
+        mf = pscf.addons.smearing_(mf, .1)
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -5.56769351866668, 6)
+        mf = pscf.addons.smearing_(mf, .1, mu0=0.351195741757)
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -5.56769351866668, 6)
+        mf = pscf.addons.smearing_(mf, .1, method='gauss')
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -5.56785857886738, 6)
+
     def test_rhf_smearing(self):
         mf = pscf.RHF(cell)
         pscf.addons.smearing_(mf, 0.1, 'fermi')
@@ -289,6 +312,11 @@ class KnownValues(unittest.TestCase):
         mf1 = pscf.ROHF(cell)
         self.assertTrue(isinstance(pscf.addons.convert_to_khf(mf1), pscf.krohf.KROHF))
 
+        from pyscf.pbc import dft
+        mf1 = dft.RKS(cell)
+        self.assertTrue(isinstance(mf1._numint, dft.numint.NumInt))
+        self.assertTrue(isinstance(pscf.addons.convert_to_kscf(mf1)._numint, dft.numint.KNumInt))
+
     def test_canonical_occ(self):
         kpts = numpy.random.rand(2,3)
         mf1 = pscf.kuhf.KUHF(cell, kpts)
@@ -375,27 +403,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(kmf.entropy, 0.250750926026, 9)
         self.assertAlmostEqual(kmf.e_free, 1.3942942592412, 9)
         self.assertAlmostEqual(lib.fp(kmf.mo_occ), 0.035214493032250, 9)
-
-    def test_rohf_smearing(self):
-        from pyscf import gto, scf
-        # Fe2 from https://doi.org/10.1021/acs.jpca.1c05769
-        mol = gto.M(
-            atom='''
-        Fe       0. 0. 0.
-        Fe       2.01 0. 0.
-        ''', basis="lanl2dz", ecp="lanl2dz", symmetry=False, unit='Angstrom',
-            spin=6, charge=0, verbose=0)
-        myhf_s = scf.ROHF(mol)
-        myhf_s = pscf.addons.smearing_(myhf_s, sigma=0.01, method='gaussian', fix_spin=True)
-        myhf_s.kernel()
-        # macos py3.7 CI -242.4828982467762
-        # linux py3.11 CI -242.48289824670388
-        self.assertAlmostEqual(myhf_s.e_tot, -242.482898246, 6)
-        self.assertAlmostEqual(myhf_s.entropy, 0.45197, 4)
-        myhf2 = scf.ROHF(mol).newton()
-        myhf2.kernel(myhf_s.make_rdm1())
-        # note 16mHa lower energy than myhf
-        self.assertAlmostEqual(myhf2.e_tot, -244.9808750, 6)
 
 
 if __name__ == '__main__':

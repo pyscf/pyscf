@@ -73,7 +73,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     noa, nob = gf_occ[0].naux, gf_occ[1].naux
     nva, nvb = gf_vir[0].naux, gf_vir[1].naux
     tol = agf2.weight_tol
-    facs = dict(os_factor=os_factor, ss_factor=ss_factor)
+    facs = {'os_factor': os_factor, 'ss_factor': ss_factor}
 
     ci_a, ei_a = gf_occ[0].coupling, gf_occ[0].energy
     ci_b, ei_b = gf_occ[1].coupling, gf_occ[1].energy
@@ -206,7 +206,7 @@ def fock_loop(agf2, eri, gf, se):
     rdm1a_prev = 0
     rdm1b_prev = 0
     converged = False
-    opts = dict(tol=agf2.conv_tol_nelec, maxiter=agf2.max_cycle_inner)
+    opts = {'tol': agf2.conv_tol_nelec, 'maxiter': agf2.max_cycle_inner}
 
     for niter1 in range(1, agf2.max_cycle_outer+1):
         sea, opt = minimize_chempot(sea, focka, nalph, x0=sea.chempot,
@@ -316,10 +316,10 @@ def energy_2body(agf2, gf, se):
 
 
 def energy_mp2(agf2, gf, se):
-    ''' Calculates the two-bdoy energy using analytically integrated
+    ''' Calculates the two-body energy using analytically integrated
         Galitskii-Migdal formula for an MP2 self-energy. Per the
         definition of one- and two-body partitioning in the Dyson
-        equation, this reuslt is half of :func:`energy_2body`.
+        equation, this result is half of :func:`energy_2body`.
 
     Args:
         gf : tuple of GreensFunction
@@ -557,7 +557,7 @@ class UAGF2(ragf2.RAGF2):
         if os_factor is None: os_factor = self.os_factor
         if ss_factor is None: ss_factor = self.ss_factor
 
-        facs = dict(os_factor=os_factor, ss_factor=ss_factor)
+        facs = {'os_factor': os_factor, 'ss_factor': ss_factor}
         gf_occ = (gf[0].get_occupied(), gf[1].get_occupied())
         gf_vir = (gf[0].get_virtual(), gf[1].get_virtual())
 
@@ -633,8 +633,7 @@ class UAGF2(ragf2.RAGF2):
             myagf2.with_df = with_df
 
         if auxbasis is not None and myagf2.with_df.auxbasis != auxbasis:
-            import copy
-            myagf2.with_df = copy.copy(myagf2.with_df)
+            myagf2.with_df = myagf2.with_df.copy()
             myagf2.with_df.auxbasis = auxbasis
 
         return myagf2

@@ -217,22 +217,28 @@ def _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym=0):
     neleca, nelecb = _unpack_nelec(nelec)
     na = len(airreps)
     nb = len(birreps)
-    hdiag = hdiag.reshape(na,nb)
     sym_allowed = airreps[:,None] == wfnsym ^ birreps
     if neleca == nelecb and na == nb:
         idx = np.arange(na)
         sym_allowed[idx[:,None] < idx] = False
     idx_a, idx_b = np.where(sym_allowed)
 
+    hdiag = hdiag.reshape(na,nb)[idx_a,idx_b]
+    if hdiag.size <= nroots:
+        hdiag_indices = np.arange(hdiag.size)
+    else:
+        hdiag_indices = np.argpartition(hdiag, nroots-1)[:nroots]
+
     ci0 = []
-    for k in np.argpartition(hdiag[idx_a,idx_b], nroots-1)[:nroots]:
+    for k in hdiag_indices:
         addra, addrb = idx_a[k], idx_b[k]
         x = np.zeros((na, nb))
         x[addra,addrb] = 1
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
@@ -248,14 +254,26 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         return _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym)
 
     ci0 = []
-    for k in np.argpartition(hdiag, nroots-1)[:nroots]:
+    if hdiag.size <= nroots:
+        hdiag_indices = np.arange(hdiag.size)
+    else:
+        hdiag_indices = np.argpartition(hdiag, nroots-1)[:nroots]
+    for k in hdiag_indices:
         x = np.zeros_like(hdiag)
         x[k] = 1.
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
+
+def _validate_degen_mapping(mapping, norb):
+    '''Check if 2D irreps are properly paired'''
+    mapping = np.asarray(mapping)
+    return (mapping.max() < norb and
+            # Must be self-conjugated
+            numpy.array_equal(mapping[mapping], numpy.arange(norb)))
 
 def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     neleca, nelecb = _unpack_nelec(nelec)
@@ -294,6 +312,13 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             addra1, sign_a = _sv_associated_det(strsa[addra], degen_mapping)
             addrb1, sign_b = _sv_associated_det(strsb[addrb], degen_mapping)
             if wfnsym in (1, 4) and addra == addra1 and addrb == addrb1:
+                # Remove the A1 repr from initial guess.
+                # The product of two E reprs can produce A1, A2 and another E repr.
+                # addra == addra1 and addrb == addrb1  can be found in the A1 repr.
+                # However, this may also incorrectly remove the A2 repr, see the
+                # explanation in issue #2291.
+                # In this case, the direct_spin1_cyl_sym solver can be used to
+                # solve A2. See example mcscf/18-o2_spatial_spin_symmetry.py
                 continue
             x = ca[:,None] * cb
 
@@ -332,7 +357,8 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             break
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def _cyl_sym_csf2civec(strs, addr, orbsym, degen_mapping):
@@ -414,7 +440,7 @@ def reorder_eri(eri, norb, orbsym):
 
     # irrep of (ij| pair
     trilirrep = (orbsym[:,None] ^ orbsym)[np.tril_indices(norb)]
-    # and the number of occurence for each irrep
+    # and the number of occurrences for each irrep
     dimirrep = np.asarray(np.bincount(trilirrep), dtype=np.int32)
     # we sort the irreps of (ij| pair, to group the pairs which have same irreps
     # "order" is irrep-id-sorted index. The (ij| paired is ordered that the
@@ -575,8 +601,9 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
                 fcivec = fcivec[0]
             wfnsym1 = _guess_wfnsym_cyl_sym(fcivec, strsa, strsb, orbsym)
             if wfnsym1 != _id_wfnsym(solver, norb, nelec, orbsym, wfnsym):
-                raise RuntimeError(f'Input wfnsym {wfnsym} is not consistent with '
-                                   f'fcivec symmetry {wfnsym1}')
+                raise lib.exceptions.WfnSymmetryError(
+                    f'Input wfnsym {wfnsym} is not consistent with '
+                    f'fcivec symmetry {wfnsym1}')
             wfnsym = wfnsym1
         else:
             na, nb = strsa.size, strsb.size
@@ -594,8 +621,8 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
             if isinstance(fcivec, np.ndarray) and fcivec.ndim <= 2:
                 fcivec = [fcivec]
             if all(abs(c.reshape(na, nb)[mask]).max() < 1e-5 for c in fcivec):
-                raise RuntimeError('Input wfnsym {wfnsym} is not consistent with '
-                                   'fcivec coefficients')
+                raise lib.exceptions.WfnSymmetryError(
+                    'Input wfnsym {wfnsym} is not consistent with fcivec coefficients')
     return wfnsym
 
 def sym_allowed_indices(nelec, orbsym, wfnsym):
@@ -614,6 +641,8 @@ def sym_allowed_indices(nelec, orbsym, wfnsym):
     return ab_idx
 
 class FCISolver(direct_spin1.FCISolver):
+
+    _keys = {'wfnsym', 'sym_allowed_idx'}
 
     pspace_size = getattr(__config__, 'fci_direct_spin1_symm_FCI_pspace_size', 400)
 
@@ -749,6 +778,11 @@ class FCISolver(direct_spin1.FCISolver):
                 orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
             if davidson_only is None:
                 davidson_only = True
+            if not _validate_degen_mapping(orbsym.degen_mapping, norb):
+                raise lib.exceptions.PointGroupSymmetryError(
+                    'Incomplete 2D-irrep orbitals for cylindrical symmetry.\n'
+                    f'orbsym = {orbsym}. '
+                    f'Retry {self.__class__} with D2h subgroup symmetry.')
 
         wfnsym_ir = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
         self.sym_allowed_idx = sym_allowed_indices(nelec, orbsym, wfnsym_ir)
@@ -757,7 +791,7 @@ class FCISolver(direct_spin1.FCISolver):
         logger.debug(self, 'Num symmetry allowed elements %d',
                      sum([x.size for x in self.sym_allowed_idx]))
         if s_idx.size == 0:
-            raise RuntimeError(
+            raise lib.exceptions.WfnSymmetryError(
                 f'Symmetry allowed determinants not found for wfnsym {wfnsym}')
 
         if wfnsym_ir > 7:

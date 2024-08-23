@@ -300,7 +300,7 @@ class FiniteGroup(ABC):
                 The indices to reconstruct `conjugacy_mask` from `classes`.
         '''
         _, idx = np.unique(self.conjugacy_mask, axis=0, return_index=True)
-        representatives = np.sort(idx)
+        representatives = np.sort(idx.ravel())
         classes = self.conjugacy_mask[representatives]
         inverse = -np.ones((self.order), dtype=int)
         diff = (self.conjugacy_mask[None,:,:]==classes[:,None,:]).all(axis=-1)

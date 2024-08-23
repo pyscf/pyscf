@@ -155,4 +155,3 @@ scf.hf.RHF.CCSD = lib.class_as_method(RCCSD)
 scf.uhf.UHF.CCSD = lib.class_as_method(UCCSD)
 scf.ghf.GHF.CCSD = lib.class_as_method(GCCSD)
 scf.rohf.ROHF.CCSD = None
-

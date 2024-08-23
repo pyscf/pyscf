@@ -86,7 +86,7 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
         2D array of shape (N,nao) for AO values if deriv = 0.
         Or 3D array of shape (:,N,nao) for AO values and AO derivatives if deriv > 0.
         In the 3D array, the first (N,nao) elements are the AO values,
-        followed by (3,N,nao) for x,y,z compoents;
+        followed by (3,N,nao) for x,y,z components;
         Then 2nd derivatives (6,N,nao) for xx, xy, xz, yy, yz, zz;
         Then 3rd derivatives (10,N,nao) for xxx, xxy, xxz, xyy, xyz, xzz, yyy, yyz, yzz, zzz;
         ...
@@ -279,7 +279,7 @@ def eval_rho1(mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
 
     if pair_mask is None:
         ovlp_cond = mol.get_overlap_cond()
-        pair_mask = ovlp_cond < -numpy.log(cutoff)
+        pair_mask = numpy.asarray(ovlp_cond < -numpy.log(cutoff), dtype=numpy.uint8)
 
     ao_loc = mol.ao_loc_nr()
     if xctype == 'LDA' or xctype == 'HF':
@@ -351,7 +351,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         xctype : str
             LDA/GGA/mGGA.  It affects the shape of the return density.
         with_lapl: bool
-            Wether to compute laplacian. It affects the shape of returns.
+            Whether to compute laplacian. It affects the shape of returns.
         verbose : int or object of :class:`Logger`
             No effects.
 
@@ -1471,30 +1471,18 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError('complex density matrix')
 
     xctype = ni._xc_type(xc_code)
+    if fxc is None and xctype in ('LDA', 'GGA', 'MGGA'):
+        fxc = ni.cache_xc_kernel1(mol, grids, xc_code, dm0, spin=0,
+                                  max_memory=max_memory)[2]
+
     make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)
-    if fxc is None and rho0 is None:
-        make_rho0 = ni._gen_rho_evaluator(mol, dm0, 1, False, grids)[0]
-    else:
-        make_rho0 = None
 
     def block_loop(ao_deriv):
         p1 = 0
-        _rho0 = None
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
-            if fxc is None:
-                if rho0 is not None:
-                    if xctype == 'LDA':
-                        _rho0 = numpy.asarray(rho0[p0:p1], order='C')
-                    else:
-                        _rho0 = numpy.asarray(rho0[:,p0:p1], order='C')
-                elif make_rho0 is not None:
-                    _rho0 = make_rho0(0, ao, mask, xctype)
-                _fxc = ni.eval_xc_eff(xc_code, _rho0, deriv=2, xctype=xctype)[2]
-            else:
-                _fxc = fxc[:,:,p0:p1]
-
+            _fxc = fxc[:,:,p0:p1]
             for i in range(nset):
                 rho1 = make_rho1(i, ao, mask, xctype)
                 if xctype == 'LDA':
@@ -1753,38 +1741,21 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError('complex density matrix')
 
     xctype = ni._xc_type(xc_code)
+    if fxc is None and xctype in ('LDA', 'GGA', 'MGGA'):
+        fxc = ni.cache_xc_kernel1(mol, grids, xc_code, dm0, spin=1,
+                                  max_memory=max_memory)[2]
+
     dma, dmb = _format_uks_dm(dms)
     nao = dma.shape[-1]
     make_rhoa, nset = ni._gen_rho_evaluator(mol, dma, hermi, False, grids)[:2]
     make_rhob       = ni._gen_rho_evaluator(mol, dmb, hermi, False, grids)[0]
 
-    if fxc is None and rho0 is None:
-        make_rho0 = ni._gen_rho_evaluator(mol, _format_uks_dm(dm0), 1, False, grids)[0]
-    else:
-        make_rho0 = None
-
     def block_loop(ao_deriv):
         p1 = 0
-        rho0a = rho0b = None
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
-            if fxc is None:
-                if rho0 is not None:
-                    if xctype == 'LDA':
-                        rho0a = numpy.asarray(rho0[0][p0:p1], order='C')
-                        rho0b = numpy.asarray(rho0[1][p0:p1], order='C')
-                    else:
-                        rho0a = numpy.asarray(rho0[0][:,p0:p1], order='C')
-                        rho0b = numpy.asarray(rho0[1][:,p0:p1], order='C')
-                elif make_rho0 is not None:
-                    rho0a = make_rho0(0, ao, mask, xctype)
-                    rho0b = make_rho0(1, ao, mask, xctype)
-                _rho0 = (rho0a, rho0b)
-                _fxc = ni.eval_xc_eff(xc_code, _rho0, deriv=2, xctype=xctype)[2]
-            else:
-                _fxc = fxc[:,:,:,:,p0:p1]
-
+            _fxc = fxc[:,:,:,:,p0:p1]
             for i in range(nset):
                 rho1a = make_rhoa(i, ao, mask, xctype)
                 rho1b = make_rhob(i, ao, mask, xctype)
@@ -2582,13 +2553,14 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
     else:
         ao_deriv = 0
+    with_lapl = MGGA_DENSITY_LAPL
 
     if mo_coeff[0].ndim == 1:  # RKS
         nao = mo_coeff.shape[0]
         rho = []
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
-            rho.append(ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype))
+            rho.append(ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype, with_lapl))
         rho = numpy.hstack(rho)
         if spin == 1:  # RKS with nr_rks_fxc_st
             rho *= .5
@@ -2601,15 +2573,16 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         rhob = []
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
-            rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype))
-            rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
+            rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype, with_lapl))
+            rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype, with_lapl))
         rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
     vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
     return rho, vxc, fxc
 
 def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=0, max_memory=2000):
     '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
-    DFT hessian module etc.
+    DFT hessian module etc. Note dm the zeroth order density matrix must be a
+    hermitian matrix.
     '''
     xctype = ni._xc_type(xc_code)
     if xctype == 'GGA':
@@ -2619,7 +2592,8 @@ def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=0, max_memory=2000):
     else:
         ao_deriv = 0
 
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi=1)
+    hermi = 1
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi, False, grids)
     if dm[0].ndim == 1:  # RKS
         rho = []
         for ao, mask, weight, coords \
@@ -2655,55 +2629,11 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
         rho[p0:p1] = make_rho(0, ao, mask, 'LDA')
     return rho
 
-def _block_loop(ni, mol, grids, nao=None, deriv=0, max_memory=2000,
-                non0tab=None, blksize=None, buf=None):
-    '''Define this macro to loop over grids by blocks.
-    '''
-    if grids.coords is None:
-        grids.build(with_non0tab=True)
-    if nao is None:
-        nao = mol.nao
-    ngrids = grids.coords.shape[0]
-    comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-    # NOTE to index grids.non0tab, the blksize needs to be an integer
-    # multiplier of BLKSIZE
-    if blksize is None:
-        blksize = int(max_memory*1e6/((comp+1)*nao*8*BLKSIZE))
-        blksize = max(4, min(blksize, ngrids//BLKSIZE+1, 1200)) * BLKSIZE
-    assert blksize % BLKSIZE == 0
 
-    if non0tab is None and mol is grids.mol:
-        non0tab = grids.non0tab
-    if non0tab is None:
-        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                              dtype=numpy.uint8)
-        non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
-    screen_index = non0tab
-
-    # the xxx_sparse() functions require ngrids 8-byte aligned
-    allow_sparse = ngrids % ALIGNMENT_UNIT == 0
-
-    if buf is None:
-        buf = _empty_aligned(comp * blksize * nao)
-    for ip0, ip1 in lib.prange(0, ngrids, blksize):
-        coords = grids.coords[ip0:ip1]
-        weight = grids.weights[ip0:ip1]
-        mask = screen_index[ip0//BLKSIZE:]
-        # TODO: pass grids.cutoff to eval_ao
-        ao = ni.eval_ao(mol, coords, deriv=deriv, non0tab=mask,
-                        cutoff=grids.cutoff, out=buf)
-        if not allow_sparse and not _sparse_enough(mask):
-            # Unset mask for dense AO tensor. It determines which eval_rho
-            # to be called in make_rho
-            mask = None
-        yield ao, mask, weight, coords
-
-
-class _NumIntMixin(lib.StreamObject):
+class LibXCMixin:
     libxc = libxc
 
-    def __init__(self):
-        self.omega = None  # RSH paramter
+    omega = None  # RSH parameter
 
 ####################
 # Overwrite following functions to use custom XC functional
@@ -2723,6 +2653,10 @@ class _NumIntMixin(lib.StreamObject):
         if omega is None: omega = self.omega
         return self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv,
                                   omega, verbose)
+
+    def eval_xc1(self, xc_code, rho, spin=0, deriv=1, omega=None):
+        if omega is None: omega = self.omega
+        return self.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
 
     def eval_xc_eff(self, xc_code, rho, deriv=1, omega=None, xctype=None,
                     verbose=None):
@@ -2752,42 +2686,25 @@ class _NumIntMixin(lib.StreamObject):
         '''
         if omega is None: omega = self.omega
         if xctype is None: xctype = self._xc_type(xc_code)
-        rhop = numpy.asarray(rho)
 
-        if xctype == 'LDA':
-            spin_polarized = rhop.ndim >= 2
-        else:
-            spin_polarized = rhop.ndim == 3
+        rho = numpy.asarray(rho, order='C', dtype=numpy.double)
+        if xctype == 'MGGA' and rho.shape[-2] == 6:
+            rho = numpy.asarray(rho[...,[0,1,2,3,5],:], order='C')
 
+        spin_polarized = rho.ndim >= 2 and rho.shape[0] == 2
         if spin_polarized:
-            assert rhop.shape[0] == 2
             spin = 1
-            if rhop.shape[1] == 5:  # MGGA
-                ngrids = rhop.shape[2]
-                rhop = numpy.empty((2, 6, ngrids))
-                rhop[0,:4] = rho[0][:4]
-                rhop[1,:4] = rho[1][:4]
-                rhop[:,4] = 0
-                rhop[0,5] = rho[0][4]
-                rhop[1,5] = rho[1][4]
         else:
             spin = 0
-            if rhop.shape[0] == 5:  # MGGA
-                ngrids = rho.shape[1]
-                rhop = numpy.empty((6, ngrids))
-                rhop[:4] = rho[:4]
-                rhop[4] = 0
-                rhop[5] = rho[4]
 
-        exc, vxc, fxc, kxc = self.eval_xc(xc_code, rhop, spin, 0, deriv, omega,
-                                          verbose)
-        if deriv > 2:
-            kxc = xc_deriv.transform_kxc(rhop, fxc, kxc, xctype, spin)
-        if deriv > 1:
-            fxc = xc_deriv.transform_fxc(rhop, vxc, fxc, xctype, spin)
-        if deriv > 0:
-            vxc = xc_deriv.transform_vxc(rhop, vxc, xctype, spin)
-        return exc, vxc, fxc, kxc
+        out = self.eval_xc1(xc_code, rho, spin, deriv, omega)
+        evfk = [out[0]]
+        for order in range(1, deriv+1):
+            evfk.append(xc_deriv.transform_xc(rho, out, xctype, spin, order))
+        if deriv < 3:
+            # Returns at least [e, v, f, k] terms
+            evfk.extend([None] * (3 - deriv))
+        return evfk
 
     def _xc_type(self, xc_code):
         return self.libxc.xc_type(xc_code)
@@ -2814,8 +2731,12 @@ class _NumIntMixin(lib.StreamObject):
             hyb = self.hybrid_coeff(xc_code, spin)
         return omega, alpha, hyb
 
+# Export the symbol _NumIntMixin for backward compatibility.
+# _NumIntMixin should be dropped in the future.
+_NumIntMixin = LibXCMixin
 
-class NumInt(_NumIntMixin):
+
+class NumInt(lib.StreamObject, LibXCMixin):
     '''Numerical integration methods for non-relativistic RKS and UKS'''
 
     cutoff = CUTOFF * 1e2  # cutoff for small AO product
@@ -2859,7 +2780,48 @@ class NumInt(_NumIntMixin):
     eval_rho2 = staticmethod(eval_rho2)
     get_rho = get_rho
 
-    block_loop = _block_loop
+    def block_loop(self, mol, grids, nao=None, deriv=0, max_memory=2000,
+                   non0tab=None, blksize=None, buf=None):
+        '''Define this macro to loop over grids by blocks.
+        '''
+        if grids.coords is None:
+            grids.build(with_non0tab=True)
+        if nao is None:
+            nao = mol.nao
+        ngrids = grids.coords.shape[0]
+        comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+        # NOTE to index grids.non0tab, the blksize needs to be an integer
+        # multiplier of BLKSIZE
+        if blksize is None:
+            blksize = int(max_memory*1e6/((comp+1)*nao*8*BLKSIZE))
+            blksize = max(4, min(blksize, ngrids//BLKSIZE+1, 1200)) * BLKSIZE
+        assert blksize % BLKSIZE == 0
+
+        if non0tab is None and mol is grids.mol:
+            non0tab = grids.non0tab
+        if non0tab is None:
+            non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+                                  dtype=numpy.uint8)
+            non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
+        screen_index = non0tab
+
+        # the xxx_sparse() functions require ngrids 8-byte aligned
+        allow_sparse = ngrids % ALIGNMENT_UNIT == 0 and nao > SWITCH_SIZE
+
+        if buf is None:
+            buf = _empty_aligned(comp * blksize * nao)
+        for ip0, ip1 in lib.prange(0, ngrids, blksize):
+            coords = grids.coords[ip0:ip1]
+            weight = grids.weights[ip0:ip1]
+            mask = screen_index[ip0//BLKSIZE:]
+            # TODO: pass grids.cutoff to eval_ao
+            ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=mask,
+                              cutoff=grids.cutoff, out=buf)
+            if not allow_sparse and not _sparse_enough(mask):
+                # Unset mask for dense AO tensor. It determines which eval_rho
+                # to be called in make_rho
+                mask = None
+            yield ao, mask, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=True, grids=None):
         if getattr(dms, 'mo_coeff', None) is not None:
@@ -2884,12 +2846,15 @@ class NumInt(_NumIntMixin):
         nao = dms[0].shape[0]
         ndms = len(dms)
 
-        ovlp_cond = mol.get_overlap_cond()
-        if dms[0].dtype == numpy.double:
-            dm_cond = numpy.max([mol.condense_to_shell(dm, 'absmax') for dm in dms], axis=0)
-            pair_mask = (numpy.exp(-ovlp_cond) * dm_cond) > self.cutoff
-        else:
-            pair_mask = ovlp_cond < -numpy.log(self.cutoff)
+        if grids is not None:
+            ovlp_cond = mol.get_overlap_cond()
+            if dms[0].dtype == numpy.double:
+                dm_cond = [mol.condense_to_shell(dm, 'absmax') for dm in dms]
+                dm_cond = numpy.max(dm_cond, axis=0)
+                pair_mask = numpy.exp(-ovlp_cond) * dm_cond > self.cutoff
+            else:
+                pair_mask = ovlp_cond < -numpy.log(self.cutoff)
+            pair_mask = numpy.asarray(pair_mask, dtype=numpy.uint8)
 
         def make_rho(idm, ao, sindex, xctype):
             if sindex is not None and grids is not None:
@@ -2904,6 +2869,12 @@ class NumInt(_NumIntMixin):
                                      with_lapl)
         return make_rho, ndms, nao
 
+    def to_gpu(self):
+        try:
+            from gpu4pyscf.dft import numint # type: ignore
+            return numint.NumInt()
+        except ImportError:
+            raise ImportError('Cannot find GPU4PySCF')
 _NumInt = NumInt
 
 

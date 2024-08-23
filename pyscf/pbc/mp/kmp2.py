@@ -380,7 +380,7 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
 
     Args:
         frozen (array_like of int): The orbital indices that will be frozen.
-        mo_occ (:obj:`ndarray` of int): The occupuation number for each orbital
+        mo_occ (:obj:`ndarray` of int): The occupation number for each orbital
             resulting from a mean-field-like calculation.
         kpt_idx (int): The k-point that `mo_occ` and `frozen` belong to.
 
@@ -690,6 +690,8 @@ def _gamma1_intermediates(mp, t2=None):
 
 
 class KMP2(mp2.MP2):
+    _keys = {'kpts', 'nkpts', 'khelper'}
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -730,7 +732,6 @@ class KMP2(mp2.MP2):
         self.e_corr_ss = None
         self.e_corr_os = None
         self.t2 = None
-        self._keys = set(self.__dict__.keys())
 
     get_nocc = get_nocc
     get_nmo = get_nmo
@@ -781,6 +782,8 @@ class KMP2(mp2.MP2):
         self._finalize()
 
         return self.e_corr, self.t2
+
+    to_gpu = lib.to_gpu
 
 KRMP2 = KMP2
 

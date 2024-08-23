@@ -24,7 +24,7 @@ from pyscf.grad import tduhf as tduhf_grad
 
 
 def setUpModule():
-    global mol, pmol, mf
+    global mol, pmol, mf, nstates
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = '/dev/null'
@@ -38,6 +38,7 @@ def setUpModule():
     mol.build()
     pmol = mol.copy()
     mf = scf.UHF(mol).set(conv_tol=1e-12).run()
+    nstates = 5 # to ensure the first 3 TDSCF states are converged
 
 def tearDownModule():
     global mol, pmol, mf
@@ -46,10 +47,10 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_tda(self):
-        td = tdscf.TDA(mf).run(nstates=3)
+        td = tdscf.TDA(mf).run(nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -0.78246882668628404, 6)
+        self.assertAlmostEqual(g1[0,2], -0.78246882668628404, 5)
 
         td_solver = td.as_scanner()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
@@ -57,10 +58,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 4)
 
     def test_tdhf(self):
-        td = tdscf.TDDFT(mf).run(nstates=3)
+        td = tdscf.TDDFT(mf).run(nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(td.xy[2])
-        self.assertAlmostEqual(g1[0,2], -0.78969714300299776, 6)
+        self.assertAlmostEqual(g1[0,2], -0.78969714300299776, 5)
 
         td_solver = td.as_scanner()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))

@@ -62,9 +62,9 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_analyze(self):
-        rpop, rchg = kmf.analyze() # pop at gamma point
-        upop, uchg = kumf.analyze()
-        gpop, gchg = kgmf.analyze()
+        rpop, rchg = kmf.analyze()[0] # pop at gamma point
+        upop, uchg = kumf.analyze()[0]
+        gpop, gchg = kgmf.analyze()[0]
         self.assertTrue(isinstance(rpop, np.ndarray) and rpop.ndim == 1)
         self.assertAlmostEqual(abs(upop[0]+upop[1]-rpop).max(), 0, 7)
         self.assertAlmostEqual(abs(gpop[0]+gpop[1]-rpop).max(), 0, 5)
@@ -292,23 +292,14 @@ class KnownValues(unittest.TestCase):
     def test_damping(self):
         nao = cell.nao
         np.random.seed(1)
-        s = kmf.get_ovlp()
-        d = np.random.random((len(kpts),nao,nao))
-        d = (d + d.transpose(0,2,1)) * 2
-        vhf = 0
-        f = khf.get_fock(kmf, kmf.get_hcore(), s, vhf, d, cycle=0,
-                         diis_start_cycle=2, damp_factor=0.5)
-        self.assertAlmostEqual(np.linalg.norm(f[0]), 95.32749551722966, 6)
-        self.assertAlmostEqual(np.linalg.norm(f[1]), 73.9231303798864, 6)
-        self.assertAlmostEqual(np.linalg.norm(f[2]), 58.973290554565196, 6)
-
-        vhf = np.zeros((2,len(kpts),nao,nao))
-        d1 = np.asarray([d/2, d/2])
-        f1 = kuhf.get_fock(kumf, kumf.get_hcore(), s, vhf, d1, cycle=0,
-                             diis_start_cycle=2, damp_factor=0.5)
+        f = kmf.get_hcore()
+        df  = np.random.rand(len(kpts),nao,nao)
+        f_prev = f + df
+        damp = 0.3
+        f_damp = khf.get_fock(kmf, h1e=0, s1e=0, vhf=f, dm=0, cycle=0,
+                              diis_start_cycle=2, damp_factor=damp, fock_last=f_prev)
         for k in range(len(kpts)):
-            self.assertAlmostEqual(abs(f[k] - f1[0,k]).max(), 0, 9)
-            self.assertAlmostEqual(abs(f[k] - f1[1,k]).max(), 0, 9)
+            self.assertAlmostEqual(abs(f_damp[k] - (f[k]*(1-damp) + f_prev[k]*damp)).max(), 0, 9)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

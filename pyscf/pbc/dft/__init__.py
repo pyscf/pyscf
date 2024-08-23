@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+'''Kohn-Sham DFT for periodic systems
+'''
+
+from pyscf.pbc import gto
 from pyscf.pbc.dft.gen_grid import UniformGrids, BeckeGrids
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import uks
@@ -30,9 +34,9 @@ from pyscf.pbc.dft import kukspu_ksymm
 from pyscf.pbc.dft.rks import KohnShamDFT
 from pyscf.pbc.lib import kpts as libkpts
 
+GKS = gks.GKS
 UKS = uks.UKS
 ROKS = roks.ROKS
-GKS = gks.GKS
 
 def KRKS(cell, *args, **kwargs):
     for arg in args:

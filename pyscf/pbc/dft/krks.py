@@ -61,38 +61,41 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (logger.process_clock(), logger.perf_counter())
 
     ni = ks._numint
-    if ks.nlc or ni.libxc.is_nlc(ks.xc):
-        raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
-
     hybrid = ni.libxc.is_hybrid_xc(ks.xc)
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        if ks.do_nlc():
+            raise NotImplementedError(f'MultiGrid for NLC functional {ks.xc} + {ks.nlc}')
         n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
                                        kpts, kpts_band,
                                        with_j=True, return_j=False)
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        logger.info(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
         return vxc
 
     # ndim = 3 : dm.shape = (nkpts, nao, nao)
     ground_state = (isinstance(dm, np.ndarray) and dm.ndim == 3 and
                     kpts_band is None)
-
-# For UniformGrids, grids.coords does not indicate whehter grids are initialized
-    if ks.grids.non0tab is None:
-        ks.grids.build(with_non0tab=True)
-        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
-            ks.small_rho_cutoff > 1e-20 and ground_state):
-            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpts)
-        t0 = logger.timer(ks, 'setting up grids', *t0)
+    ks.initialize_grids(cell, dm, kpts, ground_state)
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, hermi,
-                                        kpts, kpts_band, max_memory=max_memory)
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm, 0, hermi,
+                                kpts, kpts_band, max_memory=max_memory)
+        logger.info(ks, 'nelec by numeric integration = %s', n)
+        if ks.do_nlc():
+            if ni.libxc.is_nlc(ks.xc):
+                xc = ks.xc
+            else:
+                assert ni.libxc.is_nlc(ks.nlc)
+                xc = ks.nlc
+            n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm, 0, hermi, kpts,
+                                          max_memory=max_memory)
+            exc += enlc
+            vxc += vnlc
+            logger.info(ks, 'nelec with nlc grids = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     nkpts = len(kpts)
@@ -101,13 +104,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         vxc += vj
     else:
-        omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-        if getattr(ks.with_df, '_j_only', False) and nkpts > 1: # for GDF and MDF
-            ks.with_df._j_only = False
-            if ks.with_df._cderi is not None:
-                logger.warn(ks, 'df.j_only cannot be used with hybrid '
-                            'functional. Rebuild cderi')
-                ks.with_df.build()
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vk *= hyb
         if omega != 0:
@@ -132,6 +129,8 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     if dm is None: dm = mf.make_rdm1()
     if grids is None: grids = mf.grids
     if kpts is None: kpts = mf.kpts
+    if dm[0].ndim == 3:  # the KUKS density matrix
+        dm = dm[0] + dm[1]
     if isinstance(mf.with_df, multigrid.MultiGridFFTDF):
         rho = mf.with_df.get_rho(dm, kpts)
     else:
@@ -146,16 +145,26 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
 
     weight = 1./len(h1e_kpts)
     e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
-    tot_e = e1 + vhf.ecoul + vhf.exc
+    ecoul = vhf.ecoul
+    tot_e = e1 + ecoul + vhf.exc
     mf.scf_summary['e1'] = e1.real
-    mf.scf_summary['coul'] = vhf.ecoul.real
+    mf.scf_summary['coul'] = ecoul.real
     mf.scf_summary['exc'] = vhf.exc.real
-    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, vhf.exc)
+    if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag > mf.cell.precision*10):
+        logger.warn(mf, "Coulomb energy has imaginary part %s. "
+                    "Coulomb integrals (e-e, e-N) may not converge !",
+                    ecoul.imag)
     return tot_e.real, vhf.ecoul + vhf.exc
 
-class KRKS(khf.KRHF, rks.KohnShamDFT):
+class KRKS(rks.KohnShamDFT, khf.KRHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
+
+    get_veff = get_veff
+    energy_elec = energy_elec
+    get_rho = get_rho
+
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KRHF.__init__(self, cell, kpts, exxdiv=exxdiv)
@@ -166,32 +175,19 @@ class KRKS(khf.KRHF, rks.KohnShamDFT):
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
-    get_veff = get_veff
-    energy_elec = energy_elec
-    get_rho = get_rho
-
-    density_fit = rks._patch_df_beckegrids(khf.KRHF.density_fit)
-    rs_density_fit = rks._patch_df_beckegrids(khf.KRHF.rs_density_fit)
-    mix_density_fit = rks._patch_df_beckegrids(khf.KRHF.mix_density_fit)
-
     def nuc_grad_method(self):
         from pyscf.pbc.grad import krks
         return krks.Gradients(self)
 
+    def to_hf(self):
+        '''Convert to KRHF object.'''
+        from pyscf.pbc import scf, df
+        out = self._transfer_attrs_(scf.KRHF(self.cell, self.kpts))
+        # Pure functionals only construct J-type integrals. Enable all integrals for KHF.
+        if (not self._numint.libxc.is_hybrid_xc(self.xc) and
+            len(self.kpts) > 1 and getattr(self.with_df, '_j_only', False)):
+            out.with_df._j_only = False
+            out.with_df.reset()
+        return out
 
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.unit = 'A'
-    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-    cell.a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    '''
-
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.verbose = 7
-    cell.output = '/dev/null'
-    cell.build()
-    mf = KRKS(cell, cell.make_kpts([2,1,1]))
-    print(mf.kernel())
+    to_gpu = lib.to_gpu

@@ -24,7 +24,7 @@ myscanner = mycas.nuc_grad_method().as_scanner()
 myintegrator = pyscf.md.NVE(myscanner,
                             dt=5,
                             steps=10,
-                            energy_output="BOMD.md.energies",
+                            data_output="BOMD.md.data",
                             trajectory_output="BOMD.md.xyz").run()
 
 # Note that we can also just pass the CASSCF object directly to
@@ -32,5 +32,5 @@ myintegrator = pyscf.md.NVE(myscanner,
 # myintegrator = pyscf.md.NVE(mycas, dt=5, steps=100)
 
 # Close the file streams for the energy and trajectory.
-myintegrator.energy_output.close()
+myintegrator.data_output.close()
 myintegrator.trajectory_output.close()

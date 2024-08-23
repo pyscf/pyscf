@@ -18,7 +18,6 @@
 
 '''Density expansion on plane waves'''
 
-import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -31,6 +30,7 @@ from pyscf.pbc.df import fft_ao2mo
 from pyscf.pbc.df import fft_jk
 from pyscf.pbc.df import aft
 from pyscf.pbc.df.aft import _check_kpts
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
@@ -41,6 +41,8 @@ def get_nuc(mydf, kpts=None):
     from pyscf.pbc.dft import gen_grid
     kpts, is_single_kpt = _check_kpts(mydf, kpts)
     cell = mydf.cell
+    assert cell.low_dim_ft_type != 'inf_vacuum'
+    assert cell.dimension > 1
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
@@ -63,11 +65,13 @@ def get_nuc(mydf, kpts=None):
     return numpy.asarray(vne)
 
 def get_pp(mydf, kpts=None):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
     '''
     from pyscf.pbc.dft import gen_grid
     kpts, is_single_kpt = _check_kpts(mydf, kpts)
     cell = mydf.cell
+    assert cell.low_dim_ft_type != 'inf_vacuum'
+    assert cell.dimension > 1
     mesh = mydf.mesh
     Gv = cell.get_Gv(mesh)
     SI = cell.get_SI(mesh=mesh)
@@ -156,6 +160,11 @@ def get_pp(mydf, kpts=None):
 class FFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
+
+    _keys = {
+        'cell', 'kpts', 'grids', 'mesh', 'blockdim', 'exxdiv',
+    }
+
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         from pyscf.pbc.dft import gen_grid
         from pyscf.pbc.dft import numint
@@ -164,6 +173,8 @@ class FFTDF(lib.StreamObject):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
 
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
         self.kpts = kpts
 
         self.grids = gen_grid.UniformGrids(cell)
@@ -183,7 +194,6 @@ class FFTDF(lib.StreamObject):
         self.exxdiv = None
         self._numint = numint.KNumInt()
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._keys = set(self.__dict__.keys())
 
     @property
     def mesh(self):
@@ -318,7 +328,7 @@ class FFTDF(lib.StreamObject):
     get_mo_pairs_G = get_mo_pairs = fft_ao2mo.get_mo_pairs_G
 
     def update_mf(self, mf):
-        mf = copy.copy(mf)
+        mf = mf.copy()
         mf.with_df = self
         return mf
 
@@ -328,7 +338,7 @@ class FFTDF(lib.StreamObject):
     def loop(self, blksize=None):
         if self.cell.dimension < 3:
             raise RuntimeError('ERIs of 1D and 2D systems are not positive '
-                               'definite. Current API only supports postive '
+                               'definite. Current API only supports positive '
                                'definite ERIs.')
 
         if blksize is None:
@@ -352,3 +362,5 @@ class FFTDF(lib.StreamObject):
         return ngrids * 2
 
     range_coulomb = aft.AFTDF.range_coulomb
+
+    to_gpu = lib.to_gpu

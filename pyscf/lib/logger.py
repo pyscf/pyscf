@@ -189,7 +189,7 @@ def timer_debug1(rec, msg, cpu0=None, wall0=None):
         rec._t0 = process_clock()
         return rec._t0
 
-class Logger(object):
+class Logger:
     '''
     Attributes:
         stdout : file object or sys.stdout
@@ -237,4 +237,3 @@ def new_logger(rec=None, verbose=None):
     else:
         log = Logger(rec.stdout, rec.verbose)
     return log
-

@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Abdelrahman Ahmed <>
+#         Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         James Serna <jamcar456@gmail.com>
+#         Terrence Stahl <>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
-#
 
 '''
 Unrestricted algebraic diagrammatic construction
@@ -29,6 +31,7 @@ from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import __config__
 from pyscf import df
+from pyscf import scf
 
 
 # Excited-state kernel
@@ -44,13 +47,17 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         adc.check_sanity()
     adc.dump_flags()
 
+    if isinstance(adc._scf, scf.rohf.ROHF) and (adc.method_type == "ip" or adc.method_type == "ea"):
+        logger.warn(
+            adc, "EA/IP-ADC with the ROHF reference do not incorporate the occ-vir Fock matrix elements...")
+
     if eris is None:
         eris = adc.transform_integrals()
 
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
-    guess = adc.get_init_guess(nroots, diag, ascending=True)
+    guess = adc.get_init_guess(nroots, diag, ascending = True)
 
     conv, adc.E, U = lib.linalg_helper.davidson1(
         lambda xs : [matvec(x) for x in xs],
@@ -61,7 +68,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     if adc.compute_properties:
         adc.P,adc.X = adc.get_properties(nroots)
-
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
     header = ("\n*************************************************************"
@@ -69,16 +75,16 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
               "\n*************************************************************")
     logger.info(adc, header)
 
-    if nfalse >= 1:
-        logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
-
     for n in range(nroots):
         print_string = ('%s root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' %
                         (adc.method, n, adc.E[n], adc.E[n]*27.2114))
         if adc.compute_properties:
-            print_string += ("|  Spec factors = %10.8f  " % adc.P[n])
+            print_string += ("|  Spec. factor = %10.8f  " % adc.P[n])
         print_string += ("|  conv = %s" % conv[n])
         logger.info(adc, print_string)
+
+    if nfalse >= 1:
+        logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) did not converge!!!")
 
     log.timer('ADC', *cput0)
 
@@ -113,6 +119,16 @@ class UADC(lib.StreamObject):
     '''
     incore_complete = getattr(__config__, 'adc_uadc_UADC_incore_complete', False)
 
+    _keys = {
+        'tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff',
+        'mol', 'mo_energy_a', 'mo_energy_b', 'incore_complete',
+        'scf_energy', 'e_tot', 't1', 't2', 'frozen', 'chkfile',
+        'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties',
+        'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
+        'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc',
+        'spin_c', 'f_ov'
+    }
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf import gto
 
@@ -133,11 +149,58 @@ class UADC(lib.StreamObject):
         self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 12)
         self.max_cycle = getattr(__config__, 'adc_uadc_UADC_max_cycle', 50)
         self.conv_tol = getattr(__config__, 'adc_uadc_UADC_conv_tol', 1e-12)
-        self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_res', 1e-6)
-
+        self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_residual', 1e-6)
         self.scf_energy = mf.e_tot
+
         self.frozen = frozen
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
+
+        self.f_ov = None
+
+        if isinstance(mf, scf.rohf.ROHF):
+
+            logger.info(mf, "\nROHF reference detected in ADC, semicanonicalizing the orbitals...")
+
+            mo_a = mo_coeff.copy()
+            nalpha = mf.mol.nelec[0]
+            nbeta = mf.mol.nelec[1]
+
+            h1e = mf.get_hcore()
+            dm = mf.make_rdm1()
+            vhf = mf.get_veff(mf.mol, dm)
+
+            fock_a = h1e + vhf[0]
+            fock_b = h1e + vhf[1]
+
+            if nalpha > nbeta:
+                ndocc = nbeta
+                nsocc = nalpha - nbeta
+            else:
+                ndocc = nalpha
+                nsocc = nbeta - nalpha
+
+            fock_a = np.dot(mo_a.T,np.dot(fock_a, mo_a))
+            fock_b = np.dot(mo_a.T,np.dot(fock_b, mo_a))
+
+            # Semicanonicalize Ca using fock_a, nocc_a -> Ca, mo_energy_a, U_a, f_ov_a
+            mo_a, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(
+                fock_a, ndocc + nsocc, mo_a)
+
+            # Semicanonicalize Cb using fock_b, nocc_b -> Cb, mo_energy_b, U_b, f_ov_b
+            mo_b, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, ndocc, mo_a)
+
+            mo_coeff = [mo_a, mo_b]
+
+            f_ov = [f_ov_a, f_ov_b]
+
+            self.f_ov = f_ov
+            self.spin_c = True
+            self.mo_energy_a = mo_energy_a.copy()
+            self.mo_energy_b = mo_energy_b.copy()
+
+        else:
+            self.mo_energy_a = mf.mo_energy[0]
+            self.mo_energy_b = mf.mo_energy[1]
 
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
@@ -148,35 +211,65 @@ class UADC(lib.StreamObject):
         self._nocc = mf.nelec
         self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
         self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
-        self.mo_energy_a = mf.mo_energy[0]
-        self.mo_energy_b = mf.mo_energy[1]
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
         self.method_type = "ip"
         self.with_df = None
-        self.compute_mpn_energy = True
-        self.compute_spec = True
         self.compute_properties = True
         self.approx_trans_moments = False
         self.evec_print_tol = 0.1
         self.spec_factor_print_tol = 0.1
+        self.ncvs = None
+
         self.E = None
         self.U = None
         self.P = None
         self.X = (None,)
-        self.ncvs = None
 
-        keys = set(('tol_residual','conv_tol', 'e_corr', 'method',
-                    'method_type', 'mo_coeff', 'mol', 'mo_energy_b',
-                    'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen',
-                    'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ',
-                    'max_cycle'))
+        self.spin_c = False
 
-        self._keys = set(self.__dict__.keys()).union(keys)
+        dip_ints = -self.mol.intor('int1e_r',comp=3)
+        dip_mom_a = np.zeros((dip_ints.shape[0], self._nmo[0], self._nmo[0]))
+        dip_mom_b = np.zeros((dip_ints.shape[0], self._nmo[1], self._nmo[1]))
+
+        for i in range(dip_ints.shape[0]):
+            dip = dip_ints[i,:,:]
+            dip_mom_a[i,:,:] = np.dot(mo_coeff[0].T, np.dot(dip, mo_coeff[0]))
+            dip_mom_b[i,:,:] = np.dot(mo_coeff[1].T, np.dot(dip, mo_coeff[1]))
+
+        self.dip_mom = []
+        self.dip_mom.append(dip_mom_a)
+        self.dip_mom.append(dip_mom_b)
+
+        charges = self.mol.atom_charges()
+        coords  = self.mol.atom_coords()
+        self.dip_mom_nuc = lib.einsum('i,ix->x', charges, coords)
 
     compute_amplitudes = uadc_amplitudes.compute_amplitudes
     compute_energy = uadc_amplitudes.compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore
+
+    def semi_canonicalize_orbitals(self, f, nocc, C):
+
+        # Diagonalize occ-occ block
+        evals_oo, evecs_oo = np.linalg.eigh(f[:nocc, :nocc])
+
+        # Diagonalize virt-virt block
+        evals_vv, evecs_vv = np.linalg.eigh(f[nocc:, nocc:])
+
+        evals = np.hstack((evals_oo, evals_vv))
+
+        U = np.zeros_like(f)
+
+        U[:nocc, :nocc] = evecs_oo
+        U[nocc:, nocc:] = evecs_vv
+
+        C = np.dot(C, U)
+
+        transform_f = np.dot(U.T, np.dot(f, U))
+        f_ov = transform_f[:nocc, nocc:].copy()
+
+        return C, evals, f_ov, transform_f
 
     def dump_flags(self, verbose=None):
         logger.info(self, '')
@@ -197,8 +290,8 @@ class UADC(lib.StreamObject):
         return self
 
     def kernel_gs(self):
-        assert (self.mo_coeff is not None)
-        assert (self.mo_occ is not None)
+        assert(self.mo_coeff is not None)
+        assert(self.mo_occ is not None)
 
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -298,8 +391,8 @@ class UADC(lib.StreamObject):
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
-        logger.note(self, 'E_corr = %.8f',
-                    self.e_corr)
+        logger.note(self, 'MP%s correlation energy of reference state (a.u.) = %.8f',
+                    self.method[4], self.e_corr)
         return self
 
     def ea_adc(self, nroots=1, guess=None, eris=None):
@@ -344,7 +437,6 @@ class UADC(lib.StreamObject):
         return self._adc_es.make_rdm1()
 
 if __name__ == '__main__':
-    from pyscf import scf
     from pyscf import gto
     from pyscf import adc
 

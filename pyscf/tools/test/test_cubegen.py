@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import copy
 import tempfile
 from pyscf import lib, gto, scf
 from pyscf.tools import cubegen

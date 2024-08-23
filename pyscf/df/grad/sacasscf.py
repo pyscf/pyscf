@@ -16,6 +16,12 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import numpy as np
+import time
+import gc
+from functools import reduce
+from scipy import linalg
+from pyscf import gto
 from pyscf import mcscf, lib, ao2mo
 from pyscf.grad import lagrange
 from pyscf.grad import rhf as rhf_grad
@@ -29,10 +35,6 @@ from pyscf.df.grad import rhf as dfrhf_grad
 from pyscf.fci.direct_spin1 import _unpack_nelec
 from pyscf.fci.spin_op import spin_square0
 from pyscf.fci import cistring
-import numpy as np
-import copy, time, gc
-from functools import reduce
-from scipy import linalg
 from pyscf.df.grad.casdm2_util import solve_df_rdm2, grad_elec_dferi, grad_elec_auxresponse_dferi
 
 def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None, verbose=None,
@@ -318,35 +320,38 @@ def as_scanner(mcscf_grad, state=None):
         return dfcasscf_grad.as_scanner (mcscf_grad)
 
     lib.logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
+    name = mcscf_grad.__class__.__name__ + CASSCF_GradScanner.__name_mixin__
+    return lib.set_class(CASSCF_GradScanner(mcscf_grad, state),
+                         (CASSCF_GradScanner, mcscf_grad.__class__), name)
 
-    class CASSCF_GradScanner(mcscf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-            if state is None:
-                self.state = g.state
-            else:
-                self.state = state
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class CASSCF_GradScanner(lib.GradScanner):
+    def __init__(self, g, state):
+        lib.GradScanner.__init__(self, g)
+        if state is not None:
+            self.state = state
 
-            mc_scanner = self.base
-            e_tot = mc_scanner(mol)
-            if hasattr (mc_scanner, 'e_mcscf'): self.e_mcscf = mc_scanner.e_mcscf
-            #if isinstance (e_tot, (list, tuple, np.ndarray)): e_tot = e_tot[self.state]
-            if hasattr (mc_scanner, 'e_states'): e_tot = mc_scanner.e_states[self.state]
-            self.mol = mol
-            if not ('state' in kwargs):
-                kwargs['state'] = self.state
-            de = self.kernel(**kwargs)
-            return e_tot, de
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-    return CASSCF_GradScanner(mcscf_grad)
+        mc_scanner = self.base
+        e_tot = mc_scanner(mol)
+        if hasattr (mc_scanner, 'e_mcscf'): self.e_mcscf = mc_scanner.e_mcscf
+        #if isinstance (e_tot, (list, tuple, np.ndarray)): e_tot = e_tot[self.state]
+        if hasattr (mc_scanner, 'e_states'): e_tot = mc_scanner.e_states[self.state]
+        self.mol = mol
+        if not ('state' in kwargs):
+            kwargs['state'] = self.state
+        de = self.kernel(**kwargs)
+        return e_tot, de
 
 
 class Gradients (sacasscf_grad.Gradients):
+
+    _keys = {'with_df', 'auxbasis_response'}
 
     def __init__(self, mc, state=None):
         self.auxbasis_response = True
@@ -365,3 +370,5 @@ class Gradients (sacasscf_grad.Gradients):
     def get_LdotJnuc (self, Lvec, **kwargs):
         with lib.temporary_env (sacasscf_grad, Lci_dot_dgci_dx=Lci_dot_dgci_dx, Lorb_dot_dgorb_dx=Lorb_dot_dgorb_dx):
             return sacasscf_grad.Gradients.get_LdotJnuc (self, Lvec, **kwargs)
+
+    to_gpu = lib.to_gpu

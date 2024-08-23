@@ -32,7 +32,7 @@ ref.:
 In RSGDF, the two-center and three-center Coulomb integrals are calculated in two pars:
     j2c = j2c_SR(omega) + j2c_LR(omega)
     j3c = j3c_SR(omega) + j3c_LR(omega)
-where the SR and LR integrals correpond to using the following potentials
+where the SR and LR integrals correspond to using the following potentials
     g_SR(r_12;omega) = erfc(omega * r_12) / r_12
     g_LR(r_12;omega) = erf(omega * r_12) / r_12
 The SR integrals are evaluated in real space using a lattice summation, while
@@ -47,6 +47,7 @@ import numpy as np
 
 from pyscf import lib
 from pyscf.lib import logger, zdotCN
+from pyscf.lib import parameters as param
 from pyscf.pbc.df.df import GDF
 from pyscf.pbc.df import aft, aft_jk
 from pyscf.pbc.df import ft_ao
@@ -74,6 +75,12 @@ def get_aux_chg(auxcell):
 class RSGDF(GDF):
     '''Range Separated Gaussian Density Fitting
     '''
+    _keys = {
+        'use_bvk', 'precision_R', 'precision_G', 'npw_max', '_omega_min',
+        'omega', 'ke_cutoff', 'mesh_compact', 'omega_j2c', 'mesh_j2c',
+        'precision_j2c', 'j2c_eig_always', 'kpts',
+    }
+
     def weighted_coulG(self, kpt=np.zeros(3), exx=False, mesh=None, omega=None):
         return aft.weighted_coulG(self, kpt, exx, mesh, omega)
 
@@ -213,7 +220,7 @@ cell.dimension=3 with large vacuum.""")
             # Use the thus determined mesh_compact only if not p[rovided
             if self.mesh_compact is None:
                 self.mesh_compact = mesh_compact
-        # If omega is provded but mesh_compact is not
+        # If omega is provided but mesh_compact is not
         elif self.mesh_compact is None:
             self.ke_cutoff, self.mesh_compact = \
                                 rsdf_helper.estimate_mesh_for_omega(
@@ -313,6 +320,12 @@ RSDF = RSGDF
 
 
 class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
+    _keys = {
+        'use_bvk', 'precision_R', 'precision_G', 'npw_max', '_omega_min',
+        'omega', 'ke_cutoff', 'mesh_compact', 'omega_j2c', 'mesh_j2c',
+        'precision_j2c', 'j2c_eig_always', 'kpts',
+    }
+
     def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
         self.eta = None
         self.mesh = None
@@ -409,9 +422,11 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
                       kptij_lst=None, j_only=False, dataname='j3c-junk',
                       shls_slice=None):
-        swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
-        fswap = lib.H5TmpFile(swapfile.name)
-        swapfile = None
+        # Deadlock on NFS if you open an already-opened tmpfile in H5PY
+        # swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
+        fswap = lib.H5TmpFile(dir=os.path.dirname(cderi_file), prefix='.outcore_auxe2_swap')
+        # avoid trash files
+        os.unlink(fswap.filename)
 
         cell = self.cell
         if self.use_bvk and self.kpts_band is None:
@@ -561,7 +576,7 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
         # Add (1) short-range G=0 (i.e., charge) part and (2) long-range part
         tspans = np.zeros((3,2))    # lr, j2c_inv, j2c_cntr
         tspannames = ["ftaop+pw", "j2c_inv", "j2c_cntr"]
-        feri = h5py.File(cderi_file, 'w')
+        feri = lib.H5FileWrap(cderi_file, 'w')
 
         # TODO: Store rs_density_fit cderi tensor in v1 format for the moment.
         # It should be changed to 'v2' format in the future.

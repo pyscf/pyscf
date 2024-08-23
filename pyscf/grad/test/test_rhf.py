@@ -18,6 +18,11 @@ import numpy
 from pyscf import gto, scf, lib
 from pyscf import grad
 
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dftd3 = dftd4 = None
+
 def setUpModule():
     global mol
     mol = gto.Mole()
@@ -52,6 +57,10 @@ class KnownValues(unittest.TestCase):
         g = g_scan(mol)[1]
         self.assertAlmostEqual(lib.fp(g), 0.0055116240804341972, 7)
 
+        gobj = g_scan.undo_scanner()
+        g = gobj.kernel()
+        self.assertAlmostEqual(lib.fp(g), 0.0055116240804341972, 7)
+
         mfs = g_scan.base.as_scanner()
         e1 = mfs('O  0.  0. -0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
         e2 = mfs('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
@@ -66,6 +75,30 @@ class KnownValues(unittest.TestCase):
         e1 = mfs('O  0.  0. -0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
         e2 = mfs('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
         self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 5)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_rhf_d3_grad(self):
+        mf = scf.RHF(mol)
+        mf.disp = 'd3bj'
+        g_scan = mf.nuc_grad_method().as_scanner()
+        g = g_scan(mol)[1]
+
+        mf_scan = mf.as_scanner()
+        e1 = mf_scan('O  0.  0. -0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
+        e2 = mf_scan('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
+        self.assertAlmostEqual((e2-e1)/0.002*lib.param.BOHR, g[0,2], 5)
+
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
+    def test_rhf_d4_grad(self):
+        mf = scf.RHF(mol)
+        mf.disp = 'd4'
+        g_scan = mf.nuc_grad_method().as_scanner()
+        g = g_scan(mol)[1]
+
+        mf_scan = mf.as_scanner()
+        e1 = mf_scan('O  0.  0. -0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
+        e2 = mf_scan('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
+        self.assertAlmostEqual((e2-e1)/0.002*lib.param.BOHR, g[0,2], 5)
 
     def test_x2c_rhf_grad(self):
         h2o = gto.Mole()
@@ -201,8 +234,25 @@ class KnownValues(unittest.TestCase):
         g_x = scf.RHF (mol).run ().nuc_grad_method ().kernel ()
         self.assertAlmostEqual(abs(ref[:,2] - g_x[:,0]).max(), 0, 9)
 
+    def test_grad_nuc(self):
+        mol = gto.M(atom='He 0 0 0; He 0 1 2; H 1 2 1; H 1 0 0')
+        gs = grad.rhf.grad_nuc(mol)
+        ref = grad_nuc(mol)
+        self.assertAlmostEqual(abs(gs - ref).max(), 0, 9)
+
+def grad_nuc(mol):
+    gs = numpy.zeros((mol.natm,3))
+    for j in range(mol.natm):
+        q2 = mol.atom_charge(j)
+        r2 = mol.atom_coord(j)
+        for i in range(mol.natm):
+            if i != j:
+                q1 = mol.atom_charge(i)
+                r1 = mol.atom_coord(i)
+                r = numpy.sqrt(numpy.dot(r1-r2,r1-r2))
+                gs[j] -= q1 * q2 * (r2-r1) / r**3
+    return gs
 
 if __name__ == "__main__":
     print("Full Tests for RHF Gradients")
     unittest.main()
-

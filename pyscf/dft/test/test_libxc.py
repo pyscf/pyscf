@@ -22,7 +22,7 @@ from pyscf import dft
 from pyscf import lib
 
 def setUpModule():
-    global mol, mf, ao, rho
+    global mol, mf, ao, rho, dm
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
@@ -108,6 +108,9 @@ class KnownValues(unittest.TestCase):
         #hyb, fn_facs = dft.libxc.parse_xc('TF,')
         #self.assertEqual(fn_facs, [(50, 1)])
 
+        hyb, fn_facs = dft.libxc.parse_xc("9.999e-5*HF,")
+        self.assertEqual(hyb, (9.999e-5, 0, 0))
+
         ref = ((1, 1), (7, 1))
         self.assertEqual(dft.libxc.parse_xc_name('LDA,VWN'), (1,7))
         self.assertEqual(dft.libxc.parse_xc(('LDA','VWN'))[1], ref)
@@ -123,6 +126,9 @@ class KnownValues(unittest.TestCase):
 
         self.assertEqual(dft.libxc.parse_xc('Xpbe,')[1], ((123,1),))
         self.assertEqual(dft.libxc.parse_xc('pbe,' )[1], ((101,1),))
+        self.assertEqual(dft.libxc.parse_xc('gga_x_pbe_gaussian' )[1], ((321,1),))
+
+
         hyb, fn_facs = dft.libxc.parse_xc('PBE*.4+LDA')
         self.assertEqual(fn_facs, ((101, 0.4), (130, 0.4), (1, 1)))
         self.assertRaises(KeyError, dft.libxc.parse_xc, 'PBE+VWN')
@@ -182,8 +188,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.dot(rho[0], v[0].T[1]), -1052.1534466398498, 8)
         self.assertAlmostEqual(numpy.dot(rho[0], f[0].T[0]), -1762.3340626646932*2, 8)
         self.assertAlmostEqual(numpy.dot(rho[0], f[0].T[2]), -1762.3340626646932*2, 8)
-        self.assertAlmostEqual(numpy.dot(rho[0], k[0].T[0]),  1202284274.6255436*4, 3)
-        self.assertAlmostEqual(numpy.dot(rho[0], k[0].T[3]),  1202284274.6255436*4, 3)
+        self.assertAlmostEqual(numpy.dot(rho[0], k[0].T[0]),  1202284274.6255436*4, 2)
+        self.assertAlmostEqual(numpy.dot(rho[0], k[0].T[3]),  1202284274.6255436*4, 2)
 
     def test_lyp(self):
         e,v,f = dft.libxc.eval_xc(',LYP', rho, deriv=2)[:3]
@@ -203,7 +209,7 @@ class KnownValues(unittest.TestCase):
     #    e, v = dft.libxc.eval_xc('tpss,', (rho_a, rho_b), spin=1, deriv=1)[:2]
 
     def test_define_xc(self):
-        def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
+        def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
             # A fictitious XC functional to demonstrate the usage
             rho0, dx, dy, dz = rho[:4]
             gamma = (dx**2 + dy**2 + dz**2)
@@ -225,6 +231,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(exc), 0.0012441814416833327, 9)
         self.assertAlmostEqual(lib.fp(vxc[0]), 0.0065565189784811129, 9)
         self.assertAlmostEqual(lib.fp(vxc[1]), 0.0049270110162854116, 9)
+
+        n, exc, vxc = ni.nr_rks(mol, mf.grids, 'm06x', dm)
+        self.assertAlmostEqual(n, 4, 5)
+        self.assertAlmostEqual(lib.fp(exc), 0.01197588220700074, 6)
+        self.assertAlmostEqual(lib.fp(vxc), -0.043974912389152986, 6)
 
         mf = mf.define_xc_('0.5*B3LYP+0.5*B3LYP')
         exc0, vxc0 = mf._numint.eval_xc(None, rho, 0, deriv=1)[:2]
@@ -250,38 +261,38 @@ class KnownValues(unittest.TestCase):
         test_ref = numpy.array([-1.57730394, -2.12127045,-2.11297165,-0.00315462,
                                  0.00000000, -0.00446935, 3.45640232, 4.42563831])  # libxc-5.1.2
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('1.38888888889*m05,', rho, 1, deriv=1)
-        self.assertAlmostEqual(float(exc)*1.8, test_ref[0], 5)
+        self.assertAlmostEqual(float(exc[0])*1.8, test_ref[0], 5)
         self.assertAlmostEqual(abs(vxc[0]-test_ref[1:3]).max(), 0, 6)
         self.assertAlmostEqual(abs(vxc[1]-test_ref[3:6]).max(), 0, 6)
         self.assertAlmostEqual(abs(vxc[3]-test_ref[6:8]).max(), 0, 5)
 
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('1.38888888889*m05,', rho[0], 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.5746231988116002, 5)
-        self.assertAlmostEqual(float(vxc[0]), -0.8806121005703862, 6)
-        self.assertAlmostEqual(float(vxc[1]), -0.0032300155406846756, 7)
-        self.assertAlmostEqual(float(vxc[3]), 0.4474953100487698, 5)
+        self.assertAlmostEqual(float(exc[0]), -0.5746231988116002, 5)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.8806121005703862, 6)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.0032300155406846756, 7)
+        self.assertAlmostEqual(float(vxc[3][0]), 0.4474953100487698, 5)
 
     def test_camb3lyp(self):
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('camb3lyp', rho, 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.5752559666317147, 7)
-        self.assertAlmostEqual(float(vxc[0]), -0.7709812578936763, 7)
-        self.assertAlmostEqual(float(vxc[1]), -0.0029862221286189846, 7)
+        self.assertAlmostEqual(float(exc[0]), -0.5752559666317147, 7)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.7709812578936763, 7)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.0029862221286189846, 7)
 
         self.assertEqual(dft.libxc.rsh_coeff('camb3lyp'), (0.33, 0.65, -0.46))
 
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('RSH(0.5,0.65,-0.46) + 0.46*ITYH + .35*B88,', rho, 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.48916154057161476, 9)
-        self.assertAlmostEqual(float(vxc[0]), -0.6761177630311709, 9)
-        self.assertAlmostEqual(float(vxc[1]), -0.002949151742087167, 9)
+        self.assertAlmostEqual(float(exc[0]), -0.48916154057161476, 9)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.6761177630311709, 9)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.002949151742087167, 9)
 
     def test_ityh(self):
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('ityh,', rho, 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.6359945579326314, 7)
-        self.assertAlmostEqual(float(vxc[0]), -0.8712041561251518, 7)
-        self.assertAlmostEqual(float(vxc[1]), -0.003911167644579979, 7)
+        self.assertAlmostEqual(float(exc[0]), -0.6359945579326314, 7)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.8712041561251518, 7)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.003911167644579979, 7)
         self.assertEqual(dft.libxc.rsh_coeff('ityh,'), (0.2, 0.0, 0.0))
 
     def test_deriv_order(self):
@@ -341,6 +352,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(numpy.hstack([fxc[i] for i in [0,1,2,4,6,9]])-fxc_ref).max(), 0, 7)
         self.assertAlmostEqual(abs(numpy.hstack([kxc[i] for i in [0,1,2,3,5,7,10,12,15,19]])-kxc_ref).max(), 0, 6)
 
+    def test_dft_parser(self):
+        from pyscf.dft.dft_parser import parse_dft
+        self.assertEqual(parse_dft('wb97m-d3bj'), ('wb97m-v', False, 'd3bj'))
+        self.assertEqual(parse_dft('b3lyp-d3zerom'), ('b3lyp', '', 'd3zerom'))
+        self.assertEqual(parse_dft('wb97x-d3bj'), ('wb97x-v', False, 'd3bj'))
+        self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x', '', 'd3zero2b'))
 
 if __name__ == "__main__":
     print("Test libxc")

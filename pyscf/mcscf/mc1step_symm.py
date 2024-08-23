@@ -38,7 +38,6 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
             self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)
         else:
             self.fcisolver = fci.direct_spin1_symm.FCISolver(self.mol)
-        delattr(fcisolver, '_keys')
         self.fcisolver.__dict__.update(fcisolver.__dict__)
 
     @property
@@ -57,6 +56,8 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
+        else: # overwrite self.mo_coeff because it is needed in many methods of this class
+            self.mo_coeff = mo_coeff
         if callback is None: callback = self.callback
         if _kern is None: _kern = mc1step.kernel
 

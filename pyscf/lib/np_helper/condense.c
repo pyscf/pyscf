@@ -162,6 +162,69 @@ void NPbcondense(int8_t (*op)(int8_t *, int, int, int), int8_t *out, int8_t *a,
 }
 }
 
+void NPBcondense(uint8_t (*op)(uint8_t *, int, int, int), uint8_t *out, uint8_t *a,
+                 int *loc_x, int *loc_y, int nloc_x, int nloc_y)
+{
+        size_t nj = loc_y[nloc_y];
+        size_t Nloc_y = nloc_y;
+#pragma omp parallel
+{
+        int i, j, i0, j0, di, dj;
+#pragma omp for
+        for (i = 0; i < nloc_x; i++) {
+                i0 = loc_x[i];
+                di = loc_x[i+1] - i0;
+                for (j = 0; j < nloc_y; j++) {
+                        j0 = loc_y[j];
+                        dj = loc_y[j+1] - j0;
+                        out[i*Nloc_y+j] = op(a+i0*nj+j0, nj, di, dj);
+                }
+        }
+}
+}
+
+void NPicondense(int (*op)(int *, int, int, int), int *out, int *a,
+                 int *loc_x, int *loc_y, int nloc_x, int nloc_y)
+{
+        size_t nj = loc_y[nloc_y];
+        size_t Nloc_y = nloc_y;
+#pragma omp parallel
+{
+        int i, j, i0, j0, di, dj;
+#pragma omp for
+        for (i = 0; i < nloc_x; i++) {
+                i0 = loc_x[i];
+                di = loc_x[i+1] - i0;
+                for (j = 0; j < nloc_y; j++) {
+                        j0 = loc_y[j];
+                        dj = loc_y[j+1] - j0;
+                        out[i*Nloc_y+j] = op(a+i0*nj+j0, nj, di, dj);
+                }
+        }
+}
+}
+
+void NPfcondense(float (*op)(float *, int, int, int), float *out, float *a,
+                 int *loc_x, int *loc_y, int nloc_x, int nloc_y)
+{
+        size_t nj = loc_y[nloc_y];
+        size_t Nloc_y = nloc_y;
+#pragma omp parallel
+{
+        int i, j, i0, j0, di, dj;
+#pragma omp for
+        for (i = 0; i < nloc_x; i++) {
+                i0 = loc_x[i];
+                di = loc_x[i+1] - i0;
+                for (j = 0; j < nloc_y; j++) {
+                        j0 = loc_y[j];
+                        dj = loc_y[j+1] - j0;
+                        out[i*Nloc_y+j] = op(a+i0*nj+j0, nj, di, dj);
+                }
+        }
+}
+}
+
 int8_t NP_any(int8_t *a, int nd, int di, int dj)
 {
         int i, j;
@@ -184,4 +247,37 @@ int8_t NP_all(int8_t *a, int nd, int di, int dj)
                 }
         } }
         return 1;
+}
+
+uint8_t NP_Bmax(uint8_t *a, int nd, int di, int dj)
+{
+        int i, j;
+        uint8_t out = a[0];
+        for (i = 0; i < di; i++) {
+        for (j = 0; j < dj; j++) {
+                out = MAX(out, a[i*nd+j]);
+        } }
+        return out;
+}
+
+int NP_imax(int *a, int nd, int di, int dj)
+{
+        int i, j;
+        int out = a[0];
+        for (i = 0; i < di; i++) {
+        for (j = 0; j < dj; j++) {
+                out = MAX(out, a[i*nd+j]);
+        } }
+        return out;
+}
+
+float NP_fmax(float *a, int nd, int di, int dj)
+{
+        int i, j;
+        float out = a[0];
+        for (i = 0; i < di; i++) {
+        for (j = 0; j < dj; j++) {
+                out = MAX(out, a[i*nd+j]);
+        } }
+        return out;
 }

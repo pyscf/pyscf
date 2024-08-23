@@ -732,7 +732,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                     iLkI *= vkcoulG[p0:p1].reshape(1,nG,1)
                     zdotNC(iLkR.reshape(nao,-1), iLkI.reshape(nao,-1),
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
-                           1, vkR[i], vkI[i])
+                           1, vkR[i], vkI[i], 1)
             #t2 = log.timer_debug1('        with_k', *t2)
         pqkR = pqkI = pLqR = pLqI = iLkR = iLkI = None
         #t2 = log.timer_debug1('%d:%d'%(p0,p1), *t2)

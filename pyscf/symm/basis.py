@@ -209,7 +209,7 @@ def _basis_offset_for_atoms(atoms, basis_tab):
 
 def _num_contract(basis):
     if isinstance(basis[1], int):
-        # This branch should never be reached if basis_tab is formated by
+        # This branch should never be reached if basis_tab is formatted by
         # function mole.format_basis
         nctr = len(basis[2]) - 1
     else:
@@ -300,7 +300,7 @@ _SO3_SYMB2ID = {
     'i+5':    622,
     'i+6':    630,
 }
-_SO3_ID2SYMB = dict([(v, k) for k, v in _SO3_SYMB2ID.items()])
+_SO3_ID2SYMB = {v: k for k, v in _SO3_SYMB2ID.items()}
 _ANGULAR = 'spdfghiklmnortu'
 
 def so3_irrep_symb2id(symb):

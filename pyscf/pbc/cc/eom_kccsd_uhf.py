@@ -1238,7 +1238,7 @@ if __name__ == '__main__':
     r1, r2 = eom_kgccsd.spin2spatial_ip_doublet(spin_r1_ip, spin_r2_ip, kconserv, kshift, orbspin)
     vector = myeom.amplitudes_to_vector(r1, r2, kshift)
     vector = myeom.matvec(vector, kshift=kshift, imds=imds)
-    Hr1, Hr2 = myeom.vector_to_amplitudes(vector, nkpts, (nmoa, nmob), (nocca, noccb))
+    Hr1, Hr2 = myeom.vector_to_amplitudes(vector, 0, nkpts, (nmoa, nmob), (nocca, noccb))
     Hr1a, Hr1b = Hr1
     Hr2aaa, Hr2baa, Hr2abb, Hr2bbb = Hr2
     print('ip Hr1a',   abs(lib.fp(Hr1a)   - (-0.34462696543560045-1.6104596956729178j)))
@@ -1263,7 +1263,7 @@ if __name__ == '__main__':
 
     vector = myeom.amplitudes_to_vector(r1, r2, kshift)
     vector = myeom.matvec(vector, kshift=kshift, imds=imds)
-    Hr1, Hr2 = myeom.vector_to_amplitudes(vector, nkpts, (nmoa, nmob), (nocca, noccb))
+    Hr1, Hr2 = myeom.vector_to_amplitudes(vector, 0, nkpts, (nmoa, nmob), (nocca, noccb))
     Hr1a, Hr1b = Hr1
     Hr2aaa, Hr2aba, Hr2bab, Hr2bbb = Hr2
 

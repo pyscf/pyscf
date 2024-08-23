@@ -20,6 +20,7 @@ import numpy as np
 from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.scf import hf as mol_hf
 from pyscf.pbc.lib import kpts as libkpts
 from pyscf.pbc.scf import khf_ksymm, khf, kuhf
 from pyscf.pbc.lib.kpts import KPoints
@@ -114,6 +115,14 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
     """
     KUHF with k-point symmetry
     """
+
+    get_occ = get_occ
+    energy_elec = energy_elec
+    get_rho = get_rho
+
+    to_ks = kuhf.KUHF.to_ks
+    convert_from_ = kuhf.KUHF.convert_from_
+
     def __init__(self, cell, kpts=libkpts.KPoints(),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
                  use_ao_symmetry=True):
@@ -146,8 +155,10 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
-        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
+        dm_kpts = mol_hf.SCF.get_init_guess(self, cell, key)
         assert dm_kpts.shape[0]==2
         if dm_kpts.ndim != 4:
             nkpts = self.kpts.nkpts_ibz
@@ -156,7 +167,7 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
         elif dm_kpts.shape[1] != self.kpts.nkpts_ibz:
             dm_kpts = dm_kpts[:,self.kpts.ibz2bz]
 
-        ne = np.einsum('k,xkij,kji->x', self.kpts.weights_ibz, dm_kpts, self.get_ovlp(cell)).real
+        ne = lib.einsum('k,xkij,kji->x', self.kpts.weights_ibz, dm_kpts, s1e).real
         nkpts = self.kpts.nkpts
         ne *= nkpts
         nelec = np.asarray(self.nelec)
@@ -204,9 +215,5 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
         self.dump_chk({'e_tot': self.e_tot, 'mo_energy': self.mo_energy,
                        'mo_coeff': self.mo_coeff, 'mo_occ': self.mo_occ})
         return self
-
-    get_occ = get_occ
-    energy_elec = energy_elec
-    get_rho = get_rho
 
 KUHF = KsymAdaptedKUHF

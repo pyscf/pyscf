@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 import tempfile
 import numpy
@@ -29,7 +28,7 @@ def setUpModule():
     global mol, molsym, m, msym, mc0
     b = 1.4
     mol = gto.M(
-    verbose = 5,
+    verbose = 0,
     output = '/dev/null',
     atom = [
         ['N',(  0.000000,  0.000000, -b/2)],
@@ -43,7 +42,7 @@ def setUpModule():
     mc0 = mcscf.CASSCF(m, 4, 4).run()
 
     molsym = gto.M(
-    verbose = 5,
+    verbose = 0,
     output = '/dev/null',
     atom = [
         ['N',(  0.000000,  0.000000, -b/2)],
@@ -87,7 +86,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mc1.e_tot, -109.02535605303684, 7)
 
     def test_0core_0virtual(self):
-        mol = gto.M(atom='He', basis='321g')
+        mol = gto.M(atom='He', basis='321g', verbose=0)
         mf = scf.RHF(mol).run()
         mc1 = mcscf.CASSCF(mf, 2, 2).run()
         self.assertAlmostEqual(mc1.e_tot, -2.850576699649737, 9)
@@ -128,15 +127,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(fci.addons.overlap(ci0, ci1, 4, 4, s)), 1, 9)
 
     def test_get_h2eff(self):
-        mc1 = mcscf.CASSCF(m, 4, 4).approx_hessian()
+        mc1 = mcscf.CASSCF(m, 4, 4)
+        mc2 = mc1.approx_hessian()
         eri1 = mc1.get_h2eff(m.mo_coeff[:,5:9])
-        eri2 = mc1.get_h2cas(m.mo_coeff[:,5:9])
+        eri2 = mc2.get_h2eff(m.mo_coeff[:,5:9])
         self.assertAlmostEqual(abs(eri1-eri2).max(), 0, 12)
 
-        mc1 = mcscf.density_fit(mcscf.CASSCF(m, 4, 4))
-        eri1 = mc1.get_h2eff(m.mo_coeff[:,5:9])
-        eri2 = mc1.get_h2cas(m.mo_coeff[:,5:9])
-        self.assertTrue(abs(eri1-eri2).max() > 1e-5)
+        mc3 = mcscf.density_fit(mc1)
+        eri3 = mc3.get_h2eff(m.mo_coeff[:,5:9])
+        self.assertTrue(abs(eri1-eri3).max() > 1e-5)
 
     def test_get_veff(self):
         mf = m.view(dft.rks.RKS)
@@ -307,7 +306,7 @@ class KnownValues(unittest.TestCase):
 
     def test_state_average_mix(self):
         mc = mcscf.CASSCF(m, 4, 4)
-        cis1 = copy.copy(mc.fcisolver)
+        cis1 = mc.fcisolver.copy()
         cis1.spin = 2
         mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [.5, .5])
         mc.run()
@@ -317,14 +316,14 @@ class KnownValues(unittest.TestCase):
         mc.analyze()
         mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
 
-        mc.kernel(mo_coeff=mo_coeff)
+        mc.kernel(mo_coeff=mo_coeff, ci0=civec)
         self.assertAlmostEqual(mc.e_states[0], -108.7506795311190, 5)
         self.assertAlmostEqual(mc.e_states[1], -108.8582272809495, 5)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 7)
         self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
 
     def test_small_system(self):
-        mol = gto.M(atom='H 0 0 0; H 0 0 .74', symmetry=True, basis='6-31g')
+        mol = gto.M(atom='H 0 0 0; H 0 0 .74', symmetry=True, basis='6-31g', verbose=0)
         mf = scf.RHF(mol).run()
         mc = mcscf.CASSCF(mf, 2, 2)
         mc.max_cycle = 5
