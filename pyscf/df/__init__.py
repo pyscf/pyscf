@@ -34,7 +34,7 @@ Simple usage::
 from . import incore
 from . import outcore
 from . import addons
-from .addons import (load, aug_etb, auto_aux,
+from .addons import (load, aug_etb, autoaux, autoabs,
                      DEFAULT_AUXBASIS, make_auxbasis, make_auxmol)
 from .df import DF, GDF, DF4C, GDF4C
 

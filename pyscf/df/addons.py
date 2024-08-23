@@ -24,7 +24,7 @@ from pyscf import gto
 from pyscf import ao2mo
 from pyscf.data import elements
 from pyscf.lib.exceptions import BasisNotFoundError
-from pyscf.df.autoaux import auto_aux
+from pyscf.df.autoaux import autoaux, autoabs
 from pyscf import __config__
 
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')

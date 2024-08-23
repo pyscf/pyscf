@@ -25,7 +25,7 @@ from math import factorial
 import numpy as np
 from pyscf import gto
 
-F_LAUX = np.array([20, 4.0, 4.0, 3.5, 2.5, 2.0, 2.0])
+F_LAUX   = np.array([20 , 7.0, 4.0, 4.0, 3.5, 2.5, 2.0, 2.0])
 BETA_BIG = np.array([1.8, 2.0, 2.2, 2.2, 2.2, 2.3, 3.0, 3.0])
 BETA_SMALL = 1.8
 
@@ -45,18 +45,18 @@ def _primitive_emin_emax(basis):
         emax_by_l[l] = max(es.max(), emax_by_l[l])
         emin_by_l[l] = min(es.min(), emin_by_l[l])
 
-        if 0 and es.size == 1:
-            e_eff_by_l[l] = max(e_eff_by_l[l], emax_by_l[l])
-        else:
-            cs = e_c[:,1:]
-            cs = np.einsum('pi,p->pi', cs, gto.gto_norm(l, es))
-            ee = es[:,None] + es
-            r_ints = gto.gaussian_int(l*2+3, ee) # \int \chi^2 r dr
-            r_exp = np.einsum('pi,pq,qi->i', cs, r_ints, cs)
+        cs = e_c[:,1:]
+        cs = np.einsum('pi,p->pi', cs, gto.gto_norm(l, es)) # normalize GTOs
+        cs = gto.mole._nomalize_contracted_ao(l, es, cs) # prefactors in r_ints
+        ee = es[:,None] + es
+        r_ints = gto.gaussian_int(l*2+3, ee) # \int \chi^2 r dr
+        r_exp = np.einsum('pi,pq,qi->i', cs, r_ints, cs)
 
-            k = 2**(2*l+1) * factorial(l+1)**2 / factorial(2*l+2)
-            e_eff = 2 * k**2 / (np.pi * r_exp)
-            e_eff_by_l[l] = max(e_eff.min(), e_eff_by_l[l])
+        k = 2**(2*l+1) * factorial(l+1)**2 / factorial(2*l+2)
+        # Eq (9) in the paper. r_exp**2 in the denominator may be a bug in bse
+        #e_eff = 2 * k**2 / (np.pi * r_exp)
+        e_eff = 2 * k**2 / (np.pi * r_exp**2)
+        e_eff_by_l[l] = max(e_eff.max(), e_eff_by_l[l])
     return np.array(emax_by_l), np.array(emin_by_l), np.array(e_eff_by_l)
 
 def _auto_aux_element(Z, basis, ecp_core=0):
@@ -70,53 +70,106 @@ def _auto_aux_element(Z, basis, ecp_core=0):
     # TODO: handle ECP
     if Z <= 2:
         l_val = 0
-    elif Z <= 18:
+    elif Z <= 20:
         l_val = 1
-    elif Z <= 54:
+    elif Z <= 56:
         l_val = 2
     else:
         l_val = 3
     l_inc = 1
+    if Z > 18:
+        l_inc = 2
     l_max_aux = min(max(l_val*2, l_max+l_inc), l_max*2)
 
     liljsum = np.arange(l_max1)[:,None] + np.arange(l_max1)
-    a_min_by_l = [a_min_prim[liljsum==ll].min() for ll in range(l_max_aux+1)]
-    a_max_by_l = [a_max_prim[liljsum==ll].max() for ll in range(l_max_aux+1)]
-    a_aux_by_l = [a_max_aux [liljsum==ll].max() for ll in range(l_max_aux+1)]
+    liljsub = abs(np.arange(l_max1)[:,None] - np.arange(l_max1))
+    a_min_by_l = [a_min_prim[(liljsub<=ll) & (ll<=liljsum)].min() for ll in range(l_max_aux+1)]
+    a_max_by_l = [a_max_prim[(liljsub<=ll) & (ll<=liljsum)].max() for ll in range(l_max_aux+1)]
+    a_aux_by_l = [a_max_aux [(liljsub<=ll) & (ll<=liljsum)].max() for ll in range(l_max_aux+1)]
 
-    a_max_adjust = [max(F_LAUX[l] * a_aux_by_l[l], a_max_by_l[l])
+    a_max_adjust = [min(F_LAUX[l] * a_aux_by_l[l], a_max_by_l[l])
                     for l in range(l_val*2+1)]
     a_max_adjust = a_max_adjust + a_aux_by_l[l_val*2+1 : l_max_aux+1]
 
     emin = np.array(a_min_by_l)
-    # To ensure emax > emin even if there is only one GTO function
-    emax = np.array(a_max_adjust) + 1e-3
+    emax = np.array(a_max_adjust)
 
-    ns_small = np.log(emax[:l_val*2+1] / emin[:l_val*2+1]) / np.log(BETA_SMALL)
+    ns_small = np.log(a_max_adjust[:l_val*2+1] / emin[:l_val*2+1]) / np.log(BETA_SMALL)
     etb = []
-    for l, n in enumerate(np.ceil(ns_small).astype(int)):
+    # ns_small+1 to ensure the largest exponent in etb > emax
+    for l, n in enumerate(np.ceil(ns_small).astype(int) + 1):
         if n > 0:
             etb.append((l, n, emin[l], BETA_SMALL))
 
     if l_max_aux > l_val*2:
         ns_big = (np.log(emax[l_val*2+1:] / emin[l_val*2+1:])
                   / np.log(BETA_BIG[l_val*2+1:l_max_aux+1]))
-        for l, n in enumerate(np.ceil(ns_big).astype(int)):
+        for l, n in enumerate(np.ceil(ns_big).astype(int) + 1):
             if n > 0:
                 l = l + l_val*2+1
                 beta = BETA_BIG[l]
                 etb.append((l, n, emin[l], beta))
     return etb
 
-def auto_aux(mol):
-    uniq_atoms = {a[0] for a in mol._atom}
-    newbasis = {}
-    for symb in uniq_atoms:
+def autoaux(mol):
+    '''
+    Create an auxiliary basis set for the given orbital basis set using
+    the Auto-Aux algorithm.
+
+    See also: G. L. Stoychev, A. A. Auer, and F. Neese
+    Automatic Generation of Auxiliary Basis Sets
+    J. Chem. Theory Comput. 13, 554 (2017)
+    http://doi.org/10.1021/acs.jctc.6b01041
+    '''
+    from pyscf.gto.basis import bse
+
+    def expand(symb):
         Z = gto.charge(symb)
-        basis = mol._basis[symb]
-        etb = _auto_aux_element(Z, basis)
+        etb = _auto_aux_element(Z, mol._basis[symb])
         if etb:
-            newbasis[symb] = gto.expand_etbs(etb)
-        else:
-            raise RuntimeError(f'Failed to generate even-tempered auxbasis for {symb}')
+            return gto.expand_etbs(etb)
+        raise RuntimeError(f'Failed to generate even-tempered auxbasis for {symb}')
+
+    uniq_atoms = {a[0] for a in mol._atom}
+    if isinstance(mol.basis, str):
+        try:
+            elements = [gto.charge(symb) for symb in uniq_atoms]
+            newbasis = bse.autoaux(mol.basis, elements)
+        except KeyError:
+            newbasis = {symb: expand(symb) for symb in uniq_atoms}
+    else:
+        newbasis = {}
+        for symb in uniq_atoms:
+            if symb in mol.basis and isinstance(mol.basis[symb], str):
+                try:
+                    auxbs = bse.autoaux(mol.basis[symb], gto.charge(symb))
+                    newbasis[symb] = next(iter(auxbs.values()))
+                except KeyError:
+                    newbasis[symb] = expand(symb)
+            else:
+                newbasis[symb] = expand(symb)
+    return newbasis
+
+def autoabs(mol):
+    '''
+    Create a Coulomb fitting basis set for the given orbital basis set.
+    See also:
+    R. Yang, A. P. Rendell, and M. J. Frisch
+    Automatically generated Coulomb fitting basis sets: Design and accuracy for systems containing H to Kr
+    J. Chem. Phys. 127, 074102 (2007)
+    http://doi.org/10.1063/1.2752807
+    '''
+    from pyscf.gto.basis import bse
+    uniq_atoms = {a[0] for a in mol._atom}
+    if isinstance(mol.basis, str):
+        elements = [gto.charge(symb) for symb in uniq_atoms]
+        newbasis = bse.autoabs(mol.basis, elements)
+    else:
+        newbasis = {}
+        for symb in uniq_atoms:
+            if symb in mol.basis and isinstance(mol.basis[symb], str):
+                auxbs = bse.autoabs(mol.basis[symb], gto.charge(symb))
+                newbasis[symb] = next(iter(auxbs.values()))
+            else:
+                raise NotImplementedError
     return newbasis
