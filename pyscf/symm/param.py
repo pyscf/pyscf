@@ -18,6 +18,10 @@
 
 import numpy
 
+
+# C2x, C2y, C2z are rotation axis parallel to x, y, z axes
+# sx, sy, sz are mirrors perpendicular to x, y, z axes
+#
 # D2h   C2h   C2v   D2   Cs   Ci   C2   C1
 # E     E     E     E    E    E    E    E
 # C2x               C2x

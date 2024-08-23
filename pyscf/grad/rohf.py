@@ -38,6 +38,14 @@ def make_rdm1e(mf_grad, mo_energy, mo_coeff, mo_occ):
     rdm1e_b = reduce(numpy.dot, (mocc_b, mocc_b.conj().T, fb, mocc_b, mocc_b.conj().T))
     return numpy.array((rdm1e_a, rdm1e_b))
 
+def _tag_rdm1 (self, dm, mo_coeff, mo_occ):
+    mo_coeff = numpy.stack ((mo_coeff,mo_coeff), axis=0)
+    mo_occa = numpy.array (mo_occ>0, dtype=numpy.double)
+    mo_occb = numpy.array (mo_occ==2, dtype=numpy.double)
+    assert (mo_occa.sum () + mo_occb.sum () == mo_occ.sum())
+    mo_occ = numpy.vstack ((mo_occa,mo_occb))
+    return lib.tag_array (dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
+
 class Gradients(rhf_grad.Gradients):
     '''Non-relativistic restricted open-shell Hartree-Fock gradients
     '''
@@ -47,6 +55,8 @@ class Gradients(rhf_grad.Gradients):
     make_rdm1e = make_rdm1e
 
     grad_elec = uhf_grad.grad_elec
+
+    _tag_rdm1 = _tag_rdm1
 
 Grad = Gradients
 

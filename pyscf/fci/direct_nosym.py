@@ -40,7 +40,7 @@ from pyscf import ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
-libfci = lib.load_library('libfci')
+libfci = direct_spin1.libfci
 
 def contract_1e(h1e, fcivec, norb, nelec, link_index=None):
     h1e = numpy.asarray(h1e, order='C')
@@ -49,7 +49,8 @@ def contract_1e(h1e, fcivec, norb, nelec, link_index=None):
 
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert (fcivec.size == na*nb)
+    assert fcivec.size == na*nb
+    assert fcivec.dtype == h1e.dtype == numpy.float64
     ci1 = numpy.zeros_like(fcivec)
 
     libfci.FCIcontract_a_1e_nosym(h1e.ctypes.data_as(ctypes.c_void_p),
@@ -95,30 +96,47 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 
     See also :func:`direct_nosym.absorb_h1e`
     '''
-    fcivec = numpy.asarray(fcivec, order='C')
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
-
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert (fcivec.size == na*nb)
-    ci1 = numpy.empty_like(fcivec)
+    assert fcivec.size == na*nb
+    if fcivec.dtype == eri.dtype == numpy.float64:
+        fcivec = numpy.asarray(fcivec, order='C')
+        eri = numpy.asarray(eri, order='C')
+        ci1 = numpy.empty_like(fcivec)
+        libfci.FCIcontract_2es1(eri.ctypes.data_as(ctypes.c_void_p),
+                                fcivec.ctypes.data_as(ctypes.c_void_p),
+                                ci1.ctypes.data_as(ctypes.c_void_p),
+                                ctypes.c_int(norb),
+                                ctypes.c_int(na), ctypes.c_int(nb),
+                                ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
+                                link_indexa.ctypes.data_as(ctypes.c_void_p),
+                                link_indexb.ctypes.data_as(ctypes.c_void_p))
+        return ci1.view(direct_spin1.FCIvector)
 
-    libfci.FCIcontract_2es1(eri.ctypes.data_as(ctypes.c_void_p),
-                            fcivec.ctypes.data_as(ctypes.c_void_p),
-                            ci1.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_int(norb),
-                            ctypes.c_int(na), ctypes.c_int(nb),
-                            ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
-                            link_indexa.ctypes.data_as(ctypes.c_void_p),
-                            link_indexb.ctypes.data_as(ctypes.c_void_p))
-    return ci1.view(direct_spin1.FCIvector)
+    ciR = numpy.asarray(fcivec.real, order='C')
+    ciI = numpy.asarray(fcivec.imag, order='C')
+    eriR = numpy.asarray(eri.real, order='C')
+    eriI = numpy.asarray(eri.imag, order='C')
+    link_index = (link_indexa, link_indexb)
+    outR  = contract_2e(eriR, ciR, norb, nelec, link_index=link_index)
+    outR -= contract_2e(eriI, ciI, norb, nelec, link_index=link_index)
+    outI  = contract_2e(eriR, ciI, norb, nelec, link_index=link_index)
+    outI += contract_2e(eriI, ciR, norb, nelec, link_index=link_index)
+    out = outR.astype(numpy.complex128)
+    out.imag = outI
+    return out
 
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
     '''
     if not isinstance(nelec, (int, numpy.number)):
         nelec = sum(nelec)
-    h2e = ao2mo.restore(1, eri.copy(), norb)
+    if h1e.dtype == eri.dtype == numpy.float64:
+        h2e = ao2mo.restore(1, eri.copy(), norb)
+    else:
+        assert eri.ndim == 4
+        h2e = eri.astype(dtype=numpy.result_type(h1e, eri), copy=True)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
@@ -132,6 +150,13 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
     h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index)
     return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
+
+def make_hdiag(h1e, eri, norb, nelec, compress=False):
+    if h1e.dtype == numpy.complex128:
+        h1e = h1e.real.copy()
+    if eri.dtype == numpy.complex128:
+        eri = eri.real.copy()
+    return direct_spin1.make_hdiag(h1e, eri, norb, nelec, compress)
 
 
 class FCISolver(direct_spin1.FCISolver):
@@ -149,6 +174,10 @@ class FCISolver(direct_spin1.FCISolver):
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
         return absorb_h1e(h1e, eri, norb, nelec, fac)
 
+    def make_hdiag(self, h1e, eri, norb, nelec, compress=False):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
+        return make_hdiag(h1e, eri, norb, nelec, compress)
+
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
@@ -158,6 +187,7 @@ class FCISolver(direct_spin1.FCISolver):
             neleca = nelec - nelecb
         else:
             neleca, nelecb = nelec
+        davidson_only = True
         link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
         link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
         e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
@@ -174,11 +204,11 @@ class FCISolver(direct_spin1.FCISolver):
             return scipy.linalg.eigh(op)
 
         # TODO: check the hermitian of Hamiltonian then determine whether to
-        # call the non-hermitian diagonlization solver davidson_nosym1
+        # call the non-hermitian diagonalization solver davidson_nosym1
 
         warnings.warn('direct_nosym.kernel is not able to diagonalize '
                       'non-Hermitian Hamiltonian. If h1e and h2e is not '
-                      'hermtian, calling symmetric diagonlization in eig '
+                      'hermtian, calling symmetric diagonalization in eig '
                       'can lead to wrong results.')
 
         self.converged, e, ci = \
@@ -204,43 +234,3 @@ def _unpack(norb, nelec, link_index):
         return link_indexa, link_indexb
     else:
         return link_index
-
-
-if __name__ == '__main__':
-    from functools import reduce
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None#"out_h2o"
-    mol.atom = [
-        ['H', ( 1.,-1.    , 0.   )],
-        ['H', ( 0.,-1.    ,-1.   )],
-        ['H', ( 1.,-0.5   ,-1.   )],
-        #['H', ( 0.,-0.5   ,-1.   )],
-        #['H', ( 0.,-0.5   ,-0.   )],
-        ['H', ( 0.,-0.    ,-1.   )],
-        ['H', ( 1.,-0.5   , 0.   )],
-        ['H', ( 0., 1.    , 1.   )],
-    ]
-
-    mol.basis = {'H': 'sto-3g'}
-    mol.build()
-
-    m = scf.RHF(mol)
-    ehf = m.scf()
-
-    cis = FCISolver(mol)
-    norb = m.mo_coeff.shape[1]
-    nelec = mol.nelectron - 2
-    h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-    eri = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
-    eri = eri.reshape(norb,norb,norb,norb)
-    nea = nelec//2 + 1
-    neb = nelec//2 - 1
-    nelec = (nea, neb)
-
-    e1 = cis.kernel(h1e, eri, norb, nelec)[0]
-    print(e1, e1 - -7.7466756526056004)
-

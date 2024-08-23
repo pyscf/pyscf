@@ -372,4 +372,3 @@ if __name__ == '__main__':
     print(abs(h2[2,2]-h2_ref).max())
     print(lib.finger(h2) - -23.609411428378138)
     lib.param.LIGHT_SPEED = bak
-

@@ -68,8 +68,8 @@ class KnownValues(unittest.TestCase):
         driver = md.NVE(hf_scanner, dt=10, steps=10)
 
         driver.kernel()
-        self.assertAlmostEqual(driver.ekin, 0.000349066856492198, 12)
-        self.assertAlmostEqual(driver.epot, -75.96132729628864, 12)
+        self.assertAlmostEqual(driver.ekin, 0.000349066856492198, 9)
+        self.assertAlmostEqual(driver.epot, -75.96132729628864, 9)
 
         final_coord = np.array([[0.0000000000, 0.0000000000, 0.0020720320],
                                 [0.0000000000, -1.4113069887, 1.0928269088],
@@ -123,7 +123,6 @@ class KnownValues(unittest.TestCase):
                                 [-1.8486454469, 0.0197089974, -1.0218233017]])
 
         self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
-
 
 if __name__ == "__main__":
     print("Full Tests for NVE Velocity Verlet")

@@ -18,6 +18,10 @@ import numpy
 from pyscf import gto
 from pyscf import lib
 from pyscf import dft
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dftd3 = dftd4 = None
 
 def setUpModule():
     global h2o, h2osym, h2o_cation, h2osym_cation
@@ -79,6 +83,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_nr_lda(self):
         method = dft.RKS(h2o)
+        method.init_guess = 'atom' # initial guess problem, issue #2056
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         method.xc = 'lda, vwn_rpa'
@@ -330,7 +335,6 @@ class KnownValues(unittest.TestCase):
         dm = method.get_init_guess()
         dm = (dm[0], dm[0])
         method.xc = 'wB97M_V'
-        method.nlc = 'vv10'
         method.grids.prune = None
         method.grids.atom_grid = {"H": (30, 86), "O": (30, 86),}
         method.nlcgrids.prune = None
@@ -349,27 +353,42 @@ class KnownValues(unittest.TestCase):
     def test_nr_rks_rsh(self):
         method = dft.RKS(h2o)
         dm = method.get_init_guess()
+        method.xc = 'wB97'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.fp(vxc), 23.16975737295899, 8)
+
+    def test_nr_rks_nlc(self):
+        method = dft.RKS(h2o)
+        dm = method.get_init_guess()
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 22.767792068559917, 8)
 
+        method.xc = 'B97M_V'
+        vxc = method.get_veff(h2o, dm, dm, vxc)
+        self.assertAlmostEqual(lib.fp(vxc), 23.067046560473408, 8)
+
+        method.nlc = False
+        assert method.do_nlc() == False
+        vxc = method.get_veff(h2o, dm, dm, vxc)
+        self.assertAlmostEqual(lib.fp(vxc), 23.05881308880983, 8)
+
+    def test_nr_rks_nlc_small_memory_high_cost(self):
+        method = dft.RKS(h2o)
+        dm = method.get_init_guess()
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
-        vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 22.759558596896344, 8)
-
-        method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 22.767792068559917, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 23.067046560473408, 8)
 
-    def test_nr_rks_rsh_cart(self):
+    def test_nr_rks_rsh_cart_high_cost(self):
         mol1 = h2o.copy()
         mol1.basis = 'ccpvdz'
         mol1.cart = True
@@ -377,60 +396,87 @@ class KnownValues(unittest.TestCase):
         method = dft.RKS(mol1)
         method.xc = 'B97M_V'
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        self.assertAlmostEqual(method.kernel(), -76.44022393692919, 8)
+        self.assertAlmostEqual(method.kernel(), -76.39753789383619, 8)
 
     def test_nr_uks_rsh(self):
         method = dft.UKS(h2o)
         dm = method.get_init_guess()
         dm = (dm[0], dm[0])
+        method.xc = 'wB97'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 23.16975737295899, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 23.16975737295899, 8)
+
+    def test_nr_uks_nlc_high_cost(self):
+        method = dft.UKS(h2o)
+        dm = method.get_init_guess()
+        dm = (dm[0], dm[0])
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 22.759558596896344, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 22.767792068559917, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 22.767792068559917, 8)
 
+        method.xc = 'B97M_V'
+        vxc = method.get_veff(h2o, dm, dm, vxc)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 23.067046560473408, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 23.067046560473408, 8)
+
+    def test_nr_uks_nlc_small_memory_high_cost(self):
+        method = dft.UKS(h2o)
+        dm = method.get_init_guess()
+        dm = (dm[0], dm[0])
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
-        vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 22.759558596896344, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 22.759558596896344, 8)
-
-        method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 23.058813088809824, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 22.767792068559917, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 22.767792068559917, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 23.058813088809824, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 23.067046560473408, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 23.067046560473408, 8)
 
     def test_nr_gks_rsh(self):
         method = dft.GKS(h2o)
         dm = method.get_init_guess()
         dm = dm + numpy.sin(dm)*.02j
         dm = dm + dm.conj().T
+        method.xc = 'wB97'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.fp(vxc), 5.115622298912124+0j, 8)
+
+    def test_nr_gks_nlc_high_cost(self):
+        method = dft.GKS(h2o)
+        dm = method.get_init_guess()
+        dm = dm + numpy.sin(dm)*.02j
+        dm = dm + dm.conj().T
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 3.1818982731583274+0j, 8)
-
-        method._eri = None
-        method.max_memory = 0
-        method.xc = 'wB97M_V'
-        vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 3.1818982731583274+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 3.172920887028461+0j, 8)
 
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 2.0131447223203565+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 2.0041673361905317+0j, 8)
+
+    def test_nr_gks_nlc_small_memory_high_cost(self):
+        method = dft.GKS(h2o)
+        dm = method.get_init_guess()
+        dm = dm + numpy.sin(dm)*.02j
+        dm = dm + dm.conj().T
+        method._eri = None
+        method.max_memory = 0
+        method.xc = 'wB97M_V'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.fp(vxc), 3.172920887028461+0j, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 2.0131447223203565+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 2.0041673361905317+0j, 8)
 
     def test_nr_rks_vv10_high_cost(self):
         method = dft.RKS(h2o)
@@ -452,6 +498,63 @@ class KnownValues(unittest.TestCase):
         method.nlcgrids.atom_grid = {"H": (40, 110), "O": (40, 110),}
         self.assertAlmostEqual(method.scf(), -76.352381513158718, 8)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_dft_parser(self):
+        from pyscf.scf import dispersion
+        method = dft.RKS(h2o, xc='wb97m-d3bj')
+        assert method.do_nlc() == False
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0007551366628786623, 9)
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 531
+
+        method = dft.RKS(h2o, xc='wb97m-d3bj')
+        assert method.do_nlc() == False
+        method.xc = 'wb97m-v'
+        method.nlc = False
+        method.disp = 'd3bj'
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0007551366628786623, 9)
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 531
+
+        method = dft.RKS(h2o, xc='wb97x-d3bj')
+        assert method.do_nlc() == False
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0005697890844546384, 9)
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 466
+
+        method = dft.RKS(h2o, xc='b3lyp-d3bj')
+        assert method.xc == 'b3lyp-d3bj'
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0005738788210828446, 9)
+        fn_facs = method._numint.libxc.parse_xc(method.xc)
+        assert fn_facs[1][0][0] == 402
+
+        method = dft.RKS(h2o, xc='b3lyp-d3bjm2b')
+        assert method.xc == 'b3lyp-d3bjm2b'
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0006949127588605776, 9)
+
+        method = dft.RKS(h2o, xc='b3lyp-d3bjmatm')
+        assert method.xc == 'b3lyp-d3bjmatm'
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
+
+        method = dft.UKS(h2o, xc='b3lyp-d3bjmatm')
+        assert method.xc == 'b3lyp-d3bjmatm'
+        e_disp = dispersion.get_dispersion(method)
+        self.assertAlmostEqual(e_disp, -0.0006949125270554931, 9)
+
+    def test_d3_warning_msg(self):
+        mf = dft.RKS(h2o)
+        mf.xc = 'wb97m-v'
+        mf.nlc = True
+        mf.disp = 'd3bj'
+        with self.assertWarnsRegex(UserWarning, 'double counting'):
+            mf.build()
+
     def test_camb3lyp_rsh_omega(self):
         mf = dft.RKS(h2o)
         mf.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
@@ -468,6 +571,19 @@ class KnownValues(unittest.TestCase):
         mf2.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         mf2.kernel()
         self.assertAlmostEqual(mf1.e_tot, -76.36649222362115, 9)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_dispersion(self):
+        mf1 = dft.RKS(h2o)
+        mf1.xc = 'B3LYP'
+        mf1.disp = 'd3bj'
+        mf1.run(xc='B3LYP')
+        self.assertAlmostEqual(mf1.e_tot, -76.38552043811778, 9)
+
+        mf2 = dft.RKS(h2o)
+        mf2.xc = 'B3LYP-d3bj'
+        mf2.run(xc='B3LYP-d3bj')
+        self.assertAlmostEqual(mf1.e_tot, mf2.e_tot, 8)
 
     def test_reset(self):
         mf = dft.RKS(h2o).newton()

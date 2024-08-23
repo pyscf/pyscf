@@ -22,45 +22,64 @@
 
 from pyscf import lib
 from pyscf.tdscf import rhf
+from pyscf.pbc import scf
+from pyscf import __config__
 
+class TDBase(rhf.TDBase):
+    _keys = {'cell'}
 
-class TDA(rhf.TDA):
-    def gen_vind(self, mf):
-        vind, hdiag = rhf.TDA.gen_vind(self, mf)
-        def vindp(x):
-            with lib.temporary_env(mf, exxdiv=None):
-                return vind(x)
-        return vindp, hdiag
+    def __init__(self, mf):
+        rhf.TDBase.__init__(self, mf)
+        self.cell = mf.cell
 
     def get_ab(self, mf=None):
         raise NotImplementedError
 
     def nuc_grad_method(self):
         raise NotImplementedError
+
+    get_nto = rhf.TDBase.get_nto
+    analyze = lib.invalid_method('analyze')
+    oscillator_strength = lib.invalid_method('oscillator_strength')
+    transition_dipole              = lib.invalid_method('transition_dipole')
+    transition_quadrupole          = lib.invalid_method('transition_quadrupole')
+    transition_octupole            = lib.invalid_method('transition_octupole')
+    transition_velocity_dipole     = lib.invalid_method('transition_velocity_dipole')
+    transition_velocity_quadrupole = lib.invalid_method('transition_velocity_quadrupole')
+    transition_velocity_octupole   = lib.invalid_method('transition_velocity_octupole')
+    transition_magnetic_dipole     = lib.invalid_method('transition_magnetic_dipole')
+    transition_magnetic_quadrupole = lib.invalid_method('transition_magnetic_quadrupole')
+
+
+class TDA(TDBase):
+
+    init_guess = rhf.TDA.init_guess
+    kernel = rhf.TDA.kernel
+    _gen_vind = rhf.TDA.gen_vind
+
+    def gen_vind(self, mf):
+        moe = scf.addons.mo_energy_with_exxdiv_none(mf)
+        with lib.temporary_env(mf, mo_energy=moe):
+            vind, hdiag = self._gen_vind(mf)
+        def vindp(x):
+            with lib.temporary_env(mf, exxdiv=None):
+                return vind(x)
+        return vindp, hdiag
 
 CIS = TDA
 
 
-class TDHF(rhf.TDHF):
-    def gen_vind(self, mf):
-        vind, hdiag = rhf.TDHF.gen_vind(self, mf)
-        def vindp(x):
-            with lib.temporary_env(mf, exxdiv=None):
-                return vind(x)
-        return vindp, hdiag
+class TDHF(TDA):
 
-    def get_ab(self, mf=None):
-        raise NotImplementedError
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
+    init_guess = rhf.TDHF.init_guess
+    kernel = rhf.TDHF.kernel
+    _gen_vind = rhf.TDHF.gen_vind
+    gen_vind = TDA.gen_vind
 
 RPA = TDRHF = TDHF
 
 
-from pyscf.pbc import scf
 scf.hf.RHF.TDA = lib.class_as_method(TDA)
 scf.hf.RHF.TDHF = lib.class_as_method(TDHF)
 scf.rohf.ROHF.TDA = None
 scf.rohf.ROHF.TDHF = None
-

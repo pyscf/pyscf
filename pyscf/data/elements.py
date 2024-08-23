@@ -30,7 +30,7 @@ ELEMENTS = [
     'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds',
     'Rg', 'Cn', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og',
 ]
-NUC = dict(((x,i) for i,x in enumerate(ELEMENTS)))
+NUC = {x: i for i,x in enumerate(ELEMENTS)}
 NUC.update((x.upper(),i) for i,x in enumerate(ELEMENTS))
 NUC['GHOST'] = 0
 ELEMENTS_PROTON = NUC
@@ -827,7 +827,7 @@ NRSRHFS_CONFIGURATION = [
     [14,36,40,28],     #118  Og
 ]
 
-# This is No. of shells, not the atomic configuations
+# This is No. of shells, not the atomic configurations
 #     core       core+valence
 # core+valence = lambda nuc, l: \
 #            int(numpy.ceil(pyscf.lib.parameters.ELEMENTS[nuc][2][l]/(4*l+2.)))
@@ -1102,13 +1102,12 @@ def chemcore(mol, spinorb=False):
         atm_nelec = mol.atom_charge(a)
         atm_z = charge(mol.atom_symbol(a))
         ne_ecp = atm_z - atm_nelec
+        ncore_ecp = ne_ecp // 2
         atm_ncore = chemcore_atm[atm_z]
-        if ne_ecp == 0:
-            core += atm_ncore
-        elif ne_ecp > atm_ncore:
+        if ncore_ecp > atm_ncore:
             core += 0
         else:
-            core += atm_ncore - ne_ecp
+            core += atm_ncore - ncore_ecp
 
     if spinorb:
         core *= 2
@@ -1125,23 +1124,17 @@ def chemcore(mol, spinorb=False):
 #
 ########################################
 
-# For code compatiblity in python-2 and python-3
-import sys
-if sys.version_info >= (3,):
-    unicode = str
-del (sys)
-
 def _rm_digit(symb):
     if symb.isalpha():
         return symb
     else:
         return ''.join([i for i in symb if i.isalpha()])
 
-_ELEMENTS_UPPER = dict((x.upper(),x) for x in ELEMENTS)
+_ELEMENTS_UPPER = {x.upper(): x for x in ELEMENTS}
 _ELEMENTS_UPPER['GHOST'] = 'Ghost'
 
 def charge(symb_or_chg):
-    if isinstance(symb_or_chg, (str, unicode)):
+    if isinstance(symb_or_chg, str):
         a = str(symb_or_chg.strip().upper())
         if (a[:5] == 'GHOST' or (a[0] == 'X' and a[:2] != 'XE')):
             return 0
@@ -1151,7 +1144,7 @@ def charge(symb_or_chg):
         return symb_or_chg
 
 def _symbol(symb_or_chg):
-    if isinstance(symb_or_chg, (str, unicode)):
+    if isinstance(symb_or_chg, str):
         return str(symb_or_chg)
     else:
         return ELEMENTS[symb_or_chg]
@@ -1160,7 +1153,7 @@ def _std_symbol(symb_or_chg):
     '''For a given atom symbol (lower case or upper case) or charge, return the
     standardized atom symbol (without the numeric prefix or suffix)
     '''
-    if isinstance(symb_or_chg, (str, unicode)):
+    if isinstance(symb_or_chg, str):
         symb_or_chg = str(symb_or_chg.upper())
         rawsymb = _rm_digit(symb_or_chg)
         if rawsymb in _ELEMENTS_UPPER:
@@ -1180,7 +1173,7 @@ def _std_symbol_without_ghost(symb_or_chg):
     '''For a given atom symbol (lower case or upper case) or charge, return the
     standardized atom symbol
     '''
-    if isinstance(symb_or_chg, (str, unicode)):
+    if isinstance(symb_or_chg, str):
         symb_or_chg = str(symb_or_chg.upper())
         rawsymb = _rm_digit(symb_or_chg)
         if rawsymb in _ELEMENTS_UPPER:
@@ -1200,7 +1193,7 @@ def _atom_symbol(symb_or_chg):
     '''For a given atom symbol (lower case or upper case) or charge, return the
     standardized atom symbol (with the numeric prefix or suffix)
     '''
-    if isinstance(symb_or_chg, (str, unicode)):
+    if isinstance(symb_or_chg, str):
         a = str(symb_or_chg.strip().upper())
         if a.isdigit():
             symb = ELEMENTS[int(a)]
@@ -1236,4 +1229,3 @@ def is_ghost_atom(symb_or_chg):
         return True
     else:
         return symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE'
-

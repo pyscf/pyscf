@@ -12,9 +12,11 @@ mol.atom = [('H', 0, 0, .5*i) for i in range(20)]
 mol.basis = 'ccpvdz'
 mol.verbose = 4
 mol.build()
+# Without handling the linear dependency in basis, HF and CCSD can produce
+# incorrect results
 mf = scf.RHF(mol).run()
 mycc = cc.CCSD(mf).run()
 
-mf = scf.addons.remove_linear_dep_(mf).run()
+mf = scf.addons.remove_linear_dep_(mol.RHF()).run()
 mycc = cc.CCSD(mf).run()
 

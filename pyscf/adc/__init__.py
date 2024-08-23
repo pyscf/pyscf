@@ -1,4 +1,4 @@
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,24 +23,28 @@ Algebraic Diagrammatic Construction
 ===================================
 '''
 
-from pyscf import scf
 from pyscf import lib
 from pyscf.adc import uadc
 from pyscf.adc import radc
+from pyscf.adc import radc_amplitudes
+from pyscf.adc import uadc_amplitudes
+from pyscf.adc import radc_ip
+from pyscf.adc import radc_ip_cvs
+from pyscf.adc import radc_ea
+from pyscf.adc import uadc_ip
+from pyscf.adc import uadc_ip_cvs
+from pyscf.adc import uadc_ea
+
 
 def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
-    if isinstance(mf, scf.uhf.UHF):
+    if mf.istype('UHF'):
         return UADC(mf, frozen, mo_coeff, mo_occ)
-    #elif isinstance(mf, scf.rohf.ROHF):
-    #    lib.logger.warn(mf, 'RADC method does not support ROHF reference. ROHF object '
-    #                    'is converted to UHF object and UADC method is called.')
-    #    mf = scf.addons.convert_to_uhf(mf)
-    #    return UADC(mf, frozen, mo_coeff, mo_occ)
-    # TODO add ROHF functionality
-    elif isinstance(mf, scf.rhf.RHF):
+    elif mf.istype('ROHF'):
+        return UADC(mf, frozen, mo_coeff, mo_occ)
+    elif mf.istype('RHF'):
         return RADC(mf, frozen, mo_coeff, mo_occ)
     else :
         raise RuntimeError('ADC code only supports RHF, ROHF, and UHF references')
@@ -53,25 +57,20 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
-    from pyscf.soscf import newton_ah
-
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf)
+    if not (mf.istype('UHF') or mf.istype('ROHF')):
+        mf = mf.to_uhf()
 
     return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
 
 UADC.__doc__ = uadc.UADC.__doc__
 
 def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    __doc__ = radc.RADC.__doc__
-
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
-    from pyscf.soscf import newton_ah
-
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.rhf.RHF):
-        mf = scf.addons.convert_to_rhf(mf)
+    mf = mf.remove_soscf()
+    if not mf.istype('RHF'):
+        mf = mf.to_rhf()
 
     return radc.RADC(mf, frozen, mo_coeff, mo_occ)
 

@@ -20,11 +20,12 @@ import ctypes
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.pbc.gto import eval_gto as pbc_eval_gto
 from pyscf import dft
 from pyscf.pbc.gto.cell import get_uniform_grids, gen_uniform_grids
 from pyscf.dft.gen_grid import (sg1_prune, nwchem_prune, treutler_prune,
                                 stratmann, original_becke, gen_atomic_grids,
-                                BLKSIZE)
+                                BLKSIZE, NBINS, CUTOFF)
 
 libpbc = lib.load_library('libpbc')
 
@@ -44,13 +45,9 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, cutoff=None,
         shls_slice = (0, cell.nbas)
     assert (shls_slice == (0, cell.nbas))
 
-    # For atoms near the boundary of the cell, it is necessary (even in low-
-    # dimensional systems) to include lattice translations in all 3 dimensions.
-    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-        Ls = cell.get_lattice_Ls(dimension=cell.dimension)
-    else:
-        Ls = cell.get_lattice_Ls(dimension=3)
-    Ls = Ls[np.argsort(lib.norm(Ls, axis=1))]
+    rcut = pbc_eval_gto._estimate_rcut(cell)
+    Ls = pbc_eval_gto.get_lattice_Ls(cell, rcut=rcut.max())
+    Ls = Ls[np.argsort(lib.norm(Ls, axis=1), kind='stable')]
 
     non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas), dtype=np.uint8)
     libpbc.PBCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
@@ -65,6 +62,8 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, cutoff=None,
 
 class UniformGrids(lib.StreamObject):
     '''Uniform Grid class.'''
+
+    cutoff = CUTOFF
 
     def __init__(self, cell):
         self.cell = cell
@@ -105,14 +104,11 @@ class UniformGrids(lib.StreamObject):
         else:
             self.cell = cell
 
-        coords = self.coords
-        weights = self.weights
-
         if with_non0tab:
-            self.non0tab = self.make_mask(cell, coords)
+            self.non0tab = self.make_mask(cell, self.coords)
         else:
             self.non0tab = None
-        return coords, weights
+        return self
 
     def reset(self, cell=None):
         if cell is not None:
@@ -128,7 +124,8 @@ class UniformGrids(lib.StreamObject):
 
     def kernel(self, cell=None, with_non0tab=False):
         self.dump_flags()
-        return self.build(cell, with_non0tab)
+        self.build(cell, with_non0tab)
+        return self.coords, self.weights
 
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, cell=None, coords=None, relativity=0, shls_slice=None,
@@ -136,6 +133,8 @@ class UniformGrids(lib.StreamObject):
         if cell is None: cell = self.cell
         if coords is None: coords = self.coords
         return make_mask(cell, coords, relativity, shls_slice, verbose)
+
+    to_gpu = lib.to_gpu
 
 
 # modified from pyscf.dft.gen_grid.gen_partition
@@ -158,7 +157,8 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
         dimension = cell.dimension
     else:
         dimension = 3
-    Ls = cell.get_lattice_Ls(dimension=dimension)
+    rcut = pbc_eval_gto._estimate_rcut(cell)
+    Ls = pbc_eval_gto.get_lattice_Ls(cell, rcut=rcut.max())
 
     atm_coords = Ls.reshape(-1,1,3) + cell.atom_coords()
     atom_grids_tab = gen_atomic_grids(cell, atom_grid, radi_method, level, prune)
@@ -167,33 +167,34 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
     b = cell.reciprocal_vectors(norm_to=1)
     supatm_idx = []
     k = 0
+    tol = 1e-15
     for iL, L in enumerate(Ls):
         for ia in range(cell.natm):
             coords, vol = atom_grids_tab[cell.atom_symbol(ia)]
             coords = coords + atm_coords[iL,ia]
             # search for grids in unit cell
-            c = b.dot(coords.T).round(8)
+            c = b.dot(coords.T)
 
             mask = np.ones(c.shape[1], dtype=bool)
             if dimension >= 1:
-                mask &= (c[0]>=0) & (c[0]<=1)
+                mask &= (c[0]>-.5-tol) & (c[0]<.5+tol)
             if dimension >= 2:
-                mask &= (c[1]>=0) & (c[1]<=1)
+                mask &= (c[1]>-.5-tol) & (c[1]<.5+tol)
             if dimension == 3:
-                mask &= (c[2]>=0) & (c[2]<=1)
+                mask &= (c[2]>-.5-tol) & (c[2]<.5+tol)
 
             vol = vol[mask]
             if vol.size > 8:
                 c = c[:,mask]
                 if dimension >= 1:
-                    vol[c[0]==0] *= .5
-                    vol[c[0]==1] *= .5
+                    vol[abs(c[0]+.5) < tol] *= .5
+                    vol[abs(c[0]-.5) < tol] *= .5
                 if dimension >= 2:
-                    vol[c[1]==0] *= .5
-                    vol[c[1]==1] *= .5
+                    vol[abs(c[1]+.5) < tol] *= .5
+                    vol[abs(c[1]-.5) < tol] *= .5
                 if dimension == 3:
-                    vol[c[2]==0] *= .5
-                    vol[c[2]==1] *= .5
+                    vol[abs(c[2]+.5) < tol] *= .5
+                    vol[abs(c[2]-.5) < tol] *= .5
                 coords = coords[mask]
                 coords_all.append(coords)
                 weights_all.append(vol)
@@ -249,7 +250,7 @@ class BeckeGrids(dft.gen_grid.Grids):
         logger.info(self, 'tot grids = %d', len(self.weights))
         logger.info(self, 'cell vol = %.9g  sum(weights) = %.9g',
                     cell.vol, self.weights.sum())
-        return self.coords, self.weights
+        return self
 
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, cell=None, coords=None, relativity=0, shls_slice=None,
@@ -257,6 +258,8 @@ class BeckeGrids(dft.gen_grid.Grids):
         if cell is None: cell = self.cell
         if coords is None: coords = self.coords
         return make_mask(cell, coords, relativity, shls_slice, verbose)
+
+    to_gpu = lib.to_gpu
 
 AtomicGrids = BeckeGrids
 

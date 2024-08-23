@@ -35,7 +35,7 @@ def setUpModule():
     mol.spin = 2
     mol.build()
     mf = scf.UHF(mol)
-    mf.conv_tol = 1e-14
+    mf.conv_tol = 1e-12
     mf.scf()
 
 def tearDownModule():
@@ -49,11 +49,15 @@ class KnownValues(unittest.TestCase):
         pt = mp.MP2(mf)
         emp2, t2 = pt.kernel(mf.mo_energy, mf.mo_coeff)
         self.assertAlmostEqual(emp2, -0.16575150552336643, 8)
+        self.assertAlmostEqual(pt.e_corr_ss, -0.042627186675330754, 8)
+        self.assertAlmostEqual(pt.e_corr_os, -0.12312431898078077, 8)
 
         pt.max_memory = 1
         pt.frozen = None
         emp2, t2 = pt.kernel()
         self.assertAlmostEqual(emp2, -0.16575150552336643, 8)
+        self.assertAlmostEqual(pt.e_corr_ss, -0.042627186675330754, 8)
+        self.assertAlmostEqual(pt.e_corr_os, -0.12312431898078077, 8)
 
     def test_ump2_dm(self):
         pt = mp.MP2(mf)
@@ -187,6 +191,7 @@ class KnownValues(unittest.TestCase):
         ao2mofn = mf_df.with_df.ao2mo
         pt.ao2mo = lambda *args: mp.ump2._make_eris(pt, *args, ao2mofn=ao2mofn)
         e1 = pt.kernel()[0]
+        self.assertAlmostEqual(e1, -0.16607937629805458, 8)
         pt = mp.ump2.UMP2(mf.density_fit('weigend'))
         e2 = pt.kernel()[0]
         self.assertAlmostEqual(e1, e2, 8)
@@ -223,14 +228,16 @@ class KnownValues(unittest.TestCase):
         mo_occ = numpy.zeros((2,nmo))
         mo_occ[0,:nocca] = 1
         mo_occ[1,:noccb] = 1
-        dm = [numpy.diag(mo_occ[0]), numpy.diag(mo_occ[1])]
+        mf.make_rdm1 = lambda *args: [numpy.diag(mo_occ[0]), numpy.diag(mo_occ[1])]
+        dm = mf.make_rdm1()
         vja = numpy.einsum('ijkl,lk->ij', eri_aa, dm[0])
         vja+= numpy.einsum('ijkl,lk->ij', eri_ab, dm[1])
         vjb = numpy.einsum('ijkl,lk->ij', eri_bb, dm[1])
         vjb+= numpy.einsum('klij,lk->ij', eri_ab, dm[0])
         vka = numpy.einsum('ijkl,jk->il', eri_aa, dm[0])
         vkb = numpy.einsum('ijkl,jk->il', eri_bb, dm[1])
-        vhf = (vja - vka, vjb - vkb)
+        mf.get_veff = lambda *args: (vja - vka, vjb - vkb)
+        vhf = mf.get_veff()
         hcore = (numpy.diag(mo_energy[0]) - vhf[0],
                  numpy.diag(mo_energy[1]) - vhf[1])
         mf.get_hcore = lambda *args: hcore
@@ -265,11 +272,10 @@ class KnownValues(unittest.TestCase):
     def test_non_canonical_mp2(self):
         mf = scf.UHF(mol).run(max_cycle=1)
         pt = mp.MP2(mf)
-        self.assertAlmostEqual(pt.kernel()[0], -0.171693954168, 7)
+        self.assertAlmostEqual(pt.kernel()[0], -0.1707921460057042, 7)
 
 
 
 if __name__ == "__main__":
     print("Full Tests for mp2")
     unittest.main()
-

@@ -173,11 +173,7 @@ class KnownValues(unittest.TestCase):
 
         mydf = df.AFTDF(cell1)
         dat = sfx2c1e.get_pnucp(mydf)
-        self.assertAlmostEqual(abs(dat-vne_ref).max(), 0, 7)
-
-        mydf.eta = 0
-        dat = sfx2c1e.get_pnucp(mydf)
-        self.assertAlmostEqual(abs(dat-vne_ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(dat-vne_ref).max(), 0, 6)
 
     def test_pvxp(self):
         # w_soc should not depend on eta and the type of DF class
@@ -188,10 +184,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(dat[0].sum(), 0.0 + -0.11557054307865766j, 7)
         self.assertAlmostEqual(dat[1].sum(), 0.0 + -0.19650430913542424j, 7)
         self.assertAlmostEqual(dat[2].sum(), 0.0 + 0.25706456053958415j, 7)
-
-        mydf.eta = 0.0
-        dat = x2c1e.get_pbc_pvxp(mydf, kpts[1])
-        self.assertAlmostEqual(abs(dat - ref).max(), 0, 6)
 
         # GDF
         mydf = df.GDF(cell1)

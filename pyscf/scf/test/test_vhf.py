@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,12 +16,15 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import ctypes
 import numpy
 import unittest
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
+from pyscf import lib
 from pyscf.scf import _vhf
+
 
 def setUpModule():
     global mol, mf, nao, nmo
@@ -152,9 +155,89 @@ class KnownValues(unittest.TestCase):
                                  dm, 1, mol._atm, mol._bas, mol._env, opt_llll)
         self.assertTrue(numpy.allclose(vk0,vk1))
 
+    def test_nr_direct_ex_drv(self):
+        numpy.random.seed(1)
+        dm = numpy.random.random((nao, nao))
+        dm = dm + dm.conj().T
+        shls_excludes = [0, 4] * 4
+        vref = _vhf.direct_bindm('int2e_sph', 's8', 'jk->s1il', dm, 1, mol._atm, mol._bas, mol._env)
+        self.assertAlmostEqual(lib.fp(vref), 5.0067176755619975, 12)
+
+        v0 = _vhf.direct_bindm('int2e_sph', 's8', 'jk->s1il', dm[:6,:6], 1,
+                               mol._atm, mol._bas, mol._env, shls_slice=shls_excludes)
+        v1 = _vhf.direct_bindm('int2e_sph', 's8', 'jk->s1il', dm, 1,
+                               mol._atm, mol._bas, mol._env, shls_excludes=shls_excludes)
+        v1[:6,:6] += v0
+        self.assertAlmostEqual(abs(v1 - vref).max(), 0, 12)
+
+        vref = _vhf.direct_mapdm('int2e_sph', 's8', 'ji->s1kl', dm, 1, mol._atm, mol._bas, mol._env)
+        self.assertAlmostEqual(lib.fp(vref), 48.61070262547175, 12)
+
+        v0 = _vhf.direct_mapdm('int2e_sph', 's8', 'ji->s1kl', dm[:6,:6], 1,
+                               mol._atm, mol._bas, mol._env, shls_slice=shls_excludes)
+        v1 = _vhf.direct_mapdm('int2e_sph', 's8', 'ji->s1kl', dm, 1,
+                               mol._atm, mol._bas, mol._env, shls_excludes=shls_excludes)
+        v1[:6,:6] += v0
+        self.assertAlmostEqual(abs(v1 - vref).max(), 0, 12)
+
+    def test_direct_sr_vhf(self):
+        numpy.random.seed(1)
+        dm = numpy.random.random((nao,nao))
+        omega = 0.15
+        with mol.with_short_range_coulomb(omega):
+            ref = _vhf.direct(dm, mol._atm, mol._bas, mol._env, optimize_sr=False)
+            ref = numpy.array(ref)
+
+        vhfopt = _VHFOpt(mol, 'int2e', omega=omega)
+        vhfopt.init_cvhf_direct(mol)
+        with mol.with_short_range_coulomb(omega):
+            vjk = _vhf.direct(dm, mol._atm, mol._bas, mol._env, optimize_sr=True)
+            vjk = numpy.array(vjk)
+
+        self.assertAlmostEqual(abs(ref - vjk).max(), 0, 12)
+        self.assertAlmostEqual(lib.fp(vjk), 25.317344717490613, 12)
+
+MIN_CUTOFF = 1e-44
+libcvhf = _vhf.libcvhf
+
+class _VHFOpt(_vhf._VHFOpt):
+    def __init__(self, mol, intor=None, prescreen='CVHFnoscreen',
+                 qcondname=None, dmcondname=None, direct_scf_tol=1e-14,
+                 omega=None):
+        assert omega is not None
+        with mol.with_short_range_coulomb(omega):
+            _vhf._VHFOpt.__init__(self, mol, intor, prescreen, qcondname, dmcondname)
+        self.omega = omega
+        self._this.direct_scf_cutoff = numpy.log(direct_scf_tol)
+
+    def init_cvhf_direct(self, mol, intor=None, qcondname=None):
+        nbas = mol.nbas
+        q_cond = numpy.empty((6,nbas,nbas), dtype=numpy.float32)
+        ao_loc = mol.ao_loc
+        cintopt = self._cintopt
+        with mol.with_short_range_coulomb(self.omega):
+            libcvhf.CVHFsetnr_sr_direct_scf(
+                libcvhf.int2e_sph, cintopt,
+                q_cond.ctypes.data_as(ctypes.c_void_p),
+                ao_loc.ctypes.data_as(ctypes.c_void_p),
+                mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+                mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+                mol._env.ctypes.data_as(ctypes.c_void_p))
+
+        self._q_cond = q_cond
+        logq_cond = q_cond.ctypes.data_as(ctypes.c_void_p)
+        self._this.q_cond = logq_cond
+
+    def set_dm(self, dm, atm=None, bas=None, env=None):
+        assert dm[0].ndim == 2
+        ao_loc = self.mol.ao_loc_nr()
+        dm_cond = [lib.condense('NP_absmax', d, ao_loc, ao_loc) for d in dm]
+        dm_cond = numpy.max(dm_cond, axis=0)
+        dm_cond += MIN_CUTOFF  # to remove divide-by-zero error
+        self._dm_cond = numpy.asarray(dm_cond, order='C', dtype=np.float32)
+        self._this.dm_cond = self._dm_cond.ctypes.data_as(ctypes.c_void_p)
+
 
 if __name__ == "__main__":
     print("Full Tests for _vhf")
     unittest.main()
-
-

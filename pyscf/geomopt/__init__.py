@@ -22,6 +22,6 @@ def optimize(method, *args, **kwargs):
     except ImportError as e1:
         try:
             from . import berny_solver as geom
-        except ImportError as e2:
+        except ImportError:
             raise e1
     return geom.optimize(method, *args, **kwargs)

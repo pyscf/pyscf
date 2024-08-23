@@ -51,6 +51,7 @@ void NPzunpack_tril_2d(int count, int n,
                        double complex *tril, double complex *mat, int hermi);
 void NPdpack_tril_2d(int count, int n, double *tril, double *mat);
 
+void NPomp_split(size_t *start, size_t *end, size_t n);
 void NPomp_dsum_reduce_inplace(double **vec, size_t count);
 void NPomp_dprod_reduce_inplace(double **vec, size_t count);
 void NPomp_zsum_reduce_inplace(double complex **vec, size_t count);
@@ -60,3 +61,10 @@ void NPdset0(double *p, const size_t n);
 void NPzset0(double complex *p, const size_t n);
 void NPdcopy(double *out, const double *in, const size_t n);
 void NPzcopy(double complex *out, const double complex *in, const size_t n);
+
+void NPdgemm(const char trans_a, const char trans_b,
+             const int m, const int n, const int k,
+             const int lda, const int ldb, const int ldc,
+             const int offseta, const int offsetb, const int offsetc,
+             double *a, double *b, double *c,
+             const double alpha, const double beta);

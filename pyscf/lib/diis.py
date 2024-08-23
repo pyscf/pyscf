@@ -36,7 +36,7 @@ BLOCK_SIZE  = getattr(__config__, 'lib_diis_block_size', 20000000)  # ~ 160/320 
 # C2DIIS, IJQC, 45, 31 (1993); DOI:10.1002/qua.560450106
 # SCF-EDIIS, JCP 116, 8255 (2002); DOI:10.1063/1.1470195
 
-class DIIS(object):
+class DIIS:
     '''Direct inversion in the iterative subspace method.
 
     Attributes:
@@ -135,7 +135,7 @@ class DIIS(object):
             else:
                 self._diisfile[key] = value
 # to avoid "Unable to find a valid file signature" error when reload the hdf5
-# file from a crashed claculation
+# file from a crashed calculation
             self._diisfile.flush()
 
     def push_err_vec(self, xerr):
@@ -148,8 +148,8 @@ class DIIS(object):
     def push_vec(self, x):
         x = x.ravel()
 
-        while len(self._bookkeep) >= self.space:
-            self._bookkeep.pop(0)
+        if len(self._bookkeep) >= self.space:
+            self._bookkeep = self._bookkeep[1-self.space:]
 
         if self._err_vec_touched:
             self._bookkeep.append(self._head)
@@ -217,7 +217,7 @@ class DIIS(object):
         if nd < self.min_space:
             return x
 
-        dt = numpy.array(self.get_err_vec(self._head-1), copy=False)
+        dt = numpy.asarray(self.get_err_vec(self._head-1))
         if self._H is None:
             self._H = numpy.zeros((self.space+1,self.space+1), dt.dtype)
             self._H[0,1:] = self._H[1:,0] = 1
@@ -334,8 +334,9 @@ class DIIS(object):
         self._H[1:nd+1,1:nd+1] = e_mat
         return self
 
+    to_gpu = misc.to_gpu
+
 
 def restore(filename):
     '''Restore/construct diis object based on a diis file'''
     return DIIS().restore(filename)
-

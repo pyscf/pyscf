@@ -66,11 +66,11 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(issequence(numpy.array([1, 2, 3])))
         self.assertTrue(issequence(range(5)))
         self.assertTrue(issequence('abcde'))
-        self.assertTrue(issequence(tuple()))
+        self.assertTrue(issequence(()))
         self.assertFalse(issequence(True))
         self.assertFalse(issequence(2.0))
         self.assertFalse(issequence(1))
-        self.assertFalse(issequence(dict()))
+        self.assertFalse(issequence({}))
         self.assertFalse(issequence(set()))
 
     def test_isintsequence(self):
@@ -83,6 +83,16 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(isintsequence((True, False)))
         self.assertFalse(isintsequence('123'))
         self.assertFalse(isintsequence(5))
+
+    def test_prange_split(self):
+        self.assertEqual(list(lib.prange_split(10, 3)), [(0, 4), (4, 7), (7, 10)])
+
+    def test_pickle(self):
+        import pickle
+        from pyscf import gto
+        mol = gto.M()
+        mf = mol.GKS(xc='pbe')
+        pickle.loads(pickle.dumps(mf))
 
 
 if __name__ == "__main__":

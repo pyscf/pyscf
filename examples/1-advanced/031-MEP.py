@@ -64,6 +64,10 @@ from pyscf import df
 fakemol = gto.fakemol_for_charges(points)
 Vele = numpy.einsum('ijp,ij->p', df.incore.aux_e2(mol, fakemol), mf.make_rdm1())
 
+# Method 3 (most efficient): int1e_grids computes the integrals <i| 1/|r-r_p| |j>
+# for a group of grids r_p
+Vele = numpy.einsum('pij,ij->p', mol.intor('int1e_grids', grids=points), mf.make_rdm1())
+
 #
 # 4. MEP at each point
 #

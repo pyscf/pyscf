@@ -944,8 +944,7 @@ class UCISD(cisd.CISD):
             return uccsd._make_eris_incore(self, mo_coeff)
 
         elif getattr(self._scf, 'with_df', None):
-            raise NotImplementedError
-
+            return uccsd._make_df_eris_outcore(self, mo_coeff)
         else:
             return uccsd._make_eris_outcore(self, mo_coeff)
 
@@ -977,74 +976,4 @@ from pyscf import scf
 scf.uhf.UHF.CISD = lib.class_as_method(CISD)
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [
-        ['O', ( 0., 0.    , 0.   )],
-        ['H', ( 0., -0.757, 0.587)],
-        ['H', ( 0., 0.757 , 0.587)],]
-    mol.basis = {'H': 'sto-3g',
-                 'O': 'sto-3g',}
-#    mol.build()
-#    mf = scf.UHF(mol).run(conv_tol=1e-14)
-#    myci = CISD(mf)
-#    eris = myci.ao2mo()
-#    ecisd, civec = myci.kernel(eris=eris)
-#    print(ecisd - -0.048878084082066106)
-#
-#    nmoa = mf.mo_energy[0].size
-#    nmob = mf.mo_energy[1].size
-#    rdm1 = myci.make_rdm1(civec)
-#    rdm2 = myci.make_rdm2(civec)
-#    eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0], compact=False).reshape([nmoa]*4)
-#    eri_bb = ao2mo.kernel(mf._eri, mf.mo_coeff[1], compact=False).reshape([nmob]*4)
-#    eri_ab = ao2mo.kernel(mf._eri, [mf.mo_coeff[0], mf.mo_coeff[0],
-#                                    mf.mo_coeff[1], mf.mo_coeff[1]], compact=False)
-#    eri_ab = eri_ab.reshape(nmoa,nmoa,nmob,nmob)
-#    h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
-#    h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
-#    e2 = (numpy.einsum('ij,ji', h1a, rdm1[0]) +
-#          numpy.einsum('ij,ji', h1b, rdm1[1]) +
-#          numpy.einsum('ijkl,ijkl', eri_aa, rdm2[0]) * .5 +
-#          numpy.einsum('ijkl,ijkl', eri_ab, rdm2[1])      +
-#          numpy.einsum('ijkl,ijkl', eri_bb, rdm2[2]) * .5)
-#    print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
-#
-#    print(abs(rdm1[0] - (numpy.einsum('ijkk->ji', rdm2[0]) +
-#                         numpy.einsum('ijkk->ji', rdm2[1]))/(mol.nelectron-1)).sum())
-#    print(abs(rdm1[1] - (numpy.einsum('ijkk->ji', rdm2[2]) +
-#                         numpy.einsum('kkij->ji', rdm2[1]))/(mol.nelectron-1)).sum())
-
-    if 1:
-        from pyscf.ci import ucisd
-        from pyscf import fci
-        nmo = 8
-        nocc = nocca, noccb = (4,3)
-        numpy.random.seed(2)
-        nvira, nvirb = nmo-nocca, nmo-noccb
-        cibra = ucisd.amplitudes_to_cisdvec(numpy.random.rand(1),
-                                            (numpy.random.rand(nocca,nvira),
-                                             numpy.random.rand(noccb,nvirb)),
-                                            (numpy.random.rand(nocca,nocca,nvira,nvira),
-                                             numpy.random.rand(nocca,noccb,nvira,nvirb),
-                                             numpy.random.rand(noccb,noccb,nvirb,nvirb)))
-        ciket = ucisd.amplitudes_to_cisdvec(numpy.random.rand(1),
-                                            (numpy.random.rand(nocca,nvira),
-                                             numpy.random.rand(noccb,nvirb)),
-                                            (numpy.random.rand(nocca,nocca,nvira,nvira),
-                                             numpy.random.rand(nocca,noccb,nvira,nvirb),
-                                             numpy.random.rand(noccb,noccb,nvirb,nvirb)))
-        fcibra = ucisd.to_fcivec(cibra, nmo, nocc)
-        fciket = ucisd.to_fcivec(ciket, nmo, nocc)
-        s_mo = (numpy.random.random((nmo,nmo)),
-                numpy.random.random((nmo,nmo)))
-        s_mo = (s_mo[0], s_mo[0])
-        s0 = fci.addons.overlap(fcibra, fciket, nmo, nocc, s_mo)
-        s1 = ucisd.overlap(cibra, ciket, nmo, nocc, s_mo)
-        print(s1, s0, 9)
+    return numpy.asarray(a, order='C')

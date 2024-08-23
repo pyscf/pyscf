@@ -28,7 +28,7 @@ from pyscf import __config__
 def expmat(a):
     return scipy.linalg.expm(a)
 
-class CIAHOptimizer(lib.StreamObject):
+class CIAHOptimizerMixin:
 
     conv_tol_grad = getattr(__config__, 'soscf_ciah_CIAHOptimizer_conv_tol_grad', 1e-4)
     max_stepsize = getattr(__config__, 'soscf_ciah_CIAHOptimizer_max_stepsize', .05)
@@ -43,14 +43,14 @@ class CIAHOptimizer(lib.StreamObject):
     ah_max_cycle = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_max_cycle', 30)
     ah_trust_region = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_trust_region', 3.)
 
-    def __init__(self):
-        self._keys = set(('conv_tol_grad', 'max_stepsize', 'max_iters',
-                          'kf_interval', 'kf_trust_region', 'ah_start_tol',
-                          'ah_start_cycle', 'ah_level_shift', 'ah_conv_tol',
-                          'ah_lindep', 'ah_max_cycle', 'ah_trust_region'))
+    _keys = {
+        'conv_tol_grad', 'max_stepsize', 'max_iters', 'kf_interval',
+        'kf_trust_region', 'ah_start_tol', 'ah_start_cycle', 'ah_level_shift',
+        'ah_conv_tol', 'ah_lindep', 'ah_max_cycle', 'ah_trust_region',
+    }
 
     def gen_g_hop(self, u):
-        pass
+        raise NotImplementedError
 
     def pack_uniq_var(self, mat):
         nmo = mat.shape[0]
@@ -69,10 +69,10 @@ class CIAHOptimizer(lib.StreamObject):
         return numpy.dot(u0, expmat(dr))
 
     def get_grad(self, u):
-        pass
+        raise NotImplementedError
 
     def cost_function(self, u):
-        pass
+        raise NotImplementedError
 
 
 def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
@@ -163,7 +163,7 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
 
                 elif (ikf > 2 and # avoid frequent keyframe
                       (ikf >= max(iah.kf_interval, iah.kf_interval-numpy.log(norm_dr+1e-9)) or
-                       # Insert keyframe if the keyframe and the esitimated g_orb are too different
+                       # Insert keyframe if the keyframe and the estimated g_orb are too different
                        norm_gorb < norm_gkf/kf_trust_region)):
                     ikf = 0
                     ukf = iah.extract_rotation(dr, ukf)
@@ -281,13 +281,6 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
 
 
 def _regular_step(heff, ovlp, xs, lindep, log):
-    try:
-        e, c = scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])
-    except scipy.linalg.LinAlgError:
-        e, c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
-    if numpy.any(e < -1e-5):
-        log.debug('Negative hessians found %s', e[e<0])
-
     w, v, seig = lib.safe_eigh(heff, ovlp, lindep)
     if log.verbose >= logger.DEBUG3:
         numpy.set_printoptions(3, linewidth=1000)
@@ -303,8 +296,16 @@ def _regular_step(heff, ovlp, xs, lindep, log):
     idx = numpy.where(abs(v[0]) > 0.1)[0]
     sel = idx[0]
     log.debug1('CIAH eigen-sel %s', sel)
-
     w_t = w[sel]
+
+    if w_t < 1e-4:
+        try:
+            e, c = scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])
+        except scipy.linalg.LinAlgError:
+            e, c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
+        if numpy.any(e < -1e-5):
+            log.debug('Negative hessians found %s', e[e<0])
+
     xtrial = _dgemv(v[1:,sel]/v[0,sel], xs)
     return xtrial, w_t, v[:,sel], sel, seig
 
@@ -313,5 +314,3 @@ def _dgemv(v, m):
     for i,vi in enumerate(v[1:]):
         vm += vi * m[i+1]
     return vm
-
-

@@ -50,3 +50,17 @@ mf.kernel()
 # (particularly in the MO integral transformation) may ignore the customized
 # Hamiltonian if memory is not enough.
 mol.incore_anyway = True
+
+#
+# In the case of spin-polarized system, the get_hcore method of UHF class
+# requires a tuple for the spin-up and spin-down one-electron Hamiltonian.
+# To define the number of spin-up and spin-down electrons, setting the mol.spin
+# attribute and assigning a tuple to mf.nelec both work.
+#
+mf = scf.UHF(mol)
+mf.get_hcore = lambda *args: (h1, h1)
+mf.get_ovlp = lambda *args: numpy.eye(n)
+mf._eri = ao2mo.restore(8, eri, n)
+# Setting mf.nelec below has the same effects to setting mol.spin = 2
+mf.nelec = (6, 4)
+mf.kernel()

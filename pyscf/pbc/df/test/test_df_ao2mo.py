@@ -93,10 +93,10 @@ class KnownValues(unittest.TestCase):
     def test_eri0000(self):
         with_df = df.DF(cell).set(auxbasis='weigend')
         with_df.linear_dep_threshold = 1e-7
-        with_df.kpts = numpy.zeros((4,3))
+        with_df.kpts = numpy.zeros((1,3))
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
-        eri = ao2mo.restore(1, with_df.get_eri(with_df.kpts), nao)
+        eri = ao2mo.restore(1, with_df.get_eri(with_df.kpts[[0]*4]), nao)
         eri0 = numpy.einsum('pjkl,pi->ijkl', eri , mo.conj())
         eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
         eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
@@ -109,7 +109,7 @@ class KnownValues(unittest.TestCase):
         eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
         eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
         eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
-        eri1 = with_df.ao2mo(mo, with_df.kpts, compact=False)
+        eri1 = with_df.ao2mo(mo, with_df.kpts[[0]*4], compact=False)
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
 
     def test_1d(self):
@@ -183,4 +183,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for df ao2mo")
     unittest.main()
-

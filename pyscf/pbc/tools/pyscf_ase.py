@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # Author: Garnet Chan <gkc1000@gmail.com>
+#         Xing Zhang <zhangxing.nju@gmail.com>
 #
 
 '''
@@ -23,7 +24,22 @@ ASE package interface
 import numpy as np
 from ase.calculators.calculator import Calculator
 import ase.dft.kpoints
-from ase.lattice import bulk
+
+def pyscf_to_ase_atoms(cell):
+    '''
+    Convert PySCF Cell/Mole object to ASE Atoms object
+    '''
+    from ase import Atoms
+    from pyscf.lib import param
+    from pyscf.pbc import gto
+
+    symbols = cell.elements
+    positions = cell.atom_coords() * param.BOHR
+    if isinstance(cell, gto.Cell):
+        a = cell.lattice_vectors() * param.BOHR
+        return Atoms(symbols, positions, cell=a, pbc=True)
+    else:
+        return Atoms(symbols, positions, pbc=False)
 
 def ase_atoms_to_pyscf(ase_atoms):
     '''Convert ASE atoms to PySCF atom.
@@ -91,4 +107,3 @@ class PySCF(Calculator):
 
 def make_kpts(cell, nks):
     raise DeprecationWarning('Use cell.make_kpts(nks) instead.')
-

@@ -17,26 +17,41 @@
 #
 
 import ctypes
-import copy
 import h5py
 import numpy as np
 from scipy.special import gamma, gammaincc, comb
 
-from pyscf import gto as mol_gto
-from pyscf.pbc import df
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
-from pyscf.pbc import tools as pbctools
-from pyscf.scf import _vhf
-from pyscf.pbc.tools import k2gamma
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lib.parameters import BOHR
-
-libpbc = lib.load_library('libpbc')
+from pyscf import gto as mol_gto
+from pyscf.pbc.df.rsdf_builder import _round_off_to_odd_mesh
+from pyscf.pbc.df.incore import libpbc, make_auxcell
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
+from pyscf.pbc.tools import pbc as pbctools
+from pyscf.scf import _vhf
+from pyscf.pbc.tools import k2gamma
 
 
 """ General helper functions
 """
+class MoleNoBasSort(mol_gto.mole.Mole):
+    def build(self, **kwargs):
+        self.atom = kwargs.pop('atom')
+        self.basis = kwargs.pop('basis')
+        self._atom = mol_gto.format_atom(self.atom)
+        if isinstance(self.basis, dict):
+            self._basis = self.basis
+        else:
+            self._basis = {a[0]: self.basis for a in self._atom}
+
+        env = np.zeros(mol_gto.PTR_ENV_START)
+        # _bas should be constructed as it is in the input (see issue #1942).
+        self._atm, self._bas, self._env = self.make_env(
+            self._atom, self._basis, env)
+        self._built = True
+        return self
+
 def _remove_exp_basis_(bold, amin, amax):
     bnew = []
     for b in bold:
@@ -91,7 +106,7 @@ def remove_exp_basis(basis, amin=None, amax=None):
     return basisnew
 def _binary_search(xlo, xhi, xtol, ret_bigger, fcheck, args=None,
                    MAX_RESCALE=5, MAX_CYCLE=20, early_exit=True):
-    if args is None: args = tuple()
+    if args is None: args = ()
 # rescale xlo/xhi if necessary
     first_time = True
     count = 0
@@ -380,13 +395,14 @@ def _get_schwartz_data(bas_lst, omega, dijs_lst=None, keep1ctr=True, safe=True):
                 imin = es.argmin()
                 jmax = abs(ecs[imin,1:]).argmax()
                 cs = ecs[:,jmax+1]
-                bas_new = [bas[0]] + [(e,c) for e,c in zip(es,cs)]
+                bas_new = [bas[0]] + list(zip(es,cs))
             bas_lst_new.append(bas_new)
         return bas_lst_new
     if keep1ctr:
         bas_lst = get1ctr(bas_lst)
     if dijs_lst is None:
-        mol = mol_gto.M(atom="H 0 0 0", basis=bas_lst, spin=None)
+        mol = MoleNoBasSort()
+        mol.build(dump_input=False, parse_arg=False, atom="H 0 0 0", basis=bas_lst, spin=None)
         nbas = mol.nbas
         intor = "int2c2e"
         Qs = np.zeros(nbas)
@@ -400,7 +416,8 @@ def _get_schwartz_data(bas_lst, omega, dijs_lst=None, keep1ctr=True, safe=True):
             return _get_norm(
                         _fintor_sreri(mol, intor, shls_slice, omega, safe)
                     )**0.5
-        mol = mol_gto.M(atom="H 0 0 0; H 0 0 0", basis=bas_lst, spin=None)
+        mol = MoleNoBasSort()
+        mol.build(dump_input=False, parse_arg=False, atom="H 0 0 0", basis=bas_lst, spin=None)
         nbas = mol.nbas//2
         n2 = nbas*(nbas+1)//2
         if len(dijs_lst) != n2:
@@ -427,7 +444,8 @@ def _get_schwartz_dcut(bas_lst, omega, precision, r0=None, safe=True):
     Return:
         1d array of length nbas*(nbas+1)//2 with nbas=len(bas_lst).
     """
-    mol = mol_gto.M(atom="H 0 0 0; H 0 0 0", basis=bas_lst)
+    mol = MoleNoBasSort()
+    mol.build(dump_input=False, parse_arg=False, atom="H 0 0 0; H 0 0 0", basis=bas_lst)
     nbas = len(bas_lst)
     n2 = nbas*(nbas+1)//2
 
@@ -658,17 +676,19 @@ def _get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol, dijs_lst, omega,
     where i and j shls are separated by d specified by "dijs_lst".
     """
 
-    if isinstance(bas_lst_or_mol, mol_gto.mole.Mole):
+    if isinstance(bas_lst_or_mol, mol_gto.mole.MoleBase):
         mol = bas_lst_or_mol
     else:
         bas_lst = bas_lst_or_mol
-        mol = mol_gto.M(atom="H 0 0 0", basis=bas_lst, spin=None)
+        mol = MoleNoBasSort()
+        mol.build(dump_input=False, parse_arg=False, atom="H 0 0 0", basis=bas_lst, spin=None)
 
-    if isinstance(auxbas_lst_or_auxmol, mol_gto.mole.Mole):
+    if isinstance(auxbas_lst_or_auxmol, mol_gto.mole.MoleBase):
         auxmol = auxbas_lst_or_auxmol
     else:
         auxbas_lst = auxbas_lst_or_auxmol
-        auxmol = mol_gto.M(atom="H 0 0 0", basis=auxbas_lst, spin=None)
+        auxmol = MoleNoBasSort()
+        auxmol.build(dump_input=False, parse_arg=False, atom="H 0 0 0", basis=auxbas_lst, spin=None)
 
     nbas = mol.nbas
 
@@ -753,7 +773,7 @@ def _get_bvk_data(cell, Ls, bvk_kmesh):
 
     Ls_sorted = np.array(Ls[iL_by_bvk], order="C")
     ### [END] Hongzhou's style of bvk
-    bvkmesh_Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_kmesh)
+    bvkmesh_Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_kmesh, True)
 
     return Ls_sorted, bvkmesh_Ls, cell_loc_bvk
 
@@ -801,7 +821,7 @@ def estimate_omega_for_npw(cell, npw_max, precision=None, kmax=0,
                                                                 precision, kmax)
         mesh = pbctools.cutoff_to_mesh(latvecs, ke_cutoff)
         if round2odd:
-            mesh = df.df._round_off_to_odd_mesh(mesh)
+            mesh = _round_off_to_odd_mesh(mesh)
         return ke_cutoff, mesh
     def fcheck(omega):
         return np.prod(omega2all(omega)[1]) > npw_max
@@ -825,7 +845,7 @@ def estimate_mesh_for_omega(cell, omega, precision=None, kmax=0,
                                                             precision, kmax)
     mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
     if round2odd:
-        mesh = df.df._round_off_to_odd_mesh(mesh)
+        mesh = _round_off_to_odd_mesh(mesh)
 
     return ke_cutoff, mesh
 
@@ -900,7 +920,7 @@ def intor_j2c(cell, omega, precision=None, kpts=None, hermi=1, shls_slice=None,
     fintor = getattr(mol_gto.moleintor.libcgto, intor)
     cintopt = lib.c_null_ptr()
 
-    pcell = copy.copy(cell)
+    pcell = cell.copy(deep=False)
     pcell.precision = min(cell.precision, cell.precision)
     pcell._atm, pcell._bas, pcell._env = \
             atm, bas, env = mol_gto.conc_env(cell._atm, cell._bas, cell._env,
@@ -985,10 +1005,9 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     '''
     log = logger.Logger(cell.stdout, cell.verbose)
 
-    if isinstance(auxcell_or_auxbasis, mol_gto.Mole):
+    if isinstance(auxcell_or_auxbasis, mol_gto.MoleBase):
         auxcell = auxcell_or_auxbasis
     else:
-        from pyscf.pbc.df.incore import make_auxcell
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
 
 # prescreening data
@@ -1033,9 +1052,9 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     if isinstance(erifile, h5py.Group):
         feri = erifile
     elif h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile, 'a')
+        feri = lib.H5FileWrap(erifile, 'a')
     else:
-        feri = h5py.File(erifile, 'w')
+        feri = lib.H5FileWrap(erifile, 'w')
     if dataname in feri:
         del (feri[dataname])
     if dataname+'-kptij' in feri:
@@ -1162,7 +1181,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
 
 # GTO data
     intor = cell._add_suffix(intor)
-    pcell = copy.copy(cell)
+    pcell = cell.copy(deep=False)
     pcell._atm, pcell._bas, pcell._env = \
             atm, bas, env = mol_gto.conc_env(cell._atm, cell._bas, cell._env,
                                              cell._atm, cell._bas, cell._env)

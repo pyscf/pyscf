@@ -8,7 +8,6 @@ fashion without any issues related to the Davidson procedure.
 This is a helper module defining basic interfaces.
 """
 
-import sys
 from pyscf.lib import logger
 
 from pyscf.pbc.tools import get_kconserv
@@ -18,12 +17,11 @@ from scipy.linalg import solve
 
 from itertools import count, groupby
 
-if sys.version_info >= (3,):
-    unicode = str
 
 def msize(m):
     """
     Checks whether the matrix is square and returns its size.
+
     Args:
         m (numpy.ndarray): the matrix to measure;
 
@@ -39,6 +37,7 @@ def msize(m):
 def full2ab(full, tolerance=1e-12):
     """
     Transforms a full TD matrix into A and B parts.
+
     Args:
         full (numpy.ndarray): the full TD matrix;
         tolerance (float): a tolerance for checking whether the full matrix is in the ABBA-form;
@@ -63,6 +62,7 @@ def full2ab(full, tolerance=1e-12):
 def ab2full(a, b):
     """
     Transforms A and B TD matrices into a full matrix.
+
     Args:
         a (numpy.ndarray): TD A-matrix;
         b (numpy.ndarray): TD B-matrix;
@@ -80,6 +80,7 @@ def ab2full(a, b):
 def ab2mkk(a, b, tolerance=1e-12):
     """
     Transforms A and B TD matrices into MK and K matrices.
+
     Args:
         a (numpy.ndarray): TD A-matrix;
         b (numpy.ndarray): TD B-matrix;
@@ -99,6 +100,7 @@ def ab2mkk(a, b, tolerance=1e-12):
 def mkk2ab(mk, k):
     """
     Transforms MK and M TD matrices into A and B matrices.
+
     Args:
         mk (numpy.ndarray): TD MK-matrix;
         k (numpy.ndarray): TD K-matrix;
@@ -117,6 +119,7 @@ def mkk2ab(mk, k):
 def full2mkk(full):
     """
     Transforms a full TD matrix into MK and K parts.
+
     Args:
         full (numpy.ndarray): the full TD matrix;
 
@@ -129,6 +132,7 @@ def full2mkk(full):
 def mkk2full(mk, k):
     """
     Transforms MK and M TD matrices into a full TD matrix.
+
     Args:
         mk (numpy.ndarray): TD MK-matrix;
         k (numpy.ndarray): TD K-matrix;
@@ -139,7 +143,7 @@ def mkk2full(mk, k):
     return ab2full(*mkk2ab(mk, k))
 
 
-class TDMatrixBlocks(object):
+class TDMatrixBlocks:
     def tdhf_primary_form(self, *args, **kwargs):
         """
         A primary form of TDHF matrixes.
@@ -155,9 +159,9 @@ class TDMatrixBlocks(object):
             raise ValueError("The value returned by `tdhf_primary_form` is not a tuple")
         if len(m) < 1:
             raise ValueError("Empty tuple returned by `tdhf_primary_form`")
-        if not isinstance(m[0], (str, unicode)):
+        if not isinstance(m[0], str):
             raise ValueError("The first item returned by `tdhf_primary_form` must be a string")
-        forms = dict(ab=3, mk=3, full=2)
+        forms = {"ab": 3, "mk": 3, "full": 2}
         if m[0] in forms:
             if len(m) != forms[m[0]]:
                 raise ValueError("The {} form returned by `tdhf_primary_form` must contain {:d} values".format(
@@ -218,6 +222,7 @@ class TDMatrixBlocks(object):
 def mknj2i(item):
     """
     Transforms "mknj" notation into tensor index order for the ERI.
+
     Args:
         item (str): an arbitrary transpose of "mknj" letters;
 
@@ -252,8 +257,9 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
     def tdhf_diag(self, *args):
         """
         Retrieves the diagonal block.
+
         Args:
-            *args: args passed to `__get_mo_energies__`;
+            ``*args``: args passed to `__get_mo_energies__`;
 
         Returns:
             The diagonal block.
@@ -265,9 +271,10 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
     def eri_ov(self, item, *args):
         """
         Retrieves ERI block using 'ov' notation.
+
         Args:
             item (str): a 4-character string of 'o' and 'v' letters;
-            *args: other args passed to `__calc_block__`;
+            ``*args``: other args passed to `__calc_block__`;
 
         Returns:
             The corresponding block of ERI (4-tensor, phys notation).
@@ -295,9 +302,10 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
     def eri_mknj(self, item, *args):
         """
         Retrieves ERI block using 'mknj' notation.
+
         Args:
             item (str): a 4-character string of 'mknj' letters;
-            *args: other arguments passed to `get_block_ov_notation`;
+            ``*args``: other arguments passed to `get_block_ov_notation`;
 
         Returns:
             The corresponding block of ERI (matrix with paired dimensions).
@@ -318,7 +326,7 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
 
     def __getitem__(self, item):
         if isinstance(item, str):
-            spec, args = item, tuple()
+            spec, args = item, ()
         else:
             spec, args = item[0], item[1:]
         if set(spec) == set("mknj"):
@@ -346,10 +354,11 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
         """
         This a prototype class for TD calculations based on proxying pyscf classes such as TDDFT. It is a work-around
         class. It accepts a `pyscf.tdscf.*` class and uses its matvec to construct a full-sized TD matrix.
+
         Args:
             model: a pyscf base model to extract TD matrix from;
         """
-        super(TDProxyMatrixBlocks, self).__init__()
+        super().__init__()
         self.proxy_model = model
         self.proxy_vind, self.proxy_diag = self.proxy_model.gen_vind(self.proxy_model._scf)
         self.proxy_vind = VindTracker(self.proxy_vind)
@@ -361,6 +370,7 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
 def format_frozen_mol(frozen, nmo):
     """
     Formats the argument into a mask array of bools where False values correspond to frozen molecular orbitals.
+
     Args:
         frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         nmo (int): the total number of molecular orbitals;
@@ -380,7 +390,7 @@ def format_frozen_mol(frozen, nmo):
     return space
 
 
-class MolecularMFMixin(object):
+class MolecularMFMixin:
     def __init__(self, model, frozen=None):
         """
         A mixin to support custom slices of mean-field attributes: `mo_coeff`, `mo_energy`, ...
@@ -447,6 +457,7 @@ class MolecularMFMixin(object):
 def format_frozen_k(frozen, nmo, nk):
     """
     Formats the argument into a mask array of bools where False values correspond to frozen orbitals for each k-point.
+
     Args:
         frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all k-points or
         multiple lists of frozen orbitals for each k-point;
@@ -476,6 +487,7 @@ def format_frozen_k(frozen, nmo, nk):
 def k_nocc(model):
     """
     Retrieves occupation numbers.
+
     Args:
         model (RHF): the model;
 
@@ -488,6 +500,7 @@ def k_nocc(model):
 def k_nmo(model):
     """
     Retrieves number of AOs per k-point.
+
     Args:
         model (RHF): the model;
 
@@ -497,7 +510,7 @@ def k_nmo(model):
     return tuple(i.shape[1] for i in model.mo_coeff)
 
 
-class PeriodicMFMixin(object):
+class PeriodicMFMixin:
     def __init__(self, model, frozen=None):
         """
         A mixin to support custom slices of mean-field attributes: `mo_coeff`, `mo_energy`, ...
@@ -553,10 +566,11 @@ class PeriodicMFMixin(object):
         return k_nmo(self.model)
 
 
-class VindTracker(object):
+class VindTracker:
     def __init__(self, vind):
         """
         Tracks calls to `vind` (a matrix-vector multiplication density response routine).
+
         Args:
             vind (Callable): a matvec product routine;
         """
@@ -588,8 +602,7 @@ class VindTracker(object):
         return r
 
     def __iter__(self):
-        for i, o, e in zip(self.args, self.results, self.errors):
-            yield i, o, e
+        yield from zip(self.args, self.results, self.errors)
 
     @property
     def ncalls(self):
@@ -608,7 +621,7 @@ class VindTracker(object):
 
     @property
     def elements_calc(self):
-        return sum(map(lambda i: i[0] * i[1] if i is not None else 0, self.results))
+        return sum((i[0] * i[1] if i is not None else 0 for i in self.results))
 
     @property
     def ratio(self):
@@ -631,6 +644,7 @@ class VindTracker(object):
 def eig(m, driver=None, nroots=None, half=True):
     """
     Eigenvalue problem solver.
+
     Args:
         m (numpy.ndarray): the matrix to diagonalize;
         driver (str): one of the drivers;
@@ -658,12 +672,13 @@ def eig(m, driver=None, nroots=None, half=True):
 def kernel(eri, driver=None, fast=True, nroots=None, **kwargs):
     """
     Calculates eigenstates and eigenvalues of the TDHF problem.
+
     Args:
         eri (TDDFTMatrixBlocks): ERI;
         driver (str): one of the eigenvalue problem drivers;
         fast (bool): whether to run diagonalization on smaller matrixes;
         nroots (int): the number of roots to calculate;
-        **kwargs: arguments to `eri.tdhf_matrix`;
+        ``**kwargs``: arguments to `eri.tdhf_matrix`;
 
     Returns:
         Positive eigenvalues and eigenvectors.
@@ -697,12 +712,13 @@ def kernel(eri, driver=None, fast=True, nroots=None, **kwargs):
         return eig(m, driver=driver, nroots=nroots)
 
 
-class TDBase(object):
+class TDBase:
     v2a = None
 
     def __init__(self, mf, frozen=None):
         """
         Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
+
         Args:
             mf: the mean-field model;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
@@ -753,6 +769,7 @@ class TDBase(object):
     def vector_to_amplitudes(self, vectors):
         """
         Transforms (reshapes) and normalizes vectors into amplitudes.
+
         Args:
             vectors (numpy.ndarray): raw eigenvectors to transform;
 
@@ -766,6 +783,7 @@ class TDBase(object):
 def format_mask(x):
     """
     Formats a mask into a readable string.
+
     Args:
         x (ndarray): an array with the mask;
 

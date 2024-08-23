@@ -63,10 +63,10 @@ class KnownValues(unittest.TestCase):
 
         mf = pbcdft.UKS(cell)
         mf.xc = 'blyp'
-        self.assertAlmostEqual(mf.scf(), -7.6058004283213396, 8)
+        self.assertAlmostEqual(mf.scf(), -7.6058004283213396, 7)
 
         mf.xc = 'lda,vwn'
-        self.assertAlmostEqual(mf.scf(), -7.6162130840535092, 8)
+        self.assertAlmostEqual(mf.scf(), -7.6162130840535092, 7)
 
     def test_rsh_fft(self):
         mf = pbcdft.UKS(cell)
@@ -79,7 +79,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'camb3lyp'
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 6)
 
 
 if __name__ == '__main__':

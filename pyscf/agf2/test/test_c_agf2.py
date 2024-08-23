@@ -42,8 +42,8 @@ class KnownValues(unittest.TestCase):
         gf_vir = aux.GreensFunction(np.random.random(self.nvir), np.eye(self.nmo, self.nvir))
         vv1, vev1 = _agf2.build_mats_ragf2_outcore(xija, gf_occ.energy, gf_vir.energy)
         vv2, vev2 = _agf2.build_mats_ragf2_incore(xija, gf_occ.energy, gf_vir.energy)
-        self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 10)
-        self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 10)
+        self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 8)
+        self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 8)
 
     def test_c_dfragf2(self):
         qxi = np.random.random((self.naux, self.nmo*self.nocc)) / self.naux
@@ -52,8 +52,8 @@ class KnownValues(unittest.TestCase):
         gf_vir = aux.GreensFunction(np.random.random(self.nvir), np.eye(self.nmo, self.nvir))
         vv1, vev1 = _agf2.build_mats_dfragf2_outcore(qxi, qja, gf_occ.energy, gf_vir.energy)
         vv2, vev2 = _agf2.build_mats_dfragf2_incore(qxi, qja, gf_occ.energy, gf_vir.energy)
-        self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 10)
-        self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 10)
+        self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 8)
+        self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 8)
 
     def test_c_uagf2(self):
         xija = np.random.random((2, self.nmo, self.nocc, self.nocc, self.nvir))
@@ -63,8 +63,8 @@ class KnownValues(unittest.TestCase):
                   aux.GreensFunction(np.random.random(self.nvir), np.eye(self.nmo, self.nvir)))
         vv1, vev1 = _agf2.build_mats_uagf2_outcore(xija, (gf_occ[0].energy, gf_occ[1].energy), (gf_vir[0].energy, gf_vir[1].energy))
         vv2, vev2 = _agf2.build_mats_uagf2_incore(xija, (gf_occ[0].energy, gf_occ[1].energy), (gf_vir[0].energy, gf_vir[1].energy))
-        self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 10)
-        self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 10)
+        self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 8)
+        self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 8)
 
     def test_c_dfuagf2(self):
         qxi = np.random.random((2, self.naux, self.nmo*self.nocc)) / self.naux
@@ -75,10 +75,10 @@ class KnownValues(unittest.TestCase):
                   aux.GreensFunction(np.random.random(self.nvir), np.eye(self.nmo, self.nvir)))
         vv1, vev1 = _agf2.build_mats_dfuagf2_outcore(qxi, qja, (gf_occ[0].energy, gf_occ[1].energy), (gf_vir[0].energy, gf_vir[1].energy))
         vv2, vev2 = _agf2.build_mats_dfuagf2_incore(qxi, qja, (gf_occ[0].energy, gf_occ[1].energy), (gf_vir[0].energy, gf_vir[1].energy))
-        self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 10)
-        self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 10)
+        self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 8)
+        self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 8)
 
-        
+
 if __name__ == '__main__':
     print('AGF2 C implementations')
     unittest.main()

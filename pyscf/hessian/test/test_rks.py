@@ -17,6 +17,10 @@ import unittest
 import numpy
 from pyscf import gto, dft, lib
 from pyscf import grad, hessian
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dftd3 = dftd4 = None
 
 def setUpModule():
     global mol, h4
@@ -32,6 +36,7 @@ def setUpModule():
 
     h4 = gto.Mole()
     h4.verbose = 0
+    h4.output = '/dev/null'
     h4.atom = [
         [1 , (1. ,  0.     , 0.000)],
         [1 , (0. ,  1.     , 0.000)],
@@ -44,6 +49,7 @@ def setUpModule():
 def tearDownModule():
     global mol, h4
     mol.stdout.close()
+    h4.stdout.close()
     del mol, h4
 
 def finite_diff(mf):
@@ -87,6 +93,17 @@ def finite_partial_diff(mf):
     return e2ref
 
 class KnownValues(unittest.TestCase):
+    def test_rks_hess_atmlst(self):
+        mf = dft.RKS(mol)
+        mf.xc = 'pbe0'
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+
+        atmlst = [0, 1]
+        hess_1 = mf.Hessian().kernel()[atmlst][:, atmlst]
+        hess_2 = mf.Hessian().kernel(atmlst=atmlst)
+        self.assertAlmostEqual(abs(hess_1-hess_2).max(), 0.0, 4)
+
     def test_finite_diff_lda_hess(self):
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-14
@@ -104,10 +121,58 @@ class KnownValues(unittest.TestCase):
     def test_finite_diff_b3lyp_hess(self):
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-14
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
         self.assertAlmostEqual(lib.fp(hess), -0.7590878171493624, 6)
+
+        g_scanner = mf.nuc_grad_method().as_scanner()
+        pmol = mol.copy()
+        e1 = g_scanner(pmol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        #FIXME: errors seems too big
+        self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_finite_diff_b3lyp_d3_hess_high_cost(self):
+        mf = dft.RKS(mol)
+        mf.conv_tol = 1e-14
+        mf.xc = 'b3lyp'
+        mf.disp = 'd3bj'
+        mf.kernel()
+        hess = mf.Hessian().kernel()
+
+        g_scanner = mf.nuc_grad_method().as_scanner()
+        pmol = mol.copy()
+        e1 = g_scanner(pmol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        #FIXME: errors seems too big
+        self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_consistency_b3lyp_d3_hess(self):
+        mf1 = dft.RKS(mol)
+        mf1.conv_tol = 1e-14
+        mf1.xc = 'b3lyp'
+        mf1.disp = 'd3bj'
+        mf1.kernel()
+        hess1 = mf1.Hessian().kernel()
+
+        mf2 = dft.RKS(mol)
+        mf2.conv_tol = 1e-14
+        mf2.xc = 'b3lyp-d3bj'
+        mf2.kernel()
+        hess2 = mf2.Hessian().kernel()
+        self.assertAlmostEqual(lib.fp(hess1), lib.fp(hess2), 4)
+
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
+    def test_finite_diff_b3lyp_d4_hess(self):
+        mf = dft.RKS(mol)
+        mf.conv_tol = 1e-14
+        mf.xc = 'b3lyp'
+        mf.disp = 'd4'
+        mf.kernel()
+        hess = mf.Hessian().kernel()
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -162,7 +227,7 @@ class KnownValues(unittest.TestCase):
     def test_finite_diff_b3lyp_hess_high_cost(self):
         mf = dft.RKS(h4)
         mf.grids.level = 4
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         mf.conv_tol = 1e-14
         mf.kernel()
         e2 = mf.Hessian().kernel()

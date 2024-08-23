@@ -333,7 +333,7 @@ class GCCSD(gccsd.GCCSD):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         if not isinstance(mf, scf.kghf.KGHF):
-            mf = scf.addons.convert_to_ghf(mf)
+            mf = mf.to_ghf()
         self.kpts = mf.kpts
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         gccsd.GCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
@@ -463,6 +463,8 @@ class GCCSD(gccsd.GCCSD):
     def to_uccsd(self, t1, t2, orbspin=None):
         return spin2spatial(t1, orbspin), spin2spatial(t2, orbspin)
 
+    to_gpu = lib.to_gpu
+
 CCSD = KCCSD = KGCCSD = GCCSD
 
 
@@ -542,7 +544,6 @@ def _make_eris_incore(cc, mo_coeff=None):
     fockao = cc._scf.get_hcore() + vhf
     eris.fock = numpy.asarray([reduce(numpy.dot, (mo.T.conj(), fockao[k], mo))
                                for k, mo in enumerate(eris.mo_coeff)])
-    eris.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
     eris.mo_energy = [eris.fock[k].diagonal().real for k in range(nkpts)]
     # Add HFX correction in the eris.mo_energy to improve convergence in

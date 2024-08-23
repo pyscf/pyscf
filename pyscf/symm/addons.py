@@ -108,7 +108,7 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None,
     :func:`symmetrize_space` symmetrizes the entire space by mixing different
     orbitals.
 
-    Note this function might return non-orthorgonal orbitals.
+    Note this function might return non-orthogonal orbitals.
     Call :func:`symmetrize_space` to find the symmetrized orbitals that are
     close to the given orbitals.
 
@@ -160,22 +160,61 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None,
         mo1[:,idx] = numpy.dot(csym, sc)
     return mo1
 
+
+def find_symmetric_mo(moso, ovlpso, thr=1e-8):
+    '''Find the list of MO of that thransform like particular irrep
+
+    Args:
+        moso : 2D float array
+            Overlap matrix of symmetry-adapted AO and MO, it can be obtained
+            by reduce(numpy.dot, (csym.T.conj(), s, mo)), where csym taken from
+            mol.symm_orb, and s is the AO overlap matrix
+        ovlpso : 2D float array
+            Overlap matrix between symmetry-adapted AO, it can be obtained
+            by reduce(numpy.dot, (csym.T.conj(), s, csym))
+
+    Kwargs:
+        thr : float
+            Threshold to consider MO symmetry-adapted
+
+    Returns:
+        1D bool array to select symmetry adapted MO
+'''
+    irrep_dim = ovlpso.shape[0]
+    try:
+        diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
+    except numpy.linalg.LinAlgError:
+        ovlpso[numpy.diag_indices(irrep_dim)] += 1e-12
+        diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
+    idx = abs(1-diag) < thr
+    return idx
+
+
 def symmetrize_space(mol, mo, s=None,
                      check=getattr(__config__, 'symm_addons_symmetrize_space_check', True),
-                     tol=getattr(__config__, 'symm_addons_symmetrize_space_tol', 1e-7)):
+                     tol=getattr(__config__, 'symm_addons_symmetrize_space_tol', 1e-9),
+                     clean=getattr(__config__, 'symm_addons_symmetrize_space_clean', False)):
     '''Symmetrize the given orbital space.
 
     This function is different to the :func:`symmetrize_orb`:  In this function,
-    the given orbitals are mixed to reveal the symmtery; :func:`symmetrize_orb`
+    the given orbitals are mixed to reveal the symmetry; :func:`symmetrize_orb`
     projects out non-symmetric components for each orbital.
 
     Args:
+        mol : an instance of :class:`Mole`
+
         mo : 2D float array
             The orbital space to symmetrize
 
     Kwargs:
         s : 2D float array
             Overlap matrix.  If not given, overlap is computed with the input mol.
+        check : bool
+            Whether to check orthogonality of input orbitals and try to fix it
+        tol : float
+            Orthogonality tolerance
+        clean : bool
+            Whether to zero out symmetry forbidden orbital coefficients
 
     Returns:
         2D orbital coefficients
@@ -192,12 +231,24 @@ def symmetrize_space(mol, mo, s=None,
     ['A', 'A', 'A', 'B1', 'B1', 'B2', 'B2', 'B3', 'B3']
     '''
     from pyscf.tools import mo_mapping
+    from pyscf.lo import orth
+
     if s is None:
         s = mol.intor_symmetric('int1e_ovlp')
     nmo = mo.shape[1]
     s_mo = numpy.dot(s, mo)
-    if check and abs(numpy.dot(mo.conj().T, s_mo) - numpy.eye(nmo)).max() > tol:
-        raise ValueError('Orbitals are not orthogonalized')
+    if check:
+        moso = reduce(numpy.dot, (mo.conj().T, s, mo))
+        max_non_orth = abs(moso - numpy.eye(nmo)).max()
+        logger.debug(mol, 'Non-orthogonality of input orbitals before symmetrization %8.2e', max_non_orth)
+        if max_non_orth > tol:
+            logger.info(mol, 'Input orbitals are not orthogonal, perform Lowdin orthogonalization')
+            mo = numpy.dot(mo, orth.lowdin(moso))
+            s_mo = numpy.dot(s, mo)
+            max_non_orth = abs(reduce(numpy.dot, (mo.conj().T, s, mo)) - numpy.eye(nmo)).max()
+            logger.debug(mol, 'Non-orthogonality of orbitals before symmetrization %8.2e', max_non_orth)
+            if max_non_orth > tol:
+                raise ValueError('Input orbitals are not orthogonalized')
 
     mo1 = []
     for i, csym in enumerate(mol.symm_orb):
@@ -205,30 +256,200 @@ def symmetrize_space(mol, mo, s=None,
         ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
 
         # excluding orbitals which are already symmetrized
-        try:
-            diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
-        except numpy.linalg.LinAlgError:
-            ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
-            diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
-        idx = abs(1-diag) < 1e-8
-        orb_exclude = mo[:,idx]
-        mo1.append(orb_exclude)
-        moso1 = moso[:,~idx]
+        idx = find_symmetric_mo(moso, ovlpso)
+        orb_irrep = mo[:, idx]
+        if clean:
+            # rotate MO to symm-adapted AO and back to zero-out non-symmetric part
+            SALC_mo = numpy.dot(csym.T.conj(), orb_irrep)
+            orb_irrep = numpy.dot(csym, SALC_mo)
+        moso1 = moso[:, ~idx]
         dm = numpy.dot(moso1, moso1.T.conj())
 
-        if dm.trace() > 1e-8:
+        if dm.trace() > 1e-8 and sum(idx) < csym.shape[1]:
+            logger.debug(mol, '%5d orbital(s) symmetrized in irrep %3d', csym.shape[1] - sum(idx), i)
             e, u = scipy.linalg.eigh(dm, ovlpso)
-            mo1.append(numpy.dot(csym, u[:,abs(1-e) < 1e-6]))
+            orb_symmetrized = numpy.dot(csym, u[:, abs(1-e) < 1e-6])
+            orb_irrep = numpy.hstack([orb_irrep, orb_symmetrized])
+
+        moso = numpy.dot(orb_irrep.T.conj(), numpy.dot(s, orb_irrep))
+        if moso.shape[0] == 0:
+            continue
+        max_non_orth = abs(moso - numpy.eye(moso.shape[0])).max()
+        logger.debug(mol, 'Non-orthogonality in irrep %3d after symmetrization: %8.2e', i, max_non_orth)
+        if max_non_orth > tol:
+            logger.info(mol, 'Symmetrized orbitals in irrep %3d not orthogonal, perform Lowdin orthogonalization', i)
+            orb_irrep = numpy.dot(orb_irrep, orth.lowdin(moso))
+            max_non_orth = abs(numpy.dot(orb_irrep.T.conj(), numpy.dot(s, orb_irrep))
+                               - numpy.eye(orb_irrep.shape[1])).max()
+            logger.debug(mol, 'Non-orthogonality in irrep %3d after symmetrization and orthogonalization: %8.2e',
+                         i, max_non_orth)
+        mo1.append(orb_irrep)
     mo1 = numpy.hstack(mo1)
     if mo1.shape[1] != nmo:
-        raise ValueError('The input orbital space is not symmetrized.\n One '
+        raise ValueError('mo1.shape[1] != nmo: %d != %d The input orbital space is not symmetrized.\n One '
                          'possible reason is that the input mol and orbitals '
-                         'are of different orientation.')
-    if (check and
-        abs(reduce(numpy.dot, (mo1.conj().T, s, mo1)) - numpy.eye(nmo)).max() > tol):
-        raise ValueError('Orbitals are not orthogonalized')
+                         'are of different orientation.' % (mo1.shape[1], nmo))
+    if check:
+        moso1 = reduce(numpy.dot, (mo1.conj().T, s, mo1))
+        max_non_orth = abs(moso1 - numpy.eye(nmo)).max()
+        logger.debug(mol, 'Non-orthogonality of output orbitals after symmetrization %8.2e', max_non_orth)
+        if max_non_orth > tol:
+            logger.info(mol, 'Symmetrized output orbitals are not orthogonalized, perform Lowdin orthogonalization')
+            mo1 = numpy.dot(mo1, orth.lowdin(moso1))
+            max_non_orth = abs(reduce(numpy.dot, (mo1.conj().T, s, mo1)) - numpy.eye(nmo)).max()
+            logger.debug(mol, 'Non-orthogonality of output orbitals after orthogonalization %8.2e', max_non_orth)
+            if max_non_orth > tol:
+                raise ValueError('Output orbitals are not orthogonalized')
     idx = mo_mapping.mo_1to1map(reduce(numpy.dot, (mo.T.conj(), s, mo1)))
-    return mo1[:,idx]
+    return mo1[:, idx]
+
+
+def symmetrize_multidim(mol, mo, s=None,
+                        check=getattr(__config__, 'symm_addons_symmetrize_space_check', True),
+                        tol=getattr(__config__, 'symm_addons_symmetrize_space_tol', 1e-10),
+                        keep_phase=getattr(__config__, 'symm_addons_symmetrize_multidim_keep_phase', True)):
+    '''Symmetrize orbitals with respect to multidimensional irreps.
+
+    Make coefficients of partner functions of multidimensional irreps to be the same.
+    The functions uses the convention of the libmsym interface, that introduces underscores to
+    the labels of multidimensional irreps partners.
+
+    Args:
+        mol : an instance of :class:`Mole`
+            Symmetry-adapted basis with multidimensional irreps should be generated by libmsym
+        mo : 2D float array
+            The orbital space to symmetrize
+
+    Kwargs:
+        s : 2D float array
+            Overlap matrix.  If not given, overlap is computed with the input mol.
+        check : bool
+            Whether to check orthogonality of input orbitals and try to fix it
+        tol : float
+            Orthogonality tolerance
+        keep_phase : bool
+            Whether to keep original orbital phases, rather then make them coherent with the first partner
+
+    Returns:
+        2D orbital coefficients
+
+    '''
+    from pyscf.tools import mo_mapping
+    from pyscf.lo import orth
+
+    if s is None:
+        s = mol.intor_symmetric('int1e_ovlp')
+    nmo = mo.shape[1]
+    s_mo = numpy.dot(s, mo)
+    mo1 = []
+    if check:
+        moso = reduce(numpy.dot, (mo.conj().T, s, mo))
+        max_non_orth = abs(moso - numpy.eye(nmo)).max()
+        logger.info(mol, 'Non-orthogonality of input orbitals %8.2e', max_non_orth)
+        if max_non_orth > tol:
+            mo_lowdin = numpy.dot(mo, orth.lowdin(moso))
+            max_non_orth_lowdin = abs(reduce(numpy.dot, (mo_lowdin.conj().T, s, mo_lowdin)) -
+                                      numpy.eye(nmo)).max()
+            logger.info(mol, 'Non-orthogonality after Lowdin orthogonalization %8.2e', max_non_orth)
+            if (max_non_orth_lowdin - max_non_orth) > tol/100:
+                mo = mo_lowdin
+                s_mo = numpy.dot(s, mo)
+                logger.info(mol, 'Use Lowdin-orthogonalized input orbitals')
+            else:
+                logger.info(mol, 'Use original input orbitals')
+    irreps_mdim = []
+    irreps_1dim = []
+    for irrep in mol.irrep_name:
+        if "_" in irrep:
+            added = False
+            base = irrep.split("_")[0]
+            for partners in irreps_mdim:
+                if any(base in elem for elem in partners):
+                    partners.append(irrep)
+                    added = True
+            if not added:
+                # new base
+                irreps_mdim.append([irrep])
+        else:
+            irreps_1dim.append(irrep)
+    for irrep in irreps_1dim:
+        i = mol.irrep_name.index(irrep)
+        csym = mol.symm_orb[i]
+        moso = numpy.dot(csym.T.conj(), s_mo)
+        ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
+        # find MO that thransform like irrep
+        idx = find_symmetric_mo(moso, ovlpso)
+        if sum(idx) != csym.shape[1]:
+            raise ValueError('Number of symmetry-adapted MOs in not equal to dimensionality '
+                             'of irrep %s: %d != %d' % (mol.irrep_name[irrep], csym.shape[1], sum(idx)))
+        mo1.append(mo[:, idx])
+    for partners in irreps_mdim:
+        SALC_ao_partners = []
+        SALC_ov_partners = []
+        SALC_mo_partners = []
+        for irrep in partners:
+            csym = mol.symm_orb[mol.irrep_name.index(irrep)]
+            SALC_ao_partners.append(csym)
+            moso = numpy.dot(csym.T.conj(), s_mo)
+            ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
+            SALC_ov_partners.append(ovlpso)
+            # find MO that thransform like irrep
+            idx = find_symmetric_mo(moso, ovlpso)
+            mo_irrep = mo[:, idx]
+            if sum(idx) != csym.shape[1]:
+                raise ValueError('Number of symmetry-adapted MOs in not equal to dimensionality '
+                                 'of irrep %s: %d != %d' % (mol.irrep_name[irrep], csym.shape[1], sum(idx)))
+            # rotate MO to symm-adapted AO
+            SALC_mo = numpy.dot(csym.T.conj(), mo_irrep)
+            SALC_mo_partners.append(SALC_mo)
+        irrep_dim = SALC_mo_partners[0].shape[1]
+        phases = [numpy.ones(irrep_dim)]
+        idxes = [numpy.array(range(irrep_dim))]
+        SALC_mo_average = SALC_mo_partners[0]
+        for i in range(1, len(partners)):
+            if not numpy.allclose(SALC_ov_partners[0], SALC_ov_partners[i]):
+                raise ValueError('Symmetry-adapted AO of partner functions %s and %s are not compatible'
+                                 % (partners[0], partners[i]))
+            ov_0i = reduce(numpy.dot, (SALC_mo_partners[0].T.conj(),
+                                       SALC_ov_partners[0],
+                                       SALC_mo_partners[i]))
+            idx = mo_mapping.mo_1to1map(ov_0i)
+            idxes.append(idx)
+            phase = numpy.rint(numpy.diagonal(ov_0i[:, idx]))
+            phases.append(phase)
+            partners_mo_i = phase*SALC_mo_partners[i][:, idx]
+            SALC_mo_average += partners_mo_i
+        SALC_mo_average /= len(partners)
+        for csym, phase, SALC_mo in zip(SALC_ao_partners, phases, SALC_mo_partners):
+            if keep_phase:
+                SALC_mo = phase*SALC_mo_average
+            else:
+                SALC_mo = SALC_mo_average
+            orb_done = numpy.dot(csym, SALC_mo)
+            moso1 = reduce(numpy.dot, (orb_done.T.conj(), s, orb_done))
+            max_non_orth = abs(moso1 - numpy.eye(moso1.shape[0])).max()
+            logger.debug(mol, 'Non-orthogonality after symmetrization of %s: %s', partners[i], max_non_orth)
+            if max_non_orth > tol:
+                orb_done = numpy.dot(orb_done, orth.lowdin(moso1))
+                max_non_orth = abs(numpy.dot(orb_done.T.conj(), numpy.dot(s, orb_done))
+                                   - numpy.eye(orb_done.shape[1])).max()
+                logger.debug(mol, 'After additional orthogonalization: %s', max_non_orth)
+            mo1.append(orb_done)
+    mo1 = numpy.hstack(mo1)
+    if check:
+        moso1 = reduce(numpy.dot, (mo1.conj().T, s, mo1))
+        max_non_orth = abs(moso1 - numpy.eye(nmo)).max()
+        logger.debug(mol, 'Non-orthogonality of output orbitals after symmetrization %8.2e', max_non_orth)
+        if max_non_orth > tol:
+            logger.info(mol, 'Output orbitals are not orthogonalized, perform Lowdin orthogonalization')
+            mo1 = numpy.dot(mo1, orth.lowdin(moso1))
+            max_non_orth = abs(reduce(numpy.dot, (mo1.conj().T, s, mo1)) - numpy.eye(nmo)).max()
+            logger.info(mol, 'Non-orthogonality of output orbitals after orthogonalization %8.2e', max_non_orth)
+            if max_non_orth > tol:
+                raise ValueError('Output orbitals are not orthogonalized')
+    idx = mo_mapping.mo_1to1map(reduce(numpy.dot, (mo.T.conj(), s, mo1)))
+    return mo1[:, idx]
+
 
 def std_symb(gpname):
     '''std_symb('d2h') returns D2h; std_symb('D2H') returns D2h'''
@@ -268,7 +489,7 @@ def irrep_id2name(gpname, irrep_id):
             See IRREP_ID_TABLE in pyscf/symm/param.py
 
     Returns:
-        Irrep sybmol, str
+        Irrep symbol, str
     '''
     gpname = std_symb(gpname)
     if gpname == 'SO3':

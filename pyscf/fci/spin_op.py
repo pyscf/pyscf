@@ -19,7 +19,7 @@ from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci.addons import _unpack_nelec
 
-librdm = lib.load_library('libfci')
+librdm = cistring.libfci
 
 ######################################################
 # Spin squared operator
@@ -68,7 +68,7 @@ def spin_square_general(dm1a, dm1b, dm2aa, dm2ab, dm2bb, mo_coeff, ovlp=1):
                          + Gamma_{i\beta k\beta ,j\beta l\beta})
                          + (n_\alpha+n_\beta)/4
 
-    Given the overlap betwen non-degenerate alpha and beta orbitals, this
+    Given the overlap between non-degenerate alpha and beta orbitals, this
     function can compute the expectation value spin square operator for
     UHF-FCI wavefunction
     '''
@@ -109,13 +109,17 @@ def spin_square_general(dm1a, dm1b, dm2aa, dm2ab, dm2bb, mo_coeff, ovlp=1):
     return ss, multip
 
 @lib.with_doc(spin_square_general.__doc__)
-def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
-    from pyscf.fci import direct_spin1
+def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1, fcisolver=None):
     if mo_coeff is None:
         mo_coeff = (numpy.eye(norb),) * 2
 
-    (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
+    if fcisolver is None:
+        from pyscf.fci import direct_spin1
+        (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
             direct_spin1.make_rdm12s(fcivec, norb, nelec)
+    else:
+        (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
+            fcisolver.make_rdm12s(fcivec, norb, nelec)
 
     return spin_square_general(dm1a, dm1b, dm2aa, dm2ab, dm2bb, mo_coeff, ovlp)
 

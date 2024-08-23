@@ -12,7 +12,7 @@ regular `numpy.linalg.eig` can be used to retrieve TD roots. Several variants of
  * `pyscf.pbc.tdscf.kproxy_supercell`: PBC implementation constructing supercells. Works with an arbitrary number of
    k-points but has an overhead due to ignoring the momentum conservation law. In addition, works only with
    time reversal invariant (TRI) models: i.e. the k-point grid has to be aligned and contain at least one TRI momentum.
- * `pyscf.pbc.tdscf.kproxy`: same as the above but respect the momentum conservation and, thus, diagonlizes smaller
+ * `pyscf.pbc.tdscf.kproxy`: same as the above but respect the momentum conservation and, thus, diagonalizes smaller
    matrices (the performance gain is the total number of k-points in the model).
 """
 
@@ -31,6 +31,7 @@ import numpy
 def molecular_response_ov(vind, space_ov, nocc, nmo, double, log_dest):
     """
     Retrieves a raw response matrix.
+
     Args:
         vind (Callable): a pyscf matvec routine;
         space_ov (ndarray): the active `ov` space mask: either the same mask for both rows and columns (1D array) or
@@ -81,8 +82,9 @@ def molecular_response_ov(vind, space_ov, nocc, nmo, double, log_dest):
 def orb2ov(space, nocc):
     """
     Converts orbital active space specification into ov-pairs space spec.
+
     Args:
-        space (ndarray): the obital space;
+        space (ndarray): the orbital space;
         nocc (int): the number of occupied orbitals;
 
     Returns:
@@ -97,6 +99,7 @@ def orb2ov(space, nocc):
 def molecular_response(vind, space, nocc, nmo, double, log_dest):
     """
     Retrieves a raw response matrix.
+
     Args:
         vind (Callable): a pyscf matvec routine;
         space (ndarray): the active orbital space mask: either the same mask for both rows and columns (1D array) or
@@ -126,6 +129,7 @@ def molecular_response(vind, space, nocc, nmo, double, log_dest):
 def mk_make_canonic(m, o, v, return_ov=False, space_ov=None):
     """
     Makes the output of pyscf TDDFT matrix (MK form) to be canonic.
+
     Args:
         m (ndarray): the TDDFT matrix;
         o (ndarray): occupied orbital energies;
@@ -172,6 +176,7 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
     def proxy_is_double(self):
         """
         Determines if double-sized matrices are proxied.
+
         Returns:
             True if double-sized matrices are proxied.
         """
@@ -194,6 +199,7 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
     def proxy_response(self):
         """
         A raw response matrix.
+
         Returns:
             A raw response matrix.
         """
@@ -233,12 +239,13 @@ class TDProxy(TDBase):
     def __init__(self, mf, proxy, frozen=None):
         """
         Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
+
         Args:
             mf: the base restricted mean-field model;
             proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
-        super(TDProxy, self).__init__(mf, frozen=frozen)
+        super().__init__(mf, frozen=frozen)
         self.__proxy__ = proxy
 
     def ao2mo(self):

@@ -33,8 +33,13 @@ from pyscf.lib import logger
 from pyscf.scf import hf, hf_symm, uhf_symm
 from pyscf.scf import _response_functions  # noqa
 from pyscf.soscf import newton_ah
+from pyscf import __config__
 
-def rhf_stability(mf, internal=True, external=False, verbose=None, return_status=False):
+STAB_NROOTS = getattr(__config__, 'stab_nroots', 3)
+STAB_TOL = getattr(__config__, 'stab_tol', 1e-4)
+
+def rhf_stability(mf, internal=True, external=False, verbose=None, return_status=False,
+                  nroots=STAB_NROOTS, tol=STAB_TOL):
     '''
     Stability analysis for RHF/RKS method.
 
@@ -49,6 +54,10 @@ def rhf_stability(mf, internal=True, external=False, verbose=None, return_status
             stability analysis.
         return_status: bool
             Whether to return `stable_i` and `stable_e`
+        nroots : int
+            Number of roots solved by Davidson solver
+        tol : float
+            Convergence threshold for Davidson solver
 
     Returns:
         If return_status is False (default), the return value includes
@@ -62,21 +71,18 @@ def rhf_stability(mf, internal=True, external=False, verbose=None, return_status
         and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
+    stable_i = stable_e = None
+    if internal:
+        mo_i, stable_i = rhf_internal(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
+    if external:
+        mo_e, stable_e = rhf_external(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
     if return_status:
-        stable_i = stable_e = None
-        if internal:
-            mo_i, stable_i = rhf_internal(mf, verbose=verbose, return_status=True)
-        if external:
-            mo_e, stable_e = rhf_external(mf, verbose=verbose, return_status=True)
         return mo_i, mo_e, stable_i, stable_e
     else:
-        if internal:
-            mo_i = rhf_internal(mf, verbose=verbose)
-        if external:
-            mo_e = rhf_external(mf, verbose=verbose)
         return mo_i, mo_e
 
-def uhf_stability(mf, internal=True, external=False, verbose=None, return_status=False):
+def uhf_stability(mf, internal=True, external=False, verbose=None, return_status=False,
+                  nroots=STAB_NROOTS, tol=STAB_TOL):
     '''
     Stability analysis for UHF/UKS method.
 
@@ -91,6 +97,10 @@ def uhf_stability(mf, internal=True, external=False, verbose=None, return_status
             stability analysis.
         return_status: bool
             Whether to return `stable_i` and `stable_e`
+        nroots : int
+            Number of roots solved by Davidson solver
+        tol : float
+            Convergence threshold for Davidson solver
 
     Returns:
         If return_status is False (default), the return value includes
@@ -104,21 +114,18 @@ def uhf_stability(mf, internal=True, external=False, verbose=None, return_status
         and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
+    stable_i = stable_e = None
+    if internal:
+        mo_i, stable_i = uhf_internal(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
+    if external:
+        mo_e, stable_e = uhf_external(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
     if return_status:
-        stable_i = stable_e = None
-        if internal:
-            mo_i, stable_i = uhf_internal(mf, verbose=verbose, return_status=True)
-        if external:
-            mo_e, stable_e = uhf_external(mf, verbose=verbose, return_status=True)
         return mo_i, mo_e, stable_i, stable_e
     else:
-        if internal:
-            mo_i = uhf_internal(mf, verbose=verbose)
-        if external:
-            mo_e = uhf_external(mf, verbose=verbose)
         return mo_i, mo_e
 
-def rohf_stability(mf, internal=True, external=False, verbose=None, return_status=False):
+def rohf_stability(mf, internal=True, external=False, verbose=None, return_status=False,
+                   nroots=STAB_NROOTS, tol=STAB_TOL):
     '''
     Stability analysis for ROHF/ROKS method.
 
@@ -132,6 +139,10 @@ def rohf_stability(mf, internal=True, external=False, verbose=None, return_statu
             External stability. It is not available in current version.
         return_status: bool
             Whether to return `stable_i` and `stable_e`
+        nroots : int
+            Number of roots solved by Davidson solver
+        tol : float
+            Convergence threshold for Davidson solver
 
     Returns:
         If return_status is False (default), the return value includes
@@ -145,21 +156,25 @@ def rohf_stability(mf, internal=True, external=False, verbose=None, return_statu
         and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
+    stable_i = stable_e = None
+    if internal:
+        mo_i, stable_i = rohf_internal(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
+    if external:
+        mo_e, stable_e = rohf_external(mf, verbose=verbose, return_status=True, nroots=nroots, tol=tol)
     if return_status:
-        stable_i = stable_e = None
-        if internal:
-            mo_i, stable_i = rohf_internal(mf, verbose=verbose, return_status=True)
-        if external:
-            mo_e, stable_e = rohf_external(mf, verbose=verbose, return_status=True)
         return mo_i, mo_e, stable_i, stable_e
     else:
-        if internal:
-            mo_i = rohf_internal(mf, verbose=verbose)
-        if external:
-            mo_e = rohf_external(mf, verbose=verbose)
         return mo_i, mo_e
 
-def ghf_stability(mf, verbose=None, return_status=False):
+def dump_status(log, stable, method_class, stab_type):
+    if not stable:
+        log.note(method_class + f' wavefunction has an {stab_type} instability')
+    else:
+        log.note(method_class + f' wavefunction is stable in the {stab_type} '
+                 'stability analysis')
+
+def ghf_stability(mf, verbose=None, return_status=False,
+                  nroots=STAB_NROOTS, tol=STAB_TOL):
     '''
     Stability analysis for GHF/GKS method.
 
@@ -169,6 +184,10 @@ def ghf_stability(mf, verbose=None, return_status=False):
     Kwargs:
         return_status: bool
             Whether to return `stable_i` and `stable_e`
+        nroots : int
+            Number of roots solved by Davidson solver
+        tol : float
+            Convergence threshold for Davidson solver
 
     Returns:
         If return_status is False (default), the return value includes
@@ -193,21 +212,23 @@ def ghf_stability(mf, verbose=None, return_status=False):
     x0[g!=0] = 1. / hdiag[g!=0]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
-    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
-    if e < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has an internal instability')
-        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
-        stable = False
-    else:
-        log.note(f'{mf.__class__} wavefunction is stable in the internal '
-                 'stability analysis')
+    e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    log.info('ghf_stability: lowest eigs of H = %s', e)
+    if nroots != 1:
+        e, v = e[0], v[0]
+    stable = not (e < -1e-5)
+    dump_status(log, stable, f'{mf.__class__}', 'internal')
+    if stable:
         mo = mf.mo_coeff
+    else:
+        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     if return_status:
         return mo, stable
     else:
         return mo
 
-def dhf_stability(mf, verbose=None, return_status=False):
+def dhf_stability(mf, verbose=None, return_status=False,
+                  nroots=STAB_NROOTS, tol=STAB_TOL):
     '''
     Stability analysis for DHF/DKS method.
 
@@ -217,6 +238,10 @@ def dhf_stability(mf, verbose=None, return_status=False):
     Kwargs:
         return_status: bool
             Whether to return `stable_i` and `stable_e`
+        nroots : int
+            Number of roots solved by Davidson solver
+        tol : float
+            Convergence threshold for Davidson solver
 
     Returns:
         If return_status is False (default), the return value includes
@@ -239,26 +264,27 @@ def dhf_stability(mf, verbose=None, return_status=False):
     x0 = numpy.zeros_like(g)
     x0[g!=0] = 1. / hdiag[g!=0]
     x0[numpy.argmin(hdiag)] = 1
-    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
-    if e < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has an internal instability')
-        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
-        stable = False
-    else:
-        log.note(f'{mf.__class__} wavefunction is stable in the internal '
-                 'stability analysis')
+    e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    log.info('dhf_stability: lowest eigs of H = %s', e)
+    if nroots != 1:
+        e, v = e[0], v[0]
+    stable = not (e < -1e-5)
+    dump_status(log, stable, f'{mf.__class__}', 'internal')
+    if stable:
         mo = mf.mo_coeff
+    else:
+        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     if return_status:
         return mo, stable
     else:
         return mo
 
-def rhf_internal(mf, with_symmetry=True, verbose=None, return_status=False):
+def rhf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
+                 nroots=STAB_NROOTS, tol=STAB_TOL):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_rhf(mf, mf.mo_coeff, mf.mo_occ,
                                             with_symmetry=with_symmetry)
     hdiag *= 2
-    stable = True
     def precond(dx, e, x0):
         hdiagd = hdiag - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
@@ -266,7 +292,7 @@ def rhf_internal(mf, with_symmetry=True, verbose=None, return_status=False):
     # The results of hop(x) corresponds to a displacement that reduces
     # gradients g.  It is the vir-occ block of the matrix vector product
     # (Hessian*x). The occ-vir block equals to x2.T.conj(). The overall
-    # Hessian for internal reotation is x2 + x2.T.conj(). This is
+    # Hessian for internal rotation is x2 + x2.T.conj(). This is
     # the reason we apply (.real * 2) below
     def hessian_x(x):
         return hop(x).real * 2
@@ -275,15 +301,16 @@ def rhf_internal(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[g!=0] = 1. / hdiag[g!=0]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
-    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
-    if e < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has an internal instability')
-        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
-        stable = False
-    else:
-        log.note(f'{mf.__class__} wavefunction is stable in the internal '
-                 'stability analysis')
+    e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    log.info('rhf_internal: lowest eigs of H = %s', e)
+    if nroots != 1:
+        e, v = e[0], v[0]
+    stable = not (e < -1e-5)
+    dump_status(log, stable, f'{mf.__class__}', 'internal')
+    if stable:
         mo = mf.mo_coeff
+    else:
+        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     if return_status:
         return mo, stable
     else:
@@ -360,10 +387,10 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
     return hop_real2complex, hdiag, hop_rhf2uhf, hdiag
 
 
-def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
+def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
+                 nroots=STAB_NROOTS, tol=STAB_TOL):
     log = logger.new_logger(mf, verbose)
     hop1, hdiag1, hop2, hdiag2 = _gen_hop_rhf_external(mf, with_symmetry)
-    stable = True
 
     def precond(dx, e, x0):
         hdiagd = hdiag1 - e
@@ -373,38 +400,40 @@ def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[hdiag1>1e-5] = 1. / hdiag1[hdiag1>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag1)] = 1
-    e1, v1 = lib.davidson(hop1, x0, precond, tol=1e-4, verbose=log)
-    if e1 < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has a real -> complex instability')
-    else:
-        log.note(f'{mf.__class__} wavefunction is stable in the real -> complex '
-                 'stability analysis')
+    e1, v1 = lib.davidson(hop1, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    log.info('rhf_real2complex: lowest eigs of H = %s', e1)
+    if nroots != 1:
+        e1, v1 = e1[0], v1[0]
+    stable1 = not (e1 < -1e-5)
+    dump_status(log, stable1, f'{mf.__class__}', 'real -> complex')
 
     def precond(dx, e, x0):
         hdiagd = hdiag2 - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
         return dx/hdiagd
-    x0 = v1
-    e3, v3 = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log)
-    if e3 < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has a RHF/RKS -> UHF/UKS instability.')
-        mo = (_rotate_mo(mf.mo_coeff, mf.mo_occ, v3), mf.mo_coeff)
-        stable = False
-    else:
-        log.note(f'{mf.__class__} wavefunction is stable in the RHF/RKS -> '
-                 'UHF/UKS stability analysis')
+    x0 = numpy.zeros_like(hdiag2)
+    x0[hdiag2>1e-5] = 1. / hdiag2[hdiag2>1e-5]
+    e3, v3 = lib.davidson(hop2, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    log.info('rhf_external: lowest eigs of H = %s', e3)
+    if nroots != 1:
+        e3, v3 = e3[0], v3[0]
+    stable = not (e3 < -1e-5)
+    dump_status(log, stable, f'{mf.__class__}', 'RHF/RKS -> UHF/UKS')
+    if stable:
         mo = (mf.mo_coeff, mf.mo_coeff)
+    else:
+        mo = (_rotate_mo(mf.mo_coeff, mf.mo_occ, v3), mf.mo_coeff)
     if return_status:
         return mo, stable
     else:
         return mo
 
-def rohf_internal(mf, with_symmetry=True, verbose=None, return_status=False):
+def rohf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
+                  nroots=STAB_NROOTS, tol=STAB_TOL):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_rohf(mf, mf.mo_coeff, mf.mo_occ,
                                              with_symmetry=with_symmetry)
     hdiag *= 2
-    stable = True
     def precond(dx, e, x0):
         hdiagd = hdiag - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
@@ -416,29 +445,31 @@ def rohf_internal(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[g!=0] = 1. / hdiag[g!=0]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
-    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
-    if e < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has an internal instability.')
-        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
-        stable = False
-    else:
-        log.note(f'{mf.__class__} wavefunction is stable in the internal '
-                 'stability analysis')
+    e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    log.info('rohf_internal: lowest eigs of H = %s', e)
+    if nroots != 1:
+        e, v = e[0], v[0]
+    stable = not (e < -1e-5)
+    dump_status(log, stable, f'{mf.__class__}', 'internal')
+    if stable:
         mo = mf.mo_coeff
+    else:
+        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     if return_status:
         return mo, stable
     else:
         return mo
 
-def rohf_external(mf, with_symmetry=True, verbose=None, return_status=False):
+def rohf_external(mf, with_symmetry=True, verbose=None, return_status=False,
+                  nroots=STAB_NROOTS, tol=STAB_TOL):
     raise NotImplementedError
 
-def uhf_internal(mf, with_symmetry=True, verbose=None, return_status=False):
+def uhf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
+                 nroots=STAB_NROOTS, tol=STAB_TOL):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_uhf(mf, mf.mo_coeff, mf.mo_occ,
                                             with_symmetry=with_symmetry)
     hdiag *= 2
-    stable = True
     def precond(dx, e, x0):
         hdiagd = hdiag - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
@@ -450,18 +481,19 @@ def uhf_internal(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[g!=0] = 1. / hdiag[g!=0]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
-    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
-    if e < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has an internal instability.')
+    e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    log.info('uhf_internal: lowest eigs of H = %s', e)
+    if nroots != 1:
+        e, v = e[0], v[0]
+    stable = not (e < -1e-5)
+    dump_status(log, stable, f'{mf.__class__}', 'internal')
+    if stable:
+        mo = mf.mo_coeff
+    else:
         nocca = numpy.count_nonzero(mf.mo_occ[0]> 0)
         nvira = numpy.count_nonzero(mf.mo_occ[0]==0)
         mo = (_rotate_mo(mf.mo_coeff[0], mf.mo_occ[0], v[:nocca*nvira]),
               _rotate_mo(mf.mo_coeff[1], mf.mo_occ[1], v[nocca*nvira:]))
-        stable = False
-    else:
-        log.note(f'{mf.__class__} wavefunction is stable in the internal '
-                 'stability analysis')
-        mo = mf.mo_coeff
     if return_status:
         return mo, stable
     else:
@@ -568,10 +600,10 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     return hop_real2complex, hdiag1, hop_uhf2ghf, hdiag2
 
 
-def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
+def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
+                 nroots=STAB_NROOTS, tol=STAB_TOL):
     log = logger.new_logger(mf, verbose)
     hop1, hdiag1, hop2, hdiag2 = _gen_hop_uhf_external(mf, with_symmetry)
-    stable = True
 
     def precond(dx, e, x0):
         hdiagd = hdiag1 - e
@@ -581,12 +613,12 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[hdiag1>1e-5] = 1. / hdiag1[hdiag1>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag1)] = 1
-    e1, v = lib.davidson(hop1, x0, precond, tol=1e-4, verbose=log)
-    if e1 < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has a real -> complex instability')
-    else:
-        log.note(f'{mf.__class__} wavefunction is stable in the real -> complex '
-                 'stability analysis')
+    e1, v = lib.davidson(hop1, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    log.info('uhf_real2complex: lowest eigs of H = %s', e1)
+    if nroots != 1:
+        e1, v = e1[0], v[0]
+    stable1 = not (e1 < -1e-5)
+    dump_status(log, stable1, f'{mf.__class__}', 'real -> complex')
 
     def precond(dx, e, x0):
         hdiagd = hdiag2 - e
@@ -596,11 +628,14 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
     x0[hdiag2>1e-5] = 1. / hdiag2[hdiag2>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag2)] = 1
-    e3, v = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log)
-    log.debug('uhf_external: lowest eigs of H = %s', e3)
+    e3, v = lib.davidson(hop2, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    log.info('uhf_external: lowest eigs of H = %s', e3)
+    if nroots != 1:
+        e3, v = e3[0], v[0]
+    stable = not (e3 < -1e-5)
+    dump_status(log, stable, f'{mf.__class__}', 'UHF/UKS -> GHF/GKS')
     mo = scipy.linalg.block_diag(*mf.mo_coeff)
-    if e3 < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has an UHF/UKS -> GHF/GKS instability.')
+    if not stable:
         occidxa = numpy.where(mf.mo_occ[0]> 0)[0]
         viridxa = numpy.where(mf.mo_occ[0]==0)[0]
         occidxb = numpy.where(mf.mo_occ[1]> 0)[0]
@@ -617,10 +652,6 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False):
         mo = numpy.dot(mo, u)
         mo = numpy.hstack([mo[:,:nocca], mo[:,nmo:nmo+noccb],
                            mo[:,nocca:nmo], mo[:,nmo+noccb:]])
-        stable = False
-    else:
-        log.note(f'{mf.__class__} wavefunction is stable in the UHF/UKS -> '
-                 'GHF/GKS stability analysis')
     if return_status:
         return mo, stable
     else:

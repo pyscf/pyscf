@@ -22,10 +22,12 @@ Generalized Hartree-Fock for periodic systems at a single k-point
 
 import numpy as np
 import scipy.linalg
+from pyscf import lib
+from pyscf.lib import logger
 import pyscf.scf.ghf as mol_ghf
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import addons
-from pyscf.pbc.scf import chkfile  # noqa
+from pyscf import __config__
 
 
 def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
@@ -68,6 +70,9 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
     nblocks, n_dm = dms.shape[:2]
     dms = dms.reshape(nblocks*n_dm, nao, nao)
 
+    if mf.rsjk:
+        logger.warn(mf, 'RSJK does not support GHF')
+        raise NotImplementedError
     j1, k1 = mf.with_df.get_jk(dms, _hermi, kpt, kpts_band, with_j, with_k,
                                exxdiv=mf.exxdiv)
 
@@ -92,34 +97,44 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
 
     return vj, vk
 
-
-class GHF(pbchf.SCF, mol_ghf.GHF):
+class GHF(pbchf.SCF):
     '''GHF class for PBCs.
     '''
+    _keys = {'with_soc'}
+
+    def __init__(self, cell, kpt=np.zeros(3),
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        pbchf.SCF.__init__(self, cell, kpt, exxdiv)
+        self.with_soc = None
+
+    init_guess_by_chkfile = mol_ghf.GHF.init_guess_by_chkfile
+    init_guess_by_minao = mol_ghf.GHF.init_guess_by_minao
+    init_guess_by_atom = mol_ghf.GHF.init_guess_by_atom
+    init_guess_by_huckel = mol_ghf.GHF.init_guess_by_huckel
+    get_jk = get_jk
+    get_occ = mol_ghf.get_occ
+    get_grad = mol_ghf.GHF.get_grad
+    _finalize = mol_ghf.GHF._finalize
+    analyze = lib.invalid_method('analyze')
+    mulliken_pop = lib.invalid_method('mulliken_pop')
+    mulliken_meta = lib.invalid_method('mulliken_meta')
+    spin_square = mol_ghf.GHF.spin_square
+    stability = mol_ghf.GHF.stability
 
     def get_hcore(self, cell=None, kpt=None):
         hcore = pbchf.SCF.get_hcore(self, cell, kpt)
-        return scipy.linalg.block_diag(hcore, hcore)
+        hcore = scipy.linalg.block_diag(hcore, hcore)
+        if self.with_soc:
+            raise NotImplementedError
+        return hcore
 
     def get_ovlp(self, cell=None, kpt=None):
         s = pbchf.SCF.get_ovlp(self, cell, kpt)
         return scipy.linalg.block_diag(s, s)
 
-    get_jk = get_jk
-    get_occ = mol_ghf.get_occ
-    get_grad = mol_ghf.GHF.get_grad
-
-    def get_j(self, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
-              **kwargs):
-        return self.get_jk(cell, dm, hermi, kpt, kpts_band, True, False)[0]
-
-    def get_k(self, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
-              **kwargs):
-        return self.get_jk(cell, dm, hermi, kpt, kpts_band, False, True)[1]
-
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
-        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band, True, True)
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         vhf = vj - vk
         return vhf
 
@@ -134,19 +149,24 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
         '''
         raise NotImplementedError
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None: cell = self.cell
-        dm = mol_ghf.GHF.get_init_guess(self, cell, key)
-        dm = pbchf.normalize_dm_(self, dm)
-        return dm
+    def x2c1e(self):
+        '''X2C with spin-orbit coupling effects in spin-orbital basis'''
+        from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
+        return x2c1e_gscf(self)
+    x2c = sfx2c1e = x2c1e
+
+    def to_ks(self, xc='HF'):
+        '''Convert to RKS object.
+        '''
+        from pyscf.pbc import dft
+        return self._transfer_attrs_(dft.GKS(self.cell, self.kpt, xc=xc))
 
     def convert_from_(self, mf):
-        '''Convert given mean-field object to RHF/ROHF'''
+        '''Convert given mean-field object to GHF'''
         addons.convert_to_ghf(mf, self)
         return self
 
-    stability = None
-    nuc_grad_method = None
+    to_gpu = lib.to_gpu
 
 
 if __name__ == '__main__':

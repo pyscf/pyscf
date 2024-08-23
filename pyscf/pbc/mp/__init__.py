@@ -16,22 +16,27 @@
 from pyscf.pbc import scf
 from pyscf.pbc.mp import mp2
 from pyscf.pbc.mp import kmp2
+from pyscf.pbc.mp import kmp2_ksymm
+from pyscf.pbc.lib import kpts as libkpts
 
 def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_rhf(mf)
+    mf = mf.to_rhf()
     return mp2.RMP2(mf, frozen, mo_coeff, mo_occ)
 
 MP2 = RMP2
 
 def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_uhf(mf)
+    mf = mf.to_uhf()
     return mp2.UMP2(mf, frozen, mo_coeff, mo_occ)
 
 def GMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_ghf(mf)
+    mf = mf.to_ghf()
     return mp2.GMP2(mf, frozen, mo_coeff, mo_occ)
 
 def KRMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    return kmp2.KRMP2(mf, frozen, mo_coeff, mo_occ)
+    if isinstance(mf.kpts, libkpts.KPoints):
+        return kmp2_ksymm.KRMP2(mf, frozen, mo_coeff, mo_occ)
+    else:
+        return kmp2.KRMP2(mf, frozen, mo_coeff, mo_occ)
 
 KMP2 = KRMP2

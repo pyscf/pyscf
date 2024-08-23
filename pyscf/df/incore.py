@@ -28,10 +28,12 @@ from pyscf import __config__
 
 
 MAX_MEMORY = getattr(__config__, 'df_outcore_max_memory', 2000)  # 2GB
-LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
+# LINEAR_DEP_THR cannot be below 1e-7,
+# see qchem default setting in https://manual.q-chem.com/5.4/sec_Basis_Customization.html
+LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-7)
 
 
-# This funciton is aliased for backward compatibility.
+# This function is aliased for backward compatibility.
 format_aux_basis = addons.make_auxmol
 
 
@@ -46,7 +48,7 @@ def aux_e2(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=
 
             cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
     '''
-    if isinstance(auxmol_or_auxbasis, gto.Mole):
+    if isinstance(auxmol_or_auxbasis, gto.MoleBase):
         auxmol = auxmol_or_auxbasis
     else:
         auxbasis = auxmol_or_auxbasis
@@ -76,7 +78,7 @@ def aux_e1(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=
 
     The same arguments as function aux_e2 can be input to aux_e1.
     '''
-    if isinstance(auxmol_or_auxbasis, gto.Mole):
+    if isinstance(auxmol_or_auxbasis, gto.MoleBase):
         auxmol = auxmol_or_auxbasis
     else:
         auxbasis = auxmol_or_auxbasis
@@ -96,7 +98,7 @@ def aux_e1(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=
 def fill_2c2e(mol, auxmol_or_auxbasis, intor='int2c2e', comp=None, hermi=1, out=None):
     '''2-center 2-electron AO integrals for auxiliary basis (auxmol)
     '''
-    if isinstance(auxmol_or_auxbasis, gto.Mole):
+    if isinstance(auxmol_or_auxbasis, gto.MoleBase):
         auxmol = auxmol_or_auxbasis
     else:
         auxbasis = auxmol_or_auxbasis
@@ -109,7 +111,8 @@ def fill_2c2e(mol, auxmol_or_auxbasis, intor='int2c2e', comp=None, hermi=1, out=
 # array
 def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
                  int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
-                 max_memory=MAX_MEMORY, verbose=0, fauxe2=aux_e2):
+                 max_memory=MAX_MEMORY, decompose_j2c='cd',
+                 lindep=LINEAR_DEP_THR, verbose=0, fauxe2=aux_e2):
     '''
     Returns:
         2D array of (naux,nao*(nao+1)/2) in C-contiguous
@@ -122,17 +125,17 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
         auxmol = addons.make_auxmol(mol, auxbasis)
 
     j2c = auxmol.intor(int2c, hermi=1)
-    try:
-        low = scipy.linalg.cholesky(j2c, lower=True)
-        tag = 'cd'
-    except scipy.linalg.LinAlgError:
-        w, v = scipy.linalg.eigh(j2c)
-        idx = w > LINEAR_DEP_THR
-        low = (v[:,idx] / numpy.sqrt(w[idx]))
-        v = None
-        tag = 'eig'
+    if decompose_j2c == 'eig':
+        low = _eig_decompose(mol, j2c, lindep)
+    else:
+        try:
+            low = scipy.linalg.cholesky(j2c, lower=True)
+            decompose_j2c = 'cd'
+        except scipy.linalg.LinAlgError:
+            low = _eig_decompose(mol, j2c, lindep)
+            decompose_j2c = 'eig'
     j2c = None
-    naoaux, naux = low.shape
+    naux, naoaux = low.shape
     log.debug('size of aux basis %d', naux)
     log.timer_debug1('2c2e', *t0)
 
@@ -176,18 +179,19 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
             ints = ints.reshape((-1,naoaux)).T
 
         p0, p1 = p1, p1 + nrow
-        if tag == 'cd':
+        if decompose_j2c == 'cd':
             if ints.flags.c_contiguous:
-                ints = lib.transpose(ints, out=bufs2).T
-                bufs1, bufs2 = bufs2, bufs1
-            dat = scipy.linalg.solve_triangular(low, ints, lower=True,
-                                                overwrite_b=True, check_finite=False)
+                trsm, = scipy.linalg.get_blas_funcs(('trsm',), (low, ints))
+                dat = trsm(1.0, low, ints.T, lower=True, trans_a = 1, side = 1, overwrite_b=True).T
+            else:
+                dat = scipy.linalg.solve_triangular(low, ints, lower=True,
+                                                   overwrite_b=True, check_finite=False)
             if dat.flags.f_contiguous:
                 dat = lib.transpose(dat.T, out=bufs2)
             cderi[:,p0:p1] = dat
         else:
             dat = numpy.ndarray((naux, ints.shape[1]), buffer=bufs2)
-            cderi[:,p0:p1] = lib.dot(low.T, ints, c=dat)
+            cderi[:,p0:p1] = lib.dot(low, ints, c=dat)
         dat = ints = None
 
     log.timer('cholesky_eri', *t0)
@@ -226,13 +230,22 @@ def cholesky_eri_debug(mol, auxbasis='weigend+etb', auxmol=None,
         w, v = scipy.linalg.eigh(j2c)
         idx = w > LINEAR_DEP_THR
         v = (v[:,idx] / numpy.sqrt(w[idx]))
-        cderi = lib.dot(v.T, j3c.T)
+        cderi = lib.dot(v.conj().T, j3c.T)
 
     j3c = None
     if cderi.flags.f_contiguous:
         cderi = lib.transpose(cderi.T)
     log.timer('cholesky_eri', *t0)
     return cderi
+
+def _eig_decompose(dev, j2c, lindep=LINEAR_DEP_THR):
+    w, v = scipy.linalg.eigh(j2c)
+    mask = w > lindep
+    v = v[:,mask]
+    v /= numpy.sqrt(w[mask])
+    logger.debug(dev, 'cond = %.4g, drop %d bfns',
+                 w[-1]/w[0], w.size-numpy.count_nonzero(mask))
+    return v.conj().T
 
 
 if __name__ == '__main__':

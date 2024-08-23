@@ -81,7 +81,7 @@ class CasidaTDDFT(TDDFT, TDA):
                 zs = numpy.copy(zs)
                 zs[:,sym_forbid] = 0
 
-            dmov = lib.einsum('xov,po,qv->xpq', zs*d_ia, orbo, orbv)
+            dmov = lib.einsum('xov,qv,po->xpq', zs*d_ia, orbv, orbo)
             # +cc for A+B because K_{ai,jb} in A == K_{ai,bj} in B
             dmov = dmov + dmov.transpose(0,2,1)
 
@@ -116,12 +116,13 @@ class CasidaTDDFT(TDDFT, TDA):
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
 
         def pickeig(w, v, nroots, envs):
             idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
 
         self.converged, w2, x1 = \
                 lib.davidson1(vind, x0, precond,

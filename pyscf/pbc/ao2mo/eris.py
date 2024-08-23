@@ -17,7 +17,7 @@
 #
 
 '''
-This ao2mo module is kept for backward compatiblity.  It's recommended to use
+This ao2mo module is kept for backward compatibility.  It's recommended to use
 pyscf.pbc.df module to get 2e MO integrals
 '''
 
@@ -58,13 +58,16 @@ def get_mo_eri(cell, mo_coeffs, kpts=None):
 
 def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
     '''Calculate forward (G|ij) FFT of all MO pairs.
+
     TODO: - Implement simplifications for real orbitals.
+
     Args:
         mo_coeff: length-2 list of (nao,nmo) ndarrays
             The two sets of MO coefficients to use in calculating the
-            product |ij).
+            product ``|ij)``.
+
     Returns:
-        mo_pairs_G : (ngrids, nmoi*nmoj) ndarray
+        mo_pairs_G : ``(ngrids, nmoi*nmoj)`` ndarray
             The FFT of the real-space MO pairs.
     '''
     coords = gen_uniform_grids(cell)
@@ -108,13 +111,16 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
 
 def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
     '''Calculate "inverse" (ij|G) FFT of all MO pairs.
+
     TODO: - Implement simplifications for real orbitals.
+
     Args:
         mo_coeff: length-2 list of (nao,nmo) ndarrays
             The two sets of MO coefficients to use in calculating the
-            product |ij).
+            product ``|ij)``.
+
     Returns:
-        mo_pairs_invG : (ngrids, nmoi*nmoj) ndarray
+        mo_pairs_invG : ``(ngrids, nmoi*nmoj)`` ndarray
             The inverse FFTs of the real-space MO pairs.
     '''
     coords = gen_uniform_grids(cell)
@@ -158,6 +164,7 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
 
 def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=None, verbose=logger.INFO):
     '''Assemble 4-index electron repulsion integrals.
+
     Returns:
         (nmo1*nmo2, nmo3*nmo4) ndarray
     '''

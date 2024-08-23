@@ -177,14 +177,14 @@ class RAGF2(ragf2.RAGF2):
             Auxiliaries of the Green's function
     '''
 
+    _keys = {'nmom'}
+
     def __init__(self, mf, nmom=(None,0), frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
         ragf2.RAGF2.__init__(self, mf, frozen=frozen, mo_energy=mo_energy,
                              mo_coeff=mo_coeff, mo_occ=mo_occ)
 
         self.nmom = nmom
-
-        self._keys.update(['nmom'])
 
     build_se_part = build_se_part
 
@@ -222,7 +222,7 @@ class RAGF2(ragf2.RAGF2):
         if os_factor is None: os_factor = self.os_factor
         if ss_factor is None: ss_factor = self.ss_factor
 
-        facs = dict(os_factor=os_factor, ss_factor=ss_factor)
+        facs = {'os_factor': os_factor, 'ss_factor': ss_factor}
         gf_occ = gf.get_occupied()
         gf_vir = gf.get_virtual()
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import warnings
-import copy
+import ctypes
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -58,6 +58,44 @@ def _ifftn_blas(g, mesh):
     return out.reshape(-1, *mesh)
 
 if FFT_ENGINE == 'FFTW':
+    try:
+        libfft = lib.load_library('libfft')
+    except OSError:
+        raise RuntimeError("Failed to load libfft")
+
+    def _copy_d2z(a):
+        fn = libfft._copy_d2z
+        out = np.empty(a.shape, dtype=np.complex128)
+        fn(out.ctypes.data_as(ctypes.c_void_p),
+           a.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_size_t(a.size))
+        return out
+
+    def _complex_fftn_fftw(f, mesh, func):
+        if f.dtype == np.double and f.flags.c_contiguous:
+            # np.asarray or np.astype is too slow
+            f = _copy_d2z(f)
+        else:
+            f = np.asarray(f, order='C', dtype=np.complex128)
+        mesh = np.asarray(mesh, order='C', dtype=np.int32)
+        rank = len(mesh)
+        out = np.empty_like(f)
+        fn = getattr(libfft, func)
+        for i, fi in enumerate(f):
+            fn(fi.ctypes.data_as(ctypes.c_void_p),
+               out[i].ctypes.data_as(ctypes.c_void_p),
+               mesh.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(rank))
+        return out
+
+    def _fftn_wrapper(a):
+        mesh = a.shape[1:]
+        return _complex_fftn_fftw(a, mesh, 'fft')
+    def _ifftn_wrapper(a):
+        mesh = a.shape[1:]
+        return _complex_fftn_fftw(a, mesh, 'ifft')
+
+elif FFT_ENGINE == 'PYFFTW':
     # pyfftw is slower than np.fft in most cases
     try:
         import pyfftw
@@ -197,7 +235,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         k : (3,) ndarray
             k-point
         exx : bool or str
-            Whether this is an exchange matrix element.
+            Whether this is an exchange matrix element
         mf : instance of :class:`SCF`
 
     Returns:
@@ -206,15 +244,15 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         mesh : (3,) ndarray of ints (= nx,ny,nz)
             The number G-vectors along each direction.
         omega : float
-            Enable Coulomb kernel erf(|omega|*r12)/r12 if omega > 0
-            and erfc(|omega|*r12)/r12 if omega < 0.
+            Enable Coulomb kernel ``erf(|omega|*r12)/r12`` if omega > 0
+            and ``erfc(|omega|*r12)/r12`` if omega < 0.
             Note this parameter is slightly different to setting cell.omega
             for the treatment of exxdiv (at G0).  cell.omega affects Ewald
-            probe charge at G0. It is used mostly with RSH functional for
+            probe charge at G0. It is used mostly by RSH functionals for
             the long-range part of HF exchange. This parameter is used by
-            real-space JK builder which requires Ewald probe charge to be
-            computed with regular Coulomb interaction (1/r12) while the rest
-            coulG is scaled as long-range Coulomb kernel.
+            range-separated JK builder and range-separated DF (and other
+            range-separated integral methods) which require Ewald probe charge
+            to be computed with regular Coulomb interaction (1/r12).
     '''
     exxdiv = exx
     if isinstance(exx, str):
@@ -236,8 +274,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     else:
         kG = Gv
 
-    equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
+    equal2boundary = None
     if wrap_around and abs(k).sum() > 1e-9:
+        equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
         # Here we 'wrap around' the high frequency k+G vectors into their lower
         # frequency counterparts.  Important if you want the gamma point and k-point
         # answers to agree
@@ -345,7 +384,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
                 weights = 1 + Gp*Rc * scipy.special.j1(Gp*Rc) * scipy.special.k0(Gx*Rc)
                 weights -= Gx*Rc * scipy.special.j0(Gp*Rc) * scipy.special.k1(Gx*Rc)
                 coulG = 4*np.pi/absG2 * weights
-                # TODO: numerical integation
+                # TODO: numerical integration
                 # coulG[Gx==0] = -4*np.pi * (dr * r * scipy.special.j0(Gp*r) * np.log(r)).sum()
             if len(G0_idx) > 0:
                 coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)
@@ -358,20 +397,25 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
 
-    coulG[equal2boundary] = 0
+    if equal2boundary is not None:
+        coulG[equal2boundary] = 0
 
     # Scale the coulG kernel for attenuated Coulomb integrals.
-    # * omega is used by RealSpaceJKBuilder which requires ewald probe charge
+    # * omega is used by RangeSeparatedJKBuilder which requires ewald probe charge
     # being evaluated with regular Coulomb interaction (1/r12).
     # * cell.omega, which affects the ewald probe charge, is often set by
     # DFT-RSH functionals to build long-range HF-exchange for erf(omega*r12)/r12
     if omega is not None:
         if omega > 0:
+            # long range part
             coulG *= np.exp(-.25/omega**2 * absG2)
-        else:
+        elif omega < 0:
+            # short range part
             coulG *= (1 - np.exp(-.25/omega**2 * absG2))
-    elif cell.omega != 0:
+    elif cell.omega > 0:
         coulG *= np.exp(-.25/cell.omega**2 * absG2)
+    elif cell.omega < 0:
+        raise NotImplementedError
 
     return coulG
 
@@ -401,7 +445,7 @@ def precompute_exx(cell, kpts):
     #alpha = 3./Rin * np.sqrt(0.5)
     #kcell.mesh = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
     log.debug("# kcell.mesh FFT = %s", kcell.mesh)
-    rs = gen_grid.gen_uniform_grids(kcell)
+    rs = kcell.get_uniform_grids(wrap_around=False)
     kngs = len(rs)
     log.debug("# kcell kngs = %d", kngs)
     corners_coord = lib.cartesian_prod(([0, 1], [0, 1], [0, 1]))
@@ -438,19 +482,15 @@ def precompute_exx(cell, kpts):
 
 def madelung(cell, kpts):
     Nk = get_monkhorst_pack_size(cell, kpts)
-    ecell = copy.copy(cell)
+    ecell = cell.copy(deep=False)
     ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
     ecell._env = np.append(cell._env, [0., 0., 0.])
     ecell.unit = 'B'
     #ecell.verbose = 0
-    ecell.a = np.einsum('xi,x->xi', cell.lattice_vectors(), Nk)
-    ecell.mesh = np.asarray(cell.mesh) * Nk
+    ecell.a = a = np.einsum('xi,x->xi', cell.lattice_vectors(), Nk)
 
     if cell.omega == 0:
-        ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.mesh)
-        lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
-                          Nk, ew_eta, ew_cut)
-        return -2*ecell.ewald(ew_eta, ew_cut)
+        return -2*ecell.ewald()
 
     else:
         # cell.ewald function does not use the Coulomb kernel function
@@ -458,95 +498,114 @@ def madelung(cell, kpts):
         # Coulomb operator, the Ewald summation technique is not needed
         # because the Coulomb kernel 4pi/G^2*exp(-G^2/4/omega**2) decays
         # quickly.
-        Gv, Gvbase, weights = ecell.get_Gv_weights(ecell.mesh)
-        coulG = get_coulG(ecell, Gv=Gv)
-        ZSI = np.einsum("i,ij->j", ecell.atom_charges(), ecell.get_SI(Gv))
-        return 2*cell.omega/np.pi**0.5-np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
+        precision = cell.precision
+        omega = cell.omega
+        Ecut = 10.
+        Ecut = np.log(16*np.pi**2/(2*omega**2*(2*Ecut)**.5) / precision + 1.) * 2*omega**2
+        Ecut = np.log(16*np.pi**2/(2*omega**2*(2*Ecut)**.5) / precision + 1.) * 2*omega**2
+        mesh = cutoff_to_mesh(a, Ecut)
+        Gv, Gvbase, weights = ecell.get_Gv_weights(mesh)
+        wcoulG = get_coulG(ecell, Gv=Gv) * weights
+        SI = ecell.get_SI(mesh=mesh)
+        ZSI = SI[0]
+        return 2*omega/np.pi**0.5-np.einsum('i,i,i->', ZSI.conj(), ZSI, wcoulG).real
 
 
-def get_monkhorst_pack_size(cell, kpts):
-    skpts = cell.get_scaled_kpts(kpts).round(decimals=6)
-    Nk = np.array([len(np.unique(ki)) for ki in skpts.T])
+def get_monkhorst_pack_size(cell, kpts, tol=1e-5):
+    kpts = np.reshape(kpts, (-1,3))
+    min_tol = tol
+    assert kpts.shape[0] < 1/min_tol
+    if kpts.shape[0] == 1:
+        Nk = np.array([1,1,1])
+    else:
+        tol = max(10**(-int(-np.log10(1/kpts.shape[0]))-2), min_tol)
+        skpts = cell.get_scaled_kpts(kpts)
+        Nk = np.array([np.count_nonzero(abs(ski[1:]-ski[:-1]) > tol) + 1
+                       for ski in np.sort(skpts.T)])
     return Nk
 
 
 def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.
-    The translation vectors can be used for the lattice summation.'''
-    a = cell.lattice_vectors()
-    b = cell.reciprocal_vectors(norm_to=1)
-    heights_inv = lib.norm(b, axis=1)
+    The translation vectors can be used for the lattice summation.
 
-    if nimgs is None:
-        if rcut is None:
-            rcut = cell.rcut
-        # For atoms outside the cell, distance between certain basis of nearby
-        # images may be smaller than rcut threshold even the corresponding Ls is
-        # larger than rcut. The boundary penalty ensures that Ls would be able to
-        # cover the basis that sitting out of the cell.
-        # See issue https://github.com/pyscf/pyscf/issues/1017
-        boundary_penalty = 0
-        scaled_atom_coords = cell.atom_coords().dot(b.T)
-        if len(scaled_atom_coords) > 0:
-            boundary_penalty = np.max([abs(scaled_atom_coords).max(axis=0),
-                                       abs(1 - scaled_atom_coords).max(axis=0)], axis=0)
-        nimgs = np.ceil(rcut * heights_inv + boundary_penalty).astype(int)
-    else:
-        rcut = max((np.asarray(nimgs))/heights_inv)
-
+    Kwargs:
+        discard:
+            Drop less important Ls based on AO values on grid
+    '''
     if dimension is None:
-        dimension = cell.dimension
-    if dimension == 0:
-        nimgs = [0, 0, 0]
-    elif dimension == 1:
-        nimgs = [nimgs[0], 0, 0]
-    elif dimension == 2:
-        nimgs = [nimgs[0], nimgs[1], 0]
+        # For atoms near the boundary of the cell, it is necessary (even in low-
+        # dimensional systems) to include lattice translations in all 3 dimensions.
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            dimension = cell.dimension
+        else:
+            dimension = 3
+    if rcut is None:
+        rcut = cell.rcut
 
-    Ts = lib.cartesian_prod((np.arange(-nimgs[0], nimgs[0]+1),
-                             np.arange(-nimgs[1], nimgs[1]+1),
-                             np.arange(-nimgs[2], nimgs[2]+1)))
-    Ls = np.dot(Ts, a)
-    if discard:
-        Ls = _discard_edge_images(cell, Ls, rcut)
-    return np.asarray(Ls, order='C')
-
-def _discard_edge_images(cell, Ls, rcut):
-    '''
-    Discard images if no basis in the image would contribute to lattice sum.
-    '''
-    if rcut <= 0:
+    if dimension == 0 or rcut <= 0 or cell.natm == 0:
         return np.zeros((1, 3))
 
     a = cell.lattice_vectors()
-    scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
-    atom_boundary_max = scaled_atom_coords.max(axis=0)
-    atom_boundary_min = scaled_atom_coords.min(axis=0)
-    # ovlp_penalty ensures the overlap integrals for atoms in the adjcent
-    # images are converged.
+
+    scaled_atom_coords = cell.get_scaled_atom_coords()
+    atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
+    atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
+    if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
+        atom_boundary_max[atom_boundary_max > 1] = 1
+        atom_boundary_min[atom_boundary_min <-1] = -1
     ovlp_penalty = atom_boundary_max - atom_boundary_min
-    # atom_boundary_min-1 ensures the values of basis at the grids on the edge
-    # of the primitive cell converged
-    boundary_max = np.ceil(np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)).astype(int)
-    boundary_min = np.floor(np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)).astype(int)
-    penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
-    penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
-    penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
-    shifts = lib.cartesian_prod([penalty_x, penalty_y, penalty_z]).dot(a)
-    Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
-    # cell0 (Ls == 0) should always be included.
-    Ls_mask[len(Ls)//2] = True
-    return Ls[Ls_mask]
+    dR = ovlp_penalty.dot(a[:dimension])
+    dR_basis = np.diag(dR)
+
+    # Search the minimal x,y,z requiring |x*a[0]+y*a[1]+z*a[2]+dR|^2 > rcut^2
+    # Ls boundary should be derived by decomposing (a, Rij) for each atom-pair.
+    # For reasons unclear, the so-obtained Ls boundary seems not large enough.
+    # The upper-bound of the Ls boundary is generated by find_boundary function.
+    def find_boundary(a):
+        aR = np.vstack([a, dR_basis])
+        r = np.linalg.qr(aR.T)[1]
+        ub = (rcut + abs(r[2,3:]).sum()) / abs(r[2,2])
+        return ub
+
+    xb = find_boundary(a[[1,2,0]])
+    if dimension > 1:
+        yb = find_boundary(a[[2,0,1]])
+    else:
+        yb = 0
+    if dimension > 2:
+        zb = find_boundary(a)
+    else:
+        zb = 0
+    bounds = np.ceil([xb, yb, zb]).astype(int)
+    Ts = lib.cartesian_prod((np.arange(-bounds[0], bounds[0]+1),
+                             np.arange(-bounds[1], bounds[1]+1),
+                             np.arange(-bounds[2], bounds[2]+1)))
+    Ls = np.dot(Ts[:,:dimension], a[:dimension])
+
+    if discard:
+        ovlp_penalty += 1e-200  # avoid /0
+        Ts_scaled = (Ts[:,:dimension] + 1e-200) / ovlp_penalty
+        ovlp_penalty_fac = 1. / abs(Ts_scaled).min(axis=1)
+        Ls_mask = np.linalg.norm(Ls, axis=1) * (1-ovlp_penalty_fac) < rcut
+        Ls = Ls[Ls_mask]
+    return np.asarray(Ls, order='C')
 
 
-def super_cell(cell, ncopy):
+def super_cell(cell, ncopy, wrap_around=False):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
-    Note this function differs from :fun:`cell_plus_imgs` that cell_plus_imgs
+    Note this function differs from :func:`cell_plus_imgs` that cell_plus_imgs
     creates images in both +/- direction.
 
     Args:
         cell : instance of :class:`Cell`
+
         ncopy : (3,) array
+
+        wrap_around : bool
+            Put the original cell centered on the super cell. It has the
+            effects corresponding to the parameter wrap_around of
+            cell.make_kpts.
 
     Returns:
         supcell : instance of :class:`Cell`
@@ -560,21 +619,29 @@ def super_cell(cell, ncopy):
     #:            for atom, coord in cell._atom:
     #:                L = np.dot([Lx, Ly, Lz], a)
     #:                supcell.atom.append([atom, coord + L])
-    Ts = lib.cartesian_prod((np.arange(ncopy[0]),
-                             np.arange(ncopy[1]),
-                             np.arange(ncopy[2])))
+    xs = np.arange(ncopy[0])
+    ys = np.arange(ncopy[1])
+    zs = np.arange(ncopy[2])
+    if wrap_around:
+        xs[(ncopy[0]+1)//2:] -= ncopy[0]
+        ys[(ncopy[1]+1)//2:] -= ncopy[1]
+        zs[(ncopy[2]+1)//2:] -= ncopy[2]
+    Ts = lib.cartesian_prod((xs, ys, zs))
     Ls = np.dot(Ts, a)
-    supcell = cell.copy()
+    supcell = cell.copy(deep=False)
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
-    supcell.mesh = np.array([ncopy[0]*cell.mesh[0],
-                             ncopy[1]*cell.mesh[1],
-                             ncopy[2]*cell.mesh[2]])
+    mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
+    supcell.mesh = (mesh // 2) * 2 + 1
+    if isinstance(cell.magmom, np.ndarray):
+        supcell.magmom = cell.magmom.tolist() * np.prod(ncopy)
+    else:
+        supcell.magmom = cell.magmom * np.prod(ncopy)
     return _build_supcell_(supcell, cell, Ls)
 
 
 def cell_plus_imgs(cell, nimgs):
     '''Create a supercell via nimgs[i] in each +/- direction, as in get_lattice_Ls().
-    Note this function differs from :fun:`super_cell` that super_cell only
+    Note this function differs from :func:`super_cell` that super_cell only
     stacks the images in + direction.
 
     Args:
@@ -589,7 +656,7 @@ def cell_plus_imgs(cell, nimgs):
                              np.arange(-nimgs[1], nimgs[1]+1),
                              np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
-    supcell = cell.copy()
+    supcell = cell.copy(deep=False)
     supcell.a = np.einsum('i,ij->ij', nimgs, a)
     supcell.mesh = np.array([(nimgs[0]*2+1)*cell.mesh[0],
                              (nimgs[1]*2+1)*cell.mesh[1],
@@ -601,18 +668,24 @@ def _build_supcell_(supcell, cell, Ls):
     Construct supcell ._env directly without calling supcell.build() method.
     This reserves the basis contraction coefficients defined in cell
     '''
+    from pyscf.pbc import gto as pbcgto
     nimgs = len(Ls)
     symbs = [atom[0] for atom in cell._atom] * nimgs
     coords = Ls.reshape(-1,1,3) + cell.atom_coords()
-    supcell.atom = supcell._atom = list(zip(symbs, coords.reshape(-1,3).tolist()))
+    coords = coords.reshape(-1,3)
+    x, y, z = coords.T
+    supcell.atom = supcell._atom = list(zip(symbs, zip(x, y, z)))
     supcell.unit = 'B'
+    supcell.enuc = None # reset nuclear energy
 
-    # Do not call supcell.build() since it may normalize the basis contraction
-    # coefficients
+    # Do not call supcell.build() to initialize supcell since it may normalize
+    # the basis contraction coefficients
+
+    # preserves environments defined in cell._env (e.g. omega, gauge origin)
     _env = np.append(cell._env, coords.ravel())
     _atm = np.repeat(cell._atm[None,:,:], nimgs, axis=0)
     _atm = _atm.reshape(-1, ATM_SLOTS)
-    # Point to the corrdinates appended to _env
+    # Point to the coordinates appended to _env
     _atm[:,PTR_COORD] = cell._env.size + np.arange(nimgs * cell.natm) * 3
 
     _bas = np.repeat(cell._bas[None,:,:], nimgs, axis=0)
@@ -622,6 +695,9 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._atm = np.asarray(_atm, dtype=np.int32)
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
+
+    if isinstance(supcell, pbcgto.Cell) and getattr(supcell, 'space_group_symmetry', False):
+        supcell.build_lattice_symmetry(not cell._mesh_from_build)
     return supcell
 
 
@@ -641,34 +717,30 @@ def cutoff_to_mesh(a, cutoff):
     Returns:
         mesh : (3,) array
     '''
+    # Search the minimal x,y,z requiring |x*b[0]+y*b[1]+z*b[2]|^2 > 2 * cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)
-    cutoff = cutoff * _cubic2nonorth_factor(a)
-    mesh = np.ceil(np.sqrt(2*cutoff)/lib.norm(b, axis=1) * 2).astype(int)
+    rx = np.linalg.qr(b[[1,2,0]].T)[1][2,2]
+    ry = np.linalg.qr(b[[2,0,1]].T)[1][2,2]
+    rz = np.linalg.qr(b.T)[1][2,2]
+
+    Gmax = (2*cutoff)**.5 / np.abs([rx, ry, rz])
+    mesh = np.ceil(Gmax).astype(int) * 2 + 1
     return mesh
 
 def mesh_to_cutoff(a, mesh):
     '''
     Convert #grid points to KE cutoff
     '''
+    # Search the minimal x,y,z requiring |x*b[0]+y*b[1]+z*b[2]|^2 > 2 * cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)
-    Gmax = lib.norm(b, axis=1) * np.asarray(mesh) * .5
-    ke_cutoff = Gmax**2/2
-    # scale down Gmax to get the real energy cutoff for non-orthogonal lattice
-    return ke_cutoff / _cubic2nonorth_factor(a)
+    rx = np.linalg.qr(b[[1,2,0]].T)[1][2,2]
+    ry = np.linalg.qr(b[[2,0,1]].T)[1][2,2]
+    rz = np.linalg.qr(b.T)[1][2,2]
 
-def _cubic2nonorth_factor(a):
-    '''The factors to transform the energy cutoff from cubic lattice to
-    non-orthogonal lattice. Energy cutoff is estimated based on cubic lattice.
-    It needs to be rescaled for the non-orthogonal lattice to ensure that the
-    minimal Gv vector in the reciprocal space is larger than the required
-    energy cutoff.
-    '''
-    # Using ke_cutoff to set up a sphere, the sphere needs to be completely
-    # inside the box defined by Gv vectors
-    abase = a / np.linalg.norm(a, axis=1)[:,None]
-    bbase = np.linalg.inv(abase.T)
-    overlap = np.einsum('ix,ix->i', abase, bbase)
-    return 1./overlap**2
+    gs = (np.asarray(mesh) - 1) // 2
+    Gmax = gs * np.array([rx, ry, rz])
+    ke_cutoff = Gmax**2 / 2
+    return ke_cutoff
 
 def cutoff_to_gs(a, cutoff):
     '''Deprecated.  Replaced by function cutoff_to_mesh.'''
@@ -677,3 +749,9 @@ def cutoff_to_gs(a, cutoff):
 def gs_to_cutoff(a, gs):
     '''Deprecated.  Replaced by function mesh_to_cutoff.'''
     return mesh_to_cutoff(a, [2*n+1 for n in gs])
+
+def round_to_cell0(r, tol=1e-6):
+    '''Round scaled coordinates to reference unit cell
+    '''
+    from pyscf.pbc.lib import kpts_helper
+    return kpts_helper.round_to_fbz(r, wrap_around=False, tol=tol)

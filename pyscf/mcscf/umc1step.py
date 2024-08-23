@@ -23,14 +23,14 @@ UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
 
 import sys
 
-import copy
 from functools import reduce
 import numpy
 import pyscf.gto
 import pyscf.scf
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import ucasci
-from pyscf.mcscf.mc1step import expmat, rotate_orb_cc
+from pyscf.mcscf.mc1step import expmat, rotate_orb_cc, max_stepsize_scheduler, as_scanner
 from pyscf.mcscf import umc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import __config__
@@ -310,8 +310,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         totinner += njk
 
         eris = None
-        u = copy.copy(u)
-        g_orb = copy.copy(g_orb)
         mo = casscf.rotate_mo(mo, u, log)
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
@@ -345,7 +343,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     return conv, e_tot, e_cas, fcivec, mo
 
 
-class UCASSCF(ucasci.UCASCI):
+class UCASSCF(ucasci.UCASBase):
     max_stepsize = getattr(__config__, 'mcscf_umc1step_UCASSCF_max_stepsize', .02)
     max_cycle_macro = getattr(__config__, 'mcscf_umc1step_UCASSCF_max_cycle_macro', 50)
     max_cycle_micro = getattr(__config__, 'mcscf_umc1step_UCASSCF_max_cycle_micro', 4)
@@ -371,11 +369,21 @@ class UCASSCF(ucasci.UCASCI):
     #canonicalization = getattr(__config__, 'mcscf_umc1step_UCASSCF_canonicalization', True)
     #sorting_mo_energy = getattr(__config__, 'mcscf_umc1step_UCASSCF_sorting_mo_energy', False)
 
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
-        ucasci.UCASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
+    callback = None
+
+    _keys = {
+        'max_stepsize', 'max_cycle_macro', 'max_cycle_micro', 'conv_tol',
+        'conv_tol_grad', 'ah_level_shift', 'ah_conv_tol', 'ah_max_cycle',
+        'ah_lindep', 'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
+        'internal_rotation', 'ci_response_space', 'with_dep4', 'chk_ci',
+        'kf_interval', 'kf_trust_region', 'natorb', 'callback',
+        'canonicalization', 'sorting_mo_energy',
+    }
+
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None, frozen=None):
+        ucasci.UCASBase.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 
-        self.callback = None
         self.chkfile = self._scf.chkfile
 
         self.fcisolver.max_cycle = getattr(__config__,
@@ -392,16 +400,8 @@ class UCASSCF(ucasci.UCASCI):
         self.converged = False
         self._max_stepsize = None
 
-        keys = set(('max_stepsize', 'max_cycle_macro', 'max_cycle_micro',
-                    'conv_tol', 'conv_tol_grad', 'ah_level_shift',
-                    'ah_conv_tol', 'ah_max_cycle', 'ah_lindep',
-                    'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
-                    'internal_rotation', 'ci_response_space',
-                    'with_dep4', 'chk_ci',
-                    'kf_interval', 'kf_trust_region', 'fcisolver_max_cycle',
-                    'fcisolver_conv_tol', 'natorb', 'canonicalization',
-                    'sorting_mo_energy'))
-        self._keys = set(self.__dict__.keys()).union(keys)
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('chkfile', 'callback'))
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -473,22 +473,11 @@ class UCASSCF(ucasci.UCASCI):
         from pyscf.mcscf import umc2step
         return self.kernel(mo_coeff, ci0, callback, umc2step.kernel)
 
-    def get_h2eff(self, mo_coeff=None):
-        '''Computing active space two-particle Hamiltonian.
-        '''
-        return self.get_h2cas(mo_coeff)
-    def get_h2cas(self, mo_coeff=None):
-        return ucasci.UCASCI.ao2mo(self, mo_coeff)
+    get_h2eff = ucasci.UCASCI.get_h2eff
 
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
-        if eris is None:
-            fcasci = copy.copy(self)
-            fcasci.ao2mo = self.get_h2cas
-        else:
-            fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
-
         log = logger.new_logger(self, verbose)
-
+        fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
         e_tot, e_cas, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log,
                                              envs=envs)
         if envs is not None and log.verbose >= logger.INFO:
@@ -499,9 +488,9 @@ class UCASSCF(ucasci.UCASCI):
                          'UCASSCF E = %.15g  dE = %.8g',
                          envs['imacro'], envs['njk'], envs['imicro'],
                          e_tot, e_tot-envs['elast'])
-                if 'norm_gci' in envs:
+                if 'norm_gci' in envs and envs['norm_gci'] is not None:
                     log.info('               |grad[o]|=%5.3g  '
-                             '|grad[c]|= %s  |ddm|=%5.3g',
+                             '|grad[c]|=%5.3g  |ddm|=%5.3g',
                              envs['norm_gorb0'],
                              envs['norm_gci'], envs['norm_ddm'])
                 else:
@@ -747,39 +736,54 @@ class UCASSCF(ucasci.UCASCI):
                 ci1 += xs[i] * v[i,0]
         return ci1, g
 
-    def dump_chk(self, envs):
-        if not self.chkfile:
-            return self
+    def dump_chk(self, envs_or_file):
+        '''Serialize the MCSCF object and save it to the specified chkfile.
 
-        if self.chk_ci:
-            civec = envs['fcivec']
+        Args:
+            envs_or_file:
+                If this argument is a file path, the serialized MCSCF object is
+                saved to the file specified by this argument.
+                If this attribute is a dict (created by locals()), the necessary
+                variables are saved to the file specified by the attribute .chkfile.
+        '''
+        if isinstance(envs_or_file, str):
+            envs = None
+            chk_file = envs_or_file
         else:
-            civec = None
+            envs = envs_or_file
+            chk_file = self.chkfile
+            if not chk_file:
+                return self
+
+        e_tot = mo_coeff = mo_occ = mo_energy = e_cas = civec = casdm1 = None
         ncore = self.ncore
         ncas = self.ncas
         nocca = ncore[0] + ncas
         noccb = ncore[1] + ncas
-        if 'mo' in envs:
-            mo_coeff = envs['mo']
-        else:
-            mo_coeff = envs['mo']
-        mo_occ = numpy.zeros((2,envs['mo'][0].shape[1]))
-        mo_occ[0,:ncore[0]] = 1
-        mo_occ[1,:ncore[1]] = 1
-        if self.natorb:
-            occa, ucas = self._eig(-envs['casdm1'][0], ncore[0], nocca)
-            occb, ucas = self._eig(-envs['casdm1'][1], ncore[1], noccb)
-            mo_occ[0,ncore[0]:nocca] = -occa
-            mo_occ[1,ncore[1]:noccb] = -occb
-        else:
-            mo_occ[0,ncore[0]:nocca] = envs['casdm1'][0].diagonal()
-            mo_occ[1,ncore[1]:noccb] = envs['casdm1'][1].diagonal()
-        mo_energy = 'None'
 
-        chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
+        if envs is not None:
+            if self.chk_ci:
+                civec = envs['fcivec']
+            if 'mo' in envs:
+                mo_coeff = envs['mo']
+            else:
+                mo_coeff = envs['mo_coeff']
+            mo_occ = numpy.zeros((2,envs['mo'][0].shape[1]))
+            mo_occ[0,:ncore[0]] = 1
+            mo_occ[1,:ncore[1]] = 1
+            if self.natorb:
+                occa, ucas = self._eig(-casdm1[0], ncore[0], nocca)
+                occb, ucas = self._eig(-casdm1[1], ncore[1], noccb)
+                mo_occ[0,ncore[0]:nocca] = -occa
+                mo_occ[1,ncore[1]:noccb] = -occb
+            else:
+                mo_occ[0,ncore[0]:nocca] = casdm1[0].diagonal()
+                mo_occ[1,ncore[1]:noccb] = casdm1[1].diagonal()
+
+        chkfile.dump_mcscf(self, self.chkfile, 'mcscf', e_tot,
                            mo_coeff, ncore, ncas, mo_occ,
-                           mo_energy, envs['e_cas'], civec, envs['casdm1'],
-                           overwrite_mol=False)
+                           mo_energy, e_cas, civec, casdm1,
+                           overwrite_mol=(envs is None))
         return self
 
     def rotate_mo(self, mo, u, log=None):
@@ -803,15 +807,8 @@ class UCASSCF(ucasci.UCASCI):
         #return max(self.max_cycle_micro, int(self.max_cycle_micro-1-log_norm_ddm))
         return self.max_cycle_micro
 
-    def max_stepsize_scheduler(self, envs):
-        if self._max_stepsize is None:
-            self._max_stepsize = self.max_stepsize
-        if envs['de'] > self.conv_tol:  # Avoid total energy increasing
-            self._max_stepsize *= .5
-            logger.debug(self, 'set max_stepsize to %g', self._max_stepsize)
-        else:
-            self._max_stepsize = numpy.sqrt(self.max_stepsize*self.max_stepsize)
-        return self._max_stepsize
+    max_stepsize_scheduler=max_stepsize_scheduler
+    as_scanner=as_scanner
 
     @property
     def max_orb_stepsize(self):  # pragma: no cover
@@ -821,13 +818,21 @@ class UCASSCF(ucasci.UCASCI):
         sys.stderr.write('WARN: Attribute "max_orb_stepsize" was replaced by "max_stepsize"\n')
         self.max_stepsize = x
 
+    def reset(self, mol=None):
+        ucasci.UCASBase.reset(self, mol=mol)
+        self._max_stepsize = None
+
 CASSCF = UCASSCF
 
 
 # to avoid calculating AO integrals
 def _fake_h_for_fast_casci(casscf, mo, eris):
-    mc = copy.copy(casscf)
+    mc = casscf.view(ucasci.UCASCI)
     mc.mo_coeff = mo
+
+    if eris is None:
+        return mc
+
     # vhf for core density matrix
     s = mc._scf.get_ovlp()
     mo_inv = (numpy.dot(mo[0].T, s), numpy.dot(mo[1].T, s))
@@ -909,4 +914,3 @@ if __name__ == '__main__':
     print(ehf, emc, emc-ehf)
     print(emc - -75.5644202701263, emc - -75.573930418500652,
           emc - -75.574137883405612, emc - -75.648547447838951)
-

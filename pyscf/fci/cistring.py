@@ -27,12 +27,12 @@ def make_strings(orb_list, nelec):
     '''Generate string from the given orbital list.
 
     Returns:
-        list of int64.  One int64 element represents one string in binary format.
+        list of int64.  One element represents one string in binary format.
         The binary format takes the convention that the one bit stands for one
         orbital, bit-1 means occupied and bit-0 means unoccupied.  The lowest
         (right-most) bit corresponds to the lowest orbital in the orb_list.
 
-    Exampels:
+    Examples:
 
     >>> [bin(x) for x in make_strings((0,1,2,3),2)]
     [0b11, 0b101, 0b110, 0b1001, 0b1010, 0b1100]
@@ -40,8 +40,8 @@ def make_strings(orb_list, nelec):
     [0b1010, 0b1001, 0b11, 0b1100, 0b110, 0b101]
     '''
     orb_list = list(orb_list)
-    if len(orb_list) > 63:
-        return _gen_occslst(orb_list, nelec)
+    if len(orb_list) >= 64:
+        return gen_occslst(orb_list, nelec)
 
     assert (nelec >= 0)
     if nelec == 0:
@@ -68,8 +68,24 @@ def make_strings(orb_list, nelec):
     return numpy.asarray(strings, dtype=numpy.int64)
 gen_strings4orblist = make_strings
 
-def _gen_occslst(orb_list, nelec):
+def gen_occslst(orb_list, nelec):
     '''Generate occupied orbital list for each string.
+
+    Returns:
+        List of lists of int32. Each inner list has length equal to the number of
+        electrons, and contains the occupied orbitals in the corresponding string.
+
+    Example:
+
+        >>> [bin(x) for x in make_strings((0, 1, 2, 3), 2)]
+        ['0b11', '0b101', '0b110', '0b1001', '0b1010', '0b1100']
+        >>> gen_occslst((0, 1, 2, 3), 2)
+        OIndexList([[0, 1],
+                    [0, 2],
+                    [1, 2],
+                    [0, 3],
+                    [1, 3],
+                    [2, 3]], dtype=int32)
     '''
     orb_list = list(orb_list)
     assert (nelec >= 0)
@@ -91,65 +107,49 @@ def _gen_occslst(orb_list, nelec):
         return res
     occslst = gen_occs_iter(orb_list, nelec)
     return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
+# Add this symbol for backward compatibility. Should remove in the future.
+_gen_occslst = gen_occslst
+
 def _strs2occslst(strs, norb):
     na = len(strs)
     one_particle_strs = numpy.asarray([1 << i for i in range(norb)])
     occ_masks = (strs.reshape(-1,1) & one_particle_strs) != 0
     occslst = numpy.where(occ_masks)[1].reshape(na,-1)
     return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
+
 def _occslst2strs(occslst):
+    assert isinstance(occslst[0], OIndexList)
+    occslst = numpy.asarray(occslst)
     na, nelec = occslst.shape
     strs = numpy.zeros(na, dtype=numpy.int64)
     for i in range(nelec):
         strs ^= 1 << occslst[:,i]
     return strs
+
 class OIndexList(numpy.ndarray):
     pass
 
-def num_strings(n, m):
-    if m < 0 or m > n:
-        return 0
-    else:
-        return math.factorial(n) // (math.factorial(n-m)*math.factorial(m))
-
-def gen_linkstr_index_o0(orb_list, nelec, strs=None):
-    if strs is None:
-        strs = make_strings(orb_list, nelec)
-    strdic = dict(zip(strs,range(strs.__len__())))
-    def propgate1e(str0):
-        occ = []
-        vir = []
-        for i in orb_list:
-            if str0 & (1 << i):
-                occ.append(i)
-            else:
-                vir.append(i)
-        linktab = []
-        for i in occ:
-            linktab.append((i, i, strdic[str0], 1))
-        for i in occ:
-            for a in vir:
-                str1 = str0 ^ (1 << i) | (1 << a)
-                # [cre, des, target_address, parity]
-                linktab.append((a, i, strdic[str1], cre_des_sign(a, i, str0)))
-        return linktab
-
-    t = [propgate1e(s) for s in strs.astype(numpy.int64)]
-    return numpy.array(t, dtype=numpy.int32)
+num_strings = lib.comb
 
 def gen_linkstr_index_o1(orb_list, nelec, strs=None, tril=False):
+    '''Look up table, for the strings relationship in terms of a
+    creation-annihilating operator pair.
+
+    Similar to gen_linkstr_index. The only difference is the input argument
+    strs, which needs to be a list of OIndexList in this function.
+    '''
     if nelec == 0:
         return numpy.zeros((0,0,4), dtype=numpy.int32)
 
     if strs is None:
-        strs = _gen_occslst(orb_list, nelec)
+        strs = gen_occslst(orb_list, nelec)
     occslst = strs
 
     orb_list = numpy.asarray(orb_list)
     norb = len(orb_list)
     assert (numpy.all(numpy.arange(norb) == orb_list))
 
-    strdic = dict((tuple(s), i) for i,s in enumerate(occslst))
+    strdic = {tuple(s): i for i,s in enumerate(occslst)}
     nvir = norb - nelec
     def propgate1e(str0):
         addr0 = strdic[tuple(str0)]
@@ -200,7 +200,7 @@ def gen_linkstr_index(orb_list, nocc, strs=None, tril=False):
     For given string str0, index[str0] is (nocc+nocc*nvir) x 4 array.
     The first nocc rows [i(:occ),i(:occ),str0,sign] are occupied-occupied
     excitations, which do not change the string. The next nocc*nvir rows
-    [a(:vir),i(:occ),str1,sign] are occupied-virtual exciations, starting from
+    [a(:vir),i(:occ),str1,sign] are occupied-virtual excitations, starting from
     str0, annihilating i, creating a, to get str1.
     '''
     if strs is None:
@@ -248,29 +248,18 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
     '''
     return gen_linkstr_index(orb_list, nocc, strs, True)
 
-# return [cre, des, target_address, parity]
-def gen_cre_str_index_o0(orb_list, nelec):
-    '''Slow version of gen_cre_str_index function'''
-    cre_strs = make_strings(orb_list, nelec+1)
-    if isinstance(cre_strs, OIndexList):
-        raise NotImplementedError('System with 64 orbitals or more')
+def gen_cre_str_index(orb_list, nelec):
+    '''linkstr_index to map between N electron string to N+1 electron string.
+    It maps the given string to the address of the string which is generated by
+    the creation operator.
 
-    credic = dict(zip(cre_strs,range(cre_strs.__len__())))
-    def progate1e(str0):
-        linktab = []
-        for i in orb_list:
-            if not str0 & (1 << i):
-                str1 = str0 | (1 << i)
-                linktab.append((i, 0, credic[str1], cre_sign(i, str0)))
-        return linktab
+    For given string str0, index[str0] is nvir x 4 array.  Each entry
+    [i(cre),--,str1,sign] means starting from str0, creating i, to get str1.
 
-    strs = make_strings(orb_list, nelec)
-    t = [progate1e(s) for s in strs.astype(numpy.int64)]
-    return numpy.array(t, dtype=numpy.int32)
-def gen_cre_str_index_o1(orb_list, nelec):
-    '''C implementation of gen_cre_str_index function'''
+    Returns [[cre, -, target_address, parity], ...]
+    '''
     norb = len(orb_list)
-    assert (nelec < norb)
+    assert nelec < norb
     strs = make_strings(orb_list, nelec)
     if isinstance(strs, OIndexList):
         raise NotImplementedError('System with 64 orbitals or more')
@@ -283,38 +272,18 @@ def gen_cre_str_index_o1(orb_list, nelec):
                             ctypes.c_int(nelec),
                             strs.ctypes.data_as(ctypes.c_void_p))
     return link_index
-def gen_cre_str_index(orb_list, nelec):
-    '''linkstr_index to map between N electron string to N+1 electron string.
+
+def gen_des_str_index(orb_list, nelec):
+    '''linkstr_index to map between N electron string to N-1 electron string.
     It maps the given string to the address of the string which is generated by
-    the creation operator.
+    the annihilation operator.
 
     For given string str0, index[str0] is nvir x 4 array.  Each entry
-    [i(cre),--,str1,sign] means starting from str0, creating i, to get str1.
+    [--,i(des),str1,sign] means starting from str0, annihilating i, to get str1.
+
+    Returns [[-, des, target_address, parity], ...]
     '''
-    return gen_cre_str_index_o1(orb_list, nelec)
-
-# return [cre, des, target_address, parity]
-def gen_des_str_index_o0(orb_list, nelec):
-    '''Slow version of gen_des_str_index function'''
-    des_strs = make_strings(orb_list, nelec-1)
-    if isinstance(des_strs, OIndexList):
-        raise NotImplementedError('System with 64 orbitals or more')
-
-    desdic = dict(zip(des_strs,range(des_strs.__len__())))
-    def progate1e(str0):
-        linktab = []
-        for i in orb_list:
-            if str0 & (1 << i):
-                str1 = str0 ^ (1 << i)
-                linktab.append((0, i, desdic[str1], des_sign(i, str0)))
-        return linktab
-
-    strs = make_strings(orb_list, nelec)
-    t = [progate1e(s) for s in strs.astype(numpy.int64)]
-    return numpy.array(t, dtype=numpy.int32)
-def gen_des_str_index_o1(orb_list, nelec):
-    '''C implementation of gen_des_str_index function'''
-    assert (nelec > 0)
+    assert nelec > 0
     strs = make_strings(orb_list, nelec)
     if isinstance(strs, OIndexList):
         raise NotImplementedError('System with 64 orbitals or more')
@@ -328,16 +297,6 @@ def gen_des_str_index_o1(orb_list, nelec):
                             ctypes.c_int(nelec),
                             strs.ctypes.data_as(ctypes.c_void_p))
     return link_index
-def gen_des_str_index(orb_list, nelec):
-    '''linkstr_index to map between N electron string to N-1 electron string.
-    It maps the given string to the address of the string which is generated by
-    the annihilation operator.
-
-    For given string str0, index[str0] is nvir x 4 array.  Each entry
-    [--,i(des),str1,sign] means starting from str0, annihilating i, to get str1.
-    '''
-    return gen_des_str_index_o1(orb_list, nelec)
-
 
 
 # Determine the sign of  p^+ q |string0>
@@ -382,39 +341,34 @@ def parity(string0, string1):
     else:
         return (-1) ** (count_bit1(string0 & (-ss)))
 
-def addr2str_o0(norb, nelec, addr):
-    assert (num_strings(norb, nelec) > addr)
-    if addr == 0 or nelec == norb or nelec == 0:
-        return (1 << nelec) - 1   # ..0011..11
-    else:
-        for i in reversed(range(norb)):
-            addrcum = num_strings(i, nelec)
-            if addrcum <= addr:
-                return (1 << i) | addr2str_o0(i, nelec-1, addr-addrcum)
-def addr2str_o1(norb, nelec, addr):
-    assert (num_strings(norb, nelec) > addr)
-    if addr == 0 or nelec == norb or nelec == 0:
-        return (1 << nelec) - 1   # ..0011..11
-    str1 = 0
-    nelec_left = nelec
-    for norb_left in reversed(range(norb)):
-        addrcum = num_strings(norb_left, nelec_left)
-        if nelec_left == 0:
-            break
-        elif addr == 0:
-            str1 |= (1 << nelec_left) - 1
-            break
-        elif addrcum <= addr:
-            str1 |= 1 << norb_left
-            addr -= addrcum
-            nelec_left -= 1
-    return str1
 def addr2str(norb, nelec, addr):
     '''Convert CI determinant address to string'''
-    return addrs2str(norb, nelec, [addr])[0]
+    if norb >= 64:
+        raise NotImplementedError('norb >= 64')
+    max_addr = num_strings(norb, nelec)
+    assert max_addr > addr
+
+    if max_addr < 2**31:
+        return addrs2str(norb, nelec, [addr])[0]
+    else:
+        return _addr2str(norb, nelec, addr)
+
+def _addr2str(norb, nelec, addr):
+    if addr == 0 or nelec == norb or nelec == 0:
+        return (1 << nelec) - 1   # ..0011..11
+
+    for i in reversed(range(norb)):
+        addrcum = num_strings(i, nelec)
+        if addrcum <= addr:
+            return (1 << i) | _addr2str(i, nelec-1, addr-addrcum)
+
 def addrs2str(norb, nelec, addrs):
     '''Convert a list of CI determinant address to string'''
-    #return [addr2str_o1(norb, nelec, addr) for addr in addrs]
+    if norb >= 64:
+        raise NotImplementedError('norb >= 64')
+    if num_strings(norb, nelec) >= 2**31:
+        raise NotImplementedError('Large address')
+
     addrs = numpy.asarray(addrs, dtype=numpy.int32)
     assert (all(num_strings(norb, nelec) > addrs))
     count = addrs.size
@@ -425,37 +379,40 @@ def addrs2str(norb, nelec, addrs):
                         ctypes.c_int(norb), ctypes.c_int(nelec))
     return strs
 
-#def str2addr_o0(norb, nelec, string):
-#    if norb <= nelec or nelec == 0:
-#        return 0
-#    elif (1<<(norb-1)) & string:  # remove the first bit
-#        return num_strings(norb-1, nelec) \
-#                + str2addr_o0(norb-1, nelec-1, string^(1<<(norb-1)))
-#    else:
-#        return str2addr_o0(norb-1, nelec, string)
-#def str2addr_o1(norb, nelec, string):
-#    #TODO: assert norb > first-bit-in-string, nelec == num-1-in-string
-#    addr = 0
-#    nelec_left = nelec
-#    for norb_left in reversed(range(norb)):
-#        if nelec_left == 0 or norb_left < nelec_left:
-#            break
-#        elif (1<<norb_left) & string:
-#            addr += num_strings(norb_left, nelec_left)
-#            nelec_left -= 1
-#    return addr
 def str2addr(norb, nelec, string):
     '''Convert string to CI determinant address'''
+    if norb >= 64:
+        raise NotImplementedError('norb >= 64')
+
     if isinstance(string, str):
         assert (string.count('1') == nelec)
         string = int(string, 2)
     else:
         assert (bin(string).count('1') == nelec)
-    libfci.FCIstr2addr.restype = ctypes.c_int
-    return libfci.FCIstr2addr(ctypes.c_int(norb), ctypes.c_int(nelec),
-                              ctypes.c_ulonglong(string))
+
+    if num_strings(norb, nelec) < 2**31:
+        libfci.FCIstr2addr.restype = ctypes.c_int
+        return libfci.FCIstr2addr(ctypes.c_int(norb), ctypes.c_int(nelec),
+                                  ctypes.c_ulonglong(string))
+    return _str2addr(norb, nelec, string)
+
+def _str2addr(norb, nelec, string):
+    if norb <= nelec or nelec == 0:
+        return 0
+    addr = 0
+    for orbital_id in reversed(range(norb)):
+        if (1 << orbital_id) & string:
+            addr += num_strings(orbital_id, nelec)
+            nelec -= 1
+    return addr
+
 def strs2addr(norb, nelec, strings):
     '''Convert a list of string to CI determinant address'''
+    if norb >= 64:
+        raise NotImplementedError('norb >= 64')
+    if num_strings(norb, nelec) >= 2**31:
+        raise NotImplementedError('Large address')
+
     strings = numpy.asarray(strings, dtype=numpy.int64)
     count = strings.size
     addrs = numpy.empty(count, dtype=numpy.int32)
@@ -470,7 +427,7 @@ def sub_addrs(norb, nelec, orbital_indices, sub_nelec=0):
     indices. The size of the returned addresses is equal to the number of
     determinants of (norb, nelec) system.
     '''
-    assert (norb < 63)
+    assert norb < 64
     if sub_nelec == 0:
         strs = make_strings(orbital_indices, nelec)
         return strs2addr(norb, nelec, strs)
@@ -486,6 +443,9 @@ def tn_strs(norb, nelec, n):
     '''Generate strings for Tn amplitudes.  Eg n=1 (T1) has nvir*nocc strings,
     n=2 (T2) has nvir*(nvir-1)/2 * nocc*(nocc-1)/2 strings.
     '''
+    if norb >= 64:
+        raise NotImplementedError('norb >= 64')
+
     if nelec < n or norb-nelec < n:
         return numpy.zeros(0, dtype=int)
     occs_allow = numpy.asarray(make_strings(range(nelec), n)[::-1])

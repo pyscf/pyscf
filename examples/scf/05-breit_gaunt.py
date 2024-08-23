@@ -14,7 +14,8 @@ mol = gto.M(
     atom = '''
 Cl 0  0     0
 H  0  1.9   0''',
-    basis = {'Cl': gto.uncontract_basis(gto.basis.load('ccpvdz', 'Cl')),
+    # The prefix 'unc-" decontracts basis to primitive Gaussian basis
+    basis = {'Cl': 'unc-ccpvdz',
              'H' : 'ccpvdz'},
 )
 mf = scf.DHF(mol)

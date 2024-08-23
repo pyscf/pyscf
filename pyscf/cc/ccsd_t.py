@@ -37,6 +37,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
 
+    name = mycc.__class__.__name__
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
@@ -52,7 +53,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
 
     mo_energy, t1T, t2T, vooo, fvo, restore_t2_inplace = \
             _sort_t2_vooo_(mycc, orbsym, t1, t2, eris)
-    cpu1 = log.timer_debug1('CCSD(T) sort_eri', *cpu1)
+    cpu1 = log.timer_debug1(f'{name}(T) sort_eri', *cpu1)
 
     cpu2 = list(cpu1)
     orbsym = numpy.hstack((numpy.sort(orbsym[:nocc]),numpy.sort(orbsym[nocc:])))
@@ -124,11 +125,11 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     t2 = restore_t2_inplace(t2T)
     et_sum *= 2
     if abs(et_sum[0].imag) > 1e-4:
-        logger.warn(mycc, 'Non-zero imaginary part of CCSD(T) energy was found %s',
-                    et_sum[0])
+        logger.warn(mycc, 'Non-zero imaginary part of %s(T) energy was found %s',
+                    name, et_sum[0])
     et = et_sum[0].real
-    log.timer('CCSD(T)', *cpu0)
-    log.note('CCSD(T) correction = %.15g', et)
+    log.timer(f'{name}(T)', *cpu0)
+    log.note('%s(T) correction = %.15g', name, et)
     return et
 
 def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
@@ -137,8 +138,9 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     nmo = nocc + nvir
 
     if mol.symmetry:
+        ovlp = mycc._scf.get_ovlp()
         orbsym = symm.addons.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                            eris.mo_coeff, check=False)
+                                            eris.mo_coeff, s=ovlp, check=False)
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32) % 10
     else:
         orbsym = numpy.zeros(nmo, dtype=numpy.int32)
@@ -174,7 +176,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
 
 def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
     assert (t2.flags.c_contiguous)
-    vooo = numpy.asarray(eris.ovoo).transpose(1,0,3,2).conj().copy()
+    vooo = numpy.asarray(eris.ovoo).transpose(1,0,2,3).conj().copy()
     nocc, nvir = t1.shape
     if mycc.mol.symmetry:
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32)

@@ -222,7 +222,7 @@ def general(mydf, mo_coeffs, kpts=None,
 
 def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
                    compact=getattr(__config__, 'pbc_df_ao_pairs_compact', False)):
-    '''Calculate forward Fourier tranform (G|ij) of all AO pairs.
+    '''Calculate forward Fourier transform (G|ij) of all AO pairs.
 
     Returns:
         ao_pairs_G : 2D complex array

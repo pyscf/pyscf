@@ -33,11 +33,11 @@ def f(mol):
 fake_method = as_pyscf_method(mol, f)
 new_mol = berny_solver.optimize(fake_method)
 
-print('Old geometry (Bohr)')
-print(mol.atom_coords())
+print('Old geometry:')
+print(mol.tostring())
 
-print('New geometry (Bohr)')
-print(new_mol.atom_coords())
+print('New geometry:')
+print(new_mol.tostring())
 
 #
 # Geometry can be also optimized with geomeTRIC library

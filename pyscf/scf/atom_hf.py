@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 from pyscf import gto
 from pyscf.lib import logger
@@ -26,11 +25,12 @@ from pyscf.scf import hf, rohf, addons
 
 
 def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
-    elements = set([a[0] for a in mol._atom])
+    elements = {a[0] for a in mol._atom}
     logger.info(mol, 'Spherically averaged atomic HF for %s', elements)
 
-    atm_template = copy.copy(mol)
+    atm_template = mol.copy(deep=False)
     atm_template.charge = 0
+    atm_template.enuc = 0
     atm_template.symmetry = False  # TODO: enable SO3 symmetry here
     atm_template.atom = atm_template._atom = []
     atm_template.cart = False  # AtomSphAverageRHF does not support cartesian basis
@@ -51,7 +51,6 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
         atm._ecpbas[:,0] = 0
         if element in mol._pseudo:
             atm._pseudo = {element: mol._pseudo.get(element)}
-            raise NotImplementedError
         atm.spin = atm.nelectron % 2
 
         nao = atm.nao
@@ -60,6 +59,19 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
             mo_occ = mo_energy = numpy.zeros(nao)
             mo_coeff = numpy.zeros((nao,nao))
             atm_scf_result[element] = (0, mo_energy, mo_coeff, mo_occ)
+        elif atm._pseudo:
+            from pyscf.scf import atom_hf_pp
+            atm.a = None
+            if atm.nelectron == 1:
+                atm_hf = atom_hf_pp.AtomHF1ePP(atm)
+            else:
+                atm_hf = atom_hf_pp.AtomSCFPP(atm)
+                atm_hf.atomic_configuration = atomic_configuration
+
+            atm_hf.verbose = mol.verbose
+            atm_hf.run()
+            atm_scf_result[element] = (atm_hf.e_tot, atm_hf.mo_energy,
+                                       atm_hf.mo_coeff, atm_hf.mo_occ)
         else:
             if atm.nelectron == 1:
                 atm_hf = AtomHF1e(atm)
@@ -81,7 +93,7 @@ class AtomSphAverageRHF(hf.RHF):
         hf.SCF.__init__(self, mol)
 
         # The default initial guess minao does not have super-heavy elements
-        if mol.atom_charge(0) > 96:
+        if gto.charge(mol.atom_symbol(0)) > 96:
             self.init_guess = '1e'
 
         self = self.apply(addons.remove_linear_dep_)
@@ -133,7 +145,7 @@ class AtomSphAverageRHF(hf.RHF):
         symb = mol.atom_symbol(0)
 
         nelec_ecp = mol.atom_nelec_core(0)
-        coreshl = gto.ecp.core_configuration(nelec_ecp)
+        coreshl = gto.ecp.core_configuration(nelec_ecp, atom_symbol=gto.mole._std_symbol(symb))
 
         occ = []
         for l in range(param.L_MAX):
@@ -147,11 +159,12 @@ class AtomSphAverageRHF(hf.RHF):
 
                 logger.debug1(self, 'l = %d  occ = %d + %.4g', l, n2occ, frac)
 
-                occ_l = numpy.zeros(nbas_l)
-                occ_l[:n2occ] = 2
-                if frac > 0:
-                    occ_l[n2occ] = frac
-                occ.append(numpy.repeat(occ_l, degen))
+                if nbas_l > 0:
+                    occ_l = numpy.zeros(nbas_l)
+                    occ_l[:n2occ] = 2
+                    if frac > 0:
+                        occ_l[n2occ] = frac
+                    occ.append(numpy.repeat(occ_l, degen))
             else:
                 occ.append(numpy.zeros(nbas_l * degen))
 
@@ -166,10 +179,10 @@ class AtomSphAverageRHF(hf.RHF):
 
     def _finalize(self):
         if self.converged:
-            logger.info(self, 'Atomic HF for atom  %s  converged. SCF energy = %.15g',
+            logger.info(self, 'Atomic HF for atom  %s  converged. SCF energy = %.15g\n',
                         self.mol.atom_symbol(0), self.e_tot)
         else:
-            logger.info(self, 'Atomic HF for atom  %s  not converged. SCF energy = %.15g',
+            logger.info(self, 'Atomic HF for atom  %s  not converged. SCF energy = %.15g\n',
                         self.mol.atom_symbol(0), self.e_tot)
         return self
 
@@ -199,16 +212,3 @@ def _angular_momentum_for_each_ao(mol):
         p0, p1 = ao_loc[i], ao_loc[i+1]
         ao_ang[p0:p1] = mol.bas_angular(i)
     return ao_ang
-
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = None
-
-    mol.atom = [["N", (0. , 0., .5)],
-                ["N", (0. , 0.,-.5)] ]
-
-    mol.basis = {"N": '6-31g'}
-    mol.build()
-    print(get_atm_nrhf(mol))

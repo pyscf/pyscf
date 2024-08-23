@@ -75,7 +75,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo',
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
@@ -159,7 +159,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
@@ -238,11 +238,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
 
     if isinstance(erifile, str):
         if h5py.is_hdf5(erifile):
-            feri = h5py.File(erifile, 'a')
+            feri = lib.H5FileWrap(erifile, 'a')
             if dataname in feri:
                 del (feri[dataname])
         else:
-            feri = h5py.File(erifile, 'w')
+            feri = lib.H5FileWrap(erifile, 'w')
     else:
         assert (isinstance(erifile, h5py.Group))
         feri = erifile
@@ -383,12 +383,12 @@ def half_e1(mol, mo_coeffs, swapfile,
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
         ao2mopt : :class:`AO2MOpt` object
-            Precomputed data to improve perfomance
+            Precomputed data to improve performance
 
     Returns:
         None
@@ -431,7 +431,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     if isinstance(swapfile, h5py.Group):
         fswap = swapfile
     else:
-        fswap = lib.H5TmpFile(swapfile)
+        fswap = lib.H5FileWrap(swapfile, 'a')
     for icomp in range(comp):
         fswap.create_group(str(icomp)) # for h5py old version
 
@@ -486,16 +486,16 @@ def _load_from_h5g(h5group, row0, row1, out=None):
         out = numpy.ndarray((row1-row0, ncol), dat.dtype, buffer=out)
         col1 = 0
         for key in range(nkeys):
-            dat = h5group[str(key)][row0:row1]
-            col0, col1 = col1, col1 + dat.shape[1]
-            out[:,col0:col1] = dat
+            col0, col1 = col1, col1 + h5group[str(key)].shape[1]
+            h5group[str(key)].read_direct(out, dest_sel=numpy.s_[:,col0:col1],
+                                          source_sel=numpy.s_[row0:row1])
     else:  # multiple components
         out = numpy.ndarray((dat.shape[0], row1-row0, ncol), dat.dtype, buffer=out)
         col1 = 0
         for key in range(nkeys):
-            dat = h5group[str(key)][:,row0:row1]
-            col0, col1 = col1, col1 + dat.shape[2]
-            out[:,:,col0:col1] = dat
+            col0, col1 = col1, col1 + h5group[str(key)].shape[2]
+            h5group[str(key)].read_direct(out, dest_sel=numpy.s_[:,:,col0:col1],
+                                          source_sel=numpy.s_[:,row0:row1])
     return out
 
 def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
@@ -554,7 +554,7 @@ def full_iofree(mol, mo_coeff, intor='int2e', aosym='s4', comp=None,
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals
@@ -628,7 +628,7 @@ def general_iofree(mol, mo_coeffs, intor='int2e', aosym='s4', comp=None,
         verbose : int
             Print level
         compact : bool
-            When compact is True, depending on the four oribital sets, the
+            When compact is True, depending on the four orbital sets, the
             returned MO integrals has (up to 4-fold) permutation symmetry.
             If it's False, the function will abandon any permutation symmetry,
             and return the "plain" MO integrals

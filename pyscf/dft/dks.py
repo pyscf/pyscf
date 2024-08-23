@@ -21,7 +21,6 @@
 '''
 
 
-import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -33,8 +32,8 @@ from pyscf.dft import r_numint
 
 @lib.with_doc(gks.get_veff.__doc__)
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-    if ks.nlc != '':
-        raise NotImplementedError(ks.nlc)
+    if ks.do_nlc():
+        raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
     return gks.get_veff(ks, mol, dm, dm_last, vhf_last, hermi)
 
 
@@ -47,7 +46,7 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
         ks : an instance of DFT class
 
         dm : 2D ndarray
-            one-partical density matrix
+            one-particle density matrix
         h1e : 2D ndarray
             Core hamiltonian
 
@@ -85,6 +84,13 @@ class KohnShamDFT(rks.KohnShamDFT):
     def collinear(self, val):
         self._numint.collinear = val
 
+    @property
+    def spin_samples(self):
+        return self._numint.spin_samples
+    @spin_samples.setter
+    def spin_samples(self, val):
+        self._numint.spin_samples = val
+
     def to_rhf(self):
         raise RuntimeError
 
@@ -118,7 +124,7 @@ class KohnShamDFT(rks.KohnShamDFT):
 
     def to_dks(self, xc=None):
         if xc is not None and xc != self.xc:
-            mf = copy.copy(self)
+            mf = self.copy()
             mf.xc = xc
             mf.converged = False
         return self
@@ -140,11 +146,11 @@ class DKS(KohnShamDFT, dhf.DHF):
     def x2c1e(self):
         from pyscf.x2c import dft
         x2chf = dft.UKS(self.mol)
-        x2c_keys = x2chf._keys
         x2chf.__dict__.update(self.__dict__)
-        x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
     x2c = x2c1e
+
+    to_gpu = lib.to_gpu
 
 UKS = UDKS = DKS
 
@@ -157,9 +163,7 @@ class RDKS(DKS, dhf.RDHF):
     def x2c1e(self):
         from pyscf.x2c import dft
         x2chf = dft.RKS(self.mol)
-        x2c_keys = x2chf._keys
         x2chf.__dict__.update(self.__dict__)
-        x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
     x2c = x2c1e
 

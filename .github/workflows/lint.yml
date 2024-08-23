@@ -3,18 +3,44 @@ name: Lint
 on: [push, pull_request]
 
 jobs:
-  flake:
-    runs-on: ubuntu-18.04
+  ruff:
+    runs-on: ubuntu-latest
     steps:
-      - name: Setup Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.7
-      - uses: actions/checkout@v2
-      - name: Install flake8
-        run: pip install "flake8>=3.7.0"
-      - name: Static analysis
-        run: flake8 --config .flake8 pyscf
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Install ruff
+      run: pip install ruff
+    - name: Check style
+      run: ruff check --config .ruff.toml pyscf
+    - name: Check NumPy
+      run: ruff check --select NPY --ignore NPY002 pyscf
+  flake:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.9
+    - name: Install flake8
+      run: pip install "flake8>=3.7.0"
+    - name: Static analysis
+      run: flake8 --config .flake8 pyscf
+  lint-pycodestyle:
+    name: Code style check with pycodestyle
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.9
+    - name: Install pycodestyle
+      run: pip install pycodestyle
+    - name: Lint using pycodestyle
+      run: pycodestyle --select=E111,W191,W293 pyscf
 
 #      - name: Static analysis
 #        uses: suo/flake8-github-action@releases/v1

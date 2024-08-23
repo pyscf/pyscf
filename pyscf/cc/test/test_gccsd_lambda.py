@@ -25,6 +25,9 @@ from pyscf import scf
 from pyscf import cc
 from pyscf.cc import addons
 from pyscf.cc import gccsd_lambda
+from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
+from pyscf.cc import gccsd_t_lambda
+from pyscf.cc import uccsd_t_lambda
 
 def setUpModule():
     global mol
@@ -241,6 +244,76 @@ class KnownValues(unittest.TestCase):
         l1, l2 = gccsd_lambda.update_lambda(mycc, t1, t2, l1, l2, eris, imds)
         self.assertAlmostEqual(abs(l1-l1ref).max(), 0, 8)
         self.assertAlmostEqual(abs(l2-l2ref).max(), 0, 8)
+
+    def test_gccsd_t_lambda(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+        mol.basis = '631g'
+        mol.spin = 0
+        mol.build()
+        mf0 = mf = scf.RHF(mol).run(conv_tol=1.)
+        mf = scf.addons.convert_to_ghf(mf)
+
+        mycc0 = cc.CCSD(mf0)
+        eris0 = mycc0.ao2mo()
+        mycc0.kernel(eris=eris0)
+        t1 = mycc0.t1
+        t2 = mycc0.t2
+        imds = ccsd_t_lambda.make_intermediates(mycc0, t1, t2, eris0)
+        l1, l2 = ccsd_t_lambda.update_lambda(mycc0, t1, t2, t1, t2, eris0, imds)
+        l1ref, l2ref = ccsd_t_lambda.update_lambda(mycc0, t1, t2, l1, l2, eris0, imds)
+        mycc = cc.GCCSD(mf)
+        eris = mycc.ao2mo()
+        t1 = mycc.spatial2spin(t1, mycc.mo_coeff.orbspin)
+        t2 = mycc.spatial2spin(t2, mycc.mo_coeff.orbspin)
+        l1 = mycc.spatial2spin(l1, mycc.mo_coeff.orbspin)
+        l2 = mycc.spatial2spin(l2, mycc.mo_coeff.orbspin)
+        imds = gccsd_t_lambda.make_intermediates(mycc, t1, t2, eris)
+        l1, l2 = gccsd_t_lambda.update_lambda(mycc, t1, t2, l1, l2, eris, imds)
+        l1 = mycc.spin2spatial(l1, mycc.mo_coeff.orbspin)
+        l2 = mycc.spin2spatial(l2, mycc.mo_coeff.orbspin)
+        self.assertAlmostEqual(abs(l2[1]-l2[1].transpose(1,0,2,3)-l2[0]).max(), 0, 12)
+        self.assertAlmostEqual(abs(l2[1]-l2[1].transpose(0,1,3,2)-l2[0]).max(), 0, 12)
+        self.assertAlmostEqual(abs(l1[0]-l1ref).max(), 0, 12)
+        self.assertAlmostEqual(abs(l2[1]-l2ref).max(), 0, 12)
+
+        mol = gto.Mole()
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+        mol.basis = '631g'
+        mol.spin = 2
+        mol.build()
+        mf0 = mf = scf.UHF(mol).run(conv_tol=1)
+        mf = scf.addons.convert_to_ghf(mf)
+
+        mycc0 = cc.CCSD(mf0)
+        eris0 = mycc0.ao2mo()
+        mycc0.kernel(eris=eris0)
+        t1 = mycc0.t1
+        t2 = mycc0.t2
+        imds = uccsd_t_lambda.make_intermediates(mycc0, t1, t2, eris0)
+        l1, l2 = uccsd_t_lambda.update_lambda(mycc0, t1, t2, t1, t2, eris0, imds)
+        l1ref, l2ref = uccsd_t_lambda.update_lambda(mycc0, t1, t2, l1, l2, eris0, imds)
+        mycc = cc.GCCSD(mf)
+        eris = mycc.ao2mo()
+        t1 = mycc.spatial2spin(t1, mycc.mo_coeff.orbspin)
+        t2 = mycc.spatial2spin(t2, mycc.mo_coeff.orbspin)
+        l1 = mycc.spatial2spin(l1, mycc.mo_coeff.orbspin)
+        l2 = mycc.spatial2spin(l2, mycc.mo_coeff.orbspin)
+        imds = gccsd_t_lambda.make_intermediates(mycc, t1, t2, eris)
+        l1, l2 = gccsd_t_lambda.update_lambda(mycc, t1, t2, l1, l2, eris, imds)
+        l1 = mycc.spin2spatial(l1, mycc.mo_coeff.orbspin)
+        l2 = mycc.spin2spatial(l2, mycc.mo_coeff.orbspin)
+        self.assertAlmostEqual(abs(l1[0]-l1ref[0]).max(), 0, 12)
+        self.assertAlmostEqual(abs(l1[1]-l1ref[1]).max(), 0, 12)
+        self.assertAlmostEqual(abs(l2[0]-l2ref[0]).max(), 0, 12)
+        self.assertAlmostEqual(abs(l2[1]-l2ref[1]).max(), 0, 12)
+        self.assertAlmostEqual(abs(l2[2]-l2ref[2]).max(), 0, 12)
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ Simple usage::
     >>> mf = scf.RHF(mol).run()
     >>> cc.CCSD(mf).run()
 
-:func:`cc.CCSD` returns an instance of CCSD class.  Followings are parameters
+:func:`cc.CCSD` returns an instance of CCSD class.  Following are parameters
 to control CCSD calculation.
 
     verbose : int
@@ -78,9 +78,9 @@ from pyscf.cc import qcisd
 from pyscf import scf
 
 def CCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    if isinstance(mf, scf.uhf.UHF):
+    if mf.istype('UHF'):
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
-    elif isinstance(mf, scf.ghf.GHF):
+    elif mf.istype('GHF'):
         return GCCSD(mf, frozen, mo_coeff, mo_occ)
     else:
         return RCCSD(mf, frozen, mo_coeff, mo_occ)
@@ -92,21 +92,22 @@ scf.hf.SCF.CCSD = CCSD
 def RCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     import numpy
     from pyscf import lib
-    from pyscf.soscf import newton_ah
+    from pyscf.df.df_jk import _DFHF
     from pyscf.cc import dfccsd
 
-    if isinstance(mf, scf.uhf.UHF):
+    if mf.istype('UHF'):
         raise RuntimeError('RCCSD cannot be used with UHF method.')
-    elif isinstance(mf, scf.rohf.ROHF):
+    elif mf.istype('ROHF'):
         lib.logger.warn(mf, 'RCCSD method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UCCSD method is called.')
-        mf = scf.addons.convert_to_uhf(mf)
+        mf = mf.to_uhf()
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
-        mf = scf.addons.convert_to_rhf(mf)
+    mf = mf.remove_soscf()
+    if not mf.istype('RHF'):
+        mf = mf.to_rhf()
 
-    if getattr(mf, 'with_df', None):
+    if isinstance(mf, _DFHF) and mf.with_df:
         return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
     elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
@@ -118,12 +119,13 @@ RCCSD.__doc__ = ccsd.CCSD.__doc__
 
 
 def UCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.soscf import newton_ah
+    from pyscf.df.df_jk import _DFHF
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf)
+    mf = mf.remove_soscf()
+    if not mf.istype('UHF'):
+        mf = mf.to_uhf()
 
-    if getattr(mf, 'with_df', None):
+    if isinstance(mf, _DFHF) and mf.with_df:
         # TODO: DF-UCCSD with memory-efficient particle-particle ladder,
         # similar to dfccsd.RCCSD
         return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
@@ -133,12 +135,13 @@ UCCSD.__doc__ = uccsd.UCCSD.__doc__
 
 
 def GCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    from pyscf.soscf import newton_ah
+    from pyscf.df.df_jk import _DFHF
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
-        mf = scf.addons.convert_to_ghf(mf)
+    mf = mf.remove_soscf()
+    if not mf.istype('GHF'):
+        mf = mf.to_ghf()
 
-    if getattr(mf, 'with_df', None):
+    if isinstance(mf, _DFHF) and mf.with_df:
         raise NotImplementedError('DF-GCCSD')
     else:
         return gccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
@@ -146,9 +149,9 @@ GCCSD.__doc__ = gccsd.GCCSD.__doc__
 
 
 def QCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    if isinstance(mf, scf.uhf.UHF):
+    if mf.istype('UHF'):
         raise NotImplementedError
-    elif isinstance(mf, scf.ghf.GHF):
+    elif mf.istype('GHF'):
         raise NotImplementedError
     else:
         return RQCISD(mf, frozen, mo_coeff, mo_occ)
@@ -159,18 +162,17 @@ scf.hf.SCF.QCISD = QCISD
 def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     import numpy
     from pyscf import lib
-    from pyscf.soscf import newton_ah
 
-    if isinstance(mf, scf.uhf.UHF):
+    if mf.istype('UHF'):
         raise RuntimeError('RQCISD cannot be used with UHF method.')
-    elif isinstance(mf, scf.rohf.ROHF):
+    elif mf.istype('ROHF'):
         lib.logger.warn(mf, 'RQCISD method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UQCISD method is called.')
-        mf = scf.addons.convert_to_uhf(mf)
         raise NotImplementedError
 
-    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
-        mf = scf.addons.convert_to_rhf(mf)
+    mf = mf.remove_soscf()
+    if not mf.istype('RHF'):
+        mf = mf.to_rhf()
 
     elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
         raise NotImplementedError
@@ -180,7 +182,7 @@ def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
 RQCISD.__doc__ = qcisd.QCISD.__doc__
 
 
-def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None):
+def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None, frozen=None):
     """Frozen natural orbital CCSD
 
     Attributes:
@@ -191,11 +193,13 @@ def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None):
         nvir_act : int
             Number of virtual NOs to keep. Default is None. If present, overrides `thresh` and `pct_occ`.
     """
+    import numpy
     from pyscf import mp
-    pt = mp.MP2(mf).set(verbose=0).run()
+    pt = mp.MP2(mf, frozen=frozen).set(verbose=0).run()
     frozen, no_coeff = pt.make_fno(thresh=thresh, pct_occ=pct_occ, nvir_act=nvir_act)
+    if len(frozen) == 0: frozen = None
     pt_no = mp.MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run()
-    mycc = ccsd.CCSD(mf, frozen=frozen, mo_coeff=no_coeff)
+    mycc = CCSD(mf, frozen=frozen, mo_coeff=no_coeff)
     mycc.delta_emp2 = pt.e_corr - pt_no.e_corr
     from pyscf.lib import logger
     def _finalize(self):

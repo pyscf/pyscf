@@ -223,7 +223,7 @@ functions were also added in the new release.  Basis input such as "6-31g(d,p)",
 
 .. note:: Even the system has only Poply basis, cartesian (6d,10f) GTO is not
     enabled by default.  You should specify mol.cart = True to explicitly switch
-    to cartensian GTO calculations.
+    to cartesian GTO calculations.
 
 Problem size in FCI solver
 --------------------------

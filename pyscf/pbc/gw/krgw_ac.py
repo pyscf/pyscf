@@ -20,7 +20,7 @@
 PBC spin-restricted G0W0-AC QP eigenvalues with k-point sampling
 This implementation has N^4 scaling, and is faster than GW-CD (N^4)
 and analytic GW (N^6) methods.
-GW-AC is recommended for valence states only, and is inaccuarate for core states.
+GW-AC is recommended for valence states only, and is inaccurate for core states.
 
 Method:
     See T. Zhu and G.K.-L. Chan, arxiv:2007.03148 (2020) for details
@@ -86,6 +86,9 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         raise RuntimeError('Found incompatible integral scheme %s.'
                            'KGWAC can be only used with GDF integrals' %
                            gw.with_df.__class__)
+    if rhf.with_df._j_only:
+        logger.debug(gw, 'Rebuild CDERI for exchange integrals')
+        rhf.with_df.build(j_only=False)
 
     vk = rhf.get_veff(gw.mol,dm_kpts=dm) - rhf.get_j(gw.mol,dm_kpts=dm)
     for k in range(nkpts):
@@ -274,7 +277,7 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
                     for LpqR, LpqI, sign \
                             in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
                         Lpq.append(LpqR+LpqI*1.0j)
-                    # support uneqaul naux on different k points
+                    # support unequal naux on different k points
                     Lpq = np.vstack(Lpq).reshape(-1,nmo**2)
                     tao = []
                     ao_loc = None
@@ -386,7 +389,7 @@ def get_rho_response_wing(gw, omega, mo_energy, Lpq, qij):
 def get_qij(gw, q, mo_coeff, uniform_grids=False):
     '''
     Compute qij = 1/Omega * |< psi_{ik} | e^{iqr} | psi_{ak-q} >|^2 at q: (nkpts, nocc, nvir)
-    through kp perturbtation theory
+    through kp perturbation theory
     Ref: Phys. Rev. B 83, 245122 (2011)
     '''
     nocc = gw.nocc
@@ -439,7 +442,7 @@ def _get_scaled_legendre_roots(nw):
 
 def _get_clenshaw_curtis_roots(nw):
     """
-    Clenshaw-Curtis qaudrature on [0,inf)
+    Clenshaw-Curtis quadrature on [0,inf)
     Ref: J. Chem. Phys. 132, 234114 (2010)
     Returns:
         freqs : 1D ndarray
@@ -538,7 +541,12 @@ class KRGWAC(lib.StreamObject):
     # Whether applying finite size corrections
     fc = getattr(__config__, 'gw_gw_GW_fc', True)
 
-    def __init__(self, mf, frozen=0):
+    _keys = {
+        'linearized', 'ac', 'fc', 'frozen', 'mol', 'with_df',
+        'kpts', 'nkpts', 'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
+    }
+
+    def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -546,7 +554,7 @@ class KRGWAC(lib.StreamObject):
         self.max_memory = mf.max_memory
 
         #TODO: implement frozen orbs
-        if frozen > 0:
+        if frozen is not None and frozen > 0:
             raise NotImplementedError
         self.frozen = frozen
 
@@ -555,7 +563,6 @@ class KRGWAC(lib.StreamObject):
             self.with_df = mf.with_df
         else:
             raise NotImplementedError
-        self._keys.update(['with_df'])
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -568,9 +575,6 @@ class KRGWAC(lib.StreamObject):
         self.mo_coeff = mf.mo_coeff
         self.mo_occ = mf.mo_occ
         self.sigma = None
-
-        keys = set(('linearized','ac','fc'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -638,69 +642,3 @@ class KRGWAC(lib.StreamObject):
         logger.warn(self, 'GW QP energies may not be sorted from min to max')
         logger.timer(self, 'GW', *cput0)
         return self.mo_energy
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    from pyscf.pbc.lib import chkfile
-    import os
-    # This test takes a few minutes
-    cell = gto.Cell()
-    cell.build(unit = 'angstrom',
-               a = '''
-               0.000000     1.783500     1.783500
-               1.783500     0.000000     1.783500
-               1.783500     1.783500     0.000000
-               ''',
-               atom = 'C 1.337625 1.337625 1.337625; C 2.229375 2.229375 2.229375',
-               dimension = 3,
-               max_memory = 8000,
-               verbose = 4,
-               pseudo = 'gth-pade',
-               basis='gth-szv',
-               precision=1e-10)
-
-    kpts = cell.make_kpts([3,1,1],scaled_center=[0,0,0])
-    gdf = df.GDF(cell, kpts)
-    gdf_fname = 'gdf_ints_311.h5'
-    gdf._cderi_to_save = gdf_fname
-    if not os.path.isfile(gdf_fname):
-        gdf.build()
-
-    chkfname = 'diamond_311.chk'
-    if os.path.isfile(chkfname):
-        kmf = dft.KRKS(cell, kpts)
-        kmf.xc = 'pbe'
-        kmf.with_df = gdf
-        kmf.with_df._cderi = gdf_fname
-        data = chkfile.load(chkfname, 'scf')
-        kmf.__dict__.update(data)
-    else:
-        kmf = dft.KRKS(cell, kpts)
-        kmf.xc = 'pbe'
-        kmf.with_df = gdf
-        kmf.with_df._cderi = gdf_fname
-        kmf.conv_tol = 1e-12
-        kmf.chkfile = chkfname
-        kmf.kernel()
-
-    gw = KRGWAC(kmf)
-    gw.linearized = False
-    gw.ac = 'pade'
-    # without finite size corrections
-    gw.fc = False
-    nocc = gw.nocc
-    gw.kernel(kptlist=[0,1,2],orbs=range(0,nocc+3))
-    print(gw.mo_energy)
-    assert ((abs(gw.mo_energy[0][nocc-1]-0.62045797))<1e-5)
-    assert ((abs(gw.mo_energy[0][nocc]-0.96574324))<1e-5)
-    assert ((abs(gw.mo_energy[1][nocc-1]-0.52639137))<1e-5)
-    assert ((abs(gw.mo_energy[1][nocc]-1.07513258))<1e-5)
-
-    # with finite size corrections
-    gw.fc = True
-    gw.kernel(kptlist=[0,1,2],orbs=range(0,nocc+3))
-    print(gw.mo_energy)
-    assert ((abs(gw.mo_energy[0][nocc-1]-0.54277092))<1e-5)
-    assert ((abs(gw.mo_energy[0][nocc]-0.80148537))<1e-5)
-    assert ((abs(gw.mo_energy[1][nocc-1]-0.45073793))<1e-5)
-    assert ((abs(gw.mo_energy[1][nocc]-0.92910108))<1e-5)

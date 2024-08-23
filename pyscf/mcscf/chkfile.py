@@ -20,52 +20,84 @@
 #
 
 import h5py
-from pyscf.lib.chkfile import load
-from pyscf.lib.chkfile import dump, save
-from pyscf.lib.chkfile import load_mol, save_mol
+from pyscf.lib import H5FileWrap
+from pyscf.lib.chkfile import load, load_mol, dump
+from pyscf.mcscf.addons import StateAverageMixFCISolver
 
 
 def load_mcscf(chkfile):
-    return load_mol(chkfile), load(chkfile, 'mcscf')
+    return load_mol(chkfile), load(chkfile, "mcscf")
 
-def dump_mcscf(mc, chkfile=None, key='mcscf',
-               e_tot=None, mo_coeff=None, ncore=None, ncas=None,
-               mo_occ=None, mo_energy=None, e_cas=None, ci_vector=None,
-               casdm1=None, overwrite_mol=True):
-    '''Save CASCI/CASSCF calculation results or intermediates in chkfile.
-    '''
-    if chkfile is None: chkfile = mc.chkfile
-    if ncore is None: ncore = mc.ncore
-    if ncas is None: ncas = mc.ncas
-    if e_tot is None: e_tot = mc.e_tot
-    if e_cas is None: e_cas = mc.e_cas
-    if mo_coeff is None: mo_coeff = mc.mo_coeff
-    #if ci_vector is None: ci_vector = mc.ci
+
+def dump_mcscf(
+    mc,
+    chkfile=None,
+    key="mcscf",
+    e_tot=None,
+    mo_coeff=None,
+    ncore=None,
+    ncas=None,
+    mo_occ=None,
+    mo_energy=None,
+    e_cas=None,
+    ci_vector=None,
+    casdm1=None,
+    overwrite_mol=True,
+):
+    """Save CASCI/CASSCF calculation results or intermediates in chkfile."""
+    if chkfile is None:
+        chkfile = mc.chkfile
+    if ncore is None:
+        ncore = mc.ncore
+    if ncas is None:
+        ncas = mc.ncas
+    if e_tot is None:
+        e_tot = mc.e_tot
+    if e_cas is None:
+        e_cas = mc.e_cas
+    if mo_coeff is None:
+        mo_coeff = mc.mo_coeff
+    if mo_occ is None:
+        mo_occ = mc.mo_occ
+    if mo_energy is None:
+        mo_energy = mc.mo_energy
+    # if ci_vector is None: ci_vector = mc.ci
 
     if h5py.is_hdf5(chkfile):
-        fh5 = h5py.File(chkfile, 'a')
-        if key in fh5:
-            del (fh5[key])
+        mode = "a"
     else:
-        fh5 = h5py.File(chkfile, 'w')
+        mode = "w"
 
-    if 'mol' not in fh5:
-        fh5['mol'] = mc.mol.dumps()
-    elif overwrite_mol:
-        del (fh5['mol'])
-        fh5['mol'] = mc.mol.dumps()
+    mixed_ci = (
+        isinstance(mc.fcisolver, StateAverageMixFCISolver) and ci_vector is not None
+    )
 
-    fh5[key+'/mo_coeff'] = mo_coeff
+    with H5FileWrap(chkfile, mode) as fh5:
+        if mode == "a":
+            if key in fh5:
+                del fh5[key]
 
-    def store(subkey, val):
-        if val is not None:
-            fh5[key+'/'+subkey] = val
-    store('e_tot', e_tot)
-    store('e_cas', e_cas)
-    store('ci', ci_vector)
-    store('ncore', ncore)
-    store('ncas', ncas)
-    store('mo_occ', mo_occ)
-    store('mo_energy', mo_energy)
-    store('casdm1', casdm1)
-    fh5.close()
+        if "mol" not in fh5:
+            fh5["mol"] = mc.mol.dumps()
+        elif overwrite_mol:
+            del fh5["mol"]
+            fh5["mol"] = mc.mol.dumps()
+
+        def store(subkey, val):
+            if val is not None:
+                fh5[key + "/" + subkey] = val
+
+        store("mo_coeff", mo_coeff)
+        store("e_tot", e_tot)
+        store("e_cas", e_cas)
+        store("ncore", ncore)
+        store("ncas", ncas)
+        store("mo_occ", mo_occ)
+        store("mo_energy", mo_energy)
+        store("casdm1", casdm1)
+
+        if not mixed_ci:
+            store("ci", ci_vector)
+
+    if mixed_ci:
+        dump(chkfile, "mcscf/ci", ci_vector)

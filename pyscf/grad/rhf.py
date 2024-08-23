@@ -26,7 +26,8 @@ import ctypes
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import _vhf
+from pyscf.scf import hf, _vhf
+from pyscf.gto.mole import is_au
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
@@ -46,6 +47,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+    dm0 = mf_grad._tag_rdm1 (dm0, mo_coeff, mo_occ)
 
     t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-HF Coulomb repulsion')
@@ -91,20 +93,18 @@ def grad_nuc(mol, atmlst=None):
     '''
     Derivatives of nuclear repulsion energy wrt nuclear coordinates
     '''
-    gs = numpy.zeros((mol.natm,3))
-    for j in range(mol.natm):
-        q2 = mol.atom_charge(j)
-        r2 = mol.atom_coord(j)
-        for i in range(mol.natm):
-            if i != j:
-                q1 = mol.atom_charge(i)
-                r1 = mol.atom_coord(i)
-                r = numpy.sqrt(numpy.dot(r1-r2,r1-r2))
-                gs[j] -= q1 * q2 * (r2-r1) / r**3
+    z = mol.atom_charges()
+    r = mol.atom_coords()
+    dr = r[:,None,:] - r
+    dist = numpy.linalg.norm(dr, axis=2)
+    diag_idx = numpy.diag_indices(z.size)
+    dist[diag_idx] = 1e100
+    rinv = 1./dist
+    rinv[diag_idx] = 0.
+    gs = numpy.einsum('i,j,ijx,ij->ix', -z, z, dr, rinv**3)
     if atmlst is not None:
         gs = gs[atmlst]
     return gs
-
 
 def get_hcore(mol):
     '''Part of the nuclear gradients of core Hamiltonian'''
@@ -150,28 +150,26 @@ def get_jk(mol, dm):
     '''J = ((-nabla i) j| kl) D_lk
     K = ((-nabla i) j| kl) D_jk
     '''
-    vhfopt = _vhf.VHFOpt(mol, 'int2e_ip1ip2', 'CVHFgrad_jk_prescreen',
-                         'CVHFgrad_jk_direct_scf')
-    dm = numpy.asarray(dm, order='C')
-    if dm.ndim == 3:
-        n_dm = dm.shape[0]
-    else:
-        n_dm = 1
+    libcvhf = _vhf.libcvhf
+    vhfopt = _vhf._VHFOpt(mol, 'int2e_ip1', 'CVHFgrad_jk_prescreen',
+                          dmcondname='CVHFnr_dm_cond1')
     ao_loc = mol.ao_loc_nr()
-    fsetdm = getattr(_vhf.libcvhf, 'CVHFgrad_jk_direct_scf_dm')
-    fsetdm(vhfopt._this,
-           dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
-           ao_loc.ctypes.data_as(ctypes.c_void_p),
-           mol._atm.ctypes.data_as(ctypes.c_void_p), mol.natm,
-           mol._bas.ctypes.data_as(ctypes.c_void_p), mol.nbas,
-           mol._env.ctypes.data_as(ctypes.c_void_p))
+    nbas = mol.nbas
+    q_cond = numpy.empty((2, nbas, nbas))
+    with mol.with_integral_screen(vhfopt.direct_scf_tol**2):
+        libcvhf.CVHFnr_int2e_pp_q_cond(
+            getattr(libcvhf, mol._add_suffix('int2e_ip1ip2')),
+            lib.c_null_ptr(), q_cond[0].ctypes,
+            ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+            mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+        libcvhf.CVHFnr_int2e_q_cond(
+            getattr(libcvhf, mol._add_suffix('int2e')),
+            lib.c_null_ptr(), q_cond[1].ctypes,
+            ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
+            mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
+    vhfopt.q_cond = q_cond
 
-    # Update the vhfopt's attributes intor.  Function direct_mapdm needs
-    # vhfopt._intor and vhfopt._cintopt to compute J/K.  intor was initialized
-    # as int2e_ip1ip2. It should be int2e_ip1
-    vhfopt._intor = intor = mol._add_suffix('int2e_ip1')
-    vhfopt._cintopt = None
-
+    intor = mol._add_suffix('int2e_ip1')
     vj, vk = _vhf.direct_mapdm(intor,  # (nabla i,j|k,l)
                                's2kl', # ip1_sph has k>=l,
                                ('lk->s1ij', 'jk->s1il'),
@@ -243,34 +241,42 @@ def as_scanner(mf_grad):
         return mf_grad
 
     logger.info(mf_grad, 'Create scanner for %s', mf_grad.__class__)
+    name = mf_grad.__class__.__name__ + SCF_GradScanner.__name_mixin__
+    return lib.set_class(SCF_GradScanner(mf_grad),
+                         (SCF_GradScanner, mf_grad.__class__), name)
 
-    class SCF_GradScanner(mf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class SCF_GradScanner(lib.GradScanner):
+    def __init__(self, g):
+        lib.GradScanner.__init__(self, g)
 
-            mf_scanner = self.base
-            e_tot = mf_scanner(mol)
-            self.mol = mol
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            # If second integration grids are created for RKS and UKS
-            # gradients
+        self.reset(mol)
+        mf_scanner = self.base
+        e_tot = mf_scanner(mol)
+
+        if isinstance(mf_scanner, hf.KohnShamDFT):
             if getattr(self, 'grids', None):
                 self.grids.reset(mol)
+            if getattr(self, 'nlcgrids', None):
+                self.nlcgrids.reset(mol)
 
-            de = self.kernel(**kwargs)
-            return e_tot, de
-    return SCF_GradScanner(mf_grad)
+        de = self.kernel(**kwargs)
+        return e_tot, de
 
 
-class GradientsMixin(lib.StreamObject):
+class GradientsBase(lib.StreamObject):
     '''
     Basic nuclear gradient functions for non-relativistic methods
     '''
+
+    _keys = {'mol', 'base', 'unit', 'atmlst', 'de'}
+
     def __init__(self, method):
         self.verbose = method.verbose
         self.stdout = method.stdout
@@ -281,7 +287,6 @@ class GradientsMixin(lib.StreamObject):
 
         self.atmlst = None
         self.de = None
-        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -291,12 +296,18 @@ class GradientsMixin(lib.StreamObject):
                      self.base.__class__.__name__)
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)
-        if 'ANG' in self.unit.upper():
+        if not is_au(self.unit):
             raise NotImplementedError('unit Eh/Ang is not supported')
         else:
             log.info('unit = Eh/Bohr')
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
+        return self
+
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self.base.reset(mol)
         return self
 
     def get_hcore(self, mol=None):
@@ -310,27 +321,39 @@ class GradientsMixin(lib.StreamObject):
         return get_ovlp(mol)
 
     @lib.with_doc(get_jk.__doc__)
-    def get_jk(self, mol=None, dm=None, hermi=0):
+    def get_jk(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        vj, vk = get_jk(mol, dm)
+        if omega is None:
+            vj, vk = get_jk(mol, dm)
+        else:
+            with mol.with_range_coulomb(omega):
+                vj, vk = get_jk(mol, dm)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def get_j(self, mol=None, dm=None, hermi=0):
+    def get_j(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         intor = mol._add_suffix('int2e_ip1')
-        return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
-                                  mol._atm, mol._bas, mol._env)
+        if omega is None:
+            return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
+        with mol.with_range_coulomb(omega):
+            return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
 
-    def get_k(self, mol=None, dm=None, hermi=0):
+    def get_k(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         intor = mol._add_suffix('int2e_ip1')
-        return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
-                                  mol._atm, mol._bas, mol._env)
+        if omega is None:
+            return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
+        with mol.with_range_coulomb(omega):
+            return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
+                                      mol._atm, mol._bas, mol._env)
 
     def get_veff(self, mol=None, dm=None):
         raise NotImplementedError
@@ -393,6 +416,8 @@ class GradientsMixin(lib.StreamObject):
         self.de = de + self.grad_nuc(atmlst=atmlst)
         if self.mol.symmetry:
             self.de = self.symmetrize(self.de, atmlst)
+        if self.base.do_disp():
+            self.de += self.get_dispersion()
         logger.timer(self, 'SCF gradients', *cput0)
         self._finalize()
         return self.de
@@ -410,8 +435,25 @@ class GradientsMixin(lib.StreamObject):
 
     as_scanner = as_scanner
 
+    def _tag_rdm1 (self, dm, mo_coeff, mo_occ):
+        '''Tagging is necessary in DF subclass. Tagged arrays need
+        to be split into alpha,beta in DF-ROHF subclass'''
+        return lib.tag_array (dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
-class Gradients(GradientsMixin):
+    # to_gpu can be reused only when __init__ still takes mf
+    def to_gpu(self):
+        mf = self.base.to_gpu()
+        from importlib import import_module
+        mod = import_module(self.__module__.replace('pyscf', 'gpu4pyscf'))
+        cls = getattr(mod, self.__class__.__name__)
+        obj = cls(mf)
+        return obj
+
+# export the symbol GradientsMixin for backward compatibility.
+# GradientsMixin should be dropped in the future.
+GradientsMixin = GradientsBase
+
+class Gradients(GradientsBase):
     '''Non-relativistic restricted Hartree-Fock gradients'''
 
     def get_veff(self, mol=None, dm=None):
@@ -432,3 +474,4 @@ Grad = Gradients
 from pyscf import scf
 # Inject to RHF class
 scf.hf.RHF.Gradients = lib.class_as_method(Gradients)
+scf.rohf.ROHF.Gradients = lib.invalid_method('Gradients')

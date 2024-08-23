@@ -181,17 +181,30 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if getattr(mf, 'nlc', '') != '':
+        if mf.do_nlc():
             logger.warn(mf, 'NLC functional found in DFT object.  Its second '
-                        'deriviative is not available. Its contribution is '
+                        'derivative is not available. Its contribution is '
                         'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         add_hf_(a, b, hyb)
+        if omega != 0:  # For RSH
+            with mol.with_range_coulomb(omega):
+                eri_aa = ao2mo.general(mol, [orbo_a,mo_a,mo_a,mo_a], compact=False)
+                eri_bb = ao2mo.general(mol, [orbo_b,mo_b,mo_b,mo_b], compact=False)
+                eri_aa = eri_aa.reshape(nocc_a,nmo_a,nmo_a,nmo_a)
+                eri_bb = eri_bb.reshape(nocc_b,nmo_b,nmo_b,nmo_b)
+                a_aa, a_ab, a_bb = a
+                b_aa, b_ab, b_bb = b
+                k_fac = alpha - hyb
+                a_aa -= numpy.einsum('ijba->iajb', eri_aa[:nocc_a,:nocc_a,nocc_a:,nocc_a:]) * k_fac
+                b_aa -= numpy.einsum('jaib->iajb', eri_aa[:nocc_a,nocc_a:,:nocc_a,nocc_a:]) * k_fac
+                a_bb -= numpy.einsum('ijba->iajb', eri_bb[:nocc_b,:nocc_b,nocc_b:,nocc_b:]) * k_fac
+                b_bb -= numpy.einsum('jaib->iajb', eri_bb[:nocc_b,nocc_b:,:nocc_b,nocc_b:]) * k_fac
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1)[0]
+        make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, mf.max_memory*.8-mem_now)
 
@@ -201,8 +214,9 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 rho0a = make_rho(0, ao, mask, xctype)
                 rho0b = make_rho(1, ao, mask, xctype)
-                fxc = ni.eval_xc(mf.xc, (rho0a,rho0b), 1, deriv=2)[2]
-                u_u, u_d, d_d = fxc[0].T
+                rho = (rho0a, rho0b)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
+                wfxc = fxc[:,0,:,0] * weight
 
                 rho_o_a = lib.einsum('rp,pi->ri', ao, orbo_a)
                 rho_v_a = lib.einsum('rp,pi->ri', ao, orbv_a)
@@ -211,17 +225,17 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 rho_ov_a = numpy.einsum('ri,ra->ria', rho_o_a, rho_v_a)
                 rho_ov_b = numpy.einsum('ri,ra->ria', rho_o_b, rho_v_b)
 
-                w_ov = numpy.einsum('ria,r->ria', rho_ov_a, weight*u_u)
+                w_ov = numpy.einsum('ria,r->ria', rho_ov_a, wfxc[0,0])
                 iajb = lib.einsum('ria,rjb->iajb', rho_ov_a, w_ov)
                 a_aa += iajb
                 b_aa += iajb
 
-                w_ov = numpy.einsum('ria,r->ria', rho_ov_b, weight*u_d)
+                w_ov = numpy.einsum('ria,r->ria', rho_ov_b, wfxc[0,1])
                 iajb = lib.einsum('ria,rjb->iajb', rho_ov_a, w_ov)
                 a_ab += iajb
                 b_ab += iajb
 
-                w_ov = numpy.einsum('ria,r->ria', rho_ov_b, weight*d_d)
+                w_ov = numpy.einsum('ria,r->ria', rho_ov_b, wfxc[1,1])
                 iajb = lib.einsum('ria,rjb->iajb', rho_ov_b, w_ov)
                 a_bb += iajb
                 b_bb += iajb
@@ -233,8 +247,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 rho0a = make_rho(0, ao, mask, xctype)
                 rho0b = make_rho(1, ao, mask, xctype)
                 rho = (rho0a, rho0b)
-                vxc, fxc = ni.eval_xc(mf.xc, rho, 1, deriv=2)[1:3]
-                fxc = xc_deriv.transform_fxc(rho, vxc, fxc, xctype, spin=1)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
                 wfxc = fxc * weight
                 rho_o_a = lib.einsum('xrp,pi->xri', ao, orbo_a)
                 rho_v_a = lib.einsum('xrp,pi->xri', ao, orbv_a)
@@ -273,8 +286,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 rho0a = make_rho(0, ao, mask, xctype)
                 rho0b = make_rho(1, ao, mask, xctype)
                 rho = (rho0a, rho0b)
-                vxc, fxc = ni.eval_xc(mf.xc, rho, 1, deriv=2)[1:3]
-                fxc = xc_deriv.transform_fxc(rho, vxc, fxc, xctype, spin=1)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
                 wfxc = fxc * weight
                 rho_oa = lib.einsum('xrp,pi->xri', ao, orbo_a)
                 rho_ob = lib.einsum('xrp,pi->xri', ao, orbo_b)
@@ -580,7 +592,7 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     return pol
 
 
-class TDMixin(rhf.TDMixin):
+class TDBase(rhf.TDBase):
 
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None):
@@ -597,7 +609,7 @@ class TDMixin(rhf.TDMixin):
 
 
 @lib.with_doc(rhf.TDA.__doc__)
-class TDA(TDMixin):
+class TDA(TDBase):
 
     singlet = None
 
@@ -632,12 +644,10 @@ class TDA(TDMixin):
             e_ia_b[(orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym] = 1e99
 
         e_ia = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
-        e_ia_max = e_ia.max()
         nov = e_ia.size
         nstates = min(nstates, nov)
-        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
-        # Handle degeneracy
-        e_threshold += 1e-6
+        e_threshold = numpy.sort(e_ia)[nstates-1]
+        e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
         x0 = numpy.zeros((idx.size, nov))
@@ -659,12 +669,13 @@ class TDA(TDMixin):
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
 
         def pickeig(w, v, nroots, envs):
             idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
 
         self.converged, self.e, x1 = \
                 lib.davidson1(vind, x0, precond,
@@ -692,14 +703,16 @@ class TDA(TDMixin):
         self._finalize()
         return self.e, self.xy
 
+    to_gpu = lib.to_gpu
+
 CIS = TDA
 
 
 def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''Generate function to compute
 
-    [ A  B][X]
-    [-B -A][Y]
+    [ A   B ][X]
+    [-B* -A*][Y]
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
@@ -755,17 +768,14 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         xb = xs[:,nocca*nvira:].reshape(nz,noccb,nvirb)
         ya = ys[:,:nocca*nvira].reshape(nz,nocca,nvira)
         yb = ys[:,nocca*nvira:].reshape(nz,noccb,nvirb)
-        # dms = AX + BY
         dmsa  = lib.einsum('xov,qv,po->xpq', xa, orbva.conj(), orboa)
         dmsb  = lib.einsum('xov,qv,po->xpq', xb, orbvb.conj(), orbob)
         dmsa += lib.einsum('xov,pv,qo->xpq', ya, orbva, orboa.conj())
         dmsb += lib.einsum('xov,pv,qo->xpq', yb, orbvb, orbob.conj())
-
         v1ao = vresp(numpy.asarray((dmsa,dmsb)))
-
         v1aov = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
-        v1avo = lib.einsum('xpq,qo,pv->xov', v1ao[0], orboa, orbva.conj())
         v1bov = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
+        v1avo = lib.einsum('xpq,qo,pv->xov', v1ao[0], orboa, orbva.conj())
         v1bvo = lib.einsum('xpq,qo,pv->xov', v1ao[1], orbob, orbvb.conj())
 
         v1ov = xs * e_ia  # AX
@@ -783,7 +793,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     return vind, hdiag
 
 
-class TDHF(TDMixin):
+class TDHF(TDA):
 
     singlet = None
 
@@ -813,8 +823,6 @@ class TDHF(TDMixin):
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
@@ -822,6 +830,9 @@ class TDHF(TDMixin):
                                   (w.real > self.positive_eig_threshold))[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
                                                       real_eigenvectors=True)
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
@@ -858,6 +869,8 @@ class TDHF(TDMixin):
         log.timer('TDDFT', *cpu0)
         self._finalize()
         return self.e, self.xy
+
+    to_gpu = lib.to_gpu
 
 RPA = TDUHF = TDHF
 

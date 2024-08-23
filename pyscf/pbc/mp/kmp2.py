@@ -15,6 +15,7 @@
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #         James McClain <jdmcclain47@gmail.com>
+#         Xing Zhang <zhangxing.nju@gmail.com>
 #
 
 
@@ -33,8 +34,9 @@ import h5py
 from pyscf import lib
 from pyscf.lib import logger, einsum
 from pyscf.mp import mp2
-from pyscf.pbc import df
+from pyscf.pbc.df import df
 from pyscf.pbc.lib import kpts_helper
+from pyscf.pbc.lib import kpts as libkpts
 from pyscf.lib.parameters import LARGE_DENOM
 from pyscf import __config__
 
@@ -88,7 +90,6 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
 
     fao2mo = mp._scf.with_df.ao2mo
     kconserv = mp.khelper.kconserv
-    emp2 = 0.
     oovv_ij = np.zeros((nkpts,nocc,nocc,nvir,nvir), dtype=mo_coeff[0].dtype)
 
     mo_e_o = [mo_energy[k][:nocc] for k in range(nkpts)]
@@ -106,6 +107,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     if with_df_ints:
         Lov = _init_mp_df_eris(mp)
 
+    emp2_ss = emp2_os = 0.
     for ki in range(nkpts):
         for kj in range(nkpts):
             for ka in range(nkpts):
@@ -137,12 +139,16 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
                 t2_ijab = np.conj(oovv_ij[ka]/eijab)
                 if with_t2:
                     t2[ki, kj, ka] = t2_ijab
-                woovv = 2*oovv_ij[ka] - oovv_ij[kb].transpose(0,1,3,2)
-                emp2 += einsum('ijab,ijab', t2_ijab, woovv).real
+                edi = einsum('ijab,ijab', t2_ijab, oovv_ij[ka]).real * 2
+                exi = -einsum('ijab,ijba', t2_ijab, oovv_ij[kb]).real
+                emp2_ss += edi*0.5 + exi
+                emp2_os += edi*0.5
 
     log.timer("KMP2", *cput0)
 
-    emp2 /= nkpts
+    emp2_ss /= nkpts
+    emp2_os /= nkpts
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
 
     return emp2, t2
 
@@ -159,7 +165,6 @@ def _init_mp_df_eris(mp):
     Returns:
         Lov (numpy.ndarray) -- 3-center DF ints, with shape (nkpts, nkpts, naux, nocc, nvir)
     """
-    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     from pyscf.pbc.lib.kpts_helper import gamma_point
 
@@ -197,14 +202,12 @@ def _init_mp_df_eris(mp):
     bra_end = nocc
     ket_start = nmo+nocc
     ket_end = ket_start + nvir
-    with h5py.File(mp._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
+    with df.CDERIArray(mp._scf.with_df._cderi) as cderi_array:
         tao = []
         ao_loc = None
-        for ki, kpti in enumerate(kpts):
-            for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti, kptj))
-                Lpq_ao = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                Lpq_ao = cderi_array[ki,kj]
 
                 mo = np.hstack((mo_coeff[ki], mo_coeff[kj]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
@@ -377,7 +380,7 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
 
     Args:
         frozen (array_like of int): The orbital indices that will be frozen.
-        mo_occ (:obj:`ndarray` of int): The occupuation number for each orbital
+        mo_occ (:obj:`ndarray` of int): The occupation number for each orbital
             resulting from a mean-field-like calculation.
         kpt_idx (int): The k-point that `mo_occ` and `frozen` belong to.
 
@@ -552,11 +555,11 @@ def get_frozen_mask(mp):
 def _add_padding(mp, mo_coeff, mo_energy):
     nmo = mp.nmo
 
-    # Check if these are padded mo coefficients and energies
-    if not np.all([x.shape[1] == nmo for x in mo_coeff]):
+    # Check if these are padded mo coefficients and energies and/or if some orbitals are frozen.
+    if (mp.frozen is not None) or (not np.all([x.shape[1] == nmo for x in mo_coeff])):
         mo_coeff = padded_mo_coeff(mp, mo_coeff)
 
-    if not np.all([x.shape[0] == nmo for x in mo_energy]):
+    if (mp.frozen is not None) or (not np.all([x.shape[0] == nmo for x in mo_energy])):
         mo_energy = padded_mo_energy(mp, mo_energy)
     return mo_coeff, mo_energy
 
@@ -687,6 +690,8 @@ def _gamma1_intermediates(mp, t2=None):
 
 
 class KMP2(mp2.MP2):
+    _keys = {'kpts', 'nkpts', 'khelper'}
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -707,17 +712,26 @@ class KMP2(mp2.MP2):
 ##################################################
 # don't modify the following attributes, they are not input options
         self.kpts = mf.kpts
-        self.mo_energy = mf.mo_energy
-        self.nkpts = len(self.kpts)
-        self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
-        self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
+        if isinstance(self.kpts, libkpts.KPoints):
+            self.nkpts = self.kpts.nkpts
+            self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts.kpts)
+            #padding has to be after transformation
+            self.mo_energy = self.kpts.transform_mo_energy(mf.mo_energy)
+            self.mo_coeff = self.kpts.transform_mo_coeff(mo_coeff)
+            self.mo_occ = self.kpts.transform_mo_occ(mo_occ)
+        else:
+            self.nkpts = len(self.kpts)
+            self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
+            self.mo_energy = mf.mo_energy
+            self.mo_coeff = mo_coeff
+            self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
-        self.e_corr = None
         self.e_hf = None
+        self.e_corr = None
+        self.e_corr_ss = None
+        self.e_corr_os = None
         self.t2 = None
-        self._keys = set(self.__dict__.keys())
 
     get_nocc = get_nocc
     get_nmo = get_nmo
@@ -754,15 +768,23 @@ class KMP2(mp2.MP2):
                      'You may need to call mf.kernel() to generate them.')
             raise RuntimeError
 
-        mo_coeff, mo_energy = _add_padding(self, mo_coeff, mo_energy)
+        self.e_hf = self.get_e_hf(mo_coeff=mo_coeff)
 
-        # TODO: compute e_hf for non-canonical SCF
-        self.e_hf = self._scf.e_tot
+        mo_coeff, mo_energy = _add_padding(self, mo_coeff, mo_energy)
 
         self.e_corr, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose, with_t2=with_t2)
-        logger.log(self, 'KMP2 energy = %.15g', self.e_corr)
+
+        self.e_corr_ss = getattr(self.e_corr, 'e_corr_ss', 0)
+        self.e_corr_os = getattr(self.e_corr, 'e_corr_os', 0)
+        self.e_corr = float(self.e_corr)
+
+        self._finalize()
+
         return self.e_corr, self.t2
+
+    to_gpu = lib.to_gpu
+
 KRMP2 = KMP2
 
 
@@ -797,4 +819,3 @@ if __name__ == '__main__':
     mymp = mp.KMP2(kmf)
     emp2, t2 = mymp.kernel()
     print(emp2 - -0.204721432828996)
-

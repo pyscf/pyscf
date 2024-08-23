@@ -47,7 +47,7 @@ There are some parameters to control the CASSCF/CASCI method.
     nelecas : tuple of int
         Active (nelec_alpha, nelec_beta)
     ncore : int or tuple of int
-        Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
+        Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core electron numbers.
     natorb : bool
         Whether to restore the natural orbital during CASSCF optimization. Default is not.
     canonicalization : bool
@@ -81,42 +81,28 @@ The Following attributes are used for CASSCF
         Converge threshold.  Default is 1e-7
     conv_tol_grad : float
         Converge threshold for CI gradients and orbital rotation gradients.
-        Default is 1e-4
+        If not specified, it is set to sqrt(conv_tol).
     max_stepsize : float
         The step size for orbital rotation.  Small step size is prefered.
-        Default is 0.03.  
+        Default is 0.02.  
         (NOTE although the default step size is small enough for many systems,
-        it happens that the orbital optimizor crosses the barriar of local
+        it happens that the orbital optimizor crosses the barrier of local
         minimum and converge to the neighbour solution, e.g. the CAS(4,4) for
         C2H4 in the test files.  In these systems, adjusting max_stepsize,
-        max_ci_stepsize and max_cycle_micro, max_cycle_micro_inner and
-        ah_start_tol may be helpful)
+        max_ci_stepsize and max_cycle_micro and ah_start_tol may be helpful)
 
         >>> mc = mcscf.CASSCF(mf, 6, 6)
         >>> mc.max_stepsize = .01
         >>> mc.max_cycle_micro = 1
         >>> mc.max_cycle_macro = 100
-        >>> mc.max_cycle_micro_inner = 1
         >>> mc.ah_start_tol = 1e-6
 
-    max_ci_stepsize : float
-        The max size for approximate CI updates.  The approximate updates are
-        used in 1-step algorithm, to estimate the change of CI wavefunction wrt
-        the orbital rotation.  Small step size is prefered.  Default is 0.01.
     max_cycle_macro : int
         Max number of macro iterations.  Default is 50.
     max_cycle_micro : int
         Max number of micro iterations in each macro iteration.  Depending on
         systems, increasing this value might reduce the total macro
-        iterations.  Generally, 2 - 3 steps should be enough.  Default is 2.
-    max_cycle_micro_inner : int
-        Max number of steps for the orbital rotations allowed for the augmented
-        hessian solver.  It can affect the actual size of orbital rotation.
-        Even with a small max_stepsize, a few max_cycle_micro_inner can
-        accumulate the rotation and leads to a significant change of the CAS
-        space.  Depending on systems, increasing this value migh reduce the
-        total number of macro iterations.  The value between 2 - 8 is preferred.
-        Default is 4.
+        iterations.  Generally, 2 - 5 steps should be enough.  Default is 4.
     frozen : int or list
         If integer is given, the inner-most orbitals are excluded from optimization.
         Given the orbital indices (0-based) in a list, any doubly occupied core
@@ -131,7 +117,7 @@ The Following attributes are used for CASSCF
         Linear dependence threshold for AH solver.  Default is 1e-16.
     ah_start_tol : flat, for AH solver.
         In AH solver, the orbital rotation is started without completely solving the AH problem.
-        This value is to control the start point. Default is 1e-4.
+        This value is to control the start point. Default is 2.5.
     ah_start_cycle : int, for AH solver.
         In AH solver, the orbital rotation is started without completely solving the AH problem.
         This value is to control the start point. Default is 3.
@@ -140,7 +126,7 @@ The Following attributes are used for CASSCF
         can affect the accuracy and performance of CASSCF solver.  Lower
         ``ah_conv_tol`` and ``ah_lindep`` can improve the accuracy of CASSCF
         optimization, but slow down the performance.
-        
+
         >>> from pyscf import gto, scf, mcscf
         >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
         >>> mf = scf.UHF(mol)
@@ -193,17 +179,18 @@ from pyscf.mcscf import chkfile
 def CASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.RHF(mf_or_mol)
+    from pyscf.df.df_jk import _DFHF
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.RHF()
     else:
         mf = mf_or_mol
 
     if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_rhf(mf)
-    if getattr(mf, 'with_df', None):
+        mf = mf.to_rhf()
+    if isinstance(mf, _DFHF) and mf.with_df:
         return DFCASSCF(mf, ncas, nelecas, ncore, frozen)
 
-    if mf.mol.symmetry:
+    if mf.mol.symmetry and mf.mol.groupname != 'C1':
         mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
     else:
         mc = mc1step.CASSCF(mf, ncas, nelecas, ncore, frozen)
@@ -215,18 +202,19 @@ RCASSCF = CASSCF
 def CASCI(mf_or_mol, ncas, nelecas, ncore=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.RHF(mf_or_mol)
+    from pyscf.df.df_jk import _DFHF
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.RHF()
     else:
         mf = mf_or_mol
 
     if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_rhf(mf)
+        mf = mf.to_rhf()
 
-    if getattr(mf, 'with_df', None):
+    if isinstance(mf, _DFHF) and mf.with_df:
         return DFCASCI(mf, ncas, nelecas, ncore)
 
-    if mf.mol.symmetry:
+    if mf.mol.symmetry and mf.mol.groupname != 'C1':
         mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)
     else:
         mc = casci.CASCI(mf, ncas, nelecas, ncore)
@@ -238,13 +226,19 @@ RCASCI = CASCI
 def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.UHF(mf_or_mol)
+    from pyscf.df.df_jk import _DFHF
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.UHF()
     else:
         mf = mf_or_mol
 
     if not isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf, remove_df=True)
+        mf = mf.to_uhf()
+    if isinstance(mf, _DFHF) and mf.with_df:
+        from pyscf.lib import logger
+        logger.warn(mf, f'DF-UCASCI for DFHF method {mf} is not available. '
+                    'Normal UCASCI method is called.')
+        mf = mf.undo_df()
     mc = ucasci.UCASCI(mf, ncas, nelecas, ncore)
     return mc
 
@@ -252,13 +246,19 @@ def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
 def UCASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.UHF(mf_or_mol)
+    from pyscf.df.df_jk import _DFHF
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.UHF()
     else:
         mf = mf_or_mol
 
     if not isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf, remove_df=True)
+        mf = mf.to_uhf()
+    if isinstance(mf, _DFHF) and mf.with_df:
+        from pyscf.lib import logger
+        logger.warn(mf, f'DF-UCASSCF for DFHF method {mf} is not available. '
+                    'Normal UCASSCF method is called.')
+        mf = mf.undo_df()
     mc = umc1step.UCASSCF(mf, ncas, nelecas, ncore, frozen)
     return mc
 
@@ -271,15 +271,15 @@ def DFCASSCF(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None,
              frozen=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.RHF(mf_or_mol).density_fit()
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.RHF().density_fit()
     else:
         mf = mf_or_mol
 
     if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
+        mf = mf.to_rhf()
 
-    if mf.mol.symmetry:
+    if mf.mol.symmetry and mf.mol.groupname != 'C1':
         mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
     else:
         mc = mc1step.CASSCF(mf, ncas, nelecas, ncore, frozen)
@@ -288,15 +288,15 @@ def DFCASSCF(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None,
 def DFCASCI(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf_or_mol, gto.Mole):
-        mf = scf.RHF(mf_or_mol).density_fit()
+    if isinstance(mf_or_mol, gto.MoleBase):
+        mf = mf_or_mol.RHF().density_fit()
     else:
         mf = mf_or_mol
 
     if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
+        mf = mf.to_rhf()
 
-    if mf.mol.symmetry:
+    if mf.mol.symmetry and mf.mol.groupname != 'C1':
         mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)
     else:
         mc = casci.CASCI(mf, ncas, nelecas, ncore)
@@ -306,4 +306,3 @@ approx_hessian = df.approx_hessian
 
 def density_fit(mc, auxbasis=None, with_df=None):
     return mc.density_fit(auxbasis, with_df)
-

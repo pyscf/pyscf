@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <complex.h>
 #include "config.h"
 #include "np_helper/np_helper.h"
@@ -393,11 +394,16 @@ void CCsd_t_contract(double *e_tot,
         _make_permute_indices(permute_idx, nocc);
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, stderr)
 {
         int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
+        if (cache1 == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CCsd_t_contract\n",
+                        sizeof(double) * nocc*nocc*nocc*3);
+                exit(1);
+        }
         double *t1Thalf = malloc(sizeof(double) * nvir*nocc * 2);
         double *fvohalf = t1Thalf + nvir*nocc;
         for (k = 0; k < nvir*nocc; k++) {
@@ -421,6 +427,7 @@ void CCsd_t_contract(double *e_tot,
         *e_tot += e;
 }
         free(permute_idx);
+        free(jobs);
 }
 
 void QCIsd_t_contract(double *e_tot,
@@ -442,11 +449,16 @@ void QCIsd_t_contract(double *e_tot,
         _make_permute_indices(permute_idx, nocc);
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, stderr)
 {
         int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
+        if (cache1 == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in QCIsd_t_contract\n",
+                        sizeof(double) * nocc*nocc*nocc*3);
+                exit(1);
+        }
         double *t1Thalf = malloc(sizeof(double) * nvir*nocc * 2);
         double *fvohalf = t1Thalf + nvir*nocc;
         for (k = 0; k < nvir*nocc; k++) {
@@ -470,6 +482,7 @@ void QCIsd_t_contract(double *e_tot,
         *e_tot += e;
 }
         free(permute_idx);
+        free(jobs);
 }
 
 
@@ -617,11 +630,16 @@ void CCsd_t_zcontract(double complex *e_tot,
 
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, stderr)
 {
         int a, b, c;
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
+        if (cache1 == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CCsd_t_zcontract\n",
+                        sizeof(double complex) * nocc*nocc*nocc*3);
+                exit(1);
+        }
         double complex *t1Thalf = malloc(sizeof(double complex) * nvir*nocc * 2);
         double complex *fvohalf = t1Thalf + nvir*nocc;
         for (k = 0; k < nvir*nocc; k++) {
@@ -645,6 +663,7 @@ void CCsd_t_zcontract(double complex *e_tot,
         *e_tot += e;
 }
         free(permute_idx);
+        free(jobs);
 }
 
 void QCIsd_t_zcontract(double complex *e_tot,
@@ -669,11 +688,16 @@ void QCIsd_t_zcontract(double complex *e_tot,
 
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, stderr)
 {
         int a, b, c;
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
+        if (cache1 == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in QCIsd_t_zcontract\n",
+                        sizeof(double complex) * nocc*nocc*nocc*3);
+                exit(1);
+        }
         double complex *t1Thalf = malloc(sizeof(double complex) * nvir*nocc * 2);
         double complex *fvohalf = t1Thalf + nvir*nocc;
         for (k = 0; k < nvir*nocc; k++) {
@@ -697,6 +721,7 @@ void QCIsd_t_zcontract(double complex *e_tot,
         *e_tot += e;
 }
         free(permute_idx);
+        free(jobs);
 }
 
 
@@ -849,11 +874,16 @@ void MPICCsd_t_contract(double *e_tot, double *mo_energy, double *t1T,
 
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, fvo, jobs, e_tot, slices, \
-               data_ptrs, permute_idx)
+               data_ptrs, permute_idx, stderr)
 {
         int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
+        if (cache1 == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in MPICCsd_t_contract\n",
+                        sizeof(double) * nocc*nocc*nocc*3);
+                exit(1);
+        }
         double *t1Thalf = malloc(sizeof(double) * nvir*nocc * 2);
         double *fvohalf = t1Thalf + nvir*nocc;
         for (k = 0; k < nvir*nocc; k++) {
@@ -876,6 +906,7 @@ void MPICCsd_t_contract(double *e_tot, double *mo_energy, double *t1T,
         *e_tot += e;
 }
         free(permute_idx);
+        free(jobs);
 }
 
 /*****************************************************************************
@@ -1076,11 +1107,16 @@ void CCsd_zcontract_t3T(double complex *t3Tw, double complex *t3Tv, double *mo_e
 
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, nkpts, t3Tw, t3Tv, mo_offset, mo_energy, t1T, fvo, jobs, slices, \
-               data_ptrs, permute_idx)
+               data_ptrs, permute_idx, stderr)
 {
         int a, b, c;
         size_t k;
         complex double *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
+        if (cache1 == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CCsd_zcontract_t3T\n",
+                        sizeof(double complex) * nocc*nocc*nocc*3);
+                exit(1);
+        }
         complex double *t1Thalf = malloc(sizeof(double complex) * nkpts*nvir*nocc*2);
         complex double *fvohalf = t1Thalf + nkpts*nvir*nocc;
         for (k = 0; k < nkpts*nvir*nocc; k++) {

@@ -27,7 +27,8 @@
 #include "np_helper/np_helper.h"
 #include "fci.h"
 #define CSUMTHR         1e-28
-#define STRB_BLKSIZE    112
+// optimized for 1 MB L2 cache, (16e,16o)
+#define STRB_BLKSIZE    120
 
 double FCI_t1ci_sf(double *ci0, double *t1, int bcount,
                    int stra_id, int strb_id,
@@ -147,7 +148,7 @@ static void spread_b_t1(double *ci1, double *t1,
 }
 
 static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1,
-                           double *ci1buf, double *t1buf,
+                           double *ci1buf, double *t1, double *vt1,
                            int bcount_for_spread_a, int ncol_ci1buf,
                            int bcount, int stra_id, int strb_id,
                            int norb, int na, int nb, int nlinka, int nlinkb,
@@ -157,8 +158,6 @@ static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1,
         const double D0 = 0;
         const double D1 = 1;
         const int nnorb = norb * norb;
-        double *t1 = t1buf;
-        double *vt1 = t1buf + nnorb*bcount;
         double csum;
 
         csum = FCI_t1ci_sf(ci0, t1, bcount, stra_id, strb_id,
@@ -203,16 +202,23 @@ void FCIcontract_2es1(double *eri, double *ci0, double *ci1,
 {
         int strk, ib, blen;
         double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*norb*2+2));
+        double *tmp;
+        double *t1 = t1buf;
+        double *vt1 = t1buf + norb*norb*STRB_BLKSIZE;
         double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
                 NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < na; strk++) {
-                        ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1buf,
+                        ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1, vt1,
                                        blen, blen, blen, strk, ib,
                                        norb, na, nb, nlinka, nlinkb,
                                        clinka, clinkb);
+                        // swap buffer for better cache utilization in next task
+                        tmp = t1;
+                        t1 = vt1;
+                        vt1 = tmp;
                 }
 #pragma omp critical
                 axpy2d(ci1+ib, ci1buf, na, nb, blen);

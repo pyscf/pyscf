@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <math.h>
 #include <assert.h>
 //#define NDEBUG
@@ -1223,7 +1224,11 @@ void AO2MOnr_e1_drv(int (*intor)(), void (*fill)(), void (*ftrans)(), int (*fmmm
 {
         int nao = ao_loc[nbas];
         double *eri_ao = malloc(sizeof(double) * nao*nao*nkl*ncomp);
-        assert(eri_ao);
+        if (eri_ao == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in AO2MOnr_e1_drv\n",
+                        sizeof(double) * nao*nao*nkl*ncomp);
+                exit(1);
+        }
         AO2MOnr_e1fill_drv(intor, fill, eri_ao, klsh_start, klsh_count,
                            nkl, ncomp, ao_loc, cintopt, vhfopt,
                            atm, natm, bas, nbas, env);

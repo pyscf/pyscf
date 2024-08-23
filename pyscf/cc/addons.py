@@ -15,6 +15,7 @@
 
 import numpy
 from pyscf import lib
+from pyscf.cc.bccd import bccd_kernel_
 
 def spatial2spin(tx, orbspin=None):
     '''Convert T1/T2 of spatial orbital representation to T1/T2 of
@@ -25,17 +26,20 @@ def spatial2spin(tx, orbspin=None):
         return spatial2spin((tx,tx), orbspin)
     elif isinstance(tx, numpy.ndarray) and tx.ndim == 4:
         # RCCSD t2 amplitudes
-        t2aa = tx - tx.transpose(0,1,3,2)
+        t2aa = tx - tx.transpose(1,0,2,3)
         return spatial2spin((t2aa,tx,t2aa), orbspin)
     elif len(tx) == 2:  # t1
         t1a, t1b = tx
         nocc_a, nvir_a = t1a.shape
         nocc_b, nvir_b = t1b.shape
-    else:
+    elif len(tx) == 3:  # t2
         t2aa, t2ab, t2bb = tx
         nocc_a, nocc_b, nvir_a, nvir_b = t2ab.shape
+    else:
+        raise RuntimeError('Unknown T amplitudes')
 
     if orbspin is None:
+        assert nocc_a == nocc_b
         orbspin = numpy.zeros((nocc_a+nvir_a)*2, dtype=int)
         orbspin[1::2] = 1
 
@@ -79,10 +83,14 @@ def spatial2spin(tx, orbspin=None):
 spatial2spinorb = spatial2spin
 
 def spin2spatial(tx, orbspin):
+    '''Convert T1/T2 in spin-orbital basis to T1/T2 in spatial orbital basis
+    '''
     if tx.ndim == 2:  # t1
         nocc, nvir = tx.shape
-    else:
+    elif tx.ndim == 4:
         nocc, nvir = tx.shape[1:3]
+    else:
+        raise RuntimeError('Unknown T amplitudes')
 
     idxoa = numpy.where(orbspin[:nocc] == 0)[0]
     idxob = numpy.where(orbspin[:nocc] == 1)[0]
@@ -114,14 +122,13 @@ def spin2spatial(tx, orbspin):
         return t2aa,t2ab,t2bb
 
 def convert_to_uccsd(mycc):
-    from pyscf import scf
     from pyscf.cc import uccsd, gccsd
     if isinstance(mycc, uccsd.UCCSD):
         return mycc
     elif isinstance(mycc, gccsd.GCCSD):
         raise NotImplementedError
 
-    mf = scf.addons.convert_to_uhf(mycc._scf)
+    mf = mycc._scf.to_uhf()
     ucc = uccsd.UCCSD(mf)
     assert (mycc._nocc is None)
     assert (mycc._nmo is None)
@@ -135,12 +142,11 @@ def convert_to_uccsd(mycc):
     return ucc
 
 def convert_to_gccsd(mycc):
-    from pyscf import scf
     from pyscf.cc import gccsd
     if isinstance(mycc, gccsd.GCCSD):
         return mycc
 
-    mf = scf.addons.convert_to_ghf(mycc._scf)
+    mf = mycc._scf.to_ghf()
     gcc = gccsd.GCCSD(mf)
     assert (mycc._nocc is None)
     assert (mycc._nmo is None)

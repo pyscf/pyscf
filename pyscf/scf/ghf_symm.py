@@ -39,9 +39,6 @@ MO_BASE = getattr(__config__, 'MO_BASE', 1)
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
             **kwargs):
     mol = mf.mol
-    if not mol.symmetry:
-        return ghf.analyze(mf, verbose, **kwargs)
-
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
@@ -83,14 +80,14 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''
     mol = mf.mol
     if not mol.symmetry:
-        return ghf.canonicalize(mf, mo_coeff, mo_occ, fock)
+        raise RuntimeError('mol.symmetry not enabled')
 
     if getattr(mo_coeff, 'orbsym', None) is not None:
         return hf_symm.canonicalize(mf, mo_coeff, mo_occ, fock)
     else:
         raise NotImplementedError
 
-class GHF(ghf.GHF):
+class SymAdaptedGHF(ghf.GHF):
     __doc__ = ghf.GHF.__doc__ + '''
     Attributes for symmetry allowed GHF:
         irrep_nelec : dict
@@ -99,11 +96,13 @@ class GHF(ghf.GHF):
             For the irreps not listed in these dicts, the program will choose the
             occupancy based on the orbital energies.
     '''
+
+    _keys = {'irrep_nelec'}
+
     def __init__(self, mol):
         ghf.GHF.__init__(self, mol)
         # number of electrons for each irreps
         self.irrep_nelec = {}
-        self._keys = self._keys.union(['irrep_nelec'])
 
     def dump_flags(self, verbose=None):
         ghf.GHF.dump_flags(self, verbose)
@@ -113,44 +112,47 @@ class GHF(ghf.GHF):
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
-        if mol.symmetry:
-            for irname in self.irrep_nelec:
-                if irname not in mol.irrep_name:
-                    logger.warn(self, 'Molecule does not have irrep %s', irname)
+        if not mol.symmetry:
+            raise RuntimeError('mol.symmetry not enabled')
 
-            nelec_fix = self.irrep_nelec.values()
-            if any(isinstance(x, (tuple, list)) for x in nelec_fix):
-                msg =('Number of alpha/beta electrons cannot be assigned '
-                      'separately in GHF.  irrep_nelec = %s' % self.irrep_nelec)
-                raise ValueError(msg)
-            nelec_fix = sum(nelec_fix)
-            float_irname = set(mol.irrep_name) - set(self.irrep_nelec)
-            if nelec_fix > mol.nelectron:
-                msg =('More electrons defined by irrep_nelec than total num electrons. '
-                      'mol.nelectron = %d  irrep_nelec = %s' %
-                      (mol.nelectron, self.irrep_nelec))
-                raise ValueError(msg)
-            else:
-                logger.info(mol, 'Freeze %d electrons in irreps %s',
-                            nelec_fix, self.irrep_nelec.keys())
+        for irname in self.irrep_nelec:
+            if irname not in mol.irrep_name:
+                logger.warn(self, 'Molecule does not have irrep %s', irname)
 
-            if len(float_irname) == 0 and nelec_fix != mol.nelectron:
-                msg =('Num electrons defined by irrep_nelec != total num electrons. '
-                      'mol.nelectron = %d  irrep_nelec = %s' %
-                      (mol.nelectron, self.irrep_nelec))
-                raise ValueError(msg)
-            else:
-                logger.info(mol, '    %d free electrons in irreps %s',
-                            mol.nelectron-nelec_fix, ' '.join(float_irname))
+        nelec_fix = self.irrep_nelec.values()
+        if any(isinstance(x, (tuple, list)) for x in nelec_fix):
+            msg =('Number of alpha/beta electrons cannot be assigned '
+                  'separately in GHF.  irrep_nelec = %s' % self.irrep_nelec)
+            raise ValueError(msg)
+        nelec_fix = sum(nelec_fix)
+        float_irname = set(mol.irrep_name) - set(self.irrep_nelec)
+        if nelec_fix > mol.nelectron:
+            msg =('More electrons defined by irrep_nelec than total num electrons. '
+                  'mol.nelectron = %d  irrep_nelec = %s' %
+                  (mol.nelectron, self.irrep_nelec))
+            raise ValueError(msg)
+        else:
+            logger.info(mol, 'Freeze %d electrons in irreps %s',
+                        nelec_fix, self.irrep_nelec.keys())
+
+        if len(float_irname) == 0 and nelec_fix != mol.nelectron:
+            msg =('Num electrons defined by irrep_nelec != total num electrons. '
+                  'mol.nelectron = %d  irrep_nelec = %s' %
+                  (mol.nelectron, self.irrep_nelec))
+            raise ValueError(msg)
+        else:
+            logger.info(mol, '    %d free electrons in irreps %s',
+                        mol.nelectron-nelec_fix, ' '.join(float_irname))
         return ghf.GHF.build(self, mol)
 
-    def eig(self, h, s):
-        mol = self.mol
-        if not mol.symmetry:
-            return self._eigh(h, s)
+    def eig(self, h, s, symm_orb=None, irrep_id=None):
+        if symm_orb is None or irrep_id is None:
+            mol = self.mol
+            symm_orb = mol.symm_orb
+            irrep_id = mol.irrep_id
 
-        nirrep = len(mol.symm_orb)
-        symm_orb = [scipy.linalg.block_diag(c, c) for c in mol.symm_orb]
+        nirrep = len(symm_orb)
+        symm_orb = [scipy.linalg.block_diag(c, c) for c in symm_orb]
         s = [reduce(numpy.dot, (c.T,s,c)) for c in symm_orb]
         h = [reduce(numpy.dot, (c.T,h,c)) for c in symm_orb]
         cs = []
@@ -160,7 +162,7 @@ class GHF(ghf.GHF):
             e, c = self._eigh(h[ir], s[ir])
             cs.append(c)
             es.append(e)
-            orbsym.append([mol.irrep_id[ir]] * e.size)
+            orbsym.append([irrep_id[ir]] * e.size)
         e = numpy.hstack(es)
         c = hf_symm.so2ao_mo_coeff(symm_orb, cs)
         c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
@@ -168,12 +170,11 @@ class GHF(ghf.GHF):
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         g = ghf.GHF.get_grad(self, mo_coeff, mo_occ, fock)
-        if self.mol.symmetry:
-            occidx = mo_occ > 0
-            viridx = ~occidx
-            orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
-            sym_forbid = orbsym[viridx].reshape(-1,1) != orbsym[occidx]
-            g[sym_forbid.ravel()] = 0
+        occidx = mo_occ > 0
+        viridx = ~occidx
+        orbsym = self.get_orbsym(mo_coeff)
+        sym_forbid = orbsym[viridx].reshape(-1,1) != orbsym[occidx]
+        g[sym_forbid.ravel()] = 0
         return g
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
@@ -183,9 +184,9 @@ class GHF(ghf.GHF):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         if not mol.symmetry:
-            return ghf.GHF.get_occ(self, mo_energy, mo_coeff)
+            raise RuntimeError('mol.symmetry not enabled')
 
-        orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
+        orbsym = self.get_orbsym(mo_coeff)
         mo_occ = numpy.zeros_like(mo_energy)
         rest_idx = numpy.ones(mo_occ.size, dtype=bool)
         nelec_fix = 0
@@ -194,7 +195,7 @@ class GHF(ghf.GHF):
             ir_idx = numpy.where(orbsym == ir)[0]
             if irname in self.irrep_nelec:
                 n = self.irrep_nelec[irname]
-                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9), kind='mergesort')
+                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9), kind='stable')
                 occ_idx  = ir_idx[occ_sort[:n]]
                 mo_occ[occ_idx] = 1
                 nelec_fix += n
@@ -203,7 +204,7 @@ class GHF(ghf.GHF):
         assert (nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
-            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
+            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='stable')
             occ_idx  = rest_idx[occ_sort[:nelec_float]]
             mo_occ[occ_idx] = 1
 
@@ -238,9 +239,9 @@ class GHF(ghf.GHF):
 
         # Using mergesort because it is stable. We don't want to change the
         # ordering of the symmetry labels when two orbitals are degenerated.
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='mergesort')
-        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
-        orbsym = self.get_orbsym(self.mo_coeff, self.get_ovlp())
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='stable')
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='stable')
+        orbsym = self.get_orbsym(self.mo_coeff)
         self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ> 0][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))
         self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ> 0].take(o_sort, axis=1),
@@ -273,20 +274,29 @@ class GHF(ghf.GHF):
     def get_orbsym(self, mo_coeff=None, s=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
+        if getattr(mo_coeff, 'orbsym', None) is not None:
+            return mo_coeff.orbsym
         if s is None:
             s = self.get_ovlp()
         return numpy.asarray(get_orbsym(self.mol, mo_coeff, s))
     orbsym = property(get_orbsym)
+
+    to_gpu = lib.to_gpu
+
+GHF = SymAdaptedGHF
 
 
 class HF1e(GHF):
     scf = hf._hf1e_scf
 
 
-def get_orbsym(mol, mo_coeff, s=None, check=False):
+def get_orbsym(mol, mo_coeff, s=None, check=False, symm_orb=None, irrep_id=None):
+    if symm_orb is None or irrep_id is None:
+        symm_orb = mol.symm_orb
+        irrep_id = mol.irrep_id
     if mo_coeff is None:
-        orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
-                               for i, ir in enumerate(mol.irrep_id)])
+        orbsym = numpy.hstack([[ir] * symm_orb[i].shape[1]
+                               for i, ir in enumerate(irrep_id)])
     elif getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
     else:
@@ -298,7 +308,7 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
         mo_b = mo_coeff[nao:]
         zero_alpha_idx = numpy.linalg.norm(mo_a, axis=0) < 1e-7
         mo_a[:,zero_alpha_idx] = mo_b[:,zero_alpha_idx]
-        orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+        orbsym = symm.label_orb_symm(mol, irrep_id, symm_orb,
                                      mo_a, s, check)
     return numpy.asarray(orbsym)
 

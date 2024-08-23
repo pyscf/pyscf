@@ -51,8 +51,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(c).sum(), 33.214804163888289, 6)
 
         c = nao.prenao(mol1, mf1.make_rdm1())
-        self.assertAlmostEqual(numpy.linalg.norm(c), 5.5434134741828105, 9)
-        self.assertAlmostEqual(abs(c).sum(), 31.999905597187052, 6)
+        self.assertAlmostEqual(abs(c).sum(), 34.21520681, 6)
 
     def test_nao(self):
         c = nao.nao(mol, mf)
@@ -64,14 +63,33 @@ class KnownValues(unittest.TestCase):
 
         c = nao.nao(mol1, mf1)
         s = mf1.get_ovlp()
-        self.assertTrue(numpy.allclose(reduce(numpy.dot, (c.T, s, c)),
-                                       numpy.eye(s.shape[0])))
-        self.assertAlmostEqual(numpy.linalg.norm(c), 9.4629575662640129, 9)
-        self.assertAlmostEqual(abs(c).sum(), 100.24554485355642, 6)
+        self.assertAlmostEqual(abs(c.T.dot(s).dot(c) - numpy.eye(s.shape[0])).max(), 0, 8)
+        self.assertAlmostEqual(abs(c).sum(), 100.54615191, 6)
+
+    # issue 1755
+    def test_nao_pop_symmetry(self):
+        mol = gto.M(atom='''
+        6 -0.000000 -1.399560 0.000000
+        6 -1.212054 -0.699779 -0.000000
+        6 1.212054 -0.699779 -0.000000
+        1 -2.156901 -1.245293 0.000000
+        1 2.156901 -1.245293 0.000000
+        6 -1.212054 0.699779 0.000000
+        6 1.212054 0.699779 0.000000
+        1 -2.156901 1.245293 -0.000000
+        1 2.156901 1.245293 -0.000000
+        6 -0.000000 1.399560 -0.000000
+        1 0.000000 2.490576 0.000000
+        1 0.000000 -2.490576 -0.000000
+        ''', basis='sto3g', verbose=0)
+        mf = scf.RHF(mol).run()
+        C = nao.nao(mol, mf)
+        mo = C.T.dot(mf.get_ovlp()).dot(mf.mo_coeff)
+        dm = mf.make_rdm1(mo, mf.mo_occ)
+        pop, chg = mf.mulliken_pop(mol, dm, numpy.eye(mol.nao_nr()), verbose=0)
+        self.assertAlmostEqual(abs(abs(chg) - 0.03668).max(), 0, 6)
 
 
 if __name__ == "__main__":
     print("Test orth")
     unittest.main()
-
-

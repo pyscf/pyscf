@@ -21,12 +21,11 @@
 See also pyscf/pbc/gto/pseudo/pp_int.py
 '''
 
-import numpy
+import numpy as np
 from pyscf import lib
+from pyscf.gto.mole import ATOM_OF, intor_cross
 
 def get_gth_pp(mol):
-    from pyscf.gto import ATOM_OF
-    from pyscf.pbc.gto import Cell
     from pyscf.pbc.gto.pseudo import pp_int
     from pyscf.df import incore
 
@@ -37,44 +36,45 @@ def get_gth_pp(mol):
         charges = fakemol.atom_charges()
         atmlst = fakemol._bas[:,ATOM_OF]
         v = incore.aux_e2(mol, fakemol, 'int3c2e', aosym='s2', comp=1)
-        v = numpy.einsum('...i,i->...', v, -charges[atmlst])
-        vpploc += lib.unpack_tril(v)
+        vpploc = np.einsum('...i,i->...', v, -charges[atmlst])
 
-    # To compute the rest part of GTH PP, mimic the mol with a 0D cell.
-    cell_0D = mol.view(Cell)
-    cell_0D.dimension = 0
-    cell_0D.a = numpy.eye(3)
-    vpploc += pp_int.get_pp_loc_part2(cell_0D).real
-    vpploc += pp_int.get_pp_nl(cell_0D).real
+    intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
+              'int3c1e_r4_origk', 'int3c1e_r6_origk')
+    for cn in range(1, 5):
+        fakemol = pp_int.fake_cell_vloc(mol, cn)
+        if fakemol.nbas > 0:
+            v = incore.aux_e2(mol, fakemol, intors[cn], aosym='s2', comp=1)
+            vpploc += np.einsum('...i->...', v)
+
+    if isinstance(vpploc, np.ndarray):
+        vpploc = lib.unpack_tril(vpploc)
+
+    fakemol, hl_blocks = pp_int.fake_cell_vnl(mol)
+    hl_dims = np.array([len(hl) for hl in hl_blocks])
+    _bas = fakemol._bas
+    ppnl_half = []
+    intors = ('int1e_ovlp', 'int1e_r2_origi', 'int1e_r4_origi')
+    for i, intor in enumerate(intors):
+        fakemol._bas = _bas[hl_dims>i]
+        if fakemol.nbas > 0:
+            ppnl_half.append(intor_cross(intor, fakemol, mol))
+        else:
+            ppnl_half.append(None)
+    fakemol._bas = _bas
+
+    nao = mol.nao
+    offset = [0] * 3
+    for ib, hl in enumerate(hl_blocks):
+        l = fakemol.bas_angular(ib)
+        nd = 2 * l + 1
+        hl_dim = hl.shape[0]
+        ilp = np.empty((hl_dim, nd, nao))
+        for i in range(hl_dim):
+            p0 = offset[i]
+            if ppnl_half[i] is None:
+                ilp[i] = 0.
+            else:
+                ilp[i] = ppnl_half[i][p0:p0+nd]
+            offset[i] = p0 + nd
+        vpploc += np.einsum('ilp,ij,jlq->pq', ilp.conj(), hl, ilp)
     return vpploc
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    from pyscf.pbc import gto as pbcgto
-    from pyscf.pbc import scf as pbcscf
-    from pyscf.pbc import df
-    cell = pbcgto.Cell()
-    cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
-    cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
-                  'C' :'gth-szv',}
-    cell.pseudo = {'C':'gth-pade',
-                   'He': pbcgto.pseudo.parse('''He
-    2
-     0.40000000    3    -1.98934751    -0.75604821    0.95604821
-    2
-     0.29482550    3     1.23870466    .855         .3
-                                       .71         -1.1
-                                                    .9
-     0.32235865    2     2.25670239    -0.39677748
-                                        0.93894690
-                                                 ''')}
-    cell.a = numpy.eye(3)
-    cell.dimension = 0
-    cell.build()
-    mf = pbcscf.RHF(cell)
-    mf.with_df = df.AFTDF(cell)
-    mf.run()
-
-    mol = cell.to_mol()
-    scf.RHF(mol).run()

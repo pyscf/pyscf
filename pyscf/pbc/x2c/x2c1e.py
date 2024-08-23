@@ -26,7 +26,6 @@ Additional information can be found in [1] and references therein.
 
 
 from functools import reduce
-import copy
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -38,8 +37,10 @@ from pyscf.pbc import tools
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.scf import ghf
+from pyscf.pbc.df import gdf_builder
+from pyscf.pbc.scf import ghf, khf, kghf
 from pyscf.pbc.x2c import sfx2c1e
+from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
 def x2c1e_gscf(mf):
@@ -61,7 +62,7 @@ def x2c1e_gscf(mf):
     '''
 
     # Check if mf is a generalized SCF object
-    assert isinstance(mf, ghf.GHF)
+    assert isinstance(mf, (ghf.GHF, kghf.KGHF))
 
     if isinstance(mf, x2c._X2C_SCF):
         if mf.with_x2c is None:
@@ -73,42 +74,38 @@ def x2c1e_gscf(mf):
         else:
             return mf
 
-    mf_class = mf.__class__
-    if mf_class.__doc__ is None:
-        doc = ''
-    else:
-        doc = mf_class.__doc__
+    return lib.set_class(X2C1E_GSCF(mf), (X2C1E_GSCF, mf.__class__))
 
-    class X2C1E_GSCF(mf_class, x2c._X2C_SCF):
-        __doc__ = doc + '''
-        Attributes for spin-orbital X2C1E for PBC.
-            with_x2c : X2C object
-        '''
-        def __init__(self, mf):
-            self.__dict__.update(mf.__dict__)
-            self.with_x2c = SpinOrbitalX2C1EHelper(mf.cell)
-            self._keys = self._keys.union(['with_x2c'])
+class X2C1E_GSCF(x2c._X2C_SCF):
+    '''
+    Attributes for spin-orbital X2C1E for PBC.
+        with_x2c : X2C object
+    '''
 
-        def get_hcore(self, cell=None, kpts=None):
-            if cell is None:
-                cell = self.cell
-            if kpts is None:
+    __name_mixin__ = 'X2C1e'
+
+    _keys = {'with_x2c'}
+
+    def __init__(self, mf):
+        self.__dict__.update(mf.__dict__)
+        self.with_x2c = SpinOrbitalX2C1EHelper(mf.cell)
+
+    def get_hcore(self, cell=None, kpts=None, kpt=None):
+        if cell is None:
+            cell = self.cell
+        if kpts is None:
+            if isinstance(self, khf.KSCF):
                 kpts = self.kpts
-
-            if self.with_x2c is not None:
-                hcore = self.with_x2c.get_hcore(cell, kpts)
-                return hcore
+            elif kpt is None:
+                kpts = self.kpt
             else:
-                return mf_class.get_hcore(self, cell, kpts)
+                kpts = kpt
 
-        def dump_flags(self, verbose=None):
-            mf_class.dump_flags(self, verbose)
-            if self.with_x2c:
-                self.with_x2c.dump_flags(verbose)
-            return self
-
-    with_x2c = SpinOrbitalX2C1EHelper(mf.mol)
-    return mf.view(X2C1E_GSCF).add_keys(with_x2c=with_x2c)
+        if self.with_x2c is not None:
+            hcore = self.with_x2c.get_hcore(cell, kpts)
+            return hcore
+        else:
+            return super(x2c._X2C_SCF).get_hcore(cell, kpts)
 
 class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
     def get_hcore(self, cell=None, kpts=None):
@@ -209,57 +206,60 @@ def get_pbc_pvxp(mydf, kpts=None):
 
     log = logger.Logger(cell.stdout, cell.verbose)
     t1 = (logger.process_clock(), logger.perf_counter())
-    #t1 = (time.clock(), time.time())
 
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()
 
-    Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
-    charge = -cell.atom_charges() # Apply Koseki effective charge?
+    dfbuilder = gdf_builder._CCNucBuilder(cell, kpts_lst)
+    dfbuilder.exclude_dd_block = False
+    dfbuilder.build()
+    eta, mesh, ke_cutoff = gdf_builder._guess_eta(cell, kpts_lst)
+    log.debug1('get_pnucp eta = %s mesh = %s', eta, mesh)
+
+    fakenuc = aft._fake_nuc(cell, with_pseudo=cell._pseudo)
+    soc_mat = dfbuilder._int_nuc_vloc(fakenuc, 'int3c2e_pvxp1_sph',
+                                      aosym='s1', comp=3)
+    soc_mat = soc_mat.reshape(nkpts,3,nao,nao)
+    t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
+
+    ft_kern = dfbuilder.supmol_ft.gen_ft_kernel(
+        's1', intor='GTO_ft_pxp_sph', comp=3, return_complex=False,
+        kpts=kpts_lst, verbose=log)
+
+    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+    gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
+    ngrids = Gv.shape[0]
     kpt_allow = numpy.zeros(3)
-    coulG = tools.get_coulG(cell, kpt_allow, mesh=mydf.mesh, Gv=Gv)
+    coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
     coulG *= kws
-    if mydf.eta == 0:
-        soc_mat = numpy.zeros((nkpts,3,nao*nao), dtype=numpy.complex128)
-        SI = cell.get_SI(Gv)
-        vG = numpy.einsum('i,ix->x', charge, SI) * coulG
-    else:
-        nuccell = copy.copy(cell)
-        half_sph_norm = .5/numpy.sqrt(numpy.pi)
-        norm = half_sph_norm/mole.gaussian_int(2, mydf.eta)
-        chg_env = [mydf.eta, norm]
-        ptr_eta = cell._env.size
-        ptr_norm = ptr_eta + 1
-        chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
-        nuccell._atm = cell._atm
-        nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
-        nuccell._env = numpy.hstack((cell._env, chg_env))
-
-        soc_mat = mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvxp1_sph',
-                                     aosym='s1', comp=3)
-        # Some corrections are needed.
-        soc_mat = numpy.asarray(soc_mat).reshape(nkpts,3,nao**2)
-        t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
-
-        aoaux = ft_ao.ft_ao(nuccell, Gv)
-        vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
+    aoaux = ft_ao.ft_ao(dfbuilder.modchg_cell, Gv)
+    charge = -cell.atom_charges() # Apply Koseki effective charge?
+    vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
+    vGR = vG.real
+    vGI = vG.imag
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
-                                       max_memory=max_memory, aosym='s1',
-                                       intor='GTO_ft_pxp_sph', comp=3):
-        for k, aoao in enumerate(aoaoks):
-            aoao = aoao.reshape(3,-1,nao**2)
-            if aft_jk.gamma_point(kpts_lst[k]):
-                soc_mat[k] += numpy.einsum('k,ckx->cx', vG[p0:p1].real, aoao.real)
-                soc_mat[k] += numpy.einsum('k,ckx->cx', vG[p0:p1].imag, aoao.imag)
-            else:
-                soc_mat[k] += numpy.einsum('k,ckx->cx', vG[p0:p1].conj(), aoao)
+    Gblksize = max(16, int(max_memory*1e6/16/3/nao**2/nkpts))
+    Gblksize = min(Gblksize, ngrids, 200000)
+    log.debug1('max_memory = %s  Gblksize = %s  ngrids = %s',
+               max_memory, Gblksize, ngrids)
+
+    for p0, p1 in lib.prange(0, ngrids, Gblksize):
+        # shape of Gpq (nkpts, nGv, nao_pair)
+        Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow)
+        for k, (GpqR, GpqI) in enumerate(zip(*Gpq)):
+            vR  = numpy.einsum('k,ckpq->cpq', vGR[p0:p1], GpqR)
+            vR += numpy.einsum('k,ckpq->cpq', vGI[p0:p1], GpqI)
+            soc_mat[k] += vR
+            if not is_zero(kpts_lst[k]):
+                vI  = numpy.einsum('k,ckpq->cpq', vGR[p0:p1], GpqI)
+                vI -= numpy.einsum('k,ckpq->cpq', vGI[p0:p1], GpqR)
+                soc_mat[k] += vI * 1j
     t1 = log.timer_debug1('contracting pnucp', *t1)
 
     soc_mat_kpts = []
     for k, kpt in enumerate(kpts_lst):
-        if aft_jk.gamma_point(kpt):
+        if is_zero(kpt):
             soc_mat_kpts.append(soc_mat[k].real.reshape(3,nao,nao))
         else:
             soc_mat_kpts.append(soc_mat[k].reshape(3,nao,nao))

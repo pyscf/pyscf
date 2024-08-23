@@ -35,10 +35,10 @@ def setUpModule():
     mol.spin = 2
     mol.build()
     mf = scf.UHF(mol)
-    mf.conv_tol = 1e-14
+    mf.conv_tol = 1e-12
     mf.scf()
     gmf = scf.GHF(mol)
-    gmf.conv_tol = 1e-14
+    gmf.conv_tol = 1e-12
     gmf.scf()
 
 def tearDownModule():
@@ -180,8 +180,10 @@ class KnownValues(unittest.TestCase):
         mo_energy = numpy.arange(nmo)
         mo_occ = numpy.zeros(nmo)
         mo_occ[:nocc] = 1
-        dm = numpy.diag(mo_occ)
-        vhf = numpy.einsum('ijkl,lk->ij', erip, dm)
+        mf.make_rdm1 = lambda *args: numpy.diag(mo_occ)
+        dm = mf.make_rdm1()
+        mf.get_veff = lambda *args: numpy.einsum('ijkl,lk->ij', erip, dm)
+        vhf = mf.get_veff()
         hcore = numpy.diag(mo_energy) - vhf
         mf.get_hcore = lambda *args: hcore
         mf.get_ovlp = lambda *args: numpy.eye(nmo)

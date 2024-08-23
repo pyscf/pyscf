@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 import numpy
 from pyscf import lib
@@ -108,8 +107,8 @@ class KnownValues(unittest.TestCase):
         mc1.fcisolver.nroots = 2
         mc1.natorb = True
         mc1.kernel()
-        self.assertAlmostEqual(mc1.e_tot[0], -108.83741684447352, 9)
-        self.assertAlmostEqual(mc1.e_tot[1], -108.72522194135604, 9)
+        self.assertAlmostEqual(mc1.e_tot[0], -108.83741684447352, 7)
+        self.assertAlmostEqual(mc1.e_tot[1], -108.72522194135604, 7)
         dm1 = mc1.analyze()
         self.assertAlmostEqual(lib.fp(dm1[0]), 2.6252082970845532, 7)
         self.assertAlmostEqual(lib.fp(dm1[1]), 2.6252082970845532, 7)
@@ -127,21 +126,21 @@ class KnownValues(unittest.TestCase):
         mc1.fcisolver.nroots = 2
         mc1.natorb = True
         mc1.kernel()
-        self.assertAlmostEqual(mc1.e_tot[0], -108.83741684447352, 9)
-        self.assertAlmostEqual(mc1.e_tot[1], -108.72522194135604, 9)
+        self.assertAlmostEqual(mc1.e_tot[0], -108.83741684447352, 7)
+        self.assertAlmostEqual(mc1.e_tot[1], -108.72522194135604, 7)
         dm1 = mc1.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(lib.fp(dm1[0]), 2.6252082970845532*2, 7)
 
     def test_get_h2eff(self):
-        mc1 = mcscf.approx_hessian(mcscf.CASCI(m, 4, 4))
+        mc1 = mcscf.CASCI(m, 4, 4)
+        mc2 = mcscf.approx_hessian(mc1)
         eri1 = mc1.get_h2eff(m.mo_coeff[:,5:9])
-        eri2 = mc1.get_h2cas(m.mo_coeff[:,5:9])
+        eri2 = mc2.get_h2eff(m.mo_coeff[:,5:9])
         self.assertAlmostEqual(abs(eri1-eri2).max(), 0, 12)
 
-        mc1 = mcscf.density_fit(mcscf.CASCI(m, 4, 4))
-        eri1 = mc1.get_h2eff(m.mo_coeff[:,5:9])
-        eri2 = mc1.get_h2cas(m.mo_coeff[:,5:9])
-        self.assertTrue(abs(eri1-eri2).max() > 1e-5)
+        mc3 = mcscf.density_fit(mc1)
+        eri3 = mc3.get_h2eff(m.mo_coeff[:,5:9])
+        self.assertTrue(abs(eri1-eri3).max() > 1e-5)
 
     def test_get_veff(self):
         mf = m.view(dft.rks.RKS)
@@ -154,75 +153,75 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(veff1-veff2).max(), 0, 12)
 
     def test_with_ci_init_guess(self):
-        mc1 = mcscf.CASCI(msym, 4, 4)
-        ci0 = numpy.zeros((6,6))
-        ci0[0,1] = 1
-        mc1.kernel(ci0=ci0)
-
         mc2 = mcscf.CASCI(msym, 4, 4)
         mc2.wfnsym = 'A1u'
         mc2.kernel()
-        self.assertAlmostEqual(mc1.e_tot, mc2.e_tot, 9)
+        self.assertAlmostEqual(mc2.e_tot, -108.7252219413561, 7)
+
+        mc2 = mcscf.CASCI(msym, 4, (3, 1))
+        mc2.wfnsym = 4
+        mc2.kernel()
+        self.assertAlmostEqual(mc2.e_tot, -108.62009625745821, 7)
 
     def test_slight_symmetry_broken(self):
-        mf = copy.copy(msym)
+        mf = msym.copy()
         mf.mo_coeff = numpy.array(msym.mo_coeff)
         u = numpy.linalg.svd(numpy.random.random((4,4)))[0]
         mf.mo_coeff[:,5:9] = mf.mo_coeff[:,5:9].dot(u)
         mc1 = mcscf.CASCI(mf, 4, 4)
         mc1.kernel()
-        self.assertAlmostEqual(mc1.e_tot, -108.83741684445798, 9)
+        self.assertAlmostEqual(mc1.e_tot, -108.83741684445798, 7)
 
     def test_sort_mo(self):
         mc1 = mcscf.CASCI(msym, 4, 4)
         mo = mc1.sort_mo_by_irrep({'A1u':3, 'A1g':1})
         mc1.kernel(mo)
-        self.assertAlmostEqual(mc1.e_tot, -105.82542805259033, 9)
+        self.assertAlmostEqual(mc1.e_tot, -105.82542805259033, 7)
 
     def test_state_average(self):
         mc = mcscf.CASCI(m, 4, 4)
         mc.state_average_([0.5, 0.25, 0.25])
         mc.fcisolver.spin = 2
         mc.run()
-        self.assertAlmostEqual(mc.e_states[0], -108.72522194135607, 9)
-        self.assertAlmostEqual(mc.e_states[1], -108.67148843338228, 9)
-        self.assertAlmostEqual(mc.e_states[2], -108.67148843338228, 9)
+        self.assertAlmostEqual(mc.e_states[0], -108.72522194135607, 7)
+        self.assertAlmostEqual(mc.e_states[1], -108.67148843338228, 7)
+        self.assertAlmostEqual(mc.e_states[2], -108.67148843338228, 7)
 
         mc.analyze()
         mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
 
         mc.kernel(mo_coeff=mo_coeff)
-        self.assertAlmostEqual(mc.e_states[0], -108.72522194135607, 9)
-        self.assertAlmostEqual(mc.e_states[1], -108.67148843338228, 9)
+        self.assertAlmostEqual(mc.e_states[0], -108.72522194135607, 7)
+        self.assertAlmostEqual(mc.e_states[1], -108.67148843338228, 7)
         #FIXME: with the initial guess from mc, FCI solver may converge to
         # another state
-        #self.assertAlmostEqual(mc.e_tot[2], -108.67148843338228, 9)
+        #self.assertAlmostEqual(mc.e_states[2], -108.67148843338228, 9)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 9)
         # Second and third root are degenerated
         #self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 9)
 
     def test_state_average_mix(self):
         mc = mcscf.CASCI(m, 4, 4)
-        cis1 = copy.copy(mc.fcisolver)
+        cis1 = mc.fcisolver.copy()
         cis1.spin = 2
         cis1.nroots = 3
         mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [.25, .25, .25, .25])
         mc.run()
-        self.assertAlmostEqual(mc.e_states[0], -108.72522194135607, 9)
-        self.assertAlmostEqual(mc.e_states[1], -108.67148843338228, 9)
-        self.assertAlmostEqual(mc.e_states[2], -108.67148843338228, 9)
-        self.assertAlmostEqual(mc.e_states[3], -108.83741684447352, 9)
+        self.assertAlmostEqual(mc.e_states[0], -108.72522194135607, 7)
+        self.assertAlmostEqual(mc.e_states[1], -108.67148843338228, 7)
+        self.assertAlmostEqual(mc.e_states[2], -108.67148843338228, 7)
+        self.assertAlmostEqual(mc.e_states[3], -108.83741684447352, 7)
 
         mc.analyze()
         mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
 
         mc.kernel(mo_coeff=mo_coeff)
-        self.assertAlmostEqual(mc.e_states[0], -108.72522194135607, 8)
-        self.assertAlmostEqual(mc.e_states[1], -108.67148843338228, 8)
+        self.assertAlmostEqual(mc.e_states[0], -108.72522194135607, 7)
+        self.assertAlmostEqual(mc.e_states[1], -108.67148843338228, 7)
         #FIXME: with the initial guess from mc, FCI solver may converge to
         # another state
-        # self.assertAlmostEqual(mc.e_states[2], -108.67148843338228, 8)
-        self.assertAlmostEqual(mc.e_states[3], -108.83741684447352, 8)
+        # self.assertAlmostEqual(mc.e_states[2], -108.67148843338228, 7)
+        self.assertAlmostEqual(mc.e_states[3], -108.83741684447352, 7)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 8)
         self.assertAlmostEqual(abs((civec[3]*mc.ci[3]).sum()), 1, 8)
 

@@ -34,6 +34,8 @@ from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.df import GDF, RSGDF
+from pyscf.pbc.df import df
 from pyscf import __config__
 
 # einsum = np.einsum
@@ -240,10 +242,10 @@ def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
 
     Args:
         pindices (5-list of object):
-            A list of p0, p1, kp, orbital values, and non-zero indicess for the first
+            A list of p0, p1, kp, orbital values, and non-zero indices for the first
             denominator indices.
         qindices (5-list of object):
-            A list of q0, q1, kq, orbital values, and non-zero indicess for the second
+            A list of q0, q1, kq, orbital values, and non-zero indices for the second
             denominator element.
         fac (3-list of float):
             Factors to multiply the first and second denominator elements.
@@ -253,7 +255,7 @@ def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert (all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all(len(x) == 5 for x in [pindices,qindices]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     fac_p, fac_q = fac
@@ -496,11 +498,18 @@ def kconserve_pmatrix(nkpts, kconserv):
 class RCCSD(pyscf.cc.ccsd.CCSD):
     max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
 
+    _keys = {
+        'kpts', 'khelper', 'ip_partition', 'ea_partition', 'max_space',
+        'direct', 'keep_exxdiv',
+    }
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
-        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
+        # mf.to_khf converts mf to a non-symmetry object
+        pyscf.cc.ccsd.CCSD.__init__(self, mf.to_khf(), frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
-        self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
+        self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts,
+                                              init_symm_map=False)
         self.ip_partition = None
         self.ea_partition = None
         self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
@@ -508,15 +517,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         ##################################################
         # don't modify the following attributes, unless you know what you are doing
         self.keep_exxdiv = False
-
-        keys = set(['kpts', 'khelper', 'ip_partition',
-                    'ea_partition', 'max_space', 'direct'])
-        self._keys = self._keys.union(keys)
         self.__imds__ = None
 
     @property
     def nkpts(self):
-        return len(self.kpts)
+        return getattr(self.kpts, 'nkpts', len(self.kpts))
 
     get_normt_diff = get_normt_diff
     get_nocc = get_nocc
@@ -604,14 +609,12 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
         '''
         self.dump_flags()
+
+        self.e_hf = self.get_e_hf()
         if eris is None:
             # eris = self.ao2mo()
             eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
-
-        self.e_hf = getattr(eris, 'e_hf', None)
-        if self.e_hf is None:
-            self.e_hf = self._scf.e_tot
 
         if mbpt2:
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
@@ -649,6 +652,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
+
+    to_gpu = lib.to_gpu
 
 #####################################
 # Wrapper functions for IP/EA-EOM
@@ -711,7 +716,6 @@ KRCCSD = RCCSD
 #
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore'):
-        from pyscf.pbc import df
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         log = logger.Logger(cc.stdout, cc.verbose)
@@ -743,7 +747,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         fockao = cc._scf.get_hcore() + vhf
         self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
-        self.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
         self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
 
@@ -775,8 +778,9 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         mem_now = lib.current_memory()[0]
         fao2mo = cc._scf.with_df.ao2mo
 
-        kconserv = cc.khelper.kconserv
         khelper = cc.khelper
+        kconserv = khelper.kconserv
+        khelper.build_symm_map()
         orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
         if (method == 'incore' and (mem_incore + mem_now < cc.max_memory)
@@ -821,7 +825,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
             vvvv_required = ((not cc.direct)
                              # cc._scf.with_df needs to be df.GDF only (not MDF)
-                             or type(cc._scf.with_df) is not df.GDF
+                             or not isinstance(cc._scf.with_df, (GDF, RSGDF))
                              # direct-vvvv for pbc-2D is not supported so far
                              or cell.dimension == 2)
             if vvvv_required:
@@ -926,7 +930,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
 
 def _init_df_eris(cc, eris):
-    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
@@ -944,7 +947,7 @@ def _init_df_eris(cc, eris):
     nvir = nmo - nocc
     nao = cell.nao_nr()
 
-    kpts = cc.kpts
+    kpts = getattr(cc.kpts, 'kpts', cc.kpts)
     nkpts = len(kpts)
     #naux = cc._scf.with_df.get_naoaux()
     if gamma_point(kpts):
@@ -954,14 +957,18 @@ def _init_df_eris(cc, eris):
     dtype = np.result_type(dtype, *eris.mo_coeff)
     eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
 
-    with h5py.File(cc._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
-        tao = []
-        ao_loc = None
-        for ki, kpti in enumerate(kpts):
-            for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti, kptj))
-                Lpq = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+    tao = []
+    ao_loc = None
+#    with df.CDERIArray(cc._scf.with_df._cderi) as cderi_array:
+#        for ki in range(nkpts):
+#            for kj in range(nkpts):
+#                Lpq = cderi_array[ki,kj]
+    for ki, kpti in enumerate(kpts):
+        for kj, kptj in enumerate(kpts):
+            kpti_kptj = np.array((kpti, kptj))
+            # This loader is compatible with the old GDF format
+            with df._load3c(cc._scf.with_df._cderi, 'j3c', kpti_kptj) as j3c:
+                Lpq = np.asarray(j3c)
 
                 mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:, nocc:]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
@@ -1194,4 +1201,3 @@ if __name__ == '__main__':
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
     print(lib.finger(Ht1) - (6.608150224325518  -0.2219476427503148j))
     print(lib.finger(Ht2) - (-23.253955060531297-137.76211601171295j))
-

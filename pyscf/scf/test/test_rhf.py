@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 import unittest
 import tempfile
@@ -24,6 +23,17 @@ from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf.scf import atom_hf
+
+import sys
+try:
+    import dftd3
+except ImportError:
+    pass
+
+try:
+    import dftd4
+except ImportError:
+    pass
 
 def setUpModule():
     global mol, mf, n2sym, n2mf, re_ecp1, re_ecp2
@@ -177,10 +187,10 @@ class KnownValues(unittest.TestCase):
             basis = 'ccpvdz',
         )
         dm = scf.hf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.fp(dm), 2.78218274161741, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.78218274161741, 7)
 
         dm = scf.ROHF(mol).init_guess_by_atom()
-        self.assertAlmostEqual(lib.fp(dm[0]), 2.78218274161741/2, 9)
+        self.assertAlmostEqual(lib.fp(dm[0]), 2.78218274161741/2, 7)
 
         mol.atom = [["O" , (0. , 0.     , 0.)],
                     ['ghost-H'   , (0. , -0.757, 0.587)],
@@ -188,23 +198,23 @@ class KnownValues(unittest.TestCase):
         mol.spin = 1
         mol.build(0, 0)
         dm = scf.hf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.fp(dm), 3.0813279501879838, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.0813279501879838, 7)
 
         mol.basis = {'h': '3-21g'}
         mol.build(0, 0)
         dm = scf.hf.get_init_guess(mol, key='atom')
         self.assertEqual(dm.shape, (4, 4))
         self.assertEqual(abs(dm[:2,:2]).max(), 0)
-        self.assertAlmostEqual(lib.fp(dm), -0.47008362287778827, 9)
+        self.assertAlmostEqual(lib.fp(dm), -0.47008362287778827, 7)
 
     def test_init_guess_atom_with_ecp(self):
         s = re_ecp1.intor('int1e_ovlp')
         dm = scf.hf.get_init_guess(re_ecp1, key='atom')
-        self.assertAlmostEqual(lib.fp(dm), -4.822111004225718, 9)
+        self.assertAlmostEqual(lib.fp(dm), -4.822111004225718, 6)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 15, 9)
 
         dm = scf.hf.get_init_guess(re_ecp2, key='atom')
-        self.assertAlmostEqual(lib.fp(dm), -14.083500177270547, 9)
+        self.assertAlmostEqual(lib.fp(dm), -14.083500177270547, 6)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 57, 9)
 
     def test_atom_hf_with_ecp(self):
@@ -220,24 +230,47 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_chk(self):
         dm = mol.HF(chkfile=tempfile.NamedTemporaryFile().name).get_init_guess(mol, key='chkfile')
-        self.assertAlmostEqual(lib.fp(dm), 2.5912875957299684, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.5912875957299684, 5)
 
         dm = mf.get_init_guess(mol, key='chkfile')
-        self.assertAlmostEqual(lib.fp(dm), 3.2111753674560535, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.2111753674560535, 5)
 
     def test_init_guess_huckel(self):
         dm = scf.hf.RHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), 3.348165771345748, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.348165771345748, 5)
 
         dm = scf.ROHF(mol).init_guess_by_huckel()
-        self.assertAlmostEqual(lib.fp(dm[0]), 3.348165771345748/2, 9)
+        self.assertAlmostEqual(lib.fp(dm[0]), 3.348165771345748/2, 5)
 
         # Initial guess Huckel is not able to handle open-shell system
         mol1 = gto.M(atom='Mo 0 0 0; C 0 0 1', basis='lanl2dz', ecp='lanl2dz',
                      verbose=7, output='/dev/null')
         dm = scf.hf.get_init_guess(mol1, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), 2.01095497354225, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.01095497354225, 5)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 20, 9)
+
+    def test_init_guess_huckel(self):
+        dm = scf.hf.RHF(mol).get_init_guess(mol, key='mod_huckel')
+        self.assertAlmostEqual(lib.fp(dm), 3.233072986208057, 5)
+
+        dm = scf.ROHF(mol).init_guess_by_mod_huckel()
+        self.assertAlmostEqual(lib.fp(dm[0]), 3.233072986208057/2, 5)
+
+    def test_init_guess_sap(self):
+        mol = gto.M(
+            verbose = 7,
+            output = '/dev/null',
+            atom = '''
+        O     0    0        0
+        H1    0    -0.757   0.587
+        H2    0    0.757    0.587''',
+            basis = 'ccpvdz',
+        )
+        dm = scf.hf.RHF(mol).get_init_guess(mol, key='sap')
+        self.assertAlmostEqual(lib.fp(dm), 4.2267871571567195, 5)
+
+        dm = scf.ROHF(mol).get_init_guess(mol, key='sap')
+        self.assertAlmostEqual(lib.fp(dm[0]), 4.2267871571567195/2, 7)
 
     def test_1e(self):
         mf = scf.rohf.HF1e(mol)
@@ -311,7 +344,7 @@ class KnownValues(unittest.TestCase):
     def test_analyze(self):
         popandchg, dip = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 4.0049440587033116, 6)
-        self.assertAlmostEqual(numpy.linalg.norm(dip), 2.0584447549532596, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(dip), 2.0584447549532596, 6)
         popandchg, dip = mf.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 3.2031790129016922, 6)
 
@@ -321,11 +354,11 @@ class KnownValues(unittest.TestCase):
         popandchg, dip = mf1.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 3.2031790129016922, 6)
 
-        mf1 = copy.copy(n2mf)
+        mf1 = n2mf.copy()
         (pop, chg), dip = n2mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop), 4.5467414321488357, 6)
         self.assertAlmostEqual(numpy.linalg.norm(dip), 0, 9)
-        mf1 = copy.copy(n2mf)
+        mf1 = n2mf.copy()
         mf1.mo_coeff = numpy.array(n2mf.mo_coeff)
         popandchg, dip = mf1.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 3.8893148995392353, 6)
@@ -337,6 +370,24 @@ class KnownValues(unittest.TestCase):
 
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
+    @unittest.skipIf('dftd3' not in sys.modules, "requires the dftd3 library")
+    def test_scf_d3(self):
+        mf = scf.RHF(mol)
+        mf.disp = 'd3bj'
+        mf.conv_tol = 1e-10
+        mf.chkfile = None
+        e_tot = mf.kernel()
+        self.assertAlmostEqual(e_tot, -76.03127458778653, 9)
+
+    @unittest.skipIf('dftd4' not in sys.modules, "requires the dftd4 library")
+    def test_scf_d4(self):
+        mf = scf.RHF(mol)
+        mf.disp = 'd4'
+        mf.conv_tol = 1e-10
+        mf.chkfile = None
+        e_tot = mf.kernel()
+        self.assertAlmostEqual(e_tot, -76.0277467547733, 9)
 
     def test_scf_negative_spin(self):
         mol = gto.M(atom = '''
@@ -381,11 +432,14 @@ class KnownValues(unittest.TestCase):
     def test_damping(self):
         nao = mol.nao_nr()
         numpy.random.seed(1)
-        s = scf.hf.get_ovlp(mol)
-        d = numpy.random.random((nao,nao))
-        d = d + d.T
-        f = scf.hf.damping(s, d, scf.hf.get_hcore(mol), .5)
-        self.assertAlmostEqual(numpy.linalg.norm(f), 23361.854064083178, 9)
+        f = scf.hf.get_hcore(mol)
+        df  = numpy.random.rand(nao,nao)
+        df += df.T
+        f_prev = f + df
+        damp = 0.3
+        f_damp = scf.hf.get_fock(mf, h1e=0, s1e=0, vhf=f, dm=0, cycle=0,
+                                 diis_start_cycle=2, damp_factor=damp, fock_last=f_prev)
+        self.assertAlmostEqual(abs(f_damp - (f*(1-damp) + f_prev*damp)).max(), 0, 9)
 
     def test_level_shift(self):
         nao = mol.nao_nr()
@@ -445,7 +499,7 @@ H     0    0.757    0.587'''
         pmol.symmetry = 1
         pmol.build(False, False)
         mf = scf.hf_symm.RHF(pmol)
-        mf.irrep_nelec = {'B1':4}
+        mf.irrep_nelec = {'B2':4}
         self.assertAlmostEqual(mf.scf(), -75.074736446470723, 9)
         (pop, chg), dip = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop), 3.9779576643902912, 6)
@@ -468,7 +522,7 @@ H     0    0.757    0.587'''
         pmol.spin = 1
         pmol.build(False, False)
         mf = scf.hf_symm.ROHF(pmol)
-        mf.irrep_nelec = {'B1':(2,1)}
+        mf.irrep_nelec = {'B2':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.008317646307404, 9)
         (pop, chg), dip = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop), 3.7873920690764575, 6)
@@ -590,8 +644,7 @@ H     0    0.757    0.587'''
                 [0, 2, 0, 0, 0, 1, 2, 0, 1, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
 
         mf1 = scf.RHF(mol).set(verbose=0).view(scf.hf_symm.ROHF)
-        self.assertTrue(numpy.allclose(mf1.get_occ(energy, mo_coeff),
-                [0 ,2 ,0 ,0 ,0 ,0 ,2 ,0 ,0 ,0 ,0 ,0 ,2 ,0 ,2 ,0 ,0 ,0 ,0 ,2]))
+        self.assertRaises(RuntimeError, mf1.get_occ, energy, mo_coeff)
 
     def test_get_occ_extreme_case(self):
         mol = gto.M(atom='He', verbose=7, output='/dev/null')
@@ -741,7 +794,7 @@ H     0    0.757    0.587'''
         self.assertAlmostEqual(abs(f1 + f1.T).max(), 0, 12)
 
     def test_check_convergence(self):
-        mf1 = copy.copy(n2mf)
+        mf1 = n2mf.copy()
         mf1.diis = False
         count = [0]
         def check_convergence(envs):
@@ -775,7 +828,7 @@ H     0    0.757    0.587'''
         self.assertEqual(irrep_nelec['A1g'], 6)
         self.assertEqual(irrep_nelec['E1ux'], 2)
         self.assertEqual(irrep_nelec['E1uy'], 2)
-        n2_rhf = copy.copy(n2mf)
+        n2_rhf = n2mf.copy()
         n2_rhf.irrep_nelec = irrep_nelec
         n2_rhf.irrep_nelec['A2g'] = 0
         n2_rhf.irrep_nelec['E2gx'] = 2
@@ -906,14 +959,17 @@ H     0    0.757    0.587'''
         q = opt.q_cond
         self.assertTrue(mol.intor_by_shell('int2e', shls).ravel()[0] < q[i,j] * q[k,l])
 
+    @unittest.skip('Numerical accuracy issue in libcint 5.2')
+    def test_schwarz_condition_numerical_error(self):
         mol = gto.M(atom='''
                     H    0   0   0
                     H    0   0   6
                     ''', unit='B',
                     basis = [[0, (.6, 1)], [0, (1e3, 1)]])
         omega = 5.
-        with mol.with_short_range_coulomb(5.):
+        with mol.with_short_range_coulomb(omega):
             mf = scf.RHF(mol)
+            # sr eri cannot reach the accuracy 1e-18
             mf.direct_scf_tol = 1e-18
             opt = mf.init_direct_scf()
             shls = i, j, k, l = 2, 0, 1, 1

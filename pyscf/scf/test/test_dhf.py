@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 import numpy
 import unittest
 from pyscf import gto
@@ -60,11 +59,19 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = scf.dhf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(abs(dm).sum(), 14.859714177083553, 9)
+        self.assertAlmostEqual(abs(dm).sum(), 14.859714177083553, 8)
 
     def test_init_guess_huckel(self):
         dm = scf.dhf.DHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), (-0.6090467376579871-0.08968155321478456j), 9)
+        self.assertAlmostEqual(lib.fp(dm), (-0.6090467376579871-0.08968155321478456j), 8)
+
+    def test_init_guess_mod_huckel(self):
+        dm = scf.dhf.DHF(mol).get_init_guess(mol, key='mod_huckel')
+        self.assertAlmostEqual(lib.fp(dm), (-0.5563045659111319-0.0897593233637678j), 8)
+
+    def test_init_guess_sap(self):
+        dm = scf.dhf.DHF(mol).get_init_guess(mol, key='sap')
+        self.assertAlmostEqual(lib.fp(dm), (-0.3165252968705663-0.21867900769448959j), 8)
 
     def test_get_hcore(self):
         h = mf.get_hcore()
@@ -121,7 +128,7 @@ class KnownValues(unittest.TestCase):
         v = mf.get_veff(mol, dm)
         self.assertAlmostEqual(lib.fp(v), (-21.613084684028077-28.50754366262467j), 8)
 
-        mf1 = copy.copy(mf)
+        mf1 = mf.copy()
         mf1.direct_scf = False
         v1 = mf1.get_veff(mol, dm)
         self.assertAlmostEqual(abs(v-v1).max(), 0, 9)

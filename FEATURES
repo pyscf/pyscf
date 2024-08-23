@@ -20,6 +20,7 @@
   - Scalar relativistic DFT
   - Density fitting DFT
   - General XC functional evaluator (for Libxc or XcFun)
+  - Multi-collinear functional
   - General AO evaluator
   - VV10 NLC functional for finite size systems
   - range-separated hybrid features for RKS and UKS, including
@@ -79,6 +80,7 @@
   - EOM-IP/EA/EE-RCCSD and EOM-IP/EA/EE-UCCSD
   - RCC2
   - Density-fitting RCCSD
+  - BCCD
 
 
 * CCSD(T)
@@ -95,6 +97,7 @@
   - Selected-CI
   - Selected-CI 1, 2-particle density matrices
   - RCISD, UCISD and GCISD 1-particle transition density matrices
+  - Density-fitting RCISD, UCISD
 
 
 * Full CI
@@ -206,7 +209,7 @@
     Libcint library
   - Support for 4-index integral transformation with 4 different orbitals
   - PBC 2-electron MO integrals
-  - Integral transformation for (4-component and 2-compoent relativistic) spinor
+  - Integral transformation for (4-component and 2-component relativistic) spinor
     integrals
 
 
@@ -240,6 +243,8 @@
   - ddCOSMO
   - ddPCM
   - ddCOSMO analytical nuclear gradients
+  - SMD, and its nuclear gradients and hessian
+  - PCM, and its nuclear gradients and hessian
 
 
 * Tools

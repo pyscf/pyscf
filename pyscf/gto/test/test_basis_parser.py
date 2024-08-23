@@ -21,6 +21,7 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.gto.basis import parse_molpro
 from pyscf.gto.basis import parse_gaussian
+from pyscf.gto.basis import parse_cp2k, parse_cp2k_pp
 from pyscf.lib.exceptions import BasisNotFoundError
 
 class KnownValues(unittest.TestCase):
@@ -36,9 +37,8 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(KeyError, gto.basis._parse_pople_basis, '631g++', 'C')
 
     def test_basis_load(self):
-        self.assertEqual(gto.basis.load(__file__, 'H'), [])
+        self.assertRaises(BasisNotFoundError, gto.basis.load, __file__, 'H')
         self.assertRaises(BasisNotFoundError, gto.basis.load, 'abas', 'H')
-        #self.assertRaises(BasisNotFoundError, gto.basis.load(__file__, 'C'), [])
 
         self.assertEqual(len(gto.basis.load('631++g**', 'C')), 8)
         self.assertEqual(len(gto.basis.load('ccpcvdz', 'C')), 7)
@@ -463,6 +463,70 @@ ECP,I,46,4,3;
                 [3, [[], [], [[2.928812, -11.777154, 7.851436], [2.904069, -15.525522, -7.762761], [0.287352, -0.14855, 0.099033], [0.48938, -0.273682, -0.136841]], [], [], [], []]]]]
         self.assertEqual(ecp_data, ref)
 
+    def test_parse_gth_basis(self):
+        basis_str = '''
+                        #BASIS SET
+                        C DZV-GTH
+                          1
+                          2  0  1  4  2  2
+                                4.3362376436   0.1490797872   0.0000000000  -0.0878123619   0.0000000000
+                                1.2881838513  -0.0292640031   0.0000000000  -0.2775560300   0.0000000000
+                                0.4037767149  -0.6882040510   0.0000000000  -0.4712295093   0.0000000000
+                                0.1187877657  -0.3964426906   1.0000000000  -0.4058039291   1.0000000000
+                        #
+                        #BASIS SET
+                        N DZV-GTH
+                          1
+                          2  0  1  4  2  2
+                                6.1526903413   0.1506300537   0.0000000000  -0.0950603476   0.0000000000
+                                1.8236332280  -0.0360100734   0.0000000000  -0.2918864295   0.0000000000
+                                0.5676628870  -0.6942023212   0.0000000000  -0.4739050050   0.0000000000
+                                0.1628222852  -0.3878929987   1.0000000000  -0.3893418670   1.0000000000
+                        #
+                    '''
+        basis1 = parse_cp2k.parse(basis_str, 'C')
+        ref = gto.basis.load('gth-dzv', 'C')
+        self.assertEqual(ref, basis1)
+        basis1 = parse_cp2k.parse(basis_str, 'N')
+        ref = gto.basis.load('gth-dzv', 'N')
+        self.assertEqual(ref, basis1)
+
+        basis_str = '''
+                        C DZV-GTH
+                          1
+                          2  0  1  4  2  2
+                                4.3362376436   0.1490797872   0.0000000000  -0.0878123619   0.0000000000
+                                1.2881838513  -0.0292640031   0.0000000000  -0.2775560300   0.0000000000
+                                0.4037767149  -0.6882040510   0.0000000000  -0.4712295093   0.0000000000
+                                0.1187877657  -0.3964426906   1.0000000000  -0.4058039291   1.0000000000
+                        #
+                    '''
+        basis1 = parse_cp2k.parse(basis_str)
+        ref = gto.basis.load('gth-dzv', 'C')
+        self.assertEqual(ref, basis1)
+
+    def test_parse_gth_pp(self):
+        pp_str = '''
+            #PSEUDOPOTENTIAL
+            B GTH-PADE-q3 GTH-LDA-q3 GTH-PADE GTH-LDA
+                2    1
+                 0.43392956    2    -5.57864173     0.80425145
+                2
+                 0.37384326    1     6.23392822
+                 0.36039317    0
+            #PSEUDOPOTENTIAL
+            C GTH-PADE-q4 GTH-LDA-q4 GTH-PADE GTH-LDA
+                2    2
+                 0.34883045    2    -8.51377110     1.22843203
+                2
+                 0.30455321    1     9.52284179
+                 0.23267730    0'''
+        pp1 = parse_cp2k_pp.parse(pp_str, 'B')
+        ref = gto.basis.load_pseudo('gth-pade', 'B')
+        self.assertEqual(ref, pp1)
+        pp1 = parse_cp2k_pp.parse(pp_str, 'C')
+        ref = gto.basis.load_pseudo('gth-pade', 'C')
+        self.assertEqual(ref, pp1)
 
 if __name__ == "__main__":
     print("test basis module")

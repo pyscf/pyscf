@@ -50,10 +50,10 @@ from pyscf.fci import rdm
 from pyscf.fci import spin_op
 from pyscf.fci import addons
 from pyscf.fci.spin_op import contract_ss
-from pyscf.fci.addons import _unpack_nelec
+from pyscf.fci.addons import _unpack_nelec, civec_spinless_repr
 from pyscf import __config__
 
-libfci = lib.load_library('libfci')
+libfci = cistring.libfci
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     '''Contract the 1-electron Hamiltonian with a FCI vector to get a new FCI
@@ -63,7 +63,8 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert (fcivec.size == na*nb)
+    assert fcivec.size == na*nb
+    assert fcivec.dtype == f1e.dtype == numpy.float64
     f1e_tril = lib.pack_tril(f1e)
     ci1 = numpy.zeros_like(fcivec)
     libfci.FCIcontract_a_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
@@ -123,11 +124,12 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     See also :func:`direct_spin1.absorb_h1e`
     '''
     fcivec = numpy.asarray(fcivec, order='C')
-    eri = ao2mo.restore(4, eri, norb)
+    eri = numpy.asarray(ao2mo.restore(4, eri, norb), order='C')
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert (fcivec.size == na*nb)
+    assert fcivec.size == na*nb
+    assert fcivec.dtype == eri.dtype == numpy.float64
     ci1 = numpy.empty_like(fcivec)
 
     libfci.FCIcontract_2e_spin1(eri.ctypes.data_as(ctypes.c_void_p),
@@ -140,18 +142,21 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                                 link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1.view(FCIvector)
 
-def make_hdiag(h1e, eri, norb, nelec):
+def make_hdiag(h1e, eri, norb, nelec, compress=False):
     '''Diagonal Hamiltonian for Davidson preconditioner
+
+    Kwargs:
+        compress (bool) : whether to remove symmetry forbidden elements
     '''
-    if h1e.dtype == numpy.complex128 or eri.dtype == numpy.complex128:
+    if not (h1e.dtype == eri.dtype == numpy.float64):
         raise NotImplementedError('Complex Hamiltonian')
 
     neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.asarray(h1e, order='C')
-    eri = ao2mo.restore(1, eri, norb)
-    occslsta = occslstb = cistring._gen_occslst(range(norb), neleca)
+    eri = numpy.asarray(ao2mo.restore(1, eri, norb), order='C')
+    occslsta = occslstb = cistring.gen_occslst(range(norb), neleca)
     if neleca != nelecb:
-        occslstb = cistring._gen_occslst(range(norb), nelecb)
+        occslstb = cistring.gen_occslst(range(norb), nelecb)
     na = len(occslsta)
     nb = len(occslstb)
 
@@ -189,8 +194,8 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
 def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     '''pspace Hamiltonian to improve Davidson preconditioner. See, CPL, 169, 463
     '''
-    if norb > 63:
-        raise NotImplementedError('norb > 63')
+    if norb >= 64:
+        raise NotImplementedError('norb >= 64')
 
     if h1e.dtype == numpy.complex128 or eri.dtype == numpy.complex128:
         raise NotImplementedError('Complex Hamiltonian')
@@ -198,10 +203,12 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     neleca, nelecb = _unpack_nelec(nelec)
     h1e = numpy.ascontiguousarray(h1e)
     eri = ao2mo.restore(1, eri, norb)
+    na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     if hdiag is None:
-        hdiag = make_hdiag(h1e, eri, norb, nelec)
-    if hdiag.size < np:
+        hdiag = make_hdiag(h1e, eri, norb, nelec, compress=False)
+    assert hdiag.size == na * nb
+    if hdiag.size <= np:
         addr = numpy.arange(hdiag.size)
     else:
         try:
@@ -364,6 +371,46 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, inplace=True)
     return dm1, dm2
 
+def make_rdm123(fcivec, norb, nelec, link_index=None, reorder=True):
+    '''Spin traced 1-, 2-, and 3-particle density matrices.'''
+    dm1, dm2, dm3 = rdm.make_dm123('FCI3pdm_kern_sf', fcivec, fcivec, norb, nelec)
+    if reorder:
+        dm1, dm2, dm3 = rdm.reorder_dm123(dm1, dm2, dm3, inplace=True)
+    return dm1, dm2, dm3
+
+def make_rdm123s(fcivec, norb, nelec, link_index=None, reorder=True):
+    r'''Spin separated 1-, 2-, and 3-particle density matrices.
+
+    1pdm[p,q] = :math:`\langle q_\alpha^\dagger p_\alpha \rangle +
+                       \langle q_\beta^\dagger  p_\beta \rangle`;
+    2pdm[p,q,r,s] = :math:`\langle p_\alpha^\dagger r_\alpha^\dagger s_\alpha q_\alpha\rangle +
+                           \langle p_\beta^\dagger  r_\alpha^\dagger s_\alpha q_\beta\rangle +
+                           \langle p_\alpha^\dagger r_\beta^\dagger  s_\beta  q_\alpha\rangle +
+                           \langle p_\beta^\dagger  r_\beta^\dagger  s_\beta  q_\beta\rangle`.
+    '''
+    if (not reorder):
+        raise NotImplementedError('reorder=False not currently supported')
+    ci_spinless = civec_spinless_repr([fcivec,], norb, [nelec,])
+    rdm1, rdm2, rdm3 = make_rdm123(ci_spinless, norb*2, (nelec[0]+nelec[1],0))
+
+    rdm1a = rdm1[:norb,:norb]
+    rdm1b = rdm1[norb:,norb:]
+    # assert np.allclose(rdm1a+rdm1b, rdm1)
+
+    rdm2aa = rdm2[:norb,:norb,:norb,:norb]
+    rdm2ab = rdm2[:norb,:norb,norb:,norb:]
+    rdm2bb = rdm2[norb:,norb:,norb:,norb:]
+    # assert np.allclose(rdm2aa+rdm2bb+rdm2ab+rdm2ab.transpose(2,3,0,1), rdm2)
+
+    rdm3aaa = rdm3[:norb,:norb,:norb,:norb,:norb,:norb]
+    rdm3aab = rdm3[:norb,:norb,:norb,:norb,norb:,norb:]
+    rdm3abb = rdm3[:norb,:norb,norb:,norb:,norb:,norb:]
+    rdm3bbb = rdm3[norb:,norb:,norb:,norb:,norb:,norb:]
+    # assert np.allclose(rdm3aaa+rdm3bbb+rdm3aab+rdm3aab.transpose(0,1,4,5,2,3)+\
+    # rdm3aab.transpose(4,5,0,1,2,3)+rdm3abb+rdm3abb.transpose(2,3,0,1,4,5)+rdm3abb.transpose(2,3,4,5,0,1), rdm3)
+    return (rdm1a, rdm1b), (rdm2aa, rdm2ab, rdm2bb), (rdm3aaa, rdm3aab, rdm3abb, rdm3bbb)
+
+
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     r'''Spin separated transition 1-particle density matrices.
     The return values include two density matrices: (alpha,alpha), (beta,beta).
@@ -428,19 +475,31 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, inplace=True)
     return dm1, dm2
 
-def _get_init_guess(na, nb, nroots, hdiag):
-    '''Initial guess is the single Slater determinant
-    '''
+def _get_init_guess(na, nb, nroots, hdiag, nelec):
     # The "nroots" lowest determinats based on energy expectation value.
     ci0 = []
-    try:
-        addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
-    except AttributeError:
-        addrs = numpy.argsort(hdiag)[:nroots]
-    for addr in addrs:
-        x = numpy.zeros((na*nb))
-        x[addr] = 1
-        ci0.append(x.ravel().view(FCIvector))
+    neleca, nelecb = _unpack_nelec(nelec)
+    if neleca == nelecb and na == nb:
+        hdiag = lib.pack_tril(hdiag.reshape(na, na))
+        if hdiag.size <= nroots:
+            addrs = numpy.arange(hdiag.size)
+        else:
+            addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
+        for addr in addrs:
+            addra = (int)((2*addr+.25)**.5 - .5 + 1e-7)
+            addrb = addr - addra*(addra+1)//2
+            x = numpy.zeros((na, na))
+            x[addra,addrb] = 1
+            ci0.append(x.ravel().view(FCIvector))
+    else:
+        if hdiag.size <= nroots:
+            addrs = numpy.arange(hdiag.size)
+        else:
+            addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
+        for addr in addrs:
+            x = numpy.zeros((na*nb))
+            x[addr] = 1
+            ci0.append(x.view(FCIvector))
 
     # Add noise
     ci0[0][0 ] += 1e-5
@@ -453,7 +512,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
     neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
-    return _get_init_guess(na, nb, nroots, hdiag)
+    return _get_init_guess(na, nb, nroots, hdiag, nelec)
 
 
 ###############################################################
@@ -462,7 +521,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
 
 def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
-               nroots=None, davidson_only=None, pspace_size=None,
+               nroots=None, davidson_only=None, pspace_size=None, hop=None,
                max_memory=None, verbose=None, ecore=0, **kwargs):
     '''
     Args:
@@ -492,10 +551,12 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
         nroots: int
             Number of states to solve
         davidson_only: bool
-            Whether to call subspace diagonlization (davidson solver) or do a
-            full diagonlization (lapack eigh) for small systems
+            Whether to call subspace diagonalization (davidson solver) or do a
+            full diagonalization (lapack eigh) for small systems
         pspace_size: int
             Number of determinants as the threshold of "small systems",
+        hop: function(c) => array_like_c
+            Function to use for the Hamiltonian multiplication with trial vector
 
     Note: davidson solver requires more arguments. For the parameters not
     dispatched, they can be passed to davidson solver via the extra keyword
@@ -510,73 +571,82 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
     nelec = _unpack_nelec(nelec, fci.spin)
     assert (0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
-    link_indexa, link_indexb = _unpack(norb, nelec, link_index)
-    na = link_indexa.shape[0]
-    nb = link_indexb.shape[0]
 
-    if max_memory < na*nb*6*8e-6:
+    hdiag = fci.make_hdiag(h1e, eri, norb, nelec, compress=False).ravel()
+    num_dets = hdiag.size
+    pspace_size = min(num_dets, pspace_size)
+    addr = [0]
+    pw = pv = None
+    if pspace_size > 0 and norb < 64:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, pspace_size)
+        pw, pv = fci.eig(h0)
+        pspace_size = len(addr)
+
+    if getattr(fci, 'sym_allowed_idx', None):
+        # Remove symmetry forbidden elements
+        sym_idx = numpy.hstack(fci.sym_allowed_idx)
+        civec_size = sym_idx.size
+    else:
+        sym_idx = None
+        civec_size = num_dets
+
+    if max_memory < civec_size*6*8e-6:
         log.warn('Not enough memory for FCI solver. '
-                 'The minimal requirement is %.0f MB', na*nb*60e-6)
+                 'The minimal requirement is %.0f MB', civec_size*60e-6)
 
-    hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
-    nroots = min(hdiag.size, nroots)
+    if pspace_size >= civec_size and ci0 is None and not davidson_only:
+        if nroots > 1:
+            nroots = min(civec_size, nroots)
+            civec = numpy.empty((nroots,civec_size))
+            civec[:,addr] = pv[:,:nroots].T
+            return pw[:nroots]+ecore, civec
+        elif pspace_size == 1 or abs(pw[0]-pw[1]) > 1e-12:
+            # Check degeneracy. Degenerated wfn may break point group symmetry.
+            # Davidson iteration with a proper initial guess can avoid this problem.
+            civec = numpy.empty(civec_size)
+            civec[addr] = pv[:,0]
+            return pw[0]+ecore, civec
+    pw = pv = h0 = None
 
-    try:
-        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
-        if pspace_size > 0:
-            pw, pv = fci.eig(h0)
-        else:
-            pw = pv = None
-
-        if pspace_size >= na*nb and ci0 is None and not davidson_only:
-            # The degenerated wfn can break symmetry.  The davidson iteration with proper
-            # initial guess doesn't have this issue
-            if na*nb == 1:
-                return pw[0]+ecore, pv[:,0].reshape(1,1).view(FCIvector)
-            elif nroots > 1:
-                civec = numpy.empty((nroots,na*nb))
-                civec[:,addr] = pv[:,:nroots].T
-                return pw[:nroots]+ecore, [c.reshape(na,nb).view(FCIvector) for c in civec]
-            elif abs(pw[0]-pw[1]) > 1e-12:
-                civec = numpy.empty((na*nb))
-                civec[addr] = pv[:,0]
-                return pw[0]+ecore, civec.reshape(na,nb).view(FCIvector)
-    except NotImplementedError:
-        addr = [0]
-        pw = pv = None
-
-    precond = fci.make_precond(hdiag, pw, pv, addr)
+    if sym_idx is None:
+        precond = fci.make_precond(hdiag)
+    else:
+        precond = fci.make_precond(hdiag[sym_idx])
 
     h2e = fci.absorb_h1e(h1e, eri, norb, nelec, .5)
-    def hop(c):
-        hc = fci.contract_2e(h2e, c, norb, nelec, (link_indexa,link_indexb))
-        return hc.ravel()
+    if hop is None:
+        cpu0 = [logger.process_clock(), logger.perf_counter()]
+        def hop(c):
+            hc = fci.contract_2e(h2e, c, norb, nelec, link_index)
+            cpu0[:] = log.timer_debug1('contract_2e', *cpu0)
+            return hc.ravel()
+
+    def init_guess():
+        if callable(getattr(fci, 'get_init_guess', None)):
+            return fci.get_init_guess(norb, nelec, nroots, hdiag)
+        else:
+            x0 = []
+            for i in range(min(len(addr), nroots)):
+                x = numpy.zeros(civec_size)
+                x[addr[i]] = 1
+                x0.append(x)
+            return x0
 
     if ci0 is None:
-        if callable(getattr(fci, 'get_init_guess', None)):
-            ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
-        else:
-            def ci0():  # lazy initialization to reduce memory footprint
-                x0 = []
-                for i in range(nroots):
-                    x = numpy.zeros(na*nb)
-                    x[addr[i]] = 1
-                    x0.append(x)
-                return x0
+        ci0 = init_guess  # lazy initialization to reduce memory footprint
     elif not callable(ci0):
-        if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
+        if isinstance(ci0, numpy.ndarray):
             ci0 = [ci0.ravel()]
         else:
             ci0 = [x.ravel() for x in ci0]
-        # Add vectors if not enough initial guess is given
+        if sym_idx is not None and ci0[0].size != civec_size:
+            ci0 = [x[sym_idx] for x in ci0]
+        # If provided initial guess ci0 are accidentally the eigenvectors of the
+        # system, Davidson solver may be failed to find enough roots as it is
+        # unable to generate more subspace basis from ci0. Adding vectors so
+        # initial guess to help Davidson solver generate enough basis.
         if len(ci0) < nroots:
-            if callable(getattr(fci, 'get_init_guess', None)):
-                ci0.extend(fci.get_init_guess(norb, nelec, nroots, hdiag)[len(ci0):])
-            else:
-                for i in range(len(ci0), nroots):
-                    x = numpy.zeros(na*nb)
-                    x[addr[i]] = 1
-                    ci0.append(x)
+            ci0.extend(init_guess()[len(ci0):])
 
     if tol is None: tol = fci.conv_tol
     if lindep is None: lindep = fci.lindep
@@ -585,15 +655,11 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     tol_residual = getattr(fci, 'conv_tol_residual', None)
 
     with lib.with_omp_threads(fci.threads):
-        #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
         e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                        max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                        max_memory=max_memory, verbose=log, follow_state=True,
                        tol_residual=tol_residual, **kwargs)
-    if nroots > 1:
-        return e+ecore, [ci.reshape(na,nb).view(FCIvector) for ci in c]
-    else:
-        return e+ecore, c.reshape(na,nb).view(FCIvector)
+    return e+ecore, c
 
 def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     # precondition with pspace Hamiltonian, CPL, 169, 463
@@ -612,7 +678,7 @@ def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
         x1 = r - e1*x0
         #pspace_x1 = x1[addr].copy()
         x1 *= hdiaginv
-# pspace (h0-e0)^{-1} cause diverging?
+        # pspace (h0-e0)^{-1} cause diverging?
         #x1[addr] = numpy.linalg.solve(h0e0, pspace_x1)
         return x1
     return precond
@@ -643,7 +709,7 @@ class FCIBase(lib.StreamObject):
             problems being solved by Davidson subspace algorithm.  This flag
             should be enabled when initial guess is given or particular spin
             symmetry or point-group symmetry is required because the initial
-            guess or symmetry are completely ignored in the direct diagonlization.
+            guess or symmetry are completely ignored in the direct diagonalization.
         pspace_size : int
             The dimension of Hamiltonian matrix over which Davidson iteration
             algorithm will be used for the eigenvalue problem.  Default is 400.
@@ -686,11 +752,12 @@ class FCIBase(lib.StreamObject):
     conv_tol_residual = getattr(__config__, 'fci_direct_spin1_FCI_conv_tol_residual', None)
     lindep = getattr(__config__, 'fci_direct_spin1_FCI_lindep', 1e-14)
 
-    # level shift in precond
+    # level shift in preconditioner is helpful to avoid singularity and linear
+    # dependence basis in davidson diagonalization solver
     level_shift = getattr(__config__, 'fci_direct_spin1_FCI_level_shift', 1e-3)
 
-    # force the diagonlization use davidson iteration.  When the CI space
-    # is small, the solver exactly diagonlizes the Hamiltonian.  But this
+    # force the diagonalization use davidson iteration.  When the CI space
+    # is small, the solver exactly diagonalizes the Hamiltonian.  But this
     # solution will ignore the initial guess.  Setting davidson_only can
     # enforce the solution on the initial guess state
     davidson_only = getattr(__config__, 'fci_direct_spin1_FCI_davidson_only', False)
@@ -698,6 +765,13 @@ class FCIBase(lib.StreamObject):
     pspace_size = getattr(__config__, 'fci_direct_spin1_FCI_pspace_size', 400)
     threads = getattr(__config__, 'fci_direct_spin1_FCI_threads', None)
     lessio = getattr(__config__, 'fci_direct_spin1_FCI_lessio', False)
+
+    _keys = {
+        'max_cycle', 'max_space', 'conv_tol', 'lindep',
+        'level_shift', 'davidson_only', 'pspace_size', 'threads', 'lessio',
+        'mol', 'nroots', 'spin', 'orbsym', 'wfnsym', 'converged', 'norb',
+        'nelec', 'eci', 'ci',
+    }
 
     def __init__(self, mol=None):
         if mol is None:
@@ -721,11 +795,6 @@ class FCIBase(lib.StreamObject):
         self.nelec = None
         self.eci = None
         self.ci = None
-
-        keys = set(('max_cycle', 'max_space', 'conv_tol', 'lindep',
-                    'level_shift', 'davidson_only', 'pspace_size', 'threads',
-                    'lessio'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
     def e_tot(self):
@@ -759,9 +828,9 @@ class FCIBase(lib.StreamObject):
         return absorb_h1e(h1e, eri, norb, nelec, fac)
 
     @lib.with_doc(make_hdiag.__doc__)
-    def make_hdiag(self, h1e, eri, norb, nelec):
+    def make_hdiag(self, h1e, eri, norb, nelec, compress=False):
         nelec = _unpack_nelec(nelec, self.spin)
-        return make_hdiag(h1e, eri, norb, nelec)
+        return make_hdiag(h1e, eri, norb, nelec, compress)
 
     @lib.with_doc(pspace.__doc__)
     def pspace(self, h1e, eri, norb, nelec, hdiag=None, np=400):
@@ -792,11 +861,12 @@ class FCIBase(lib.StreamObject):
             ci = ci[0]
         return e, ci
 
-    def make_precond(self, hdiag, pspaceig, pspaceci, addr):
+    def make_precond(self, hdiag, pspaceig=None, pspaceci=None, addr=None):
         if pspaceig is None:
             return make_diag_precond(hdiag, pspaceig, pspaceci, addr,
                                      self.level_shift)
         else:
+            # Note: H0 in pspace may break symmetry.
             return make_pspace_precond(hdiag, pspaceig, pspaceci, addr,
                                        self.level_shift)
 
@@ -809,14 +879,23 @@ class FCIBase(lib.StreamObject):
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
+        if nroots is None: nroots = self.nroots
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.norb = norb
-        self.nelec = nelec
-        self.eci, self.ci = \
-                kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
-                           tol, lindep, max_cycle, max_space, nroots,
-                           davidson_only, pspace_size, ecore=ecore, **kwargs)
+        self.nelec = nelec = _unpack_nelec(nelec, self.spin)
+        link_index = _unpack(norb, nelec, None)
+        e, c = kernel_ms1(self, h1e, eri, norb, nelec, ci0, link_index,
+                          tol, lindep, max_cycle, max_space, nroots,
+                          davidson_only, pspace_size, ecore=ecore, **kwargs)
+        self.eci = e
+
+        na = link_index[0].shape[0]
+        nb = link_index[1].shape[0]
+        if nroots > 1:
+            self.ci = [x.reshape(na,nb).view(FCIvector) for x in c]
+        else:
+            self.ci = c.reshape(na,nb).view(FCIvector)
         return self.eci, self.ci
 
     @lib.with_doc(energy.__doc__)
@@ -850,6 +929,16 @@ class FCIBase(lib.StreamObject):
     def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
         nelec = _unpack_nelec(nelec, self.spin)
         return make_rdm12(fcivec, norb, nelec, link_index, reorder)
+
+    @lib.with_doc(make_rdm123s.__doc__)
+    def make_rdm123s(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        nelec = _unpack_nelec(nelec, self.spin)
+        return make_rdm123s(fcivec, norb, nelec, link_index, reorder)
+
+    @lib.with_doc(make_rdm123.__doc__)
+    def make_rdm123(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        nelec = _unpack_nelec(nelec, self.spin)
+        return make_rdm123(fcivec, norb, nelec, link_index, reorder)
 
     def make_rdm2(self, fcivec, norb, nelec, link_index=None, reorder=True):
         r'''Spin traced 2-particle density matrice
@@ -889,9 +978,8 @@ class FCIBase(lib.StreamObject):
         return addons.large_ci(fcivec, norb, nelec, tol, return_strs)
 
     def contract_ss(self, fcivec, norb, nelec):  # noqa: F811
-        from pyscf.fci import spin_op
         nelec = _unpack_nelec(nelec, self.spin)
-        return spin_op.contract_ss(fcivec, norb, nelec)
+        return contract_ss(fcivec, norb, nelec)
 
     def gen_linkstr(self, norb, nelec, tril=True, spin=None):
         if spin is None:
@@ -912,6 +1000,8 @@ class FCISolver(FCIBase):
     def transform_ci_for_orbital_rotation(self, fcivec, norb, nelec, u):
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.transform_ci_for_orbital_rotation(fcivec, norb, nelec, u)
+
+    to_gpu = lib.to_gpu
 
 FCI = FCISolver
 
@@ -936,43 +1026,3 @@ def _unpack(norb, nelec, link_index, spin=None):
         return link_indexa, link_indexb
     else:
         return link_index
-
-
-if __name__ == '__main__':
-    from functools import reduce
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None#"out_h2o"
-    mol.atom = [
-        ['H', ( 1.,-1.    , 0.   )],
-        ['H', ( 0.,-1.    ,-1.   )],
-        ['H', ( 1.,-0.5   ,-1.   )],
-        #['H', ( 0.,-0.5   ,-1.   )],
-        #['H', ( 0.,-0.5   ,-0.   )],
-        ['H', ( 0.,-0.    ,-1.   )],
-        ['H', ( 1.,-0.5   , 0.   )],
-        ['H', ( 0., 1.    , 1.   )],
-    ]
-
-    mol.basis = {'H': 'sto-3g'}
-    mol.build()
-
-    m = scf.RHF(mol)
-    ehf = m.scf()
-
-    cis = FCISolver(mol)
-    norb = m.mo_coeff.shape[1]
-    nelec = mol.nelectron - 2
-    h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-    eri = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
-    eri = eri.reshape(norb,norb,norb,norb)
-    nea = nelec//2 + 1
-    neb = nelec//2 - 1
-    nelec = (nea, neb)
-
-    e1 = cis.kernel(h1e, eri, norb, nelec, davidson_only=True)[0]
-    print(e1, e1 - -7.7466756526056004)
-

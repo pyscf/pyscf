@@ -29,9 +29,10 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lo import orth
 from pyscf.lo import boys
+from pyscf.lo import pipek_jacobi
 from pyscf import __config__
 
-def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
+def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None, s=None):
     '''
     Kwargs:
         method : string
@@ -53,10 +54,11 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
     nmo = mo_coeff.shape[1]
     proj = numpy.empty((mol.natm,nmo,nmo))
 
-    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
-        s = mol.pbc_intor('int1e_ovlp_sph', hermi=1)
-    else:
-        s = mol.intor_symmetric('int1e_ovlp')
+    if s is None:
+        if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
+            s = mol.pbc_intor('int1e_ovlp', hermi=1)
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
 
     if method == 'becke':
         from pyscf.dft import gen_grid
@@ -116,7 +118,7 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
     return proj
 
 
-class PipekMezey(boys.Boys):
+class PipekMezey(boys.OrbitalLocalizer):
     '''The Pipek-Mezey localization optimizer that maximizes the orbital
     population
 
@@ -153,7 +155,7 @@ class PipekMezey(boys.Boys):
         max_iters : int
             The max. number of iterations in each macro iteration. Default 20
         max_stepsize : float
-            The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
+            The step size for orbital rotation.  Small step (0.005 - 0.05) is preferred.
             Default 0.03.
         init_guess : str or None
             Initial guess for optimization. If set to None, orbitals defined
@@ -184,90 +186,84 @@ class PipekMezey(boys.Boys):
 
     pop_method = getattr(__config__, 'lo_pipek_PM_pop_method', 'meta_lowdin')
     conv_tol = getattr(__config__, 'lo_pipek_PM_conv_tol', 1e-6)
-    exponent = getattr(__config__, 'lo_pipek_PM_exponent', 2)  # should be 2 or 4
+    exponent = getattr(__config__, 'lo_pipek_PM_exponent', 2)  # any integer >= 2
 
-    def __init__(self, mol, mo_coeff=None, mf=None):
-        boys.Boys.__init__(self, mol, mo_coeff)
+    _keys = {'pop_method', 'conv_tol', 'exponent'}
+
+    def __init__(self, mol, mo_coeff=None, mf=None, pop_method=None):
+        boys.OrbitalLocalizer.__init__(self, mol, mo_coeff)
         self._scf = mf
-        self._keys = self._keys.union(['pop_method', 'exponent', '_scf'])
+        if pop_method is not None:
+            self.pop_method = pop_method
 
     def dump_flags(self, verbose=None):
-        boys.Boys.dump_flags(self, verbose)
+        boys.OrbitalLocalizer.dump_flags(self, verbose)
         logger.info(self, 'pop_method = %s',self.pop_method)
 
     def gen_g_hop(self, u):
+        exponent = self.exponent
         mo_coeff = lib.dot(self.mo_coeff, u)
-        pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
-        if self.exponent == 2:
-            g0 = numpy.einsum('xii,xip->pi', pop, pop)
-            g = -self.pack_uniq_var(g0-g0.conj().T) * 2
-        elif self.exponent == 4:
-            pop3 = numpy.einsum('xii->xi', pop)**3
-            g0 = numpy.einsum('xi,xip->pi', pop3, pop)
-            g = -self.pack_uniq_var(g0-g0.conj().T) * 4
-        else:
-            raise NotImplementedError('exponent %s' % self.exponent)
+        projR = self.atomic_pops(self.mol, mo_coeff, self.pop_method).real
+        pop = lib.einsum('xii->xi', projR)
+        popexp1 = pop**(exponent-1)
+        popexp2 = pop**(exponent-2)
 
-        h_diag = numpy.einsum('xii,xpp->pi', pop, pop) * 2
-        g_diag = g0.diagonal()
-        h_diag-= g_diag + g_diag.reshape(-1,1)
-        h_diag+= numpy.einsum('xip,xip->pi', pop, pop) * 2
-        h_diag+= numpy.einsum('xip,xpi->pi', pop, pop) * 2
-        h_diag = -self.pack_uniq_var(h_diag) * 2
+        # gradient
+        g = lib.einsum('xj,xij->ij', popexp1, projR)
+        g = -2 * exponent * self.pack_uniq_var(g - g.T)
 
-        g0 = g0 + g0.conj().T
-        if self.exponent == 2:
-            def h_op(x):
-                x = self.unpack_uniq_var(x)
-                norb = x.shape[0]
-                hx = lib.dot(x.T, g0.T).conj()
-                hx+= numpy.einsum('xip,xi->pi', pop, numpy.einsum('qi,xiq->xi', x, pop)) * 2
-                hx-= numpy.einsum('xpp,xip->pi', pop,
-                                  lib.dot(pop.reshape(-1,norb), x).reshape(-1,norb,norb)) * 2
-                hx-= numpy.einsum('xip,xp->pi', pop, numpy.einsum('qp,xpq->xp', x, pop)) * 2
-                return -self.pack_uniq_var(hx-hx.conj().T)
-        else:
-            def h_op(x):
-                x = self.unpack_uniq_var(x)
-                norb = x.shape[0]
-                hx = lib.dot(x.T, g0.T).conj() * 2
-                pop2 = numpy.einsum('xii->xi', pop)**2
-                pop3 = numpy.einsum('xii->xi', pop)**3
-                tmp = numpy.einsum('qi,xiq->xi', x, pop) * pop2
-                hx+= numpy.einsum('xip,xi->pi', pop, tmp) * 12
-                hx-= numpy.einsum('xp,xip->pi', pop3,
-                                  lib.dot(pop.reshape(-1,norb), x).reshape(-1,norb,norb)) * 4
-                tmp = numpy.einsum('qp,xpq->xp', x, pop) * pop2
-                hx-= numpy.einsum('xip,xp->pi', pop, tmp) * 12
-                return -self.pack_uniq_var(hx-hx.conj().T)
+        # hessian diagonal
+        g1 = lib.einsum('xi,xi->i', popexp1, pop)
+        g2 = lib.einsum('xi,xj->ij', popexp1, pop)
+        h_diag  = -2 * exponent * (g1[:,None] - g2)
+        g1 = lib.einsum('xi,xij->ij', popexp2, projR**2.)
+        h_diag +=  4 * exponent * (exponent-1) * g1
+        h_diag = -self.pack_uniq_var(h_diag + h_diag.T)
+
+        # hessian vector product
+        G = lib.einsum('xi,xij->ij', popexp1, projR)
+        G += G.T
+
+        def h_op(x):
+            xR = self.unpack_uniq_var(x).real
+
+            # contributions from (nabla proj) x (nabla proj)
+            j0 = popexp2 * lib.einsum('xik,ki->xi', projR, xR)
+            j1 = lib.einsum('xi,xij->ij', j0, projR)
+            hx = -4 * exponent * (exponent-1) * j1
+
+            # contributions from nabla^2 proj: symmetric terms
+            j1 = numpy.dot(G,xR)
+            hx += -exponent * j1
+
+            # contributions from nabla^2 proj: asymmetric terms
+            j1 = lib.einsum('xj,xik,kj->ij', popexp1, projR, xR)
+            hx += 2 * exponent * j1
+
+            hx -= hx.T
+
+            return -self.pack_uniq_var(hx)
 
         return g, h_op, h_diag
 
     def get_grad(self, u=None):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
+        exponent = self.exponent
         mo_coeff = lib.dot(self.mo_coeff, u)
-        pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
-        if self.exponent == 2:
-            g0 = numpy.einsum('xii,xip->pi', pop, pop)
-            g = -self.pack_uniq_var(g0-g0.conj().T) * 2
-        else:
-            pop3 = numpy.einsum('xii->xi', pop)**3
-            g0 = numpy.einsum('xi,xip->pi', pop3, pop)
-            g = -self.pack_uniq_var(g0-g0.conj().T) * 4
+        projR = self.atomic_pops(self.mol, mo_coeff, self.pop_method).real
+        popexp1 = lib.einsum('xii->xi', projR)**(exponent-1)
+        g = lib.einsum('xj,xij->ij', popexp1, projR)
+        g = -2 * exponent * self.pack_uniq_var(g - g.T)
         return g
 
     def cost_function(self, u=None):
         if u is None: u = numpy.eye(self.mo_coeff.shape[1])
         mo_coeff = lib.dot(self.mo_coeff, u)
-        pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
-        if self.exponent == 2:
-            return numpy.einsum('xii,xii->', pop, pop)
-        else:
-            pop2 = numpy.einsum('xii->xi', pop)**2
-            return numpy.einsum('xi,xi', pop2, pop2)
+        projR = self.atomic_pops(self.mol, mo_coeff, self.pop_method).real
+        return (lib.einsum('xii->xi', projR)**self.exponent).sum()
 
     @lib.with_doc(atomic_pops.__doc__)
-    def atomic_pops(self, mol, mo_coeff, method=None):
+    def atomic_pops(self, mol, mo_coeff, method=None, s=None):
         if method is None:
             method = self.pop_method
 
@@ -275,7 +271,11 @@ class PipekMezey(boys.Boys):
             logger.error(self, 'PM with IAO scheme should include an scf '
                          'object when creating PM object.\n    PM(mol, mf=scf_object)')
             raise ValueError('PM attribute method is not valid')
-        return atomic_pops(mol, mo_coeff, method, self._scf)
+        return atomic_pops(mol, mo_coeff, method, self._scf, s=s)
+
+    def stability_jacobi(self):
+        return pipek_jacobi.PipekMezey_stability_jacobi(self)
+
 
 PM = Pipek = PipekMezey
 
@@ -284,12 +284,21 @@ if __name__ == '__main__':
 
     mol = gto.Mole()
     mol.atom = '''
-         O   0.    0.     0.2
-         H    0.   -0.5   -0.4
-         H    0.    0.5   -0.4
-      '''
+    O          0.00000        0.00000        0.11779
+    H          0.00000        0.75545       -0.47116
+    H          0.00000       -0.75545       -0.47116
+    '''
     mol.basis = 'ccpvdz'
     mol.build()
     mf = scf.RHF(mol).run()
 
-    mo = PM(mol).kernel(mf.mo_coeff[:,5:9], verbose=4)
+    mlo = PM(mol)
+    mlo.verbose = 4
+    mlo.exponent = 2    # integer >= 2
+    mo0 = mf.mo_coeff[:,mf.mo_occ>1e-6]
+    mo = mlo.kernel(mo0)
+    isstable, mo1 = mlo.stability_jacobi()
+    if not isstable:
+        mo = mlo.kernel(mo1)
+        isstable, mo1 = mlo.stability_jacobi()
+        assert( isstable )

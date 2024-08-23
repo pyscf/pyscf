@@ -69,7 +69,7 @@ def make_intermediates(mycc, t1, t2, eris):
     oooo = np.asarray(eris.oooo)
     woooo  = lib.einsum('icjl,kc->ikjl', ovoo, t1)
     woooo += lib.einsum('jcil,kc->iljk', ovoo, t1)
-    woooo += oooo.copy()
+    woooo += oooo
     woooo += lib.einsum('icjd,klcd->ikjl', ovov, tau)
 
     theta = t2*2 - t2.transpose(0,1,3,2)
@@ -287,4 +287,3 @@ if __name__ == '__main__':
     e1 = np.einsum('pq,pq', h1, dm1)
     e2 = np.einsum('pqrs,pqrs', eri, dm2) * .5
     print(e1+e2+mol.energy_nuc() - mf.e_tot - ecc)
-

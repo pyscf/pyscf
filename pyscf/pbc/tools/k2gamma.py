@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,21 +26,43 @@ https://github.com/zhcui/local-orbital-and-cdft/blob/master/k2gamma.py
 '''
 
 from functools import reduce
+from fractions import Fraction
 import numpy as np
 import scipy.linalg
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.pbc import tools
+from pyscf.pbc.lib.kpts import KPoints
+from pyscf.pbc.lib.kpts_helper import group_by_conj_pairs
 
 
-def kpts_to_kmesh(cell, kpts):
-    '''Guess kmesh'''
-    scaled_k = cell.get_scaled_kpts(kpts).round(8)
-    kmesh = (len(np.unique(scaled_k[:,0])),
-             len(np.unique(scaled_k[:,1])),
-             len(np.unique(scaled_k[:,2])))
+def kpts_to_kmesh(cell, kpts, precision=None):
+    '''Find the minimal k-points mesh to include all input kpts'''
+    scaled_kpts = cell.get_scaled_kpts(kpts)
+    logger.debug3(cell, '    scaled_kpts kpts %s', scaled_kpts)
+    # cell.nimgs are the upper limits for kmesh
+    kmesh = np.asarray(cell.nimgs) * 2 + 1
+    if precision is None:
+        precision = cell.precision * 1e2
+    for i in range(3):
+        floats = scaled_kpts[:,i]
+        uniq_floats_idx = np.unique(floats.round(6), return_index=True)[1]
+        uniq_floats = floats[uniq_floats_idx]
+        # Limit the number of images to 30 in each direction
+        fracs = [Fraction(x).limit_denominator(30) for x in uniq_floats]
+        denominators = np.unique([x.denominator for x in fracs])
+        common_denominator = reduce(np.lcm, denominators)
+        fs = common_denominator * uniq_floats
+        if abs(uniq_floats - np.rint(fs)/common_denominator).max() < precision:
+            kmesh[i] = min(kmesh[i], common_denominator)
+        if cell.verbose >= logger.DEBUG3:
+            logger.debug3(cell, 'dim=%d common_denominator %d  error %g',
+                          i, common_denominator, abs(fs - np.rint(fs)).max())
+            logger.debug3(cell, '    unique kpts %s', uniq_floats)
+            logger.debug3(cell, '    frac kpts %s', fracs)
     return kmesh
 
-def translation_vectors_for_kmesh(cell, kmesh):
+def translation_vectors_for_kmesh(cell, kmesh, wrap_around=False):
     '''
     Translation vectors to construct super-cell of which the gamma point is
     identical to the k-point mesh of primitive cell
@@ -49,25 +71,29 @@ def translation_vectors_for_kmesh(cell, kmesh):
     R_rel_a = np.arange(kmesh[0])
     R_rel_b = np.arange(kmesh[1])
     R_rel_c = np.arange(kmesh[2])
+    if wrap_around:
+        R_rel_a[(kmesh[0]+1)//2:] -= kmesh[0]
+        R_rel_b[(kmesh[1]+1)//2:] -= kmesh[1]
+        R_rel_c[(kmesh[2]+1)//2:] -= kmesh[2]
     R_vec_rel = lib.cartesian_prod((R_rel_a, R_rel_b, R_rel_c))
-    R_vec_abs = np.einsum('nu, uv -> nv', R_vec_rel, latt_vec)
+    R_vec_abs = np.dot(R_vec_rel, latt_vec)
     return R_vec_abs
 
-def get_phase(cell, kpts, kmesh=None):
+def get_phase(cell, kpts, kmesh=None, wrap_around=False):
     '''
     The unitary transformation that transforms the supercell basis k-mesh
     adapted basis.
     '''
     if kmesh is None:
         kmesh = kpts_to_kmesh(cell, kpts)
-    R_vec_abs = translation_vectors_for_kmesh(cell, kmesh)
+    R_vec_abs = translation_vectors_for_kmesh(cell, kmesh, wrap_around)
 
     NR = len(R_vec_abs)
-    phase = np.exp(1j*np.einsum('Ru, ku -> Rk', R_vec_abs, kpts))
+    phase = np.exp(1j*np.dot(R_vec_abs, kpts.T))
     phase /= np.sqrt(NR)  # normalization in supercell
 
     # R_rel_mesh has to be construct exactly same to the Ts in super_cell function
-    scell = tools.super_cell(cell, kmesh)
+    scell = tools.super_cell(cell, kmesh, wrap_around)
     return scell, phase
 
 def double_translation_indices(kmesh):
@@ -113,36 +139,54 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
     Nk, Nao, Nmo = C_k.shape
     NR = phase.shape[0]
 
+    k_conj_groups = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)
+    k_phase = np.eye(Nk, dtype=np.complex128)
+    r2x2 = np.array([[1., 1j], [1., -1j]]) * .5**.5
+    pairs = [[k, k_conj] for k, k_conj in k_conj_groups
+             if k_conj is not None and k != k_conj]
+    for idx in np.array(pairs):
+        k_phase[idx[:,None],idx] = r2x2
     # Transform AO indices
-    C_gamma = np.einsum('Rk, kum -> Rukm', phase, C_k)
+    C_gamma = np.einsum('Rk,kum,kh->Ruhm', phase, C_k, k_phase)
     C_gamma = C_gamma.reshape(Nao*NR, Nk*Nmo)
 
-    E_sort_idx = np.argsort(E_g)
+    # Pure imaginary orbitals to real
+    cR_max = abs(C_gamma.real).max(axis=0)
+    C_gamma[:,cR_max < 1e-5] *= -1j
+
+    E_sort_idx = np.argsort(E_g, kind='stable')
     E_g = E_g[E_sort_idx]
-    C_gamma = C_gamma[:,E_sort_idx]
-    s = scell.pbc_intor('int1e_ovlp')
-    assert (abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
-               - np.eye(Nmo*Nk)).max() < 1e-5)
 
-    # For degenerated MOs, the transformed orbitals in super cell may not be
-    # real. Construct a sub Fock matrix in super-cell to find a proper
-    # transformation that makes the transformed MOs real.
-    E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
-    degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
-    if np.any(E_k_degen):
-        if abs(C_gamma[:,~degen_mask].imag).max() < 1e-4:
-            shift = min(E_g[degen_mask]) - .1
-            f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
-                       C_gamma[:,degen_mask].conj().T)
-            assert (abs(f.imag).max() < 1e-4)
+    cI_max = abs(C_gamma.imag).max(axis=0)
+    if cI_max.max() < 1e-5:
+        C_gamma = C_gamma.real[:,E_sort_idx]
+    else:
+        C_gamma = C_gamma[:,E_sort_idx]
+        s = scell.pbc_intor('int1e_ovlp')
+        # assert (abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
+        #            - np.eye(Nmo*Nk)).max() < 1e-5)
 
-            e, na_orb = scipy.linalg.eigh(f.real, s, type=2)
-            C_gamma = C_gamma.real
-            C_gamma[:,degen_mask] = na_orb[:, e>1e-7]
-        else:
-            f = np.dot(C_gamma * E_g, C_gamma.conj().T)
-            assert (abs(f.imag).max() < 1e-4)
-            e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)
+        # For degenerated MOs, the transformed orbitals in super cell may not be
+        # real. Construct a sub Fock matrix in super-cell to find a proper
+        # transformation that makes the transformed MOs real.
+        E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
+        degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
+        degen_mask[cI_max < 1e-5] = False
+        if np.any(E_k_degen):
+            c_rest = C_gamma[:,~degen_mask]
+            if c_rest.size > 0 and abs(c_rest.imag).max() < 1e-4:
+                shift = min(E_g[degen_mask]) - .1
+                f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
+                           C_gamma[:,degen_mask].conj().T)
+                assert (abs(f.imag).max() < 1e-4)
+
+                e, na_orb = scipy.linalg.eigh(f.real, s, type=2)
+                C_gamma = C_gamma.real
+                C_gamma[:,degen_mask] = na_orb[:, e>1e-7]
+            else:
+                f = np.dot(C_gamma * E_g, C_gamma.conj().T)
+                assert (abs(f.imag).max() < 1e-4)
+                e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)
 
     s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     # overlap between k-point unitcell and gamma-point supercell
@@ -161,26 +205,51 @@ def k2gamma(kmf, kmesh=None):
          C_{\nu ' n'} = C_{\vecR\mu, \veck m} = \frac{1}{\sqrt{N_{\UC}}}
          \e^{\ii \veck\cdot\vecR} C^{\veck}_{\mu  m}
     '''
-    from pyscf.pbc import scf
+    from pyscf.pbc import scf, dft
+    if isinstance(kmf.kpts, KPoints):
+        kmf = kmf.to_khf()
+
     def transform(mo_energy, mo_coeff, mo_occ):
+        assert not isinstance(kmf.kpts, KPoints)
+        kpts = kmf.kpts
         scell, E_g, C_gamma = mo_k2gamma(kmf.cell, mo_energy, mo_coeff,
-                                         kmf.kpts, kmesh)[:3]
-        E_sort_idx = np.argsort(np.hstack(mo_energy))
+                                         kpts, kmesh)[:3]
+        E_sort_idx = np.argsort(np.hstack(mo_energy), kind='stable')
         mo_occ = np.hstack(mo_occ)[E_sort_idx]
         return scell, E_g, C_gamma, mo_occ
 
+    mo_coeff = kmf.mo_coeff
+    mo_energy = kmf.mo_energy
+    mo_occ = kmf.mo_occ
+
     if isinstance(kmf, scf.khf.KRHF):
-        scell, E_g, C_gamma, mo_occ = transform(kmf.mo_energy, kmf.mo_coeff, kmf.mo_occ)
-        mf = scf.RHF(scell)
+        scell, E_g, C_gamma, mo_occ = transform(mo_energy, mo_coeff, mo_occ)
     elif isinstance(kmf, scf.kuhf.KUHF):
-        scell, Ea, Ca, occ_a = transform(kmf.mo_energy[0], kmf.mo_coeff[0], kmf.mo_occ[0])
-        scell, Eb, Cb, occ_b = transform(kmf.mo_energy[1], kmf.mo_coeff[1], kmf.mo_occ[1])
-        mf = scf.UHF(scell)
+        scell, Ea, Ca, occ_a = transform(mo_energy[0], mo_coeff[0], mo_occ[0])
+        scell, Eb, Cb, occ_b = transform(mo_energy[1], mo_coeff[1], mo_occ[1])
         E_g = [Ea, Eb]
         C_gamma = [Ca, Cb]
         mo_occ = [occ_a, occ_b]
     else:
         raise NotImplementedError('SCF object %s not supported' % kmf)
+
+    known_cls = {
+        dft.kuks.KUKS  : dft.uks.UKS  ,
+        dft.kroks.KROKS: dft.roks.ROKS,
+        dft.krks.KRKS  : dft.rks.RKS  ,
+        dft.kgks.KGKS  : dft.gks.GKS  ,
+        scf.kuhf.KUHF  : scf.uhf.UHF  ,
+        scf.krohf.KROHF: scf.rohf.ROHF,
+        scf.khf.KRHF   : scf.hf.RHF   ,
+        scf.kghf.KGHF  : scf.ghf.GHF  ,
+    }
+    if kmf.__class__ in known_cls:
+        mf = known_cls[kmf.__class__](scell)
+        mf.exxdiv = kmf.exxdiv
+        if isinstance(mf, dft.KohnShamDFT):
+            mf.xc = kmf.xc
+    else:
+        raise RuntimeError(f'k2gamma for SCF object {kmf} not supported.')
 
     mf.mo_coeff = C_gamma
     mf.mo_energy = E_g
@@ -252,7 +321,7 @@ if __name__ == '__main__':
     mf = k2gamma(kmf, kmesh)
     c_g_ao = mf.mo_coeff
 
-    # The following is to check whether the MO is correctly coverted:
+    # The following is to check whether the MO is correctly converted:
 
     print("Supercell gamma MO in AO basis from conversion:")
     scell = tools.super_cell(cell, kmesh)
@@ -266,4 +335,3 @@ if __name__ == '__main__':
     print("Supercell gamma MO from direct calculation:")
     print(np.linalg.det(c_g_ao[:,:nocc].T.conj().dot(s).dot(sc_mo[:,:nocc])))
     print(np.linalg.svd(c_g_ao[:,:nocc].T.conj().dot(s).dot(sc_mo[:,:nocc]))[1])
-

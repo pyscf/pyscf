@@ -148,11 +148,11 @@ def energy(cc, t1, t2, eris):
 
 
 class RCCSD(ccsd.CCSD):
+    _keys = {'max_space'}
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.max_space = 20
-        self._keys = self._keys.union(['max_space'])
 
     def dump_flags(self, verbose=None):
         ccsd.CCSD.dump_flags(self, verbose)
@@ -185,6 +185,7 @@ class RCCSD(ccsd.CCSD):
         if mbpt2 and cc2:
             raise RuntimeError('MBPT2 and CC2 are mutually exclusive approximations to the CCSD ground state.')
         if eris is None: eris = self.ao2mo(self.mo_coeff)
+        self.e_hf = self.get_e_hf()
         self.eris = eris
         self.dump_flags()
         if mbpt2:
@@ -205,7 +206,7 @@ class RCCSD(ccsd.CCSD):
                 logger.info(self, '%s converged', cctyp)
             else:
                 logger.info(self, '%s not converged', cctyp)
-        if self._scf.e_tot == 0:
+        if self.e_hf == 0:
             logger.note(self, 'E_corr = %.16g', self.e_corr)
         else:
             logger.note(self, 'E(%s) = %.16g  E_corr = %.16g',
@@ -1046,7 +1047,7 @@ class _IMDS:
         raise NotImplementedError
 
 def _cp(a):
-    return np.array(a, copy=False, order='C')
+    return np.asarray(a, order='C')
 
 
 if __name__ == '__main__':

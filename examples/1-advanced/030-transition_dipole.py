@@ -36,7 +36,7 @@ mc = mcscf.CASSCF(mf, 6, 6)
 solver_ag = fci.direct_spin0_symm.FCI(mol)
 solver_b2u = fci.direct_spin0_symm.FCI(mol)
 solver_b2u.wfnsym = 'B2u'
-mc.fcisolver = mcscf.state_average_mix(mc, [solver_ag,solver_b2u], [.5,.5])
+mc = mcscf.state_average_mix(mc, [solver_ag,solver_b2u], [.5,.5])
 cas_list = [17,20,21,22,23,30]  # 2pz orbitals
 mo = mcscf.sort_mo(mc, mf.mo_coeff, cas_list)
 mc.kernel(mo)
@@ -68,7 +68,7 @@ mc.kernel(mc_mo)
 # Be careful with the gauge origin of the dipole integrals
 #
 charges = mol.atom_charges()
-coords = mol.atom_coords()
+coords = mol.atom_coords()  # in a.u.
 nuc_charge_center = numpy.einsum('z,zx->x', charges, coords) / charges.sum()
 mol.set_common_orig_(nuc_charge_center)
 dip_ints = mol.intor('cint1e_r_sph', comp=3)

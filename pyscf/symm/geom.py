@@ -49,9 +49,6 @@ from pyscf import __config__
 
 TOLERANCE = getattr(__config__, 'symm_geom_tol', 1e-5)
 
-# For code compatiblity in python-2 and python-3
-if sys.version_info >= (3,):
-    unicode = str
 
 def parallel_vectors(v1, v2, tol=TOLERANCE):
     if numpy.allclose(v1, 0, atol=tol) or numpy.allclose(v2, 0, atol=tol):
@@ -118,6 +115,51 @@ def alias_axes(axes, ref):
         new_axes = axes[[y_id,x_id,z_id]]
     return new_axes
 
+def _adjust_planar_c2v(atom_coords, axes):
+    '''Adjust axes for planar molecules'''
+    # Following http://iopenshell.usc.edu/resources/howto/symmetry/
+    # See also discussions in issue #1201
+    # * planar C2v molecules should be oriented such that the X axis is perpendicular
+    # to the plane of the molecule, and the Z axis is the axis of symmetry;
+    natm = len(atom_coords)
+    tol = TOLERANCE / numpy.sqrt(1+natm)
+    atoms_on_xz = abs(atom_coords.dot(axes[1])) < tol
+    if all(atoms_on_xz):
+        # rotate xy
+        axes = numpy.array([-axes[1], axes[0], axes[2]])
+    return axes
+
+def _adjust_planar_d2h(atom_coords, axes):
+    '''Adjust axes for planar molecules'''
+    # Following http://iopenshell.usc.edu/resources/howto/symmetry/
+    # See also discussions in issue #1201
+    # * planar D2h molecules should be oriented such that the X axis is
+    # perpendicular to the plane of the molecule, and the Z axis passes through
+    # the greatest number of atoms.
+    natm = len(atom_coords)
+    tol = TOLERANCE / numpy.sqrt(1+natm)
+    natm_with_x = numpy.count_nonzero(abs(atom_coords.dot(axes[0])) > tol)
+    natm_with_y = numpy.count_nonzero(abs(atom_coords.dot(axes[1])) > tol)
+    natm_with_z = numpy.count_nonzero(abs(atom_coords.dot(axes[2])) > tol)
+    if natm_with_z == 0:  # atoms on xy plane
+        if natm_with_x >= natm_with_y:  # atoms-on-y >= atoms-on-x
+            # rotate xz
+            axes = numpy.array([-axes[2], axes[1], axes[0]])
+        else:
+            # rotate xy then rotate xz
+            axes = numpy.array([axes[2], axes[0], axes[1]])
+    elif natm_with_y == 0:  # atoms on xz plane
+        if natm_with_x >= natm_with_z:  # atoms-on-z >= atoms-on-x
+            # rotate xy
+            axes = numpy.array([-axes[1], axes[0], axes[2]])
+        else:
+            # rotate xz then rotate xy
+            axes = numpy.array([axes[1], axes[2], axes[0]])
+    elif natm_with_x == 0:  # atoms on yz plane
+        if natm_with_y < natm_with_z:  # atoms-on-z < atoms-on-y
+            # rotate yz
+            axes = numpy.array([axes[0], -axes[2], axes[1]])
+    return axes
 
 def detect_symm(atoms, basis=None, verbose=logger.WARN):
     '''Detect the point group symmetry for given molecule.
@@ -244,6 +286,8 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
             if is_c2z and is_c2x and is_c2y:
                 if rawsys.has_icenter():
                     gpname = 'D2h'
+                    # _adjust_planar_d2h is unlikely to be called
+                    axes = _adjust_planar_d2h(rawsys.atom_coords, axes)
                 else:
                     gpname = 'D2'
                 axes = alias_axes(axes, numpy.eye(3))
@@ -256,6 +300,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                     gpname = 'C2h'
                 elif rawsys.has_mirror(axes[0]):
                     gpname = 'C2v'
+                    axes = _adjust_planar_c2v(rawsys.atom_coords, axes)
                 else:
                     gpname = 'C2'
             else:
@@ -353,7 +398,7 @@ def as_subgroup(topgroup, axes, subgroup=None):
 
     groupname, axes = get_subgroup(topgroup, axes)
 
-    if isinstance(subgroup, (str, unicode)):
+    if isinstance(subgroup, str):
         subgroup = std_symb(subgroup)
         if groupname == 'C2v' and subgroup == 'Cs':
             axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[1], numpy.pi/2), axes)
@@ -399,8 +444,8 @@ def symm_ops(gpname, axes=None):
              'C2x': opc2x,
              'C2y': opc2y,
              'i'  : opi,
-             'sz' : opcsz,
-             'sx' : opcsx,
+             'sz' : opcsz,  # the mirror perpendicular to z
+             'sx' : opcsx,  # the mirror perpendicular to x
              'sy' : opcsy,}
     return opdic
 
@@ -418,7 +463,7 @@ def symm_identical_atoms(gpname, atoms):
         dup_atom_ids = numpy.sort((idx0,idx1), axis=0).T
         uniq_idx = numpy.unique(dup_atom_ids[:,0], return_index=True)[1]
         eql_atom_ids = dup_atom_ids[uniq_idx]
-        eql_atom_ids = [list(sorted(set(i))) for i in eql_atom_ids]
+        eql_atom_ids = [sorted(set(i)) for i in eql_atom_ids]
         return eql_atom_ids
     elif gpname == 'Coov':
         eql_atom_ids = [[i] for i,a in enumerate(atoms)]
@@ -447,7 +492,7 @@ def symm_identical_atoms(gpname, atoms):
     dup_atom_ids = numpy.sort(dup_atom_ids, axis=0).T
     uniq_idx = numpy.unique(dup_atom_ids[:,0], return_index=True)[1]
     eql_atom_ids = dup_atom_ids[uniq_idx]
-    eql_atom_ids = [list(sorted(set(i))) for i in eql_atom_ids]
+    eql_atom_ids = [sorted(set(i)) for i in eql_atom_ids]
     return eql_atom_ids
 
 def check_symm(gpname, atoms, basis=None):
@@ -502,10 +547,10 @@ def shift_atom(atoms, orig, axis):
 class RotationAxisNotFound(PointGroupSymmetryError):
     pass
 
-class SymmSys(object):
+class SymmSys:
     def __init__(self, atoms, basis=None):
         self.atomtypes = mole.atom_types(atoms, basis)
-        # fake systems, which treates the atoms of different basis as different atoms.
+        # fake systems, which treats the atoms of different basis as different atoms.
         # the fake systems do not have the same symmetry as the potential
         # it's only used to determine the main (Z-)axis
         chg1 = numpy.pi - 2
@@ -547,6 +592,10 @@ class SymmSys(object):
             for i, s in enumerate(u):
                 self.group_atoms_by_distance.append(index[idx == i])
 
+    @property
+    def atom_coords(self):
+        return self.atoms[:,1:]
+
     def cartesian_tensor(self, n):
         z = self.atoms[:,0]
         r = self.atoms[:,1:]
@@ -562,7 +611,7 @@ class SymmSys(object):
         for lst in self.group_atoms_by_distance:
             r0 = self.atoms[lst,1:]
             r1 = numpy.dot(r0, op)
-# FIXME: compare whehter two sets of coordinates are identical
+            # FIXME: compare whether two sets of coordinates are identical
             yield all((_vec_in_vecs(x, r0) for x in r1))
 
     def has_icenter(self):

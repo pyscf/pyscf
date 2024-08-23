@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include "config.h"
 #include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
@@ -301,11 +302,16 @@ void CCuccsd_t_aaa(double complex *e_tot,
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
                v_ir_loc, oo_ir_loc, orbsym, vooo, fvohalf, jobs, e_tot, \
-               permute_idx)
+               permute_idx, stderr)
 {
         int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
+        if (cache1 == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_aaa\n",
+                        sizeof(double) * nocc*nocc*nocc*3);
+                exit(1);
+        }
         double e = 0;
 #pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
@@ -323,6 +329,7 @@ void CCuccsd_t_aaa(double complex *e_tot,
 }
         free(permute_idx);
         free(fvohalf);
+        free(jobs);
 }
 
 
@@ -543,12 +550,17 @@ void CCuccsd_t_baa(double complex *e_tot,
                 t1aT, t1bT, t2aaT, t2abT};
 
 #pragma omp parallel default(none) \
-        shared(njobs, nocca, noccb, nvira, nvirb, vs_ts, jobs, e_tot)
+        shared(njobs, nocca, noccb, nvira, nvirb, vs_ts, jobs, e_tot, stderr)
 {
         int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * (noccb*nocca*nocca*5+1 +
                                                   nocca*2+noccb*2));
+        if (cache1 == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_baa\n",
+                        sizeof(double) * noccb*nocca*nocca*5);
+                exit(1);
+        }
         double e = 0;
 #pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
@@ -562,6 +574,7 @@ void CCuccsd_t_baa(double complex *e_tot,
 #pragma omp critical
         *e_tot += e;
 }
+        free(jobs);
 }
 
 
@@ -695,12 +708,17 @@ void CCuccsd_t_zaaa(double complex *e_tot,
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
                v_ir_loc, oo_ir_loc, orbsym, vooo, fvohalf, jobs, e_tot, \
-               permute_idx)
+               permute_idx, stderr)
 {
         int a, b, c;
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) *
                                         (nocc*nocc*nocc*3+2));
+        if (cache1 == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_zaaa\n",
+                        sizeof(double complex) * nocc*nocc*nocc*3);
+                exit(1);
+        }
         double complex e = 0;
 #pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
@@ -718,6 +736,7 @@ void CCuccsd_t_zaaa(double complex *e_tot,
 }
         free(permute_idx);
         free(fvohalf);
+        free(jobs);
 }
 
 
@@ -897,13 +916,18 @@ void CCuccsd_t_zbaa(double complex *e_tot,
                 t1aT, t1bT, t2aaT, t2abT};
 
 #pragma omp parallel default(none) \
-        shared(njobs, nocca, noccb, nvira, nvirb, vs_ts, jobs, e_tot)
+        shared(njobs, nocca, noccb, nvira, nvirb, vs_ts, jobs, e_tot, stderr)
 {
         int a, b, c;
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) *
                                         (noccb*nocca*nocca*5+1 +
                                          nocca*2+noccb*2));
+        if (cache1 == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_zbaa\n",
+                        sizeof(double complex) * noccb*nocca*nocca*5);
+                exit(1);
+        }
         double complex e = 0;
 #pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
@@ -917,5 +941,6 @@ void CCuccsd_t_zbaa(double complex *e_tot,
 #pragma omp critical
         *e_tot += e;
 }
+        free(jobs);
 }
 

@@ -17,14 +17,13 @@
 #
 
 import numpy as np
-from pyscf import scf
 
 def convert_to_gcisd(myci):
     from pyscf.ci import gcisd
     if isinstance(myci, gcisd.GCISD):
         return myci
 
-    mf = scf.addons.convert_to_ghf(myci._scf)
+    mf = myci._scf.to_ghf()
     gci = gcisd.GCISD(mf)
     assert (myci._nocc is None)
     assert (myci._nmo is None)

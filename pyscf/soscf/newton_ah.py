@@ -286,7 +286,7 @@ def gen_g_hop_dhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 # Dual basis for gradients and hessian
 def project_mol(mol, dual_basis={}):
     from pyscf import df
-    uniq_atoms = set([a[0] for a in mol._atom])
+    uniq_atoms = {a[0] for a in mol._atom}
     newbasis = {}
     for symb in uniq_atoms:
         if gto.charge(symb) <= 10:
@@ -358,11 +358,13 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
         #ah_start_cycle = max(mf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
         ah_start_cycle = mf.ah_start_cycle
         imic = 0
-        dr = 0
+        dr = 0.
+        u = 1.
         ukf = None
         jkcount = 0
         kfcount = 0
         ikf = 0
+        ihop = 0
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in ciah.davidson_cc(h_op, g_op, precond, x0_guess,
@@ -411,7 +413,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                 elif (ikf > 2 and # avoid frequent keyframe
                       #TODO: replace it with keyframe_scheduler
                       (ikf >= max(mf.kf_interval, mf.kf_interval-numpy.log(norm_dr+1e-9)) or
-                       # Insert keyframe if the keyframe and the esitimated g_orb are too different
+                       # Insert keyframe if the keyframe and the estimated g_orb are too different
                        norm_gorb < norm_gkf/kf_trust_region)):
                     ikf = 0
                     u = mf.update_rotate_matrix(dr, mo_occ, mo_coeff=mo_coeff)
@@ -453,12 +455,13 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                         log.debug('Out of trust region. Restore previouse step')
                         break
 
-        u = mf.update_rotate_matrix(dr, mo_occ, mo_coeff=mo_coeff)
-        if ukf is not None:
-            u = mf.rotate_mo(ukf, u)
-        jkcount += ihop + 1
-        log.debug('    tot inner=%d  %d JK  |g|= %4.3g  |u-1|= %4.3g',
-                  imic, jkcount, norm_gorb, numpy.linalg.norm(dr))
+        if ihop > 0:
+            u = mf.update_rotate_matrix(dr, mo_occ, mo_coeff=mo_coeff)
+            if ukf is not None:
+                u = mf.rotate_mo(ukf, u)
+            jkcount += ihop + 1
+            log.debug('    tot inner=%d  %d JK  |g|= %4.3g  |u-1|= %4.3g',
+                      imic, jkcount, norm_gorb, numpy.linalg.norm(dr))
         h_op = h_diag = None
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
 
@@ -517,13 +520,11 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
     # cached twice.
     if mol is mf.mol and not getattr(mf, 'with_df', None):
         mf._eri = mf._scf._eri
-        # If different direct_scf_cutoff is assigned to newton_ah mf.opt
-        # object, mf.opt should be different to mf._scf.opt
-        #mf.opt = mf._scf.opt
 
     rotaiter = _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad, verbose=log)
     next(rotaiter)  # start the iterator
     kftot = jktot = 0
+    norm_gorb = 0.
     scf_conv = False
     cput1 = log.timer('initializing second order scf', *cput0)
 
@@ -615,7 +616,7 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
 
 
 # A tag to label the derived SCF class
-class _CIAH_SOSCF(object):
+class _CIAH_SOSCF:
     '''
     Attributes for Newton solver:
         max_cycle_inner : int
@@ -626,6 +627,8 @@ class _CIAH_SOSCF(object):
             To control whether to canonicalize the orbitals optimized by
             Newton solver.  Default is True.
     '''
+
+    __name_mixin__ = 'SecondOrder'
 
     max_cycle_inner = getattr(__config__, 'soscf_newton_ah_SOSCF_max_cycle_inner', 12)
     max_stepsize = getattr(__config__, 'soscf_newton_ah_SOSCF_max_stepsize', .05)
@@ -641,19 +644,38 @@ class _CIAH_SOSCF(object):
     kf_interval = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_interval', 4)
     kf_trust_region = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_trust_region', 5)
 
+    _keys = {
+        'max_cycle_inner', 'max_stepsize', 'canonicalization', 'ah_start_tol',
+        'ah_start_cycle', 'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
+        'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval', 'kf_trust_region',
+    }
+
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)
         self._scf = mf
-        self._keys.update(('max_cycle_inner', 'max_stepsize',
-                           'canonicalization', 'ah_start_tol', 'ah_start_cycle',
-                           'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
-                           'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval',
-                           'kf_trust_region'))
+
+    def undo_soscf(self):
+        '''Remove the SOSCF Mixin'''
+        from pyscf.df.df_jk import _DFHF
+        if isinstance(self, _DFHF) and not isinstance(self._scf, _DFHF):
+            # where density fitting is only applied on the SOSCF hessian
+            mf = self.undo_df()
+        else:
+            mf = self
+        obj = lib.view(mf, lib.drop_class(mf.__class__, _CIAH_SOSCF))
+        del obj._scf
+        # When both self and self._scf are DF objects, they may be different df
+        # objects. The DF object of the base scf object should be used.
+        if hasattr(self._scf, 'with_df'):
+            obj.with_df = self._scf.with_df
+        return obj
+
+    undo_newton = undo_soscf
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('\n')
-        self._scf.dump_flags(verbose)
+        super().dump_flags(verbose)
         log.info('******** %s Newton solver flags ********', self._scf.__class__)
         log.info('SCF tol = %g', self.conv_tol)
         log.info('conv_tol_grad = %s',    self.conv_tol_grad)
@@ -684,14 +706,15 @@ class _CIAH_SOSCF(object):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self._scf.build(mol)
-        self.opt = None
+        self._opt = {None: None}
         self._eri = None
         return self
 
     def reset(self, mol=None):
         if mol is not None:
             self.mol = mol
-        return self._scf.reset(mol)
+        self._scf.reset(mol)
+        return self
 
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
@@ -777,6 +800,124 @@ class _CIAH_SOSCF(object):
                       _effective_svd(u[idx][:,idx], 1e-5))
         return mo
 
+    def to_gpu(self):
+        return self.undo_soscf().to_gpu()
+
+class _SecondOrderROHF(_CIAH_SOSCF):
+    gen_g_hop = gen_g_hop_rohf
+
+class _SecondOrderUHF(_CIAH_SOSCF):
+    gen_g_hop = gen_g_hop_uhf
+
+    def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+        occidxa = mo_occ[0] > 0
+        occidxb = mo_occ[1] > 0
+        viridxa = ~occidxa
+        viridxb = ~occidxb
+
+        nmo = len(occidxa)
+        dr = numpy.zeros((2,nmo,nmo), dtype=dx.dtype)
+        uniq = numpy.array((viridxa[:,None] & occidxa,
+                            viridxb[:,None] & occidxb))
+        dr[uniq] = dx
+        dr = dr - dr.conj().transpose(0,2,1)
+
+        if WITH_EX_EY_DEGENERACY:
+            mol = self._scf.mol
+            if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
+                orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
+                if mol.groupname == 'SO3':
+                    _force_SO3_degeneracy_(dr[0], orbsyma)
+                    _force_SO3_degeneracy_(dr[1], orbsymb)
+                else:
+                    _force_Ex_Ey_degeneracy_(dr[0], orbsyma)
+                    _force_Ex_Ey_degeneracy_(dr[1], orbsymb)
+
+        if isinstance(u0, int) and u0 == 1:
+            return numpy.asarray((expmat(dr[0]), expmat(dr[1])))
+        else:
+            return numpy.asarray((numpy.dot(u0[0], expmat(dr[0])),
+                                  numpy.dot(u0[1], expmat(dr[1]))))
+
+    def rotate_mo(self, mo_coeff, u, log=None):
+        mo = numpy.asarray((numpy.dot(mo_coeff[0], u[0]),
+                            numpy.dot(mo_coeff[1], u[1])))
+        if self._scf.mol.symmetry:
+            orbsym = uhf_symm.get_orbsym(self._scf.mol, mo_coeff)
+            mo = lib.tag_array(mo, orbsym=orbsym)
+        return mo
+
+    def spin_square(self, mo_coeff=None, s=None):
+        if mo_coeff is None:
+            mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
+                        self.mo_coeff[1][:,self.mo_occ[1]>0])
+        if getattr(self, '_scf', None) and self._scf.mol != self.mol:
+            s = self._scf.get_ovlp()
+        return self._scf.spin_square(mo_coeff, s)
+
+    def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
+        if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
+            mo_coeff = (mo_coeff, mo_coeff)
+        if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
+            mo_occ = (numpy.asarray(mo_occ >0, dtype=numpy.double),
+                      numpy.asarray(mo_occ==2, dtype=numpy.double))
+        return _CIAH_SOSCF.kernel(self, mo_coeff, mo_occ, dm0)
+
+class _SecondOrderGHF(_CIAH_SOSCF):
+    gen_g_hop = gen_g_hop_ghf
+
+    def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+        dr = hf.unpack_uniq_var(dx, mo_occ)
+
+        if WITH_EX_EY_DEGENERACY:
+            mol = self._scf.mol
+            if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
+                orbsym = ghf_symm.get_orbsym(mol, mo_coeff)
+                if mol.groupname == 'SO3':
+                    _force_SO3_degeneracy_(dr, orbsym)
+                else:
+                    _force_Ex_Ey_degeneracy_(dr, orbsym)
+        return numpy.dot(u0, expmat(dr))
+
+    def rotate_mo(self, mo_coeff, u, log=None):
+        mo = numpy.dot(mo_coeff, u)
+        if self._scf.mol.symmetry:
+            orbsym = ghf_symm.get_orbsym(self._scf.mol, mo_coeff)
+            mo = lib.tag_array(mo, orbsym=orbsym)
+        return mo
+
+class _SecondOrderRDHF(_CIAH_SOSCF):
+    gen_g_hop = gen_g_hop_dhf
+
+    def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+        nmo = mo_occ.size
+        nocc = numpy.count_nonzero(mo_occ)
+        nvir = nmo - nocc
+        dx = dx.reshape(nvir, nocc)
+        dx_aa = dx[::2,::2]
+        dr_aa = hf.unpack_uniq_var(dx_aa.ravel(), mo_occ[::2])
+        u = numpy.zeros((nmo, nmo), dtype=dr_aa.dtype)
+        # Allows only the rotation within the up-up space and down-down space
+        u[::2,::2] = u[1::2,1::2] = expmat(dr_aa)
+        return numpy.dot(u0, u)
+
+    def rotate_mo(self, mo_coeff, u, log=None):
+        mo = numpy.dot(mo_coeff, u)
+        return mo
+
+class _SecondOrderDHF(_CIAH_SOSCF):
+    gen_g_hop = gen_g_hop_dhf
+
+    def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+        dr = hf.unpack_uniq_var(dx, mo_occ)
+        return numpy.dot(u0, expmat(dr))
+
+    def rotate_mo(self, mo_coeff, u, log=None):
+        mo = numpy.dot(mo_coeff, u)
+        return mo
+
+class _SecondOrderRHF(_CIAH_SOSCF):
+    gen_g_hop = gen_g_hop_rhf
 
 def newton(mf):
     '''Co-iterative augmented hessian (CIAH) second order SCF solver
@@ -794,163 +935,25 @@ def newton(mf):
     if isinstance(mf, _CIAH_SOSCF):
         return mf
 
-    assert (isinstance(mf, hf.SCF))
-    if mf.__doc__ is None:
-        mf_doc = ''
+    assert isinstance(mf, hf.SCF)
+
+    if mf.istype('ROHF'):
+        cls = _SecondOrderROHF
+    elif mf.istype('UHF'):
+        cls = _SecondOrderUHF
+    elif mf.istype('GHF'):
+        cls = _SecondOrderGHF
+    elif mf.istype('RDHF'):
+        cls = _SecondOrderRDHF
+    elif mf.istype('DHF'):
+        cls = _SecondOrderDHF
     else:
-        mf_doc = mf.__doc__
-
-    if isinstance(mf, rohf.ROHF):
-        class SecondOrderROHF(_CIAH_SOSCF, mf.__class__):
-            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-            gen_g_hop = gen_g_hop_rohf
-        return SecondOrderROHF(mf)
-
-    elif isinstance(mf, uhf.UHF):
-        class SecondOrderUHF(_CIAH_SOSCF, mf.__class__):
-            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-
-            gen_g_hop = gen_g_hop_uhf
-
-            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
-                occidxa = mo_occ[0] > 0
-                occidxb = mo_occ[1] > 0
-                viridxa = ~occidxa
-                viridxb = ~occidxb
-
-                nmo = len(occidxa)
-                dr = numpy.zeros((2,nmo,nmo), dtype=dx.dtype)
-                uniq = numpy.array((viridxa[:,None] & occidxa,
-                                    viridxb[:,None] & occidxb))
-                dr[uniq] = dx
-                dr = dr - dr.conj().transpose(0,2,1)
-
-                if WITH_EX_EY_DEGENERACY:
-                    mol = self._scf.mol
-                    if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
-                        orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-                        if mol.groupname == 'SO3':
-                            _force_SO3_degeneracy_(dr[0], orbsyma)
-                            _force_SO3_degeneracy_(dr[1], orbsymb)
-                        else:
-                            _force_Ex_Ey_degeneracy_(dr[0], orbsyma)
-                            _force_Ex_Ey_degeneracy_(dr[1], orbsymb)
-
-                if isinstance(u0, int) and u0 == 1:
-                    return numpy.asarray((expmat(dr[0]), expmat(dr[1])))
-                else:
-                    return numpy.asarray((numpy.dot(u0[0], expmat(dr[0])),
-                                          numpy.dot(u0[1], expmat(dr[1]))))
-
-            def rotate_mo(self, mo_coeff, u, log=None):
-                mo = numpy.asarray((numpy.dot(mo_coeff[0], u[0]),
-                                    numpy.dot(mo_coeff[1], u[1])))
-                if self._scf.mol.symmetry:
-                    orbsym = uhf_symm.get_orbsym(self._scf.mol, mo_coeff)
-                    mo = lib.tag_array(mo, orbsym=orbsym)
-                return mo
-
-            def spin_square(self, mo_coeff=None, s=None):
-                if mo_coeff is None:
-                    mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
-                                self.mo_coeff[1][:,self.mo_occ[1]>0])
-                if getattr(self, '_scf', None) and self._scf.mol != self.mol:
-                    s = self._scf.get_ovlp()
-                return self._scf.spin_square(mo_coeff, s)
-
-            def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
-                if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
-                    mo_coeff = (mo_coeff, mo_coeff)
-                if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
-                    mo_occ = (numpy.asarray(mo_occ >0, dtype=numpy.double),
-                              numpy.asarray(mo_occ==2, dtype=numpy.double))
-                return _CIAH_SOSCF.kernel(self, mo_coeff, mo_occ, dm0)
-
-        return SecondOrderUHF(mf)
-
-    elif isinstance(mf, scf.ghf.GHF):
-        class SecondOrderGHF(_CIAH_SOSCF, mf.__class__):
-            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-
-            gen_g_hop = gen_g_hop_ghf
-
-            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
-                dr = hf.unpack_uniq_var(dx, mo_occ)
-
-                if WITH_EX_EY_DEGENERACY:
-                    mol = self._scf.mol
-                    if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
-                        orbsym = scf.ghf_symm.get_orbsym(mol, mo_coeff)
-                        if mol.groupname == 'SO3':
-                            _force_SO3_degeneracy_(dr, orbsym)
-                        else:
-                            _force_Ex_Ey_degeneracy_(dr, orbsym)
-                return numpy.dot(u0, expmat(dr))
-
-            def rotate_mo(self, mo_coeff, u, log=None):
-                mo = numpy.dot(mo_coeff, u)
-                if self._scf.mol.symmetry:
-                    orbsym = scf.ghf_symm.get_orbsym(self._scf.mol, mo_coeff)
-                    mo = lib.tag_array(mo, orbsym=orbsym)
-                return mo
-        return SecondOrderGHF(mf)
-
-    elif isinstance(mf, scf.dhf.RDHF):
-        class SecondOrderRDHF(_CIAH_SOSCF, mf.__class__):
-            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-
-            gen_g_hop = gen_g_hop_dhf
-
-            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
-                nmo = mo_occ.size
-                nocc = numpy.count_nonzero(mo_occ)
-                nvir = nmo - nocc
-                dx = dx.reshape(nvir, nocc)
-                dx_aa = dx[::2,::2]
-                dr_aa = hf.unpack_uniq_var(dx_aa.ravel(), mo_occ[::2])
-                u = numpy.zeros((nmo, nmo), dtype=dr_aa.dtype)
-                # Allows only the rotation within the up-up space and down-down space
-                u[::2,::2] = u[1::2,1::2] = expmat(dr_aa)
-                return numpy.dot(u0, u)
-
-            def rotate_mo(self, mo_coeff, u, log=None):
-                mo = numpy.dot(mo_coeff, u)
-                return mo
-        return SecondOrderRDHF(mf)
-
-    elif isinstance(mf, scf.dhf.DHF):
-        class SecondOrderDHF(_CIAH_SOSCF, mf.__class__):
-            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-
-            gen_g_hop = gen_g_hop_dhf
-
-            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
-                dr = hf.unpack_uniq_var(dx, mo_occ)
-                return numpy.dot(u0, expmat(dr))
-
-            def rotate_mo(self, mo_coeff, u, log=None):
-                mo = numpy.dot(mo_coeff, u)
-                return mo
-        return SecondOrderDHF(mf)
-
-    else:
-        class SecondOrderRHF(_CIAH_SOSCF, mf.__class__):
-            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-            gen_g_hop = gen_g_hop_rhf
-        return SecondOrderRHF(mf)
+        cls = _SecondOrderRHF
+    return lib.set_class(cls(mf), (cls, mf.__class__))
 
 def remove_soscf(mf):
     '''Remove the SOSCF decorator'''
-    if not isinstance(mf, _CIAH_SOSCF):
-        return mf
-
-    for cls in mf.__class__.__mro__:
-        if not issubclass(cls, _CIAH_SOSCF):
-            break
-    mf = mf.view(cls)
-    if hasattr(mf, '_scf'):
-        delattr(mf, '_scf')
-    return mf
+    return mf.remove_soscf()
 
 SVD_TOL = getattr(__config__, 'soscf_newton_ah_effective_svd_tol', 1e-5)
 def _effective_svd(a, tol=SVD_TOL):
@@ -980,7 +983,7 @@ def _force_SO3_degeneracy_(dr, orbsym):
 def _force_Ex_Ey_degeneracy_(dr, orbsym):
     '''Force the Ex and Ey orbitals to use the same rotation matrix'''
     # 0,1,4,5 are 1D irreps
-    E_irrep_ids = set(orbsym).difference(set((0,1,4,5)))
+    E_irrep_ids = set(orbsym).difference({0,1,4,5})
     orbsym = numpy.asarray(orbsym)
 
     for ir in E_irrep_ids:

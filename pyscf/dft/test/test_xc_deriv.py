@@ -117,6 +117,59 @@ def v5to6(v5):
         v6[:,[0,1,2,3,5]] = v5
     return v6
 
+def eval_xc_eff(xc_code, rho, deriv, mod):
+    xctype = mod.xc_type(xc_code)
+    rhop = np.asarray(rho)
+
+    if xctype == 'LDA':
+        spin_polarized = rhop.ndim >= 2
+    else:
+        spin_polarized = rhop.ndim == 3
+
+    if spin_polarized:
+        assert rhop.shape[0] == 2
+        spin = 1
+        if rhop.ndim == 3 and rhop.shape[1] == 5:  # MGGA
+            ngrids = rhop.shape[2]
+            rhop = np.empty((2, 6, ngrids))
+            rhop[0,:4] = rho[0][:4]
+            rhop[1,:4] = rho[1][:4]
+            rhop[:,4] = 0
+            rhop[0,5] = rho[0][4]
+            rhop[1,5] = rho[1][4]
+    else:
+        spin = 0
+        if rhop.ndim == 2 and rhop.shape[0] == 5:  # MGGA
+            ngrids = rho.shape[1]
+            rhop = np.empty((6, ngrids))
+            rhop[:4] = rho[:4]
+            rhop[4] = 0
+            rhop[5] = rho[4]
+
+    exc, vxc, fxc, kxc = mod.eval_xc(xc_code, rhop, spin, 0, deriv)
+    if deriv > 2:
+        kxc = xc_deriv.transform_kxc(rhop, fxc, kxc, xctype, spin)
+    if deriv > 1:
+        fxc = xc_deriv.transform_fxc(rhop, vxc, fxc, xctype, spin)
+    if deriv > 0:
+        vxc = xc_deriv.transform_vxc(rhop, vxc, xctype, spin)
+    return exc, vxc, fxc, kxc
+
+def setUpModule():
+    global rho
+    rho = np.array(
+        [[[ 0.17283732, 0.17272921, 0.17244017, 0.17181541, 0.17062690],
+          [-0.01025988,-0.02423402,-0.04315779,-0.06753381,-0.09742367],
+          [ 0.00219947, 0.00222727, 0.00226589, 0.00231774, 0.00238570],
+          [ 0.00151577, 0.00153381, 0.00155893, 0.00159277, 0.00163734],
+          [ 0.00323925, 0.00386831, 0.00520072, 0.00774571, 0.01218266]],
+         [[ 0.17443331, 0.17436845, 0.17413969, 0.17359613, 0.17251427],
+          [-0.00341093,-0.01727580,-0.03605226,-0.06023877,-0.08989467],
+          [ 0.00357202, 0.00361952, 0.00368537, 0.00377355, 0.00388873],
+          [ 0.00233614, 0.00236578, 0.00240683, 0.00246173, 0.00253334],
+          [ 0.00473343, 0.00533707, 0.00663345, 0.00912920, 0.01350123],]]
+    )
+
 class KnownValues(unittest.TestCase):
     def test_gga_deriv1(self):
         ng = 7
@@ -266,6 +319,253 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(xc_deriv.ud2ts(v_ud) - v_ts).max(), 0, 12)
         self.assertAlmostEqual(abs(xc_deriv.ud2ts(f_ud) - f_ts).max(), 0, 12)
         self.assertAlmostEqual(abs(xc_deriv.ud2ts(k_ud) - k_ts).max(), 0, 12)
+
+    def test_libxc_lda_deriv3(self):
+        rho1 = rho[:,0].copy()
+        ref = eval_xc_eff('LDA,', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 51.36053114469969, 9)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -13.323225829690143, 9)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -6.912554696220437, 9)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+        rho1 = rho[1,0].copy()
+        ref = eval_xc_eff('LDA,', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 20.21333987261437, 9)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -5.269784014086463, 9)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('LDA,', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -2.7477984980958627, 9)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+    def test_libxc_gga_deriv3(self):
+        rho1 = rho[:,:4].copy()
+        ref = eval_xc_eff('PBE', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 61.29042037001073, 3)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -13.896034377219816, 4)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -7.616226587554259, 6)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+        rho1 = rho[1,:4].copy()
+        ni = numint.NumInt()
+        ref = eval_xc_eff('PBE', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 26.08081046374974, 3)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -5.559303849017572, 4)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -3.0715856471099032, 6)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+    def test_libxc_mgga_deriv3(self):
+        rho1 = rho
+        ref = eval_xc_eff('M06', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 3461867.985594323, 1)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -19196.865088253828, 3)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), 90.99262909378264, 6)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+        rho1 = rho[1]
+        ni = numint.NumInt()
+        ref = eval_xc_eff('M06', rho1, 3, dft.libxc)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 2506574.915698602, 1)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -9308.64852580393, 3)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.libxc.eval_xc_eff('M06', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), 19.977512805950784, 7)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+    @unittest.skipIf(dft.libxc.max_deriv_order('pbe,') <= 3, 'libxc order')
+    def test_libxc_gga_deriv4(self):
+        rho1 = rho[:,:4].copy()
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=4)
+        self.assertAlmostEqual(xc1.sum(), -1141.356286780069, 1)
+
+        rho1 = rho[1,:4].copy()
+        xc1 = dft.libxc.eval_xc_eff('PBE', rho1, deriv=4)
+        self.assertAlmostEqual(xc1.sum(), -615.116081052867, 1)
+
+    @unittest.skipIf(not hasattr(dft, 'xcfun'), 'xcfun order')
+    def test_xcfun_lda_deriv3(self):
+        rho1 = rho[:,0].copy()
+        ref = eval_xc_eff('LDA,', rho1, 3, dft.xcfun)
+
+        xc1 = dft.xcfun.eval_xc_eff('LDA,', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 51.36053114469969, 9)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('LDA,', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -13.323225829690143, 9)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('LDA,', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -6.912554696220437, 9)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+        rho1 = rho[1,0].copy()
+        ref = eval_xc_eff('LDA,', rho1, 3, dft.xcfun)
+
+        xc1 = dft.xcfun.eval_xc_eff('LDA,', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 20.21333987261437, 9)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('LDA,', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -5.269784014086463, 9)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('LDA,', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -2.7477984980958627, 9)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+    @unittest.skipIf(not hasattr(dft, 'xcfun'), 'xcfun order')
+    def test_xcfun_gga_deriv3(self):
+        rho1 = rho[:,:4].copy()
+        ref = eval_xc_eff('PBE', rho1, 3, dft.xcfun)
+
+        xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 61.29042037001073, 9)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -13.896034377219816, 9)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -7.616226587554259, 9)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+        rho1 = rho[1,:4].copy()
+        ref = eval_xc_eff('PBE', rho1, 3, dft.xcfun)
+
+        xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 26.08081046374974, 9)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -5.559303849017572, 9)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), -3.0715856471099032, 9)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+    @unittest.skipIf(not hasattr(dft, 'xcfun'), 'xcfun order')
+    def test_xcfun_mgga_deriv3(self):
+        rho1 = rho
+        ref = eval_xc_eff('M06', rho1, 3, dft.xcfun)
+
+        xc1 = dft.xcfun.eval_xc_eff('M06', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 3461867.985594323, 5)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('M06', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -19196.865088253828, 5)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('M06', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), 90.99262909378264, 9)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+        rho1 = rho[1]
+        ref = eval_xc_eff('M06', rho1, 3, dft.xcfun)
+
+        xc1 = dft.xcfun.eval_xc_eff('M06', rho1, deriv=3)
+        self.assertAlmostEqual(xc1.sum(), 2506574.915698602, 5)
+        self.assertAlmostEqual(abs(ref[3] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('M06', rho1, deriv=2)
+        self.assertAlmostEqual(xc1.sum(), -9308.64852580393, 5)
+        self.assertAlmostEqual(abs(ref[2] - xc1).max(), 0, 9)
+
+        xc1 = dft.xcfun.eval_xc_eff('M06', rho1, deriv=1)
+        self.assertAlmostEqual(xc1.sum(), 19.977512805950784, 9)
+        self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
+
+    @unittest.skipIf(not (hasattr(dft, 'xcfun') and dft.xcfun.MAX_DERIV_ORDER > 3), 'xcfun order')
+    def test_xcfun_gga_deriv4(self):
+        rho1 = rho[:,:4].copy()
+        xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=4)
+        self.assertAlmostEqual(xc1.sum(), -1141.356286780069, 9)
+
+        rho1 = rho[1,:4].copy()
+        xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=4)
+        self.assertAlmostEqual(xc1.sum(), -615.116081052867, 9)
+
+    @unittest.skipIf(not (hasattr(dft, 'xcfun') and dft.xcfun.MAX_DERIV_ORDER > 3), 'xcfun order')
+    def test_xcfun_gga_deriv4_finite_diff(self):
+        xctype = 'GGA'
+        deriv = 4
+        nvar = 4
+        delta = 1e-6
+
+        spin = 1
+        rhop = rho[:,:nvar].copy()
+        xcp = dft.xcfun.eval_xc1('pbe,', rhop, spin, deriv=deriv)
+        lxc = xc_deriv.transform_xc(rhop, xcp, xctype, spin,4)
+        for s in (0, 1):
+            for t in range(nvar):
+                rhop = rho[:,:nvar].copy()
+                rhop[s,t] += delta * .5
+                xcp = dft.xcfun.eval_xc1('pbe,', rhop, spin, deriv=deriv-1)
+                kxc0 = xc_deriv.transform_xc(rhop, xcp, xctype, spin, deriv-1)
+                rhop[s,t] -= delta
+                xcp = dft.xcfun.eval_xc1('pbe,', rhop, spin, deriv=deriv-1)
+                kxc1 = xc_deriv.transform_xc(rhop, xcp, xctype, spin, deriv-1)
+                self.assertAlmostEqual(abs((kxc0-kxc1)/delta - lxc[s,t]).max(), 0, 7)
+
+        spin = 0
+        rhop = rho[0,:nvar].copy()
+        xcp = dft.xcfun.eval_xc1('b88,', rhop, spin, deriv=deriv)
+        lxc = xc_deriv.transform_xc(rhop, xcp, xctype, spin,4)
+        for t in range(nvar):
+            rhop = rho[0,:nvar].copy()
+            rhop[t] += delta * .5
+            xcp = dft.xcfun.eval_xc1('b88,', rhop, spin, deriv=deriv-1)
+            kxc0 = xc_deriv.transform_xc(rhop, xcp, xctype, spin, deriv-1)
+            rhop[t] -= delta
+            xcp = dft.xcfun.eval_xc1('b88,', rhop, spin, deriv=deriv-1)
+            kxc1 = xc_deriv.transform_xc(rhop, xcp, xctype, spin, deriv-1)
+            self.assertAlmostEqual(abs((kxc0-kxc1)/delta - lxc[t]).max(), 0, 7)
 
 if __name__ == "__main__":
     print("Test xc_deriv")

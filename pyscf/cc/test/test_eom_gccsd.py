@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import copy
 import numpy
 from functools import reduce
 

@@ -81,6 +81,29 @@ class KnownValues(unittest.TestCase):
         occ = mf.get_occ(mo_energy_kpts)
         self.assertAlmostEqual(mf.entropy, 0.9554526863670467/2, 9)
 
+    def test_kuhf_smearing1(self):
+        cell = pbcgto.Cell()
+        cell.atom = '''
+        He 0 0 1
+        He 1 0 1
+        '''
+        cell.basis = 'ccpvdz'
+        cell.a = numpy.eye(3) * 4
+        cell.precision = 1e-6
+        cell.verbose = 3
+        cell.build()
+        nks = [2,1,1]
+        mf = pscf.KUHF(cell, cell.make_kpts(nks)).density_fit()
+        mf = pscf.addons.smearing_(mf, .1)
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -5.56769351866668, 6)
+        mf = pscf.addons.smearing_(mf, .1, mu0=0.351195741757)
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -5.56769351866668, 6)
+        mf = pscf.addons.smearing_(mf, .1, method='gauss')
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -5.56785857886738, 6)
+
     def test_rhf_smearing(self):
         mf = pscf.RHF(cell)
         pscf.addons.smearing_(mf, 0.1, 'fermi')
@@ -288,6 +311,11 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(pscf.addons.convert_to_khf(mf1), pscf.kuhf.KUHF))
         mf1 = pscf.ROHF(cell)
         self.assertTrue(isinstance(pscf.addons.convert_to_khf(mf1), pscf.krohf.KROHF))
+
+        from pyscf.pbc import dft
+        mf1 = dft.RKS(cell)
+        self.assertTrue(isinstance(mf1._numint, dft.numint.NumInt))
+        self.assertTrue(isinstance(pscf.addons.convert_to_kscf(mf1)._numint, dft.numint.KNumInt))
 
     def test_canonical_occ(self):
         kpts = numpy.random.rand(2,3)
