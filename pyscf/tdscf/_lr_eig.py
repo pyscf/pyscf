@@ -18,7 +18,147 @@ import sys
 import numpy as np
 import scipy.linalg
 from pyscf.lib import logger
-from pyscf.lib.linalg_helper import _sort_elast, _outprod_to_subspace
+from pyscf.lib.linalg_helper import _sort_elast, _outprod_to_subspace, _qr
+
+# Add at most 20 states in each iteration
+MAX_SPACE_INC = 20
+
+def eigh(aop, x0, precond, tol_residual=1e-5, nroots=1, pick=None, x0sym=None,
+         max_cycle=50, max_memory=4000, lindep=1e-12, verbose=logger.WARN):
+    '''
+    Solve symmetric eigenvalues.
+
+    This solver is similar to the `linalg_helper.davidson` solver, with
+    optimizations for performance and wavefunction symmetry, specifically
+    tailored for linear response methods.
+    '''
+
+    assert callable(pick)
+    assert callable(precond)
+
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
+
+    if isinstance(x0, np.ndarray) and x0.ndim == 1:
+        x0 = x0[None,:]
+    x0 = np.asarray(x0)
+    if x0sym is not None:
+        x0sym = np.asarray(x0sym) % 10
+
+    x0_size = x0.shape[1]
+    max_space = int(max_memory*1e6/8/x0_size - nroots) // 4
+    if max_space < nroots * 2:
+        log.warn('Not enough memory to store trial space in _lr_eig.eigh')
+        max_space = nroots * 2
+    max_space = min(max_space, x0_size)
+    log.debug(f'Set max_space {max_space}')
+
+    xs = np.zeros((0, x0_size))
+    ax = np.zeros((0, x0_size))
+    e = w = v = None
+    conv = np.zeros(nroots, dtype=bool)
+    xt = x0
+    max_space_inc = nroots if MAX_SPACE_INC is None else MAX_SPACE_INC
+
+    for icyc in range(max_cycle):
+        if x0sym is None:
+            xt = _qr(xt, np.dot)[0]
+        else:
+            xt_wfnsym, wfnsym_idx = np.unique(wfnsym, return_inverse=True)
+            xt = [_qr(xt[idx]) for idx in wfnsym_idx]
+            xt = np.vstack(xt)
+            wfnsym_idx = [FIXME]
+
+        row0 = len(xs)
+        axt = aop(xt)
+        xs = np.vstack([xs, xt])
+        ax = np.vstack([ax, axt])
+        if x0sym is not None:
+            xs_wfnsym.extend(xt_wfnsym[wfnsym_idx])
+
+        # Compute heff = xs.conj().dot(ax.T)
+        if w is None:
+            heff = xs.conj().dot(ax.T)
+        else:
+            hsub = xt.conj().dot(ax.T)
+            heff = np.block([[np.diag(w), hsub[:,:row0].conj().T],
+                             [hsub[:,:row0], hsub[:,row0:]]])
+
+        # TODO: loop over xs_sym
+        w, v = scipy.linalg.eigh(heff)
+        w, v, idx = pick(w, v, nroots, locals())
+        if len(w) == 0:
+            raise RuntimeError('Not enough eigenvalues')
+
+        elast, e = e, w[:nroots]
+        if elast is None:
+            de = e
+        elif elast.size != e.size:
+            log.debug('Number of roots different from the previous step (%d,%d)',
+                      e.size, elast.size)
+            de = e
+        else:
+            # mapping to previous eigenvectors
+            vlast = np.eye(nroots)
+            elast, conv_last = _sort_elast(elast, conv, vlast,
+                                           v[:nroots,:nroots], log)
+            de = e - elast
+
+        xs = v.T.dot(xs)
+        ax = v.T.dot(ax)
+        if len(xs) * 2 > max_space:
+            row0 = max_space - max(max_space_inc, nroots)
+            xs = xs[:row0]
+            ax = ax[:row0]
+            w = w[:row0]
+
+        t_size = max(nroots, min(max_space_inc, max_space-len(xs)))
+        xt = -w[:t_size,None] * xs[:t_size]
+        xt += ax[:t_size]
+
+        dx_norm = np.linalg.norm(xt, axis=1)
+        max_dx_norm = max(dx_norm[:nroots])
+        conv = dx_norm[:nroots] < tol_residual
+        ide = np.argmax(abs(de))
+        if all(conv):
+            log.debug('converged %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
+                      icyc, len(xs), max_dx_norm, e, de[ide])
+            break
+
+        for k, ek in enumerate(e[:nroots]):
+            if conv[k] and not conv_last[k]:
+                log.debug('root %d converged  |r|= %4.3g  e= %s  max|de|= %4.3g',
+                          k, dx_norm[k], ek, de[k])
+
+        # remove subspace linear dependency
+        for k, xk in enumerate(xt):
+            xt[k] = precond(xk, e[0], xs[k])
+        xt -= xs.conj().dot(xt.T).T.dot(xs)
+        xt_norm = np.linalg.norm(xt, axis=1)
+
+        remaining = []
+        for k, xk in enumerate(xt):
+            if dx_norm[k] > tol_residual and xt_norm[k]**2 > lindep:
+                xt[k] /= xt_norm[k]
+                remaining.append(k)
+
+        if len(remaining) == 0:
+            log.debug(f'Linear dependency in trial subspace. |r| for each state {dx_norm}')
+            break
+
+        xt = xt[remaining]
+        norm_min = xt_norm[remaining].min()
+        log.debug('davidson %d %d |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
+                  icyc, len(xs), max_dx_norm, e, de[ide], norm_min)
+
+    x0 = xs[:nroots]
+    # Check whether the solver finds enough eigenvectors.
+    if len(x0) < min(x0_size, nroots):
+        log.warn(f'Not enough eigenvectors (len(x0)={len(x0)}, nroots={nroots})')
+
+    return conv, e, x0
 
 def eig(aop, x0, precond, tol_residual=1e-5, max_cycle=50, max_space=12,
         lindep=1e-12, nroots=1, pick=None, verbose=logger.WARN):
