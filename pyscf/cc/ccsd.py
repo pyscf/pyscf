@@ -28,7 +28,6 @@ from functools import reduce
 import numpy
 from pyscf import gto
 from pyscf import lib
-from pyscf import common
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
@@ -66,7 +65,8 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     else:
         adiis = None
 
-    mycc.iterinfo.cycle = 0
+    converged = False
+    mycc.cycle = 0
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
         if callback is not None:
@@ -84,15 +84,15 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         t1new = t2new = None
         t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
-        mycc.iterinfo.cycle += 1
+        mycc.cycle = istep + 1
         log.info('cycle = %d  E_corr(%s) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, name, eccsd, eccsd - eold, normt)
         cput1 = log.timer(f'{name} iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
-            mycc.iterinfo.converged = True
+            converged = True
             break
     log.timer(name, *cput0)
-    return mycc.iterinfo.converged, eccsd, t1, t2
+    return converged, eccsd, t1, t2
 
 
 def update_amps(mycc, t1, t2, eris):
@@ -895,8 +895,6 @@ class CCSDBase(lib.StreamObject):
 
     Saved results
 
-        iterinfo : pyscf.common.IterationInfo
-            Information about iteration (see pyscf.common.Iteration in detail)
         e_corr : float
             CCSD correlation correction
         e_tot : float
@@ -905,6 +903,8 @@ class CCSDBase(lib.StreamObject):
             T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
         l1, l2 :
             Lambda amplitudes l1[i,a], l2[i,j,a,b]  (i,j in occ, a,b in virt)
+        cycle : int
+            Iteration cycle count
     '''
 
     max_cycle = getattr(__config__, 'cc_ccsd_CCSD_max_cycle', 50)
@@ -931,7 +931,7 @@ class CCSDBase(lib.StreamObject):
         'diis_start_cycle', 'diis_start_energy_diff', 'direct',
         'async_io', 'incore_complete', 'cc2', 'callback',
         'mol', 'verbose', 'stdout', 'frozen', 'level_shift',
-        'mo_coeff', 'mo_occ', 'converged', 'converged_lambda', 'emp2', 'e_hf',
+        'mo_coeff', 'mo_occ', 'cycle', 'converged_lambda', 'emp2', 'e_hf',
         'e_corr', 't1', 't2', 'l1', 'l2', 'chkfile',
     }
 
@@ -960,7 +960,7 @@ class CCSDBase(lib.StreamObject):
 # don't modify the following attributes, they are not input options
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
-        self.iterinfo = common.IterationInfo()
+        self.cycle = None
         self.converged_lambda = False
         self.emp2 = None
         self.e_hf = None
@@ -983,14 +983,6 @@ class CCSDBase(lib.StreamObject):
     @property
     def e_tot(self):
         return self.e_hf + self.e_corr
-
-    @property
-    def converged(self):
-        return self.iterinfo.converged
-
-    @property
-    def cycle(self):
-        return self.iterinfo.cycle
 
     @property
     def nocc(self):
