@@ -177,7 +177,8 @@ class KnownValues(unittest.TestCase):
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
         cell.mesh = [9,9,60]
-        cell.verbose = 0
+        cell.verbose = 5
+        cell.output = '/dev/null'
         cell.dimension = 2
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.rcut = 3.6
@@ -191,7 +192,8 @@ class KnownValues(unittest.TestCase):
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
         cell.mesh = [9,60,60]
-        cell.verbose = 0
+        cell.verbose = 5
+        cell.output = '/dev/null'
         cell.dimension = 1
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.rcut = 3.6
@@ -204,8 +206,8 @@ class KnownValues(unittest.TestCase):
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
         cell.mesh = [60] * 3
-        cell.verbose = 0
-        cell.dimension = 0
+        cell.verbose = 5
+        cell.output = '/dev/null'
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.build()
         eref = cell.to_mol().energy_nuc()
@@ -217,7 +219,8 @@ class KnownValues(unittest.TestCase):
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
         cell.mesh = [9,9,60]
-        cell.verbose = 0
+        cell.verbose = 5
+        cell.output = '/dev/null'
         cell.dimension = 2
         cell.rcut = 3.6
         cell.build()

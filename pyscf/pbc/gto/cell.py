@@ -1331,7 +1331,8 @@ class Cell(mole.MoleBase):
         if symmorphic is not None:
             self.symmorphic = symmorphic
 
-        mole.MoleBase.build(self, dump_input, parse_arg, *args, **kwargs)
+        _built = self._built
+        mole.MoleBase.build(self, False, parse_arg, *args, **kwargs)
 
         exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
         if self.exp_to_discard is None:
@@ -1448,7 +1449,8 @@ class Cell(mole.MoleBase):
             _check_mesh_symm = not self._mesh_from_build
             self.build_lattice_symmetry(check_mesh_symmetry=_check_mesh_symm)
 
-        if dump_input:
+        if dump_input and not _built and self.verbose > logger.NOTE:
+            self.dump_input()
             logger.info(self, 'lattice vectors  a1 [%.9f, %.9f, %.9f]', *_a[0])
             logger.info(self, '                 a2 [%.9f, %.9f, %.9f]', *_a[1])
             logger.info(self, '                 a3 [%.9f, %.9f, %.9f]', *_a[2])
