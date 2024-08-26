@@ -62,11 +62,13 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
         dm = dm0
 
     mf._coulomb_level = 'LLLL'
+    cycles = 0
     if dm0 is None and mf._coulomb_level.upper() == 'LLLL':
         scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-2, 1e-1,
                             dump_chk, dm0=dm, callback=callback,
                             conv_check=False)
+        cycles += mf.cycles
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_level = 'SSLL'
 
@@ -77,13 +79,16 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
                     = hf.kernel(mf, 1e-3, 1e-1,
                                 dump_chk, dm0=dm, callback=callback,
                                 conv_check=False)
+            cycles += mf.cycles
             dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_level = 'SSSS'
     else:
         mf._coulomb_level = 'SSLL'
 
-    return hf.kernel(mf, conv_tol, conv_tol_grad, dump_chk, dm0=dm,
-                     callback=callback, conv_check=conv_check)
+    out = hf.kernel(mf, conv_tol, conv_tol_grad, dump_chk, dm0=dm,
+                    callback=callback, conv_check=conv_check)
+    mf.cycles = cycles + mf.cycles
+    return out
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
     r'''Electronic part of Dirac-Hartree-Fock energy
