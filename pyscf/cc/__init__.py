@@ -54,8 +54,8 @@ to control CCSD calculation.
 
 Saved results
 
-    converged : bool
-        CCSD converged or not
+    iterinfo : common.IterationInfo
+        Information about iteration (see pyscf.common.Iteration in detail)
     e_tot : float
         Total CCSD energy (HF + correlation)
     t1, t2 :
