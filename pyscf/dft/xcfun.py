@@ -36,9 +36,60 @@ _itrf = lib.load_library('libxcfun_itrf')
 _itrf.xcfun_splash.restype = ctypes.c_char_p
 _itrf.xcfun_version.restype = ctypes.c_char_p
 _itrf.XCFUN_eval_xc.restype = ctypes.c_int
+_itrf.xcfun_enumerate_parameters.restype = ctypes.c_char_p
+_itrf.XCFUN_xc_type.restype = ctypes.c_int
+_itrf.xcfun_describe_short.restype = ctypes.c_char_p
+_itrf.xcfun_describe_short.argtype = [ctypes.c_char_p]
+_itrf.xcfun_describe_long.restype = ctypes.c_char_p
+_itrf.xcfun_describe_long.argtype = [ctypes.c_char_p]
 
 __version__ = _itrf.xcfun_version().decode("UTF-8")
 __reference__ = _itrf.xcfun_splash().decode("UTF-8")
+
+def print_XC_CODES():
+    '''
+    Dump the built-in xcfun XC_CODES in a readable format.
+    '''
+    lda_ids = []
+    gga_ids = []
+    mgga_ids = []
+    xc_codes = {}
+
+    print('XC = XC_CODES = {')
+    for i in range(78):
+        name = _itrf.xcfun_enumerate_parameters(ctypes.c_int(i))
+        sdescr = _itrf.xcfun_describe_short(name)
+        #ldescr = _itrf.xcfun_describe_long(ctypes.c_int(i))
+        if sdescr is not None:
+            name = name.decode('UTF-8')
+            key = f"'{name}'"
+            sdescr = sdescr.decode('UTF-8')
+            print(f'{key:<16s}: {i:2d},  #{sdescr}')
+            xc_codes[name] = i
+
+        fntype = _itrf.XCFUN_xc_type(ctypes.c_int(i))
+        if fntype == 0:
+            lda_ids.append(i)
+        elif fntype == 1:
+            gga_ids.append(i)
+        elif fntype == 2:
+            mgga_ids.append(i)
+
+    alias = {
+        'SLATER': 'SLATERX',
+        'LDA'   : 'SLATERX',
+        'VWN'   : 'VWN5C',
+        'VWN5'  : 'VWN5C',
+        'B88'   : 'BECKEX',
+        'LYP'   : 'LYPC',
+    }
+    for k, v in alias.items():
+        key = f"'{k}'"
+        print(f'{key:<16s}: {xc_codes[v]:2d},  # {v}')
+    print('}')
+    print('LDA_IDS = %s' % lda_ids)
+    print('GGA_IDS = %s' % gga_ids)
+    print('MGGA_IDS = %s' % mgga_ids)
 
 XC = XC_CODES = {
 'SLATERX'       :  0,  #Slater LDA exchange

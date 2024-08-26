@@ -4,7 +4,11 @@
 #
 
 '''
-Assign FCI wavefunction symmetry
+Assign FCI wavefunction symmetry.
+
+This example demonstrates only the solver that utlizes the D2h (and its
+subgroup) symmetry. For molecules with cylindrical symmetry, a special solver is
+available, as shown in 03-cylindrical_symmetry.py
 '''
 
 import numpy
@@ -42,7 +46,7 @@ norb = mo_cas.shape[1]
 ncore = mo_core.shape[1]
 nelec = mol.nelectron - ncore * 2
 fs = fci.direct_spin0_symm.FCI(mol)
-fs.wfnsym = 'A2'
+fs.wfnsym = 'A1'
 e, c = fs.kernel(h1, h2, norb, nelec, ecore=ecore, orbsym=orbsym, verbose=5)
 print('Energy of %s state %.12f' % (fs.wfnsym, e))
 
@@ -61,7 +65,7 @@ h1, ecore = mcscf.casci.h1e_for_cas(m, m.mo_coeff, norb, ncore)
 h2 = ao2mo.kernel(mol, mo_cas)
 orbsym = scf.hf_symm.get_orbsym(mol, m.mo_coeff)[cas_idx]
 fs = fci.direct_spin0_symm.FCI(mol)
-fs.wfnsym = 'A2'
+fs.wfnsym = 'A1'
 e, c = fs.kernel(h1, h2, norb, nelec, ecore=ecore, orbsym=orbsym)
 print('Energy of %s state %.12f' % (fs.wfnsym, e))
 
@@ -79,7 +83,7 @@ h1, ecore = mc.get_h1eff(mo)
 h2 = mc.get_h2eff(mo)
 orbsym = scf.hf_symm.get_orbsym(mol, m.mo_coeff)[cas_idx]
 fs = fci.direct_spin0_symm.FCI(mol)
-fs.wfnsym = 'A2'
+fs.wfnsym = 'A1'
 e, c = fs.kernel(h1, h2, norb, nelec, ecore=ecore, orbsym=orbsym)
 print('Energy of %s state %.12f' % (fs.wfnsym, e))
 
