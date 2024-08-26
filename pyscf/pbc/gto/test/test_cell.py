@@ -208,6 +208,7 @@ class KnownValues(unittest.TestCase):
         cell.mesh = [60] * 3
         cell.verbose = 5
         cell.output = '/dev/null'
+        cell.dimension = 0
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.build()
         eref = cell.to_mol().energy_nuc()
