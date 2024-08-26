@@ -17,7 +17,7 @@
 #
 
 import unittest
-import numpy
+import numpy as np
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
@@ -41,6 +41,12 @@ def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
 
+def rdms_test(dm):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
+    return r2
+
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
@@ -48,8 +54,12 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p,x,es = myadc.ea_adc(nroots=3)
-        es.analyze()
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 39.23226380360857, 6)
+
+        myadcea = adc.radc_ea.RADCEA(myadc)
+        e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.0961781923822576, 6)
         self.assertAlmostEqual(e[1], 0.1258326916409743, 6)
@@ -58,6 +68,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.9832854445007961, 6)
         self.assertAlmostEqual(p[1], 1.9634368668786559, 6)
         self.assertAlmostEqual(p[2], 1.9783719593912672, 6)
+
+        dm1_exc = myadcea.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 83.57588095829082, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 66.92768038358671, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 66.15440155740416, 6)
 
     def test_ea_adc2_oneroot(self):
 
@@ -73,7 +88,13 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(2)-x"
         myadc.method_type = "ea"
 
-        e,v,p,x = myadc.kernel(nroots=4)
+        myadc.kernel_gs()
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 39.23226380360857, 6)
+
+        myadcea = adc.radc_ea.RADCEA(myadc)
+        e,v,p,x = myadcea.kernel(nroots=4)
         e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.32201692499346535, 6)
@@ -88,12 +109,24 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2],1.9689940350592570, 6)
         self.assertAlmostEqual(p[3],1.9689940350592559, 6)
 
+        dm1_exc = myadcea.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 83.53454941982915, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 66.8646378314392, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 66.29435797091572, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[3]), 66.29435797091572, 6)
+
     def test_ea_adc3(self):
 
         myadc.method = "adc(3)"
         myadc.method_type = "ea"
 
-        e,v,p,x = myadc.kernel(nroots=3)
+        myadc.kernel_gs()
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 39.4764479057645, 6)
+
+        myadcea = adc.radc_ea.RADCEA(myadc)
+        e,v,p,x = myadcea.kernel(nroots=3)
         e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.31694173142858517 , 6)
@@ -105,6 +138,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.8324175318668088, 6)
         self.assertAlmostEqual(p[1], 1.9840991060607487, 6)
         self.assertAlmostEqual(p[2], 1.9638550014980212, 6)
+
+        dm1_exc = myadcea.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 55.12466915835939, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 84.21966457078218, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 67.34876130600885, 6)
 
 if __name__ == "__main__":
     print("EA calculations for different RADC methods for nitrogen molecule")

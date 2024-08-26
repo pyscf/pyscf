@@ -17,25 +17,13 @@
 Interface to geometry optimizer pyberny https://github.com/jhrmnn/pyberny
 '''
 
-from __future__ import absolute_import
-import pkg_resources
-try:
-    dist = pkg_resources.get_distribution('pyberny')
-except pkg_resources.DistributionNotFound:
-    dist = None
-if dist is None or [int(x) for x in dist.version.split('.')] < [0, 6, 2]:
-    msg = ('Geometry optimizer Pyberny not found or outdated. Install or update '
-           'with:\n\n\tpip install -U pyberny')
-    raise ImportError(msg)
-
-
 import numpy
 import logging
 from pyscf import lib
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
                                   symmetrize)  # noqa
 from pyscf import __config__
-from pyscf.grad.rhf import GradientsMixin
+from pyscf.grad.rhf import GradientsBase
 
 from berny import Berny, geomlib, coords
 
@@ -119,7 +107,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     if isinstance(method, lib.GradScanner):
         g_scanner = method
-    elif isinstance(method, GradientsMixin):
+    elif isinstance(method, GradientsBase):
         g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
@@ -131,12 +119,12 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     # When symmetry is enabled, the molecule may be shifted or rotated to make
     # the z-axis be the main axis. The transformation can cause inconsistency
     # between the optimization steps. The transformation is muted by setting
-    # an explict point group to the keyword mol.symmetry (see symmetry
+    # an explicit point group to the keyword mol.symmetry (see symmetry
     # detection code in Mole.build function).
     if mol.symmetry:
         mol.symmetry = mol.topgroup
 
-# temporary interface, taken from berny.py optimize function
+    # temporary interface, taken from berny.py optimize function
     berny_log = to_berny_log(log)
     geom = to_berny_geom(mol, include_ghost)
     optimizer = Berny(geom, logger=berny_log, **kwargs)

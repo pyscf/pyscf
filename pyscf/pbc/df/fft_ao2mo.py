@@ -104,6 +104,8 @@ def general(mydf, mo_coeffs, kpts=None,
     from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
     warn_pbc2d_eri(mydf)
     cell = mydf.cell
+    assert cell.low_dim_ft_type != 'inf_vacuum'
+    assert cell.dimension > 1
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
@@ -341,6 +343,8 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
 
 def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     cell = mydf.cell
+    assert cell.low_dim_ft_type != 'inf_vacuum'
+    assert cell.dimension > 1
     if kpts is None:
         kpts = mydf.kpts
     nkpts = len(kpts)

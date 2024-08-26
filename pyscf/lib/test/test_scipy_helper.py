@@ -21,8 +21,8 @@ from pyscf.lib import scipy_helper
 class KnownValues(unittest.TestCase):
 
     def setUp(self):
-        self.pivoted_cholesky = [scipy_helper.pivoted_cholesky, \
-            scipy_helper.pivoted_cholesky_python]
+        self.pivoted_cholesky = [scipy_helper.pivoted_cholesky,
+                                 scipy_helper.pivoted_cholesky_python]
 
     def test_pivoted_cholesky_1x1(self):
         for func in self.pivoted_cholesky:
@@ -53,7 +53,7 @@ class KnownValues(unittest.TestCase):
             self.assertTrue(numpy.allclose(L, L_ref, atol=1.0e-14))
             self.assertTrue(numpy.array_equal(piv, piv_ref))
             self.assertEqual(rank, 1)
-    
+
     def test_pivoted_cholesky_10x10(self):
         for func in self.pivoted_cholesky:
             # Positive-definite 10x10 matrix A
@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
                 for j in range(i+1, 10):
                     self.assertEqual(L[i, j], 0)
             self.assertTrue(numpy.allclose(LtL, PtAP, atol=1.0e-12))
-    
+
     def test_10x10_singular(self):
         for func in self.pivoted_cholesky:
             # Positive-semidefinite 10x10 matrix A with rank 7
@@ -103,6 +103,16 @@ class KnownValues(unittest.TestCase):
                 for j in range(i+1, 10):
                     self.assertEqual(L[i, j], 0)
             self.assertTrue(numpy.allclose(LtL, PtAP, atol=1.0e-12))
+
+    def test_complex(self):
+        numpy.random.seed(1)
+        A = numpy.random.rand(8,8) + numpy.random.rand(8,8)*1j
+        A -= .7 + .3j
+        A = A.dot(A.conj().T)
+        U, piv = scipy_helper.pivoted_cholesky_python(A)[:2]
+        U1 = U.copy()
+        U[:,piv] = U1
+        self.assertAlmostEqual(abs(U.conj().T.dot(U) - A).max(), 0, 9)
 
 
 if __name__ == "__main__":

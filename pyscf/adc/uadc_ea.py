@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Abdelrahman Ahmed <>
+#         Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         James Serna <jamcar456@gmail.com>
+#         Terrence Stahl <>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -287,22 +290,13 @@ def get_imds(adc, eris=None):
             M_ab_a += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
             del eris_vvvv
 
-            temp = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))
-            temp[:,:,ab_ind_a[0],ab_ind_a[1]] =  adc.imds.t2_1_vvvv[0]
-            temp[:,:,ab_ind_a[1],ab_ind_a[0]] = -adc.imds.t2_1_vvvv[0]
-
-            M_ab_a -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_a, temp, optimize=True)
-            del temp
-
+            M_ab_a -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',
+                                                t2_1_a, adc.imds.t2_1_vvvv[0], optimize=True)
         else:
-
-            temp_t2a_vvvv = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))
-            temp_t2a_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = adc.imds.t2_1_vvvv[0][:]
-            temp_t2a_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -adc.imds.t2_1_vvvv[0][:]
-
-            M_ab_a -= 2*0.5*0.25*lib.einsum('mlad,mlbd->ab',  temp_t2a_vvvv, t2_1_a, optimize=True)
-            M_ab_a -= 2*0.5*0.25*lib.einsum('mlaf,mlbf->ab', t2_1_a, temp_t2a_vvvv, optimize=True)
-            del temp_t2a_vvvv
+            M_ab_a -= 2*0.5*0.25*lib.einsum('mlad,mlbd->ab',
+                                            adc.imds.t2_1_vvvv[0], t2_1_a, optimize=True)
+            M_ab_a -= 2*0.5*0.25*lib.einsum('mlaf,mlbf->ab', t2_1_a,
+                                            adc.imds.t2_1_vvvv[0], optimize=True)
 
         if isinstance(eris.vvvv_p, list):
 
@@ -387,18 +381,20 @@ def get_imds(adc, eris=None):
             M_ab_b += lib.einsum('mlfd,mled,eafb->ab',t2_1_ab, t2_1_ab,   eris_vVvV, optimize=True)
 
             eris_vVvV = eris_vVvV.reshape(nvir_a*nvir_b,nvir_a*nvir_b)
-            temp = adc.imds.t2_1_vvvv[1]
-            M_ab_a -= 0.5*lib.einsum('mlaf,mlbf->ab',t2_1_ab, temp, optimize=True)
-            M_ab_b -= 0.5*lib.einsum('mlfa,mlfb->ab',t2_1_ab, temp, optimize=True)
-            del temp
-        else:
-            t2_vVvV = adc.imds.t2_1_vvvv[1][:]
 
-            M_ab_a -= 0.5 * lib.einsum('mlad,mlbd->ab', t2_vVvV, t2_1_ab, optimize=True)
-            M_ab_b -= 0.5 * lib.einsum('mlda,mldb->ab', t2_vVvV, t2_1_ab, optimize=True)
-            M_ab_a -= 0.5 * lib.einsum('mlaf,mlbf->ab',t2_1_ab, t2_vVvV, optimize=True)
-            M_ab_b -= 0.5 * lib.einsum('mlfa,mlfb->ab',t2_1_ab, t2_vVvV, optimize=True)
-            del t2_vVvV
+            M_ab_a -= 0.5*lib.einsum('mlaf,mlbf->ab',t2_1_ab, adc.imds.t2_1_vvvv[1], optimize=True)
+            M_ab_b -= 0.5*lib.einsum('mlfa,mlfb->ab',t2_1_ab, adc.imds.t2_1_vvvv[1], optimize=True)
+
+        else:
+            M_ab_a -= 0.5 * lib.einsum('mlad,mlbd->ab',
+                                       adc.imds.t2_1_vvvv[1], t2_1_ab, optimize=True)
+            M_ab_b -= 0.5 * lib.einsum('mlda,mldb->ab',
+                                       adc.imds.t2_1_vvvv[1], t2_1_ab, optimize=True)
+            M_ab_a -= 0.5 * lib.einsum('mlaf,mlbf->ab', t2_1_ab,
+                                       adc.imds.t2_1_vvvv[1], optimize=True)
+            M_ab_b -= 0.5 * lib.einsum('mlfa,mlfb->ab', t2_1_ab,
+                                       adc.imds.t2_1_vvvv[1], optimize=True)
+
         del t2_1_a
 
         if isinstance(eris.VVVV_p,np.ndarray):
@@ -409,22 +405,13 @@ def get_imds(adc, eris=None):
             M_ab_b += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
             del eris_VVVV
 
-            temp = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))
-            temp[:,:,ab_ind_b[0],ab_ind_b[1]] =  adc.imds.t2_1_vvvv[2]
-            temp[:,:,ab_ind_b[1],ab_ind_b[0]] = -adc.imds.t2_1_vvvv[2]
-            M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_b, temp, optimize=True)
-            del temp
-        else:
-
-            temp_t2b_VVVV = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))
-            temp_t2b_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = adc.imds.t2_1_vvvv[2][:]
-            temp_t2b_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -adc.imds.t2_1_vvvv[2][:]
-
-            M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlad,mlbd->ab',
-                                                temp_t2b_VVVV, t2_1_b, optimize=True)
             M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',
-                                                t2_1_b, temp_t2b_VVVV, optimize=True)
-            del temp_t2b_VVVV
+                                                t2_1_b, adc.imds.t2_1_vvvv[2], optimize=True)
+        else:
+            M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlad,mlbd->ab',
+                                                adc.imds.t2_1_vvvv[2], t2_1_b, optimize=True)
+            M_ab_b -= 2 * 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',
+                                                t2_1_b, adc.imds.t2_1_vvvv[2], optimize=True)
 
         if isinstance(eris.vvvv_p, list):
 
@@ -1402,7 +1389,7 @@ def get_trans_moments(adc):
         T_bb = get_trans_moments_orbital(adc,orb, spin="beta")
         T_b.append(T_bb)
 
-    cput0 = log.timer_debug1("completed spec vactor calc in ADC(3) calculation", *cput0)
+    cput0 = log.timer_debug1("completed spec vector calc in ADC(3) calculation", *cput0)
     return (T_a, T_b)
 
 
@@ -1960,7 +1947,18 @@ class UADCEA(uadc.UADC):
             Spectroscopic amplitudes for each EA transition.
     '''
 
+    _keys = {
+        'tol_residual','conv_tol', 'e_corr', 'method',
+        'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory',
+        't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
+        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff', 'mo_energy_a',
+        'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
+        'with_df', 'spec_factor_print_tol', 'evec_print_tol',
+        'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
+    }
+
     def __init__(self, adc):
+        self.mol = adc.mol
         self.verbose = adc.verbose
         self.stdout = adc.stdout
         self.max_memory = adc.max_memory
@@ -1977,6 +1975,7 @@ class UADCEA(uadc.UADC):
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
+        self._nmo = adc._nmo
         self.nocc_a = adc._nocc[0]
         self.nocc_b = adc._nocc[1]
         self.nvir_a = adc._nvir[0]
@@ -1986,35 +1985,30 @@ class UADCEA(uadc.UADC):
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
         self.nmo_b = adc._nmo[1]
-        self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
+        self.compute_properties = adc.compute_properties
+        self.approx_trans_moments = adc.approx_trans_moments
+
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.evec_print_tol = adc.evec_print_tol
 
-        self.compute_properties = adc.compute_properties
-        self.approx_trans_moments = adc.approx_trans_moments
         self.E = adc.E
         self.U = adc.U
         self.P = adc.P
         self.X = adc.X
-
-        keys = set(('tol_residual','conv_tol', 'e_corr', 'method',
-                    'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory',
-                    't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
-
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     kernel = uadc.kernel
     get_imds = get_imds
     matvec = matvec
     get_diag = get_diag
     get_trans_moments = get_trans_moments
-    analyze_spec_factor = analyze_spec_factor
     get_properties = get_properties
+
     analyze = analyze
-    compute_dyson_mo = compute_dyson_mo
+    analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector
+    compute_dyson_mo = compute_dyson_mo
 
     def get_init_guess(self, nroots=1, diag=None, ascending=True):
         if diag is None :

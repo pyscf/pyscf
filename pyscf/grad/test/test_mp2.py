@@ -153,6 +153,14 @@ class KnownValues(unittest.TestCase):
         g = mol.RHF.run().MP2().run().Gradients().kernel()
         self.assertAlmostEqual(lib.fp(g), 0.049987975650731625, 6)
 
+    # issue 1985
+    def test_cart_gto(self):
+        mol1 = mol.copy()
+        mol1.cart = True
+        mol1.basis = '6-31g*'
+        g = mol.RHF.run().MP2().run().Gradients().kernel()
+        self.assertAlmostEqual(lib.fp(g), -0.03568120792884476, 6)
+
 
 if __name__ == "__main__":
     print("Tests for MP2 gradients")

@@ -28,7 +28,7 @@ from pyscf.mcscf import addons
 from pyscf.scf.hf_symm import map_degeneracy
 
 class SymAdaptedCASCI(casci.CASCI):
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
 
         assert (self.mol.symmetry)
@@ -37,7 +37,6 @@ class SymAdaptedCASCI(casci.CASCI):
             self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)
         else:
             self.fcisolver = fci.direct_spin1_symm.FCISolver(self.mol)
-        delattr(fcisolver, '_keys')
         self.fcisolver.__dict__.update(fcisolver.__dict__)
 
     @property
@@ -50,6 +49,9 @@ class SymAdaptedCASCI(casci.CASCI):
     def kernel(self, mo_coeff=None, ci0=None, verbose=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
+        else: # overwrite self.mo_coeff because it is needed in many methods of this class
+            self.mo_coeff = mo_coeff
+
         if ci0 is None:
             ci0 = self.ci
 
@@ -71,6 +73,8 @@ class SymAdaptedCASCI(casci.CASCI):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
                                        cas_irrep_ncore, s)
+
+    to_gpu = lib.to_gpu
 
 CASCI = SymAdaptedCASCI
 
@@ -114,7 +118,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
             if getattr(mo_coeff, 'degen_mapping', None) is not None:
                 degen_mapping = mo_coeff.degen_mapping[ncore:nocc] - ncore
             else:
-                h1e = numpy.diag (mc.h1e_for_cas (mo_coeff=mo_coeff)[0])
+                h1e = numpy.diag (mc.get_h1eff (mo_coeff=mo_coeff)[0])
                 degen_mapping = map_degeneracy (h1e, orbsym[ncore:nocc])
             mc.fcisolver.orbsym = lib.tag_array(
                 orbsym[ncore:nocc], degen_mapping=degen_mapping)

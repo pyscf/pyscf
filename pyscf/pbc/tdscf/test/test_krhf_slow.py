@@ -157,7 +157,7 @@ class DiamondTest(unittest.TestCase):
         for k in range(self.k):
             # Prepare indexes
             r1, r2, c1, c2 = ktd.get_block_k_ix(model.eri, k)
-            r = k2k(r1, r2)
+            # r = k2k(r1, r2)
             c = k2k(c1, c2)
 
             # Select roots

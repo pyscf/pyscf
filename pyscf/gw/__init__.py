@@ -44,4 +44,3 @@ def GW(mf, freq_int='ac', frozen=None, tdmf=None):
     else:
         raise RuntimeError("GW frequency integration method %s not recognized. "
                            "Options are 'ac', 'cd', and 'exact'."%(freq_int))
-

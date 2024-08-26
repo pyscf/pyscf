@@ -65,8 +65,7 @@ def load(chkfile, key):
             if key.endswith('__from_list__'):
                 return [load_as_dic(k, val) for k in val]
             else:
-                return dict([(k.replace('__from_list__', ''),
-                              load_as_dic(k, val)) for k in val])
+                return {k.replace('__from_list__', ''): load_as_dic(k, val) for k in val}
         else:
             return val[()]
 
@@ -106,6 +105,7 @@ def dump(chkfile, key, value):
     >>> f['symm/Ci/op']
     <HDF5 dataset "op": shape (2,), type "|S1">
     '''
+    from pyscf.lib import H5FileWrap
     def save_as_group(key, value, root):
         if isinstance(value, dict):
             root1 = root.create_group(key)
@@ -127,14 +127,14 @@ def dump(chkfile, key, value):
                     save_as_group('%06d'%k, v, root1)
 
     if h5py.is_hdf5(chkfile):
-        with h5py.File(chkfile, 'r+') as fh5:
+        with H5FileWrap(chkfile, 'r+') as fh5:
             if key in fh5:
                 del (fh5[key])
             elif key + '__from_list__' in fh5:
                 del (fh5[key+'__from_list__'])
             save_as_group(key, value, fh5)
     else:
-        with h5py.File(chkfile, 'w') as fh5:
+        with H5FileWrap(chkfile, 'w') as fh5:
             save_as_group(key, value, fh5)
 dump_chkfile_key = save = dump
 
@@ -189,4 +189,3 @@ def save_mol(mol, chkfile):
     '''
     dump(chkfile, 'mol', mol.dumps())
 dump_mol = save_mol
-

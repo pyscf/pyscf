@@ -763,7 +763,7 @@ Reference isotope 65 Tb 159       0               Stable            3/2+      +1
                   65 Tb 160       0               72.1 d            3-        +3.85(5)
                   65 Tb 161       0               6.9 d             3/2+      +1.3(6)
 Dysprosium        Muonic atom X-ray hyperfine structure
-                  A. Unpublished results from Neugart, PC to Raghavan (1987). No information on interactio
+                  A. Unpublished results from Neugart, PC to Raghavan (1987). No information on interaction
                   B. Analysis of perturbation of TDPAC in liquid sources
                   66 Dy 147       751             59 s              (11/2-)   +0.67(10)
                   66 Dy 149       0               4.23 m            7/2-      -0.62(5)

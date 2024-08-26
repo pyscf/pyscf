@@ -70,7 +70,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     noccb, nvirb = gf_occ[1].naux, gf_vir[1].naux
     naux = agf2.with_df.get_naoaux()
     tol = agf2.weight_tol
-    facs = dict(os_factor=os_factor, ss_factor=ss_factor)
+    facs = {'os_factor': os_factor, 'ss_factor': ss_factor}
 
     ci_a, ei_a = gf_occ[0].coupling, gf_occ[0].energy
     ci_b, ei_b = gf_occ[1].coupling, gf_occ[1].energy
@@ -209,6 +209,8 @@ class DFUAGF2(uagf2.UAGF2):
             Auxiliaries of the Green's function for each spin
     '''
 
+    _keys = {'_with_df', 'allow_lowmem_build'}
+
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
         uagf2.UAGF2.__init__(self, mf, frozen=frozen, mo_energy=mo_energy,
                              mo_coeff=mo_coeff, mo_occ=mo_occ)
@@ -220,8 +222,6 @@ class DFUAGF2(uagf2.UAGF2):
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
 
         self.allow_lowmem_build = True
-
-        self._keys.update(['_with_df', 'allow_lowmem_build'])
 
     build_se_part = build_se_part
     get_jk = dfragf2.get_jk
@@ -277,7 +277,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     mob = np.asarray(mob, order='F')
     sija = (0, nmoa, 0, nmoa)
     sijb = (0, nmob, 0, nmob)
-    sym = dict(aosym='s2', mosym='s2')
+    sym = {'aosym': 's2', 'mosym': 's2'}
 
     for p0, p1 in with_df.prange():
         eri0 = with_df._cderi[p0:p1]
@@ -324,7 +324,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b):
     jasym_a, nja_a, cja_a, sja_a = ao2mo.incore._conc_mos(cja, caa, compact=False)
     xisym_b, nxi_b, cxi_b, sxi_b = ao2mo.incore._conc_mos(cxb, cib, compact=False)
     jasym_b, nja_b, cja_b, sja_b = ao2mo.incore._conc_mos(cjb, cab, compact=False)
-    sym = dict(aosym='s2', mosym='s1')
+    sym = {'aosym': 's2', 'mosym': 's1'}
 
     qxi_a = np.zeros((naux, nxi_a))
     qxi_b = np.zeros((naux, nxi_b))
@@ -387,4 +387,3 @@ if __name__ == '__main__':
     uagf2.run()
     uagf2.ipagf2(nroots=5)
     uagf2.eaagf2(nroots=5)
-

@@ -6,4 +6,4 @@
 #endif
 
 #cmakedefine HAVE_FFS
-
+#define XCFUN_MAX_DERIV_ORDER @XCFUN_MAX_ORDER@

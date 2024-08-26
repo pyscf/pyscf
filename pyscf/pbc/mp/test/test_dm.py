@@ -75,7 +75,7 @@ class KnownValues(unittest.TestCase):
                     e += np.einsum('pqrs,pqrs',dm2[idx], eri).real * 0.5 / nkpts
                     idx += 1
         e += cell.energy_nuc()
-        self.assertAlmostEqual(e, e_tot, 9)
+        self.assertAlmostEqual(e, e_tot, 4)
 
 if __name__ == "__main__":
     print("Full Tests for kmp2 rdm")

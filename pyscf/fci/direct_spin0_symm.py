@@ -74,15 +74,20 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     strsa = cistring.gen_strings4orblist(range(norb), neleca)
     na = len(strsa)
     airreps = direct_spin1_symm._gen_strs_irrep(strsa, orbsym)
-    hdiag = hdiag.reshape(na,na)
 
     sym_allowed = (airreps[:,None] ^ airreps) == wfnsym
     idx = numpy.arange(na)
     sym_allowed[idx[:,None] < idx] = False
     idx_a, idx_b = numpy.where(sym_allowed)
 
+    hdiag = hdiag.reshape(na,na)[idx_a,idx_b]
+    if hdiag.size <= nroots:
+        hdiag_indices = numpy.arange(hdiag.size)
+    else:
+        hdiag_indices = numpy.argpartition(hdiag, nroots-1)[:nroots]
+
     ci0 = []
-    for k in numpy.argpartition(hdiag[idx_a,idx_b], nroots-1)[:nroots]:
+    for k in hdiag_indices:
         addra, addrb = idx_a[k], idx_b[k]
         x = numpy.zeros((na, na))
         if addra == addrb:
@@ -92,7 +97,8 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
@@ -141,7 +147,8 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             break
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 

@@ -18,7 +18,6 @@
 
 import unittest
 import numpy
-import copy
 from pyscf import lib, gto, scf, dft
 from pyscf.tdscf import rhf, rks
 from pyscf import tdscf
@@ -51,7 +50,7 @@ def setUpModule():
     mf_bp86.run(conv_tol=1e-10)
 
     mf_b3lyp = dft.RKS(mol)
-    mf_b3lyp.xc = 'b3lyp'
+    mf_b3lyp.xc = 'b3lyp5'
     mf_b3lyp.grids.prune = None
     mf_b3lyp.run(conv_tol=1e-10)
 
@@ -107,6 +106,15 @@ class KnownValues(unittest.TestCase):
         a, b = td.get_ab()
         ref = diagonalize(a, b, nroots=5) * 27.2114
         self.assertAlmostEqual(abs(es - ref).max(), 0, 7)
+
+    def test_tddft_camb3lyp(self):
+        mf = mol.RKS(xc='camb3lyp').run()
+        td = mf.TDDFT()
+        es = td.kernel(nstates=4)[0]
+        a,b = td.get_ab()
+        e_ref = diagonalize(a, b, 5)
+        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
+        self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 9.0054057603534, 4)
 
     def test_tda_b3lypg(self):
         mf = dft.RKS(mol)
@@ -197,7 +205,7 @@ class KnownValues(unittest.TestCase):
         e = mf.kernel()
         self.assertAlmostEqual(e, -1.14670613191817, 8)
 
-        e_td = mf.TDA().kernel()[0]
+        e_td = mf.TDA().set(nstates=5).kernel()[0]
         ref = [16.25021865, 27.93720198, 49.4665691]
         self.assertAlmostEqual(abs(e_td*nist.HARTREE2EV - ref).max(), 0, 4)
 
@@ -286,7 +294,7 @@ class KnownValues(unittest.TestCase):
 
     def test_nto(self):
         mf = scf.RHF(mol).run()
-        td = rks.TDA(mf).run()
+        td = rks.TDA(mf).run(nstates=5)
         w, nto = td.get_nto(state=3)
         self.assertAlmostEqual(w[0], 0.98655300613468389, 7)
         self.assertAlmostEqual(lib.fp(w), 0.98625701534112464, 7)
@@ -295,7 +303,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(w[0], 0.99997335352278072, 7)
         self.assertAlmostEqual(lib.fp(w), 0.99998775067586554, 7)
 
-        pmol = copy.copy(mol)
+        pmol = mol.copy(deep=False)
         pmol.symmetry = True
         pmol.build(0, 0)
         mf = scf.RHF(pmol).run()

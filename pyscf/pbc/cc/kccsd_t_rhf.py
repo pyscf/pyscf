@@ -117,7 +117,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     def get_w(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
         '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts
 
-        Uses tranposed eris for fast data access.'''
+        Uses transposed eris for fast data access.'''
         km = kconserv[kc, kk, kb]
         kf = kconserv[kk, kc, kj]
         out = einsum('cfjk,abif->abcijk', t2T[kc,kf,kj,c0:c1,:,:,:], eris_vvop[ka,kb,ki,a0:a1,b0:b1,:,nocc:])
@@ -357,7 +357,7 @@ def check_read_success(filename, **kwargs):
         mode = kwargs.get('mode', 'r')
         if not os.path.isfile(filename):
             return False
-        f = h5py.File(filename, mode=mode, **kwargs)
+        f = lib.H5FileWrap(filename, mode=mode, **kwargs)
         return f.attrs.get('completed', False)
     write_complete = check_write_complete(filename, **kwargs)
     return False and write_complete
@@ -579,7 +579,7 @@ def _get_epqr(pindices,qindices,rindices,fac=[1.0,1.0,1.0],large_num=LARGE_DENOM
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert (all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all(len(x) == 5 for x in [pindices,qindices]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     r0,r1,kr,mo_e_r,nonzero_r = rindices

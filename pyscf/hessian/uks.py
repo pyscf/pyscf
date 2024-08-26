@@ -40,7 +40,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     mol = hessobj.mol
     mf = hessobj.base
     ni = mf._numint
-    if mf.nlc or ni.libxc.is_nlc(mf.xc):
+    if mf.do_nlc():
         raise NotImplementedError('RKS Hessian for NLC functional')
 
     if mo_energy is None: mo_energy = mf.mo_energy
@@ -601,8 +601,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             vmatb[ia] = -vmatb[ia] - vmatb[ia].transpose(0,2,1)
 
     elif xctype == 'MGGA':
-        if grids.level < 5:
-            logger.warn(mol, 'MGGA Hessian is sensitive to dft grids.')
+        rks_hess._check_mgga_grids(grids)
         ao_deriv = 2
         vipa = numpy.zeros((3,nao,nao))
         vipb = numpy.zeros((3,nao,nao))
@@ -653,14 +652,19 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     return vmata, vmatb
 
 
-class Hessian(uhf_hess.Hessian):
+class Hessian(rhf_hess.HessianBase):
     '''Non-relativistic UKS hessian'''
+
+    _keys = {'grids', 'grid_response'}
+
     def __init__(self, mf):
         uhf_hess.Hessian.__init__(self, mf)
         self.grids = None
         self.grid_response = False
-        self._keys = self._keys.union(['grids'])
 
+    hess_elec = uhf_hess.hess_elec
+    gen_hop = uhf_hess.gen_hop
+    solve_mo1 = uhf_hess.Hessian.solve_mo1
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
 

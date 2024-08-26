@@ -227,7 +227,7 @@ def cart2polar(rvec):
 
 
 def get_pp(cell, kpt=np.zeros(3)):
-    '''Get the periodic pseudotential nuc-el AO matrix
+    '''Get the periodic pseudopotential nuc-el AO matrix
     '''
     from pyscf.pbc import tools
     coords = cell.get_uniform_grids()

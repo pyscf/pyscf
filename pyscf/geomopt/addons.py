@@ -33,7 +33,7 @@ def as_pyscf_method(mol, scan_function):
     >>> m = as_pyscf_method(mol, scan_fn)
     >>> pyscf.geomopt.berny_solver.kernel(m)
     '''
-    from pyscf.grad.rhf import GradientsMixin
+    from pyscf.grad.rhf import GradientsBase
     class OmniGrad(lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
@@ -45,11 +45,11 @@ def as_pyscf_method(mol, scan_function):
         def converged(self):
             return True
 
-    class Gradients(GradientsMixin):
+    class Gradients(GradientsBase):
         def as_scanner(self):
             return OmniGrad(self)
 
-    class OmniMethod(object):
+    class OmniMethod:
         def __init__(self, mol):
             self.mol = mol
             self.verbose = mol.verbose
@@ -87,4 +87,3 @@ def symmetrize(mol, coords):
     from pyscf.grad.rhf import symmetrize
     # Symmetrizing coordinates is the same to the symmetrization of gradients.
     return symmetrize(mol, coords)
-

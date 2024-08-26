@@ -13,7 +13,7 @@ regular `numpy.linalg.eig` can be used to retrieve TD roots. Several variants of
  * (this module) `pyscf.pbc.tdscf.kproxy_supercell`: PBC implementation constructing supercells. Works with an arbitrary number of
    k-points but has an overhead due to ignoring the momentum conservation law. In addition, works only with
    time reversal invariant (TRI) models: i.e. the k-point grid has to be aligned and contain at least one TRI momentum.
- * `pyscf.pbc.tdscf.kproxy`: same as the above but respect the momentum conservation and, thus, diagonlizes smaller
+ * `pyscf.pbc.tdscf.kproxy`: same as the above but respect the momentum conservation and, thus, diagonalizes smaller
    matrices (the performance gain is the total number of k-points in the model).
 """
 
@@ -495,7 +495,7 @@ def orb2ov(space, nocc, nmo):
     """
     Converts orbital active space specification into ov-pairs space spec.
     Args:
-        space (ndarray): the obital space. Basis order: [k, orb=o+v];
+        space (ndarray): the orbital space. Basis order: [k, orb=o+v];
         nocc (Iterable): the numbers of occupied orbitals per k-point;
         nmo (Iterable): the total numbers of orbitals per k-point;
 
@@ -662,4 +662,3 @@ class TDProxy(mol_proxy.TDProxy):
             frozen=self.frozen,
             **self.__k2s_kwargs__
         )
-

@@ -22,12 +22,11 @@ Edmiston-Ruedenberg localization
 
 import numpy
 from functools import reduce
-
 from pyscf.scf import hf
 from pyscf.lo import boys
 
 
-class EdmistonRuedenberg(boys.Boys):
+class EdmistonRuedenberg(boys.OrbitalLocalizer):
 
     def get_jk(self, u):
         mo_coeff = numpy.dot(self.mo_coeff, u)

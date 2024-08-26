@@ -18,7 +18,7 @@
 
 '''
 PBC spin-unrestricted G0W0-AC QP eigenvalues with k-point sampling
-GW-AC is recommended for valence states only, and is inaccuarate for core states.
+GW-AC is recommended for valence states only, and is inaccurate for core states.
 
 Method:
     See T. Zhu and G.K.-L. Chan, arxiv:2007.03148 (2020) for details
@@ -86,6 +86,9 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
     uhf = scf.KUHF(gw.mol, gw.kpts, exxdiv=exxdiv)
     uhf.with_df = gw.with_df
     uhf.with_df._cderi = gw.with_df._cderi
+    if uhf.with_df._j_only:
+        logger.debug(gw, 'Rebuild CDERI for exchange integrals')
+        uhf.with_df.build(j_only=False)
     vk = uhf.get_veff(gw.mol,dm_kpts=dm)
     vj = uhf.get_j(gw.mol,dm_kpts=dm)
     vk[0] = vk[0] - (vj[0] + vj[1])
@@ -445,7 +448,7 @@ def get_rho_response_wing(gw, omega, mo_energy, Lpq, qij):
 def get_qij(gw, q, mo_coeff, uniform_grids=False):
     '''
     Compute qij = 1/Omega * |< psi_{ik} | e^{iqr} | psi_{ak-q} >|^2 at q: (nkpts, nocc, nvir)
-    through kp perturbtation theory
+    through kp perturbation theory
     Ref: Phys. Rev. B 83, 245122 (2011)
     '''
     nocca, noccb = gw.nocc
@@ -504,7 +507,7 @@ def _get_scaled_legendre_roots(nw):
 
 def _get_clenshaw_curtis_roots(nw):
     """
-    Clenshaw-Curtis qaudrature on [0,inf)
+    Clenshaw-Curtis quadrature on [0,inf)
     Ref: J. Chem. Phys. 132, 234114 (2010)
     Returns:
         freqs : 1D ndarray
@@ -604,7 +607,12 @@ class KUGWAC(lib.StreamObject):
     # Whether applying finite size corrections
     fc = getattr(__config__, 'gw_gw_GW_fc', True)
 
-    def __init__(self, mf, frozen=0):
+    _keys = {
+        'linearized', 'ac', 'fc', 'frozen', 'mol', 'with_df',
+        'kpts', 'nkpts', 'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
+    }
+
+    def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -612,7 +620,7 @@ class KUGWAC(lib.StreamObject):
         self.max_memory = mf.max_memory
 
         #TODO: implement frozen orbs
-        if frozen > 0:
+        if frozen is not None and frozen > 0:
             raise NotImplementedError
         self.frozen = frozen
 
@@ -621,7 +629,6 @@ class KUGWAC(lib.StreamObject):
             self.with_df = mf.with_df
         else:
             raise NotImplementedError
-        self._keys.update(['with_df'])
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -634,9 +641,6 @@ class KUGWAC(lib.StreamObject):
         self.mo_coeff = mf.mo_coeff
         self.mo_occ = mf.mo_occ
         self.sigma = None
-
-        keys = set(('linearized','ac','fc'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)

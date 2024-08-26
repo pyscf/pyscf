@@ -24,7 +24,7 @@ Non-relativistic Unrestricted Kohn-Sham
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import uhf
+from pyscf.scf import hf, uhf
 from pyscf.dft import rks
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -50,7 +50,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_uks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
-        if ks.nlc or ni.libxc.is_nlc(ks.xc):
+        if ks.do_nlc():
             if ni.libxc.is_nlc(ks.xc):
                 xc = ks.xc
             else:
@@ -192,3 +192,9 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
     def nuc_grad_method(self):
         from pyscf.grad import uks
         return uks.Gradients(self)
+
+    def to_hf(self):
+        '''Convert to UHF object.'''
+        return self._transfer_attrs_(self.mol.UHF())
+
+    to_gpu = lib.to_gpu

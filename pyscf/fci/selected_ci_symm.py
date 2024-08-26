@@ -38,7 +38,7 @@ def reorder4irrep(eri, norb, link_index, orbsym, offdiag=0):
     orbsym = orbsym % 10
     # irrep of (ij| pair
     trilirrep = (orbsym[:,None] ^ orbsym)[numpy.tril_indices(norb, offdiag)]
-    # and the number of occurence for each irrep
+    # and the number of occurrences for each irrep
     dimirrep = numpy.array(numpy.bincount(trilirrep), dtype=numpy.int32)
     # we sort the irreps of (ij| pair, to group the pairs which have same irreps
     # "order" is irrep-id-sorted index. The (ij| paired is ordered that the
@@ -178,7 +178,7 @@ class SelectedCI(selected_ci.SelectedCI):
                 wfnsym = [addons._guess_wfnsym(c, strsa, strsb, orbsym)
                           for c in fcivec]
                 if any(wfnsym[0] != x for x in wfnsym):
-                    warnings.warn('Different wfnsym %s found in different CI vecotrs' % wfnsym)
+                    warnings.warn('Different wfnsym %s found in different CI vectors' % wfnsym)
                 wfnsym = wfnsym[0]
 
         else:
@@ -290,4 +290,3 @@ if __name__ == '__main__':
     myci = direct_spin1_symm.FCISolver().set(orbsym=orbsym)
     e2, c2 = myci.kernel(h1e, eri, norb, nelec)
     print(e1 - e2)
-

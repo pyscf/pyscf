@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import unittest
 import numpy
 from pyscf import lib
@@ -133,15 +132,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm1[0]), 2.6252082970845532*2, 7)
 
     def test_get_h2eff(self):
-        mc1 = mcscf.approx_hessian(mcscf.CASCI(m, 4, 4))
+        mc1 = mcscf.CASCI(m, 4, 4)
+        mc2 = mcscf.approx_hessian(mc1)
         eri1 = mc1.get_h2eff(m.mo_coeff[:,5:9])
-        eri2 = mc1.get_h2cas(m.mo_coeff[:,5:9])
+        eri2 = mc2.get_h2eff(m.mo_coeff[:,5:9])
         self.assertAlmostEqual(abs(eri1-eri2).max(), 0, 12)
 
-        mc1 = mcscf.density_fit(mcscf.CASCI(m, 4, 4))
-        eri1 = mc1.get_h2eff(m.mo_coeff[:,5:9])
-        eri2 = mc1.get_h2cas(m.mo_coeff[:,5:9])
-        self.assertTrue(abs(eri1-eri2).max() > 1e-5)
+        mc3 = mcscf.density_fit(mc1)
+        eri3 = mc3.get_h2eff(m.mo_coeff[:,5:9])
+        self.assertTrue(abs(eri1-eri3).max() > 1e-5)
 
     def test_get_veff(self):
         mf = m.view(dft.rks.RKS)
@@ -165,7 +164,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mc2.e_tot, -108.62009625745821, 7)
 
     def test_slight_symmetry_broken(self):
-        mf = copy.copy(msym)
+        mf = msym.copy()
         mf.mo_coeff = numpy.array(msym.mo_coeff)
         u = numpy.linalg.svd(numpy.random.random((4,4)))[0]
         mf.mo_coeff[:,5:9] = mf.mo_coeff[:,5:9].dot(u)
@@ -203,7 +202,7 @@ class KnownValues(unittest.TestCase):
 
     def test_state_average_mix(self):
         mc = mcscf.CASCI(m, 4, 4)
-        cis1 = copy.copy(mc.fcisolver)
+        cis1 = mc.fcisolver.copy()
         cis1.spin = 2
         cis1.nroots = 3
         mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [.25, .25, .25, .25])

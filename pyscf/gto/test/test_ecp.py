@@ -283,6 +283,28 @@ Na F
                            mol.intor('ECPso'), u.conj(), u)
         self.assertAlmostEqual(abs(ref-mat).max(), 0, 11)
 
+    def test_ecp_with_so_data(self):
+        mol = gto.M(atom='Ce 0 0 0', basis=[[0, [1, 1]]],
+                    ecp='''
+        Ce nelec 28
+        Ce ul
+        1     148.23398733 8.58586082
+        Ce P
+        0     0.25454001 5.00000000
+        ''')
+        mol2 = gto.M(atom='Ce 0 0 0', basis=[[0, [1, 1]]],
+                     ecp='''
+        Ce nelec 28
+        Ce ul
+        1     148.23398733 8.58586082 -0.69175758
+        Ce P
+        0     0.25454001 5.00000000 0.00000000
+        ''')
+        v1 = mol.intor('ECPscalar')
+        v2 = mol2.intor('ECPscalar')
+        self.assertAlmostEqual(v1[0,0], 0.1823961651083, 12)
+        self.assertAlmostEqual(abs(v1 - v2).max(), 0, 12)
+
     def test_ecp_grad1(self):
         mol = gto.M(atom='Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.050',
                     basis='lanl2dz', ecp = 'lanl2dz', unit='B')
@@ -376,8 +398,18 @@ Eu F
 2      5.3988000000      -63.6010500000
                     ''')}, charge=2, verbose=0)
         mf = scf.RHF(mol)
+        mf.get_init_guess()
         self.assertEqual(mol.ao_labels()[0], '0 Eu1 5s    ')
         self.assertAlmostEqual(lib.fp(mf.get_hcore()), 22.59028455662168)
+
+    def test_ecp_f_in_valence(self):
+        mol = gto.M(atom='U, 0.00, 0.00, 0.00',
+                    basis={'U': 'crenbl'}, ecp={'U': 'crenbl'},
+                    charge=3, spin=3, verbose=0)
+        mf = scf.ROHF(mol)
+        mf.get_init_guess()
+        self.assertEqual(mol.ao_labels()[40], '0 U 5f-3  ')
+        self.assertAlmostEqual(lib.fp(mf.get_hcore()), -55.38627201912257)
 
 
 if __name__ == '__main__':

@@ -26,5 +26,9 @@ for i in range(mol.natm):
                                         mol.atom_charge(i),
                                         mol.atom_coord(i)))
 
-print("Atoms' charges in a vector\n%s" % mol.atom_charges())
-print("Atoms' coordinates in an array\n%s" % mol.atom_coords())
+print("Atomic charges:")
+print(mol.atom_charges())
+print("Atomic coordinates (Bohr):")
+print(mol.atom_coords())
+print("Atomic coordinates (Angstrom):")
+print(mol.atom_coords(unit='Ang'))

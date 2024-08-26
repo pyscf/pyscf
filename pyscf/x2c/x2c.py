@@ -18,7 +18,6 @@ X2C 2-component HF methods
 '''
 
 from functools import reduce
-import copy
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -31,7 +30,7 @@ from pyscf import __config__
 
 LINEAR_DEP_THRESHOLD = 1e-9
 
-class X2CHelperMixin(lib.StreamObject):
+class X2CHelperBase(lib.StreamObject):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
@@ -58,7 +57,7 @@ class X2CHelperMixin(lib.StreamObject):
             mol = self.mol
 
         if self.basis is not None:
-            xmol = copy.copy(mol)
+            xmol = mol.copy(deep=False)
             xmol.build(False, False, basis=self.basis)
             return xmol, None
         elif self.xuncontract:
@@ -270,7 +269,7 @@ class X2CHelperMixin(lib.StreamObject):
         self.mol = mol
         return self
 
-class SpinorX2CHelper(X2CHelperMixin):
+class SpinorX2CHelper(X2CHelperBase):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
@@ -278,7 +277,7 @@ class SpinorX2CHelper(X2CHelperMixin):
 
 X2C = SpinorX2CHelper
 
-class SpinOrbitalX2CHelper(X2CHelperMixin):
+class SpinOrbitalX2CHelper(X2CHelperBase):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the Gaussian type spin-orbital basis (as the spin-orbital basis in GHF)
     '''
@@ -332,7 +331,7 @@ class SpinOrbitalX2CHelper(X2CHelperMixin):
             h1 = reduce(lib.dot, (contr_coeff.T, h1, contr_coeff))
         return h1
 
-    @lib.with_doc(X2CHelperMixin.picture_change.__doc__)
+    @lib.with_doc(X2CHelperBase.picture_change.__doc__)
     def picture_change(self, even_operator=(None, None), odd_operator=None):
         mol = self.mol
         xmol, c = self.get_xmol(mol)
@@ -416,8 +415,7 @@ def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True, omega=None):
     vk = vk.reshape(dm.shape)
     return dhf._jk_triu_(mol, vj, vk, hermi)
 
-def make_rdm1(mo_coeff, mo_occ, **kwargs):
-    return numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
+make_rdm1 = hf.make_rdm1
 
 def init_guess_by_minao(mol):
     '''Initial guess in terms of the overlap to minimal basis.'''
@@ -454,11 +452,13 @@ def get_init_guess(mol, key='minao'):
 
 class SCF(hf.SCF):
     '''The full X2C problem (scaler + soc terms) in j-adapted spinor basis'''
+
+    _keys = {'with_x2c'}
+
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.with_x2c = SpinorX2CHelper(mol)
         #self.with_x2c.xuncontract = False
-        self._keys = self._keys.union(['with_x2c'])
 
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
@@ -518,20 +518,14 @@ class SCF(hf.SCF):
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        if mo_occ is None: mo_occ = self.mo_occ
-        return make_rdm1(mo_coeff, mo_occ, **kwargs)
+    make_rdm1 = lib.module_method(make_rdm1, absences=['mo_coeff', 'mo_occ'])
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
-        def set_vkscreen(opt, name):
-            opt._this.contents.r_vkscreen = _vhf._fpointer(name)
-        opt = _vhf.VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
-                          'CVHFrkbllll_direct_scf',
-                          'CVHFrkbllll_direct_scf_dm')
-        opt.direct_scf_tol = self.direct_scf_tol
-        set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
+        opt = dhf._VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
+                          'CVHFrkb_q_cond', 'CVHFrkb_dm_cond',
+                          direct_scf_tol=self.direct_scf_tol)
+        opt._this.r_vkscreen = _vhf._fpointer('CVHFrkbllll_vkscreen')
         return opt
 
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
@@ -539,9 +533,11 @@ class SCF(hf.SCF):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (logger.process_clock(), logger.perf_counter())
-        if self.direct_scf and self.opt is None:
-            self.opt = self.init_direct_scf(mol)
-        vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
+        if self.direct_scf and self._opt.get(omega) is None:
+            with mol.with_range_coulomb(omega):
+                self._opt[omega] = self.init_direct_scf(mol)
+        vhfopt = self._opt.get(omega)
+        vj, vk = get_jk(mol, dm, hermi, vhfopt, with_j, with_k)
         logger.timer(self, 'vj and vk', *t0)
         return vj, vk
 
@@ -550,9 +546,9 @@ class SCF(hf.SCF):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
-            ddm = numpy.array(dm, copy=False) - numpy.array(dm_last, copy=False)
+            ddm = numpy.array(dm) - numpy.array(dm_last)
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
-            return numpy.array(vhf_last, copy=False) + vj - vk
+            return numpy.array(vhf_last) + vj - vk
         else:
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk
@@ -581,7 +577,7 @@ class SCF(hf.SCF):
         log = logger.new_logger(mol, verbose)
 
         if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-            # UHF denisty matrices
+            # UHF density matrices
             dm = dm[0] + dm[1]
 
         with mol.with_common_orig((0,0,0)):
@@ -643,6 +639,13 @@ class SCF(hf.SCF):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+    def _transfer_attrs_(self, dst):
+        if self.with_x2c and not hasattr(dst, 'with_x2c'):
+            logger.warn(self, 'Destination object of to_hf/to_ks method is not '
+                        'an X2C object. Convert dst to X2C object.')
+            dst = dst.x2c()
+        return hf.SCF._transfer_attrs_(self, dst)
+
 X2C_SCF = SCF
 
 class UHF(SCF):
@@ -654,9 +657,9 @@ class UHF(SCF):
         mean-field object.
         '''
         from pyscf.x2c import dft
-        mf = self.view(dft.UKS)
-        mf.converged = False
-        return mf
+        return self._transfer_attrs_(dft.UKS(self.mol, xc=xc))
+
+    to_gpu = lib.to_gpu
 
 X2C_UHF = UHF
 
@@ -677,9 +680,9 @@ class RHF(SCF):
         mean-field object.
         '''
         from pyscf.x2c import dft
-        mf = self.view(dft.RKS)
-        mf.converged = False
-        return mf
+        return self._transfer_attrs_(dft.RKS(self.mol, xc=xc))
+
+    to_gpu = lib.to_gpu
 
 X2C_RHF = RHF
 
@@ -712,87 +715,102 @@ def x2c1e_ghf(mf):
         else:
             return mf
 
-    mf_class = mf.__class__
-    if mf_class.__doc__ is None:
-        doc = ''
-    else:
-        doc = mf_class.__doc__
+    return lib.set_class(X2C1E_GSCF(mf), (X2C1E_GSCF, mf.__class__))
 
-    class X2C1E_GSCF(_X2C_SCF, mf_class):
-        __doc__ = doc + '''
-        Attributes for spin-orbital X2C:
-            with_x2c : X2C object
+# A tag to label the derived SCF class
+class _X2C_SCF:
+    def dump_flags(self, verbose=None):
+        super().dump_flags(verbose)
+        if self.with_x2c:
+            self.with_x2c.dump_flags(verbose)
+        return self
+
+    def reset(self, mol):
+        self.with_x2c.reset(mol)
+        return super().reset(mol)
+
+class X2C1E_GSCF(_X2C_SCF):
+    '''
+    Attributes for spin-orbital X2C:
+        with_x2c : X2C object
+    '''
+
+    __name_mixin__ = 'X2C1e'
+
+    _keys = {'with_x2c'}
+
+    def __init__(self, mf):
+        self.__dict__.update(mf.__dict__)
+        self.with_x2c = SpinOrbitalX2CHelper(mf.mol)
+
+    def undo_x2c(self):
+        '''Remove the X2C Mixin'''
+        obj = lib.view(self, lib.drop_class(self.__class__, X2C1E_GSCF))
+        del obj.with_x2c
+        return obj
+
+    def get_hcore(self, mol=None):
+        if mol is None: mol = self.mol
+        return self.with_x2c.get_hcore(mol)
+
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   picture_change=True, **kwargs):
+        r''' Dipole moment calculation with picture change correction
+
+        Args:
+             mol: an instance of :class:`Mole`
+             dm : a 2D ndarrays density matrices
+
+        Kwarg:
+            picture_change (bool) : Whether to compute the dipole moment with
+            picture change correction.
+
+        Return:
+            A list: the dipole moment on x, y and z component
         '''
-        def __init__(self, mol, *args, **kwargs):
-            mf_class.__init__(self, mol, *args, **kwargs)
-            self.with_x2c = SpinOrbitalX2CHelper(mf.mol)
-            self._keys = self._keys.union(['with_x2c'])
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        log = logger.new_logger(mol, verbose)
+        charges = mol.atom_charges()
+        coords  = mol.atom_coords()
+        nucl_dip = numpy.einsum('i,ix->x', charges, coords)
+        with mol.with_common_orig(nucl_dip):
+            r = mol.intor_symmetric('int1e_r')
+            ao_dip = numpy.array([_block_diag(x) for x in r])
+            if picture_change:
+                xmol = self.with_x2c.get_xmol()[0]
+                nao = xmol.nao
+                prp = xmol.intor_symmetric('int1e_sprsp').reshape(3,4,nao,nao)[:,0]
+                prp = numpy.array([_block_diag(x) for x in prp])
+                ao_dip = self.with_x2c.picture_change((ao_dip, prp))
 
-        def get_hcore(self, mol=None):
-            if mol is None: mol = self.mol
-            return self.with_x2c.get_hcore(mol)
+        mol_dip = -numpy.einsum('xij,ji->x', ao_dip, dm).real
 
-        def dump_flags(self, verbose=None):
-            mf_class.dump_flags(self, verbose)
-            if self.with_x2c:
-                self.with_x2c.dump_flags(verbose)
-            return self
+        if unit.upper() == 'DEBYE':
+            mol_dip *= nist.AU2DEBYE
+            log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
+        else:
+            log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
+        return mol_dip
 
-        def reset(self, mol):
-            self.with_x2c.reset(mol)
-            return mf_class.reset(self, mol)
+    def _transfer_attrs_(self, dst):
+        if self.with_x2c and not hasattr(dst, 'with_x2c'):
+            logger.warn(self, 'Destination object of to_hf/to_ks method is not '
+                        'an X2C object. Convert dst to X2C object.')
+            dst = dst.x2c()
+        return hf.SCF._transfer_attrs_(self, dst)
 
-        def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
-                       picture_change=True, **kwargs):
-            r''' Dipole moment calculation with picture change correction
+    def to_ks(self, xc='HF'):
+        raise NotImplementedError
 
-            Args:
-                 mol: an instance of :class:`Mole`
-                 dm : a 2D ndarrays density matrices
-
-            Kwarg:
-                picture_change (bool) : Whether to compute the dipole moment with
-                picture change correction.
-
-            Return:
-                A list: the dipole moment on x, y and z component
-            '''
-            if mol is None: mol = self.mol
-            if dm is None: dm = self.make_rdm1()
-            log = logger.new_logger(mol, verbose)
-
-            nao = mol.nao
-            dm = dm[:nao,:nao] + dm[nao:,nao:]
-
-            charges = mol.atom_charges()
-            coords  = mol.atom_coords()
-            nucl_dip = numpy.einsum('i,ix->x', charges, coords)
-            with mol.with_common_orig(nucl_dip):
-                ao_dip = _block_diag(mol.intor_symmetric('int1e_r'))
-                if picture_change:
-                    xmol = self.with_x2c.get_xmol()[0]
-                    nao = xmol.nao
-                    prp = xmol.intor_symmetric('int1e_sprsp').reshape(3,4,nao,nao)[:,0]
-                    prp = numpy.array([_block_diag(x) for x in prp])
-                    ao_dip = self.with_x2c.picture_change((ao_dip, prp))
-
-            mol_dip = -numpy.einsum('xij,ji->x', ao_dip, dm).real
-
-            if unit.upper() == 'DEBYE':
-                mol_dip *= nist.AU2DEBYE
-                log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
-            else:
-                log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
-            return mol_dip
-
-    with_x2c = SpinOrbitalX2CHelper(mf.mol)
-    return mf.view(X2C1E_GSCF).add_keys(with_x2c=with_x2c)
+    def to_gpu(self):
+        obj = self.undo_x2c().to_gpu().x2c1e()
+        return lib.to_gpu(self, obj)
 
 
 def _uncontract_mol(mol, xuncontract=None, exp_drop=0.2):
     '''mol._basis + uncontracted steep functions'''
-    pmol, contr_coeff = mol.decontract_basis(atoms=xuncontract)
-    contr_coeff = scipy.linalg.block_diag(*contr_coeff)
+    pmol, contr_coeff = mol.decontract_basis(atoms=xuncontract, aggregate=True)
     return pmol, contr_coeff
 
 
@@ -934,7 +952,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 
     w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
     idx = w > 1e-14
-    # Adopt (2) here becuase X is not appeared in Eq (2).
+    # Adopt (2) here because X is not appeared in Eq (2).
     # R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
     r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
                            cl.T.conj(), s))
@@ -962,11 +980,6 @@ def _sigma_dot(mat):
     quaternion = numpy.vstack([1j * lib.PauliMatrices, numpy.eye(2)[None,:,:]])
     nao = mat.shape[-1] * 2
     return lib.einsum('sxy,spq->xpyq', quaternion, mat).reshape(nao, nao)
-
-
-# A tag to label the derived SCF class
-class _X2C_SCF:
-    pass
 
 
 if __name__ == '__main__':

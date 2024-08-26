@@ -18,7 +18,6 @@
 
 import unittest
 import numpy
-import copy
 from pyscf import lib, gto, scf, dft
 from pyscf import tdscf
 
@@ -74,7 +73,7 @@ def setUpModule():
     mf_bp86 = dft.UKS(mol).set(xc='b88,p86', conv_tol=1e-12)
     mf_bp86.grids.prune = None
     mf_bp86 = mf_bp86.newton().run()
-    mf_b3lyp = dft.UKS(mol).set(xc='b3lyp', conv_tol=1e-12)
+    mf_b3lyp = dft.UKS(mol).set(xc='b3lyp5', conv_tol=1e-12)
     mf_b3lyp.grids.prune = None
     mf_b3lyp = mf_b3lyp.newton().run()
     mf_m06l = dft.UKS(mol).run(xc='m06l')
@@ -130,6 +129,15 @@ class KnownValues(unittest.TestCase):
         td = tdscf.uks.TDDFT(mf_b3lyp).set(conv_tol=1e-12)
         es = td.kernel(nstates=4)[0] * 27.2114
         self.assertAlmostEqual(lib.fp(es[:3]), 1.2984822994759448, 4)
+
+    def test_tddft_camb3lyp(self):
+        mf = mol1.UKS(xc='camb3lyp').run()
+        td = mf.TDDFT()
+        es = td.kernel(nstates=4)[0]
+        a,b = td.get_ab()
+        e_ref = diagonalize(a, b, 5)
+        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
+        self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 7.69383202636, 4)
 
     def test_tda_b3lyp(self):
         td = tdscf.TDA(mf_b3lyp).set(conv_tol=1e-12)
@@ -351,7 +359,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(w[0]), 0.00027305600430816, 9)
         self.assertAlmostEqual(lib.fp(w[1]), 0.99964370569529093, 9)
 
-        pmol = copy.copy(mol)
+        pmol = mol.copy(deep=False)
         pmol.symmetry = True
         pmol.build(0, 0)
         mf = scf.UHF(pmol).run()

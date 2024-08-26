@@ -393,6 +393,11 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         // Use opt->nbas because it is used in the prescreen function
         nbas = opt->nbas;
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        if (opt->q_cond == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CVHFsetnr_direct_scf\n",
+                        sizeof(double) * nbas*nbas);
+                exit(1);
+        }
         CVHFset_int2e_q_cond(intor, cintopt, opt->q_cond, ao_loc,
                              atm, natm, bas, nbas, env);
 }
@@ -400,9 +405,9 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
 /*
  * Non-relativistic 2-electron integrals
  */
-void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
-                          int *ao_loc, int *atm, int natm,
-                          int *bas, int nbas, double *env)
+void CVHFnr_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
+                         int *ao_loc, int *atm, int natm,
+                         int *bas, int nbas, double *env)
 {
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
@@ -448,6 +453,13 @@ void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
 }
 }
 
+void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
+                          int *ao_loc, int *atm, int natm,
+                          int *bas, int nbas, double *env)
+{
+        CVHFnr_int2e_q_cond(intor, cintopt, q_cond, ao_loc, atm, natm, bas, nbas, env);
+}
+
 void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, int len)
 {
         if (opt->q_cond != NULL) {
@@ -457,19 +469,32 @@ void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, int len)
         NPdcopy(opt->q_cond, q_cond, len);
 }
 
-void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
-                             int *atm, int natm, int *bas, int nbas, double *env)
+void CVHFnr_dm_cond1(double *dm_cond, double *dm, int nset, int *ao_loc,
+                     int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (opt->dm_cond != NULL) { // NOT reuse opt->dm_cond because nset may be diff in different call
-                free(opt->dm_cond);
-        }
-        // nbas in the input arguments may different to opt->nbas.
-        // Use opt->nbas because it is used in the prescreen function
-        nbas = opt->nbas;
-        opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas);
+        size_t nao = ao_loc[nbas];
+        double dmax;
+        int i, j, ish, jsh;
+        int iset;
+        double *pdm;
+        for (ish = 0; ish < nbas; ish++) {
+        for (jsh = 0; jsh < nbas; jsh++) {
+                dmax = 0;
+                for (iset = 0; iset < nset; iset++) {
+                        pdm = dm + nao*nao*iset;
+                        for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
+                        for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
+                                dmax = MAX(dmax, fabs(pdm[i*nao+j]));
+                        } }
+                }
+                dm_cond[ish*nbas+jsh] = dmax;
+        } }
+}
 
-        const size_t nao = ao_loc[nbas];
+void CVHFnr_dm_cond(double *dm_cond, double *dm, int nset, int *ao_loc,
+                    int *atm, int natm, int *bas, int nbas, double *env)
+{
+        size_t nao = ao_loc[nbas];
         double dmax, tmp;
         size_t i, j, ish, jsh, iset;
         double *pdm;
@@ -487,9 +512,27 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                                 dmax = MAX(dmax, tmp);
                         } }
                 }
-                opt->dm_cond[ish*nbas+jsh] = .5 * dmax;
-                opt->dm_cond[jsh*nbas+ish] = .5 * dmax;
+                dm_cond[ish*nbas+jsh] = .5 * dmax;
+                dm_cond[jsh*nbas+ish] = .5 * dmax;
         } }
+}
+
+void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
+                             int *atm, int natm, int *bas, int nbas, double *env)
+{
+        if (opt->dm_cond != NULL) { // NOT reuse opt->dm_cond because nset may be diff in different call
+                free(opt->dm_cond);
+        }
+        // nbas in the input arguments may different to opt->nbas.
+        // Use opt->nbas because it is used in the prescreen function
+        nbas = opt->nbas;
+        opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        if (opt->dm_cond == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CVHFsetnr_direct_scf_dm\n",
+                        sizeof(double) * nbas*nbas);
+                exit(1);
+        }
+        CVHFnr_dm_cond(opt->dm_cond, dm, nset, ao_loc, atm, natm, bas, nbas, env);
 }
 
 void CVHFset_dm_cond(CVHFOpt *opt, double *dm_cond, int len)

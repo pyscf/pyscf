@@ -6,6 +6,10 @@ from pyscf import gto
 from pyscf import dft
 from pyscf import lib
 from pyscf.dft import r_numint, xc_deriv
+try:
+    import mcfun
+except ImportError:
+    mcfun = None
 
 def setUpModule():
     global mol
@@ -45,26 +49,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(rho1[0].imag).max(), 0, 9)
         self.assertAlmostEqual(abs(rho0-rho1[0]).max(), 0, 9)
         self.assertAlmostEqual(abs(m0 - rho1[1:4]).max(), 0, 9)
-
-#    def test_eval_mat(self):
-#        numpy.random.seed(10)
-#        ngrids = 100
-#        coords = numpy.random.random((ngrids,3))*20
-#        rho = numpy.random.random((ngrids))
-#        m = numpy.random.random((3,ngrids)) * .05
-#        vxc = [numpy.random.random((2,ngrids)).T, None, None, None]
-#        weight = numpy.random.random(ngrids)
-#        aoLa, aoLb, aoSa, aoSb = r_numint.eval_ao(mol, coords, deriv=1)
-#
-#        s = numpy.linalg.norm(m, axis=0)
-#        m_pauli = numpy.einsum('xp,xij,p->pij', m, lib.PauliMatrices, 1./(s+1e-300))
-#        aoL = numpy.array([aoLa[0],aoLb[0]])
-#
-#        mat0 = numpy.einsum('pi,p,pj->ij', aoLa[0].conj(), weight*vxc[0][:,0], aoLa[0])
-#        mat0+= numpy.einsum('pi,p,pj->ij', aoLb[0].conj(), weight*vxc[0][:,0], aoLb[0])
-#        mat0+= numpy.einsum('api,p,pab,bpj->ij', aoL.conj(), weight*vxc[0][:,1], m_pauli, aoL)
-#        mat1 = r_numint.eval_mat(mol, (aoLa[0], aoLb[0]), weight, (rho, m), vxc, xctype='LDA')
-#        self.assertTrue(numpy.allclose(mat0, mat1))
 
     def test_rsh_omega(self):
         rho0 = numpy.array([[1., 1., 0.1, 0.1],
@@ -116,7 +100,82 @@ class KnownValues(unittest.TestCase):
         res = mf._numint.get_vxc(mol, mf.grids, mf.xc, dm, spin=0)
         self.assertAlmostEqual(res[1], -8.631807003163278, 11)
 
-#    def test_fxc(self):
+    def test_vxc_col(self):
+        ni = r_numint.RNumInt()
+        ni.collinear = 'c'
+        mf = mol.DKS()
+        dm = mf.get_init_guess(mol, 'minao')
+        n, e, v = ni.get_vxc(mol, mf.grids, 'B88,', dm)
+        self.assertAlmostEqual(n, 9.984666945, 5)
+        self.assertAlmostEqual(e, -8.8304689765, 6)
+        self.assertAlmostEqual(lib.fp(v), 0.05882536730070975+0.37093946710262393j, 8)
+
+    def test_vxc_ncol(self):
+        ni = r_numint.RNumInt()
+        ni.collinear = 'n'
+        mf = mol.DKS()
+        dm = mf.get_init_guess(mol, 'minao')
+        n, e, v = ni.get_vxc(mol, mf.grids, 'LDA,', dm)
+        self.assertAlmostEqual(n, 9.984666945, 5)
+        self.assertAlmostEqual(e, -7.9613152012, 6)
+        self.assertAlmostEqual(lib.fp(v), 0.09939730962851079+0.35765389167296235j, 8)
+
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
+    def test_vxc_mcol(self):
+        ni = r_numint.RNumInt()
+        ni.collinear = 'm'
+        ni.spin_samples = 14
+        mf = mol.DKS()
+        dm = mf.get_init_guess(mol, 'minao')
+        n, e, v = ni.get_vxc(mol, mf.grids, 'LDA,', dm)
+        self.assertAlmostEqual(n, 9.984666945, 5)
+        self.assertAlmostEqual(e, -7.9613152012, 6)
+        self.assertAlmostEqual(lib.fp(v), 0.09939730962851079+0.35765389167296235j, 8)
+
+        n, e, v = ni.get_vxc(mol, mf.grids, 'B88,', dm)
+        self.assertAlmostEqual(n, 9.984666945, 5)
+        self.assertAlmostEqual(e, -8.8304689765, 6)
+        self.assertAlmostEqual(lib.fp(v), 0.058825367300710196+0.37093946710262404j, 8)
+
+    def test_fxc_col(self):
+        ni = r_numint.RNumInt()
+        ni.collinear = 'c'
+        mf = mol.DKS()
+        dm = mf.get_init_guess(mol, 'minao')
+        numpy.random.seed(10)
+        dm1 = numpy.random.random(dm.shape)
+        v = ni.get_fxc(mol, mf.grids, 'B88,', dm, dm1)
+        self.assertAlmostEqual(lib.fp(v), -0.6265667390145981+0.5244965520637875j, 6)
+
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
+    def test_fxc_mcol(self):
+        ni = r_numint.RNumInt()
+        ni.collinear = 'm'
+        ni.spin_samples = 14
+        mf = mol.DKS()
+        dm = mf.get_init_guess(mol, 'minao')
+        numpy.random.seed(10)
+        dm1 = numpy.random.random(dm.shape)
+        v = ni.get_fxc(mol, mf.grids, 'LDA,', dm, dm1)
+        self.assertAlmostEqual(lib.fp(v), -1.9850498137636299+1.4541338353513784j, 6)
+
+        v = ni.get_fxc(mol, mf.grids, 'M06', dm, dm1)
+        self.assertAlmostEqual(lib.fp(v), -1.0864202540818795+0.06981358086231704j, 6)
+
+    def test_get_rho(self):
+        ni = r_numint.RNumInt()
+        ni.collinear = 'c'
+        mf = mol.DKS()
+        grids = mf.grids.build()
+        dm = mf.get_init_guess(mol, 'minao')
+        rho = ni.get_rho(mol, dm, grids)
+        self.assertAlmostEqual(lib.fp(rho), -361.4682369790235, 8)
+
+        ni.collinear = 'm'
+        ni.spin_samples = 50
+        rho = ni.get_rho(mol, dm, grids)
+        self.assertAlmostEqual(lib.fp(rho), -361.4682369790235, 8)
+
 
 if __name__ == "__main__":
     print("Test r_numint")

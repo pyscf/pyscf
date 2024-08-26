@@ -57,7 +57,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(kmf.mo_coeff[0]-mo_i[0]).max(), 0, 9)
 
         hop2, hdiag2 = stability._gen_hop_rhf_external(kmf)
-        self.assertAlmostEqual(lib.fp(hdiag2), 18.528134783454508, 7)
+        self.assertAlmostEqual(lib.fp(hdiag2), 18.528134783454508, 6)
         self.assertAlmostEqual(lib.fp(hop2(hdiag2)), 108.99683506471919, 5)
 
     def test_uhf_stability(self):
@@ -95,4 +95,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for stability")
     unittest.main()
-

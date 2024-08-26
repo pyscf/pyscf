@@ -17,7 +17,7 @@
 #
 
 import unittest
-import numpy
+import numpy as np
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
@@ -35,11 +35,18 @@ def setUpModule():
     mf = scf.RHF(mol)
     mf.conv_tol = 1e-12
     mf.kernel()
+
     myadc = adc.ADC(mf)
 
 def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
+
+def rdms_test(dm):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
+    return r2
 
 class KnownValues(unittest.TestCase):
 
@@ -48,8 +55,12 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p,x,es = myadc.ip_adc(nroots=3)
-        es.analyze()
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 39.23226380360857, 6)
+
+        myadcip = adc.radc_ip.RADCIP(myadc)
+        e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.5434389910483670, 6)
         self.assertAlmostEqual(e[1], 0.6240296243595950, 6)
@@ -58,6 +69,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.7688097076459075, 6)
         self.assertAlmostEqual(p[1], 1.8192921131700284, 6)
         self.assertAlmostEqual(p[2], 1.8192921131700293, 6)
+
+        dm1_exc = myadcip.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 32.182304246973395, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 33.184809640044106, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 33.184809640044106, 6)
 
     def test_ip_adc2_oneroot(self):
 
@@ -70,8 +86,10 @@ class KnownValues(unittest.TestCase):
     def test_ip_adc2x(self):
 
         myadc.method = "adc(2)-x"
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
 
-        e,v,p,x = myadc.kernel(nroots=3)
+        myadcip = adc.radc_ip.RADCIP(myadc)
+        e,v,p,x = myadcip.kernel(nroots=3)
         e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.32201692499346535, 6)
@@ -84,12 +102,23 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.8152869633769022, 6)
         self.assertAlmostEqual(p[2], 1.8152869633769015, 6)
 
+        dm1_exc = myadcip.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 32.1274922515584, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 33.1669386304224, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 33.1669386304224, 6)
+
     def test_ip_adc3(self):
 
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
 
-        e,v,p,x = myadc.kernel(nroots=3)
+        myadc.kernel_gs()
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 39.4764479057645, 6)
+
+        myadcip = adc.radc_ip.RADCIP(myadc)
+        e,v,p,x = myadcip.kernel(nroots=3)
         e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.31694173142858517 , 6)
@@ -101,6 +130,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.8173191958988848, 6)
         self.assertAlmostEqual(p[1], 1.8429224413853840, 6)
         self.assertAlmostEqual(p[2], 1.8429224413853851, 6)
+
+        dm1_exc = myadcip.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 32.49588382444393, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 33.65709826882843, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 33.65709826882843, 6)
 
 if __name__ == "__main__":
     print("IP calculations for different RADC methods for nitrogen molecule")

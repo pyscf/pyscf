@@ -13,7 +13,7 @@ regular `numpy.linalg.eig` can be used to retrieve TD roots. Several variants of
  * `pyscf.pbc.tdscf.kproxy_supercell`: PBC implementation constructing supercells. Works with an arbitrary number of
    k-points but has an overhead due to ignoring the momentum conservation law. In addition, works only with
    time reversal invariant (TRI) models: i.e. the k-point grid has to be aligned and contain at least one TRI momentum.
- * (this module) `pyscf.pbc.tdscf.kproxy`: same as the above but respect the momentum conservation and, thus, diagonlizes smaller
+ * (this module) `pyscf.pbc.tdscf.kproxy`: same as the above but respect the momentum conservation and, thus, diagonalizes smaller
    matrices (the performance gain is the total number of k-points in the model).
 """
 

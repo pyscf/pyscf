@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools >= 61.0", "wheel", "cmake"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "pyscf"
+dynamic = ["version"]
+description = "PySCF: Python-based Simulations of Chemistry Framework"
+readme = "README.md"
+classifiers = [
+  'Development Status :: 5 - Production/Stable',
+  'Intended Audience :: Science/Research',
+  'Intended Audience :: Developers',
+  'License :: OSI Approved :: Apache Software License',
+  'Programming Language :: C',
+  'Programming Language :: Python',
+  'Programming Language :: Python :: 3.7',
+  'Programming Language :: Python :: 3.8',
+  'Programming Language :: Python :: 3.9',
+  'Programming Language :: Python :: 3.10',
+  'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
+  'Topic :: Software Development',
+  'Topic :: Scientific/Engineering',
+  'Operating System :: POSIX',
+  'Operating System :: Unix',
+  'Operating System :: MacOS',
+]
+
+maintainers = [{ name = "Qiming Sun", email = "osirpt.sun@gmail.com" }]
+
+authors = [{ name = "Qiming Sun", email = "osirpt.sun@gmail.com" }]
+
+license = { text = "Apache-2.0" }
+
+dependencies = [
+  'numpy>=1.13,!=1.16,!=1.17',
+  'scipy!=1.5.0,!=1.5.1',
+  'h5py>=2.7',
+  'setuptools',
+]
+
+[project.urls]
+Homepage = "http://www.pyscf.org"
+Repository = "https://github.com/pyscf/pyscf"
+Documentation = "http://www.pyscf.org"
+
+[project.optional-dependencies]
+
+forge = ["pyscf-forge"]
+geomopt = ["pyberny>=0.6.2", "geometric>=0.9.7.2", "pyscf-qsdopt"]
+doci = ["pyscf-doci"]
+properties = ["pyscf-properties"]
+semiempirical = ['pyscf-semiempirical']
+cppe = ["cppe"]
+pyqmc = ["pyqmc"]
+bse = ["basis-set-exchange"]
+dispersion = ["pyscf-dispersion"]
+
+all = ["pyscf[forge,geomopt,doci,properties,semiempirical,cppe,pyqmc,bse,dispersion]"]
+
+# extras which should not be installed by "all" components
+cornell_shci = ["pyscf-cornell-shci"]
+nao = ["pyscf-nao"]
+fciqmcscf = ["pyscf-fciqmc"]
+tblis = ["pyscf-tblis"]
+icmpspt = ["pyscf-icmpspt"] # broken
+shciscf = ["pyscf-shciscf"] # broken

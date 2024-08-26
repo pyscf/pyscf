@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Abdelrahman Ahmed <>
+#         Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         James Serna <jamcar456@gmail.com>
+#         Terrence Stahl <>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -29,7 +32,7 @@ from pyscf.adc import dfadc
 from pyscf.adc.radc_amplitudes import _create_t2_h5cache
 from pyscf import __config__
 from pyscf import df
-
+from pyscf import scf
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
 
@@ -126,12 +129,29 @@ def compute_amplitudes(myadc, eris):
 
     cput0 = log.timer_debug1("Completed t2_1 amplitude calculation", *cput0)
 
+    t1_1 = (None,)
+
+    if isinstance(myadc._scf, scf.rohf.ROHF):
+
+        f_ov_a, f_ov_b = myadc.f_ov
+
+        t1_1_a = f_ov_a/D1_a
+        t1_1_b = f_ov_b/D1_b
+        t1_1 = (t1_1_a, t1_1_b)
+    else:
+        f_ov_a = np.zeros((nocc_a, nvir_a))
+        f_ov_b = np.zeros((nocc_b, nvir_b))
+        t1_1_a = np.zeros((nocc_a, nvir_a))
+        t1_1_b = np.zeros((nocc_b, nvir_b))
+
+
     t1_2 = (None,)
     if myadc.approx_trans_moments is False or myadc.method == "adc(3)":
         # Compute second-order singles t1 (tij)
 
         t1_2_a = np.zeros((nocc_a,nvir_a))
         t1_2_b = np.zeros((nocc_b,nvir_b))
+
         if isinstance(eris.ovvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             a = 0
@@ -151,6 +171,33 @@ def compute_amplitudes(myadc, eris):
 
         t1_2_a -= 0.5*lib.einsum('lcki,klac->ia',eris_ovoo,t2_1_a[:],optimize=True)
         t1_2_a += 0.5*lib.einsum('kcli,klac->ia',eris_ovoo,t2_1_a[:],optimize=True)
+
+        if isinstance(myadc._scf, scf.rohf.ROHF):
+            t1_2_a += lib.einsum('d,ld,ilad->ia',e_a[nocc_a:],t1_1_a,t2_1_a[:], optimize = True)
+            t1_2_a += lib.einsum('d,ld,ilad->ia',e_b[nocc_b:],t1_1_b,t2_1_ab[:], optimize = True)
+
+            t1_2_a -= lib.einsum('l,ld,ilad->ia',e_a[:nocc_a],t1_1_a,t2_1_a[:], optimize = True)
+            t1_2_a -= lib.einsum('l,ld,ilad->ia',e_b[:nocc_b],t1_1_b,t2_1_ab[:], optimize = True)
+
+
+            t1_2_a += 0.5*lib.einsum('a,ld,ilad->ia',e_a[nocc_a:],t1_1_a,t2_1_a[:], optimize = True)
+            t1_2_a += 0.5*lib.einsum('a,ld,ilad->ia',
+                                     e_a[nocc_a:],t1_1_b,t2_1_ab[:], optimize = True)
+
+            t1_2_a -= 0.5*lib.einsum('i,ld,ilad->ia',e_a[:nocc_a],t1_1_a,t2_1_a[:], optimize = True)
+            t1_2_a -= 0.5*lib.einsum('i,ld,ilad->ia',
+                                     e_a[:nocc_a],t1_1_b,t2_1_ab[:], optimize = True)
+
+            t1_2_a += lib.einsum('ld,ilad->ia',f_ov_a,t2_1_a[:], optimize = True)
+            t1_2_a += lib.einsum('ld,ilad->ia',f_ov_b,t2_1_ab[:], optimize = True)
+
+            t1_2_a += lib.einsum('ld,iadl->ia',t1_1_a, eris.ovvo, optimize = True)
+            t1_2_a -= lib.einsum('ld,idal->ia',t1_1_a, eris.ovvo, optimize = True)
+            t1_2_a += lib.einsum('ld,iadl->ia',t1_1_b, eris.ovVO, optimize = True)
+
+            t1_2_a += lib.einsum('ld,iadl->ia',t1_1_a,eris.ovvo, optimize = True)
+            t1_2_a -= lib.einsum('ld,liad->ia',t1_1_a,eris.oovv, optimize = True)
+            t1_2_a += lib.einsum('ld,iadl->ia',t1_1_b,eris.ovVO, optimize = True)
 
         if isinstance(eris.OVvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
@@ -184,7 +231,33 @@ def compute_amplitudes(myadc, eris):
             del eris_ovVV
 
         t1_2_a -= lib.einsum('lcki,klac->ia',eris_OVoo,t2_1_ab[:],optimize=True)
-        t1_2_b -= lib.einsum('lcki,lkca->ia',eris_ovOO,t2_1_ab[:])
+        t1_2_b -= lib.einsum('lcki,lkca->ia',eris_ovOO,t2_1_ab[:],optimize=True)
+
+        if isinstance(myadc._scf, scf.rohf.ROHF):
+            t1_2_b += lib.einsum('d,ld,ilad->ia',e_b[nocc_b:],t1_1_b,t2_1_b[:], optimize = True)
+            t1_2_b += lib.einsum('d,ld,lida->ia',e_a[nocc_a:],t1_1_a,t2_1_ab[:], optimize = True)
+
+            t1_2_b -= lib.einsum('l,ld,ilad->ia',e_b[:nocc_b],t1_1_b,t2_1_b[:], optimize = True)
+            t1_2_b -= lib.einsum('l,ld,lida->ia',e_a[:nocc_a],t1_1_a,t2_1_ab[:], optimize = True)
+
+            t1_2_b += 0.5*lib.einsum('a,ld,ilad->ia',e_b[nocc_b:],t1_1_b,t2_1_b[:], optimize = True)
+            t1_2_b += 0.5*lib.einsum('a,ld,lida->ia',
+                                     e_b[nocc_b:],t1_1_a,t2_1_ab[:], optimize = True)
+
+            t1_2_b -= 0.5*lib.einsum('i,ld,ilad->ia',e_b[:nocc_b],t1_1_b,t2_1_b[:], optimize = True)
+            t1_2_b -= 0.5*lib.einsum('i,ld,lida->ia',
+                                     e_b[:nocc_b],t1_1_a,t2_1_ab[:], optimize = True)
+
+            t1_2_b += lib.einsum('ld,ilad->ia',f_ov_b,t2_1_b[:], optimize = True)
+            t1_2_b += lib.einsum('ld,lida->ia',f_ov_a,t2_1_ab[:], optimize = True)
+
+            t1_2_b += lib.einsum('ld,iadl->ia',t1_1_b, eris.OVVO, optimize = True)
+            t1_2_b -= lib.einsum('ld,idal->ia',t1_1_b, eris.OVVO, optimize = True)
+            t1_2_b += lib.einsum('ld,ldai->ia',t1_1_a, eris.ovVO, optimize = True)
+
+            t1_2_b += lib.einsum('ld,iadl->ia',t1_1_b,eris.OVVO, optimize = True)
+            t1_2_b -= lib.einsum('ld,liad->ia',t1_1_b,eris.OOVV, optimize = True)
+            t1_2_b += lib.einsum('ld,ldai->ia',t1_1_a,eris.ovVO, optimize = True)
 
         if isinstance(eris.OVVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
@@ -234,19 +307,20 @@ def compute_amplitudes(myadc, eris):
             eris_vvvv = eris.vvvv_p
             temp = np.ascontiguousarray(
                 t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]]).reshape(nocc_a*nocc_a,-1)
-            t2_1_vvvv_a = np.dot(temp,eris_vvvv.T).reshape(nocc_a, nocc_a, -1)
+            temp = np.dot(temp,eris_vvvv.T).reshape(nocc_a, nocc_a, -1)
+            t2_1_vvvv_a = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))
+            t2_1_vvvv_a[:,:,ab_ind_a[0],ab_ind_a[1]] = temp
+            t2_1_vvvv_a[:,:,ab_ind_a[1],ab_ind_a[0]] = -temp
             del eris_vvvv
         elif isinstance(eris.vvvv_p, list):
-            t2_1_vvvv_a = contract_ladder_antisym(myadc,t2_1_a[:], eris.vvvv_p)
+            t2_1_vvvv_a = contract_ladder_antisym(myadc,t2_1_a[:], eris.vvvv_p, pack = False)
         else:
-            t2_1_vvvv_a = contract_ladder_antisym(myadc,t2_1_a[:], eris.Lvv)
+            t2_1_vvvv_a = contract_ladder(myadc, t2_1_a[:], (eris.Lvv, eris.Lvv))
 
         if not isinstance(eris.oooo, np.ndarray):
             t2_1_vvvv_a = h5cache_t2.create_dataset('t2_1_vvvv_a', data=t2_1_vvvv_a)
 
-        t2_2_a = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))
-        t2_2_a[:,:,ab_ind_a[0],ab_ind_a[1]] = t2_1_vvvv_a[:]
-        t2_2_a[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2_1_vvvv_a[:]
+        t2_2_a = t2_1_vvvv_a[:].copy()
 
         t2_2_a += 0.5*lib.einsum('kilj,klab->ijab', eris_oooo, t2_1_a[:],optimize=True)
         t2_2_a -= 0.5*lib.einsum('kjli,klab->ijab', eris_oooo, t2_1_a[:],optimize=True)
@@ -262,23 +336,53 @@ def compute_amplitudes(myadc, eris):
         del temp
         del temp_1
 
+        if isinstance(myadc._scf, scf.rohf.ROHF):
+            t2_2_a += lib.einsum('la,ibjl->ijab',t1_1_a,eris.ovoo, optimize = True)
+            t2_2_a -= lib.einsum('la,jbil->ijab',t1_1_a,eris.ovoo, optimize = True)
+
+
+            t2_2_a -= lib.einsum('lb,iajl->ijab',t1_1_a,eris.ovoo, optimize = True)
+            t2_2_a += lib.einsum('lb,jail->ijab',t1_1_a,eris.ovoo, optimize = True)
+
+            if isinstance(eris.ovvv, type(None)):
+                chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
+                a = 0
+                for p in range(0,nocc_a,chnk_size):
+                    eris_ovvv = dfadc.get_ovvv_spin_df(
+                        myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
+                    k = eris_ovvv.shape[0]
+                    t2_2_a[:,a:a+k] += lib.einsum('id,jbad->ijab',t1_1_a,eris_ovvv, optimize = True)
+                    t2_2_a[:,a:a+k] -= lib.einsum('id,jabd->ijab',t1_1_a,eris_ovvv, optimize = True)
+                    t2_2_a[a:a+k] -= lib.einsum('jd,ibad->ijab',t1_1_a,eris_ovvv, optimize = True)
+                    t2_2_a[a:a+k] += lib.einsum('jd,iabd->ijab',t1_1_a,eris_ovvv, optimize = True)
+                    del eris_ovvv
+                    a += k
+            else:
+                eris_ovvv = uadc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
+                t2_2_a += lib.einsum('id,jbad->ijab',t1_1_a,eris_ovvv, optimize = True)
+                t2_2_a -= lib.einsum('id,jabd->ijab',t1_1_a,eris_ovvv, optimize = True)
+                t2_2_a -= lib.einsum('jd,ibad->ijab',t1_1_a,eris_ovvv, optimize = True)
+                t2_2_a += lib.einsum('jd,iabd->ijab',t1_1_a,eris_ovvv, optimize = True)
+                del eris_ovvv
+
         if isinstance(eris.VVVV_p, np.ndarray):
             eris_VVVV = eris.VVVV_p
             temp = np.ascontiguousarray(
                 t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]]).reshape(nocc_b*nocc_b,-1)
-            t2_1_vvvv_b = np.dot(temp,eris_VVVV.T).reshape(nocc_b, nocc_b, -1)
+            temp = np.dot(temp,eris_VVVV.T).reshape(nocc_b, nocc_b, -1)
+            t2_1_vvvv_b = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))
+            t2_1_vvvv_b[:,:,ab_ind_b[0],ab_ind_b[1]] = temp
+            t2_1_vvvv_b[:,:,ab_ind_b[1],ab_ind_b[0]] = -temp
             del eris_VVVV
         elif isinstance(eris.VVVV_p, list) :
-            t2_1_vvvv_b = contract_ladder_antisym(myadc,t2_1_b[:],eris.VVVV_p)
+            t2_1_vvvv_b = contract_ladder_antisym(myadc,t2_1_b[:],eris.VVVV_p, pack = False)
         else:
-            t2_1_vvvv_b = contract_ladder_antisym(myadc,t2_1_b[:],eris.LVV)
+            t2_1_vvvv_b = contract_ladder(myadc, t2_1_b[:], (eris.LVV, eris.LVV))
 
         if not isinstance(eris.oooo, np.ndarray):
             t2_1_vvvv_b = h5cache_t2.create_dataset('t2_1_vvvv_b', data=t2_1_vvvv_b)
 
-        t2_2_b = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))
-        t2_2_b[:,:,ab_ind_b[0],ab_ind_b[1]] = t2_1_vvvv_b[:]
-        t2_2_b[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2_1_vvvv_b[:]
+        t2_2_b = t2_1_vvvv_b[:].copy()
 
         t2_2_b += 0.5*lib.einsum('kilj,klab->ijab', eris_OOOO, t2_1_b[:],optimize=True)
         t2_2_b -= 0.5*lib.einsum('kjli,klab->ijab', eris_OOOO, t2_1_b[:],optimize=True)
@@ -290,8 +394,37 @@ def compute_amplitudes(myadc, eris):
         t2_2_b += temp - temp.transpose(1,0,2,3) - temp.transpose(0,1,3,2) + temp.transpose(1,0,3,2)
         t2_2_b += temp_1 - temp_1.transpose(1,0,2,3) - \
                                             temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
+
         del temp
         del temp_1
+
+        if isinstance(myadc._scf, scf.rohf.ROHF):
+            t2_2_b += lib.einsum('la,ibjl->ijab',t1_1_b,eris.OVOO, optimize = True)
+            t2_2_b -= lib.einsum('la,jbil->ijab',t1_1_b,eris.OVOO, optimize = True)
+
+            t2_2_b -= lib.einsum('lb,iajl->ijab',t1_1_b,eris.OVOO, optimize = True)
+            t2_2_b += lib.einsum('lb,jail->ijab',t1_1_b,eris.OVOO, optimize = True)
+
+            if isinstance(eris.OVVV, type(None)):
+                chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
+                a = 0
+                for p in range(0,nocc_b,chnk_size):
+                    eris_OVVV = dfadc.get_ovvv_spin_df(
+                        myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+                    k = eris_OVVV.shape[0]
+                    t2_2_b[:,a:a+k] += lib.einsum('id,jbad->ijab',t1_1_b,eris_OVVV, optimize = True)
+                    t2_2_b[:,a:a+k] -= lib.einsum('id,jabd->ijab',t1_1_b,eris_OVVV, optimize = True)
+                    t2_2_b[a:a+k] -= lib.einsum('jd,ibad->ijab',t1_1_b,eris_OVVV, optimize = True)
+                    t2_2_b[a:a+k] += lib.einsum('jd,iabd->ijab',t1_1_b,eris_OVVV, optimize = True)
+                    del eris_OVVV
+                    a += k
+            else:
+                eris_OVVV = uadc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
+                t2_2_b += lib.einsum('id,jbad->ijab',t1_1_b,eris_OVVV, optimize = True)
+                t2_2_b -= lib.einsum('id,jabd->ijab',t1_1_b,eris_OVVV, optimize = True)
+                t2_2_b -= lib.einsum('jd,ibad->ijab',t1_1_b,eris_OVVV, optimize = True)
+                t2_2_b += lib.einsum('jd,iabd->ijab',t1_1_b,eris_OVVV, optimize = True)
+                del eris_OVVV
 
         if isinstance(eris.vVvV_p, np.ndarray):
             temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
@@ -316,6 +449,43 @@ def compute_amplitudes(myadc, eris):
         t2_2_ab += lib.einsum('kcai,kjcb->ijab',eris_OVvo,t2_1_b[:],optimize=True)
         t2_2_ab += lib.einsum('kcai,kjcb->ijab',eris_ovvo,t2_1_ab[:],optimize=True)
         t2_2_ab -= lib.einsum('kiac,kjcb->ijab',eris_oovv,t2_1_ab[:],optimize=True)
+
+        if isinstance(myadc._scf, scf.rohf.ROHF):
+            t2_2_ab -= lib.einsum('la,jbil->ijab',t1_1_a,eris.OVoo, optimize = True)
+            t2_2_ab -= lib.einsum('lb,iajl->ijab',t1_1_b,eris.ovOO, optimize = True)
+
+            if isinstance(eris.OVvv, type(None)):
+                chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
+                a = 0
+                for p in range(0,nocc_b,chnk_size):
+                    eris_OVvv = dfadc.get_ovvv_spin_df(
+                        myadc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
+                    k = eris_OVvv.shape[0]
+                    t2_2_ab[:, a:a+k] += lib.einsum('id,jbad->ijab',
+                                                    t1_1_a,eris_OVvv, optimize = True)
+                    del eris_OVvv
+                    a += k
+            else:
+                eris_OVvv = uadc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
+                t2_2_ab += lib.einsum('id,jbad->ijab',t1_1_a,eris_OVvv, optimize = True)
+                del eris_OVvv
+
+            if isinstance(eris.ovVV, type(None)):
+                chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
+                a = 0
+                for p in range(0,nocc_a,chnk_size):
+                    eris_ovVV = dfadc.get_ovvv_spin_df(
+                        myadc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
+                    k = eris_ovVV.shape[0]
+                    t2_2_ab[a:a+k] += lib.einsum('jd,iabd->ijab',t1_1_b,eris_ovVV, optimize = True)
+                    del eris_ovVV
+                    a += k
+            else:
+                eris_ovVV = uadc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
+                t2_2_ab += lib.einsum('jd,iabd->ijab',t1_1_b,eris_ovVV, optimize = True)
+                del eris_ovVV
+
+
 
         D2_a = d_ij_a.reshape(-1,1) - d_ab_a.reshape(-1)
         D2_a = D2_a.reshape((nocc_a,nocc_a,nvir_a,nvir_a))
@@ -694,7 +864,7 @@ def compute_amplitudes(myadc, eris):
         t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
         t2_1_vvvv = (t2_1_vvvv_a, t2_1_vvvv_ab, t2_1_vvvv_b)
 
-    t1 = (t1_2, t1_3)
+    t1 = (t1_2, t1_3, t1_1)
     t2 = (t2_1, t2_2)
 
     cput0 = log.timer_debug1("Completed amplitude calculation", *cput0)
@@ -738,17 +908,38 @@ def compute_energy(myadc, t1, t2, eris):
     e_mp -= 0.25 * lib.einsum('ijab,ibaj', t2_b, eris_OVVO)
     del t2_b
 
+    logger.info(myadc, "Reference correlation energy (doubles): %.8f", e_mp)
+
+    if isinstance(myadc._scf, scf.rohf.ROHF):
+        f_ov_a = myadc.f_ov[0]
+        f_ov_b = myadc.f_ov[1]
+        t1_1_a = t1[2][0].copy()
+        t1_1_b = t1[2][1].copy()
+
+        if (myadc.method == "adc(3)"):
+            t1_1_a += t1[0][0]
+            t1_1_b += t1[0][1]
+
+        singles = lib.einsum('ia,ia', f_ov_a, t1_1_a)
+        singles += lib.einsum('ia,ia', f_ov_b, t1_1_b)
+
+        e_mp += singles
+
+        logger.info(myadc, "Reference correlation energy (singles): %.8f", singles)
+
     cput0 = log.timer_debug1("Completed energy calculation", *cput0)
 
     return e_mp
 
-def contract_ladder(myadc,t_amp,vvvv_p):
+
+def contract_ladder(myadc,t_amp,vvvv_p, prefactor = 1.0, pack = False):
 
     nocc_a = t_amp.shape[0]
     nocc_b = t_amp.shape[1]
     nvir_a = t_amp.shape[2]
     nvir_b = t_amp.shape[3]
 
+    tril_idx = np.tril_indices(nvir_a, k=-1)
     t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc_a*nocc_b,-1).T)
     t = np.zeros((nvir_a,nvir_b, nocc_a*nocc_b))
     chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
@@ -773,12 +964,14 @@ def contract_ladder(myadc,t_amp,vvvv_p):
     else:
         raise Exception("Unknown vvvv type")
 
-    t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc_a, nocc_b, nvir_a, nvir_b)
+    t = prefactor * np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc_a, nocc_b, nvir_a, nvir_b)
+    if pack:
+        t = t[:, :, tril_idx[0], tril_idx[1]]
 
     return t
 
 
-def contract_ladder_antisym(myadc,t_amp,vvvv_d):
+def contract_ladder_antisym(myadc,t_amp,vvvv_d, pack = True):
 
     nocc = t_amp.shape[0]
     nvir = t_amp.shape[2]
@@ -811,6 +1004,8 @@ def contract_ladder_antisym(myadc,t_amp,vvvv_d):
         raise Exception("Unknown vvvv type")
 
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
-    t = t[:, :, tril_idx[0], tril_idx[1]]
+
+    if pack:
+        t = t[:, :, tril_idx[0], tril_idx[1]]
 
     return t

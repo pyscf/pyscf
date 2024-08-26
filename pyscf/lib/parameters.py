@@ -53,6 +53,7 @@ OUTPUT_DIGITS = getattr(__config__, 'OUTPUT_DIGITS', 5)
 OUTPUT_COLS   = getattr(__config__, 'OUTPUT_COLS', 5)
 LOOSE_ZERO_TOL = getattr(__config__, 'LOOSE_ZERO_TOL', 1e-9)
 LARGE_DENOM = getattr(__config__, 'LARGE_DENOM', 1e14)
+H5F_WRITE_KWARGS = getattr(__config__, 'H5F_WRITE_KWARGS', {})
 
 L_MAX = 8
 ANGULAR = 'spdfghik'

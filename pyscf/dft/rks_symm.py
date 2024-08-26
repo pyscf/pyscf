@@ -20,6 +20,7 @@
 Non-relativistic Restricted Kohn-Sham
 '''
 
+from pyscf import lib
 from pyscf.scf import hf_symm
 from pyscf.dft import rks
 from pyscf.dft import uks
@@ -46,12 +47,14 @@ class SymAdaptedRKS(rks.KohnShamDFT, hf_symm.SymAdaptedRHF):
         from pyscf.grad import rks
         return rks.Gradients(self)
 
+    to_gpu = lib.to_gpu
+
 RKS = SymAdaptedRKS
 
 
 class SymAdaptedROKS(rks.KohnShamDFT, hf_symm.SymAdaptedROHF):
     ''' Restricted Kohn-Sham '''
-    def __init__(self, mol, xc='LDA,VWN'):
+    def __init__(self, mol=None, xc='LDA,VWN'):
         hf_symm.ROHF.__init__(self, mol)
         rks.KohnShamDFT.__init__(self, xc)
 
@@ -70,6 +73,8 @@ class SymAdaptedROKS(rks.KohnShamDFT, hf_symm.SymAdaptedROHF):
         from pyscf.grad import roks
         return roks.Gradients(self)
 
+    to_gpu = lib.to_gpu
+
 ROKS = SymAdaptedROKS
 
 
@@ -87,4 +92,3 @@ if __name__ == '__main__':
     m = RKS(mol)
     m.xc = 'b3lyp'
     print(m.scf())  # -2.89992555753
-

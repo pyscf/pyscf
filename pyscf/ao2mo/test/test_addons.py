@@ -132,4 +132,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print('Full Tests for ao2mo.addons')
     unittest.main()
-

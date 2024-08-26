@@ -77,7 +77,7 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
     '''
     if rotations is None: rotations = search_point_group_ops(cell, tol=tol)
     a = cell.lattice_vectors()
-    coords = cell.get_scaled_positions()
+    coords = cell.get_scaled_atom_coords()
     atmgrp = mole.atom_types(cell._atom, magmom=cell.magmom)
     atmgrp_spin_inv = {} #spin up and down inverted
     has_spin = False
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     """
     cell.a = [[4.0, 0., 0.], [0., 4.0, 0.], [0., 0., 16.0]]
     cell.dimension = 2
-    cell.magmom = [1., 1., -1., -1., 1., -1., 1., 1., -1., -1., 1., -1.]
+    cell.magmom = [1, 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, -1]
     cell.build()
 
     ops = search_space_group_ops(cell)

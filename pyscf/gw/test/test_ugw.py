@@ -41,8 +41,9 @@ class KnownValues(unittest.TestCase):
     def test_rpa(self):
         rpa_obj = urpa.URPA(mf, frozen=0)
         rpa_obj.kernel()
-        self.assertAlmostEqual(rpa_obj.e_tot, -74.98258098665727, 6)
-        self.assertAlmostEqual(rpa_obj.e_corr, -0.18821540003542925, 6)
+
+        self.assertAlmostEqual(rpa_obj.e_tot, -74.98369614250653, 6)
+        self.assertAlmostEqual(rpa_obj.e_corr, -0.1882153685614803, 6)
 
 
 if __name__ == "__main__":

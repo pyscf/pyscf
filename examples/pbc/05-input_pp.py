@@ -3,7 +3,7 @@
 '''
 Input pseudo potential using functions pbc.gto.pseudo.parse and pbc.gto.pseudo.load
 
-It is allowed to mix the Quantum chemistry effective core potentail (ECP) with
+It is allowed to mix the Quantum chemistry effective core potential (ECP) with
 crystal pseudo potential (PP).  Input ECP with .ecp attribute and PP with
 .pseudo attribute.
 

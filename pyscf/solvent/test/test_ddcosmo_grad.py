@@ -30,7 +30,7 @@ from pyscf.scf import cphf
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
 from pyscf.solvent import ddcosmo
-from pyscf.solvent import ddcosmo_grad
+from pyscf.solvent.grad import ddcosmo_grad
 from pyscf.solvent import _ddcosmo_tdscf_grad
 from pyscf.symm import sph
 
@@ -627,7 +627,6 @@ def B1_dot_x(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, L):
 
     return Bx
 
-
 def setUpModule():
     global dx, mol0, mol1, mol2, nao, dm
     dx = 0.0001
@@ -645,7 +644,6 @@ def tearDownModule():
     del dx, mol0, mol1, mol2, nao, dm
 
 class KnownValues(unittest.TestCase):
-
     def test_e_psi1(self):
         def get_e_psi1(pcmobj):
             pcmobj.grids.build()
@@ -1026,7 +1024,6 @@ class KnownValues(unittest.TestCase):
         L_1 = ddcosmo.regularize_xt(t-1e-4, eta)
         L_2 = ddcosmo.regularize_xt(t+1e-4, eta)
         self.assertAlmostEqual(abs((L_2-L_1)/2e-4 - L1).max(), 0, 6)
-
 
 if __name__ == "__main__":
     print("Full Tests for ddcosmo gradients")

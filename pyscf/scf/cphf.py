@@ -17,7 +17,7 @@
 #
 
 '''
-Restricted coupled pertubed Hartree-Fock solver
+Restricted coupled perturbed Hartree-Fock solver
 '''
 
 
@@ -27,7 +27,8 @@ from pyscf.lib import logger
 
 
 def solve(fvind, mo_energy, mo_occ, h1, s1=None,
-          max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
+          max_cycle=50, tol=1e-9, hermi=False, verbose=logger.WARN,
+          level_shift=0):
     '''
     Args:
         fvind : function
@@ -36,29 +37,43 @@ def solve(fvind, mo_energy, mo_occ, h1, s1=None,
     Kwargs:
         hermi : boolean
             Whether the matrix defined by fvind is Hermitian or not.
+        level_shift : float
+            Add to diagonal terms to slightly improve the convergence speed of
+            Krylov solver
     '''
     if s1 is None:
         return solve_nos1(fvind, mo_energy, mo_occ, h1,
-                          max_cycle, tol, hermi, verbose)
+                          max_cycle, tol, hermi, verbose, level_shift)
     else:
         return solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
-                            max_cycle, tol, hermi, verbose)
+                            max_cycle, tol, hermi, verbose, level_shift)
 kernel = solve
 
 # h1 shape is (:,nvir,nocc)
 def solve_nos1(fvind, mo_energy, mo_occ, h1,
-               max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
-    '''For field independent basis. First order overlap matrix is zero'''
+               max_cycle=50, tol=1e-9, hermi=False, verbose=logger.WARN,
+               level_shift=0):
+    '''For field independent basis. First order overlap matrix is zero
+
+    Kwargs:
+        level_shift : float
+            Add to diagonal terms to slightly improve the convergence speed of
+            Krylov solver
+    '''
+    assert not hermi
     log = logger.new_logger(verbose=verbose)
     t0 = (logger.process_clock(), logger.perf_counter())
 
     e_a = mo_energy[mo_occ==0]
     e_i = mo_energy[mo_occ>0]
-    e_ai = 1 / lib.direct_sum('a-i->ai', e_a, e_i)
+    e_ai = 1 / (e_a[:,None] + level_shift - e_i)
     mo1base = h1 * -e_ai
 
     def vind_vo(mo1):
-        v = fvind(mo1.reshape(h1.shape)).reshape(h1.shape)
+        mo1 = mo1.reshape(h1.shape)
+        v = fvind(mo1).reshape(h1.shape)
+        if level_shift != 0:
+            v -= mo1 * level_shift
         v *= e_ai
         return v.ravel()
     mo1 = lib.krylov(vind_vo, mo1base.ravel(),
@@ -68,20 +83,23 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
 
 # h1 shape is (:,nocc+nvir,nocc)
 def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
-                 max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
+                 max_cycle=50, tol=1e-9, hermi=False, verbose=logger.WARN,
+                 level_shift=0):
     '''For field dependent basis. First order overlap matrix is non-zero.
     The first order orbitals are set to
     C^1_{ij} = -1/2 S1
     e1 = h1 - s1*e0 + (e0_j-e0_i)*c1 + vhf[c1]
 
     Kwargs:
-        hermi : boolean
-            Whether the matrix defined by fvind is Hermitian or not.
+        level_shift : float
+            Add to diagonal terms to slightly improve the convergence speed of
+            Krylov solver
 
     Returns:
         First order orbital coefficients (in MO basis) and first order orbital
         energy matrix
     '''
+    assert not hermi
     log = logger.new_logger(verbose=verbose)
     t0 = (logger.process_clock(), logger.perf_counter())
 
@@ -89,34 +107,38 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
     viridx = mo_occ == 0
     e_a = mo_energy[viridx]
     e_i = mo_energy[occidx]
-    e_ai = 1 / lib.direct_sum('a-i->ai', e_a, e_i)
+    e_ai = 1 / (e_a[:,None] + level_shift - e_i)
     nvir, nocc = e_ai.shape
     nmo = nocc + nvir
 
     s1 = s1.reshape(-1,nmo,nocc)
     hs = mo1base = h1.reshape(-1,nmo,nocc) - s1*e_i
-    mo_e1 = hs[:,occidx,:].copy()
 
+    mo1base = hs.copy()
     mo1base[:,viridx] *= -e_ai
     mo1base[:,occidx] = -s1[:,occidx] * .5
 
     def vind_vo(mo1):
-        v = fvind(mo1.reshape(h1.shape)).reshape(-1,nmo,nocc)
+        mo1 = mo1.reshape(mo1base.shape)
+        v = fvind(mo1).reshape(mo1base.shape)
+        if level_shift != 0:
+            v -= mo1 * level_shift
         v[:,viridx,:] *= e_ai
         v[:,occidx,:] = 0
         return v.ravel()
     mo1 = lib.krylov(vind_vo, mo1base.ravel(),
                      tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
     mo1 = mo1.reshape(mo1base.shape)
+    mo1[:,occidx] = mo1base[:,occidx]
     log.timer('krylov solver in CPHF', *t0)
 
-    v1mo = fvind(mo1.reshape(h1.shape)).reshape(-1,nmo,nocc)
-    mo1[:,viridx] = mo1base[:,viridx] - v1mo[:,viridx]*e_ai
+    hs += fvind(mo1).reshape(mo1base.shape)
+    mo1[:,viridx] = hs[:,viridx] / (e_i - e_a[:,None])
 
     # mo_e1 has the same symmetry as the first order Fock matrix (hermitian or
     # anti-hermitian). mo_e1 = v1mo - s1*lib.direct_sum('i+j->ij',e_i,e_i)
-    mo_e1 += mo1[:,occidx] * lib.direct_sum('i-j->ij', e_i, e_i)
-    mo_e1 += v1mo[:,occidx,:]
+    mo_e1 = hs[:,occidx,:]
+    mo_e1 += mo1[:,occidx] * (e_i[:,None] - e_i)
 
     if h1.ndim == 3:
         return mo1, mo_e1

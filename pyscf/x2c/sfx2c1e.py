@@ -64,98 +64,103 @@ def sfx2c1e(mf):
         else:
             return mf
 
-    mf_class = mf.__class__
-    if mf_class.__doc__ is None:
-        doc = ''
-    else:
-        doc = mf_class.__doc__
-
-    class SFX2C1E_SCF(x2c._X2C_SCF, mf_class):
-        __doc__ = doc + '''
-        Attributes for spin-free X2C:
-            with_x2c : X2C object
-        '''
-        def __init__(self, mol, *args, **kwargs):
-            mf_class.__init__(self, mol, *args, **kwargs)
-            self.with_x2c = SpinFreeX2CHelper(mf.mol)
-            self._keys = self._keys.union(['with_x2c'])
-
-        def get_hcore(self, mol=None):
-            if self.with_x2c:
-                hcore = self.with_x2c.get_hcore(mol)
-                if isinstance(self, ghf.GHF):
-                    hcore = scipy.linalg.block_diag(hcore, hcore)
-                return hcore
-            else:
-                return mf_class.get_hcore(self, mol)
-
-        def dump_flags(self, verbose=None):
-            mf_class.dump_flags(self, verbose)
-            if self.with_x2c:
-                self.with_x2c.dump_flags(verbose)
-            return self
-
-        def reset(self, mol):
-            self.with_x2c.reset(mol)
-            return mf_class.reset(self, mol)
-
-        def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
-                       picture_change=True, **kwargs):
-            r''' Dipole moment calculation with picture change correction
-
-            Args:
-                 mol: an instance of :class:`Mole`
-                 dm : a 2D ndarrays density matrices
-
-            Kwarg:
-                picture_chang (bool) : Whether to compute the dipole moment with
-                picture change correction.
-
-            Return:
-                A list: the dipole moment on x, y and z component
-            '''
-            if mol is None: mol = self.mol
-            if dm is None: dm = self.make_rdm1()
-            log = logger.new_logger(mol, verbose)
-
-            if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-                # UHF denisty matrices
-                dm = dm[0] + dm[1]
-
-            if isinstance(self, ghf.GHF):
-                nao = mol.nao_nr()
-                dm = dm[:nao,:nao] + dm[nao:,nao:]
-
-            with mol.with_common_orig((0,0,0)):
-                if picture_change:
-                    xmol = self.with_x2c.get_xmol()[0]
-                    nao = xmol.nao
-                    prp = xmol.intor_symmetric('int1e_sprsp').reshape(3,4,nao,nao)[:,0]
-                    ao_dip = self.with_x2c.picture_change(('int1e_r', prp))
-                else:
-                    ao_dip = mol.intor_symmetric('int1e_r')
-
-            el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
-
-            charges = mol.atom_charges()
-            coords  = mol.atom_coords()
-            nucl_dip = numpy.einsum('i,ix->x', charges, coords)
-            mol_dip = nucl_dip - el_dip
-
-            if unit.upper() == 'DEBYE':
-                mol_dip *= nist.AU2DEBYE
-                log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
-            else:
-                log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
-            return mol_dip
-
-    with_x2c = SpinFreeX2CHelper(mf.mol)
-    return mf.view(SFX2C1E_SCF).add_keys(with_x2c=with_x2c)
+    return lib.set_class(SFX2C1E_SCF(mf), (SFX2C1E_SCF, mf.__class__))
 
 sfx2c = sfx2c1e
 
+class SFX2C1E_SCF(x2c._X2C_SCF):
+    '''
+    Attributes for spin-free X2C:
+        with_x2c : X2C object
+    '''
 
-class SpinFreeX2CHelper(x2c.X2CHelperMixin):
+    __name_mixin__ = 'sfX2C1e'
+
+    _keys = {'with_x2c'}
+
+    def __init__(self, mf):
+        self.__dict__.update(mf.__dict__)
+        self.with_x2c = SpinFreeX2CHelper(mf.mol)
+
+    def undo_x2c(self):
+        '''Remove the X2C Mixin'''
+        obj = lib.view(self, lib.drop_class(self.__class__, SFX2C1E_SCF))
+        del obj.with_x2c
+        return obj
+
+    def get_hcore(self, mol=None):
+        if self.with_x2c:
+            hcore = self.with_x2c.get_hcore(mol)
+            if isinstance(self, ghf.GHF):
+                hcore = scipy.linalg.block_diag(hcore, hcore)
+            return hcore
+        else:
+            return super(x2c._X2C_SCF, self).get_hcore(mol)
+
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   picture_change=True, **kwargs):
+        r''' Dipole moment calculation with picture change correction
+
+        Args:
+             mol: an instance of :class:`Mole`
+             dm : a 2D ndarrays density matrices
+
+        Kwarg:
+            picture_chang (bool) : Whether to compute the dipole moment with
+            picture change correction.
+
+        Return:
+            A list: the dipole moment on x, y and z component
+        '''
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        log = logger.new_logger(mol, verbose)
+
+        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            # UHF density matrices
+            dm = dm[0] + dm[1]
+
+        if isinstance(self, ghf.GHF):
+            nao = mol.nao_nr()
+            dm = dm[:nao,:nao] + dm[nao:,nao:]
+
+        with mol.with_common_orig((0,0,0)):
+            if picture_change:
+                xmol = self.with_x2c.get_xmol()[0]
+                nao = xmol.nao
+                prp = xmol.intor_symmetric('int1e_sprsp').reshape(3,4,nao,nao)[:,3]
+                c1 = 0.5/lib.param.LIGHT_SPEED
+                ao_dip = self.with_x2c.picture_change(('int1e_r', prp*c1**2))
+            else:
+                ao_dip = mol.intor_symmetric('int1e_r')
+
+        el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
+
+        charges = mol.atom_charges()
+        coords  = mol.atom_coords()
+        nucl_dip = numpy.einsum('i,ix->x', charges, coords)
+        mol_dip = nucl_dip - el_dip
+
+        if unit.upper() == 'DEBYE':
+            mol_dip *= nist.AU2DEBYE
+            log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
+        else:
+            log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
+        return mol_dip
+
+    def _transfer_attrs_(self, dst):
+        if self.with_x2c and not hasattr(dst, 'with_x2c'):
+            logger.warn(self, 'Destination object of to_hf/to_ks method is not '
+                        'an X2C object. Convert dst to X2C object.')
+            dst = dst.sfx2c()
+        return hf.SCF._transfer_attrs_(self, dst)
+
+    def to_gpu(self):
+        obj = self.undo_x2c().to_gpu().sfx2c1e()
+        return lib.to_gpu(self, obj)
+
+
+class SpinFreeX2CHelper(x2c.X2CHelperBase):
     '''1-component X2c (spin-free part only)
     '''
     def get_hcore(self, mol=None):
@@ -315,3 +320,5 @@ if __name__ == '__main__':
     method.with_x2c.approx = 'atom1e'
     print('E(SFX2C1E) = %.12g' % method.kernel())
 
+    mf = method.density_fit().undo_x2c().run()
+    print('E(DF-NR) = %.12g' % mf.e_tot)

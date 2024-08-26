@@ -36,6 +36,7 @@ try:
         XC = {**xcfun.XC, **xcfun.XC_ALIAS}
 except (ImportError, OSError):
     pass
+from pyscf import gto
 #from pyscf.dft import xc
 from pyscf.dft import rks
 from pyscf.dft import roks
@@ -104,7 +105,6 @@ def DKS(mol, xc='LDA,VWN'):
         return dks.RDKS(mol, xc=xc)
     else:
         return dks.UDKS(mol, xc=xc)
-
 UDKS = dks.UDKS
 RDKS = dks.RDKS
 
@@ -116,3 +116,4 @@ def X2C(mol, *args):
         return dft.RKS(mol, *args)
     else:
         return dft.UKS(mol, *args)
+X2C_KS = X2C

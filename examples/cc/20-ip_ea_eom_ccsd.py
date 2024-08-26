@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 '''
-Ground-state and IP/EA-EOM-CCSD for singlet (RHF) and triplet (UHF) O2.
+Ground-state, EOM-EE-GCCSD and IP/EA-EOM-CCSD for singlet (RHF) and triplet (UHF) O2.
 '''
 
 from pyscf import gto, scf, cc
@@ -49,3 +49,10 @@ mycc.ccsd()
 eip,cip = mycc.ipccsd(nroots=1)
 eea,cea = mycc.eaccsd(nroots=1)
 
+# EOM-GCCSD
+mf = mf.to_ghf()
+mycc = mf.CCSD()
+ecc, t1, t2 = mycc.kernel()
+e,v = mycc.ipccsd(nroots=6)
+e,v = mycc.eaccsd(nroots=6)
+e,v = mycc.eeccsd(nroots=6)

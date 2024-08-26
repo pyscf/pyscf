@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2024 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,9 +35,7 @@ from pyscf.lib import logger
 from pyscf.data import nist
 from pyscf.pbc import gto
 from pyscf.pbc import tools
-from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
-from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc.scf import addons
 from pyscf.pbc import df
 from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
@@ -48,27 +46,30 @@ from pyscf import __config__
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
-                       pbcopt=lib.c_null_ptr())
-    s = lib.asarray(s)
+    precision = cell.precision * 1e-5
+    rcut = max(cell.rcut, gto.estimate_rcut(cell, precision))
+    with lib.temporary_env(cell, rcut=rcut, precision=precision):
+        # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+        s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
+                           pbcopt=lib.c_null_ptr())
+    s = np.asarray(s)
     hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
     if hermi_error > cell.precision and hermi_error > 1e-12:
         logger.warn(cell, '%.4g error found in overlap integrals. '
                     'cell.precision  or  cell.rcut  can be adjusted to '
                     'improve accuracy.', hermi_error)
 
-    cond = np.max(lib.cond(s))
-    if cond * cell.precision > 1e2:
-        prec = 1e2 / cond
-        rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
-        if cell.rcut < rmin:
+    if cell.verbose >= logger.DEBUG:
+        cond = np.max(lib.cond(s))
+        if cond * precision > 1e2:
+            prec = 1e7 / cond
+            rmin = gto.estimate_rcut(cell, prec*1e-5)
             logger.warn(cell, 'Singularity detected in overlap matrix.  '
                         'Integral accuracy may be not enough.\n      '
                         'You can adjust  cell.precision  or  cell.rcut  to '
-                        'improve accuracy.  Recommended values are\n      '
-                        'cell.precision = %.2g  or smaller.\n      '
-                        'cell.rcut = %.4g  or larger.', prec, rmin)
+                        'improve accuracy.  Recommended settings are\n      '
+                        'cell.precision < %.2g\n      '
+                        'cell.rcut > %.4g', prec, rmin)
     return s
 
 
@@ -81,6 +82,7 @@ def get_hcore(cell, kpt=np.zeros(3)):
     else:
         hcore += get_nuc(cell, kpt)
     if len(cell._ecpbas) > 0:
+        from pyscf.pbc.gto import ecp
         hcore += ecp.ecp_int(cell, kpt)
     return hcore
 
@@ -118,7 +120,7 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             An arbitrary "band" k-point at which J is evaluated.
 
     Returns:
@@ -148,7 +150,7 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3),
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             An arbitrary "band" k-point at which J and K are evaluated.
 
     Returns:
@@ -244,7 +246,7 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     # With the optimal origin of the unti cell, the net dipole in the unit
     # cell should be strictly zero. However, the integral grids are often not
     # enough to produce the zero dipole. Errors are caused by the sub-optimal
-    # origin and the numerial integration.
+    # origin and the numerical integration.
     if origin is None:
         origin = _search_dipole_gauge_origin(cell, grids, rho, log)
 
@@ -408,7 +410,7 @@ def _dip_correction(mf):
     grids.mesh = tools.cutoff_to_mesh(a, ke_cutoff)
 
     dm = mf.make_rdm1()
-    rho = mf.get_rho(dm, grids, mf.kpt)
+    rho = mf.get_rho(dm, grids)
     origin = _search_dipole_gauge_origin(cell, grids, rho, log)
 
     def shift_grids(r):
@@ -501,22 +503,19 @@ class SCF(mol_hf.SCF):
         with_df : density fitting object
             Default is the FFT based DF model. For all-electron calculation,
             MDF model is favored for better accuracy.  See also :mod:`pyscf.pbc.df`.
-
-        direct_scf : bool
-            When this flag is set to true, the J/K matrices will be computed
-            directly through the underlying with_df methods.  Otherwise,
-            depending the available memory, the 4-index integrals may be cached
-            and J/K matrices are computed based on the 4-index integrals.
     '''
 
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    _keys = {'cell', 'exxdiv', 'with_df', 'rsjk'}
+
+    init_direct_scf = lib.invalid_method('init_direct_scf')
+    get_bands = get_bands
+    get_rho = get_rho
 
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
-        self.cell = cell
         mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
@@ -525,9 +524,7 @@ class SCF(mol_hf.SCF):
 
         self.exxdiv = exxdiv
         self.kpt = kpt
-        self.conv_tol = cell.precision * 10
-
-        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df', 'rsjk'])
+        self.conv_tol = max(cell.precision * 10, 1e-8)
 
     @property
     def kpt(self):
@@ -537,19 +534,46 @@ class SCF(mol_hf.SCF):
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
-        self.with_df.kpts = np.reshape(x, (-1, 3))
+        self.with_df.kpts = np.reshape(x, (1, 3))
+        if self.rsjk:
+            self.rsjk.kpts = self.with_df.kpts
+
+    @property
+    def kpts(self):
+        if 'kpts' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpts = self.__dict__.pop('kpts')
+        return self.with_df.kpts
+    @kpts.setter
+    def kpts(self, x):
+        self.with_df.kpts = np.reshape(x, (-1,3))
         if self.rsjk:
             self.rsjk.kpts = self.with_df.kpts
 
     def build(self, cell=None):
-        if 'kpt' in self.__dict__:
-            # To handle the attribute kpt loaded from chkfile
+        # To handle the attribute kpt or kpts loaded from chkfile
+        if 'kpts' in self.__dict__:
+            self.kpts = self.__dict__.pop('kpts')
+        elif 'kpt' in self.__dict__:
             self.kpt = self.__dict__.pop('kpt')
 
+        # "vcut_ws" precomputing is triggered by pbc.tools.pbc.get_coulG
+        #if self.exxdiv == 'vcut_ws':
+        #    if self.exx_built is False:
+        #        self.precompute_exx()
+        #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
+
+        kpts = self.kpts
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpt):
-                self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
-            self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
+                self.rsjk = self.rsjk.__class__(cell, kpts)
+
+        # for GDF and MDF
+        with_df = self.with_df
+        if len(kpts) > 1 and getattr(with_df, '_j_only', False):
+            logger.warn(self, 'df.j_only cannot be used with k-point HF')
+            with_df._j_only = False
+            with_df.reset()
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -559,9 +583,16 @@ class SCF(mol_hf.SCF):
         '''Reset cell and relevant attributes associated to the old cell object'''
         if cell is not None:
             self.cell = cell
-            self.mol = cell # used by hf kernel
         self.with_df.reset(cell)
         return self
+
+    # used by hf kernel
+    @property
+    def mol(self):
+        return self.cell
+    @mol.setter
+    def mol(self, x):
+        self.cell = x
 
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)
@@ -585,12 +616,18 @@ class SCF(mol_hf.SCF):
         return self
 
     def check_sanity(self):
-        mol_hf.SCF.check_sanity(self)
-        self.with_df.check_sanity()
+        lib.StreamObject.check_sanity(self)
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
                         self.exxdiv)
+
+        if self.verbose >= logger.DEBUG:
+            s = self.get_ovlp()
+            cond = np.max(lib.cond(s))
+            if cond * 1e-17 > self.conv_tol:
+                logger.warn(self, 'Singularity detected in overlap matrix (condition number = %4.3g). '
+                            'SCF may be inaccurate and hard to converge.', cond)
         return self
 
     def get_hcore(self, cell=None, kpt=None):
@@ -601,6 +638,7 @@ class SCF(mol_hf.SCF):
         else:
             nuc = self.with_df.get_nuc(kpt)
         if len(cell._ecpbas) > 0:
+            from pyscf.pbc.gto import ecp
             nuc += ecp.ecp_int(cell, kpt)
         return nuc + cell.pbc_intor('int1e_kin', 1, 1, kpt)
 
@@ -635,7 +673,7 @@ class SCF(mol_hf.SCF):
             not self.rsjk and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
             (self._eri is not None or cell.incore_anyway or
-             (not self.direct_scf and self._is_mem_enough()))):
+             self._is_mem_enough())):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
@@ -643,7 +681,7 @@ class SCF(mol_hf.SCF):
 
             if with_k and self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
-                # G=0 is not inculded in the ._eri integrals
+                # G=0 is not included in the ._eri integrals
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
         elif self.rsjk:
@@ -688,15 +726,8 @@ class SCF(mol_hf.SCF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        if self.rsjk and self.direct_scf:
-            # Enable direct-SCF for real space JK builder
-            ddm = dm - dm_last
-            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
-            vhf = vj - vk * .5
-            vhf += vhf_last
-        else:
-            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-            vhf = vj - vk * .5
+        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+        vhf = vj - vk * .5
         return vhf
 
     def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, omega=None,
@@ -716,19 +747,13 @@ class SCF(mol_hf.SCF):
         return self.get_jk(cell, dm, hermi, kpt)
 
     def energy_nuc(self):
-        return self.cell.energy_nuc()
-
-    get_bands = get_bands
-
-    get_rho = get_rho
+        return self.cell.enuc
 
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
         if cell is None:
             cell = self.cell
-        if dm is None:
-            dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)
@@ -742,10 +767,10 @@ class SCF(mol_hf.SCF):
             makov_payne_correction(self)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None: cell = self.cell
         dm = mol_hf.SCF.get_init_guess(self, cell, key)
-        dm = normalize_dm_(self, dm)
+        dm = normalize_dm_(self, dm, s1e)
         return dm
 
     def init_guess_by_1e(self, cell=None):
@@ -762,10 +787,22 @@ class SCF(mol_hf.SCF):
     def from_chk(self, chk=None, project=None, kpt=None):
         return self.init_guess_by_chkfile(chk, project, kpt)
 
-    def dump_chk(self, envs):
-        if self.chkfile:
-            mol_hf.SCF.dump_chk(self, envs)
-            with h5py.File(self.chkfile, 'a') as fh5:
+    def dump_chk(self, envs_or_file):
+        '''Serialize the SCF object and save it to the specified chkfile.
+
+        Args:
+            envs_or_file:
+                If this argument is a file path, the serialized SCF object is
+                saved to the file specified by this argument.
+                If this attribute is a dict (created by locals()), the necessary
+                variables are saved to the file specified by the attribute mf.chkfile.
+        '''
+        mol_hf.SCF.dump_chk(self, envs_or_file)
+        if isinstance(envs_or_file, str):
+            with lib.H5FileWrap(envs_or_file, 'a') as fh5:
+                fh5['scf/kpt'] = self.kpt
+        elif self.chkfile:
+            with lib.H5FileWrap(self.chkfile, 'a') as fh5:
                 fh5['scf/kpt'] = self.kpt
         return self
 
@@ -776,6 +813,12 @@ class SCF(mol_hf.SCF):
         else:
             mem_need = nao**4*16/1e6
         return mem_need + lib.current_memory()[0] < self.max_memory*.95
+
+    def analyze(self, verbose=None, with_meta_lowdin=None, **kwargs):
+        raise NotImplementedError
+
+    def mulliken_pop(self):
+        raise NotImplementedError
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import df_jk
@@ -794,20 +837,23 @@ class SCF(mol_hf.SCF):
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
 
-    def to_rhf(self, mf):
+    def to_rhf(self):
         '''Convert the input mean-field object to a RHF/ROHF/RKS/ROKS object'''
-        return addons.convert_to_rhf(mf)
+        return addons.convert_to_rhf(self)
 
-    def to_uhf(self, mf):
+    def to_uhf(self):
         '''Convert the input mean-field object to a UHF/UKS object'''
-        return addons.convert_to_uhf(mf)
+        return addons.convert_to_uhf(self)
 
-    def to_ghf(self, mf):
+    def to_ghf(self):
         '''Convert the input mean-field object to a GHF/GKS object'''
-        return addons.convert_to_ghf(mf)
+        return addons.convert_to_ghf(self)
 
-    def nuc_grad_method(self, *args, **kwargs):
-        raise NotImplementedError
+    def to_kscf(self):
+        '''Convert gamma point SCF object to k-point SCF object
+        '''
+        from pyscf.pbc.scf.addons import convert_to_kscf
+        return convert_to_kscf(self)
 
     def jk_method(self, J='FFTDF', K=None):
         '''
@@ -831,25 +877,22 @@ class SCF(mol_hf.SCF):
                 assert J == K
             else:
                 df_method = J if 'DF' in J else K
-                self.with_df = getattr(df, df_method)(self.cell, self.kpt)
+                self.with_df = getattr(df, df_method)(self.cell, self.kpts)
 
-        # For nuclear attraction
-        if ('RS' in J or 'RS' in K) and not self.with_df:
-            self.with_df = df.GDF(self.cell, self.kpt)
-
-        if J == 'RS' or K == 'RS':
-            if not gamma_point(self.kpt):
-                raise NotImplementedError('Single k-point must be gamma point')
-            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpt)
+        if 'RS' in J or 'RS' in K:
+            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpts)
             self.rsjk.verbose = self.verbose
 
         # For nuclear attraction
         if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
-            self.with_df = df.GDF(self.cell, self.kpt)
+            self.with_df = df.GDF(self.cell, self.kpts)
 
         nuc = self.with_df.__class__.__name__
         logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
         return self
+
+    def to_gpu(self):
+        raise NotImplementedError
 
 
 class KohnShamDFT:
@@ -862,12 +905,24 @@ class KohnShamDFT:
     '''
 
 
-class RHF(SCF, mol_hf.RHF):
+class RHF(SCF):
 
+    analyze = mol_hf.RHF.analyze
+    spin_square = mol_hf.RHF.spin_square
     stability = mol_hf.RHF.stability
+    to_gpu = lib.to_gpu
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+    def to_ks(self, xc='HF'):
+        '''Convert to RKS object.
+        '''
+        from pyscf.pbc import dft
+        return self._transfer_attrs_(dft.RKS(self.cell, xc=xc))
 
     def convert_from_(self, mf):
-        '''Convert given mean-field object to RHF'''
+        '''Convert given mean-field object to RHF/ROHF'''
         addons.convert_to_rhf(mf, self)
         return self
 
@@ -881,16 +936,15 @@ def _format_jks(vj, dm, kpts_band):
         vj = vj[0]
     return vj
 
-def normalize_dm_(mf, dm):
+def normalize_dm_(mf, dm, s1e=None):
     '''
     Scale density matrix to make it produce the correct number of electrons.
     '''
     cell = mf.cell
-    if isinstance(dm, np.ndarray) and dm.ndim == 2:
-        ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
-    else:
-        ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
-    if abs(ne - cell.nelectron).sum() > 1e-7:
+    if s1e is None:
+        s1e = mf.get_ovlp(cell)
+    ne = lib.einsum('ij,ji->', dm, s1e).real
+    if abs(ne - cell.nelectron) > 0.01:
         logger.debug(mf, 'Big error detected in the electron number '
                      'of initial guess density matrix (Ne/cell = %g)!\n'
                      '  This can cause huge error in Fock matrix and '

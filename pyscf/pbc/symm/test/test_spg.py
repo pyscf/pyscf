@@ -55,7 +55,7 @@ class KnownValues(unittest.TestCase):
     @unittest.skipIf(not has_spglib, "spglib not found")
     def test_D4h_vs_spglib(self):
         dim = 3
-        magmom = [1., 1., -1., -1., 1., -1., 1., 1., -1., -1., 1., -1.]
+        magmom = [1, 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, -1]
         cell = make_cell_D4h(dim, magmom)
         sg = spg.SpaceGroup(cell)
 
@@ -88,7 +88,7 @@ class KnownValues(unittest.TestCase):
                 rot[0,2] == 0 and rot[1,2] == 0 and 
                 rot[2,2] != -1):
                 ops2.append(op)
-        ops2.sort
+        ops2.sort()
 
         dim = 2
         cell = make_cell_D4h(dim)
@@ -206,7 +206,7 @@ class KnownValues(unittest.TestCase):
         t = num // (3**9)
         degit = 12**2
         for i in range(3):
-            trans[i] = ( float( ( t % ( degit * 12 ) ) // degit ) ) / 12.;
+            trans[i] = ( float( ( t % ( degit * 12 ) ) // degit ) ) / 12.
             degit = degit // 12
         op = spg.SPGElement(rot, trans)
         self.assertTrue(hash(op) == num)

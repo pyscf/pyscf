@@ -41,7 +41,7 @@ from pyscf.fci.spin_op import spin_square
 
 libfci = direct_spin1.libfci
 
-# When the spin-orbitals do not have the degeneracy on spacial part,
+# When the spin-orbitals do not have the degeneracy on spatial part,
 # there is only one version of FCI which is close to _spin1 solver.
 # The inputs: h1e has two parts (h1e_a, h1e_b),
 # h2e has three parts (h2e_aa, h2e_ab, h2e_bb)
@@ -181,6 +181,12 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
             ao2mo.restore(4, h2e_bb, norb) * fac)
 
 def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
+    if norb >= 64:
+        raise NotImplementedError('norb >= 64')
+
+    if h1e[0].dtype == numpy.complex128 or eri[0].dtype == numpy.complex128:
+        raise NotImplementedError('Complex Hamiltonian')
+
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
     h1e_a = numpy.ascontiguousarray(h1e[0])
     h1e_b = numpy.ascontiguousarray(h1e[1])
@@ -192,7 +198,7 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     assert hdiag.size == na * nb
-    if hdiag.size < np:
+    if hdiag.size <= np:
         addr = numpy.arange(hdiag.size)
     else:
         try:
@@ -239,14 +245,14 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 # dm_pq = <|p^+ q|>
 make_rdm1s = direct_spin1.make_rdm1s
 
-# spacial part of DM, dm_pq = <|p^+ q|>
+# spatial part of DM, dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
     raise ValueError('Spin trace for UHF-FCI density matrices.')
 
 make_rdm12s = direct_spin1.make_rdm12s
 trans_rdm1s = direct_spin1.trans_rdm1s
 
-# spacial part of DM
+# spatial part of DM
 def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     raise ValueError('Spin trace for UHF-FCI density matrices.')
 

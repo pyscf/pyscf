@@ -326,6 +326,7 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
         get_Wvvvv = lambda ka, kb, kc: _Wvvvv[ka, kb, kc]
 
     kakb, igroup = np.unique(kqrts.kqrts_ibz[:,2:], axis=0, return_inverse=True)
+    igroup = igroup.ravel()
     for i in range(np.amax(igroup) + 1):
         ka, kb = kakb[i]
         idx = np.where(igroup==i)[0]
@@ -378,6 +379,8 @@ def energy(cc, t1, t2, eris):
 
 
 class KsymAdaptedRCCSD(RCCSD):
+    _keys = {'kqrts', 'rmat', 'ktensor_direct', 'eris_outcore'}
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         '''
         Attributes:
@@ -393,13 +396,10 @@ class KsymAdaptedRCCSD(RCCSD):
         '''
         # NOTE self._scf is a non-symmetry object, see RCCSD.__init__
         RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        self.kqrts = KQuartets(self.kpts).build()
+        self.kqrts = KQuartets(mf.kpts).build()
         self.rmat = None
         self.ktensor_direct = False
         self.eris_outcore = False
-
-        keys = set(['kqrts', 'rmat', 'ktensor_direct', 'eris_outcore'])
-        self._keys = self._keys.union(keys)
 
     def ao2mo(self, mo_coeff=None):
         eris = _PhysicistsERIs()

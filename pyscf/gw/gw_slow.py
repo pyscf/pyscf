@@ -25,7 +25,7 @@ from itertools import product
 # * GW provides a container
 
 
-class AbstractIMDS(object):
+class AbstractIMDS:
     orb_dims = 1
 
     def __init__(self, td, eri=None):
@@ -133,7 +133,7 @@ class IMDS(AbstractIMDS):
             td: a container with TD solution;
             eri: a container with electron repulsion integrals;
         """
-        super(IMDS, self).__init__(td, eri=eri)
+        super().__init__(td, eri=eri)
 
         # MF
         self.nocc = self.eri.nocc
@@ -188,7 +188,7 @@ class IMDS(AbstractIMDS):
         return [numpy.arange(self.eri.nmo)]
 
 
-class LoggingFunction(object):
+class LoggingFunction:
     def __init__(self, m):
         """
         A function number->number logging calls.
@@ -318,7 +318,7 @@ def kernel(imds, orbs=None, linearized=False, eta=1e-3, tol=1e-9, method="fallba
     return gw_energies
 
 
-class GW(object):
+class GW:
     base_imds = IMDS
 
     def __init__(self, td, eri=None):

@@ -125,15 +125,7 @@ def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
                     sodic[ir].append(c)
                 ip += degen
 
-    ao_loc = mol.ao_loc_nr()
-    l_idx = {}
-    ANG_OF = 1
-    for l in range(mol._bas[:,ANG_OF].max()+1):
-        idx = [numpy.arange(ao_loc[ib], ao_loc[ib+1])
-               for ib in numpy.where(mol._bas[:,ANG_OF] == l)[0]]
-        if idx:
-            l_idx[l] = numpy.hstack(idx)
-
+    l_idx = ao_l_dict(mol)
     Ds = _momentum_rotation_matrices(mol, coordinates)
     so = []
     irrep_ids = []
@@ -149,6 +141,17 @@ def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
             so.append(c_ir)
 
     return so, irrep_ids
+
+def ao_l_dict(mol):
+    ao_loc = mol.ao_loc_nr()
+    l_idx = {}
+    ANG_OF = 1
+    for l in range(mol._bas[:,ANG_OF].max()+1):
+        idx = [numpy.arange(ao_loc[ib], ao_loc[ib+1])
+               for ib in numpy.where(mol._bas[:,ANG_OF] == l)[0]]
+        if idx:
+            l_idx[l] = numpy.hstack(idx)
+    return l_idx
 
 def _momentum_rotation_matrices(mol, axes):
     '''Cache the rotation matrices for each angular momentum'''
@@ -206,7 +209,7 @@ def _basis_offset_for_atoms(atoms, basis_tab):
 
 def _num_contract(basis):
     if isinstance(basis[1], int):
-        # This branch should never be reached if basis_tab is formated by
+        # This branch should never be reached if basis_tab is formatted by
         # function mole.format_basis
         nctr = len(basis[2]) - 1
     else:
@@ -297,7 +300,7 @@ _SO3_SYMB2ID = {
     'i+5':    622,
     'i+6':    630,
 }
-_SO3_ID2SYMB = dict([(v, k) for k, v in _SO3_SYMB2ID.items()])
+_SO3_ID2SYMB = {v: k for k, v in _SO3_SYMB2ID.items()}
 _ANGULAR = 'spdfghiklmnortu'
 
 def so3_irrep_symb2id(symb):

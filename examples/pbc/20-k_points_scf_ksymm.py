@@ -35,9 +35,15 @@ kmf = dft.KRKS(cell, kpts)
 kmf.xc = 'camb3lyp'
 kmf.kernel()
 
+# By default, the mean-field calculation will use symmetry-adapted
+# crystalline orbitals whenever possible. This can be turned off manually
+# when instantiating the mean-field object.
+kmf = scf.KRHF(cell, kpts, use_ao_symmetry=False)
+kmf.kernel()
+
 #
 # The mean-field object with k-point symmetry can be converted back to
-# the correponding non-symmetric mean-field object
+# the corresponding non-symmetric mean-field object
 #
 
 kmf = kmf.to_khf()
@@ -58,7 +64,7 @@ kumf.kernel()
 
 #
 # The mean-field object with k-point symmetry can be converted back to
-# the correponding non-symmetric mean-field object
+# the corresponding non-symmetric mean-field object
 #
 kumf = kumf.to_khf()
 kumf.kernel(kumf.make_rdm1())

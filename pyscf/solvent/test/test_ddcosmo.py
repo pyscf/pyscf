@@ -237,6 +237,7 @@ class KnownValues(unittest.TestCase):
         mf.init_guess = '1e'
         mf.run()
         self.assertAlmostEqual(mf.e_tot, -0.1645636146393864, 9)
+        self.assertEqual(mf.undo_solvent().__class__.__name__, 'RHF')
 
         mol = gto.M(atom='''
                6        0.000000    0.000000   -0.542500
@@ -491,7 +492,7 @@ class KnownValues(unittest.TestCase):
         td = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
         ref = numpy.array([0.30124900879, 0.358722766464, 0.3950184783571])
         self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
-        
+        self.assertEqual(td.undo_solvent().__class__.__name__, 'TDA')
 
         # TDA without equilibrium_solvation
         mf = mol.RHF().ddCOSMO().run(conv_tol=1e-10)

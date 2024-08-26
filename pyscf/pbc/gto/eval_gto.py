@@ -17,7 +17,7 @@
 #
 
 import ctypes
-import numpy
+import numpy as np
 from pyscf import lib
 from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import _get_intor_and_comp, BLKSIZE
@@ -34,7 +34,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     r'''Evaluate PBC-AO function value on the given grids,
 
     Args:
-        eval_name : str
+        eval_name : str::
 
             ==========================  =======================
             Function                    Expression
@@ -97,24 +97,24 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
         eval_name, comp = _get_intor_and_comp(cell, eval_name, comp)
     eval_name = 'PBC' + eval_name
 
-    atm = numpy.asarray(cell._atm, dtype=numpy.int32, order='C')
-    bas = numpy.asarray(cell._bas, dtype=numpy.int32, order='C')
-    env = numpy.asarray(cell._env, dtype=numpy.double, order='C')
+    atm = np.asarray(cell._atm, dtype=np.int32, order='C')
+    bas = np.asarray(cell._bas, dtype=np.int32, order='C')
+    env = np.asarray(cell._env, dtype=np.double, order='C')
     natm = atm.shape[0]
     nbas = bas.shape[0]
     if kpts is None:
         if kpt is not None:
-            kpts_lst = numpy.reshape(kpt, (1,3))
+            kpts_lst = np.reshape(kpt, (1,3))
         else:
-            kpts_lst = numpy.zeros((1,3))
+            kpts_lst = np.zeros((1,3))
     else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
+        kpts_lst = np.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
     ngrids = len(coords)
 
     if non0tab is None:
-        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
-                              dtype=numpy.uint8)
+        non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
+                              dtype=np.uint8)
 # non0tab stores the number of images to be summed in real space.
 # Initializing it to 255 means all images should be included
         non0tab[:] = 0xff
@@ -126,20 +126,15 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     sh0, sh1 = shls_slice
     nao = ao_loc[sh1] - ao_loc[sh0]
 
-    out = numpy.empty((nkpts,comp,nao,ngrids), dtype=numpy.complex128)
-    coords = numpy.asarray(coords, order='F')
+    out = np.empty((nkpts,comp,nao,ngrids), dtype=np.complex128)
+    coords = np.asarray(coords, order='F')
 
-    # For atoms near the boundary of the cell, it is necessary (even in low-
-    # dimensional systems) to include lattice translations in all 3 dimensions.
-    if Ls is None:
-        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-            Ls = cell.get_lattice_Ls(dimension=cell.dimension)
-        else:
-            Ls = cell.get_lattice_Ls(dimension=3)
-        Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
-    expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts_lst.T), order='C'))
     if rcut is None:
         rcut = _estimate_rcut(cell)
+    if Ls is None:
+        Ls = get_lattice_Ls(cell, rcut=rcut.max())
+        Ls = Ls[np.argsort(lib.norm(Ls, axis=1), kind='stable')]
+    expLk = np.exp(1j * np.asarray(np.dot(Ls, kpts_lst.T), order='C'))
 
     with cell.with_integral_screen(cutoff):
         drv = getattr(libpbc, eval_name)
@@ -159,44 +154,100 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     for k, kpt in enumerate(kpts_lst):
         v = out[k]
         if abs(kpt).sum() < 1e-9:
-            v = numpy.asarray(v.real, order='C')
+            v = np.asarray(v.real, order='C')
         v = v.transpose(0,2,1)
         if comp == 1:
             v = v[0]
         ao_kpts.append(v)
 
-    if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
+    if kpts is None or np.shape(kpts) == (3,):  # A single k-point
         ao_kpts = ao_kpts[0]
     return ao_kpts
 
 pbc_eval_gto = eval_gto
 
 def _estimate_rcut(cell):
-    '''Cutoff raidus, above which each shell decays to a value less than the
-    required precsion'''
-    log_prec = numpy.log(cell.precision * EXTRA_PREC)
+    '''Cutoff radius, above which each shell decays to a value less than the
+    required precision'''
+    vol = cell.vol
+    weight_penalty = vol # ~ V[r] * (vol/ngrids) * ngrids
+    precision = cell.precision / max(weight_penalty, 1)
     rcut = []
     for ib in range(cell.nbas):
         l = cell.bas_angular(ib)
         es = cell.bas_exp(ib)
-        cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
-        r = 5.
-        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
-        r[r < 1.] = 1.
-        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
+        norm_ang = ((2*l+1)/(4*np.pi))**.5
+        fac = 2*np.pi/vol * cs*norm_ang/es / precision
+        r = cell.rcut
+        r = (np.log(fac * r**(l+1) + 1.) / es)**.5
+        r = (np.log(fac * r**(l+1) + 1.) / es)**.5
         rcut.append(r.max())
-    return numpy.array(rcut)
+    return np.array(rcut)
 
+def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
+    '''Get lattice-sum vectors for eval_gto
+    '''
+    if dimension is None:
+        # For atoms near the boundary of the cell, it is necessary (even in low-
+        # dimensional systems) to include lattice translations in all 3 dimensions.
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            dimension = cell.dimension
+        else:
+            dimension = 3
+    if rcut is None:
+        rcut = cell.rcut
 
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
-    coords = cell.get_uniform_grids([10]*3)
-    ao_value = eval_gto(cell, "GTOval_sph", coords, kpts=cell.make_kpts([3]*3))
-    print(lib.finger(numpy.asarray(ao_value)) - (-0.27594803231989179+0.0064644591759109114j))
+    if dimension == 0 or rcut <= 0:
+        return np.zeros((1, 3))
 
-    cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
-    coords = cell.get_uniform_grids([10]*3)
-    ao_value = eval_gto(cell, "GTOval_ip_cart", coords, kpts=cell.make_kpts([3]*3))
-    print(lib.finger(numpy.asarray(ao_value)) - (0.38051517609460028+0.062526488684770759j))
+    a = cell.lattice_vectors()
+    atom_coords = cell.atom_coords()
+    scaled_atom_coords = np.linalg.solve(a.T, atom_coords.T).T
+    atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
+    atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
+    atom_boundary_max[atom_boundary_max > 1] = 1
+    atom_boundary_min[atom_boundary_min <-1] = -1
+    atom_bound1 = np.diag(atom_boundary_max).dot(a[:dimension])
+    atom_bound2 = np.diag(atom_boundary_min).dot(a[:dimension])
 
+    def find_boundary(a):
+        aR = np.vstack([a, atom_bound1, atom_bound2])
+        r = np.linalg.qr(aR.T)[1]
+        ub = (rcut + abs(r[2,3:]).max()) / abs(r[2,2])
+        return ub
+
+    xb = find_boundary(a[[1,2,0]])
+    if dimension > 1:
+        yb = find_boundary(a[[2,0,1]])
+    else:
+        yb = 0
+    if dimension > 2:
+        zb = find_boundary(a)
+    else:
+        zb = 0
+    bounds = np.ceil([xb, yb, zb]).astype(int)
+    Ts = lib.cartesian_prod((np.arange(-bounds[0], bounds[0]+1),
+                             np.arange(-bounds[1], bounds[1]+1),
+                             np.arange(-bounds[2], bounds[2]+1)))
+    Ls = np.dot(Ts[:,:dimension], a[:dimension])
+
+    # grids with wrap_around: grids_edge ~ [-.5, .5]
+    # regular grids: grids_edge ~ [0, 1]
+    grids_edge = lib.cartesian_prod([[-.5, 1.]] * dimension).dot(a[:dimension])
+    edge_lb = grids_edge.min(axis=0)
+    edge_ub = grids_edge.max(axis=0)
+
+    grids2atm = Ls + atom_coords[:,None,:]
+    edge_filter1 = grids2atm > edge_lb
+    edge_filter2 = grids2atm < edge_ub
+    grids2atm[~edge_filter1[:,:,0],0] -= edge_lb[0]
+    grids2atm[~edge_filter1[:,:,1],1] -= edge_lb[1]
+    grids2atm[~edge_filter1[:,:,2],2] -= edge_lb[2]
+    grids2atm[~edge_filter2[:,:,0],0] -= edge_ub[0]
+    grids2atm[~edge_filter2[:,:,1],1] -= edge_ub[1]
+    grids2atm[~edge_filter2[:,:,2],2] -= edge_ub[2]
+    grids2atm[edge_filter1 & edge_filter2] = 0.
+    Ls_mask = (np.linalg.norm(grids2atm, axis=2) < rcut).any(axis=0)
+    Ls = Ls[Ls_mask]
+    return np.asarray(Ls, order='C')
