@@ -167,6 +167,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     fock_last = None
     cput1 = logger.timer(mf, 'initialize scf', *cput0)
+    mf.cycles = 0
     for cycle in range(mf.max_cycle):
         dm_last = dm
         last_hf_e = e_tot
@@ -206,6 +207,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         if scf_conv:
             break
 
+    mf.cycles = cycle + 1
     if scf_conv and conv_check:
         # An extra diagonalization, to remove level shift
         #fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf
@@ -1561,7 +1563,7 @@ class SCF(lib.StreamObject):
     Saved results:
 
         converged : bool
-            SCF converged or not
+            Whether the SCF iteration converged
         e_tot : float
             Total HF energy (electronic energy plus nuclear repulsion)
         mo_energy :
@@ -1570,6 +1572,8 @@ class SCF(lib.StreamObject):
             Orbital occupancy
         mo_coeff
             Orbital coefficients
+        cycles : int
+            The number of iteration cycles performed
 
     Examples:
 
@@ -1613,7 +1617,8 @@ class SCF(lib.StreamObject):
         'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
         'direct_scf', 'direct_scf_tol', 'conv_check', 'callback',
         'mol', 'chkfile', 'mo_energy', 'mo_coeff', 'mo_occ',
-        'e_tot', 'converged', 'scf_summary', 'opt', 'disp', 'disp_with_3body',
+        'e_tot', 'converged', 'cycles', 'scf_summary', 'opt',
+        'disp', 'disp_with_3body',
     }
 
     def __init__(self, mol):
@@ -1642,6 +1647,7 @@ class SCF(lib.StreamObject):
         self.mo_occ = None
         self.e_tot = 0
         self.converged = False
+        self.cycles = 0
         self.scf_summary = {}
 
         self._opt = {None: None}
