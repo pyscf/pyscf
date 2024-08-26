@@ -893,8 +893,10 @@ class CCSDBase(lib.StreamObject):
             callback function can access all local variables in the current
             environment.
 
-    Saved results
+    Saved results:
 
+        converged : bool
+            Whether the CCSD iteration converged
         e_corr : float
             CCSD correlation correction
         e_tot : float
@@ -904,7 +906,7 @@ class CCSDBase(lib.StreamObject):
         l1, l2 :
             Lambda amplitudes l1[i,a], l2[i,j,a,b]  (i,j in occ, a,b in virt)
         cycle : int
-            Iteration cycle count
+            The number of iteration cycles performed
     '''
 
     max_cycle = getattr(__config__, 'cc_ccsd_CCSD_max_cycle', 50)
@@ -960,6 +962,7 @@ class CCSDBase(lib.StreamObject):
 # don't modify the following attributes, they are not input options
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
+        self.converged = False
         self.cycle = None
         self.converged_lambda = False
         self.emp2 = None
@@ -1084,7 +1087,7 @@ class CCSDBase(lib.StreamObject):
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
 
-        _, self.e_corr, self.t1, self.t2 = \
+        self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
                        verbose=self.verbose, callback=self.callback)
