@@ -26,7 +26,7 @@ from pyscf import lib
 from pyscf.lib import linalg_helper
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
-from pyscf.tdscf._lr_eig import eig as lr_eig
+from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf.pbc import scf
 from pyscf.pbc.tdscf.rhf import TDBase
 from pyscf.pbc.scf import _response_functions  # noqa
@@ -155,6 +155,8 @@ def get_ab(mf, kshift=0):
     return a, b
 
 class KTDBase(TDBase):
+    conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-4)
+
     _keys = {'kconserv', 'kshift_lst'}
 
     def __init__(self, mf, kshift_lst=None):
@@ -184,7 +186,6 @@ class KTDBase(TDBase):
         log.info('conv_tol = %g', self.conv_tol)
         log.info('eigh lindep = %g', self.lindep)
         log.info('eigh level_shift = %g', self.level_shift)
-        log.info('eigh max_space = %d', self.max_space)
         log.info('eigh max_cycle = %d', self.max_cycle)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
@@ -215,7 +216,6 @@ class KTDBase(TDBase):
     get_nto = lib.invalid_method('get_nto')
 
 class TDA(KTDBase):
-    conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None, kshift=0):
@@ -325,13 +325,10 @@ class TDA(KTDBase):
             else:
                 x0k = x0[i]
 
-            converged, e, x1 = \
-                    lib.davidson1(vind, x0k, precond,
-                                  tol=self.conv_tol,
-                                  max_cycle=self.max_cycle,
-                                  nroots=self.nstates, lindep=self.lindep,
-                                  max_space=self.max_space, pick=pickeig,
-                                  verbose=self.verbose)
+            converged, e, x1 = lr_eigh(
+                vind, x0k, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+                nroots=self.nstates, pick=pickeig, max_cycle=self.max_cycle,
+                max_memory=self.max_memory, verbose=log)
             self.converged.append( converged )
             self.e.append( e )
             # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
@@ -344,8 +341,6 @@ CIS = KTDA = TDA
 
 
 class TDHF(KTDBase):
-
-    conv_tol = 1e-5
 
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None, kshift=0):
@@ -483,9 +478,9 @@ class TDHF(KTDBase):
                 x0k = x0[i]
 
             converged, e, x1 = lr_eig(
-                vind, x0k, precond, tol_residual=self.conv_tol, nroots=self.nstates,
-                lindep=self.lindep, max_cycle=self.max_cycle,
-                max_space=self.max_space, pick=pickeig, verbose=log)
+                vind, x0k, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+                nroots=self.nstates, pick=pickeig, max_cycle=self.max_cycle,
+                max_memory=self.max_memory, verbose=log)
             self.converged.append( converged )
             self.e.append( e )
             self.xy.append( [norm_xy(z, kconserv) for z in x1] )

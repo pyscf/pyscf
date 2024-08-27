@@ -525,7 +525,6 @@ def gen_tdhf_operation(mf, fock_ao=None):
 
 class TDHF(TDBase):
 
-    conv_tol = 1e-4
     singlet = None
 
     @lib.with_doc(gen_tdhf_operation.__doc__)

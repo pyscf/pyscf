@@ -21,7 +21,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.tdscf import uhf
-from pyscf.tdscf._lr_eig import eig as lr_eig
+from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf.pbc import scf
 from pyscf.pbc.tdscf.krhf import KTDBase, _get_e_ia
 from pyscf.pbc.lib.kpts_helper import is_gamma_point
@@ -146,14 +146,10 @@ class TDA(KTDBase):
             else:
                 x0k = x0[i]
 
-            converged, e, x1 = \
-                    lib.davidson1(vind, x0k, precond,
-                                  tol=self.conv_tol,
-                                  max_cycle=self.max_cycle,
-                                  nroots=self.nstates,
-                                  lindep=self.lindep,
-                                  max_space=self.max_space, pick=pickeig,
-                                  verbose=self.verbose)
+            converged, e, x1 = lr_eigh(
+                vind, x0k, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+                nroots=self.nstates, pick=pickeig, max_cycle=self.max_cycle,
+                max_memory=self.max_memory, verbose=log)
             self.converged.append( converged )
             self.e.append( e )
             self.xy.append( [(_unpack(xi, mo_occ, kconserv),  # (X_alpha, X_beta)
@@ -296,9 +292,9 @@ class TDHF(KTDBase):
                 x0k = x0[i]
 
             converged, w, x1 = lr_eig(
-                vind, x0k, precond, tol_residual=self.conv_tol, nroots=self.nstates,
-                lindep=self.lindep, max_cycle=self.max_cycle,
-                max_space=self.max_space, pick=pickeig, verbose=log)
+                vind, x0k, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+                nroots=self.nstates, pick=pickeig, max_cycle=self.max_cycle,
+                max_memory=self.max_memory, verbose=log)
             self.converged.append( converged )
 
             e = []

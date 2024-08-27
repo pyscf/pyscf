@@ -660,7 +660,6 @@ class TDBase(lib.StreamObject):
     singlet = getattr(__config__, 'tdscf_rhf_TDA_singlet', True)
     lindep = getattr(__config__, 'tdscf_rhf_TDA_lindep', 1e-12)
     level_shift = getattr(__config__, 'tdscf_rhf_TDA_level_shift', 0)
-    max_space = getattr(__config__, 'tdscf_rhf_TDA_max_space', 50)
     max_cycle = getattr(__config__, 'tdscf_rhf_TDA_max_cycle', 100)
     # Low excitation filter to avoid numerical instability
     positive_eig_threshold = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
@@ -668,7 +667,7 @@ class TDBase(lib.StreamObject):
     deg_eia_thresh = getattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-3)
 
     _keys = {
-        'conv_tol', 'nstates', 'singlet', 'lindep', 'level_shift', 'max_space',
+        'conv_tol', 'nstates', 'singlet', 'lindep', 'level_shift',
         'max_cycle', 'mol', 'chkfile', 'wfnsym', 'converged', 'e', 'xy',
     }
 
@@ -716,7 +715,6 @@ class TDBase(lib.StreamObject):
         log.info('conv_tol = %g', self.conv_tol)
         log.info('eigh lindep = %g', self.lindep)
         log.info('eigh level_shift = %g', self.level_shift)
-        log.info('eigh max_space = %d', self.max_space)
         log.info('eigh max_cycle = %d', self.max_cycle)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
@@ -1006,8 +1004,6 @@ class TDHF(TDBase):
             excited state.  (X,Y) are normalized to 1/2 in RHF/RKS methods and
             normalized to 1 for UHF/UKS methods. In the TDA calculation, Y = 0.
     '''
-
-    conv_tol = 1e-4
 
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
