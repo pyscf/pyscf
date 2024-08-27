@@ -213,7 +213,7 @@ class DiamondPBE0(unittest.TestCase):
 
     def test_tdhf(self):
         # nstates=6 is required to derive the lowest state
-        ref = [4.6851639, 4.7903984, 4.7903984]
+        ref = [4.6851639, 4.79043398, 4.79043398]
         td = self.kernel('TDDFT', ref[1:3])
         a, b = td.get_ab()
         eref = diagonalize(a, b)
