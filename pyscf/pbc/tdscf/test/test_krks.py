@@ -158,7 +158,7 @@ class DiamondPBE0(unittest.TestCase):
 
     def test_tdhf_singlet(self):
         ref = [[9.25192096, 9.32080304]]
-        td = self.kernel('TDDFT', ref)
+        td = self.kernel('TDDFT', ref, conv_tol=1e-6)
         a, b = td.get_ab(kshift=0)
         eref = diagonalize(a, b)
         self.assertAlmostEqual(abs(td.e[0][:2] - eref[:2]).max(), 0, 8)

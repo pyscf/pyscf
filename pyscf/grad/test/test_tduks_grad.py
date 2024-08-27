@@ -104,7 +104,7 @@ class KnownValues(unittest.TestCase):
         mf = dft.UKS(mol).set(conv_tol=1e-12)
         mf.xc = '.2*HF + .8*b88, vwn'
         mf.scf()
-        td = tdscf.TDDFT(mf).run(nstates=nstates)
+        td = tdscf.TDDFT(mf).run(nstates=nstates, conv_tol=1e-6)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -0.80446691153291727, 6)

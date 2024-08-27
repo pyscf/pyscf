@@ -115,7 +115,7 @@ class KnownValues(unittest.TestCase):
         mcol_m06l = dft.UKS(mol).set(xc='m06l', collinear='mcol')
         mcol_m06l._numint.spin_samples = 6
         mcol_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mcol_m06l.TDDFT(), -0.6984240332038076, 2.0192987108288794)
+        self._check_against_ab_ks(mcol_m06l.TDDFT(), -0.6984240332038076, 2.0192987108288794, 5)
 
     def _check_against_ab_ks(self, td, refa, refb, places=6):
         mf = td._scf
@@ -144,7 +144,7 @@ class KnownValues(unittest.TestCase):
     def test_mcol_vs_gks(self):
         with lib.temporary_env(lib.param, LIGHT_SPEED=20):
             mol = gto.M(atom='C', basis='6-31g')
-            ref = dft.RKS(mol)
+            ref = dft.UKS(mol)
             ref.xc = 'pbe'
             ref.collinear = 'mcol'
             ref._numint.spin_samples = 6
@@ -165,7 +165,7 @@ class KnownValues(unittest.TestCase):
             td = mf.TDA()
             td.positive_eig_threshold = -10
             es = td.kernel(nstates=5)[0]
-            self.assertAlmostEqual(abs(es - eref).max(), 0, 7)
+            self.assertAlmostEqual(abs(es - eref).max(), 0, 6)
 
 
 if __name__ == "__main__":

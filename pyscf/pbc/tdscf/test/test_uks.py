@@ -212,11 +212,12 @@ class DiamondPBE0(unittest.TestCase):
         self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 8)
 
     def test_tdhf(self):
-        ref = [4.68534716, 4.79043398]
-        td = self.kernel('TDDFT', ref)
+        # nstates=6 is required to derive the lowest state
+        ref = [4.6851639, 4.7903984, 4.7903984]
+        td = self.kernel('TDDFT', ref[1:3])
         a, b = td.get_ab()
         eref = diagonalize(a, b)
-        self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 8)
+        self.assertAlmostEqual(abs(td.e[:2] - eref[1:3]).max(), 0, 8)
 
 
 class WaterBigBoxPBE0(unittest.TestCase):
