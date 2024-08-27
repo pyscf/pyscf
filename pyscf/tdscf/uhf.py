@@ -24,7 +24,6 @@ from pyscf import symm
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.scf import uhf_symm
-from pyscf.scf import _response_functions
 from pyscf.tdscf import rhf
 from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf.data import nist
@@ -619,7 +618,6 @@ class TDBase(rhf.TDBase):
 @lib.with_doc(rhf.TDA.__doc__)
 class TDA(TDBase):
 
-    conv_tol = 1e-5
     singlet = None
 
     def gen_vind(self, mf=None):

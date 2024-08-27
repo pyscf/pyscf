@@ -17,12 +17,8 @@
 #
 
 
-import numpy
 from pyscf import lib
 from pyscf.tdscf import dhf
-from pyscf.data import nist
-from pyscf.dft.rks import KohnShamDFT
-from pyscf import __config__
 
 
 class TDA(dhf.TDA):

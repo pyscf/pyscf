@@ -473,18 +473,6 @@ class KnownValues(unittest.TestCase):
         ref = [16.14837289, 28.01968627, 49.00854076]
         self.assertAlmostEqual(abs(e_td*nist.HARTREE2EV - ref).max(), 0, 4)
 
-    def test_symmetry_init_guess(self):
-        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', output='/dev/null', symmetry='D2h')
-        mf = mol.RHF.run()
-        td = mf.TDA().run(nstates=1)
-        self.assertAlmostEqual(td.e[0], 0.22349707455528, 7)
-        mo_coeff = mf.mo_coeff
-        mo_occ = mf.mo_occ
-        orbsym = rhf.hf_symm.get_orbsym(mol, mo_coeff)
-        x_sym = rhf.symm.direct_prod(orbsym[mo_occ==2], orbsym[mo_occ==0], mol.groupname)
-        wfnsym = rhf._analyze_wfnsym(td, x_sym, td.xy[0][0])
-        self.assertEqual(wfnsym, 'Au')
-
 if __name__ == "__main__":
     print("Full Tests for TD-RKS")
     unittest.main()

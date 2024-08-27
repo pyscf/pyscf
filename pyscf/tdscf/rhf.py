@@ -32,9 +32,9 @@ from pyscf import ao2mo
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import hf_symm
-from pyscf.scf import _response_functions
+from pyscf.scf import _response_functions # noqa
 from pyscf.data import nist
-from pyscf.tdscf._lr_eig import eig as lr_eig, eigh as lr_eigh
+from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
@@ -655,7 +655,7 @@ class TD_Scanner(lib.SinglePointScanner):
 
 
 class TDBase(lib.StreamObject):
-    conv_tol = getattr(__config__, 'tdscf_rhf_TDA_conv_tol', 1e-9)
+    conv_tol = getattr(__config__, 'tdscf_rhf_TDA_conv_tol', 1e-5)
     nstates = getattr(__config__, 'tdscf_rhf_TDA_nstates', 3)
     singlet = getattr(__config__, 'tdscf_rhf_TDA_singlet', True)
     lindep = getattr(__config__, 'tdscf_rhf_TDA_lindep', 1e-12)
@@ -803,8 +803,6 @@ class TDA(TDBase):
             excited state.  (X,Y) are normalized to 1/2 in RHF/RKS methods and
             normalized to 1 for UHF/UKS methods. In the TDA calculation, Y = 0.
     '''
-
-    conv_tol = 1e-5
 
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''

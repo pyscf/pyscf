@@ -26,8 +26,6 @@ from pyscf import lib
 from pyscf import symm
 from pyscf.tdscf import rhf
 from pyscf.tdscf._lr_eig import eigh as lr_eigh
-from pyscf.scf import hf_symm
-from pyscf.data import nist
 from pyscf.dft.rks import KohnShamDFT
 from pyscf import __config__
 
@@ -47,7 +45,7 @@ RPA = TDRKS = TDDFT
 class CasidaTDDFT(TDDFT, TDA):
     '''Solve the Casida TDDFT formula (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
-    conv_tol = 1e-5
+
     init_guess = TDA.init_guess
 
     def gen_vind(self, mf=None):

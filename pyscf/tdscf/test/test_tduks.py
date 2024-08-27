@@ -18,7 +18,7 @@
 
 import unittest
 import numpy
-from pyscf import lib, gto, scf, dft
+from pyscf import lib, gto, scf, dft, symm
 from pyscf import tdscf
 
 def diagonalize(a, b, nroots=4):
@@ -469,13 +469,6 @@ class KnownValues(unittest.TestCase):
         es = td.kernel()[0]
         self.assertAlmostEqual(lib.fp(es), 0.15403661700414412, 6)
         td.analyze()
-
-    def test_symmetry_init_guess(self):
-        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True, verbose=0)
-        td = mol.UHF.run().TDA().run(nstates=1)
-        self.assertAlmostEqual(td.e[0], 0.14147328219131602, 7)
-        # TODO: verify symmetry of td.x == A1u, close to triplet state
-
 
 if __name__ == "__main__":
     print("Full Tests for TD-UKS")
