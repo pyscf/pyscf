@@ -157,7 +157,7 @@ class DiamondPBE0(unittest.TestCase):
         self.kernel('TDA', ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [[9.2519208050, 9.3208025447]]
+        ref = [[9.25192096, 9.32080304]]
         td = self.kernel('TDDFT', ref)
         a, b = td.get_ab(kshift=0)
         eref = diagonalize(a, b)

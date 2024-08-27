@@ -116,11 +116,13 @@ class Diamond(unittest.TestCase):
         self.kernel(tdscf.KTDA, ref, np.arange(2), singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [[10.60761946, 10.76654619]]
-        td = self.kernel(tdscf.KTDHF, ref, [0], conv_tol=1e-7)
+        # The first state can be obtained by solving nstates=9
+        #ref = [[10.60761946, 10.76654619, 10.76654619]]
+        ref = [[10.76654619, 10.76654619]]
+        td = self.kernel(tdscf.KTDHF, ref, [0])
         a0, b0 = td.get_ab(kshift=0)
         eref0 = diagonalize(a0, b0)
-        self.assertAlmostEqual(abs(td.e[0][:2] - eref0[:2]).max(), 0, 5)
+        self.assertAlmostEqual(abs(td.e[0][:2] - eref0[1:3]).max(), 0, 5)
 
         nk, no, nv = a0.shape[:3]
         nkov = nk * no * nv

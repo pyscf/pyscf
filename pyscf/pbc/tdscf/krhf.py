@@ -279,7 +279,7 @@ class TDA(KTDBase):
 
         nov = e_ia.size
         nstates = min(nstates, nov)
-        e_threshold = numpy.sort(e_ia)[nstates-1]
+        e_threshold = numpy.partition(e_ia, nstates-1)[nstates-1]
         e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
