@@ -26,6 +26,7 @@ def setUpModule():
         ['H' , (0. , 0. , .917)],
         ['F' , (0. , 0. , 0.)], ]
     mol.basis = '631g'
+    mol.symmetry = True
     mol.build()
     mf = scf.RHF(mol).run()
     nstates = 5 # make sure first 3 states are converged
@@ -38,6 +39,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_tda_singlet(self):
         td = mf.TDA().set(nstates=nstates)
+        td.max_memory = 1e-3
         e = td.kernel()[0]
         ref = [11.90276464, 11.90276464, 16.86036434]
         self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)

@@ -28,6 +28,7 @@ from pyscf.tdscf import rhf
 from pyscf.scf import hf_symm
 from pyscf.data import nist
 from pyscf.dft.rks import KohnShamDFT
+from pyscf.tdscf._lr_eig import eigh as lr_eigh
 from pyscf import __config__
 
 
@@ -46,6 +47,7 @@ RPA = TDRKS = TDDFT
 class CasidaTDDFT(TDDFT, TDA):
     '''Solve the Casida TDDFT formula (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
+    conv_tol = 1e-5
     init_guess = TDA.init_guess
 
     def gen_vind(self, mf=None):
@@ -125,16 +127,20 @@ class CasidaTDDFT(TDDFT, TDA):
             idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
 
+        x0sym = None
         if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
+            x0, x0sym = self.init_guess(
+                self._scf, self.nstates, return_symmetry=True)
+        elif mol.symmetry:
+            mo_occ = self._scf.mo_occ
+            orbsym = hf_symm.get_orbsym(mol, self._scf.mo_coeff) % 10
+            x_sym = (orbsym[mo_occ==2,None] ^ orbsym[mo_occ==0]).ravel()
+            x0sym = [rhf._guess_wfnsym_id(self, x_sym, x) for x in x0]
 
-        self.converged, w2, x1 = \
-                lib.davidson1(vind, x0, precond,
-                              tol=self.conv_tol,
-                              nroots=nstates, lindep=self.lindep,
-                              max_cycle=self.max_cycle,
-                              max_space=self.max_space, pick=pickeig,
-                              verbose=log)
+        self.converged, w2, x1 = lr_eigh(
+            vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+            nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
+            max_memory=self.max_memory, verbose=log)
 
         mo_energy = self._scf.mo_energy
         mo_occ = self._scf.mo_occ

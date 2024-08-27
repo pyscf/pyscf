@@ -25,6 +25,7 @@ def setUpModule():
         ['H' , (0. , 0. , .917)],
         ['F' , (0. , 0. , 0.)], ]
     mol.basis = '631g'
+    mol.symmetry = True
     mol.build()
     mf = scf.UHF(mol).run(conv_tol=1e-10)
 

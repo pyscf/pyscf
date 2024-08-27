@@ -522,8 +522,8 @@ def analyze(tdobj, verbose=None):
             log.note('Excited State %3d: %12.5f eV %9.2f nm  f=%.4f',
                      i+1, e_ev[i], wave_length[i], f_oscillator[i])
         else:
-            wfnsyma = rhf.analyze_wfnsym(tdobj, x_syma, x[0])
-            wfnsymb = rhf.analyze_wfnsym(tdobj, x_symb, x[1])
+            wfnsyma = rhf._analyze_wfnsym(tdobj, x_syma, x[0])
+            wfnsymb = rhf._analyze_wfnsym(tdobj, x_symb, x[1])
             if wfnsyma == wfnsymb:
                 wfnsym = wfnsyma
             else:
