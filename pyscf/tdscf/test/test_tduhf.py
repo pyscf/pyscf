@@ -57,6 +57,7 @@ class KnownValues(unittest.TestCase):
         td = mf.TDHF()
         td.nstates = 5
         td.singlet = False
+        td.conv_tol = 1e-5
         e = td.kernel()[0]
         ref = [10.89192986, 10.89192986, 11.83487865, 11.83487865, 12.6344099]
         self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 4)

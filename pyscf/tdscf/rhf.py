@@ -66,9 +66,8 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         if isinstance(wfnsym, str):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-        orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
-        sym_forbid = (orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym
+        x_sym = _get_x_sym_table(mf)
+        sym_forbid = x_sym != wfnsym
 
     if fock_ao is None:
         e_ia = hdiag = mo_energy[viridx] - mo_energy[occidx,None]
@@ -106,6 +105,14 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
     return vind, hdiag
 gen_tda_hop = gen_tda_operation
+
+def _get_x_sym_table(mf):
+    '''Irrep (up to D2h symmetry) of each coefficient in X[nocc,nvir]'''
+    mol = mf.mol
+    mo_occ = mf.mo_occ
+    orbsym = hf_symm.get_orbsym(mol, mf.mo_coeff)
+    orbsym = orbsym % 10  # convert to D2h irreps
+    return orbsym[mo_occ==2,None] ^ orbsym[mo_occ==0]
 
 def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     r'''A and B matrices for TDDFT response function.
@@ -829,9 +836,7 @@ class TDA(TDBase):
         nstates = min(nstates, nov)
 
         if (wfnsym is not None or return_symmetry) and mf.mol.symmetry:
-            orbsym = hf_symm.get_orbsym(mf.mol, mf.mo_coeff)
-            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
-            x_sym = (orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]).ravel()
+            x_sym = _get_x_sym_table(mf).ravel()
             if wfnsym is not None:
                 if isinstance(wfnsym, str):
                     wfnsym = symm.irrep_name2id(mf.mol.groupname, wfnsym)
@@ -840,7 +845,7 @@ class TDA(TDBase):
                 nov_allowed = numpy.count_nonzero(x_sym == wfnsym)
                 nstates = min(nstates, nov_allowed)
 
-        # The nstates-th lowest energy gap
+        # Find the nstates-th lowest energy gap
         e_threshold = numpy.partition(e_ia, nstates-1)[nstates-1]
         e_threshold += self.deg_eia_thresh
 
@@ -884,9 +889,7 @@ class TDA(TDBase):
             x0, x0sym = self.init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
-            mo_occ = self._scf.mo_occ
-            orbsym = hf_symm.get_orbsym(mol, self._scf.mo_coeff) % 10
-            x_sym = (orbsym[mo_occ==2,None] ^ orbsym[mo_occ==0]).ravel()
+            x_sym = _get_x_sym_table(self._scf).ravel()
             x0sym = [_guess_wfnsym_id(self, x_sym, x) for x in x0]
 
         self.converged, self.e, x1 = lr_eigh(
@@ -936,9 +939,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         if isinstance(wfnsym, str):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-        orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
-        sym_forbid = (orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym
+        sym_forbid = _get_x_sym_table(mf) != wfnsym
 
     assert fock_ao is None
 
@@ -1065,9 +1066,8 @@ class TDHF(TDBase):
             x0, x0sym = self.init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
-            mo_occ = self._scf.mo_occ
-            orbsym = hf_symm.get_orbsym(mol, self._scf.mo_coeff) % 10
-            x_sym = (orbsym[mo_occ==2,None] ^ orbsym[mo_occ==0]).ravel()
+            x_sym = y_sym = _get_x_sym_table(self._scf).ravel()
+            x_sym = numpy.append(x_sym, y_sym)
             x0sym = [_guess_wfnsym_id(self, x_sym, x) for x in x0]
 
         self.converged, w, x1 = lr_eig(
