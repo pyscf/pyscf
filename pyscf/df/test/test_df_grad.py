@@ -22,6 +22,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf import dft
 from pyscf import ao2mo
 from pyscf import df
 from pyscf import mcscf
@@ -44,6 +45,15 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_rhf_grad(self):
         gref = scf.RHF(mol).run().nuc_grad_method().kernel()
         g1 = scf.RHF(mol).density_fit().run().nuc_grad_method().kernel()

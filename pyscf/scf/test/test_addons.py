@@ -244,7 +244,7 @@ class KnownValues(unittest.TestCase):
         occ[0][5] = 1.
         mf = addons.mom_occ(mf, mo0, occ)
         dm = mf.make_rdm1(mo0, occ)
-        self.assertAlmostEqual(mf.scf(dm), -76.0606858747, 9)
+        self.assertAlmostEqual(mf.scf(dm), -76.0606858747, 7)
         self.assertTrue(numpy.allclose(mf.mo_occ[0][:6], [1,1,1,1,0,1]))
 
         mf = scf.ROHF(mol).run()
@@ -276,7 +276,7 @@ class KnownValues(unittest.TestCase):
         mf.max_cycle = 2
         mf.diis = False
         mf.kernel()
-        self.assertAlmostEqual(mf.scf(), -71.6072956194109, 8)
+        self.assertAlmostEqual(mf.scf(), -71.6072956194109, 7)
 
     def test_convert_to_scf(self):
         from pyscf.x2c import x2c

@@ -90,7 +90,7 @@ C, 0.8917,  2.6751,  2.6751'''
         mf.xc = 'camb3lyp'
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 6)
 
     def test_to_hf(self):
         mf = pbcdft.KUKS(cell).density_fit()

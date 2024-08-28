@@ -20,6 +20,7 @@ import unittest
 import tempfile
 import numpy
 from pyscf import lib, gto, scf
+from pyscf.dft import radi
 from pyscf.x2c import x2c, dft, tdscf
 try:
     import mcfun
@@ -60,6 +61,15 @@ def diagonalize(a, b, nroots=4):
     return lowest_e
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_tddft_lda(self):
         td = mf_lda.TDDFT()
         es = td.kernel(nstates=4)[0]

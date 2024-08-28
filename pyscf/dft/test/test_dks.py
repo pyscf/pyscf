@@ -17,6 +17,7 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import lib
+from pyscf import dft
 from pyscf.dft import dks
 try:
     import mcfun
@@ -58,6 +59,16 @@ def tearDownModule():
     del mol, mol1
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
+
     def test_ncol_dks_lda_omega_high_cost(self):
         mf = dks.UDKS(mol)
         mf.xc = 'lda + .2*HF'

@@ -33,7 +33,7 @@ COVALENT_RADII = radii.COVALENT
 # numerical integration, potentially leading to differences of ~ 1e-6 per atom
 # in total energy.
 # Enable this flag to ensure results are comparable across different packages.
-ATOM_SPECIFIC_TREUTLER_GRIDS = False
+ATOM_SPECIFIC_TREUTLER_GRIDS = getattr(__config__, 'ATOM_SPECIFIC_TREUTLER_GRIDS', False)
 
 # P.M.W. Gill, B.G. Johnson, J.A. Pople, Chem. Phys. Letters 209 (1993) 506-512
 SG1RADII = numpy.array((

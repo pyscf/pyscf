@@ -17,11 +17,20 @@
 
 import unittest
 from pyscf import gto
-from pyscf import scf
+from pyscf import scf, dft
 from pyscf.sgx import sgx
 
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_reset(self):
         mol = gto.M(atom='He')
         mol1 = gto.M(atom='C')
