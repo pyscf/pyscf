@@ -35,12 +35,19 @@ class KnownValues(unittest.TestCase):
             basis = 'cc-pvdz',
         )
         auxbasis = df.addons.aug_etb(mol)
-        self.assertEqual(len(auxbasis['O']), 42)
-        self.assertEqual(len(auxbasis['H']), 13)
+        if df.addons.USE_VERSION_26_AUXBASIS:
+            self.assertEqual(len(auxbasis['O']), 36)
+            self.assertEqual(len(auxbasis['H']), 12)
+        else:
+            self.assertEqual(len(auxbasis['O']), 42)
+            self.assertEqual(len(auxbasis['H']), 13)
 
         auxbasis = df.addons.autoaux(mol)
         self.assertEqual(len(auxbasis['O']), 37)
-        self.assertEqual(len(auxbasis['H']), 13)
+        # If basis-set-exchange pacakge is installed, this test will fail.
+        # bse-0.9 produces 13 shells due to round-off errors.
+        # The correct number of generated basis functions should be 12. 
+        self.assertEqual(len(auxbasis['H']), 12)
 
         mol = gto.M(
             verbose = 0,
@@ -50,8 +57,12 @@ class KnownValues(unittest.TestCase):
             basis = ('cc-pvdz', [[4, (1., 1.)]])
         )
         auxbasis = df.addons.aug_etb(mol)
-        self.assertEqual(len(auxbasis['O']), 59)
-        self.assertEqual(len(auxbasis['H']), 16)
+        if df.addons.USE_VERSION_26_AUXBASIS:
+            self.assertEqual(len(auxbasis['O']), 36)
+            self.assertEqual(len(auxbasis['H']), 12)
+        else:
+            self.assertEqual(len(auxbasis['O']), 59)
+            self.assertEqual(len(auxbasis['H']), 16)
 
         auxbasis = df.addons.autoaux(mol)
         self.assertEqual(len(auxbasis['O']), 47)
@@ -80,8 +91,12 @@ class KnownValues(unittest.TestCase):
                      'O': ('631g', [[0, 0, (1., 1.)]])}
         )
         auxbasis = df.addons.make_auxbasis(mol)
-        self.assertEqual(len(auxbasis['O']), 35)
-        self.assertEqual(len(auxbasis['H']), 3)
+        if df.addons.USE_VERSION_26_AUXBASIS:
+            self.assertEqual(len(auxbasis['O']), 32)
+            self.assertEqual(len(auxbasis['H']), 3)
+        else:
+            self.assertEqual(len(auxbasis['O']), 35)
+            self.assertEqual(len(auxbasis['H']), 3)
 
     def test_default_auxbasis(self):
         mol = gto.M(atom='He 0 0 0; O 0 0 1', basis='ccpvdz')

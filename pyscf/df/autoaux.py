@@ -53,9 +53,18 @@ def _primitive_emin_emax(basis):
         r_exp = np.einsum('pi,pq,qi->i', cs, r_ints, cs)
 
         k = 2**(2*l+1) * factorial(l+1)**2 / factorial(2*l+2)
-        # Eq (9) in the paper. r_exp**2 in the denominator may be a bug in bse
+        # Eq (9) in the paper
         #e_eff = 2 * k**2 / (np.pi * r_exp)
+        # r_exp**2 is applied in bse. For primitive functions, this leads to
+        # e_eff = exponent of the basis
         e_eff = 2 * k**2 / (np.pi * r_exp**2)
+        # For primitive functions, e_eff may be slightly different to the
+        # exponent due to the rounding errors in gaussian_int function.
+        # When a particular shell has only one primitive function, one auxiliary
+        # function should be generated. This error can introduce an additional
+        # auxiliary function.
+        # Slightly reduce e_eff to remove the extra auxiliary functions.
+        e_eff -= 1e-8
         e_eff_by_l[l] = max(e_eff.max(), e_eff_by_l[l])
     return np.array(emax_by_l), np.array(emin_by_l), np.array(e_eff_by_l)
 
@@ -131,6 +140,9 @@ def autoaux(mol):
         raise RuntimeError(f'Failed to generate even-tempered auxbasis for {symb}')
 
     uniq_atoms = {a[0] for a in mol._atom}
+    if bse.basis_set_exchange is None:
+        return {symb: expand(symb) for symb in uniq_atoms}
+
     if isinstance(mol.basis, str):
         try:
             elements = [gto.charge(symb) for symb in uniq_atoms]
@@ -160,6 +172,10 @@ def autoabs(mol):
     http://doi.org/10.1063/1.2752807
     '''
     from pyscf.gto.basis import bse
+    if bse is None:
+        print('Package basis-set-exchange not available')
+        raise ImportError
+
     uniq_atoms = {a[0] for a in mol._atom}
     if isinstance(mol.basis, str):
         elements = [gto.charge(symb) for symb in uniq_atoms]
