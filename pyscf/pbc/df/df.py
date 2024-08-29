@@ -637,12 +637,12 @@ class CDERIArray:
         if self.aosym == 's1' or kikj == kjki:
             dat = self.j3c[str(kikj)]
             nsegs = len(dat)
-            out = numpy.hstack([dat[str(i)][slices] for i in range(nsegs)])
+            out = _hstack_datasets([dat[str(i)] for i in range(nsegs)], slices)
         elif self.aosym == 's2':
             dat_ij = self.j3c[str(kikj)]
             dat_ji = self.j3c[str(kjki)]
-            tril = numpy.hstack([dat_ij[str(i)][slices] for i in range(len(dat_ij))])
-            triu = numpy.hstack([dat_ji[str(i)][slices] for i in range(len(dat_ji))])
+            tril = _hstack_datasets([dat_ij[str(i)] for i in range(len(dat_ij))], slices)
+            triu = _hstack_datasets([dat_ji[str(i)] for i in range(len(dat_ji))], slices)
             assert tril.dtype == numpy.complex128
             naux = self.naux
             nao = self.nao
@@ -807,7 +807,7 @@ class _load_and_unpack:
     def __getitem__(self, s):
         dat = self.dat
         if isinstance(dat, h5py.Group):
-            v = numpy.hstack([dat[str(i)][s] for i in range(len(dat))])
+            v = _hstack_datasets([dat[str(i)] for i in range(len(dat))], s)
         else: # For mpi4pyscf, pyscf-1.5.1 or older
             v = numpy.asarray(dat[s])
 
@@ -831,6 +831,65 @@ class _load_and_unpack:
         else: # For mpi4pyscf, pyscf-1.5.1 or older
             return dat.shape
 
+def _hstack_datasets(data_to_stack, slices=None):
+    """Faster version of numpy.hstack for h5py datasets
+
+    Parameters
+    ----------
+    data_to_stack : list of h5py.Dataset or np.ndarray
+        Datasets/arrays to be stacked along first axis
+    slices: tuple of slices, or just one slice, along the lines of numpy.s_.
+
+    Returns
+    -------
+    numpy.ndarray
+        The stacked data, equal to numpy.hstack([dset[slices] for dset in data_to_stack])
+    """
+    sliced_dims = []
+    shapes = [x.shape for x in data_to_stack]
+
+    # Step 1. Calculate the shapes of dset[slices] for all dset in data_to_stack.
+    # These shapes are stored in sliced_dims.
+    if isinstance(slices, tuple) or isinstance(slices, list):
+        for i, t in enumerate(slices):
+            ts = numpy.s_[t]
+            if i == 1:
+                sliced_dims.append([
+                    len(range(sh[i])[ts]) for sh in shapes
+                ])
+            else:
+                # Except along axis 1, the dimensions need to be the same.
+                # Don't worry, if they aren't, an error gets raised later.
+                sliced_dims.append([
+                    len(range(shapes[0])[ts])
+                ])
+        res_shape = sliced_dims
+        ax1widths_sliced = sliced_dims[1]
+        res_shape[1] = sum(ax1widths_sliced)
+    else:
+        # If slices is not a tuple, we assume it acts on axis 0 only.
+        res_shape = list(shapes[0])
+        ax1widths_sliced = [sh[1] for sh in shapes]
+        res_shape[0] = len(range(shapes[0][0])[slices])
+
+    # Allocate the output array
+    out = numpy.empty(res_shape, dtype=numpy.result_type(*data_to_stack))
+    ax1ind = 0
+    for i, dset in enumerate(data_to_stack):
+        ax1width = ax1widths_sliced[i]
+        if hasattr(dset, 'read_direct'):
+            # For h5py datasets, use read_direct
+            dset.read_direct(
+                out,
+                source_sel=slices,
+                dest_sel=numpy.s_[:, ax1ind:ax1ind + ax1width],
+            )
+        else:
+            # For array-like objects
+            out[:, ax1ind:ax1ind + ax1width] = dset
+        ax1ind += ax1width
+    return out
+
 class _KPair3CLoader:
     def __init__(self, dat, ki, kj, nkpts, aosym):
         self.dat = dat
@@ -843,12 +902,12 @@ class _KPair3CLoader:
     def __getitem__(self, s):
         if self.aosym == 's1' or self.kikj == self.kjki:
             dat = self.dat[str(self.kikj)]
-            out = numpy.hstack([dat[str(i)][s] for i in range(self.nsegs)])
+            out = _hstack_datasets([dat[str(i)] for i in range(self.nsegs)], s)
         elif self.aosym == 's2':
             dat_ij = self.dat[str(self.kikj)]
             dat_ji = self.dat[str(self.kjki)]
-            tril = numpy.hstack([dat_ij[str(i)][s] for i in range(self.nsegs)])
-            triu = numpy.hstack([dat_ji[str(i)][s] for i in range(self.nsegs)])
+            tril = _hstack_datasets([dat_ij[str(i)] for i in range(self.nsegs)], s)
+            triu = _hstack_datasets([dat_ji[str(i)] for i in range(self.nsegs)], s)
             assert tril.dtype == numpy.complex128
             naux, nao_pair = tril.shape
             nao = int((nao_pair * 2)**.5)
