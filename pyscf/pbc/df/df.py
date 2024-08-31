@@ -845,35 +845,33 @@ def _hstack_datasets(data_to_stack, slices=None):
     numpy.ndarray
         The stacked data, equal to numpy.hstack([dset[slices] for dset in data_to_stack])
     """
-    sliced_dims = []
-    shapes = [x.shape for x in data_to_stack]
+    # Step 1. Calculate the shape of the output array, and store it
+    # in res_shape.
+    res_shape = list(data_to_stack[0].shape)
+    dset_shapes = [x.shape for x in data_to_stack]
 
-    # Step 1. Calculate the shapes of dset[slices] for all dset in data_to_stack.
-    # These shapes are stored in sliced_dims.
-    if isinstance(slices, tuple) or isinstance(slices, list):
-        for i, t in enumerate(slices):
-            ts = numpy.s_[t]
-            if i == 1:
-                sliced_dims.append([
-                    len(range(sh[i])[ts]) for sh in shapes
-                ])
-            else:
-                # Except along axis 1, the dimensions need to be the same.
-                # Don't worry, if they aren't, an error gets raised later.
-                sliced_dims.append([
-                    len(range(shapes[0])[ts])
-                ])
-        res_shape = sliced_dims
-        ax1widths_sliced = sliced_dims[1]
-        res_shape[1] = sum(ax1widths_sliced)
-    else:
-        # If slices is not a tuple, we assume it acts on axis 0 only.
-        res_shape = list(shapes[0])
-        ax1widths_sliced = [sh[1] for sh in shapes]
-        res_shape[0] = len(range(shapes[0][0])[slices])
+    if not (isinstance(slices, tuple) or isinstance(slices, list)):
+        # If slices is not a tuple, we assume it is a single slice acting on axis 0 only.
+        slices = (slices,)
 
-    # Allocate the output array
+    for i, t in enumerate(slices):
+        ts = numpy.s_[t]
+        if i == 1:
+            ax1widths_sliced = [len(range(sh[1])[ts]) for sh in dset_shapes]
+        else:
+            # Except along axis 1, we assume the dimensions of all datasets are the same.
+            # If they aren't, an error gets raised later.
+            res_shape[i] = len(range(res_shape[i])[ts])
+    if len(slices) <= 1:
+        ax1widths_sliced = [sh[1] for sh in dset_shapes]
+
+    # Final dim along axis 1 is the sum of the post-slice axis 1 widths.
+    res_shape[1] = sum(ax1widths_sliced)
+
+    # Step 2. Allocate the output buffer
     out = numpy.empty(res_shape, dtype=numpy.result_type(*data_to_stack))
+
+    # Step 3. Read data into the output buffer.
     ax1ind = 0
     for i, dset in enumerate(data_to_stack):
         ax1width = ax1widths_sliced[i]
