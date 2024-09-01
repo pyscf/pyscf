@@ -1407,7 +1407,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
 
 def solve(aop, b, precond=None, tol=1e-12, max_cycle=60, dot=numpy.dot,
           lindep=DSOLVE_LINDEP, verbose=0, tol_residual=None):
-    '''Solve linear equation using the scipy.sparse module
+    '''Solve a linear equation using the GMRES solver from the scipy.sparse module.
     '''
     from scipy.sparse.linalg import gmres, LinearOperator
     assert b.ndim == 1
