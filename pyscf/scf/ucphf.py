@@ -67,25 +67,26 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
     mo1base = numpy.hstack((h1[0].reshape(-1,nvira*nocca),
                             h1[1].reshape(-1,nvirb*noccb)))
     mo1base *= -e_ai
+    nov = e_ai.size
 
     def vind_vo(mo1):
-        mo1 = mo1.reshape(mo1base.shape)
-        v = fvind(mo1).reshape(mo1base.shape)
+        nd = mo1.shape[0]
+        v = fvind(mo1).reshape(nd, nov)
         if level_shift != 0:
             v -= mo1 * level_shift
         v *= e_ai
-        return v.ravel()
-    mo1 = lib.krylov(vind_vo, mo1base.ravel(),
+        return v.reshape(-1, nov)
+    mo1 = lib.krylov(vind_vo, mo1base.reshape(-1, nov),
                      tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
     log.timer('krylov solver in CPHF', *t0)
 
+    mo1 = mo1.reshape(mo1base.shape)
+    mo1_a = mo1[:,:nvira*nocca].reshape(-1,nvira,nocca)
+    mo1_b = mo1[:,nvira*nocca:].reshape(-1,nvirb,noccb)
     if isinstance(h1[0], numpy.ndarray) and h1[0].ndim == 2:
-        mo1 = (mo1[:nocca*nvira].reshape(nvira,nocca),
-               mo1[nocca*nvira:].reshape(nvirb,noccb))
+        mo1 = (mo1_a[0], mo1_b[0])
     else:
-        mo1 = mo1.reshape(mo1base.shape)
-        mo1_a = mo1[:,:nvira*nocca].reshape(-1,nvira,nocca)
-        mo1_b = mo1[:,nvira*nocca:].reshape(-1,nvirb,noccb)
+        assert h1[0].ndim == 3
         mo1 = (mo1_a, mo1_b)
     return mo1, None
 
@@ -128,20 +129,22 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
     mo1base_a[:,occidxa] = -s1_a[:,occidxa] * .5
     mo1base_b[:,occidxb] = -s1_b[:,occidxb] * .5
     mo1base = numpy.hstack((mo1base_a.reshape(nset,-1), mo1base_b.reshape(nset,-1)))
+    nov = nocca * nmoa + noccb * nmob
 
     def vind_vo(mo1):
-        mo1 = mo1.reshape(mo1base.shape)
-        v = fvind(mo1).reshape(mo1base.shape)
+        nd = mo1.shape[0]
+        mo1 = mo1.reshape(nd, nov)
+        v = fvind(mo1).reshape(nd, nov)
         if level_shift != 0:
             v -= mo1 * level_shift
-        v1a = v[:,:nmoa*nocca].reshape(nset,nmoa,nocca)
-        v1b = v[:,nmoa*nocca:].reshape(nset,nmob,noccb)
+        v1a = v[:,:nmoa*nocca].reshape(nd,nmoa,nocca)
+        v1b = v[:,nmoa*nocca:].reshape(nd,nmob,noccb)
         v1a[:,viridxa] *= eai_a
         v1b[:,viridxb] *= eai_b
         v1a[:,occidxa] = 0
         v1b[:,occidxb] = 0
-        return v.ravel()
-    mo1 = lib.krylov(vind_vo, mo1base.ravel(),
+        return v.reshape(nd, nov)
+    mo1 = lib.krylov(vind_vo, mo1base.reshape(-1, nov),
                      tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
     mo1 = mo1.reshape(mo1base.shape)
     mo1_a = mo1[:,:nmoa*nocca].reshape(nset,nmoa,nocca)
@@ -164,4 +167,6 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
     if isinstance(h1[0], numpy.ndarray) and h1[0].ndim == 2:
         mo1_a, mo1_b = mo1_a[0], mo1_b[0]
         mo_e1_a, mo_e1_b = mo_e1_a[0], mo_e1_b[0]
+    else:
+        assert h1[0].ndim == 3
     return (mo1_a, mo1_b), (mo_e1_a, mo_e1_b)

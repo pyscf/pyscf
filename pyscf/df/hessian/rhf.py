@@ -368,16 +368,8 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     for ia, h1, vj1, vk1 in _gen_jk(hessobj, mo_coeff, mo_occ, chkfile,
                                     atmlst, verbose, True):
         h1 += vj1 - vk1 * .5
-
-        if chkfile is None:
-            h1ao[ia] = h1
-        else:
-            key = 'scf_f1ao/%d' % ia
-            lib.chkfile.save(chkfile, key, h1)
-    if chkfile is None:
-        return h1ao
-    else:
-        return chkfile
+        h1ao[ia] = h1
+    return h1ao
 
 def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
             verbose=None, with_k=True):
