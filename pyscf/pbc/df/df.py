@@ -831,14 +831,14 @@ class _load_and_unpack:
         else: # For mpi4pyscf, pyscf-1.5.1 or older
             return dat.shape
 
-def _hstack_datasets(data_to_stack, slices=None):
+def _hstack_datasets(data_to_stack, slices=numpy.s_[:]):
     """Faster version of numpy.hstack for h5py datasets
 
     Parameters
     ----------
     data_to_stack : list of h5py.Dataset or np.ndarray
         Datasets/arrays to be stacked along first axis
-    slices: tuple of slices, or just one slice, along the lines of numpy.s_.
+    slices: tuple or list of slices, a slice, or ().
 
     Returns
     -------
@@ -854,22 +854,29 @@ def _hstack_datasets(data_to_stack, slices=None):
         # If slices is not a tuple, we assume it is a single slice acting on axis 0 only.
         slices = (slices,)
 
-    for i, t in enumerate(slices):
-        ts = numpy.s_[t]
+    def len_of_slice(arraylen, s):
+        start, stop, step = s.indices(arraylen)
+        r = range(start, stop, step)
+        # Python has a very fast builtin method to get the length of a range.
+        return len(r)
+
+    for i, cur_slice in enumerate(slices):
+        if not isinstance(cur_slice, slice):
+            return numpy.hstack([dset[slices] for dset in data_to_stack])
         if i == 1:
-            ax1widths_sliced = [len(range(sh[1])[ts]) for sh in dset_shapes]
+            ax1widths_sliced = [len_of_slice(shp[1], cur_slice) for shp in dset_shapes]
         else:
             # Except along axis 1, we assume the dimensions of all datasets are the same.
             # If they aren't, an error gets raised later.
-            res_shape[i] = len(range(res_shape[i])[ts])
+            res_shape[i] = len_of_slice(res_shape[i], cur_slice)
     if len(slices) <= 1:
-        ax1widths_sliced = [sh[1] for sh in dset_shapes]
+        ax1widths_sliced = [shp[1] for shp in dset_shapes]
 
     # Final dim along axis 1 is the sum of the post-slice axis 1 widths.
     res_shape[1] = sum(ax1widths_sliced)
 
     # Step 2. Allocate the output buffer
-    out = numpy.empty(res_shape, dtype=numpy.result_type(*data_to_stack))
+    out = numpy.empty(res_shape, dtype=numpy.result_type(*[dset.dtype for dset in data_to_stack]))
 
     # Step 3. Read data into the output buffer.
     ax1ind = 0
