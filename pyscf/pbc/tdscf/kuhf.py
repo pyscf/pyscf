@@ -24,21 +24,26 @@ from pyscf.tdscf import uhf
 from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf.pbc import scf
 from pyscf.pbc.tdscf.krhf import KTDBase, _get_e_ia
-from pyscf.pbc.lib.kpts_helper import is_gamma_point
+from pyscf.pbc.lib.kpts_helper import is_gamma_point, get_kconserv_ria
 from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)
 
 class TDA(KTDBase):
-    conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-7)
 
     def get_ab(self, mf=None, kshift=0):
         raise NotImplementedError
 
-    def gen_vind(self, mf, kshift):
-        '''Compute Ax'''
-        kconserv = self.kconserv[kshift]
+    def gen_vind(self, mf, kshift=0):
+        '''Compute Ax
+
+        Kwargs:
+            kshift : integer
+                The index of the k-point that represents the transition between
+                k-points in the excitation coefficients.
+        '''
+        kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
         mo_coeff = mf.mo_coeff
         mo_occ = mf.mo_occ
         nkpts = len(mo_occ[0])
@@ -98,7 +103,7 @@ class TDA(KTDBase):
 
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
-        kconserv = self.kconserv[kshift]
+        kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
         e_ia_a = _get_e_ia(mo_energy[0], mo_occ[0], kconserv)
         e_ia_b = _get_e_ia(mo_energy[1], mo_occ[1], kconserv)
         e_ia = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
@@ -136,7 +141,7 @@ class TDA(KTDBase):
         self.e = []
         self.xy = []
         for i,kshift in enumerate(self.kshift_lst):
-            kconserv = self.kconserv[kshift]
+            kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
 
             vind, hdiag = self.gen_vind(self._scf, kshift)
             precond = self.get_precond(hdiag)
@@ -163,8 +168,6 @@ CIS = KTDA = TDA
 
 
 class TDHF(KTDBase):
-
-    conv_tol = 1e-5
 
     def get_ab(self, mf=None, kshift=0):
         raise NotImplementedError
@@ -281,7 +284,7 @@ class TDHF(KTDBase):
         self.e = []
         self.xy = []
         for i,kshift in enumerate(self.kshift_lst):
-            kconserv = self.kconserv[kshift]
+            kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
 
             vind, hdiag = self.gen_vind(self._scf, kshift)
             precond = self.get_precond(hdiag)

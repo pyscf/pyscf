@@ -45,6 +45,11 @@ def get_ab(mf, kshift=0):
     B[i,a,j,b] = (ia||jb)
 
     Ref: Chem Phys Lett, 256, 454
+
+    Kwargs:
+        kshift : integer
+            The index of the k-point that represents the transition between
+            k-points in the excitation coefficients.
     '''
     cell = mf.cell
     mo_energy = scf.addons.mo_energy_with_exxdiv_none(mf)
@@ -155,9 +160,17 @@ def get_ab(mf, kshift=0):
     return a, b
 
 class KTDBase(TDBase):
+    '''
+    Attributes:
+        kshift_lst : list of integers
+            Each element in the list is the index of the k-point that
+            represents the transition between k-points in the excitation
+            coefficients.
+    '''
+
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-4)
 
-    _keys = {'kconserv', 'kshift_lst'}
+    _keys = {'kshift_lst'}
 
     def __init__(self, mf, kshift_lst=None):
         assert isinstance(mf, scf.khf.KSCF)
@@ -165,8 +178,6 @@ class KTDBase(TDBase):
         warn_pbc2d_eri(mf)
 
         if kshift_lst is None: kshift_lst = [0]
-
-        self.kconserv = get_kconserv_ria(mf.cell, mf.kpts)
         self.kshift_lst = kshift_lst
 
     def dump_flags(self, verbose=None):
@@ -222,12 +233,16 @@ class TDA(KTDBase):
         if mf is None: mf = self._scf
         return get_ab(mf, kshift)
 
-    def gen_vind(self, mf, kshift):
-        # exxdiv corrections are kept in hdiag while excluding them when calling
-        # the contractions between two-electron integrals and X/Y amplitudes.
-        # See also the relevant comments in function pbc.tdscf.rhf.TDA.gen_vind
+    def gen_vind(self, mf, kshift=0):
+        '''Compute Ax
+
+        Kwargs:
+            kshift : integer
+                The index of the k-point that represents the transition between
+                k-points in the excitation coefficients.
+        '''
         singlet = self.singlet
-        kconserv = self.kconserv[kshift]
+        kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
 
         mo_coeff = mf.mo_coeff
         mo_occ = mf.mo_occ
@@ -273,7 +288,7 @@ class TDA(KTDBase):
 
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
-        kconserv = self.kconserv[kshift]
+        kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
         e_ia = numpy.concatenate( [x.reshape(-1) for x in
                                    _get_e_ia(mo_energy, mo_occ, kconserv)] )
 
@@ -315,7 +330,7 @@ class TDA(KTDBase):
         self.e = []
         self.xy = []
         for i,kshift in enumerate(self.kshift_lst):
-            kconserv = self.kconserv[kshift]
+            kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
 
             vind, hdiag = self.gen_vind(self._scf, kshift)
             precond = self.get_precond(hdiag)
@@ -467,7 +482,7 @@ class TDHF(KTDBase):
         self.e = []
         self.xy = []
         for i,kshift in enumerate(self.kshift_lst):
-            kconserv = self.kconserv[kshift]
+            kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
 
             vind, hdiag = self.gen_vind(self._scf, kshift)
             precond = self.get_precond(hdiag)

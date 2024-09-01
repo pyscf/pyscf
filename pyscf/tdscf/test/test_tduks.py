@@ -133,7 +133,6 @@ class KnownValues(unittest.TestCase):
     def test_tddft_camb3lyp(self):
         mf = mol1.UKS(xc='camb3lyp').run()
         td = mf.TDDFT()
-        td.conv_tol = 1e-9
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 5)
