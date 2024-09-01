@@ -58,7 +58,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 4)
 
     def test_tdhf(self):
-        td = tdscf.TDDFT(mf).run(nstates=nstates)
+        td = tdscf.TDDFT(mf).run(nstates=nstates, conv_tol=1e-6)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(td.xy[2])
         self.assertAlmostEqual(g1[0,2], -0.78969714300299776, 5)

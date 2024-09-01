@@ -129,7 +129,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 3)
 
     def test_tddft_lda(self):
-        td = tdscf.TDDFT(mf_lda).run(nstates=nstates)
+        td = tdscf.TDDFT(mf_lda).run(nstates=nstates, conv_tol=1e-8)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -1.31315477e-01, 6)

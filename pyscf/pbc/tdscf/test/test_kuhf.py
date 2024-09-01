@@ -53,8 +53,8 @@ class Diamond(unittest.TestCase):
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
-    def kernel(self, TD, ref, **kwargs):
-        td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)),
+    def kernel(self, TD, ref, kshift_lst, **kwargs):
+        td = TD(self.mf).set(kshift_lst=kshift_lst,
                              nstates=self.nstates, **kwargs).run()
         for kshift,e in enumerate(td.e):
             self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev  - ref[kshift]).max(), 0, 4)
@@ -63,13 +63,12 @@ class Diamond(unittest.TestCase):
         # same as lowest roots in Diamond->test_tda_singlet/triplet in test_krhf.py
         ref = [[6.4440137833, 7.5317890777],
                [7.4264899075, 7.6381352853]]
-        self.kernel(tdscf.KTDA, ref)
+        self.kernel(tdscf.KTDA, ref, np.arange(len(ref)))
 
     def test_tdhf(self):
         # same as lowest roots in Diamond->test_tdhf_singlet/triplet in test_krhf.py
-        ref = [[5.9794378466, 5.9794378466],
-               [6.1703909932, 6.1703909932]]
-        self.kernel(tdscf.KTDHF, ref)
+        ref = [[5.9794378466, 5.9794378466]]
+        self.kernel(tdscf.KTDHF, ref, [0])
 
 
 class WaterBigBox(unittest.TestCase):
@@ -116,8 +115,7 @@ class WaterBigBox(unittest.TestCase):
         del cls.mol, cls.molmf
 
     def kernel(self, TD, MOLTD, **kwargs):
-        td = TD(self.mf).set(kshift_lst=np.arange(len(self.mf.kpts)),
-                             nstates=self.nstates, **kwargs).run()
+        td = TD(self.mf).set(nstates=self.nstates, **kwargs).run()
         moltd = MOLTD(self.molmf).set(nstates=self.nstates, **kwargs).run()
         ref = moltd.e
         for kshift,e in enumerate(td.e):

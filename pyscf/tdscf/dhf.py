@@ -23,11 +23,11 @@ TDA and TDHF for no-pair DKS Hamiltonian
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf import dft
+from pyscf import scf
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
-from pyscf.data import nist
+from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)
@@ -120,7 +120,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b = b - numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
         return a, b
 
-    if isinstance(mf, dft.KohnShamDFT):
+    if isinstance(mf, scf.hf.KohnShamDFT):
         from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
@@ -398,6 +398,9 @@ class TDBase(rhf.TDBase):
 
 @lib.with_doc(rhf.TDA.__doc__)
 class TDA(TDBase):
+
+    singlet = None
+
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
         if mf is None:
@@ -449,14 +452,10 @@ class TDA(TDBase):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
-        # FIXME: Is it correct to call davidson1 for complex integrals?
-        self.converged, self.e, x1 = \
-                lib.davidson1(vind, x0, precond,
-                              tol=self.conv_tol,
-                              nroots=nstates, lindep=self.lindep,
-                              max_cycle=self.max_cycle,
-                              max_space=self.max_space, pick=pickeig,
-                              verbose=log)
+        self.converged, self.e, x1 = lr_eigh(
+            vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+            nroots=nstates, pick=pickeig, max_cycle=self.max_cycle,
+            max_memory=self.max_memory, verbose=log)
 
         nocc = (self._scf.mo_occ>0).sum()
         nmo = self._scf.mo_occ.size
@@ -525,6 +524,9 @@ def gen_tdhf_operation(mf, fock_ao=None):
 
 
 class TDHF(TDBase):
+
+    singlet = None
+
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
         if mf is None:
@@ -534,7 +536,9 @@ class TDHF(TDBase):
     def init_guess(self, mf, nstates=None, wfnsym=None):
         x0 = TDA.init_guess(self, mf, nstates, wfnsym)
         y0 = numpy.zeros_like(x0)
-        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
+        return numpy.hstack([x0, y0])
+
+    get_precond = rhf.TDHF.get_precond
 
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -562,13 +566,10 @@ class TDHF(TDBase):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
-        self.converged, w, x1 = \
-                lib.davidson_nosym1(vind, x0, precond,
-                                    tol=self.conv_tol,
-                                    nroots=nstates, lindep=self.lindep,
-                                    max_cycle=self.max_cycle,
-                                    max_space=self.max_space, pick=pickeig,
-                                    verbose=log)
+        self.converged, w, x1 = lr_eig(
+            vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+            nroots=nstates, pick=pickeig, max_cycle=self.max_cycle,
+            max_memory=self.max_memory, verbose=log)
 
         nocc = (self._scf.mo_occ>0).sum()
         nmo = self._scf.mo_occ.size
@@ -590,7 +591,6 @@ class TDHF(TDBase):
         self._finalize()
         return self.e, self.xy
 
-from pyscf import scf
 scf.dhf.DHF.TDA  = scf.dhf.RDHF.TDA  = lib.class_as_method(TDA)
 scf.dhf.DHF.TDHF = scf.dhf.RDHF.TDHF = lib.class_as_method(TDHF)
 

@@ -23,6 +23,17 @@ from pyscf.pbc.cc.eom_kccsd_rhf import EOMEESinglet
 from pyscf.data.nist import HARTREE2EV as unitev
 
 
+def diagonalize(a, b, nroots=4):
+    nkpts, nocc, nvir = a.shape[:3]
+    a = a.reshape(nkpts*nocc*nvir, -1)
+    b = b.reshape(nkpts*nocc*nvir, -1)
+    h = np.block([[a        , b       ],
+                  [-b.conj(),-a.conj()]])
+    e = np.linalg.eigvals(np.asarray(h))
+    lowest_e = np.sort(e[e.real > 0].real)[:nroots]
+    lowest_e = lowest_e[lowest_e > 1e-3]
+    return lowest_e
+
 class DiamondPBE(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -43,28 +54,37 @@ class DiamondPBE(unittest.TestCase):
         kpts = cell.make_kpts((2,1,1))
 
         xc = 'pbe'
-        mf = scf.KRKS(cell, kpts=kpts).set(xc=xc).rs_density_fit(auxbasis='weigend').run()
+        mf = scf.KRKS(cell, kpts=kpts).set(xc=xc).rs_density_fit(auxbasis='weigend')
+        mf.with_df._j_only = False
+        mf.with_df.build()
+        mf.run()
 
         cls.cell = cell
         cls.mf = mf
 
         cls.nstates = 4 # make sure first `nstates_test` states are converged
         cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
     def kernel(self, TD, ref, **kwargs):
-        td = getattr(self.mf, TD)().set(kshift_lst=np.arange(len(self.mf.kpts)),
+        td = getattr(self.mf, TD)().set(kshift_lst=np.arange(len(ref)),
                                         nstates=self.nstates, **kwargs).run()
         for kshift,e in enumerate(td.e):
-            self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev - ref[kshift]).max(), 0, 4)
+            self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev - ref[kshift]).max(), 0, 5)
+        return td
 
     def test_tda_singlet(self):
-        ref = [[7.7172854747, 7.7173219160],
+        ref = [[7.7172857896, 7.7173222336],
                [8.3749594280, 8.3749980463]]
-        self.kernel('TDA', ref)
+        td = self.kernel('TDA', ref)
+        a0, _ = td.get_ab(kshift=0)
+        nk, no, nv = a0.shape[:3]
+        eref = np.linalg.eigvalsh(a0.reshape(nk*no*nv,-1))[:4]
+        self.assertAlmostEqual(abs(td.e[0][:2] - eref[:2]).max(), 0, 7)
 
     def test_tda_triplet(self):
         ref = [[5.7465112548, 5.7465526327],
@@ -72,13 +92,14 @@ class DiamondPBE(unittest.TestCase):
         self.kernel('TDA', ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [[7.5824302393, 7.5824675688],
-               [8.3438648420, 8.3439036271]]
-        self.kernel('TDDFT', ref)
+        ref = [[7.58243026, 7.58246786]]
+        td = self.kernel('TDDFT', ref)
+        a, b = td.get_ab(kshift=0)
+        eref = diagonalize(a, b)
+        self.assertAlmostEqual(abs(td.e[0][:2] - eref[:2]).max(), 0, 7)
 
     def test_tdhf_triplet(self):
-        ref = [[5.5659966435, 5.5660393021],
-               [6.7992845776, 6.7993290046]]
+        ref = [[5.56599665, 5.56603980]]
         self.kernel('TDDFT', ref, singlet=False)
 
 
@@ -115,15 +136,20 @@ class DiamondPBE0(unittest.TestCase):
         del cls.cell, cls.mf
 
     def kernel(self, TD, ref, **kwargs):
-        td = getattr(self.mf, TD)().set(kshift_lst=np.arange(len(self.mf.kpts)),
+        td = getattr(self.mf, TD)().set(kshift_lst=np.arange(len(ref)),
                                         nstates=self.nstates, **kwargs).run()
         for kshift,e in enumerate(td.e):
-            self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev - ref[kshift]).max(), 0, 4)
+            self.assertAlmostEqual(abs(e[:self.nstates_test] * unitev - ref[kshift]).max(), 0, 5)
+        return td
 
     def test_tda_singlet(self):
         ref = [[9.3936718451, 9.4874866060],
                [10.0697605303, 10.0697862958]]
-        self.kernel('TDA', ref)
+        td = self.kernel('TDA', ref)
+        a0, _ = td.get_ab(kshift=0)
+        nk, no, nv = a0.shape[:3]
+        eref = np.linalg.eigvalsh(a0.reshape(nk*no*nv,-1))[:4]
+        self.assertAlmostEqual(abs(td.e[0][:2] - eref[:2]).max(), 0, 8)
 
     def test_tda_triplet(self):
         ref = [[6.6703797643, 6.6704110631],
@@ -131,13 +157,14 @@ class DiamondPBE0(unittest.TestCase):
         self.kernel('TDA', ref, singlet=False)
 
     def test_tdhf_singlet(self):
-        ref = [[9.2519208050, 9.3208025447],
-               [9.9609751875, 9.9610015227]]
-        self.kernel('TDDFT', ref)
+        ref = [[9.25192096, 9.32080304]]
+        td = self.kernel('TDDFT', ref, conv_tol=1e-6)
+        a, b = td.get_ab(kshift=0)
+        eref = diagonalize(a, b)
+        self.assertAlmostEqual(abs(td.e[0][:2] - eref[:2]).max(), 0, 8)
 
     def test_tdhf_triplet(self):
-        ref = [[6.3282716764, 6.3283051217],
-               [7.0656766298, 7.0657111705]]
+        ref = [[6.3282716764, 6.3283051217]]
         self.kernel('TDDFT', ref, singlet=False)
 
 

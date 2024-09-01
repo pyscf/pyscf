@@ -22,6 +22,17 @@ from pyscf.pbc import gto, scf, tdscf
 from pyscf.data.nist import HARTREE2EV as unitev
 
 
+def diagonalize(a, b, nroots=4):
+    nocc, nvir = a.shape[:2]
+    a = a.reshape(nocc*nvir, -1)
+    b = b.reshape(nocc*nvir, -1)
+    h = np.block([[a        , b       ],
+                  [-b.conj(),-a.conj()]])
+    e = np.linalg.eigvals(np.asarray(h))
+    lowest_e = np.sort(e[e.real > 0].real)
+    lowest_e = lowest_e[lowest_e > 1e-3][:nroots]
+    return lowest_e
+
 class DiamondPBE(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -40,7 +51,7 @@ class DiamondPBE(unittest.TestCase):
         cell.precision = 1e-10
         cell.build()
 
-        xc = 'pbe'
+        xc = 'm06'
         mf = scf.RKS(cell).set(xc=xc).rs_density_fit(auxbasis='weigend').run()
 
         cls.cell = cell
@@ -55,22 +66,30 @@ class DiamondPBE(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
-        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 5)
+        return td
 
     def test_tda_singlet(self):
-        ref = [9.26752544, 9.26752544]
-        self.kernel('TDA', ref)
+        ref = [14.68587442, 14.68589929]
+        td = self.kernel('TDA', ref)
+        a, b = td.get_ab()
+        no, nv = a.shape[:2]
+        eref = np.linalg.eigvalsh(a.reshape(no*nv,-1))
+        self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 8)
 
     def test_tda_triplet(self):
-        ref = [4.79532598, 4.79532598]
+        ref = [11.10049832, 11.59365532]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tddft_singlet(self):
-        ref = [8.8773512896, 8.8773512896]
-        self.kernel('TDDFT', ref)
+        ref = [14.42819773, 14.42822009]
+        td = self.kernel('TDDFT', ref)
+        a, b = td.get_ab()
+        eref = diagonalize(a, b)
+        self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 8)
 
     def test_tddft_triplet(self):
-        ref = [4.7694490556, 4.7694490556]
+        ref = [ 9.09496456, 11.53650896]
         self.kernel('TDDFT', ref, singlet=False)
 
 
@@ -109,7 +128,7 @@ class DiamondPBEShifted(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
-        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 5)
 
     def test_tda_singlet(self):
         ref = [11.9664870288, 12.7605699008]
@@ -223,22 +242,30 @@ class DiamondPBE0(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
-        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 5)
+        return td
 
     def test_tda_singlet(self):
-        ref = [9.61243337, 9.61243337]
-        self.kernel('TDA', ref)
+        ref = [9.62238067, 9.62238067]
+        td = self.kernel('TDA', ref)
+        a, b = td.get_ab()
+        no, nv = a.shape[:2]
+        eref = np.linalg.eigvalsh(a.reshape(no*nv,-1))
+        self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 8)
 
     def test_tda_triplet(self):
-        ref = [5.13034084, 5.13034084]
+        ref = [5.39995144, 5.39995144]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tddft_singlet(self):
-        ref = [9.2585491075, 9.2585491075]
-        self.kernel('TDDFT', ref)
+        ref = [9.26011401, 9.26011401]
+        td = self.kernel('TDDFT', ref)
+        a, b = td.get_ab()
+        eref = diagonalize(a, b)
+        self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 8)
 
     def test_tddft_triplet(self):
-        ref = [4.5570089807, 4.5570089807]
+        ref = [4.68905023, 4.81439580]
         self.kernel('TDDFT', ref, singlet=False)
 
 

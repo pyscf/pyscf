@@ -21,9 +21,8 @@ import numpy
 from pyscf import symm
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.tdscf import uhf
-from pyscf.scf import uhf_symm
-from pyscf.data import nist
+from pyscf.tdscf import uhf, rhf
+from pyscf.tdscf._lr_eig import eigh as lr_eigh
 from pyscf.dft.rks import KohnShamDFT
 from pyscf import __config__
 
@@ -74,13 +73,9 @@ class CasidaTDDFT(TDDFT, TDA):
         if wfnsym is not None and mol.symmetry:
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
-            orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
-            orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
-            orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
-            sym_forbida = (orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym
-            sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
-            sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
+            x_sym_a, x_sym_b = uhf._get_x_sym_table(mf)
+            sym_forbid = numpy.append(x_sym_a.ravel(), x_sym_b.ravel()) != wfnsym
 
         e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
         e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
@@ -123,6 +118,7 @@ class CasidaTDDFT(TDDFT, TDA):
         '''TDDFT diagonalization solver
         '''
         cpu0 = (logger.process_clock(), logger.perf_counter())
+        mol = self.mol
         mf = self._scf
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
             raise RuntimeError('%s cannot be used with hybrid functional'
@@ -142,16 +138,19 @@ class CasidaTDDFT(TDDFT, TDA):
             idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
 
+        x0sym = None
         if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
+            x0, x0sym = self.init_guess(
+                self._scf, self.nstates, return_symmetry=True)
+        elif mol.symmetry:
+            x_sym_a, x_sym_b = uhf._get_x_sym_table(self._scf)
+            x_sym = numpy.append(x_sym_a.ravel(), x_sym_b.ravel())
+            x0sym = [rhf._guess_wfnsym_id(self, x_sym, x) for x in x0]
 
-        self.converged, w2, x1 = \
-                lib.davidson1(vind, x0, precond,
-                              tol=self.conv_tol,
-                              nroots=nstates, lindep=self.lindep,
-                              max_cycle=self.max_cycle,
-                              max_space=self.max_space, pick=pickeig,
-                              verbose=log)
+        self.converged, w2, x1 = lr_eigh(
+            vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+            nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
+            max_memory=self.max_memory, verbose=log)
 
         mo_energy = self._scf.mo_energy
         mo_occ = self._scf.mo_occ

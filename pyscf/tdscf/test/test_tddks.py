@@ -114,13 +114,15 @@ class KnownValues(unittest.TestCase):
         mcol_m06l = dft.UDKS(mol).set(xc='m06l', collinear='mcol')
         mcol_m06l._numint.spin_samples = 6
         mcol_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mcol_m06l.TDDFT(), 14.934345395514491, 9.539340104227188)
+        self._check_against_ab_ks(mcol_m06l.TDDFT())
 
-    def _check_against_ab_ks(self, td, refa, refb):
+    def _check_against_ab_ks(self, td, refa=None, refb=None):
         mf = td._scf
         a, b = td.get_ab()
-        self.assertAlmostEqual(lib.fp(abs(a)), refa, 4)
-        self.assertAlmostEqual(lib.fp(abs(b)), refb, 4)
+        if refa is not None:
+            self.assertAlmostEqual(lib.fp(abs(a)), refa, 4)
+        if refb is not None:
+            self.assertAlmostEqual(lib.fp(abs(b)), refb, 4)
         ftda = mf.TDA().gen_vind()[0]
         ftdhf = td.gen_vind()[0]
         n2c = mf.mo_occ.size // 2

@@ -72,7 +72,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 4)
 
     def test_tddft_lda(self):
-        td = tdscf.TDDFT(mf_lda).run(nstates=nstates)
+        td = tdscf.TDDFT(mf_lda).run(nstates=nstates, conv_tol=1e-7)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -0.800487816830773, 6)
@@ -104,7 +104,7 @@ class KnownValues(unittest.TestCase):
         mf = dft.UKS(mol).set(conv_tol=1e-12)
         mf.xc = '.2*HF + .8*b88, vwn'
         mf.scf()
-        td = tdscf.TDDFT(mf).run(nstates=nstates)
+        td = tdscf.TDDFT(mf).run(nstates=nstates, conv_tol=1e-6)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -0.80446691153291727, 6)

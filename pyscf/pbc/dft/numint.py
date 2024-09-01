@@ -276,7 +276,8 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                     rho[4] -= rho5 * 2
                 rho[tau_idx] -= rho5 * .5
     else:
-        rho = numint.eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab, xctype, verbose)
+        rho = numint.eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab, xctype,
+                               with_lapl, verbose)
     return rho
 
 
@@ -477,7 +478,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
                 vmata[i] += ni._vxc_mat(cell, ao_k1, wv[0], mask, xctype,
                                         shls_slice, ao_loc, v_hermi)
                 vmatb[i] += ni._vxc_mat(cell, ao_k1, wv[1], mask, xctype,
-                                        shls_slice, ao_loc, hermi)
+                                        shls_slice, ao_loc, v_hermi)
 
         vmat = numpy.stack([vmata, vmatb])
         # call swapaxes method to swap last two indices because vmat may be a 3D
@@ -636,11 +637,12 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     elif isinstance(kpts, KPoints):
         kpts = kpts.kpts_ibz
 
+    v_hermi = 0
     if is_zero(kpts):
         if isinstance(dms, numpy.ndarray) and dms.dtype == numpy.double:
             # for real orbitals and real matrix, K_{ia,bj} = K_{ia,jb}
             # The output matrix v = K*x_{ia} is symmetric
-            hermi = 1
+            v_hermi = 1
 
     if xctype in ('LDA', 'GGA', 'MGGA'):
         make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi, False)
@@ -660,10 +662,10 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                     vxc1 = numpy.einsum('xg,xyg->yg', rho1, _fxc)
                 wv = weight * vxc1
                 vmat[i] += ni._vxc_mat(cell, ao_k1, wv, mask, xctype,
-                                       shls_slice, ao_loc, hermi)
+                                       shls_slice, ao_loc, v_hermi)
 
         vmat = numpy.stack(vmat)
-        if hermi == 1:
+        if v_hermi == 1:
             # call swapaxes method to swap last two indices because vmat may be a 3D
             # array (nset,nao,nao) in single k-point mode or a 4D array
             # (nset,nkpts,nao,nao) in k-points mode
@@ -759,10 +761,11 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         kpts = kpts.kpts_ibz
 
     dma, dmb = _format_uks_dm(dms)
+    v_hermi = 0
     if is_zero(kpts) and dma.dtype == numpy.double:
         # for real orbitals and real matrix, K_{ia,bj} = K_{ia,jb}
         # The output matrix v = K*x_{ia} is symmetric
-        hermi = 1
+        v_hermi = 1
 
     nao = dma.shape[-1]
     make_rhoa, nset = ni._gen_rho_evaluator(cell, dma, hermi, False)[:2]
@@ -782,19 +785,19 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             for i in range(nset):
                 rho1a = make_rhoa(i, ao_k1, mask, xctype)
                 rho1b = make_rhob(i, ao_k1, mask, xctype)
-                rho1 = numpy.stack([rho1a, rho1b])
                 if xctype == 'LDA':
-                    vxc1 = numpy.einsum('ag,abyg->byg', rho1, _fxc[:,0,:])
+                    wv = rho1a * _fxc[0,0] + rho1b * _fxc[1,0]
                 else:
-                    vxc1 = numpy.einsum('axg,axbyg->byg', rho1, _fxc)
-                wv = weight * vxc1
+                    wv  = numpy.einsum('xg,xbyg->byg', rho1a, _fxc[0])
+                    wv += numpy.einsum('xg,xbyg->byg', rho1b, _fxc[1])
+                wv *= weight
                 vmata[i] += ni._vxc_mat(cell, ao_k1, wv[0], mask, xctype,
-                                        shls_slice, ao_loc, hermi)
+                                        shls_slice, ao_loc, v_hermi)
                 vmatb[i] += ni._vxc_mat(cell, ao_k1, wv[1], mask, xctype,
-                                        shls_slice, ao_loc, hermi)
+                                        shls_slice, ao_loc, v_hermi)
 
         vmat = numpy.stack([vmata, vmatb])
-        if hermi == 1:
+        if v_hermi == 1:
             vmat = vmat + vmat.conj().swapaxes(-2,-1)
         if nset == 1:
             vmat = vmat.reshape((2,) + dma.shape)
@@ -852,12 +855,13 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     else:
         is_rhf = mo_coeff[0].ndim == 1
 
+    with_lapl = False
     nao = cell.nao_nr()
     if is_rhf:
         rho = []
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
-            rho.append(ni.eval_rho2(cell, ao_k1, mo_coeff, mo_occ, mask, xctype))
+            rho.append(ni.eval_rho2(cell, ao_k1, mo_coeff, mo_occ, mask, xctype, with_lapl))
         rho = numpy.hstack(rho)
         if spin == 1:
             rho *= .5
@@ -868,8 +872,8 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
         rhob = []
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
-            rhoa.append(ni.eval_rho2(cell, ao_k1, mo_coeff[0], mo_occ[0], mask, xctype))
-            rhob.append(ni.eval_rho2(cell, ao_k1, mo_coeff[1], mo_occ[1], mask, xctype))
+            rhoa.append(ni.eval_rho2(cell, ao_k1, mo_coeff[0], mo_occ[0], mask, xctype, with_lapl))
+            rhob.append(ni.eval_rho2(cell, ao_k1, mo_coeff[1], mo_occ[1], mask, xctype, with_lapl))
         rho = numpy.stack([numpy.hstack(rhoa), numpy.hstack(rhob)])
     vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
     return rho, vxc, fxc
@@ -898,12 +902,13 @@ def cache_xc_kernel1(ni, cell, grids, xc_code, dm, spin=0,
 
     # 0th order density matrix must be hermitian
     hermi = 1
+    with_lapl = False
     nao = cell.nao_nr()
     if is_rhf:
         rho = []
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
-            rho.append(ni.eval_rho1(cell, ao_k1, dm, mask, xctype, hermi))
+            rho.append(ni.eval_rho1(cell, ao_k1, dm, mask, xctype, hermi, with_lapl))
         rho = numpy.hstack(rho)
         if spin == 1:
             rho *= .5
@@ -914,8 +919,8 @@ def cache_xc_kernel1(ni, cell, grids, xc_code, dm, spin=0,
         rhob = []
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
-            rhoa.append(ni.eval_rho1(cell, ao_k1, dm[0], mask, xctype, hermi))
-            rhob.append(ni.eval_rho1(cell, ao_k1, dm[1], mask, xctype, hermi))
+            rhoa.append(ni.eval_rho1(cell, ao_k1, dm[0], mask, xctype, hermi, with_lapl))
+            rhob.append(ni.eval_rho1(cell, ao_k1, dm[1], mask, xctype, hermi, with_lapl))
         rho = numpy.stack([numpy.hstack(rhoa), numpy.hstack(rhob)])
     vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
     return rho, vxc, fxc
@@ -985,11 +990,13 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
                       hermi, kpt, kpts_band, max_memory, verbose)
 
     def _vxc_mat(self, cell, ao, wv, mask, xctype, shls_slice, ao_loc, hermi):
+        if xctype == 'MGGA':
+            tau_idx = 4
+            wv[tau_idx] *= .5 # *.5 for 1/2 in tau
         if hermi == 1:
             # *.5 because mat + mat.T in the caller when hermi=1
             wv[0] *= .5
             if xctype == 'MGGA':
-                tau_idx = 4
                 wv[tau_idx] *= .5
         return _vxc_mat(cell, ao, wv, mask, xctype, shls_slice, ao_loc, hermi)
 
@@ -1190,11 +1197,13 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
         nao = ao_kpts[0].shape[-1]
         dtype = numpy.result_type(wv, *ao_kpts)
         mat = numpy.empty((nkpts,nao,nao), dtype=dtype)
+        if xctype == 'MGGA':
+            tau_idx = 4
+            wv[tau_idx] *= .5 # *.5 for 1/2 in tau
         if hermi == 1:
             # *.5 because mat + mat.T in the caller when hermi=1
             wv[0] *= .5
             if xctype == 'MGGA':
-                tau_idx = 4
                 wv[tau_idx] *= .5
 
         for k in range(nkpts):

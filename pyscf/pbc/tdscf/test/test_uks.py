@@ -22,7 +22,28 @@ from pyscf.pbc import gto, scf, tdscf
 from pyscf.data.nist import HARTREE2EV as unitev
 
 
-class DiamondPBE(unittest.TestCase):
+def diagonalize(a, b, nroots=4):
+    a_aa, a_ab, a_bb = a
+    b_aa, b_ab, b_bb = b
+    nocc_a, nvir_a, nocc_b, nvir_b = a_ab.shape
+    a_aa = a_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
+    a_ab = a_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
+    a_bb = a_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
+    b_aa = b_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
+    b_ab = b_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
+    b_bb = b_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
+    a = np.block([[ a_aa  , a_ab],
+                  [ a_ab.T, a_bb]])
+    b = np.block([[ b_aa  , b_ab],
+                  [ b_ab.T, b_bb]])
+    abba = np.block([[a        , b       ],
+                     [-b.conj(),-a.conj()]])
+    e = np.linalg.eig(abba)[0]
+    lowest_e = np.sort(e[e.real > 0].real)
+    lowest_e = lowest_e[lowest_e > 1e-3][:nroots]
+    return lowest_e
+
+class DiamondM06(unittest.TestCase):
     ''' Reproduce RKS-TDSCF results
     '''
     @classmethod
@@ -42,7 +63,7 @@ class DiamondPBE(unittest.TestCase):
         cell.precision = 1e-10
         cell.build()
 
-        xc = 'pbe'
+        xc = 'm06'
         mf = scf.UKS(cell).set(xc=xc).rs_density_fit(auxbasis='weigend').run()
         cls.cell = cell
         cls.mf = mf
@@ -56,15 +77,29 @@ class DiamondPBE(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
-        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 5)
+        return td
 
     def test_tda(self):
-        ref = [4.77090949, 4.77090949]
-        self.kernel('TDA', ref)
+        ref = [11.09731427, 11.57079413]
+        td = self.kernel('TDA', ref)
+        a, b = td.get_ab()
+        a_aa, a_ab, a_bb = a
+        nocc_a, nvir_a, nocc_b, nvir_b = a_ab.shape
+        a_aa = a_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
+        a_ab = a_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
+        a_bb = a_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
+        a = np.block([[ a_aa  , a_ab],
+                      [ a_ab.T, a_bb]])
+        eref = np.linalg.eigvalsh(a)
+        self.assertAlmostEqual(abs(td.e[:4] - eref[:4]).max(), 0, 8)
 
     def test_tdhf(self):
-        ref = [4.7455726874, 4.7455726874]
-        self.kernel('TDDFT', ref)
+        ref = [9.09165361, 11.51362009]
+        td = self.kernel('TDDFT', ref)
+        a, b = td.get_ab()
+        eref = diagonalize(a, b)
+        self.assertAlmostEqual(abs(td.e[:4] - eref[:4]).max(), 0, 8)
 
 
 class WaterBigBoxPBE(unittest.TestCase):
@@ -151,6 +186,7 @@ class DiamondPBE0(unittest.TestCase):
 
         cls.nstates = 5 # make sure first `nstates_test` states are converged
         cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -158,15 +194,30 @@ class DiamondPBE0(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
-        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 5)
+        return td
 
     def test_tda(self):
-        ref = [5.1069789, 5.10697989]
-        self.kernel('TDA', ref)
+        ref = [5.37745381, 5.37745449]
+        td = self.kernel('TDA', ref)
+        a, b = td.get_ab()
+        a_aa, a_ab, a_bb = a
+        nocc_a, nvir_a, nocc_b, nvir_b = a_ab.shape
+        a_aa = a_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
+        a_ab = a_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
+        a_bb = a_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
+        a = np.block([[ a_aa  , a_ab],
+                      [ a_ab.T, a_bb]])
+        eref = np.linalg.eigvalsh(a)
+        self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 8)
 
     def test_tdhf(self):
-        ref = [4.5331029147, 4.5331029147]
-        self.kernel('TDDFT', ref)
+        # nstates=6 is required to derive the lowest state
+        ref = [4.6851639, 4.79043398, 4.79043398]
+        td = self.kernel('TDDFT', ref[1:3])
+        a, b = td.get_ab()
+        eref = diagonalize(a, b)
+        self.assertAlmostEqual(abs(td.e[:2] - eref[1:3]).max(), 0, 8)
 
 
 class WaterBigBoxPBE0(unittest.TestCase):

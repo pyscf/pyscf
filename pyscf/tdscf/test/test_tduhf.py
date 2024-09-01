@@ -15,7 +15,7 @@
 #
 
 import unittest
-from pyscf import lib, gto, scf, tdscf
+from pyscf import lib, gto, scf, tdscf, symm
 
 def setUpModule():
     global mol, mol1, mf, mf1
@@ -25,6 +25,7 @@ def setUpModule():
         ['H' , (0. , 0. , .917)],
         ['F' , (0. , 0. , 0.)], ]
     mol.basis = '631g'
+    mol.symmetry = True
     mol.build()
     mf = scf.UHF(mol).run(conv_tol=1e-10)
 
@@ -56,6 +57,7 @@ class KnownValues(unittest.TestCase):
         td = mf.TDHF()
         td.nstates = 5
         td.singlet = False
+        td.conv_tol = 1e-5
         e = td.kernel()[0]
         ref = [10.89192986, 10.89192986, 11.83487865, 11.83487865, 12.6344099]
         self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 4)
@@ -74,6 +76,20 @@ class KnownValues(unittest.TestCase):
         ref = [3.31267103, 18.4954748, 20.84935404, 21.54808392]
         self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 4)
 
+    def test_symmetry_init_guess(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True, verbose=0)
+        mf = mol.UHF.run()
+        td = mf.TDA().run(nstates=1)
+        self.assertAlmostEqual(td.e[0], 0.14147328219131602, 7)
+        mo_coeff = mf.mo_coeff
+        mo_occa, mo_occb = mf.mo_occ
+        orbsyma, orbsymb = scf.uhf_symm.get_orbsym(mol, mo_coeff)
+        x_syma = symm.direct_prod(orbsyma[mo_occa==1], orbsyma[mo_occa==0], mol.groupname)
+        x_symb = symm.direct_prod(orbsymb[mo_occb==1], orbsymb[mo_occb==0], mol.groupname)
+        wfnsyma = tdscf.rhf._analyze_wfnsym(td, x_syma, td.xy[0][0][0])
+        wfnsymb = tdscf.rhf._analyze_wfnsym(td, x_symb, td.xy[0][0][1])
+        self.assertAlmostEqual(wfnsyma, 'A1u')
+        self.assertAlmostEqual(wfnsymb, 'A1u')
 
 if __name__ == "__main__":
     print("Full Tests for uhf-TDA and uhf-TDHF")

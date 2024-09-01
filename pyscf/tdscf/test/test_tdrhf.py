@@ -27,6 +27,7 @@ def setUpModule():
         ['H' , (0. , 0. , .917)],
         ['F' , (0. , 0. , 0.)], ]
     mol.basis = '631g'
+    mol.symmetry = True
     mol.build()
     mf = scf.RHF(mol).run()
     nstates = 5 # make sure first 3 states are converged
@@ -39,6 +40,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_tda_singlet(self):
         td = mf.TDA().set(nstates=nstates)
+        td.max_memory = 1e-3
         e = td.kernel()[0]
         ref = [11.90276464, 11.90276464, 16.86036434]
         self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
@@ -70,6 +72,29 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
         dip = td.transition_dipole()
         self.assertAlmostEqual(abs(dip).max(), 0, 8)
+
+    def test_symmetry_init_guess(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry='D2h')
+        mf = mol.RHF.run()
+        td = mf.TDA().run(nstates=1)
+        self.assertAlmostEqual(td.e[0], 0.22349707455528, 7)
+        mo_coeff = mf.mo_coeff
+        mo_occ = mf.mo_occ
+        orbsym = tdscf.rhf.hf_symm.get_orbsym(mol, mo_coeff)
+        x_sym = tdscf.rhf.symm.direct_prod(orbsym[mo_occ==2], orbsym[mo_occ==0], mol.groupname)
+        wfnsym = tdscf.rhf._analyze_wfnsym(td, x_sym, td.xy[0][0])
+        self.assertEqual(wfnsym, 'Au')
+
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        mf = mol.RHF.run()
+        td = mf.TDA().run(nstates=1, singlet=False)
+        self.assertAlmostEqual(td.e[0], 0.14147328219131602, 7)
+        mo_coeff = mf.mo_coeff
+        mo_occ = mf.mo_occ
+        orbsym = tdscf.rhf.hf_symm.get_orbsym(mol, mo_coeff)
+        x_sym = tdscf.rhf.symm.direct_prod(orbsym[mo_occ==2], orbsym[mo_occ==0], mol.groupname)
+        wfnsym = tdscf.rhf._analyze_wfnsym(td, x_sym, td.xy[0][0])
+        self.assertEqual(wfnsym, 'A1u')
 
 
 if __name__ == "__main__":

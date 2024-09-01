@@ -474,6 +474,33 @@ class KSCF(pbchf.SCF):
     def mo_occ_kpts(self):
         return self.mo_occ
 
+    def build(self, cell=None):
+        # To handle the attribute kpt or kpts loaded from chkfile
+        if 'kpts' in self.__dict__:
+            self.kpts = self.__dict__.pop('kpts')
+
+        # "vcut_ws" precomputing is triggered by pbc.tools.pbc.get_coulG
+        #if self.exxdiv == 'vcut_ws':
+        #    if self.exx_built is False:
+        #        self.precompute_exx()
+        #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
+
+        kpts = self.kpts
+        if self.rsjk:
+            if not np.all(self.rsjk.kpts == kpts):
+                self.rsjk = self.rsjk.__class__(cell, kpts)
+
+        # for GDF and MDF
+        with_df = self.with_df
+        if len(kpts) > 1 and getattr(with_df, '_j_only', False):
+            logger.warn(self, 'df.j_only cannot be used with k-point HF')
+            with_df._j_only = False
+            with_df.reset()
+
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return self
+
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)
         logger.info(self, '\n')

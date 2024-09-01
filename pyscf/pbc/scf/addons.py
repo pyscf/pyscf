@@ -526,7 +526,7 @@ def mo_energy_with_exxdiv_none(mf, mo_coeff=None):
         fockao = mf.get_fock(vhf=vhf, dm=dm)
 
     def _get_moe1(C, fao):
-        return lib.einsum('pi,pq,qi->i', C.conj(), fao, C)
+        return lib.einsum('pi,pq,qi->i', C.conj(), fao, C).real
     def _get_moek(kC, kfao):
         return [_get_moe1(C, fao) for C,fao in zip(kC, kfao)]
 

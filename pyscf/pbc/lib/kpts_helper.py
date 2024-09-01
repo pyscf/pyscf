@@ -30,7 +30,7 @@ KPT_DIFF_TOL = getattr(__config__, 'pbc_lib_kpts_helper_kpt_diff_tol', 1e-6)
 
 def is_zero(kpt):
     return abs(np.asarray(kpt)).sum() < KPT_DIFF_TOL
-gamma_point = is_zero
+is_gamma_point = gamma_point = is_zero
 
 def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
     '''
