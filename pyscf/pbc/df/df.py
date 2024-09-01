@@ -875,16 +875,20 @@ def _hstack_datasets(data_to_stack, slices=None):
     ax1ind = 0
     for i, dset in enumerate(data_to_stack):
         ax1width = ax1widths_sliced[i]
+        dest_sel = numpy.s_[:, ax1ind:ax1ind + ax1width]
         if hasattr(dset, 'read_direct'):
-            # For h5py datasets, use read_direct
-            dset.read_direct(
-                out,
-                source_sel=slices,
-                dest_sel=numpy.s_[:, ax1ind:ax1ind + ax1width],
-            )
+            # h5py has issues with zero-size selections, see
+            # https://github.com/h5py/h5py/issues/1455,
+            # so we check for that here.
+            if out[dest_sel].size > 0:
+                dset.read_direct(
+                    out,
+                    source_sel=slices,
+                    dest_sel=dest_sel
+                )
         else:
             # For array-like objects
-            out[:, ax1ind:ax1ind + ax1width] = dset
+            out[dest_sel] = dset
         ax1ind += ax1width
     return out
 
