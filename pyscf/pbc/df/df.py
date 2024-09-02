@@ -832,13 +832,15 @@ class _load_and_unpack:
             return dat.shape
 
 def _hstack_datasets(data_to_stack, slices=numpy.s_[:]):
-    """Faster version of numpy.hstack for h5py datasets
+    """Faster version of the operation
+    np.hstack([x[slices] for x in data_to_stack]) for h5py datasets.
 
     Parameters
     ----------
     data_to_stack : list of h5py.Dataset or np.ndarray
-        Datasets/arrays to be stacked along first axis
+        Datasets/arrays to be stacked along first axis.
     slices: tuple or list of slices, a slice, or ().
+        The slices (or indices) to select data from each H5 dataset.
 
     Returns
     -------
