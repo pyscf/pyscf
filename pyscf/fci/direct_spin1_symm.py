@@ -519,19 +519,34 @@ def _guess_wfnsym_cyl_sym(civec, strsa, strsb, orbsym):
     if wfn_momentum == 0:
         # For A1g and A1u, CI coefficient and its sigma_v associated one have
         # the same sign
-        if (sign_a*sign_b * c_max[0,0].real * c_max[1,1].real > 1e-6 or
-            sign_a*sign_b * c_max[0,0].imag * c_max[1,1].imag > 1e-6):  # A1
+        if (sign_a*sign_b * c_max[0,0].real * c_max[1,1].real > 1e-4 or
+            sign_a*sign_b * c_max[0,0].imag * c_max[1,1].imag > 1e-4):  # A1
             if wfn_ungerade:
                 wfnsym = 5
             else:
                 wfnsym = 0
-        else:
+        elif (sign_a*sign_b * c_max[0,0].real * c_max[1,1].real < -1e-4 or
+              sign_a*sign_b * c_max[0,0].imag * c_max[1,1].imag < -1e-4):  # A2
             # For A2g and A2u, CI coefficient and its sigma_v associated one
             # have opposite signs
             if wfn_ungerade:
                 wfnsym = 4
             else:
                 wfnsym = 1
+        elif abs(c_max[0,1] - c_max[1,0]) < 1e-4: # Off-diagonal terms only
+            # (E+)(E-') + (E-)(E+') => A1
+            if wfn_ungerade:
+                wfnsym = 5
+            else:
+                wfnsym = 0
+        elif abs(c_max[0,1] + c_max[1,0]) < 1e-4:
+            # (E+)(E-') - (E-)(E+') => A2
+            if wfn_ungerade:
+                wfnsym = 4
+            else:
+                wfnsym = 1
+        else:
+            raise RuntimeError('Symmetry broken wavefunction')
 
     elif wfn_momentum % 2 == 1:
         if abs(c_max[idx_a,idx_b].real) > 1e-6:  # Ex
