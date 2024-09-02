@@ -895,7 +895,7 @@ def _hstack_datasets(data_to_stack, slices=numpy.s_[:]):
                 )
         else:
             # For array-like objects
-            out[dest_sel] = dset
+            out[dest_sel] = dset[slices]
         ax1ind += ax1width
     return out
 
