@@ -102,7 +102,7 @@ def _aug_etb_element(nuc_charge, basis, beta):
     if USE_VERSION_26_AUXBASIS:
         # This is the method that version 2.6 (and earlier) generates auxiliary
         # basis. It estimates the exponents ranges by geometric average.
-        # This method is not recommended because it tends to generate diffused
+        # This method is not recommended because it tends to generate diffuse
         # functions. Important compact functions might be improperly excluded.
         l_max = min(l_max, max_shells)
         l_max_aux = l_max * 2
