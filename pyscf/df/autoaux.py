@@ -53,9 +53,9 @@ def _primitive_emin_emax(basis):
         r_exp = np.einsum('pi,pq,qi->i', cs, r_ints, cs)
 
         k = 2**(2*l+1) * factorial(l+1)**2 / factorial(2*l+2)
-        # Eq (9) in the paper
-        #e_eff = 2 * k**2 / (np.pi * r_exp)
-        # r_exp**2 is applied in bse. For primitive functions, this leads to
+        # Eq (9) in the paper, e_eff = 2 * k**2 / (np.pi * r_exp) is a typo.
+        # See also https://github.com/MolSSI-BSE/basis_set_exchange/issues/317
+        # For primitive functions, following expression leads to 
         # e_eff = exponent of the basis
         e_eff = 2 * k**2 / (np.pi * r_exp**2)
         # For primitive functions, e_eff may be slightly different to the
