@@ -150,6 +150,9 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
             etb = _aug_etb_element(nuc_charge, basis, beta)
             if etb:
                 newbasis[symb] = gto.expand_etbs(etb)
+                for l, n, emin, beta in etb:
+                    logger.info(mol, 'l = %d, exps = %s * %g^n for n = 0..%d',
+                                l, emin, beta, n-1)
             else:
                 raise RuntimeError(f'Failed to generate even-tempered auxbasis for {symb}')
 
