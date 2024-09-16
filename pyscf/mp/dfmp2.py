@@ -36,7 +36,7 @@ THRESH_LINDEP = getattr(__config__, 'mp_dfmp2_thresh_lindep', 1e-10)
 
 try:
     libmp = lib.load_library('libmp')
-except:
+except OSError:
     libmp = None
 
 
