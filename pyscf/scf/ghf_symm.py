@@ -153,8 +153,8 @@ class SymAdaptedGHF(ghf.GHF):
 
         nirrep = len(symm_orb)
         symm_orb = [scipy.linalg.block_diag(c, c) for c in symm_orb]
-        s = [reduce(numpy.dot, (c.T,s,c)) for c in symm_orb]
-        h = [reduce(numpy.dot, (c.T,h,c)) for c in symm_orb]
+        h = symm.symmetrize_matrix(h, symm_orb)
+        s = symm.symmetrize_matrix(s, symm_orb)
         cs = []
         es = []
         orbsym = []
