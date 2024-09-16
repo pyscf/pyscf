@@ -34,7 +34,10 @@ WITH_T2 = getattr(__config__, 'mp_dfmp2_with_t2', True)
 THRESH_LINDEP = getattr(__config__, 'mp_dfmp2_thresh_lindep', 1e-10)
 
 
-libmp = lib.load_library('libmp')
+try:
+    libmp = lib.load_library('libmp')
+except:
+    libmp = None
 
 
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbose=None):
