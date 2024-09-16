@@ -372,6 +372,9 @@ def to_scf(filename, molpro_orbsym=MOLPRO_ORBSYM, mf=None, **kwargs):
     mf.get_hcore = lambda *args: h1
     mf.get_ovlp = lambda *args: numpy.eye(norb)
     mf._eri = ctx['H2']
+    intor_symmetric = mf.mol.intor_symmetric
+    mf.mol.intor_symmetric = lambda intor, **kwargs: numpy.eye(norb) \
+        if intor == 'int1e_ovlp' else intor_symmetric(intor, **kwargs)
 
     return mf
 
