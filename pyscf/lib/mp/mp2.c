@@ -483,3 +483,33 @@ void MP2_OS_contract_c(double *ed_out,
     free(parr_jbLR); free(parr_jbLI);
 
 }
+
+#ifdef _OPENMP
+void trisolve_parallel_grp(double *low, double *b, const int n, const int nrhs, const int grpfac)
+{
+    int ntmax = omp_get_max_threads();
+    int ngrp = grpfac*ntmax;
+    int mgrp = floor((double) (nrhs + ngrp - 1) / ngrp);
+    ngrp = (int) floor( (double) (nrhs + mgrp - 1) / mgrp);
+    const double **parr_b = _gen_ptr_arr(b, nrhs, n);
+#pragma omp parallel default(none) shared(low, b, n, nrhs, ngrp, mgrp, parr_b)
+{
+    const char UPLO = 'L';
+    const char TRANS = 'N';
+    const char DIAG = 'N';
+
+    int i;
+    int info;
+    double * bi;
+
+    int igrp, i0, di;
+
+#pragma omp for schedule (dynamic, 4)
+    for (igrp = 0; igrp < ngrp; ++igrp) {
+        i0 = igrp * mgrp;
+        di = (i0+mgrp<=nrhs) ? (mgrp) : (nrhs-i0);
+        dtrtrs_(&UPLO, &TRANS, &DIAG, &n, &di, low, &n, parr_b[i0], &n, &info);
+    }
+} // parallel
+}
+#endif
