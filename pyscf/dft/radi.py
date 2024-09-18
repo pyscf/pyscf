@@ -32,8 +32,8 @@ COVALENT_RADII = radii.COVALENT
 # Note that using the atom-specific radius may slightly alter the results of
 # numerical integration, potentially leading to differences of ~ 1e-6 per atom
 # in total energy.
-# Enable this flag to ensure results are comparable across different packages.
-ATOM_SPECIFIC_TREUTLER_GRIDS = getattr(__config__, 'ATOM_SPECIFIC_TREUTLER_GRIDS', False)
+# Disable this flag to make DFT grids consistent with old PySCF versions.
+ATOM_SPECIFIC_TREUTLER_GRIDS = getattr(__config__, 'ATOM_SPECIFIC_TREUTLER_GRIDS', True)
 
 # P.M.W. Gill, B.G. Johnson, J.A. Pople, Chem. Phys. Letters 209 (1993) 506-512
 SG1RADII = numpy.array((
