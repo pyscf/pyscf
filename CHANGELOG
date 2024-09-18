@@ -20,6 +20,8 @@ PySCF 2.7.0 (2024-09-16)
   - Enhance TDDFT code with symmetry adaptation in diagonalization.
   - More efficient PBC-CDERI loading.
 * Fixes
+  - The missing atomic radius parameters for the Treutler-Ahlrichs scheme in DFT grids
+  - Symmetry adapted GHF with complex orbitals.
   - Complex-valued FCI matvec operation.
   - Bug in Smearing-RHF for odd number of electrons and disable Smearing-ROHF.
   - MP2 FNO bug when pct_occ=1 .
