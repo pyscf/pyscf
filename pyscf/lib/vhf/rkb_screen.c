@@ -32,6 +32,9 @@
 #define SL 2
 #define LS 3
 
+#define GAUNT_LL 0
+#define GAUNT_SS 1
+#define GAUNT_LS 2 // in gaunt_lssl screening, put order to ll, ss, ls
 
 int int2e_spinor();
 int int2e_spsp1spsp2_spinor();
@@ -145,6 +148,63 @@ int CVHFrkbssll_vkscreen(int *shls, CVHFOpt *opt,
         }
         *dm_atleast = opt->direct_scf_cutoff / qijkl;
         return 1;
+}
+
+
+int CVHFrkb_gaunt_lsls_prescreen(int *shls, CVHFOpt *opt,
+                          int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(opt->dm_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
+        double dmin = opt->direct_scf_cutoff / qijkl;
+        return qijkl > opt->direct_scf_cutoff
+            &&((opt->dm_cond[k*n+l] > dmin)
+            || (opt->dm_cond[j*n+k] > dmin));
+}
+
+
+//
+int CVHFrkb_gaunt_lssl_prescreen(int *shls, CVHFOpt *opt,
+                          int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        int nbas = opt->nbas;
+        int nbas2 = nbas * nbas;
+        assert(opt->q_cond);
+        assert(opt->dm_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double *dmll = opt->dm_cond + n*n*GAUNT_LL;
+        double *dmss = opt->dm_cond + n*n*GAUNT_SS;
+        double *dmls = opt->dm_cond + n*n*GAUNT_LS;
+        double qijkl = opt->q_cond[i*nbas+j] * opt->q_cond[nbas2+k*nbas+l];
+        double dmin = opt->direct_scf_cutoff / qijkl;
+        return qijkl > opt->direct_scf_cutoff
+            &&((dmll[j*n+k] > dmin) // dmss_ji
+            || (dmss[l*n+i] > dmin) // dmll_lk
+            || (dmls[l*n+k] > dmin)); // dmls_lk
 }
 
 
@@ -329,6 +389,26 @@ void CVHFrkbssll_dm_cond(double *dm_cond, double complex *dm, int nset, int *ao_
                 dmscondsl += nbas2;
                 dmscondls += nbas2;
         }
+}
+
+// the current order of dmscond (dmls, dmll, dmss) is consistent to the
+// second contraction in function _call_veff_gaunt_breit in dhf.py
+void CVHFrkb_gaunt_lssl_dm_cond(double *dm_cond, double complex *dm, int nset, int *ao_loc,
+                         int *atm, int natm, int *bas, int nbas, double *env)
+{
+        nset = nset / 3;
+        int n2c = CINTtot_cgto_spinor(bas, nbas);
+        size_t nbas2 = nbas * nbas;
+        double *dmcondll = dm_cond + (1+nset)*nbas2*GAUNT_LL;
+        double *dmcondss = dm_cond + (1+nset)*nbas2*GAUNT_SS;
+        double *dmcondls = dm_cond + (1+nset)*nbas2*GAUNT_LS;
+        double complex *dmll = dm + n2c*n2c*GAUNT_LL*nset;
+        double complex *dmss = dm + n2c*n2c*GAUNT_SS*nset;
+        double complex *dmls = dm + n2c*n2c*GAUNT_LS*nset;
+
+        CVHFrkb_dm_cond(dmcondll, dmll, nset, ao_loc, atm, natm, bas, nbas, env);
+        CVHFrkb_dm_cond(dmcondss, dmss, nset, ao_loc, atm, natm, bas, nbas, env);
+        CVHFrkb_dm_cond(dmcondls, dmls, nset, ao_loc, atm, natm, bas, nbas, env);
 }
 
 // the current order of dmscond (dmll, dmss, dmsl) is consistent to the
