@@ -104,3 +104,4 @@ mf = fcidump.to_scf('fcidump.example5', molpro_orbsym=True)
 mf.mol.verbose = 4
 mf.run()
 mf.MP2().run()
+mf.to_uhf().newton().run()
