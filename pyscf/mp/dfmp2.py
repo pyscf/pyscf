@@ -155,6 +155,11 @@ class DFMP2(mp2.MP2):
         masks = _mo_splitter(self)
         return [mo_energy[m] for m in masks]
 
+    def split_mo_occ(self, mo_occ=None):
+        if mo_occ is None: mo_occ = self.mo_occ
+        masks = _mo_splitter(self)
+        return [mo_occ[m] for m in masks]
+
     def reset(self, mol=None):
         self.with_df.reset(mol)
         return mp2.MP2.reset(self, mol)
@@ -217,9 +222,10 @@ def _make_df_eris(mp, mo_coeff=None, ovL=None, ovL_to_save=None, verbose=None):
     with_df = getattr(mp, 'with_df', None)
     assert( with_df is not None )
 
-    if with_df._cderi is None and with_df.auxmol is None:
+    if with_df._cderi is None:
         log.debug('Caching ovL-type integrals directly')
-        with_df.auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+        if with_df.auxmol is None:
+            with_df.auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
     else:
         log.debug('Caching ovL-type integrals by transforming saved AO 3c integrals.')
 
@@ -302,7 +308,10 @@ class _DFINCOREERIS:
                                             self.max_memory, log=log)
 
     def get_occ_blk(self, i0,i1):
-        return np.asarray(self.ovL[i0:i1], order='C')
+        nvir, naux = self.nvir, self.naux
+        return np.asarray(self.ovL[i0*nvir:i1*nvir], order='C').reshape(i1-i0,nvir,naux)
+    def get_ov_blk(self, ia0,ia1):
+        return np.asarray(self.ovL[ia0:ia1], order='C')
 
 
 class _DFOUTCOREERIS(_DFINCOREERIS):
@@ -355,9 +364,9 @@ def _init_mp_df_eris(with_df, occ_coeff, vir_coeff, max_memory, h5obj=None, log=
     ijslice = (0, nocc, nocc, nmo)
 
     if h5obj is None:   # incore
-        ovL = np.empty((nocc,nvir,naux), dtype=dtype)
+        ovL = np.empty((nocc*nvir,naux), dtype=dtype)
     else:
-        ovL_shape = (nocc,nvir,naux)
+        ovL_shape = (nocc*nvir,naux)
         ovL = h5obj.create_dataset('ovL', ovL_shape, dtype=dtype, chunks=(1,*ovL_shape[1:]))
 
     mem_avail = max_memory - lib.current_memory()[0]
@@ -374,7 +383,7 @@ def _init_mp_df_eris(with_df, occ_coeff, vir_coeff, max_memory, h5obj=None, log=
         for Lpq in with_df.loop(blksize=aux_blksize):
             p0, p1 = p1, p1+Lpq.shape[0]
             out = _ao2mo.nr_e2(Lpq, mo, ijslice, aosym='s2', out=buf)
-            ovL[:,:,p0:p1] = out.reshape(-1,nocc,nvir).transpose(1,2,0)
+            ovL[:,p0:p1] = out.T
             Lpq = out = None
         buf = None
     else:
@@ -392,13 +401,13 @@ def _init_mp_df_eris(with_df, occ_coeff, vir_coeff, max_memory, h5obj=None, log=
             nocci = i1-i0
             ijslice = (i0,i1,nocc,nmo)
             p1 = 0
-            OvL = np.ndarray((nocci,nvir,naux), dtype=dtype, buffer=buf)
+            OvL = np.ndarray((nocci*nvir,naux), dtype=dtype, buffer=buf)
             for Lpq in with_df.loop(blksize=aux_blksize):
                 p0, p1 = p1, p1+Lpq.shape[0]
                 out = _ao2mo.nr_e2(Lpq, mo, ijslice, aosym='s2', out=buf2)
-                OvL[:,:,p0:p1] = out.reshape(-1,nocci,nvir).transpose(1,2,0)
+                OvL[:,p0:p1] = out.T
                 Lpq = out = None
-            ovL[i0:i1] = OvL    # this avoids slow operations like ovL[i0:i1,:,p0:p1] = ...
+            ovL[i0*nvir:i1*nvir] = OvL  # this avoids slow operations like ovL[i0:i1,:,p0:p1] = ...
             OvL = None
         buf = buf2 = None
 
@@ -456,13 +465,13 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
 
     incore = h5obj is None
     if incore:
-        ovL = np.empty((nocc,nvir,naoaux), dtype=dtype)
+        ovL = np.empty((nocc*nvir,naoaux), dtype=dtype)
         mem_avail -= ovL.size * dsize / 1e6
     else:
-        ovL_shape = (nocc,nvir,naux)
+        ovL_shape = (nocc*nvir,naux)
         ovL = h5obj.create_dataset('ovL', ovL_shape, dtype=dtype, chunks=(1,*ovL_shape[1:]))
         h5tmp = lib.H5TmpFile()
-        Lov0_shape = (naoaux,nocc,nvir)
+        Lov0_shape = (naoaux,nocc*nvir)
         Lov0 = h5tmp.create_dataset('Lov0', Lov0_shape, dtype=dtype, chunks=(1,*Lov0_shape[1:]))
 
     # buffer
@@ -505,11 +514,11 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
         tick = (logger.process_clock(), logger.perf_counter())
         tspans[2] += np.asarray(tick) - np.asarray(tock)
         if incore:
-            ovl = lib.transpose(lov, out=buf0T).reshape(nocc,nvir,dk)
-            ovL[:,:,k0:k1] = ovl
+            ovl = lib.transpose(lov, out=buf0T)
+            ovL[:,k0:k1] = ovl
             ovl = None
         else:
-            Lov0[k0:k1] = lov.reshape(dk,nocc,nvir)
+            Lov0[k0:k1] = lov
         lpq = lov = None
         tock = (logger.process_clock(), logger.perf_counter())
         tspans[3] += np.asarray(tock) - np.asarray(tick)
@@ -544,7 +553,7 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
                 out = np.ndarray((nocci*nvir,naux), dtype=dtype, buffer=buf)
                 lib.dot(ovL[i0*nvxao:i1*nvxao].reshape(nocci*nvir,naoaux), m2c, c=out)
                 ovL[i0*nvx:i1*nvx] = out.reshape(-1)
-            ovL = ovL[:nocc*nvx].reshape(nocc,nvir,naux)
+            ovL = ovL[:nocc*nvx].reshape(nocc*nvir,naux)
             buf = None
     else:
         nvxao = nvir*naoaux
@@ -553,7 +562,7 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
         occ_blksize = max(1, min(nocc, int(np.floor(mem_avail*0.4/mem_blk))))
         for i0,i1 in lib.prange(0, nocc, occ_blksize):
             nocci = i1-i0
-            ivL = np.asarray(Lov0[:,i0:i1].transpose(1,2,0), order='C')
+            ivL = np.asarray(Lov0[:,i0*nvir:i1*nvir].T, order='C')
             if tag == 'cd':
                 if drv is None:
                     ivL = scipy.linalg.solve_triangular(m2c, ivL.T, lower=True,
@@ -568,8 +577,8 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
                         ctypes.c_int(grpfac)
                     )
             else:
-                ivL = lib.dot(ivL.reshape(nocci*nvir,naoaux), m2c).reshape(nocci,nvir,naux)
-            ovL[i0:i1] = ivL
+                ivL = lib.dot(ivL.reshape(nocci*nvir,naoaux), m2c)
+            ovL[i0*nvir:i1*nvir] = ivL
         del h5tmp['Lov0']
         h5tmp.close()
         Lov0 = None
