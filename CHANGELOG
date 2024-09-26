@@ -1,4 +1,4 @@
-PySCF 2.7.0 (2024-09-16)
+PySCF 2.7.0 (2024-09-23)
 ------------------------
 * Added
   - Superposition of Atomic Potentials (SAP) initial guess for SCF methods.
@@ -9,6 +9,7 @@ PySCF 2.7.0 (2024-09-16)
   - Supports for fractional coordinates in Cell.
   - Population analysis for KSCF.
   - A, B matrices for k-point TDRKS.
+  - AutoAux scheme for generating auxiliary basis sets.
 * Improved
   - Automatic cleanup for HDF5 temporary files.
   - Saves CI coefficients for SA-CASSCF to chkfile.
@@ -31,6 +32,8 @@ PySCF 2.7.0 (2024-09-16)
   - Wrong transition dipoles of triplet TDDFT states.
   - GHF-X2C dipole moment.
   - FCI symmetry validation code for cylindrical symmetry.
+  - Missing complex conjugation for complex orbitals in SymAdaptedGHF.
+  - Custom UHF objects using the Hamiltonian in FCIDUMP.
 
 
 PySCF 2.6.2 (2024-06-19)
