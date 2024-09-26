@@ -1,3 +1,41 @@
+PySCF 2.7.0 (2024-09-23)
+------------------------
+* Added
+  - Superposition of Atomic Potentials (SAP) initial guess for SCF methods.
+  - Supports pickle serialization for all methods.
+  - ADC 1-particle density matrix and dipole moment.
+  - Spin-separated 3-RDMs.
+  - Traceless quadrupole moment for SCF methods.
+  - Supports for fractional coordinates in Cell.
+  - Population analysis for KSCF.
+  - A, B matrices for k-point TDRKS.
+  - AutoAux scheme for generating auxiliary basis sets.
+* Improved
+  - Automatic cleanup for HDF5 temporary files.
+  - Saves CI coefficients for SA-CASSCF to chkfile.
+  - UHF/UKS initial guess with better spin-symmetry breaking code.
+  - New attribute .cycles in SCF methods and CC methods to save iteration counts.
+  - FFT performance.
+  - CPHF convergence in nuclear hessian.
+  - Eigenvalue solver for linear response theory.
+  - Enhance TDDFT code with symmetry adaptation in diagonalization.
+  - More efficient PBC-CDERI loading.
+* Fixes
+  - The missing atomic radius parameters for the Treutler-Ahlrichs scheme in DFT grids
+  - Symmetry adapted GHF with complex orbitals.
+  - Complex-valued FCI matvec operation.
+  - Bug in Smearing-RHF for odd number of electrons and disable Smearing-ROHF.
+  - MP2 FNO bug when pct_occ=1 .
+  - DHF dipole moment.
+  - Bug in PBC ECP integral.
+  - Bug in parser for spin-orbit ECPs.
+  - Wrong transition dipoles of triplet TDDFT states.
+  - GHF-X2C dipole moment.
+  - FCI symmetry validation code for cylindrical symmetry.
+  - Missing complex conjugation for complex orbitals in SymAdaptedGHF.
+  - Custom UHF objects using the Hamiltonian in FCIDUMP.
+
+
 PySCF 2.6.2 (2024-06-19)
 ------------------------
 * Fixes
