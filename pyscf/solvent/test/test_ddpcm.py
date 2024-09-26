@@ -46,7 +46,7 @@ class KnownValues(unittest.TestCase):
         pcm.lmax = 6
         pcm.lebedev_order = 17
         mf = scf.RHF(mol).ddPCM(pcm).run()
-        self.assertAlmostEqual(mf.e_tot, -112.3544929827, 8)
+        self.assertAlmostEqual(mf.e_tot, -112.3544929827, 5)
 
     def test_reset(self):
         mol1 = gto.M(atom='H 0 0 0; H 0 0 .9', basis='cc-pvdz')

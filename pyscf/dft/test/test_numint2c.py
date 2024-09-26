@@ -34,9 +34,10 @@ def setUpModule():
             [1   , (0. , -0.757 , 0.587)],
             [1   , (0. , 0.757  , 0.587)] ],
         basis = '6-31g')
-    mf = mol.GKS()
-    mf.grids.level = 3
-    mf.grids.build()
+    with lib.temporary_env(dft.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
+        mf = mol.GKS()
+        mf.grids.level = 3
+        mf.grids.build()
 
 def tearDownModule():
     global mol, mf

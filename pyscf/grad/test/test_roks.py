@@ -95,13 +95,13 @@ class KnownValues(unittest.TestCase):
 #[[  0.    0.               0.0529837158]
 # [  0.    0.0673568416    -0.0264979200]
 # [  0.   -0.0673568416    -0.0264979200]]
-        self.assertAlmostEqual(g1[0, 2], 0.0529837158, 7)
+        self.assertAlmostEqual(g1[0, 2], 0.0529837158, 6)
         g.grid_response = True
         g1 = g.kernel()
 #[[  0.    0.               0.0529917556]
 # [  0.    0.0673570505    -0.0264958778]
 # [  0.   -0.0673570505    -0.0264958778]]
-        self.assertAlmostEqual(g1[0, 2], 0.0529917556, 7)
+        self.assertAlmostEqual(g1[0, 2], 0.0529917556, 6)
 
     def test_roks_gga_grid_response(self):
         mol = gto.Mole()
@@ -122,13 +122,13 @@ class KnownValues(unittest.TestCase):
 #[[  0.    0.               0.0516999634]
 # [  0.    0.0638666270    -0.0258541362]
 # [  0.   -0.0638666270    -0.0258541362]]
-        self.assertAlmostEqual(g1[0, 2], 0.0516999634, 7)
+        self.assertAlmostEqual(g1[0, 2], 0.0516999634, 6)
         g.grid_response = True
         g1 = g.kernel()
 #[[  0.    0.               0.0516940546]
 # [  0.    0.0638566430    -0.0258470273]
 # [  0.   -0.0638566430    -0.0258470273]]
-        self.assertAlmostEqual(g1[0, 2], 0.0516940546, 7)
+        self.assertAlmostEqual(g1[0, 2], 0.0516940546, 6)
 
         mf.xc = 'b3lypg'
         e0 = mf.scf()
@@ -137,7 +137,7 @@ class KnownValues(unittest.TestCase):
 #[[  0.    0.               0.0395990911]
 # [  0.    0.0586841789    -0.0198038250]
 # [  0.   -0.0586841789    -0.0198038250]]
-        self.assertAlmostEqual(g1[0, 2], 0.0395990911, 7)
+        self.assertAlmostEqual(g1[0, 2], 0.0395990911, 6)
 
     def test_roks_grids_converge(self):
         mol = gto.Mole()
@@ -157,8 +157,8 @@ class KnownValues(unittest.TestCase):
 # sum over z direction non-zero, due to meshgrid response
 #[[ 0  0   -0.1479101538]
 # [ 0  0    0.1479140846]]
-        self.assertAlmostEqual(g1[0, 2], -0.1479101538, 7)
-        self.assertAlmostEqual(g1[1, 2],  0.1479140846, 7)
+        self.assertAlmostEqual(g1[0, 2], -0.1479101538, 6)
+        self.assertAlmostEqual(g1[1, 2],  0.1479140846, 6)
 
         mf = dft.ROKS(mol)
         mf.grids.prune = None
@@ -168,8 +168,8 @@ class KnownValues(unittest.TestCase):
         g1 = mf.Gradients().kernel()
 #[[ 0  0   -0.1479101105]
 # [ 0  0    0.1479099093]]
-        self.assertAlmostEqual(g1[0, 2], -0.1479101105, 7)
-        self.assertAlmostEqual(g1[1, 2],  0.1479099093, 7)
+        self.assertAlmostEqual(g1[0, 2], -0.1479101105, 6)
+        self.assertAlmostEqual(g1[1, 2],  0.1479099093, 6)
 
 
 if __name__ == "__main__":

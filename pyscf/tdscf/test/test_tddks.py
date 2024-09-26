@@ -60,6 +60,15 @@ def diagonalize(a, b, nroots=4):
     return lowest_e
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_tddft_lda(self):
         td = mf_lda.TDDFT()
         es = td.kernel(nstates=4)[0]

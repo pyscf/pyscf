@@ -81,6 +81,15 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_nr_lda(self):
         method = dft.RKS(h2o)
         method.init_guess = 'atom' # initial guess problem, issue #2056

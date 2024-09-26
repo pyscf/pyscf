@@ -51,6 +51,15 @@ def _energy_with_solvent(mf, method):
     return e_tot
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_CPCM(self):
         e_tot = _energy_with_solvent(scf.RHF(mol), 'C-PCM')
         print(f"Energy error in RHF with C-PCM: {numpy.abs(e_tot - -71.19244927767662)}")

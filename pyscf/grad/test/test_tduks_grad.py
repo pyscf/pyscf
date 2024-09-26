@@ -37,10 +37,11 @@ def setUpModule():
     mol.basis = '631g'
     mol.build()
     pmol = mol.copy()
-    mf_lda = dft.UKS(mol).set(xc='LDA,', conv_tol=1e-12)
-    mf_lda.kernel()
-    mf_gga = dft.UKS(mol).set(xc='b88,', conv_tol=1e-12)
-    mf_gga.kernel()
+    with lib.temporary_env(dft.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
+        mf_lda = dft.UKS(mol).set(xc='LDA,', conv_tol=1e-12)
+        mf_lda.kernel()
+        mf_gga = dft.UKS(mol).set(xc='b88,', conv_tol=1e-12)
+        mf_gga.kernel()
     nstates = 5 # to ensure the first 3 TDSCF states are converged
 
 def tearDownModule():
@@ -49,6 +50,15 @@ def tearDownModule():
     del mol, pmol, mf_lda, mf_gga
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_tda_lda(self):
         td = tdscf.TDA(mf_lda).run(nstates=nstates)
         tdg = td.nuc_grad_method()

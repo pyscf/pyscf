@@ -18,6 +18,7 @@
 
 import unittest
 import numpy as np
+from pyscf import dft
 from pyscf.pbc import gto as pbcgto
 try:
     import mcfun
@@ -40,6 +41,15 @@ def tearDownModule():
     del cell
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_collinear_gks_gga(self):
         mf = cell.GKS()
         mf.xc = 'pbe'

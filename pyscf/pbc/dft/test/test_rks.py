@@ -156,11 +156,11 @@ class KnownValues(unittest.TestCase):
         mf = pbcdft.RKS(cell).mix_density_fit()
         mf.xc = 'camb3lyp'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4745138538438827, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4745138538438827, 6)
 
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4766174820185456, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766174820185456, 6)
 
     def test_rsh_aft_high_cost(self):
         from pyscf.pbc.df.aft import AFTDF

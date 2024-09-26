@@ -30,12 +30,13 @@ def setUpModule():
     mol.build()
     #dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
     dm = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'dm_h4.npy')))
-    mf = dft.RKS(mol)
-    mf.grids.atom_grid = {"H": (50, 110)}
-    mf.prune = None
-    mf.grids.build(with_non0tab=False, sort_grids=False)
-    ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
-    rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA', with_lapl=True)
+    with lib.temporary_env(dft.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
+        mf = dft.RKS(mol)
+        mf.grids.atom_grid = {"H": (50, 110)}
+        mf.prune = None
+        mf.grids.build(with_non0tab=False, sort_grids=False)
+        ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
+        rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA', with_lapl=True)
 
 def tearDownModule():
     global mol, mf, ao, rho
@@ -46,6 +47,15 @@ def fp(a):
     return numpy.dot(w, a.ravel())
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_parse_xc(self):
         hyb, fn_facs = dft.xcfun.parse_xc('.5*HF+.5*B3LYP5,VWN*.5')
         self.assertAlmostEqual(hyb[0], .6, 12)

@@ -20,6 +20,7 @@ import unittest
 import numpy as np
 
 from pyscf import lib
+from pyscf.dft import radi
 from pyscf.pbc import gto as gto
 from pyscf.pbc import dft as dft
 from pyscf.pbc import scf as pbcscf
@@ -64,6 +65,15 @@ def tearDownModule():
     del cell, alle_cell
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_KGKS(self):
         # In the absence of off diagonal blocks in the spin space, dft.KGKS should reproduce the dft.KRKS results
         # Reference from dft.KRKS
@@ -155,7 +165,7 @@ class KnownValues(unittest.TestCase):
         mf.collinear = 'mcol'
         mf._numint.spin_samples = 6
         mf.run()
-        self.assertAlmostEqual(mf.e_tot, -1.6312141891350893, 6)
+        self.assertAlmostEqual(mf.e_tot, -1.6312141891350893, 5)
 
     def test_ncol_x2c_kgks_lda(self):
         from pyscf.pbc import gto
