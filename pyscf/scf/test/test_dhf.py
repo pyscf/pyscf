@@ -238,6 +238,7 @@ class KnownValues(unittest.TestCase):
         vj0 = numpy.einsum('ijkl,xlk->xij', eri1, dm)
         vk0 = numpy.einsum('ijkl,xjk->xil', eri1, dm)
 
+        mf = scf.dhf.DHF(h4)
         mf.with_breit = True
         vj1, vk1 = mf.get_jk(h4, dm, hermi=1)
         self.assertTrue(numpy.allclose(vj0, vj1))

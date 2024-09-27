@@ -32,6 +32,9 @@
 #define SL 2
 #define LS 3
 
+#define GAUNT_LL 0
+#define GAUNT_SS 1
+#define GAUNT_LS 2 // in gaunt_lssl screening, put order to ll, ss, ls
 
 int int2e_spinor();
 int int2e_spsp1spsp2_spinor();
@@ -148,6 +151,61 @@ int CVHFrkbssll_vkscreen(int *shls, CVHFOpt *opt,
 }
 
 
+int CVHFrkb_gaunt_lsls_prescreen(int *shls, CVHFOpt *opt,
+                          int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(opt->dm_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
+        double dmin = opt->direct_scf_cutoff / qijkl;
+        return qijkl > opt->direct_scf_cutoff
+            &&((opt->dm_cond[k*n+l] > dmin)
+            || (opt->dm_cond[j*n+k] > dmin));
+}
+
+
+//
+int CVHFrkb_gaunt_lssl_prescreen(int *shls, CVHFOpt *opt,
+                          int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(opt->dm_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double *dmll = opt->dm_cond + n*n*GAUNT_LL;
+        double *dmss = opt->dm_cond + n*n*GAUNT_SS;
+        double *dmls = opt->dm_cond + n*n*GAUNT_LS;
+        double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
+        double dmin = opt->direct_scf_cutoff / qijkl;
+        return qijkl > opt->direct_scf_cutoff
+            &&((dmll[j*n+k] > dmin) // dmss_ji
+            || (dmss[l*n+i] > dmin) // dmll_lk
+            || (dmls[l*n+k] > dmin)); // dmls_lk
+}
+
+
 void CVHFrkb_q_cond(int (*intor)(), CINTOpt *cintopt, double *qcond,
                     int *ao_loc, int *atm, int natm,
                     int *bas, int nbas, double *env)
@@ -193,6 +251,67 @@ void CVHFrkb_q_cond(int (*intor)(), CINTOpt *cintopt, double *qcond,
         free(cache);
 }
 }
+
+
+void CVHFrkb_asym_q_cond(int (*intor)(), CINTOpt *cintopt, double *qcond,
+                    int *ao_loc, int *atm, int natm,
+                    int *bas, int nbas, double *env)
+{
+        int shls_slice[] = {0, nbas};
+        const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
+                                                 atm, natm, bas, nbas, env);
+#pragma omp parallel
+{
+        double qtmp, tmp;
+        int i, j, ij, di, dj, ish, jsh;
+        int shls[4];
+        double *cache = malloc(sizeof(double) * cache_size);
+        di = 0;
+        for (ish = 0; ish < nbas; ish++) {
+                dj = ao_loc[ish+1] - ao_loc[ish];
+                di = MAX(di, dj);
+        }
+        double complex *buf = malloc(sizeof(double complex) * di*di*di*di);
+#pragma omp for schedule(dynamic, 4)
+        for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
+                ish = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                jsh = ij - ish*(ish+1)/2;
+                di = ao_loc[ish+1] - ao_loc[ish];
+                dj = ao_loc[jsh+1] - ao_loc[jsh];
+                shls[0] = ish;
+                shls[1] = jsh;
+                shls[2] = ish;
+                shls[3] = jsh;
+                qtmp = 1e-100;
+                if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache)) {
+                        for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                tmp = cabs(buf[i+di*j+di*dj*i+di*dj*di*j]);
+                                qtmp = MAX(qtmp, tmp);
+                        } }
+                        qtmp = sqrt(qtmp);
+                }
+                qcond[ish*nbas+jsh] = qtmp;
+                shls[0] = jsh;
+                shls[1] = ish;
+                shls[2] = jsh;
+                shls[3] = ish;
+                qtmp = 1e-100;
+                if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache)) {
+                        for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                tmp = cabs(buf[j+dj*i+dj*di*j+dj*di*dj*i]);
+                                qtmp = MAX(qtmp, tmp);
+                        } }
+                        qtmp = sqrt(qtmp);
+                }
+                qcond[jsh*nbas+ish] = qtmp;
+        }
+        free(buf);
+        free(cache);
+}
+}
+
 
 void CVHFrkbllll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                             int *ao_loc, int *atm, int natm,
@@ -329,6 +448,26 @@ void CVHFrkbssll_dm_cond(double *dm_cond, double complex *dm, int nset, int *ao_
                 dmscondsl += nbas2;
                 dmscondls += nbas2;
         }
+}
+
+// the current order of dmscond (dmls, dmll, dmss) is consistent to the
+// second contraction in function _call_veff_gaunt_breit in dhf.py
+void CVHFrkb_gaunt_lssl_dm_cond(double *dm_cond, double complex *dm, int nset, int *ao_loc,
+                         int *atm, int natm, int *bas, int nbas, double *env)
+{
+        nset = nset / 3;
+        int n2c = CINTtot_cgto_spinor(bas, nbas);
+        size_t nbas2 = nbas * nbas;
+        double *dmcondll = dm_cond + (1+nset)*nbas2*GAUNT_LL;
+        double *dmcondss = dm_cond + (1+nset)*nbas2*GAUNT_SS;
+        double *dmcondls = dm_cond + (1+nset)*nbas2*GAUNT_LS;
+        double complex *dmll = dm + n2c*n2c*GAUNT_LL*nset;
+        double complex *dmss = dm + n2c*n2c*GAUNT_SS*nset;
+        double complex *dmls = dm + n2c*n2c*GAUNT_LS*nset;
+
+        CVHFrkb_dm_cond(dmcondll, dmll, nset, ao_loc, atm, natm, bas, nbas, env);
+        CVHFrkb_dm_cond(dmcondss, dmss, nset, ao_loc, atm, natm, bas, nbas, env);
+        CVHFrkb_dm_cond(dmcondls, dmls, nset, ao_loc, atm, natm, bas, nbas, env);
 }
 
 // the current order of dmscond (dmll, dmss, dmsl) is consistent to the
