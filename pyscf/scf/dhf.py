@@ -61,7 +61,7 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
     else:
         dm = dm0
 
-    if mf.init_guess is not 'chkfile':
+    if mf.init_guess != 'chkfile':
         mf._coulomb_level = 'LLLL'
     cycles = 0
     if dm0 is None and mf._coulomb_level.upper() == 'LLLL':
@@ -630,14 +630,15 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
                 # alpha1*alpha2/r12. Minus sign was not included.
                 intor_prefix = 'int2e_'
             opt_gaunt_lsls = _VHFOpt(mol, intor_prefix + 'ssp1ssp2_spinor',
-                                 'CVHFrkb_gaunt_lsls_prescreen', 'CVHFrkb_q_cond',
+                                 'CVHFrkb_gaunt_lsls_prescreen', 'CVHFrkb_asym_q_cond',
                                  'CVHFrkb_dm_cond',
                                  direct_scf_tol=self.direct_scf_tol/c1**2)
-            opt_gaunt_lssl = _VHFOpt(mol, intor_prefix + 'sps1sps2_spinor',
-                                 'CVHFrkb_gaunt_lssl_prescreen', 'CVHFrkb_q_cond',
+            
+            opt_gaunt_lssl = _VHFOpt(mol, intor_prefix + 'ssp1sps2_spinor',
+                                 'CVHFrkb_gaunt_lssl_prescreen', 'CVHFrkb_asym_q_cond',
                                  'CVHFrkb_dm_cond',
                                  direct_scf_tol=self.direct_scf_tol/c1**2)
-            opt_gaunt_lssl.q_cond = numpy.array([opt_gaunt_lsls.q_cond, opt_gaunt_lssl.q_cond])
+
             logger.timer(self, 'init_direct_scf_gaunt_breit', *cpu0)
         #return None, None, None, None, None
         return opt_llll, opt_ssll, opt_ssss, opt_gaunt_lsls, opt_gaunt_lssl
@@ -962,7 +963,11 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
     return _jk_triu_(mol, vj, vk, hermi)
 
 def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
-    opt_gaunt_lsls, opt_gaunt_lssl = mf_opt
+    if mf_opt is not None:
+        opt_gaunt_lsls, opt_gaunt_lssl = mf_opt
+    else:
+        opt_gaunt_lsls = opt_gaunt_lssl = None
+
     log = logger.new_logger(mol)
     t0 = (logger.process_clock(), logger.perf_counter())
 
@@ -993,23 +998,23 @@ def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
         dmls = [dmi[:n2c,n2c:].copy() for dmi in dm]
         dmsl = [dmi[n2c:,:n2c].copy() for dmi in dm]
         dmss = [dmi[n2c:,n2c:].copy() for dmi in dm]
-        dms = dmsl + dmll + dmss + dmls
+        dms = dmsl + dmls + dmll + dmss
     vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex128)
     vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex128)
 
-    jks = ('lk->s1ij',) * n_dm \
-        + ('jk->s1il',) * n_dm
-    vx = _vhf.rdirect_mapdm(intor_prefix+'ssp1ssp2_spinor', 's1', jks, dms[:n_dm], 1,
+    jks = ('lk->s1ij', 'jk->s1il')
+    vj_ls, vk_ls = _vhf.rdirect_mapdm(intor_prefix+'ssp1ssp2_spinor', 's1', jks, dms[:n_dm], 1,
                             mol._atm, mol._bas, mol._env, opt_gaunt_lsls)
+    vj[:,:n2c,n2c:] = vj_ls
+    vk[:,:n2c,n2c:] = vk_ls
     t0 = log.timer_debug1('LSLS contribution', *t0)
-    vj[:,:n2c,n2c:] = vx[:n_dm,:,:]
-    vk[:,:n2c,n2c:] = vx[n_dm:,:,:]
 
     jks = ('lk->s1ij',) * n_dm \
         + ('li->s1kj',) * n_dm \
         + ('jk->s1il',) * n_dm
     vx = _vhf.rdirect_bindm(intor_prefix+'ssp1sps2_spinor', 's1', jks, dms[n_dm:], 1,
                             mol._atm, mol._bas, mol._env, opt_gaunt_lssl)
+
     t0 = log.timer_debug1('LSSL contribution', *t0)
     vj[:,:n2c,n2c:]+= vx[      :n_dm  ,:,:]
     vk[:,n2c:,n2c:] = vx[n_dm  :n_dm*2,:,:]

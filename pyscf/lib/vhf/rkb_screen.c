@@ -188,8 +188,6 @@ int CVHFrkb_gaunt_lssl_prescreen(int *shls, CVHFOpt *opt,
         int k = shls[2];
         int l = shls[3];
         int n = opt->nbas;
-        int nbas = opt->nbas;
-        int nbas2 = nbas * nbas;
         assert(opt->q_cond);
         assert(opt->dm_cond);
         assert(i < n);
@@ -199,7 +197,7 @@ int CVHFrkb_gaunt_lssl_prescreen(int *shls, CVHFOpt *opt,
         double *dmll = opt->dm_cond + n*n*GAUNT_LL;
         double *dmss = opt->dm_cond + n*n*GAUNT_SS;
         double *dmls = opt->dm_cond + n*n*GAUNT_LS;
-        double qijkl = opt->q_cond[i*nbas+j] * opt->q_cond[nbas2+k*nbas+l];
+        double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
         double dmin = opt->direct_scf_cutoff / qijkl;
         return qijkl > opt->direct_scf_cutoff
             &&((dmll[j*n+k] > dmin) // dmss_ji
@@ -253,6 +251,67 @@ void CVHFrkb_q_cond(int (*intor)(), CINTOpt *cintopt, double *qcond,
         free(cache);
 }
 }
+
+
+void CVHFrkb_asym_q_cond(int (*intor)(), CINTOpt *cintopt, double *qcond,
+                    int *ao_loc, int *atm, int natm,
+                    int *bas, int nbas, double *env)
+{
+        int shls_slice[] = {0, nbas};
+        const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
+                                                 atm, natm, bas, nbas, env);
+#pragma omp parallel
+{
+        double qtmp, tmp;
+        int i, j, ij, di, dj, ish, jsh;
+        int shls[4];
+        double *cache = malloc(sizeof(double) * cache_size);
+        di = 0;
+        for (ish = 0; ish < nbas; ish++) {
+                dj = ao_loc[ish+1] - ao_loc[ish];
+                di = MAX(di, dj);
+        }
+        double complex *buf = malloc(sizeof(double complex) * di*di*di*di);
+#pragma omp for schedule(dynamic, 4)
+        for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
+                ish = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                jsh = ij - ish*(ish+1)/2;
+                di = ao_loc[ish+1] - ao_loc[ish];
+                dj = ao_loc[jsh+1] - ao_loc[jsh];
+                shls[0] = ish;
+                shls[1] = jsh;
+                shls[2] = ish;
+                shls[3] = jsh;
+                qtmp = 1e-100;
+                if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache)) {
+                        for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                tmp = cabs(buf[i+di*j+di*dj*i+di*dj*di*j]);
+                                qtmp = MAX(qtmp, tmp);
+                        } }
+                        qtmp = sqrt(qtmp);
+                }
+                qcond[ish*nbas+jsh] = qtmp;
+                shls[0] = jsh;
+                shls[1] = ish;
+                shls[2] = jsh;
+                shls[3] = ish;
+                qtmp = 1e-100;
+                if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache)) {
+                        for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                tmp = cabs(buf[j+dj*i+dj*di*j+dj*di*dj*i]);
+                                qtmp = MAX(qtmp, tmp);
+                        } }
+                        qtmp = sqrt(qtmp);
+                }
+                qcond[jsh*nbas+ish] = qtmp;
+        }
+        free(buf);
+        free(cache);
+}
+}
+
 
 void CVHFrkbllll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                             int *ao_loc, int *atm, int natm,
