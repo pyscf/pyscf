@@ -633,7 +633,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
                                  'CVHFrkb_gaunt_lsls_prescreen', 'CVHFrkb_asym_q_cond',
                                  'CVHFrkb_dm_cond',
                                  direct_scf_tol=self.direct_scf_tol/c1**2)
-            
+
             opt_gaunt_lssl = _VHFOpt(mol, intor_prefix + 'ssp1sps2_spinor',
                                  'CVHFrkb_gaunt_lssl_prescreen', 'CVHFrkb_asym_q_cond',
                                  'CVHFrkb_dm_cond',
