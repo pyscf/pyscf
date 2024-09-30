@@ -127,7 +127,6 @@ class KnownValues(unittest.TestCase):
     def test_mp2_contract_eri_dm(self):
         nocc = mol.nelectron//2
         nmo = mf.mo_energy.size
-        nvir = nmo - nocc
 
         pt = mp.mp2.MP2(mf)
         emp2, t2 = pt.kernel()
@@ -298,7 +297,7 @@ class KnownValues(unittest.TestCase):
 
     def test_reset(self):
         mol1 = gto.M(atom='C')
-        pt = scf.RHF(mol).DFMP2()
+        pt = scf.RHF(mol).run().DFMP2()
         pt.reset(mol1)
         self.assertTrue(pt.mol is mol1)
         self.assertTrue(pt.with_df.mol is mol1)

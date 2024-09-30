@@ -154,16 +154,16 @@ class KnownValues(unittest.TestCase):
         e = pt.kernel(with_t2=False)[0]
         self.assertAlmostEqual(e, -0.11264162733420097, 8)
 
-        #pt = mp.dfump2.DFUMP2(mf.density_fit('weigend'))
-        #pt.frozen = [1]
-        #e = pt.kernel()[0]
-        #self.assertAlmostEqual(e, -0.11264162733420097, 8)
+        pt = mp.dfump2.DFUMP2(mf.density_fit('weigend'))
+        pt.frozen = [1]
+        e = pt.kernel()[0]
+        self.assertAlmostEqual(e, -0.11264162733420097, 8)
 
-        #pt = mp.dfump2.DFUMP2(mf)
-        #pt.frozen = [1]
-        #pt.with_df = mf.density_fit('weigend').with_df
-        #e = pt.kernel()[0]
-        #self.assertAlmostEqual(e, -0.11264162733420097, 8)
+        pt = mp.dfump2.DFUMP2(mf)
+        pt.frozen = [1]
+        pt.with_df = mf.density_fit('weigend').with_df
+        e = pt.kernel()[0]
+        self.assertAlmostEqual(e, -0.11264162733420097, 8)
 
     def test_ump2_ao2mo_ovov(self):
         pt = mp.UMP2(mf)
