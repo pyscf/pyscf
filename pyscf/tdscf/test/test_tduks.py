@@ -85,6 +85,15 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_nohybrid_lda(self):
         td = tdscf.uks.CasidaTDDFT(mf_lda)
         es = td.kernel(nstates=4)[0]

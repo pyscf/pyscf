@@ -497,7 +497,7 @@ def _generate_basis_converter():
             _basis = load(raw_basis, _std_symbol_without_ghost(symb))
         elif (any(isinstance(x, str) for x in raw_basis)
               # The first element is the basis of internal format
-              or not isinstance(raw_basis[0][0], int)):
+              or not isinstance(raw_basis[0][0], (numpy.integer, int))):
             stdsymb = _std_symbol_without_ghost(symb)
             _basis = []
             for rawb in raw_basis:

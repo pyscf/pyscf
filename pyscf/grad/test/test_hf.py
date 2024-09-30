@@ -92,9 +92,9 @@ class KnownValues(unittest.TestCase):
         F   0.   0.1  0.''')
         mf_scanner = rks.Grad(scf.RKS(mol).set(conv_tol=1e-14)).as_scanner()
         e, de = mf_scanner(mol)
-        self.assertAlmostEqual(fp(de), 0.458572523892797, 6)
+        self.assertAlmostEqual(fp(de), 0.458572523892797, 5)
         e, de = mf_scanner(mol1)
-        self.assertAlmostEqual(fp(de), 0.12763259021187467, 6)
+        self.assertAlmostEqual(fp(de), 0.12763259021187467, 5)
 
     def test_ccsd_scanner(self):
         mycc = cc.CCSD(scf.RHF(mol).set(conv_tol=1e-14))

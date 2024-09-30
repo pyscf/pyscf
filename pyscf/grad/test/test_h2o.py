@@ -115,59 +115,59 @@ class KnownValues(unittest.TestCase):
         mf.grids.prune = None
         mf.run(conv_tol=1e-14, xc='lda,vwn')
         g = rks.Grad(mf)
-        self.assertAlmostEqual(fp(g.grad()), 0.098438461959390822, 6)
+        self.assertAlmostEqual(fp(g.grad()), 0.098438461959390822, 5)
         g.grid_response = True
-        self.assertAlmostEqual(fp(g.grad()), 0.098441823256625829, 6)
+        self.assertAlmostEqual(fp(g.grad()), 0.098441823256625829, 5)
 
     def test_rks_bp86(self):
         mf = dft.RKS(h2o)
         mf.grids.prune = None
         mf.run(conv_tol=1e-14, xc='b88,p86')
         g = rks.Grad(mf)
-        self.assertAlmostEqual(fp(g.grad()), 0.10362532283229957, 6)
+        self.assertAlmostEqual(fp(g.grad()), 0.10362532283229957, 5)
         g.grid_response = True
-        self.assertAlmostEqual(fp(g.grad()), 0.10357804241970789, 6)
+        self.assertAlmostEqual(fp(g.grad()), 0.10357804241970789, 5)
 
     def test_rks_b3lypg(self):
         mf = dft.RKS(h2o)
         mf.grids.prune = None
         mf.run(conv_tol=1e-14, xc='b3lypg')
         g = rks.Grad(mf)
-        self.assertAlmostEqual(fp(g.grad()), 0.066541921001296467, 6)
+        self.assertAlmostEqual(fp(g.grad()), 0.066541921001296467, 5)
         g.grid_response = True
-        self.assertAlmostEqual(fp(g.grad()), 0.066543737224608879, 6)
+        self.assertAlmostEqual(fp(g.grad()), 0.066543737224608879, 5)
 
     def test_uks_lda(self):
         mf = dft.UKS(h2o_p)
         mf.run(conv_tol=1e-14, xc='lda,vwn')
         g = uks.Grad(mf)
-        self.assertAlmostEqual(lib.fp(g.grad()), -0.12090786418355501, 6)
+        self.assertAlmostEqual(lib.fp(g.grad()), -0.12090786418355501, 5)
         g.grid_response = True
-        self.assertAlmostEqual(lib.fp(g.grad()), -0.12091122603875157, 6)
+        self.assertAlmostEqual(lib.fp(g.grad()), -0.12091122603875157, 5)
 
     def test_roks_lda(self):
         mf = dft.ROKS(h2o_p)
         mf.run(conv_tol=1e-14, xc='lda,vwn')
         g = roks.Grad(mf)
-        self.assertAlmostEqual(lib.fp(g.grad()), -0.12051785975616186, 6)
+        self.assertAlmostEqual(lib.fp(g.grad()), -0.12051785975616186, 5)
         g.grid_response = True
-        self.assertAlmostEqual(lib.fp(g.grad()), -0.12052121736985746, 6)
+        self.assertAlmostEqual(lib.fp(g.grad()), -0.12052121736985746, 5)
 
     def test_uks_b3lypg(self):
         mf = dft.UKS(h2o_n)
         mf.run(conv_tol=1e-14, xc='b3lypg')
         g = uks.Grad(mf)
-        self.assertAlmostEqual(lib.fp(g.grad()), -0.1436034999176907, 6)
+        self.assertAlmostEqual(lib.fp(g.grad()), -0.1436034999176907, 5)
         g.grid_response = True
-        self.assertAlmostEqual(lib.fp(g.grad()), -0.14360504586558553, 6)
+        self.assertAlmostEqual(lib.fp(g.grad()), -0.14360504586558553, 5)
 
     def test_roks_b3lypg(self):
         mf = dft.ROKS(h2o_n)
         mf.run(conv_tol=1e-14, xc='b3lypg')
         g = roks.Grad(mf)
-        self.assertAlmostEqual(lib.fp(g.grad()), -0.14281412906618443, 6)
+        self.assertAlmostEqual(lib.fp(g.grad()), -0.14281412906618443, 5)
         g.grid_response = True
-        self.assertAlmostEqual(lib.fp(g.grad()), -0.14281571291026954, 6)
+        self.assertAlmostEqual(lib.fp(g.grad()), -0.14281571291026954, 5)
 
 
 if __name__ == "__main__":

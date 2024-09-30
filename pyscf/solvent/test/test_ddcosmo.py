@@ -227,6 +227,15 @@ def tearDownModule():
     del mol
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_ddcosmo_scf(self):
         mol = gto.M(atom=''' H 0 0 0 ''', charge=1, basis='sto3g', verbose=7,
                     output='/dev/null')

@@ -21,9 +21,19 @@
 import numpy
 from pyscf.data import radii
 from pyscf.data.elements import charge as elements_proton
+from pyscf import __config__
 
 BRAGG_RADII = radii.BRAGG
 COVALENT_RADII = radii.COVALENT
+
+# The effective atomic radius in Treutler's original paper (JCP 102, 346) was
+# omitted in PySCF versions 2.6 and earlier. This can cause discrepancies in the
+# numerical grids when compared to other software (See issue #2178 for details).
+# Note that using the atom-specific radius may slightly alter the results of
+# numerical integration, potentially leading to differences of ~ 1e-6 per atom
+# in total energy.
+# Disable this flag to make DFT grids consistent with old PySCF versions.
+ATOM_SPECIFIC_TREUTLER_GRIDS = getattr(__config__, 'ATOM_SPECIFIC_TREUTLER_GRIDS', True)
 
 # P.M.W. Gill, B.G. Johnson, J.A. Pople, Chem. Phys. Letters 209 (1993) 506-512
 SG1RADII = numpy.array((
@@ -95,15 +105,41 @@ def gauss_chebyshev(n, *args, **kwargs):
     dr = fac * numpy.sin(x1)**4 * ln2/(1+xi)
     return r, dr
 
+# Individually optimized Treutler/Ahlrichs radius parameter.
+# H - Kr are taken from the original paper JCP 102, 346 (1995)
+# Other elements are copied from Psi4 source code
+_treutler_ahlrichs_xi = [1.0, # Ghost
+    0.8,                               0.9,           # 1s
+    1.8, 1.4, 1.3, 1.1, 0.9, 0.9, 0.9, 0.9,           # 2s2p
+    1.4, 1.3, 1.3, 1.2, 1.1, 1.0, 1.0, 1.0,           # 3s3p
+    1.5, 1.4,                                         # 4s
+    1.3, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.1, 1.1, 1.1, # 3d
+              1.1, 1.0, 0.9, 0.9, 0.9, 0.9,           # 4p
+    2.000, 1.700,                                                         # 5s
+    1.500, 1.500, 1.350, 1.350, 1.250, 1.200, 1.250, 1.300, 1.500, 1.500, # 4d
+                  1.300, 1.200, 1.200, 1.150, 1.150, 1.150,               # 5p
+    2.500, 2.200,                                                         # 6s
+           2.500, 1.500, 1.500, 1.500, 1.500, 1.500, 1.500,               # La, Ce-Eu
+           1.500, 1.500, 1.500, 1.500, 1.500, 1.500, 1.500, 1.500,        # Gd, Tb-Lu
+           1.500, 1.500, 1.500, 1.500, 1.500, 1.500, 1.500, 1.500, 1.500, # 5d
+                  1.500, 1.500, 1.500, 1.500, 1.500, 1.500,               # 6p
+    2.500, 2.100,                                                         # 7s
+           3.685, 1.500, 1.500, 1.500, 1.500, 1.500, 1.500,
+           1.500, 1.500, 1.500, 1.500, 1.500, 1.500, 1.500, 1.500,
+] # noqa: E124
 
-def treutler_ahlrichs(n, *args, **kwargs):
+def treutler_ahlrichs(n, chg, *args, **kwargs):
     '''
     Treutler-Ahlrichs [JCP 102, 346 (1995); DOI:10.1063/1.469408] (M4) radial grids
     '''
+    if ATOM_SPECIFIC_TREUTLER_GRIDS:
+        xi = _treutler_ahlrichs_xi[chg]
+    else:
+        xi = 1.
     r = numpy.empty(n)
     dr = numpy.empty(n)
     step = numpy.pi / (n+1)
-    ln2 = 1 / numpy.log(2)
+    ln2 = xi / numpy.log(2)
     for i in range(n):
         x = numpy.cos((i+1)*step)
         r [i] = -ln2*(1+x)**.6 * numpy.log((1-x)/2)
@@ -111,8 +147,6 @@ def treutler_ahlrichs(n, *args, **kwargs):
                 * ln2*(1+x)**.6 *(-.6/(1+x)*numpy.log((1-x)/2)+1/(1-x))
     return r[::-1], dr[::-1]
 treutler = treutler_ahlrichs
-
-
 
 
 def becke_atomic_radii_adjust(mol, atomic_radii):

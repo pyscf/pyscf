@@ -20,7 +20,7 @@ from pyscf import lib
 from pyscf import ao2mo
 import pyscf.pbc
 from pyscf.pbc import gto as pgto
-from pyscf.pbc.df import df, aug_etb, FFTDF
+from pyscf.pbc.df import df, FFTDF
 from pyscf.pbc.df import mdf
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.tools import pbc as pbctools

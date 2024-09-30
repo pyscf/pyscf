@@ -102,11 +102,11 @@ class KnownValues(unittest.TestCase):
     def test_nr_m06l(self):
         m = mol.RKS()
         m.xc = 'm06l'
-        self.assertAlmostEqual(m.scf(), -2.9039230673864243, 9)
+        self.assertAlmostEqual(m.scf(), -2.9039230673864243, 7)
 
         m = mol.UKS()
         m.xc = 'm06l'
-        self.assertAlmostEqual(m.scf(), -2.9039230673864243, 9)
+        self.assertAlmostEqual(m.scf(), -2.9039230673864243, 7)
 
     def test_1e(self):
         mf = dft.RKS(gto.M(atom='H', spin=1)).run()
