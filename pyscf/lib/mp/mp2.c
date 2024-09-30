@@ -494,9 +494,11 @@ void trisolve_parallel_grp(double *low, double *b, const int n, const int nrhs, 
     const double **parr_b = _gen_ptr_arr(b, nrhs, n);
 #pragma omp parallel default(none) shared(low, b, n, nrhs, ngrp, mgrp, parr_b)
 {
+    const char SIDE = 'L';
     const char UPLO = 'L';
     const char TRANS = 'N';
     const char DIAG = 'N';
+    const double D1 = 1;
 
     int i;
     int info;
@@ -508,7 +510,7 @@ void trisolve_parallel_grp(double *low, double *b, const int n, const int nrhs, 
     for (igrp = 0; igrp < ngrp; ++igrp) {
         i0 = igrp * mgrp;
         di = (i0+mgrp<=nrhs) ? (mgrp) : (nrhs-i0);
-        dtrtrs_(&UPLO, &TRANS, &DIAG, &n, &di, low, &n, parr_b[i0], &n, &info);
+        dtrsm(&SIDE, &UPLO, &TRANS, &DIAG, &n, &di, &D1, low, &n, parr_b[i0], &n);
     }
 } // parallel
 }
