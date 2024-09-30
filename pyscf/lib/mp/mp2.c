@@ -510,7 +510,7 @@ void trisolve_parallel_grp(double *low, double *b, const int n, const int nrhs, 
     for (igrp = 0; igrp < ngrp; ++igrp) {
         i0 = igrp * mgrp;
         di = (i0+mgrp<=nrhs) ? (mgrp) : (nrhs-i0);
-        dtrsm(&SIDE, &UPLO, &TRANS, &DIAG, &n, &di, &D1, low, &n, parr_b[i0], &n);
+        dtrsm_(&SIDE, &UPLO, &TRANS, &DIAG, &n, &di, &D1, low, &n, parr_b[i0], &n);
     }
 } // parallel
 }
