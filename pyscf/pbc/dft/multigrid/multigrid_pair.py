@@ -58,8 +58,9 @@ libdft = lib.load_library('libdft')
 
 def gradient_gs(f_gs, Gv):
     r'''Compute the G-space components of :math:`\nabla f(r)`
-    given :math:`f(G)` and :math:`G`,
-    which is equivalent to einsum('np,px->nxp', f_gs, 1j*Gv)
+    given :math:`f(G)` and :math:`G`.
+    This is equivalent to einsum('np,px->nxp', f_gs, 1j*Gv)
+    with multithreading.
     '''
     ng, dim = Gv.shape
     assert dim == 3
@@ -67,30 +68,26 @@ def gradient_gs(f_gs, Gv):
     f_gs = np.asarray(f_gs.reshape(-1,ng), order='C', dtype=np.complex128)
     n = f_gs.shape[0]
     out = np.empty((n,dim,ng), dtype=np.complex128)
-
-    fn = getattr(libdft, 'gradient_gs', None)
-    try:
-        fn(out.ctypes.data_as(ctypes.c_void_p),
-           f_gs.ctypes.data_as(ctypes.c_void_p),
-           Gv.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(n), ctypes.c_size_t(ng))
-    except Exception as e:
-        raise RuntimeError(f'Error in gradient_gs: {e}')
+    libdft.gradient_gs(
+        out.ctypes.data_as(ctypes.c_void_p),
+        f_gs.ctypes.data_as(ctypes.c_void_p),
+        Gv.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(n), ctypes.c_size_t(ng)
+    )
     return out
 
 
 class GridLevel_Info(ctypes.Structure):
-    '''
-    Info about the grid levels.
+    '''Information about the multigrid levels.
     '''
     _fields_ = [("nlevels", ctypes.c_int), # number of grid levels
                 ("rel_cutoff", ctypes.c_double),
                 ("cutoff", ctypes.POINTER(ctypes.c_double)),
                 ("mesh", ctypes.POINTER(ctypes.c_int))]
 
+
 class RS_Grid(ctypes.Structure):
-    '''
-    Values on real space multigrid.
+    '''Values on the real space multigrid.
     '''
     _fields_ = [("nlevels", ctypes.c_int),
                 ("gridlevel_info", ctypes.POINTER(GridLevel_Info)),
@@ -98,9 +95,9 @@ class RS_Grid(ctypes.Structure):
                 # data is list of 1d arrays
                 ("data", ctypes.POINTER(ctypes.POINTER(ctypes.c_double)))]
 
+
 class PGFPair(ctypes.Structure):
-    '''
-    A primitive Gaussian function pair.
+    '''A primitive Gaussian function pair.
     '''
     _fields_ = [("ish", ctypes.c_int),
                 ("ipgf", ctypes.c_int),
@@ -111,8 +108,7 @@ class PGFPair(ctypes.Structure):
 
 
 class Task(ctypes.Structure):
-    '''
-    A single task.
+    '''A single task.
     '''
     _fields_ = [("buf_size", ctypes.c_size_t),
                 ("ntasks", ctypes.c_size_t),
@@ -121,8 +117,7 @@ class Task(ctypes.Structure):
 
 
 class TaskList(ctypes.Structure):
-    '''
-    A task list.
+    '''A task list.
     '''
     _fields_ = [("nlevels", ctypes.c_int),
                 ("hermi", ctypes.c_int),
@@ -154,8 +149,7 @@ def multi_grids_tasks(cell, ke_cutoff=None, hermi=0,
 
 
 def _update_task_list(mydf, hermi=0, ngrids=None, ke_ratio=None, rel_cutoff=None):
-    '''
-    Update :attr:`task_list` if necessary.
+    '''Update :attr:`task_list` if necessary.
     '''
     cell = mydf.cell
     if ngrids is None:
@@ -195,51 +189,41 @@ def init_gridlevel_info(cutoff, rel_cutoff, mesh):
     mesh = np.asarray(np.asarray(mesh).reshape(-1,3), order='C', dtype=np.int32)
     nlevels = len(cutoff)
     gridlevel_info = ctypes.POINTER(GridLevel_Info)()
-    fn = getattr(libdft, "init_gridlevel_info", None)
-    try:
-        fn(ctypes.byref(gridlevel_info),
-           cutoff.ctypes.data_as(ctypes.c_void_p),
-           mesh.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(nlevels), ctypes.c_double(rel_cutoff))
-    except Exception as e:
-        raise RuntimeError("Failed to init grid level info. %s" % e)
+    libdft.init_gridlevel_info(
+        ctypes.byref(gridlevel_info),
+        cutoff.ctypes.data_as(ctypes.c_void_p),
+        mesh.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nlevels), ctypes.c_double(rel_cutoff)
+    )
     return gridlevel_info
 
 
 def free_gridlevel_info(gridlevel_info):
-    fn = getattr(libdft, "del_gridlevel_info", None)
-    try:
-        fn(ctypes.byref(gridlevel_info))
-    except Exception as e:
-        raise RuntimeError("Failed to free grid level info. %s" % e)
+    libdft.del_gridlevel_info(
+        ctypes.byref(gridlevel_info)
+    )
 
 
 def init_rs_grid(gridlevel_info, comp):
-    '''
-    Initialize values on real space multigrid
+    '''Initialize values on the real space multigrid.
     '''
     rs_grid = ctypes.POINTER(RS_Grid)()
-    fn = getattr(libdft, "init_rs_grid", None)
-    try:
-        fn(ctypes.byref(rs_grid),
-           ctypes.byref(gridlevel_info),
-           ctypes.c_int(comp))
-    except Exception as e:
-        raise RuntimeError("Failed to initialize real space multigrid data. %s" % e)
+    libdft.init_rs_grid(
+        ctypes.byref(rs_grid),
+        ctypes.byref(gridlevel_info),
+        ctypes.c_int(comp)
+    )
     return rs_grid
 
 
 def free_rs_grid(rs_grid):
-    fn = getattr(libdft, "del_rs_grid", None)
-    try:
-        fn(ctypes.byref(rs_grid))
-    except Exception as e:
-        raise RuntimeError("Failed to free real space multigrid data. %s" % e)
+    libdft.del_rs_grid(
+        ctypes.byref(rs_grid)
+    )
 
 
 def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precision=None):
-    '''
-    Build the task list for multigrid DFT calculations.
+    '''Build the task list for multigrid DFT calculations.
 
     Arguments:
         cell : :class:`pbc.gto.cell.Cell`
@@ -305,48 +289,44 @@ def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precisio
                                           hermi=hermi)
 
     task_list = ctypes.POINTER(TaskList)()
-    func = getattr(libdft, "build_task_list", None)
-    try:
-        func(ctypes.byref(task_list),
-             ctypes.byref(nl), ctypes.byref(gridlevel_info),
-             ish_atm.ctypes.data_as(ctypes.c_void_p),
-             ish_bas.ctypes.data_as(ctypes.c_void_p),
-             ish_env.ctypes.data_as(ctypes.c_void_p),
-             ish_rcut.ctypes.data_as(ctypes.c_void_p),
-             ptr_ipgf_rcut.ctypes,
-             jsh_atm.ctypes.data_as(ctypes.c_void_p),
-             jsh_bas.ctypes.data_as(ctypes.c_void_p),
-             jsh_env.ctypes.data_as(ctypes.c_void_p),
-             jsh_rcut.ctypes.data_as(ctypes.c_void_p),
-             ptr_jpgf_rcut.ctypes,
-             ctypes.c_int(nish), ctypes.c_int(njsh),
-             Ls.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_double(precision), ctypes.c_int(hermi))
-    except Exception as e:
-        raise RuntimeError("Failed to build task list. %s" % e)
+    libdft.build_task_list(
+        ctypes.byref(task_list),
+        ctypes.byref(nl), ctypes.byref(gridlevel_info),
+        ish_atm.ctypes.data_as(ctypes.c_void_p),
+        ish_bas.ctypes.data_as(ctypes.c_void_p),
+        ish_env.ctypes.data_as(ctypes.c_void_p),
+        ish_rcut.ctypes.data_as(ctypes.c_void_p),
+        ptr_ipgf_rcut.ctypes,
+        jsh_atm.ctypes.data_as(ctypes.c_void_p),
+        jsh_bas.ctypes.data_as(ctypes.c_void_p),
+        jsh_env.ctypes.data_as(ctypes.c_void_p),
+        jsh_rcut.ctypes.data_as(ctypes.c_void_p),
+        ptr_jpgf_rcut.ctypes,
+        ctypes.c_int(nish), ctypes.c_int(njsh),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_double(precision), ctypes.c_int(hermi)
+    )
     free_neighbor_list(nl)
     return task_list
 
 
 def free_task_list(task_list):
-    '''
+    '''Free memory storing the taks list.
+
     Note:
-        This will also free task_list.contents.gridlevel_info.
+        This will also free `task_list.contents.gridlevel_info`.
     '''
     if task_list is None:
         return
-    func = getattr(libdft, "del_task_list", None)
-    try:
-        func(ctypes.byref(task_list))
-    except Exception as e:
-        raise RuntimeError("Failed to free task list. %s" % e)
+    libdft.del_task_list(
+        ctypes.byref(task_list)
+    )
 
 
 def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
              dimension=None, cell1=None, shls_slice1=None, Ls=None,
              a=None, ignore_imag=False):
-    '''
-    Collocate density (opt. gradients) on the real-space grid.
+    '''Collocate density (and gradients) on the real-space grid.
     The two sets of Gaussian functions can be different.
 
     Returns:
@@ -438,31 +418,28 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
         raise NotImplementedError('meta-GGA')
 
     eval_fn = 'make_rho_' + xctype.lower() + lattice_type
-    drv = getattr(libdft, "grid_collocate_drv", None)
+    drv = libdft.grid_collocate_drv
 
     def make_rho_(rs_rho, dm):
-        try:
-            drv(getattr(libdft, eval_fn, None),
-                ctypes.byref(rs_rho),
-                dm.ctypes.data_as(ctypes.c_void_p),
-                ctypes.byref(task_list),
-                ctypes.c_int(comp), ctypes.c_int(hermi),
-                (ctypes.c_int*4)(i0, i1, j0, j1),
-                ao_loc0.ctypes.data_as(ctypes.c_void_p),
-                ao_loc1.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(dimension),
-                Ls.ctypes.data_as(ctypes.c_void_p),
-                a.ctypes.data_as(ctypes.c_void_p),
-                b.ctypes.data_as(ctypes.c_void_p),
-                ish_atm.ctypes.data_as(ctypes.c_void_p),
-                ish_bas.ctypes.data_as(ctypes.c_void_p),
-                ish_env.ctypes.data_as(ctypes.c_void_p),
-                jsh_atm.ctypes.data_as(ctypes.c_void_p),
-                jsh_bas.ctypes.data_as(ctypes.c_void_p),
-                jsh_env.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(cell0.cart))
-        except Exception as e:
-            raise RuntimeError("Failed to compute rho. %s" % e)
+        drv(getattr(libdft, eval_fn),
+            ctypes.byref(rs_rho),
+            dm.ctypes.data_as(ctypes.c_void_p),
+            ctypes.byref(task_list),
+            ctypes.c_int(comp), ctypes.c_int(hermi),
+            (ctypes.c_int*4)(i0, i1, j0, j1),
+            ao_loc0.ctypes.data_as(ctypes.c_void_p),
+            ao_loc1.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(dimension),
+            Ls.ctypes.data_as(ctypes.c_void_p),
+            a.ctypes.data_as(ctypes.c_void_p),
+            b.ctypes.data_as(ctypes.c_void_p),
+            ish_atm.ctypes.data_as(ctypes.c_void_p),
+            ish_bas.ctypes.data_as(ctypes.c_void_p),
+            ish_env.ctypes.data_as(ctypes.c_void_p),
+            jsh_atm.ctypes.data_as(ctypes.c_void_p),
+            jsh_bas.ctypes.data_as(ctypes.c_void_p),
+            jsh_env.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(cell0.cart))
         return rs_rho
 
     gridlevel_info = task_list.contents.gridlevel_info
@@ -482,7 +459,8 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
 
 def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
                rhog_high_order=RHOG_HIGH_ORDER):
-    assert(deriv < 2)
+    if deriv >= 2:
+        raise NotImplementedError
     cell = mydf.cell
 
     dm_kpts = np.asarray(dm_kpts, order='C')
@@ -505,10 +483,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
             xctype = 'LDA'
             rhodim = 1
             deriv = 0
-        assert(hermi == 1 or gamma_point(kpts))
-    elif deriv == 2:  # meta-GGA
-        raise NotImplementedError
-        assert(hermi == 1 or gamma_point(kpts))
+        assert hermi == 1 or gamma_point(kpts)
 
     ignore_imag = (hermi == 1)
 
@@ -551,7 +526,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
     rhoG = rhoG.reshape(nset,rhodim,-1)
     if gga_high_order:
         Gv = cell.get_Gv(mydf.mesh)
-        #:rhoG1 = np.einsum('np,px->nxp', 1j*rhoG[:,0], Gv)
+        #:rhoG1 = np.einsum('np,px->nxp', rhoG[:,0], 1j*Gv)
         rhoG1 = gradient_gs(rhoG[:,0], Gv)
         rhoG = np.concatenate([rhoG, rhoG1], axis=1)
         Gv = rhoG1 = None
@@ -659,7 +634,7 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0
             eval_fn += '_ip1'
         else:
             raise NotImplementedError
-    drv = getattr(libdft, "grid_integrate_drv", None)
+    drv = libdft.grid_integrate_drv
 
     def make_mat(wv):
         if comp == 1:
@@ -667,29 +642,26 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0
         else:
             mat = np.zeros((comp, naoi, naoj))
 
-        try:
-            drv(getattr(libdft, eval_fn, None),
-                mat.ctypes.data_as(ctypes.c_void_p),
-                wv.ctypes.data_as(ctypes.c_void_p),
-                ctypes.byref(task_list),
-                ctypes.c_int(comp), ctypes.c_int(hermi),
-                ctypes.c_int(grid_level),
-                (ctypes.c_int*4)(i0, i1, j0, j1),
-                ao_loc0.ctypes.data_as(ctypes.c_void_p),
-                ao_loc1.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(dimension),
-                Ls.ctypes.data_as(ctypes.c_void_p),
-                a.ctypes.data_as(ctypes.c_void_p),
-                b.ctypes.data_as(ctypes.c_void_p),
-                ish_atm.ctypes.data_as(ctypes.c_void_p),
-                ish_bas.ctypes.data_as(ctypes.c_void_p),
-                ish_env.ctypes.data_as(ctypes.c_void_p),
-                jsh_atm.ctypes.data_as(ctypes.c_void_p),
-                jsh_bas.ctypes.data_as(ctypes.c_void_p),
-                jsh_env.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(cell0.cart))
-        except Exception as e:
-            raise RuntimeError("Failed to compute rho. %s" % e)
+        drv(getattr(libdft, eval_fn),
+            mat.ctypes.data_as(ctypes.c_void_p),
+            wv.ctypes.data_as(ctypes.c_void_p),
+            ctypes.byref(task_list),
+            ctypes.c_int(comp), ctypes.c_int(hermi),
+            ctypes.c_int(grid_level),
+            (ctypes.c_int*4)(i0, i1, j0, j1),
+            ao_loc0.ctypes.data_as(ctypes.c_void_p),
+            ao_loc1.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(dimension),
+            Ls.ctypes.data_as(ctypes.c_void_p),
+            a.ctypes.data_as(ctypes.c_void_p),
+            b.ctypes.data_as(ctypes.c_void_p),
+            ish_atm.ctypes.data_as(ctypes.c_void_p),
+            ish_bas.ctypes.data_as(ctypes.c_void_p),
+            ish_env.ctypes.data_as(ctypes.c_void_p),
+            jsh_atm.ctypes.data_as(ctypes.c_void_p),
+            jsh_bas.ctypes.data_as(ctypes.c_void_p),
+            jsh_env.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(cell0.cart))
         return mat
 
     out = []
@@ -935,16 +907,17 @@ def _rks_gga_wv0_pw(cell, rho, vxc, weight, mesh):
     vrho_freq = tools.fft(vrho, mesh).reshape((1,ngrid))
     buf_freq = tools.fft(buf, mesh).reshape((3,ngrid))
     Gv = cell.get_Gv(mesh)
-    #out  = vrho_freq - 2j * np.einsum('px,xp->p', Gv, buf_freq)
-    #out *= weight
 
+    #:out  = vrho_freq - 2j * np.einsum('px,xp->p', Gv, buf_freq)
+    #:out *= weight
     out = np.empty((ngrid,), order="C", dtype=np.complex128)
-    func = getattr(libdft, 'get_gga_vrho_gs', None)
-    func(out.ctypes.data_as(ctypes.c_void_p),
-         vrho_freq.ctypes.data_as(ctypes.c_void_p),
-         buf_freq.ctypes.data_as(ctypes.c_void_p),
-         Gv.ctypes.data_as(ctypes.c_void_p),
-         ctypes.c_double(weight), ctypes.c_int(ngrid))
+    libdft.get_gga_vrho_gs(
+        out.ctypes.data_as(ctypes.c_void_p),
+        vrho_freq.ctypes.data_as(ctypes.c_void_p),
+        buf_freq.ctypes.data_as(ctypes.c_void_p),
+        Gv.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_double(weight), ctypes.c_int(ngrid)
+    )
     return out
 
 
@@ -964,30 +937,31 @@ def _uks_gga_wv0_pw(cell, rho, vxc, weight, mesh):
         tmp = np.multiply(.5, tmp, out=tmp)
         buf[1,i-1] = np.add(buf[1,i-1], tmp, out=buf[1,i-1])
 
-
     vrho_freq = tools.fft(vrho.T, mesh).reshape((2,ngrid))
     buf_freq = tools.fft(buf.reshape(-1,ngrid), mesh).reshape((2,3,ngrid))
     Gv = cell.get_Gv(mesh)
-    #out  = vrho_freq - 2j * np.einsum('px,xp->p', Gv, buf_freq)
-    #out *= weight
 
+    #:out  = vrho_freq - 2j * np.einsum('px,xp->p', Gv, buf_freq)
+    #:out *= weight
     out = np.empty((2,ngrid), order="C", dtype=np.complex128)
-    func = getattr(libdft, 'get_gga_vrho_gs')
+    fn = libdft.get_gga_vrho_gs
     for s in range(2):
-        func(out[s].ctypes.data_as(ctypes.c_void_p),
-             vrho_freq[s].ctypes.data_as(ctypes.c_void_p),
-             buf_freq[s].ctypes.data_as(ctypes.c_void_p),
-             Gv.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_double(weight), ctypes.c_int(ngrid))
+        fn(out[s].ctypes.data_as(ctypes.c_void_p),
+           vrho_freq[s].ctypes.data_as(ctypes.c_void_p),
+           buf_freq[s].ctypes.data_as(ctypes.c_void_p),
+           Gv.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_double(weight), ctypes.c_int(ngrid))
     return out
 
 
 def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
            kpts_band=None, with_j=False, return_j=False, verbose=None):
+    '''Compute the XC energy and RKS XC matrix using the multigrid algorithm.
+
+    See also `multigrid.nr_rks`.
     '''
-    Same as multigrid.nr_rks, but considers Hermitian symmetry also for GGA
-    '''
-    if kpts is None: kpts = mydf.kpts
+    if kpts is None:
+        kpts = mydf.kpts
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     dm_kpts = np.asarray(dm_kpts, order='C')
@@ -1007,7 +981,8 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ngrids = np.prod(mesh)
 
     coulG = tools.get_coulG(cell, mesh=mesh)
-    #vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
+
+    #:vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
     vG = np.empty_like(rhoG[:,0], dtype=np.result_type(rhoG[:,0], coulG))
     for i, rhoG_i in enumerate(rhoG[:,0]):
         vG[i] = np.multiply(rhoG_i, coulG, out=vG[i])
@@ -1015,11 +990,11 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     if mydf.vpplocG_part1 is not None:
         for i in range(nset):
-            #vG[i] += mydf.vpplocG_part1 * 2
+            #:vG[i] += mydf.vpplocG_part1 * 2
             vG[i] = np.add(vG[i], np.multiply(2., mydf.vpplocG_part1), out=vG[i])
 
-    #ecoul = .5 * np.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
-    #ecoul+= .5 * np.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
+    #:ecoul = .5 * np.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
+    #:ecoul+= .5 * np.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
     ecoul = np.zeros((rhoG.shape[0],))
     for i in range(rhoG.shape[0]):
         ecoul[i] = .5 * np.vdot(rhoG[i,0], vG[i]).real
@@ -1029,7 +1004,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     if mydf.vpplocG_part1 is not None:
         for i in range(nset):
-            #vG[i] -= mydf.vpplocG_part1
+            #:vG[i] -= mydf.vpplocG_part1
             vG[i] = np.subtract(vG[i], mydf.vpplocG_part1, out=vG[i])
 
     weight = cell.vol / ngrids
@@ -1080,7 +1055,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
     elif xctype == 'GGA':
         if with_j:
-            #wv_freq[:,0] += vG.reshape(nset,*mesh)
+            #:wv_freq[:,0] += vG.reshape(nset,*mesh)
             wv_freq[:,0] = np.add(wv_freq[:,0], vG.reshape(nset,*mesh), out=wv_freq[:,0])
         if GGA_METHOD.upper() == 'FFT':
             veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
@@ -1123,7 +1098,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     rhoG = rhoG.reshape(nset,2,-1,ngrids)
 
     coulG = tools.get_coulG(cell, mesh=mesh)
-    #vG = np.einsum('nsg,g->ng', rhoG[:,:,0], coulG)
+    #:vG = np.einsum('nsg,g->ng', rhoG[:,:,0], coulG)
     vG = np.empty((nset,ngrids), dtype=np.result_type(rhoG[:,:,0], coulG))
     for i, rhoG_i in enumerate(rhoG[:,:,0]):
         vG[i] = np.multiply(np.add(rhoG_i[0], rhoG_i[1]), coulG, out=vG[i])
@@ -1131,7 +1106,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     if mydf.vpplocG_part1 is not None:
         for i in range(nset):
-            #vG[i] += mydf.vpplocG_part1 * 2
+            #:vG[i] += mydf.vpplocG_part1 * 2
             vG[i] = np.add(vG[i], np.multiply(2., mydf.vpplocG_part1), out=vG[i])
 
     ecoul = np.zeros(nset)
@@ -1143,7 +1118,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     if mydf.vpplocG_part1 is not None:
         for i in range(nset):
-            #vG[i] -= mydf.vpplocG_part1
+            #:vG[i] -= mydf.vpplocG_part1
             vG[i] = np.subtract(vG[i], mydf.vpplocG_part1, out=vG[i])
 
     weight = cell.vol / ngrids
@@ -1195,7 +1170,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
     elif xctype == 'GGA':
         if with_j:
-            #wv_freq[:,:,0] += vG.reshape(nset,*mesh)
+            #:wv_freq[:,:,0] += vG.reshape(nset,*mesh)
             for s in range(2):
                 wv_freq[:,s,0] = np.add(wv_freq[:,s,0], vG.reshape(nset,*mesh), out=wv_freq[:,s,0])
         if GGA_METHOD.upper() == 'FFT':
@@ -1337,23 +1312,22 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
 
 
 class MultiGridFFTDF2(MultiGridFFTDF):
-    '''
-    Base class for multigrid DFT (version 2).
+    '''Base class for multigrid DFT (version 2).
 
     Attributes:
-        task_list : TaskList instance
+        task_list : `TaskList` instance
             Task list recording which primitive basis function pairs
             need to be considered.
-        vpplocG_part1 : arrary
-            Short-range part of the local pseudopotential represented
+        vpplocG_part1 : ndarray
+            Long-range part of the local pseudopotential represented
             in the reciprocal space. It is cached to reduce cost.
-        rhoG : array
+        rhoG : ndarray
             Electronic density represented in the reciprocal space.
             It is cached in nuclear gradient calculations to reduce cost.
     '''
-    ngrids = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
-    ke_ratio = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
-    rel_cutoff = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 20.0)
+    ngrids = NGRIDS
+    ke_ratio = KE_RATIO
+    rel_cutoff = REL_CUTOFF
     _keys = {'ngrids', 'ke_ratio', 'rel_cutoff',
              'task_list', 'vpplocG_part1', 'rhoG'}
 
@@ -1392,8 +1366,8 @@ class MultiGridFFTDF2(MultiGridFFTDF):
 
     def get_pp(self, kpts=None):
         '''Compute the GTH pseudopotential matrix, which includes
-        the second part of the local potential and the non-local potential.
-        The first part of the local potential is cached as `vpplocG_part1`,
+        the short-range part of the local potential and the non-local potential.
+        The long-range part of the local potential is cached as `vpplocG_part1`,
         which is the reciprocal space representation, to be added to the electron
         density for computing the Coulomb matrix.
         In order to get the full PP matrix, the potential due to `vpplocG_part1`
@@ -1403,3 +1377,4 @@ class MultiGridFFTDF2(MultiGridFFTDF):
         return _get_pp_without_erf(self, kpts)
 
     vpploc_part1_nuc_grad = vpploc_part1_nuc_grad
+
