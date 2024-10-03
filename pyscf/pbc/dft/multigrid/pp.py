@@ -93,7 +93,7 @@ def _get_pp_without_erf(mydf, kpts=None):
 def get_pp_loc_part1_gs(cell, Gv):
     coulG = tools.get_coulG(cell, Gv=Gv)
     G2 = numpy.einsum('ix,ix->i', Gv, Gv)
-    G0idx = numpy.where(G2==0)[0]
+    G0idx = numpy.where(G2==0)[0][0]
     ngrid = len(G2)
     Gv = numpy.asarray(Gv, order='C', dtype=numpy.double)
     coulG = numpy.asarray(coulG, order='C', dtype=numpy.double)
