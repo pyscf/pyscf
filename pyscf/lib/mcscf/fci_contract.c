@@ -21,6 +21,11 @@
 #include <string.h>
 #include <math.h>
 #include <assert.h>
+
+#ifdef HAVE_FFS
+#include <strings.h>
+#endif
+
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
@@ -603,7 +608,9 @@ void FCImake_hdiag(double *hdiag, double *h1e, double *jdiag, double *kdiag,
 
 static int first1(uint64_t r)
 {
-#ifdef HAVE_FFS
+#if defined(__builtin_ffsll)
+        return __builtin_ffsll(r) - 1;
+#elif defined(HAVE_FFS)
         return ffsll(r) - 1;
 #else
         int n = 0;
