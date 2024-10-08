@@ -1,0 +1,25 @@
+name: CI_conda
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-conda-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup conda
+        uses: s-weigand/setup-conda@v1
+        with:
+          update-conda: true
+          conda-channels: conda-forge
+      - run: conda --version
+      - run: which python
+      - name: Build conda package
+        run: |
+          export CMAKE_BUILD_PARALLEL_LEVEL=4
+          conda install -y conda-build
+          conda config --set anaconda_upload False
+          conda build --output-folder . conda
