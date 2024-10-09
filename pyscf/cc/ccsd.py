@@ -611,6 +611,8 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     # vvvv == None means AO-direct CCSD. It should redirect to
     # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
     assert (vvvv is not None)
+    if t2.size == 0:
+        return numpy.zeros_like(t2)
 
     time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mycc, verbose)
