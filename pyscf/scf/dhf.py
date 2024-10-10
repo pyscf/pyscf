@@ -205,9 +205,13 @@ def get_ovlp(mol):
 
     s = mol.intor_symmetric('int1e_ovlp_spinor')
     t = mol.intor_symmetric('int1e_spsp_spinor')
+    u = mol.intor_symmetric("int1e_sp_spinor")
     s1e = numpy.zeros((n4c, n4c), numpy.complex128)
     s1e[:n2c,:n2c] = s
+    # Small (ket) over large (bra)
     s1e[n2c:,n2c:] = t * (.5/c)**2
+    # Large (ket) over small (bra)
+    s1e[n2c:, :n2c] = u.conj().T * (0.5 / c)
     return s1e
 
 make_rdm1 = hf.make_rdm1
@@ -447,6 +451,200 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     g = reduce(numpy.dot, (mo_coeff[:,viridx].T.conj(), fock_ao,
                            mo_coeff[:,occidx]))
     return g.ravel()
+
+
+def fc_integrals(mol, mf, atom, **kwargs):
+    """
+    Compute the Fermi Contact (FC) integrals for a given atom.
+
+    This function calculates the Fermi Contact integrals in relativistic form for a 
+    specified atom in the molecule using four-component Dirac-Coulomb spinor wavefunctions.
+
+    The FC integrals consist of four distinct blocks:
+    - LL: Large-Large component
+    - LS: Large-Small component
+    - SL: Small-Large component
+    - SS: Small-Small component
+
+    :param mol: Molecule object containing information about the molecular system.
+    :type mol: pyscf.gto.Mole
+    :param mf: Mean-field object, obtained from a Dirac-Hartree-Fock (DHF) calculation.
+    :type mf: pyscf.scf.hf.SCF
+    :param atom: Index of the atom for which the FC integrals are computed.
+    :type atom: int
+    :return: Matrix of Fermi Contact integrals (4-component spinor form) for the specified atom.
+    :rtype: numpy.ndarray (complex128), shape (n4c, n4c)
+
+    Example:
+        mol = gto.Mole()
+        # Setup mol with geometry and basis set...
+        mf = scf.DHF(mol)
+        mf.kernel()
+        atom_index = 0
+        fc_matrix = fc_integrals(mol, mf, atom_index)
+    """
+    c = lib.param.LIGHT_SPEED
+    n4c = mf.mo_coeff.shape[0]
+    n2c = n4c // 2
+    coordinates = mf.mol.atom_coords()[[atom]]
+
+    # Obtaining AO integrals in spinor form
+    ao_spinor = gto.eval_gto(mf.mol, "GTOval_spinor", coordinates, comp=1)[:, 0, :]
+    ao_spinor_S = gto.eval_gto(mf.mol, "GTOval_sp_spinor", coordinates, comp=1)[:, 0, :]
+
+    # Forming the FC integrals matrix
+    fc_integrals = numpy.zeros((n4c, n4c), dtype=numpy.complex128)
+    fc_integrals[:n2c, :n2c] = numpy.einsum("ip,iq->pq", ao_spinor.conjugate(), ao_spinor)  # LL block
+    fc_integrals[:n2c, n2c:] = numpy.einsum("ip,iq->pq", ao_spinor.conjugate(), ao_spinor_S) * (0.5 / c)  # LS block
+    fc_integrals[n2c:, :n2c] = numpy.einsum("ip,iq->pq", ao_spinor_S.conjugate(), ao_spinor) * (0.5 / c)  # SL block
+    fc_integrals[n2c:, n2c:] = numpy.einsum("ip,iq->pq", ao_spinor_S.conjugate(), ao_spinor_S) * ((0.5 / c) ** 2)  # SS block
+
+    return fc_integrals
+
+def fc_expval(mol, mf, atom):
+    """
+    Calculate the Fermi Contact (FC) expectation values for each occupied orbital in a molecule,
+    focusing on a specific atom.
+
+    The expectation values are calculated using the four-component Dirac-Coulomb spinor 
+    wavefunctions. The function computes the contributions from the large-large (LL) and 
+    small-small (SS) components of the spinor for each occupied orbital.
+
+    :param mol: Molecule object containing information about the molecular system.
+    :type mol: pyscf.gto.Mole
+    :param mf: Mean-field object, obtained from a Dirac-Hartree-Fock (DHF) calculation.
+    :type mf: pyscf.scf.hf.SCF
+    :param atom: Index of the atom for which the FC expectation values are computed.
+    :type atom: int
+    :return: Array of FC expectation values for each occupied orbital.
+    :rtype: numpy.ndarray (real), shape (nocc,)
+
+    Example:
+        mol = gto.Mole()
+        # Setup mol with geometry and basis set...
+        mf = scf.DHF(mol)
+        mf.kernel()
+        atom_index = 0
+        fc_expval_per_orbital = fc_expval(mol, mf, atom_index)
+    """
+    n4c, nmo = mf.mo_coeff.shape
+    n2c = n4c // 2
+    nocc = mf.mol.nelectron
+    expval_perorb = numpy.zeros(nocc)
+
+    mo_pos_l = mf.mo_coeff[:n2c, nmo//2:]
+    mo_pos_s = mf.mo_coeff[n2c:, nmo//2:]
+
+    Lo = mo_pos_l[:, :nocc]
+    So = mo_pos_s[:, :nocc]
+
+    fac = 8 * numpy.pi / 3
+    fc_ao = fc_integrals(mol, mf, atom)
+    
+    # Split the fc_integrals matrix into LL and SS blocks
+    fc_ao_LL = fc_ao[:n2c, :n2c]
+    fc_ao_SS = fc_ao[n2c:, n2c:]
+
+    for k in range(nocc):
+        expval_LL_k = numpy.einsum('pi,ij,qj->pq', Lo[:, k].conjugate(), fc_ao_LL, Lo[:, k])
+        expval_SS_k = numpy.einsum('pi,ij,qj->pq', So[:, k].conjugate(), fc_ao_SS, Lo[:, k])
+        expval_perorb[k] = expval_LL_k + expval_SS_k
+
+    return fac * expval_perorb.real
+
+
+
+def Epv_atom(mol, mf, atom_index):
+    """
+    Calculate the parity-violating (PV) contribution to energy for a given atom in a molecule.
+
+    It then returns the contributions from each occupied orbital.
+    (First term of Eq. 4 -  https://doi.org/10.1002/wcms.1396)
+
+    :param mol: Molecule object containing information about the molecular system.
+    :type mol: pyscf.gto.Mole
+    :param mf: Mean-field object, obtained from a Dirac-Hartree-Fock (DHF) calculation.
+    :type mf: pyscf.scf.hf.SCF
+    :param atom_index: Index of the atom for which the PV contribution is computed.
+    :type atom_index: int
+    :return: Array of PV expectation values for each occupied orbital.
+    :rtype: numpy.ndarray (real), shape (nocc,)
+
+    Example:
+        mol = gto.Mole()
+        # Setup mol with geometry and basis set...
+        mf = scf.DHF(mol)
+        mf.kernel()
+        atom_index = 0
+        pv_values = Epv_atom(mol, mf, atom_index)
+    """
+    n4c, nmo = mf.mo_coeff.shape
+    n2c = n4c // 2
+    nNeg = nmo // 2  # Molecular orbitals of negative energy
+    nocc = mf.mol.nelectron
+
+
+    # Get the positive components of the MO spinors
+    Lo = mf.mo_coeff[:n2c, nNeg:nNeg + nocc]
+    So = mf.mo_coeff[n2c:, nNeg:nNeg + nocc]
+
+    # Atom masses and atomic numbers
+    masses = mf.mol.atom_mass_list(isotope_avg=False)
+    atomic_numbers = mf.mol.atom_charges()
+
+    # Neutrons per atom
+    neutrons = masses - atomic_numbers
+
+    S2THETAW = 0.23122  # AS DIRAC24 (CODATA 2018)
+
+    # Weak charge of the nucleus of the selected atom
+    QW = (1 - 4 * S2THETAW) * atomic_numbers[atom_index] - neutrons[atom_index]
+
+    # Get the Fermi Contact integrals for the selected atom
+    fc_ao = fc_integrals(mol, mf, atom_index)
+
+    # Expectation values
+    expval_LS = numpy.einsum('ij,ji->i', Lo.conjugate().T @ fc_ao[:n2c, n2c:], So)
+    expval_SL = numpy.einsum('ij,ji->i', So.conjugate().T @ fc_ao[n2c:, :n2c], Lo)
+
+    # Sum LS and SL terms
+    expval_perorb = expval_LS + expval_SL
+
+    # Prefactor
+    fac = (2.2225 * 10 ** (-14) * QW) / (2 * numpy.sqrt(2))
+
+    return fac * expval_perorb.real
+
+
+
+def Epv_molecule(mol, mf):
+    """
+    Calculate the weak charge parity-violating (PV) contributions for all atoms in the molecule
+    within a punctual nuclear charge distribution model.
+
+    This function iterates over all atoms in the molecule and computes the PV contributions
+    for each atom.
+
+    :param mol: Molecule object containing information about the molecular system.
+    :type mol: pyscf.gto.Mole
+    :param mf: Mean-field object, typically obtained from a Dirac-Hartree-Fock (DHF) calculation.
+    :type mf: pyscf.scf.hf.SCF
+    :return: A 2D array where each row corresponds to an atom and each column contains the PV
+             contributions for the occupied orbitals of that atom.
+    :rtype: numpy.ndarray (real), shape (n_atoms, n_occ)
+    """
+    
+    # Check for nuclear model and raise a warning if it's not punctual
+    if not hasattr(mol, 'nuclear_model') or mol.nuclear_model != 'punctual':
+        import warnings
+        warnings.warn("Nuclear model is not punctual. Results may be inaccurate for extended nuclear models.", UserWarning)
+
+
+    nocc = mf.mol.nelectron
+    result = numpy.zeros((mf.mol.natm, nocc))
+    for i in range(mf.mol.natm):
+        result[i, :] = Epv_atom(mol, mf, i)
+    return result
 
 
 # Kramers unrestricted Dirac-Hartree-Fock
