@@ -49,8 +49,45 @@ def setUpModule():
         basis = ('sto3g', [[1,[0.3,1]]]),
     )
 
+    mol_alanine = gto.M(
+    atom = '''
+    O   -0.000008 0.000006 0.473161                                                                    
+    O   -0.498429 1.617953 -0.942950                                                                   
+    N   -2.916494 2.018558 0.304530                                                                    
+    C   -2.245961 0.738717 0.446378                                                                    
+    C   -2.933825 -0.437589 -0.265779                                                                  
+    C   -0.836260 0.869228 -0.089564                                                                   
+    H   -2.164332 0.502686 1.502658                                                                    
+    H   -2.396710 -1.368611 -0.107150                                                                  
+    H   -3.940684 -0.559206 0.124631                                                                   
+    H   -3.002345 -0.251817 -1.334665                                                                 
+    H   -3.903065 1.915512 0.431392                                                                   
+    H   -2.755346 2.398021 -0.608200                                                                  
+    H   0.850292 0.091697 0.064913
+    ''',
+    basis = 'sto6g',
+    verbose = 3)
+
+    mf_alanine = scf.DHF(mol_alanine)
+    mf_alanine.conv_tol = 1e-5
+    mf_alanine.kernel()
+
+
+
+    f = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        atom = '''
+            H     0    0        1
+            H     1    1        0
+            H     0    -0.757   0.587
+            H     0    0.757    0.587''',
+        basis = ('sto3g', [[1,[0.3,1]]]),
+    )
+
+
 def tearDownModule():
-    global mol, mf, h4
+    global mol, mf, h4, mf_alanine
     mol.stdout.close()
     h4.stdout.close()
     del mol, mf, h4
@@ -95,6 +132,11 @@ class KnownValues(unittest.TestCase):
     def test_energy_tot(self):
         e = mf.energy_tot(mf.make_rdm1())
         self.assertAlmostEqual(e, mf.e_tot, 9)
+
+    def test_pv(self):
+        Epv = scf.DHF.Epv_molecule(mol, mf_alanine)
+        Epv_Oxigen = numpy.sum(Epv, axis=1)[0]
+        self.assertAlmostEqual(Epv_Oxigen, -2.506215-15, 5)
 
     def test_get_grad(self):
         g = mf.get_grad(mf.mo_coeff, mf.mo_occ)
