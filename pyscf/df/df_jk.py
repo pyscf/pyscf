@@ -138,7 +138,7 @@ class _DFHF:
             return super().get_jk(mol, dm, hermi, with_j, with_k, omega)
 
         with_dfk = with_k and not self.only_dfj
-        if with_j:
+        if with_j or with_dfk:
             if isinstance(self, scf.ghf.GHF):
                 def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
                     vj, vk = self.with_df.get_jk(dm.real, hermi, with_j, with_k,
