@@ -634,12 +634,6 @@ def Epv_molecule(mol, mf):
     :rtype: numpy.ndarray (real), shape (n_atoms, n_occ)
     """
     
-    # Check for nuclear model and raise a warning if it's not punctual
-    if not hasattr(mol, 'nuclear_model') or mol.nuclear_model != 'punctual':
-        import warnings
-        warnings.warn("Nuclear model is not punctual. Results may be inaccurate for extended nuclear models.", UserWarning)
-
-
     nocc = mf.mol.nelectron
     result = numpy.zeros((mf.mol.natm, nocc))
     for i in range(mf.mol.natm):
