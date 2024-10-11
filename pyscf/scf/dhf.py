@@ -457,8 +457,9 @@ def fc_integrals(mol, mf, atom, **kwargs):
     """
     Compute the Fermi Contact (FC) integrals for a given atom.
 
-    This function calculates the Fermi Contact integrals in relativistic form for a 
-    specified atom in the molecule using four-component Dirac-Coulomb spinor wavefunctions.
+    This function calculates the Fermi Contact integrals in
+    relativistic form for a specified atom in the molecule using
+    four-component Dirac-Coulomb spinor wavefunctions.
 
     The FC integrals consist of four distinct blocks:
     - LL: Large-Large component
@@ -492,12 +493,12 @@ def fc_integrals(mol, mf, atom, **kwargs):
     ao_spinor = gto.eval_gto(mf.mol, "GTOval_spinor", coordinates, comp=1)[:, 0, :]
     ao_spinor_S = gto.eval_gto(mf.mol, "GTOval_sp_spinor", coordinates, comp=1)[:, 0, :]
 
-    # Forming the FC integrals matrix
+    # Forming the FC integrals matrix (LL, LS, SL, SS blocks)
     fc_integrals = numpy.zeros((n4c, n4c), dtype=numpy.complex128)
-    fc_integrals[:n2c, :n2c] = numpy.einsum("ip,iq->pq", ao_spinor.conjugate(), ao_spinor)  # LL block
-    fc_integrals[:n2c, n2c:] = numpy.einsum("ip,iq->pq", ao_spinor.conjugate(), ao_spinor_S) * (0.5 / c)  # LS block
-    fc_integrals[n2c:, :n2c] = numpy.einsum("ip,iq->pq", ao_spinor_S.conjugate(), ao_spinor) * (0.5 / c)  # SL block
-    fc_integrals[n2c:, n2c:] = numpy.einsum("ip,iq->pq", ao_spinor_S.conjugate(), ao_spinor_S) * ((0.5 / c) ** 2)  # SS block
+    fc_integrals[:n2c, :n2c] = numpy.einsum("ip,iq->pq", ao_spinor.conjugate(), ao_spinor)
+    fc_integrals[:n2c, n2c:] = numpy.einsum("ip,iq->pq", ao_spinor.conjugate(), ao_spinor_S) * (0.5 / c)
+    fc_integrals[n2c:, :n2c] = numpy.einsum("ip,iq->pq", ao_spinor_S.conjugate(), ao_spinor) * (0.5 / c)
+    fc_integrals[n2c:, n2c:] = numpy.einsum("ip,iq->pq", ao_spinor_S.conjugate(), ao_spinor_S) * ((0.5 / c) ** 2)
 
     return fc_integrals
 
@@ -506,8 +507,8 @@ def fc_expval(mol, mf, atom):
     Calculate the Fermi Contact (FC) expectation values for each occupied orbital in a molecule,
     focusing on a specific atom.
 
-    The expectation values are calculated using the four-component Dirac-Coulomb spinor 
-    wavefunctions. The function computes the contributions from the large-large (LL) and 
+    The expectation values are calculated using the four-component Dirac-Coulomb spinor
+    wavefunctions. The function computes the contributions from the large-large (LL) and
     small-small (SS) components of the spinor for each occupied orbital.
 
     :param mol: Molecule object containing information about the molecular system.
@@ -540,7 +541,7 @@ def fc_expval(mol, mf, atom):
 
     fac = 8 * numpy.pi / 3
     fc_ao = fc_integrals(mol, mf, atom)
-    
+
     # Split the fc_integrals matrix into LL and SS blocks
     fc_ao_LL = fc_ao[:n2c, :n2c]
     fc_ao_SS = fc_ao[n2c:, n2c:]
@@ -633,7 +634,7 @@ def Epv_molecule(mol, mf):
              contributions for the occupied orbitals of that atom.
     :rtype: numpy.ndarray (real), shape (n_atoms, n_occ)
     """
-    
+
     nocc = mf.mol.nelectron
     result = numpy.zeros((mf.mol.natm, nocc))
     for i in range(mf.mol.natm):
